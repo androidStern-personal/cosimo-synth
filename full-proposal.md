@@ -507,16 +507,155 @@ A hand-written SIMD oscillator core may still outperform a more general implemen
 4. Future custom import: if user wavetable hot-swap becomes a requirement, what chunk size and ownership model perform best on the actual target hosts?
 5. Effect scope: for v1, should chorus ship alongside delay and reverb, or should it wait for a later revision?
 
-## 15. Development Phases
 
-Phase 1 - Oscillator Core: precomputed wavetable bank, no warp, no unison. Validate mipmap generation, shared external data loading, phase accumulator, and cubic playback quality.
+### 15 Phase Plan
 
-Phase 2 - Voice Architecture: per-voice filter, ADSR envelope, polyphony via `std::voices::VoiceAllocator`. Validate note handling, voice lifecycle, and shared-table reads.
+Foundation layer
 
-Phase 3 - Phase Warp: implement bend, sync, squeeze, PM, and pulse-width-style remaps. Test aliasing and sonic usefulness at extreme settings.
+1. Reference fixtures and render harness
 
-Phase 4 - Modulation: MSEG system (buffer transport plus playback), mod matrix, LFOs, and wavetable position scanning.
+Build a tiny fixed test set before touching the real synth. A few tables are enough: sine, saw, square, one bright complex table, and one “nasty” edge-case table.
 
-Phase 5 - Unison + MPE: sub-voice loop, detune spread, stereo spread, and MPE routing through per-note modulation sources.
+This unit exists so every later block can be judged the same way: fixed notes, fixed sweeps, fixed parameter moves, and repeatable offline renders. Without this, every test turns into “does this sound kind of right?”
 
-Phase 6 - Effects + Polish: post-voice FX chain, GUI, preset system, profiling, and sound-design validation.
+2. Wavetable bank pipeline
+
+Treat the whole path from raw frame data to packaged immutable bank as one module. That includes FFT/iFFT mip generation, harmonic truncation, wrap padding, metadata, and the packed layout that Cmajor will read.
+
+This is worth isolating because it has no realtime concerns at all. You should be able to validate it entirely offline: harmonic caps per mip, padding correctness, level counts, frame counts, and deterministic pack/unpack behavior.
+
+Oscillator core
+
+3. Fixed-frame read kernel
+
+This is the hottest loop in the whole synth, so it deserves its own unit. Keep it brutally small at first: phase accumulator, phase-to-index mapping, and Catmull-Rom lookup from one fixed frame at one fixed mip level.
+
+No frame scanning. No mip switching. No warp. No modulation. Just “can I read a single cycle cleanly and at the correct pitch?”
+
+4. Mip selection policy
+
+Once the fixed read kernel is stable, add only the logic that maps pitch to mip level. Keep it separate because this is where aliasing policy lives, and you’ll want to A/B hard switching against optional adjacent-level smoothing without touching the core lookup code.
+
+This unit should answer one question cleanly: “For a given phase increment, which table do I read?”
+
+5. Frame scanning layer
+
+Now add wavetable position. This unit owns frameLo, frameHi, frameT, and the crossfade between two already-working cubic reads.
+
+That makes it easy to test by sweeping position slowly through a table and listening for clicks, level jumps, or weird interpolation behavior, without any warp or modulation muddying the waters.
+
+6. Warp layer
+
+Treat warp as a phase-transform module that sits between base phase generation and lookup. Bend, squeeze, pulse-width style remap, and PM all fit that pattern. Hard sync is the outlier because it adds a second phase source and reset behavior, so I’d still keep it under the same umbrella, but test it as a separate sub-unit.
+
+This boundary is good because it lets you answer “is the oscillator wrong?” versus “is the phase remap wrong?” without guessing.
+
+Voice engine
+
+7. Filter and drive block
+
+Build the drive plus SVF as a standalone audio processor before wiring it into the full voice. Feed it oscillator output or even noise and prove the basics: stability, resonance behavior, keyboard tracking, and modulation cadence.
+
+This keeps filter problems from being mistaken for oscillator problems.
+
+8. Mono voice shell
+
+Now make the first actually musical thing: one note voice with note on/off, ADSR, oscillator, optional filter, gain, and pan.
+
+At this stage, avoid the allocator. Feed it synthetic note events and make sure voice start, sustain, release, and cleanup are all clean. This is your first “playable” milestone.
+
+9. Polyphony engine
+
+Only after the mono voice is boringly reliable should you add MPEConverter plus VoiceAllocator and multiple voices.
+
+Keep MPE expression turned off at first. This unit is just about lifecycle: note assignment, note stealing, release tails, and shared-bank access across many voices.
+
+Modulation and control
+
+10. Modulation core
+
+This is one of the places I’d split more aggressively than your current phases. Build the mod matrix before MSEG.
+
+Start with simple sources only: constants, velocity, ADSR, a plain LFO, maybe aftertouch if available. This unit owns route storage, depth scaling, destination accumulation, and the rule for what runs at block rate versus sample rate.
+
+That gives you a clean plumbing layer before GUI buffer transport enters the picture.
+
+11. MSEG subsystem
+
+Now bolt MSEG onto the already-existing modulation core. This unit includes the JS-side pre-render, PatchConnection transport, slot addressing, DSP-side playback, and its exposure as just another modulation source.
+
+That keeps MSEG from becoming “the modulation system.” It’s just one source type.
+
+12. Unison layer
+
+Add unison only after a single voice and the mod plumbing are stable. It is a multiplier on almost everything: CPU, level staging, stereo behavior, and modulation distribution.
+
+Because it lives inside the voice, it should stay its own unit: detune spread, frame spread, pan spread, phase behavior, and gain compensation. This is where you want focused profiling before any bus FX are active.
+
+13. MPE mappings
+
+MPE should come after polyphony and after the mod system. That way per-note pitch bend, slide, and pressure are just extra source signals feeding a known routing layer.
+
+This prevents “basic note handling” bugs from being confused with “expressive control” bugs.
+
+Output layer
+
+14. Post-voice FX bus
+
+Treat the FX chain as bus processors, not as part of the voice engine. And inside this layer, each effect is its own mini-unit: chorus, delay, reverb, limiter.
+
+Each one should get its own standalone bypass and stability tests before you wire the chain together. Otherwise reverb and limiter can hide gain-staging or CPU problems coming from the core synth.
+
+How I’d build it, in order
+
+I’d do it in these milestones:
+	1.	Audible oscillator: units 1 through 5.
+This gets you a band-limited scanning wavetable oscillator with no voice complexity.
+	2.	Playable synth core: units 7 through 9.
+Now it’s a real instrument: filter, mono voice, then polyphony.
+	3.	Modulated synth: units 10 and 11.
+Build the routing plumbing first, then add MSEG as a source.
+	4.	Character and scale: units 6, 12, and 13.
+Warp, then unison, then MPE. These add personality, but they also multiply debug surface, so I’d keep them out of the early core.
+	5.	Finish and productize: unit 14, plus the real GUI/preset layer.
+By now the sound engine is already trustworthy, so UI work is mostly control and presentation.
+
+One important framing choice
+
+I would not treat the GUI/PatchConnection side as one giant late-phase feature. I’d keep it as a thin adapter around whatever unit is currently under test.
+
+Early on, that might just be:
+	•	wavetable select
+	•	a few oscillator params
+	•	one debug render or meter
+	•	later, MSEG upload
+
+That way the GUI stays a test panel until the DSP architecture is settled.
+
+Boundaries worth freezing early
+
+There are four contracts I’d lock down very early:
+	•	Phase is always normalized 0..1 everywhere.
+	•	The cubic read neighborhood and the wrap-padding convention are one fixed contract.
+	•	Modulation source ranges are explicit and consistent, especially bipolar versus unipolar.
+	•	Mutable state ownership is clear: bank data is shared read-only, voices own voice state, FX own bus state, GUI owns editor-only structures.
+
+Those four choices stop a lot of ugly refactors later.
+
+Things I would deliberately keep as experiments, not architecture
+
+Adjacent-level mip smoothing, per-level normalization, audio-rate filter update strategy, max unison count, and chorus-in-v1 are all good prototype questions. I wouldn’t let any of them block the baseline design.
+
+The cleanest mental model is this:
+
+Immutable bank
+→ oscillator read path
+→ mono voice
+→ polyphony
+→ modulation
+→ expressive extras
+→ bus FX
+
+That gives you a chain where every step is testable on its own and every later step sits on a smaller set of already-proven pieces.
+
+A useful next step is a one-page checklist with a “done means…” acceptance test for each unit.

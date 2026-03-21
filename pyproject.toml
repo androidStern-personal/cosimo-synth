@@ -1,0 +1,22 @@
+[project]
+name = "cosimo-synth"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+    "numpy>=2.4.3",
+    "pytest>=9.0.2",
+    "scipy>=1.17.1",
+]
+
+[project.optional-dependencies]
+debug = [
+    "matplotlib>=3.10.8",
+]
+
+[tool.pytest.ini_options]
+addopts = "-ra"
+markers = [
+    "reference: renders longer reference cases that are useful for listening or artifact dumps",
+]
+pythonpath = ["."]
+testpaths = ["tests"]
