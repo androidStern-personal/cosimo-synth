@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
+import shutil
+import subprocess
+import tempfile
 from pathlib import Path
-from typing import Callable, Mapping, Protocol
+from typing import Callable, Mapping, Protocol, Sequence
 import os
 
 import numpy as np
@@ -24,6 +28,9 @@ DUMP_ENV_VAR = "WTBENCH_DUMP"
 ARTIFACTS_DIR = Path("artifacts")
 SPECTROGRAM_SEGMENT_SIZE = 1024
 SPECTROGRAM_OVERLAP = 768
+CMAJOR_FIXED_FRAME_SOURCE = (
+    Path(__file__).resolve().parent / "cmajor" / "FixedFrameOscillator.cmajor"
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -106,6 +113,284 @@ def render_case(probe: Probe, bank: FixtureBank, recipe: Recipe) -> Float32Array
         )
 
     return audio
+
+
+def _require_cmaj_cli() -> str:
+    cmaj = shutil.which("cmaj")
+    if cmaj is None:
+        raise RuntimeError("cmaj CLI is required to render the fixed-frame oscillator")
+    return cmaj
+
+
+def _require_constant_curve(curve: Float64Array, label: str) -> float:
+    value = float(curve[0])
+    if not np.array_equal(curve, np.full(curve.shape, value, dtype=np.float64)):
+        raise ValueError(f"{label} must stay constant for the fixed-frame Cmajor render")
+    return value
+
+
+def _cmajor_float_literal(value: float) -> str:
+    literal = repr(float(value))
+    if "e" not in literal and "." not in literal:
+        literal += ".0"
+    return literal + "f"
+
+
+def _build_fixed_frame_wrapper_source(
+    *,
+    table_index: int,
+    frame_index: int,
+    mip_index: int,
+    frequency_hz: float,
+    start_phase: float,
+) -> str:
+    return (
+        "graph FixedFrameProbe [[ main ]]\n"
+        "{\n"
+        "    input event float frequencyIn;\n"
+        "    output stream float out;\n"
+        "    node osc = wt::FixedFrameOscillator ("
+        + str(table_index)
+        + ", "
+        + str(frame_index)
+        + ", "
+        + str(mip_index)
+        + ", "
+        + _cmajor_float_literal(frequency_hz)
+        + ", "
+        + _cmajor_float_literal(start_phase)
+        + ");\n"
+        "    connection\n"
+        "    {\n"
+        "        frequencyIn -> osc.frequencyIn;\n"
+        "        osc.out -> out;\n"
+        "    }\n"
+        "}\n"
+    )
+
+
+def _build_fixed_frame_patch_manifest(
+    *,
+    source_files: Sequence[str],
+    manifest_value: dict[str, object],
+) -> dict[str, object]:
+    return {
+        "CmajorVersion": 1,
+        "ID": "dev.cosimo.fixed-frame-probe",
+        "version": "1.0",
+        "name": "Fixed Frame Probe",
+        "description": "Renders the checked-in fixed-frame wavetable oscillator",
+        "category": "generator",
+        "source": list(source_files),
+        "externals": {
+            "wt::factoryBank": manifest_value,
+        },
+    }
+
+
+def _build_cmajor_render_test_script(
+    *,
+    patch_name: str,
+    sample_rate: int,
+    num_samples: int,
+    output_dir_name: str,
+) -> str:
+    return (
+        "## runScript({ frequency:"
+        + str(sample_rate)
+        + ", blockSize:512, samplesToRender:"
+        + str(num_samples)
+        + ', subDir:"'
+        + output_dir_name
+        + '", patch:"'
+        + patch_name
+        + '" })\n'
+    )
+
+
+def _write_cmajor_event_input(
+    path: Path,
+    events: Sequence[tuple[int, float]],
+    *,
+    num_samples: int,
+) -> None:
+    previous_frame_offset = -1
+    serialized: list[dict[str, object]] = []
+
+    for frame_offset, event_value in events:
+        if not 0 <= frame_offset < num_samples:
+            raise ValueError("frequency event frame offsets must stay inside the rendered buffer")
+        if frame_offset < previous_frame_offset:
+            raise ValueError("frequency event frame offsets must be sorted in ascending order")
+        previous_frame_offset = frame_offset
+        serialized.append(
+            {
+                "frameOffset": int(frame_offset),
+                "event": float(event_value),
+            }
+        )
+
+    path.write_text(json.dumps(serialized, indent=2) + "\n", encoding="utf-8")
+
+
+def _read_rendered_wav(
+    output_path: Path,
+    *,
+    expected_num_samples: int,
+    expected_sample_rate: int,
+) -> Float32Array:
+    sample_rate, audio = wavfile.read(output_path)
+    if sample_rate != expected_sample_rate:
+        raise RuntimeError(
+            f"Cmajor test runner wrote sample rate {sample_rate}, expected {expected_sample_rate}"
+        )
+    audio_array = np.asarray(audio, dtype=np.float32)
+    if audio_array.ndim == 2:
+        if audio_array.shape[1] != 1:
+            raise RuntimeError(
+                f"Cmajor test runner wrote shape {audio_array.shape}, expected mono audio"
+            )
+        audio_array = audio_array[:, 0]
+    if audio_array.shape != (expected_num_samples,):
+        raise RuntimeError(
+            f"Cmajor test runner wrote shape {audio_array.shape}, expected {(expected_num_samples,)}"
+        )
+    return audio_array.copy()
+
+
+def _run_cmajor_test_render(
+    *,
+    patch_path: Path,
+    test_path: Path,
+    output_dir_path: Path,
+    output_wav_path: Path,
+    sample_rate: int,
+    num_samples: int,
+    frequency_events: Sequence[tuple[int, float]] = (),
+) -> Float32Array:
+    cmaj = _require_cmaj_cli()
+    output_dir_path.mkdir(parents=True, exist_ok=True)
+    _write_cmajor_event_input(
+        output_dir_path / "frequencyIn.json",
+        frequency_events,
+        num_samples=num_samples,
+    )
+
+    test_path.write_text(
+        _build_cmajor_render_test_script(
+            patch_name=patch_path.name,
+            sample_rate=sample_rate,
+            num_samples=num_samples,
+            output_dir_name=output_dir_path.name,
+        ),
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        [cmaj, "test", str(test_path), "--singleThread"],
+        cwd=patch_path.parent,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    if result.returncode != 0:
+        details = "\n".join(
+            part
+            for part in (result.stdout.strip(), result.stderr.strip())
+            if part
+        )
+        raise RuntimeError(f"cmaj test failed:\n{details}")
+
+    if not output_wav_path.exists():
+        raise RuntimeError(f"cmaj test did not write the expected output WAV: {output_wav_path}")
+
+    return _read_rendered_wav(
+        output_wav_path,
+        expected_num_samples=num_samples,
+        expected_sample_rate=sample_rate,
+    )
+
+
+def render_cmajor_fixed_frame_tables(
+    source_tables: Sequence[FixtureBank],
+    recipe: Recipe,
+    *,
+    table_index: int = 0,
+    frame_index: int = 0,
+    mip_index: int = 10,
+    frequency_events: Sequence[tuple[int, float]] = (),
+) -> Float32Array:
+    from wtbank import MIP_COUNT, build_bank, emit_cmajor_bank_assets
+
+    if not source_tables:
+        raise ValueError("render_cmajor_fixed_frame_tables requires at least one FixtureBank")
+    if not CMAJOR_FIXED_FRAME_SOURCE.exists():
+        raise RuntimeError(
+            f"Checked-in oscillator source is missing: {CMAJOR_FIXED_FRAME_SOURCE}"
+        )
+    if not 0 <= table_index < len(source_tables):
+        raise ValueError("table_index must address a table inside source_tables")
+    if not 0 <= frame_index < source_tables[table_index].num_frames:
+        raise ValueError("frame_index must address a frame inside the selected table")
+    if not 0 <= mip_index < MIP_COUNT:
+        raise ValueError(f"mip_index must stay in the range [0, {MIP_COUNT})")
+
+    frequency_hz = _require_constant_curve(recipe.freq_hz_curve, "Recipe.freq_hz_curve")
+    if not np.array_equal(recipe.frame_pos_curve, np.zeros(recipe.num_samples, dtype=np.float64)):
+        raise ValueError(
+            "Recipe.frame_pos_curve must stay at 0.0 because the fixed-frame Cmajor render does not scan frames yet"
+        )
+
+    with tempfile.TemporaryDirectory(prefix="cmajor_fixed_frame_") as temp_dir_name:
+        temp_dir = Path(temp_dir_name)
+        assets = emit_cmajor_bank_assets(
+            temp_dir,
+            build_bank(source_tables).bank,
+            sample_rate=recipe.sample_rate,
+        )
+        source_link_path = temp_dir / CMAJOR_FIXED_FRAME_SOURCE.name
+        wrapper_path = temp_dir / "FixedFrameProbe.cmajor"
+        patch_path = temp_dir / "FixedFrameProbe.cmajorpatch"
+        test_path = temp_dir / "FixedFrameProbe.cmajtest"
+        output_dir_path = temp_dir / "golden"
+        output_wav_path = output_dir_path / "expectedOutput-out.wav"
+
+        source_link_path.symlink_to(CMAJOR_FIXED_FRAME_SOURCE)
+        wrapper_path.write_text(
+            _build_fixed_frame_wrapper_source(
+                table_index=table_index,
+                frame_index=frame_index,
+                mip_index=mip_index,
+                frequency_hz=frequency_hz,
+                start_phase=recipe.start_phase,
+            ),
+            encoding="utf-8",
+        )
+        patch_path.write_text(
+            json.dumps(
+                _build_fixed_frame_patch_manifest(
+                    source_files=[
+                        source_link_path.name,
+                        wrapper_path.name,
+                    ],
+                    manifest_value=assets.manifest_value,
+                ),
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        return _run_cmajor_test_render(
+            patch_path=patch_path,
+            test_path=test_path,
+            output_dir_path=output_dir_path,
+            output_wav_path=output_wav_path,
+            sample_rate=recipe.sample_rate,
+            num_samples=recipe.num_samples,
+            frequency_events=frequency_events,
+        )
 
 
 def _sample_positions() -> Float64Array:
@@ -237,6 +522,7 @@ def make_static_tone_recipe(
     duration_seconds: float = 1.0,
     frequency_hz: float = DEFAULT_STATIC_FREQUENCY_HZ,
     frame_position: float = 0.0,
+    start_phase: float = 0.0,
 ) -> Recipe:
     num_samples = _num_samples(duration_seconds, sample_rate)
     return Recipe(
@@ -245,6 +531,7 @@ def make_static_tone_recipe(
         num_samples=num_samples,
         freq_hz_curve=_constant_curve(frequency_hz, num_samples),
         frame_pos_curve=_constant_curve(frame_position, num_samples),
+        start_phase=start_phase,
     )
 
 
@@ -318,6 +605,20 @@ class ReferenceTableProbe:
         hi = _sample_bank(bank.frames, frame_hi, sample_indices, fractional)
         audio = lo + (hi - lo) * frame_t
         return audio.astype(np.float32)
+
+
+@dataclass(frozen=True, slots=True)
+class CmajorFixedFrameProbe:
+    frame_index: int = 0
+    mip_index: int = 10
+
+    def render(self, bank: FixtureBank, recipe: Recipe) -> Float32Array:
+        return render_cmajor_fixed_frame_tables(
+            [bank],
+            recipe,
+            frame_index=self.frame_index,
+            mip_index=self.mip_index,
+        )
 
 
 def _phase_curve(recipe: Recipe) -> Float64Array:
@@ -444,6 +745,8 @@ def maybe_write_spectrogram(
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     audio_array = np.asarray(audio, dtype=np.float64)
+    if audio_array.size < ((SPECTROGRAM_SEGMENT_SIZE + 1) // 2):
+        return None
     spectrogram_builder = ShortTimeFFT.from_window(
         "hann",
         fs=sample_rate,

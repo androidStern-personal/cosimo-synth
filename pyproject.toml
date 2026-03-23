@@ -16,6 +16,7 @@ debug = [
 [tool.pytest.ini_options]
 addopts = "-ra"
 markers = [
+    "cmajor: exercises Cmajor bank loading and oscillator integration",
     "reference: renders longer reference cases that are useful for listening or artifact dumps",
 ]
 pythonpath = ["."]

@@ -36,6 +36,7 @@ from bench import (
     make_static_tone_recipe,
     make_sweep4_bank,
     make_zero_bank,
+    maybe_write_spectrogram,
     maybe_write_wav,
     peak_abs,
     render_case,
@@ -217,12 +218,14 @@ def test_static_tone_recipe_shape_and_values() -> None:
         name="custom_static",
         frequency_hz=880.0,
         frame_position=0.25,
+        start_phase=0.125,
     )
 
     assert recipe.name == "custom_static"
     assert recipe.num_samples == DEFAULT_SAMPLE_RATE
     assert_array_equal(recipe.freq_hz_curve, np.full(DEFAULT_SAMPLE_RATE, 880.0))
     assert_array_equal(recipe.frame_pos_curve, np.full(DEFAULT_SAMPLE_RATE, 0.25))
+    assert recipe.start_phase == pytest.approx(0.125, abs=0.0)
 
 
 def test_pitch_sweep_recipe_is_monotonic_with_exact_endpoints() -> None:
@@ -319,6 +322,21 @@ def test_maybe_write_wav_respects_enabled_flag(tmp_path: Path) -> None:
     sample_rate, written_audio = wavfile.read(wav_path)
     assert sample_rate == DEFAULT_SAMPLE_RATE
     assert written_audio.shape == audio.shape
+
+
+def test_maybe_write_spectrogram_skips_short_audio(tmp_path: Path) -> None:
+    spectrogram_path = tmp_path / "short.png"
+    audio = make_sine_bank().frames[0][:128]
+
+    written = maybe_write_spectrogram(
+        spectrogram_path,
+        DEFAULT_SAMPLE_RATE,
+        audio,
+        enabled=True,
+    )
+
+    assert written is None
+    assert not spectrogram_path.exists()
 
 
 def test_dump_render_artifacts_writes_expected_files(

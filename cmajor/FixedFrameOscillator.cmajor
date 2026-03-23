@@ -1,0 +1,77 @@
+namespace wt
+{
+    let samplesPerFrame = 2048;
+    let paddedFrameSize = 2051;
+
+    struct TableMeta
+    {
+        int32 frameCount;
+        int32 sampleOffset;
+    }
+
+    struct Bank
+    {
+        std::audio_data::Mono sampleBlob;
+        TableMeta[] tables;
+    }
+
+    external Bank factoryBank;
+
+    float32 catmullRom (float32 p0, float32 p1, float32 p2, float32 p3, float32 t)
+    {
+        return p1 + 0.5f * t * ((p2 - p0) + t * ((2.0f * p0 - 5.0f * p1 + 4.0f * p2 - p3)
+               + t * (-p0 + 3.0f * p1 - 3.0f * p2 + p3)));
+    }
+
+    int32 frameBase (int32 tableIndex, int32 frameIndex, int32 mipIndex)
+    {
+        let table = factoryBank.tables[tableIndex];
+        return table.sampleOffset + (((mipIndex * table.frameCount) + frameIndex) * paddedFrameSize);
+    }
+
+    float32 readFixedFrameSample (int32 tableIndex, int32 frameIndex, int32 mipIndex, float32 phase)
+    {
+        let wrappedPhase = std::intrinsics::wrap (phase, 1.0f);
+        let x = wrappedPhase * float32 (samplesPerFrame);
+        let sampleIndex = int32 (std::intrinsics::floor (x));
+        let fractional = x - float32 (sampleIndex);
+        let base = frameBase (tableIndex, frameIndex, mipIndex) + sampleIndex;
+
+        let p0 = factoryBank.sampleBlob.frames[base];
+        let p1 = factoryBank.sampleBlob.frames[base + 1];
+        let p2 = factoryBank.sampleBlob.frames[base + 2];
+        let p3 = factoryBank.sampleBlob.frames[base + 3];
+        return catmullRom (p0, p1, p2, p3, fractional);
+    }
+
+    processor FixedFrameOscillator (int32 tableIndex,
+                                    int32 frameIndex,
+                                    int32 mipIndex,
+                                    float32 initialFrequencyHz = 440.0f,
+                                    float32 initialPhase = 0.0f)
+    {
+        input event float32 frequencyIn [[ name: "Frequency", min: 0.0f, max: 24000.0f, init: 440.0f, unit: "Hz" ]];
+        output stream float out;
+
+        std::oscillators::PhasorState phasor;
+        float32 currentFrequencyHz = initialFrequencyHz;
+
+        event frequencyIn (float32 newFrequency)
+        {
+            currentFrequencyHz = newFrequency < 0.0f ? 0.0f : newFrequency;
+            phasor.setFrequency (processor.frequency, currentFrequencyHz);
+        }
+
+        void main()
+        {
+            phasor.phase = std::intrinsics::wrap (initialPhase, 1.0f);
+            phasor.setFrequency (processor.frequency, currentFrequencyHz < 0.0f ? 0.0f : currentFrequencyHz);
+
+            loop
+            {
+                out <- readFixedFrameSample (tableIndex, frameIndex, mipIndex, phasor.next());
+                advance();
+            }
+        }
+    }
+}
