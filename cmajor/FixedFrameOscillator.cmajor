@@ -2,6 +2,7 @@ namespace wt
 {
     let samplesPerFrame = 2048;
     let paddedFrameSize = 2051;
+    let brightestMipIndex = 10;
 
     struct TableMeta
     {
@@ -21,6 +22,24 @@ namespace wt
     {
         return p1 + 0.5f * t * ((p2 - p0) + t * ((2.0f * p0 - 5.0f * p1 + 4.0f * p2 - p3)
                + t * (-p0 + 3.0f * p1 - 3.0f * p2 + p3)));
+    }
+
+    int32 selectMipIndexFromPhaseIncrement (float32 phaseIncrement)
+    {
+        // These are the exact one-table-per-octave handoff points. Equality stays on the
+        // brighter safe mip so the selector matches the conservative Nyquist rule.
+        if (phaseIncrement <= 0.0f)      return brightestMipIndex;
+        if (phaseIncrement <= 1.0f / 2048.0f) return 10;
+        if (phaseIncrement <= 1.0f / 1024.0f) return 9;
+        if (phaseIncrement <= 1.0f / 512.0f)  return 8;
+        if (phaseIncrement <= 1.0f / 256.0f)  return 7;
+        if (phaseIncrement <= 1.0f / 128.0f)  return 6;
+        if (phaseIncrement <= 1.0f / 64.0f)   return 5;
+        if (phaseIncrement <= 1.0f / 32.0f)   return 4;
+        if (phaseIncrement <= 1.0f / 16.0f)   return 3;
+        if (phaseIncrement <= 1.0f / 8.0f)    return 2;
+        if (phaseIncrement <= 1.0f / 4.0f)    return 1;
+        return 0;
     }
 
     int32 frameBase (int32 tableIndex, int32 frameIndex, int32 mipIndex)
@@ -46,7 +65,6 @@ namespace wt
 
     processor FixedFrameOscillator (int32 tableIndex,
                                     int32 frameIndex,
-                                    int32 mipIndex,
                                     float32 initialFrequencyHz = 440.0f,
                                     float32 initialPhase = 0.0f)
     {
@@ -55,21 +73,28 @@ namespace wt
 
         std::oscillators::PhasorState phasor;
         float32 currentFrequencyHz = initialFrequencyHz;
+        float32 currentPhaseIncrement = 0.0f;
+        int32 currentMipIndex = brightestMipIndex;
 
         event frequencyIn (float32 newFrequency)
         {
             currentFrequencyHz = newFrequency < 0.0f ? 0.0f : newFrequency;
+            currentPhaseIncrement = currentFrequencyHz / float32 (processor.frequency);
+            currentMipIndex = selectMipIndexFromPhaseIncrement (currentPhaseIncrement);
             phasor.setFrequency (processor.frequency, currentFrequencyHz);
         }
 
         void main()
         {
             phasor.phase = std::intrinsics::wrap (initialPhase, 1.0f);
-            phasor.setFrequency (processor.frequency, currentFrequencyHz < 0.0f ? 0.0f : currentFrequencyHz);
+            currentFrequencyHz = currentFrequencyHz < 0.0f ? 0.0f : currentFrequencyHz;
+            currentPhaseIncrement = currentFrequencyHz / float32 (processor.frequency);
+            currentMipIndex = selectMipIndexFromPhaseIncrement (currentPhaseIncrement);
+            phasor.setFrequency (processor.frequency, currentFrequencyHz);
 
             loop
             {
-                out <- readFixedFrameSample (tableIndex, frameIndex, mipIndex, phasor.next());
+                out <- readFixedFrameSample (tableIndex, frameIndex, currentMipIndex, phasor.next());
                 advance();
             }
         }

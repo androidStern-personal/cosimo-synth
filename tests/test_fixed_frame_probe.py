@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Callable
 
 import numpy as np
@@ -15,6 +14,7 @@ from bench import (
     SAMPLES_PER_FRAME,
     dominant_bin_hz,
     dump_render_artifacts,
+    formula_mip_index_for_frequency,
     is_finite,
     make_blend2_bank,
     make_bright_bank,
@@ -77,22 +77,26 @@ def _expected_padded_frame(frame: np.ndarray, mip_index: int) -> np.ndarray:
 def _expected_fixed_frame_audio(
     *,
     frame: np.ndarray,
-    mip_index: int,
     recipe,
     frequency_events: tuple[tuple[int, float], ...] = (),
 ) -> np.ndarray:
-    padded = _expected_padded_frame(frame, mip_index).astype(np.float32)
     expected = np.empty(recipe.num_samples, dtype=np.float32)
     phase = np.float32(recipe.start_phase)
     current_frequency = np.float32(recipe.freq_hz_curve[0])
     sample_rate = np.float32(recipe.sample_rate)
     event_index = 0
+    padded_by_mip: dict[int, np.ndarray] = {}
 
     for sample_offset in range(recipe.num_samples):
         while event_index < len(frequency_events) and frequency_events[event_index][0] == sample_offset:
             current_frequency = np.float32(frequency_events[event_index][1])
             event_index += 1
 
+        current_mip = formula_mip_index_for_frequency(float(current_frequency), recipe.sample_rate)
+        padded = padded_by_mip.setdefault(
+            current_mip,
+            _expected_padded_frame(frame, current_mip).astype(np.float32),
+        )
         x = np.float32(phase * np.float32(SAMPLES_PER_FRAME))
         sample_index = int(np.floor(x))
         fractional = float(np.float32(x - sample_index))
@@ -132,7 +136,7 @@ def test_cmajor_fixed_frame_probe_compiled_sine_tracks_pitch(frequency_hz: float
         name=f"sine_{frequency_hz:.0f}",
         frequency_hz=frequency_hz,
     )
-    audio = render_case(CmajorFixedFrameProbe(mip_index=10), make_sine_bank(), recipe)
+    audio = render_case(CmajorFixedFrameProbe(), make_sine_bank(), recipe)
 
     def assertion() -> None:
         assert is_finite(audio)
@@ -148,19 +152,18 @@ def test_cmajor_fixed_frame_probe_compiled_sine_tracks_pitch(frequency_hz: float
 
 
 @pytest.mark.cmajor
-@pytest.mark.parametrize("mip_index", [0, 10])
-def test_cmajor_fixed_frame_probe_wrap_boundary_matches_exact_samples(mip_index: int) -> None:
+@pytest.mark.parametrize("frequency_hz", [10.0, 12_000.0])
+def test_cmajor_fixed_frame_probe_wrap_boundary_matches_exact_samples(frequency_hz: float) -> None:
     recipe = make_static_tone_recipe(
         name="wrap_boundary",
         duration_seconds=16 / DEFAULT_SAMPLE_RATE,
-        frequency_hz=440.0,
+        frequency_hz=frequency_hz,
         start_phase=2047.25 / SAMPLES_PER_FRAME,
     )
     bank = make_sine_bank()
-    audio = render_case(CmajorFixedFrameProbe(mip_index=mip_index), bank, recipe)
+    audio = render_case(CmajorFixedFrameProbe(), bank, recipe)
     expected = _expected_fixed_frame_audio(
         frame=bank.frames[0],
-        mip_index=mip_index,
         recipe=recipe,
     )
 
@@ -168,7 +171,7 @@ def test_cmajor_fixed_frame_probe_wrap_boundary_matches_exact_samples(mip_index:
         assert_allclose(audio, expected, atol=1e-6, rtol=0.0)
 
     _assert_with_artifacts(
-        f"test_cmajor_fixed_frame_probe_wrap_boundary_matches_exact_samples_mip_{mip_index}",
+        f"test_cmajor_fixed_frame_probe_wrap_boundary_matches_exact_samples_{int(frequency_hz)}hz",
         recipe.sample_rate,
         {"actual": audio, "expected": expected},
         assertion,
@@ -184,10 +187,9 @@ def test_cmajor_fixed_frame_probe_edge_bank_matches_exact_samples_across_seam() 
         start_phase=2047.75 / SAMPLES_PER_FRAME,
     )
     bank = make_edge_bank()
-    audio = render_case(CmajorFixedFrameProbe(mip_index=10), bank, recipe)
+    audio = render_case(CmajorFixedFrameProbe(), bank, recipe)
     expected = _expected_fixed_frame_audio(
         frame=bank.frames[0],
-        mip_index=10,
         recipe=recipe,
     )
 
@@ -212,17 +214,21 @@ def test_cmajor_fixed_frame_probe_frequency_event_matches_exact_samples() -> Non
         frequency_hz=DEFAULT_STATIC_FREQUENCY_HZ,
         start_phase=0.125,
     )
-    bank = make_sine_bank()
-    frequency_events = ((0, 220.0), (48, 880.0), (96, 330.0))
+    bank = make_bright_bank()
+    frequency_events = (
+        (0, 10.0),
+        (32, 55.0),
+        (64, 440.0),
+        (96, 4_000.0),
+        (112, 14_000.0),
+    )
     audio = render_cmajor_fixed_frame_tables(
         [bank],
         recipe,
-        mip_index=10,
         frequency_events=frequency_events,
     )
     expected = _expected_fixed_frame_audio(
         frame=bank.frames[0],
-        mip_index=10,
         recipe=recipe,
         frequency_events=frequency_events,
     )
@@ -241,9 +247,9 @@ def test_cmajor_fixed_frame_probe_frequency_event_matches_exact_samples() -> Non
 @pytest.mark.cmajor
 def test_cmajor_fixed_frame_probe_blend2_frame_one_matches_square() -> None:
     recipe = make_static_tone_recipe(name="blend2_square_frame")
-    from_blend = render_case(CmajorFixedFrameProbe(frame_index=1, mip_index=10), make_blend2_bank(), recipe)
+    from_blend = render_case(CmajorFixedFrameProbe(frame_index=1), make_blend2_bank(), recipe)
     from_square = render_case(
-        CmajorFixedFrameProbe(frame_index=0, mip_index=10),
+        CmajorFixedFrameProbe(frame_index=0),
         make_square_bank(),
         recipe,
     )
@@ -262,9 +268,9 @@ def test_cmajor_fixed_frame_probe_blend2_frame_one_matches_square() -> None:
 @pytest.mark.cmajor
 def test_cmajor_fixed_frame_probe_sweep4_frame_two_matches_square() -> None:
     recipe = make_static_tone_recipe(name="sweep4_square_frame")
-    from_sweep = render_case(CmajorFixedFrameProbe(frame_index=2, mip_index=10), make_sweep4_bank(), recipe)
+    from_sweep = render_case(CmajorFixedFrameProbe(frame_index=2), make_sweep4_bank(), recipe)
     from_square = render_case(
-        CmajorFixedFrameProbe(frame_index=0, mip_index=10),
+        CmajorFixedFrameProbe(frame_index=0),
         make_square_bank(),
         recipe,
     )
@@ -281,20 +287,72 @@ def test_cmajor_fixed_frame_probe_sweep4_frame_two_matches_square() -> None:
 
 
 @pytest.mark.cmajor
-def test_cmajor_fixed_frame_probe_uses_requested_mip_level() -> None:
-    recipe = make_static_tone_recipe(name="bright_mips")
-    mip0 = render_case(CmajorFixedFrameProbe(mip_index=0), make_bright_bank(), recipe)
-    mip10 = render_case(CmajorFixedFrameProbe(mip_index=10), make_bright_bank(), recipe)
+def test_cmajor_fixed_frame_probe_bright_bank_gets_more_band_limited_at_high_pitch() -> None:
+    low_recipe = make_static_tone_recipe(name="bright_low_pitch", frequency_hz=55.0)
+    high_recipe = make_static_tone_recipe(name="bright_high_pitch", frequency_hz=7_040.0)
+    bright_bank = make_bright_bank()
+    low_pitch_audio = render_case(CmajorFixedFrameProbe(), bright_bank, low_recipe)
+    high_pitch_audio = render_case(CmajorFixedFrameProbe(), bright_bank, high_recipe)
+    low_expected = _expected_fixed_frame_audio(frame=bright_bank.frames[0], recipe=low_recipe)
+    high_expected = _expected_fixed_frame_audio(frame=bright_bank.frames[0], recipe=high_recipe)
+    low_mip = formula_mip_index_for_frequency(low_recipe.freq_hz_curve[0], low_recipe.sample_rate)
+    high_mip = formula_mip_index_for_frequency(high_recipe.freq_hz_curve[0], high_recipe.sample_rate)
 
     def assertion() -> None:
-        assert not np.allclose(mip0, mip10, atol=1e-6, rtol=0.0)
-        assert residual_db_excluding_bin(mip0, recipe.sample_rate, 441.0) <= -35.0
-        assert residual_db_excluding_bin(mip10, recipe.sample_rate, 441.0) > -20.0
+        assert low_mip > high_mip
+        assert_allclose(low_pitch_audio, low_expected, atol=1e-6, rtol=0.0)
+        assert_allclose(high_pitch_audio, high_expected, atol=1e-6, rtol=0.0)
+        assert not np.allclose(low_pitch_audio, high_pitch_audio, atol=1e-6, rtol=0.0)
+        assert residual_db_excluding_bin(
+            low_pitch_audio, low_recipe.sample_rate, low_recipe.freq_hz_curve[0]
+        ) > residual_db_excluding_bin(
+            high_pitch_audio, high_recipe.sample_rate, high_recipe.freq_hz_curve[0]
+        )
 
     _assert_with_artifacts(
-        "test_cmajor_fixed_frame_probe_uses_requested_mip_level",
+        "test_cmajor_fixed_frame_probe_bright_bank_gets_more_band_limited_at_high_pitch",
+        low_recipe.sample_rate,
+        {
+            "bright_low_pitch_actual": low_pitch_audio,
+            "bright_low_pitch_expected": low_expected,
+            "bright_high_pitch_actual": high_pitch_audio,
+            "bright_high_pitch_expected": high_expected,
+        },
+        assertion,
+    )
+
+
+@pytest.mark.cmajor
+@pytest.mark.parametrize(
+    ("phase_increment", "expected_mip"),
+    [
+        (np.float32(1.0 / 32.0), 4),
+        (np.nextafter(np.float32(1.0 / 32.0), np.float32(np.inf), dtype=np.float32), 3),
+    ],
+)
+def test_cmajor_fixed_frame_probe_boundary_handoff_matches_exact_reference(
+    phase_increment: np.float32,
+    expected_mip: int,
+) -> None:
+    frequency_hz = float(np.float32(phase_increment * np.float32(DEFAULT_SAMPLE_RATE)))
+    recipe = make_static_tone_recipe(
+        name=f"bright_boundary_{expected_mip}",
+        duration_seconds=64 / DEFAULT_SAMPLE_RATE,
+        frequency_hz=frequency_hz,
+        start_phase=0.125,
+    )
+    bright_bank = make_bright_bank()
+    audio = render_case(CmajorFixedFrameProbe(), bright_bank, recipe)
+    expected = _expected_fixed_frame_audio(frame=bright_bank.frames[0], recipe=recipe)
+
+    def assertion() -> None:
+        assert formula_mip_index_for_frequency(frequency_hz, recipe.sample_rate) == expected_mip
+        assert_allclose(audio, expected, atol=1e-6, rtol=0.0)
+
+    _assert_with_artifacts(
+        f"test_cmajor_fixed_frame_probe_boundary_handoff_matches_exact_reference_mip_{expected_mip}",
         recipe.sample_rate,
-        {"mip0": mip0, "mip10": mip10},
+        {"actual": audio, "expected": expected},
         assertion,
     )
 
@@ -307,10 +365,9 @@ def test_cmajor_fixed_frame_probe_reads_from_second_table_offset() -> None:
         recipe,
         table_index=1,
         frame_index=2,
-        mip_index=10,
     )
     square_audio = render_case(
-        CmajorFixedFrameProbe(frame_index=0, mip_index=10),
+        CmajorFixedFrameProbe(frame_index=0),
         make_square_bank(),
         recipe,
     )
@@ -335,9 +392,6 @@ def test_cmajor_fixed_frame_probe_rejects_invalid_selectors() -> None:
 
     with pytest.raises(ValueError, match="frame_index"):
         render_cmajor_fixed_frame_tables([make_sine_bank()], recipe, frame_index=1)
-
-    with pytest.raises(ValueError, match="mip_index"):
-        render_cmajor_fixed_frame_tables([make_sine_bank()], recipe, mip_index=99)
 
 
 @pytest.mark.cmajor

@@ -28,6 +28,13 @@ DUMP_ENV_VAR = "WTBENCH_DUMP"
 ARTIFACTS_DIR = Path("artifacts")
 SPECTROGRAM_SEGMENT_SIZE = 1024
 SPECTROGRAM_OVERLAP = 768
+OSCILLATOR_MIP_COUNT = 11
+BRIGHTEST_MIP_INDEX = OSCILLATOR_MIP_COUNT - 1
+MAX_MIP_HARMONICS = 1 << BRIGHTEST_MIP_INDEX
+MIP_LEVEL_THRESHOLDS: tuple[tuple[int, np.float32], ...] = tuple(
+    (level, np.float32(1.0 / float(1 << (level + 1))))
+    for level in range(BRIGHTEST_MIP_INDEX, 0, -1)
+)
 CMAJOR_FIXED_FRAME_SOURCE = (
     Path(__file__).resolve().parent / "cmajor" / "FixedFrameOscillator.cmajor"
 )
@@ -140,7 +147,6 @@ def _build_fixed_frame_wrapper_source(
     *,
     table_index: int,
     frame_index: int,
-    mip_index: int,
     frequency_hz: float,
     start_phase: float,
 ) -> str:
@@ -153,8 +159,6 @@ def _build_fixed_frame_wrapper_source(
         + str(table_index)
         + ", "
         + str(frame_index)
-        + ", "
-        + str(mip_index)
         + ", "
         + _cmajor_float_literal(frequency_hz)
         + ", "
@@ -318,10 +322,9 @@ def render_cmajor_fixed_frame_tables(
     *,
     table_index: int = 0,
     frame_index: int = 0,
-    mip_index: int = 10,
     frequency_events: Sequence[tuple[int, float]] = (),
 ) -> Float32Array:
-    from wtbank import MIP_COUNT, build_bank, emit_cmajor_bank_assets
+    from wtbank import build_bank, emit_cmajor_bank_assets
 
     if not source_tables:
         raise ValueError("render_cmajor_fixed_frame_tables requires at least one FixtureBank")
@@ -333,8 +336,6 @@ def render_cmajor_fixed_frame_tables(
         raise ValueError("table_index must address a table inside source_tables")
     if not 0 <= frame_index < source_tables[table_index].num_frames:
         raise ValueError("frame_index must address a frame inside the selected table")
-    if not 0 <= mip_index < MIP_COUNT:
-        raise ValueError(f"mip_index must stay in the range [0, {MIP_COUNT})")
 
     frequency_hz = _require_constant_curve(recipe.freq_hz_curve, "Recipe.freq_hz_curve")
     if not np.array_equal(recipe.frame_pos_curve, np.zeros(recipe.num_samples, dtype=np.float64)):
@@ -361,7 +362,6 @@ def render_cmajor_fixed_frame_tables(
             _build_fixed_frame_wrapper_source(
                 table_index=table_index,
                 frame_index=frame_index,
-                mip_index=mip_index,
                 frequency_hz=frequency_hz,
                 start_phase=recipe.start_phase,
             ),
@@ -610,15 +610,57 @@ class ReferenceTableProbe:
 @dataclass(frozen=True, slots=True)
 class CmajorFixedFrameProbe:
     frame_index: int = 0
-    mip_index: int = 10
 
     def render(self, bank: FixtureBank, recipe: Recipe) -> Float32Array:
         return render_cmajor_fixed_frame_tables(
             [bank],
             recipe,
             frame_index=self.frame_index,
-            mip_index=self.mip_index,
         )
+
+
+def formula_mip_index_for_phase_increment(phase_increment: float) -> int:
+    phase_increment32 = np.float32(phase_increment)
+
+    if phase_increment32 <= np.float32(0.0):
+        return BRIGHTEST_MIP_INDEX
+
+    max_harmonics = int(
+        np.floor(np.float32(1.0) / (np.float32(2.0) * phase_increment32))
+    )
+    max_harmonics = min(max(max_harmonics, 1), MAX_MIP_HARMONICS)
+    return int(
+        np.clip(
+            np.floor(np.log2(max_harmonics)),
+            0,
+            BRIGHTEST_MIP_INDEX,
+        )
+    )
+
+
+def threshold_mip_index_for_phase_increment(phase_increment: float) -> int:
+    phase_increment32 = np.float32(phase_increment)
+
+    if phase_increment32 <= np.float32(0.0):
+        return BRIGHTEST_MIP_INDEX
+
+    for mip_index, threshold in MIP_LEVEL_THRESHOLDS:
+        if phase_increment32 <= threshold:
+            return mip_index
+
+    return 0
+
+
+def formula_mip_index_for_frequency(frequency_hz: float, sample_rate: int) -> int:
+    frequency32 = np.float32(frequency_hz)
+    sample_rate32 = np.float32(sample_rate)
+    return formula_mip_index_for_phase_increment(frequency32 / sample_rate32)
+
+
+def threshold_mip_index_for_frequency(frequency_hz: float, sample_rate: int) -> int:
+    frequency32 = np.float32(frequency_hz)
+    sample_rate32 = np.float32(sample_rate)
+    return threshold_mip_index_for_phase_increment(frequency32 / sample_rate32)
 
 
 def _phase_curve(recipe: Recipe) -> Float64Array:
