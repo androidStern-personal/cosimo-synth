@@ -3,24 +3,27 @@ import { CanvasWavetableDisplay } from "./wavetable-display.js";
 
 const midiInputEndpointID = "midiIn";
 const wavetablePositionEndpointID = "wavetablePosition";
-const knobMin = 0.0;
-const knobMax = 1.0;
+
 const knobDefault = 0.0;
-const knobArcLength = 184.0;
+
 let CosimoKeyboard;
 
 function clamp(value, min, max) {
     return Math.min(Math.max(value, min), max);
 }
 
-function remap(value, sourceMin, sourceMax, targetMin, targetMax) {
-    return targetMin + ((value - sourceMin) * (targetMax - targetMin) / (sourceMax - sourceMin));
-}
-
 function registerCustomElement(name, elementClass) {
     if (!window.customElements.get(name)) {
         window.customElements.define(name, elementClass);
     }
+}
+
+function findParameterEndpointInfo(status, endpointID) {
+    return status?.details?.inputs?.find(
+        (endpointInfo) =>
+            endpointInfo?.endpointID === endpointID &&
+            endpointInfo?.purpose === "parameter"
+    );
 }
 
 function defineKeyboardElement(patchConnection) {
@@ -46,9 +49,8 @@ class CosimoSynthView extends HTMLElement {
 
         this.patchConnection = patchConnection;
         this.currentValue = knobDefault;
-        this.dragStartValue = knobDefault;
-        this.dragStartY = 0;
         this.display = null;
+        this.displayFramesLoaded = false;
         this.resizeObserver = null;
 
         this.attachShadow({ mode: "open" });
@@ -63,20 +65,22 @@ class CosimoSynthView extends HTMLElement {
     }
 
     disconnectedCallback() {
-        window.removeEventListener("mousemove", this.handleMouseMove);
-        window.removeEventListener("mouseup", this.handleMouseUp);
         this.resizeObserver?.disconnect();
 
         if (this.keyboard) {
-            this.keyboard.removeEventListener("note-down", this.handleNoteDown);
-            this.keyboard.removeEventListener("note-up", this.handleNoteUp);
+            this.keyboard.detachPatchConnection?.(this.patchConnection);
         }
 
-        this.patchConnection.removeParameterListener(
-            wavetablePositionEndpointID,
-            this.handleParameterChange
-        );
-        this.patchConnection.removeEndpointListener(midiInputEndpointID, this.handleIncomingMIDI);
+        if (this.handleParameterChange) {
+            this.patchConnection.removeParameterListener(
+                wavetablePositionEndpointID,
+                this.handleParameterChange
+            );
+        }
+
+        if (this.handleStatusUpdate) {
+            this.patchConnection.removeStatusListener(this.handleStatusUpdate);
+        }
     }
 
     getScaleFactorLimits() {
@@ -86,9 +90,7 @@ class CosimoSynthView extends HTMLElement {
     initialiseView() {
         this.shadowRoot.innerHTML = this.getHTML();
 
-        this.knobElement = this.shadowRoot.querySelector(".knob-shell");
-        this.knobTrack = this.shadowRoot.querySelector(".knob-track-value");
-        this.knobDial = this.shadowRoot.querySelector(".knob-dial");
+        this.knobControlHost = this.shadowRoot.querySelector(".knob-control-host");
         this.valueText = this.shadowRoot.querySelector(".value-text");
         this.keyboardHost = this.shadowRoot.querySelector(".keyboard-host");
         this.hint = this.shadowRoot.querySelector(".hint");
@@ -98,26 +100,27 @@ class CosimoSynthView extends HTMLElement {
         this.displayStatus = this.shadowRoot.querySelector(".display-status");
         this.bankReadout = this.shadowRoot.querySelector(".bank-readout");
 
-        this.handleParameterChange = (value) => this.setDisplayedValue(value);
-        this.handleIncomingMIDI = (message) => this.keyboard?.handleExternalMIDI(message.message);
-        this.handleMouseMove = (event) => this.dragKnob(event);
-        this.handleMouseUp = () => this.endKnobGesture();
-
         this.display = new CanvasWavetableDisplay(this.displayCanvas);
-        this.installResizeObserver();
+
+        this.handleParameterChange = (value) => this.setDisplayedValue(value);
+        this.handleStatusUpdate = (status) => this.handlePatchStatus(status);
+
+        this.buildKnob();
         this.buildKeyboard();
-        this.bindKnob();
+        this.installResizeObserver();
         this.setDisplayedValue(knobDefault);
+        this.setDisplayState("loading", "Loading wavetable bank…");
 
         this.patchConnection.addParameterListener(
             wavetablePositionEndpointID,
             this.handleParameterChange
         );
         this.patchConnection.requestParameterValue(wavetablePositionEndpointID);
-        this.patchConnection.addEndpointListener(midiInputEndpointID, this.handleIncomingMIDI);
-        this.loadDisplayFrames();
 
-        this.hasOnscreenKeyboard = true;
+        this.patchConnection.addStatusListener(this.handleStatusUpdate);
+        this.patchConnection.requestStatusUpdate();
+
+        this.loadDisplayFrames();
     }
 
     installResizeObserver() {
@@ -137,19 +140,35 @@ class CosimoSynthView extends HTMLElement {
     }
 
     async loadDisplayFrames() {
-        this.setDisplayState("loading", "Loading wavetable bank…");
-
         try {
             const bank = await loadFactoryBankFramesFromPatch(this.patchConnection);
             this.display.setFrames(bank.frames);
             this.display.setPosition(this.currentValue);
             this.setDisplayState("loaded", `${bank.frameCount} frames • mip ${DEFAULT_VISIBLE_MIP_INDEX}`);
             this.bankReadout.textContent = `Factory bank • ${bank.frameCount} stored shapes`;
+            this.displayFramesLoaded = true;
         } catch (error) {
             console.error(error);
             this.setDisplayState("error", "Could not load wavetable bank");
             this.bankReadout.textContent = "Display unavailable";
         }
+    }
+
+    handlePatchStatus(status) {
+        if (status?.error) {
+            this.hint.textContent = "The patch failed to load.";
+            return;
+        }
+
+        const endpointInfo = findParameterEndpointInfo(status, wavetablePositionEndpointID);
+
+        if (endpointInfo) {
+            this.buildKnob(endpointInfo);
+        }
+
+        this.patchConnection.requestParameterValue(wavetablePositionEndpointID);
+        this.hint.textContent =
+            "Click the keyboard once, then use A W S E D F T G Y H U J K to play notes from your computer keyboard.";
     }
 
     setDisplayState(state, message) {
@@ -168,7 +187,7 @@ class CosimoSynthView extends HTMLElement {
                     display: block;
                     width: 100%;
                     height: 100%;
-                    background: #140f12;
+                    background: #02040b;
                     color: #ffd9d9;
                     font-family: Menlo, Monaco, monospace;
                 }
@@ -190,89 +209,44 @@ class CosimoSynthView extends HTMLElement {
         this.keyboard.classList.add("keyboard");
         this.keyboard.setAttribute("root-note", "48");
         this.keyboard.setAttribute("note-count", "25");
+        this.keyboard.attachToPatchConnection?.(this.patchConnection, midiInputEndpointID);
 
-        this.handleNoteDown = (event) => this.sendNoteEvent(event.detail.note, true);
-        this.handleNoteUp = (event) => this.sendNoteEvent(event.detail.note, false);
-
-        this.keyboard.addEventListener("note-down", this.handleNoteDown);
-        this.keyboard.addEventListener("note-up", this.handleNoteUp);
+        this.keyboard.addEventListener("mousedown", () => this.focusKeyboard(), { passive: true });
 
         this.keyboardHost.innerHTML = "";
         this.keyboardHost.appendChild(this.keyboard);
 
-        requestAnimationFrame(() => {
-            this.keyboard.shadowRoot?.querySelector(".note-holder")?.focus();
-        });
-
-        this.hint.textContent =
-            "Click the keyboard once, then use A W S E D F T G Y H U J K to play notes from your computer keyboard.";
+        requestAnimationFrame(() => this.focusKeyboard());
+        this.hasOnscreenKeyboard = true;
+        this.hint.textContent = "Connecting the keyboard to the synth…";
     }
 
-    bindKnob() {
-        this.knobElement.addEventListener("mousedown", (event) => this.beginKnobGesture(event));
-        this.knobElement.addEventListener("wheel", (event) => {
-            event.preventDefault();
-
-            const delta = event.deltaY < 0 ? 0.02 : -0.02;
-            const nextValue = clamp(this.currentValue + delta, knobMin, knobMax);
-
-            this.patchConnection.sendParameterGestureStart(wavetablePositionEndpointID);
-            this.patchConnection.sendEventOrValue(wavetablePositionEndpointID, nextValue);
-            this.patchConnection.sendParameterGestureEnd(wavetablePositionEndpointID);
-        });
-        this.knobElement.addEventListener("dblclick", () => {
-            this.patchConnection.sendParameterGestureStart(wavetablePositionEndpointID);
-            this.patchConnection.sendEventOrValue(wavetablePositionEndpointID, knobDefault);
-            this.patchConnection.sendParameterGestureEnd(wavetablePositionEndpointID);
-        });
+    focusKeyboard() {
+        this.keyboard?.shadowRoot?.querySelector(".note-holder")?.focus();
     }
 
-    beginKnobGesture(event) {
-        event.preventDefault();
+    buildKnob(endpointInfo) {
+        if (!endpointInfo) {
+            return;
+        }
 
-        this.dragStartY = event.clientY;
-        this.dragStartValue = this.currentValue;
+        if (this.knobControl && this.knobEndpointID === endpointInfo.endpointID) {
+            return;
+        }
 
-        window.addEventListener("mousemove", this.handleMouseMove);
-        window.addEventListener("mouseup", this.handleMouseUp);
-        this.patchConnection.sendParameterGestureStart(wavetablePositionEndpointID);
-    }
+        const { Knob } = this.patchConnection.utilities.ParameterControls;
+        this.knobControl = new Knob(this.patchConnection, endpointInfo);
+        this.knobEndpointID = endpointInfo.endpointID;
+        this.knobControl.classList.add("cosimo-knob");
 
-    dragKnob(event) {
-        const nextValue = clamp(
-            this.dragStartValue + ((this.dragStartY - event.clientY) / 240.0),
-            knobMin,
-            knobMax
-        );
-
-        this.patchConnection.sendEventOrValue(wavetablePositionEndpointID, nextValue);
-    }
-
-    endKnobGesture() {
-        window.removeEventListener("mousemove", this.handleMouseMove);
-        window.removeEventListener("mouseup", this.handleMouseUp);
-        this.patchConnection.sendParameterGestureEnd(wavetablePositionEndpointID);
-    }
-
-    sendNoteEvent(note, isOn) {
-        const controlByte = isOn ? 0x900000 : 0x800000;
-        const velocity = 100;
-
-        this.patchConnection.sendMIDIInputEvent(
-            midiInputEndpointID,
-            controlByte | (note << 8) | velocity
-        );
+        this.knobControlHost.innerHTML = "";
+        this.knobControlHost.appendChild(this.knobControl);
     }
 
     setDisplayedValue(value) {
-        const nextValue = clamp(Number(value) || 0, knobMin, knobMax);
-        const rotation = remap(nextValue, knobMin, knobMax, -132, 132);
-        const dashOffset = remap(nextValue, knobMin, knobMax, knobArcLength, 0);
+        const nextValue = clamp(Number(value) || 0, 0.0, 1.0);
 
         this.currentValue = nextValue;
-        this.knobTrack.style.strokeDasharray = `${knobArcLength}`;
-        this.knobTrack.style.strokeDashoffset = `${dashOffset}`;
-        this.knobDial.style.transform = `rotate(${rotation}deg)`;
         this.valueText.textContent = nextValue.toFixed(2);
         this.display?.setPosition(nextValue);
     }
@@ -280,6 +254,8 @@ class CosimoSynthView extends HTMLElement {
     getHTML() {
         return `
             <style>
+                ${this.patchConnection.utilities.ParameterControls.Knob.getCSS()}
+
                 * {
                     box-sizing: border-box;
                     font-family: "Avenir Next", Avenir, sans-serif;
@@ -439,77 +415,70 @@ class CosimoSynthView extends HTMLElement {
 
                 .knob-shell {
                     width: 150px;
+                    height: 170px;
+                    display: grid;
+                    justify-items: center;
+                    align-content: start;
+                    gap: 8px;
+                }
+
+                .knob-control-host {
+                    width: 150px;
                     height: 150px;
-                    position: relative;
-                    cursor: ns-resize;
-                    user-select: none;
-                    -webkit-user-select: none;
+                    display: grid;
+                    place-items: center;
                 }
 
-                .knob-shell svg {
-                    width: 100%;
-                    height: 100%;
+                .cosimo-knob.knob-container {
+                    --knob-track-background-color: rgba(112, 128, 214, 0.28);
+                    --knob-track-value-color: #f19335;
+                    --knob-dial-border-color: rgba(196, 204, 255, 0.08);
+                    --knob-dial-background-color: radial-gradient(circle at 32% 28%, #434f95 0%, #1d2450 42%, #090d1f 100%);
+                    --knob-dial-tick-color: #ffd8a6;
+
+                    width: 150px;
+                    height: 150px;
                 }
 
-                .knob-path {
-                    fill: none;
+                .cosimo-knob .knob-path {
                     stroke-width: 6;
-                    stroke-linecap: round;
                 }
 
-                .knob-track-background {
-                    stroke: rgba(112, 128, 214, 0.28);
-                }
-
-                .knob-track-value {
-                    stroke: #f19335;
-                }
-
-                .knob-dial {
-                    position: absolute;
-                    inset: 23px;
-                    border-radius: 50%;
-                    background:
-                        radial-gradient(circle at 32% 28%, #434f95 0%, #1d2450 42%, #090d1f 100%);
+                .cosimo-knob .knob-dial {
+                    inset: auto;
+                    height: 70%;
+                    width: 70%;
+                    border: none;
+                    background: radial-gradient(circle at 32% 28%, #434f95 0%, #1d2450 42%, #090d1f 100%);
                     box-shadow:
                         inset 0 2px 10px rgba(196, 204, 255, 0.14),
                         inset 0 -10px 18px rgba(0, 0, 0, 0.42),
                         0 12px 24px rgba(4, 8, 20, 0.42);
-                    display: grid;
-                    place-items: start center;
-                    padding-top: 12px;
-                    transition: transform 0.03s linear;
                 }
 
-                .knob-tick {
+                .cosimo-knob .knob-dial-tick {
                     width: 4px;
                     height: 27px;
                     border-radius: 999px;
                     background: linear-gradient(180deg, #ffd9a4 0%, #f56cb6 100%);
                     box-shadow: 0 0 12px rgba(245, 108, 182, 0.48);
+                    left: calc(50% - 2px);
+                    top: 12px;
                 }
 
                 .value-text {
-                    position: absolute;
-                    inset: 0;
-                    display: grid;
-                    place-items: center;
-                    padding-top: 38px;
                     font-size: 18px;
                     letter-spacing: 0.08em;
                     color: #ffd8a6;
-                    pointer-events: none;
+                    line-height: 1;
                 }
 
                 .label {
-                    position: absolute;
-                    inset: auto 0 12px 0;
                     text-align: center;
                     font-size: 13px;
                     letter-spacing: 0.08em;
                     text-transform: uppercase;
                     color: rgba(203, 212, 255, 0.8);
-                    pointer-events: none;
                 }
 
                 .keyboard-host {
@@ -525,6 +494,7 @@ class CosimoSynthView extends HTMLElement {
                     overflow: hidden;
                     background: rgba(6, 10, 24, 0.94);
                     padding: 8px 10px 10px;
+                    touch-action: none;
                 }
 
                 .hint {
@@ -563,19 +533,7 @@ class CosimoSynthView extends HTMLElement {
                         <div class="control-panel">
                             <div class="control-heading">Frame Scan</div>
                             <div class="knob-shell">
-                                <svg viewBox="0 0 100 100" aria-hidden="true">
-                                    <path
-                                        class="knob-path knob-track-background"
-                                        d="M20,76 A 40 40 0 1 1 80 76"
-                                    ></path>
-                                    <path
-                                        class="knob-path knob-track-value"
-                                        d="M20,76 A 40 40 0 1 1 80 76"
-                                    ></path>
-                                </svg>
-                                <div class="knob-dial">
-                                    <div class="knob-tick"></div>
-                                </div>
+                                <div class="knob-control-host"></div>
                                 <div class="value-text">0.00</div>
                                 <div class="label">Wavetable Position</div>
                             </div>
@@ -583,7 +541,7 @@ class CosimoSynthView extends HTMLElement {
                     </div>
 
                     <div class="keyboard-host"></div>
-                    <div class="hint">Loading keyboard…</div>
+                    <div class="hint">Connecting the keyboard to the synth…</div>
                 </div>
             </div>
         `;

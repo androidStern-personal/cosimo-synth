@@ -1,5 +1,5 @@
-Done: pushed the Serum comparison deeper and resumed the renderer work.
+Paused: tuning the renderer toward the Serum look.
 
-Current state: the renderer now uses a higher and weaker-perspective camera, a deeper deck, flatter relief, more interpolated contour slices, and split contour lines at reset cliffs so the front slice no longer acts like a wall.
+Current state: renderer tuning is paused while we fix the Ableton Live plug-in. The old hand-built Audio Unit loader kept crashing or loading in a broken state. The installed `CmajInstrumentDev.component` is now the self-contained Audio Unit generated directly from `WavetableSynth.cmajorpatch`, and Apple `auval` passes on that build.
 
-Return to next: reload the harness or plugin window and decide whether to keep tuning toward Serum or switch back to synth features.
+Return to next: reopen Live and test `CmajInstrumentDev`. If it works in Live, go back to the renderer tuning. If Live still fails, compare the new crash or failure against the generated Audio Unit build that already passed `auval`.

@@ -35,6 +35,64 @@ class MockPianoKeyboard extends HTMLElement {
     }
 
     handleExternalMIDI() {}
+
+    attachToPatchConnection() {}
+
+    detachPatchConnection() {}
+}
+
+class MockKnob extends HTMLElement {
+    constructor(patchConnection, endpointInfo) {
+        super();
+        this.patchConnection = patchConnection;
+        this.endpointInfo = endpointInfo;
+        this.value = endpointInfo?.annotation?.init ?? 0;
+        this.className = "knob-container";
+        this.innerHTML = `
+            <style>
+                :host {
+                    display: inline-grid;
+                    place-items: center;
+                    width: 100%;
+                    height: 100%;
+                }
+
+                .mock-knob {
+                    width: 70%;
+                    height: 70%;
+                    border-radius: 999px;
+                    border: 6px solid rgba(112, 128, 214, 0.28);
+                    background: radial-gradient(circle at 32% 28%, #434f95 0%, #1d2450 42%, #090d1f 100%);
+                    position: relative;
+                }
+
+                .tick {
+                    position: absolute;
+                    left: calc(50% - 2px);
+                    top: 12px;
+                    width: 4px;
+                    height: 27px;
+                    border-radius: 999px;
+                    background: linear-gradient(180deg, #ffd9a4 0%, #f56cb6 100%);
+                }
+            </style>
+            <div class="mock-knob">
+                <div class="tick"></div>
+            </div>
+        `;
+
+        this.tick = this.querySelector(".mock-knob");
+        this.listener = (value) => this.valueChanged(value);
+        this.patchConnection.addParameterListener(this.endpointInfo.endpointID, this.listener);
+        this.patchConnection.requestParameterValue(this.endpointInfo.endpointID);
+    }
+
+    valueChanged(value) {
+        const numeric = Number(value) || 0;
+        this.value = numeric;
+        const rotation = -132 + (264 * numeric);
+        this.tick.style.transform = `rotate(${rotation}deg)`;
+    }
 }
 
 class MockPatchConnection {
@@ -43,8 +101,33 @@ class MockPatchConnection {
         this.parameterValues = new Map([[wavetablePositionEndpointID, 0.5]]);
         this.parameterListeners = new Map();
         this.endpointListeners = new Map();
+        this.statusListeners = new Set();
+        this.status = {
+            manifest,
+            details: {
+                inputs: [
+                    {
+                        endpointID: midiInputEndpointID,
+                        purpose: "event",
+                    },
+                    {
+                        endpointID: wavetablePositionEndpointID,
+                        purpose: "parameter",
+                        annotation: {
+                            name: "Wavetable Position",
+                            min: 0.0,
+                            max: 1.0,
+                            init: 0.0,
+                        },
+                    },
+                ],
+            },
+        };
         this.utilities = {
             PianoKeyboard: MockPianoKeyboard,
+            ParameterControls: {
+                Knob: MockKnob,
+            },
         };
     }
 
@@ -91,6 +174,20 @@ class MockPatchConnection {
 
     sendMIDIInputEvent(endpointID, value) {
         this.endpointListeners.get(endpointID)?.forEach((listener) => listener({ message: value }));
+    }
+
+    addStatusListener(listener) {
+        this.statusListeners.add(listener);
+    }
+
+    removeStatusListener(listener) {
+        this.statusListeners.delete(listener);
+    }
+
+    requestStatusUpdate() {
+        queueMicrotask(() => {
+            this.statusListeners.forEach((listener) => listener(this.status));
+        });
     }
 }
 

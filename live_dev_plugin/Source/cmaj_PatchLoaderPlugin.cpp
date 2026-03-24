@@ -1,185 +1,114 @@
 #include <JuceHeader.h>
 #include <assert.h>
-#include <mutex>
 
 #define CHOC_ASSERT(x) assert(x)
-#include "cmajor/COM/cmaj_Library.h"
 #include "cmajor/helpers/cmaj_JUCEPluginFormat.h"
 #include "choc/javascript/choc_javascript_QuickJS.h"
 
-#ifndef COSIMO_PATCH_PATH
- #error COSIMO_PATCH_PATH must be defined
-#endif
-
-static bool initialiseCmajorLibrary()
+static std::optional<std::filesystem::path> findSiblingPatch (std::filesystem::path pluginFile)
 {
-    static std::once_flag once;
-    static bool initialised = false;
+    auto file = pluginFile;
+    file.replace_extension (".cmajorpatch");
 
-    std::call_once (once, []
-    {
-        auto bundle = juce::File::getSpecialLocation (juce::File::currentApplicationFile);
-        auto resourceDirectory = bundle.getChildFile ("Contents").getChildFile ("Resources");
-        auto dylibPath = resourceDirectory.getChildFile (cmaj::Library::getDLLName());
+    if (exists (file))
+        return file;
 
-        initialised = cmaj::Library::initialise (dylibPath.getFullPathName().toStdString());
-
-        if (! initialised)
-            std::cerr << "Failed to initialise Cmajor library from "
-                      << dylibPath.getFullPathName() << std::endl;
-    });
-
-    return initialised;
+    return {};
 }
 
-static std::filesystem::path getFixedPatchLocation()
+static std::optional<std::filesystem::path> findSiblingPatchFolder (std::filesystem::path pluginFile)
 {
-    return std::filesystem::path (COSIMO_PATCH_PATH);
+    auto folder = pluginFile;
+    folder.replace_extension ({});
+
+    if (is_directory (folder))
+    {
+        std::error_code errorCode;
+
+        for (auto& file : std::filesystem::directory_iterator (folder,
+                                                                std::filesystem::directory_options::skip_permission_denied,
+                                                                errorCode))
+            if (file.path().extension() == ".cmajorpatch")
+                return file;
+    }
+
+    return {};
 }
 
-class FixedPatchInstrumentDevPlugin
-    : public cmaj::plugin::JUCEPluginBase<FixedPatchInstrumentDevPlugin>
+static std::optional<std::filesystem::path> findSiblingJSONFile (std::filesystem::path pluginFile)
 {
-public:
-    FixedPatchInstrumentDevPlugin (std::shared_ptr<cmaj::Patch> patchToUse,
-                                   std::filesystem::path manifestLocationToUse)
-        : cmaj::plugin::JUCEPluginBase<FixedPatchInstrumentDevPlugin> (
-              patchToUse,
-              preloadBusLayout (*patchToUse, manifestLocationToUse)),
-          manifestLocation (std::move (manifestLocationToUse))
+    auto file = pluginFile;
+    file.replace_extension (".json");
+
+    if (exists (file))
     {
-        setFixedStateSynchronously (createEmptyState (manifestLocation));
-    }
-
-    void setStateInformation (const void* data, int size) override
-    {
-        choc::hash::xxHash64 hash (1);
-        hash.addInput (data, static_cast<size_t> (size));
-        auto stateHash = hash.getHash();
-
-        if (lastLoadedStateHash != stateHash)
-        {
-            lastLoadedStateHash = stateHash;
-            setFixedStateSynchronously (juce::ValueTree::readFromData (data, static_cast<size_t> (size)));
-        }
-    }
-
-    bool prepareManifest (cmaj::Patch::LoadParams& loadParams, const juce::ValueTree& newState) override
-    {
-        if (! newState.isValid())
-            return false;
-
-        loadParams.manifest.initialiseWithFile (manifestLocation);
-        readParametersFromState (loadParams, newState);
-        return true;
-    }
-
-    static BusesProperties preloadBusLayout (cmaj::Patch& patch, const std::filesystem::path& location)
-    {
-        cmaj::PatchManifest manifest;
-        manifest.initialiseWithFile (location);
-        patch.preload (manifest);
-
-        return getBusesProperties (patch.getInputEndpoints(), patch.getOutputEndpoints());
-    }
-
-    static constexpr bool isPrecompiled = false;
-    static constexpr bool isFixedPatch = true;
-
-    static constexpr int extraCompHeight = 0;
-    static bool isViewVisible() { return true; }
-    std::unique_ptr<juce::Component> createExtraComponent() { return {}; }
-    void refreshExtraComp (juce::Component*) {}
-
-private:
-    void setFixedStateSynchronously (const juce::ValueTree& newState)
-    {
-        if (! dllLoadedSuccessfully)
-            return;
-
-        if (newState.isValid() && ! newState.hasType (ids.Cmajor))
-        {
-            unload ("Failed to load: invalid state", true);
-            return;
-        }
-
-        cmaj::Patch::LoadParams loadParams;
-
         try
         {
-            if (! prepareManifest (loadParams, newState))
-            {
-                unload ({}, false);
-                return;
-            }
+            auto json = choc::json::parse (choc::file::loadFileAsString (file.string()));
+
+            if (! json.isObject())
+                throw std::runtime_error ("Expected a JSON object");
+
+            auto manifest = std::filesystem::path (json["location"].toString());
+
+            if (manifest.extension() != ".cmajorpatch")
+                throw std::runtime_error ("Expected the path of a .cmajorpatch file");
+
+            if (manifest.is_relative())
+                manifest = pluginFile.parent_path() / manifest;
+
+            if (! exists (manifest))
+                throw std::runtime_error ("No such file: " + manifest.string());
+
+            return manifest;
         }
-        catch (const std::runtime_error& e)
+        catch (const std::exception& e)
         {
-            unload (e.what(), true);
-            return;
+            std::cerr << "Error parsing " << file << ": " << e.what() << std::endl;
         }
-
-        if (isViewResizable())
-        {
-            if (auto width = newState.getPropertyPointer (ids.viewWidth); width != nullptr && width->isInt())
-                lastEditorWidth = *width;
-
-            if (auto height = newState.getPropertyPointer (ids.viewHeight); height != nullptr && height->isInt())
-                lastEditorHeight = *height;
-        }
-        else
-        {
-            lastEditorWidth = 0;
-            lastEditorHeight = 0;
-        }
-
-        if (auto state = newState.getChildWithName (ids.STATE); state.isValid())
-        {
-            for (const auto& valueTree : state)
-            {
-                if (! valueTree.hasType (ids.VALUE))
-                    continue;
-
-                auto* key = valueTree.getPropertyPointer (ids.key);
-                auto* value = valueTree.getPropertyPointer (ids.value);
-
-                if (key == nullptr || value == nullptr)
-                    continue;
-
-                if (key->isString() && key->toString().isNotEmpty() && ! value->isVoid())
-                    patch->setStoredStateValue (key->toString().toStdString(), convertVarToValue (*value));
-            }
-        }
-
-        if (getSampleRate() > 0)
-            applyCurrentRateAndBlockSize();
-
-        patch->loadPatch (loadParams, true);
-        handlePatchChange();
     }
 
-    std::filesystem::path manifestLocation;
-};
+    return {};
+}
+
+static std::optional<std::filesystem::path> findAssociatedPatch (std::filesystem::path pluginFile)
+{
+    try
+    {
+        if (auto patch = findSiblingJSONFile (pluginFile))
+            return patch;
+
+        if (auto patch = findSiblingPatch (pluginFile))
+            return patch;
+
+        if (auto patch = findSiblingPatchFolder (pluginFile))
+            return patch;
+    }
+    catch (const std::exception& e)
+    {
+        std::cerr << e.what() << std::endl;
+    }
+
+    return {};
+}
 
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
 {
-    if (! initialiseCmajorLibrary())
-        throw std::runtime_error ("Failed to initialise libCmajPerformer.dylib");
-
-    auto manifest = getFixedPatchLocation();
-
-    if (! std::filesystem::exists (manifest))
-        throw std::runtime_error ("Patch file not found: " + manifest.string());
-
     auto patch = std::make_shared<cmaj::Patch>();
     patch->setAutoRebuildOnFileChange (true);
     patch->createEngine = +[] { return cmaj::Engine::create(); };
 
-   #if CMAJ_USE_QUICKJS_WORKER
-    enableQuickJSPatchWorker (*patch);
-   #else
-    enableWebViewPatchWorker (*patch);
-   #endif
+    if (auto manifest = findAssociatedPatch (juce::File::getSpecialLocation (juce::File::currentApplicationFile)
+                                               .getFullPathName().toStdString()))
+    {
+       #if CMAJ_USE_QUICKJS_WORKER
+        enableQuickJSPatchWorker (*patch);
+       #else
+        enableWebViewPatchWorker (*patch);
+       #endif
 
-    return new FixedPatchInstrumentDevPlugin (std::move (patch), manifest);
+        return new cmaj::plugin::SinglePatchJITPlugin (std::move (patch), *manifest);
+    }
+
+    return new cmaj::plugin::JITLoaderPlugin (std::move (patch));
 }

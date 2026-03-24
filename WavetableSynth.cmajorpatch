@@ -6,6 +6,10 @@
   "description": "Single-oscillator wavetable synth with MIDI input, automatable wavetable position, and a 16-frame display-demo factory bank.",
   "category": "generator",
   "manufacturer": "Cosimo",
+  "plugin": {
+    "pluginCode": "CmDv",
+    "manufacturerCode": "Manu"
+  },
   "isInstrument": true,
   "source": [
     "cmajor/FixedFrameOscillator.cmajor",
