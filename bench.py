@@ -146,30 +146,29 @@ def _cmajor_float_literal(value: float) -> str:
 def _build_fixed_frame_wrapper_source(
     *,
     table_index: int,
-    frame_index: int,
     frequency_hz: float,
     start_phase: float,
 ) -> str:
     return (
         "graph FixedFrameProbe [[ main ]]\n"
-        "{\n"
-        "    input event float frequencyIn;\n"
-        "    output stream float out;\n"
-        "    node osc = wt::FixedFrameOscillator ("
+        + "{\n"
+        + "    input event float frequencyIn;\n"
+        + "    input value float framePositionIn;\n"
+        + "    output stream float out;\n"
+        + "    node osc = wt::FixedFrameOscillator ("
         + str(table_index)
-        + ", "
-        + str(frame_index)
         + ", "
         + _cmajor_float_literal(frequency_hz)
         + ", "
         + _cmajor_float_literal(start_phase)
         + ");\n"
-        "    connection\n"
-        "    {\n"
-        "        frequencyIn -> osc.frequencyIn;\n"
-        "        osc.out -> out;\n"
-        "    }\n"
-        "}\n"
+        + "    connection\n"
+        + "    {\n"
+        + "        frequencyIn -> osc.frequencyIn;\n"
+        + "        framePositionIn -> osc.framePositionIn;\n"
+        + "        osc.out -> out;\n"
+        + "    }\n"
+        + "}\n"
     )
 
 
@@ -237,6 +236,62 @@ def _write_cmajor_event_input(
     path.write_text(json.dumps(serialized, indent=2) + "\n", encoding="utf-8")
 
 
+def _write_cmajor_value_input(
+    path: Path,
+    values: Sequence[tuple[int, float, int]],
+    *,
+    num_samples: int,
+) -> None:
+    previous_frame_offset = -1
+    serialized: list[dict[str, object]] = []
+
+    for frame_offset, value, frames_to_reach_value in values:
+        if not 0 <= frame_offset < num_samples:
+            raise ValueError("value input frame offsets must stay inside the rendered buffer")
+        if frame_offset < previous_frame_offset:
+            raise ValueError("value input frame offsets must be sorted in ascending order")
+        if frames_to_reach_value < 0:
+            raise ValueError("framesToReachValue must not be negative")
+        previous_frame_offset = frame_offset
+        serialized.append(
+            {
+                "frameOffset": int(frame_offset),
+                "value": float(value),
+                "framesToReachValue": int(frames_to_reach_value),
+            }
+        )
+
+    path.write_text(json.dumps(serialized, indent=2) + "\n", encoding="utf-8")
+
+
+def _curve_to_value_events(curve: Float64Array) -> tuple[tuple[int, float, int], ...]:
+    if curve.size == 0:
+        raise ValueError("value curve must contain at least one sample")
+
+    if curve.size == 1 or np.allclose(curve, curve[0], rtol=0.0, atol=1e-12):
+        return ((0, float(curve[0]), 0),)
+
+    deltas = np.diff(curve)
+    nonzero_mask = ~np.isclose(deltas, 0.0, rtol=0.0, atol=1e-12)
+    nonzero_deltas = deltas[nonzero_mask]
+    if (
+        nonzero_deltas.size
+        and np.allclose(nonzero_deltas, nonzero_deltas[0], rtol=0.0, atol=1e-12)
+        and np.all(nonzero_mask)
+    ):
+        return (
+            (0, float(curve[0]), 0),
+            (curve.size - 1, float(curve[-1]), curve.size - 1),
+        )
+
+    events: list[tuple[int, float, int]] = [(0, float(curve[0]), 0)]
+    for sample_index in range(1, curve.size):
+        if not np.isclose(curve[sample_index], curve[sample_index - 1], rtol=0.0, atol=1e-12):
+            events.append((sample_index, float(curve[sample_index]), 0))
+
+    return tuple(events)
+
+
 def _read_rendered_wav(
     output_path: Path,
     *,
@@ -271,12 +326,18 @@ def _run_cmajor_test_render(
     sample_rate: int,
     num_samples: int,
     frequency_events: Sequence[tuple[int, float]] = (),
+    frame_position_events: Sequence[tuple[int, float, int]] = (),
 ) -> Float32Array:
     cmaj = _require_cmaj_cli()
     output_dir_path.mkdir(parents=True, exist_ok=True)
     _write_cmajor_event_input(
         output_dir_path / "frequencyIn.json",
         frequency_events,
+        num_samples=num_samples,
+    )
+    _write_cmajor_value_input(
+        output_dir_path / "framePositionIn.json",
+        frame_position_events,
         num_samples=num_samples,
     )
 
@@ -321,7 +382,6 @@ def render_cmajor_fixed_frame_tables(
     recipe: Recipe,
     *,
     table_index: int = 0,
-    frame_index: int = 0,
     frequency_events: Sequence[tuple[int, float]] = (),
 ) -> Float32Array:
     from wtbank import build_bank, emit_cmajor_bank_assets
@@ -334,14 +394,10 @@ def render_cmajor_fixed_frame_tables(
         )
     if not 0 <= table_index < len(source_tables):
         raise ValueError("table_index must address a table inside source_tables")
-    if not 0 <= frame_index < source_tables[table_index].num_frames:
-        raise ValueError("frame_index must address a frame inside the selected table")
 
     frequency_hz = _require_constant_curve(recipe.freq_hz_curve, "Recipe.freq_hz_curve")
-    if not np.array_equal(recipe.frame_pos_curve, np.zeros(recipe.num_samples, dtype=np.float64)):
-        raise ValueError(
-            "Recipe.frame_pos_curve must stay at 0.0 because the fixed-frame Cmajor render does not scan frames yet"
-        )
+    frame_position = float(recipe.frame_pos_curve[0])
+    frame_position_events = _curve_to_value_events(recipe.frame_pos_curve)
 
     with tempfile.TemporaryDirectory(prefix="cmajor_fixed_frame_") as temp_dir_name:
         temp_dir = Path(temp_dir_name)
@@ -361,7 +417,6 @@ def render_cmajor_fixed_frame_tables(
         wrapper_path.write_text(
             _build_fixed_frame_wrapper_source(
                 table_index=table_index,
-                frame_index=frame_index,
                 frequency_hz=frequency_hz,
                 start_phase=recipe.start_phase,
             ),
@@ -390,6 +445,7 @@ def render_cmajor_fixed_frame_tables(
             sample_rate=recipe.sample_rate,
             num_samples=recipe.num_samples,
             frequency_events=frequency_events,
+            frame_position_events=frame_position_events,
         )
 
 
@@ -607,15 +663,45 @@ class ReferenceTableProbe:
         return audio.astype(np.float32)
 
 
+def frame_position_to_indices(
+    frame_position: float,
+    frame_count: int,
+) -> tuple[int, int, float]:
+    clamped_position = float(np.clip(frame_position, 0.0, 1.0))
+    if frame_count <= 1:
+        return 0, 0, 0.0
+
+    last_frame_index = frame_count - 1
+    frame_index = clamped_position * last_frame_index
+    frame_lo = int(np.floor(frame_index))
+    frame_hi = min(frame_lo + 1, last_frame_index)
+    frame_t = frame_index - frame_lo
+    return frame_lo, frame_hi, frame_t
+
+
 @dataclass(frozen=True, slots=True)
 class CmajorFixedFrameProbe:
-    frame_index: int = 0
+    frame_position: float | None = None
 
     def render(self, bank: FixtureBank, recipe: Recipe) -> Float32Array:
+        if self.frame_position is None:
+            effective_recipe = recipe
+        else:
+            effective_recipe = Recipe(
+                name=recipe.name,
+                sample_rate=recipe.sample_rate,
+                num_samples=recipe.num_samples,
+                freq_hz_curve=recipe.freq_hz_curve,
+                frame_pos_curve=np.full(
+                    recipe.frame_pos_curve.shape,
+                    self.frame_position,
+                    dtype=np.float64,
+                ),
+                start_phase=recipe.start_phase,
+            )
         return render_cmajor_fixed_frame_tables(
             [bank],
-            recipe,
-            frame_index=self.frame_index,
+            effective_recipe,
         )
 
 
@@ -661,6 +747,91 @@ def threshold_mip_index_for_frequency(frequency_hz: float, sample_rate: int) -> 
     frequency32 = np.float32(frequency_hz)
     sample_rate32 = np.float32(sample_rate)
     return threshold_mip_index_for_phase_increment(frequency32 / sample_rate32)
+
+
+def _catmull_rom(p0: float, p1: float, p2: float, p3: float, t: float) -> float:
+    return p1 + 0.5 * t * (
+        (p2 - p0)
+        + t * ((2.0 * p0 - 5.0 * p1 + 4.0 * p2 - p3) + t * (-p0 + 3.0 * p1 - 3.0 * p2 + p3))
+    )
+
+
+def _read_bank_frame_sample(
+    bank,
+    *,
+    table_index: int,
+    frame_index: int,
+    mip_index: int,
+    phase: float,
+) -> float:
+    from wtbank import read_padded_sample
+
+    wrapped_phase = float(np.mod(np.float32(phase), np.float32(1.0)))
+    x = np.float32(wrapped_phase * np.float32(SAMPLES_PER_FRAME))
+    sample_index = int(np.floor(x))
+    fractional = float(np.float32(x - sample_index))
+    p0 = read_padded_sample(bank, table_index, mip_index, frame_index, sample_index + 0)
+    p1 = read_padded_sample(bank, table_index, mip_index, frame_index, sample_index + 1)
+    p2 = read_padded_sample(bank, table_index, mip_index, frame_index, sample_index + 2)
+    p3 = read_padded_sample(bank, table_index, mip_index, frame_index, sample_index + 3)
+    return _catmull_rom(p0, p1, p2, p3, fractional)
+
+
+def render_bank_reference(
+    source_tables: Sequence[FixtureBank],
+    recipe: Recipe,
+    *,
+    table_index: int = 0,
+    frequency_events: Sequence[tuple[int, float]] = (),
+) -> Float32Array:
+    from wtbank import build_bank
+
+    if not source_tables:
+        raise ValueError("render_bank_reference requires at least one FixtureBank")
+    if not 0 <= table_index < len(source_tables):
+        raise ValueError("table_index must address a table inside source_tables")
+
+    built_bank = build_bank(source_tables).bank
+    frame_count = source_tables[table_index].num_frames
+    expected = np.empty(recipe.num_samples, dtype=np.float32)
+    phase = np.float32(recipe.start_phase)
+    current_frequency = np.float32(recipe.freq_hz_curve[0])
+    sample_rate = np.float32(recipe.sample_rate)
+    event_index = 0
+
+    for sample_offset in range(recipe.num_samples):
+        while event_index < len(frequency_events) and frequency_events[event_index][0] == sample_offset:
+            current_frequency = np.float32(frequency_events[event_index][1])
+            event_index += 1
+
+        mip_index = formula_mip_index_for_frequency(float(current_frequency), recipe.sample_rate)
+        frame_lo, frame_hi, frame_t = frame_position_to_indices(
+            float(recipe.frame_pos_curve[sample_offset]),
+            frame_count,
+        )
+        lo = _read_bank_frame_sample(
+            built_bank,
+            table_index=table_index,
+            frame_index=frame_lo,
+            mip_index=mip_index,
+            phase=float(phase),
+        )
+        if frame_hi == frame_lo:
+            expected[sample_offset] = np.float32(lo)
+        else:
+            hi = _read_bank_frame_sample(
+                built_bank,
+                table_index=table_index,
+                frame_index=frame_hi,
+                mip_index=mip_index,
+                phase=float(phase),
+            )
+            expected[sample_offset] = np.float32(lo + (hi - lo) * frame_t)
+
+        phase_increment = np.float32(current_frequency / sample_rate)
+        phase = np.float32(np.mod(np.float32(phase + phase_increment), np.float32(1.0)))
+
+    return expected
 
 
 def _phase_curve(recipe: Recipe) -> Float64Array:

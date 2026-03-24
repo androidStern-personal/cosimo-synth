@@ -1,0 +1,9 @@
+{
+  "sampleBlob": "factory-bank.wav",
+  "tables": [
+    {
+      "frameCount": 4,
+      "sampleOffset": 0
+    }
+  ]
+}

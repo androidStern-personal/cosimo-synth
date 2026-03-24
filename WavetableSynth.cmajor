@@ -1,0 +1,64 @@
+namespace wt
+{
+    graph Voice
+    {
+        input event (std::notes::NoteOn,
+                     std::notes::NoteOff,
+                     std::notes::PitchBend,
+                     std::notes::Slide,
+                     std::notes::Pressure,
+                     std::notes::Control) eventIn;
+        input value float32 framePositionIn;
+        output stream float32<2> out;
+
+        node osc       = wt::FixedFrameOscillator (0, 440.0f, 0.0f);
+        node envelope  = std::envelopes::FixedASR (0.01f, 0.20f);
+        node voiceGain = std::levels::DynamicGain (float32);
+        node trim      = std::levels::ConstantGain (float32, 0.18f);
+        node stereo    = std::mixers::MonoToStereo (float32);
+
+        event eventIn (std::notes::NoteOn note)
+        {
+            osc.frequencyIn <- std::notes::noteToFrequency (note.pitch);
+            envelope.eventIn <- note;
+        }
+
+        event eventIn (std::notes::NoteOff note)
+        {
+            envelope.eventIn <- note;
+        }
+
+        event eventIn (std::notes::PitchBend bend) {}
+        event eventIn (std::notes::Slide slide) {}
+        event eventIn (std::notes::Pressure pressure) {}
+        event eventIn (std::notes::Control control) {}
+
+        connection
+        {
+            framePositionIn -> osc.framePositionIn;
+            osc.out -> voiceGain.in;
+            envelope.gainOut -> voiceGain.gain;
+            voiceGain.out -> trim.in;
+            trim.out -> stereo.in;
+            stereo.out -> out;
+        }
+    }
+}
+
+graph WavetableSynth [[ main ]]
+{
+    input event std::midi::Message midiIn;
+    input value float32 wavetablePosition [[ name: "Wavetable Position", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
+    output stream float32<2> audioOut;
+
+    node mpe   = std::midi::MPEConverter;
+    node voice = wt::Voice;
+
+    connection
+    {
+        midiIn -> mpe.parseMIDI;
+        mpe.eventOut -> voice.eventIn;
+        wavetablePosition -> voice.framePositionIn;
+        voice.out -> audioOut;
+    }
+}

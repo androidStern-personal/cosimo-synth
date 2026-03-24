@@ -23,7 +23,7 @@ A wavetable is an ordered collection of frames (single-cycle waveforms). A user-
 | Samples per frame        |  2048 | Common power-of-two size with good FFT behavior and broad Serum-style wavetable compatibility.                                                    |
 | Max frames per wavetable |   256 | Matches Serum's documented upper bound and comfortably covers dense wavetables.                                                                   |
 | Mipmap levels per frame  |    11 | One-octave spacing from 1 harmonic through 1024 harmonics. Covers the practical harmonic-count range for a 44.1 kHz system.                       |
-| Extra samples per buffer |     3 | Wrap padding for a 4-point cubic interpolation read. The exact read neighborhood is implementation-defined and must match the padding convention. |
+| Extra samples per buffer |     3 | Wrap padding for a 4-point cubic interpolation read. The implementation uses one wrapped sample on the left and two on the right so the hot read path can use `base + i .. base + i + 3` without modulo branches. |
 
 ### 1.3 Memory Layout
 
@@ -55,7 +55,7 @@ This chooses the largest mip level whose harmonic count does not exceed Nyquist 
 
 ## 2. Mipmap Generation Pipeline
 
-This runs offline in tooling or in the JS editor/builder layer, not in the Cmajor audio path. Zero FFT at runtime.
+This runs offline in Python tooling, not in the Cmajor audio path. Zero FFT at runtime.
 
 ### 2.1 Steps (per frame)
 
@@ -64,12 +64,12 @@ This runs offline in tooling or in the JS editor/builder layer, not in the Cmajo
    - Copy the frequency-domain data.
    - Zero all bins above index `2^k`.
    - iFFT back to 2048 time-domain samples.
-   - Append 3 wrap samples (copy samples `[0..2]` to positions `[2048..2050]`) for interpolation.
+   - Write the padded frame as `[last, frame[0..2047], first, second]` so cubic reads can use `base + i .. base + i + 3`.
 3. Pack the result into a flat `Float32Array` or equivalent build-time resource format.
 
-### 2.2 JS Implementation Notes
+### 2.2 Offline Compiler Notes
 
-Use a JS or WASM FFT library such as `fft.js` or `kissfft-wasm`. `OfflineAudioContext` is not the FFT backend here - it is an offline renderer, not a general FFT/IFFT API. Build time depends on the chosen FFT library, platform, and wavetable size, so any exact latency target should be measured on the real target platforms rather than baked into the design.
+Use the existing Python toolchain for this build step. NumPy and SciPy already provide the real-input FFT and inverse FFT the bank compiler needs, and they keep the offline bank pipeline in the same language and test harness as the rest of the build tooling. If a browser-side editor is added later, that separate UI path will need its own FFT backend, but that is outside the v1 compiler path. Build time depends on the chosen implementation, platform, and wavetable size, so any exact latency target should be measured on the real target platforms rather than baked into the design.
 
 ### 2.3 Normalization
 
@@ -174,7 +174,17 @@ out = p1 + 0.5 * t * (
 )
 ```
 
-The implementation must define the cubic read neighborhood so it matches the wrap-padding convention exactly. The goal is to make boundary reads valid without paying a per-sample modulo cost in the hot path.
+The implementation uses this fixed read neighborhood:
+
+```text
+base = table.sampleOffset + (((mip_index * table.frameCount) + frame_index) * 2051)
+p0 = sampleBlob.frames[base + i]
+p1 = sampleBlob.frames[base + i + 1]
+p2 = sampleBlob.frames[base + i + 2]
+p3 = sampleBlob.frames[base + i + 3]
+```
+
+with padded frames stored as `[last, frame[0..2047], first, second]`. This makes boundary reads valid without paying a per-sample modulo cost in the hot path.
 
 ### 4.5 Frame Scanning (Wavetable Position)
 
@@ -422,7 +432,7 @@ For v1, shared factory wavetable banks are the clean path:
 3. All voices read the same shared read-only wavetable bank.
 4. Runtime changes choose among preloaded banks by index.
 
-This avoids per-voice duplication entirely for the baseline instrument.
+This avoids per-voice duplication entirely for the baseline instrument. The shared bank is a single `external` object containing the flat sample blob plus per-table metadata. The sample blob is loaded from an audio resource in the patch bundle, and the table metadata comes from the manifest's normal JSON object coercion.
 
 If user-imported hot-swap tables become a product requirement later, the mutable wavetable store should move into a single stateful processor that owns active/staging buffers. Graphs should not be treated as owning mutable state, and `external` data should not be treated as a runtime-write path.
 
