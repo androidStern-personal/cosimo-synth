@@ -1,3 +1,6 @@
+import { loadFactoryBankFramesFromPatch, DEFAULT_VISIBLE_MIP_INDEX } from "./wavetable-bank.js";
+import { CanvasWavetableDisplay } from "./wavetable-display.js";
+
 const midiInputEndpointID = "midiIn";
 const wavetablePositionEndpointID = "wavetablePosition";
 const knobMin = 0.0;
@@ -11,7 +14,7 @@ function clamp(value, min, max) {
 }
 
 function remap(value, sourceMin, sourceMax, targetMin, targetMax) {
-    return targetMin + (value - sourceMin) * (targetMax - targetMin) / (sourceMax - sourceMin);
+    return targetMin + ((value - sourceMin) * (targetMax - targetMin) / (sourceMax - sourceMin));
 }
 
 function registerCustomElement(name, elementClass) {
@@ -28,7 +31,7 @@ function defineKeyboardElement(patchConnection) {
                     naturalNoteWidth: 22,
                     accidentalWidth: 13,
                     accidentalPercentageHeight: 64,
-                    pressedNoteColour: "#f0d17a",
+                    pressedNoteColour: "#f56cb6",
                 });
             }
         };
@@ -45,6 +48,8 @@ class CosimoSynthView extends HTMLElement {
         this.currentValue = knobDefault;
         this.dragStartValue = knobDefault;
         this.dragStartY = 0;
+        this.display = null;
+        this.resizeObserver = null;
 
         this.attachShadow({ mode: "open" });
         defineKeyboardElement(patchConnection);
@@ -60,6 +65,7 @@ class CosimoSynthView extends HTMLElement {
     disconnectedCallback() {
         window.removeEventListener("mousemove", this.handleMouseMove);
         window.removeEventListener("mouseup", this.handleMouseUp);
+        this.resizeObserver?.disconnect();
 
         if (this.keyboard) {
             this.keyboard.removeEventListener("note-down", this.handleNoteDown);
@@ -74,7 +80,7 @@ class CosimoSynthView extends HTMLElement {
     }
 
     getScaleFactorLimits() {
-        return { minScale: 0.75, maxScale: 1.5 };
+        return { minScale: 0.75, maxScale: 1.35 };
     }
 
     initialiseView() {
@@ -86,12 +92,19 @@ class CosimoSynthView extends HTMLElement {
         this.valueText = this.shadowRoot.querySelector(".value-text");
         this.keyboardHost = this.shadowRoot.querySelector(".keyboard-host");
         this.hint = this.shadowRoot.querySelector(".hint");
+        this.displayCanvas = this.shadowRoot.querySelector(".wavetable-canvas");
+        this.displayViewport = this.shadowRoot.querySelector(".wavetable-stage");
+        this.displayOverlay = this.shadowRoot.querySelector(".display-overlay");
+        this.displayStatus = this.shadowRoot.querySelector(".display-status");
+        this.bankReadout = this.shadowRoot.querySelector(".bank-readout");
 
         this.handleParameterChange = (value) => this.setDisplayedValue(value);
         this.handleIncomingMIDI = (message) => this.keyboard?.handleExternalMIDI(message.message);
         this.handleMouseMove = (event) => this.dragKnob(event);
         this.handleMouseUp = () => this.endKnobGesture();
 
+        this.display = new CanvasWavetableDisplay(this.displayCanvas);
+        this.installResizeObserver();
         this.buildKeyboard();
         this.bindKnob();
         this.setDisplayedValue(knobDefault);
@@ -102,8 +115,48 @@ class CosimoSynthView extends HTMLElement {
         );
         this.patchConnection.requestParameterValue(wavetablePositionEndpointID);
         this.patchConnection.addEndpointListener(midiInputEndpointID, this.handleIncomingMIDI);
+        this.loadDisplayFrames();
 
         this.hasOnscreenKeyboard = true;
+    }
+
+    installResizeObserver() {
+        const resize = () => {
+            const bounds = this.displayViewport.getBoundingClientRect();
+            this.display.resize(bounds.width, bounds.height, window.devicePixelRatio || 1);
+        };
+
+        if ("ResizeObserver" in window) {
+            this.resizeObserver = new ResizeObserver(() => resize());
+            this.resizeObserver.observe(this.displayViewport);
+        } else {
+            window.addEventListener("resize", resize);
+        }
+
+        requestAnimationFrame(resize);
+    }
+
+    async loadDisplayFrames() {
+        this.setDisplayState("loading", "Loading wavetable bank…");
+
+        try {
+            const bank = await loadFactoryBankFramesFromPatch(this.patchConnection);
+            this.display.setFrames(bank.frames);
+            this.display.setPosition(this.currentValue);
+            this.setDisplayState("loaded", `${bank.frameCount} frames • mip ${DEFAULT_VISIBLE_MIP_INDEX}`);
+            this.bankReadout.textContent = `Factory bank • ${bank.frameCount} stored shapes`;
+        } catch (error) {
+            console.error(error);
+            this.setDisplayState("error", "Could not load wavetable bank");
+            this.bankReadout.textContent = "Display unavailable";
+        }
+    }
+
+    setDisplayState(state, message) {
+        this.displayStatus.textContent = message;
+        this.displayViewport.dataset.state = state;
+        this.displayOverlay.textContent = message;
+        this.displayOverlay.hidden = state === "loaded";
     }
 
     showError(error) {
@@ -187,7 +240,7 @@ class CosimoSynthView extends HTMLElement {
 
     dragKnob(event) {
         const nextValue = clamp(
-            this.dragStartValue + (this.dragStartY - event.clientY) / 240.0,
+            this.dragStartValue + ((this.dragStartY - event.clientY) / 240.0),
             knobMin,
             knobMax
         );
@@ -221,6 +274,7 @@ class CosimoSynthView extends HTMLElement {
         this.knobTrack.style.strokeDashoffset = `${dashOffset}`;
         this.knobDial.style.transform = `rotate(${rotation}deg)`;
         this.valueText.textContent = nextValue.toFixed(2);
+        this.display?.setPosition(nextValue);
     }
 
     getHTML() {
@@ -235,9 +289,8 @@ class CosimoSynthView extends HTMLElement {
                     display: block;
                     width: 100%;
                     height: 100%;
-                    background:
-                        radial-gradient(circle at top, #2f383f 0%, #15181b 58%, #0c0e10 100%);
-                    color: #f3f3ee;
+                    background: #02040b;
+                    color: #f3f0ff;
                 }
 
                 .panel {
@@ -249,38 +302,144 @@ class CosimoSynthView extends HTMLElement {
                 .card {
                     width: 100%;
                     height: 100%;
-                    border: 1px solid rgba(255, 255, 255, 0.12);
+                    border: 1px solid rgba(122, 142, 255, 0.18);
                     border-radius: 18px;
-                    background: rgba(20, 23, 26, 0.82);
-                    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.35);
-                    padding: 18px 18px 16px;
+                    background: rgba(4, 7, 18, 0.96);
+                    box-shadow:
+                        0 24px 60px rgba(3, 6, 18, 0.48),
+                        inset 0 1px 0 rgba(160, 173, 255, 0.08);
+                    padding: 18px 18px 14px;
                     display: grid;
-                    gap: 12px;
-                    grid-template-rows: auto auto 1fr auto auto;
+                    gap: 16px;
+                    grid-template-rows: auto 1fr auto auto;
+                }
+
+                .header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: end;
+                    gap: 16px;
                 }
 
                 .title {
                     font-size: 14px;
                     letter-spacing: 0.12em;
                     text-transform: uppercase;
-                    color: #c6d2c0;
+                    color: #8da2ff;
                 }
 
                 .subtitle {
-                    font-size: 20px;
+                    font-size: 22px;
                     line-height: 1;
-                    color: #fff7d6;
+                    color: #ffd8a6;
+                    margin-top: 6px;
                 }
 
-                .knob-section {
+                .display-status {
+                    padding: 6px 10px;
+                    border-radius: 999px;
+                    background: rgba(73, 93, 186, 0.14);
+                    color: #f56cb6;
+                    font-size: 12px;
+                    letter-spacing: 0.04em;
+                    text-transform: uppercase;
+                    box-shadow: inset 0 1px 0 rgba(160, 173, 255, 0.08);
+                }
+
+                .main-grid {
+                    display: grid;
+                    grid-template-columns: minmax(0, 1fr) 208px;
+                    gap: 16px;
+                    align-items: stretch;
+                }
+
+                .wavetable-panel {
+                    min-width: 0;
+                    border-radius: 16px;
+                    border: 1px solid rgba(122, 142, 255, 0.12);
+                    background: rgba(5, 8, 20, 0.94);
+                    padding: 14px 14px 12px;
+                    display: grid;
+                    grid-template-rows: auto 1fr;
+                    gap: 12px;
+                }
+
+                .wavetable-copy {
+                    display: flex;
+                    justify-content: flex-start;
+                    align-items: baseline;
+                    gap: 12px;
+                    font-size: 12px;
+                }
+
+                .bank-readout {
+                    color: rgba(255, 214, 165, 0.9);
+                    letter-spacing: 0.08em;
+                    text-transform: uppercase;
+                }
+
+                .wavetable-stage {
+                    position: relative;
+                    aspect-ratio: 1.9 / 1;
+                    min-height: 280px;
+                    border-radius: 12px;
+                    overflow: hidden;
+                    background: #04070f;
+                    box-shadow:
+                        inset 0 1px 0 rgba(149, 164, 255, 0.08),
+                        inset 0 -30px 54px rgba(2, 4, 12, 0.44);
+                }
+
+                .wavetable-canvas {
+                    width: 100%;
+                    height: 100%;
+                    display: block;
+                }
+
+                .display-overlay {
+                    position: absolute;
+                    inset: 0;
                     display: grid;
                     place-items: center;
-                    min-height: 180px;
+                    text-align: center;
+                    padding: 22px;
+                    font-size: 13px;
+                    letter-spacing: 0.06em;
+                    text-transform: uppercase;
+                    color: rgba(255, 216, 172, 0.86);
+                    background: rgba(4, 7, 18, 0.82);
+                    backdrop-filter: blur(4px);
+                }
+
+                .display-overlay[hidden] {
+                    display: none;
+                }
+
+                .wavetable-stage[data-state="error"] .display-overlay {
+                    color: #ffb0d5;
+                }
+
+                .control-panel {
+                    border-radius: 16px;
+                    border: 1px solid rgba(122, 142, 255, 0.12);
+                    background: rgba(5, 8, 20, 0.78);
+                    padding: 16px 12px 14px;
+                    display: grid;
+                    align-content: start;
+                    justify-items: center;
+                    gap: 14px;
+                }
+
+                .control-heading {
+                    font-size: 12px;
+                    letter-spacing: 0.1em;
+                    text-transform: uppercase;
+                    color: rgba(154, 170, 255, 0.78);
                 }
 
                 .knob-shell {
-                    width: 168px;
-                    height: 168px;
+                    width: 150px;
+                    height: 150px;
                     position: relative;
                     cursor: ns-resize;
                     user-select: none;
@@ -299,23 +458,23 @@ class CosimoSynthView extends HTMLElement {
                 }
 
                 .knob-track-background {
-                    stroke: rgba(255, 255, 255, 0.14);
+                    stroke: rgba(112, 128, 214, 0.28);
                 }
 
                 .knob-track-value {
-                    stroke: #f0d17a;
+                    stroke: #f19335;
                 }
 
                 .knob-dial {
                     position: absolute;
-                    inset: 26px;
+                    inset: 23px;
                     border-radius: 50%;
                     background:
-                        radial-gradient(circle at 32% 28%, #4d5660 0%, #2c3137 48%, #15181c 100%);
+                        radial-gradient(circle at 32% 28%, #434f95 0%, #1d2450 42%, #090d1f 100%);
                     box-shadow:
-                        inset 0 2px 10px rgba(255, 255, 255, 0.08),
-                        inset 0 -10px 18px rgba(0, 0, 0, 0.4),
-                        0 12px 24px rgba(0, 0, 0, 0.28);
+                        inset 0 2px 10px rgba(196, 204, 255, 0.14),
+                        inset 0 -10px 18px rgba(0, 0, 0, 0.42),
+                        0 12px 24px rgba(4, 8, 20, 0.42);
                     display: grid;
                     place-items: start center;
                     padding-top: 12px;
@@ -324,10 +483,10 @@ class CosimoSynthView extends HTMLElement {
 
                 .knob-tick {
                     width: 4px;
-                    height: 30px;
+                    height: 27px;
                     border-radius: 999px;
-                    background: linear-gradient(180deg, #fff7d6 0%, #f0d17a 100%);
-                    box-shadow: 0 0 10px rgba(240, 209, 122, 0.45);
+                    background: linear-gradient(180deg, #ffd9a4 0%, #f56cb6 100%);
+                    box-shadow: 0 0 12px rgba(245, 108, 182, 0.48);
                 }
 
                 .value-text {
@@ -335,10 +494,10 @@ class CosimoSynthView extends HTMLElement {
                     inset: 0;
                     display: grid;
                     place-items: center;
-                    padding-top: 44px;
-                    font-size: 19px;
+                    padding-top: 38px;
+                    font-size: 18px;
                     letter-spacing: 0.08em;
-                    color: #fff7d6;
+                    color: #ffd8a6;
                     pointer-events: none;
                 }
 
@@ -349,54 +508,80 @@ class CosimoSynthView extends HTMLElement {
                     font-size: 13px;
                     letter-spacing: 0.08em;
                     text-transform: uppercase;
-                    color: rgba(255, 255, 255, 0.76);
+                    color: rgba(203, 212, 255, 0.8);
                     pointer-events: none;
                 }
 
                 .keyboard-host {
-                    min-height: 126px;
+                    min-height: 122px;
                     display: grid;
                     align-items: stretch;
                 }
 
                 .keyboard {
                     width: 100%;
-                    height: 126px;
+                    height: 122px;
                     border-radius: 12px;
                     overflow: hidden;
-                    background: rgba(255, 255, 255, 0.04);
+                    background: rgba(6, 10, 24, 0.94);
                     padding: 8px 10px 10px;
                 }
 
                 .hint {
                     font-size: 12px;
-                    color: rgba(255, 255, 255, 0.68);
+                    color: rgba(194, 202, 255, 0.72);
+                }
+
+                @media (max-width: 760px) {
+                    .main-grid {
+                        grid-template-columns: 1fr;
+                    }
                 }
             </style>
 
             <div class="panel">
                 <div class="card">
-                    <div class="title">Cosimo Synth Reload Test</div>
-                    <div class="subtitle">Wavetable Position</div>
-                    <div class="knob-section">
-                        <div class="knob-shell">
-                            <svg viewBox="0 0 100 100" aria-hidden="true">
-                                <path
-                                    class="knob-path knob-track-background"
-                                    d="M20,76 A 40 40 0 1 1 80 76"
-                                ></path>
-                                <path
-                                    class="knob-path knob-track-value"
-                                    d="M20,76 A 40 40 0 1 1 80 76"
-                                ></path>
-                            </svg>
-                            <div class="knob-dial">
-                                <div class="knob-tick"></div>
+                    <div class="header">
+                        <div>
+                            <div class="title">Cosimo Synth</div>
+                            <div class="subtitle">Wavetable Position</div>
+                        </div>
+                        <div class="display-status">Loading wavetable bank…</div>
+                    </div>
+
+                    <div class="main-grid">
+                        <div class="wavetable-panel">
+                            <div class="wavetable-copy">
+                                <div class="bank-readout">Factory bank</div>
                             </div>
-                            <div class="value-text">0.00</div>
-                            <div class="label">Wavetable Position</div>
+                            <div class="wavetable-stage" data-state="loading">
+                                <canvas class="wavetable-canvas"></canvas>
+                                <div class="display-overlay">Loading wavetable bank…</div>
+                            </div>
+                        </div>
+
+                        <div class="control-panel">
+                            <div class="control-heading">Frame Scan</div>
+                            <div class="knob-shell">
+                                <svg viewBox="0 0 100 100" aria-hidden="true">
+                                    <path
+                                        class="knob-path knob-track-background"
+                                        d="M20,76 A 40 40 0 1 1 80 76"
+                                    ></path>
+                                    <path
+                                        class="knob-path knob-track-value"
+                                        d="M20,76 A 40 40 0 1 1 80 76"
+                                    ></path>
+                                </svg>
+                                <div class="knob-dial">
+                                    <div class="knob-tick"></div>
+                                </div>
+                                <div class="value-text">0.00</div>
+                                <div class="label">Wavetable Position</div>
+                            </div>
                         </div>
                     </div>
+
                     <div class="keyboard-host"></div>
                     <div class="hint">Loading keyboard…</div>
                 </div>

@@ -31,6 +31,25 @@ SPECTROGRAM_OVERLAP = 768
 OSCILLATOR_MIP_COUNT = 11
 BRIGHTEST_MIP_INDEX = OSCILLATOR_MIP_COUNT - 1
 MAX_MIP_HARMONICS = 1 << BRIGHTEST_MIP_INDEX
+SYNC_SAW_FRAME_RATIOS: tuple[float, ...] = (
+    1.0,
+    1.125,
+    1.25,
+    1.375,
+    1.5,
+    1.75,
+    2.0,
+    2.5,
+    3.0,
+    3.5,
+    4.0,
+    5.0,
+    6.0,
+    8.0,
+    12.0,
+    16.0,
+)
+DISPLAY_DEMO_FRAME_COUNT = 16
 MIP_LEVEL_THRESHOLDS: tuple[tuple[int, np.float32], ...] = tuple(
     (level, np.float32(1.0 / float(1 << (level + 1))))
     for level in range(BRIGHTEST_MIP_INDEX, 0, -1)
@@ -478,6 +497,95 @@ def _square_frame() -> Float64Array:
     return np.where(indices < SAMPLES_PER_FRAME // 2, 1.0, -1.0).astype(np.float64)
 
 
+def _sync_saw_frame(sync_ratio: float) -> Float64Array:
+    if sync_ratio < 1.0:
+        raise ValueError("sync_ratio must stay at or above 1.0")
+
+    slave_phase = np.mod(_sample_positions() * float(sync_ratio), 1.0)
+    return (2.0 * slave_phase) - 1.0
+
+
+def _rounded_triangle_frame() -> Float64Array:
+    return (2.0 / np.pi) * np.arcsin(np.sin(2.0 * np.pi * _sample_positions()))
+
+
+def _soft_square_frame() -> Float64Array:
+    return np.tanh(1.35 * np.sin(2.0 * np.pi * _sample_positions()))
+
+
+def _camel_frame() -> Float64Array:
+    positions = _sample_positions()
+    return (
+        (0.82 * np.sin(2.0 * np.pi * positions))
+        + (0.28 * np.sin((4.0 * np.pi * positions) - 0.85))
+    )
+
+
+def _double_peak_frame() -> Float64Array:
+    positions = _sample_positions()
+    return (
+        (0.78 * np.sin(2.0 * np.pi * positions))
+        - (0.14 * np.sin((4.0 * np.pi * positions) - 0.75))
+        + (0.22 * np.sin((6.0 * np.pi * positions) + 0.45))
+    )
+
+
+def _hollow_frame() -> Float64Array:
+    positions = _sample_positions()
+    return (
+        (0.88 * np.sin(2.0 * np.pi * positions))
+        - (0.24 * np.sin((6.0 * np.pi * positions) + 0.15))
+    )
+
+
+def _tilted_sine_frame() -> Float64Array:
+    positions = _sample_positions()
+    phase = (2.0 * np.pi * positions) + (0.38 * np.sin((2.0 * np.pi * positions) - 0.35))
+    return np.sin(phase)
+
+
+def _folded_sine_frame() -> Float64Array:
+    positions = _sample_positions()
+    raw = (
+        np.sin(2.0 * np.pi * positions)
+        + (0.35 * np.sin((4.0 * np.pi * positions) + 0.8))
+        - (0.12 * np.sin((6.0 * np.pi * positions) - 0.6))
+    )
+    return np.tanh(0.95 * raw)
+
+
+def _display_demo_frame(frame_position: float) -> Float64Array:
+    anchors = [
+        _sine_frame(),
+        _camel_frame(),
+        _rounded_triangle_frame(),
+        _double_peak_frame(),
+        _soft_square_frame(),
+        _hollow_frame(),
+        _folded_sine_frame(),
+        _tilted_sine_frame(),
+    ]
+    anchor_positions = np.linspace(0.0, 1.0, num=len(anchors), dtype=np.float64)
+
+    if frame_position <= 0.0:
+        frame = anchors[0].copy()
+    elif frame_position >= 1.0:
+        frame = anchors[-1].copy()
+    else:
+        upper_index = int(np.searchsorted(anchor_positions, frame_position, side="right"))
+        lower_index = upper_index - 1
+        lower_position = anchor_positions[lower_index]
+        upper_position = anchor_positions[upper_index]
+        blend_amount = (frame_position - lower_position) / (upper_position - lower_position)
+        frame = (
+            ((1.0 - blend_amount) * anchors[lower_index])
+            + (blend_amount * anchors[upper_index])
+        )
+
+    frame -= np.mean(frame)
+    return frame
+
+
 def _bright_frame() -> Float64Array:
     positions = _sample_positions()
     rng = np.random.default_rng(BRIGHT_PHASE_SEED)
@@ -532,6 +640,26 @@ def make_sweep4_bank() -> FixtureBank:
     return _make_bank("sweep4_bank", [_sine_frame(), _saw_frame(), _square_frame(), _bright_frame()])
 
 
+def make_sync_saw_bank() -> FixtureBank:
+    return _make_bank(
+        "sync_saw_bank",
+        [_sync_saw_frame(sync_ratio) for sync_ratio in SYNC_SAW_FRAME_RATIOS],
+    )
+
+
+def make_display_demo_bank() -> FixtureBank:
+    frame_positions = np.linspace(
+        0.0,
+        1.0,
+        num=DISPLAY_DEMO_FRAME_COUNT,
+        dtype=np.float64,
+    )
+    return _make_bank(
+        "display_demo_bank",
+        [_display_demo_frame(frame_position) for frame_position in frame_positions],
+    )
+
+
 FIXTURE_BUILDERS: Mapping[str, Callable[[], FixtureBank]] = {
     "zero_bank": make_zero_bank,
     "sine_bank": make_sine_bank,
@@ -541,6 +669,7 @@ FIXTURE_BUILDERS: Mapping[str, Callable[[], FixtureBank]] = {
     "edge_bank": make_edge_bank,
     "blend2_bank": make_blend2_bank,
     "sweep4_bank": make_sweep4_bank,
+    "sync_saw_bank": make_sync_saw_bank,
 }
 
 

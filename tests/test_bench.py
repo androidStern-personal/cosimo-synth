@@ -1,4 +1,5 @@
 import importlib.util
+import math
 from pathlib import Path
 import numpy as np
 from numpy.testing import assert_allclose, assert_array_equal
@@ -32,6 +33,7 @@ from bench import (
     make_saw_bank,
     make_silence_recipe,
     make_sine_bank,
+    make_sync_saw_bank,
     make_square_bank,
     make_static_tone_recipe,
     make_sweep4_bank,
@@ -42,6 +44,7 @@ from bench import (
     render_case,
     residual_db_excluding_bin,
     rms,
+    SYNC_SAW_FRAME_RATIOS,
 )
 
 EXPECTED_FRAME_COUNTS = {
@@ -53,6 +56,7 @@ EXPECTED_FRAME_COUNTS = {
     "edge_bank": 1,
     "blend2_bank": 2,
     "sweep4_bank": 4,
+    "sync_saw_bank": len(SYNC_SAW_FRAME_RATIOS),
 }
 
 CONTRACT_PROBE_FACTORIES: dict[str, Callable[[], object]] = {
@@ -83,6 +87,17 @@ def _expected_square_frame() -> np.ndarray:
     indices = np.arange(SAMPLES_PER_FRAME, dtype=np.int64)
     raw = np.where(indices < SAMPLES_PER_FRAME // 2, 1.0, -1.0).astype(np.float64)
     return _expected_normalized(raw)
+
+
+def _expected_sync_saw_frame(sync_ratio: float) -> np.ndarray:
+    positions = np.arange(SAMPLES_PER_FRAME, dtype=np.float64) / SAMPLES_PER_FRAME
+    slave_phase = np.mod(positions * sync_ratio, 1.0)
+    raw = (2.0 * slave_phase) - 1.0
+    return _expected_normalized(raw)
+
+
+def _count_internal_sync_resets(frame: np.ndarray) -> int:
+    return int(np.count_nonzero(np.diff(frame.astype(np.float64)) < -0.5))
 
 
 def _bright_harmonic_magnitudes(frame: np.ndarray) -> np.ndarray:
@@ -178,6 +193,7 @@ def test_fixture_generation_is_deterministic(name: str, builder) -> None:
 def test_multiframe_banks_use_the_expected_frames() -> None:
     blend2_bank = make_blend2_bank()
     sweep4_bank = make_sweep4_bank()
+    sync_saw_bank = make_sync_saw_bank()
 
     expected_sine = _expected_sine_frame()
     expected_saw = _expected_saw_frame()
@@ -189,6 +205,17 @@ def test_multiframe_banks_use_the_expected_frames() -> None:
     assert_allclose(sweep4_bank.frames[1], expected_saw, atol=1e-6, rtol=0.0)
     assert_allclose(sweep4_bank.frames[2], expected_square, atol=1e-6, rtol=0.0)
     assert np.max(_bright_harmonic_magnitudes(sweep4_bank.frames[3])[BRIGHT_HARMONIC_COUNT:]) < 1e-4
+
+    assert_allclose(sync_saw_bank.frames[0], expected_saw, atol=1e-6, rtol=0.0)
+    for frame_index in (3, 7, len(SYNC_SAW_FRAME_RATIOS) - 1):
+        ratio = SYNC_SAW_FRAME_RATIOS[frame_index]
+        assert_allclose(
+            sync_saw_bank.frames[frame_index],
+            _expected_sync_saw_frame(ratio),
+            atol=1e-6,
+            rtol=0.0,
+        )
+        assert _count_internal_sync_resets(sync_saw_bank.frames[frame_index]) == math.ceil(ratio) - 1
 
 
 @pytest.mark.parametrize("name,builder", RECIPE_BUILDERS.items())

@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Cosimo Synth Wavetable Harness</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      background: #02040b;
+      color: #f3f0ff;
+      font-family: "Avenir Next", Avenir, sans-serif;
+    }
+
+    body {
+      padding: 24px;
+      display: grid;
+      gap: 18px;
+    }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 14px;
+      padding: 14px 16px;
+      border-radius: 16px;
+      background: rgba(4, 7, 18, 0.96);
+      border: 1px solid rgba(122, 142, 255, 0.18);
+      box-shadow: 0 18px 50px rgba(4, 8, 20, 0.35);
+    }
+
+    .controls label {
+      display: grid;
+      gap: 4px;
+      min-width: 220px;
+      font-size: 12px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: rgba(151, 167, 255, 0.84);
+    }
+
+    .controls input[type="range"] {
+      width: 260px;
+    }
+
+    .controls output,
+    .controls .status {
+      font-variant-numeric: tabular-nums;
+      color: #ffd8a6;
+      font-size: 14px;
+      letter-spacing: 0.02em;
+    }
+
+    #host {
+      min-height: 620px;
+    }
+  </style>
+</head>
+<body>
+  <div class="controls">
+    <label>
+      Wavetable Position
+      <input id="position" type="range" min="0" max="1" step="0.001" value="0.5" />
+    </label>
+    <output id="position-value">0.500</output>
+    <label style="min-width: unset;">
+      Animate
+      <input id="animate" type="checkbox" />
+    </label>
+    <div class="status" id="status">Loading harness…</div>
+  </div>
+
+  <div id="host"></div>
+
+  <script type="module" src="./dev-harness.mjs"></script>
+</body>
+</html>

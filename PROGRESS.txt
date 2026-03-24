@@ -1,0 +1,5 @@
+Done: pushed the Serum comparison deeper and resumed the renderer work.
+
+Current state: the renderer now uses a higher and weaker-perspective camera, a deeper deck, flatter relief, more interpolated contour slices, and split contour lines at reset cliffs so the front slice no longer acts like a wall.
+
+Return to next: reload the harness or plugin window and decide whether to keep tuning toward Serum or switch back to synth features.
