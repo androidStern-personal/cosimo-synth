@@ -51,6 +51,7 @@ class CosimoSynthView extends HTMLElement {
         this.currentValue = knobDefault;
         this.display = null;
         this.displayFramesLoaded = false;
+        this.displayFramesLoading = false;
         this.resizeObserver = null;
 
         this.attachShadow({ mode: "open" });
@@ -120,7 +121,6 @@ class CosimoSynthView extends HTMLElement {
         this.patchConnection.addStatusListener(this.handleStatusUpdate);
         this.patchConnection.requestStatusUpdate();
 
-        this.loadDisplayFrames();
     }
 
     installResizeObserver() {
@@ -140,6 +140,12 @@ class CosimoSynthView extends HTMLElement {
     }
 
     async loadDisplayFrames() {
+        if (this.displayFramesLoaded || this.displayFramesLoading) {
+            return;
+        }
+
+        this.displayFramesLoading = true;
+
         try {
             const bank = await loadFactoryBankFramesFromPatch(this.patchConnection);
             this.display.setFrames(bank.frames);
@@ -151,6 +157,8 @@ class CosimoSynthView extends HTMLElement {
             console.error(error);
             this.setDisplayState("error", "Could not load wavetable bank");
             this.bankReadout.textContent = "Display unavailable";
+        } finally {
+            this.displayFramesLoading = false;
         }
     }
 
@@ -169,6 +177,10 @@ class CosimoSynthView extends HTMLElement {
         this.patchConnection.requestParameterValue(wavetablePositionEndpointID);
         this.hint.textContent =
             "Click the keyboard once, then use A W S E D F T G Y H U J K to play notes from your computer keyboard.";
+
+        if (!this.displayFramesLoaded) {
+            this.loadDisplayFrames();
+        }
     }
 
     setDisplayState(state, message) {
@@ -445,9 +457,11 @@ class CosimoSynthView extends HTMLElement {
                 }
 
                 .cosimo-knob .knob-dial {
-                    inset: auto;
                     height: 70%;
                     width: 70%;
+                    top: 50%;
+                    left: 50%;
+                    transform: translate(-50%, -50%);
                     border: none;
                     background: radial-gradient(circle at 32% 28%, #434f95 0%, #1d2450 42%, #090d1f 100%);
                     box-shadow:

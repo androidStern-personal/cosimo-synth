@@ -15,6 +15,9 @@
     "cmajor/FixedFrameOscillator.cmajor",
     "WavetableSynth.cmajor"
   ],
+  "resources": [
+    "assets/factory-bank.wav"
+  ],
   "view": {
     "src": "patch_gui/index.js",
     "width": 1120,

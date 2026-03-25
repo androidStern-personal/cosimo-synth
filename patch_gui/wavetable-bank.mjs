@@ -140,7 +140,7 @@ export async function loadWavetableFramesFromUrls(
         paddedFrameSize = DEFAULT_PADDED_FRAME_SIZE,
     }
 ) {
-    const response = await fetch(sampleBlobUrl);
+    const response = await fetch(sampleBlobUrl.toString());
     assert(response.ok, `Failed to fetch wavetable bank from ${sampleBlobUrl}`);
 
     const arrayBuffer = await response.arrayBuffer();
@@ -173,6 +173,11 @@ export async function loadFactoryBankFramesFromPatch(
 ) {
     const manifestValue = getFactoryBankValue(patchConnection.manifest, externalID);
     const sampleBlobUrl = patchConnection.getResourceAddress(manifestValue.sampleBlob);
+
+    assert(
+        typeof sampleBlobUrl === "string" || sampleBlobUrl instanceof URL,
+        `Patch resource address for ${manifestValue.sampleBlob} is not available yet`
+    );
 
     return loadWavetableFramesFromUrls({
         manifestValue,
