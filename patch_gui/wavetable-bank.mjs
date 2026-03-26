@@ -2,7 +2,6 @@ export const FACTORY_BANK_EXTERNAL_ID = "wt::factoryBank";
 export const DEFAULT_SAMPLES_PER_FRAME = 2048;
 export const DEFAULT_PADDED_FRAME_SIZE = DEFAULT_SAMPLES_PER_FRAME + 3;
 export const DEFAULT_VISIBLE_MIP_INDEX = 10;
-export const DEFAULT_FACTORY_BANK_MANIFEST_PATH = "WavetableSynth.cmajorpatch";
 export const DEFAULT_FACTORY_BANK_CATALOG_PATH = "assets/factory-bank.json";
 
 function assert(condition, message) {
@@ -56,6 +55,16 @@ async function fetchJSON(url, label) {
     const response = await fetch(url.toString());
     assert(response.ok, `Failed to fetch ${label} from ${url}`);
     return response.json();
+}
+
+function toFactoryBankManifestValue(catalogValue) {
+    return {
+        sampleBlob: catalogValue.sampleBlob,
+        tables: catalogValue.tables.map((table) => ({
+            frameCount: Number(table.frameCount),
+            sampleOffset: Number(table.sampleOffset),
+        })),
+    };
 }
 
 export function parseWaveFile(arrayBuffer) {
@@ -224,18 +233,6 @@ export async function loadWavetableFramesFromUrls(
     };
 }
 
-async function loadPatchManifestForFactoryBank(patchConnection, manifest, externalID) {
-    if (manifest?.externals?.[externalID]) {
-        return manifest;
-    }
-
-    const manifestUrl = resolvePatchResourceUrl(
-        DEFAULT_FACTORY_BANK_MANIFEST_PATH,
-        patchConnection
-    );
-    return fetchJSON(manifestUrl, "patch manifest");
-}
-
 export async function loadFactoryBankCatalogFromPatch(
     patchConnection,
     {
@@ -251,18 +248,18 @@ export async function loadFactoryBankFramesFromPatch(
     {
         manifest = patchConnection?.manifest,
         externalID = FACTORY_BANK_EXTERNAL_ID,
+        catalogPath = DEFAULT_FACTORY_BANK_CATALOG_PATH,
         tableIndex = 0,
         visibleMipIndex = DEFAULT_VISIBLE_MIP_INDEX,
         samplesPerFrame = DEFAULT_SAMPLES_PER_FRAME,
         paddedFrameSize = DEFAULT_PADDED_FRAME_SIZE,
     } = {}
 ) {
-    const resolvedManifest = await loadPatchManifestForFactoryBank(
-        patchConnection,
-        manifest,
-        externalID
-    );
-    const manifestValue = getFactoryBankValue(resolvedManifest, externalID);
+    const manifestValue = manifest?.externals?.[externalID]
+        ? getFactoryBankValue(manifest, externalID)
+        : toFactoryBankManifestValue(
+            await loadFactoryBankCatalogFromPatch(patchConnection, { catalogPath })
+        );
     const sampleBlobUrl = resolvePatchResourceUrl(manifestValue.sampleBlob, patchConnection);
 
     return loadWavetableFramesFromUrls({

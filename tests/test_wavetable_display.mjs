@@ -220,12 +220,12 @@ test("frame extraction returns the 16 display-demo frames with evolving harmonic
     );
 });
 
-test("bank loading still works when runtime status strips externals from the manifest", async () => {
+test("bank loading falls back to the generated catalog when runtime status strips externals", async () => {
     const manifest = JSON.parse(
         await fs.readFile(path.join(repoRoot, "WavetableSynth.cmajorpatch"), "utf8")
     );
     const strippedManifest = { ...manifest };
-    const manifestBytes = Buffer.from(JSON.stringify(manifest), "utf8");
+    const catalogBytes = await fs.readFile(path.join(repoRoot, "assets", "factory-bank.json"));
     const sampleBlob = await fs.readFile(path.join(repoRoot, "assets", "factory-bank.wav"));
     delete strippedManifest.externals;
 
@@ -235,8 +235,8 @@ test("bank loading still works when runtime status strips externals from the man
         getResourceAddress(requestedPath) {
             requestedPaths.push(requestedPath);
 
-            if (requestedPath === "WavetableSynth.cmajorpatch") {
-                return `data:application/json;base64,${manifestBytes.toString("base64")}`;
+            if (requestedPath === "assets/factory-bank.json") {
+                return `data:application/json;base64,${catalogBytes.toString("base64")}`;
             }
 
             if (requestedPath === "assets/factory-bank.wav") {
@@ -251,7 +251,7 @@ test("bank loading still works when runtime status strips externals from the man
     assert.equal(bank.frameCount, manifest.externals["wt::factoryBank"].tables[0].frameCount);
     assert.equal(bank.frames[0]?.length, 2048);
     assert.equal(bank.sampleBlobPath, "assets/factory-bank.wav");
-    assert.deepEqual(requestedPaths, ["WavetableSynth.cmajorpatch", "assets/factory-bank.wav"]);
+    assert.deepEqual(requestedPaths, ["assets/factory-bank.json", "assets/factory-bank.wav"]);
 });
 
 test("factory bank catalog loader returns names for the selector UI", async () => {
