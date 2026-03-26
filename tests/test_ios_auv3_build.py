@@ -5,6 +5,7 @@ import http.server
 import json
 import os
 import platform
+import re
 import shutil
 import subprocess
 import threading
@@ -20,6 +21,21 @@ IOS_AUV3_XCODE_PROJECT = REPO_ROOT / "scripts" / "generate_ios_auv3_xcode_projec
 IOS_AUV3_HOST_SMOKE = REPO_ROOT / "scripts" / "run_ios_auv3_host_smoke.py"
 IOS_AUV3_PATCH = REPO_ROOT / "WavetableSynth.iOS.cmajorpatch"
 IOS_AUV3_HOST_SNAPSHOT = REPO_ROOT / "ios_auv3" / "expected_host_smoke.json"
+IOS_AUV3_STANDALONE_APP = REPO_ROOT / "ios_auv3" / "Source" / "CosimoStandaloneApp.cpp"
+IOS_DEV_HARNESS = REPO_ROOT / "patch_gui" / "dev-harness-ios.html"
+
+
+def _find_chrome_binary() -> str | None:
+    candidates = [
+        "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+        "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
+    ]
+
+    for candidate in candidates:
+        if Path(candidate).is_file():
+            return candidate
+
+    return None
 
 
 def _normalise_whitespace(text: str) -> str:
@@ -110,6 +126,41 @@ class _BundleServer:
         self._server.server_close()
         self._thread.join()
 
+
+def _read_harness_metrics(url: str) -> dict[str, object]:
+    chrome_binary = _find_chrome_binary()
+
+    if chrome_binary is None:
+        pytest.skip("The browser harness check needs Google Chrome or Brave on macOS")
+
+    result = subprocess.run(
+        [
+            chrome_binary,
+            "--headless",
+            "--disable-gpu",
+            "--hide-scrollbars",
+            "--window-size=430,980",
+            "--virtual-time-budget=8000",
+            "--dump-dom",
+            url,
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    match = re.search(
+        r'<script id="harness-metrics" type="application/json">(?P<json>.*?)</script>',
+        result.stdout,
+        re.DOTALL,
+    )
+
+    if match is None:
+        raise AssertionError("The iOS harness did not publish any metrics")
+
+    return json.loads(match.group("json"))
+
+
 @pytest.fixture(scope="module")
 def generated_ios_plugin_dir(tmp_path_factory: pytest.TempPathFactory) -> Path:
     output_dir = tmp_path_factory.mktemp("ios-auv3-generated")
@@ -136,12 +187,12 @@ def test_ios_auv3_cmake_keeps_the_ios_shell_separate_from_the_desktop_loader() -
     assert "WavetableSynth.iOS.cmajorpatch" in cmake_text
     assert "cmajor_plugin.cpp" in cmake_text
     assert "cmaj_StaticLibraryShim.cpp" in cmake_text
+    assert "CosimoStandaloneApp.cpp" in cmake_text
     assert "CosimoSynthHost" in cmake_text
     assert "CosimoHostMain.mm" in cmake_text
     assert "CosimoHostViewController.mm" in cmake_text
     assert "CosimoAUv3HostHarness.mm" in cmake_text
-    assert "CosimoStandaloneApp.cpp" not in cmake_text
-    assert "JUCE_USE_CUSTOM_PLUGIN_STANDALONE_APP=1" not in cmake_text
+    assert "JUCE_USE_CUSTOM_PLUGIN_STANDALONE_APP=1" in cmake_text
     assert "COSIMO_PATCH_PATH" not in cmake_text
     assert "CMAJOR_SOURCE_PATH" not in cmake_text
     assert "libCmajPerformer" not in cmake_text
@@ -157,6 +208,33 @@ def test_ios_patch_manifest_points_at_the_mobile_editor_entry() -> None:
     assert manifest["view"]["height"] == 648
     assert manifest["view"]["background"] == "#07090d"
     assert manifest["view"]["resizable"] is True
+
+
+@pytest.mark.skipif(
+    platform.system() != "Darwin",
+    reason="The browser harness check currently runs on macOS",
+)
+def test_ios_patch_harness_renders_a_full_width_scan_rail(tmp_path: Path) -> None:
+    _stage_bundle_root(tmp_path)
+
+    with _BundleServer(tmp_path) as root_url:
+        metrics = _read_harness_metrics(f"{root_url}patch_gui/dev-harness-ios.html")
+
+    assert metrics["hostWidth"] >= 360
+    assert abs(metrics["patchWidth"] - metrics["hostWidth"]) <= 1
+    assert metrics["scanRailCount"] == 1
+    assert metrics["knobCount"] == 0
+    assert metrics["keyboardDockCount"] == 1
+    assert metrics["patchScrollWidth"] <= metrics["patchClientWidth"]
+    assert metrics["stageWidth"] <= metrics["patchClientWidth"]
+    assert abs(metrics["stageLeftInset"]) <= 1
+    assert abs(metrics["stageRightInset"]) <= 1
+    assert abs(metrics["stageCenterOffset"]) <= 1.5
+    assert metrics["hasNarrativeTopline"] is False
+    assert metrics["hasNarrativeRailNote"] is False
+    assert metrics["hasNarrativeKeyboardNote"] is False
+    assert metrics["hasPlayViewLabel"] is False
+
 
 @pytest.mark.skipif(
     platform.system() != "Darwin" or shutil.which("xcodebuild") is None,
