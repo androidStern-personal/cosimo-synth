@@ -43,6 +43,8 @@ add_library(juce::juce_audio_utils ALIAS juce_audio_utils)
 
 function(juce_add_plugin target)
     add_library(${target} STATIC "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/juce_plugin_stub.cpp")
+    add_library(${target}_Standalone STATIC "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/juce_plugin_stub.cpp")
+    add_library(${target}_AUv3 STATIC "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/juce_plugin_stub.cpp")
 endfunction()
 
 function(juce_generate_juce_header target)
@@ -56,6 +58,7 @@ endfunction()
 
 def _stage_bundle_root(destination: Path) -> None:
     shutil.copy2(REPO_ROOT / "WavetableSynth.cmajorpatch", destination / "WavetableSynth.cmajorpatch")
+    shutil.copy2(REPO_ROOT / "WavetableSynth.iOS.cmajorpatch", destination / "WavetableSynth.iOS.cmajorpatch")
     shutil.copytree(REPO_ROOT / "assets", destination / "assets")
     shutil.copytree(REPO_ROOT / "patch_gui", destination / "patch_gui")
 
@@ -123,7 +126,7 @@ def generated_ios_plugin_dir(tmp_path_factory: pytest.TempPathFactory) -> Path:
     return output_dir
 
 
-def test_ios_auv3_cmake_keeps_the_ios_shell_separate_from_the_desktop_loader() -> None:
+def test_ios_auv3_cmake_uses_the_shared_stock_juce_plugin_targets() -> None:
     cmake_text = IOS_AUV3_CMAKE.read_text(encoding="utf-8")
     cmake = _normalise_whitespace(cmake_text)
 
@@ -138,6 +141,8 @@ def test_ios_auv3_cmake_keeps_the_ios_shell_separate_from_the_desktop_loader() -
     assert "CosimoHostMain.mm" in cmake_text
     assert "CosimoHostViewController.mm" in cmake_text
     assert "CosimoAUv3HostHarness.mm" in cmake_text
+    assert "CosimoStandaloneApp.cpp" not in cmake_text
+    assert "JUCE_USE_CUSTOM_PLUGIN_STANDALONE_APP=1" not in cmake_text
     assert "COSIMO_PATCH_PATH" not in cmake_text
     assert "CMAJOR_SOURCE_PATH" not in cmake_text
     assert "libCmajPerformer" not in cmake_text
@@ -149,7 +154,7 @@ def test_ios_patch_manifest_points_at_the_mobile_editor_entry() -> None:
     manifest = json.loads(IOS_AUV3_PATCH.read_text(encoding="utf-8"))
 
     assert manifest["view"]["src"] == "patch_gui/index.ios.js"
-    assert manifest["view"]["width"] == 376
+    assert manifest["view"]["width"] == 393
     assert manifest["view"]["height"] == 648
     assert manifest["view"]["resizable"] is True
 
@@ -184,16 +189,52 @@ def test_ios_auv3_generator_writes_self_contained_plugin_source_and_headers(
     assert (generated_ios_plugin_dir / "cmajor_plugin.cpp").is_file()
     assert (generated_ios_plugin_dir / "include/cmajor/helpers/cmaj_JUCEPlugin.h").is_file()
     assert (generated_ios_plugin_dir / "include/choc/choc/javascript/choc_javascript_QuickJS.h").is_file()
+    assert (generated_ios_plugin_dir / "include/cmajor/helpers/cmaj_EmbeddedWebAssets.h").is_file()
+    assert (generated_ios_plugin_dir / "include/cmajor/helpers/cmaj_PatchWebView.h").is_file()
 
     webview_header = (generated_ios_plugin_dir / "include/choc/choc/gui/choc_WebView.h").read_text(
         encoding="utf-8"
     )
+    embedded_assets_header = (
+        generated_ios_plugin_dir / "include/cmajor/helpers/cmaj_EmbeddedWebAssets.h"
+    ).read_text(encoding="utf-8")
+    patch_webview_header = (
+        generated_ios_plugin_dir / "include/cmajor/helpers/cmaj_PatchWebView.h"
+    ).read_text(encoding="utf-8")
 
-    assert """       #if CHOC_OSX
-        if (options->transparentBackground)
-            call<void> (webview, "setValue:forKey:", getNSNumberBool (false), getNSString ("drawsBackground"));
-       #endif
-""" in webview_header
+    assert '#if CHOC_OSX' in webview_header
+    assert 'if (options->transparentBackground)' in webview_header
+    assert 'call<void> (webview, "setValue:forKey:", getNSNumberBool (false), getNSString ("drawsBackground"));' in webview_header
+    assert '#endif' in webview_header
+    assert 'auto black = callClass<id> ("UIColor", "blackColor");' in webview_header
+    assert 'call<void> (webview, "setOpaque:", (BOOL) 0);' in webview_header
+    assert 'call<void> (webview, "setBackgroundColor:", black);' in webview_header
+    assert 'if (auto scrollView = call<id> (webview, "scrollView"))' in webview_header
+    assert 'call<void> (scrollView, "setBackgroundColor:", black);' in webview_header
+    assert (
+        '"            width:  view.clientWidth  - parseFloat (clientStyle.paddingLeft) - parseFloat (clientStyle.paddingRight),\\n"'
+        in embedded_assets_header
+    )
+    assert (
+        '"            height: view.clientHeight - parseFloat (clientStyle.paddingTop)  - parseFloat (clientStyle.paddingBottom)\\n"'
+        in embedded_assets_header
+    )
+    assert (
+        '"            width:  view.clientHeight - parseFloat (clientStyle.paddingTop)  - parseFloat (clientStyle.paddingBottom),\\n"'
+        not in embedded_assets_header
+    )
+    assert (
+        '"            height: view.clientWidth  - parseFloat (clientStyle.paddingLeft) - parseFloat (clientStyle.paddingRight)\\n"'
+        not in embedded_assets_header
+    )
+    assert '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />' in patch_webview_header
+    assert 'html { background: black; overflow: hidden; }' in patch_webview_header
+    assert 'body { display: block; position: absolute; width: 100%; height: 100%; color: white; font-family: Monaco, Consolas, monospace; }' in patch_webview_header
+    assert '#cmaj-view-container { display: block; position: relative; width: 100%; height: 100%; overflow: auto; }' in patch_webview_header
+    assert 'if (view?.width > 10)' in embedded_assets_header
+    assert 'if (view?.height > 10)' in embedded_assets_header
+    assert 'patchView.style.minWidth = "100%"' not in embedded_assets_header
+    assert 'patchView.style.minHeight = "100%"' not in embedded_assets_header
 
 
 def test_ios_auv3_generator_rejects_a_missing_patch_file(tmp_path: Path) -> None:
