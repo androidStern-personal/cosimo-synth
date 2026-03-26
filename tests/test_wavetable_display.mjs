@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 
 import {
     parseWaveFile,
@@ -17,6 +18,7 @@ import {
     buildWavetableStaticScene,
     buildWavetableRenderModel,
     drawWavetableModel,
+    CanvasWavetableDisplay,
 } from "../patch_gui/wavetable-display.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
@@ -161,6 +163,69 @@ class FakeContext {
     }
 }
 
+class FakeCanvas {
+    constructor() {
+        this.width = 0;
+        this.height = 0;
+        this.clientWidth = 0;
+        this.clientHeight = 0;
+        this.style = {};
+        this.context = new FakeContext();
+    }
+
+    getContext(kind) {
+        assert.equal(kind, "2d");
+        return this.context;
+    }
+}
+
+function createAnimationFrameHarness() {
+    let nextHandle = 1;
+    const pendingCallbacks = new Map();
+
+    return {
+        requestAnimationFrame(callback) {
+            const handle = nextHandle;
+            nextHandle += 1;
+            pendingCallbacks.set(handle, callback);
+            return handle;
+        },
+        cancelAnimationFrame(handle) {
+            pendingCallbacks.delete(handle);
+        },
+        flush(timestamp = 0) {
+            const callbacks = Array.from(pendingCallbacks.values());
+            pendingCallbacks.clear();
+
+            callbacks.forEach((callback) => callback(timestamp));
+        },
+        get pendingCount() {
+            return pendingCallbacks.size;
+        },
+    };
+}
+
+let patchViewModulePromise;
+
+async function loadPatchViewModule() {
+    if (!patchViewModulePromise) {
+        globalThis.HTMLElement ??= class {};
+        globalThis.window ??= {};
+        globalThis.window.customElements ??= {
+            get() {
+                return undefined;
+            },
+            define() {},
+        };
+
+        patchViewModulePromise = import(
+            `${pathToFileURL(path.join(repoRoot, "patch_gui", "index.js")).href}?test=display`
+        );
+    }
+
+    return patchViewModulePromise;
+}
+
 async function loadCurrentBank() {
     const manifest = JSON.parse(
         await fs.readFile(path.join(repoRoot, "WavetableSynth.cmajorpatch"), "utf8")
@@ -269,6 +334,13 @@ test("factory bank catalog loader returns names for the selector UI", async () =
     assert.ok(catalog.tables.length >= 2);
     assert.equal(typeof catalog.tables[0]?.tableId, "string");
     assert.equal(typeof catalog.tables[0]?.name, "string");
+});
+
+test("display position matching ignores float noise but not real slider movement", async () => {
+    const { displayPositionsMatch } = await loadPatchViewModule();
+
+    assert.equal(displayPositionsMatch(0.37, 0.3700000047683716), true);
+    assert.equal(displayPositionsMatch(0.37, 0.371), false);
 });
 
 test("loading table 1 returns a different stored frame set than table 0", async () => {
@@ -500,6 +572,47 @@ test("flat identical frames collapse into a stable slab", () => {
 
     model.contours.forEach((contour) => assert.ok(isCollinear(contour.points)));
     assert.ok(isCollinear(model.currentSlice.points));
+});
+
+test("canvas display coalesces repeated position updates into one animation-frame paint", () => {
+    const frames = createSimpleFrames([
+        [-1, -0.25, 0.5, 1],
+        [-1, -0.25, 0.5, 1],
+        [-1, -0.25, 0.5, 1],
+    ]);
+    const canvas = new FakeCanvas();
+    const animationFrame = createAnimationFrameHarness();
+    const display = new CanvasWavetableDisplay(canvas, {
+        requestAnimationFrame: animationFrame.requestAnimationFrame,
+        cancelAnimationFrame: animationFrame.cancelAnimationFrame,
+    });
+    const originalRender = display.render.bind(display);
+    let renderCount = 0;
+
+    display.render = () => {
+        renderCount += 1;
+        return originalRender();
+    };
+
+    display.resize(320, 220, 1);
+    display.setFrames(frames);
+    assert.equal(animationFrame.pendingCount, 1);
+    assert.equal(renderCount, 0);
+
+    animationFrame.flush();
+    assert.equal(renderCount, 1);
+
+    renderCount = 0;
+    display.setPosition(0.12);
+    display.setPosition(0.34);
+    display.setPosition(0.56);
+
+    assert.equal(animationFrame.pendingCount, 1);
+    assert.equal(renderCount, 0);
+    assert.equal(display.position, 0.56);
+
+    animationFrame.flush();
+    assert.equal(renderCount, 1);
 });
 
 test("boundary positions and exact stored-frame positions stay continuous", async () => {

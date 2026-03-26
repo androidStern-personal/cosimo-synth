@@ -9,11 +9,20 @@ import { computeResponsivePatchLayout, getLayoutCSSVariables } from "./responsiv
 const midiInputEndpointID = "midiIn";
 const wavetablePositionEndpointID = "wavetablePosition";
 const wavetableSelectEndpointID = "wavetableSelect";
+const DISPLAY_POSITION_EPSILON = 0.000001;
 
 const knobDefault = 0.0;
 
 function clamp(value, min, max) {
     return Math.min(Math.max(value, min), max);
+}
+
+function clampDisplayPosition(value) {
+    return clamp(Number(value) || 0, 0.0, 1.0);
+}
+
+export function displayPositionsMatch(left, right, epsilon = DISPLAY_POSITION_EPSILON) {
+    return Math.abs(clampDisplayPosition(left) - clampDisplayPosition(right)) <= epsilon;
 }
 
 function registerCustomElement(name, elementClass) {
@@ -68,6 +77,7 @@ class CosimoSynthView extends HTMLElement {
         this.currentValue = knobDefault;
         this.currentTableIndex = 0;
         this.currentFrameCount = 1;
+        this.hasDisplayedValue = false;
         this.display = null;
         this.displayFramesCache = new Map();
         this.displayFramesLoading = new Set();
@@ -580,7 +590,12 @@ class CosimoSynthView extends HTMLElement {
 
         this.scanRailEndpointID = endpointID;
         this.handleScanRailInput = () => {
-            const nextValue = clamp(Number(this.scanRailInput.value) || 0, 0.0, 1.0);
+            const nextValue = clampDisplayPosition(this.scanRailInput.value);
+
+            if (this.hasDisplayedValue && displayPositionsMatch(this.currentValue, nextValue)) {
+                return;
+            }
+
             this.patchConnection.sendEventOrValue(endpointID, nextValue);
             this.setDisplayedValue(nextValue);
         };
@@ -617,8 +632,13 @@ class CosimoSynthView extends HTMLElement {
     }
 
     setDisplayedValue(value) {
-        const nextValue = clamp(Number(value) || 0, 0.0, 1.0);
+        const nextValue = clampDisplayPosition(value);
 
+        if (this.hasDisplayedValue && displayPositionsMatch(this.currentValue, nextValue)) {
+            return;
+        }
+
+        this.hasDisplayedValue = true;
         this.currentValue = nextValue;
         if (this.valueReadout) {
             this.valueReadout.textContent = this.options.platform === "ios"

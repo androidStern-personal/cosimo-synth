@@ -25,6 +25,23 @@ function clamp(value, min, max) {
     return Math.min(Math.max(value, min), max);
 }
 
+function requestNextAnimationFrame(callback) {
+    if (typeof globalThis.requestAnimationFrame === "function") {
+        return globalThis.requestAnimationFrame(callback);
+    }
+
+    return setTimeout(() => callback(Date.now()), 0);
+}
+
+function cancelNextAnimationFrame(handle) {
+    if (typeof globalThis.cancelAnimationFrame === "function") {
+        globalThis.cancelAnimationFrame(handle);
+        return;
+    }
+
+    clearTimeout(handle);
+}
+
 function lerp(start, end, amount) {
     return start + ((end - start) * amount);
 }
@@ -824,10 +841,19 @@ export function drawWavetableModel(context, model, theme = DEFAULT_WAVETABLE_THE
 }
 
 export class CanvasWavetableDisplay {
-    constructor(canvas, { theme = DEFAULT_WAVETABLE_THEME } = {}) {
+    constructor(
+        canvas,
+        {
+            theme = DEFAULT_WAVETABLE_THEME,
+            requestAnimationFrame = requestNextAnimationFrame,
+            cancelAnimationFrame = cancelNextAnimationFrame,
+        } = {}
+    ) {
         this.canvas = canvas;
         this.context = canvas.getContext("2d");
         this.theme = theme;
+        this.requestAnimationFrame = requestAnimationFrame;
+        this.cancelAnimationFrame = cancelAnimationFrame;
         this.frames = [];
         this.position = 0;
         this.devicePixelRatio = 1;
@@ -835,6 +861,7 @@ export class CanvasWavetableDisplay {
         this.cssHeight = 0;
         this.staticScene = null;
         this.staticKey = "";
+        this.pendingRenderHandle = null;
     }
 
     invalidateStaticScene() {
@@ -848,12 +875,12 @@ export class CanvasWavetableDisplay {
             frame instanceof Float32Array ? frame.slice() : Float32Array.from(frame)
         );
         this.invalidateStaticScene();
-        this.render();
+        this.queueRender();
     }
 
     setPosition(position) {
         this.position = clamp(Number(position) || 0, 0, 1);
-        this.render();
+        this.queueRender();
     }
 
     resize(width, height, devicePixelRatio = 1) {
@@ -869,7 +896,7 @@ export class CanvasWavetableDisplay {
         this.canvas.style.width = `${nextWidth}px`;
         this.canvas.style.height = `${nextHeight}px`;
         this.invalidateStaticScene();
-        this.render();
+        this.queueRender();
     }
 
     getStaticScene(width, height) {
@@ -896,7 +923,23 @@ export class CanvasWavetableDisplay {
         return this.staticScene;
     }
 
+    queueRender() {
+        if (this.pendingRenderHandle !== null) {
+            return;
+        }
+
+        this.pendingRenderHandle = this.requestAnimationFrame(() => {
+            this.pendingRenderHandle = null;
+            this.render();
+        });
+    }
+
     render() {
+        if (this.pendingRenderHandle !== null) {
+            this.cancelAnimationFrame(this.pendingRenderHandle);
+            this.pendingRenderHandle = null;
+        }
+
         if (!this.context || this.canvas.width === 0 || this.canvas.height === 0) {
             return;
         }
