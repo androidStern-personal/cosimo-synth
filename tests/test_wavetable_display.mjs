@@ -343,6 +343,15 @@ test("display position matching ignores float noise but not real slider movement
     assert.equal(displayPositionsMatch(0.37, 0.371), false);
 });
 
+test("upward wavetable-stage drag maps to the same normalized position change as moving the slider right", async () => {
+    const { mapDisplayDragToPosition } = await loadPatchViewModule();
+
+    assert.equal(mapDisplayDragToPosition(0.25, 300, 250, 200), 0.5);
+    assert.equal(Number(mapDisplayDragToPosition(0.25, 300, 340, 200).toFixed(3)), 0.05);
+    assert.equal(mapDisplayDragToPosition(0.9, 300, 0, 200), 1);
+    assert.equal(mapDisplayDragToPosition(0.1, 300, 700, 200), 0);
+});
+
 test("loading table 1 returns a different stored frame set than table 0", async () => {
     const manifest = JSON.parse(
         await fs.readFile(path.join(repoRoot, "WavetableSynth.cmajorpatch"), "utf8")

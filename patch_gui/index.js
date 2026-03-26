@@ -25,6 +25,13 @@ export function displayPositionsMatch(left, right, epsilon = DISPLAY_POSITION_EP
     return Math.abs(clampDisplayPosition(left) - clampDisplayPosition(right)) <= epsilon;
 }
 
+export function mapDisplayDragToPosition(startValue, startClientY, nextClientY, dragSpan) {
+    const safeSpan = Math.max(1, Number(dragSpan) || 0);
+    const delta = (Number(startClientY) || 0) - (Number(nextClientY) || 0);
+
+    return clampDisplayPosition((Number(startValue) || 0) + (delta / safeSpan));
+}
+
 function registerCustomElement(name, elementClass) {
     if (!window.customElements.get(name)) {
         window.customElements.define(name, elementClass);
@@ -93,6 +100,7 @@ class CosimoSynthView extends HTMLElement {
         this.keyboardNoteCount = 0;
         this.scanRailEndpointID = null;
         this.tableSelectEndpointID = null;
+        this.activeDisplayDrag = null;
 
         this.attachShadow({ mode: "open" });
 
@@ -142,6 +150,13 @@ class CosimoSynthView extends HTMLElement {
             this.stepUpButton?.removeEventListener("click", this.handleScanStepUp);
         }
 
+        if (this.displayViewport && this.handleDisplayDragStart) {
+            this.displayViewport.removeEventListener("pointerdown", this.handleDisplayDragStart);
+            this.displayViewport.removeEventListener("pointermove", this.handleDisplayDragMove);
+            this.displayViewport.removeEventListener("pointerup", this.handleDisplayDragEnd);
+            this.displayViewport.removeEventListener("pointercancel", this.handleDisplayDragEnd);
+        }
+
         if (this.tableSelect && this.handleTableSelectChange) {
             this.tableSelect.removeEventListener("change", this.handleTableSelectChange);
         }
@@ -174,6 +189,9 @@ class CosimoSynthView extends HTMLElement {
         this.handleParameterChange = (value) => this.setDisplayedValue(value);
         this.handleTableParameterChange = (value) => this.setSelectedTableIndex(value);
         this.handleStatusUpdate = (status) => this.handlePatchStatus(status);
+        this.handleDisplayDragStart = (event) => this.beginDisplayDrag(event);
+        this.handleDisplayDragMove = (event) => this.updateDisplayDrag(event);
+        this.handleDisplayDragEnd = (event) => this.endDisplayDrag(event);
         this.handleTableSelectChange = () => {
             const nextIndex = Number(this.tableSelect?.value ?? 0);
 
@@ -185,6 +203,13 @@ class CosimoSynthView extends HTMLElement {
 
         if (this.tableSelect) {
             this.tableSelect.addEventListener("change", this.handleTableSelectChange);
+        }
+
+        if (this.displayViewport) {
+            this.displayViewport.addEventListener("pointerdown", this.handleDisplayDragStart);
+            this.displayViewport.addEventListener("pointermove", this.handleDisplayDragMove);
+            this.displayViewport.addEventListener("pointerup", this.handleDisplayDragEnd);
+            this.displayViewport.addEventListener("pointercancel", this.handleDisplayDragEnd);
         }
 
         this.applyResponsiveLayout(this.currentLayout, true);
@@ -629,6 +654,56 @@ class CosimoSynthView extends HTMLElement {
         this.scanRailInput.value = clamp((Number(this.scanRailInput.value) || 0) + amount, 0, 1).toFixed(3);
         this.handleScanRailInput?.();
         this.patchConnection.sendParameterGestureEnd?.(this.scanRailEndpointID);
+    }
+
+    beginDisplayDrag(event) {
+        if (!this.scanRailInput || !this.scanRailEndpointID || !this.displayViewport) {
+            return;
+        }
+
+        if (event.button !== undefined && event.button !== 0) {
+            return;
+        }
+
+        const bounds = this.displayViewport.getBoundingClientRect();
+        this.activeDisplayDrag = {
+            pointerId: event.pointerId,
+            startClientY: event.clientY,
+            startValue: clampDisplayPosition(this.scanRailInput.value),
+            dragSpan: bounds.height,
+        };
+
+        this.displayViewport.setPointerCapture?.(event.pointerId);
+        this.patchConnection.sendParameterGestureStart?.(this.scanRailEndpointID);
+        event.preventDefault?.();
+    }
+
+    updateDisplayDrag(event) {
+        if (!this.activeDisplayDrag || event.pointerId !== this.activeDisplayDrag.pointerId) {
+            return;
+        }
+
+        const nextValue = mapDisplayDragToPosition(
+            this.activeDisplayDrag.startValue,
+            this.activeDisplayDrag.startClientY,
+            event.clientY,
+            this.activeDisplayDrag.dragSpan
+        );
+
+        this.scanRailInput.value = nextValue.toFixed(3);
+        this.handleScanRailInput?.();
+        event.preventDefault?.();
+    }
+
+    endDisplayDrag(event) {
+        if (!this.activeDisplayDrag || event.pointerId !== this.activeDisplayDrag.pointerId) {
+            return;
+        }
+
+        this.displayViewport?.releasePointerCapture?.(event.pointerId);
+        this.activeDisplayDrag = null;
+        this.patchConnection.sendParameterGestureEnd?.(this.scanRailEndpointID);
+        event.preventDefault?.();
     }
 
     setDisplayedValue(value) {
@@ -1150,6 +1225,7 @@ class CosimoSynthView extends HTMLElement {
                         radial-gradient(circle at 50% 22%, rgba(135, 215, 245, 0.08), transparent 24%),
                         radial-gradient(circle at 88% 18%, rgba(242, 184, 107, 0.09), transparent 16%),
                         linear-gradient(180deg, rgba(8, 11, 17, 0.9), rgba(6, 9, 14, 0.98));
+                    touch-action: none;
                 }
 
                 .wavetable-stage::before {
