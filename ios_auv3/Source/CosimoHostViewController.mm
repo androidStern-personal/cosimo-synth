@@ -183,10 +183,10 @@ static NSString * const CosimoSmokeStateName = @"host-smoke-state";
         [closeOverlayButton.trailingAnchor constraintEqualToAnchor:self.editorOverlayView.trailingAnchor constant:-20.0],
         [closeOverlayButton.centerYAnchor constraintEqualToAnchor:editorLabel.centerYAnchor],
 
-        [self.editorContentView.leadingAnchor constraintEqualToAnchor:self.editorOverlayView.leadingAnchor constant:12.0],
-        [self.editorContentView.trailingAnchor constraintEqualToAnchor:self.editorOverlayView.trailingAnchor constant:-12.0],
+        [self.editorContentView.leadingAnchor constraintEqualToAnchor:self.editorOverlayView.safeAreaLayoutGuide.leadingAnchor],
+        [self.editorContentView.trailingAnchor constraintEqualToAnchor:self.editorOverlayView.safeAreaLayoutGuide.trailingAnchor],
         [self.editorContentView.topAnchor constraintEqualToAnchor:editorLabel.bottomAnchor constant:12.0],
-        [self.editorContentView.bottomAnchor constraintEqualToAnchor:self.editorOverlayView.safeAreaLayoutGuide.bottomAnchor constant:-12.0],
+        [self.editorContentView.bottomAnchor constraintEqualToAnchor:self.editorOverlayView.safeAreaLayoutGuide.bottomAnchor],
     ]];
 }
 

@@ -162,6 +162,14 @@ target_link_libraries(CosimoSynth PRIVATE
 
 add_dependencies(CosimoSynth cosimo_ios_auv3_generated_plugin)
 
+target_sources(CosimoSynth_Standalone PRIVATE
+    "${CMAKE_CURRENT_LIST_DIR}/Source/CosimoStandaloneApp.cpp"
+)
+
+target_compile_definitions(CosimoSynth_Standalone PRIVATE
+    JUCE_USE_CUSTOM_PLUGIN_STANDALONE_APP=1
+)
+
 add_executable(CosimoSynthHost MACOSX_BUNDLE
     "${CMAKE_CURRENT_LIST_DIR}/Source/CosimoHostMain.mm"
     "${CMAKE_CURRENT_LIST_DIR}/Source/CosimoHostViewController.mm"

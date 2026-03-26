@@ -63,12 +63,13 @@ class CosimoSynthView extends HTMLElement {
         this.resizeObserver = null;
         this.windowResizeListener = null;
         this.currentLayout = computeResponsivePatchLayout({
-            width: this.options.platform === "ios" ? 376 : 1120,
+            width: this.options.platform === "ios" ? 393 : 1120,
             height: this.options.platform === "ios" ? 648 : 680,
             platform: this.options.platform,
         });
         this.keyboardStyle = "";
         this.keyboardNoteCount = 0;
+        this.scanRailEndpointID = null;
 
         this.attachShadow({ mode: "open" });
 
@@ -101,20 +102,34 @@ class CosimoSynthView extends HTMLElement {
         if (this.handleStatusUpdate) {
             this.patchConnection.removeStatusListener(this.handleStatusUpdate);
         }
+
+        if (this.scanRailInput && this.handleScanRailInput) {
+            this.scanRailInput.removeEventListener("input", this.handleScanRailInput);
+            this.scanRailInput.removeEventListener("pointerdown", this.handleScanRailGestureStart);
+            this.scanRailInput.removeEventListener("pointerup", this.handleScanRailGestureEnd);
+            this.scanRailInput.removeEventListener("change", this.handleScanRailGestureEnd);
+            this.stepDownButton?.removeEventListener("click", this.handleScanStepDown);
+            this.stepUpButton?.removeEventListener("click", this.handleScanStepUp);
+        }
     }
 
     initialiseView() {
         this.shadowRoot.innerHTML = this.getHTML();
 
         this.knobControlHost = this.shadowRoot.querySelector(".knob-control-host");
-        this.valueText = this.shadowRoot.querySelector(".value-text");
+        this.valueReadout = this.shadowRoot.querySelector("[data-role='value-readout']");
+        this.frameReadout = this.shadowRoot.querySelector("[data-role='frame-readout']");
+        this.heroFrameReadout = this.shadowRoot.querySelector("[data-role='hero-frame-readout']");
         this.keyboardHost = this.shadowRoot.querySelector(".keyboard-host");
         this.hint = this.shadowRoot.querySelector(".hint");
         this.displayCanvas = this.shadowRoot.querySelector(".wavetable-canvas");
         this.displayViewport = this.shadowRoot.querySelector(".wavetable-stage");
         this.displayOverlay = this.shadowRoot.querySelector(".display-overlay");
-        this.displayStatus = this.shadowRoot.querySelector(".display-status");
+        this.displayStatus = this.shadowRoot.querySelector("[data-role='display-status']");
         this.bankReadout = this.shadowRoot.querySelector(".bank-readout");
+        this.scanRailInput = this.shadowRoot.querySelector(".scan-slider");
+        this.stepDownButton = this.shadowRoot.querySelector(".step-down");
+        this.stepUpButton = this.shadowRoot.querySelector(".step-up");
 
         this.display = new CanvasWavetableDisplay(this.displayCanvas);
 
@@ -122,7 +137,13 @@ class CosimoSynthView extends HTMLElement {
         this.handleStatusUpdate = (status) => this.handlePatchStatus(status);
 
         this.applyResponsiveLayout(this.currentLayout, true);
-        this.buildKnob();
+
+        if (this.options.platform === "ios") {
+            this.buildScanRail();
+        } else {
+            this.buildKnob();
+        }
+
         this.buildKeyboard();
         this.installResizeObserver();
         this.setDisplayedValue(knobDefault);
@@ -169,10 +190,11 @@ class CosimoSynthView extends HTMLElement {
             force ||
             this.currentLayout.gridTemplateColumns !== nextLayout.gridTemplateColumns ||
             this.currentLayout.noteCount !== nextLayout.noteCount ||
-            this.currentLayout.knobSize !== nextLayout.knobSize ||
+            this.currentLayout.controlHeight !== nextLayout.controlHeight ||
             this.currentLayout.stageMinHeight !== nextLayout.stageMinHeight ||
             this.currentLayout.keyboardHeight !== nextLayout.keyboardHeight ||
-            this.currentLayout.headerStacks !== nextLayout.headerStacks;
+            this.currentLayout.headerStacks !== nextLayout.headerStacks ||
+            this.currentLayout.controlStyle !== nextLayout.controlStyle;
 
         this.currentLayout = nextLayout;
         this.toggleAttribute("stacked-header", nextLayout.headerStacks);
@@ -197,14 +219,27 @@ class CosimoSynthView extends HTMLElement {
             const bank = await loadFactoryBankFramesFromPatch(this.patchConnection);
             this.display.setFrames(bank.frames);
             this.display.setPosition(this.currentValue);
-            this.setDisplayState("loaded", `${bank.frameCount} frames • mip ${DEFAULT_VISIBLE_MIP_INDEX}`);
-            this.bankReadout.textContent = `Factory bank • ${bank.frameCount} stored shapes`;
+            this.setDisplayState(
+                "loaded",
+                this.options.platform === "ios"
+                    ? `${bank.frameCount} shapes`
+                    : `${bank.frameCount} frames • mip ${DEFAULT_VISIBLE_MIP_INDEX}`
+            );
+            if (this.bankReadout) {
+                this.bankReadout.textContent = this.options.platform === "ios"
+                    ? `Bank A / ${bank.frameCount} shapes`
+                    : `Factory bank • ${bank.frameCount} stored shapes`;
+            }
             this.displayFramesLoaded = true;
         } catch (error) {
             console.error(error);
             const detail = String(error?.message || error || "Unknown error");
             this.setDisplayState("error", `Could not load wavetable bank: ${detail}`);
-            this.bankReadout.textContent = `Display unavailable: ${detail}`;
+            if (this.bankReadout) {
+                this.bankReadout.textContent = this.options.platform === "ios"
+                    ? "Display unavailable"
+                    : `Display unavailable: ${detail}`;
+            }
         } finally {
             this.displayFramesLoading = false;
         }
@@ -212,19 +247,29 @@ class CosimoSynthView extends HTMLElement {
 
     handlePatchStatus(status) {
         if (status?.error) {
-            this.hint.textContent = "The patch failed to load.";
+            if (this.hint) {
+                this.hint.textContent = "The patch failed to load.";
+            }
+            this.setDisplayState("error", "The patch failed to load.");
             return;
         }
 
         const endpointInfo = findParameterEndpointInfo(status, wavetablePositionEndpointID);
 
         if (endpointInfo) {
-            this.buildKnob(endpointInfo);
+            if (this.options.platform === "ios") {
+                this.buildScanRail(endpointInfo);
+            } else {
+                this.buildKnob(endpointInfo);
+            }
         }
 
         this.patchConnection.requestParameterValue(wavetablePositionEndpointID);
-        this.hint.textContent =
-            "Click the keyboard once, then use A W S E D F T G Y H U J K to play notes from your computer keyboard.";
+        if (this.hint) {
+            this.hint.textContent = this.options.platform === "ios"
+                ? ""
+                : "Click the keyboard once, then use A W S E D F T G Y H U J K to play notes from your computer keyboard.";
+        }
 
         if (!this.displayFramesLoaded) {
             this.loadDisplayFrames();
@@ -232,7 +277,9 @@ class CosimoSynthView extends HTMLElement {
     }
 
     setDisplayState(state, message) {
-        this.displayStatus.textContent = message;
+        if (this.displayStatus) {
+            this.displayStatus.textContent = message;
+        }
         this.displayViewport.dataset.state = state;
         this.displayOverlay.textContent = message;
         this.displayOverlay.hidden = state === "loaded";
@@ -304,7 +351,9 @@ class CosimoSynthView extends HTMLElement {
         this.keyboardStyle = keyboardStyle;
         this.keyboardNoteCount = this.currentLayout.noteCount;
         this.hasOnscreenKeyboard = true;
-        this.hint.textContent = "Connecting the keyboard to the synth…";
+        if (this.hint) {
+            this.hint.textContent = this.options.platform === "ios" ? "" : "Connecting the keyboard to the synth…";
+        }
     }
 
     syncKeyboardLayout() {
@@ -341,15 +390,95 @@ class CosimoSynthView extends HTMLElement {
         this.knobControlHost.appendChild(this.knobControl);
     }
 
+    buildScanRail(endpointInfo = { endpointID: wavetablePositionEndpointID }) {
+        if (!this.scanRailInput) {
+            return;
+        }
+
+        const endpointID = endpointInfo.endpointID || wavetablePositionEndpointID;
+
+        if (this.scanRailEndpointID === endpointID) {
+            return;
+        }
+
+        if (this.handleScanRailInput) {
+            this.scanRailInput.removeEventListener("input", this.handleScanRailInput);
+            this.scanRailInput.removeEventListener("pointerdown", this.handleScanRailGestureStart);
+            this.scanRailInput.removeEventListener("pointerup", this.handleScanRailGestureEnd);
+            this.scanRailInput.removeEventListener("change", this.handleScanRailGestureEnd);
+            this.stepDownButton?.removeEventListener("click", this.handleScanStepDown);
+            this.stepUpButton?.removeEventListener("click", this.handleScanStepUp);
+        }
+
+        this.scanRailEndpointID = endpointID;
+        this.handleScanRailInput = () => {
+            const nextValue = clamp(Number(this.scanRailInput.value) || 0, 0.0, 1.0);
+            this.patchConnection.sendEventOrValue(endpointID, nextValue);
+            this.setDisplayedValue(nextValue);
+        };
+        this.handleScanRailGestureStart = () => {
+            this.patchConnection.sendParameterGestureStart?.(endpointID);
+        };
+        this.handleScanRailGestureEnd = () => {
+            this.patchConnection.sendParameterGestureEnd?.(endpointID);
+        };
+        this.handleScanStepDown = () => this.nudgeScanRail(-1 / 15);
+        this.handleScanStepUp = () => this.nudgeScanRail(1 / 15);
+
+        this.scanRailInput.addEventListener("input", this.handleScanRailInput);
+        this.scanRailInput.addEventListener("pointerdown", this.handleScanRailGestureStart);
+        this.scanRailInput.addEventListener("pointerup", this.handleScanRailGestureEnd);
+        this.scanRailInput.addEventListener("change", this.handleScanRailGestureEnd);
+        this.stepDownButton?.addEventListener("click", this.handleScanStepDown);
+        this.stepUpButton?.addEventListener("click", this.handleScanStepUp);
+    }
+
+    nudgeScanRail(amount) {
+        if (!this.scanRailInput || !this.scanRailEndpointID) {
+            return;
+        }
+
+        this.patchConnection.sendParameterGestureStart?.(this.scanRailEndpointID);
+        this.scanRailInput.value = clamp((Number(this.scanRailInput.value) || 0) + amount, 0, 1).toFixed(3);
+        this.handleScanRailInput?.();
+        this.patchConnection.sendParameterGestureEnd?.(this.scanRailEndpointID);
+    }
+
     setDisplayedValue(value) {
         const nextValue = clamp(Number(value) || 0, 0.0, 1.0);
+        const frameIndex = Math.round(nextValue * 15) + 1;
 
         this.currentValue = nextValue;
-        this.valueText.textContent = nextValue.toFixed(2);
+        if (this.valueReadout) {
+            this.valueReadout.textContent = this.options.platform === "ios"
+                ? nextValue.toFixed(3)
+                : nextValue.toFixed(2);
+        }
+
+        if (this.frameReadout) {
+            this.frameReadout.textContent = String(frameIndex).padStart(2, "0");
+        }
+
+        if (this.heroFrameReadout) {
+            this.heroFrameReadout.textContent = `${String(frameIndex).padStart(2, "0")}/16`;
+        }
+
+        if (this.scanRailInput && document.activeElement !== this.scanRailInput) {
+            this.scanRailInput.value = nextValue.toFixed(3);
+        }
+
         this.display?.setPosition(nextValue);
     }
 
     getHTML() {
+        if (this.options.platform === "ios") {
+            return this.getIOSHTML();
+        }
+
+        return this.getDesktopHTML();
+    }
+
+    getDesktopHTML() {
         return `
             <style>
                 ${this.patchConnection.utilities.ParameterControls.Knob.getCSS()}
@@ -369,7 +498,7 @@ class CosimoSynthView extends HTMLElement {
                     --cosimo-card-padding: 18px;
                     --cosimo-section-gap: 16px;
                     --cosimo-main-grid-columns: minmax(0, 1fr) 208px;
-                    --cosimo-knob-size: 150px;
+                    --cosimo-control-height: 150px;
                     --cosimo-stage-min-height: 280px;
                     --cosimo-keyboard-height: 122px;
                     --cosimo-title-font-size: 14px;
@@ -526,8 +655,8 @@ class CosimoSynthView extends HTMLElement {
                 }
 
                 .knob-shell {
-                    width: var(--cosimo-knob-size);
-                    height: calc(var(--cosimo-knob-size) + 20px);
+                    width: var(--cosimo-control-height);
+                    height: calc(var(--cosimo-control-height) + 20px);
                     display: grid;
                     justify-items: center;
                     align-content: start;
@@ -535,8 +664,8 @@ class CosimoSynthView extends HTMLElement {
                 }
 
                 .knob-control-host {
-                    width: var(--cosimo-knob-size);
-                    height: var(--cosimo-knob-size);
+                    width: var(--cosimo-control-height);
+                    height: var(--cosimo-control-height);
                     display: grid;
                     place-items: center;
                 }
@@ -548,8 +677,8 @@ class CosimoSynthView extends HTMLElement {
                     --knob-dial-background-color: radial-gradient(circle at 32% 28%, #434f95 0%, #1d2450 42%, #090d1f 100%);
                     --knob-dial-tick-color: #ffd8a6;
 
-                    width: var(--cosimo-knob-size);
-                    height: var(--cosimo-knob-size);
+                    width: var(--cosimo-control-height);
+                    height: var(--cosimo-control-height);
                 }
 
                 .cosimo-knob .knob-path {
@@ -642,7 +771,7 @@ class CosimoSynthView extends HTMLElement {
                             <div class="control-heading">Frame Scan</div>
                             <div class="knob-shell">
                                 <div class="knob-control-host"></div>
-                                <div class="value-text">0.00</div>
+                                <div class="value-text" data-role="value-readout">0.00</div>
                                 <div class="label">Wavetable Position</div>
                             </div>
                         </div>
@@ -650,6 +779,441 @@ class CosimoSynthView extends HTMLElement {
 
                     <div class="keyboard-host"></div>
                     <div class="hint">Connecting the keyboard to the synth…</div>
+                </div>
+            </div>
+        `;
+    }
+
+    getIOSHTML() {
+        return `
+            <style>
+                * {
+                    box-sizing: border-box;
+                }
+
+                :host {
+                    display: block;
+                    width: 100%;
+                    min-height: 100%;
+                    min-height: 100dvh;
+                    height: auto;
+                    overflow-x: hidden;
+                    overscroll-behavior: none;
+                    background:
+                        radial-gradient(circle at top, rgba(78, 106, 142, 0.1), transparent 30%),
+                        linear-gradient(180deg, rgba(255, 255, 255, 0.016), rgba(255, 255, 255, 0)),
+                        linear-gradient(180deg, rgba(7, 9, 13, 0.96), rgba(7, 9, 13, 0.98));
+                    color: #eef2f5;
+                    font-family: "SF Pro Display", "SF Pro Text", -apple-system, BlinkMacSystemFont, "Avenir Next", sans-serif;
+                    --cosimo-section-gap: 12px;
+                    --cosimo-stage-min-height: 248px;
+                    --cosimo-keyboard-height: 122px;
+                    --cosimo-control-height: 54px;
+                }
+
+                .ios-shell {
+                    width: 100%;
+                    min-height: 100%;
+                    min-height: 100dvh;
+                    height: auto;
+                    min-width: 0;
+                    padding: max(10px, env(safe-area-inset-top)) 0 max(14px, env(safe-area-inset-bottom)) 0;
+                    display: grid;
+                    grid-template-rows: auto auto auto;
+                    align-content: start;
+                    gap: var(--cosimo-section-gap);
+                }
+
+                .hero,
+                .scan-panel,
+                .keyboard-panel {
+                    min-width: 0;
+                }
+
+                .eyebrow,
+                .section-label,
+                .display-status,
+                .bank-readout,
+                .rail-labels,
+                .mini-label {
+                    font-family: "SF Mono", "IBM Plex Mono", Menlo, monospace;
+                    letter-spacing: 0.16em;
+                    text-transform: uppercase;
+                }
+
+                .eyebrow,
+                .section-label,
+                .mini-label {
+                    font-size: 10px;
+                    color: rgba(212, 220, 230, 0.34);
+                }
+
+                .hero {
+                    display: grid;
+                    min-width: 0;
+                    gap: 8px;
+                    padding-top: 10px;
+                }
+
+                .hero-head,
+                .scan-head,
+                .keyboard-head {
+                    display: grid;
+                    min-width: 0;
+                    grid-template-columns: minmax(0, 1fr) auto;
+                    gap: 8px;
+                    align-items: end;
+                    padding-left: max(16px, env(safe-area-inset-left));
+                    padding-right: max(16px, env(safe-area-inset-right));
+                }
+
+                .hero-title,
+                .scan-title {
+                    display: grid;
+                    min-width: 0;
+                    gap: 4px;
+                }
+
+                .hero-title strong,
+                .scan-title strong {
+                    font-size: 17px;
+                    letter-spacing: -0.04em;
+                    font-weight: 600;
+                }
+
+                .display-status,
+                .bank-readout,
+                .position-label {
+                    font-size: 10px;
+                    color: rgba(212, 220, 230, 0.42);
+                }
+
+                .hero-frame,
+                .position-readout {
+                    font-family: "SF Pro Display", "SF Pro Text", -apple-system, BlinkMacSystemFont, sans-serif;
+                    font-weight: 600;
+                    letter-spacing: -0.03em;
+                    color: #87d7f5;
+                }
+
+                .hero-frame {
+                    font-size: 12px;
+                }
+
+                .position-readout {
+                    font-size: 22px;
+                    line-height: 1;
+                }
+
+                .wavetable-stage {
+                    position: relative;
+                    width: 100%;
+                    min-width: 0;
+                    max-width: 100%;
+                    min-height: var(--cosimo-stage-min-height);
+                    aspect-ratio: 1.55 / 1;
+                    border-radius: 18px;
+                    overflow: hidden;
+                    background:
+                        radial-gradient(circle at 50% 22%, rgba(135, 215, 245, 0.08), transparent 24%),
+                        radial-gradient(circle at 88% 18%, rgba(242, 184, 107, 0.09), transparent 16%),
+                        linear-gradient(180deg, rgba(8, 11, 17, 0.9), rgba(6, 9, 14, 0.98));
+                }
+
+                .wavetable-stage::before {
+                    content: "";
+                    position: absolute;
+                    inset: 0;
+                    background:
+                        linear-gradient(rgba(255, 255, 255, 0.026) 1px, transparent 1px),
+                        linear-gradient(90deg, rgba(255, 255, 255, 0.026) 1px, transparent 1px);
+                    background-size: 28px 28px;
+                    opacity: 0.24;
+                    pointer-events: none;
+                }
+
+                .wavetable-canvas {
+                    width: 100%;
+                    height: 100%;
+                    display: block;
+                }
+
+                .display-overlay {
+                    position: absolute;
+                    inset: 0;
+                    display: grid;
+                    place-items: center;
+                    text-align: center;
+                    padding: 20px;
+                    font-size: 13px;
+                    color: rgba(255, 216, 172, 0.86);
+                    background: rgba(4, 7, 18, 0.82);
+                    backdrop-filter: blur(4px);
+                }
+
+                .display-overlay[hidden] {
+                    display: none;
+                }
+
+                .stage-copy {
+                    position: absolute;
+                    inset: 0;
+                    display: grid;
+                    grid-template-rows: auto 1fr auto;
+                    gap: 8px;
+                    padding: 12px;
+                    pointer-events: none;
+                }
+
+                .stage-copy-row {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    gap: 8px;
+                }
+
+                .stage-copy-row:last-child {
+                    align-items: end;
+                }
+
+                .mini-label.active {
+                    color: #87d7f5;
+                }
+
+                .mini-label.warm {
+                    color: #f2b86b;
+                }
+
+                .scan-panel,
+                .keyboard-panel {
+                    display: grid;
+                    min-width: 0;
+                    gap: 10px;
+                    padding-top: 10px;
+                }
+
+                .scan-rail-wrap {
+                    display: grid;
+                    min-width: 0;
+                    gap: 8px;
+                    padding-left: max(16px, env(safe-area-inset-left));
+                    padding-right: max(16px, env(safe-area-inset-right));
+                }
+
+                .scan-rail-row {
+                    display: grid;
+                    min-width: 0;
+                    grid-template-columns: auto minmax(0, 1fr) auto;
+                    gap: 10px;
+                    align-items: center;
+                }
+
+                .rail-button {
+                    width: 34px;
+                    height: 34px;
+                    border: 0;
+                    border-radius: 999px;
+                    background: none;
+                    color: rgba(236, 241, 247, 0.42);
+                    display: grid;
+                    place-items: center;
+                    font-size: 16px;
+                }
+
+                .scan-rail {
+                    position: relative;
+                    min-width: 0;
+                    height: var(--cosimo-control-height);
+                    border-radius: 14px;
+                    overflow: hidden;
+                    background:
+                        linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent),
+                        linear-gradient(90deg, rgba(255, 255, 255, 0.035) 0, rgba(255, 255, 255, 0) 100%);
+                }
+
+                .scan-rail::before {
+                    content: "";
+                    position: absolute;
+                    inset: 0;
+                    background:
+                        repeating-linear-gradient(
+                            90deg,
+                            transparent 0,
+                            transparent calc(6.25% - 1px),
+                            rgba(255, 255, 255, 0.08) calc(6.25% - 1px),
+                            rgba(255, 255, 255, 0.08) 6.25%
+                        );
+                    opacity: 0.46;
+                    pointer-events: none;
+                }
+
+                .scan-rail::after {
+                    content: "";
+                    position: absolute;
+                    inset: 21px 14px;
+                    border-radius: 999px;
+                    background:
+                        linear-gradient(90deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.02));
+                    pointer-events: none;
+                }
+
+                .scan-slider {
+                    appearance: none;
+                    position: absolute;
+                    inset: 0;
+                    width: 100%;
+                    height: 100%;
+                    margin: 0;
+                    background: transparent;
+                    cursor: pointer;
+                }
+
+                .scan-slider::-webkit-slider-runnable-track {
+                    height: var(--cosimo-control-height);
+                    background: transparent;
+                }
+
+                .scan-slider::-moz-range-track {
+                    height: var(--cosimo-control-height);
+                    background: transparent;
+                    border: 0;
+                }
+
+                .scan-slider::-webkit-slider-thumb {
+                    appearance: none;
+                    width: 14px;
+                    height: var(--cosimo-control-height);
+                    border: 0;
+                    border-radius: 0;
+                    background:
+                        linear-gradient(180deg, rgba(135, 215, 245, 0), rgba(135, 215, 245, 0.82) 24%, rgba(135, 215, 245, 0.82) 76%, rgba(135, 215, 245, 0)),
+                        linear-gradient(180deg, rgba(255, 255, 255, 0.66), rgba(255, 255, 255, 0.14));
+                    box-shadow:
+                        0 0 0 1px rgba(255, 255, 255, 0.08),
+                        0 0 20px rgba(135, 215, 245, 0.22);
+                    margin-top: 0;
+                }
+
+                .scan-slider::-moz-range-thumb {
+                    width: 14px;
+                    height: var(--cosimo-control-height);
+                    border: 0;
+                    border-radius: 0;
+                    background:
+                        linear-gradient(180deg, rgba(135, 215, 245, 0), rgba(135, 215, 245, 0.82) 24%, rgba(135, 215, 245, 0.82) 76%, rgba(135, 215, 245, 0)),
+                        linear-gradient(180deg, rgba(255, 255, 255, 0.66), rgba(255, 255, 255, 0.14));
+                    box-shadow:
+                        0 0 0 1px rgba(255, 255, 255, 0.08),
+                        0 0 20px rgba(135, 215, 245, 0.22);
+                }
+
+                .rail-labels {
+                    display: flex;
+                    justify-content: space-between;
+                    gap: 8px;
+                    font-size: 10px;
+                    color: rgba(212, 220, 230, 0.34);
+                }
+
+                .keyboard-head strong {
+                    font-size: 15px;
+                    font-weight: 600;
+                    color: #eef2f5;
+                    letter-spacing: -0.03em;
+                }
+
+                .keyboard-host {
+                    min-width: 0;
+                    min-height: var(--cosimo-keyboard-height);
+                    display: grid;
+                    align-items: stretch;
+                    padding-left: max(16px, env(safe-area-inset-left));
+                    padding-right: max(16px, env(safe-area-inset-right));
+                }
+
+                .keyboard {
+                    width: 100%;
+                    height: var(--cosimo-keyboard-height);
+                    border-radius: 16px 16px 20px 20px;
+                    overflow: hidden;
+                    background:
+                        linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 18%),
+                        linear-gradient(180deg, rgba(10, 13, 18, 0.68), rgba(7, 9, 13, 0.92));
+                    padding: 8px 8px 10px;
+                    touch-action: none;
+                }
+            </style>
+
+            <div class="ios-shell">
+                <div class="hero">
+                    <div class="hero-head">
+                        <div class="hero-title">
+                            <div class="section-label">Wavetable</div>
+                            <strong>Factory Bank</strong>
+                        </div>
+
+                        <div>
+                            <div class="display-status" data-role="display-status">Frame</div>
+                            <div class="hero-frame" data-role="hero-frame-readout">01/16</div>
+                        </div>
+                    </div>
+
+                    <div class="wavetable-stage" data-state="loading">
+                        <canvas class="wavetable-canvas"></canvas>
+                        <div class="display-overlay">Loading wavetable bank…</div>
+                        <div class="stage-copy">
+                            <div class="stage-copy-row">
+                                <div class="mini-label active">Wavescan</div>
+                                <div class="mini-label warm">Frame scan</div>
+                            </div>
+                            <div></div>
+                            <div class="stage-copy-row">
+                                <div class="mini-label">3D field</div>
+                                <div class="bank-readout">Factory bank</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="scan-panel">
+                    <div class="scan-head">
+                        <div class="scan-title">
+                            <div class="section-label">Primary control</div>
+                            <strong>Frame Scan</strong>
+                        </div>
+
+                        <div>
+                            <div class="position-label display-status">Position</div>
+                            <div class="position-readout" data-role="value-readout">0.000</div>
+                        </div>
+                    </div>
+
+                    <div class="scan-rail-wrap">
+                        <div class="scan-rail-row">
+                            <button class="rail-button step-down" type="button" aria-label="Step down">&lsaquo;</button>
+                            <div class="scan-rail">
+                                <input class="scan-slider" type="range" min="0" max="1" step="0.001" value="0.000" />
+                            </div>
+                            <button class="rail-button step-up" type="button" aria-label="Step up">&rsaquo;</button>
+                        </div>
+
+                        <div class="rail-labels">
+                            <span>Shape 01</span>
+                            <span>Shape 08</span>
+                            <span>Shape 16</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="keyboard-panel">
+                    <div class="keyboard-head">
+                        <div>
+                            <div class="section-label">Keyboard</div>
+                            <strong>Keyboard</strong>
+                        </div>
+                    </div>
+
+                    <div class="keyboard-host"></div>
                 </div>
             </div>
         `;

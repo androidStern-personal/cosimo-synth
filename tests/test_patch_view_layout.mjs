@@ -18,7 +18,7 @@ test("iOS patch manifest keeps the synth graph but switches to the mobile editor
     const iosManifest = await loadPatchManifest("WavetableSynth.iOS.cmajorpatch");
 
     assert.equal(iosManifest.view.src, "patch_gui/index.ios.js");
-    assert.equal(iosManifest.view.width, 376);
+    assert.equal(iosManifest.view.width, 393);
     assert.equal(iosManifest.view.height, 648);
     assert.equal(iosManifest.view.resizable, true);
     assert.deepEqual(iosManifest.source, desktopManifest.source);
@@ -26,7 +26,7 @@ test("iOS patch manifest keeps the synth graph but switches to the mobile editor
     assert.deepEqual(iosManifest.externals, desktopManifest.externals);
 });
 
-test("phone portrait layout stacks the control rail and shrinks the keyboard to a playable mobile size", () => {
+test("phone portrait layout uses a full-width scan rail and a compact host-keyboard dock", () => {
     const layout = computeResponsivePatchLayout({
         width: 390,
         height: 844,
@@ -36,13 +36,14 @@ test("phone portrait layout stacks the control rail and shrinks the keyboard to 
     assert.equal(layout.isCompact, true);
     assert.equal(layout.headerStacks, true);
     assert.equal(layout.gridTemplateColumns, "minmax(0, 1fr)");
+    assert.equal(layout.controlStyle, "scan-rail");
     assert.equal(layout.noteCount, 13);
-    assert.equal(layout.knobSize, 112);
-    assert.equal(layout.stageMinHeight, 210);
-    assert.equal(layout.keyboardHeight, 98);
+    assert.equal(layout.stageMinHeight, 224);
+    assert.equal(layout.controlHeight, 54);
+    assert.equal(layout.keyboardHeight, 108);
 });
 
-test("tablet landscape layout keeps a side control rail without carrying over the desktop canvas size", () => {
+test("tablet landscape keeps the flatter iOS hierarchy while using a wider keyboard dock", () => {
     const layout = computeResponsivePatchLayout({
         width: 1024,
         height: 768,
@@ -51,11 +52,12 @@ test("tablet landscape layout keeps a side control rail without carrying over th
 
     assert.equal(layout.isCompact, false);
     assert.equal(layout.headerStacks, false);
-    assert.equal(layout.gridTemplateColumns, "minmax(0, 1fr) 220px");
+    assert.equal(layout.gridTemplateColumns, "minmax(0, 1fr)");
+    assert.equal(layout.controlStyle, "scan-rail");
     assert.equal(layout.noteCount, 25);
-    assert.equal(layout.knobSize, 140);
-    assert.equal(layout.stageMinHeight, 260);
-    assert.equal(layout.keyboardHeight, 118);
+    assert.equal(layout.stageMinHeight, 284);
+    assert.equal(layout.controlHeight, 54);
+    assert.equal(layout.keyboardHeight, 128);
 });
 
 test("short landscape heights keep every interactive area above the minimum tap-safe size", () => {
@@ -67,9 +69,19 @@ test("short landscape heights keep every interactive area above the minimum tap-
 
     assert.equal(layout.isCompact, false);
     assert.equal(layout.headerStacks, false);
-    assert.equal(layout.gridTemplateColumns, "minmax(0, 1fr) 180px");
+    assert.equal(layout.gridTemplateColumns, "minmax(0, 1fr)");
+    assert.equal(layout.controlStyle, "scan-rail");
     assert.equal(layout.noteCount, 17);
-    assert.equal(layout.knobSize, 108);
-    assert.equal(layout.stageMinHeight, 180);
-    assert.equal(layout.keyboardHeight, 92);
+    assert.equal(layout.stageMinHeight, 188);
+    assert.equal(layout.controlHeight, 48);
+    assert.equal(layout.keyboardHeight, 94);
+});
+
+test("iOS patch view uses safe-area insets instead of drawing a nested shell inside the phone screen", async () => {
+    const source = await fs.readFile(path.join(repoRoot, "patch_gui", "index.js"), "utf8");
+
+    assert.match(source, /env\(safe-area-inset-top\)/);
+    assert.match(source, /env\(safe-area-inset-bottom\)/);
+    assert.match(source, /env\(safe-area-inset-left\)/);
+    assert.match(source, /env\(safe-area-inset-right\)/);
 });

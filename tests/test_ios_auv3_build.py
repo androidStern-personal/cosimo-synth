@@ -5,6 +5,7 @@ import http.server
 import json
 import os
 import platform
+import re
 import shutil
 import subprocess
 import threading
@@ -20,6 +21,21 @@ IOS_AUV3_XCODE_PROJECT = REPO_ROOT / "scripts" / "generate_ios_auv3_xcode_projec
 IOS_AUV3_HOST_SMOKE = REPO_ROOT / "scripts" / "run_ios_auv3_host_smoke.py"
 IOS_AUV3_PATCH = REPO_ROOT / "WavetableSynth.iOS.cmajorpatch"
 IOS_AUV3_HOST_SNAPSHOT = REPO_ROOT / "ios_auv3" / "expected_host_smoke.json"
+IOS_AUV3_STANDALONE_APP = REPO_ROOT / "ios_auv3" / "Source" / "CosimoStandaloneApp.cpp"
+IOS_DEV_HARNESS = REPO_ROOT / "patch_gui" / "dev-harness-ios.html"
+
+
+def _find_chrome_binary() -> str | None:
+    candidates = [
+        "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+        "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
+    ]
+
+    for candidate in candidates:
+        if Path(candidate).is_file():
+            return candidate
+
+    return None
 
 
 def _normalise_whitespace(text: str) -> str:
@@ -43,6 +59,8 @@ add_library(juce::juce_audio_utils ALIAS juce_audio_utils)
 
 function(juce_add_plugin target)
     add_library(${target} STATIC "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/juce_plugin_stub.cpp")
+    add_library(${target}_Standalone STATIC "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/juce_plugin_stub.cpp")
+    add_library(${target}_AUv3 STATIC "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/juce_plugin_stub.cpp")
 endfunction()
 
 function(juce_generate_juce_header target)
@@ -56,6 +74,7 @@ endfunction()
 
 def _stage_bundle_root(destination: Path) -> None:
     shutil.copy2(REPO_ROOT / "WavetableSynth.cmajorpatch", destination / "WavetableSynth.cmajorpatch")
+    shutil.copy2(REPO_ROOT / "WavetableSynth.iOS.cmajorpatch", destination / "WavetableSynth.iOS.cmajorpatch")
     shutil.copytree(REPO_ROOT / "assets", destination / "assets")
     shutil.copytree(REPO_ROOT / "patch_gui", destination / "patch_gui")
 
@@ -108,6 +127,40 @@ class _BundleServer:
         self._thread.join()
 
 
+def _read_harness_metrics(url: str) -> dict[str, object]:
+    chrome_binary = _find_chrome_binary()
+
+    if chrome_binary is None:
+        pytest.skip("The browser harness check needs Google Chrome or Brave on macOS")
+
+    result = subprocess.run(
+        [
+            chrome_binary,
+            "--headless",
+            "--disable-gpu",
+            "--hide-scrollbars",
+            "--window-size=430,980",
+            "--virtual-time-budget=8000",
+            "--dump-dom",
+            url,
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    match = re.search(
+        r'<script id="harness-metrics" type="application/json">(?P<json>.*?)</script>',
+        result.stdout,
+        re.DOTALL,
+    )
+
+    if match is None:
+        raise AssertionError("The iOS harness did not publish any metrics")
+
+    return json.loads(match.group("json"))
+
+
 @pytest.fixture(scope="module")
 def generated_ios_plugin_dir(tmp_path_factory: pytest.TempPathFactory) -> Path:
     output_dir = tmp_path_factory.mktemp("ios-auv3-generated")
@@ -134,10 +187,12 @@ def test_ios_auv3_cmake_keeps_the_ios_shell_separate_from_the_desktop_loader() -
     assert "WavetableSynth.iOS.cmajorpatch" in cmake_text
     assert "cmajor_plugin.cpp" in cmake_text
     assert "cmaj_StaticLibraryShim.cpp" in cmake_text
+    assert "CosimoStandaloneApp.cpp" in cmake_text
     assert "CosimoSynthHost" in cmake_text
     assert "CosimoHostMain.mm" in cmake_text
     assert "CosimoHostViewController.mm" in cmake_text
     assert "CosimoAUv3HostHarness.mm" in cmake_text
+    assert "JUCE_USE_CUSTOM_PLUGIN_STANDALONE_APP=1" in cmake_text
     assert "COSIMO_PATCH_PATH" not in cmake_text
     assert "CMAJOR_SOURCE_PATH" not in cmake_text
     assert "libCmajPerformer" not in cmake_text
@@ -149,9 +204,36 @@ def test_ios_patch_manifest_points_at_the_mobile_editor_entry() -> None:
     manifest = json.loads(IOS_AUV3_PATCH.read_text(encoding="utf-8"))
 
     assert manifest["view"]["src"] == "patch_gui/index.ios.js"
-    assert manifest["view"]["width"] == 376
+    assert manifest["view"]["width"] == 393
     assert manifest["view"]["height"] == 648
+    assert manifest["view"]["background"] == "#07090d"
     assert manifest["view"]["resizable"] is True
+
+
+@pytest.mark.skipif(
+    platform.system() != "Darwin",
+    reason="The browser harness check currently runs on macOS",
+)
+def test_ios_patch_harness_renders_a_full_width_scan_rail(tmp_path: Path) -> None:
+    _stage_bundle_root(tmp_path)
+
+    with _BundleServer(tmp_path) as root_url:
+        metrics = _read_harness_metrics(f"{root_url}patch_gui/dev-harness-ios.html")
+
+    assert metrics["hostWidth"] >= 360
+    assert abs(metrics["patchWidth"] - metrics["hostWidth"]) <= 1
+    assert metrics["scanRailCount"] == 1
+    assert metrics["knobCount"] == 0
+    assert metrics["keyboardDockCount"] == 1
+    assert metrics["patchScrollWidth"] <= metrics["patchClientWidth"]
+    assert metrics["stageWidth"] <= metrics["patchClientWidth"]
+    assert abs(metrics["stageLeftInset"]) <= 1
+    assert abs(metrics["stageRightInset"]) <= 1
+    assert abs(metrics["stageCenterOffset"]) <= 1.5
+    assert metrics["hasNarrativeTopline"] is False
+    assert metrics["hasNarrativeRailNote"] is False
+    assert metrics["hasNarrativeKeyboardNote"] is False
+    assert metrics["hasPlayViewLabel"] is False
 
 
 @pytest.mark.skipif(
@@ -184,16 +266,51 @@ def test_ios_auv3_generator_writes_self_contained_plugin_source_and_headers(
     assert (generated_ios_plugin_dir / "cmajor_plugin.cpp").is_file()
     assert (generated_ios_plugin_dir / "include/cmajor/helpers/cmaj_JUCEPlugin.h").is_file()
     assert (generated_ios_plugin_dir / "include/choc/choc/javascript/choc_javascript_QuickJS.h").is_file()
+    assert (generated_ios_plugin_dir / "include/cmajor/helpers/cmaj_EmbeddedWebAssets.h").is_file()
+    assert (generated_ios_plugin_dir / "include/cmajor/helpers/cmaj_PatchWebView.h").is_file()
 
     webview_header = (generated_ios_plugin_dir / "include/choc/choc/gui/choc_WebView.h").read_text(
         encoding="utf-8"
     )
+    embedded_assets_header = (
+        generated_ios_plugin_dir / "include/cmajor/helpers/cmaj_EmbeddedWebAssets.h"
+    ).read_text(encoding="utf-8")
+    patch_webview_header = (
+        generated_ios_plugin_dir / "include/cmajor/helpers/cmaj_PatchWebView.h"
+    ).read_text(encoding="utf-8")
 
-    assert """       #if CHOC_OSX
-        if (options->transparentBackground)
-            call<void> (webview, "setValue:forKey:", getNSNumberBool (false), getNSString ("drawsBackground"));
-       #endif
-""" in webview_header
+    assert '#if CHOC_OSX' in webview_header
+    assert 'if (options->transparentBackground)' in webview_header
+    assert 'call<void> (webview, "setValue:forKey:", getNSNumberBool (false), getNSString ("drawsBackground"));' in webview_header
+    assert '#endif' in webview_header
+    assert 'auto surface = callClass<id> ("UIColor", "colorWithRed:green:blue:alpha:"' in webview_header
+    assert 'call<void> (webview, "setOpaque:", (BOOL) 0);' in webview_header
+    assert 'call<void> (webview, "setBackgroundColor:", surface);' in webview_header
+    assert 'if (auto scrollView = call<id> (webview, "scrollView"))' in webview_header
+    assert 'call<void> (scrollView, "setBackgroundColor:", surface);' in webview_header
+    assert (
+        '"            width:  view.clientWidth  - parseFloat (clientStyle.paddingLeft) - parseFloat (clientStyle.paddingRight),\\n"'
+        in embedded_assets_header
+    )
+    assert (
+        '"            height: view.clientHeight - parseFloat (clientStyle.paddingTop)  - parseFloat (clientStyle.paddingBottom)\\n"'
+        in embedded_assets_header
+    )
+    assert (
+        '"            width:  view.clientHeight - parseFloat (clientStyle.paddingTop)  - parseFloat (clientStyle.paddingBottom),\\n"'
+        not in embedded_assets_header
+    )
+    assert (
+        '"            height: view.clientWidth  - parseFloat (clientStyle.paddingLeft) - parseFloat (clientStyle.paddingRight)\\n"'
+        not in embedded_assets_header
+    )
+    assert '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />' in patch_webview_header
+    assert 'html { background: #07090d; overflow: hidden; }' in patch_webview_header
+    assert 'body { display: block; position: absolute; width: 100%; height: 100%; color: white; background: #07090d;' in patch_webview_header
+    assert '#cmaj-view-container { display: block; position: relative; width: 100%; height: 100%; overflow: auto; background: #07090d; }' in patch_webview_header
+    assert 'if (view?.width > 10)' in embedded_assets_header
+    assert 'if (view?.height > 10)' in embedded_assets_header
+    assert 'const shouldUseFixedSize = ! view?.resizable;' not in embedded_assets_header
 
 
 def test_ios_auv3_generator_rejects_a_missing_patch_file(tmp_path: Path) -> None:

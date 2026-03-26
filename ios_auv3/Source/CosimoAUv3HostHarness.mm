@@ -212,13 +212,13 @@ static AudioComponentDescription CosimoComponentDescription()
     }];
 
     const uint8_t noteOn[] = { 0x90, 60, 96 };
-    midiBlock (0, 0, 3, noteOn);
+    midiBlock (AUEventSampleTimeImmediate, 0, 3, noteOn);
 
     dispatch_after (dispatch_time (DISPATCH_TIME_NOW, (int64_t) (0.25 * NSEC_PER_SEC)),
                     dispatch_get_main_queue(), ^
     {
         const uint8_t noteOff[] = { 0x80, 60, 0 };
-        midiBlock (0, 0, 3, noteOff);
+        midiBlock (AUEventSampleTimeImmediate, 0, 3, noteOff);
     });
 
     dispatch_after (dispatch_time (DISPATCH_TIME_NOW, (int64_t) (0.7 * NSEC_PER_SEC)),
@@ -305,23 +305,29 @@ static AudioComponentDescription CosimoComponentDescription()
 
 - (void)saveStateNamed:(NSString *)stateName completion:(CosimoHostResultBlock)completion
 {
-    NSDictionary<NSString *, id> *fullState = self.instrumentUnit.AUAudioUnit.fullState;
+    NSString *stateSource = nil;
+    NSDictionary<NSString *, id> *fullState = [self currentPersistedStateWithSource:&stateSource];
 
     if (fullState == nil)
     {
-        completion (nil, CosimoMakeError (18, @"The AUv3 did not provide a fullState dictionary."));
+        completion (nil, CosimoMakeError (18, [NSString stringWithFormat:@"The AUv3 did not provide a persistable state dictionary. %@", [self describePersistableStateAvailability]]));
         return;
     }
 
+    NSDictionary<NSString *, id> *stateEnvelope = @{
+        @"stateSource": stateSource ?: @"fullState",
+        @"statePayload": fullState,
+    };
+
     NSError *serialiseError = nil;
-    NSData *plist = [NSPropertyListSerialization dataWithPropertyList:fullState
+    NSData *plist = [NSPropertyListSerialization dataWithPropertyList:stateEnvelope
                                                                format:NSPropertyListBinaryFormat_v1_0
                                                               options:0
                                                                 error:&serialiseError];
 
     if (plist == nil)
     {
-        completion (nil, serialiseError ?: CosimoMakeError (19, @"Could not serialise the AUv3 fullState dictionary."));
+        completion (nil, serialiseError ?: CosimoMakeError (19, @"Could not serialise the AUv3 state dictionary."));
         return;
     }
 
@@ -338,12 +344,14 @@ static AudioComponentDescription CosimoComponentDescription()
 
     completion (@{
         @"savedStateKeys": keys,
+        @"stateSource": stateSource ?: @"fullState",
     }, nil);
 }
 
 - (void)reloadStateNamed:(NSString *)stateName completion:(CosimoHostResultBlock)completion
 {
-    NSDictionary<NSString *, id> *savedState = [self readStateNamed:stateName error:nil];
+    NSString *stateSource = nil;
+    NSDictionary<NSString *, id> *savedState = [self readStateNamed:stateName source:&stateSource error:nil];
 
     if (savedState == nil)
     {
@@ -362,13 +370,14 @@ static AudioComponentDescription CosimoComponentDescription()
             return;
         }
 
-        [self applySavedState:savedState completion:completion];
+        [self applySavedState:savedState source:stateSource completion:completion];
     }];
 }
 
 - (void)loadSavedStateNamed:(NSString *)stateName completion:(CosimoHostResultBlock)completion
 {
-    NSDictionary<NSString *, id> *savedState = [self readStateNamed:stateName error:nil];
+    NSString *stateSource = nil;
+    NSDictionary<NSString *, id> *savedState = [self readStateNamed:stateName source:&stateSource error:nil];
 
     if (savedState == nil)
     {
@@ -386,13 +395,13 @@ static AudioComponentDescription CosimoComponentDescription()
                 return;
             }
 
-            [self applySavedState:savedState completion:completion];
+            [self applySavedState:savedState source:stateSource completion:completion];
         }];
 
         return;
     }
 
-    [self applySavedState:savedState completion:completion];
+    [self applySavedState:savedState source:stateSource completion:completion];
 }
 
 - (void)teardown
@@ -403,9 +412,24 @@ static AudioComponentDescription CosimoComponentDescription()
 
 #pragma mark - Internals
 
-- (void)applySavedState:(NSDictionary<NSString *, id> *)savedState completion:(CosimoHostResultBlock)completion
+- (void)applySavedState:(NSDictionary<NSString *, id> *)savedState
+                 source:(NSString *)stateSource
+             completion:(CosimoHostResultBlock)completion
 {
-    self.instrumentUnit.AUAudioUnit.fullState = savedState;
+    if ([stateSource isEqualToString:@"parameterValues"])
+    {
+        NSError *parameterError = nil;
+
+        if (! [self applyParameterValues:savedState error:&parameterError])
+        {
+            completion (nil, parameterError ?: CosimoMakeError (23, @"Could not restore the saved parameter values."));
+            return;
+        }
+    }
+    else if ([stateSource isEqualToString:@"fullStateForDocument"])
+        self.instrumentUnit.AUAudioUnit.fullStateForDocument = savedState;
+    else
+        self.instrumentUnit.AUAudioUnit.fullState = savedState;
 
     dispatch_after (dispatch_time (DISPATCH_TIME_NOW, (int64_t) (0.25 * NSEC_PER_SEC)),
                     dispatch_get_main_queue(), ^
@@ -439,6 +463,105 @@ static AudioComponentDescription CosimoComponentDescription()
     self.instrumentUnit = nil;
     self.engine = nil;
     self.parameterSnapshot = nil;
+}
+
+- (NSDictionary<NSString *, id> *)currentPersistedStateWithSource:(NSString * __autoreleasing _Nullable *)stateSource
+{
+    NSDictionary<NSString *, id> *documentState = self.instrumentUnit.AUAudioUnit.fullStateForDocument;
+
+    if (documentState != nil)
+    {
+        if (stateSource != nil)
+            *stateSource = @"fullStateForDocument";
+
+        return documentState;
+    }
+
+    NSDictionary<NSString *, id> *presetState = self.instrumentUnit.AUAudioUnit.fullState;
+
+    if (presetState != nil)
+    {
+        if (stateSource != nil)
+            *stateSource = @"fullState";
+
+        return presetState;
+    }
+
+    NSDictionary<NSString *, id> *parameterValues = [self serialiseParameterValues];
+
+    if (parameterValues.count > 0)
+    {
+        if (stateSource != nil)
+            *stateSource = @"parameterValues";
+
+        return parameterValues;
+    }
+
+    if (stateSource != nil)
+        *stateSource = nil;
+
+    return nil;
+}
+
+- (NSDictionary<NSString *, id> *)serialiseParameterValues
+{
+    NSMutableDictionary<NSString *, NSNumber *> *values = [[NSMutableDictionary alloc] init];
+
+    for (AUParameter *parameter in self.instrumentUnit.AUAudioUnit.parameterTree.allParameters)
+    {
+        if (parameter.identifier.length == 0)
+            continue;
+
+        values[parameter.identifier] = @(parameter.value);
+    }
+
+    return values;
+}
+
+- (BOOL)applyParameterValues:(NSDictionary<NSString *, id> *)parameterValues error:(NSError **)error
+{
+    for (NSString *identifier in parameterValues)
+    {
+        AUParameter *parameter = [self findParameterWithIdentifier:identifier];
+
+        if (parameter == nil)
+        {
+            if (error != nil)
+                *error = CosimoMakeError (24, [NSString stringWithFormat:@"Could not find parameter %@ while restoring state.", identifier]);
+
+            return NO;
+        }
+
+        id savedValue = parameterValues[identifier];
+
+        if (! [savedValue isKindOfClass:[NSNumber class]])
+        {
+            if (error != nil)
+                *error = CosimoMakeError (25, [NSString stringWithFormat:@"Saved value for %@ was not numeric.", identifier]);
+
+            return NO;
+        }
+
+        parameter.value = [savedValue floatValue];
+    }
+
+    return YES;
+}
+
+- (NSString *)describePersistableStateAvailability
+{
+    AUAudioUnit *audioUnit = self.instrumentUnit.AUAudioUnit;
+    NSDictionary<NSString *, id> *fullState = audioUnit.fullState;
+    NSDictionary<NSString *, id> *documentState = audioUnit.fullStateForDocument;
+    NSArray<AUParameter *> *parameters = audioUnit.parameterTree.allParameters ?: @[];
+    AUAudioUnitPreset *currentPreset = audioUnit.currentPreset;
+
+    return [NSString stringWithFormat:@"fullState=%@ fullStateForDocument=%@ parameterCount=%lu supportsUserPresets=%@ currentPreset=%@",
+            fullState != nil ? @"yes" : @"no",
+            documentState != nil ? @"yes" : @"no",
+            (unsigned long) parameters.count,
+            audioUnit.supportsUserPresets ? @"yes" : @"no",
+            currentPreset.name ?: @"<none>"];
 }
 
 - (NSArray<AVAudioUnitComponent *> *)matchingCosimoComponents
@@ -602,7 +725,9 @@ static AudioComponentDescription CosimoComponentDescription()
     return [documentsDirectory URLByAppendingPathComponent:[NSString stringWithFormat:@"%@.plist", stateName]];
 }
 
-- (NSDictionary<NSString *, id> *)readStateNamed:(NSString *)stateName error:(NSError **)error
+- (NSDictionary<NSString *, id> *)readStateNamed:(NSString *)stateName
+                                          source:(NSString * __autoreleasing _Nullable *)stateSource
+                                           error:(NSError **)error
 {
     NSURL *url = [self stateFileURLForName:stateName];
     NSData *plist = [NSData dataWithContentsOfURL:url options:0 error:error];
@@ -619,6 +744,20 @@ static AudioComponentDescription CosimoComponentDescription()
 
     if (![dictionary isKindOfClass:[NSDictionary class]])
         return nil;
+
+    id envelopeSource = dictionary[@"stateSource"];
+    id envelopePayload = dictionary[@"statePayload"];
+
+    if ([envelopeSource isKindOfClass:[NSString class]] && [envelopePayload isKindOfClass:[NSDictionary class]])
+    {
+        if (stateSource != nil)
+            *stateSource = envelopeSource;
+
+        return envelopePayload;
+    }
+
+    if (stateSource != nil)
+        *stateSource = @"fullState";
 
     return dictionary;
 }

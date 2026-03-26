@@ -66,6 +66,22 @@ replacement = """       #if CHOC_OSX
         if (options->transparentBackground)
             call<void> (webview, "setValue:forKey:", getNSNumberBool (false), getNSString ("drawsBackground"));
        #endif
+
+       #if CHOC_IOS
+        if (options->transparentBackground)
+        {
+            auto surface = callClass<id> ("UIColor", "colorWithRed:green:blue:alpha:",
+                                          (CGFloat) (7.0 / 255.0),
+                                          (CGFloat) (9.0 / 255.0),
+                                          (CGFloat) (13.0 / 255.0),
+                                          (CGFloat) 1.0);
+            call<void> (webview, "setOpaque:", (BOOL) 0);
+            call<void> (webview, "setBackgroundColor:", surface);
+
+            if (auto scrollView = call<id> (webview, "scrollView"))
+                call<void> (scrollView, "setBackgroundColor:", surface);
+        }
+       #endif
 """
 
 if needle not in text:
@@ -74,6 +90,182 @@ if needle not in text:
 path.write_text(text.replace(needle, replacement, 1), encoding="utf-8")
 PY
 fi
+
+python3 - "$temp_dir" <<'PY'
+from pathlib import Path
+import sys
+
+root = Path(sys.argv[1])
+targets = [
+    root / "include/cmajor/helpers/cmaj_EmbeddedWebAssets.h",
+    root / "cmajor_plugin.cpp",
+]
+
+old_width = '            width:  view.clientHeight - parseFloat (clientStyle.paddingTop)  - parseFloat (clientStyle.paddingBottom),\\n'
+new_width = '            width:  view.clientWidth  - parseFloat (clientStyle.paddingLeft) - parseFloat (clientStyle.paddingRight),\\n'
+old_height = '            height: view.clientWidth  - parseFloat (clientStyle.paddingLeft) - parseFloat (clientStyle.paddingRight)\\n'
+new_height = '            height: view.clientHeight - parseFloat (clientStyle.paddingTop)  - parseFloat (clientStyle.paddingBottom)\\n'
+
+for path in targets:
+    if not path.is_file():
+        continue
+
+    text = path.read_text(encoding="utf-8")
+
+    if old_width not in text or old_height not in text:
+        raise SystemExit(f"Could not find the expected patch scaling snippet in {path}")
+
+    text = text.replace(old_width, new_width, 1)
+    text = text.replace(old_height, new_height, 1)
+    path.write_text(text, encoding="utf-8")
+PY
+
+python3 - "$temp_dir/include/cmajor/helpers/cmaj_PatchWebView.h" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+
+if not path.is_file():
+    raise SystemExit(0)
+
+text = path.read_text(encoding="utf-8")
+old_header = '<meta charset="utf-8" />\n  <title>Cmajor Patch Controls</title>'
+new_header = '<meta charset="utf-8" />\n  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />\n  <title>Cmajor Patch Controls</title>'
+old_style = """  * { box-sizing: border-box; padding: 0; margin: 0; border: 0; }
+  html { background: black; overflow: hidden; }
+  body { display: block; position: absolute; width: 100%; height: 100%; color: white; font-family: Monaco, Consolas, monospace; }
+  #cmaj-view-container { display: block; position: relative; width: 100%; height: 100%; overflow: auto; }
+"""
+new_style = """  * { box-sizing: border-box; padding: 0; margin: 0; border: 0; }
+  html { background: #07090d; overflow: hidden; }
+  body { display: block; position: absolute; width: 100%; height: 100%; color: white; background: #07090d; font-family: Monaco, Consolas, monospace; }
+  #cmaj-view-container { display: block; position: relative; width: 100%; height: 100%; overflow: auto; background: #07090d; }
+"""
+
+if old_header not in text and new_header not in text:
+    raise SystemExit(f"Could not find the expected patch webview HTML header snippet in {path}")
+
+text = text.replace(old_header, new_header, 1)
+
+if old_style in text:
+    text = text.replace(old_style, new_style, 1)
+elif new_style not in text:
+    raise SystemExit(f"Could not find the expected patch webview style snippet in {path}")
+
+path.write_text(text, encoding="utf-8")
+PY
+
+python3 - "$temp_dir" <<'PY'
+from pathlib import Path
+import sys
+
+root = Path(sys.argv[1])
+targets = [
+    root / "include/cmajor/helpers/cmaj_EmbeddedWebAssets.h",
+    root / "cmajor_plugin.cpp",
+]
+
+replacement_pairs = [
+    (
+        """            if (view?.height > 10)
+                patchView.style.height = view.height + "px";
+            else
+                patchView.style.height = undefined;
+
+            return patchView;
+""",
+        """            if (view?.height > 10)
+                patchView.style.height = view.height + "px";
+            else
+                patchView.style.height = undefined;
+
+            if (view?.resizable)
+            {
+                patchView.style.minWidth = "100%";
+                patchView.style.minHeight = "100%";
+            }
+
+            return patchView;
+""",
+    ),
+    (
+        """        "            if (view?.height > 10)\\n"
+        "                patchView.style.height = view.height + \\"px\\";\\n"
+        "            else\\n"
+        "                patchView.style.height = undefined;\\n"
+        "\\n"
+        "            return patchView;\\n"
+""",
+        """        "            if (view?.height > 10)\\n"
+        "                patchView.style.height = view.height + \\"px\\";\\n"
+        "            else\\n"
+        "                patchView.style.height = undefined;\\n"
+        "\\n"
+        "            if (view?.resizable)\\n"
+        "            {\\n"
+        "                patchView.style.minWidth = \\"100%\\";\\n"
+        "                patchView.style.minHeight = \\"100%\\";\\n"
+        "            }\\n"
+        "\\n"
+        "            return patchView;\\n"
+""",
+    ),
+]
+
+for path in targets:
+    if not path.is_file():
+        continue
+
+    text = path.read_text(encoding="utf-8")
+    replaced = False
+
+    for old_block, new_block in replacement_pairs:
+        if old_block in text:
+            text = text.replace(old_block, new_block, 1)
+            replaced = True
+            break
+
+        if new_block in text:
+            replaced = True
+            break
+
+    if not replaced:
+        raise SystemExit(f"Could not find the expected patch min-size snippet in {path}")
+
+    path.write_text(text, encoding="utf-8")
+PY
+
+python3 - "$temp_dir/include/cmajor/helpers/cmaj_JUCEPlugin.h" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+
+if not path.is_file():
+    raise SystemExit(0)
+
+text = path.read_text(encoding="utf-8")
+old_child_bounds = """        void childBoundsChanged (Component*) override
+        {
+            if (! isResizing && patchWebViewHolder->isVisible())
+                setSize (std::max (50, patchWebViewHolder->getWidth()),
+                         std::max (50, patchWebViewHolder->getHeight() + DerivedType::extraCompHeight));
+        }
+"""
+new_child_bounds = """        void childBoundsChanged (Component*) override
+        {
+            if (! isResizing && patchWebViewHolder->isVisible() && ! patchWebView->resizable)
+                setSize (std::max (50, patchWebViewHolder->getWidth()),
+                         std::max (50, patchWebViewHolder->getHeight() + DerivedType::extraCompHeight));
+        }
+"""
+
+if old_child_bounds not in text and new_child_bounds not in text:
+    raise SystemExit(f"Could not find the expected JUCE editor sizing snippet in {path}")
+
+path.write_text(text.replace(old_child_bounds, new_child_bounds, 1), encoding="utf-8")
+PY
 
 rm -rf "$output_dir"
 mv "$temp_dir" "$output_dir"
