@@ -40,6 +40,24 @@ public:
             app->systemRequestedQuit();
     }
 
+    BorderSize<int> getBorderThickness() const override
+    {
+        return {};
+    }
+
+    BorderSize<int> getContentComponentBorder() const override
+    {
+        return {};
+    }
+
+    void resized() override
+    {
+        DocumentWindow::resized();
+
+        if (auto* content = getContentComponent())
+            content->setBounds (getLocalBounds());
+    }
+
     StandalonePluginHolder* getPluginHolder() const
     {
         return pluginHolder.get();
