@@ -1,5 +1,8 @@
 # AUv3 Research And Implementation Plan
 
+Historical note: this file was written before the iOS shell and repo cleanup landed.
+Current live paths are `ios_auv3/`, `tools/live_dev_plugin/`, and `cmajor/WavetableSynth.cmajor`.
+
 ## Why this file exists
 
 This file is the durable record of what we learned about getting this synth onto iOS as an AUv3 without turning the repo into two separate synths.

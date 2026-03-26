@@ -48,6 +48,17 @@ namespace wt
         return table.sampleOffset + (((mipIndex * table.frameCount) + frameIndex) * paddedFrameSize);
     }
 
+    int32 resolveTableIndex (float32 requestedSelect)
+    {
+        let tableCount = int32 (factoryBank.tables.size);
+
+        if (tableCount <= 1)
+            return 0;
+
+        let rounded = int32 (std::intrinsics::floor (requestedSelect + 0.5f));
+        return std::intrinsics::clamp (rounded, 0, tableCount - 1);
+    }
+
     float32 readFixedFrameSample (int32 tableIndex, int32 frameIndex, int32 mipIndex, float32 phase)
     {
         let wrappedPhase = std::intrinsics::wrap (phase, 1.0f);
@@ -79,15 +90,16 @@ namespace wt
         return lo + (hi - lo) * frameT;
     }
 
-    processor FixedFrameOscillator (int32 tableIndex,
-                                    float32 initialFrequencyHz = 440.0f,
+    processor FixedFrameOscillator (float32 initialFrequencyHz = 440.0f,
                                     float32 initialPhase = 0.0f)
     {
         input event float32 frequencyIn [[ name: "Frequency", min: 0.0f, max: 24000.0f, init: 440.0f, unit: "Hz" ]];
         input value float32 framePositionIn [[ name: "Wavetable Position", min: 0.0f, max: 1.0f, init: 0.0f ]];
+        input value float32 tableSelectIn [[ name: "Wavetable Select", min: 0.0f, max: 255.0f, init: 0.0f, rampFrames: 0 ]];
         output stream float out;
 
         std::oscillators::PhasorState phasor;
+        int32 currentTableIndex = 0;
         int32 frameCount = 1;
         int32 lastFrameIndex = 0;
         float32 lastFrameIndexF = 0.0f;
@@ -105,7 +117,8 @@ namespace wt
 
         void main()
         {
-            frameCount = factoryBank.tables[tableIndex].frameCount;
+            currentTableIndex = resolveTableIndex (tableSelectIn);
+            frameCount = factoryBank.tables[currentTableIndex].frameCount;
             lastFrameIndex = frameCount - 1;
             lastFrameIndexF = float32 (lastFrameIndex);
             phasor.phase = std::intrinsics::wrap (initialPhase, 1.0f);
@@ -116,11 +129,22 @@ namespace wt
 
             loop
             {
+                let requestedTableIndex = resolveTableIndex (tableSelectIn);
+
+                if (requestedTableIndex != currentTableIndex)
+                {
+                    currentTableIndex = requestedTableIndex;
+                    frameCount = factoryBank.tables[currentTableIndex].frameCount;
+                    lastFrameIndex = frameCount - 1;
+                    lastFrameIndexF = float32 (lastFrameIndex);
+                    phasor.phase = 0.0f;
+                }
+
                 let phase = phasor.next();
 
                 if (frameCount == 1)
                 {
-                    out <- readFixedFrameSample (tableIndex, 0, currentMipIndex, phase);
+                    out <- readFixedFrameSample (currentTableIndex, 0, currentMipIndex, phase);
                 }
                 else
                 {
@@ -130,7 +154,7 @@ namespace wt
                     let frameHi = std::intrinsics::min (frameLo + 1, lastFrameIndex);
                     let frameT = frameIndex - float32 (frameLo);
                     out <- readFrameBlendSample (
-                        tableIndex,
+                        currentTableIndex,
                         frameLo,
                         frameHi,
                         currentMipIndex,

@@ -1,12 +1,9 @@
-import {
-    FACTORY_BANK_EXTERNAL_ID,
-    FACTORY_BANK_MANIFEST_VALUE,
-} from "./factory-bank-manifest.mjs";
-
+export const FACTORY_BANK_EXTERNAL_ID = "wt::factoryBank";
 export const DEFAULT_SAMPLES_PER_FRAME = 2048;
 export const DEFAULT_PADDED_FRAME_SIZE = DEFAULT_SAMPLES_PER_FRAME + 3;
 export const DEFAULT_VISIBLE_MIP_INDEX = 10;
-const DEFAULT_FACTORY_BANK_MANIFEST_PATH = "WavetableSynth.cmajorpatch";
+export const DEFAULT_FACTORY_BANK_MANIFEST_PATH = "WavetableSynth.cmajorpatch";
+export const DEFAULT_FACTORY_BANK_CATALOG_PATH = "assets/factory-bank.json";
 
 function assert(condition, message) {
     if (!condition) {
@@ -53,6 +50,12 @@ function resolvePatchResourceUrl(path, patchConnection) {
     }
 
     return new URL(path, patchRootUrl);
+}
+
+async function fetchJSON(url, label) {
+    const response = await fetch(url.toString());
+    assert(response.ok, `Failed to fetch ${label} from ${url}`);
+    return response.json();
 }
 
 export function parseWaveFile(arrayBuffer) {
@@ -121,7 +124,7 @@ export function parseWaveFile(arrayBuffer) {
     };
 }
 
-export function getFactoryBankValue(manifest, externalID = "wt::factoryBank") {
+export function getFactoryBankValue(manifest, externalID = FACTORY_BANK_EXTERNAL_ID) {
     const external = manifest?.externals?.[externalID];
 
     assert(external, `Patch manifest is missing external ${externalID}`);
@@ -129,6 +132,32 @@ export function getFactoryBankValue(manifest, externalID = "wt::factoryBank") {
     assert(typeof external.sampleBlob === "string", `${externalID} must provide a sampleBlob path`);
 
     return external;
+}
+
+export function getFactoryBankCatalogValue(catalogValue) {
+    assert(typeof catalogValue?.sampleBlob === "string", "Factory bank catalog must provide a sampleBlob path");
+    assert(Array.isArray(catalogValue?.tables), "Factory bank catalog must provide a tables array");
+
+    catalogValue.tables.forEach((table, tableIndex) => {
+        assert(
+            typeof table?.tableId === "string" && table.tableId.length > 0,
+            `Factory bank catalog table ${tableIndex} must provide tableId`
+        );
+        assert(
+            typeof table?.name === "string" && table.name.length > 0,
+            `Factory bank catalog table ${tableIndex} must provide name`
+        );
+        assert(
+            Number.isInteger(Number(table?.frameCount)) && Number(table.frameCount) > 0,
+            `Factory bank catalog table ${tableIndex} must provide a positive frameCount`
+        );
+        assert(
+            Number.isInteger(Number(table?.sampleOffset)) && Number(table.sampleOffset) >= 0,
+            `Factory bank catalog table ${tableIndex} must provide a non-negative sampleOffset`
+        );
+    });
+
+    return catalogValue;
 }
 
 export function extractWavetableFrames(
@@ -178,12 +207,13 @@ export async function loadWavetableFramesFromUrls(
 
     const arrayBuffer = await response.arrayBuffer();
     const parsedWave = parseWaveFile(arrayBuffer);
-    const tableMeta = manifestValue.tables[clampToRange(tableIndex, 0, manifestValue.tables.length - 1)];
+    const clampedTableIndex = clampToRange(tableIndex, 0, manifestValue.tables.length - 1);
+    const tableMeta = manifestValue.tables[clampedTableIndex];
 
     return {
         sampleRate: parsedWave.sampleRate,
         sampleBlobPath: manifestValue.sampleBlob,
-        tableIndex,
+        tableIndex: clampedTableIndex,
         visibleMipIndex,
         frameCount: Number(tableMeta.frameCount),
         frames: extractWavetableFrames(parsedWave.samples, tableMeta, {
@@ -199,28 +229,28 @@ async function loadPatchManifestForFactoryBank(patchConnection, manifest, extern
         return manifest;
     }
 
-    if (externalID === FACTORY_BANK_EXTERNAL_ID) {
-        return {
-            externals: {
-                [FACTORY_BANK_EXTERNAL_ID]: FACTORY_BANK_MANIFEST_VALUE,
-            },
-        };
-    }
-
     const manifestUrl = resolvePatchResourceUrl(
         DEFAULT_FACTORY_BANK_MANIFEST_PATH,
         patchConnection
     );
-    const response = await fetch(manifestUrl.toString());
-    assert(response.ok, `Failed to fetch patch manifest from ${manifestUrl}`);
-    return response.json();
+    return fetchJSON(manifestUrl, "patch manifest");
+}
+
+export async function loadFactoryBankCatalogFromPatch(
+    patchConnection,
+    {
+        catalogPath = DEFAULT_FACTORY_BANK_CATALOG_PATH,
+    } = {}
+) {
+    const catalogUrl = resolvePatchResourceUrl(catalogPath, patchConnection);
+    return getFactoryBankCatalogValue(await fetchJSON(catalogUrl, "factory bank catalog"));
 }
 
 export async function loadFactoryBankFramesFromPatch(
     patchConnection,
     {
         manifest = patchConnection?.manifest,
-        externalID = "wt::factoryBank",
+        externalID = FACTORY_BANK_EXTERNAL_ID,
         tableIndex = 0,
         visibleMipIndex = DEFAULT_VISIBLE_MIP_INDEX,
         samplesPerFrame = DEFAULT_SAMPLES_PER_FRAME,

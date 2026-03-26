@@ -6,7 +6,9 @@ import path from "node:path";
 import {
     parseWaveFile,
     getFactoryBankValue,
+    getFactoryBankCatalogValue,
     extractWavetableFrames,
+    loadFactoryBankCatalogFromPatch,
     loadFactoryBankFramesFromPatch,
 } from "../patch_gui/wavetable-bank.mjs";
 import {
@@ -163,6 +165,9 @@ async function loadCurrentBank() {
     const manifest = JSON.parse(
         await fs.readFile(path.join(repoRoot, "WavetableSynth.cmajorpatch"), "utf8")
     );
+    const catalog = getFactoryBankCatalogValue(
+        JSON.parse(await fs.readFile(path.join(repoRoot, "assets", "factory-bank.json"), "utf8"))
+    );
     const bankValue = getFactoryBankValue(manifest);
     const wavBytes = await fs.readFile(path.join(repoRoot, bankValue.sampleBlob));
     const parsedWave = parseWaveFile(
@@ -170,6 +175,7 @@ async function loadCurrentBank() {
     );
 
     return {
+        catalog,
         bankValue,
         parsedWave,
         frames: extractWavetableFrames(parsedWave.samples, bankValue.tables[0]),
@@ -177,12 +183,16 @@ async function loadCurrentBank() {
 }
 
 test("wave bank parser reads the current float32 mono bank", async () => {
-    const { parsedWave } = await loadCurrentBank();
+    const { bankValue, parsedWave } = await loadCurrentBank();
+    const expectedSampleCount = bankValue.tables.reduce(
+        (total, table) => total + (table.frameCount * 11 * 2051),
+        0
+    );
 
     assert.equal(parsedWave.sampleRate, 44100);
     assert.equal(parsedWave.channelCount, 1);
     assert.equal(parsedWave.bitsPerSample, 32);
-    assert.equal(parsedWave.samples.length, 360976);
+    assert.equal(parsedWave.samples.length, expectedSampleCount);
 });
 
 test("frame extraction returns the 16 display-demo frames with evolving harmonic shape", async () => {
@@ -215,6 +225,7 @@ test("bank loading still works when runtime status strips externals from the man
         await fs.readFile(path.join(repoRoot, "WavetableSynth.cmajorpatch"), "utf8")
     );
     const strippedManifest = { ...manifest };
+    const manifestBytes = Buffer.from(JSON.stringify(manifest), "utf8");
     const sampleBlob = await fs.readFile(path.join(repoRoot, "assets", "factory-bank.wav"));
     delete strippedManifest.externals;
 
@@ -223,6 +234,10 @@ test("bank loading still works when runtime status strips externals from the man
         manifest: strippedManifest,
         getResourceAddress(requestedPath) {
             requestedPaths.push(requestedPath);
+
+            if (requestedPath === "WavetableSynth.cmajorpatch") {
+                return `data:application/json;base64,${manifestBytes.toString("base64")}`;
+            }
 
             if (requestedPath === "assets/factory-bank.wav") {
                 return `data:audio/wav;base64,${sampleBlob.toString("base64")}`;
@@ -233,10 +248,52 @@ test("bank loading still works when runtime status strips externals from the man
     });
 
     assert.equal(bank.sampleRate, 44100);
-    assert.equal(bank.frameCount, 16);
+    assert.equal(bank.frameCount, manifest.externals["wt::factoryBank"].tables[0].frameCount);
     assert.equal(bank.frames[0]?.length, 2048);
     assert.equal(bank.sampleBlobPath, "assets/factory-bank.wav");
-    assert.deepEqual(requestedPaths, ["assets/factory-bank.wav"]);
+    assert.deepEqual(requestedPaths, ["WavetableSynth.cmajorpatch", "assets/factory-bank.wav"]);
+});
+
+test("factory bank catalog loader returns names for the selector UI", async () => {
+    const catalogBytes = await fs.readFile(path.join(repoRoot, "assets", "factory-bank.json"));
+    const catalog = await loadFactoryBankCatalogFromPatch({
+        getResourceAddress(requestedPath) {
+            if (requestedPath === "assets/factory-bank.json") {
+                return `data:application/json;base64,${catalogBytes.toString("base64")}`;
+            }
+
+            throw new Error(`Unexpected resource path: ${requestedPath}`);
+        },
+    });
+
+    assert.ok(catalog.tables.length >= 2);
+    assert.equal(typeof catalog.tables[0]?.tableId, "string");
+    assert.equal(typeof catalog.tables[0]?.name, "string");
+});
+
+test("loading table 1 returns a different stored frame set than table 0", async () => {
+    const manifest = JSON.parse(
+        await fs.readFile(path.join(repoRoot, "WavetableSynth.cmajorpatch"), "utf8")
+    );
+    const sampleBlob = await fs.readFile(path.join(repoRoot, "assets", "factory-bank.wav"));
+    const patchConnection = {
+        manifest,
+        getResourceAddress(requestedPath) {
+            if (requestedPath === "assets/factory-bank.wav") {
+                return `data:audio/wav;base64,${sampleBlob.toString("base64")}`;
+            }
+
+            throw new Error(`Unexpected resource path: ${requestedPath}`);
+        },
+    };
+    const firstTable = await loadFactoryBankFramesFromPatch(patchConnection, { tableIndex: 0 });
+    const secondTable = await loadFactoryBankFramesFromPatch(patchConnection, { tableIndex: 1 });
+
+    assert.notEqual(secondTable.frameCount, 0);
+    assert.notDeepEqual(
+        Array.from(firstTable.frames[0]),
+        Array.from(secondTable.frames[0])
+    );
 });
 
 test("decimation preserves the first and last sample columns", () => {

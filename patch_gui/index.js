@@ -1,9 +1,14 @@
-import { loadFactoryBankFramesFromPatch, DEFAULT_VISIBLE_MIP_INDEX } from "./wavetable-bank.js";
+import {
+    loadFactoryBankCatalogFromPatch,
+    loadFactoryBankFramesFromPatch,
+    DEFAULT_VISIBLE_MIP_INDEX,
+} from "./wavetable-bank.js";
 import { CanvasWavetableDisplay } from "./wavetable-display.js";
 import { computeResponsivePatchLayout, getLayoutCSSVariables } from "./responsive-layout.js";
 
 const midiInputEndpointID = "midiIn";
 const wavetablePositionEndpointID = "wavetablePosition";
+const wavetableSelectEndpointID = "wavetableSelect";
 
 const knobDefault = 0.0;
 
@@ -23,6 +28,10 @@ function findParameterEndpointInfo(status, endpointID) {
             endpointInfo?.endpointID === endpointID &&
             endpointInfo?.purpose === "parameter"
     );
+}
+
+function formatOrdinal(value) {
+    return String(value).padStart(2, "0");
 }
 
 function getKeyboardTagName(keyboardStyle) {
@@ -57,9 +66,12 @@ class CosimoSynthView extends HTMLElement {
         this.patchConnection = patchConnection;
         this.options = { platform: "desktop", ...options };
         this.currentValue = knobDefault;
+        this.currentTableIndex = 0;
+        this.currentFrameCount = 1;
         this.display = null;
-        this.displayFramesLoaded = false;
-        this.displayFramesLoading = false;
+        this.displayFramesCache = new Map();
+        this.displayFramesLoading = new Set();
+        this.factoryBankCatalog = null;
         this.resizeObserver = null;
         this.windowResizeListener = null;
         this.currentLayout = computeResponsivePatchLayout({
@@ -70,6 +82,7 @@ class CosimoSynthView extends HTMLElement {
         this.keyboardStyle = "";
         this.keyboardNoteCount = 0;
         this.scanRailEndpointID = null;
+        this.tableSelectEndpointID = null;
 
         this.attachShadow({ mode: "open" });
 
@@ -99,6 +112,13 @@ class CosimoSynthView extends HTMLElement {
             );
         }
 
+        if (this.handleTableParameterChange) {
+            this.patchConnection.removeParameterListener(
+                wavetableSelectEndpointID,
+                this.handleTableParameterChange
+            );
+        }
+
         if (this.handleStatusUpdate) {
             this.patchConnection.removeStatusListener(this.handleStatusUpdate);
         }
@@ -110,6 +130,10 @@ class CosimoSynthView extends HTMLElement {
             this.scanRailInput.removeEventListener("change", this.handleScanRailGestureEnd);
             this.stepDownButton?.removeEventListener("click", this.handleScanStepDown);
             this.stepUpButton?.removeEventListener("click", this.handleScanStepUp);
+        }
+
+        if (this.tableSelect && this.handleTableSelectChange) {
+            this.tableSelect.removeEventListener("change", this.handleTableSelectChange);
         }
     }
 
@@ -130,11 +154,28 @@ class CosimoSynthView extends HTMLElement {
         this.scanRailInput = this.shadowRoot.querySelector(".scan-slider");
         this.stepDownButton = this.shadowRoot.querySelector(".step-down");
         this.stepUpButton = this.shadowRoot.querySelector(".step-up");
+        this.tableSelect = this.shadowRoot.querySelector(".table-select");
+        this.railLabelStart = this.shadowRoot.querySelector("[data-role='rail-label-start']");
+        this.railLabelMid = this.shadowRoot.querySelector("[data-role='rail-label-mid']");
+        this.railLabelEnd = this.shadowRoot.querySelector("[data-role='rail-label-end']");
 
         this.display = new CanvasWavetableDisplay(this.displayCanvas);
 
         this.handleParameterChange = (value) => this.setDisplayedValue(value);
+        this.handleTableParameterChange = (value) => this.setSelectedTableIndex(value);
         this.handleStatusUpdate = (status) => this.handlePatchStatus(status);
+        this.handleTableSelectChange = () => {
+            const nextIndex = Number(this.tableSelect?.value ?? 0);
+
+            this.patchConnection.sendParameterGestureStart?.(wavetableSelectEndpointID);
+            this.patchConnection.sendEventOrValue(wavetableSelectEndpointID, nextIndex);
+            this.patchConnection.sendParameterGestureEnd?.(wavetableSelectEndpointID);
+            this.setSelectedTableIndex(nextIndex);
+        };
+
+        if (this.tableSelect) {
+            this.tableSelect.addEventListener("change", this.handleTableSelectChange);
+        }
 
         this.applyResponsiveLayout(this.currentLayout, true);
 
@@ -153,7 +194,12 @@ class CosimoSynthView extends HTMLElement {
             wavetablePositionEndpointID,
             this.handleParameterChange
         );
+        this.patchConnection.addParameterListener(
+            wavetableSelectEndpointID,
+            this.handleTableParameterChange
+        );
         this.patchConnection.requestParameterValue(wavetablePositionEndpointID);
+        this.patchConnection.requestParameterValue(wavetableSelectEndpointID);
 
         this.patchConnection.addStatusListener(this.handleStatusUpdate);
         this.patchConnection.requestStatusUpdate();
@@ -208,29 +254,108 @@ class CosimoSynthView extends HTMLElement {
         }
     }
 
-    async loadDisplayFrames() {
-        if (this.displayFramesLoaded || this.displayFramesLoading) {
+    async ensureBankCatalogLoaded() {
+        if (this.factoryBankCatalog) {
+            return this.factoryBankCatalog;
+        }
+
+        this.factoryBankCatalog = await loadFactoryBankCatalogFromPatch(this.patchConnection);
+        this.populateTableSelector();
+        this.updateBankReadout();
+        this.updateFrameReadouts();
+        return this.factoryBankCatalog;
+    }
+
+    populateTableSelector() {
+        if (!this.tableSelect || !this.factoryBankCatalog) {
             return;
         }
 
-        this.displayFramesLoading = true;
+        this.tableSelect.innerHTML = "";
+
+        this.factoryBankCatalog.tables.forEach((table, tableIndex) => {
+            const option = document.createElement("option");
+            option.value = String(tableIndex);
+            option.textContent = table.name;
+            this.tableSelect.appendChild(option);
+        });
+
+        this.currentTableIndex = clamp(
+            this.currentTableIndex,
+            0,
+            this.factoryBankCatalog.tables.length - 1
+        );
+        this.tableSelect.value = String(this.currentTableIndex);
+    }
+
+    getSelectedTableMeta() {
+        return this.factoryBankCatalog?.tables?.[this.currentTableIndex] ?? null;
+    }
+
+    updateBankReadout() {
+        if (!this.bankReadout) {
+            return;
+        }
+
+        const selectedTable = this.getSelectedTableMeta();
+        if (!selectedTable) {
+            this.bankReadout.textContent = this.options.platform === "ios"
+                ? "Factory bank"
+                : "Factory bank";
+            return;
+        }
+
+        this.bankReadout.textContent = this.options.platform === "ios"
+            ? selectedTable.name
+            : `Factory bank • ${selectedTable.name}`;
+    }
+
+    updateFrameReadouts() {
+        const safeFrameCount = Math.max(1, this.currentFrameCount);
+        const frameIndex = Math.round(this.currentValue * Math.max(0, safeFrameCount - 1)) + 1;
+
+        if (this.frameReadout) {
+            this.frameReadout.textContent = formatOrdinal(frameIndex);
+        }
+
+        if (this.heroFrameReadout) {
+            this.heroFrameReadout.textContent = `${formatOrdinal(frameIndex)}/${formatOrdinal(safeFrameCount)}`;
+        }
+
+        if (this.railLabelStart) {
+            this.railLabelStart.textContent = `Shape ${formatOrdinal(1)}`;
+        }
+
+        if (this.railLabelMid) {
+            this.railLabelMid.textContent = `Shape ${formatOrdinal(Math.max(1, Math.ceil(safeFrameCount / 2)))}`;
+        }
+
+        if (this.railLabelEnd) {
+            this.railLabelEnd.textContent = `Shape ${formatOrdinal(safeFrameCount)}`;
+        }
+    }
+
+    async loadDisplayFrames(tableIndex = this.currentTableIndex) {
+        const cachedBank = this.displayFramesCache.get(tableIndex);
+        if (cachedBank) {
+            this.applyLoadedBank(cachedBank);
+            return;
+        }
+
+        if (this.displayFramesLoading.has(tableIndex)) {
+            return;
+        }
+
+        this.displayFramesLoading.add(tableIndex);
+        this.setDisplayState("loading", "Loading wavetable bank…");
 
         try {
-            const bank = await loadFactoryBankFramesFromPatch(this.patchConnection);
-            this.display.setFrames(bank.frames);
-            this.display.setPosition(this.currentValue);
-            this.setDisplayState(
-                "loaded",
-                this.options.platform === "ios"
-                    ? `${bank.frameCount} shapes`
-                    : `${bank.frameCount} frames • mip ${DEFAULT_VISIBLE_MIP_INDEX}`
-            );
-            if (this.bankReadout) {
-                this.bankReadout.textContent = this.options.platform === "ios"
-                    ? `Bank A / ${bank.frameCount} shapes`
-                    : `Factory bank • ${bank.frameCount} stored shapes`;
+            const bank = await loadFactoryBankFramesFromPatch(this.patchConnection, { tableIndex });
+            this.displayFramesCache.set(tableIndex, bank);
+
+            if (tableIndex === this.currentTableIndex) {
+                this.applyLoadedBank(bank);
             }
-            this.displayFramesLoaded = true;
         } catch (error) {
             console.error(error);
             const detail = String(error?.message || error || "Unknown error");
@@ -241,8 +366,41 @@ class CosimoSynthView extends HTMLElement {
                     : `Display unavailable: ${detail}`;
             }
         } finally {
-            this.displayFramesLoading = false;
+            this.displayFramesLoading.delete(tableIndex);
         }
+    }
+
+    applyLoadedBank(bank) {
+        this.currentFrameCount = Math.max(1, Number(bank.frameCount) || 1);
+        this.display.setFrames(bank.frames);
+        this.display.setPosition(this.currentValue);
+        this.updateFrameReadouts();
+        this.updateBankReadout();
+        this.setDisplayState(
+            "loaded",
+            this.options.platform === "ios"
+                ? `${bank.frameCount} shapes`
+                : `${bank.frameCount} frames • mip ${DEFAULT_VISIBLE_MIP_INDEX}`
+        );
+    }
+
+    setSelectedTableIndex(value) {
+        const maxTableIndex = this.factoryBankCatalog
+            ? Math.max(0, this.factoryBankCatalog.tables.length - 1)
+            : 255;
+        const nextTableIndex = clamp(Math.round(Number(value) || 0), 0, maxTableIndex);
+
+        if (this.tableSelect && this.tableSelect.value !== String(nextTableIndex)) {
+            this.tableSelect.value = String(nextTableIndex);
+        }
+
+        if (nextTableIndex === this.currentTableIndex && this.displayFramesCache.has(nextTableIndex)) {
+            return;
+        }
+
+        this.currentTableIndex = nextTableIndex;
+        this.updateBankReadout();
+        void this.loadDisplayFrames(nextTableIndex);
     }
 
     handlePatchStatus(status) {
@@ -255,6 +413,7 @@ class CosimoSynthView extends HTMLElement {
         }
 
         const endpointInfo = findParameterEndpointInfo(status, wavetablePositionEndpointID);
+        const tableSelectInfo = findParameterEndpointInfo(status, wavetableSelectEndpointID);
 
         if (endpointInfo) {
             if (this.options.platform === "ios") {
@@ -264,16 +423,25 @@ class CosimoSynthView extends HTMLElement {
             }
         }
 
+        if (tableSelectInfo) {
+            this.tableSelectEndpointID = tableSelectInfo.endpointID;
+        }
+
         this.patchConnection.requestParameterValue(wavetablePositionEndpointID);
+        this.patchConnection.requestParameterValue(wavetableSelectEndpointID);
         if (this.hint) {
             this.hint.textContent = this.options.platform === "ios"
                 ? ""
                 : "Click the keyboard once, then use A W S E D F T G Y H U J K to play notes from your computer keyboard.";
         }
 
-        if (!this.displayFramesLoaded) {
-            this.loadDisplayFrames();
-        }
+        void this.ensureBankCatalogLoaded()
+            .catch((error) => {
+                console.error(error);
+                const detail = String(error?.message || error || "Unknown error");
+                this.setDisplayState("error", `Could not load wavetable catalog: ${detail}`);
+            })
+            .finally(() => this.loadDisplayFrames(this.currentTableIndex));
     }
 
     setDisplayState(state, message) {
@@ -422,8 +590,8 @@ class CosimoSynthView extends HTMLElement {
         this.handleScanRailGestureEnd = () => {
             this.patchConnection.sendParameterGestureEnd?.(endpointID);
         };
-        this.handleScanStepDown = () => this.nudgeScanRail(-1 / 15);
-        this.handleScanStepUp = () => this.nudgeScanRail(1 / 15);
+        this.handleScanStepDown = () => this.nudgeScanRail(-this.getFrameStepSize());
+        this.handleScanStepUp = () => this.nudgeScanRail(this.getFrameStepSize());
 
         this.scanRailInput.addEventListener("input", this.handleScanRailInput);
         this.scanRailInput.addEventListener("pointerdown", this.handleScanRailGestureStart);
@@ -431,6 +599,10 @@ class CosimoSynthView extends HTMLElement {
         this.scanRailInput.addEventListener("change", this.handleScanRailGestureEnd);
         this.stepDownButton?.addEventListener("click", this.handleScanStepDown);
         this.stepUpButton?.addEventListener("click", this.handleScanStepUp);
+    }
+
+    getFrameStepSize() {
+        return this.currentFrameCount > 1 ? 1.0 / (this.currentFrameCount - 1) : 1.0;
     }
 
     nudgeScanRail(amount) {
@@ -446,7 +618,6 @@ class CosimoSynthView extends HTMLElement {
 
     setDisplayedValue(value) {
         const nextValue = clamp(Number(value) || 0, 0.0, 1.0);
-        const frameIndex = Math.round(nextValue * 15) + 1;
 
         this.currentValue = nextValue;
         if (this.valueReadout) {
@@ -454,14 +625,7 @@ class CosimoSynthView extends HTMLElement {
                 ? nextValue.toFixed(3)
                 : nextValue.toFixed(2);
         }
-
-        if (this.frameReadout) {
-            this.frameReadout.textContent = String(frameIndex).padStart(2, "0");
-        }
-
-        if (this.heroFrameReadout) {
-            this.heroFrameReadout.textContent = `${String(frameIndex).padStart(2, "0")}/16`;
-        }
+        this.updateFrameReadouts();
 
         if (this.scanRailInput && document.activeElement !== this.scanRailInput) {
             this.scanRailInput.value = nextValue.toFixed(3);
@@ -593,6 +757,28 @@ class CosimoSynthView extends HTMLElement {
                     color: rgba(255, 214, 165, 0.9);
                     letter-spacing: 0.08em;
                     text-transform: uppercase;
+                }
+
+                .table-picker {
+                    display: grid;
+                    gap: 4px;
+                }
+
+                .table-picker-label {
+                    font-size: 10px;
+                    letter-spacing: 0.08em;
+                    text-transform: uppercase;
+                    color: rgba(168, 180, 255, 0.68);
+                }
+
+                .table-select {
+                    min-width: 180px;
+                    border-radius: 10px;
+                    border: 1px solid rgba(122, 142, 255, 0.28);
+                    background: rgba(8, 11, 24, 0.98);
+                    color: #eef2f5;
+                    padding: 8px 10px;
+                    font-size: 13px;
                 }
 
                 .wavetable-stage {
@@ -760,6 +946,10 @@ class CosimoSynthView extends HTMLElement {
                         <div class="wavetable-panel">
                             <div class="wavetable-copy">
                                 <div class="bank-readout">Factory bank</div>
+                                <label class="table-picker">
+                                    <span class="table-picker-label">Table</span>
+                                    <select class="table-select"></select>
+                                </label>
                             </div>
                             <div class="wavetable-stage" data-state="loading">
                                 <canvas class="wavetable-canvas"></canvas>
@@ -886,6 +1076,28 @@ class CosimoSynthView extends HTMLElement {
                 .position-label {
                     font-size: 10px;
                     color: rgba(212, 220, 230, 0.42);
+                }
+
+                .table-select-wrap {
+                    padding-left: max(16px, env(safe-area-inset-left));
+                    padding-right: max(16px, env(safe-area-inset-right));
+                }
+
+                .table-picker {
+                    display: grid;
+                    gap: 6px;
+                }
+
+                .table-select {
+                    appearance: auto;
+                    width: 100%;
+                    min-height: 40px;
+                    border-radius: 12px;
+                    border: 1px solid rgba(255, 255, 255, 0.08);
+                    background: rgba(10, 13, 18, 0.92);
+                    color: #eef2f5;
+                    padding: 0 12px;
+                    font-size: 14px;
                 }
 
                 .hero-frame,
@@ -1188,6 +1400,13 @@ class CosimoSynthView extends HTMLElement {
                         </div>
                     </div>
 
+                    <div class="table-select-wrap">
+                        <label class="table-picker">
+                            <span class="position-label">Table</span>
+                            <select class="table-select"></select>
+                        </label>
+                    </div>
+
                     <div class="scan-rail-wrap">
                         <div class="scan-rail-row">
                             <button class="rail-button step-down" type="button" aria-label="Step down">&lsaquo;</button>
@@ -1198,9 +1417,9 @@ class CosimoSynthView extends HTMLElement {
                         </div>
 
                         <div class="rail-labels">
-                            <span>Shape 01</span>
-                            <span>Shape 08</span>
-                            <span>Shape 16</span>
+                            <span data-role="rail-label-start">Shape 01</span>
+                            <span data-role="rail-label-mid">Shape 08</span>
+                            <span data-role="rail-label-end">Shape 16</span>
                         </div>
                     </div>
                 </div>

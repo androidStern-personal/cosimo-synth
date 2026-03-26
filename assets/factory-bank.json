@@ -1,9 +1,17 @@
 {
-  "sampleBlob": "factory-bank.wav",
+  "sampleBlob": "assets/factory-bank.wav",
   "tables": [
     {
+      "tableId": "display-demo",
+      "name": "Display Demo",
       "frameCount": 16,
       "sampleOffset": 0
+    },
+    {
+      "tableId": "sweep-4",
+      "name": "Sweep 4",
+      "frameCount": 4,
+      "sampleOffset": 360976
     }
   ]
 }

@@ -19,16 +19,19 @@ from bench import (
     make_sweep4_bank,
 )
 from wtbank import (
+    CatalogTable,
     DEFAULT_MANIFEST_VALUE_FILENAME,
     DEFAULT_SAMPLE_BLOB_FILENAME,
     MIP_COUNT,
     PADDED_FRAME_SIZE,
     SourceTable,
+    build_catalog_bank_value,
     TableMeta,
     WavetableBank,
     build_bank,
     build_manifest_bank_value,
     emit_cmajor_bank_assets,
+    load_source_table_wav,
     read_padded_sample,
     sample_address,
 )
@@ -176,6 +179,55 @@ def test_source_table_rejects_tables_larger_than_256_frames() -> None:
         )
 
 
+def test_load_source_table_wav_accepts_float32_sources(tmp_path: Path) -> None:
+    frames = make_blend2_bank().frames.astype(np.float32)
+    source_path = tmp_path / "blend2.wav"
+    wavfile.write(source_path, 44_100, frames.reshape(-1))
+
+    table = load_source_table_wav(source_path, table_id="blend2")
+
+    assert table.table_id == "blend2"
+    assert table.frames.shape == frames.shape
+    assert_allclose(table.frames, frames, atol=0.0, rtol=0.0)
+
+
+def test_load_source_table_wav_rejects_stereo_sources(tmp_path: Path) -> None:
+    source_path = tmp_path / "stereo.wav"
+    stereo = np.zeros((SAMPLES_PER_FRAME, 2), dtype=np.float32)
+    wavfile.write(source_path, 44_100, stereo)
+
+    with pytest.raises(ValueError, match="mono"):
+        load_source_table_wav(source_path, table_id="stereo")
+
+
+def test_load_source_table_wav_rejects_unsupported_encodings(tmp_path: Path) -> None:
+    source_path = tmp_path / "int32.wav"
+    wavfile.write(source_path, 44_100, np.zeros(SAMPLES_PER_FRAME, dtype=np.int32))
+
+    with pytest.raises(ValueError, match="float32 or int16"):
+        load_source_table_wav(source_path, table_id="int32")
+
+
+def test_load_source_table_wav_rejects_partial_frames(tmp_path: Path) -> None:
+    source_path = tmp_path / "partial.wav"
+    wavfile.write(source_path, 44_100, np.zeros(SAMPLES_PER_FRAME + 1, dtype=np.float32))
+
+    with pytest.raises(ValueError, match="whole number"):
+        load_source_table_wav(source_path, table_id="partial")
+
+
+def test_load_source_table_wav_rejects_more_than_256_frames(tmp_path: Path) -> None:
+    source_path = tmp_path / "oversized.wav"
+    wavfile.write(
+        source_path,
+        44_100,
+        np.zeros((257 * SAMPLES_PER_FRAME,), dtype=np.float32),
+    )
+
+    with pytest.raises(ValueError, match="between 1 and 256"):
+        load_source_table_wav(source_path, table_id="oversized")
+
+
 def test_build_bank_preserves_input_order_for_runtime_indices() -> None:
     built = build_bank([make_sweep4_bank(), make_blend2_bank()])
     bank = built.bank
@@ -240,6 +292,36 @@ def test_build_manifest_bank_value_matches_cmajor_bank_shape() -> None:
     )
 
     assert build_manifest_bank_value(bank, sample_blob_resource="bank.wav") == expected
+
+
+def test_build_catalog_bank_value_adds_table_names_and_ids() -> None:
+    built = build_bank([make_blend2_bank(), make_sweep4_bank()])
+    bank = built.bank
+
+    assert build_catalog_bank_value(
+        bank,
+        (
+            CatalogTable(table_id="blend2", name="Blend 2"),
+            CatalogTable(table_id="sweep4", name="Sweep 4"),
+        ),
+        sample_blob_resource="assets/factory-bank.wav",
+    ) == {
+        "sampleBlob": "assets/factory-bank.wav",
+        "tables": [
+            {
+                "tableId": "blend2",
+                "name": "Blend 2",
+                "frameCount": 2,
+                "sampleOffset": 0,
+            },
+            {
+                "tableId": "sweep4",
+                "name": "Sweep 4",
+                "frameCount": 4,
+                "sampleOffset": 2 * MIP_COUNT * PADDED_FRAME_SIZE,
+            },
+        ],
+    }
 
 
 def test_emit_cmajor_bank_assets_writes_wave_and_json(tmp_path: Path) -> None:

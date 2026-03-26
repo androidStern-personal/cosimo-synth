@@ -70,6 +70,11 @@ file(
     CONFIGURE_DEPENDS
     "${COSIMO_REPO_ROOT}/patch_gui/*"
 )
+file(
+    GLOB_RECURSE COSIMO_FACTORY_SOURCE_FILES
+    CONFIGURE_DEPENDS
+    "${COSIMO_REPO_ROOT}/assets/factory_sources/*"
+)
 
 set(
     COSIMO_GENERATED_PLUGIN_CPP
@@ -95,10 +100,14 @@ add_custom_command(
         "${COSIMO_CMAJOR_PATCH_FILE}"
     DEPENDS
         "${COSIMO_IOS_GENERATOR_SCRIPT}"
-        "${COSIMO_REPO_ROOT}/WavetableSynth.cmajor"
+        "${COSIMO_REPO_ROOT}/build_assets.py"
+        "${COSIMO_REPO_ROOT}/cmajor/WavetableSynth.cmajor"
         "${COSIMO_REPO_ROOT}/WavetableSynth.cmajorpatch"
         "${COSIMO_REPO_ROOT}/cmajor/FixedFrameOscillator.cmajor"
+        "${COSIMO_REPO_ROOT}/assets/factory-table-catalog.json"
         "${COSIMO_REPO_ROOT}/assets/factory-bank.wav"
+        "${COSIMO_REPO_ROOT}/assets/factory-bank.json"
+        ${COSIMO_FACTORY_SOURCE_FILES}
         ${COSIMO_PATCH_UI_FILES}
     COMMENT
         "Generating the self-contained Cmajor JUCE source for the iOS app and AUv3 extension"

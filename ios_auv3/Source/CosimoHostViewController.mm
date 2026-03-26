@@ -11,6 +11,8 @@ static NSString * const CosimoSmokeStateName = @"host-smoke-state";
 @property (nonatomic, strong) UITextView *logView;
 @property (nonatomic, strong) UISlider *parameterSlider;
 @property (nonatomic, strong) UILabel *parameterValueLabel;
+@property (nonatomic, strong) UISlider *tableSelectSlider;
+@property (nonatomic, strong) UILabel *tableSelectValueLabel;
 @property (nonatomic, strong) UIView *editorOverlayView;
 @property (nonatomic, strong) UIView *editorContentView;
 @property (nonatomic, assign) BOOL automationStarted;
@@ -119,6 +121,31 @@ static NSString * const CosimoSmokeStateName = @"host-smoke-state";
     [sliderRow addArrangedSubview:self.parameterSlider];
     [sliderRow addArrangedSubview:self.parameterValueLabel];
     [stack addArrangedSubview:sliderRow];
+
+    UILabel *tableSliderLabel = [[UILabel alloc] init];
+    tableSliderLabel.text = @"Wavetable Select";
+    tableSliderLabel.textColor = [UIColor colorWithRed:0.82 green:0.85 blue:0.96 alpha:1.0];
+    [stack addArrangedSubview:tableSliderLabel];
+
+    UIStackView *tableSliderRow = [[UIStackView alloc] init];
+    tableSliderRow.axis = UILayoutConstraintAxisHorizontal;
+    tableSliderRow.spacing = 12.0;
+    tableSliderRow.alignment = UIStackViewAlignmentCenter;
+
+    self.tableSelectSlider = [[UISlider alloc] init];
+    self.tableSelectSlider.minimumValue = 0.0f;
+    self.tableSelectSlider.maximumValue = 255.0f;
+    self.tableSelectSlider.value = 0.0f;
+    [self.tableSelectSlider addTarget:self action:@selector(tableSelectSliderChanged:) forControlEvents:UIControlEventValueChanged];
+
+    self.tableSelectValueLabel = [[UILabel alloc] init];
+    self.tableSelectValueLabel.text = @"0";
+    self.tableSelectValueLabel.textColor = [UIColor colorWithRed:0.96 green:0.86 blue:0.67 alpha:1.0];
+    self.tableSelectValueLabel.font = [UIFont monospacedDigitSystemFontOfSize:14.0 weight:UIFontWeightMedium];
+
+    [tableSliderRow addArrangedSubview:self.tableSelectSlider];
+    [tableSliderRow addArrangedSubview:self.tableSelectValueLabel];
+    [stack addArrangedSubview:tableSliderRow];
 
     self.logView = [[UITextView alloc] init];
     self.logView.editable = NO;
@@ -293,6 +320,18 @@ static NSString * const CosimoSmokeStateName = @"host-smoke-state";
     }];
 }
 
+- (void)tableSelectSliderChanged:(UISlider *)slider
+{
+    float quantizedValue = roundf (slider.value);
+    slider.value = quantizedValue;
+    self.tableSelectValueLabel.text = [NSString stringWithFormat:@"%.0f", quantizedValue];
+
+    [self.harness setParameterWithIdentifier:@"wavetableSelect" value:quantizedValue completion:^(NSDictionary<NSString *,id> * _Nullable result, NSError * _Nullable error)
+    {
+        [self handleStepNamed:@"set table" result:result error:error];
+    }];
+}
+
 #pragma mark - Automation
 
 - (void)runAutomationIfNeeded
@@ -360,54 +399,63 @@ static NSString * const CosimoSmokeStateName = @"host-smoke-state";
 
                 payload[@"parameterSet"] = parameterResult;
 
-                [self.harness sendTestNoteWithCompletion:^(NSDictionary<NSString *,id> * _Nullable noteResult, NSError * _Nullable noteError)
+                [self.harness setParameterWithIdentifier:@"wavetableSelect" value:1.0f completion:^(NSDictionary<NSString *,id> * _Nullable tableResult, NSError * _Nullable tableError)
                 {
-                    if ([self handleAutomationError:noteError outputName:outputName])
+                    if ([self handleAutomationError:tableError outputName:outputName])
                         return;
 
-                    payload[@"audio"] = noteResult;
-                    [self presentEditorOverlay:YES];
+                    payload[@"tableSelectionSet"] = tableResult;
 
-                    [self.harness openEditorWithCompletion:^(NSDictionary<NSString *,id> * _Nullable editorResult, NSError * _Nullable editorError)
+                    [self.harness sendTestNoteWithCompletion:^(NSDictionary<NSString *,id> * _Nullable noteResult, NSError * _Nullable noteError)
                     {
-                        if ([self handleAutomationError:editorError outputName:outputName])
+                        if ([self handleAutomationError:noteError outputName:outputName])
                             return;
 
-                        NSMutableDictionary<NSString *, id> *editorPayload = [editorResult mutableCopy];
+                        payload[@"audio"] = noteResult;
+                        [self presentEditorOverlay:YES];
 
-                        [self.harness closeEditorWithCompletion:^(NSDictionary<NSString *,id> * _Nullable closeResult, NSError * _Nullable closeError)
+                        [self.harness openEditorWithCompletion:^(NSDictionary<NSString *,id> * _Nullable editorResult, NSError * _Nullable editorError)
                         {
-                            [self presentEditorOverlay:NO];
-
-                            if ([self handleAutomationError:closeError outputName:outputName])
+                            if ([self handleAutomationError:editorError outputName:outputName])
                                 return;
 
-                            editorPayload[@"closed"] = closeResult[@"closed"] ?: @YES;
-                            payload[@"editor"] = editorPayload;
+                            NSMutableDictionary<NSString *, id> *editorPayload = [editorResult mutableCopy];
 
-                            [self.harness saveStateNamed:CosimoSmokeStateName completion:^(NSDictionary<NSString *,id> * _Nullable saveResult, NSError * _Nullable saveError)
+                            [self.harness closeEditorWithCompletion:^(NSDictionary<NSString *,id> * _Nullable closeResult, NSError * _Nullable closeError)
                             {
-                                if ([self handleAutomationError:saveError outputName:outputName])
+                                [self presentEditorOverlay:NO];
+
+                                if ([self handleAutomationError:closeError outputName:outputName])
                                     return;
 
-                                [self.harness reloadStateNamed:CosimoSmokeStateName completion:^(NSDictionary<NSString *,id> * _Nullable reloadResult, NSError * _Nullable reloadError)
+                                editorPayload[@"closed"] = closeResult[@"closed"] ?: @YES;
+                                payload[@"editor"] = editorPayload;
+
+                                [self.harness saveStateNamed:CosimoSmokeStateName completion:^(NSDictionary<NSString *,id> * _Nullable saveResult, NSError * _Nullable saveError)
                                 {
-                                    if ([self handleAutomationError:reloadError outputName:outputName])
+                                    if ([self handleAutomationError:saveError outputName:outputName])
                                         return;
 
-                                    payload[@"state"] = @{
-                                        @"savedStateKeys": saveResult[@"savedStateKeys"] ?: @[],
-                                        @"reloadObservedValue": reloadResult[@"observedValue"] ?: @(0.0),
-                                    };
+                                    [self.harness reloadStateNamed:CosimoSmokeStateName completion:^(NSDictionary<NSString *,id> * _Nullable reloadResult, NSError * _Nullable reloadError)
+                                    {
+                                        if ([self handleAutomationError:reloadError outputName:outputName])
+                                            return;
 
-                                    [self setStatus:@"The host app discovered the AUv3, opened the editor, played a note, and restored state."];
-                                    [self appendLogWithName:@"save smoke" value:payload];
+                                        payload[@"state"] = @{
+                                            @"savedStateKeys": saveResult[@"savedStateKeys"] ?: @[],
+                                            @"reloadObservedValue": reloadResult[@"observedValue"] ?: @(0.0),
+                                            @"reloadObservedTableSelect": reloadResult[@"observedTableSelectValue"] ?: @(0.0),
+                                        };
 
-                                    if (outputName != nil)
-                                        [self completeAutomationWithPayload:payload outputName:outputName];
+                                        [self setStatus:@"The host app discovered the AUv3, opened the editor, played a note, and restored state."];
+                                        [self appendLogWithName:@"save smoke" value:payload];
 
-                                    if (completion != nil)
-                                        completion (payload);
+                                        if (outputName != nil)
+                                            [self completeAutomationWithPayload:payload outputName:outputName];
+
+                                        if (completion != nil)
+                                            completion (payload);
+                                    }];
                                 }];
                             }];
                         }];
@@ -444,6 +492,7 @@ static NSString * const CosimoSmokeStateName = @"host-smoke-state";
 
                 payload[@"state"] = @{
                     @"relaunchObservedValue": reloadResult[@"observedValue"] ?: @(0.0),
+                    @"relaunchObservedTableSelect": reloadResult[@"observedTableSelectValue"] ?: @(0.0),
                 };
 
                 [self completeAutomationWithPayload:payload outputName:outputName];

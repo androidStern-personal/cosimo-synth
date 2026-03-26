@@ -6,6 +6,7 @@
 
 static NSString * const CosimoHostHarnessErrorDomain = @"CosimoHostHarnessError";
 static NSString * const CosimoPrimaryParameterIdentifier = @"wavetablePosition";
+static NSString * const CosimoTableSelectParameterIdentifier = @"wavetableSelect";
 
 static NSError * CosimoMakeError (NSInteger code, NSString *description)
 {
@@ -435,16 +436,19 @@ static AudioComponentDescription CosimoComponentDescription()
                     dispatch_get_main_queue(), ^
     {
         AUParameter *parameter = [self findParameterWithIdentifier:CosimoPrimaryParameterIdentifier];
+        AUParameter *tableSelectParameter = [self findParameterWithIdentifier:CosimoTableSelectParameterIdentifier];
 
-        if (parameter == nil)
+        if (parameter == nil || tableSelectParameter == nil)
         {
-            completion (nil, CosimoMakeError (23, @"Could not find the wavetablePosition parameter after restoring state."));
+            completion (nil, CosimoMakeError (23, @"Could not find the restored wavetable parameters after restoring state."));
             return;
         }
 
         completion (@{
             @"identifier": CosimoPrimaryParameterIdentifier,
             @"observedValue": @(parameter.value),
+            @"tableSelectIdentifier": CosimoTableSelectParameterIdentifier,
+            @"observedTableSelectValue": @(tableSelectParameter.value),
         }, nil);
     });
 }
@@ -467,6 +471,16 @@ static AudioComponentDescription CosimoComponentDescription()
 
 - (NSDictionary<NSString *, id> *)currentPersistedStateWithSource:(NSString * __autoreleasing _Nullable *)stateSource
 {
+    NSDictionary<NSString *, id> *parameterValues = [self serialiseParameterValues];
+
+    if (parameterValues.count > 0)
+    {
+        if (stateSource != nil)
+            *stateSource = @"parameterValues";
+
+        return parameterValues;
+    }
+
     NSDictionary<NSString *, id> *documentState = self.instrumentUnit.AUAudioUnit.fullStateForDocument;
 
     if (documentState != nil)
@@ -485,16 +499,6 @@ static AudioComponentDescription CosimoComponentDescription()
             *stateSource = @"fullState";
 
         return presetState;
-    }
-
-    NSDictionary<NSString *, id> *parameterValues = [self serialiseParameterValues];
-
-    if (parameterValues.count > 0)
-    {
-        if (stateSource != nil)
-            *stateSource = @"parameterValues";
-
-        return parameterValues;
     }
 
     if (stateSource != nil)

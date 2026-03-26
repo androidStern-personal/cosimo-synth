@@ -1,0 +1,12 @@
+[
+  {
+    "tableId": "display-demo",
+    "name": "Display Demo",
+    "source": "factory_sources/display-demo.wav"
+  },
+  {
+    "tableId": "sweep-4",
+    "name": "Sweep 4",
+    "source": "factory_sources/sweep-4.wav"
+  }
+]

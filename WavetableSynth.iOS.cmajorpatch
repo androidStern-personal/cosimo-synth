@@ -3,7 +3,7 @@
   "ID": "dev.cosimo.wavetable-synth",
   "version": "0.1.1",
   "name": "Cosimo Synth",
-  "description": "Single-oscillator wavetable synth with MIDI input, automatable wavetable position, and a 16-frame display-demo factory bank.",
+  "description": "Single-oscillator wavetable synth with MIDI input, automatable wavetable position, runtime table selection, and a preloaded multi-table factory bank.",
   "category": "generator",
   "manufacturer": "Cosimo",
   "plugin": {
@@ -13,10 +13,11 @@
   "isInstrument": true,
   "source": [
     "cmajor/FixedFrameOscillator.cmajor",
-    "WavetableSynth.cmajor"
+    "cmajor/WavetableSynth.cmajor"
   ],
   "resources": [
-    "assets/factory-bank.wav"
+    "assets/factory-bank.wav",
+    "assets/factory-bank.json"
   ],
   "view": {
     "src": "patch_gui/index.ios.js",
@@ -31,6 +32,10 @@
         {
           "frameCount": 16,
           "sampleOffset": 0
+        },
+        {
+          "frameCount": 4,
+          "sampleOffset": 360976
         }
       ]
     }

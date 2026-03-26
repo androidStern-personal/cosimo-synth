@@ -1,8 +1,8 @@
-import { loadWavetableFramesFromUrls, getFactoryBankValue } from "./wavetable-bank.mjs";
-import { CanvasWavetableDisplay } from "./wavetable-display.mjs";
+import { loadWavetableFramesFromUrls, getFactoryBankValue } from "../../patch_gui/wavetable-bank.mjs";
+import { CanvasWavetableDisplay } from "../../patch_gui/wavetable-display.mjs";
 
 async function loadManifest() {
-    const response = await fetch("../WavetableSynth.cmajorpatch");
+    const response = await fetch("../../WavetableSynth.cmajorpatch");
 
     if (!response.ok) {
         throw new Error(`Could not load patch manifest: ${response.status}`);
@@ -42,7 +42,7 @@ resizeDisplay();
 
 const manifest = await loadManifest();
 const manifestValue = getFactoryBankValue(manifest);
-const sampleBlobUrl = new URL(`../${manifestValue.sampleBlob}`, import.meta.url);
+const sampleBlobUrl = new URL(`../../${manifestValue.sampleBlob}`, import.meta.url);
 const bank = await loadWavetableFramesFromUrls({
     manifestValue,
     sampleBlobUrl,

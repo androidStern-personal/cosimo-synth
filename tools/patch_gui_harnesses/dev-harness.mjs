@@ -1,7 +1,8 @@
-import createPatchView from "./index.js";
+import createPatchView from "../../patch_gui/index.js";
 
 const midiInputEndpointID = "midiIn";
 const wavetablePositionEndpointID = "wavetablePosition";
+const wavetableSelectEndpointID = "wavetableSelect";
 
 class MockPianoKeyboard extends HTMLElement {
     constructor() {
@@ -98,7 +99,10 @@ class MockKnob extends HTMLElement {
 class MockPatchConnection {
     constructor(manifest) {
         this.manifest = manifest;
-        this.parameterValues = new Map([[wavetablePositionEndpointID, 0.5]]);
+        this.parameterValues = new Map([
+            [wavetablePositionEndpointID, 0.5],
+            [wavetableSelectEndpointID, 0],
+        ]);
         this.parameterListeners = new Map();
         this.endpointListeners = new Map();
         this.statusListeners = new Set();
@@ -120,6 +124,16 @@ class MockPatchConnection {
                             init: 0.0,
                         },
                     },
+                    {
+                        endpointID: wavetableSelectEndpointID,
+                        purpose: "parameter",
+                        annotation: {
+                            name: "Wavetable Select",
+                            min: 0.0,
+                            max: 255.0,
+                            init: 0.0,
+                        },
+                    },
                 ],
             },
         };
@@ -133,7 +147,7 @@ class MockPatchConnection {
 
     getResourceAddress(path) {
         const relativePath = path.startsWith("/") ? path.slice(1) : path;
-        return `../${relativePath}`;
+        return `../../${relativePath}`;
     }
 
     addParameterListener(endpointID, listener) {
@@ -192,7 +206,7 @@ class MockPatchConnection {
 }
 
 async function loadManifest() {
-    const response = await fetch("../WavetableSynth.cmajorpatch");
+    const response = await fetch("../../WavetableSynth.cmajorpatch");
 
     if (!response.ok) {
         throw new Error(`Could not load patch manifest: ${response.status}`);
@@ -204,10 +218,21 @@ async function loadManifest() {
 const host = document.getElementById("host");
 const positionInput = document.getElementById("position");
 const positionValue = document.getElementById("position-value");
+const tableSelectInput = document.getElementById("table-select");
+const tableSelectValue = document.getElementById("table-select-value");
 const animateInput = document.getElementById("animate");
 const status = document.getElementById("status");
 
-const manifest = await loadManifest();
+const [manifest, bankCatalog] = await Promise.all([
+    loadManifest(),
+    fetch("../../assets/factory-bank.json").then((response) => {
+        if (!response.ok) {
+            throw new Error(`Could not load factory bank catalog: ${response.status}`);
+        }
+
+        return response.json();
+    }),
+]);
 const patchConnection = new MockPatchConnection(manifest);
 const patchView = createPatchView(patchConnection);
 host.appendChild(patchView);
@@ -221,6 +246,23 @@ function setPosition(value) {
 
 positionInput.addEventListener("input", () => setPosition(positionInput.value));
 setPosition(positionInput.value);
+
+function setTableSelect(value) {
+    const numericValue = Math.round(Number(value) || 0);
+    tableSelectInput.value = String(numericValue);
+    tableSelectValue.textContent = String(numericValue);
+    patchConnection.sendEventOrValue(wavetableSelectEndpointID, numericValue);
+}
+
+bankCatalog.tables.forEach((table, tableIndex) => {
+    const option = document.createElement("option");
+    option.value = String(tableIndex);
+    option.textContent = table.name;
+    tableSelectInput.appendChild(option);
+});
+
+tableSelectInput.addEventListener("change", () => setTableSelect(tableSelectInput.value));
+setTableSelect(0);
 
 let animationFrame = null;
 let animationStart = performance.now();
@@ -241,6 +283,6 @@ animateInput.addEventListener("change", () => {
     }
 });
 
-status.textContent = "Harness ready • using the real patch UI with a mock patch connection";
+status.textContent = "Harness ready • using the real patch UI with the generated factory bank catalog";
 
 patchConnection.addEndpointListener(midiInputEndpointID, () => {});

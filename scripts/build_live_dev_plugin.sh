@@ -27,6 +27,8 @@ if [[ ! -e "$patch_path" ]]; then
   exit 1
 fi
 
+uv run python "$repo_root/build_assets.py"
+
 mkdir -p "$cache_root"
 
 if [[ ! -d "$juce_path/.git" ]]; then
@@ -55,7 +57,7 @@ fi
 
 mkdir -p "$build_dir" "$au_install_dir"
 
-cmake -S "$repo_root/live_dev_plugin" \
+cmake -S "$repo_root/tools/live_dev_plugin" \
       -B "$build_dir" \
       -DCMAKE_BUILD_TYPE=Release \
       -DCOSIMO_PATCH_PATH="$patch_path" \

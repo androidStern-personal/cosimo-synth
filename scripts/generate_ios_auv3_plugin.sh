@@ -42,6 +42,8 @@ if [[ ! -f "$patch_path" ]]; then
   exit 1
 fi
 
+uv run python "$repo_root/build_assets.py"
+
 temp_dir="$(mktemp -d "${TMPDIR:-/tmp}/cosimo-ios-auv3.XXXXXX")"
 cleanup() {
   rm -rf "$temp_dir"

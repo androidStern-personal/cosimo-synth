@@ -9,9 +9,10 @@ namespace wt
                      std::notes::Pressure,
                      std::notes::Control) eventIn;
         input value float32 framePositionIn;
+        input value float32 tableSelectIn;
         output stream float32<2> out;
 
-        node osc       = wt::FixedFrameOscillator (0, 440.0f, 0.0f);
+        node osc       = wt::FixedFrameOscillator (440.0f, 0.0f);
         node envelope  = std::envelopes::FixedASR (0.01f, 0.20f);
         node voiceGain = std::levels::DynamicGain (float32);
         node trim      = std::levels::ConstantGain (float32, 0.18f);
@@ -36,6 +37,7 @@ namespace wt
         connection
         {
             framePositionIn -> osc.framePositionIn;
+            tableSelectIn -> osc.tableSelectIn;
             osc.out -> voiceGain.in;
             envelope.gainOut -> voiceGain.gain;
             voiceGain.out -> trim.in;
@@ -49,6 +51,7 @@ graph WavetableSynth [[ main ]]
 {
     input event std::midi::Message midiIn;
     input value float32 wavetablePosition [[ name: "Wavetable Position", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
+    input value float32 wavetableSelect [[ name: "Wavetable Select", min: 0.0f, max: 255.0f, init: 0.0f, rampFrames: 0 ]];
     output stream float32<2> audioOut;
 
     node mpe   = std::midi::MPEConverter;
@@ -59,6 +62,7 @@ graph WavetableSynth [[ main ]]
         midiIn -> mpe.parseMIDI;
         mpe.eventOut -> voice.eventIn;
         wavetablePosition -> voice.framePositionIn;
+        wavetableSelect -> voice.tableSelectIn;
         voice.out -> audioOut;
     }
 }

@@ -214,6 +214,7 @@ def run_host_mode(udid: str, mode: str, output_name: str) -> dict[str, object]:
 def combine_results(phone_save: dict[str, object], phone_reload: dict[str, object], tablet_layout: dict[str, object]) -> dict[str, object]:
     phone_state = dict(phone_save.get("state", {}))
     phone_state["relaunchObservedValue"] = phone_reload.get("state", {}).get("relaunchObservedValue", 0.0)
+    phone_state["relaunchObservedTableSelect"] = phone_reload.get("state", {}).get("relaunchObservedTableSelect", 0.0)
     phone_state["parameterSchemaMatchesRelaunch"] = phone_save.get("parameters", []) == phone_reload.get("parameters", [])
 
     return {
@@ -222,6 +223,7 @@ def combine_results(phone_save: dict[str, object], phone_reload: dict[str, objec
             "instantiate": phone_save.get("instantiate", {}),
             "parameters": phone_save.get("parameters", []),
             "parameterSet": phone_save.get("parameterSet", {}),
+            "tableSelectionSet": phone_save.get("tableSelectionSet", {}),
             "audio": phone_save.get("audio", {}),
             "editor": phone_save.get("editor", {}),
             "state": phone_state,

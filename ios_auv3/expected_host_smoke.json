@@ -4,14 +4,15 @@
       "address": 10299632488404189556,
       "identifier": "wavetablePosition",
       "displayName": "Wavetable Position"
+    },
+    {
+      "address": 6614061662679701423,
+      "identifier": "wavetableSelect",
+      "displayName": "Wavetable Select"
     }
   ],
   "savedStateKeys": [
-    "data",
-    "jucePluginState",
-    "manufacturer",
-    "subtype",
-    "type",
-    "version"
+    "wavetablePosition",
+    "wavetableSelect"
   ]
 }

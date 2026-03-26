@@ -474,6 +474,40 @@ def test_cmajor_fixed_frame_probe_reads_from_second_table_offset() -> None:
 
 
 @pytest.mark.cmajor
+def test_cmajor_fixed_frame_probe_runtime_table_switch_matches_reference() -> None:
+    recipe = make_static_tone_recipe(
+        name="runtime_table_switch",
+        duration_seconds=96 / DEFAULT_SAMPLE_RATE,
+        frame_position=2.0 / 3.0,
+        start_phase=0.125,
+    )
+    source_tables = [make_sweep4_bank(), make_blend2_bank()]
+    table_index_events = ((48, 1),)
+    audio = render_cmajor_fixed_frame_tables(
+        source_tables,
+        recipe,
+        table_index=0,
+        table_index_events=table_index_events,
+    )
+    expected = render_bank_reference(
+        source_tables,
+        recipe,
+        table_index=0,
+        table_index_events=table_index_events,
+    )
+
+    def assertion() -> None:
+        assert_allclose(audio, expected, atol=1e-6, rtol=0.0)
+
+    _assert_with_artifacts(
+        "test_cmajor_fixed_frame_probe_runtime_table_switch_matches_reference",
+        recipe.sample_rate,
+        {"actual": audio, "expected": expected},
+        assertion,
+    )
+
+
+@pytest.mark.cmajor
 def test_cmajor_fixed_frame_probe_slow_frame_sweep_stays_finite_and_nontrivial() -> None:
     recipe = make_frame_sweep_recipe()
     bank = make_sweep4_bank()
@@ -503,6 +537,27 @@ def test_cmajor_fixed_frame_probe_rejects_invalid_selectors() -> None:
 
     with pytest.raises(ValueError, match="table_index"):
         render_cmajor_fixed_frame_tables([make_sine_bank()], recipe, table_index=1)
+
+    with pytest.raises(ValueError, match="inside the rendered buffer"):
+        render_cmajor_fixed_frame_tables(
+            [make_sine_bank(), make_square_bank()],
+            recipe,
+            table_index_events=((recipe.num_samples, 1),),
+        )
+
+    with pytest.raises(ValueError, match="sorted in ascending order"):
+        render_cmajor_fixed_frame_tables(
+            [make_sine_bank(), make_square_bank()],
+            recipe,
+            table_index_events=((32, 1), (16, 0)),
+        )
+
+    with pytest.raises(ValueError, match="address a table"):
+        render_cmajor_fixed_frame_tables(
+            [make_sine_bank(), make_square_bank()],
+            recipe,
+            table_index_events=((32, 2),),
+        )
 
 
 @pytest.mark.cmajor

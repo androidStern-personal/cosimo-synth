@@ -125,6 +125,12 @@ class EmittedBankAssets:
     manifest_value: dict[str, Any]
 
 
+@dataclass(frozen=True, slots=True)
+class CatalogTable:
+    table_id: str
+    name: str
+
+
 def build_bank(source_tables: Sequence[SourceTable | FixtureBank]) -> BankBuild:
     if not source_tables:
         raise ValueError("build_bank requires at least one source table")
@@ -184,6 +190,41 @@ def build_bank(source_tables: Sequence[SourceTable | FixtureBank]) -> BankBuild:
     return BankBuild(bank=bank, diagnostics=tuple(diagnostics))
 
 
+def load_source_table_wav(
+    path: str | Path,
+    *,
+    table_id: str,
+) -> SourceTable:
+    source_path = Path(path)
+    sample_rate, raw_audio = wavfile.read(source_path)
+    del sample_rate
+
+    if np.asarray(raw_audio).ndim != 1:
+        raise ValueError("Source wavetable files must be mono")
+
+    audio = np.asarray(raw_audio)
+    if audio.dtype == np.float32:
+        samples = audio
+    elif audio.dtype == np.int16:
+        samples = audio.astype(np.float32) / 32768.0
+    else:
+        raise ValueError("Source wavetable files must use float32 or int16 samples")
+
+    if samples.size % SAMPLES_PER_FRAME != 0:
+        raise ValueError(
+            f"Source wavetable files must contain a whole number of {SAMPLES_PER_FRAME}-sample frames"
+        )
+
+    frame_count = samples.size // SAMPLES_PER_FRAME
+    if not 1 <= frame_count <= MAX_FRAMES_PER_TABLE:
+        raise ValueError(
+            f"Source wavetable files must contain between 1 and {MAX_FRAMES_PER_TABLE} frames"
+        )
+
+    frames = samples.reshape(frame_count, SAMPLES_PER_FRAME)
+    return SourceTable(table_id=table_id, frames=frames)
+
+
 def build_manifest_bank_value(
     bank: WavetableBank,
     *,
@@ -197,6 +238,29 @@ def build_manifest_bank_value(
                 "sampleOffset": table.sample_offset,
             }
             for table in bank.tables
+        ],
+    }
+
+
+def build_catalog_bank_value(
+    bank: WavetableBank,
+    catalog_tables: Sequence[CatalogTable],
+    *,
+    sample_blob_resource: str = DEFAULT_SAMPLE_BLOB_FILENAME,
+) -> dict[str, Any]:
+    if len(catalog_tables) != len(bank.tables):
+        raise ValueError("catalog_tables must describe every table in the bank")
+
+    return {
+        "sampleBlob": sample_blob_resource,
+        "tables": [
+            {
+                "tableId": catalog_table.table_id,
+                "name": catalog_table.name,
+                "frameCount": table.frame_count,
+                "sampleOffset": table.sample_offset,
+            }
+            for catalog_table, table in zip(catalog_tables, bank.tables, strict=True)
         ],
     }
 

@@ -164,7 +164,6 @@ def _cmajor_float_literal(value: float) -> str:
 
 def _build_fixed_frame_wrapper_source(
     *,
-    table_index: int,
     frequency_hz: float,
     start_phase: float,
 ) -> str:
@@ -173,10 +172,9 @@ def _build_fixed_frame_wrapper_source(
         + "{\n"
         + "    input event float frequencyIn;\n"
         + "    input value float framePositionIn;\n"
+        + "    input value float tableSelectIn;\n"
         + "    output stream float out;\n"
         + "    node osc = wt::FixedFrameOscillator ("
-        + str(table_index)
-        + ", "
         + _cmajor_float_literal(frequency_hz)
         + ", "
         + _cmajor_float_literal(start_phase)
@@ -185,6 +183,7 @@ def _build_fixed_frame_wrapper_source(
         + "    {\n"
         + "        frequencyIn -> osc.frequencyIn;\n"
         + "        framePositionIn -> osc.framePositionIn;\n"
+        + "        tableSelectIn -> osc.tableSelectIn;\n"
         + "        osc.out -> out;\n"
         + "    }\n"
         + "}\n"
@@ -346,6 +345,7 @@ def _run_cmajor_test_render(
     num_samples: int,
     frequency_events: Sequence[tuple[int, float]] = (),
     frame_position_events: Sequence[tuple[int, float, int]] = (),
+    table_select_events: Sequence[tuple[int, float, int]] = (),
 ) -> Float32Array:
     cmaj = _require_cmaj_cli()
     output_dir_path.mkdir(parents=True, exist_ok=True)
@@ -357,6 +357,11 @@ def _run_cmajor_test_render(
     _write_cmajor_value_input(
         output_dir_path / "framePositionIn.json",
         frame_position_events,
+        num_samples=num_samples,
+    )
+    _write_cmajor_value_input(
+        output_dir_path / "tableSelectIn.json",
+        table_select_events,
         num_samples=num_samples,
     )
 
@@ -402,6 +407,7 @@ def render_cmajor_fixed_frame_tables(
     *,
     table_index: int = 0,
     frequency_events: Sequence[tuple[int, float]] = (),
+    table_index_events: Sequence[tuple[int, int]] = (),
 ) -> Float32Array:
     from wtbank import build_bank, emit_cmajor_bank_assets
 
@@ -414,8 +420,19 @@ def render_cmajor_fixed_frame_tables(
     if not 0 <= table_index < len(source_tables):
         raise ValueError("table_index must address a table inside source_tables")
 
+    previous_table_event_offset = -1
+    table_select_events: list[tuple[int, float, int]] = [(0, float(table_index), 0)]
+    for frame_offset, next_table_index in table_index_events:
+        if not 0 <= frame_offset < recipe.num_samples:
+            raise ValueError("table_index event frame offsets must stay inside the rendered buffer")
+        if frame_offset < previous_table_event_offset:
+            raise ValueError("table_index event frame offsets must be sorted in ascending order")
+        if not 0 <= next_table_index < len(source_tables):
+            raise ValueError("table_index events must address a table inside source_tables")
+        previous_table_event_offset = frame_offset
+        table_select_events.append((frame_offset, float(next_table_index), 0))
+
     frequency_hz = _require_constant_curve(recipe.freq_hz_curve, "Recipe.freq_hz_curve")
-    frame_position = float(recipe.frame_pos_curve[0])
     frame_position_events = _curve_to_value_events(recipe.frame_pos_curve)
 
     with tempfile.TemporaryDirectory(prefix="cmajor_fixed_frame_") as temp_dir_name:
@@ -435,7 +452,6 @@ def render_cmajor_fixed_frame_tables(
         source_link_path.symlink_to(CMAJOR_FIXED_FRAME_SOURCE)
         wrapper_path.write_text(
             _build_fixed_frame_wrapper_source(
-                table_index=table_index,
                 frequency_hz=frequency_hz,
                 start_phase=recipe.start_phase,
             ),
@@ -465,6 +481,7 @@ def render_cmajor_fixed_frame_tables(
             num_samples=recipe.num_samples,
             frequency_events=frequency_events,
             frame_position_events=frame_position_events,
+            table_select_events=table_select_events,
         )
 
 
@@ -912,6 +929,7 @@ def render_bank_reference(
     *,
     table_index: int = 0,
     frequency_events: Sequence[tuple[int, float]] = (),
+    table_index_events: Sequence[tuple[int, int]] = (),
 ) -> Float32Array:
     from wtbank import build_bank
 
@@ -919,28 +937,49 @@ def render_bank_reference(
         raise ValueError("render_bank_reference requires at least one FixtureBank")
     if not 0 <= table_index < len(source_tables):
         raise ValueError("table_index must address a table inside source_tables")
+    previous_table_event_offset = -1
+    for frame_offset, next_table_index in table_index_events:
+        if not 0 <= frame_offset < recipe.num_samples:
+            raise ValueError("table_index event frame offsets must stay inside the rendered buffer")
+        if frame_offset < previous_table_event_offset:
+            raise ValueError("table_index event frame offsets must be sorted in ascending order")
+        if not 0 <= next_table_index < len(source_tables):
+            raise ValueError("table_index events must address a table inside source_tables")
+        previous_table_event_offset = frame_offset
 
     built_bank = build_bank(source_tables).bank
-    frame_count = source_tables[table_index].num_frames
     expected = np.empty(recipe.num_samples, dtype=np.float32)
     phase = np.float32(recipe.start_phase)
     current_frequency = np.float32(recipe.freq_hz_curve[0])
+    current_table_index = table_index
     sample_rate = np.float32(recipe.sample_rate)
     event_index = 0
+    table_event_index = 0
 
     for sample_offset in range(recipe.num_samples):
         while event_index < len(frequency_events) and frequency_events[event_index][0] == sample_offset:
             current_frequency = np.float32(frequency_events[event_index][1])
             event_index += 1
 
+        while (
+            table_event_index < len(table_index_events)
+            and table_index_events[table_event_index][0] == sample_offset
+        ):
+            next_table_index = table_index_events[table_event_index][1]
+            if not 0 <= next_table_index < len(source_tables):
+                raise ValueError("table_index events must address a table inside source_tables")
+            current_table_index = next_table_index
+            phase = np.float32(0.0)
+            table_event_index += 1
+
         mip_index = formula_mip_index_for_frequency(float(current_frequency), recipe.sample_rate)
         frame_lo, frame_hi, frame_t = frame_position_to_indices(
             float(recipe.frame_pos_curve[sample_offset]),
-            frame_count,
+            source_tables[current_table_index].num_frames,
         )
         lo = _read_bank_frame_sample(
             built_bank,
-            table_index=table_index,
+            table_index=current_table_index,
             frame_index=frame_lo,
             mip_index=mip_index,
             phase=float(phase),
@@ -950,7 +989,7 @@ def render_bank_reference(
         else:
             hi = _read_bank_frame_sample(
                 built_bank,
-                table_index=table_index,
+                table_index=current_table_index,
                 frame_index=frame_hi,
                 mip_index=mip_index,
                 phase=float(phase),

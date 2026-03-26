@@ -135,6 +135,7 @@ def test_ios_auv3_cmake_uses_the_shared_stock_juce_plugin_targets() -> None:
     assert "FORMATS Standalone AUv3" in cmake
     assert "generate_ios_auv3_plugin.sh" in cmake_text
     assert "WavetableSynth.iOS.cmajorpatch" in cmake_text
+    assert "cmajor/WavetableSynth.cmajor" in cmake_text
     assert "cmajor_plugin.cpp" in cmake_text
     assert "cmaj_StaticLibraryShim.cpp" in cmake_text
     assert "CosimoSynthHost" in cmake_text
@@ -287,12 +288,17 @@ def test_generated_ios_plugin_embeds_the_bank_and_patch_ui_resources(
     )
 
     assert 'File { "assets/factory-bank.wav"' in plugin_source
-    assert 'File { "patch_gui/factory-bank-manifest.js"' in plugin_source
+    assert 'File { "assets/factory-bank.json"' in plugin_source
     assert 'File { "patch_gui/index.ios.js"' in plugin_source
     assert 'File { "patch_gui/index.js"' in plugin_source
     assert 'File { "patch_gui/responsive-layout.js"' in plugin_source
     assert 'File { "patch_gui/wavetable-bank.js"' in plugin_source
     assert 'File { "patch_gui/wavetable-display.js"' in plugin_source
+    assert "dev-harness.html" not in plugin_source
+    assert "renderer-harness.html" not in plugin_source
+    assert "mockup-massive-x-ios.html" not in plugin_source
+    assert "factory-bank-display-data.js" not in plugin_source
+    assert 'factory-bank-manifest.js' not in plugin_source
     assert "GeneratedPlugin<::WavetableSynth>" in plugin_source
     assert "COSIMO_PATCH_PATH" not in plugin_source
     assert "libCmajPerformer" not in plugin_source
@@ -320,7 +326,7 @@ def test_bundle_root_resource_paths_work_for_both_app_and_extension(tmp_path: Pa
                 "--input-type=module",
                 "-e",
                 """
-import { loadFactoryBankFramesFromPatch } from "./patch_gui/wavetable-bank.mjs";
+import { loadFactoryBankCatalogFromPatch, loadFactoryBankFramesFromPatch } from "./patch_gui/wavetable-bank.mjs";
 
 async function fetchJSON(url) {
     const response = await fetch(url);
@@ -334,12 +340,17 @@ async function fetchJSON(url) {
 
 async function loadBundle(rootUrl) {
     const manifest = await fetchJSON(new URL("WavetableSynth.cmajorpatch", rootUrl));
-    const bank = await loadFactoryBankFramesFromPatch({
+    const expectedFrameCount = manifest.externals["wt::factoryBank"].tables[0]?.frameCount;
+    const patchConnection = {
         manifest,
         getResourceAddress(path) {
             return new URL(path, rootUrl);
         },
+    };
+    const bank = await loadFactoryBankFramesFromPatch({
+        ...patchConnection,
     });
+    const catalog = await loadFactoryBankCatalogFromPatch(patchConnection);
     const viewResponse = await fetch(new URL(manifest.view.src, rootUrl));
 
     if (!viewResponse.ok) {
@@ -357,6 +368,10 @@ async function loadBundle(rootUrl) {
         frameCount: bank.frameCount,
         frameLength: bank.frames[0]?.length,
         sampleBlobPath: bank.sampleBlobPath,
+        catalogTableCount: catalog.tables.length,
+        firstTableName: catalog.tables[0]?.name,
+        externalTableCount: manifest.externals["wt::factoryBank"].tables.length,
+        expectedFrameCount,
     };
 }
 
@@ -368,7 +383,7 @@ for (const bundle of [app, extension]) {
         throw new Error(`Unexpected sample rate: ${JSON.stringify(bundle)}`);
     }
 
-    if (bundle.frameCount !== 16) {
+    if (bundle.frameCount !== bundle.expectedFrameCount) {
         throw new Error(`Unexpected frame count: ${JSON.stringify(bundle)}`);
     }
 
@@ -378,6 +393,14 @@ for (const bundle of [app, extension]) {
 
     if (bundle.sampleBlobPath !== "assets/factory-bank.wav") {
         throw new Error(`Unexpected sample blob path: ${JSON.stringify(bundle)}`);
+    }
+
+    if (bundle.catalogTableCount !== bundle.externalTableCount) {
+        throw new Error(`Catalog/external mismatch: ${JSON.stringify(bundle)}`);
+    }
+
+    if (typeof bundle.firstTableName !== "string" || bundle.firstTableName.length === 0) {
+        throw new Error(`Missing first table name: ${JSON.stringify(bundle)}`);
     }
 }
 """,
@@ -397,6 +420,7 @@ def test_ios_host_smoke_discovers_the_extension_and_restores_state_across_relaun
 ) -> None:
     phone = ios_host_smoke_result["phone"]
     parameter_set = phone["parameterSet"]
+    table_selection_set = phone["tableSelectionSet"]
     state = phone["state"]
 
     assert phone["discover"]["matchedComponents"] >= 1
@@ -407,8 +431,13 @@ def test_ios_host_smoke_discovers_the_extension_and_restores_state_across_relaun
     assert parameter_set["identifier"] == "wavetablePosition"
     assert parameter_set["requestedValue"] == pytest.approx(0.625, abs=0.001)
     assert parameter_set["observedValue"] == pytest.approx(0.625, abs=0.001)
+    assert table_selection_set["identifier"] == "wavetableSelect"
+    assert table_selection_set["requestedValue"] == pytest.approx(1.0, abs=0.001)
+    assert table_selection_set["observedValue"] == pytest.approx(1.0, abs=0.001)
     assert state["reloadObservedValue"] == pytest.approx(0.625, abs=0.001)
+    assert state["reloadObservedTableSelect"] == pytest.approx(1.0, abs=0.001)
     assert state["relaunchObservedValue"] == pytest.approx(0.625, abs=0.001)
+    assert state["relaunchObservedTableSelect"] == pytest.approx(1.0, abs=0.001)
     assert state["parameterSchemaMatchesRelaunch"] is True
 
 
