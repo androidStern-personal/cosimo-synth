@@ -139,7 +139,7 @@ public:
 
         mainWindow = std::make_unique<CosimoStandaloneWindow> (
             getApplicationName(),
-            LookAndFeel::getDefaultLookAndFeel().findColour (ResizableWindow::backgroundColourId),
+            juce::Colours::magenta,
             createPluginHolder());
         mainWindow->setVisible (true);
     }
