@@ -206,7 +206,6 @@ def test_ios_patch_manifest_points_at_the_mobile_editor_entry() -> None:
     assert manifest["view"]["src"] == "patch_gui/index.ios.js"
     assert manifest["view"]["width"] == 393
     assert manifest["view"]["height"] == 648
-    assert manifest["view"]["background"] == "#07090d"
     assert manifest["view"]["resizable"] is True
 
 
@@ -283,11 +282,11 @@ def test_ios_auv3_generator_writes_self_contained_plugin_source_and_headers(
     assert 'if (options->transparentBackground)' in webview_header
     assert 'call<void> (webview, "setValue:forKey:", getNSNumberBool (false), getNSString ("drawsBackground"));' in webview_header
     assert '#endif' in webview_header
-    assert 'auto surface = callClass<id> ("UIColor", "colorWithRed:green:blue:alpha:"' in webview_header
+    assert 'auto black = callClass<id> ("UIColor", "blackColor");' in webview_header
     assert 'call<void> (webview, "setOpaque:", (BOOL) 0);' in webview_header
-    assert 'call<void> (webview, "setBackgroundColor:", surface);' in webview_header
+    assert 'call<void> (webview, "setBackgroundColor:", black);' in webview_header
     assert 'if (auto scrollView = call<id> (webview, "scrollView"))' in webview_header
-    assert 'call<void> (scrollView, "setBackgroundColor:", surface);' in webview_header
+    assert 'call<void> (scrollView, "setBackgroundColor:", black);' in webview_header
     assert (
         '"            width:  view.clientWidth  - parseFloat (clientStyle.paddingLeft) - parseFloat (clientStyle.paddingRight),\\n"'
         in embedded_assets_header
@@ -305,12 +304,13 @@ def test_ios_auv3_generator_writes_self_contained_plugin_source_and_headers(
         not in embedded_assets_header
     )
     assert '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />' in patch_webview_header
-    assert 'html { background: #07090d; overflow: hidden; }' in patch_webview_header
-    assert 'body { display: block; position: absolute; width: 100%; height: 100%; color: white; background: #07090d;' in patch_webview_header
-    assert '#cmaj-view-container { display: block; position: relative; width: 100%; height: 100%; overflow: auto; background: #07090d; }' in patch_webview_header
+    assert 'html { background: black; overflow: hidden; }' in patch_webview_header
+    assert 'body { display: block; position: absolute; width: 100%; height: 100%; color: white; font-family: Monaco, Consolas, monospace; }' in patch_webview_header
+    assert '#cmaj-view-container { display: block; position: relative; width: 100%; height: 100%; overflow: auto; }' in patch_webview_header
     assert 'if (view?.width > 10)' in embedded_assets_header
     assert 'if (view?.height > 10)' in embedded_assets_header
-    assert 'const shouldUseFixedSize = ! view?.resizable;' not in embedded_assets_header
+    assert 'patchView.style.minWidth = "100%"' not in embedded_assets_header
+    assert 'patchView.style.minHeight = "100%"' not in embedded_assets_header
 
 
 def test_ios_auv3_generator_rejects_a_missing_patch_file(tmp_path: Path) -> None:

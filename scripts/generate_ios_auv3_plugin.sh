@@ -70,16 +70,12 @@ replacement = """       #if CHOC_OSX
        #if CHOC_IOS
         if (options->transparentBackground)
         {
-            auto surface = callClass<id> ("UIColor", "colorWithRed:green:blue:alpha:",
-                                          (CGFloat) (7.0 / 255.0),
-                                          (CGFloat) (9.0 / 255.0),
-                                          (CGFloat) (13.0 / 255.0),
-                                          (CGFloat) 1.0);
+            auto black = callClass<id> ("UIColor", "blackColor");
             call<void> (webview, "setOpaque:", (BOOL) 0);
-            call<void> (webview, "setBackgroundColor:", surface);
+            call<void> (webview, "setBackgroundColor:", black);
 
             if (auto scrollView = call<id> (webview, "scrollView"))
-                call<void> (scrollView, "setBackgroundColor:", surface);
+                call<void> (scrollView, "setBackgroundColor:", black);
         }
        #endif
 """
@@ -137,103 +133,16 @@ old_style = """  * { box-sizing: border-box; padding: 0; margin: 0; border: 0; }
   body { display: block; position: absolute; width: 100%; height: 100%; color: white; font-family: Monaco, Consolas, monospace; }
   #cmaj-view-container { display: block; position: relative; width: 100%; height: 100%; overflow: auto; }
 """
-new_style = """  * { box-sizing: border-box; padding: 0; margin: 0; border: 0; }
-  html { background: #07090d; overflow: hidden; }
-  body { display: block; position: absolute; width: 100%; height: 100%; color: white; background: #07090d; font-family: Monaco, Consolas, monospace; }
-  #cmaj-view-container { display: block; position: relative; width: 100%; height: 100%; overflow: auto; background: #07090d; }
-"""
 
 if old_header not in text and new_header not in text:
     raise SystemExit(f"Could not find the expected patch webview HTML header snippet in {path}")
 
 text = text.replace(old_header, new_header, 1)
 
-if old_style in text:
-    text = text.replace(old_style, new_style, 1)
-elif new_style not in text:
+if old_style not in text:
     raise SystemExit(f"Could not find the expected patch webview style snippet in {path}")
 
 path.write_text(text, encoding="utf-8")
-PY
-
-python3 - "$temp_dir" <<'PY'
-from pathlib import Path
-import sys
-
-root = Path(sys.argv[1])
-targets = [
-    root / "include/cmajor/helpers/cmaj_EmbeddedWebAssets.h",
-    root / "cmajor_plugin.cpp",
-]
-
-replacement_pairs = [
-    (
-        """            if (view?.height > 10)
-                patchView.style.height = view.height + "px";
-            else
-                patchView.style.height = undefined;
-
-            return patchView;
-""",
-        """            if (view?.height > 10)
-                patchView.style.height = view.height + "px";
-            else
-                patchView.style.height = undefined;
-
-            if (view?.resizable)
-            {
-                patchView.style.minWidth = "100%";
-                patchView.style.minHeight = "100%";
-            }
-
-            return patchView;
-""",
-    ),
-    (
-        """        "            if (view?.height > 10)\\n"
-        "                patchView.style.height = view.height + \\"px\\";\\n"
-        "            else\\n"
-        "                patchView.style.height = undefined;\\n"
-        "\\n"
-        "            return patchView;\\n"
-""",
-        """        "            if (view?.height > 10)\\n"
-        "                patchView.style.height = view.height + \\"px\\";\\n"
-        "            else\\n"
-        "                patchView.style.height = undefined;\\n"
-        "\\n"
-        "            if (view?.resizable)\\n"
-        "            {\\n"
-        "                patchView.style.minWidth = \\"100%\\";\\n"
-        "                patchView.style.minHeight = \\"100%\\";\\n"
-        "            }\\n"
-        "\\n"
-        "            return patchView;\\n"
-""",
-    ),
-]
-
-for path in targets:
-    if not path.is_file():
-        continue
-
-    text = path.read_text(encoding="utf-8")
-    replaced = False
-
-    for old_block, new_block in replacement_pairs:
-        if old_block in text:
-            text = text.replace(old_block, new_block, 1)
-            replaced = True
-            break
-
-        if new_block in text:
-            replaced = True
-            break
-
-    if not replaced:
-        raise SystemExit(f"Could not find the expected patch min-size snippet in {path}")
-
-    path.write_text(text, encoding="utf-8")
 PY
 
 python3 - "$temp_dir/include/cmajor/helpers/cmaj_JUCEPlugin.h" <<'PY'
