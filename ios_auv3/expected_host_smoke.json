@@ -1,0 +1,17 @@
+{
+  "parameters": [
+    {
+      "address": 10299632488404189556,
+      "identifier": "wavetablePosition",
+      "displayName": "Wavetable Position"
+    }
+  ],
+  "savedStateKeys": [
+    "data",
+    "jucePluginState",
+    "manufacturer",
+    "subtype",
+    "type",
+    "version"
+  ]
+}

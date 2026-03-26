@@ -1,5 +1,11 @@
-Paused: tuning the renderer toward the Serum look.
+Paused work
 
-Current state: renderer tuning is paused while we fix the Ableton Live plug-in. The old hand-built Audio Unit loader kept crashing or loading in a broken state. The installed `CmajInstrumentDev.component` is now the self-contained Audio Unit generated directly from `WavetableSynth.cmajorpatch`, and Apple `auval` passes on that build.
+Renderer tuning toward the Serum look is paused while we plan the iOS AUv3 build.
 
-Return to next: reopen Live and test `CmajInstrumentDev`. If it works in Live, go back to the renderer tuning. If Live still fails, compare the new crash or failure against the generated Audio Unit build that already passed `auval`.
+What is true right now
+- The macOS Ableton Live development plug-in works.
+- That plug-in is a desktop-only development shell and should stay that way.
+- The detailed AUv3 research, testing strategy, and implementation plan now live in `AUV3_RESEARCH_AND_PLAN.md`.
+
+What happens next
+- Start with the first item in `AUV3_RESEARCH_AND_PLAN.md`: add the `ios_auv3` shell and prove JUCE can build an iOS app with an embedded AUv3 extension for this repo.

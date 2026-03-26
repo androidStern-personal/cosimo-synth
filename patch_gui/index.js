@@ -1,12 +1,11 @@
 import { loadFactoryBankFramesFromPatch, DEFAULT_VISIBLE_MIP_INDEX } from "./wavetable-bank.js";
 import { CanvasWavetableDisplay } from "./wavetable-display.js";
+import { computeResponsivePatchLayout, getLayoutCSSVariables } from "./responsive-layout.js";
 
 const midiInputEndpointID = "midiIn";
 const wavetablePositionEndpointID = "wavetablePosition";
 
 const knobDefault = 0.0;
-
-let CosimoKeyboard;
 
 function clamp(value, min, max) {
     return Math.min(Math.max(value, min), max);
@@ -26,36 +25,52 @@ function findParameterEndpointInfo(status, endpointID) {
     );
 }
 
-function defineKeyboardElement(patchConnection) {
-    if (!CosimoKeyboard) {
-        CosimoKeyboard = class extends patchConnection.utilities.PianoKeyboard {
+function getKeyboardTagName(keyboardStyle) {
+    return `cosimo-synth-keyboard-${keyboardStyle}`;
+}
+
+function defineKeyboardElement(patchConnection, keyboardStyle, keyboardOptions) {
+    const tagName = getKeyboardTagName(keyboardStyle);
+
+    if (!window.customElements.get(tagName)) {
+        const CosimoKeyboard = class extends patchConnection.utilities.PianoKeyboard {
             constructor() {
                 super({
-                    naturalNoteWidth: 22,
-                    accidentalWidth: 13,
+                    naturalNoteWidth: keyboardOptions.naturalNoteWidth,
+                    accidentalWidth: keyboardOptions.accidentalWidth,
                     accidentalPercentageHeight: 64,
                     pressedNoteColour: "#f56cb6",
                 });
             }
         };
 
-        registerCustomElement("cosimo-synth-keyboard", CosimoKeyboard);
+        registerCustomElement(tagName, CosimoKeyboard);
     }
+
+    return tagName;
 }
 
 class CosimoSynthView extends HTMLElement {
-    constructor(patchConnection) {
+    constructor(patchConnection, options = {}) {
         super();
 
         this.patchConnection = patchConnection;
+        this.options = { platform: "desktop", ...options };
         this.currentValue = knobDefault;
         this.display = null;
         this.displayFramesLoaded = false;
         this.displayFramesLoading = false;
         this.resizeObserver = null;
+        this.windowResizeListener = null;
+        this.currentLayout = computeResponsivePatchLayout({
+            width: this.options.platform === "ios" ? 376 : 1120,
+            height: this.options.platform === "ios" ? 648 : 680,
+            platform: this.options.platform,
+        });
+        this.keyboardStyle = "";
+        this.keyboardNoteCount = 0;
 
         this.attachShadow({ mode: "open" });
-        defineKeyboardElement(patchConnection);
 
         try {
             this.initialiseView();
@@ -67,6 +82,10 @@ class CosimoSynthView extends HTMLElement {
 
     disconnectedCallback() {
         this.resizeObserver?.disconnect();
+
+        if (this.windowResizeListener) {
+            window.removeEventListener("resize", this.windowResizeListener);
+        }
 
         if (this.keyboard) {
             this.keyboard.detachPatchConnection?.(this.patchConnection);
@@ -82,10 +101,6 @@ class CosimoSynthView extends HTMLElement {
         if (this.handleStatusUpdate) {
             this.patchConnection.removeStatusListener(this.handleStatusUpdate);
         }
-    }
-
-    getScaleFactorLimits() {
-        return { minScale: 0.75, maxScale: 1.35 };
     }
 
     initialiseView() {
@@ -106,6 +121,7 @@ class CosimoSynthView extends HTMLElement {
         this.handleParameterChange = (value) => this.setDisplayedValue(value);
         this.handleStatusUpdate = (status) => this.handlePatchStatus(status);
 
+        this.applyResponsiveLayout(this.currentLayout, true);
         this.buildKnob();
         this.buildKeyboard();
         this.installResizeObserver();
@@ -120,23 +136,54 @@ class CosimoSynthView extends HTMLElement {
 
         this.patchConnection.addStatusListener(this.handleStatusUpdate);
         this.patchConnection.requestStatusUpdate();
-
     }
 
     installResizeObserver() {
         const resize = () => {
-            const bounds = this.displayViewport.getBoundingClientRect();
-            this.display.resize(bounds.width, bounds.height, window.devicePixelRatio || 1);
+            const hostBounds = this.getBoundingClientRect();
+            const nextLayout = computeResponsivePatchLayout({
+                width: hostBounds.width,
+                height: hostBounds.height,
+                platform: this.options.platform,
+            });
+            const stageBounds = this.displayViewport.getBoundingClientRect();
+
+            this.applyResponsiveLayout(nextLayout);
+            this.display.resize(stageBounds.width, stageBounds.height, window.devicePixelRatio || 1);
         };
 
         if ("ResizeObserver" in window) {
             this.resizeObserver = new ResizeObserver(() => resize());
+            this.resizeObserver.observe(this);
             this.resizeObserver.observe(this.displayViewport);
         } else {
-            window.addEventListener("resize", resize);
+            this.windowResizeListener = () => resize();
+            window.addEventListener("resize", this.windowResizeListener);
         }
 
         requestAnimationFrame(resize);
+    }
+
+    applyResponsiveLayout(nextLayout, force = false) {
+        const layoutChanged =
+            force ||
+            this.currentLayout.gridTemplateColumns !== nextLayout.gridTemplateColumns ||
+            this.currentLayout.noteCount !== nextLayout.noteCount ||
+            this.currentLayout.knobSize !== nextLayout.knobSize ||
+            this.currentLayout.stageMinHeight !== nextLayout.stageMinHeight ||
+            this.currentLayout.keyboardHeight !== nextLayout.keyboardHeight ||
+            this.currentLayout.headerStacks !== nextLayout.headerStacks;
+
+        this.currentLayout = nextLayout;
+        this.toggleAttribute("stacked-header", nextLayout.headerStacks);
+
+        Object.entries(getLayoutCSSVariables(nextLayout)).forEach(([key, value]) => {
+            this.style.setProperty(key, value);
+        });
+
+        if (layoutChanged && this.keyboard) {
+            this.syncKeyboardLayout();
+        }
     }
 
     async loadDisplayFrames() {
@@ -155,8 +202,9 @@ class CosimoSynthView extends HTMLElement {
             this.displayFramesLoaded = true;
         } catch (error) {
             console.error(error);
-            this.setDisplayState("error", "Could not load wavetable bank");
-            this.bankReadout.textContent = "Display unavailable";
+            const detail = String(error?.message || error || "Unknown error");
+            this.setDisplayState("error", `Could not load wavetable bank: ${detail}`);
+            this.bankReadout.textContent = `Display unavailable: ${detail}`;
         } finally {
             this.displayFramesLoading = false;
         }
@@ -215,22 +263,60 @@ class CosimoSynthView extends HTMLElement {
         `;
     }
 
-    buildKeyboard() {
-        this.keyboard = new (window.customElements.get("cosimo-synth-keyboard"))();
+    getKeyboardStyle() {
+        if (this.options.platform !== "ios") {
+            return "desktop";
+        }
 
+        if (this.currentLayout.isCompact) {
+            return "ios-compact";
+        }
+
+        if (this.currentLayout.keyboardHeight <= 92) {
+            return "ios-short";
+        }
+
+        return "ios-regular";
+    }
+
+    buildKeyboard() {
+        const keyboardStyle = this.getKeyboardStyle();
+        const tagName = defineKeyboardElement(
+            this.patchConnection,
+            keyboardStyle,
+            {
+                naturalNoteWidth: this.currentLayout.keyboardNaturalNoteWidth,
+                accidentalWidth: this.currentLayout.keyboardAccidentalWidth,
+            }
+        );
+
+        this.keyboard = new (window.customElements.get(tagName))();
         this.keyboard.classList.add("keyboard");
         this.keyboard.setAttribute("root-note", "48");
-        this.keyboard.setAttribute("note-count", "25");
+        this.keyboard.setAttribute("note-count", `${this.currentLayout.noteCount}`);
         this.keyboard.attachToPatchConnection?.(this.patchConnection, midiInputEndpointID);
-
         this.keyboard.addEventListener("mousedown", () => this.focusKeyboard(), { passive: true });
 
         this.keyboardHost.innerHTML = "";
         this.keyboardHost.appendChild(this.keyboard);
 
         requestAnimationFrame(() => this.focusKeyboard());
+        this.keyboardStyle = keyboardStyle;
+        this.keyboardNoteCount = this.currentLayout.noteCount;
         this.hasOnscreenKeyboard = true;
         this.hint.textContent = "Connecting the keyboard to the synth…";
+    }
+
+    syncKeyboardLayout() {
+        const nextStyle = this.getKeyboardStyle();
+        const nextNoteCount = this.currentLayout.noteCount;
+
+        if (this.keyboardStyle === nextStyle && this.keyboardNoteCount === nextNoteCount) {
+            return;
+        }
+
+        this.keyboard.detachPatchConnection?.(this.patchConnection);
+        this.buildKeyboard();
     }
 
     focusKeyboard() {
@@ -279,12 +365,21 @@ class CosimoSynthView extends HTMLElement {
                     height: 100%;
                     background: #02040b;
                     color: #f3f0ff;
+                    --cosimo-panel-padding: 18px;
+                    --cosimo-card-padding: 18px;
+                    --cosimo-section-gap: 16px;
+                    --cosimo-main-grid-columns: minmax(0, 1fr) 208px;
+                    --cosimo-knob-size: 150px;
+                    --cosimo-stage-min-height: 280px;
+                    --cosimo-keyboard-height: 122px;
+                    --cosimo-title-font-size: 14px;
+                    --cosimo-subtitle-font-size: 22px;
                 }
 
                 .panel {
                     width: 100%;
                     height: 100%;
-                    padding: 18px;
+                    padding: var(--cosimo-panel-padding);
                 }
 
                 .card {
@@ -296,9 +391,9 @@ class CosimoSynthView extends HTMLElement {
                     box-shadow:
                         0 24px 60px rgba(3, 6, 18, 0.48),
                         inset 0 1px 0 rgba(160, 173, 255, 0.08);
-                    padding: 18px 18px 14px;
+                    padding: var(--cosimo-card-padding);
                     display: grid;
-                    gap: 16px;
+                    gap: var(--cosimo-section-gap);
                     grid-template-rows: auto 1fr auto auto;
                 }
 
@@ -306,18 +401,23 @@ class CosimoSynthView extends HTMLElement {
                     display: flex;
                     justify-content: space-between;
                     align-items: end;
-                    gap: 16px;
+                    gap: var(--cosimo-section-gap);
+                }
+
+                :host([stacked-header]) .header {
+                    flex-direction: column;
+                    align-items: flex-start;
                 }
 
                 .title {
-                    font-size: 14px;
+                    font-size: var(--cosimo-title-font-size);
                     letter-spacing: 0.12em;
                     text-transform: uppercase;
                     color: #8da2ff;
                 }
 
                 .subtitle {
-                    font-size: 22px;
+                    font-size: var(--cosimo-subtitle-font-size);
                     line-height: 1;
                     color: #ffd8a6;
                     margin-top: 6px;
@@ -336,8 +436,8 @@ class CosimoSynthView extends HTMLElement {
 
                 .main-grid {
                     display: grid;
-                    grid-template-columns: minmax(0, 1fr) 208px;
-                    gap: 16px;
+                    grid-template-columns: var(--cosimo-main-grid-columns);
+                    gap: var(--cosimo-section-gap);
                     align-items: stretch;
                 }
 
@@ -369,7 +469,7 @@ class CosimoSynthView extends HTMLElement {
                 .wavetable-stage {
                     position: relative;
                     aspect-ratio: 1.9 / 1;
-                    min-height: 280px;
+                    min-height: var(--cosimo-stage-min-height);
                     border-radius: 12px;
                     overflow: hidden;
                     background: #04070f;
@@ -426,8 +526,8 @@ class CosimoSynthView extends HTMLElement {
                 }
 
                 .knob-shell {
-                    width: 150px;
-                    height: 170px;
+                    width: var(--cosimo-knob-size);
+                    height: calc(var(--cosimo-knob-size) + 20px);
                     display: grid;
                     justify-items: center;
                     align-content: start;
@@ -435,8 +535,8 @@ class CosimoSynthView extends HTMLElement {
                 }
 
                 .knob-control-host {
-                    width: 150px;
-                    height: 150px;
+                    width: var(--cosimo-knob-size);
+                    height: var(--cosimo-knob-size);
                     display: grid;
                     place-items: center;
                 }
@@ -448,8 +548,8 @@ class CosimoSynthView extends HTMLElement {
                     --knob-dial-background-color: radial-gradient(circle at 32% 28%, #434f95 0%, #1d2450 42%, #090d1f 100%);
                     --knob-dial-tick-color: #ffd8a6;
 
-                    width: 150px;
-                    height: 150px;
+                    width: var(--cosimo-knob-size);
+                    height: var(--cosimo-knob-size);
                 }
 
                 .cosimo-knob .knob-path {
@@ -496,14 +596,14 @@ class CosimoSynthView extends HTMLElement {
                 }
 
                 .keyboard-host {
-                    min-height: 122px;
+                    min-height: var(--cosimo-keyboard-height);
                     display: grid;
                     align-items: stretch;
                 }
 
                 .keyboard {
                     width: 100%;
-                    height: 122px;
+                    height: var(--cosimo-keyboard-height);
                     border-radius: 12px;
                     overflow: hidden;
                     background: rgba(6, 10, 24, 0.94);
@@ -514,12 +614,6 @@ class CosimoSynthView extends HTMLElement {
                 .hint {
                     font-size: 12px;
                     color: rgba(194, 202, 255, 0.72);
-                }
-
-                @media (max-width: 760px) {
-                    .main-grid {
-                        grid-template-columns: 1fr;
-                    }
                 }
             </style>
 
@@ -562,12 +656,16 @@ class CosimoSynthView extends HTMLElement {
     }
 }
 
-export default function createPatchView(patchConnection) {
+export function createPatchViewWithOptions(patchConnection, options = {}) {
     const tagName = "cosimo-synth-view";
 
     if (!window.customElements.get(tagName)) {
         window.customElements.define(tagName, CosimoSynthView);
     }
 
-    return new (window.customElements.get(tagName))(patchConnection);
+    return new (window.customElements.get(tagName))(patchConnection, options);
+}
+
+export default function createPatchView(patchConnection) {
+    return createPatchViewWithOptions(patchConnection);
 }

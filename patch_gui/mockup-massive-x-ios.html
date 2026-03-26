@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Cosimo iPhone UI Mockup</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Space+Grotesk:wght@500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #07090d;
+      --bg-2: #0e1218;
+      --line: rgba(201, 214, 229, 0.1);
+      --text-dim: rgba(221, 228, 236, 0.42);
+      --text-faint: rgba(221, 228, 236, 0.26);
+      --accent: #8ad6f3;
+      --accent-soft: rgba(138, 214, 243, 0.15);
+      --accent-2: #efbc76;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      margin: 0;
+      min-height: 100%;
+      background:
+        radial-gradient(circle at 50% 8%, rgba(117, 147, 181, 0.14), transparent 24%),
+        radial-gradient(circle at 84% 82%, rgba(239, 188, 118, 0.06), transparent 22%),
+        linear-gradient(180deg, #05070a 0%, #090c11 42%, #06080b 100%);
+      color: #eef2f5;
+      font-family: "Space Grotesk", "Avenir Next", sans-serif;
+    }
+
+    body {
+      min-height: 100dvh;
+      display: grid;
+      place-items: center;
+      padding: 0;
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background-image:
+        linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+      background-size: 26px 26px;
+      mask-image: radial-gradient(circle at center, black 42%, transparent 88%);
+      opacity: 0.32;
+    }
+
+    .phone-shell {
+      width: min(100vw, 430px);
+      min-height: min(932px, 100dvh);
+      overflow: hidden;
+      position: relative;
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.01), rgba(255, 255, 255, 0)),
+        linear-gradient(180deg, rgba(6, 8, 12, 0.98), rgba(7, 10, 14, 0.98));
+    }
+
+    .phone-shell::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background:
+        radial-gradient(circle at 50% 32%, rgba(138, 214, 243, 0.07), transparent 22%),
+        radial-gradient(circle at 50% 44%, rgba(138, 214, 243, 0.08), transparent 28%),
+        radial-gradient(circle at 50% 92%, rgba(255, 255, 255, 0.04), transparent 16%);
+    }
+
+    .app {
+      min-height: inherit;
+      display: grid;
+      grid-template-rows: 1fr auto;
+      gap: 18px;
+      padding: 18px 16px 18px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .hero {
+      display: grid;
+      align-content: center;
+      justify-items: stretch;
+      padding-top: 12px;
+    }
+
+    .hero-stack {
+      position: relative;
+      min-height: 500px;
+      display: grid;
+      place-items: center;
+    }
+
+    .hero-stack::before {
+      content: "";
+      position: absolute;
+      inset: 9% 5% 21%;
+      border-radius: 40px;
+      background:
+        radial-gradient(circle at 50% 38%, rgba(138, 214, 243, 0.1), transparent 24%),
+        radial-gradient(circle at 72% 30%, rgba(239, 188, 118, 0.06), transparent 16%),
+        radial-gradient(circle at 28% 36%, rgba(221, 98, 174, 0.05), transparent 16%);
+      filter: blur(18px);
+      opacity: 0.95;
+      pointer-events: none;
+    }
+
+    .wave-layer {
+      position: relative;
+      width: 100%;
+      max-width: 388px;
+      aspect-ratio: 1 / 1.04;
+      display: grid;
+      place-items: center;
+    }
+
+    .wave-layer::before {
+      content: "";
+      position: absolute;
+      inset: 4% 8% 16%;
+      background:
+        linear-gradient(rgba(255, 255, 255, 0.022) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.022) 1px, transparent 1px);
+      background-size: 32px 32px;
+      opacity: 0.42;
+      transform: perspective(720px) rotateX(74deg);
+      mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.8), transparent 92%);
+      pointer-events: none;
+    }
+
+    .wave-layer::after {
+      content: "";
+      position: absolute;
+      inset: 6% 14% 12%;
+      background: radial-gradient(circle at 50% 42%, rgba(255, 255, 255, 0.05), transparent 50%);
+      filter: blur(30px);
+      pointer-events: none;
+    }
+
+    .wave-canvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      display: block;
+      filter: drop-shadow(0 16px 32px rgba(0, 0, 0, 0.34));
+      opacity: 0.88;
+      mix-blend-mode: screen;
+      -webkit-mask-image: radial-gradient(circle at 50% 44%, rgba(0, 0, 0, 1) 26%, rgba(0, 0, 0, 0.94) 48%, rgba(0, 0, 0, 0.32) 62%, transparent 74%);
+      mask-image: radial-gradient(circle at 50% 44%, rgba(0, 0, 0, 1) 26%, rgba(0, 0, 0, 0.94) 48%, rgba(0, 0, 0, 0.32) 62%, transparent 74%);
+    }
+
+    .wave-overlay {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+    }
+
+    .readout {
+      position: absolute;
+      right: 24%;
+      top: 45%;
+      color: var(--accent-2);
+      font: 500 11px/1 "IBM Plex Mono", monospace;
+      letter-spacing: 0.08em;
+    }
+
+    .control-dock {
+      display: grid;
+      gap: 14px;
+      padding-top: 8px;
+    }
+
+    .control-head {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      align-items: end;
+    }
+
+    .control-head strong {
+      font-size: 28px;
+      line-height: 0.96;
+      font-weight: 600;
+      letter-spacing: -0.05em;
+    }
+
+    .position-stack {
+      display: grid;
+      gap: 4px;
+      justify-items: end;
+    }
+
+    .position-stack span,
+    .tick-labels span,
+    .footer-whisper {
+      color: var(--text-faint);
+      font: 500 10px/1 "IBM Plex Mono", monospace;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+    }
+
+    .position-stack strong {
+      color: var(--accent);
+      font-size: 34px;
+      line-height: 0.92;
+      font-weight: 600;
+      letter-spacing: -0.05em;
+    }
+
+    .slider-row {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .rail-button {
+      width: 34px;
+      height: 34px;
+      border: 0;
+      border-radius: 999px;
+      background: none;
+      color: rgba(236, 241, 247, 0.34);
+      display: grid;
+      place-items: center;
+      padding: 0;
+    }
+
+    .rail-button svg {
+      width: 14px;
+      height: 14px;
+      stroke: currentColor;
+      stroke-width: 1.6;
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .scan-rail {
+      position: relative;
+      height: 54px;
+      overflow: hidden;
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.028) 0, rgba(255, 255, 255, 0) 100%);
+      border-radius: 18px;
+    }
+
+    .scan-rail::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background:
+        repeating-linear-gradient(
+          90deg,
+          transparent 0,
+          transparent calc(6.25% - 1px),
+          rgba(255, 255, 255, 0.045) calc(6.25% - 1px),
+          rgba(255, 255, 255, 0.045) 6.25%
+        );
+      pointer-events: none;
+    }
+
+    .scan-rail::after {
+      content: "";
+      position: absolute;
+      inset: 22px 14px;
+      border-radius: 999px;
+      background:
+        linear-gradient(90deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02));
+      pointer-events: none;
+    }
+
+    .scan-slider {
+      appearance: none;
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      background: transparent;
+      cursor: pointer;
+    }
+
+    .scan-slider::-webkit-slider-runnable-track {
+      height: 54px;
+      background: transparent;
+    }
+
+    .scan-slider::-moz-range-track {
+      height: 54px;
+      background: transparent;
+      border: 0;
+    }
+
+    .scan-slider::-webkit-slider-thumb {
+      appearance: none;
+      width: 14px;
+      height: 54px;
+      border: 0;
+      margin-top: 0;
+      background:
+        linear-gradient(180deg, rgba(138, 214, 243, 0), rgba(138, 214, 243, 0.82) 24%, rgba(138, 214, 243, 0.82) 76%, rgba(138, 214, 243, 0)),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.74), rgba(255, 255, 255, 0.16));
+      box-shadow:
+        0 0 0 1px rgba(255, 255, 255, 0.08),
+        0 0 18px rgba(138, 214, 243, 0.24);
+      border-radius: 0;
+    }
+
+    .scan-slider::-moz-range-thumb {
+      width: 14px;
+      height: 54px;
+      border: 0;
+      background:
+        linear-gradient(180deg, rgba(138, 214, 243, 0), rgba(138, 214, 243, 0.82) 24%, rgba(138, 214, 243, 0.82) 76%, rgba(138, 214, 243, 0)),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.74), rgba(255, 255, 255, 0.16));
+      box-shadow:
+        0 0 0 1px rgba(255, 255, 255, 0.08),
+        0 0 18px rgba(138, 214, 243, 0.24);
+      border-radius: 0;
+    }
+
+    .tick-labels {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 0 44px;
+    }
+
+    .footer-whisper {
+      text-align: center;
+      color: rgba(221, 228, 236, 0.22);
+    }
+
+    @media (max-width: 430px) {
+      .hero-stack {
+        min-height: 468px;
+      }
+
+      .control-head strong {
+        font-size: 24px;
+      }
+
+      .position-stack strong {
+        font-size: 30px;
+      }
+
+      .tick-labels {
+        padding: 0 40px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="phone-shell">
+    <main class="app">
+      <section class="hero">
+        <div class="hero-stack">
+          <div class="wave-layer" id="wave-stage">
+            <canvas class="wave-canvas" id="wave-canvas"></canvas>
+            <div class="wave-overlay">
+              <span class="readout" id="frame-readout">Frame 08/15</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="control-dock">
+        <div class="control-head">
+          <strong>Frame Scan</strong>
+          <div class="position-stack">
+            <span>Position</span>
+            <strong id="numeric-value">0.580</strong>
+          </div>
+        </div>
+
+        <div class="slider-row">
+          <button class="rail-button" id="step-down" type="button" aria-label="Step down">
+            <svg viewBox="0 0 24 24">
+              <path d="M15 18l-6-6 6-6"></path>
+            </svg>
+          </button>
+          <div class="scan-rail">
+            <input class="scan-slider" id="position-slider" type="range" min="0" max="1" step="0.001" value="0.58" />
+          </div>
+          <button class="rail-button" id="step-up" type="button" aria-label="Step up">
+            <svg viewBox="0 0 24 24">
+              <path d="M9 6l6 6-6 6"></path>
+            </svg>
+          </button>
+        </div>
+
+        <div class="tick-labels">
+          <span>Shape 01</span>
+          <span>Shape 08</span>
+          <span>Shape 16</span>
+        </div>
+
+        <div class="footer-whisper">minimal mock-up only</div>
+      </section>
+    </main>
+  </div>
+
+  <script type="module">
+    import { loadWavetableFramesFromUrls, getFactoryBankValue } from "./wavetable-bank.mjs";
+    import { CanvasWavetableDisplay } from "./wavetable-display.mjs";
+
+    async function loadManifest() {
+      const response = await fetch("../WavetableSynth.cmajorpatch");
+
+      if (!response.ok) {
+        throw new Error(`Could not load patch manifest: ${response.status}`);
+      }
+
+      return response.json();
+    }
+
+    const stage = document.getElementById("wave-stage");
+    const canvas = document.getElementById("wave-canvas");
+    const slider = document.getElementById("position-slider");
+    const numericValue = document.getElementById("numeric-value");
+    const frameReadout = document.getElementById("frame-readout");
+    const stepDown = document.getElementById("step-down");
+    const stepUp = document.getElementById("step-up");
+    const display = new CanvasWavetableDisplay(canvas);
+
+    function resizeDisplay() {
+      const bounds = stage.getBoundingClientRect();
+      display.resize(bounds.width, bounds.height, window.devicePixelRatio || 1);
+    }
+
+    function setPosition(rawValue) {
+      const value = Math.max(0, Math.min(1, Number(rawValue) || 0));
+      const frame = Math.round(value * 15);
+      slider.value = value.toFixed(3);
+      numericValue.textContent = value.toFixed(3);
+      frameReadout.textContent = `Frame ${String(frame).padStart(2, "0")}/15`;
+      display.setPosition(value);
+    }
+
+    function nudge(amount) {
+      setPosition(Number(slider.value) + amount);
+    }
+
+    if ("ResizeObserver" in window) {
+      const observer = new ResizeObserver(() => resizeDisplay());
+      observer.observe(stage);
+    } else {
+      window.addEventListener("resize", resizeDisplay);
+    }
+
+    resizeDisplay();
+
+    const manifest = await loadManifest();
+    const manifestValue = getFactoryBankValue(manifest);
+    const sampleBlobUrl = new URL(`../${manifestValue.sampleBlob}`, import.meta.url);
+    const bank = await loadWavetableFramesFromUrls({
+      manifestValue,
+      sampleBlobUrl,
+    });
+
+    display.setFrames(bank.frames);
+    setPosition(slider.value);
+
+    slider.addEventListener("input", () => setPosition(slider.value));
+    stepDown.addEventListener("click", () => nudge(-1 / 15));
+    stepUp.addEventListener("click", () => nudge(1 / 15));
+  </script>
+</body>
+</html>

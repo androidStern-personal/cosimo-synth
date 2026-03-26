@@ -7,6 +7,7 @@ import {
     parseWaveFile,
     getFactoryBankValue,
     extractWavetableFrames,
+    loadFactoryBankFramesFromPatch,
 } from "../patch_gui/wavetable-bank.mjs";
 import {
     createFrameState,
@@ -207,6 +208,35 @@ test("frame extraction returns the 16 display-demo frames with evolving harmonic
         selectedCentroids.map((value) => Number(value.toFixed(3))),
         [1, 1.439, 1.196]
     );
+});
+
+test("bank loading still works when runtime status strips externals from the manifest", async () => {
+    const manifest = JSON.parse(
+        await fs.readFile(path.join(repoRoot, "WavetableSynth.cmajorpatch"), "utf8")
+    );
+    const strippedManifest = { ...manifest };
+    const sampleBlob = await fs.readFile(path.join(repoRoot, "assets", "factory-bank.wav"));
+    delete strippedManifest.externals;
+
+    const requestedPaths = [];
+    const bank = await loadFactoryBankFramesFromPatch({
+        manifest: strippedManifest,
+        getResourceAddress(requestedPath) {
+            requestedPaths.push(requestedPath);
+
+            if (requestedPath === "assets/factory-bank.wav") {
+                return `data:audio/wav;base64,${sampleBlob.toString("base64")}`;
+            }
+
+            throw new Error(`Unexpected resource path: ${requestedPath}`);
+        },
+    });
+
+    assert.equal(bank.sampleRate, 44100);
+    assert.equal(bank.frameCount, 16);
+    assert.equal(bank.frames[0]?.length, 2048);
+    assert.equal(bank.sampleBlobPath, "assets/factory-bank.wav");
+    assert.deepEqual(requestedPaths, ["assets/factory-bank.wav"]);
 });
 
 test("decimation preserves the first and last sample columns", () => {

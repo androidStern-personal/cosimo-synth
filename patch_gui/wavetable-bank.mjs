@@ -1,6 +1,12 @@
+import {
+    FACTORY_BANK_EXTERNAL_ID,
+    FACTORY_BANK_MANIFEST_VALUE,
+} from "./factory-bank-manifest.mjs";
+
 export const DEFAULT_SAMPLES_PER_FRAME = 2048;
 export const DEFAULT_PADDED_FRAME_SIZE = DEFAULT_SAMPLES_PER_FRAME + 3;
 export const DEFAULT_VISIBLE_MIP_INDEX = 10;
+const DEFAULT_FACTORY_BANK_MANIFEST_PATH = "WavetableSynth.cmajorpatch";
 
 function assert(condition, message) {
     if (!condition) {
@@ -20,6 +26,33 @@ function readAscii(view, offset, length) {
 
 function clampToRange(value, min, max) {
     return Math.min(Math.max(value, min), max);
+}
+
+function isAbsoluteURL(value) {
+    return /^[a-zA-Z][a-zA-Z\d+.-]*:/.test(value);
+}
+
+function resolvePatchResourceUrl(path, patchConnection) {
+    const patchRootUrl = new URL("../", import.meta.url);
+    const resourceAddress = patchConnection?.getResourceAddress?.(path);
+
+    if (resourceAddress instanceof URL) {
+        return resourceAddress;
+    }
+
+    if (typeof resourceAddress === "string" && resourceAddress.length > 0) {
+        if (isAbsoluteURL(resourceAddress)) {
+            return new URL(resourceAddress);
+        }
+
+        const normalisedPath = resourceAddress.startsWith("/")
+            ? resourceAddress.slice(1)
+            : resourceAddress;
+
+        return new URL(normalisedPath, patchRootUrl);
+    }
+
+    return new URL(path, patchRootUrl);
 }
 
 export function parseWaveFile(arrayBuffer) {
@@ -161,9 +194,32 @@ export async function loadWavetableFramesFromUrls(
     };
 }
 
+async function loadPatchManifestForFactoryBank(patchConnection, manifest, externalID) {
+    if (manifest?.externals?.[externalID]) {
+        return manifest;
+    }
+
+    if (externalID === FACTORY_BANK_EXTERNAL_ID) {
+        return {
+            externals: {
+                [FACTORY_BANK_EXTERNAL_ID]: FACTORY_BANK_MANIFEST_VALUE,
+            },
+        };
+    }
+
+    const manifestUrl = resolvePatchResourceUrl(
+        DEFAULT_FACTORY_BANK_MANIFEST_PATH,
+        patchConnection
+    );
+    const response = await fetch(manifestUrl.toString());
+    assert(response.ok, `Failed to fetch patch manifest from ${manifestUrl}`);
+    return response.json();
+}
+
 export async function loadFactoryBankFramesFromPatch(
     patchConnection,
     {
+        manifest = patchConnection?.manifest,
         externalID = "wt::factoryBank",
         tableIndex = 0,
         visibleMipIndex = DEFAULT_VISIBLE_MIP_INDEX,
@@ -171,13 +227,13 @@ export async function loadFactoryBankFramesFromPatch(
         paddedFrameSize = DEFAULT_PADDED_FRAME_SIZE,
     } = {}
 ) {
-    const manifestValue = getFactoryBankValue(patchConnection.manifest, externalID);
-    const sampleBlobUrl = patchConnection.getResourceAddress(manifestValue.sampleBlob);
-
-    assert(
-        typeof sampleBlobUrl === "string" || sampleBlobUrl instanceof URL,
-        `Patch resource address for ${manifestValue.sampleBlob} is not available yet`
+    const resolvedManifest = await loadPatchManifestForFactoryBank(
+        patchConnection,
+        manifest,
+        externalID
     );
+    const manifestValue = getFactoryBankValue(resolvedManifest, externalID);
+    const sampleBlobUrl = resolvePatchResourceUrl(manifestValue.sampleBlob, patchConnection);
 
     return loadWavetableFramesFromUrls({
         manifestValue,
