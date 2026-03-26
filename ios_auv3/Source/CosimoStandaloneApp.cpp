@@ -64,6 +64,8 @@ private:
                 editor->addComponentListener (this);
                 addAndMakeVisible (editor.get());
             }
+
+            setOpaque (true);
         }
 
         ~MainContentComponent() override
@@ -83,6 +85,11 @@ private:
         {
             if (editor != nullptr)
                 editor->setBounds (getLocalBounds());
+        }
+
+        void paint (Graphics& g) override
+        {
+            g.fillAll (juce::Colours::limegreen);
         }
 
     private:
