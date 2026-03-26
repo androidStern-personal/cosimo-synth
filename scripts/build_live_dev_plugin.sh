@@ -31,6 +31,14 @@ uv run python "$repo_root/build_assets.py"
 
 mkdir -p "$cache_root"
 
+if [[ -f "$build_dir/CMakeCache.txt" ]]; then
+  cached_source_dir="$(awk -F= '/^CMAKE_HOME_DIRECTORY:INTERNAL=/{print $2; exit}' "$build_dir/CMakeCache.txt")"
+
+  if [[ -n "$cached_source_dir" && "$cached_source_dir" != "$repo_root/tools/live_dev_plugin" ]]; then
+    rm -rf "$build_dir"
+  fi
+fi
+
 if [[ ! -d "$juce_path/.git" ]]; then
   git clone --depth 1 https://github.com/juce-framework/JUCE.git "$juce_path"
 fi
