@@ -24,6 +24,7 @@ test("iOS patch manifest keeps the synth graph but switches to the mobile editor
     assert.deepEqual(iosManifest.source, desktopManifest.source);
     assert.deepEqual(desktopManifest.source, [
         "cmajor/FixedFrameOscillator.cmajor",
+        "cmajor/Mseg.cmajor",
         "cmajor/WavetableSynth.cmajor",
     ]);
     assert.deepEqual(iosManifest.resources, desktopManifest.resources);
@@ -31,7 +32,13 @@ test("iOS patch manifest keeps the synth graph but switches to the mobile editor
 });
 
 test("shared patch GUI .js files are generated from the .mjs source modules", async () => {
-    for (const moduleName of ["responsive-layout", "wavetable-bank", "wavetable-display"]) {
+    for (const moduleName of [
+        "responsive-layout",
+        "wavetable-bank",
+        "wavetable-display",
+        "mseg",
+        "mseg-controller",
+    ]) {
         const esmSource = await fs.readFile(
             path.join(repoRoot, "patch_gui", `${moduleName}.mjs`),
             "utf8"

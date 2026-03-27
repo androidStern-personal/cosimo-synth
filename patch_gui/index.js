@@ -3,13 +3,17 @@ import {
     loadFactoryBankFramesFromPatch,
     DEFAULT_VISIBLE_MIP_INDEX,
 } from "./wavetable-bank.js";
+import { MsegController } from "./mseg-controller.js";
+import { evaluateMsegShape } from "./mseg.js";
 import { CanvasWavetableDisplay } from "./wavetable-display.js";
 import { computeResponsivePatchLayout, getLayoutCSSVariables } from "./responsive-layout.js";
 
 const midiInputEndpointID = "midiIn";
 const wavetablePositionEndpointID = "wavetablePosition";
 const wavetableSelectEndpointID = "wavetableSelect";
+const msegDepthEndpointID = "mseg1Depth";
 const DISPLAY_POSITION_EPSILON = 0.000001;
+const SVG_NS = "http://www.w3.org/2000/svg";
 
 const knobDefault = 0.0;
 
@@ -19,6 +23,23 @@ function clamp(value, min, max) {
 
 function clampDisplayPosition(value) {
     return clamp(Number(value) || 0, 0.0, 1.0);
+}
+
+function clampDepth(value) {
+    return clamp(Number(value) || 0, -1.0, 1.0);
+}
+
+function pointToEditorCoordinates(point, width, height) {
+    return {
+        x: point.x * width,
+        y: (1.0 - point.y) * height,
+    };
+}
+
+function editorCoordinatesToPoint(clientX, clientY, bounds) {
+    const x = clamp((clientX - bounds.left) / Math.max(bounds.width, 1), 0.0, 1.0);
+    const y = clamp(1.0 - ((clientY - bounds.top) / Math.max(bounds.height, 1)), 0.0, 1.0);
+    return { x, y };
 }
 
 export function displayPositionsMatch(left, right, epsilon = DISPLAY_POSITION_EPSILON) {
@@ -102,6 +123,10 @@ class CosimoSynthView extends HTMLElement {
         this.scanRailEndpointID = null;
         this.tableSelectEndpointID = null;
         this.activeDisplayDrag = null;
+        this.msegController = null;
+        this.msegState = null;
+        this.selectedMsegPointIndex = 0;
+        this.activeMsegDrag = null;
 
         this.attachShadow({ mode: "open" });
 
@@ -142,6 +167,8 @@ class CosimoSynthView extends HTMLElement {
             this.patchConnection.removeStatusListener(this.handleStatusUpdate);
         }
 
+        this.msegController?.detach();
+
         if (this.scanRailInput && this.handleScanRailInput) {
             this.scanRailInput.removeEventListener("input", this.handleScanRailInput);
             this.scanRailInput.removeEventListener("pointerdown", this.handleScanRailGestureStart);
@@ -160,6 +187,21 @@ class CosimoSynthView extends HTMLElement {
 
         if (this.tableSelect && this.handleTableSelectChange) {
             this.tableSelect.removeEventListener("change", this.handleTableSelectChange);
+        }
+
+        if (this.msegViewport && this.handleMsegPointerDown) {
+            this.msegViewport.removeEventListener("pointerdown", this.handleMsegPointerDown);
+            this.msegViewport.removeEventListener("pointermove", this.handleMsegPointerMove);
+            this.msegViewport.removeEventListener("pointerup", this.handleMsegPointerUp);
+            this.msegViewport.removeEventListener("pointercancel", this.handleMsegPointerUp);
+        }
+
+        if (this.msegDeleteButton && this.handleDeleteMsegPoint) {
+            this.msegDeleteButton.removeEventListener("click", this.handleDeleteMsegPoint);
+        }
+
+        if (this.msegDepthInput && this.handleMsegDepthInput) {
+            this.msegDepthInput.removeEventListener("input", this.handleMsegDepthInput);
         }
     }
 
@@ -184,8 +226,18 @@ class CosimoSynthView extends HTMLElement {
         this.railLabelStart = this.shadowRoot.querySelector("[data-role='rail-label-start']");
         this.railLabelMid = this.shadowRoot.querySelector("[data-role='rail-label-mid']");
         this.railLabelEnd = this.shadowRoot.querySelector("[data-role='rail-label-end']");
+        this.msegViewport = this.shadowRoot.querySelector(".mseg-editor");
+        this.msegCurve = this.shadowRoot.querySelector(".mseg-curve");
+        this.msegPointsLayer = this.shadowRoot.querySelector(".mseg-points");
+        this.msegDeleteButton = this.shadowRoot.querySelector(".mseg-delete-point");
+        this.msegDepthInput = this.shadowRoot.querySelector(".mseg-depth-slider");
+        this.msegDepthReadout = this.shadowRoot.querySelector("[data-role='mseg-depth-readout']");
 
         this.display = new CanvasWavetableDisplay(this.displayCanvas);
+        this.msegController = new MsegController(this.patchConnection, {
+            onStateChange: (state) => this.handleMsegStateChange(state),
+        });
+        this.msegController.attach();
 
         this.handleParameterChange = (value) => this.setDisplayedValue(value);
         this.handleTableParameterChange = (value) => this.setSelectedTableIndex(value);
@@ -193,6 +245,13 @@ class CosimoSynthView extends HTMLElement {
         this.handleDisplayDragStart = (event) => this.beginDisplayDrag(event);
         this.handleDisplayDragMove = (event) => this.updateDisplayDrag(event);
         this.handleDisplayDragEnd = (event) => this.endDisplayDrag(event);
+        this.handleMsegPointerDown = (event) => this.beginMsegInteraction(event);
+        this.handleMsegPointerMove = (event) => this.updateMsegInteraction(event);
+        this.handleMsegPointerUp = (event) => this.endMsegInteraction(event);
+        this.handleDeleteMsegPoint = () => this.deleteSelectedMsegPoint();
+        this.handleMsegDepthInput = () => {
+            this.msegController?.setDepth(clampDepth(this.msegDepthInput?.value));
+        };
         this.handleTableSelectChange = () => {
             const nextIndex = Number(this.tableSelect?.value ?? 0);
 
@@ -212,6 +271,16 @@ class CosimoSynthView extends HTMLElement {
             this.displayViewport.addEventListener("pointerup", this.handleDisplayDragEnd);
             this.displayViewport.addEventListener("pointercancel", this.handleDisplayDragEnd);
         }
+
+        if (this.msegViewport) {
+            this.msegViewport.addEventListener("pointerdown", this.handleMsegPointerDown);
+            this.msegViewport.addEventListener("pointermove", this.handleMsegPointerMove);
+            this.msegViewport.addEventListener("pointerup", this.handleMsegPointerUp);
+            this.msegViewport.addEventListener("pointercancel", this.handleMsegPointerUp);
+        }
+
+        this.msegDeleteButton?.addEventListener("click", this.handleDeleteMsegPoint);
+        this.msegDepthInput?.addEventListener("input", this.handleMsegDepthInput);
 
         this.applyResponsiveLayout(this.currentLayout, true);
 
@@ -239,6 +308,7 @@ class CosimoSynthView extends HTMLElement {
 
         this.patchConnection.addStatusListener(this.handleStatusUpdate);
         this.patchConnection.requestStatusUpdate();
+        this.msegController.requestBootState();
     }
 
     installResizeObserver() {
@@ -478,6 +548,152 @@ class CosimoSynthView extends HTMLElement {
                 this.setDisplayState("error", `Could not load wavetable catalog: ${detail}`);
             })
             .finally(() => this.loadDisplayFrames(this.currentTableIndex));
+    }
+
+    handleMsegStateChange(state) {
+        this.msegState = state;
+        this.selectedMsegPointIndex = clamp(
+            this.selectedMsegPointIndex,
+            0,
+            Math.max(0, state.shape.points.length - 1)
+        );
+        this.renderMsegEditor();
+        this.syncMsegDepthControl();
+    }
+
+    syncMsegDepthControl() {
+        if (!this.msegDepthInput || !this.msegState) {
+            return;
+        }
+
+        const nextDepth = clampDepth(this.msegState.depth);
+        if (document.activeElement !== this.msegDepthInput) {
+            this.msegDepthInput.value = nextDepth.toFixed(3);
+        }
+
+        if (this.msegDepthReadout) {
+            this.msegDepthReadout.textContent = nextDepth.toFixed(3);
+        }
+    }
+
+    renderMsegEditor() {
+        if (!this.msegViewport || !this.msegCurve || !this.msegPointsLayer || !this.msegState) {
+            return;
+        }
+
+        const width = Math.max(1, this.msegViewport.viewBox.baseVal.width || this.msegViewport.clientWidth || 600);
+        const height = Math.max(1, this.msegViewport.viewBox.baseVal.height || this.msegViewport.clientHeight || 180);
+        const samples = 96;
+        let pathData = "";
+
+        for (let index = 0; index < samples; index += 1) {
+            const x = index / (samples - 1);
+            const y = evaluateMsegShape(this.msegState.shape, x);
+            const screenX = x * width;
+            const screenY = (1.0 - y) * height;
+            pathData += `${index === 0 ? "M" : "L"} ${screenX.toFixed(3)} ${screenY.toFixed(3)} `;
+        }
+
+        this.msegCurve.setAttribute("d", pathData.trim());
+        this.msegPointsLayer.innerHTML = "";
+
+        this.msegState.shape.points.forEach((point, pointIndex) => {
+            const coordinates = pointToEditorCoordinates(point, width, height);
+            const circle = document.createElementNS(SVG_NS, "circle");
+            circle.setAttribute("cx", coordinates.x.toFixed(3));
+            circle.setAttribute("cy", coordinates.y.toFixed(3));
+            circle.setAttribute("r", pointIndex === this.selectedMsegPointIndex ? "6" : "5");
+            circle.setAttribute("class", pointIndex === this.selectedMsegPointIndex ? "mseg-point selected" : "mseg-point");
+            circle.dataset.pointIndex = String(pointIndex);
+            this.msegPointsLayer.appendChild(circle);
+        });
+
+        if (this.msegDeleteButton) {
+            const isEndpoint =
+                this.selectedMsegPointIndex === 0 ||
+                this.selectedMsegPointIndex === this.msegState.shape.points.length - 1;
+            this.msegDeleteButton.disabled = isEndpoint;
+        }
+    }
+
+    beginMsegInteraction(event) {
+        if (!this.msegViewport || !this.msegState) {
+            return;
+        }
+
+        const targetPoint = event.target?.dataset?.pointIndex;
+
+        if (targetPoint !== undefined) {
+            this.selectedMsegPointIndex = Number(targetPoint);
+            this.activeMsegDrag = {
+                pointerId: event.pointerId,
+                pointIndex: this.selectedMsegPointIndex,
+            };
+            this.renderMsegEditor();
+            this.msegViewport.setPointerCapture?.(event.pointerId);
+            event.preventDefault?.();
+            return;
+        }
+
+        const bounds = this.msegViewport.getBoundingClientRect();
+        const point = editorCoordinatesToPoint(event.clientX, event.clientY, bounds);
+        this.msegController?.addPoint(point.x, point.y);
+        const points = this.msegController?.getState().shape.points ?? [];
+        this.selectedMsegPointIndex = points.findIndex(
+            (nextPoint) =>
+                Math.abs(nextPoint.x - point.x) <= 1e-6 &&
+                Math.abs(nextPoint.y - point.y) <= 1e-6
+        );
+        this.renderMsegEditor();
+        event.preventDefault?.();
+    }
+
+    updateMsegInteraction(event) {
+        if (!this.activeMsegDrag || !this.msegViewport) {
+            return;
+        }
+
+        if (event.pointerId !== this.activeMsegDrag.pointerId) {
+            return;
+        }
+
+        const bounds = this.msegViewport.getBoundingClientRect();
+        const point = editorCoordinatesToPoint(event.clientX, event.clientY, bounds);
+        this.msegController?.movePoint(this.activeMsegDrag.pointIndex, point.x, point.y);
+        this.selectedMsegPointIndex = this.activeMsegDrag.pointIndex;
+        event.preventDefault?.();
+    }
+
+    endMsegInteraction(event) {
+        if (!this.activeMsegDrag || event.pointerId !== this.activeMsegDrag.pointerId) {
+            return;
+        }
+
+        this.msegViewport?.releasePointerCapture?.(event.pointerId);
+        this.activeMsegDrag = null;
+        event.preventDefault?.();
+    }
+
+    deleteSelectedMsegPoint() {
+        if (!this.msegController || !this.msegState) {
+            return;
+        }
+
+        const isEndpoint =
+            this.selectedMsegPointIndex === 0 ||
+            this.selectedMsegPointIndex === this.msegState.shape.points.length - 1;
+
+        if (isEndpoint) {
+            return;
+        }
+
+        this.msegController.deletePoint(this.selectedMsegPointIndex);
+        this.selectedMsegPointIndex = clamp(
+            this.selectedMsegPointIndex - 1,
+            0,
+            this.msegController.getState().shape.points.length - 1
+        );
+        this.renderMsegEditor();
     }
 
     setDisplayState(state, message) {
@@ -1055,6 +1271,120 @@ class CosimoSynthView extends HTMLElement {
                     font-size: 12px;
                     color: rgba(194, 202, 255, 0.72);
                 }
+
+                .mseg-panel {
+                    border-radius: 16px;
+                    border: 1px solid rgba(122, 142, 255, 0.12);
+                    background: rgba(5, 8, 20, 0.88);
+                    padding: 14px;
+                    display: grid;
+                    gap: 12px;
+                }
+
+                .mseg-header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: end;
+                    gap: 12px;
+                }
+
+                .mseg-title {
+                    display: grid;
+                    gap: 4px;
+                }
+
+                .mseg-title strong {
+                    font-size: 16px;
+                    letter-spacing: -0.03em;
+                    color: #eef2f5;
+                }
+
+                .mseg-depth-readout {
+                    font-family: "SF Mono", "IBM Plex Mono", Menlo, monospace;
+                    font-size: 12px;
+                    letter-spacing: 0.08em;
+                    color: #87d7f5;
+                }
+
+                .mseg-editor-shell {
+                    position: relative;
+                    border-radius: 12px;
+                    overflow: hidden;
+                    border: 1px solid rgba(122, 142, 255, 0.14);
+                    background:
+                        linear-gradient(180deg, rgba(255, 255, 255, 0.018), transparent 22%),
+                        linear-gradient(180deg, rgba(8, 12, 24, 0.94), rgba(4, 7, 15, 0.98));
+                }
+
+                .mseg-editor {
+                    display: block;
+                    width: 100%;
+                    height: 180px;
+                    touch-action: none;
+                    cursor: crosshair;
+                }
+
+                .mseg-grid {
+                    stroke: rgba(255, 255, 255, 0.08);
+                    stroke-width: 1;
+                }
+
+                .mseg-curve {
+                    fill: none;
+                    stroke: #87d7f5;
+                    stroke-width: 3;
+                    stroke-linejoin: round;
+                    stroke-linecap: round;
+                }
+
+                .mseg-point {
+                    fill: #ffd8a6;
+                    stroke: rgba(4, 7, 15, 0.96);
+                    stroke-width: 2;
+                    cursor: grab;
+                }
+
+                .mseg-point.selected {
+                    fill: #f56cb6;
+                }
+
+                .mseg-controls {
+                    display: grid;
+                    grid-template-columns: minmax(0, 1fr) auto;
+                    gap: 12px;
+                    align-items: center;
+                }
+
+                .mseg-depth {
+                    display: grid;
+                    gap: 6px;
+                }
+
+                .mseg-depth-label {
+                    font-size: 10px;
+                    letter-spacing: 0.1em;
+                    text-transform: uppercase;
+                    color: rgba(194, 202, 255, 0.72);
+                }
+
+                .mseg-depth-slider {
+                    width: 100%;
+                }
+
+                .mseg-delete-point {
+                    border: 1px solid rgba(245, 108, 182, 0.28);
+                    border-radius: 10px;
+                    background: rgba(245, 108, 182, 0.08);
+                    color: #ffd8e8;
+                    padding: 10px 12px;
+                    font-size: 12px;
+                    letter-spacing: 0.08em;
+                    text-transform: uppercase;
+                }
+
+                .mseg-delete-point:disabled {
+                    opacity: 0.45;
+                }
             </style>
 
             <div class="panel">
@@ -1089,6 +1419,39 @@ class CosimoSynthView extends HTMLElement {
                                 <div class="value-text" data-role="value-readout">0.00</div>
                                 <div class="label">Wavetable Position</div>
                             </div>
+                        </div>
+                    </div>
+
+                    <div class="mseg-panel">
+                        <div class="mseg-header">
+                            <div class="mseg-title">
+                                <div class="title">MSEG 1</div>
+                                <strong>Fixed Wavetable Route</strong>
+                            </div>
+                            <div class="mseg-depth-readout" data-role="mseg-depth-readout">0.000</div>
+                        </div>
+
+                        <div class="mseg-editor-shell">
+                            <svg class="mseg-editor" viewBox="0 0 600 180" preserveAspectRatio="none">
+                                <g class="mseg-grid">
+                                    <line x1="0" y1="45" x2="600" y2="45"></line>
+                                    <line x1="0" y1="90" x2="600" y2="90"></line>
+                                    <line x1="0" y1="135" x2="600" y2="135"></line>
+                                    <line x1="150" y1="0" x2="150" y2="180"></line>
+                                    <line x1="300" y1="0" x2="300" y2="180"></line>
+                                    <line x1="450" y1="0" x2="450" y2="180"></line>
+                                </g>
+                                <path class="mseg-curve"></path>
+                                <g class="mseg-points"></g>
+                            </svg>
+                        </div>
+
+                        <div class="mseg-controls">
+                            <label class="mseg-depth">
+                                <span class="mseg-depth-label">Depth To Wavetable Position</span>
+                                <input class="mseg-depth-slider" type="range" min="-1" max="1" step="0.001" value="0.000" />
+                            </label>
+                            <button class="mseg-delete-point" type="button">Delete Point</button>
                         </div>
                     </div>
 
@@ -1480,6 +1843,118 @@ class CosimoSynthView extends HTMLElement {
                     padding: 8px 8px 10px;
                     touch-action: none;
                 }
+
+                .mseg-panel {
+                    display: grid;
+                    min-width: 0;
+                    gap: 10px;
+                    padding-top: 10px;
+                }
+
+                .mseg-head {
+                    display: grid;
+                    min-width: 0;
+                    grid-template-columns: minmax(0, 1fr) auto;
+                    gap: 8px;
+                    align-items: end;
+                    padding-left: max(16px, env(safe-area-inset-left));
+                    padding-right: max(16px, env(safe-area-inset-right));
+                }
+
+                .mseg-title {
+                    display: grid;
+                    gap: 4px;
+                }
+
+                .mseg-title strong {
+                    font-size: 15px;
+                    font-weight: 600;
+                    color: #eef2f5;
+                    letter-spacing: -0.03em;
+                }
+
+                .mseg-depth-readout {
+                    font-family: "SF Mono", "IBM Plex Mono", Menlo, monospace;
+                    font-size: 12px;
+                    color: #87d7f5;
+                    letter-spacing: 0.08em;
+                }
+
+                .mseg-editor-shell {
+                    margin-left: max(16px, env(safe-area-inset-left));
+                    margin-right: max(16px, env(safe-area-inset-right));
+                    border-radius: 16px;
+                    overflow: hidden;
+                    border: 1px solid rgba(255, 255, 255, 0.08);
+                    background: rgba(10, 13, 18, 0.92);
+                }
+
+                .mseg-editor {
+                    display: block;
+                    width: 100%;
+                    height: 156px;
+                    touch-action: none;
+                }
+
+                .mseg-grid {
+                    stroke: rgba(255, 255, 255, 0.08);
+                    stroke-width: 1;
+                }
+
+                .mseg-curve {
+                    fill: none;
+                    stroke: #87d7f5;
+                    stroke-width: 3;
+                    stroke-linejoin: round;
+                    stroke-linecap: round;
+                }
+
+                .mseg-point {
+                    fill: #ffd8a6;
+                    stroke: rgba(4, 7, 15, 0.96);
+                    stroke-width: 2;
+                }
+
+                .mseg-point.selected {
+                    fill: #f56cb6;
+                }
+
+                .mseg-controls {
+                    display: grid;
+                    min-width: 0;
+                    grid-template-columns: minmax(0, 1fr) auto;
+                    gap: 10px;
+                    align-items: center;
+                    padding-left: max(16px, env(safe-area-inset-left));
+                    padding-right: max(16px, env(safe-area-inset-right));
+                }
+
+                .mseg-depth {
+                    display: grid;
+                    gap: 6px;
+                }
+
+                .mseg-depth-label {
+                    font-size: 10px;
+                    color: rgba(212, 220, 230, 0.42);
+                    letter-spacing: 0.12em;
+                    text-transform: uppercase;
+                }
+
+                .mseg-delete-point {
+                    border: 1px solid rgba(245, 108, 182, 0.28);
+                    border-radius: 10px;
+                    background: rgba(245, 108, 182, 0.08);
+                    color: #ffd8e8;
+                    padding: 10px 12px;
+                    font-size: 12px;
+                    letter-spacing: 0.08em;
+                    text-transform: uppercase;
+                }
+
+                .mseg-delete-point:disabled {
+                    opacity: 0.45;
+                }
             </style>
 
             <div class="ios-shell">
@@ -1547,6 +2022,40 @@ class CosimoSynthView extends HTMLElement {
                             <span data-role="rail-label-mid">Shape 08</span>
                             <span data-role="rail-label-end">Shape 16</span>
                         </div>
+                    </div>
+                </div>
+
+                <div class="mseg-panel">
+                    <div class="mseg-head">
+                        <div class="mseg-title">
+                            <div class="section-label">MSEG 1</div>
+                            <strong>Fixed Wavetable Route</strong>
+                        </div>
+
+                        <div class="mseg-depth-readout" data-role="mseg-depth-readout">0.000</div>
+                    </div>
+
+                    <div class="mseg-editor-shell">
+                        <svg class="mseg-editor" viewBox="0 0 600 156" preserveAspectRatio="none">
+                            <g class="mseg-grid">
+                                <line x1="0" y1="39" x2="600" y2="39"></line>
+                                <line x1="0" y1="78" x2="600" y2="78"></line>
+                                <line x1="0" y1="117" x2="600" y2="117"></line>
+                                <line x1="150" y1="0" x2="150" y2="156"></line>
+                                <line x1="300" y1="0" x2="300" y2="156"></line>
+                                <line x1="450" y1="0" x2="450" y2="156"></line>
+                            </g>
+                            <path class="mseg-curve"></path>
+                            <g class="mseg-points"></g>
+                        </svg>
+                    </div>
+
+                    <div class="mseg-controls">
+                        <label class="mseg-depth">
+                            <span class="mseg-depth-label">Depth To Wavetable Position</span>
+                            <input class="mseg-depth-slider" type="range" min="-1" max="1" step="0.001" value="0.000" />
+                        </label>
+                        <button class="mseg-delete-point" type="button">Delete Point</button>
                     </div>
                 </div>
 

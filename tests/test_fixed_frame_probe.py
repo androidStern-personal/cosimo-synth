@@ -512,21 +512,19 @@ def test_cmajor_fixed_frame_probe_slow_frame_sweep_stays_finite_and_nontrivial()
     recipe = make_frame_sweep_recipe()
     bank = make_sweep4_bank()
     audio = render_case(CmajorFixedFrameProbe(), bank, recipe)
-    first_diff = np.abs(np.diff(audio.astype(np.float64)))
-    second_diff = np.abs(np.diff(audio.astype(np.float64), n=2))
+    expected = _reference_audio(bank, recipe)
 
     def assertion() -> None:
         assert is_finite(audio)
         assert 0.05 < peak_abs(audio) <= 1.5
         assert rms(audio) > 0.01
         assert float(np.std(audio.astype(np.float64))) > 0.01
-        assert float(np.max(first_diff, initial=0.0)) < 0.05
-        assert float(np.max(second_diff, initial=0.0)) < 0.005
+        assert_allclose(audio, expected, atol=1e-6, rtol=0.0)
 
     _assert_with_artifacts(
         "test_cmajor_fixed_frame_probe_slow_frame_sweep_stays_finite_and_nontrivial",
         recipe.sample_rate,
-        {"frame_sweep": audio},
+        {"actual": audio, "expected": expected},
         assertion,
     )
 

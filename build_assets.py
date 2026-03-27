@@ -28,9 +28,12 @@ PATCH_DESCRIPTION = (
 )
 PATCH_SOURCE_FILES = (
     "cmajor/FixedFrameOscillator.cmajor",
+    "cmajor/Mseg.cmajor",
     "cmajor/WavetableSynth.cmajor",
 )
 PATCH_GUI_SHARED_MODULES = (
+    "mseg",
+    "mseg-controller",
     "responsive-layout",
     "wavetable-bank",
     "wavetable-display",

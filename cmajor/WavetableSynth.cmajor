@@ -8,20 +8,27 @@ namespace wt
                      std::notes::Slide,
                      std::notes::Pressure,
                      std::notes::Control) eventIn;
+        input event float32[wt::msegPaddedSamples] msegBufferIn;
+        input event wt::MsegPlaybackConfig msegPlaybackIn;
         input value float32 framePositionIn;
         input value float32 tableSelectIn;
+        input value float32 msegDepthIn;
         output stream float32<2> out;
 
-        node osc       = wt::FixedFrameOscillator (440.0f, 0.0f);
-        node envelope  = std::envelopes::FixedASR (0.01f, 0.20f);
-        node voiceGain = std::levels::DynamicGain (float32);
-        node trim      = std::levels::ConstantGain (float32, 0.18f);
-        node stereo    = std::mixers::MonoToStereo (float32);
+        node osc         = wt::FixedFrameOscillator (440.0f, 0.0f);
+        node envelope    = std::envelopes::FixedASR (0.01f, 0.20f);
+        node voiceGain   = std::levels::DynamicGain (float32);
+        node trim        = std::levels::ConstantGain (float32, 0.18f);
+        node stereo      = std::mixers::MonoToStereo (float32);
+        node msegReader  = wt::MsegReader;
+        node frameRouter = wt::FramePositionModulator;
+        node frameBase   = wt::ValueToStream;
 
         event eventIn (std::notes::NoteOn note)
         {
             osc.frequencyIn <- std::notes::noteToFrequency (note.pitch);
             envelope.eventIn <- note;
+            msegReader.triggerIn <- 1;
         }
 
         event eventIn (std::notes::NoteOff note)
@@ -33,10 +40,16 @@ namespace wt
         event eventIn (std::notes::Slide slide) {}
         event eventIn (std::notes::Pressure pressure) {}
         event eventIn (std::notes::Control control) {}
+        event msegBufferIn (float32[wt::msegPaddedSamples] buffer) { msegReader.bufferUpload <- buffer; }
+        event msegPlaybackIn (wt::MsegPlaybackConfig config) { msegReader.playbackUpload <- config; }
 
         connection
         {
-            framePositionIn -> osc.framePositionIn;
+            framePositionIn -> frameBase.valueIn;
+            frameBase.out -> frameRouter.basePositionIn;
+            msegReader.out -> frameRouter.modulationIn;
+            msegDepthIn -> frameRouter.depthIn;
+            frameRouter.out -> osc.framePositionIn;
             tableSelectIn -> osc.tableSelectIn;
             osc.out -> voiceGain.in;
             envelope.gainOut -> voiceGain.gain;
@@ -50,8 +63,11 @@ namespace wt
 graph WavetableSynth [[ main ]]
 {
     input event std::midi::Message midiIn;
+    input event float32[wt::msegPaddedSamples] mseg1Buffer;
+    input event wt::MsegPlaybackConfig mseg1Playback;
     input value float32 wavetablePosition [[ name: "Wavetable Position", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
     input value float32 wavetableSelect [[ name: "Wavetable Select", min: 0.0f, max: 255.0f, init: 0.0f, rampFrames: 0 ]];
+    input value float32 mseg1Depth [[ name: "MSEG 1 Depth", min: -1.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
     output stream float32<2> audioOut;
 
     node mpe   = std::midi::MPEConverter;
@@ -61,8 +77,11 @@ graph WavetableSynth [[ main ]]
     {
         midiIn -> mpe.parseMIDI;
         mpe.eventOut -> voice.eventIn;
+        mseg1Buffer -> voice.msegBufferIn;
+        mseg1Playback -> voice.msegPlaybackIn;
         wavetablePosition -> voice.framePositionIn;
         wavetableSelect -> voice.tableSelectIn;
+        mseg1Depth -> voice.msegDepthIn;
         voice.out -> audioOut;
     }
 }

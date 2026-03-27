@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import json
+import re
 import shutil
 import subprocess
 import tempfile
@@ -19,6 +20,8 @@ Float32Array = npt.NDArray[np.float32]
 Float64Array = npt.NDArray[np.float64]
 
 SAMPLES_PER_FRAME = 2048
+MSEG_BODY_SAMPLES = 2048
+MSEG_PADDED_SAMPLES = 2051
 DEFAULT_SAMPLE_RATE = 44_100
 DEFAULT_STATIC_FREQUENCY_HZ = 441.0
 DEFAULT_FIXTURE_PEAK = 0.99
@@ -57,6 +60,7 @@ MIP_LEVEL_THRESHOLDS: tuple[tuple[int, np.float32], ...] = tuple(
 CMAJOR_FIXED_FRAME_SOURCE = (
     Path(__file__).resolve().parent / "cmajor" / "FixedFrameOscillator.cmajor"
 )
+CMAJOR_MSEG_SOURCE = Path(__file__).resolve().parent / "cmajor" / "Mseg.cmajor"
 
 
 @dataclass(frozen=True, slots=True)
@@ -125,6 +129,44 @@ class Recipe:
         object.__setattr__(self, "frame_pos_curve", frame_pos_curve)
 
 
+@dataclass(frozen=True, slots=True)
+class MsegPoint:
+    x: float
+    y: float
+    curve_power: float = 0.0
+
+
+@dataclass(frozen=True, slots=True)
+class MsegShape:
+    points: tuple[MsegPoint, ...]
+    global_smooth: bool = False
+
+    def __post_init__(self) -> None:
+        if len(self.points) < 2:
+            raise ValueError("MsegShape.points must contain at least two points")
+
+        if self.points[0].x != 0.0 or self.points[-1].x != 1.0:
+            raise ValueError("MsegShape.points must start at 0.0 and end at 1.0")
+
+        previous_x = self.points[0].x
+        for point in self.points:
+            if not np.isfinite(point.x) or not np.isfinite(point.y) or not np.isfinite(point.curve_power):
+                raise ValueError("MsegShape points must contain only finite values")
+            if point.x < previous_x:
+                raise ValueError("MsegShape.points must stay in non-decreasing x order")
+            previous_x = point.x
+
+
+@dataclass(frozen=True, slots=True)
+class MsegPlayback:
+    seconds: float
+    hold_final_value: bool = True
+
+    def __post_init__(self) -> None:
+        if not np.isfinite(self.seconds) or self.seconds <= 0.0:
+            raise ValueError("MsegPlayback.seconds must be positive and finite")
+
+
 class Probe(Protocol):
     def render(self, bank: FixtureBank, recipe: Recipe) -> Float32Array:
         ...
@@ -148,6 +190,13 @@ def _require_cmaj_cli() -> str:
     return cmaj
 
 
+def _require_node_cli() -> str:
+    node = shutil.which("node")
+    if node is None:
+        raise RuntimeError("node is required to render generated Cmajor javascript runtimes")
+    return node
+
+
 def _require_constant_curve(curve: Float64Array, label: str) -> float:
     value = float(curve[0])
     if not np.array_equal(curve, np.full(curve.shape, value, dtype=np.float64)):
@@ -162,28 +211,168 @@ def _cmajor_float_literal(value: float) -> str:
     return literal + "f"
 
 
+def _cmajor_bool_literal(value: bool) -> str:
+    return "true" if value else "false"
+
+
+def _cmajor_int_literal(value: int) -> str:
+    return str(int(value))
+
+
+def _cmajor_float_array_literal(values: Sequence[float]) -> str:
+    return ", ".join(_cmajor_float_literal(float(value)) for value in values)
+
+
+def _cmajor_int_array_literal(values: Sequence[int]) -> str:
+    return ", ".join(_cmajor_int_literal(int(value)) for value in values)
+
+
+def _curve_to_linear_segments(curve: Float64Array) -> list[tuple[int, float, float]]:
+    curve64 = np.asarray(curve, dtype=np.float64)
+    if curve64.ndim != 1 or curve64.size == 0:
+        raise ValueError("curve must be a non-empty 1-D array")
+
+    if curve64.size == 1:
+        return [(0, float(curve64[0]), 0.0)]
+
+    segments: list[tuple[int, float, float]] = []
+    current_delta = float(curve64[1] - curve64[0])
+    segments.append((0, float(curve64[0]), current_delta))
+
+    for sample_index in range(2, curve64.size):
+        delta = float(curve64[sample_index] - curve64[sample_index - 1])
+        if not np.isclose(delta, current_delta, rtol=0.0, atol=1e-12):
+            segments.append((sample_index - 1, float(curve64[sample_index - 1]), delta))
+            current_delta = delta
+
+    return segments
+
+
 def _build_fixed_frame_wrapper_source(
     *,
-    frequency_hz: float,
+    initial_frequency_hz: float,
     start_phase: float,
+    frame_position_curve: Float64Array,
+    initial_table_index: int,
+    table_index_events: Sequence[tuple[int, int]],
+    frequency_events: Sequence[tuple[int, float]],
 ) -> str:
+    num_samples = int(frame_position_curve.size)
+    if num_samples <= 0:
+        raise ValueError("frame_position_curve must contain at least one sample")
+
+    frequency_offsets = [int(offset) for offset, _ in frequency_events]
+    frequency_values = [float(value) for _, value in frequency_events]
+    table_event_offsets = [int(offset) for offset, _ in table_index_events]
+    table_event_values = [float(value) for _, value in table_index_events]
+    frame_segments = _curve_to_linear_segments(frame_position_curve)
+    frame_segment_offsets = [offset for offset, _, _ in frame_segments]
+    frame_segment_values = [value for _, value, _ in frame_segments]
+    frame_segment_deltas = [delta for _, _, delta in frame_segments]
+
+    frequency_storage_size = max(len(frequency_offsets), 1)
+    table_storage_size = max(len(table_event_offsets), 1)
+    frame_segment_storage_size = max(len(frame_segments), 1)
+    stored_frequency_offsets = frequency_offsets or [0]
+    stored_frequency_values = frequency_values or [0.0]
+    stored_table_offsets = table_event_offsets or [0]
+    stored_table_values = table_event_values or [float(initial_table_index)]
+
     return (
-        "graph FixedFrameProbe [[ main ]]\n"
+        "processor FixedFrameProbeControl\n"
         + "{\n"
-        + "    input event float frequencyIn;\n"
-        + "    input value float framePositionIn;\n"
-        + "    input value float tableSelectIn;\n"
+        + "    output event float32 frequencyOut;\n"
+        + "    output stream float32 framePositionOut;\n"
+        + "    output value float32 tableSelectOut;\n"
+        + "    let frequencyEventCount = "
+        + _cmajor_int_literal(len(frequency_offsets))
+        + ";\n"
+        + "    let tableEventCount = "
+        + _cmajor_int_literal(len(table_event_offsets))
+        + ";\n"
+        + "    let frameSegmentCount = "
+        + _cmajor_int_literal(len(frame_segments))
+        + ";\n"
+        + "    int32["
+        + _cmajor_int_literal(frame_segment_storage_size)
+        + "] frameSegmentOffsets = ("
+        + _cmajor_int_array_literal(frame_segment_offsets)
+        + ");\n"
+        + "    float32["
+        + _cmajor_int_literal(frame_segment_storage_size)
+        + "] frameSegmentValues = ("
+        + _cmajor_float_array_literal(frame_segment_values)
+        + ");\n"
+        + "    float32["
+        + _cmajor_int_literal(frame_segment_storage_size)
+        + "] frameSegmentDeltas = ("
+        + _cmajor_float_array_literal(frame_segment_deltas)
+        + ");\n"
+        + "    int32["
+        + _cmajor_int_literal(frequency_storage_size)
+        + "] frequencyEventOffsets = ("
+        + _cmajor_int_array_literal(stored_frequency_offsets)
+        + ");\n"
+        + "    float32["
+        + _cmajor_int_literal(frequency_storage_size)
+        + "] frequencyEventValues = ("
+        + _cmajor_float_array_literal(stored_frequency_values)
+        + ");\n"
+        + "    int32["
+        + _cmajor_int_literal(table_storage_size)
+        + "] tableEventOffsets = ("
+        + _cmajor_int_array_literal(stored_table_offsets)
+        + ");\n"
+        + "    float32["
+        + _cmajor_int_literal(table_storage_size)
+        + "] tableEventValues = ("
+        + _cmajor_float_array_literal(stored_table_values)
+        + ");\n"
+        + "    int32 frameIndex = 0;\n"
+        + "    int32 currentFrameSegment = 0;\n"
+        + "    int32 nextFrequencyEvent = 0;\n"
+        + "    int32 nextTableEvent = 0;\n"
+        + "    void main()\n"
+        + "    {\n"
+        + "        tableSelectOut <- "
+        + _cmajor_float_literal(float(initial_table_index))
+        + ";\n"
+        + "        loop\n"
+        + "        {\n"
+        + "            if (nextFrequencyEvent < frequencyEventCount && frameIndex == frequencyEventOffsets.at (nextFrequencyEvent))\n"
+        + "            {\n"
+        + "                frequencyOut <- frequencyEventValues.at (nextFrequencyEvent);\n"
+        + "                nextFrequencyEvent += 1;\n"
+        + "            }\n"
+        + "            if (nextTableEvent < tableEventCount && frameIndex == tableEventOffsets.at (nextTableEvent))\n"
+        + "            {\n"
+        + "                tableSelectOut <- tableEventValues.at (nextTableEvent);\n"
+        + "                nextTableEvent += 1;\n"
+        + "            }\n"
+        + "            if (currentFrameSegment + 1 < frameSegmentCount && frameIndex >= frameSegmentOffsets.at (currentFrameSegment + 1))\n"
+        + "                currentFrameSegment += 1;\n"
+        + "            let segmentStart = frameSegmentOffsets.at (currentFrameSegment);\n"
+        + "            let segmentOffset = frameIndex - segmentStart;\n"
+        + "            framePositionOut <- frameSegmentValues.at (currentFrameSegment) + (frameSegmentDeltas.at (currentFrameSegment) * float32 (segmentOffset));\n"
+        + "            advance();\n"
+        + "            frameIndex += 1;\n"
+        + "        }\n"
+        + "    }\n"
+        + "}\n"
+        + "graph FixedFrameProbe [[ main ]]\n"
+        + "{\n"
         + "    output stream float out;\n"
+        + "    node control = FixedFrameProbeControl;\n"
         + "    node osc = wt::FixedFrameOscillator ("
-        + _cmajor_float_literal(frequency_hz)
+        + _cmajor_float_literal(initial_frequency_hz)
         + ", "
         + _cmajor_float_literal(start_phase)
         + ");\n"
         + "    connection\n"
         + "    {\n"
-        + "        frequencyIn -> osc.frequencyIn;\n"
-        + "        framePositionIn -> osc.framePositionIn;\n"
-        + "        tableSelectIn -> osc.tableSelectIn;\n"
+        + "        control.frequencyOut -> osc.frequencyIn;\n"
+        + "        control.framePositionOut -> osc.framePositionIn;\n"
+        + "        control.tableSelectOut -> osc.tableSelectIn;\n"
         + "        osc.out -> out;\n"
         + "    }\n"
         + "}\n"
@@ -192,7 +381,7 @@ def _build_fixed_frame_wrapper_source(
 
 def _build_fixed_frame_patch_manifest(
     *,
-    source_files: Sequence[str],
+    source_files: Sequence[str] | str,
     manifest_value: dict[str, object],
 ) -> dict[str, object]:
     return {
@@ -202,112 +391,11 @@ def _build_fixed_frame_patch_manifest(
         "name": "Fixed Frame Probe",
         "description": "Renders the checked-in fixed-frame wavetable oscillator",
         "category": "generator",
-        "source": list(source_files),
+        "source": source_files if isinstance(source_files, str) else list(source_files),
         "externals": {
             "wt::factoryBank": manifest_value,
         },
     }
-
-
-def _build_cmajor_render_test_script(
-    *,
-    patch_name: str,
-    sample_rate: int,
-    num_samples: int,
-    output_dir_name: str,
-) -> str:
-    return (
-        "## runScript({ frequency:"
-        + str(sample_rate)
-        + ", blockSize:512, samplesToRender:"
-        + str(num_samples)
-        + ', subDir:"'
-        + output_dir_name
-        + '", patch:"'
-        + patch_name
-        + '" })\n'
-    )
-
-
-def _write_cmajor_event_input(
-    path: Path,
-    events: Sequence[tuple[int, float]],
-    *,
-    num_samples: int,
-) -> None:
-    previous_frame_offset = -1
-    serialized: list[dict[str, object]] = []
-
-    for frame_offset, event_value in events:
-        if not 0 <= frame_offset < num_samples:
-            raise ValueError("frequency event frame offsets must stay inside the rendered buffer")
-        if frame_offset < previous_frame_offset:
-            raise ValueError("frequency event frame offsets must be sorted in ascending order")
-        previous_frame_offset = frame_offset
-        serialized.append(
-            {
-                "frameOffset": int(frame_offset),
-                "event": float(event_value),
-            }
-        )
-
-    path.write_text(json.dumps(serialized, indent=2) + "\n", encoding="utf-8")
-
-
-def _write_cmajor_value_input(
-    path: Path,
-    values: Sequence[tuple[int, float, int]],
-    *,
-    num_samples: int,
-) -> None:
-    previous_frame_offset = -1
-    serialized: list[dict[str, object]] = []
-
-    for frame_offset, value, frames_to_reach_value in values:
-        if not 0 <= frame_offset < num_samples:
-            raise ValueError("value input frame offsets must stay inside the rendered buffer")
-        if frame_offset < previous_frame_offset:
-            raise ValueError("value input frame offsets must be sorted in ascending order")
-        if frames_to_reach_value < 0:
-            raise ValueError("framesToReachValue must not be negative")
-        previous_frame_offset = frame_offset
-        serialized.append(
-            {
-                "frameOffset": int(frame_offset),
-                "value": float(value),
-                "framesToReachValue": int(frames_to_reach_value),
-            }
-        )
-
-    path.write_text(json.dumps(serialized, indent=2) + "\n", encoding="utf-8")
-
-
-def _curve_to_value_events(curve: Float64Array) -> tuple[tuple[int, float, int], ...]:
-    if curve.size == 0:
-        raise ValueError("value curve must contain at least one sample")
-
-    if curve.size == 1 or np.allclose(curve, curve[0], rtol=0.0, atol=1e-12):
-        return ((0, float(curve[0]), 0),)
-
-    deltas = np.diff(curve)
-    nonzero_mask = ~np.isclose(deltas, 0.0, rtol=0.0, atol=1e-12)
-    nonzero_deltas = deltas[nonzero_mask]
-    if (
-        nonzero_deltas.size
-        and np.allclose(nonzero_deltas, nonzero_deltas[0], rtol=0.0, atol=1e-12)
-        and np.all(nonzero_mask)
-    ):
-        return (
-            (0, float(curve[0]), 0),
-            (curve.size - 1, float(curve[-1]), curve.size - 1),
-        )
-
-    events: list[tuple[int, float, int]] = [(0, float(curve[0]), 0)]
-    for sample_index in range(1, curve.size):
-        if not np.isclose(curve[sample_index], curve[sample_index - 1], rtol=0.0, atol=1e-12):
-            events.append((sample_index, float(curve[sample_index]), 0))
-
-    return tuple(events)
 
 
 def _read_rendered_wav(
@@ -335,48 +423,39 @@ def _read_rendered_wav(
     return audio_array.copy()
 
 
-def _run_cmajor_test_render(
+def _run_cmajor_golden_test(
     *,
     patch_path: Path,
     test_path: Path,
-    output_dir_path: Path,
-    output_wav_path: Path,
+    golden_dir_path: Path,
     sample_rate: int,
-    num_samples: int,
-    frequency_events: Sequence[tuple[int, float]] = (),
-    frame_position_events: Sequence[tuple[int, float, int]] = (),
-    table_select_events: Sequence[tuple[int, float, int]] = (),
-) -> Float32Array:
+    expected_audio: Float32Array,
+) -> None:
     cmaj = _require_cmaj_cli()
-    output_dir_path.mkdir(parents=True, exist_ok=True)
-    _write_cmajor_event_input(
-        output_dir_path / "frequencyIn.json",
-        frequency_events,
-        num_samples=num_samples,
-    )
-    _write_cmajor_value_input(
-        output_dir_path / "framePositionIn.json",
-        frame_position_events,
-        num_samples=num_samples,
-    )
-    _write_cmajor_value_input(
-        output_dir_path / "tableSelectIn.json",
-        table_select_events,
-        num_samples=num_samples,
-    )
+    golden_dir_path.mkdir(parents=True, exist_ok=True)
+    expected_wav_path = golden_dir_path / "expectedOutput-out.wav"
+    wavfile.write(expected_wav_path, sample_rate, np.asarray(expected_audio, dtype=np.float32))
 
     test_path.write_text(
-        _build_cmajor_render_test_script(
-            patch_name=patch_path.name,
-            sample_rate=sample_rate,
-            num_samples=num_samples,
-            output_dir_name=output_dir_path.name,
-        ),
+        '## runScript({ frequency:'
+        + str(sample_rate)
+        + ", blockSize:512, samplesToRender:"
+        + str(int(expected_audio.shape[0]))
+        + ', subDir:"'
+        + golden_dir_path.name
+        + '", patch:"'
+        + patch_path.name
+        + '" })\n',
         encoding="utf-8",
     )
 
     result = subprocess.run(
-        [cmaj, "test", str(test_path), "--singleThread"],
+        [
+            cmaj,
+            "test",
+            str(test_path),
+            "--singleThread",
+        ],
         cwd=patch_path.parent,
         capture_output=True,
         text=True,
@@ -391,14 +470,148 @@ def _run_cmajor_test_render(
         )
         raise RuntimeError(f"cmaj test failed:\n{details}")
 
-    if not output_wav_path.exists():
-        raise RuntimeError(f"cmaj test did not write the expected output WAV: {output_wav_path}")
 
-    return _read_rendered_wav(
-        output_wav_path,
-        expected_num_samples=num_samples,
-        expected_sample_rate=sample_rate,
-    )
+def _detect_cmajor_generated_class_name(runtime_source: str) -> str:
+    match = re.search(r"^class\s+([A-Za-z_][A-Za-z0-9_]*)", runtime_source, re.MULTILINE)
+    if match is None:
+        raise RuntimeError("Could not find the generated Cmajor javascript class name")
+    return match.group(1)
+
+
+def _render_cmajor_patch_via_generated_javascript(
+    patch_path: Path,
+    *,
+    sample_rate: int,
+    num_samples: int,
+    output_endpoint_id: str = "out",
+    setup_js: str = "",
+) -> Float32Array:
+    cmaj = _require_cmaj_cli()
+    node = _require_node_cli()
+
+    with tempfile.TemporaryDirectory(prefix="cmajor_js_runtime_") as temp_dir_name:
+        temp_dir = Path(temp_dir_name)
+        runtime_path = temp_dir / "runtime.cjs"
+        output_path = temp_dir / "output.f32"
+        render_script_path = temp_dir / "render.cjs"
+
+        generate_result = subprocess.run(
+            [
+                cmaj,
+                "generate",
+                "--target=javascript",
+                f"--output={runtime_path}",
+                str(patch_path),
+            ],
+            cwd=patch_path.parent,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        if generate_result.returncode != 0:
+            details = "\n".join(
+                part
+                for part in (generate_result.stdout.strip(), generate_result.stderr.strip())
+                if part
+            )
+            raise RuntimeError(f"cmaj generate failed:\n{details}")
+
+        runtime_source = runtime_path.read_text(encoding="utf-8")
+        class_name = _detect_cmajor_generated_class_name(runtime_source)
+        runtime_path.write_text(
+            runtime_source + f"\nmodule.exports = {class_name};\n",
+            encoding="utf-8",
+        )
+
+        render_script_path.write_text(
+            """
+const fs = require("fs");
+
+const RuntimeClass = require(process.argv[2]);
+const outputPath = process.argv[3];
+const sampleRate = Number(process.argv[4]);
+const numFrames = Number(process.argv[5]);
+const outputEndpointID = process.argv[6];
+
+(async () => {
+    const patch = new RuntimeClass();
+    await patch.initialise(2, sampleRate);
+"""
+            + (setup_js.strip() + "\n" if setup_js.strip() else "")
+            + """
+
+    const outputEndpoint = patch.getOutputEndpoints().find(
+        ({ endpointID }) => endpointID === outputEndpointID
+    );
+
+    if (!outputEndpoint) {
+        throw new Error(`Could not find output endpoint ${outputEndpointID}`);
+    }
+
+    const numChannels = outputEndpoint.numAudioChannels || 1;
+    if (numChannels !== 1) {
+        throw new Error(`Expected mono output for ${outputEndpointID}, got ${numChannels} channels`);
+    }
+
+    const getterName = `getOutputFrames_${outputEndpointID}`;
+    if (typeof patch[getterName] !== "function") {
+        throw new Error(`Generated runtime is missing ${getterName}()`);
+    }
+
+    const output = new Float32Array(numFrames);
+    let offset = 0;
+
+    while (offset < numFrames) {
+        const framesThisBlock = Math.min(512, numFrames - offset);
+        patch.advance(framesThisBlock);
+
+        const block = new Float32Array(framesThisBlock);
+        patch[getterName]([block], framesThisBlock, 0);
+        output.set(block, offset);
+        offset += framesThisBlock;
+    }
+
+    fs.writeFileSync(outputPath, Buffer.from(output.buffer, output.byteOffset, output.byteLength));
+})().catch((error) => {
+    console.error(error?.stack || String(error));
+    process.exit(1);
+});
+""".lstrip(),
+            encoding="utf-8",
+        )
+
+        render_result = subprocess.run(
+            [
+                node,
+                str(render_script_path),
+                str(runtime_path),
+                str(output_path),
+                str(sample_rate),
+                str(num_samples),
+                output_endpoint_id,
+            ],
+            cwd=patch_path.parent,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        if render_result.returncode != 0:
+            details = "\n".join(
+                part
+                for part in (render_result.stdout.strip(), render_result.stderr.strip())
+                if part
+            )
+            raise RuntimeError(f"node runtime render failed:\n{details}")
+
+        audio = np.frombuffer(output_path.read_bytes(), dtype=np.float32)
+        if audio.shape != (num_samples,):
+            raise RuntimeError(
+                f"Generated javascript runtime wrote shape {audio.shape}, expected {(num_samples,)}"
+            )
+
+        return audio.copy()
 
 
 def render_cmajor_fixed_frame_tables(
@@ -421,7 +634,7 @@ def render_cmajor_fixed_frame_tables(
         raise ValueError("table_index must address a table inside source_tables")
 
     previous_table_event_offset = -1
-    table_select_events: list[tuple[int, float, int]] = [(0, float(table_index), 0)]
+    baked_table_events: list[tuple[int, int]] = []
     for frame_offset, next_table_index in table_index_events:
         if not 0 <= frame_offset < recipe.num_samples:
             raise ValueError("table_index event frame offsets must stay inside the rendered buffer")
@@ -430,10 +643,22 @@ def render_cmajor_fixed_frame_tables(
         if not 0 <= next_table_index < len(source_tables):
             raise ValueError("table_index events must address a table inside source_tables")
         previous_table_event_offset = frame_offset
-        table_select_events.append((frame_offset, float(next_table_index), 0))
+        baked_table_events.append((frame_offset, next_table_index))
 
     frequency_hz = _require_constant_curve(recipe.freq_hz_curve, "Recipe.freq_hz_curve")
-    frame_position_events = _curve_to_value_events(recipe.frame_pos_curve)
+    initial_frequency_hz = frequency_hz
+    baked_frequency_events: list[tuple[int, float]] = []
+    previous_frequency_event_offset = -1
+    for frame_offset, next_frequency_hz in frequency_events:
+        if not 0 <= frame_offset < recipe.num_samples:
+            raise ValueError("frequency event frame offsets must stay inside the rendered buffer")
+        if frame_offset < previous_frequency_event_offset:
+            raise ValueError("frequency event frame offsets must be sorted in ascending order")
+        previous_frequency_event_offset = frame_offset
+        if frame_offset == 0:
+            initial_frequency_hz = float(next_frequency_hz)
+        else:
+            baked_frequency_events.append((frame_offset, float(next_frequency_hz)))
 
     with tempfile.TemporaryDirectory(prefix="cmajor_fixed_frame_") as temp_dir_name:
         temp_dir = Path(temp_dir_name)
@@ -442,28 +667,26 @@ def render_cmajor_fixed_frame_tables(
             build_bank(source_tables).bank,
             sample_rate=recipe.sample_rate,
         )
-        source_link_path = temp_dir / CMAJOR_FIXED_FRAME_SOURCE.name
-        wrapper_path = temp_dir / "FixedFrameProbe.cmajor"
+        combined_source_path = temp_dir / "FixedFrameProbe.cmajor"
         patch_path = temp_dir / "FixedFrameProbe.cmajorpatch"
-        test_path = temp_dir / "FixedFrameProbe.cmajtest"
-        output_dir_path = temp_dir / "golden"
-        output_wav_path = output_dir_path / "expectedOutput-out.wav"
 
-        source_link_path.symlink_to(CMAJOR_FIXED_FRAME_SOURCE)
-        wrapper_path.write_text(
-            _build_fixed_frame_wrapper_source(
-                frequency_hz=frequency_hz,
+        combined_source_path.write_text(
+            CMAJOR_FIXED_FRAME_SOURCE.read_text(encoding="utf-8")
+            + "\n"
+            + _build_fixed_frame_wrapper_source(
+                initial_frequency_hz=initial_frequency_hz,
                 start_phase=recipe.start_phase,
+                frame_position_curve=recipe.frame_pos_curve,
+                initial_table_index=table_index,
+                table_index_events=baked_table_events,
+                frequency_events=baked_frequency_events,
             ),
             encoding="utf-8",
         )
         patch_path.write_text(
             json.dumps(
                 _build_fixed_frame_patch_manifest(
-                    source_files=[
-                        source_link_path.name,
-                        wrapper_path.name,
-                    ],
+                    source_files=combined_source_path.name,
                     manifest_value=assets.manifest_value,
                 ),
                 indent=2,
@@ -472,16 +695,196 @@ def render_cmajor_fixed_frame_tables(
             encoding="utf-8",
         )
 
-        return _run_cmajor_test_render(
+        return _render_cmajor_patch_via_generated_javascript(
             patch_path=patch_path,
-            test_path=test_path,
-            output_dir_path=output_dir_path,
-            output_wav_path=output_wav_path,
             sample_rate=recipe.sample_rate,
             num_samples=recipe.num_samples,
-            frequency_events=frequency_events,
-            frame_position_events=frame_position_events,
-            table_select_events=table_select_events,
+        )
+
+
+def _build_mseg_probe_wrapper_source(
+    *,
+    frequency_hz: float,
+    start_phase: float,
+    frame_position: float,
+    table_index: int,
+    depth: float,
+    trigger_offsets: Sequence[int],
+) -> str:
+    trigger_storage_size = max(len(trigger_offsets), 1)
+    stored_trigger_offsets = [int(offset) for offset in trigger_offsets] or [0]
+    return (
+        "processor MsegProbeControl\n"
+        + "{\n"
+        + "    output event float32 frequencyOut;\n"
+        + "    output event int32 triggerOut;\n"
+        + "    output stream float32 framePositionOut;\n"
+        + "    output value float32 tableSelectOut;\n"
+        + "    output value float32 depthOut;\n"
+        + "    let triggerEventCount = "
+        + _cmajor_int_literal(len(trigger_offsets))
+        + ";\n"
+        + "    int32["
+        + _cmajor_int_literal(trigger_storage_size)
+        + "] triggerEventOffsets = ("
+        + _cmajor_int_array_literal(stored_trigger_offsets)
+        + ");\n"
+        + "    bool hasSentFrequency = false;\n"
+        + "    int32 frameIndex = 0;\n"
+        + "    int32 nextTriggerEvent = 0;\n"
+        + "    void main()\n"
+        + "    {\n"
+        + "        tableSelectOut <- "
+        + _cmajor_float_literal(float(table_index))
+        + ";\n"
+        + "        depthOut <- "
+        + _cmajor_float_literal(depth)
+        + ";\n"
+        + "        loop\n"
+        + "        {\n"
+        + "            if (! hasSentFrequency)\n"
+        + "            {\n"
+        + "                frequencyOut <- "
+        + _cmajor_float_literal(frequency_hz)
+        + ";\n"
+        + "                hasSentFrequency = true;\n"
+        + "            }\n"
+        + "            if (nextTriggerEvent < triggerEventCount && frameIndex == triggerEventOffsets.at (nextTriggerEvent))\n"
+        + "            {\n"
+        + "                triggerOut <- 1;\n"
+        + "                nextTriggerEvent += 1;\n"
+        + "            }\n"
+        + "            framePositionOut <- "
+        + _cmajor_float_literal(frame_position)
+        + ";\n"
+        + "            advance();\n"
+        + "            frameIndex += 1;\n"
+        + "        }\n"
+        + "    }\n"
+        + "}\n"
+        + "graph MsegProbe [[ main ]]\n"
+        + "{\n"
+        + "    input event float32[wt::msegPaddedSamples] msegBuffer;\n"
+        + "    input event wt::MsegPlaybackConfig msegPlayback;\n"
+        + "    output stream float out;\n"
+        + "    node control = MsegProbeControl;\n"
+        + "    node osc = wt::FixedFrameOscillator ("
+        + _cmajor_float_literal(frequency_hz)
+        + ", "
+        + _cmajor_float_literal(start_phase)
+        + ");\n"
+        + "    node mseg = wt::MsegReader;\n"
+        + "    node route = wt::FramePositionModulator;\n"
+        + "    connection\n"
+        + "    {\n"
+        + "        msegBuffer -> mseg.bufferUpload;\n"
+        + "        msegPlayback -> mseg.playbackUpload;\n"
+        + "        control.frequencyOut -> osc.frequencyIn;\n"
+        + "        control.triggerOut -> mseg.triggerIn;\n"
+        + "        control.framePositionOut -> route.basePositionIn;\n"
+        + "        mseg.out -> route.modulationIn;\n"
+        + "        control.depthOut -> route.depthIn;\n"
+        + "        route.out -> osc.framePositionIn;\n"
+        + "        control.tableSelectOut -> osc.tableSelectIn;\n"
+        + "        osc.out -> out;\n"
+        + "    }\n"
+        + "}\n"
+    )
+
+
+def render_cmajor_mseg_probe(
+    source_tables: Sequence[FixtureBank],
+    recipe: Recipe,
+    *,
+    mseg_buffer: Float32Array,
+    playback: MsegPlayback,
+    depth: float,
+    trigger_offsets: Sequence[int] = (0,),
+    table_index: int = 0,
+) -> Float32Array:
+    from wtbank import build_bank, emit_cmajor_bank_assets
+
+    if not source_tables:
+        raise ValueError("render_cmajor_mseg_probe requires at least one FixtureBank")
+    if not 0 <= table_index < len(source_tables):
+        raise ValueError("table_index must address a table inside source_tables")
+    if mseg_buffer.shape != (MSEG_PADDED_SAMPLES,):
+        raise ValueError(f"mseg_buffer must have shape {(MSEG_PADDED_SAMPLES,)}")
+    if not CMAJOR_FIXED_FRAME_SOURCE.exists():
+        raise RuntimeError(
+            f"Checked-in oscillator source is missing: {CMAJOR_FIXED_FRAME_SOURCE}"
+        )
+    if not CMAJOR_MSEG_SOURCE.exists():
+        raise RuntimeError(
+            f"Checked-in MSEG source is missing: {CMAJOR_MSEG_SOURCE}"
+        )
+
+    frequency_hz = _require_constant_curve(recipe.freq_hz_curve, "Recipe.freq_hz_curve")
+    frame_position = _require_constant_curve(recipe.frame_pos_curve, "Recipe.frame_pos_curve")
+    previous_trigger_offset = -1
+    for trigger_offset in trigger_offsets:
+        if not 0 <= trigger_offset < recipe.num_samples:
+            raise ValueError("trigger_offsets must stay inside the rendered buffer")
+        if trigger_offset < previous_trigger_offset:
+            raise ValueError("trigger_offsets must be sorted in ascending order")
+        previous_trigger_offset = trigger_offset
+
+    with tempfile.TemporaryDirectory(prefix="cmajor_mseg_probe_") as temp_dir_name:
+        temp_dir = Path(temp_dir_name)
+        assets = emit_cmajor_bank_assets(
+            temp_dir,
+            build_bank(source_tables).bank,
+            sample_rate=recipe.sample_rate,
+        )
+        combined_source_path = temp_dir / "MsegProbe.cmajor"
+        patch_path = temp_dir / "MsegProbe.cmajorpatch"
+
+        combined_source_path.write_text(
+            CMAJOR_FIXED_FRAME_SOURCE.read_text(encoding="utf-8")
+            + "\n"
+            + CMAJOR_MSEG_SOURCE.read_text(encoding="utf-8")
+            + "\n"
+            + _build_mseg_probe_wrapper_source(
+                frequency_hz=frequency_hz,
+                start_phase=recipe.start_phase,
+                frame_position=frame_position,
+                table_index=table_index,
+                depth=depth,
+                trigger_offsets=trigger_offsets,
+            ),
+            encoding="utf-8",
+        )
+        patch_path.write_text(
+            json.dumps(
+                _build_fixed_frame_patch_manifest(
+                    source_files=combined_source_path.name,
+                    manifest_value=assets.manifest_value,
+                ),
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        playback_event = {
+            "seconds": float(playback.seconds),
+            "holdFinalValue": bool(playback.hold_final_value),
+            "rateKind": 0,
+            "loopEnabled": False,
+            "loopStart": 0.0,
+            "loopEnd": 1.0,
+            "noteOffPolicy": 0,
+            "legatoRestarts": False,
+        }
+
+        return _render_cmajor_patch_via_generated_javascript(
+            patch_path=patch_path,
+            sample_rate=recipe.sample_rate,
+            num_samples=recipe.num_samples,
+            setup_js=(
+                f"patch.sendInputEvent_msegBuffer({json.dumps(mseg_buffer.tolist())});\n"
+                f"patch.sendInputEvent_msegPlayback({json.dumps(playback_event)});"
+            ),
         )
 
 
@@ -900,6 +1303,134 @@ def _catmull_rom(p0: float, p1: float, p2: float, p3: float, t: float) -> float:
         (p2 - p0)
         + t * ((2.0 * p0 - 5.0 * p1 + 4.0 * p2 - p3) + t * (-p0 + 3.0 * p1 - 3.0 * p2 + p3))
     )
+
+
+def _mseg_power_scale(value: float, power: float) -> float:
+    if abs(power) < 0.01:
+        return value
+    return (np.exp(power * value) - 1.0) / (np.exp(power) - 1.0)
+
+
+def evaluate_mseg_shape(shape: MsegShape, x: float) -> float:
+    clamped_x = float(np.clip(x, 0.0, 1.0))
+
+    if clamped_x <= shape.points[0].x:
+        return float(shape.points[0].y)
+
+    for index in range(len(shape.points) - 1):
+        current = shape.points[index]
+        following = shape.points[index + 1]
+
+        if clamped_x < following.x:
+            width = following.x - current.x
+            if width <= 0.0:
+                return float(following.y)
+            t = (clamped_x - current.x) / width
+            curved_t = float(np.clip(_mseg_power_scale(t, current.curve_power), 0.0, 1.0))
+            return float(current.y + ((following.y - current.y) * curved_t))
+
+        if np.isclose(clamped_x, following.x, atol=1e-12, rtol=0.0):
+            latest_index = index + 1
+            while (
+                latest_index + 1 < len(shape.points)
+                and np.isclose(shape.points[latest_index + 1].x, clamped_x, atol=1e-12, rtol=0.0)
+            ):
+                latest_index += 1
+            return float(shape.points[latest_index].y)
+
+    return float(shape.points[-1].y)
+
+
+def render_mseg_shape_reference(shape: MsegShape) -> Float32Array:
+    body = np.empty(MSEG_PADDED_SAMPLES - 3, dtype=np.float32)
+    for sample_index in range(body.shape[0]):
+        x = sample_index / float(body.shape[0] - 1)
+        body[sample_index] = np.float32(evaluate_mseg_shape(shape, x))
+
+    padded = np.empty(MSEG_PADDED_SAMPLES, dtype=np.float32)
+    padded[0] = body[0]
+    padded[1:-2] = body
+    padded[-2] = body[-1]
+    padded[-1] = body[-1]
+    return padded
+
+
+def sample_rendered_mseg_buffer(buffer: Float32Array, x: float) -> float:
+    if buffer.shape != (MSEG_PADDED_SAMPLES,):
+        raise ValueError(f"MSEG buffers must have shape {(MSEG_PADDED_SAMPLES,)}")
+
+    clamped_x = np.float32(np.clip(x, 0.0, 1.0))
+    scaled = np.float32(clamped_x * np.float32((MSEG_PADDED_SAMPLES - 3) - 1))
+    sample_index = int(np.floor(scaled))
+    fractional = np.float32(scaled - np.float32(sample_index))
+    return float(
+        np.float32(
+            _catmull_rom(
+                float(buffer[sample_index]),
+                float(buffer[sample_index + 1]),
+                float(buffer[sample_index + 2]),
+                float(buffer[sample_index + 3]),
+                float(fractional),
+            )
+        )
+    )
+
+
+def render_mseg_reference(
+    buffer: Float32Array,
+    *,
+    sample_rate: int,
+    num_samples: int,
+    playback: MsegPlayback,
+    trigger_offsets: Sequence[int] = (0,),
+) -> Float32Array:
+    if sample_rate <= 0 or num_samples <= 0:
+        raise ValueError("sample_rate and num_samples must be positive")
+
+    previous_trigger = -1
+    for trigger_offset in trigger_offsets:
+        if not 0 <= trigger_offset < num_samples:
+            raise ValueError("trigger_offsets must stay inside the rendered buffer")
+        if trigger_offset < previous_trigger:
+            raise ValueError("trigger_offsets must be sorted in ascending order")
+        previous_trigger = trigger_offset
+
+    output = np.zeros(num_samples, dtype=np.float32)
+    progress = np.float32(1.0)
+    increment = np.float32(1.0) / (np.float32(playback.seconds) * np.float32(sample_rate))
+    active = False
+    current_value = np.float32(sample_rendered_mseg_buffer(buffer, 0.0))
+    trigger_index = 0
+
+    for sample_offset in range(num_samples):
+        while trigger_index < len(trigger_offsets) and trigger_offsets[trigger_index] == sample_offset:
+            active = True
+            progress = np.float32(0.0)
+            current_value = np.float32(sample_rendered_mseg_buffer(buffer, 0.0))
+            trigger_index += 1
+
+        if active:
+            current_value = np.float32(sample_rendered_mseg_buffer(buffer, float(progress)))
+            if progress >= np.float32(1.0):
+                active = False
+            else:
+                progress = np.minimum(progress + increment, np.float32(1.0))
+
+        output[sample_offset] = np.float32(current_value if playback.hold_final_value or active else np.float32(0.0))
+
+    return output
+
+
+def apply_mseg_route(base_curve: Float64Array, modulation_curve: Float32Array, depth: float) -> Float64Array:
+    if base_curve.shape != modulation_curve.shape:
+        raise ValueError("base_curve and modulation_curve must have the same shape")
+    routed = np.clip(
+        np.asarray(base_curve, dtype=np.float32)
+        + (np.asarray(modulation_curve, dtype=np.float32) * np.float32(depth)),
+        np.float32(0.0),
+        np.float32(1.0),
+    )
+    return np.asarray(routed, dtype=np.float64)
 
 
 def _read_bank_frame_sample(

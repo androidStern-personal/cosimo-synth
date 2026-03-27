@@ -1,0 +1,153 @@
+namespace wt
+{
+    let msegBodySamples = 2048;
+    let msegPaddedSamples = 2051;
+
+    struct MsegPlaybackConfig
+    {
+        float32 seconds;
+        bool holdFinalValue;
+        int32 rateKind;
+        bool loopEnabled;
+        float32 loopStart;
+        float32 loopEnd;
+        int32 noteOffPolicy;
+        bool legatoRestarts;
+    }
+
+    float32 msegCatmullRom (float32 p0, float32 p1, float32 p2, float32 p3, float32 t)
+    {
+        return p1 + 0.5f * t * ((p2 - p0) + t * ((2.0f * p0 - 5.0f * p1 + 4.0f * p2 - p3)
+               + t * (-p0 + 3.0f * p1 - 3.0f * p2 + p3)));
+    }
+
+    processor ValueToStream
+    {
+        input value float32 valueIn;
+        output stream float32 out;
+
+        void main()
+        {
+            loop
+            {
+                out <- valueIn;
+                advance();
+            }
+        }
+    }
+
+    processor FramePositionModulator
+    {
+        input stream float32 basePositionIn;
+        input stream float32 modulationIn;
+        input value float32 depthIn;
+        output stream float32 out;
+
+        void main()
+        {
+            loop
+            {
+                out <- std::intrinsics::clamp (basePositionIn + (modulationIn * depthIn), 0.0f, 1.0f);
+                advance();
+            }
+        }
+    }
+
+    processor MsegReader
+    {
+        input event float32[msegPaddedSamples] bufferUpload;
+        input event MsegPlaybackConfig playbackUpload;
+        input event int32 triggerIn;
+        output stream float32 out;
+
+        float32[msegPaddedSamples] buffer;
+        float32 currentValue = 0.5f;
+        float32 progress = 1.0f;
+        float32 progressIncrement = 1.0f;
+        bool active = false;
+        bool holdFinalValue = true;
+        bool hasUploadedBuffer = false;
+        bool hasUploadedPlayback = false;
+
+        void initialiseBuffer()
+        {
+            for (int32 i = 0; i < msegPaddedSamples; ++i)
+                buffer.at (i) = 0.5f;
+        }
+
+        void setDurationSeconds (float32 seconds)
+        {
+            let minDuration = 1.0f / float32 (processor.frequency);
+            let safeDuration = seconds < minDuration ? minDuration : seconds;
+            progressIncrement = 1.0f / (safeDuration * float32 (processor.frequency));
+        }
+
+        float32 sampleAt (float32 normalizedX)
+        {
+            let clampedX = std::intrinsics::clamp (normalizedX, 0.0f, 1.0f);
+            let scaled = clampedX * float32 (msegBodySamples - 1);
+            let sampleIndex = int32 (std::intrinsics::floor (scaled));
+            let fractional = scaled - float32 (sampleIndex);
+
+            return msegCatmullRom (
+                buffer.at (sampleIndex),
+                buffer.at (sampleIndex + 1),
+                buffer.at (sampleIndex + 2),
+                buffer.at (sampleIndex + 3),
+                fractional
+            );
+        }
+
+        event bufferUpload (float32[msegPaddedSamples] newBuffer)
+        {
+            for (int32 i = 0; i < msegPaddedSamples; ++i)
+                buffer.at (i) = newBuffer.at (i);
+
+            hasUploadedBuffer = true;
+            currentValue = buffer.at (1);
+        }
+
+        event playbackUpload (MsegPlaybackConfig config)
+        {
+            holdFinalValue = config.holdFinalValue;
+            setDurationSeconds (config.seconds);
+            hasUploadedPlayback = true;
+        }
+
+        event triggerIn (int32 unused)
+        {
+            active = true;
+            progress = 0.0f;
+            currentValue = sampleAt (0.0f);
+        }
+
+        void main()
+        {
+            if (! hasUploadedBuffer)
+                initialiseBuffer();
+
+            if (! hasUploadedPlayback)
+                setDurationSeconds (1.0f);
+
+            loop
+            {
+                if (active)
+                {
+                    currentValue = sampleAt (progress);
+
+                    if (progress >= 1.0f)
+                    {
+                        active = false;
+                    }
+                    else
+                    {
+                        progress = std::intrinsics::min (progress + progressIncrement, 1.0f);
+                    }
+                }
+
+                out <- holdFinalValue || active ? currentValue : 0.0f;
+                advance();
+            }
+        }
+    }
+}

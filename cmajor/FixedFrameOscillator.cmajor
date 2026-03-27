@@ -94,7 +94,7 @@ namespace wt
                                     float32 initialPhase = 0.0f)
     {
         input event float32 frequencyIn [[ name: "Frequency", min: 0.0f, max: 24000.0f, init: 440.0f, unit: "Hz" ]];
-        input value float32 framePositionIn [[ name: "Wavetable Position", min: 0.0f, max: 1.0f, init: 0.0f ]];
+        input stream float32 framePositionIn [[ name: "Wavetable Position", min: 0.0f, max: 1.0f, init: 0.0f ]];
         input value float32 tableSelectIn [[ name: "Wavetable Select", min: 0.0f, max: 255.0f, init: 0.0f, rampFrames: 0 ]];
         output stream float out;
 

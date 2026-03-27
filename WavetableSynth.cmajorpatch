@@ -13,6 +13,7 @@
   "isInstrument": true,
   "source": [
     "cmajor/FixedFrameOscillator.cmajor",
+    "cmajor/Mseg.cmajor",
     "cmajor/WavetableSynth.cmajor"
   ],
   "resources": [
