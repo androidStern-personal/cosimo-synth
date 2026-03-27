@@ -8,6 +8,7 @@ export const MSEG_RATE_KIND_TEMPO = 1;
 export const MSEG_NOTE_OFF_POLICY_FINISH_LOOP = 0;
 export const MSEG_NOTE_OFF_POLICY_IMMEDIATE = 1;
 export const MSEG_NOTE_OFF_POLICY_IGNORE = 2;
+export const MSEG_POINT_HIT_RADIUS_PX = 16;
 
 const MSEG_NOTE_OFF_POLICY_VALUES = new Set([
     "finish_loop",
@@ -38,8 +39,8 @@ export function createDefaultMsegShape(name = MSEG_DEFAULT_NAME) {
         name,
         globalSmooth: false,
         points: [
-            { x: 0.0, y: 0.5, curvePower: 0.0 },
-            { x: 1.0, y: 0.5, curvePower: 0.0 },
+            { x: 0.0, y: 0.0, curvePower: 0.0 },
+            { x: 1.0, y: 1.0, curvePower: 0.0 },
         ],
     };
 }
@@ -298,6 +299,44 @@ export function createRenderedMsegState(shape = createDefaultMsegShape()) {
         shape: normalizedShape,
         buffer: renderMsegShape(normalizedShape),
     };
+}
+
+export function findMsegPointHitIndex(
+    shape,
+    editorX,
+    editorY,
+    width,
+    height,
+    hitRadius = MSEG_POINT_HIT_RADIUS_PX
+) {
+    const points = normalizeMsegShape(shape).points;
+    const targetX = Number(editorX);
+    const targetY = Number(editorY);
+
+    if (!Number.isFinite(targetX) || !Number.isFinite(targetY)) {
+        return -1;
+    }
+
+    const safeWidth = Math.max(1, Number(width) || 0);
+    const safeHeight = Math.max(1, Number(height) || 0);
+    const safeHitRadius = Math.max(0, Number(hitRadius) || 0);
+    let closestPointIndex = -1;
+    let closestDistanceSquared = safeHitRadius * safeHitRadius;
+
+    points.forEach((point, pointIndex) => {
+        const pointX = point.x * safeWidth;
+        const pointY = (1.0 - point.y) * safeHeight;
+        const deltaX = targetX - pointX;
+        const deltaY = targetY - pointY;
+        const distanceSquared = (deltaX * deltaX) + (deltaY * deltaY);
+
+        if (distanceSquared <= closestDistanceSquared) {
+            closestPointIndex = pointIndex;
+            closestDistanceSquared = distanceSquared;
+        }
+    });
+
+    return closestPointIndex;
 }
 
 export function toMsegPlaybackConfigEvent(playback) {

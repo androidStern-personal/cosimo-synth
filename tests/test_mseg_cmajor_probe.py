@@ -18,6 +18,7 @@ from bench import (
     peak_abs,
     render_cmajor_fixed_frame_tables,
     render_cmajor_mseg_probe,
+    render_cmajor_scan_position_monitor_probe,
     render_mseg_reference,
     render_mseg_shape_reference,
     rms,
@@ -75,6 +76,43 @@ def _expected_audio(
         ),
     )
     return rendered, expected
+
+
+def _render_note_monitor_reference(
+    *,
+    num_samples: int,
+    trigger_offsets: tuple[int, ...],
+    note_off_offsets: tuple[int, ...] = (),
+) -> tuple[np.ndarray, np.ndarray]:
+    active = np.zeros(num_samples, dtype=np.bool_)
+    generations = np.zeros(num_samples, dtype=np.int32)
+    next_generation = 1
+    current_generation = 0
+    voice_active = False
+    next_trigger_index = 0
+    next_note_off_index = 0
+
+    for sample_offset in range(num_samples):
+        while (
+            next_trigger_index < len(trigger_offsets)
+            and trigger_offsets[next_trigger_index] == sample_offset
+        ):
+            voice_active = True
+            current_generation = next_generation
+            next_generation += 1
+            next_trigger_index += 1
+
+        while (
+            next_note_off_index < len(note_off_offsets)
+            and note_off_offsets[next_note_off_index] == sample_offset
+        ):
+            voice_active = False
+            next_note_off_index += 1
+
+        active[sample_offset] = voice_active
+        generations[sample_offset] = current_generation
+
+    return active, generations
 
 
 @pytest.mark.cmajor
@@ -384,6 +422,130 @@ def test_cmajor_mseg_probe_lower_clamp_matches_reference() -> None:
         {"actual": actual, "expected": expected},
         lambda: assert_allclose(actual, expected, atol=1e-6, rtol=0.0),
     )
+
+
+@pytest.mark.cmajor
+def test_cmajor_scan_position_monitor_reports_post_route_values() -> None:
+    recipe = make_static_tone_recipe(
+        name="scan_monitor",
+        sample_rate=300,
+        duration_seconds=0.2,
+        frame_position=0.55,
+    )
+    playback = MsegPlayback(seconds=0.1)
+    trigger_offsets = (0, recipe.num_samples // 2)
+    shape = MsegShape(points=(MsegPoint(0.0, 0.0), MsegPoint(1.0, 1.0)))
+    rendered = render_mseg_shape_reference(shape)
+    mseg_values = render_mseg_reference(
+        rendered,
+        sample_rate=recipe.sample_rate,
+        num_samples=recipe.num_samples,
+        playback=playback,
+        trigger_offsets=trigger_offsets,
+    )
+    expected_positions = apply_mseg_route(recipe.frame_pos_curve, mseg_values, 0.9)
+    expected_active, expected_generations = _render_note_monitor_reference(
+        num_samples=recipe.num_samples,
+        trigger_offsets=trigger_offsets,
+    )
+    actual_events = render_cmajor_scan_position_monitor_probe(
+        recipe,
+        mseg_buffer=rendered,
+        playback=playback,
+        depth=0.9,
+        trigger_offsets=trigger_offsets,
+    )
+
+    expected_interval_frames = max(
+        1,
+        int(np.floor((recipe.sample_rate / 30.0) + 0.5)),
+    )
+    expected_frames = list(range(0, recipe.num_samples, expected_interval_frames))
+    actual_frames = [int(event["frame"]) for event in actual_events]
+    actual_generations = [int(event["event"]["voiceGeneration"]) for event in actual_events]
+    actual_positions = np.asarray(
+        [float(event["event"]["position"]) for event in actual_events],
+        dtype=np.float32,
+    )
+    expected_sampled_generations = [int(expected_generations[frame]) for frame in expected_frames]
+    expected_sampled_positions = np.asarray(
+        [
+            expected_positions[frame] if expected_active[frame] else recipe.frame_pos_curve[frame]
+            for frame in expected_frames
+        ],
+        dtype=np.float32,
+    )
+
+    assert actual_frames == expected_frames
+    assert actual_generations == expected_sampled_generations
+    assert float(actual_positions.max(initial=np.float32(0.0))) == 1.0
+    assert_allclose(actual_positions, expected_sampled_positions, atol=1e-6, rtol=0.0)
+
+
+@pytest.mark.cmajor
+def test_cmajor_scan_position_monitor_returns_to_base_position_after_note_off() -> None:
+    recipe = make_static_tone_recipe(
+        name="scan_monitor_note_off",
+        sample_rate=300,
+        duration_seconds=0.2,
+        frame_position=0.35,
+    )
+    playback = MsegPlayback(seconds=0.1)
+    trigger_offsets = (0,)
+    note_off_offsets = (25,)
+    shape = MsegShape(points=(MsegPoint(0.0, 0.0), MsegPoint(1.0, 1.0)))
+    rendered = render_mseg_shape_reference(shape)
+    mseg_values = render_mseg_reference(
+        rendered,
+        sample_rate=recipe.sample_rate,
+        num_samples=recipe.num_samples,
+        playback=playback,
+        trigger_offsets=trigger_offsets,
+    )
+    expected_positions = apply_mseg_route(recipe.frame_pos_curve, mseg_values, 0.9)
+    expected_active, expected_generations = _render_note_monitor_reference(
+        num_samples=recipe.num_samples,
+        trigger_offsets=trigger_offsets,
+        note_off_offsets=note_off_offsets,
+    )
+    actual_events = render_cmajor_scan_position_monitor_probe(
+        recipe,
+        mseg_buffer=rendered,
+        playback=playback,
+        depth=0.9,
+        trigger_offsets=trigger_offsets,
+        note_off_offsets=note_off_offsets,
+    )
+
+    expected_interval_frames = max(
+        1,
+        int(np.floor((recipe.sample_rate / 30.0) + 0.5)),
+    )
+    expected_frames = list(range(0, recipe.num_samples, expected_interval_frames))
+    actual_frames = [int(event["frame"]) for event in actual_events]
+    actual_generations = [int(event["event"]["voiceGeneration"]) for event in actual_events]
+    actual_positions = np.asarray(
+        [float(event["event"]["position"]) for event in actual_events],
+        dtype=np.float32,
+    )
+    expected_sampled_generations = [int(expected_generations[frame]) for frame in expected_frames]
+    expected_sampled_positions = np.asarray(
+        [
+            expected_positions[frame] if expected_active[frame] else recipe.frame_pos_curve[frame]
+            for frame in expected_frames
+        ],
+        dtype=np.float32,
+    )
+
+    assert actual_frames == expected_frames
+    assert actual_generations == expected_sampled_generations
+    assert_allclose(
+        np.asarray([actual_positions[-1]], dtype=np.float32),
+        np.asarray([recipe.frame_pos_curve[0]], dtype=np.float32),
+        atol=1e-6,
+        rtol=0.0,
+    )
+    assert_allclose(actual_positions, expected_sampled_positions, atol=1e-6, rtol=0.0)
 
 
 @pytest.mark.cmajor

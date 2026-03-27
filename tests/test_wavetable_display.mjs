@@ -371,6 +371,49 @@ test("display position matching ignores float noise but not real slider movement
     assert.equal(displayPositionsMatch(0.37, 0.371), false);
 });
 
+test("effective wavetable position monitor messages clamp positions and unwrap runtime event payloads", async () => {
+    const { normalizeEffectiveWavetablePositionMessage } = await loadPatchViewModule();
+
+    assert.deepEqual(
+        normalizeEffectiveWavetablePositionMessage({
+            event: { voiceGeneration: 7, position: 1.4 },
+        }),
+        { voiceGeneration: 7, position: 1 }
+    );
+    assert.deepEqual(
+        normalizeEffectiveWavetablePositionMessage({
+            voiceGeneration: -5,
+            position: -0.2,
+        }),
+        { voiceGeneration: 0, position: 0 }
+    );
+    assert.equal(
+        normalizeEffectiveWavetablePositionMessage({ voiceGeneration: 2, position: Number.NaN }),
+        null
+    );
+});
+
+test("effective wavetable position monitor keeps the newest voice generation", async () => {
+    const { selectObservedWavetablePositionState } = await loadPatchViewModule();
+
+    const olderVoiceState = selectObservedWavetablePositionState(
+        { voiceGeneration: 4, position: 0.62 },
+        { voiceGeneration: 3, position: 0.15 }
+    );
+    const sameVoiceState = selectObservedWavetablePositionState(
+        { voiceGeneration: 4, position: 0.62 },
+        { voiceGeneration: 4, position: 0.18 }
+    );
+    const newerVoiceState = selectObservedWavetablePositionState(
+        { voiceGeneration: 4, position: 0.62 },
+        { voiceGeneration: 5, position: 0.33 }
+    );
+
+    assert.deepEqual(olderVoiceState, { voiceGeneration: 4, position: 0.62 });
+    assert.deepEqual(sameVoiceState, { voiceGeneration: 4, position: 0.18 });
+    assert.deepEqual(newerVoiceState, { voiceGeneration: 5, position: 0.33 });
+});
+
 test("upward wavetable-stage drag maps to the same normalized position change as moving the slider right", async () => {
     const { mapDisplayDragToPosition } = await loadPatchViewModule();
 

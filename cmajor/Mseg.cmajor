@@ -2,6 +2,7 @@ namespace wt
 {
     let msegBodySamples = 2048;
     let msegPaddedSamples = 2051;
+    let effectiveWavetablePositionMonitorHz = 30.0f;
 
     struct MsegPlaybackConfig
     {
@@ -13,6 +14,12 @@ namespace wt
         float32 loopEnd;
         int32 noteOffPolicy;
         bool legatoRestarts;
+    }
+
+    struct EffectiveWavetablePositionMonitor
+    {
+        int32 voiceGeneration;
+        float32 position;
     }
 
     float32 msegCatmullRom (float32 p0, float32 p1, float32 p2, float32 p3, float32 t)
@@ -48,6 +55,94 @@ namespace wt
             loop
             {
                 out <- std::intrinsics::clamp (basePositionIn + (modulationIn * depthIn), 0.0f, 1.0f);
+                advance();
+            }
+        }
+    }
+
+    processor EffectiveWavetablePositionReporter
+    {
+        input stream float32 basePositionIn;
+        input stream float32 effectivePositionIn;
+        input value float32 voiceActiveIn;
+        input value float32 voiceGenerationIn;
+        output stream float32 out;
+        output event EffectiveWavetablePositionMonitor monitorOut;
+
+        int32 updateIntervalFrames = 1;
+        int32 framesUntilNextUpdate = 0;
+
+        void emitMonitorEvent (float32 position, float32 voiceGeneration)
+        {
+            EffectiveWavetablePositionMonitor monitor;
+            monitor.voiceGeneration = int32 (
+                std::intrinsics::floor (
+                    std::intrinsics::max (0.0f, voiceGeneration) + 0.5f
+                )
+            );
+            monitor.position = std::intrinsics::clamp (position, 0.0f, 1.0f);
+            monitorOut <- monitor;
+        }
+
+        void main()
+        {
+            let requestedInterval = int32 (
+                std::intrinsics::floor ((processor.frequency / effectiveWavetablePositionMonitorHz) + 0.5f)
+            );
+            updateIntervalFrames = std::intrinsics::max (1, requestedInterval);
+            framesUntilNextUpdate = 0;
+
+            loop
+            {
+                let basePosition = std::intrinsics::clamp (basePositionIn, 0.0f, 1.0f);
+                let effectivePosition = std::intrinsics::clamp (effectivePositionIn, 0.0f, 1.0f);
+                let observedPosition = voiceActiveIn >= 0.5f ? effectivePosition : basePosition;
+                out <- effectivePosition;
+
+                if (framesUntilNextUpdate <= 0)
+                {
+                    emitMonitorEvent (observedPosition, voiceGenerationIn);
+                    framesUntilNextUpdate = updateIntervalFrames - 1;
+                }
+                else
+                {
+                    framesUntilNextUpdate -= 1;
+                }
+
+                advance();
+            }
+        }
+    }
+
+    processor NoteGenerationTracker
+    {
+        input event int32 noteOnIn;
+        input event int32 noteOffIn;
+        output value float32 activeOut;
+        output value float32 generationOut;
+
+        float32 active = 0.0f;
+        float32 generation = 0.0f;
+        int32 nextGeneration = 1;
+
+        event noteOnIn (int32 unused)
+        {
+            active = 1.0f;
+            generation = float32 (nextGeneration);
+            nextGeneration += 1;
+        }
+
+        event noteOffIn (int32 unused)
+        {
+            active = 0.0f;
+        }
+
+        void main()
+        {
+            loop
+            {
+                activeOut <- active;
+                generationOut <- generation;
                 advance();
             }
         }

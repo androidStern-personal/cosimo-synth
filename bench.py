@@ -248,6 +248,153 @@ def _curve_to_linear_segments(curve: Float64Array) -> list[tuple[int, float, flo
     return segments
 
 
+def _build_bank_backed_fixed_frame_source() -> str:
+    return (
+        "namespace wt\n"
+        + "{\n"
+        + "    let samplesPerFrame = "
+        + _cmajor_int_literal(SAMPLES_PER_FRAME)
+        + ";\n"
+        + "    let paddedFrameSize = "
+        + _cmajor_int_literal(SAMPLES_PER_FRAME + 3)
+        + ";\n"
+        + "    let brightestMipIndex = "
+        + _cmajor_int_literal(OSCILLATOR_MIP_COUNT - 1)
+        + ";\n"
+        + "    struct TableMeta\n"
+        + "    {\n"
+        + "        int32 frameCount;\n"
+        + "        int32 sampleOffset;\n"
+        + "    }\n"
+        + "    struct Bank\n"
+        + "    {\n"
+        + "        std::audio_data::Mono sampleBlob;\n"
+        + "        TableMeta[] tables;\n"
+        + "    }\n"
+        + "    external Bank factoryBank;\n"
+        + "    float32 catmullRom (float32 p0, float32 p1, float32 p2, float32 p3, float32 t)\n"
+        + "    {\n"
+        + "        return p1 + 0.5f * t * ((p2 - p0) + t * ((2.0f * p0 - 5.0f * p1 + 4.0f * p2 - p3)\n"
+        + "               + t * (-p0 + 3.0f * p1 - 3.0f * p2 + p3)));\n"
+        + "    }\n"
+        + "    int32 resolveTableIndex (float32 requestedSelect)\n"
+        + "    {\n"
+        + "        let tableCount = wt::factoryBank.tables.size();\n"
+        + "        if (tableCount <= 1)\n"
+        + "            return 0;\n"
+        + "        let rounded = int32 (std::intrinsics::floor (requestedSelect + 0.5f));\n"
+        + "        return std::intrinsics::clamp (rounded, 0, tableCount - 1);\n"
+        + "    }\n"
+        + "    int32 selectMipIndexFromPhaseIncrement (float32 phaseIncrement)\n"
+        + "    {\n"
+        + "        if (phaseIncrement <= 0.0f)\n"
+        + "            return brightestMipIndex;\n"
+        + "        float32 threshold = 0.25f;\n"
+        + "        for (int32 mipIndex = 0; mipIndex < brightestMipIndex; ++mipIndex)\n"
+        + "        {\n"
+        + "            if (phaseIncrement > threshold)\n"
+        + "                return mipIndex;\n"
+        + "            threshold *= 0.5f;\n"
+        + "        }\n"
+        + "        return brightestMipIndex;\n"
+        + "    }\n"
+        + "    int32 frameBase (int32 tableIndex, int32 frameIndex, int32 mipIndex)\n"
+        + "    {\n"
+        + "        let table = wt::factoryBank.tables[tableIndex];\n"
+        + "        return table.sampleOffset + (((mipIndex * table.frameCount) + frameIndex) * paddedFrameSize);\n"
+        + "    }\n"
+        + "    float32 readFixedFrameSample (int32 tableIndex, int32 frameIndex, int32 mipIndex, float32 phase)\n"
+        + "    {\n"
+        + "        let wrappedPhase = std::intrinsics::wrap (phase, 1.0f);\n"
+        + "        let x = wrappedPhase * float32 (samplesPerFrame);\n"
+        + "        let sampleIndex = int32 (std::intrinsics::floor (x));\n"
+        + "        let fractional = x - float32 (sampleIndex);\n"
+        + "        let base = frameBase (tableIndex, frameIndex, mipIndex) + sampleIndex;\n"
+        + "        let p0 = wt::factoryBank.sampleBlob.frames[base + 0];\n"
+        + "        let p1 = wt::factoryBank.sampleBlob.frames[base + 1];\n"
+        + "        let p2 = wt::factoryBank.sampleBlob.frames[base + 2];\n"
+        + "        let p3 = wt::factoryBank.sampleBlob.frames[base + 3];\n"
+        + "        return catmullRom (p0, p1, p2, p3, fractional);\n"
+        + "    }\n"
+        + "    float32 readFrameBlendSample (int32 tableIndex,\n"
+        + "                                  int32 frameLo,\n"
+        + "                                  int32 frameHi,\n"
+        + "                                  int32 mipIndex,\n"
+        + "                                  float32 phase,\n"
+        + "                                  float32 frameT)\n"
+        + "    {\n"
+        + "        let lo = readFixedFrameSample (tableIndex, frameLo, mipIndex, phase);\n"
+        + "        if (frameHi == frameLo)\n"
+        + "            return lo;\n"
+        + "        let hi = readFixedFrameSample (tableIndex, frameHi, mipIndex, phase);\n"
+        + "        return lo + (hi - lo) * frameT;\n"
+        + "    }\n"
+        + "    processor BankBackedFixedFrameOscillator (float32 initialFrequencyHz = 440.0f,\n"
+        + "                                              float32 initialPhase = 0.0f)\n"
+        + "    {\n"
+        + "        input event float32 frequencyIn;\n"
+        + "        input stream float32 framePositionIn;\n"
+        + "        input stream float32 tableSelectIn;\n"
+        + "        output stream float out;\n"
+        + "        std::oscillators::PhasorState phasor;\n"
+        + "        float32 currentFrequencyHz = initialFrequencyHz;\n"
+        + "        float32 currentPhaseIncrement = 0.0f;\n"
+        + "        int32 currentMipIndex = brightestMipIndex;\n"
+        + "        int32 currentTableIndex = 0;\n"
+        + "        int32 frameCount = 1;\n"
+        + "        int32 lastFrameIndex = 0;\n"
+        + "        float32 lastFrameIndexF = 0.0f;\n"
+        + "        event frequencyIn (float32 newFrequency)\n"
+        + "        {\n"
+        + "            currentFrequencyHz = newFrequency < 0.0f ? 0.0f : newFrequency;\n"
+        + "            currentPhaseIncrement = currentFrequencyHz / float32 (processor.frequency);\n"
+        + "            currentMipIndex = selectMipIndexFromPhaseIncrement (currentPhaseIncrement);\n"
+        + "            phasor.setFrequency (processor.frequency, currentFrequencyHz);\n"
+        + "        }\n"
+        + "        void main()\n"
+        + "        {\n"
+        + "            currentTableIndex = resolveTableIndex (tableSelectIn);\n"
+        + "            frameCount = wt::factoryBank.tables[currentTableIndex].frameCount;\n"
+        + "            lastFrameIndex = frameCount - 1;\n"
+        + "            lastFrameIndexF = float32 (lastFrameIndex);\n"
+        + "            phasor.phase = std::intrinsics::wrap (initialPhase, 1.0f);\n"
+        + "            currentFrequencyHz = currentFrequencyHz < 0.0f ? 0.0f : currentFrequencyHz;\n"
+        + "            currentPhaseIncrement = currentFrequencyHz / float32 (processor.frequency);\n"
+        + "            currentMipIndex = selectMipIndexFromPhaseIncrement (currentPhaseIncrement);\n"
+        + "            phasor.setFrequency (processor.frequency, currentFrequencyHz);\n"
+        + "            loop\n"
+        + "            {\n"
+        + "                let requestedTableIndex = resolveTableIndex (tableSelectIn);\n"
+        + "                if (requestedTableIndex != currentTableIndex)\n"
+        + "                {\n"
+        + "                    currentTableIndex = requestedTableIndex;\n"
+        + "                    frameCount = wt::factoryBank.tables[currentTableIndex].frameCount;\n"
+        + "                    lastFrameIndex = frameCount - 1;\n"
+        + "                    lastFrameIndexF = float32 (lastFrameIndex);\n"
+        + "                    phasor.phase = 0.0f;\n"
+        + "                }\n"
+        + "                let phase = phasor.next();\n"
+        + "                if (frameCount == 1)\n"
+        + "                {\n"
+        + "                    out <- readFixedFrameSample (currentTableIndex, 0, currentMipIndex, phase);\n"
+        + "                }\n"
+        + "                else\n"
+        + "                {\n"
+        + "                    let framePosition = std::intrinsics::clamp (framePositionIn, 0.0f, 1.0f);\n"
+        + "                    let frameIndex = framePosition * lastFrameIndexF;\n"
+        + "                    let frameLo = int32 (std::intrinsics::floor (frameIndex));\n"
+        + "                    let frameHi = std::intrinsics::min (frameLo + 1, lastFrameIndex);\n"
+        + "                    let frameT = frameIndex - float32 (frameLo);\n"
+        + "                    out <- readFrameBlendSample (currentTableIndex, frameLo, frameHi, currentMipIndex, phase, frameT);\n"
+        + "                }\n"
+        + "                advance();\n"
+        + "            }\n"
+        + "        }\n"
+        + "    }\n"
+        + "}\n"
+    )
+
+
 def _build_fixed_frame_wrapper_source(
     *,
     initial_frequency_hz: float,
@@ -363,7 +510,7 @@ def _build_fixed_frame_wrapper_source(
         + "{\n"
         + "    output stream float out;\n"
         + "    node control = FixedFrameProbeControl;\n"
-        + "    node osc = wt::FixedFrameOscillator ("
+        + "    node osc = wt::BankBackedFixedFrameOscillator ("
         + _cmajor_float_literal(initial_frequency_hz)
         + ", "
         + _cmajor_float_literal(start_phase)
@@ -614,6 +761,143 @@ const outputEndpointID = process.argv[6];
         return audio.copy()
 
 
+def _collect_cmajor_output_events_via_generated_javascript(
+    patch_path: Path,
+    *,
+    sample_rate: int,
+    num_samples: int,
+    output_endpoint_id: str,
+    setup_js: str = "",
+) -> list[dict[str, object]]:
+    cmaj = _require_cmaj_cli()
+    node = _require_node_cli()
+
+    with tempfile.TemporaryDirectory(prefix="cmajor_js_events_") as temp_dir_name:
+        temp_dir = Path(temp_dir_name)
+        runtime_path = temp_dir / "runtime.cjs"
+        output_path = temp_dir / "events.json"
+        render_script_path = temp_dir / "render.cjs"
+
+        generate_result = subprocess.run(
+            [
+                cmaj,
+                "generate",
+                "--target=javascript",
+                f"--output={runtime_path}",
+                str(patch_path),
+            ],
+            cwd=patch_path.parent,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        if generate_result.returncode != 0:
+            details = "\n".join(
+                part
+                for part in (generate_result.stdout.strip(), generate_result.stderr.strip())
+                if part
+            )
+            raise RuntimeError(f"cmaj generate failed:\n{details}")
+
+        runtime_source = runtime_path.read_text(encoding="utf-8")
+        class_name = _detect_cmajor_generated_class_name(runtime_source)
+        runtime_path.write_text(
+            runtime_source + f"\nmodule.exports = {class_name};\n",
+            encoding="utf-8",
+        )
+
+        render_script_path.write_text(
+            """
+const fs = require("fs");
+
+const RuntimeClass = require(process.argv[2]);
+const outputPath = process.argv[3];
+const sampleRate = Number(process.argv[4]);
+const numFrames = Number(process.argv[5]);
+const outputEndpointID = process.argv[6];
+
+(async () => {
+    const patch = new RuntimeClass();
+    await patch.initialise(2, sampleRate);
+"""
+            + (setup_js.strip() + "\n" if setup_js.strip() else "")
+            + """
+
+    const outputEndpoint = patch.getOutputEndpoints().find(
+        ({ endpointID }) => endpointID === outputEndpointID
+    );
+
+    if (!outputEndpoint) {
+        throw new Error(`Could not find output endpoint ${outputEndpointID}`);
+    }
+
+    const countGetterName = `getOutputEventCount_${outputEndpointID}`;
+    const resetGetterName = `resetOutputEventCount_${outputEndpointID}`;
+    const readGetterName = `getOutputEvent_${outputEndpointID}`;
+
+    if (typeof patch[countGetterName] !== "function") {
+        throw new Error(`Generated runtime is missing ${countGetterName}()`);
+    }
+    if (typeof patch[resetGetterName] !== "function") {
+        throw new Error(`Generated runtime is missing ${resetGetterName}()`);
+    }
+    if (typeof patch[readGetterName] !== "function") {
+        throw new Error(`Generated runtime is missing ${readGetterName}()`);
+    }
+
+    const events = [];
+    let offset = 0;
+
+    while (offset < numFrames) {
+        const framesThisBlock = Math.min(512, numFrames - offset);
+        patch.advance(framesThisBlock);
+
+        const eventCount = patch[countGetterName]();
+        for (let index = 0; index < eventCount; index += 1) {
+            events.push(patch[readGetterName](index));
+        }
+
+        patch[resetGetterName]();
+        offset += framesThisBlock;
+    }
+
+    fs.writeFileSync(outputPath, JSON.stringify(events));
+})().catch((error) => {
+    console.error(error?.stack || String(error));
+    process.exit(1);
+});
+""".lstrip(),
+            encoding="utf-8",
+        )
+
+        render_result = subprocess.run(
+            [
+                node,
+                str(render_script_path),
+                str(runtime_path),
+                str(output_path),
+                str(sample_rate),
+                str(num_samples),
+                output_endpoint_id,
+            ],
+            cwd=patch_path.parent,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        if render_result.returncode != 0:
+            details = "\n".join(
+                part
+                for part in (render_result.stdout.strip(), render_result.stderr.strip())
+                if part
+            )
+            raise RuntimeError(f"node runtime event collection failed:\n{details}")
+
+        return json.loads(output_path.read_text(encoding="utf-8"))
+
+
 def render_cmajor_fixed_frame_tables(
     source_tables: Sequence[FixtureBank],
     recipe: Recipe,
@@ -626,10 +910,6 @@ def render_cmajor_fixed_frame_tables(
 
     if not source_tables:
         raise ValueError("render_cmajor_fixed_frame_tables requires at least one FixtureBank")
-    if not CMAJOR_FIXED_FRAME_SOURCE.exists():
-        raise RuntimeError(
-            f"Checked-in oscillator source is missing: {CMAJOR_FIXED_FRAME_SOURCE}"
-        )
     if not 0 <= table_index < len(source_tables):
         raise ValueError("table_index must address a table inside source_tables")
 
@@ -671,7 +951,7 @@ def render_cmajor_fixed_frame_tables(
         patch_path = temp_dir / "FixedFrameProbe.cmajorpatch"
 
         combined_source_path.write_text(
-            CMAJOR_FIXED_FRAME_SOURCE.read_text(encoding="utf-8")
+            _build_bank_backed_fixed_frame_source()
             + "\n"
             + _build_fixed_frame_wrapper_source(
                 initial_frequency_hz=initial_frequency_hz,
@@ -768,7 +1048,7 @@ def _build_mseg_probe_wrapper_source(
         + "    input event wt::MsegPlaybackConfig msegPlayback;\n"
         + "    output stream float out;\n"
         + "    node control = MsegProbeControl;\n"
-        + "    node osc = wt::FixedFrameOscillator ("
+        + "    node osc = wt::BankBackedFixedFrameOscillator ("
         + _cmajor_float_literal(frequency_hz)
         + ", "
         + _cmajor_float_literal(start_phase)
@@ -810,10 +1090,6 @@ def render_cmajor_mseg_probe(
         raise ValueError("table_index must address a table inside source_tables")
     if mseg_buffer.shape != (MSEG_PADDED_SAMPLES,):
         raise ValueError(f"mseg_buffer must have shape {(MSEG_PADDED_SAMPLES,)}")
-    if not CMAJOR_FIXED_FRAME_SOURCE.exists():
-        raise RuntimeError(
-            f"Checked-in oscillator source is missing: {CMAJOR_FIXED_FRAME_SOURCE}"
-        )
     if not CMAJOR_MSEG_SOURCE.exists():
         raise RuntimeError(
             f"Checked-in MSEG source is missing: {CMAJOR_MSEG_SOURCE}"
@@ -840,7 +1116,7 @@ def render_cmajor_mseg_probe(
         patch_path = temp_dir / "MsegProbe.cmajorpatch"
 
         combined_source_path.write_text(
-            CMAJOR_FIXED_FRAME_SOURCE.read_text(encoding="utf-8")
+            _build_bank_backed_fixed_frame_source()
             + "\n"
             + CMAJOR_MSEG_SOURCE.read_text(encoding="utf-8")
             + "\n"
@@ -881,6 +1157,189 @@ def render_cmajor_mseg_probe(
             patch_path=patch_path,
             sample_rate=recipe.sample_rate,
             num_samples=recipe.num_samples,
+            setup_js=(
+                f"patch.sendInputEvent_msegBuffer({json.dumps(mseg_buffer.tolist())});\n"
+                f"patch.sendInputEvent_msegPlayback({json.dumps(playback_event)});"
+            ),
+        )
+
+
+def _build_scan_position_monitor_probe_wrapper_source(
+    *,
+    frame_position: float,
+    depth: float,
+    trigger_offsets: Sequence[int],
+    note_off_offsets: Sequence[int],
+) -> str:
+    trigger_storage_size = max(len(trigger_offsets), 1)
+    stored_trigger_offsets = [int(offset) for offset in trigger_offsets] or [0]
+    note_off_storage_size = max(len(note_off_offsets), 1)
+    stored_note_off_offsets = [int(offset) for offset in note_off_offsets] or [0]
+    return (
+        "processor ScanPositionMonitorProbeControl\n"
+        + "{\n"
+        + "    output event int32 triggerOut;\n"
+        + "    output stream float32 framePositionOut;\n"
+        + "    output value float32 depthOut;\n"
+        + "    output value float32 voiceActiveOut;\n"
+        + "    output value float32 voiceGenerationOut;\n"
+        + "    let triggerEventCount = "
+        + _cmajor_int_literal(len(trigger_offsets))
+        + ";\n"
+        + "    let noteOffEventCount = "
+        + _cmajor_int_literal(len(note_off_offsets))
+        + ";\n"
+        + "    int32["
+        + _cmajor_int_literal(trigger_storage_size)
+        + "] triggerEventOffsets = ("
+        + _cmajor_int_array_literal(stored_trigger_offsets)
+        + ");\n"
+        + "    int32["
+        + _cmajor_int_literal(note_off_storage_size)
+        + "] noteOffEventOffsets = ("
+        + _cmajor_int_array_literal(stored_note_off_offsets)
+        + ");\n"
+        + "    int32 frameIndex = 0;\n"
+        + "    int32 nextTriggerEvent = 0;\n"
+        + "    int32 nextNoteOffEvent = 0;\n"
+        + "    float32 voiceActive = 0.0f;\n"
+        + "    float32 voiceGeneration = 0.0f;\n"
+        + "    void main()\n"
+        + "    {\n"
+        + "        depthOut <- "
+        + _cmajor_float_literal(depth)
+        + ";\n"
+        + "        loop\n"
+        + "        {\n"
+        + "            if (nextTriggerEvent < triggerEventCount && frameIndex == triggerEventOffsets.at (nextTriggerEvent))\n"
+        + "            {\n"
+        + "                triggerOut <- 1;\n"
+        + "                voiceActive = 1.0f;\n"
+        + "                voiceGeneration += 1.0f;\n"
+        + "                nextTriggerEvent += 1;\n"
+        + "            }\n"
+        + "            if (nextNoteOffEvent < noteOffEventCount && frameIndex == noteOffEventOffsets.at (nextNoteOffEvent))\n"
+        + "            {\n"
+        + "                voiceActive = 0.0f;\n"
+        + "                nextNoteOffEvent += 1;\n"
+        + "            }\n"
+        + "            framePositionOut <- "
+        + _cmajor_float_literal(frame_position)
+        + ";\n"
+        + "            voiceActiveOut <- voiceActive;\n"
+        + "            voiceGenerationOut <- voiceGeneration;\n"
+        + "            advance();\n"
+        + "            frameIndex += 1;\n"
+        + "        }\n"
+        + "    }\n"
+        + "}\n"
+        + "graph ScanPositionMonitorProbe [[ main ]]\n"
+        + "{\n"
+        + "    input event float32[wt::msegPaddedSamples] msegBuffer;\n"
+        + "    input event wt::MsegPlaybackConfig msegPlayback;\n"
+        + "    output event wt::EffectiveWavetablePositionMonitor effectiveWavetablePosition;\n"
+        + "    node control = ScanPositionMonitorProbeControl;\n"
+        + "    node mseg = wt::MsegReader;\n"
+        + "    node route = wt::FramePositionModulator;\n"
+        + "    node reporter = wt::EffectiveWavetablePositionReporter;\n"
+        + "    connection\n"
+        + "    {\n"
+        + "        msegBuffer -> mseg.bufferUpload;\n"
+        + "        msegPlayback -> mseg.playbackUpload;\n"
+        + "        control.triggerOut -> mseg.triggerIn;\n"
+        + "        control.framePositionOut -> route.basePositionIn;\n"
+        + "        control.framePositionOut -> reporter.basePositionIn;\n"
+        + "        mseg.out -> route.modulationIn;\n"
+        + "        control.depthOut -> route.depthIn;\n"
+        + "        route.out -> reporter.effectivePositionIn;\n"
+        + "        control.voiceActiveOut -> reporter.voiceActiveIn;\n"
+        + "        control.voiceGenerationOut -> reporter.voiceGenerationIn;\n"
+        + "        reporter.monitorOut -> effectiveWavetablePosition;\n"
+        + "    }\n"
+        + "}\n"
+    )
+
+
+def render_cmajor_scan_position_monitor_probe(
+    recipe: Recipe,
+    *,
+    mseg_buffer: Float32Array,
+    playback: MsegPlayback,
+    depth: float,
+    trigger_offsets: Sequence[int] = (0,),
+    note_off_offsets: Sequence[int] = (),
+) -> list[dict[str, object]]:
+    if mseg_buffer.shape != (MSEG_PADDED_SAMPLES,):
+        raise ValueError(f"mseg_buffer must have shape {(MSEG_PADDED_SAMPLES,)}")
+    if not CMAJOR_MSEG_SOURCE.exists():
+        raise RuntimeError(
+            f"Checked-in MSEG source is missing: {CMAJOR_MSEG_SOURCE}"
+        )
+
+    frame_position = _require_constant_curve(recipe.frame_pos_curve, "Recipe.frame_pos_curve")
+    previous_trigger_offset = -1
+    for trigger_offset in trigger_offsets:
+        if not 0 <= trigger_offset < recipe.num_samples:
+            raise ValueError("trigger_offsets must stay inside the rendered buffer")
+        if trigger_offset < previous_trigger_offset:
+            raise ValueError("trigger_offsets must be sorted in ascending order")
+        previous_trigger_offset = trigger_offset
+    previous_note_off_offset = -1
+    for note_off_offset in note_off_offsets:
+        if not 0 <= note_off_offset < recipe.num_samples:
+            raise ValueError("note_off_offsets must stay inside the rendered buffer")
+        if note_off_offset < previous_note_off_offset:
+            raise ValueError("note_off_offsets must be sorted in ascending order")
+        previous_note_off_offset = note_off_offset
+
+    with tempfile.TemporaryDirectory(prefix="cmajor_scan_monitor_probe_") as temp_dir_name:
+        temp_dir = Path(temp_dir_name)
+        combined_source_path = temp_dir / "ScanPositionMonitorProbe.cmajor"
+        patch_path = temp_dir / "ScanPositionMonitorProbe.cmajorpatch"
+
+        combined_source_path.write_text(
+            CMAJOR_MSEG_SOURCE.read_text(encoding="utf-8")
+            + "\n"
+            + _build_scan_position_monitor_probe_wrapper_source(
+                frame_position=frame_position,
+                depth=depth,
+                trigger_offsets=trigger_offsets,
+                note_off_offsets=note_off_offsets,
+            ),
+            encoding="utf-8",
+        )
+        patch_path.write_text(
+            json.dumps(
+                {
+                    "CmajorVersion": 1,
+                    "ID": "dev.cosimo.scan-position-monitor-probe",
+                    "version": "1.0",
+                    "name": "Scan Position Monitor Probe",
+                    "description": "Collects effective wavetable position monitor events",
+                    "source": [combined_source_path.name],
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        playback_event = {
+            "seconds": float(playback.seconds),
+            "holdFinalValue": bool(playback.hold_final_value),
+            "rateKind": 0,
+            "loopEnabled": False,
+            "loopStart": 0.0,
+            "loopEnd": 1.0,
+            "noteOffPolicy": 0,
+            "legatoRestarts": False,
+        }
+
+        return _collect_cmajor_output_events_via_generated_javascript(
+            patch_path=patch_path,
+            sample_rate=recipe.sample_rate,
+            num_samples=recipe.num_samples,
+            output_endpoint_id="effectiveWavetablePosition",
             setup_js=(
                 f"patch.sendInputEvent_msegBuffer({json.dumps(mseg_buffer.tolist())});\n"
                 f"patch.sendInputEvent_msegPlayback({json.dumps(playback_event)});"

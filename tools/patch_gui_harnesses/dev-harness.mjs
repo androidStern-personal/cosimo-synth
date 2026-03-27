@@ -3,6 +3,7 @@ import createPatchView from "../../patch_gui/index.js";
 const midiInputEndpointID = "midiIn";
 const wavetablePositionEndpointID = "wavetablePosition";
 const wavetableSelectEndpointID = "wavetableSelect";
+const effectiveWavetablePositionEndpointID = "effectiveWavetablePosition";
 
 class MockPianoKeyboard extends HTMLElement {
     constructor() {
@@ -170,6 +171,13 @@ class MockPatchConnection {
     sendEventOrValue(endpointID, value) {
         this.parameterValues.set(endpointID, value);
         this.parameterListeners.get(endpointID)?.forEach((listener) => listener(value));
+
+        if (endpointID === wavetablePositionEndpointID) {
+            this.emitEndpointEvent(effectiveWavetablePositionEndpointID, {
+                voiceGeneration: 0,
+                position: value,
+            });
+        }
     }
 
     sendParameterGestureStart() {}
@@ -184,6 +192,10 @@ class MockPatchConnection {
 
     removeEndpointListener(endpointID, listener) {
         this.endpointListeners.get(endpointID)?.delete(listener);
+    }
+
+    emitEndpointEvent(endpointID, value) {
+        this.endpointListeners.get(endpointID)?.forEach((listener) => listener(value));
     }
 
     sendMIDIInputEvent(endpointID, value) {

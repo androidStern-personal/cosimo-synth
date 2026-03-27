@@ -14,6 +14,7 @@ namespace wt
         input value float32 framePositionIn;
         input value float32 tableSelectIn;
         input value float32 msegDepthIn;
+        output event wt::EffectiveWavetablePositionMonitor effectiveWavetablePositionOut;
         output stream float32<2> out;
 
         node osc         = wt::FixedFrameOscillator (440.0f, 0.0f);
@@ -23,6 +24,8 @@ namespace wt
         node stereo      = std::mixers::MonoToStereo (float32);
         node msegReader  = wt::MsegReader;
         node frameRouter = wt::FramePositionModulator;
+        node frameMonitor = wt::EffectiveWavetablePositionReporter;
+        node noteTracker = wt::NoteGenerationTracker;
         node frameBase   = wt::ValueToStream;
         node tableSelectBase = wt::ValueToStream;
 
@@ -31,11 +34,13 @@ namespace wt
             osc.frequencyIn <- std::notes::noteToFrequency (note.pitch);
             envelope.eventIn <- note;
             msegReader.triggerIn <- 1;
+            noteTracker.noteOnIn <- 1;
         }
 
         event eventIn (std::notes::NoteOff note)
         {
             envelope.eventIn <- note;
+            noteTracker.noteOffIn <- 1;
         }
 
         event eventIn (std::notes::PitchBend bend) {}
@@ -51,10 +56,15 @@ namespace wt
             framePositionIn -> frameBase.valueIn;
             tableSelectIn -> tableSelectBase.valueIn;
             frameBase.out -> frameRouter.basePositionIn;
+            frameBase.out -> frameMonitor.basePositionIn;
             tableSelectBase.out -> osc.tableSelectIn;
             msegReader.out -> frameRouter.modulationIn;
             msegDepthIn -> frameRouter.depthIn;
-            frameRouter.out -> osc.framePositionIn;
+            frameRouter.out -> frameMonitor.effectivePositionIn;
+            noteTracker.activeOut -> frameMonitor.voiceActiveIn;
+            noteTracker.generationOut -> frameMonitor.voiceGenerationIn;
+            frameMonitor.out -> osc.framePositionIn;
+            frameMonitor.monitorOut -> effectiveWavetablePositionOut;
             osc.out -> voiceGain.in;
             envelope.gainOut -> voiceGain.gain;
             voiceGain.out -> trim.in;
@@ -73,6 +83,7 @@ graph WavetableSynth [[ main ]]
     input value float32 wavetablePosition [[ name: "Wavetable Position", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
     input value float32 wavetableSelect [[ name: "Wavetable Select", min: 0.0f, max: 255.0f, init: 0.0f, discrete: true, step: 1.0f, rampFrames: 0 ]];
     input value float32 mseg1Depth [[ name: "MSEG 1 Depth", min: -1.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
+    output event wt::EffectiveWavetablePositionMonitor effectiveWavetablePosition;
     output stream float32<2> audioOut;
 
     node mpe   = std::midi::MPEConverter;
@@ -88,6 +99,7 @@ graph WavetableSynth [[ main ]]
         wavetablePosition -> voice.framePositionIn;
         wavetableSelect -> voice.tableSelectIn;
         mseg1Depth -> voice.msegDepthIn;
+        voice.effectiveWavetablePositionOut -> effectiveWavetablePosition;
         voice.out -> audioOut;
     }
 }

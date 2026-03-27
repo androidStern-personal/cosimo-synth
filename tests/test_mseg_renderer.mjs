@@ -8,6 +8,7 @@ import {
     createDefaultMsegPlayback,
     createDefaultMsegShape,
     evaluateMsegShape,
+    findMsegPointHitIndex,
     normalizeMsegShape,
     renderMsegShape,
     sampleRenderedMsegBuffer,
@@ -30,12 +31,26 @@ test("default_shape_has_two_endpoints_and_default_playback", () => {
     const playback = createDefaultMsegPlayback();
 
     assert.equal(shape.points.length, 2);
-    assert.deepEqual(shape.points[0], { x: 0.0, y: 0.5, curvePower: 0.0 });
-    assert.deepEqual(shape.points[1], { x: 1.0, y: 0.5, curvePower: 0.0 });
+    assert.deepEqual(shape.points[0], { x: 0.0, y: 0.0, curvePower: 0.0 });
+    assert.deepEqual(shape.points[1], { x: 1.0, y: 1.0, curvePower: 0.0 });
     assert.equal(playback.rate.kind, "seconds");
     assert.equal(playback.rate.seconds, 1.0);
     assert.equal(playback.loop, null);
     assert.equal(playback.holdFinalValue, true);
+});
+
+test("point_hit_testing_accepts_near_misses_inside_the_larger_pick_radius", () => {
+    const shape = {
+        ...createDefaultMsegShape(),
+        points: [
+            { x: 0.0, y: 0.0, curvePower: 0.0 },
+            { x: 0.5, y: 0.5, curvePower: 0.0 },
+            { x: 1.0, y: 1.0, curvePower: 0.0 },
+        ],
+    };
+
+    assert.equal(findMsegPointHitIndex(shape, 312, 84, 600, 180), 1);
+    assert.equal(findMsegPointHitIndex(shape, 335, 125, 600, 180), -1);
 });
 
 test("shape_validation_rejects_fewer_than_two_points", () => {

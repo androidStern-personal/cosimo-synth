@@ -3,7 +3,7 @@ import {
     loadFactoryBankFramesFromPatch,
 } from "./wavetable-bank.js";
 import { MsegController } from "./mseg-controller.js";
-import { evaluateMsegShape } from "./mseg.js";
+import { evaluateMsegShape, findMsegPointHitIndex } from "./mseg.js";
 import { CanvasWavetableDisplay } from "./wavetable-display.js";
 import { computeResponsivePatchLayout, getLayoutCSSVariables } from "./responsive-layout.js";
 
@@ -12,6 +12,7 @@ const wavetableFramesEndpointID = "wavetableFrames";
 const wavetablePositionEndpointID = "wavetablePosition";
 const wavetableSelectEndpointID = "wavetableSelect";
 const msegDepthEndpointID = "mseg1Depth";
+const effectiveWavetablePositionEndpointID = "effectiveWavetablePosition";
 const runtimeSelectedTableStateKey = "cosimoRuntimeSelectedTableIndex";
 const samplesPerFrame = 2048;
 const maxWavetableFrames = 256;
@@ -96,6 +97,59 @@ export function mapDisplayDragToPosition(startValue, startClientY, nextClientY, 
     return clampDisplayPosition((Number(startValue) || 0) + (delta / safeSpan));
 }
 
+export function normalizeEffectiveWavetablePositionMessage(message) {
+    const payload = message?.event ?? message;
+
+    if (payload === null || payload === undefined) {
+        return null;
+    }
+
+    if (typeof payload === "number") {
+        return {
+            voiceGeneration: 0,
+            position: clampDisplayPosition(payload),
+        };
+    }
+
+    const rawPosition = Number(payload?.position);
+    if (!Number.isFinite(rawPosition)) {
+        return null;
+    }
+
+    const rawGeneration = Number(payload?.voiceGeneration);
+    return {
+        voiceGeneration: Number.isFinite(rawGeneration)
+            ? Math.max(0, Math.trunc(rawGeneration))
+            : 0,
+        position: clampDisplayPosition(rawPosition),
+    };
+}
+
+export function selectObservedWavetablePositionState(currentState, message) {
+    const previousState = currentState && typeof currentState === "object"
+        ? {
+            voiceGeneration: Number.isFinite(Number(currentState.voiceGeneration))
+                ? Math.trunc(Number(currentState.voiceGeneration))
+                : -1,
+            position: clampDisplayPosition(currentState.position),
+        }
+        : {
+            voiceGeneration: -1,
+            position: knobDefault,
+        };
+    const nextState = normalizeEffectiveWavetablePositionMessage(message);
+
+    if (!nextState) {
+        return previousState;
+    }
+
+    if (nextState.voiceGeneration < previousState.voiceGeneration) {
+        return previousState;
+    }
+
+    return nextState;
+}
+
 function registerCustomElement(name, elementClass) {
     if (!window.customElements.get(name)) {
         window.customElements.define(name, elementClass);
@@ -146,10 +200,16 @@ class CosimoSynthView extends HTMLElement {
         this.patchConnection = patchConnection;
         this.options = { platform: "desktop", ...options };
         this.currentValue = knobDefault;
+        this.currentDisplayPosition = knobDefault;
         this.currentTableIndex = 0;
         this.currentFrameCount = 1;
         this.hasDisplayedValue = false;
         this.display = null;
+        this.observedWavetablePositionState = {
+            voiceGeneration: -1,
+            position: knobDefault,
+        };
+        this.hasEffectiveWavetablePositionMonitor = false;
         this.displayFramesCache = new Map();
         this.displayFramesLoading = new Set();
         this.factoryBankCatalog = null;
@@ -204,6 +264,13 @@ class CosimoSynthView extends HTMLElement {
             this.patchConnection.removeParameterListener(
                 wavetableSelectEndpointID,
                 this.handleTableParameterChange
+            );
+        }
+
+        if (this.handleEffectiveWavetablePositionChange && this.hasEffectiveWavetablePositionMonitor) {
+            this.patchConnection.removeEndpointListener?.(
+                effectiveWavetablePositionEndpointID,
+                this.handleEffectiveWavetablePositionChange
             );
         }
 
@@ -285,6 +352,7 @@ class CosimoSynthView extends HTMLElement {
 
         this.handleParameterChange = (value) => this.setDisplayedValue(value);
         this.handleTableParameterChange = (value) => this.setSelectedTableIndex(value);
+        this.handleEffectiveWavetablePositionChange = (message) => this.handleObservedDisplayPosition(message);
         this.handleStatusUpdate = (status) => this.handlePatchStatus(status);
         this.handleDisplayDragStart = (event) => this.beginDisplayDrag(event);
         this.handleDisplayDragMove = (event) => this.updateDisplayDrag(event);
@@ -348,6 +416,17 @@ class CosimoSynthView extends HTMLElement {
             wavetableSelectEndpointID,
             this.handleTableParameterChange
         );
+        if (typeof this.patchConnection.addEndpointListener === "function") {
+            try {
+                this.patchConnection.addEndpointListener(
+                    effectiveWavetablePositionEndpointID,
+                    this.handleEffectiveWavetablePositionChange
+                );
+                this.hasEffectiveWavetablePositionMonitor = true;
+            } catch (error) {
+                console.warn("Could not subscribe to effective wavetable position updates", error);
+            }
+        }
         this.patchConnection.requestParameterValue(wavetablePositionEndpointID);
         this.patchConnection.requestParameterValue(wavetableSelectEndpointID);
 
@@ -463,7 +542,7 @@ class CosimoSynthView extends HTMLElement {
 
     updateFrameReadouts() {
         const safeFrameCount = Math.max(1, this.currentFrameCount);
-        const frameIndex = Math.round(this.currentValue * Math.max(0, safeFrameCount - 1)) + 1;
+        const frameIndex = Math.round(this.currentDisplayPosition * Math.max(0, safeFrameCount - 1)) + 1;
 
         if (this.frameReadout) {
             this.frameReadout.textContent = formatOrdinal(frameIndex);
@@ -545,7 +624,7 @@ class CosimoSynthView extends HTMLElement {
     applyLoadedBank(bank) {
         this.currentFrameCount = Math.max(1, Number(bank.frameCount) || 1);
         this.display.setFrames(bank.frames);
-        this.display.setPosition(this.currentValue);
+        this.display.setPosition(this.currentDisplayPosition);
         this.updateFrameReadouts();
         this.updateBankReadout();
         this.setDisplayState(
@@ -687,10 +766,17 @@ class CosimoSynthView extends HTMLElement {
             return;
         }
 
-        const targetPoint = event.target?.dataset?.pointIndex;
+        const bounds = this.msegViewport.getBoundingClientRect();
+        const targetPointIndex = findMsegPointHitIndex(
+            this.msegState.shape,
+            event.clientX - bounds.left,
+            event.clientY - bounds.top,
+            bounds.width,
+            bounds.height
+        );
 
-        if (targetPoint !== undefined) {
-            this.selectedMsegPointIndex = Number(targetPoint);
+        if (targetPointIndex >= 0) {
+            this.selectedMsegPointIndex = targetPointIndex;
             this.activeMsegDrag = {
                 pointerId: event.pointerId,
                 pointIndex: this.selectedMsegPointIndex,
@@ -701,7 +787,6 @@ class CosimoSynthView extends HTMLElement {
             return;
         }
 
-        const bounds = this.msegViewport.getBoundingClientRect();
         const point = editorCoordinatesToPoint(event.clientX, event.clientY, bounds);
         this.msegController?.addPoint(point.x, point.y);
         const points = this.msegController?.getState().shape.points ?? [];
@@ -1018,6 +1103,35 @@ class CosimoSynthView extends HTMLElement {
         event.preventDefault?.();
     }
 
+    handleObservedDisplayPosition(message) {
+        const nextState = selectObservedWavetablePositionState(
+            this.observedWavetablePositionState,
+            message
+        );
+
+        if (
+            nextState.voiceGeneration === this.observedWavetablePositionState.voiceGeneration &&
+            displayPositionsMatch(nextState.position, this.observedWavetablePositionState.position)
+        ) {
+            return;
+        }
+
+        this.observedWavetablePositionState = nextState;
+        this.setDisplayPosition(nextState.position);
+    }
+
+    setDisplayPosition(value) {
+        const nextValue = clampDisplayPosition(value);
+
+        if (displayPositionsMatch(this.currentDisplayPosition, nextValue)) {
+            return;
+        }
+
+        this.currentDisplayPosition = nextValue;
+        this.updateFrameReadouts();
+        this.display?.setPosition(nextValue);
+    }
+
     setDisplayedValue(value) {
         const nextValue = clampDisplayPosition(value);
 
@@ -1032,13 +1146,12 @@ class CosimoSynthView extends HTMLElement {
                 ? nextValue.toFixed(3)
                 : nextValue.toFixed(2);
         }
-        this.updateFrameReadouts();
 
         if (this.scanRailInput && document.activeElement !== this.scanRailInput) {
             this.scanRailInput.value = nextValue.toFixed(3);
         }
 
-        this.display?.setPosition(nextValue);
+        this.setDisplayPosition(nextValue);
     }
 
     getHTML() {
