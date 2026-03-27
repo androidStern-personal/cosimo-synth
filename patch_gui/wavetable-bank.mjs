@@ -1,8 +1,5 @@
-export const FACTORY_BANK_EXTERNAL_ID = "wt::factoryBank";
 export const DEFAULT_SAMPLES_PER_FRAME = 2048;
-export const DEFAULT_PADDED_FRAME_SIZE = DEFAULT_SAMPLES_PER_FRAME + 3;
-export const DEFAULT_VISIBLE_MIP_INDEX = 10;
-export const DEFAULT_FACTORY_BANK_CATALOG_PATH = "assets/factory-bank.json";
+export const DEFAULT_FACTORY_BANK_CATALOG_PATH = "assets/factory-bank-catalog.json";
 
 function assert(condition, message) {
     if (!condition) {
@@ -22,6 +19,23 @@ function readAscii(view, offset, length) {
 
 function clampToRange(value, min, max) {
     return Math.min(Math.max(value, min), max);
+}
+
+function canonicalizeFrame(frame) {
+    let sum = 0;
+
+    for (let index = 0; index < frame.length; index += 1) {
+        sum += frame[index];
+    }
+
+    const mean = sum / Math.max(1, frame.length);
+    const canonical = new Float32Array(frame.length);
+
+    for (let index = 0; index < frame.length; index += 1) {
+        canonical[index] = frame[index] - mean;
+    }
+
+    return canonical;
 }
 
 function isAbsoluteURL(value) {
@@ -55,16 +69,6 @@ async function fetchJSON(url, label) {
     const response = await fetch(url.toString());
     assert(response.ok, `Failed to fetch ${label} from ${url}`);
     return response.json();
-}
-
-function toFactoryBankManifestValue(catalogValue) {
-    return {
-        sampleBlob: catalogValue.sampleBlob,
-        tables: catalogValue.tables.map((table) => ({
-            frameCount: Number(table.frameCount),
-            sampleOffset: Number(table.sampleOffset),
-        })),
-    };
 }
 
 export function parseWaveFile(arrayBuffer) {
@@ -133,18 +137,7 @@ export function parseWaveFile(arrayBuffer) {
     };
 }
 
-export function getFactoryBankValue(manifest, externalID = FACTORY_BANK_EXTERNAL_ID) {
-    const external = manifest?.externals?.[externalID];
-
-    assert(external, `Patch manifest is missing external ${externalID}`);
-    assert(Array.isArray(external.tables), `${externalID} must provide a tables array`);
-    assert(typeof external.sampleBlob === "string", `${externalID} must provide a sampleBlob path`);
-
-    return external;
-}
-
 export function getFactoryBankCatalogValue(catalogValue) {
-    assert(typeof catalogValue?.sampleBlob === "string", "Factory bank catalog must provide a sampleBlob path");
     assert(Array.isArray(catalogValue?.tables), "Factory bank catalog must provide a tables array");
 
     catalogValue.tables.forEach((table, tableIndex) => {
@@ -161,75 +154,76 @@ export function getFactoryBankCatalogValue(catalogValue) {
             `Factory bank catalog table ${tableIndex} must provide a positive frameCount`
         );
         assert(
-            Number.isInteger(Number(table?.sampleOffset)) && Number(table.sampleOffset) >= 0,
-            `Factory bank catalog table ${tableIndex} must provide a non-negative sampleOffset`
+            typeof table?.sourceWav === "string" && table.sourceWav.length > 0,
+            `Factory bank catalog table ${tableIndex} must provide sourceWav`
         );
     });
 
     return catalogValue;
 }
 
-export function extractWavetableFrames(
-    sampleBlob,
-    tableMeta,
+function extractSourceFrames(
+    samples,
     {
-        visibleMipIndex = DEFAULT_VISIBLE_MIP_INDEX,
+        expectedFrameCount = undefined,
         samplesPerFrame = DEFAULT_SAMPLES_PER_FRAME,
-        paddedFrameSize = DEFAULT_PADDED_FRAME_SIZE,
     } = {}
 ) {
-    const typedBlob = sampleBlob instanceof Float32Array ? sampleBlob : Float32Array.from(sampleBlob);
-    const frameCount = Number(tableMeta?.frameCount);
-    const sampleOffset = Number(tableMeta?.sampleOffset ?? 0);
+    assert(
+        samples.length % samplesPerFrame === 0,
+        `Source wavetable files must contain a whole number of ${samplesPerFrame}-sample frames`
+    );
 
-    assert(Number.isInteger(frameCount) && frameCount > 0, "tableMeta.frameCount must be a positive integer");
-    assert(Number.isInteger(sampleOffset) && sampleOffset >= 0, "tableMeta.sampleOffset must be a non-negative integer");
+    const frameCount = samples.length / samplesPerFrame;
+    assert(frameCount > 0, "Source wavetable files must contain at least one frame");
+
+    if (expectedFrameCount !== undefined) {
+        assert(
+            frameCount === expectedFrameCount,
+            `Source wavetable frame count mismatch: expected ${expectedFrameCount}, got ${frameCount}`
+        );
+    }
 
     const frames = [];
 
     for (let frameIndex = 0; frameIndex < frameCount; frameIndex += 1) {
-        const base =
-            sampleOffset + (((visibleMipIndex * frameCount) + frameIndex) * paddedFrameSize);
-        const start = base + 1;
+        const start = frameIndex * samplesPerFrame;
         const end = start + samplesPerFrame;
-
-        assert(end <= typedBlob.length, "Wavetable bank does not contain the requested frame range");
-
-        frames.push(typedBlob.slice(start, end));
+        frames.push(canonicalizeFrame(samples.slice(start, end)));
     }
 
-    return frames;
+    return {
+        frameCount,
+        frames,
+    };
 }
 
-export async function loadWavetableFramesFromUrls(
+export async function loadSourceWavetableFramesFromUrl(
     {
-        manifestValue,
-        sampleBlobUrl,
+        sourceWavUrl,
+        sourceWavPath,
         tableIndex = 0,
-        visibleMipIndex = DEFAULT_VISIBLE_MIP_INDEX,
+        expectedFrameCount = undefined,
         samplesPerFrame = DEFAULT_SAMPLES_PER_FRAME,
-        paddedFrameSize = DEFAULT_PADDED_FRAME_SIZE,
     }
 ) {
-    const response = await fetch(sampleBlobUrl.toString());
-    assert(response.ok, `Failed to fetch wavetable bank from ${sampleBlobUrl}`);
+    const response = await fetch(sourceWavUrl.toString());
+    assert(response.ok, `Failed to fetch source wavetable from ${sourceWavUrl}`);
 
     const arrayBuffer = await response.arrayBuffer();
     const parsedWave = parseWaveFile(arrayBuffer);
-    const clampedTableIndex = clampToRange(tableIndex, 0, manifestValue.tables.length - 1);
-    const tableMeta = manifestValue.tables[clampedTableIndex];
+    const sourceFrames = extractSourceFrames(parsedWave.samples, {
+        expectedFrameCount,
+        samplesPerFrame,
+    });
 
     return {
         sampleRate: parsedWave.sampleRate,
-        sampleBlobPath: manifestValue.sampleBlob,
-        tableIndex: clampedTableIndex,
-        visibleMipIndex,
-        frameCount: Number(tableMeta.frameCount),
-        frames: extractWavetableFrames(parsedWave.samples, tableMeta, {
-            visibleMipIndex,
-            samplesPerFrame,
-            paddedFrameSize,
-        }),
+        sampleBlobPath: sourceWavPath,
+        tableIndex,
+        frameCount: sourceFrames.frameCount,
+        samples: parsedWave.samples,
+        frames: sourceFrames.frames,
     };
 }
 
@@ -246,28 +240,21 @@ export async function loadFactoryBankCatalogFromPatch(
 export async function loadFactoryBankFramesFromPatch(
     patchConnection,
     {
-        manifest = patchConnection?.manifest,
-        externalID = FACTORY_BANK_EXTERNAL_ID,
         catalogPath = DEFAULT_FACTORY_BANK_CATALOG_PATH,
         tableIndex = 0,
-        visibleMipIndex = DEFAULT_VISIBLE_MIP_INDEX,
         samplesPerFrame = DEFAULT_SAMPLES_PER_FRAME,
-        paddedFrameSize = DEFAULT_PADDED_FRAME_SIZE,
     } = {}
 ) {
-    const manifestValue = manifest?.externals?.[externalID]
-        ? getFactoryBankValue(manifest, externalID)
-        : toFactoryBankManifestValue(
-            await loadFactoryBankCatalogFromPatch(patchConnection, { catalogPath })
-        );
-    const sampleBlobUrl = resolvePatchResourceUrl(manifestValue.sampleBlob, patchConnection);
+    const catalogValue = await loadFactoryBankCatalogFromPatch(patchConnection, { catalogPath });
+    const clampedTableIndex = clampToRange(tableIndex, 0, catalogValue.tables.length - 1);
+    const sourceTableMeta = catalogValue.tables[clampedTableIndex];
+    const sourceWavUrl = resolvePatchResourceUrl(sourceTableMeta.sourceWav, patchConnection);
 
-    return loadWavetableFramesFromUrls({
-        manifestValue,
-        sampleBlobUrl,
-        tableIndex,
-        visibleMipIndex,
+    return loadSourceWavetableFramesFromUrl({
+        sourceWavUrl,
+        sourceWavPath: sourceTableMeta.sourceWav,
+        tableIndex: clampedTableIndex,
+        expectedFrameCount: Number(sourceTableMeta.frameCount),
         samplesPerFrame,
-        paddedFrameSize,
     });
 }

@@ -6,9 +6,7 @@ import { pathToFileURL } from "node:url";
 
 import {
     parseWaveFile,
-    getFactoryBankValue,
     getFactoryBankCatalogValue,
-    extractWavetableFrames,
     loadFactoryBankCatalogFromPatch,
     loadFactoryBankFramesFromPatch,
 } from "../patch_gui/wavetable-bank.mjs";
@@ -231,33 +229,46 @@ async function loadCurrentBank() {
         await fs.readFile(path.join(repoRoot, "WavetableSynth.cmajorpatch"), "utf8")
     );
     const catalog = getFactoryBankCatalogValue(
-        JSON.parse(await fs.readFile(path.join(repoRoot, "assets", "factory-bank.json"), "utf8"))
+        JSON.parse(await fs.readFile(path.join(repoRoot, "assets", "factory-bank-catalog.json"), "utf8"))
     );
-    const bankValue = getFactoryBankValue(manifest);
-    const wavBytes = await fs.readFile(path.join(repoRoot, bankValue.sampleBlob));
+    const firstTable = catalog.tables[0];
+    const sourceWavBytes = await fs.readFile(path.join(repoRoot, firstTable.sourceWav));
     const parsedWave = parseWaveFile(
-        wavBytes.buffer.slice(wavBytes.byteOffset, wavBytes.byteOffset + wavBytes.byteLength)
+        sourceWavBytes.buffer.slice(
+            sourceWavBytes.byteOffset,
+            sourceWavBytes.byteOffset + sourceWavBytes.byteLength
+        )
     );
+    const bank = await loadFactoryBankFramesFromPatch({
+        manifest,
+        getResourceAddress(requestedPath) {
+            if (requestedPath === "assets/factory-bank-catalog.json") {
+                return `data:application/json;base64,${Buffer.from(JSON.stringify(catalog)).toString("base64")}`;
+            }
+
+            if (requestedPath === firstTable.sourceWav) {
+                return `data:audio/wav;base64,${sourceWavBytes.toString("base64")}`;
+            }
+
+            throw new Error(`Unexpected resource path: ${requestedPath}`);
+        },
+    });
 
     return {
         catalog,
-        bankValue,
         parsedWave,
-        frames: extractWavetableFrames(parsedWave.samples, bankValue.tables[0]),
+        bank,
+        frames: bank.frames,
     };
 }
 
-test("wave bank parser reads the current float32 mono bank", async () => {
-    const { bankValue, parsedWave } = await loadCurrentBank();
-    const expectedSampleCount = bankValue.tables.reduce(
-        (total, table) => total + (table.frameCount * 11 * 2051),
-        0
-    );
-
+test("wave bank parser reads the current display source wavetable", async () => {
+    const { bank, parsedWave } = await loadCurrentBank();
     assert.equal(parsedWave.sampleRate, 44100);
     assert.equal(parsedWave.channelCount, 1);
     assert.equal(parsedWave.bitsPerSample, 32);
-    assert.equal(parsedWave.samples.length, expectedSampleCount);
+    assert.equal(parsedWave.samples.length, bank.frameCount * 2048);
+    assert.equal(bank.samples.length, parsedWave.samples.length);
 });
 
 test("frame extraction returns the 16 display-demo frames with evolving harmonic shape", async () => {
@@ -285,27 +296,27 @@ test("frame extraction returns the 16 display-demo frames with evolving harmonic
     );
 });
 
-test("bank loading falls back to the generated catalog when runtime status strips externals", async () => {
+test("bank loading resolves the selected source wavetable from the runtime catalog", async () => {
     const manifest = JSON.parse(
         await fs.readFile(path.join(repoRoot, "WavetableSynth.cmajorpatch"), "utf8")
     );
-    const strippedManifest = { ...manifest };
-    const catalogBytes = await fs.readFile(path.join(repoRoot, "assets", "factory-bank.json"));
-    const sampleBlob = await fs.readFile(path.join(repoRoot, "assets", "factory-bank.wav"));
-    delete strippedManifest.externals;
+    const catalogBytes = await fs.readFile(path.join(repoRoot, "assets", "factory-bank-catalog.json"));
+    const catalog = JSON.parse(catalogBytes.toString("utf8"));
+    const sourceWavPath = catalog.tables[0].sourceWav;
+    const sourceWavBytes = await fs.readFile(path.join(repoRoot, sourceWavPath));
 
     const requestedPaths = [];
     const bank = await loadFactoryBankFramesFromPatch({
-        manifest: strippedManifest,
+        manifest,
         getResourceAddress(requestedPath) {
             requestedPaths.push(requestedPath);
 
-            if (requestedPath === "assets/factory-bank.json") {
+            if (requestedPath === "assets/factory-bank-catalog.json") {
                 return `data:application/json;base64,${catalogBytes.toString("base64")}`;
             }
 
-            if (requestedPath === "assets/factory-bank.wav") {
-                return `data:audio/wav;base64,${sampleBlob.toString("base64")}`;
+            if (requestedPath === sourceWavPath) {
+                return `data:audio/wav;base64,${sourceWavBytes.toString("base64")}`;
             }
 
             throw new Error(`Unexpected resource path: ${requestedPath}`);
@@ -313,17 +324,33 @@ test("bank loading falls back to the generated catalog when runtime status strip
     });
 
     assert.equal(bank.sampleRate, 44100);
-    assert.equal(bank.frameCount, manifest.externals["wt::factoryBank"].tables[0].frameCount);
+    assert.equal(bank.frameCount, catalog.tables[0].frameCount);
     assert.equal(bank.frames[0]?.length, 2048);
-    assert.equal(bank.sampleBlobPath, "assets/factory-bank.wav");
-    assert.deepEqual(requestedPaths, ["assets/factory-bank.json", "assets/factory-bank.wav"]);
+    assert.equal(bank.samples.length, bank.frameCount * 2048);
+    assert.equal(bank.sampleBlobPath, sourceWavPath);
+    assert.deepEqual(requestedPaths, ["assets/factory-bank-catalog.json", sourceWavPath]);
+});
+
+test("factory bank catalog rejects stale packed-bank entries without source wavs", () => {
+    assert.throws(
+        () => getFactoryBankCatalogValue({
+            tables: [
+                {
+                    tableId: "bad",
+                    name: "Bad",
+                    frameCount: 4,
+                },
+            ],
+        }),
+        /must provide sourceWav/
+    );
 });
 
 test("factory bank catalog loader returns names for the selector UI", async () => {
-    const catalogBytes = await fs.readFile(path.join(repoRoot, "assets", "factory-bank.json"));
+    const catalogBytes = await fs.readFile(path.join(repoRoot, "assets", "factory-bank-catalog.json"));
     const catalog = await loadFactoryBankCatalogFromPatch({
         getResourceAddress(requestedPath) {
-            if (requestedPath === "assets/factory-bank.json") {
+            if (requestedPath === "assets/factory-bank-catalog.json") {
                 return `data:application/json;base64,${catalogBytes.toString("base64")}`;
             }
 
@@ -334,6 +361,7 @@ test("factory bank catalog loader returns names for the selector UI", async () =
     assert.ok(catalog.tables.length >= 2);
     assert.equal(typeof catalog.tables[0]?.tableId, "string");
     assert.equal(typeof catalog.tables[0]?.name, "string");
+    assert.equal(typeof catalog.tables[0]?.sourceWav, "string");
 });
 
 test("display position matching ignores float noise but not real slider movement", async () => {
@@ -352,16 +380,74 @@ test("upward wavetable-stage drag maps to the same normalized position change as
     assert.equal(mapDisplayDragToPosition(0.1, 300, 700, 200), 0);
 });
 
+test("wavetable upload events are chunked into 2048-sample frames with a shared upload token", async () => {
+    const { buildUploadedWavetableFrameEvents } = await loadPatchViewModule();
+    const bank = {
+        frameCount: 2,
+        frames: [
+            Float32Array.from({ length: 2048 }, (_, index) => index / 2048),
+            Float32Array.from({ length: 2048 }, (_, index) => (index + 2048) / 2048),
+        ],
+    };
+
+    const events = buildUploadedWavetableFrameEvents(bank, 17);
+
+    assert.equal(events.length, 2);
+    assert.deepEqual(
+        events.map(({ uploadToken, frameCount, frameIndex, samples }) => ({
+            uploadToken,
+            frameCount,
+            frameIndex,
+            sampleCount: samples.length,
+            firstSample: samples[0],
+            lastSample: samples[samples.length - 1],
+        })),
+        [
+            {
+                uploadToken: 17,
+                frameCount: 2,
+                frameIndex: 0,
+                sampleCount: 2048,
+                firstSample: 0,
+                lastSample: 2047 / 2048,
+            },
+            {
+                uploadToken: 17,
+                frameCount: 2,
+                frameIndex: 1,
+                sampleCount: 2048,
+                firstSample: 1,
+                lastSample: 4095 / 2048,
+            },
+        ]
+    );
+});
+
 test("loading table 1 returns a different stored frame set than table 0", async () => {
     const manifest = JSON.parse(
         await fs.readFile(path.join(repoRoot, "WavetableSynth.cmajorpatch"), "utf8")
     );
-    const sampleBlob = await fs.readFile(path.join(repoRoot, "assets", "factory-bank.wav"));
+    const catalog = JSON.parse(
+        await fs.readFile(path.join(repoRoot, "assets", "factory-bank-catalog.json"), "utf8")
+    );
+    const sourceWavByPath = new Map();
+
+    for (const table of catalog.tables.slice(0, 2)) {
+        sourceWavByPath.set(
+            table.sourceWav,
+            await fs.readFile(path.join(repoRoot, table.sourceWav))
+        );
+    }
+
     const patchConnection = {
         manifest,
         getResourceAddress(requestedPath) {
-            if (requestedPath === "assets/factory-bank.wav") {
-                return `data:audio/wav;base64,${sampleBlob.toString("base64")}`;
+            if (requestedPath === "assets/factory-bank-catalog.json") {
+                return `data:application/json;base64,${Buffer.from(JSON.stringify(catalog)).toString("base64")}`;
+            }
+
+            if (sourceWavByPath.has(requestedPath)) {
+                return `data:audio/wav;base64,${sourceWavByPath.get(requestedPath).toString("base64")}`;
             }
 
             throw new Error(`Unexpected resource path: ${requestedPath}`);

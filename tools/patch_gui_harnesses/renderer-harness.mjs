@@ -1,4 +1,7 @@
-import { loadWavetableFramesFromUrls, getFactoryBankValue } from "../../patch_gui/wavetable-bank.mjs";
+import {
+    loadFactoryBankCatalogFromPatch,
+    loadFactoryBankFramesFromPatch,
+} from "../../patch_gui/wavetable-bank.mjs";
 import { CanvasWavetableDisplay } from "../../patch_gui/wavetable-display.mjs";
 
 async function loadManifest() {
@@ -41,16 +44,20 @@ if ("ResizeObserver" in window) {
 resizeDisplay();
 
 const manifest = await loadManifest();
-const manifestValue = getFactoryBankValue(manifest);
-const sampleBlobUrl = new URL(`../../${manifestValue.sampleBlob}`, import.meta.url);
-const bank = await loadWavetableFramesFromUrls({
-    manifestValue,
-    sampleBlobUrl,
+const patchConnection = {
+    manifest,
+    getResourceAddress(path) {
+        return new URL(`../../${path}`, import.meta.url);
+    },
+};
+const catalog = await loadFactoryBankCatalogFromPatch(patchConnection);
+const bank = await loadFactoryBankFramesFromPatch(patchConnection, {
+    tableIndex: 0,
 });
 
 display.setFrames(bank.frames);
 setPosition(positionInput.value);
-status.textContent = `Loaded ${bank.frameCount} frames from the real display-demo bank`;
+status.textContent = `Loaded ${bank.frameCount} frames from ${catalog.tables[0]?.name ?? "the first bank table"}`;
 
 positionInput.addEventListener("input", () => setPosition(positionInput.value));
 

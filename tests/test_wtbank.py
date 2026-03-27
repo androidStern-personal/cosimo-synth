@@ -301,8 +301,16 @@ def test_build_catalog_bank_value_adds_table_names_and_ids() -> None:
     assert build_catalog_bank_value(
         bank,
         (
-            CatalogTable(table_id="blend2", name="Blend 2"),
-            CatalogTable(table_id="sweep4", name="Sweep 4"),
+            CatalogTable(
+                table_id="blend2",
+                name="Blend 2",
+                source_wav="assets/factory_sources/blend2.wav",
+            ),
+            CatalogTable(
+                table_id="sweep4",
+                name="Sweep 4",
+                source_wav="assets/factory_sources/sweep4.wav",
+            ),
         ),
         sample_blob_resource="assets/factory-bank.wav",
     ) == {
@@ -311,12 +319,14 @@ def test_build_catalog_bank_value_adds_table_names_and_ids() -> None:
             {
                 "tableId": "blend2",
                 "name": "Blend 2",
+                "sourceWav": "assets/factory_sources/blend2.wav",
                 "frameCount": 2,
                 "sampleOffset": 0,
             },
             {
                 "tableId": "sweep4",
                 "name": "Sweep 4",
+                "sourceWav": "assets/factory_sources/sweep4.wav",
                 "frameCount": 4,
                 "sampleOffset": 2 * MIP_COUNT * PADDED_FRAME_SIZE,
             },

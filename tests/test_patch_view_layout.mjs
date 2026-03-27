@@ -27,8 +27,10 @@ test("iOS patch manifest keeps the synth graph but switches to the mobile editor
         "cmajor/Mseg.cmajor",
         "cmajor/WavetableSynth.cmajor",
     ]);
-    assert.deepEqual(iosManifest.resources, desktopManifest.resources);
-    assert.deepEqual(iosManifest.externals, desktopManifest.externals);
+    assert.deepEqual(desktopManifest.resources, []);
+    assert.deepEqual(iosManifest.resources, []);
+    assert.equal("externals" in desktopManifest, false);
+    assert.equal("externals" in iosManifest, false);
 });
 
 test("shared patch GUI .js files are generated from the .mjs source modules", async () => {
@@ -52,34 +54,36 @@ test("shared patch GUI .js files are generated from the .mjs source modules", as
     }
 });
 
-test("generated factory bank catalog stays aligned with both patch manifests", async () => {
+test("generated factory bank catalog points at real bundled source wavetable files", async () => {
     const desktopManifest = await loadPatchManifest("WavetableSynth.cmajorpatch");
     const iosManifest = await loadPatchManifest("WavetableSynth.iOS.cmajorpatch");
     const catalog = JSON.parse(
-        await fs.readFile(path.join(repoRoot, "assets", "factory-bank.json"), "utf8")
+        await fs.readFile(path.join(repoRoot, "assets", "factory-bank-catalog.json"), "utf8")
     );
 
-    const expectedExternal = {
-        sampleBlob: catalog.sampleBlob,
-        tables: catalog.tables.map(({ frameCount, sampleOffset }) => ({
-            frameCount,
-            sampleOffset,
-        })),
-    };
-
-    assert.ok(desktopManifest.resources.includes("assets/factory-bank.wav"));
-    assert.ok(desktopManifest.resources.includes("assets/factory-bank.json"));
-    assert.ok(iosManifest.resources.includes("assets/factory-bank.wav"));
-    assert.ok(iosManifest.resources.includes("assets/factory-bank.json"));
-    assert.deepEqual(desktopManifest.externals["wt::factoryBank"], expectedExternal);
-    assert.deepEqual(iosManifest.externals["wt::factoryBank"], expectedExternal);
+    assert.deepEqual(desktopManifest.resources, []);
+    assert.deepEqual(iosManifest.resources, []);
+    assert.equal("externals" in desktopManifest, false);
+    assert.equal("externals" in iosManifest, false);
+    assert.ok(Array.isArray(catalog.tables));
     assert.ok(catalog.tables.length >= 2);
-    catalog.tables.forEach((table) => {
+    assert.equal("sampleBlob" in catalog, false);
+
+    for (const table of catalog.tables) {
         assert.equal(typeof table.tableId, "string");
+        assert.ok(table.tableId.length > 0);
         assert.equal(typeof table.name, "string");
+        assert.ok(table.name.length > 0);
+        assert.equal(typeof table.sourceWav, "string");
+        assert.match(table.sourceWav, /^assets\/factory_sources\//);
         assert.equal(Number.isInteger(table.frameCount), true);
-        assert.equal(Number.isInteger(table.sampleOffset), true);
-    });
+        assert.ok(table.frameCount > 0);
+        assert.equal("sampleOffset" in table, false);
+
+        const sourcePath = path.join(repoRoot, table.sourceWav);
+        const sourceStats = await fs.stat(sourcePath);
+        assert.equal(sourceStats.isFile(), true);
+    }
 });
 
 test("phone portrait layout uses a full-width scan rail and a compact host-keyboard dock", () => {

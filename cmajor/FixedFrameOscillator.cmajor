@@ -1,22 +1,16 @@
 namespace wt
 {
     let samplesPerFrame = 2048;
-    let paddedFrameSize = 2051;
-    let brightestMipIndex = 10;
+    let maxFramesPerTable = 256;
+    let maxTableSampleCount = samplesPerFrame * maxFramesPerTable;
 
-    struct TableMeta
+    struct UploadedWavetableFrame
     {
+        int32 uploadToken;
         int32 frameCount;
-        int32 sampleOffset;
+        int32 frameIndex;
+        float32[samplesPerFrame] samples;
     }
-
-    struct Bank
-    {
-        std::audio_data::Mono sampleBlob;
-        TableMeta[] tables;
-    }
-
-    external Bank factoryBank;
 
     float32 catmullRom (float32 p0, float32 p1, float32 p2, float32 p3, float32 t)
     {
@@ -24,69 +18,52 @@ namespace wt
                + t * (-p0 + 3.0f * p1 - 3.0f * p2 + p3)));
     }
 
-    int32 selectMipIndexFromPhaseIncrement (float32 phaseIncrement)
+    int32 resolveUploadedFrameCount (int32 resolvedFrameCount)
     {
-        // These are the exact one-table-per-octave handoff points. Equality stays on the
-        // brighter safe mip so the selector matches the conservative Nyquist rule.
-        if (phaseIncrement <= 0.0f)      return brightestMipIndex;
-        if (phaseIncrement <= 1.0f / 2048.0f) return 10;
-        if (phaseIncrement <= 1.0f / 1024.0f) return 9;
-        if (phaseIncrement <= 1.0f / 512.0f)  return 8;
-        if (phaseIncrement <= 1.0f / 256.0f)  return 7;
-        if (phaseIncrement <= 1.0f / 128.0f)  return 6;
-        if (phaseIncrement <= 1.0f / 64.0f)   return 5;
-        if (phaseIncrement <= 1.0f / 32.0f)   return 4;
-        if (phaseIncrement <= 1.0f / 16.0f)   return 3;
-        if (phaseIncrement <= 1.0f / 8.0f)    return 2;
-        if (phaseIncrement <= 1.0f / 4.0f)    return 1;
-        return 0;
-    }
-
-    int32 frameBase (int32 tableIndex, int32 frameIndex, int32 mipIndex)
-    {
-        let table = factoryBank.tables[tableIndex];
-        return table.sampleOffset + (((mipIndex * table.frameCount) + frameIndex) * paddedFrameSize);
-    }
-
-    int32 resolveTableIndex (float32 requestedSelect)
-    {
-        let tableCount = int32 (factoryBank.tables.size);
-
-        if (tableCount <= 1)
+        if (resolvedFrameCount < 1 || resolvedFrameCount > maxFramesPerTable)
             return 0;
 
-        let rounded = int32 (std::intrinsics::floor (requestedSelect + 0.5f));
-        return std::intrinsics::clamp (rounded, 0, tableCount - 1);
+        return resolvedFrameCount;
     }
 
-    float32 readFixedFrameSample (int32 tableIndex, int32 frameIndex, int32 mipIndex, float32 phase)
+    int32 resolveRequestedTableIndex (float32 requestedSelect)
+    {
+        let rounded = int32 (std::intrinsics::floor (requestedSelect + 0.5f));
+        return std::intrinsics::clamp (rounded, 0, maxFramesPerTable - 1);
+    }
+
+    float32 readFixedFrameSample (const float[] tableSamples, int32 frameIndex, float32 phase)
     {
         let wrappedPhase = std::intrinsics::wrap (phase, 1.0f);
         let x = wrappedPhase * float32 (samplesPerFrame);
         let sampleIndex = int32 (std::intrinsics::floor (x));
         let fractional = x - float32 (sampleIndex);
-        let base = frameBase (tableIndex, frameIndex, mipIndex) + sampleIndex;
+        let frameBase = frameIndex * samplesPerFrame;
 
-        let p0 = factoryBank.sampleBlob.frames[base];
-        let p1 = factoryBank.sampleBlob.frames[base + 1];
-        let p2 = factoryBank.sampleBlob.frames[base + 2];
-        let p3 = factoryBank.sampleBlob.frames[base + 3];
+        let p0Offset = sampleIndex == 0 ? samplesPerFrame - 1 : sampleIndex - 1;
+        let p1Offset = sampleIndex;
+        let p2Offset = sampleIndex + 1 < samplesPerFrame ? sampleIndex + 1 : 0;
+        let p3Offset = sampleIndex + 2 < samplesPerFrame ? sampleIndex + 2 : sampleIndex + 2 - samplesPerFrame;
+
+        let p0 = tableSamples.at (frameBase + p0Offset);
+        let p1 = tableSamples.at (frameBase + p1Offset);
+        let p2 = tableSamples.at (frameBase + p2Offset);
+        let p3 = tableSamples.at (frameBase + p3Offset);
         return catmullRom (p0, p1, p2, p3, fractional);
     }
 
-    float32 readFrameBlendSample (int32 tableIndex,
+    float32 readFrameBlendSample (const float[] tableSamples,
                                   int32 frameLo,
                                   int32 frameHi,
-                                  int32 mipIndex,
                                   float32 phase,
                                   float32 frameT)
     {
-        let lo = readFixedFrameSample (tableIndex, frameLo, mipIndex, phase);
+        let lo = readFixedFrameSample (tableSamples, frameLo, phase);
 
         if (frameHi == frameLo)
             return lo;
 
-        let hi = readFixedFrameSample (tableIndex, frameHi, mipIndex, phase);
+        let hi = readFixedFrameSample (tableSamples, frameHi, phase);
         return lo + (hi - lo) * frameT;
     }
 
@@ -94,57 +71,86 @@ namespace wt
                                     float32 initialPhase = 0.0f)
     {
         input event float32 frequencyIn [[ name: "Frequency", min: 0.0f, max: 24000.0f, init: 440.0f, unit: "Hz" ]];
+        input event UploadedWavetableFrame tableFramesIn;
         input stream float32 framePositionIn [[ name: "Wavetable Position", min: 0.0f, max: 1.0f, init: 0.0f ]];
-        input value float32 tableSelectIn [[ name: "Wavetable Select", min: 0.0f, max: 255.0f, init: 0.0f, rampFrames: 0 ]];
+        input stream float32 tableSelectIn [[ name: "Wavetable Select", min: 0.0f, max: 255.0f, init: 0.0f ]];
         output stream float out;
 
         std::oscillators::PhasorState phasor;
-        int32 currentTableIndex = 0;
-        int32 frameCount = 1;
+        float32[maxTableSampleCount] currentTableSamples;
+        float32[maxTableSampleCount] stagedTableSamples;
+        int32 frameCount = 0;
         int32 lastFrameIndex = 0;
         float32 lastFrameIndexF = 0.0f;
         float32 currentFrequencyHz = initialFrequencyHz;
-        float32 currentPhaseIncrement = 0.0f;
-        int32 currentMipIndex = brightestMipIndex;
+        int32 lastObservedTableSelect = -1;
+        int32 stagedFrameCount = 0;
+        int32 stagedUploadToken = -1;
 
         event frequencyIn (float32 newFrequency)
         {
             currentFrequencyHz = newFrequency < 0.0f ? 0.0f : newFrequency;
-            currentPhaseIncrement = currentFrequencyHz / float32 (processor.frequency);
-            currentMipIndex = selectMipIndexFromPhaseIncrement (currentPhaseIncrement);
             phasor.setFrequency (processor.frequency, currentFrequencyHz);
+        }
+
+        event tableFramesIn (UploadedWavetableFrame newFrame)
+        {
+            let resolvedFrameCount = resolveUploadedFrameCount (newFrame.frameCount);
+
+            if (resolvedFrameCount == 0)
+                return;
+
+            if (newFrame.frameIndex < 0 || newFrame.frameIndex >= resolvedFrameCount)
+                return;
+
+            if (stagedUploadToken != newFrame.uploadToken || stagedFrameCount != resolvedFrameCount)
+            {
+                stagedUploadToken = newFrame.uploadToken;
+                stagedFrameCount = resolvedFrameCount;
+            }
+
+            let frameBase = newFrame.frameIndex * samplesPerFrame;
+
+            for (int32 i = 0; i < samplesPerFrame; ++i)
+                stagedTableSamples.at (frameBase + i) = newFrame.samples.at (i);
+
+            if (newFrame.frameIndex != resolvedFrameCount - 1)
+                return;
+
+            currentTableSamples = stagedTableSamples;
+            frameCount = stagedFrameCount;
+            lastFrameIndex = frameCount > 0 ? frameCount - 1 : 0;
+            lastFrameIndexF = float32 (lastFrameIndex);
+            phasor.phase = 0.0f;
         }
 
         void main()
         {
-            currentTableIndex = resolveTableIndex (tableSelectIn);
-            frameCount = factoryBank.tables[currentTableIndex].frameCount;
-            lastFrameIndex = frameCount - 1;
+            lastFrameIndex = frameCount > 0 ? frameCount - 1 : 0;
             lastFrameIndexF = float32 (lastFrameIndex);
             phasor.phase = std::intrinsics::wrap (initialPhase, 1.0f);
             currentFrequencyHz = currentFrequencyHz < 0.0f ? 0.0f : currentFrequencyHz;
-            currentPhaseIncrement = currentFrequencyHz / float32 (processor.frequency);
-            currentMipIndex = selectMipIndexFromPhaseIncrement (currentPhaseIncrement);
             phasor.setFrequency (processor.frequency, currentFrequencyHz);
 
             loop
             {
-                let requestedTableIndex = resolveTableIndex (tableSelectIn);
+                let requestedTableIndex = resolveRequestedTableIndex (tableSelectIn);
 
-                if (requestedTableIndex != currentTableIndex)
+                if (requestedTableIndex != lastObservedTableSelect)
                 {
-                    currentTableIndex = requestedTableIndex;
-                    frameCount = factoryBank.tables[currentTableIndex].frameCount;
-                    lastFrameIndex = frameCount - 1;
-                    lastFrameIndexF = float32 (lastFrameIndex);
+                    lastObservedTableSelect = requestedTableIndex;
                     phasor.phase = 0.0f;
                 }
 
                 let phase = phasor.next();
 
-                if (frameCount == 1)
+                if (frameCount <= 0)
                 {
-                    out <- readFixedFrameSample (currentTableIndex, 0, currentMipIndex, phase);
+                    out <- 0.0f;
+                }
+                else if (frameCount == 1)
+                {
+                    out <- readFixedFrameSample (currentTableSamples, 0, phase);
                 }
                 else
                 {
@@ -154,10 +160,9 @@ namespace wt
                     let frameHi = std::intrinsics::min (frameLo + 1, lastFrameIndex);
                     let frameT = frameIndex - float32 (frameLo);
                     out <- readFrameBlendSample (
-                        currentTableIndex,
+                        currentTableSamples,
                         frameLo,
                         frameHi,
-                        currentMipIndex,
                         phase,
                         frameT
                     );

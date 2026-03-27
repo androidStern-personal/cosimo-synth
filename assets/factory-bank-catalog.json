@@ -1,0 +1,1432 @@
+{
+  "tables": [
+    {
+      "tableId": "display-demo",
+      "name": "Display Demo",
+      "frameCount": 16,
+      "sourceWav": "assets/factory_sources/display-demo.wav"
+    },
+    {
+      "tableId": "sweep-4",
+      "name": "Sweep 4",
+      "frameCount": 4,
+      "sourceWav": "assets/factory_sources/sweep-4.wav"
+    },
+    {
+      "tableId": "4088",
+      "name": "4088",
+      "frameCount": 16,
+      "sourceWav": "assets/factory_sources/imported/4088.wav"
+    },
+    {
+      "tableId": "acid",
+      "name": "Acid",
+      "frameCount": 40,
+      "sourceWav": "assets/factory_sources/imported/Acid.wav"
+    },
+    {
+      "tableId": "analog-bd-sin",
+      "name": "Analog_BD_Sin",
+      "frameCount": 6,
+      "sourceWav": "assets/factory_sources/imported/Analog_BD_Sin.wav"
+    },
+    {
+      "tableId": "bs2-acid",
+      "name": "BS2 - Acid",
+      "frameCount": 128,
+      "sourceWav": "assets/factory_sources/imported/BS2 - Acid.wav"
+    },
+    {
+      "tableId": "bs2-filthy",
+      "name": "BS2 - Filthy",
+      "frameCount": 73,
+      "sourceWav": "assets/factory_sources/imported/BS2 - Filthy.wav"
+    },
+    {
+      "tableId": "bs2-subby-saw",
+      "name": "BS2 - Subby Saw",
+      "frameCount": 8,
+      "sourceWav": "assets/factory_sources/imported/BS2 - Subby Saw.wav"
+    },
+    {
+      "tableId": "bsod-square",
+      "name": "BSOD_Square",
+      "frameCount": 2,
+      "sourceWav": "assets/factory_sources/imported/BSOD_Square.wav"
+    },
+    {
+      "tableId": "basic-mg",
+      "name": "Basic Mg",
+      "frameCount": 166,
+      "sourceWav": "assets/factory_sources/imported/Basic Mg.wav"
+    },
+    {
+      "tableId": "basic-mini",
+      "name": "Basic Mini",
+      "frameCount": 4,
+      "sourceWav": "assets/factory_sources/imported/Basic Mini.wav"
+    },
+    {
+      "tableId": "basic-shapes",
+      "name": "Basic Shapes",
+      "frameCount": 7,
+      "sourceWav": "assets/factory_sources/imported/Basic Shapes.wav"
+    },
+    {
+      "tableId": "basic-cjw",
+      "name": "Basic_Cjw",
+      "frameCount": 6,
+      "sourceWav": "assets/factory_sources/imported/Basic_Cjw.wav"
+    },
+    {
+      "tableId": "basic-mcb",
+      "name": "Basic_McB",
+      "frameCount": 4,
+      "sourceWav": "assets/factory_sources/imported/Basic_McB.wav"
+    },
+    {
+      "tableId": "basic-mdc",
+      "name": "Basic_Mdc",
+      "frameCount": 4,
+      "sourceWav": "assets/factory_sources/imported/Basic_Mdc.wav"
+    },
+    {
+      "tableId": "basic-wrd",
+      "name": "Basic_Wrd",
+      "frameCount": 7,
+      "sourceWav": "assets/factory_sources/imported/Basic_Wrd.wav"
+    },
+    {
+      "tableId": "ds-saw-and-tri",
+      "name": "DS Saw and Tri",
+      "frameCount": 3,
+      "sourceWav": "assets/factory_sources/imported/DS Saw and Tri.wav"
+    },
+    {
+      "tableId": "jno",
+      "name": "Jno",
+      "frameCount": 10,
+      "sourceWav": "assets/factory_sources/imported/Jno.wav"
+    },
+    {
+      "tableId": "matrixy-c64",
+      "name": "MATRIXY C64",
+      "frameCount": 72,
+      "sourceWav": "assets/factory_sources/imported/MATRIXY C64.wav"
+    },
+    {
+      "tableId": "mb-saw",
+      "name": "MB Saw",
+      "frameCount": 256,
+      "sourceWav": "assets/factory_sources/imported/MB Saw.wav"
+    },
+    {
+      "tableId": "mb-triangle-metal",
+      "name": "MB Triangle (Metal)",
+      "frameCount": 256,
+      "sourceWav": "assets/factory_sources/imported/MB Triangle (Metal).wav"
+    },
+    {
+      "tableId": "mellow-but-instable",
+      "name": "Mellow But Instable",
+      "frameCount": 249,
+      "sourceWav": "assets/factory_sources/imported/Mellow But Instable.wav"
+    },
+    {
+      "tableId": "minibass",
+      "name": "MiniBass",
+      "frameCount": 11,
+      "sourceWav": "assets/factory_sources/imported/MiniBass.wav"
+    },
+    {
+      "tableId": "msaw",
+      "name": "MsAw",
+      "frameCount": 135,
+      "sourceWav": "assets/factory_sources/imported/MsAw.wav"
+    },
+    {
+      "tableId": "mspw",
+      "name": "MsPw",
+      "frameCount": 122,
+      "sourceWav": "assets/factory_sources/imported/MsPw.wav"
+    },
+    {
+      "tableId": "pwm-c64",
+      "name": "PWM C64",
+      "frameCount": 20,
+      "sourceWav": "assets/factory_sources/imported/PWM C64.wav"
+    },
+    {
+      "tableId": "pwm-ds",
+      "name": "PWM DS",
+      "frameCount": 100,
+      "sourceWav": "assets/factory_sources/imported/PWM DS.wav"
+    },
+    {
+      "tableId": "pwm-genji",
+      "name": "PWM Genji",
+      "frameCount": 136,
+      "sourceWav": "assets/factory_sources/imported/PWM Genji.wav"
+    },
+    {
+      "tableId": "pwm-inception",
+      "name": "PWM Inception",
+      "frameCount": 46,
+      "sourceWav": "assets/factory_sources/imported/PWM Inception.wav"
+    },
+    {
+      "tableId": "pwm-juno",
+      "name": "PWM Juno",
+      "frameCount": 112,
+      "sourceWav": "assets/factory_sources/imported/PWM Juno.wav"
+    },
+    {
+      "tableId": "pwm-lpf",
+      "name": "PWM LPF",
+      "frameCount": 225,
+      "sourceWav": "assets/factory_sources/imported/PWM LPF.wav"
+    },
+    {
+      "tableId": "pwm-mg",
+      "name": "PWM MG",
+      "frameCount": 68,
+      "sourceWav": "assets/factory_sources/imported/PWM MG.wav"
+    },
+    {
+      "tableId": "pwm-maths-2",
+      "name": "PWM Maths 2",
+      "frameCount": 17,
+      "sourceWav": "assets/factory_sources/imported/PWM Maths 2.wav"
+    },
+    {
+      "tableId": "pwm-maths",
+      "name": "PWM Maths",
+      "frameCount": 12,
+      "sourceWav": "assets/factory_sources/imported/PWM Maths.wav"
+    },
+    {
+      "tableId": "pwm-medicinehat",
+      "name": "PWM MedicineHat",
+      "frameCount": 46,
+      "sourceWav": "assets/factory_sources/imported/PWM MedicineHat.wav"
+    },
+    {
+      "tableId": "pwm-mini",
+      "name": "PWM Mini",
+      "frameCount": 180,
+      "sourceWav": "assets/factory_sources/imported/PWM Mini.wav"
+    },
+    {
+      "tableId": "pwm-reso",
+      "name": "PWM Reso",
+      "frameCount": 208,
+      "sourceWav": "assets/factory_sources/imported/PWM Reso.wav"
+    },
+    {
+      "tableId": "pwm-restricted",
+      "name": "PWM Restricted",
+      "frameCount": 109,
+      "sourceWav": "assets/factory_sources/imported/PWM Restricted.wav"
+    },
+    {
+      "tableId": "pwm-trench",
+      "name": "PWM Trench",
+      "frameCount": 44,
+      "sourceWav": "assets/factory_sources/imported/PWM Trench.wav"
+    },
+    {
+      "tableId": "pwm-mdc",
+      "name": "PWM_Mdc",
+      "frameCount": 90,
+      "sourceWav": "assets/factory_sources/imported/PWM_Mdc.wav"
+    },
+    {
+      "tableId": "sqr-saw-wrd",
+      "name": "SQR_SAW_Wrd",
+      "frameCount": 2,
+      "sourceWav": "assets/factory_sources/imported/SQR_SAW_Wrd.wav"
+    },
+    {
+      "tableId": "sawrounded",
+      "name": "SawRounded",
+      "frameCount": 26,
+      "sourceWav": "assets/factory_sources/imported/SawRounded.wav"
+    },
+    {
+      "tableId": "sawroundedtosquare",
+      "name": "SawRoundedToSquare",
+      "frameCount": 26,
+      "sourceWav": "assets/factory_sources/imported/SawRoundedToSquare.wav"
+    },
+    {
+      "tableId": "sweep20",
+      "name": "Sweep20",
+      "frameCount": 255,
+      "sourceWav": "assets/factory_sources/imported/Sweep20.wav"
+    },
+    {
+      "tableId": "anti-stasis",
+      "name": "Anti-Stasis",
+      "frameCount": 177,
+      "sourceWav": "assets/factory_sources/imported/Anti-Stasis.wav"
+    },
+    {
+      "tableId": "bottleblow",
+      "name": "BottleBlow",
+      "frameCount": 90,
+      "sourceWav": "assets/factory_sources/imported/BottleBlow.wav"
+    },
+    {
+      "tableId": "crushwub",
+      "name": "CrushWub",
+      "frameCount": 12,
+      "sourceWav": "assets/factory_sources/imported/CrushWub.wav"
+    },
+    {
+      "tableId": "debussy",
+      "name": "Debussy",
+      "frameCount": 21,
+      "sourceWav": "assets/factory_sources/imported/Debussy.wav"
+    },
+    {
+      "tableId": "dirtysaw",
+      "name": "DirtySaw",
+      "frameCount": 6,
+      "sourceWav": "assets/factory_sources/imported/DirtySaw.wav"
+    },
+    {
+      "tableId": "dist-8bit-fwap",
+      "name": "Dist 8bit Fwap",
+      "frameCount": 18,
+      "sourceWav": "assets/factory_sources/imported/Dist 8bit Fwap.wav"
+    },
+    {
+      "tableId": "dist-bass-dropper",
+      "name": "Dist Bass Dropper",
+      "frameCount": 16,
+      "sourceWav": "assets/factory_sources/imported/Dist Bass Dropper.wav"
+    },
+    {
+      "tableId": "dist-c2",
+      "name": "Dist C2",
+      "frameCount": 5,
+      "sourceWav": "assets/factory_sources/imported/Dist C2.wav"
+    },
+    {
+      "tableId": "dist-fwapper-sq",
+      "name": "Dist Fwapper SQ",
+      "frameCount": 20,
+      "sourceWav": "assets/factory_sources/imported/Dist Fwapper SQ.wav"
+    },
+    {
+      "tableId": "dist-sub-dskperc",
+      "name": "Dist Sub Dskperc",
+      "frameCount": 9,
+      "sourceWav": "assets/factory_sources/imported/Dist Sub Dskperc.wav"
+    },
+    {
+      "tableId": "dist-watech",
+      "name": "Dist WaTech",
+      "frameCount": 256,
+      "sourceWav": "assets/factory_sources/imported/Dist WaTech.wav"
+    },
+    {
+      "tableId": "dist-d00t",
+      "name": "Dist d00t",
+      "frameCount": 256,
+      "sourceWav": "assets/factory_sources/imported/Dist d00t.wav"
+    },
+    {
+      "tableId": "dull-toy",
+      "name": "Dull_toy",
+      "frameCount": 3,
+      "sourceWav": "assets/factory_sources/imported/Dull_toy.wav"
+    },
+    {
+      "tableId": "ethos",
+      "name": "Ethos",
+      "frameCount": 64,
+      "sourceWav": "assets/factory_sources/imported/Ethos.wav"
+    },
+    {
+      "tableId": "evol-longreece",
+      "name": "Evol Longreece",
+      "frameCount": 182,
+      "sourceWav": "assets/factory_sources/imported/Evol Longreece.wav"
+    },
+    {
+      "tableId": "evol-sweep",
+      "name": "Evol Sweep",
+      "frameCount": 7,
+      "sourceWav": "assets/factory_sources/imported/Evol Sweep.wav"
+    },
+    {
+      "tableId": "evolution",
+      "name": "Evolution",
+      "frameCount": 6,
+      "sourceWav": "assets/factory_sources/imported/Evolution.wav"
+    },
+    {
+      "tableId": "fft-add-2nds",
+      "name": "FFT_Add_2nds",
+      "frameCount": 16,
+      "sourceWav": "assets/factory_sources/imported/FFT_Add_2nds.wav"
+    },
+    {
+      "tableId": "fft-add-3rds",
+      "name": "FFT_Add_3rds",
+      "frameCount": 16,
+      "sourceWav": "assets/factory_sources/imported/FFT_Add_3rds.wav"
+    },
+    {
+      "tableId": "fft-add-4ths",
+      "name": "FFT_Add_4ths",
+      "frameCount": 16,
+      "sourceWav": "assets/factory_sources/imported/FFT_Add_4ths.wav"
+    },
+    {
+      "tableId": "fft-animal-1",
+      "name": "FFT_Animal 1",
+      "frameCount": 7,
+      "sourceWav": "assets/factory_sources/imported/FFT_Animal 1.wav"
+    },
+    {
+      "tableId": "fft-squeal",
+      "name": "FFT_SQUEAL",
+      "frameCount": 7,
+      "sourceWav": "assets/factory_sources/imported/FFT_SQUEAL.wav"
+    },
+    {
+      "tableId": "fmfm",
+      "name": "FMFM",
+      "frameCount": 25,
+      "sourceWav": "assets/factory_sources/imported/FMFM.wav"
+    },
+    {
+      "tableId": "fm-freak",
+      "name": "FM_Freak",
+      "frameCount": 14,
+      "sourceWav": "assets/factory_sources/imported/FM_Freak.wav"
+    },
+    {
+      "tableId": "fm-splat",
+      "name": "FM_Splat",
+      "frameCount": 57,
+      "sourceWav": "assets/factory_sources/imported/FM_Splat.wav"
+    },
+    {
+      "tableId": "gs-xello",
+      "name": "GS-xello",
+      "frameCount": 19,
+      "sourceWav": "assets/factory_sources/imported/GS-xello.wav"
+    },
+    {
+      "tableId": "gritty",
+      "name": "Gritty",
+      "frameCount": 4,
+      "sourceWav": "assets/factory_sources/imported/Gritty.wav"
+    },
+    {
+      "tableId": "harmonic-morph",
+      "name": "Harmonic Morph",
+      "frameCount": 256,
+      "sourceWav": "assets/factory_sources/imported/Harmonic Morph.wav"
+    },
+    {
+      "tableId": "harmonic-subtle",
+      "name": "Harmonic Subtle",
+      "frameCount": 202,
+      "sourceWav": "assets/factory_sources/imported/Harmonic Subtle.wav"
+    },
+    {
+      "tableId": "harmonicseries",
+      "name": "HarmonicSeries",
+      "frameCount": 24,
+      "sourceWav": "assets/factory_sources/imported/HarmonicSeries.wav"
+    },
+    {
+      "tableId": "hoo",
+      "name": "Hoo",
+      "frameCount": 7,
+      "sourceWav": "assets/factory_sources/imported/Hoo.wav"
+    },
+    {
+      "tableId": "hypa",
+      "name": "Hypa",
+      "frameCount": 1,
+      "sourceWav": "assets/factory_sources/imported/Hypa.wav"
+    },
+    {
+      "tableId": "icanhaskick",
+      "name": "ICanHasKick",
+      "frameCount": 256,
+      "sourceWav": "assets/factory_sources/imported/ICanHasKick.wav"
+    },
+    {
+      "tableId": "kream",
+      "name": "Kream",
+      "frameCount": 33,
+      "sourceWav": "assets/factory_sources/imported/Kream.wav"
+    },
+    {
+      "tableId": "mario",
+      "name": "Mario",
+      "frameCount": 4,
+      "sourceWav": "assets/factory_sources/imported/Mario.wav"
+    },
+    {
+      "tableId": "misfits",
+      "name": "Misfits",
+      "frameCount": 2,
+      "sourceWav": "assets/factory_sources/imported/Misfits.wav"
+    },
+    {
+      "tableId": "pwm-electro",
+      "name": "PWM Electro",
+      "frameCount": 256,
+      "sourceWav": "assets/factory_sources/imported/PWM Electro.wav"
+    },
+    {
+      "tableId": "pwm-weird",
+      "name": "PWM Weird",
+      "frameCount": 256,
+      "sourceWav": "assets/factory_sources/imported/PWM Weird.wav"
+    },
+    {
+      "tableId": "perfectsqsteps",
+      "name": "PerfectSQSteps",
+      "frameCount": 32,
+      "sourceWav": "assets/factory_sources/imported/PerfectSQSteps.wav"
+    },
+    {
+      "tableId": "prime",
+      "name": "Prime",
+      "frameCount": 239,
+      "sourceWav": "assets/factory_sources/imported/Prime.wav"
+    },
+    {
+      "tableId": "razor",
+      "name": "Razor",
+      "frameCount": 3,
+      "sourceWav": "assets/factory_sources/imported/Razor.wav"
+    },
+    {
+      "tableId": "reese",
+      "name": "Reese",
+      "frameCount": 43,
+      "sourceWav": "assets/factory_sources/imported/Reese.wav"
+    },
+    {
+      "tableId": "ring",
+      "name": "Ring",
+      "frameCount": 33,
+      "sourceWav": "assets/factory_sources/imported/Ring.wav"
+    },
+    {
+      "tableId": "ssq",
+      "name": "SSQ",
+      "frameCount": 3,
+      "sourceWav": "assets/factory_sources/imported/SSQ.wav"
+    },
+    {
+      "tableId": "scream",
+      "name": "Scream",
+      "frameCount": 123,
+      "sourceWav": "assets/factory_sources/imported/Scream.wav"
+    },
+    {
+      "tableId": "shrats",
+      "name": "Shrats",
+      "frameCount": 10,
+      "sourceWav": "assets/factory_sources/imported/Shrats.wav"
+    },
+    {
+      "tableId": "sludgecrank",
+      "name": "Sludgecrank",
+      "frameCount": 25,
+      "sourceWav": "assets/factory_sources/imported/Sludgecrank.wav"
+    },
+    {
+      "tableId": "subbass-1",
+      "name": "SubBass_1",
+      "frameCount": 12,
+      "sourceWav": "assets/factory_sources/imported/SubBass_1.wav"
+    },
+    {
+      "tableId": "tigra",
+      "name": "Tigra",
+      "frameCount": 7,
+      "sourceWav": "assets/factory_sources/imported/Tigra.wav"
+    },
+    {
+      "tableId": "vintagesynth",
+      "name": "VintageSynth",
+      "frameCount": 255,
+      "sourceWav": "assets/factory_sources/imported/VintageSynth.wav"
+    },
+    {
+      "tableId": "voxu",
+      "name": "Voxu",
+      "frameCount": 152,
+      "sourceWav": "assets/factory_sources/imported/Voxu.wav"
+    },
+    {
+      "tableId": "waveterminal",
+      "name": "Waveterminal",
+      "frameCount": 2,
+      "sourceWav": "assets/factory_sources/imported/Waveterminal.wav"
+    },
+    {
+      "tableId": "weow",
+      "name": "Weow",
+      "frameCount": 19,
+      "sourceWav": "assets/factory_sources/imported/Weow.wav"
+    },
+    {
+      "tableId": "wraith",
+      "name": "Wraith",
+      "frameCount": 8,
+      "sourceWav": "assets/factory_sources/imported/Wraith.wav"
+    },
+    {
+      "tableId": "yoy64",
+      "name": "Yoy64",
+      "frameCount": 256,
+      "sourceWav": "assets/factory_sources/imported/Yoy64.wav"
+    },
+    {
+      "tableId": "bipole-harmonic",
+      "name": "bipole_harmonic",
+      "frameCount": 3,
+      "sourceWav": "assets/factory_sources/imported/bipole_harmonic.wav"
+    },
+    {
+      "tableId": "01-square-saw-i",
+      "name": "01-Square-Saw I",
+      "frameCount": 2,
+      "sourceWav": "assets/factory_sources/imported/01-Square-Saw I.wav"
+    },
+    {
+      "tableId": "02-square-saw-ii",
+      "name": "02-Square-Saw II",
+      "frameCount": 2,
+      "sourceWav": "assets/factory_sources/imported/02-Square-Saw II.wav"
+    },
+    {
+      "tableId": "03-smooth-square",
+      "name": "03-Smooth Square",
+      "frameCount": 6,
+      "sourceWav": "assets/factory_sources/imported/03-Smooth Square.wav"
+    },
+    {
+      "tableId": "04-sin-square",
+      "name": "04-Sin-Square",
+      "frameCount": 5,
+      "sourceWav": "assets/factory_sources/imported/04-Sin-Square.wav"
+    },
+    {
+      "tableId": "05-sin-triangle",
+      "name": "05-Sin-Triangle",
+      "frameCount": 2,
+      "sourceWav": "assets/factory_sources/imported/05-Sin-Triangle.wav"
+    },
+    {
+      "tableId": "06-polysaw-i",
+      "name": "06-PolySaw I",
+      "frameCount": 5,
+      "sourceWav": "assets/factory_sources/imported/06-PolySaw I.wav"
+    },
+    {
+      "tableId": "07-polysaw-ii",
+      "name": "07-PolySaw II",
+      "frameCount": 5,
+      "sourceWav": "assets/factory_sources/imported/07-PolySaw II.wav"
+    },
+    {
+      "tableId": "08-roughmath-i",
+      "name": "08-Roughmath I",
+      "frameCount": 4,
+      "sourceWav": "assets/factory_sources/imported/08-Roughmath I.wav"
+    },
+    {
+      "tableId": "09-roughmath-ii",
+      "name": "09-Roughmath II",
+      "frameCount": 4,
+      "sourceWav": "assets/factory_sources/imported/09-Roughmath II.wav"
+    },
+    {
+      "tableId": "10-roughmath-iii",
+      "name": "10-Roughmath III",
+      "frameCount": 4,
+      "sourceWav": "assets/factory_sources/imported/10-Roughmath III.wav"
+    },
+    {
+      "tableId": "11-escalation-i",
+      "name": "11-Escalation I",
+      "frameCount": 3,
+      "sourceWav": "assets/factory_sources/imported/11-Escalation I.wav"
+    },
+    {
+      "tableId": "12-escalation-ii",
+      "name": "12-Escalation II",
+      "frameCount": 4,
+      "sourceWav": "assets/factory_sources/imported/12-Escalation II.wav"
+    },
+    {
+      "tableId": "13-multiplex",
+      "name": "13-Multiplex",
+      "frameCount": 4,
+      "sourceWav": "assets/factory_sources/imported/13-Multiplex.wav"
+    },
+    {
+      "tableId": "14-sinformant",
+      "name": "14-SinFormant",
+      "frameCount": 16,
+      "sourceWav": "assets/factory_sources/imported/14-SinFormant.wav"
+    },
+    {
+      "tableId": "15-additiveoctaves",
+      "name": "15-AdditiveOctaves",
+      "frameCount": 8,
+      "sourceWav": "assets/factory_sources/imported/15-AdditiveOctaves.wav"
+    },
+    {
+      "tableId": "16-additivmix-i",
+      "name": "16-AdditivMix I",
+      "frameCount": 4,
+      "sourceWav": "assets/factory_sources/imported/16-AdditivMix I.wav"
+    },
+    {
+      "tableId": "17-additivmix-ii",
+      "name": "17-AdditivMix II",
+      "frameCount": 4,
+      "sourceWav": "assets/factory_sources/imported/17-AdditivMix II.wav"
+    },
+    {
+      "tableId": "18-additivmix-iii",
+      "name": "18-AdditivMix III",
+      "frameCount": 5,
+      "sourceWav": "assets/factory_sources/imported/18-AdditivMix III.wav"
+    },
+    {
+      "tableId": "19-additivmix-iv",
+      "name": "19-AdditivMix IV",
+      "frameCount": 5,
+      "sourceWav": "assets/factory_sources/imported/19-AdditivMix IV.wav"
+    },
+    {
+      "tableId": "20-additivmix-v",
+      "name": "20-AdditivMix V",
+      "frameCount": 4,
+      "sourceWav": "assets/factory_sources/imported/20-AdditivMix V.wav"
+    },
+    {
+      "tableId": "21-additivmix-vi",
+      "name": "21-AdditivMix VI",
+      "frameCount": 9,
+      "sourceWav": "assets/factory_sources/imported/21-AdditivMix VI.wav"
+    },
+    {
+      "tableId": "22-inharmonic",
+      "name": "22-Inharmonic",
+      "frameCount": 3,
+      "sourceWav": "assets/factory_sources/imported/22-Inharmonic.wav"
+    },
+    {
+      "tableId": "23-sinarmonic-i",
+      "name": "23-Sinarmonic I",
+      "frameCount": 8,
+      "sourceWav": "assets/factory_sources/imported/23-Sinarmonic I.wav"
+    },
+    {
+      "tableId": "24-sinarmonic-ii",
+      "name": "24-Sinarmonic II",
+      "frameCount": 6,
+      "sourceWav": "assets/factory_sources/imported/24-Sinarmonic II.wav"
+    },
+    {
+      "tableId": "02-acid",
+      "name": "02-Acid",
+      "frameCount": 32,
+      "sourceWav": "assets/factory_sources/imported/02-Acid.wav"
+    },
+    {
+      "tableId": "03-groan-i",
+      "name": "03-Groan I",
+      "frameCount": 4,
+      "sourceWav": "assets/factory_sources/imported/03-Groan I.wav"
+    },
+    {
+      "tableId": "04-groan-ii",
+      "name": "04-Groan II",
+      "frameCount": 4,
+      "sourceWav": "assets/factory_sources/imported/04-Groan II.wav"
+    },
+    {
+      "tableId": "05-groan-iii",
+      "name": "05-Groan III",
+      "frameCount": 4,
+      "sourceWav": "assets/factory_sources/imported/05-Groan III.wav"
+    },
+    {
+      "tableId": "06-groan-iv",
+      "name": "06-Groan IV",
+      "frameCount": 4,
+      "sourceWav": "assets/factory_sources/imported/06-Groan IV.wav"
+    },
+    {
+      "tableId": "07-crude",
+      "name": "07-Crude",
+      "frameCount": 4,
+      "sourceWav": "assets/factory_sources/imported/07-Crude.wav"
+    },
+    {
+      "tableId": "08-drive-i",
+      "name": "08-Drive I",
+      "frameCount": 4,
+      "sourceWav": "assets/factory_sources/imported/08-Drive I.wav"
+    },
+    {
+      "tableId": "09-drive-ii",
+      "name": "09-Drive II",
+      "frameCount": 4,
+      "sourceWav": "assets/factory_sources/imported/09-Drive II.wav"
+    },
+    {
+      "tableId": "10-drive-iii",
+      "name": "10-Drive III",
+      "frameCount": 4,
+      "sourceWav": "assets/factory_sources/imported/10-Drive III.wav"
+    },
+    {
+      "tableId": "11-electric",
+      "name": "11-Electric",
+      "frameCount": 5,
+      "sourceWav": "assets/factory_sources/imported/11-Electric.wav"
+    },
+    {
+      "tableId": "12-screamer",
+      "name": "12-Screamer",
+      "frameCount": 13,
+      "sourceWav": "assets/factory_sources/imported/12-Screamer.wav"
+    },
+    {
+      "tableId": "13-dirty-needle",
+      "name": "13-Dirty Needle",
+      "frameCount": 11,
+      "sourceWav": "assets/factory_sources/imported/13-Dirty Needle.wav"
+    },
+    {
+      "tableId": "14-dirty-throat",
+      "name": "14-Dirty Throat",
+      "frameCount": 20,
+      "sourceWav": "assets/factory_sources/imported/14-Dirty Throat.wav"
+    },
+    {
+      "tableId": "15-dirty-pwm",
+      "name": "15-Dirty PWM",
+      "frameCount": 32,
+      "sourceWav": "assets/factory_sources/imported/15-Dirty PWM.wav"
+    },
+    {
+      "tableId": "16-strontium",
+      "name": "16-Strontium",
+      "frameCount": 18,
+      "sourceWav": "assets/factory_sources/imported/16-Strontium.wav"
+    },
+    {
+      "tableId": "17-crusher",
+      "name": "17-Crusher",
+      "frameCount": 22,
+      "sourceWav": "assets/factory_sources/imported/17-Crusher.wav"
+    },
+    {
+      "tableId": "18-reducer",
+      "name": "18-Reducer",
+      "frameCount": 13,
+      "sourceWav": "assets/factory_sources/imported/18-Reducer.wav"
+    },
+    {
+      "tableId": "19-kangaroo",
+      "name": "19-Kangaroo",
+      "frameCount": 30,
+      "sourceWav": "assets/factory_sources/imported/19-Kangaroo.wav"
+    },
+    {
+      "tableId": "20-frozen",
+      "name": "20-Frozen",
+      "frameCount": 2,
+      "sourceWav": "assets/factory_sources/imported/20-Frozen.wav"
+    },
+    {
+      "tableId": "21-vulgar",
+      "name": "21-Vulgar",
+      "frameCount": 17,
+      "sourceWav": "assets/factory_sources/imported/21-Vulgar.wav"
+    },
+    {
+      "tableId": "22-classic",
+      "name": "22-Classic",
+      "frameCount": 15,
+      "sourceWav": "assets/factory_sources/imported/22-Classic.wav"
+    },
+    {
+      "tableId": "23-disto",
+      "name": "23-Disto",
+      "frameCount": 35,
+      "sourceWav": "assets/factory_sources/imported/23-Disto.wav"
+    },
+    {
+      "tableId": "01-gentle-speech",
+      "name": "01-Gentle Speech",
+      "frameCount": 4,
+      "sourceWav": "assets/factory_sources/imported/01-Gentle Speech.wav"
+    },
+    {
+      "tableId": "02-modern-talking",
+      "name": "02-Modern Talking",
+      "frameCount": 6,
+      "sourceWav": "assets/factory_sources/imported/02-Modern Talking.wav"
+    },
+    {
+      "tableId": "03-deep-throat",
+      "name": "03-Deep Throat",
+      "frameCount": 4,
+      "sourceWav": "assets/factory_sources/imported/03-Deep Throat.wav"
+    },
+    {
+      "tableId": "04-melomantic",
+      "name": "04-Melomantic",
+      "frameCount": 11,
+      "sourceWav": "assets/factory_sources/imported/04-Melomantic.wav"
+    },
+    {
+      "tableId": "05-melofant",
+      "name": "05-Melofant",
+      "frameCount": 15,
+      "sourceWav": "assets/factory_sources/imported/05-Melofant.wav"
+    },
+    {
+      "tableId": "06-digigrain-i",
+      "name": "06-Digigrain I",
+      "frameCount": 26,
+      "sourceWav": "assets/factory_sources/imported/06-Digigrain I.wav"
+    },
+    {
+      "tableId": "07-digigrain-ii",
+      "name": "07-Digigrain II",
+      "frameCount": 21,
+      "sourceWav": "assets/factory_sources/imported/07-Digigrain II.wav"
+    },
+    {
+      "tableId": "08-formant-saw",
+      "name": "08-Formant Saw",
+      "frameCount": 19,
+      "sourceWav": "assets/factory_sources/imported/08-Formant Saw.wav"
+    },
+    {
+      "tableId": "09-formant-square",
+      "name": "09-Formant Square",
+      "frameCount": 8,
+      "sourceWav": "assets/factory_sources/imported/09-Formant Square.wav"
+    },
+    {
+      "tableId": "10-sonic",
+      "name": "10-Sonic",
+      "frameCount": 5,
+      "sourceWav": "assets/factory_sources/imported/10-Sonic.wav"
+    },
+    {
+      "tableId": "11-squelchy",
+      "name": "11-Squelchy",
+      "frameCount": 10,
+      "sourceWav": "assets/factory_sources/imported/11-Squelchy.wav"
+    },
+    {
+      "tableId": "12-duckorgan",
+      "name": "12-Duckorgan",
+      "frameCount": 4,
+      "sourceWav": "assets/factory_sources/imported/12-Duckorgan.wav"
+    },
+    {
+      "tableId": "13-flenders-i",
+      "name": "13-Flenders I",
+      "frameCount": 4,
+      "sourceWav": "assets/factory_sources/imported/13-Flenders I.wav"
+    },
+    {
+      "tableId": "14-flenders-ii",
+      "name": "14-Flenders II",
+      "frameCount": 4,
+      "sourceWav": "assets/factory_sources/imported/14-Flenders II.wav"
+    },
+    {
+      "tableId": "15-flenders-iii",
+      "name": "15-Flenders III",
+      "frameCount": 10,
+      "sourceWav": "assets/factory_sources/imported/15-Flenders III.wav"
+    },
+    {
+      "tableId": "16-digi-cook-i",
+      "name": "16-Digi Cook I",
+      "frameCount": 4,
+      "sourceWav": "assets/factory_sources/imported/16-Digi Cook I.wav"
+    },
+    {
+      "tableId": "17-digi-cook-ii",
+      "name": "17-Digi Cook II",
+      "frameCount": 4,
+      "sourceWav": "assets/factory_sources/imported/17-Digi Cook II.wav"
+    },
+    {
+      "tableId": "18-digi-cook-iii",
+      "name": "18-Digi Cook III",
+      "frameCount": 4,
+      "sourceWav": "assets/factory_sources/imported/18-Digi Cook III.wav"
+    },
+    {
+      "tableId": "19-chrome",
+      "name": "19-Chrome",
+      "frameCount": 4,
+      "sourceWav": "assets/factory_sources/imported/19-Chrome.wav"
+    },
+    {
+      "tableId": "20-magyr",
+      "name": "20-Magyr",
+      "frameCount": 4,
+      "sourceWav": "assets/factory_sources/imported/20-Magyr.wav"
+    },
+    {
+      "tableId": "21-a-i",
+      "name": "21-A.I",
+      "frameCount": 10,
+      "sourceWav": "assets/factory_sources/imported/21-A.I.wav"
+    },
+    {
+      "tableId": "22-silver",
+      "name": "22-Silver",
+      "frameCount": 6,
+      "sourceWav": "assets/factory_sources/imported/22-Silver.wav"
+    },
+    {
+      "tableId": "23-scrap-yard",
+      "name": "23-Scrap Yard",
+      "frameCount": 11,
+      "sourceWav": "assets/factory_sources/imported/23-Scrap Yard.wav"
+    },
+    {
+      "tableId": "24-wicked",
+      "name": "24-Wicked",
+      "frameCount": 7,
+      "sourceWav": "assets/factory_sources/imported/24-Wicked.wav"
+    },
+    {
+      "tableId": "25-bronze",
+      "name": "25-Bronze",
+      "frameCount": 5,
+      "sourceWav": "assets/factory_sources/imported/25-Bronze.wav"
+    },
+    {
+      "tableId": "26-arctic",
+      "name": "26-Arctic",
+      "frameCount": 4,
+      "sourceWav": "assets/factory_sources/imported/26-Arctic.wav"
+    },
+    {
+      "tableId": "27-herby",
+      "name": "27-Herby",
+      "frameCount": 16,
+      "sourceWav": "assets/factory_sources/imported/27-Herby.wav"
+    },
+    {
+      "tableId": "28-bender",
+      "name": "28-Bender",
+      "frameCount": 8,
+      "sourceWav": "assets/factory_sources/imported/28-Bender.wav"
+    },
+    {
+      "tableId": "29-guitar-pulse",
+      "name": "29-Guitar Pulse",
+      "frameCount": 2,
+      "sourceWav": "assets/factory_sources/imported/29-Guitar Pulse.wav"
+    },
+    {
+      "tableId": "30-e-bass-pulse",
+      "name": "30-E-Bass Pulse",
+      "frameCount": 4,
+      "sourceWav": "assets/factory_sources/imported/30-E-Bass Pulse.wav"
+    },
+    {
+      "tableId": "01-camchord",
+      "name": "01-Camchord",
+      "frameCount": 6,
+      "sourceWav": "assets/factory_sources/imported/01-Camchord.wav"
+    },
+    {
+      "tableId": "02-colors",
+      "name": "02-Colors",
+      "frameCount": 3,
+      "sourceWav": "assets/factory_sources/imported/02-Colors.wav"
+    },
+    {
+      "tableId": "03-iron",
+      "name": "03-Iron",
+      "frameCount": 6,
+      "sourceWav": "assets/factory_sources/imported/03-Iron.wav"
+    },
+    {
+      "tableId": "04-cicada",
+      "name": "04-Cicada",
+      "frameCount": 4,
+      "sourceWav": "assets/factory_sources/imported/04-Cicada.wav"
+    },
+    {
+      "tableId": "xlnt-a-i",
+      "name": "XLNT-A.I.",
+      "frameCount": 256,
+      "sourceWav": "assets/factory_sources/imported/XLNT-A.I..wav"
+    },
+    {
+      "tableId": "xlnt-assitude",
+      "name": "XLNT-Assitude",
+      "frameCount": 4,
+      "sourceWav": "assets/factory_sources/imported/XLNT-Assitude.wav"
+    },
+    {
+      "tableId": "xlnt-bangawub",
+      "name": "XLNT-Bangawub",
+      "frameCount": 4,
+      "sourceWav": "assets/factory_sources/imported/XLNT-Bangawub.wav"
+    },
+    {
+      "tableId": "xlnt-bender",
+      "name": "XLNT-Bender",
+      "frameCount": 256,
+      "sourceWav": "assets/factory_sources/imported/XLNT-Bender.wav"
+    },
+    {
+      "tableId": "xlnt-bloody",
+      "name": "XLNT-Bloody",
+      "frameCount": 9,
+      "sourceWav": "assets/factory_sources/imported/XLNT-Bloody.wav"
+    },
+    {
+      "tableId": "xlnt-carbon",
+      "name": "XLNT-Carbon",
+      "frameCount": 52,
+      "sourceWav": "assets/factory_sources/imported/XLNT-Carbon.wav"
+    },
+    {
+      "tableId": "xlnt-carrier",
+      "name": "XLNT-Carrier",
+      "frameCount": 256,
+      "sourceWav": "assets/factory_sources/imported/XLNT-Carrier.wav"
+    },
+    {
+      "tableId": "xlnt-chrome",
+      "name": "XLNT-Chrome",
+      "frameCount": 52,
+      "sourceWav": "assets/factory_sources/imported/XLNT-Chrome.wav"
+    },
+    {
+      "tableId": "xlnt-clarinet",
+      "name": "XLNT-Clarinet",
+      "frameCount": 208,
+      "sourceWav": "assets/factory_sources/imported/XLNT-Clarinet.wav"
+    },
+    {
+      "tableId": "xlnt-crude",
+      "name": "XLNT-Crude",
+      "frameCount": 256,
+      "sourceWav": "assets/factory_sources/imported/XLNT-Crude.wav"
+    },
+    {
+      "tableId": "xlnt-deep-throat",
+      "name": "XLNT-Deep Throat",
+      "frameCount": 256,
+      "sourceWav": "assets/factory_sources/imported/XLNT-Deep Throat.wav"
+    },
+    {
+      "tableId": "xlnt-dirt-string",
+      "name": "XLNT-Dirt String",
+      "frameCount": 256,
+      "sourceWav": "assets/factory_sources/imported/XLNT-Dirt String.wav"
+    },
+    {
+      "tableId": "xlnt-dirty-throat",
+      "name": "XLNT-Dirty Throat",
+      "frameCount": 256,
+      "sourceWav": "assets/factory_sources/imported/XLNT-Dirty Throat.wav"
+    },
+    {
+      "tableId": "xlnt-disto",
+      "name": "XLNT-Disto",
+      "frameCount": 256,
+      "sourceWav": "assets/factory_sources/imported/XLNT-Disto.wav"
+    },
+    {
+      "tableId": "xlnt-eastern-pluck",
+      "name": "XLNT-Eastern Pluck",
+      "frameCount": 19,
+      "sourceWav": "assets/factory_sources/imported/XLNT-Eastern Pluck.wav"
+    },
+    {
+      "tableId": "xlnt-ele-1",
+      "name": "XLNT-Ele 1",
+      "frameCount": 1,
+      "sourceWav": "assets/factory_sources/imported/XLNT-Ele 1.wav"
+    },
+    {
+      "tableId": "xlnt-ele-2",
+      "name": "XLNT-Ele 2",
+      "frameCount": 2,
+      "sourceWav": "assets/factory_sources/imported/XLNT-Ele 2.wav"
+    },
+    {
+      "tableId": "xlnt-eleves",
+      "name": "XLNT-Eleves",
+      "frameCount": 1,
+      "sourceWav": "assets/factory_sources/imported/XLNT-Eleves.wav"
+    },
+    {
+      "tableId": "xlnt-flute",
+      "name": "XLNT-Flute",
+      "frameCount": 256,
+      "sourceWav": "assets/factory_sources/imported/XLNT-Flute.wav"
+    },
+    {
+      "tableId": "xlnt-fuzzy-sine",
+      "name": "XLNT-Fuzzy Sine",
+      "frameCount": 256,
+      "sourceWav": "assets/factory_sources/imported/XLNT-Fuzzy Sine.wav"
+    },
+    {
+      "tableId": "xlnt-gargle",
+      "name": "XLNT-Gargle",
+      "frameCount": 38,
+      "sourceWav": "assets/factory_sources/imported/XLNT-Gargle.wav"
+    },
+    {
+      "tableId": "xlnt-gentle-speech",
+      "name": "XLNT-Gentle Speech",
+      "frameCount": 52,
+      "sourceWav": "assets/factory_sources/imported/XLNT-Gentle Speech.wav"
+    },
+    {
+      "tableId": "xlnt-groan-i",
+      "name": "XLNT-Groan I",
+      "frameCount": 52,
+      "sourceWav": "assets/factory_sources/imported/XLNT-Groan I.wav"
+    },
+    {
+      "tableId": "xlnt-groan-ii",
+      "name": "XLNT-Groan II",
+      "frameCount": 51,
+      "sourceWav": "assets/factory_sources/imported/XLNT-Groan II.wav"
+    },
+    {
+      "tableId": "xlnt-groan-iii",
+      "name": "XLNT-Groan III",
+      "frameCount": 52,
+      "sourceWav": "assets/factory_sources/imported/XLNT-Groan III.wav"
+    },
+    {
+      "tableId": "xlnt-groan-iv",
+      "name": "XLNT-Groan IV",
+      "frameCount": 52,
+      "sourceWav": "assets/factory_sources/imported/XLNT-Groan IV.wav"
+    },
+    {
+      "tableId": "xlnt-guzheng",
+      "name": "XLNT-Guzheng",
+      "frameCount": 256,
+      "sourceWav": "assets/factory_sources/imported/XLNT-Guzheng.wav"
+    },
+    {
+      "tableId": "xlnt-hardsync-01",
+      "name": "XLNT-Hardsync 01",
+      "frameCount": 164,
+      "sourceWav": "assets/factory_sources/imported/XLNT-Hardsync 01.wav"
+    },
+    {
+      "tableId": "xlnt-hardsync-02",
+      "name": "XLNT-Hardsync 02",
+      "frameCount": 52,
+      "sourceWav": "assets/factory_sources/imported/XLNT-Hardsync 02.wav"
+    },
+    {
+      "tableId": "xlnt-herby",
+      "name": "XLNT-Herby",
+      "frameCount": 256,
+      "sourceWav": "assets/factory_sources/imported/XLNT-Herby.wav"
+    },
+    {
+      "tableId": "xlnt-i-robot",
+      "name": "XLNT-I Robot",
+      "frameCount": 164,
+      "sourceWav": "assets/factory_sources/imported/XLNT-I Robot.wav"
+    },
+    {
+      "tableId": "xlnt-kalimba",
+      "name": "XLNT-Kalimba",
+      "frameCount": 256,
+      "sourceWav": "assets/factory_sources/imported/XLNT-Kalimba.wav"
+    },
+    {
+      "tableId": "xlnt-liquid-sawz",
+      "name": "XLNT-Liquid Sawz",
+      "frameCount": 1,
+      "sourceWav": "assets/factory_sources/imported/XLNT-Liquid Sawz.wav"
+    },
+    {
+      "tableId": "xlnt-modern-talking",
+      "name": "XLNT-Modern Talking",
+      "frameCount": 256,
+      "sourceWav": "assets/factory_sources/imported/XLNT-Modern Talking.wav"
+    },
+    {
+      "tableId": "xlnt-nexus-saw",
+      "name": "XLNT-Nexus Saw",
+      "frameCount": 256,
+      "sourceWav": "assets/factory_sources/imported/XLNT-Nexus Saw.wav"
+    },
+    {
+      "tableId": "xlnt-pulse-saw-sync",
+      "name": "XLNT-Pulse - Saw Sync",
+      "frameCount": 52,
+      "sourceWav": "assets/factory_sources/imported/XLNT-Pulse - Saw Sync.wav"
+    },
+    {
+      "tableId": "xlnt-pulse-pwm",
+      "name": "XLNT-Pulse PWM",
+      "frameCount": 52,
+      "sourceWav": "assets/factory_sources/imported/XLNT-Pulse PWM.wav"
+    },
+    {
+      "tableId": "xlnt-red-lips",
+      "name": "XLNT-Red Lips",
+      "frameCount": 256,
+      "sourceWav": "assets/factory_sources/imported/XLNT-Red Lips.wav"
+    },
+    {
+      "tableId": "xlnt-rough-math-i",
+      "name": "XLNT-Rough Math I",
+      "frameCount": 256,
+      "sourceWav": "assets/factory_sources/imported/XLNT-Rough Math I.wav"
+    },
+    {
+      "tableId": "xlnt-rough-math-ii",
+      "name": "XLNT-Rough Math II",
+      "frameCount": 67,
+      "sourceWav": "assets/factory_sources/imported/XLNT-Rough Math II.wav"
+    },
+    {
+      "tableId": "xlnt-rough-math-iii",
+      "name": "XLNT-Rough Math III",
+      "frameCount": 256,
+      "sourceWav": "assets/factory_sources/imported/XLNT-Rough Math III.wav"
+    },
+    {
+      "tableId": "xlnt-scary",
+      "name": "XLNT-Scary",
+      "frameCount": 2,
+      "sourceWav": "assets/factory_sources/imported/XLNT-Scary.wav"
+    },
+    {
+      "tableId": "xlnt-scrap-yard",
+      "name": "XLNT-Scrap Yard",
+      "frameCount": 52,
+      "sourceWav": "assets/factory_sources/imported/XLNT-Scrap Yard.wav"
+    },
+    {
+      "tableId": "xlnt-shrug",
+      "name": "XLNT-Shrug",
+      "frameCount": 83,
+      "sourceWav": "assets/factory_sources/imported/XLNT-Shrug.wav"
+    },
+    {
+      "tableId": "xlnt-sin-sq",
+      "name": "XLNT-Sin - Sq",
+      "frameCount": 52,
+      "sourceWav": "assets/factory_sources/imported/XLNT-Sin - Sq.wav"
+    },
+    {
+      "tableId": "xlnt-sin-tri",
+      "name": "XLNT-Sin - Tri",
+      "frameCount": 51,
+      "sourceWav": "assets/factory_sources/imported/XLNT-Sin - Tri.wav"
+    },
+    {
+      "tableId": "xlnt-skrillimba",
+      "name": "XLNT-Skrillimba",
+      "frameCount": 253,
+      "sourceWav": "assets/factory_sources/imported/XLNT-Skrillimba.wav"
+    },
+    {
+      "tableId": "xlnt-so-fm",
+      "name": "XLNT-So FM",
+      "frameCount": 125,
+      "sourceWav": "assets/factory_sources/imported/XLNT-So FM.wav"
+    },
+    {
+      "tableId": "xlnt-spit",
+      "name": "XLNT-Spit",
+      "frameCount": 256,
+      "sourceWav": "assets/factory_sources/imported/XLNT-Spit.wav"
+    },
+    {
+      "tableId": "xlnt-square-saw-i",
+      "name": "XLNT-Square - Saw I",
+      "frameCount": 52,
+      "sourceWav": "assets/factory_sources/imported/XLNT-Square - Saw I.wav"
+    },
+    {
+      "tableId": "xlnt-square-saw-ii",
+      "name": "XLNT-Square - Saw II",
+      "frameCount": 52,
+      "sourceWav": "assets/factory_sources/imported/XLNT-Square - Saw II.wav"
+    },
+    {
+      "tableId": "xlnt-square-babel",
+      "name": "XLNT-Square Babel",
+      "frameCount": 80,
+      "sourceWav": "assets/factory_sources/imported/XLNT-Square Babel.wav"
+    },
+    {
+      "tableId": "xlnt-string",
+      "name": "XLNT-String",
+      "frameCount": 256,
+      "sourceWav": "assets/factory_sources/imported/XLNT-String.wav"
+    },
+    {
+      "tableId": "xlnt-terror-squid",
+      "name": "XLNT-Terror Squid",
+      "frameCount": 256,
+      "sourceWav": "assets/factory_sources/imported/XLNT-Terror Squid.wav"
+    },
+    {
+      "tableId": "xlnt-thai-flute",
+      "name": "XLNT-Thai Flute",
+      "frameCount": 256,
+      "sourceWav": "assets/factory_sources/imported/XLNT-Thai Flute.wav"
+    },
+    {
+      "tableId": "xlnt-trashsync",
+      "name": "XLNT-Trashsync",
+      "frameCount": 164,
+      "sourceWav": "assets/factory_sources/imported/XLNT-Trashsync.wav"
+    },
+    {
+      "tableId": "xlnt-trust",
+      "name": "XLNT-Trust",
+      "frameCount": 10,
+      "sourceWav": "assets/factory_sources/imported/XLNT-Trust.wav"
+    },
+    {
+      "tableId": "xlnt-xello",
+      "name": "XLNT-Xello",
+      "frameCount": 19,
+      "sourceWav": "assets/factory_sources/imported/XLNT-Xello.wav"
+    }
+  ]
+}

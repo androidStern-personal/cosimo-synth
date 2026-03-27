@@ -4,11 +4,13 @@ from dataclasses import dataclass
 import json
 from pathlib import Path
 from typing import Any, Sequence
+import warnings
 
 import numpy as np
 import numpy.typing as npt
 from scipy.fft import irfft, rfft
 from scipy.io import wavfile
+from scipy.io.wavfile import WavFileWarning
 
 from bench import DEFAULT_SAMPLE_RATE, FixtureBank, SAMPLES_PER_FRAME
 
@@ -129,6 +131,7 @@ class EmittedBankAssets:
 class CatalogTable:
     table_id: str
     name: str
+    source_wav: str | None = None
 
 
 def build_bank(source_tables: Sequence[SourceTable | FixtureBank]) -> BankBuild:
@@ -196,7 +199,9 @@ def load_source_table_wav(
     table_id: str,
 ) -> SourceTable:
     source_path = Path(path)
-    sample_rate, raw_audio = wavfile.read(source_path)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", WavFileWarning)
+        sample_rate, raw_audio = wavfile.read(source_path)
     del sample_rate
 
     if np.asarray(raw_audio).ndim != 1:
@@ -257,6 +262,11 @@ def build_catalog_bank_value(
             {
                 "tableId": catalog_table.table_id,
                 "name": catalog_table.name,
+                **(
+                    {"sourceWav": catalog_table.source_wav}
+                    if catalog_table.source_wav is not None
+                    else {}
+                ),
                 "frameCount": table.frame_count,
                 "sampleOffset": table.sample_offset,
             }

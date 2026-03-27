@@ -413,7 +413,10 @@
   </div>
 
   <script type="module">
-    import { loadWavetableFramesFromUrls, getFactoryBankValue } from "../../patch_gui/wavetable-bank.mjs";
+    import {
+      loadFactoryBankCatalogFromPatch,
+      loadFactoryBankFramesFromPatch,
+    } from "../../patch_gui/wavetable-bank.mjs";
     import { CanvasWavetableDisplay } from "../../patch_gui/wavetable-display.mjs";
 
     async function loadManifest() {
@@ -434,6 +437,7 @@
     const stepDown = document.getElementById("step-down");
     const stepUp = document.getElementById("step-up");
     const display = new CanvasWavetableDisplay(canvas);
+    let frameCount = 16;
 
     function resizeDisplay() {
       const bounds = stage.getBoundingClientRect();
@@ -442,10 +446,10 @@
 
     function setPosition(rawValue) {
       const value = Math.max(0, Math.min(1, Number(rawValue) || 0));
-      const frame = Math.round(value * 15);
+      const frameIndex = Math.round(value * Math.max(0, frameCount - 1)) + 1;
       slider.value = value.toFixed(3);
       numericValue.textContent = value.toFixed(3);
-      frameReadout.textContent = `Frame ${String(frame).padStart(2, "0")}/15`;
+      frameReadout.textContent = `Frame ${String(frameIndex).padStart(2, "0")}/${String(frameCount).padStart(2, "0")}`;
       display.setPosition(value);
     }
 
@@ -463,19 +467,25 @@
     resizeDisplay();
 
     const manifest = await loadManifest();
-    const manifestValue = getFactoryBankValue(manifest);
-    const sampleBlobUrl = new URL(`../${manifestValue.sampleBlob}`, import.meta.url);
-    const bank = await loadWavetableFramesFromUrls({
-      manifestValue,
-      sampleBlobUrl,
+    const patchConnection = {
+      manifest,
+      getResourceAddress(path) {
+        return new URL(`../${path}`, import.meta.url);
+      },
+    };
+    const catalog = await loadFactoryBankCatalogFromPatch(patchConnection);
+    const bank = await loadFactoryBankFramesFromPatch(patchConnection, {
+      tableIndex: 0,
     });
 
+    frameCount = bank.frameCount;
     display.setFrames(bank.frames);
+    document.querySelector(".footer-whisper").textContent = `minimal mock-up only • ${catalog.tables[0]?.name ?? "table 1"}`;
     setPosition(slider.value);
 
     slider.addEventListener("input", () => setPosition(slider.value));
-    stepDown.addEventListener("click", () => nudge(-1 / 15));
-    stepUp.addEventListener("click", () => nudge(1 / 15));
+    stepDown.addEventListener("click", () => nudge(-(frameCount > 1 ? 1 / (frameCount - 1) : 1)));
+    stepUp.addEventListener("click", () => nudge(frameCount > 1 ? 1 / (frameCount - 1) : 1));
   </script>
 </body>
 </html>

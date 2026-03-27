@@ -1,7 +1,6 @@
 import {
     loadFactoryBankCatalogFromPatch,
     loadFactoryBankFramesFromPatch,
-    DEFAULT_VISIBLE_MIP_INDEX,
 } from "./wavetable-bank.js";
 import { MsegController } from "./mseg-controller.js";
 import { evaluateMsegShape } from "./mseg.js";
@@ -9,9 +8,13 @@ import { CanvasWavetableDisplay } from "./wavetable-display.js";
 import { computeResponsivePatchLayout, getLayoutCSSVariables } from "./responsive-layout.js";
 
 const midiInputEndpointID = "midiIn";
+const wavetableFramesEndpointID = "wavetableFrames";
 const wavetablePositionEndpointID = "wavetablePosition";
 const wavetableSelectEndpointID = "wavetableSelect";
 const msegDepthEndpointID = "mseg1Depth";
+const runtimeSelectedTableStateKey = "cosimoRuntimeSelectedTableIndex";
+const samplesPerFrame = 2048;
+const maxWavetableFrames = 256;
 const DISPLAY_POSITION_EPSILON = 0.000001;
 const SVG_NS = "http://www.w3.org/2000/svg";
 
@@ -27,6 +30,46 @@ function clampDisplayPosition(value) {
 
 function clampDepth(value) {
     return clamp(Number(value) || 0, -1.0, 1.0);
+}
+
+export function buildUploadedWavetableFrameEvents(bank, uploadToken = 0) {
+    const availableFrames = Array.isArray(bank?.frames) ? bank.frames.length : 0;
+    const safeFrameCount = Math.max(
+        0,
+        Math.min(
+            maxWavetableFrames,
+            Number(bank?.frameCount) || availableFrames,
+            availableFrames
+        )
+    );
+
+    if (safeFrameCount === 0) {
+        return [];
+    }
+
+    const events = [];
+
+    for (let frameIndex = 0; frameIndex < safeFrameCount; frameIndex += 1) {
+        const sourceFrame = bank.frames[frameIndex];
+        const paddedSamples = new Float32Array(samplesPerFrame);
+
+        if (sourceFrame) {
+            paddedSamples.set(
+                typeof sourceFrame.subarray === "function"
+                    ? sourceFrame.subarray(0, samplesPerFrame)
+                    : Array.from(sourceFrame).slice(0, samplesPerFrame)
+            );
+        }
+
+        events.push({
+            uploadToken,
+            frameCount: safeFrameCount,
+            frameIndex,
+            samples: Array.from(paddedSamples),
+        });
+    }
+
+    return events;
 }
 
 function pointToEditorCoordinates(point, width, height) {
@@ -110,6 +153,7 @@ class CosimoSynthView extends HTMLElement {
         this.displayFramesCache = new Map();
         this.displayFramesLoading = new Set();
         this.factoryBankCatalog = null;
+        this.nextUploadToken = 1;
         this.resizeObserver = null;
         this.windowResizeListener = null;
         this.currentLayout = computeResponsivePatchLayout({
@@ -258,6 +302,7 @@ class CosimoSynthView extends HTMLElement {
             this.patchConnection.sendParameterGestureStart?.(wavetableSelectEndpointID);
             this.patchConnection.sendEventOrValue(wavetableSelectEndpointID, nextIndex);
             this.patchConnection.sendParameterGestureEnd?.(wavetableSelectEndpointID);
+            this.patchConnection.sendStoredStateValue?.(runtimeSelectedTableStateKey, nextIndex);
             this.setSelectedTableIndex(nextIndex);
         };
 
@@ -445,6 +490,9 @@ class CosimoSynthView extends HTMLElement {
         const cachedBank = this.displayFramesCache.get(tableIndex);
         if (cachedBank) {
             this.applyLoadedBank(cachedBank);
+            if (tableIndex === this.currentTableIndex) {
+                this.uploadLoadedTable(cachedBank);
+            }
             return;
         }
 
@@ -461,6 +509,7 @@ class CosimoSynthView extends HTMLElement {
 
             if (tableIndex === this.currentTableIndex) {
                 this.applyLoadedBank(bank);
+                this.uploadLoadedTable(bank);
             }
         } catch (error) {
             console.error(error);
@@ -476,6 +525,23 @@ class CosimoSynthView extends HTMLElement {
         }
     }
 
+    uploadLoadedTable(bank) {
+        if (this.options.platform === "ios") {
+            return;
+        }
+
+        if (!bank?.frames || typeof this.patchConnection?.sendEventOrValue !== "function") {
+            return;
+        }
+
+        const uploadToken = this.nextUploadToken;
+        this.nextUploadToken += 1;
+
+        for (const frameEvent of buildUploadedWavetableFrameEvents(bank, uploadToken)) {
+            this.patchConnection.sendEventOrValue(wavetableFramesEndpointID, frameEvent);
+        }
+    }
+
     applyLoadedBank(bank) {
         this.currentFrameCount = Math.max(1, Number(bank.frameCount) || 1);
         this.display.setFrames(bank.frames);
@@ -486,7 +552,7 @@ class CosimoSynthView extends HTMLElement {
             "loaded",
             this.options.platform === "ios"
                 ? `${bank.frameCount} shapes`
-                : `${bank.frameCount} frames • mip ${DEFAULT_VISIBLE_MIP_INDEX}`
+                : `${bank.frameCount} frames`
         );
     }
 

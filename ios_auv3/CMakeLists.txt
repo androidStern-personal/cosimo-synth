@@ -77,6 +77,19 @@ file(
 )
 
 set(
+    COSIMO_BUNDLED_BANK_RESOURCE_FILES
+    "${COSIMO_REPO_ROOT}/assets/factory-bank-catalog.json"
+)
+set(
+    COSIMO_FACTORY_SOURCE_DIR
+    "${COSIMO_REPO_ROOT}/assets/factory_sources"
+)
+set(
+    COSIMO_RUNTIME_PATCH_FILE
+    "${COSIMO_REPO_ROOT}/WavetableSynth.iOS.cmajorpatch"
+)
+
+set(
     COSIMO_GENERATED_PLUGIN_CPP
     "${COSIMO_GENERATED_DIR}/cmajor_plugin.cpp"
 )
@@ -105,8 +118,7 @@ add_custom_command(
         "${COSIMO_REPO_ROOT}/WavetableSynth.cmajorpatch"
         "${COSIMO_REPO_ROOT}/cmajor/FixedFrameOscillator.cmajor"
         "${COSIMO_REPO_ROOT}/assets/factory-table-catalog.json"
-        "${COSIMO_REPO_ROOT}/assets/factory-bank.wav"
-        "${COSIMO_REPO_ROOT}/assets/factory-bank.json"
+        "${COSIMO_REPO_ROOT}/assets/factory-bank-catalog.json"
         ${COSIMO_FACTORY_SOURCE_FILES}
         ${COSIMO_PATCH_UI_FILES}
     COMMENT
@@ -170,6 +182,34 @@ target_link_libraries(CosimoSynth PRIVATE
 )
 
 add_dependencies(CosimoSynth cosimo_ios_auv3_generated_plugin)
+
+foreach(bundle_target CosimoSynth_Standalone CosimoSynth_AUv3)
+    add_custom_command(
+        TARGET ${bundle_target}
+        POST_BUILD
+        COMMAND
+            "${CMAKE_COMMAND}" -E make_directory "$<TARGET_FILE_DIR:${bundle_target}>/assets"
+        COMMAND
+            "${CMAKE_COMMAND}" -E rm -rf "$<TARGET_FILE_DIR:${bundle_target}>/assets/factory_sources"
+        COMMAND
+            "${CMAKE_COMMAND}" -E rm -f "$<TARGET_FILE_DIR:${bundle_target}>/assets/factory-bank.json"
+        COMMAND
+            "${CMAKE_COMMAND}" -E copy_if_different
+            "${COSIMO_REPO_ROOT}/assets/factory-bank-catalog.json"
+            "$<TARGET_FILE_DIR:${bundle_target}>/assets/factory-bank-catalog.json"
+        COMMAND
+            "${CMAKE_COMMAND}" -E copy_if_different
+            "${COSIMO_RUNTIME_PATCH_FILE}"
+            "$<TARGET_FILE_DIR:${bundle_target}>/WavetableSynth.iOS.cmajorpatch"
+        COMMAND
+            "${CMAKE_COMMAND}" -E copy_directory
+            "${COSIMO_FACTORY_SOURCE_DIR}"
+            "$<TARGET_FILE_DIR:${bundle_target}>/assets/factory_sources"
+        COMMENT
+            "Copying the runtime wavetable catalog and source files into ${bundle_target}"
+        VERBATIM
+    )
+endforeach()
 
 add_executable(CosimoSynthHost MACOSX_BUNDLE
     "${CMAKE_CURRENT_LIST_DIR}/Source/CosimoHostMain.mm"

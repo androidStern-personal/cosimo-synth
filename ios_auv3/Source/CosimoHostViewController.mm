@@ -391,76 +391,80 @@ static NSString * const CosimoSmokeStateName = @"host-smoke-state";
 
             payload[@"instantiate"] = instantiateResult;
             payload[@"parameters"] = self.harness.parameterSnapshot ?: @[];
+            [self presentEditorOverlay:YES];
 
-            [self.harness setParameterWithIdentifier:@"wavetablePosition" value:0.625f completion:^(NSDictionary<NSString *,id> * _Nullable parameterResult, NSError * _Nullable parameterError)
+            [self.harness openEditorWithCompletion:^(NSDictionary<NSString *,id> * _Nullable editorResult, NSError * _Nullable editorError)
             {
-                if ([self handleAutomationError:parameterError outputName:outputName])
+                if ([self handleAutomationError:editorError outputName:outputName])
                     return;
 
-                payload[@"parameterSet"] = parameterResult;
+                NSMutableDictionary<NSString *, id> *editorPayload = [editorResult mutableCopy];
 
-                [self.harness setParameterWithIdentifier:@"wavetableSelect" value:1.0f completion:^(NSDictionary<NSString *,id> * _Nullable tableResult, NSError * _Nullable tableError)
+                dispatch_after (dispatch_time (DISPATCH_TIME_NOW, (int64_t) (0.35 * NSEC_PER_SEC)),
+                                dispatch_get_main_queue(), ^
                 {
-                    if ([self handleAutomationError:tableError outputName:outputName])
-                        return;
-
-                    payload[@"tableSelectionSet"] = tableResult;
-
-                    [self.harness sendTestNoteWithCompletion:^(NSDictionary<NSString *,id> * _Nullable noteResult, NSError * _Nullable noteError)
+                    [self.harness setParameterWithIdentifier:@"wavetablePosition" value:0.625f completion:^(NSDictionary<NSString *,id> * _Nullable parameterResult, NSError * _Nullable parameterError)
                     {
-                        if ([self handleAutomationError:noteError outputName:outputName])
+                        if ([self handleAutomationError:parameterError outputName:outputName])
                             return;
 
-                        payload[@"audio"] = noteResult;
-                        [self presentEditorOverlay:YES];
+                        payload[@"parameterSet"] = parameterResult;
 
-                        [self.harness openEditorWithCompletion:^(NSDictionary<NSString *,id> * _Nullable editorResult, NSError * _Nullable editorError)
+                        [self.harness setParameterWithIdentifier:@"wavetableSelect" value:1.0f completion:^(NSDictionary<NSString *,id> * _Nullable tableResult, NSError * _Nullable tableError)
                         {
-                            if ([self handleAutomationError:editorError outputName:outputName])
+                            if ([self handleAutomationError:tableError outputName:outputName])
                                 return;
 
-                            NSMutableDictionary<NSString *, id> *editorPayload = [editorResult mutableCopy];
+                            payload[@"tableSelectionSet"] = tableResult;
 
-                            [self.harness closeEditorWithCompletion:^(NSDictionary<NSString *,id> * _Nullable closeResult, NSError * _Nullable closeError)
+                            [self.harness sendTestNoteWithCompletion:^(NSDictionary<NSString *,id> * _Nullable noteResult, NSError * _Nullable noteError)
                             {
-                                [self presentEditorOverlay:NO];
-
-                                if ([self handleAutomationError:closeError outputName:outputName])
+                                if ([self handleAutomationError:noteError outputName:outputName])
                                     return;
 
-                                editorPayload[@"closed"] = closeResult[@"closed"] ?: @YES;
-                                payload[@"editor"] = editorPayload;
+                                payload[@"audio"] = noteResult;
 
-                                [self.harness saveStateNamed:CosimoSmokeStateName completion:^(NSDictionary<NSString *,id> * _Nullable saveResult, NSError * _Nullable saveError)
+                                [self.harness closeEditorWithCompletion:^(NSDictionary<NSString *,id> * _Nullable closeResult, NSError * _Nullable closeError)
                                 {
-                                    if ([self handleAutomationError:saveError outputName:outputName])
+                                    [self presentEditorOverlay:NO];
+
+                                    if ([self handleAutomationError:closeError outputName:outputName])
                                         return;
 
-                                    [self.harness reloadStateNamed:CosimoSmokeStateName completion:^(NSDictionary<NSString *,id> * _Nullable reloadResult, NSError * _Nullable reloadError)
+                                    editorPayload[@"closed"] = closeResult[@"closed"] ?: @YES;
+                                    payload[@"editor"] = editorPayload;
+
+                                    [self.harness saveStateNamed:CosimoSmokeStateName completion:^(NSDictionary<NSString *,id> * _Nullable saveResult, NSError * _Nullable saveError)
                                     {
-                                        if ([self handleAutomationError:reloadError outputName:outputName])
+                                        if ([self handleAutomationError:saveError outputName:outputName])
                                             return;
 
-                                        payload[@"state"] = @{
-                                            @"savedStateKeys": saveResult[@"savedStateKeys"] ?: @[],
-                                            @"reloadObservedValue": reloadResult[@"observedValue"] ?: @(0.0),
-                                            @"reloadObservedTableSelect": reloadResult[@"observedTableSelectValue"] ?: @(0.0),
-                                        };
+                                        [self.harness reloadStateNamed:CosimoSmokeStateName completion:^(NSDictionary<NSString *,id> * _Nullable reloadResult, NSError * _Nullable reloadError)
+                                        {
+                                            if ([self handleAutomationError:reloadError outputName:outputName])
+                                                return;
 
-                                        [self setStatus:@"The host app discovered the AUv3, opened the editor, played a note, and restored state."];
-                                        [self appendLogWithName:@"save smoke" value:payload];
+                                            payload[@"state"] = @{
+                                                @"savedStateKeys": saveResult[@"savedStateKeys"] ?: @[],
+                                                @"reloadObservedValue": reloadResult[@"observedValue"] ?: @(0.0),
+                                                @"reloadObservedTableSelect": reloadResult[@"observedTableSelectValue"] ?: @(0.0),
+                                            };
 
-                                        if (outputName != nil)
-                                            [self completeAutomationWithPayload:payload outputName:outputName];
+                                            [self setStatus:@"The host app discovered the AUv3, opened the editor, played a note, and restored state."];
+                                            [self appendLogWithName:@"save smoke" value:payload];
 
-                                        if (completion != nil)
-                                            completion (payload);
+                                            if (outputName != nil)
+                                                [self completeAutomationWithPayload:payload outputName:outputName];
+
+                                            if (completion != nil)
+                                                completion (payload);
+                                        }];
                                     }];
                                 }];
                             }];
                         }];
                     }];
-                }];
+                });
             }];
         }];
     }];

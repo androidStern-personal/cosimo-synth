@@ -9,9 +9,15 @@
       "address": 6614061662679701423,
       "identifier": "wavetableSelect",
       "displayName": "Wavetable Select"
+    },
+    {
+      "address": 9787453917618359882,
+      "identifier": "mseg1Depth",
+      "displayName": "MSEG 1 Depth"
     }
   ],
   "savedStateKeys": [
+    "mseg1Depth",
     "wavetablePosition",
     "wavetableSelect"
   ]

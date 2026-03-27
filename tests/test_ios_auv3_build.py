@@ -142,6 +142,16 @@ def test_ios_auv3_cmake_uses_the_shared_stock_juce_plugin_targets() -> None:
     assert "CosimoHostMain.mm" in cmake_text
     assert "CosimoHostViewController.mm" in cmake_text
     assert "CosimoAUv3HostHarness.mm" in cmake_text
+    assert "assets/factory-bank-catalog.json" in cmake_text
+    assert "foreach(bundle_target CosimoSynth_Standalone CosimoSynth_AUv3)" in cmake_text
+    assert 'make_directory "$<TARGET_FILE_DIR:${bundle_target}>/assets"' in cmake_text
+    assert 'copy_if_different' in cmake_text
+    assert 'rm -rf "$<TARGET_FILE_DIR:${bundle_target}>/assets/factory_sources"' in cmake_text
+    assert 'rm -f "$<TARGET_FILE_DIR:${bundle_target}>/assets/factory-bank.json"' in cmake_text
+    assert 'copy_directory' in cmake_text
+    assert 'assets/factory_sources' in cmake_text
+    assert '$<TARGET_FILE_DIR:${bundle_target}>/assets/factory-bank-catalog.json' in cmake_text
+    assert '$<TARGET_FILE_DIR:${bundle_target}>/WavetableSynth.iOS.cmajorpatch' in cmake_text
     assert "CosimoStandaloneApp.cpp" not in cmake_text
     assert "JUCE_USE_CUSTOM_PLUGIN_STANDALONE_APP=1" not in cmake_text
     assert "COSIMO_PATCH_PATH" not in cmake_text
@@ -149,6 +159,7 @@ def test_ios_auv3_cmake_uses_the_shared_stock_juce_plugin_targets() -> None:
     assert "libCmajPerformer" not in cmake_text
     assert "CMAJOR_DLL=1" not in cmake_text
     assert "modules/compiler/src" not in cmake_text
+    assert "factory-bank.wav" not in cmake_text
 
 
 def test_ios_patch_manifest_points_at_the_mobile_editor_entry() -> None:
@@ -158,6 +169,7 @@ def test_ios_patch_manifest_points_at_the_mobile_editor_entry() -> None:
     assert manifest["view"]["width"] == 393
     assert manifest["view"]["height"] == 648
     assert manifest["view"]["resizable"] is True
+    assert manifest["resources"] == []
 
 
 @pytest.mark.skipif(
@@ -202,6 +214,9 @@ def test_ios_auv3_generator_writes_self_contained_plugin_source_and_headers(
     patch_webview_header = (
         generated_ios_plugin_dir / "include/cmajor/helpers/cmaj_PatchWebView.h"
     ).read_text(encoding="utf-8")
+    juce_plugin_header = (
+        generated_ios_plugin_dir / "include/cmajor/helpers/cmaj_JUCEPlugin.h"
+    ).read_text(encoding="utf-8")
 
     assert '#if CHOC_OSX' in webview_header
     assert 'if (options->transparentBackground)' in webview_header
@@ -236,6 +251,9 @@ def test_ios_auv3_generator_writes_self_contained_plugin_source_and_headers(
     assert 'if (view?.height > 10)' in embedded_assets_header
     assert 'patchView.style.minWidth = "100%"' not in embedded_assets_header
     assert 'patchView.style.minHeight = "100%"' not in embedded_assets_header
+    assert "getBundledResourceFile" in juce_plugin_header
+    assert "juce::File::getSpecialLocation (juce::File::currentApplicationFile)" in juce_plugin_header
+    assert "std::make_shared<std::ifstream>" in juce_plugin_header
 
 
 def test_ios_auv3_generator_rejects_a_missing_patch_file(tmp_path: Path) -> None:
@@ -279,7 +297,7 @@ def test_ios_auv3_generator_rejects_a_repo_root_like_output_directory() -> None:
     assert f"Refusing to overwrite unsafe output directory: {REPO_ROOT}" in result.stderr
 
 
-def test_generated_ios_plugin_embeds_the_bank_and_patch_ui_resources(
+def test_generated_ios_plugin_externalises_the_bank_but_keeps_patch_ui_resources(
     generated_ios_plugin_dir: Path,
 ) -> None:
     plugin_source = (generated_ios_plugin_dir / "cmajor_plugin.cpp").read_text(
@@ -287,8 +305,9 @@ def test_generated_ios_plugin_embeds_the_bank_and_patch_ui_resources(
         errors="ignore",
     )
 
-    assert 'File { "assets/factory-bank.wav"' in plugin_source
-    assert 'File { "assets/factory-bank.json"' in plugin_source
+    assert 'File { "assets/factory-bank.wav"' not in plugin_source
+    assert 'File { "assets/factory-bank-catalog.json"' not in plugin_source
+    assert 'File { "assets/codegen-bank.wav"' not in plugin_source
     assert 'File { "patch_gui/index.ios.js"' in plugin_source
     assert 'File { "patch_gui/index.js"' in plugin_source
     assert 'File { "patch_gui/responsive-layout.js"' in plugin_source
@@ -300,9 +319,19 @@ def test_generated_ios_plugin_embeds_the_bank_and_patch_ui_resources(
     assert "factory-bank-display-data.js" not in plugin_source
     assert 'factory-bank-manifest.js' not in plugin_source
     assert "GeneratedPlugin<::WavetableSynth>" in plugin_source
+    assert '"wavetableFrames"' in plugin_source
+    assert '"cosimoRuntimeSelectedTableIndex"' in plugin_source
+    assert "startTimerHz (30)" in plugin_source
+    assert 'createObject ("UploadedWavetableFrame"' in plugin_source
+    assert 'createObject ("UploadedWavetable"' not in plugin_source
+    assert '"uploadToken"' in plugin_source
+    assert '"frameIndex"' in plugin_source
+    assert "std::vector<choc::value::Value> pendingUploadFrames;" in plugin_source
+    assert "static constexpr int maxUploadFramesPerFlush = 8;" in plugin_source
     assert "COSIMO_PATCH_PATH" not in plugin_source
     assert "libCmajPerformer" not in plugin_source
     assert "createEngine = +[]" not in plugin_source
+    assert "wt::factoryBank" not in plugin_source
 
 
 def test_bundle_root_resource_paths_work_for_both_app_and_extension(tmp_path: Path) -> None:
@@ -326,7 +355,11 @@ def test_bundle_root_resource_paths_work_for_both_app_and_extension(tmp_path: Pa
                 "--input-type=module",
                 "-e",
                 """
-import { loadFactoryBankCatalogFromPatch, loadFactoryBankFramesFromPatch } from "./patch_gui/wavetable-bank.mjs";
+import {
+    loadFactoryBankCatalogFromPatch,
+    loadFactoryBankFramesFromPatch,
+    parseWaveFile,
+} from "./patch_gui/wavetable-bank.mjs";
 
 async function fetchJSON(url) {
     const response = await fetch(url);
@@ -339,18 +372,24 @@ async function fetchJSON(url) {
 }
 
 async function loadBundle(rootUrl) {
-    const manifest = await fetchJSON(new URL("WavetableSynth.cmajorpatch", rootUrl));
-    const expectedFrameCount = manifest.externals["wt::factoryBank"].tables[0]?.frameCount;
+    const manifest = await fetchJSON(new URL("WavetableSynth.iOS.cmajorpatch", rootUrl));
     const patchConnection = {
         manifest,
         getResourceAddress(path) {
             return new URL(path, rootUrl);
         },
     };
-    const bank = await loadFactoryBankFramesFromPatch({
-        ...patchConnection,
-    });
     const catalog = await loadFactoryBankCatalogFromPatch(patchConnection);
+    const bank = await loadFactoryBankFramesFromPatch(patchConnection, { tableIndex: 0 });
+    const firstTable = catalog.tables[0];
+    const firstTableSourceWav = firstTable?.sourceWav;
+    const sourceResponse = await fetch(new URL(firstTableSourceWav, rootUrl));
+
+    if (!sourceResponse.ok) {
+        throw new Error(`Could not fetch source wavetable from ${rootUrl}`);
+    }
+
+    const sourceWave = parseWaveFile(await sourceResponse.arrayBuffer());
     const viewResponse = await fetch(new URL(manifest.view.src, rootUrl));
 
     if (!viewResponse.ok) {
@@ -359,7 +398,7 @@ async function loadBundle(rootUrl) {
 
     const viewSource = await viewResponse.text();
 
-    if (!viewSource.includes("cosimo-synth-view")) {
+    if (!viewSource.includes("createPatchViewWithOptions") && !viewSource.includes("createIOSPatchView")) {
         throw new Error(`View module did not load the expected UI from ${rootUrl}`);
     }
 
@@ -367,11 +406,14 @@ async function loadBundle(rootUrl) {
         sampleRate: bank.sampleRate,
         frameCount: bank.frameCount,
         frameLength: bank.frames[0]?.length,
-        sampleBlobPath: bank.sampleBlobPath,
+        uploadedSampleCount: bank.samples.length,
         catalogTableCount: catalog.tables.length,
-        firstTableName: catalog.tables[0]?.name,
-        externalTableCount: manifest.externals["wt::factoryBank"].tables.length,
-        expectedFrameCount,
+        firstTableName: firstTable?.name,
+        firstTableSourceWav,
+        expectedFrameCount: firstTable?.frameCount,
+        expectedSampleCount: sourceWave.samples.length,
+        hasExternals: Object.prototype.hasOwnProperty.call(manifest, "externals"),
+        hasResources: Array.isArray(manifest.resources) ? manifest.resources.length : -1,
     };
 }
 
@@ -387,20 +429,32 @@ for (const bundle of [app, extension]) {
         throw new Error(`Unexpected frame count: ${JSON.stringify(bundle)}`);
     }
 
+    if (bundle.uploadedSampleCount !== bundle.expectedSampleCount) {
+        throw new Error(`Unexpected uploaded sample count: ${JSON.stringify(bundle)}`);
+    }
+
     if (bundle.frameLength !== 2048) {
         throw new Error(`Unexpected frame length: ${JSON.stringify(bundle)}`);
     }
 
-    if (bundle.sampleBlobPath !== "assets/factory-bank.wav") {
-        throw new Error(`Unexpected sample blob path: ${JSON.stringify(bundle)}`);
-    }
-
-    if (bundle.catalogTableCount !== bundle.externalTableCount) {
-        throw new Error(`Catalog/external mismatch: ${JSON.stringify(bundle)}`);
-    }
-
     if (typeof bundle.firstTableName !== "string" || bundle.firstTableName.length === 0) {
         throw new Error(`Missing first table name: ${JSON.stringify(bundle)}`);
+    }
+
+    if (bundle.firstTableSourceWav !== "assets/factory_sources/display-demo.wav") {
+        throw new Error(`Unexpected first table source wav: ${JSON.stringify(bundle)}`);
+    }
+
+    if (bundle.hasExternals) {
+        throw new Error(`Unexpected external bank metadata: ${JSON.stringify(bundle)}`);
+    }
+
+    if (bundle.hasResources !== 0) {
+        throw new Error(`Unexpected manifest resources: ${JSON.stringify(bundle)}`);
+    }
+
+    if (bundle.catalogTableCount < 2) {
+        throw new Error(`Catalog did not include multiple tables: ${JSON.stringify(bundle)}`);
     }
 }
 """,

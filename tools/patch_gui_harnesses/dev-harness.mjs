@@ -225,7 +225,7 @@ const status = document.getElementById("status");
 
 const [manifest, bankCatalog] = await Promise.all([
     loadManifest(),
-    fetch("../../assets/factory-bank.json").then((response) => {
+    fetch("../../assets/factory-bank-catalog.json").then((response) => {
         if (!response.ok) {
             throw new Error(`Could not load factory bank catalog: ${response.status}`);
         }
