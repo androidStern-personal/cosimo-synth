@@ -85,7 +85,7 @@ function getFrameDepth(frameIndex, frameCount) {
 }
 
 function getSceneDepth(frameIndex, frameCount) {
-    return FRAME_DEPTH_EXTENT - getFrameDepth(frameIndex, frameCount);
+    return getFrameDepth(frameIndex, frameCount);
 }
 
 function getBackness(frameIndex, frameCount) {
@@ -93,7 +93,7 @@ function getBackness(frameIndex, frameCount) {
         return 0;
     }
 
-    return 1 - (frameIndex / (frameCount - 1));
+    return frameIndex / (frameCount - 1);
 }
 
 function getSceneDepthAt(frameIndex, frameCount) {
@@ -101,7 +101,7 @@ function getSceneDepthAt(frameIndex, frameCount) {
         return FRAME_DEPTH_EXTENT * 0.5;
     }
 
-    return FRAME_DEPTH_EXTENT - ((frameIndex / (frameCount - 1)) * FRAME_DEPTH_EXTENT);
+    return (frameIndex / (frameCount - 1)) * FRAME_DEPTH_EXTENT;
 }
 
 function getBacknessAt(frameIndex, frameCount) {
@@ -109,7 +109,7 @@ function getBacknessAt(frameIndex, frameCount) {
         return 0;
     }
 
-    return 1 - (frameIndex / (frameCount - 1));
+    return frameIndex / (frameCount - 1);
 }
 
 function subtractPoints(a, b) {

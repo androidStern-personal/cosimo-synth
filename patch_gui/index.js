@@ -98,6 +98,7 @@ class CosimoSynthView extends HTMLElement {
         });
         this.keyboardStyle = "";
         this.keyboardNoteCount = 0;
+        this.knobEndpointID = null;
         this.scanRailEndpointID = null;
         this.tableSelectEndpointID = null;
         this.activeDisplayDrag = null;
@@ -656,8 +657,36 @@ class CosimoSynthView extends HTMLElement {
         this.patchConnection.sendParameterGestureEnd?.(this.scanRailEndpointID);
     }
 
+    getPrimaryPositionEndpointID() {
+        return this.scanRailEndpointID || this.knobEndpointID || null;
+    }
+
+    commitDraggedDisplayPosition(nextValue) {
+        const clampedValue = clampDisplayPosition(nextValue);
+        const endpointID = this.getPrimaryPositionEndpointID();
+
+        if (!endpointID) {
+            return;
+        }
+
+        if (this.scanRailInput) {
+            this.scanRailInput.value = clampedValue.toFixed(3);
+            this.handleScanRailInput?.();
+            return;
+        }
+
+        if (this.hasDisplayedValue && displayPositionsMatch(this.currentValue, clampedValue)) {
+            return;
+        }
+
+        this.patchConnection.sendEventOrValue(endpointID, clampedValue);
+        this.setDisplayedValue(clampedValue);
+    }
+
     beginDisplayDrag(event) {
-        if (!this.scanRailInput || !this.scanRailEndpointID || !this.displayViewport) {
+        const endpointID = this.getPrimaryPositionEndpointID();
+
+        if (!endpointID || !this.displayViewport) {
             return;
         }
 
@@ -669,12 +698,13 @@ class CosimoSynthView extends HTMLElement {
         this.activeDisplayDrag = {
             pointerId: event.pointerId,
             startClientY: event.clientY,
-            startValue: clampDisplayPosition(this.scanRailInput.value),
+            endpointID,
+            startValue: this.currentValue,
             dragSpan: bounds.height,
         };
 
         this.displayViewport.setPointerCapture?.(event.pointerId);
-        this.patchConnection.sendParameterGestureStart?.(this.scanRailEndpointID);
+        this.patchConnection.sendParameterGestureStart?.(endpointID);
         event.preventDefault?.();
     }
 
@@ -690,8 +720,7 @@ class CosimoSynthView extends HTMLElement {
             this.activeDisplayDrag.dragSpan
         );
 
-        this.scanRailInput.value = nextValue.toFixed(3);
-        this.handleScanRailInput?.();
+        this.commitDraggedDisplayPosition(nextValue);
         event.preventDefault?.();
     }
 
@@ -701,8 +730,9 @@ class CosimoSynthView extends HTMLElement {
         }
 
         this.displayViewport?.releasePointerCapture?.(event.pointerId);
+        const { endpointID } = this.activeDisplayDrag;
         this.activeDisplayDrag = null;
-        this.patchConnection.sendParameterGestureEnd?.(this.scanRailEndpointID);
+        this.patchConnection.sendParameterGestureEnd?.(endpointID);
         event.preventDefault?.();
     }
 

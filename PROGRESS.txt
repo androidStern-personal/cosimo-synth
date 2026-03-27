@@ -4,6 +4,8 @@ Renderer tuning toward the Serum look is paused while we plan the iOS AUv3 build
 
 The iOS AUv3 shell work is now paused while we pivot back to wavetable-bank implementation.
 
+The wavetable-bank research is now paused while we scope the first real MSEG path into the existing oscillator.
+
 What is true right now
 - The macOS Ableton Live development plug-in works.
 - That plug-in is a desktop-only development shell and should stay that way.
@@ -16,7 +18,26 @@ What we are doing instead
 - Research how Serum wavetable exports can be converted into this repo's bank format.
 - Research how to replace the current single-bank asset path with a real factory-bank bundling pipeline.
 - Research the DSP, manifest, and UI changes needed to switch among bundled tables at runtime.
+- Read the MSEG proposal, the current synth code, and official Cmajor plus synth-manual references so we can turn phase 6 into a concrete implementation plan.
 
 What happens next
 - Finish the Serum import, bank pipeline, and runtime-switching research.
 - Turn that research into a concrete implementation plan before resuming the paused AUv3 shell work.
+- Finish the MSEG research pass and use `phase-6-mseg-plan.md` as the concrete phase-6 source of truth for the first one-shot `MSEG 1 -> Wavetable Position` implementation.
+
+Detour completed on 2026-03-26
+- Read `phase-6-mseg-plan.md`, `full-proposal.md`, `cmajor/FixedFrameOscillator.cmajor`, `cmajor/WavetableSynth.cmajor`, and `patch_gui/index.js`.
+- Confirmed that the current synth has wavetable scanning but no modulation plumbing, no MSEG endpoints, and no GUI stored-state path yet.
+- Confirmed from the official Cmajor patch docs that `PatchConnection.sendEventOrValue()` can coerce JavaScript arrays into complex endpoint types and that stored-state APIs exist for persisting editor data.
+- Expanded `phase-6-mseg-plan.md` with the narrow first-cut plan: one-shot `MSEG 1`, seconds-based timing, one routed destination (`Wavetable Position`), stored GUI curve state, shared DSP slot buffers, and Python-versus-Cmajor verification.
+
+Detour completed on 2026-03-27
+- Read 30 real Vital `.vitallfo` files from `/Users/winterfell/Downloads/Sonicspore FREE BUNDLE VITAL/Sonicspore Free LFO Shpaes VITAL` and confirmed they are plain JSON shape files.
+- Cloned Vital to `/Users/winterfell/src/vital` and traced the shape serializer in `src/common/line_generator.cpp`, the runtime LFO engine in `src/synthesis/modulators/synth_lfo.cpp`, and the import-export UI in `src/interface/editor_sections/lfo_section.cpp`.
+- Confirmed that Vital stores only shape data in `.vitallfo`, keeps playback behavior in separate synth parameters, inverts file `y` into output-space during render, uses duplicate `x` values for step edges, and plays back from a pre-rendered 2048-sample cubic-interpolated buffer.
+- Confirmed that the checked-in Vital source does not show a dedicated Serum LFO importer, but it does document shared wavetable WAV metadata parsing through the RIFF `clm ` chunk.
+- Wrote the full technical brief to `VITAL_AND_SERUM_LFO_RESEARCH.md` so the next implementation step can define this repo's own LFO shape spec, playback spec, and import rules separately.
+- Compared the old `full-proposal.md` MSEG section against Vital and decided that the final spec should keep the buffer-playback architecture but replace the proposed bezier-native saved format with a Vital-style point-plus-curve shape format, separate playback objects, separate route objects, and a 2048-sample rendered shape buffer with cubic pad samples.
+- Drafted `MSEG_VITAL_FOUNDATION_DRAFT.md` as the reduced direction: Vital-style normalized shape data, Lumos-style sustain-loop playback, mono-only v1, no seconds mode, no stereo phase, and no attempt to copy Vital's full playback feature set.
+- Revised `MSEG_VITAL_FOUNDATION_DRAFT.md` after review: removed point IDs from the shape model, moved loop markers into playback or preset state as normalized positions independent of points, restored a seconds-based rate mode plus tempo straight/dotted/triplet rates, and clarified that `tail_loop` is the useful part of Vital's `LoopPoint` while exact `LoopHold` remains deferred.
+- Simplified the playback model again after further discussion: the current source of truth is now one shape, one rate, one optional loop window, and one note-off policy, with use-case mappings for one-shot, Lumos sustain-loop behavior, Vital-style tail looping, and immediate loop exit on note-off; `phase-6-mseg-plan.md` was updated to match that model and the 2048-plus-padding runtime buffer choice.

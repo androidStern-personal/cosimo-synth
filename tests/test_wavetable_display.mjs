@@ -425,8 +425,8 @@ test("perspective makes distant stored frames narrower than front frames", () =>
         width: 720,
         height: 360,
     });
-    const backFrame = scene.contourFrames[0];
-    const frontFrame = scene.contourFrames[scene.contourFrames.length - 1];
+    const frontFrame = scene.contourFrames[0];
+    const backFrame = scene.contourFrames[scene.contourFrames.length - 1];
     const frontWidth = frontFrame.points.at(-1).x - frontFrame.points[0].x;
     const backWidth = backFrame.points.at(-1).x - backFrame.points[0].x;
 
