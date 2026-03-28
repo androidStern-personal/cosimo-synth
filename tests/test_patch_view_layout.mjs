@@ -160,6 +160,11 @@ test("iOS patch view pins the keyboard footer and removes the separate hero and 
     assert.match(source, /class="keyboard-footer"/);
     assert.match(source, /class="octave-button octave-down"/);
     assert.match(source, /class="octave-button octave-up"/);
+    assert.match(source, /class="wavetable-display-stack"/);
+    assert.match(source, /class="bank-picker-trigger"/);
+    assert.match(source, /class="table-select table-select-overlay"/);
+    assert.match(source, /Swipe \+ Drag/);
+    assert.doesNotMatch(source, /<span class="position-label">Table<\/span>/);
     assert.doesNotMatch(source, /class="hero"/);
     assert.doesNotMatch(source, /class="scan-panel"/);
     assert.doesNotMatch(source, /class="scan-slider"/);

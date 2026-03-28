@@ -423,6 +423,39 @@ test("upward wavetable-stage drag maps to the same normalized position change as
     assert.equal(mapDisplayDragToPosition(0.1, 300, 700, 200), 0);
 });
 
+test("display gesture helpers distinguish vertical scan drags from horizontal table swipes", async () => {
+    const {
+        getAdjacentTableIndices,
+        resolveDisplayGestureAxis,
+        resolveHorizontalSwipeTarget,
+        shouldCommitHorizontalSwipe,
+    } = await loadPatchViewModule();
+
+    assert.deepEqual(getAdjacentTableIndices(0, 5), [1]);
+    assert.deepEqual(getAdjacentTableIndices(2, 5), [1, 3]);
+    assert.deepEqual(getAdjacentTableIndices(4, 5), [3]);
+    assert.equal(resolveDisplayGestureAxis(6, 8), "pending");
+    assert.equal(resolveDisplayGestureAxis(-48, 10), "horizontal");
+    assert.equal(resolveDisplayGestureAxis(9, -52), "vertical");
+    assert.deepEqual(resolveHorizontalSwipeTarget(3, -80, 8), {
+        direction: 1,
+        targetTableIndex: 4,
+        hasTarget: true,
+    });
+    assert.deepEqual(resolveHorizontalSwipeTarget(3, 80, 8), {
+        direction: -1,
+        targetTableIndex: 2,
+        hasTarget: true,
+    });
+    assert.deepEqual(resolveHorizontalSwipeTarget(0, 80, 8), {
+        direction: -1,
+        targetTableIndex: 0,
+        hasTarget: false,
+    });
+    assert.equal(shouldCommitHorizontalSwipe(28, 320), false);
+    assert.equal(shouldCommitHorizontalSwipe(-72, 320), true);
+});
+
 test("wavetable upload events are chunked into 2048-sample frames with a shared upload token", async () => {
     const { buildUploadedWavetableFrameEvents } = await loadPatchViewModule();
     const bank = {

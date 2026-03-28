@@ -76,7 +76,7 @@ test("boot_without_saved_mseg_state_uses_default_shape_playback_and_depth", () =
     const { shape, playback, depth } = controller.getState();
     assert.deepEqual(shape, createDefaultMsegShape());
     assert.deepEqual(playback, createDefaultMsegPlayback());
-    assert.equal(depth, 0.0);
+    assert.equal(depth, 1.0);
 });
 
 test("boot_with_saved_mseg_state_restores_shape_playback_and_depth", () => {
@@ -320,7 +320,7 @@ test("malformed_saved_state_falls_back_to_defaults", () => {
 
     assert.deepEqual(controller.getState().shape, createDefaultMsegShape());
     assert.deepEqual(controller.getState().playback, createDefaultMsegPlayback());
-    assert.equal(controller.getState().depth, 0.0);
+    assert.equal(controller.getState().depth, 1.0);
     assert.deepEqual(
         lastEvent(patchConnection, MSEG_BUFFER_ENDPOINT_ID).value,
         Array.from(renderMsegShape(createDefaultMsegShape()))

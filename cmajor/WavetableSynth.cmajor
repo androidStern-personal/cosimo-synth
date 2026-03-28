@@ -82,7 +82,7 @@ graph WavetableSynth [[ main ]]
     input event wt::MsegPlaybackConfig mseg1Playback;
     input value float32 wavetablePosition [[ name: "Wavetable Position", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
     input value float32 wavetableSelect [[ name: "Wavetable Select", min: 0.0f, max: 255.0f, init: 0.0f, discrete: true, step: 1.0f, rampFrames: 0 ]];
-    input value float32 mseg1Depth [[ name: "MSEG 1 Depth", min: -1.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
+    input value float32 mseg1Depth [[ name: "MSEG 1 Depth", min: -1.0f, max: 1.0f, init: 1.0f, rampFrames: 64 ]];
     output event wt::EffectiveWavetablePositionMonitor effectiveWavetablePosition;
     output stream float32<2> audioOut;
 

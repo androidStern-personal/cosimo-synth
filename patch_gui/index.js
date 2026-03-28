@@ -17,6 +17,10 @@ const runtimeSelectedTableStateKey = "cosimoRuntimeSelectedTableIndex";
 const samplesPerFrame = 2048;
 const maxWavetableFrames = 256;
 const DISPLAY_POSITION_EPSILON = 0.000001;
+const DISPLAY_GESTURE_AXIS_LOCK_PX = 12;
+const DISPLAY_SWIPE_MIN_COMMIT_PX = 48;
+const DISPLAY_SWIPE_COMMIT_RATIO = 0.18;
+const DISPLAY_SLIDE_TRANSITION_MS = 240;
 const SVG_NS = "http://www.w3.org/2000/svg";
 const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 
@@ -82,6 +86,82 @@ export function computeKeyboardDimensions({
         naturalWidth,
         accidentalWidth,
     };
+}
+
+export function getAdjacentTableIndices(currentTableIndex, tableCount) {
+    const safeTableCount = Math.max(0, Math.round(Number(tableCount) || 0));
+    if (safeTableCount <= 1) {
+        return [];
+    }
+
+    const safeCurrentIndex = clamp(
+        Math.round(Number(currentTableIndex) || 0),
+        0,
+        safeTableCount - 1
+    );
+    const adjacent = [];
+
+    if (safeCurrentIndex > 0) {
+        adjacent.push(safeCurrentIndex - 1);
+    }
+
+    if (safeCurrentIndex < safeTableCount - 1) {
+        adjacent.push(safeCurrentIndex + 1);
+    }
+
+    return adjacent;
+}
+
+export function resolveDisplayGestureAxis(deltaX, deltaY, axisLockThreshold = DISPLAY_GESTURE_AXIS_LOCK_PX) {
+    const safeDeltaX = Math.abs(Number(deltaX) || 0);
+    const safeDeltaY = Math.abs(Number(deltaY) || 0);
+    const safeThreshold = Math.max(0, Number(axisLockThreshold) || 0);
+
+    if (Math.max(safeDeltaX, safeDeltaY) < safeThreshold) {
+        return "pending";
+    }
+
+    return safeDeltaX > safeDeltaY ? "horizontal" : "vertical";
+}
+
+export function resolveHorizontalSwipeTarget(startTableIndex, deltaX, tableCount) {
+    const safeTableCount = Math.max(1, Math.round(Number(tableCount) || 1));
+    const safeStartIndex = clamp(
+        Math.round(Number(startTableIndex) || 0),
+        0,
+        safeTableCount - 1
+    );
+    const safeDeltaX = Number(deltaX) || 0;
+    const direction = safeDeltaX < 0 ? 1 : safeDeltaX > 0 ? -1 : 0;
+
+    if (direction === 0) {
+        return {
+            direction: 0,
+            targetTableIndex: safeStartIndex,
+            hasTarget: false,
+        };
+    }
+
+    const targetTableIndex = clamp(safeStartIndex + direction, 0, safeTableCount - 1);
+    return {
+        direction,
+        targetTableIndex,
+        hasTarget: targetTableIndex !== safeStartIndex,
+    };
+}
+
+export function shouldCommitHorizontalSwipe(
+    deltaX,
+    stageWidth,
+    minCommitDistance = DISPLAY_SWIPE_MIN_COMMIT_PX,
+    commitRatio = DISPLAY_SWIPE_COMMIT_RATIO
+) {
+    const safeStageWidth = Math.max(0, Number(stageWidth) || 0);
+    const safeMinCommitDistance = Math.max(0, Number(minCommitDistance) || 0);
+    const safeCommitRatio = Math.max(0, Number(commitRatio) || 0);
+    const commitDistance = Math.max(safeMinCommitDistance, safeStageWidth * safeCommitRatio);
+
+    return Math.abs(Number(deltaX) || 0) >= commitDistance;
 }
 
 export function buildUploadedWavetableFrameEvents(bank, uploadToken = 0) {
@@ -276,15 +356,18 @@ class CosimoSynthView extends HTMLElement {
         this.currentFrameCount = 1;
         this.hasDisplayedValue = false;
         this.display = null;
+        this.displaySlots = [];
+        this.activeDisplaySlotIndex = 0;
         this.observedWavetablePositionState = {
             voiceGeneration: -1,
             position: knobDefault,
         };
         this.hasEffectiveWavetablePositionMonitor = false;
         this.displayFramesCache = new Map();
-        this.displayFramesLoading = new Set();
+        this.displayFramesLoading = new Map();
         this.factoryBankCatalog = null;
         this.nextUploadToken = 1;
+        this.nextDisplaySelectionToken = 1;
         this.resizeObserver = null;
         this.windowResizeListener = null;
         this.currentLayout = computeResponsivePatchLayout({
@@ -407,15 +490,18 @@ class CosimoSynthView extends HTMLElement {
         this.heroFrameReadout = this.shadowRoot.querySelector("[data-role='hero-frame-readout']");
         this.keyboardHost = this.shadowRoot.querySelector(".keyboard-host");
         this.hint = this.shadowRoot.querySelector(".hint");
-        this.displayCanvas = this.shadowRoot.querySelector(".wavetable-canvas");
         this.displayViewport = this.shadowRoot.querySelector(".wavetable-stage");
+        this.displayLayers = Array.from(this.shadowRoot.querySelectorAll(".wavetable-layer"));
+        this.displayCanvases = Array.from(this.shadowRoot.querySelectorAll(".wavetable-canvas"));
         this.displayOverlay = this.shadowRoot.querySelector(".display-overlay");
         this.displayStatus = this.shadowRoot.querySelector("[data-role='display-status']");
         this.bankReadout = this.shadowRoot.querySelector(".bank-readout");
+        this.stageGestureHint = this.shadowRoot.querySelector("[data-role='stage-gesture-hint']");
         this.scanRailInput = this.shadowRoot.querySelector(".scan-slider");
         this.stepDownButton = this.shadowRoot.querySelector(".step-down");
         this.stepUpButton = this.shadowRoot.querySelector(".step-up");
         this.tableSelect = this.shadowRoot.querySelector(".table-select");
+        this.bankPickerTrigger = this.shadowRoot.querySelector(".bank-picker-trigger");
         this.railLabelStart = this.shadowRoot.querySelector("[data-role='rail-label-start']");
         this.railLabelMid = this.shadowRoot.querySelector("[data-role='rail-label-mid']");
         this.railLabelEnd = this.shadowRoot.querySelector("[data-role='rail-label-end']");
@@ -429,14 +515,25 @@ class CosimoSynthView extends HTMLElement {
         this.msegDepthInput = this.shadowRoot.querySelector(".mseg-depth-slider");
         this.msegDepthReadout = this.shadowRoot.querySelector("[data-role='mseg-depth-readout']");
 
-        this.display = new CanvasWavetableDisplay(this.displayCanvas);
+        this.displaySlots = this.displayCanvases.map((canvas, slotIndex) => ({
+            slotIndex,
+            layer: this.displayLayers[slotIndex] ?? canvas,
+            canvas,
+            display: new CanvasWavetableDisplay(canvas),
+            tableIndex: null,
+            frameCount: 0,
+        }));
+        this.activeDisplaySlotIndex = 0;
+        this.display = this.displaySlots[0]?.display ?? null;
         this.msegController = new MsegController(this.patchConnection, {
             onStateChange: (state) => this.handleMsegStateChange(state),
         });
         this.msegController.attach();
 
         this.handleParameterChange = (value) => this.setDisplayedValue(value);
-        this.handleTableParameterChange = (value) => this.setSelectedTableIndex(value);
+        this.handleTableParameterChange = (value) => {
+            void this.setSelectedTableIndex(value).catch(() => {});
+        };
         this.handleEffectiveWavetablePositionChange = (message) => this.handleObservedDisplayPosition(message);
         this.handleStatusUpdate = (status) => this.handlePatchStatus(status);
         this.handleDisplayDragStart = (event) => this.beginDisplayDrag(event);
@@ -453,12 +550,13 @@ class CosimoSynthView extends HTMLElement {
         this.handleOctaveUp = () => this.nudgeKeyboardOctave(12);
         this.handleTableSelectChange = () => {
             const nextIndex = Number(this.tableSelect?.value ?? 0);
+            const animateDirection =
+                Math.abs(nextIndex - this.currentTableIndex) === 1
+                    ? Math.sign(nextIndex - this.currentTableIndex)
+                    : 0;
 
-            this.patchConnection.sendParameterGestureStart?.(wavetableSelectEndpointID);
-            this.patchConnection.sendEventOrValue(wavetableSelectEndpointID, nextIndex);
-            this.patchConnection.sendParameterGestureEnd?.(wavetableSelectEndpointID);
-            this.patchConnection.sendStoredStateValue?.(runtimeSelectedTableStateKey, nextIndex);
-            this.setSelectedTableIndex(nextIndex);
+            this.sendSelectedTableIndex(nextIndex);
+            void this.setSelectedTableIndex(nextIndex, { animateDirection }).catch(() => {});
         };
 
         if (this.tableSelect) {
@@ -494,6 +592,7 @@ class CosimoSynthView extends HTMLElement {
 
         this.buildKeyboard();
         this.installResizeObserver();
+        this.resetDisplayLayerPositions();
         this.setDisplayedValue(knobDefault);
         this.setDisplayState("loading", "Loading wavetable bank…");
 
@@ -536,7 +635,10 @@ class CosimoSynthView extends HTMLElement {
 
             this.applyResponsiveLayout(nextLayout);
             this.syncKeyboardGeometry();
-            this.display.resize(stageBounds.width, stageBounds.height, window.devicePixelRatio || 1);
+            this.displaySlots.forEach((slot) => {
+                slot.display.resize(stageBounds.width, stageBounds.height, window.devicePixelRatio || 1);
+            });
+            this.resetDisplayLayerPositions();
         };
 
         if ("ResizeObserver" in window) {
@@ -572,6 +674,85 @@ class CosimoSynthView extends HTMLElement {
         if (layoutChanged && this.keyboard) {
             this.syncKeyboardLayout();
         }
+    }
+
+    getDisplayStageWidth() {
+        return Math.max(
+            1,
+            this.displayViewport?.getBoundingClientRect?.().width ||
+                this.displayViewport?.clientWidth ||
+                1
+        );
+    }
+
+    getActiveDisplaySlot() {
+        return this.displaySlots[this.activeDisplaySlotIndex] ?? null;
+    }
+
+    getInactiveDisplaySlot() {
+        if (this.displaySlots.length < 2) {
+            return null;
+        }
+
+        return this.displaySlots[(this.activeDisplaySlotIndex + 1) % this.displaySlots.length] ?? null;
+    }
+
+    setDisplaySlotTransition(slot, enabled) {
+        if (!slot?.layer?.style) {
+            return;
+        }
+
+        slot.layer.style.transition = enabled
+            ? `transform ${DISPLAY_SLIDE_TRANSITION_MS}ms cubic-bezier(0.22, 1, 0.36, 1)`
+            : "none";
+    }
+
+    setDisplaySlotOffset(slot, offsetPx) {
+        if (!slot?.layer?.style) {
+            return;
+        }
+
+        slot.layer.style.transform = `translate3d(${Number(offsetPx || 0).toFixed(3)}px, 0, 0)`;
+    }
+
+    resetDisplayLayerPositions() {
+        const activeSlot = this.getActiveDisplaySlot();
+        const inactiveSlot = this.getInactiveDisplaySlot();
+        const stageWidth = this.getDisplayStageWidth();
+
+        if (activeSlot) {
+            this.setDisplaySlotTransition(activeSlot, false);
+            this.setDisplaySlotOffset(activeSlot, 0);
+        }
+
+        if (inactiveSlot) {
+            this.setDisplaySlotTransition(inactiveSlot, false);
+            this.setDisplaySlotOffset(inactiveSlot, stageWidth);
+        }
+    }
+
+    renderBankIntoSlot(slot, bank) {
+        if (!slot || !bank) {
+            return;
+        }
+
+        slot.display.setFrames(bank.frames);
+        slot.display.setPosition(this.currentDisplayPosition);
+        slot.tableIndex = bank.tableIndex;
+        slot.frameCount = bank.frameCount;
+    }
+
+    finalizeDisplayedBank(bank) {
+        this.currentFrameCount = Math.max(1, Number(bank?.frameCount) || 1);
+        this.display = this.getActiveDisplaySlot()?.display ?? this.display;
+        this.updateFrameReadouts();
+        this.updateBankReadout();
+        this.setDisplayState(
+            "loaded",
+            this.options.platform === "ios"
+                ? `${bank.frameCount} shapes`
+                : `${bank.frameCount} frames`
+        );
     }
 
     async ensureBankCatalogLoaded() {
@@ -655,43 +836,55 @@ class CosimoSynthView extends HTMLElement {
         }
     }
 
-    async loadDisplayFrames(tableIndex = this.currentTableIndex) {
+    async fetchDisplayBank(tableIndex, { showLoadingState = false } = {}) {
         const cachedBank = this.displayFramesCache.get(tableIndex);
         if (cachedBank) {
-            this.applyLoadedBank(cachedBank);
-            if (tableIndex === this.currentTableIndex) {
-                this.uploadLoadedTable(cachedBank);
-            }
-            return;
+            return cachedBank;
         }
 
-        if (this.displayFramesLoading.has(tableIndex)) {
-            return;
+        const inFlightRequest = this.displayFramesLoading.get(tableIndex);
+        if (inFlightRequest) {
+            return inFlightRequest;
         }
 
-        this.displayFramesLoading.add(tableIndex);
-        this.setDisplayState("loading", "Loading wavetable bank…");
-
-        try {
-            const bank = await loadFactoryBankFramesFromPatch(this.patchConnection, { tableIndex });
-            this.displayFramesCache.set(tableIndex, bank);
-
-            if (tableIndex === this.currentTableIndex) {
-                this.applyLoadedBank(bank);
-                this.uploadLoadedTable(bank);
-            }
-        } catch (error) {
-            console.error(error);
-            const detail = String(error?.message || error || "Unknown error");
-            this.setDisplayState("error", `Could not load wavetable bank: ${detail}`);
-            if (this.bankReadout) {
-                this.bankReadout.textContent = this.options.platform === "ios"
-                    ? "Display unavailable"
-                    : `Display unavailable: ${detail}`;
-            }
-        } finally {
-            this.displayFramesLoading.delete(tableIndex);
+        if (showLoadingState) {
+            this.setDisplayState("loading", "Loading wavetable bank…");
         }
+
+        const request = loadFactoryBankFramesFromPatch(this.patchConnection, { tableIndex })
+            .then((bank) => {
+                this.displayFramesCache.set(tableIndex, bank);
+                return bank;
+            })
+            .catch((error) => {
+                console.error(error);
+
+                if (showLoadingState) {
+                    const detail = String(error?.message || error || "Unknown error");
+                    this.setDisplayState("error", `Could not load wavetable bank: ${detail}`);
+                    if (this.bankReadout) {
+                        this.bankReadout.textContent = this.options.platform === "ios"
+                            ? "Display unavailable"
+                            : `Display unavailable: ${detail}`;
+                    }
+                }
+
+                throw error;
+            })
+            .finally(() => {
+                this.displayFramesLoading.delete(tableIndex);
+            });
+
+        this.displayFramesLoading.set(tableIndex, request);
+        return request;
+    }
+
+    preloadAdjacentTables(tableIndex = this.currentTableIndex) {
+        const tableCount = this.factoryBankCatalog?.tables?.length ?? 0;
+
+        getAdjacentTableIndices(tableIndex, tableCount).forEach((adjacentTableIndex) => {
+            void this.fetchDisplayBank(adjacentTableIndex).catch(() => {});
+        });
     }
 
     uploadLoadedTable(bank) {
@@ -712,36 +905,85 @@ class CosimoSynthView extends HTMLElement {
     }
 
     applyLoadedBank(bank) {
-        this.currentFrameCount = Math.max(1, Number(bank.frameCount) || 1);
-        this.display.setFrames(bank.frames);
-        this.display.setPosition(this.currentDisplayPosition);
-        this.updateFrameReadouts();
-        this.updateBankReadout();
-        this.setDisplayState(
-            "loaded",
-            this.options.platform === "ios"
-                ? `${bank.frameCount} shapes`
-                : `${bank.frameCount} frames`
-        );
+        const activeSlot = this.getActiveDisplaySlot();
+        this.renderBankIntoSlot(activeSlot, bank);
+        this.resetDisplayLayerPositions();
+        this.finalizeDisplayedBank(bank);
     }
 
-    setSelectedTableIndex(value) {
+    async animateTableSlide(bank, direction) {
+        const activeSlot = this.getActiveDisplaySlot();
+        const inactiveSlot = this.getInactiveDisplaySlot();
+
+        if (!activeSlot || !inactiveSlot || direction === 0) {
+            this.applyLoadedBank(bank);
+            return;
+        }
+
+        const stageWidth = this.getDisplayStageWidth();
+        const incomingOffset = direction > 0 ? stageWidth : -stageWidth;
+        const outgoingOffset = direction > 0 ? -stageWidth : stageWidth;
+
+        this.renderBankIntoSlot(inactiveSlot, bank);
+        this.setDisplaySlotTransition(activeSlot, false);
+        this.setDisplaySlotTransition(inactiveSlot, false);
+        this.setDisplaySlotOffset(activeSlot, 0);
+        this.setDisplaySlotOffset(inactiveSlot, incomingOffset);
+
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+
+        this.setDisplaySlotTransition(activeSlot, true);
+        this.setDisplaySlotTransition(inactiveSlot, true);
+        this.setDisplaySlotOffset(activeSlot, outgoingOffset);
+        this.setDisplaySlotOffset(inactiveSlot, 0);
+
+        await new Promise((resolve) => window.setTimeout(resolve, DISPLAY_SLIDE_TRANSITION_MS));
+
+        this.activeDisplaySlotIndex = inactiveSlot.slotIndex;
+        this.display = inactiveSlot.display;
+        this.finalizeDisplayedBank(bank);
+        this.resetDisplayLayerPositions();
+    }
+
+    async setSelectedTableIndex(value, { animateDirection = 0 } = {}) {
         const maxTableIndex = this.factoryBankCatalog
             ? Math.max(0, this.factoryBankCatalog.tables.length - 1)
             : 255;
         const nextTableIndex = clamp(Math.round(Number(value) || 0), 0, maxTableIndex);
+        const requestToken = this.nextDisplaySelectionToken;
+        this.nextDisplaySelectionToken += 1;
+        const previousTableIndex = this.currentTableIndex;
 
         if (this.tableSelect && this.tableSelect.value !== String(nextTableIndex)) {
             this.tableSelect.value = String(nextTableIndex);
         }
 
-        if (nextTableIndex === this.currentTableIndex && this.displayFramesCache.has(nextTableIndex)) {
+        if (
+            nextTableIndex === this.currentTableIndex &&
+            this.displayFramesCache.has(nextTableIndex) &&
+            this.getActiveDisplaySlot()?.tableIndex === nextTableIndex
+        ) {
             return;
         }
 
         this.currentTableIndex = nextTableIndex;
         this.updateBankReadout();
-        void this.loadDisplayFrames(nextTableIndex);
+
+        const bank = await this.fetchDisplayBank(nextTableIndex, { showLoadingState: true });
+        if (requestToken !== this.nextDisplaySelectionToken - 1) {
+            return;
+        }
+
+        if (animateDirection !== 0 && nextTableIndex !== previousTableIndex) {
+            await this.animateTableSlide(bank, animateDirection);
+        } else {
+            this.applyLoadedBank(bank);
+        }
+
+        if (nextTableIndex === this.currentTableIndex) {
+            this.uploadLoadedTable(bank);
+            this.preloadAdjacentTables(nextTableIndex);
+        }
     }
 
     handlePatchStatus(status) {
@@ -782,7 +1024,9 @@ class CosimoSynthView extends HTMLElement {
                 const detail = String(error?.message || error || "Unknown error");
                 this.setDisplayState("error", `Could not load wavetable catalog: ${detail}`);
             })
-            .finally(() => this.loadDisplayFrames(this.currentTableIndex));
+            .finally(() => {
+                void this.setSelectedTableIndex(this.currentTableIndex).catch(() => {});
+            });
     }
 
     handleMsegStateChange(state) {
@@ -1201,6 +1445,13 @@ class CosimoSynthView extends HTMLElement {
         return this.scanRailEndpointID || this.knobEndpointID || wavetablePositionEndpointID;
     }
 
+    sendSelectedTableIndex(nextIndex) {
+        this.patchConnection.sendParameterGestureStart?.(wavetableSelectEndpointID);
+        this.patchConnection.sendEventOrValue(wavetableSelectEndpointID, nextIndex);
+        this.patchConnection.sendParameterGestureEnd?.(wavetableSelectEndpointID);
+        this.patchConnection.sendStoredStateValue?.(runtimeSelectedTableStateKey, nextIndex);
+    }
+
     commitDraggedDisplayPosition(nextValue) {
         const clampedValue = clampDisplayPosition(nextValue);
         const endpointID = this.getPrimaryPositionEndpointID();
@@ -1234,17 +1485,25 @@ class CosimoSynthView extends HTMLElement {
             return;
         }
 
+        if (event.target?.closest?.(".bank-picker-trigger")) {
+            return;
+        }
+
         const bounds = this.displayViewport.getBoundingClientRect();
         this.activeDisplayDrag = {
             pointerId: event.pointerId,
+            startClientX: event.clientX,
             startClientY: event.clientY,
             endpointID,
+            mode: "pending",
+            startTableIndex: this.currentTableIndex,
             startValue: this.currentValue,
-            dragSpan: bounds.height,
+            dragSpanX: bounds.width,
+            dragSpanY: bounds.height,
         };
 
         this.displayViewport.setPointerCapture?.(event.pointerId);
-        this.patchConnection.sendParameterGestureStart?.(endpointID);
+        this.preloadAdjacentTables(this.currentTableIndex);
         event.preventDefault?.();
     }
 
@@ -1253,11 +1512,74 @@ class CosimoSynthView extends HTMLElement {
             return;
         }
 
+        const deltaX = event.clientX - this.activeDisplayDrag.startClientX;
+        const deltaY = event.clientY - this.activeDisplayDrag.startClientY;
+        const gestureAxis = resolveDisplayGestureAxis(deltaX, deltaY);
+
+        if (this.activeDisplayDrag.mode === "pending" && gestureAxis !== "pending") {
+            this.activeDisplayDrag.mode = gestureAxis;
+
+            if (gestureAxis === "vertical") {
+                this.patchConnection.sendParameterGestureStart?.(this.activeDisplayDrag.endpointID);
+            }
+        }
+
+        if (this.activeDisplayDrag.mode === "horizontal") {
+            const tableCount = this.factoryBankCatalog?.tables?.length ?? 0;
+            const swipeTarget = resolveHorizontalSwipeTarget(
+                this.activeDisplayDrag.startTableIndex,
+                deltaX,
+                tableCount
+            );
+            const activeSlot = this.getActiveDisplaySlot();
+            const inactiveSlot = this.getInactiveDisplaySlot();
+            const stageWidth = this.getDisplayStageWidth();
+            const clampedOffset = clamp(deltaX, -stageWidth, stageWidth);
+
+            this.activeDisplayDrag.currentDeltaX = clampedOffset;
+            this.activeDisplayDrag.direction = swipeTarget.direction;
+            this.activeDisplayDrag.previewTargetTableIndex = swipeTarget.targetTableIndex;
+            this.activeDisplayDrag.hasHorizontalTarget = swipeTarget.hasTarget;
+
+            if (activeSlot) {
+                this.setDisplaySlotTransition(activeSlot, false);
+                this.setDisplaySlotOffset(activeSlot, clampedOffset);
+            }
+
+            if (inactiveSlot) {
+                if (swipeTarget.hasTarget) {
+                    const previewBank = this.displayFramesCache.get(swipeTarget.targetTableIndex);
+                    if (previewBank) {
+                        this.renderBankIntoSlot(inactiveSlot, previewBank);
+                        this.setDisplaySlotTransition(inactiveSlot, false);
+                        this.setDisplaySlotOffset(
+                            inactiveSlot,
+                            clampedOffset + (swipeTarget.direction > 0 ? stageWidth : -stageWidth)
+                        );
+                    } else {
+                        void this.fetchDisplayBank(swipeTarget.targetTableIndex).catch(() => {});
+                        this.setDisplaySlotTransition(inactiveSlot, false);
+                        this.setDisplaySlotOffset(inactiveSlot, swipeTarget.direction > 0 ? stageWidth : -stageWidth);
+                    }
+                } else {
+                    this.setDisplaySlotTransition(inactiveSlot, false);
+                    this.setDisplaySlotOffset(inactiveSlot, stageWidth);
+                }
+            }
+
+            event.preventDefault?.();
+            return;
+        }
+
+        if (this.activeDisplayDrag.mode !== "vertical") {
+            return;
+        }
+
         const nextValue = mapDisplayDragToPosition(
             this.activeDisplayDrag.startValue,
             this.activeDisplayDrag.startClientY,
             event.clientY,
-            this.activeDisplayDrag.dragSpan
+            this.activeDisplayDrag.dragSpanY
         );
 
         this.commitDraggedDisplayPosition(nextValue);
@@ -1270,9 +1592,33 @@ class CosimoSynthView extends HTMLElement {
         }
 
         this.displayViewport?.releasePointerCapture?.(event.pointerId);
-        const { endpointID } = this.activeDisplayDrag;
+        const dragState = this.activeDisplayDrag;
         this.activeDisplayDrag = null;
-        this.patchConnection.sendParameterGestureEnd?.(endpointID);
+
+        if (dragState.mode === "vertical") {
+            this.patchConnection.sendParameterGestureEnd?.(dragState.endpointID);
+        } else if (dragState.mode === "horizontal") {
+            const swipeTarget = resolveHorizontalSwipeTarget(
+                dragState.startTableIndex,
+                dragState.currentDeltaX,
+                this.factoryBankCatalog?.tables?.length ?? 0
+            );
+            const shouldCommitSwipe =
+                swipeTarget.hasTarget &&
+                shouldCommitHorizontalSwipe(dragState.currentDeltaX, dragState.dragSpanX);
+
+            this.resetDisplayLayerPositions();
+
+            if (shouldCommitSwipe) {
+                this.sendSelectedTableIndex(swipeTarget.targetTableIndex);
+                void this.setSelectedTableIndex(swipeTarget.targetTableIndex, {
+                    animateDirection: swipeTarget.direction,
+                });
+            }
+        } else {
+            this.resetDisplayLayerPositions();
+        }
+
         event.preventDefault?.();
     }
 
@@ -1302,7 +1648,7 @@ class CosimoSynthView extends HTMLElement {
 
         this.currentDisplayPosition = nextValue;
         this.updateFrameReadouts();
-        this.display?.setPosition(nextValue);
+        this.displaySlots.forEach((slot) => slot.display.setPosition(nextValue));
     }
 
     setDisplayedValue(value) {
@@ -1780,7 +2126,7 @@ class CosimoSynthView extends HTMLElement {
                                 <div class="title">MSEG 1</div>
                                 <strong>Fixed Wavetable Route</strong>
                             </div>
-                            <div class="mseg-depth-readout" data-role="mseg-depth-readout">0.000</div>
+                            <div class="mseg-depth-readout" data-role="mseg-depth-readout">1.000</div>
                         </div>
 
                         <div class="mseg-editor-shell">
@@ -1801,7 +2147,7 @@ class CosimoSynthView extends HTMLElement {
                         <div class="mseg-controls">
                             <label class="mseg-depth">
                                 <span class="mseg-depth-label">Depth To Wavetable Position</span>
-                                <input class="mseg-depth-slider" type="range" min="-1" max="1" step="0.001" value="0.000" />
+                                <input class="mseg-depth-slider" type="range" min="-1" max="1" step="0.001" value="1.000" />
                             </label>
                             <button class="mseg-delete-point" type="button">Delete Point</button>
                         </div>
@@ -1908,16 +2254,26 @@ class CosimoSynthView extends HTMLElement {
                     gap: 6px;
                 }
 
-                .table-select {
-                    appearance: auto;
-                    width: 100%;
+                .bank-picker-trigger {
+                    position: relative;
+                    display: inline-flex;
+                    align-items: end;
+                    min-width: 0;
+                    max-width: min(72%, 260px);
+                    pointer-events: auto;
+                }
+
+                .table-select-overlay {
+                    position: absolute;
+                    inset: -8px -10px;
+                    width: calc(100% + 20px);
                     min-height: 40px;
-                    border-radius: 12px;
-                    border: 1px solid rgba(255, 255, 255, 0.08);
-                    background: rgba(10, 13, 18, 0.92);
-                    color: #eef2f5;
-                    padding: 0 12px;
-                    font-size: 14px;
+                    opacity: 0.001;
+                    appearance: none;
+                    border: 0;
+                    background: transparent;
+                    color: transparent;
+                    font-size: 16px;
                 }
 
                 .shape-readout,
@@ -1965,7 +2321,20 @@ class CosimoSynthView extends HTMLElement {
                     pointer-events: none;
                 }
 
+                .wavetable-display-stack {
+                    position: absolute;
+                    inset: 0;
+                }
+
+                .wavetable-layer {
+                    position: absolute;
+                    inset: 0;
+                    will-change: transform;
+                }
+
                 .wavetable-canvas {
+                    position: absolute;
+                    inset: 0;
                     width: 100%;
                     height: 100%;
                     display: block;
@@ -2035,6 +2404,13 @@ class CosimoSynthView extends HTMLElement {
                     display: grid;
                     gap: 8px;
                     justify-items: end;
+                }
+
+                .bank-readout {
+                    min-width: 0;
+                    overflow: hidden;
+                    white-space: nowrap;
+                    text-overflow: ellipsis;
                 }
 
                 .display-status {
@@ -2235,7 +2611,14 @@ class CosimoSynthView extends HTMLElement {
                     <div class="ios-content">
                         <div class="wavetable-panel">
                             <div class="wavetable-stage" data-state="loading">
-                                <canvas class="wavetable-canvas"></canvas>
+                                <div class="wavetable-display-stack">
+                                    <div class="wavetable-layer">
+                                        <canvas class="wavetable-canvas"></canvas>
+                                    </div>
+                                    <div class="wavetable-layer">
+                                        <canvas class="wavetable-canvas"></canvas>
+                                    </div>
+                                </div>
                                 <div class="display-overlay">Loading wavetable bank…</div>
                                 <div class="stage-copy">
                                     <div class="stage-copy-row">
@@ -2244,26 +2627,24 @@ class CosimoSynthView extends HTMLElement {
                                     </div>
                                     <div></div>
                                     <div class="stage-copy-row">
-                                        <div class="bank-readout">Factory bank</div>
-                                        <div class="mini-label warm">Drag To Scan</div>
+                                        <label class="bank-picker-trigger">
+                                            <div class="bank-readout">Factory bank</div>
+                                            <select class="table-select table-select-overlay" aria-label="Select wavetable"></select>
+                                        </label>
+                                        <div class="mini-label warm" data-role="stage-gesture-hint">Swipe + Drag</div>
                                     </div>
                                 </div>
                             </div>
 
                             <div class="wavetable-meta">
                                 <div class="wavetable-meta-row">
-                                    <label class="table-picker">
-                                        <span class="position-label">Table</span>
-                                        <select class="table-select"></select>
-                                    </label>
+                                    <div class="display-status" data-role="display-status">Loading wavetable bank…</div>
 
                                     <div class="wavetable-readouts">
                                         <div class="position-label">Position</div>
                                         <div class="position-readout" data-role="value-readout">0.000</div>
                                     </div>
                                 </div>
-
-                                <div class="display-status" data-role="display-status">Loading wavetable bank…</div>
                             </div>
                         </div>
 
@@ -2274,7 +2655,7 @@ class CosimoSynthView extends HTMLElement {
                                     <strong>Fixed Wavetable Route</strong>
                                 </div>
 
-                                <div class="mseg-depth-readout" data-role="mseg-depth-readout">0.000</div>
+                                <div class="mseg-depth-readout" data-role="mseg-depth-readout">1.000</div>
                             </div>
 
                             <div class="mseg-editor-shell">
@@ -2295,7 +2676,7 @@ class CosimoSynthView extends HTMLElement {
                             <div class="mseg-controls">
                                 <label class="mseg-depth">
                                     <span class="mseg-depth-label">Depth To Wavetable Position</span>
-                                    <input class="mseg-depth-slider" type="range" min="-1" max="1" step="0.001" value="0.000" />
+                                    <input class="mseg-depth-slider" type="range" min="-1" max="1" step="0.001" value="1.000" />
                                 </label>
                                 <button class="mseg-delete-point" type="button">Delete Point</button>
                             </div>

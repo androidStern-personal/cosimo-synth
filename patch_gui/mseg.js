@@ -2,7 +2,7 @@ export const MSEG_BODY_SAMPLES = 2048;
 export const MSEG_PADDED_SAMPLES = MSEG_BODY_SAMPLES + 3;
 export const MSEG_CURVE_POWER_LIMIT = 20;
 export const MSEG_DEFAULT_NAME = "MSEG 1";
-export const MSEG_DEFAULT_DEPTH = 0.0;
+export const MSEG_DEFAULT_DEPTH = 1.0;
 export const MSEG_RATE_KIND_SECONDS = 0;
 export const MSEG_RATE_KIND_TEMPO = 1;
 export const MSEG_NOTE_OFF_POLICY_FINISH_LOOP = 0;
@@ -185,7 +185,8 @@ export function deserializeMsegPlayback(value) {
 }
 
 export function deserializeMsegDepth(value) {
-    return clampMsegDepth(Number(value));
+    const numericValue = Number(value);
+    return clampMsegDepth(Number.isFinite(numericValue) ? numericValue : MSEG_DEFAULT_DEPTH);
 }
 
 function powerScale(value, power) {
