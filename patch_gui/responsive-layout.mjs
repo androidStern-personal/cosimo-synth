@@ -39,18 +39,18 @@ export function computeResponsivePatchLayout({
         headerStacks: safeWidth < 420,
         gridTemplateColumns: "minmax(0, 1fr)",
         controlStyle: "scan-rail",
-        noteCount: 24,
+        noteCount: 18,
         controlHeight: shortLandscape ? 48 : 54,
         stageMinHeight: compact ? 216 : (shortLandscape ? 180 : 252),
-        keyboardHeight: compact ? 88 : (shortLandscape ? 84 : 96),
+        keyboardHeight: compact ? 94 : (shortLandscape ? 88 : 102),
         controlColumnWidth: safeWidth,
         panelPadding: compact ? 14 : 20,
         cardPadding: compact ? 0 : 0,
         sectionGap: compact ? 10 : 16,
         titleFontSize: compact ? 12 : 13,
         subtitleFontSize: compact ? 18 : 22,
-        keyboardNaturalNoteWidth: compact ? 20 : (shortLandscape ? 18 : 22),
-        keyboardAccidentalWidth: compact ? 11 : (shortLandscape ? 10 : 12),
+        keyboardNaturalNoteWidth: compact ? 22 : (shortLandscape ? 20 : 24),
+        keyboardAccidentalWidth: compact ? 12 : (shortLandscape ? 11 : 13),
     };
 }
 

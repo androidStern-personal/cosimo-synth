@@ -11,6 +11,7 @@ import {
     loadFactoryBankFramesFromPatch,
 } from "../patch_gui/wavetable-bank.mjs";
 import {
+    DEFAULT_WAVETABLE_THEME,
     createFrameState,
     decimateFrame,
     buildWavetableStaticScene,
@@ -456,6 +457,13 @@ test("display gesture helpers distinguish vertical scan drags from horizontal ta
     assert.equal(shouldCommitHorizontalSwipe(-72, 320), true);
 });
 
+test("wavetable renderer keeps a flat shared background and no visible panel stroke", () => {
+    assert.equal(DEFAULT_WAVETABLE_THEME.backgroundTop, "#04070f");
+    assert.equal(DEFAULT_WAVETABLE_THEME.backgroundBottom, "#04070f");
+    assert.deepEqual(DEFAULT_WAVETABLE_THEME.backgroundRGB, [4, 7, 15]);
+    assert.equal(DEFAULT_WAVETABLE_THEME.panelStroke, "rgba(132, 149, 255, 0.0)");
+});
+
 test("wavetable upload events are chunked into 2048-sample frames with a shared upload token", async () => {
     const { buildUploadedWavetableFrameEvents } = await loadPatchViewModule();
     const bank = {
@@ -499,16 +507,16 @@ test("wavetable upload events are chunked into 2048-sample frames with a shared 
     );
 });
 
-test("keyboard geometry expands a two-octave range to fill the footer width", async () => {
+test("keyboard geometry expands a one-and-a-half-octave range to fill the footer width", async () => {
     const { computeKeyboardDimensions } = await loadPatchViewModule();
     const dimensions = computeKeyboardDimensions({
         rootNote: 36,
-        noteCount: 24,
+        noteCount: 18,
         availableWidth: 337,
-        minNaturalWidth: 20,
+        minNaturalWidth: 22,
     });
 
-    assert.equal(dimensions.naturalCount, 14);
+    assert.equal(dimensions.naturalCount, 11);
     assert.ok(Math.abs((dimensions.naturalWidth * dimensions.naturalCount) + 1 - 337) < 0.001);
     assert.ok(dimensions.accidentalWidth > 0);
 });

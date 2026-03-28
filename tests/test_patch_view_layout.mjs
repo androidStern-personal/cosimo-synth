@@ -97,12 +97,12 @@ test("phone portrait layout uses a full-width scan rail and a compact host-keybo
     assert.equal(layout.headerStacks, true);
     assert.equal(layout.gridTemplateColumns, "minmax(0, 1fr)");
     assert.equal(layout.controlStyle, "scan-rail");
-    assert.equal(layout.noteCount, 24);
+    assert.equal(layout.noteCount, 18);
     assert.equal(layout.stageMinHeight, 216);
     assert.equal(layout.controlHeight, 54);
-    assert.equal(layout.keyboardHeight, 88);
-    assert.equal(layout.keyboardNaturalNoteWidth, 20);
-    assert.equal(layout.keyboardAccidentalWidth, 11);
+    assert.equal(layout.keyboardHeight, 94);
+    assert.equal(layout.keyboardNaturalNoteWidth, 22);
+    assert.equal(layout.keyboardAccidentalWidth, 12);
 });
 
 test("tablet landscape keeps the flatter iOS hierarchy while using a wider keyboard dock", () => {
@@ -116,12 +116,12 @@ test("tablet landscape keeps the flatter iOS hierarchy while using a wider keybo
     assert.equal(layout.headerStacks, false);
     assert.equal(layout.gridTemplateColumns, "minmax(0, 1fr)");
     assert.equal(layout.controlStyle, "scan-rail");
-    assert.equal(layout.noteCount, 24);
+    assert.equal(layout.noteCount, 18);
     assert.equal(layout.stageMinHeight, 252);
     assert.equal(layout.controlHeight, 54);
-    assert.equal(layout.keyboardHeight, 96);
-    assert.equal(layout.keyboardNaturalNoteWidth, 22);
-    assert.equal(layout.keyboardAccidentalWidth, 12);
+    assert.equal(layout.keyboardHeight, 102);
+    assert.equal(layout.keyboardNaturalNoteWidth, 24);
+    assert.equal(layout.keyboardAccidentalWidth, 13);
 });
 
 test("short landscape heights keep every interactive area above the minimum tap-safe size", () => {
@@ -135,12 +135,12 @@ test("short landscape heights keep every interactive area above the minimum tap-
     assert.equal(layout.headerStacks, false);
     assert.equal(layout.gridTemplateColumns, "minmax(0, 1fr)");
     assert.equal(layout.controlStyle, "scan-rail");
-    assert.equal(layout.noteCount, 24);
+    assert.equal(layout.noteCount, 18);
     assert.equal(layout.stageMinHeight, 180);
     assert.equal(layout.controlHeight, 48);
-    assert.equal(layout.keyboardHeight, 84);
-    assert.equal(layout.keyboardNaturalNoteWidth, 18);
-    assert.equal(layout.keyboardAccidentalWidth, 10);
+    assert.equal(layout.keyboardHeight, 88);
+    assert.equal(layout.keyboardNaturalNoteWidth, 20);
+    assert.equal(layout.keyboardAccidentalWidth, 11);
 });
 
 test("iOS patch view uses safe-area insets instead of drawing a nested shell inside the phone screen", async () => {
@@ -165,13 +165,22 @@ test("iOS patch view pins the keyboard footer and removes the separate hero and 
     assert.match(source, /class="table-select table-select-overlay"/);
     assert.match(source, /Swipe \+ Drag/);
     assert.doesNotMatch(source, /<span class="position-label">Table<\/span>/);
+    assert.doesNotMatch(source, /class="wavetable-meta"/);
+    assert.doesNotMatch(source, /class="position-readout"/);
+    assert.match(source, /background:\s*#04070f;/);
+    assert.match(source, /\.wavetable-stage\s*\{[\s\S]*border-radius:\s*0;/);
+    assert.match(source, /\.wavetable-stage\s*\{[\s\S]*background:\s*transparent;/);
+    assert.match(source, /\.mseg-editor-shell\s*\{[\s\S]*border-radius:\s*0;/);
+    assert.match(source, /\.mseg-editor-shell\s*\{[\s\S]*border:\s*0;/);
+    assert.match(source, /\.mseg-editor-shell\s*\{[\s\S]*background:\s*transparent;/);
     assert.doesNotMatch(source, /class="hero"/);
     assert.doesNotMatch(source, /class="scan-panel"/);
     assert.doesNotMatch(source, /class="scan-slider"/);
 });
 
-test("iOS keyboard defaults to a true two-octave span starting one octave lower than before", async () => {
+test("iOS keyboard defaults to a tighter one-and-a-half-octave span starting one octave lower than before", async () => {
     const source = await fs.readFile(path.join(repoRoot, "patch_gui", "index.js"), "utf8");
+    const layoutSource = await fs.readFile(path.join(repoRoot, "patch_gui", "responsive-layout.mjs"), "utf8");
 
     assert.match(source, /this\.keyboardRootNote = 36;/);
     assert.match(source, /this\.keyboardMinRootNote = 12;/);
@@ -180,4 +189,5 @@ test("iOS keyboard defaults to a true two-octave span starting one octave lower 
     assert.match(source, /attributeChangedCallback\(name, oldValue, newValue\)/);
     assert.match(source, /this\.refreshHTML\(\);/);
     assert.match(source, /return `\$\{formatNote\(startNote\)\} - \$\{formatNote\(lastNote\)\}`;/);
+    assert.match(layoutSource, /noteCount:\s*18,/);
 });

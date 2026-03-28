@@ -2174,10 +2174,7 @@ class CosimoSynthView extends HTMLElement {
                     min-height: 100dvh;
                     overflow-x: hidden;
                     overscroll-behavior: none;
-                    background:
-                        radial-gradient(circle at top, rgba(78, 106, 142, 0.1), transparent 30%),
-                        linear-gradient(180deg, rgba(255, 255, 255, 0.016), rgba(255, 255, 255, 0)),
-                        linear-gradient(180deg, rgba(7, 9, 13, 0.96), rgba(7, 9, 13, 0.98));
+                    background: #04070f;
                     color: #eef2f5;
                     font-family: "SF Pro Display", "SF Pro Text", -apple-system, BlinkMacSystemFont, "Avenir Next", sans-serif;
                     --cosimo-section-gap: 12px;
@@ -2239,7 +2236,7 @@ class CosimoSynthView extends HTMLElement {
                 .wavetable-panel {
                     display: grid;
                     min-width: 0;
-                    gap: 12px;
+                    gap: 0;
                 }
 
                 .display-status,
@@ -2300,12 +2297,9 @@ class CosimoSynthView extends HTMLElement {
                     max-width: 100%;
                     min-height: var(--cosimo-stage-min-height);
                     aspect-ratio: 1.55 / 1;
-                    border-radius: 18px;
+                    border-radius: 0;
                     overflow: hidden;
-                    background:
-                        radial-gradient(circle at 50% 22%, rgba(135, 215, 245, 0.08), transparent 24%),
-                        radial-gradient(circle at 88% 18%, rgba(242, 184, 107, 0.09), transparent 16%),
-                        linear-gradient(180deg, rgba(8, 11, 17, 0.9), rgba(6, 9, 14, 0.98));
+                    background: transparent;
                     touch-action: none;
                 }
 
@@ -2386,26 +2380,6 @@ class CosimoSynthView extends HTMLElement {
                     color: #f2b86b;
                 }
 
-                .wavetable-meta {
-                    display: grid;
-                    min-width: 0;
-                    gap: 10px;
-                }
-
-                .wavetable-meta-row {
-                    display: grid;
-                    min-width: 0;
-                    grid-template-columns: minmax(0, 1fr) auto;
-                    gap: 12px;
-                    align-items: end;
-                }
-
-                .wavetable-readouts {
-                    display: grid;
-                    gap: 8px;
-                    justify-items: end;
-                }
-
                 .bank-readout {
                     min-width: 0;
                     overflow: hidden;
@@ -2428,11 +2402,9 @@ class CosimoSynthView extends HTMLElement {
                         max(16px, env(safe-area-inset-right))
                         max(10px, env(safe-area-inset-bottom))
                         max(16px, env(safe-area-inset-left));
-                    border-top: 1px solid rgba(255, 255, 255, 0.08);
-                    background:
-                        linear-gradient(180deg, rgba(255, 255, 255, 0.024), rgba(255, 255, 255, 0)),
-                        linear-gradient(180deg, rgba(9, 12, 18, 0.96), rgba(6, 8, 13, 0.98));
-                    box-shadow: 0 -18px 36px rgba(2, 4, 10, 0.34);
+                    border-top: 0;
+                    background: transparent;
+                    box-shadow: none;
                 }
 
                 .keyboard-toolbar {
@@ -2524,10 +2496,10 @@ class CosimoSynthView extends HTMLElement {
                 }
 
                 .mseg-editor-shell {
-                    border-radius: 16px;
+                    border-radius: 0;
                     overflow: hidden;
-                    border: 1px solid rgba(255, 255, 255, 0.08);
-                    background: rgba(10, 13, 18, 0.92);
+                    border: 0;
+                    background: transparent;
                 }
 
                 .mseg-editor {
@@ -2632,17 +2604,6 @@ class CosimoSynthView extends HTMLElement {
                                             <select class="table-select table-select-overlay" aria-label="Select wavetable"></select>
                                         </label>
                                         <div class="mini-label warm" data-role="stage-gesture-hint">Swipe + Drag</div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="wavetable-meta">
-                                <div class="wavetable-meta-row">
-                                    <div class="display-status" data-role="display-status">Loading wavetable bank…</div>
-
-                                    <div class="wavetable-readouts">
-                                        <div class="position-label">Position</div>
-                                        <div class="position-readout" data-role="value-readout">0.000</div>
                                     </div>
                                 </div>
                             </div>

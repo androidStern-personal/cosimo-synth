@@ -12,7 +12,7 @@ export const DEFAULT_WAVETABLE_THEME = {
     backgroundTop: "#04070f",
     backgroundBottom: "#04070f",
     backgroundRGB: [4, 7, 15],
-    panelStroke: "rgba(132, 149, 255, 0.12)",
+    panelStroke: "rgba(132, 149, 255, 0.0)",
     frameColor: [94, 118, 255],
     meshColor: [102, 224, 255],
     highlightColor: [245, 108, 182],
