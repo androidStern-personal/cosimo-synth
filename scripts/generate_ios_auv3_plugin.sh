@@ -157,6 +157,77 @@ if old_style not in text:
 path.write_text(text, encoding="utf-8")
 PY
 
+python3 - "$generated_dir/include/cmajor/helpers/cmaj_PatchWebView.h" "$generated_dir/include/cmajor/helpers/cmaj_PatchWorker_WebView.h" <<'PY'
+from pathlib import Path
+import sys
+
+
+def patch_view_header(path: Path) -> None:
+    if not path.is_file():
+        return
+
+    text = path.read_text(encoding="utf-8")
+    old = """    const auto toMimeType = [this] (const auto& extension)
+    {
+        if (getMIMETypeForExtension)
+            if (auto m = getMIMETypeForExtension (extension); ! m.empty())
+                return m;
+
+        return choc::network::getMIMETypeFromFilename (extension, "application/octet-stream");
+    };
+"""
+    new = """    const auto toMimeType = [this] (const auto& extension)
+    {
+        if (extension == ".mjs" || extension == "mjs")
+            return std::string ("text/javascript");
+
+        if (extension == ".json" || extension == "json")
+            return std::string ("application/json");
+
+        if (getMIMETypeForExtension)
+            if (auto m = getMIMETypeForExtension (extension); ! m.empty())
+                return m;
+
+        return choc::network::getMIMETypeFromFilename (extension, "application/octet-stream");
+    };
+"""
+
+    if old not in text and new not in text:
+        raise SystemExit(f"Could not find the expected PatchWebView MIME mapping snippet in {path}")
+
+    path.write_text(text.replace(old, new, 1), encoding="utf-8")
+
+
+def patch_worker_header(path: Path) -> None:
+    if not path.is_file():
+        return
+
+    text = path.read_text(encoding="utf-8")
+    old = """                if (auto moduleText = readJavascriptResource (path, manifest))
+                    return choc::ui::WebView::Options::Resource (*moduleText, choc::network::getMIMETypeFromFilename (path, "application/octet-stream"));
+"""
+    new = """                if (auto moduleText = readJavascriptResource (path, manifest))
+                {
+                    const auto extension = std::filesystem::path (path).extension().string();
+                    const auto mimeType = (extension == ".mjs")
+                                            ? std::string ("text/javascript")
+                                            : (extension == ".json")
+                                                ? std::string ("application/json")
+                                                : choc::network::getMIMETypeFromFilename (path, "application/octet-stream");
+                    return choc::ui::WebView::Options::Resource (*moduleText, mimeType);
+                }
+"""
+
+    if old not in text and new not in text:
+        raise SystemExit(f"Could not find the expected PatchWorker MIME mapping snippet in {path}")
+
+    path.write_text(text.replace(old, new, 1), encoding="utf-8")
+
+
+patch_view_header(Path(sys.argv[1]))
+patch_worker_header(Path(sys.argv[2]))
+PY
+
 python3 - "$generated_dir/include/cmajor/helpers/cmaj_Patch.h" <<'PY'
 from pathlib import Path
 import sys
@@ -465,324 +536,6 @@ for old, new, label in [
 
     text = text.replace(old, new, 1)
 
-path.write_text(text, encoding="utf-8")
-PY
-
-python3 - "$generated_dir/cmajor_plugin.cpp" <<'PY'
-from pathlib import Path
-import sys
-
-path = Path(sys.argv[1])
-
-if not path.is_file():
-    raise SystemExit(0)
-
-text = path.read_text(encoding="utf-8")
-old_includes = """#include <array>
-#include <stdexcept>
-"""
-new_includes = """#include <array>
-#include <stdexcept>
-#include <algorithm>
-#include <vector>
-"""
-old_factory = """juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
-{
-    return new cmaj::plugin::GeneratedPlugin<::WavetableSynth> (std::make_shared<cmaj::Patch>());
-}
-"""
-new_factory = """class CosimoGeneratedPlugin final
-    : public cmaj::plugin::GeneratedPlugin<::WavetableSynth>,
-      private juce::AsyncUpdater,
-      private juce::Timer
-{
-public:
-    using super = cmaj::plugin::GeneratedPlugin<::WavetableSynth>;
-
-    CosimoGeneratedPlugin (std::shared_ptr<cmaj::Patch> patchToUse)
-        : super (std::move (patchToUse))
-    {
-        getPatchForDerived().handleXrun = [this]
-        {
-            ++uploadXrunCount;
-            getPatchForDerived().setStoredStateValue ("cosimoDebugUploadXrunCount", choc::value::createInt32 (uploadXrunCount));
-        };
-        startTimerHz (30);
-        requestRuntimeTableUpload (0.0f, true);
-    }
-
-    ~CosimoGeneratedPlugin() override
-    {
-        stopTimer();
-        cancelPendingUpdate();
-    }
-
-protected:
-    void prepareToPlay (double sampleRate, int samplesPerBlock) override
-    {
-        super::prepareToPlay (sampleRate, samplesPerBlock);
-        requestRuntimeTableUpload (pendingRequestedTableIndex, lastUploadedTableIndex < 0);
-    }
-
-    void processBlock (juce::AudioBuffer<float>& audio, juce::MidiBuffer& midi) override
-    {
-        flushPendingRuntimeTableUpload();
-        super::processBlock (audio, midi);
-    }
-
-    void patchLoadedFromState (const juce::ValueTree& newState) override
-    {
-        requestRuntimeTableUpload (readWavetableSelectFromState (newState), true);
-    }
-
-    void patchParameterValueDidChange (std::string_view endpointID, float newValue) override
-    {
-        if (endpointID == std::string_view ("wavetableSelect"))
-            requestRuntimeTableUpload (newValue, false);
-    }
-
-private:
-    static juce::File getBundledResourceFile (const std::string& path)
-    {
-        const auto relativePath = juce::String (path);
-        const auto app = juce::File::getSpecialLocation (juce::File::currentApplicationFile);
-        auto root = app.isDirectory() ? app : app.getParentDirectory();
-
-        for (int depth = 0; depth < 4 && root.exists(); ++depth)
-        {
-            const auto direct = root.getChildFile (relativePath);
-
-            if (direct.existsAsFile())
-                return direct;
-
-            const auto flatResources = root.getChildFile ("Resources").getChildFile (relativePath);
-
-            if (flatResources.existsAsFile())
-                return flatResources;
-
-            const auto bundleResources = root.getChildFile ("Contents")
-                                              .getChildFile ("Resources")
-                                              .getChildFile (relativePath);
-
-            if (bundleResources.existsAsFile())
-                return bundleResources;
-
-            const auto parent = root.getParentDirectory();
-
-            if (parent == root)
-                break;
-
-            root = parent;
-        }
-
-        return {};
-    }
-
-    static float readWavetableSelectFromState (const juce::ValueTree& state)
-    {
-        if (auto params = state.getChildWithName ("PARAMS"); params.isValid())
-            for (auto param : params)
-                if (param.getProperty ("ID").toString() == "wavetableSelect")
-                    return static_cast<float> (double (param.getProperty ("V")));
-
-        return 0.0f;
-    }
-
-    void requestRuntimeTableUpload (float requestedIndex, bool forceReload)
-    {
-        pendingRequestedTableIndex = requestedIndex;
-        stageBundledRuntimeTableUpload (pendingRequestedTableIndex, forceReloadPending || forceReload);
-        triggerAsyncUpdate();
-        flushPendingRuntimeTableUpload();
-    }
-
-    void handleAsyncUpdate() override
-    {
-        flushPendingRuntimeTableUpload();
-    }
-
-    void timerCallback() override
-    {
-        syncRuntimeTableSelectionFromStoredState();
-    }
-
-    void stageBundledRuntimeTableUpload (float requestedIndex, bool forceReload)
-    {
-        const auto catalogFile = getBundledResourceFile ("assets/factory-bank-catalog.json");
-
-        if (! catalogFile.existsAsFile())
-            return;
-
-        const auto parsedCatalog = juce::JSON::parse (catalogFile.loadFileAsString());
-        auto* catalogObject = parsedCatalog.getDynamicObject();
-
-        if (catalogObject == nullptr)
-            return;
-
-        auto* tables = catalogObject->getProperty ("tables").getArray();
-
-        if (tables == nullptr || tables->isEmpty())
-            return;
-
-        const auto tableIndex = juce::jlimit (0, tables->size() - 1, juce::roundToInt (requestedIndex));
-
-        if (! forceReload)
-        {
-            if (pendingUploadTableIndex == tableIndex && pendingUploadCursor < pendingUploadFrames.size())
-                return;
-
-            if (pendingUploadTableIndex < 0 && tableIndex == lastUploadedTableIndex)
-                return;
-        }
-
-        const auto& tableVar = tables->getReference (tableIndex);
-        auto* tableObject = tableVar.getDynamicObject();
-
-        if (tableObject == nullptr)
-            return;
-
-        const auto sourcePath = tableObject->getProperty ("sourceWav").toString();
-
-        if (sourcePath.isEmpty())
-            return;
-
-        const auto sourceFile = getBundledResourceFile (sourcePath.toStdString());
-
-        if (! sourceFile.existsAsFile())
-            return;
-
-        juce::WavAudioFormat wavFormat;
-        auto inputStream = std::unique_ptr<juce::InputStream> (sourceFile.createInputStream());
-
-        if (inputStream == nullptr)
-            return;
-
-        auto reader = std::unique_ptr<juce::AudioFormatReader> (wavFormat.createReaderFor (inputStream.release(), true));
-
-        if (reader == nullptr || reader->numChannels != 1 || reader->lengthInSamples <= 0)
-            return;
-
-        const auto sampleCount = static_cast<int> (reader->lengthInSamples);
-
-        if (sampleCount <= 0 || sampleCount % 2048 != 0)
-            return;
-
-        const auto frameCount = sampleCount / 2048;
-
-        if (frameCount < 1 || frameCount > 256)
-            return;
-
-        juce::AudioBuffer<float> buffer (1, sampleCount);
-
-        if (! reader->read (&buffer, 0, sampleCount, 0, true, false))
-            return;
-
-        pendingUploadFrames.clear();
-        pendingUploadFrames.reserve (static_cast<size_t> (frameCount));
-        pendingUploadCursor = 0;
-
-        const auto uploadToken = nextUploadToken++;
-
-        for (int frameIndex = 0; frameIndex < frameCount; ++frameIndex)
-        {
-            std::vector<float> frameSamples (2048, 0.0f);
-            const auto* frameStart = buffer.getReadPointer (0) + (frameIndex * 2048);
-            std::copy (frameStart, frameStart + 2048, frameSamples.begin());
-            pendingUploadFrames.push_back (choc::value::createObject ("UploadedWavetableFrame",
-                                                                      "uploadToken", uploadToken,
-                                                                      "frameCount", frameCount,
-                                                                      "frameIndex", frameIndex,
-                                                                      "samples", choc::value::createArray (frameSamples)));
-        }
-
-        pendingUploadTableIndex = tableIndex;
-        forceReloadPending = forceReload;
-        getPatchForDerived().setStoredStateValue ("cosimoDebugUploadStaged", choc::value::createInt32 (tableIndex));
-    }
-
-    void syncRuntimeTableSelectionFromStoredState()
-    {
-        const auto& storedState = getPatchForDerived().getStoredStateValues();
-        auto found = storedState.find (std::string (runtimeTableSelectionStateKey));
-
-        if (found == storedState.end())
-            return;
-
-        const auto requestedIndex = found->second.getWithDefault<float> (pendingRequestedTableIndex);
-        const auto roundedIndex = juce::roundToInt (requestedIndex);
-
-        if (roundedIndex == lastStoredStateTableIndex)
-            return;
-
-        lastStoredStateTableIndex = roundedIndex;
-        requestRuntimeTableUpload (requestedIndex, false);
-    }
-
-    void flushPendingRuntimeTableUpload()
-    {
-        if (pendingUploadTableIndex < 0 || pendingUploadFrames.empty())
-            return;
-
-        if (pendingUploadCursor >= pendingUploadFrames.size())
-        {
-            lastUploadedTableIndex = pendingUploadTableIndex;
-            forceReloadPending = false;
-            pendingUploadTableIndex = -1;
-            pendingUploadFrames.clear();
-            pendingUploadCursor = 0;
-            getPatchForDerived().setStoredStateValue ("cosimoDebugUploadSucceeded", choc::value::createInt32 (lastUploadedTableIndex));
-            return;
-        }
-
-        int framesSentThisFlush = 0;
-
-        while (pendingUploadCursor < pendingUploadFrames.size() && framesSentThisFlush < maxUploadFramesPerFlush)
-        {
-            if (! getPatchForDerived().sendEventOrValueToPatch (cmaj::EndpointID::create (std::string_view ("wavetableFrames")),
-                                                                pendingUploadFrames[pendingUploadCursor],
-                                                                0,
-                                                                5000))
-                break;
-
-            ++pendingUploadCursor;
-            ++framesSentThisFlush;
-        }
-
-        if (pendingUploadCursor < pendingUploadFrames.size())
-            triggerAsyncUpdate();
-        else
-            flushPendingRuntimeTableUpload();
-    }
-
-    float pendingRequestedTableIndex = 0.0f;
-    std::vector<choc::value::Value> pendingUploadFrames;
-    size_t pendingUploadCursor = 0;
-    int pendingUploadTableIndex = -1;
-    bool forceReloadPending = false;
-    int lastUploadedTableIndex = -1;
-    int lastStoredStateTableIndex = -1;
-    int nextUploadToken = 1;
-    int uploadXrunCount = 0;
-
-    static constexpr int maxUploadFramesPerFlush = 8;
-    static constexpr std::string_view runtimeTableSelectionStateKey = "cosimoRuntimeSelectedTableIndex";
-};
-
-juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
-{
-    return new CosimoGeneratedPlugin (std::make_shared<cmaj::Patch>());
-}
-"""
-
-if old_includes not in text and new_includes not in text:
-    raise SystemExit(f"Could not find the expected cmajor_plugin include snippet in {path}")
-
-text = text.replace(old_includes, new_includes, 1)
-
-if old_factory not in text and new_factory not in text:
-    raise SystemExit(f"Could not find the expected createPluginFilter snippet in {path}")
-
-text = text.replace(old_factory, new_factory, 1)
 path.write_text(text, encoding="utf-8")
 PY
 

@@ -8,14 +8,10 @@ import { CanvasWavetableDisplay } from "./wavetable-display.js";
 import { computeResponsivePatchLayout, getLayoutCSSVariables } from "./responsive-layout.js";
 
 const midiInputEndpointID = "midiIn";
-const wavetableFramesEndpointID = "wavetableFrames";
 const wavetablePositionEndpointID = "wavetablePosition";
 const wavetableSelectEndpointID = "wavetableSelect";
 const msegDepthEndpointID = "mseg1Depth";
 const effectiveWavetablePositionEndpointID = "effectiveWavetablePosition";
-const runtimeSelectedTableStateKey = "cosimoRuntimeSelectedTableIndex";
-const samplesPerFrame = 2048;
-const maxWavetableFrames = 256;
 const DISPLAY_POSITION_EPSILON = 0.000001;
 const DISPLAY_GESTURE_AXIS_LOCK_PX = 12;
 const DISPLAY_SWIPE_MIN_COMMIT_PX = 48;
@@ -162,46 +158,6 @@ export function shouldCommitHorizontalSwipe(
     const commitDistance = Math.max(safeMinCommitDistance, safeStageWidth * safeCommitRatio);
 
     return Math.abs(Number(deltaX) || 0) >= commitDistance;
-}
-
-export function buildUploadedWavetableFrameEvents(bank, uploadToken = 0) {
-    const availableFrames = Array.isArray(bank?.frames) ? bank.frames.length : 0;
-    const safeFrameCount = Math.max(
-        0,
-        Math.min(
-            maxWavetableFrames,
-            Number(bank?.frameCount) || availableFrames,
-            availableFrames
-        )
-    );
-
-    if (safeFrameCount === 0) {
-        return [];
-    }
-
-    const events = [];
-
-    for (let frameIndex = 0; frameIndex < safeFrameCount; frameIndex += 1) {
-        const sourceFrame = bank.frames[frameIndex];
-        const paddedSamples = new Float32Array(samplesPerFrame);
-
-        if (sourceFrame) {
-            paddedSamples.set(
-                typeof sourceFrame.subarray === "function"
-                    ? sourceFrame.subarray(0, samplesPerFrame)
-                    : Array.from(sourceFrame).slice(0, samplesPerFrame)
-            );
-        }
-
-        events.push({
-            uploadToken,
-            frameCount: safeFrameCount,
-            frameIndex,
-            samples: Array.from(paddedSamples),
-        });
-    }
-
-    return events;
 }
 
 function pointToEditorCoordinates(point, width, height) {
@@ -366,7 +322,6 @@ class CosimoSynthView extends HTMLElement {
         this.displayFramesCache = new Map();
         this.displayFramesLoading = new Map();
         this.factoryBankCatalog = null;
-        this.nextUploadToken = 1;
         this.nextDisplaySelectionToken = 1;
         this.resizeObserver = null;
         this.windowResizeListener = null;
@@ -887,23 +842,6 @@ class CosimoSynthView extends HTMLElement {
         });
     }
 
-    uploadLoadedTable(bank) {
-        if (this.options.platform === "ios") {
-            return;
-        }
-
-        if (!bank?.frames || typeof this.patchConnection?.sendEventOrValue !== "function") {
-            return;
-        }
-
-        const uploadToken = this.nextUploadToken;
-        this.nextUploadToken += 1;
-
-        for (const frameEvent of buildUploadedWavetableFrameEvents(bank, uploadToken)) {
-            this.patchConnection.sendEventOrValue(wavetableFramesEndpointID, frameEvent);
-        }
-    }
-
     applyLoadedBank(bank) {
         const activeSlot = this.getActiveDisplaySlot();
         this.renderBankIntoSlot(activeSlot, bank);
@@ -981,7 +919,6 @@ class CosimoSynthView extends HTMLElement {
         }
 
         if (nextTableIndex === this.currentTableIndex) {
-            this.uploadLoadedTable(bank);
             this.preloadAdjacentTables(nextTableIndex);
         }
     }
@@ -1449,7 +1386,6 @@ class CosimoSynthView extends HTMLElement {
         this.patchConnection.sendParameterGestureStart?.(wavetableSelectEndpointID);
         this.patchConnection.sendEventOrValue(wavetableSelectEndpointID, nextIndex);
         this.patchConnection.sendParameterGestureEnd?.(wavetableSelectEndpointID);
-        this.patchConnection.sendStoredStateValue?.(runtimeSelectedTableStateKey, nextIndex);
     }
 
     commitDraggedDisplayPosition(nextValue) {

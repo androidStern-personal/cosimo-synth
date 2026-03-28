@@ -1,30 +1,27 @@
-Paused work
-
-Renderer tuning toward the Serum look is paused while we plan the iOS AUv3 build.
-
-The iOS AUv3 shell work is now paused while we pivot back to wavetable-bank implementation.
-
-The wavetable-bank research is now paused while we scope the first real MSEG path into the existing oscillator.
-
 Current wavetable-loading source of truth
-- The current reviewed plan for restoring mip-selected playback while keeping the source WAVs as separate bundled files now lives in `SERUM_WAVETABLE_BUNDLING_PLAN.md`.
-- The short version is: keep `assets/factory_sources/`, add a patch worker, restore mip-aware playback in `cmajor/FixedFrameOscillator.cmajor`, and remove the current host-specific raw-table upload path once the worker path works.
+- The reviewed plan for restoring mip-selected playback while keeping the source WAVs as separate bundled files lives in `SERUM_WAVETABLE_BUNDLING_PLAN.md`.
 
 What is true right now
-- The macOS Ableton Live development plug-in works.
-- That plug-in is a desktop-only development shell and should stay that way.
-- The detailed AUv3 research, testing strategy, and implementation plan now live in `AUV3_RESEARCH_AND_PLAN.md`.
-- The current app ships wavetable source files separately in `assets/factory_sources/` and uses `assets/factory-bank-catalog.json` as the runtime catalog.
-- The current active oscillator path does not use mip selection. It uploads and plays one raw table at a time.
+- The app still ships wavetable source files separately in `assets/factory_sources/` and uses `assets/factory-bank-catalog.json` as the runtime catalog.
+- The active synth path now has a patch worker, `patch_gui/wavetable-worker.mjs`, which loads a selected source WAV, compiles mip frames in JavaScript, and streams them into the patch.
+- `cmajor/FixedFrameOscillator.cmajor` is mip-aware again. It now accepts `wavetableLoadBegin` and `wavetableMipFrame`, emits `wavetableMipRequest` and `wavetableUploadAck`, and selects mip levels at render time.
+- `cmajor/WavetableSynth.cmajor` now exposes those worker/DSP endpoints at the patch level.
+- The desktop UI in `patch_gui/index.js` no longer uploads audio tables itself. It only changes the `wavetableSelect` parameter and keeps the display path.
+- The iPhone JUCE generator script, `scripts/generate_ios_auv3_plugin.sh`, no longer injects the old native raw-table uploader. It keeps the existing bundle-aware manifest loader and now relies on the patch worker instead.
 
-What we are doing instead
-- Restore proper mip-selected wavetable playback without giving up the separate bundled source WAV files.
-- Replace the current host-specific raw-table upload path with one patch-worker wavetable loading path shared by desktop and iPhone.
-- Read the MSEG proposal, the current synth code, and official Cmajor plus synth-manual references so we can turn phase 6 into a concrete implementation plan.
+What was verified
+- `node --test tests/test_wavetable_worker.mjs tests/test_wavetable_display.mjs tests/test_patch_view_layout.mjs`
+- `uv run pytest tests/test_wavetable_worker_runtime.py tests/test_runtime_wavetable_mip_probe.py -q`
+- `uv run pytest tests/test_fixed_frame_probe.py -q`
+- `uv run pytest tests/test_ios_auv3_build.py -q -k 'not ios_host_smoke'`
+- `uv run pytest tests/test_ios_auv3_build.py -q -k generated_ios_plugin_externalises_the_bank_but_keeps_patch_ui_resources`
+
+What was not re-run in this pass
+- The simulator host-smoke tests in `tests/test_ios_auv3_build.py` that depend on `scripts/run_ios_auv3_host_smoke.py`.
 
 What happens next
-- Implement the worker-based wavetable loading plan from `SERUM_WAVETABLE_BUNDLING_PLAN.md`.
-- Finish the MSEG research pass and use `phase-6-mseg-plan.md` as the concrete phase-6 source of truth for the first one-shot `MSEG 1 -> Wavetable Position` implementation.
+- Re-run the iPhone simulator host-smoke path now that the worker-based mip loader is in place.
+- After that, put the standalone iPhone app on a real device and confirm that wavetable changes still sound different at runtime with the worker path active.
 
 Detour completed on 2026-03-26
 - Read `phase-6-mseg-plan.md`, `full-proposal.md`, `cmajor/FixedFrameOscillator.cmajor`, `cmajor/WavetableSynth.cmajor`, and `patch_gui/index.js`.

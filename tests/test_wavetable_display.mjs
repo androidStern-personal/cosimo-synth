@@ -464,49 +464,6 @@ test("wavetable renderer keeps a flat shared background and no visible panel str
     assert.equal(DEFAULT_WAVETABLE_THEME.panelStroke, "rgba(132, 149, 255, 0.0)");
 });
 
-test("wavetable upload events are chunked into 2048-sample frames with a shared upload token", async () => {
-    const { buildUploadedWavetableFrameEvents } = await loadPatchViewModule();
-    const bank = {
-        frameCount: 2,
-        frames: [
-            Float32Array.from({ length: 2048 }, (_, index) => index / 2048),
-            Float32Array.from({ length: 2048 }, (_, index) => (index + 2048) / 2048),
-        ],
-    };
-
-    const events = buildUploadedWavetableFrameEvents(bank, 17);
-
-    assert.equal(events.length, 2);
-    assert.deepEqual(
-        events.map(({ uploadToken, frameCount, frameIndex, samples }) => ({
-            uploadToken,
-            frameCount,
-            frameIndex,
-            sampleCount: samples.length,
-            firstSample: samples[0],
-            lastSample: samples[samples.length - 1],
-        })),
-        [
-            {
-                uploadToken: 17,
-                frameCount: 2,
-                frameIndex: 0,
-                sampleCount: 2048,
-                firstSample: 0,
-                lastSample: 2047 / 2048,
-            },
-            {
-                uploadToken: 17,
-                frameCount: 2,
-                frameIndex: 1,
-                sampleCount: 2048,
-                firstSample: 1,
-                lastSample: 4095 / 2048,
-            },
-        ]
-    );
-});
-
 test("keyboard geometry expands a one-and-a-half-octave range to fill the footer width", async () => {
     const { computeKeyboardDimensions } = await loadPatchViewModule();
     const dimensions = computeKeyboardDimensions({

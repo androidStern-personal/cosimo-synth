@@ -16,6 +16,7 @@
     "cmajor/Mseg.cmajor",
     "cmajor/WavetableSynth.cmajor"
   ],
+  "worker": "patch_gui/wavetable-worker.mjs",
   "resources": [],
   "view": {
     "src": "patch_gui/index.ios.js",

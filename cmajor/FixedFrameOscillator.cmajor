@@ -1,15 +1,43 @@
 namespace wt
 {
     let samplesPerFrame = 2048;
+    let paddedFrameSize = samplesPerFrame + 3;
+    let mipLevelCount = 11;
+    let brightestMipIndex = mipLevelCount - 1;
+    let maxMipHarmonics = 1 << brightestMipIndex;
     let maxFramesPerTable = 256;
-    let maxTableSampleCount = samplesPerFrame * maxFramesPerTable;
+    let maxMipSampleCount = paddedFrameSize * maxFramesPerTable;
+    let maxMipFrameSlots = mipLevelCount * maxFramesPerTable;
 
-    struct UploadedWavetableFrame
+    struct WavetableLoadBegin
     {
-        int32 uploadToken;
+        int32 generation;
+        int32 tableIndex;
         int32 frameCount;
+    }
+
+    struct WavetableMipFrame
+    {
+        int32 generation;
+        int32 tableIndex;
+        int32 mipIndex;
         int32 frameIndex;
         float32[samplesPerFrame] samples;
+    }
+
+    struct WavetableUploadAck
+    {
+        int32 generation;
+        int32 tableIndex;
+        int32 mipIndex;
+        int32 frameIndex;
+    }
+
+    struct WavetableMipRequest
+    {
+        int32 generation;
+        int32 tableIndex;
+        int32 mipIndex;
     }
 
     float32 catmullRom (float32 p0, float32 p1, float32 p2, float32 p3, float32 t)
@@ -26,29 +54,64 @@ namespace wt
         return resolvedFrameCount;
     }
 
-    int32 resolveRequestedTableIndex (float32 requestedSelect)
+    int32 resolveMipIndex (int32 requestedMipIndex)
     {
-        let rounded = int32 (std::intrinsics::floor (requestedSelect + 0.5f));
-        return std::intrinsics::clamp (rounded, 0, maxFramesPerTable - 1);
+        if (requestedMipIndex < 0 || requestedMipIndex >= mipLevelCount)
+            return -1;
+
+        return requestedMipIndex;
     }
 
-    float32 readFixedFrameSample (const float[] tableSamples, int32 frameIndex, float32 phase)
+    int32 selectMipIndexFromPhaseIncrement (float32 phaseIncrement)
+    {
+        if (phaseIncrement <= 0.0f)
+            return brightestMipIndex;
+
+        let rawMaxHarmonics = int32 (
+            std::intrinsics::floor (1.0f / (2.0f * phaseIncrement))
+        );
+        int32 clampedMaxHarmonics = rawMaxHarmonics;
+
+        if (clampedMaxHarmonics < 1)
+            clampedMaxHarmonics = 1;
+        else if (clampedMaxHarmonics > maxMipHarmonics)
+            clampedMaxHarmonics = maxMipHarmonics;
+
+        int32 mipIndex = 0;
+        int32 remainingHarmonics = clampedMaxHarmonics;
+
+        while (remainingHarmonics > 1)
+        {
+            remainingHarmonics /= 2;
+            mipIndex += 1;
+        }
+
+        return std::intrinsics::clamp (mipIndex, 0, brightestMipIndex);
+    }
+
+    int32 frameBase (int32 frameIndex)
+    {
+        return (frameIndex * paddedFrameSize);
+    }
+
+    int32 readinessIndex (int32 mipIndex, int32 frameIndex)
+    {
+        return (mipIndex * maxFramesPerTable) + frameIndex;
+    }
+
+    float32 readFixedFrameSample (const float[] tableSamples,
+                                  int32 frameIndex,
+                                  float32 phase)
     {
         let wrappedPhase = std::intrinsics::wrap (phase, 1.0f);
         let x = wrappedPhase * float32 (samplesPerFrame);
         let sampleIndex = int32 (std::intrinsics::floor (x));
         let fractional = x - float32 (sampleIndex);
-        let frameBase = frameIndex * samplesPerFrame;
-
-        let p0Offset = sampleIndex == 0 ? samplesPerFrame - 1 : sampleIndex - 1;
-        let p1Offset = sampleIndex;
-        let p2Offset = sampleIndex + 1 < samplesPerFrame ? sampleIndex + 1 : 0;
-        let p3Offset = sampleIndex + 2 < samplesPerFrame ? sampleIndex + 2 : sampleIndex + 2 - samplesPerFrame;
-
-        let p0 = tableSamples.at (frameBase + p0Offset);
-        let p1 = tableSamples.at (frameBase + p1Offset);
-        let p2 = tableSamples.at (frameBase + p2Offset);
-        let p3 = tableSamples.at (frameBase + p3Offset);
+        let base = frameBase (frameIndex) + sampleIndex;
+        let p0 = tableSamples.at (base + 0);
+        let p1 = tableSamples.at (base + 1);
+        let p2 = tableSamples.at (base + 2);
+        let p3 = tableSamples.at (base + 3);
         return catmullRom (p0, p1, p2, p3, fractional);
     }
 
@@ -71,21 +134,249 @@ namespace wt
                                     float32 initialPhase = 0.0f)
     {
         input event float32 frequencyIn [[ name: "Frequency", min: 0.0f, max: 24000.0f, init: 440.0f, unit: "Hz" ]];
-        input event UploadedWavetableFrame tableFramesIn;
+        input event WavetableLoadBegin wavetableLoadBeginIn;
+        input event WavetableMipFrame wavetableMipFrameIn;
         input stream float32 framePositionIn [[ name: "Wavetable Position", min: 0.0f, max: 1.0f, init: 0.0f ]];
         input stream float32 tableSelectIn [[ name: "Wavetable Select", min: 0.0f, max: 255.0f, init: 0.0f ]];
+        output event WavetableUploadAck wavetableUploadAckOut;
+        output event WavetableMipRequest wavetableMipRequestOut;
         output stream float out;
 
         std::oscillators::PhasorState phasor;
-        float32[maxTableSampleCount] currentTableSamples;
-        float32[maxTableSampleCount] stagedTableSamples;
+        float32[maxMipSampleCount] mip0Samples;
+        float32[maxMipSampleCount] mip1Samples;
+        float32[maxMipSampleCount] mip2Samples;
+        float32[maxMipSampleCount] mip3Samples;
+        float32[maxMipSampleCount] mip4Samples;
+        float32[maxMipSampleCount] mip5Samples;
+        float32[maxMipSampleCount] mip6Samples;
+        float32[maxMipSampleCount] mip7Samples;
+        float32[maxMipSampleCount] mip8Samples;
+        float32[maxMipSampleCount] mip9Samples;
+        float32[maxMipSampleCount] mip10Samples;
+        int32[maxMipFrameSlots] readyFrameFlags;
+        int32[mipLevelCount] loadedFrameCounts;
+        int32[mipLevelCount] requestedGenerationByMip;
+        float32 currentFrequencyHz = initialFrequencyHz;
+        int32 currentGeneration = 0;
+        int32 currentTableIndex = 0;
         int32 frameCount = 0;
         int32 lastFrameIndex = 0;
         float32 lastFrameIndexF = 0.0f;
-        float32 currentFrequencyHz = initialFrequencyHz;
-        int32 lastObservedTableSelect = -1;
-        int32 stagedFrameCount = 0;
-        int32 stagedUploadToken = -1;
+        int32 isPlayable = 0;
+
+        void clearPendingTableState()
+        {
+            for (int32 index = 0; index < maxMipFrameSlots; ++index)
+                readyFrameFlags.at (index) = 0;
+
+            for (int32 mipIndex = 0; mipIndex < mipLevelCount; ++mipIndex)
+            {
+                loadedFrameCounts.at (mipIndex) = 0;
+                requestedGenerationByMip.at (mipIndex) = 0;
+            }
+
+            isPlayable = 0;
+        }
+
+        bool isMipReady (int32 mipIndex)
+        {
+            if (mipIndex < 0 || mipIndex >= mipLevelCount || frameCount <= 0)
+                return false;
+
+            return loadedFrameCounts.at (mipIndex) >= frameCount;
+        }
+
+        int32 findPlayableMipIndex (int32 requestedMipIndex)
+        {
+            let resolvedRequestedMip = resolveMipIndex (requestedMipIndex);
+
+            if (resolvedRequestedMip < 0)
+                return -1;
+
+            for (int32 mipIndex = resolvedRequestedMip; mipIndex >= 0; --mipIndex)
+                if (isMipReady (mipIndex))
+                    return mipIndex;
+
+            return -1;
+        }
+
+        void writeMipFrame (int32 mipIndex, int32 frameIndex, const float32[] sourceSamples)
+        {
+            let base = frameBase (frameIndex);
+
+            if (mipIndex == 0)
+            {
+                mip0Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
+                for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
+                    mip0Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
+                mip0Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
+                mip0Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
+                return;
+            }
+
+            if (mipIndex == 1)
+            {
+                mip1Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
+                for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
+                    mip1Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
+                mip1Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
+                mip1Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
+                return;
+            }
+
+            if (mipIndex == 2)
+            {
+                mip2Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
+                for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
+                    mip2Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
+                mip2Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
+                mip2Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
+                return;
+            }
+
+            if (mipIndex == 3)
+            {
+                mip3Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
+                for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
+                    mip3Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
+                mip3Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
+                mip3Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
+                return;
+            }
+
+            if (mipIndex == 4)
+            {
+                mip4Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
+                for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
+                    mip4Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
+                mip4Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
+                mip4Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
+                return;
+            }
+
+            if (mipIndex == 5)
+            {
+                mip5Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
+                for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
+                    mip5Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
+                mip5Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
+                mip5Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
+                return;
+            }
+
+            if (mipIndex == 6)
+            {
+                mip6Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
+                for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
+                    mip6Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
+                mip6Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
+                mip6Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
+                return;
+            }
+
+            if (mipIndex == 7)
+            {
+                mip7Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
+                for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
+                    mip7Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
+                mip7Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
+                mip7Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
+                return;
+            }
+
+            if (mipIndex == 8)
+            {
+                mip8Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
+                for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
+                    mip8Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
+                mip8Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
+                mip8Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
+                return;
+            }
+
+            if (mipIndex == 9)
+            {
+                mip9Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
+                for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
+                    mip9Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
+                mip9Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
+                mip9Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
+                return;
+            }
+
+            if (mipIndex == 10)
+            {
+                mip10Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
+                for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
+                    mip10Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
+                mip10Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
+                mip10Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
+                return;
+            }
+        }
+
+        float32 readFixedFrameSampleForMip (int32 mipIndex, int32 frameIndex, float32 phase)
+        {
+            if (mipIndex == 0) return readFixedFrameSample (mip0Samples, frameIndex, phase);
+            if (mipIndex == 1) return readFixedFrameSample (mip1Samples, frameIndex, phase);
+            if (mipIndex == 2) return readFixedFrameSample (mip2Samples, frameIndex, phase);
+            if (mipIndex == 3) return readFixedFrameSample (mip3Samples, frameIndex, phase);
+            if (mipIndex == 4) return readFixedFrameSample (mip4Samples, frameIndex, phase);
+            if (mipIndex == 5) return readFixedFrameSample (mip5Samples, frameIndex, phase);
+            if (mipIndex == 6) return readFixedFrameSample (mip6Samples, frameIndex, phase);
+            if (mipIndex == 7) return readFixedFrameSample (mip7Samples, frameIndex, phase);
+            if (mipIndex == 8) return readFixedFrameSample (mip8Samples, frameIndex, phase);
+            if (mipIndex == 9) return readFixedFrameSample (mip9Samples, frameIndex, phase);
+            if (mipIndex == 10) return readFixedFrameSample (mip10Samples, frameIndex, phase);
+            return 0.0f;
+        }
+
+        float32 readFrameBlendSampleForMip (int32 mipIndex,
+                                            int32 frameLo,
+                                            int32 frameHi,
+                                            float32 phase,
+                                            float32 frameT)
+        {
+            if (mipIndex == 0) return readFrameBlendSample (mip0Samples, frameLo, frameHi, phase, frameT);
+            if (mipIndex == 1) return readFrameBlendSample (mip1Samples, frameLo, frameHi, phase, frameT);
+            if (mipIndex == 2) return readFrameBlendSample (mip2Samples, frameLo, frameHi, phase, frameT);
+            if (mipIndex == 3) return readFrameBlendSample (mip3Samples, frameLo, frameHi, phase, frameT);
+            if (mipIndex == 4) return readFrameBlendSample (mip4Samples, frameLo, frameHi, phase, frameT);
+            if (mipIndex == 5) return readFrameBlendSample (mip5Samples, frameLo, frameHi, phase, frameT);
+            if (mipIndex == 6) return readFrameBlendSample (mip6Samples, frameLo, frameHi, phase, frameT);
+            if (mipIndex == 7) return readFrameBlendSample (mip7Samples, frameLo, frameHi, phase, frameT);
+            if (mipIndex == 8) return readFrameBlendSample (mip8Samples, frameLo, frameHi, phase, frameT);
+            if (mipIndex == 9) return readFrameBlendSample (mip9Samples, frameLo, frameHi, phase, frameT);
+            if (mipIndex == 10) return readFrameBlendSample (mip10Samples, frameLo, frameHi, phase, frameT);
+            return 0.0f;
+        }
+
+        void emitMipRequest (int32 mipIndex)
+        {
+            if (currentGeneration <= 0 || frameCount <= 0 || mipIndex < 0 || mipIndex >= mipLevelCount)
+                return;
+
+            if (requestedGenerationByMip.at (mipIndex) == currentGeneration)
+                return;
+
+            WavetableMipRequest request;
+            request.generation = currentGeneration;
+            request.tableIndex = currentTableIndex;
+            request.mipIndex = mipIndex;
+            requestedGenerationByMip.at (mipIndex) = currentGeneration;
+            wavetableMipRequestOut <- request;
+        }
+
+        void emitUploadAck (int32 generation, int32 tableIndex, int32 mipIndex, int32 frameIndex)
+        {
+            WavetableUploadAck ack;
+            ack.generation = generation;
+            ack.tableIndex = tableIndex;
+            ack.mipIndex = mipIndex;
+            ack.frameIndex = frameIndex;
+            wavetableUploadAckOut <- ack;
+        }
 
         event frequencyIn (float32 newFrequency)
         {
@@ -93,80 +384,103 @@ namespace wt
             phasor.setFrequency (processor.frequency, currentFrequencyHz);
         }
 
-        event tableFramesIn (UploadedWavetableFrame newFrame)
+        event wavetableLoadBeginIn (WavetableLoadBegin request)
         {
-            let resolvedFrameCount = resolveUploadedFrameCount (newFrame.frameCount);
+            let resolvedFrameCount = resolveUploadedFrameCount (request.frameCount);
 
-            if (resolvedFrameCount == 0)
+            if (request.generation <= 0 || request.tableIndex < 0 || resolvedFrameCount == 0)
                 return;
 
-            if (newFrame.frameIndex < 0 || newFrame.frameIndex >= resolvedFrameCount)
-                return;
-
-            if (stagedUploadToken != newFrame.uploadToken || stagedFrameCount != resolvedFrameCount)
-            {
-                stagedUploadToken = newFrame.uploadToken;
-                stagedFrameCount = resolvedFrameCount;
-            }
-
-            let frameBase = newFrame.frameIndex * samplesPerFrame;
-
-            for (int32 i = 0; i < samplesPerFrame; ++i)
-                stagedTableSamples.at (frameBase + i) = newFrame.samples.at (i);
-
-            if (newFrame.frameIndex != resolvedFrameCount - 1)
-                return;
-
-            currentTableSamples = stagedTableSamples;
-            frameCount = stagedFrameCount;
+            currentGeneration = request.generation;
+            currentTableIndex = request.tableIndex;
+            frameCount = resolvedFrameCount;
             lastFrameIndex = frameCount > 0 ? frameCount - 1 : 0;
             lastFrameIndexF = float32 (lastFrameIndex);
-            phasor.phase = 0.0f;
+            clearPendingTableState();
+        }
+
+        event wavetableMipFrameIn (WavetableMipFrame newFrame)
+        {
+            let resolvedMipIndex = resolveMipIndex (newFrame.mipIndex);
+
+            if (resolvedMipIndex < 0 || frameCount <= 0)
+                return;
+
+            if (newFrame.generation != currentGeneration || newFrame.tableIndex != currentTableIndex)
+                return;
+
+            if (newFrame.frameIndex < 0 || newFrame.frameIndex >= frameCount)
+                return;
+
+            let readyIndex = readinessIndex (resolvedMipIndex, newFrame.frameIndex);
+
+            if (readyFrameFlags.at (readyIndex) != 0)
+            {
+                emitUploadAck (
+                    newFrame.generation,
+                    newFrame.tableIndex,
+                    resolvedMipIndex,
+                    newFrame.frameIndex
+                );
+                return;
+            }
+
+            writeMipFrame (resolvedMipIndex, newFrame.frameIndex, newFrame.samples);
+            readyFrameFlags.at (readyIndex) = 1;
+            loadedFrameCounts.at (resolvedMipIndex) += 1;
+
+            emitUploadAck (
+                newFrame.generation,
+                newFrame.tableIndex,
+                resolvedMipIndex,
+                newFrame.frameIndex
+            );
         }
 
         void main()
         {
-            lastFrameIndex = frameCount > 0 ? frameCount - 1 : 0;
-            lastFrameIndexF = float32 (lastFrameIndex);
             phasor.phase = std::intrinsics::wrap (initialPhase, 1.0f);
             currentFrequencyHz = currentFrequencyHz < 0.0f ? 0.0f : currentFrequencyHz;
             phasor.setFrequency (processor.frequency, currentFrequencyHz);
 
             loop
             {
-                let requestedTableIndex = resolveRequestedTableIndex (tableSelectIn);
+                let currentPhaseIncrement = currentFrequencyHz / float32 (processor.frequency);
+                let requestedMipIndex = selectMipIndexFromPhaseIncrement (currentPhaseIncrement);
+                emitMipRequest (requestedMipIndex);
 
-                if (requestedTableIndex != lastObservedTableSelect)
+                let playableMipIndex = findPlayableMipIndex (requestedMipIndex);
+
+                if (playableMipIndex < 0)
                 {
-                    lastObservedTableSelect = requestedTableIndex;
-                    phasor.phase = 0.0f;
-                }
-
-                let phase = phasor.next();
-
-                if (frameCount <= 0)
-                {
+                    isPlayable = 0;
                     out <- 0.0f;
-                }
-                else if (frameCount == 1)
-                {
-                    out <- readFixedFrameSample (currentTableSamples, 0, phase);
                 }
                 else
                 {
-                    let framePosition = std::intrinsics::clamp (framePositionIn, 0.0f, 1.0f);
-                    let frameIndex = framePosition * lastFrameIndexF;
-                    let frameLo = int32 (std::intrinsics::floor (frameIndex));
-                    let frameHi = std::intrinsics::min (frameLo + 1, lastFrameIndex);
-                    let frameT = frameIndex - float32 (frameLo);
-                    out <- readFrameBlendSample (
-                        currentTableSamples,
-                        frameLo,
-                        frameHi,
-                        phase,
-                        frameT
-                    );
+                    if (isPlayable == 0)
+                    {
+                        phasor.phase = 0.0f;
+                        isPlayable = 1;
+                    }
+
+                    let phase = phasor.next();
+
+                    if (frameCount <= 1)
+                    {
+                        out <- readFixedFrameSampleForMip (playableMipIndex, 0, phase);
+                    }
+                    else
+                    {
+                        let framePosition = std::intrinsics::clamp (framePositionIn, 0.0f, 1.0f);
+                        let frameIndex = framePosition * lastFrameIndexF;
+                        let frameLo = int32 (std::intrinsics::floor (frameIndex));
+                        let frameHi = std::intrinsics::min (frameLo + 1, lastFrameIndex);
+                        let frameT = frameIndex - float32 (frameLo);
+                        out <- readFrameBlendSampleForMip (playableMipIndex, frameLo, frameHi, phase, frameT);
+                    }
                 }
+
                 advance();
             }
         }

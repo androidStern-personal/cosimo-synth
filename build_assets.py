@@ -17,6 +17,7 @@ PATCH_DESCRIPTION = (
     "Single-oscillator wavetable synth with MIDI input, automatable wavetable "
     "position, runtime table selection, and runtime-loaded Serum-style wavetable files."
 )
+PATCH_WORKER_SRC = "patch_gui/wavetable-worker.mjs"
 PATCH_SOURCE_FILES = (
     "cmajor/FixedFrameOscillator.cmajor",
     "cmajor/Mseg.cmajor",
@@ -237,6 +238,7 @@ def update_patch_manifest(
         },
         "isInstrument": True,
         "source": list(PATCH_SOURCE_FILES),
+        "worker": PATCH_WORKER_SRC,
         "resources": list(variant.resource_files),
         "view": {
             "src": variant.view_src,

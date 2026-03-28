@@ -8,12 +8,15 @@ namespace wt
                      std::notes::Slide,
                      std::notes::Pressure,
                      std::notes::Control) eventIn;
-        input event wt::UploadedWavetableFrame wavetableFramesIn;
+        input event wt::WavetableLoadBegin wavetableLoadBeginIn;
+        input event wt::WavetableMipFrame wavetableMipFrameIn;
         input event float32[wt::msegPaddedSamples] msegBufferIn;
         input event wt::MsegPlaybackConfig msegPlaybackIn;
         input value float32 framePositionIn;
         input value float32 tableSelectIn;
         input value float32 msegDepthIn;
+        output event wt::WavetableUploadAck wavetableUploadAckOut;
+        output event wt::WavetableMipRequest wavetableMipRequestOut;
         output event wt::EffectiveWavetablePositionMonitor effectiveWavetablePositionOut;
         output stream float32<2> out;
 
@@ -47,7 +50,8 @@ namespace wt
         event eventIn (std::notes::Slide slide) {}
         event eventIn (std::notes::Pressure pressure) {}
         event eventIn (std::notes::Control control) {}
-        event wavetableFramesIn (wt::UploadedWavetableFrame upload) { osc.tableFramesIn <- upload; }
+        event wavetableLoadBeginIn (wt::WavetableLoadBegin load) { osc.wavetableLoadBeginIn <- load; }
+        event wavetableMipFrameIn (wt::WavetableMipFrame frame) { osc.wavetableMipFrameIn <- frame; }
         event msegBufferIn (float32[wt::msegPaddedSamples] buffer) { msegReader.bufferUpload <- buffer; }
         event msegPlaybackIn (wt::MsegPlaybackConfig config) { msegReader.playbackUpload <- config; }
 
@@ -58,6 +62,8 @@ namespace wt
             frameBase.out -> frameRouter.basePositionIn;
             frameBase.out -> frameMonitor.basePositionIn;
             tableSelectBase.out -> osc.tableSelectIn;
+            osc.wavetableUploadAckOut -> wavetableUploadAckOut;
+            osc.wavetableMipRequestOut -> wavetableMipRequestOut;
             msegReader.out -> frameRouter.modulationIn;
             msegDepthIn -> frameRouter.depthIn;
             frameRouter.out -> frameMonitor.effectivePositionIn;
@@ -77,12 +83,15 @@ namespace wt
 graph WavetableSynth [[ main ]]
 {
     input event std::midi::Message midiIn;
-    input event wt::UploadedWavetableFrame wavetableFrames;
+    input event wt::WavetableLoadBegin wavetableLoadBegin;
+    input event wt::WavetableMipFrame wavetableMipFrame;
     input event float32[wt::msegPaddedSamples] mseg1Buffer;
     input event wt::MsegPlaybackConfig mseg1Playback;
     input value float32 wavetablePosition [[ name: "Wavetable Position", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
     input value float32 wavetableSelect [[ name: "Wavetable Select", min: 0.0f, max: 255.0f, init: 0.0f, discrete: true, step: 1.0f, rampFrames: 0 ]];
     input value float32 mseg1Depth [[ name: "MSEG 1 Depth", min: -1.0f, max: 1.0f, init: 1.0f, rampFrames: 64 ]];
+    output event wt::WavetableUploadAck wavetableUploadAck;
+    output event wt::WavetableMipRequest wavetableMipRequest;
     output event wt::EffectiveWavetablePositionMonitor effectiveWavetablePosition;
     output stream float32<2> audioOut;
 
@@ -93,12 +102,15 @@ graph WavetableSynth [[ main ]]
     {
         midiIn -> mpe.parseMIDI;
         mpe.eventOut -> voice.eventIn;
-        wavetableFrames -> voice.wavetableFramesIn;
+        wavetableLoadBegin -> voice.wavetableLoadBeginIn;
+        wavetableMipFrame -> voice.wavetableMipFrameIn;
         mseg1Buffer -> voice.msegBufferIn;
         mseg1Playback -> voice.msegPlaybackIn;
         wavetablePosition -> voice.framePositionIn;
         wavetableSelect -> voice.tableSelectIn;
         mseg1Depth -> voice.msegDepthIn;
+        voice.wavetableUploadAckOut -> wavetableUploadAck;
+        voice.wavetableMipRequestOut -> wavetableMipRequest;
         voice.effectiveWavetablePositionOut -> effectiveWavetablePosition;
         voice.out -> audioOut;
     }

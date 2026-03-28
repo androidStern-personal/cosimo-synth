@@ -204,6 +204,7 @@ def test_ios_auv3_generator_writes_self_contained_plugin_source_and_headers(
     assert (generated_ios_plugin_dir / "include/choc/choc/javascript/choc_javascript_QuickJS.h").is_file()
     assert (generated_ios_plugin_dir / "include/cmajor/helpers/cmaj_EmbeddedWebAssets.h").is_file()
     assert (generated_ios_plugin_dir / "include/cmajor/helpers/cmaj_PatchWebView.h").is_file()
+    assert (generated_ios_plugin_dir / "include/cmajor/helpers/cmaj_PatchWorker_WebView.h").is_file()
 
     webview_header = (generated_ios_plugin_dir / "include/choc/choc/gui/choc_WebView.h").read_text(
         encoding="utf-8"
@@ -213,6 +214,9 @@ def test_ios_auv3_generator_writes_self_contained_plugin_source_and_headers(
     ).read_text(encoding="utf-8")
     patch_webview_header = (
         generated_ios_plugin_dir / "include/cmajor/helpers/cmaj_PatchWebView.h"
+    ).read_text(encoding="utf-8")
+    patch_worker_webview_header = (
+        generated_ios_plugin_dir / "include/cmajor/helpers/cmaj_PatchWorker_WebView.h"
     ).read_text(encoding="utf-8")
     juce_plugin_header = (
         generated_ios_plugin_dir / "include/cmajor/helpers/cmaj_JUCEPlugin.h"
@@ -247,6 +251,15 @@ def test_ios_auv3_generator_writes_self_contained_plugin_source_and_headers(
     assert 'html { background: black; overflow: hidden; }' in patch_webview_header
     assert 'body { display: block; position: absolute; width: 100%; height: 100%; color: white; font-family: Monaco, Consolas, monospace; }' in patch_webview_header
     assert '#cmaj-view-container { display: block; position: relative; width: 100%; height: 100%; overflow: auto; }' in patch_webview_header
+    assert 'if (extension == ".mjs" || extension == "mjs")' in patch_webview_header
+    assert 'return std::string ("text/javascript");' in patch_webview_header
+    assert 'if (extension == ".json" || extension == "json")' in patch_webview_header
+    assert 'return std::string ("application/json");' in patch_webview_header
+    assert 'const auto extension = std::filesystem::path (path).extension().string();' in patch_worker_webview_header
+    assert 'const auto mimeType = (extension == ".mjs")' in patch_worker_webview_header
+    assert 'std::string ("text/javascript")' in patch_worker_webview_header
+    assert 'std::string ("application/json")' in patch_worker_webview_header
+    assert 'getMIMETypeFromFilename (path, "application/octet-stream")' in patch_worker_webview_header
     assert 'if (view?.width > 10)' in embedded_assets_header
     assert 'if (view?.height > 10)' in embedded_assets_header
     assert 'patchView.style.minWidth = "100%"' not in embedded_assets_header
@@ -310,6 +323,8 @@ def test_generated_ios_plugin_externalises_the_bank_but_keeps_patch_ui_resources
     assert 'File { "assets/codegen-bank.wav"' not in plugin_source
     assert 'File { "patch_gui/index.ios.js"' in plugin_source
     assert 'File { "patch_gui/index.js"' in plugin_source
+    assert 'File { "patch_gui/wavetable-worker.mjs"' in plugin_source
+    assert 'File { "patch_gui/wavetable-mip.mjs"' in plugin_source
     assert 'File { "patch_gui/responsive-layout.js"' in plugin_source
     assert 'File { "patch_gui/wavetable-bank.js"' in plugin_source
     assert 'File { "patch_gui/wavetable-display.js"' in plugin_source
@@ -319,15 +334,18 @@ def test_generated_ios_plugin_externalises_the_bank_but_keeps_patch_ui_resources
     assert "factory-bank-display-data.js" not in plugin_source
     assert 'factory-bank-manifest.js' not in plugin_source
     assert "GeneratedPlugin<::WavetableSynth>" in plugin_source
-    assert '"wavetableFrames"' in plugin_source
-    assert '"cosimoRuntimeSelectedTableIndex"' in plugin_source
-    assert "startTimerHz (30)" in plugin_source
-    assert 'createObject ("UploadedWavetableFrame"' in plugin_source
+    assert '"wavetableLoadBegin"' in plugin_source
+    assert '"wavetableMipFrame"' in plugin_source
+    assert '"wavetableUploadAck"' in plugin_source
+    assert '"wavetableMipRequest"' in plugin_source
+    assert '"wavetableFrames"' not in plugin_source
+    assert '"cosimoRuntimeSelectedTableIndex"' not in plugin_source
+    assert "startTimerHz (30)" not in plugin_source
+    assert 'createObject ("UploadedWavetableFrame"' not in plugin_source
     assert 'createObject ("UploadedWavetable"' not in plugin_source
-    assert '"uploadToken"' in plugin_source
-    assert '"frameIndex"' in plugin_source
-    assert "std::vector<choc::value::Value> pendingUploadFrames;" in plugin_source
-    assert "static constexpr int maxUploadFramesPerFlush = 8;" in plugin_source
+    assert '"uploadToken"' not in plugin_source
+    assert "std::vector<choc::value::Value> pendingUploadFrames;" not in plugin_source
+    assert "static constexpr int maxUploadFramesPerFlush = 8;" not in plugin_source
     assert "COSIMO_PATCH_PATH" not in plugin_source
     assert "libCmajPerformer" not in plugin_source
     assert "createEngine = +[]" not in plugin_source
