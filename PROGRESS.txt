@@ -6,23 +6,24 @@ The iOS AUv3 shell work is now paused while we pivot back to wavetable-bank impl
 
 The wavetable-bank research is now paused while we scope the first real MSEG path into the existing oscillator.
 
+Current wavetable-loading source of truth
+- The current reviewed plan for restoring mip-selected playback while keeping the source WAVs as separate bundled files now lives in `SERUM_WAVETABLE_BUNDLING_PLAN.md`.
+- The short version is: keep `assets/factory_sources/`, add a patch worker, restore mip-aware playback in `cmajor/FixedFrameOscillator.cmajor`, and remove the current host-specific raw-table upload path once the worker path works.
+
 What is true right now
 - The macOS Ableton Live development plug-in works.
 - That plug-in is a desktop-only development shell and should stay that way.
 - The detailed AUv3 research, testing strategy, and implementation plan now live in `AUV3_RESEARCH_AND_PLAN.md`.
-- The current app ships one generated demo bank at `assets/factory-bank.wav`.
-- That bank is built by `build_assets.py` from `bench.py` fixture-generation code through `wtbank.py`.
-- The offline bank format already supports multiple tables, but the live synth still hardcodes table selection at oscillator construction time.
+- The current app ships wavetable source files separately in `assets/factory_sources/` and uses `assets/factory-bank-catalog.json` as the runtime catalog.
+- The current active oscillator path does not use mip selection. It uploads and plays one raw table at a time.
 
 What we are doing instead
-- Research how Serum wavetable exports can be converted into this repo's bank format.
-- Research how to replace the current single-bank asset path with a real factory-bank bundling pipeline.
-- Research the DSP, manifest, and UI changes needed to switch among bundled tables at runtime.
+- Restore proper mip-selected wavetable playback without giving up the separate bundled source WAV files.
+- Replace the current host-specific raw-table upload path with one patch-worker wavetable loading path shared by desktop and iPhone.
 - Read the MSEG proposal, the current synth code, and official Cmajor plus synth-manual references so we can turn phase 6 into a concrete implementation plan.
 
 What happens next
-- Finish the Serum import, bank pipeline, and runtime-switching research.
-- Turn that research into a concrete implementation plan before resuming the paused AUv3 shell work.
+- Implement the worker-based wavetable loading plan from `SERUM_WAVETABLE_BUNDLING_PLAN.md`.
 - Finish the MSEG research pass and use `phase-6-mseg-plan.md` as the concrete phase-6 source of truth for the first one-shot `MSEG 1 -> Wavetable Position` implementation.
 
 Detour completed on 2026-03-26
