@@ -466,6 +466,20 @@ test("wavetable upload events are chunked into 2048-sample frames with a shared 
     );
 });
 
+test("keyboard geometry expands a two-octave range to fill the footer width", async () => {
+    const { computeKeyboardDimensions } = await loadPatchViewModule();
+    const dimensions = computeKeyboardDimensions({
+        rootNote: 36,
+        noteCount: 24,
+        availableWidth: 337,
+        minNaturalWidth: 20,
+    });
+
+    assert.equal(dimensions.naturalCount, 14);
+    assert.ok(Math.abs((dimensions.naturalWidth * dimensions.naturalCount) + 1 - 337) < 0.001);
+    assert.ok(dimensions.accidentalWidth > 0);
+});
+
 test("loading table 1 returns a different stored frame set than table 0", async () => {
     const manifest = JSON.parse(
         await fs.readFile(path.join(repoRoot, "WavetableSynth.cmajorpatch"), "utf8")

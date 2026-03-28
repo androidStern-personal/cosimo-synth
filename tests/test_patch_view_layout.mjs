@@ -97,10 +97,12 @@ test("phone portrait layout uses a full-width scan rail and a compact host-keybo
     assert.equal(layout.headerStacks, true);
     assert.equal(layout.gridTemplateColumns, "minmax(0, 1fr)");
     assert.equal(layout.controlStyle, "scan-rail");
-    assert.equal(layout.noteCount, 13);
-    assert.equal(layout.stageMinHeight, 224);
+    assert.equal(layout.noteCount, 24);
+    assert.equal(layout.stageMinHeight, 216);
     assert.equal(layout.controlHeight, 54);
-    assert.equal(layout.keyboardHeight, 108);
+    assert.equal(layout.keyboardHeight, 88);
+    assert.equal(layout.keyboardNaturalNoteWidth, 20);
+    assert.equal(layout.keyboardAccidentalWidth, 11);
 });
 
 test("tablet landscape keeps the flatter iOS hierarchy while using a wider keyboard dock", () => {
@@ -114,10 +116,12 @@ test("tablet landscape keeps the flatter iOS hierarchy while using a wider keybo
     assert.equal(layout.headerStacks, false);
     assert.equal(layout.gridTemplateColumns, "minmax(0, 1fr)");
     assert.equal(layout.controlStyle, "scan-rail");
-    assert.equal(layout.noteCount, 25);
-    assert.equal(layout.stageMinHeight, 284);
+    assert.equal(layout.noteCount, 24);
+    assert.equal(layout.stageMinHeight, 252);
     assert.equal(layout.controlHeight, 54);
-    assert.equal(layout.keyboardHeight, 128);
+    assert.equal(layout.keyboardHeight, 96);
+    assert.equal(layout.keyboardNaturalNoteWidth, 22);
+    assert.equal(layout.keyboardAccidentalWidth, 12);
 });
 
 test("short landscape heights keep every interactive area above the minimum tap-safe size", () => {
@@ -131,10 +135,12 @@ test("short landscape heights keep every interactive area above the minimum tap-
     assert.equal(layout.headerStacks, false);
     assert.equal(layout.gridTemplateColumns, "minmax(0, 1fr)");
     assert.equal(layout.controlStyle, "scan-rail");
-    assert.equal(layout.noteCount, 17);
-    assert.equal(layout.stageMinHeight, 188);
+    assert.equal(layout.noteCount, 24);
+    assert.equal(layout.stageMinHeight, 180);
     assert.equal(layout.controlHeight, 48);
-    assert.equal(layout.keyboardHeight, 94);
+    assert.equal(layout.keyboardHeight, 84);
+    assert.equal(layout.keyboardNaturalNoteWidth, 18);
+    assert.equal(layout.keyboardAccidentalWidth, 10);
 });
 
 test("iOS patch view uses safe-area insets instead of drawing a nested shell inside the phone screen", async () => {
@@ -144,4 +150,29 @@ test("iOS patch view uses safe-area insets instead of drawing a nested shell ins
     assert.match(source, /env\(safe-area-inset-bottom\)/);
     assert.match(source, /env\(safe-area-inset-left\)/);
     assert.match(source, /env\(safe-area-inset-right\)/);
+});
+
+test("iOS patch view pins the keyboard footer and removes the separate hero and frame-scan sections", async () => {
+    const source = await fs.readFile(path.join(repoRoot, "patch_gui", "index.js"), "utf8");
+
+    assert.match(source, /grid-template-rows:\s*minmax\(0,\s*1fr\)\s*auto;/);
+    assert.match(source, /\.ios-scroll\s*\{[\s\S]*overflow-y:\s*auto;/);
+    assert.match(source, /class="keyboard-footer"/);
+    assert.match(source, /class="octave-button octave-down"/);
+    assert.match(source, /class="octave-button octave-up"/);
+    assert.doesNotMatch(source, /class="hero"/);
+    assert.doesNotMatch(source, /class="scan-panel"/);
+    assert.doesNotMatch(source, /class="scan-slider"/);
+});
+
+test("iOS keyboard defaults to a true two-octave span starting one octave lower than before", async () => {
+    const source = await fs.readFile(path.join(repoRoot, "patch_gui", "index.js"), "utf8");
+
+    assert.match(source, /this\.keyboardRootNote = 36;/);
+    assert.match(source, /this\.keyboardMinRootNote = 12;/);
+    assert.match(source, /this\.keyboardMaxRootNote = 72;/);
+    assert.match(source, /this\.keyboard\.setAttribute\("note-count", `\$\{this\.currentLayout\.noteCount\}`\);/);
+    assert.match(source, /attributeChangedCallback\(name, oldValue, newValue\)/);
+    assert.match(source, /this\.refreshHTML\(\);/);
+    assert.match(source, /return `\$\{formatNote\(startNote\)\} - \$\{formatNote\(lastNote\)\}`;/);
 });

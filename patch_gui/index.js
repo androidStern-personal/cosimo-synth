@@ -18,6 +18,7 @@ const samplesPerFrame = 2048;
 const maxWavetableFrames = 256;
 const DISPLAY_POSITION_EPSILON = 0.000001;
 const SVG_NS = "http://www.w3.org/2000/svg";
+const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 
 const knobDefault = 0.0;
 
@@ -31,6 +32,56 @@ function clampDisplayPosition(value) {
 
 function clampDepth(value) {
     return clamp(Number(value) || 0, -1.0, 1.0);
+}
+
+function getPitchClass(noteNumber) {
+    const safeNoteNumber = Math.round(Number(noteNumber) || 0);
+    return ((safeNoteNumber % 12) + 12) % 12;
+}
+
+function isNaturalNoteNumber(noteNumber) {
+    const pitchClass = getPitchClass(noteNumber);
+
+    return pitchClass === 0 ||
+        pitchClass === 2 ||
+        pitchClass === 4 ||
+        pitchClass === 5 ||
+        pitchClass === 7 ||
+        pitchClass === 9 ||
+        pitchClass === 11;
+}
+
+export function countNaturalNotesInRange(rootNote, noteCount) {
+    const safeRootNote = Math.round(Number(rootNote) || 0);
+    const safeNoteCount = Math.max(1, Math.round(Number(noteCount) || 0));
+    let naturalCount = 0;
+
+    for (let noteOffset = 0; noteOffset < safeNoteCount; noteOffset += 1) {
+        if (isNaturalNoteNumber(safeRootNote + noteOffset)) {
+            naturalCount += 1;
+        }
+    }
+
+    return Math.max(1, naturalCount);
+}
+
+export function computeKeyboardDimensions({
+    rootNote = 36,
+    noteCount = 24,
+    availableWidth = 0,
+    minNaturalWidth = 18,
+} = {}) {
+    const naturalCount = countNaturalNotesInRange(rootNote, noteCount);
+    const safeAvailableWidth = Math.max(0, Number(availableWidth) || 0);
+    const unclampedNaturalWidth = Math.max(1, (safeAvailableWidth - 1) / naturalCount);
+    const naturalWidth = Math.max(Number(minNaturalWidth) || 0, unclampedNaturalWidth);
+    const accidentalWidth = Math.max(8, naturalWidth * 0.58);
+
+    return {
+        naturalCount,
+        naturalWidth,
+        accidentalWidth,
+    };
 }
 
 export function buildUploadedWavetableFrameEvents(bank, uploadToken = 0) {
@@ -185,6 +236,26 @@ function defineKeyboardElement(patchConnection, keyboardStyle, keyboardOptions) 
                     pressedNoteColour: "#f56cb6",
                 });
             }
+
+            bindRenderedTouchHandlers() {
+                for (const child of this.root.children) {
+                    child.addEventListener("touchstart", (event) => this.touchStart(event), { passive: false });
+                    child.addEventListener("touchend", (event) => this.touchEnd(event));
+                }
+            }
+
+            attributeChangedCallback(name, oldValue, newValue) {
+                super.attributeChangedCallback?.(name, oldValue, newValue);
+
+                if (oldValue === newValue) {
+                    return;
+                }
+
+                this.notes = [];
+                this.refreshHTML();
+                this.bindRenderedTouchHandlers();
+                this.refreshActiveNoteElements();
+            }
         };
 
         registerCustomElement(tagName, CosimoKeyboard);
@@ -223,6 +294,9 @@ class CosimoSynthView extends HTMLElement {
         });
         this.keyboardStyle = "";
         this.keyboardNoteCount = 0;
+        this.keyboardRootNote = 36;
+        this.keyboardMinRootNote = 12;
+        this.keyboardMaxRootNote = 72;
         this.knobEndpointID = null;
         this.scanRailEndpointID = null;
         this.tableSelectEndpointID = null;
@@ -314,6 +388,14 @@ class CosimoSynthView extends HTMLElement {
         if (this.msegDepthInput && this.handleMsegDepthInput) {
             this.msegDepthInput.removeEventListener("input", this.handleMsegDepthInput);
         }
+
+        if (this.octaveDownButton && this.handleOctaveDown) {
+            this.octaveDownButton.removeEventListener("click", this.handleOctaveDown);
+        }
+
+        if (this.octaveUpButton && this.handleOctaveUp) {
+            this.octaveUpButton.removeEventListener("click", this.handleOctaveUp);
+        }
     }
 
     initialiseView() {
@@ -337,6 +419,9 @@ class CosimoSynthView extends HTMLElement {
         this.railLabelStart = this.shadowRoot.querySelector("[data-role='rail-label-start']");
         this.railLabelMid = this.shadowRoot.querySelector("[data-role='rail-label-mid']");
         this.railLabelEnd = this.shadowRoot.querySelector("[data-role='rail-label-end']");
+        this.octaveDownButton = this.shadowRoot.querySelector(".octave-down");
+        this.octaveUpButton = this.shadowRoot.querySelector(".octave-up");
+        this.octaveReadout = this.shadowRoot.querySelector("[data-role='octave-readout']");
         this.msegViewport = this.shadowRoot.querySelector(".mseg-editor");
         this.msegCurve = this.shadowRoot.querySelector(".mseg-curve");
         this.msegPointsLayer = this.shadowRoot.querySelector(".mseg-points");
@@ -364,6 +449,8 @@ class CosimoSynthView extends HTMLElement {
         this.handleMsegDepthInput = () => {
             this.msegController?.setDepth(clampDepth(this.msegDepthInput?.value));
         };
+        this.handleOctaveDown = () => this.nudgeKeyboardOctave(-12);
+        this.handleOctaveUp = () => this.nudgeKeyboardOctave(12);
         this.handleTableSelectChange = () => {
             const nextIndex = Number(this.tableSelect?.value ?? 0);
 
@@ -394,6 +481,8 @@ class CosimoSynthView extends HTMLElement {
 
         this.msegDeleteButton?.addEventListener("click", this.handleDeleteMsegPoint);
         this.msegDepthInput?.addEventListener("input", this.handleMsegDepthInput);
+        this.octaveDownButton?.addEventListener("click", this.handleOctaveDown);
+        this.octaveUpButton?.addEventListener("click", this.handleOctaveUp);
 
         this.applyResponsiveLayout(this.currentLayout, true);
 
@@ -446,6 +535,7 @@ class CosimoSynthView extends HTMLElement {
             const stageBounds = this.displayViewport.getBoundingClientRect();
 
             this.applyResponsiveLayout(nextLayout);
+            this.syncKeyboardGeometry();
             this.display.resize(stageBounds.width, stageBounds.height, window.devicePixelRatio || 1);
         };
 
@@ -897,6 +987,83 @@ class CosimoSynthView extends HTMLElement {
         return "ios-regular";
     }
 
+    getKeyboardRangeLabel() {
+        const startNote = this.keyboardRootNote;
+        const lastNote = this.keyboardRootNote + Math.max(0, this.currentLayout.noteCount - 1);
+        const formatNote = (noteNumber) => {
+            const safeNote = Math.max(0, Math.round(Number(noteNumber) || 0));
+            return `${NOTE_NAMES[safeNote % 12]}${Math.floor(safeNote / 12) - 1}`;
+        };
+
+        return `${formatNote(startNote)} - ${formatNote(lastNote)}`;
+    }
+
+    syncKeyboardOctaveControls() {
+        if (this.octaveReadout) {
+            this.octaveReadout.textContent = this.getKeyboardRangeLabel();
+        }
+
+        if (this.octaveDownButton) {
+            this.octaveDownButton.disabled = this.keyboardRootNote <= this.keyboardMinRootNote;
+        }
+
+        if (this.octaveUpButton) {
+            this.octaveUpButton.disabled = this.keyboardRootNote >= this.keyboardMaxRootNote;
+        }
+    }
+
+    setKeyboardRootNote(value) {
+        const nextRootNote = clamp(
+            Math.round(Number(value) || 0),
+            this.keyboardMinRootNote,
+            this.keyboardMaxRootNote
+        );
+
+        this.keyboardRootNote = nextRootNote;
+        this.keyboard?.setAttribute("root-note", String(nextRootNote));
+        this.syncKeyboardOctaveControls();
+    }
+
+    nudgeKeyboardOctave(offset) {
+        this.setKeyboardRootNote(this.keyboardRootNote + offset);
+        this.focusKeyboard();
+    }
+
+    syncKeyboardGeometry() {
+        if (this.options.platform !== "ios" || !this.keyboard || !this.keyboardHost) {
+            return;
+        }
+
+        const hostWidth = this.keyboardHost.getBoundingClientRect().width;
+        if (hostWidth <= 0) {
+            return;
+        }
+
+        const { naturalWidth, accidentalWidth } = computeKeyboardDimensions({
+            rootNote: this.keyboardRootNote,
+            noteCount: this.currentLayout.noteCount,
+            availableWidth: hostWidth,
+            minNaturalWidth: this.currentLayout.keyboardNaturalNoteWidth,
+        });
+
+        const currentNaturalWidth = Number(this.keyboard.naturalWidth) || 0;
+        const currentAccidentalWidth = Number(this.keyboard.accidentalWidth) || 0;
+
+        if (
+            Math.abs(currentNaturalWidth - naturalWidth) < 0.01 &&
+            Math.abs(currentAccidentalWidth - accidentalWidth) < 0.01
+        ) {
+            return;
+        }
+
+        this.keyboard.naturalWidth = naturalWidth;
+        this.keyboard.accidentalWidth = accidentalWidth;
+        this.keyboard.notes = [];
+        this.keyboard.refreshHTML();
+        this.keyboard.bindRenderedTouchHandlers?.();
+        this.keyboard.refreshActiveNoteElements?.();
+    }
+
     buildKeyboard() {
         const keyboardStyle = this.getKeyboardStyle();
         const tagName = defineKeyboardElement(
@@ -910,7 +1077,7 @@ class CosimoSynthView extends HTMLElement {
 
         this.keyboard = new (window.customElements.get(tagName))();
         this.keyboard.classList.add("keyboard");
-        this.keyboard.setAttribute("root-note", "48");
+        this.keyboard.setAttribute("root-note", String(this.keyboardRootNote));
         this.keyboard.setAttribute("note-count", `${this.currentLayout.noteCount}`);
         this.keyboard.attachToPatchConnection?.(this.patchConnection, midiInputEndpointID);
         this.keyboard.addEventListener("mousedown", () => this.focusKeyboard(), { passive: true });
@@ -918,10 +1085,15 @@ class CosimoSynthView extends HTMLElement {
         this.keyboardHost.innerHTML = "";
         this.keyboardHost.appendChild(this.keyboard);
 
-        requestAnimationFrame(() => this.focusKeyboard());
+        this.syncKeyboardGeometry();
+        requestAnimationFrame(() => {
+            this.syncKeyboardGeometry();
+            this.focusKeyboard();
+        });
         this.keyboardStyle = keyboardStyle;
         this.keyboardNoteCount = this.currentLayout.noteCount;
         this.hasOnscreenKeyboard = true;
+        this.syncKeyboardOctaveControls();
         if (this.hint) {
             this.hint.textContent = this.options.platform === "ios" ? "" : "Connecting the keyboard to the synth…";
         }
@@ -962,13 +1134,15 @@ class CosimoSynthView extends HTMLElement {
     }
 
     buildScanRail(endpointInfo = { endpointID: wavetablePositionEndpointID }) {
-        if (!this.scanRailInput) {
-            return;
-        }
-
         const endpointID = endpointInfo.endpointID || wavetablePositionEndpointID;
 
         if (this.scanRailEndpointID === endpointID) {
+            return;
+        }
+
+        this.scanRailEndpointID = endpointID;
+
+        if (!this.scanRailInput) {
             return;
         }
 
@@ -981,7 +1155,6 @@ class CosimoSynthView extends HTMLElement {
             this.stepUpButton?.removeEventListener("click", this.handleScanStepUp);
         }
 
-        this.scanRailEndpointID = endpointID;
         this.handleScanRailInput = () => {
             const nextValue = clampDisplayPosition(this.scanRailInput.value);
 
@@ -1025,7 +1198,7 @@ class CosimoSynthView extends HTMLElement {
     }
 
     getPrimaryPositionEndpointID() {
-        return this.scanRailEndpointID || this.knobEndpointID || null;
+        return this.scanRailEndpointID || this.knobEndpointID || wavetablePositionEndpointID;
     }
 
     commitDraggedDisplayPosition(nextValue) {
@@ -1651,9 +1824,8 @@ class CosimoSynthView extends HTMLElement {
                 :host {
                     display: block;
                     width: 100%;
-                    min-height: 100%;
+                    height: 100%;
                     min-height: 100dvh;
-                    height: auto;
                     overflow-x: hidden;
                     overscroll-behavior: none;
                     background:
@@ -1670,72 +1842,58 @@ class CosimoSynthView extends HTMLElement {
 
                 .ios-shell {
                     width: 100%;
-                    min-height: 100%;
+                    height: 100%;
                     min-height: 100dvh;
-                    height: auto;
                     min-width: 0;
-                    padding: max(10px, env(safe-area-inset-top)) 0 max(14px, env(safe-area-inset-bottom)) 0;
                     display: grid;
-                    grid-template-rows: auto auto auto;
-                    align-content: start;
-                    gap: var(--cosimo-section-gap);
+                    grid-template-rows: minmax(0, 1fr) auto;
                 }
 
-                .hero,
-                .scan-panel,
-                .keyboard-panel {
+                .ios-scroll {
+                    min-height: 0;
+                    overflow-y: auto;
+                    overscroll-behavior: contain;
+                    -webkit-overflow-scrolling: touch;
+                }
+
+                .ios-content {
+                    display: grid;
+                    min-width: 0;
+                    align-content: start;
+                    gap: 16px;
+                    padding:
+                        max(12px, env(safe-area-inset-top))
+                        max(16px, env(safe-area-inset-right))
+                        18px
+                        max(16px, env(safe-area-inset-left));
+                }
+
+                .wavetable-panel,
+                .mseg-panel,
+                .keyboard-footer {
                     min-width: 0;
                 }
 
-                .eyebrow,
                 .section-label,
                 .display-status,
                 .bank-readout,
-                .rail-labels,
-                .mini-label {
+                .mini-label,
+                .octave-readout {
                     font-family: "SF Mono", "IBM Plex Mono", Menlo, monospace;
                     letter-spacing: 0.16em;
                     text-transform: uppercase;
                 }
 
-                .eyebrow,
                 .section-label,
                 .mini-label {
                     font-size: 10px;
                     color: rgba(212, 220, 230, 0.34);
                 }
 
-                .hero {
+                .wavetable-panel {
                     display: grid;
                     min-width: 0;
-                    gap: 8px;
-                    padding-top: 10px;
-                }
-
-                .hero-head,
-                .scan-head,
-                .keyboard-head {
-                    display: grid;
-                    min-width: 0;
-                    grid-template-columns: minmax(0, 1fr) auto;
-                    gap: 8px;
-                    align-items: end;
-                    padding-left: max(16px, env(safe-area-inset-left));
-                    padding-right: max(16px, env(safe-area-inset-right));
-                }
-
-                .hero-title,
-                .scan-title {
-                    display: grid;
-                    min-width: 0;
-                    gap: 4px;
-                }
-
-                .hero-title strong,
-                .scan-title strong {
-                    font-size: 17px;
-                    letter-spacing: -0.04em;
-                    font-weight: 600;
+                    gap: 12px;
                 }
 
                 .display-status,
@@ -1743,11 +1901,6 @@ class CosimoSynthView extends HTMLElement {
                 .position-label {
                     font-size: 10px;
                     color: rgba(212, 220, 230, 0.42);
-                }
-
-                .table-select-wrap {
-                    padding-left: max(16px, env(safe-area-inset-left));
-                    padding-right: max(16px, env(safe-area-inset-right));
                 }
 
                 .table-picker {
@@ -1767,7 +1920,7 @@ class CosimoSynthView extends HTMLElement {
                     font-size: 14px;
                 }
 
-                .hero-frame,
+                .shape-readout,
                 .position-readout {
                     font-family: "SF Pro Display", "SF Pro Text", -apple-system, BlinkMacSystemFont, sans-serif;
                     font-weight: 600;
@@ -1775,12 +1928,12 @@ class CosimoSynthView extends HTMLElement {
                     color: #87d7f5;
                 }
 
-                .hero-frame {
+                .shape-readout {
                     font-size: 12px;
                 }
 
                 .position-readout {
-                    font-size: 22px;
+                    font-size: 20px;
                     line-height: 1;
                 }
 
@@ -1864,142 +2017,82 @@ class CosimoSynthView extends HTMLElement {
                     color: #f2b86b;
                 }
 
-                .scan-panel,
-                .keyboard-panel {
+                .wavetable-meta {
                     display: grid;
                     min-width: 0;
                     gap: 10px;
-                    padding-top: 10px;
                 }
 
-                .scan-rail-wrap {
+                .wavetable-meta-row {
                     display: grid;
                     min-width: 0;
+                    grid-template-columns: minmax(0, 1fr) auto;
+                    gap: 12px;
+                    align-items: end;
+                }
+
+                .wavetable-readouts {
+                    display: grid;
                     gap: 8px;
-                    padding-left: max(16px, env(safe-area-inset-left));
-                    padding-right: max(16px, env(safe-area-inset-right));
+                    justify-items: end;
                 }
 
-                .scan-rail-row {
+                .display-status {
+                    justify-self: start;
+                    padding: 6px 10px;
+                    border-radius: 999px;
+                    background: rgba(255, 255, 255, 0.04);
+                }
+
+                .keyboard-footer {
                     display: grid;
-                    min-width: 0;
-                    grid-template-columns: auto minmax(0, 1fr) auto;
                     gap: 10px;
+                    padding:
+                        10px
+                        max(16px, env(safe-area-inset-right))
+                        max(10px, env(safe-area-inset-bottom))
+                        max(16px, env(safe-area-inset-left));
+                    border-top: 1px solid rgba(255, 255, 255, 0.08);
+                    background:
+                        linear-gradient(180deg, rgba(255, 255, 255, 0.024), rgba(255, 255, 255, 0)),
+                        linear-gradient(180deg, rgba(9, 12, 18, 0.96), rgba(6, 8, 13, 0.98));
+                    box-shadow: 0 -18px 36px rgba(2, 4, 10, 0.34);
+                }
+
+                .keyboard-toolbar {
+                    display: flex;
+                    justify-content: center;
                     align-items: center;
                 }
 
-                .rail-button {
-                    width: 34px;
-                    height: 34px;
-                    border: 0;
-                    border-radius: 999px;
-                    background: none;
-                    color: rgba(236, 241, 247, 0.42);
-                    display: grid;
-                    place-items: center;
-                    font-size: 16px;
-                }
-
-                .scan-rail {
-                    position: relative;
-                    min-width: 0;
-                    height: var(--cosimo-control-height);
-                    border-radius: 14px;
-                    overflow: hidden;
-                    background:
-                        linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent),
-                        linear-gradient(90deg, rgba(255, 255, 255, 0.035) 0, rgba(255, 255, 255, 0) 100%);
-                }
-
-                .scan-rail::before {
-                    content: "";
-                    position: absolute;
-                    inset: 0;
-                    background:
-                        repeating-linear-gradient(
-                            90deg,
-                            transparent 0,
-                            transparent calc(6.25% - 1px),
-                            rgba(255, 255, 255, 0.08) calc(6.25% - 1px),
-                            rgba(255, 255, 255, 0.08) 6.25%
-                        );
-                    opacity: 0.46;
-                    pointer-events: none;
-                }
-
-                .scan-rail::after {
-                    content: "";
-                    position: absolute;
-                    inset: 21px 14px;
-                    border-radius: 999px;
-                    background:
-                        linear-gradient(90deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.02));
-                    pointer-events: none;
-                }
-
-                .scan-slider {
-                    appearance: none;
-                    position: absolute;
-                    inset: 0;
-                    width: 100%;
-                    height: 100%;
-                    margin: 0;
-                    background: transparent;
-                    cursor: pointer;
-                }
-
-                .scan-slider::-webkit-slider-runnable-track {
-                    height: var(--cosimo-control-height);
-                    background: transparent;
-                }
-
-                .scan-slider::-moz-range-track {
-                    height: var(--cosimo-control-height);
-                    background: transparent;
-                    border: 0;
-                }
-
-                .scan-slider::-webkit-slider-thumb {
-                    appearance: none;
-                    width: 14px;
-                    height: var(--cosimo-control-height);
-                    border: 0;
-                    border-radius: 0;
-                    background:
-                        linear-gradient(180deg, rgba(135, 215, 245, 0), rgba(135, 215, 245, 0.82) 24%, rgba(135, 215, 245, 0.82) 76%, rgba(135, 215, 245, 0)),
-                        linear-gradient(180deg, rgba(255, 255, 255, 0.66), rgba(255, 255, 255, 0.14));
-                    box-shadow:
-                        0 0 0 1px rgba(255, 255, 255, 0.08),
-                        0 0 20px rgba(135, 215, 245, 0.22);
-                    margin-top: 0;
-                }
-
-                .scan-slider::-moz-range-thumb {
-                    width: 14px;
-                    height: var(--cosimo-control-height);
-                    border: 0;
-                    border-radius: 0;
-                    background:
-                        linear-gradient(180deg, rgba(135, 215, 245, 0), rgba(135, 215, 245, 0.82) 24%, rgba(135, 215, 245, 0.82) 76%, rgba(135, 215, 245, 0)),
-                        linear-gradient(180deg, rgba(255, 255, 255, 0.66), rgba(255, 255, 255, 0.14));
-                    box-shadow:
-                        0 0 0 1px rgba(255, 255, 255, 0.08),
-                        0 0 20px rgba(135, 215, 245, 0.22);
-                }
-
-                .rail-labels {
-                    display: flex;
-                    justify-content: space-between;
+                .octave-controls {
+                    display: inline-grid;
+                    grid-template-columns: auto auto auto;
                     gap: 8px;
-                    font-size: 10px;
-                    color: rgba(212, 220, 230, 0.34);
+                    align-items: center;
                 }
 
-                .keyboard-head strong {
-                    font-size: 15px;
-                    font-weight: 600;
+                .octave-button {
+                    min-width: 72px;
+                    min-height: 34px;
+                    border: 1px solid rgba(255, 255, 255, 0.1);
+                    border-radius: 999px;
+                    background: rgba(255, 255, 255, 0.04);
                     color: #eef2f5;
-                    letter-spacing: -0.03em;
+                    font-size: 12px;
+                    letter-spacing: 0.08em;
+                    text-transform: uppercase;
+                }
+
+                .octave-button:disabled {
+                    opacity: 0.32;
+                }
+
+                .octave-readout {
+                    min-width: 88px;
+                    text-align: center;
+                    font-size: 12px;
+                    color: #87d7f5;
                 }
 
                 .keyboard-host {
@@ -2007,19 +2100,17 @@ class CosimoSynthView extends HTMLElement {
                     min-height: var(--cosimo-keyboard-height);
                     display: grid;
                     align-items: stretch;
-                    padding-left: max(16px, env(safe-area-inset-left));
-                    padding-right: max(16px, env(safe-area-inset-right));
                 }
 
                 .keyboard {
                     width: 100%;
                     height: var(--cosimo-keyboard-height);
-                    border-radius: 16px 16px 20px 20px;
+                    border-radius: 14px 14px 18px 18px;
                     overflow: hidden;
                     background:
                         linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 18%),
                         linear-gradient(180deg, rgba(10, 13, 18, 0.68), rgba(7, 9, 13, 0.92));
-                    padding: 8px 8px 10px;
+                    padding: 6px 6px 8px;
                     touch-action: none;
                 }
 
@@ -2027,7 +2118,6 @@ class CosimoSynthView extends HTMLElement {
                     display: grid;
                     min-width: 0;
                     gap: 10px;
-                    padding-top: 10px;
                 }
 
                 .mseg-head {
@@ -2036,8 +2126,6 @@ class CosimoSynthView extends HTMLElement {
                     grid-template-columns: minmax(0, 1fr) auto;
                     gap: 8px;
                     align-items: end;
-                    padding-left: max(16px, env(safe-area-inset-left));
-                    padding-right: max(16px, env(safe-area-inset-right));
                 }
 
                 .mseg-title {
@@ -2060,8 +2148,6 @@ class CosimoSynthView extends HTMLElement {
                 }
 
                 .mseg-editor-shell {
-                    margin-left: max(16px, env(safe-area-inset-left));
-                    margin-right: max(16px, env(safe-area-inset-right));
                     border-radius: 16px;
                     overflow: hidden;
                     border: 1px solid rgba(255, 255, 255, 0.08);
@@ -2071,7 +2157,7 @@ class CosimoSynthView extends HTMLElement {
                 .mseg-editor {
                     display: block;
                     width: 100%;
-                    height: 156px;
+                    height: 148px;
                     touch-action: none;
                 }
 
@@ -2104,8 +2190,16 @@ class CosimoSynthView extends HTMLElement {
                     grid-template-columns: minmax(0, 1fr) auto;
                     gap: 10px;
                     align-items: center;
-                    padding-left: max(16px, env(safe-area-inset-left));
-                    padding-right: max(16px, env(safe-area-inset-right));
+                }
+
+                @media (max-height: 720px) {
+                    .ios-content {
+                        gap: 14px;
+                    }
+
+                    .mseg-editor {
+                        height: 136px;
+                    }
                 }
 
                 .mseg-depth {
@@ -2137,112 +2231,84 @@ class CosimoSynthView extends HTMLElement {
             </style>
 
             <div class="ios-shell">
-                <div class="hero">
-                    <div class="hero-head">
-                        <div class="hero-title">
-                            <div class="section-label">Wavetable</div>
-                            <strong>Factory Bank</strong>
-                        </div>
-
-                        <div>
-                            <div class="display-status" data-role="display-status">Frame</div>
-                            <div class="hero-frame" data-role="hero-frame-readout">01/16</div>
-                        </div>
-                    </div>
-
-                    <div class="wavetable-stage" data-state="loading">
-                        <canvas class="wavetable-canvas"></canvas>
-                        <div class="display-overlay">Loading wavetable bank…</div>
-                        <div class="stage-copy">
-                            <div class="stage-copy-row">
-                                <div class="mini-label active">Wavescan</div>
-                                <div class="mini-label warm">Frame scan</div>
+                <div class="ios-scroll">
+                    <div class="ios-content">
+                        <div class="wavetable-panel">
+                            <div class="wavetable-stage" data-state="loading">
+                                <canvas class="wavetable-canvas"></canvas>
+                                <div class="display-overlay">Loading wavetable bank…</div>
+                                <div class="stage-copy">
+                                    <div class="stage-copy-row">
+                                        <div class="mini-label active">Wavescan</div>
+                                        <div class="shape-readout" data-role="hero-frame-readout">01/16</div>
+                                    </div>
+                                    <div></div>
+                                    <div class="stage-copy-row">
+                                        <div class="bank-readout">Factory bank</div>
+                                        <div class="mini-label warm">Drag To Scan</div>
+                                    </div>
+                                </div>
                             </div>
-                            <div></div>
-                            <div class="stage-copy-row">
-                                <div class="mini-label">3D field</div>
-                                <div class="bank-readout">Factory bank</div>
+
+                            <div class="wavetable-meta">
+                                <div class="wavetable-meta-row">
+                                    <label class="table-picker">
+                                        <span class="position-label">Table</span>
+                                        <select class="table-select"></select>
+                                    </label>
+
+                                    <div class="wavetable-readouts">
+                                        <div class="position-label">Position</div>
+                                        <div class="position-readout" data-role="value-readout">0.000</div>
+                                    </div>
+                                </div>
+
+                                <div class="display-status" data-role="display-status">Loading wavetable bank…</div>
+                            </div>
+                        </div>
+
+                        <div class="mseg-panel">
+                            <div class="mseg-head">
+                                <div class="mseg-title">
+                                    <div class="section-label">MSEG 1</div>
+                                    <strong>Fixed Wavetable Route</strong>
+                                </div>
+
+                                <div class="mseg-depth-readout" data-role="mseg-depth-readout">0.000</div>
+                            </div>
+
+                            <div class="mseg-editor-shell">
+                                <svg class="mseg-editor" viewBox="0 0 600 156" preserveAspectRatio="none">
+                                    <g class="mseg-grid">
+                                        <line x1="0" y1="39" x2="600" y2="39"></line>
+                                        <line x1="0" y1="78" x2="600" y2="78"></line>
+                                        <line x1="0" y1="117" x2="600" y2="117"></line>
+                                        <line x1="150" y1="0" x2="150" y2="156"></line>
+                                        <line x1="300" y1="0" x2="300" y2="156"></line>
+                                        <line x1="450" y1="0" x2="450" y2="156"></line>
+                                    </g>
+                                    <path class="mseg-curve"></path>
+                                    <g class="mseg-points"></g>
+                                </svg>
+                            </div>
+
+                            <div class="mseg-controls">
+                                <label class="mseg-depth">
+                                    <span class="mseg-depth-label">Depth To Wavetable Position</span>
+                                    <input class="mseg-depth-slider" type="range" min="-1" max="1" step="0.001" value="0.000" />
+                                </label>
+                                <button class="mseg-delete-point" type="button">Delete Point</button>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <div class="scan-panel">
-                    <div class="scan-head">
-                        <div class="scan-title">
-                            <div class="section-label">Primary control</div>
-                            <strong>Frame Scan</strong>
-                        </div>
-
-                        <div>
-                            <div class="position-label display-status">Position</div>
-                            <div class="position-readout" data-role="value-readout">0.000</div>
-                        </div>
-                    </div>
-
-                    <div class="table-select-wrap">
-                        <label class="table-picker">
-                            <span class="position-label">Table</span>
-                            <select class="table-select"></select>
-                        </label>
-                    </div>
-
-                    <div class="scan-rail-wrap">
-                        <div class="scan-rail-row">
-                            <button class="rail-button step-down" type="button" aria-label="Step down">&lsaquo;</button>
-                            <div class="scan-rail">
-                                <input class="scan-slider" type="range" min="0" max="1" step="0.001" value="0.000" />
-                            </div>
-                            <button class="rail-button step-up" type="button" aria-label="Step up">&rsaquo;</button>
-                        </div>
-
-                        <div class="rail-labels">
-                            <span data-role="rail-label-start">Shape 01</span>
-                            <span data-role="rail-label-mid">Shape 08</span>
-                            <span data-role="rail-label-end">Shape 16</span>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="mseg-panel">
-                    <div class="mseg-head">
-                        <div class="mseg-title">
-                            <div class="section-label">MSEG 1</div>
-                            <strong>Fixed Wavetable Route</strong>
-                        </div>
-
-                        <div class="mseg-depth-readout" data-role="mseg-depth-readout">0.000</div>
-                    </div>
-
-                    <div class="mseg-editor-shell">
-                        <svg class="mseg-editor" viewBox="0 0 600 156" preserveAspectRatio="none">
-                            <g class="mseg-grid">
-                                <line x1="0" y1="39" x2="600" y2="39"></line>
-                                <line x1="0" y1="78" x2="600" y2="78"></line>
-                                <line x1="0" y1="117" x2="600" y2="117"></line>
-                                <line x1="150" y1="0" x2="150" y2="156"></line>
-                                <line x1="300" y1="0" x2="300" y2="156"></line>
-                                <line x1="450" y1="0" x2="450" y2="156"></line>
-                            </g>
-                            <path class="mseg-curve"></path>
-                            <g class="mseg-points"></g>
-                        </svg>
-                    </div>
-
-                    <div class="mseg-controls">
-                        <label class="mseg-depth">
-                            <span class="mseg-depth-label">Depth To Wavetable Position</span>
-                            <input class="mseg-depth-slider" type="range" min="-1" max="1" step="0.001" value="0.000" />
-                        </label>
-                        <button class="mseg-delete-point" type="button">Delete Point</button>
-                    </div>
-                </div>
-
-                <div class="keyboard-panel">
-                    <div class="keyboard-head">
-                        <div>
-                            <div class="section-label">Keyboard</div>
-                            <strong>Keyboard</strong>
+                <div class="keyboard-footer">
+                    <div class="keyboard-toolbar">
+                        <div class="octave-controls">
+                            <button class="octave-button octave-down" type="button">Oct -</button>
+                            <div class="octave-readout" data-role="octave-readout">C3 - C5</div>
+                            <button class="octave-button octave-up" type="button">Oct +</button>
                         </div>
                     </div>
 

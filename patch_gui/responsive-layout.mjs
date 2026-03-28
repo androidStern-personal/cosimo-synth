@@ -39,18 +39,18 @@ export function computeResponsivePatchLayout({
         headerStacks: safeWidth < 420,
         gridTemplateColumns: "minmax(0, 1fr)",
         controlStyle: "scan-rail",
-        noteCount: compact ? 13 : (shortLandscape ? 17 : 25),
+        noteCount: 24,
         controlHeight: shortLandscape ? 48 : 54,
-        stageMinHeight: compact ? 224 : (shortLandscape ? 188 : 284),
-        keyboardHeight: compact ? 108 : (shortLandscape ? 94 : 128),
+        stageMinHeight: compact ? 216 : (shortLandscape ? 180 : 252),
+        keyboardHeight: compact ? 88 : (shortLandscape ? 84 : 96),
         controlColumnWidth: safeWidth,
         panelPadding: compact ? 14 : 20,
         cardPadding: compact ? 0 : 0,
         sectionGap: compact ? 10 : 16,
         titleFontSize: compact ? 12 : 13,
         subtitleFontSize: compact ? 18 : 22,
-        keyboardNaturalNoteWidth: compact ? 16 : (shortLandscape ? 17 : 20),
-        keyboardAccidentalWidth: compact ? 9 : (shortLandscape ? 10 : 12),
+        keyboardNaturalNoteWidth: compact ? 20 : (shortLandscape ? 18 : 22),
+        keyboardAccidentalWidth: compact ? 11 : (shortLandscape ? 10 : 12),
     };
 }
 
@@ -63,7 +63,7 @@ export function getLayoutCSSVariables(layout) {
         "--cosimo-control-column-width": `${clamp(layout.controlColumnWidth, 160, 420)}px`,
         "--cosimo-control-height": `${clamp(layout.controlHeight, 48, 160)}px`,
         "--cosimo-stage-min-height": `${clamp(layout.stageMinHeight, 180, 320)}px`,
-        "--cosimo-keyboard-height": `${clamp(layout.keyboardHeight, 92, 132)}px`,
+        "--cosimo-keyboard-height": `${clamp(layout.keyboardHeight, 80, 132)}px`,
         "--cosimo-title-font-size": `${clamp(layout.titleFontSize, 12, 14)}px`,
         "--cosimo-subtitle-font-size": `${clamp(layout.subtitleFontSize, 18, 24)}px`,
     };
