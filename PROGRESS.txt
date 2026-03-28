@@ -3,16 +3,15 @@ Current wavetable-loading source of truth
 
 What is true right now
 - The app still ships wavetable source files separately in `assets/factory_sources/` and uses `assets/factory-bank-catalog.json` as the runtime catalog.
-- The active synth path now has a patch worker, `patch_gui/wavetable-worker.mjs`, which loads a selected source WAV, compiles mip frames in JavaScript, and streams them into the patch.
-- `cmajor/FixedFrameOscillator.cmajor` is mip-aware again. It now accepts `wavetableLoadBegin` and `wavetableMipFrame`, emits `wavetableMipRequest` and `wavetableUploadAck`, and selects mip levels at render time.
-- `cmajor/WavetableSynth.cmajor` now exposes those worker/DSP endpoints at the patch level.
-- The desktop UI in `patch_gui/index.js` no longer uploads audio tables itself. It only changes the `wavetableSelect` parameter and keeps the display path.
+- The active synth path has a patch worker, `patch_gui/wavetable-worker.mjs`, which reads the selected source WAV, compiles mip frames in JavaScript, and streams them into the patch. It now classifies source-read failures separately from mip-build failures, aborts dead committed loading generations with a watchdog timeout, and does not immediately throw away a reconstructed active table on worker restart.
+- `cmajor/FixedFrameOscillator.cmajor` is mip-aware again. It accepts `wavetableLoadBegin`, `wavetableMipFrame`, and `serviceLoadAbort`, emits `wavetableMipRequest`, `wavetableUploadAck`, and `runtimeServiceState`, rejects stale older generations, raises mip-request urgency to `1` when it is currently playing a darker fallback mip, and now uses the real Cmajor `processor.session` value instead of hardcoded session `1`.
+- `cmajor/WavetableSynth.cmajor` now owns the runtime wavetable state model. It publishes `runtimeState`, tracks the desired table separately from the active/loading DSP table, fences stale worker failures both by desired-intent serial and by the currently active/loading generation, and exposes `runtimeSyncRequest` plus `retryDesiredTableRequest`.
+- The patch GUI in `patch_gui/index.js` no longer treats `wavetableSelect` as audible truth. It asks for `runtimeState`, keeps the selector bound to the requested table, keeps the displayed/audible wavetable view bound to the active or loading DSP table, and now has an explicit retry action for a failed same-table load instead of relying on an impossible native `<select>` re-select path.
 - The iPhone JUCE generator script, `scripts/generate_ios_auv3_plugin.sh`, no longer injects the old native raw-table uploader. It keeps the existing bundle-aware manifest loader and now relies on the patch worker instead.
 
 What was verified
 - `node --test tests/test_wavetable_worker.mjs tests/test_wavetable_display.mjs tests/test_patch_view_layout.mjs`
-- `uv run pytest tests/test_wavetable_worker_runtime.py tests/test_runtime_wavetable_mip_probe.py -q`
-- `uv run pytest tests/test_fixed_frame_probe.py -q`
+- `uv run pytest tests/test_wavetable_worker_runtime.py tests/test_runtime_wavetable_mip_probe.py tests/test_runtime_state_coordinator.py tests/test_fixed_frame_probe.py -q`
 - `uv run pytest tests/test_ios_auv3_build.py -q -k 'not ios_host_smoke'`
 - `uv run pytest tests/test_ios_auv3_build.py -q -k generated_ios_plugin_externalises_the_bank_but_keeps_patch_ui_resources`
 

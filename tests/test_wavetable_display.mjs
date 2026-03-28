@@ -210,11 +210,14 @@ async function loadPatchViewModule() {
     if (!patchViewModulePromise) {
         globalThis.HTMLElement ??= class {};
         globalThis.window ??= {};
+        const customElementRegistry = new Map();
         globalThis.window.customElements ??= {
-            get() {
-                return undefined;
+            get(name) {
+                return customElementRegistry.get(name);
             },
-            define() {},
+            define(name, value) {
+                customElementRegistry.set(name, value);
+            },
         };
 
         patchViewModulePromise = import(
@@ -413,6 +416,136 @@ test("effective wavetable position monitor keeps the newest voice generation", a
     assert.deepEqual(olderVoiceState, { voiceGeneration: 4, position: 0.62 });
     assert.deepEqual(sameVoiceState, { voiceGeneration: 4, position: 0.18 });
     assert.deepEqual(newerVoiceState, { voiceGeneration: 5, position: 0.33 });
+});
+
+test("runtime table state keeps the displayed wavetable on the audible table while a newer request is pending", async () => {
+    const { resolveRuntimeTablePresentation } = await loadPatchViewModule();
+
+    assert.deepEqual(
+        resolveRuntimeTablePresentation({
+            serviceState: 2,
+            hasActive: true,
+            activeTableIndex: 3,
+            activeGeneration: 14,
+            hasLoading: false,
+            loadingTableIndex: 0,
+            loadingGeneration: 0,
+            desiredTableIndex: 5,
+            desiredIntentSerial: 8,
+            hasFailure: false,
+            failedTableIndex: 0,
+        }),
+        {
+            desiredTableIndex: 5,
+            presentedTableIndex: 3,
+            activeTableIndex: 3,
+            activeGeneration: 14,
+            loadingTableIndex: null,
+            loadingGeneration: null,
+            isPendingSelection: true,
+            isRetryableFailure: false,
+        }
+    );
+});
+
+test("runtime table state presents the loading table when there is no active audible table yet", async () => {
+    const { resolveRuntimeTablePresentation } = await loadPatchViewModule();
+
+    assert.deepEqual(
+        resolveRuntimeTablePresentation({
+            serviceState: 1,
+            hasActive: false,
+            activeTableIndex: 0,
+            activeGeneration: 0,
+            hasLoading: true,
+            loadingTableIndex: 4,
+            loadingGeneration: 15,
+            desiredTableIndex: 4,
+            desiredIntentSerial: 9,
+            hasFailure: false,
+            failedTableIndex: 0,
+        }),
+        {
+            desiredTableIndex: 4,
+            presentedTableIndex: 4,
+            activeTableIndex: null,
+            activeGeneration: null,
+            loadingTableIndex: 4,
+            loadingGeneration: 15,
+            isPendingSelection: true,
+            isRetryableFailure: false,
+        }
+    );
+});
+
+test("runtime table state marks an unchanged failed desired table as retryable", async () => {
+    const { resolveRuntimeTablePresentation } = await loadPatchViewModule();
+
+    assert.deepEqual(
+        resolveRuntimeTablePresentation({
+            serviceState: 0,
+            hasActive: false,
+            activeTableIndex: 0,
+            activeGeneration: 0,
+            hasLoading: false,
+            loadingTableIndex: 0,
+            loadingGeneration: 0,
+            desiredTableIndex: 6,
+            desiredIntentSerial: 10,
+            hasFailure: true,
+            failedTableIndex: 6,
+        }),
+        {
+            desiredTableIndex: 6,
+            presentedTableIndex: 6,
+            activeTableIndex: null,
+            activeGeneration: null,
+            loadingTableIndex: null,
+            loadingGeneration: null,
+            isPendingSelection: false,
+            isRetryableFailure: true,
+        }
+    );
+});
+
+test("view table-select handler retries the failed desired table instead of pretending the value changed", async () => {
+    const { CosimoSynthView } = await loadPatchViewModule();
+    const sentEvents = [];
+    const selectedTableIndices = [];
+    const view = Object.create(CosimoSynthView.prototype);
+
+    view.patchConnection = {
+        sendEventOrValue(endpointID, value) {
+            sentEvents.push({ endpointID, value });
+        },
+    };
+    view.tableSelect = { value: "6" };
+    view.desiredTableIndex = 6;
+    view.runtimeTablePresentation = { isRetryableFailure: true };
+    view.sendSelectedTableIndex = (value) => {
+        selectedTableIndices.push(value);
+    };
+
+    view.handleTableSelectChange();
+
+    assert.deepEqual(sentEvents, [{ endpointID: "retryDesiredTableRequest", value: 1 }]);
+    assert.deepEqual(selectedTableIndices, []);
+});
+
+test("view can explicitly request a runtime-state sync without relying on status side effects", async () => {
+    const { CosimoSynthView } = await loadPatchViewModule();
+    const sentEvents = [];
+    const view = Object.create(CosimoSynthView.prototype);
+
+    view.patchConnection = {
+        sendEventOrValue(endpointID, value) {
+            sentEvents.push({ endpointID, value });
+        },
+    };
+
+    view.requestRuntimeTableSync();
+
+    assert.deepEqual(sentEvents, [{ endpointID: "runtimeSyncRequest", value: 1 }]);
 });
 
 test("upward wavetable-stage drag maps to the same normalized position change as moving the slider right", async () => {

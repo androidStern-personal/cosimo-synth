@@ -1,5 +1,229 @@
 namespace wt
 {
+    struct DesiredTableChange
+    {
+        int32 tableIndex;
+    }
+
+    struct WorkerLoadFailure
+    {
+        int32 dspSessionId;
+        int32 tableIndex;
+        int32 generation;
+        int32 candidateAttemptSerial;
+        int32 failurePhase;
+        int32 failureReasonCode;
+    }
+
+    struct RuntimeState
+    {
+        int32 dspSessionId;
+        int32 desiredIntentSerial;
+        int32 desiredTableIndex;
+        int32 generationFrontier;
+        int32 serviceState;
+        int32 hasActive;
+        int32 activeTableIndex;
+        int32 activeGeneration;
+        int32 hasLoading;
+        int32 loadingTableIndex;
+        int32 loadingGeneration;
+        int32 hasFailure;
+        int32 failedTableIndex;
+        int32 failedGeneration;
+        int32 failureScope;
+        int32 failurePhase;
+        int32 failureReasonCode;
+    }
+
+    processor DesiredTableMonitor
+    {
+        input value float32 tableSelectIn;
+        output event DesiredTableChange desiredTableChangeOut;
+
+        int32 lastTableIndex = -1;
+
+        void emitDesiredTableChange (int32 tableIndex)
+        {
+            DesiredTableChange change;
+            change.tableIndex = tableIndex;
+            desiredTableChangeOut <- change;
+        }
+
+        void main()
+        {
+            loop
+            {
+                let nextTableIndex = int32 (
+                    std::intrinsics::floor (
+                        std::intrinsics::clamp (tableSelectIn, 0.0f, 255.0f) + 0.5f
+                    )
+                );
+
+                if (nextTableIndex != lastTableIndex)
+                {
+                    lastTableIndex = nextTableIndex;
+                    emitDesiredTableChange (nextTableIndex);
+                }
+
+                advance();
+            }
+        }
+    }
+
+    processor RuntimeStateCoordinator
+    {
+        input event DesiredTableChange desiredTableChangeIn;
+        input event int32 runtimeSyncRequestIn;
+        input event int32 retryDesiredTableRequestIn;
+        input event WorkerLoadFailure workerLoadFailureIn;
+        input event RuntimeServiceState runtimeServiceStateIn;
+        output event RuntimeState runtimeStateOut;
+
+        int32 dspSessionId = 0;
+        int32 desiredIntentSerial = 0;
+        int32 desiredTableIndex = 0;
+        int32 generationFrontier = 0;
+        int32 serviceState = 0;
+        int32 hasActive = 0;
+        int32 activeTableIndex = 0;
+        int32 activeGeneration = 0;
+        int32 hasLoading = 0;
+        int32 loadingTableIndex = 0;
+        int32 loadingGeneration = 0;
+        int32 hasFailure = 0;
+        int32 failedTableIndex = 0;
+        int32 failedGeneration = 0;
+        int32 failureScope = 0;
+        int32 failurePhase = 0;
+        int32 failureReasonCode = 0;
+
+        void clearFailure()
+        {
+            hasFailure = 0;
+            failedTableIndex = 0;
+            failedGeneration = 0;
+            failureScope = 0;
+            failurePhase = 0;
+            failureReasonCode = 0;
+        }
+
+        void emitRuntimeState()
+        {
+            RuntimeState state;
+            state.dspSessionId = dspSessionId;
+            state.desiredIntentSerial = desiredIntentSerial;
+            state.desiredTableIndex = desiredTableIndex;
+            state.generationFrontier = generationFrontier;
+            state.serviceState = serviceState;
+            state.hasActive = hasActive;
+            state.activeTableIndex = activeTableIndex;
+            state.activeGeneration = activeGeneration;
+            state.hasLoading = hasLoading;
+            state.loadingTableIndex = loadingTableIndex;
+            state.loadingGeneration = loadingGeneration;
+            state.hasFailure = hasFailure;
+            state.failedTableIndex = failedTableIndex;
+            state.failedGeneration = failedGeneration;
+            state.failureScope = failureScope;
+            state.failurePhase = failurePhase;
+            state.failureReasonCode = failureReasonCode;
+            runtimeStateOut <- state;
+        }
+
+        event desiredTableChangeIn (DesiredTableChange change)
+        {
+            if (change.tableIndex == desiredTableIndex)
+                return;
+
+            desiredTableIndex = change.tableIndex;
+            desiredIntentSerial += 1;
+            clearFailure();
+            emitRuntimeState();
+        }
+
+        event runtimeSyncRequestIn (int32 unused)
+        {
+            emitRuntimeState();
+        }
+
+        event retryDesiredTableRequestIn (int32 unused)
+        {
+            if (hasFailure == 0 || failedTableIndex != desiredTableIndex)
+                return;
+
+            desiredIntentSerial += 1;
+            clearFailure();
+            emitRuntimeState();
+        }
+
+        event workerLoadFailureIn (WorkerLoadFailure failure)
+        {
+            if (failure.dspSessionId != dspSessionId)
+                return;
+
+            if (failure.generation == 0)
+            {
+                if (failure.candidateAttemptSerial != desiredIntentSerial)
+                    return;
+
+                hasFailure = 1;
+                failedTableIndex = failure.tableIndex;
+                failedGeneration = 0;
+                failureScope = 0;
+                failurePhase = failure.failurePhase;
+                failureReasonCode = failure.failureReasonCode;
+                emitRuntimeState();
+                return;
+            }
+
+            if (hasLoading != 0)
+            {
+                if (failure.generation != loadingGeneration || failure.tableIndex != loadingTableIndex)
+                    return;
+            }
+            else if (hasActive != 0)
+            {
+                if (failure.generation != activeGeneration || failure.tableIndex != activeTableIndex)
+                    return;
+            }
+            else
+            {
+                return;
+            }
+
+            hasFailure = 1;
+            failedTableIndex = failure.tableIndex;
+            failedGeneration = failure.generation;
+            failureScope = 1;
+            failurePhase = failure.failurePhase;
+            failureReasonCode = failure.failureReasonCode;
+            emitRuntimeState();
+        }
+
+        event runtimeServiceStateIn (RuntimeServiceState state)
+        {
+            dspSessionId = state.dspSessionId;
+            generationFrontier = state.generationFrontier;
+            serviceState = state.serviceState;
+            hasActive = state.hasActive;
+            activeTableIndex = state.activeTableIndex;
+            activeGeneration = state.activeGeneration;
+            hasLoading = state.hasLoading;
+            loadingTableIndex = state.loadingTableIndex;
+            loadingGeneration = state.loadingGeneration;
+            emitRuntimeState();
+        }
+
+        void main()
+        {
+            loop
+            {
+                advance();
+            }
+        }
+    }
+
     graph Voice
     {
         input event (std::notes::NoteOn,
@@ -10,13 +234,14 @@ namespace wt
                      std::notes::Control) eventIn;
         input event wt::WavetableLoadBegin wavetableLoadBeginIn;
         input event wt::WavetableMipFrame wavetableMipFrameIn;
+        input event wt::ServiceLoadAbort serviceLoadAbortIn;
         input event float32[wt::msegPaddedSamples] msegBufferIn;
         input event wt::MsegPlaybackConfig msegPlaybackIn;
         input value float32 framePositionIn;
-        input value float32 tableSelectIn;
         input value float32 msegDepthIn;
         output event wt::WavetableUploadAck wavetableUploadAckOut;
         output event wt::WavetableMipRequest wavetableMipRequestOut;
+        output event wt::RuntimeServiceState runtimeServiceStateOut;
         output event wt::EffectiveWavetablePositionMonitor effectiveWavetablePositionOut;
         output stream float32<2> out;
 
@@ -30,7 +255,6 @@ namespace wt
         node frameMonitor = wt::EffectiveWavetablePositionReporter;
         node noteTracker = wt::NoteGenerationTracker;
         node frameBase   = wt::ValueToStream;
-        node tableSelectBase = wt::ValueToStream;
 
         event eventIn (std::notes::NoteOn note)
         {
@@ -52,18 +276,18 @@ namespace wt
         event eventIn (std::notes::Control control) {}
         event wavetableLoadBeginIn (wt::WavetableLoadBegin load) { osc.wavetableLoadBeginIn <- load; }
         event wavetableMipFrameIn (wt::WavetableMipFrame frame) { osc.wavetableMipFrameIn <- frame; }
+        event serviceLoadAbortIn (wt::ServiceLoadAbort abort) { osc.serviceLoadAbortIn <- abort; }
         event msegBufferIn (float32[wt::msegPaddedSamples] buffer) { msegReader.bufferUpload <- buffer; }
         event msegPlaybackIn (wt::MsegPlaybackConfig config) { msegReader.playbackUpload <- config; }
 
         connection
         {
             framePositionIn -> frameBase.valueIn;
-            tableSelectIn -> tableSelectBase.valueIn;
             frameBase.out -> frameRouter.basePositionIn;
             frameBase.out -> frameMonitor.basePositionIn;
-            tableSelectBase.out -> osc.tableSelectIn;
             osc.wavetableUploadAckOut -> wavetableUploadAckOut;
             osc.wavetableMipRequestOut -> wavetableMipRequestOut;
+            osc.runtimeServiceStateOut -> runtimeServiceStateOut;
             msegReader.out -> frameRouter.modulationIn;
             msegDepthIn -> frameRouter.depthIn;
             frameRouter.out -> frameMonitor.effectivePositionIn;
@@ -85,6 +309,10 @@ graph WavetableSynth [[ main ]]
     input event std::midi::Message midiIn;
     input event wt::WavetableLoadBegin wavetableLoadBegin;
     input event wt::WavetableMipFrame wavetableMipFrame;
+    input event wt::ServiceLoadAbort serviceLoadAbort;
+    input event wt::WorkerLoadFailure workerLoadFailure;
+    input event int32 runtimeSyncRequest;
+    input event int32 retryDesiredTableRequest;
     input event float32[wt::msegPaddedSamples] mseg1Buffer;
     input event wt::MsegPlaybackConfig mseg1Playback;
     input value float32 wavetablePosition [[ name: "Wavetable Position", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
@@ -92,11 +320,14 @@ graph WavetableSynth [[ main ]]
     input value float32 mseg1Depth [[ name: "MSEG 1 Depth", min: -1.0f, max: 1.0f, init: 1.0f, rampFrames: 64 ]];
     output event wt::WavetableUploadAck wavetableUploadAck;
     output event wt::WavetableMipRequest wavetableMipRequest;
+    output event wt::RuntimeState runtimeState;
     output event wt::EffectiveWavetablePositionMonitor effectiveWavetablePosition;
     output stream float32<2> audioOut;
 
     node mpe   = std::midi::MPEConverter;
     node voice = wt::Voice;
+    node desiredTableMonitor = wt::DesiredTableMonitor;
+    node runtimeStateCoordinator = wt::RuntimeStateCoordinator;
 
     connection
     {
@@ -104,13 +335,20 @@ graph WavetableSynth [[ main ]]
         mpe.eventOut -> voice.eventIn;
         wavetableLoadBegin -> voice.wavetableLoadBeginIn;
         wavetableMipFrame -> voice.wavetableMipFrameIn;
+        serviceLoadAbort -> voice.serviceLoadAbortIn;
         mseg1Buffer -> voice.msegBufferIn;
         mseg1Playback -> voice.msegPlaybackIn;
         wavetablePosition -> voice.framePositionIn;
-        wavetableSelect -> voice.tableSelectIn;
+        wavetableSelect -> desiredTableMonitor.tableSelectIn;
         mseg1Depth -> voice.msegDepthIn;
         voice.wavetableUploadAckOut -> wavetableUploadAck;
         voice.wavetableMipRequestOut -> wavetableMipRequest;
+        voice.runtimeServiceStateOut -> runtimeStateCoordinator.runtimeServiceStateIn;
+        desiredTableMonitor.desiredTableChangeOut -> runtimeStateCoordinator.desiredTableChangeIn;
+        workerLoadFailure -> runtimeStateCoordinator.workerLoadFailureIn;
+        runtimeSyncRequest -> runtimeStateCoordinator.runtimeSyncRequestIn;
+        retryDesiredTableRequest -> runtimeStateCoordinator.retryDesiredTableRequestIn;
+        runtimeStateCoordinator.runtimeStateOut -> runtimeState;
         voice.effectiveWavetablePositionOut -> effectiveWavetablePosition;
         voice.out -> audioOut;
     }

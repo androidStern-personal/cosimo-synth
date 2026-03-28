@@ -11,6 +11,7 @@ namespace wt
 
     struct WavetableLoadBegin
     {
+        int32 dspSessionId;
         int32 generation;
         int32 tableIndex;
         int32 frameCount;
@@ -18,6 +19,7 @@ namespace wt
 
     struct WavetableMipFrame
     {
+        int32 dspSessionId;
         int32 generation;
         int32 tableIndex;
         int32 mipIndex;
@@ -27,6 +29,7 @@ namespace wt
 
     struct WavetableUploadAck
     {
+        int32 dspSessionId;
         int32 generation;
         int32 tableIndex;
         int32 mipIndex;
@@ -35,9 +38,32 @@ namespace wt
 
     struct WavetableMipRequest
     {
+        int32 dspSessionId;
         int32 generation;
         int32 tableIndex;
         int32 mipIndex;
+        int32 urgencyLevel;
+    }
+
+    struct ServiceLoadAbort
+    {
+        int32 dspSessionId;
+        int32 generation;
+        int32 tableIndex;
+        int32 failureReasonCode;
+    }
+
+    struct RuntimeServiceState
+    {
+        int32 dspSessionId;
+        int32 generationFrontier;
+        int32 serviceState;
+        int32 hasActive;
+        int32 activeTableIndex;
+        int32 activeGeneration;
+        int32 hasLoading;
+        int32 loadingTableIndex;
+        int32 loadingGeneration;
     }
 
     float32 catmullRom (float32 p0, float32 p1, float32 p2, float32 p3, float32 t)
@@ -136,10 +162,11 @@ namespace wt
         input event float32 frequencyIn [[ name: "Frequency", min: 0.0f, max: 24000.0f, init: 440.0f, unit: "Hz" ]];
         input event WavetableLoadBegin wavetableLoadBeginIn;
         input event WavetableMipFrame wavetableMipFrameIn;
+        input event ServiceLoadAbort serviceLoadAbortIn;
         input stream float32 framePositionIn [[ name: "Wavetable Position", min: 0.0f, max: 1.0f, init: 0.0f ]];
-        input stream float32 tableSelectIn [[ name: "Wavetable Select", min: 0.0f, max: 255.0f, init: 0.0f ]];
         output event WavetableUploadAck wavetableUploadAckOut;
         output event WavetableMipRequest wavetableMipRequestOut;
+        output event RuntimeServiceState runtimeServiceStateOut;
         output stream float out;
 
         std::oscillators::PhasorState phasor;
@@ -157,13 +184,17 @@ namespace wt
         int32[maxMipFrameSlots] readyFrameFlags;
         int32[mipLevelCount] loadedFrameCounts;
         int32[mipLevelCount] requestedGenerationByMip;
+        int32[mipLevelCount] requestedUrgencyByMip;
         float32 currentFrequencyHz = initialFrequencyHz;
+        int32 currentDspSessionId = int32 (processor.session);
         int32 currentGeneration = 0;
         int32 currentTableIndex = 0;
+        int32 generationFrontier = 0;
         int32 frameCount = 0;
         int32 lastFrameIndex = 0;
         float32 lastFrameIndexF = 0.0f;
         int32 isPlayable = 0;
+        bool hasEmittedInitialRuntimeState = false;
 
         void clearPendingTableState()
         {
@@ -174,6 +205,7 @@ namespace wt
             {
                 loadedFrameCounts.at (mipIndex) = 0;
                 requestedGenerationByMip.at (mipIndex) = 0;
+                requestedUrgencyByMip.at (mipIndex) = -1;
             }
 
             isPlayable = 0;
@@ -352,30 +384,50 @@ namespace wt
             return 0.0f;
         }
 
-        void emitMipRequest (int32 mipIndex)
+        void emitMipRequest (int32 mipIndex, int32 urgencyLevel)
         {
             if (currentGeneration <= 0 || frameCount <= 0 || mipIndex < 0 || mipIndex >= mipLevelCount)
                 return;
 
-            if (requestedGenerationByMip.at (mipIndex) == currentGeneration)
+            if (requestedGenerationByMip.at (mipIndex) == currentGeneration
+                && requestedUrgencyByMip.at (mipIndex) >= urgencyLevel)
                 return;
 
             WavetableMipRequest request;
+            request.dspSessionId = currentDspSessionId;
             request.generation = currentGeneration;
             request.tableIndex = currentTableIndex;
             request.mipIndex = mipIndex;
+            request.urgencyLevel = urgencyLevel;
             requestedGenerationByMip.at (mipIndex) = currentGeneration;
+            requestedUrgencyByMip.at (mipIndex) = urgencyLevel;
             wavetableMipRequestOut <- request;
         }
 
         void emitUploadAck (int32 generation, int32 tableIndex, int32 mipIndex, int32 frameIndex)
         {
             WavetableUploadAck ack;
+            ack.dspSessionId = currentDspSessionId;
             ack.generation = generation;
             ack.tableIndex = tableIndex;
             ack.mipIndex = mipIndex;
             ack.frameIndex = frameIndex;
             wavetableUploadAckOut <- ack;
+        }
+
+        void emitRuntimeServiceState()
+        {
+            RuntimeServiceState state;
+            state.dspSessionId = currentDspSessionId;
+            state.generationFrontier = generationFrontier;
+            state.serviceState = isPlayable != 0 ? 2 : (currentGeneration > 0 && frameCount > 0 ? 1 : 0);
+            state.hasActive = isPlayable != 0 ? 1 : 0;
+            state.activeTableIndex = isPlayable != 0 ? currentTableIndex : 0;
+            state.activeGeneration = isPlayable != 0 ? currentGeneration : 0;
+            state.hasLoading = isPlayable == 0 && currentGeneration > 0 && frameCount > 0 ? 1 : 0;
+            state.loadingTableIndex = state.hasLoading != 0 ? currentTableIndex : 0;
+            state.loadingGeneration = state.hasLoading != 0 ? currentGeneration : 0;
+            runtimeServiceStateOut <- state;
         }
 
         event frequencyIn (float32 newFrequency)
@@ -388,15 +440,21 @@ namespace wt
         {
             let resolvedFrameCount = resolveUploadedFrameCount (request.frameCount);
 
-            if (request.generation <= 0 || request.tableIndex < 0 || resolvedFrameCount == 0)
+            if (request.dspSessionId != currentDspSessionId
+                || request.generation <= 0
+                || request.generation < generationFrontier
+                || request.tableIndex < 0
+                || resolvedFrameCount == 0)
                 return;
 
             currentGeneration = request.generation;
             currentTableIndex = request.tableIndex;
+            generationFrontier = std::intrinsics::max (generationFrontier, request.generation);
             frameCount = resolvedFrameCount;
             lastFrameIndex = frameCount > 0 ? frameCount - 1 : 0;
             lastFrameIndexF = float32 (lastFrameIndex);
             clearPendingTableState();
+            emitRuntimeServiceState();
         }
 
         event wavetableMipFrameIn (WavetableMipFrame newFrame)
@@ -406,7 +464,9 @@ namespace wt
             if (resolvedMipIndex < 0 || frameCount <= 0)
                 return;
 
-            if (newFrame.generation != currentGeneration || newFrame.tableIndex != currentTableIndex)
+            if (newFrame.dspSessionId != currentDspSessionId
+                || newFrame.generation != currentGeneration
+                || newFrame.tableIndex != currentTableIndex)
                 return;
 
             if (newFrame.frameIndex < 0 || newFrame.frameIndex >= frameCount)
@@ -437,19 +497,44 @@ namespace wt
             );
         }
 
+        event serviceLoadAbortIn (ServiceLoadAbort abort)
+        {
+            if (abort.dspSessionId != currentDspSessionId
+                || abort.generation != currentGeneration
+                || abort.tableIndex != currentTableIndex
+                || isPlayable != 0)
+                return;
+
+            currentGeneration = 0;
+            currentTableIndex = 0;
+            frameCount = 0;
+            lastFrameIndex = 0;
+            lastFrameIndexF = 0.0f;
+            clearPendingTableState();
+            emitRuntimeServiceState();
+        }
+
         void main()
         {
             phasor.phase = std::intrinsics::wrap (initialPhase, 1.0f);
             currentFrequencyHz = currentFrequencyHz < 0.0f ? 0.0f : currentFrequencyHz;
             phasor.setFrequency (processor.frequency, currentFrequencyHz);
-
             loop
             {
+                if (! hasEmittedInitialRuntimeState)
+                {
+                    emitRuntimeServiceState();
+                    hasEmittedInitialRuntimeState = true;
+                }
+
                 let currentPhaseIncrement = currentFrequencyHz / float32 (processor.frequency);
                 let requestedMipIndex = selectMipIndexFromPhaseIncrement (currentPhaseIncrement);
-                emitMipRequest (requestedMipIndex);
-
                 let playableMipIndex = findPlayableMipIndex (requestedMipIndex);
+                if (! isMipReady (requestedMipIndex))
+                {
+                    let requestUrgency = playableMipIndex < 0 ? 2 : (playableMipIndex < requestedMipIndex ? 1 : 0);
+                    emitMipRequest (requestedMipIndex, requestUrgency);
+                }
 
                 if (playableMipIndex < 0)
                 {
@@ -462,6 +547,7 @@ namespace wt
                     {
                         phasor.phase = 0.0f;
                         isPlayable = 1;
+                        emitRuntimeServiceState();
                     }
 
                     let phase = phasor.next();
