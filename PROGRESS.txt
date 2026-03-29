@@ -1,3 +1,21 @@
+Path 1 polyphony refactor started on 2026-03-29
+- Active task: replace the current voice-owned wavetable bank with one shared-bank owning processor while keeping the current JavaScript patch view, JavaScript wavetable worker, and graph-level Cmajor voice allocation.
+- Working plan: `TRANSIENT_PATH1_POLYPHONY_IMPLEMENTATION_PLAN.md`.
+- First implementation step: add focused proof tests for shared-bank polyphony and note-release independence before rewiring the shipping patch.
+- Landed in this pass:
+  - Added `wt::SharedVoiceEngine` to `cmajor/FixedFrameOscillator.cmajor`. It owns one mutable wavetable bank, one runtime wavetable service state machine, and per-voice phasor, envelope, MSEG, generation, and display-selection state.
+  - Rewired `cmajor/WavetableSynth.cmajor` so the shipping patch now does `midiIn -> std::midi::MPEConverter -> std::voices::VoiceAllocator(16) -> wt::SharedVoiceEngine(16)` and then trims/stereos the shared-owner mono output.
+  - Kept the existing runtime worker endpoint names and payload shapes, so `patch_gui/wavetable-worker.mjs`, `patch_gui/index.js`, and the iPhone generated-plugin checks stayed stable.
+  - Added `tests/test_shared_voice_engine_probe.py` with two proof tests: one shared-bank render equals the sum of two independent voices, and releasing one voice does not cut off the other.
+- What was verified for the Path 1 landing:
+  - `cmaj generate --target=javascript --output=/tmp/cosimo_poly_runtime.cjs WavetableSynth.cmajorpatch`
+  - `uv run pytest -q tests/test_runtime_state_coordinator.py -q`
+  - `uv run pytest -q tests/test_shared_voice_engine_probe.py -q`
+  - `node --test tests/test_wavetable_worker.mjs tests/test_wavetable_display.mjs tests/test_patch_view_layout.mjs`
+  - `uv run pytest -q tests/test_runtime_wavetable_mip_probe.py tests/test_mseg_cmajor_probe.py -q`
+  - `uv run pytest -q tests/test_wavetable_worker_runtime.py tests/test_fixed_frame_probe.py tests/test_runtime_state_coordinator.py tests/test_shared_voice_engine_probe.py -q`
+  - `uv run pytest -q tests/test_ios_auv3_build.py -q -k 'not ios_host_smoke'`
+
 Current wavetable-loading source of truth
 - The reviewed plan for restoring mip-selected playback while keeping the source WAVs as separate bundled files lives in `SERUM_WAVETABLE_BUNDLING_PLAN.md`.
 
@@ -26,13 +44,21 @@ What is fixed in the latest wavetable-loader pass
 - The worker watchdog timeout was raised from `8000 ms` to `20000 ms` to reduce false transfer timeouts while debugging large imported Serum tables.
 
 Current iPhone build status
-- The current installable app bundle is `/Users/winterfell/src/cosimo-synth/build/ios_device_run/CosimoSynth_artefacts/Debug/Standalone/Cosimo Synth.app`.
+- The current installable app bundle in this worktree is `build/ios_device_run/CosimoSynth_artefacts/Debug/Standalone/Cosimo Synth.app`.
 - The current app bundle contains the expected runtime assets:
   - `Cosimo Synth.app/assets/factory-bank-catalog.json`
   - `Cosimo Synth.app/assets/factory_sources/`
-- A fresh signed build was rebuilt from `build/ios_device_run/CosimoSynthAUv3.xcodeproj`, installed onto the physical iPhone, and launched successfully.
-- The current installed app bundle path on device is `/private/var/containers/Bundle/Application/39080308-230F-4188-B16B-A157FE196D08/Cosimo Synth.app/`.
-- The current running phone process after launch was `Cosimo Synth` with PID `2189`.
+- A fresh signed build was rebuilt from `build/ios_device_run/CosimoSynthAUv3.xcodeproj`, installed onto the physical iPhone, and launched successfully on 2026-03-29.
+- The generated Xcode project in this worktree did not set `DEVELOPMENT_TEAM`. The device build only succeeded after adding the command-line overrides `DEVELOPMENT_TEAM=JUFVT28775 CODE_SIGN_STYLE=Automatic CODE_SIGN_IDENTITY='Apple Development' -allowProvisioningUpdates`.
+- The exact successful device build command was:
+  - `xcodebuild -project build/ios_device_run/CosimoSynthAUv3.xcodeproj -scheme CosimoSynth_Standalone -configuration Debug -destination id=00008120-000139383644C01E DEVELOPMENT_TEAM=JUFVT28775 CODE_SIGN_STYLE=Automatic CODE_SIGN_IDENTITY='Apple Development' -allowProvisioningUpdates build`
+- The paired phone currently uses two different identifiers in Apple tooling:
+  - `xcodebuild` destination id: `00008120-000139383644C01E`
+  - `devicectl` device id: `00C7F433-8B6A-5CAC-856F-56D7385E12F9`
+- The exact successful install and launch commands were:
+  - `xcrun devicectl device install app --device 00C7F433-8B6A-5CAC-856F-56D7385E12F9 'build/ios_device_run/CosimoSynth_artefacts/Debug/Standalone/Cosimo Synth.app'`
+  - `xcrun devicectl device process launch --device 00C7F433-8B6A-5CAC-856F-56D7385E12F9 dev.cosimo.wavetable-synth`
+- The current installed app bundle path on device is `/private/var/containers/Bundle/Application/E0A3AFCB-497B-4DF4-AC85-7713ABFBB39B/Cosimo Synth.app/`.
 
 What happens next
 - Exercise wavetable switching on the physical iPhone again and inspect the new explicit failure banner plus the new `[wavetable-worker]` and `[wavetable-view]` console logs if failures still occur.

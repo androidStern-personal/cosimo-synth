@@ -571,4 +571,571 @@ namespace wt
             }
         }
     }
+
+    processor SharedVoiceEngine (int voiceCount,
+                                 float32 previewFrequencyHz = 440.0f)
+    {
+        input event (std::notes::NoteOn,
+                     std::notes::NoteOff,
+                     std::notes::PitchBend,
+                     std::notes::Slide,
+                     std::notes::Pressure,
+                     std::notes::Control) voiceEventIn[voiceCount];
+        input event WavetableLoadBegin wavetableLoadBeginIn;
+        input event WavetableMipFrame wavetableMipFrameIn;
+        input event ServiceLoadAbort serviceLoadAbortIn;
+        input event float32[msegPaddedSamples] msegBufferIn;
+        input event wt::MsegPlaybackConfig msegPlaybackIn;
+        input value float32 framePositionIn [[ name: "Wavetable Position", min: 0.0f, max: 1.0f, init: 0.0f ]];
+        input value float32 msegDepthIn [[ name: "MSEG 1 Depth", min: -1.0f, max: 1.0f, init: 1.0f ]];
+        output event WavetableUploadAck wavetableUploadAckOut;
+        output event WavetableMipRequest wavetableMipRequestOut;
+        output event RuntimeServiceState runtimeServiceStateOut;
+        output event wt::EffectiveWavetablePositionMonitor effectiveWavetablePositionOut;
+        output stream float32 out;
+
+        node envelopes = std::envelopes::FixedASR (0.01f, 0.20f)[voiceCount];
+        node msegs = wt::MsegReader[voiceCount];
+
+        std::oscillators::PhasorState[voiceCount] phasors;
+        float32[voiceCount] voiceFrequencyHz;
+        int32[voiceCount] voiceActive;
+        int32[voiceCount] voiceGeneration;
+        float32[voiceCount] voiceEffectivePosition;
+
+        float32[maxMipSampleCount] mip0Samples;
+        float32[maxMipSampleCount] mip1Samples;
+        float32[maxMipSampleCount] mip2Samples;
+        float32[maxMipSampleCount] mip3Samples;
+        float32[maxMipSampleCount] mip4Samples;
+        float32[maxMipSampleCount] mip5Samples;
+        float32[maxMipSampleCount] mip6Samples;
+        float32[maxMipSampleCount] mip7Samples;
+        float32[maxMipSampleCount] mip8Samples;
+        float32[maxMipSampleCount] mip9Samples;
+        float32[maxMipSampleCount] mip10Samples;
+        int32[maxMipFrameSlots] readyFrameFlags;
+        int32[mipLevelCount] loadedFrameCounts;
+        int32[mipLevelCount] requestedGenerationByMip;
+        int32[mipLevelCount] requestedUrgencyByMip;
+
+        int32 currentDspSessionId = int32 (processor.session);
+        int32 currentGeneration = 0;
+        int32 currentTableIndex = 0;
+        int32 generationFrontier = 0;
+        int32 frameCount = 0;
+        int32 lastFrameIndex = 0;
+        float32 lastFrameIndexF = 0.0f;
+        int32 isPlayable = 0;
+        bool hasEmittedInitialRuntimeState = false;
+
+        int32 nextVoiceGeneration = 1;
+        int32 monitorUpdateIntervalFrames = 1;
+        int32 framesUntilNextMonitorUpdate = 0;
+        float32 previewFrequencyHzState = previewFrequencyHz;
+
+        void clearPendingTableState()
+        {
+            for (int32 index = 0; index < maxMipFrameSlots; ++index)
+                readyFrameFlags.at (index) = 0;
+
+            for (int32 mipIndex = 0; mipIndex < mipLevelCount; ++mipIndex)
+            {
+                loadedFrameCounts.at (mipIndex) = 0;
+                requestedGenerationByMip.at (mipIndex) = 0;
+                requestedUrgencyByMip.at (mipIndex) = -1;
+            }
+
+            isPlayable = 0;
+        }
+
+        bool isMipReady (int32 mipIndex)
+        {
+            if (mipIndex < 0 || mipIndex >= mipLevelCount || frameCount <= 0)
+                return false;
+
+            return loadedFrameCounts.at (mipIndex) >= frameCount;
+        }
+
+        int32 findPlayableMipIndex (int32 requestedMipIndex)
+        {
+            let resolvedRequestedMip = resolveMipIndex (requestedMipIndex);
+
+            if (resolvedRequestedMip < 0)
+                return -1;
+
+            for (int32 mipIndex = resolvedRequestedMip; mipIndex >= 0; --mipIndex)
+                if (isMipReady (mipIndex))
+                    return mipIndex;
+
+            return -1;
+        }
+
+        void writeMipFrame (int32 mipIndex, int32 frameIndex, const float32[] sourceSamples)
+        {
+            let base = frameBase (frameIndex);
+
+            if (mipIndex == 0)
+            {
+                mip0Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
+                for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
+                    mip0Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
+                mip0Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
+                mip0Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
+                return;
+            }
+
+            if (mipIndex == 1)
+            {
+                mip1Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
+                for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
+                    mip1Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
+                mip1Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
+                mip1Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
+                return;
+            }
+
+            if (mipIndex == 2)
+            {
+                mip2Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
+                for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
+                    mip2Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
+                mip2Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
+                mip2Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
+                return;
+            }
+
+            if (mipIndex == 3)
+            {
+                mip3Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
+                for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
+                    mip3Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
+                mip3Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
+                mip3Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
+                return;
+            }
+
+            if (mipIndex == 4)
+            {
+                mip4Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
+                for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
+                    mip4Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
+                mip4Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
+                mip4Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
+                return;
+            }
+
+            if (mipIndex == 5)
+            {
+                mip5Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
+                for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
+                    mip5Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
+                mip5Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
+                mip5Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
+                return;
+            }
+
+            if (mipIndex == 6)
+            {
+                mip6Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
+                for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
+                    mip6Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
+                mip6Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
+                mip6Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
+                return;
+            }
+
+            if (mipIndex == 7)
+            {
+                mip7Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
+                for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
+                    mip7Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
+                mip7Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
+                mip7Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
+                return;
+            }
+
+            if (mipIndex == 8)
+            {
+                mip8Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
+                for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
+                    mip8Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
+                mip8Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
+                mip8Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
+                return;
+            }
+
+            if (mipIndex == 9)
+            {
+                mip9Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
+                for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
+                    mip9Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
+                mip9Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
+                mip9Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
+                return;
+            }
+
+            if (mipIndex == 10)
+            {
+                mip10Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
+                for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
+                    mip10Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
+                mip10Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
+                mip10Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
+                return;
+            }
+        }
+
+        float32 readFixedFrameSampleForMip (int32 mipIndex, int32 frameIndex, float32 phase)
+        {
+            if (mipIndex == 0) return readFixedFrameSample (mip0Samples, frameIndex, phase);
+            if (mipIndex == 1) return readFixedFrameSample (mip1Samples, frameIndex, phase);
+            if (mipIndex == 2) return readFixedFrameSample (mip2Samples, frameIndex, phase);
+            if (mipIndex == 3) return readFixedFrameSample (mip3Samples, frameIndex, phase);
+            if (mipIndex == 4) return readFixedFrameSample (mip4Samples, frameIndex, phase);
+            if (mipIndex == 5) return readFixedFrameSample (mip5Samples, frameIndex, phase);
+            if (mipIndex == 6) return readFixedFrameSample (mip6Samples, frameIndex, phase);
+            if (mipIndex == 7) return readFixedFrameSample (mip7Samples, frameIndex, phase);
+            if (mipIndex == 8) return readFixedFrameSample (mip8Samples, frameIndex, phase);
+            if (mipIndex == 9) return readFixedFrameSample (mip9Samples, frameIndex, phase);
+            if (mipIndex == 10) return readFixedFrameSample (mip10Samples, frameIndex, phase);
+            return 0.0f;
+        }
+
+        float32 readFrameBlendSampleForMip (int32 mipIndex,
+                                            int32 frameLo,
+                                            int32 frameHi,
+                                            float32 phase,
+                                            float32 frameT)
+        {
+            if (mipIndex == 0) return readFrameBlendSample (mip0Samples, frameLo, frameHi, phase, frameT);
+            if (mipIndex == 1) return readFrameBlendSample (mip1Samples, frameLo, frameHi, phase, frameT);
+            if (mipIndex == 2) return readFrameBlendSample (mip2Samples, frameLo, frameHi, phase, frameT);
+            if (mipIndex == 3) return readFrameBlendSample (mip3Samples, frameLo, frameHi, phase, frameT);
+            if (mipIndex == 4) return readFrameBlendSample (mip4Samples, frameLo, frameHi, phase, frameT);
+            if (mipIndex == 5) return readFrameBlendSample (mip5Samples, frameLo, frameHi, phase, frameT);
+            if (mipIndex == 6) return readFrameBlendSample (mip6Samples, frameLo, frameHi, phase, frameT);
+            if (mipIndex == 7) return readFrameBlendSample (mip7Samples, frameLo, frameHi, phase, frameT);
+            if (mipIndex == 8) return readFrameBlendSample (mip8Samples, frameLo, frameHi, phase, frameT);
+            if (mipIndex == 9) return readFrameBlendSample (mip9Samples, frameLo, frameHi, phase, frameT);
+            if (mipIndex == 10) return readFrameBlendSample (mip10Samples, frameLo, frameHi, phase, frameT);
+            return 0.0f;
+        }
+
+        void emitMipRequest (int32 mipIndex, int32 urgencyLevel)
+        {
+            if (currentGeneration <= 0 || frameCount <= 0 || mipIndex < 0 || mipIndex >= mipLevelCount)
+                return;
+
+            if (requestedGenerationByMip.at (mipIndex) == currentGeneration
+                && requestedUrgencyByMip.at (mipIndex) >= urgencyLevel)
+                return;
+
+            WavetableMipRequest request;
+            request.dspSessionId = currentDspSessionId;
+            request.generation = currentGeneration;
+            request.tableIndex = currentTableIndex;
+            request.mipIndex = mipIndex;
+            request.urgencyLevel = urgencyLevel;
+            requestedGenerationByMip.at (mipIndex) = currentGeneration;
+            requestedUrgencyByMip.at (mipIndex) = urgencyLevel;
+            wavetableMipRequestOut <- request;
+        }
+
+        void emitUploadAck (int32 generation, int32 tableIndex, int32 mipIndex, int32 frameIndex)
+        {
+            WavetableUploadAck ack;
+            ack.dspSessionId = currentDspSessionId;
+            ack.generation = generation;
+            ack.tableIndex = tableIndex;
+            ack.mipIndex = mipIndex;
+            ack.frameIndex = frameIndex;
+            wavetableUploadAckOut <- ack;
+        }
+
+        void emitRuntimeServiceState()
+        {
+            RuntimeServiceState state;
+            state.dspSessionId = currentDspSessionId;
+            state.generationFrontier = generationFrontier;
+            state.serviceState = isPlayable != 0 ? 2 : (currentGeneration > 0 && frameCount > 0 ? 1 : 0);
+            state.hasActive = isPlayable != 0 ? 1 : 0;
+            state.activeTableIndex = isPlayable != 0 ? currentTableIndex : 0;
+            state.activeGeneration = isPlayable != 0 ? currentGeneration : 0;
+            state.hasLoading = isPlayable == 0 && currentGeneration > 0 && frameCount > 0 ? 1 : 0;
+            state.loadingTableIndex = state.hasLoading != 0 ? currentTableIndex : 0;
+            state.loadingGeneration = state.hasLoading != 0 ? currentGeneration : 0;
+            runtimeServiceStateOut <- state;
+        }
+
+        int32 findNewestVisibleGeneration()
+        {
+            int32 newestGeneration = 0;
+
+            for (wrap<voiceCount> voice)
+                newestGeneration = std::intrinsics::max (newestGeneration, voiceGeneration.at (voice));
+
+            return newestGeneration;
+        }
+
+        int32 findNewestActiveVoiceIndex()
+        {
+            int32 newestGeneration = -1;
+            int32 newestVoiceIndex = -1;
+
+            for (wrap<voiceCount> voice)
+            {
+                if (voiceActive.at (voice) != 0 && voiceGeneration.at (voice) >= newestGeneration)
+                {
+                    newestGeneration = voiceGeneration.at (voice);
+                    newestVoiceIndex = int32 (voice);
+                }
+            }
+
+            return newestVoiceIndex;
+        }
+
+        void emitEffectiveWavetablePositionMonitor()
+        {
+            wt::EffectiveWavetablePositionMonitor monitor;
+            let newestVoiceIndex = findNewestActiveVoiceIndex();
+
+            if (newestVoiceIndex >= 0)
+            {
+                monitor.voiceGeneration = voiceGeneration.at (newestVoiceIndex);
+                monitor.position = std::intrinsics::clamp (voiceEffectivePosition.at (newestVoiceIndex), 0.0f, 1.0f);
+            }
+            else
+            {
+                monitor.voiceGeneration = findNewestVisibleGeneration();
+                monitor.position = std::intrinsics::clamp (framePositionIn, 0.0f, 1.0f);
+            }
+
+            effectiveWavetablePositionOut <- monitor;
+        }
+
+        void maybeEmitMonitorUpdate()
+        {
+            if (framesUntilNextMonitorUpdate <= 0)
+            {
+                emitEffectiveWavetablePositionMonitor();
+                framesUntilNextMonitorUpdate = monitorUpdateIntervalFrames - 1;
+            }
+            else
+            {
+                framesUntilNextMonitorUpdate -= 1;
+            }
+        }
+
+        void maybeTransitionServiceToPlayable()
+        {
+            let previewPhaseIncrement = previewFrequencyHzState / float32 (processor.frequency);
+            let previewRequestedMip = selectMipIndexFromPhaseIncrement (previewPhaseIncrement);
+            let previewPlayableMip = findPlayableMipIndex (previewRequestedMip);
+
+            if (! isMipReady (previewRequestedMip))
+                emitMipRequest (previewRequestedMip, previewPlayableMip < 0 ? 2 : (previewPlayableMip < previewRequestedMip ? 1 : 0));
+
+            if (previewPlayableMip >= 0 && isPlayable == 0)
+            {
+                for (wrap<voiceCount> voice)
+                    phasors.at (voice).phase = 0.0f;
+
+                isPlayable = 1;
+                emitRuntimeServiceState();
+            }
+        }
+
+        event voiceEventIn (int index, std::notes::NoteOn note)
+        {
+            let voice = wrap<voiceCount> (index);
+            let frequencyHz = std::notes::noteToFrequency (note.pitch);
+
+            voiceFrequencyHz.at (voice) = frequencyHz;
+            phasors.at (voice).setFrequency (processor.frequency, frequencyHz);
+            voiceActive.at (voice) = 1;
+            voiceGeneration.at (voice) = nextVoiceGeneration;
+            nextVoiceGeneration += 1;
+
+            envelopes[voice].eventIn <- note;
+            msegs[voice].triggerIn <- 1;
+        }
+
+        event voiceEventIn (int index, std::notes::NoteOff note)
+        {
+            let voice = wrap<voiceCount> (index);
+            voiceActive.at (voice) = 0;
+            envelopes[voice].eventIn <- note;
+            msegs[voice].noteOffIn <- 1;
+        }
+
+        event voiceEventIn (int index, std::notes::PitchBend bend) {}
+        event voiceEventIn (int index, std::notes::Slide slide) {}
+        event voiceEventIn (int index, std::notes::Pressure pressure) {}
+        event voiceEventIn (int index, std::notes::Control control) {}
+
+        event msegBufferIn (float32[msegPaddedSamples] buffer)
+        {
+            for (wrap<voiceCount> voice)
+                msegs[voice].bufferUpload <- buffer;
+        }
+
+        event msegPlaybackIn (wt::MsegPlaybackConfig config)
+        {
+            for (wrap<voiceCount> voice)
+                msegs[voice].playbackUpload <- config;
+        }
+
+        event wavetableLoadBeginIn (WavetableLoadBegin request)
+        {
+            let resolvedFrameCount = resolveUploadedFrameCount (request.frameCount);
+
+            if (request.dspSessionId != currentDspSessionId
+                || request.generation <= 0
+                || request.generation < generationFrontier
+                || request.tableIndex < 0
+                || resolvedFrameCount == 0)
+                return;
+
+            currentGeneration = request.generation;
+            currentTableIndex = request.tableIndex;
+            generationFrontier = std::intrinsics::max (generationFrontier, request.generation);
+            frameCount = resolvedFrameCount;
+            lastFrameIndex = frameCount > 0 ? frameCount - 1 : 0;
+            lastFrameIndexF = float32 (lastFrameIndex);
+            clearPendingTableState();
+            emitRuntimeServiceState();
+        }
+
+        event wavetableMipFrameIn (WavetableMipFrame newFrame)
+        {
+            let resolvedMipIndex = resolveMipIndex (newFrame.mipIndex);
+
+            if (resolvedMipIndex < 0 || frameCount <= 0)
+                return;
+
+            if (newFrame.dspSessionId != currentDspSessionId
+                || newFrame.generation != currentGeneration
+                || newFrame.tableIndex != currentTableIndex)
+                return;
+
+            if (newFrame.frameIndex < 0 || newFrame.frameIndex >= frameCount)
+                return;
+
+            let readyIndex = readinessIndex (resolvedMipIndex, newFrame.frameIndex);
+
+            if (readyFrameFlags.at (readyIndex) != 0)
+            {
+                emitUploadAck (
+                    newFrame.generation,
+                    newFrame.tableIndex,
+                    resolvedMipIndex,
+                    newFrame.frameIndex
+                );
+                return;
+            }
+
+            writeMipFrame (resolvedMipIndex, newFrame.frameIndex, newFrame.samples);
+            readyFrameFlags.at (readyIndex) = 1;
+            loadedFrameCounts.at (resolvedMipIndex) += 1;
+
+            emitUploadAck (
+                newFrame.generation,
+                newFrame.tableIndex,
+                resolvedMipIndex,
+                newFrame.frameIndex
+            );
+        }
+
+        event serviceLoadAbortIn (ServiceLoadAbort abort)
+        {
+            if (abort.dspSessionId != currentDspSessionId
+                || abort.generation != currentGeneration
+                || abort.tableIndex != currentTableIndex
+                || isPlayable != 0)
+                return;
+
+            currentGeneration = 0;
+            currentTableIndex = 0;
+            frameCount = 0;
+            lastFrameIndex = 0;
+            lastFrameIndexF = 0.0f;
+            clearPendingTableState();
+            emitRuntimeServiceState();
+        }
+
+        void main()
+        {
+            previewFrequencyHzState = previewFrequencyHzState < 0.0f ? 0.0f : previewFrequencyHzState;
+
+            let requestedInterval = int32 (
+                std::intrinsics::floor ((processor.frequency / wt::effectiveWavetablePositionMonitorHz) + 0.5f)
+            );
+            monitorUpdateIntervalFrames = std::intrinsics::max (1, requestedInterval);
+            framesUntilNextMonitorUpdate = 0;
+
+            loop
+            {
+                if (! hasEmittedInitialRuntimeState)
+                {
+                    emitRuntimeServiceState();
+                    hasEmittedInitialRuntimeState = true;
+                }
+
+                maybeTransitionServiceToPlayable();
+
+                float32 mix = 0.0f;
+
+                for (wrap<voiceCount> voice)
+                {
+                    msegs[voice].advance();
+                    envelopes[voice].advance();
+
+                    let envelopeGain = envelopes[voice].gainOut;
+                    let modulation = msegs[voice].out;
+                    let effectivePosition = std::intrinsics::clamp (
+                        framePositionIn + (modulation * msegDepthIn),
+                        0.0f,
+                        1.0f
+                    );
+                    voiceEffectivePosition.at (voice) = effectivePosition;
+
+                    if (envelopeGain <= 0.0f || voiceFrequencyHz.at (voice) <= 0.0f)
+                        continue;
+
+                    let currentPhaseIncrement = voiceFrequencyHz.at (voice) / float32 (processor.frequency);
+                    let requestedMipIndex = selectMipIndexFromPhaseIncrement (currentPhaseIncrement);
+                    let playableMipIndex = findPlayableMipIndex (requestedMipIndex);
+
+                    if (! isMipReady (requestedMipIndex))
+                    {
+                        let requestUrgency = playableMipIndex < 0 ? 2 : (playableMipIndex < requestedMipIndex ? 1 : 0);
+                        emitMipRequest (requestedMipIndex, requestUrgency);
+                    }
+
+                    if (playableMipIndex < 0)
+                        continue;
+
+                    let phase = phasors.at (voice).next();
+
+                    if (frameCount <= 1)
+                    {
+                        mix += readFixedFrameSampleForMip (playableMipIndex, 0, phase) * envelopeGain;
+                    }
+                    else
+                    {
+                        let frameIndex = effectivePosition * lastFrameIndexF;
+                        let frameLo = int32 (std::intrinsics::floor (frameIndex));
+                        let frameHi = std::intrinsics::min (frameLo + 1, lastFrameIndex);
+                        let frameT = frameIndex - float32 (frameLo);
+                        mix += readFrameBlendSampleForMip (playableMipIndex, frameLo, frameHi, phase, frameT) * envelopeGain;
+                    }
+                }
+
+                out <- mix;
+                maybeEmitMonitorUpdate();
+                advance();
+            }
+        }
+    }
 }

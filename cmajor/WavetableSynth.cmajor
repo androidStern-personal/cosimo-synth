@@ -325,32 +325,40 @@ graph WavetableSynth [[ main ]]
     output event wt::EffectiveWavetablePositionMonitor effectiveWavetablePosition;
     output stream float32<2> audioOut;
 
+    let voiceCount = 16;
+
     node mpe   = std::midi::MPEConverter;
-    node voice = wt::Voice;
+    node voiceAllocator = std::voices::VoiceAllocator (voiceCount);
+    node sharedEngine = wt::SharedVoiceEngine (voiceCount);
+    node trim = std::levels::ConstantGain (float32, 0.18f);
+    node stereo = std::mixers::MonoToStereo (float32);
     node desiredTableMonitor = wt::DesiredTableMonitor;
     node runtimeStateCoordinator = wt::RuntimeStateCoordinator;
 
     connection
     {
         midiIn -> mpe.parseMIDI;
-        mpe.eventOut -> voice.eventIn;
-        wavetableLoadBegin -> voice.wavetableLoadBeginIn;
-        wavetableMipFrame -> voice.wavetableMipFrameIn;
-        serviceLoadAbort -> voice.serviceLoadAbortIn;
-        mseg1Buffer -> voice.msegBufferIn;
-        mseg1Playback -> voice.msegPlaybackIn;
-        wavetablePosition -> voice.framePositionIn;
+        mpe.eventOut -> voiceAllocator.eventIn;
+        voiceAllocator.voiceEventOut -> sharedEngine.voiceEventIn;
+        wavetableLoadBegin -> sharedEngine.wavetableLoadBeginIn;
+        wavetableMipFrame -> sharedEngine.wavetableMipFrameIn;
+        serviceLoadAbort -> sharedEngine.serviceLoadAbortIn;
+        mseg1Buffer -> sharedEngine.msegBufferIn;
+        mseg1Playback -> sharedEngine.msegPlaybackIn;
+        wavetablePosition -> sharedEngine.framePositionIn;
         wavetableSelect -> desiredTableMonitor.tableSelectIn;
-        mseg1Depth -> voice.msegDepthIn;
-        voice.wavetableUploadAckOut -> wavetableUploadAck;
-        voice.wavetableMipRequestOut -> wavetableMipRequest;
-        voice.runtimeServiceStateOut -> runtimeStateCoordinator.runtimeServiceStateIn;
+        mseg1Depth -> sharedEngine.msegDepthIn;
+        sharedEngine.wavetableUploadAckOut -> wavetableUploadAck;
+        sharedEngine.wavetableMipRequestOut -> wavetableMipRequest;
+        sharedEngine.runtimeServiceStateOut -> runtimeStateCoordinator.runtimeServiceStateIn;
         desiredTableMonitor.desiredTableChangeOut -> runtimeStateCoordinator.desiredTableChangeIn;
         workerLoadFailure -> runtimeStateCoordinator.workerLoadFailureIn;
         runtimeSyncRequest -> runtimeStateCoordinator.runtimeSyncRequestIn;
         retryDesiredTableRequest -> runtimeStateCoordinator.retryDesiredTableRequestIn;
         runtimeStateCoordinator.runtimeStateOut -> runtimeState;
-        voice.effectiveWavetablePositionOut -> effectiveWavetablePosition;
-        voice.out -> audioOut;
+        sharedEngine.effectiveWavetablePositionOut -> effectiveWavetablePosition;
+        sharedEngine.out -> trim.in;
+        trim.out -> stereo.in;
+        stereo.out -> audioOut;
     }
 }
