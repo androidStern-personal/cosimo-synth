@@ -42,7 +42,7 @@ function isAbsoluteURL(value) {
     return /^[a-zA-Z][a-zA-Z\d+.-]*:/.test(value);
 }
 
-function resolvePatchResourceUrl(path, patchConnection) {
+export function resolvePatchResourceUrl(path, patchConnection) {
     const patchRootUrl = new URL("../", import.meta.url);
     const resourceAddress = patchConnection?.getResourceAddress?.(path);
 

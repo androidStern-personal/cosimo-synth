@@ -163,6 +163,8 @@ test("iOS patch view pins the keyboard footer and removes the separate hero and 
     assert.match(source, /class="wavetable-display-stack"/);
     assert.match(source, /class="bank-picker-trigger"/);
     assert.match(source, /class="table-select table-select-overlay"/);
+    assert.match(source, /data-role="display-status"/);
+    assert.match(source, /data-role="table-error-banner"/);
     assert.match(source, /Swipe \+ Drag/);
     assert.doesNotMatch(source, /<span class="position-label">Table<\/span>/);
     assert.doesNotMatch(source, /class="wavetable-meta"/);
@@ -173,6 +175,9 @@ test("iOS patch view pins the keyboard footer and removes the separate hero and 
     assert.match(source, /\.mseg-editor-shell\s*\{[\s\S]*border-radius:\s*0;/);
     assert.match(source, /\.mseg-editor-shell\s*\{[\s\S]*border:\s*0;/);
     assert.match(source, /\.mseg-editor-shell\s*\{[\s\S]*background:\s*transparent;/);
+    assert.match(source, /class="mseg-rate-slider"/);
+    assert.match(source, /data-role="mseg-rate-readout"/);
+    assert.match(source, /class="mseg-loop-toggle"/);
     assert.doesNotMatch(source, /class="hero"/);
     assert.doesNotMatch(source, /class="scan-panel"/);
     assert.doesNotMatch(source, /class="scan-slider"/);

@@ -5,13 +5,16 @@ import {
     MSEG_BODY_SAMPLES,
     MSEG_CURVE_POWER_LIMIT,
     MSEG_PADDED_SAMPLES,
+    clampMsegRateSeconds,
     createDefaultMsegPlayback,
     createDefaultMsegShape,
     evaluateMsegShape,
     findMsegPointHitIndex,
+    normalizeMsegPlayback,
     normalizeMsegShape,
     renderMsegShape,
     sampleRenderedMsegBuffer,
+    toMsegPlaybackConfigEvent,
 } from "../patch_gui/mseg.mjs";
 
 function expectThrows(message, callback) {
@@ -33,10 +36,66 @@ test("default_shape_has_two_endpoints_and_default_playback", () => {
     assert.equal(shape.points.length, 2);
     assert.deepEqual(shape.points[0], { x: 0.0, y: 0.0, curvePower: 0.0 });
     assert.deepEqual(shape.points[1], { x: 1.0, y: 1.0, curvePower: 0.0 });
+    assert.deepEqual(playback, {
+        format: "cosimo.mseg.playback",
+        version: 1,
+        rate: { kind: "seconds", seconds: 1.0 },
+        loop: { startX: 0.0, endX: 1.0 },
+        noteOffPolicy: "finish_loop",
+        legatoRestarts: false,
+        holdFinalValue: true,
+    });
+});
+
+test("seconds_rate_clamps_to_the_phase_6b_supported_range", () => {
+    assert.equal(clampMsegRateSeconds(0.0), 0.05);
+    assert.equal(clampMsegRateSeconds(99.0), 8.0);
+});
+
+test("playback_normalization_swaps_reversed_loops_and_disables_zero_width_loops", () => {
+    const swapped = normalizeMsegPlayback({
+        ...createDefaultMsegPlayback(),
+        loop: { startX: 0.8, endX: 0.2 },
+    });
+    const disabled = normalizeMsegPlayback({
+        ...createDefaultMsegPlayback(),
+        loop: { startX: 0.5, endX: 0.5 },
+    });
+
+    assert.deepEqual(swapped.loop, { startX: 0.2, endX: 0.8 });
+    assert.equal(disabled.loop, null);
+});
+
+test("playback_normalization_disables_zero_width_loops_and_preserves_seconds_rate", () => {
+    const playback = normalizeMsegPlayback({
+        ...createDefaultMsegPlayback(),
+        rate: { kind: "seconds", seconds: 0.375 },
+        loop: { startX: 0.6, endX: 0.6 },
+    });
+
     assert.equal(playback.rate.kind, "seconds");
-    assert.equal(playback.rate.seconds, 1.0);
+    assert.equal(playback.rate.seconds, 0.375);
     assert.equal(playback.loop, null);
-    assert.equal(playback.holdFinalValue, true);
+});
+
+test("playback_config_event_uses_the_flat_seconds_loop_payload", () => {
+    assert.deepEqual(
+        toMsegPlaybackConfigEvent({
+            ...createDefaultMsegPlayback(),
+            rate: { kind: "seconds", seconds: 0.375 },
+            loop: { startX: 0.0, endX: 1.0 },
+        }),
+        {
+            seconds: 0.375,
+            holdFinalValue: true,
+            rateKind: 0,
+            loopEnabled: true,
+            loopStart: 0.0,
+            loopEnd: 1.0,
+            noteOffPolicy: 0,
+            legatoRestarts: false,
+        }
+    );
 });
 
 test("point_hit_testing_accepts_near_misses_inside_the_larger_pick_radius", () => {

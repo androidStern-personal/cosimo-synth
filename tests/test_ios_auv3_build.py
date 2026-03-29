@@ -352,6 +352,30 @@ def test_generated_ios_plugin_externalises_the_bank_but_keeps_patch_ui_resources
     assert "wt::factoryBank" not in plugin_source
 
 
+def test_generated_ios_plugin_reads_worker_resources_via_resolved_bundle_urls(
+    generated_ios_plugin_dir: Path,
+) -> None:
+    plugin_source = (generated_ios_plugin_dir / "cmajor_plugin.cpp").read_text(
+        encoding="utf-8",
+        errors="ignore",
+    )
+
+    old_read_resource_block = _normalise_whitespace(
+        """
+        "    async readResource (path)\n"
+        "    {\n"
+        "        return fetch (path);\n"
+        "    }\n"
+        """
+    )
+
+    assert old_read_resource_block not in _normalise_whitespace(plugin_source)
+    assert '"        const resourceAddress = this.getResourceAddress (path);\\n"' in plugin_source
+    assert '"        if (resourceAddress instanceof URL)\\n"' in plugin_source
+    assert '"            return fetch (resourceAddress.toString());\\n"' in plugin_source
+    assert '"                return fetch (new URL (resourceAddress, this.rootResourcePath).toString());\\n"' in plugin_source
+
+
 def test_bundle_root_resource_paths_work_for_both_app_and_extension(tmp_path: Path) -> None:
     staged_root = tmp_path / "bundles"
     app_root = staged_root / "app"

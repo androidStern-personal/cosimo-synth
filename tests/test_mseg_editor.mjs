@@ -7,7 +7,6 @@ import {
     createDefaultMsegShape,
     renderMsegShape,
     serializeMsegShape,
-    toMsegPlaybackConfigEvent,
 } from "../patch_gui/mseg.mjs";
 import {
     MSEG_BUFFER_ENDPOINT_ID,
@@ -75,8 +74,29 @@ test("boot_without_saved_mseg_state_uses_default_shape_playback_and_depth", () =
 
     const { shape, playback, depth } = controller.getState();
     assert.deepEqual(shape, createDefaultMsegShape());
-    assert.deepEqual(playback, createDefaultMsegPlayback());
+    assert.deepEqual(playback, {
+        format: "cosimo.mseg.playback",
+        version: 1,
+        rate: { kind: "seconds", seconds: 1.0 },
+        loop: { startX: 0.0, endX: 1.0 },
+        noteOffPolicy: "finish_loop",
+        legatoRestarts: false,
+        holdFinalValue: true,
+    });
     assert.equal(depth, 1.0);
+    assert.deepEqual(
+        lastEvent(patchConnection, MSEG_PLAYBACK_ENDPOINT_ID).value,
+        {
+            seconds: 1.0,
+            holdFinalValue: true,
+            rateKind: 0,
+            loopEnabled: true,
+            loopStart: 0.0,
+            loopEnd: 1.0,
+            noteOffPolicy: 0,
+            legatoRestarts: false,
+        }
+    );
 });
 
 test("boot_with_saved_mseg_state_restores_shape_playback_and_depth", () => {
@@ -223,6 +243,105 @@ test("depth_change_updates_route_depth_without_rerendering_shape", () => {
     assert.equal(lastEvent(patchConnection, MSEG_DEPTH_ENDPOINT_ID).value, 0.5);
 });
 
+test("playback_rate_change_updates_transport_without_rerendering_shape", () => {
+    const patchConnection = new FakePatchConnection();
+    const controller = new MsegController(patchConnection);
+
+    controller.attach();
+    controller.requestBootState();
+    patchConnection.events = [];
+
+    controller.setPlayback({
+        ...createDefaultMsegPlayback(),
+        rate: { kind: "seconds", seconds: 0.2 },
+        loop: { startX: 0.0, endX: 1.0 },
+    });
+
+    assert.deepEqual(controller.getState().playback, {
+        format: "cosimo.mseg.playback",
+        version: 1,
+        rate: { kind: "seconds", seconds: 0.2 },
+        loop: { startX: 0.0, endX: 1.0 },
+        noteOffPolicy: "finish_loop",
+        legatoRestarts: false,
+        holdFinalValue: true,
+    });
+    assert.equal(
+        patchConnection.events.filter((entry) => entry.endpointID === MSEG_BUFFER_ENDPOINT_ID).length,
+        0
+    );
+    assert.deepEqual(
+        lastEvent(patchConnection, MSEG_PLAYBACK_ENDPOINT_ID).value,
+        {
+            seconds: 0.2,
+            holdFinalValue: true,
+            rateKind: 0,
+            loopEnabled: true,
+            loopStart: 0.0,
+            loopEnd: 1.0,
+            noteOffPolicy: 0,
+            legatoRestarts: false,
+        }
+    );
+});
+
+test("playback_change_updates_stored_playback_and_uploads_without_rerendering_shape", () => {
+    const patchConnection = new FakePatchConnection();
+    const controller = new MsegController(patchConnection);
+
+    controller.attach();
+    controller.requestBootState();
+    patchConnection.events = [];
+    patchConnection.storedWrites = [];
+
+    controller.setPlayback({
+        ...createDefaultMsegPlayback(),
+        rate: { kind: "seconds", seconds: 0.25 },
+        loop: null,
+    });
+
+    assert.deepEqual(controller.getState().playback, {
+        format: "cosimo.mseg.playback",
+        version: 1,
+        rate: { kind: "seconds", seconds: 0.25 },
+        loop: null,
+        noteOffPolicy: "finish_loop",
+        legatoRestarts: false,
+        holdFinalValue: true,
+    });
+    assert.equal(
+        patchConnection.events.filter((entry) => entry.endpointID === MSEG_BUFFER_ENDPOINT_ID).length,
+        0
+    );
+    assert.deepEqual(
+        lastEvent(patchConnection, MSEG_PLAYBACK_ENDPOINT_ID).value,
+        {
+            seconds: 0.25,
+            holdFinalValue: true,
+            rateKind: 0,
+            loopEnabled: false,
+            loopStart: 0.0,
+            loopEnd: 0.0,
+            noteOffPolicy: 0,
+            legatoRestarts: false,
+        }
+    );
+    assert.equal(patchConnection.storedWrites.length, 1);
+    assert.equal(patchConnection.storedWrites[0].key, MSEG_PLAYBACK_STATE_KEY);
+    assert.deepEqual(
+        JSON.parse(patchConnection.storedWrites[0].value),
+        {
+            format: "cosimo.mseg.playback",
+            version: 1,
+            rate: { kind: "seconds", seconds: 0.25 },
+            loop: null,
+            noteOffPolicy: "finish_loop",
+            legatoRestarts: false,
+            holdFinalValue: true,
+        }
+    );
+});
+
 test("every_uploaded_mseg_buffer_has_exact_expected_length", () => {
     const patchConnection = new FakePatchConnection();
     const controller = new MsegController(patchConnection);
@@ -250,16 +369,22 @@ test("playback_upload_uses_the_flat_cmajor_struct_shape", () => {
 
     controller.setPlayback({
         ...createDefaultMsegPlayback(),
-        rate: { kind: "seconds", seconds: 0.75 },
-        loop: { startX: 0.25, endX: 0.75 },
-        noteOffPolicy: "ignore",
-        legatoRestarts: true,
-        holdFinalValue: false,
+        rate: { kind: "seconds", seconds: 0.375 },
+        loop: { startX: 0.0, endX: 1.0 },
     });
 
     assert.deepEqual(
         lastEvent(patchConnection, MSEG_PLAYBACK_ENDPOINT_ID).value,
-        toMsegPlaybackConfigEvent(controller.getState().playback)
+        {
+            seconds: 0.375,
+            holdFinalValue: true,
+            rateKind: 0,
+            loopEnabled: true,
+            loopStart: 0.0,
+            loopEnd: 1.0,
+            noteOffPolicy: 0,
+            legatoRestarts: false,
+        }
     );
 });
 
@@ -301,7 +426,16 @@ test("fallback_boot_waits_for_all_requested_keys_before_uploading", () => {
     );
     assert.deepEqual(
         lastEvent(patchConnection, MSEG_PLAYBACK_ENDPOINT_ID).value,
-        toMsegPlaybackConfigEvent(storedPlayback)
+        {
+            seconds: 0.33,
+            holdFinalValue: true,
+            rateKind: 0,
+            loopEnabled: true,
+            loopStart: 0.0,
+            loopEnd: 1.0,
+            noteOffPolicy: 0,
+            legatoRestarts: false,
+        }
     );
     assert.equal(lastEvent(patchConnection, MSEG_DEPTH_ENDPOINT_ID).value, 0.25);
 });

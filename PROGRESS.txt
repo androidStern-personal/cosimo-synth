@@ -14,13 +14,28 @@ What was verified
 - `uv run pytest tests/test_wavetable_worker_runtime.py tests/test_runtime_wavetable_mip_probe.py tests/test_runtime_state_coordinator.py tests/test_fixed_frame_probe.py -q`
 - `uv run pytest tests/test_ios_auv3_build.py -q -k 'not ios_host_smoke'`
 - `uv run pytest tests/test_ios_auv3_build.py -q -k generated_ios_plugin_externalises_the_bank_but_keeps_patch_ui_resources`
+- `uv run pytest tests/test_ios_auv3_build.py -q -k ios_host_smoke`
 
-What was not re-run in this pass
-- The simulator host-smoke tests in `tests/test_ios_auv3_build.py` that depend on `scripts/run_ios_auv3_host_smoke.py`.
+What is fixed in the latest wavetable-loader pass
+- The worker no longer keeps chasing an obsolete loading generation when the user changes to a different wavetable mid-load. It now aborts that stale load and follows the new desired table.
+- The worker now auto-retries one timed-out load for the currently desired wavetable instead of leaving that table dead until the user manually retries it.
+- The UI now surfaces the actual wavetable failure state. A timed-out wavetable transfer shows as `Wavetable load timed out.` and failed loads expose the retry affordance consistently.
+- The iPhone patch view now actually has a mobile `display-status` target and an explicit `table-error-banner`, so runtime wavetable failures are no longer silently dropped on iOS.
+- The patch view now latches the last wavetable failure until the requested table actually becomes active again, which prevents immediate worker retries from erasing the only visible failure message.
+- The worker now emits detailed console logs for runtime-state updates, source reads, committed loads, mip requests, transfer progress, and watchdog timeouts. The patch view also logs runtime-state transitions and explicit wavetable failures.
+- The worker watchdog timeout was raised from `8000 ms` to `20000 ms` to reduce false transfer timeouts while debugging large imported Serum tables.
+
+Current iPhone build status
+- The current installable app bundle is `/Users/winterfell/src/cosimo-synth/build/ios_device_run/CosimoSynth_artefacts/Debug/Standalone/Cosimo Synth.app`.
+- The current app bundle contains the expected runtime assets:
+  - `Cosimo Synth.app/assets/factory-bank-catalog.json`
+  - `Cosimo Synth.app/assets/factory_sources/`
+- A fresh signed build was rebuilt from `build/ios_device_run/CosimoSynthAUv3.xcodeproj`, installed onto the physical iPhone, and launched successfully.
+- The current installed app bundle path on device is `/private/var/containers/Bundle/Application/39080308-230F-4188-B16B-A157FE196D08/Cosimo Synth.app/`.
+- The current running phone process after launch was `Cosimo Synth` with PID `2189`.
 
 What happens next
-- Re-run the iPhone simulator host-smoke path now that the worker-based mip loader is in place.
-- After that, put the standalone iPhone app on a real device and confirm that wavetable changes still sound different at runtime with the worker path active.
+- Exercise wavetable switching on the physical iPhone again and inspect the new explicit failure banner plus the new `[wavetable-worker]` and `[wavetable-view]` console logs if failures still occur.
 
 Detour completed on 2026-03-26
 - Read `phase-6-mseg-plan.md`, `full-proposal.md`, `cmajor/FixedFrameOscillator.cmajor`, `cmajor/WavetableSynth.cmajor`, and `patch_gui/index.js`.
@@ -42,3 +57,17 @@ Detour completed on 2026-03-27
 - Locked the active 6A subset to one editable MSEG, add/move/delete point editing, one-shot seconds-based playback, one fixed route to wavetable frame position, and one depth control.
 - Kept the future-facing shape-versus-playback split in the 6A doc so later loop windows, note-off policies, tempo sync, and more destinations stay additive instead of forcing a schema rewrite.
 - Broke the work into four concrete tasks: JS model plus renderer, GUI editor plus persistence plus upload, DSP reader plus fixed route, and reference-driven verification.
+
+Phase 6B landed on 2026-03-29
+- Wrote `phase-6b-mseg-playback-controls-plan.md` as the next implementation slice after 6A: one visible seconds-rate control, full-shape looping while the note is held, `finish_loop` note-off behavior, and the existing fixed route from `MSEG 1` to wavetable position.
+- Changed the default MSEG playback object from one-shot to full-shape looped playback, kept the playback schema future-facing, and clamped seconds rates to the current supported range of `0.05` to `8.0`.
+- Fixed the patch-view rate control path so a DOM slider string like `"0.375"` now becomes a real playback seconds value instead of silently falling back to `1.0`.
+- Extended `wt::MsegReader` in `cmajor/Mseg.cmajor` to use real loop metadata, stop future wraps after note-off for the active `finish_loop` behavior, and keep the existing rendered-buffer plus cubic-interpolation contract.
+- Wired note-off from `cmajor/WavetableSynth.cmajor` into the MSEG reader so loop exit is driven by the actual note lifecycle instead of only by note-on retrigger.
+- Updated the Python reference path in `bench.py` so the JavaScript model, Python oracle, and Cmajor probe all agree about exact full-loop seam behavior, note-off exit, and disabled-loop transport payloads.
+- Tightened the tests so the playback truth now lives in literal objects and literal sample arrays instead of being re-derived from the same helper functions under test.
+
+What was verified for phase 6B
+- `node --test tests/test_mseg_renderer.mjs tests/test_mseg_editor.mjs tests/test_patch_view_layout.mjs tests/test_wavetable_display.mjs`
+- `uv run pytest -q tests/test_mseg_reference.py`
+- `uv run pytest -q tests/test_mseg_cmajor_probe.py -m cmajor`

@@ -267,6 +267,7 @@ namespace wt
         event eventIn (std::notes::NoteOff note)
         {
             envelope.eventIn <- note;
+            msegReader.noteOffIn <- 1;
             noteTracker.noteOffIn <- 1;
         }
 

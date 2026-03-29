@@ -61,6 +61,7 @@ CMAJOR_FIXED_FRAME_SOURCE = (
     Path(__file__).resolve().parent / "cmajor" / "FixedFrameOscillator.cmajor"
 )
 CMAJOR_MSEG_SOURCE = Path(__file__).resolve().parent / "cmajor" / "Mseg.cmajor"
+MSEG_NOTE_OFF_POLICIES = frozenset(("finish_loop", "immediate", "ignore"))
 
 
 @dataclass(frozen=True, slots=True)
@@ -160,11 +161,35 @@ class MsegShape:
 @dataclass(frozen=True, slots=True)
 class MsegPlayback:
     seconds: float
+    loop: tuple[float, float] | None = None
+    note_off_policy: str = "finish_loop"
     hold_final_value: bool = True
 
     def __post_init__(self) -> None:
         if not np.isfinite(self.seconds) or self.seconds <= 0.0:
             raise ValueError("MsegPlayback.seconds must be positive and finite")
+
+        if self.note_off_policy not in MSEG_NOTE_OFF_POLICIES:
+            raise ValueError("MsegPlayback.note_off_policy must be a supported policy")
+
+        if self.loop is None:
+            return
+
+        if len(self.loop) != 2:
+            raise ValueError("MsegPlayback.loop must contain exactly two positions")
+
+        start, end = float(self.loop[0]), float(self.loop[1])
+        if not np.isfinite(start) or not np.isfinite(end):
+            raise ValueError("MsegPlayback.loop must contain only finite values")
+        if not 0.0 <= start <= 1.0 or not 0.0 <= end <= 1.0:
+            raise ValueError("MsegPlayback.loop positions must stay in the range [0, 1]")
+        if end < start:
+            start, end = end, start
+        if np.isclose(start, end, atol=1e-12, rtol=0.0):
+            object.__setattr__(self, "loop", None)
+            return
+
+        object.__setattr__(self, "loop", (start, end))
 
 
 class Probe(Protocol):
@@ -990,28 +1015,41 @@ def _build_mseg_probe_wrapper_source(
     table_index: int,
     depth: float,
     trigger_offsets: Sequence[int],
+    note_off_offsets: Sequence[int],
 ) -> str:
     trigger_storage_size = max(len(trigger_offsets), 1)
     stored_trigger_offsets = [int(offset) for offset in trigger_offsets] or [0]
+    note_off_storage_size = max(len(note_off_offsets), 1)
+    stored_note_off_offsets = [int(offset) for offset in note_off_offsets] or [0]
     return (
         "processor MsegProbeControl\n"
         + "{\n"
         + "    output event float32 frequencyOut;\n"
         + "    output event int32 triggerOut;\n"
+        + "    output event int32 noteOffOut;\n"
         + "    output stream float32 framePositionOut;\n"
         + "    output value float32 tableSelectOut;\n"
         + "    output value float32 depthOut;\n"
         + "    let triggerEventCount = "
         + _cmajor_int_literal(len(trigger_offsets))
         + ";\n"
+        + "    let noteOffEventCount = "
+        + _cmajor_int_literal(len(note_off_offsets))
+        + ";\n"
         + "    int32["
         + _cmajor_int_literal(trigger_storage_size)
         + "] triggerEventOffsets = ("
         + _cmajor_int_array_literal(stored_trigger_offsets)
         + ");\n"
+        + "    int32["
+        + _cmajor_int_literal(note_off_storage_size)
+        + "] noteOffEventOffsets = ("
+        + _cmajor_int_array_literal(stored_note_off_offsets)
+        + ");\n"
         + "    bool hasSentFrequency = false;\n"
         + "    int32 frameIndex = 0;\n"
         + "    int32 nextTriggerEvent = 0;\n"
+        + "    int32 nextNoteOffEvent = 0;\n"
         + "    void main()\n"
         + "    {\n"
         + "        tableSelectOut <- "
@@ -1033,6 +1071,11 @@ def _build_mseg_probe_wrapper_source(
         + "            {\n"
         + "                triggerOut <- 1;\n"
         + "                nextTriggerEvent += 1;\n"
+        + "            }\n"
+        + "            if (nextNoteOffEvent < noteOffEventCount && frameIndex == noteOffEventOffsets.at (nextNoteOffEvent))\n"
+        + "            {\n"
+        + "                noteOffOut <- 1;\n"
+        + "                nextNoteOffEvent += 1;\n"
         + "            }\n"
         + "            framePositionOut <- "
         + _cmajor_float_literal(frame_position)
@@ -1061,6 +1104,7 @@ def _build_mseg_probe_wrapper_source(
         + "        msegPlayback -> mseg.playbackUpload;\n"
         + "        control.frequencyOut -> osc.frequencyIn;\n"
         + "        control.triggerOut -> mseg.triggerIn;\n"
+        + "        control.noteOffOut -> mseg.noteOffIn;\n"
         + "        control.framePositionOut -> route.basePositionIn;\n"
         + "        mseg.out -> route.modulationIn;\n"
         + "        control.depthOut -> route.depthIn;\n"
@@ -1072,6 +1116,25 @@ def _build_mseg_probe_wrapper_source(
     )
 
 
+def _build_mseg_playback_event(playback: MsegPlayback) -> dict[str, object]:
+    note_off_policy = 0
+    if playback.note_off_policy == "immediate":
+        note_off_policy = 1
+    elif playback.note_off_policy == "ignore":
+        note_off_policy = 2
+
+    return {
+        "seconds": float(playback.seconds),
+        "holdFinalValue": bool(playback.hold_final_value),
+        "rateKind": 0,
+        "loopEnabled": playback.loop is not None,
+        "loopStart": 0.0 if playback.loop is None else float(playback.loop[0]),
+        "loopEnd": 0.0 if playback.loop is None else float(playback.loop[1]),
+        "noteOffPolicy": note_off_policy,
+        "legatoRestarts": False,
+    }
+
+
 def render_cmajor_mseg_probe(
     source_tables: Sequence[FixtureBank],
     recipe: Recipe,
@@ -1080,6 +1143,7 @@ def render_cmajor_mseg_probe(
     playback: MsegPlayback,
     depth: float,
     trigger_offsets: Sequence[int] = (0,),
+    note_off_offsets: Sequence[int] = (),
     table_index: int = 0,
 ) -> Float32Array:
     from wtbank import build_bank, emit_cmajor_bank_assets
@@ -1104,6 +1168,13 @@ def render_cmajor_mseg_probe(
         if trigger_offset < previous_trigger_offset:
             raise ValueError("trigger_offsets must be sorted in ascending order")
         previous_trigger_offset = trigger_offset
+    previous_note_off_offset = -1
+    for note_off_offset in note_off_offsets:
+        if not 0 <= note_off_offset < recipe.num_samples:
+            raise ValueError("note_off_offsets must stay inside the rendered buffer")
+        if note_off_offset < previous_note_off_offset:
+            raise ValueError("note_off_offsets must be sorted in ascending order")
+        previous_note_off_offset = note_off_offset
 
     with tempfile.TemporaryDirectory(prefix="cmajor_mseg_probe_") as temp_dir_name:
         temp_dir = Path(temp_dir_name)
@@ -1127,6 +1198,7 @@ def render_cmajor_mseg_probe(
                 table_index=table_index,
                 depth=depth,
                 trigger_offsets=trigger_offsets,
+                note_off_offsets=note_off_offsets,
             ),
             encoding="utf-8",
         )
@@ -1142,16 +1214,7 @@ def render_cmajor_mseg_probe(
             encoding="utf-8",
         )
 
-        playback_event = {
-            "seconds": float(playback.seconds),
-            "holdFinalValue": bool(playback.hold_final_value),
-            "rateKind": 0,
-            "loopEnabled": False,
-            "loopStart": 0.0,
-            "loopEnd": 1.0,
-            "noteOffPolicy": 0,
-            "legatoRestarts": False,
-        }
+        playback_event = _build_mseg_playback_event(playback)
 
         return _render_cmajor_patch_via_generated_javascript(
             patch_path=patch_path,
@@ -1324,16 +1387,7 @@ def render_cmajor_scan_position_monitor_probe(
             encoding="utf-8",
         )
 
-        playback_event = {
-            "seconds": float(playback.seconds),
-            "holdFinalValue": bool(playback.hold_final_value),
-            "rateKind": 0,
-            "loopEnabled": False,
-            "loopStart": 0.0,
-            "loopEnd": 1.0,
-            "noteOffPolicy": 0,
-            "legatoRestarts": False,
-        }
+        playback_event = _build_mseg_playback_event(playback)
 
         return _collect_cmajor_output_events_via_generated_javascript(
             patch_path=patch_path,
@@ -1764,6 +1818,30 @@ def _catmull_rom(p0: float, p1: float, p2: float, p3: float, t: float) -> float:
     )
 
 
+def _advance_mseg_progress(
+    progress: np.float32,
+    increment: np.float32,
+    loop: tuple[float, float] | None,
+    wraps_enabled: bool,
+) -> np.float32:
+    if loop is None or not wraps_enabled:
+        return np.minimum(progress + increment, np.float32(1.0))
+
+    loop_start = np.float32(loop[0])
+    loop_end = np.float32(loop[1])
+    loop_width = np.float32(loop_end - loop_start)
+    if loop_width <= np.float32(0.0):
+        return np.minimum(progress + increment, np.float32(1.0))
+
+    raw_next = np.float32(progress + increment)
+    epsilon = np.float32(1e-6)
+    if raw_next <= loop_end + epsilon:
+        return np.minimum(raw_next, loop_end)
+
+    remainder = np.float32(raw_next - loop_end)
+    return np.float32(loop_start + np.mod(remainder, loop_width))
+
+
 def _mseg_power_scale(value: float, power: float) -> float:
     if abs(power) < 0.01:
         return value
@@ -1842,6 +1920,7 @@ def render_mseg_reference(
     num_samples: int,
     playback: MsegPlayback,
     trigger_offsets: Sequence[int] = (0,),
+    note_off_offsets: Sequence[int] = (),
 ) -> Float32Array:
     if sample_rate <= 0 or num_samples <= 0:
         raise ValueError("sample_rate and num_samples must be positive")
@@ -1853,6 +1932,13 @@ def render_mseg_reference(
         if trigger_offset < previous_trigger:
             raise ValueError("trigger_offsets must be sorted in ascending order")
         previous_trigger = trigger_offset
+    previous_note_off = -1
+    for note_off_offset in note_off_offsets:
+        if not 0 <= note_off_offset < num_samples:
+            raise ValueError("note_off_offsets must stay inside the rendered buffer")
+        if note_off_offset < previous_note_off:
+            raise ValueError("note_off_offsets must be sorted in ascending order")
+        previous_note_off = note_off_offset
 
     output = np.zeros(num_samples, dtype=np.float32)
     progress = np.float32(1.0)
@@ -1860,20 +1946,29 @@ def render_mseg_reference(
     active = False
     current_value = np.float32(sample_rendered_mseg_buffer(buffer, 0.0))
     trigger_index = 0
+    note_off_index = 0
+    stop_future_wraps = False
 
     for sample_offset in range(num_samples):
         while trigger_index < len(trigger_offsets) and trigger_offsets[trigger_index] == sample_offset:
             active = True
             progress = np.float32(0.0)
             current_value = np.float32(sample_rendered_mseg_buffer(buffer, 0.0))
+            stop_future_wraps = False
             trigger_index += 1
+
+        while note_off_index < len(note_off_offsets) and note_off_offsets[note_off_index] == sample_offset:
+            if active and playback.note_off_policy != "ignore":
+                stop_future_wraps = True
+            note_off_index += 1
 
         if active:
             current_value = np.float32(sample_rendered_mseg_buffer(buffer, float(progress)))
-            if progress >= np.float32(1.0):
+            wraps_enabled = playback.loop is not None and not stop_future_wraps
+            if not wraps_enabled and progress >= np.float32(1.0):
                 active = False
             else:
-                progress = np.minimum(progress + increment, np.float32(1.0))
+                progress = _advance_mseg_progress(progress, increment, playback.loop, wraps_enabled)
 
         output[sample_offset] = np.float32(current_value if playback.hold_final_value or active else np.float32(0.0))
 

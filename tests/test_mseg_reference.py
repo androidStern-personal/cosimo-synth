@@ -74,13 +74,17 @@ def test_reference_reader_advances_over_configured_seconds() -> None:
     rendered = render_mseg_shape_reference(shape)
     values = render_mseg_reference(
         rendered,
-        sample_rate=100,
-        num_samples=100,
+        sample_rate=4,
+        num_samples=5,
         playback=MsegPlayback(seconds=1.0),
     )
 
-    assert values[50] == pytest.approx(0.5, abs=0.02)
-    assert values[-1] == pytest.approx(0.99, abs=0.02)
+    assert np.allclose(
+        values,
+        np.asarray([0.0, 0.25, 0.5, 0.75, 1.0], dtype=np.float32),
+        atol=1e-6,
+        rtol=0.0,
+    )
 
 
 def test_reference_reader_holds_final_value_after_end() -> None:
@@ -88,13 +92,54 @@ def test_reference_reader_holds_final_value_after_end() -> None:
     rendered = render_mseg_shape_reference(shape)
     values = render_mseg_reference(
         rendered,
-        sample_rate=100,
-        num_samples=200,
+        sample_rate=4,
+        num_samples=4,
         playback=MsegPlayback(seconds=0.5),
     )
 
-    assert values[80] == pytest.approx(1.0, abs=0.02)
-    assert values[-1] == pytest.approx(1.0, abs=1e-6)
+    assert np.allclose(
+        values,
+        np.asarray([0.0, 0.5, 1.0, 1.0], dtype=np.float32),
+        atol=1e-6,
+        rtol=0.0,
+    )
+
+
+def test_reference_reader_loop_window_repeats_the_middle_section() -> None:
+    shape = MsegShape(points=(MsegPoint(0.0, 0.0), MsegPoint(1.0, 1.0)))
+    rendered = render_mseg_shape_reference(shape)
+    values = render_mseg_reference(
+        rendered,
+        sample_rate=4,
+        num_samples=8,
+        playback=MsegPlayback(seconds=1.0, loop=(0.25, 0.75)),
+    )
+
+    assert np.allclose(
+        values,
+        np.asarray([0.0, 0.25, 0.5, 0.75, 0.5, 0.75, 0.5, 0.75], dtype=np.float32),
+        atol=1e-6,
+        rtol=0.0,
+    )
+
+
+def test_reference_reader_finish_loop_note_off_exits_after_reaching_loop_end() -> None:
+    shape = MsegShape(points=(MsegPoint(0.0, 0.0), MsegPoint(1.0, 1.0)))
+    rendered = render_mseg_shape_reference(shape)
+    values = render_mseg_reference(
+        rendered,
+        sample_rate=4,
+        num_samples=8,
+        playback=MsegPlayback(seconds=1.0, loop=(0.25, 0.75), note_off_policy="finish_loop"),
+        note_off_offsets=(2,),
+    )
+
+    assert np.allclose(
+        values,
+        np.asarray([0.0, 0.25, 0.5, 0.75, 1.0, 1.0, 1.0, 1.0], dtype=np.float32),
+        atol=1e-6,
+        rtol=0.0,
+    )
 
 
 def test_reference_reader_retrigger_resets_to_start() -> None:
@@ -110,6 +155,43 @@ def test_reference_reader_retrigger_resets_to_start() -> None:
 
     assert values[0] == pytest.approx(0.2, abs=1e-6)
     assert values[40] == pytest.approx(0.2, abs=1e-6)
+
+
+def test_reference_reader_full_shape_loop_wraps_after_reaching_the_end() -> None:
+    shape = MsegShape(points=(MsegPoint(0.0, 0.0), MsegPoint(1.0, 1.0)))
+    rendered = render_mseg_shape_reference(shape)
+    values = render_mseg_reference(
+        rendered,
+        sample_rate=4,
+        num_samples=8,
+        playback=MsegPlayback(seconds=1.0, loop=(0.0, 1.0)),
+    )
+
+    assert np.allclose(
+        values,
+        np.asarray([0.0, 0.25, 0.5, 0.75, 1.0, 0.25, 0.5, 0.75], dtype=np.float32),
+        atol=1e-6,
+        rtol=0.0,
+    )
+
+
+def test_reference_reader_finish_loop_note_off_completes_the_current_pass_then_stops_wrapping() -> None:
+    shape = MsegShape(points=(MsegPoint(0.0, 0.0), MsegPoint(1.0, 1.0)))
+    rendered = render_mseg_shape_reference(shape)
+    values = render_mseg_reference(
+        rendered,
+        sample_rate=4,
+        num_samples=8,
+        playback=MsegPlayback(seconds=1.0, loop=(0.0, 1.0)),
+        note_off_offsets=(2,),
+    )
+
+    assert np.allclose(
+        values,
+        np.asarray([0.0, 0.25, 0.5, 0.75, 1.0, 1.0, 1.0, 1.0], dtype=np.float32),
+        atol=1e-6,
+        rtol=0.0,
+    )
 
 
 def test_reference_route_applies_depth_then_clamps_into_zero_to_one() -> None:

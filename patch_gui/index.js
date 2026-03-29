@@ -3,7 +3,7 @@ import {
     loadFactoryBankFramesFromPatch,
 } from "./wavetable-bank.js";
 import { MsegController } from "./mseg-controller.js";
-import { evaluateMsegShape, findMsegPointHitIndex } from "./mseg.js";
+import { clampMsegRateSeconds, evaluateMsegShape, findMsegPointHitIndex } from "./mseg.js";
 import { CanvasWavetableDisplay } from "./wavetable-display.js";
 import { computeResponsivePatchLayout, getLayoutCSSVariables } from "./responsive-layout.js";
 
@@ -15,6 +15,12 @@ const runtimeStateEndpointID = "runtimeState";
 const retryDesiredTableRequestEndpointID = "retryDesiredTableRequest";
 const msegDepthEndpointID = "mseg1Depth";
 const effectiveWavetablePositionEndpointID = "effectiveWavetablePosition";
+const runtimeFailurePhaseLoadSource = 1;
+const runtimeFailurePhaseBuildMip = 2;
+const runtimeFailurePhaseTransferMip = 3;
+const runtimeFailureReasonTimeout = 2;
+const runtimeFailureScopeCandidate = 0;
+const runtimeFailureScopeService = 1;
 const DISPLAY_POSITION_EPSILON = 0.000001;
 const DISPLAY_GESTURE_AXIS_LOCK_PX = 12;
 const DISPLAY_SWIPE_MIN_COMMIT_PX = 48;
@@ -24,6 +30,23 @@ const SVG_NS = "http://www.w3.org/2000/svg";
 const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 
 const knobDefault = 0.0;
+
+function emitPatchViewLog(level, message, fields = null) {
+    const logger = typeof console?.[level] === "function"
+        ? console[level].bind(console)
+        : console.log?.bind(console);
+
+    if (!logger) {
+        return;
+    }
+
+    if (fields && typeof fields === "object" && Object.keys(fields).length > 0) {
+        logger(`[wavetable-view] ${message}`, fields);
+        return;
+    }
+
+    logger(`[wavetable-view] ${message}`);
+}
 
 function clamp(value, min, max) {
     return Math.min(Math.max(value, min), max);
@@ -35,6 +58,10 @@ function clampDisplayPosition(value) {
 
 function clampDepth(value) {
     return clamp(Number(value) || 0, -1.0, 1.0);
+}
+
+function formatMsegRateSeconds(seconds) {
+    return `${clampMsegRateSeconds(Number(seconds) || 1.0).toFixed(3)} s`;
 }
 
 function getPitchClass(noteNumber) {
@@ -259,6 +286,95 @@ export function normalizeRuntimeTableState(message) {
         loadingGeneration: Math.max(0, Math.trunc(Number(payload.loadingGeneration) || 0)),
         hasFailure: Boolean(payload.hasFailure),
         failedTableIndex: Math.max(0, Math.trunc(Number(payload.failedTableIndex) || 0)),
+        failedGeneration: Math.max(0, Math.trunc(Number(payload.failedGeneration) || 0)),
+        failureScope: Math.max(0, Math.trunc(Number(payload.failureScope) || 0)),
+        failurePhase: Math.max(0, Math.trunc(Number(payload.failurePhase) || 0)),
+        failureReasonCode: Math.max(0, Math.trunc(Number(payload.failureReasonCode) || 0)),
+    };
+}
+
+function describeRuntimeTableFailure(normalized) {
+    if (!normalized?.hasFailure) {
+        return null;
+    }
+
+    if (
+        normalized.failurePhase === runtimeFailurePhaseTransferMip &&
+        normalized.failureReasonCode === runtimeFailureReasonTimeout
+    ) {
+        return "Wavetable load timed out.";
+    }
+
+    if (normalized.failurePhase === runtimeFailurePhaseLoadSource) {
+        return "Could not read wavetable source.";
+    }
+
+    if (normalized.failurePhase === runtimeFailurePhaseBuildMip) {
+        return "Could not build wavetable mip data.";
+    }
+
+    if (normalized.failurePhase === runtimeFailurePhaseTransferMip) {
+        return "Could not transfer wavetable mip data.";
+    }
+
+    return "Wavetable load failed.";
+}
+
+function describeRuntimeTableFailureDetails(normalized, tableName = "Requested wavetable") {
+    if (!normalized?.hasFailure) {
+        return null;
+    }
+
+    const phaseLabel = normalized.failurePhase === runtimeFailurePhaseLoadSource
+        ? "source read"
+        : normalized.failurePhase === runtimeFailurePhaseBuildMip
+            ? "mip build"
+            : normalized.failurePhase === runtimeFailurePhaseTransferMip
+                ? "mip transfer"
+                : "unknown phase";
+    const scopeLabel = normalized.failureScope === runtimeFailureScopeService
+        ? "committed load"
+        : "candidate load";
+    const generationLabel = normalized.failedGeneration > 0
+        ? `generation ${normalized.failedGeneration}`
+        : "candidate generation";
+    const reasonLabel = normalized.failureReasonCode === runtimeFailureReasonTimeout
+        ? "timeout"
+        : "generic failure";
+
+    return `${tableName} failed during ${phaseLabel} (${scopeLabel}, ${generationLabel}, ${reasonLabel}).`;
+}
+
+function summarizeRuntimeTableStateForLog(normalized) {
+    if (!normalized) {
+        return null;
+    }
+
+    return {
+        desiredTableIndex: normalized.desiredTableIndex,
+        desiredIntentSerial: normalized.desiredIntentSerial,
+        serviceState: normalized.serviceState,
+        active: normalized.hasActive
+            ? {
+                tableIndex: normalized.activeTableIndex,
+                generation: normalized.activeGeneration,
+            }
+            : null,
+        loading: normalized.hasLoading
+            ? {
+                tableIndex: normalized.loadingTableIndex,
+                generation: normalized.loadingGeneration,
+            }
+            : null,
+        failure: normalized.hasFailure
+            ? {
+                tableIndex: normalized.failedTableIndex,
+                generation: normalized.failedGeneration,
+                scope: normalized.failureScope,
+                phase: normalized.failurePhase,
+                reason: normalized.failureReasonCode,
+            }
+            : null,
     };
 }
 
@@ -276,6 +392,7 @@ export function resolveRuntimeTablePresentation(message, fallbackTableIndex = 0)
             loadingGeneration: null,
             isPendingSelection: false,
             isRetryableFailure: false,
+            failureMessage: null,
         };
     }
 
@@ -296,6 +413,7 @@ export function resolveRuntimeTablePresentation(message, fallbackTableIndex = 0)
             activeTableIndex !== null && normalized.desiredTableIndex !== activeTableIndex
         ),
         isRetryableFailure: normalized.hasFailure && normalized.failedTableIndex === normalized.desiredTableIndex,
+        failureMessage: describeRuntimeTableFailure(normalized),
     };
 }
 
@@ -386,6 +504,7 @@ export class CosimoSynthView extends HTMLElement {
         this.displayFramesLoading = new Map();
         this.factoryBankCatalog = null;
         this.latestRuntimeTableState = null;
+        this.latchedRuntimeFailureState = null;
         this.runtimeTablePresentation = resolveRuntimeTablePresentation(null, 0);
         this.hasRuntimeTableState = false;
         this.nextDisplaySelectionToken = 1;
@@ -497,6 +616,14 @@ export class CosimoSynthView extends HTMLElement {
             this.msegDepthInput.removeEventListener("input", this.handleMsegDepthInput);
         }
 
+        if (this.msegRateInput && this.handleMsegRateInput) {
+            this.msegRateInput.removeEventListener("input", this.handleMsegRateInput);
+        }
+
+        if (this.msegLoopToggle && this.handleMsegLoopInput) {
+            this.msegLoopToggle.removeEventListener("input", this.handleMsegLoopInput);
+        }
+
         if (this.octaveDownButton && this.handleOctaveDown) {
             this.octaveDownButton.removeEventListener("click", this.handleOctaveDown);
         }
@@ -521,6 +648,7 @@ export class CosimoSynthView extends HTMLElement {
         this.displayOverlay = this.shadowRoot.querySelector(".display-overlay");
         this.displayStatus = this.shadowRoot.querySelector("[data-role='display-status']");
         this.bankReadout = this.shadowRoot.querySelector(".bank-readout");
+        this.tableErrorBanner = this.shadowRoot.querySelector("[data-role='table-error-banner']");
         this.stageGestureHint = this.shadowRoot.querySelector("[data-role='stage-gesture-hint']");
         this.scanRailInput = this.shadowRoot.querySelector(".scan-slider");
         this.stepDownButton = this.shadowRoot.querySelector(".step-down");
@@ -540,6 +668,9 @@ export class CosimoSynthView extends HTMLElement {
         this.msegDeleteButton = this.shadowRoot.querySelector(".mseg-delete-point");
         this.msegDepthInput = this.shadowRoot.querySelector(".mseg-depth-slider");
         this.msegDepthReadout = this.shadowRoot.querySelector("[data-role='mseg-depth-readout']");
+        this.msegRateInput = this.shadowRoot.querySelector(".mseg-rate-slider");
+        this.msegRateReadout = this.shadowRoot.querySelector("[data-role='mseg-rate-readout']");
+        this.msegLoopToggle = this.shadowRoot.querySelector(".mseg-loop-toggle");
 
         this.displaySlots = this.displayCanvases.map((canvas, slotIndex) => ({
             slotIndex,
@@ -567,6 +698,8 @@ export class CosimoSynthView extends HTMLElement {
         this.handleMsegPointerMove = this.updateMsegInteraction.bind(this);
         this.handleMsegPointerUp = this.endMsegInteraction.bind(this);
         this.handleDeleteMsegPoint = this.deleteSelectedMsegPoint.bind(this);
+        this.handleMsegRateInput = this.handleMsegRateInput.bind(this);
+        this.handleMsegLoopInput = this.handleMsegLoopInput.bind(this);
         this.handleMsegDepthInput = () => {
             this.msegController?.setDepth(clampDepth(this.msegDepthInput?.value));
         };
@@ -596,6 +729,8 @@ export class CosimoSynthView extends HTMLElement {
         }
 
         this.msegDeleteButton?.addEventListener("click", this.handleDeleteMsegPoint);
+        this.msegRateInput?.addEventListener("input", this.handleMsegRateInput);
+        this.msegLoopToggle?.addEventListener("input", this.handleMsegLoopInput);
         this.msegDepthInput?.addEventListener("input", this.handleMsegDepthInput);
         this.octaveDownButton?.addEventListener("click", this.handleOctaveDown);
         this.octaveUpButton?.addEventListener("click", this.handleOctaveUp);
@@ -820,8 +955,55 @@ export class CosimoSynthView extends HTMLElement {
         return this.factoryBankCatalog?.tables?.[this.desiredTableIndex] ?? null;
     }
 
+    getVisibleRuntimeFailureState() {
+        if (this.latestRuntimeTableState?.hasFailure) {
+            return this.latestRuntimeTableState;
+        }
+
+        if (!this.latchedRuntimeFailureState) {
+            return null;
+        }
+
+        if (this.latchedRuntimeFailureState.desiredTableIndex !== this.desiredTableIndex) {
+            return null;
+        }
+
+        return this.latchedRuntimeFailureState;
+    }
+
+    updateLatchedRuntimeFailureState(normalizedRuntimeState) {
+        if (!normalizedRuntimeState) {
+            return;
+        }
+
+        if (normalizedRuntimeState.hasFailure) {
+            this.latchedRuntimeFailureState = { ...normalizedRuntimeState };
+            return;
+        }
+
+        if (!this.latchedRuntimeFailureState) {
+            return;
+        }
+
+        if (normalizedRuntimeState.desiredTableIndex !== this.latchedRuntimeFailureState.desiredTableIndex) {
+            this.latchedRuntimeFailureState = null;
+            return;
+        }
+
+        if (
+            normalizedRuntimeState.hasActive &&
+            normalizedRuntimeState.activeTableIndex === normalizedRuntimeState.desiredTableIndex
+        ) {
+            this.latchedRuntimeFailureState = null;
+        }
+    }
+
     updateBankReadout() {
         const showRetry = Boolean(this.runtimeTablePresentation?.isRetryableFailure);
+        const visibleFailureState = this.getVisibleRuntimeFailureState();
+        const failureMessage = visibleFailureState
+            ? describeRuntimeTableFailure(visibleFailureState)
+            : null;
 
         if (this.tableRetryButton) {
             this.tableRetryButton.hidden = !showRetry;
@@ -834,10 +1016,47 @@ export class CosimoSynthView extends HTMLElement {
 
         const selectedTable = this.getSelectedTableMeta();
         const desiredTable = this.getDesiredTableMeta();
+        const failureDetail = visibleFailureState
+            ? describeRuntimeTableFailureDetails(
+                visibleFailureState,
+                desiredTable?.name ?? selectedTable?.name ?? "Requested wavetable"
+            )
+            : null;
+
+        if (this.tableErrorBanner) {
+            this.tableErrorBanner.hidden = !failureDetail;
+            this.tableErrorBanner.textContent = failureDetail ?? "";
+        }
+
+        if (this.displayStatus && failureMessage) {
+            this.displayStatus.textContent = failureMessage;
+        } else if (
+            this.displayStatus &&
+            this.runtimeTablePresentation?.isPendingSelection &&
+            desiredTable &&
+            desiredTable !== selectedTable
+        ) {
+            this.displayStatus.textContent = `Loading ${desiredTable.name}…`;
+        }
+
         if (!selectedTable) {
             this.bankReadout.textContent = this.options.platform === "ios"
                 ? "Factory bank"
                 : "Factory bank";
+            return;
+        }
+
+        if (failureMessage) {
+            if (desiredTable && desiredTable !== selectedTable) {
+                this.bankReadout.textContent = this.options.platform === "ios"
+                    ? `${selectedTable.name} -> ${desiredTable.name} • ${failureMessage}`
+                    : `Audible • ${selectedTable.name} -> Requested • ${desiredTable.name} • ${failureMessage}`;
+                return;
+            }
+
+            this.bankReadout.textContent = this.options.platform === "ios"
+                ? `${selectedTable.name} • ${failureMessage}`
+                : `Factory bank • ${selectedTable.name} • ${failureMessage}`;
             return;
         }
 
@@ -866,6 +1085,10 @@ export class CosimoSynthView extends HTMLElement {
             return false;
         }
 
+        emitPatchViewLog("warn", "Retrying failed wavetable load", {
+            visibleFailureState: this.getVisibleRuntimeFailureState(),
+            runtimeTablePresentation: this.runtimeTablePresentation,
+        });
         this.patchConnection.sendEventOrValue?.(retryDesiredTableRequestEndpointID, 1);
         return true;
     }
@@ -933,6 +1156,10 @@ export class CosimoSynthView extends HTMLElement {
             })
             .catch((error) => {
                 console.error(error);
+                emitPatchViewLog("error", "Could not load display wavetable frames", {
+                    tableIndex,
+                    detail: String(error?.message || error || "Unknown error"),
+                });
 
                 if (showLoadingState) {
                     const detail = String(error?.message || error || "Unknown error");
@@ -1116,11 +1343,24 @@ export class CosimoSynthView extends HTMLElement {
 
     handleRuntimeTableState(message) {
         this.latestRuntimeTableState = normalizeRuntimeTableState(message);
+        emitPatchViewLog("info", "Received runtime table state", summarizeRuntimeTableStateForLog(this.latestRuntimeTableState));
+        this.updateLatchedRuntimeFailureState(this.latestRuntimeTableState);
         this.runtimeTablePresentation = resolveRuntimeTablePresentation(
             this.latestRuntimeTableState,
             this.currentTableIndex
         );
         this.hasRuntimeTableState = true;
+        if (this.latestRuntimeTableState?.hasFailure) {
+            const desiredTable = this.factoryBankCatalog?.tables?.[this.latestRuntimeTableState.desiredTableIndex];
+            emitPatchViewLog("error", "Wavetable runtime reported a load failure", {
+                message: describeRuntimeTableFailure(this.latestRuntimeTableState),
+                detail: describeRuntimeTableFailureDetails(
+                    this.latestRuntimeTableState,
+                    desiredTable?.name ?? "Requested wavetable"
+                ),
+                state: summarizeRuntimeTableStateForLog(this.latestRuntimeTableState),
+            });
+        }
         this.applyRuntimeTablePresentation();
         this.updateBankReadout();
     }
@@ -1133,6 +1373,7 @@ export class CosimoSynthView extends HTMLElement {
             Math.max(0, state.shape.points.length - 1)
         );
         this.renderMsegEditor();
+        this.syncMsegPlaybackControls();
         this.syncMsegDepthControl();
     }
 
@@ -1142,13 +1383,58 @@ export class CosimoSynthView extends HTMLElement {
         }
 
         const nextDepth = clampDepth(this.msegState.depth);
-        if (document.activeElement !== this.msegDepthInput) {
+        if (globalThis.document?.activeElement !== this.msegDepthInput) {
             this.msegDepthInput.value = nextDepth.toFixed(3);
         }
 
         if (this.msegDepthReadout) {
             this.msegDepthReadout.textContent = nextDepth.toFixed(3);
         }
+    }
+
+    syncMsegPlaybackControls() {
+        if (!this.msegState?.playback) {
+            return;
+        }
+
+        const nextSeconds = clampMsegRateSeconds(this.msegState.playback.rate?.seconds);
+        if (this.msegRateInput && globalThis.document?.activeElement !== this.msegRateInput) {
+            this.msegRateInput.value = nextSeconds.toFixed(3);
+        }
+
+        if (this.msegRateReadout) {
+            this.msegRateReadout.textContent = formatMsegRateSeconds(nextSeconds);
+        }
+
+        if (this.msegLoopToggle) {
+            this.msegLoopToggle.checked = this.msegState.playback.loop !== null;
+        }
+    }
+
+    handleMsegRateInput() {
+        if (!this.msegController || !this.msegState?.playback) {
+            return;
+        }
+
+        this.msegController.setPlayback({
+            ...this.msegState.playback,
+            rate: {
+                kind: "seconds",
+                seconds: clampMsegRateSeconds(this.msegRateInput?.value),
+            },
+        });
+    }
+
+    handleMsegLoopInput() {
+        if (!this.msegController || !this.msegState?.playback) {
+            return;
+        }
+
+        this.msegController.setPlayback({
+            ...this.msegState.playback,
+            loop: this.msegLoopToggle?.checked ? { startX: 0.0, endX: 1.0 } : null,
+            noteOffPolicy: "finish_loop",
+        });
     }
 
     renderMsegEditor() {
@@ -1542,6 +1828,10 @@ export class CosimoSynthView extends HTMLElement {
     }
 
     sendSelectedTableIndex(nextIndex) {
+        emitPatchViewLog("info", "User requested wavetable change", {
+            previousDesiredTableIndex: this.desiredTableIndex,
+            nextDesiredTableIndex: Math.round(Number(nextIndex) || 0),
+        });
         this.patchConnection.sendParameterGestureStart?.(wavetableSelectEndpointID);
         this.patchConnection.sendEventOrValue(wavetableSelectEndpointID, nextIndex);
         this.patchConnection.sendParameterGestureEnd?.(wavetableSelectEndpointID);
@@ -1928,6 +2218,22 @@ export class CosimoSynthView extends HTMLElement {
                     display: none;
                 }
 
+                .table-error-banner {
+                    display: block;
+                    min-height: 18px;
+                    padding: 10px 12px;
+                    border-radius: 12px;
+                    border: 1px solid rgba(245, 108, 182, 0.24);
+                    background: rgba(245, 108, 182, 0.1);
+                    color: #ffd8e8;
+                    font-size: 12px;
+                    line-height: 1.4;
+                }
+
+                .table-error-banner[hidden] {
+                    display: none;
+                }
+
                 .wavetable-stage {
                     position: relative;
                     aspect-ratio: 1.9 / 1;
@@ -2161,6 +2467,18 @@ export class CosimoSynthView extends HTMLElement {
                     align-items: center;
                 }
 
+                .mseg-playback-controls {
+                    display: grid;
+                    grid-template-columns: minmax(0, 1fr) auto;
+                    gap: 12px;
+                    align-items: center;
+                }
+
+                .mseg-rate {
+                    display: grid;
+                    gap: 6px;
+                }
+
                 .mseg-depth {
                     display: grid;
                     gap: 6px;
@@ -2173,8 +2491,36 @@ export class CosimoSynthView extends HTMLElement {
                     color: rgba(194, 202, 255, 0.72);
                 }
 
+                .mseg-rate-slider,
                 .mseg-depth-slider {
                     width: 100%;
+                }
+
+                .mseg-playback-meta {
+                    display: grid;
+                    gap: 8px;
+                    justify-items: end;
+                }
+
+                .mseg-rate-readout {
+                    font-family: "SF Mono", "IBM Plex Mono", Menlo, monospace;
+                    font-size: 12px;
+                    letter-spacing: 0.08em;
+                    color: #87d7f5;
+                }
+
+                .mseg-loop {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 8px;
+                    font-size: 11px;
+                    letter-spacing: 0.08em;
+                    text-transform: uppercase;
+                    color: rgba(212, 220, 230, 0.76);
+                }
+
+                .mseg-loop-toggle {
+                    margin: 0;
                 }
 
                 .mseg-delete-point {
@@ -2212,6 +2558,7 @@ export class CosimoSynthView extends HTMLElement {
                                     <select class="table-select"></select>
                                 </label>
                                 <button class="table-retry-button" type="button" hidden>Retry Load</button>
+                                <div class="table-error-banner" data-role="table-error-banner" hidden></div>
                             </div>
                             <div class="wavetable-stage" data-state="loading">
                                 <canvas class="wavetable-canvas"></canvas>
@@ -2251,6 +2598,20 @@ export class CosimoSynthView extends HTMLElement {
                                 <path class="mseg-curve"></path>
                                 <g class="mseg-points"></g>
                             </svg>
+                        </div>
+
+                        <div class="mseg-playback-controls">
+                            <label class="mseg-rate">
+                                <span class="mseg-depth-label">Rate In Seconds</span>
+                                <input class="mseg-rate-slider" type="range" min="0.05" max="8" step="0.001" value="1.000" />
+                            </label>
+                            <div class="mseg-playback-meta">
+                                <div class="mseg-rate-readout" data-role="mseg-rate-readout">1.000 s</div>
+                                <label class="mseg-loop">
+                                    <input class="mseg-loop-toggle" type="checkbox" checked />
+                                    <span>Loop Full Shape</span>
+                                </label>
+                            </div>
                         </div>
 
                         <div class="mseg-controls">
@@ -2394,6 +2755,22 @@ export class CosimoSynthView extends HTMLElement {
                 }
 
                 .table-retry-button[hidden] {
+                    display: none;
+                }
+
+                .table-error-banner {
+                    display: block;
+                    min-width: 0;
+                    padding: 10px 12px;
+                    border-radius: 14px;
+                    border: 1px solid rgba(245, 108, 182, 0.24);
+                    background: rgba(245, 108, 182, 0.12);
+                    color: #ffd8e8;
+                    font-size: 12px;
+                    line-height: 1.35;
+                }
+
+                .table-error-banner[hidden] {
                     display: none;
                 }
 
@@ -2664,6 +3041,14 @@ export class CosimoSynthView extends HTMLElement {
                     align-items: center;
                 }
 
+                .mseg-playback-controls {
+                    display: grid;
+                    min-width: 0;
+                    grid-template-columns: minmax(0, 1fr) auto;
+                    gap: 10px;
+                    align-items: center;
+                }
+
                 @media (max-height: 720px) {
                     .ios-content {
                         gap: 14px;
@@ -2679,11 +3064,48 @@ export class CosimoSynthView extends HTMLElement {
                     gap: 6px;
                 }
 
+                .mseg-rate {
+                    display: grid;
+                    gap: 6px;
+                }
+
                 .mseg-depth-label {
                     font-size: 10px;
                     color: rgba(212, 220, 230, 0.42);
                     letter-spacing: 0.12em;
                     text-transform: uppercase;
+                }
+
+                .mseg-rate-slider,
+                .mseg-depth-slider {
+                    width: 100%;
+                }
+
+                .mseg-playback-meta {
+                    display: grid;
+                    gap: 8px;
+                    justify-items: end;
+                }
+
+                .mseg-rate-readout {
+                    font-family: "SF Mono", "IBM Plex Mono", Menlo, monospace;
+                    font-size: 12px;
+                    color: #87d7f5;
+                    letter-spacing: 0.08em;
+                }
+
+                .mseg-loop {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 8px;
+                    font-size: 11px;
+                    letter-spacing: 0.08em;
+                    text-transform: uppercase;
+                    color: rgba(212, 220, 230, 0.7);
+                }
+
+                .mseg-loop-toggle {
+                    margin: 0;
                 }
 
                 .mseg-delete-point {
@@ -2719,8 +3141,10 @@ export class CosimoSynthView extends HTMLElement {
                                 <div class="stage-copy">
                                     <div class="stage-copy-row">
                                         <div class="mini-label active">Wavescan</div>
+                                        <div class="display-status" data-role="display-status">Loading wavetable bank…</div>
                                         <div class="shape-readout" data-role="hero-frame-readout">01/16</div>
                                     </div>
+                                    <div class="table-error-banner" data-role="table-error-banner" hidden></div>
                                     <div></div>
                                     <div class="stage-copy-row">
                                         <label class="bank-picker-trigger">
@@ -2757,6 +3181,20 @@ export class CosimoSynthView extends HTMLElement {
                                     <path class="mseg-curve"></path>
                                     <g class="mseg-points"></g>
                                 </svg>
+                            </div>
+
+                            <div class="mseg-playback-controls">
+                                <label class="mseg-rate">
+                                    <span class="mseg-depth-label">Rate In Seconds</span>
+                                    <input class="mseg-rate-slider" type="range" min="0.05" max="8" step="0.001" value="1.000" />
+                                </label>
+                                <div class="mseg-playback-meta">
+                                    <div class="mseg-rate-readout" data-role="mseg-rate-readout">1.000 s</div>
+                                    <label class="mseg-loop">
+                                        <input class="mseg-loop-toggle" type="checkbox" checked />
+                                        <span>Loop Full Shape</span>
+                                    </label>
+                                </div>
                             </div>
 
                             <div class="mseg-controls">

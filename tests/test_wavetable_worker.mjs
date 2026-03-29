@@ -31,6 +31,41 @@ function createAudioFileFromFrames(frames) {
     };
 }
 
+function createFloat32WaveBufferFromFrames(frames, sampleRate = 44100) {
+    const flattened = new Float32Array(frames.length * samplesPerFrame);
+
+    frames.forEach((frame, frameIndex) => {
+        flattened.set(frame, frameIndex * samplesPerFrame);
+    });
+
+    const bytesPerSample = 4;
+    const dataSize = flattened.length * bytesPerSample;
+    const buffer = new ArrayBuffer(44 + dataSize);
+    const view = new DataView(buffer);
+    const bytes = new Uint8Array(buffer);
+    const encoder = new TextEncoder();
+
+    bytes.set(encoder.encode("RIFF"), 0);
+    view.setUint32(4, 36 + dataSize, true);
+    bytes.set(encoder.encode("WAVE"), 8);
+    bytes.set(encoder.encode("fmt "), 12);
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 3, true);
+    view.setUint16(22, 1, true);
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * bytesPerSample, true);
+    view.setUint16(32, bytesPerSample, true);
+    view.setUint16(34, 32, true);
+    bytes.set(encoder.encode("data"), 36);
+    view.setUint32(40, dataSize, true);
+
+    for (let index = 0; index < flattened.length; index += 1) {
+        view.setFloat32(44 + (index * bytesPerSample), flattened[index], true);
+    }
+
+    return buffer;
+}
+
 function createRuntimeState(overrides = {}) {
     return {
         dspSessionId: 7,
@@ -94,10 +129,12 @@ class FakePatchConnection {
         catalog,
         audioFiles,
         maxAutoAckFrames = Infinity,
+        resourceRootUrl = null,
     }) {
         this.catalog = catalog;
         this.audioFiles = new Map(Object.entries(audioFiles));
         this.maxAutoAckFrames = maxAutoAckFrames;
+        this.resourceRootUrl = resourceRootUrl ? new URL(resourceRootUrl) : null;
         this.parameterListeners = new Map();
         this.endpointListeners = new Map();
         this.requestedParameters = [];
@@ -141,6 +178,14 @@ class FakePatchConnection {
         }
 
         return audioFile;
+    }
+
+    getResourceAddress(path) {
+        if (!this.resourceRootUrl) {
+            return undefined;
+        }
+
+        return new URL(path, this.resourceRootUrl);
     }
 
     sendEventOrValue(endpointID, value) {
@@ -204,6 +249,17 @@ function createDefaultAudioFiles() {
     };
 }
 
+async function withPatchedFetch(fakeFetch, callback) {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = fakeFetch;
+
+    try {
+        return await callback();
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
+}
+
 test("worker bootstraps from runtimeState instead of requesting wavetableSelect directly", async () => {
     const connection = new FakePatchConnection({
         catalog: createDefaultCatalog(),
@@ -249,7 +305,73 @@ test("worker bootstraps from runtimeState instead of requesting wavetableSelect 
     );
 });
 
-test("worker reconstructs the current loading generation before chasing a newer desired table", async () => {
+test("worker loads a spaced source wavetable path through the resolved resource URL instead of the audio-data bridge", async () => {
+    const spacedPath = "assets/factory_sources/BS2 - Acid.wav";
+    const catalog = {
+        tables: [
+            {
+                tableId: "bs2-acid",
+                name: "BS2 - Acid",
+                frameCount: 2,
+                sourceWav: spacedPath,
+            },
+        ],
+    };
+    const waveBuffer = createFloat32WaveBufferFromFrames([
+        createSineFrame(0),
+        createSineFrame(Math.PI / 2),
+    ]);
+    const fetchedUrls = [];
+    const connection = new FakePatchConnection({
+        catalog,
+        audioFiles: {},
+        maxAutoAckFrames: 0,
+        resourceRootUrl: "https://example.test/bundle/",
+    });
+
+    await withPatchedFetch(async (url) => {
+        fetchedUrls.push(String(url));
+
+        return {
+            ok: true,
+            async arrayBuffer() {
+                return waveBuffer;
+            },
+        };
+    }, async () => {
+        const controller = createWavetableWorkerController(connection, { maxFramesInFlight: 1 });
+        await controller.start();
+        await flushMicrotasks();
+
+        connection.emitEndpoint(
+            "runtimeState",
+            createRuntimeState({
+                desiredIntentSerial: 5,
+                desiredTableIndex: 0,
+                generationFrontier: 10,
+                serviceState: 0,
+            })
+        );
+        await flushMicrotasks(16);
+    });
+
+    assert.deepEqual(connection.readAudioPaths, []);
+    assert.deepEqual(fetchedUrls, [
+        "https://example.test/bundle/assets/factory_sources/BS2%20-%20Acid.wav",
+    ]);
+
+    const loadBeginEvents = connection.sentEvents.filter(({ endpointID }) => endpointID === "wavetableLoadBegin");
+    assert.deepEqual(loadBeginEvents.map(({ value }) => value), [
+        {
+            dspSessionId: 7,
+            generation: 11,
+            tableIndex: 0,
+            frameCount: 2,
+        },
+    ]);
+});
+
+test("worker reconstructs the current loading generation when it still matches the desired table", async () => {
     const connection = new FakePatchConnection({
         catalog: createDefaultCatalog(),
         audioFiles: createDefaultAudioFiles(),
@@ -264,7 +386,7 @@ test("worker reconstructs the current loading generation before chasing a newer 
         "runtimeState",
         createRuntimeState({
             desiredIntentSerial: 9,
-            desiredTableIndex: 2,
+            desiredTableIndex: 1,
             generationFrontier: 12,
             serviceState: 1,
             hasLoading: true,
@@ -415,6 +537,57 @@ test("worker does not auto-retry an unchanged failed desired table until runtime
         tableIndex: 2,
         frameCount: 1,
     });
+});
+
+test("worker aborts an obsolete loading generation when the desired table changes mid-load", async () => {
+    const connection = new FakePatchConnection({
+        catalog: createDefaultCatalog(),
+        audioFiles: createDefaultAudioFiles(),
+        maxAutoAckFrames: 0,
+    });
+
+    const controller = createWavetableWorkerController(connection, { maxFramesInFlight: 1 });
+    await controller.start();
+    await flushMicrotasks();
+
+    connection.emitEndpoint(
+        "runtimeState",
+        createRuntimeState({
+            desiredIntentSerial: 9,
+            desiredTableIndex: 1,
+            generationFrontier: 12,
+            serviceState: 1,
+            hasLoading: true,
+            loadingTableIndex: 1,
+            loadingGeneration: 12,
+        })
+    );
+    await flushMicrotasks(16);
+
+    connection.emitEndpoint(
+        "runtimeState",
+        createRuntimeState({
+            desiredIntentSerial: 10,
+            desiredTableIndex: 2,
+            generationFrontier: 12,
+            serviceState: 1,
+            hasLoading: true,
+            loadingTableIndex: 1,
+            loadingGeneration: 12,
+        })
+    );
+    await flushMicrotasks(16);
+
+    const abortEvents = connection.sentEvents.filter(({ endpointID }) => endpointID === "serviceLoadAbort");
+    const failureEvents = connection.sentEvents.filter(({ endpointID }) => endpointID === "workerLoadFailure");
+
+    assert.deepEqual(abortEvents.at(-1)?.value, {
+        dspSessionId: 7,
+        generation: 12,
+        tableIndex: 1,
+        failureReasonCode: failureReasonGeneric,
+    });
+    assert.equal(failureEvents.length, 0);
 });
 
 test("worker validates and commits a newer desired table while another table is still active", async () => {
@@ -683,4 +856,90 @@ test("worker aborts a committed loading generation when mip upload acks stall pa
         tableIndex: 1,
         failureReasonCode: failureReasonTimeout,
     });
+});
+
+test("worker automatically retries one timed-out desired table load when runtime state reports the timeout failure", async () => {
+    const timeoutHarness = new FakeTimeoutHarness();
+    const connection = new FakePatchConnection({
+        catalog: createDefaultCatalog(),
+        audioFiles: createDefaultAudioFiles(),
+        maxAutoAckFrames: 0,
+    });
+
+    const controller = createWavetableWorkerController(connection, {
+        maxFramesInFlight: 1,
+        serviceLoadTimeoutMs: 5,
+        setTimeoutFn: timeoutHarness.setTimeout.bind(timeoutHarness),
+        clearTimeoutFn: timeoutHarness.clearTimeout.bind(timeoutHarness),
+    });
+    await controller.start();
+    await flushMicrotasks();
+
+    connection.emitEndpoint(
+        "runtimeState",
+        createRuntimeState({
+            desiredIntentSerial: 9,
+            desiredTableIndex: 1,
+            generationFrontier: 12,
+            serviceState: 1,
+            hasLoading: true,
+            loadingTableIndex: 1,
+            loadingGeneration: 12,
+        })
+    );
+    await flushMicrotasks(16);
+
+    connection.emitEndpoint("wavetableMipRequest", {
+        dspSessionId: 7,
+        generation: 12,
+        tableIndex: 1,
+        mipIndex: 0,
+        urgencyLevel: 2,
+    });
+    await flushMicrotasks(16);
+
+    assert.equal(timeoutHarness.fireNext(), true);
+    await flushMicrotasks(16);
+
+    connection.emitEndpoint(
+        "runtimeState",
+        createRuntimeState({
+            desiredIntentSerial: 9,
+            desiredTableIndex: 1,
+            generationFrontier: 12,
+            serviceState: 0,
+            hasFailure: true,
+            failedTableIndex: 1,
+            failedGeneration: 12,
+            failureScope: 1,
+            failurePhase: failurePhaseTransferMip,
+            failureReasonCode: failureReasonTimeout,
+        })
+    );
+    await flushMicrotasks(16);
+
+    const retryEvents = connection.sentEvents.filter(({ endpointID }) => endpointID === "retryDesiredTableRequest");
+    assert.deepEqual(retryEvents.map(({ value }) => value), [1]);
+
+    connection.emitEndpoint(
+        "runtimeState",
+        createRuntimeState({
+            desiredIntentSerial: 9,
+            desiredTableIndex: 1,
+            generationFrontier: 12,
+            serviceState: 0,
+            hasFailure: true,
+            failedTableIndex: 1,
+            failedGeneration: 12,
+            failureScope: 1,
+            failurePhase: failurePhaseTransferMip,
+            failureReasonCode: failureReasonTimeout,
+        })
+    );
+    await flushMicrotasks(16);
+
+    assert.equal(
+        connection.sentEvents.filter(({ endpointID }) => endpointID === "retryDesiredTableRequest").length,
+        1
+    );
 });

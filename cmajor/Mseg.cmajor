@@ -3,6 +3,9 @@ namespace wt
     let msegBodySamples = 2048;
     let msegPaddedSamples = 2051;
     let effectiveWavetablePositionMonitorHz = 30.0f;
+    let msegNoteOffPolicyFinishLoop = 0;
+    let msegNoteOffPolicyImmediate = 1;
+    let msegNoteOffPolicyIgnore = 2;
 
     struct MsegPlaybackConfig
     {
@@ -153,6 +156,7 @@ namespace wt
         input event float32[msegPaddedSamples] bufferUpload;
         input event MsegPlaybackConfig playbackUpload;
         input event int32 triggerIn;
+        input event int32 noteOffIn;
         output stream float32 out;
 
         float32[msegPaddedSamples] buffer;
@@ -163,6 +167,11 @@ namespace wt
         bool holdFinalValue = true;
         bool hasUploadedBuffer = false;
         bool hasUploadedPlayback = false;
+        bool loopEnabled = false;
+        float32 loopStart = 0.0f;
+        float32 loopEnd = 1.0f;
+        int32 noteOffPolicy = msegNoteOffPolicyFinishLoop;
+        bool stopFutureWraps = false;
 
         void initialiseBuffer()
         {
@@ -175,6 +184,44 @@ namespace wt
             let minDuration = 1.0f / float32 (processor.frequency);
             let safeDuration = seconds < minDuration ? minDuration : seconds;
             progressIncrement = 1.0f / (safeDuration * float32 (processor.frequency));
+        }
+
+        void setLoopWindow (bool enabled, float32 start, float32 end)
+        {
+            float32 clampedStart = std::intrinsics::clamp (start, 0.0f, 1.0f);
+            float32 clampedEnd = std::intrinsics::clamp (end, 0.0f, 1.0f);
+
+            if (! enabled)
+            {
+                loopEnabled = false;
+                loopStart = 0.0f;
+                loopEnd = 1.0f;
+                return;
+            }
+
+            if (clampedEnd < clampedStart)
+            {
+                let swappedStart = clampedEnd;
+                clampedEnd = clampedStart;
+                clampedStart = swappedStart;
+            }
+
+            if (std::intrinsics::abs (clampedEnd - clampedStart) <= 0.000001f)
+            {
+                loopEnabled = false;
+                loopStart = 0.0f;
+                loopEnd = 1.0f;
+                return;
+            }
+
+            loopEnabled = true;
+            loopStart = clampedStart;
+            loopEnd = clampedEnd;
+        }
+
+        bool wrapsAreActive()
+        {
+            return loopEnabled && ! stopFutureWraps;
         }
 
         float32 sampleAt (float32 normalizedX)
@@ -193,6 +240,25 @@ namespace wt
             );
         }
 
+        float32 advanceProgress()
+        {
+            let rawNext = progress + progressIncrement;
+
+            if (! wrapsAreActive())
+                return std::intrinsics::min (rawNext, 1.0f);
+
+            let loopWidth = loopEnd - loopStart;
+            if (loopWidth <= 0.0f)
+                return std::intrinsics::min (rawNext, 1.0f);
+
+            if (rawNext <= loopEnd + 0.000001f)
+                return std::intrinsics::min (rawNext, loopEnd);
+
+            let remainder = rawNext - loopEnd;
+            let completedLoopCount = std::intrinsics::floor (remainder / loopWidth);
+            return loopStart + (remainder - (completedLoopCount * loopWidth));
+        }
+
         event bufferUpload (float32[msegPaddedSamples] newBuffer)
         {
             for (int32 i = 0; i < msegPaddedSamples; ++i)
@@ -206,6 +272,8 @@ namespace wt
         {
             holdFinalValue = config.holdFinalValue;
             setDurationSeconds (config.seconds);
+            setLoopWindow (config.loopEnabled, config.loopStart, config.loopEnd);
+            noteOffPolicy = config.noteOffPolicy;
             hasUploadedPlayback = true;
         }
 
@@ -214,6 +282,18 @@ namespace wt
             active = true;
             progress = 0.0f;
             currentValue = sampleAt (0.0f);
+            stopFutureWraps = false;
+        }
+
+        event noteOffIn (int32 unused)
+        {
+            if (! active || ! loopEnabled)
+                return;
+
+            if (noteOffPolicy == msegNoteOffPolicyIgnore)
+                return;
+
+            stopFutureWraps = true;
         }
 
         void main()
@@ -230,13 +310,13 @@ namespace wt
                 {
                     currentValue = sampleAt (progress);
 
-                    if (progress >= 1.0f)
+                    if (! wrapsAreActive() && progress >= 1.0f)
                     {
                         active = false;
                     }
                     else
                     {
-                        progress = std::intrinsics::min (progress + progressIncrement, 1.0f);
+                        progress = advanceProgress();
                     }
                 }
 

@@ -47,6 +47,7 @@ def _expected_audio(
     playback: MsegPlayback,
     depth: float,
     trigger_offsets: tuple[int, ...] = (0,),
+    note_off_offsets: tuple[int, ...] = (),
 ) -> tuple[np.ndarray, np.ndarray]:
     rendered = render_mseg_shape_reference(shape)
     mseg_values = render_mseg_reference(
@@ -55,6 +56,7 @@ def _expected_audio(
         num_samples=recipe.num_samples,
         playback=playback,
         trigger_offsets=trigger_offsets,
+        note_off_offsets=note_off_offsets,
     )
     routed_curve = apply_mseg_route(recipe.frame_pos_curve, mseg_values, depth)
     expected = render_cmajor_fixed_frame_tables(
@@ -272,6 +274,71 @@ def test_cmajor_mseg_probe_end_hold_matches_reference() -> None:
 
     _assert_with_artifacts(
         "test_cmajor_mseg_probe_end_hold_matches_reference",
+        recipe.sample_rate,
+        {"actual": actual, "expected": expected},
+        lambda: assert_allclose(actual, expected, atol=1e-6, rtol=0.0),
+    )
+
+
+@pytest.mark.cmajor
+def test_cmajor_mseg_probe_loop_window_matches_reference() -> None:
+    recipe = make_static_tone_recipe(
+        name="mseg_loop_window",
+        sample_rate=300,
+        duration_seconds=0.18,
+        frame_position=0.0,
+    )
+    shape = MsegShape(points=(MsegPoint(0.0, 0.0), MsegPoint(1.0, 1.0)))
+    rendered, expected = _expected_audio(
+        recipe=recipe,
+        shape=shape,
+        playback=MsegPlayback(seconds=0.05, loop=(0.25, 0.75)),
+        depth=0.8,
+    )
+    actual = render_cmajor_mseg_probe(
+        [make_sweep4_bank()],
+        recipe,
+        mseg_buffer=rendered,
+        playback=MsegPlayback(seconds=0.05, loop=(0.25, 0.75)),
+        depth=0.8,
+    )
+
+    _assert_with_artifacts(
+        "test_cmajor_mseg_probe_loop_window_matches_reference",
+        recipe.sample_rate,
+        {"actual": actual, "expected": expected},
+        lambda: assert_allclose(actual, expected, atol=1e-6, rtol=0.0),
+    )
+
+
+@pytest.mark.cmajor
+def test_cmajor_mseg_probe_finish_loop_note_off_matches_reference() -> None:
+    recipe = make_static_tone_recipe(
+        name="mseg_finish_loop_note_off",
+        sample_rate=300,
+        duration_seconds=0.25,
+        frame_position=0.0,
+    )
+    shape = MsegShape(points=(MsegPoint(0.0, 0.0), MsegPoint(1.0, 1.0)))
+    note_off_offsets = (20,)
+    rendered, expected = _expected_audio(
+        recipe=recipe,
+        shape=shape,
+        playback=MsegPlayback(seconds=0.1, loop=(0.25, 0.75)),
+        depth=0.8,
+        note_off_offsets=note_off_offsets,
+    )
+    actual = render_cmajor_mseg_probe(
+        [make_sweep4_bank()],
+        recipe,
+        mseg_buffer=rendered,
+        playback=MsegPlayback(seconds=0.1, loop=(0.25, 0.75)),
+        depth=0.8,
+        note_off_offsets=note_off_offsets,
+    )
+
+    _assert_with_artifacts(
+        "test_cmajor_mseg_probe_finish_loop_note_off_matches_reference",
         recipe.sample_rate,
         {"actual": actual, "expected": expected},
         lambda: assert_allclose(actual, expected, atol=1e-6, rtol=0.0),

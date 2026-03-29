@@ -444,6 +444,7 @@ test("runtime table state keeps the displayed wavetable on the audible table whi
             loadingGeneration: null,
             isPendingSelection: true,
             isRetryableFailure: false,
+            failureMessage: null,
         }
     );
 });
@@ -474,6 +475,7 @@ test("runtime table state presents the loading table when there is no active aud
             loadingGeneration: 15,
             isPendingSelection: true,
             isRetryableFailure: false,
+            failureMessage: null,
         }
     );
 });
@@ -504,6 +506,42 @@ test("runtime table state marks an unchanged failed desired table as retryable",
             loadingGeneration: null,
             isPendingSelection: false,
             isRetryableFailure: true,
+            failureMessage: "Wavetable load failed.",
+        }
+    );
+});
+
+test("runtime table state names a timed-out wavetable transfer failure", async () => {
+    const { resolveRuntimeTablePresentation } = await loadPatchViewModule();
+
+    assert.deepEqual(
+        resolveRuntimeTablePresentation({
+            serviceState: 0,
+            hasActive: false,
+            activeTableIndex: 0,
+            activeGeneration: 0,
+            hasLoading: false,
+            loadingTableIndex: 0,
+            loadingGeneration: 0,
+            desiredTableIndex: 6,
+            desiredIntentSerial: 10,
+            hasFailure: true,
+            failedTableIndex: 6,
+            failedGeneration: 14,
+            failureScope: 1,
+            failurePhase: 3,
+            failureReasonCode: 2,
+        }),
+        {
+            desiredTableIndex: 6,
+            presentedTableIndex: 6,
+            activeTableIndex: null,
+            activeGeneration: null,
+            loadingTableIndex: null,
+            loadingGeneration: null,
+            isPendingSelection: false,
+            isRetryableFailure: true,
+            failureMessage: "Wavetable load timed out.",
         }
     );
 });
@@ -530,6 +568,251 @@ test("view table-select handler retries the failed desired table instead of pret
 
     assert.deepEqual(sentEvents, [{ endpointID: "retryDesiredTableRequest", value: 1 }]);
     assert.deepEqual(selectedTableIndices, []);
+});
+
+test("view playback controls mirror the current MSEG seconds rate and full-shape loop state", async () => {
+    const { CosimoSynthView } = await loadPatchViewModule();
+    const view = Object.create(CosimoSynthView.prototype);
+
+    view.msegState = {
+        playback: {
+            rate: { kind: "seconds", seconds: 0.25 },
+            loop: { startX: 0.0, endX: 1.0 },
+        },
+    };
+    view.msegRateInput = { value: "" };
+    view.msegRateReadout = { textContent: "" };
+    view.msegLoopToggle = { checked: false };
+
+    view.syncMsegPlaybackControls();
+
+    assert.equal(view.msegRateInput.value, "0.250");
+    assert.equal(view.msegRateReadout.textContent, "0.250 s");
+    assert.equal(view.msegLoopToggle.checked, true);
+});
+
+test("view rate input updates the controller playback seconds while preserving loop state", async () => {
+    const { CosimoSynthView } = await loadPatchViewModule();
+    const updatedPlaybacks = [];
+    const view = Object.create(CosimoSynthView.prototype);
+
+    view.msegState = {
+        playback: {
+            rate: { kind: "seconds", seconds: 1.0 },
+            loop: { startX: 0.0, endX: 1.0 },
+            noteOffPolicy: "finish_loop",
+            holdFinalValue: true,
+            legatoRestarts: false,
+        },
+    };
+    view.msegRateInput = { value: "0.375" };
+    view.msegController = {
+        setPlayback(playback) {
+            updatedPlaybacks.push(playback);
+        },
+    };
+
+    view.handleMsegRateInput();
+
+    assert.deepEqual(updatedPlaybacks, [{
+        rate: { kind: "seconds", seconds: 0.375 },
+        loop: { startX: 0.0, endX: 1.0 },
+        noteOffPolicy: "finish_loop",
+        holdFinalValue: true,
+        legatoRestarts: false,
+    }]);
+});
+
+test("view loop toggle switches between full-shape looping and one-shot playback", async () => {
+    const { CosimoSynthView } = await loadPatchViewModule();
+    const updatedPlaybacks = [];
+    const view = Object.create(CosimoSynthView.prototype);
+
+    view.msegState = {
+        playback: {
+            rate: { kind: "seconds", seconds: 0.5 },
+            loop: null,
+            noteOffPolicy: "finish_loop",
+            holdFinalValue: true,
+            legatoRestarts: false,
+        },
+    };
+    view.msegLoopToggle = { checked: true };
+    view.msegController = {
+        setPlayback(playback) {
+            updatedPlaybacks.push(playback);
+        },
+    };
+
+    view.handleMsegLoopInput();
+    view.msegState = { playback: updatedPlaybacks[0] };
+    view.msegLoopToggle.checked = false;
+    view.handleMsegLoopInput();
+
+    assert.deepEqual(updatedPlaybacks, [
+        {
+            rate: { kind: "seconds", seconds: 0.5 },
+            loop: { startX: 0.0, endX: 1.0 },
+            noteOffPolicy: "finish_loop",
+            holdFinalValue: true,
+            legatoRestarts: false,
+        },
+        {
+            rate: { kind: "seconds", seconds: 0.5 },
+            loop: null,
+            noteOffPolicy: "finish_loop",
+            holdFinalValue: true,
+            legatoRestarts: false,
+        },
+    ]);
+});
+
+test("view readout names the wavetable load failure and exposes the retry button", async () => {
+    const { CosimoSynthView } = await loadPatchViewModule();
+    const view = Object.create(CosimoSynthView.prototype);
+    const tableMeta = { name: "Table 3" };
+
+    view.options = { platform: "desktop" };
+    view.bankReadout = { textContent: "" };
+    view.tableRetryButton = { hidden: true, disabled: true };
+    view.displayStatus = { textContent: "" };
+    view.tableErrorBanner = { hidden: true, textContent: "" };
+    view.runtimeTablePresentation = {
+        isRetryableFailure: true,
+        isPendingSelection: false,
+        failureMessage: "Wavetable load timed out.",
+    };
+    view.latestRuntimeTableState = {
+        desiredTableIndex: 3,
+        desiredIntentSerial: 10,
+        serviceState: 0,
+        hasActive: false,
+        activeTableIndex: 0,
+        activeGeneration: 0,
+        hasLoading: false,
+        loadingTableIndex: 0,
+        loadingGeneration: 0,
+        hasFailure: true,
+        failedTableIndex: 3,
+        failedGeneration: 14,
+        failureScope: 1,
+        failurePhase: 3,
+        failureReasonCode: 2,
+    };
+    view.latchedRuntimeFailureState = null;
+    view.currentTableIndex = 3;
+    view.desiredTableIndex = 3;
+    view.factoryBankCatalog = {
+        tables: [
+            { name: "Table 0" },
+            { name: "Table 1" },
+            { name: "Table 2" },
+            tableMeta,
+        ],
+    };
+    view.getSelectedTableMeta = () => tableMeta;
+    view.getDesiredTableMeta = () => tableMeta;
+
+    view.updateBankReadout();
+
+    assert.equal(view.bankReadout.textContent, "Factory bank • Table 3 • Wavetable load timed out.");
+    assert.equal(view.displayStatus.textContent, "Wavetable load timed out.");
+    assert.equal(
+        view.tableErrorBanner.textContent,
+        "Table 3 failed during mip transfer (committed load, generation 14, timeout)."
+    );
+    assert.equal(view.tableErrorBanner.hidden, false);
+    assert.equal(view.tableRetryButton.hidden, false);
+    assert.equal(view.tableRetryButton.disabled, false);
+});
+
+test("view keeps the last wavetable failure visible until the requested table actually becomes active", async () => {
+    const { CosimoSynthView } = await loadPatchViewModule();
+    const view = Object.create(CosimoSynthView.prototype);
+
+    view.options = { platform: "ios" };
+    view.bankReadout = { textContent: "" };
+    view.tableRetryButton = { hidden: true, disabled: true };
+    view.displayStatus = { textContent: "" };
+    view.tableErrorBanner = { hidden: true, textContent: "" };
+    view.factoryBankCatalog = {
+        tables: [
+            { name: "Table 0" },
+            { name: "Table 1" },
+        ],
+    };
+    view.currentTableIndex = 0;
+    view.desiredTableIndex = 1;
+    view.hasRuntimeTableState = false;
+    view.applyRuntimeTablePresentation = () => {};
+    view.getSelectedTableMeta = () => view.factoryBankCatalog.tables[view.currentTableIndex];
+    view.getDesiredTableMeta = () => view.factoryBankCatalog.tables[view.desiredTableIndex];
+
+    view.handleRuntimeTableState({
+        desiredTableIndex: 1,
+        desiredIntentSerial: 4,
+        serviceState: 0,
+        hasActive: false,
+        activeTableIndex: 0,
+        activeGeneration: 0,
+        hasLoading: false,
+        loadingTableIndex: 0,
+        loadingGeneration: 0,
+        hasFailure: true,
+        failedTableIndex: 1,
+        failedGeneration: 12,
+        failureScope: 1,
+        failurePhase: 3,
+        failureReasonCode: 2,
+    });
+
+    assert.equal(view.tableErrorBanner.hidden, false);
+    assert.equal(
+        view.tableErrorBanner.textContent,
+        "Table 1 failed during mip transfer (committed load, generation 12, timeout)."
+    );
+
+    view.handleRuntimeTableState({
+        desiredTableIndex: 1,
+        desiredIntentSerial: 5,
+        serviceState: 0,
+        hasActive: false,
+        activeTableIndex: 0,
+        activeGeneration: 0,
+        hasLoading: false,
+        loadingTableIndex: 0,
+        loadingGeneration: 0,
+        hasFailure: false,
+        failedTableIndex: 0,
+        failedGeneration: 0,
+        failureScope: 0,
+        failurePhase: 0,
+        failureReasonCode: 0,
+    });
+
+    assert.equal(view.tableErrorBanner.hidden, false);
+    assert.equal(view.displayStatus.textContent, "Wavetable load timed out.");
+
+    view.currentTableIndex = 1;
+    view.handleRuntimeTableState({
+        desiredTableIndex: 1,
+        desiredIntentSerial: 5,
+        serviceState: 2,
+        hasActive: true,
+        activeTableIndex: 1,
+        activeGeneration: 13,
+        hasLoading: false,
+        loadingTableIndex: 0,
+        loadingGeneration: 0,
+        hasFailure: false,
+        failedTableIndex: 0,
+        failedGeneration: 0,
+        failureScope: 0,
+        failurePhase: 0,
+        failureReasonCode: 0,
+    });
+
+    assert.equal(view.tableErrorBanner.hidden, true);
 });
 
 test("view can explicitly request a runtime-state sync without relying on status side effects", async () => {

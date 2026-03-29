@@ -539,6 +539,50 @@ for old, new, label in [
 path.write_text(text, encoding="utf-8")
 PY
 
+python3 - "$generated_dir/cmajor_plugin.cpp" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+
+if not path.is_file():
+    raise SystemExit(0)
+
+text = path.read_text(encoding="utf-8")
+old = """        \"    async readResource (path)\\n\"
+        \"    {\\n\"
+        \"        return fetch (path);\\n\"
+        \"    }\\n\"
+"""
+new = """        \"    async readResource (path)\\n\"
+        \"    {\\n\"
+        \"        const resourceAddress = this.getResourceAddress (path);\\n\"
+        \"\\n\"
+        \"        if (resourceAddress instanceof URL)\\n\"
+        \"            return fetch (resourceAddress.toString());\\n\"
+        \"\\n\"
+        \"        if (typeof resourceAddress === \\\"string\\\" && resourceAddress.length > 0)\\n\"
+        \"        {\\n\"
+        \"            try\\n\"
+        \"            {\\n\"
+        \"                return fetch (new URL (resourceAddress, this.rootResourcePath).toString());\\n\"
+        \"            }\\n\"
+        \"            catch (error)\\n\"
+        \"            {\\n\"
+        \"                return fetch (resourceAddress);\\n\"
+        \"            }\\n\"
+        \"        }\\n\"
+        \"\\n\"
+        \"        return fetch (path);\\n\"
+        \"    }\\n\"
+"""
+
+if old not in text and new not in text:
+    raise SystemExit(f"Could not find the expected PatchConnection readResource snippet in {path}")
+
+path.write_text(text.replace(old, new, 1), encoding="utf-8")
+PY
+
 rm -rf "$output_dir"
 mv "$generated_dir" "$output_dir"
 

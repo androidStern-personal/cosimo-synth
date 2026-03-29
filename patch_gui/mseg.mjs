@@ -3,6 +3,8 @@ export const MSEG_PADDED_SAMPLES = MSEG_BODY_SAMPLES + 3;
 export const MSEG_CURVE_POWER_LIMIT = 20;
 export const MSEG_DEFAULT_NAME = "MSEG 1";
 export const MSEG_DEFAULT_DEPTH = 1.0;
+export const MSEG_RATE_MIN_SECONDS = 0.05;
+export const MSEG_RATE_MAX_SECONDS = 8.0;
 export const MSEG_RATE_KIND_SECONDS = 0;
 export const MSEG_RATE_KIND_TEMPO = 1;
 export const MSEG_NOTE_OFF_POLICY_FINISH_LOOP = 0;
@@ -53,7 +55,7 @@ export function createDefaultMsegPlayback() {
             kind: "seconds",
             seconds: 1.0,
         },
-        loop: null,
+        loop: { startX: 0.0, endX: 1.0 },
         noteOffPolicy: "finish_loop",
         legatoRestarts: false,
         holdFinalValue: true,
@@ -64,6 +66,15 @@ export function clampMsegDepth(value) {
     return clamp(Number.isFinite(value) ? value : 0.0, -1.0, 1.0);
 }
 
+export function clampMsegRateSeconds(value) {
+    const numericValue = Number(value);
+    return clamp(
+        Number.isFinite(numericValue) ? numericValue : 1.0,
+        MSEG_RATE_MIN_SECONDS,
+        MSEG_RATE_MAX_SECONDS
+    );
+}
+
 function normalizeMsegLoop(loop) {
     if (!loop || typeof loop !== "object") {
         return null;
@@ -71,6 +82,10 @@ function normalizeMsegLoop(loop) {
 
     const startX = clamp01(Number(loop.startX));
     const endX = clamp01(Number(loop.endX));
+
+    if (almostEqual(startX, endX)) {
+        return null;
+    }
 
     if (endX < startX) {
         return {
@@ -95,7 +110,7 @@ export function normalizeMsegPlayback(playback = createDefaultMsegPlayback()) {
         version: 1,
         rate: {
             kind: "seconds",
-            seconds: Number.isFinite(seconds) && seconds > 0.0 ? seconds : 1.0,
+            seconds: clampMsegRateSeconds(Number.isFinite(seconds) ? seconds : 1.0),
         },
         loop: normalizeMsegLoop(next.loop),
         noteOffPolicy,
@@ -349,7 +364,7 @@ export function toMsegPlaybackConfigEvent(playback) {
         rateKind: normalizedPlayback.rate.kind === "tempo" ? MSEG_RATE_KIND_TEMPO : MSEG_RATE_KIND_SECONDS,
         loopEnabled: normalizedPlayback.loop !== null,
         loopStart: normalizedPlayback.loop?.startX ?? 0.0,
-        loopEnd: normalizedPlayback.loop?.endX ?? 1.0,
+        loopEnd: normalizedPlayback.loop?.endX ?? 0.0,
         noteOffPolicy:
             normalizedPlayback.noteOffPolicy === "immediate"
                 ? MSEG_NOTE_OFF_POLICY_IMMEDIATE
