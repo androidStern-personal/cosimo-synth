@@ -1,5 +1,15 @@
 namespace wt
 {
+    let playModePoly = 0;
+    let playModeMono = 1;
+    let playModeMonoST = 2;
+    let playModeMonoFP = 3;
+    let playModeMonoSTFP = 4;
+    let notePriorityLast = 0;
+    let notePriorityHigh = 1;
+    let notePriorityLow = 2;
+    let maxMonoHeldNotes = 64;
+
     struct DesiredTableChange
     {
         int32 tableIndex;
@@ -34,6 +44,656 @@ namespace wt
         int32 failureScope;
         int32 failurePhase;
         int32 failureReasonCode;
+    }
+
+    processor NoteDispatcher (int voiceCount,
+                              int MPEMasterChannel = 0)
+    {
+        input event (std::notes::NoteOn,
+                     std::notes::NoteOff,
+                     std::notes::PitchBend,
+                     std::notes::Slide,
+                     std::notes::Pressure,
+                     std::notes::Control) eventIn;
+        input value float32 playModeIn [[ name: "Play Mode", min: 0.0f, max: 4.0f, init: 0.0f, discrete: true, step: 1.0f, rampFrames: 0 ]];
+        input value float32 notePriorityIn [[ name: "Note Priority", min: 0.0f, max: 2.0f, init: 0.0f, discrete: true, step: 1.0f, rampFrames: 0 ]];
+
+        output event (std::notes::NoteOn,
+                      std::notes::NoteOff,
+                      std::notes::PitchBend,
+                      std::notes::Slide,
+                      std::notes::Pressure,
+                      std::notes::Control) voiceEventOut[voiceCount];
+        output event wt::VoiceRetune voiceRetuneOut[voiceCount];
+
+        struct VoiceState
+        {
+            bool isActive, isReleasing;
+            int32 channel, age;
+            float32 pitch;
+
+            void start (int32 nextActiveAge, int32 voiceChannel, float32 voicePitch)
+            {
+                this.isActive = true;
+                this.isReleasing = false;
+                this.channel = voiceChannel;
+                this.pitch = voicePitch;
+                this.age = nextActiveAge;
+            }
+
+            void free (int32 nextInactiveAge)
+            {
+                this.isActive = false;
+                this.isReleasing = false;
+                this.channel = -1;
+                this.pitch = 0.0f;
+                this.age = nextInactiveAge;
+            }
+        }
+
+        struct HeldMonoNote
+        {
+            bool occupied, held, sustained;
+            int32 channel, order;
+            float32 pitch, velocity;
+        }
+
+        static_assert (voiceCount > 0);
+
+        VoiceState[voiceCount] polyVoiceState;
+        HeldMonoNote[maxMonoHeldNotes] monoHeldNotes;
+
+        float32[16] channelPitchBendSemitones;
+        float32[16] channelPressure;
+        float32[16] channelSlide;
+
+        int32 nextActiveTime = 0x70000000;
+        int32 nextInactiveTime = 1;
+        bool mpeMasterSustainActive;
+        int64 perChannelSustainActive;
+        int32 playModeState = playModePoly;
+        int32 notePriorityState = notePriorityLast;
+        int32 lastObservedPlayMode = playModePoly;
+        int32 lastObservedNotePriority = notePriorityLast;
+        int32 nextMonoOrder = 1;
+        bool monoVoiceActive = false;
+        int32 monoVoiceChannel = -1;
+        float32 monoVoicePitch = 0.0f;
+
+        int32 readPlayModeInput()
+        {
+            let rounded = int32 (
+                std::intrinsics::floor (
+                    std::intrinsics::clamp (playModeIn, 0.0f, 4.0f) + 0.5f
+                )
+            );
+            return rounded;
+        }
+
+        int32 readNotePriorityInput()
+        {
+            let rounded = int32 (
+                std::intrinsics::floor (
+                    std::intrinsics::clamp (notePriorityIn, 0.0f, 2.0f) + 0.5f
+                )
+            );
+            return rounded;
+        }
+
+        int32 normalisePlayMode() { return playModeState; }
+        int32 normaliseNotePriority() { return notePriorityState; }
+
+        bool isMonoMode()
+        {
+            return normalisePlayMode() != playModePoly;
+        }
+
+        bool isSingleTriggerMode()
+        {
+            let mode = normalisePlayMode();
+            return mode == playModeMonoST || mode == playModeMonoSTFP;
+        }
+
+        bool isFingeredPortamentoMode()
+        {
+            let mode = normalisePlayMode();
+            return mode == playModeMonoFP || mode == playModeMonoSTFP;
+        }
+
+        bool pitchesMatch (float32 left, float32 right)
+        {
+            return std::intrinsics::abs (left - right) <= 0.0001f;
+        }
+
+        bool isSustainActive (int32 channel)
+        {
+            if (channel < 0 || channel >= 64)
+                return mpeMasterSustainActive;
+
+            return mpeMasterSustainActive || (perChannelSustainActive & (1L << channel)) != 0;
+        }
+
+        void setChannelSustain (int32 channel, bool active)
+        {
+            if (channel < 0 || channel >= 64)
+                return;
+
+            if (active)
+                perChannelSustainActive |= (1L << channel);
+            else
+                perChannelSustainActive &= ~(1L << channel);
+        }
+
+        void clearMonoHeldNotes()
+        {
+            for (int32 slot = 0; slot < maxMonoHeldNotes; ++slot)
+            {
+                monoHeldNotes.at (slot).occupied = false;
+                monoHeldNotes.at (slot).held = false;
+                monoHeldNotes.at (slot).sustained = false;
+                monoHeldNotes.at (slot).channel = -1;
+                monoHeldNotes.at (slot).order = 0;
+                monoHeldNotes.at (slot).pitch = 0.0f;
+                monoHeldNotes.at (slot).velocity = 0.0f;
+            }
+        }
+
+        int32 findHeldMonoSlot (int32 channel, float32 pitch)
+        {
+            for (int32 slot = 0; slot < maxMonoHeldNotes; ++slot)
+            {
+                let heldNote = monoHeldNotes.at (slot);
+                if (heldNote.occupied && heldNote.channel == channel && pitchesMatch (heldNote.pitch, pitch))
+                    return slot;
+            }
+
+            return -1;
+        }
+
+        int32 findFreeHeldMonoSlot()
+        {
+            for (int32 slot = 0; slot < maxMonoHeldNotes; ++slot)
+                if (! monoHeldNotes.at (slot).occupied)
+                    return slot;
+
+            return -1;
+        }
+
+        bool monoSlotMatchesCurrentVoice (int32 slot)
+        {
+            if (slot < 0 || ! monoVoiceActive)
+                return false;
+
+            let heldNote = monoHeldNotes.at (slot);
+            return heldNote.occupied
+                && heldNote.channel == monoVoiceChannel
+                && pitchesMatch (heldNote.pitch, monoVoicePitch);
+        }
+
+        int32 chooseMonoPrioritySlot()
+        {
+            let priority = normaliseNotePriority();
+            int32 selectedSlot = -1;
+            int32 selectedOrder = -1;
+            float32 selectedPitch = 0.0f;
+
+            for (int32 slot = 0; slot < maxMonoHeldNotes; ++slot)
+            {
+                let heldNote = monoHeldNotes.at (slot);
+
+                if (! heldNote.occupied || (! heldNote.held && ! heldNote.sustained))
+                    continue;
+
+                if (selectedSlot < 0)
+                {
+                    selectedSlot = slot;
+                    selectedOrder = heldNote.order;
+                    selectedPitch = heldNote.pitch;
+                    continue;
+                }
+
+                if (priority == notePriorityLast)
+                {
+                    if (heldNote.order > selectedOrder)
+                    {
+                        selectedSlot = slot;
+                        selectedOrder = heldNote.order;
+                        selectedPitch = heldNote.pitch;
+                    }
+                    continue;
+                }
+
+                if (priority == notePriorityHigh)
+                {
+                    if (heldNote.pitch > selectedPitch
+                        || (pitchesMatch (heldNote.pitch, selectedPitch) && heldNote.order > selectedOrder))
+                    {
+                        selectedSlot = slot;
+                        selectedOrder = heldNote.order;
+                        selectedPitch = heldNote.pitch;
+                    }
+                    continue;
+                }
+
+                if (heldNote.pitch < selectedPitch
+                    || (pitchesMatch (heldNote.pitch, selectedPitch) && heldNote.order > selectedOrder))
+                {
+                    selectedSlot = slot;
+                    selectedOrder = heldNote.order;
+                    selectedPitch = heldNote.pitch;
+                }
+            }
+
+            return selectedSlot;
+        }
+
+        void emitExpressionSnapshotForVoice (wrap<voiceCount> voice, int32 channel)
+        {
+            if (channel < 0 || channel >= 16)
+                return;
+
+            std::notes::PitchBend bend;
+            bend.channel = channel;
+            bend.bendSemitones = channelPitchBendSemitones.at (channel);
+            voiceEventOut[voice] <- bend;
+
+            std::notes::Pressure pressure;
+            pressure.channel = channel;
+            pressure.pressure = channelPressure.at (channel);
+            voiceEventOut[voice] <- pressure;
+
+            std::notes::Slide slide;
+            slide.channel = channel;
+            slide.slide = channelSlide.at (channel);
+            voiceEventOut[voice] <- slide;
+        }
+
+        wrap<voiceCount> findOldestIndex()
+        {
+            if const (voiceCount == 1)
+            {
+                return 0;
+            }
+            else
+            {
+                wrap<voiceCount> index;
+                var oldest = polyVoiceState[0].age;
+
+                for (wrap<voiceCount> voice = 1)
+                {
+                    let age = polyVoiceState[voice].age;
+
+                    if (age < oldest)
+                    {
+                        index = voice;
+                        oldest = age;
+                    }
+                }
+
+                return index;
+            }
+        }
+
+        void handlePolyNoteOn (std::notes::NoteOn noteOn)
+        {
+            let oldest = findOldestIndex();
+
+            if (polyVoiceState[oldest].isActive)
+            {
+                voiceEventOut[oldest] <- std::notes::NoteOff (polyVoiceState[oldest].channel,
+                                                              polyVoiceState[oldest].pitch,
+                                                              0.0f);
+            }
+
+            polyVoiceState[oldest].start (++nextActiveTime, noteOn.channel, noteOn.pitch);
+            voiceEventOut[oldest] <- noteOn;
+            emitExpressionSnapshotForVoice (oldest, noteOn.channel);
+        }
+
+        void handlePolyNoteOff (std::notes::NoteOff noteOff)
+        {
+            for (wrap<voiceCount> voice)
+            {
+                if (polyVoiceState[voice].channel == noteOff.channel
+                    && pitchesMatch (polyVoiceState[voice].pitch, noteOff.pitch))
+                {
+                    if (isSustainActive (noteOff.channel))
+                    {
+                        polyVoiceState[voice].isReleasing = true;
+                    }
+                    else
+                    {
+                        voiceEventOut[voice] <- noteOff;
+                        polyVoiceState[voice].free (++nextInactiveTime);
+                    }
+                }
+            }
+        }
+
+        void addOrRefreshMonoHeldNote (std::notes::NoteOn noteOn)
+        {
+            int32 slot = findHeldMonoSlot (noteOn.channel, noteOn.pitch);
+
+            if (slot < 0)
+                slot = findFreeHeldMonoSlot();
+
+            if (slot < 0)
+                return;
+
+            monoHeldNotes.at (slot).occupied = true;
+            monoHeldNotes.at (slot).held = true;
+            monoHeldNotes.at (slot).sustained = false;
+            monoHeldNotes.at (slot).channel = noteOn.channel;
+            monoHeldNotes.at (slot).pitch = noteOn.pitch;
+            monoHeldNotes.at (slot).velocity = noteOn.velocity;
+            monoHeldNotes.at (slot).order = nextMonoOrder;
+            nextMonoOrder += 1;
+        }
+
+        void releaseMonoHeldNote (std::notes::NoteOff noteOff)
+        {
+            let slot = findHeldMonoSlot (noteOff.channel, noteOff.pitch);
+
+            if (slot < 0)
+                return;
+
+            if (isSustainActive (noteOff.channel))
+            {
+                monoHeldNotes.at (slot).held = false;
+                monoHeldNotes.at (slot).sustained = true;
+                return;
+            }
+
+            monoHeldNotes.at (slot).occupied = false;
+            monoHeldNotes.at (slot).held = false;
+            monoHeldNotes.at (slot).sustained = false;
+        }
+
+        void clearReleasedSustainedMonoNotesForChannel (int32 channel)
+        {
+            for (int32 slot = 0; slot < maxMonoHeldNotes; ++slot)
+            {
+                let heldNote = monoHeldNotes.at (slot);
+
+                if (! heldNote.occupied)
+                    continue;
+
+                if (heldNote.held)
+                    continue;
+
+                if (channel == MPEMasterChannel || heldNote.channel == channel)
+                {
+                    monoHeldNotes.at (slot).occupied = false;
+                    monoHeldNotes.at (slot).sustained = false;
+                }
+            }
+        }
+
+        void emitMonoVoiceRetuneForSlot (int32 slot,
+                                         bool retrigger,
+                                         bool glide)
+        {
+            if (slot < 0 || slot >= maxMonoHeldNotes)
+                return;
+
+            let heldNote = monoHeldNotes.at (slot);
+            if (! heldNote.occupied)
+                return;
+
+            wt::VoiceRetune change;
+            change.channel = heldNote.channel;
+            change.pitch = heldNote.pitch;
+            change.velocity = heldNote.velocity;
+            change.bendSemitones = heldNote.channel >= 0 && heldNote.channel < 16 ? channelPitchBendSemitones.at (heldNote.channel) : 0.0f;
+            change.pressure = heldNote.channel >= 0 && heldNote.channel < 16 ? channelPressure.at (heldNote.channel) : 0.0f;
+            change.slide = heldNote.channel >= 0 && heldNote.channel < 16 ? channelSlide.at (heldNote.channel) : 0.0f;
+            change.retrigger = retrigger;
+            change.glide = glide;
+            voiceRetuneOut[0] <- change;
+
+            monoVoiceActive = true;
+            monoVoiceChannel = heldNote.channel;
+            monoVoicePitch = heldNote.pitch;
+        }
+
+        void emitMonoVoiceNoteOff (float32 velocity)
+        {
+            if (! monoVoiceActive)
+                return;
+
+            voiceEventOut[0] <- std::notes::NoteOff (monoVoiceChannel,
+                                                     monoVoicePitch,
+                                                     velocity);
+            monoVoiceActive = false;
+            monoVoiceChannel = -1;
+            monoVoicePitch = 0.0f;
+        }
+
+        void applyMonoSelectionAfterNoteOn()
+        {
+            let selectedSlot = chooseMonoPrioritySlot();
+
+            if (selectedSlot < 0)
+                return;
+
+            if (monoSlotMatchesCurrentVoice (selectedSlot))
+            {
+                if (! isSingleTriggerMode())
+                    emitMonoVoiceRetuneForSlot (selectedSlot, true, false);
+
+                return;
+            }
+
+            let retrigger = ! monoVoiceActive || ! isSingleTriggerMode();
+            let glide = isFingeredPortamentoMode() && monoVoiceActive;
+            emitMonoVoiceRetuneForSlot (selectedSlot, retrigger, glide);
+        }
+
+        void applyMonoSelectionAfterNoteOff (float32 releaseVelocity)
+        {
+            let selectedSlot = chooseMonoPrioritySlot();
+
+            if (selectedSlot < 0)
+            {
+                emitMonoVoiceNoteOff (releaseVelocity);
+                return;
+            }
+
+            if (monoSlotMatchesCurrentVoice (selectedSlot))
+                return;
+
+            let retrigger = ! isSingleTriggerMode();
+            let glide = isFingeredPortamentoMode() && monoVoiceActive;
+            emitMonoVoiceRetuneForSlot (selectedSlot, retrigger, glide);
+        }
+
+        void resetDispatcherState()
+        {
+            for (wrap<voiceCount> voice)
+            {
+                if (polyVoiceState[voice].isActive)
+                    voiceEventOut[voice] <- std::notes::NoteOff (polyVoiceState[voice].channel,
+                                                                 polyVoiceState[voice].pitch,
+                                                                 0.0f);
+
+                polyVoiceState[voice].free (++nextInactiveTime);
+            }
+
+            emitMonoVoiceNoteOff (0.0f);
+            clearMonoHeldNotes();
+            mpeMasterSustainActive = false;
+            perChannelSustainActive = 0;
+        }
+
+        event eventIn (std::notes::NoteOn noteOn)
+        {
+            if (! isMonoMode())
+            {
+                handlePolyNoteOn (noteOn);
+                return;
+            }
+
+            addOrRefreshMonoHeldNote (noteOn);
+            applyMonoSelectionAfterNoteOn();
+        }
+
+        event eventIn (std::notes::NoteOff noteOff)
+        {
+            if (! isMonoMode())
+            {
+                handlePolyNoteOff (noteOff);
+                return;
+            }
+
+            if (isSustainActive (noteOff.channel))
+            {
+                releaseMonoHeldNote (noteOff);
+                return;
+            }
+
+            releaseMonoHeldNote (noteOff);
+            applyMonoSelectionAfterNoteOff (noteOff.velocity);
+        }
+
+        event eventIn (std::notes::PitchBend bend)
+        {
+            if (bend.channel >= 0 && bend.channel < 16)
+                channelPitchBendSemitones.at (bend.channel) = bend.bendSemitones;
+
+            if (! isMonoMode())
+            {
+                for (wrap<voiceCount> voice)
+                    if (polyVoiceState[voice].channel == bend.channel)
+                        voiceEventOut[voice] <- bend;
+
+                return;
+            }
+
+            if (monoVoiceActive && monoVoiceChannel == bend.channel)
+                voiceEventOut[0] <- bend;
+        }
+
+        event eventIn (std::notes::Pressure pressure)
+        {
+            if (pressure.channel >= 0 && pressure.channel < 16)
+                channelPressure.at (pressure.channel) = pressure.pressure;
+
+            if (! isMonoMode())
+            {
+                for (wrap<voiceCount> voice)
+                    if (polyVoiceState[voice].channel == pressure.channel)
+                        voiceEventOut[voice] <- pressure;
+
+                return;
+            }
+
+            if (monoVoiceActive && monoVoiceChannel == pressure.channel)
+                voiceEventOut[0] <- pressure;
+        }
+
+        event eventIn (std::notes::Slide slide)
+        {
+            if (slide.channel >= 0 && slide.channel < 16)
+                channelSlide.at (slide.channel) = slide.slide;
+
+            if (! isMonoMode())
+            {
+                for (wrap<voiceCount> voice)
+                    if (polyVoiceState[voice].channel == slide.channel)
+                        voiceEventOut[voice] <- slide;
+
+                return;
+            }
+
+            if (monoVoiceActive && monoVoiceChannel == slide.channel)
+                voiceEventOut[0] <- slide;
+        }
+
+        event eventIn (std::notes::Control control)
+        {
+            if (control.control == 64)
+            {
+                bool sustainActive = control.value >= 0.5f;
+                setChannelSustain (control.channel, sustainActive);
+
+                if (control.channel == MPEMasterChannel)
+                    mpeMasterSustainActive = sustainActive;
+
+                if (! isMonoMode())
+                {
+                    if (! sustainActive)
+                    {
+                        for (wrap<voiceCount> voice)
+                        {
+                            if ((control.channel == MPEMasterChannel || polyVoiceState[voice].channel == control.channel)
+                                && polyVoiceState[voice].isActive
+                                && polyVoiceState[voice].isReleasing)
+                            {
+                                voiceEventOut[voice] <- std::notes::NoteOff (polyVoiceState[voice].channel,
+                                                                             polyVoiceState[voice].pitch,
+                                                                             0.0f);
+                                polyVoiceState[voice].free (++nextInactiveTime);
+                            }
+                        }
+                    }
+
+                    return;
+                }
+
+                if (! sustainActive)
+                {
+                    clearReleasedSustainedMonoNotesForChannel (control.channel);
+                    applyMonoSelectionAfterNoteOff (0.0f);
+                }
+
+                return;
+            }
+
+            if (! isMonoMode())
+            {
+                for (wrap<voiceCount> voice)
+                    if (polyVoiceState[voice].channel == control.channel)
+                        voiceEventOut[voice] <- control;
+
+                return;
+            }
+
+            if (monoVoiceActive && monoVoiceChannel == control.channel)
+                voiceEventOut[0] <- control;
+        }
+
+        void main()
+        {
+            clearMonoHeldNotes();
+            playModeState = readPlayModeInput();
+            notePriorityState = readNotePriorityInput();
+            lastObservedPlayMode = playModeState;
+            lastObservedNotePriority = notePriorityState;
+
+            loop
+            {
+                let playMode = readPlayModeInput();
+                let notePriority = readNotePriorityInput();
+                playModeState = playMode;
+                notePriorityState = notePriority;
+
+                if (playMode != lastObservedPlayMode)
+                {
+                    resetDispatcherState();
+                    lastObservedPlayMode = playMode;
+                    lastObservedNotePriority = notePriority;
+                }
+                else if (notePriority != lastObservedNotePriority)
+                {
+                    lastObservedNotePriority = notePriority;
+
+                    if (isMonoMode())
+                        applyMonoSelectionAfterNoteOff (0.0f);
+                }
+
+                advance();
+            }
+        }
     }
 
     processor DesiredTableMonitor
@@ -318,6 +978,9 @@ graph WavetableSynth [[ main ]]
     input event wt::MsegPlaybackConfig mseg1Playback;
     input value float32 wavetablePosition [[ name: "Wavetable Position", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
     input value float32 wavetableSelect [[ name: "Wavetable Select", min: 0.0f, max: 255.0f, init: 0.0f, discrete: true, step: 1.0f, rampFrames: 0 ]];
+    input value float32 playMode [[ name: "Play Mode", min: 0.0f, max: 4.0f, init: 0.0f, discrete: true, step: 1.0f, rampFrames: 0 ]];
+    input value float32 notePriority [[ name: "Note Priority", min: 0.0f, max: 2.0f, init: 0.0f, discrete: true, step: 1.0f, rampFrames: 0 ]];
+    input value float32 glideTime [[ name: "Glide Time", min: 0.0f, max: 2.0f, init: 0.0f, unit: "s", rampFrames: 0 ]];
     input value float32 mseg1Depth [[ name: "MSEG 1 Depth", min: -1.0f, max: 1.0f, init: 1.0f, rampFrames: 64 ]];
     output event wt::WavetableUploadAck wavetableUploadAck;
     output event wt::WavetableMipRequest wavetableMipRequest;
@@ -328,7 +991,7 @@ graph WavetableSynth [[ main ]]
     let voiceCount = 16;
 
     node mpe   = std::midi::MPEConverter;
-    node voiceAllocator = std::voices::VoiceAllocator (voiceCount);
+    node noteDispatcher = wt::NoteDispatcher (voiceCount);
     node sharedEngine = wt::SharedVoiceEngine (voiceCount);
     node trim = std::levels::ConstantGain (float32, 0.18f);
     node stereo = std::mixers::MonoToStereo (float32);
@@ -338,8 +1001,11 @@ graph WavetableSynth [[ main ]]
     connection
     {
         midiIn -> mpe.parseMIDI;
-        mpe.eventOut -> voiceAllocator.eventIn;
-        voiceAllocator.voiceEventOut -> sharedEngine.voiceEventIn;
+        mpe.eventOut -> noteDispatcher.eventIn;
+        playMode -> noteDispatcher.playModeIn;
+        notePriority -> noteDispatcher.notePriorityIn;
+        noteDispatcher.voiceEventOut -> sharedEngine.voiceEventIn;
+        noteDispatcher.voiceRetuneOut -> sharedEngine.voiceRetuneIn;
         wavetableLoadBegin -> sharedEngine.wavetableLoadBeginIn;
         wavetableMipFrame -> sharedEngine.wavetableMipFrameIn;
         serviceLoadAbort -> sharedEngine.serviceLoadAbortIn;
@@ -347,6 +1013,7 @@ graph WavetableSynth [[ main ]]
         mseg1Playback -> sharedEngine.msegPlaybackIn;
         wavetablePosition -> sharedEngine.framePositionIn;
         wavetableSelect -> desiredTableMonitor.tableSelectIn;
+        glideTime -> sharedEngine.glideTimeIn;
         mseg1Depth -> sharedEngine.msegDepthIn;
         sharedEngine.wavetableUploadAckOut -> wavetableUploadAck;
         sharedEngine.wavetableMipRequestOut -> wavetableMipRequest;

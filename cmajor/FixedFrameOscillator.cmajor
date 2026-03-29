@@ -66,6 +66,17 @@ namespace wt
         int32 loadingGeneration;
     }
 
+    struct VoiceRetune
+    {
+        int32 channel;
+        float32 pitch;
+        float32 velocity;
+        float32 bendSemitones;
+        float32 pressure;
+        float32 slide;
+        bool retrigger, glide;
+    }
+
     float32 catmullRom (float32 p0, float32 p1, float32 p2, float32 p3, float32 t)
     {
         return p1 + 0.5f * t * ((p2 - p0) + t * ((2.0f * p0 - 5.0f * p1 + 4.0f * p2 - p3)
@@ -154,6 +165,101 @@ namespace wt
 
         let hi = readFixedFrameSample (tableSamples, frameHi, phase);
         return lo + (hi - lo) * frameT;
+    }
+
+    processor RetriggerableFixedASR (float32 attackSeconds,
+                                     float32 releaseSeconds)
+    {
+        input event (std::notes::NoteOn,
+                     std::notes::NoteOff) eventIn;
+
+        output stream float32 gainOut;
+
+        float32 keyDownVelocity, currentLevel;
+        int32 noteOnSerial, handledNoteOnSerial;
+
+        event eventIn (std::notes::NoteOn noteOn)
+        {
+            keyDownVelocity = noteOn.velocity;
+            noteOnSerial += 1;
+        }
+
+        event eventIn (std::notes::NoteOff noteOff)
+        {
+            keyDownVelocity = 0.0f;
+        }
+
+        void main()
+        {
+            int32 handledNoteOnSerial = 0;
+
+            loop
+            {
+                while (keyDownVelocity == 0.0f)
+                {
+                    if const (releaseSeconds > 0.0f)
+                    {
+                        let decayFactor = pow (0.0001f, float32 (processor.period) / releaseSeconds);
+
+                        if (currentLevel > 0.0001f)
+                        {
+                            gainOut <- currentLevel;
+                            currentLevel *= decayFactor;
+                        }
+                        else
+                        {
+                            currentLevel = 0.0f;
+                            gainOut <- 0.0f;
+                        }
+                    }
+                    else
+                    {
+                        currentLevel = 0.0f;
+                        gainOut <- 0.0f;
+                    }
+
+                    advance();
+                }
+
+                handledNoteOnSerial = noteOnSerial;
+                currentLevel = 0.0f;
+
+                if const (attackSeconds > 0.0f)
+                {
+                    while (currentLevel < keyDownVelocity)
+                    {
+                        let attackExponent = 1.0f / int32 (attackSeconds * float32 (processor.frequency));
+                        let attackMultiplier = 2.0f ** -attackExponent
+                                               * (2.0f + keyDownVelocity) ** attackExponent;
+                        gainOut <- currentLevel;
+                        currentLevel = attackMultiplier * (currentLevel + 2.0f) - 2.0f;
+                        advance();
+
+                        if (keyDownVelocity == 0.0f)
+                            break;
+
+                        if (handledNoteOnSerial != noteOnSerial)
+                        {
+                            handledNoteOnSerial = noteOnSerial;
+                            currentLevel = 0.0f;
+                        }
+                    }
+                }
+                else
+                {
+                    currentLevel = keyDownVelocity;
+                }
+
+                while (keyDownVelocity != 0.0f)
+                {
+                    gainOut <- currentLevel;
+                    advance();
+
+                    if (handledNoteOnSerial != noteOnSerial)
+                        break;
+                }
+            }
+        }
     }
 
     processor FixedFrameOscillator (float32 initialFrequencyHz = 440.0f,
@@ -581,6 +687,7 @@ namespace wt
                      std::notes::Slide,
                      std::notes::Pressure,
                      std::notes::Control) voiceEventIn[voiceCount];
+        input event VoiceRetune voiceRetuneIn[voiceCount];
         input event WavetableLoadBegin wavetableLoadBeginIn;
         input event WavetableMipFrame wavetableMipFrameIn;
         input event ServiceLoadAbort serviceLoadAbortIn;
@@ -588,16 +695,27 @@ namespace wt
         input event wt::MsegPlaybackConfig msegPlaybackIn;
         input value float32 framePositionIn [[ name: "Wavetable Position", min: 0.0f, max: 1.0f, init: 0.0f ]];
         input value float32 msegDepthIn [[ name: "MSEG 1 Depth", min: -1.0f, max: 1.0f, init: 1.0f ]];
+        input value float32 glideTimeIn [[ name: "Glide Time", min: 0.0f, max: 2.0f, init: 0.0f, unit: "s", rampFrames: 0 ]];
         output event WavetableUploadAck wavetableUploadAckOut;
         output event WavetableMipRequest wavetableMipRequestOut;
         output event RuntimeServiceState runtimeServiceStateOut;
         output event wt::EffectiveWavetablePositionMonitor effectiveWavetablePositionOut;
         output stream float32 out;
 
-        node envelopes = std::envelopes::FixedASR (0.01f, 0.20f)[voiceCount];
+        node envelopes = wt::RetriggerableFixedASR (0.01f, 0.20f)[voiceCount];
         node msegs = wt::MsegReader[voiceCount];
 
         std::oscillators::PhasorState[voiceCount] phasors;
+        int32[voiceCount] voiceChannel;
+        float32[voiceCount] voiceBasePitch;
+        float32[voiceCount] voiceCurrentPitch;
+        float32[voiceCount] voiceTargetPitch;
+        float32[voiceCount] voiceBendSemitones;
+        float32[voiceCount] voicePressure;
+        float32[voiceCount] voiceSlide;
+        float32[voiceCount] voiceVelocity;
+        float32[voiceCount] voicePitchGlideStep;
+        int32[voiceCount] voiceGlideSamplesRemaining;
         float32[voiceCount] voiceFrequencyHz;
         int32[voiceCount] voiceActive;
         int32[voiceCount] voiceGeneration;
@@ -633,6 +751,7 @@ namespace wt
         int32 monitorUpdateIntervalFrames = 1;
         int32 framesUntilNextMonitorUpdate = 0;
         float32 previewFrequencyHzState = previewFrequencyHz;
+        float32 glideTimeSecondsState = 0.0f;
 
         void clearPendingTableState()
         {
@@ -946,13 +1065,82 @@ namespace wt
             }
         }
 
+        void updateVoiceFrequencyHz (int32 voiceIndex)
+        {
+            let voice = wrap<voiceCount> (voiceIndex);
+            let resolvedPitch = voiceCurrentPitch.at (voice) + voiceBendSemitones.at (voice);
+            let frequencyHz = std::notes::noteToFrequency (resolvedPitch);
+            voiceFrequencyHz.at (voice) = frequencyHz;
+            phasors.at (voice).setFrequency (processor.frequency, frequencyHz);
+        }
+
+        void clearVoiceGlide (int32 voiceIndex)
+        {
+            let voice = wrap<voiceCount> (voiceIndex);
+            voicePitchGlideStep.at (voice) = 0.0f;
+            voiceGlideSamplesRemaining.at (voice) = 0;
+        }
+
+        void setVoicePitchImmediate (int32 voiceIndex, float32 pitch)
+        {
+            let voice = wrap<voiceCount> (voiceIndex);
+            voiceBasePitch.at (voice) = pitch;
+            voiceCurrentPitch.at (voice) = pitch;
+            voiceTargetPitch.at (voice) = pitch;
+            clearVoiceGlide (voiceIndex);
+            updateVoiceFrequencyHz (voiceIndex);
+        }
+
+        void startVoiceGlideToPitch (int32 voiceIndex, float32 targetPitch)
+        {
+            let voice = wrap<voiceCount> (voiceIndex);
+            voiceBasePitch.at (voice) = targetPitch;
+            voiceTargetPitch.at (voice) = targetPitch;
+
+            let requestedSeconds = std::intrinsics::max (0.0f, glideTimeSecondsState);
+            let glideSamples = int32 (
+                std::intrinsics::floor ((requestedSeconds * float32 (processor.frequency)) + 0.5f)
+            );
+
+            if (glideSamples <= 0 || std::intrinsics::abs (voiceCurrentPitch.at (voice) - targetPitch) <= 0.0001f)
+            {
+                setVoicePitchImmediate (voiceIndex, targetPitch);
+                return;
+            }
+
+            voiceGlideSamplesRemaining.at (voice) = glideSamples;
+            voicePitchGlideStep.at (voice) = (targetPitch - voiceCurrentPitch.at (voice)) / float32 (glideSamples);
+            updateVoiceFrequencyHz (voiceIndex);
+        }
+
+        void advanceVoicePitchState (int32 voiceIndex)
+        {
+            let voice = wrap<voiceCount> (voiceIndex);
+
+            if (voiceGlideSamplesRemaining.at (voice) > 0)
+            {
+                voiceCurrentPitch.at (voice) += voicePitchGlideStep.at (voice);
+                voiceGlideSamplesRemaining.at (voice) -= 1;
+
+                if (voiceGlideSamplesRemaining.at (voice) <= 0)
+                {
+                    voiceCurrentPitch.at (voice) = voiceTargetPitch.at (voice);
+                    clearVoiceGlide (voiceIndex);
+                }
+            }
+
+            updateVoiceFrequencyHz (voiceIndex);
+        }
+
         event voiceEventIn (int index, std::notes::NoteOn note)
         {
             let voice = wrap<voiceCount> (index);
-            let frequencyHz = std::notes::noteToFrequency (note.pitch);
-
-            voiceFrequencyHz.at (voice) = frequencyHz;
-            phasors.at (voice).setFrequency (processor.frequency, frequencyHz);
+            voiceChannel.at (voice) = note.channel;
+            voiceVelocity.at (voice) = note.velocity;
+            voiceBendSemitones.at (voice) = 0.0f;
+            voicePressure.at (voice) = 0.0f;
+            voiceSlide.at (voice) = 0.0f;
+            setVoicePitchImmediate (index, note.pitch);
             voiceActive.at (voice) = 1;
             voiceGeneration.at (voice) = nextVoiceGeneration;
             nextVoiceGeneration += 1;
@@ -969,10 +1157,58 @@ namespace wt
             msegs[voice].noteOffIn <- 1;
         }
 
-        event voiceEventIn (int index, std::notes::PitchBend bend) {}
-        event voiceEventIn (int index, std::notes::Slide slide) {}
-        event voiceEventIn (int index, std::notes::Pressure pressure) {}
+        event voiceEventIn (int index, std::notes::PitchBend bend)
+        {
+            let voice = wrap<voiceCount> (index);
+            voiceBendSemitones.at (voice) = bend.bendSemitones;
+            updateVoiceFrequencyHz (index);
+        }
+
+        event voiceEventIn (int index, std::notes::Slide slide)
+        {
+            let voice = wrap<voiceCount> (index);
+            voiceSlide.at (voice) = slide.slide;
+        }
+
+        event voiceEventIn (int index, std::notes::Pressure pressure)
+        {
+            let voice = wrap<voiceCount> (index);
+            voicePressure.at (voice) = pressure.pressure;
+        }
+
         event voiceEventIn (int index, std::notes::Control control) {}
+
+        event voiceRetuneIn (int index, VoiceRetune change)
+        {
+            let voice = wrap<voiceCount> (index);
+            let shouldRetrigger = change.retrigger || voiceActive.at (voice) == 0;
+            let shouldGlide = change.glide && voiceActive.at (voice) != 0;
+
+            voiceChannel.at (voice) = change.channel;
+            voiceVelocity.at (voice) = change.velocity;
+            voiceBendSemitones.at (voice) = change.bendSemitones;
+            voicePressure.at (voice) = change.pressure;
+            voiceSlide.at (voice) = change.slide;
+
+            if (shouldGlide)
+                startVoiceGlideToPitch (index, change.pitch);
+            else
+                setVoicePitchImmediate (index, change.pitch);
+
+            voiceActive.at (voice) = 1;
+
+            if (shouldRetrigger)
+            {
+                std::notes::NoteOn note;
+                note.channel = change.channel;
+                note.pitch = change.pitch;
+                note.velocity = change.velocity;
+                voiceGeneration.at (voice) = nextVoiceGeneration;
+                nextVoiceGeneration += 1;
+                envelopes[voice].eventIn <- note;
+                msegs[voice].triggerIn <- 1;
+            }
+        }
 
         event msegBufferIn (float32[msegPaddedSamples] buffer)
         {
@@ -1067,6 +1303,7 @@ namespace wt
         void main()
         {
             previewFrequencyHzState = previewFrequencyHzState < 0.0f ? 0.0f : previewFrequencyHzState;
+            glideTimeSecondsState = std::intrinsics::max (0.0f, glideTimeIn);
 
             let requestedInterval = int32 (
                 std::intrinsics::floor ((processor.frequency / wt::effectiveWavetablePositionMonitorHz) + 0.5f)
@@ -1076,6 +1313,8 @@ namespace wt
 
             loop
             {
+                glideTimeSecondsState = std::intrinsics::max (0.0f, glideTimeIn);
+
                 if (! hasEmittedInitialRuntimeState)
                 {
                     emitRuntimeServiceState();
@@ -1088,6 +1327,7 @@ namespace wt
 
                 for (wrap<voiceCount> voice)
                 {
+                    advanceVoicePitchState (int32 (voice));
                     msegs[voice].advance();
                     envelopes[voice].advance();
 

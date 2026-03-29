@@ -1,3 +1,45 @@
+Mono / legato / MPE pass landed on 2026-03-29
+- Active plan note: `TRANSIENT_MONO_MPE_IMPLEMENTATION_PLAN.md`.
+- Follow-up fix on the same day:
+  - The first `Mono` retrigger envelope implementation was wrong. A second overlapping note could reset the envelope to zero but fail to re-enter attack while the key was still down, which made `Mono` go silent on a second note.
+  - Fixed `wt::RetriggerableFixedASR` in `cmajor/FixedFrameOscillator.cmajor` so a new `NoteOn` during sustain or release restarts the attack stage instead of staying in the sustain loop at zero.
+  - Tightened `tests/test_note_dispatcher_probe.py` so it now proves both parts of the expected behavior: `Mono ST` keeps the envelope running, and plain `Mono` recovers audibly to the new note and new pitch after its retrigger attack.
+- What was re-verified for the follow-up fix:
+  - `cmaj generate --target=javascript --output=build/generated_js_test WavetableSynth.cmajorpatch`
+  - `cmaj generate --target=juce --output=/tmp/cosimo_juce_probe WavetableSynth.cmajorpatch`
+  - `uv run pytest -q tests/test_note_dispatcher_probe.py -q`
+  - `uv run pytest -q tests/test_shared_voice_engine_probe.py tests/test_runtime_wavetable_mip_probe.py -q`
+  - `node --test tests/test_patch_view_layout.mjs`
+- Current phone build status after the follow-up fix:
+  - Rebuilt, reinstalled, and relaunched the standalone iPhone app on 2026-03-29.
+  - Current installed app bundle path on device is `/private/var/containers/Bundle/Application/1F5478BB-022E-4712-9D69-42D7460CC5A5/Cosimo Synth.app/`.
+- What changed:
+  - Replaced the top-level poly-only allocator path with a repo-owned `wt::NoteDispatcher` in `cmajor/WavetableSynth.cmajor`. The shipping patch now does `midiIn -> std::midi::MPEConverter -> wt::NoteDispatcher(16) -> wt::SharedVoiceEngine(16)`.
+  - Added exposed patch parameters for `playMode`, `notePriority`, and `glideTime`.
+  - Added mono play modes: `Poly`, `Mono`, `Mono ST`, `Mono FP`, and `Mono ST + FP`.
+  - Added mono note-priority policies: `Last`, `High`, and `Low`.
+  - Added a new shared-engine event type, `wt::VoiceRetune`, so mono note changes can retune the active lane without forcing an envelope retrigger.
+  - Extended `wt::SharedVoiceEngine` in `cmajor/FixedFrameOscillator.cmajor` with per-voice channel, pitch, bend, pressure, slide, and glide state. Pitch is now recomputed continuously so mip selection follows bend and glide automatically.
+  - Implemented actual audible mono retrigger behavior by replacing the shared-engine envelope node with a repo-owned `wt::RetriggerableFixedASR`. The stock Cmajor `std::envelopes::FixedASR` does not retrigger on overlapping note-ons, so mono retrig and mono single-trigger would otherwise sound identical.
+  - Kept the current runtime wavetable-loading architecture intact: source WAV files still ship separately in `assets/factory_sources/`, the JavaScript worker still builds mip frames at runtime, and the shared DSP bank still receives those frames once for all voices.
+  - Added webview controls in `patch_gui/index.js` for play mode, note priority, and glide time on both desktop and iPhone layouts.
+- What was verified for the mono/MPE pass:
+  - `uv run pytest -q tests/test_note_dispatcher_probe.py -q`
+  - `uv run pytest -q tests/test_shared_voice_engine_probe.py tests/test_runtime_state_coordinator.py tests/test_runtime_wavetable_mip_probe.py tests/test_mseg_cmajor_probe.py -q`
+  - `node --test tests/test_patch_view_layout.mjs tests/test_wavetable_worker.mjs tests/test_wavetable_display.mjs tests/test_mseg_renderer.mjs tests/test_mseg_editor.mjs`
+  - `uv run pytest -q tests/test_ios_auv3_build.py -q -k 'not ios_host_smoke'`
+  - `cmaj generate --target=javascript --output=build/generated_js_test WavetableSynth.cmajorpatch`
+- The new probe file `tests/test_note_dispatcher_probe.py` proves:
+  - mono priority chooses the correct held note for `Last`, `High`, and `Low`
+  - fingered portamento modes emit the correct `glide` / `retrigger` retune policy
+  - `Mono ST` and `Mono` are audibly different because the shared-engine envelope now really retriggers
+  - pitch bend changes the rendered audio pitch after note-on
+- Current phone build status after the mono/MPE pass:
+  - Rebuilt with `xcodebuild -project build/ios_device_run/CosimoSynthAUv3.xcodeproj -scheme CosimoSynth_Standalone -configuration Debug -destination id=00008120-000139383644C01E DEVELOPMENT_TEAM=JUFVT28775 CODE_SIGN_STYLE=Automatic CODE_SIGN_IDENTITY='Apple Development' -allowProvisioningUpdates build`
+  - Confirmed the rebuilt standalone app bundle still contains `assets/factory-bank-catalog.json` and `assets/factory_sources/`
+  - Installed with `xcrun devicectl device install app --device 00C7F433-8B6A-5CAC-856F-56D7385E12F9 'build/ios_device_run/CosimoSynth_artefacts/Debug/Standalone/Cosimo Synth.app'`
+  - Launched with `xcrun devicectl device process launch --device 00C7F433-8B6A-5CAC-856F-56D7385E12F9 dev.cosimo.wavetable-synth`
+
 Path 1 polyphony refactor started on 2026-03-29
 - Active task: replace the current voice-owned wavetable bank with one shared-bank owning processor while keeping the current JavaScript patch view, JavaScript wavetable worker, and graph-level Cmajor voice allocation.
 - Working plan: `TRANSIENT_PATH1_POLYPHONY_IMPLEMENTATION_PLAN.md`.

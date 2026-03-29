@@ -10,6 +10,9 @@ import { computeResponsivePatchLayout, getLayoutCSSVariables } from "./responsiv
 const midiInputEndpointID = "midiIn";
 const wavetablePositionEndpointID = "wavetablePosition";
 const wavetableSelectEndpointID = "wavetableSelect";
+const playModeEndpointID = "playMode";
+const notePriorityEndpointID = "notePriority";
+const glideTimeEndpointID = "glideTime";
 const runtimeSyncRequestEndpointID = "runtimeSyncRequest";
 const runtimeStateEndpointID = "runtimeState";
 const retryDesiredTableRequestEndpointID = "retryDesiredTableRequest";
@@ -28,6 +31,18 @@ const DISPLAY_SWIPE_COMMIT_RATIO = 0.18;
 const DISPLAY_SLIDE_TRANSITION_MS = 240;
 const SVG_NS = "http://www.w3.org/2000/svg";
 const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+const PLAY_MODE_OPTIONS = [
+    { value: 0, label: "Poly" },
+    { value: 1, label: "Mono" },
+    { value: 2, label: "Mono ST" },
+    { value: 3, label: "Mono FP" },
+    { value: 4, label: "Mono ST + FP" },
+];
+const NOTE_PRIORITY_OPTIONS = [
+    { value: 0, label: "Last" },
+    { value: 1, label: "High" },
+    { value: 2, label: "Low" },
+];
 
 const knobDefault = 0.0;
 
@@ -60,8 +75,30 @@ function clampDepth(value) {
     return clamp(Number(value) || 0, -1.0, 1.0);
 }
 
+function clampPlayMode(value) {
+    return clamp(Math.round(Number(value) || 0), 0, PLAY_MODE_OPTIONS.length - 1);
+}
+
+function clampNotePriority(value) {
+    return clamp(Math.round(Number(value) || 0), 0, NOTE_PRIORITY_OPTIONS.length - 1);
+}
+
+function clampGlideTime(value) {
+    return clamp(Number(value) || 0, 0.0, 2.0);
+}
+
 function formatMsegRateSeconds(seconds) {
     return `${clampMsegRateSeconds(Number(seconds) || 1.0).toFixed(3)} s`;
+}
+
+function formatGlideTime(seconds) {
+    return `${clampGlideTime(seconds).toFixed(3)} s`;
+}
+
+function buildSelectOptionsHTML(options) {
+    return options
+        .map(({ value, label }) => `<option value="${value}">${label}</option>`)
+        .join("");
 }
 
 function getPitchClass(noteNumber) {
@@ -491,6 +528,9 @@ export class CosimoSynthView extends HTMLElement {
         this.currentTableIndex = 0;
         this.desiredTableIndex = 0;
         this.currentFrameCount = 1;
+        this.currentPlayMode = 0;
+        this.currentNotePriority = 0;
+        this.currentGlideTime = 0.0;
         this.hasDisplayedValue = false;
         this.display = null;
         this.displaySlots = [];
@@ -557,6 +597,27 @@ export class CosimoSynthView extends HTMLElement {
             );
         }
 
+        if (this.handlePlayModeParameterChange) {
+            this.patchConnection.removeParameterListener(
+                playModeEndpointID,
+                this.handlePlayModeParameterChange
+            );
+        }
+
+        if (this.handleNotePriorityParameterChange) {
+            this.patchConnection.removeParameterListener(
+                notePriorityEndpointID,
+                this.handleNotePriorityParameterChange
+            );
+        }
+
+        if (this.handleGlideTimeParameterChange) {
+            this.patchConnection.removeParameterListener(
+                glideTimeEndpointID,
+                this.handleGlideTimeParameterChange
+            );
+        }
+
         if (this.handleEffectiveWavetablePositionChange && this.hasEffectiveWavetablePositionMonitor) {
             this.patchConnection.removeEndpointListener?.(
                 effectiveWavetablePositionEndpointID,
@@ -620,6 +681,18 @@ export class CosimoSynthView extends HTMLElement {
             this.msegRateInput.removeEventListener("input", this.handleMsegRateInput);
         }
 
+        if (this.playModeSelect && this.handlePlayModeInput) {
+            this.playModeSelect.removeEventListener("change", this.handlePlayModeInput);
+        }
+
+        if (this.notePrioritySelect && this.handleNotePriorityInput) {
+            this.notePrioritySelect.removeEventListener("change", this.handleNotePriorityInput);
+        }
+
+        if (this.glideTimeInput && this.handleGlideTimeInput) {
+            this.glideTimeInput.removeEventListener("input", this.handleGlideTimeInput);
+        }
+
         if (this.msegLoopToggle && this.handleMsegLoopInput) {
             this.msegLoopToggle.removeEventListener("input", this.handleMsegLoopInput);
         }
@@ -671,6 +744,10 @@ export class CosimoSynthView extends HTMLElement {
         this.msegRateInput = this.shadowRoot.querySelector(".mseg-rate-slider");
         this.msegRateReadout = this.shadowRoot.querySelector("[data-role='mseg-rate-readout']");
         this.msegLoopToggle = this.shadowRoot.querySelector(".mseg-loop-toggle");
+        this.playModeSelect = this.shadowRoot.querySelector(".play-mode-select");
+        this.notePrioritySelect = this.shadowRoot.querySelector(".note-priority-select");
+        this.glideTimeInput = this.shadowRoot.querySelector(".glide-time-slider");
+        this.glideTimeReadout = this.shadowRoot.querySelector("[data-role='glide-time-readout']");
 
         this.displaySlots = this.displayCanvases.map((canvas, slotIndex) => ({
             slotIndex,
@@ -688,6 +765,9 @@ export class CosimoSynthView extends HTMLElement {
         this.msegController.attach();
 
         this.handleParameterChange = this.setDisplayedValue.bind(this);
+        this.handlePlayModeParameterChange = this.syncPlayModeControl.bind(this);
+        this.handleNotePriorityParameterChange = this.syncNotePriorityControl.bind(this);
+        this.handleGlideTimeParameterChange = this.syncGlideTimeControl.bind(this);
         this.handleEffectiveWavetablePositionChange = this.handleObservedDisplayPosition.bind(this);
         this.handleRuntimeTableStateChange = this.handleRuntimeTableState.bind(this);
         this.handleStatusUpdate = this.handlePatchStatus.bind(this);
@@ -703,6 +783,9 @@ export class CosimoSynthView extends HTMLElement {
         this.handleMsegDepthInput = () => {
             this.msegController?.setDepth(clampDepth(this.msegDepthInput?.value));
         };
+        this.handlePlayModeInput = this.handlePlayModeInput.bind(this);
+        this.handleNotePriorityInput = this.handleNotePriorityInput.bind(this);
+        this.handleGlideTimeInput = this.handleGlideTimeInput.bind(this);
         this.handleOctaveDown = () => this.nudgeKeyboardOctave(-12);
         this.handleOctaveUp = () => this.nudgeKeyboardOctave(12);
         this.handleTableSelectChange = this.handleTableSelectChange.bind(this);
@@ -713,6 +796,9 @@ export class CosimoSynthView extends HTMLElement {
         }
 
         this.tableRetryButton?.addEventListener("click", this.handleRetryButtonClick);
+        this.playModeSelect?.addEventListener("change", this.handlePlayModeInput);
+        this.notePrioritySelect?.addEventListener("change", this.handleNotePriorityInput);
+        this.glideTimeInput?.addEventListener("input", this.handleGlideTimeInput);
 
         if (this.displayViewport) {
             this.displayViewport.addEventListener("pointerdown", this.handleDisplayDragStart);
@@ -748,10 +834,25 @@ export class CosimoSynthView extends HTMLElement {
         this.resetDisplayLayerPositions();
         this.setDisplayedValue(knobDefault);
         this.setDisplayState("loading", "Loading wavetable bank…");
+        this.syncPlayModeControl(0);
+        this.syncNotePriorityControl(0);
+        this.syncGlideTimeControl(0.0);
 
         this.patchConnection.addParameterListener(
             wavetablePositionEndpointID,
             this.handleParameterChange
+        );
+        this.patchConnection.addParameterListener(
+            playModeEndpointID,
+            this.handlePlayModeParameterChange
+        );
+        this.patchConnection.addParameterListener(
+            notePriorityEndpointID,
+            this.handleNotePriorityParameterChange
+        );
+        this.patchConnection.addParameterListener(
+            glideTimeEndpointID,
+            this.handleGlideTimeParameterChange
         );
         if (typeof this.patchConnection.addEndpointListener === "function") {
             try {
@@ -774,6 +875,9 @@ export class CosimoSynthView extends HTMLElement {
             }
         }
         this.patchConnection.requestParameterValue(wavetablePositionEndpointID);
+        this.patchConnection.requestParameterValue(playModeEndpointID);
+        this.patchConnection.requestParameterValue(notePriorityEndpointID);
+        this.patchConnection.requestParameterValue(glideTimeEndpointID);
         this.requestRuntimeTableSync();
 
         this.patchConnection.addStatusListener(this.handleStatusUpdate);
@@ -1295,6 +1399,9 @@ export class CosimoSynthView extends HTMLElement {
         }
 
         this.patchConnection.requestParameterValue(wavetablePositionEndpointID);
+        this.patchConnection.requestParameterValue(playModeEndpointID);
+        this.patchConnection.requestParameterValue(notePriorityEndpointID);
+        this.patchConnection.requestParameterValue(glideTimeEndpointID);
         this.requestRuntimeTableSync();
         if (this.hint) {
             this.hint.textContent = this.options.platform === "ios"
@@ -1392,6 +1499,34 @@ export class CosimoSynthView extends HTMLElement {
         }
     }
 
+    syncPlayModeControl(value) {
+        this.currentPlayMode = clampPlayMode(value);
+
+        if (this.playModeSelect && globalThis.document?.activeElement !== this.playModeSelect) {
+            this.playModeSelect.value = String(this.currentPlayMode);
+        }
+    }
+
+    syncNotePriorityControl(value) {
+        this.currentNotePriority = clampNotePriority(value);
+
+        if (this.notePrioritySelect && globalThis.document?.activeElement !== this.notePrioritySelect) {
+            this.notePrioritySelect.value = String(this.currentNotePriority);
+        }
+    }
+
+    syncGlideTimeControl(value) {
+        this.currentGlideTime = clampGlideTime(value);
+
+        if (this.glideTimeInput && globalThis.document?.activeElement !== this.glideTimeInput) {
+            this.glideTimeInput.value = this.currentGlideTime.toFixed(3);
+        }
+
+        if (this.glideTimeReadout) {
+            this.glideTimeReadout.textContent = formatGlideTime(this.currentGlideTime);
+        }
+    }
+
     syncMsegPlaybackControls() {
         if (!this.msegState?.playback) {
             return;
@@ -1435,6 +1570,24 @@ export class CosimoSynthView extends HTMLElement {
             loop: this.msegLoopToggle?.checked ? { startX: 0.0, endX: 1.0 } : null,
             noteOffPolicy: "finish_loop",
         });
+    }
+
+    handlePlayModeInput() {
+        const nextValue = clampPlayMode(this.playModeSelect?.value);
+        this.syncPlayModeControl(nextValue);
+        this.patchConnection.sendEventOrValue?.(playModeEndpointID, nextValue);
+    }
+
+    handleNotePriorityInput() {
+        const nextValue = clampNotePriority(this.notePrioritySelect?.value);
+        this.syncNotePriorityControl(nextValue);
+        this.patchConnection.sendEventOrValue?.(notePriorityEndpointID, nextValue);
+    }
+
+    handleGlideTimeInput() {
+        const nextValue = clampGlideTime(this.glideTimeInput?.value);
+        this.syncGlideTimeControl(nextValue);
+        this.patchConnection.sendEventOrValue?.(glideTimeEndpointID, nextValue);
     }
 
     renderMsegEditor() {
@@ -2286,6 +2439,56 @@ export class CosimoSynthView extends HTMLElement {
                     gap: 14px;
                 }
 
+                .play-panel {
+                    border-radius: 16px;
+                    border: 1px solid rgba(122, 142, 255, 0.12);
+                    background: rgba(5, 8, 20, 0.88);
+                    padding: 14px;
+                    display: grid;
+                    gap: 12px;
+                }
+
+                .play-grid {
+                    display: grid;
+                    grid-template-columns: repeat(3, minmax(0, 1fr));
+                    gap: 12px;
+                    align-items: end;
+                }
+
+                .play-field {
+                    display: grid;
+                    gap: 6px;
+                    min-width: 0;
+                }
+
+                .play-field-label {
+                    font-size: 10px;
+                    letter-spacing: 0.1em;
+                    text-transform: uppercase;
+                    color: rgba(194, 202, 255, 0.72);
+                }
+
+                .play-select {
+                    width: 100%;
+                    border-radius: 10px;
+                    border: 1px solid rgba(122, 142, 255, 0.28);
+                    background: rgba(8, 11, 24, 0.98);
+                    color: #eef2f5;
+                    padding: 9px 10px;
+                    font-size: 13px;
+                }
+
+                .glide-time-slider {
+                    width: 100%;
+                }
+
+                .glide-time-readout {
+                    font-family: "SF Mono", "IBM Plex Mono", Menlo, monospace;
+                    font-size: 12px;
+                    letter-spacing: 0.08em;
+                    color: #87d7f5;
+                }
+
                 .control-heading {
                     font-size: 12px;
                     letter-spacing: 0.1em;
@@ -2573,6 +2776,25 @@ export class CosimoSynthView extends HTMLElement {
                                 <div class="value-text" data-role="value-readout">0.00</div>
                                 <div class="label">Wavetable Position</div>
                             </div>
+                        </div>
+                    </div>
+
+                    <div class="play-panel">
+                        <div class="control-heading">Voice Routing</div>
+                        <div class="play-grid">
+                            <label class="play-field">
+                                <span class="play-field-label">Play Mode</span>
+                                <select class="play-select play-mode-select">${buildSelectOptionsHTML(PLAY_MODE_OPTIONS)}</select>
+                            </label>
+                            <label class="play-field">
+                                <span class="play-field-label">Note Priority</span>
+                                <select class="play-select note-priority-select">${buildSelectOptionsHTML(NOTE_PRIORITY_OPTIONS)}</select>
+                            </label>
+                            <label class="play-field">
+                                <span class="play-field-label">Glide Time</span>
+                                <input class="glide-time-slider" type="range" min="0" max="2" step="0.001" value="0.000" />
+                                <div class="glide-time-readout" data-role="glide-time-readout">0.000 s</div>
+                            </label>
                         </div>
                     </div>
 
@@ -2969,6 +3191,59 @@ export class CosimoSynthView extends HTMLElement {
                     gap: 10px;
                 }
 
+                .play-panel {
+                    display: grid;
+                    min-width: 0;
+                    gap: 10px;
+                }
+
+                .play-grid {
+                    display: grid;
+                    min-width: 0;
+                    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+                    gap: 10px;
+                    align-items: end;
+                }
+
+                .play-field {
+                    display: grid;
+                    min-width: 0;
+                    gap: 6px;
+                }
+
+                .play-field.wide {
+                    grid-column: 1 / -1;
+                }
+
+                .play-field-label {
+                    font-size: 10px;
+                    color: rgba(212, 220, 230, 0.42);
+                    letter-spacing: 0.12em;
+                    text-transform: uppercase;
+                }
+
+                .play-select {
+                    width: 100%;
+                    min-height: 36px;
+                    border-radius: 12px;
+                    border: 1px solid rgba(255, 255, 255, 0.1);
+                    background: rgba(255, 255, 255, 0.04);
+                    color: #eef2f5;
+                    padding: 8px 10px;
+                    font-size: 13px;
+                }
+
+                .glide-time-slider {
+                    width: 100%;
+                }
+
+                .glide-time-readout {
+                    font-family: "SF Mono", "IBM Plex Mono", Menlo, monospace;
+                    font-size: 12px;
+                    color: #87d7f5;
+                    letter-spacing: 0.08em;
+                }
+
                 .mseg-head {
                     display: grid;
                     min-width: 0;
@@ -3155,6 +3430,25 @@ export class CosimoSynthView extends HTMLElement {
                                         <div class="mini-label warm" data-role="stage-gesture-hint">Swipe + Drag</div>
                                     </div>
                                 </div>
+                            </div>
+                        </div>
+
+                        <div class="play-panel">
+                            <div class="section-label">Voice Routing</div>
+                            <div class="play-grid">
+                                <label class="play-field">
+                                    <span class="play-field-label">Play Mode</span>
+                                    <select class="play-select play-mode-select">${buildSelectOptionsHTML(PLAY_MODE_OPTIONS)}</select>
+                                </label>
+                                <label class="play-field">
+                                    <span class="play-field-label">Note Priority</span>
+                                    <select class="play-select note-priority-select">${buildSelectOptionsHTML(NOTE_PRIORITY_OPTIONS)}</select>
+                                </label>
+                                <label class="play-field wide">
+                                    <span class="play-field-label">Glide Time</span>
+                                    <input class="glide-time-slider" type="range" min="0" max="2" step="0.001" value="0.000" />
+                                    <div class="glide-time-readout" data-role="glide-time-readout">0.000 s</div>
+                                </label>
                             </div>
                         </div>
 
