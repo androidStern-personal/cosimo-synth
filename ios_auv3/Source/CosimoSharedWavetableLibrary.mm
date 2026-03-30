@@ -276,26 +276,31 @@ InstallResult installLibraryFromArchive (const juce::URL& archiveURL)
 class SharedWavetableLibraryComponent final : public juce::Component
 {
 public:
-    explicit SharedWavetableLibraryComponent (SharedWavetableLibraryComponentCallbacks callbacksToUse)
-        : callbacks (std::move (callbacksToUse))
+    explicit SharedWavetableLibraryComponent (SharedWavetableLibraryComponentMode modeToUse,
+                                              SharedWavetableLibraryComponentCallbacks callbacksToUse)
+        : mode (modeToUse), callbacks (std::move (callbacksToUse))
     {
-        titleLabel.setText ("Factory Wavetable Library", juce::dontSendNotification);
         titleLabel.setJustificationType (juce::Justification::centredLeft);
+        titleLabel.setColour (juce::Label::textColourId, juce::Colours::white);
        #if JUCE_MAJOR_VERSION == 8
         titleLabel.setFont (juce::Font (juce::FontOptions (16.0f).withStyle ("Bold")));
        #else
         titleLabel.setFont (juce::Font (16.0f, juce::Font::bold));
        #endif
 
-        detailLabel.setJustificationType (juce::Justification::centredLeft);
+        detailLabel.setJustificationType (juce::Justification::topLeft);
         detailLabel.setMinimumHorizontalScale (1.0f);
+        detailLabel.setColour (juce::Label::textColourId, juce::Colour (0xffd9e2f2));
 
         importButton.setButtonText ("Import Zip");
         importButton.onClick = [this] { chooseArchive(); };
+        importButton.setVisible (mode == SharedWavetableLibraryComponentMode::standaloneInstaller);
 
         addAndMakeVisible (titleLabel);
         addAndMakeVisible (detailLabel);
-        addAndMakeVisible (importButton);
+
+        if (mode == SharedWavetableLibraryComponentMode::standaloneInstaller)
+            addAndMakeVisible (importButton);
 
         refresh();
     }
@@ -303,57 +308,101 @@ public:
     void refresh()
     {
         currentStatus = inspectSharedWavetableLibrary();
-        const auto shouldShow = isInstalling || ! currentStatus.ready || lastOperationWasError;
-
+        juce::String title;
         juce::String message;
 
-        if (isInstalling)
+        if (mode == SharedWavetableLibraryComponentMode::standaloneInstaller)
         {
-            message = "Installing the factory library into shared storage...";
-        }
-        else if (! lastOperationMessage.isEmpty())
-        {
-            message = lastOperationMessage;
-        }
-        else if (currentStatus.ready)
-        {
-            message = currentStatus.summary;
+            title = currentStatus.ready ? "Factory Wavetables Installed"
+                                        : "Install Factory Wavetables";
+
+            if (isInstalling)
+            {
+                message = "Installing the factory wavetable library into shared storage...";
+            }
+            else if (! lastOperationMessage.isEmpty())
+            {
+                message = lastOperationMessage;
+            }
+            else if (currentStatus.ready)
+            {
+                message = currentStatus.summary;
+            }
+            else
+            {
+                message = currentStatus.detail;
+            }
+
+            importButton.setEnabled (! isInstalling);
+            importButton.setButtonText (currentStatus.ready ? "Reinstall Zip" : "Import Zip");
         }
         else
         {
-            message = currentStatus.detail;
+            title = "Factory Wavetable Library Required";
+
+            if (currentStatus.ready)
+            {
+                message = "The shared factory wavetable library is ready. Close and reopen this plug-in window if the synth view is still hidden.";
+            }
+            else if (! currentStatus.detail.isEmpty())
+            {
+                message = "Open the Cosimo Synth app and import the factory wavetable zip there. This AUv3 reads that shared library after the install finishes.\n\nCurrent shared library status: "
+                        + currentStatus.detail;
+            }
+            else
+            {
+                message = "Open the Cosimo Synth app and import the factory wavetable zip there. This AUv3 reads that shared library after the install finishes.";
+            }
         }
 
+        titleLabel.setText (title, juce::dontSendNotification);
         detailLabel.setText (message, juce::dontSendNotification);
-        importButton.setEnabled (! isInstalling);
-        importButton.setButtonText (currentStatus.ready ? "Reinstall Zip" : "Import Zip");
-        setVisible (shouldShow);
         repaint();
     }
 
     void resized() override
     {
-        auto area = getLocalBounds().reduced (12, 8);
-        auto buttonArea = area.removeFromRight (130);
-        importButton.setBounds (buttonArea.withTrimmedTop (6).withTrimmedBottom (6));
-        area.removeFromRight (12);
-        titleLabel.setBounds (area.removeFromTop (22));
-        detailLabel.setBounds (area);
+        auto cardArea = getCardBounds().reduced (24);
+        titleLabel.setBounds (cardArea.removeFromTop (28));
+        cardArea.removeFromTop (16);
+
+        if (importButton.isVisible())
+        {
+            auto buttonArea = cardArea.removeFromBottom (44);
+            importButton.setBounds (buttonArea.removeFromLeft (150));
+            cardArea.removeFromBottom (12);
+        }
+
+        detailLabel.setBounds (cardArea);
     }
 
     void paint (juce::Graphics& g) override
     {
-        auto bounds = getLocalBounds().toFloat().reduced (4.0f);
-        g.setColour (juce::Colour (0xff1f2733));
-        g.fillRoundedRectangle (bounds, 14.0f);
+        g.fillAll (juce::Colour (0xff05070d));
 
-        g.setColour (lastOperationWasError ? juce::Colour (0xff9f3d3d) : juce::Colour (0xff314764));
-        g.drawRoundedRectangle (bounds, 14.0f, 1.5f);
+        const auto cardBounds = getCardBounds().toFloat();
+        g.setColour (juce::Colour (0xff111826));
+        g.fillRoundedRectangle (cardBounds, 20.0f);
+
+        g.setColour (lastOperationWasError ? juce::Colour (0xffa74a4a) : juce::Colour (0xff314764));
+        g.drawRoundedRectangle (cardBounds, 20.0f, 1.5f);
     }
 
 private:
+    juce::Rectangle<int> getCardBounds() const
+    {
+        auto area = getLocalBounds().reduced (24);
+        const auto targetWidth = std::min (620, area.getWidth());
+        const auto targetHeight = std::min (mode == SharedWavetableLibraryComponentMode::standaloneInstaller ? 260 : 220,
+                                            area.getHeight());
+        return juce::Rectangle<int> (targetWidth, targetHeight).withCentre (area.getCentre());
+    }
+
     void chooseArchive()
     {
+        if (mode != SharedWavetableLibraryComponentMode::standaloneInstaller)
+            return;
+
         chooser = std::make_unique<juce::FileChooser> (
             "Import the factory wavetable zip",
             juce::File(),
@@ -400,15 +449,13 @@ private:
                 safeThis->lastOperationMessage = result.message;
                 safeThis->refresh();
 
-                if (safeThis->callbacks.requestComponentRefresh != nullptr)
-                    safeThis->callbacks.requestComponentRefresh();
-
                 if (result.succeeded && safeThis->callbacks.requestPatchReload != nullptr)
                     safeThis->callbacks.requestPatchReload();
             });
         });
     }
 
+    SharedWavetableLibraryComponentMode mode;
     SharedWavetableLibraryComponentCallbacks callbacks;
     SharedWavetableLibraryStatus currentStatus;
     std::unique_ptr<juce::FileChooser> chooser;
@@ -468,14 +515,10 @@ SharedWavetableLibraryStatus inspectSharedWavetableLibrary()
     return status;
 }
 
-int getSharedWavetableLibraryComponentHeight()
+std::unique_ptr<juce::Component> createSharedWavetableLibraryComponent (SharedWavetableLibraryComponentMode mode,
+                                                                       SharedWavetableLibraryComponentCallbacks callbacks)
 {
-    return inspectSharedWavetableLibrary().ready ? 0 : kSharedWavetableLibraryBarHeight;
-}
-
-std::unique_ptr<juce::Component> createSharedWavetableLibraryComponent (SharedWavetableLibraryComponentCallbacks callbacks)
-{
-    return std::make_unique<SharedWavetableLibraryComponent> (std::move (callbacks));
+    return std::make_unique<SharedWavetableLibraryComponent> (mode, std::move (callbacks));
 }
 
 void refreshSharedWavetableLibraryComponent (juce::Component* component)

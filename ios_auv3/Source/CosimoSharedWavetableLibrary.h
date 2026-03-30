@@ -11,7 +11,6 @@ namespace cosimo::ios
 inline constexpr std::string_view kSharedWavetableAppGroupIdentifier = "group.dev.cosimo.wavetable-synth";
 inline constexpr std::string_view kFactoryBankCatalogAssetPath = "assets/factory-bank-catalog.json";
 inline constexpr std::string_view kFactorySourceAssetPrefix = "assets/factory_sources/";
-inline constexpr int kSharedWavetableLibraryBarHeight = 76;
 
 struct SharedWavetableLibraryStatus
 {
@@ -24,18 +23,23 @@ struct SharedWavetableLibraryStatus
     juce::File catalogFile;
 };
 
+enum class SharedWavetableLibraryComponentMode
+{
+    standaloneInstaller,
+    extensionUnavailable,
+};
+
 struct SharedWavetableLibraryComponentCallbacks
 {
     std::function<void()> requestPatchReload;
-    std::function<void()> requestComponentRefresh;
 };
 
 bool isManagedWavetableAssetPath (std::string_view relativePath);
 juce::File resolveManagedWavetableAssetFile (std::string_view relativePath);
 SharedWavetableLibraryStatus inspectSharedWavetableLibrary();
-int getSharedWavetableLibraryComponentHeight();
 
-std::unique_ptr<juce::Component> createSharedWavetableLibraryComponent (SharedWavetableLibraryComponentCallbacks callbacks);
+std::unique_ptr<juce::Component> createSharedWavetableLibraryComponent (SharedWavetableLibraryComponentMode mode,
+                                                                       SharedWavetableLibraryComponentCallbacks callbacks);
 void refreshSharedWavetableLibraryComponent (juce::Component* component);
 
 } // namespace cosimo::ios

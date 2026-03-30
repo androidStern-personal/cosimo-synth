@@ -373,17 +373,21 @@ def test_ios_auv3_generator_writes_self_contained_plugin_source_and_headers(
     assert "view.isResizable()" in juce_plugin_header
     assert "juce::Desktop::getInstance().getDisplays().getPrimaryDisplay()" in juce_plugin_header
     assert "display->userArea.isEmpty() ? display->totalArea" in juce_plugin_header
-    assert "const auto extraCompHeight = owner.getExtraCompHeight();" in juce_plugin_header
-    assert "patchWebViewHolder->setBounds (r.removeFromTop (getHeight() - extraCompHeight));" in juce_plugin_header
-    assert "if (extraCompHeight > 0)" in juce_plugin_header
-    assert "int getExtraCompHeight() const" in juce_plugin_header
-    assert "return cosimo::ios::getSharedWavetableLibraryComponentHeight();" in juce_plugin_header
-    assert "createSharedWavetableLibraryComponent ({" in juce_plugin_header
+    assert "addChildComponent (*extraComp);" in juce_plugin_header
+    assert "enum class SharedWavetableLibraryScreenMode" in juce_plugin_header
+    assert "getSharedWavetableLibraryScreenMode() const" in juce_plugin_header
+    assert "return SharedWavetableLibraryScreenMode::standaloneInstaller;" in juce_plugin_header
+    assert "return SharedWavetableLibraryScreenMode::extensionUnavailable;" in juce_plugin_header
+    assert "return getSharedWavetableLibraryScreenMode() == SharedWavetableLibraryScreenMode::patchView;" in juce_plugin_header
+    assert "patchWebViewHolder->setBounds (r);" in juce_plugin_header
+    assert "extraComp->setBounds (getLocalBounds());" in juce_plugin_header
+    assert "createSharedWavetableLibraryComponent (cosimo::ios::SharedWavetableLibraryComponentMode::standaloneInstaller" in juce_plugin_header
+    assert "createSharedWavetableLibraryComponent (cosimo::ios::SharedWavetableLibraryComponentMode::extensionUnavailable" in juce_plugin_header
     assert "setNewStateAsync (this->getUpdatedState())" in juce_plugin_header
     assert "refreshSharedWavetableLibraryComponent (c)" in juce_plugin_header
     assert "owner.refreshExtraComp (extraComp.get());" in juce_plugin_header
     assert "childBoundsChanged (nullptr);" in juce_plugin_header
-    assert "patchLoadedFromState (const juce::ValueTree&) override" in juce_plugin_header
+    assert "getSharedWavetableLibraryComponentHeight" not in juce_plugin_header
 
 
 def test_ios_shared_wavetable_helper_uses_app_groups_zip_import_and_backup_exclusion() -> None:
@@ -398,6 +402,15 @@ def test_ios_shared_wavetable_helper_uses_app_groups_zip_import_and_backup_exclu
     assert "NSURLIsExcludedFromBackupKey" in helper_source
     assert "validateInstalledLibrary" in helper_source
     assert "createSharedWavetableLibraryComponent" in helper_source
+    assert "Install Factory Wavetables" in helper_source
+    assert "Factory Wavetable Library Required" in helper_source
+    assert "Open the Cosimo Synth app and import the factory wavetable zip there." in helper_source
+    assert "enum class SharedWavetableLibraryComponentMode" in helper_header
+    assert "standaloneInstaller" in helper_header
+    assert "extensionUnavailable" in helper_header
+    assert "kSharedWavetableLibraryBarHeight" not in helper_header
+    assert "getSharedWavetableLibraryComponentHeight" not in helper_header
+    assert "requestComponentRefresh" not in helper_header
     assert "com.apple.security.application-groups" in entitlements
     assert "group.dev.cosimo.wavetable-synth" in entitlements
 

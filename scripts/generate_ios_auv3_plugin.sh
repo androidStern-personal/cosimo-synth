@@ -765,11 +765,8 @@ old_child_bounds = """        void childBoundsChanged (Component*) override
 new_child_bounds = """        void childBoundsChanged (Component*) override
         {
             if (! isResizing && patchWebViewHolder->isVisible() && ! patchWebView->resizable)
-            {
-                const auto extraCompHeight = owner.getExtraCompHeight();
                 setSize (std::max (50, patchWebViewHolder->getWidth()),
-                         std::max (50, patchWebViewHolder->getHeight() + extraCompHeight));
-            }
+                         std::max (50, patchWebViewHolder->getHeight()));
         }
 """
 old_status_message_changed = """        void statusMessageChanged()
@@ -1082,14 +1079,6 @@ new_status_message_block = """        void statusMessageChanged()
         {
             owner.refreshExtraComp (extraComp.get());
             patchWebView->setStatusMessage (owner.statusMessage);
-
-            if (patchWebViewHolder->isVisible())
-            {
-                if (! isResizing && ! patchWebView->resizable)
-                    childBoundsChanged (nullptr);
-                else
-                    resized();
-            }
         }
 
        #if JUCE_IOS
@@ -1216,7 +1205,97 @@ new_status_message_block = """        void statusMessageChanged()
         }
        #endif
 
-        static cmaj::PatchManifest::View derivePatchViewSize (const DerivedType& owner)
+       static cmaj::PatchManifest::View derivePatchViewSize (const DerivedType& owner)
+"""
+old_editor_setup_block = """            extraComp = owner.createExtraComponent();
+
+            onPatchChanged (false);
+
+            if (extraComp)
+                addAndMakeVisible (*extraComp);
+
+            statusMessageChanged();
+"""
+new_editor_setup_block = """            extraComp = owner.createExtraComponent();
+
+            if (extraComp != nullptr)
+                addChildComponent (*extraComp);
+
+            onPatchChanged (false);
+            statusMessageChanged();
+"""
+old_on_patch_changed_block = """        void onPatchChanged (bool forceReload = true)
+        {
+            if (owner.isViewVisible())
+            {
+                patchWebView->setActive (true);
+                patchWebView->update (derivePatchViewSize (owner));
+                patchWebViewHolder->setSize ((int) patchWebView->width, (int) patchWebView->height);
+
+                setResizable (patchWebView->resizable, false);
+
+                addAndMakeVisible (*patchWebViewHolder);
+                childBoundsChanged (nullptr);
+            }
+            else
+            {
+                removeChildComponent (patchWebViewHolder.get());
+
+                patchWebView->setActive (false);
+                patchWebViewHolder->setVisible (false);
+
+                setSize (defaultWidth, defaultHeight);
+                setResizable (true, false);
+            }
+
+            if (forceReload)
+                patchWebView->reload();
+        }
+"""
+new_on_patch_changed_block = """        void onPatchChanged (bool forceReload = true)
+        {
+            owner.refreshExtraComp (extraComp.get());
+
+            if (owner.isViewVisible())
+            {
+                patchWebView->setActive (true);
+                patchWebView->update (derivePatchViewSize (owner));
+                patchWebViewHolder->setSize ((int) patchWebView->width, (int) patchWebView->height);
+
+                setResizable (patchWebView->resizable, false);
+
+                addAndMakeVisible (*patchWebViewHolder);
+                patchWebViewHolder->toFront (false);
+
+                if (extraComp != nullptr)
+                    extraComp->setVisible (false);
+
+                if (! isResizing && ! patchWebView->resizable)
+                    childBoundsChanged (nullptr);
+                else
+                    resized();
+
+                if (forceReload)
+                    patchWebView->reload();
+            }
+            else
+            {
+                removeChildComponent (patchWebViewHolder.get());
+
+                patchWebView->setActive (false);
+                patchWebViewHolder->setVisible (false);
+
+                if (extraComp != nullptr)
+                {
+                    addAndMakeVisible (*extraComp);
+                    extraComp->toFront (false);
+                }
+
+                setSize (defaultWidth, defaultHeight);
+                setResizable (true, false);
+                resized();
+            }
+        }
 """
 old_resized_block = """        void resized() override
         {
@@ -1249,14 +1328,10 @@ new_resized_block = """        void resized() override
             juce::AudioProcessorEditor::resized();
 
             auto r = getLocalBounds();
-            const auto extraCompHeight = owner.getExtraCompHeight();
 
             if (patchWebViewHolder->isVisible())
             {
-                patchWebViewHolder->setBounds (r.removeFromTop (getHeight() - extraCompHeight));
-
-                if (extraCompHeight > 0)
-                    r.removeFromTop (4);
+                patchWebViewHolder->setBounds (r);
 
                 if (getWidth() > 0 && getHeight() > 0)
                 {
@@ -1269,8 +1344,8 @@ new_resized_block = """        void resized() override
                #endif
             }
 
-            if (extraComp)
-                extraComp->setBounds (r);
+            if (extraComp != nullptr && extraComp->isVisible())
+                extraComp->setBounds (getLocalBounds());
 
             isResizing = false;
         }
@@ -1290,30 +1365,50 @@ new_generated_extra_component = """    using PatchClass = GeneratedInfoClass;
     static constexpr bool isPrecompiled = true;
     static constexpr bool isFixedPatch = true;
 
-    void patchLoadedFromState (const juce::ValueTree&) override
+    enum class SharedWavetableLibraryScreenMode
     {
-        this->notifyEditorStatusMessageChanged();
+        patchView,
+        standaloneInstaller,
+        extensionUnavailable,
+    };
+
+    SharedWavetableLibraryScreenMode getSharedWavetableLibraryScreenMode() const
+    {
+        if (cosimo::ios::inspectSharedWavetableLibrary().ready)
+            return SharedWavetableLibraryScreenMode::patchView;
+
+        if (this->wrapperType == juce::AudioProcessor::wrapperType_Standalone)
+            return SharedWavetableLibraryScreenMode::standaloneInstaller;
+
+        if (this->wrapperType == juce::AudioProcessor::wrapperType_AudioUnitv3)
+            return SharedWavetableLibraryScreenMode::extensionUnavailable;
+
+        return SharedWavetableLibraryScreenMode::patchView;
     }
 
-    int getExtraCompHeight() const
+    bool isViewVisible() const
     {
-        return cosimo::ios::getSharedWavetableLibraryComponentHeight();
+        return getSharedWavetableLibraryScreenMode() == SharedWavetableLibraryScreenMode::patchView;
     }
-
-    static bool isViewVisible()  { return true; }
 
     std::unique_ptr<juce::Component> createExtraComponent()
     {
-        return cosimo::ios::createSharedWavetableLibraryComponent ({
-            [this]
-            {
-                this->setNewStateAsync (this->getUpdatedState());
-            },
-            [this]
-            {
-                this->notifyEditorStatusMessageChanged();
-            }
-        });
+        if (this->wrapperType == juce::AudioProcessor::wrapperType_Standalone)
+        {
+            return cosimo::ios::createSharedWavetableLibraryComponent (cosimo::ios::SharedWavetableLibraryComponentMode::standaloneInstaller,
+                                                                       {
+                                                                           [this]
+                                                                           {
+                                                                               this->setNewStateAsync (this->getUpdatedState());
+                                                                           }
+                                                                       });
+        }
+
+        if (this->wrapperType == juce::AudioProcessor::wrapperType_AudioUnitv3)
+            return cosimo::ios::createSharedWavetableLibraryComponent (cosimo::ios::SharedWavetableLibraryComponentMode::extensionUnavailable,
+                                                                       {});
+
+        return {};
     }
 
     void refreshExtraComp (juce::Component* c)
@@ -1380,6 +1475,8 @@ for old, new, label in [
     (old_parameter_tree_allocation, new_parameter_tree_allocation, "parameter tree allocation"),
     (old_parameter_tree_members, new_parameter_tree_members, "parameter tree members"),
     (old_status_message_block, new_status_message_block, "iOS layout metrics exporter"),
+    (old_editor_setup_block, new_editor_setup_block, "generated editor setup"),
+    (old_on_patch_changed_block, new_on_patch_changed_block, "patch view screen switch"),
     (old_resized_block, new_resized_block, "iOS layout metrics trigger"),
     (old_generated_extra_component, new_generated_extra_component, "generated plugin extra component"),
     (old_loader_extra_component, new_loader_extra_component, "JIT loader extra component"),
