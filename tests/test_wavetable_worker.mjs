@@ -305,7 +305,7 @@ test("worker bootstraps from runtimeState instead of requesting wavetableSelect 
     );
 });
 
-test("worker loads a spaced source wavetable path through the resolved resource URL instead of the audio-data bridge", async () => {
+test("worker falls back to the resolved resource URL for spaced wavetable paths when no audio-data bridge is available", async () => {
     const spacedPath = "assets/factory_sources/BS2 - Acid.wav";
     const catalog = {
         tables: [
@@ -328,6 +328,7 @@ test("worker loads a spaced source wavetable path through the resolved resource 
         maxAutoAckFrames: 0,
         resourceRootUrl: "https://example.test/bundle/",
     });
+    connection.readResourceAsAudioData = undefined;
 
     await withPatchedFetch(async (url) => {
         fetchedUrls.push(String(url));

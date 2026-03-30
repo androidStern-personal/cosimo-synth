@@ -4,6 +4,7 @@ import argparse
 import json
 import os
 import plistlib
+import shutil
 import subprocess
 import sys
 import time
@@ -14,6 +15,8 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 XCODE_PROJECT_SCRIPT = REPO_ROOT / "scripts" / "generate_ios_auv3_xcode_project.sh"
 HOST_BUNDLE_ID = "dev.cosimo.wavetable-synth-host"
 CONTAINER_BUNDLE_ID = "dev.cosimo.wavetable-synth"
+EXTENSION_BUNDLE_ID = "dev.cosimo.wavetable-synth.wavetable-synthAUv3"
+APP_GROUP_ID = "group.dev.cosimo.wavetable-synth"
 
 DEFAULT_PHONE_NAMES = [
     "iPhone 17",
@@ -162,6 +165,133 @@ def app_documents_directory(udid: str, bundle_id: str) -> Path:
     return Path(result.stdout.strip()) / "Documents"
 
 
+def data_container_directory(udid: str, bundle_id: str) -> Path | None:
+    result = run_allow_failure(["xcrun", "simctl", "get_app_container", udid, bundle_id, "data"])
+
+    if result.returncode != 0:
+        return None
+
+    return Path(result.stdout.strip())
+
+
+def group_container_directory(udid: str, bundle_id: str, group_id: str) -> Path | None:
+    result = run_allow_failure(["xcrun", "simctl", "get_app_container", udid, bundle_id, group_id])
+
+    if result.returncode != 0:
+        return None
+
+    return Path(result.stdout.strip())
+
+
+def seed_factory_library(udid: str) -> None:
+    install_roots: set[Path] = set()
+    group_root = group_container_directory(udid, CONTAINER_BUNDLE_ID, APP_GROUP_ID)
+
+    if group_root is not None:
+        install_roots.add(
+            group_root / "Library" / "Application Support" / "CosimoSynth" / "WavetableLibrary" / "current"
+        )
+
+    for bundle_id in (CONTAINER_BUNDLE_ID, EXTENSION_BUNDLE_ID):
+        data_root = data_container_directory(udid, bundle_id)
+
+        if data_root is None:
+            continue
+
+        install_roots.add(
+            data_root / "Library" / "Application Support" / "CosimoSynth" / "WavetableLibrary" / "current"
+        )
+
+    for pluginkit_root in pluginkit_data_roots(udid, EXTENSION_BUNDLE_ID):
+        install_roots.add(
+            pluginkit_root / "Library" / "Application Support" / "CosimoSynth" / "WavetableLibrary" / "current"
+        )
+
+    if not install_roots:
+        raise RuntimeError("Could not find an app group or app data container to seed the wavetable library.")
+
+    for install_root in sorted(install_roots):
+        if install_root.exists():
+            shutil.rmtree(install_root)
+
+        (install_root / "assets").mkdir(parents=True, exist_ok=True)
+        shutil.copy2(REPO_ROOT / "assets" / "factory-bank-catalog.json", install_root / "assets" / "factory-bank-catalog.json")
+        shutil.copytree(REPO_ROOT / "assets" / "factory_sources", install_root / "assets" / "factory_sources")
+
+
+def simulator_device_data_root(udid: str) -> Path:
+    return Path.home() / "Library" / "Developer" / "CoreSimulator" / "Devices" / udid / "data" / "Containers" / "Data"
+
+
+def pluginkit_data_roots(udid: str, bundle_id: str) -> list[Path]:
+    data_root = simulator_device_data_root(udid)
+    pluginkit_root = data_root / "PluginKitPlugin"
+
+    if not pluginkit_root.exists():
+        return []
+
+    roots: set[Path] = set()
+
+    for marker in pluginkit_root.glob(f"*/Library/WebKit/{bundle_id}"):
+        roots.add(marker.parents[2])
+
+    return sorted(roots)
+
+
+def editor_metrics_candidate_paths(udid: str) -> list[Path]:
+    data_root = simulator_device_data_root(udid)
+    candidates: list[Path] = []
+
+    for pattern in (
+        "Application/*/Documents/ui-geometry.json",
+        "PluginKitPlugin/*/Documents/ui-geometry.json",
+    ):
+        candidates.extend(data_root.glob(pattern))
+
+    return sorted(candidates)
+
+
+def clear_editor_metrics_output(udid: str) -> None:
+    for metrics_path in editor_metrics_candidate_paths(udid):
+        if metrics_path.exists():
+            metrics_path.unlink()
+
+
+def wait_for_editor_metrics(udid: str, *, timeout_seconds: float = 20.0) -> dict[str, object] | None:
+    deadline = time.monotonic() + timeout_seconds
+    latest_payload: dict[str, object] | None = None
+
+    while time.monotonic() < deadline:
+        candidates = [path for path in editor_metrics_candidate_paths(udid) if path.is_file() and path.stat().st_size > 0]
+
+        if candidates:
+            newest_path = max(candidates, key=lambda path: path.stat().st_mtime)
+
+            try:
+                payload = json.loads(newest_path.read_text(encoding="utf-8"))
+            except json.JSONDecodeError:
+                time.sleep(0.2)
+                continue
+
+            if isinstance(payload, dict):
+                latest_payload = payload
+
+                dom_metrics = payload.get("domMetrics")
+
+                if isinstance(dom_metrics, dict):
+                    is_ready = bool(dom_metrics.get("isReady"))
+
+                    if is_ready:
+                        return payload
+
+                if payload.get("error") not in (None, ""):
+                    return payload
+
+        time.sleep(0.2)
+
+    return latest_payload
+
+
 def wait_for_output(path: Path, *, timeout_seconds: float = 120.0) -> dict[str, object]:
     deadline = time.monotonic() + timeout_seconds
 
@@ -178,6 +308,7 @@ def run_host_mode(udid: str, mode: str, output_name: str) -> dict[str, object]:
     documents_dir = app_documents_directory(udid, HOST_BUNDLE_ID)
     documents_dir.mkdir(parents=True, exist_ok=True)
     output_path = documents_dir / output_name
+    clear_editor_metrics_output(udid)
 
     if output_path.exists():
         output_path.unlink()
@@ -207,6 +338,25 @@ def run_host_mode(udid: str, mode: str, output_name: str) -> dict[str, object]:
 
     if "error" in payload:
         raise RuntimeError(f"Host app smoke mode {mode} failed: {payload['error']}")
+
+    editor_payload = payload.get("editor")
+
+    if isinstance(editor_payload, dict):
+        geometry_payload = wait_for_editor_metrics(udid)
+
+        if isinstance(geometry_payload, dict):
+            dom_metrics = geometry_payload.get("domMetrics")
+            native_metrics = geometry_payload.get("native")
+            geometry_error = geometry_payload.get("error")
+
+            if isinstance(dom_metrics, dict):
+                editor_payload["domMetrics"] = dom_metrics
+
+            if isinstance(native_metrics, dict):
+                editor_payload["nativeMetrics"] = native_metrics
+
+            if geometry_error and "domMetrics" not in editor_payload:
+                editor_payload["domMetricsError"] = geometry_error
 
     return payload
 
@@ -262,6 +412,8 @@ def main() -> int:
         install_app(udid, products[CONTAINER_BUNDLE_ID])
         install_app(udid, products[HOST_BUNDLE_ID])
         prime_extension_registration(udid)
+        run_host_mode(udid, "layout", "prime-layout.json")
+        seed_factory_library(udid)
 
     phone_save = run_host_mode(phone_udid, "save", "phone-save.json")
     phone_reload = run_host_mode(phone_udid, "reload", "phone-reload.json")

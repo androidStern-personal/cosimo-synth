@@ -77,16 +77,12 @@ file(
 )
 
 set(
-    COSIMO_BUNDLED_BANK_RESOURCE_FILES
-    "${COSIMO_REPO_ROOT}/assets/factory-bank-catalog.json"
-)
-set(
-    COSIMO_FACTORY_SOURCE_DIR
-    "${COSIMO_REPO_ROOT}/assets/factory_sources"
-)
-set(
     COSIMO_RUNTIME_PATCH_FILE
     "${COSIMO_REPO_ROOT}/WavetableSynth.iOS.cmajorpatch"
+)
+set(
+    COSIMO_SHARED_WAVETABLE_ENTITLEMENTS
+    "${CMAKE_CURRENT_LIST_DIR}/Entitlements/CosimoSharedWavetableLibrary.entitlements"
 )
 
 set(
@@ -139,6 +135,8 @@ juce_add_plugin(CosimoSynth
     BUNDLE_ID "dev.cosimo.wavetable-synth"
     COMPANY_NAME "Cosimo"
     COMPANY_COPYRIGHT "(C)2026 Cosimo"
+    FILE_SHARING_ENABLED TRUE
+    PLIST_TO_MERGE "<plist><dict><key>LSSupportsOpeningDocumentsInPlace</key><true/></dict></plist>"
     PLUGIN_CODE CmDv
     PLUGIN_MANUFACTURER_CODE Manu
     FORMATS Standalone AUv3
@@ -158,6 +156,7 @@ set_source_files_properties(
 target_sources(CosimoSynth PRIVATE
     "${COSIMO_GENERATED_PLUGIN_CPP}"
     "${CMAKE_CURRENT_LIST_DIR}/Source/cmaj_StaticLibraryShim.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/Source/CosimoSharedWavetableLibrary.mm"
 )
 
 target_compile_features(CosimoSynth PRIVATE cxx_std_17)
@@ -174,6 +173,7 @@ target_compile_definitions(CosimoSynth PRIVATE
 target_include_directories(CosimoSynth PRIVATE
     "${COSIMO_GENERATED_DIR}/include"
     "${COSIMO_GENERATED_DIR}/include/choc"
+    "${CMAKE_CURRENT_LIST_DIR}/Source"
 )
 
 target_link_libraries(CosimoSynth PRIVATE
@@ -184,29 +184,19 @@ target_link_libraries(CosimoSynth PRIVATE
 add_dependencies(CosimoSynth cosimo_ios_auv3_generated_plugin)
 
 foreach(bundle_target CosimoSynth_Standalone CosimoSynth_AUv3)
+    set_target_properties(${bundle_target} PROPERTIES
+        XCODE_ATTRIBUTE_CODE_SIGN_ENTITLEMENTS "${COSIMO_SHARED_WAVETABLE_ENTITLEMENTS}"
+    )
+
     add_custom_command(
         TARGET ${bundle_target}
         POST_BUILD
         COMMAND
-            "${CMAKE_COMMAND}" -E make_directory "$<TARGET_FILE_DIR:${bundle_target}>/assets"
-        COMMAND
-            "${CMAKE_COMMAND}" -E rm -rf "$<TARGET_FILE_DIR:${bundle_target}>/assets/factory_sources"
-        COMMAND
-            "${CMAKE_COMMAND}" -E rm -f "$<TARGET_FILE_DIR:${bundle_target}>/assets/factory-bank.json"
-        COMMAND
-            "${CMAKE_COMMAND}" -E copy_if_different
-            "${COSIMO_REPO_ROOT}/assets/factory-bank-catalog.json"
-            "$<TARGET_FILE_DIR:${bundle_target}>/assets/factory-bank-catalog.json"
-        COMMAND
             "${CMAKE_COMMAND}" -E copy_if_different
             "${COSIMO_RUNTIME_PATCH_FILE}"
             "$<TARGET_FILE_DIR:${bundle_target}>/WavetableSynth.iOS.cmajorpatch"
-        COMMAND
-            "${CMAKE_COMMAND}" -E copy_directory
-            "${COSIMO_FACTORY_SOURCE_DIR}"
-            "$<TARGET_FILE_DIR:${bundle_target}>/assets/factory_sources"
         COMMENT
-            "Copying the runtime wavetable catalog and source files into ${bundle_target}"
+            "Copying the runtime patch manifest into ${bundle_target}"
         VERBATIM
     )
 endforeach()

@@ -438,19 +438,26 @@ export class WavetableWorkerController {
         const normalizedIndex = normalizeRequestedTableIndex(tableIndex, catalog.tables.length);
         const tableMeta = catalog.tables[normalizedIndex];
         assert(tableMeta, `Could not resolve table ${normalizedIndex}`);
+        const canLoadSourceByAudioBridge =
+            typeof this.connection?.readResourceAsAudioData === "function";
         const resourceAddress = typeof this.connection?.getResourceAddress === "function"
             ? this.connection.getResourceAddress(tableMeta.sourceWav)
             : null;
-        const canLoadSourceByUrl = resourceAddress !== null
+        const canLoadSourceByUrl = !canLoadSourceByAudioBridge
+            && resourceAddress !== null
             && resourceAddress !== undefined
             && typeof fetch === "function";
+        assert(
+            canLoadSourceByUrl || canLoadSourceByAudioBridge,
+            "Patch connection cannot read wavetable source files"
+        );
         const startTime = performance?.now?.() ?? Date.now();
         emitWorkerLog("info", "Reading wavetable source", {
             tableIndex: normalizedIndex,
             tableId: tableMeta.tableId,
             tableName: tableMeta.name,
             sourceWav: tableMeta.sourceWav,
-            loaderMode: canLoadSourceByUrl ? "resource-url" : "audio-data-bridge",
+            loaderMode: canLoadSourceByAudioBridge ? "audio-data-bridge" : "resource-url",
             expectedFrameCount:
                 expectedFrameCount === undefined ? Number(tableMeta.frameCount) : expectedFrameCount,
         });

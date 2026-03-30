@@ -417,51 +417,55 @@ static NSString * const CosimoSmokeStateName = @"host-smoke-state";
 
                             payload[@"tableSelectionSet"] = tableResult;
 
-                            [self.harness sendTestNoteWithCompletion:^(NSDictionary<NSString *,id> * _Nullable noteResult, NSError * _Nullable noteError)
+                            dispatch_after (dispatch_time (DISPATCH_TIME_NOW, (int64_t) (3.0 * NSEC_PER_SEC)),
+                                            dispatch_get_main_queue(), ^
                             {
-                                if ([self handleAutomationError:noteError outputName:outputName])
-                                    return;
-
-                                payload[@"audio"] = noteResult;
-
-                                [self.harness closeEditorWithCompletion:^(NSDictionary<NSString *,id> * _Nullable closeResult, NSError * _Nullable closeError)
+                                [self.harness sendTestNoteWithCompletion:^(NSDictionary<NSString *,id> * _Nullable noteResult, NSError * _Nullable noteError)
                                 {
-                                    [self presentEditorOverlay:NO];
-
-                                    if ([self handleAutomationError:closeError outputName:outputName])
+                                    if ([self handleAutomationError:noteError outputName:outputName])
                                         return;
 
-                                    editorPayload[@"closed"] = closeResult[@"closed"] ?: @YES;
-                                    payload[@"editor"] = editorPayload;
+                                    payload[@"audio"] = noteResult;
 
-                                    [self.harness saveStateNamed:CosimoSmokeStateName completion:^(NSDictionary<NSString *,id> * _Nullable saveResult, NSError * _Nullable saveError)
+                                    [self.harness closeEditorWithCompletion:^(NSDictionary<NSString *,id> * _Nullable closeResult, NSError * _Nullable closeError)
                                     {
-                                        if ([self handleAutomationError:saveError outputName:outputName])
+                                        [self presentEditorOverlay:NO];
+
+                                        if ([self handleAutomationError:closeError outputName:outputName])
                                             return;
 
-                                        [self.harness reloadStateNamed:CosimoSmokeStateName completion:^(NSDictionary<NSString *,id> * _Nullable reloadResult, NSError * _Nullable reloadError)
+                                        editorPayload[@"closed"] = closeResult[@"closed"] ?: @YES;
+                                        payload[@"editor"] = editorPayload;
+
+                                        [self.harness saveStateNamed:CosimoSmokeStateName completion:^(NSDictionary<NSString *,id> * _Nullable saveResult, NSError * _Nullable saveError)
                                         {
-                                            if ([self handleAutomationError:reloadError outputName:outputName])
+                                            if ([self handleAutomationError:saveError outputName:outputName])
                                                 return;
 
-                                            payload[@"state"] = @{
-                                                @"savedStateKeys": saveResult[@"savedStateKeys"] ?: @[],
-                                                @"reloadObservedValue": reloadResult[@"observedValue"] ?: @(0.0),
-                                                @"reloadObservedTableSelect": reloadResult[@"observedTableSelectValue"] ?: @(0.0),
-                                            };
+                                            [self.harness reloadStateNamed:CosimoSmokeStateName completion:^(NSDictionary<NSString *,id> * _Nullable reloadResult, NSError * _Nullable reloadError)
+                                            {
+                                                if ([self handleAutomationError:reloadError outputName:outputName])
+                                                    return;
 
-                                            [self setStatus:@"The host app discovered the AUv3, opened the editor, played a note, and restored state."];
-                                            [self appendLogWithName:@"save smoke" value:payload];
+                                                payload[@"state"] = @{
+                                                    @"savedStateKeys": saveResult[@"savedStateKeys"] ?: @[],
+                                                    @"reloadObservedValue": reloadResult[@"observedValue"] ?: @(0.0),
+                                                    @"reloadObservedTableSelect": reloadResult[@"observedTableSelectValue"] ?: @(0.0),
+                                                };
 
-                                            if (outputName != nil)
-                                                [self completeAutomationWithPayload:payload outputName:outputName];
+                                                [self setStatus:@"The host app discovered the AUv3, opened the editor, played a note, and restored state."];
+                                                [self appendLogWithName:@"save smoke" value:payload];
 
-                                            if (completion != nil)
-                                                completion (payload);
+                                                if (outputName != nil)
+                                                    [self completeAutomationWithPayload:payload outputName:outputName];
+
+                                                if (completion != nil)
+                                                    completion (payload);
+                                            }];
                                         }];
                                     }];
                                 }];
-                            }];
+                            });
                         }];
                     }];
                 });
@@ -531,17 +535,21 @@ static NSString * const CosimoSmokeStateName = @"host-smoke-state";
 
                 NSMutableDictionary<NSString *, id> *editorPayload = [editorResult mutableCopy];
 
-                [self.harness closeEditorWithCompletion:^(NSDictionary<NSString *,id> * _Nullable closeResult, NSError * _Nullable closeError)
+                dispatch_after (dispatch_time (DISPATCH_TIME_NOW, (int64_t) (2.5 * NSEC_PER_SEC)),
+                                dispatch_get_main_queue(), ^
                 {
-                    [self presentEditorOverlay:NO];
+                    [self.harness closeEditorWithCompletion:^(NSDictionary<NSString *,id> * _Nullable closeResult, NSError * _Nullable closeError)
+                    {
+                        [self presentEditorOverlay:NO];
 
-                    if ([self handleAutomationError:closeError outputName:outputName])
-                        return;
+                        if ([self handleAutomationError:closeError outputName:outputName])
+                            return;
 
-                    editorPayload[@"closed"] = closeResult[@"closed"] ?: @YES;
-                    payload[@"editor"] = editorPayload;
-                    [self completeAutomationWithPayload:payload outputName:outputName];
-                }];
+                        editorPayload[@"closed"] = closeResult[@"closed"] ?: @YES;
+                        payload[@"editor"] = editorPayload;
+                        [self completeAutomationWithPayload:payload outputName:outputName];
+                    }];
+                });
             }];
         }];
     }];

@@ -216,14 +216,14 @@ static AudioComponentDescription CosimoComponentDescription()
     const uint8_t noteOn[] = { 0x90, 60, 96 };
     midiBlock (AUEventSampleTimeImmediate, 0, 3, noteOn);
 
-    dispatch_after (dispatch_time (DISPATCH_TIME_NOW, (int64_t) (0.25 * NSEC_PER_SEC)),
+    dispatch_after (dispatch_time (DISPATCH_TIME_NOW, (int64_t) (0.8 * NSEC_PER_SEC)),
                     dispatch_get_main_queue(), ^
     {
         const uint8_t noteOff[] = { 0x80, 60, 0 };
         midiBlock (AUEventSampleTimeImmediate, 0, 3, noteOff);
     });
 
-    dispatch_after (dispatch_time (DISPATCH_TIME_NOW, (int64_t) (0.7 * NSEC_PER_SEC)),
+    dispatch_after (dispatch_time (DISPATCH_TIME_NOW, (int64_t) (1.6 * NSEC_PER_SEC)),
                     dispatch_get_main_queue(), ^
     {
         [mixer removeTapOnBus:0];
@@ -729,6 +729,7 @@ static AudioComponentDescription CosimoComponentDescription()
         @"containerHeight": @(containerSize.height),
         @"viewWidth": @(viewSize.width),
         @"viewHeight": @(viewSize.height),
+        @"nativeViewTree": [self describeViewTree:self.editorController.view depth:0 maxDepth:5],
     };
 }
 
@@ -746,6 +747,29 @@ static AudioComponentDescription CosimoComponentDescription()
     }
 
     return nil;
+}
+
+- (NSDictionary<NSString *, id> *)describeViewTree:(UIView *)view
+                                            depth:(NSInteger)depth
+                                         maxDepth:(NSInteger)maxDepth
+{
+    NSMutableDictionary<NSString *, id> *result = [@{
+        @"className": NSStringFromClass ([view class]) ?: @"UnknownView",
+        @"hidden": @(view.hidden),
+        @"alpha": @(view.alpha),
+        @"subviewCount": @(view.subviews.count),
+    } mutableCopy];
+
+    if (depth >= maxDepth || view.subviews.count == 0)
+        return result;
+
+    NSMutableArray<NSDictionary<NSString *, id> *> *children = [[NSMutableArray alloc] initWithCapacity:view.subviews.count];
+
+    for (UIView *subview in view.subviews)
+        [children addObject:[self describeViewTree:subview depth:depth + 1 maxDepth:maxDepth]];
+
+    result[@"children"] = children;
+    return result;
 }
 
 - (void)collectEditorDOMMetricsAfterDelay:(NSTimeInterval)delay
@@ -786,7 +810,7 @@ static AudioComponentDescription CosimoComponentDescription()
         return;
     }
 
-    NSString *script = @"window.__cosimoCollectLayoutMetrics?.() ?? null";
+    NSString *script = @"typeof window.__cosimoCollectLayoutMetrics === 'function' ? window.__cosimoCollectLayoutMetrics() : null";
 
     [webView evaluateJavaScript:script completionHandler:^(id _Nullable result, NSError * _Nullable error)
     {

@@ -42,6 +42,27 @@ function isAbsoluteURL(value) {
     return /^[a-zA-Z][a-zA-Z\d+.-]*:/.test(value);
 }
 
+function describePayload(payload) {
+    if (payload === null) {
+        return "null";
+    }
+
+    if (payload === undefined) {
+        return "undefined";
+    }
+
+    const type = typeof payload;
+    const constructorName = payload?.constructor?.name;
+
+    if (type !== "object") {
+        return constructorName ? `${type}:${constructorName}` : type;
+    }
+
+    const keys = Object.keys(payload).slice(0, 6);
+    const keySummary = keys.length > 0 ? ` keys=${keys.join(",")}` : "";
+    return constructorName ? `${type}:${constructorName}${keySummary}` : `${type}${keySummary}`;
+}
+
 export function resolvePatchResourceUrl(path, patchConnection) {
     const patchRootUrl = new URL("../", import.meta.url);
     const resourceAddress = patchConnection?.getResourceAddress?.(path);
@@ -69,6 +90,78 @@ async function fetchJSON(url, label) {
     const response = await fetch(url.toString());
     assert(response.ok, `Failed to fetch ${label} from ${url}`);
     return response.json();
+}
+
+async function decodeTextPayload(payload) {
+    if (typeof payload === "string") {
+        return payload;
+    }
+
+    if (payload && typeof payload.text === "function") {
+        return payload.text();
+    }
+
+    if (payload instanceof ArrayBuffer) {
+        if (typeof TextDecoder === "function") {
+            return new TextDecoder().decode(new Uint8Array(payload));
+        }
+
+        return String.fromCharCode(...new Uint8Array(payload));
+    }
+
+    if (ArrayBuffer.isView(payload)) {
+        if (typeof TextDecoder === "function") {
+            return new TextDecoder().decode(payload);
+        }
+
+        return String.fromCharCode(...payload);
+    }
+
+    if (Array.isArray(payload)) {
+        const byteArray = Uint8Array.from(payload);
+
+        if (typeof TextDecoder === "function") {
+            return new TextDecoder().decode(byteArray);
+        }
+
+        return String.fromCharCode(...byteArray);
+    }
+
+    throw new Error(`Unsupported text resource payload (${describePayload(payload)})`);
+}
+
+function normalizeDecodedAudioFileSamples(audioFile) {
+    const frames = audioFile?.frames;
+
+    assert(
+        Array.isArray(frames) || ArrayBuffer.isView(frames),
+        "Decoded audio data must provide a frames array"
+    );
+
+    const frameArray = Array.from(frames);
+    const samples = new Float32Array(frameArray.length);
+
+    for (let index = 0; index < frameArray.length; index += 1) {
+        const frame = frameArray[index];
+
+        if (typeof frame === "number") {
+            samples[index] = frame;
+            continue;
+        }
+
+        if (ArrayBuffer.isView(frame) || Array.isArray(frame)) {
+            assert(frame.length === 1, "Only mono wavetable source files are supported");
+            samples[index] = Number(frame[0]) || 0;
+            continue;
+        }
+
+        throw new Error("Decoded audio frames must contain numeric mono samples");
+    }
+
+    return {
+        sampleRate: Number(audioFile?.sampleRate) || 0,
+        samples,
+    };
 }
 
 export function parseWaveFile(arrayBuffer) {
@@ -227,12 +320,43 @@ export async function loadSourceWavetableFramesFromUrl(
     };
 }
 
+async function loadSourceWavetableFramesFromPatchConnection(
+    {
+        patchConnection,
+        sourceWavPath,
+        tableIndex = 0,
+        expectedFrameCount = undefined,
+        samplesPerFrame = DEFAULT_SAMPLES_PER_FRAME,
+    }
+) {
+    const audioFile = await patchConnection.readResourceAsAudioData(sourceWavPath);
+    const decodedAudio = normalizeDecodedAudioFileSamples(audioFile);
+    const sourceFrames = extractSourceFrames(decodedAudio.samples, {
+        expectedFrameCount,
+        samplesPerFrame,
+    });
+
+    return {
+        sampleRate: decodedAudio.sampleRate,
+        sampleBlobPath: sourceWavPath,
+        tableIndex,
+        frameCount: sourceFrames.frameCount,
+        samples: decodedAudio.samples,
+        frames: sourceFrames.frames,
+    };
+}
+
 export async function loadFactoryBankCatalogFromPatch(
     patchConnection,
     {
         catalogPath = DEFAULT_FACTORY_BANK_CATALOG_PATH,
     } = {}
 ) {
+    if (typeof patchConnection?.readResource === "function") {
+        const payload = await patchConnection.readResource(catalogPath);
+        return getFactoryBankCatalogValue(JSON.parse(await decodeTextPayload(payload)));
+    }
+
     const catalogUrl = resolvePatchResourceUrl(catalogPath, patchConnection);
     return getFactoryBankCatalogValue(await fetchJSON(catalogUrl, "factory bank catalog"));
 }
@@ -248,6 +372,17 @@ export async function loadFactoryBankFramesFromPatch(
     const catalogValue = await loadFactoryBankCatalogFromPatch(patchConnection, { catalogPath });
     const clampedTableIndex = clampToRange(tableIndex, 0, catalogValue.tables.length - 1);
     const sourceTableMeta = catalogValue.tables[clampedTableIndex];
+
+    if (typeof patchConnection?.readResourceAsAudioData === "function") {
+        return loadSourceWavetableFramesFromPatchConnection({
+            patchConnection,
+            sourceWavPath: sourceTableMeta.sourceWav,
+            tableIndex: clampedTableIndex,
+            expectedFrameCount: Number(sourceTableMeta.frameCount),
+            samplesPerFrame,
+        });
+    }
+
     const sourceWavUrl = resolvePatchResourceUrl(sourceTableMeta.sourceWav, patchConnection);
 
     return loadSourceWavetableFramesFromUrl({

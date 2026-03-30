@@ -11,13 +11,25 @@
       "displayName": "Wavetable Select"
     },
     {
+      "address": 12123592271396227,
+      "identifier": "playMode",
+      "displayName": "Play Mode"
+    },
+    {
+      "address": 1127033989823269416,
+      "identifier": "glideTime",
+      "displayName": "Glide Time"
+    },
+    {
       "address": 9787453917618359882,
       "identifier": "mseg1Depth",
       "displayName": "MSEG 1 Depth"
     }
   ],
   "savedStateKeys": [
+    "glideTime",
     "mseg1Depth",
+    "playMode",
     "wavetablePosition",
     "wavetableSelect"
   ]

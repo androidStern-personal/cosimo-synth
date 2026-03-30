@@ -225,6 +225,190 @@ text = text.replace(old_header, new_header, 1)
 if old_style not in text:
     raise SystemExit(f"Could not find the expected patch webview style snippet in {path}")
 
+old_cpp_status_message = """inline void PatchWebView::setStatusMessage (const std::string& newMessage)
+{
+    getWebView().evaluateJavascript ("window.setStatusMessage (" + choc::json::getEscapedQuotedString (newMessage) + ")");
+}
+"""
+new_cpp_status_message = """inline void PatchWebView::setStatusMessage (const std::string& newMessage)
+{
+    getWebView().evaluateJavascript ("if (typeof window.setStatusMessage === 'function') window.setStatusMessage (" + choc::json::getEscapedQuotedString (newMessage) + ")");
+}
+"""
+old_js_status_message = """window.setStatusMessage = (newMessage) =>
+{
+    isViewActive = false;
+    container.innerHTML = `<pre id="cmaj-error-text">${newMessage}</pre>`;
+};
+"""
+new_js_status_message = """window.setStatusMessage = (newMessage) =>
+{
+    const messageText = typeof newMessage === "string" ? newMessage : String (newMessage ?? "");
+    const isErrorLike = /(^|\\b)(error|failed|could not)\\b/i.test (messageText)
+        || /no view available/i.test (messageText);
+
+    if (! isErrorLike)
+        return;
+
+    isViewActive = false;
+    container.innerHTML = `<pre id="cmaj-error-text">${messageText}</pre>`;
+};
+"""
+old_view_bindings = """        bool boundOK = w.bind ("cmaj_sendMessageToServer", [this] (const choc::value::ValueView& args) -> choc::value::Value
+        {
+            try
+            {
+                if (args.isArray() && args.size() != 0)
+                    patch.handleClientMessage (*this, args[0]);
+            }
+            catch (const std::exception& e)
+            {
+                std::cout << "Error processing message from client: " << e.what() << std::endl;
+            }
+
+            return {};
+        });
+
+        (void) boundOK;
+        CMAJ_ASSERT (boundOK);
+"""
+new_view_bindings = """        const auto normaliseResourcePath = [] (std::string pathText)
+        {
+            if (auto schemePos = pathText.find ("://"); schemePos != std::string::npos)
+                if (auto pathPos = pathText.find ('/', schemePos + 3); pathPos != std::string::npos)
+                    pathText = pathText.substr (pathPos);
+                else
+                    pathText.clear();
+
+            while (! pathText.empty() && pathText.front() == '/')
+                pathText.erase (pathText.begin());
+
+            return pathText;
+        };
+
+        bool boundOK = w.bind ("cmaj_sendMessageToServer", [this] (const choc::value::ValueView& args) -> choc::value::Value
+        {
+            try
+            {
+                if (args.isArray() && args.size() != 0)
+                    patch.handleClientMessage (*this, args[0]);
+            }
+            catch (const std::exception& e)
+            {
+                std::cout << "Error processing message from client: " << e.what() << std::endl;
+            }
+
+            return {};
+        });
+
+        boundOK = boundOK && w.bind ("_internalReadResource", [this, normaliseResourcePath] (const choc::value::ValueView& args) -> choc::value::Value
+        {
+            try
+            {
+                if (args.isArray() && args.size() != 0)
+                    if (auto manifest = patch.getManifest())
+                        if (auto content = manifest->readFileContent (normaliseResourcePath (args[0].toString())))
+                            return choc::value::createArray (static_cast<uint32_t> (content->length()),
+                                                             [&] (uint32_t i) { return static_cast<int32_t> ((*content)[i]); });
+            }
+            catch (...)
+            {}
+
+            return {};
+        });
+
+        boundOK = boundOK && w.bind ("_internalReadResourceAsAudioData", [this, normaliseResourcePath] (const choc::value::ValueView& args) -> choc::value::Value
+        {
+            try
+            {
+                if (args.isArray() && args.size() != 0)
+                {
+                    const auto path = normaliseResourcePath (args[0].toString());
+
+                    if (! path.empty())
+                    {
+                        choc::value::Value annotation;
+
+                        if (args.size() > 1)
+                            annotation = args[1];
+
+                        if (auto manifest = patch.getManifest())
+                            return readManifestResourceAsAudioData (*manifest, path, annotation);
+                    }
+                }
+            }
+            catch (...)
+            {}
+
+            return {};
+        });
+
+        (void) boundOK;
+        CMAJ_ASSERT (boundOK);
+"""
+old_embedded_connection = """class EmbeddedPatchConnection  extends PatchConnection
+{
+    constructor()
+    {
+        super();
+        this.manifest = patchManifest;
+        window.cmaj_deliverMessageFromServer = msg => this.deliverMessageFromServer (msg);
+    }
+
+    getResourceAddress (path)
+    {
+        return path.startsWith ("/") ? path : ("/" + path);
+    }
+
+    sendMessageToServer (message)
+    {
+        window.cmaj_sendMessageToServer (message);
+    }
+}
+"""
+new_embedded_connection = """class EmbeddedPatchConnection  extends PatchConnection
+{
+    constructor()
+    {
+        super();
+        this.manifest = patchManifest;
+        this.prefersResourceReadBridge = true;
+        window.cmaj_deliverMessageFromServer = msg => this.deliverMessageFromServer (msg);
+    }
+
+    getResourceAddress (path)
+    {
+        return path.startsWith ("/") ? path : ("/" + path);
+    }
+
+    async readResource (path)
+    {
+        return _internalReadResource (path);
+    }
+
+    async readResourceAsAudioData (path)
+    {
+        return _internalReadResourceAsAudioData (path);
+    }
+
+    sendMessageToServer (message)
+    {
+        window.cmaj_sendMessageToServer (message);
+    }
+}
+"""
+
+for old, new, label in [
+    (old_cpp_status_message, new_cpp_status_message, "PatchWebView::setStatusMessage"),
+    (old_js_status_message, new_js_status_message, "window.setStatusMessage"),
+    (old_view_bindings, new_view_bindings, "PatchWebView resource bindings"),
+    (old_embedded_connection, new_embedded_connection, "EmbeddedPatchConnection resource bridge"),
+]:
+    if old not in text and new not in text:
+        raise SystemExit(f"Could not find the expected {label} snippet in {path}")
+
+    text = text.replace(old, new, 1)
+
 path.write_text(text, encoding="utf-8")
 PY
 
@@ -266,7 +450,67 @@ def patch_view_header(path: Path) -> None:
     if old not in text and new not in text:
         raise SystemExit(f"Could not find the expected PatchWebView MIME mapping snippet in {path}")
 
-    path.write_text(text.replace(old, new, 1), encoding="utf-8")
+    text = text.replace(old, new, 1)
+
+    old_relative_path = """    auto relativePath = std::filesystem::path (path).relative_path();
+"""
+    new_relative_path = """    const auto normaliseRequestPath = [] (std::string requestPath)
+    {
+        if (auto schemePos = requestPath.find ("://"); schemePos != std::string::npos)
+            if (auto pathPos = requestPath.find ('/', schemePos + 3); pathPos != std::string::npos)
+                requestPath = requestPath.substr (pathPos);
+            else
+                requestPath = "/";
+
+        while (! requestPath.empty() && requestPath.front() == '/')
+            requestPath.erase (requestPath.begin());
+
+        return requestPath;
+    };
+
+    const auto normalisedPath = normaliseRequestPath (path);
+    const auto requestPathForLookup = normalisedPath.empty() ? std::string ("/") : ("/" + normalisedPath);
+    auto relativePath = std::filesystem::path (normalisedPath).relative_path();
+"""
+
+    if old_relative_path not in text and new_relative_path not in text:
+        raise SystemExit(f"Could not find the expected PatchWebView relative-path snippet in {path}")
+
+    text = text.replace(old_relative_path, new_relative_path, 1)
+
+    old_read_javascript = """    if (auto content = readJavascriptResource (path, patch.getManifest()))
+"""
+    new_read_javascript = """    if (auto content = readJavascriptResource (requestPathForLookup, patch.getManifest()))
+"""
+
+    if old_read_javascript not in text and new_read_javascript not in text:
+        raise SystemExit(f"Could not find the expected PatchWebView javascript-resource snippet in {path}")
+
+    text = text.replace(old_read_javascript, new_read_javascript, 1)
+
+    old_resource_fallback = """    if (auto content = readJavascriptResource (requestPathForLookup, patch.getManifest()))
+        if (! content->empty())
+            return choc::ui::WebView::Options::Resource (*content, toMimeType (relativePath.extension().string()));
+
+    return {};
+}
+"""
+    new_resource_fallback = """    if (auto content = readJavascriptResource (path, patch.getManifest()))
+        if (! content->empty())
+            return choc::ui::WebView::Options::Resource (*content, toMimeType (relativePath.extension().string()));
+
+    if (auto manifest = patch.getManifest())
+        if (auto content = manifest->readFileContent (relativePath.generic_string()))
+            return choc::ui::WebView::Options::Resource (*content, toMimeType (relativePath.extension().string()));
+
+    return {};
+}
+"""
+
+    if old_resource_fallback not in text and new_resource_fallback not in text:
+        raise SystemExit(f"Could not find the expected PatchWebView resource fallback snippet in {path}")
+
+    path.write_text(text.replace(old_resource_fallback, new_resource_fallback, 1), encoding="utf-8")
 
 
 def patch_worker_header(path: Path) -> None:
@@ -274,25 +518,193 @@ def patch_worker_header(path: Path) -> None:
         return
 
     text = path.read_text(encoding="utf-8")
-    old = """                if (auto moduleText = readJavascriptResource (path, manifest))
-                    return choc::ui::WebView::Options::Resource (*moduleText, choc::network::getMIMETypeFromFilename (path, "application/octet-stream"));
-"""
-    new = """                if (auto moduleText = readJavascriptResource (path, manifest))
+    old_audio_binding = """                w.bind ("_internalReadResourceAsAudioData", [&p] (const choc::value::ValueView& args) -> choc::value::Value
                 {
-                    const auto extension = std::filesystem::path (path).extension().string();
-                    const auto mimeType = (extension == ".mjs")
-                                            ? std::string ("text/javascript")
-                                            : (extension == ".json")
-                                                ? std::string ("application/json")
-                                                : choc::network::getMIMETypeFromFilename (path, "application/octet-stream");
-                    return choc::ui::WebView::Options::Resource (*moduleText, mimeType);
-                }
+                    try
+                    {
+                        if (args.isArray() && args.size() != 0)
+                        {
+                            if (auto path = args[0].toString(); ! path.empty())
+                            {
+                                choc::value::Value annotation;
+
+                                if (args.size() > 1)
+                                    annotation = args[1];
+
+                                if (auto manifest = p.getManifest())
+                                    return readManifestResourceAsAudioData (*manifest, path, annotation);
+                            }
+                        }
+                    }
+                    catch (...)
+                    {}
+
+                    return {};
+                });
+"""
+    new_audio_binding = """                w.bind ("_internalReadResource", [&p] (const choc::value::ValueView& args) -> choc::value::Value
+                {
+                    try
+                    {
+                        if (args.isArray() && args.size() != 0)
+                        {
+                            auto path = args[0].toString();
+
+                            if (auto schemePos = path.find ("://"); schemePos != std::string::npos)
+                                if (auto pathPos = path.find ('/', schemePos + 3); pathPos != std::string::npos)
+                                    path = path.substr (pathPos);
+                                else
+                                    path.clear();
+
+                            while (! path.empty() && path.front() == '/')
+                                path.erase (path.begin());
+
+                            if (auto manifest = p.getManifest())
+                                if (auto content = manifest->readFileContent (path))
+                                    return choc::value::createArray (static_cast<uint32_t> (content->length()),
+                                                                     [&] (uint32_t i) { return static_cast<int32_t> ((*content)[i]); });
+                        }
+                    }
+                    catch (...)
+                    {}
+
+                    return {};
+                });
+
+                w.bind ("_internalReadResourceAsAudioData", [&p] (const choc::value::ValueView& args) -> choc::value::Value
+                {
+                    try
+                    {
+                        if (args.isArray() && args.size() != 0)
+                        {
+                            if (auto path = args[0].toString(); ! path.empty())
+                            {
+                                if (auto schemePos = path.find ("://"); schemePos != std::string::npos)
+                                    if (auto pathPos = path.find ('/', schemePos + 3); pathPos != std::string::npos)
+                                        path = path.substr (pathPos);
+                                    else
+                                        path.clear();
+
+                                while (! path.empty() && path.front() == '/')
+                                    path.erase (path.begin());
+
+                                choc::value::Value annotation;
+
+                                if (args.size() > 1)
+                                    annotation = args[1];
+
+                                if (auto manifest = p.getManifest())
+                                    return readManifestResourceAsAudioData (*manifest, path, annotation);
+                            }
+                        }
+                    }
+                    catch (...)
+                    {}
+
+                    return {};
+                });
+"""
+    old_fetch_resource = """        std::optional<choc::ui::WebView::Options::Resource> fetchResource (const std::string& path)
+        {
+            if (auto manifest = patch.getManifest())
+            {
+                if (path == "/")
+                    return choc::ui::WebView::Options::Resource (getHTML (*manifest), "text/html");
+
+                if (auto moduleText = readJavascriptResource (path, manifest))
+                    return choc::ui::WebView::Options::Resource (*moduleText, choc::network::getMIMETypeFromFilename (path, "application/octet-stream"));
+            }
+
+            return {};
+        }
+"""
+    new_fetch_resource = """        std::optional<choc::ui::WebView::Options::Resource> fetchResource (const std::string& path)
+        {
+            const auto normaliseRequestPath = [] (std::string requestPath)
+            {
+                if (auto schemePos = requestPath.find ("://"); schemePos != std::string::npos)
+                    if (auto pathPos = requestPath.find ('/', schemePos + 3); pathPos != std::string::npos)
+                        requestPath = requestPath.substr (pathPos);
+                    else
+                        requestPath = "/";
+
+                while (! requestPath.empty() && requestPath.front() == '/')
+                    requestPath.erase (requestPath.begin());
+
+                return requestPath;
+            };
+
+            const auto normalisedPath = normaliseRequestPath (path);
+            const auto requestPathForLookup = normalisedPath.empty() ? std::string ("/") : ("/" + normalisedPath);
+            const auto relativePath = std::filesystem::path (normalisedPath).relative_path();
+            const auto toMimeType = [] (const auto& extension)
+            {
+                if (extension == ".mjs" || extension == "mjs")
+                    return std::string ("text/javascript");
+
+                if (extension == ".json" || extension == "json")
+                    return std::string ("application/json");
+
+                return choc::network::getMIMETypeFromFilename (extension, "application/octet-stream");
+            };
+
+            if (auto manifest = patch.getManifest())
+            {
+                if (normalisedPath.empty())
+                    return choc::ui::WebView::Options::Resource (getHTML (*manifest), "text/html");
+
+                if (auto moduleText = readJavascriptResource (requestPathForLookup, manifest))
+                    return choc::ui::WebView::Options::Resource (*moduleText, toMimeType (relativePath.extension().string()));
+
+                if (auto content = manifest->readFileContent (relativePath.generic_string()))
+                    return choc::ui::WebView::Options::Resource (*content, toMimeType (relativePath.extension().string()));
+            }
+
+            return {};
+        }
+"""
+    old_read_resource = """    async readResource (path)
+    {
+        return fetch (path);
+    }
+"""
+    new_read_resource = """    async readResource (path)
+    {
+        return _internalReadResource (path);
+    }
+"""
+    old_worker_connection = """class WorkerPatchConnection  extends PatchConnection
+{
+    constructor()
+    {
+        super();
+        this.manifest = MANIFEST;
+        window.currentView = this;
+    }
+"""
+    new_worker_connection = """class WorkerPatchConnection  extends PatchConnection
+{
+    constructor()
+    {
+        super();
+        this.manifest = MANIFEST;
+        this.prefersResourceReadBridge = true;
+        window.currentView = this;
+    }
 """
 
-    if old not in text and new not in text:
-        raise SystemExit(f"Could not find the expected PatchWorker MIME mapping snippet in {path}")
+    for old, new, label in [
+        (old_audio_binding, new_audio_binding, "_internalReadResource binding"),
+        (old_fetch_resource, new_fetch_resource, "fetchResource"),
+        (old_read_resource, new_read_resource, "readResource"),
+        (old_worker_connection, new_worker_connection, "WorkerPatchConnection resource bridge"),
+    ]:
+        if old not in text and new not in text:
+            raise SystemExit(f"Could not find the expected PatchWorker {label} snippet in {path}")
 
-    path.write_text(text.replace(old, new, 1), encoding="utf-8")
+        text = text.replace(old, new, 1)
+
+    path.write_text(text, encoding="utf-8")
 
 
 patch_view_header(Path(sys.argv[1]))
@@ -336,6 +748,13 @@ if not path.is_file():
     raise SystemExit(0)
 
 text = path.read_text(encoding="utf-8")
+old_header_include = """#include <utility>
+#include "../../choc/choc/memory/choc_xxHash.h"
+"""
+new_header_include = """#include <utility>
+#include "CosimoSharedWavetableLibrary.h"
+#include "../../choc/choc/memory/choc_xxHash.h"
+"""
 old_child_bounds = """        void childBoundsChanged (Component*) override
         {
             if (! isResizing && patchWebViewHolder->isVisible())
@@ -346,8 +765,31 @@ old_child_bounds = """        void childBoundsChanged (Component*) override
 new_child_bounds = """        void childBoundsChanged (Component*) override
         {
             if (! isResizing && patchWebViewHolder->isVisible() && ! patchWebView->resizable)
+            {
+                const auto extraCompHeight = owner.getExtraCompHeight();
                 setSize (std::max (50, patchWebViewHolder->getWidth()),
-                         std::max (50, patchWebViewHolder->getHeight() + DerivedType::extraCompHeight));
+                         std::max (50, patchWebViewHolder->getHeight() + extraCompHeight));
+            }
+        }
+"""
+old_status_message_changed = """        void statusMessageChanged()
+        {
+            owner.refreshExtraComp (extraComp.get());
+            patchWebView->setStatusMessage (owner.statusMessage);
+        }
+"""
+new_status_message_changed = """        void statusMessageChanged()
+        {
+            owner.refreshExtraComp (extraComp.get());
+            patchWebView->setStatusMessage (owner.statusMessage);
+
+            if (patchWebViewHolder->isVisible())
+            {
+                if (! isResizing && ! patchWebView->resizable)
+                    childBoundsChanged (nullptr);
+                else
+                    resized();
+            }
         }
 """
 old_prepare_manifest = """    bool prepareManifest (Patch::LoadParams& loadParams, const juce::ValueTree& newState) override
@@ -382,8 +824,11 @@ new_prepare_manifest = """    bool prepareManifest (Patch::LoadParams& loadParam
     {
         loadParams.manifest.needsToBuildSource = false;
 
-        const auto getBundledResourceFile = [] (const std::string& path) -> juce::File
+        const auto getRuntimeResourceFile = [] (const std::string& path) -> juce::File
         {
+            if (auto managedFile = cosimo::ios::resolveManagedWavetableAssetFile (path); managedFile.existsAsFile())
+                return managedFile;
+
             const auto relativePath = juce::String (path);
             const auto app = juce::File::getSpecialLocation (juce::File::currentApplicationFile);
             auto root = app.isDirectory() ? app : app.getParentDirectory();
@@ -419,43 +864,43 @@ new_prepare_manifest = """    bool prepareManifest (Patch::LoadParams& loadParam
         };
 
         loadParams.manifest.initialiseWithVirtualFile (std::string (PatchClass::filename),
-            [getBundledResourceFile] (const std::string& f) -> std::shared_ptr<std::istream>
+            [getRuntimeResourceFile] (const std::string& f) -> std::shared_ptr<std::istream>
             {
                 if (f == PatchClass::filename)
-                    if (auto bundledFile = getBundledResourceFile (f); bundledFile.existsAsFile())
+                    if (auto bundledFile = getRuntimeResourceFile (f); bundledFile.existsAsFile())
                         return std::make_shared<std::ifstream> (bundledFile.getFullPathName().toStdString(), std::ios::binary | std::ios::in);
 
                 for (auto& file : PatchClass::files)
                     if (f == file.name)
                         return std::make_shared<std::istringstream> (std::string (file.content), std::ios::binary);
 
-                if (auto bundledFile = getBundledResourceFile (f); bundledFile.existsAsFile())
+                if (auto bundledFile = getRuntimeResourceFile (f); bundledFile.existsAsFile())
                     return std::make_shared<std::ifstream> (bundledFile.getFullPathName().toStdString(), std::ios::binary | std::ios::in);
 
                 return {};
             },
-            [getBundledResourceFile] (const std::string& name) -> std::string
+            [getRuntimeResourceFile] (const std::string& name) -> std::string
             {
                 if (name == PatchClass::filename)
-                    if (auto bundledFile = getBundledResourceFile (name); bundledFile.existsAsFile())
+                    if (auto bundledFile = getRuntimeResourceFile (name); bundledFile.existsAsFile())
                         return bundledFile.getFullPathName().toStdString();
 
                 for (auto& file : PatchClass::files)
                     if (name == file.name)
                         return name;
 
-                if (auto bundledFile = getBundledResourceFile (name); bundledFile.existsAsFile())
+                if (auto bundledFile = getRuntimeResourceFile (name); bundledFile.existsAsFile())
                     return bundledFile.getFullPathName().toStdString();
 
                 return name;
             },
-            [getBundledResourceFile] (const std::string& f) -> std::filesystem::file_time_type
+            [getRuntimeResourceFile] (const std::string& f) -> std::filesystem::file_time_type
             {
                 if (f == PatchClass::filename)
                 {
                     try
                     {
-                        if (auto bundledFile = getBundledResourceFile (f); bundledFile.existsAsFile())
+                        if (auto bundledFile = getRuntimeResourceFile (f); bundledFile.existsAsFile())
                             return std::filesystem::last_write_time (std::filesystem::path (bundledFile.getFullPathName().toStdString()));
                     }
                     catch (...) {}
@@ -467,23 +912,23 @@ new_prepare_manifest = """    bool prepareManifest (Patch::LoadParams& loadParam
 
                 try
                 {
-                    if (auto bundledFile = getBundledResourceFile (f); bundledFile.existsAsFile())
+                    if (auto bundledFile = getRuntimeResourceFile (f); bundledFile.existsAsFile())
                         return std::filesystem::last_write_time (std::filesystem::path (bundledFile.getFullPathName().toStdString()));
                 }
                 catch (...) {}
 
                 return {};
             },
-            [getBundledResourceFile] (const std::string& f)
+            [getRuntimeResourceFile] (const std::string& f)
             {
-                if (f == PatchClass::filename && getBundledResourceFile (f).existsAsFile())
+                if (f == PatchClass::filename && getRuntimeResourceFile (f).existsAsFile())
                     return true;
 
                 for (auto& file : PatchClass::files)
                     if (f == file.name)
                         return true;
 
-                return getBundledResourceFile (f).existsAsFile();
+                return getRuntimeResourceFile (f).existsAsFile();
             });
 
         this->readParametersFromState (loadParams, newState);
@@ -518,6 +963,11 @@ new_ios_default_size = """           #if JUCE_IOS
 
 if old_child_bounds not in text and new_child_bounds not in text:
     raise SystemExit(f"Could not find the expected JUCE editor sizing snippet in {path}")
+
+if old_header_include not in text and new_header_include not in text:
+    raise SystemExit(f"Could not find the expected JUCE plugin include block in {path}")
+
+text = text.replace(old_header_include, new_header_include, 1)
 
 text = text.replace(old_child_bounds, new_child_bounds, 1)
 
@@ -632,14 +1082,22 @@ new_status_message_block = """        void statusMessageChanged()
         {
             owner.refreshExtraComp (extraComp.get());
             patchWebView->setStatusMessage (owner.statusMessage);
+
+            if (patchWebViewHolder->isVisible())
+            {
+                if (! isResizing && ! patchWebView->resizable)
+                    childBoundsChanged (nullptr);
+                else
+                    resized();
+            }
         }
 
        #if JUCE_IOS
-        void scheduleIOSLayoutMetricsDump (int remainingAttempts = 12)
+        void scheduleIOSLayoutMetricsDump (int remainingAttempts = 24)
         {
             auto safeThis = juce::Component::SafePointer<Editor> (this);
 
-            juce::Timer::callAfterDelay (180, [safeThis, remainingAttempts]
+            juce::Timer::callAfterDelay (250, [safeThis, remainingAttempts]
             {
                 if (safeThis != nullptr)
                     safeThis->dumpIOSLayoutMetrics (remainingAttempts);
@@ -697,7 +1155,7 @@ new_status_message_block = """        void statusMessageChanged()
                 ? choc::objc::call<int> (scrollViewHandle, "contentInsetAdjustmentBehavior")
                 : -1;
 
-            patchWebView->getWebView().evaluateJavascript ("window.__cosimoCollectLayoutMetrics?.() ?? null",
+            patchWebView->getWebView().evaluateJavascript ("typeof window.__cosimoCollectLayoutMetrics === 'function' ? window.__cosimoCollectLayoutMetrics() : null",
                                                            [safeThis,
                                                             remainingAttempts,
                                                             displayBounds,
@@ -713,6 +1171,9 @@ new_status_message_block = """        void statusMessageChanged()
                     return;
 
                 const bool hasMetrics = ! result.isVoid() && result.isObject();
+                const bool metricsReady = hasMetrics
+                    && result.hasObjectMember ("isReady")
+                    && result["isReady"].getWithDefault (false);
                 std::string json = "{\\n";
                 json += "  \\"native\\": {\\n";
                 json += "    \\"displayWidth\\": " + std::to_string (displayBounds.getWidth()) + ",\\n";
@@ -741,9 +1202,15 @@ new_status_message_block = """        void statusMessageChanged()
 
                 const auto metricsFile = juce::File::getSpecialLocation (juce::File::userDocumentsDirectory)
                     .getChildFile ("ui-geometry.json");
-                metricsFile.replaceWithText (juce::String::fromUTF8 (json.c_str()));
+                const bool shouldWriteSnapshot = metricsReady
+                    || ! error.empty()
+                    || remainingAttempts <= 0
+                    || ! metricsFile.existsAsFile();
 
-                if (! hasMetrics && remainingAttempts > 0)
+                if (shouldWriteSnapshot)
+                    metricsFile.replaceWithText (juce::String::fromUTF8 (json.c_str()));
+
+                if ((! hasMetrics || ! metricsReady) && remainingAttempts > 0)
                     safeThis->scheduleIOSLayoutMetricsDump (remainingAttempts - 1);
             });
         }
@@ -782,11 +1249,14 @@ new_resized_block = """        void resized() override
             juce::AudioProcessorEditor::resized();
 
             auto r = getLocalBounds();
+            const auto extraCompHeight = owner.getExtraCompHeight();
 
             if (patchWebViewHolder->isVisible())
             {
-                patchWebViewHolder->setBounds (r.removeFromTop (getHeight() - DerivedType::extraCompHeight));
-                r.removeFromTop (4);
+                patchWebViewHolder->setBounds (r.removeFromTop (getHeight() - extraCompHeight));
+
+                if (extraCompHeight > 0)
+                    r.removeFromTop (4);
 
                 if (getWidth() > 0 && getHeight() > 0)
                 {
@@ -805,6 +1275,99 @@ new_resized_block = """        void resized() override
             isResizing = false;
         }
 """
+old_generated_extra_component = """    using PatchClass = GeneratedInfoClass;
+    using PerformerClass = typename PatchClass::PerformerClass;
+    static constexpr bool isPrecompiled = true;
+    static constexpr bool isFixedPatch = true;
+
+    static constexpr int extraCompHeight = 0;
+    static bool isViewVisible()  { return true; }
+    std::unique_ptr<juce::Component> createExtraComponent() { return {}; }
+    void refreshExtraComp (juce::Component*) {}
+"""
+new_generated_extra_component = """    using PatchClass = GeneratedInfoClass;
+    using PerformerClass = typename PatchClass::PerformerClass;
+    static constexpr bool isPrecompiled = true;
+    static constexpr bool isFixedPatch = true;
+
+    void patchLoadedFromState (const juce::ValueTree&) override
+    {
+        this->notifyEditorStatusMessageChanged();
+    }
+
+    int getExtraCompHeight() const
+    {
+        return cosimo::ios::getSharedWavetableLibraryComponentHeight();
+    }
+
+    static bool isViewVisible()  { return true; }
+
+    std::unique_ptr<juce::Component> createExtraComponent()
+    {
+        return cosimo::ios::createSharedWavetableLibraryComponent ({
+            [this]
+            {
+                this->setNewStateAsync (this->getUpdatedState());
+            },
+            [this]
+            {
+                this->notifyEditorStatusMessageChanged();
+            }
+        });
+    }
+
+    void refreshExtraComp (juce::Component* c)
+    {
+        cosimo::ios::refreshSharedWavetableLibraryComponent (c);
+    }
+"""
+old_loader_extra_component = """    static constexpr int extraCompHeight = 50;
+
+    std::unique_ptr<ExtraEditorComponent> createExtraComponent()
+    {
+        return std::make_unique<ExtraEditorComponent> (*this);
+    }
+
+    void refreshExtraComp (juce::Component* c)
+    {
+        if (auto v = dynamic_cast<ExtraEditorComponent*> (c))
+            v->refresh();
+    }
+"""
+new_loader_extra_component = """    static constexpr int extraCompHeight = 50;
+
+    int getExtraCompHeight() const
+    {
+        return extraCompHeight;
+    }
+
+    std::unique_ptr<ExtraEditorComponent> createExtraComponent()
+    {
+        return std::make_unique<ExtraEditorComponent> (*this);
+    }
+
+    void refreshExtraComp (juce::Component* c)
+    {
+        if (auto v = dynamic_cast<ExtraEditorComponent*> (c))
+            v->refresh();
+    }
+"""
+old_single_patch_extra_component = """    static constexpr int extraCompHeight = 0;
+    static bool isViewVisible()  { return true; }
+    std::unique_ptr<juce::Component> createExtraComponent() { return {}; }
+    void refreshExtraComp (juce::Component*) {}
+"""
+new_single_patch_extra_component = """    static constexpr int extraCompHeight = 0;
+
+    int getExtraCompHeight() const
+    {
+        return extraCompHeight;
+    }
+
+    static bool isViewVisible()  { return true; }
+    std::unique_ptr<juce::Component> createExtraComponent() { return {}; }
+    void refreshExtraComp (juce::Component*) {}
+"""
 
 for old, new, label in [
     (old_patch_members, new_patch_members, "patch members"),
@@ -818,6 +1381,9 @@ for old, new, label in [
     (old_parameter_tree_members, new_parameter_tree_members, "parameter tree members"),
     (old_status_message_block, new_status_message_block, "iOS layout metrics exporter"),
     (old_resized_block, new_resized_block, "iOS layout metrics trigger"),
+    (old_generated_extra_component, new_generated_extra_component, "generated plugin extra component"),
+    (old_loader_extra_component, new_loader_extra_component, "JIT loader extra component"),
+    (old_single_patch_extra_component, new_single_patch_extra_component, "single patch extra component"),
 ]:
     if old not in text and new not in text:
         raise SystemExit(f"Could not find the expected JUCEPlugin {label} snippet in {path}")

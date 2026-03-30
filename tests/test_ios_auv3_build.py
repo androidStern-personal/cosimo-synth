@@ -8,6 +8,7 @@ import platform
 import shutil
 import subprocess
 import threading
+import zipfile
 from pathlib import Path
 
 import pytest
@@ -16,10 +17,14 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[1]
 IOS_AUV3_CMAKE = REPO_ROOT / "ios_auv3" / "CMakeLists.txt"
 IOS_AUV3_GENERATOR = REPO_ROOT / "scripts" / "generate_ios_auv3_plugin.sh"
+IOS_FACTORY_LIBRARY_ZIP = REPO_ROOT / "scripts" / "build_ios_factory_library_zip.sh"
 IOS_AUV3_XCODE_PROJECT = REPO_ROOT / "scripts" / "generate_ios_auv3_xcode_project.sh"
 IOS_AUV3_HOST_SMOKE = REPO_ROOT / "scripts" / "run_ios_auv3_host_smoke.py"
 IOS_AUV3_PATCH = REPO_ROOT / "WavetableSynth.iOS.cmajorpatch"
 IOS_AUV3_HOST_SNAPSHOT = REPO_ROOT / "ios_auv3" / "expected_host_smoke.json"
+IOS_SHARED_LIBRARY_HELPER = REPO_ROOT / "ios_auv3" / "Source" / "CosimoSharedWavetableLibrary.mm"
+IOS_SHARED_LIBRARY_HELPER_HEADER = REPO_ROOT / "ios_auv3" / "Source" / "CosimoSharedWavetableLibrary.h"
+IOS_SHARED_LIBRARY_ENTITLEMENTS = REPO_ROOT / "ios_auv3" / "Entitlements" / "CosimoSharedWavetableLibrary.entitlements"
 
 
 def _normalise_whitespace(text: str) -> str:
@@ -134,24 +139,27 @@ def test_ios_auv3_cmake_uses_the_shared_stock_juce_plugin_targets() -> None:
     assert "LANGUAGES CXX C OBJC OBJCXX" in cmake
     assert "FORMATS Standalone AUv3" in cmake
     assert "generate_ios_auv3_plugin.sh" in cmake_text
+    assert "build_ios_factory_library_zip.sh" not in cmake_text
     assert "WavetableSynth.iOS.cmajorpatch" in cmake_text
     assert "cmajor/WavetableSynth.cmajor" in cmake_text
     assert "cmajor_plugin.cpp" in cmake_text
     assert "cmaj_StaticLibraryShim.cpp" in cmake_text
+    assert "CosimoSharedWavetableLibrary.mm" in cmake_text
+    assert "CosimoSharedWavetableLibrary.entitlements" in cmake_text
     assert "CosimoSynthHost" in cmake_text
     assert "CosimoHostMain.mm" in cmake_text
     assert "CosimoHostViewController.mm" in cmake_text
     assert "CosimoAUv3HostHarness.mm" in cmake_text
     assert "assets/factory-bank-catalog.json" in cmake_text
     assert "foreach(bundle_target CosimoSynth_Standalone CosimoSynth_AUv3)" in cmake_text
-    assert 'make_directory "$<TARGET_FILE_DIR:${bundle_target}>/assets"' in cmake_text
     assert 'copy_if_different' in cmake_text
-    assert 'rm -rf "$<TARGET_FILE_DIR:${bundle_target}>/assets/factory_sources"' in cmake_text
-    assert 'rm -f "$<TARGET_FILE_DIR:${bundle_target}>/assets/factory-bank.json"' in cmake_text
-    assert 'copy_directory' in cmake_text
     assert 'assets/factory_sources' in cmake_text
-    assert '$<TARGET_FILE_DIR:${bundle_target}>/assets/factory-bank-catalog.json' in cmake_text
     assert '$<TARGET_FILE_DIR:${bundle_target}>/WavetableSynth.iOS.cmajorpatch' in cmake_text
+    assert 'XCODE_ATTRIBUTE_CODE_SIGN_ENTITLEMENTS' in cmake_text
+    assert 'copy_directory' not in cmake_text
+    assert 'rm -rf "$<TARGET_FILE_DIR:${bundle_target}>/assets/factory_sources"' not in cmake_text
+    assert 'rm -f "$<TARGET_FILE_DIR:${bundle_target}>/assets/factory-bank.json"' not in cmake_text
+    assert '$<TARGET_FILE_DIR:${bundle_target}>/assets/factory-bank-catalog.json' not in cmake_text
     assert "CosimoStandaloneApp.cpp" not in cmake_text
     assert "JUCE_USE_CUSTOM_PLUGIN_STANDALONE_APP=1" not in cmake_text
     assert "COSIMO_PATCH_PATH" not in cmake_text
@@ -192,8 +200,74 @@ def test_ios_auv3_xcode_project_script_generates_an_xcode_project(tmp_path: Path
         text=True,
     )
 
-    assert (build_dir / "CosimoSynthAUv3.xcodeproj" / "project.pbxproj").is_file()
+    project_file = build_dir / "CosimoSynthAUv3.xcodeproj" / "project.pbxproj"
+
+    assert project_file.is_file()
     assert f"Generated Xcode project in {build_dir}" in result.stdout
+
+    project_text = project_file.read_text(encoding="utf-8")
+
+    assert "CosimoSharedWavetableLibrary.mm" in project_text
+    assert "CosimoSharedWavetableLibrary.entitlements" in project_text
+
+    project_json = json.loads(
+        subprocess.run(
+            ["plutil", "-convert", "json", "-o", "-", str(project_file)],
+            cwd=REPO_ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout
+    )
+    root_object = project_json["rootObject"]
+    target_attributes = project_json["objects"][root_object]["attributes"]["TargetAttributes"]
+    target_names = {
+        target["name"]: target_id
+        for target_id, target in project_json["objects"].items()
+        if target.get("isa") == "PBXNativeTarget"
+        and target.get("name") in {"CosimoSynth_AUv3", "CosimoSynth_Standalone"}
+    }
+
+    for target_name, target_id in target_names.items():
+        target_attributes_entry = target_attributes[target_id]
+        assert target_attributes_entry["ProvisioningStyle"] == "Automatic", target_name
+        assert (
+            target_attributes_entry["SystemCapabilities"]["com.apple.ApplicationGroups.iOS"]["enabled"] == 1
+        ), target_name
+
+
+def test_ios_factory_library_zip_script_preserves_the_runtime_layout(tmp_path: Path) -> None:
+    catalog_file = tmp_path / "factory-bank-catalog.json"
+    source_dir = tmp_path / "factory_sources"
+    output_path = tmp_path / "factory-library.zip"
+
+    source_dir.mkdir(parents=True)
+    catalog_file.write_text('{"tables":[{"tableId":"test","name":"Test","frameCount":1,"sourceWav":"assets/factory_sources/test.wav"}]}\n', encoding="utf-8")
+    (source_dir / "test.wav").write_bytes(b"RIFFtest")
+
+    subprocess.run(
+        [
+            str(IOS_FACTORY_LIBRARY_ZIP),
+            "--catalog",
+            str(catalog_file),
+            "--sources",
+            str(source_dir),
+            "--output",
+            str(output_path),
+        ],
+        cwd=REPO_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    with zipfile.ZipFile(output_path) as archive:
+        assert archive.namelist() == [
+            "assets/factory-bank-catalog.json",
+            "assets/factory_sources/test.wav",
+        ]
+        assert archive.read("assets/factory-bank-catalog.json").decode("utf-8") == catalog_file.read_text(encoding="utf-8")
+        assert archive.read("assets/factory_sources/test.wav") == b"RIFFtest"
 
 
 def test_ios_auv3_generator_writes_self_contained_plugin_source_and_headers(
@@ -258,32 +332,74 @@ def test_ios_auv3_generator_writes_self_contained_plugin_source_and_headers(
     assert 'html { background: black; overflow: hidden; }' in patch_webview_header
     assert 'body { display: block; position: absolute; width: 100%; height: 100%; color: white; font-family: Monaco, Consolas, monospace; }' in patch_webview_header
     assert '#cmaj-view-container { display: block; position: relative; width: 100%; height: 100%; overflow: auto; }' in patch_webview_header
+    assert 'if (typeof window.setStatusMessage === \'function\') window.setStatusMessage (' in patch_webview_header
+    assert 'const isErrorLike = /(^|\\b)(error|failed|could not)\\b/i.test (messageText)' in patch_webview_header
+    assert 'if (! isErrorLike)' in patch_webview_header
+    assert 'w.bind ("_internalReadResource",' in patch_webview_header
+    assert 'w.bind ("_internalReadResourceAsAudioData",' in patch_webview_header
+    assert 'this.prefersResourceReadBridge = true;' in patch_webview_header
+    assert 'return _internalReadResource (path);' in patch_webview_header
+    assert 'return _internalReadResourceAsAudioData (path);' in patch_webview_header
+    assert 'const auto normalisedPath = normaliseRequestPath (path);' in patch_webview_header
+    assert 'const auto requestPathForLookup = normalisedPath.empty() ? std::string ("/") : ("/" + normalisedPath);' in patch_webview_header
+    assert 'readJavascriptResource (path, patch.getManifest())' in patch_webview_header
     assert 'if (extension == ".mjs" || extension == "mjs")' in patch_webview_header
     assert 'return std::string ("text/javascript");' in patch_webview_header
     assert 'if (extension == ".json" || extension == "json")' in patch_webview_header
     assert 'return std::string ("application/json");' in patch_webview_header
-    assert 'const auto extension = std::filesystem::path (path).extension().string();' in patch_worker_webview_header
-    assert 'const auto mimeType = (extension == ".mjs")' in patch_worker_webview_header
+    assert 'manifest->readFileContent (relativePath.generic_string())' in patch_webview_header
+    assert 'const auto normalisedPath = normaliseRequestPath (path);' in patch_worker_webview_header
+    assert 'const auto requestPathForLookup = normalisedPath.empty() ? std::string ("/") : ("/" + normalisedPath);' in patch_worker_webview_header
+    assert 'const auto toMimeType = [] (const auto& extension)' in patch_worker_webview_header
     assert 'std::string ("text/javascript")' in patch_worker_webview_header
     assert 'std::string ("application/json")' in patch_worker_webview_header
-    assert 'getMIMETypeFromFilename (path, "application/octet-stream")' in patch_worker_webview_header
+    assert 'w.bind ("_internalReadResource",' in patch_worker_webview_header
+    assert 'w.bind ("_internalReadResourceAsAudioData",' in patch_worker_webview_header
+    assert 'this.prefersResourceReadBridge = true;' in patch_worker_webview_header
+    assert 'readJavascriptResource (requestPathForLookup, manifest)' in patch_worker_webview_header
+    assert 'manifest->readFileContent (relativePath.generic_string())' in patch_worker_webview_header
+    assert 'return _internalReadResource (path);' in patch_worker_webview_header
+    assert 'return _internalReadResourceAsAudioData (path);' in patch_worker_webview_header
     assert 'if (view?.width > 10)' in embedded_assets_header
     assert 'if (view?.height > 10)' in embedded_assets_header
     assert 'patchView.style.minWidth = "100%"' not in embedded_assets_header
     assert 'patchView.style.minHeight = "100%"' not in embedded_assets_header
-    assert "getBundledResourceFile" in juce_plugin_header
+    assert '#include "CosimoSharedWavetableLibrary.h"' in juce_plugin_header
+    assert "getRuntimeResourceFile" in juce_plugin_header
+    assert "resolveManagedWavetableAssetFile (path)" in juce_plugin_header
     assert "juce::File::getSpecialLocation (juce::File::currentApplicationFile)" in juce_plugin_header
     assert "std::make_shared<std::ifstream>" in juce_plugin_header
     assert "#if JUCE_IOS" in juce_plugin_header
     assert "view.isResizable()" in juce_plugin_header
     assert "juce::Desktop::getInstance().getDisplays().getPrimaryDisplay()" in juce_plugin_header
     assert "display->userArea.isEmpty() ? display->totalArea" in juce_plugin_header
-    assert 'view.view.setMember ("width", std::max (50, screenBounds.getWidth()))' in juce_plugin_header
-    assert 'view.view.setMember ("height", std::max (50, screenBounds.getHeight()))' in juce_plugin_header
-    assert 'window.__cosimoCollectLayoutMetrics?.() ?? null' in juce_plugin_header
-    assert 'getChildFile ("ui-geometry.json")' in juce_plugin_header
-    assert 'json += "  \\"domMetrics\\": "' in juce_plugin_header
-    assert 'json += "    \\"editorHeight\\": "' in juce_plugin_header
+    assert "const auto extraCompHeight = owner.getExtraCompHeight();" in juce_plugin_header
+    assert "patchWebViewHolder->setBounds (r.removeFromTop (getHeight() - extraCompHeight));" in juce_plugin_header
+    assert "if (extraCompHeight > 0)" in juce_plugin_header
+    assert "int getExtraCompHeight() const" in juce_plugin_header
+    assert "return cosimo::ios::getSharedWavetableLibraryComponentHeight();" in juce_plugin_header
+    assert "createSharedWavetableLibraryComponent ({" in juce_plugin_header
+    assert "setNewStateAsync (this->getUpdatedState())" in juce_plugin_header
+    assert "refreshSharedWavetableLibraryComponent (c)" in juce_plugin_header
+    assert "owner.refreshExtraComp (extraComp.get());" in juce_plugin_header
+    assert "childBoundsChanged (nullptr);" in juce_plugin_header
+    assert "patchLoadedFromState (const juce::ValueTree&) override" in juce_plugin_header
+
+
+def test_ios_shared_wavetable_helper_uses_app_groups_zip_import_and_backup_exclusion() -> None:
+    helper_source = IOS_SHARED_LIBRARY_HELPER.read_text(encoding="utf-8")
+    helper_header = IOS_SHARED_LIBRARY_HELPER_HEADER.read_text(encoding="utf-8")
+    entitlements = IOS_SHARED_LIBRARY_ENTITLEMENTS.read_text(encoding="utf-8")
+
+    assert "group.dev.cosimo.wavetable-synth" in helper_header
+    assert "containerURLForSecurityApplicationGroupIdentifier" in helper_source
+    assert "ZipFile archive" in helper_source
+    assert "WavAudioFormat format" in helper_source
+    assert "NSURLIsExcludedFromBackupKey" in helper_source
+    assert "validateInstalledLibrary" in helper_source
+    assert "createSharedWavetableLibraryComponent" in helper_source
+    assert "com.apple.security.application-groups" in entitlements
+    assert "group.dev.cosimo.wavetable-synth" in entitlements
 
 
 def test_ios_auv3_generator_rejects_a_missing_patch_file(tmp_path: Path) -> None:

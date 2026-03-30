@@ -72,6 +72,16 @@ function emitPatchViewLog(level, message, fields = null) {
     logger(`[wavetable-view] ${message}`);
 }
 
+function formatIOSFactoryLibraryLoadMessage(prefix, detail, platform) {
+    const baseMessage = `${prefix}: ${detail}`;
+
+    if (platform !== "ios") {
+        return baseMessage;
+    }
+
+    return `${baseMessage}. Import the factory wavetable zip from the native library bar, then reopen the patch.`;
+}
+
 function clamp(value, min, max) {
     return Math.min(Math.max(value, min), max);
 }
@@ -1077,6 +1087,11 @@ export function collectCosimoLayoutMetrics() {
     const toolbar = shadow?.querySelector?.(".keyboard-toolbar") ?? null;
     const keyboardHost = shadow?.querySelector?.(".keyboard-host") ?? null;
     const keyboard = shadow?.querySelector?.(".keyboard") ?? null;
+    const displayStatus = shadow?.querySelector?.("[data-role='display-status']") ?? shadow?.querySelector?.(".display-status") ?? null;
+    const bankReadout = shadow?.querySelector?.(".bank-readout") ?? null;
+    const tableErrorBanner = shadow?.querySelector?.("[data-role='table-error-banner']") ?? null;
+    const wrapperErrorText = globalThis.document?.querySelector?.("#cmaj-error-text") ?? null;
+
     const viewportWidth =
         Number(globalThis.visualViewport?.width) ||
         Number(globalThis.window?.innerWidth) ||
@@ -1098,6 +1113,7 @@ export function collectCosimoLayoutMetrics() {
         shellChildren: shell ? Array.from(shell.children, (node) => node.className || node.tagName) : null,
         footerChildren: footer ? Array.from(footer.children, (node) => node.className || node.tagName) : null,
         keyboardHostChildren: keyboardHost ? Array.from(keyboardHost.children, (node) => node.className || node.tagName) : null,
+        isReady: Boolean(host && shadow && shell && footer && keyboardHost && keyboard),
         hostRect: measureElementRect(host),
         shellRect: measureElementRect(shell),
         topRowRect: measureElementRect(topRow),
@@ -1112,6 +1128,11 @@ export function collectCosimoLayoutMetrics() {
         footerStyle: measureElementStyle(footer),
         keyboardHostStyle: measureElementStyle(keyboardHost),
         keyboardStyle: measureElementStyle(keyboard),
+        displayStatusText: displayStatus?.textContent?.trim?.() ?? null,
+        bankReadoutText: bankReadout?.textContent?.trim?.() ?? null,
+        tableErrorText: tableErrorBanner?.textContent?.trim?.() ?? null,
+        tableErrorHidden: tableErrorBanner?.hidden ?? null,
+        wrapperErrorText: wrapperErrorText?.textContent?.trim?.() ?? null,
         footerBottomGap: footer ? viewportHeight - footer.getBoundingClientRect().bottom : null,
         keyboardBottomGap: keyboard ? viewportHeight - keyboard.getBoundingClientRect().bottom : null,
     };
@@ -1928,7 +1949,14 @@ export class CosimoSynthView extends HTMLElement {
 
                 if (showLoadingState) {
                     const detail = String(error?.message || error || "Unknown error");
-                    this.setDisplayState("error", `Could not load wavetable bank: ${detail}`);
+                    this.setDisplayState(
+                        "error",
+                        formatIOSFactoryLibraryLoadMessage(
+                            "Could not load wavetable bank",
+                            detail,
+                            this.options.platform
+                        )
+                    );
                     if (this.bankReadout) {
                         this.bankReadout.textContent = this.options.platform === "ios"
                             ? "Display unavailable"
@@ -2073,7 +2101,14 @@ export class CosimoSynthView extends HTMLElement {
             .catch((error) => {
                 console.error(error);
                 const detail = String(error?.message || error || "Unknown error");
-                this.setDisplayState("error", `Could not load wavetable catalog: ${detail}`);
+                this.setDisplayState(
+                    "error",
+                    formatIOSFactoryLibraryLoadMessage(
+                        "Could not load wavetable catalog",
+                        detail,
+                        this.options.platform
+                    )
+                );
             })
             .finally(() => {
                 this.applyRuntimeTablePresentation();
@@ -3588,7 +3623,7 @@ export class CosimoSynthView extends HTMLElement {
                     --cosimo-keyboard-height: 122px;
                     --cosimo-control-height: 54px;
                     --cosimo-ios-top-inset: 50px;
-                    --cosimo-ios-bottom-inset: 20px;
+                    --cosimo-ios-bottom-inset: 0px;
                     --cosimo-ios-safe-top: calc(env(safe-area-inset-top) + var(--cosimo-ios-top-inset));
                     --cosimo-ios-safe-bottom: calc(env(safe-area-inset-bottom) + var(--cosimo-ios-bottom-inset));
                     --cosimo-bottom-safe-area: env(safe-area-inset-bottom);
