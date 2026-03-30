@@ -3547,7 +3547,7 @@ export class CosimoSynthView extends HTMLElement {
                             </label>
                             <label class="play-field" aria-label="Glide time">
                                 <div class="glide-field-body">
-                                    <input class="glide-time-slider" type="range" min="0" max="2" step="0.001" value="0.000" aria-label="Glide time" />
+                                    <input class="glide-time-slider" type="range" min="0" max="1" step="0.001" value="0.000" aria-label="Glide time" />
                                     <div class="glide-time-readout" data-role="glide-time-readout">0.000 s</div>
                                 </div>
                             </label>
@@ -4103,7 +4103,7 @@ export class CosimoSynthView extends HTMLElement {
                                     </label>
                                     <label class="play-field" aria-label="Glide time">
                                         <div class="glide-field-body">
-                                            <input class="glide-time-slider" type="range" min="0" max="2" step="0.001" value="0.000" aria-label="Glide time" />
+                                            <input class="glide-time-slider" type="range" min="0" max="1" step="0.001" value="0.000" aria-label="Glide time" />
                                             <div class="glide-time-readout" data-role="glide-time-readout">0.000 s</div>
                                         </div>
                                     </label>
