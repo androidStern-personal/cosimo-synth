@@ -3,7 +3,21 @@ import {
     loadFactoryBankFramesFromPatch,
 } from "./wavetable-bank.js";
 import { MsegController } from "./mseg-controller.js";
-import { clampMsegRateSeconds, evaluateMsegShape, findMsegPointHitIndex } from "./mseg.js";
+import {
+    MSEG_EDITOR_HORIZONTAL_PADDING_PX,
+    MSEG_EDITOR_VERTICAL_PADDING_PX,
+    MSEG_POINT_RADIUS_PX,
+    MSEG_RATE_MAX_SECONDS,
+    MSEG_RATE_MIN_SECONDS,
+    MSEG_SELECTED_POINT_RADIUS_PX,
+    clampMsegRateSeconds,
+    createMsegEditorMetrics,
+    evaluateMsegShape,
+    findMsegPointHitIndex,
+    msegEditorCoordinatesToPoint,
+    pointToMsegEditorCoordinates,
+} from "./mseg.js";
+import { getPatchThemeCSSVariables } from "./theme.js";
 import { CanvasWavetableDisplay } from "./wavetable-display.js";
 import { computeResponsivePatchLayout, getLayoutCSSVariables } from "./responsive-layout.js";
 
@@ -11,7 +25,6 @@ const midiInputEndpointID = "midiIn";
 const wavetablePositionEndpointID = "wavetablePosition";
 const wavetableSelectEndpointID = "wavetableSelect";
 const playModeEndpointID = "playMode";
-const notePriorityEndpointID = "notePriority";
 const glideTimeEndpointID = "glideTime";
 const runtimeSyncRequestEndpointID = "runtimeSyncRequest";
 const runtimeStateEndpointID = "runtimeState";
@@ -29,22 +42,18 @@ const DISPLAY_GESTURE_AXIS_LOCK_PX = 12;
 const DISPLAY_SWIPE_MIN_COMMIT_PX = 48;
 const DISPLAY_SWIPE_COMMIT_RATIO = 0.18;
 const DISPLAY_SLIDE_TRANSITION_MS = 240;
+const MSEG_CURVE_PREVIEW_SAMPLES = 128;
+const MSEG_DRAG_THRESHOLD_PX = 8;
 const SVG_NS = "http://www.w3.org/2000/svg";
 const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 const PLAY_MODE_OPTIONS = [
     { value: 0, label: "Poly" },
     { value: 1, label: "Mono" },
-    { value: 2, label: "Mono ST" },
-    { value: 3, label: "Mono FP" },
-    { value: 4, label: "Mono ST + FP" },
-];
-const NOTE_PRIORITY_OPTIONS = [
-    { value: 0, label: "Last" },
-    { value: 1, label: "High" },
-    { value: 2, label: "Low" },
+    { value: 2, label: "Legato" },
 ];
 
 const knobDefault = 0.0;
+const patchThemeCSSVariables = getPatchThemeCSSVariables();
 
 function emitPatchViewLog(level, message, fields = null) {
     const logger = typeof console?.[level] === "function"
@@ -79,16 +88,13 @@ function clampPlayMode(value) {
     return clamp(Math.round(Number(value) || 0), 0, PLAY_MODE_OPTIONS.length - 1);
 }
 
-function clampNotePriority(value) {
-    return clamp(Math.round(Number(value) || 0), 0, NOTE_PRIORITY_OPTIONS.length - 1);
-}
-
 function clampGlideTime(value) {
     return clamp(Number(value) || 0, 0.0, 2.0);
 }
 
 function formatMsegRateSeconds(seconds) {
-    return `${clampMsegRateSeconds(Number(seconds) || 1.0).toFixed(3)} s`;
+    const numericSeconds = Number(seconds);
+    return `${clampMsegRateSeconds(Number.isFinite(numericSeconds) ? numericSeconds : 1.0).toFixed(3)} s`;
 }
 
 function formatGlideTime(seconds) {
@@ -227,17 +233,561 @@ export function shouldCommitHorizontalSwipe(
     return Math.abs(Number(deltaX) || 0) >= commitDistance;
 }
 
-function pointToEditorCoordinates(point, width, height) {
+function buildThemeCSSVariablesBlock() {
+    return Object.entries(patchThemeCSSVariables)
+        .map(([key, value]) => `${key}: ${value};`)
+        .join("\n");
+}
+
+function getMsegEditorInteractionOptions(orientation = "horizontal") {
     return {
-        x: point.x * width,
-        y: (1.0 - point.y) * height,
+        orientation,
+        pointRadius: MSEG_POINT_RADIUS_PX,
+        horizontalPadding: MSEG_EDITOR_HORIZONTAL_PADDING_PX,
+        verticalPadding: MSEG_EDITOR_VERTICAL_PADDING_PX,
     };
 }
 
-function editorCoordinatesToPoint(clientX, clientY, bounds) {
-    const x = clamp((clientX - bounds.left) / Math.max(bounds.width, 1), 0.0, 1.0);
-    const y = clamp(1.0 - ((clientY - bounds.top) / Math.max(bounds.height, 1)), 0.0, 1.0);
-    return { x, y };
+function formatMsegLoopLabel(loop) {
+    return loop ? "Loop On" : "Loop Off";
+}
+
+function getMsegLoopIconSVG() {
+    return `
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M7 7h8.5l-1.9-1.9L15 4l4 4-4 4-1.4-1.1 1.9-1.9H7a3 3 0 0 0-3 3v1H2v-1a5 5 0 0 1 5-5Z"></path>
+            <path d="M17 17H8.5l1.9 1.9L9 20l-4-4 4-4 1.4 1.1-1.9 1.9H17a3 3 0 0 0 3-3v-1h2v1a5 5 0 0 1-5 5Z"></path>
+        </svg>
+    `;
+}
+
+function buildMsegSurfaceHTML(rolePrefix, extraClass = "") {
+    return `
+        <svg class="mseg-surface ${extraClass}" data-role="${rolePrefix}-viewport">
+            <g class="mseg-grid" data-role="${rolePrefix}-grid"></g>
+            <path class="mseg-fill" data-role="${rolePrefix}-fill"></path>
+            <path class="mseg-curve" data-role="${rolePrefix}-curve"></path>
+            <g class="mseg-points" data-role="${rolePrefix}-points"></g>
+        </svg>
+    `;
+}
+
+function buildMsegLauncherHTML() {
+    return `
+        <div class="mseg-shell">
+            <div class="mseg-launcher">
+                <div class="mseg-launcher-head">
+                    <div class="mseg-launcher-copy">
+                        <div class="mseg-eyebrow">MSEG 1</div>
+                        <strong class="mseg-route-title">Fixed Wavetable Route</strong>
+                    </div>
+                </div>
+
+                <button class="mseg-preview-button" type="button" aria-label="Open MSEG editor">
+                    <div class="mseg-preview-shell">
+                        ${buildMsegSurfaceHTML("mseg-preview", "mseg-preview-surface")}
+                    </div>
+                </button>
+
+                <div class="mseg-preview-footer">
+                    <div class="mseg-launcher-rate-readout" data-role="mseg-launcher-rate-readout">1.000 s</div>
+                    <button
+                        class="mseg-loop-button mseg-launcher-loop-button"
+                        type="button"
+                        data-role="mseg-launcher-loop-button"
+                        aria-pressed="true"
+                        aria-label="Toggle full-shape loop"
+                    >
+                        ${getMsegLoopIconSVG()}
+                    </button>
+                </div>
+
+                <div class="mseg-controls">
+                    <label class="mseg-depth">
+                        <span class="mseg-depth-label">Depth To Wavetable Position</span>
+                        <input class="mseg-depth-slider" type="range" min="-1" max="1" step="0.001" value="1.000" />
+                    </label>
+                    <div class="mseg-depth-readout" data-role="mseg-depth-readout">1.000</div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function buildMsegModalHTML() {
+    return `
+        <div class="mseg-modal-layer" data-role="mseg-modal-layer" data-open="false">
+            <button class="mseg-modal-backdrop" type="button" data-role="mseg-modal-backdrop" aria-label="Close MSEG editor"></button>
+            <section class="mseg-modal" aria-hidden="true">
+                <div class="mseg-modal-head">
+                    <div class="mseg-modal-copy">
+                        <div class="mseg-eyebrow">MSEG 1</div>
+                        <strong class="mseg-route-title">Fixed Wavetable Route</strong>
+                    </div>
+                    <button class="mseg-modal-close" type="button" data-role="mseg-modal-close">Done</button>
+                </div>
+
+                <div class="mseg-modal-stage">
+                    <div class="mseg-editor-shell mseg-modal-editor-shell">
+                        ${buildMsegSurfaceHTML("mseg-modal", "mseg-modal-surface")}
+                    </div>
+                </div>
+
+                <div class="mseg-modal-footer">
+                    <label class="mseg-rate">
+                        <span class="mseg-depth-label">Time In Seconds</span>
+                        <input
+                            class="mseg-rate-slider"
+                            type="range"
+                            aria-label="MSEG time in seconds"
+                            min="${MSEG_RATE_MIN_SECONDS.toFixed(3)}"
+                            max="${MSEG_RATE_MAX_SECONDS.toFixed(3)}"
+                            step="0.001"
+                            value="1.000"
+                        />
+                    </label>
+                    <div class="mseg-modal-footer-actions">
+                        <div class="mseg-rate-readout" data-role="mseg-rate-readout">1.000 s</div>
+                        <button class="mseg-loop-button" type="button" data-role="mseg-loop-button" aria-pressed="true" aria-label="Toggle full-shape loop">
+                            ${getMsegLoopIconSVG()}
+                        </button>
+                    </div>
+                </div>
+            </section>
+        </div>
+    `;
+}
+
+function getMsegStyles(platform = "desktop") {
+    const compact = platform === "ios";
+    return `
+        .mseg-shell {
+            min-width: 0;
+            display: grid;
+            gap: ${compact ? "10px" : "12px"};
+            ${compact
+                ? ""
+                : `
+                    border-radius: 16px;
+                    border: 1px solid rgba(var(--cosimo-accent-blue-rgb), 0.14);
+                    background: rgba(5, 8, 20, 0.88);
+                    padding: 14px;
+                `}
+        }
+
+        .mseg-launcher {
+            display: grid;
+            gap: 12px;
+            min-width: 0;
+        }
+
+        .mseg-launcher-head,
+        .mseg-modal-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: end;
+            gap: 12px;
+        }
+
+        .mseg-launcher-copy,
+        .mseg-modal-copy {
+            display: grid;
+            gap: 4px;
+            min-width: 0;
+        }
+
+        .mseg-eyebrow {
+            font-size: 10px;
+            letter-spacing: 0.16em;
+            text-transform: uppercase;
+            color: rgba(212, 220, 230, ${compact ? "0.34" : "0.42"});
+            font-family: "SF Mono", "IBM Plex Mono", Menlo, monospace;
+        }
+
+        .mseg-route-title {
+            font-size: ${compact ? "15px" : "16px"};
+            font-weight: 600;
+            color: #eef2f5;
+            letter-spacing: -0.03em;
+        }
+
+        .mseg-modal-close {
+            border: 1px solid rgba(var(--cosimo-accent-blue-rgb), 0.22);
+            border-radius: 999px;
+            background: rgba(var(--cosimo-accent-blue-rgb), 0.1);
+            color: var(--cosimo-accent-blue);
+            min-height: 38px;
+            padding: 0 14px;
+            font-size: 11px;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+        }
+
+        .mseg-preview-button {
+            width: 100%;
+            border: 0;
+            padding: 0;
+            margin: 0;
+            background: transparent;
+            color: inherit;
+            text-align: left;
+        }
+
+        .mseg-preview-shell {
+            border-radius: ${compact ? "18px" : "14px"};
+            overflow: hidden;
+            border: 1px solid rgba(var(--cosimo-accent-blue-rgb), 0.16);
+            background:
+                linear-gradient(180deg, rgba(255, 255, 255, 0.018), transparent 18%),
+                linear-gradient(180deg, rgba(9, 13, 24, 0.94), rgba(4, 7, 15, 0.98));
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+        }
+
+        .mseg-preview-surface {
+            display: block;
+            width: 100%;
+            height: ${compact ? "128px" : "142px"};
+        }
+
+        .mseg-preview-footer {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .mseg-launcher-rate-readout {
+            font-family: "SF Mono", "IBM Plex Mono", Menlo, monospace;
+            font-size: 12px;
+            letter-spacing: 0.08em;
+            color: var(--cosimo-accent-blue);
+            min-width: 0;
+            white-space: nowrap;
+        }
+
+        .mseg-controls {
+            display: grid;
+            min-width: 0;
+            grid-template-columns: minmax(0, 1fr) auto;
+            gap: 12px;
+            align-items: end;
+        }
+
+        .mseg-depth,
+        .mseg-rate {
+            display: grid;
+            gap: 6px;
+            min-width: 0;
+        }
+
+        .mseg-depth-label {
+            font-size: 10px;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: rgba(212, 220, 230, ${compact ? "0.42" : "0.72"});
+        }
+
+        .mseg-depth-readout,
+        .mseg-rate-readout {
+            font-family: "SF Mono", "IBM Plex Mono", Menlo, monospace;
+            font-size: 12px;
+            letter-spacing: 0.08em;
+            color: var(--cosimo-accent-blue);
+        }
+
+        .mseg-rate-slider,
+        .mseg-depth-slider {
+            width: 100%;
+            accent-color: var(--cosimo-accent-blue);
+        }
+
+        .mseg-surface {
+            display: block;
+            width: 100%;
+        }
+
+        .mseg-grid {
+            stroke: rgba(255, 255, 255, 0.07);
+            stroke-width: 1;
+        }
+
+        .mseg-fill {
+            fill: rgba(var(--cosimo-accent-blue-rgb), 0.18);
+        }
+
+        .mseg-curve {
+            fill: none;
+            stroke: var(--cosimo-accent-blue);
+            stroke-width: 3;
+            stroke-linejoin: round;
+            stroke-linecap: round;
+        }
+
+        .mseg-point {
+            fill: rgba(var(--cosimo-background-rgb), 0.95);
+            stroke: var(--cosimo-accent-blue);
+            stroke-width: 3;
+        }
+
+        .mseg-point.selected {
+            fill: rgba(var(--cosimo-accent-blue-rgb), 0.22);
+            stroke-width: 3.25;
+        }
+
+        .mseg-editor-shell {
+            position: relative;
+            border-radius: ${compact ? "22px" : "18px"};
+            overflow: hidden;
+            border: 1px solid rgba(var(--cosimo-accent-blue-rgb), 0.18);
+            background:
+                linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent 16%),
+                linear-gradient(180deg, rgba(9, 13, 24, 0.94), rgba(4, 7, 15, 0.98));
+            box-shadow:
+                inset 0 1px 0 rgba(255, 255, 255, 0.04),
+                inset 0 -30px 54px rgba(2, 4, 12, 0.44);
+        }
+
+        .mseg-modal-layer {
+            position: absolute;
+            inset: 0;
+            z-index: 20;
+            display: grid;
+            padding: ${compact
+                ? "max(10px, env(safe-area-inset-top)) 10px 10px 10px"
+                : "18px"};
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 180ms ease;
+        }
+
+        .mseg-modal-layer[data-open="true"] {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .mseg-modal-backdrop {
+            position: absolute;
+            inset: 0;
+            border: 0;
+            padding: 0;
+            margin: 0;
+            background: rgba(2, 4, 11, 0.82);
+            backdrop-filter: blur(10px);
+        }
+
+        .mseg-modal {
+            position: relative;
+            z-index: 1;
+            min-width: 0;
+            min-height: 0;
+            display: grid;
+            grid-template-rows: ${compact ? "0 minmax(0, 1fr) auto" : "auto minmax(0, 1fr) auto"};
+            gap: 12px;
+            padding: ${compact ? "14px" : "18px"};
+            border-radius: ${compact ? "26px" : "24px"};
+            border: 1px solid rgba(var(--cosimo-accent-blue-rgb), 0.18);
+            background:
+                linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 16%),
+                rgba(5, 8, 20, 0.98);
+            box-shadow:
+                0 26px 60px rgba(2, 4, 12, 0.58),
+                inset 0 1px 0 rgba(255, 255, 255, 0.04);
+            transform: translateY(18px) scale(0.985);
+            opacity: 0;
+            transition:
+                transform 220ms cubic-bezier(0.22, 1, 0.36, 1),
+                opacity 180ms ease;
+        }
+
+        .mseg-modal-layer[data-open="true"] .mseg-modal {
+            transform: translateY(0) scale(1);
+            opacity: 1;
+        }
+
+        .mseg-modal-stage {
+            min-height: 0;
+            display: grid;
+        }
+
+        .mseg-modal-editor-shell {
+            min-height: ${compact ? "220px" : "340px"};
+            height: 100%;
+        }
+
+        .mseg-modal-surface {
+            width: 100%;
+            height: 100%;
+            touch-action: none;
+            cursor: crosshair;
+        }
+
+        .mseg-modal-footer {
+            display: grid;
+            min-width: 0;
+            grid-template-columns: minmax(0, 1fr) auto;
+            gap: 12px;
+            align-items: end;
+        }
+
+        .mseg-modal-footer-actions {
+            display: grid;
+            gap: 10px;
+            justify-items: end;
+        }
+
+        .mseg-loop-button {
+            width: 48px;
+            height: 48px;
+            border-radius: 999px;
+            border: 1px solid rgba(var(--cosimo-accent-blue-rgb), 0.18);
+            background: rgba(var(--cosimo-background-rgb), 0.68);
+            color: rgba(var(--cosimo-accent-blue-rgb), 0.42);
+            display: grid;
+            place-items: center;
+            padding: 0;
+        }
+
+        .mseg-loop-button[aria-pressed="true"] {
+            background: rgba(var(--cosimo-accent-blue-rgb), 0.16);
+            color: var(--cosimo-accent-blue);
+            box-shadow:
+                inset 0 0 0 1px rgba(var(--cosimo-accent-blue-rgb), 0.18),
+                0 0 18px rgba(var(--cosimo-accent-blue-rgb), 0.12);
+        }
+
+        .mseg-loop-button svg {
+            width: 20px;
+            height: 20px;
+            display: block;
+        }
+
+        .mseg-launcher-loop-button {
+            width: 42px;
+            height: 42px;
+        }
+
+        .mseg-loop-button path {
+            fill: currentColor;
+        }
+
+        .mseg-preview-button:active,
+        .mseg-modal-close:active,
+        .mseg-loop-button:active {
+            transform: translateY(1px) scale(0.985);
+        }
+
+        ${compact ? `
+            .mseg-modal-layer {
+                position: relative;
+                inset: auto;
+                min-height: 0;
+                padding: 0;
+            }
+
+            .mseg-modal-backdrop {
+                display: none;
+            }
+
+            .mseg-modal {
+                position: relative;
+                inset: auto;
+                display: flex;
+                flex-direction: column;
+                gap: 6px;
+                min-height: 100%;
+                padding: 4px 10px 0;
+                border: 0;
+                border-radius: 0;
+                background: transparent;
+                box-shadow: none;
+            }
+
+            .mseg-modal-head {
+                position: absolute;
+                top: 4px;
+                right: 4px;
+                left: 4px;
+                z-index: 2;
+                justify-content: flex-end;
+                align-items: start;
+                pointer-events: none;
+            }
+
+            .mseg-modal-copy {
+                display: none;
+            }
+
+            .mseg-modal-close {
+                pointer-events: auto;
+                min-height: 32px;
+                padding: 0 12px;
+                border: 0;
+                background: rgba(var(--cosimo-background-rgb), 0.72);
+                color: rgba(var(--cosimo-accent-blue-rgb), 0.9);
+                box-shadow: inset 0 0 0 1px rgba(var(--cosimo-accent-blue-rgb), 0.14);
+            }
+
+            .mseg-modal-stage {
+                flex: 1 1 auto;
+                min-height: 0;
+            }
+
+            .mseg-modal-editor-shell {
+                min-height: 0;
+                border-radius: 18px;
+                border-color: rgba(var(--cosimo-accent-blue-rgb), 0.12);
+                box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035);
+            }
+
+            .mseg-modal-footer {
+                grid-template-columns: minmax(0, 1fr) auto auto;
+                gap: 8px;
+                align-items: center;
+                padding: 0 2px 0;
+            }
+
+            .mseg-modal-footer .mseg-rate {
+                gap: 0;
+            }
+
+            .mseg-modal-footer .mseg-depth-label {
+                display: none;
+            }
+
+            .mseg-modal-footer-actions {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            }
+
+            .mseg-rate-readout {
+                font-size: 11px;
+                white-space: nowrap;
+            }
+
+            .mseg-loop-button {
+                width: auto;
+                height: auto;
+                min-width: 34px;
+                min-height: 34px;
+                border: 0;
+                border-radius: 0;
+                background: transparent;
+                box-shadow: none;
+                padding: 4px;
+            }
+
+            .mseg-loop-button[aria-pressed="true"] {
+                background: transparent;
+                box-shadow: none;
+            }
+
+            .mseg-loop-button svg {
+                width: 18px;
+                height: 18px;
+            }
+        ` : ""}
+    `;
 }
 
 export function displayPositionsMatch(left, right, epsilon = DISPLAY_POSITION_EPSILON) {
@@ -472,6 +1022,105 @@ function formatOrdinal(value) {
     return String(value).padStart(2, "0");
 }
 
+function measureElementRect(element) {
+    if (!element || typeof element.getBoundingClientRect !== "function") {
+        return null;
+    }
+
+    const rect = element.getBoundingClientRect();
+
+    return {
+        top: rect.top,
+        left: rect.left,
+        right: rect.right,
+        bottom: rect.bottom,
+        width: rect.width,
+        height: rect.height,
+    };
+}
+
+function measureElementStyle(element) {
+    if (!element || typeof globalThis.getComputedStyle !== "function") {
+        return null;
+    }
+
+    const style = globalThis.getComputedStyle(element);
+
+    return {
+        display: style.display,
+        position: style.position,
+        top: style.top,
+        right: style.right,
+        bottom: style.bottom,
+        left: style.left,
+        width: style.width,
+        height: style.height,
+        minHeight: style.minHeight,
+        maxWidth: style.maxWidth,
+        overflow: style.overflow,
+        overflowY: style.overflowY,
+        gridRow: style.gridRow,
+        gridTemplateRows: style.gridTemplateRows,
+        alignSelf: style.alignSelf,
+    };
+}
+
+export function collectCosimoLayoutMetrics() {
+    const host = globalThis.document?.querySelector?.("cosimo-synth-view");
+    const shadow = host?.shadowRoot ?? null;
+    const shell = shadow?.querySelector?.(".ios-shell") ?? null;
+    const topRow = shadow?.querySelector?.(".ios-top-row") ?? null;
+    const mainView = shadow?.querySelector?.(".ios-main-view") ?? null;
+    const scroll = shadow?.querySelector?.(".ios-scroll") ?? null;
+    const content = shadow?.querySelector?.(".ios-content") ?? null;
+    const footer = shadow?.querySelector?.(".keyboard-footer") ?? null;
+    const toolbar = shadow?.querySelector?.(".keyboard-toolbar") ?? null;
+    const keyboardHost = shadow?.querySelector?.(".keyboard-host") ?? null;
+    const keyboard = shadow?.querySelector?.(".keyboard") ?? null;
+    const viewportWidth =
+        Number(globalThis.visualViewport?.width) ||
+        Number(globalThis.window?.innerWidth) ||
+        0;
+    const viewportHeight =
+        Number(globalThis.visualViewport?.height) ||
+        Number(globalThis.window?.innerHeight) ||
+        0;
+
+    return {
+        viewport: {
+            width: viewportWidth,
+            height: viewportHeight,
+            scrollX: Number(globalThis.window?.scrollX) || 0,
+            scrollY: Number(globalThis.window?.scrollY) || 0,
+            visualWidth: Number(globalThis.visualViewport?.width) || null,
+            visualHeight: Number(globalThis.visualViewport?.height) || null,
+        },
+        shellChildren: shell ? Array.from(shell.children, (node) => node.className || node.tagName) : null,
+        footerChildren: footer ? Array.from(footer.children, (node) => node.className || node.tagName) : null,
+        keyboardHostChildren: keyboardHost ? Array.from(keyboardHost.children, (node) => node.className || node.tagName) : null,
+        hostRect: measureElementRect(host),
+        shellRect: measureElementRect(shell),
+        topRowRect: measureElementRect(topRow),
+        mainViewRect: measureElementRect(mainView),
+        scrollRect: measureElementRect(scroll),
+        contentRect: measureElementRect(content),
+        toolbarRect: measureElementRect(toolbar),
+        footerRect: measureElementRect(footer),
+        keyboardHostRect: measureElementRect(keyboardHost),
+        keyboardRect: measureElementRect(keyboard),
+        shellStyle: measureElementStyle(shell),
+        footerStyle: measureElementStyle(footer),
+        keyboardHostStyle: measureElementStyle(keyboardHost),
+        keyboardStyle: measureElementStyle(keyboard),
+        footerBottomGap: footer ? viewportHeight - footer.getBoundingClientRect().bottom : null,
+        keyboardBottomGap: keyboard ? viewportHeight - keyboard.getBoundingClientRect().bottom : null,
+    };
+}
+
+if (typeof globalThis === "object") {
+    globalThis.__cosimoCollectLayoutMetrics = collectCosimoLayoutMetrics;
+}
+
 function getKeyboardTagName(keyboardStyle) {
     return `cosimo-synth-keyboard-${keyboardStyle}`;
 }
@@ -521,6 +1170,15 @@ export class CosimoSynthView extends HTMLElement {
     constructor(patchConnection, options = {}) {
         super();
 
+        const initialViewportWidth =
+            Number(globalThis.visualViewport?.width) ||
+            Number(globalThis.window?.innerWidth) ||
+            393;
+        const initialViewportHeight =
+            Number(globalThis.visualViewport?.height) ||
+            Number(globalThis.window?.innerHeight) ||
+            852;
+
         this.patchConnection = patchConnection;
         this.options = { platform: "desktop", ...options };
         this.currentValue = knobDefault;
@@ -529,7 +1187,6 @@ export class CosimoSynthView extends HTMLElement {
         this.desiredTableIndex = 0;
         this.currentFrameCount = 1;
         this.currentPlayMode = 0;
-        this.currentNotePriority = 0;
         this.currentGlideTime = 0.0;
         this.hasDisplayedValue = false;
         this.display = null;
@@ -551,8 +1208,8 @@ export class CosimoSynthView extends HTMLElement {
         this.resizeObserver = null;
         this.windowResizeListener = null;
         this.currentLayout = computeResponsivePatchLayout({
-            width: this.options.platform === "ios" ? 393 : 1120,
-            height: this.options.platform === "ios" ? 648 : 680,
+            width: this.options.platform === "ios" ? initialViewportWidth : 1120,
+            height: this.options.platform === "ios" ? initialViewportHeight : 680,
             platform: this.options.platform,
         });
         this.keyboardStyle = "";
@@ -566,8 +1223,11 @@ export class CosimoSynthView extends HTMLElement {
         this.activeDisplayDrag = null;
         this.msegController = null;
         this.msegState = null;
+        this.isMsegModalOpen = false;
         this.selectedMsegPointIndex = 0;
-        this.activeMsegDrag = null;
+        this.activeMsegPointer = null;
+        this.msegPreviewSurface = null;
+        this.msegModalSurface = null;
 
         this.attachShadow({ mode: "open" });
 
@@ -601,13 +1261,6 @@ export class CosimoSynthView extends HTMLElement {
             this.patchConnection.removeParameterListener(
                 playModeEndpointID,
                 this.handlePlayModeParameterChange
-            );
-        }
-
-        if (this.handleNotePriorityParameterChange) {
-            this.patchConnection.removeParameterListener(
-                notePriorityEndpointID,
-                this.handleNotePriorityParameterChange
             );
         }
 
@@ -662,15 +1315,23 @@ export class CosimoSynthView extends HTMLElement {
             this.tableRetryButton.removeEventListener("click", this.handleRetryButtonClick);
         }
 
-        if (this.msegViewport && this.handleMsegPointerDown) {
-            this.msegViewport.removeEventListener("pointerdown", this.handleMsegPointerDown);
-            this.msegViewport.removeEventListener("pointermove", this.handleMsegPointerMove);
-            this.msegViewport.removeEventListener("pointerup", this.handleMsegPointerUp);
-            this.msegViewport.removeEventListener("pointercancel", this.handleMsegPointerUp);
+        if (this.msegModalSurface?.viewport && this.handleMsegPointerDown) {
+            this.msegModalSurface.viewport.removeEventListener("pointerdown", this.handleMsegPointerDown);
+            this.msegModalSurface.viewport.removeEventListener("pointermove", this.handleMsegPointerMove);
+            this.msegModalSurface.viewport.removeEventListener("pointerup", this.handleMsegPointerUp);
+            this.msegModalSurface.viewport.removeEventListener("pointercancel", this.handleMsegPointerUp);
         }
 
-        if (this.msegDeleteButton && this.handleDeleteMsegPoint) {
-            this.msegDeleteButton.removeEventListener("click", this.handleDeleteMsegPoint);
+        if (this.msegPreviewButton && this.handleOpenMsegModal) {
+            this.msegPreviewButton.removeEventListener("click", this.handleOpenMsegModal);
+        }
+
+        if (this.msegModalCloseButton && this.handleCloseMsegModal) {
+            this.msegModalCloseButton.removeEventListener("click", this.handleCloseMsegModal);
+        }
+
+        if (this.msegModalBackdrop && this.handleCloseMsegModal) {
+            this.msegModalBackdrop.removeEventListener("click", this.handleCloseMsegModal);
         }
 
         if (this.msegDepthInput && this.handleMsegDepthInput) {
@@ -685,16 +1346,16 @@ export class CosimoSynthView extends HTMLElement {
             this.playModeSelect.removeEventListener("change", this.handlePlayModeInput);
         }
 
-        if (this.notePrioritySelect && this.handleNotePriorityInput) {
-            this.notePrioritySelect.removeEventListener("change", this.handleNotePriorityInput);
-        }
-
         if (this.glideTimeInput && this.handleGlideTimeInput) {
             this.glideTimeInput.removeEventListener("input", this.handleGlideTimeInput);
         }
 
-        if (this.msegLoopToggle && this.handleMsegLoopInput) {
-            this.msegLoopToggle.removeEventListener("input", this.handleMsegLoopInput);
+        if (this.msegLoopButton && this.handleMsegLoopInput) {
+            this.msegLoopButton.removeEventListener("click", this.handleMsegLoopInput);
+        }
+
+        if (this.msegLauncherLoopButton && this.handleMsegLoopInput) {
+            this.msegLauncherLoopButton.removeEventListener("click", this.handleMsegLoopInput);
         }
 
         if (this.octaveDownButton && this.handleOctaveDown) {
@@ -735,19 +1396,22 @@ export class CosimoSynthView extends HTMLElement {
         this.octaveDownButton = this.shadowRoot.querySelector(".octave-down");
         this.octaveUpButton = this.shadowRoot.querySelector(".octave-up");
         this.octaveReadout = this.shadowRoot.querySelector("[data-role='octave-readout']");
-        this.msegViewport = this.shadowRoot.querySelector(".mseg-editor");
-        this.msegCurve = this.shadowRoot.querySelector(".mseg-curve");
-        this.msegPointsLayer = this.shadowRoot.querySelector(".mseg-points");
-        this.msegDeleteButton = this.shadowRoot.querySelector(".mseg-delete-point");
+        this.msegPreviewButton = this.shadowRoot.querySelector(".mseg-preview-button");
+        this.msegModalLayer = this.shadowRoot.querySelector("[data-role='mseg-modal-layer']");
+        this.msegModalBackdrop = this.shadowRoot.querySelector("[data-role='mseg-modal-backdrop']");
+        this.msegModalCloseButton = this.shadowRoot.querySelector("[data-role='mseg-modal-close']");
         this.msegDepthInput = this.shadowRoot.querySelector(".mseg-depth-slider");
         this.msegDepthReadout = this.shadowRoot.querySelector("[data-role='mseg-depth-readout']");
+        this.msegLauncherRateReadout = this.shadowRoot.querySelector("[data-role='mseg-launcher-rate-readout']");
+        this.msegLauncherLoopButton = this.shadowRoot.querySelector("[data-role='mseg-launcher-loop-button']");
         this.msegRateInput = this.shadowRoot.querySelector(".mseg-rate-slider");
         this.msegRateReadout = this.shadowRoot.querySelector("[data-role='mseg-rate-readout']");
-        this.msegLoopToggle = this.shadowRoot.querySelector(".mseg-loop-toggle");
+        this.msegLoopButton = this.shadowRoot.querySelector("[data-role='mseg-loop-button']");
         this.playModeSelect = this.shadowRoot.querySelector(".play-mode-select");
-        this.notePrioritySelect = this.shadowRoot.querySelector(".note-priority-select");
         this.glideTimeInput = this.shadowRoot.querySelector(".glide-time-slider");
         this.glideTimeReadout = this.shadowRoot.querySelector("[data-role='glide-time-readout']");
+        this.msegPreviewSurface = this.getMsegSurfaceRefs("mseg-preview");
+        this.msegModalSurface = this.getMsegSurfaceRefs("mseg-modal");
 
         this.displaySlots = this.displayCanvases.map((canvas, slotIndex) => ({
             slotIndex,
@@ -766,7 +1430,6 @@ export class CosimoSynthView extends HTMLElement {
 
         this.handleParameterChange = this.setDisplayedValue.bind(this);
         this.handlePlayModeParameterChange = this.syncPlayModeControl.bind(this);
-        this.handleNotePriorityParameterChange = this.syncNotePriorityControl.bind(this);
         this.handleGlideTimeParameterChange = this.syncGlideTimeControl.bind(this);
         this.handleEffectiveWavetablePositionChange = this.handleObservedDisplayPosition.bind(this);
         this.handleRuntimeTableStateChange = this.handleRuntimeTableState.bind(this);
@@ -777,14 +1440,14 @@ export class CosimoSynthView extends HTMLElement {
         this.handleMsegPointerDown = this.beginMsegInteraction.bind(this);
         this.handleMsegPointerMove = this.updateMsegInteraction.bind(this);
         this.handleMsegPointerUp = this.endMsegInteraction.bind(this);
-        this.handleDeleteMsegPoint = this.deleteSelectedMsegPoint.bind(this);
+        this.handleOpenMsegModal = this.openMsegModal.bind(this);
+        this.handleCloseMsegModal = this.closeMsegModal.bind(this);
         this.handleMsegRateInput = this.handleMsegRateInput.bind(this);
         this.handleMsegLoopInput = this.handleMsegLoopInput.bind(this);
         this.handleMsegDepthInput = () => {
             this.msegController?.setDepth(clampDepth(this.msegDepthInput?.value));
         };
         this.handlePlayModeInput = this.handlePlayModeInput.bind(this);
-        this.handleNotePriorityInput = this.handleNotePriorityInput.bind(this);
         this.handleGlideTimeInput = this.handleGlideTimeInput.bind(this);
         this.handleOctaveDown = () => this.nudgeKeyboardOctave(-12);
         this.handleOctaveUp = () => this.nudgeKeyboardOctave(12);
@@ -797,7 +1460,6 @@ export class CosimoSynthView extends HTMLElement {
 
         this.tableRetryButton?.addEventListener("click", this.handleRetryButtonClick);
         this.playModeSelect?.addEventListener("change", this.handlePlayModeInput);
-        this.notePrioritySelect?.addEventListener("change", this.handleNotePriorityInput);
         this.glideTimeInput?.addEventListener("input", this.handleGlideTimeInput);
 
         if (this.displayViewport) {
@@ -807,16 +1469,19 @@ export class CosimoSynthView extends HTMLElement {
             this.displayViewport.addEventListener("pointercancel", this.handleDisplayDragEnd);
         }
 
-        if (this.msegViewport) {
-            this.msegViewport.addEventListener("pointerdown", this.handleMsegPointerDown);
-            this.msegViewport.addEventListener("pointermove", this.handleMsegPointerMove);
-            this.msegViewport.addEventListener("pointerup", this.handleMsegPointerUp);
-            this.msegViewport.addEventListener("pointercancel", this.handleMsegPointerUp);
+        if (this.msegModalSurface?.viewport) {
+            this.msegModalSurface.viewport.addEventListener("pointerdown", this.handleMsegPointerDown);
+            this.msegModalSurface.viewport.addEventListener("pointermove", this.handleMsegPointerMove);
+            this.msegModalSurface.viewport.addEventListener("pointerup", this.handleMsegPointerUp);
+            this.msegModalSurface.viewport.addEventListener("pointercancel", this.handleMsegPointerUp);
         }
 
-        this.msegDeleteButton?.addEventListener("click", this.handleDeleteMsegPoint);
+        this.msegPreviewButton?.addEventListener("click", this.handleOpenMsegModal);
+        this.msegModalCloseButton?.addEventListener("click", this.handleCloseMsegModal);
+        this.msegModalBackdrop?.addEventListener("click", this.handleCloseMsegModal);
         this.msegRateInput?.addEventListener("input", this.handleMsegRateInput);
-        this.msegLoopToggle?.addEventListener("input", this.handleMsegLoopInput);
+        this.msegLoopButton?.addEventListener("click", this.handleMsegLoopInput);
+        this.msegLauncherLoopButton?.addEventListener("click", this.handleMsegLoopInput);
         this.msegDepthInput?.addEventListener("input", this.handleMsegDepthInput);
         this.octaveDownButton?.addEventListener("click", this.handleOctaveDown);
         this.octaveUpButton?.addEventListener("click", this.handleOctaveUp);
@@ -835,8 +1500,8 @@ export class CosimoSynthView extends HTMLElement {
         this.setDisplayedValue(knobDefault);
         this.setDisplayState("loading", "Loading wavetable bank…");
         this.syncPlayModeControl(0);
-        this.syncNotePriorityControl(0);
         this.syncGlideTimeControl(0.0);
+        this.setMsegModalOpen(false);
 
         this.patchConnection.addParameterListener(
             wavetablePositionEndpointID,
@@ -845,10 +1510,6 @@ export class CosimoSynthView extends HTMLElement {
         this.patchConnection.addParameterListener(
             playModeEndpointID,
             this.handlePlayModeParameterChange
-        );
-        this.patchConnection.addParameterListener(
-            notePriorityEndpointID,
-            this.handleNotePriorityParameterChange
         );
         this.patchConnection.addParameterListener(
             glideTimeEndpointID,
@@ -876,7 +1537,6 @@ export class CosimoSynthView extends HTMLElement {
         }
         this.patchConnection.requestParameterValue(wavetablePositionEndpointID);
         this.patchConnection.requestParameterValue(playModeEndpointID);
-        this.patchConnection.requestParameterValue(notePriorityEndpointID);
         this.patchConnection.requestParameterValue(glideTimeEndpointID);
         this.requestRuntimeTableSync();
 
@@ -901,6 +1561,7 @@ export class CosimoSynthView extends HTMLElement {
                 slot.display.resize(stageBounds.width, stageBounds.height, window.devicePixelRatio || 1);
             });
             this.resetDisplayLayerPositions();
+            this.renderMsegEditor();
         };
 
         if ("ResizeObserver" in window) {
@@ -1400,7 +2061,6 @@ export class CosimoSynthView extends HTMLElement {
 
         this.patchConnection.requestParameterValue(wavetablePositionEndpointID);
         this.patchConnection.requestParameterValue(playModeEndpointID);
-        this.patchConnection.requestParameterValue(notePriorityEndpointID);
         this.patchConnection.requestParameterValue(glideTimeEndpointID);
         this.requestRuntimeTableSync();
         if (this.hint) {
@@ -1484,6 +2144,91 @@ export class CosimoSynthView extends HTMLElement {
         this.syncMsegDepthControl();
     }
 
+    getMsegSurfaceRefs(rolePrefix) {
+        return {
+            viewport: this.shadowRoot.querySelector(`[data-role='${rolePrefix}-viewport']`),
+            grid: this.shadowRoot.querySelector(`[data-role='${rolePrefix}-grid']`),
+            fill: this.shadowRoot.querySelector(`[data-role='${rolePrefix}-fill']`),
+            curve: this.shadowRoot.querySelector(`[data-role='${rolePrefix}-curve']`),
+            points: this.shadowRoot.querySelector(`[data-role='${rolePrefix}-points']`),
+        };
+    }
+
+    getMsegSurfaceOrientation(surface, { showPoints = false } = {}) {
+        if (this.options?.platform !== "ios" || !showPoints) {
+            return "horizontal";
+        }
+
+        const hostBounds = this.getBoundingClientRect?.() ?? null;
+        const viewportBounds = globalThis.visualViewport ?? null;
+        const width = Math.max(
+            0,
+            hostBounds?.width ||
+                this.clientWidth ||
+                viewportBounds?.width ||
+                globalThis.window?.innerWidth ||
+                0
+        );
+        const height = Math.max(
+            0,
+            hostBounds?.height ||
+                this.clientHeight ||
+                viewportBounds?.height ||
+                globalThis.window?.innerHeight ||
+                0
+        );
+
+        if (width > 0 && height > 0) {
+            return height > width ? "vertical" : "horizontal";
+        }
+
+        if (!surface?.viewport) {
+            return "horizontal";
+        }
+
+        const bounds = surface.viewport.getBoundingClientRect?.() ?? { width: 0, height: 0 };
+        const fallbackWidth = Math.max(1, bounds.width || surface.viewport.clientWidth || 0);
+        const fallbackHeight = Math.max(1, bounds.height || surface.viewport.clientHeight || 0);
+        return fallbackHeight > fallbackWidth ? "vertical" : "horizontal";
+    }
+
+    setMsegModalOpen(nextOpen) {
+        this.isMsegModalOpen = Boolean(nextOpen);
+        if (!this.isMsegModalOpen) {
+            this.activeMsegPointer = null;
+        }
+        this.toggleAttribute("mseg-modal-open", this.isMsegModalOpen);
+
+        if (this.msegModalLayer) {
+            this.msegModalLayer.dataset.open = this.isMsegModalOpen ? "true" : "false";
+        }
+
+        const modalElement = this.msegModalLayer?.querySelector(".mseg-modal");
+        if (modalElement) {
+            modalElement.setAttribute("aria-hidden", this.isMsegModalOpen ? "false" : "true");
+        }
+
+        this.renderMsegEditor();
+
+        if (this.isMsegModalOpen) {
+            if (typeof globalThis.requestAnimationFrame === "function") {
+                globalThis.requestAnimationFrame(() => this.renderMsegEditor());
+            } else {
+                this.renderMsegEditor();
+            }
+        }
+    }
+
+    openMsegModal(event) {
+        event?.preventDefault?.();
+        this.setMsegModalOpen(true);
+    }
+
+    closeMsegModal(event) {
+        event?.preventDefault?.();
+        this.setMsegModalOpen(false);
+    }
+
     syncMsegDepthControl() {
         if (!this.msegDepthInput || !this.msegState) {
             return;
@@ -1504,14 +2249,6 @@ export class CosimoSynthView extends HTMLElement {
 
         if (this.playModeSelect && globalThis.document?.activeElement !== this.playModeSelect) {
             this.playModeSelect.value = String(this.currentPlayMode);
-        }
-    }
-
-    syncNotePriorityControl(value) {
-        this.currentNotePriority = clampNotePriority(value);
-
-        if (this.notePrioritySelect && globalThis.document?.activeElement !== this.notePrioritySelect) {
-            this.notePrioritySelect.value = String(this.currentNotePriority);
         }
     }
 
@@ -1541,8 +2278,20 @@ export class CosimoSynthView extends HTMLElement {
             this.msegRateReadout.textContent = formatMsegRateSeconds(nextSeconds);
         }
 
-        if (this.msegLoopToggle) {
-            this.msegLoopToggle.checked = this.msegState.playback.loop !== null;
+        if (this.msegLauncherRateReadout) {
+            this.msegLauncherRateReadout.textContent = formatMsegRateSeconds(nextSeconds);
+        }
+
+        const isLoopEnabled = this.msegState.playback.loop !== null;
+
+        if (this.msegLoopButton) {
+            this.msegLoopButton.setAttribute("aria-pressed", isLoopEnabled ? "true" : "false");
+            this.msegLoopButton.setAttribute("title", isLoopEnabled ? "Loop full shape" : "Play one shot");
+        }
+
+        if (this.msegLauncherLoopButton) {
+            this.msegLauncherLoopButton.setAttribute("aria-pressed", isLoopEnabled ? "true" : "false");
+            this.msegLauncherLoopButton.setAttribute("title", formatMsegLoopLabel(this.msegState.playback.loop));
         }
     }
 
@@ -1567,7 +2316,7 @@ export class CosimoSynthView extends HTMLElement {
 
         this.msegController.setPlayback({
             ...this.msegState.playback,
-            loop: this.msegLoopToggle?.checked ? { startX: 0.0, endX: 1.0 } : null,
+            loop: this.msegState.playback.loop ? null : { startX: 0.0, endX: 1.0 },
             noteOffPolicy: "finish_loop",
         });
     }
@@ -1578,85 +2327,157 @@ export class CosimoSynthView extends HTMLElement {
         this.patchConnection.sendEventOrValue?.(playModeEndpointID, nextValue);
     }
 
-    handleNotePriorityInput() {
-        const nextValue = clampNotePriority(this.notePrioritySelect?.value);
-        this.syncNotePriorityControl(nextValue);
-        this.patchConnection.sendEventOrValue?.(notePriorityEndpointID, nextValue);
-    }
-
     handleGlideTimeInput() {
         const nextValue = clampGlideTime(this.glideTimeInput?.value);
         this.syncGlideTimeControl(nextValue);
         this.patchConnection.sendEventOrValue?.(glideTimeEndpointID, nextValue);
     }
 
-    renderMsegEditor() {
-        if (!this.msegViewport || !this.msegCurve || !this.msegPointsLayer || !this.msegState) {
+    getMsegSurfaceSize(surface, fallbackWidth = 600, fallbackHeight = 220) {
+        const bounds = surface?.viewport?.getBoundingClientRect?.() ?? { width: 0, height: 0 };
+        const width = Math.max(1, bounds.width || surface?.viewport?.clientWidth || fallbackWidth);
+        const height = Math.max(1, bounds.height || surface?.viewport?.clientHeight || fallbackHeight);
+        surface?.viewport?.setAttribute("viewBox", `0 0 ${width} ${height}`);
+        return { width, height };
+    }
+
+    renderMsegGrid(surface, metrics) {
+        if (!surface?.grid) {
             return;
         }
 
-        const width = Math.max(1, this.msegViewport.viewBox.baseVal.width || this.msegViewport.clientWidth || 600);
-        const height = Math.max(1, this.msegViewport.viewBox.baseVal.height || this.msegViewport.clientHeight || 180);
-        const samples = 96;
-        let pathData = "";
+        surface.grid.innerHTML = "";
 
-        for (let index = 0; index < samples; index += 1) {
-            const x = index / (samples - 1);
-            const y = evaluateMsegShape(this.msegState.shape, x);
-            const screenX = x * width;
-            const screenY = (1.0 - y) * height;
-            pathData += `${index === 0 ? "M" : "L"} ${screenX.toFixed(3)} ${screenY.toFixed(3)} `;
+        [0.25, 0.5, 0.75].forEach((step) => {
+            const horizontalLine = document.createElementNS(SVG_NS, "line");
+            const y = metrics.plotTop + ((1.0 - step) * metrics.plotHeight);
+            horizontalLine.setAttribute("x1", metrics.plotLeft.toFixed(3));
+            horizontalLine.setAttribute("y1", y.toFixed(3));
+            horizontalLine.setAttribute("x2", metrics.plotRight.toFixed(3));
+            horizontalLine.setAttribute("y2", y.toFixed(3));
+            surface.grid.appendChild(horizontalLine);
+        });
+
+        [0.25, 0.5, 0.75].forEach((step) => {
+            const verticalLine = document.createElementNS(SVG_NS, "line");
+            const x = metrics.plotLeft + (step * metrics.plotWidth);
+            verticalLine.setAttribute("x1", x.toFixed(3));
+            verticalLine.setAttribute("y1", metrics.plotTop.toFixed(3));
+            verticalLine.setAttribute("x2", x.toFixed(3));
+            verticalLine.setAttribute("y2", metrics.plotBottom.toFixed(3));
+            surface.grid.appendChild(verticalLine);
+        });
+    }
+
+    renderMsegSurface(surface, { showPoints = false } = {}) {
+        if (!surface?.viewport || !surface.curve || !surface.fill || !surface.points || !this.msegState) {
+            return;
         }
 
-        this.msegCurve.setAttribute("d", pathData.trim());
-        this.msegPointsLayer.innerHTML = "";
+        const { width, height } = this.getMsegSurfaceSize(
+            surface,
+            showPoints ? 840 : 600,
+            showPoints ? 360 : 132
+        );
+        const orientation = this.getMsegSurfaceOrientation(surface, { showPoints });
+        const editorOptions = getMsegEditorInteractionOptions(orientation);
+        const metrics = createMsegEditorMetrics(width, height, editorOptions);
+        this.renderMsegGrid(surface, metrics);
+        let pathData = "";
+
+        for (let index = 0; index < MSEG_CURVE_PREVIEW_SAMPLES; index += 1) {
+            const x = index / (MSEG_CURVE_PREVIEW_SAMPLES - 1);
+            const y = evaluateMsegShape(this.msegState.shape, x);
+            const coordinates = pointToMsegEditorCoordinates({ x, y }, width, height, editorOptions);
+            pathData += `${index === 0 ? "M" : "L"} ${coordinates.x.toFixed(3)} ${coordinates.y.toFixed(3)} `;
+        }
+
+        const curvePath = pathData.trim();
+        surface.curve.setAttribute("d", curvePath);
+        surface.fill.setAttribute("d", orientation === "vertical"
+            ? `${curvePath} L ${metrics.plotLeft.toFixed(3)} ${metrics.plotTop.toFixed(3)} ` +
+                `L ${metrics.plotLeft.toFixed(3)} ${metrics.plotBottom.toFixed(3)} Z`
+            : `${curvePath} L ${metrics.plotRight.toFixed(3)} ${metrics.plotBottom.toFixed(3)} ` +
+                `L ${metrics.plotLeft.toFixed(3)} ${metrics.plotBottom.toFixed(3)} Z`
+        );
+        surface.points.innerHTML = "";
+
+        if (!showPoints) {
+            return;
+        }
 
         this.msegState.shape.points.forEach((point, pointIndex) => {
-            const coordinates = pointToEditorCoordinates(point, width, height);
+            const coordinates = pointToMsegEditorCoordinates(point, width, height, editorOptions);
             const circle = document.createElementNS(SVG_NS, "circle");
             circle.setAttribute("cx", coordinates.x.toFixed(3));
             circle.setAttribute("cy", coordinates.y.toFixed(3));
-            circle.setAttribute("r", pointIndex === this.selectedMsegPointIndex ? "6" : "5");
-            circle.setAttribute("class", pointIndex === this.selectedMsegPointIndex ? "mseg-point selected" : "mseg-point");
+            circle.setAttribute(
+                "r",
+                String(pointIndex === this.selectedMsegPointIndex ? MSEG_SELECTED_POINT_RADIUS_PX : MSEG_POINT_RADIUS_PX)
+            );
+            circle.setAttribute(
+                "class",
+                pointIndex === this.selectedMsegPointIndex ? "mseg-point selected" : "mseg-point"
+            );
+            circle.setAttribute("vector-effect", "non-scaling-stroke");
             circle.dataset.pointIndex = String(pointIndex);
-            this.msegPointsLayer.appendChild(circle);
+            surface.points.appendChild(circle);
         });
-
-        if (this.msegDeleteButton) {
-            const isEndpoint =
-                this.selectedMsegPointIndex === 0 ||
-                this.selectedMsegPointIndex === this.msegState.shape.points.length - 1;
-            this.msegDeleteButton.disabled = isEndpoint;
-        }
     }
 
-    beginMsegInteraction(event) {
-        if (!this.msegViewport || !this.msegState) {
+    renderMsegEditor() {
+        if (!this.msegState) {
             return;
         }
 
-        const bounds = this.msegViewport.getBoundingClientRect();
+        this.renderMsegSurface(this.msegPreviewSurface, { showPoints: false });
+        this.renderMsegSurface(this.msegModalSurface, { showPoints: true });
+    }
+
+    beginMsegInteraction(event) {
+        if (!this.isMsegModalOpen || !this.msegModalSurface?.viewport || !this.msegState) {
+            return;
+        }
+
+        const bounds = this.msegModalSurface.viewport.getBoundingClientRect();
+        const editorOptions = getMsegEditorInteractionOptions(
+            this.getMsegSurfaceOrientation(this.msegModalSurface, { showPoints: true })
+        );
         const targetPointIndex = findMsegPointHitIndex(
             this.msegState.shape,
             event.clientX - bounds.left,
             event.clientY - bounds.top,
             bounds.width,
-            bounds.height
+            bounds.height,
+            undefined,
+            editorOptions
         );
 
         if (targetPointIndex >= 0) {
             this.selectedMsegPointIndex = targetPointIndex;
-            this.activeMsegDrag = {
+            this.activeMsegPointer = {
                 pointerId: event.pointerId,
                 pointIndex: this.selectedMsegPointIndex,
+                startClientX: event.clientX,
+                startClientY: event.clientY,
+                moved: false,
+                deleteOnRelease:
+                    targetPointIndex > 0 &&
+                    targetPointIndex < this.msegState.shape.points.length - 1,
             };
             this.renderMsegEditor();
-            this.msegViewport.setPointerCapture?.(event.pointerId);
+            this.msegModalSurface.viewport.setPointerCapture?.(event.pointerId);
             event.preventDefault?.();
             return;
         }
 
-        const point = editorCoordinatesToPoint(event.clientX, event.clientY, bounds);
+        const point = msegEditorCoordinatesToPoint(
+            event.clientX - bounds.left,
+            event.clientY - bounds.top,
+            bounds.width,
+            bounds.height,
+            editorOptions
+        );
         this.msegController?.addPoint(point.x, point.y);
         const points = this.msegController?.getState().shape.points ?? [];
         this.selectedMsegPointIndex = points.findIndex(
@@ -1669,51 +2490,59 @@ export class CosimoSynthView extends HTMLElement {
     }
 
     updateMsegInteraction(event) {
-        if (!this.activeMsegDrag || !this.msegViewport) {
+        if (!this.activeMsegPointer || !this.msegModalSurface?.viewport) {
             return;
         }
 
-        if (event.pointerId !== this.activeMsegDrag.pointerId) {
+        if (event.pointerId !== this.activeMsegPointer.pointerId) {
             return;
         }
 
-        const bounds = this.msegViewport.getBoundingClientRect();
-        const point = editorCoordinatesToPoint(event.clientX, event.clientY, bounds);
-        this.msegController?.movePoint(this.activeMsegDrag.pointIndex, point.x, point.y);
-        this.selectedMsegPointIndex = this.activeMsegDrag.pointIndex;
+        const movementDistance = Math.hypot(
+            event.clientX - this.activeMsegPointer.startClientX,
+            event.clientY - this.activeMsegPointer.startClientY
+        );
+
+        if (!this.activeMsegPointer.moved && movementDistance < MSEG_DRAG_THRESHOLD_PX) {
+            return;
+        }
+
+        const bounds = this.msegModalSurface.viewport.getBoundingClientRect();
+        const point = msegEditorCoordinatesToPoint(
+            event.clientX - bounds.left,
+            event.clientY - bounds.top,
+            bounds.width,
+            bounds.height,
+            getMsegEditorInteractionOptions(
+                this.getMsegSurfaceOrientation(this.msegModalSurface, { showPoints: true })
+            )
+        );
+        this.activeMsegPointer.moved = true;
+        this.msegController?.movePoint(this.activeMsegPointer.pointIndex, point.x, point.y);
+        this.selectedMsegPointIndex = this.activeMsegPointer.pointIndex;
         event.preventDefault?.();
     }
 
     endMsegInteraction(event) {
-        if (!this.activeMsegDrag || event.pointerId !== this.activeMsegDrag.pointerId) {
+        if (!this.activeMsegPointer || event.pointerId !== this.activeMsegPointer.pointerId) {
             return;
         }
 
-        this.msegViewport?.releasePointerCapture?.(event.pointerId);
-        this.activeMsegDrag = null;
-        event.preventDefault?.();
-    }
+        const pointerState = this.activeMsegPointer;
+        this.msegModalSurface.viewport.releasePointerCapture?.(event.pointerId);
+        this.activeMsegPointer = null;
 
-    deleteSelectedMsegPoint() {
-        if (!this.msegController || !this.msegState) {
-            return;
+        if (!pointerState.moved && pointerState.deleteOnRelease && this.msegController) {
+            this.msegController.deletePoint(pointerState.pointIndex);
+            this.selectedMsegPointIndex = clamp(
+                pointerState.pointIndex - 1,
+                0,
+                this.msegController.getState().shape.points.length - 1
+            );
         }
 
-        const isEndpoint =
-            this.selectedMsegPointIndex === 0 ||
-            this.selectedMsegPointIndex === this.msegState.shape.points.length - 1;
-
-        if (isEndpoint) {
-            return;
-        }
-
-        this.msegController.deletePoint(this.selectedMsegPointIndex);
-        this.selectedMsegPointIndex = clamp(
-            this.selectedMsegPointIndex - 1,
-            0,
-            this.msegController.getState().shape.points.length - 1
-        );
         this.renderMsegEditor();
+        event.preventDefault?.();
     }
 
     setDisplayState(state, message) {
@@ -1805,7 +2634,10 @@ export class CosimoSynthView extends HTMLElement {
 
     nudgeKeyboardOctave(offset) {
         this.setKeyboardRootNote(this.keyboardRootNote + offset);
-        this.focusKeyboard();
+
+        if (this.options.platform !== "ios") {
+            this.focusKeyboard();
+        }
     }
 
     syncKeyboardGeometry() {
@@ -1859,7 +2691,10 @@ export class CosimoSynthView extends HTMLElement {
         this.keyboard.setAttribute("root-note", String(this.keyboardRootNote));
         this.keyboard.setAttribute("note-count", `${this.currentLayout.noteCount}`);
         this.keyboard.attachToPatchConnection?.(this.patchConnection, midiInputEndpointID);
-        this.keyboard.addEventListener("mousedown", () => this.focusKeyboard(), { passive: true });
+
+        if (this.options.platform !== "ios") {
+            this.keyboard.addEventListener("mousedown", () => this.focusKeyboard(), { passive: true });
+        }
 
         this.keyboardHost.innerHTML = "";
         this.keyboardHost.appendChild(this.keyboard);
@@ -1867,7 +2702,10 @@ export class CosimoSynthView extends HTMLElement {
         this.syncKeyboardGeometry();
         requestAnimationFrame(() => {
             this.syncKeyboardGeometry();
-            this.focusKeyboard();
+
+            if (this.options.platform !== "ios") {
+                this.focusKeyboard();
+            }
         });
         this.keyboardStyle = keyboardStyle;
         this.keyboardNoteCount = this.currentLayout.noteCount;
@@ -2232,6 +3070,7 @@ export class CosimoSynthView extends HTMLElement {
                     height: 100%;
                     background: #02040b;
                     color: #f3f0ff;
+                    ${buildThemeCSSVariablesBlock()}
                     --cosimo-panel-padding: 18px;
                     --cosimo-card-padding: 18px;
                     --cosimo-section-gap: 16px;
@@ -2252,6 +3091,7 @@ export class CosimoSynthView extends HTMLElement {
                 .card {
                     width: 100%;
                     height: 100%;
+                    position: relative;
                     border: 1px solid rgba(122, 142, 255, 0.18);
                     border-radius: 18px;
                     background: rgba(4, 7, 18, 0.96);
@@ -2443,29 +3283,29 @@ export class CosimoSynthView extends HTMLElement {
                     border-radius: 16px;
                     border: 1px solid rgba(122, 142, 255, 0.12);
                     background: rgba(5, 8, 20, 0.88);
-                    padding: 14px;
+                    padding: 12px 14px;
                     display: grid;
-                    gap: 12px;
+                    gap: 0;
                 }
 
                 .play-grid {
                     display: grid;
-                    grid-template-columns: repeat(3, minmax(0, 1fr));
+                    grid-template-columns: minmax(160px, 210px) minmax(0, 1fr);
                     gap: 12px;
-                    align-items: end;
+                    align-items: center;
                 }
 
                 .play-field {
                     display: grid;
-                    gap: 6px;
+                    gap: 0;
                     min-width: 0;
                 }
 
-                .play-field-label {
-                    font-size: 10px;
-                    letter-spacing: 0.1em;
-                    text-transform: uppercase;
-                    color: rgba(194, 202, 255, 0.72);
+                .glide-field-body {
+                    display: grid;
+                    grid-template-columns: minmax(0, 1fr) auto;
+                    gap: 12px;
+                    align-items: center;
                 }
 
                 .play-select {
@@ -2487,6 +3327,7 @@ export class CosimoSynthView extends HTMLElement {
                     font-size: 12px;
                     letter-spacing: 0.08em;
                     color: #87d7f5;
+                    white-space: nowrap;
                 }
 
                 .control-heading {
@@ -2659,87 +3500,7 @@ export class CosimoSynthView extends HTMLElement {
                     cursor: grab;
                 }
 
-                .mseg-point.selected {
-                    fill: #f56cb6;
-                }
-
-                .mseg-controls {
-                    display: grid;
-                    grid-template-columns: minmax(0, 1fr) auto;
-                    gap: 12px;
-                    align-items: center;
-                }
-
-                .mseg-playback-controls {
-                    display: grid;
-                    grid-template-columns: minmax(0, 1fr) auto;
-                    gap: 12px;
-                    align-items: center;
-                }
-
-                .mseg-rate {
-                    display: grid;
-                    gap: 6px;
-                }
-
-                .mseg-depth {
-                    display: grid;
-                    gap: 6px;
-                }
-
-                .mseg-depth-label {
-                    font-size: 10px;
-                    letter-spacing: 0.1em;
-                    text-transform: uppercase;
-                    color: rgba(194, 202, 255, 0.72);
-                }
-
-                .mseg-rate-slider,
-                .mseg-depth-slider {
-                    width: 100%;
-                }
-
-                .mseg-playback-meta {
-                    display: grid;
-                    gap: 8px;
-                    justify-items: end;
-                }
-
-                .mseg-rate-readout {
-                    font-family: "SF Mono", "IBM Plex Mono", Menlo, monospace;
-                    font-size: 12px;
-                    letter-spacing: 0.08em;
-                    color: #87d7f5;
-                }
-
-                .mseg-loop {
-                    display: inline-flex;
-                    align-items: center;
-                    gap: 8px;
-                    font-size: 11px;
-                    letter-spacing: 0.08em;
-                    text-transform: uppercase;
-                    color: rgba(212, 220, 230, 0.76);
-                }
-
-                .mseg-loop-toggle {
-                    margin: 0;
-                }
-
-                .mseg-delete-point {
-                    border: 1px solid rgba(245, 108, 182, 0.28);
-                    border-radius: 10px;
-                    background: rgba(245, 108, 182, 0.08);
-                    color: #ffd8e8;
-                    padding: 10px 12px;
-                    font-size: 12px;
-                    letter-spacing: 0.08em;
-                    text-transform: uppercase;
-                }
-
-                .mseg-delete-point:disabled {
-                    opacity: 0.45;
-                }
+                ${getMsegStyles("desktop")}
             </style>
 
             <div class="panel">
@@ -2780,70 +3541,21 @@ export class CosimoSynthView extends HTMLElement {
                     </div>
 
                     <div class="play-panel">
-                        <div class="control-heading">Voice Routing</div>
                         <div class="play-grid">
-                            <label class="play-field">
-                                <span class="play-field-label">Play Mode</span>
-                                <select class="play-select play-mode-select">${buildSelectOptionsHTML(PLAY_MODE_OPTIONS)}</select>
+                            <label class="play-field" aria-label="Voice mode">
+                                <select class="play-select play-mode-select" aria-label="Voice mode">${buildSelectOptionsHTML(PLAY_MODE_OPTIONS)}</select>
                             </label>
-                            <label class="play-field">
-                                <span class="play-field-label">Note Priority</span>
-                                <select class="play-select note-priority-select">${buildSelectOptionsHTML(NOTE_PRIORITY_OPTIONS)}</select>
-                            </label>
-                            <label class="play-field">
-                                <span class="play-field-label">Glide Time</span>
-                                <input class="glide-time-slider" type="range" min="0" max="2" step="0.001" value="0.000" />
-                                <div class="glide-time-readout" data-role="glide-time-readout">0.000 s</div>
+                            <label class="play-field" aria-label="Glide time">
+                                <div class="glide-field-body">
+                                    <input class="glide-time-slider" type="range" min="0" max="2" step="0.001" value="0.000" aria-label="Glide time" />
+                                    <div class="glide-time-readout" data-role="glide-time-readout">0.000 s</div>
+                                </div>
                             </label>
                         </div>
                     </div>
 
-                    <div class="mseg-panel">
-                        <div class="mseg-header">
-                            <div class="mseg-title">
-                                <div class="title">MSEG 1</div>
-                                <strong>Fixed Wavetable Route</strong>
-                            </div>
-                            <div class="mseg-depth-readout" data-role="mseg-depth-readout">1.000</div>
-                        </div>
-
-                        <div class="mseg-editor-shell">
-                            <svg class="mseg-editor" viewBox="0 0 600 180" preserveAspectRatio="none">
-                                <g class="mseg-grid">
-                                    <line x1="0" y1="45" x2="600" y2="45"></line>
-                                    <line x1="0" y1="90" x2="600" y2="90"></line>
-                                    <line x1="0" y1="135" x2="600" y2="135"></line>
-                                    <line x1="150" y1="0" x2="150" y2="180"></line>
-                                    <line x1="300" y1="0" x2="300" y2="180"></line>
-                                    <line x1="450" y1="0" x2="450" y2="180"></line>
-                                </g>
-                                <path class="mseg-curve"></path>
-                                <g class="mseg-points"></g>
-                            </svg>
-                        </div>
-
-                        <div class="mseg-playback-controls">
-                            <label class="mseg-rate">
-                                <span class="mseg-depth-label">Rate In Seconds</span>
-                                <input class="mseg-rate-slider" type="range" min="0.05" max="8" step="0.001" value="1.000" />
-                            </label>
-                            <div class="mseg-playback-meta">
-                                <div class="mseg-rate-readout" data-role="mseg-rate-readout">1.000 s</div>
-                                <label class="mseg-loop">
-                                    <input class="mseg-loop-toggle" type="checkbox" checked />
-                                    <span>Loop Full Shape</span>
-                                </label>
-                            </div>
-                        </div>
-
-                        <div class="mseg-controls">
-                            <label class="mseg-depth">
-                                <span class="mseg-depth-label">Depth To Wavetable Position</span>
-                                <input class="mseg-depth-slider" type="range" min="-1" max="1" step="0.001" value="1.000" />
-                            </label>
-                            <button class="mseg-delete-point" type="button">Delete Point</button>
-                        </div>
-                    </div>
+                    ${buildMsegLauncherHTML()}
+                    ${buildMsegModalHTML()}
 
                     <div class="keyboard-host"></div>
                     <div class="hint">Connecting the keyboard to the synth…</div>
@@ -2861,6 +3573,7 @@ export class CosimoSynthView extends HTMLElement {
 
                 :host {
                     display: block;
+                    box-sizing: border-box;
                     width: 100%;
                     height: 100%;
                     min-height: 100dvh;
@@ -2868,27 +3581,66 @@ export class CosimoSynthView extends HTMLElement {
                     overscroll-behavior: none;
                     background: #04070f;
                     color: #eef2f5;
+                    ${buildThemeCSSVariablesBlock()}
                     font-family: "SF Pro Display", "SF Pro Text", -apple-system, BlinkMacSystemFont, "Avenir Next", sans-serif;
                     --cosimo-section-gap: 12px;
                     --cosimo-stage-min-height: 248px;
                     --cosimo-keyboard-height: 122px;
                     --cosimo-control-height: 54px;
+                    --cosimo-ios-top-inset: 50px;
+                    --cosimo-ios-bottom-inset: 20px;
+                    --cosimo-ios-safe-top: calc(env(safe-area-inset-top) + var(--cosimo-ios-top-inset));
+                    --cosimo-ios-safe-bottom: calc(env(safe-area-inset-bottom) + var(--cosimo-ios-bottom-inset));
+                    --cosimo-bottom-safe-area: env(safe-area-inset-bottom);
                 }
 
                 .ios-shell {
+                    box-sizing: border-box;
                     width: 100%;
                     height: 100%;
                     min-height: 100dvh;
+                    padding:
+                        var(--cosimo-ios-safe-top)
+                        env(safe-area-inset-right)
+                        var(--cosimo-ios-safe-bottom)
+                        env(safe-area-inset-left);
                     min-width: 0;
                     display: grid;
                     grid-template-rows: minmax(0, 1fr) auto;
                 }
 
+                .ios-top-row {
+                    position: relative;
+                    display: grid;
+                    grid-template-columns: minmax(0, 1fr);
+                    grid-template-rows: minmax(0, 1fr);
+                    min-height: 0;
+                    overflow: hidden;
+                }
+
+                .ios-main-view {
+                    display: grid;
+                    min-height: 0;
+                    grid-column: 1;
+                    grid-row: 1;
+                }
+
+                .mseg-modal-layer {
+                    grid-column: 1;
+                    grid-row: 1;
+                    min-height: 0;
+                }
+
                 .ios-scroll {
+                    height: 100%;
                     min-height: 0;
                     overflow-y: auto;
                     overscroll-behavior: contain;
                     -webkit-overflow-scrolling: touch;
+                }
+
+                :host([mseg-modal-open]) .ios-main-view {
+                    display: none;
                 }
 
                 .ios-content {
@@ -2896,11 +3648,7 @@ export class CosimoSynthView extends HTMLElement {
                     min-width: 0;
                     align-content: start;
                     gap: 16px;
-                    padding:
-                        max(12px, env(safe-area-inset-top))
-                        max(16px, env(safe-area-inset-right))
-                        18px
-                        max(16px, env(safe-area-inset-left));
+                    padding: 0 16px;
                 }
 
                 .wavetable-panel,
@@ -3118,15 +3866,13 @@ export class CosimoSynthView extends HTMLElement {
                 }
 
                 .keyboard-footer {
+                    position: relative;
+                    z-index: 1;
                     display: grid;
-                    gap: 10px;
-                    padding:
-                        10px
-                        max(16px, env(safe-area-inset-right))
-                        max(10px, env(safe-area-inset-bottom))
-                        max(16px, env(safe-area-inset-left));
+                    gap: 0;
+                    padding: 0 12px;
                     border-top: 0;
-                    background: transparent;
+                    background: #04070f;
                     box-shadow: none;
                 }
 
@@ -3176,12 +3922,12 @@ export class CosimoSynthView extends HTMLElement {
                 .keyboard {
                     width: 100%;
                     height: var(--cosimo-keyboard-height);
-                    border-radius: 14px 14px 18px 18px;
+                    border-radius: 14px 14px 0 0;
                     overflow: hidden;
                     background:
                         linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 18%),
                         linear-gradient(180deg, rgba(10, 13, 18, 0.68), rgba(7, 9, 13, 0.92));
-                    padding: 6px 6px 8px;
+                    padding: 6px 6px 0;
                     touch-action: none;
                 }
 
@@ -3194,32 +3940,28 @@ export class CosimoSynthView extends HTMLElement {
                 .play-panel {
                     display: grid;
                     min-width: 0;
-                    gap: 10px;
+                    gap: 0;
                 }
 
                 .play-grid {
                     display: grid;
                     min-width: 0;
-                    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+                    grid-template-columns: minmax(132px, 160px) minmax(0, 1fr);
                     gap: 10px;
-                    align-items: end;
+                    align-items: center;
                 }
 
                 .play-field {
                     display: grid;
                     min-width: 0;
-                    gap: 6px;
+                    gap: 0;
                 }
 
-                .play-field.wide {
-                    grid-column: 1 / -1;
-                }
-
-                .play-field-label {
-                    font-size: 10px;
-                    color: rgba(212, 220, 230, 0.42);
-                    letter-spacing: 0.12em;
-                    text-transform: uppercase;
+                .glide-field-body {
+                    display: grid;
+                    grid-template-columns: minmax(0, 1fr) auto;
+                    gap: 10px;
+                    align-items: center;
                 }
 
                 .play-select {
@@ -3242,6 +3984,7 @@ export class CosimoSynthView extends HTMLElement {
                     font-size: 12px;
                     color: #87d7f5;
                     letter-spacing: 0.08em;
+                    white-space: nowrap;
                 }
 
                 .mseg-head {
@@ -3304,26 +4047,6 @@ export class CosimoSynthView extends HTMLElement {
                     stroke-width: 2;
                 }
 
-                .mseg-point.selected {
-                    fill: #f56cb6;
-                }
-
-                .mseg-controls {
-                    display: grid;
-                    min-width: 0;
-                    grid-template-columns: minmax(0, 1fr) auto;
-                    gap: 10px;
-                    align-items: center;
-                }
-
-                .mseg-playback-controls {
-                    display: grid;
-                    min-width: 0;
-                    grid-template-columns: minmax(0, 1fr) auto;
-                    gap: 10px;
-                    align-items: center;
-                }
-
                 @media (max-height: 720px) {
                     .ios-content {
                         gap: 14px;
@@ -3334,183 +4057,76 @@ export class CosimoSynthView extends HTMLElement {
                     }
                 }
 
-                .mseg-depth {
-                    display: grid;
-                    gap: 6px;
-                }
-
-                .mseg-rate {
-                    display: grid;
-                    gap: 6px;
-                }
-
-                .mseg-depth-label {
-                    font-size: 10px;
-                    color: rgba(212, 220, 230, 0.42);
-                    letter-spacing: 0.12em;
-                    text-transform: uppercase;
-                }
-
-                .mseg-rate-slider,
-                .mseg-depth-slider {
-                    width: 100%;
-                }
-
-                .mseg-playback-meta {
-                    display: grid;
-                    gap: 8px;
-                    justify-items: end;
-                }
-
-                .mseg-rate-readout {
-                    font-family: "SF Mono", "IBM Plex Mono", Menlo, monospace;
-                    font-size: 12px;
-                    color: #87d7f5;
-                    letter-spacing: 0.08em;
-                }
-
-                .mseg-loop {
-                    display: inline-flex;
-                    align-items: center;
-                    gap: 8px;
-                    font-size: 11px;
-                    letter-spacing: 0.08em;
-                    text-transform: uppercase;
-                    color: rgba(212, 220, 230, 0.7);
-                }
-
-                .mseg-loop-toggle {
-                    margin: 0;
-                }
-
-                .mseg-delete-point {
-                    border: 1px solid rgba(245, 108, 182, 0.28);
-                    border-radius: 10px;
-                    background: rgba(245, 108, 182, 0.08);
-                    color: #ffd8e8;
-                    padding: 10px 12px;
-                    font-size: 12px;
-                    letter-spacing: 0.08em;
-                    text-transform: uppercase;
-                }
-
-                .mseg-delete-point:disabled {
-                    opacity: 0.45;
-                }
+                ${getMsegStyles("ios")}
             </style>
 
             <div class="ios-shell">
-                <div class="ios-scroll">
-                    <div class="ios-content">
-                        <div class="wavetable-panel">
-                            <div class="wavetable-stage" data-state="loading">
-                                <div class="wavetable-display-stack">
-                                    <div class="wavetable-layer">
-                                        <canvas class="wavetable-canvas"></canvas>
+                <div class="ios-top-row">
+                    <div class="ios-main-view">
+                        <div class="ios-scroll">
+                            <div class="ios-content">
+                            <div class="wavetable-panel">
+                                <div class="wavetable-stage" data-state="loading">
+                                    <div class="wavetable-display-stack">
+                                        <div class="wavetable-layer">
+                                            <canvas class="wavetable-canvas"></canvas>
+                                        </div>
+                                        <div class="wavetable-layer">
+                                            <canvas class="wavetable-canvas"></canvas>
+                                        </div>
                                     </div>
-                                    <div class="wavetable-layer">
-                                        <canvas class="wavetable-canvas"></canvas>
+                                    <div class="display-overlay">Loading wavetable bank…</div>
+                                    <div class="stage-copy">
+                                        <div class="stage-copy-row">
+                                            <div class="mini-label active">Wavescan</div>
+                                            <div class="display-status" data-role="display-status">Loading wavetable bank…</div>
+                                            <div class="shape-readout" data-role="hero-frame-readout">01/16</div>
+                                        </div>
+                                        <div class="table-error-banner" data-role="table-error-banner" hidden></div>
+                                        <div></div>
+                                        <div class="stage-copy-row">
+                                            <label class="bank-picker-trigger">
+                                                <div class="bank-readout">Factory bank</div>
+                                                <select class="table-select table-select-overlay" aria-label="Select wavetable"></select>
+                                            </label>
+                                            <button class="table-retry-button" type="button" hidden>Retry</button>
+                                            <div class="mini-label warm" data-role="stage-gesture-hint">Swipe + Drag</div>
+                                        </div>
                                     </div>
                                 </div>
-                                <div class="display-overlay">Loading wavetable bank…</div>
-                                <div class="stage-copy">
-                                    <div class="stage-copy-row">
-                                        <div class="mini-label active">Wavescan</div>
-                                        <div class="display-status" data-role="display-status">Loading wavetable bank…</div>
-                                        <div class="shape-readout" data-role="hero-frame-readout">01/16</div>
-                                    </div>
-                                    <div class="table-error-banner" data-role="table-error-banner" hidden></div>
-                                    <div></div>
-                                    <div class="stage-copy-row">
-                                        <label class="bank-picker-trigger">
-                                            <div class="bank-readout">Factory bank</div>
-                                            <select class="table-select table-select-overlay" aria-label="Select wavetable"></select>
-                                        </label>
-                                        <button class="table-retry-button" type="button" hidden>Retry</button>
-                                        <div class="mini-label warm" data-role="stage-gesture-hint">Swipe + Drag</div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="play-panel">
-                            <div class="section-label">Voice Routing</div>
-                            <div class="play-grid">
-                                <label class="play-field">
-                                    <span class="play-field-label">Play Mode</span>
-                                    <select class="play-select play-mode-select">${buildSelectOptionsHTML(PLAY_MODE_OPTIONS)}</select>
-                                </label>
-                                <label class="play-field">
-                                    <span class="play-field-label">Note Priority</span>
-                                    <select class="play-select note-priority-select">${buildSelectOptionsHTML(NOTE_PRIORITY_OPTIONS)}</select>
-                                </label>
-                                <label class="play-field wide">
-                                    <span class="play-field-label">Glide Time</span>
-                                    <input class="glide-time-slider" type="range" min="0" max="2" step="0.001" value="0.000" />
-                                    <div class="glide-time-readout" data-role="glide-time-readout">0.000 s</div>
-                                </label>
-                            </div>
-                        </div>
-
-                        <div class="mseg-panel">
-                            <div class="mseg-head">
-                                <div class="mseg-title">
-                                    <div class="section-label">MSEG 1</div>
-                                    <strong>Fixed Wavetable Route</strong>
-                                </div>
-
-                                <div class="mseg-depth-readout" data-role="mseg-depth-readout">1.000</div>
                             </div>
 
-                            <div class="mseg-editor-shell">
-                                <svg class="mseg-editor" viewBox="0 0 600 156" preserveAspectRatio="none">
-                                    <g class="mseg-grid">
-                                        <line x1="0" y1="39" x2="600" y2="39"></line>
-                                        <line x1="0" y1="78" x2="600" y2="78"></line>
-                                        <line x1="0" y1="117" x2="600" y2="117"></line>
-                                        <line x1="150" y1="0" x2="150" y2="156"></line>
-                                        <line x1="300" y1="0" x2="300" y2="156"></line>
-                                        <line x1="450" y1="0" x2="450" y2="156"></line>
-                                    </g>
-                                    <path class="mseg-curve"></path>
-                                    <g class="mseg-points"></g>
-                                </svg>
-                            </div>
-
-                            <div class="mseg-playback-controls">
-                                <label class="mseg-rate">
-                                    <span class="mseg-depth-label">Rate In Seconds</span>
-                                    <input class="mseg-rate-slider" type="range" min="0.05" max="8" step="0.001" value="1.000" />
-                                </label>
-                                <div class="mseg-playback-meta">
-                                    <div class="mseg-rate-readout" data-role="mseg-rate-readout">1.000 s</div>
-                                    <label class="mseg-loop">
-                                        <input class="mseg-loop-toggle" type="checkbox" checked />
-                                        <span>Loop Full Shape</span>
+                            <div class="play-panel">
+                                <div class="play-grid">
+                                    <label class="play-field" aria-label="Voice mode">
+                                        <select class="play-select play-mode-select" aria-label="Voice mode">${buildSelectOptionsHTML(PLAY_MODE_OPTIONS)}</select>
+                                    </label>
+                                    <label class="play-field" aria-label="Glide time">
+                                        <div class="glide-field-body">
+                                            <input class="glide-time-slider" type="range" min="0" max="2" step="0.001" value="0.000" aria-label="Glide time" />
+                                            <div class="glide-time-readout" data-role="glide-time-readout">0.000 s</div>
+                                        </div>
                                     </label>
                                 </div>
                             </div>
 
-                            <div class="mseg-controls">
-                                <label class="mseg-depth">
-                                    <span class="mseg-depth-label">Depth To Wavetable Position</span>
-                                    <input class="mseg-depth-slider" type="range" min="-1" max="1" step="0.001" value="1.000" />
-                                </label>
-                                <button class="mseg-delete-point" type="button">Delete Point</button>
+                            ${buildMsegLauncherHTML()}
+
+                            <div class="keyboard-toolbar">
+                                <div class="octave-controls">
+                                    <button class="octave-button octave-down" type="button">Oct -</button>
+                                    <div class="octave-readout" data-role="octave-readout">C3 - C5</div>
+                                    <button class="octave-button octave-up" type="button">Oct +</button>
+                                </div>
+                            </div>
                             </div>
                         </div>
                     </div>
+
+                    ${buildMsegModalHTML()}
                 </div>
 
                 <div class="keyboard-footer">
-                    <div class="keyboard-toolbar">
-                        <div class="octave-controls">
-                            <button class="octave-button octave-down" type="button">Oct -</button>
-                            <div class="octave-readout" data-role="octave-readout">C3 - C5</div>
-                            <button class="octave-button octave-up" type="button">Oct +</button>
-                        </div>
-                    </div>
-
                     <div class="keyboard-host"></div>
                 </div>
             </div>

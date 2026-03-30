@@ -19,6 +19,7 @@ import {
     drawWavetableModel,
     CanvasWavetableDisplay,
 } from "../patch_gui/wavetable-display.mjs";
+import { DEFAULT_PATCH_THEME, getPatchThemeCSSVariables } from "../patch_gui/theme.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 
@@ -226,6 +227,147 @@ async function loadPatchViewModule() {
     }
 
     return patchViewModulePromise;
+}
+
+function createMetricElement({
+    className = "",
+    tagName = "DIV",
+    rect = { top: 0, left: 0, right: 0, bottom: 0, width: 0, height: 0 },
+    children = [],
+    computedStyle = {},
+    queries = {},
+} = {}) {
+    return {
+        className,
+        tagName,
+        children,
+        computedStyle: {
+            display: "block",
+            position: "static",
+            top: "auto",
+            right: "auto",
+            bottom: "auto",
+            left: "auto",
+            width: `${rect.width}px`,
+            height: `${rect.height}px`,
+            minHeight: "0px",
+            maxWidth: "none",
+            overflow: "visible",
+            overflowY: "visible",
+            gridRow: "auto",
+            gridTemplateRows: "none",
+            alignSelf: "stretch",
+            ...computedStyle,
+        },
+        getBoundingClientRect() {
+            return rect;
+        },
+        querySelector(selector) {
+            return queries[selector] ?? null;
+        },
+    };
+}
+
+const VOID_HTML_TAGS = new Set([
+    "area",
+    "base",
+    "br",
+    "col",
+    "embed",
+    "hr",
+    "img",
+    "input",
+    "link",
+    "meta",
+    "param",
+    "source",
+    "track",
+    "wbr",
+]);
+
+function parseHTMLTree(html) {
+    const root = {
+        tagName: "#root",
+        attributes: {},
+        classList: [],
+        children: [],
+        parent: null,
+    };
+    const stack = [root];
+    const tagPattern = /<\/?([a-zA-Z0-9-]+)([^>]*)>/g;
+    let match;
+
+    while ((match = tagPattern.exec(html))) {
+        const fullTag = match[0];
+        const tagName = match[1].toLowerCase();
+
+        if (fullTag.startsWith("</")) {
+            while (stack.length > 1) {
+                const current = stack.pop();
+
+                if (current.tagName === tagName) {
+                    break;
+                }
+            }
+
+            continue;
+        }
+
+        const attributes = {};
+        const attributePattern = /([^\s=/>]+)(?:="([^"]*)")?/g;
+        let attributeMatch;
+
+        while ((attributeMatch = attributePattern.exec(match[2] ?? ""))) {
+            const [, name, value = ""] = attributeMatch;
+            attributes[name] = value;
+        }
+
+        const node = {
+            tagName,
+            attributes,
+            classList: (attributes.class ?? "").split(/\s+/).filter(Boolean),
+            children: [],
+            parent: stack[stack.length - 1] ?? null,
+        };
+
+        node.parent.children.push(node);
+
+        if (!fullTag.endsWith("/>") && !VOID_HTML_TAGS.has(tagName)) {
+            stack.push(node);
+        }
+    }
+
+    return root;
+}
+
+function findFirstHTMLNode(node, predicate) {
+    if (predicate(node)) {
+        return node;
+    }
+
+    for (const child of node.children) {
+        const match = findFirstHTMLNode(child, predicate);
+
+        if (match) {
+            return match;
+        }
+    }
+
+    return null;
+}
+
+function hasAncestorHTMLNode(node, predicate) {
+    let current = node?.parent ?? null;
+
+    while (current) {
+        if (predicate(current)) {
+            return true;
+        }
+
+        current = current.parent ?? null;
+    }
+
+    return false;
 }
 
 async function loadCurrentBank() {
@@ -582,13 +724,22 @@ test("view playback controls mirror the current MSEG seconds rate and full-shape
     };
     view.msegRateInput = { value: "" };
     view.msegRateReadout = { textContent: "" };
-    view.msegLoopToggle = { checked: false };
+    view.msegLauncherRateReadout = { textContent: "" };
+    view.msegLauncherLoopReadout = { textContent: "" };
+    view.msegLoopButton = {
+        attributes: {},
+        setAttribute(name, value) {
+            this.attributes[name] = value;
+        },
+    };
 
     view.syncMsegPlaybackControls();
 
     assert.equal(view.msegRateInput.value, "0.250");
     assert.equal(view.msegRateReadout.textContent, "0.250 s");
-    assert.equal(view.msegLoopToggle.checked, true);
+    assert.equal(view.msegLauncherRateReadout.textContent, "0.250 s");
+    assert.equal(view.msegLauncherLoopReadout.textContent, "Loop On");
+    assert.equal(view.msegLoopButton.attributes["aria-pressed"], "true");
 });
 
 test("view rate input updates the controller playback seconds while preserving loop state", async () => {
@@ -637,7 +788,6 @@ test("view loop toggle switches between full-shape looping and one-shot playback
             legatoRestarts: false,
         },
     };
-    view.msegLoopToggle = { checked: true };
     view.msegController = {
         setPlayback(playback) {
             updatedPlaybacks.push(playback);
@@ -646,7 +796,6 @@ test("view loop toggle switches between full-shape looping and one-shot playback
 
     view.handleMsegLoopInput();
     view.msegState = { playback: updatedPlaybacks[0] };
-    view.msegLoopToggle.checked = false;
     view.handleMsegLoopInput();
 
     assert.deepEqual(updatedPlaybacks, [
@@ -665,6 +814,470 @@ test("view loop toggle switches between full-shape looping and one-shot playback
             legatoRestarts: false,
         },
     ]);
+});
+
+test("view can open and close the reusable mseg modal without touching the keyboard row", async () => {
+    const { CosimoSynthView } = await loadPatchViewModule();
+    const toggledAttributes = new Map();
+    const view = Object.create(CosimoSynthView.prototype);
+
+    view.msegModalLayer = {
+        dataset: {},
+        querySelector() {
+            return {
+                attributes: {},
+                setAttribute(name, value) {
+                    this.attributes[name] = value;
+                },
+            };
+        },
+    };
+    view.toggleAttribute = (name, value) => toggledAttributes.set(name, value);
+    view.renderMsegEditor = () => {};
+
+    view.openMsegModal();
+    assert.equal(view.isMsegModalOpen, true);
+    assert.equal(view.msegModalLayer.dataset.open, "true");
+    assert.equal(toggledAttributes.get("mseg-modal-open"), true);
+
+    view.closeMsegModal();
+    assert.equal(view.isMsegModalOpen, false);
+    assert.equal(view.msegModalLayer.dataset.open, "false");
+    assert.equal(toggledAttributes.get("mseg-modal-open"), false);
+});
+
+test("iPhone layout applies the safe-area gutter at the root so both the main view and keyboard footer inherit it", async () => {
+    const { CosimoSynthView } = await loadPatchViewModule();
+    const view = Object.create(CosimoSynthView.prototype);
+    const html = view.getIOSHTML();
+
+    assert.match(html, /:host\s*\{[\s\S]*box-sizing:\s*border-box;/);
+    assert.match(html, /--cosimo-ios-top-inset:\s*50px;/);
+    assert.match(html, /--cosimo-ios-bottom-inset:\s*20px;/);
+    assert.match(html, /--cosimo-ios-safe-top:\s*calc\(env\(safe-area-inset-top\)\s*\+\s*var\(--cosimo-ios-top-inset\)\);/);
+    assert.match(html, /--cosimo-ios-safe-bottom:\s*calc\(env\(safe-area-inset-bottom\)\s*\+\s*var\(--cosimo-ios-bottom-inset\)\);/);
+    assert.match(html, /\.ios-shell\s*\{[\s\S]*box-sizing:\s*border-box;/);
+    assert.match(html, /\.ios-shell\s*\{[\s\S]*padding:\s*var\(--cosimo-ios-safe-top\)\s*env\(safe-area-inset-right\)\s*var\(--cosimo-ios-safe-bottom\)\s*env\(safe-area-inset-left\);/);
+    assert.match(html, /class="ios-main-view"/);
+    assert.match(html, /\.ios-top-row\s*\{[\s\S]*overflow:\s*hidden;/);
+    assert.match(html, /\.ios-top-row\s*\{[\s\S]*display:\s*grid;/);
+    assert.match(html, /\.ios-top-row\s*\{[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\);/);
+    assert.match(html, /\.ios-top-row\s*\{[\s\S]*grid-template-rows:\s*minmax\(0,\s*1fr\);/);
+    assert.match(html, /\.ios-main-view\s*\{[\s\S]*display:\s*grid;/);
+    assert.match(html, /\.ios-main-view\s*\{[\s\S]*grid-column:\s*1;/);
+    assert.match(html, /\.ios-main-view\s*\{[\s\S]*grid-row:\s*1;/);
+    assert.match(html, /\.mseg-modal-layer\s*\{[\s\S]*grid-column:\s*1;/);
+    assert.match(html, /\.mseg-modal-layer\s*\{[\s\S]*grid-row:\s*1;/);
+    assert.match(html, /:host\(\[mseg-modal-open\]\)\s+\.ios-main-view\s*\{[\s\S]*display:\s*none;/);
+    assert.match(html, /\.keyboard-footer\s*\{[\s\S]*position:\s*relative;/);
+    assert.match(html, /\.keyboard-footer\s*\{[\s\S]*z-index:\s*1;/);
+    assert.match(html, /\.keyboard-footer\s*\{[\s\S]*background:\s*#04070f;/);
+    assert.match(html, /class="keyboard-toolbar"[\s\S]*class="keyboard-host"/);
+    assert.match(html, /\.keyboard-host\s*\{[\s\S]*min-height:\s*var\(--cosimo-keyboard-height\);/);
+    assert.match(html, /\.keyboard\s*\{[\s\S]*height:\s*var\(--cosimo-keyboard-height\);/);
+    assert.match(html, /\.keyboard\s*\{[\s\S]*border-radius:\s*14px 14px 0 0;/);
+    assert.match(html, /\.keyboard\s*\{[\s\S]*padding:\s*6px 6px 0;/);
+    assert.match(html, /\.mseg-modal\s*\{[\s\S]*grid-template-rows:\s*0 minmax\(0,\s*1fr\)\s*auto;/);
+    assert.match(html, /\.mseg-modal-copy\s*\{\s*display:\s*none;/);
+    assert.match(html, /\.mseg-modal-backdrop\s*\{[\s\S]*display:\s*none;/);
+    assert.match(html, /\.mseg-modal-layer\s*\{[\s\S]*padding:\s*0;/);
+    assert.match(html, /\.mseg-modal-layer\s*\{[\s\S]*position:\s*relative;/);
+    assert.match(html, /\.mseg-modal-layer\s*\{[\s\S]*inset:\s*auto;/);
+    assert.match(html, /\.mseg-modal\s*\{[\s\S]*position:\s*relative;/);
+    assert.match(html, /\.mseg-modal\s*\{[\s\S]*min-height:\s*100%;/);
+    assert.match(html, /\.ios-content\s*\{[\s\S]*padding:\s*0\s*16px;/);
+    assert.match(html, /\.keyboard-footer\s*\{[\s\S]*padding:\s*0\s*12px;/);
+    assert.match(html, /\.mseg-modal\s*\{[\s\S]*padding:\s*4px\s*10px\s*0;/);
+    assert.doesNotMatch(html, /\.mseg-modal\s*\{[\s\S]*position:\s*absolute;[\s\S]*inset:\s*max\(6px,\s*env\(safe-area-inset-top\)\)\s*6px\s*0\s*6px;/);
+    assert.match(html, /\.mseg-modal-footer\s*\{[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s*auto\s*auto;/);
+    assert.match(html, /\.mseg-loop-button\s*\{[\s\S]*background:\s*transparent;/);
+    assert.match(html, /class="mseg-rate-slider"[\s\S]*aria-label="MSEG time in seconds"/);
+});
+
+test("iPhone MSEG modal stays outside the hidden main view and the keyboard footer stays in the shell footer row", async () => {
+    const { CosimoSynthView } = await loadPatchViewModule();
+    const view = Object.create(CosimoSynthView.prototype);
+    const tree = parseHTMLTree(view.getIOSHTML());
+    const shell = findFirstHTMLNode(
+        tree,
+        (node) => node.classList.includes("ios-shell")
+    );
+    const topRow = findFirstHTMLNode(
+        tree,
+        (node) => node.classList.includes("ios-top-row")
+    );
+    const mainView = findFirstHTMLNode(
+        tree,
+        (node) => node.classList.includes("ios-main-view")
+    );
+    const modalLayer = findFirstHTMLNode(
+        tree,
+        (node) => node.attributes["data-role"] === "mseg-modal-layer"
+    );
+    const footer = findFirstHTMLNode(
+        tree,
+        (node) => node.classList.includes("keyboard-footer")
+    );
+
+    assert.ok(shell);
+    assert.ok(topRow);
+    assert.ok(mainView);
+    assert.ok(modalLayer);
+    assert.ok(footer);
+    assert.equal(modalLayer.parent, topRow);
+    assert.equal(hasAncestorHTMLNode(modalLayer, (node) => node === mainView), false);
+    assert.equal(footer.parent, shell);
+    assert.equal(hasAncestorHTMLNode(footer, (node) => node === topRow), false);
+});
+
+test("tap on an interior point deletes it while a drag moves it", async () => {
+    const { CosimoSynthView } = await loadPatchViewModule();
+    const deletedPoints = [];
+    const movedPoints = [];
+    const addedPoints = [];
+    const view = Object.create(CosimoSynthView.prototype);
+
+    view.isMsegModalOpen = true;
+    view.selectedMsegPointIndex = 0;
+    view.renderMsegEditor = () => {};
+    view.msegState = {
+        shape: {
+            points: [
+                { x: 0.0, y: 0.0, curvePower: 0.0 },
+                { x: 0.5, y: 0.5, curvePower: 0.0 },
+                { x: 1.0, y: 1.0, curvePower: 0.0 },
+            ],
+        },
+    };
+    view.msegController = {
+        addPoint(x, y) {
+            addedPoints.push({ x, y });
+        },
+        movePoint(pointIndex, x, y) {
+            movedPoints.push({ pointIndex, x, y });
+        },
+        deletePoint(pointIndex) {
+            deletedPoints.push(pointIndex);
+        },
+        getState() {
+            return view.msegState;
+        },
+    };
+    view.msegModalSurface = {
+        viewport: {
+            getBoundingClientRect() {
+                return { left: 0, top: 0, width: 600, height: 180 };
+            },
+            setPointerCapture() {},
+            releasePointerCapture() {},
+        },
+    };
+
+    view.beginMsegInteraction({
+        pointerId: 1,
+        clientX: 300,
+        clientY: 90,
+        preventDefault() {},
+    });
+    view.endMsegInteraction({
+        pointerId: 1,
+        preventDefault() {},
+    });
+    assert.deepEqual(deletedPoints, [1]);
+
+    view.beginMsegInteraction({
+        pointerId: 2,
+        clientX: 300,
+        clientY: 90,
+        preventDefault() {},
+    });
+    view.updateMsegInteraction({
+        pointerId: 2,
+        clientX: 340,
+        clientY: 80,
+        preventDefault() {},
+    });
+    view.endMsegInteraction({
+        pointerId: 2,
+        preventDefault() {},
+    });
+
+    assert.equal(movedPoints.length, 1);
+    assert.deepEqual(deletedPoints, [1]);
+    assert.deepEqual(addedPoints, []);
+});
+
+test("iPhone MSEG modal follows the phone orientation instead of the plot box shape", async () => {
+    const { CosimoSynthView } = await loadPatchViewModule();
+    const view = Object.create(CosimoSynthView.prototype);
+
+    view.options = { platform: "ios" };
+    view.getBoundingClientRect = () => ({ width: 390, height: 844 });
+
+    assert.equal(
+        view.getMsegSurfaceOrientation({
+            viewport: {
+                getBoundingClientRect() {
+                    return { width: 600, height: 180 };
+                },
+            },
+        }, { showPoints: true }),
+        "vertical"
+    );
+
+    view.getBoundingClientRect = () => ({ width: 844, height: 390 });
+
+    assert.equal(
+        view.getMsegSurfaceOrientation({
+            viewport: {
+                getBoundingClientRect() {
+                    return { width: 180, height: 600 };
+                },
+            },
+        }, { showPoints: true }),
+        "horizontal"
+    );
+});
+
+test("iPhone keyboard mount does not auto-focus the footer piano or install desktop mouse focus", async () => {
+    const { CosimoSynthView } = await loadPatchViewModule();
+    const view = Object.create(CosimoSynthView.prototype);
+    const focusCalls = [];
+    const originalRequestAnimationFrame = globalThis.requestAnimationFrame;
+    const originalCancelAnimationFrame = globalThis.cancelAnimationFrame;
+
+    class FakePianoKeyboard extends HTMLElement {
+        constructor() {
+            super();
+            this.classList = { add() {} };
+            this.shadowRoot = {
+                querySelector() {
+                    return {
+                        focus() {
+                            focusCalls.push("keyboard-focus");
+                        },
+                    };
+                },
+            };
+            this.listeners = [];
+        }
+
+        setAttribute() {}
+
+        attachToPatchConnection() {}
+
+        addEventListener(type) {
+            this.listeners.push(type);
+        }
+    }
+
+    try {
+        globalThis.requestAnimationFrame = (callback) => {
+            callback(0);
+            return 1;
+        };
+        globalThis.cancelAnimationFrame = () => {};
+
+        view.options = { platform: "ios" };
+        view.patchConnection = {
+            utilities: {
+                PianoKeyboard: FakePianoKeyboard,
+            },
+        };
+        view.currentLayout = {
+            keyboardNaturalNoteWidth: 22,
+            keyboardAccidentalWidth: 12,
+            noteCount: 18,
+        };
+        view.keyboardRootNote = 36;
+        view.keyboardHost = {
+            innerHTML: "",
+            appendChild(child) {
+                this.child = child;
+            },
+        };
+        view.getKeyboardStyle = () => "test-ios";
+        view.syncKeyboardGeometry = () => {};
+        view.syncKeyboardOctaveControls = () => {};
+        view.focusKeyboard = () => {
+            focusCalls.push("view-focus");
+        };
+        view.hint = { textContent: "" };
+
+        view.buildKeyboard();
+
+        assert.deepEqual(focusCalls, []);
+        assert.ok(view.keyboardHost.child);
+        assert.deepEqual(view.keyboard.listeners, []);
+    } finally {
+        globalThis.requestAnimationFrame = originalRequestAnimationFrame;
+        globalThis.cancelAnimationFrame = originalCancelAnimationFrame;
+    }
+});
+
+test("layout metrics exporter reports a whole-screen bottom gutter when the keyboard sits above the viewport bottom", async () => {
+    const { collectCosimoLayoutMetrics } = await loadPatchViewModule();
+    const keyboard = createMetricElement({
+        className: "keyboard",
+        rect: { top: 751, left: 12, right: 381, bottom: 845, width: 369, height: 94 },
+    });
+    const keyboardHost = createMetricElement({
+        className: "keyboard-host",
+        children: [keyboard],
+        rect: { top: 751, left: 12, right: 381, bottom: 845, width: 369, height: 94 },
+        queries: {
+            ".keyboard": keyboard,
+        },
+    });
+    const footer = createMetricElement({
+        className: "keyboard-footer",
+        children: [keyboardHost],
+        rect: { top: 751, left: 0, right: 393, bottom: 845, width: 393, height: 94 },
+        queries: {
+            ".keyboard-host": keyboardHost,
+            ".keyboard": keyboard,
+        },
+    });
+    const topRow = createMetricElement({
+        className: "ios-top-row",
+        rect: { top: 7, left: 0, right: 393, bottom: 751, width: 393, height: 744 },
+    });
+    const mainView = createMetricElement({
+        className: "ios-main-view",
+        rect: { top: 7, left: 0, right: 393, bottom: 751, width: 393, height: 744 },
+    });
+    const scroll = createMetricElement({
+        className: "ios-scroll",
+        rect: { top: 7, left: 0, right: 393, bottom: 751, width: 393, height: 744 },
+    });
+    const content = createMetricElement({
+        className: "ios-content",
+        rect: { top: 7, left: 0, right: 393, bottom: 751, width: 393, height: 744 },
+    });
+    const shell = createMetricElement({
+        className: "ios-shell",
+        children: [topRow, footer],
+        rect: { top: 7, left: 0, right: 393, bottom: 845, width: 393, height: 838 },
+        queries: {
+            ".ios-top-row": topRow,
+            ".ios-main-view": mainView,
+            ".ios-scroll": scroll,
+            ".ios-content": content,
+            ".keyboard-footer": footer,
+            ".keyboard-host": keyboardHost,
+            ".keyboard": keyboard,
+        },
+    });
+    const host = createMetricElement({
+        tagName: "COSIMO-SYNTH-VIEW",
+        rect: { top: 0, left: 0, right: 393, bottom: 852, width: 393, height: 852 },
+    });
+
+    host.shadowRoot = {
+        querySelector(selector) {
+            if (selector === ".ios-shell") {
+                return shell;
+            }
+
+            return shell.querySelector(selector);
+        },
+    };
+
+    const previousDocument = globalThis.document;
+    const previousWindow = globalThis.window;
+    const previousVisualViewport = globalThis.visualViewport;
+    const previousGetComputedStyle = globalThis.getComputedStyle;
+
+    globalThis.document = {
+        querySelector(selector) {
+            return selector === "cosimo-synth-view" ? host : null;
+        },
+    };
+    globalThis.window = { innerWidth: 393, innerHeight: 852, scrollX: 0, scrollY: 0 };
+    globalThis.visualViewport = { width: 393, height: 852 };
+    globalThis.getComputedStyle = (element) => element.computedStyle;
+
+    try {
+        const metrics = collectCosimoLayoutMetrics();
+
+        assert.equal(metrics.viewport.height, 852);
+        assert.equal(metrics.keyboardRect.bottom, 845);
+        assert.equal(metrics.footerRect.bottom, 845);
+        assert.equal(metrics.keyboardBottomGap, 7);
+        assert.equal(metrics.footerBottomGap, 7);
+        assert.deepEqual(metrics.footerChildren, ["keyboard-host"]);
+    } finally {
+        globalThis.document = previousDocument;
+        globalThis.window = previousWindow;
+        globalThis.visualViewport = previousVisualViewport;
+        globalThis.getComputedStyle = previousGetComputedStyle;
+    }
+});
+
+test("tap on an endpoint does not delete it and tapping empty space adds a point", async () => {
+    const { CosimoSynthView } = await loadPatchViewModule();
+    const deletedPoints = [];
+    const addedPoints = [];
+    const view = Object.create(CosimoSynthView.prototype);
+
+    view.isMsegModalOpen = true;
+    view.renderMsegEditor = () => {};
+    view.msegState = {
+        shape: {
+            points: [
+                { x: 0.0, y: 0.0, curvePower: 0.0 },
+                { x: 1.0, y: 1.0, curvePower: 0.0 },
+            ],
+        },
+    };
+    view.msegController = {
+        addPoint(x, y) {
+            addedPoints.push({ x, y });
+        },
+        deletePoint(pointIndex) {
+            deletedPoints.push(pointIndex);
+        },
+        getState() {
+            return {
+                shape: {
+                    points: [
+                        { x: 0.0, y: 0.0, curvePower: 0.0 },
+                        { x: 0.33, y: 0.66, curvePower: 0.0 },
+                        { x: 1.0, y: 1.0, curvePower: 0.0 },
+                    ],
+                },
+            };
+        },
+    };
+    view.msegModalSurface = {
+        viewport: {
+            getBoundingClientRect() {
+                return { left: 0, top: 0, width: 600, height: 180 };
+            },
+            setPointerCapture() {},
+            releasePointerCapture() {},
+        },
+    };
+
+    view.beginMsegInteraction({
+        pointerId: 1,
+        clientX: 22,
+        clientY: 158,
+        preventDefault() {},
+    });
+    view.endMsegInteraction({
+        pointerId: 1,
+        preventDefault() {},
+    });
+    assert.deepEqual(deletedPoints, []);
+
+    view.beginMsegInteraction({
+        pointerId: 2,
+        clientX: 200,
+        clientY: 60,
+        preventDefault() {},
+    });
+    assert.equal(addedPoints.length, 1);
 });
 
 test("view readout names the wavetable load failure and exposes the retry button", async () => {
@@ -878,6 +1491,8 @@ test("wavetable renderer keeps a flat shared background and no visible panel str
     assert.equal(DEFAULT_WAVETABLE_THEME.backgroundBottom, "#04070f");
     assert.deepEqual(DEFAULT_WAVETABLE_THEME.backgroundRGB, [4, 7, 15]);
     assert.equal(DEFAULT_WAVETABLE_THEME.panelStroke, "rgba(132, 149, 255, 0.0)");
+    assert.deepEqual(DEFAULT_WAVETABLE_THEME.meshColor, DEFAULT_PATCH_THEME.accentBlueRGB);
+    assert.equal(getPatchThemeCSSVariables()["--cosimo-accent-blue"], DEFAULT_PATCH_THEME.accentBlue);
 });
 
 test("keyboard geometry expands a one-and-a-half-octave range to fill the footer width", async () => {

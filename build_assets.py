@@ -27,6 +27,7 @@ PATCH_GUI_SHARED_MODULES = (
     "mseg",
     "mseg-controller",
     "responsive-layout",
+    "theme",
     "wavetable-bank",
     "wavetable-display",
 )
@@ -49,8 +50,8 @@ class SourceTableInfo:
 class PatchVariant:
     manifest_filename: str
     view_src: str
-    view_width: int
-    view_height: int
+    view_width: int | None = None
+    view_height: int | None = None
     view_resizable: bool = True
     resource_files: tuple[str, ...] = ()
 
@@ -65,8 +66,6 @@ PATCH_VARIANTS = (
     PatchVariant(
         manifest_filename="WavetableSynth.iOS.cmajorpatch",
         view_src="patch_gui/index.ios.js",
-        view_width=393,
-        view_height=648,
         resource_files=(),
     ),
 )
@@ -224,6 +223,17 @@ def update_patch_manifest(
     repo_root: Path,
     variant: PatchVariant,
 ) -> None:
+    view = {
+        "src": variant.view_src,
+        "resizable": variant.view_resizable,
+    }
+
+    if variant.view_width is not None:
+        view["width"] = variant.view_width
+
+    if variant.view_height is not None:
+        view["height"] = variant.view_height
+
     manifest = {
         "CmajorVersion": 1,
         "ID": "dev.cosimo.wavetable-synth",
@@ -240,12 +250,7 @@ def update_patch_manifest(
         "source": list(PATCH_SOURCE_FILES),
         "worker": PATCH_WORKER_SRC,
         "resources": list(variant.resource_files),
-        "view": {
-            "src": variant.view_src,
-            "width": variant.view_width,
-            "height": variant.view_height,
-            "resizable": variant.view_resizable,
-        },
+        "view": view,
     }
     (repo_root / variant.manifest_filename).write_text(
         json.dumps(manifest, indent=2) + "\n",

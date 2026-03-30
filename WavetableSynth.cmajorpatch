@@ -20,8 +20,8 @@
   "resources": [],
   "view": {
     "src": "patch_gui/index.js",
+    "resizable": true,
     "width": 1120,
-    "height": 680,
-    "resizable": true
+    "height": 680
   }
 }

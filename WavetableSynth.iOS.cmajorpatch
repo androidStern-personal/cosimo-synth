@@ -20,8 +20,6 @@
   "resources": [],
   "view": {
     "src": "patch_gui/index.ios.js",
-    "width": 393,
-    "height": 648,
     "resizable": true
   }
 }

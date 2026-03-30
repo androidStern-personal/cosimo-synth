@@ -18,8 +18,8 @@ test("iOS patch manifest keeps the synth graph but switches to the mobile editor
     const iosManifest = await loadPatchManifest("WavetableSynth.iOS.cmajorpatch");
 
     assert.equal(iosManifest.view.src, "patch_gui/index.ios.js");
-    assert.equal(iosManifest.view.width, 393);
-    assert.equal(iosManifest.view.height, 648);
+    assert.equal("width" in iosManifest.view, false);
+    assert.equal("height" in iosManifest.view, false);
     assert.equal(iosManifest.view.resizable, true);
     assert.deepEqual(iosManifest.source, desktopManifest.source);
     assert.deepEqual(desktopManifest.source, [
@@ -38,6 +38,7 @@ test("shared patch GUI .js files are generated from the .mjs source modules", as
         "responsive-layout",
         "wavetable-bank",
         "wavetable-display",
+        "theme",
         "mseg",
         "mseg-controller",
     ]) {
@@ -143,23 +144,85 @@ test("short landscape heights keep every interactive area above the minimum tap-
     assert.equal(layout.keyboardAccidentalWidth, 11);
 });
 
-test("iOS patch view uses safe-area insets instead of drawing a nested shell inside the phone screen", async () => {
+test("iOS patch view applies a root-level safe-area gutter across the whole screen", async () => {
     const source = await fs.readFile(path.join(repoRoot, "patch_gui", "index.js"), "utf8");
 
     assert.match(source, /env\(safe-area-inset-top\)/);
     assert.match(source, /env\(safe-area-inset-bottom\)/);
     assert.match(source, /env\(safe-area-inset-left\)/);
     assert.match(source, /env\(safe-area-inset-right\)/);
+    assert.match(source, /:host\s*\{[\s\S]*box-sizing:\s*border-box;/);
+    assert.match(source, /--cosimo-ios-top-inset:\s*50px;/);
+    assert.match(source, /--cosimo-ios-bottom-inset:\s*20px;/);
+    assert.match(source, /--cosimo-ios-safe-top:\s*calc\(env\(safe-area-inset-top\)\s*\+\s*var\(--cosimo-ios-top-inset\)\);/);
+    assert.match(source, /--cosimo-ios-safe-bottom:\s*calc\(env\(safe-area-inset-bottom\)\s*\+\s*var\(--cosimo-ios-bottom-inset\)\);/);
+    assert.match(source, /\.ios-shell\s*\{[\s\S]*box-sizing:\s*border-box;/);
+    assert.match(source, /\.ios-shell\s*\{[\s\S]*padding:\s*var\(--cosimo-ios-safe-top\)\s*env\(safe-area-inset-right\)\s*var\(--cosimo-ios-safe-bottom\)\s*env\(safe-area-inset-left\);/);
+    assert.match(source, /\.ios-content\s*\{[\s\S]*padding:\s*0\s*16px;/);
+    assert.match(source, /\.keyboard-footer\s*\{[\s\S]*padding:\s*0\s*12px;/);
+    assert.match(source, /\.mseg-modal\s*\{[\s\S]*padding:\s*4px\s*10px\s*0;/);
 });
 
-test("iOS patch view pins the keyboard footer and removes the separate hero and frame-scan sections", async () => {
+test("patch view only exposes Poly Mono Legato play modes and no note-priority control", async () => {
+    const source = await fs.readFile(path.join(repoRoot, "patch_gui", "index.js"), "utf8");
+
+    assert.match(source, /label:\s*"Poly"/);
+    assert.match(source, /label:\s*"Mono"/);
+    assert.match(source, /label:\s*"Legato"/);
+    assert.doesNotMatch(source, /label:\s*"Mono ST"/);
+    assert.doesNotMatch(source, /label:\s*"Mono FP"/);
+    assert.doesNotMatch(source, /label:\s*"Mono ST \+ FP"/);
+    assert.doesNotMatch(source, /Note Priority/);
+    assert.doesNotMatch(source, /Voice Routing/);
+    assert.doesNotMatch(source, />Play Mode</);
+});
+
+test("iOS host lets the patch view extend to the full screen and leaves top safe-area handling to the UI", async () => {
+    const source = await fs.readFile(
+        path.join(repoRoot, "ios_auv3", "Source", "CosimoHostViewController.mm"),
+        "utf8"
+    );
+
+    assert.match(source, /\[scrollView\.leadingAnchor constraintEqualToAnchor:self\.view\.leadingAnchor\]/);
+    assert.match(source, /\[scrollView\.trailingAnchor constraintEqualToAnchor:self\.view\.trailingAnchor\]/);
+    assert.match(source, /\[scrollView\.topAnchor constraintEqualToAnchor:self\.view\.topAnchor\]/);
+    assert.match(source, /\[scrollView\.bottomAnchor constraintEqualToAnchor:self\.view\.bottomAnchor\]/);
+    assert.match(source, /\[editorLabel\.topAnchor constraintEqualToAnchor:self\.editorOverlayView\.safeAreaLayoutGuide\.topAnchor constant:12\.0\]/);
+    assert.match(source, /\[self\.editorContentView\.leadingAnchor constraintEqualToAnchor:self\.editorOverlayView\.leadingAnchor\]/);
+    assert.match(source, /\[self\.editorContentView\.trailingAnchor constraintEqualToAnchor:self\.editorOverlayView\.trailingAnchor\]/);
+    assert.match(source, /\[self\.editorContentView\.bottomAnchor constraintEqualToAnchor:self\.editorOverlayView\.bottomAnchor\]/);
+    assert.doesNotMatch(source, /\[scrollView\.bottomAnchor constraintEqualToAnchor:safeArea\.bottomAnchor\]/);
+    assert.doesNotMatch(source, /\[self\.editorContentView\.bottomAnchor constraintEqualToAnchor:self\.editorOverlayView\.safeAreaLayoutGuide\.bottomAnchor\]/);
+});
+
+test("iOS patch view pins the keyboard footer and mounts the MSEG modal above the keyboard row", async () => {
     const source = await fs.readFile(path.join(repoRoot, "patch_gui", "index.js"), "utf8");
 
     assert.match(source, /grid-template-rows:\s*minmax\(0,\s*1fr\)\s*auto;/);
+    assert.match(source, /class="ios-top-row"/);
+    assert.match(source, /class="ios-main-view"/);
+    assert.match(source, /\.ios-top-row\s*\{[\s\S]*overflow:\s*hidden;/);
+    assert.match(source, /\.ios-top-row\s*\{[\s\S]*display:\s*grid;/);
+    assert.match(source, /\.ios-top-row\s*\{[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\);/);
+    assert.match(source, /\.ios-top-row\s*\{[\s\S]*grid-template-rows:\s*minmax\(0,\s*1fr\);/);
+    assert.match(source, /\.ios-main-view\s*\{[\s\S]*display:\s*grid;/);
+    assert.match(source, /\.ios-main-view\s*\{[\s\S]*grid-column:\s*1;/);
+    assert.match(source, /\.ios-main-view\s*\{[\s\S]*grid-row:\s*1;/);
+    assert.match(source, /\.mseg-modal-layer\s*\{[\s\S]*grid-column:\s*1;/);
+    assert.match(source, /\.mseg-modal-layer\s*\{[\s\S]*grid-row:\s*1;/);
     assert.match(source, /\.ios-scroll\s*\{[\s\S]*overflow-y:\s*auto;/);
+    assert.match(source, /:host\(\[mseg-modal-open\]\)\s+\.ios-main-view\s*\{[\s\S]*display:\s*none;/);
     assert.match(source, /class="keyboard-footer"/);
+    assert.match(source, /class="keyboard-toolbar"/);
+    assert.match(source, /\.keyboard-footer\s*\{[\s\S]*padding:\s*0\s*12px;/);
+    assert.match(source, /class="keyboard-host"/);
+    assert.match(source, /class="keyboard-toolbar"[\s\S]*class="keyboard-host"/);
     assert.match(source, /class="octave-button octave-down"/);
     assert.match(source, /class="octave-button octave-up"/);
+    assert.match(source, /\.keyboard-host\s*\{[\s\S]*min-height:\s*var\(--cosimo-keyboard-height\);/);
+    assert.match(source, /\.keyboard\s*\{[\s\S]*height:\s*var\(--cosimo-keyboard-height\);/);
+    assert.match(source, /\.keyboard\s*\{[\s\S]*border-radius:\s*14px 14px 0 0;/);
+    assert.match(source, /\.keyboard\s*\{[\s\S]*padding:\s*6px 6px 0;/);
     assert.match(source, /class="wavetable-display-stack"/);
     assert.match(source, /class="bank-picker-trigger"/);
     assert.match(source, /class="table-select table-select-overlay"/);
@@ -175,9 +238,29 @@ test("iOS patch view pins the keyboard footer and removes the separate hero and 
     assert.match(source, /\.mseg-editor-shell\s*\{[\s\S]*border-radius:\s*0;/);
     assert.match(source, /\.mseg-editor-shell\s*\{[\s\S]*border:\s*0;/);
     assert.match(source, /\.mseg-editor-shell\s*\{[\s\S]*background:\s*transparent;/);
+    assert.match(source, /class="mseg-preview-button"/);
+    assert.match(source, /class="mseg-preview-footer"/);
+    assert.match(source, /data-role="mseg-modal-layer"/);
+    assert.match(source, /class="mseg-modal"/);
     assert.match(source, /class="mseg-rate-slider"/);
     assert.match(source, /data-role="mseg-rate-readout"/);
-    assert.match(source, /class="mseg-loop-toggle"/);
+    assert.match(source, /data-role="mseg-launcher-rate-readout"/);
+    assert.match(source, /data-role="mseg-launcher-loop-button"/);
+    assert.match(source, /class="mseg-loop-button"/);
+    assert.match(source, /getMsegSurfaceOrientation\(surface,\s*\{\s*showPoints = false\s*\} = \{\}\)/);
+    assert.match(source, /const hostBounds = this\.getBoundingClientRect\?\.\(\) \?\? null;/);
+    assert.match(source, /return height > width \? "vertical" : "horizontal";/);
+    assert.match(source, /Number\(globalThis\.visualViewport\?\.height\)/);
+    assert.match(source, /Number\(globalThis\.window\?\.innerHeight\)/);
+    assert.match(source, /\.mseg-modal-backdrop\s*\{[\s\S]*display:\s*none;/);
+    assert.match(source, /\.mseg-modal-layer\s*\{[\s\S]*position:\s*relative;/);
+    assert.match(source, /\.mseg-modal-layer\s*\{[\s\S]*inset:\s*auto;/);
+    assert.match(source, /\.mseg-modal\s*\{[\s\S]*position:\s*relative;/);
+    assert.match(source, /\.mseg-modal\s*\{[\s\S]*min-height:\s*100%;/);
+    assert.doesNotMatch(source, /\.mseg-modal\s*\{[\s\S]*position:\s*absolute;[\s\S]*inset:\s*max\(6px,\s*env\(safe-area-inset-top\)\)\s*6px\s*0\s*6px;/);
+    assert.doesNotMatch(source, /class="mseg-loop-toggle"/);
+    assert.doesNotMatch(source, /Open Editor/);
+    assert.doesNotMatch(source, /Delete Point/);
     assert.doesNotMatch(source, /class="hero"/);
     assert.doesNotMatch(source, /class="scan-panel"/);
     assert.doesNotMatch(source, /class="scan-slider"/);

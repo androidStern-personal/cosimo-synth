@@ -166,8 +166,8 @@ def test_ios_patch_manifest_points_at_the_mobile_editor_entry() -> None:
     manifest = json.loads(IOS_AUV3_PATCH.read_text(encoding="utf-8"))
 
     assert manifest["view"]["src"] == "patch_gui/index.ios.js"
-    assert manifest["view"]["width"] == 393
-    assert manifest["view"]["height"] == 648
+    assert "width" not in manifest["view"]
+    assert "height" not in manifest["view"]
     assert manifest["view"]["resizable"] is True
     assert manifest["resources"] == []
 
@@ -230,7 +230,14 @@ def test_ios_auv3_generator_writes_self_contained_plugin_source_and_headers(
     assert 'call<void> (webview, "setOpaque:", (BOOL) 0);' in webview_header
     assert 'call<void> (webview, "setBackgroundColor:", black);' in webview_header
     assert 'if (auto scrollView = call<id> (webview, "scrollView"))' in webview_header
+    assert 'call<void> (scrollView, "setContentInsetAdjustmentBehavior:", 2);' in webview_header
+    assert 'call<void> (scrollView, "setAutomaticallyAdjustsScrollIndicatorInsets:", (BOOL) 0);' in webview_header
     assert 'call<void> (scrollView, "setBackgroundColor:", black);' in webview_header
+    assert 'class_addMethod (webviewClass, sel_registerName ("safeAreaInsets"),' in webview_header
+    assert '-> choc::objc::UIEdgeInsets' in webview_header
+    assert 'struct UIEdgeInsets { CGFloat top = 0, left = 0, bottom = 0, right = 0; };' in (
+        generated_ios_plugin_dir / "include/choc/choc/platform/choc_ObjectiveCHelpers.h"
+    ).read_text(encoding="utf-8")
     assert (
         '"            width:  view.clientWidth  - parseFloat (clientStyle.paddingLeft) - parseFloat (clientStyle.paddingRight),\\n"'
         in embedded_assets_header
@@ -267,6 +274,16 @@ def test_ios_auv3_generator_writes_self_contained_plugin_source_and_headers(
     assert "getBundledResourceFile" in juce_plugin_header
     assert "juce::File::getSpecialLocation (juce::File::currentApplicationFile)" in juce_plugin_header
     assert "std::make_shared<std::ifstream>" in juce_plugin_header
+    assert "#if JUCE_IOS" in juce_plugin_header
+    assert "view.isResizable()" in juce_plugin_header
+    assert "juce::Desktop::getInstance().getDisplays().getPrimaryDisplay()" in juce_plugin_header
+    assert "display->userArea.isEmpty() ? display->totalArea" in juce_plugin_header
+    assert 'view.view.setMember ("width", std::max (50, screenBounds.getWidth()))' in juce_plugin_header
+    assert 'view.view.setMember ("height", std::max (50, screenBounds.getHeight()))' in juce_plugin_header
+    assert 'window.__cosimoCollectLayoutMetrics?.() ?? null' in juce_plugin_header
+    assert 'getChildFile ("ui-geometry.json")' in juce_plugin_header
+    assert 'json += "  \\"domMetrics\\": "' in juce_plugin_header
+    assert 'json += "    \\"editorHeight\\": "' in juce_plugin_header
 
 
 def test_ios_auv3_generator_rejects_a_missing_patch_file(tmp_path: Path) -> None:
@@ -559,3 +576,9 @@ def test_ios_host_smoke_keeps_the_editor_inside_phone_and_tablet_viewports(
         assert editor["preferredHeight"] <= editor["containerHeight"]
         assert editor["viewWidth"] <= editor["containerWidth"]
         assert editor["viewHeight"] <= editor["containerHeight"]
+
+        dom_metrics = editor["domMetrics"]
+
+        assert dom_metrics["keyboardBottomGap"] <= 1.0
+        assert dom_metrics["footerBottomGap"] <= 1.0
+        assert abs(dom_metrics["keyboardRect"]["bottom"] - dom_metrics["viewport"]["height"]) <= 1.0

@@ -2,12 +2,7 @@ namespace wt
 {
     let playModePoly = 0;
     let playModeMono = 1;
-    let playModeMonoST = 2;
-    let playModeMonoFP = 3;
-    let playModeMonoSTFP = 4;
-    let notePriorityLast = 0;
-    let notePriorityHigh = 1;
-    let notePriorityLow = 2;
+    let playModeLegato = 2;
     let maxMonoHeldNotes = 64;
 
     struct DesiredTableChange
@@ -55,8 +50,7 @@ namespace wt
                      std::notes::Slide,
                      std::notes::Pressure,
                      std::notes::Control) eventIn;
-        input value float32 playModeIn [[ name: "Play Mode", min: 0.0f, max: 4.0f, init: 0.0f, discrete: true, step: 1.0f, rampFrames: 0 ]];
-        input value float32 notePriorityIn [[ name: "Note Priority", min: 0.0f, max: 2.0f, init: 0.0f, discrete: true, step: 1.0f, rampFrames: 0 ]];
+        input value float32 playModeIn [[ name: "Play Mode", min: 0.0f, max: 2.0f, init: 0.0f, discrete: true, step: 1.0f, rampFrames: 0 ]];
 
         output event (std::notes::NoteOn,
                       std::notes::NoteOff,
@@ -112,9 +106,7 @@ namespace wt
         bool mpeMasterSustainActive;
         int64 perChannelSustainActive;
         int32 playModeState = playModePoly;
-        int32 notePriorityState = notePriorityLast;
         int32 lastObservedPlayMode = playModePoly;
-        int32 lastObservedNotePriority = notePriorityLast;
         int32 nextMonoOrder = 1;
         bool monoVoiceActive = false;
         int32 monoVoiceChannel = -1;
@@ -124,40 +116,22 @@ namespace wt
         {
             let rounded = int32 (
                 std::intrinsics::floor (
-                    std::intrinsics::clamp (playModeIn, 0.0f, 4.0f) + 0.5f
-                )
-            );
-            return rounded;
-        }
-
-        int32 readNotePriorityInput()
-        {
-            let rounded = int32 (
-                std::intrinsics::floor (
-                    std::intrinsics::clamp (notePriorityIn, 0.0f, 2.0f) + 0.5f
+                    std::intrinsics::clamp (playModeIn, 0.0f, 2.0f) + 0.5f
                 )
             );
             return rounded;
         }
 
         int32 normalisePlayMode() { return playModeState; }
-        int32 normaliseNotePriority() { return notePriorityState; }
 
         bool isMonoMode()
         {
             return normalisePlayMode() != playModePoly;
         }
 
-        bool isSingleTriggerMode()
+        bool isLegatoMode()
         {
-            let mode = normalisePlayMode();
-            return mode == playModeMonoST || mode == playModeMonoSTFP;
-        }
-
-        bool isFingeredPortamentoMode()
-        {
-            let mode = normalisePlayMode();
-            return mode == playModeMonoFP || mode == playModeMonoSTFP;
+            return normalisePlayMode() == playModeLegato;
         }
 
         bool pitchesMatch (float32 left, float32 right)
@@ -232,10 +206,8 @@ namespace wt
 
         int32 chooseMonoPrioritySlot()
         {
-            let priority = normaliseNotePriority();
             int32 selectedSlot = -1;
             int32 selectedOrder = -1;
-            float32 selectedPitch = 0.0f;
 
             for (int32 slot = 0; slot < maxMonoHeldNotes; ++slot)
             {
@@ -248,39 +220,13 @@ namespace wt
                 {
                     selectedSlot = slot;
                     selectedOrder = heldNote.order;
-                    selectedPitch = heldNote.pitch;
                     continue;
                 }
 
-                if (priority == notePriorityLast)
-                {
-                    if (heldNote.order > selectedOrder)
-                    {
-                        selectedSlot = slot;
-                        selectedOrder = heldNote.order;
-                        selectedPitch = heldNote.pitch;
-                    }
-                    continue;
-                }
-
-                if (priority == notePriorityHigh)
-                {
-                    if (heldNote.pitch > selectedPitch
-                        || (pitchesMatch (heldNote.pitch, selectedPitch) && heldNote.order > selectedOrder))
-                    {
-                        selectedSlot = slot;
-                        selectedOrder = heldNote.order;
-                        selectedPitch = heldNote.pitch;
-                    }
-                    continue;
-                }
-
-                if (heldNote.pitch < selectedPitch
-                    || (pitchesMatch (heldNote.pitch, selectedPitch) && heldNote.order > selectedOrder))
+                if (heldNote.order > selectedOrder)
                 {
                     selectedSlot = slot;
                     selectedOrder = heldNote.order;
-                    selectedPitch = heldNote.pitch;
                 }
             }
 
@@ -478,14 +424,14 @@ namespace wt
 
             if (monoSlotMatchesCurrentVoice (selectedSlot))
             {
-                if (! isSingleTriggerMode())
+                if (! isLegatoMode())
                     emitMonoVoiceRetuneForSlot (selectedSlot, true, false);
 
                 return;
             }
 
-            let retrigger = ! monoVoiceActive || ! isSingleTriggerMode();
-            let glide = isFingeredPortamentoMode() && monoVoiceActive;
+            let retrigger = ! monoVoiceActive || ! isLegatoMode();
+            let glide = monoVoiceActive;
             emitMonoVoiceRetuneForSlot (selectedSlot, retrigger, glide);
         }
 
@@ -502,8 +448,8 @@ namespace wt
             if (monoSlotMatchesCurrentVoice (selectedSlot))
                 return;
 
-            let retrigger = ! isSingleTriggerMode();
-            let glide = isFingeredPortamentoMode() && monoVoiceActive;
+            let retrigger = ! isLegatoMode();
+            let glide = monoVoiceActive;
             emitMonoVoiceRetuneForSlot (selectedSlot, retrigger, glide);
         }
 
@@ -666,29 +612,17 @@ namespace wt
         {
             clearMonoHeldNotes();
             playModeState = readPlayModeInput();
-            notePriorityState = readNotePriorityInput();
             lastObservedPlayMode = playModeState;
-            lastObservedNotePriority = notePriorityState;
 
             loop
             {
                 let playMode = readPlayModeInput();
-                let notePriority = readNotePriorityInput();
                 playModeState = playMode;
-                notePriorityState = notePriority;
 
                 if (playMode != lastObservedPlayMode)
                 {
                     resetDispatcherState();
                     lastObservedPlayMode = playMode;
-                    lastObservedNotePriority = notePriority;
-                }
-                else if (notePriority != lastObservedNotePriority)
-                {
-                    lastObservedNotePriority = notePriority;
-
-                    if (isMonoMode())
-                        applyMonoSelectionAfterNoteOff (0.0f);
                 }
 
                 advance();
@@ -978,8 +912,7 @@ graph WavetableSynth [[ main ]]
     input event wt::MsegPlaybackConfig mseg1Playback;
     input value float32 wavetablePosition [[ name: "Wavetable Position", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
     input value float32 wavetableSelect [[ name: "Wavetable Select", min: 0.0f, max: 255.0f, init: 0.0f, discrete: true, step: 1.0f, rampFrames: 0 ]];
-    input value float32 playMode [[ name: "Play Mode", min: 0.0f, max: 4.0f, init: 0.0f, discrete: true, step: 1.0f, rampFrames: 0 ]];
-    input value float32 notePriority [[ name: "Note Priority", min: 0.0f, max: 2.0f, init: 0.0f, discrete: true, step: 1.0f, rampFrames: 0 ]];
+    input value float32 playMode [[ name: "Play Mode", min: 0.0f, max: 2.0f, init: 0.0f, discrete: true, step: 1.0f, rampFrames: 0 ]];
     input value float32 glideTime [[ name: "Glide Time", min: 0.0f, max: 2.0f, init: 0.0f, unit: "s", rampFrames: 0 ]];
     input value float32 mseg1Depth [[ name: "MSEG 1 Depth", min: -1.0f, max: 1.0f, init: 1.0f, rampFrames: 64 ]];
     output event wt::WavetableUploadAck wavetableUploadAck;
@@ -1003,7 +936,6 @@ graph WavetableSynth [[ main ]]
         midiIn -> mpe.parseMIDI;
         mpe.eventOut -> noteDispatcher.eventIn;
         playMode -> noteDispatcher.playModeIn;
-        notePriority -> noteDispatcher.notePriorityIn;
         noteDispatcher.voiceEventOut -> sharedEngine.voiceEventIn;
         noteDispatcher.voiceRetuneOut -> sharedEngine.voiceRetuneIn;
         wavetableLoadBegin -> sharedEngine.wavetableLoadBeginIn;

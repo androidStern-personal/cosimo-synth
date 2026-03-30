@@ -105,6 +105,24 @@ def test_reference_reader_holds_final_value_after_end() -> None:
     )
 
 
+def test_reference_reader_zero_seconds_uses_the_fastest_safe_duration() -> None:
+    shape = MsegShape(points=(MsegPoint(0.0, 0.0), MsegPoint(1.0, 1.0)))
+    rendered = render_mseg_shape_reference(shape)
+    values = render_mseg_reference(
+        rendered,
+        sample_rate=4,
+        num_samples=4,
+        playback=MsegPlayback(seconds=0.0),
+    )
+
+    assert np.allclose(
+        values,
+        np.asarray([0.0, 1.0, 1.0, 1.0], dtype=np.float32),
+        atol=1e-6,
+        rtol=0.0,
+    )
+
+
 def test_reference_reader_loop_window_repeats_the_middle_section() -> None:
     shape = MsegShape(points=(MsegPoint(0.0, 0.0), MsegPoint(1.0, 1.0)))
     rendered = render_mseg_shape_reference(shape)

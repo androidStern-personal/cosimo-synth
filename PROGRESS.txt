@@ -1,3 +1,33 @@
+Main-view control strip and MSEG launcher simplification landed on 2026-03-30
+- Removed the visible `Voice Routing` heading and `Play Mode` field label from the shipping patch UI.
+- Kept the voice mode selector and glide control on one shared row in both desktop and iPhone layouts.
+- Moved the glide value readout onto the same row as the glide slider instead of stacking it under a labeled field.
+- Removed the `Open Editor` button above the main-view MSEG preview.
+- Reworked the main-view MSEG preview footer so it now shows:
+  - the current length in seconds as a bare value
+  - the same loop icon toggle pattern used in the expanded MSEG editor, with active/inactive color state
+- Left the expanded MSEG editor structure intact apart from reusing the same loop-icon visual language in the launcher.
+- What was verified for this UI simplification:
+  - `node --test tests/test_patch_view_layout.mjs`
+  - `cmaj generate --target=javascript --output=build/generated_js_test WavetableSynth.cmajorpatch`
+  - `uv run python scripts/run_ios_auv3_host_smoke.py --build-dir build/ios_sim_host_smoke --output build/ios_sim_host_smoke/result.json`
+
+Mono / legato surface reduction landed on 2026-03-30
+- Removed the `Note Priority` control from the shipping patch UI and from `cmajor/WavetableSynth.cmajor`. Mono note selection is now hardcoded to newest-held-note behavior.
+- Reduced the exposed play modes to `Poly`, `Mono`, and `Legato`.
+- Defined the two mono modes concretely:
+  - `Mono` now means one voice, newest held note takes over, overlap glide stays active, and the envelope retriggers on note changes.
+  - `Legato` now means one voice, newest held note takes over, overlap glide stays active, and the envelope does not retrigger on note changes.
+- Updated `tests/test_note_dispatcher_probe.py` so it now proves the reduced behavior directly:
+  - `Mono` prefers the newest held note.
+  - both `Mono` and `Legato` glide on overlap and when returning to an older still-held note.
+  - `Mono` retriggers while `Legato` does not.
+- Updated `tests/test_patch_view_layout.mjs` so it now proves the webview only exposes `Poly`, `Mono`, and `Legato`, and no longer renders `Note Priority`.
+- What was verified for this reduction:
+  - `cmaj generate --target=javascript --output=build/generated_js_test WavetableSynth.cmajorpatch`
+  - `uv run pytest -q tests/test_note_dispatcher_probe.py -q`
+  - `node --test tests/test_patch_view_layout.mjs`
+
 Mono / legato / MPE pass landed on 2026-03-29
 - Active plan note: `TRANSIENT_MONO_MPE_IMPLEMENTATION_PLAN.md`.
 - Follow-up fix on the same day:

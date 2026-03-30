@@ -285,6 +285,33 @@ test("playback_rate_change_updates_transport_without_rerendering_shape", () => {
     );
 });
 
+test("playback_rate_accepts_zero_seconds_and_uploads_the_fastest_safe_pass", () => {
+    const patchConnection = new FakePatchConnection();
+    const controller = new MsegController(patchConnection);
+
+    controller.attach();
+    controller.requestBootState();
+    patchConnection.events = [];
+
+    controller.setPlayback({
+        ...createDefaultMsegPlayback(),
+        rate: { kind: "seconds", seconds: 0.0 },
+        loop: { startX: 0.0, endX: 1.0 },
+    });
+
+    assert.equal(controller.getState().playback.rate.seconds, 0.0);
+    assert.deepEqual(lastEvent(patchConnection, MSEG_PLAYBACK_ENDPOINT_ID).value, {
+        seconds: 0.0,
+        holdFinalValue: true,
+        rateKind: 0,
+        loopEnabled: true,
+        loopStart: 0.0,
+        loopEnd: 1.0,
+        noteOffPolicy: 0,
+        legatoRestarts: false,
+    });
+});
+
 test("playback_change_updates_stored_playback_and_uploads_without_rerendering_shape", () => {
     const patchConnection = new FakePatchConnection();
     const controller = new MsegController(patchConnection);

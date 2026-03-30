@@ -166,8 +166,8 @@ class MsegPlayback:
     hold_final_value: bool = True
 
     def __post_init__(self) -> None:
-        if not np.isfinite(self.seconds) or self.seconds <= 0.0:
-            raise ValueError("MsegPlayback.seconds must be positive and finite")
+        if not np.isfinite(self.seconds) or self.seconds < 0.0:
+            raise ValueError("MsegPlayback.seconds must be zero or positive and finite")
 
         if self.note_off_policy not in MSEG_NOTE_OFF_POLICIES:
             raise ValueError("MsegPlayback.note_off_policy must be a supported policy")
@@ -1942,7 +1942,9 @@ def render_mseg_reference(
 
     output = np.zeros(num_samples, dtype=np.float32)
     progress = np.float32(1.0)
-    increment = np.float32(1.0) / (np.float32(playback.seconds) * np.float32(sample_rate))
+    min_duration = np.float32(1.0) / np.float32(sample_rate)
+    safe_seconds = max(np.float32(playback.seconds), min_duration)
+    increment = np.float32(1.0) / (safe_seconds * np.float32(sample_rate))
     active = False
     current_value = np.float32(sample_rendered_mseg_buffer(buffer, 0.0))
     trigger_index = 0

@@ -27,11 +27,7 @@ SAMPLES_PER_FRAME = 2048
 OSCILLATOR_MIP_COUNT = 11
 PLAY_MODE_POLY = 0
 PLAY_MODE_MONO = 1
-PLAY_MODE_MONO_ST = 2
-PLAY_MODE_MONO_FP = 3
-NOTE_PRIORITY_LAST = 0
-NOTE_PRIORITY_HIGH = 1
-NOTE_PRIORITY_LOW = 2
+PLAY_MODE_LEGATO = 2
 
 
 def _expected_mip_frame(frame: np.ndarray, mip_index: int) -> np.ndarray:
@@ -92,13 +88,11 @@ def _build_mip_frame_events(
 def _build_setup_js(
     *,
     play_mode: int,
-    note_priority: int = NOTE_PRIORITY_LAST,
     glide_time: float = 0.0,
     include_bank: bool = False,
 ) -> str:
     statements = [
         f"patch.setInputValue_playMode({float(play_mode):.1f}, 0);",
-        f"patch.setInputValue_notePriority({float(note_priority):.1f}, 0);",
         f"patch.setInputValue_glideTime({float(glide_time):.6f}, 0);",
         "patch.setInputValue_framePosition(0.0, 0);",
         "patch.setInputValue_msegDepth(0.0, 0);",
@@ -211,7 +205,6 @@ def _build_dispatcher_probe_source(scheduled_events: list[tuple[int, str]]) -> s
         + "graph NoteDispatcherProbe [[ main ]]\n"
         + "{\n"
         + "    input value float32 playMode [[ init: 0.0f ]];\n"
-        + "    input value float32 notePriority [[ init: 0.0f ]];\n"
         + "    input value float32 glideTime [[ init: 0.0f ]];\n"
         + "    input value float32 framePosition [[ init: 0.0f ]];\n"
         + "    input value float32 msegDepth [[ init: 0.0f ]];\n"
@@ -222,7 +215,6 @@ def _build_dispatcher_probe_source(scheduled_events: list[tuple[int, str]]) -> s
         + "    {\n"
         + "        scheduler.noteEventOut -> dispatcher.eventIn;\n"
         + "        playMode -> dispatcher.playModeIn;\n"
-        + "        notePriority -> dispatcher.notePriorityIn;\n"
         + "        dispatcher.voiceRetuneOut[0] -> monoRetune;\n"
         + "    }\n"
         + "}\n"
@@ -244,7 +236,6 @@ def _build_audio_probe_source(scheduled_events: list[tuple[int, str]]) -> str:
         + "    input event wt::WavetableLoadBegin wavetableLoadBegin;\n"
         + "    input event wt::WavetableMipFrame wavetableMipFrame;\n"
         + "    input value float32 playMode [[ init: 0.0f ]];\n"
-        + "    input value float32 notePriority [[ init: 0.0f ]];\n"
         + "    input value float32 glideTime [[ init: 0.0f ]];\n"
         + "    input value float32 framePosition [[ init: 0.0f ]];\n"
         + "    input value float32 msegDepth [[ init: 0.0f ]];\n"
@@ -259,7 +250,6 @@ def _build_audio_probe_source(scheduled_events: list[tuple[int, str]]) -> str:
         + "    {\n"
         + "        scheduler.noteEventOut -> dispatcher.eventIn;\n"
         + "        playMode -> dispatcher.playModeIn;\n"
-        + "        notePriority -> dispatcher.notePriorityIn;\n"
         + "        dispatcher.voiceEventOut -> engine.voiceEventIn;\n"
         + "        dispatcher.voiceRetuneOut -> engine.voiceRetuneIn;\n"
         + "        glideTime -> engine.glideTimeIn;\n"
@@ -289,7 +279,6 @@ def _collect_dispatcher_retunes(
     scheduled_events: list[tuple[int, str]],
     *,
     play_mode: int,
-    note_priority: int = NOTE_PRIORITY_LAST,
     glide_time: float = 0.0,
     num_samples: int = 16_384,
 ) -> list[dict[str, object]]:
@@ -322,7 +311,6 @@ def _collect_dispatcher_retunes(
             output_endpoint_id="monoRetune",
             setup_js=_build_setup_js(
                 play_mode=play_mode,
-                note_priority=note_priority,
                 glide_time=glide_time,
                 include_bank=False,
             ),
@@ -333,7 +321,6 @@ def _render_audio_probe(
     scheduled_events: list[tuple[int, str]],
     *,
     play_mode: int,
-    note_priority: int = NOTE_PRIORITY_LAST,
     glide_time: float = 0.0,
     num_samples: int,
 ) -> np.ndarray:
@@ -366,7 +353,6 @@ def _render_audio_probe(
             output_endpoint_id="out",
             setup_js=_build_setup_js(
                 play_mode=play_mode,
-                note_priority=note_priority,
                 glide_time=glide_time,
                 include_bank=True,
             ),
@@ -374,18 +360,7 @@ def _render_audio_probe(
 
 
 @pytest.mark.cmajor
-@pytest.mark.parametrize(
-    ("note_priority", "expected_pitch"),
-    [
-        (NOTE_PRIORITY_LAST, 64.0),
-        (NOTE_PRIORITY_HIGH, 67.0),
-        (NOTE_PRIORITY_LOW, 60.0),
-    ],
-)
-def test_note_dispatcher_mono_priority_selects_the_expected_held_note(
-    note_priority: int,
-    expected_pitch: float,
-) -> None:
+def test_note_dispatcher_mono_prefers_the_newest_held_note() -> None:
     events = _collect_dispatcher_retunes(
         [
             (1024, _note_on_expr(1, 60.0)),
@@ -393,23 +368,31 @@ def test_note_dispatcher_mono_priority_selects_the_expected_held_note(
             (5120, _note_on_expr(1, 64.0)),
         ],
         play_mode=PLAY_MODE_MONO,
-        note_priority=note_priority,
     )
 
     assert events
     last_event = events[-1]["event"]
-    assert float(last_event["pitch"]) == pytest.approx(expected_pitch, abs=1e-6)
+    assert float(last_event["pitch"]) == pytest.approx(64.0, abs=1e-6)
 
 
 @pytest.mark.cmajor
-def test_note_dispatcher_marks_fingered_portamento_overlap_as_glide_and_retrigger() -> None:
+@pytest.mark.parametrize(
+    ("play_mode", "expected_retrigger"),
+    [
+        (PLAY_MODE_MONO, True),
+        (PLAY_MODE_LEGATO, False),
+    ],
+)
+def test_note_dispatcher_overlap_glides_with_mode_specific_retrigger(
+    play_mode: int,
+    expected_retrigger: bool,
+) -> None:
     events = _collect_dispatcher_retunes(
         [
             (1024, _note_on_expr(1, 60.0)),
             (3072, _note_on_expr(1, 72.0)),
         ],
-        play_mode=PLAY_MODE_MONO_FP,
-        note_priority=NOTE_PRIORITY_LAST,
+        play_mode=play_mode,
         glide_time=0.150,
     )
 
@@ -418,13 +401,42 @@ def test_note_dispatcher_marks_fingered_portamento_overlap_as_glide_and_retrigge
     second_event = events[1]["event"]
     assert bool(first_event["retrigger"]) is True
     assert bool(first_event["glide"]) is False
-    assert bool(second_event["retrigger"]) is True
+    assert bool(second_event["retrigger"]) is expected_retrigger
     assert bool(second_event["glide"]) is True
     assert float(second_event["pitch"]) == pytest.approx(72.0, abs=1e-6)
 
 
 @pytest.mark.cmajor
-def test_shared_voice_engine_mono_st_keeps_the_envelope_running_on_legato_note_change() -> None:
+@pytest.mark.parametrize(
+    ("play_mode", "expected_retrigger"),
+    [
+        (PLAY_MODE_MONO, True),
+        (PLAY_MODE_LEGATO, False),
+    ],
+)
+def test_note_dispatcher_returns_to_the_previous_held_note_on_release(
+    play_mode: int,
+    expected_retrigger: bool,
+) -> None:
+    events = _collect_dispatcher_retunes(
+        [
+            (1024, _note_on_expr(1, 60.0)),
+            (3072, _note_on_expr(1, 72.0)),
+            (5120, _note_off_expr(1, 72.0)),
+        ],
+        play_mode=play_mode,
+        glide_time=0.150,
+    )
+
+    assert len(events) >= 3
+    release_event = events[-1]["event"]
+    assert float(release_event["pitch"]) == pytest.approx(60.0, abs=1e-6)
+    assert bool(release_event["retrigger"]) is expected_retrigger
+    assert bool(release_event["glide"]) is True
+
+
+@pytest.mark.cmajor
+def test_shared_voice_engine_legato_keeps_the_envelope_running_on_note_change() -> None:
     schedule = [
         (1024, _note_on_expr(1, 60.0)),
         (9216, _note_on_expr(1, 67.0)),
@@ -435,17 +447,17 @@ def test_shared_voice_engine_mono_st_keeps_the_envelope_running_on_legato_note_c
         play_mode=PLAY_MODE_MONO,
         num_samples=24_576,
     )
-    mono_st_audio = _render_audio_probe(
+    legato_audio = _render_audio_probe(
         schedule,
-        play_mode=PLAY_MODE_MONO_ST,
+        play_mode=PLAY_MODE_LEGATO,
         num_samples=24_576,
     )
 
     mono_attack_window = mono_audio[9216:9472]
-    mono_st_window = mono_st_audio[9216:9472]
+    legato_window = legato_audio[9216:9472]
     mono_recovery_window = mono_audio[10_752:13_312]
 
-    assert rms(mono_st_window) > (rms(mono_attack_window) * 2.0)
+    assert rms(legato_window) > (rms(mono_attack_window) * 2.0)
     assert rms(mono_recovery_window) > 0.2
     assert dominant_bin_hz(mono_recovery_window, DEFAULT_SAMPLE_RATE) == pytest.approx(
         _note_to_frequency(67.0),

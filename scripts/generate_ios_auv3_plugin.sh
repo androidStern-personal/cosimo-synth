@@ -62,6 +62,32 @@ cp "$patch_path" "$codegen_patch_path"
 
 cmaj generate --target=juce "$codegen_patch_path" --output="$generated_dir"
 
+objective_c_helpers_header="$generated_dir/include/choc/choc/platform/choc_ObjectiveCHelpers.h"
+
+if [[ -f "$objective_c_helpers_header" ]]; then
+  python3 - "$objective_c_helpers_header" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+text = path.read_text(encoding="utf-8")
+needle = """    struct CGPoint { CGFloat x = 0, y = 0; };
+    struct CGSize  { CGFloat width = 0, height = 0; };
+    struct CGRect  { CGPoint origin; CGSize size; };
+"""
+replacement = """    struct CGPoint { CGFloat x = 0, y = 0; };
+    struct CGSize  { CGFloat width = 0, height = 0; };
+    struct CGRect  { CGPoint origin; CGSize size; };
+    struct UIEdgeInsets { CGFloat top = 0, left = 0, bottom = 0, right = 0; };
+"""
+
+if needle not in text and replacement not in text:
+    raise SystemExit(f"Could not find the expected Objective-C geometry helper snippet in {path}")
+
+path.write_text(text.replace(needle, replacement, 1), encoding="utf-8")
+PY
+fi
+
 webview_header="$generated_dir/include/choc/choc/gui/choc_WebView.h"
 
 if [[ -f "$webview_header" ]]; then
@@ -80,6 +106,13 @@ replacement = """       #if CHOC_OSX
        #endif
 
        #if CHOC_IOS
+        if (auto scrollView = call<id> (webview, "scrollView"))
+        {
+            // Let the patch UI handle the safe area itself instead of shrinking the HTML viewport.
+            call<void> (scrollView, "setContentInsetAdjustmentBehavior:", 2);
+            call<void> (scrollView, "setAutomaticallyAdjustsScrollIndicatorInsets:", (BOOL) 0);
+        }
+
         if (options->transparentBackground)
         {
             auto black = callClass<id> ("UIColor", "blackColor");
@@ -95,7 +128,45 @@ replacement = """       #if CHOC_OSX
 if needle not in text:
     raise SystemExit(f"Could not find the expected WebView background snippet in {path}")
 
-path.write_text(text.replace(needle, replacement, 1), encoding="utf-8")
+text = text.replace(needle, replacement, 1)
+
+safe_area_needle = """            class_addMethod (webviewClass, sel_registerName ("performKeyEquivalent:"),
+                            (IMP) (+[](id self, SEL, id e) -> BOOL
+                            {
+                                if (auto p = getPimpl (self))
+                                    if (p->performKeyEquivalent (self, e))
+                                        return true;
+
+                                return choc::objc::callSuper<BOOL> (self, "performKeyEquivalent:", e);
+                            }), "B@:@");
+
+            objc_registerClassPair (webviewClass);
+"""
+safe_area_replacement = """            class_addMethod (webviewClass, sel_registerName ("performKeyEquivalent:"),
+                            (IMP) (+[](id self, SEL, id e) -> BOOL
+                            {
+                                if (auto p = getPimpl (self))
+                                    if (p->performKeyEquivalent (self, e))
+                                        return true;
+
+                                return choc::objc::callSuper<BOOL> (self, "performKeyEquivalent:", e);
+                            }), "B@:@");
+
+           #if CHOC_IOS
+            class_addMethod (webviewClass, sel_registerName ("safeAreaInsets"),
+                            (IMP) (+[](id, SEL) -> choc::objc::UIEdgeInsets
+                            {
+                                return {};
+                            }), "{UIEdgeInsets=dddd}@:");
+           #endif
+
+            objc_registerClassPair (webviewClass);
+"""
+
+if safe_area_needle not in text and safe_area_replacement not in text:
+    raise SystemExit(f"Could not find the expected WebView subclass snippet in {path}")
+
+path.write_text(text.replace(safe_area_needle, safe_area_replacement, 1), encoding="utf-8")
 PY
 fi
 
@@ -419,6 +490,31 @@ new_prepare_manifest = """    bool prepareManifest (Patch::LoadParams& loadParam
         return true;
     }
 """
+old_ios_default_size = """            if (view.getWidth()  == 0)  view.view.setMember ("width", defaultWidth);
+            if (view.getHeight() == 0)  view.view.setMember ("height", defaultHeight);
+
+            return view;
+"""
+new_ios_default_size = """           #if JUCE_IOS
+            if ((view.getWidth() == 0 || view.getHeight() == 0) && view.isResizable())
+                if (auto* display = juce::Desktop::getInstance().getDisplays().getPrimaryDisplay())
+                {
+                    const auto screenBounds = display->userArea.isEmpty() ? display->totalArea
+                                                                          : display->userArea;
+
+                    if (view.getWidth() == 0)
+                        view.view.setMember ("width", std::max (50, screenBounds.getWidth()));
+
+                    if (view.getHeight() == 0)
+                        view.view.setMember ("height", std::max (50, screenBounds.getHeight()));
+                }
+           #endif
+
+            if (view.getWidth()  == 0)  view.view.setMember ("width", defaultWidth);
+            if (view.getHeight() == 0)  view.view.setMember ("height", defaultHeight);
+
+            return view;
+"""
 
 if old_child_bounds not in text and new_child_bounds not in text:
     raise SystemExit(f"Could not find the expected JUCE editor sizing snippet in {path}")
@@ -429,6 +525,11 @@ if old_prepare_manifest not in text and new_prepare_manifest not in text:
     raise SystemExit(f"Could not find the expected GeneratedPlugin prepareManifest snippet in {path}")
 
 text = text.replace(old_prepare_manifest, new_prepare_manifest, 1)
+
+if old_ios_default_size not in text and new_ios_default_size not in text:
+    raise SystemExit(f"Could not find the expected JUCE iOS default editor size snippet in {path}")
+
+text = text.replace(old_ios_default_size, new_ios_default_size, 1)
 path.write_text(text, encoding="utf-8")
 PY
 
@@ -519,6 +620,191 @@ new_parameter_tree_members = """                JUCEPluginBase& owner;
 
             ParameterTreeBuilder builder { *this };
 """
+old_status_message_block = """        void statusMessageChanged()
+        {
+            owner.refreshExtraComp (extraComp.get());
+            patchWebView->setStatusMessage (owner.statusMessage);
+        }
+
+        static cmaj::PatchManifest::View derivePatchViewSize (const DerivedType& owner)
+"""
+new_status_message_block = """        void statusMessageChanged()
+        {
+            owner.refreshExtraComp (extraComp.get());
+            patchWebView->setStatusMessage (owner.statusMessage);
+        }
+
+       #if JUCE_IOS
+        void scheduleIOSLayoutMetricsDump (int remainingAttempts = 12)
+        {
+            auto safeThis = juce::Component::SafePointer<Editor> (this);
+
+            juce::Timer::callAfterDelay (180, [safeThis, remainingAttempts]
+            {
+                if (safeThis != nullptr)
+                    safeThis->dumpIOSLayoutMetrics (remainingAttempts);
+            });
+        }
+
+        void dumpIOSLayoutMetrics (int remainingAttempts)
+        {
+            if (patchWebView == nullptr || patchWebViewHolder == nullptr || ! patchWebViewHolder->isShowing())
+            {
+                if (remainingAttempts > 0)
+                    scheduleIOSLayoutMetricsDump (remainingAttempts - 1);
+
+                return;
+            }
+
+            const auto displayBounds = []() -> juce::Rectangle<int>
+            {
+                if (auto* display = juce::Desktop::getInstance().getDisplays().getPrimaryDisplay())
+                    return display->userArea.isEmpty() ? display->totalArea : display->userArea;
+
+                return {};
+            }();
+
+            auto safeThis = juce::Component::SafePointer<Editor> (this);
+
+            struct NativeEdgeInsets
+            {
+                choc::objc::CGFloat top = 0;
+                choc::objc::CGFloat left = 0;
+                choc::objc::CGFloat bottom = 0;
+                choc::objc::CGFloat right = 0;
+            };
+
+            const auto webViewHandle = reinterpret_cast<id> (safeThis->patchWebView->getWebView().getViewHandle());
+            const auto webViewFrame = webViewHandle != nullptr
+                ? choc::objc::call<choc::objc::CGRect> (webViewHandle, "frame")
+                : choc::objc::CGRect {};
+            const auto webViewSafeAreaInsets = webViewHandle != nullptr
+                ? choc::objc::call<NativeEdgeInsets> (webViewHandle, "safeAreaInsets")
+                : NativeEdgeInsets {};
+            const auto scrollViewHandle = webViewHandle != nullptr
+                ? choc::objc::call<id> (webViewHandle, "scrollView")
+                : nullptr;
+            const auto scrollViewFrame = scrollViewHandle != nullptr
+                ? choc::objc::call<choc::objc::CGRect> (scrollViewHandle, "frame")
+                : choc::objc::CGRect {};
+            const auto scrollViewContentInset = scrollViewHandle != nullptr
+                ? choc::objc::call<NativeEdgeInsets> (scrollViewHandle, "contentInset")
+                : NativeEdgeInsets {};
+            const auto scrollViewAdjustedContentInset = scrollViewHandle != nullptr
+                ? choc::objc::call<NativeEdgeInsets> (scrollViewHandle, "adjustedContentInset")
+                : NativeEdgeInsets {};
+            const auto scrollViewContentInsetAdjustmentBehavior = scrollViewHandle != nullptr
+                ? choc::objc::call<int> (scrollViewHandle, "contentInsetAdjustmentBehavior")
+                : -1;
+
+            patchWebView->getWebView().evaluateJavascript ("window.__cosimoCollectLayoutMetrics?.() ?? null",
+                                                           [safeThis,
+                                                            remainingAttempts,
+                                                            displayBounds,
+                                                            webViewFrame,
+                                                            webViewSafeAreaInsets,
+                                                            scrollViewFrame,
+                                                            scrollViewContentInset,
+                                                            scrollViewAdjustedContentInset,
+                                                            scrollViewContentInsetAdjustmentBehavior] (const std::string& error,
+                                                                                                      const choc::value::ValueView& result)
+            {
+                if (safeThis == nullptr)
+                    return;
+
+                const bool hasMetrics = ! result.isVoid() && result.isObject();
+                std::string json = "{\\n";
+                json += "  \\"native\\": {\\n";
+                json += "    \\"displayWidth\\": " + std::to_string (displayBounds.getWidth()) + ",\\n";
+                json += "    \\"displayHeight\\": " + std::to_string (displayBounds.getHeight()) + ",\\n";
+                json += "    \\"editorWidth\\": " + std::to_string (safeThis->getWidth()) + ",\\n";
+                json += "    \\"editorHeight\\": " + std::to_string (safeThis->getHeight()) + ",\\n";
+                json += "    \\"holderWidth\\": " + std::to_string (safeThis->patchWebViewHolder != nullptr ? safeThis->patchWebViewHolder->getWidth() : 0) + ",\\n";
+                json += "    \\"holderHeight\\": " + std::to_string (safeThis->patchWebViewHolder != nullptr ? safeThis->patchWebViewHolder->getHeight() : 0) + ",\\n";
+                json += "    \\"holderX\\": " + std::to_string (safeThis->patchWebViewHolder != nullptr ? safeThis->patchWebViewHolder->getX() : 0) + ",\\n";
+                json += "    \\"holderY\\": " + std::to_string (safeThis->patchWebViewHolder != nullptr ? safeThis->patchWebViewHolder->getY() : 0) + ",\\n";
+                json += "    \\"webViewPreferredWidth\\": " + std::to_string ((int) safeThis->patchWebView->width) + ",\\n";
+                json += "    \\"webViewPreferredHeight\\": " + std::to_string ((int) safeThis->patchWebView->height) + ",\\n";
+                json += "    \\"webViewFrameHeight\\": " + std::to_string (webViewFrame.size.height) + ",\\n";
+                json += "    \\"webViewSafeAreaTop\\": " + std::to_string (webViewSafeAreaInsets.top) + ",\\n";
+                json += "    \\"webViewSafeAreaBottom\\": " + std::to_string (webViewSafeAreaInsets.bottom) + ",\\n";
+                json += "    \\"scrollViewFrameHeight\\": " + std::to_string (scrollViewFrame.size.height) + ",\\n";
+                json += "    \\"scrollViewContentInsetTop\\": " + std::to_string (scrollViewContentInset.top) + ",\\n";
+                json += "    \\"scrollViewContentInsetBottom\\": " + std::to_string (scrollViewContentInset.bottom) + ",\\n";
+                json += "    \\"scrollViewAdjustedInsetTop\\": " + std::to_string (scrollViewAdjustedContentInset.top) + ",\\n";
+                json += "    \\"scrollViewAdjustedInsetBottom\\": " + std::to_string (scrollViewAdjustedContentInset.bottom) + ",\\n";
+                json += "    \\"scrollViewInsetAdjustmentBehavior\\": " + std::to_string (scrollViewContentInsetAdjustmentBehavior) + "\\n";
+                json += "  },\\n";
+                json += "  \\"domMetrics\\": " + (hasMetrics ? choc::json::toString (result, true) : std::string ("null")) + ",\\n";
+                json += "  \\"error\\": " + (error.empty() ? std::string ("null") : choc::json::getEscapedQuotedString (error)) + "\\n";
+                json += "}\\n";
+
+                const auto metricsFile = juce::File::getSpecialLocation (juce::File::userDocumentsDirectory)
+                    .getChildFile ("ui-geometry.json");
+                metricsFile.replaceWithText (juce::String::fromUTF8 (json.c_str()));
+
+                if (! hasMetrics && remainingAttempts > 0)
+                    safeThis->scheduleIOSLayoutMetricsDump (remainingAttempts - 1);
+            });
+        }
+       #endif
+
+        static cmaj::PatchManifest::View derivePatchViewSize (const DerivedType& owner)
+"""
+old_resized_block = """        void resized() override
+        {
+            isResizing = true;
+            juce::AudioProcessorEditor::resized();
+
+            auto r = getLocalBounds();
+
+            if (patchWebViewHolder->isVisible())
+            {
+                patchWebViewHolder->setBounds (r.removeFromTop (getHeight() - DerivedType::extraCompHeight));
+                r.removeFromTop (4);
+
+                if (getWidth() > 0 && getHeight() > 0)
+                {
+                    owner.lastEditorWidth = patchWebViewHolder->getWidth();
+                    owner.lastEditorHeight = patchWebViewHolder->getHeight();
+                }
+            }
+
+            if (extraComp)
+                extraComp->setBounds (r);
+
+            isResizing = false;
+        }
+"""
+new_resized_block = """        void resized() override
+        {
+            isResizing = true;
+            juce::AudioProcessorEditor::resized();
+
+            auto r = getLocalBounds();
+
+            if (patchWebViewHolder->isVisible())
+            {
+                patchWebViewHolder->setBounds (r.removeFromTop (getHeight() - DerivedType::extraCompHeight));
+                r.removeFromTop (4);
+
+                if (getWidth() > 0 && getHeight() > 0)
+                {
+                    owner.lastEditorWidth = patchWebViewHolder->getWidth();
+                    owner.lastEditorHeight = patchWebViewHolder->getHeight();
+                }
+
+               #if JUCE_IOS
+                scheduleIOSLayoutMetricsDump();
+               #endif
+            }
+
+            if (extraComp)
+                extraComp->setBounds (r);
+
+            isResizing = false;
+        }
+"""
 
 for old, new, label in [
     (old_patch_members, new_patch_members, "patch members"),
@@ -530,6 +816,8 @@ for old, new, label in [
     (old_parameter_allocation, new_parameter_allocation, "parameter allocation"),
     (old_parameter_tree_allocation, new_parameter_tree_allocation, "parameter tree allocation"),
     (old_parameter_tree_members, new_parameter_tree_members, "parameter tree members"),
+    (old_status_message_block, new_status_message_block, "iOS layout metrics exporter"),
+    (old_resized_block, new_resized_block, "iOS layout metrics trigger"),
 ]:
     if old not in text and new not in text:
         raise SystemExit(f"Could not find the expected JUCEPlugin {label} snippet in {path}")

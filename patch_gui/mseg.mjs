@@ -3,14 +3,18 @@ export const MSEG_PADDED_SAMPLES = MSEG_BODY_SAMPLES + 3;
 export const MSEG_CURVE_POWER_LIMIT = 20;
 export const MSEG_DEFAULT_NAME = "MSEG 1";
 export const MSEG_DEFAULT_DEPTH = 1.0;
-export const MSEG_RATE_MIN_SECONDS = 0.05;
-export const MSEG_RATE_MAX_SECONDS = 8.0;
+export const MSEG_RATE_MIN_SECONDS = 0.0;
+export const MSEG_RATE_MAX_SECONDS = 2.0;
 export const MSEG_RATE_KIND_SECONDS = 0;
 export const MSEG_RATE_KIND_TEMPO = 1;
 export const MSEG_NOTE_OFF_POLICY_FINISH_LOOP = 0;
 export const MSEG_NOTE_OFF_POLICY_IMMEDIATE = 1;
 export const MSEG_NOTE_OFF_POLICY_IGNORE = 2;
 export const MSEG_POINT_HIT_RADIUS_PX = 16;
+export const MSEG_POINT_RADIUS_PX = 8;
+export const MSEG_SELECTED_POINT_RADIUS_PX = 10;
+export const MSEG_EDITOR_HORIZONTAL_PADDING_PX = 14;
+export const MSEG_EDITOR_VERTICAL_PADDING_PX = 14;
 
 const MSEG_NOTE_OFF_POLICY_VALUES = new Set([
     "finish_loop",
@@ -73,6 +77,78 @@ export function clampMsegRateSeconds(value) {
         MSEG_RATE_MIN_SECONDS,
         MSEG_RATE_MAX_SECONDS
     );
+}
+
+export function createMsegEditorMetrics(
+    width,
+    height,
+    {
+        pointRadius = MSEG_POINT_RADIUS_PX,
+        horizontalPadding = MSEG_EDITOR_HORIZONTAL_PADDING_PX,
+        verticalPadding = MSEG_EDITOR_VERTICAL_PADDING_PX,
+    } = {}
+) {
+    const safeWidth = Math.max(1, Number(width) || 0);
+    const safeHeight = Math.max(1, Number(height) || 0);
+    const safePointRadius = Math.max(0, Number(pointRadius) || 0);
+    const safeHorizontalPadding = Math.max(0, Number(horizontalPadding) || 0);
+    const safeVerticalPadding = Math.max(0, Number(verticalPadding) || 0);
+    const maxInsetX = Math.max(0, (safeWidth - 1) * 0.5);
+    const maxInsetY = Math.max(0, (safeHeight - 1) * 0.5);
+    const insetX = Math.min(maxInsetX, safePointRadius + safeHorizontalPadding);
+    const insetY = Math.min(maxInsetY, safePointRadius + safeVerticalPadding);
+    const plotLeft = insetX;
+    const plotTop = insetY;
+    const plotRight = Math.max(plotLeft + 1, safeWidth - insetX);
+    const plotBottom = Math.max(plotTop + 1, safeHeight - insetY);
+
+    return {
+        width: safeWidth,
+        height: safeHeight,
+        pointRadius: safePointRadius,
+        plotLeft,
+        plotTop,
+        plotRight,
+        plotBottom,
+        plotWidth: Math.max(1, plotRight - plotLeft),
+        plotHeight: Math.max(1, plotBottom - plotTop),
+    };
+}
+
+export function pointToMsegEditorCoordinates(point, width, height, options = {}) {
+    const metrics = createMsegEditorMetrics(width, height, options);
+    const orientation = options?.orientation === "vertical" ? "vertical" : "horizontal";
+    const normalizedX = clamp01(Number(point?.x));
+    const normalizedY = clamp01(Number(point?.y));
+
+    if (orientation === "vertical") {
+        return {
+            x: metrics.plotLeft + (normalizedY * metrics.plotWidth),
+            y: metrics.plotBottom - (normalizedX * metrics.plotHeight),
+        };
+    }
+
+    return {
+        x: metrics.plotLeft + (normalizedX * metrics.plotWidth),
+        y: metrics.plotTop + ((1.0 - normalizedY) * metrics.plotHeight),
+    };
+}
+
+export function msegEditorCoordinatesToPoint(editorX, editorY, width, height, options = {}) {
+    const metrics = createMsegEditorMetrics(width, height, options);
+    const orientation = options?.orientation === "vertical" ? "vertical" : "horizontal";
+
+    if (orientation === "vertical") {
+        return {
+            x: clamp01((metrics.plotBottom - Number(editorY)) / metrics.plotHeight),
+            y: clamp01((Number(editorX) - metrics.plotLeft) / metrics.plotWidth),
+        };
+    }
+
+    return {
+        x: clamp01((Number(editorX) - metrics.plotLeft) / metrics.plotWidth),
+        y: clamp01(1.0 - ((Number(editorY) - metrics.plotTop) / metrics.plotHeight)),
+    };
 }
 
 function normalizeMsegLoop(loop) {
@@ -323,7 +399,8 @@ export function findMsegPointHitIndex(
     editorY,
     width,
     height,
-    hitRadius = MSEG_POINT_HIT_RADIUS_PX
+    hitRadius = MSEG_POINT_HIT_RADIUS_PX,
+    editorOptions = {}
 ) {
     const points = normalizeMsegShape(shape).points;
     const targetX = Number(editorX);
@@ -333,15 +410,14 @@ export function findMsegPointHitIndex(
         return -1;
     }
 
-    const safeWidth = Math.max(1, Number(width) || 0);
-    const safeHeight = Math.max(1, Number(height) || 0);
     const safeHitRadius = Math.max(0, Number(hitRadius) || 0);
     let closestPointIndex = -1;
     let closestDistanceSquared = safeHitRadius * safeHitRadius;
 
     points.forEach((point, pointIndex) => {
-        const pointX = point.x * safeWidth;
-        const pointY = (1.0 - point.y) * safeHeight;
+        const coordinates = pointToMsegEditorCoordinates(point, width, height, editorOptions);
+        const pointX = coordinates.x;
+        const pointY = coordinates.y;
         const deltaX = targetX - pointX;
         const deltaY = targetY - pointY;
         const distanceSquared = (deltaX * deltaX) + (deltaY * deltaY);

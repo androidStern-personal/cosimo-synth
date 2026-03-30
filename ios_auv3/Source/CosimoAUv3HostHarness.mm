@@ -3,6 +3,7 @@
 #import <AVFoundation/AVFoundation.h>
 #import <AudioToolbox/AudioToolbox.h>
 #import <CoreAudioKit/AUViewController.h>
+#import <WebKit/WebKit.h>
 
 static NSString * const CosimoHostHarnessErrorDomain = @"CosimoHostHarnessError";
 static NSString * const CosimoPrimaryParameterIdentifier = @"wavetablePosition";
@@ -276,11 +277,20 @@ static AudioComponentDescription CosimoComponentDescription()
             [self.editorController didMoveToParentViewController:host];
             [container layoutIfNeeded];
 
-            dispatch_after (dispatch_time (DISPATCH_TIME_NOW, (int64_t) (0.8 * NSEC_PER_SEC)),
-                            dispatch_get_main_queue(), ^
+            [self collectEditorDOMMetricsAfterDelay:0.35
+                                  remainingAttempts:12
+                                         completion:^(NSDictionary<NSString *,id> * _Nullable debugResult, NSError * _Nullable debugError)
             {
-                completion ([self currentEditorMetrics:YES], nil);
-            });
+                NSMutableDictionary<NSString *, id> *result = [[self currentEditorMetrics:YES] mutableCopy];
+
+                if (debugResult != nil)
+                    result[@"domMetrics"] = debugResult;
+
+                if (debugError != nil)
+                    result[@"domMetricsError"] = debugError.localizedDescription ?: @"Unknown DOM metrics error";
+
+                completion (result, nil);
+            }];
         });
     }];
 }
@@ -720,6 +730,88 @@ static AudioComponentDescription CosimoComponentDescription()
         @"viewWidth": @(viewSize.width),
         @"viewHeight": @(viewSize.height),
     };
+}
+
+- (WKWebView * _Nullable)findWebViewInView:(UIView *)view
+{
+    if ([view isKindOfClass:[WKWebView class]])
+        return (WKWebView *) view;
+
+    for (UIView *subview in view.subviews)
+    {
+        WKWebView *match = [self findWebViewInView:subview];
+
+        if (match != nil)
+            return match;
+    }
+
+    return nil;
+}
+
+- (void)collectEditorDOMMetricsAfterDelay:(NSTimeInterval)delay
+                          remainingAttempts:(NSInteger)remainingAttempts
+                                 completion:(CosimoHostResultBlock)completion
+{
+    dispatch_after (dispatch_time (DISPATCH_TIME_NOW, (int64_t) (delay * NSEC_PER_SEC)),
+                    dispatch_get_main_queue(), ^
+    {
+        [self collectEditorDOMMetricsWithCompletion:^(NSDictionary<NSString *,id> * _Nullable result, NSError * _Nullable error)
+        {
+            if (result != nil || remainingAttempts <= 0)
+            {
+                completion (result, error);
+                return;
+            }
+
+            [self collectEditorDOMMetricsAfterDelay:0.25
+                                  remainingAttempts:remainingAttempts - 1
+                                         completion:completion];
+        }];
+    });
+}
+
+- (void)collectEditorDOMMetricsWithCompletion:(CosimoHostResultBlock)completion
+{
+    if (self.editorController == nil)
+    {
+        completion (nil, CosimoMakeError (18, @"The editor is not open."));
+        return;
+    }
+
+    WKWebView *webView = [self findWebViewInView:self.editorController.view];
+
+    if (webView == nil)
+    {
+        completion (nil, CosimoMakeError (19, @"Could not find the editor web view."));
+        return;
+    }
+
+    NSString *script = @"window.__cosimoCollectLayoutMetrics?.() ?? null";
+
+    [webView evaluateJavaScript:script completionHandler:^(id _Nullable result, NSError * _Nullable error)
+    {
+        if (error != nil)
+        {
+            completion (nil, error);
+            return;
+        }
+
+        if ([result isKindOfClass:[NSDictionary class]])
+        {
+            completion ((NSDictionary<NSString *, id> *) result, nil);
+            return;
+        }
+
+        if (result == nil || [result isKindOfClass:[NSNull class]])
+        {
+            completion (nil, CosimoMakeError (20, @"The editor did not expose layout metrics yet."));
+            return;
+        }
+
+        completion (@{
+            @"resultType": result != nil ? NSStringFromClass ([result class]) : @"nil",
+        }, nil);
+    }];
 }
 
 - (NSURL *)stateFileURLForName:(NSString *)stateName

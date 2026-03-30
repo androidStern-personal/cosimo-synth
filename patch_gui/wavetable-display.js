@@ -1,3 +1,5 @@
+import { createDefaultWavetableTheme } from "./theme.js";
+
 const CAMERA_YAW = 15 * (Math.PI / 180);
 const CAMERA_PITCH = 26 * (Math.PI / 180);
 const CAMERA_DISTANCE = 10.5;
@@ -8,18 +10,7 @@ const DISCONTINUITY_THRESHOLD = 0.5;
 const FLOOR_Y = -0.64;
 const GUIDE_TOP_Y = 0.28;
 
-export const DEFAULT_WAVETABLE_THEME = {
-    backgroundTop: "#04070f",
-    backgroundBottom: "#04070f",
-    backgroundRGB: [4, 7, 15],
-    panelStroke: "rgba(132, 149, 255, 0.0)",
-    frameColor: [94, 118, 255],
-    meshColor: [102, 224, 255],
-    highlightColor: [245, 108, 182],
-    guideColor: "rgba(129, 150, 255, 0.12)",
-    textColor: "rgba(255, 219, 166, 0.94)",
-    shadowColor: "rgba(7, 11, 28, 0.36)",
-};
+export const DEFAULT_WAVETABLE_THEME = createDefaultWavetableTheme();
 
 function clamp(value, min, max) {
     return Math.min(Math.max(value, min), max);

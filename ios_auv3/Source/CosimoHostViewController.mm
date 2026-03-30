@@ -181,10 +181,10 @@ static NSString * const CosimoSmokeStateName = @"host-smoke-state";
     UILayoutGuide *safeArea = self.view.safeAreaLayoutGuide;
 
     [NSLayoutConstraint activateConstraints:@[
-        [scrollView.leadingAnchor constraintEqualToAnchor:safeArea.leadingAnchor],
-        [scrollView.trailingAnchor constraintEqualToAnchor:safeArea.trailingAnchor],
-        [scrollView.topAnchor constraintEqualToAnchor:safeArea.topAnchor],
-        [scrollView.bottomAnchor constraintEqualToAnchor:safeArea.bottomAnchor],
+        [scrollView.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
+        [scrollView.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
+        [scrollView.topAnchor constraintEqualToAnchor:self.view.topAnchor],
+        [scrollView.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor],
 
         [contentView.leadingAnchor constraintEqualToAnchor:scrollView.contentLayoutGuide.leadingAnchor],
         [contentView.trailingAnchor constraintEqualToAnchor:scrollView.contentLayoutGuide.trailingAnchor],
@@ -210,10 +210,10 @@ static NSString * const CosimoSmokeStateName = @"host-smoke-state";
         [closeOverlayButton.trailingAnchor constraintEqualToAnchor:self.editorOverlayView.trailingAnchor constant:-20.0],
         [closeOverlayButton.centerYAnchor constraintEqualToAnchor:editorLabel.centerYAnchor],
 
-        [self.editorContentView.leadingAnchor constraintEqualToAnchor:self.editorOverlayView.safeAreaLayoutGuide.leadingAnchor],
-        [self.editorContentView.trailingAnchor constraintEqualToAnchor:self.editorOverlayView.safeAreaLayoutGuide.trailingAnchor],
+        [self.editorContentView.leadingAnchor constraintEqualToAnchor:self.editorOverlayView.leadingAnchor],
+        [self.editorContentView.trailingAnchor constraintEqualToAnchor:self.editorOverlayView.trailingAnchor],
         [self.editorContentView.topAnchor constraintEqualToAnchor:editorLabel.bottomAnchor constant:12.0],
-        [self.editorContentView.bottomAnchor constraintEqualToAnchor:self.editorOverlayView.safeAreaLayoutGuide.bottomAnchor],
+        [self.editorContentView.bottomAnchor constraintEqualToAnchor:self.editorOverlayView.bottomAnchor],
     ]];
 }
 

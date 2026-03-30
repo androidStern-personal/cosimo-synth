@@ -4,14 +4,18 @@ import assert from "node:assert/strict";
 import {
     MSEG_BODY_SAMPLES,
     MSEG_CURVE_POWER_LIMIT,
+    MSEG_POINT_RADIUS_PX,
     MSEG_PADDED_SAMPLES,
     clampMsegRateSeconds,
+    createMsegEditorMetrics,
     createDefaultMsegPlayback,
     createDefaultMsegShape,
     evaluateMsegShape,
     findMsegPointHitIndex,
+    msegEditorCoordinatesToPoint,
     normalizeMsegPlayback,
     normalizeMsegShape,
+    pointToMsegEditorCoordinates,
     renderMsegShape,
     sampleRenderedMsegBuffer,
     toMsegPlaybackConfigEvent,
@@ -47,9 +51,10 @@ test("default_shape_has_two_endpoints_and_default_playback", () => {
     });
 });
 
-test("seconds_rate_clamps_to_the_phase_6b_supported_range", () => {
-    assert.equal(clampMsegRateSeconds(0.0), 0.05);
-    assert.equal(clampMsegRateSeconds(99.0), 8.0);
+test("seconds_rate_clamps_to_the_modal_editor_supported_range", () => {
+    assert.equal(clampMsegRateSeconds(-1.0), 0.0);
+    assert.equal(clampMsegRateSeconds(0.0), 0.0);
+    assert.equal(clampMsegRateSeconds(99.0), 2.0);
 });
 
 test("playback_normalization_swaps_reversed_loops_and_disables_zero_width_loops", () => {
@@ -110,6 +115,45 @@ test("point_hit_testing_accepts_near_misses_inside_the_larger_pick_radius", () =
 
     assert.equal(findMsegPointHitIndex(shape, 312, 84, 600, 180), 1);
     assert.equal(findMsegPointHitIndex(shape, 335, 125, 600, 180), -1);
+});
+
+test("editor_metrics_keep_endpoints_clear_of_the_shell border", () => {
+    const metrics = createMsegEditorMetrics(600, 180);
+    const start = pointToMsegEditorCoordinates({ x: 0.0, y: 0.0 }, 600, 180);
+    const end = pointToMsegEditorCoordinates({ x: 1.0, y: 1.0 }, 600, 180);
+
+    assert.ok(start.x >= metrics.plotLeft);
+    assert.ok(start.y <= metrics.plotBottom);
+    assert.ok(end.x <= metrics.plotRight);
+    assert.ok(end.y >= metrics.plotTop);
+    assert.ok(metrics.plotLeft >= MSEG_POINT_RADIUS_PX);
+    assert.ok(metrics.plotRight <= 600 - MSEG_POINT_RADIUS_PX);
+});
+
+test("vertical editor orientation maps time along the long axis and amplitude across it", () => {
+    const start = pointToMsegEditorCoordinates(
+        { x: 0.0, y: 0.0 },
+        180,
+        600,
+        { orientation: "vertical" }
+    );
+    const end = pointToMsegEditorCoordinates(
+        { x: 1.0, y: 1.0 },
+        180,
+        600,
+        { orientation: "vertical" }
+    );
+
+    assert.ok(start.y > end.y);
+    assert.ok(start.x < end.x);
+    assert.deepEqual(
+        msegEditorCoordinatesToPoint(start.x, start.y, 180, 600, { orientation: "vertical" }),
+        { x: 0.0, y: 0.0 }
+    );
+    assert.deepEqual(
+        msegEditorCoordinatesToPoint(end.x, end.y, 180, 600, { orientation: "vertical" }),
+        { x: 1.0, y: 1.0 }
+    );
 });
 
 test("shape_validation_rejects_fewer_than_two_points", () => {
