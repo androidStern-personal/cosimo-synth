@@ -19,7 +19,7 @@
   "worker": "patch_gui/wavetable-worker.mjs",
   "resources": [],
   "view": {
-    "src": "patch_gui/index.js",
+    "src": "patch_gui/desktop/index.js",
     "resizable": true,
     "width": 1120,
     "height": 680

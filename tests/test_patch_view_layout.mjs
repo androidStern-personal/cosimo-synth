@@ -17,6 +17,9 @@ test("iOS patch manifest keeps the synth graph but switches to the mobile editor
     const desktopManifest = await loadPatchManifest("WavetableSynth.cmajorpatch");
     const iosManifest = await loadPatchManifest("WavetableSynth.iOS.cmajorpatch");
 
+    assert.equal(desktopManifest.view.src, "patch_gui/desktop/index.js");
+    assert.equal(desktopManifest.view.width, 1120);
+    assert.equal(desktopManifest.view.height, 680);
     assert.equal(iosManifest.view.src, "patch_gui/index.ios.js");
     assert.equal("width" in iosManifest.view, false);
     assert.equal("height" in iosManifest.view, false);
@@ -31,6 +34,30 @@ test("iOS patch manifest keeps the synth graph but switches to the mobile editor
     assert.deepEqual(iosManifest.resources, []);
     assert.equal("externals" in desktopManifest, false);
     assert.equal("externals" in iosManifest, false);
+});
+
+test("desktop React UI tooling is wired for Vite dev and build loops", async () => {
+    const packageJson = JSON.parse(await fs.readFile(path.join(repoRoot, "package.json"), "utf8"));
+    const viteConfig = await fs.readFile(path.join(repoRoot, "ui", "vite.desktop.config.mjs"), "utf8");
+
+    assert.equal(packageJson.scripts["ui:desktop:dev"], "vite --config ui/vite.desktop.config.mjs");
+    assert.equal(packageJson.scripts["ui:desktop:build"], "vite build --config ui/vite.desktop.config.mjs");
+    assert.match(viteConfig, /serveHtmlEntry\("\/", path\.join\(repoRoot,\s*"ui",\s*"desktop",\s*"index\.html"\)\)/);
+    assert.match(viteConfig, /serveHtmlEntry\("\/ui\/desktop\/index\.html", path\.join\(repoRoot,\s*"ui",\s*"desktop",\s*"index\.html"\)\)/);
+    assert.match(viteConfig, /servePatchModuleAlias\("\/patch_gui\/desktop\/index\.js"/);
+    assert.match(viteConfig, /serveStaticDirectory\("\/cmaj_api", cmajorApiRoot\)/);
+    assert.match(viteConfig, /port:\s*5174/);
+    assert.match(viteConfig, /outDir:\s*path\.join\(repoRoot,\s*"patch_gui",\s*"desktop"\)/);
+});
+
+test("desktop dev plug-in build enables the webview dev server and rebuilds the React bundle", async () => {
+    const cmakeSource = await fs.readFile(path.join(repoRoot, "tools", "live_dev_plugin", "CMakeLists.txt"), "utf8");
+    const buildScript = await fs.readFile(path.join(repoRoot, "scripts", "build_live_dev_plugin.sh"), "utf8");
+
+    assert.match(cmakeSource, /CMAJ_ENABLE_WEBVIEW_DEV_TOOLS=1/);
+    assert.match(cmakeSource, /COSIMO_ENABLE_WEBVIEW_DEV_SERVER=1/);
+    assert.match(buildScript, /uv run python "\$repo_root\/build_assets\.py"/);
+    assert.match(buildScript, /npm run ui:desktop:build/);
 });
 
 test("shared patch GUI .js files are generated from the .mjs source modules", async () => {
@@ -153,7 +180,7 @@ test("iOS patch view applies a root-level safe-area gutter across the whole scre
     assert.match(source, /env\(safe-area-inset-right\)/);
     assert.match(source, /:host\s*\{[\s\S]*box-sizing:\s*border-box;/);
     assert.match(source, /--cosimo-ios-top-inset:\s*50px;/);
-    assert.match(source, /--cosimo-ios-bottom-inset:\s*20px;/);
+    assert.match(source, /--cosimo-ios-bottom-inset:\s*0px;/);
     assert.match(source, /--cosimo-ios-safe-top:\s*calc\(env\(safe-area-inset-top\)\s*\+\s*var\(--cosimo-ios-top-inset\)\);/);
     assert.match(source, /--cosimo-ios-safe-bottom:\s*calc\(env\(safe-area-inset-bottom\)\s*\+\s*var\(--cosimo-ios-bottom-inset\)\);/);
     assert.match(source, /\.ios-shell\s*\{[\s\S]*box-sizing:\s*border-box;/);

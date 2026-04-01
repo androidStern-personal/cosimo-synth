@@ -59,7 +59,7 @@ class PatchVariant:
 PATCH_VARIANTS = (
     PatchVariant(
         manifest_filename="WavetableSynth.cmajorpatch",
-        view_src="patch_gui/index.js",
+        view_src="patch_gui/desktop/index.js",
         view_width=1120,
         view_height=680,
     ),
