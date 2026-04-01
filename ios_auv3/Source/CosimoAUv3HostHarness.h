@@ -20,6 +20,10 @@ typedef void (^CosimoHostResultBlock)(NSDictionary<NSString *, id> * _Nullable r
                         completion:(CosimoHostResultBlock)completion;
 - (void)sendTestNoteWithCompletion:(CosimoHostResultBlock)completion;
 - (void)openEditorWithCompletion:(CosimoHostResultBlock)completion;
+- (void)captureEditorStateWithCompletion:(CosimoHostResultBlock)completion;
+- (void)inspectEditorHostPageWithCompletion:(CosimoHostResultBlock)completion;
+- (void)inspectFactoryCatalogWithCompletion:(CosimoHostResultBlock)completion;
+- (void)reloadEditorHostPageWithCompletion:(CosimoHostResultBlock)completion;
 - (void)closeEditorWithCompletion:(CosimoHostResultBlock _Nullable)completion;
 - (void)saveStateNamed:(NSString *)stateName completion:(CosimoHostResultBlock)completion;
 - (void)reloadStateNamed:(NSString *)stateName completion:(CosimoHostResultBlock)completion;

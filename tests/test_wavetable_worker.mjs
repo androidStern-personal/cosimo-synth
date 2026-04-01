@@ -305,6 +305,72 @@ test("worker bootstraps from runtimeState instead of requesting wavetableSelect 
     );
 });
 
+test("worker prefers the resolved resource URL for factory wavetable source paths when both loader paths are available", async () => {
+    const spacedPath = "assets/factory_sources/imported/BS2 - Acid.wav";
+    const catalog = {
+        tables: [
+            {
+                tableId: "bs2-acid",
+                name: "BS2 - Acid",
+                frameCount: 2,
+                sourceWav: spacedPath,
+            },
+        ],
+    };
+    const connection = new FakePatchConnection({
+        catalog,
+        audioFiles: {},
+        maxAutoAckFrames: 0,
+        resourceRootUrl: "https://example.test/bundle/",
+    });
+    const waveBuffer = createFloat32WaveBufferFromFrames([
+        createSineFrame(0),
+        createSineFrame(Math.PI / 2),
+    ]);
+    const fetchedUrls = [];
+
+    await withPatchedFetch(async (url) => {
+        fetchedUrls.push(String(url));
+
+        return {
+            ok: true,
+            async arrayBuffer() {
+                return waveBuffer;
+            },
+        };
+    }, async () => {
+        const controller = createWavetableWorkerController(connection, { maxFramesInFlight: 1 });
+        await controller.start();
+        await flushMicrotasks();
+
+        connection.emitEndpoint(
+            "runtimeState",
+            createRuntimeState({
+                desiredIntentSerial: 5,
+                desiredTableIndex: 0,
+                generationFrontier: 10,
+                serviceState: 0,
+            })
+        );
+        await flushMicrotasks(16);
+    });
+
+    assert.deepEqual(connection.readAudioPaths, []);
+    assert.deepEqual(fetchedUrls, [
+        "https://example.test/bundle/assets/factory_sources/imported/BS2%20-%20Acid.wav",
+    ]);
+
+    const loadBeginEvents = connection.sentEvents.filter(({ endpointID }) => endpointID === "wavetableLoadBegin");
+    assert.deepEqual(loadBeginEvents.map(({ value }) => value), [
+        {
+            dspSessionId: 7,
+            generation: 11,
+            tableIndex: 0,
+            frameCount: 2,
+        },
+    ]);
+});
+
 test("worker falls back to the resolved resource URL for spaced wavetable paths when no audio-data bridge is available", async () => {
     const spacedPath = "assets/factory_sources/BS2 - Acid.wav";
     const catalog = {

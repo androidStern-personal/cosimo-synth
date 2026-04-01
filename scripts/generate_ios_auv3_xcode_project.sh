@@ -54,6 +54,8 @@ cmake -S "$repo_root/ios_auv3" \
       -DCMAKE_SYSTEM_NAME=iOS \
       -DCMAKE_OSX_SYSROOT="$ios_sysroot" \
       -DCMAJOR_VERSION="$cmajor_version" \
+      -DCOSIMO_WEBVIEW_DEV_SERVER_URL="${COSIMO_WEBVIEW_DEV_SERVER_URL:-}" \
+      -DCOSIMO_ENABLE_EDITOR_INSPECTION="${COSIMO_ENABLE_EDITOR_INSPECTION:-}" \
       -DJUCE_PATH="$juce_path"
 
 enable_app_groups_capability "$build_dir/CosimoSynthAUv3.xcodeproj/project.pbxproj"

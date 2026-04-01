@@ -89,7 +89,7 @@ def boot_device(udid: str) -> None:
     run(["xcrun", "simctl", "bootstatus", udid, "-b"])
 
 
-def build_project(build_dir: Path, destination_udid: str) -> dict[str, Path]:
+def build_project(build_dir: Path, destination_udid: str, *, configuration: str = "Debug") -> dict[str, Path]:
     env = os.environ.copy()
     env["COSIMO_IOS_SYSROOT"] = "iphonesimulator"
     run([str(XCODE_PROJECT_SCRIPT), str(build_dir)], env=env)
@@ -101,7 +101,7 @@ def build_project(build_dir: Path, destination_udid: str) -> dict[str, Path]:
             "-project",
             str(project_path),
             "-configuration",
-            "Debug",
+            configuration,
             "-sdk",
             "iphonesimulator",
             "-destination",
@@ -277,11 +277,14 @@ def wait_for_editor_metrics(udid: str, *, timeout_seconds: float = 20.0) -> dict
                 latest_payload = payload
 
                 dom_metrics = payload.get("domMetrics")
+                host_page = payload.get("hostPage")
+                runtime = payload.get("runtime")
+                screen_mode = payload.get("screenMode")
 
                 if isinstance(dom_metrics, dict):
                     is_ready = bool(dom_metrics.get("isReady"))
 
-                    if is_ready:
+                    if is_ready and (screen_mode != "patchView" or isinstance(host_page, dict)):
                         return payload
 
                 if payload.get("error") not in (None, ""):
@@ -304,7 +307,15 @@ def wait_for_output(path: Path, *, timeout_seconds: float = 120.0) -> dict[str, 
     raise RuntimeError(f"Timed out waiting for {path.name}")
 
 
-def run_host_mode(udid: str, mode: str, output_name: str) -> dict[str, object]:
+def run_host_mode(
+    udid: str,
+    mode: str,
+    output_name: str,
+    *,
+    extra_child_env: dict[str, str] | None = None,
+    terminate_after_output: bool = True,
+    require_ready_patch_view_metrics: bool = False,
+) -> dict[str, object]:
     documents_dir = app_documents_directory(udid, HOST_BUNDLE_ID)
     documents_dir.mkdir(parents=True, exist_ok=True)
     output_path = documents_dir / output_name
@@ -316,6 +327,10 @@ def run_host_mode(udid: str, mode: str, output_name: str) -> dict[str, object]:
     env = os.environ.copy()
     env["SIMCTL_CHILD_COSIMO_SMOKE_MODE"] = mode
     env["SIMCTL_CHILD_COSIMO_SMOKE_OUTPUT_NAME"] = output_name
+
+    if extra_child_env is not None:
+        for key, value in extra_child_env.items():
+            env[f"SIMCTL_CHILD_{key}"] = value
 
     run_allow_failure(["xcrun", "simctl", "terminate", udid, HOST_BUNDLE_ID])
     launch = run_allow_failure(
@@ -334,7 +349,9 @@ def run_host_mode(udid: str, mode: str, output_name: str) -> dict[str, object]:
         raise RuntimeError(f"Could not launch the host app in {mode} mode:\n{launch.stderr}")
 
     payload = wait_for_output(output_path)
-    run_allow_failure(["xcrun", "simctl", "terminate", udid, HOST_BUNDLE_ID])
+
+    if terminate_after_output:
+        run_allow_failure(["xcrun", "simctl", "terminate", udid, HOST_BUNDLE_ID])
 
     if "error" in payload:
         raise RuntimeError(f"Host app smoke mode {mode} failed: {payload['error']}")
@@ -348,6 +365,15 @@ def run_host_mode(udid: str, mode: str, output_name: str) -> dict[str, object]:
             dom_metrics = geometry_payload.get("domMetrics")
             native_metrics = geometry_payload.get("native")
             geometry_error = geometry_payload.get("error")
+            host_page = geometry_payload.get("hostPage")
+            catalog = geometry_payload.get("catalog")
+            runtime = geometry_payload.get("runtime")
+            screen_mode = geometry_payload.get("screenMode")
+            geometry_patch_view_ready = (
+                isinstance(dom_metrics, dict)
+                and bool(dom_metrics.get("isReady"))
+                and (screen_mode != "patchView" or isinstance(host_page, dict))
+            )
 
             if isinstance(dom_metrics, dict):
                 editor_payload["domMetrics"] = dom_metrics
@@ -355,8 +381,36 @@ def run_host_mode(udid: str, mode: str, output_name: str) -> dict[str, object]:
             if isinstance(native_metrics, dict):
                 editor_payload["nativeMetrics"] = native_metrics
 
+            if isinstance(host_page, dict) and (
+                geometry_patch_view_ready or "hostPage" not in editor_payload
+            ):
+                editor_payload["hostPage"] = host_page
+
+            if isinstance(catalog, dict):
+                editor_payload["catalog"] = catalog
+
+            if isinstance(runtime, dict):
+                editor_payload["runtime"] = runtime
+
+            if isinstance(screen_mode, str) and screen_mode:
+                editor_payload["screenMode"] = screen_mode
+
             if geometry_error and "domMetrics" not in editor_payload:
                 editor_payload["domMetricsError"] = geometry_error
+
+        if require_ready_patch_view_metrics:
+            screen_mode = editor_payload.get("screenMode")
+            dom_metrics = editor_payload.get("domMetrics")
+            host_page = editor_payload.get("hostPage")
+            patch_view_ready = (
+                screen_mode == "patchView"
+                and isinstance(dom_metrics, dict)
+                and bool(dom_metrics.get("isReady"))
+                and isinstance(host_page, dict)
+            )
+
+            if not patch_view_ready:
+                raise RuntimeError(f"Host app mode {mode} did not produce ready patch-view editor metrics: {editor_payload}")
 
     return payload
 
@@ -365,6 +419,7 @@ def combine_results(phone_save: dict[str, object], phone_reload: dict[str, objec
     phone_state = dict(phone_save.get("state", {}))
     phone_state["relaunchObservedValue"] = phone_reload.get("state", {}).get("relaunchObservedValue", 0.0)
     phone_state["relaunchObservedTableSelect"] = phone_reload.get("state", {}).get("relaunchObservedTableSelect", 0.0)
+    phone_state["relaunchStateSource"] = phone_reload.get("state", {}).get("relaunchStateSource", "")
     phone_state["parameterSchemaMatchesRelaunch"] = phone_save.get("parameters", []) == phone_reload.get("parameters", [])
 
     return {
@@ -374,6 +429,7 @@ def combine_results(phone_save: dict[str, object], phone_reload: dict[str, objec
             "parameters": phone_save.get("parameters", []),
             "parameterSet": phone_save.get("parameterSet", {}),
             "tableSelectionSet": phone_save.get("tableSelectionSet", {}),
+            "tableSelectionRuntime": phone_save.get("tableSelectionRuntime", {}),
             "audio": phone_save.get("audio", {}),
             "editor": phone_save.get("editor", {}),
             "state": phone_state,
@@ -415,9 +471,9 @@ def main() -> int:
         run_host_mode(udid, "layout", "prime-layout.json")
         seed_factory_library(udid)
 
-    phone_save = run_host_mode(phone_udid, "save", "phone-save.json")
-    phone_reload = run_host_mode(phone_udid, "reload", "phone-reload.json")
-    tablet_layout = run_host_mode(tablet_udid, "layout", "tablet-layout.json")
+    phone_save = run_host_mode(phone_udid, "save", "phone-save.json", require_ready_patch_view_metrics=True)
+    phone_reload = run_host_mode(phone_udid, "reload", "phone-reload.json", require_ready_patch_view_metrics=True)
+    tablet_layout = run_host_mode(tablet_udid, "layout", "tablet-layout.json", require_ready_patch_view_metrics=True)
 
     args.output.write_text(
         json.dumps(combine_results(phone_save, phone_reload, tablet_layout), indent=2),

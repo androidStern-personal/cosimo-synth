@@ -23,6 +23,17 @@ import { DEFAULT_PATCH_THEME, getPatchThemeCSSVariables } from "../patch_gui/the
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 
+async function withPatchedFetch(fakeFetch, callback) {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = fakeFetch;
+
+    try {
+        return await callback();
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
+}
+
 function harmonicCentroid(frame, maxHarmonic = 32) {
     const sampleCount = frame.length;
     let weightedTotal = 0;
@@ -475,6 +486,57 @@ test("bank loading resolves the selected source wavetable from the runtime catal
     assert.equal(bank.samples.length, bank.frameCount * 2048);
     assert.equal(bank.sampleBlobPath, sourceWavPath);
     assert.deepEqual(requestedPaths, ["assets/factory-bank-catalog.json", sourceWavPath]);
+});
+
+test("bank loading prefers the resolved resource URL for factory wavetable source paths when both loader paths are available", async () => {
+    const spacedPath = "assets/factory_sources/imported/BS2 - Acid.wav";
+    const fullCatalog = getFactoryBankCatalogValue(
+        JSON.parse(await fs.readFile(path.join(repoRoot, "assets", "factory-bank-catalog.json"), "utf8"))
+    );
+    const spacedTable = fullCatalog.tables.find((table) => table.sourceWav === spacedPath);
+    assert.ok(spacedTable, `Could not find ${spacedPath} in the runtime catalog`);
+    const catalog = {
+        tables: [spacedTable],
+    };
+    const waveBuffer = await fs.readFile(path.join(repoRoot, spacedPath));
+    const fetchedUrls = [];
+    const readAudioPaths = [];
+
+    const bank = await withPatchedFetch(async (url) => {
+        fetchedUrls.push(String(url));
+
+        return {
+            ok: true,
+            async arrayBuffer() {
+                return waveBuffer.buffer.slice(
+                    waveBuffer.byteOffset,
+                    waveBuffer.byteOffset + waveBuffer.byteLength
+                );
+            },
+        };
+    }, async () => loadFactoryBankFramesFromPatch({
+        readResource(path) {
+            if (path === "assets/factory-bank-catalog.json") {
+                return JSON.stringify(catalog);
+            }
+
+            throw new Error(`Unexpected resource path: ${path}`);
+        },
+        readResourceAsAudioData(path) {
+            readAudioPaths.push(path);
+            throw new Error(`The audio-data bridge should not be used for ${path}`);
+        },
+        getResourceAddress(requestedPath) {
+            return new URL(requestedPath, "https://example.test/bundle/");
+        },
+    }, { tableIndex: 0 }));
+
+    assert.equal(bank.frameCount, Number(spacedTable.frameCount));
+    assert.equal(bank.sampleBlobPath, spacedPath);
+    assert.deepEqual(readAudioPaths, []);
+    assert.deepEqual(fetchedUrls, [
+        "https://example.test/bundle/assets/factory_sources/imported/BS2%20-%20Acid.wav",
+    ]);
 });
 
 test("factory bank catalog rejects stale packed-bank entries without source wavs", () => {

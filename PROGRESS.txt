@@ -1,3 +1,71 @@
+Native iOS shell cleanup follow-up landed on 2026-03-31
+- This was a cleanup pass after the repo-owned iOS AUv3 shell refactor, focused on removing flaky test contracts and tightening the remaining footguns instead of adding new features.
+- The Debug dev-server and editor inspection path is now less racy:
+  - `ios_auv3/Source/CosimoAUv3HostHarness.mm` now retries editor-state capture until the host-page inspection data is actually ready instead of returning the first partial patch-view snapshot.
+  - `ios_auv3/Source/CosimoHostViewController.mm` now refreshes editor state before writing layout smoke output.
+  - `scripts/run_ios_auv3_host_smoke.py` now refuses to treat incomplete patch-view metrics as a successful inspect result.
+- The repo-owned runtime no longer silently swallows several resource and audio-data failures:
+  - `ios_auv3/Source/CosimoCmajorPlugin.h` now logs resource-read and modification-time failures instead of hiding them completely.
+- The raw-performer generator contract is tighter without breaking the real Xcode build path:
+  - `scripts/generate_ios_auv3_plugin.sh` still rejects the repo root and unrelated non-empty directories
+  - outside this repo, it now only accepts output paths that end with `generated/cmajor`, which matches the actual CMake/Xcode build layout and avoids deleting arbitrary directories
+- The iOS test contract is cleaner:
+  - added a real standalone missing-library behavior test that deletes one installed wavetable source file and proves the app stays on the installer screen
+  - reduced several structure-freeze tests so they assert the external contract instead of large swaths of implementation text
+  - removed a bad host-smoke assertion that was treating a stale runtime endpoint snapshot as proof of saved-state correctness; the host smoke now focuses on the real AU state blob path, while runtime endpoint delivery is covered by its own test
+- Temporary cleanup tracker:
+  - `TMP_IOS_AUV3_CLEANUP_TASKS.md`
+- What was verified in this cleanup pass:
+  - `uv run pytest -q tests/test_ios_auv3_build.py -k 'generator_'`
+  - `uv run pytest -q tests/test_ios_auv3_build.py -k 'test_ios_host_smoke_discovers_the_extension_and_restores_state_across_relaunch or test_ios_host_smoke_freezes_parameter_and_state_shape or test_ios_host_smoke_keeps_the_editor_inside_phone_and_tablet_viewports'`
+  - `uv run pytest -q tests/test_ios_auv3_build.py`
+  - Final result: `28 passed in 411.09s (0:06:51)`
+
+Native iOS shell refactor follow-up landed on 2026-03-30
+- Plan: `IOS_AUV3_NATIVE_SHELL_REFACTOR_PLAN.md`.
+- Kept the repo-owned AUv3 shell around raw `cmaj generate --target=cpp` performer output and the pinned runtime snapshot under `ios_auv3/Vendor/cmajor/`.
+- Removed the simulator-only repo-checkout resource fallback that was masking packaging bugs. Debug now tries the local Vite server if it is reachable and otherwise loads the bundled UI and patch assets. Release always loads bundled files.
+- Added a debug and test only editor inspection hook, gated by `COSIMO_ENABLE_EDITOR_INSPECTION`, so the simulator host tests can capture the real extension-side host page, DOM layout, and catalog snapshot without leaving always-on telemetry in shipping builds.
+- Added the ATS exceptions needed for the local web-development server and threaded `COSIMO_ENABLE_EDITOR_INSPECTION` through `scripts/generate_ios_auv3_xcode_project.sh`.
+- Expanded `tests/test_ios_auv3_build.py` so it now proves:
+  - the built standalone app and AUv3 extension bundles contain the shipped UI, `cmaj_api`, assets, and patch manifest files
+  - the shipped bundles can serve the UI and patch resources from the real bundle layout
+  - Debug loads modified dev-server HTML and JavaScript without rebuilding and falls back to bundled files when the server is absent
+  - Release ignores the dev-server URL and still uses bundled files
+  - the AUv3 shows the missing-library gate screen when the shared wavetable library is absent
+  - the editor reads a shared-library catalog override from the App Group install location
+  - host smoke still discovers the AUv3, opens the editor, restores state, and fits phone and tablet viewports
+- What was verified:
+  - `uv run pytest -q tests/test_ios_auv3_build.py`
+  - Result: `21 passed`
+- Deliberate non-goal kept for follow-up:
+  - the large queue-size hack and the underlying wavetable mip transport design were not changed in this refactor
+
+Host smoke and iPhone wavetable resource follow-up landed on 2026-03-31
+- The AUv3 host smoke no longer claims state restore success by replaying raw parameter values. `ios_auv3/Source/CosimoAUv3HostHarness.mm` now saves the real AU `fullState` blob when available, writes the expected observable parameter values next to that blob, restores through the real AU state property, and polls the parameter tree until the blob has actually taken effect.
+- The frozen host-smoke snapshot in `ios_auv3/expected_host_smoke.json` now matches the real JUCE AU state envelope keys:
+  - `data`
+  - `jucePluginState`
+  - `manufacturer`
+  - `subtype`
+  - `type`
+  - `version`
+- The AUv3 audio smoke now sends a second note after startup because Simulator occasionally drops the first note while the out-of-process extension is still warming up. The smoke still fails if the instance never produces audio.
+- The shared-library readiness gate still uses full `validateInstalledLibrary()` validation, so a partial install can no longer report as ready just because the catalog JSON exists.
+- Fixed the real iPhone wavetable regression:
+  - the worker and display loaders now prefer the resolved resource URL for source WAV files and only fall back to the audio-data bridge when no fetchable URL exists
+  - the custom `cosimo://bundle/...` URL handler now serves raw bytes for binary resources instead of corrupting `.wav` files through `loadFileAsString()`
+  - `BS2 - Acid.wav` now loads correctly from the installed factory library on the physical iPhone
+- Cleanup after the iPhone regression hunt:
+  - removed the one-off `COSIMO_EDITOR_TEST_AUDIO_SNAPSHOT_PATH` runtime hook and its `resourceAudio` inspection payload
+  - the shared-library regression test now uses the normal catalog snapshot path by overriding the first installed table to `assets/factory_sources/imported/BS2 - Acid.wav`
+  - `ios_auv3/Source/CosimoPluginMain.cpp` now only includes the QuickJS implementation header when the QuickJS worker path is actually enabled
+- What was verified:
+  - `node --test tests/test_wavetable_worker.mjs`
+  - `node --test --test-name-pattern='bank loading resolves the selected source wavetable from the runtime catalog|bank loading prefers the resolved resource URL for factory wavetable source paths when both loader paths are available' tests/test_wavetable_display.mjs`
+  - rebuilt and reinstalled `build/ios_device_run/CosimoSynth_artefacts/Debug/Standalone/Cosimo Synth.app`
+  - confirmed on the physical iPhone that `BS2 - ACID` now loads successfully
+
 Main-view control strip and MSEG launcher simplification landed on 2026-03-30
 - Removed the visible `Voice Routing` heading and `Play Mode` field label from the shipping patch UI.
 - Kept the voice mode selector and glide control on one shared row in both desktop and iPhone layouts.

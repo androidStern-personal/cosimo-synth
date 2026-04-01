@@ -19,7 +19,21 @@ set(
     COSIMO_GENERATED_DIR
     "${CMAKE_BINARY_DIR}/generated/cmajor"
     CACHE PATH
-    "Where the generated self-contained Cmajor JUCE files should be written"
+    "Where the generated raw Cmajor performer source should be written"
+)
+
+set(
+    COSIMO_WEBVIEW_DEV_SERVER_URL
+    "$ENV{COSIMO_WEBVIEW_DEV_SERVER_URL}"
+    CACHE STRING
+    "Optional absolute URL for a development web server that serves patch_gui/ and cmaj_api/ with HMR"
+)
+
+set(
+    COSIMO_ENABLE_EDITOR_INSPECTION
+    ""
+    CACHE STRING
+    "Optional override for the in-extension editor inspection hook. Leave empty to enable it only in Debug builds."
 )
 
 set(COSIMO_IOS_GENERATOR_SCRIPT "${COSIMO_REPO_ROOT}/scripts/generate_ios_auv3_plugin.sh")
@@ -30,6 +44,14 @@ endif()
 
 if (NOT EXISTS "${COSIMO_IOS_GENERATOR_SCRIPT}")
     message(FATAL_ERROR "Generator script not found: ${COSIMO_IOS_GENERATOR_SCRIPT}")
+endif()
+
+if (NOT EXISTS "${CMAKE_CURRENT_LIST_DIR}/Vendor/cmajor/include/cmajor/helpers/cmaj_Patch.h")
+    message(FATAL_ERROR "Vendored Cmajor helper runtime not found under ios_auv3/Vendor/cmajor/include")
+endif()
+
+if (NOT EXISTS "${CMAKE_CURRENT_LIST_DIR}/Vendor/cmajor/web/cmaj_api/cmaj-patch-view.js")
+    message(FATAL_ERROR "Vendored Cmajor web API files not found under ios_auv3/Vendor/cmajor/web/cmaj_api")
 endif()
 
 if (NOT JUCE_PATH)
@@ -55,12 +77,6 @@ if (NOT CMAKE_SYSTEM_NAME STREQUAL "iOS")
     message(STATUS "Configure ios_auv3 with -G Xcode -DCMAKE_SYSTEM_NAME=iOS to build the iOS app and AUv3 extension.")
 endif()
 
-find_library(UIKitFramework UIKit REQUIRED)
-find_library(AVFoundationFramework AVFoundation REQUIRED)
-find_library(AudioToolboxFramework AudioToolbox REQUIRED)
-find_library(WebKitFramework WebKit REQUIRED)
-find_library(CoreAudioKitFramework CoreAudioKit REQUIRED)
-
 set(JUCE_ENABLE_MODULE_SOURCE_GROUPS ON)
 
 add_subdirectory("${JUCE_PATH}" juce)
@@ -75,6 +91,11 @@ file(
     CONFIGURE_DEPENDS
     "${COSIMO_REPO_ROOT}/assets/factory_sources/*"
 )
+file(
+    GLOB_RECURSE COSIMO_CMAJOR_WEB_FILES
+    CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_LIST_DIR}/Vendor/cmajor/web/cmaj_api/*"
+)
 
 set(
     COSIMO_RUNTIME_PATCH_FILE
@@ -86,23 +107,13 @@ set(
 )
 
 set(
-    COSIMO_GENERATED_PLUGIN_CPP
-    "${COSIMO_GENERATED_DIR}/cmajor_plugin.cpp"
-)
-set(
-    COSIMO_GENERATED_CMAJOR_HEADER
-    "${COSIMO_GENERATED_DIR}/include/cmajor/helpers/cmaj_JUCEPlugin.h"
-)
-set(
-    COSIMO_GENERATED_CHOC_HEADER
-    "${COSIMO_GENERATED_DIR}/include/choc/choc/javascript/choc_javascript_QuickJS.h"
+    COSIMO_GENERATED_PERFORMER_CPP
+    "${COSIMO_GENERATED_DIR}/WavetableSynth.cpp"
 )
 
 add_custom_command(
     OUTPUT
-        "${COSIMO_GENERATED_PLUGIN_CPP}"
-        "${COSIMO_GENERATED_CMAJOR_HEADER}"
-        "${COSIMO_GENERATED_CHOC_HEADER}"
+        "${COSIMO_GENERATED_PERFORMER_CPP}"
     COMMAND
         "${COSIMO_IOS_GENERATOR_SCRIPT}"
         "${COSIMO_GENERATED_DIR}"
@@ -117,17 +128,16 @@ add_custom_command(
         "${COSIMO_REPO_ROOT}/assets/factory-bank-catalog.json"
         ${COSIMO_FACTORY_SOURCE_FILES}
         ${COSIMO_PATCH_UI_FILES}
+        ${COSIMO_CMAJOR_WEB_FILES}
     COMMENT
-        "Generating the self-contained Cmajor JUCE source for the iOS app and AUv3 extension"
+        "Generating the raw Cmajor performer source for the iOS app and AUv3 extension"
     VERBATIM
 )
 
 add_custom_target(
-    cosimo_ios_auv3_generated_plugin
+    cosimo_ios_auv3_generated_performer
     DEPENDS
-        "${COSIMO_GENERATED_PLUGIN_CPP}"
-        "${COSIMO_GENERATED_CMAJOR_HEADER}"
-        "${COSIMO_GENERATED_CHOC_HEADER}"
+        "${COSIMO_GENERATED_PERFORMER_CPP}"
 )
 
 juce_add_plugin(CosimoSynth
@@ -148,13 +158,17 @@ juce_add_plugin(CosimoSynth
 
 juce_generate_juce_header(CosimoSynth)
 
-set_source_files_properties(
-    "${COSIMO_GENERATED_PLUGIN_CPP}"
-    PROPERTIES GENERATED TRUE
-)
+set(COSIMO_GENERATED_CPP_PATH_DEFINE "\"${COSIMO_GENERATED_PERFORMER_CPP}\"")
+set(COSIMO_WEBVIEW_DEV_SERVER_URL_DEFINE "\"${COSIMO_WEBVIEW_DEV_SERVER_URL}\"")
+
+if (COSIMO_ENABLE_EDITOR_INSPECTION STREQUAL "")
+    set(COSIMO_ENABLE_EDITOR_INSPECTION_DEFINE "$<IF:$<CONFIG:Debug>,1,0>")
+else()
+    set(COSIMO_ENABLE_EDITOR_INSPECTION_DEFINE "${COSIMO_ENABLE_EDITOR_INSPECTION}")
+endif()
 
 target_sources(CosimoSynth PRIVATE
-    "${COSIMO_GENERATED_PLUGIN_CPP}"
+    "${CMAKE_CURRENT_LIST_DIR}/Source/CosimoPluginMain.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/Source/cmaj_StaticLibraryShim.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/Source/CosimoSharedWavetableLibrary.mm"
 )
@@ -165,14 +179,18 @@ target_compile_definitions(CosimoSynth PRIVATE
     $<$<CONFIG:Debug>:DEBUG=1>
     $<$<CONFIG:Debug>:CMAJ_ENABLE_ALLOCATION_CHECKER=1>
     CMAJ_VERSION="${CMAJOR_VERSION}"
+    COSIMO_ENABLE_WEBVIEW_DEV_SERVER=$<IF:$<CONFIG:Debug>,1,0>
+    COSIMO_ENABLE_EDITOR_INSPECTION=${COSIMO_ENABLE_EDITOR_INSPECTION_DEFINE}
+    COSIMO_GENERATED_CPP_PATH=${COSIMO_GENERATED_CPP_PATH_DEFINE}
+    COSIMO_WEBVIEW_DEV_SERVER_URL=${COSIMO_WEBVIEW_DEV_SERVER_URL_DEFINE}
     CMAJ_ENABLE_WEBVIEW_DEV_TOOLS=0
     JUCE_DISABLE_JUCE_VERSION_PRINTING=1
     JUCE_USE_CURL=0
 )
 
 target_include_directories(CosimoSynth PRIVATE
-    "${COSIMO_GENERATED_DIR}/include"
-    "${COSIMO_GENERATED_DIR}/include/choc"
+    "${CMAKE_CURRENT_LIST_DIR}/Vendor/cmajor/include"
+    "${CMAKE_CURRENT_LIST_DIR}/Vendor/cmajor/include/choc"
     "${CMAKE_CURRENT_LIST_DIR}/Source"
 )
 
@@ -181,7 +199,7 @@ target_link_libraries(CosimoSynth PRIVATE
     $<$<AND:$<CXX_COMPILER_ID:GNU>,$<VERSION_LESS:$<CXX_COMPILER_VERSION>,9.0>>:stdc++fs>
 )
 
-add_dependencies(CosimoSynth cosimo_ios_auv3_generated_plugin)
+add_dependencies(CosimoSynth cosimo_ios_auv3_generated_performer)
 
 foreach(bundle_target CosimoSynth_Standalone CosimoSynth_AUv3)
     set_target_properties(${bundle_target} PROPERTIES
@@ -192,11 +210,36 @@ foreach(bundle_target CosimoSynth_Standalone CosimoSynth_AUv3)
         TARGET ${bundle_target}
         POST_BUILD
         COMMAND
+            "${CMAKE_COMMAND}" -E rm -rf
+            "$<TARGET_FILE_DIR:${bundle_target}>/patch_gui"
+        COMMAND
+            "${CMAKE_COMMAND}" -E copy_directory
+            "${COSIMO_REPO_ROOT}/patch_gui"
+            "$<TARGET_FILE_DIR:${bundle_target}>/patch_gui"
+        COMMAND
+            "${CMAKE_COMMAND}" -E rm -rf
+            "$<TARGET_FILE_DIR:${bundle_target}>/cmaj_api"
+        COMMAND
+            "${CMAKE_COMMAND}" -E copy_directory
+            "${CMAKE_CURRENT_LIST_DIR}/Vendor/cmajor/web/cmaj_api"
+            "$<TARGET_FILE_DIR:${bundle_target}>/cmaj_api"
+        COMMAND
+            "${CMAKE_COMMAND}" -E rm -rf
+            "$<TARGET_FILE_DIR:${bundle_target}>/assets"
+        COMMAND
+            "${CMAKE_COMMAND}" -E copy_directory
+            "${COSIMO_REPO_ROOT}/assets"
+            "$<TARGET_FILE_DIR:${bundle_target}>/assets"
+        COMMAND
+            "${CMAKE_COMMAND}" -E copy_if_different
+            "${COSIMO_REPO_ROOT}/WavetableSynth.cmajorpatch"
+            "$<TARGET_FILE_DIR:${bundle_target}>/WavetableSynth.cmajorpatch"
+        COMMAND
             "${CMAKE_COMMAND}" -E copy_if_different
             "${COSIMO_RUNTIME_PATCH_FILE}"
             "$<TARGET_FILE_DIR:${bundle_target}>/WavetableSynth.iOS.cmajorpatch"
         COMMENT
-            "Copying the runtime patch manifest into ${bundle_target}"
+            "Copying the runtime patch, UI bundle, Cmajor web API, and factory assets into ${bundle_target}"
         VERBATIM
     )
 endforeach()
@@ -218,9 +261,9 @@ set_target_properties(CosimoSynthHost PROPERTIES
 target_compile_features(CosimoSynthHost PRIVATE cxx_std_17)
 
 target_link_libraries(CosimoSynthHost PRIVATE
-    "${UIKitFramework}"
-    "${AVFoundationFramework}"
-    "${AudioToolboxFramework}"
-    "${CoreAudioKitFramework}"
-    "${WebKitFramework}"
+    "-framework UIKit"
+    "-framework AVFoundation"
+    "-framework AudioToolbox"
+    "-framework CoreAudioKit"
+    "-framework WebKit"
 )

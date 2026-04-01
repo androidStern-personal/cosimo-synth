@@ -42,6 +42,28 @@ function isAbsoluteURL(value) {
     return /^[a-zA-Z][a-zA-Z\d+.-]*:/.test(value);
 }
 
+function resourceAddressToUrl(path, resourceAddress) {
+    const patchRootUrl = new URL("../", import.meta.url);
+
+    if (resourceAddress instanceof URL) {
+        return resourceAddress;
+    }
+
+    if (typeof resourceAddress === "string" && resourceAddress.length > 0) {
+        if (isAbsoluteURL(resourceAddress)) {
+            return new URL(resourceAddress);
+        }
+
+        const normalisedPath = resourceAddress.startsWith("/")
+            ? resourceAddress.slice(1)
+            : resourceAddress;
+
+        return new URL(normalisedPath, patchRootUrl);
+    }
+
+    return new URL(path, patchRootUrl);
+}
+
 function describePayload(payload) {
     if (payload === null) {
         return "null";
@@ -64,26 +86,8 @@ function describePayload(payload) {
 }
 
 export function resolvePatchResourceUrl(path, patchConnection) {
-    const patchRootUrl = new URL("../", import.meta.url);
     const resourceAddress = patchConnection?.getResourceAddress?.(path);
-
-    if (resourceAddress instanceof URL) {
-        return resourceAddress;
-    }
-
-    if (typeof resourceAddress === "string" && resourceAddress.length > 0) {
-        if (isAbsoluteURL(resourceAddress)) {
-            return new URL(resourceAddress);
-        }
-
-        const normalisedPath = resourceAddress.startsWith("/")
-            ? resourceAddress.slice(1)
-            : resourceAddress;
-
-        return new URL(normalisedPath, patchRootUrl);
-    }
-
-    return new URL(path, patchRootUrl);
+    return resourceAddressToUrl(path, resourceAddress);
 }
 
 async function fetchJSON(url, label) {
@@ -372,6 +376,24 @@ export async function loadFactoryBankFramesFromPatch(
     const catalogValue = await loadFactoryBankCatalogFromPatch(patchConnection, { catalogPath });
     const clampedTableIndex = clampToRange(tableIndex, 0, catalogValue.tables.length - 1);
     const sourceTableMeta = catalogValue.tables[clampedTableIndex];
+    const resourceAddress = typeof patchConnection?.getResourceAddress === "function"
+        ? patchConnection.getResourceAddress(sourceTableMeta.sourceWav)
+        : null;
+    const canLoadSourceByUrl = resourceAddress !== null
+        && resourceAddress !== undefined
+        && typeof fetch === "function";
+
+    if (canLoadSourceByUrl) {
+        const sourceWavUrl = resourceAddressToUrl(sourceTableMeta.sourceWav, resourceAddress);
+
+        return loadSourceWavetableFramesFromUrl({
+            sourceWavUrl,
+            sourceWavPath: sourceTableMeta.sourceWav,
+            tableIndex: clampedTableIndex,
+            expectedFrameCount: Number(sourceTableMeta.frameCount),
+            samplesPerFrame,
+        });
+    }
 
     if (typeof patchConnection?.readResourceAsAudioData === "function") {
         return loadSourceWavetableFramesFromPatchConnection({
