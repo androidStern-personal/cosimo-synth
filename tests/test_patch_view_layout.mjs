@@ -39,47 +39,78 @@ test("iOS patch manifest keeps the synth graph but switches to the mobile editor
 test("desktop React UI tooling is wired for Vite dev and build loops", async () => {
     const packageJson = JSON.parse(await fs.readFile(path.join(repoRoot, "package.json"), "utf8"));
     const viteConfig = await fs.readFile(path.join(repoRoot, "ui", "vite.desktop.config.mjs"), "utf8");
+    const workerViteConfig = await fs.readFile(path.join(repoRoot, "ui", "vite.worker.config.mjs"), "utf8");
 
     assert.equal(packageJson.scripts["ui:desktop:dev"], "vite --config ui/vite.desktop.config.mjs");
     assert.equal(packageJson.scripts["ui:desktop:build"], "vite build --config ui/vite.desktop.config.mjs");
+    assert.equal(packageJson.scripts["ui:worker:build"], "vite build --config ui/vite.worker.config.mjs");
+    assert.equal(packageJson.scripts["ui:build"], "node ui/build.mjs");
     assert.match(viteConfig, /serveHtmlEntry\("\/", path\.join\(repoRoot,\s*"ui",\s*"desktop",\s*"index\.html"\)\)/);
     assert.match(viteConfig, /serveHtmlEntry\("\/ui\/desktop\/index\.html", path\.join\(repoRoot,\s*"ui",\s*"desktop",\s*"index\.html"\)\)/);
     assert.match(viteConfig, /servePatchModuleAlias\("\/patch_gui\/desktop\/index\.js"/);
     assert.match(viteConfig, /serveStaticDirectory\("\/cmaj_api", cmajorApiRoot\)/);
     assert.match(viteConfig, /port:\s*5174/);
     assert.match(viteConfig, /outDir:\s*path\.join\(repoRoot,\s*"patch_gui",\s*"desktop"\)/);
+    assert.match(workerViteConfig, /fileName:\s*\(\)\s*=>\s*"wavetable-worker\.js"/);
+    assert.match(workerViteConfig, /ui",\s*"worker",\s*"wavetable-worker\.ts"/);
 });
 
-test("desktop dev plug-in build enables the webview dev server and rebuilds the React bundle", async () => {
+test("desktop dev plug-in build enables the webview dev server and lets Vite build UI assets before Python writes manifests", async () => {
     const cmakeSource = await fs.readFile(path.join(repoRoot, "tools", "live_dev_plugin", "CMakeLists.txt"), "utf8");
     const buildScript = await fs.readFile(path.join(repoRoot, "scripts", "build_live_dev_plugin.sh"), "utf8");
+    const buildAssets = await fs.readFile(path.join(repoRoot, "build_assets.py"), "utf8");
 
     assert.match(cmakeSource, /CMAJ_ENABLE_WEBVIEW_DEV_TOOLS=1/);
     assert.match(cmakeSource, /COSIMO_ENABLE_WEBVIEW_DEV_SERVER=1/);
+    assert.match(buildScript, /npm run ui:build/);
     assert.match(buildScript, /uv run python "\$repo_root\/build_assets\.py"/);
-    assert.match(buildScript, /npm run ui:desktop:build/);
+    assert.ok(
+        buildScript.indexOf("npm run ui:build") < buildScript.indexOf('uv run python "$repo_root/build_assets.py"'),
+        "The Vite UI build should run before build_assets.py writes manifests",
+    );
+    assert.doesNotMatch(buildAssets, /sync_patch_gui_module_copies/);
+    assert.doesNotMatch(buildAssets, /shutil\.copyfile/);
 });
 
-test("shared patch GUI .js files are generated from the .mjs source modules", async () => {
-    for (const moduleName of [
-        "responsive-layout",
-        "wavetable-bank",
-        "wavetable-display",
-        "theme",
-        "mseg",
-        "mseg-controller",
-    ]) {
-        const esmSource = await fs.readFile(
-            path.join(repoRoot, "patch_gui", `${moduleName}.mjs`),
-            "utf8"
-        );
-        const browserSource = await fs.readFile(
-            path.join(repoRoot, "patch_gui", `${moduleName}.js`),
-            "utf8"
-        );
+test("the worker runtime is produced as a real Vite build output instead of a Python-generated source copy", async () => {
+    const builtWorker = await fs.readFile(path.join(repoRoot, "patch_gui", "wavetable-worker.js"), "utf8");
 
-        assert.equal(browserSource, esmSource);
-    }
+    assert.match(builtWorker, /class WavetableWorkerController/);
+    assert.doesNotMatch(builtWorker, /\.replace\("\.\/wavetable-mip\.mjs"/);
+});
+
+test("desktop wavetable badge uses a real chevron icon instead of a fake text caret hack", async () => {
+    const desktopPatchView = await fs.readFile(path.join(repoRoot, "ui", "desktop", "DesktopPatchView.tsx"), "utf8");
+
+    assert.match(desktopPatchView, /function SelectChevron/);
+    assert.doesNotMatch(desktopPatchView, />v</);
+});
+
+test("desktop keyboard row uses compact transport controls instead of a duplicate frame card and separate editor button", async () => {
+    const desktopPatchView = await fs.readFile(path.join(repoRoot, "ui", "desktop", "DesktopPatchView.tsx"), "utf8");
+
+    assert.match(desktopPatchView, /new Nexus\.Number\(/);
+    assert.match(desktopPatchView, /Shift keyboard up one octave/);
+    assert.match(desktopPatchView, /Shift keyboard down one octave/);
+    assert.match(desktopPatchView, /function VoiceModeGlyph/);
+    assert.match(desktopPatchView, /function KeyboardSection/);
+    assert.doesNotMatch(desktopPatchView, /Open Editor/);
+    assert.doesNotMatch(desktopPatchView, /grid-cols-\[220px_minmax\(0,1fr\)\]/);
+});
+
+test("desktop keyboard routing is global and the last active control can claim left-right arrow steps", async () => {
+    const desktopPatchView = await fs.readFile(path.join(repoRoot, "ui", "desktop", "DesktopPatchView.tsx"), "utf8");
+    const synthInputRouter = await fs.readFile(path.join(repoRoot, "ui", "shared", "synth-input-router.ts"), "utf8");
+
+    assert.match(desktopPatchView, /useSynthInputRouter\(keyboardElementRef\)/);
+    assert.match(desktopPatchView, /keyboardRef=\{keyboardElementRef\}/);
+    assert.match(desktopPatchView, /handleStepWavetable/);
+    assert.match(desktopPatchView, /handleStepGlideTime/);
+    assert.match(synthInputRouter, /window\.addEventListener\("keydown", handleKeyDown, true\)/);
+    assert.match(synthInputRouter, /window\.addEventListener\("keyup", handleKeyUp, true\)/);
+    assert.match(synthInputRouter, /event\.key === "ArrowLeft" \|\| event\.key === "ArrowRight"/);
+    assert.match(synthInputRouter, /keyboardRef\.current\?\.handleKey\?\.\(event, true\)/);
+    assert.match(synthInputRouter, /keyboardRef\.current\?\.allNotesOff\?\.\(\)/);
 });
 
 test("generated factory bank catalog points at real bundled source wavetable files", async () => {

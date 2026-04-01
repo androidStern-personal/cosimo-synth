@@ -136,39 +136,6 @@ export function createDesktopPatchView(patchConnection: PatchConnectionLike) {
     return element;
 }
 
-declare global {
-    interface Window {
-        __cosimoCollectLayoutMetrics?: () => Record<string, unknown>;
-    }
-}
-
-window.__cosimoCollectLayoutMetrics = () => {
-    const elements = Array.from(document.querySelectorAll("cosimo-desktop-react-view"));
-
-    return {
-        isReady: elements.length > 0,
-        bodyClassName: document.body.className,
-        bodyChildCount: document.body.childElementCount,
-        patchViewCount: elements.length,
-        patchViews: elements.map((element) => {
-            const host = element as HTMLElement;
-            const shadowRoot = host.shadowRoot;
-            const mountPoint = shadowRoot?.querySelector("div") as HTMLDivElement | null;
-
-            return {
-                width: host.getBoundingClientRect().width,
-                height: host.getBoundingClientRect().height,
-                childElementCount: host.childElementCount,
-                shadowChildElementCount: shadowRoot?.childElementCount ?? 0,
-                hasMountPoint: Boolean(mountPoint),
-                mountChildElementCount: mountPoint?.childElementCount ?? 0,
-                mountTextLength: mountPoint?.textContent?.length ?? 0,
-                shadowTextLength: shadowRoot?.textContent?.length ?? 0,
-            };
-        }),
-    };
-};
-
 export default function createPatchView(patchConnection: PatchConnectionLike) {
     return createDesktopPatchView(patchConnection);
 }

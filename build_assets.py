@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 import json
 from pathlib import Path
-import shutil
 import struct
 
 FACTORY_BANK_SOURCE_CATALOG_FILENAME = "factory-table-catalog.json"
@@ -17,19 +16,11 @@ PATCH_DESCRIPTION = (
     "Single-oscillator wavetable synth with MIDI input, automatable wavetable "
     "position, runtime table selection, and runtime-loaded Serum-style wavetable files."
 )
-PATCH_WORKER_SRC = "patch_gui/wavetable-worker.mjs"
+PATCH_WORKER_SRC = "patch_gui/wavetable-worker.js"
 PATCH_SOURCE_FILES = (
     "cmajor/FixedFrameOscillator.cmajor",
     "cmajor/Mseg.cmajor",
     "cmajor/WavetableSynth.cmajor",
-)
-PATCH_GUI_SHARED_MODULES = (
-    "mseg",
-    "mseg-controller",
-    "responsive-layout",
-    "theme",
-    "wavetable-bank",
-    "wavetable-display",
 )
 
 
@@ -258,15 +249,6 @@ def update_patch_manifest(
     )
 
 
-def sync_patch_gui_module_copies(repo_root: Path) -> None:
-    patch_gui_dir = repo_root / "patch_gui"
-
-    for module_basename in PATCH_GUI_SHARED_MODULES:
-        source_path = patch_gui_dir / f"{module_basename}.mjs"
-        target_path = patch_gui_dir / f"{module_basename}.js"
-        shutil.copyfile(source_path, target_path)
-
-
 def remove_obsolete_bank_outputs(assets_dir: Path) -> None:
     obsolete_paths = (
         assets_dir / LEGACY_FACTORY_BANK_RUNTIME_CATALOG_FILENAME,
@@ -292,7 +274,6 @@ def main() -> None:
         encoding="utf-8",
     )
     remove_obsolete_bank_outputs(assets_dir)
-    sync_patch_gui_module_copies(repo_root)
 
     for variant in PATCH_VARIANTS:
         update_patch_manifest(repo_root, variant)

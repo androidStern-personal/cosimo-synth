@@ -145,10 +145,13 @@ ${reactRefreshPreamble}
     };
 }
 
-export default defineConfig({
+export default defineConfig(({ command }) => ({
     appType: "custom",
     root: repoRoot,
     clearScreen: false,
+    define: {
+        "process.env.NODE_ENV": JSON.stringify(command === "build" ? "production" : "development"),
+    },
     plugins: [
         react(),
         tailwindcss(),
@@ -182,4 +185,4 @@ export default defineConfig({
             },
         },
     },
-});
+}));

@@ -27,8 +27,8 @@ if [[ ! -e "$patch_path" ]]; then
   exit 1
 fi
 
+npm run ui:build
 uv run python "$repo_root/build_assets.py"
-npm run ui:desktop:build
 
 mkdir -p "$cache_root"
 

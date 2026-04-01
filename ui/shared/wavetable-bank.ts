@@ -1,13 +1,42 @@
+import type { PatchConnectionLike } from "./cmajor-react";
+
 export const DEFAULT_SAMPLES_PER_FRAME = 2048;
 export const DEFAULT_FACTORY_BANK_CATALOG_PATH = "assets/factory-bank-catalog.json";
 
-function assert(condition, message) {
+export type FactoryTableMeta = {
+    tableId: string;
+    name: string;
+    frameCount: number;
+    sourceWav: string;
+};
+
+export type FactoryBankCatalog = {
+    tables: FactoryTableMeta[];
+};
+
+export type SourceWavetableFrames = {
+    sampleRate: number;
+    sampleBlobPath: string;
+    tableIndex: number;
+    frameCount: number;
+    samples: Float32Array;
+    frames: Float32Array[];
+};
+
+type MonoAudioFrame = number | ArrayLike<number>;
+
+type DecodedAudioLike = {
+    sampleRate?: unknown;
+    frames?: ArrayLike<MonoAudioFrame>;
+};
+
+function assert(condition: unknown, message: string): asserts condition {
     if (!condition) {
         throw new Error(message);
     }
 }
 
-function readAscii(view, offset, length) {
+function readAscii(view: DataView, offset: number, length: number) {
     let text = "";
 
     for (let index = 0; index < length; index += 1) {
@@ -17,28 +46,32 @@ function readAscii(view, offset, length) {
     return text;
 }
 
-function clampToRange(value, min, max) {
+function clamp(value: number, min: number, max: number) {
     return Math.min(Math.max(value, min), max);
 }
 
-function canonicalizeFrame(frame) {
+function clampToRange(value: number, min: number, max: number) {
+    return clamp(value, min, max);
+}
+
+function canonicalizeFrame(frame: ArrayLike<number>) {
     let sum = 0;
 
     for (let index = 0; index < frame.length; index += 1) {
-        sum += frame[index];
+        sum += Number(frame[index]) || 0;
     }
 
     const mean = sum / Math.max(1, frame.length);
     const canonical = new Float32Array(frame.length);
 
     for (let index = 0; index < frame.length; index += 1) {
-        canonical[index] = frame[index] - mean;
+        canonical[index] = (Number(frame[index]) || 0) - mean;
     }
 
     return canonical;
 }
 
-function isAbsoluteURL(value) {
+function isAbsoluteURL(value: string) {
     return /^[a-zA-Z][a-zA-Z\d+.-]*:/.test(value);
 }
 
@@ -71,7 +104,7 @@ function getDefaultPatchRootUrl() {
     return moduleUrl;
 }
 
-function resourceAddressToUrl(path, resourceAddress) {
+function resourceAddressToUrl(path: string, resourceAddress: string | URL | null | undefined) {
     const patchRootUrl = getDefaultPatchRootUrl();
 
     if (resourceAddress instanceof URL) {
@@ -83,17 +116,17 @@ function resourceAddressToUrl(path, resourceAddress) {
             return new URL(resourceAddress);
         }
 
-        const normalisedPath = resourceAddress.startsWith("/")
+        const normalizedPath = resourceAddress.startsWith("/")
             ? resourceAddress.slice(1)
             : resourceAddress;
 
-        return new URL(normalisedPath, patchRootUrl);
+        return new URL(normalizedPath, patchRootUrl);
     }
 
     return new URL(path, patchRootUrl);
 }
 
-function describePayload(payload) {
+function describePayload(payload: unknown) {
     if (payload === null) {
         return "null";
     }
@@ -103,35 +136,35 @@ function describePayload(payload) {
     }
 
     const type = typeof payload;
-    const constructorName = payload?.constructor?.name;
+    const constructorName = (payload as { constructor?: { name?: string } })?.constructor?.name;
 
     if (type !== "object") {
         return constructorName ? `${type}:${constructorName}` : type;
     }
 
-    const keys = Object.keys(payload).slice(0, 6);
+    const keys = Object.keys(payload as Record<string, unknown>).slice(0, 6);
     const keySummary = keys.length > 0 ? ` keys=${keys.join(",")}` : "";
     return constructorName ? `${type}:${constructorName}${keySummary}` : `${type}${keySummary}`;
 }
 
-export function resolvePatchResourceUrl(path, patchConnection) {
+export function resolvePatchResourceUrl(path: string, patchConnection: PatchConnectionLike | null | undefined) {
     const resourceAddress = patchConnection?.getResourceAddress?.(path);
     return resourceAddressToUrl(path, resourceAddress);
 }
 
-async function fetchJSON(url, label) {
+async function fetchJSON<TValue>(url: URL, label: string): Promise<TValue> {
     const response = await fetch(url.toString());
     assert(response.ok, `Failed to fetch ${label} from ${url}`);
-    return response.json();
+    return response.json() as Promise<TValue>;
 }
 
-async function decodeTextPayload(payload) {
+async function decodeTextPayload(payload: unknown) {
     if (typeof payload === "string") {
         return payload;
     }
 
-    if (payload && typeof payload.text === "function") {
-        return payload.text();
+    if (payload && typeof (payload as { text?: () => Promise<string> }).text === "function") {
+        return (payload as { text: () => Promise<string> }).text();
     }
 
     if (payload instanceof ArrayBuffer) {
@@ -143,11 +176,13 @@ async function decodeTextPayload(payload) {
     }
 
     if (ArrayBuffer.isView(payload)) {
+        const bytes = new Uint8Array(payload.buffer, payload.byteOffset, payload.byteLength);
+
         if (typeof TextDecoder === "function") {
-            return new TextDecoder().decode(payload);
+            return new TextDecoder().decode(bytes);
         }
 
-        return String.fromCharCode(...payload);
+        return String.fromCharCode(...bytes);
     }
 
     if (Array.isArray(payload)) {
@@ -163,12 +198,12 @@ async function decodeTextPayload(payload) {
     throw new Error(`Unsupported text resource payload (${describePayload(payload)})`);
 }
 
-function normalizeDecodedAudioFileSamples(audioFile) {
+export function normalizeDecodedAudioFileSamples(audioFile: DecodedAudioLike) {
     const frames = audioFile?.frames;
 
     assert(
         Array.isArray(frames) || ArrayBuffer.isView(frames),
-        "Decoded audio data must provide a frames array"
+        "Decoded audio data must provide a frames array",
     );
 
     const frameArray = Array.from(frames);
@@ -183,8 +218,9 @@ function normalizeDecodedAudioFileSamples(audioFile) {
         }
 
         if (ArrayBuffer.isView(frame) || Array.isArray(frame)) {
-            assert(frame.length === 1, "Only mono wavetable source files are supported");
-            samples[index] = Number(frame[0]) || 0;
+            const monoFrame = frame as ArrayLike<number>;
+            assert(monoFrame.length === 1, "Only mono wavetable source files are supported");
+            samples[index] = Number(monoFrame[0]) || 0;
             continue;
         }
 
@@ -197,19 +233,19 @@ function normalizeDecodedAudioFileSamples(audioFile) {
     };
 }
 
-export function parseWaveFile(arrayBuffer) {
+function parseWaveFile(arrayBuffer: ArrayBuffer) {
     const view = new DataView(arrayBuffer);
 
     assert(readAscii(view, 0, 4) === "RIFF", "Expected a RIFF wave file");
     assert(readAscii(view, 8, 4) === "WAVE", "Expected a WAVE file");
 
-    let format = null;
-    let channelCount = null;
-    let sampleRate = null;
-    let bitsPerSample = null;
-    let blockAlign = null;
-    let dataOffset = null;
-    let dataSize = null;
+    let format: number | null = null;
+    let channelCount: number | null = null;
+    let sampleRate: number | null = null;
+    let bitsPerSample: number | null = null;
+    let blockAlign: number | null = null;
+    let dataOffset: number | null = null;
+    let dataSize: number | null = null;
     let cursor = 12;
 
     while (cursor + 8 <= view.byteLength) {
@@ -235,7 +271,7 @@ export function parseWaveFile(arrayBuffer) {
     assert(dataOffset !== null && dataSize !== null, "Wave file is missing a data chunk");
     assert(channelCount === 1, "Only mono wavetable bank files are supported");
 
-    let samples;
+    let samples: Float32Array;
 
     if (format === 3 && bitsPerSample === 32) {
         samples = new Float32Array(arrayBuffer.slice(dataOffset, dataOffset + dataSize));
@@ -248,69 +284,53 @@ export function parseWaveFile(arrayBuffer) {
             samples[index] = pcm[index] / 32768.0;
         }
     } else {
-        throw new Error(
-            `Unsupported WAV format: format=${format}, bitsPerSample=${bitsPerSample}`
-        );
+        throw new Error(`Unsupported WAV format: format=${format}, bitsPerSample=${bitsPerSample}`);
     }
 
     return {
-        format,
-        channelCount,
-        sampleRate,
-        bitsPerSample,
-        blockAlign,
+        sampleRate: sampleRate ?? 0,
+        blockAlign: blockAlign ?? 0,
         samples,
     };
 }
 
-export function getFactoryBankCatalogValue(catalogValue) {
-    assert(Array.isArray(catalogValue?.tables), "Factory bank catalog must provide a tables array");
+export function getFactoryBankCatalogValue(catalogValue: unknown): FactoryBankCatalog {
+    assert(Array.isArray((catalogValue as FactoryBankCatalog | null)?.tables), "Factory bank catalog must provide a tables array");
 
-    catalogValue.tables.forEach((table, tableIndex) => {
-        assert(
-            typeof table?.tableId === "string" && table.tableId.length > 0,
-            `Factory bank catalog table ${tableIndex} must provide tableId`
-        );
-        assert(
-            typeof table?.name === "string" && table.name.length > 0,
-            `Factory bank catalog table ${tableIndex} must provide name`
-        );
-        assert(
-            Number.isInteger(Number(table?.frameCount)) && Number(table.frameCount) > 0,
-            `Factory bank catalog table ${tableIndex} must provide a positive frameCount`
-        );
-        assert(
-            typeof table?.sourceWav === "string" && table.sourceWav.length > 0,
-            `Factory bank catalog table ${tableIndex} must provide sourceWav`
-        );
+    const catalog = catalogValue as FactoryBankCatalog;
+    catalog.tables.forEach((table, tableIndex) => {
+        assert(typeof table?.tableId === "string" && table.tableId.length > 0, `Factory bank catalog table ${tableIndex} must provide tableId`);
+        assert(typeof table?.name === "string" && table.name.length > 0, `Factory bank catalog table ${tableIndex} must provide name`);
+        assert(Number.isInteger(Number(table?.frameCount)) && Number(table.frameCount) > 0, `Factory bank catalog table ${tableIndex} must provide a positive frameCount`);
+        assert(typeof table?.sourceWav === "string" && table.sourceWav.length > 0, `Factory bank catalog table ${tableIndex} must provide sourceWav`);
     });
 
-    return catalogValue;
+    return catalog;
 }
 
 function extractSourceFrames(
-    samples,
+    samples: Float32Array,
     {
-        expectedFrameCount = undefined,
+        expectedFrameCount,
         samplesPerFrame = DEFAULT_SAMPLES_PER_FRAME,
-    } = {}
+    }: {
+        expectedFrameCount?: number;
+        samplesPerFrame?: number;
+    } = {},
 ) {
     assert(
         samples.length % samplesPerFrame === 0,
-        `Source wavetable files must contain a whole number of ${samplesPerFrame}-sample frames`
+        `Source wavetable files must contain a whole number of ${samplesPerFrame}-sample frames`,
     );
 
     const frameCount = samples.length / samplesPerFrame;
     assert(frameCount > 0, "Source wavetable files must contain at least one frame");
 
     if (expectedFrameCount !== undefined) {
-        assert(
-            frameCount === expectedFrameCount,
-            `Source wavetable frame count mismatch: expected ${expectedFrameCount}, got ${frameCount}`
-        );
+        assert(frameCount === expectedFrameCount, `Source wavetable frame count mismatch: expected ${expectedFrameCount}, got ${frameCount}`);
     }
 
-    const frames = [];
+    const frames: Float32Array[] = [];
 
     for (let frameIndex = 0; frameIndex < frameCount; frameIndex += 1) {
         const start = frameIndex * samplesPerFrame;
@@ -329,10 +349,16 @@ export async function loadSourceWavetableFramesFromUrl(
         sourceWavUrl,
         sourceWavPath,
         tableIndex = 0,
-        expectedFrameCount = undefined,
+        expectedFrameCount,
         samplesPerFrame = DEFAULT_SAMPLES_PER_FRAME,
-    }
-) {
+    }: {
+        sourceWavUrl: URL;
+        sourceWavPath: string;
+        tableIndex?: number;
+        expectedFrameCount?: number;
+        samplesPerFrame?: number;
+    },
+): Promise<SourceWavetableFrames> {
     const response = await fetch(sourceWavUrl.toString());
     assert(response.ok, `Failed to fetch source wavetable from ${sourceWavUrl}`);
 
@@ -358,12 +384,19 @@ async function loadSourceWavetableFramesFromPatchConnection(
         patchConnection,
         sourceWavPath,
         tableIndex = 0,
-        expectedFrameCount = undefined,
+        expectedFrameCount,
         samplesPerFrame = DEFAULT_SAMPLES_PER_FRAME,
-    }
-) {
-    const audioFile = await patchConnection.readResourceAsAudioData(sourceWavPath);
-    const decodedAudio = normalizeDecodedAudioFileSamples(audioFile);
+    }: {
+        patchConnection: PatchConnectionLike;
+        sourceWavPath: string;
+        tableIndex?: number;
+        expectedFrameCount?: number;
+        samplesPerFrame?: number;
+    },
+): Promise<SourceWavetableFrames> {
+    const audioFile = await patchConnection.readResourceAsAudioData?.(sourceWavPath);
+    assert(audioFile, `Could not decode source wavetable ${sourceWavPath}`);
+    const decodedAudio = normalizeDecodedAudioFileSamples(audioFile as DecodedAudioLike);
     const sourceFrames = extractSourceFrames(decodedAudio.samples, {
         expectedFrameCount,
         samplesPerFrame,
@@ -380,28 +413,34 @@ async function loadSourceWavetableFramesFromPatchConnection(
 }
 
 export async function loadFactoryBankCatalogFromPatch(
-    patchConnection,
+    patchConnection: PatchConnectionLike | null | undefined,
     {
         catalogPath = DEFAULT_FACTORY_BANK_CATALOG_PATH,
-    } = {}
-) {
+    }: {
+        catalogPath?: string;
+    } = {},
+): Promise<FactoryBankCatalog> {
     if (typeof patchConnection?.readResource === "function") {
         const payload = await patchConnection.readResource(catalogPath);
         return getFactoryBankCatalogValue(JSON.parse(await decodeTextPayload(payload)));
     }
 
     const catalogUrl = resolvePatchResourceUrl(catalogPath, patchConnection);
-    return getFactoryBankCatalogValue(await fetchJSON(catalogUrl, "factory bank catalog"));
+    return getFactoryBankCatalogValue(await fetchJSON<FactoryBankCatalog>(catalogUrl, "factory bank catalog"));
 }
 
 export async function loadFactoryBankFramesFromPatch(
-    patchConnection,
+    patchConnection: PatchConnectionLike | null | undefined,
     {
         catalogPath = DEFAULT_FACTORY_BANK_CATALOG_PATH,
         tableIndex = 0,
         samplesPerFrame = DEFAULT_SAMPLES_PER_FRAME,
-    } = {}
-) {
+    }: {
+        catalogPath?: string;
+        tableIndex?: number;
+        samplesPerFrame?: number;
+    } = {},
+): Promise<SourceWavetableFrames> {
     const catalogValue = await loadFactoryBankCatalogFromPatch(patchConnection, { catalogPath });
     const clampedTableIndex = clampToRange(tableIndex, 0, catalogValue.tables.length - 1);
     const sourceTableMeta = catalogValue.tables[clampedTableIndex];

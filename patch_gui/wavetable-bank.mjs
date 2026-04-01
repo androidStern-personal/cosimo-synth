@@ -42,8 +42,37 @@ function isAbsoluteURL(value) {
     return /^[a-zA-Z][a-zA-Z\d+.-]*:/.test(value);
 }
 
+function getDefaultPatchRootUrl() {
+    const locationHref = globalThis.location?.href;
+
+    if (typeof locationHref === "string" && locationHref.length > 0) {
+        return new URL("/", locationHref);
+    }
+
+    const moduleUrl = new URL(import.meta.url);
+    const modulePath = moduleUrl.pathname;
+
+    if (modulePath.includes("/patch_gui/desktop/")) {
+        moduleUrl.pathname = modulePath.replace(/\/patch_gui\/desktop\/[^/]+$/, "/");
+        return moduleUrl;
+    }
+
+    if (modulePath.includes("/patch_gui/")) {
+        moduleUrl.pathname = modulePath.replace(/\/patch_gui\/[^/]+$/, "/");
+        return moduleUrl;
+    }
+
+    if (modulePath.includes("/ui/shared/")) {
+        moduleUrl.pathname = modulePath.replace(/\/ui\/shared\/[^/]+$/, "/");
+        return moduleUrl;
+    }
+
+    moduleUrl.pathname = modulePath.replace(/\/[^/]+$/, "/");
+    return moduleUrl;
+}
+
 function resourceAddressToUrl(path, resourceAddress) {
-    const patchRootUrl = new URL("../", import.meta.url);
+    const patchRootUrl = getDefaultPatchRootUrl();
 
     if (resourceAddress instanceof URL) {
         return resourceAddress;

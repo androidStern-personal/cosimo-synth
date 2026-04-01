@@ -787,7 +787,12 @@ test("view playback controls mirror the current MSEG seconds rate and full-shape
     view.msegRateInput = { value: "" };
     view.msegRateReadout = { textContent: "" };
     view.msegLauncherRateReadout = { textContent: "" };
-    view.msegLauncherLoopReadout = { textContent: "" };
+    view.msegLauncherLoopButton = {
+        attributes: {},
+        setAttribute(name, value) {
+            this.attributes[name] = value;
+        },
+    };
     view.msegLoopButton = {
         attributes: {},
         setAttribute(name, value) {
@@ -800,8 +805,9 @@ test("view playback controls mirror the current MSEG seconds rate and full-shape
     assert.equal(view.msegRateInput.value, "0.250");
     assert.equal(view.msegRateReadout.textContent, "0.250 s");
     assert.equal(view.msegLauncherRateReadout.textContent, "0.250 s");
-    assert.equal(view.msegLauncherLoopReadout.textContent, "Loop On");
     assert.equal(view.msegLoopButton.attributes["aria-pressed"], "true");
+    assert.equal(view.msegLauncherLoopButton.attributes["aria-pressed"], "true");
+    assert.equal(view.msegLauncherLoopButton.attributes.title, "Loop On");
 });
 
 test("view rate input updates the controller playback seconds while preserving loop state", async () => {
@@ -915,7 +921,7 @@ test("iPhone layout applies the safe-area gutter at the root so both the main vi
 
     assert.match(html, /:host\s*\{[\s\S]*box-sizing:\s*border-box;/);
     assert.match(html, /--cosimo-ios-top-inset:\s*50px;/);
-    assert.match(html, /--cosimo-ios-bottom-inset:\s*20px;/);
+    assert.match(html, /--cosimo-ios-bottom-inset:\s*0px;/);
     assert.match(html, /--cosimo-ios-safe-top:\s*calc\(env\(safe-area-inset-top\)\s*\+\s*var\(--cosimo-ios-top-inset\)\);/);
     assert.match(html, /--cosimo-ios-safe-bottom:\s*calc\(env\(safe-area-inset-bottom\)\s*\+\s*var\(--cosimo-ios-bottom-inset\)\);/);
     assert.match(html, /\.ios-shell\s*\{[\s\S]*box-sizing:\s*border-box;/);

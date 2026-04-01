@@ -10,11 +10,13 @@ if (!rootElement) {
     throw new Error("Harness root element is missing.");
 }
 
+const harnessRoot = rootElement;
+
 function renderFatalError(error: unknown) {
     const message = error instanceof Error
         ? error.stack || error.message
         : String(error);
-    rootElement.innerHTML = `
+    harnessRoot.innerHTML = `
         <pre style="
             margin: 0;
             min-height: 100vh;
@@ -40,13 +42,13 @@ window.addEventListener("unhandledrejection", (event) => {
 
 try {
     document.body.dataset.bootStage = "booting";
-    rootElement.textContent = "Booting desktop harness…";
+    harnessRoot.textContent = "Booting desktop harness…";
     const manifest = await loadHarnessManifest();
     document.body.dataset.bootStage = "manifest-loaded";
     const patchConnection = new MockPatchConnection(manifest);
     document.body.dataset.bootStage = "rendering";
 
-    createRoot(rootElement).render(
+    createRoot(harnessRoot).render(
         <DesktopPatchView patchConnection={patchConnection} />
     );
     document.body.dataset.bootStage = "render-called";

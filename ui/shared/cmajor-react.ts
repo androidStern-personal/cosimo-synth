@@ -28,7 +28,7 @@ export type PatchConnectionLike = {
     addStatusListener?: (listener: (status: unknown) => void) => void;
     removeStatusListener?: (listener: (status: unknown) => void) => void;
     requestStatusUpdate?: () => void;
-    getResourceAddress?: (path: string) => string;
+    getResourceAddress?: (path: string) => string | URL;
     readResource?: (path: string) => Promise<unknown>;
     readResourceAsAudioData?: (path: string, annotation?: unknown) => Promise<unknown>;
     addStoredStateValueListener?: (listener: (message: unknown) => void) => void;
