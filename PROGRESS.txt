@@ -1,3 +1,12 @@
+Cross-platform roadmap pointer recorded on 2026-04-02
+- The durable roadmap for frontend and host unification plus upcoming warp sequencing now lives in `PLATFORM_UNIFICATION_AND_WARP_SPRINT_PLAN.md`.
+- Use that file for the cross-platform order of operations:
+  - merge `codex/UI-refactor`
+  - add the shared browser-side host contract and `resourceClient`
+  - migrate iPhone to the React and Vite frontend
+  - then move desktop to the repo-owned native host
+  - then do waveform warp work
+
 Stock CHOC safe-area probe results recorded on 2026-04-01
 - I built a separate iPhone simulator app at `experiments/choc_webview_probe/`.
 - That app uses upstream CHOC `WebView` headers from commit `9cfd6054f8d863aa39029c6f3daf71b56746b4d7`, not the patched Cosimo copy.
@@ -59,6 +68,20 @@ CHOC vendor cleanup result recorded on 2026-04-01
   - the vendored CHOC files now match upstream commit `9cfd6054f8d863aa39029c6f3daf71b56746b4d7`
   - safe-area behavior is now owned in repo code plus normal page CSS, not in a CHOC fork
 
+Pinned Cmajor runtime fetch cleanup recorded on 2026-04-01
+- The repo no longer needs a checked-in `ios_auv3/Vendor/cmajor/` tree.
+- The shipping iPhone build no longer patches generated Cmajor output after `cmaj generate --target=cpp`.
+- One pinned fetch helper now owns the Cmajor runtime source:
+  - `scripts/ensure_cmajor_runtime.py`
+  - fetches `https://github.com/cmajor-lang/cmajor.git`
+  - pins tag `1.0.3066`
+  - verifies commit `172db53232337154d5a1c0f9a448318129dfacd9`
+  - initializes the `include/choc` submodule because CHOC is not stored inline in the main Cmajor git tree
+  - stores the runtime under `build/deps/cmajor-1.0.3066/`
+- `ios_auv3/CMakeLists.txt` now asks that helper for the runtime path instead of reading `ios_auv3/Vendor/cmajor/`.
+- `ios_auv3/vite.config.mjs` now asks that helper for the same runtime path so `/cmaj_api` in the iPhone web dev server stays in sync with the real build.
+- The remaining old generated-output patching only exists in historical code on `master` and in tests that deliberately rewrite temporary copied fixtures.
+
 Architecture clarification recorded on 2026-04-01
 - This repo has had two separate initiatives that are easy to blur together:
   - the iPhone native-shell refactor
@@ -84,6 +107,8 @@ Short chronology
   - The desktop React and Vite refactor landed for the patch UI.
   - The desktop patch manifest now points at `patch_gui/desktop/index.js`.
   - The worker also moved onto a Vite build output.
+  - The old checked-in `ios_auv3/Vendor/cmajor/` snapshot was replaced with a pinned runtime fetch into `build/deps/cmajor-1.0.3066/`.
+  - The real iPhone app was validated on stock CHOC plus a repo-owned `WKWebView` scroll-view fix, and the extra page-level top gutter was removed.
   - But the desktop native host was not rewritten in the same pass.
 
 What is true right now
@@ -92,6 +117,8 @@ What is true right now
   - The repo-owned bridge host is `PatchWebViewHost` in `ios_auv3/Source/CosimoCmajorPlugin.h`.
   - But that host still creates `choc::ui::WebView`.
   - So the iPhone runtime is still on the CHOC WebView path even though the surrounding shell is repo-owned.
+  - The CHOC runtime is now fetched into `build/deps/cmajor-1.0.3066/`, not checked into source control.
+  - The safe-area behavior is no longer implemented by patching CHOC. It is implemented by repo code that sets the native `WKWebView` scroll-view inset policy in `webviewIsReady`, plus the normal page CSS.
 - Desktop:
   - The desktop UI is now the React and Vite build from `patch_gui/desktop/index.js`.
   - But the standalone desktop host still uses Cmajor's stock host stack:
@@ -101,19 +128,22 @@ What is true right now
   - The desktop host changes on this branch were dev-server wiring and patch-manifest wiring, not a repo-owned native host rewrite.
 
 Current conclusion about the CHOC WebView patch
-- The iPhone safe-area patch in `ios_auv3/Vendor/cmajor/include/choc/choc/gui/choc_WebView.h` is still on the real iPhone runtime path today.
-- It is still needed as long as `PatchWebViewHost` continues to construct `choc::ui::WebView`.
-- The desktop React refactor did not remove that dependency because desktop still uses the stock Cmajor `JUCEPluginBase -> PatchWebView -> choc::ui::WebView` path.
+- The local CHOC safe-area patch is no longer needed.
+- The real iPhone app now works on stock CHOC because the real fix lives in repo code:
+  - the host grabs the native `WKWebView`
+  - sets `scrollView.contentInsetAdjustmentBehavior = .never`
+  - disables automatic scroll-indicator inset adjustment
+- The desktop React refactor did not remove the CHOC dependency itself because desktop still uses the stock Cmajor `JUCEPluginBase -> PatchWebView -> choc::ui::WebView` path.
 - So the right answer is:
   - the CHOC WebView patch is not a permanent architectural requirement
-  - it is a current implementation requirement
-  - it can go away only after the remaining native WebView layer is in-housed too
+  - it is not a current implementation requirement anymore either
+  - but CHOC itself is still a current runtime dependency until the remaining native WebView layer is in-housed too
 
-What "finish the shell refactor properly" means if the goal is to remove the CHOC patch
+What "finish the shell refactor properly" means if the goal is to remove CHOC entirely
 - iPhone:
   - Replace `choc::ui::WebView` inside `PatchWebViewHost` with a repo-owned `WKWebView` wrapper.
   - Keep the existing repo-owned bridge protocol, resource resolver, and bundle/dev-server loader.
-  - Once that happens, the iPhone safe-area behavior can live in repo code and the CHOC safe-area patch can be deleted.
+  - The safe-area behavior already lives in repo code, so this remaining step is about removing the CHOC wrapper layer itself, not about restoring the old patch.
 - Desktop:
   - Replace the current `JUCEPluginBase` and `cmaj::PatchWebView` host path with a repo-owned JUCE editor and repo-owned WebView host.
   - The current desktop React UI can sit on top of that later, but it does not do that yet.
@@ -121,7 +151,7 @@ What "finish the shell refactor properly" means if the goal is to remove the CHO
 Practical rule for future sessions
 - Do not say "the native-shell refactor is done everywhere" or "desktop is already on the repo-owned host".
 - The accurate statement is:
-  - iPhone shell refactor: mostly done, but still depends on CHOC WebView
+  - iPhone shell refactor: mostly done, uses stock CHOC WebView, and no longer needs a CHOC fork
   - desktop React UI refactor: done for the web UI layer, not for the native host layer
 
 Native iOS shell cleanup follow-up landed on 2026-03-31
@@ -149,7 +179,7 @@ Native iOS shell cleanup follow-up landed on 2026-03-31
 
 Native iOS shell refactor follow-up landed on 2026-03-30
 - Plan: `IOS_AUV3_NATIVE_SHELL_REFACTOR_PLAN.md`.
-- Kept the repo-owned AUv3 shell around raw `cmaj generate --target=cpp` performer output and the pinned runtime snapshot under `ios_auv3/Vendor/cmajor/`.
+- Kept the repo-owned AUv3 shell around raw `cmaj generate --target=cpp` performer output and, at that time, a pinned runtime snapshot under `ios_auv3/Vendor/cmajor/`.
 - Removed the simulator-only repo-checkout resource fallback that was masking packaging bugs. Debug now tries the local Vite server if it is reachable and otherwise loads the bundled UI and patch assets. Release always loads bundled files.
 - Added a debug and test only editor inspection hook, gated by `COSIMO_ENABLE_EDITOR_INSPECTION`, so the simulator host tests can capture the real extension-side host page, DOM layout, and catalog snapshot without leaving always-on telemetry in shipping builds.
 - Added the ATS exceptions needed for the local web-development server and threaded `COSIMO_ENABLE_EDITOR_INSPECTION` through `scripts/generate_ios_auv3_xcode_project.sh`.

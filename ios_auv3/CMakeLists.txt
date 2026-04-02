@@ -6,6 +6,8 @@ project(
     LANGUAGES CXX C OBJC OBJCXX
 )
 
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+
 get_filename_component(COSIMO_REPO_ROOT "${CMAKE_CURRENT_LIST_DIR}/.." ABSOLUTE)
 
 set(
@@ -46,12 +48,39 @@ if (NOT EXISTS "${COSIMO_IOS_GENERATOR_SCRIPT}")
     message(FATAL_ERROR "Generator script not found: ${COSIMO_IOS_GENERATOR_SCRIPT}")
 endif()
 
-if (NOT EXISTS "${CMAKE_CURRENT_LIST_DIR}/Vendor/cmajor/include/cmajor/helpers/cmaj_Patch.h")
-    message(FATAL_ERROR "Vendored Cmajor helper runtime not found under ios_auv3/Vendor/cmajor/include")
+set(COSIMO_CMAJOR_RUNTIME_SCRIPT "${COSIMO_REPO_ROOT}/scripts/ensure_cmajor_runtime.py")
+
+if (NOT EXISTS "${COSIMO_CMAJOR_RUNTIME_SCRIPT}")
+    message(FATAL_ERROR "Pinned Cmajor runtime fetch helper not found: ${COSIMO_CMAJOR_RUNTIME_SCRIPT}")
 endif()
 
-if (NOT EXISTS "${CMAKE_CURRENT_LIST_DIR}/Vendor/cmajor/web/cmaj_api/cmaj-patch-view.js")
-    message(FATAL_ERROR "Vendored Cmajor web API files not found under ios_auv3/Vendor/cmajor/web/cmaj_api")
+execute_process(
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${COSIMO_CMAJOR_RUNTIME_SCRIPT}"
+        --path
+    WORKING_DIRECTORY
+        "${COSIMO_REPO_ROOT}"
+    RESULT_VARIABLE
+        COSIMO_CMAJOR_RUNTIME_RESULT
+    OUTPUT_VARIABLE
+        COSIMO_CMAJOR_RUNTIME_DIR
+    ERROR_VARIABLE
+        COSIMO_CMAJOR_RUNTIME_ERROR
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+
+if (NOT COSIMO_CMAJOR_RUNTIME_RESULT EQUAL 0)
+    string(STRIP "${COSIMO_CMAJOR_RUNTIME_ERROR}" COSIMO_CMAJOR_RUNTIME_ERROR)
+    message(FATAL_ERROR "Failed to fetch the pinned Cmajor runtime: ${COSIMO_CMAJOR_RUNTIME_ERROR}")
+endif()
+
+if (NOT EXISTS "${COSIMO_CMAJOR_RUNTIME_DIR}/include/cmajor/helpers/cmaj_Patch.h")
+    message(FATAL_ERROR "Pinned Cmajor helper runtime is incomplete: ${COSIMO_CMAJOR_RUNTIME_DIR}")
+endif()
+
+if (NOT EXISTS "${COSIMO_CMAJOR_RUNTIME_DIR}/javascript/cmaj_api/cmaj-patch-view.js")
+    message(FATAL_ERROR "Pinned Cmajor web API files are incomplete: ${COSIMO_CMAJOR_RUNTIME_DIR}")
 endif()
 
 if (NOT JUCE_PATH)
@@ -94,7 +123,7 @@ file(
 file(
     GLOB_RECURSE COSIMO_CMAJOR_WEB_FILES
     CONFIGURE_DEPENDS
-    "${CMAKE_CURRENT_LIST_DIR}/Vendor/cmajor/web/cmaj_api/*"
+    "${COSIMO_CMAJOR_RUNTIME_DIR}/javascript/cmaj_api/*"
 )
 
 set(
@@ -189,8 +218,8 @@ target_compile_definitions(CosimoSynth PRIVATE
 )
 
 target_include_directories(CosimoSynth PRIVATE
-    "${CMAKE_CURRENT_LIST_DIR}/Vendor/cmajor/include"
-    "${CMAKE_CURRENT_LIST_DIR}/Vendor/cmajor/include/choc"
+    "${COSIMO_CMAJOR_RUNTIME_DIR}/include"
+    "${COSIMO_CMAJOR_RUNTIME_DIR}/include/choc"
     "${CMAKE_CURRENT_LIST_DIR}/Source"
 )
 
@@ -204,6 +233,7 @@ add_dependencies(CosimoSynth cosimo_ios_auv3_generated_performer)
 foreach(bundle_target CosimoSynth_Standalone CosimoSynth_AUv3)
     set_target_properties(${bundle_target} PROPERTIES
         XCODE_ATTRIBUTE_CODE_SIGN_ENTITLEMENTS "${COSIMO_SHARED_WAVETABLE_ENTITLEMENTS}"
+        XCODE_ATTRIBUTE_IPHONEOS_DEPLOYMENT_TARGET "18.0"
     )
 
     add_custom_command(
@@ -221,7 +251,7 @@ foreach(bundle_target CosimoSynth_Standalone CosimoSynth_AUv3)
             "$<TARGET_FILE_DIR:${bundle_target}>/cmaj_api"
         COMMAND
             "${CMAKE_COMMAND}" -E copy_directory
-            "${CMAKE_CURRENT_LIST_DIR}/Vendor/cmajor/web/cmaj_api"
+            "${COSIMO_CMAJOR_RUNTIME_DIR}/javascript/cmaj_api"
             "$<TARGET_FILE_DIR:${bundle_target}>/cmaj_api"
         COMMAND
             "${CMAKE_COMMAND}" -E rm -rf

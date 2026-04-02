@@ -2,6 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { spawn } from "node:child_process";
+import { createServer } from "node:net";
 
 import { computeResponsivePatchLayout } from "../patch_gui/responsive-layout.mjs";
 
@@ -11,6 +13,110 @@ async function loadPatchManifest(fileName) {
     return JSON.parse(
         await fs.readFile(path.join(repoRoot, fileName), "utf8")
     );
+}
+
+async function pickUnusedLocalPort() {
+    return await new Promise((resolve, reject) => {
+        const server = createServer();
+
+        server.once("error", reject);
+        server.listen(0, "127.0.0.1", () => {
+            const address = server.address();
+
+            if (!address || typeof address === "string") {
+                server.close();
+                reject(new Error("Could not determine an unused local port"));
+                return;
+            }
+
+            server.close((error) => {
+                if (error) {
+                    reject(error);
+                    return;
+                }
+
+                resolve(address.port);
+            });
+        });
+    });
+}
+
+async function startDesktopViteServer({ port, readyPath }) {
+    const viteBinary = path.join(repoRoot, "node_modules", ".bin", "vite");
+    const outputChunks = [];
+
+    try {
+        const stats = await fs.stat(viteBinary);
+        assert.equal(stats.isFile(), true, "The local Vite binary is missing; run npm install before this test.");
+    } catch (error) {
+        throw new Error(`The local Vite binary is missing at ${viteBinary}: ${error}`);
+    }
+
+    const child = spawn(
+        viteBinary,
+        [
+            "--host",
+            "127.0.0.1",
+            "--port",
+            String(port),
+            "--config",
+            "ui/vite.desktop.config.mjs",
+        ],
+        {
+            cwd: repoRoot,
+            stdio: ["ignore", "pipe", "pipe"],
+        },
+    );
+
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => outputChunks.push(chunk));
+    child.stderr.on("data", (chunk) => outputChunks.push(chunk));
+
+    const rootUrl = `http://127.0.0.1:${port}/`;
+    const readyUrl = new URL(readyPath, rootUrl);
+    const deadline = Date.now() + 30_000;
+
+    while (Date.now() < deadline) {
+        if (child.exitCode !== null) {
+            throw new Error(`Desktop Vite server exited early:\n${outputChunks.join("")}`);
+        }
+
+        try {
+            const response = await fetch(readyUrl);
+
+            if (response.ok) {
+                return {
+                    rootUrl,
+                    async stop() {
+                        if (child.exitCode !== null) {
+                            return;
+                        }
+
+                        child.kill("SIGTERM");
+                        await new Promise((resolve) => {
+                            child.once("exit", resolve);
+                            setTimeout(() => {
+                                if (child.exitCode === null) {
+                                    child.kill("SIGKILL");
+                                }
+                            }, 5_000);
+                        });
+                    },
+                };
+            }
+        } catch {
+            // Wait for the server to finish starting.
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, 200));
+    }
+
+    if (child.exitCode === null) {
+        child.kill("SIGTERM");
+    }
+
+    throw new Error(`Timed out waiting for the desktop Vite server at ${rootUrl}\n${outputChunks.join("")}`);
 }
 
 test("iOS patch manifest keeps the synth graph but switches to the mobile editor entry point", async () => {
@@ -45,14 +151,49 @@ test("desktop React UI tooling is wired for Vite dev and build loops", async () 
     assert.equal(packageJson.scripts["ui:desktop:build"], "vite build --config ui/vite.desktop.config.mjs");
     assert.equal(packageJson.scripts["ui:worker:build"], "vite build --config ui/vite.worker.config.mjs");
     assert.equal(packageJson.scripts["ui:build"], "node ui/build.mjs");
+    assert.match(viteConfig, /ensure_cmajor_runtime\.py/);
     assert.match(viteConfig, /serveHtmlEntry\("\/", path\.join\(repoRoot,\s*"ui",\s*"desktop",\s*"index\.html"\)\)/);
     assert.match(viteConfig, /serveHtmlEntry\("\/ui\/desktop\/index\.html", path\.join\(repoRoot,\s*"ui",\s*"desktop",\s*"index\.html"\)\)/);
     assert.match(viteConfig, /servePatchModuleAlias\("\/patch_gui\/desktop\/index\.js"/);
     assert.match(viteConfig, /serveStaticDirectory\("\/cmaj_api", cmajorApiRoot\)/);
+    assert.doesNotMatch(viteConfig, /Vendor\/cmajor/);
     assert.match(viteConfig, /port:\s*5174/);
     assert.match(viteConfig, /outDir:\s*path\.join\(repoRoot,\s*"patch_gui",\s*"desktop"\)/);
     assert.match(workerViteConfig, /fileName:\s*\(\)\s*=>\s*"wavetable-worker\.js"/);
     assert.match(workerViteConfig, /ui",\s*"worker",\s*"wavetable-worker\.ts"/);
+});
+
+test("desktop Vite dev server serves the real Cmajor browser helpers and the desktop patch bundle", async (t) => {
+    const port = await pickUnusedLocalPort();
+    const server = await startDesktopViteServer({
+        port,
+        readyPath: "ui/desktop/index.html",
+    });
+
+    t.after(async () => {
+        await server.stop();
+    });
+
+    const patchViewResponse = await fetch(new URL("cmaj_api/cmaj-patch-view.js", server.rootUrl));
+    assert.equal(patchViewResponse.status, 200);
+    const patchViewSource = await patchViewResponse.text();
+    assert.match(patchViewSource, /createPatchViewHolder/);
+
+    const patchConnectionResponse = await fetch(new URL("cmaj_api/cmaj-patch-connection.js", server.rootUrl));
+    assert.equal(patchConnectionResponse.status, 200);
+    const patchConnectionSource = await patchConnectionResponse.text();
+    assert.match(patchConnectionSource, /class PatchConnection/);
+
+    const desktopBundleResponse = await fetch(new URL("patch_gui/desktop/index.js", server.rootUrl));
+    assert.equal(desktopBundleResponse.status, 200);
+    const desktopBundleSource = await desktopBundleResponse.text();
+    assert.match(desktopBundleSource, /createDesktopPatchView/);
+
+    const desktopHtmlResponse = await fetch(new URL("ui/desktop/index.html", server.rootUrl));
+    assert.equal(desktopHtmlResponse.status, 200);
+    const desktopHtmlSource = await desktopHtmlResponse.text();
+    assert.match(desktopHtmlSource, /@vite\/client/);
+    assert.match(desktopHtmlSource, /ui\/desktop\/harness-main\.tsx/);
 });
 
 test("desktop dev plug-in build enables the webview dev server and lets Vite build UI assets before Python writes manifests", async () => {

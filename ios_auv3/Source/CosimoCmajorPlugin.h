@@ -297,7 +297,7 @@ public:
         choc::ui::WebView::Options options;
         options.enableDebugMode = false;
         options.enableDebugInspector = false;
-        options.transparentBackground = true;
+        options.transparentBackground = false;
         options.customSchemeURI = std::string (getBundleSchemeRoot());
         options.fetchResource = [this] (const std::string& path) { return onRequest (path); };
         options.webviewIsReady = [this] (choc::ui::WebView& readyView)
@@ -305,13 +305,20 @@ public:
             using namespace choc::objc;
 
             if (auto nativeWebView = reinterpret_cast<id> (readyView.getViewHandle()))
+            {
+                auto black = callClass<id> ("UIColor", "blackColor");
+                call<void> (nativeWebView, "setOpaque:", (BOOL) 0);
+                call<void> (nativeWebView, "setBackgroundColor:", black);
+
                 if (auto scrollView = call<id> (nativeWebView, "scrollView"))
                 {
                     call<void> (scrollView, "setContentInsetAdjustmentBehavior:", 2);
+                    call<void> (scrollView, "setBackgroundColor:", black);
 
                     if (call<BOOL> (scrollView, "respondsToSelector:", sel_registerName ("setAutomaticallyAdjustsScrollIndicatorInsets:")))
                         call<void> (scrollView, "setAutomaticallyAdjustsScrollIndicatorInsets:", (BOOL) 0);
                 }
+            }
 
             initialiseBridge();
             navigateToBundlePage();

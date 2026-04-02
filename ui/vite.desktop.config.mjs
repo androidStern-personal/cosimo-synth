@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 import react from "@vitejs/plugin-react";
@@ -8,7 +9,8 @@ import { defineConfig } from "vite";
 
 const thisDirectory = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(thisDirectory, "..");
-const cmajorWebRoot = path.join(repoRoot, "ios_auv3", "Vendor", "cmajor", "web");
+const cmajorRuntimeRoot = resolveCmajorRuntimeRoot(repoRoot);
+const cmajorWebRoot = path.join(cmajorRuntimeRoot, "javascript");
 const cmajorApiRoot = path.join(cmajorWebRoot, "cmaj_api");
 const desktopPatchViewSource = path.join(repoRoot, "ui", "desktop", "patch-view-entry.tsx");
 const reactRefreshPreamble = [
@@ -18,6 +20,19 @@ const reactRefreshPreamble = [
     "window.$RefreshSig$ = () => (type) => type;",
     "window.__vite_plugin_react_preamble_installed__ = true;",
 ].join("\n");
+
+function resolveCmajorRuntimeRoot(workspaceRoot) {
+    if (process.env.COSIMO_CMAJOR_RUNTIME_DIR) {
+        return path.resolve(process.env.COSIMO_CMAJOR_RUNTIME_DIR);
+    }
+
+    const runtimeScript = path.join(workspaceRoot, "scripts", "ensure_cmajor_runtime.py");
+
+    return execFileSync("python3", [runtimeScript, "--path"], {
+        cwd: workspaceRoot,
+        encoding: "utf8",
+    }).trim();
+}
 
 function contentTypeFor(filePath) {
     switch (path.extname(filePath)) {

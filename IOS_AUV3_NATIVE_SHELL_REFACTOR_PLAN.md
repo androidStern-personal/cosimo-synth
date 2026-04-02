@@ -7,7 +7,7 @@ Completed on 2026-03-30.
 What landed:
 
 - `scripts/generate_ios_auv3_plugin.sh` now emits raw `cmaj generate --target=cpp` performer output instead of a generated JUCE plug-in shell.
-- The repo now pins the Cmajor helper runtime, Cmajor API headers, COM headers, CHOC headers, and browser `cmaj_api` files under `ios_auv3/Vendor/cmajor/`.
+- The repo now fetches the pinned Cmajor helper runtime, CHOC headers, and browser `cmaj_api` files into `build/deps/` instead of checking that runtime tree into source control.
 - The iOS target now builds through `ios_auv3/Source/CosimoPluginMain.cpp`, which includes the raw generated performer and the pinned runtime instead of compiling generated `cmajor_plugin.cpp`.
 - The bundle packaging step now copies real `patch_gui/`, `cmaj_api/`, `assets/`, and `WavetableSynth.iOS.cmajorpatch` files into the standalone app and AUv3 extension bundles.
 - The visible WebView bridge keeps the full Cmajor `PatchWebView` protocol and now has a development-server loader with fallback to bundled files.
@@ -52,7 +52,7 @@ After this refactor:
   - runs `build_assets.py`
   - runs `cmaj generate --target=cpp`
   - writes the raw generated performer C++ output into the build folder
-- A pinned repo-owned Cmajor runtime directory exists in the repo instead of depending on the generated JUCE helper output at build time.
+- A pinned runtime fetch supplies the Cmajor helper layer at build time instead of depending on generated JUCE helper output.
 
 ### Acceptance Criteria
 
@@ -70,7 +70,7 @@ After this refactor:
 
 ### Deliverables
 
-- A repo-owned runtime directory contains the Cmajor helper layer the app actually uses.
+- A pinned fetched runtime contains the Cmajor helper layer the app actually uses.
 - The repo-owned runtime keeps:
   - `cmaj::Patch`
   - patch manifest support
@@ -82,7 +82,7 @@ After this refactor:
 ### Acceptance Criteria
 
 - The iOS target builds against repo-owned runtime files only.
-- The runtime source tree is pinned and versioned in the repo.
+- The runtime source tree is pinned to one exact upstream version and fetched outside source control.
 - No build step patches vendored helper headers with search-and-replace edits.
 
 ## Milestone 3: Build The Repo-Owned Plug-In Shell

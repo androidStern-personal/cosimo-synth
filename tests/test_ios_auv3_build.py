@@ -42,7 +42,7 @@ IOS_VITE_CONFIG = REPO_ROOT / "ios_auv3" / "vite.config.mjs"
 IOS_PATCH_HOST_HTML = REPO_ROOT / "patch_gui" / "index.ios.html"
 IOS_PATCH_HOST_RUNTIME = REPO_ROOT / "patch_gui" / "index.ios-host.js"
 PACKAGE_JSON = REPO_ROOT / "package.json"
-VENDORED_CMAJOR_WEB_API = REPO_ROOT / "ios_auv3" / "Vendor" / "cmajor" / "web" / "cmaj_api"
+CMAJOR_RUNTIME_HELPER = REPO_ROOT / "scripts" / "ensure_cmajor_runtime.py"
 
 CONTAINER_BUNDLE_ID = "dev.cosimo.wavetable-synth"
 HOST_BUNDLE_ID = "dev.cosimo.wavetable-synth-host"
@@ -84,13 +84,30 @@ endfunction()
     return root
 
 
+@functools.lru_cache(maxsize=1)
+def _cmajor_runtime_root() -> Path:
+    result = subprocess.run(
+        ["python3", str(CMAJOR_RUNTIME_HELPER), "--path"],
+        cwd=REPO_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    return Path(result.stdout.strip())
+
+
+def _cmajor_web_api_root() -> Path:
+    return _cmajor_runtime_root() / "javascript" / "cmaj_api"
+
+
 def _stage_bundle_root(destination: Path) -> None:
     destination.mkdir(parents=True, exist_ok=True)
     shutil.copy2(REPO_ROOT / "WavetableSynth.cmajorpatch", destination / "WavetableSynth.cmajorpatch")
     shutil.copy2(REPO_ROOT / "WavetableSynth.iOS.cmajorpatch", destination / "WavetableSynth.iOS.cmajorpatch")
     shutil.copytree(REPO_ROOT / "assets", destination / "assets")
     shutil.copytree(REPO_ROOT / "patch_gui", destination / "patch_gui")
-    shutil.copytree(VENDORED_CMAJOR_WEB_API, destination / "cmaj_api")
+    shutil.copytree(_cmajor_web_api_root(), destination / "cmaj_api")
 
 
 def _load_python_module(module_path: Path, module_name: str) -> ModuleType:
@@ -728,14 +745,16 @@ def test_ios_auv3_cmake_declares_the_repo_owned_shell_and_bundle_copy_contract()
     assert "LANGUAGES CXX C OBJC OBJCXX" in cmake
     assert "FORMATS Standalone AUv3" in cmake
     assert "generate_ios_auv3_plugin.sh" in cmake_text
+    assert "ensure_cmajor_runtime.py" in cmake_text
     assert "CosimoPluginMain.cpp" in cmake_text
     assert "CosimoSharedWavetableLibrary.mm" in cmake_text
-    assert "Vendor/cmajor/include" in cmake_text
+    assert "COSIMO_CMAJOR_RUNTIME_DIR" in cmake_text
     assert "copy_directory" in cmake_text
     assert "$<TARGET_FILE_DIR:${bundle_target}>/patch_gui" in cmake_text
     assert "$<TARGET_FILE_DIR:${bundle_target}>/cmaj_api" in cmake_text
     assert "$<TARGET_FILE_DIR:${bundle_target}>/assets" in cmake_text
     assert "$<TARGET_FILE_DIR:${bundle_target}>/WavetableSynth.iOS.cmajorpatch" in cmake_text
+    assert "Vendor/cmajor" not in cmake_text
     assert "COSIMO_REPO_ROOT_PATH" not in cmake_text
     assert "COSIMO_ENABLE_LIVE_REPO_RESOURCES" not in cmake_text
     assert "cmajor_plugin.cpp" not in cmake_text
@@ -777,11 +796,13 @@ def test_ios_ui_dev_server_configuration_exists() -> None:
 
     assert package_json["scripts"]["ios:ui:dev"] == "vite --config ios_auv3/vite.config.mjs"
     assert "vite" in package_json["devDependencies"]
+    assert "ensure_cmajor_runtime.py" in vite_config
     assert 'serveStaticDirectory("/cmaj_api", cmajorApiRoot)' in vite_config
     assert 'host: "0.0.0.0"' in vite_config
     assert "strictPort: true" in vite_config
     assert "cors: true" in vite_config
     assert "port: 5173" in vite_config
+    assert "Vendor/cmajor" not in vite_config
 
 
 def test_ios_patch_manifest_points_at_the_mobile_editor_entry() -> None:
