@@ -210,7 +210,7 @@ test("iOS patch view applies a root-level safe-area gutter across the whole scre
     assert.match(source, /env\(safe-area-inset-left\)/);
     assert.match(source, /env\(safe-area-inset-right\)/);
     assert.match(source, /:host\s*\{[\s\S]*box-sizing:\s*border-box;/);
-    assert.match(source, /--cosimo-ios-top-inset:\s*50px;/);
+    assert.match(source, /--cosimo-ios-top-inset:\s*0px;/);
     assert.match(source, /--cosimo-ios-bottom-inset:\s*0px;/);
     assert.match(source, /--cosimo-ios-safe-top:\s*calc\(env\(safe-area-inset-top\)\s*\+\s*var\(--cosimo-ios-top-inset\)\);/);
     assert.match(source, /--cosimo-ios-safe-bottom:\s*calc\(env\(safe-area-inset-bottom\)\s*\+\s*var\(--cosimo-ios-bottom-inset\)\);/);

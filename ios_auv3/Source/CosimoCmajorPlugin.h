@@ -300,8 +300,19 @@ public:
         options.transparentBackground = true;
         options.customSchemeURI = std::string (getBundleSchemeRoot());
         options.fetchResource = [this] (const std::string& path) { return onRequest (path); };
-        options.webviewIsReady = [this] (choc::ui::WebView&)
+        options.webviewIsReady = [this] (choc::ui::WebView& readyView)
         {
+            using namespace choc::objc;
+
+            if (auto nativeWebView = reinterpret_cast<id> (readyView.getViewHandle()))
+                if (auto scrollView = call<id> (nativeWebView, "scrollView"))
+                {
+                    call<void> (scrollView, "setContentInsetAdjustmentBehavior:", 2);
+
+                    if (call<BOOL> (scrollView, "respondsToSelector:", sel_registerName ("setAutomaticallyAdjustsScrollIndicatorInsets:")))
+                        call<void> (scrollView, "setAutomaticallyAdjustsScrollIndicatorInsets:", (BOOL) 0);
+                }
+
             initialiseBridge();
             navigateToBundlePage();
         };

@@ -64067,9 +64067,7 @@ struct QuickJSContext  : public Context::Pimpl
 
     choc::value::Value evaluateExpression (const std::string& code) override
     {
-        auto result = takeValue (JS_Eval (context, code.c_str(), code.size(), "", JS_EVAL_TYPE_GLOBAL));
-        result.throwIfError();
-        return result.toChocValue();
+        return takeValue (JS_Eval (context, code.c_str(), code.size(), "", JS_EVAL_TYPE_GLOBAL)).toChocValue();
     }
 
     void run (const std::string& code, Context::ReadModuleContentFn* resolveModule, Context::CompletionHandler handleResult) override
@@ -64081,7 +64079,6 @@ struct QuickJSContext  : public Context::Pimpl
                 JS_SetModuleLoaderFunc (runtime, nullptr, moduleLoaderFunc, resolveModule);
                 auto result = takeValue (JS_Eval (context, code.c_str(), code.size(), "", JS_EVAL_TYPE_MODULE));
                 JS_SetModuleLoaderFunc (runtime, nullptr, nullptr, nullptr);
-                result.throwIfError();
 
                 if (handleResult)
                     handleResult ({}, result.toChocValue());
@@ -64089,7 +64086,6 @@ struct QuickJSContext  : public Context::Pimpl
             else
             {
                 auto result = takeValue (JS_Eval (context, code.c_str(), code.size(), "", JS_EVAL_TYPE_GLOBAL));
-                result.throwIfError();
 
                 if (handleResult)
                     handleResult ({}, result.toChocValue());
@@ -64130,7 +64126,6 @@ struct QuickJSContext  : public Context::Pimpl
             JS_FreeValue (context, arg);
 
         functionArgs.clear();
-        returnVal.throwIfError();
         return returnVal.toChocValue();
     }
 

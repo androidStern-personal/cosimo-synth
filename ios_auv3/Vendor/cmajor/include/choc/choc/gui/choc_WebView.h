@@ -553,29 +553,8 @@ struct choc::ui::WebView::Pimpl
         call<void> (webview, "setUIDelegate:", delegate);
         call<void> (webview, "setNavigationDelegate:", delegate);
 
-       #if CHOC_OSX
         if (options->transparentBackground)
             call<void> (webview, "setValue:forKey:", getNSNumberBool (false), getNSString ("drawsBackground"));
-       #endif
-
-       #if CHOC_IOS
-        if (auto scrollView = call<id> (webview, "scrollView"))
-        {
-            // Let the patch UI handle the safe area itself instead of shrinking the HTML viewport.
-            call<void> (scrollView, "setContentInsetAdjustmentBehavior:", 2);
-            call<void> (scrollView, "setAutomaticallyAdjustsScrollIndicatorInsets:", (BOOL) 0);
-        }
-
-        if (options->transparentBackground)
-        {
-            auto black = callClass<id> ("UIColor", "blackColor");
-            call<void> (webview, "setOpaque:", (BOOL) 0);
-            call<void> (webview, "setBackgroundColor:", black);
-
-            if (auto scrollView = call<id> (webview, "scrollView"))
-                call<void> (scrollView, "setBackgroundColor:", black);
-        }
-       #endif
 
         call<void> (config, "release");
 
@@ -882,14 +861,6 @@ private:
 
                                 return choc::objc::callSuper<BOOL> (self, "performKeyEquivalent:", e);
                             }), "B@:@");
-
-           #if CHOC_IOS
-            class_addMethod (webviewClass, sel_registerName ("safeAreaInsets"),
-                            (IMP) (+[](id, SEL) -> choc::objc::UIEdgeInsets
-                            {
-                                return {};
-                            }), "{UIEdgeInsets=dddd}@:");
-           #endif
 
             objc_registerClassPair (webviewClass);
         }

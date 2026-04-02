@@ -165,7 +165,6 @@ namespace choc::objc
     struct CGPoint { CGFloat x = 0, y = 0; };
     struct CGSize  { CGFloat width = 0, height = 0; };
     struct CGRect  { CGPoint origin; CGSize size; };
-    struct UIEdgeInsets { CGFloat top = 0, left = 0, bottom = 0, right = 0; };
 
 } // namespace choc::objc
 
