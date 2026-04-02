@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Nexus Number Shadow Repro</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: ui-sans-serif, system-ui, sans-serif;
+      background: #070b16;
+      color: #d6f4ff;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      background:
+        radial-gradient(circle at top, rgba(30, 47, 88, 0.35), transparent 55%),
+        #070b16;
+    }
+
+    #mount {
+      width: 540px;
+      border-radius: 24px;
+      border: 1px solid rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.03);
+      box-shadow: 0 20px 48px rgba(0,0,0,0.45);
+      padding: 24px;
+    }
+  </style>
+</head>
+<body>
+  <div id="mount"></div>
+  <script type="module">
+    import Nexus from "nexusui";
+
+    const mount = document.getElementById("mount");
+    const shadowRoot = mount.attachShadow({ mode: "open" });
+    shadowRoot.innerHTML = `
+      <style>
+        :host { color: #d6f4ff; }
+        .shell { display: grid; gap: 20px; }
+        .row { display: grid; grid-template-columns: 140px 1fr; gap: 16px; align-items: center; }
+        .label { font: 600 12px/1 ui-monospace, SFMono-Regular, monospace; letter-spacing: 0.14em; text-transform: uppercase; color: rgba(214,244,255,0.7); }
+        .host { width: 118px; height: 42px; }
+        .value { font: 600 12px/1 ui-monospace, SFMono-Regular, monospace; letter-spacing: 0.14em; color: #8fe8ff; }
+      </style>
+      <div class="shell">
+        <div class="row">
+          <div class="label">Plain Nexus</div>
+          <div>
+            <div id="plain-host" class="host"></div>
+            <div id="plain-value" class="value">0.000</div>
+          </div>
+        </div>
+        <div class="row">
+          <div class="label">Current Wrapper</div>
+          <div>
+            <div id="wrapped-host" class="host"></div>
+            <div id="wrapped-value" class="value">0.000</div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    const plainHost = shadowRoot.getElementById("plain-host");
+    const wrappedHost = shadowRoot.getElementById("wrapped-host");
+    const plainValue = shadowRoot.getElementById("plain-value");
+    const wrappedValue = shadowRoot.getElementById("wrapped-value");
+
+    function styleWidget(widget) {
+      widget.decimalPlaces = 3;
+      widget.colors.fill = "rgba(255,255,255,0.06)";
+      widget.colors.dark = "#d6f4ff";
+      widget.colors.light = "#06101f";
+      widget.colors.accent = "#8fe8ff";
+      widget.colorInterface();
+      widget.element.style.borderRadius = "16px";
+      widget.element.style.border = "1px solid rgba(255,255,255,0.08)";
+      widget.element.style.boxShadow = "inset 0 1px 0 rgba(255,255,255,0.04)";
+      widget.element.style.fontFamily = "\"SF Mono\", \"JetBrains Mono\", ui-monospace, monospace";
+      widget.element.style.letterSpacing = "0.12em";
+      widget.element.style.fontSize = "14px";
+      widget.element.style.padding = "10px 14px";
+      widget.element.style.backgroundColor = "rgba(255,255,255,0.06)";
+      widget.element.style.color = "#d6f4ff";
+    }
+
+    const plain = new Nexus.Number(plainHost, {
+      size: [118, 42],
+      value: 0,
+      min: 0,
+      max: 2,
+      step: 0.001,
+    });
+    styleWidget(plain);
+    plain.on("change", (value) => {
+      plainValue.textContent = Number(value || 0).toFixed(3);
+    });
+
+    const wrapped = new Nexus.Number(wrappedHost, {
+      size: [118, 42],
+      value: 0,
+      min: 0,
+      max: 2,
+      step: 0.001,
+    });
+    styleWidget(wrapped);
+    wrapped.element.style.display = "block";
+    wrapped.element.style.width = "100%";
+    wrapped.element.style.height = "100%";
+    wrapped.element.readOnly = true;
+    wrappedHost.style.width = "118px";
+    wrappedHost.style.height = "42px";
+    wrappedHost.style.cursor = "ns-resize";
+
+    let latestValue = 0;
+    let dragState = null;
+    const dragSensitivity = Math.max(0.001, (2 - 0) / 800);
+
+    wrapped.on("change", (value) => {
+      latestValue = Number(value || 0);
+      wrappedValue.textContent = latestValue.toFixed(3);
+    });
+
+    const handleMouseMove = (event) => {
+      if (!dragState) {
+        return;
+      }
+      const deltaY = dragState.startY - event.clientY;
+      if (!dragState.moved && Math.abs(deltaY) >= 3) {
+        dragState.moved = true;
+      }
+      if (!dragState.moved) {
+        return;
+      }
+      const nextValue = Math.min(2, Math.max(0, dragState.startValue + (deltaY * dragSensitivity)));
+      wrapped.passiveUpdate(nextValue);
+      wrapped.render();
+      latestValue = nextValue;
+      wrappedValue.textContent = nextValue.toFixed(3);
+      event.preventDefault();
+    };
+
+    const handleMouseUp = (event) => {
+      if (!dragState) {
+        return;
+      }
+      const moved = dragState.moved;
+      dragState = null;
+      window.removeEventListener("mousemove", handleMouseMove, true);
+      window.removeEventListener("mouseup", handleMouseUp, true);
+      if (!moved) {
+        wrapped.element.readOnly = false;
+        wrapped.element.focus();
+        wrapped.element.select();
+      }
+      event.preventDefault();
+    };
+
+    wrappedHost.addEventListener("mousedown", (event) => {
+      if (event.button !== 0) {
+        return;
+      }
+      dragState = {
+        startY: event.clientY,
+        startValue: latestValue,
+        moved: false,
+      };
+      window.addEventListener("mousemove", handleMouseMove, true);
+      window.addEventListener("mouseup", handleMouseUp, true);
+      event.preventDefault();
+      event.stopPropagation();
+    }, true);
+
+    wrapped.element.addEventListener("blur", () => {
+      wrapped.element.readOnly = true;
+      const parsedValue = Number.parseFloat(wrapped.element.value);
+      latestValue = Number.isFinite(parsedValue) ? parsedValue : latestValue;
+      wrapped.passiveUpdate(latestValue);
+      wrapped.render();
+      wrappedValue.textContent = latestValue.toFixed(3);
+    });
+
+    window.__repro = {
+      plainHost,
+      plainInput: plain.element,
+      plain,
+      wrappedHost,
+      wrappedInput: wrapped.element,
+      wrapped,
+      values() {
+        return {
+          plain: plain.value,
+          wrapped: latestValue,
+        };
+      },
+    };
+  </script>
+</body>
+</html>

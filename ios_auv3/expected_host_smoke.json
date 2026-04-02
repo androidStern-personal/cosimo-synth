@@ -27,10 +27,12 @@
     }
   ],
   "savedStateKeys": [
-    "glideTime",
-    "mseg1Depth",
-    "playMode",
-    "wavetablePosition",
-    "wavetableSelect"
-  ]
+    "data",
+    "jucePluginState",
+    "manufacturer",
+    "subtype",
+    "type",
+    "version"
+  ],
+  "savedStateSource": "fullState"
 }

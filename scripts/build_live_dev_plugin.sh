@@ -27,6 +27,7 @@ if [[ ! -e "$patch_path" ]]; then
   exit 1
 fi
 
+npm run ui:build
 uv run python "$repo_root/build_assets.py"
 
 mkdir -p "$cache_root"
@@ -75,9 +76,15 @@ cmake -S "$repo_root/tools/live_dev_plugin" \
 cmake --build "$build_dir" --config Release
 
 au_built="$build_dir/CmajInstrumentDev_artefacts/Release/AU/CmajInstrumentDev.component"
+standalone_built="$build_dir/CmajInstrumentDev_artefacts/Release/Standalone/CmajInstrumentDev.app"
 
 if [[ ! -d "$au_built" ]]; then
   printf 'Built AU bundle not found: %s\n' "$au_built" >&2
+  exit 1
+fi
+
+if [[ ! -d "$standalone_built" ]]; then
+  printf 'Built standalone app not found: %s\n' "$standalone_built" >&2
   exit 1
 fi
 
@@ -89,8 +96,13 @@ cp -R "$au_built" "$au_bundle"
 mkdir -p "$au_bundle/Contents/Resources"
 cp "$runtime_dylib" "$au_bundle/Contents/Resources/libCmajPerformer.dylib"
 
+mkdir -p "$standalone_built/Contents/Resources"
+cp "$runtime_dylib" "$standalone_built/Contents/Resources/libCmajPerformer.dylib"
+
 codesign --force --deep --sign - "$au_bundle" >/dev/null
+codesign --force --deep --sign - "$standalone_built" >/dev/null
 
 printf 'Installed %s\n' "$au_bundle"
+printf 'Bundled standalone runtime into %s\n' "$standalone_built"
 printf 'Bundled %s\n' "$runtime_dylib"
 printf 'Using patch %s\n' "$patch_path"

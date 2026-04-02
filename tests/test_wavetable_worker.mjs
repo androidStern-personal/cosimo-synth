@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { createWavetableWorkerController } from "../patch_gui/wavetable-worker.mjs";
+import { createWavetableWorkerController } from "../patch_gui/wavetable-worker.js";
 
 const samplesPerFrame = 2048;
 const failurePhaseLoadSource = 1;
@@ -303,6 +303,72 @@ test("worker bootstraps from runtimeState instead of requesting wavetableSelect 
             },
         ]
     );
+});
+
+test("worker prefers the resolved resource URL for factory wavetable source paths when both loader paths are available", async () => {
+    const spacedPath = "assets/factory_sources/imported/BS2 - Acid.wav";
+    const catalog = {
+        tables: [
+            {
+                tableId: "bs2-acid",
+                name: "BS2 - Acid",
+                frameCount: 2,
+                sourceWav: spacedPath,
+            },
+        ],
+    };
+    const connection = new FakePatchConnection({
+        catalog,
+        audioFiles: {},
+        maxAutoAckFrames: 0,
+        resourceRootUrl: "https://example.test/bundle/",
+    });
+    const waveBuffer = createFloat32WaveBufferFromFrames([
+        createSineFrame(0),
+        createSineFrame(Math.PI / 2),
+    ]);
+    const fetchedUrls = [];
+
+    await withPatchedFetch(async (url) => {
+        fetchedUrls.push(String(url));
+
+        return {
+            ok: true,
+            async arrayBuffer() {
+                return waveBuffer;
+            },
+        };
+    }, async () => {
+        const controller = createWavetableWorkerController(connection, { maxFramesInFlight: 1 });
+        await controller.start();
+        await flushMicrotasks();
+
+        connection.emitEndpoint(
+            "runtimeState",
+            createRuntimeState({
+                desiredIntentSerial: 5,
+                desiredTableIndex: 0,
+                generationFrontier: 10,
+                serviceState: 0,
+            })
+        );
+        await flushMicrotasks(16);
+    });
+
+    assert.deepEqual(connection.readAudioPaths, []);
+    assert.deepEqual(fetchedUrls, [
+        "https://example.test/bundle/assets/factory_sources/imported/BS2%20-%20Acid.wav",
+    ]);
+
+    const loadBeginEvents = connection.sentEvents.filter(({ endpointID }) => endpointID === "wavetableLoadBegin");
+    assert.deepEqual(loadBeginEvents.map(({ value }) => value), [
+        {
+            dspSessionId: 7,
+            generation: 11,
+            tableIndex: 0,
+            frameCount: 2,
+        },
+    ]);
 });
 
 test("worker falls back to the resolved resource URL for spaced wavetable paths when no audio-data bridge is available", async () => {
@@ -857,6 +923,50 @@ test("worker aborts a committed loading generation when mip upload acks stall pa
         tableIndex: 1,
         failureReasonCode: failureReasonTimeout,
     });
+});
+
+test("worker uses the declared 20 second watchdog timeout when no explicit timeout is provided", async () => {
+    const timeoutHarness = new FakeTimeoutHarness();
+    const connection = new FakePatchConnection({
+        catalog: createDefaultCatalog(),
+        audioFiles: createDefaultAudioFiles(),
+        maxAutoAckFrames: 0,
+    });
+
+    const controller = createWavetableWorkerController(connection, {
+        maxFramesInFlight: 1,
+        setTimeoutFn: timeoutHarness.setTimeout.bind(timeoutHarness),
+        clearTimeoutFn: timeoutHarness.clearTimeout.bind(timeoutHarness),
+    });
+    await controller.start();
+    await flushMicrotasks();
+
+    connection.emitEndpoint(
+        "runtimeState",
+        createRuntimeState({
+            desiredIntentSerial: 9,
+            desiredTableIndex: 1,
+            generationFrontier: 12,
+            serviceState: 1,
+            hasLoading: true,
+            loadingTableIndex: 1,
+            loadingGeneration: 12,
+        })
+    );
+    await flushMicrotasks(16);
+
+    connection.emitEndpoint("wavetableMipRequest", {
+        dspSessionId: 7,
+        generation: 12,
+        tableIndex: 1,
+        mipIndex: 0,
+        urgencyLevel: 2,
+    });
+    await flushMicrotasks(16);
+
+    assert.equal(timeoutHarness.pending.size, 1);
+    const [, scheduledTimeout] = timeoutHarness.pending.entries().next().value;
+    assert.equal(scheduledTimeout.delay, 20000);
 });
 
 test("worker automatically retries one timed-out desired table load when runtime state reports the timeout failure", async () => {

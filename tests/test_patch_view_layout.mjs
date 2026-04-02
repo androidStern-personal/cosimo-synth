@@ -2,6 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { spawn } from "node:child_process";
+import { createServer } from "node:net";
 
 import { computeResponsivePatchLayout } from "../patch_gui/responsive-layout.mjs";
 
@@ -13,10 +15,117 @@ async function loadPatchManifest(fileName) {
     );
 }
 
+async function pickUnusedLocalPort() {
+    return await new Promise((resolve, reject) => {
+        const server = createServer();
+
+        server.once("error", reject);
+        server.listen(0, "127.0.0.1", () => {
+            const address = server.address();
+
+            if (!address || typeof address === "string") {
+                server.close();
+                reject(new Error("Could not determine an unused local port"));
+                return;
+            }
+
+            server.close((error) => {
+                if (error) {
+                    reject(error);
+                    return;
+                }
+
+                resolve(address.port);
+            });
+        });
+    });
+}
+
+async function startDesktopViteServer({ port, readyPath }) {
+    const viteBinary = path.join(repoRoot, "node_modules", ".bin", "vite");
+    const outputChunks = [];
+
+    try {
+        const stats = await fs.stat(viteBinary);
+        assert.equal(stats.isFile(), true, "The local Vite binary is missing; run npm install before this test.");
+    } catch (error) {
+        throw new Error(`The local Vite binary is missing at ${viteBinary}: ${error}`);
+    }
+
+    const child = spawn(
+        viteBinary,
+        [
+            "--host",
+            "127.0.0.1",
+            "--port",
+            String(port),
+            "--config",
+            "ui/vite.desktop.config.mjs",
+        ],
+        {
+            cwd: repoRoot,
+            stdio: ["ignore", "pipe", "pipe"],
+        },
+    );
+
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => outputChunks.push(chunk));
+    child.stderr.on("data", (chunk) => outputChunks.push(chunk));
+
+    const rootUrl = `http://127.0.0.1:${port}/`;
+    const readyUrl = new URL(readyPath, rootUrl);
+    const deadline = Date.now() + 30_000;
+
+    while (Date.now() < deadline) {
+        if (child.exitCode !== null) {
+            throw new Error(`Desktop Vite server exited early:\n${outputChunks.join("")}`);
+        }
+
+        try {
+            const response = await fetch(readyUrl);
+
+            if (response.ok) {
+                return {
+                    rootUrl,
+                    async stop() {
+                        if (child.exitCode !== null) {
+                            return;
+                        }
+
+                        child.kill("SIGTERM");
+                        await new Promise((resolve) => {
+                            child.once("exit", resolve);
+                            setTimeout(() => {
+                                if (child.exitCode === null) {
+                                    child.kill("SIGKILL");
+                                }
+                            }, 5_000);
+                        });
+                    },
+                };
+            }
+        } catch {
+            // Wait for the server to finish starting.
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, 200));
+    }
+
+    if (child.exitCode === null) {
+        child.kill("SIGTERM");
+    }
+
+    throw new Error(`Timed out waiting for the desktop Vite server at ${rootUrl}\n${outputChunks.join("")}`);
+}
+
 test("iOS patch manifest keeps the synth graph but switches to the mobile editor entry point", async () => {
     const desktopManifest = await loadPatchManifest("WavetableSynth.cmajorpatch");
     const iosManifest = await loadPatchManifest("WavetableSynth.iOS.cmajorpatch");
 
+    assert.equal(desktopManifest.view.src, "patch_gui/desktop/index.js");
+    assert.equal(desktopManifest.view.width, 1120);
+    assert.equal(desktopManifest.view.height, 680);
     assert.equal(iosManifest.view.src, "patch_gui/index.ios.js");
     assert.equal("width" in iosManifest.view, false);
     assert.equal("height" in iosManifest.view, false);
@@ -33,26 +142,116 @@ test("iOS patch manifest keeps the synth graph but switches to the mobile editor
     assert.equal("externals" in iosManifest, false);
 });
 
-test("shared patch GUI .js files are generated from the .mjs source modules", async () => {
-    for (const moduleName of [
-        "responsive-layout",
-        "wavetable-bank",
-        "wavetable-display",
-        "theme",
-        "mseg",
-        "mseg-controller",
-    ]) {
-        const esmSource = await fs.readFile(
-            path.join(repoRoot, "patch_gui", `${moduleName}.mjs`),
-            "utf8"
-        );
-        const browserSource = await fs.readFile(
-            path.join(repoRoot, "patch_gui", `${moduleName}.js`),
-            "utf8"
-        );
+test("desktop React UI tooling is wired for Vite dev and build loops", async () => {
+    const packageJson = JSON.parse(await fs.readFile(path.join(repoRoot, "package.json"), "utf8"));
+    const viteConfig = await fs.readFile(path.join(repoRoot, "ui", "vite.desktop.config.mjs"), "utf8");
+    const workerViteConfig = await fs.readFile(path.join(repoRoot, "ui", "vite.worker.config.mjs"), "utf8");
 
-        assert.equal(browserSource, esmSource);
-    }
+    assert.equal(packageJson.scripts["ui:desktop:dev"], "vite --config ui/vite.desktop.config.mjs");
+    assert.equal(packageJson.scripts["ui:desktop:build"], "vite build --config ui/vite.desktop.config.mjs");
+    assert.equal(packageJson.scripts["ui:worker:build"], "vite build --config ui/vite.worker.config.mjs");
+    assert.equal(packageJson.scripts["ui:build"], "node ui/build.mjs");
+    assert.match(viteConfig, /ensure_cmajor_runtime\.py/);
+    assert.match(viteConfig, /serveHtmlEntry\("\/", path\.join\(repoRoot,\s*"ui",\s*"desktop",\s*"index\.html"\)\)/);
+    assert.match(viteConfig, /serveHtmlEntry\("\/ui\/desktop\/index\.html", path\.join\(repoRoot,\s*"ui",\s*"desktop",\s*"index\.html"\)\)/);
+    assert.match(viteConfig, /servePatchModuleAlias\("\/patch_gui\/desktop\/index\.js"/);
+    assert.match(viteConfig, /serveStaticDirectory\("\/cmaj_api", cmajorApiRoot\)/);
+    assert.doesNotMatch(viteConfig, /Vendor\/cmajor/);
+    assert.match(viteConfig, /port:\s*5174/);
+    assert.match(viteConfig, /outDir:\s*path\.join\(repoRoot,\s*"patch_gui",\s*"desktop"\)/);
+    assert.match(workerViteConfig, /fileName:\s*\(\)\s*=>\s*"wavetable-worker\.js"/);
+    assert.match(workerViteConfig, /ui",\s*"worker",\s*"wavetable-worker\.ts"/);
+});
+
+test("desktop Vite dev server serves the real Cmajor browser helpers and the desktop patch bundle", async (t) => {
+    const port = await pickUnusedLocalPort();
+    const server = await startDesktopViteServer({
+        port,
+        readyPath: "ui/desktop/index.html",
+    });
+
+    t.after(async () => {
+        await server.stop();
+    });
+
+    const patchViewResponse = await fetch(new URL("cmaj_api/cmaj-patch-view.js", server.rootUrl));
+    assert.equal(patchViewResponse.status, 200);
+    const patchViewSource = await patchViewResponse.text();
+    assert.match(patchViewSource, /createPatchViewHolder/);
+
+    const patchConnectionResponse = await fetch(new URL("cmaj_api/cmaj-patch-connection.js", server.rootUrl));
+    assert.equal(patchConnectionResponse.status, 200);
+    const patchConnectionSource = await patchConnectionResponse.text();
+    assert.match(patchConnectionSource, /class PatchConnection/);
+
+    const desktopBundleResponse = await fetch(new URL("patch_gui/desktop/index.js", server.rootUrl));
+    assert.equal(desktopBundleResponse.status, 200);
+    const desktopBundleSource = await desktopBundleResponse.text();
+    assert.match(desktopBundleSource, /createDesktopPatchView/);
+
+    const desktopHtmlResponse = await fetch(new URL("ui/desktop/index.html", server.rootUrl));
+    assert.equal(desktopHtmlResponse.status, 200);
+    const desktopHtmlSource = await desktopHtmlResponse.text();
+    assert.match(desktopHtmlSource, /@vite\/client/);
+    assert.match(desktopHtmlSource, /ui\/desktop\/harness-main\.tsx/);
+});
+
+test("desktop dev plug-in build enables the webview dev server and lets Vite build UI assets before Python writes manifests", async () => {
+    const cmakeSource = await fs.readFile(path.join(repoRoot, "tools", "live_dev_plugin", "CMakeLists.txt"), "utf8");
+    const buildScript = await fs.readFile(path.join(repoRoot, "scripts", "build_live_dev_plugin.sh"), "utf8");
+    const buildAssets = await fs.readFile(path.join(repoRoot, "build_assets.py"), "utf8");
+
+    assert.match(cmakeSource, /CMAJ_ENABLE_WEBVIEW_DEV_TOOLS=1/);
+    assert.match(cmakeSource, /COSIMO_ENABLE_WEBVIEW_DEV_SERVER=1/);
+    assert.match(buildScript, /npm run ui:build/);
+    assert.match(buildScript, /uv run python "\$repo_root\/build_assets\.py"/);
+    assert.ok(
+        buildScript.indexOf("npm run ui:build") < buildScript.indexOf('uv run python "$repo_root/build_assets.py"'),
+        "The Vite UI build should run before build_assets.py writes manifests",
+    );
+    assert.doesNotMatch(buildAssets, /sync_patch_gui_module_copies/);
+    assert.doesNotMatch(buildAssets, /shutil\.copyfile/);
+});
+
+test("the worker runtime is produced as a real Vite build output instead of a Python-generated source copy", async () => {
+    const builtWorker = await fs.readFile(path.join(repoRoot, "patch_gui", "wavetable-worker.js"), "utf8");
+
+    assert.match(builtWorker, /class WavetableWorkerController/);
+    assert.doesNotMatch(builtWorker, /\.replace\("\.\/wavetable-mip\.mjs"/);
+});
+
+test("desktop wavetable badge uses a real chevron icon instead of a fake text caret hack", async () => {
+    const desktopPatchView = await fs.readFile(path.join(repoRoot, "ui", "desktop", "DesktopPatchView.tsx"), "utf8");
+
+    assert.match(desktopPatchView, /function SelectChevron/);
+    assert.doesNotMatch(desktopPatchView, />v</);
+});
+
+test("desktop keyboard row uses compact transport controls instead of a duplicate frame card and separate editor button", async () => {
+    const desktopPatchView = await fs.readFile(path.join(repoRoot, "ui", "desktop", "DesktopPatchView.tsx"), "utf8");
+
+    assert.match(desktopPatchView, /new Nexus\.Number\(/);
+    assert.match(desktopPatchView, /Shift keyboard up one octave/);
+    assert.match(desktopPatchView, /Shift keyboard down one octave/);
+    assert.match(desktopPatchView, /function VoiceModeGlyph/);
+    assert.match(desktopPatchView, /function KeyboardSection/);
+    assert.doesNotMatch(desktopPatchView, /Open Editor/);
+    assert.doesNotMatch(desktopPatchView, /grid-cols-\[220px_minmax\(0,1fr\)\]/);
+});
+
+test("desktop keyboard routing is global and the last active control can claim left-right arrow steps", async () => {
+    const desktopPatchView = await fs.readFile(path.join(repoRoot, "ui", "desktop", "DesktopPatchView.tsx"), "utf8");
+    const synthInputRouter = await fs.readFile(path.join(repoRoot, "ui", "shared", "synth-input-router.ts"), "utf8");
+
+    assert.match(desktopPatchView, /useSynthInputRouter\(keyboardElementRef\)/);
+    assert.match(desktopPatchView, /keyboardRef=\{keyboardElementRef\}/);
+    assert.match(desktopPatchView, /handleStepWavetable/);
+    assert.match(desktopPatchView, /handleStepGlideTime/);
+    assert.match(synthInputRouter, /window\.addEventListener\("keydown", handleKeyDown, true\)/);
+    assert.match(synthInputRouter, /window\.addEventListener\("keyup", handleKeyUp, true\)/);
+    assert.match(synthInputRouter, /event\.key === "ArrowLeft" \|\| event\.key === "ArrowRight"/);
+    assert.match(synthInputRouter, /keyboardRef\.current\?\.handleKey\?\.\(event, true\)/);
+    assert.match(synthInputRouter, /keyboardRef\.current\?\.allNotesOff\?\.\(\)/);
 });
 
 test("generated factory bank catalog points at real bundled source wavetable files", async () => {
@@ -152,8 +351,8 @@ test("iOS patch view applies a root-level safe-area gutter across the whole scre
     assert.match(source, /env\(safe-area-inset-left\)/);
     assert.match(source, /env\(safe-area-inset-right\)/);
     assert.match(source, /:host\s*\{[\s\S]*box-sizing:\s*border-box;/);
-    assert.match(source, /--cosimo-ios-top-inset:\s*50px;/);
-    assert.match(source, /--cosimo-ios-bottom-inset:\s*20px;/);
+    assert.match(source, /--cosimo-ios-top-inset:\s*0px;/);
+    assert.match(source, /--cosimo-ios-bottom-inset:\s*0px;/);
     assert.match(source, /--cosimo-ios-safe-top:\s*calc\(env\(safe-area-inset-top\)\s*\+\s*var\(--cosimo-ios-top-inset\)\);/);
     assert.match(source, /--cosimo-ios-safe-bottom:\s*calc\(env\(safe-area-inset-bottom\)\s*\+\s*var\(--cosimo-ios-bottom-inset\)\);/);
     assert.match(source, /\.ios-shell\s*\{[\s\S]*box-sizing:\s*border-box;/);

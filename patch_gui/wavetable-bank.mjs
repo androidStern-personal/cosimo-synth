@@ -42,6 +42,57 @@ function isAbsoluteURL(value) {
     return /^[a-zA-Z][a-zA-Z\d+.-]*:/.test(value);
 }
 
+function getDefaultPatchRootUrl() {
+    const locationHref = globalThis.location?.href;
+
+    if (typeof locationHref === "string" && locationHref.length > 0) {
+        return new URL("/", locationHref);
+    }
+
+    const moduleUrl = new URL(import.meta.url);
+    const modulePath = moduleUrl.pathname;
+
+    if (modulePath.includes("/patch_gui/desktop/")) {
+        moduleUrl.pathname = modulePath.replace(/\/patch_gui\/desktop\/[^/]+$/, "/");
+        return moduleUrl;
+    }
+
+    if (modulePath.includes("/patch_gui/")) {
+        moduleUrl.pathname = modulePath.replace(/\/patch_gui\/[^/]+$/, "/");
+        return moduleUrl;
+    }
+
+    if (modulePath.includes("/ui/shared/")) {
+        moduleUrl.pathname = modulePath.replace(/\/ui\/shared\/[^/]+$/, "/");
+        return moduleUrl;
+    }
+
+    moduleUrl.pathname = modulePath.replace(/\/[^/]+$/, "/");
+    return moduleUrl;
+}
+
+function resourceAddressToUrl(path, resourceAddress) {
+    const patchRootUrl = getDefaultPatchRootUrl();
+
+    if (resourceAddress instanceof URL) {
+        return resourceAddress;
+    }
+
+    if (typeof resourceAddress === "string" && resourceAddress.length > 0) {
+        if (isAbsoluteURL(resourceAddress)) {
+            return new URL(resourceAddress);
+        }
+
+        const normalisedPath = resourceAddress.startsWith("/")
+            ? resourceAddress.slice(1)
+            : resourceAddress;
+
+        return new URL(normalisedPath, patchRootUrl);
+    }
+
+    return new URL(path, patchRootUrl);
+}
+
 function describePayload(payload) {
     if (payload === null) {
         return "null";
@@ -64,26 +115,8 @@ function describePayload(payload) {
 }
 
 export function resolvePatchResourceUrl(path, patchConnection) {
-    const patchRootUrl = new URL("../", import.meta.url);
     const resourceAddress = patchConnection?.getResourceAddress?.(path);
-
-    if (resourceAddress instanceof URL) {
-        return resourceAddress;
-    }
-
-    if (typeof resourceAddress === "string" && resourceAddress.length > 0) {
-        if (isAbsoluteURL(resourceAddress)) {
-            return new URL(resourceAddress);
-        }
-
-        const normalisedPath = resourceAddress.startsWith("/")
-            ? resourceAddress.slice(1)
-            : resourceAddress;
-
-        return new URL(normalisedPath, patchRootUrl);
-    }
-
-    return new URL(path, patchRootUrl);
+    return resourceAddressToUrl(path, resourceAddress);
 }
 
 async function fetchJSON(url, label) {
@@ -372,6 +405,24 @@ export async function loadFactoryBankFramesFromPatch(
     const catalogValue = await loadFactoryBankCatalogFromPatch(patchConnection, { catalogPath });
     const clampedTableIndex = clampToRange(tableIndex, 0, catalogValue.tables.length - 1);
     const sourceTableMeta = catalogValue.tables[clampedTableIndex];
+    const resourceAddress = typeof patchConnection?.getResourceAddress === "function"
+        ? patchConnection.getResourceAddress(sourceTableMeta.sourceWav)
+        : null;
+    const canLoadSourceByUrl = resourceAddress !== null
+        && resourceAddress !== undefined
+        && typeof fetch === "function";
+
+    if (canLoadSourceByUrl) {
+        const sourceWavUrl = resourceAddressToUrl(sourceTableMeta.sourceWav, resourceAddress);
+
+        return loadSourceWavetableFramesFromUrl({
+            sourceWavUrl,
+            sourceWavPath: sourceTableMeta.sourceWav,
+            tableIndex: clampedTableIndex,
+            expectedFrameCount: Number(sourceTableMeta.frameCount),
+            samplesPerFrame,
+        });
+    }
 
     if (typeof patchConnection?.readResourceAsAudioData === "function") {
         return loadSourceWavetableFramesFromPatchConnection({

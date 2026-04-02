@@ -1,16 +1,19 @@
+import type { PatchConnectionLike } from "../shared/cmajor-react";
+import {
+    DEFAULT_SAMPLES_PER_FRAME,
+    getFactoryBankCatalogValue,
+    loadSourceWavetableFramesFromUrl,
+    normalizeDecodedAudioFileSamples,
+    resolvePatchResourceUrl,
+    type FactoryBankCatalog,
+    type FactoryTableMeta,
+} from "../shared/wavetable-bank";
 import {
     DEFAULT_MIP_LEVEL_COUNT,
-    DEFAULT_SAMPLES_PER_FRAME,
     buildFrameSpectrum,
     buildMipFrameFromSpectrum,
     extractSourceFramesFromSamples,
-    normalizeDecodedAudioFileSamples,
-} from "./wavetable-mip.mjs";
-import {
-    getFactoryBankCatalogValue,
-    loadSourceWavetableFramesFromUrl,
-    resolvePatchResourceUrl,
-} from "./wavetable-bank.mjs";
+} from "../shared/wavetable-mip";
 
 const runtimeSyncRequestEndpointID = "runtimeSyncRequest";
 const runtimeStateEndpointID = "runtimeState";
@@ -35,7 +38,127 @@ const failurePhaseTransferMip = FAILURE_PHASE_TRANSFER_MIP;
 const failureReasonGeneric = FAILURE_REASON_GENERIC;
 const failureReasonTimeout = FAILURE_REASON_TIMEOUT;
 
-function emitWorkerLog(level, message, fields = null) {
+type NormalizedRuntimeState = ReturnType<typeof normalizeRuntimeState>;
+type Spectrum = ReturnType<typeof buildFrameSpectrum>;
+type ServiceTargetKind = "loading" | "active";
+type TimerHandle = ReturnType<NonNullable<typeof globalThis.setTimeout>> | number;
+
+type WorkerOptions = {
+    catalogPath?: string;
+    maxFramesInFlight?: number;
+    mipLevelCount?: number;
+    serviceLoadTimeoutMs?: number;
+    setTimeoutFn?: ((callback: () => void, delay: number) => TimerHandle) | null;
+    clearTimeoutFn?: ((handle: TimerHandle) => void) | null;
+};
+
+type ServiceTarget = {
+    kind: ServiceTargetKind;
+    dspSessionId: number;
+    generation: number;
+    tableIndex: number;
+};
+
+type CandidateValidation = {
+    dspSessionId: number;
+    tableIndex: number;
+    desiredIntentSerial: number;
+    generation: number;
+};
+
+type LoadedTable = {
+    tableIndex: number;
+    tableMeta: FactoryTableMeta;
+    frameCount: number;
+    frames: Float32Array[];
+    spectra: Array<Spectrum | undefined>;
+};
+
+type ServiceTable = LoadedTable & {
+    mode: ServiceTargetKind;
+    dspSessionId: number;
+    generation: number;
+    desiredIntentSerial: number;
+};
+
+type MipJob = {
+    key: string;
+    dspSessionId: number;
+    generation: number;
+    tableIndex: number;
+    mipIndex: number;
+    urgencyLevel: number;
+    nextFrameIndex: number;
+    ackedFrames: Uint8Array;
+    ackedFrameCount: number;
+    inFlightFrames: Set<number>;
+    completed: boolean;
+};
+
+type WorkerFailureDetail = {
+    failurePhase?: number;
+    failureReasonCode?: number;
+};
+
+type WorkerLoadFailurePayload = {
+    dspSessionId: number;
+    tableIndex: number;
+    generation?: number;
+    candidateAttemptSerial?: number;
+    failurePhase?: number;
+    failureReasonCode?: number;
+};
+
+type ServiceLoadAbortPayload = {
+    dspSessionId: number;
+    generation: number;
+    tableIndex: number;
+    failureReasonCode?: number;
+};
+
+type RuntimeStateLike = {
+    dspSessionId?: unknown;
+    desiredIntentSerial?: unknown;
+    desiredTableIndex?: unknown;
+    generationFrontier?: unknown;
+    serviceState?: unknown;
+    hasActive?: unknown;
+    activeTableIndex?: unknown;
+    activeGeneration?: unknown;
+    hasLoading?: unknown;
+    loadingTableIndex?: unknown;
+    loadingGeneration?: unknown;
+    hasFailure?: unknown;
+    failedTableIndex?: unknown;
+    failedGeneration?: unknown;
+    failureScope?: unknown;
+    failurePhase?: unknown;
+    failureReasonCode?: unknown;
+};
+
+type MipRequestLike = {
+    dspSessionId?: unknown;
+    generation?: unknown;
+    tableIndex?: unknown;
+    mipIndex?: unknown;
+    urgencyLevel?: unknown;
+};
+
+type UploadAckLike = {
+    dspSessionId?: unknown;
+    generation?: unknown;
+    mipIndex?: unknown;
+    frameIndex?: unknown;
+};
+
+function resolvePositiveIntegerOption(value: unknown, fallback: number) {
+    const normalized = Math.round(Number(value));
+    return Number.isFinite(normalized) && normalized > 0
+        ? normalized
+        : fallback;
+}
+
+function emitWorkerLog(level: "info" | "warn" | "error", message: string, fields: Record<string, unknown> | null = null) {
     const logger = typeof console?.[level] === "function"
         ? console[level].bind(console)
         : console.log?.bind(console);
@@ -44,7 +167,7 @@ function emitWorkerLog(level, message, fields = null) {
         return;
     }
 
-    if (fields && typeof fields === "object" && Object.keys(fields).length > 0) {
+    if (fields && Object.keys(fields).length > 0) {
         logger(`[wavetable-worker] ${message}`, fields);
         return;
     }
@@ -52,7 +175,7 @@ function emitWorkerLog(level, message, fields = null) {
     logger(`[wavetable-worker] ${message}`);
 }
 
-function summarizeRuntimeStateForLog(runtimeState) {
+function summarizeRuntimeStateForLog(runtimeState: NormalizedRuntimeState) {
     return {
         dspSessionId: runtimeState.dspSessionId,
         desiredIntentSerial: runtimeState.desiredIntentSerial,
@@ -83,64 +206,67 @@ function summarizeRuntimeStateForLog(runtimeState) {
     };
 }
 
-function shouldLogFrameProgress(frameIndex, frameCount) {
+function shouldLogFrameProgress(frameIndex: number, frameCount: number) {
     const nextFrame = frameIndex + 1;
     return nextFrame === 1 || nextFrame === frameCount || (nextFrame % 16) === 0;
 }
 
-function assert(condition, message) {
+function assert(condition: unknown, message: string): asserts condition {
     if (!condition) {
         throw new Error(message);
     }
 }
 
-function clamp(value, min, max) {
+function clamp(value: number, min: number, max: number) {
     return Math.min(Math.max(value, min), max);
 }
 
-function decodeTextPayload(payload) {
+function decodeTextPayload(payload: unknown) {
     if (typeof payload === "string") {
-        return payload;
+        return Promise.resolve(payload);
     }
 
-    if (payload && typeof payload.text === "function") {
-        return payload.text();
+    if (payload && typeof (payload as { text?: () => Promise<string> }).text === "function") {
+        return (payload as { text: () => Promise<string> }).text();
     }
 
     if (payload instanceof ArrayBuffer) {
         if (typeof TextDecoder === "function") {
-            return new TextDecoder().decode(new Uint8Array(payload));
+            return Promise.resolve(new TextDecoder().decode(new Uint8Array(payload)));
         }
 
-        return String.fromCharCode(...new Uint8Array(payload));
+        return Promise.resolve(String.fromCharCode(...new Uint8Array(payload)));
     }
 
     if (ArrayBuffer.isView(payload)) {
+        const bytes = new Uint8Array(payload.buffer, payload.byteOffset, payload.byteLength);
+
         if (typeof TextDecoder === "function") {
-            return new TextDecoder().decode(payload);
+            return Promise.resolve(new TextDecoder().decode(bytes));
         }
 
-        return String.fromCharCode(...payload);
+        return Promise.resolve(String.fromCharCode(...bytes));
     }
 
     if (Array.isArray(payload)) {
-        const byteArray = Uint8Array.from(payload);
+        const bytes = Uint8Array.from(payload);
         if (typeof TextDecoder === "function") {
-            return new TextDecoder().decode(byteArray);
+            return Promise.resolve(new TextDecoder().decode(bytes));
         }
 
-        return String.fromCharCode(...byteArray);
+        return Promise.resolve(String.fromCharCode(...bytes));
     }
 
     throw new Error("Unsupported text resource payload");
 }
 
-async function readCatalogFromConnection(connection, catalogPath) {
-    const payload = await connection.readResource(catalogPath);
+async function readCatalogFromConnection(connection: PatchConnectionLike, catalogPath: string) {
+    const payload = await connection.readResource?.(catalogPath);
+    assert(payload !== undefined, `Could not read wavetable catalog ${catalogPath}`);
     return getFactoryBankCatalogValue(JSON.parse(await decodeTextPayload(payload)));
 }
 
-function normalizeRuntimeState(state) {
+function normalizeRuntimeState(state: RuntimeStateLike) {
     return {
         dspSessionId: Math.trunc(Number(state?.dspSessionId) || 0),
         desiredIntentSerial: Math.trunc(Number(state?.desiredIntentSerial) || 0),
@@ -162,55 +288,59 @@ function normalizeRuntimeState(state) {
     };
 }
 
-function normalizeRequestedTableIndex(value, tableCount) {
+function normalizeRequestedTableIndex(value: number, tableCount: number) {
     const rounded = Math.round(Number(value) || 0);
     return clamp(rounded, 0, Math.max(0, tableCount - 1));
 }
 
-function createMipJobKey(dspSessionId, generation, mipIndex) {
+function createMipJobKey(dspSessionId: number, generation: number, mipIndex: number) {
     return `${dspSessionId}:${generation}:${mipIndex}`;
 }
 
-function createEmptyMipJobFrameState(frameCount) {
+function createEmptyMipJobFrameState(frameCount: number) {
     return {
         nextFrameIndex: 0,
         ackedFrames: new Uint8Array(frameCount),
         ackedFrameCount: 0,
-        inFlightFrames: new Set(),
+        inFlightFrames: new Set<number>(),
     };
 }
 
+function getNow() {
+    return typeof globalThis.performance?.now === "function"
+        ? globalThis.performance.now()
+        : Date.now();
+}
+
 export class WavetableWorkerController {
-    constructor(
-        connection,
-        {
-            catalogPath = defaultCatalogPath,
-            maxFramesInFlight = 4,
-            mipLevelCount = DEFAULT_MIP_LEVEL_COUNT,
-            serviceLoadTimeoutMs = defaultServiceLoadTimeoutMs,
-            setTimeoutFn = globalThis.setTimeout?.bind(globalThis),
-            clearTimeoutFn = globalThis.clearTimeout?.bind(globalThis),
-        } = {}
-    ) {
+    private readonly connection: PatchConnectionLike;
+    private readonly catalogPath: string;
+    private readonly maxFramesInFlight: number;
+    private readonly mipLevelCount: number;
+    private readonly serviceLoadTimeoutMs: number;
+    private readonly setTimeoutFn: ((callback: () => void, delay: number) => TimerHandle) | null;
+    private readonly clearTimeoutFn: ((handle: TimerHandle) => void) | null;
+    private catalog: FactoryBankCatalog | null = null;
+    private started = false;
+    private knownSessionId = 0;
+    private nextLoadGeneration = 1;
+    private latestRuntimeState: NormalizedRuntimeState | null = null;
+    private asyncStateToken = 0;
+    private serviceTable: ServiceTable | null = null;
+    private candidateValidation: CandidateValidation | null = null;
+    private mipJobs = new Map<string, MipJob>();
+    private activeUploadKey: string | null = null;
+    private serviceLoadWatchdogHandle: TimerHandle | null = null;
+    private autoRetryConsumedKey: string | null = null;
+
+    constructor(connection: PatchConnectionLike, options: WorkerOptions = {}) {
         this.connection = connection;
-        this.catalogPath = catalogPath;
-        this.maxFramesInFlight = Math.max(1, Math.round(Number(maxFramesInFlight) || 1));
-        this.mipLevelCount = mipLevelCount;
-        this.serviceLoadTimeoutMs = Math.max(1, Math.round(Number(serviceLoadTimeoutMs) || 1));
-        this.setTimeoutFn = typeof setTimeoutFn === "function" ? setTimeoutFn : null;
-        this.clearTimeoutFn = typeof clearTimeoutFn === "function" ? clearTimeoutFn : null;
-        this.catalog = null;
-        this.started = false;
-        this.knownSessionId = 0;
-        this.nextLoadGeneration = 1;
-        this.latestRuntimeState = null;
-        this.asyncStateToken = 0;
-        this.serviceTable = null;
-        this.candidateValidation = null;
-        this.mipJobs = new Map();
-        this.activeUploadKey = null;
-        this.serviceLoadWatchdogHandle = null;
-        this.autoRetryConsumedKey = null;
+        this.catalogPath = options.catalogPath ?? defaultCatalogPath;
+        this.maxFramesInFlight = resolvePositiveIntegerOption(options.maxFramesInFlight, 1);
+        this.mipLevelCount = options.mipLevelCount ?? DEFAULT_MIP_LEVEL_COUNT;
+        this.serviceLoadTimeoutMs = resolvePositiveIntegerOption(options.serviceLoadTimeoutMs, defaultServiceLoadTimeoutMs);
+        this.setTimeoutFn = typeof options.setTimeoutFn === "function" ? options.setTimeoutFn : globalThis.setTimeout?.bind(globalThis) ?? null;
+        this.clearTimeoutFn = typeof options.clearTimeoutFn === "function" ? options.clearTimeoutFn : globalThis.clearTimeout?.bind(globalThis) ?? null;
         this.handleRuntimeState = this.handleRuntimeState.bind(this);
         this.handleUploadAck = this.handleUploadAck.bind(this);
         this.handleMipRequest = this.handleMipRequest.bind(this);
@@ -235,7 +365,7 @@ export class WavetableWorkerController {
         return this;
     }
 
-    async ensureCatalogLoaded() {
+    private async ensureCatalogLoaded() {
         if (!this.catalog) {
             this.catalog = await readCatalogFromConnection(this.connection, this.catalogPath);
             emitWorkerLog("info", "Loaded wavetable catalog", {
@@ -247,7 +377,7 @@ export class WavetableWorkerController {
         return this.catalog;
     }
 
-    resetSessionState(runtimeState) {
+    private resetSessionState(runtimeState: NormalizedRuntimeState) {
         this.knownSessionId = runtimeState.dspSessionId;
         this.nextLoadGeneration = Math.max(1, runtimeState.generationFrontier + 1);
         this.serviceTable = null;
@@ -257,13 +387,13 @@ export class WavetableWorkerController {
         this.autoRetryConsumedKey = null;
     }
 
-    clearMipTransferState() {
+    private clearMipTransferState() {
         this.cancelServiceLoadWatchdog();
         this.mipJobs.clear();
         this.activeUploadKey = null;
     }
 
-    cancelServiceLoadWatchdog() {
+    private cancelServiceLoadWatchdog() {
         if (this.serviceLoadWatchdogHandle === null) {
             return;
         }
@@ -272,7 +402,7 @@ export class WavetableWorkerController {
         this.serviceLoadWatchdogHandle = null;
     }
 
-    serviceLoadHasPendingTransfers() {
+    private serviceLoadHasPendingTransfers() {
         if (!this.serviceTable || this.serviceTable.mode !== "loading") {
             return false;
         }
@@ -292,17 +422,13 @@ export class WavetableWorkerController {
         return false;
     }
 
-    armServiceLoadWatchdog() {
-        if (!this.setTimeoutFn || !this.serviceLoadHasPendingTransfers()) {
+    private armServiceLoadWatchdog() {
+        if (!this.setTimeoutFn || !this.serviceLoadHasPendingTransfers() || !this.serviceTable) {
             this.cancelServiceLoadWatchdog();
             return;
         }
 
-        const {
-            dspSessionId,
-            generation,
-            tableIndex,
-        } = this.serviceTable;
+        const { dspSessionId, generation, tableIndex } = this.serviceTable;
 
         this.cancelServiceLoadWatchdog();
         this.serviceLoadWatchdogHandle = this.setTimeoutFn(() => {
@@ -335,14 +461,14 @@ export class WavetableWorkerController {
                 {
                     failurePhase: failurePhaseTransferMip,
                     failureReasonCode: failureReasonTimeout,
-                }
+                },
             );
             this.serviceTable = null;
             this.clearMipTransferState();
         }, this.serviceLoadTimeoutMs);
     }
 
-    resolveServiceTarget(runtimeState) {
+    private resolveServiceTarget(runtimeState: NormalizedRuntimeState): ServiceTarget | null {
         if (runtimeState.hasLoading) {
             return {
                 kind: "loading",
@@ -364,17 +490,17 @@ export class WavetableWorkerController {
         return null;
     }
 
-    shouldStayIdleOnFailure(runtimeState) {
+    private shouldStayIdleOnFailure(runtimeState: NormalizedRuntimeState) {
         return runtimeState.hasFailure
             && runtimeState.failedTableIndex === runtimeState.desiredTableIndex
             && runtimeState.desiredIntentSerial > 0;
     }
 
-    getDesiredRetryKey(runtimeState) {
+    private getDesiredRetryKey(runtimeState: NormalizedRuntimeState) {
         return `${runtimeState.dspSessionId}:${runtimeState.desiredTableIndex}`;
     }
 
-    shouldAutomaticallyRetryTimeoutFailure(runtimeState) {
+    private shouldAutomaticallyRetryTimeoutFailure(runtimeState: NormalizedRuntimeState) {
         if (
             !runtimeState.hasFailure ||
             runtimeState.failedTableIndex !== runtimeState.desiredTableIndex ||
@@ -387,14 +513,14 @@ export class WavetableWorkerController {
         return this.autoRetryConsumedKey !== this.getDesiredRetryKey(runtimeState);
     }
 
-    emitWorkerLoadFailure({
+    private emitWorkerLoadFailure({
         dspSessionId,
         tableIndex,
         generation = 0,
         candidateAttemptSerial = 0,
         failurePhase = failurePhaseLoadSource,
         failureReasonCode = failureReasonGeneric,
-    }) {
+    }: WorkerLoadFailurePayload) {
         this.connection.sendEventOrValue?.(workerLoadFailureEndpointID, {
             dspSessionId,
             tableIndex,
@@ -405,12 +531,12 @@ export class WavetableWorkerController {
         });
     }
 
-    emitServiceLoadAbort({
+    private emitServiceLoadAbort({
         dspSessionId,
         generation,
         tableIndex,
         failureReasonCode = failureReasonGeneric,
-    }) {
+    }: ServiceLoadAbortPayload) {
         this.connection.sendEventOrValue?.(serviceLoadAbortEndpointID, {
             dspSessionId,
             generation,
@@ -419,7 +545,7 @@ export class WavetableWorkerController {
         });
     }
 
-    emitRetryDesiredTableRequest() {
+    private emitRetryDesiredTableRequest() {
         emitWorkerLog("warn", "Requesting retry for failed desired wavetable load", {
             latestRuntimeState: this.latestRuntimeState
                 ? summarizeRuntimeStateForLog(this.latestRuntimeState)
@@ -428,7 +554,7 @@ export class WavetableWorkerController {
         this.connection.sendEventOrValue?.(retryDesiredTableRequestEndpointID, 1);
     }
 
-    async loadTableSource(tableIndex, expectedFrameCount, token) {
+    private async loadTableSource(tableIndex: number, expectedFrameCount: number | undefined, token: number): Promise<LoadedTable | null> {
         const catalog = await this.ensureCatalogLoaded();
 
         if (token !== this.asyncStateToken) {
@@ -438,31 +564,25 @@ export class WavetableWorkerController {
         const normalizedIndex = normalizeRequestedTableIndex(tableIndex, catalog.tables.length);
         const tableMeta = catalog.tables[normalizedIndex];
         assert(tableMeta, `Could not resolve table ${normalizedIndex}`);
-        const canLoadSourceByAudioBridge =
-            typeof this.connection?.readResourceAsAudioData === "function";
-        const resourceAddress = typeof this.connection?.getResourceAddress === "function"
+        const resourceAddress = typeof this.connection.getResourceAddress === "function"
             ? this.connection.getResourceAddress(tableMeta.sourceWav)
             : null;
-        const canLoadSourceByUrl = !canLoadSourceByAudioBridge
-            && resourceAddress !== null
+        const canLoadSourceByUrl = resourceAddress !== null
             && resourceAddress !== undefined
             && typeof fetch === "function";
-        assert(
-            canLoadSourceByUrl || canLoadSourceByAudioBridge,
-            "Patch connection cannot read wavetable source files"
-        );
-        const startTime = performance?.now?.() ?? Date.now();
+        const canLoadSourceByAudioBridge = typeof this.connection.readResourceAsAudioData === "function";
+        assert(canLoadSourceByUrl || canLoadSourceByAudioBridge, "Patch connection cannot read wavetable source files");
+        const startTime = getNow();
         emitWorkerLog("info", "Reading wavetable source", {
             tableIndex: normalizedIndex,
             tableId: tableMeta.tableId,
             tableName: tableMeta.name,
             sourceWav: tableMeta.sourceWav,
-            loaderMode: canLoadSourceByAudioBridge ? "audio-data-bridge" : "resource-url",
-            expectedFrameCount:
-                expectedFrameCount === undefined ? Number(tableMeta.frameCount) : expectedFrameCount,
+            loaderMode: canLoadSourceByUrl ? "resource-url" : "audio-data-bridge",
+            expectedFrameCount: expectedFrameCount === undefined ? Number(tableMeta.frameCount) : expectedFrameCount,
         });
 
-        let sourceTable = null;
+        let sourceTable: { frameCount: number; frames: Float32Array[] } | null = null;
 
         if (canLoadSourceByUrl) {
             const sourceWavUrl = resolvePatchResourceUrl(tableMeta.sourceWav, this.connection);
@@ -470,8 +590,7 @@ export class WavetableWorkerController {
                 sourceWavUrl,
                 sourceWavPath: tableMeta.sourceWav,
                 tableIndex: normalizedIndex,
-                expectedFrameCount:
-                    expectedFrameCount === undefined ? Number(tableMeta.frameCount) : expectedFrameCount,
+                expectedFrameCount: expectedFrameCount === undefined ? Number(tableMeta.frameCount) : expectedFrameCount,
                 samplesPerFrame: DEFAULT_SAMPLES_PER_FRAME,
             });
             sourceTable = {
@@ -479,26 +598,26 @@ export class WavetableWorkerController {
                 frames: loadedSource.frames,
             };
         } else {
-            const audioFile = await this.connection.readResourceAsAudioData(tableMeta.sourceWav);
-            const { samples } = normalizeDecodedAudioFileSamples(audioFile);
+            const audioFile = await this.connection.readResourceAsAudioData?.(tableMeta.sourceWav);
+            assert(audioFile !== undefined && audioFile !== null, `Could not decode source wavetable ${tableMeta.sourceWav}`);
+            const { samples } = normalizeDecodedAudioFileSamples(audioFile as Parameters<typeof normalizeDecodedAudioFileSamples>[0]);
             sourceTable = extractSourceFramesFromSamples(samples, {
-                expectedFrameCount:
-                    expectedFrameCount === undefined ? Number(tableMeta.frameCount) : expectedFrameCount,
+                expectedFrameCount: expectedFrameCount === undefined ? Number(tableMeta.frameCount) : expectedFrameCount,
                 samplesPerFrame: DEFAULT_SAMPLES_PER_FRAME,
             });
         }
 
-        if (token !== this.asyncStateToken) {
+        if (!sourceTable || token !== this.asyncStateToken) {
             return null;
         }
-        const endTime = performance?.now?.() ?? Date.now();
+
         emitWorkerLog("info", "Prepared wavetable source table", {
             tableIndex: normalizedIndex,
             tableId: tableMeta.tableId,
             tableName: tableMeta.name,
             sourceWav: tableMeta.sourceWav,
             frameCount: sourceTable.frameCount,
-            loadDurationMs: Math.round(endTime - startTime),
+            loadDurationMs: Math.round(getNow() - startTime),
         });
 
         return {
@@ -510,16 +629,16 @@ export class WavetableWorkerController {
         };
     }
 
-    isMatchingServiceTable(serviceTarget) {
+    private isMatchingServiceTable(serviceTarget: ServiceTarget) {
         return Boolean(
             this.serviceTable &&
             this.serviceTable.dspSessionId === serviceTarget.dspSessionId &&
             this.serviceTable.generation === serviceTarget.generation &&
-            this.serviceTable.tableIndex === serviceTarget.tableIndex
+            this.serviceTable.tableIndex === serviceTarget.tableIndex,
         );
     }
 
-    markCommittedDesiredLoad(runtimeState, generation, loadedTable) {
+    private markCommittedDesiredLoad(runtimeState: NormalizedRuntimeState, generation: number, loadedTable: LoadedTable) {
         emitWorkerLog("info", "Committing desired wavetable load", {
             dspSessionId: runtimeState.dspSessionId,
             desiredIntentSerial: runtimeState.desiredIntentSerial,
@@ -551,7 +670,7 @@ export class WavetableWorkerController {
         });
     }
 
-    handleCandidateLoadFailure(runtimeState) {
+    private handleCandidateLoadFailure(runtimeState: NormalizedRuntimeState) {
         emitWorkerLog("error", "Failed to prepare desired wavetable source", {
             dspSessionId: runtimeState.dspSessionId,
             desiredIntentSerial: runtimeState.desiredIntentSerial,
@@ -569,13 +688,10 @@ export class WavetableWorkerController {
         });
     }
 
-    handleServiceTargetFailure(
-        serviceTarget,
-        {
-            failurePhase = failurePhaseLoadSource,
-            failureReasonCode = failureReasonGeneric,
-        } = {}
-    ) {
+    private handleServiceTargetFailure(serviceTarget: ServiceTarget, {
+        failurePhase = failurePhaseLoadSource,
+        failureReasonCode = failureReasonGeneric,
+    }: WorkerFailureDetail = {}) {
         emitWorkerLog("error", "Service wavetable load failed", {
             kind: serviceTarget.kind,
             dspSessionId: serviceTarget.dspSessionId,
@@ -603,9 +719,11 @@ export class WavetableWorkerController {
         }
     }
 
-    async prepareServiceTarget(serviceTarget, runtimeState, token) {
+    private async prepareServiceTarget(serviceTarget: ServiceTarget, runtimeState: NormalizedRuntimeState, token: number) {
         if (this.isMatchingServiceTable(serviceTarget)) {
-            this.serviceTable.mode = serviceTarget.kind;
+            if (this.serviceTable) {
+                this.serviceTable.mode = serviceTarget.kind;
+            }
 
             if (
                 this.candidateValidation &&
@@ -619,14 +737,10 @@ export class WavetableWorkerController {
             return true;
         }
 
-        let loadedTable = null;
+        let loadedTable: LoadedTable | null = null;
 
         try {
-            loadedTable = await this.loadTableSource(
-                serviceTarget.tableIndex,
-                undefined,
-                token
-            );
+            loadedTable = await this.loadTableSource(serviceTarget.tableIndex, undefined, token);
         } catch (error) {
             if (token === this.asyncStateToken) {
                 emitWorkerLog("error", "Could not reload committed service wavetable source", {
@@ -634,7 +748,7 @@ export class WavetableWorkerController {
                     dspSessionId: serviceTarget.dspSessionId,
                     generation: serviceTarget.generation,
                     tableIndex: serviceTarget.tableIndex,
-                    detail: String(error?.message || error || "Unknown error"),
+                    detail: describeErrorDetail(error),
                 });
                 this.handleServiceTargetFailure(serviceTarget);
             }
@@ -665,24 +779,24 @@ export class WavetableWorkerController {
         return true;
     }
 
-    async prepareDesiredLoad(runtimeState, token) {
+    private async prepareDesiredLoad(runtimeState: NormalizedRuntimeState, token: number) {
         const desiredTableIndex = runtimeState.desiredTableIndex;
 
         if (
             this.candidateValidation &&
-            this.candidateValidation.dspSessionId === runtimeState.dspSessionId
-            && this.candidateValidation.tableIndex === desiredTableIndex
-            && this.candidateValidation.desiredIntentSerial === runtimeState.desiredIntentSerial
+            this.candidateValidation.dspSessionId === runtimeState.dspSessionId &&
+            this.candidateValidation.tableIndex === desiredTableIndex &&
+            this.candidateValidation.desiredIntentSerial === runtimeState.desiredIntentSerial
         ) {
             return;
         }
 
         const generation = Math.max(
             this.nextLoadGeneration,
-            runtimeState.generationFrontier + 1
+            runtimeState.generationFrontier + 1,
         );
 
-        let loadedTable = null;
+        let loadedTable: LoadedTable | null = null;
 
         try {
             loadedTable = await this.loadTableSource(desiredTableIndex, undefined, token);
@@ -692,7 +806,7 @@ export class WavetableWorkerController {
                     dspSessionId: runtimeState.dspSessionId,
                     desiredIntentSerial: runtimeState.desiredIntentSerial,
                     tableIndex: desiredTableIndex,
-                    detail: String(error?.message || error || "Unknown error"),
+                    detail: describeErrorDetail(error),
                 });
                 this.handleCandidateLoadFailure(runtimeState);
             }
@@ -706,13 +820,13 @@ export class WavetableWorkerController {
         this.markCommittedDesiredLoad(runtimeState, generation, loadedTable);
     }
 
-    async prepareDesiredCandidate(runtimeState, token) {
+    private async prepareDesiredCandidate(runtimeState: NormalizedRuntimeState, token: number) {
         await this.prepareDesiredLoad(runtimeState, token);
     }
 
-    async handleRuntimeState(nextState) {
+    async handleRuntimeState(nextState: unknown) {
         try {
-            const runtimeState = normalizeRuntimeState(nextState);
+            const runtimeState = normalizeRuntimeState((nextState as RuntimeStateLike | null) ?? {});
             emitWorkerLog("info", "Received runtime state", summarizeRuntimeStateForLog(runtimeState));
 
             if (runtimeState.dspSessionId <= 0) {
@@ -729,7 +843,7 @@ export class WavetableWorkerController {
             } else {
                 this.nextLoadGeneration = Math.max(
                     this.nextLoadGeneration,
-                    runtimeState.generationFrontier + 1
+                    runtimeState.generationFrontier + 1,
                 );
             }
 
@@ -816,7 +930,7 @@ export class WavetableWorkerController {
         }
     }
 
-    getOrCreateMipJob(request) {
+    private getOrCreateMipJob(request: MipRequestLike) {
         const dspSessionId = Math.trunc(Number(request?.dspSessionId));
         const generation = Math.trunc(Number(request?.generation));
         const tableIndex = Math.trunc(Number(request?.tableIndex));
@@ -864,8 +978,8 @@ export class WavetableWorkerController {
         return job;
     }
 
-    handleMipRequest(request) {
-        const job = this.getOrCreateMipJob(request);
+    handleMipRequest(request: unknown) {
+        const job = this.getOrCreateMipJob((request as MipRequestLike | null) ?? {});
 
         if (!job || job.completed) {
             return;
@@ -883,11 +997,12 @@ export class WavetableWorkerController {
         this.pumpUploads();
     }
 
-    handleUploadAck(ack) {
-        const dspSessionId = Math.trunc(Number(ack?.dspSessionId));
-        const generation = Math.trunc(Number(ack?.generation));
-        const mipIndex = Math.trunc(Number(ack?.mipIndex));
-        const frameIndex = Math.trunc(Number(ack?.frameIndex));
+    handleUploadAck(ack: unknown) {
+        const uploadAck = (ack as UploadAckLike | null) ?? {};
+        const dspSessionId = Math.trunc(Number(uploadAck.dspSessionId));
+        const generation = Math.trunc(Number(uploadAck.generation));
+        const mipIndex = Math.trunc(Number(uploadAck.mipIndex));
+        const frameIndex = Math.trunc(Number(uploadAck.frameIndex));
         const key = createMipJobKey(dspSessionId, generation, mipIndex);
         const job = this.mipJobs.get(key);
 
@@ -929,20 +1044,18 @@ export class WavetableWorkerController {
         this.pumpUploads();
     }
 
-    getSpectrumForFrame(frameIndex) {
+    private getSpectrumForFrame(frameIndex: number) {
         assert(this.serviceTable, "Current table must exist before building a spectrum");
 
         if (!this.serviceTable.spectra[frameIndex]) {
-            this.serviceTable.spectra[frameIndex] = buildFrameSpectrum(
-                this.serviceTable.frames[frameIndex]
-            );
+            this.serviceTable.spectra[frameIndex] = buildFrameSpectrum(this.serviceTable.frames[frameIndex]);
         }
 
-        return this.serviceTable.spectra[frameIndex];
+        return this.serviceTable.spectra[frameIndex]!;
     }
 
-    selectNextMipJob() {
-        let selectedJob = null;
+    private selectNextMipJob() {
+        let selectedJob: MipJob | null = null;
 
         for (const job of this.mipJobs.values()) {
             if (job.completed) {
@@ -962,7 +1075,7 @@ export class WavetableWorkerController {
             return;
         }
 
-        let activeJob = this.activeUploadKey ? this.mipJobs.get(this.activeUploadKey) : null;
+        let activeJob = this.activeUploadKey ? this.mipJobs.get(this.activeUploadKey) ?? null : null;
 
         if (!activeJob || activeJob.completed) {
             activeJob = this.selectNextMipJob();
@@ -978,7 +1091,7 @@ export class WavetableWorkerController {
             activeJob.nextFrameIndex < this.serviceTable.frameCount
         ) {
             const frameIndex = activeJob.nextFrameIndex;
-            let mipSamples = null;
+            let mipSamples: Float32Array;
 
             try {
                 const spectrum = this.getSpectrumForFrame(frameIndex);
@@ -994,7 +1107,7 @@ export class WavetableWorkerController {
                     {
                         failurePhase: failurePhaseBuildMip,
                         failureReasonCode: failureReasonGeneric,
-                    }
+                    },
                 );
                 this.serviceTable = null;
                 this.clearMipTransferState();
@@ -1039,11 +1152,20 @@ export class WavetableWorkerController {
     }
 }
 
-export function createWavetableWorkerController(connection, options = {}) {
+function describeErrorDetail(error: unknown) {
+    if (error && typeof error === "object") {
+        const maybeError = error as { message?: string; stack?: string };
+        return maybeError.message || maybeError.stack || String(error);
+    }
+
+    return String(error);
+}
+
+export function createWavetableWorkerController(connection: PatchConnectionLike, options: WorkerOptions = {}) {
     return new WavetableWorkerController(connection, options);
 }
 
-export default async function runWavetableWorker(connection, options = {}) {
+export default async function runWavetableWorker(connection: PatchConnectionLike, options: WorkerOptions = {}) {
     const controller = createWavetableWorkerController(connection, options);
     await controller.start();
     return controller;

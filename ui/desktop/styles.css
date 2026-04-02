@@ -1,0 +1,95 @@
+@import "tailwindcss";
+
+:host {
+    display: block;
+    width: 100%;
+    height: 100%;
+    color-scheme: dark;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+button,
+input,
+select {
+    font: inherit;
+}
+
+.cosimo-surface {
+    background:
+        radial-gradient(circle at top, rgba(122, 142, 255, 0.18), transparent 34%),
+        linear-gradient(180deg, rgba(6, 10, 22, 0.98), rgba(3, 5, 12, 1));
+}
+
+.cosimo-stage {
+    background:
+        linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+        radial-gradient(circle at top, rgba(122, 142, 255, 0.2), transparent 38%),
+        linear-gradient(180deg, rgba(5, 9, 21, 0.98), rgba(2, 4, 11, 1));
+    background-size: 24px 24px, 24px 24px, auto, auto;
+}
+
+.cosimo-stage::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.08),
+        inset 0 -48px 64px rgba(0, 0, 0, 0.35);
+}
+
+.cosimo-range {
+    appearance: none;
+    width: 100%;
+    height: 10px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, rgba(84, 99, 201, 0.45), rgba(245, 108, 182, 0.45));
+    outline: none;
+}
+
+.cosimo-range::-webkit-slider-thumb {
+    appearance: none;
+    width: 22px;
+    height: 22px;
+    border-radius: 999px;
+    background: linear-gradient(180deg, #ffd8a6 0%, #f56cb6 100%);
+    box-shadow: 0 6px 18px rgba(245, 108, 182, 0.35);
+    border: 0;
+}
+
+.cosimo-range::-moz-range-thumb {
+    width: 22px;
+    height: 22px;
+    border-radius: 999px;
+    background: linear-gradient(180deg, #ffd8a6 0%, #f56cb6 100%);
+    box-shadow: 0 6px 18px rgba(245, 108, 182, 0.35);
+    border: 0;
+}
+
+.cosimo-select,
+.cosimo-button {
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.04);
+    color: #eef2f5;
+}
+
+.cosimo-grid-line {
+    stroke: rgba(255, 255, 255, 0.08);
+    stroke-width: 1;
+}
+
+.cosimo-curve-fill {
+    fill: rgba(135, 215, 245, 0.08);
+}
+
+.cosimo-curve-line {
+    fill: none;
+    stroke: #87d7f5;
+    stroke-width: 3;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}

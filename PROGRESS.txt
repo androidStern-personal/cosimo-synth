@@ -1,3 +1,227 @@
+Cross-platform roadmap pointer recorded on 2026-04-02
+- The durable roadmap for frontend and host unification plus upcoming warp sequencing now lives in `PLATFORM_UNIFICATION_AND_WARP_SPRINT_PLAN.md`.
+- Use that file for the cross-platform order of operations:
+  - merge `codex/UI-refactor`
+  - add the shared browser-side host contract and `resourceClient`
+  - migrate iPhone to the React and Vite frontend
+  - then move desktop to the repo-owned native host
+  - then do waveform warp work
+
+Stock CHOC safe-area probe results recorded on 2026-04-01
+- I built a separate iPhone simulator app at `experiments/choc_webview_probe/`.
+- That app uses upstream CHOC `WebView` headers from commit `9cfd6054f8d863aa39029c6f3daf71b56746b4d7`, not the patched Cosimo copy.
+- The page itself only uses web-side tools:
+  - `<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">`
+  - zero page margins
+  - CSS `env(safe-area-inset-*)`
+- Baseline stock CHOC result in a valid full-screen app:
+  - native iPhone safe area was `top 62 / bottom 34`
+  - the page saw the same `62px / 34px`
+  - but the actual page viewport was only `402 x 778` on a `402 x 874` screen
+  - so the page still lost exactly the safe-area height
+- Direct native knob experiments:
+  - baseline: viewport stayed `402 x 778`
+  - `setMinimumViewportInset(UIEdgeInsetsZero, UIEdgeInsetsZero)` only: still `402 x 778`
+  - `scrollView.contentInsetAdjustmentBehavior = .never` only: viewport became `402 x 874`
+  - both together: same `402 x 874`
+- Critical stock-CHOC lifecycle result:
+  - in the `fetchResource` startup path, `webviewIsReady` fired before the first `fetchResource` call and before the first successful JavaScript layout measurement
+  - setting `scrollView.contentInsetAdjustmentBehavior = .never` inside `webviewIsReady` was early enough to make the first measured viewport `402 x 874`
+- Current best conclusion:
+  - the critical native knob is `WKWebView.scrollView.contentInsetAdjustmentBehavior = .never`
+  - `setMinimumViewportInset` did not fix this probe by itself
+  - stock CHOC does have an early-enough hook (`webviewIsReady`) to set the critical native option before first layout in this probe
+
+Real Cosimo app stock-CHOC experiment branch recorded on 2026-04-01
+- Branch: `codex/ios-stock-choc-webview-test`
+- Goal:
+  - test the real Cosimo iPhone app with the iPhone-specific CHOC safe-area patch removed
+  - keep stock CHOC
+  - move the one critical fix into repo-owned host code by setting `WKWebView.scrollView.contentInsetAdjustmentBehavior = .never` inside `webviewIsReady`
+- Changes on this branch:
+  - removed the iPhone-specific safe-area override from `ios_auv3/Vendor/cmajor/include/choc/choc/gui/choc_WebView.h`
+  - removed the support struct added for that override from `ios_auv3/Vendor/cmajor/include/choc/choc/platform/choc_ObjectiveCHelpers.h`
+  - added the external stock-CHOC fix in `ios_auv3/Source/CosimoCmajorPlugin.h` by grabbing the native `WKWebView*` in `webviewIsReady`, setting `contentInsetAdjustmentBehavior = .never`, and disabling automatic scroll-indicator inset adjustment if that selector exists
+- Current run status:
+  - simulator build succeeded for `CosimoSynth_Standalone`
+  - simulator app installed and launched successfully
+  - device build succeeded for `CosimoSynth_Standalone`
+  - device app installed successfully on the paired iPhone
+  - device launch attempt failed only because the phone was locked
+- Current artifacts:
+  - simulator screenshot captured at `/tmp/cosimo-stock-choc-sim.png`
+- Next step:
+  - unlock the paired iPhone and relaunch `dev.cosimo.wavetable-synth`
+  - then compare the real app behavior on phone against the simulator result and decide whether the old CHOC safe-area patch is still needed
+
+CHOC vendor cleanup result recorded on 2026-04-01
+- The real iPhone app was rebuilt and launched with:
+  - stock `choc_WebView.h`
+  - stock `choc_ObjectiveCHelpers.h`
+  - stock `choc_javascript_QuickJS.h`
+  - the native `WKWebView` scroll-view fix applied in repo code inside `ios_auv3/Source/CosimoCmajorPlugin.h`
+- The page-level iPhone top gutter was also corrected:
+  - `patch_gui/index.js` now uses `--cosimo-ios-top-inset: 0px`
+  - the old black bar at the top was our own HTML/CSS, not a native header
+- Result:
+  - the real iPhone app works without any local CHOC patch
+  - the vendored CHOC files now match upstream commit `9cfd6054f8d863aa39029c6f3daf71b56746b4d7`
+  - safe-area behavior is now owned in repo code plus normal page CSS, not in a CHOC fork
+
+Pinned Cmajor runtime fetch cleanup recorded on 2026-04-01
+- The repo no longer needs a checked-in `ios_auv3/Vendor/cmajor/` tree.
+- The shipping iPhone build no longer patches generated Cmajor output after `cmaj generate --target=cpp`.
+- One pinned fetch helper now owns the Cmajor runtime source:
+  - `scripts/ensure_cmajor_runtime.py`
+  - fetches `https://github.com/cmajor-lang/cmajor.git`
+  - pins tag `1.0.3066`
+  - verifies commit `172db53232337154d5a1c0f9a448318129dfacd9`
+  - initializes the `include/choc` submodule because CHOC is not stored inline in the main Cmajor git tree
+  - stores the runtime under `build/deps/cmajor-1.0.3066/`
+- `ios_auv3/CMakeLists.txt` now asks that helper for the runtime path instead of reading `ios_auv3/Vendor/cmajor/`.
+- `ios_auv3/vite.config.mjs` now asks that helper for the same runtime path so `/cmaj_api` in the iPhone web dev server stays in sync with the real build.
+- The remaining old generated-output patching only exists in historical code on `master` and in tests that deliberately rewrite temporary copied fixtures.
+
+Architecture clarification recorded on 2026-04-01
+- This repo has had two separate initiatives that are easy to blur together:
+  - the iPhone native-shell refactor
+  - the desktop React UI refactor
+- They did not land as one clean stack where desktop first moved to a repo-owned native host and then React was built on top of it.
+- The branch history after `master` only has three commits:
+  - `ed2e629` `Checkpoint desktop React patch view`
+  - `53cc2ab` `Checkpoint remaining iOS native shell work`
+  - `e3874a9` `Refactor desktop patch UI and fix glide control`
+- So the work was interleaved on this branch even though the planning docs described the initiatives separately.
+
+Short chronology
+- 2026-03-26:
+  - There was an older rollback episode that returned the iPhone standalone app to the stock JUCE wrapper in branch `codex/stock-juce-standalone-auv3`, commit `dcf77e8` `Return iOS standalone to stock JUCE wrapper`.
+  - That older rollback was merged into the main history at `4a4a121`.
+- 2026-03-30:
+  - The current iPhone native-shell refactor landed.
+  - `scripts/generate_ios_auv3_plugin.sh` switched to raw `cmaj generate --target=cpp`.
+  - The iPhone target moved to `ios_auv3/Source/CosimoPluginMain.cpp` plus `ios_auv3/Source/CosimoCmajorPlugin.h`.
+  - The repo started pinning the runtime snapshot under `ios_auv3/Vendor/cmajor/`.
+  - The repo-owned iPhone host kept the full `PatchWebView` bridge protocol but implemented it in repo code.
+- 2026-04-01:
+  - The desktop React and Vite refactor landed for the patch UI.
+  - The desktop patch manifest now points at `patch_gui/desktop/index.js`.
+  - The worker also moved onto a Vite build output.
+  - The old checked-in `ios_auv3/Vendor/cmajor/` snapshot was replaced with a pinned runtime fetch into `build/deps/cmajor-1.0.3066/`.
+  - The real iPhone app was validated on stock CHOC plus a repo-owned `WKWebView` scroll-view fix, and the extra page-level top gutter was removed.
+  - But the desktop native host was not rewritten in the same pass.
+
+What is true right now
+- iPhone:
+  - The iPhone app and AUv3 now use a repo-owned shell around raw generated performer output.
+  - The repo-owned bridge host is `PatchWebViewHost` in `ios_auv3/Source/CosimoCmajorPlugin.h`.
+  - But that host still creates `choc::ui::WebView`.
+  - So the iPhone runtime is still on the CHOC WebView path even though the surrounding shell is repo-owned.
+  - The CHOC runtime is now fetched into `build/deps/cmajor-1.0.3066/`, not checked into source control.
+  - The safe-area behavior is no longer implemented by patching CHOC. It is implemented by repo code that sets the native `WKWebView` scroll-view inset policy in `webviewIsReady`, plus the normal page CSS.
+- Desktop:
+  - The desktop UI is now the React and Vite build from `patch_gui/desktop/index.js`.
+  - But the standalone desktop host still uses Cmajor's stock host stack:
+    - `tools/live_dev_plugin/Source/cmaj_PatchLoaderPlugin.cpp` derives from `cmaj::plugin::JUCEPluginBase`
+    - `cmaj_JUCEPlugin.h` still creates `cmaj::PatchWebView`
+    - `cmaj_PatchWebView.h` still creates `choc::ui::WebView`
+  - The desktop host changes on this branch were dev-server wiring and patch-manifest wiring, not a repo-owned native host rewrite.
+
+Current conclusion about the CHOC WebView patch
+- The local CHOC safe-area patch is no longer needed.
+- The real iPhone app now works on stock CHOC because the real fix lives in repo code:
+  - the host grabs the native `WKWebView`
+  - sets `scrollView.contentInsetAdjustmentBehavior = .never`
+  - disables automatic scroll-indicator inset adjustment
+- The desktop React refactor did not remove the CHOC dependency itself because desktop still uses the stock Cmajor `JUCEPluginBase -> PatchWebView -> choc::ui::WebView` path.
+- So the right answer is:
+  - the CHOC WebView patch is not a permanent architectural requirement
+  - it is not a current implementation requirement anymore either
+  - but CHOC itself is still a current runtime dependency until the remaining native WebView layer is in-housed too
+
+What "finish the shell refactor properly" means if the goal is to remove CHOC entirely
+- iPhone:
+  - Replace `choc::ui::WebView` inside `PatchWebViewHost` with a repo-owned `WKWebView` wrapper.
+  - Keep the existing repo-owned bridge protocol, resource resolver, and bundle/dev-server loader.
+  - The safe-area behavior already lives in repo code, so this remaining step is about removing the CHOC wrapper layer itself, not about restoring the old patch.
+- Desktop:
+  - Replace the current `JUCEPluginBase` and `cmaj::PatchWebView` host path with a repo-owned JUCE editor and repo-owned WebView host.
+  - The current desktop React UI can sit on top of that later, but it does not do that yet.
+
+Practical rule for future sessions
+- Do not say "the native-shell refactor is done everywhere" or "desktop is already on the repo-owned host".
+- The accurate statement is:
+  - iPhone shell refactor: mostly done, uses stock CHOC WebView, and no longer needs a CHOC fork
+  - desktop React UI refactor: done for the web UI layer, not for the native host layer
+
+Native iOS shell cleanup follow-up landed on 2026-03-31
+- This was a cleanup pass after the repo-owned iOS AUv3 shell refactor, focused on removing flaky test contracts and tightening the remaining footguns instead of adding new features.
+- The Debug dev-server and editor inspection path is now less racy:
+  - `ios_auv3/Source/CosimoAUv3HostHarness.mm` now retries editor-state capture until the host-page inspection data is actually ready instead of returning the first partial patch-view snapshot.
+  - `ios_auv3/Source/CosimoHostViewController.mm` now refreshes editor state before writing layout smoke output.
+  - `scripts/run_ios_auv3_host_smoke.py` now refuses to treat incomplete patch-view metrics as a successful inspect result.
+- The repo-owned runtime no longer silently swallows several resource and audio-data failures:
+  - `ios_auv3/Source/CosimoCmajorPlugin.h` now logs resource-read and modification-time failures instead of hiding them completely.
+- The raw-performer generator contract is tighter without breaking the real Xcode build path:
+  - `scripts/generate_ios_auv3_plugin.sh` still rejects the repo root and unrelated non-empty directories
+  - outside this repo, it now only accepts output paths that end with `generated/cmajor`, which matches the actual CMake/Xcode build layout and avoids deleting arbitrary directories
+- The iOS test contract is cleaner:
+  - added a real standalone missing-library behavior test that deletes one installed wavetable source file and proves the app stays on the installer screen
+  - reduced several structure-freeze tests so they assert the external contract instead of large swaths of implementation text
+  - removed a bad host-smoke assertion that was treating a stale runtime endpoint snapshot as proof of saved-state correctness; the host smoke now focuses on the real AU state blob path, while runtime endpoint delivery is covered by its own test
+- Temporary cleanup tracker:
+  - `TMP_IOS_AUV3_CLEANUP_TASKS.md`
+- What was verified in this cleanup pass:
+  - `uv run pytest -q tests/test_ios_auv3_build.py -k 'generator_'`
+  - `uv run pytest -q tests/test_ios_auv3_build.py -k 'test_ios_host_smoke_discovers_the_extension_and_restores_state_across_relaunch or test_ios_host_smoke_freezes_parameter_and_state_shape or test_ios_host_smoke_keeps_the_editor_inside_phone_and_tablet_viewports'`
+  - `uv run pytest -q tests/test_ios_auv3_build.py`
+  - Final result: `28 passed in 411.09s (0:06:51)`
+
+Native iOS shell refactor follow-up landed on 2026-03-30
+- Plan: `IOS_AUV3_NATIVE_SHELL_REFACTOR_PLAN.md`.
+- Kept the repo-owned AUv3 shell around raw `cmaj generate --target=cpp` performer output and, at that time, a pinned runtime snapshot under `ios_auv3/Vendor/cmajor/`.
+- Removed the simulator-only repo-checkout resource fallback that was masking packaging bugs. Debug now tries the local Vite server if it is reachable and otherwise loads the bundled UI and patch assets. Release always loads bundled files.
+- Added a debug and test only editor inspection hook, gated by `COSIMO_ENABLE_EDITOR_INSPECTION`, so the simulator host tests can capture the real extension-side host page, DOM layout, and catalog snapshot without leaving always-on telemetry in shipping builds.
+- Added the ATS exceptions needed for the local web-development server and threaded `COSIMO_ENABLE_EDITOR_INSPECTION` through `scripts/generate_ios_auv3_xcode_project.sh`.
+- Expanded `tests/test_ios_auv3_build.py` so it now proves:
+  - the built standalone app and AUv3 extension bundles contain the shipped UI, `cmaj_api`, assets, and patch manifest files
+  - the shipped bundles can serve the UI and patch resources from the real bundle layout
+  - Debug loads modified dev-server HTML and JavaScript without rebuilding and falls back to bundled files when the server is absent
+  - Release ignores the dev-server URL and still uses bundled files
+  - the AUv3 shows the missing-library gate screen when the shared wavetable library is absent
+  - the editor reads a shared-library catalog override from the App Group install location
+  - host smoke still discovers the AUv3, opens the editor, restores state, and fits phone and tablet viewports
+- What was verified:
+  - `uv run pytest -q tests/test_ios_auv3_build.py`
+  - Result: `21 passed`
+- Deliberate non-goal kept for follow-up:
+  - the large queue-size hack and the underlying wavetable mip transport design were not changed in this refactor
+
+Host smoke and iPhone wavetable resource follow-up landed on 2026-03-31
+- The AUv3 host smoke no longer claims state restore success by replaying raw parameter values. `ios_auv3/Source/CosimoAUv3HostHarness.mm` now saves the real AU `fullState` blob when available, writes the expected observable parameter values next to that blob, restores through the real AU state property, and polls the parameter tree until the blob has actually taken effect.
+- The frozen host-smoke snapshot in `ios_auv3/expected_host_smoke.json` now matches the real JUCE AU state envelope keys:
+  - `data`
+  - `jucePluginState`
+  - `manufacturer`
+  - `subtype`
+  - `type`
+  - `version`
+- The AUv3 audio smoke now sends a second note after startup because Simulator occasionally drops the first note while the out-of-process extension is still warming up. The smoke still fails if the instance never produces audio.
+- The shared-library readiness gate still uses full `validateInstalledLibrary()` validation, so a partial install can no longer report as ready just because the catalog JSON exists.
+- Fixed the real iPhone wavetable regression:
+  - the worker and display loaders now prefer the resolved resource URL for source WAV files and only fall back to the audio-data bridge when no fetchable URL exists
+  - the custom `cosimo://bundle/...` URL handler now serves raw bytes for binary resources instead of corrupting `.wav` files through `loadFileAsString()`
+  - `BS2 - Acid.wav` now loads correctly from the installed factory library on the physical iPhone
+- Cleanup after the iPhone regression hunt:
+  - removed the one-off `COSIMO_EDITOR_TEST_AUDIO_SNAPSHOT_PATH` runtime hook and its `resourceAudio` inspection payload
+  - the shared-library regression test now uses the normal catalog snapshot path by overriding the first installed table to `assets/factory_sources/imported/BS2 - Acid.wav`
+  - `ios_auv3/Source/CosimoPluginMain.cpp` now only includes the QuickJS implementation header when the QuickJS worker path is actually enabled
+- What was verified:
+  - `node --test tests/test_wavetable_worker.mjs`
+  - `node --test --test-name-pattern='bank loading resolves the selected source wavetable from the runtime catalog|bank loading prefers the resolved resource URL for factory wavetable source paths when both loader paths are available' tests/test_wavetable_display.mjs`
+  - rebuilt and reinstalled `build/ios_device_run/CosimoSynth_artefacts/Debug/Standalone/Cosimo Synth.app`
+  - confirmed on the physical iPhone that `BS2 - ACID` now loads successfully
+
 Main-view control strip and MSEG launcher simplification landed on 2026-03-30
 - Removed the visible `Voice Routing` heading and `Play Mode` field label from the shipping patch UI.
 - Kept the voice mode selector and glide control on one shared row in both desktop and iPhone layouts.

@@ -3622,7 +3622,7 @@ export class CosimoSynthView extends HTMLElement {
                     --cosimo-stage-min-height: 248px;
                     --cosimo-keyboard-height: 122px;
                     --cosimo-control-height: 54px;
-                    --cosimo-ios-top-inset: 50px;
+                    --cosimo-ios-top-inset: 0px;
                     --cosimo-ios-bottom-inset: 0px;
                     --cosimo-ios-safe-top: calc(env(safe-area-inset-top) + var(--cosimo-ios-top-inset));
                     --cosimo-ios-safe-bottom: calc(env(safe-area-inset-bottom) + var(--cosimo-ios-bottom-inset));

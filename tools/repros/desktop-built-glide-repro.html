@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Desktop Built Glide Repro</title>
+  <style>
+    html, body, #mount {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+    }
+
+    body {
+      background: #02040b;
+    }
+  </style>
+</head>
+<body>
+  <div id="mount"></div>
+  <script type="module">
+    import createPatchView from "../../patch_gui/desktop/index.js";
+    import { loadHarnessManifest, MockPatchConnection } from "../../ui/shared/patch-connection-mock.ts";
+
+    const manifest = await loadHarnessManifest();
+    const patchConnection = new MockPatchConnection(manifest);
+    const view = createPatchView(patchConnection);
+    document.getElementById("mount").appendChild(view);
+    window.__repro = { view, patchConnection };
+  </script>
+</body>
+</html>

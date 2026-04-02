@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Cosimo Synth</title>
+  <style>
+    * { box-sizing: border-box; padding: 0; margin: 0; border: 0; }
+    html { background: black; overflow: hidden; }
+    body { display: block; position: absolute; width: 100%; height: 100%; color: white; font-family: Monaco, Consolas, monospace; }
+    #cmaj-view-container { display: block; position: relative; width: 100%; height: 100%; overflow: auto; }
+    #cmaj-error-text { display: block; position: relative; width: 100%; height: 100%; padding: 1rem; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <div id="cmaj-view-container"></div>
+  <script type="module">
+    async function loadBootConfig() {
+      if (globalThis.__COSIMO_PATCH_BOOT) {
+        return globalThis.__COSIMO_PATCH_BOOT;
+      }
+
+      if (typeof globalThis.cmaj_getPatchBootConfig !== "function") {
+        throw new Error("The native Cosimo patch boot bridge is unavailable.");
+      }
+
+      const boot = await globalThis.cmaj_getPatchBootConfig();
+      globalThis.__COSIMO_PATCH_BOOT = boot ?? {};
+      return globalThis.__COSIMO_PATCH_BOOT;
+    }
+
+    function normaliseURL(url) {
+      if (typeof url !== "string") {
+        return "";
+      }
+
+      const trimmed = url.trim();
+
+      if (trimmed.length === 0) {
+        return "";
+      }
+
+      return trimmed.endsWith("/") ? trimmed : `${trimmed}/`;
+    }
+
+    async function maybeRedirectToDevServer(boot) {
+      const devServerURL = normaliseURL(boot?.devServerURL);
+
+      if (!devServerURL || window.location.href.startsWith(devServerURL)) {
+        globalThis.__COSIMO_DEV_SERVER_PROBE = {
+          result: devServerURL ? "already-on-dev-server" : "disabled",
+          devServerURL,
+        };
+        return false;
+      }
+
+      const devServerPageURL = new URL("patch_gui/index.ios.html", devServerURL).toString();
+
+      try {
+        const response = await fetch(devServerPageURL, {
+          method: "HEAD",
+          cache: "no-store",
+          mode: "cors",
+        });
+
+        if (response.ok) {
+          globalThis.__COSIMO_DEV_SERVER_PROBE = {
+            result: "redirected",
+            devServerURL,
+            devServerPageURL,
+            status: response.status,
+          };
+          window.location.replace(devServerPageURL);
+          return true;
+        }
+
+        globalThis.__COSIMO_DEV_SERVER_PROBE = {
+          result: "http-error",
+          devServerURL,
+          devServerPageURL,
+          status: response.status,
+        };
+      } catch {
+        globalThis.__COSIMO_DEV_SERVER_PROBE = {
+          result: "network-error",
+          devServerURL,
+          devServerPageURL,
+        };
+      }
+
+      return false;
+    }
+
+    const boot = await loadBootConfig();
+
+    if (await maybeRedirectToDevServer(boot)) {
+      await new Promise(() => {});
+    }
+
+    const devServerURL = normaliseURL(boot?.devServerURL);
+    const resourceBaseURL =
+      devServerURL && window.location.href.startsWith(devServerURL)
+        ? devServerURL
+        : boot?.bundleResourceBaseURL ?? "/";
+
+    await import(new URL("patch_gui/index.ios-host.js", resourceBaseURL).toString());
+  </script>
+</body>
+</html>

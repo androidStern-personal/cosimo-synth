@@ -498,10 +498,10 @@ SharedWavetableLibraryStatus inspectSharedWavetableLibrary()
 
     int tableCount = 0;
 
-    if (auto tableCountResult = readCatalogTableCount (status.catalogFile, &tableCount); tableCountResult.failed())
+    if (auto validationResult = validateInstalledLibrary (status.libraryRoot, &tableCount); validationResult.failed())
     {
         status.summary = "Factory wavetable library is incomplete.";
-        status.detail = tableCountResult.getErrorMessage();
+        status.detail = validationResult.getErrorMessage();
         return status;
     }
 

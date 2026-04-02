@@ -8,6 +8,15 @@
 static NSString * const CosimoHostHarnessErrorDomain = @"CosimoHostHarnessError";
 static NSString * const CosimoPrimaryParameterIdentifier = @"wavetablePosition";
 static NSString * const CosimoTableSelectParameterIdentifier = @"wavetableSelect";
+static const float CosimoStateVerificationTolerance = 0.001f;
+static const NSTimeInterval CosimoStateVerificationTimeoutSeconds = 5.0;
+static const NSTimeInterval CosimoFirstNoteOffSeconds = 1.2;
+static const NSTimeInterval CosimoSecondNoteOnSeconds = 1.8;
+static const NSTimeInterval CosimoSecondNoteOffSeconds = 3.0;
+static const NSTimeInterval CosimoNoteCaptureDurationSeconds = 4.2;
+static const NSInteger CosimoEditorStateCaptureAttempts = 12;
+static const NSTimeInterval CosimoEditorStateInitialDelaySeconds = 0.35;
+static const NSTimeInterval CosimoEditorStateRetryDelaySeconds = 0.25;
 
 static NSError * CosimoMakeError (NSInteger code, NSString *description)
 {
@@ -54,6 +63,11 @@ static AudioComponentDescription CosimoComponentDescription()
 @property (nonatomic, strong) UIViewController *editorController;
 @property (nonatomic, strong) NSDictionary<NSString *, id> *lastDiscoverySummary;
 @property (nonatomic, strong) NSArray<NSDictionary<NSString *, id> *> *parameterSnapshot;
+
+- (void)captureEditorStateAfterDelay:(NSTimeInterval)delay
+                    remainingAttempts:(NSInteger)remainingAttempts
+                           completion:(CosimoHostResultBlock)completion;
+- (BOOL)hostPageInspectionIsReady:(NSDictionary<NSString *, id> * _Nullable)hostPageResult;
 
 @end
 
@@ -216,14 +230,31 @@ static AudioComponentDescription CosimoComponentDescription()
     const uint8_t noteOn[] = { 0x90, 60, 96 };
     midiBlock (AUEventSampleTimeImmediate, 0, 3, noteOn);
 
-    dispatch_after (dispatch_time (DISPATCH_TIME_NOW, (int64_t) (0.8 * NSEC_PER_SEC)),
+    dispatch_after (dispatch_time (DISPATCH_TIME_NOW, (int64_t) (CosimoFirstNoteOffSeconds * NSEC_PER_SEC)),
                     dispatch_get_main_queue(), ^
     {
         const uint8_t noteOff[] = { 0x80, 60, 0 };
         midiBlock (AUEventSampleTimeImmediate, 0, 3, noteOff);
     });
 
-    dispatch_after (dispatch_time (DISPATCH_TIME_NOW, (int64_t) (1.6 * NSEC_PER_SEC)),
+    // AUv3 startup on Simulator can occasionally swallow the first note while the
+    // extension is still warming up. A second note keeps the smoke focused on
+    // "can this instance render audio after launch?" rather than first-event timing.
+    dispatch_after (dispatch_time (DISPATCH_TIME_NOW, (int64_t) (CosimoSecondNoteOnSeconds * NSEC_PER_SEC)),
+                    dispatch_get_main_queue(), ^
+    {
+        const uint8_t secondNoteOn[] = { 0x90, 67, 96 };
+        midiBlock (AUEventSampleTimeImmediate, 0, 3, secondNoteOn);
+    });
+
+    dispatch_after (dispatch_time (DISPATCH_TIME_NOW, (int64_t) (CosimoSecondNoteOffSeconds * NSEC_PER_SEC)),
+                    dispatch_get_main_queue(), ^
+    {
+        const uint8_t secondNoteOff[] = { 0x80, 67, 0 };
+        midiBlock (AUEventSampleTimeImmediate, 0, 3, secondNoteOff);
+    });
+
+    dispatch_after (dispatch_time (DISPATCH_TIME_NOW, (int64_t) (CosimoNoteCaptureDurationSeconds * NSEC_PER_SEC)),
                     dispatch_get_main_queue(), ^
     {
         [mixer removeTapOnBus:0];
@@ -244,7 +275,7 @@ static AudioComponentDescription CosimoComponentDescription()
 
     if (self.editorController != nil)
     {
-        completion ([self currentEditorMetrics:YES], nil);
+        [self captureEditorStateWithCompletion:completion];
         return;
     }
 
@@ -276,22 +307,314 @@ static AudioComponentDescription CosimoComponentDescription()
             ]];
             [self.editorController didMoveToParentViewController:host];
             [container layoutIfNeeded];
-
-            [self collectEditorDOMMetricsAfterDelay:0.35
-                                  remainingAttempts:12
-                                         completion:^(NSDictionary<NSString *,id> * _Nullable debugResult, NSError * _Nullable debugError)
-            {
-                NSMutableDictionary<NSString *, id> *result = [[self currentEditorMetrics:YES] mutableCopy];
-
-                if (debugResult != nil)
-                    result[@"domMetrics"] = debugResult;
-
-                if (debugError != nil)
-                    result[@"domMetricsError"] = debugError.localizedDescription ?: @"Unknown DOM metrics error";
-
-                completion (result, nil);
-            }];
+            [self captureEditorStateWithCompletion:completion];
         });
+    }];
+}
+
+- (void)captureEditorStateWithCompletion:(CosimoHostResultBlock)completion
+{
+    [self captureEditorStateAfterDelay:CosimoEditorStateInitialDelaySeconds
+                     remainingAttempts:CosimoEditorStateCaptureAttempts
+                            completion:completion];
+}
+
+- (void)captureEditorStateAfterDelay:(NSTimeInterval)delay
+                    remainingAttempts:(NSInteger)remainingAttempts
+                           completion:(CosimoHostResultBlock)completion
+{
+    [self collectEditorDOMMetricsAfterDelay:delay
+                          remainingAttempts:CosimoEditorStateCaptureAttempts
+                                 completion:^(NSDictionary<NSString *,id> * _Nullable debugResult, NSError * _Nullable debugError)
+    {
+        [self inspectEditorHostPageAfterDelay:0.0
+                            remainingAttempts:CosimoEditorStateCaptureAttempts
+                                   completion:^(NSDictionary<NSString *,id> * _Nullable hostPageResult, NSError * _Nullable hostPageError)
+        {
+            NSMutableDictionary<NSString *, id> *result = [[self currentEditorMetrics:YES] mutableCopy];
+
+            if (debugResult != nil)
+                result[@"domMetrics"] = debugResult;
+
+            if (debugError != nil)
+                result[@"domMetricsError"] = debugError.localizedDescription ?: @"Unknown DOM metrics error";
+
+            if (hostPageResult != nil)
+                result[@"hostPage"] = hostPageResult;
+
+            const BOOL hasWebView = [result[@"hasWebView"] boolValue];
+            const BOOL hostPageReady = ! hasWebView || [self hostPageInspectionIsReady:hostPageResult];
+            NSString *hostPageErrorDescription = hostPageError.localizedDescription ?: @"";
+
+            if (! hostPageReady && remainingAttempts > 0)
+            {
+                [self captureEditorStateAfterDelay:CosimoEditorStateRetryDelaySeconds
+                                 remainingAttempts:remainingAttempts - 1
+                                        completion:completion];
+                return;
+            }
+
+            if (hostPageError != nil)
+                result[@"hostPageError"] = hostPageErrorDescription.length > 0 ? hostPageErrorDescription
+                                                                               : @"Unknown host page error";
+
+            completion (result, nil);
+        }];
+    }];
+}
+
+- (BOOL)hostPageInspectionIsReady:(NSDictionary<NSString *, id> * _Nullable)hostPageResult
+{
+    if (hostPageResult == nil)
+        return NO;
+
+    NSString *devServerURL = [hostPageResult[@"devServerURL"] isKindOfClass:[NSString class]]
+        ? hostPageResult[@"devServerURL"]
+        : @"";
+
+    if (devServerURL.length == 0)
+        return YES;
+
+    NSString *bootSource = [hostPageResult[@"bootSource"] isKindOfClass:[NSString class]]
+        ? hostPageResult[@"bootSource"]
+        : @"";
+
+    if ([bootSource isEqualToString:@"devServer"])
+        return YES;
+
+    return [hostPageResult[@"devServerProbe"] isKindOfClass:[NSDictionary class]];
+}
+
+- (void)inspectEditorHostPageAfterDelay:(NSTimeInterval)delay
+                      remainingAttempts:(NSInteger)remainingAttempts
+                             completion:(CosimoHostResultBlock)completion
+{
+    dispatch_after (dispatch_time (DISPATCH_TIME_NOW, (int64_t) (delay * NSEC_PER_SEC)),
+                    dispatch_get_main_queue(), ^
+    {
+        [self inspectEditorHostPageWithCompletion:^(NSDictionary<NSString *,id> * _Nullable result, NSError * _Nullable error)
+        {
+            if (result != nil || remainingAttempts <= 0)
+            {
+                completion (result, error);
+                return;
+            }
+
+            NSString *description = error.localizedDescription ?: @"";
+
+            if ([description containsString:@"did not expose host page inspection yet"])
+            {
+                [self inspectEditorHostPageAfterDelay:0.25
+                                    remainingAttempts:remainingAttempts - 1
+                                           completion:completion];
+                return;
+            }
+
+            completion (nil, error);
+        }];
+    });
+}
+
+- (void)inspectEditorHostPageWithCompletion:(CosimoHostResultBlock)completion
+{
+    if (self.editorController == nil)
+    {
+        completion (nil, CosimoMakeError (31, @"The editor is not open."));
+        return;
+    }
+
+    WKWebView *webView = [self findWebViewInView:self.editorController.view];
+
+    if (webView == nil)
+    {
+        completion (nil, CosimoMakeError (32, @"Could not find the editor web view."));
+        return;
+    }
+
+    NSString *script = @"(() => {"
+                        "  const inspector = typeof window.__cosimoInspectHostPage === 'function' ? window.__cosimoInspectHostPage() : null;"
+                        "  if (inspector) return inspector;"
+                        "  const boot = globalThis.__COSIMO_PATCH_BOOT ?? {};"
+                        "  const currentURL = window.location.href;"
+                        "  const devServerURL = typeof boot.devServerURL === 'string' ? boot.devServerURL : '';"
+                        "  const bundlePageURL = typeof boot.bundlePageURL === 'string' ? boot.bundlePageURL : '';"
+                        "  const bundleResourceBaseURL = typeof boot.bundleResourceBaseURL === 'string' ? boot.bundleResourceBaseURL : '';"
+                        "  const bootSource = devServerURL && currentURL.startsWith(devServerURL) ? 'devServer' : 'bundle';"
+                        "  const container = document.getElementById('cmaj-view-container');"
+                        "  return {"
+                        "    bootSource,"
+                        "    currentURL,"
+                        "    bundlePageURL,"
+                        "    bundleResourceBaseURL,"
+                        "    devServerURL,"
+                        "    devServerProbe: globalThis.__COSIMO_DEV_SERVER_PROBE ?? null,"
+                        "    resourceBaseURL: bootSource === 'devServer' ? devServerURL : bundleResourceBaseURL,"
+                        "    documentTitle: document.title,"
+                        "    htmlMarker: globalThis.__COSIMO_DEV_HTML_MARKER ?? '',"
+                        "    jsMarker: globalThis.__COSIMO_DEV_JS_MARKER ?? '',"
+                        "    statusText: '',"
+                        "    viewActive: Boolean(container),"
+                        "    containerText: container?.innerText ?? ''"
+                        "  };"
+                        "})()";
+
+    [webView evaluateJavaScript:script completionHandler:^(id _Nullable result, NSError * _Nullable error)
+    {
+        if (error != nil)
+        {
+            completion (nil, error);
+            return;
+        }
+
+        if ([result isKindOfClass:[NSDictionary class]])
+        {
+            completion ((NSDictionary<NSString *, id> *) result, nil);
+            return;
+        }
+
+        if (result == nil || [result isKindOfClass:[NSNull class]])
+            completion (nil, CosimoMakeError (33, @"The editor did not expose host page inspection yet."));
+        else
+            completion (@{
+                @"resultType": result != nil ? NSStringFromClass ([result class]) : @"nil",
+            }, nil);
+    }];
+}
+
+- (void)reloadEditorHostPageWithCompletion:(CosimoHostResultBlock)completion
+{
+    if (self.editorController == nil)
+    {
+        completion (nil, CosimoMakeError (34, @"The editor is not open."));
+        return;
+    }
+
+    WKWebView *webView = [self findWebViewInView:self.editorController.view];
+
+    if (webView == nil)
+    {
+        completion (nil, CosimoMakeError (35, @"Could not find the editor web view."));
+        return;
+    }
+
+    [webView evaluateJavaScript:@"window.location.reload(); true;" completionHandler:^(id _Nullable result, NSError * _Nullable error)
+    {
+        if (error != nil)
+        {
+            completion (nil, error);
+            return;
+        }
+
+        [self collectEditorDOMMetricsAfterDelay:0.35
+                              remainingAttempts:12
+                                     completion:^(__unused NSDictionary<NSString *,id> * _Nullable ignoredResult, __unused NSError * _Nullable ignoredError)
+        {
+            [self inspectEditorHostPageWithCompletion:completion];
+        }];
+    }];
+}
+
+- (void)inspectFactoryCatalogWithCompletion:(CosimoHostResultBlock)completion
+{
+    [self inspectFactoryCatalogAfterDelay:0.0 remainingAttempts:12 completion:completion];
+}
+
+- (void)inspectFactoryCatalogAfterDelay:(NSTimeInterval)delay
+                      remainingAttempts:(NSInteger)remainingAttempts
+                             completion:(CosimoHostResultBlock)completion
+{
+    dispatch_after (dispatch_time (DISPATCH_TIME_NOW, (int64_t) (delay * NSEC_PER_SEC)),
+                    dispatch_get_main_queue(), ^
+    {
+        [self inspectFactoryCatalogNowWithCompletion:^(NSDictionary<NSString *,id> * _Nullable result, NSError * _Nullable error)
+        {
+            if (result != nil || remainingAttempts <= 0)
+            {
+                completion (result, error);
+                return;
+            }
+
+            [self inspectFactoryCatalogAfterDelay:0.25
+                                remainingAttempts:remainingAttempts - 1
+                                       completion:completion];
+        }];
+    });
+}
+
+- (void)inspectFactoryCatalogNowWithCompletion:(CosimoHostResultBlock)completion
+{
+    if (self.editorController == nil)
+    {
+        completion (nil, CosimoMakeError (36, @"The editor is not open."));
+        return;
+    }
+
+    WKWebView *webView = [self findWebViewInView:self.editorController.view];
+
+    if (webView == nil)
+    {
+        completion (nil, CosimoMakeError (37, @"Could not find the editor web view."));
+        return;
+    }
+
+    NSString *script = @"const patchConnection = globalThis.__cosimoPatchConnection;"
+                        "if (! patchConnection) throw new Error('The patch connection is not ready yet.');"
+                        "const response = await fetch(patchConnection.getResourceAddress('assets/factory-bank-catalog.json'));"
+                        "if (! response.ok) throw new Error(`Could not load the runtime catalog: ${response.status}`);"
+                        "const catalog = await response.json();"
+                        "const tables = Array.isArray(catalog.tables) ? catalog.tables : [];"
+                        "const firstTable = tables[0] ?? {};"
+                        "let firstTableAudioSampleRate = null;"
+                        "let firstTableAudioFrameCount = null;"
+                        "let firstTableAudioError = '';"
+                        "if (typeof patchConnection.readResourceAsAudioData === 'function' && typeof firstTable.sourceWav === 'string' && firstTable.sourceWav.length > 0) {"
+                        "  try {"
+                        "    const audioFile = await patchConnection.readResourceAsAudioData(firstTable.sourceWav);"
+                        "    const frames = Array.isArray(audioFile?.frames) || ArrayBuffer.isView(audioFile?.frames) ? Array.from(audioFile.frames) : [];"
+                        "    firstTableAudioSampleRate = Number(audioFile?.sampleRate) || 0;"
+                        "    firstTableAudioFrameCount = frames.length;"
+                        "  } catch (error) {"
+                        "    firstTableAudioError = error?.stack || error?.message || String(error);"
+                        "  }"
+                        "}"
+                        "return {"
+                        "  tableCount: tables.length,"
+                        "  firstTableName: typeof firstTable.name === 'string' ? firstTable.name : '',"
+                        "  firstTableSourceWav: typeof firstTable.sourceWav === 'string' ? firstTable.sourceWav : '',"
+                        "  firstTableAudioSampleRate,"
+                        "  firstTableAudioFrameCount,"
+                        "  firstTableAudioError"
+                        "};";
+
+    [webView callAsyncJavaScript:script
+                       arguments:@{}
+                         inFrame:nil
+                  inContentWorld:WKContentWorld.pageWorld
+               completionHandler:^(id _Nullable result, NSError * _Nullable error)
+    {
+        if (error != nil)
+        {
+            NSString *description = error.localizedDescription ?: @"Unknown runtime catalog error";
+
+            if ([description containsString:@"patch connection is not ready yet"])
+            {
+                completion (nil, nil);
+                return;
+            }
+
+            completion (nil, error);
+            return;
+        }
+
+        if ([result isKindOfClass:[NSDictionary class]])
+        {
+            completion ((NSDictionary<NSString *, id> *) result, nil);
+            return;
+        }
+
+        completion (@{
+            @"resultType": result != nil ? NSStringFromClass ([result class]) : @"nil",
+        }, nil);
     }];
 }
 
@@ -318,6 +641,7 @@ static AudioComponentDescription CosimoComponentDescription()
 {
     NSString *stateSource = nil;
     NSDictionary<NSString *, id> *fullState = [self currentPersistedStateWithSource:&stateSource];
+    NSDictionary<NSString *, NSNumber *> *verificationParameters = [self currentVerificationParameters];
 
     if (fullState == nil)
     {
@@ -328,6 +652,7 @@ static AudioComponentDescription CosimoComponentDescription()
     NSDictionary<NSString *, id> *stateEnvelope = @{
         @"stateSource": stateSource ?: @"fullState",
         @"statePayload": fullState,
+        @"verificationParameters": verificationParameters ?: @{},
     };
 
     NSError *serialiseError = nil;
@@ -362,7 +687,11 @@ static AudioComponentDescription CosimoComponentDescription()
 - (void)reloadStateNamed:(NSString *)stateName completion:(CosimoHostResultBlock)completion
 {
     NSString *stateSource = nil;
-    NSDictionary<NSString *, id> *savedState = [self readStateNamed:stateName source:&stateSource error:nil];
+    NSDictionary<NSString *, NSNumber *> *verificationParameters = nil;
+    NSDictionary<NSString *, id> *savedState = [self readStateNamed:stateName
+                                                             source:&stateSource
+                                             verificationParameters:&verificationParameters
+                                                              error:nil];
 
     if (savedState == nil)
     {
@@ -381,14 +710,21 @@ static AudioComponentDescription CosimoComponentDescription()
             return;
         }
 
-        [self applySavedState:savedState source:stateSource completion:completion];
+        [self applySavedState:savedState
+                       source:stateSource
+          verificationParameters:verificationParameters
+                   completion:completion];
     }];
 }
 
 - (void)loadSavedStateNamed:(NSString *)stateName completion:(CosimoHostResultBlock)completion
 {
     NSString *stateSource = nil;
-    NSDictionary<NSString *, id> *savedState = [self readStateNamed:stateName source:&stateSource error:nil];
+    NSDictionary<NSString *, NSNumber *> *verificationParameters = nil;
+    NSDictionary<NSString *, id> *savedState = [self readStateNamed:stateName
+                                                             source:&stateSource
+                                             verificationParameters:&verificationParameters
+                                                              error:nil];
 
     if (savedState == nil)
     {
@@ -406,13 +742,19 @@ static AudioComponentDescription CosimoComponentDescription()
                 return;
             }
 
-            [self applySavedState:savedState source:stateSource completion:completion];
+            [self applySavedState:savedState
+                           source:stateSource
+              verificationParameters:verificationParameters
+                       completion:completion];
         }];
 
         return;
     }
 
-    [self applySavedState:savedState source:stateSource completion:completion];
+    [self applySavedState:savedState
+                   source:stateSource
+      verificationParameters:verificationParameters
+               completion:completion];
 }
 
 - (void)teardown
@@ -425,42 +767,24 @@ static AudioComponentDescription CosimoComponentDescription()
 
 - (void)applySavedState:(NSDictionary<NSString *, id> *)savedState
                  source:(NSString *)stateSource
+   verificationParameters:(NSDictionary<NSString *, NSNumber *> *)verificationParameters
              completion:(CosimoHostResultBlock)completion
 {
-    if ([stateSource isEqualToString:@"parameterValues"])
-    {
-        NSError *parameterError = nil;
-
-        if (! [self applyParameterValues:savedState error:&parameterError])
-        {
-            completion (nil, parameterError ?: CosimoMakeError (23, @"Could not restore the saved parameter values."));
-            return;
-        }
-    }
-    else if ([stateSource isEqualToString:@"fullStateForDocument"])
+    if ([stateSource isEqualToString:@"fullStateForDocument"])
         self.instrumentUnit.AUAudioUnit.fullStateForDocument = savedState;
-    else
+    else if (stateSource == nil || [stateSource isEqualToString:@"fullState"])
         self.instrumentUnit.AUAudioUnit.fullState = savedState;
-
-    dispatch_after (dispatch_time (DISPATCH_TIME_NOW, (int64_t) (0.25 * NSEC_PER_SEC)),
-                    dispatch_get_main_queue(), ^
+    else
     {
-        AUParameter *parameter = [self findParameterWithIdentifier:CosimoPrimaryParameterIdentifier];
-        AUParameter *tableSelectParameter = [self findParameterWithIdentifier:CosimoTableSelectParameterIdentifier];
+        completion (nil, CosimoMakeError (23,
+                                          [NSString stringWithFormat:@"Unsupported saved-state source '%@'. The smoke harness now requires a real AU state dictionary.", stateSource]));
+        return;
+    }
 
-        if (parameter == nil || tableSelectParameter == nil)
-        {
-            completion (nil, CosimoMakeError (23, @"Could not find the restored wavetable parameters after restoring state."));
-            return;
-        }
-
-        completion (@{
-            @"identifier": CosimoPrimaryParameterIdentifier,
-            @"observedValue": @(parameter.value),
-            @"tableSelectIdentifier": CosimoTableSelectParameterIdentifier,
-            @"observedTableSelectValue": @(tableSelectParameter.value),
-        }, nil);
-    });
+    [self pollForRestoredVerificationParameters:verificationParameters
+                                     stateSource:stateSource
+                                        deadline:(CFAbsoluteTimeGetCurrent() + CosimoStateVerificationTimeoutSeconds)
+                                      completion:completion];
 }
 
 - (void)teardownAudioOnly
@@ -481,14 +805,14 @@ static AudioComponentDescription CosimoComponentDescription()
 
 - (NSDictionary<NSString *, id> *)currentPersistedStateWithSource:(NSString * __autoreleasing _Nullable *)stateSource
 {
-    NSDictionary<NSString *, id> *parameterValues = [self serialiseParameterValues];
+    NSDictionary<NSString *, id> *presetState = self.instrumentUnit.AUAudioUnit.fullState;
 
-    if (parameterValues.count > 0)
+    if (presetState != nil)
     {
         if (stateSource != nil)
-            *stateSource = @"parameterValues";
+            *stateSource = @"fullState";
 
-        return parameterValues;
+        return presetState;
     }
 
     NSDictionary<NSString *, id> *documentState = self.instrumentUnit.AUAudioUnit.fullStateForDocument;
@@ -501,65 +825,10 @@ static AudioComponentDescription CosimoComponentDescription()
         return documentState;
     }
 
-    NSDictionary<NSString *, id> *presetState = self.instrumentUnit.AUAudioUnit.fullState;
-
-    if (presetState != nil)
-    {
-        if (stateSource != nil)
-            *stateSource = @"fullState";
-
-        return presetState;
-    }
-
     if (stateSource != nil)
         *stateSource = nil;
 
     return nil;
-}
-
-- (NSDictionary<NSString *, id> *)serialiseParameterValues
-{
-    NSMutableDictionary<NSString *, NSNumber *> *values = [[NSMutableDictionary alloc] init];
-
-    for (AUParameter *parameter in self.instrumentUnit.AUAudioUnit.parameterTree.allParameters)
-    {
-        if (parameter.identifier.length == 0)
-            continue;
-
-        values[parameter.identifier] = @(parameter.value);
-    }
-
-    return values;
-}
-
-- (BOOL)applyParameterValues:(NSDictionary<NSString *, id> *)parameterValues error:(NSError **)error
-{
-    for (NSString *identifier in parameterValues)
-    {
-        AUParameter *parameter = [self findParameterWithIdentifier:identifier];
-
-        if (parameter == nil)
-        {
-            if (error != nil)
-                *error = CosimoMakeError (24, [NSString stringWithFormat:@"Could not find parameter %@ while restoring state.", identifier]);
-
-            return NO;
-        }
-
-        id savedValue = parameterValues[identifier];
-
-        if (! [savedValue isKindOfClass:[NSNumber class]])
-        {
-            if (error != nil)
-                *error = CosimoMakeError (25, [NSString stringWithFormat:@"Saved value for %@ was not numeric.", identifier]);
-
-            return NO;
-        }
-
-        parameter.value = [savedValue floatValue];
-    }
-
-    return YES;
 }
 
 - (NSString *)describePersistableStateAvailability
@@ -720,6 +989,7 @@ static AudioComponentDescription CosimoComponentDescription()
     CGSize preferredSize = self.editorController.preferredContentSize;
     CGSize containerSize = self.editorContainerView.bounds.size;
     CGSize viewSize = self.editorController.view.bounds.size;
+    WKWebView *webView = self.editorController != nil ? [self findWebViewInView:self.editorController.view] : nil;
 
     return @{
         @"opened": @(opened),
@@ -729,6 +999,8 @@ static AudioComponentDescription CosimoComponentDescription()
         @"containerHeight": @(containerSize.height),
         @"viewWidth": @(viewSize.width),
         @"viewHeight": @(viewSize.height),
+        @"hasWebView": @(webView != nil),
+        @"editorTitle": self.editorController.title ?: @"",
         @"nativeViewTree": [self describeViewTree:self.editorController.view depth:0 maxDepth:5],
     };
 }
@@ -847,6 +1119,7 @@ static AudioComponentDescription CosimoComponentDescription()
 
 - (NSDictionary<NSString *, id> *)readStateNamed:(NSString *)stateName
                                           source:(NSString * __autoreleasing _Nullable *)stateSource
+                          verificationParameters:(NSDictionary<NSString *, NSNumber *> * __autoreleasing _Nullable *)verificationParameters
                                            error:(NSError **)error
 {
     NSURL *url = [self stateFileURLForName:stateName];
@@ -867,11 +1140,15 @@ static AudioComponentDescription CosimoComponentDescription()
 
     id envelopeSource = dictionary[@"stateSource"];
     id envelopePayload = dictionary[@"statePayload"];
+    id envelopeVerificationParameters = dictionary[@"verificationParameters"];
 
     if ([envelopeSource isKindOfClass:[NSString class]] && [envelopePayload isKindOfClass:[NSDictionary class]])
     {
         if (stateSource != nil)
             *stateSource = envelopeSource;
+
+        if (verificationParameters != nil && [envelopeVerificationParameters isKindOfClass:[NSDictionary class]])
+            *verificationParameters = envelopeVerificationParameters;
 
         return envelopePayload;
     }
@@ -879,7 +1156,77 @@ static AudioComponentDescription CosimoComponentDescription()
     if (stateSource != nil)
         *stateSource = @"fullState";
 
+    if (verificationParameters != nil)
+        *verificationParameters = nil;
+
     return dictionary;
+}
+
+- (NSDictionary<NSString *, NSNumber *> *)currentVerificationParameters
+{
+    NSMutableDictionary<NSString *, NSNumber *> *values = [[NSMutableDictionary alloc] init];
+
+    if (AUParameter *parameter = [self findParameterWithIdentifier:CosimoPrimaryParameterIdentifier])
+        values[CosimoPrimaryParameterIdentifier] = @(parameter.value);
+
+    if (AUParameter *parameter = [self findParameterWithIdentifier:CosimoTableSelectParameterIdentifier])
+        values[CosimoTableSelectParameterIdentifier] = @(parameter.value);
+
+    return values;
+}
+
+- (BOOL)verificationParameters:(NSDictionary<NSString *, NSNumber *> *)expectedParameters
+              matchParameters:(NSDictionary<NSString *, NSNumber *> *)observedParameters
+{
+    if (expectedParameters.count == 0)
+        return observedParameters.count > 0;
+
+    for (NSString *identifier in expectedParameters)
+    {
+        NSNumber *expectedValue = expectedParameters[identifier];
+        NSNumber *observedValue = observedParameters[identifier];
+
+        if (expectedValue == nil || observedValue == nil)
+            return NO;
+
+        if (fabsf(expectedValue.floatValue - observedValue.floatValue) > CosimoStateVerificationTolerance)
+            return NO;
+    }
+
+    return YES;
+}
+
+- (void)pollForRestoredVerificationParameters:(NSDictionary<NSString *, NSNumber *> *)verificationParameters
+                                  stateSource:(NSString *)stateSource
+                                     deadline:(CFTimeInterval)deadline
+                                   completion:(CosimoHostResultBlock)completion
+{
+    NSDictionary<NSString *, NSNumber *> *observedParameters = [self currentVerificationParameters];
+    const BOOL matches = [self verificationParameters:verificationParameters matchParameters:observedParameters];
+
+    if (matches || CFAbsoluteTimeGetCurrent() >= deadline)
+    {
+        NSNumber *observedValue = observedParameters[CosimoPrimaryParameterIdentifier] ?: @(0.0f);
+        NSNumber *observedTableSelectValue = observedParameters[CosimoTableSelectParameterIdentifier] ?: @(0.0f);
+
+        completion (@{
+            @"identifier": CosimoPrimaryParameterIdentifier,
+            @"observedValue": observedValue,
+            @"tableSelectIdentifier": CosimoTableSelectParameterIdentifier,
+            @"observedTableSelectValue": observedTableSelectValue,
+            @"stateSource": stateSource ?: @"fullState",
+        }, nil);
+        return;
+    }
+
+    dispatch_after (dispatch_time (DISPATCH_TIME_NOW, (int64_t) (0.1 * NSEC_PER_SEC)),
+                    dispatch_get_main_queue(), ^
+    {
+        [self pollForRestoredVerificationParameters:verificationParameters
+                                        stateSource:stateSource
+                                           deadline:deadline
+                                         completion:completion];
+    });
 }
 
 @end
