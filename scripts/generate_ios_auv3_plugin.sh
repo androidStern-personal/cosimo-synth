@@ -39,6 +39,11 @@ if ! command -v cmaj >/dev/null 2>&1; then
   exit 1
 fi
 
+if ! command -v npm >/dev/null 2>&1; then
+  printf 'npm is required to build the generated patch_gui JavaScript files.\n' >&2
+  exit 1
+fi
+
 if [[ ! -f "$patch_path" ]]; then
   printf 'Patch file not found: %s\n' "$patch_path" >&2
   exit 1
@@ -46,6 +51,7 @@ fi
 
 mkdir -p "$output_parent"
 
+npm run ui:build
 uv run python "$repo_root/build_assets.py"
 
 temp_dir="$(mktemp -d "${TMPDIR:-/tmp}/cosimo-ios-auv3.XXXXXX")"

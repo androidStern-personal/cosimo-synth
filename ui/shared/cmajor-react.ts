@@ -8,6 +8,10 @@ import {
     useState,
     type ReactNode,
 } from "react";
+import {
+    createPatchConnectionResourceClient,
+    type ResourceClient,
+} from "./resource-client";
 
 export type PatchConnectionLike = {
     manifest?: unknown;
@@ -46,26 +50,46 @@ type ParameterBinding = {
     endGesture: () => void;
 };
 
-const PatchConnectionContext = createContext<PatchConnectionLike | null>(null);
+type PatchHostLike = {
+    patchConnection: PatchConnectionLike;
+    resourceClient: ResourceClient;
+};
+
+const PatchHostContext = createContext<PatchHostLike | null>(null);
 
 export function PatchConnectionProvider({
     patchConnection,
+    resourceClient,
     children,
 }: {
     patchConnection: PatchConnectionLike;
+    resourceClient?: ResourceClient;
     children: ReactNode;
 }) {
-    return createElement(PatchConnectionContext.Provider, { value: patchConnection }, children);
+    const host = useMemo<PatchHostLike>(() => ({
+        patchConnection,
+        resourceClient: resourceClient ?? createPatchConnectionResourceClient(patchConnection),
+    }), [patchConnection, resourceClient]);
+
+    return createElement(PatchHostContext.Provider, { value: host }, children);
 }
 
-export function usePatchConnection() {
-    const patchConnection = useContext(PatchConnectionContext);
+function usePatchHost() {
+    const patchHost = useContext(PatchHostContext);
 
-    if (!patchConnection) {
+    if (!patchHost) {
         throw new Error("PatchConnectionProvider is missing.");
     }
 
-    return patchConnection;
+    return patchHost;
+}
+
+export function usePatchConnection() {
+    return usePatchHost().patchConnection;
+}
+
+export function useResourceClient() {
+    return usePatchHost().resourceClient;
 }
 
 export function usePatchParameter(endpointID: string, initialValue: unknown = 0): ParameterBinding {

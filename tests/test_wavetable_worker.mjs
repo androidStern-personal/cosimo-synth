@@ -305,6 +305,71 @@ test("worker bootstraps from runtimeState instead of requesting wavetableSelect 
     );
 });
 
+test("worker can load wavetable resources through an injected resource client even when patch connection resource helpers are absent", async () => {
+    const catalog = createDefaultCatalog();
+    const audioFiles = createDefaultAudioFiles();
+    const connection = new FakePatchConnection({
+        catalog,
+        audioFiles: {},
+        maxAutoAckFrames: 0,
+    });
+    const resourceClientReadJSONPaths = [];
+    const resourceClientReadAudioPaths = [];
+    connection.readResource = undefined;
+    connection.readResourceAsAudioData = undefined;
+    connection.getResourceAddress = undefined;
+
+    const controller = createWavetableWorkerController(connection, {
+        maxFramesInFlight: 1,
+        resourceClient: {
+            async readJSON(path) {
+                resourceClientReadJSONPaths.push(path);
+                assert.equal(path, "assets/factory-bank-catalog.json");
+                return catalog;
+            },
+            async readAudio(path) {
+                resourceClientReadAudioPaths.push(path);
+                assert.equal(path, "assets/factory_sources/table-1.wav");
+                return {
+                    sampleRate: 44100,
+                    samples: Float32Array.from(
+                        audioFiles["assets/factory_sources/table-1.wav"].frames,
+                        (frame) => frame[0]
+                    ),
+                };
+            },
+        },
+    });
+    await controller.start();
+    await flushMicrotasks();
+
+    connection.emitEndpoint(
+        "runtimeState",
+        createRuntimeState({
+            desiredIntentSerial: 5,
+            desiredTableIndex: 1,
+            generationFrontier: 10,
+            serviceState: 0,
+        })
+    );
+    await flushMicrotasks(16);
+
+    assert.deepEqual(resourceClientReadJSONPaths, ["assets/factory-bank-catalog.json"]);
+    assert.deepEqual(resourceClientReadAudioPaths, ["assets/factory_sources/table-1.wav"]);
+    assert.deepEqual(connection.readResourcePaths, []);
+    assert.deepEqual(connection.readAudioPaths, []);
+
+    const loadBeginEvents = connection.sentEvents.filter(({ endpointID }) => endpointID === "wavetableLoadBegin");
+    assert.deepEqual(loadBeginEvents.map(({ value }) => value), [
+        {
+            dspSessionId: 7,
+            generation: 11,
+            tableIndex: 1,
+            frameCount: 2,
+        },
+    ]);
+});
+
 test("worker prefers the resolved resource URL for factory wavetable source paths when both loader paths are available", async () => {
     const spacedPath = "assets/factory_sources/imported/BS2 - Acid.wav";
     const catalog = {

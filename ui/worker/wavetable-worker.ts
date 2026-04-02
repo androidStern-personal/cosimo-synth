@@ -2,9 +2,6 @@ import type { PatchConnectionLike } from "../shared/cmajor-react";
 import {
     DEFAULT_SAMPLES_PER_FRAME,
     getFactoryBankCatalogValue,
-    loadSourceWavetableFramesFromUrl,
-    normalizeDecodedAudioFileSamples,
-    resolvePatchResourceUrl,
     type FactoryBankCatalog,
     type FactoryTableMeta,
 } from "../shared/wavetable-bank";
@@ -14,6 +11,11 @@ import {
     buildMipFrameFromSpectrum,
     extractSourceFramesFromSamples,
 } from "../shared/wavetable-mip";
+import {
+    asResourceClient,
+    type ResourceClient,
+    type ResourceClientInput,
+} from "../shared/resource-client";
 
 const runtimeSyncRequestEndpointID = "runtimeSyncRequest";
 const runtimeStateEndpointID = "runtimeState";
@@ -48,6 +50,7 @@ type WorkerOptions = {
     maxFramesInFlight?: number;
     mipLevelCount?: number;
     serviceLoadTimeoutMs?: number;
+    resourceClient?: ResourceClientInput;
     setTimeoutFn?: ((callback: () => void, delay: number) => TimerHandle) | null;
     clearTimeoutFn?: ((handle: TimerHandle) => void) | null;
 };
@@ -260,10 +263,8 @@ function decodeTextPayload(payload: unknown) {
     throw new Error("Unsupported text resource payload");
 }
 
-async function readCatalogFromConnection(connection: PatchConnectionLike, catalogPath: string) {
-    const payload = await connection.readResource?.(catalogPath);
-    assert(payload !== undefined, `Could not read wavetable catalog ${catalogPath}`);
-    return getFactoryBankCatalogValue(JSON.parse(await decodeTextPayload(payload)));
+async function readCatalogFromResourceClient(resourceClient: ResourceClient, catalogPath: string) {
+    return getFactoryBankCatalogValue(await resourceClient.readJSON<FactoryBankCatalog>(catalogPath));
 }
 
 function normalizeRuntimeState(state: RuntimeStateLike) {
@@ -314,6 +315,7 @@ function getNow() {
 
 export class WavetableWorkerController {
     private readonly connection: PatchConnectionLike;
+    private readonly resourceClient: ResourceClient;
     private readonly catalogPath: string;
     private readonly maxFramesInFlight: number;
     private readonly mipLevelCount: number;
@@ -335,6 +337,7 @@ export class WavetableWorkerController {
 
     constructor(connection: PatchConnectionLike, options: WorkerOptions = {}) {
         this.connection = connection;
+        this.resourceClient = asResourceClient(options.resourceClient ?? connection);
         this.catalogPath = options.catalogPath ?? defaultCatalogPath;
         this.maxFramesInFlight = resolvePositiveIntegerOption(options.maxFramesInFlight, 1);
         this.mipLevelCount = options.mipLevelCount ?? DEFAULT_MIP_LEVEL_COUNT;
@@ -367,7 +370,7 @@ export class WavetableWorkerController {
 
     private async ensureCatalogLoaded() {
         if (!this.catalog) {
-            this.catalog = await readCatalogFromConnection(this.connection, this.catalogPath);
+            this.catalog = await readCatalogFromResourceClient(this.resourceClient, this.catalogPath);
             emitWorkerLog("info", "Loaded wavetable catalog", {
                 catalogPath: this.catalogPath,
                 tableCount: this.catalog.tables.length,
@@ -564,48 +567,21 @@ export class WavetableWorkerController {
         const normalizedIndex = normalizeRequestedTableIndex(tableIndex, catalog.tables.length);
         const tableMeta = catalog.tables[normalizedIndex];
         assert(tableMeta, `Could not resolve table ${normalizedIndex}`);
-        const resourceAddress = typeof this.connection.getResourceAddress === "function"
-            ? this.connection.getResourceAddress(tableMeta.sourceWav)
-            : null;
-        const canLoadSourceByUrl = resourceAddress !== null
-            && resourceAddress !== undefined
-            && typeof fetch === "function";
-        const canLoadSourceByAudioBridge = typeof this.connection.readResourceAsAudioData === "function";
-        assert(canLoadSourceByUrl || canLoadSourceByAudioBridge, "Patch connection cannot read wavetable source files");
         const startTime = getNow();
         emitWorkerLog("info", "Reading wavetable source", {
             tableIndex: normalizedIndex,
             tableId: tableMeta.tableId,
             tableName: tableMeta.name,
             sourceWav: tableMeta.sourceWav,
-            loaderMode: canLoadSourceByUrl ? "resource-url" : "audio-data-bridge",
+            loaderMode: "resource-client",
             expectedFrameCount: expectedFrameCount === undefined ? Number(tableMeta.frameCount) : expectedFrameCount,
         });
 
-        let sourceTable: { frameCount: number; frames: Float32Array[] } | null = null;
-
-        if (canLoadSourceByUrl) {
-            const sourceWavUrl = resolvePatchResourceUrl(tableMeta.sourceWav, this.connection);
-            const loadedSource = await loadSourceWavetableFramesFromUrl({
-                sourceWavUrl,
-                sourceWavPath: tableMeta.sourceWav,
-                tableIndex: normalizedIndex,
-                expectedFrameCount: expectedFrameCount === undefined ? Number(tableMeta.frameCount) : expectedFrameCount,
-                samplesPerFrame: DEFAULT_SAMPLES_PER_FRAME,
-            });
-            sourceTable = {
-                frameCount: loadedSource.frameCount,
-                frames: loadedSource.frames,
-            };
-        } else {
-            const audioFile = await this.connection.readResourceAsAudioData?.(tableMeta.sourceWav);
-            assert(audioFile !== undefined && audioFile !== null, `Could not decode source wavetable ${tableMeta.sourceWav}`);
-            const { samples } = normalizeDecodedAudioFileSamples(audioFile as Parameters<typeof normalizeDecodedAudioFileSamples>[0]);
-            sourceTable = extractSourceFramesFromSamples(samples, {
-                expectedFrameCount: expectedFrameCount === undefined ? Number(tableMeta.frameCount) : expectedFrameCount,
-                samplesPerFrame: DEFAULT_SAMPLES_PER_FRAME,
-            });
-        }
+        const sourceAudio = await this.resourceClient.readAudio(tableMeta.sourceWav);
+        const sourceTable = extractSourceFramesFromSamples(sourceAudio.samples, {
+            expectedFrameCount: expectedFrameCount === undefined ? Number(tableMeta.frameCount) : expectedFrameCount,
+            samplesPerFrame: DEFAULT_SAMPLES_PER_FRAME,
+        });
 
         if (!sourceTable || token !== this.asyncStateToken) {
             return null;

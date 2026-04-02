@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import "./styles.css";
 import { DesktopPatchView } from "./DesktopPatchView";
 import { loadHarnessManifest, MockPatchConnection } from "../shared/patch-connection-mock";
+import { createDesktopResourceClient } from "../shared/resource-client";
 
 const rootElement = document.getElementById("root");
 
@@ -49,7 +50,10 @@ try {
     document.body.dataset.bootStage = "rendering";
 
     createRoot(harnessRoot).render(
-        <DesktopPatchView patchConnection={patchConnection} />
+        <DesktopPatchView
+            patchConnection={patchConnection}
+            resourceClient={createDesktopResourceClient(patchConnection)}
+        />
     );
     document.body.dataset.bootStage = "render-called";
 } catch (error) {

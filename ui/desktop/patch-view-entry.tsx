@@ -4,6 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import cssText from "./styles.css?inline";
 import { DesktopPatchView } from "./DesktopPatchView";
 import type { PatchConnectionLike } from "../shared/cmajor-react";
+import { createDesktopResourceClient } from "../shared/resource-client";
 
 type ErrorBoundaryState = {
     errorMessage: string | null;
@@ -114,7 +115,10 @@ class CosimoDesktopReactViewElement extends HTMLElement {
 
         this.root.render(
             <DesktopPatchErrorBoundary>
-                <DesktopPatchView patchConnection={this.patchConnection} />
+                <DesktopPatchView
+                    patchConnection={this.patchConnection}
+                    resourceClient={createDesktopResourceClient(this.patchConnection)}
+                />
             </DesktopPatchErrorBoundary>
         );
     }

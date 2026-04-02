@@ -1,0 +1,526 @@
+export type ResourcePathAddress = string | URL | null | undefined;
+
+export type PatchConnectionResourceSource = {
+    getResourceAddress?: (path: string) => string | URL;
+    readResource?: (path: string) => Promise<unknown>;
+    readResourceAsAudioData?: (path: string, annotation?: unknown) => Promise<unknown>;
+    prefersResourceReadBridge?: unknown;
+    prefersAudioResourceReadBridge?: unknown;
+};
+
+export type ResourceAudioData = {
+    sampleRate: number;
+    samples: Float32Array;
+};
+
+export type ResourceClient = {
+    readText(path: string): Promise<string>;
+    readJSON<T>(path: string): Promise<T>;
+    readBytes(path: string): Promise<Uint8Array>;
+    readAudio(path: string): Promise<ResourceAudioData>;
+    getURL(path: string): URL | null;
+};
+
+export type PartialResourceClient = Partial<ResourceClient>;
+
+export type ResourceClientInput =
+    | PatchConnectionResourceSource
+    | ResourceClient
+    | PartialResourceClient
+    | null
+    | undefined;
+
+type MonoAudioFrame = number | ArrayLike<number>;
+
+type DecodedAudioLike = {
+    sampleRate?: unknown;
+    frames?: ArrayLike<MonoAudioFrame>;
+};
+
+type ResourceReadPreference = "bridge" | "url";
+
+type ResourceClientOptions = {
+    textPreference?: ResourceReadPreference;
+    audioPreference?: ResourceReadPreference;
+};
+
+function assert(condition: unknown, message: string): asserts condition {
+    if (!condition) {
+        throw new Error(message);
+    }
+}
+
+function readAscii(view: DataView, offset: number, length: number) {
+    let text = "";
+
+    for (let index = 0; index < length; index += 1) {
+        text += String.fromCharCode(view.getUint8(offset + index));
+    }
+
+    return text;
+}
+
+function isAbsoluteURL(value: string) {
+    return /^[a-zA-Z][a-zA-Z\d+.-]*:/.test(value);
+}
+
+function encodeTextPayload(text: string) {
+    if (typeof TextEncoder === "function") {
+        return new TextEncoder().encode(text);
+    }
+
+    return Uint8Array.from(text, (character) => character.charCodeAt(0));
+}
+
+function describePayload(payload: unknown) {
+    if (payload === null) {
+        return "null";
+    }
+
+    if (payload === undefined) {
+        return "undefined";
+    }
+
+    const type = typeof payload;
+    const constructorName = (payload as { constructor?: { name?: string } })?.constructor?.name;
+
+    if (type !== "object") {
+        return constructorName ? `${type}:${constructorName}` : type;
+    }
+
+    const keys = Object.keys(payload as Record<string, unknown>).slice(0, 6);
+    const keySummary = keys.length > 0 ? ` keys=${keys.join(",")}` : "";
+    return constructorName ? `${type}:${constructorName}${keySummary}` : `${type}${keySummary}`;
+}
+
+export function getDefaultPatchRootUrl() {
+    const locationHref = globalThis.location?.href;
+
+    if (typeof locationHref === "string" && locationHref.length > 0) {
+        return new URL("/", locationHref);
+    }
+
+    const moduleUrl = new URL(import.meta.url);
+    const modulePath = moduleUrl.pathname;
+
+    if (modulePath.includes("/patch_gui/desktop/")) {
+        moduleUrl.pathname = modulePath.replace(/\/patch_gui\/desktop\/[^/]+$/, "/");
+        return moduleUrl;
+    }
+
+    if (modulePath.includes("/patch_gui/")) {
+        moduleUrl.pathname = modulePath.replace(/\/patch_gui\/[^/]+$/, "/");
+        return moduleUrl;
+    }
+
+    if (modulePath.includes("/ui/shared/")) {
+        moduleUrl.pathname = modulePath.replace(/\/ui\/shared\/[^/]+$/, "/");
+        return moduleUrl;
+    }
+
+    moduleUrl.pathname = modulePath.replace(/\/[^/]+$/, "/");
+    return moduleUrl;
+}
+
+export function resourceAddressToUrl(path: string, resourceAddress: ResourcePathAddress) {
+    const patchRootUrl = getDefaultPatchRootUrl();
+
+    if (resourceAddress instanceof URL) {
+        return resourceAddress;
+    }
+
+    if (typeof resourceAddress === "string" && resourceAddress.length > 0) {
+        if (isAbsoluteURL(resourceAddress)) {
+            return new URL(resourceAddress);
+        }
+
+        const normalizedPath = resourceAddress.startsWith("/")
+            ? resourceAddress.slice(1)
+            : resourceAddress;
+
+        return new URL(normalizedPath, patchRootUrl);
+    }
+
+    return new URL(path, patchRootUrl);
+}
+
+export async function decodeTextPayload(payload: unknown) {
+    if (typeof payload === "string") {
+        return payload;
+    }
+
+    if (payload && typeof (payload as { text?: () => Promise<string> }).text === "function") {
+        return (payload as { text: () => Promise<string> }).text();
+    }
+
+    if (payload instanceof ArrayBuffer) {
+        if (typeof TextDecoder === "function") {
+            return new TextDecoder().decode(new Uint8Array(payload));
+        }
+
+        return String.fromCharCode(...new Uint8Array(payload));
+    }
+
+    if (ArrayBuffer.isView(payload)) {
+        const bytes = new Uint8Array(payload.buffer, payload.byteOffset, payload.byteLength);
+
+        if (typeof TextDecoder === "function") {
+            return new TextDecoder().decode(bytes);
+        }
+
+        return String.fromCharCode(...bytes);
+    }
+
+    if (Array.isArray(payload)) {
+        const bytes = Uint8Array.from(payload);
+
+        if (typeof TextDecoder === "function") {
+            return new TextDecoder().decode(bytes);
+        }
+
+        return String.fromCharCode(...bytes);
+    }
+
+    throw new Error(`Unsupported text resource payload (${describePayload(payload)})`);
+}
+
+export function normalizeBytesPayload(payload: unknown) {
+    if (payload instanceof ArrayBuffer) {
+        return new Uint8Array(payload.slice(0));
+    }
+
+    if (ArrayBuffer.isView(payload)) {
+        return new Uint8Array(payload.buffer.slice(payload.byteOffset, payload.byteOffset + payload.byteLength));
+    }
+
+    if (Array.isArray(payload)) {
+        return Uint8Array.from(payload);
+    }
+
+    if (typeof payload === "string") {
+        return encodeTextPayload(payload);
+    }
+
+    throw new Error(`Unsupported binary resource payload (${describePayload(payload)})`);
+}
+
+export function normalizeDecodedAudioFileSamples(audioFile: DecodedAudioLike): ResourceAudioData {
+    const frames = audioFile?.frames;
+
+    assert(
+        Array.isArray(frames) || ArrayBuffer.isView(frames),
+        "Decoded audio data must provide a frames array",
+    );
+
+    const frameArray = Array.from(frames);
+    const samples = new Float32Array(frameArray.length);
+
+    for (let index = 0; index < frameArray.length; index += 1) {
+        const frame = frameArray[index];
+
+        if (typeof frame === "number") {
+            samples[index] = frame;
+            continue;
+        }
+
+        if (ArrayBuffer.isView(frame) || Array.isArray(frame)) {
+            const monoFrame = frame as ArrayLike<number>;
+            assert(monoFrame.length === 1, "Only mono wavetable source files are supported");
+            samples[index] = Number(monoFrame[0]) || 0;
+            continue;
+        }
+
+        throw new Error("Decoded audio frames must contain numeric mono samples");
+    }
+
+    return {
+        sampleRate: Number(audioFile?.sampleRate) || 0,
+        samples,
+    };
+}
+
+export function parseWaveFile(arrayBuffer: ArrayBuffer) {
+    const view = new DataView(arrayBuffer);
+
+    assert(readAscii(view, 0, 4) === "RIFF", "Expected a RIFF wave file");
+    assert(readAscii(view, 8, 4) === "WAVE", "Expected a WAVE file");
+
+    let format: number | null = null;
+    let channelCount: number | null = null;
+    let sampleRate: number | null = null;
+    let bitsPerSample: number | null = null;
+    let blockAlign: number | null = null;
+    let dataOffset: number | null = null;
+    let dataSize: number | null = null;
+    let cursor = 12;
+
+    while (cursor + 8 <= view.byteLength) {
+        const chunkID = readAscii(view, cursor, 4);
+        const chunkSize = view.getUint32(cursor + 4, true);
+        const chunkDataOffset = cursor + 8;
+
+        if (chunkID === "fmt ") {
+            format = view.getUint16(chunkDataOffset, true);
+            channelCount = view.getUint16(chunkDataOffset + 2, true);
+            sampleRate = view.getUint32(chunkDataOffset + 4, true);
+            blockAlign = view.getUint16(chunkDataOffset + 12, true);
+            bitsPerSample = view.getUint16(chunkDataOffset + 14, true);
+        } else if (chunkID === "data") {
+            dataOffset = chunkDataOffset;
+            dataSize = chunkSize;
+        }
+
+        cursor = chunkDataOffset + chunkSize + (chunkSize % 2);
+    }
+
+    assert(format !== null, "Wave file is missing a fmt chunk");
+    assert(dataOffset !== null && dataSize !== null, "Wave file is missing a data chunk");
+    assert(channelCount === 1, "Only mono wavetable bank files are supported");
+
+    let samples: Float32Array;
+
+    if (format === 3 && bitsPerSample === 32) {
+        samples = new Float32Array(arrayBuffer.slice(dataOffset, dataOffset + dataSize));
+    } else if (format === 1 && bitsPerSample === 16) {
+        const sampleCount = dataSize / 2;
+        const pcm = new Int16Array(arrayBuffer.slice(dataOffset, dataOffset + dataSize));
+        samples = new Float32Array(sampleCount);
+
+        for (let index = 0; index < sampleCount; index += 1) {
+            samples[index] = pcm[index] / 32768.0;
+        }
+    } else {
+        throw new Error(`Unsupported WAV format: format=${format}, bitsPerSample=${bitsPerSample}`);
+    }
+
+    return {
+        format,
+        channelCount,
+        sampleRate: sampleRate ?? 0,
+        bitsPerSample,
+        blockAlign: blockAlign ?? 0,
+        samples,
+    };
+}
+
+async function fetchArrayBuffer(url: URL) {
+    assert(typeof fetch === "function", `Could not fetch ${url}: global fetch is unavailable`);
+    const response = await fetch(url.toString());
+    assert(response.ok, `Failed to fetch resource from ${url}`);
+    return response.arrayBuffer();
+}
+
+function readTextFromBytes(bytes: Uint8Array) {
+    if (typeof TextDecoder === "function") {
+        return new TextDecoder().decode(bytes);
+    }
+
+    return String.fromCharCode(...bytes);
+}
+
+function readAudioFromBytes(bytes: Uint8Array): ResourceAudioData {
+    const arrayBuffer = new Uint8Array(bytes).buffer;
+    const parsedWave = parseWaveFile(arrayBuffer);
+
+    return {
+        sampleRate: parsedWave.sampleRate,
+        samples: parsedWave.samples,
+    };
+}
+
+function createResourceClient(
+    source: PatchConnectionResourceSource,
+    {
+        textPreference = "bridge",
+        audioPreference = "url",
+    }: ResourceClientOptions = {},
+): ResourceClient {
+    const readResourcePayload = async (path: string) => {
+        assert(typeof source.readResource === "function", `Resource bridge cannot read ${path}`);
+        return source.readResource(path);
+    };
+
+    const readAudioBridge = async (path: string) => {
+        assert(typeof source.readResourceAsAudioData === "function", `Audio resource bridge cannot read ${path}`);
+        const audioFile = await source.readResourceAsAudioData(path);
+        return normalizeDecodedAudioFileSamples(audioFile as DecodedAudioLike);
+    };
+
+    const getExplicitResourceAddress = (path: string) => {
+        const resourceAddress = source.getResourceAddress?.(path);
+        return resourceAddress !== null && resourceAddress !== undefined
+            ? resourceAddress
+            : null;
+    };
+
+    const fetchAudioFromUrl = async (path: string, resourceAddress: ResourcePathAddress = source.getResourceAddress?.(path)) => {
+        const url = resourceAddressToUrl(path, resourceAddress);
+        const arrayBuffer = await fetchArrayBuffer(url);
+        const parsedWave = parseWaveFile(arrayBuffer);
+
+        return {
+            sampleRate: parsedWave.sampleRate,
+            samples: parsedWave.samples,
+        };
+    };
+
+    const fetchBytesFromUrl = async (path: string, resourceAddress: ResourcePathAddress = source.getResourceAddress?.(path)) => {
+        const url = resourceAddressToUrl(path, resourceAddress);
+        return new Uint8Array(await fetchArrayBuffer(url));
+    };
+
+    return {
+        async readText(path: string) {
+            if (textPreference === "bridge" && typeof source.readResource === "function") {
+                return decodeTextPayload(await readResourcePayload(path));
+            }
+
+            const explicitResourceAddress = getExplicitResourceAddress(path);
+
+            if (textPreference === "url" && explicitResourceAddress !== null) {
+                return readTextFromBytes(await fetchBytesFromUrl(path, explicitResourceAddress));
+            }
+
+            if (typeof source.readResource === "function") {
+                return decodeTextPayload(await readResourcePayload(path));
+            }
+
+            return readTextFromBytes(await fetchBytesFromUrl(path, explicitResourceAddress));
+        },
+
+        async readJSON<T>(path: string) {
+            return JSON.parse(await this.readText(path)) as T;
+        },
+
+        async readBytes(path: string) {
+            if (typeof source.readResource === "function") {
+                return normalizeBytesPayload(await readResourcePayload(path));
+            }
+
+            return fetchBytesFromUrl(path);
+        },
+
+        async readAudio(path: string) {
+            if (audioPreference === "bridge" && typeof source.readResourceAsAudioData === "function") {
+                return readAudioBridge(path);
+            }
+
+            const explicitResourceAddress = getExplicitResourceAddress(path);
+
+            if (audioPreference === "url" && explicitResourceAddress !== null) {
+                return fetchAudioFromUrl(path, explicitResourceAddress);
+            }
+
+            if (typeof source.readResourceAsAudioData === "function") {
+                return readAudioBridge(path);
+            }
+
+            return readAudioFromBytes(await this.readBytes(path));
+        },
+
+        getURL(path: string) {
+            return resourceAddressToUrl(path, source.getResourceAddress?.(path));
+        },
+    };
+}
+
+export function createPatchConnectionResourceClient(source: PatchConnectionResourceSource | null | undefined) {
+    const normalizedSource = source ?? {};
+    const prefersBridgeAudio = Boolean(normalizedSource.prefersAudioResourceReadBridge);
+
+    return createResourceClient(normalizedSource, {
+        textPreference: "bridge",
+        audioPreference: prefersBridgeAudio ? "bridge" : "url",
+    });
+}
+
+export function createDesktopResourceClient(source: PatchConnectionResourceSource | null | undefined) {
+    return createResourceClient(source ?? {}, {
+        textPreference: "url",
+        audioPreference: "url",
+    });
+}
+
+export function createIOSResourceClient(source: PatchConnectionResourceSource | null | undefined) {
+    return createResourceClient(source ?? {}, {
+        textPreference: "bridge",
+        audioPreference: "url",
+    });
+}
+
+function normalizeResourceClient(value: PartialResourceClient): ResourceClient {
+    const readText = typeof value.readText === "function" ? value.readText.bind(value) : null;
+    const readJSON = typeof value.readJSON === "function" ? value.readJSON.bind(value) : null;
+    const readBytes = typeof value.readBytes === "function" ? value.readBytes.bind(value) : null;
+    const readAudio = typeof value.readAudio === "function" ? value.readAudio.bind(value) : null;
+    const getURL = typeof value.getURL === "function" ? value.getURL.bind(value) : null;
+
+    return {
+        async readText(path: string) {
+            if (readText) {
+                return readText(path);
+            }
+
+            if (readJSON) {
+                return JSON.stringify(await readJSON(path));
+            }
+
+            if (readBytes) {
+                return readTextFromBytes(await readBytes(path));
+            }
+
+            throw new Error(`Resource client cannot read text ${path}`);
+        },
+
+        async readJSON<T>(path: string) {
+            if (readJSON) {
+                return readJSON(path) as Promise<T>;
+            }
+
+            return JSON.parse(await this.readText(path)) as T;
+        },
+
+        async readBytes(path: string) {
+            if (readBytes) {
+                return readBytes(path);
+            }
+
+            if (readText) {
+                return encodeTextPayload(await readText(path));
+            }
+
+            if (readJSON) {
+                return encodeTextPayload(JSON.stringify(await readJSON(path)));
+            }
+
+            throw new Error(`Resource client cannot read bytes ${path}`);
+        },
+
+        async readAudio(path: string) {
+            if (readAudio) {
+                return readAudio(path);
+            }
+
+            return readAudioFromBytes(await this.readBytes(path));
+        },
+
+        getURL(path: string) {
+            return getURL ? getURL(path) : null;
+        },
+    };
+}
+
+export function isResourceClient(value: ResourceClientInput): value is PartialResourceClient {
+    return typeof (value as PartialResourceClient | null | undefined)?.readText === "function"
+        || typeof (value as PartialResourceClient | null | undefined)?.readJSON === "function"
+        || typeof (value as PartialResourceClient | null | undefined)?.readBytes === "function"
+        || typeof (value as PartialResourceClient | null | undefined)?.readAudio === "function";
+}
+
+export function asResourceClient(value: ResourceClientInput) {
+    if (isResourceClient(value)) {
+        return normalizeResourceClient(value);
+    }
+
+    return createPatchConnectionResourceClient(value);
+}

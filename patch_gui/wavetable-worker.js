@@ -1,5 +1,4 @@
-const DEFAULT_SAMPLES_PER_FRAME$1 = 2048;
-function assert$2(condition, message) {
+function assert$3(condition, message) {
   if (!condition) {
     throw new Error(message);
   }
@@ -11,20 +10,30 @@ function readAscii(view, offset, length) {
   }
   return text;
 }
-function canonicalizeFrame$1(frame) {
-  let sum = 0;
-  for (let index = 0; index < frame.length; index += 1) {
-    sum += Number(frame[index]) || 0;
-  }
-  const mean = sum / Math.max(1, frame.length);
-  const canonical = new Float32Array(frame.length);
-  for (let index = 0; index < frame.length; index += 1) {
-    canonical[index] = (Number(frame[index]) || 0) - mean;
-  }
-  return canonical;
-}
 function isAbsoluteURL(value) {
   return /^[a-zA-Z][a-zA-Z\d+.-]*:/.test(value);
+}
+function encodeTextPayload(text) {
+  if (typeof TextEncoder === "function") {
+    return new TextEncoder().encode(text);
+  }
+  return Uint8Array.from(text, (character) => character.charCodeAt(0));
+}
+function describePayload(payload) {
+  if (payload === null) {
+    return "null";
+  }
+  if (payload === void 0) {
+    return "undefined";
+  }
+  const type = typeof payload;
+  const constructorName = payload?.constructor?.name;
+  if (type !== "object") {
+    return constructorName ? `${type}:${constructorName}` : type;
+  }
+  const keys = Object.keys(payload).slice(0, 6);
+  const keySummary = keys.length > 0 ? ` keys=${keys.join(",")}` : "";
+  return constructorName ? `${type}:${constructorName}${keySummary}` : `${type}${keySummary}`;
 }
 function getDefaultPatchRootUrl() {
   const locationHref = globalThis.location?.href;
@@ -62,13 +71,53 @@ function resourceAddressToUrl(path, resourceAddress) {
   }
   return new URL(path, patchRootUrl);
 }
-function resolvePatchResourceUrl(path, patchConnection) {
-  const resourceAddress = patchConnection?.getResourceAddress?.(path);
-  return resourceAddressToUrl(path, resourceAddress);
+async function decodeTextPayload(payload) {
+  if (typeof payload === "string") {
+    return payload;
+  }
+  if (payload && typeof payload.text === "function") {
+    return payload.text();
+  }
+  if (payload instanceof ArrayBuffer) {
+    if (typeof TextDecoder === "function") {
+      return new TextDecoder().decode(new Uint8Array(payload));
+    }
+    return String.fromCharCode(...new Uint8Array(payload));
+  }
+  if (ArrayBuffer.isView(payload)) {
+    const bytes = new Uint8Array(payload.buffer, payload.byteOffset, payload.byteLength);
+    if (typeof TextDecoder === "function") {
+      return new TextDecoder().decode(bytes);
+    }
+    return String.fromCharCode(...bytes);
+  }
+  if (Array.isArray(payload)) {
+    const bytes = Uint8Array.from(payload);
+    if (typeof TextDecoder === "function") {
+      return new TextDecoder().decode(bytes);
+    }
+    return String.fromCharCode(...bytes);
+  }
+  throw new Error(`Unsupported text resource payload (${describePayload(payload)})`);
+}
+function normalizeBytesPayload(payload) {
+  if (payload instanceof ArrayBuffer) {
+    return new Uint8Array(payload.slice(0));
+  }
+  if (ArrayBuffer.isView(payload)) {
+    return new Uint8Array(payload.buffer.slice(payload.byteOffset, payload.byteOffset + payload.byteLength));
+  }
+  if (Array.isArray(payload)) {
+    return Uint8Array.from(payload);
+  }
+  if (typeof payload === "string") {
+    return encodeTextPayload(payload);
+  }
+  throw new Error(`Unsupported binary resource payload (${describePayload(payload)})`);
 }
 function normalizeDecodedAudioFileSamples(audioFile) {
   const frames = audioFile?.frames;
-  assert$2(
+  assert$3(
     Array.isArray(frames) || ArrayBuffer.isView(frames),
     "Decoded audio data must provide a frames array"
   );
@@ -82,7 +131,7 @@ function normalizeDecodedAudioFileSamples(audioFile) {
     }
     if (ArrayBuffer.isView(frame) || Array.isArray(frame)) {
       const monoFrame = frame;
-      assert$2(monoFrame.length === 1, "Only mono wavetable source files are supported");
+      assert$3(monoFrame.length === 1, "Only mono wavetable source files are supported");
       samples[index] = Number(monoFrame[0]) || 0;
       continue;
     }
@@ -95,8 +144,8 @@ function normalizeDecodedAudioFileSamples(audioFile) {
 }
 function parseWaveFile(arrayBuffer) {
   const view = new DataView(arrayBuffer);
-  assert$2(readAscii(view, 0, 4) === "RIFF", "Expected a RIFF wave file");
-  assert$2(readAscii(view, 8, 4) === "WAVE", "Expected a WAVE file");
+  assert$3(readAscii(view, 0, 4) === "RIFF", "Expected a RIFF wave file");
+  assert$3(readAscii(view, 8, 4) === "WAVE", "Expected a WAVE file");
   let format = null;
   let channelCount = null;
   let sampleRate = null;
@@ -121,9 +170,9 @@ function parseWaveFile(arrayBuffer) {
     }
     cursor = chunkDataOffset + chunkSize + chunkSize % 2;
   }
-  assert$2(format !== null, "Wave file is missing a fmt chunk");
-  assert$2(dataOffset !== null && dataSize !== null, "Wave file is missing a data chunk");
-  assert$2(channelCount === 1, "Only mono wavetable bank files are supported");
+  assert$3(format !== null, "Wave file is missing a fmt chunk");
+  assert$3(dataOffset !== null && dataSize !== null, "Wave file is missing a data chunk");
+  assert$3(channelCount === 1, "Only mono wavetable bank files are supported");
   let samples;
   if (format === 3 && bitsPerSample === 32) {
     samples = new Float32Array(arrayBuffer.slice(dataOffset, dataOffset + dataSize));
@@ -138,69 +187,201 @@ function parseWaveFile(arrayBuffer) {
     throw new Error(`Unsupported WAV format: format=${format}, bitsPerSample=${bitsPerSample}`);
   }
   return {
+    format,
+    channelCount,
     sampleRate: sampleRate ?? 0,
+    bitsPerSample,
     blockAlign: blockAlign ?? 0,
     samples
   };
 }
-function getFactoryBankCatalogValue(catalogValue) {
-  assert$2(Array.isArray(catalogValue?.tables), "Factory bank catalog must provide a tables array");
-  const catalog = catalogValue;
-  catalog.tables.forEach((table, tableIndex) => {
-    assert$2(typeof table?.tableId === "string" && table.tableId.length > 0, `Factory bank catalog table ${tableIndex} must provide tableId`);
-    assert$2(typeof table?.name === "string" && table.name.length > 0, `Factory bank catalog table ${tableIndex} must provide name`);
-    assert$2(Number.isInteger(Number(table?.frameCount)) && Number(table.frameCount) > 0, `Factory bank catalog table ${tableIndex} must provide a positive frameCount`);
-    assert$2(typeof table?.sourceWav === "string" && table.sourceWav.length > 0, `Factory bank catalog table ${tableIndex} must provide sourceWav`);
-  });
-  return catalog;
+async function fetchArrayBuffer(url) {
+  assert$3(typeof fetch === "function", `Could not fetch ${url}: global fetch is unavailable`);
+  const response = await fetch(url.toString());
+  assert$3(response.ok, `Failed to fetch resource from ${url}`);
+  return response.arrayBuffer();
 }
-function extractSourceFrames(samples, {
-  expectedFrameCount,
-  samplesPerFrame = DEFAULT_SAMPLES_PER_FRAME$1
-} = {}) {
-  assert$2(
-    samples.length % samplesPerFrame === 0,
-    `Source wavetable files must contain a whole number of ${samplesPerFrame}-sample frames`
-  );
-  const frameCount = samples.length / samplesPerFrame;
-  assert$2(frameCount > 0, "Source wavetable files must contain at least one frame");
-  if (expectedFrameCount !== void 0) {
-    assert$2(frameCount === expectedFrameCount, `Source wavetable frame count mismatch: expected ${expectedFrameCount}, got ${frameCount}`);
+function readTextFromBytes(bytes) {
+  if (typeof TextDecoder === "function") {
+    return new TextDecoder().decode(bytes);
   }
-  const frames = [];
-  for (let frameIndex = 0; frameIndex < frameCount; frameIndex += 1) {
-    const start = frameIndex * samplesPerFrame;
-    const end = start + samplesPerFrame;
-    frames.push(canonicalizeFrame$1(samples.slice(start, end)));
-  }
-  return {
-    frameCount,
-    frames
-  };
+  return String.fromCharCode(...bytes);
 }
-async function loadSourceWavetableFramesFromUrl({
-  sourceWavUrl,
-  sourceWavPath,
-  tableIndex = 0,
-  expectedFrameCount,
-  samplesPerFrame = DEFAULT_SAMPLES_PER_FRAME$1
-}) {
-  const response = await fetch(sourceWavUrl.toString());
-  assert$2(response.ok, `Failed to fetch source wavetable from ${sourceWavUrl}`);
-  const arrayBuffer = await response.arrayBuffer();
+function readAudioFromBytes(bytes) {
+  const arrayBuffer = new Uint8Array(bytes).buffer;
   const parsedWave = parseWaveFile(arrayBuffer);
-  const sourceFrames = extractSourceFrames(parsedWave.samples, {
-    expectedFrameCount,
-    samplesPerFrame
-  });
   return {
     sampleRate: parsedWave.sampleRate,
-    sampleBlobPath: sourceWavPath,
-    tableIndex,
-    frameCount: sourceFrames.frameCount,
-    samples: parsedWave.samples,
-    frames: sourceFrames.frames
+    samples: parsedWave.samples
   };
+}
+function createResourceClient(source, {
+  textPreference = "bridge",
+  audioPreference = "url"
+} = {}) {
+  const readResourcePayload = async (path) => {
+    assert$3(typeof source.readResource === "function", `Resource bridge cannot read ${path}`);
+    return source.readResource(path);
+  };
+  const readAudioBridge = async (path) => {
+    assert$3(typeof source.readResourceAsAudioData === "function", `Audio resource bridge cannot read ${path}`);
+    const audioFile = await source.readResourceAsAudioData(path);
+    return normalizeDecodedAudioFileSamples(audioFile);
+  };
+  const getExplicitResourceAddress = (path) => {
+    const resourceAddress = source.getResourceAddress?.(path);
+    return resourceAddress !== null && resourceAddress !== void 0 ? resourceAddress : null;
+  };
+  const fetchAudioFromUrl = async (path, resourceAddress = source.getResourceAddress?.(path)) => {
+    const url = resourceAddressToUrl(path, resourceAddress);
+    const arrayBuffer = await fetchArrayBuffer(url);
+    const parsedWave = parseWaveFile(arrayBuffer);
+    return {
+      sampleRate: parsedWave.sampleRate,
+      samples: parsedWave.samples
+    };
+  };
+  const fetchBytesFromUrl = async (path, resourceAddress = source.getResourceAddress?.(path)) => {
+    const url = resourceAddressToUrl(path, resourceAddress);
+    return new Uint8Array(await fetchArrayBuffer(url));
+  };
+  return {
+    async readText(path) {
+      if (textPreference === "bridge" && typeof source.readResource === "function") {
+        return decodeTextPayload(await readResourcePayload(path));
+      }
+      const explicitResourceAddress = getExplicitResourceAddress(path);
+      if (textPreference === "url" && explicitResourceAddress !== null) {
+        return readTextFromBytes(await fetchBytesFromUrl(path, explicitResourceAddress));
+      }
+      if (typeof source.readResource === "function") {
+        return decodeTextPayload(await readResourcePayload(path));
+      }
+      return readTextFromBytes(await fetchBytesFromUrl(path, explicitResourceAddress));
+    },
+    async readJSON(path) {
+      return JSON.parse(await this.readText(path));
+    },
+    async readBytes(path) {
+      if (typeof source.readResource === "function") {
+        return normalizeBytesPayload(await readResourcePayload(path));
+      }
+      return fetchBytesFromUrl(path);
+    },
+    async readAudio(path) {
+      if (audioPreference === "bridge" && typeof source.readResourceAsAudioData === "function") {
+        return readAudioBridge(path);
+      }
+      const explicitResourceAddress = getExplicitResourceAddress(path);
+      if (audioPreference === "url" && explicitResourceAddress !== null) {
+        return fetchAudioFromUrl(path, explicitResourceAddress);
+      }
+      if (typeof source.readResourceAsAudioData === "function") {
+        return readAudioBridge(path);
+      }
+      return readAudioFromBytes(await this.readBytes(path));
+    },
+    getURL(path) {
+      return resourceAddressToUrl(path, source.getResourceAddress?.(path));
+    }
+  };
+}
+function createPatchConnectionResourceClient(source) {
+  const normalizedSource = source ?? {};
+  const prefersBridgeAudio = Boolean(normalizedSource.prefersAudioResourceReadBridge);
+  return createResourceClient(normalizedSource, {
+    textPreference: "bridge",
+    audioPreference: prefersBridgeAudio ? "bridge" : "url"
+  });
+}
+function normalizeResourceClient(value) {
+  const readText = typeof value.readText === "function" ? value.readText.bind(value) : null;
+  const readJSON = typeof value.readJSON === "function" ? value.readJSON.bind(value) : null;
+  const readBytes = typeof value.readBytes === "function" ? value.readBytes.bind(value) : null;
+  const readAudio = typeof value.readAudio === "function" ? value.readAudio.bind(value) : null;
+  const getURL = typeof value.getURL === "function" ? value.getURL.bind(value) : null;
+  return {
+    async readText(path) {
+      if (readText) {
+        return readText(path);
+      }
+      if (readJSON) {
+        return JSON.stringify(await readJSON(path));
+      }
+      if (readBytes) {
+        return readTextFromBytes(await readBytes(path));
+      }
+      throw new Error(`Resource client cannot read text ${path}`);
+    },
+    async readJSON(path) {
+      if (readJSON) {
+        return readJSON(path);
+      }
+      return JSON.parse(await this.readText(path));
+    },
+    async readBytes(path) {
+      if (readBytes) {
+        return readBytes(path);
+      }
+      if (readText) {
+        return encodeTextPayload(await readText(path));
+      }
+      if (readJSON) {
+        return encodeTextPayload(JSON.stringify(await readJSON(path)));
+      }
+      throw new Error(`Resource client cannot read bytes ${path}`);
+    },
+    async readAudio(path) {
+      if (readAudio) {
+        return readAudio(path);
+      }
+      return readAudioFromBytes(await this.readBytes(path));
+    },
+    getURL(path) {
+      return getURL ? getURL(path) : null;
+    }
+  };
+}
+function isResourceClient(value) {
+  return typeof value?.readText === "function" || typeof value?.readJSON === "function" || typeof value?.readBytes === "function" || typeof value?.readAudio === "function";
+}
+function asResourceClient(value) {
+  if (isResourceClient(value)) {
+    return normalizeResourceClient(value);
+  }
+  return createPatchConnectionResourceClient(value);
+}
+const DEFAULT_SAMPLES_PER_FRAME$1 = 2048;
+function assert$2(condition, message) {
+  if (!condition) {
+    throw new Error(message);
+  }
+}
+function getFactoryBankCatalogValue(catalogValue) {
+  assert$2(
+    Array.isArray(catalogValue?.tables),
+    "Factory bank catalog must provide a tables array"
+  );
+  const catalog = catalogValue;
+  catalog.tables.forEach((table, tableIndex) => {
+    assert$2(
+      typeof table?.tableId === "string" && table.tableId.length > 0,
+      `Factory bank catalog table ${tableIndex} must provide tableId`
+    );
+    assert$2(
+      typeof table?.name === "string" && table.name.length > 0,
+      `Factory bank catalog table ${tableIndex} must provide name`
+    );
+    assert$2(
+      Number.isInteger(Number(table?.frameCount)) && Number(table.frameCount) > 0,
+      `Factory bank catalog table ${tableIndex} must provide a positive frameCount`
+    );
+    assert$2(
+      typeof table?.sourceWav === "string" && table.sourceWav.length > 0,
+      `Factory bank catalog table ${tableIndex} must provide sourceWav`
+    );
+  });
+  return catalog;
 }
 const DEFAULT_SAMPLES_PER_FRAME = 2048;
 const DEFAULT_MIP_LEVEL_COUNT = 11;
@@ -427,39 +608,8 @@ function assert(condition, message) {
 function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
-function decodeTextPayload(payload) {
-  if (typeof payload === "string") {
-    return Promise.resolve(payload);
-  }
-  if (payload && typeof payload.text === "function") {
-    return payload.text();
-  }
-  if (payload instanceof ArrayBuffer) {
-    if (typeof TextDecoder === "function") {
-      return Promise.resolve(new TextDecoder().decode(new Uint8Array(payload)));
-    }
-    return Promise.resolve(String.fromCharCode(...new Uint8Array(payload)));
-  }
-  if (ArrayBuffer.isView(payload)) {
-    const bytes = new Uint8Array(payload.buffer, payload.byteOffset, payload.byteLength);
-    if (typeof TextDecoder === "function") {
-      return Promise.resolve(new TextDecoder().decode(bytes));
-    }
-    return Promise.resolve(String.fromCharCode(...bytes));
-  }
-  if (Array.isArray(payload)) {
-    const bytes = Uint8Array.from(payload);
-    if (typeof TextDecoder === "function") {
-      return Promise.resolve(new TextDecoder().decode(bytes));
-    }
-    return Promise.resolve(String.fromCharCode(...bytes));
-  }
-  throw new Error("Unsupported text resource payload");
-}
-async function readCatalogFromConnection(connection, catalogPath) {
-  const payload = await connection.readResource?.(catalogPath);
-  assert(payload !== void 0, `Could not read wavetable catalog ${catalogPath}`);
-  return getFactoryBankCatalogValue(JSON.parse(await decodeTextPayload(payload)));
+async function readCatalogFromResourceClient(resourceClient, catalogPath) {
+  return getFactoryBankCatalogValue(await resourceClient.readJSON(catalogPath));
 }
 function normalizeRuntimeState(state) {
   return {
@@ -502,6 +652,7 @@ function getNow() {
 }
 class WavetableWorkerController {
   connection;
+  resourceClient;
   catalogPath;
   maxFramesInFlight;
   mipLevelCount;
@@ -522,6 +673,7 @@ class WavetableWorkerController {
   autoRetryConsumedKey = null;
   constructor(connection, options = {}) {
     this.connection = connection;
+    this.resourceClient = asResourceClient(options.resourceClient ?? connection);
     this.catalogPath = options.catalogPath ?? defaultCatalogPath;
     this.maxFramesInFlight = resolvePositiveIntegerOption(options.maxFramesInFlight, 1);
     this.mipLevelCount = options.mipLevelCount ?? DEFAULT_MIP_LEVEL_COUNT;
@@ -551,7 +703,7 @@ class WavetableWorkerController {
   }
   async ensureCatalogLoaded() {
     if (!this.catalog) {
-      this.catalog = await readCatalogFromConnection(this.connection, this.catalogPath);
+      this.catalog = await readCatalogFromResourceClient(this.resourceClient, this.catalogPath);
       emitWorkerLog("info", "Loaded wavetable catalog", {
         catalogPath: this.catalogPath,
         tableCount: this.catalog.tables.length
@@ -700,42 +852,20 @@ class WavetableWorkerController {
     const normalizedIndex = normalizeRequestedTableIndex(tableIndex, catalog.tables.length);
     const tableMeta = catalog.tables[normalizedIndex];
     assert(tableMeta, `Could not resolve table ${normalizedIndex}`);
-    const resourceAddress = typeof this.connection.getResourceAddress === "function" ? this.connection.getResourceAddress(tableMeta.sourceWav) : null;
-    const canLoadSourceByUrl = resourceAddress !== null && resourceAddress !== void 0 && typeof fetch === "function";
-    const canLoadSourceByAudioBridge = typeof this.connection.readResourceAsAudioData === "function";
-    assert(canLoadSourceByUrl || canLoadSourceByAudioBridge, "Patch connection cannot read wavetable source files");
     const startTime = getNow();
     emitWorkerLog("info", "Reading wavetable source", {
       tableIndex: normalizedIndex,
       tableId: tableMeta.tableId,
       tableName: tableMeta.name,
       sourceWav: tableMeta.sourceWav,
-      loaderMode: canLoadSourceByUrl ? "resource-url" : "audio-data-bridge",
+      loaderMode: "resource-client",
       expectedFrameCount: expectedFrameCount === void 0 ? Number(tableMeta.frameCount) : expectedFrameCount
     });
-    let sourceTable = null;
-    if (canLoadSourceByUrl) {
-      const sourceWavUrl = resolvePatchResourceUrl(tableMeta.sourceWav, this.connection);
-      const loadedSource = await loadSourceWavetableFramesFromUrl({
-        sourceWavUrl,
-        sourceWavPath: tableMeta.sourceWav,
-        tableIndex: normalizedIndex,
-        expectedFrameCount: expectedFrameCount === void 0 ? Number(tableMeta.frameCount) : expectedFrameCount,
-        samplesPerFrame: DEFAULT_SAMPLES_PER_FRAME$1
-      });
-      sourceTable = {
-        frameCount: loadedSource.frameCount,
-        frames: loadedSource.frames
-      };
-    } else {
-      const audioFile = await this.connection.readResourceAsAudioData?.(tableMeta.sourceWav);
-      assert(audioFile !== void 0 && audioFile !== null, `Could not decode source wavetable ${tableMeta.sourceWav}`);
-      const { samples } = normalizeDecodedAudioFileSamples(audioFile);
-      sourceTable = extractSourceFramesFromSamples(samples, {
-        expectedFrameCount: expectedFrameCount === void 0 ? Number(tableMeta.frameCount) : expectedFrameCount,
-        samplesPerFrame: DEFAULT_SAMPLES_PER_FRAME$1
-      });
-    }
+    const sourceAudio = await this.resourceClient.readAudio(tableMeta.sourceWav);
+    const sourceTable = extractSourceFramesFromSamples(sourceAudio.samples, {
+      expectedFrameCount: expectedFrameCount === void 0 ? Number(tableMeta.frameCount) : expectedFrameCount,
+      samplesPerFrame: DEFAULT_SAMPLES_PER_FRAME$1
+    });
     if (!sourceTable || token !== this.asyncStateToken) {
       return null;
     }

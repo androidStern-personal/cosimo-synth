@@ -1,3 +1,5 @@
+import { createIOSResourceClient } from "./resource-client.js";
+
 function normaliseURL(url) {
     if (typeof url !== "string") {
         return "";
@@ -165,19 +167,12 @@ function cloneInspectableValue(value) {
 }
 
 async function refreshCatalogSnapshot(patchConnection) {
+    const resourceClient = patchConnection?.resourceClient ?? createIOSResourceClient(patchConnection);
     state.catalogSnapshot = { pending: true };
     globalThis.__cosimoLatestCatalogSnapshot = state.catalogSnapshot;
 
     try {
-        const response = await fetch(patchConnection.getResourceAddress("assets/factory-bank-catalog.json"), {
-            cache: "no-store",
-        });
-
-        if (!response.ok) {
-            throw new Error(`Could not load the runtime catalog: ${response.status}`);
-        }
-
-        const catalog = await response.json();
+        const catalog = await resourceClient.readJSON("assets/factory-bank-catalog.json");
         const tables = Array.isArray(catalog?.tables) ? catalog.tables : [];
         const firstTable = tables[0] ?? {};
         let firstTableAudioSampleRate = null;
@@ -185,18 +180,13 @@ async function refreshCatalogSnapshot(patchConnection) {
         let firstTableAudioError = "";
 
         if (
-            typeof patchConnection?.readResourceAsAudioData === "function" &&
             typeof firstTable.sourceWav === "string" &&
             firstTable.sourceWav.length > 0
         ) {
             try {
-                const audioFile = await patchConnection.readResourceAsAudioData(firstTable.sourceWav);
-                const frames = Array.isArray(audioFile?.frames) || ArrayBuffer.isView(audioFile?.frames)
-                    ? Array.from(audioFile.frames)
-                    : [];
-
+                const audioFile = await resourceClient.readAudio(firstTable.sourceWav);
                 firstTableAudioSampleRate = Number(audioFile?.sampleRate) || 0;
-                firstTableAudioFrameCount = frames.length;
+                firstTableAudioFrameCount = audioFile?.samples?.length ?? 0;
             } catch (error) {
                 firstTableAudioError = error?.stack || error?.message || String(error);
             }
@@ -230,6 +220,7 @@ async function initialisePatch() {
     const runtimeModules = await importRuntimeModules(state.runtimeState);
     const EmbeddedPatchConnection = createEmbeddedPatchConnectionClass(runtimeModules.PatchConnection, state.runtimeState);
     const patchConnection = new EmbeddedPatchConnection();
+    patchConnection.resourceClient = createIOSResourceClient(patchConnection);
     globalThis.__cosimoPatchConnection = patchConnection;
 
     if (typeof patchConnection.addEndpointListener === "function") {

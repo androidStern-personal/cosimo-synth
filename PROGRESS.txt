@@ -212,6 +212,7 @@ Host smoke and iPhone wavetable resource follow-up landed on 2026-03-31
   - the worker and display loaders now prefer the resolved resource URL for source WAV files and only fall back to the audio-data bridge when no fetchable URL exists
   - the custom `cosimo://bundle/...` URL handler now serves raw bytes for binary resources instead of corrupting `.wav` files through `loadFileAsString()`
   - `BS2 - Acid.wav` now loads correctly from the installed factory library on the physical iPhone
+  - DO NOT BREAK THIS AGAIN: `BS2 - Acid.wav` is the canary for the iPhone source-WAV path. The failure is not "the table is too big." The failure happens when someone routes iPhone source WAV files through `readResourceAsAudioData()` first instead of using the resolved `getResourceAddress(...)` URL first. The required rule is simple and non-negotiable: use the native bridge for catalog JSON text, but use URL-first loading for source WAV files and only fall back to the audio-data bridge when no fetchable URL exists. Any adapter or refactor that turns `prefersResourceReadBridge` into "force all WAVs through the bridge" is reintroducing this exact regression.
 - Cleanup after the iPhone regression hunt:
   - removed the one-off `COSIMO_EDITOR_TEST_AUDIO_SNAPSHOT_PATH` runtime hook and its `resourceAudio` inspection payload
   - the shared-library regression test now uses the normal catalog snapshot path by overriding the first installed table to `assets/factory_sources/imported/BS2 - Acid.wav`

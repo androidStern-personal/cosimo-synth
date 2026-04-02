@@ -1,7 +1,11 @@
 import {
-    loadFactoryBankCatalogFromPatch,
-    loadFactoryBankFramesFromPatch,
+    loadFactoryBankCatalog,
+    loadFactoryBankFrames,
 } from "./wavetable-bank.js";
+import {
+    createPatchConnectionResourceClient,
+    createDesktopResourceClient,
+} from "./resource-client.js";
 import { MsegController } from "./mseg-controller.js";
 import {
     MSEG_EDITOR_HORIZONTAL_PADDING_PX,
@@ -1202,6 +1206,9 @@ export class CosimoSynthView extends HTMLElement {
 
         this.patchConnection = patchConnection;
         this.options = { platform: "desktop", ...options };
+        this.resourceClient = this.options.resourceClient
+            ?? this.patchConnection.resourceClient
+            ?? createPatchConnectionResourceClient(this.patchConnection);
         this.currentValue = knobDefault;
         this.currentDisplayPosition = knobDefault;
         this.currentTableIndex = 0;
@@ -1704,7 +1711,7 @@ export class CosimoSynthView extends HTMLElement {
             return this.factoryBankCatalog;
         }
 
-        this.factoryBankCatalog = await loadFactoryBankCatalogFromPatch(this.patchConnection);
+        this.factoryBankCatalog = await loadFactoryBankCatalog(this.resourceClient);
         this.populateTableSelector();
         this.updateBankReadout();
         this.updateFrameReadouts();
@@ -1935,7 +1942,7 @@ export class CosimoSynthView extends HTMLElement {
             this.setDisplayState("loading", "Loading wavetable bank…");
         }
 
-        const request = loadFactoryBankFramesFromPatch(this.patchConnection, { tableIndex })
+        const request = loadFactoryBankFrames(this.resourceClient, { tableIndex })
             .then((bank) => {
                 this.displayFramesCache.set(tableIndex, bank);
                 return bank;
@@ -4180,5 +4187,7 @@ export function createPatchViewWithOptions(patchConnection, options = {}) {
 }
 
 export default function createPatchView(patchConnection) {
-    return createPatchViewWithOptions(patchConnection);
+    return createPatchViewWithOptions(patchConnection, {
+        resourceClient: createDesktopResourceClient(patchConnection),
+    });
 }

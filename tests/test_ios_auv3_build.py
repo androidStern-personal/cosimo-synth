@@ -860,15 +860,30 @@ def test_ios_auv3_xcode_project_script_generates_an_xcode_project(tmp_path: Path
         target["name"]: target_id
         for target_id, target in project_json["objects"].items()
         if target.get("isa") == "PBXNativeTarget"
-        and target.get("name") in {"CosimoSynth_AUv3", "CosimoSynth_Standalone"}
+        and target.get("name") in {"CosimoSynth_AUv3", "CosimoSynth_Standalone", "CosimoSynthHost"}
     }
 
+    assert set(target_names) == {"CosimoSynth_AUv3", "CosimoSynth_Standalone", "CosimoSynthHost"}
+
     for target_name, target_id in target_names.items():
-        target_attributes_entry = target_attributes[target_id]
-        assert target_attributes_entry["ProvisioningStyle"] == "Automatic", target_name
-        assert (
-            target_attributes_entry["SystemCapabilities"]["com.apple.ApplicationGroups.iOS"]["enabled"] == 1
-        ), target_name
+        if target_name != "CosimoSynthHost":
+            target_attributes_entry = target_attributes[target_id]
+            assert target_attributes_entry["ProvisioningStyle"] == "Automatic", target_name
+            assert (
+                target_attributes_entry["SystemCapabilities"]["com.apple.ApplicationGroups.iOS"]["enabled"] == 1
+            ), target_name
+        else:
+            assert target_id not in target_attributes
+
+        config_list_id = project_json["objects"][target_id]["buildConfigurationList"]
+        config_ids = project_json["objects"][config_list_id]["buildConfigurations"]
+
+        for config_id in config_ids:
+            build_settings = project_json["objects"][config_id]["buildSettings"]
+            assert build_settings["IPHONEOS_DEPLOYMENT_TARGET"] == "18.0", (
+                target_name,
+                project_json["objects"][config_id]["name"],
+            )
 
 
 def test_ios_factory_library_zip_script_preserves_the_runtime_layout(tmp_path: Path) -> None:

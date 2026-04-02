@@ -7,9 +7,12 @@ import { pathToFileURL } from "node:url";
 import {
     parseWaveFile,
     getFactoryBankCatalogValue,
+    loadFactoryBankCatalog,
+    loadFactoryBankFrames,
     loadFactoryBankCatalogFromPatch,
     loadFactoryBankFramesFromPatch,
 } from "../patch_gui/wavetable-bank.mjs";
+import { createIOSResourceClient } from "../patch_gui/resource-client.js";
 import {
     DEFAULT_WAVETABLE_THEME,
     createFrameState,
@@ -488,6 +491,191 @@ test("bank loading resolves the selected source wavetable from the runtime catal
     assert.deepEqual(requestedPaths, ["assets/factory-bank-catalog.json", sourceWavPath]);
 });
 
+test("explicit resource client loads the selected source wavetable without raw patch connection resource helpers", async () => {
+    const catalog = getFactoryBankCatalogValue(
+        JSON.parse(await fs.readFile(path.join(repoRoot, "assets", "factory-bank-catalog.json"), "utf8"))
+    );
+    const selectedTable = catalog.tables[1];
+    const sourceWavBytes = await fs.readFile(path.join(repoRoot, selectedTable.sourceWav));
+    const parsedWave = parseWaveFile(
+        sourceWavBytes.buffer.slice(
+            sourceWavBytes.byteOffset,
+            sourceWavBytes.byteOffset + sourceWavBytes.byteLength
+        )
+    );
+    const requestedCatalogPaths = [];
+    const requestedAudioPaths = [];
+    const resourceClient = {
+        async readJSON(requestedPath) {
+            requestedCatalogPaths.push(requestedPath);
+            assert.equal(requestedPath, "assets/factory-bank-catalog.json");
+            return catalog;
+        },
+        async readAudio(requestedPath) {
+            requestedAudioPaths.push(requestedPath);
+            assert.equal(requestedPath, selectedTable.sourceWav);
+            return {
+                sampleRate: parsedWave.sampleRate,
+                samples: parsedWave.samples,
+            };
+        },
+    };
+
+    const loadedCatalog = await loadFactoryBankCatalog(resourceClient);
+    const bank = await loadFactoryBankFrames(resourceClient, { tableIndex: 1 });
+
+    assert.equal(loadedCatalog.tables[1]?.tableId, selectedTable.tableId);
+    assert.equal(bank.sampleRate, parsedWave.sampleRate);
+    assert.equal(bank.frameCount, Number(selectedTable.frameCount));
+    assert.equal(bank.sampleBlobPath, selectedTable.sourceWav);
+    assert.deepEqual(requestedCatalogPaths, [
+        "assets/factory-bank-catalog.json",
+        "assets/factory-bank-catalog.json",
+    ]);
+    assert.deepEqual(requestedAudioPaths, [selectedTable.sourceWav]);
+});
+
+test("byte-only resource clients are treated as resource clients instead of falling back to patch helpers", async () => {
+    const catalog = getFactoryBankCatalogValue(
+        JSON.parse(await fs.readFile(path.join(repoRoot, "assets", "factory-bank-catalog.json"), "utf8"))
+    );
+    const requestedPaths = [];
+    const resourceClient = {
+        async readBytes(requestedPath) {
+            requestedPaths.push(requestedPath);
+            assert.equal(requestedPath, "assets/factory-bank-catalog.json");
+            return Buffer.from(JSON.stringify(catalog), "utf8");
+        },
+    };
+
+    const loadedCatalog = await loadFactoryBankCatalog(resourceClient);
+
+    assert.equal(loadedCatalog.tables[0]?.tableId, catalog.tables[0]?.tableId);
+    assert.deepEqual(requestedPaths, ["assets/factory-bank-catalog.json"]);
+});
+
+test("iPhone resource client reads catalog JSON through the native bridge and source audio through the resolved URL", async () => {
+    const catalog = getFactoryBankCatalogValue(
+        JSON.parse(await fs.readFile(path.join(repoRoot, "assets", "factory-bank-catalog.json"), "utf8"))
+    );
+    const selectedTable = catalog.tables[1];
+    const sourceWavBytes = await fs.readFile(path.join(repoRoot, selectedTable.sourceWav));
+    const parsedWave = parseWaveFile(
+        sourceWavBytes.buffer.slice(
+            sourceWavBytes.byteOffset,
+            sourceWavBytes.byteOffset + sourceWavBytes.byteLength
+        )
+    );
+    const requestedCatalogPaths = [];
+    const requestedAudioPaths = [];
+    const requestedUrlPaths = [];
+    const fetchedUrls = [];
+    const patchConnection = {
+        prefersResourceReadBridge: true,
+        async readResource(requestedPath) {
+            requestedCatalogPaths.push(requestedPath);
+            assert.equal(requestedPath, "assets/factory-bank-catalog.json");
+            return JSON.stringify(catalog);
+        },
+        async readResourceAsAudioData(requestedPath) {
+            requestedAudioPaths.push(requestedPath);
+            assert.equal(requestedPath, selectedTable.sourceWav);
+            throw new Error(`The iPhone resource client should not use the audio bridge for ${requestedPath}`);
+        },
+        getResourceAddress(requestedPath) {
+            requestedUrlPaths.push(requestedPath);
+            return new URL(requestedPath, "https://example.test/bundle/");
+        },
+    };
+    const resourceClient = createIOSResourceClient(patchConnection);
+
+    const loadedCatalog = await loadFactoryBankCatalog(resourceClient);
+    const bank = await withPatchedFetch(async (url) => {
+        fetchedUrls.push(String(url));
+
+        return {
+            ok: true,
+            async arrayBuffer() {
+                return sourceWavBytes.buffer.slice(
+                    sourceWavBytes.byteOffset,
+                    sourceWavBytes.byteOffset + sourceWavBytes.byteLength
+                );
+            },
+        };
+    }, async () => loadFactoryBankFrames(resourceClient, { tableIndex: 1 }));
+
+    assert.equal(loadedCatalog.tables[1]?.tableId, selectedTable.tableId);
+    assert.equal(bank.sampleRate, parsedWave.sampleRate);
+    assert.equal(bank.frameCount, Number(selectedTable.frameCount));
+    assert.equal(bank.sampleBlobPath, selectedTable.sourceWav);
+    assert.equal(bank.frames[0]?.length, 2048);
+    assert.equal(bank.samples.length, bank.frameCount * 2048);
+    assert.deepEqual(requestedCatalogPaths, [
+        "assets/factory-bank-catalog.json",
+        "assets/factory-bank-catalog.json",
+    ]);
+    assert.deepEqual(requestedAudioPaths, []);
+    assert.deepEqual(requestedUrlPaths, [selectedTable.sourceWav]);
+    assert.deepEqual(fetchedUrls, [
+        `https://example.test/bundle/${selectedTable.sourceWav}`,
+    ]);
+});
+
+test("iPhone resource client falls back to the native audio bridge when no resource URL is available", async () => {
+    const catalog = getFactoryBankCatalogValue(
+        JSON.parse(await fs.readFile(path.join(repoRoot, "assets", "factory-bank-catalog.json"), "utf8"))
+    );
+    const selectedTable = catalog.tables[1];
+    const sourceWavBytes = await fs.readFile(path.join(repoRoot, selectedTable.sourceWav));
+    const parsedWave = parseWaveFile(
+        sourceWavBytes.buffer.slice(
+            sourceWavBytes.byteOffset,
+            sourceWavBytes.byteOffset + sourceWavBytes.byteLength
+        )
+    );
+    const requestedCatalogPaths = [];
+    const requestedAudioPaths = [];
+    const requestedUrlPaths = [];
+    const patchConnection = {
+        prefersResourceReadBridge: true,
+        async readResource(requestedPath) {
+            requestedCatalogPaths.push(requestedPath);
+            assert.equal(requestedPath, "assets/factory-bank-catalog.json");
+            return JSON.stringify(catalog);
+        },
+        async readResourceAsAudioData(requestedPath) {
+            requestedAudioPaths.push(requestedPath);
+            assert.equal(requestedPath, selectedTable.sourceWav);
+
+            return {
+                sampleRate: parsedWave.sampleRate,
+                frames: Array.from(parsedWave.samples),
+            };
+        },
+        getResourceAddress(requestedPath) {
+            requestedUrlPaths.push(requestedPath);
+            return null;
+        },
+    };
+    const resourceClient = createIOSResourceClient(patchConnection);
+
+    const loadedCatalog = await loadFactoryBankCatalog(resourceClient);
+    const bank = await loadFactoryBankFrames(resourceClient, { tableIndex: 1 });
+
+    assert.equal(loadedCatalog.tables[1]?.tableId, selectedTable.tableId);
+    assert.equal(bank.sampleRate, parsedWave.sampleRate);
+    assert.equal(bank.frameCount, Number(selectedTable.frameCount));
+    assert.equal(bank.sampleBlobPath, selectedTable.sourceWav);
+    assert.equal(bank.frames[0]?.length, 2048);
+    assert.equal(bank.samples.length, bank.frameCount * 2048);
+    assert.deepEqual(requestedCatalogPaths, [
+        "assets/factory-bank-catalog.json",
+        "assets/factory-bank-catalog.json",
+    ]);
+    assert.deepEqual(requestedAudioPaths, [selectedTable.sourceWav]);
+    assert.deepEqual(requestedUrlPaths, [selectedTable.sourceWav]);
+});
+
 test("bank loading prefers the resolved resource URL for factory wavetable source paths when both loader paths are available", async () => {
     const spacedPath = "assets/factory_sources/imported/BS2 - Acid.wav";
     const fullCatalog = getFactoryBankCatalogValue(
@@ -920,7 +1108,7 @@ test("iPhone layout applies the safe-area gutter at the root so both the main vi
     const html = view.getIOSHTML();
 
     assert.match(html, /:host\s*\{[\s\S]*box-sizing:\s*border-box;/);
-    assert.match(html, /--cosimo-ios-top-inset:\s*50px;/);
+    assert.match(html, /--cosimo-ios-top-inset:\s*0px;/);
     assert.match(html, /--cosimo-ios-bottom-inset:\s*0px;/);
     assert.match(html, /--cosimo-ios-safe-top:\s*calc\(env\(safe-area-inset-top\)\s*\+\s*var\(--cosimo-ios-top-inset\)\);/);
     assert.match(html, /--cosimo-ios-safe-bottom:\s*calc\(env\(safe-area-inset-bottom\)\s*\+\s*var\(--cosimo-ios-bottom-inset\)\);/);

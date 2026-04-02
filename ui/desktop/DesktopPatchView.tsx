@@ -14,8 +14,10 @@ import {
     PatchConnectionProvider,
     usePatchConnection,
     usePatchEndpoint,
+    useResourceClient,
     type PatchConnectionLike,
 } from "../shared/cmajor-react";
+import type { ResourceClient } from "../shared/resource-client";
 import {
     usePatchEventTrigger,
     usePatchParameterBinding,
@@ -50,7 +52,9 @@ import {
 } from "../shared/mseg";
 import { MsegController } from "../shared/mseg-controller";
 import {
+    loadFactoryBankCatalog,
     loadFactoryBankCatalogFromPatch,
+    loadFactoryBankFrames,
     loadFactoryBankFramesFromPatch,
     type FactoryBankCatalog,
 } from "../shared/wavetable-bank";
@@ -297,7 +301,7 @@ function useResizeObserver<TElement extends Element>(ref: RefObject<TElement | n
 }
 
 function useFactoryBankCatalog(): CatalogLoadState {
-    const patchConnection = usePatchConnection();
+    const resourceClient = useResourceClient();
     const [state, setState] = useState<CatalogLoadState>({
         catalog: null,
         error: null,
@@ -306,7 +310,7 @@ function useFactoryBankCatalog(): CatalogLoadState {
     useEffect(() => {
         let cancelled = false;
 
-        void loadFactoryBankCatalogFromPatch(patchConnection)
+        void loadFactoryBankCatalog(resourceClient)
             .then((catalog) => {
                 if (!cancelled) {
                     setState({
@@ -327,13 +331,13 @@ function useFactoryBankCatalog(): CatalogLoadState {
         return () => {
             cancelled = true;
         };
-    }, [patchConnection]);
+    }, [resourceClient]);
 
     return state;
 }
 
 function useFactoryTableFrames(tableIndex: number): FrameLoadState {
-    const patchConnection = usePatchConnection();
+    const resourceClient = useResourceClient();
     const [state, setState] = useState<FrameLoadState>({
         frames: null,
         error: null,
@@ -342,7 +346,7 @@ function useFactoryTableFrames(tableIndex: number): FrameLoadState {
     useEffect(() => {
         let cancelled = false;
 
-        void loadFactoryBankFramesFromPatch(patchConnection, { tableIndex })
+        void loadFactoryBankFrames(resourceClient, { tableIndex })
             .then((nextFrames) => {
                 if (!cancelled) {
                     setState({
@@ -363,7 +367,7 @@ function useFactoryTableFrames(tableIndex: number): FrameLoadState {
         return () => {
             cancelled = true;
         };
-    }, [patchConnection, tableIndex]);
+    }, [resourceClient, tableIndex]);
 
     return state;
 }
@@ -1900,9 +1904,15 @@ function DesktopPatchViewBody() {
     );
 }
 
-export function DesktopPatchView({ patchConnection }: { patchConnection: PatchConnectionLike }) {
+export function DesktopPatchView({
+    patchConnection,
+    resourceClient,
+}: {
+    patchConnection: PatchConnectionLike;
+    resourceClient?: ResourceClient;
+}) {
     return (
-        <PatchConnectionProvider patchConnection={patchConnection}>
+        <PatchConnectionProvider patchConnection={patchConnection} resourceClient={resourceClient}>
             <DesktopPatchViewBody />
         </PatchConnectionProvider>
     );
