@@ -79,4 +79,5 @@ async function runBuild(configRelativePath) {
 
 await emitGeneratedPatchGuiModule("ui/shared/resource-client.ts", "patch_gui/resource-client.js");
 await runBuild("./vite.desktop.config.mjs");
+await runBuild("./vite.ios.config.mjs");
 await runBuild("./vite.worker.config.mjs");

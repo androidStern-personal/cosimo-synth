@@ -7,6 +7,7 @@ import { NexusNumberField, setNexusNumberConstructorForTests, type NexusNumberWi
 import {
     EditableMsegSurface,
     KeyboardSectionShell,
+    MsegPreview,
     MsegOverviewSection,
     VoiceGlideControlSurface,
     VoiceModeToolbar,
@@ -62,6 +63,25 @@ function waitForMicrotask() {
     return new Promise<void>((resolve) => {
         queueMicrotask(() => resolve());
     });
+}
+
+function readCurvePointsFromPath(pathElement: SVGPathElement | null, maxPoints = 48) {
+    if (!(pathElement instanceof SVGPathElement)) {
+        return [];
+    }
+
+    const d = pathElement.getAttribute("d") ?? "";
+    const matches = d.match(/-?\d+(?:\.\d+)?/g) ?? [];
+    const points: Array<{ x: number; y: number }> = [];
+
+    for (let index = 0; index + 1 < matches.length && points.length < maxPoints; index += 2) {
+        points.push({
+            x: Number(matches[index]),
+            y: Number(matches[index + 1]),
+        });
+    }
+
+    return points;
 }
 
 function cloneValue<TValue>(value: TValue): TValue {
@@ -872,6 +892,8 @@ export async function installStagePositionDragHookHarness(target: HTMLElement) {
 export async function installMsegEditorInteractionsHookHarness(target: HTMLElement) {
     const actionLog: Array<{ type: string; pointIndex?: number; x?: number; y?: number }> = [];
     let setMsegStateState: ((updater: (previousState: MsegState) => MsegState) => void) | null = null;
+    let setOrientationState: ((nextValue: "horizontal" | "vertical") => void) | null = null;
+    let currentOrientation: "horizontal" | "vertical" = "horizontal";
     let currentMsegState: MsegState = {
         shape: addMsegPoint(createDefaultMsegShape("Harness"), 0.5, 0.35),
         playback: createDefaultMsegPlayback(),
@@ -881,10 +903,13 @@ export async function installMsegEditorInteractionsHookHarness(target: HTMLEleme
     const mounted = mountHarness(target, (root) => {
         function Harness() {
             const [msegState, setMsegState] = useState<MsegState>(currentMsegState);
+            const [orientation, setOrientation] = useState<"horizontal" | "vertical">("horizontal");
             setMsegStateState = (updater) => setMsegState((previousState) => updater(previousState));
+            setOrientationState = setOrientation;
             const currentStateRef = useRef(msegState);
             currentStateRef.current = msegState;
             currentMsegState = msegState;
+            currentOrientation = orientation;
             const surfaceRef = useRef<SVGSVGElement | null>(null);
             const controllerRef = useRef({
                 addPoint(x: number, y: number) {
@@ -924,6 +949,7 @@ export async function installMsegEditorInteractionsHookHarness(target: HTMLEleme
                 msegState,
                 msegController: controllerRef,
                 surfaceRef,
+                orientation,
             });
 
             useEffect(() => {
@@ -986,9 +1012,15 @@ export async function installMsegEditorInteractionsHookHarness(target: HTMLEleme
             }));
             await waitForMicrotask();
         },
+        async setOrientation(nextValue: "horizontal" | "vertical") {
+            setOrientationState?.(nextValue);
+            await waitForMicrotask();
+        },
         getPointCoordinates(pointIndex: number) {
             const point = currentMsegState.shape.points[pointIndex];
-            const localCoordinates = pointToMsegEditorCoordinates(point, 320, 180);
+            const localCoordinates = pointToMsegEditorCoordinates(point, 320, 180, {
+                orientation: currentOrientation,
+            });
             const surface = document.getElementById("mseg-surface");
             const bounds = surface?.getBoundingClientRect();
 
@@ -998,7 +1030,9 @@ export async function installMsegEditorInteractionsHookHarness(target: HTMLEleme
             };
         },
         getNormalizedCoordinates(x: number, y: number) {
-            const localCoordinates = pointToMsegEditorCoordinates({ x, y }, 320, 180);
+            const localCoordinates = pointToMsegEditorCoordinates({ x, y }, 320, 180, {
+                orientation: currentOrientation,
+            });
             const surface = document.getElementById("mseg-surface");
             const bounds = surface?.getBoundingClientRect();
 
@@ -1019,6 +1053,7 @@ export async function installMsegEditorInteractionsHookHarness(target: HTMLEleme
                 pointCount: Number(pointCountText) || 0,
                 actionLog: cloneValue(actionLog),
                 points: cloneValue(currentMsegState.shape.points),
+                orientation: currentOrientation,
             };
         },
         async unmount() {
@@ -1345,6 +1380,76 @@ export async function installSharedEditableMsegSurfaceHarness(target: HTMLElemen
                 circleCount: circles.length,
                 radii: circles.map((circle) => circle.getAttribute("r")),
                 surfaceClassName: document.querySelector("svg")?.className.baseVal ?? null,
+            };
+        },
+        async unmount() {
+            mounted.unmount();
+            await waitForMicrotask();
+        },
+    };
+
+    await waitForMicrotask();
+}
+
+export async function installSharedMsegOrientationHarness(target: HTMLElement) {
+    const points = [
+        { x: 0, y: 0, curvePower: 0 },
+        { x: 0.18, y: 0.82, curvePower: 0 },
+        { x: 0.72, y: 0.35, curvePower: 0 },
+        { x: 1, y: 1, curvePower: 0 },
+    ];
+    let setOrientationState: ((nextValue: "horizontal" | "vertical") => void) | null = null;
+
+    const mounted = mountHarness(target, (root) => {
+        function Harness() {
+            const [orientation, setOrientation] = useState<"horizontal" | "vertical">("horizontal");
+            const surfaceRef = useRef<SVGSVGElement | null>(null);
+            setOrientationState = setOrientation;
+
+            return (
+                <div className="grid gap-4">
+                    <div data-testid="preview" style={{ width: "320px", height: "128px" }}>
+                        <MsegPreview
+                            points={points}
+                            orientation={orientation}
+                            className="h-full w-full overflow-hidden rounded-[20px] bg-white/[0.03]"
+                        />
+                    </div>
+                    <EditableMsegSurface
+                        surfaceRef={surfaceRef}
+                        orientation={orientation}
+                        points={points}
+                        selectedPointIndex={1}
+                        onPointerDown={() => {}}
+                        onPointerMove={() => {}}
+                        onPointerUp={() => {}}
+                        className="h-[180px]"
+                        dataRole="shared-mseg-orientation-surface"
+                    />
+                </div>
+            );
+        }
+
+        root.render(<Harness />);
+    });
+
+    window.__COSIMO_DESKTOP_MODULE_HARNESS__ = {
+        async setOrientation(nextValue: "horizontal" | "vertical") {
+            setOrientationState?.(nextValue);
+            await waitForMicrotask();
+        },
+        getSnapshot() {
+            const previewPath = document.querySelector('[data-testid="preview"] .cosimo-curve-line') as SVGPathElement | null;
+            const circles = Array.from(
+                document.querySelectorAll('[data-role="shared-mseg-orientation-surface"] circle'),
+            );
+
+            return {
+                previewCurvePoints: readCurvePointsFromPath(previewPath),
+                editorCircleCenters: circles.map((circle) => ({
+                    cx: Number(circle.getAttribute("cx")),
+                    cy: Number(circle.getAttribute("cy")),
+                })),
             };
         },
         async unmount() {

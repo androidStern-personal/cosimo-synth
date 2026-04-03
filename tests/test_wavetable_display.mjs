@@ -370,6 +370,18 @@ function findFirstHTMLNode(node, predicate) {
     return null;
 }
 
+function findAllHTMLNodes(node, predicate, matches = []) {
+    if (predicate(node)) {
+        matches.push(node);
+    }
+
+    for (const child of node.children) {
+        findAllHTMLNodes(child, predicate, matches);
+    }
+
+    return matches;
+}
+
 function hasAncestorHTMLNode(node, predicate) {
     let current = node?.parent ?? null;
 
@@ -1102,18 +1114,22 @@ test("view can open and close the reusable mseg modal without touching the keybo
     assert.equal(toggledAttributes.get("mseg-modal-open"), false);
 });
 
-test("iPhone layout applies the safe-area gutter at the root so both the main view and keyboard footer inherit it", async () => {
+test("iPhone HTML template includes the safe-area gutter CSS at the root so the main view and keyboard footer can inherit it", async () => {
     const { CosimoSynthView } = await loadPatchViewModule();
     const view = Object.create(CosimoSynthView.prototype);
     const html = view.getIOSHTML();
 
     assert.match(html, /:host\s*\{[\s\S]*box-sizing:\s*border-box;/);
     assert.match(html, /--cosimo-ios-top-inset:\s*0px;/);
+    assert.match(html, /--cosimo-ios-right-inset:\s*0px;/);
     assert.match(html, /--cosimo-ios-bottom-inset:\s*0px;/);
+    assert.match(html, /--cosimo-ios-left-inset:\s*0px;/);
     assert.match(html, /--cosimo-ios-safe-top:\s*calc\(env\(safe-area-inset-top\)\s*\+\s*var\(--cosimo-ios-top-inset\)\);/);
+    assert.match(html, /--cosimo-ios-safe-right:\s*calc\(env\(safe-area-inset-right\)\s*\+\s*var\(--cosimo-ios-right-inset\)\);/);
     assert.match(html, /--cosimo-ios-safe-bottom:\s*calc\(env\(safe-area-inset-bottom\)\s*\+\s*var\(--cosimo-ios-bottom-inset\)\);/);
+    assert.match(html, /--cosimo-ios-safe-left:\s*calc\(env\(safe-area-inset-left\)\s*\+\s*var\(--cosimo-ios-left-inset\)\);/);
     assert.match(html, /\.ios-shell\s*\{[\s\S]*box-sizing:\s*border-box;/);
-    assert.match(html, /\.ios-shell\s*\{[\s\S]*padding:\s*var\(--cosimo-ios-safe-top\)\s*env\(safe-area-inset-right\)\s*var\(--cosimo-ios-safe-bottom\)\s*env\(safe-area-inset-left\);/);
+    assert.match(html, /\.ios-shell\s*\{[\s\S]*padding:\s*var\(--cosimo-ios-safe-top\)\s*var\(--cosimo-ios-safe-right\)\s*var\(--cosimo-ios-safe-bottom\)\s*var\(--cosimo-ios-safe-left\);/);
     assert.match(html, /class="ios-main-view"/);
     assert.match(html, /\.ios-top-row\s*\{[\s\S]*overflow:\s*hidden;/);
     assert.match(html, /\.ios-top-row\s*\{[\s\S]*display:\s*grid;/);
@@ -1150,7 +1166,7 @@ test("iPhone layout applies the safe-area gutter at the root so both the main vi
     assert.match(html, /class="mseg-rate-slider"[\s\S]*aria-label="MSEG time in seconds"/);
 });
 
-test("iPhone MSEG modal stays outside the hidden main view and the keyboard footer stays in the shell footer row", async () => {
+test("iPhone HTML template keeps the MSEG modal outside the hidden main view and the keyboard footer in the shell footer row", async () => {
     const { CosimoSynthView } = await loadPatchViewModule();
     const view = Object.create(CosimoSynthView.prototype);
     const tree = parseHTMLTree(view.getIOSHTML());
@@ -1184,6 +1200,111 @@ test("iPhone MSEG modal stays outside the hidden main view and the keyboard foot
     assert.equal(hasAncestorHTMLNode(modalLayer, (node) => node === mainView), false);
     assert.equal(footer.parent, shell);
     assert.equal(hasAncestorHTMLNode(footer, (node) => node === topRow), false);
+});
+
+test("iPhone HTML template keeps the overlay picker, retry button, gesture hint, and double-canvas display stack inside the stage", async () => {
+    const { CosimoSynthView } = await loadPatchViewModule();
+    const view = Object.create(CosimoSynthView.prototype);
+    const tree = parseHTMLTree(view.getIOSHTML());
+    const stage = findFirstHTMLNode(
+        tree,
+        (node) => node.classList.includes("wavetable-stage")
+    );
+    const stageCopy = findFirstHTMLNode(
+        stage,
+        (node) => node.classList.includes("stage-copy")
+    );
+    const displayStack = findFirstHTMLNode(
+        stage,
+        (node) => node.classList.includes("wavetable-display-stack")
+    );
+    const layers = findAllHTMLNodes(
+        stage,
+        (node) => node.classList.includes("wavetable-layer")
+    );
+    const displayOverlay = findFirstHTMLNode(
+        stage,
+        (node) => node.classList.includes("display-overlay")
+    );
+    const tableSelect = findFirstHTMLNode(
+        stage,
+        (node) => node.classList.includes("table-select-overlay")
+    );
+    const retryButton = findFirstHTMLNode(
+        stage,
+        (node) => node.classList.includes("table-retry-button")
+    );
+    const gestureHint = findFirstHTMLNode(
+        stage,
+        (node) => node.attributes["data-role"] === "stage-gesture-hint"
+    );
+    const heroFrameReadout = findFirstHTMLNode(
+        stage,
+        (node) => node.attributes["data-role"] === "hero-frame-readout"
+    );
+
+    assert.ok(stage);
+    assert.ok(stageCopy);
+    assert.ok(displayStack);
+    assert.equal(layers.length, 2);
+    assert.ok(displayOverlay);
+    assert.ok(tableSelect);
+    assert.ok(retryButton);
+    assert.ok(gestureHint);
+    assert.ok(heroFrameReadout);
+    assert.equal(hasAncestorHTMLNode(tableSelect, (node) => node === stageCopy), true);
+    assert.equal(hasAncestorHTMLNode(retryButton, (node) => node === stageCopy), true);
+    assert.equal(hasAncestorHTMLNode(gestureHint, (node) => node === stageCopy), true);
+    assert.equal(gestureHint.parent, retryButton.parent);
+    assert.equal(tableSelect.attributes["aria-label"], "Select wavetable");
+    assert.equal(retryButton.tagName, "button");
+    assert.equal(retryButton.attributes.hidden, "");
+});
+
+test("iPhone HTML template keeps the play controls and octave toolbar in the scroll content while the piano stays in the footer", async () => {
+    const { CosimoSynthView } = await loadPatchViewModule();
+    const view = Object.create(CosimoSynthView.prototype);
+    const tree = parseHTMLTree(view.getIOSHTML());
+    const iosContent = findFirstHTMLNode(
+        tree,
+        (node) => node.classList.includes("ios-content")
+    );
+    const keyboardFooter = findFirstHTMLNode(
+        tree,
+        (node) => node.classList.includes("keyboard-footer")
+    );
+    const keyboardToolbar = findFirstHTMLNode(
+        tree,
+        (node) => node.classList.includes("keyboard-toolbar")
+    );
+    const keyboardHost = findFirstHTMLNode(
+        tree,
+        (node) => node.classList.includes("keyboard-host")
+    );
+    const playModeSelect = findFirstHTMLNode(
+        tree,
+        (node) => node.classList.includes("play-mode-select")
+    );
+    const glideSlider = findFirstHTMLNode(
+        tree,
+        (node) => node.classList.includes("glide-time-slider")
+    );
+
+    assert.ok(iosContent);
+    assert.ok(keyboardFooter);
+    assert.ok(keyboardToolbar);
+    assert.ok(keyboardHost);
+    assert.ok(playModeSelect);
+    assert.ok(glideSlider);
+    assert.equal(hasAncestorHTMLNode(playModeSelect, (node) => node === iosContent), true);
+    assert.equal(hasAncestorHTMLNode(glideSlider, (node) => node === iosContent), true);
+    assert.equal(hasAncestorHTMLNode(keyboardToolbar, (node) => node === iosContent), true);
+    assert.equal(hasAncestorHTMLNode(keyboardToolbar, (node) => node === keyboardFooter), false);
+    assert.equal(keyboardHost.parent, keyboardFooter);
+    assert.equal(hasAncestorHTMLNode(keyboardHost, (node) => node === iosContent), false);
+    assert.equal(playModeSelect.attributes["aria-label"], "Voice mode");
+    assert.equal(glideSlider.attributes["aria-label"], "Glide time");
+    assert.equal(glideSlider.attributes.type, "range");
 });
 
 test("tap on an interior point deletes it while a drag moves it", async () => {
@@ -1295,6 +1416,83 @@ test("iPhone MSEG modal follows the phone orientation instead of the plot box sh
     );
 });
 
+test("iPhone play-mode input clamps to the supported discrete values and sends the clamped selection", async () => {
+    const { CosimoSynthView } = await loadPatchViewModule();
+    const sentEvents = [];
+    const view = Object.create(CosimoSynthView.prototype);
+
+    view.playModeSelect = { value: "99" };
+    view.patchConnection = {
+        sendEventOrValue(endpointID, value) {
+            sentEvents.push({ endpointID, value });
+        },
+    };
+
+    view.handlePlayModeInput();
+
+    assert.equal(view.currentPlayMode, 2);
+    assert.equal(view.playModeSelect.value, "2");
+    assert.deepEqual(sentEvents, [{ endpointID: "playMode", value: 2 }]);
+});
+
+test("iPhone glide input clamps to the supported range, updates the readout, and sends the clamped value", async () => {
+    const { CosimoSynthView } = await loadPatchViewModule();
+    const sentEvents = [];
+    const view = Object.create(CosimoSynthView.prototype);
+
+    view.glideTimeInput = { value: "9.75" };
+    view.glideTimeReadout = { textContent: "" };
+    view.patchConnection = {
+        sendEventOrValue(endpointID, value) {
+            sentEvents.push({ endpointID, value });
+        },
+    };
+
+    view.handleGlideTimeInput();
+
+    assert.equal(view.currentGlideTime, 2);
+    assert.equal(view.glideTimeInput.value, "2.000");
+    assert.equal(view.glideTimeReadout.textContent, "2.000 s");
+    assert.deepEqual(sentEvents, [{ endpointID: "glideTime", value: 2 }]);
+});
+
+test("iPhone keyboard octave controls clamp the root note and keep the footer range label in sync", async () => {
+    const { CosimoSynthView } = await loadPatchViewModule();
+    const keyboardAttributes = {};
+    const view = Object.create(CosimoSynthView.prototype);
+
+    view.currentLayout = { noteCount: 18 };
+    view.keyboardMinRootNote = 12;
+    view.keyboardMaxRootNote = 72;
+    view.keyboardRootNote = 12;
+    view.keyboard = {
+        setAttribute(name, value) {
+            keyboardAttributes[name] = value;
+        },
+    };
+    view.octaveReadout = { textContent: "" };
+    view.octaveDownButton = { disabled: false };
+    view.octaveUpButton = { disabled: false };
+
+    view.syncKeyboardOctaveControls();
+    assert.equal(view.octaveReadout.textContent, "C0 - F1");
+    assert.equal(view.octaveDownButton.disabled, true);
+    assert.equal(view.octaveUpButton.disabled, false);
+
+    view.setKeyboardRootNote(36);
+    assert.equal(view.keyboardRootNote, 36);
+    assert.equal(keyboardAttributes["root-note"], "36");
+    assert.equal(view.octaveReadout.textContent, "C2 - F3");
+    assert.equal(view.octaveDownButton.disabled, false);
+    assert.equal(view.octaveUpButton.disabled, false);
+
+    view.setKeyboardRootNote(999);
+    assert.equal(view.keyboardRootNote, 72);
+    assert.equal(keyboardAttributes["root-note"], "72");
+    assert.equal(view.octaveReadout.textContent, "C5 - F6");
+    assert.equal(view.octaveUpButton.disabled, true);
+});
+
 test("iPhone keyboard mount does not auto-focus the footer piano or install desktop mouse focus", async () => {
     const { CosimoSynthView } = await loadPatchViewModule();
     const view = Object.create(CosimoSynthView.prototype);
@@ -1369,6 +1567,178 @@ test("iPhone keyboard mount does not auto-focus the footer piano or install desk
         globalThis.requestAnimationFrame = originalRequestAnimationFrame;
         globalThis.cancelAnimationFrame = originalCancelAnimationFrame;
     }
+});
+
+test("iPhone stage drag ignores picker touches so opening the table picker does not start a scan gesture", async () => {
+    const { CosimoSynthView } = await loadPatchViewModule();
+    const pointerCaptures = [];
+    const view = Object.create(CosimoSynthView.prototype);
+
+    view.displayViewport = {
+        getBoundingClientRect() {
+            return { width: 320, height: 240 };
+        },
+        setPointerCapture(pointerId) {
+            pointerCaptures.push(pointerId);
+        },
+    };
+
+    view.beginDisplayDrag({
+        pointerId: 7,
+        clientX: 180,
+        clientY: 120,
+        target: {
+            closest(selector) {
+                return selector === ".bank-picker-trigger" ? {} : null;
+            },
+        },
+        preventDefault() {
+            throw new Error("The picker tap should not become a display drag");
+        },
+    });
+
+    assert.equal(view.activeDisplayDrag, undefined);
+    assert.deepEqual(pointerCaptures, []);
+});
+
+test("iPhone horizontal stage swipe commits the adjacent wavetable without starting a position gesture", async () => {
+    const { CosimoSynthView } = await loadPatchViewModule();
+    const gestureStarts = [];
+    const gestureEnds = [];
+    const selectedTableIndices = [];
+    const pointerCaptures = [];
+    const pointerReleases = [];
+    let preloadIndex = null;
+    let resetCalls = 0;
+    const view = Object.create(CosimoSynthView.prototype);
+
+    view.patchConnection = {
+        sendParameterGestureStart(endpointID) {
+            gestureStarts.push(endpointID);
+        },
+        sendParameterGestureEnd(endpointID) {
+            gestureEnds.push(endpointID);
+        },
+    };
+    view.displayViewport = {
+        getBoundingClientRect() {
+            return { width: 320, height: 240 };
+        },
+        setPointerCapture(pointerId) {
+            pointerCaptures.push(pointerId);
+        },
+        releasePointerCapture(pointerId) {
+            pointerReleases.push(pointerId);
+        },
+    };
+    view.factoryBankCatalog = { tables: [{}, {}, {}, {}, {}] };
+    view.currentTableIndex = 2;
+    view.currentValue = 0.25;
+    view.preloadAdjacentTables = (tableIndex) => {
+        preloadIndex = tableIndex;
+    };
+    view.getDisplayStageWidth = () => 320;
+    view.getActiveDisplaySlot = () => null;
+    view.getInactiveDisplaySlot = () => null;
+    view.resetDisplayLayerPositions = () => {
+        resetCalls += 1;
+    };
+    view.sendSelectedTableIndex = (nextIndex) => {
+        selectedTableIndices.push(nextIndex);
+    };
+
+    view.beginDisplayDrag({
+        pointerId: 3,
+        clientX: 200,
+        clientY: 120,
+        target: {
+            closest() {
+                return null;
+            },
+        },
+        preventDefault() {},
+    });
+    view.updateDisplayDrag({
+        pointerId: 3,
+        clientX: 100,
+        clientY: 126,
+        preventDefault() {},
+    });
+    view.endDisplayDrag({
+        pointerId: 3,
+        preventDefault() {},
+    });
+
+    assert.equal(preloadIndex, 2);
+    assert.deepEqual(pointerCaptures, [3]);
+    assert.deepEqual(pointerReleases, [3]);
+    assert.deepEqual(gestureStarts, []);
+    assert.deepEqual(gestureEnds, []);
+    assert.deepEqual(selectedTableIndices, [3]);
+    assert.equal(resetCalls, 1);
+    assert.equal(view.activeDisplayDrag, null);
+});
+
+test("iPhone vertical stage drag sends a wavetable-position gesture and the mapped normalized position", async () => {
+    const { CosimoSynthView } = await loadPatchViewModule();
+    const gestureStarts = [];
+    const gestureEnds = [];
+    const sentEvents = [];
+    const displayedValues = [];
+    const view = Object.create(CosimoSynthView.prototype);
+
+    view.patchConnection = {
+        sendParameterGestureStart(endpointID) {
+            gestureStarts.push(endpointID);
+        },
+        sendParameterGestureEnd(endpointID) {
+            gestureEnds.push(endpointID);
+        },
+        sendEventOrValue(endpointID, value) {
+            sentEvents.push({ endpointID, value });
+        },
+    };
+    view.displayViewport = {
+        getBoundingClientRect() {
+            return { width: 320, height: 200 };
+        },
+        setPointerCapture() {},
+        releasePointerCapture() {},
+    };
+    view.currentTableIndex = 1;
+    view.currentValue = 0.25;
+    view.hasDisplayedValue = false;
+    view.preloadAdjacentTables = () => {};
+    view.setDisplayedValue = (value) => {
+        displayedValues.push(value);
+    };
+
+    view.beginDisplayDrag({
+        pointerId: 4,
+        clientX: 120,
+        clientY: 300,
+        target: {
+            closest() {
+                return null;
+            },
+        },
+        preventDefault() {},
+    });
+    view.updateDisplayDrag({
+        pointerId: 4,
+        clientX: 122,
+        clientY: 250,
+        preventDefault() {},
+    });
+    view.endDisplayDrag({
+        pointerId: 4,
+        preventDefault() {},
+    });
+
+    assert.deepEqual(gestureStarts, ["wavetablePosition"]);
+    assert.deepEqual(gestureEnds, ["wavetablePosition"]);
+    assert.deepEqual(sentEvents, [{ endpointID: "wavetablePosition", value: 0.5 }]);
+    assert.deepEqual(displayedValues, [0.5]);
 });
 
 test("layout metrics exporter reports a whole-screen bottom gutter when the keyboard sits above the viewport bottom", async () => {
@@ -1534,6 +1904,53 @@ test("tap on an endpoint does not delete it and tapping empty space adds a point
         preventDefault() {},
     });
     assert.equal(addedPoints.length, 1);
+});
+
+test("iPhone display-bank load failures keep the stage unavailable message short and add the native library recovery hint", async () => {
+    const { CosimoSynthView } = await loadPatchViewModule();
+    const displayStates = [];
+    const view = Object.create(CosimoSynthView.prototype);
+
+    view.options = { platform: "ios" };
+    view.resourceClient = {
+        async readJSON(requestedPath) {
+            assert.equal(requestedPath, "assets/factory-bank-catalog.json");
+            return {
+                tables: [
+                    {
+                        tableId: "broken",
+                        name: "Broken",
+                        frameCount: 16,
+                        sourceWav: "assets/factory_sources/missing.wav",
+                    },
+                ],
+            };
+        },
+        async readAudio(requestedPath) {
+            assert.equal(requestedPath, "assets/factory_sources/missing.wav");
+            throw new Error("Missing factory source WAV");
+        },
+    };
+    view.displayFramesCache = new Map();
+    view.displayFramesLoading = new Map();
+    view.bankReadout = { textContent: "" };
+    view.setDisplayState = (state, message) => {
+        displayStates.push({ state, message });
+    };
+
+    await assert.rejects(
+        () => view.fetchDisplayBank(0, { showLoadingState: true }),
+        /Missing factory source WAV/
+    );
+
+    assert.deepEqual(displayStates, [
+        { state: "loading", message: "Loading wavetable bank…" },
+        {
+            state: "error",
+            message: "Could not load wavetable bank: Missing factory source WAV. Import the factory wavetable zip from the native library bar, then reopen the patch.",
+        },
+    ]);
+    assert.equal(view.bankReadout.textContent, "Display unavailable");
 });
 
 test("view readout names the wavetable load failure and exposes the retry button", async () => {

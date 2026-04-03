@@ -7,6 +7,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
+let cmajorApiRootPromise;
 
 export function desktopHarnessNpmCommand(platform = process.platform) {
     return platform === "win32" ? "npm.cmd" : "npm";
@@ -24,6 +25,36 @@ export function pathStaysWithinRepoRoot(rootPath, candidatePath) {
     const repoRelativePath = path.relative(rootPath, candidatePath);
 
     return !(repoRelativePath.startsWith("..") || path.isAbsolute(repoRelativePath));
+}
+
+async function resolveCmajorApiRoot(rootPath) {
+    if (!cmajorApiRootPromise) {
+        cmajorApiRootPromise = (async () => {
+            const depsRoot = path.join(rootPath, "build", "deps");
+            const entries = await fs.readdir(depsRoot, { withFileTypes: true });
+
+            for (const entry of entries) {
+                if (!entry.isDirectory() || !entry.name.startsWith("cmajor-")) {
+                    continue;
+                }
+
+                const candidate = path.join(depsRoot, entry.name, "javascript", "cmaj_api");
+
+                try {
+                    const stat = await fs.stat(candidate);
+                    if (stat.isDirectory()) {
+                        return candidate;
+                    }
+                } catch {
+                    // Ignore missing runtime folders and keep searching.
+                }
+            }
+
+            throw new Error(`Could not find a Cmajor browser API directory under ${depsRoot}`);
+        })();
+    }
+
+    return cmajorApiRootPromise;
 }
 
 export async function resolveRepoServedPath(rootPath, candidatePath) {
@@ -172,14 +203,20 @@ export async function startDesktopHarnessServer() {
 
 export async function startStaticRepoServer() {
     const port = await nextHarnessPort();
+    const cmajorApiRoot = await resolveCmajorApiRoot(repoRoot);
 
     const server = createHttpServer(async (request, response) => {
         try {
             const requestUrl = new URL(request.url ?? "/", `http://127.0.0.1:${port}`);
             const decodedPath = decodeURIComponent(requestUrl.pathname);
             const relativePath = decodedPath === "/" ? "/index.html" : decodedPath;
-            const filePath = path.resolve(repoRoot, `.${relativePath}`);
-            const repoServedPath = await resolveRepoServedPath(repoRoot, filePath);
+            const servingCmajorApi = relativePath === "/cmaj_api" || relativePath.startsWith("/cmaj_api/");
+            const servingRoot = servingCmajorApi ? cmajorApiRoot : repoRoot;
+            const rootRelativePath = servingCmajorApi
+                ? relativePath.replace(/^\/cmaj_api/, "") || "/index.html"
+                : relativePath;
+            const filePath = path.resolve(servingRoot, `.${rootRelativePath}`);
+            const repoServedPath = await resolveRepoServedPath(servingRoot, filePath);
 
             if (!repoServedPath) {
                 response.writeHead(403, { "content-type": "text/plain; charset=utf-8" });

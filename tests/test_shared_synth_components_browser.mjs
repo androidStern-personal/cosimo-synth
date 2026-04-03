@@ -54,6 +54,23 @@ async function getHarnessSnapshot(page) {
     });
 }
 
+function inferCurveOrientation(points) {
+    assert.ok(points.length >= 4, "Expected enough sampled curve points to infer orientation.");
+
+    const xMonotonic = points.every((point, index) => index === 0 || point.x >= points[index - 1].x - 1e-3);
+    const yMonotonicAscending = points.every((point, index) => index === 0 || point.y >= points[index - 1].y - 1e-3);
+
+    if (xMonotonic && !yMonotonicAscending) {
+        return "horizontal";
+    }
+
+    if (yMonotonicAscending && !xMonotonic) {
+        return "vertical";
+    }
+
+    throw new Error(`Could not infer orientation from sampled curve points: ${JSON.stringify(points.slice(0, 8))}`);
+}
+
 before(async () => {
     server = await startDesktopHarnessServer();
     browser = await chromium.launch({ headless: true });
@@ -147,6 +164,42 @@ test("shared editable MSEG surface mounts with plain points and forwards pointer
         assert.deepEqual(snapshot.pointerLog, ["down", "move", "up"]);
         assert.match(snapshot.surfaceClassName, /h-\[180px\]/);
         assert.doesNotMatch(snapshot.surfaceClassName, /h-\[320px\]/);
+    } finally {
+        await page.close();
+    }
+});
+
+test("shared MSEG preview and editor honor explicit vertical orientation", async () => {
+    const page = await openModulePage();
+
+    try {
+        await installHarness(page, "installSharedMsegOrientationHarness");
+        await page.waitForSelector('[data-testid="preview"]');
+
+        let snapshot = await getHarnessSnapshot(page);
+        assert.equal(inferCurveOrientation(snapshot.previewCurvePoints), "horizontal");
+        assert.ok(
+            snapshot.editorCircleCenters[1].cx < snapshot.editorCircleCenters[2].cx,
+            "Horizontal editor should place later time values further right.",
+        );
+
+        await page.evaluate(() => window.__COSIMO_DESKTOP_MODULE_HARNESS__.setOrientation("vertical"));
+        await page.waitForFunction(() => {
+            const snapshotValue = window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.();
+            const points = snapshotValue?.previewCurvePoints ?? [];
+            return points.length >= 4 && points[1].y > points[0].y;
+        });
+
+        snapshot = await getHarnessSnapshot(page);
+        assert.equal(inferCurveOrientation(snapshot.previewCurvePoints), "vertical");
+        assert.ok(
+            snapshot.editorCircleCenters[2].cy > snapshot.editorCircleCenters[1].cy,
+            "Vertical editor should place later time values lower on the screen.",
+        );
+        assert.ok(
+            snapshot.editorCircleCenters[1].cx > snapshot.editorCircleCenters[2].cx,
+            "Vertical editor should map higher MSEG values further right.",
+        );
     } finally {
         await page.close();
     }

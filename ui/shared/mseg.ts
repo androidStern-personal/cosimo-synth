@@ -16,6 +16,8 @@ export const MSEG_SELECTED_POINT_RADIUS_PX = 10;
 export const MSEG_EDITOR_HORIZONTAL_PADDING_PX = 14;
 export const MSEG_EDITOR_VERTICAL_PADDING_PX = 14;
 
+export type MsegSurfaceOrientation = "horizontal" | "vertical";
+
 const MSEG_NOTE_OFF_POLICY_VALUES = new Set([
     "finish_loop",
     "immediate",
@@ -173,7 +175,7 @@ export function pointToMsegEditorCoordinates(
     width: number,
     height: number,
     options: {
-        orientation?: "horizontal" | "vertical";
+        orientation?: MsegSurfaceOrientation;
         pointRadius?: number;
         horizontalPadding?: number;
         verticalPadding?: number;
@@ -187,7 +189,7 @@ export function pointToMsegEditorCoordinates(
     if (orientation === "vertical") {
         return {
             x: metrics.plotLeft + (normalizedY * metrics.plotWidth),
-            y: metrics.plotBottom - (normalizedX * metrics.plotHeight),
+            y: metrics.plotTop + (normalizedX * metrics.plotHeight),
         };
     }
 
@@ -203,7 +205,7 @@ export function msegEditorCoordinatesToPoint(
     width: number,
     height: number,
     options: {
-        orientation?: "horizontal" | "vertical";
+        orientation?: MsegSurfaceOrientation;
         pointRadius?: number;
         horizontalPadding?: number;
         verticalPadding?: number;
@@ -214,7 +216,7 @@ export function msegEditorCoordinatesToPoint(
 
     if (orientation === "vertical") {
         return {
-            x: clamp01((metrics.plotBottom - Number(editorY)) / metrics.plotHeight),
+            x: clamp01((Number(editorY) - metrics.plotTop) / metrics.plotHeight),
             y: clamp01((Number(editorX) - metrics.plotLeft) / metrics.plotWidth),
         };
     }
@@ -466,7 +468,7 @@ export function findMsegPointHitIndex(
     height: number,
     hitRadius = MSEG_POINT_HIT_RADIUS_PX,
     editorOptions: {
-        orientation?: "horizontal" | "vertical";
+        orientation?: MsegSurfaceOrientation;
         pointRadius?: number;
         horizontalPadding?: number;
         verticalPadding?: number;

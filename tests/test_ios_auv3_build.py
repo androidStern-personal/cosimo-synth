@@ -749,6 +749,12 @@ def test_ios_auv3_cmake_declares_the_repo_owned_shell_and_bundle_copy_contract()
     assert "CosimoPluginMain.cpp" in cmake_text
     assert "CosimoSharedWavetableLibrary.mm" in cmake_text
     assert "COSIMO_CMAJOR_RUNTIME_DIR" in cmake_text
+    assert "COSIMO_REACT_UI_FILES" in cmake_text
+    assert '${COSIMO_REPO_ROOT}/ui/ios/*' in cmake_text
+    assert '${COSIMO_REPO_ROOT}/ui/shared/*' in cmake_text
+    assert '${COSIMO_REPO_ROOT}/package.json' in cmake_text
+    assert '${COSIMO_REPO_ROOT}/ui/build.mjs' in cmake_text
+    assert '${COSIMO_REPO_ROOT}/ui/vite.ios.config.mjs' in cmake_text
     assert "copy_directory" in cmake_text
     assert "$<TARGET_FILE_DIR:${bundle_target}>/patch_gui" in cmake_text
     assert "$<TARGET_FILE_DIR:${bundle_target}>/cmaj_api" in cmake_text
@@ -1034,6 +1040,78 @@ def test_ios_auv3_generator_refuses_to_overwrite_an_unrelated_non_empty_director
         shutil.rmtree(output_dir, ignore_errors=True)
 
 
+def test_ios_auv3_generator_runs_npm_and_build_assets_from_the_repo_root(tmp_path: Path) -> None:
+    output_dir = tmp_path / "generated" / "cmajor"
+    fake_bin = tmp_path / "fake-bin"
+    fake_bin.mkdir(parents=True)
+    npm_log = tmp_path / "npm-log.txt"
+    uv_log = tmp_path / "uv-log.txt"
+
+    (fake_bin / "npm").write_text(
+        """#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\\n' "$PWD" >> "$COSIMO_TEST_NPM_LOG"
+printf '%s\\n' "$*" >> "$COSIMO_TEST_NPM_LOG"
+""",
+        encoding="utf-8",
+    )
+    (fake_bin / "uv").write_text(
+        """#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\\n' "$PWD" >> "$COSIMO_TEST_UV_LOG"
+printf '%s\\n' "$*" >> "$COSIMO_TEST_UV_LOG"
+""",
+        encoding="utf-8",
+    )
+    (fake_bin / "cmaj").write_text(
+        """#!/usr/bin/env bash
+set -euo pipefail
+output=''
+for arg in "$@"; do
+  case "$arg" in
+    --output=*)
+      output="${arg#--output=}"
+      ;;
+  esac
+done
+if [[ -z "$output" ]]; then
+  echo "missing output path" >&2
+  exit 1
+fi
+mkdir -p "$(dirname "$output")"
+cat > "$output" <<'EOF'
+struct WavetableSynth {};
+constexpr auto programDetailsJSON = "{}";
+EOF
+""",
+        encoding="utf-8",
+    )
+
+    for tool in ("npm", "uv", "cmaj"):
+        (fake_bin / tool).chmod(0o755)
+
+    env = os.environ.copy()
+    env["PATH"] = f"{fake_bin}:{env['PATH']}"
+    env["COSIMO_TEST_NPM_LOG"] = str(npm_log)
+    env["COSIMO_TEST_UV_LOG"] = str(uv_log)
+
+    subprocess.run(
+        [str(IOS_AUV3_GENERATOR), str(output_dir)],
+        cwd=tmp_path,
+        env=env,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    npm_lines = npm_log.read_text(encoding="utf-8").splitlines()
+    uv_lines = uv_log.read_text(encoding="utf-8").splitlines()
+
+    assert npm_lines == [str(REPO_ROOT), "run ui:build"]
+    assert uv_lines == [str(REPO_ROOT), "run python build_assets.py"]
+    assert (output_dir / "WavetableSynth.cpp").is_file()
+
+
 def test_built_app_and_extension_bundles_include_runtime_files(
     ios_debug_host_session: dict[str, object],
 ) -> None:
@@ -1132,7 +1210,9 @@ async function loadBundle(rootUrl) {
         expectedSampleCount: sourceWave.samples.length,
         hasIOSHostPage: htmlSource.includes("cmaj-view-container"),
         hasIOSHostRuntimeImport: htmlSource.includes("patch_gui/index.ios-host.js"),
-        hasPatchViewFactory: viewSource.includes("createPatchViewWithOptions") || viewSource.includes("createIOSPatchView"),
+        hasReactIOSPatchViewFactory: viewSource.includes("createIOSPatchView"),
+        hasReactIOSCustomElement: viewSource.includes("CosimoIOSReactViewElement"),
+        hasLegacyPatchViewWithOptionsFactory: viewSource.includes("createPatchViewWithOptions"),
     };
 }
 
@@ -1160,7 +1240,13 @@ for (const bundle of [app, extension]) {
         throw new Error(`Unexpected first table source wav: ${JSON.stringify(bundle)}`);
     }
 
-    if (!bundle.hasIOSHostPage || !bundle.hasIOSHostRuntimeImport || !bundle.hasPatchViewFactory) {
+    if (
+        !bundle.hasIOSHostPage
+        || !bundle.hasIOSHostRuntimeImport
+        || !bundle.hasReactIOSPatchViewFactory
+        || !bundle.hasReactIOSCustomElement
+        || bundle.hasLegacyPatchViewWithOptionsFactory
+    ) {
         throw new Error(`The built bundle did not include the expected runtime UI files: ${JSON.stringify(bundle)}`);
     }
 

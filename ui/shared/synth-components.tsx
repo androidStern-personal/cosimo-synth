@@ -21,6 +21,7 @@ import {
     createMsegEditorMetrics,
     evaluateMsegShape,
     pointToMsegEditorCoordinates,
+    type MsegSurfaceOrientation,
     type MsegState,
 } from "./mseg";
 import { CanvasWavetableDisplay } from "./wavetable-display";
@@ -161,6 +162,7 @@ function buildMsegSurfacePaths(
     width: number,
     height: number,
     options: {
+        orientation?: MsegSurfaceOrientation;
         pointRadius?: number;
         horizontalPadding?: number;
         verticalPadding?: number;
@@ -177,6 +179,7 @@ function buildMsegSurfacePaths(
         const x = index / (MSEG_EDITOR_SAMPLES - 1);
         const y = evaluateMsegShape({ points }, x);
         const coordinates = pointToMsegEditorCoordinates({ x, y }, width, height, {
+            orientation: options.orientation,
             pointRadius: options.pointRadius,
             horizontalPadding: options.horizontalPadding,
             verticalPadding: options.verticalPadding,
@@ -185,8 +188,11 @@ function buildMsegSurfacePaths(
     }
 
     const curvePath = path.trim();
-    const fillPath = `${curvePath} L ${metrics.plotRight.toFixed(3)} ${metrics.plotBottom.toFixed(3)} ` +
-        `L ${metrics.plotLeft.toFixed(3)} ${metrics.plotBottom.toFixed(3)} Z`;
+    const fillPath = options.orientation === "vertical"
+        ? `${curvePath} L ${metrics.plotLeft.toFixed(3)} ${metrics.plotBottom.toFixed(3)} ` +
+            `L ${metrics.plotLeft.toFixed(3)} ${metrics.plotTop.toFixed(3)} Z`
+        : `${curvePath} L ${metrics.plotRight.toFixed(3)} ${metrics.plotBottom.toFixed(3)} ` +
+            `L ${metrics.plotLeft.toFixed(3)} ${metrics.plotBottom.toFixed(3)} Z`;
 
     return { curvePath, fillPath, metrics };
 }
@@ -230,11 +236,13 @@ function OctaveShiftGlyph({
     );
 }
 
-function MsegPreview({
+export function MsegPreview({
     points,
+    orientation = "horizontal",
     className,
 }: {
     points: Array<{ x: number; y: number; curvePower: number }>;
+    orientation?: MsegSurfaceOrientation;
     className?: string;
 }) {
     const viewportRef = useRef<SVGSVGElement | null>(null);
@@ -242,11 +250,12 @@ function MsegPreview({
 
     const { curvePath, fillPath, metrics } = useMemo(() => {
         return buildMsegSurfacePaths(points, size.width, size.height, {
+            orientation,
             pointRadius: 0,
             horizontalPadding: MSEG_PREVIEW_HORIZONTAL_PADDING_PX,
             verticalPadding: MSEG_PREVIEW_VERTICAL_PADDING_PX,
         });
-    }, [points, size.height, size.width]);
+    }, [orientation, points, size.height, size.width]);
 
     return (
         <svg
@@ -369,28 +378,35 @@ export function EditableMsegSurface({
     surfaceRef,
     points,
     selectedPointIndex,
+    orientation = "horizontal",
     onPointerDown,
     onPointerMove,
     onPointerUp,
     className,
+    dataRole,
 }: {
     surfaceRef: RefObject<SVGSVGElement | null>;
     points: Array<{ x: number; y: number; curvePower: number }>;
     selectedPointIndex: number;
+    orientation?: MsegSurfaceOrientation;
     onPointerDown: (event: ReactPointerEvent<SVGSVGElement>) => void;
     onPointerMove: (event: ReactPointerEvent<SVGSVGElement>) => void;
     onPointerUp: (event: ReactPointerEvent<SVGSVGElement>) => void;
     className?: string;
+    dataRole?: string;
 }) {
     const size = useResizeObserver(surfaceRef);
 
-    const { curvePath, fillPath } = useMemo(() => {
-        return buildMsegSurfacePaths(points, size.width, size.height);
-    }, [points, size.height, size.width]);
+    const { curvePath, fillPath, metrics } = useMemo(() => {
+        return buildMsegSurfacePaths(points, size.width, size.height, {
+            orientation,
+        });
+    }, [orientation, points, size.height, size.width]);
 
     return (
         <svg
             ref={surfaceRef}
+            data-role={dataRole}
             className={joinClasses(
                 "h-full w-full touch-none overflow-hidden rounded-[20px] bg-white/[0.03]",
                 className,
@@ -406,20 +422,20 @@ export function EditableMsegSurface({
                     <line
                         key={`editable-h-${step}`}
                         className="cosimo-grid-line"
-                        x1={0}
-                        y1={size.height * (1 - step)}
-                        x2={size.width}
-                        y2={size.height * (1 - step)}
+                        x1={metrics.plotLeft}
+                        y1={metrics.plotTop + (metrics.plotHeight * (1 - step))}
+                        x2={metrics.plotRight}
+                        y2={metrics.plotTop + (metrics.plotHeight * (1 - step))}
                     />
                 ))}
                 {MSEG_GRID_STEPS.map((step) => (
                     <line
                         key={`editable-v-${step}`}
                         className="cosimo-grid-line"
-                        x1={size.width * step}
-                        y1={0}
-                        x2={size.width * step}
-                        y2={size.height}
+                        x1={metrics.plotLeft + (metrics.plotWidth * step)}
+                        y1={metrics.plotTop}
+                        x2={metrics.plotLeft + (metrics.plotWidth * step)}
+                        y2={metrics.plotBottom}
                     />
                 ))}
             </g>
@@ -427,7 +443,9 @@ export function EditableMsegSurface({
             <path className="cosimo-curve-line" d={curvePath} />
             <g>
                 {points.map((point, pointIndex) => {
-                    const coordinates = pointToMsegEditorCoordinates(point, size.width, size.height);
+                    const coordinates = pointToMsegEditorCoordinates(point, size.width, size.height, {
+                        orientation,
+                    });
                     const isSelected = pointIndex === selectedPointIndex;
 
                     return (

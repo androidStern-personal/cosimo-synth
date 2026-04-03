@@ -443,3 +443,105 @@ What was verified for the DesktopPatchView extraction
 - `npx tsc --noEmit`
 - `npm run ui:build`
 - `node --test --test-concurrency=1 tests/test_shared_synth_components_browser.mjs tests/test_desktop_patch_view_browser.mjs tests/test_desktop_widget_adapters_browser.mjs tests/test_shared_synth_hooks_browser.mjs tests/test_patch_view_layout.mjs tests/test_wavetable_display.mjs tests/test_wavetable_worker.mjs`
+
+Detour started on 2026-04-03
+- Paused the actual iPhone React migration implementation long enough to lock down the current iPhone frontend behavior with characterization tests first.
+- Wrote `TRANSIENT_IOS_REACT_MIGRATION_PLAN.md` as the transient execution plan for replacing the old iPhone `patch_gui/index.js` UI path with the new React and Vite frontend.
+- The immediate goal is to strengthen `tests/test_wavetable_display.mjs` so the migration has to preserve the current iPhone safe-area shell, wavetable stage shell, play-mode and glide controls, MSEG modal behavior, footer keyboard behavior, octave controls, and the known `BS2 - Acid.wav` resource-loading rule.
+
+Detour progress on 2026-04-03
+- Expanded `tests/test_wavetable_display.mjs` to characterize the old iPhone UI more directly: the stage shell now has explicit tests for the overlay picker, retry button, `Swipe + Drag` hint, dual-canvas stack, play-mode select, glide slider, footer keyboard split, octave clamping, stage swipe-versus-drag behavior, and the iPhone-specific factory-library recovery message.
+- Added a real mounted iPhone browser harness in `tests/helpers/ios_harness_browser.mjs` and a new browser suite in `tests/test_ios_patch_view_browser.mjs` that boots the real `patch_gui/index.ios.js` wrapper in Chromium against real repo assets instead of only reading HTML strings.
+- The mounted iPhone browser suite now proves the real wrapper sends `runtimeSyncRequest` on boot, reads the catalog through the bridge-backed path, fetches source WAVs through URL resolution, still loads `BS2 - Acid` without falling back to the audio bridge, keeps the audible table visible while a new desired table is pending, exposes retry for retryable failures, preserves the play-mode and glide controls, preserves the MSEG modal shell in portrait and landscape, and preserves the footer keyboard octave controls.
+
+What was verified for the iPhone migration characterization safety net
+- `node --test tests/test_ios_patch_view_browser.mjs`
+- `node --test tests/test_wavetable_display.mjs`
+- `node --test --test-concurrency=1 tests/test_ios_patch_view_browser.mjs tests/test_wavetable_display.mjs tests/test_wavetable_worker.mjs tests/test_patch_view_layout.mjs`
+
+Detour hardening completed on 2026-04-03
+- Replaced the synthetic `page.setContent(...)` iPhone browser harness with the real shipped host page at `patch_gui/index.ios.html`, using a fake native bridge that speaks the real embedded patch message protocol instead of mounting `patch_gui/index.ios.js` into an invented document.
+- Extended the repo static test server so `/cmaj_api/*` resolves to the pinned Cmajor browser runtime under `build/deps/.../javascript/cmaj_api`, which lets the mounted iPhone host page import the same browser helpers it uses in the real app.
+- Strengthened `tests/test_ios_patch_view_browser.mjs` so it now proves the actual host-page boundary, the viewport `viewport-fit=cover` metadata, the docked footer keyboard geometry in portrait and landscape, the mounted stage gestures (picker taps ignored, horizontal wavetable swipe, vertical scan drag), and a mounted MSEG shape edit that persists `mseg1.shape` and uploads `mseg1Buffer`.
+- Renamed the HTML-string tests in `tests/test_wavetable_display.mjs` so they are explicitly described as template-characterization coverage instead of overclaiming mounted runtime behavior.
+- Replaced the flaky octave-boundary loop in the mounted browser suite with deterministic step-by-step clicks that wait for each root-note update.
+
+What was verified after hardening the iPhone migration safety net
+- `npx tsc --noEmit`
+- `node --test tests/test_ios_patch_view_browser.mjs`
+- `node --test tests/test_wavetable_display.mjs`
+- `node --test --test-concurrency=1 tests/test_ios_patch_view_browser.mjs tests/test_wavetable_display.mjs tests/test_wavetable_worker.mjs tests/test_patch_view_layout.mjs`
+
+Final iPhone regression hardening on 2026-04-03
+- Replaced the mounted iPhone browser suite's last synthetic form-control edits with real Playwright interactions for the wavetable picker, the voice-mode select, and the glide slider. The suite no longer passes by mutating `.value` inside `page.evaluate(...)`.
+- Removed the unused synthetic shadow-pointer helper from `tests/helpers/ios_harness_browser.mjs` so the harness no longer advertises a weaker bypass path than the mounted suite actually uses.
+- The mounted retry flow exposed a real iPhone UI bug in `patch_gui/index.js`: the retry button sat inside `.stage-copy`, which has `pointer-events: none`, but the button never opted back into pointer events. Added `pointer-events: auto` to `.table-retry-button` so the stage retry control is actually clickable again.
+- Tightened the mounted retry-state assertion so it waits for the stable user-facing timeout text in the bank readout instead of overconstraining a transient `displayStatus` value while the currently audible table is still visible.
+- Tightened the mounted iPhone browser harness again so it now records host-page ready and fallback callback counts, can deliberately fail specific bundled resources, and exposes the mounted MSEG depth control state. That lets the safety net prove one ready notification on normal boot, zero bundled-fallback requests on normal boot, and the visible `Display unavailable` recovery path when a source WAV is missing.
+- Tightened `tests/test_ios_patch_view_browser.mjs` so it now covers the mounted retry button through shadow-root hit-testing instead of synthetic `element.click()`, covers left and right safe-area inset overrides in the live shell, and covers the mounted MSEG depth control. Updated the static HTML characterization in `tests/test_wavetable_display.mjs` to match the new left/right safe-area CSS variables (`--cosimo-ios-safe-right` and `--cosimo-ios-safe-left`).
+
+What was verified after the final iPhone regression hardening
+- `node --test tests/test_ios_patch_view_browser.mjs`
+- `node --test --test-concurrency=1 tests/test_ios_patch_view_browser.mjs tests/test_wavetable_display.mjs tests/test_wavetable_worker.mjs tests/test_patch_view_layout.mjs`
+
+Last iPhone safety-net tightening on 2026-04-03
+- Switched the mounted iPhone browser harness to a mobile browser context with touch enabled, and changed the mounted stage and MSEG edit tests to use real touch events instead of mouse-style input. The browser suite now exercises the same interaction class the phone uses for the stage and MSEG surface.
+- Tightened the pending-table assertion in `tests/test_ios_patch_view_browser.mjs` so it requires the exact live loading label (`Loading <table>…`) instead of also accepting the steady-state `shapes` text too early.
+- Tightened the mounted footer assertion in `tests/helpers/ios_harness_browser.mjs` so `footerVisible` now means the footer is actually rendered with visible geometry, not merely present in the DOM.
+- Renamed the mounted safe-area test to say exactly what it proves: host inset overrides applied by the iPhone host page. The real `env(safe-area-inset-*)` contract is still locked down separately by the HTML-template characterization coverage in `tests/test_wavetable_display.mjs`.
+
+iPhone React frontend migration completed on 2026-04-03
+- Replaced the old browser-side iPhone UI path behind `patch_gui/index.ios.js` with a generated React and Vite bundle from `ui/ios/*`, while keeping the existing iPhone host bootstrap in `patch_gui/index.ios-host.js` unchanged. This was a frontend migration, not a native host rewrite.
+- Added the new iPhone React shell in `ui/ios/IOSPatchView.tsx`, the iPhone keyboard adapter in `ui/ios/ios-keyboard-adapter.tsx`, the shadow-root entrypoint in `ui/ios/patch-view-entry.tsx`, the iPhone stylesheet in `ui/ios/styles.css`, and the iPhone Vite config in `ui/vite.ios.config.mjs`. `ui/build.mjs` now emits the real shipped bundle at `patch_gui/index.ios.js`.
+- Preserved the iPhone-specific browser behavior that the strict mounted suite characterizes: the safe-area shell, footer keyboard docking, wavetable stage swipe-and-drag behavior, retry flow, MSEG modal flow, play-mode and glide controls, and the `BS2 - Acid.wav` URL-first source loading rule.
+- The real iPhone wrapper build initially failed because Xcode reused stale compile response files that still pointed at the removed `ios_auv3/Vendor/cmajor/include` path. A clean device rebuild regenerated those arguments from the current generated project, which already points at the pinned runtime under `build/deps/cmajor-1.0.3066/include`.
+- Built the real `CosimoSynth_Standalone` app from `build/ios_device_run/CosimoSynthAUv3.xcodeproj`, verified that the app bundle contains `assets/factory-bank-catalog.json`, `assets/factory_sources`, and the new React `patch_gui/index.ios.js` bundle, then installed and launched `dev.cosimo.wavetable-synth` on the paired iPhone.
+
+What was verified for the iPhone React frontend migration
+- `npx tsc --noEmit`
+- `npm run ui:build`
+- `node --test --test-concurrency=1 tests/test_desktop_patch_view_browser.mjs tests/test_desktop_widget_adapters_browser.mjs tests/test_shared_synth_components_browser.mjs tests/test_shared_synth_hooks_browser.mjs tests/test_patch_view_layout.mjs tests/test_ios_patch_view_browser.mjs tests/test_wavetable_display.mjs tests/test_wavetable_worker.mjs`
+- `xcodebuild -project build/ios_device_run/CosimoSynthAUv3.xcodeproj -scheme CosimoSynth_Standalone -configuration Debug -destination id=00008120-000139383644C01E DEVELOPMENT_TEAM=JUFVT28775 CODE_SIGN_STYLE=Automatic CODE_SIGN_IDENTITY='Apple Development' -allowProvisioningUpdates clean build`
+- `xcrun devicectl device install app --device 00C7F433-8B6A-5CAC-856F-56D7385E12F9 'build/ios_device_run/CosimoSynth_artefacts/Debug/Standalone/Cosimo Synth.app'`
+- `xcrun devicectl device process launch --device 00C7F433-8B6A-5CAC-856F-56D7385E12F9 dev.cosimo.wavetable-synth`
+
+iPhone React MSEG portrait fix on 2026-04-03
+- A user-found regression in the new iPhone React frontend showed the MSEG preview and MSEG modal editor laid out in the wrong axis when the phone was upright. The graph still used the desktop-style left-to-right time axis instead of the iPhone portrait top-to-bottom time axis, and the main-panel preview had also grown taller than the old compact iPhone shell.
+- Fixed the browser-side shared MSEG renderer in `ui/shared/synth-components.tsx` and the browser-side shared MSEG pointer mapping in `ui/shared/synth-hooks.ts` so both the preview and the editor can render and edit in a vertical orientation. This stays entirely in the browser/frontend layer; it does not change the iPhone native host in `patch_gui/index.ios-host.js`.
+- The iPhone React shell in `ui/ios/IOSPatchView.tsx` now selects the vertical MSEG orientation only when the phone is upright and keeps the horizontal layout in landscape. The iPhone preview shell in `ui/ios/styles.css` is back to the old compact portrait height of `128px`.
+- Tightened the shared browser tests and the mounted iPhone browser tests so they now prove the rotated SVG path direction, the rotated editor coordinate mapping, and the compact portrait preview height against the real built `patch_gui/index.ios.js` bundle.
+
+What was verified for the iPhone React MSEG portrait fix
+- `npx tsc --noEmit`
+- `npm run ui:build`
+- `node --test --test-concurrency=1 tests/test_shared_synth_components_browser.mjs tests/test_shared_synth_hooks_browser.mjs tests/test_ios_patch_view_browser.mjs tests/test_wavetable_display.mjs tests/test_wavetable_worker.mjs tests/test_patch_view_layout.mjs`
+
+iPhone React MSEG portrait direction correction on 2026-04-03
+- The first portrait MSEG fix still allowed the time axis to run upward. The real iPhone rule is stricter: when the phone is upright, both the small MSEG preview and the full MSEG editor must run time from the top of the phone to the bottom.
+- Fixed the shared browser-side MSEG coordinate mapping in `ui/shared/mseg.ts` so the vertical orientation is a clockwise rotation of the normal graph, not a counterclockwise one. Higher time values now land lower on the screen in portrait, and the vertical fill path in both `ui/shared/synth-components.tsx` and `patch_gui/index.js` now closes against the left edge in the right order for that clockwise rotation.
+- Tightened the browser tests so they fail if portrait MSEG time runs upward again. `tests/test_shared_synth_hooks_browser.mjs` now uses an independent vertical coordinate calculation that expects time to move downward, `tests/test_shared_synth_components_browser.mjs` now checks that later editor points are lower on the screen, and `tests/test_ios_patch_view_browser.mjs` now checks that the real mounted preview and modal curves in the shipped `patch_gui/index.ios.js` bundle move downward in portrait while still keeping the old compact preview height.
+- Rebuilt the real `CosimoSynth_Standalone` wrapper app from this tree, verified that the bundle contains `assets/factory-bank-catalog.json`, `assets/factory_sources`, and `patch_gui/index.ios.js`, and reinstalled it on the paired phone. The remote launch step failed only because the device was locked, not because the app or bundle failed.
+
+iPhone React build-boundary fix on 2026-04-03
+- The strict simulator-bundle test exposed a real packaging regression after the iPhone React migration: `scripts/generate_ios_auv3_plugin.sh` started running `npm run ui:build`, but Xcode invokes that generator from a temporary build directory, not from the repo root. That made `npm` look for `package.json` under the temp Xcode build folder and fail before the app bundle could be rebuilt.
+- Fixed the generator script so both `npm run ui:build` and `uv run python build_assets.py` execute from the repo root explicitly. This does not change the iPhone native host; it only fixes the browser-bundle build step.
+- Tightened `ios_auv3/CMakeLists.txt` and `tests/test_ios_auv3_build.py` so the simulator and device bundle path now tracks `ui/ios/*`, `ui/shared/*`, `ui/build.mjs`, `ui/vite.ios.config.mjs`, and `package.json`, and the built-bundle test now fails unless the packaged `patch_gui/index.ios.js` contains the real React iPhone entry (`createIOSPatchView` and `CosimoIOSReactViewElement`) rather than the old wrapper path.
+- Added a focused generator test in `tests/test_ios_auv3_build.py` that runs `generate_ios_auv3_plugin.sh` from the wrong working directory with fake `npm`, `uv`, and `cmaj` binaries, then proves the script still runs the frontend build from the repo root. This locks down the exact Xcode failure that surfaced here.
+
+What was verified for the iPhone React build-boundary fix
+- `node --test --test-concurrency=1 tests/test_ios_patch_view_browser.mjs tests/test_wavetable_display.mjs tests/test_wavetable_worker.mjs tests/test_patch_view_layout.mjs`
+- `uv run pytest -q tests/test_ios_auv3_build.py -k 'test_ios_auv3_generator_runs_npm_and_build_assets_from_the_repo_root or test_ios_auv3_cmake_declares_the_repo_owned_shell_and_bundle_copy_contract or test_actual_built_bundle_roots_load_the_runtime_patch_and_ui_files'`
+
+iPhone React portrait MSEG preview/editor split fix on 2026-04-03
+- A user-reported regression in the new iPhone React frontend showed that upright portrait mode was applying the same MSEG orientation to both surfaces. That was wrong. The real iPhone rule is split: the small main-panel MSEG preview stays horizontal with time running left-to-right, while the full portrait MSEG editor rotates so time runs top-to-bottom.
+- Fixed the browser-side React iPhone shell in `ui/ios/IOSPatchView.tsx` by separating the two orientations. The preview now always renders with horizontal time, while the modal editor still uses the portrait-only vertical orientation. This stayed entirely in the browser/frontend layer and did not change the iPhone native host in `patch_gui/index.ios-host.js`.
+- Tightened the mounted browser regression test in `tests/test_ios_patch_view_browser.mjs` so it now injects a known asymmetric four-point MSEG shape, waits until that exact shape is visibly rendered and stable, and then proves the main-panel preview stays horizontal in portrait while the full editor rotates vertical. Three adversarial reviewer agents approved that red test before the implementation change.
+- Rebuilt the shipped `patch_gui/index.ios.js` bundle, rebuilt the real `CosimoSynth_Standalone` wrapper app, verified that the app bundle still contains `assets/factory-bank-catalog.json`, `assets/factory_sources`, and the rebuilt `patch_gui/index.ios.js`, then reinstalled and launched `dev.cosimo.wavetable-synth` on the paired iPhone.
+
+What was verified for the iPhone React portrait MSEG preview/editor split fix
+- `npx tsc --noEmit`
+- `npm run ui:build`
+- `node --test --test-concurrency=1 tests/test_ios_patch_view_browser.mjs tests/test_wavetable_display.mjs tests/test_shared_synth_components_browser.mjs`
+- `xcodebuild -project build/ios_device_run/CosimoSynthAUv3.xcodeproj -scheme CosimoSynth_Standalone -configuration Debug -destination id=00008120-000139383644C01E DEVELOPMENT_TEAM=JUFVT28775 CODE_SIGN_STYLE=Automatic CODE_SIGN_IDENTITY='Apple Development' -allowProvisioningUpdates build`
+- `xcrun devicectl device install app --device 00C7F433-8B6A-5CAC-856F-56D7385E12F9 'build/ios_device_run/CosimoSynth_artefacts/Debug/Standalone/Cosimo Synth.app'`
+- `xcrun devicectl device process launch --device 00C7F433-8B6A-5CAC-856F-56D7385E12F9 dev.cosimo.wavetable-synth`

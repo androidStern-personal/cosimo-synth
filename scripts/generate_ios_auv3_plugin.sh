@@ -51,8 +51,14 @@ fi
 
 mkdir -p "$output_parent"
 
-npm run ui:build
-uv run python "$repo_root/build_assets.py"
+(
+  cd "$repo_root"
+  npm run ui:build
+)
+(
+  cd "$repo_root"
+  uv run python build_assets.py
+)
 
 temp_dir="$(mktemp -d "${TMPDIR:-/tmp}/cosimo-ios-auv3.XXXXXX")"
 cleanup() {

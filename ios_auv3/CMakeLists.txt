@@ -116,6 +116,12 @@ file(
     "${COSIMO_REPO_ROOT}/patch_gui/*"
 )
 file(
+    GLOB_RECURSE COSIMO_REACT_UI_FILES
+    CONFIGURE_DEPENDS
+    "${COSIMO_REPO_ROOT}/ui/ios/*"
+    "${COSIMO_REPO_ROOT}/ui/shared/*"
+)
+file(
     GLOB_RECURSE COSIMO_FACTORY_SOURCE_FILES
     CONFIGURE_DEPENDS
     "${COSIMO_REPO_ROOT}/assets/factory_sources/*"
@@ -150,13 +156,17 @@ add_custom_command(
     DEPENDS
         "${COSIMO_IOS_GENERATOR_SCRIPT}"
         "${COSIMO_REPO_ROOT}/build_assets.py"
+        "${COSIMO_REPO_ROOT}/package.json"
         "${COSIMO_REPO_ROOT}/cmajor/WavetableSynth.cmajor"
         "${COSIMO_REPO_ROOT}/WavetableSynth.cmajorpatch"
         "${COSIMO_REPO_ROOT}/cmajor/FixedFrameOscillator.cmajor"
         "${COSIMO_REPO_ROOT}/assets/factory-table-catalog.json"
         "${COSIMO_REPO_ROOT}/assets/factory-bank-catalog.json"
+        "${COSIMO_REPO_ROOT}/ui/build.mjs"
+        "${COSIMO_REPO_ROOT}/ui/vite.ios.config.mjs"
         ${COSIMO_FACTORY_SOURCE_FILES}
         ${COSIMO_PATCH_UI_FILES}
+        ${COSIMO_REACT_UI_FILES}
         ${COSIMO_CMAJOR_WEB_FILES}
     COMMENT
         "Generating the raw Cmajor performer source for the iOS app and AUv3 extension"

@@ -22,6 +22,7 @@ import {
     clampMsegRateSeconds,
     findMsegPointHitIndex,
     msegEditorCoordinatesToPoint,
+    type MsegSurfaceOrientation,
     type MsegState,
 } from "./mseg";
 import { MsegController } from "./mseg-controller";
@@ -32,6 +33,7 @@ import {
     normalizeRuntimeTableState,
     resolveRuntimeTablePresentation,
     selectObservedWavetablePositionState,
+    type RuntimeTablePresentation,
 } from "./runtime-table-state";
 import {
     useSynthInputRouter,
@@ -94,14 +96,20 @@ export type SynthKeyboardRoutingBindings = {
 
 export type SynthPatchViewModel = {
     frames: Float32Array[] | null;
+    catalogError: string | null;
+    frameError: string | null;
     observedPosition: number;
     topStatus: string;
     failureDetail: string | null;
+    runtimePresentation: RuntimeTablePresentation;
+    displayedTableIndex: number;
     displayedTableName: string;
     displayedFrameCount: number;
     desiredTableIndex: number;
+    desiredTableName: string;
     tableOptions: FactoryBankCatalog["tables"];
     canRetryDesiredTableLoad: boolean;
+    wavetablePosition: PatchControlBinding<number>;
     playMode: PatchControlBinding<number>;
     glideTime: PatchControlBinding<number>;
     msegState: MsegState | null;
@@ -324,10 +332,12 @@ export function useMsegEditorInteractions({
     msegState,
     msegController,
     surfaceRef,
+    orientation = "horizontal",
 }: {
     msegState: MsegState | null;
     msegController: RefObject<MsegController | null>;
     surfaceRef: RefObject<SVGSVGElement | null>;
+    orientation?: MsegSurfaceOrientation;
 }) {
     const [isOpen, setIsOpen] = useState(false);
     const [selectedPointIndex, setSelectedPointIndex] = useState(0);
@@ -384,6 +394,8 @@ export function useMsegEditorInteractions({
             event.clientY - bounds.top,
             bounds.width,
             bounds.height,
+            undefined,
+            { orientation },
         );
 
         if (targetPointIndex >= 0) {
@@ -406,6 +418,7 @@ export function useMsegEditorInteractions({
             event.clientY - bounds.top,
             bounds.width,
             bounds.height,
+            { orientation },
         );
         msegController.current?.addPoint(point.x, point.y);
         const points = msegController.current?.getState().shape.points ?? [];
@@ -420,7 +433,7 @@ export function useMsegEditorInteractions({
         }
 
         event.preventDefault();
-    }, [msegController, msegState, surfaceRef]);
+    }, [msegController, msegState, orientation, surfaceRef]);
 
     const handlePointerMove = useCallback((event: ReactPointerEvent<SVGSVGElement>) => {
         if (!activePointer || activePointer.pointerId !== event.pointerId || !surfaceRef.current) {
@@ -442,6 +455,7 @@ export function useMsegEditorInteractions({
             event.clientY - bounds.top,
             bounds.width,
             bounds.height,
+            { orientation },
         );
         setActivePointer((previousPointer) => previousPointer
             ? { ...previousPointer, moved: true }
@@ -449,7 +463,7 @@ export function useMsegEditorInteractions({
         msegController.current?.movePoint(activePointer.pointIndex, point.x, point.y);
         setSelectedPointIndex(activePointer.pointIndex);
         event.preventDefault();
-    }, [activePointer, msegController, surfaceRef]);
+    }, [activePointer, msegController, orientation, surfaceRef]);
 
     const handlePointerUp = useCallback((event: ReactPointerEvent<SVGSVGElement>) => {
         if (!activePointer || activePointer.pointerId !== event.pointerId) {
@@ -542,11 +556,13 @@ export function useSynthPatchViewModel({
     msegEditorSurfaceRef,
     keyboardRef,
     voiceModeCount,
+    msegSurfaceOrientation = "horizontal",
 }: {
     stageRef: RefObject<HTMLDivElement | null>;
     msegEditorSurfaceRef: RefObject<SVGSVGElement | null>;
     keyboardRef: RefObject<SynthKeyboardLike | null>;
     voiceModeCount: number;
+    msegSurfaceOrientation?: MsegSurfaceOrientation;
 }): SynthPatchViewModel {
     const runtimeStateMessage = usePatchEndpoint<unknown | null>(RUNTIME_STATE_ENDPOINT_ID, null);
     const normalizedRuntimeState = useMemo(
@@ -594,6 +610,7 @@ export function useSynthPatchViewModel({
         msegState,
         msegController,
         surfaceRef: msegEditorSurfaceRef,
+        orientation: msegSurfaceOrientation,
     });
 
     const displayedTable = catalog?.tables?.[presentedTableIndex] ?? null;
@@ -704,14 +721,20 @@ export function useSynthPatchViewModel({
 
     return {
         frames,
+        catalogError,
+        frameError,
         observedPosition,
         topStatus,
         failureDetail,
+        runtimePresentation,
+        displayedTableIndex: presentedTableIndex,
         displayedTableName: displayedTable?.name ?? "Factory bank",
         displayedFrameCount,
         desiredTableIndex,
+        desiredTableName: desiredTable?.name ?? displayedTable?.name ?? "Factory bank",
         tableOptions: catalog?.tables ?? [],
         canRetryDesiredTableLoad: runtimePresentation.isRetryableFailure,
+        wavetablePosition,
         playMode,
         glideTime,
         msegState,

@@ -13030,7 +13030,7 @@ function pointToMsegEditorCoordinates(point, width, height, options = {}) {
   if (orientation === "vertical") {
     return {
       x: metrics.plotLeft + normalizedY * metrics.plotWidth,
-      y: metrics.plotBottom - normalizedX * metrics.plotHeight
+      y: metrics.plotTop + normalizedX * metrics.plotHeight
     };
   }
   return {
@@ -13043,7 +13043,7 @@ function msegEditorCoordinatesToPoint(editorX, editorY, width, height, options =
   const orientation = options.orientation === "vertical" ? "vertical" : "horizontal";
   if (orientation === "vertical") {
     return {
-      x: clamp01((metrics.plotBottom - Number(editorY)) / metrics.plotHeight),
+      x: clamp01((Number(editorY) - metrics.plotTop) / metrics.plotHeight),
       y: clamp01((Number(editorX) - metrics.plotLeft) / metrics.plotWidth)
     };
   }
@@ -14340,6 +14340,7 @@ function buildMsegSurfacePaths(points, width, height, options = {}) {
     const x = index / (MSEG_EDITOR_SAMPLES - 1);
     const y = evaluateMsegShape({ points }, x);
     const coordinates = pointToMsegEditorCoordinates({ x, y }, width, height, {
+      orientation: options.orientation,
       pointRadius: options.pointRadius,
       horizontalPadding: options.horizontalPadding,
       verticalPadding: options.verticalPadding
@@ -14347,7 +14348,7 @@ function buildMsegSurfacePaths(points, width, height, options = {}) {
     path += `${index === 0 ? "M" : "L"} ${coordinates.x.toFixed(3)} ${coordinates.y.toFixed(3)} `;
   }
   const curvePath = path.trim();
-  const fillPath = `${curvePath} L ${metrics.plotRight.toFixed(3)} ${metrics.plotBottom.toFixed(3)} L ${metrics.plotLeft.toFixed(3)} ${metrics.plotBottom.toFixed(3)} Z`;
+  const fillPath = options.orientation === "vertical" ? `${curvePath} L ${metrics.plotLeft.toFixed(3)} ${metrics.plotBottom.toFixed(3)} L ${metrics.plotLeft.toFixed(3)} ${metrics.plotTop.toFixed(3)} Z` : `${curvePath} L ${metrics.plotRight.toFixed(3)} ${metrics.plotBottom.toFixed(3)} L ${metrics.plotLeft.toFixed(3)} ${metrics.plotBottom.toFixed(3)} Z`;
   return { curvePath, fillPath, metrics };
 }
 function SelectChevron({ className }) {
@@ -14389,17 +14390,19 @@ function OctaveShiftGlyph({
 }
 function MsegPreview({
   points,
+  orientation = "horizontal",
   className
 }) {
   const viewportRef = reactExports.useRef(null);
   const size = useResizeObserver$1(viewportRef);
   const { curvePath, fillPath, metrics } = reactExports.useMemo(() => {
     return buildMsegSurfacePaths(points, size.width, size.height, {
+      orientation,
       pointRadius: 0,
       horizontalPadding: MSEG_PREVIEW_HORIZONTAL_PADDING_PX,
       verticalPadding: MSEG_PREVIEW_VERTICAL_PADDING_PX
     });
-  }, [points, size.height, size.width]);
+  }, [orientation, points, size.height, size.width]);
   return /* @__PURE__ */ jsxRuntimeExports.jsxs(
     "svg",
     {
@@ -14494,19 +14497,24 @@ function EditableMsegSurface({
   surfaceRef,
   points,
   selectedPointIndex,
+  orientation = "horizontal",
   onPointerDown,
   onPointerMove,
   onPointerUp,
-  className
+  className,
+  dataRole
 }) {
   const size = useResizeObserver$1(surfaceRef);
-  const { curvePath, fillPath } = reactExports.useMemo(() => {
-    return buildMsegSurfacePaths(points, size.width, size.height);
-  }, [points, size.height, size.width]);
+  const { curvePath, fillPath, metrics } = reactExports.useMemo(() => {
+    return buildMsegSurfacePaths(points, size.width, size.height, {
+      orientation
+    });
+  }, [orientation, points, size.height, size.width]);
   return /* @__PURE__ */ jsxRuntimeExports.jsxs(
     "svg",
     {
       ref: surfaceRef,
+      "data-role": dataRole,
       className: joinClasses(
         "h-full w-full touch-none overflow-hidden rounded-[20px] bg-white/[0.03]",
         className
@@ -14522,10 +14530,10 @@ function EditableMsegSurface({
             "line",
             {
               className: "cosimo-grid-line",
-              x1: 0,
-              y1: size.height * (1 - step),
-              x2: size.width,
-              y2: size.height * (1 - step)
+              x1: metrics.plotLeft,
+              y1: metrics.plotTop + metrics.plotHeight * (1 - step),
+              x2: metrics.plotRight,
+              y2: metrics.plotTop + metrics.plotHeight * (1 - step)
             },
             `editable-h-${step}`
           )),
@@ -14533,10 +14541,10 @@ function EditableMsegSurface({
             "line",
             {
               className: "cosimo-grid-line",
-              x1: size.width * step,
-              y1: 0,
-              x2: size.width * step,
-              y2: size.height
+              x1: metrics.plotLeft + metrics.plotWidth * step,
+              y1: metrics.plotTop,
+              x2: metrics.plotLeft + metrics.plotWidth * step,
+              y2: metrics.plotBottom
             },
             `editable-v-${step}`
           ))
@@ -14544,7 +14552,9 @@ function EditableMsegSurface({
         /* @__PURE__ */ jsxRuntimeExports.jsx("path", { className: "cosimo-curve-fill", d: fillPath }),
         /* @__PURE__ */ jsxRuntimeExports.jsx("path", { className: "cosimo-curve-line", d: curvePath }),
         /* @__PURE__ */ jsxRuntimeExports.jsx("g", { children: points.map((point, pointIndex) => {
-          const coordinates = pointToMsegEditorCoordinates(point, size.width, size.height);
+          const coordinates = pointToMsegEditorCoordinates(point, size.width, size.height, {
+            orientation
+          });
           const isSelected = pointIndex === selectedPointIndex;
           return /* @__PURE__ */ jsxRuntimeExports.jsx(
             "circle",
@@ -23649,7 +23659,8 @@ function useStagePositionDrag({
 function useMsegEditorInteractions({
   msegState,
   msegController,
-  surfaceRef
+  surfaceRef,
+  orientation = "horizontal"
 }) {
   const [isOpen, setIsOpen] = reactExports.useState(false);
   const [selectedPointIndex, setSelectedPointIndex] = reactExports.useState(0);
@@ -23696,7 +23707,9 @@ function useMsegEditorInteractions({
       event.clientX - bounds.left,
       event.clientY - bounds.top,
       bounds.width,
-      bounds.height
+      bounds.height,
+      void 0,
+      { orientation }
     );
     if (targetPointIndex >= 0) {
       setSelectedPointIndex(targetPointIndex);
@@ -23716,7 +23729,8 @@ function useMsegEditorInteractions({
       event.clientX - bounds.left,
       event.clientY - bounds.top,
       bounds.width,
-      bounds.height
+      bounds.height,
+      { orientation }
     );
     msegController.current?.addPoint(point.x, point.y);
     const points = msegController.current?.getState().shape.points ?? [];
@@ -23727,7 +23741,7 @@ function useMsegEditorInteractions({
       setSelectedPointIndex(nextPointIndex);
     }
     event.preventDefault();
-  }, [msegController, msegState, surfaceRef]);
+  }, [msegController, msegState, orientation, surfaceRef]);
   const handlePointerMove = reactExports.useCallback((event) => {
     if (!activePointer || activePointer.pointerId !== event.pointerId || !surfaceRef.current) {
       return;
@@ -23744,13 +23758,14 @@ function useMsegEditorInteractions({
       event.clientX - bounds.left,
       event.clientY - bounds.top,
       bounds.width,
-      bounds.height
+      bounds.height,
+      { orientation }
     );
     setActivePointer((previousPointer) => previousPointer ? { ...previousPointer, moved: true } : previousPointer);
     msegController.current?.movePoint(activePointer.pointIndex, point.x, point.y);
     setSelectedPointIndex(activePointer.pointIndex);
     event.preventDefault();
-  }, [activePointer, msegController, surfaceRef]);
+  }, [activePointer, msegController, orientation, surfaceRef]);
   const handlePointerUp = reactExports.useCallback((event) => {
     if (!activePointer || activePointer.pointerId !== event.pointerId) {
       return;
@@ -23824,7 +23839,8 @@ function useSynthPatchViewModel({
   stageRef,
   msegEditorSurfaceRef,
   keyboardRef,
-  voiceModeCount
+  voiceModeCount,
+  msegSurfaceOrientation = "horizontal"
 }) {
   const runtimeStateMessage = usePatchEndpoint(RUNTIME_STATE_ENDPOINT_ID, null);
   const normalizedRuntimeState = reactExports.useMemo(
@@ -23871,7 +23887,8 @@ function useSynthPatchViewModel({
   const msegEditor = useMsegEditorInteractions({
     msegState,
     msegController,
-    surfaceRef: msegEditorSurfaceRef
+    surfaceRef: msegEditorSurfaceRef,
+    orientation: msegSurfaceOrientation
   });
   const displayedTable = catalog?.tables?.[presentedTableIndex] ?? null;
   const desiredTable = catalog?.tables?.[desiredTableIndex] ?? displayedTable;
@@ -23960,14 +23977,20 @@ function useSynthPatchViewModel({
   });
   return {
     frames,
+    catalogError,
+    frameError,
     observedPosition,
     topStatus,
     failureDetail,
+    runtimePresentation,
+    displayedTableIndex: presentedTableIndex,
     displayedTableName: displayedTable?.name ?? "Factory bank",
     displayedFrameCount,
     desiredTableIndex,
+    desiredTableName: desiredTable?.name ?? displayedTable?.name ?? "Factory bank",
     tableOptions: catalog?.tables ?? [],
     canRetryDesiredTableLoad: runtimePresentation.isRetryableFailure,
+    wavetablePosition,
     playMode,
     glideTime,
     msegState,

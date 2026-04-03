@@ -186,13 +186,17 @@ test("iOS patch manifest keeps the synth graph but switches to the mobile editor
     assert.equal("externals" in iosManifest, false);
 });
 
-test("desktop React UI tooling is wired for Vite dev and build loops", async () => {
+test("desktop and iPhone React UI tooling are wired for Vite dev and build loops", async () => {
     const packageJson = JSON.parse(await fs.readFile(path.join(repoRoot, "package.json"), "utf8"));
     const viteConfig = await fs.readFile(path.join(repoRoot, "ui", "vite.desktop.config.mjs"), "utf8");
+    const iosViteConfig = await fs.readFile(path.join(repoRoot, "ui", "vite.ios.config.mjs"), "utf8");
     const workerViteConfig = await fs.readFile(path.join(repoRoot, "ui", "vite.worker.config.mjs"), "utf8");
+    const buildScript = await fs.readFile(path.join(repoRoot, "ui", "build.mjs"), "utf8");
 
     assert.equal(packageJson.scripts["ui:desktop:dev"], "vite --config ui/vite.desktop.config.mjs");
     assert.equal(packageJson.scripts["ui:desktop:build"], "vite build --config ui/vite.desktop.config.mjs");
+    assert.equal(packageJson.scripts["ui:ios:dev"], "vite --config ui/vite.ios.config.mjs");
+    assert.equal(packageJson.scripts["ui:ios:build"], "vite build --config ui/vite.ios.config.mjs");
     assert.equal(packageJson.scripts["ui:worker:build"], "vite build --config ui/vite.worker.config.mjs");
     assert.equal(packageJson.scripts["ui:build"], "node ui/build.mjs");
     assert.match(viteConfig, /ensure_cmajor_runtime\.py/);
@@ -203,6 +207,16 @@ test("desktop React UI tooling is wired for Vite dev and build loops", async () 
     assert.doesNotMatch(viteConfig, /Vendor\/cmajor/);
     assert.match(viteConfig, /port:\s*5174/);
     assert.match(viteConfig, /outDir:\s*path\.join\(repoRoot,\s*"patch_gui",\s*"desktop"\)/);
+    assert.match(iosViteConfig, /ensure_cmajor_runtime\.py/);
+    assert.match(iosViteConfig, /serveHtmlEntry\("\/", path\.join\(repoRoot,\s*"ui",\s*"ios",\s*"index\.html"\)\)/);
+    assert.match(iosViteConfig, /serveHtmlEntry\("\/ui\/ios\/index\.html", path\.join\(repoRoot,\s*"ui",\s*"ios",\s*"index\.html"\)\)/);
+    assert.match(iosViteConfig, /servePatchModuleAlias\("\/patch_gui\/index\.ios\.js"/);
+    assert.match(iosViteConfig, /serveStaticDirectory\("\/patch_gui", path\.join\(repoRoot,\s*"patch_gui"\)\)/);
+    assert.match(iosViteConfig, /serveStaticDirectory\("\/cmaj_api", cmajorApiRoot\)/);
+    assert.match(iosViteConfig, /port:\s*5175/);
+    assert.match(iosViteConfig, /outDir:\s*path\.join\(repoRoot,\s*"patch_gui"\)/);
+    assert.match(iosViteConfig, /fileName:\s*\(\)\s*=>\s*"index\.ios\.js"/);
+    assert.match(buildScript, /runBuild\("\.\/vite\.ios\.config\.mjs"\)/);
     assert.match(workerViteConfig, /fileName:\s*\(\)\s*=>\s*"wavetable-worker\.js"/);
     assert.match(workerViteConfig, /ui",\s*"worker",\s*"wavetable-worker\.ts"/);
 });
@@ -331,10 +345,10 @@ test("desktop dev plug-in build enables the webview dev server and lets Vite bui
 test("iPhone generator builds UI assets before Python writes manifests so copied patch_gui includes generated modules", async () => {
     const buildScript = await fs.readFile(path.join(repoRoot, "scripts", "generate_ios_auv3_plugin.sh"), "utf8");
 
-    assert.match(buildScript, /npm run ui:build/);
-    assert.match(buildScript, /uv run python "\$repo_root\/build_assets\.py"/);
+    assert.match(buildScript, /\(\s*cd "\$repo_root"\s*npm run ui:build\s*\)/s);
+    assert.match(buildScript, /\(\s*cd "\$repo_root"\s*uv run python build_assets\.py\s*\)/s);
     assert.ok(
-        buildScript.indexOf("npm run ui:build") < buildScript.indexOf('uv run python "$repo_root/build_assets.py"'),
+        buildScript.indexOf("npm run ui:build") < buildScript.indexOf("uv run python build_assets.py"),
         "The iPhone generator should build the UI before build_assets.py copies patch_gui into app bundles",
     );
 });
@@ -378,6 +392,17 @@ test("legacy patch shell resource client is emitted from the TypeScript source i
     );
     assert.match(generatedResourceClient, /export function createIOSResourceClient/);
     assert.doesNotMatch(generatedResourceClient, /^\s*export type /m);
+});
+
+test("the iPhone patch view is emitted as a real React bundle instead of a wrapper around patch_gui/index.js", async () => {
+    const builtIOSPatchView = await fs.readFile(path.join(repoRoot, "patch_gui", "index.ios.js"), "utf8");
+
+    assert.match(builtIOSPatchView, /class CosimoIOSReactViewElement extends HTMLElement/);
+    assert.match(builtIOSPatchView, /function createIOSPatchView/);
+    assert.match(builtIOSPatchView, /"cosimo-synth-view"/);
+    assert.match(builtIOSPatchView, /Swipe \+ Drag/);
+    assert.doesNotMatch(builtIOSPatchView, /createPatchViewWithOptions/);
+    assert.doesNotMatch(builtIOSPatchView, /import \{ createPatchViewWithOptions \} from "\.\/index\.js"/);
 });
 
 test("desktop and iPhone wavetable views share the same renderer implementation", async () => {

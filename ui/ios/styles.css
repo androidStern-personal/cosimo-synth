@@ -1,0 +1,611 @@
+@import "tailwindcss";
+
+:host {
+    display: block;
+    box-sizing: border-box;
+    width: 100%;
+    height: 100%;
+    min-height: 100dvh;
+    overflow-x: hidden;
+    overscroll-behavior: none;
+    background: #04070f;
+    color: #eef2f5;
+    color-scheme: dark;
+    font-family: "SF Pro Display", "SF Pro Text", -apple-system, BlinkMacSystemFont, "Avenir Next", sans-serif;
+    --cosimo-ios-top-inset: 0px;
+    --cosimo-ios-right-inset: 0px;
+    --cosimo-ios-bottom-inset: 0px;
+    --cosimo-ios-left-inset: 0px;
+    --cosimo-ios-safe-top: calc(env(safe-area-inset-top) + var(--cosimo-ios-top-inset));
+    --cosimo-ios-safe-right: calc(env(safe-area-inset-right) + var(--cosimo-ios-right-inset));
+    --cosimo-ios-safe-bottom: calc(env(safe-area-inset-bottom) + var(--cosimo-ios-bottom-inset));
+    --cosimo-ios-safe-left: calc(env(safe-area-inset-left) + var(--cosimo-ios-left-inset));
+    --cosimo-stage-min-height: 248px;
+    --cosimo-keyboard-height: 94px;
+    --cosimo-control-height: 54px;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+button,
+input,
+select {
+    font: inherit;
+}
+
+.ios-shell {
+    box-sizing: border-box;
+    width: 100%;
+    height: 100%;
+    min-height: 100dvh;
+    padding:
+        var(--cosimo-ios-safe-top)
+        var(--cosimo-ios-safe-right)
+        var(--cosimo-ios-safe-bottom)
+        var(--cosimo-ios-safe-left);
+    min-width: 0;
+    display: grid;
+    grid-template-rows: minmax(0, 1fr) auto;
+}
+
+.ios-top-row {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+    min-height: 0;
+    overflow: hidden;
+}
+
+.ios-main-view {
+    display: grid;
+    min-height: 0;
+    grid-column: 1;
+    grid-row: 1;
+}
+
+.ios-scroll {
+    height: 100%;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+}
+
+.ios-content {
+    display: grid;
+    min-width: 0;
+    align-content: start;
+    gap: 16px;
+    padding: 0 16px;
+}
+
+.wavetable-panel,
+.play-panel,
+.mseg-shell,
+.keyboard-footer {
+    min-width: 0;
+}
+
+.section-label,
+.display-status,
+.bank-readout,
+.mini-label,
+.octave-readout,
+.glide-time-readout,
+.mseg-depth-readout,
+.mseg-rate-readout,
+.mseg-launcher-rate-readout {
+    font-family: "SF Mono", "IBM Plex Mono", Menlo, monospace;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+}
+
+.wavetable-stage {
+    position: relative;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    min-height: var(--cosimo-stage-min-height);
+    aspect-ratio: 1.55 / 1;
+    overflow: hidden;
+    background: transparent;
+    touch-action: none;
+}
+
+.wavetable-stage::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background:
+        linear-gradient(rgba(255, 255, 255, 0.026) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.026) 1px, transparent 1px);
+    background-size: 28px 28px;
+    opacity: 0.24;
+    pointer-events: none;
+}
+
+.wavetable-display-stack {
+    position: absolute;
+    inset: 0;
+}
+
+.wavetable-layer {
+    position: absolute;
+    inset: 0;
+    will-change: transform;
+}
+
+.display-overlay {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    text-align: center;
+    padding: 20px;
+    font-size: 13px;
+    color: rgba(255, 216, 172, 0.86);
+    background: rgba(4, 7, 18, 0.82);
+    backdrop-filter: blur(4px);
+}
+
+.display-overlay[hidden] {
+    display: none;
+}
+
+.stage-copy {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+    gap: 8px;
+    padding: 12px;
+    pointer-events: none;
+}
+
+.stage-copy-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    pointer-events: auto;
+}
+
+.stage-copy-row:last-child {
+    align-items: end;
+}
+
+.mini-label {
+    font-size: 10px;
+    color: rgba(212, 220, 230, 0.34);
+}
+
+.mini-label.active {
+    color: #87d7f5;
+}
+
+.mini-label.warm {
+    color: #f2b86b;
+}
+
+.display-status,
+.bank-readout {
+    font-size: 10px;
+    color: rgba(212, 220, 230, 0.42);
+}
+
+.display-status {
+    justify-self: start;
+    padding: 6px 10px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.shape-readout {
+    font-family: "SF Pro Display", "SF Pro Text", -apple-system, BlinkMacSystemFont, sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: -0.03em;
+    color: #87d7f5;
+}
+
+.bank-picker-trigger {
+    position: relative;
+    display: inline-flex;
+    align-items: end;
+    min-width: 0;
+    max-width: min(72%, 260px);
+    pointer-events: auto;
+}
+
+.table-select-overlay {
+    position: absolute;
+    inset: -8px -10px;
+    width: calc(100% + 20px);
+    min-height: 40px;
+    opacity: 0.001;
+    appearance: none;
+    border: 0;
+    background: transparent;
+    color: transparent;
+    font-size: 16px;
+    cursor: pointer;
+}
+
+.bank-readout {
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.table-retry-button {
+    border: 1px solid rgba(245, 108, 182, 0.28);
+    border-radius: 999px;
+    background: rgba(245, 108, 182, 0.08);
+    color: #ffd8e8;
+    padding: 6px 10px;
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    pointer-events: auto;
+}
+
+.table-retry-button[hidden] {
+    display: none;
+}
+
+.table-error-banner {
+    display: block;
+    min-width: 0;
+    padding: 10px 12px;
+    border-radius: 14px;
+    border: 1px solid rgba(245, 108, 182, 0.24);
+    background: rgba(245, 108, 182, 0.12);
+    color: #ffd8e8;
+    font-size: 12px;
+    line-height: 1.35;
+}
+
+.table-error-banner[hidden] {
+    display: none;
+}
+
+.play-grid {
+    display: grid;
+    min-width: 0;
+    grid-template-columns: minmax(132px, 160px) minmax(0, 1fr);
+    gap: 10px;
+    align-items: center;
+}
+
+.play-field {
+    display: grid;
+    min-width: 0;
+}
+
+.play-select {
+    width: 100%;
+    min-height: 36px;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.04);
+    color: #eef2f5;
+    padding: 8px 10px;
+    font-size: 13px;
+}
+
+.glide-field-body {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px;
+    align-items: center;
+}
+
+.glide-time-slider {
+    width: 100%;
+}
+
+.glide-time-readout,
+.mseg-depth-readout,
+.mseg-rate-readout,
+.mseg-launcher-rate-readout {
+    font-size: 12px;
+    color: #87d7f5;
+    letter-spacing: 0.08em;
+    white-space: nowrap;
+}
+
+.mseg-shell {
+    display: grid;
+    gap: 10px;
+}
+
+.mseg-launcher {
+    display: grid;
+    gap: 12px;
+}
+
+.mseg-launcher-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: end;
+    gap: 12px;
+}
+
+.mseg-launcher-copy,
+.mseg-modal-copy {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+}
+
+.mseg-eyebrow {
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: rgba(212, 220, 230, 0.34);
+    font-family: "SF Mono", "IBM Plex Mono", Menlo, monospace;
+}
+
+.mseg-route-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: #eef2f5;
+    letter-spacing: -0.03em;
+}
+
+.mseg-preview-button {
+    display: block;
+    width: 100%;
+    appearance: none;
+    border: 0;
+    background: transparent;
+    padding: 0;
+    text-align: left;
+}
+
+.mseg-preview-shell {
+    height: 128px;
+    min-height: 128px;
+}
+
+.mseg-preview-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+}
+
+.mseg-controls {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px;
+    align-items: center;
+}
+
+.mseg-depth {
+    display: grid;
+    gap: 8px;
+}
+
+.mseg-depth-label {
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: rgba(212, 220, 230, 0.34);
+    font-family: "SF Mono", "IBM Plex Mono", Menlo, monospace;
+}
+
+.mseg-depth-slider,
+.mseg-rate-slider {
+    width: 100%;
+}
+
+.mseg-modal-layer {
+    grid-column: 1;
+    grid-row: 1;
+    min-height: 0;
+    padding: 0;
+    position: relative;
+    inset: auto;
+    pointer-events: none;
+}
+
+.mseg-modal-layer[data-open="true"] {
+    pointer-events: auto;
+}
+
+.mseg-modal-backdrop {
+    display: none;
+}
+
+.mseg-modal {
+    position: relative;
+    min-height: 100%;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    gap: 4px;
+    padding: 0 8px 0;
+}
+
+.mseg-modal-copy {
+    display: none;
+}
+
+.mseg-modal-head {
+    display: flex;
+    justify-content: end;
+    align-items: start;
+    min-height: 24px;
+    padding: 0;
+}
+
+.mseg-modal-close {
+    appearance: none;
+    -webkit-appearance: none;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    color: #eef2f5;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 24px;
+    min-width: 28px;
+    min-height: 24px;
+    padding: 0;
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 1;
+    letter-spacing: 0;
+    text-transform: none;
+}
+
+.mseg-modal-stage {
+    min-height: 0;
+    padding-top: 3px;
+}
+
+.mseg-modal-editor-shell {
+    height: 100%;
+    min-height: 0;
+}
+
+.mseg-modal-surface {
+    display: block;
+    width: 100%;
+    height: 100%;
+    min-height: 148px;
+    touch-action: none;
+}
+
+.mseg-modal-footer {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    gap: 12px;
+    align-items: center;
+}
+
+.mseg-rate {
+    display: grid;
+    gap: 8px;
+}
+
+.mseg-modal-footer-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.mseg-loop-button {
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: #87d7f5;
+    padding: 0;
+    min-width: 36px;
+    min-height: 36px;
+}
+
+.mseg-loop-button svg {
+    width: 20px;
+    height: 20px;
+    fill: currentColor;
+}
+
+.keyboard-footer {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    gap: 0;
+    padding: 0 12px;
+    background: #04070f;
+}
+
+.keyboard-toolbar {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.octave-controls {
+    display: inline-grid;
+    grid-template-columns: auto auto auto;
+    gap: 8px;
+    align-items: center;
+}
+
+.octave-button {
+    min-width: 72px;
+    min-height: 34px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.04);
+    color: #eef2f5;
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.octave-button:disabled {
+    opacity: 0.32;
+}
+
+.octave-readout {
+    min-width: 88px;
+    text-align: center;
+    font-size: 12px;
+    color: #87d7f5;
+}
+
+.keyboard-host {
+    min-width: 0;
+    min-height: var(--cosimo-keyboard-height);
+    display: grid;
+    align-items: stretch;
+}
+
+.keyboard {
+    width: 100%;
+    height: var(--cosimo-keyboard-height);
+    border-radius: 14px 14px 0 0;
+    overflow: hidden;
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 18%),
+        linear-gradient(180deg, rgba(10, 13, 18, 0.68), rgba(7, 9, 13, 0.92));
+    padding: 6px 6px 0;
+    touch-action: none;
+}
+
+.cosimo-grid-line {
+    stroke: rgba(255, 255, 255, 0.08);
+    stroke-width: 1;
+}
+
+.cosimo-curve-fill {
+    fill: rgba(135, 215, 245, 0.08);
+}
+
+.cosimo-curve-line {
+    fill: none;
+    stroke: #87d7f5;
+    stroke-width: 3;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+@media (max-height: 720px) {
+    .ios-content {
+        gap: 14px;
+    }
+
+    .mseg-preview-shell,
+    .mseg-modal-surface {
+        height: 136px;
+        min-height: 136px;
+    }
+}

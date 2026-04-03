@@ -2437,8 +2437,8 @@ export class CosimoSynthView extends HTMLElement {
         const curvePath = pathData.trim();
         surface.curve.setAttribute("d", curvePath);
         surface.fill.setAttribute("d", orientation === "vertical"
-            ? `${curvePath} L ${metrics.plotLeft.toFixed(3)} ${metrics.plotTop.toFixed(3)} ` +
-                `L ${metrics.plotLeft.toFixed(3)} ${metrics.plotBottom.toFixed(3)} Z`
+            ? `${curvePath} L ${metrics.plotLeft.toFixed(3)} ${metrics.plotBottom.toFixed(3)} ` +
+                `L ${metrics.plotLeft.toFixed(3)} ${metrics.plotTop.toFixed(3)} Z`
             : `${curvePath} L ${metrics.plotRight.toFixed(3)} ${metrics.plotBottom.toFixed(3)} ` +
                 `L ${metrics.plotLeft.toFixed(3)} ${metrics.plotBottom.toFixed(3)} Z`
         );
@@ -3630,9 +3630,13 @@ export class CosimoSynthView extends HTMLElement {
                     --cosimo-keyboard-height: 122px;
                     --cosimo-control-height: 54px;
                     --cosimo-ios-top-inset: 0px;
+                    --cosimo-ios-right-inset: 0px;
                     --cosimo-ios-bottom-inset: 0px;
+                    --cosimo-ios-left-inset: 0px;
                     --cosimo-ios-safe-top: calc(env(safe-area-inset-top) + var(--cosimo-ios-top-inset));
+                    --cosimo-ios-safe-right: calc(env(safe-area-inset-right) + var(--cosimo-ios-right-inset));
                     --cosimo-ios-safe-bottom: calc(env(safe-area-inset-bottom) + var(--cosimo-ios-bottom-inset));
+                    --cosimo-ios-safe-left: calc(env(safe-area-inset-left) + var(--cosimo-ios-left-inset));
                     --cosimo-bottom-safe-area: env(safe-area-inset-bottom);
                 }
 
@@ -3643,9 +3647,9 @@ export class CosimoSynthView extends HTMLElement {
                     min-height: 100dvh;
                     padding:
                         var(--cosimo-ios-safe-top)
-                        env(safe-area-inset-right)
+                        var(--cosimo-ios-safe-right)
                         var(--cosimo-ios-safe-bottom)
-                        env(safe-area-inset-left);
+                        var(--cosimo-ios-safe-left);
                     min-width: 0;
                     display: grid;
                     grid-template-rows: minmax(0, 1fr) auto;
@@ -3764,6 +3768,7 @@ export class CosimoSynthView extends HTMLElement {
                     font-size: 10px;
                     letter-spacing: 0.08em;
                     text-transform: uppercase;
+                    pointer-events: auto;
                 }
 
                 .table-retry-button[hidden] {

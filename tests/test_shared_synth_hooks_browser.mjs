@@ -5,6 +5,9 @@ import { chromium } from "playwright";
 import {
     deserializeMsegPlayback,
     deserializeMsegShape,
+    MSEG_EDITOR_HORIZONTAL_PADDING_PX,
+    MSEG_EDITOR_VERTICAL_PADDING_PX,
+    MSEG_POINT_RADIUS_PX,
     renderMsegShape,
     toMsegPlaybackConfigEvent,
 } from "../patch_gui/mseg.mjs";
@@ -71,6 +74,35 @@ async function getHarnessSnapshot(page) {
 
         return getSnapshot();
     });
+}
+
+async function getSurfaceRect(page) {
+    return page.evaluate(() => {
+        const surface = document.getElementById("mseg-surface");
+        if (!(surface instanceof SVGSVGElement)) {
+            throw new Error("MSEG surface is missing.");
+        }
+
+        const rect = surface.getBoundingClientRect();
+        return {
+            left: rect.left,
+            top: rect.top,
+            width: rect.width,
+            height: rect.height,
+        };
+    });
+}
+
+function getIndependentVerticalSurfacePoint(rect, x, y) {
+    const insetX = MSEG_POINT_RADIUS_PX + MSEG_EDITOR_HORIZONTAL_PADDING_PX;
+    const insetY = MSEG_POINT_RADIUS_PX + MSEG_EDITOR_VERTICAL_PADDING_PX;
+    const plotWidth = rect.width - (insetX * 2);
+    const plotHeight = rect.height - (insetY * 2);
+
+    return {
+        x: rect.left + insetX + (y * plotWidth),
+        y: rect.top + insetY + (x * plotHeight),
+    };
 }
 
 function assertAlmostEqual(actual, expected, epsilon = 1e-6) {
@@ -600,5 +632,63 @@ test("useMsegEditorInteractions deletes an interior point on click-release, move
         assert.equal(snapshot.actionLog.filter(({ type }) => type === "delete").length, 0);
     } finally {
         await movePage.close();
+    }
+});
+
+test("useMsegEditorInteractions maps add and move gestures through the vertical iPhone editor orientation", async () => {
+    const page = await openModulePage();
+
+    try {
+        await installHarness(page, "installMsegEditorInteractionsHookHarness");
+        await invokeHarness(page, "setOrientation", "vertical");
+        await invokeHarness(page, "openEditor");
+        const surfaceRect = await getSurfaceRect(page);
+
+        const addCoordinates = getIndependentVerticalSurfacePoint(surfaceRect, 0.72, 0.22);
+        await invokeHarness(page, "dispatchPointer", "pointerdown", {
+            pointerId: 31,
+            button: 0,
+            clientX: addCoordinates.x,
+            clientY: addCoordinates.y,
+        });
+
+        await page.waitForFunction(() => {
+            const snapshot = window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.();
+            return snapshot?.pointCount === 4;
+        });
+
+        let snapshot = await getHarnessSnapshot(page);
+        assert.equal(snapshot.orientation, "vertical");
+        assert.equal(snapshot.actionLog.at(-1).type, "add");
+        assertAlmostEqual(snapshot.points[2].x, 0.72, 1e-6);
+        assertAlmostEqual(snapshot.points[2].y, 0.22, 1e-6);
+
+        const movedCoordinates = getIndependentVerticalSurfacePoint(surfaceRect, 0.6, 0.64);
+        const movedPoint = getIndependentVerticalSurfacePoint(surfaceRect, snapshot.points[2].x, snapshot.points[2].y);
+        await invokeHarness(page, "dispatchPointer", "pointerdown", {
+            pointerId: 32,
+            button: 0,
+            clientX: movedPoint.x,
+            clientY: movedPoint.y,
+        });
+        await invokeHarness(page, "dispatchPointer", "pointermove", {
+            pointerId: 32,
+            button: 0,
+            clientX: movedCoordinates.x,
+            clientY: movedCoordinates.y,
+        });
+        await invokeHarness(page, "dispatchPointer", "pointerup", {
+            pointerId: 32,
+            button: 0,
+            clientX: movedCoordinates.x,
+            clientY: movedCoordinates.y,
+        });
+
+        snapshot = await getHarnessSnapshot(page);
+        assert.equal(snapshot.actionLog.at(-1).type, "move");
+        assertAlmostEqual(snapshot.points[2].x, 0.6, 1e-6);
+        assertAlmostEqual(snapshot.points[2].y, 0.64, 1e-6);
+    } finally {
+        await page.close();
     }
 });
