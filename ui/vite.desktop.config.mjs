@@ -172,6 +172,10 @@ export default defineConfig(({ command }) => ({
         tailwindcss(),
         serveHtmlEntry("/", path.join(repoRoot, "ui", "desktop", "index.html")),
         serveHtmlEntry("/ui/desktop/index.html", path.join(repoRoot, "ui", "desktop", "index.html")),
+        serveHtmlEntry(
+            "/tests/helpers/module_test_shell.html",
+            path.join(repoRoot, "tests", "helpers", "module_test_shell.html"),
+        ),
         servePatchModuleAlias("/patch_gui/desktop/index.js", desktopPatchViewSource),
         serveStaticDirectory("/cmaj_api", cmajorApiRoot),
     ],

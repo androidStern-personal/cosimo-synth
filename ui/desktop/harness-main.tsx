@@ -1,9 +1,32 @@
-import { createRoot } from "react-dom/client";
-
 import "./styles.css";
-import { DesktopPatchView } from "./DesktopPatchView";
 import { loadHarnessManifest, MockPatchConnection } from "../shared/patch-connection-mock";
-import { createDesktopResourceClient } from "../shared/resource-client";
+import { createDesktopPatchView } from "./patch-view-entry";
+
+declare global {
+    interface Window {
+        __COSIMO_DESKTOP_HARNESS__?: {
+            patchConnection: MockPatchConnection;
+            getSnapshot: () => ReturnType<MockPatchConnection["getDebugSnapshot"]>;
+            getRenderedState: () => {
+                errorText: string | null;
+                hasCanvas: boolean;
+                keyboardDebug: unknown | null;
+                keyboardNoteCount: string | null;
+                keyboardRootNote: string | null;
+                stageLabel: string | null;
+            };
+            clearDebugLog: () => void;
+            setRuntimeState: (nextState: Parameters<MockPatchConnection["setRuntimeState"]>[0]) => void;
+            setParameterValue: (
+                endpointID: string,
+                value: unknown,
+                emitEndpoint?: boolean,
+            ) => void;
+            emitEffectiveWavetablePosition: (position: number, voiceGeneration?: number) => void;
+            setStoredStateValue: (key: string, value: unknown) => void;
+        };
+    }
+}
 
 const rootElement = document.getElementById("root");
 
@@ -12,6 +35,38 @@ if (!rootElement) {
 }
 
 const harnessRoot = rootElement;
+
+function getDesktopViewHost() {
+    return harnessRoot.querySelector("cosimo-desktop-react-view");
+}
+
+function getDesktopShadowRoot() {
+    return getDesktopViewHost()?.shadowRoot ?? null;
+}
+
+function readHarnessFatalErrorText() {
+    return harnessRoot.querySelector(":scope > pre")?.textContent ?? null;
+}
+
+function readKeyboardDebug() {
+    const keyboard = getDesktopShadowRoot()?.querySelector(".keyboard") as {
+        debug?: unknown;
+        resetDebug?: () => void;
+    } | null;
+    return keyboard?.debug ?? null;
+}
+
+function readKeyboardAttribute(name: "note-count" | "root-note") {
+    const keyboard = getDesktopShadowRoot()?.querySelector(".keyboard");
+    return keyboard?.getAttribute(name) ?? null;
+}
+
+function clearKeyboardDebug() {
+    const keyboard = getDesktopShadowRoot()?.querySelector(".keyboard") as {
+        resetDebug?: () => void;
+    } | null;
+    keyboard?.resetDebug?.();
+}
 
 function renderFatalError(error: unknown) {
     const message = error instanceof Error
@@ -47,14 +102,38 @@ try {
     const manifest = await loadHarnessManifest();
     document.body.dataset.bootStage = "manifest-loaded";
     const patchConnection = new MockPatchConnection(manifest);
+    window.__COSIMO_DESKTOP_HARNESS__ = {
+        patchConnection,
+        getSnapshot: () => patchConnection.getDebugSnapshot(),
+        getRenderedState: () => {
+            const shadowRoot = getDesktopShadowRoot();
+            return {
+                errorText: shadowRoot?.querySelector("pre")?.textContent ?? readHarnessFatalErrorText(),
+                hasCanvas: Boolean(shadowRoot?.querySelector(".cosimo-stage canvas")),
+                keyboardDebug: readKeyboardDebug(),
+                keyboardNoteCount: readKeyboardAttribute("note-count"),
+                keyboardRootNote: readKeyboardAttribute("root-note"),
+                stageLabel: shadowRoot?.querySelector(".cosimo-stage .truncate")?.textContent?.trim() ?? null,
+            };
+        },
+        clearDebugLog: () => {
+            patchConnection.clearDebugLog();
+            clearKeyboardDebug();
+        },
+        setRuntimeState: (nextState) => patchConnection.setRuntimeState(nextState),
+        setParameterValue: (endpointID, value, emitEndpoint = false) => {
+            patchConnection.setParameterValue(endpointID, value, emitEndpoint);
+        },
+        emitEffectiveWavetablePosition: (position, voiceGeneration = 1) => {
+            patchConnection.emitEffectiveWavetablePosition(position, voiceGeneration);
+        },
+        setStoredStateValue: (key, value) => patchConnection.setStoredStateValue(key, value),
+    };
     document.body.dataset.bootStage = "rendering";
-
-    createRoot(harnessRoot).render(
-        <DesktopPatchView
-            patchConnection={patchConnection}
-            resourceClient={createDesktopResourceClient(patchConnection)}
-        />
-    );
+    const patchView = createDesktopPatchView(patchConnection);
+    patchView.style.width = "100%";
+    patchView.style.height = "100%";
+    harnessRoot.replaceChildren(patchView);
     document.body.dataset.bootStage = "render-called";
 } catch (error) {
     renderFatalError(error);

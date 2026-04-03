@@ -15,9 +15,45 @@ type EndpointListener = (value: unknown) => void;
 type StatusListener = (status: unknown) => void;
 type StoredStateListener = (message: unknown) => void;
 
+function createKeyboardDebugState() {
+    return {
+        attachCalls: [] as Array<{ endpointID: string }>,
+        detachCount: 0,
+        handledKeys: [] as Array<{ key: string; isDown: boolean }>,
+        allNotesOffCount: 0,
+        refreshHTMLCount: 0,
+        refreshActiveNoteElementsCount: 0,
+    };
+}
+
+const qwertyNoteOffsets = new Map([
+    ["a", 0],
+    ["w", 1],
+    ["s", 2],
+    ["e", 3],
+    ["d", 4],
+    ["f", 5],
+    ["t", 6],
+    ["g", 7],
+    ["y", 8],
+    ["h", 9],
+    ["u", 10],
+    ["j", 11],
+    ["k", 12],
+    ["o", 13],
+    ["l", 14],
+    ["p", 15],
+    [";", 16],
+    ["'", 17],
+]);
+
 class MockPianoKeyboard extends HTMLElement {
+    notes: unknown[] = [];
     naturalWidth = 22;
     accidentalWidth = 13;
+    private attachedPatchConnection: PatchConnectionLike | null = null;
+    private attachedEndpointID: string | null = null;
+    debug = createKeyboardDebugState();
 
     constructor() {
         super();
@@ -52,15 +88,63 @@ class MockPianoKeyboard extends HTMLElement {
 
     handleExternalMIDI() {}
 
-    attachToPatchConnection() {}
+    handleKey(event: KeyboardEvent, isDown: boolean) {
+        this.debug.handledKeys.push({
+            key: event.key,
+            isDown,
+        });
 
-    detachPatchConnection() {}
+        if (!this.attachedPatchConnection || !this.attachedEndpointID) {
+            return;
+        }
 
-    refreshHTML() {}
+        const noteOffset = qwertyNoteOffsets.get(event.key.toLowerCase());
+
+        if (noteOffset === undefined) {
+            return;
+        }
+
+        const midiStatus = isDown ? 0x90 : 0x80;
+        const rootNote = Math.max(0, Math.round(Number(this.getAttribute("root-note")) || 0));
+        const noteNumber = rootNote + noteOffset;
+        const velocity = isDown ? 100 : 0;
+        const shortMIDICode = midiStatus | (noteNumber << 8) | (velocity << 16);
+
+        this.attachedPatchConnection.sendMIDIInputEvent?.(this.attachedEndpointID, shortMIDICode);
+    }
+
+    allNotesOff() {
+        this.debug.allNotesOffCount += 1;
+    }
+
+    attachToPatchConnection(_patchConnection: PatchConnectionLike, endpointID: string) {
+        this.attachedPatchConnection = _patchConnection;
+        this.attachedEndpointID = endpointID;
+        this.debug.attachCalls.push({ endpointID });
+        (_patchConnection as { recordKeyboardAttach?: (endpointID: string) => void }).recordKeyboardAttach?.(endpointID);
+    }
+
+    detachPatchConnection() {
+        const patchConnection = this.attachedPatchConnection;
+        this.attachedPatchConnection = null;
+        this.attachedEndpointID = null;
+        this.debug.detachCount += 1;
+        (patchConnection as { recordKeyboardDetach?: () => void })?.recordKeyboardDetach?.();
+    }
+
+    refreshHTML() {
+        this.debug.refreshHTMLCount += 1;
+    }
 
     bindRenderedTouchHandlers() {}
 
-    refreshActiveNoteElements() {}
+    refreshActiveNoteElements() {
+        this.debug.refreshActiveNoteElementsCount += 1;
+    }
+
+    resetDebug() {
+        this.debug = createKeyboardDebugState();
+    }
 }
 
 function createDefaultRuntimeState() {
@@ -143,6 +227,13 @@ export class MockPatchConnection implements PatchConnectionLike {
         PianoKeyboard: MockPianoKeyboard,
         ParameterControls: {},
     };
+    sentMessages: Array<{ endpointID: string; value: unknown }> = [];
+    gestureStarts: string[] = [];
+    gestureEnds: string[] = [];
+    endpointMessages: Array<{ endpointID: string; value: unknown }> = [];
+    midiInputEvents: Array<{ endpointID: string; value: number }> = [];
+    keyboardAttachCalls: Array<{ endpointID: string }> = [];
+    keyboardDetachCount = 0;
 
     private parameterValues = new Map<string, unknown>([
         [wavetablePositionEndpointID, 0.28],
@@ -186,15 +277,26 @@ export class MockPatchConnection implements PatchConnectionLike {
     }
 
     sendEventOrValue(endpointID: string, value: unknown) {
+        this.sentMessages.push({ endpointID, value });
+
         if (endpointID === runtimeSyncRequestEndpointID) {
             this.emitEndpoint(runtimeStateEndpointID, this.runtimeState);
             return;
         }
 
         if (endpointID === retryDesiredTableRequestEndpointID) {
+            const retryGeneration = Math.max(
+                this.runtimeState.activeGeneration,
+                this.runtimeState.loadingGeneration,
+                this.runtimeState.failedGeneration,
+                0,
+            ) + 1;
             this.runtimeState = {
                 ...this.runtimeState,
                 hasFailure: false,
+                hasLoading: true,
+                loadingTableIndex: this.runtimeState.desiredTableIndex,
+                loadingGeneration: retryGeneration,
             };
             this.emitEndpoint(runtimeStateEndpointID, this.runtimeState);
             return;
@@ -212,19 +314,38 @@ export class MockPatchConnection implements PatchConnectionLike {
 
         if (endpointID === wavetableSelectEndpointID) {
             const tableIndex = Math.max(0, Math.trunc(Number(value) || 0));
+            const isAlreadyActive = this.runtimeState.hasActive && this.runtimeState.activeTableIndex === tableIndex;
+            const nextGeneration = Math.max(
+                this.runtimeState.activeGeneration,
+                this.runtimeState.loadingGeneration,
+                this.runtimeState.failedGeneration,
+                0,
+            ) + 1;
             this.runtimeState = {
                 ...this.runtimeState,
                 desiredTableIndex: tableIndex,
-                activeTableIndex: tableIndex,
                 desiredIntentSerial: this.runtimeState.desiredIntentSerial + 1,
+                hasLoading: !isAlreadyActive,
+                loadingTableIndex: tableIndex,
+                loadingGeneration: isAlreadyActive ? 0 : nextGeneration,
+                hasFailure: false,
+                failedTableIndex: 0,
+                failedGeneration: 0,
+                failureScope: 0,
+                failurePhase: 0,
+                failureReasonCode: 0,
             };
             this.emitEndpoint(runtimeStateEndpointID, this.runtimeState);
         }
     }
 
-    sendParameterGestureStart() {}
+    sendParameterGestureStart(endpointID: string) {
+        this.gestureStarts.push(endpointID);
+    }
 
-    sendParameterGestureEnd() {}
+    sendParameterGestureEnd(endpointID: string) {
+        this.gestureEnds.push(endpointID);
+    }
 
     addEndpointListener(endpointID: string, listener: EndpointListener) {
         const listeners = this.endpointListeners.get(endpointID) ?? new Set();
@@ -237,10 +358,12 @@ export class MockPatchConnection implements PatchConnectionLike {
     }
 
     private emitEndpoint(endpointID: string, value: unknown) {
+        this.endpointMessages.push({ endpointID, value });
         this.endpointListeners.get(endpointID)?.forEach((listener) => listener(value));
     }
 
     sendMIDIInputEvent(endpointID: string, value: number) {
+        this.midiInputEvents.push({ endpointID, value });
         this.emitEndpoint(endpointID, { message: value });
     }
 
@@ -282,6 +405,76 @@ export class MockPatchConnection implements PatchConnectionLike {
     }
 
     sendStoredStateValue(key: string, value: unknown) {
+        this.storedState.set(key, value);
+        const message = { key, value };
+        this.storedStateListeners.forEach((listener) => listener(message));
+    }
+
+    clearDebugLog() {
+        this.sentMessages = [];
+        this.gestureStarts = [];
+        this.gestureEnds = [];
+        this.endpointMessages = [];
+        this.midiInputEvents = [];
+    }
+
+    getDebugSnapshot() {
+        return {
+            parameterValues: Object.fromEntries(this.parameterValues.entries()),
+            runtimeState: { ...this.runtimeState },
+            storedState: Object.fromEntries(this.storedState.entries()),
+            sentMessages: this.sentMessages.map((message) => ({
+                endpointID: message.endpointID,
+                value: message.value,
+            })),
+            gestureStarts: [...this.gestureStarts],
+            gestureEnds: [...this.gestureEnds],
+            endpointMessages: this.endpointMessages.map((message) => ({
+                endpointID: message.endpointID,
+                value: message.value,
+            })),
+            midiInputEvents: this.midiInputEvents.map((message) => ({
+                endpointID: message.endpointID,
+                value: message.value,
+            })),
+            keyboardAttachCalls: this.keyboardAttachCalls.map(({ endpointID }) => ({ endpointID })),
+            keyboardDetachCount: this.keyboardDetachCount,
+        };
+    }
+
+    recordKeyboardAttach(endpointID: string) {
+        this.keyboardAttachCalls.push({ endpointID });
+    }
+
+    recordKeyboardDetach() {
+        this.keyboardDetachCount += 1;
+    }
+
+    setRuntimeState(nextState: Partial<ReturnType<typeof createDefaultRuntimeState>>) {
+        this.runtimeState = {
+            ...this.runtimeState,
+            ...nextState,
+        };
+        this.emitEndpoint(runtimeStateEndpointID, this.runtimeState);
+    }
+
+    setParameterValue(endpointID: string, value: unknown, emitEndpoint = false) {
+        this.parameterValues.set(endpointID, value);
+        this.parameterListeners.get(endpointID)?.forEach((listener) => listener(value));
+
+        if (emitEndpoint) {
+            this.emitEndpoint(endpointID, value);
+        }
+    }
+
+    emitEffectiveWavetablePosition(position: number, voiceGeneration = 1) {
+        this.emitEndpoint(effectiveWavetablePositionEndpointID, {
+            voiceGeneration,
+            position,
+        });
+    }
+
+    setStoredStateValue(key: string, value: unknown) {
         this.storedState.set(key, value);
         const message = { key, value };
         this.storedStateListeners.forEach((listener) => listener(message));

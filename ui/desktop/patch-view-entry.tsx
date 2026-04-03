@@ -4,7 +4,10 @@ import { createRoot, type Root } from "react-dom/client";
 import cssText from "./styles.css?inline";
 import { DesktopPatchView } from "./DesktopPatchView";
 import type { PatchConnectionLike } from "../shared/cmajor-react";
-import { createDesktopResourceClient } from "../shared/resource-client";
+import {
+    createDesktopResourceClient,
+    type ResourceClient,
+} from "../shared/resource-client";
 
 type ErrorBoundaryState = {
     errorMessage: string | null;
@@ -72,11 +75,13 @@ class DesktopPatchErrorBoundary extends Component<
 
 class CosimoDesktopReactViewElement extends HTMLElement {
     private patchConnection: PatchConnectionLike | null = null;
+    private resourceClient: ResourceClient | null = null;
     private root: Root | null = null;
     private mountPoint: HTMLDivElement | null = null;
 
-    setPatchConnection(patchConnection: PatchConnectionLike) {
+    setPatchConnection(patchConnection: PatchConnectionLike, resourceClient?: ResourceClient) {
         this.patchConnection = patchConnection;
+        this.resourceClient = resourceClient ?? null;
         this.renderApp();
     }
 
@@ -117,7 +122,7 @@ class CosimoDesktopReactViewElement extends HTMLElement {
             <DesktopPatchErrorBoundary>
                 <DesktopPatchView
                     patchConnection={this.patchConnection}
-                    resourceClient={createDesktopResourceClient(this.patchConnection)}
+                    resourceClient={this.resourceClient ?? createDesktopResourceClient(this.patchConnection)}
                 />
             </DesktopPatchErrorBoundary>
         );
@@ -128,7 +133,10 @@ function getTagName() {
     return "cosimo-desktop-react-view";
 }
 
-export function createDesktopPatchView(patchConnection: PatchConnectionLike) {
+export function createDesktopPatchView(
+    patchConnection: PatchConnectionLike,
+    options: { resourceClient?: ResourceClient } = {},
+) {
     const tagName = getTagName();
 
     if (!window.customElements.get(tagName)) {
@@ -136,7 +144,7 @@ export function createDesktopPatchView(patchConnection: PatchConnectionLike) {
     }
 
     const element = document.createElement(tagName) as CosimoDesktopReactViewElement;
-    element.setPatchConnection(patchConnection);
+    element.setPatchConnection(patchConnection, options.resourceClient);
     return element;
 }
 

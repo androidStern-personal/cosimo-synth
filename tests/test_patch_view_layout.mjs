@@ -1,13 +1,40 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
+import http from "node:http";
+import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { createServer } from "node:net";
 
 import { computeResponsivePatchLayout } from "../patch_gui/responsive-layout.mjs";
+import {
+    desktopHarnessNpmCommand,
+    desktopHarnessSpawnSpec,
+    pathStaysWithinRepoRoot,
+    startStaticRepoServer,
+} from "./helpers/desktop_harness_browser.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
+
+function localViteCommand(platform = process.platform) {
+    return path.join(repoRoot, "node_modules", ".bin", platform === "win32" ? "vite.cmd" : "vite");
+}
+
+function desktopViteSpawnSpec(port, platform = process.platform) {
+    return {
+        command: localViteCommand(platform),
+        args: [
+            "--host",
+            "127.0.0.1",
+            "--port",
+            String(port),
+            "--config",
+            "ui/vite.desktop.config.mjs",
+        ],
+        shell: platform === "win32",
+    };
+}
 
 async function loadPatchManifest(fileName) {
     return JSON.parse(
@@ -41,8 +68,31 @@ async function pickUnusedLocalPort() {
     });
 }
 
+async function requestRawPathStatus(baseUrl, requestPath) {
+    const url = new URL(baseUrl);
+
+    return await new Promise((resolve, reject) => {
+        const request = http.request(
+            {
+                hostname: url.hostname,
+                port: url.port,
+                path: requestPath,
+                method: "GET",
+            },
+            (response) => {
+                response.resume();
+                response.once("end", () => resolve(response.statusCode ?? 0));
+            },
+        );
+
+        request.once("error", reject);
+        request.end();
+    });
+}
+
 async function startDesktopViteServer({ port, readyPath }) {
-    const viteBinary = path.join(repoRoot, "node_modules", ".bin", "vite");
+    const spawnSpec = desktopViteSpawnSpec(port);
+    const viteBinary = spawnSpec.command;
     const outputChunks = [];
 
     try {
@@ -53,18 +103,12 @@ async function startDesktopViteServer({ port, readyPath }) {
     }
 
     const child = spawn(
-        viteBinary,
-        [
-            "--host",
-            "127.0.0.1",
-            "--port",
-            String(port),
-            "--config",
-            "ui/vite.desktop.config.mjs",
-        ],
+        spawnSpec.command,
+        spawnSpec.args,
         {
             cwd: repoRoot,
             stdio: ["ignore", "pipe", "pipe"],
+            shell: spawnSpec.shell,
         },
     );
 
@@ -163,6 +207,77 @@ test("desktop React UI tooling is wired for Vite dev and build loops", async () 
     assert.match(workerViteConfig, /ui",\s*"worker",\s*"wavetable-worker\.ts"/);
 });
 
+test("desktop browser harness launch spec resolves the correct command and args for each platform", () => {
+    assert.equal(desktopHarnessNpmCommand("darwin"), "npm");
+    assert.equal(desktopHarnessNpmCommand("linux"), "npm");
+    assert.equal(desktopHarnessNpmCommand("win32"), "npm.cmd");
+    assert.deepEqual(desktopHarnessSpawnSpec(5174, "darwin"), {
+        command: "npm",
+        args: ["run", "ui:desktop:dev", "--", "--host", "127.0.0.1", "--port", "5174", "--strictPort"],
+        shell: false,
+    });
+    assert.deepEqual(desktopHarnessSpawnSpec(5174, "win32"), {
+        command: "npm.cmd",
+        args: ["run", "ui:desktop:dev", "--", "--host", "127.0.0.1", "--port", "5174", "--strictPort"],
+        shell: true,
+    });
+});
+
+test("desktop Vite helper launch spec resolves the correct command and args for each platform", () => {
+    assert.deepEqual(desktopViteSpawnSpec(5174, "darwin"), {
+        command: path.join(repoRoot, "node_modules", ".bin", "vite"),
+        args: ["--host", "127.0.0.1", "--port", "5174", "--config", "ui/vite.desktop.config.mjs"],
+        shell: false,
+    });
+    assert.deepEqual(desktopViteSpawnSpec(5174, "linux"), {
+        command: path.join(repoRoot, "node_modules", ".bin", "vite"),
+        args: ["--host", "127.0.0.1", "--port", "5174", "--config", "ui/vite.desktop.config.mjs"],
+        shell: false,
+    });
+    assert.deepEqual(desktopViteSpawnSpec(5174, "win32"), {
+        command: path.join(repoRoot, "node_modules", ".bin", "vite.cmd"),
+        args: ["--host", "127.0.0.1", "--port", "5174", "--config", "ui/vite.desktop.config.mjs"],
+        shell: true,
+    });
+});
+
+test("desktop repo-boundary helper rejects sibling paths that only share the repo prefix", () => {
+    const nestedFile = path.join(repoRoot, "patch_gui", "desktop", "index.js");
+    const siblingWithSharedPrefix = path.join(path.dirname(repoRoot), `${path.basename(repoRoot)}-other`, "secret.txt");
+
+    assert.equal(pathStaysWithinRepoRoot(repoRoot, nestedFile), true);
+    assert.equal(pathStaysWithinRepoRoot(repoRoot, siblingWithSharedPrefix), false);
+});
+
+test("desktop static repo server rejects repo-local symlinks that point outside the repo", async (t) => {
+    const repoTempDir = await fs.mkdtemp(path.join(repoRoot, ".tmp-harness-root-"));
+    const siblingRoot = await fs.mkdtemp(path.join(os.tmpdir(), "cosimo-harness-outside-"));
+    const server = await startStaticRepoServer();
+
+    t.after(async () => {
+        await server.stop();
+        await fs.rm(repoTempDir, { recursive: true, force: true });
+        await fs.rm(siblingRoot, { recursive: true, force: true });
+    });
+
+    const outsideFile = path.join(siblingRoot, "secret.txt");
+    const symlinkPath = path.join(repoTempDir, "escape.txt");
+
+    await fs.writeFile(outsideFile, "secret", "utf8");
+    try {
+        await fs.symlink(outsideFile, symlinkPath);
+    } catch (error) {
+        if (error && typeof error === "object" && "code" in error && (error.code === "EPERM" || error.code === "ENOTSUP")) {
+            t.skip(`Symlink creation is not permitted on this platform: ${error.code}`);
+            return;
+        }
+        throw error;
+    }
+
+    const status = await requestRawPathStatus(server.baseUrl, `/${path.basename(repoTempDir)}/escape.txt`);
+    assert.equal(status, 403);
+});
+
 test("desktop Vite dev server serves the real Cmajor browser helpers and the desktop patch bundle", async (t) => {
     const port = await pickUnusedLocalPort();
     const server = await startDesktopViteServer({
@@ -225,13 +340,37 @@ test("iPhone generator builds UI assets before Python writes manifests so copied
 });
 
 test("legacy patch shell resource client is emitted from the TypeScript source instead of being maintained as a second implementation", async () => {
-    const uiBuild = await fs.readFile(path.join(repoRoot, "ui", "build.mjs"), "utf8");
-    const generatedResourceClient = await fs.readFile(path.join(repoRoot, "patch_gui", "resource-client.js"), "utf8");
+    const generatedResourceClientPath = path.join(repoRoot, "patch_gui", "resource-client.js");
+    const originalGeneratedResourceClient = await fs.readFile(generatedResourceClientPath, "utf8");
+    const sentinel = "\n// TEST SENTINEL: build must remove this line.\n";
+    await fs.writeFile(generatedResourceClientPath, `${originalGeneratedResourceClient}${sentinel}`, "utf8");
 
-    assert.match(uiBuild, /ui\/shared\/resource-client\.ts/);
-    assert.match(
-        uiBuild,
-        /emitGeneratedPatchGuiModule\("ui\/shared\/resource-client\.ts", "patch_gui\/resource-client\.js"\)/,
+    await new Promise((resolve, reject) => {
+        const child = spawn(process.execPath, ["ui/build.mjs"], {
+            cwd: repoRoot,
+            stdio: ["ignore", "pipe", "pipe"],
+        });
+        let stderr = "";
+        child.stderr.setEncoding("utf8");
+        child.stderr.on("data", (chunk) => {
+            stderr += chunk;
+        });
+        child.once("error", reject);
+        child.once("exit", (code) => {
+            if (code === 0) {
+                resolve();
+                return;
+            }
+            reject(new Error(`node ui/build.mjs exited with code ${code}\n${stderr}`));
+        });
+    });
+
+    const generatedResourceClient = await fs.readFile(generatedResourceClientPath, "utf8");
+
+    assert.doesNotMatch(
+        generatedResourceClient,
+        /TEST SENTINEL: build must remove this line\./,
+        "node ui/build.mjs should rewrite patch_gui/resource-client.js from the TypeScript source",
     );
     assert.match(
         generatedResourceClient,
@@ -241,45 +380,20 @@ test("legacy patch shell resource client is emitted from the TypeScript source i
     assert.doesNotMatch(generatedResourceClient, /^\s*export type /m);
 });
 
+test("desktop and iPhone wavetable views share the same renderer implementation", async () => {
+    const sharedRenderer = await fs.readFile(path.join(repoRoot, "ui", "shared", "wavetable-display.ts"), "utf8");
+
+    assert.match(
+        sharedRenderer,
+        /export \{ CanvasWavetableDisplay \} from "\.\.\/\.\.\/patch_gui\/wavetable-display\.js";/,
+    );
+});
+
 test("the worker runtime is produced as a real Vite build output instead of a Python-generated source copy", async () => {
     const builtWorker = await fs.readFile(path.join(repoRoot, "patch_gui", "wavetable-worker.js"), "utf8");
 
     assert.match(builtWorker, /class WavetableWorkerController/);
     assert.doesNotMatch(builtWorker, /\.replace\("\.\/wavetable-mip\.mjs"/);
-});
-
-test("desktop wavetable badge uses a real chevron icon instead of a fake text caret hack", async () => {
-    const desktopPatchView = await fs.readFile(path.join(repoRoot, "ui", "desktop", "DesktopPatchView.tsx"), "utf8");
-
-    assert.match(desktopPatchView, /function SelectChevron/);
-    assert.doesNotMatch(desktopPatchView, />v</);
-});
-
-test("desktop keyboard row uses compact transport controls instead of a duplicate frame card and separate editor button", async () => {
-    const desktopPatchView = await fs.readFile(path.join(repoRoot, "ui", "desktop", "DesktopPatchView.tsx"), "utf8");
-
-    assert.match(desktopPatchView, /new Nexus\.Number\(/);
-    assert.match(desktopPatchView, /Shift keyboard up one octave/);
-    assert.match(desktopPatchView, /Shift keyboard down one octave/);
-    assert.match(desktopPatchView, /function VoiceModeGlyph/);
-    assert.match(desktopPatchView, /function KeyboardSection/);
-    assert.doesNotMatch(desktopPatchView, /Open Editor/);
-    assert.doesNotMatch(desktopPatchView, /grid-cols-\[220px_minmax\(0,1fr\)\]/);
-});
-
-test("desktop keyboard routing is global and the last active control can claim left-right arrow steps", async () => {
-    const desktopPatchView = await fs.readFile(path.join(repoRoot, "ui", "desktop", "DesktopPatchView.tsx"), "utf8");
-    const synthInputRouter = await fs.readFile(path.join(repoRoot, "ui", "shared", "synth-input-router.ts"), "utf8");
-
-    assert.match(desktopPatchView, /useSynthInputRouter\(keyboardElementRef\)/);
-    assert.match(desktopPatchView, /keyboardRef=\{keyboardElementRef\}/);
-    assert.match(desktopPatchView, /handleStepWavetable/);
-    assert.match(desktopPatchView, /handleStepGlideTime/);
-    assert.match(synthInputRouter, /window\.addEventListener\("keydown", handleKeyDown, true\)/);
-    assert.match(synthInputRouter, /window\.addEventListener\("keyup", handleKeyUp, true\)/);
-    assert.match(synthInputRouter, /event\.key === "ArrowLeft" \|\| event\.key === "ArrowRight"/);
-    assert.match(synthInputRouter, /keyboardRef\.current\?\.handleKey\?\.\(event, true\)/);
-    assert.match(synthInputRouter, /keyboardRef\.current\?\.allNotesOff\?\.\(\)/);
 });
 
 test("generated factory bank catalog points at real bundled source wavetable files", async () => {
@@ -369,140 +483,4 @@ test("short landscape heights keep every interactive area above the minimum tap-
     assert.equal(layout.keyboardHeight, 88);
     assert.equal(layout.keyboardNaturalNoteWidth, 20);
     assert.equal(layout.keyboardAccidentalWidth, 11);
-});
-
-test("iOS patch view applies a root-level safe-area gutter across the whole screen", async () => {
-    const source = await fs.readFile(path.join(repoRoot, "patch_gui", "index.js"), "utf8");
-
-    assert.match(source, /env\(safe-area-inset-top\)/);
-    assert.match(source, /env\(safe-area-inset-bottom\)/);
-    assert.match(source, /env\(safe-area-inset-left\)/);
-    assert.match(source, /env\(safe-area-inset-right\)/);
-    assert.match(source, /:host\s*\{[\s\S]*box-sizing:\s*border-box;/);
-    assert.match(source, /--cosimo-ios-top-inset:\s*0px;/);
-    assert.match(source, /--cosimo-ios-bottom-inset:\s*0px;/);
-    assert.match(source, /--cosimo-ios-safe-top:\s*calc\(env\(safe-area-inset-top\)\s*\+\s*var\(--cosimo-ios-top-inset\)\);/);
-    assert.match(source, /--cosimo-ios-safe-bottom:\s*calc\(env\(safe-area-inset-bottom\)\s*\+\s*var\(--cosimo-ios-bottom-inset\)\);/);
-    assert.match(source, /\.ios-shell\s*\{[\s\S]*box-sizing:\s*border-box;/);
-    assert.match(source, /\.ios-shell\s*\{[\s\S]*padding:\s*var\(--cosimo-ios-safe-top\)\s*env\(safe-area-inset-right\)\s*var\(--cosimo-ios-safe-bottom\)\s*env\(safe-area-inset-left\);/);
-    assert.match(source, /\.ios-content\s*\{[\s\S]*padding:\s*0\s*16px;/);
-    assert.match(source, /\.keyboard-footer\s*\{[\s\S]*padding:\s*0\s*12px;/);
-    assert.match(source, /\.mseg-modal\s*\{[\s\S]*padding:\s*4px\s*10px\s*0;/);
-});
-
-test("patch view only exposes Poly Mono Legato play modes and no note-priority control", async () => {
-    const source = await fs.readFile(path.join(repoRoot, "patch_gui", "index.js"), "utf8");
-
-    assert.match(source, /label:\s*"Poly"/);
-    assert.match(source, /label:\s*"Mono"/);
-    assert.match(source, /label:\s*"Legato"/);
-    assert.doesNotMatch(source, /label:\s*"Mono ST"/);
-    assert.doesNotMatch(source, /label:\s*"Mono FP"/);
-    assert.doesNotMatch(source, /label:\s*"Mono ST \+ FP"/);
-    assert.doesNotMatch(source, /Note Priority/);
-    assert.doesNotMatch(source, /Voice Routing/);
-    assert.doesNotMatch(source, />Play Mode</);
-});
-
-test("iOS host lets the patch view extend to the full screen and leaves top safe-area handling to the UI", async () => {
-    const source = await fs.readFile(
-        path.join(repoRoot, "ios_auv3", "Source", "CosimoHostViewController.mm"),
-        "utf8"
-    );
-
-    assert.match(source, /\[scrollView\.leadingAnchor constraintEqualToAnchor:self\.view\.leadingAnchor\]/);
-    assert.match(source, /\[scrollView\.trailingAnchor constraintEqualToAnchor:self\.view\.trailingAnchor\]/);
-    assert.match(source, /\[scrollView\.topAnchor constraintEqualToAnchor:self\.view\.topAnchor\]/);
-    assert.match(source, /\[scrollView\.bottomAnchor constraintEqualToAnchor:self\.view\.bottomAnchor\]/);
-    assert.match(source, /\[editorLabel\.topAnchor constraintEqualToAnchor:self\.editorOverlayView\.safeAreaLayoutGuide\.topAnchor constant:12\.0\]/);
-    assert.match(source, /\[self\.editorContentView\.leadingAnchor constraintEqualToAnchor:self\.editorOverlayView\.leadingAnchor\]/);
-    assert.match(source, /\[self\.editorContentView\.trailingAnchor constraintEqualToAnchor:self\.editorOverlayView\.trailingAnchor\]/);
-    assert.match(source, /\[self\.editorContentView\.bottomAnchor constraintEqualToAnchor:self\.editorOverlayView\.bottomAnchor\]/);
-    assert.doesNotMatch(source, /\[scrollView\.bottomAnchor constraintEqualToAnchor:safeArea\.bottomAnchor\]/);
-    assert.doesNotMatch(source, /\[self\.editorContentView\.bottomAnchor constraintEqualToAnchor:self\.editorOverlayView\.safeAreaLayoutGuide\.bottomAnchor\]/);
-});
-
-test("iOS patch view pins the keyboard footer and mounts the MSEG modal above the keyboard row", async () => {
-    const source = await fs.readFile(path.join(repoRoot, "patch_gui", "index.js"), "utf8");
-
-    assert.match(source, /grid-template-rows:\s*minmax\(0,\s*1fr\)\s*auto;/);
-    assert.match(source, /class="ios-top-row"/);
-    assert.match(source, /class="ios-main-view"/);
-    assert.match(source, /\.ios-top-row\s*\{[\s\S]*overflow:\s*hidden;/);
-    assert.match(source, /\.ios-top-row\s*\{[\s\S]*display:\s*grid;/);
-    assert.match(source, /\.ios-top-row\s*\{[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\);/);
-    assert.match(source, /\.ios-top-row\s*\{[\s\S]*grid-template-rows:\s*minmax\(0,\s*1fr\);/);
-    assert.match(source, /\.ios-main-view\s*\{[\s\S]*display:\s*grid;/);
-    assert.match(source, /\.ios-main-view\s*\{[\s\S]*grid-column:\s*1;/);
-    assert.match(source, /\.ios-main-view\s*\{[\s\S]*grid-row:\s*1;/);
-    assert.match(source, /\.mseg-modal-layer\s*\{[\s\S]*grid-column:\s*1;/);
-    assert.match(source, /\.mseg-modal-layer\s*\{[\s\S]*grid-row:\s*1;/);
-    assert.match(source, /\.ios-scroll\s*\{[\s\S]*overflow-y:\s*auto;/);
-    assert.match(source, /:host\(\[mseg-modal-open\]\)\s+\.ios-main-view\s*\{[\s\S]*display:\s*none;/);
-    assert.match(source, /class="keyboard-footer"/);
-    assert.match(source, /class="keyboard-toolbar"/);
-    assert.match(source, /\.keyboard-footer\s*\{[\s\S]*padding:\s*0\s*12px;/);
-    assert.match(source, /class="keyboard-host"/);
-    assert.match(source, /class="keyboard-toolbar"[\s\S]*class="keyboard-host"/);
-    assert.match(source, /class="octave-button octave-down"/);
-    assert.match(source, /class="octave-button octave-up"/);
-    assert.match(source, /\.keyboard-host\s*\{[\s\S]*min-height:\s*var\(--cosimo-keyboard-height\);/);
-    assert.match(source, /\.keyboard\s*\{[\s\S]*height:\s*var\(--cosimo-keyboard-height\);/);
-    assert.match(source, /\.keyboard\s*\{[\s\S]*border-radius:\s*14px 14px 0 0;/);
-    assert.match(source, /\.keyboard\s*\{[\s\S]*padding:\s*6px 6px 0;/);
-    assert.match(source, /class="wavetable-display-stack"/);
-    assert.match(source, /class="bank-picker-trigger"/);
-    assert.match(source, /class="table-select table-select-overlay"/);
-    assert.match(source, /data-role="display-status"/);
-    assert.match(source, /data-role="table-error-banner"/);
-    assert.match(source, /Swipe \+ Drag/);
-    assert.doesNotMatch(source, /<span class="position-label">Table<\/span>/);
-    assert.doesNotMatch(source, /class="wavetable-meta"/);
-    assert.doesNotMatch(source, /class="position-readout"/);
-    assert.match(source, /background:\s*#04070f;/);
-    assert.match(source, /\.wavetable-stage\s*\{[\s\S]*border-radius:\s*0;/);
-    assert.match(source, /\.wavetable-stage\s*\{[\s\S]*background:\s*transparent;/);
-    assert.match(source, /\.mseg-editor-shell\s*\{[\s\S]*border-radius:\s*0;/);
-    assert.match(source, /\.mseg-editor-shell\s*\{[\s\S]*border:\s*0;/);
-    assert.match(source, /\.mseg-editor-shell\s*\{[\s\S]*background:\s*transparent;/);
-    assert.match(source, /class="mseg-preview-button"/);
-    assert.match(source, /class="mseg-preview-footer"/);
-    assert.match(source, /data-role="mseg-modal-layer"/);
-    assert.match(source, /class="mseg-modal"/);
-    assert.match(source, /class="mseg-rate-slider"/);
-    assert.match(source, /data-role="mseg-rate-readout"/);
-    assert.match(source, /data-role="mseg-launcher-rate-readout"/);
-    assert.match(source, /data-role="mseg-launcher-loop-button"/);
-    assert.match(source, /class="mseg-loop-button"/);
-    assert.match(source, /getMsegSurfaceOrientation\(surface,\s*\{\s*showPoints = false\s*\} = \{\}\)/);
-    assert.match(source, /const hostBounds = this\.getBoundingClientRect\?\.\(\) \?\? null;/);
-    assert.match(source, /return height > width \? "vertical" : "horizontal";/);
-    assert.match(source, /Number\(globalThis\.visualViewport\?\.height\)/);
-    assert.match(source, /Number\(globalThis\.window\?\.innerHeight\)/);
-    assert.match(source, /\.mseg-modal-backdrop\s*\{[\s\S]*display:\s*none;/);
-    assert.match(source, /\.mseg-modal-layer\s*\{[\s\S]*position:\s*relative;/);
-    assert.match(source, /\.mseg-modal-layer\s*\{[\s\S]*inset:\s*auto;/);
-    assert.match(source, /\.mseg-modal\s*\{[\s\S]*position:\s*relative;/);
-    assert.match(source, /\.mseg-modal\s*\{[\s\S]*min-height:\s*100%;/);
-    assert.doesNotMatch(source, /\.mseg-modal\s*\{[\s\S]*position:\s*absolute;[\s\S]*inset:\s*max\(6px,\s*env\(safe-area-inset-top\)\)\s*6px\s*0\s*6px;/);
-    assert.doesNotMatch(source, /class="mseg-loop-toggle"/);
-    assert.doesNotMatch(source, /Open Editor/);
-    assert.doesNotMatch(source, /Delete Point/);
-    assert.doesNotMatch(source, /class="hero"/);
-    assert.doesNotMatch(source, /class="scan-panel"/);
-    assert.doesNotMatch(source, /class="scan-slider"/);
-});
-
-test("iOS keyboard defaults to a tighter one-and-a-half-octave span starting one octave lower than before", async () => {
-    const source = await fs.readFile(path.join(repoRoot, "patch_gui", "index.js"), "utf8");
-    const layoutSource = await fs.readFile(path.join(repoRoot, "patch_gui", "responsive-layout.mjs"), "utf8");
-
-    assert.match(source, /this\.keyboardRootNote = 36;/);
-    assert.match(source, /this\.keyboardMinRootNote = 12;/);
-    assert.match(source, /this\.keyboardMaxRootNote = 72;/);
-    assert.match(source, /this\.keyboard\.setAttribute\("note-count", `\$\{this\.currentLayout\.noteCount\}`\);/);
-    assert.match(source, /attributeChangedCallback\(name, oldValue, newValue\)/);
-    assert.match(source, /this\.refreshHTML\(\);/);
-    assert.match(source, /return `\$\{formatNote\(startNote\)\} - \$\{formatNote\(lastNote\)\}`;/);
-    assert.match(layoutSource, /noteCount:\s*18,/);
 });

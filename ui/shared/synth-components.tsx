@@ -1,0 +1,783 @@
+import {
+    type ReactNode,
+    useEffect,
+    useLayoutEffect,
+    useMemo,
+    useRef,
+    useState,
+    type PointerEvent as ReactPointerEvent,
+    type RefObject,
+} from "react";
+
+import { clampDisplayPosition } from "./runtime-table-state";
+import {
+    MSEG_EDITOR_HORIZONTAL_PADDING_PX,
+    MSEG_EDITOR_VERTICAL_PADDING_PX,
+    MSEG_POINT_RADIUS_PX,
+    MSEG_RATE_MAX_SECONDS,
+    MSEG_RATE_MIN_SECONDS,
+    MSEG_SELECTED_POINT_RADIUS_PX,
+    clampMsegRateSeconds,
+    createMsegEditorMetrics,
+    evaluateMsegShape,
+    pointToMsegEditorCoordinates,
+    type MsegState,
+} from "./mseg";
+import { CanvasWavetableDisplay } from "./wavetable-display";
+import type { SynthFocusBindings } from "./synth-input-router";
+
+export type VoiceModeOption = {
+    value: number;
+    label: string;
+};
+
+export const VOICE_MODE_OPTIONS: VoiceModeOption[] = [
+    { value: 0, label: "Poly" },
+    { value: 1, label: "Mono" },
+    { value: 2, label: "Legato" },
+];
+const MSEG_EDITOR_SAMPLES = 128;
+const MSEG_GRID_STEPS = [0.25, 0.5, 0.75] as const;
+const MSEG_PREVIEW_HORIZONTAL_PADDING_PX = 24;
+const MSEG_PREVIEW_VERTICAL_PADDING_PX = 22;
+
+export type FactoryTableOption = {
+    tableId: string;
+    name: string;
+    sourceWav: string;
+    frameCount: number;
+};
+
+export type RangeFieldProps = {
+    label: string;
+    min: number;
+    max: number;
+    step: number;
+    value: number;
+    displayValue: string;
+    onChange: (nextValue: number) => void;
+    onPointerDown?: () => void;
+    onPointerUp?: () => void;
+    onPointerCancel?: () => void;
+    ariaLabel?: string;
+    focusBindings?: SynthFocusBindings;
+};
+
+export type WavetableStageSectionProps = {
+    stageRef: RefObject<HTMLDivElement | null>;
+    frames: Float32Array[] | null;
+    position: number;
+    tableName: string;
+    frameCount: number;
+    desiredTableIndex: number;
+    tableOptions: FactoryTableOption[];
+    canRetry: boolean;
+    onTableChange: (nextValue: number) => void;
+    onRetry: () => void;
+    tableFocusBindings: SynthFocusBindings;
+    onPointerDown: (event: ReactPointerEvent<HTMLDivElement>) => void;
+    onPointerMove: (event: ReactPointerEvent<HTMLDivElement>) => void;
+    onPointerUp: (event: ReactPointerEvent<HTMLDivElement>) => void;
+    className?: string;
+};
+
+export type MsegOverviewSectionProps = {
+    msegState: MsegState | null;
+    onOpenEditor: () => void;
+    onDepthChange: (nextValue: number) => void;
+    onRateChange: (nextValue: number) => void;
+    onToggleLoop: () => void;
+    depthFocusBindings: SynthFocusBindings;
+    rateFocusBindings: SynthFocusBindings;
+    className?: string;
+};
+
+export type VoiceGlideControlSurfaceProps = {
+    playModeValue: number;
+    onPlayModeChange: (nextValue: number) => void;
+    playModeFocusBindings: SynthFocusBindings;
+    glideControl: ReactNode;
+    className?: string;
+};
+
+export type KeyboardSectionShellProps = {
+    keyboardRootLabel: string;
+    canOctaveUp: boolean;
+    canOctaveDown: boolean;
+    onOctaveUp: () => void;
+    onOctaveDown: () => void;
+    toolbar: ReactNode;
+    keyboard: ReactNode;
+    className?: string;
+    railClassName?: string;
+    contentClassName?: string;
+};
+
+function joinClasses(...classes: Array<string | null | undefined | false>) {
+    return classes.filter(Boolean).join(" ");
+}
+
+function useResizeObserver<TElement extends Element>(ref: RefObject<TElement | null>) {
+    const [size, setSize] = useState({ width: 1, height: 1 });
+
+    useLayoutEffect(() => {
+        const element = ref.current;
+
+        if (!element) {
+            return;
+        }
+
+        const update = () => {
+            const bounds = element.getBoundingClientRect();
+            const host = element as unknown as HTMLElement;
+            setSize({
+                width: Math.max(1, bounds.width || host.clientWidth || 1),
+                height: Math.max(1, bounds.height || host.clientHeight || 1),
+            });
+        };
+
+        const observer = new ResizeObserver(update);
+        observer.observe(element);
+        update();
+
+        return () => observer.disconnect();
+    }, [ref]);
+
+    return size;
+}
+
+function formatSeconds(seconds: number) {
+    return `${seconds.toFixed(3)} s`;
+}
+
+function formatFrameIndex(position: number, frameCount: number) {
+    const safeFrameCount = Math.max(1, frameCount);
+    const frameIndex = Math.round(position * Math.max(0, safeFrameCount - 1)) + 1;
+    return `${String(frameIndex).padStart(2, "0")}/${String(safeFrameCount).padStart(2, "0")}`;
+}
+
+function buildMsegSurfacePaths(
+    points: Array<{ x: number; y: number; curvePower: number }>,
+    width: number,
+    height: number,
+    options: {
+        pointRadius?: number;
+        horizontalPadding?: number;
+        verticalPadding?: number;
+    } = {},
+) {
+    const metrics = createMsegEditorMetrics(width, height, {
+        pointRadius: options.pointRadius,
+        horizontalPadding: options.horizontalPadding ?? MSEG_EDITOR_HORIZONTAL_PADDING_PX,
+        verticalPadding: options.verticalPadding ?? MSEG_EDITOR_VERTICAL_PADDING_PX,
+    });
+    let path = "";
+
+    for (let index = 0; index < MSEG_EDITOR_SAMPLES; index += 1) {
+        const x = index / (MSEG_EDITOR_SAMPLES - 1);
+        const y = evaluateMsegShape({ points }, x);
+        const coordinates = pointToMsegEditorCoordinates({ x, y }, width, height, {
+            pointRadius: options.pointRadius,
+            horizontalPadding: options.horizontalPadding,
+            verticalPadding: options.verticalPadding,
+        });
+        path += `${index === 0 ? "M" : "L"} ${coordinates.x.toFixed(3)} ${coordinates.y.toFixed(3)} `;
+    }
+
+    const curvePath = path.trim();
+    const fillPath = `${curvePath} L ${metrics.plotRight.toFixed(3)} ${metrics.plotBottom.toFixed(3)} ` +
+        `L ${metrics.plotLeft.toFixed(3)} ${metrics.plotBottom.toFixed(3)} Z`;
+
+    return { curvePath, fillPath, metrics };
+}
+
+function SelectChevron({ className }: { className?: string }) {
+    return (
+        <svg
+            className={className}
+            viewBox="0 0 12 12"
+            aria-hidden="true"
+            focusable="false"
+        >
+            <path
+                d="M3 4.5 6 7.5 9 4.5"
+                fill="none"
+                stroke="currentColor"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="1.4"
+            />
+        </svg>
+    );
+}
+
+function OctaveShiftGlyph({
+    direction,
+}: {
+    direction: "up" | "down";
+}) {
+    return (
+        <svg viewBox="0 0 16 16" className="h-3.5 w-3.5" aria-hidden="true">
+            <path
+                d={direction === "up" ? "M4.5 9.75 8 6.25 11.5 9.75" : "M4.5 6.25 8 9.75 11.5 6.25"}
+                fill="none"
+                stroke="currentColor"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="1.5"
+            />
+        </svg>
+    );
+}
+
+function MsegPreview({
+    points,
+    className,
+}: {
+    points: Array<{ x: number; y: number; curvePower: number }>;
+    className?: string;
+}) {
+    const viewportRef = useRef<SVGSVGElement | null>(null);
+    const size = useResizeObserver(viewportRef);
+
+    const { curvePath, fillPath, metrics } = useMemo(() => {
+        return buildMsegSurfacePaths(points, size.width, size.height, {
+            pointRadius: 0,
+            horizontalPadding: MSEG_PREVIEW_HORIZONTAL_PADDING_PX,
+            verticalPadding: MSEG_PREVIEW_VERTICAL_PADDING_PX,
+        });
+    }, [points, size.height, size.width]);
+
+    return (
+        <svg
+            ref={viewportRef}
+            className={className ?? "h-32 w-full overflow-hidden rounded-[20px] bg-white/[0.03]"}
+            viewBox={`0 0 ${size.width} ${size.height}`}
+        >
+            <g>
+                {MSEG_GRID_STEPS.map((step) => (
+                    <line
+                        key={`h-${step}`}
+                        className="cosimo-grid-line"
+                        x1={metrics.plotLeft}
+                        y1={metrics.plotTop + (metrics.plotHeight * (1 - step))}
+                        x2={metrics.plotRight}
+                        y2={metrics.plotTop + (metrics.plotHeight * (1 - step))}
+                    />
+                ))}
+                {MSEG_GRID_STEPS.map((step) => (
+                    <line
+                        key={`v-${step}`}
+                        className="cosimo-grid-line"
+                        x1={metrics.plotLeft + (metrics.plotWidth * step)}
+                        y1={metrics.plotTop}
+                        x2={metrics.plotLeft + (metrics.plotWidth * step)}
+                        y2={metrics.plotBottom}
+                    />
+                ))}
+            </g>
+            <path className="cosimo-curve-fill" d={fillPath} />
+            <path className="cosimo-curve-line" d={curvePath} />
+        </svg>
+    );
+}
+
+function VoiceModeGlyph({
+    mode,
+    active,
+}: {
+    mode: number;
+    active: boolean;
+}) {
+    const stroke = active ? "rgba(214,244,255,0.96)" : "rgba(189,204,223,0.72)";
+    const fill = active ? "rgba(143,232,255,0.24)" : "rgba(255,255,255,0.06)";
+
+    if (mode === 0) {
+        return (
+            <svg viewBox="0 0 28 18" className="h-4 w-6" aria-hidden="true">
+                <circle cx="7" cy="11" r="3.2" fill={fill} stroke={stroke} strokeWidth="1.3" />
+                <circle cx="14" cy="8" r="3.2" fill={fill} stroke={stroke} strokeWidth="1.3" />
+                <circle cx="21" cy="11" r="3.2" fill={fill} stroke={stroke} strokeWidth="1.3" />
+            </svg>
+        );
+    }
+
+    if (mode === 1) {
+        return (
+            <svg viewBox="0 0 28 18" className="h-4 w-6" aria-hidden="true">
+                <rect x="8.5" y="4.5" width="11" height="9" rx="4.5" fill={fill} stroke={stroke} strokeWidth="1.3" />
+            </svg>
+        );
+    }
+
+    return (
+        <svg viewBox="0 0 28 18" className="h-4 w-6" aria-hidden="true">
+            <circle cx="8" cy="9" r="3" fill={fill} stroke={stroke} strokeWidth="1.3" />
+            <circle cx="20" cy="9" r="3" fill={fill} stroke={stroke} strokeWidth="1.3" />
+            <path d="M10.8 9 C12.5 5.5 15.5 5.5 17.2 9" fill="none" stroke={stroke} strokeWidth="1.4" strokeLinecap="round" />
+        </svg>
+    );
+}
+
+export function WavetableCanvas({
+    frames,
+    position,
+}: {
+    frames: Float32Array[] | null;
+    position: number;
+}) {
+    const canvasRef = useRef<HTMLCanvasElement | null>(null);
+    const viewportRef = useRef<HTMLDivElement | null>(null);
+    const size = useResizeObserver(viewportRef);
+    const displayRef = useRef<CanvasWavetableDisplay | null>(null);
+
+    useLayoutEffect(() => {
+        if (!canvasRef.current) {
+            return;
+        }
+
+        displayRef.current = new CanvasWavetableDisplay(canvasRef.current);
+        return () => {
+            displayRef.current = null;
+        };
+    }, []);
+
+    useEffect(() => {
+        if (!displayRef.current || !frames) {
+            return;
+        }
+
+        displayRef.current.setFrames(frames);
+    }, [frames]);
+
+    useEffect(() => {
+        displayRef.current?.setPosition(position);
+    }, [position]);
+
+    useEffect(() => {
+        displayRef.current?.resize(size.width, size.height, window.devicePixelRatio || 1);
+    }, [size]);
+
+    return (
+        <div ref={viewportRef} className="absolute inset-0">
+            <canvas ref={canvasRef} className="h-full w-full" />
+        </div>
+    );
+}
+
+export function EditableMsegSurface({
+    surfaceRef,
+    points,
+    selectedPointIndex,
+    onPointerDown,
+    onPointerMove,
+    onPointerUp,
+    className,
+}: {
+    surfaceRef: RefObject<SVGSVGElement | null>;
+    points: Array<{ x: number; y: number; curvePower: number }>;
+    selectedPointIndex: number;
+    onPointerDown: (event: ReactPointerEvent<SVGSVGElement>) => void;
+    onPointerMove: (event: ReactPointerEvent<SVGSVGElement>) => void;
+    onPointerUp: (event: ReactPointerEvent<SVGSVGElement>) => void;
+    className?: string;
+}) {
+    const size = useResizeObserver(surfaceRef);
+
+    const { curvePath, fillPath } = useMemo(() => {
+        return buildMsegSurfacePaths(points, size.width, size.height);
+    }, [points, size.height, size.width]);
+
+    return (
+        <svg
+            ref={surfaceRef}
+            className={joinClasses(
+                "h-full w-full touch-none overflow-hidden rounded-[20px] bg-white/[0.03]",
+                className,
+            )}
+            viewBox={`0 0 ${size.width} ${size.height}`}
+            onPointerDown={onPointerDown}
+            onPointerMove={onPointerMove}
+            onPointerUp={onPointerUp}
+            onPointerCancel={onPointerUp}
+        >
+            <g>
+                {MSEG_GRID_STEPS.map((step) => (
+                    <line
+                        key={`editable-h-${step}`}
+                        className="cosimo-grid-line"
+                        x1={0}
+                        y1={size.height * (1 - step)}
+                        x2={size.width}
+                        y2={size.height * (1 - step)}
+                    />
+                ))}
+                {MSEG_GRID_STEPS.map((step) => (
+                    <line
+                        key={`editable-v-${step}`}
+                        className="cosimo-grid-line"
+                        x1={size.width * step}
+                        y1={0}
+                        x2={size.width * step}
+                        y2={size.height}
+                    />
+                ))}
+            </g>
+            <path className="cosimo-curve-fill" d={fillPath} />
+            <path className="cosimo-curve-line" d={curvePath} />
+            <g>
+                {points.map((point, pointIndex) => {
+                    const coordinates = pointToMsegEditorCoordinates(point, size.width, size.height);
+                    const isSelected = pointIndex === selectedPointIndex;
+
+                    return (
+                        <circle
+                            key={`point-${pointIndex}-${point.x}-${point.y}`}
+                            cx={coordinates.x}
+                            cy={coordinates.y}
+                            r={isSelected ? MSEG_SELECTED_POINT_RADIUS_PX : MSEG_POINT_RADIUS_PX}
+                            className={isSelected ? "fill-fuchsia-200 stroke-[#050913] stroke-[3px]" : "fill-cyan-200 stroke-[#050913] stroke-[2px]"}
+                            vectorEffect="non-scaling-stroke"
+                        />
+                    );
+                })}
+            </g>
+        </svg>
+    );
+}
+
+export function RangeField({
+    label,
+    min,
+    max,
+    step,
+    value,
+    displayValue,
+    onChange,
+    onPointerDown,
+    onPointerUp,
+    onPointerCancel,
+    ariaLabel,
+    focusBindings,
+}: RangeFieldProps) {
+    return (
+        <label className="grid gap-2">
+            <span className="text-[11px] uppercase tracking-[0.18em] text-slate-300/60">{label}</span>
+            <div className="grid grid-cols-[minmax(0,1fr)_88px] items-center gap-4">
+                <input
+                    className="cosimo-range"
+                    type="range"
+                    min={min}
+                    max={max}
+                    step={step}
+                    value={value.toFixed(3)}
+                    aria-label={ariaLabel ?? label}
+                    onPointerDown={onPointerDown}
+                    onPointerUp={onPointerUp}
+                    onPointerCancel={onPointerCancel}
+                    onChange={(event) => onChange(Number(event.target.value))}
+                    {...focusBindings}
+                />
+                <div className="text-right font-mono text-sm tracking-[0.18em] text-cyan-200">
+                    {displayValue}
+                </div>
+            </div>
+        </label>
+    );
+}
+
+export function VoiceModeToolbar({
+    value,
+    onChange,
+    focusBindings,
+    options = VOICE_MODE_OPTIONS,
+    className,
+    surfaceClassName,
+}: {
+    value: number;
+    onChange: (nextValue: number) => void;
+    focusBindings: SynthFocusBindings;
+    options?: VoiceModeOption[];
+    className?: string;
+    surfaceClassName?: string;
+}) {
+    const columnCount = Math.max(1, options.length);
+
+    return (
+        <div className={joinClasses("grid gap-2", className)}>
+            <span className="text-[10px] uppercase tracking-[0.18em] text-slate-300/60">Voice</span>
+            <div
+                className={joinClasses(
+                    "inline-grid gap-1 rounded-[18px] border border-white/8 bg-black/25 p-1",
+                    surfaceClassName,
+                )}
+                style={{ gridTemplateColumns: `repeat(${columnCount}, minmax(0, 1fr))` }}
+                {...focusBindings}
+            >
+                {options.map((option) => {
+                    const isActive = option.value === value;
+
+                    return (
+                        <button
+                            key={option.value}
+                            type="button"
+                            className={`rounded-[14px] px-3 py-2.5 text-left transition ${
+                                isActive
+                                    ? "bg-white/[0.08] text-cyan-100 shadow-[inset_0_0_0_1px_rgba(143,232,255,0.18)]"
+                                    : "text-slate-300/70 hover:bg-white/[0.04] hover:text-slate-100"
+                            }`}
+                            onClick={() => onChange(option.value)}
+                            aria-pressed={isActive}
+                        >
+                            <div className="flex items-center gap-2">
+                                <VoiceModeGlyph mode={option.value} active={isActive} />
+                                <span className="text-[11px] uppercase tracking-[0.16em]">{option.label}</span>
+                            </div>
+                        </button>
+                    );
+                })}
+            </div>
+        </div>
+    );
+}
+
+export function VoiceGlideControlSurface({
+    playModeValue,
+    onPlayModeChange,
+    playModeFocusBindings,
+    glideControl,
+    className,
+}: VoiceGlideControlSurfaceProps) {
+    return (
+        <div className={joinClasses(
+            "grid gap-4 rounded-[24px] border border-white/8 bg-white/[0.03] px-4 py-3",
+            className,
+        )}>
+            <VoiceModeToolbar
+                value={playModeValue}
+                onChange={onPlayModeChange}
+                focusBindings={playModeFocusBindings}
+            />
+            {glideControl}
+        </div>
+    );
+}
+
+export function KeyboardSectionShell({
+    keyboardRootLabel,
+    canOctaveUp,
+    canOctaveDown,
+    onOctaveUp,
+    onOctaveDown,
+    toolbar,
+    keyboard,
+    className,
+    railClassName,
+    contentClassName,
+}: KeyboardSectionShellProps) {
+    return (
+        <section className={joinClasses("grid gap-3", className)}>
+            <div className={joinClasses(
+                "flex flex-col items-center justify-end gap-2 rounded-[24px] border border-white/8 bg-white/[0.03] px-2 py-3",
+                railClassName,
+            )}>
+                <span className="text-[10px] uppercase tracking-[0.18em] text-slate-300/55">Oct</span>
+                <button
+                    type="button"
+                    className="cosimo-button flex h-10 w-10 items-center justify-center rounded-2xl p-0 disabled:opacity-35"
+                    onClick={onOctaveUp}
+                    disabled={!canOctaveUp}
+                    aria-label="Shift keyboard up one octave"
+                >
+                    <OctaveShiftGlyph direction="up" />
+                </button>
+                <button
+                    type="button"
+                    className="cosimo-button flex h-10 w-10 items-center justify-center rounded-2xl p-0 disabled:opacity-35"
+                    onClick={onOctaveDown}
+                    disabled={!canOctaveDown}
+                    aria-label="Shift keyboard down one octave"
+                >
+                    <OctaveShiftGlyph direction="down" />
+                </button>
+                <div className="font-mono text-[10px] tracking-[0.18em] text-cyan-200/70">
+                    {keyboardRootLabel}
+                </div>
+            </div>
+
+            <div className={joinClasses("grid gap-3", contentClassName)}>
+                {toolbar}
+                {keyboard}
+            </div>
+        </section>
+    );
+}
+
+export function WavetableStageSection({
+    stageRef,
+    frames,
+    position,
+    tableName,
+    frameCount,
+    desiredTableIndex,
+    tableOptions,
+    canRetry,
+    onTableChange,
+    onRetry,
+    tableFocusBindings,
+    onPointerDown,
+    onPointerMove,
+    onPointerUp,
+    className,
+}: WavetableStageSectionProps) {
+    return (
+        <section
+            ref={stageRef}
+            className={joinClasses(
+                "cosimo-stage relative overflow-hidden rounded-[30px] border border-white/8",
+                className,
+            )}
+            onPointerDown={onPointerDown}
+            onPointerMove={onPointerMove}
+            onPointerUp={onPointerUp}
+            onPointerCancel={onPointerUp}
+        >
+            <WavetableCanvas frames={frames} position={position} />
+
+            <div className="absolute inset-x-0 top-0 flex items-start justify-between gap-3 p-5 text-[11px] uppercase tracking-[0.16em] text-slate-300/70">
+                <label className="relative inline-flex max-w-[280px] cursor-pointer items-center">
+                    <div className="inline-flex min-w-0 items-center rounded-full border border-white/10 bg-black/40 px-4 py-2.5 pr-10 text-left text-[11px] uppercase tracking-[0.18em] text-amber-100 shadow-[0_10px_28px_rgba(0,0,0,0.28)] backdrop-blur-md">
+                        <span className="truncate">{tableName}</span>
+                    </div>
+                    <SelectChevron className="pointer-events-none absolute right-4 top-1/2 h-3 w-3 -translate-y-1/2 text-slate-300/75" />
+                    <select
+                        className="absolute inset-0 cursor-pointer opacity-0"
+                        value={String(desiredTableIndex)}
+                        onChange={(event) => onTableChange(Number(event.target.value))}
+                        aria-label="Select wavetable"
+                        {...tableFocusBindings}
+                    >
+                        {tableOptions.map((table, tableIndex) => (
+                            <option key={`${table.name}-${tableIndex}`} value={tableIndex}>
+                                {table.name}
+                            </option>
+                        ))}
+                    </select>
+                </label>
+
+                <div className="flex items-center gap-2">
+                    <div className="rounded-full border border-white/10 bg-black/35 px-3 py-2 text-cyan-200/80 shadow-[0_10px_28px_rgba(0,0,0,0.22)] backdrop-blur-md">
+                        Frame {formatFrameIndex(position, frameCount)}
+                    </div>
+                    <div className="rounded-full border border-white/10 bg-black/35 px-3 py-2 text-slate-200/80 shadow-[0_10px_28px_rgba(0,0,0,0.22)] backdrop-blur-md">
+                        Pos {clampDisplayPosition(position).toFixed(3)}
+                    </div>
+                </div>
+            </div>
+
+            <div className="absolute inset-x-0 bottom-0 flex items-end justify-start gap-3 p-5">
+                {canRetry ? (
+                    <button
+                        type="button"
+                        className="cosimo-button rounded-full px-4 py-2 text-[11px] uppercase tracking-[0.18em] disabled:opacity-40"
+                        disabled={!canRetry}
+                        onClick={onRetry}
+                    >
+                        Retry Load
+                    </button>
+                ) : null}
+            </div>
+        </section>
+    );
+}
+
+export function MsegOverviewSection({
+    msegState,
+    onOpenEditor,
+    onDepthChange,
+    onRateChange,
+    onToggleLoop,
+    depthFocusBindings,
+    rateFocusBindings,
+    className,
+}: MsegOverviewSectionProps) {
+    return (
+        <section className={joinClasses(
+            "grid grid-rows-[auto_minmax(0,1fr)_auto] gap-3 rounded-[30px] border border-white/8 bg-white/[0.03] p-4 pb-5",
+            className,
+        )}>
+            <div className="flex items-center justify-between gap-4">
+                <div className="text-[11px] uppercase tracking-[0.22em] text-blue-300/70">MSEG</div>
+                <div className="font-mono text-sm tracking-[0.16em] text-cyan-200">
+                    {msegState ? formatSeconds(clampMsegRateSeconds(msegState.playback.rate.seconds)) : "0.000 s"}
+                </div>
+            </div>
+
+            {msegState ? (
+                <>
+                    <button
+                        type="button"
+                        className="group min-h-0 overflow-hidden rounded-[24px] border border-white/6 bg-black/20 p-3 text-left transition hover:border-white/12 hover:bg-black/24"
+                        onClick={onOpenEditor}
+                        aria-label="Open MSEG editor"
+                    >
+                        <MsegPreview
+                            points={msegState.shape.points}
+                            className="h-full min-h-0 w-full overflow-hidden rounded-[18px] bg-white/[0.03]"
+                        />
+                    </button>
+                    <div className="grid gap-3 pt-1">
+                        <div className="grid grid-cols-[minmax(0,1fr)_92px] items-center gap-4">
+                            <div className="grid gap-2">
+                                <span className="text-[11px] uppercase tracking-[0.18em] text-slate-300/60">Depth</span>
+                                <input
+                                    className="cosimo-range"
+                                    type="range"
+                                    min="-1"
+                                    max="1"
+                                    step="0.001"
+                                    value={Number(msegState.depth).toFixed(3)}
+                                    onChange={(event) => onDepthChange(Number(event.target.value))}
+                                    {...depthFocusBindings}
+                                />
+                            </div>
+                            <div className="text-right font-mono text-sm tracking-[0.16em] text-cyan-200">
+                                {Number(msegState.depth).toFixed(3)}
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-[minmax(0,1fr)_92px_auto] items-center gap-4">
+                            <div className="grid gap-2">
+                                <span className="text-[11px] uppercase tracking-[0.18em] text-slate-300/60">Rate</span>
+                                <input
+                                    className="cosimo-range"
+                                    type="range"
+                                    min={MSEG_RATE_MIN_SECONDS}
+                                    max={MSEG_RATE_MAX_SECONDS}
+                                    step="0.001"
+                                    value={clampMsegRateSeconds(msegState.playback.rate.seconds).toFixed(3)}
+                                    onChange={(event) => onRateChange(Number(event.target.value))}
+                                    {...rateFocusBindings}
+                                />
+                            </div>
+                            <div className="text-right font-mono text-sm tracking-[0.16em] text-cyan-200">
+                                {formatSeconds(clampMsegRateSeconds(msegState.playback.rate.seconds))}
+                            </div>
+                            <button
+                                type="button"
+                                className="cosimo-button h-11 rounded-2xl px-4 text-[11px] uppercase tracking-[0.18em]"
+                                onClick={onToggleLoop}
+                            >
+                                {msegState.playback.loop ? "Looping" : "One Shot"}
+                            </button>
+                        </div>
+                    </div>
+                </>
+            ) : (
+                <div className="rounded-2xl border border-white/8 bg-black/20 px-4 py-5 text-sm text-slate-300/70">
+                    Loading MSEG state…
+                </div>
+            )}
+        </section>
+    );
+}

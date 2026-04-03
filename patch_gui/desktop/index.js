@@ -12497,7 +12497,2530 @@ function requireClient() {
   return client.exports;
 }
 var clientExports = requireClient();
-const cssText = '/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com */\n@layer properties {\n  @supports (((-webkit-hyphens: none)) and (not (margin-trim: inline))) or ((-moz-orient: inline) and (not (color: rgb(from red r g b)))) {\n    *, :before, :after, ::backdrop {\n      --tw-translate-x: 0;\n      --tw-translate-y: 0;\n      --tw-translate-z: 0;\n      --tw-rotate-x: initial;\n      --tw-rotate-y: initial;\n      --tw-rotate-z: initial;\n      --tw-skew-x: initial;\n      --tw-skew-y: initial;\n      --tw-border-style: solid;\n      --tw-font-weight: initial;\n      --tw-tracking: initial;\n      --tw-ordinal: initial;\n      --tw-slashed-zero: initial;\n      --tw-numeric-figure: initial;\n      --tw-numeric-spacing: initial;\n      --tw-numeric-fraction: initial;\n      --tw-shadow: 0 0 #0000;\n      --tw-shadow-color: initial;\n      --tw-shadow-alpha: 100%;\n      --tw-inset-shadow: 0 0 #0000;\n      --tw-inset-shadow-color: initial;\n      --tw-inset-shadow-alpha: 100%;\n      --tw-ring-color: initial;\n      --tw-ring-shadow: 0 0 #0000;\n      --tw-inset-ring-color: initial;\n      --tw-inset-ring-shadow: 0 0 #0000;\n      --tw-ring-inset: initial;\n      --tw-ring-offset-width: 0px;\n      --tw-ring-offset-color: #fff;\n      --tw-ring-offset-shadow: 0 0 #0000;\n      --tw-outline-style: solid;\n      --tw-blur: initial;\n      --tw-brightness: initial;\n      --tw-contrast: initial;\n      --tw-grayscale: initial;\n      --tw-hue-rotate: initial;\n      --tw-invert: initial;\n      --tw-opacity: initial;\n      --tw-saturate: initial;\n      --tw-sepia: initial;\n      --tw-drop-shadow: initial;\n      --tw-drop-shadow-color: initial;\n      --tw-drop-shadow-alpha: 100%;\n      --tw-drop-shadow-size: initial;\n      --tw-backdrop-blur: initial;\n      --tw-backdrop-brightness: initial;\n      --tw-backdrop-contrast: initial;\n      --tw-backdrop-grayscale: initial;\n      --tw-backdrop-hue-rotate: initial;\n      --tw-backdrop-invert: initial;\n      --tw-backdrop-opacity: initial;\n      --tw-backdrop-saturate: initial;\n      --tw-backdrop-sepia: initial;\n    }\n  }\n}\n\n@layer theme {\n  :root, :host {\n    --font-sans: ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji",\n      "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";\n    --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",\n      "Courier New", monospace;\n    --color-amber-100: oklch(96.2% .059 95.617);\n    --color-cyan-100: oklch(95.6% .045 203.388);\n    --color-cyan-200: oklch(91.7% .08 205.041);\n    --color-blue-300: oklch(80.9% .105 251.813);\n    --color-fuchsia-100: oklch(95.2% .037 318.852);\n    --color-fuchsia-200: oklch(90.3% .076 319.62);\n    --color-fuchsia-300: oklch(83.3% .145 321.434);\n    --color-slate-100: oklch(96.8% .007 247.896);\n    --color-slate-200: oklch(92.9% .013 255.508);\n    --color-slate-300: oklch(86.9% .022 252.894);\n    --color-black: #000;\n    --color-white: #fff;\n    --spacing: .25rem;\n    --text-xs: .75rem;\n    --text-xs--line-height: calc(1 / .75);\n    --text-sm: .875rem;\n    --text-sm--line-height: calc(1.25 / .875);\n    --text-2xl: 1.5rem;\n    --text-2xl--line-height: calc(2 / 1.5);\n    --text-3xl: 1.875rem;\n    --text-3xl--line-height: calc(2.25 / 1.875);\n    --font-weight-semibold: 600;\n    --radius-2xl: 1rem;\n    --blur-md: 12px;\n    --default-transition-duration: .15s;\n    --default-transition-timing-function: cubic-bezier(.4, 0, .2, 1);\n    --default-font-family: var(--font-sans);\n    --default-mono-font-family: var(--font-mono);\n  }\n}\n\n@layer base {\n  *, :after, :before, ::backdrop {\n    box-sizing: border-box;\n    border: 0 solid;\n    margin: 0;\n    padding: 0;\n  }\n\n  ::file-selector-button {\n    box-sizing: border-box;\n    border: 0 solid;\n    margin: 0;\n    padding: 0;\n  }\n\n  html, :host {\n    -webkit-text-size-adjust: 100%;\n    tab-size: 4;\n    line-height: 1.5;\n    font-family: var(--default-font-family, ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji");\n    font-feature-settings: var(--default-font-feature-settings, normal);\n    font-variation-settings: var(--default-font-variation-settings, normal);\n    -webkit-tap-highlight-color: transparent;\n  }\n\n  hr {\n    height: 0;\n    color: inherit;\n    border-top-width: 1px;\n  }\n\n  abbr:where([title]) {\n    -webkit-text-decoration: underline dotted;\n    text-decoration: underline dotted;\n  }\n\n  h1, h2, h3, h4, h5, h6 {\n    font-size: inherit;\n    font-weight: inherit;\n  }\n\n  a {\n    color: inherit;\n    -webkit-text-decoration: inherit;\n    -webkit-text-decoration: inherit;\n    -webkit-text-decoration: inherit;\n    text-decoration: inherit;\n  }\n\n  b, strong {\n    font-weight: bolder;\n  }\n\n  code, kbd, samp, pre {\n    font-family: var(--default-mono-font-family, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace);\n    font-feature-settings: var(--default-mono-font-feature-settings, normal);\n    font-variation-settings: var(--default-mono-font-variation-settings, normal);\n    font-size: 1em;\n  }\n\n  small {\n    font-size: 80%;\n  }\n\n  sub, sup {\n    vertical-align: baseline;\n    font-size: 75%;\n    line-height: 0;\n    position: relative;\n  }\n\n  sub {\n    bottom: -.25em;\n  }\n\n  sup {\n    top: -.5em;\n  }\n\n  table {\n    text-indent: 0;\n    border-color: inherit;\n    border-collapse: collapse;\n  }\n\n  :-moz-focusring {\n    outline: auto;\n  }\n\n  progress {\n    vertical-align: baseline;\n  }\n\n  summary {\n    display: list-item;\n  }\n\n  ol, ul, menu {\n    list-style: none;\n  }\n\n  img, svg, video, canvas, audio, iframe, embed, object {\n    vertical-align: middle;\n    display: block;\n  }\n\n  img, video {\n    max-width: 100%;\n    height: auto;\n  }\n\n  button, input, select, optgroup, textarea {\n    font: inherit;\n    font-feature-settings: inherit;\n    font-variation-settings: inherit;\n    letter-spacing: inherit;\n    color: inherit;\n    opacity: 1;\n    background-color: #0000;\n    border-radius: 0;\n  }\n\n  ::file-selector-button {\n    font: inherit;\n    font-feature-settings: inherit;\n    font-variation-settings: inherit;\n    letter-spacing: inherit;\n    color: inherit;\n    opacity: 1;\n    background-color: #0000;\n    border-radius: 0;\n  }\n\n  :where(select:is([multiple], [size])) optgroup {\n    font-weight: bolder;\n  }\n\n  :where(select:is([multiple], [size])) optgroup option {\n    padding-inline-start: 20px;\n  }\n\n  ::file-selector-button {\n    margin-inline-end: 4px;\n  }\n\n  ::placeholder {\n    opacity: 1;\n  }\n\n  @supports (not ((-webkit-appearance: -apple-pay-button))) or (contain-intrinsic-size: 1px) {\n    ::placeholder {\n      color: currentColor;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      ::placeholder {\n        color: color-mix(in oklab, currentcolor 50%, transparent);\n      }\n    }\n  }\n\n  textarea {\n    resize: vertical;\n  }\n\n  ::-webkit-search-decoration {\n    -webkit-appearance: none;\n  }\n\n  ::-webkit-date-and-time-value {\n    min-height: 1lh;\n    text-align: inherit;\n  }\n\n  ::-webkit-datetime-edit {\n    display: inline-flex;\n  }\n\n  ::-webkit-datetime-edit-fields-wrapper {\n    padding: 0;\n  }\n\n  ::-webkit-datetime-edit {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-year-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-month-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-day-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-hour-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-minute-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-second-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-millisecond-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-meridiem-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-calendar-picker-indicator {\n    line-height: 1;\n  }\n\n  :-moz-ui-invalid {\n    box-shadow: none;\n  }\n\n  button, input:where([type="button"], [type="reset"], [type="submit"]) {\n    appearance: button;\n  }\n\n  ::file-selector-button {\n    appearance: button;\n  }\n\n  ::-webkit-inner-spin-button {\n    height: auto;\n  }\n\n  ::-webkit-outer-spin-button {\n    height: auto;\n  }\n\n  [hidden]:where(:not([hidden="until-found"])) {\n    display: none !important;\n  }\n}\n\n@layer components;\n\n@layer utilities {\n  .pointer-events-none {\n    pointer-events: none;\n  }\n\n  .collapse {\n    visibility: collapse;\n  }\n\n  .visible {\n    visibility: visible;\n  }\n\n  .absolute {\n    position: absolute;\n  }\n\n  .fixed {\n    position: fixed;\n  }\n\n  .relative {\n    position: relative;\n  }\n\n  .static {\n    position: static;\n  }\n\n  .sticky {\n    position: sticky;\n  }\n\n  .inset-0 {\n    inset: calc(var(--spacing) * 0);\n  }\n\n  .inset-x-0 {\n    inset-inline: calc(var(--spacing) * 0);\n  }\n\n  .start {\n    inset-inline-start: var(--spacing);\n  }\n\n  .end {\n    inset-inline-end: var(--spacing);\n  }\n\n  .top-0 {\n    top: calc(var(--spacing) * 0);\n  }\n\n  .top-1 {\n    top: calc(var(--spacing) * 1);\n  }\n\n  .top-1\\/2 {\n    top: 50%;\n  }\n\n  .right-4 {\n    right: calc(var(--spacing) * 4);\n  }\n\n  .bottom-0 {\n    bottom: calc(var(--spacing) * 0);\n  }\n\n  .isolate {\n    isolation: isolate;\n  }\n\n  .z-20 {\n    z-index: 20;\n  }\n\n  .order-1 {\n    order: 1;\n  }\n\n  .\\!container {\n    width: 100% !important;\n  }\n\n  @media (min-width: 40rem) {\n    .\\!container {\n      max-width: 40rem !important;\n    }\n  }\n\n  @media (min-width: 48rem) {\n    .\\!container {\n      max-width: 48rem !important;\n    }\n  }\n\n  @media (min-width: 64rem) {\n    .\\!container {\n      max-width: 64rem !important;\n    }\n  }\n\n  @media (min-width: 80rem) {\n    .\\!container {\n      max-width: 80rem !important;\n    }\n  }\n\n  @media (min-width: 96rem) {\n    .\\!container {\n      max-width: 96rem !important;\n    }\n  }\n\n  .container {\n    width: 100%;\n  }\n\n  @media (min-width: 40rem) {\n    .container {\n      max-width: 40rem;\n    }\n  }\n\n  @media (min-width: 48rem) {\n    .container {\n      max-width: 48rem;\n    }\n  }\n\n  @media (min-width: 64rem) {\n    .container {\n      max-width: 64rem;\n    }\n  }\n\n  @media (min-width: 80rem) {\n    .container {\n      max-width: 80rem;\n    }\n  }\n\n  @media (min-width: 96rem) {\n    .container {\n      max-width: 96rem;\n    }\n  }\n\n  .m-1 {\n    margin: calc(var(--spacing) * 1);\n  }\n\n  .mt-1 {\n    margin-top: calc(var(--spacing) * 1);\n  }\n\n  .mt-2 {\n    margin-top: calc(var(--spacing) * 2);\n  }\n\n  .block {\n    display: block;\n  }\n\n  .contents {\n    display: contents;\n  }\n\n  .flex {\n    display: flex;\n  }\n\n  .grid {\n    display: grid;\n  }\n\n  .hidden {\n    display: none;\n  }\n\n  .inline {\n    display: inline;\n  }\n\n  .inline-flex {\n    display: inline-flex;\n  }\n\n  .inline-grid {\n    display: inline-grid;\n  }\n\n  .table {\n    display: table;\n  }\n\n  .h-3 {\n    height: calc(var(--spacing) * 3);\n  }\n\n  .h-3\\.5 {\n    height: calc(var(--spacing) * 3.5);\n  }\n\n  .h-4 {\n    height: calc(var(--spacing) * 4);\n  }\n\n  .h-10 {\n    height: calc(var(--spacing) * 10);\n  }\n\n  .h-11 {\n    height: calc(var(--spacing) * 11);\n  }\n\n  .h-12 {\n    height: calc(var(--spacing) * 12);\n  }\n\n  .h-32 {\n    height: calc(var(--spacing) * 32);\n  }\n\n  .h-\\[42px\\] {\n    height: 42px;\n  }\n\n  .h-\\[118px\\] {\n    height: 118px;\n  }\n\n  .h-\\[320px\\] {\n    height: 320px;\n  }\n\n  .h-full {\n    height: 100%;\n  }\n\n  .min-h-0 {\n    min-height: calc(var(--spacing) * 0);\n  }\n\n  .min-h-\\[356px\\] {\n    min-height: 356px;\n  }\n\n  .w-3 {\n    width: calc(var(--spacing) * 3);\n  }\n\n  .w-3\\.5 {\n    width: calc(var(--spacing) * 3.5);\n  }\n\n  .w-6 {\n    width: calc(var(--spacing) * 6);\n  }\n\n  .w-10 {\n    width: calc(var(--spacing) * 10);\n  }\n\n  .w-\\[118px\\] {\n    width: 118px;\n  }\n\n  .w-full {\n    width: 100%;\n  }\n\n  .max-w-\\[280px\\] {\n    max-width: 280px;\n  }\n\n  .max-w-\\[1080px\\] {\n    max-width: 1080px;\n  }\n\n  .min-w-0 {\n    min-width: calc(var(--spacing) * 0);\n  }\n\n  .flex-1 {\n    flex: 1;\n  }\n\n  .flex-shrink, .shrink {\n    flex-shrink: 1;\n  }\n\n  .flex-grow, .grow {\n    flex-grow: 1;\n  }\n\n  .border-collapse {\n    border-collapse: collapse;\n  }\n\n  .-translate-y-1 {\n    --tw-translate-y: calc(var(--spacing) * -1);\n    translate: var(--tw-translate-x) var(--tw-translate-y);\n  }\n\n  .-translate-y-1\\/2 {\n    --tw-translate-y: calc(calc(1 / 2 * 100%) * -1);\n    translate: var(--tw-translate-x) var(--tw-translate-y);\n  }\n\n  .transform {\n    transform: var(--tw-rotate-x, ) var(--tw-rotate-y, ) var(--tw-rotate-z, ) var(--tw-skew-x, ) var(--tw-skew-y, );\n  }\n\n  .cursor-pointer {\n    cursor: pointer;\n  }\n\n  .touch-none {\n    touch-action: none;\n  }\n\n  .resize {\n    resize: both;\n  }\n\n  .grid-cols-3 {\n    grid-template-columns: repeat(3, minmax(0, 1fr));\n  }\n\n  .grid-cols-\\[56px_minmax\\(0\\,1fr\\)\\] {\n    grid-template-columns: 56px minmax(0, 1fr);\n  }\n\n  .grid-cols-\\[minmax\\(0\\,1fr\\)_88px\\] {\n    grid-template-columns: minmax(0, 1fr) 88px;\n  }\n\n  .grid-cols-\\[minmax\\(0\\,1fr\\)_92px\\] {\n    grid-template-columns: minmax(0, 1fr) 92px;\n  }\n\n  .grid-cols-\\[minmax\\(0\\,1fr\\)_92px_auto\\] {\n    grid-template-columns: minmax(0, 1fr) 92px auto;\n  }\n\n  .grid-cols-\\[minmax\\(0\\,1fr\\)_auto\\] {\n    grid-template-columns: minmax(0, 1fr) auto;\n  }\n\n  .grid-cols-\\[minmax\\(280px\\,1fr\\)_minmax\\(0\\,2fr\\)\\] {\n    grid-template-columns: minmax(280px, 1fr) minmax(0, 2fr);\n  }\n\n  .grid-rows-\\[auto_minmax\\(0\\,1fr\\)_auto\\] {\n    grid-template-rows: auto minmax(0, 1fr) auto;\n  }\n\n  .grid-rows-\\[minmax\\(356px\\,0\\.9fr\\)_auto_auto\\] {\n    grid-template-rows: minmax(356px, .9fr) auto auto;\n  }\n\n  .flex-col {\n    flex-direction: column;\n  }\n\n  .flex-wrap {\n    flex-wrap: wrap;\n  }\n\n  .items-center {\n    align-items: center;\n  }\n\n  .items-end {\n    align-items: flex-end;\n  }\n\n  .items-start {\n    align-items: flex-start;\n  }\n\n  .justify-between {\n    justify-content: space-between;\n  }\n\n  .justify-center {\n    justify-content: center;\n  }\n\n  .justify-end {\n    justify-content: flex-end;\n  }\n\n  .justify-start {\n    justify-content: flex-start;\n  }\n\n  .gap-1 {\n    gap: calc(var(--spacing) * 1);\n  }\n\n  .gap-2 {\n    gap: calc(var(--spacing) * 2);\n  }\n\n  .gap-3 {\n    gap: calc(var(--spacing) * 3);\n  }\n\n  .gap-4 {\n    gap: calc(var(--spacing) * 4);\n  }\n\n  .gap-5 {\n    gap: calc(var(--spacing) * 5);\n  }\n\n  .truncate {\n    text-overflow: ellipsis;\n    white-space: nowrap;\n    overflow: hidden;\n  }\n\n  .overflow-auto {\n    overflow: auto;\n  }\n\n  .overflow-hidden {\n    overflow: hidden;\n  }\n\n  .rounded {\n    border-radius: .25rem;\n  }\n\n  .rounded-2xl {\n    border-radius: var(--radius-2xl);\n  }\n\n  .rounded-\\[14px\\] {\n    border-radius: 14px;\n  }\n\n  .rounded-\\[16px\\] {\n    border-radius: 16px;\n  }\n\n  .rounded-\\[18px\\] {\n    border-radius: 18px;\n  }\n\n  .rounded-\\[20px\\] {\n    border-radius: 20px;\n  }\n\n  .rounded-\\[22px\\] {\n    border-radius: 22px;\n  }\n\n  .rounded-\\[24px\\] {\n    border-radius: 24px;\n  }\n\n  .rounded-\\[28px\\] {\n    border-radius: 28px;\n  }\n\n  .rounded-\\[30px\\] {\n    border-radius: 30px;\n  }\n\n  .rounded-full {\n    border-radius: 3.40282e38px;\n  }\n\n  .border {\n    border-style: var(--tw-border-style);\n    border-width: 1px;\n  }\n\n  .border-fuchsia-300 {\n    border-color: var(--color-fuchsia-300);\n  }\n\n  .border-fuchsia-300\\/15 {\n    border-color: #f2a9ff26;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-fuchsia-300\\/15 {\n      border-color: color-mix(in oklab, var(--color-fuchsia-300) 15%, transparent);\n    }\n  }\n\n  .border-white {\n    border-color: var(--color-white);\n  }\n\n  .border-white\\/6 {\n    border-color: #ffffff0f;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-white\\/6 {\n      border-color: color-mix(in oklab, var(--color-white) 6%, transparent);\n    }\n  }\n\n  .border-white\\/8 {\n    border-color: #ffffff14;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-white\\/8 {\n      border-color: color-mix(in oklab, var(--color-white) 8%, transparent);\n    }\n  }\n\n  .border-white\\/10 {\n    border-color: #ffffff1a;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-white\\/10 {\n      border-color: color-mix(in oklab, var(--color-white) 10%, transparent);\n    }\n  }\n\n  .bg-\\[\\#070b16\\] {\n    background-color: #070b16;\n  }\n\n  .bg-\\[\\#09101d\\]\\/95 {\n    background-color: oklab(17.3432% -.0040513 -.029082 / .95);\n  }\n\n  .bg-\\[\\#030711\\]\\/85 {\n    background-color: oklab(12.8817% -.00430492 -.0249884 / .85);\n  }\n\n  .bg-black {\n    background-color: var(--color-black);\n  }\n\n  .bg-black\\/20 {\n    background-color: #0003;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-black\\/20 {\n      background-color: color-mix(in oklab, var(--color-black) 20%, transparent);\n    }\n  }\n\n  .bg-black\\/25 {\n    background-color: #00000040;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-black\\/25 {\n      background-color: color-mix(in oklab, var(--color-black) 25%, transparent);\n    }\n  }\n\n  .bg-black\\/35 {\n    background-color: #00000059;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-black\\/35 {\n      background-color: color-mix(in oklab, var(--color-black) 35%, transparent);\n    }\n  }\n\n  .bg-black\\/40 {\n    background-color: #0006;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-black\\/40 {\n      background-color: color-mix(in oklab, var(--color-black) 40%, transparent);\n    }\n  }\n\n  .bg-fuchsia-300 {\n    background-color: var(--color-fuchsia-300);\n  }\n\n  .bg-fuchsia-300\\/8 {\n    background-color: #f2a9ff14;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-fuchsia-300\\/8 {\n      background-color: color-mix(in oklab, var(--color-fuchsia-300) 8%, transparent);\n    }\n  }\n\n  .bg-white {\n    background-color: var(--color-white);\n  }\n\n  .bg-white\\/\\[0\\.03\\] {\n    background-color: #ffffff08;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-white\\/\\[0\\.03\\] {\n      background-color: color-mix(in oklab, var(--color-white) 3%, transparent);\n    }\n  }\n\n  .bg-white\\/\\[0\\.04\\] {\n    background-color: #ffffff0a;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-white\\/\\[0\\.04\\] {\n      background-color: color-mix(in oklab, var(--color-white) 4%, transparent);\n    }\n  }\n\n  .bg-white\\/\\[0\\.08\\] {\n    background-color: #ffffff14;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-white\\/\\[0\\.08\\] {\n      background-color: color-mix(in oklab, var(--color-white) 8%, transparent);\n    }\n  }\n\n  .mask-repeat {\n    -webkit-mask-repeat: repeat;\n    mask-repeat: repeat;\n  }\n\n  .fill-cyan-200 {\n    fill: var(--color-cyan-200);\n  }\n\n  .fill-fuchsia-200 {\n    fill: var(--color-fuchsia-200);\n  }\n\n  .stroke-\\[\\#050913\\] {\n    stroke: #050913;\n  }\n\n  .stroke-\\[2px\\] {\n    stroke-width: 2px;\n  }\n\n  .stroke-\\[3px\\] {\n    stroke-width: 3px;\n  }\n\n  .p-0 {\n    padding: calc(var(--spacing) * 0);\n  }\n\n  .p-1 {\n    padding: calc(var(--spacing) * 1);\n  }\n\n  .p-2 {\n    padding: calc(var(--spacing) * 2);\n  }\n\n  .p-3 {\n    padding: calc(var(--spacing) * 3);\n  }\n\n  .p-4 {\n    padding: calc(var(--spacing) * 4);\n  }\n\n  .p-5 {\n    padding: calc(var(--spacing) * 5);\n  }\n\n  .p-6 {\n    padding: calc(var(--spacing) * 6);\n  }\n\n  .px-2 {\n    padding-inline: calc(var(--spacing) * 2);\n  }\n\n  .px-3 {\n    padding-inline: calc(var(--spacing) * 3);\n  }\n\n  .px-4 {\n    padding-inline: calc(var(--spacing) * 4);\n  }\n\n  .px-5 {\n    padding-inline: calc(var(--spacing) * 5);\n  }\n\n  .py-2 {\n    padding-block: calc(var(--spacing) * 2);\n  }\n\n  .py-2\\.5 {\n    padding-block: calc(var(--spacing) * 2.5);\n  }\n\n  .py-3 {\n    padding-block: calc(var(--spacing) * 3);\n  }\n\n  .py-4 {\n    padding-block: calc(var(--spacing) * 4);\n  }\n\n  .py-5 {\n    padding-block: calc(var(--spacing) * 5);\n  }\n\n  .pt-1 {\n    padding-top: calc(var(--spacing) * 1);\n  }\n\n  .pr-1 {\n    padding-right: calc(var(--spacing) * 1);\n  }\n\n  .pr-4 {\n    padding-right: calc(var(--spacing) * 4);\n  }\n\n  .pr-10 {\n    padding-right: calc(var(--spacing) * 10);\n  }\n\n  .pb-5 {\n    padding-bottom: calc(var(--spacing) * 5);\n  }\n\n  .text-left {\n    text-align: left;\n  }\n\n  .text-right {\n    text-align: right;\n  }\n\n  .font-mono {\n    font-family: var(--font-mono);\n  }\n\n  .text-2xl {\n    font-size: var(--text-2xl);\n    line-height: var(--tw-leading, var(--text-2xl--line-height));\n  }\n\n  .text-3xl {\n    font-size: var(--text-3xl);\n    line-height: var(--tw-leading, var(--text-3xl--line-height));\n  }\n\n  .text-sm {\n    font-size: var(--text-sm);\n    line-height: var(--tw-leading, var(--text-sm--line-height));\n  }\n\n  .text-xs {\n    font-size: var(--text-xs);\n    line-height: var(--tw-leading, var(--text-xs--line-height));\n  }\n\n  .text-\\[10px\\] {\n    font-size: 10px;\n  }\n\n  .text-\\[11px\\] {\n    font-size: 11px;\n  }\n\n  .font-semibold {\n    --tw-font-weight: var(--font-weight-semibold);\n    font-weight: var(--font-weight-semibold);\n  }\n\n  .tracking-\\[-0\\.04em\\] {\n    --tw-tracking: -.04em;\n    letter-spacing: -.04em;\n  }\n\n  .tracking-\\[0\\.16em\\] {\n    --tw-tracking: .16em;\n    letter-spacing: .16em;\n  }\n\n  .tracking-\\[0\\.18em\\] {\n    --tw-tracking: .18em;\n    letter-spacing: .18em;\n  }\n\n  .tracking-\\[0\\.22em\\] {\n    --tw-tracking: .22em;\n    letter-spacing: .22em;\n  }\n\n  .tracking-\\[0\\.24em\\] {\n    --tw-tracking: .24em;\n    letter-spacing: .24em;\n  }\n\n  .text-wrap {\n    text-wrap: wrap;\n  }\n\n  .text-amber-100 {\n    color: var(--color-amber-100);\n  }\n\n  .text-blue-300 {\n    color: var(--color-blue-300);\n  }\n\n  .text-blue-300\\/70 {\n    color: #90c5ffb3;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-blue-300\\/70 {\n      color: color-mix(in oklab, var(--color-blue-300) 70%, transparent);\n    }\n  }\n\n  .text-cyan-100 {\n    color: var(--color-cyan-100);\n  }\n\n  .text-cyan-200 {\n    color: var(--color-cyan-200);\n  }\n\n  .text-cyan-200\\/70 {\n    color: #a2f4fdb3;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-cyan-200\\/70 {\n      color: color-mix(in oklab, var(--color-cyan-200) 70%, transparent);\n    }\n  }\n\n  .text-cyan-200\\/80 {\n    color: #a2f4fdcc;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-cyan-200\\/80 {\n      color: color-mix(in oklab, var(--color-cyan-200) 80%, transparent);\n    }\n  }\n\n  .text-fuchsia-100 {\n    color: var(--color-fuchsia-100);\n  }\n\n  .text-fuchsia-100\\/90 {\n    color: #fae8ffe6;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-fuchsia-100\\/90 {\n      color: color-mix(in oklab, var(--color-fuchsia-100) 90%, transparent);\n    }\n  }\n\n  .text-fuchsia-200 {\n    color: var(--color-fuchsia-200);\n  }\n\n  .text-fuchsia-200\\/80 {\n    color: #f6cfffcc;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-fuchsia-200\\/80 {\n      color: color-mix(in oklab, var(--color-fuchsia-200) 80%, transparent);\n    }\n  }\n\n  .text-slate-100 {\n    color: var(--color-slate-100);\n  }\n\n  .text-slate-200 {\n    color: var(--color-slate-200);\n  }\n\n  .text-slate-200\\/80 {\n    color: #e2e8f0cc;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-200\\/80 {\n      color: color-mix(in oklab, var(--color-slate-200) 80%, transparent);\n    }\n  }\n\n  .text-slate-300 {\n    color: var(--color-slate-300);\n  }\n\n  .text-slate-300\\/55 {\n    color: #cad5e28c;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-300\\/55 {\n      color: color-mix(in oklab, var(--color-slate-300) 55%, transparent);\n    }\n  }\n\n  .text-slate-300\\/60 {\n    color: #cad5e299;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-300\\/60 {\n      color: color-mix(in oklab, var(--color-slate-300) 60%, transparent);\n    }\n  }\n\n  .text-slate-300\\/70 {\n    color: #cad5e2b3;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-300\\/70 {\n      color: color-mix(in oklab, var(--color-slate-300) 70%, transparent);\n    }\n  }\n\n  .text-slate-300\\/75 {\n    color: #cad5e2bf;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-300\\/75 {\n      color: color-mix(in oklab, var(--color-slate-300) 75%, transparent);\n    }\n  }\n\n  .lowercase {\n    text-transform: lowercase;\n  }\n\n  .uppercase {\n    text-transform: uppercase;\n  }\n\n  .ordinal {\n    --tw-ordinal: ordinal;\n    font-variant-numeric: var(--tw-ordinal, ) var(--tw-slashed-zero, ) var(--tw-numeric-figure, ) var(--tw-numeric-spacing, ) var(--tw-numeric-fraction, );\n  }\n\n  .underline {\n    text-decoration-line: underline;\n  }\n\n  .opacity-0 {\n    opacity: 0;\n  }\n\n  .shadow {\n    --tw-shadow: 0 1px 3px 0 var(--tw-shadow-color, #0000001a), 0 1px 2px -1px var(--tw-shadow-color, #0000001a);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[0_10px_28px_rgba\\(0\\,0\\,0\\,0\\.22\\)\\] {\n    --tw-shadow: 0 10px 28px var(--tw-shadow-color, #00000038);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[0_10px_28px_rgba\\(0\\,0\\,0\\,0\\.28\\)\\] {\n    --tw-shadow: 0 10px 28px var(--tw-shadow-color, #00000047);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[0_18px_42px_rgba\\(3\\,6\\,18\\,0\\.45\\)\\] {\n    --tw-shadow: 0 18px 42px var(--tw-shadow-color, #03061273);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[0_26px_80px_rgba\\(0\\,0\\,0\\,0\\.48\\)\\] {\n    --tw-shadow: 0 26px 80px var(--tw-shadow-color, #0000007a);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[0_36px_80px_rgba\\(0\\,0\\,0\\,0\\.5\\)\\] {\n    --tw-shadow: 0 36px 80px var(--tw-shadow-color, #00000080);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[inset_0_0_0_1px_rgba\\(143\\,232\\,255\\,0\\.18\\)\\] {\n    --tw-shadow: inset 0 0 0 1px var(--tw-shadow-color, #8fe8ff2e);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .ring {\n    --tw-ring-shadow: var(--tw-ring-inset, ) 0 0 0 calc(1px + var(--tw-ring-offset-width)) var(--tw-ring-color, currentcolor);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .outline {\n    outline-style: var(--tw-outline-style);\n    outline-width: 1px;\n  }\n\n  .blur {\n    --tw-blur: blur(8px);\n    filter: var(--tw-blur, ) var(--tw-brightness, ) var(--tw-contrast, ) var(--tw-grayscale, ) var(--tw-hue-rotate, ) var(--tw-invert, ) var(--tw-saturate, ) var(--tw-sepia, ) var(--tw-drop-shadow, );\n  }\n\n  .invert {\n    --tw-invert: invert(100%);\n    filter: var(--tw-blur, ) var(--tw-brightness, ) var(--tw-contrast, ) var(--tw-grayscale, ) var(--tw-hue-rotate, ) var(--tw-invert, ) var(--tw-saturate, ) var(--tw-sepia, ) var(--tw-drop-shadow, );\n  }\n\n  .filter {\n    filter: var(--tw-blur, ) var(--tw-brightness, ) var(--tw-contrast, ) var(--tw-grayscale, ) var(--tw-hue-rotate, ) var(--tw-invert, ) var(--tw-saturate, ) var(--tw-sepia, ) var(--tw-drop-shadow, );\n  }\n\n  .backdrop-blur-md {\n    --tw-backdrop-blur: blur(var(--blur-md));\n    -webkit-backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );\n    backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );\n  }\n\n  .backdrop-filter {\n    -webkit-backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );\n    backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );\n  }\n\n  .transition {\n    transition-property: color, background-color, border-color, outline-color, text-decoration-color, fill, stroke, --tw-gradient-from, --tw-gradient-via, --tw-gradient-to, opacity, box-shadow, transform, translate, scale, rotate, filter, -webkit-backdrop-filter, backdrop-filter, display, content-visibility, overlay, pointer-events;\n    transition-timing-function: var(--tw-ease, var(--default-transition-timing-function));\n    transition-duration: var(--tw-duration, var(--default-transition-duration));\n  }\n\n  @media (hover: hover) {\n    .hover\\:border-white\\/12:hover {\n      border-color: #ffffff1f;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:border-white\\/12:hover {\n        border-color: color-mix(in oklab, var(--color-white) 12%, transparent);\n      }\n    }\n\n    .hover\\:bg-black\\/24:hover {\n      background-color: #0000003d;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:bg-black\\/24:hover {\n        background-color: color-mix(in oklab, var(--color-black) 24%, transparent);\n      }\n    }\n\n    .hover\\:bg-white\\/\\[0\\.04\\]:hover {\n      background-color: #ffffff0a;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:bg-white\\/\\[0\\.04\\]:hover {\n        background-color: color-mix(in oklab, var(--color-white) 4%, transparent);\n      }\n    }\n\n    .hover\\:text-slate-100:hover {\n      color: var(--color-slate-100);\n    }\n  }\n\n  .disabled\\:opacity-35:disabled {\n    opacity: .35;\n  }\n\n  .disabled\\:opacity-40:disabled {\n    opacity: .4;\n  }\n}\n\n:host {\n  color-scheme: dark;\n  width: 100%;\n  height: 100%;\n  display: block;\n}\n\n* {\n  box-sizing: border-box;\n}\n\nbutton, input, select {\n  font: inherit;\n}\n\n.cosimo-surface {\n  background: radial-gradient(circle at top, #7a8eff2e, #0000 34%), linear-gradient(#060a16fa, #03050c);\n}\n\n.cosimo-stage {\n  background: linear-gradient(#ffffff05 1px, #0000 1px) 0 0 / 24px 24px, linear-gradient(90deg, #ffffff05 1px, #0000 1px) 0 0 / 24px 24px, radial-gradient(circle at top, #7a8eff33, #0000 38%), linear-gradient(#050915fa, #02040b);\n}\n\n.cosimo-stage:after {\n  content: "";\n  pointer-events: none;\n  position: absolute;\n  inset: 0;\n  box-shadow: inset 0 1px #ffffff14, inset 0 -48px 64px #00000059;\n}\n\n.cosimo-range {\n  appearance: none;\n  background: linear-gradient(90deg, #5463c973, #f56cb673);\n  border-radius: 999px;\n  outline: none;\n  width: 100%;\n  height: 10px;\n}\n\n.cosimo-range::-webkit-slider-thumb {\n  appearance: none;\n  background: linear-gradient(#ffd8a6 0%, #f56cb6 100%);\n  border: 0;\n  border-radius: 999px;\n  width: 22px;\n  height: 22px;\n  box-shadow: 0 6px 18px #f56cb659;\n}\n\n.cosimo-range::-moz-range-thumb {\n  background: linear-gradient(#ffd8a6 0%, #f56cb6 100%);\n  border: 0;\n  border-radius: 999px;\n  width: 22px;\n  height: 22px;\n  box-shadow: 0 6px 18px #f56cb659;\n}\n\n.cosimo-select, .cosimo-button {\n  color: #eef2f5;\n  background: #ffffff0a;\n  border: 1px solid #ffffff14;\n}\n\n.cosimo-grid-line {\n  stroke: #ffffff14;\n  stroke-width: 1px;\n}\n\n.cosimo-curve-fill {\n  fill: #87d7f514;\n}\n\n.cosimo-curve-line {\n  fill: none;\n  stroke: #87d7f5;\n  stroke-width: 3px;\n  stroke-linecap: round;\n  stroke-linejoin: round;\n}\n\n@property --tw-translate-x {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0;\n}\n\n@property --tw-translate-y {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0;\n}\n\n@property --tw-translate-z {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0;\n}\n\n@property --tw-rotate-x {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-rotate-y {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-rotate-z {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-skew-x {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-skew-y {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-border-style {\n  syntax: "*";\n  inherits: false;\n  initial-value: solid;\n}\n\n@property --tw-font-weight {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-tracking {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-ordinal {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-slashed-zero {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-numeric-figure {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-numeric-spacing {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-numeric-fraction {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-shadow {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0 0 #0000;\n}\n\n@property --tw-shadow-color {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-shadow-alpha {\n  syntax: "<percentage>";\n  inherits: false;\n  initial-value: 100%;\n}\n\n@property --tw-inset-shadow {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0 0 #0000;\n}\n\n@property --tw-inset-shadow-color {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-inset-shadow-alpha {\n  syntax: "<percentage>";\n  inherits: false;\n  initial-value: 100%;\n}\n\n@property --tw-ring-color {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-ring-shadow {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0 0 #0000;\n}\n\n@property --tw-inset-ring-color {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-inset-ring-shadow {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0 0 #0000;\n}\n\n@property --tw-ring-inset {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-ring-offset-width {\n  syntax: "<length>";\n  inherits: false;\n  initial-value: 0;\n}\n\n@property --tw-ring-offset-color {\n  syntax: "*";\n  inherits: false;\n  initial-value: #fff;\n}\n\n@property --tw-ring-offset-shadow {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0 0 #0000;\n}\n\n@property --tw-outline-style {\n  syntax: "*";\n  inherits: false;\n  initial-value: solid;\n}\n\n@property --tw-blur {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-brightness {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-contrast {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-grayscale {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-hue-rotate {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-invert {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-opacity {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-saturate {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-sepia {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-drop-shadow {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-drop-shadow-color {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-drop-shadow-alpha {\n  syntax: "<percentage>";\n  inherits: false;\n  initial-value: 100%;\n}\n\n@property --tw-drop-shadow-size {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-blur {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-brightness {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-contrast {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-grayscale {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-hue-rotate {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-invert {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-opacity {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-saturate {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-sepia {\n  syntax: "*";\n  inherits: false\n}\n';
+const cssText = '/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com */\n@layer properties {\n  @supports (((-webkit-hyphens: none)) and (not (margin-trim: inline))) or ((-moz-orient: inline) and (not (color: rgb(from red r g b)))) {\n    *, :before, :after, ::backdrop {\n      --tw-translate-x: 0;\n      --tw-translate-y: 0;\n      --tw-translate-z: 0;\n      --tw-rotate-x: initial;\n      --tw-rotate-y: initial;\n      --tw-rotate-z: initial;\n      --tw-skew-x: initial;\n      --tw-skew-y: initial;\n      --tw-border-style: solid;\n      --tw-font-weight: initial;\n      --tw-tracking: initial;\n      --tw-ordinal: initial;\n      --tw-slashed-zero: initial;\n      --tw-numeric-figure: initial;\n      --tw-numeric-spacing: initial;\n      --tw-numeric-fraction: initial;\n      --tw-shadow: 0 0 #0000;\n      --tw-shadow-color: initial;\n      --tw-shadow-alpha: 100%;\n      --tw-inset-shadow: 0 0 #0000;\n      --tw-inset-shadow-color: initial;\n      --tw-inset-shadow-alpha: 100%;\n      --tw-ring-color: initial;\n      --tw-ring-shadow: 0 0 #0000;\n      --tw-inset-ring-color: initial;\n      --tw-inset-ring-shadow: 0 0 #0000;\n      --tw-ring-inset: initial;\n      --tw-ring-offset-width: 0px;\n      --tw-ring-offset-color: #fff;\n      --tw-ring-offset-shadow: 0 0 #0000;\n      --tw-outline-style: solid;\n      --tw-blur: initial;\n      --tw-brightness: initial;\n      --tw-contrast: initial;\n      --tw-grayscale: initial;\n      --tw-hue-rotate: initial;\n      --tw-invert: initial;\n      --tw-opacity: initial;\n      --tw-saturate: initial;\n      --tw-sepia: initial;\n      --tw-drop-shadow: initial;\n      --tw-drop-shadow-color: initial;\n      --tw-drop-shadow-alpha: 100%;\n      --tw-drop-shadow-size: initial;\n      --tw-backdrop-blur: initial;\n      --tw-backdrop-brightness: initial;\n      --tw-backdrop-contrast: initial;\n      --tw-backdrop-grayscale: initial;\n      --tw-backdrop-hue-rotate: initial;\n      --tw-backdrop-invert: initial;\n      --tw-backdrop-opacity: initial;\n      --tw-backdrop-saturate: initial;\n      --tw-backdrop-sepia: initial;\n    }\n  }\n}\n\n@layer theme {\n  :root, :host {\n    --font-sans: ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji",\n      "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";\n    --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",\n      "Courier New", monospace;\n    --color-amber-100: oklch(96.2% .059 95.617);\n    --color-cyan-100: oklch(95.6% .045 203.388);\n    --color-cyan-200: oklch(91.7% .08 205.041);\n    --color-blue-300: oklch(80.9% .105 251.813);\n    --color-fuchsia-100: oklch(95.2% .037 318.852);\n    --color-fuchsia-200: oklch(90.3% .076 319.62);\n    --color-fuchsia-300: oklch(83.3% .145 321.434);\n    --color-slate-100: oklch(96.8% .007 247.896);\n    --color-slate-200: oklch(92.9% .013 255.508);\n    --color-slate-300: oklch(86.9% .022 252.894);\n    --color-black: #000;\n    --color-white: #fff;\n    --spacing: .25rem;\n    --text-xs: .75rem;\n    --text-xs--line-height: calc(1 / .75);\n    --text-sm: .875rem;\n    --text-sm--line-height: calc(1.25 / .875);\n    --text-2xl: 1.5rem;\n    --text-2xl--line-height: calc(2 / 1.5);\n    --text-3xl: 1.875rem;\n    --text-3xl--line-height: calc(2.25 / 1.875);\n    --font-weight-semibold: 600;\n    --radius-2xl: 1rem;\n    --blur-md: 12px;\n    --default-transition-duration: .15s;\n    --default-transition-timing-function: cubic-bezier(.4, 0, .2, 1);\n    --default-font-family: var(--font-sans);\n    --default-mono-font-family: var(--font-mono);\n  }\n}\n\n@layer base {\n  *, :after, :before, ::backdrop {\n    box-sizing: border-box;\n    border: 0 solid;\n    margin: 0;\n    padding: 0;\n  }\n\n  ::file-selector-button {\n    box-sizing: border-box;\n    border: 0 solid;\n    margin: 0;\n    padding: 0;\n  }\n\n  html, :host {\n    -webkit-text-size-adjust: 100%;\n    tab-size: 4;\n    line-height: 1.5;\n    font-family: var(--default-font-family, ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji");\n    font-feature-settings: var(--default-font-feature-settings, normal);\n    font-variation-settings: var(--default-font-variation-settings, normal);\n    -webkit-tap-highlight-color: transparent;\n  }\n\n  hr {\n    height: 0;\n    color: inherit;\n    border-top-width: 1px;\n  }\n\n  abbr:where([title]) {\n    -webkit-text-decoration: underline dotted;\n    text-decoration: underline dotted;\n  }\n\n  h1, h2, h3, h4, h5, h6 {\n    font-size: inherit;\n    font-weight: inherit;\n  }\n\n  a {\n    color: inherit;\n    -webkit-text-decoration: inherit;\n    -webkit-text-decoration: inherit;\n    -webkit-text-decoration: inherit;\n    text-decoration: inherit;\n  }\n\n  b, strong {\n    font-weight: bolder;\n  }\n\n  code, kbd, samp, pre {\n    font-family: var(--default-mono-font-family, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace);\n    font-feature-settings: var(--default-mono-font-feature-settings, normal);\n    font-variation-settings: var(--default-mono-font-variation-settings, normal);\n    font-size: 1em;\n  }\n\n  small {\n    font-size: 80%;\n  }\n\n  sub, sup {\n    vertical-align: baseline;\n    font-size: 75%;\n    line-height: 0;\n    position: relative;\n  }\n\n  sub {\n    bottom: -.25em;\n  }\n\n  sup {\n    top: -.5em;\n  }\n\n  table {\n    text-indent: 0;\n    border-color: inherit;\n    border-collapse: collapse;\n  }\n\n  :-moz-focusring {\n    outline: auto;\n  }\n\n  progress {\n    vertical-align: baseline;\n  }\n\n  summary {\n    display: list-item;\n  }\n\n  ol, ul, menu {\n    list-style: none;\n  }\n\n  img, svg, video, canvas, audio, iframe, embed, object {\n    vertical-align: middle;\n    display: block;\n  }\n\n  img, video {\n    max-width: 100%;\n    height: auto;\n  }\n\n  button, input, select, optgroup, textarea {\n    font: inherit;\n    font-feature-settings: inherit;\n    font-variation-settings: inherit;\n    letter-spacing: inherit;\n    color: inherit;\n    opacity: 1;\n    background-color: #0000;\n    border-radius: 0;\n  }\n\n  ::file-selector-button {\n    font: inherit;\n    font-feature-settings: inherit;\n    font-variation-settings: inherit;\n    letter-spacing: inherit;\n    color: inherit;\n    opacity: 1;\n    background-color: #0000;\n    border-radius: 0;\n  }\n\n  :where(select:is([multiple], [size])) optgroup {\n    font-weight: bolder;\n  }\n\n  :where(select:is([multiple], [size])) optgroup option {\n    padding-inline-start: 20px;\n  }\n\n  ::file-selector-button {\n    margin-inline-end: 4px;\n  }\n\n  ::placeholder {\n    opacity: 1;\n  }\n\n  @supports (not ((-webkit-appearance: -apple-pay-button))) or (contain-intrinsic-size: 1px) {\n    ::placeholder {\n      color: currentColor;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      ::placeholder {\n        color: color-mix(in oklab, currentcolor 50%, transparent);\n      }\n    }\n  }\n\n  textarea {\n    resize: vertical;\n  }\n\n  ::-webkit-search-decoration {\n    -webkit-appearance: none;\n  }\n\n  ::-webkit-date-and-time-value {\n    min-height: 1lh;\n    text-align: inherit;\n  }\n\n  ::-webkit-datetime-edit {\n    display: inline-flex;\n  }\n\n  ::-webkit-datetime-edit-fields-wrapper {\n    padding: 0;\n  }\n\n  ::-webkit-datetime-edit {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-year-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-month-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-day-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-hour-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-minute-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-second-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-millisecond-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-meridiem-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-calendar-picker-indicator {\n    line-height: 1;\n  }\n\n  :-moz-ui-invalid {\n    box-shadow: none;\n  }\n\n  button, input:where([type="button"], [type="reset"], [type="submit"]) {\n    appearance: button;\n  }\n\n  ::file-selector-button {\n    appearance: button;\n  }\n\n  ::-webkit-inner-spin-button {\n    height: auto;\n  }\n\n  ::-webkit-outer-spin-button {\n    height: auto;\n  }\n\n  [hidden]:where(:not([hidden="until-found"])) {\n    display: none !important;\n  }\n}\n\n@layer components;\n\n@layer utilities {\n  .pointer-events-none {\n    pointer-events: none;\n  }\n\n  .collapse {\n    visibility: collapse;\n  }\n\n  .visible {\n    visibility: visible;\n  }\n\n  .absolute {\n    position: absolute;\n  }\n\n  .fixed {\n    position: fixed;\n  }\n\n  .relative {\n    position: relative;\n  }\n\n  .static {\n    position: static;\n  }\n\n  .sticky {\n    position: sticky;\n  }\n\n  .inset-0 {\n    inset: calc(var(--spacing) * 0);\n  }\n\n  .inset-x-0 {\n    inset-inline: calc(var(--spacing) * 0);\n  }\n\n  .start {\n    inset-inline-start: var(--spacing);\n  }\n\n  .end {\n    inset-inline-end: var(--spacing);\n  }\n\n  .top-0 {\n    top: calc(var(--spacing) * 0);\n  }\n\n  .top-1 {\n    top: calc(var(--spacing) * 1);\n  }\n\n  .top-1\\/2 {\n    top: 50%;\n  }\n\n  .right-4 {\n    right: calc(var(--spacing) * 4);\n  }\n\n  .bottom-0 {\n    bottom: calc(var(--spacing) * 0);\n  }\n\n  .isolate {\n    isolation: isolate;\n  }\n\n  .z-20 {\n    z-index: 20;\n  }\n\n  .order-1 {\n    order: 1;\n  }\n\n  .\\!container {\n    width: 100% !important;\n  }\n\n  @media (min-width: 40rem) {\n    .\\!container {\n      max-width: 40rem !important;\n    }\n  }\n\n  @media (min-width: 48rem) {\n    .\\!container {\n      max-width: 48rem !important;\n    }\n  }\n\n  @media (min-width: 64rem) {\n    .\\!container {\n      max-width: 64rem !important;\n    }\n  }\n\n  @media (min-width: 80rem) {\n    .\\!container {\n      max-width: 80rem !important;\n    }\n  }\n\n  @media (min-width: 96rem) {\n    .\\!container {\n      max-width: 96rem !important;\n    }\n  }\n\n  .container {\n    width: 100%;\n  }\n\n  @media (min-width: 40rem) {\n    .container {\n      max-width: 40rem;\n    }\n  }\n\n  @media (min-width: 48rem) {\n    .container {\n      max-width: 48rem;\n    }\n  }\n\n  @media (min-width: 64rem) {\n    .container {\n      max-width: 64rem;\n    }\n  }\n\n  @media (min-width: 80rem) {\n    .container {\n      max-width: 80rem;\n    }\n  }\n\n  @media (min-width: 96rem) {\n    .container {\n      max-width: 96rem;\n    }\n  }\n\n  .m-1 {\n    margin: calc(var(--spacing) * 1);\n  }\n\n  .mt-1 {\n    margin-top: calc(var(--spacing) * 1);\n  }\n\n  .mt-2 {\n    margin-top: calc(var(--spacing) * 2);\n  }\n\n  .block {\n    display: block;\n  }\n\n  .contents {\n    display: contents;\n  }\n\n  .flex {\n    display: flex;\n  }\n\n  .grid {\n    display: grid;\n  }\n\n  .hidden {\n    display: none;\n  }\n\n  .inline {\n    display: inline;\n  }\n\n  .inline-flex {\n    display: inline-flex;\n  }\n\n  .inline-grid {\n    display: inline-grid;\n  }\n\n  .table {\n    display: table;\n  }\n\n  .h-3 {\n    height: calc(var(--spacing) * 3);\n  }\n\n  .h-3\\.5 {\n    height: calc(var(--spacing) * 3.5);\n  }\n\n  .h-4 {\n    height: calc(var(--spacing) * 4);\n  }\n\n  .h-10 {\n    height: calc(var(--spacing) * 10);\n  }\n\n  .h-11 {\n    height: calc(var(--spacing) * 11);\n  }\n\n  .h-12 {\n    height: calc(var(--spacing) * 12);\n  }\n\n  .h-32 {\n    height: calc(var(--spacing) * 32);\n  }\n\n  .h-\\[42px\\] {\n    height: 42px;\n  }\n\n  .h-\\[118px\\] {\n    height: 118px;\n  }\n\n  .h-\\[180px\\] {\n    height: 180px;\n  }\n\n  .h-\\[320px\\] {\n    height: 320px;\n  }\n\n  .h-full {\n    height: 100%;\n  }\n\n  .min-h-0 {\n    min-height: calc(var(--spacing) * 0);\n  }\n\n  .min-h-\\[220px\\] {\n    min-height: 220px;\n  }\n\n  .min-h-\\[356px\\] {\n    min-height: 356px;\n  }\n\n  .w-3 {\n    width: calc(var(--spacing) * 3);\n  }\n\n  .w-3\\.5 {\n    width: calc(var(--spacing) * 3.5);\n  }\n\n  .w-6 {\n    width: calc(var(--spacing) * 6);\n  }\n\n  .w-10 {\n    width: calc(var(--spacing) * 10);\n  }\n\n  .w-\\[118px\\] {\n    width: 118px;\n  }\n\n  .w-full {\n    width: 100%;\n  }\n\n  .max-w-\\[280px\\] {\n    max-width: 280px;\n  }\n\n  .max-w-\\[1080px\\] {\n    max-width: 1080px;\n  }\n\n  .min-w-0 {\n    min-width: calc(var(--spacing) * 0);\n  }\n\n  .flex-1 {\n    flex: 1;\n  }\n\n  .flex-shrink, .shrink {\n    flex-shrink: 1;\n  }\n\n  .flex-grow, .grow {\n    flex-grow: 1;\n  }\n\n  .border-collapse {\n    border-collapse: collapse;\n  }\n\n  .-translate-y-1 {\n    --tw-translate-y: calc(var(--spacing) * -1);\n    translate: var(--tw-translate-x) var(--tw-translate-y);\n  }\n\n  .-translate-y-1\\/2 {\n    --tw-translate-y: calc(calc(1 / 2 * 100%) * -1);\n    translate: var(--tw-translate-x) var(--tw-translate-y);\n  }\n\n  .transform {\n    transform: var(--tw-rotate-x, ) var(--tw-rotate-y, ) var(--tw-rotate-z, ) var(--tw-skew-x, ) var(--tw-skew-y, );\n  }\n\n  .cursor-pointer {\n    cursor: pointer;\n  }\n\n  .touch-none {\n    touch-action: none;\n  }\n\n  .resize {\n    resize: both;\n  }\n\n  .grid-cols-1 {\n    grid-template-columns: repeat(1, minmax(0, 1fr));\n  }\n\n  .grid-cols-3 {\n    grid-template-columns: repeat(3, minmax(0, 1fr));\n  }\n\n  .grid-cols-\\[56px_minmax\\(0\\,1fr\\)\\] {\n    grid-template-columns: 56px minmax(0, 1fr);\n  }\n\n  .grid-cols-\\[minmax\\(0\\,1fr\\)_88px\\] {\n    grid-template-columns: minmax(0, 1fr) 88px;\n  }\n\n  .grid-cols-\\[minmax\\(0\\,1fr\\)_92px\\] {\n    grid-template-columns: minmax(0, 1fr) 92px;\n  }\n\n  .grid-cols-\\[minmax\\(0\\,1fr\\)_92px_auto\\] {\n    grid-template-columns: minmax(0, 1fr) 92px auto;\n  }\n\n  .grid-cols-\\[minmax\\(0\\,1fr\\)_auto\\] {\n    grid-template-columns: minmax(0, 1fr) auto;\n  }\n\n  .grid-cols-\\[minmax\\(280px\\,1fr\\)_minmax\\(0\\,2fr\\)\\] {\n    grid-template-columns: minmax(280px, 1fr) minmax(0, 2fr);\n  }\n\n  .grid-rows-\\[auto_minmax\\(0\\,1fr\\)_auto\\] {\n    grid-template-rows: auto minmax(0, 1fr) auto;\n  }\n\n  .grid-rows-\\[minmax\\(356px\\,0\\.9fr\\)_auto_auto\\] {\n    grid-template-rows: minmax(356px, .9fr) auto auto;\n  }\n\n  .flex-col {\n    flex-direction: column;\n  }\n\n  .flex-wrap {\n    flex-wrap: wrap;\n  }\n\n  .items-center {\n    align-items: center;\n  }\n\n  .items-end {\n    align-items: flex-end;\n  }\n\n  .items-start {\n    align-items: flex-start;\n  }\n\n  .items-stretch {\n    align-items: stretch;\n  }\n\n  .justify-between {\n    justify-content: space-between;\n  }\n\n  .justify-center {\n    justify-content: center;\n  }\n\n  .justify-end {\n    justify-content: flex-end;\n  }\n\n  .justify-start {\n    justify-content: flex-start;\n  }\n\n  .gap-1 {\n    gap: calc(var(--spacing) * 1);\n  }\n\n  .gap-2 {\n    gap: calc(var(--spacing) * 2);\n  }\n\n  .gap-3 {\n    gap: calc(var(--spacing) * 3);\n  }\n\n  .gap-4 {\n    gap: calc(var(--spacing) * 4);\n  }\n\n  .gap-5 {\n    gap: calc(var(--spacing) * 5);\n  }\n\n  .self-start {\n    align-self: flex-start;\n  }\n\n  .truncate {\n    text-overflow: ellipsis;\n    white-space: nowrap;\n    overflow: hidden;\n  }\n\n  .overflow-auto {\n    overflow: auto;\n  }\n\n  .overflow-hidden {\n    overflow: hidden;\n  }\n\n  .rounded {\n    border-radius: .25rem;\n  }\n\n  .rounded-2xl {\n    border-radius: var(--radius-2xl);\n  }\n\n  .rounded-\\[14px\\] {\n    border-radius: 14px;\n  }\n\n  .rounded-\\[16px\\] {\n    border-radius: 16px;\n  }\n\n  .rounded-\\[18px\\] {\n    border-radius: 18px;\n  }\n\n  .rounded-\\[20px\\] {\n    border-radius: 20px;\n  }\n\n  .rounded-\\[22px\\] {\n    border-radius: 22px;\n  }\n\n  .rounded-\\[24px\\] {\n    border-radius: 24px;\n  }\n\n  .rounded-\\[28px\\] {\n    border-radius: 28px;\n  }\n\n  .rounded-\\[30px\\] {\n    border-radius: 30px;\n  }\n\n  .rounded-full {\n    border-radius: 3.40282e38px;\n  }\n\n  .border {\n    border-style: var(--tw-border-style);\n    border-width: 1px;\n  }\n\n  .border-fuchsia-300 {\n    border-color: var(--color-fuchsia-300);\n  }\n\n  .border-fuchsia-300\\/15 {\n    border-color: #f2a9ff26;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-fuchsia-300\\/15 {\n      border-color: color-mix(in oklab, var(--color-fuchsia-300) 15%, transparent);\n    }\n  }\n\n  .border-white {\n    border-color: var(--color-white);\n  }\n\n  .border-white\\/6 {\n    border-color: #ffffff0f;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-white\\/6 {\n      border-color: color-mix(in oklab, var(--color-white) 6%, transparent);\n    }\n  }\n\n  .border-white\\/8 {\n    border-color: #ffffff14;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-white\\/8 {\n      border-color: color-mix(in oklab, var(--color-white) 8%, transparent);\n    }\n  }\n\n  .border-white\\/10 {\n    border-color: #ffffff1a;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-white\\/10 {\n      border-color: color-mix(in oklab, var(--color-white) 10%, transparent);\n    }\n  }\n\n  .bg-\\[\\#070b16\\] {\n    background-color: #070b16;\n  }\n\n  .bg-\\[\\#09101d\\]\\/95 {\n    background-color: oklab(17.3432% -.0040513 -.029082 / .95);\n  }\n\n  .bg-\\[\\#030711\\]\\/85 {\n    background-color: oklab(12.8817% -.00430492 -.0249884 / .85);\n  }\n\n  .bg-black {\n    background-color: var(--color-black);\n  }\n\n  .bg-black\\/20 {\n    background-color: #0003;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-black\\/20 {\n      background-color: color-mix(in oklab, var(--color-black) 20%, transparent);\n    }\n  }\n\n  .bg-black\\/25 {\n    background-color: #00000040;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-black\\/25 {\n      background-color: color-mix(in oklab, var(--color-black) 25%, transparent);\n    }\n  }\n\n  .bg-black\\/35 {\n    background-color: #00000059;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-black\\/35 {\n      background-color: color-mix(in oklab, var(--color-black) 35%, transparent);\n    }\n  }\n\n  .bg-black\\/40 {\n    background-color: #0006;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-black\\/40 {\n      background-color: color-mix(in oklab, var(--color-black) 40%, transparent);\n    }\n  }\n\n  .bg-fuchsia-300 {\n    background-color: var(--color-fuchsia-300);\n  }\n\n  .bg-fuchsia-300\\/8 {\n    background-color: #f2a9ff14;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-fuchsia-300\\/8 {\n      background-color: color-mix(in oklab, var(--color-fuchsia-300) 8%, transparent);\n    }\n  }\n\n  .bg-white {\n    background-color: var(--color-white);\n  }\n\n  .bg-white\\/\\[0\\.03\\] {\n    background-color: #ffffff08;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-white\\/\\[0\\.03\\] {\n      background-color: color-mix(in oklab, var(--color-white) 3%, transparent);\n    }\n  }\n\n  .bg-white\\/\\[0\\.04\\] {\n    background-color: #ffffff0a;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-white\\/\\[0\\.04\\] {\n      background-color: color-mix(in oklab, var(--color-white) 4%, transparent);\n    }\n  }\n\n  .bg-white\\/\\[0\\.08\\] {\n    background-color: #ffffff14;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-white\\/\\[0\\.08\\] {\n      background-color: color-mix(in oklab, var(--color-white) 8%, transparent);\n    }\n  }\n\n  .mask-repeat {\n    -webkit-mask-repeat: repeat;\n    mask-repeat: repeat;\n  }\n\n  .fill-cyan-200 {\n    fill: var(--color-cyan-200);\n  }\n\n  .fill-fuchsia-200 {\n    fill: var(--color-fuchsia-200);\n  }\n\n  .stroke-\\[\\#050913\\] {\n    stroke: #050913;\n  }\n\n  .stroke-\\[2px\\] {\n    stroke-width: 2px;\n  }\n\n  .stroke-\\[3px\\] {\n    stroke-width: 3px;\n  }\n\n  .p-0 {\n    padding: calc(var(--spacing) * 0);\n  }\n\n  .p-1 {\n    padding: calc(var(--spacing) * 1);\n  }\n\n  .p-2 {\n    padding: calc(var(--spacing) * 2);\n  }\n\n  .p-3 {\n    padding: calc(var(--spacing) * 3);\n  }\n\n  .p-4 {\n    padding: calc(var(--spacing) * 4);\n  }\n\n  .p-5 {\n    padding: calc(var(--spacing) * 5);\n  }\n\n  .p-6 {\n    padding: calc(var(--spacing) * 6);\n  }\n\n  .px-2 {\n    padding-inline: calc(var(--spacing) * 2);\n  }\n\n  .px-3 {\n    padding-inline: calc(var(--spacing) * 3);\n  }\n\n  .px-4 {\n    padding-inline: calc(var(--spacing) * 4);\n  }\n\n  .px-5 {\n    padding-inline: calc(var(--spacing) * 5);\n  }\n\n  .py-2 {\n    padding-block: calc(var(--spacing) * 2);\n  }\n\n  .py-2\\.5 {\n    padding-block: calc(var(--spacing) * 2.5);\n  }\n\n  .py-3 {\n    padding-block: calc(var(--spacing) * 3);\n  }\n\n  .py-4 {\n    padding-block: calc(var(--spacing) * 4);\n  }\n\n  .py-5 {\n    padding-block: calc(var(--spacing) * 5);\n  }\n\n  .pt-1 {\n    padding-top: calc(var(--spacing) * 1);\n  }\n\n  .pr-1 {\n    padding-right: calc(var(--spacing) * 1);\n  }\n\n  .pr-4 {\n    padding-right: calc(var(--spacing) * 4);\n  }\n\n  .pr-10 {\n    padding-right: calc(var(--spacing) * 10);\n  }\n\n  .pb-5 {\n    padding-bottom: calc(var(--spacing) * 5);\n  }\n\n  .text-left {\n    text-align: left;\n  }\n\n  .text-right {\n    text-align: right;\n  }\n\n  .font-mono {\n    font-family: var(--font-mono);\n  }\n\n  .text-2xl {\n    font-size: var(--text-2xl);\n    line-height: var(--tw-leading, var(--text-2xl--line-height));\n  }\n\n  .text-3xl {\n    font-size: var(--text-3xl);\n    line-height: var(--tw-leading, var(--text-3xl--line-height));\n  }\n\n  .text-sm {\n    font-size: var(--text-sm);\n    line-height: var(--tw-leading, var(--text-sm--line-height));\n  }\n\n  .text-xs {\n    font-size: var(--text-xs);\n    line-height: var(--tw-leading, var(--text-xs--line-height));\n  }\n\n  .text-\\[10px\\] {\n    font-size: 10px;\n  }\n\n  .text-\\[11px\\] {\n    font-size: 11px;\n  }\n\n  .font-semibold {\n    --tw-font-weight: var(--font-weight-semibold);\n    font-weight: var(--font-weight-semibold);\n  }\n\n  .tracking-\\[-0\\.04em\\] {\n    --tw-tracking: -.04em;\n    letter-spacing: -.04em;\n  }\n\n  .tracking-\\[0\\.16em\\] {\n    --tw-tracking: .16em;\n    letter-spacing: .16em;\n  }\n\n  .tracking-\\[0\\.18em\\] {\n    --tw-tracking: .18em;\n    letter-spacing: .18em;\n  }\n\n  .tracking-\\[0\\.22em\\] {\n    --tw-tracking: .22em;\n    letter-spacing: .22em;\n  }\n\n  .tracking-\\[0\\.24em\\] {\n    --tw-tracking: .24em;\n    letter-spacing: .24em;\n  }\n\n  .text-wrap {\n    text-wrap: wrap;\n  }\n\n  .text-amber-100 {\n    color: var(--color-amber-100);\n  }\n\n  .text-blue-300 {\n    color: var(--color-blue-300);\n  }\n\n  .text-blue-300\\/70 {\n    color: #90c5ffb3;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-blue-300\\/70 {\n      color: color-mix(in oklab, var(--color-blue-300) 70%, transparent);\n    }\n  }\n\n  .text-cyan-100 {\n    color: var(--color-cyan-100);\n  }\n\n  .text-cyan-200 {\n    color: var(--color-cyan-200);\n  }\n\n  .text-cyan-200\\/70 {\n    color: #a2f4fdb3;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-cyan-200\\/70 {\n      color: color-mix(in oklab, var(--color-cyan-200) 70%, transparent);\n    }\n  }\n\n  .text-cyan-200\\/80 {\n    color: #a2f4fdcc;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-cyan-200\\/80 {\n      color: color-mix(in oklab, var(--color-cyan-200) 80%, transparent);\n    }\n  }\n\n  .text-fuchsia-100 {\n    color: var(--color-fuchsia-100);\n  }\n\n  .text-fuchsia-100\\/90 {\n    color: #fae8ffe6;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-fuchsia-100\\/90 {\n      color: color-mix(in oklab, var(--color-fuchsia-100) 90%, transparent);\n    }\n  }\n\n  .text-fuchsia-200 {\n    color: var(--color-fuchsia-200);\n  }\n\n  .text-fuchsia-200\\/80 {\n    color: #f6cfffcc;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-fuchsia-200\\/80 {\n      color: color-mix(in oklab, var(--color-fuchsia-200) 80%, transparent);\n    }\n  }\n\n  .text-slate-100 {\n    color: var(--color-slate-100);\n  }\n\n  .text-slate-200 {\n    color: var(--color-slate-200);\n  }\n\n  .text-slate-200\\/80 {\n    color: #e2e8f0cc;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-200\\/80 {\n      color: color-mix(in oklab, var(--color-slate-200) 80%, transparent);\n    }\n  }\n\n  .text-slate-300 {\n    color: var(--color-slate-300);\n  }\n\n  .text-slate-300\\/55 {\n    color: #cad5e28c;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-300\\/55 {\n      color: color-mix(in oklab, var(--color-slate-300) 55%, transparent);\n    }\n  }\n\n  .text-slate-300\\/60 {\n    color: #cad5e299;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-300\\/60 {\n      color: color-mix(in oklab, var(--color-slate-300) 60%, transparent);\n    }\n  }\n\n  .text-slate-300\\/70 {\n    color: #cad5e2b3;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-300\\/70 {\n      color: color-mix(in oklab, var(--color-slate-300) 70%, transparent);\n    }\n  }\n\n  .text-slate-300\\/75 {\n    color: #cad5e2bf;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-300\\/75 {\n      color: color-mix(in oklab, var(--color-slate-300) 75%, transparent);\n    }\n  }\n\n  .lowercase {\n    text-transform: lowercase;\n  }\n\n  .uppercase {\n    text-transform: uppercase;\n  }\n\n  .ordinal {\n    --tw-ordinal: ordinal;\n    font-variant-numeric: var(--tw-ordinal, ) var(--tw-slashed-zero, ) var(--tw-numeric-figure, ) var(--tw-numeric-spacing, ) var(--tw-numeric-fraction, );\n  }\n\n  .underline {\n    text-decoration-line: underline;\n  }\n\n  .opacity-0 {\n    opacity: 0;\n  }\n\n  .shadow {\n    --tw-shadow: 0 1px 3px 0 var(--tw-shadow-color, #0000001a), 0 1px 2px -1px var(--tw-shadow-color, #0000001a);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[0_10px_28px_rgba\\(0\\,0\\,0\\,0\\.22\\)\\] {\n    --tw-shadow: 0 10px 28px var(--tw-shadow-color, #00000038);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[0_10px_28px_rgba\\(0\\,0\\,0\\,0\\.28\\)\\] {\n    --tw-shadow: 0 10px 28px var(--tw-shadow-color, #00000047);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[0_18px_42px_rgba\\(3\\,6\\,18\\,0\\.45\\)\\] {\n    --tw-shadow: 0 18px 42px var(--tw-shadow-color, #03061273);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[0_26px_80px_rgba\\(0\\,0\\,0\\,0\\.48\\)\\] {\n    --tw-shadow: 0 26px 80px var(--tw-shadow-color, #0000007a);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[0_36px_80px_rgba\\(0\\,0\\,0\\,0\\.5\\)\\] {\n    --tw-shadow: 0 36px 80px var(--tw-shadow-color, #00000080);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[inset_0_0_0_1px_rgba\\(143\\,232\\,255\\,0\\.18\\)\\] {\n    --tw-shadow: inset 0 0 0 1px var(--tw-shadow-color, #8fe8ff2e);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .ring {\n    --tw-ring-shadow: var(--tw-ring-inset, ) 0 0 0 calc(1px + var(--tw-ring-offset-width)) var(--tw-ring-color, currentcolor);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .outline {\n    outline-style: var(--tw-outline-style);\n    outline-width: 1px;\n  }\n\n  .blur {\n    --tw-blur: blur(8px);\n    filter: var(--tw-blur, ) var(--tw-brightness, ) var(--tw-contrast, ) var(--tw-grayscale, ) var(--tw-hue-rotate, ) var(--tw-invert, ) var(--tw-saturate, ) var(--tw-sepia, ) var(--tw-drop-shadow, );\n  }\n\n  .invert {\n    --tw-invert: invert(100%);\n    filter: var(--tw-blur, ) var(--tw-brightness, ) var(--tw-contrast, ) var(--tw-grayscale, ) var(--tw-hue-rotate, ) var(--tw-invert, ) var(--tw-saturate, ) var(--tw-sepia, ) var(--tw-drop-shadow, );\n  }\n\n  .filter {\n    filter: var(--tw-blur, ) var(--tw-brightness, ) var(--tw-contrast, ) var(--tw-grayscale, ) var(--tw-hue-rotate, ) var(--tw-invert, ) var(--tw-saturate, ) var(--tw-sepia, ) var(--tw-drop-shadow, );\n  }\n\n  .backdrop-blur-md {\n    --tw-backdrop-blur: blur(var(--blur-md));\n    -webkit-backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );\n    backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );\n  }\n\n  .backdrop-filter {\n    -webkit-backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );\n    backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );\n  }\n\n  .transition {\n    transition-property: color, background-color, border-color, outline-color, text-decoration-color, fill, stroke, --tw-gradient-from, --tw-gradient-via, --tw-gradient-to, opacity, box-shadow, transform, translate, scale, rotate, filter, -webkit-backdrop-filter, backdrop-filter, display, content-visibility, overlay, pointer-events;\n    transition-timing-function: var(--tw-ease, var(--default-transition-timing-function));\n    transition-duration: var(--tw-duration, var(--default-transition-duration));\n  }\n\n  @media (hover: hover) {\n    .hover\\:border-white\\/12:hover {\n      border-color: #ffffff1f;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:border-white\\/12:hover {\n        border-color: color-mix(in oklab, var(--color-white) 12%, transparent);\n      }\n    }\n\n    .hover\\:bg-black\\/24:hover {\n      background-color: #0000003d;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:bg-black\\/24:hover {\n        background-color: color-mix(in oklab, var(--color-black) 24%, transparent);\n      }\n    }\n\n    .hover\\:bg-white\\/\\[0\\.04\\]:hover {\n      background-color: #ffffff0a;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:bg-white\\/\\[0\\.04\\]:hover {\n        background-color: color-mix(in oklab, var(--color-white) 4%, transparent);\n      }\n    }\n\n    .hover\\:text-slate-100:hover {\n      color: var(--color-slate-100);\n    }\n  }\n\n  .disabled\\:opacity-35:disabled {\n    opacity: .35;\n  }\n\n  .disabled\\:opacity-40:disabled {\n    opacity: .4;\n  }\n}\n\n:host {\n  color-scheme: dark;\n  width: 100%;\n  height: 100%;\n  display: block;\n}\n\n* {\n  box-sizing: border-box;\n}\n\nbutton, input, select {\n  font: inherit;\n}\n\n.cosimo-surface {\n  background: radial-gradient(circle at top, #7a8eff2e, #0000 34%), linear-gradient(#060a16fa, #03050c);\n}\n\n.cosimo-stage {\n  background: linear-gradient(#ffffff05 1px, #0000 1px) 0 0 / 24px 24px, linear-gradient(90deg, #ffffff05 1px, #0000 1px) 0 0 / 24px 24px, radial-gradient(circle at top, #7a8eff33, #0000 38%), linear-gradient(#050915fa, #02040b);\n}\n\n.cosimo-stage:after {\n  content: "";\n  pointer-events: none;\n  position: absolute;\n  inset: 0;\n  box-shadow: inset 0 1px #ffffff14, inset 0 -48px 64px #00000059;\n}\n\n.cosimo-range {\n  appearance: none;\n  background: linear-gradient(90deg, #5463c973, #f56cb673);\n  border-radius: 999px;\n  outline: none;\n  width: 100%;\n  height: 10px;\n}\n\n.cosimo-range::-webkit-slider-thumb {\n  appearance: none;\n  background: linear-gradient(#ffd8a6 0%, #f56cb6 100%);\n  border: 0;\n  border-radius: 999px;\n  width: 22px;\n  height: 22px;\n  box-shadow: 0 6px 18px #f56cb659;\n}\n\n.cosimo-range::-moz-range-thumb {\n  background: linear-gradient(#ffd8a6 0%, #f56cb6 100%);\n  border: 0;\n  border-radius: 999px;\n  width: 22px;\n  height: 22px;\n  box-shadow: 0 6px 18px #f56cb659;\n}\n\n.cosimo-select, .cosimo-button {\n  color: #eef2f5;\n  background: #ffffff0a;\n  border: 1px solid #ffffff14;\n}\n\n.cosimo-grid-line {\n  stroke: #ffffff14;\n  stroke-width: 1px;\n}\n\n.cosimo-curve-fill {\n  fill: #87d7f514;\n}\n\n.cosimo-curve-line {\n  fill: none;\n  stroke: #87d7f5;\n  stroke-width: 3px;\n  stroke-linecap: round;\n  stroke-linejoin: round;\n}\n\n@property --tw-translate-x {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0;\n}\n\n@property --tw-translate-y {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0;\n}\n\n@property --tw-translate-z {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0;\n}\n\n@property --tw-rotate-x {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-rotate-y {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-rotate-z {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-skew-x {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-skew-y {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-border-style {\n  syntax: "*";\n  inherits: false;\n  initial-value: solid;\n}\n\n@property --tw-font-weight {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-tracking {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-ordinal {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-slashed-zero {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-numeric-figure {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-numeric-spacing {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-numeric-fraction {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-shadow {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0 0 #0000;\n}\n\n@property --tw-shadow-color {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-shadow-alpha {\n  syntax: "<percentage>";\n  inherits: false;\n  initial-value: 100%;\n}\n\n@property --tw-inset-shadow {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0 0 #0000;\n}\n\n@property --tw-inset-shadow-color {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-inset-shadow-alpha {\n  syntax: "<percentage>";\n  inherits: false;\n  initial-value: 100%;\n}\n\n@property --tw-ring-color {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-ring-shadow {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0 0 #0000;\n}\n\n@property --tw-inset-ring-color {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-inset-ring-shadow {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0 0 #0000;\n}\n\n@property --tw-ring-inset {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-ring-offset-width {\n  syntax: "<length>";\n  inherits: false;\n  initial-value: 0;\n}\n\n@property --tw-ring-offset-color {\n  syntax: "*";\n  inherits: false;\n  initial-value: #fff;\n}\n\n@property --tw-ring-offset-shadow {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0 0 #0000;\n}\n\n@property --tw-outline-style {\n  syntax: "*";\n  inherits: false;\n  initial-value: solid;\n}\n\n@property --tw-blur {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-brightness {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-contrast {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-grayscale {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-hue-rotate {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-invert {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-opacity {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-saturate {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-sepia {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-drop-shadow {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-drop-shadow-color {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-drop-shadow-alpha {\n  syntax: "<percentage>";\n  inherits: false;\n  initial-value: 100%;\n}\n\n@property --tw-drop-shadow-size {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-blur {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-brightness {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-contrast {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-grayscale {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-hue-rotate {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-invert {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-opacity {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-saturate {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-sepia {\n  syntax: "*";\n  inherits: false\n}\n';
+function assert$1(condition, message) {
+  if (!condition) {
+    throw new Error(message);
+  }
+}
+function readAscii(view, offset, length) {
+  let text = "";
+  for (let index = 0; index < length; index += 1) {
+    text += String.fromCharCode(view.getUint8(offset + index));
+  }
+  return text;
+}
+function isAbsoluteURL(value) {
+  return /^[a-zA-Z][a-zA-Z\d+.-]*:/.test(value);
+}
+function encodeTextPayload(text) {
+  if (typeof TextEncoder === "function") {
+    return new TextEncoder().encode(text);
+  }
+  return Uint8Array.from(text, (character) => character.charCodeAt(0));
+}
+function describePayload(payload) {
+  if (payload === null) {
+    return "null";
+  }
+  if (payload === void 0) {
+    return "undefined";
+  }
+  const type = typeof payload;
+  const constructorName = payload?.constructor?.name;
+  if (type !== "object") {
+    return constructorName ? `${type}:${constructorName}` : type;
+  }
+  const keys = Object.keys(payload).slice(0, 6);
+  const keySummary = keys.length > 0 ? ` keys=${keys.join(",")}` : "";
+  return constructorName ? `${type}:${constructorName}${keySummary}` : `${type}${keySummary}`;
+}
+function getDefaultPatchRootUrl() {
+  const locationHref = globalThis.location?.href;
+  if (typeof locationHref === "string" && locationHref.length > 0) {
+    return new URL("/", locationHref);
+  }
+  const moduleUrl = new URL(import.meta.url);
+  const modulePath = moduleUrl.pathname;
+  if (modulePath.includes("/patch_gui/desktop/")) {
+    moduleUrl.pathname = modulePath.replace(/\/patch_gui\/desktop\/[^/]+$/, "/");
+    return moduleUrl;
+  }
+  if (modulePath.includes("/patch_gui/")) {
+    moduleUrl.pathname = modulePath.replace(/\/patch_gui\/[^/]+$/, "/");
+    return moduleUrl;
+  }
+  if (modulePath.includes("/ui/shared/")) {
+    moduleUrl.pathname = modulePath.replace(/\/ui\/shared\/[^/]+$/, "/");
+    return moduleUrl;
+  }
+  moduleUrl.pathname = modulePath.replace(/\/[^/]+$/, "/");
+  return moduleUrl;
+}
+function resourceAddressToUrl(path, resourceAddress) {
+  const patchRootUrl = getDefaultPatchRootUrl();
+  if (resourceAddress instanceof URL) {
+    return resourceAddress;
+  }
+  if (typeof resourceAddress === "string" && resourceAddress.length > 0) {
+    if (isAbsoluteURL(resourceAddress)) {
+      return new URL(resourceAddress);
+    }
+    const normalizedPath = resourceAddress.startsWith("/") ? resourceAddress.slice(1) : resourceAddress;
+    return new URL(normalizedPath, patchRootUrl);
+  }
+  return new URL(path, patchRootUrl);
+}
+async function decodeTextPayload(payload) {
+  if (typeof payload === "string") {
+    return payload;
+  }
+  if (payload && typeof payload.text === "function") {
+    return payload.text();
+  }
+  if (payload instanceof ArrayBuffer) {
+    if (typeof TextDecoder === "function") {
+      return new TextDecoder().decode(new Uint8Array(payload));
+    }
+    return String.fromCharCode(...new Uint8Array(payload));
+  }
+  if (ArrayBuffer.isView(payload)) {
+    const bytes = new Uint8Array(payload.buffer, payload.byteOffset, payload.byteLength);
+    if (typeof TextDecoder === "function") {
+      return new TextDecoder().decode(bytes);
+    }
+    return String.fromCharCode(...bytes);
+  }
+  if (Array.isArray(payload)) {
+    const bytes = Uint8Array.from(payload);
+    if (typeof TextDecoder === "function") {
+      return new TextDecoder().decode(bytes);
+    }
+    return String.fromCharCode(...bytes);
+  }
+  throw new Error(`Unsupported text resource payload (${describePayload(payload)})`);
+}
+function normalizeBytesPayload(payload) {
+  if (payload instanceof ArrayBuffer) {
+    return new Uint8Array(payload.slice(0));
+  }
+  if (ArrayBuffer.isView(payload)) {
+    return new Uint8Array(payload.buffer.slice(payload.byteOffset, payload.byteOffset + payload.byteLength));
+  }
+  if (Array.isArray(payload)) {
+    return Uint8Array.from(payload);
+  }
+  if (typeof payload === "string") {
+    return encodeTextPayload(payload);
+  }
+  throw new Error(`Unsupported binary resource payload (${describePayload(payload)})`);
+}
+function normalizeDecodedAudioFileSamples(audioFile) {
+  const frames = audioFile?.frames;
+  assert$1(
+    Array.isArray(frames) || ArrayBuffer.isView(frames),
+    "Decoded audio data must provide a frames array"
+  );
+  const frameArray = Array.from(frames);
+  const samples = new Float32Array(frameArray.length);
+  for (let index = 0; index < frameArray.length; index += 1) {
+    const frame = frameArray[index];
+    if (typeof frame === "number") {
+      samples[index] = frame;
+      continue;
+    }
+    if (ArrayBuffer.isView(frame) || Array.isArray(frame)) {
+      const monoFrame = frame;
+      assert$1(monoFrame.length === 1, "Only mono wavetable source files are supported");
+      samples[index] = Number(monoFrame[0]) || 0;
+      continue;
+    }
+    throw new Error("Decoded audio frames must contain numeric mono samples");
+  }
+  return {
+    sampleRate: Number(audioFile?.sampleRate) || 0,
+    samples
+  };
+}
+function parseWaveFile(arrayBuffer) {
+  const view = new DataView(arrayBuffer);
+  assert$1(readAscii(view, 0, 4) === "RIFF", "Expected a RIFF wave file");
+  assert$1(readAscii(view, 8, 4) === "WAVE", "Expected a WAVE file");
+  let format = null;
+  let channelCount = null;
+  let sampleRate = null;
+  let bitsPerSample = null;
+  let blockAlign = null;
+  let dataOffset = null;
+  let dataSize = null;
+  let cursor = 12;
+  while (cursor + 8 <= view.byteLength) {
+    const chunkID = readAscii(view, cursor, 4);
+    const chunkSize = view.getUint32(cursor + 4, true);
+    const chunkDataOffset = cursor + 8;
+    if (chunkID === "fmt ") {
+      format = view.getUint16(chunkDataOffset, true);
+      channelCount = view.getUint16(chunkDataOffset + 2, true);
+      sampleRate = view.getUint32(chunkDataOffset + 4, true);
+      blockAlign = view.getUint16(chunkDataOffset + 12, true);
+      bitsPerSample = view.getUint16(chunkDataOffset + 14, true);
+    } else if (chunkID === "data") {
+      dataOffset = chunkDataOffset;
+      dataSize = chunkSize;
+    }
+    cursor = chunkDataOffset + chunkSize + chunkSize % 2;
+  }
+  assert$1(format !== null, "Wave file is missing a fmt chunk");
+  assert$1(dataOffset !== null && dataSize !== null, "Wave file is missing a data chunk");
+  assert$1(channelCount === 1, "Only mono wavetable bank files are supported");
+  let samples;
+  if (format === 3 && bitsPerSample === 32) {
+    samples = new Float32Array(arrayBuffer.slice(dataOffset, dataOffset + dataSize));
+  } else if (format === 1 && bitsPerSample === 16) {
+    const sampleCount = dataSize / 2;
+    const pcm = new Int16Array(arrayBuffer.slice(dataOffset, dataOffset + dataSize));
+    samples = new Float32Array(sampleCount);
+    for (let index = 0; index < sampleCount; index += 1) {
+      samples[index] = pcm[index] / 32768;
+    }
+  } else {
+    throw new Error(`Unsupported WAV format: format=${format}, bitsPerSample=${bitsPerSample}`);
+  }
+  return {
+    format,
+    channelCount,
+    sampleRate: sampleRate ?? 0,
+    bitsPerSample,
+    blockAlign: blockAlign ?? 0,
+    samples
+  };
+}
+async function fetchArrayBuffer(url) {
+  assert$1(typeof fetch === "function", `Could not fetch ${url}: global fetch is unavailable`);
+  const response = await fetch(url.toString());
+  assert$1(response.ok, `Failed to fetch resource from ${url}`);
+  return response.arrayBuffer();
+}
+function readTextFromBytes(bytes) {
+  if (typeof TextDecoder === "function") {
+    return new TextDecoder().decode(bytes);
+  }
+  return String.fromCharCode(...bytes);
+}
+function readAudioFromBytes(bytes) {
+  const arrayBuffer = new Uint8Array(bytes).buffer;
+  const parsedWave = parseWaveFile(arrayBuffer);
+  return {
+    sampleRate: parsedWave.sampleRate,
+    samples: parsedWave.samples
+  };
+}
+function createResourceClient(source, {
+  textPreference = "bridge",
+  audioPreference = "url"
+} = {}) {
+  const readResourcePayload = async (path) => {
+    assert$1(typeof source.readResource === "function", `Resource bridge cannot read ${path}`);
+    return source.readResource(path);
+  };
+  const readAudioBridge = async (path) => {
+    assert$1(typeof source.readResourceAsAudioData === "function", `Audio resource bridge cannot read ${path}`);
+    const audioFile = await source.readResourceAsAudioData(path);
+    return normalizeDecodedAudioFileSamples(audioFile);
+  };
+  const getExplicitResourceAddress = (path) => {
+    const resourceAddress = source.getResourceAddress?.(path);
+    return resourceAddress !== null && resourceAddress !== void 0 ? resourceAddress : null;
+  };
+  const fetchAudioFromUrl = async (path, resourceAddress = source.getResourceAddress?.(path)) => {
+    const url = resourceAddressToUrl(path, resourceAddress);
+    const arrayBuffer = await fetchArrayBuffer(url);
+    const parsedWave = parseWaveFile(arrayBuffer);
+    return {
+      sampleRate: parsedWave.sampleRate,
+      samples: parsedWave.samples
+    };
+  };
+  const fetchBytesFromUrl = async (path, resourceAddress = source.getResourceAddress?.(path)) => {
+    const url = resourceAddressToUrl(path, resourceAddress);
+    return new Uint8Array(await fetchArrayBuffer(url));
+  };
+  return {
+    async readText(path) {
+      if (textPreference === "bridge" && typeof source.readResource === "function") {
+        return decodeTextPayload(await readResourcePayload(path));
+      }
+      const explicitResourceAddress = getExplicitResourceAddress(path);
+      if (textPreference === "url" && explicitResourceAddress !== null) {
+        return readTextFromBytes(await fetchBytesFromUrl(path, explicitResourceAddress));
+      }
+      if (typeof source.readResource === "function") {
+        return decodeTextPayload(await readResourcePayload(path));
+      }
+      return readTextFromBytes(await fetchBytesFromUrl(path, explicitResourceAddress));
+    },
+    async readJSON(path) {
+      return JSON.parse(await this.readText(path));
+    },
+    async readBytes(path) {
+      if (typeof source.readResource === "function") {
+        return normalizeBytesPayload(await readResourcePayload(path));
+      }
+      return fetchBytesFromUrl(path);
+    },
+    async readAudio(path) {
+      if (audioPreference === "bridge" && typeof source.readResourceAsAudioData === "function") {
+        return readAudioBridge(path);
+      }
+      const explicitResourceAddress = getExplicitResourceAddress(path);
+      if (audioPreference === "url" && explicitResourceAddress !== null) {
+        return fetchAudioFromUrl(path, explicitResourceAddress);
+      }
+      if (typeof source.readResourceAsAudioData === "function") {
+        return readAudioBridge(path);
+      }
+      return readAudioFromBytes(await this.readBytes(path));
+    },
+    getURL(path) {
+      return resourceAddressToUrl(path, source.getResourceAddress?.(path));
+    }
+  };
+}
+function createPatchConnectionResourceClient(source) {
+  const normalizedSource = source ?? {};
+  const prefersBridgeAudio = Boolean(normalizedSource.prefersAudioResourceReadBridge);
+  return createResourceClient(normalizedSource, {
+    textPreference: "bridge",
+    audioPreference: prefersBridgeAudio ? "bridge" : "url"
+  });
+}
+function createDesktopResourceClient(source) {
+  return createResourceClient(source ?? {}, {
+    textPreference: "url",
+    audioPreference: "url"
+  });
+}
+function normalizeResourceClient(value) {
+  const readText = typeof value.readText === "function" ? value.readText.bind(value) : null;
+  const readJSON = typeof value.readJSON === "function" ? value.readJSON.bind(value) : null;
+  const readBytes = typeof value.readBytes === "function" ? value.readBytes.bind(value) : null;
+  const readAudio = typeof value.readAudio === "function" ? value.readAudio.bind(value) : null;
+  const getURL = typeof value.getURL === "function" ? value.getURL.bind(value) : null;
+  return {
+    async readText(path) {
+      if (readText) {
+        return readText(path);
+      }
+      if (readJSON) {
+        return JSON.stringify(await readJSON(path));
+      }
+      if (readBytes) {
+        return readTextFromBytes(await readBytes(path));
+      }
+      throw new Error(`Resource client cannot read text ${path}`);
+    },
+    async readJSON(path) {
+      if (readJSON) {
+        return readJSON(path);
+      }
+      return JSON.parse(await this.readText(path));
+    },
+    async readBytes(path) {
+      if (readBytes) {
+        return readBytes(path);
+      }
+      if (readText) {
+        return encodeTextPayload(await readText(path));
+      }
+      if (readJSON) {
+        return encodeTextPayload(JSON.stringify(await readJSON(path)));
+      }
+      throw new Error(`Resource client cannot read bytes ${path}`);
+    },
+    async readAudio(path) {
+      if (readAudio) {
+        return readAudio(path);
+      }
+      return readAudioFromBytes(await this.readBytes(path));
+    },
+    getURL(path) {
+      return getURL ? getURL(path) : null;
+    }
+  };
+}
+function isResourceClient(value) {
+  return typeof value?.readText === "function" || typeof value?.readJSON === "function" || typeof value?.readBytes === "function" || typeof value?.readAudio === "function";
+}
+function asResourceClient(value) {
+  if (isResourceClient(value)) {
+    return normalizeResourceClient(value);
+  }
+  return createPatchConnectionResourceClient(value);
+}
+const PatchHostContext = reactExports.createContext(null);
+function PatchConnectionProvider({
+  patchConnection,
+  resourceClient,
+  children
+}) {
+  const host = reactExports.useMemo(() => ({
+    patchConnection,
+    resourceClient: resourceClient ?? createPatchConnectionResourceClient(patchConnection)
+  }), [patchConnection, resourceClient]);
+  return reactExports.createElement(PatchHostContext.Provider, { value: host }, children);
+}
+function usePatchHost() {
+  const patchHost = reactExports.useContext(PatchHostContext);
+  if (!patchHost) {
+    throw new Error("PatchConnectionProvider is missing.");
+  }
+  return patchHost;
+}
+function usePatchConnection() {
+  return usePatchHost().patchConnection;
+}
+function useResourceClient() {
+  return usePatchHost().resourceClient;
+}
+function usePatchParameter(endpointID, initialValue = 0) {
+  const patchConnection = usePatchConnection();
+  const [value, setValue] = reactExports.useState(initialValue);
+  reactExports.useEffect(() => {
+    const listener = (nextValue) => setValue(nextValue);
+    patchConnection.addParameterListener?.(endpointID, listener);
+    patchConnection.requestParameterValue?.(endpointID);
+    return () => {
+      patchConnection.removeParameterListener?.(endpointID, listener);
+    };
+  }, [endpointID, patchConnection]);
+  const setParameterValue = reactExports.useCallback((nextValue) => {
+    patchConnection.sendEventOrValue?.(endpointID, nextValue);
+    setValue(nextValue);
+  }, [endpointID, patchConnection]);
+  const beginGesture = reactExports.useCallback(() => {
+    patchConnection.sendParameterGestureStart?.(endpointID);
+  }, [endpointID, patchConnection]);
+  const endGesture = reactExports.useCallback(() => {
+    patchConnection.sendParameterGestureEnd?.(endpointID);
+  }, [endpointID, patchConnection]);
+  return reactExports.useMemo(() => ({
+    value,
+    setValue: setParameterValue,
+    beginGesture,
+    endGesture
+  }), [beginGesture, endGesture, setParameterValue, value]);
+}
+function usePatchEndpoint(endpointID, initialValue) {
+  const patchConnection = usePatchConnection();
+  const [value, setValue] = reactExports.useState(initialValue);
+  reactExports.useEffect(() => {
+    const listener = (nextValue) => setValue(nextValue);
+    patchConnection.addEndpointListener?.(endpointID, listener);
+    return () => {
+      patchConnection.removeEndpointListener?.(endpointID, listener);
+    };
+  }, [endpointID, patchConnection]);
+  return value;
+}
+const MSEG_BODY_SAMPLES = 2048;
+const MSEG_PADDED_SAMPLES = MSEG_BODY_SAMPLES + 3;
+const MSEG_CURVE_POWER_LIMIT = 20;
+const MSEG_DEFAULT_NAME = "MSEG 1";
+const MSEG_DEFAULT_DEPTH = 1;
+const MSEG_RATE_MIN_SECONDS = 0;
+const MSEG_RATE_MAX_SECONDS = 2;
+const MSEG_RATE_KIND_SECONDS = 0;
+const MSEG_NOTE_OFF_POLICY_FINISH_LOOP = 0;
+const MSEG_NOTE_OFF_POLICY_IMMEDIATE = 1;
+const MSEG_NOTE_OFF_POLICY_IGNORE = 2;
+const MSEG_POINT_HIT_RADIUS_PX = 16;
+const MSEG_POINT_RADIUS_PX = 8;
+const MSEG_SELECTED_POINT_RADIUS_PX = 10;
+const MSEG_EDITOR_HORIZONTAL_PADDING_PX = 14;
+const MSEG_EDITOR_VERTICAL_PADDING_PX = 14;
+const MSEG_NOTE_OFF_POLICY_VALUES = /* @__PURE__ */ new Set([
+  "finish_loop",
+  "immediate",
+  "ignore"
+]);
+function clamp$3(value, min, max) {
+  return Math.min(Math.max(value, min), max);
+}
+function almostEqual(left, right, epsilon = 1e-12) {
+  return Math.abs(left - right) <= epsilon;
+}
+function clampCurvePower(value) {
+  return clamp$3(Number.isFinite(value) ? value : 0, -MSEG_CURVE_POWER_LIMIT, MSEG_CURVE_POWER_LIMIT);
+}
+function clamp01(value) {
+  return clamp$3(Number.isFinite(value) ? value : 0, 0, 1);
+}
+function createDefaultMsegShape(name = MSEG_DEFAULT_NAME) {
+  return {
+    format: "cosimo.mseg.shape",
+    version: 1,
+    name,
+    globalSmooth: false,
+    points: [
+      { x: 0, y: 0, curvePower: 0 },
+      { x: 1, y: 1, curvePower: 0 }
+    ]
+  };
+}
+function createDefaultMsegPlayback() {
+  return {
+    format: "cosimo.mseg.playback",
+    version: 1,
+    rate: {
+      kind: "seconds",
+      seconds: 1
+    },
+    loop: { startX: 0, endX: 1 },
+    noteOffPolicy: "finish_loop",
+    legatoRestarts: false,
+    holdFinalValue: true
+  };
+}
+function clampMsegDepth(value) {
+  return clamp$3(Number.isFinite(value) ? value : 0, -1, 1);
+}
+function clampMsegRateSeconds(value) {
+  const numericValue = Number(value);
+  return clamp$3(
+    Number.isFinite(numericValue) ? numericValue : 1,
+    MSEG_RATE_MIN_SECONDS,
+    MSEG_RATE_MAX_SECONDS
+  );
+}
+function createMsegEditorMetrics(width, height, {
+  pointRadius = MSEG_POINT_RADIUS_PX,
+  horizontalPadding = MSEG_EDITOR_HORIZONTAL_PADDING_PX,
+  verticalPadding = MSEG_EDITOR_VERTICAL_PADDING_PX
+} = {}) {
+  const safeWidth = Math.max(1, Number(width) || 0);
+  const safeHeight = Math.max(1, Number(height) || 0);
+  const safePointRadius = Math.max(0, Number(pointRadius) || 0);
+  const safeHorizontalPadding = Math.max(0, Number(horizontalPadding) || 0);
+  const safeVerticalPadding = Math.max(0, Number(verticalPadding) || 0);
+  const maxInsetX = Math.max(0, (safeWidth - 1) * 0.5);
+  const maxInsetY = Math.max(0, (safeHeight - 1) * 0.5);
+  const insetX = Math.min(maxInsetX, safePointRadius + safeHorizontalPadding);
+  const insetY = Math.min(maxInsetY, safePointRadius + safeVerticalPadding);
+  const plotLeft = insetX;
+  const plotTop = insetY;
+  const plotRight = Math.max(plotLeft + 1, safeWidth - insetX);
+  const plotBottom = Math.max(plotTop + 1, safeHeight - insetY);
+  return {
+    width: safeWidth,
+    height: safeHeight,
+    pointRadius: safePointRadius,
+    plotLeft,
+    plotTop,
+    plotRight,
+    plotBottom,
+    plotWidth: Math.max(1, plotRight - plotLeft),
+    plotHeight: Math.max(1, plotBottom - plotTop)
+  };
+}
+function pointToMsegEditorCoordinates(point, width, height, options = {}) {
+  const metrics = createMsegEditorMetrics(width, height, options);
+  const orientation = options.orientation === "vertical" ? "vertical" : "horizontal";
+  const normalizedX = clamp01(Number(point?.x));
+  const normalizedY = clamp01(Number(point?.y));
+  if (orientation === "vertical") {
+    return {
+      x: metrics.plotLeft + normalizedY * metrics.plotWidth,
+      y: metrics.plotBottom - normalizedX * metrics.plotHeight
+    };
+  }
+  return {
+    x: metrics.plotLeft + normalizedX * metrics.plotWidth,
+    y: metrics.plotTop + (1 - normalizedY) * metrics.plotHeight
+  };
+}
+function msegEditorCoordinatesToPoint(editorX, editorY, width, height, options = {}) {
+  const metrics = createMsegEditorMetrics(width, height, options);
+  const orientation = options.orientation === "vertical" ? "vertical" : "horizontal";
+  if (orientation === "vertical") {
+    return {
+      x: clamp01((metrics.plotBottom - Number(editorY)) / metrics.plotHeight),
+      y: clamp01((Number(editorX) - metrics.plotLeft) / metrics.plotWidth)
+    };
+  }
+  return {
+    x: clamp01((Number(editorX) - metrics.plotLeft) / metrics.plotWidth),
+    y: clamp01(1 - (Number(editorY) - metrics.plotTop) / metrics.plotHeight)
+  };
+}
+function normalizeMsegLoop(loop) {
+  if (!loop || typeof loop !== "object") {
+    return null;
+  }
+  const nextLoop = loop;
+  const startX = clamp01(Number(nextLoop.startX));
+  const endX = clamp01(Number(nextLoop.endX));
+  if (almostEqual(startX, endX)) {
+    return null;
+  }
+  if (endX < startX) {
+    return {
+      startX: endX,
+      endX: startX
+    };
+  }
+  return { startX, endX };
+}
+function normalizeMsegPlayback(playback = createDefaultMsegPlayback()) {
+  const next = playback && typeof playback === "object" ? playback : {};
+  const rate = next.rate && typeof next.rate === "object" ? next.rate : {};
+  const seconds = Number(rate.seconds);
+  const noteOffPolicyCandidate = next.noteOffPolicy;
+  const noteOffPolicy = MSEG_NOTE_OFF_POLICY_VALUES.has(noteOffPolicyCandidate) ? noteOffPolicyCandidate : "finish_loop";
+  return {
+    format: "cosimo.mseg.playback",
+    version: 1,
+    rate: {
+      kind: "seconds",
+      seconds: clampMsegRateSeconds(Number.isFinite(seconds) ? seconds : 1)
+    },
+    loop: normalizeMsegLoop(next.loop),
+    noteOffPolicy,
+    legatoRestarts: Boolean(next.legatoRestarts),
+    holdFinalValue: next.holdFinalValue !== false
+  };
+}
+function normalizePoint(point, pointIndex, pointCount) {
+  const nextPoint = point && typeof point === "object" ? point : {};
+  let x = Number(nextPoint.x);
+  if (!Number.isFinite(x)) {
+    x = pointIndex === 0 ? 0 : pointIndex === pointCount - 1 ? 1 : 0;
+  }
+  if (pointIndex !== 0 && pointIndex !== pointCount - 1) {
+    x = clamp01(x);
+  }
+  return {
+    x,
+    y: clamp01(Number(nextPoint.y)),
+    curvePower: clampCurvePower(Number(nextPoint.curvePower))
+  };
+}
+function normalizeMsegShape(shape = createDefaultMsegShape()) {
+  const next = shape && typeof shape === "object" ? shape : {};
+  const inputPoints = Array.isArray(next.points) ? next.points : [];
+  if (inputPoints.length < 2) {
+    throw new Error("MSEG shapes require at least two points");
+  }
+  const points = inputPoints.map((point, index) => normalizePoint(point, index, inputPoints.length));
+  if (!almostEqual(points[0].x, 0) || !almostEqual(points[points.length - 1].x, 1)) {
+    throw new Error("MSEG shapes must start at x = 0 and end at x = 1");
+  }
+  for (let index = 1; index < points.length; index += 1) {
+    if (points[index].x < points[index - 1].x) {
+      throw new Error("MSEG shape points must stay in non-decreasing x order");
+    }
+  }
+  return {
+    format: "cosimo.mseg.shape",
+    version: 1,
+    name: typeof next.name === "string" && next.name.trim() ? next.name : MSEG_DEFAULT_NAME,
+    globalSmooth: Boolean(next.globalSmooth),
+    points
+  };
+}
+function serializeMsegShape(shape) {
+  return JSON.stringify(normalizeMsegShape(shape));
+}
+function deserializeMsegShape(value) {
+  if (typeof value !== "string" || !value.trim()) {
+    return createDefaultMsegShape();
+  }
+  try {
+    return normalizeMsegShape(JSON.parse(value));
+  } catch {
+    return createDefaultMsegShape();
+  }
+}
+function serializeMsegPlayback(playback) {
+  return JSON.stringify(normalizeMsegPlayback(playback));
+}
+function deserializeMsegPlayback(value) {
+  if (typeof value !== "string" || !value.trim()) {
+    return createDefaultMsegPlayback();
+  }
+  try {
+    return normalizeMsegPlayback(JSON.parse(value));
+  } catch {
+    return createDefaultMsegPlayback();
+  }
+}
+function deserializeMsegDepth(value) {
+  const numericValue = Number(value);
+  return clampMsegDepth(Number.isFinite(numericValue) ? numericValue : MSEG_DEFAULT_DEPTH);
+}
+function powerScale(value, power) {
+  if (Math.abs(power) < 0.01) {
+    return value;
+  }
+  const numerator = Math.exp(power * value) - 1;
+  const denominator = Math.exp(power) - 1;
+  return numerator / denominator;
+}
+function findEvaluationSegment(points, x) {
+  if (x <= points[0].x) {
+    return { from: points[0], to: points[0], laterPointWins: false };
+  }
+  for (let index = 0; index < points.length - 1; index += 1) {
+    const from = points[index];
+    const to = points[index + 1];
+    if (x < to.x) {
+      return { from, to, laterPointWins: false };
+    }
+    if (almostEqual(x, to.x)) {
+      let latestIndex = index + 1;
+      while (latestIndex + 1 < points.length && almostEqual(points[latestIndex + 1].x, x)) {
+        latestIndex += 1;
+      }
+      return {
+        from: points[latestIndex],
+        to: points[latestIndex],
+        laterPointWins: true
+      };
+    }
+  }
+  return {
+    from: points[points.length - 1],
+    to: points[points.length - 1],
+    laterPointWins: false
+  };
+}
+function evaluateMsegShape(shape, x) {
+  const { points } = normalizeMsegShape(shape);
+  const clampedX = clamp01(Number(x));
+  const segment = findEvaluationSegment(points, clampedX);
+  if (segment.laterPointWins || almostEqual(segment.from.x, segment.to.x)) {
+    return segment.to.y;
+  }
+  const width = segment.to.x - segment.from.x;
+  const t = width <= 0 ? 1 : (clampedX - segment.from.x) / width;
+  const curvedT = clamp01(powerScale(t, segment.from.curvePower));
+  return segment.from.y + (segment.to.y - segment.from.y) * curvedT;
+}
+function renderMsegShape(shape) {
+  const normalizedShape = normalizeMsegShape(shape);
+  const body = new Float32Array(MSEG_BODY_SAMPLES);
+  for (let sampleIndex = 0; sampleIndex < MSEG_BODY_SAMPLES; sampleIndex += 1) {
+    const x = sampleIndex / (MSEG_BODY_SAMPLES - 1);
+    body[sampleIndex] = evaluateMsegShape(normalizedShape, x);
+  }
+  const padded = new Float32Array(MSEG_PADDED_SAMPLES);
+  padded[0] = body[0];
+  padded.set(body, 1);
+  padded[MSEG_BODY_SAMPLES + 1] = body[MSEG_BODY_SAMPLES - 1];
+  padded[MSEG_BODY_SAMPLES + 2] = body[MSEG_BODY_SAMPLES - 1];
+  return padded;
+}
+function findMsegPointHitIndex(shape, editorX, editorY, width, height, hitRadius = MSEG_POINT_HIT_RADIUS_PX, editorOptions = {}) {
+  const points = normalizeMsegShape(shape).points;
+  const targetX = Number(editorX);
+  const targetY = Number(editorY);
+  if (!Number.isFinite(targetX) || !Number.isFinite(targetY)) {
+    return -1;
+  }
+  const safeHitRadius = Math.max(0, Number(hitRadius) || 0);
+  let closestPointIndex = -1;
+  let closestDistanceSquared = safeHitRadius * safeHitRadius;
+  points.forEach((point, pointIndex) => {
+    const coordinates = pointToMsegEditorCoordinates(point, width, height, editorOptions);
+    const deltaX = targetX - coordinates.x;
+    const deltaY = targetY - coordinates.y;
+    const distanceSquared = deltaX * deltaX + deltaY * deltaY;
+    if (distanceSquared <= closestDistanceSquared) {
+      closestPointIndex = pointIndex;
+      closestDistanceSquared = distanceSquared;
+    }
+  });
+  return closestPointIndex;
+}
+function toMsegPlaybackConfigEvent(playback) {
+  const normalizedPlayback = normalizeMsegPlayback(playback);
+  return {
+    seconds: normalizedPlayback.rate.seconds,
+    holdFinalValue: normalizedPlayback.holdFinalValue,
+    rateKind: MSEG_RATE_KIND_SECONDS,
+    loopEnabled: normalizedPlayback.loop !== null,
+    loopStart: normalizedPlayback.loop?.startX ?? 0,
+    loopEnd: normalizedPlayback.loop?.endX ?? 0,
+    noteOffPolicy: normalizedPlayback.noteOffPolicy === "immediate" ? MSEG_NOTE_OFF_POLICY_IMMEDIATE : normalizedPlayback.noteOffPolicy === "ignore" ? MSEG_NOTE_OFF_POLICY_IGNORE : MSEG_NOTE_OFF_POLICY_FINISH_LOOP,
+    legatoRestarts: normalizedPlayback.legatoRestarts
+  };
+}
+function msegShapesEqual(left, right) {
+  return serializeMsegShape(left) === serializeMsegShape(right);
+}
+function msegPlaybacksEqual(left, right) {
+  return serializeMsegPlayback(left) === serializeMsegPlayback(right);
+}
+function addMsegPoint(shape, x, y) {
+  const normalizedShape = normalizeMsegShape(shape);
+  const points = normalizedShape.points.map((point) => ({ ...point }));
+  const nextPoint = {
+    x: clamp01(Number(x)),
+    y: clamp01(Number(y)),
+    curvePower: 0
+  };
+  let insertIndex = points.length - 1;
+  while (insertIndex > 0 && points[insertIndex - 1].x > nextPoint.x) {
+    insertIndex -= 1;
+  }
+  points.splice(insertIndex, 0, nextPoint);
+  return normalizeMsegShape({
+    ...normalizedShape,
+    points
+  });
+}
+function moveMsegPoint(shape, pointIndex, x, y) {
+  const normalizedShape = normalizeMsegShape(shape);
+  if (!Number.isInteger(pointIndex) || pointIndex < 0 || pointIndex >= normalizedShape.points.length) {
+    throw new Error("pointIndex must address a point inside the shape");
+  }
+  const points = normalizedShape.points.map((point) => ({ ...point }));
+  const previousX = pointIndex > 0 ? points[pointIndex - 1].x : 0;
+  const nextX = pointIndex < points.length - 1 ? points[pointIndex + 1].x : 1;
+  const moved = { ...points[pointIndex] };
+  moved.y = clamp01(Number(y));
+  if (pointIndex === 0) {
+    moved.x = 0;
+  } else if (pointIndex === points.length - 1) {
+    moved.x = 1;
+  } else {
+    moved.x = clamp$3(clamp01(Number(x)), previousX, nextX);
+  }
+  points[pointIndex] = moved;
+  return normalizeMsegShape({
+    ...normalizedShape,
+    points
+  });
+}
+function deleteMsegPoint(shape, pointIndex) {
+  const normalizedShape = normalizeMsegShape(shape);
+  if (!Number.isInteger(pointIndex) || pointIndex < 0 || pointIndex >= normalizedShape.points.length) {
+    throw new Error("pointIndex must address a point inside the shape");
+  }
+  if (pointIndex === 0 || pointIndex === normalizedShape.points.length - 1) {
+    return normalizedShape;
+  }
+  const points = normalizedShape.points.filter((_, index) => index !== pointIndex);
+  return normalizeMsegShape({
+    ...normalizedShape,
+    points
+  });
+}
+const runtimeFailurePhaseLoadSource = 1;
+const runtimeFailurePhaseBuildMip = 2;
+const runtimeFailurePhaseTransferMip = 3;
+const runtimeFailureReasonTimeout = 2;
+const runtimeFailureScopeService = 1;
+function clamp$2(value, min, max) {
+  return Math.min(Math.max(value, min), max);
+}
+function clampDisplayPosition(value) {
+  return clamp$2(Number(value) || 0, 0, 1);
+}
+function mapDisplayDragToPosition(startValue, startClientY, nextClientY, dragSpan) {
+  const safeSpan = Math.max(1, Number(dragSpan) || 0);
+  const delta = (Number(startClientY) || 0) - (Number(nextClientY) || 0);
+  return clampDisplayPosition((Number(startValue) || 0) + delta / safeSpan);
+}
+function normalizeEffectiveWavetablePositionMessage(message) {
+  const payload = message?.event ?? message;
+  if (payload === null || payload === void 0) {
+    return null;
+  }
+  if (typeof payload === "number") {
+    return {
+      voiceGeneration: 0,
+      position: clampDisplayPosition(payload)
+    };
+  }
+  const rawPosition = Number(payload.position);
+  if (!Number.isFinite(rawPosition)) {
+    return null;
+  }
+  const rawGeneration = Number(payload.voiceGeneration);
+  return {
+    voiceGeneration: Number.isFinite(rawGeneration) ? Math.max(0, Math.trunc(rawGeneration)) : 0,
+    position: clampDisplayPosition(rawPosition)
+  };
+}
+function selectObservedWavetablePositionState(currentState, message) {
+  const previousState = currentState && typeof currentState === "object" ? {
+    voiceGeneration: Number.isFinite(Number(currentState.voiceGeneration)) ? Math.trunc(Number(currentState.voiceGeneration)) : -1,
+    position: clampDisplayPosition(currentState.position)
+  } : {
+    voiceGeneration: -1,
+    position: 0
+  };
+  const nextState = normalizeEffectiveWavetablePositionMessage(message);
+  if (!nextState) {
+    return previousState;
+  }
+  if (nextState.voiceGeneration < previousState.voiceGeneration) {
+    return previousState;
+  }
+  return nextState;
+}
+function normalizeRuntimeTableState(message) {
+  const payload = message?.event ?? message;
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+  const value = payload;
+  return {
+    desiredTableIndex: Math.max(0, Math.trunc(Number(value.desiredTableIndex) || 0)),
+    desiredIntentSerial: Math.max(0, Math.trunc(Number(value.desiredIntentSerial) || 0)),
+    serviceState: Math.max(0, Math.trunc(Number(value.serviceState) || 0)),
+    hasActive: Boolean(value.hasActive),
+    activeTableIndex: Math.max(0, Math.trunc(Number(value.activeTableIndex) || 0)),
+    activeGeneration: Math.max(0, Math.trunc(Number(value.activeGeneration) || 0)),
+    hasLoading: Boolean(value.hasLoading),
+    loadingTableIndex: Math.max(0, Math.trunc(Number(value.loadingTableIndex) || 0)),
+    loadingGeneration: Math.max(0, Math.trunc(Number(value.loadingGeneration) || 0)),
+    hasFailure: Boolean(value.hasFailure),
+    failedTableIndex: Math.max(0, Math.trunc(Number(value.failedTableIndex) || 0)),
+    failedGeneration: Math.max(0, Math.trunc(Number(value.failedGeneration) || 0)),
+    failureScope: Math.max(0, Math.trunc(Number(value.failureScope) || 0)),
+    failurePhase: Math.max(0, Math.trunc(Number(value.failurePhase) || 0)),
+    failureReasonCode: Math.max(0, Math.trunc(Number(value.failureReasonCode) || 0))
+  };
+}
+function describeRuntimeTableFailure(normalized) {
+  if (!normalized?.hasFailure) {
+    return null;
+  }
+  if (normalized.failurePhase === runtimeFailurePhaseTransferMip && normalized.failureReasonCode === runtimeFailureReasonTimeout) {
+    return "Wavetable load timed out.";
+  }
+  if (normalized.failurePhase === runtimeFailurePhaseLoadSource) {
+    return "Could not read wavetable source.";
+  }
+  if (normalized.failurePhase === runtimeFailurePhaseBuildMip) {
+    return "Could not build wavetable mip data.";
+  }
+  if (normalized.failurePhase === runtimeFailurePhaseTransferMip) {
+    return "Could not transfer wavetable mip data.";
+  }
+  return "Wavetable load failed.";
+}
+function describeRuntimeTableFailureDetails(normalized, tableName = "Requested wavetable") {
+  if (!normalized?.hasFailure) {
+    return null;
+  }
+  const phaseLabel = normalized.failurePhase === runtimeFailurePhaseLoadSource ? "source read" : normalized.failurePhase === runtimeFailurePhaseBuildMip ? "mip build" : normalized.failurePhase === runtimeFailurePhaseTransferMip ? "mip transfer" : "unknown phase";
+  const scopeLabel = normalized.failureScope === runtimeFailureScopeService ? "committed load" : "candidate load";
+  const generationLabel = normalized.failedGeneration > 0 ? `generation ${normalized.failedGeneration}` : "candidate generation";
+  const reasonLabel = normalized.failureReasonCode === runtimeFailureReasonTimeout ? "timeout" : "generic failure";
+  return `${tableName} failed during ${phaseLabel} (${scopeLabel}, ${generationLabel}, ${reasonLabel}).`;
+}
+function resolveRuntimeTablePresentation(message, fallbackTableIndex = 0) {
+  const normalized = normalizeRuntimeTableState(message);
+  const safeFallbackTableIndex = Math.max(0, Math.trunc(Number(fallbackTableIndex) || 0));
+  if (!normalized) {
+    return {
+      desiredTableIndex: safeFallbackTableIndex,
+      presentedTableIndex: safeFallbackTableIndex,
+      activeTableIndex: null,
+      activeGeneration: null,
+      loadingTableIndex: null,
+      loadingGeneration: null,
+      isPendingSelection: false,
+      isRetryableFailure: false,
+      failureMessage: null
+    };
+  }
+  const activeTableIndex = normalized.hasActive ? normalized.activeTableIndex : null;
+  const activeGeneration = normalized.hasActive ? normalized.activeGeneration : null;
+  const loadingTableIndex = normalized.hasLoading ? normalized.loadingTableIndex : null;
+  const loadingGeneration = normalized.hasLoading ? normalized.loadingGeneration : null;
+  const presentedTableIndex = activeTableIndex ?? loadingTableIndex ?? normalized.desiredTableIndex;
+  return {
+    desiredTableIndex: normalized.desiredTableIndex,
+    presentedTableIndex,
+    activeTableIndex,
+    activeGeneration,
+    loadingTableIndex,
+    loadingGeneration,
+    isPendingSelection: loadingTableIndex !== null || activeTableIndex !== null && normalized.desiredTableIndex !== activeTableIndex,
+    isRetryableFailure: normalized.hasFailure && normalized.failedTableIndex === normalized.desiredTableIndex,
+    failureMessage: describeRuntimeTableFailure(normalized)
+  };
+}
+const DEFAULT_PATCH_THEME = {
+  backgroundTop: "#04070f",
+  backgroundBottom: "#04070f",
+  backgroundRGB: [4, 7, 15],
+  panelStroke: "rgba(132, 149, 255, 0.0)",
+  frameBlueRGB: [94, 118, 255],
+  accentBlue: "#87d7f5",
+  accentBlueRGB: [135, 215, 245],
+  accentBlueDeep: "#5f7aff",
+  accentBlueDeepRGB: [95, 122, 255],
+  guideBlue: "rgba(129, 150, 255, 0.12)",
+  warmText: "#ffd8a6",
+  warmTextRGB: [255, 216, 166],
+  highlightPink: "#f56cb6",
+  highlightPinkRGB: [245, 108, 182],
+  shadowColor: "rgba(7, 11, 28, 0.36)"
+};
+function createDefaultWavetableTheme(theme = DEFAULT_PATCH_THEME) {
+  return {
+    backgroundTop: theme.backgroundTop,
+    backgroundBottom: theme.backgroundBottom,
+    backgroundRGB: [...theme.backgroundRGB],
+    panelStroke: theme.panelStroke,
+    frameColor: [...theme.frameBlueRGB],
+    meshColor: [...theme.accentBlueRGB],
+    highlightColor: [...theme.highlightPinkRGB],
+    guideColor: theme.guideBlue,
+    textColor: `rgba(${theme.warmTextRGB.join(", ")}, 0.94)`,
+    shadowColor: theme.shadowColor
+  };
+}
+const CAMERA_YAW = 15 * (Math.PI / 180);
+const CAMERA_PITCH = 26 * (Math.PI / 180);
+const CAMERA_DISTANCE = 10.5;
+const CAMERA_FOCAL_LENGTH = 2.4;
+const FRAME_DEPTH_EXTENT = 3.6;
+const AMPLITUDE_SCALE = 0.3;
+const DISCONTINUITY_THRESHOLD = 0.5;
+const FLOOR_Y = -0.64;
+const GUIDE_TOP_Y = 0.28;
+const DEFAULT_WAVETABLE_THEME = createDefaultWavetableTheme();
+function clamp$1(value, min, max) {
+  return Math.min(Math.max(value, min), max);
+}
+function requestNextAnimationFrame(callback) {
+  if (typeof globalThis.requestAnimationFrame === "function") {
+    return globalThis.requestAnimationFrame(callback);
+  }
+  return setTimeout(() => callback(Date.now()), 0);
+}
+function cancelNextAnimationFrame(handle) {
+  if (typeof globalThis.cancelAnimationFrame === "function") {
+    globalThis.cancelAnimationFrame(handle);
+    return;
+  }
+  clearTimeout(handle);
+}
+function lerp(start, end, amount) {
+  return start + (end - start) * amount;
+}
+function mixRGB(from, to, amount) {
+  return [
+    Math.round(lerp(from[0], to[0], amount)),
+    Math.round(lerp(from[1], to[1], amount)),
+    Math.round(lerp(from[2], to[2], amount))
+  ];
+}
+function toRGBA(rgb, alpha) {
+  return `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${alpha.toFixed(3)})`;
+}
+function assertFrames(frames) {
+  if (!Array.isArray(frames) || frames.length === 0) {
+    throw new Error("frames must be a non-empty array of sample arrays");
+  }
+  const expectedLength = frames[0].length;
+  for (const frame of frames) {
+    if (!(frame instanceof Float32Array) && !Array.isArray(frame)) {
+      throw new Error("every frame must be an array-like set of samples");
+    }
+    if (frame.length !== expectedLength) {
+      throw new Error("all frames must have the same sample count");
+    }
+  }
+}
+function getFrameDepth(frameIndex, frameCount) {
+  if (frameCount <= 1) {
+    return 0;
+  }
+  return frameIndex / (frameCount - 1) * FRAME_DEPTH_EXTENT;
+}
+function getSceneDepth(frameIndex, frameCount) {
+  return getFrameDepth(frameIndex, frameCount);
+}
+function getBackness(frameIndex, frameCount) {
+  if (frameCount <= 1) {
+    return 0;
+  }
+  return frameIndex / (frameCount - 1);
+}
+function getSceneDepthAt(frameIndex, frameCount) {
+  if (frameCount <= 1) {
+    return FRAME_DEPTH_EXTENT * 0.5;
+  }
+  return frameIndex / (frameCount - 1) * FRAME_DEPTH_EXTENT;
+}
+function getBacknessAt(frameIndex, frameCount) {
+  if (frameCount <= 1) {
+    return 0;
+  }
+  return frameIndex / (frameCount - 1);
+}
+function subtractPoints(a, b) {
+  return {
+    x: a.x - b.x,
+    y: a.y - b.y,
+    z: a.z - b.z
+  };
+}
+function crossProduct(a, b) {
+  return {
+    x: a.y * b.z - a.z * b.y,
+    y: a.z * b.x - a.x * b.z,
+    z: a.x * b.y - a.y * b.x
+  };
+}
+function dotProduct(a, b) {
+  return a.x * b.x + a.y * b.y + a.z * b.z;
+}
+function normaliseVector(vector) {
+  const magnitude = Math.hypot(vector.x, vector.y, vector.z);
+  if (magnitude < 1e-5) {
+    return { x: 0, y: 1, z: 0 };
+  }
+  return {
+    x: vector.x / magnitude,
+    y: vector.y / magnitude,
+    z: vector.z / magnitude
+  };
+}
+function createCamera() {
+  const target = {
+    x: 0,
+    y: FLOOR_Y,
+    z: FRAME_DEPTH_EXTENT * 0.5
+  };
+  const horizontalDistance = Math.cos(CAMERA_PITCH) * CAMERA_DISTANCE;
+  const position = {
+    x: target.x + Math.sin(CAMERA_YAW) * horizontalDistance,
+    y: target.y + Math.sin(CAMERA_PITCH) * CAMERA_DISTANCE,
+    z: target.z - Math.cos(CAMERA_YAW) * horizontalDistance
+  };
+  const worldUp = { x: 0, y: 1, z: 0 };
+  const forward = normaliseVector(subtractPoints(target, position));
+  const right = normaliseVector(crossProduct(worldUp, forward));
+  const up = normaliseVector(crossProduct(forward, right));
+  return {
+    position,
+    target,
+    forward,
+    right,
+    up
+  };
+}
+function createViewportPadding(width, height) {
+  return {
+    left: clamp$1(width * 0.06, 22, 48),
+    right: clamp$1(width * 0.06, 22, 48),
+    top: clamp$1(height * 0.1, 20, 56),
+    bottom: clamp$1(height * 0.09, 20, 52)
+  };
+}
+function projectWorldPoint(point, camera) {
+  const relative = subtractPoints(point, camera.position);
+  const cameraX = dotProduct(relative, camera.right);
+  const cameraY = dotProduct(relative, camera.up);
+  const cameraDepth = Math.max(1e-3, dotProduct(relative, camera.forward));
+  const perspective = CAMERA_FOCAL_LENGTH / cameraDepth;
+  return {
+    projectedX: cameraX * perspective,
+    projectedY: cameraY * perspective,
+    cameraDepth,
+    perspective
+  };
+}
+function projectToScreen(projectedPoint, projection) {
+  return {
+    x: projection.centerX + (projectedPoint.projectedX - projection.projectedCenterX) * projection.scale,
+    y: projection.centerY - (projectedPoint.projectedY - projection.projectedCenterY) * projection.scale,
+    cameraDepth: projectedPoint.cameraDepth,
+    perspective: projectedPoint.perspective
+  };
+}
+function createProjection(points, width, height) {
+  const padding = createViewportPadding(width, height);
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minY = Infinity;
+  let maxY = -Infinity;
+  for (const point of points) {
+    minX = Math.min(minX, point.projectedX);
+    maxX = Math.max(maxX, point.projectedX);
+    minY = Math.min(minY, point.projectedY);
+    maxY = Math.max(maxY, point.projectedY);
+  }
+  const spanX = Math.max(1e-3, maxX - minX);
+  const spanY = Math.max(1e-3, maxY - minY);
+  const scale = Math.min(
+    (width - padding.left - padding.right) / spanX,
+    (height - padding.top - padding.bottom) / spanY
+  );
+  return {
+    width,
+    height,
+    scale,
+    padding,
+    projectedCenterX: (minX + maxX) * 0.5,
+    projectedCenterY: (minY + maxY) * 0.5,
+    centerX: width * 0.5,
+    centerY: height * 0.46
+  };
+}
+function getSurfacePointCount(width, sampleCount) {
+  return clamp$1(Math.round(width / 10), 64, Math.min(128, sampleCount));
+}
+function getContourPointCount(width, sampleCount) {
+  return clamp$1(Math.round(width / 4), 128, Math.min(256, sampleCount));
+}
+function createObjectPoints(samples, depth) {
+  const points = new Array(samples.length);
+  const denominator = Math.max(1, samples.length - 1);
+  for (let sampleIndex = 0; sampleIndex < samples.length; sampleIndex += 1) {
+    const phase = sampleIndex / denominator;
+    points[sampleIndex] = {
+      x: lerp(-1, 1, phase),
+      y: samples[sampleIndex] * AMPLITUDE_SCALE,
+      z: depth
+    };
+  }
+  return points;
+}
+function createProjectedFrame(samples, frameIndex, frameCount, camera, projection) {
+  const depth = getSceneDepth(frameIndex, frameCount);
+  const objectPoints = createObjectPoints(samples, depth);
+  const points = objectPoints.map((point) => {
+    const projectedPoint = projectWorldPoint(point, camera);
+    return {
+      ...projectToScreen(projectedPoint, projection),
+      objectPoint: point
+    };
+  });
+  return {
+    frameIndex,
+    depth,
+    depthNormalized: getBackness(frameIndex, frameCount),
+    samples,
+    objectPoints,
+    points,
+    averageCameraDepth: points.reduce((total, point) => total + point.cameraDepth, 0) / Math.max(points.length, 1)
+  };
+}
+function createGuideLine(pointList, camera, projection) {
+  return pointList.map((point) => {
+    const projectedPoint = projectWorldPoint(point, camera);
+    return projectToScreen(projectedPoint, projection);
+  });
+}
+function createGuideLines(camera, projection) {
+  const frontFloor = [
+    { x: -1, y: FLOOR_Y, z: 0 },
+    { x: 1, y: FLOOR_Y, z: 0 }
+  ];
+  const backFloor = [
+    { x: -1, y: FLOOR_Y, z: FRAME_DEPTH_EXTENT },
+    { x: 1, y: FLOOR_Y, z: FRAME_DEPTH_EXTENT }
+  ];
+  const leftEdge = [
+    { x: -1, y: FLOOR_Y, z: 0 },
+    { x: -1, y: FLOOR_Y, z: FRAME_DEPTH_EXTENT }
+  ];
+  const rightEdge = [
+    { x: 1, y: FLOOR_Y, z: 0 },
+    { x: 1, y: FLOOR_Y, z: FRAME_DEPTH_EXTENT }
+  ];
+  const centreDepth = [
+    { x: 0, y: FLOOR_Y, z: 0 },
+    { x: 0, y: FLOOR_Y, z: FRAME_DEPTH_EXTENT }
+  ];
+  const zeroPlane = [
+    { x: -1, y: 0, z: 0 },
+    { x: 1, y: 0, z: 0 }
+  ];
+  const topFront = [
+    { x: -1, y: GUIDE_TOP_Y, z: 0 },
+    { x: 1, y: GUIDE_TOP_Y, z: 0 }
+  ];
+  const topBack = [
+    { x: -1, y: GUIDE_TOP_Y, z: FRAME_DEPTH_EXTENT },
+    { x: 1, y: GUIDE_TOP_Y, z: FRAME_DEPTH_EXTENT }
+  ];
+  const topLeft = [
+    { x: -1, y: GUIDE_TOP_Y, z: 0 },
+    { x: -1, y: GUIDE_TOP_Y, z: FRAME_DEPTH_EXTENT }
+  ];
+  const topRight = [
+    { x: 1, y: GUIDE_TOP_Y, z: 0 },
+    { x: 1, y: GUIDE_TOP_Y, z: FRAME_DEPTH_EXTENT }
+  ];
+  return [
+    { kind: "frame", strength: 0.78, points: createGuideLine(frontFloor, camera, projection) },
+    { kind: "frame", strength: 0.7, points: createGuideLine(backFloor, camera, projection) },
+    { kind: "frame", strength: 0.52, points: createGuideLine(leftEdge, camera, projection) },
+    { kind: "frame", strength: 0.52, points: createGuideLine(rightEdge, camera, projection) },
+    { kind: "guide", strength: 0.28, points: createGuideLine(centreDepth, camera, projection) },
+    { kind: "guide", strength: 0.36, points: createGuideLine(zeroPlane, camera, projection) },
+    { kind: "frame", strength: 0.28, points: createGuideLine(topFront, camera, projection) },
+    { kind: "frame", strength: 0.2, points: createGuideLine(topBack, camera, projection) },
+    { kind: "frame", strength: 0.18, points: createGuideLine(topLeft, camera, projection) },
+    { kind: "frame", strength: 0.18, points: createGuideLine(topRight, camera, projection) }
+  ];
+}
+function buildProjectionFromFrames(contourSamples, width, height, frameCount) {
+  const camera = createCamera();
+  const stableWorldPoints = [
+    { x: -1, y: FLOOR_Y, z: 0 },
+    { x: 1, y: FLOOR_Y, z: 0 },
+    { x: -1, y: FLOOR_Y, z: FRAME_DEPTH_EXTENT },
+    { x: 1, y: FLOOR_Y, z: FRAME_DEPTH_EXTENT },
+    { x: -1, y: 0, z: 0 },
+    { x: 1, y: 0, z: 0 },
+    { x: -1, y: 0, z: FRAME_DEPTH_EXTENT },
+    { x: 1, y: 0, z: FRAME_DEPTH_EXTENT },
+    { x: -1, y: GUIDE_TOP_Y, z: 0 },
+    { x: 1, y: GUIDE_TOP_Y, z: 0 },
+    { x: -1, y: GUIDE_TOP_Y, z: FRAME_DEPTH_EXTENT },
+    { x: 1, y: GUIDE_TOP_Y, z: FRAME_DEPTH_EXTENT }
+  ];
+  const projectedAnchors = stableWorldPoints.map((point) => projectWorldPoint(point, camera));
+  return {
+    camera,
+    projection: createProjection(projectedAnchors, width, height)
+  };
+}
+function getSparseContourIndices(frameCount, frameState) {
+  const contourIndices = /* @__PURE__ */ new Set([0, frameCount - 1, frameState.frameLo, frameState.frameHi]);
+  for (let frameIndex = 0; frameIndex < frameCount; frameIndex += 4) {
+    contourIndices.add(frameIndex);
+  }
+  return [...contourIndices].sort((left, right) => left - right);
+}
+function createContourDescriptors(projectedFrames, frameState) {
+  return getSparseContourIndices(projectedFrames.length, frameState).map((frameIndex) => {
+    const frame = projectedFrames[frameIndex];
+    const distance = Math.abs(frameState.frameIndex - frameIndex);
+    const proximity = Math.max(0, 1 - distance / 5.5);
+    const frontFactor = 1 - frame.depthNormalized;
+    return {
+      frameIndex,
+      depthNormalized: frame.depthNormalized,
+      points: frame.points,
+      segments: createPolylineSegments(frame.points, frame.samples),
+      samples: frame.samples,
+      averageCameraDepth: frame.averageCameraDepth,
+      lineWidth: lerp(0.45, 0.9, frontFactor) + proximity * 0.1,
+      alpha: lerp(0.03, 0.09, frontFactor) * lerp(0.84, 1, proximity),
+      colourMix: lerp(0.58, 0.9, frame.depthNormalized) - proximity * 0.04
+    };
+  });
+}
+function createSurfaceBands(projectedFrames) {
+  const bands = [];
+  for (let frameIndex = 0; frameIndex < projectedFrames.length - 1; frameIndex += 1) {
+    const frontFrame = projectedFrames[frameIndex];
+    const backFrame = projectedFrames[frameIndex + 1];
+    for (let sampleIndex = 0; sampleIndex < frontFrame.points.length - 1; sampleIndex += 1) {
+      const frontJump = Math.abs(frontFrame.samples[sampleIndex + 1] - frontFrame.samples[sampleIndex]);
+      const backJump = Math.abs(backFrame.samples[sampleIndex + 1] - backFrame.samples[sampleIndex]);
+      if (frontJump > DISCONTINUITY_THRESHOLD || backJump > DISCONTINUITY_THRESHOLD) {
+        continue;
+      }
+      const quad = [
+        frontFrame.points[sampleIndex],
+        frontFrame.points[sampleIndex + 1],
+        backFrame.points[sampleIndex + 1],
+        backFrame.points[sampleIndex]
+      ];
+      const objectQuad = [
+        frontFrame.objectPoints[sampleIndex],
+        frontFrame.objectPoints[sampleIndex + 1],
+        backFrame.objectPoints[sampleIndex + 1],
+        backFrame.objectPoints[sampleIndex]
+      ];
+      const surfaceNormal = normaliseVector(
+        crossProduct(
+          subtractPoints(objectQuad[1], objectQuad[0]),
+          subtractPoints(objectQuad[3], objectQuad[0])
+        )
+      );
+      const lightDirection = normaliseVector({ x: -0.2, y: 0.95, z: -0.5 });
+      const averageCameraDepth = quad.reduce((total, point) => total + point.cameraDepth, 0) / quad.length;
+      const depthNormalized = (frontFrame.depthNormalized + backFrame.depthNormalized) * 0.5;
+      const slopeLight = clamp$1((dotProduct(surfaceNormal, lightDirection) + 1) * 0.5, 0, 1);
+      const ridgeAmount = clamp$1(
+        Math.abs(frontFrame.samples[sampleIndex + 1] - frontFrame.samples[sampleIndex]) * 0.95 + Math.abs(backFrame.samples[sampleIndex + 1] - backFrame.samples[sampleIndex]) * 0.95,
+        0,
+        1
+      );
+      bands.push({
+        frameLo: frontFrame.frameIndex,
+        frameHi: backFrame.frameIndex,
+        sampleIndex,
+        points: quad,
+        averageCameraDepth,
+        depthNormalized,
+        slopeLight,
+        ridgeAmount
+      });
+    }
+  }
+  bands.sort((left, right) => right.averageCameraDepth - left.averageCameraDepth);
+  return bands;
+}
+function createSurfaceRibs(projectedFrames) {
+  const sampleCount = projectedFrames[0]?.points.length ?? 0;
+  if (sampleCount < 3) {
+    return [];
+  }
+  const desiredRibCount = clamp$1(Math.round(sampleCount / 10), 8, 14);
+  const selectedColumns = /* @__PURE__ */ new Set([0, sampleCount - 1]);
+  for (let ribIndex = 1; ribIndex < desiredRibCount - 1; ribIndex += 1) {
+    selectedColumns.add(
+      Math.round(ribIndex * (sampleCount - 1) / (desiredRibCount - 1))
+    );
+  }
+  return [...selectedColumns].sort((left, right) => left - right).map((sampleIndex) => {
+    const points = projectedFrames.map((frame) => frame.points[sampleIndex]);
+    const averageDepth = points.reduce((total, point) => total + point.cameraDepth, 0) / Math.max(points.length, 1);
+    const frontness = 1 - projectedFrames.reduce((total, frame) => total + frame.depthNormalized, 0) / Math.max(projectedFrames.length, 1);
+    return {
+      sampleIndex,
+      points,
+      averageDepth,
+      alpha: lerp(0.05, 0.12, frontness)
+    };
+  });
+}
+function createPolylineSegments(points, samples, threshold = DISCONTINUITY_THRESHOLD) {
+  if (points.length <= 1) {
+    return [];
+  }
+  const segments = [];
+  let startIndex = 0;
+  for (let pointIndex = 0; pointIndex < points.length - 1; pointIndex += 1) {
+    if (Math.abs(samples[pointIndex + 1] - samples[pointIndex]) > threshold) {
+      if (pointIndex - startIndex >= 1) {
+        segments.push(points.slice(startIndex, pointIndex + 1));
+      }
+      startIndex = pointIndex + 1;
+    }
+  }
+  if (points.length - 1 - startIndex >= 1) {
+    segments.push(points.slice(startIndex));
+  }
+  return segments;
+}
+function createInterpolatedSurfaceSlices(sourceFrames, camera, projection) {
+  const frameCount = sourceFrames.length;
+  if (frameCount === 0) {
+    return [];
+  }
+  const sliceCount = clamp$1(frameCount * 3 - 2, 17, 41);
+  const slices = [];
+  for (let sliceIndex = 0; sliceIndex < sliceCount; sliceIndex += 1) {
+    const framePosition = sliceIndex * (frameCount - 1) / Math.max(1, sliceCount - 1);
+    const frameLo = Math.floor(framePosition);
+    const frameHi = Math.min(frameLo + 1, frameCount - 1);
+    const frameT = framePosition - frameLo;
+    const samples = buildInterpolatedFrame(
+      sourceFrames[frameLo].samples,
+      sourceFrames[frameHi].samples,
+      frameT
+    );
+    const depth = getSceneDepthAt(framePosition, frameCount);
+    const objectPoints = createObjectPoints(samples, depth);
+    const points = objectPoints.map(
+      (point) => projectToScreen(projectWorldPoint(point, camera), projection)
+    );
+    const averageDepth = points.reduce((total, point) => total + point.cameraDepth, 0) / Math.max(points.length, 1);
+    slices.push({
+      frameIndex: framePosition,
+      depthNormalized: getBacknessAt(framePosition, frameCount),
+      samples,
+      points,
+      segments: createPolylineSegments(points, samples),
+      averageDepth,
+      alpha: lerp(0.07, 0.16, 1 - getBacknessAt(framePosition, frameCount))
+    });
+  }
+  return slices;
+}
+function buildInterpolatedFrame(lowFrame, highFrame, amount) {
+  const output = new Float32Array(lowFrame.length);
+  for (let sampleIndex = 0; sampleIndex < lowFrame.length; sampleIndex += 1) {
+    output[sampleIndex] = lerp(lowFrame[sampleIndex], highFrame[sampleIndex], amount);
+  }
+  return output;
+}
+function createCurrentSlice(staticScene, frameState) {
+  const lowFrame = staticScene.contourFrames[frameState.frameLo];
+  const highFrame = staticScene.contourFrames[frameState.frameHi];
+  const blendedSamples = buildInterpolatedFrame(lowFrame.samples, highFrame.samples, frameState.frameT);
+  const depth = getSceneDepth(frameState.frameIndex, staticScene.frameCount);
+  const objectPoints = createObjectPoints(blendedSamples, depth);
+  const floorObjectPoints = objectPoints.map((point) => ({ x: point.x, y: FLOOR_Y, z: point.z }));
+  const points = objectPoints.map(
+    (point) => projectToScreen(projectWorldPoint(point, staticScene.camera), staticScene.projection)
+  );
+  const floorPoints = floorObjectPoints.map(
+    (point) => projectToScreen(projectWorldPoint(point, staticScene.camera), staticScene.projection)
+  );
+  const labelAnchor = points[Math.floor(points.length * 0.78)] ?? points[points.length - 1];
+  const label = {
+    text: `Frame ${frameState.frameIndex.toFixed(2)} / ${staticScene.frameCount - 1}`,
+    x: clamp$1(labelAnchor.x + 14, 18, staticScene.width - 180),
+    y: clamp$1(labelAnchor.y - 18, 24, staticScene.height - 24)
+  };
+  return {
+    frameState,
+    samples: blendedSamples,
+    points,
+    segments: [points],
+    floorPoints,
+    label,
+    lineWidth: 2.35,
+    glowBlur: 12
+  };
+}
+function createFrameState(frameCount, position) {
+  const safeFrameCount = Math.max(1, Number(frameCount) || 0);
+  const clampedPosition = clamp$1(Number(position) || 0, 0, 1);
+  const frameIndex = clampedPosition * (safeFrameCount - 1);
+  const frameLo = Math.floor(frameIndex);
+  const frameHi = Math.min(frameLo + 1, safeFrameCount - 1);
+  const frameT = frameIndex - frameLo;
+  return {
+    frameCount: safeFrameCount,
+    position: clampedPosition,
+    frameIndex,
+    frameLo,
+    frameHi,
+    frameT
+  };
+}
+function decimateFrame(frame, targetPointCount) {
+  const source = frame instanceof Float32Array ? frame : Float32Array.from(frame);
+  const clampedPointCount = Math.max(2, Math.floor(targetPointCount || source.length));
+  if (clampedPointCount >= source.length) {
+    return source.slice();
+  }
+  const output = new Float32Array(clampedPointCount);
+  const lastSourceIndex = source.length - 1;
+  for (let pointIndex = 0; pointIndex < clampedPointCount; pointIndex += 1) {
+    const sampleIndex = Math.round(pointIndex * lastSourceIndex / (clampedPointCount - 1));
+    output[pointIndex] = source[sampleIndex];
+  }
+  return output;
+}
+function buildWavetableStaticScene({
+  frames,
+  width = 640,
+  height = 320,
+  pixelRatio = 1
+}) {
+  assertFrames(frames);
+  const safeWidth = Math.max(180, Math.floor(width || 0));
+  const safeHeight = Math.max(140, Math.floor(height || 0));
+  const frameCount = frames.length;
+  const contourPointCount = getContourPointCount(safeWidth, frames[0].length);
+  const surfacePointCount = getSurfacePointCount(safeWidth, frames[0].length);
+  const contourSamples = frames.map((frame) => decimateFrame(frame, contourPointCount));
+  const surfaceSamples = frames.map((frame) => decimateFrame(frame, surfacePointCount));
+  const { camera, projection } = buildProjectionFromFrames(contourSamples, safeWidth, safeHeight);
+  const contourFrames = contourSamples.map(
+    (samples, frameIndex) => createProjectedFrame(samples, frameIndex, frameCount, camera, projection)
+  );
+  const surfaceFrames = surfaceSamples.map(
+    (samples, frameIndex) => createProjectedFrame(samples, frameIndex, frameCount, camera, projection)
+  );
+  return {
+    width: safeWidth,
+    height: safeHeight,
+    pixelRatio: Math.max(1, Number(pixelRatio) || 1),
+    frameCount,
+    camera,
+    contourPointCount,
+    surfacePointCount,
+    projection,
+    contourFrames,
+    surfaceFrames,
+    surfaceBands: createSurfaceBands(surfaceFrames),
+    surfaceRibs: createSurfaceRibs(surfaceFrames),
+    surfaceSlices: createInterpolatedSurfaceSlices(contourFrames, camera, projection),
+    guideLines: createGuideLines(camera, projection)
+  };
+}
+function buildWavetableRenderModel({
+  frames = null,
+  position = 0,
+  width = 640,
+  height = 320,
+  pixelRatio = 1,
+  staticScene = null
+}) {
+  const scene = staticScene ?? buildWavetableStaticScene({
+    frames,
+    width,
+    height,
+    pixelRatio
+  });
+  const frameState = createFrameState(scene.frameCount, position);
+  return {
+    ...scene,
+    frameState,
+    contours: createContourDescriptors(scene.contourFrames, frameState),
+    currentSlice: createCurrentSlice(scene, frameState)
+  };
+}
+function tracePath(context, points) {
+  points.forEach((point, pointIndex) => {
+    if (pointIndex === 0) {
+      context.moveTo(point.x, point.y);
+    } else {
+      context.lineTo(point.x, point.y);
+    }
+  });
+}
+function strokePolylineSegments(context, segments) {
+  for (const segment of segments) {
+    if (segment.length < 2) {
+      continue;
+    }
+    context.beginPath();
+    tracePath(context, segment);
+    context.stroke();
+  }
+}
+function drawWavetableModel(context, model, theme = DEFAULT_WAVETABLE_THEME) {
+  const meshColour = mixRGB(theme.meshColor, [214, 246, 255], 0.34);
+  const gradient = context.createLinearGradient?.(0, 0, 0, model.height);
+  if (gradient) {
+    gradient.addColorStop(0, theme.backgroundTop);
+    gradient.addColorStop(1, theme.backgroundBottom);
+    context.fillStyle = gradient;
+  } else {
+    context.fillStyle = theme.backgroundBottom;
+  }
+  context.clearRect(0, 0, model.width, model.height);
+  context.fillRect(0, 0, model.width, model.height);
+  context.save();
+  context.strokeStyle = theme.panelStroke;
+  context.lineWidth = 1;
+  context.strokeRect?.(0.5, 0.5, model.width - 1, model.height - 1);
+  context.restore();
+  context.save();
+  context.strokeStyle = theme.guideColor;
+  context.lineWidth = 1;
+  for (const guideLine of model.guideLines) {
+    context.beginPath();
+    context.strokeStyle = toRGBA(theme.frameColor, guideLine.strength * 0.22);
+    context.lineWidth = guideLine.kind === "frame" ? 1.15 : 0.9;
+    tracePath(context, guideLine.points);
+    context.stroke();
+  }
+  context.restore();
+  for (const band of model.surfaceBands) {
+    const alpha = lerp(0.085, 0.024, band.depthNormalized) + band.ridgeAmount * 0.018;
+    const bandColour = mixRGB(
+      mixRGB(theme.frameColor, theme.highlightColor, band.slopeLight * 0.24),
+      theme.backgroundRGB,
+      lerp(0.08, 0.68, band.depthNormalized) - band.slopeLight * 0.06
+    );
+    context.save();
+    context.fillStyle = toRGBA(bandColour, alpha);
+    context.beginPath();
+    tracePath(context, band.points);
+    context.closePath?.();
+    context.fill();
+    context.restore();
+  }
+  for (const slice of model.surfaceSlices) {
+    context.save();
+    context.strokeStyle = toRGBA(meshColour, Math.min(0.46, slice.alpha * 2.05));
+    context.lineWidth = 1.15;
+    context.shadowBlur = 8;
+    context.shadowColor = toRGBA(theme.meshColor, 0.2);
+    strokePolylineSegments(context, slice.segments);
+    context.restore();
+  }
+  for (const rib of model.surfaceRibs) {
+    context.save();
+    context.strokeStyle = toRGBA(meshColour, Math.min(0.42, rib.alpha * 1.95));
+    context.lineWidth = 1.1;
+    context.shadowBlur = 7;
+    context.shadowColor = toRGBA(theme.meshColor, 0.18);
+    context.beginPath();
+    tracePath(context, rib.points);
+    context.stroke();
+    context.restore();
+  }
+  for (const contour of model.contours) {
+    const strokeColour = mixRGB(theme.frameColor, theme.backgroundRGB, clamp$1(contour.colourMix, 0, 0.92));
+    context.save();
+    context.strokeStyle = toRGBA(strokeColour, contour.alpha);
+    context.lineWidth = contour.lineWidth;
+    strokePolylineSegments(context, contour.segments);
+    context.restore();
+  }
+  context.save();
+  context.strokeStyle = toRGBA(theme.highlightColor, 0.98);
+  context.lineWidth = model.currentSlice.lineWidth;
+  context.shadowBlur = model.currentSlice.glowBlur + 4;
+  context.shadowColor = toRGBA(theme.highlightColor, 0.52);
+  strokePolylineSegments(context, model.currentSlice.segments);
+  context.restore();
+  context.save();
+  context.fillStyle = toRGBA(theme.backgroundRGB, 0.74);
+  context.fillRect(model.currentSlice.label.x - 10, model.currentSlice.label.y - 14, 154, 24);
+  context.fillStyle = theme.textColor;
+  context.font = "600 12px Avenir Next, Avenir, sans-serif";
+  context.textAlign = "left";
+  context.fillText(model.currentSlice.label.text, model.currentSlice.label.x, model.currentSlice.label.y + 2);
+  context.restore();
+}
+class CanvasWavetableDisplay {
+  constructor(canvas, {
+    theme = DEFAULT_WAVETABLE_THEME,
+    requestAnimationFrame: requestAnimationFrame2 = requestNextAnimationFrame,
+    cancelAnimationFrame = cancelNextAnimationFrame
+  } = {}) {
+    this.canvas = canvas;
+    this.context = canvas.getContext("2d");
+    this.theme = theme;
+    this.requestAnimationFrame = requestAnimationFrame2;
+    this.cancelAnimationFrame = cancelAnimationFrame;
+    this.frames = [];
+    this.position = 0;
+    this.devicePixelRatio = 1;
+    this.cssWidth = 0;
+    this.cssHeight = 0;
+    this.staticScene = null;
+    this.staticKey = "";
+    this.pendingRenderHandle = null;
+  }
+  invalidateStaticScene() {
+    this.staticScene = null;
+    this.staticKey = "";
+  }
+  setFrames(frames) {
+    assertFrames(frames);
+    this.frames = frames.map(
+      (frame) => frame instanceof Float32Array ? frame.slice() : Float32Array.from(frame)
+    );
+    this.invalidateStaticScene();
+    this.queueRender();
+  }
+  setPosition(position) {
+    this.position = clamp$1(Number(position) || 0, 0, 1);
+    this.queueRender();
+  }
+  resize(width, height, devicePixelRatio = 1) {
+    const nextWidth = Math.max(1, Math.floor(width || this.canvas.clientWidth || 1));
+    const nextHeight = Math.max(1, Math.floor(height || this.canvas.clientHeight || 1));
+    const nextRatio = Math.max(1, Number(devicePixelRatio) || 1);
+    this.cssWidth = nextWidth;
+    this.cssHeight = nextHeight;
+    this.devicePixelRatio = nextRatio;
+    this.canvas.width = Math.max(1, Math.round(nextWidth * nextRatio));
+    this.canvas.height = Math.max(1, Math.round(nextHeight * nextRatio));
+    this.canvas.style.width = `${nextWidth}px`;
+    this.canvas.style.height = `${nextHeight}px`;
+    this.invalidateStaticScene();
+    this.queueRender();
+  }
+  getStaticScene(width, height) {
+    const nextKey = [
+      this.frames.length,
+      this.frames[0]?.length ?? 0,
+      width,
+      height,
+      this.devicePixelRatio
+    ].join(":");
+    if (this.staticScene && this.staticKey === nextKey) {
+      return this.staticScene;
+    }
+    this.staticKey = nextKey;
+    this.staticScene = buildWavetableStaticScene({
+      frames: this.frames,
+      width,
+      height,
+      pixelRatio: this.devicePixelRatio
+    });
+    return this.staticScene;
+  }
+  queueRender() {
+    if (this.pendingRenderHandle !== null) {
+      return;
+    }
+    this.pendingRenderHandle = this.requestAnimationFrame(() => {
+      this.pendingRenderHandle = null;
+      this.render();
+    });
+  }
+  render() {
+    if (this.pendingRenderHandle !== null) {
+      this.cancelAnimationFrame(this.pendingRenderHandle);
+      this.pendingRenderHandle = null;
+    }
+    if (!this.context || this.canvas.width === 0 || this.canvas.height === 0) {
+      return;
+    }
+    const width = this.cssWidth || this.canvas.clientWidth || Math.round(this.canvas.width / this.devicePixelRatio);
+    const height = this.cssHeight || this.canvas.clientHeight || Math.round(this.canvas.height / this.devicePixelRatio);
+    this.context.setTransform(this.devicePixelRatio, 0, 0, this.devicePixelRatio, 0, 0);
+    if (this.frames.length === 0) {
+      this.context.clearRect(0, 0, width, height);
+      return;
+    }
+    const model = buildWavetableRenderModel({
+      staticScene: this.getStaticScene(width, height),
+      position: this.position
+    });
+    drawWavetableModel(this.context, model, this.theme);
+  }
+}
+const VOICE_MODE_OPTIONS = [
+  { value: 0, label: "Poly" },
+  { value: 1, label: "Mono" },
+  { value: 2, label: "Legato" }
+];
+const MSEG_EDITOR_SAMPLES = 128;
+const MSEG_GRID_STEPS = [0.25, 0.5, 0.75];
+const MSEG_PREVIEW_HORIZONTAL_PADDING_PX = 24;
+const MSEG_PREVIEW_VERTICAL_PADDING_PX = 22;
+function joinClasses(...classes) {
+  return classes.filter(Boolean).join(" ");
+}
+function useResizeObserver$1(ref) {
+  const [size, setSize] = reactExports.useState({ width: 1, height: 1 });
+  reactExports.useLayoutEffect(() => {
+    const element = ref.current;
+    if (!element) {
+      return;
+    }
+    const update = () => {
+      const bounds = element.getBoundingClientRect();
+      const host = element;
+      setSize({
+        width: Math.max(1, bounds.width || host.clientWidth || 1),
+        height: Math.max(1, bounds.height || host.clientHeight || 1)
+      });
+    };
+    const observer = new ResizeObserver(update);
+    observer.observe(element);
+    update();
+    return () => observer.disconnect();
+  }, [ref]);
+  return size;
+}
+function formatSeconds$1(seconds) {
+  return `${seconds.toFixed(3)} s`;
+}
+function formatFrameIndex(position, frameCount) {
+  const safeFrameCount = Math.max(1, frameCount);
+  const frameIndex = Math.round(position * Math.max(0, safeFrameCount - 1)) + 1;
+  return `${String(frameIndex).padStart(2, "0")}/${String(safeFrameCount).padStart(2, "0")}`;
+}
+function buildMsegSurfacePaths(points, width, height, options = {}) {
+  const metrics = createMsegEditorMetrics(width, height, {
+    pointRadius: options.pointRadius,
+    horizontalPadding: options.horizontalPadding ?? MSEG_EDITOR_HORIZONTAL_PADDING_PX,
+    verticalPadding: options.verticalPadding ?? MSEG_EDITOR_VERTICAL_PADDING_PX
+  });
+  let path = "";
+  for (let index = 0; index < MSEG_EDITOR_SAMPLES; index += 1) {
+    const x = index / (MSEG_EDITOR_SAMPLES - 1);
+    const y = evaluateMsegShape({ points }, x);
+    const coordinates = pointToMsegEditorCoordinates({ x, y }, width, height, {
+      pointRadius: options.pointRadius,
+      horizontalPadding: options.horizontalPadding,
+      verticalPadding: options.verticalPadding
+    });
+    path += `${index === 0 ? "M" : "L"} ${coordinates.x.toFixed(3)} ${coordinates.y.toFixed(3)} `;
+  }
+  const curvePath = path.trim();
+  const fillPath = `${curvePath} L ${metrics.plotRight.toFixed(3)} ${metrics.plotBottom.toFixed(3)} L ${metrics.plotLeft.toFixed(3)} ${metrics.plotBottom.toFixed(3)} Z`;
+  return { curvePath, fillPath, metrics };
+}
+function SelectChevron({ className }) {
+  return /* @__PURE__ */ jsxRuntimeExports.jsx(
+    "svg",
+    {
+      className,
+      viewBox: "0 0 12 12",
+      "aria-hidden": "true",
+      focusable: "false",
+      children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "path",
+        {
+          d: "M3 4.5 6 7.5 9 4.5",
+          fill: "none",
+          stroke: "currentColor",
+          strokeLinecap: "round",
+          strokeLinejoin: "round",
+          strokeWidth: "1.4"
+        }
+      )
+    }
+  );
+}
+function OctaveShiftGlyph({
+  direction
+}) {
+  return /* @__PURE__ */ jsxRuntimeExports.jsx("svg", { viewBox: "0 0 16 16", className: "h-3.5 w-3.5", "aria-hidden": "true", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+    "path",
+    {
+      d: direction === "up" ? "M4.5 9.75 8 6.25 11.5 9.75" : "M4.5 6.25 8 9.75 11.5 6.25",
+      fill: "none",
+      stroke: "currentColor",
+      strokeLinecap: "round",
+      strokeLinejoin: "round",
+      strokeWidth: "1.5"
+    }
+  ) });
+}
+function MsegPreview({
+  points,
+  className
+}) {
+  const viewportRef = reactExports.useRef(null);
+  const size = useResizeObserver$1(viewportRef);
+  const { curvePath, fillPath, metrics } = reactExports.useMemo(() => {
+    return buildMsegSurfacePaths(points, size.width, size.height, {
+      pointRadius: 0,
+      horizontalPadding: MSEG_PREVIEW_HORIZONTAL_PADDING_PX,
+      verticalPadding: MSEG_PREVIEW_VERTICAL_PADDING_PX
+    });
+  }, [points, size.height, size.width]);
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+    "svg",
+    {
+      ref: viewportRef,
+      className: className ?? "h-32 w-full overflow-hidden rounded-[20px] bg-white/[0.03]",
+      viewBox: `0 0 ${size.width} ${size.height}`,
+      children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("g", { children: [
+          MSEG_GRID_STEPS.map((step) => /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "line",
+            {
+              className: "cosimo-grid-line",
+              x1: metrics.plotLeft,
+              y1: metrics.plotTop + metrics.plotHeight * (1 - step),
+              x2: metrics.plotRight,
+              y2: metrics.plotTop + metrics.plotHeight * (1 - step)
+            },
+            `h-${step}`
+          )),
+          MSEG_GRID_STEPS.map((step) => /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "line",
+            {
+              className: "cosimo-grid-line",
+              x1: metrics.plotLeft + metrics.plotWidth * step,
+              y1: metrics.plotTop,
+              x2: metrics.plotLeft + metrics.plotWidth * step,
+              y2: metrics.plotBottom
+            },
+            `v-${step}`
+          ))
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("path", { className: "cosimo-curve-fill", d: fillPath }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("path", { className: "cosimo-curve-line", d: curvePath })
+      ]
+    }
+  );
+}
+function VoiceModeGlyph({
+  mode,
+  active
+}) {
+  const stroke = active ? "rgba(214,244,255,0.96)" : "rgba(189,204,223,0.72)";
+  const fill = active ? "rgba(143,232,255,0.24)" : "rgba(255,255,255,0.06)";
+  if (mode === 0) {
+    return /* @__PURE__ */ jsxRuntimeExports.jsxs("svg", { viewBox: "0 0 28 18", className: "h-4 w-6", "aria-hidden": "true", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("circle", { cx: "7", cy: "11", r: "3.2", fill, stroke, strokeWidth: "1.3" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("circle", { cx: "14", cy: "8", r: "3.2", fill, stroke, strokeWidth: "1.3" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("circle", { cx: "21", cy: "11", r: "3.2", fill, stroke, strokeWidth: "1.3" })
+    ] });
+  }
+  if (mode === 1) {
+    return /* @__PURE__ */ jsxRuntimeExports.jsx("svg", { viewBox: "0 0 28 18", className: "h-4 w-6", "aria-hidden": "true", children: /* @__PURE__ */ jsxRuntimeExports.jsx("rect", { x: "8.5", y: "4.5", width: "11", height: "9", rx: "4.5", fill, stroke, strokeWidth: "1.3" }) });
+  }
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("svg", { viewBox: "0 0 28 18", className: "h-4 w-6", "aria-hidden": "true", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx("circle", { cx: "8", cy: "9", r: "3", fill, stroke, strokeWidth: "1.3" }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("circle", { cx: "20", cy: "9", r: "3", fill, stroke, strokeWidth: "1.3" }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("path", { d: "M10.8 9 C12.5 5.5 15.5 5.5 17.2 9", fill: "none", stroke, strokeWidth: "1.4", strokeLinecap: "round" })
+  ] });
+}
+function WavetableCanvas({
+  frames,
+  position
+}) {
+  const canvasRef = reactExports.useRef(null);
+  const viewportRef = reactExports.useRef(null);
+  const size = useResizeObserver$1(viewportRef);
+  const displayRef = reactExports.useRef(null);
+  reactExports.useLayoutEffect(() => {
+    if (!canvasRef.current) {
+      return;
+    }
+    displayRef.current = new CanvasWavetableDisplay(canvasRef.current);
+    return () => {
+      displayRef.current = null;
+    };
+  }, []);
+  reactExports.useEffect(() => {
+    if (!displayRef.current || !frames) {
+      return;
+    }
+    displayRef.current.setFrames(frames);
+  }, [frames]);
+  reactExports.useEffect(() => {
+    displayRef.current?.setPosition(position);
+  }, [position]);
+  reactExports.useEffect(() => {
+    displayRef.current?.resize(size.width, size.height, window.devicePixelRatio || 1);
+  }, [size]);
+  return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { ref: viewportRef, className: "absolute inset-0", children: /* @__PURE__ */ jsxRuntimeExports.jsx("canvas", { ref: canvasRef, className: "h-full w-full" }) });
+}
+function EditableMsegSurface({
+  surfaceRef,
+  points,
+  selectedPointIndex,
+  onPointerDown,
+  onPointerMove,
+  onPointerUp,
+  className
+}) {
+  const size = useResizeObserver$1(surfaceRef);
+  const { curvePath, fillPath } = reactExports.useMemo(() => {
+    return buildMsegSurfacePaths(points, size.width, size.height);
+  }, [points, size.height, size.width]);
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+    "svg",
+    {
+      ref: surfaceRef,
+      className: joinClasses(
+        "h-full w-full touch-none overflow-hidden rounded-[20px] bg-white/[0.03]",
+        className
+      ),
+      viewBox: `0 0 ${size.width} ${size.height}`,
+      onPointerDown,
+      onPointerMove,
+      onPointerUp,
+      onPointerCancel: onPointerUp,
+      children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("g", { children: [
+          MSEG_GRID_STEPS.map((step) => /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "line",
+            {
+              className: "cosimo-grid-line",
+              x1: 0,
+              y1: size.height * (1 - step),
+              x2: size.width,
+              y2: size.height * (1 - step)
+            },
+            `editable-h-${step}`
+          )),
+          MSEG_GRID_STEPS.map((step) => /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "line",
+            {
+              className: "cosimo-grid-line",
+              x1: size.width * step,
+              y1: 0,
+              x2: size.width * step,
+              y2: size.height
+            },
+            `editable-v-${step}`
+          ))
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("path", { className: "cosimo-curve-fill", d: fillPath }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("path", { className: "cosimo-curve-line", d: curvePath }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("g", { children: points.map((point, pointIndex) => {
+          const coordinates = pointToMsegEditorCoordinates(point, size.width, size.height);
+          const isSelected = pointIndex === selectedPointIndex;
+          return /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "circle",
+            {
+              cx: coordinates.x,
+              cy: coordinates.y,
+              r: isSelected ? MSEG_SELECTED_POINT_RADIUS_PX : MSEG_POINT_RADIUS_PX,
+              className: isSelected ? "fill-fuchsia-200 stroke-[#050913] stroke-[3px]" : "fill-cyan-200 stroke-[#050913] stroke-[2px]",
+              vectorEffect: "non-scaling-stroke"
+            },
+            `point-${pointIndex}-${point.x}-${point.y}`
+          );
+        }) })
+      ]
+    }
+  );
+}
+function RangeField({
+  label,
+  min,
+  max,
+  step,
+  value,
+  displayValue,
+  onChange,
+  onPointerDown,
+  onPointerUp,
+  onPointerCancel,
+  ariaLabel,
+  focusBindings
+}) {
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "grid gap-2", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[11px] uppercase tracking-[0.18em] text-slate-300/60", children: label }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid grid-cols-[minmax(0,1fr)_88px] items-center gap-4", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "input",
+        {
+          className: "cosimo-range",
+          type: "range",
+          min,
+          max,
+          step,
+          value: value.toFixed(3),
+          "aria-label": ariaLabel ?? label,
+          onPointerDown,
+          onPointerUp,
+          onPointerCancel,
+          onChange: (event) => onChange(Number(event.target.value)),
+          ...focusBindings
+        }
+      ),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-right font-mono text-sm tracking-[0.18em] text-cyan-200", children: displayValue })
+    ] })
+  ] });
+}
+function VoiceModeToolbar({
+  value,
+  onChange,
+  focusBindings,
+  options = VOICE_MODE_OPTIONS,
+  className,
+  surfaceClassName
+}) {
+  const columnCount = Math.max(1, options.length);
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: joinClasses("grid gap-2", className), children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[10px] uppercase tracking-[0.18em] text-slate-300/60", children: "Voice" }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx(
+      "div",
+      {
+        className: joinClasses(
+          "inline-grid gap-1 rounded-[18px] border border-white/8 bg-black/25 p-1",
+          surfaceClassName
+        ),
+        style: { gridTemplateColumns: `repeat(${columnCount}, minmax(0, 1fr))` },
+        ...focusBindings,
+        children: options.map((option) => {
+          const isActive = option.value === value;
+          return /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "button",
+            {
+              type: "button",
+              className: `rounded-[14px] px-3 py-2.5 text-left transition ${isActive ? "bg-white/[0.08] text-cyan-100 shadow-[inset_0_0_0_1px_rgba(143,232,255,0.18)]" : "text-slate-300/70 hover:bg-white/[0.04] hover:text-slate-100"}`,
+              onClick: () => onChange(option.value),
+              "aria-pressed": isActive,
+              children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2", children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx(VoiceModeGlyph, { mode: option.value, active: isActive }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[11px] uppercase tracking-[0.16em]", children: option.label })
+              ] })
+            },
+            option.value
+          );
+        })
+      }
+    )
+  ] });
+}
+function VoiceGlideControlSurface({
+  playModeValue,
+  onPlayModeChange,
+  playModeFocusBindings,
+  glideControl,
+  className
+}) {
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: joinClasses(
+    "grid gap-4 rounded-[24px] border border-white/8 bg-white/[0.03] px-4 py-3",
+    className
+  ), children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx(
+      VoiceModeToolbar,
+      {
+        value: playModeValue,
+        onChange: onPlayModeChange,
+        focusBindings: playModeFocusBindings
+      }
+    ),
+    glideControl
+  ] });
+}
+function KeyboardSectionShell({
+  keyboardRootLabel,
+  canOctaveUp,
+  canOctaveDown,
+  onOctaveUp,
+  onOctaveDown,
+  toolbar,
+  keyboard,
+  className,
+  railClassName,
+  contentClassName
+}) {
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: joinClasses("grid gap-3", className), children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: joinClasses(
+      "flex flex-col items-center justify-end gap-2 rounded-[24px] border border-white/8 bg-white/[0.03] px-2 py-3",
+      railClassName
+    ), children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[10px] uppercase tracking-[0.18em] text-slate-300/55", children: "Oct" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "button",
+        {
+          type: "button",
+          className: "cosimo-button flex h-10 w-10 items-center justify-center rounded-2xl p-0 disabled:opacity-35",
+          onClick: onOctaveUp,
+          disabled: !canOctaveUp,
+          "aria-label": "Shift keyboard up one octave",
+          children: /* @__PURE__ */ jsxRuntimeExports.jsx(OctaveShiftGlyph, { direction: "up" })
+        }
+      ),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "button",
+        {
+          type: "button",
+          className: "cosimo-button flex h-10 w-10 items-center justify-center rounded-2xl p-0 disabled:opacity-35",
+          onClick: onOctaveDown,
+          disabled: !canOctaveDown,
+          "aria-label": "Shift keyboard down one octave",
+          children: /* @__PURE__ */ jsxRuntimeExports.jsx(OctaveShiftGlyph, { direction: "down" })
+        }
+      ),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "font-mono text-[10px] tracking-[0.18em] text-cyan-200/70", children: keyboardRootLabel })
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: joinClasses("grid gap-3", contentClassName), children: [
+      toolbar,
+      keyboard
+    ] })
+  ] });
+}
+function WavetableStageSection({
+  stageRef,
+  frames,
+  position,
+  tableName,
+  frameCount,
+  desiredTableIndex,
+  tableOptions,
+  canRetry,
+  onTableChange,
+  onRetry,
+  tableFocusBindings,
+  onPointerDown,
+  onPointerMove,
+  onPointerUp,
+  className
+}) {
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+    "section",
+    {
+      ref: stageRef,
+      className: joinClasses(
+        "cosimo-stage relative overflow-hidden rounded-[30px] border border-white/8",
+        className
+      ),
+      onPointerDown,
+      onPointerMove,
+      onPointerUp,
+      onPointerCancel: onPointerUp,
+      children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx(WavetableCanvas, { frames, position }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "absolute inset-x-0 top-0 flex items-start justify-between gap-3 p-5 text-[11px] uppercase tracking-[0.16em] text-slate-300/70", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "relative inline-flex max-w-[280px] cursor-pointer items-center", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "inline-flex min-w-0 items-center rounded-full border border-white/10 bg-black/40 px-4 py-2.5 pr-10 text-left text-[11px] uppercase tracking-[0.18em] text-amber-100 shadow-[0_10px_28px_rgba(0,0,0,0.28)] backdrop-blur-md", children: /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "truncate", children: tableName }) }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(SelectChevron, { className: "pointer-events-none absolute right-4 top-1/2 h-3 w-3 -translate-y-1/2 text-slate-300/75" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "select",
+              {
+                className: "absolute inset-0 cursor-pointer opacity-0",
+                value: String(desiredTableIndex),
+                onChange: (event) => onTableChange(Number(event.target.value)),
+                "aria-label": "Select wavetable",
+                ...tableFocusBindings,
+                children: tableOptions.map((table, tableIndex) => /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: tableIndex, children: table.name }, `${table.name}-${tableIndex}`))
+              }
+            )
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "rounded-full border border-white/10 bg-black/35 px-3 py-2 text-cyan-200/80 shadow-[0_10px_28px_rgba(0,0,0,0.22)] backdrop-blur-md", children: [
+              "Frame ",
+              formatFrameIndex(position, frameCount)
+            ] }),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "rounded-full border border-white/10 bg-black/35 px-3 py-2 text-slate-200/80 shadow-[0_10px_28px_rgba(0,0,0,0.22)] backdrop-blur-md", children: [
+              "Pos ",
+              clampDisplayPosition(position).toFixed(3)
+            ] })
+          ] })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "absolute inset-x-0 bottom-0 flex items-end justify-start gap-3 p-5", children: canRetry ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "button",
+          {
+            type: "button",
+            className: "cosimo-button rounded-full px-4 py-2 text-[11px] uppercase tracking-[0.18em] disabled:opacity-40",
+            disabled: !canRetry,
+            onClick: onRetry,
+            children: "Retry Load"
+          }
+        ) : null })
+      ]
+    }
+  );
+}
+function MsegOverviewSection({
+  msegState,
+  onOpenEditor,
+  onDepthChange,
+  onRateChange,
+  onToggleLoop,
+  depthFocusBindings,
+  rateFocusBindings,
+  className
+}) {
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: joinClasses(
+    "grid grid-rows-[auto_minmax(0,1fr)_auto] gap-3 rounded-[30px] border border-white/8 bg-white/[0.03] p-4 pb-5",
+    className
+  ), children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between gap-4", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-[11px] uppercase tracking-[0.22em] text-blue-300/70", children: "MSEG" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "font-mono text-sm tracking-[0.16em] text-cyan-200", children: msegState ? formatSeconds$1(clampMsegRateSeconds(msegState.playback.rate.seconds)) : "0.000 s" })
+    ] }),
+    msegState ? /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "button",
+        {
+          type: "button",
+          className: "group min-h-0 overflow-hidden rounded-[24px] border border-white/6 bg-black/20 p-3 text-left transition hover:border-white/12 hover:bg-black/24",
+          onClick: onOpenEditor,
+          "aria-label": "Open MSEG editor",
+          children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+            MsegPreview,
+            {
+              points: msegState.shape.points,
+              className: "h-full min-h-0 w-full overflow-hidden rounded-[18px] bg-white/[0.03]"
+            }
+          )
+        }
+      ),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid gap-3 pt-1", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid grid-cols-[minmax(0,1fr)_92px] items-center gap-4", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid gap-2", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[11px] uppercase tracking-[0.18em] text-slate-300/60", children: "Depth" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "input",
+              {
+                className: "cosimo-range",
+                type: "range",
+                min: "-1",
+                max: "1",
+                step: "0.001",
+                value: Number(msegState.depth).toFixed(3),
+                onChange: (event) => onDepthChange(Number(event.target.value)),
+                ...depthFocusBindings
+              }
+            )
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-right font-mono text-sm tracking-[0.16em] text-cyan-200", children: Number(msegState.depth).toFixed(3) })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid grid-cols-[minmax(0,1fr)_92px_auto] items-center gap-4", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid gap-2", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[11px] uppercase tracking-[0.18em] text-slate-300/60", children: "Rate" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "input",
+              {
+                className: "cosimo-range",
+                type: "range",
+                min: MSEG_RATE_MIN_SECONDS,
+                max: MSEG_RATE_MAX_SECONDS,
+                step: "0.001",
+                value: clampMsegRateSeconds(msegState.playback.rate.seconds).toFixed(3),
+                onChange: (event) => onRateChange(Number(event.target.value)),
+                ...rateFocusBindings
+              }
+            )
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-right font-mono text-sm tracking-[0.16em] text-cyan-200", children: formatSeconds$1(clampMsegRateSeconds(msegState.playback.rate.seconds)) }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "button",
+            {
+              type: "button",
+              className: "cosimo-button h-11 rounded-2xl px-4 text-[11px] uppercase tracking-[0.18em]",
+              onClick: onToggleLoop,
+              children: msegState.playback.loop ? "Looping" : "One Shot"
+            }
+          )
+        ] })
+      ] })
+    ] }) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "rounded-2xl border border-white/8 bg-black/20 px-4 py-5 text-sm text-slate-300/70", children: "Loading MSEG state…" })
+  ] });
+}
+const midiInputEndpointID = "midiIn";
+const DEFAULT_KEYBOARD_NOTE_COUNT = 25;
+const DEFAULT_KEYBOARD_ROOT_NOTE = 36;
+function getPitchClass(noteNumber) {
+  const safeNoteNumber = Math.round(Number(noteNumber) || 0);
+  return (safeNoteNumber % 12 + 12) % 12;
+}
+function isNaturalNoteNumber(noteNumber) {
+  const pitchClass = getPitchClass(noteNumber);
+  return pitchClass === 0 || pitchClass === 2 || pitchClass === 4 || pitchClass === 5 || pitchClass === 7 || pitchClass === 9 || pitchClass === 11;
+}
+function countNaturalNotesInRange(rootNote, noteCount) {
+  const safeRootNote = Math.round(Number(rootNote) || 0);
+  const safeNoteCount = Math.max(1, Math.round(Number(noteCount) || 0));
+  let naturalCount = 0;
+  for (let noteOffset = 0; noteOffset < safeNoteCount; noteOffset += 1) {
+    if (isNaturalNoteNumber(safeRootNote + noteOffset)) {
+      naturalCount += 1;
+    }
+  }
+  return Math.max(1, naturalCount);
+}
+function computeKeyboardDimensions(rootNote, noteCount, availableWidth) {
+  const naturalCount = countNaturalNotesInRange(rootNote, noteCount);
+  const safeAvailableWidth = Math.max(0, Number(availableWidth) || 0);
+  const naturalWidth = Math.max(18, (safeAvailableWidth - 1) / naturalCount);
+  const accidentalWidth = Math.max(8, naturalWidth * 0.58);
+  return {
+    naturalWidth,
+    accidentalWidth
+  };
+}
+function useResizeObserver(ref) {
+  const [size, setSize] = reactExports.useState({ width: 1, height: 1 });
+  reactExports.useLayoutEffect(() => {
+    const element = ref.current;
+    if (!element) {
+      return;
+    }
+    const update = () => {
+      const bounds = element.getBoundingClientRect();
+      const host = element;
+      setSize({
+        width: Math.max(1, bounds.width || host.clientWidth || 1),
+        height: Math.max(1, bounds.height || host.clientHeight || 1)
+      });
+    };
+    const observer = new ResizeObserver(update);
+    observer.observe(element);
+    update();
+    return () => observer.disconnect();
+  }, [ref]);
+  return size;
+}
+function createKeyboardTagName() {
+  return "cosimo-react-desktop-keyboard";
+}
+function ensureKeyboardElement(patchConnection) {
+  const tagName = createKeyboardTagName();
+  if (!patchConnection.utilities?.PianoKeyboard) {
+    return null;
+  }
+  if (!window.customElements.get(tagName)) {
+    const BaseKeyboard = patchConnection.utilities.PianoKeyboard;
+    class CosimoDesktopKeyboard extends BaseKeyboard {
+      constructor() {
+        super({
+          naturalNoteWidth: 22,
+          accidentalWidth: 13,
+          accidentalPercentageHeight: 64,
+          pressedNoteColour: "#f56cb6"
+        });
+      }
+    }
+    window.customElements.define(tagName, CosimoDesktopKeyboard);
+  }
+  return tagName;
+}
+function KeyboardDock({
+  rootNote,
+  noteCount = DEFAULT_KEYBOARD_NOTE_COUNT,
+  keyboardRef
+}) {
+  const patchConnection = usePatchConnection();
+  const hostRef = reactExports.useRef(null);
+  const hostSize = useResizeObserver(hostRef);
+  reactExports.useEffect(() => {
+    const tagName = ensureKeyboardElement(patchConnection);
+    const host = hostRef.current;
+    if (!tagName || !host) {
+      return;
+    }
+    const KeyboardElement = window.customElements.get(tagName);
+    if (!KeyboardElement) {
+      return;
+    }
+    const keyboard = new KeyboardElement();
+    keyboard.classList.add("keyboard");
+    keyboard.style.display = "block";
+    keyboard.style.width = "100%";
+    keyboard.style.height = "100%";
+    keyboard.tabIndex = 0;
+    keyboard.setAttribute("root-note", String(rootNote));
+    keyboard.setAttribute("note-count", String(noteCount));
+    keyboard.refreshHTML();
+    keyboard.attachToPatchConnection?.(patchConnection, midiInputEndpointID);
+    keyboard.refreshActiveNoteElements?.();
+    keyboardRef.current = keyboard;
+    host.replaceChildren(keyboard);
+    return () => {
+      keyboard.detachPatchConnection?.(patchConnection);
+      keyboardRef.current = null;
+      host.replaceChildren();
+    };
+  }, [patchConnection, keyboardRef]);
+  reactExports.useEffect(() => {
+    const keyboard = keyboardRef.current;
+    if (!keyboard) {
+      return;
+    }
+    const currentRootNote = Number(keyboard.getAttribute("root-note")) || DEFAULT_KEYBOARD_ROOT_NOTE;
+    const currentNoteCount = Number(keyboard.getAttribute("note-count")) || DEFAULT_KEYBOARD_NOTE_COUNT;
+    if (currentRootNote === rootNote && currentNoteCount === noteCount) {
+      return;
+    }
+    keyboard.setAttribute("root-note", String(rootNote));
+    keyboard.setAttribute("note-count", String(noteCount));
+    keyboard.notes = [];
+    keyboard.refreshHTML();
+    keyboard.refreshActiveNoteElements();
+  }, [noteCount, rootNote, keyboardRef]);
+  reactExports.useEffect(() => {
+    const keyboard = keyboardRef.current;
+    const host = hostRef.current;
+    if (!keyboard || !host || hostSize.width <= 0) {
+      return;
+    }
+    const { naturalWidth, accidentalWidth } = computeKeyboardDimensions(rootNote, noteCount, hostSize.width);
+    const currentNaturalWidth = Number(keyboard.naturalWidth) || 0;
+    const currentAccidentalWidth = Number(keyboard.accidentalWidth) || 0;
+    if (Math.abs(currentNaturalWidth - naturalWidth) < 0.01 && Math.abs(currentAccidentalWidth - accidentalWidth) < 0.01) {
+      return;
+    }
+    keyboard.naturalWidth = naturalWidth;
+    keyboard.accidentalWidth = accidentalWidth;
+    keyboard.notes = [];
+    keyboard.refreshHTML();
+    keyboard.refreshActiveNoteElements();
+  }, [hostSize.width, noteCount, rootNote, keyboardRef]);
+  return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "rounded-[28px] border border-white/8 bg-white/[0.03] p-3 shadow-[0_18px_42px_rgba(3,6,18,0.45)]", children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { ref: hostRef, className: "h-[118px] w-full overflow-hidden rounded-[22px] bg-[#070b16]" }) });
+}
 var NexusUI$1 = { exports: {} };
 var NexusUI = NexusUI$1.exports;
 var hasRequiredNexusUI;
@@ -20459,429 +22982,130 @@ function requireNexusUI() {
 }
 var NexusUIExports = requireNexusUI();
 const Nexus = /* @__PURE__ */ getDefaultExportFromCjs(NexusUIExports);
-function assert$1(condition, message) {
-  if (!condition) {
-    throw new Error(message);
-  }
+let nexusNumberConstructor = Nexus.Number;
+function clampNumber(value, min, max) {
+  return Math.min(Math.max(value, min), max);
 }
-function readAscii(view, offset, length) {
-  let text = "";
-  for (let index = 0; index < length; index += 1) {
-    text += String.fromCharCode(view.getUint8(offset + index));
-  }
-  return text;
+function styleNexusNumberInput(element, host) {
+  element.style.borderRadius = "16px";
+  element.style.border = "1px solid rgba(255,255,255,0.08)";
+  element.style.boxShadow = "inset 0 1px 0 rgba(255,255,255,0.04)";
+  element.style.fontFamily = '"SF Mono", "JetBrains Mono", ui-monospace, monospace';
+  element.style.letterSpacing = "0.12em";
+  element.style.fontSize = "14px";
+  element.style.padding = "10px 14px";
+  element.style.backgroundColor = "rgba(255,255,255,0.06)";
+  element.style.color = "#d6f4ff";
+  element.style.display = "block";
+  element.style.width = "118px";
+  element.style.height = "42px";
+  host.style.width = "118px";
+  host.style.height = "42px";
+  host.style.cursor = "ns-resize";
 }
-function isAbsoluteURL(value) {
-  return /^[a-zA-Z][a-zA-Z\d+.-]*:/.test(value);
-}
-function encodeTextPayload(text) {
-  if (typeof TextEncoder === "function") {
-    return new TextEncoder().encode(text);
-  }
-  return Uint8Array.from(text, (character) => character.charCodeAt(0));
-}
-function describePayload(payload) {
-  if (payload === null) {
-    return "null";
-  }
-  if (payload === void 0) {
-    return "undefined";
-  }
-  const type = typeof payload;
-  const constructorName = payload?.constructor?.name;
-  if (type !== "object") {
-    return constructorName ? `${type}:${constructorName}` : type;
-  }
-  const keys = Object.keys(payload).slice(0, 6);
-  const keySummary = keys.length > 0 ? ` keys=${keys.join(",")}` : "";
-  return constructorName ? `${type}:${constructorName}${keySummary}` : `${type}${keySummary}`;
-}
-function getDefaultPatchRootUrl() {
-  const locationHref = globalThis.location?.href;
-  if (typeof locationHref === "string" && locationHref.length > 0) {
-    return new URL("/", locationHref);
-  }
-  const moduleUrl = new URL(import.meta.url);
-  const modulePath = moduleUrl.pathname;
-  if (modulePath.includes("/patch_gui/desktop/")) {
-    moduleUrl.pathname = modulePath.replace(/\/patch_gui\/desktop\/[^/]+$/, "/");
-    return moduleUrl;
-  }
-  if (modulePath.includes("/patch_gui/")) {
-    moduleUrl.pathname = modulePath.replace(/\/patch_gui\/[^/]+$/, "/");
-    return moduleUrl;
-  }
-  if (modulePath.includes("/ui/shared/")) {
-    moduleUrl.pathname = modulePath.replace(/\/ui\/shared\/[^/]+$/, "/");
-    return moduleUrl;
-  }
-  moduleUrl.pathname = modulePath.replace(/\/[^/]+$/, "/");
-  return moduleUrl;
-}
-function resourceAddressToUrl(path, resourceAddress) {
-  const patchRootUrl = getDefaultPatchRootUrl();
-  if (resourceAddress instanceof URL) {
-    return resourceAddress;
-  }
-  if (typeof resourceAddress === "string" && resourceAddress.length > 0) {
-    if (isAbsoluteURL(resourceAddress)) {
-      return new URL(resourceAddress);
-    }
-    const normalizedPath = resourceAddress.startsWith("/") ? resourceAddress.slice(1) : resourceAddress;
-    return new URL(normalizedPath, patchRootUrl);
-  }
-  return new URL(path, patchRootUrl);
-}
-async function decodeTextPayload(payload) {
-  if (typeof payload === "string") {
-    return payload;
-  }
-  if (payload && typeof payload.text === "function") {
-    return payload.text();
-  }
-  if (payload instanceof ArrayBuffer) {
-    if (typeof TextDecoder === "function") {
-      return new TextDecoder().decode(new Uint8Array(payload));
-    }
-    return String.fromCharCode(...new Uint8Array(payload));
-  }
-  if (ArrayBuffer.isView(payload)) {
-    const bytes = new Uint8Array(payload.buffer, payload.byteOffset, payload.byteLength);
-    if (typeof TextDecoder === "function") {
-      return new TextDecoder().decode(bytes);
-    }
-    return String.fromCharCode(...bytes);
-  }
-  if (Array.isArray(payload)) {
-    const bytes = Uint8Array.from(payload);
-    if (typeof TextDecoder === "function") {
-      return new TextDecoder().decode(bytes);
-    }
-    return String.fromCharCode(...bytes);
-  }
-  throw new Error(`Unsupported text resource payload (${describePayload(payload)})`);
-}
-function normalizeBytesPayload(payload) {
-  if (payload instanceof ArrayBuffer) {
-    return new Uint8Array(payload.slice(0));
-  }
-  if (ArrayBuffer.isView(payload)) {
-    return new Uint8Array(payload.buffer.slice(payload.byteOffset, payload.byteOffset + payload.byteLength));
-  }
-  if (Array.isArray(payload)) {
-    return Uint8Array.from(payload);
-  }
-  if (typeof payload === "string") {
-    return encodeTextPayload(payload);
-  }
-  throw new Error(`Unsupported binary resource payload (${describePayload(payload)})`);
-}
-function normalizeDecodedAudioFileSamples(audioFile) {
-  const frames = audioFile?.frames;
-  assert$1(
-    Array.isArray(frames) || ArrayBuffer.isView(frames),
-    "Decoded audio data must provide a frames array"
-  );
-  const frameArray = Array.from(frames);
-  const samples = new Float32Array(frameArray.length);
-  for (let index = 0; index < frameArray.length; index += 1) {
-    const frame = frameArray[index];
-    if (typeof frame === "number") {
-      samples[index] = frame;
-      continue;
-    }
-    if (ArrayBuffer.isView(frame) || Array.isArray(frame)) {
-      const monoFrame = frame;
-      assert$1(monoFrame.length === 1, "Only mono wavetable source files are supported");
-      samples[index] = Number(monoFrame[0]) || 0;
-      continue;
-    }
-    throw new Error("Decoded audio frames must contain numeric mono samples");
-  }
-  return {
-    sampleRate: Number(audioFile?.sampleRate) || 0,
-    samples
-  };
-}
-function parseWaveFile(arrayBuffer) {
-  const view = new DataView(arrayBuffer);
-  assert$1(readAscii(view, 0, 4) === "RIFF", "Expected a RIFF wave file");
-  assert$1(readAscii(view, 8, 4) === "WAVE", "Expected a WAVE file");
-  let format = null;
-  let channelCount = null;
-  let sampleRate = null;
-  let bitsPerSample = null;
-  let blockAlign = null;
-  let dataOffset = null;
-  let dataSize = null;
-  let cursor = 12;
-  while (cursor + 8 <= view.byteLength) {
-    const chunkID = readAscii(view, cursor, 4);
-    const chunkSize = view.getUint32(cursor + 4, true);
-    const chunkDataOffset = cursor + 8;
-    if (chunkID === "fmt ") {
-      format = view.getUint16(chunkDataOffset, true);
-      channelCount = view.getUint16(chunkDataOffset + 2, true);
-      sampleRate = view.getUint32(chunkDataOffset + 4, true);
-      blockAlign = view.getUint16(chunkDataOffset + 12, true);
-      bitsPerSample = view.getUint16(chunkDataOffset + 14, true);
-    } else if (chunkID === "data") {
-      dataOffset = chunkDataOffset;
-      dataSize = chunkSize;
-    }
-    cursor = chunkDataOffset + chunkSize + chunkSize % 2;
-  }
-  assert$1(format !== null, "Wave file is missing a fmt chunk");
-  assert$1(dataOffset !== null && dataSize !== null, "Wave file is missing a data chunk");
-  assert$1(channelCount === 1, "Only mono wavetable bank files are supported");
-  let samples;
-  if (format === 3 && bitsPerSample === 32) {
-    samples = new Float32Array(arrayBuffer.slice(dataOffset, dataOffset + dataSize));
-  } else if (format === 1 && bitsPerSample === 16) {
-    const sampleCount = dataSize / 2;
-    const pcm = new Int16Array(arrayBuffer.slice(dataOffset, dataOffset + dataSize));
-    samples = new Float32Array(sampleCount);
-    for (let index = 0; index < sampleCount; index += 1) {
-      samples[index] = pcm[index] / 32768;
-    }
-  } else {
-    throw new Error(`Unsupported WAV format: format=${format}, bitsPerSample=${bitsPerSample}`);
-  }
-  return {
-    format,
-    channelCount,
-    sampleRate: sampleRate ?? 0,
-    bitsPerSample,
-    blockAlign: blockAlign ?? 0,
-    samples
-  };
-}
-async function fetchArrayBuffer(url) {
-  assert$1(typeof fetch === "function", `Could not fetch ${url}: global fetch is unavailable`);
-  const response = await fetch(url.toString());
-  assert$1(response.ok, `Failed to fetch resource from ${url}`);
-  return response.arrayBuffer();
-}
-function readTextFromBytes(bytes) {
-  if (typeof TextDecoder === "function") {
-    return new TextDecoder().decode(bytes);
-  }
-  return String.fromCharCode(...bytes);
-}
-function readAudioFromBytes(bytes) {
-  const arrayBuffer = new Uint8Array(bytes).buffer;
-  const parsedWave = parseWaveFile(arrayBuffer);
-  return {
-    sampleRate: parsedWave.sampleRate,
-    samples: parsedWave.samples
-  };
-}
-function createResourceClient(source, {
-  textPreference = "bridge",
-  audioPreference = "url"
-} = {}) {
-  const readResourcePayload = async (path) => {
-    assert$1(typeof source.readResource === "function", `Resource bridge cannot read ${path}`);
-    return source.readResource(path);
-  };
-  const readAudioBridge = async (path) => {
-    assert$1(typeof source.readResourceAsAudioData === "function", `Audio resource bridge cannot read ${path}`);
-    const audioFile = await source.readResourceAsAudioData(path);
-    return normalizeDecodedAudioFileSamples(audioFile);
-  };
-  const getExplicitResourceAddress = (path) => {
-    const resourceAddress = source.getResourceAddress?.(path);
-    return resourceAddress !== null && resourceAddress !== void 0 ? resourceAddress : null;
-  };
-  const fetchAudioFromUrl = async (path, resourceAddress = source.getResourceAddress?.(path)) => {
-    const url = resourceAddressToUrl(path, resourceAddress);
-    const arrayBuffer = await fetchArrayBuffer(url);
-    const parsedWave = parseWaveFile(arrayBuffer);
-    return {
-      sampleRate: parsedWave.sampleRate,
-      samples: parsedWave.samples
-    };
-  };
-  const fetchBytesFromUrl = async (path, resourceAddress = source.getResourceAddress?.(path)) => {
-    const url = resourceAddressToUrl(path, resourceAddress);
-    return new Uint8Array(await fetchArrayBuffer(url));
-  };
-  return {
-    async readText(path) {
-      if (textPreference === "bridge" && typeof source.readResource === "function") {
-        return decodeTextPayload(await readResourcePayload(path));
-      }
-      const explicitResourceAddress = getExplicitResourceAddress(path);
-      if (textPreference === "url" && explicitResourceAddress !== null) {
-        return readTextFromBytes(await fetchBytesFromUrl(path, explicitResourceAddress));
-      }
-      if (typeof source.readResource === "function") {
-        return decodeTextPayload(await readResourcePayload(path));
-      }
-      return readTextFromBytes(await fetchBytesFromUrl(path, explicitResourceAddress));
-    },
-    async readJSON(path) {
-      return JSON.parse(await this.readText(path));
-    },
-    async readBytes(path) {
-      if (typeof source.readResource === "function") {
-        return normalizeBytesPayload(await readResourcePayload(path));
-      }
-      return fetchBytesFromUrl(path);
-    },
-    async readAudio(path) {
-      if (audioPreference === "bridge" && typeof source.readResourceAsAudioData === "function") {
-        return readAudioBridge(path);
-      }
-      const explicitResourceAddress = getExplicitResourceAddress(path);
-      if (audioPreference === "url" && explicitResourceAddress !== null) {
-        return fetchAudioFromUrl(path, explicitResourceAddress);
-      }
-      if (typeof source.readResourceAsAudioData === "function") {
-        return readAudioBridge(path);
-      }
-      return readAudioFromBytes(await this.readBytes(path));
-    },
-    getURL(path) {
-      return resourceAddressToUrl(path, source.getResourceAddress?.(path));
-    }
-  };
-}
-function createPatchConnectionResourceClient(source) {
-  const normalizedSource = source ?? {};
-  const prefersBridgeAudio = Boolean(normalizedSource.prefersAudioResourceReadBridge);
-  return createResourceClient(normalizedSource, {
-    textPreference: "bridge",
-    audioPreference: prefersBridgeAudio ? "bridge" : "url"
-  });
-}
-function createDesktopResourceClient(source) {
-  return createResourceClient(source ?? {}, {
-    textPreference: "url",
-    audioPreference: "url"
-  });
-}
-function normalizeResourceClient(value) {
-  const readText = typeof value.readText === "function" ? value.readText.bind(value) : null;
-  const readJSON = typeof value.readJSON === "function" ? value.readJSON.bind(value) : null;
-  const readBytes = typeof value.readBytes === "function" ? value.readBytes.bind(value) : null;
-  const readAudio = typeof value.readAudio === "function" ? value.readAudio.bind(value) : null;
-  const getURL = typeof value.getURL === "function" ? value.getURL.bind(value) : null;
-  return {
-    async readText(path) {
-      if (readText) {
-        return readText(path);
-      }
-      if (readJSON) {
-        return JSON.stringify(await readJSON(path));
-      }
-      if (readBytes) {
-        return readTextFromBytes(await readBytes(path));
-      }
-      throw new Error(`Resource client cannot read text ${path}`);
-    },
-    async readJSON(path) {
-      if (readJSON) {
-        return readJSON(path);
-      }
-      return JSON.parse(await this.readText(path));
-    },
-    async readBytes(path) {
-      if (readBytes) {
-        return readBytes(path);
-      }
-      if (readText) {
-        return encodeTextPayload(await readText(path));
-      }
-      if (readJSON) {
-        return encodeTextPayload(JSON.stringify(await readJSON(path)));
-      }
-      throw new Error(`Resource client cannot read bytes ${path}`);
-    },
-    async readAudio(path) {
-      if (readAudio) {
-        return readAudio(path);
-      }
-      return readAudioFromBytes(await this.readBytes(path));
-    },
-    getURL(path) {
-      return getURL ? getURL(path) : null;
-    }
-  };
-}
-function isResourceClient(value) {
-  return typeof value?.readText === "function" || typeof value?.readJSON === "function" || typeof value?.readBytes === "function" || typeof value?.readAudio === "function";
-}
-function asResourceClient(value) {
-  if (isResourceClient(value)) {
-    return normalizeResourceClient(value);
-  }
-  return createPatchConnectionResourceClient(value);
-}
-const PatchHostContext = reactExports.createContext(null);
-function PatchConnectionProvider({
-  patchConnection,
-  resourceClient,
-  children
+function NexusNumberField({
+  label,
+  binding,
+  min,
+  max,
+  step,
+  decimalPlaces = 3,
+  onActivate,
+  onBeginTextEntry,
+  onEndTextEntry
 }) {
-  const host = reactExports.useMemo(() => ({
-    patchConnection,
-    resourceClient: resourceClient ?? createPatchConnectionResourceClient(patchConnection)
-  }), [patchConnection, resourceClient]);
-  return reactExports.createElement(PatchHostContext.Provider, { value: host }, children);
-}
-function usePatchHost() {
-  const patchHost = reactExports.useContext(PatchHostContext);
-  if (!patchHost) {
-    throw new Error("PatchConnectionProvider is missing.");
-  }
-  return patchHost;
-}
-function usePatchConnection() {
-  return usePatchHost().patchConnection;
-}
-function useResourceClient() {
-  return usePatchHost().resourceClient;
-}
-function usePatchParameter(endpointID, initialValue = 0) {
-  const patchConnection = usePatchConnection();
-  const [value, setValue] = reactExports.useState(initialValue);
+  const hostRef = reactExports.useRef(null);
+  const widgetRef = reactExports.useRef(null);
+  const bindingRef = reactExports.useRef(binding);
+  const textEntryActiveRef = reactExports.useRef(false);
+  const callbackRef = reactExports.useRef({
+    onActivate,
+    onBeginTextEntry,
+    onEndTextEntry
+  });
   reactExports.useEffect(() => {
-    const listener = (nextValue) => setValue(nextValue);
-    patchConnection.addParameterListener?.(endpointID, listener);
-    patchConnection.requestParameterValue?.(endpointID);
-    return () => {
-      patchConnection.removeParameterListener?.(endpointID, listener);
+    bindingRef.current = binding;
+    callbackRef.current = {
+      onActivate,
+      onBeginTextEntry,
+      onEndTextEntry
     };
-  }, [endpointID, patchConnection]);
-  const setParameterValue = reactExports.useCallback((nextValue) => {
-    patchConnection.sendEventOrValue?.(endpointID, nextValue);
-    setValue(nextValue);
-  }, [endpointID, patchConnection]);
-  const beginGesture = reactExports.useCallback(() => {
-    patchConnection.sendParameterGestureStart?.(endpointID);
-  }, [endpointID, patchConnection]);
-  const endGesture = reactExports.useCallback(() => {
-    patchConnection.sendParameterGestureEnd?.(endpointID);
-  }, [endpointID, patchConnection]);
-  return reactExports.useMemo(() => ({
-    value,
-    setValue: setParameterValue,
-    beginGesture,
-    endGesture
-  }), [beginGesture, endGesture, setParameterValue, value]);
-}
-function usePatchEndpoint(endpointID, initialValue) {
-  const patchConnection = usePatchConnection();
-  const [value, setValue] = reactExports.useState(initialValue);
+  }, [binding, onActivate, onBeginTextEntry, onEndTextEntry]);
   reactExports.useEffect(() => {
-    const listener = (nextValue) => setValue(nextValue);
-    patchConnection.addEndpointListener?.(endpointID, listener);
-    return () => {
-      patchConnection.removeEndpointListener?.(endpointID, listener);
+    const host = hostRef.current;
+    if (!host) {
+      return;
+    }
+    host.replaceChildren();
+    const widget = new nexusNumberConstructor(host, {
+      size: [118, 42],
+      value: binding.value,
+      min,
+      max,
+      step
+    });
+    widget.decimalPlaces = decimalPlaces;
+    widget.colors.fill = "rgba(255,255,255,0.06)";
+    widget.colors.dark = "#d6f4ff";
+    widget.colors.light = "#06101f";
+    widget.colors.accent = "#8fe8ff";
+    widget.colorInterface();
+    widget.element.setAttribute("aria-label", label);
+    styleNexusNumberInput(widget.element, host);
+    const handleMouseDown = () => {
+      callbackRef.current.onActivate?.();
     };
-  }, [endpointID, patchConnection]);
-  return value;
+    const handleFocus = () => {
+      textEntryActiveRef.current = true;
+      callbackRef.current.onActivate?.();
+      callbackRef.current.onBeginTextEntry?.();
+    };
+    const handleBlur = () => {
+      textEntryActiveRef.current = false;
+      callbackRef.current.onEndTextEntry?.();
+    };
+    const handleWidgetChange = (nextValue) => {
+      const safeValue = clampNumber(Number(nextValue) || 0, min, max);
+      bindingRef.current.setValue(safeValue);
+    };
+    widget.element.addEventListener("mousedown", handleMouseDown);
+    widget.element.addEventListener("focus", handleFocus);
+    widget.element.addEventListener("blur", handleBlur);
+    widget.on("change", handleWidgetChange);
+    widgetRef.current = widget;
+    return () => {
+      widget.element.removeEventListener("mousedown", handleMouseDown);
+      widget.element.removeEventListener("focus", handleFocus);
+      widget.element.removeEventListener("blur", handleBlur);
+      if (textEntryActiveRef.current) {
+        textEntryActiveRef.current = false;
+        callbackRef.current.onEndTextEntry?.();
+      }
+      widget.destroy();
+      widgetRef.current = null;
+    };
+  }, [decimalPlaces, label, max, min, step]);
+  reactExports.useEffect(() => {
+    const widget = widgetRef.current;
+    if (!widget) {
+      return;
+    }
+    if (document.activeElement === widget.element) {
+      return;
+    }
+    if (Math.abs(widget.value - binding.value) <= step / 10) {
+      return;
+    }
+    widget.passiveUpdate(binding.value);
+    widget.render();
+  }, [binding.value, step]);
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "grid gap-2", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[10px] uppercase tracking-[0.18em] text-slate-300/60", children: label }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-3", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { ref: hostRef, className: "h-[42px] w-[118px] rounded-[16px]" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono text-xs tracking-[0.18em] text-cyan-200/80", children: "s" })
+    ] })
+  ] });
 }
 function usePatchParameterBinding({
   endpointID,
@@ -20913,606 +23137,6 @@ function usePatchEventTrigger(endpointID) {
   return reactExports.useCallback((value) => {
     patchConnection.sendEventOrValue?.(endpointID, value);
   }, [endpointID, patchConnection]);
-}
-function hasCommandModifier(event) {
-  return event.metaKey || event.ctrlKey || event.altKey;
-}
-function useSynthInputRouter(keyboardRef) {
-  const activeArrowTargetRef = reactExports.useRef(null);
-  const textEntryDepthRef = reactExports.useRef(0);
-  const activateArrowTarget = reactExports.useCallback((target) => {
-    activeArrowTargetRef.current = target;
-  }, []);
-  const beginTextEntry = reactExports.useCallback((target) => {
-    activeArrowTargetRef.current = target;
-    textEntryDepthRef.current += 1;
-    keyboardRef.current?.allNotesOff?.();
-  }, [keyboardRef]);
-  const endTextEntry = reactExports.useCallback(() => {
-    textEntryDepthRef.current = Math.max(0, textEntryDepthRef.current - 1);
-  }, []);
-  reactExports.useEffect(() => {
-    const handleKeyDown = (event) => {
-      if (event.defaultPrevented || hasCommandModifier(event)) {
-        return;
-      }
-      const activeArrowTarget = activeArrowTargetRef.current;
-      if ((event.key === "ArrowLeft" || event.key === "ArrowRight") && activeArrowTarget) {
-        activeArrowTarget.onArrowStep(event.key === "ArrowRight" ? 1 : -1);
-        event.preventDefault();
-        return;
-      }
-      if (textEntryDepthRef.current > 0) {
-        return;
-      }
-      keyboardRef.current?.handleKey?.(event, true);
-    };
-    const handleKeyUp = (event) => {
-      if (hasCommandModifier(event) || textEntryDepthRef.current > 0) {
-        return;
-      }
-      keyboardRef.current?.handleKey?.(event, false);
-    };
-    const handleWindowBlur = () => {
-      keyboardRef.current?.allNotesOff?.();
-    };
-    window.addEventListener("keydown", handleKeyDown, true);
-    window.addEventListener("keyup", handleKeyUp, true);
-    window.addEventListener("blur", handleWindowBlur);
-    return () => {
-      window.removeEventListener("keydown", handleKeyDown, true);
-      window.removeEventListener("keyup", handleKeyUp, true);
-      window.removeEventListener("blur", handleWindowBlur);
-    };
-  }, [keyboardRef]);
-  const bindArrowTarget = reactExports.useCallback((target) => ({
-    onPointerDownCapture: () => activateArrowTarget(target),
-    onFocusCapture: () => activateArrowTarget(target)
-  }), [activateArrowTarget]);
-  const bindTextEntryTarget = reactExports.useCallback((target) => ({
-    onPointerDownCapture: () => activateArrowTarget(target),
-    onFocusCapture: () => beginTextEntry(target),
-    onBlurCapture: () => endTextEntry()
-  }), [activateArrowTarget, beginTextEntry, endTextEntry]);
-  return reactExports.useMemo(() => ({
-    activateArrowTarget,
-    beginTextEntry,
-    endTextEntry,
-    bindArrowTarget,
-    bindTextEntryTarget
-  }), [activateArrowTarget, beginTextEntry, endTextEntry, bindArrowTarget, bindTextEntryTarget]);
-}
-const runtimeFailurePhaseLoadSource = 1;
-const runtimeFailurePhaseBuildMip = 2;
-const runtimeFailurePhaseTransferMip = 3;
-const runtimeFailureReasonTimeout = 2;
-const runtimeFailureScopeService = 1;
-function clamp$3(value, min, max) {
-  return Math.min(Math.max(value, min), max);
-}
-function clampDisplayPosition(value) {
-  return clamp$3(Number(value) || 0, 0, 1);
-}
-function mapDisplayDragToPosition(startValue, startClientY, nextClientY, dragSpan) {
-  const safeSpan = Math.max(1, Number(dragSpan) || 0);
-  const delta = (Number(startClientY) || 0) - (Number(nextClientY) || 0);
-  return clampDisplayPosition((Number(startValue) || 0) + delta / safeSpan);
-}
-function normalizeEffectiveWavetablePositionMessage(message) {
-  const payload = message?.event ?? message;
-  if (payload === null || payload === void 0) {
-    return null;
-  }
-  if (typeof payload === "number") {
-    return {
-      voiceGeneration: 0,
-      position: clampDisplayPosition(payload)
-    };
-  }
-  const rawPosition = Number(payload.position);
-  if (!Number.isFinite(rawPosition)) {
-    return null;
-  }
-  const rawGeneration = Number(payload.voiceGeneration);
-  return {
-    voiceGeneration: Number.isFinite(rawGeneration) ? Math.max(0, Math.trunc(rawGeneration)) : 0,
-    position: clampDisplayPosition(rawPosition)
-  };
-}
-function selectObservedWavetablePositionState(currentState, message) {
-  const previousState = currentState && typeof currentState === "object" ? {
-    voiceGeneration: Number.isFinite(Number(currentState.voiceGeneration)) ? Math.trunc(Number(currentState.voiceGeneration)) : -1,
-    position: clampDisplayPosition(currentState.position)
-  } : {
-    voiceGeneration: -1,
-    position: 0
-  };
-  const nextState = normalizeEffectiveWavetablePositionMessage(message);
-  if (!nextState) {
-    return previousState;
-  }
-  if (nextState.voiceGeneration < previousState.voiceGeneration) {
-    return previousState;
-  }
-  return nextState;
-}
-function normalizeRuntimeTableState(message) {
-  const payload = message?.event ?? message;
-  if (!payload || typeof payload !== "object") {
-    return null;
-  }
-  const value = payload;
-  return {
-    desiredTableIndex: Math.max(0, Math.trunc(Number(value.desiredTableIndex) || 0)),
-    desiredIntentSerial: Math.max(0, Math.trunc(Number(value.desiredIntentSerial) || 0)),
-    serviceState: Math.max(0, Math.trunc(Number(value.serviceState) || 0)),
-    hasActive: Boolean(value.hasActive),
-    activeTableIndex: Math.max(0, Math.trunc(Number(value.activeTableIndex) || 0)),
-    activeGeneration: Math.max(0, Math.trunc(Number(value.activeGeneration) || 0)),
-    hasLoading: Boolean(value.hasLoading),
-    loadingTableIndex: Math.max(0, Math.trunc(Number(value.loadingTableIndex) || 0)),
-    loadingGeneration: Math.max(0, Math.trunc(Number(value.loadingGeneration) || 0)),
-    hasFailure: Boolean(value.hasFailure),
-    failedTableIndex: Math.max(0, Math.trunc(Number(value.failedTableIndex) || 0)),
-    failedGeneration: Math.max(0, Math.trunc(Number(value.failedGeneration) || 0)),
-    failureScope: Math.max(0, Math.trunc(Number(value.failureScope) || 0)),
-    failurePhase: Math.max(0, Math.trunc(Number(value.failurePhase) || 0)),
-    failureReasonCode: Math.max(0, Math.trunc(Number(value.failureReasonCode) || 0))
-  };
-}
-function describeRuntimeTableFailure(normalized) {
-  if (!normalized?.hasFailure) {
-    return null;
-  }
-  if (normalized.failurePhase === runtimeFailurePhaseTransferMip && normalized.failureReasonCode === runtimeFailureReasonTimeout) {
-    return "Wavetable load timed out.";
-  }
-  if (normalized.failurePhase === runtimeFailurePhaseLoadSource) {
-    return "Could not read wavetable source.";
-  }
-  if (normalized.failurePhase === runtimeFailurePhaseBuildMip) {
-    return "Could not build wavetable mip data.";
-  }
-  if (normalized.failurePhase === runtimeFailurePhaseTransferMip) {
-    return "Could not transfer wavetable mip data.";
-  }
-  return "Wavetable load failed.";
-}
-function describeRuntimeTableFailureDetails(normalized, tableName = "Requested wavetable") {
-  if (!normalized?.hasFailure) {
-    return null;
-  }
-  const phaseLabel = normalized.failurePhase === runtimeFailurePhaseLoadSource ? "source read" : normalized.failurePhase === runtimeFailurePhaseBuildMip ? "mip build" : normalized.failurePhase === runtimeFailurePhaseTransferMip ? "mip transfer" : "unknown phase";
-  const scopeLabel = normalized.failureScope === runtimeFailureScopeService ? "committed load" : "candidate load";
-  const generationLabel = normalized.failedGeneration > 0 ? `generation ${normalized.failedGeneration}` : "candidate generation";
-  const reasonLabel = normalized.failureReasonCode === runtimeFailureReasonTimeout ? "timeout" : "generic failure";
-  return `${tableName} failed during ${phaseLabel} (${scopeLabel}, ${generationLabel}, ${reasonLabel}).`;
-}
-function resolveRuntimeTablePresentation(message, fallbackTableIndex = 0) {
-  const normalized = normalizeRuntimeTableState(message);
-  const safeFallbackTableIndex = Math.max(0, Math.trunc(Number(fallbackTableIndex) || 0));
-  if (!normalized) {
-    return {
-      desiredTableIndex: safeFallbackTableIndex,
-      presentedTableIndex: safeFallbackTableIndex,
-      activeTableIndex: null,
-      activeGeneration: null,
-      loadingTableIndex: null,
-      loadingGeneration: null,
-      isPendingSelection: false,
-      isRetryableFailure: false,
-      failureMessage: null
-    };
-  }
-  const activeTableIndex = normalized.hasActive ? normalized.activeTableIndex : null;
-  const activeGeneration = normalized.hasActive ? normalized.activeGeneration : null;
-  const loadingTableIndex = normalized.hasLoading ? normalized.loadingTableIndex : null;
-  const loadingGeneration = normalized.hasLoading ? normalized.loadingGeneration : null;
-  const presentedTableIndex = activeTableIndex ?? loadingTableIndex ?? normalized.desiredTableIndex;
-  return {
-    desiredTableIndex: normalized.desiredTableIndex,
-    presentedTableIndex,
-    activeTableIndex,
-    activeGeneration,
-    loadingTableIndex,
-    loadingGeneration,
-    isPendingSelection: loadingTableIndex !== null || activeTableIndex !== null && normalized.desiredTableIndex !== activeTableIndex,
-    isRetryableFailure: normalized.hasFailure && normalized.failedTableIndex === normalized.desiredTableIndex,
-    failureMessage: describeRuntimeTableFailure(normalized)
-  };
-}
-const MSEG_BODY_SAMPLES = 2048;
-const MSEG_PADDED_SAMPLES = MSEG_BODY_SAMPLES + 3;
-const MSEG_CURVE_POWER_LIMIT = 20;
-const MSEG_DEFAULT_NAME = "MSEG 1";
-const MSEG_DEFAULT_DEPTH = 1;
-const MSEG_RATE_MIN_SECONDS = 0;
-const MSEG_RATE_MAX_SECONDS = 2;
-const MSEG_RATE_KIND_SECONDS = 0;
-const MSEG_NOTE_OFF_POLICY_FINISH_LOOP = 0;
-const MSEG_NOTE_OFF_POLICY_IMMEDIATE = 1;
-const MSEG_NOTE_OFF_POLICY_IGNORE = 2;
-const MSEG_POINT_HIT_RADIUS_PX = 16;
-const MSEG_POINT_RADIUS_PX = 8;
-const MSEG_SELECTED_POINT_RADIUS_PX = 10;
-const MSEG_EDITOR_HORIZONTAL_PADDING_PX = 14;
-const MSEG_EDITOR_VERTICAL_PADDING_PX = 14;
-const MSEG_NOTE_OFF_POLICY_VALUES = /* @__PURE__ */ new Set([
-  "finish_loop",
-  "immediate",
-  "ignore"
-]);
-function clamp$2(value, min, max) {
-  return Math.min(Math.max(value, min), max);
-}
-function almostEqual(left, right, epsilon = 1e-12) {
-  return Math.abs(left - right) <= epsilon;
-}
-function clampCurvePower(value) {
-  return clamp$2(Number.isFinite(value) ? value : 0, -MSEG_CURVE_POWER_LIMIT, MSEG_CURVE_POWER_LIMIT);
-}
-function clamp01(value) {
-  return clamp$2(Number.isFinite(value) ? value : 0, 0, 1);
-}
-function createDefaultMsegShape(name = MSEG_DEFAULT_NAME) {
-  return {
-    format: "cosimo.mseg.shape",
-    version: 1,
-    name,
-    globalSmooth: false,
-    points: [
-      { x: 0, y: 0, curvePower: 0 },
-      { x: 1, y: 1, curvePower: 0 }
-    ]
-  };
-}
-function createDefaultMsegPlayback() {
-  return {
-    format: "cosimo.mseg.playback",
-    version: 1,
-    rate: {
-      kind: "seconds",
-      seconds: 1
-    },
-    loop: { startX: 0, endX: 1 },
-    noteOffPolicy: "finish_loop",
-    legatoRestarts: false,
-    holdFinalValue: true
-  };
-}
-function clampMsegDepth(value) {
-  return clamp$2(Number.isFinite(value) ? value : 0, -1, 1);
-}
-function clampMsegRateSeconds(value) {
-  const numericValue = Number(value);
-  return clamp$2(
-    Number.isFinite(numericValue) ? numericValue : 1,
-    MSEG_RATE_MIN_SECONDS,
-    MSEG_RATE_MAX_SECONDS
-  );
-}
-function createMsegEditorMetrics(width, height, {
-  pointRadius = MSEG_POINT_RADIUS_PX,
-  horizontalPadding = MSEG_EDITOR_HORIZONTAL_PADDING_PX,
-  verticalPadding = MSEG_EDITOR_VERTICAL_PADDING_PX
-} = {}) {
-  const safeWidth = Math.max(1, Number(width) || 0);
-  const safeHeight = Math.max(1, Number(height) || 0);
-  const safePointRadius = Math.max(0, Number(pointRadius) || 0);
-  const safeHorizontalPadding = Math.max(0, Number(horizontalPadding) || 0);
-  const safeVerticalPadding = Math.max(0, Number(verticalPadding) || 0);
-  const maxInsetX = Math.max(0, (safeWidth - 1) * 0.5);
-  const maxInsetY = Math.max(0, (safeHeight - 1) * 0.5);
-  const insetX = Math.min(maxInsetX, safePointRadius + safeHorizontalPadding);
-  const insetY = Math.min(maxInsetY, safePointRadius + safeVerticalPadding);
-  const plotLeft = insetX;
-  const plotTop = insetY;
-  const plotRight = Math.max(plotLeft + 1, safeWidth - insetX);
-  const plotBottom = Math.max(plotTop + 1, safeHeight - insetY);
-  return {
-    width: safeWidth,
-    height: safeHeight,
-    pointRadius: safePointRadius,
-    plotLeft,
-    plotTop,
-    plotRight,
-    plotBottom,
-    plotWidth: Math.max(1, plotRight - plotLeft),
-    plotHeight: Math.max(1, plotBottom - plotTop)
-  };
-}
-function pointToMsegEditorCoordinates(point, width, height, options = {}) {
-  const metrics = createMsegEditorMetrics(width, height, options);
-  const orientation = options.orientation === "vertical" ? "vertical" : "horizontal";
-  const normalizedX = clamp01(Number(point?.x));
-  const normalizedY = clamp01(Number(point?.y));
-  if (orientation === "vertical") {
-    return {
-      x: metrics.plotLeft + normalizedY * metrics.plotWidth,
-      y: metrics.plotBottom - normalizedX * metrics.plotHeight
-    };
-  }
-  return {
-    x: metrics.plotLeft + normalizedX * metrics.plotWidth,
-    y: metrics.plotTop + (1 - normalizedY) * metrics.plotHeight
-  };
-}
-function msegEditorCoordinatesToPoint(editorX, editorY, width, height, options = {}) {
-  const metrics = createMsegEditorMetrics(width, height, options);
-  const orientation = options.orientation === "vertical" ? "vertical" : "horizontal";
-  if (orientation === "vertical") {
-    return {
-      x: clamp01((metrics.plotBottom - Number(editorY)) / metrics.plotHeight),
-      y: clamp01((Number(editorX) - metrics.plotLeft) / metrics.plotWidth)
-    };
-  }
-  return {
-    x: clamp01((Number(editorX) - metrics.plotLeft) / metrics.plotWidth),
-    y: clamp01(1 - (Number(editorY) - metrics.plotTop) / metrics.plotHeight)
-  };
-}
-function normalizeMsegLoop(loop) {
-  if (!loop || typeof loop !== "object") {
-    return null;
-  }
-  const nextLoop = loop;
-  const startX = clamp01(Number(nextLoop.startX));
-  const endX = clamp01(Number(nextLoop.endX));
-  if (almostEqual(startX, endX)) {
-    return null;
-  }
-  if (endX < startX) {
-    return {
-      startX: endX,
-      endX: startX
-    };
-  }
-  return { startX, endX };
-}
-function normalizeMsegPlayback(playback = createDefaultMsegPlayback()) {
-  const next = playback && typeof playback === "object" ? playback : {};
-  const rate = next.rate && typeof next.rate === "object" ? next.rate : {};
-  const seconds = Number(rate.seconds);
-  const noteOffPolicyCandidate = next.noteOffPolicy;
-  const noteOffPolicy = MSEG_NOTE_OFF_POLICY_VALUES.has(noteOffPolicyCandidate) ? noteOffPolicyCandidate : "finish_loop";
-  return {
-    format: "cosimo.mseg.playback",
-    version: 1,
-    rate: {
-      kind: "seconds",
-      seconds: clampMsegRateSeconds(Number.isFinite(seconds) ? seconds : 1)
-    },
-    loop: normalizeMsegLoop(next.loop),
-    noteOffPolicy,
-    legatoRestarts: Boolean(next.legatoRestarts),
-    holdFinalValue: next.holdFinalValue !== false
-  };
-}
-function normalizePoint(point, pointIndex, pointCount) {
-  const nextPoint = point && typeof point === "object" ? point : {};
-  let x = Number(nextPoint.x);
-  if (!Number.isFinite(x)) {
-    x = pointIndex === 0 ? 0 : pointIndex === pointCount - 1 ? 1 : 0;
-  }
-  if (pointIndex !== 0 && pointIndex !== pointCount - 1) {
-    x = clamp01(x);
-  }
-  return {
-    x,
-    y: clamp01(Number(nextPoint.y)),
-    curvePower: clampCurvePower(Number(nextPoint.curvePower))
-  };
-}
-function normalizeMsegShape(shape = createDefaultMsegShape()) {
-  const next = shape && typeof shape === "object" ? shape : {};
-  const inputPoints = Array.isArray(next.points) ? next.points : [];
-  if (inputPoints.length < 2) {
-    throw new Error("MSEG shapes require at least two points");
-  }
-  const points = inputPoints.map((point, index) => normalizePoint(point, index, inputPoints.length));
-  if (!almostEqual(points[0].x, 0) || !almostEqual(points[points.length - 1].x, 1)) {
-    throw new Error("MSEG shapes must start at x = 0 and end at x = 1");
-  }
-  for (let index = 1; index < points.length; index += 1) {
-    if (points[index].x < points[index - 1].x) {
-      throw new Error("MSEG shape points must stay in non-decreasing x order");
-    }
-  }
-  return {
-    format: "cosimo.mseg.shape",
-    version: 1,
-    name: typeof next.name === "string" && next.name.trim() ? next.name : MSEG_DEFAULT_NAME,
-    globalSmooth: Boolean(next.globalSmooth),
-    points
-  };
-}
-function serializeMsegShape(shape) {
-  return JSON.stringify(normalizeMsegShape(shape));
-}
-function deserializeMsegShape(value) {
-  if (typeof value !== "string" || !value.trim()) {
-    return createDefaultMsegShape();
-  }
-  try {
-    return normalizeMsegShape(JSON.parse(value));
-  } catch {
-    return createDefaultMsegShape();
-  }
-}
-function serializeMsegPlayback(playback) {
-  return JSON.stringify(normalizeMsegPlayback(playback));
-}
-function deserializeMsegPlayback(value) {
-  if (typeof value !== "string" || !value.trim()) {
-    return createDefaultMsegPlayback();
-  }
-  try {
-    return normalizeMsegPlayback(JSON.parse(value));
-  } catch {
-    return createDefaultMsegPlayback();
-  }
-}
-function deserializeMsegDepth(value) {
-  const numericValue = Number(value);
-  return clampMsegDepth(Number.isFinite(numericValue) ? numericValue : MSEG_DEFAULT_DEPTH);
-}
-function powerScale(value, power) {
-  if (Math.abs(power) < 0.01) {
-    return value;
-  }
-  const numerator = Math.exp(power * value) - 1;
-  const denominator = Math.exp(power) - 1;
-  return numerator / denominator;
-}
-function findEvaluationSegment(points, x) {
-  if (x <= points[0].x) {
-    return { from: points[0], to: points[0], laterPointWins: false };
-  }
-  for (let index = 0; index < points.length - 1; index += 1) {
-    const from = points[index];
-    const to = points[index + 1];
-    if (x < to.x) {
-      return { from, to, laterPointWins: false };
-    }
-    if (almostEqual(x, to.x)) {
-      let latestIndex = index + 1;
-      while (latestIndex + 1 < points.length && almostEqual(points[latestIndex + 1].x, x)) {
-        latestIndex += 1;
-      }
-      return {
-        from: points[latestIndex],
-        to: points[latestIndex],
-        laterPointWins: true
-      };
-    }
-  }
-  return {
-    from: points[points.length - 1],
-    to: points[points.length - 1],
-    laterPointWins: false
-  };
-}
-function evaluateMsegShape(shape, x) {
-  const { points } = normalizeMsegShape(shape);
-  const clampedX = clamp01(Number(x));
-  const segment = findEvaluationSegment(points, clampedX);
-  if (segment.laterPointWins || almostEqual(segment.from.x, segment.to.x)) {
-    return segment.to.y;
-  }
-  const width = segment.to.x - segment.from.x;
-  const t = width <= 0 ? 1 : (clampedX - segment.from.x) / width;
-  const curvedT = clamp01(powerScale(t, segment.from.curvePower));
-  return segment.from.y + (segment.to.y - segment.from.y) * curvedT;
-}
-function renderMsegShape(shape) {
-  const normalizedShape = normalizeMsegShape(shape);
-  const body = new Float32Array(MSEG_BODY_SAMPLES);
-  for (let sampleIndex = 0; sampleIndex < MSEG_BODY_SAMPLES; sampleIndex += 1) {
-    const x = sampleIndex / (MSEG_BODY_SAMPLES - 1);
-    body[sampleIndex] = evaluateMsegShape(normalizedShape, x);
-  }
-  const padded = new Float32Array(MSEG_PADDED_SAMPLES);
-  padded[0] = body[0];
-  padded.set(body, 1);
-  padded[MSEG_BODY_SAMPLES + 1] = body[MSEG_BODY_SAMPLES - 1];
-  padded[MSEG_BODY_SAMPLES + 2] = body[MSEG_BODY_SAMPLES - 1];
-  return padded;
-}
-function findMsegPointHitIndex(shape, editorX, editorY, width, height, hitRadius = MSEG_POINT_HIT_RADIUS_PX, editorOptions = {}) {
-  const points = normalizeMsegShape(shape).points;
-  const targetX = Number(editorX);
-  const targetY = Number(editorY);
-  if (!Number.isFinite(targetX) || !Number.isFinite(targetY)) {
-    return -1;
-  }
-  const safeHitRadius = Math.max(0, Number(hitRadius) || 0);
-  let closestPointIndex = -1;
-  let closestDistanceSquared = safeHitRadius * safeHitRadius;
-  points.forEach((point, pointIndex) => {
-    const coordinates = pointToMsegEditorCoordinates(point, width, height, editorOptions);
-    const deltaX = targetX - coordinates.x;
-    const deltaY = targetY - coordinates.y;
-    const distanceSquared = deltaX * deltaX + deltaY * deltaY;
-    if (distanceSquared <= closestDistanceSquared) {
-      closestPointIndex = pointIndex;
-      closestDistanceSquared = distanceSquared;
-    }
-  });
-  return closestPointIndex;
-}
-function toMsegPlaybackConfigEvent(playback) {
-  const normalizedPlayback = normalizeMsegPlayback(playback);
-  return {
-    seconds: normalizedPlayback.rate.seconds,
-    holdFinalValue: normalizedPlayback.holdFinalValue,
-    rateKind: MSEG_RATE_KIND_SECONDS,
-    loopEnabled: normalizedPlayback.loop !== null,
-    loopStart: normalizedPlayback.loop?.startX ?? 0,
-    loopEnd: normalizedPlayback.loop?.endX ?? 0,
-    noteOffPolicy: normalizedPlayback.noteOffPolicy === "immediate" ? MSEG_NOTE_OFF_POLICY_IMMEDIATE : normalizedPlayback.noteOffPolicy === "ignore" ? MSEG_NOTE_OFF_POLICY_IGNORE : MSEG_NOTE_OFF_POLICY_FINISH_LOOP,
-    legatoRestarts: normalizedPlayback.legatoRestarts
-  };
-}
-function msegShapesEqual(left, right) {
-  return serializeMsegShape(left) === serializeMsegShape(right);
-}
-function msegPlaybacksEqual(left, right) {
-  return serializeMsegPlayback(left) === serializeMsegPlayback(right);
-}
-function addMsegPoint(shape, x, y) {
-  const normalizedShape = normalizeMsegShape(shape);
-  const points = normalizedShape.points.map((point) => ({ ...point }));
-  const nextPoint = {
-    x: clamp01(Number(x)),
-    y: clamp01(Number(y)),
-    curvePower: 0
-  };
-  let insertIndex = points.length - 1;
-  while (insertIndex > 0 && points[insertIndex - 1].x > nextPoint.x) {
-    insertIndex -= 1;
-  }
-  points.splice(insertIndex, 0, nextPoint);
-  return normalizeMsegShape({
-    ...normalizedShape,
-    points
-  });
-}
-function moveMsegPoint(shape, pointIndex, x, y) {
-  const normalizedShape = normalizeMsegShape(shape);
-  if (!Number.isInteger(pointIndex) || pointIndex < 0 || pointIndex >= normalizedShape.points.length) {
-    throw new Error("pointIndex must address a point inside the shape");
-  }
-  const points = normalizedShape.points.map((point) => ({ ...point }));
-  const previousX = pointIndex > 0 ? points[pointIndex - 1].x : 0;
-  const nextX = pointIndex < points.length - 1 ? points[pointIndex + 1].x : 1;
-  const moved = { ...points[pointIndex] };
-  moved.y = clamp01(Number(y));
-  if (pointIndex === 0) {
-    moved.x = 0;
-  } else if (pointIndex === points.length - 1) {
-    moved.x = 1;
-  } else {
-    moved.x = clamp$2(clamp01(Number(x)), previousX, nextX);
-  }
-  points[pointIndex] = moved;
-  return normalizeMsegShape({
-    ...normalizedShape,
-    points
-  });
-}
-function deleteMsegPoint(shape, pointIndex) {
-  const normalizedShape = normalizeMsegShape(shape);
-  if (!Number.isInteger(pointIndex) || pointIndex < 0 || pointIndex >= normalizedShape.points.length) {
-    throw new Error("pointIndex must address a point inside the shape");
-  }
-  if (pointIndex === 0 || pointIndex === normalizedShape.points.length - 1) {
-    return normalizedShape;
-  }
-  const points = normalizedShape.points.filter((_, index) => index !== pointIndex);
-  return normalizeMsegShape({
-    ...normalizedShape,
-    points
-  });
 }
 const MSEG_SHAPE_STATE_KEY = "mseg1.shape";
 const MSEG_PLAYBACK_STATE_KEY = "mseg1.playback";
@@ -21680,6 +23304,74 @@ class MsegController {
     this.options.onStateChange?.(this.getState());
   }
 }
+function hasCommandModifier(event) {
+  return event.metaKey || event.ctrlKey || event.altKey;
+}
+function useSynthInputRouter(keyboardRef) {
+  const activeArrowTargetRef = reactExports.useRef(null);
+  const textEntryDepthRef = reactExports.useRef(0);
+  const activateArrowTarget = reactExports.useCallback((target) => {
+    activeArrowTargetRef.current = target;
+  }, []);
+  const beginTextEntry = reactExports.useCallback((target) => {
+    activeArrowTargetRef.current = target;
+    textEntryDepthRef.current += 1;
+    keyboardRef.current?.allNotesOff?.();
+  }, [keyboardRef]);
+  const endTextEntry = reactExports.useCallback(() => {
+    textEntryDepthRef.current = Math.max(0, textEntryDepthRef.current - 1);
+  }, []);
+  reactExports.useEffect(() => {
+    const handleKeyDown = (event) => {
+      if (event.defaultPrevented || hasCommandModifier(event)) {
+        return;
+      }
+      const activeArrowTarget = activeArrowTargetRef.current;
+      if ((event.key === "ArrowLeft" || event.key === "ArrowRight") && activeArrowTarget) {
+        activeArrowTarget.onArrowStep(event.key === "ArrowRight" ? 1 : -1);
+        event.preventDefault();
+        return;
+      }
+      if (textEntryDepthRef.current > 0) {
+        return;
+      }
+      keyboardRef.current?.handleKey?.(event, true);
+    };
+    const handleKeyUp = (event) => {
+      if (hasCommandModifier(event) || textEntryDepthRef.current > 0) {
+        return;
+      }
+      keyboardRef.current?.handleKey?.(event, false);
+    };
+    const handleWindowBlur = () => {
+      keyboardRef.current?.allNotesOff?.();
+    };
+    window.addEventListener("keydown", handleKeyDown, true);
+    window.addEventListener("keyup", handleKeyUp, true);
+    window.addEventListener("blur", handleWindowBlur);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown, true);
+      window.removeEventListener("keyup", handleKeyUp, true);
+      window.removeEventListener("blur", handleWindowBlur);
+    };
+  }, [keyboardRef]);
+  const bindArrowTarget = reactExports.useCallback((target) => ({
+    onPointerDownCapture: () => activateArrowTarget(target),
+    onFocusCapture: () => activateArrowTarget(target)
+  }), [activateArrowTarget]);
+  const bindTextEntryTarget = reactExports.useCallback((target) => ({
+    onPointerDownCapture: () => activateArrowTarget(target),
+    onFocusCapture: () => beginTextEntry(target),
+    onBlurCapture: () => endTextEntry()
+  }), [activateArrowTarget, beginTextEntry, endTextEntry]);
+  return reactExports.useMemo(() => ({
+    activateArrowTarget,
+    beginTextEntry,
+    endTextEntry,
+    bindArrowTarget,
+    bindTextEntryTarget
+  }), [activateArrowTarget, beginTextEntry, endTextEntry, bindArrowTarget, bindTextEntryTarget]);
+}
 const DEFAULT_SAMPLES_PER_FRAME = 2048;
 const DEFAULT_FACTORY_BANK_CATALOG_PATH = "assets/factory-bank-catalog.json";
 function assert(condition, message) {
@@ -21784,399 +23476,19 @@ async function loadFactoryBankFrames(resourceClientInput, {
     frames: sourceFrames.frames
   };
 }
-const DEFAULT_WAVETABLE_THEME = {
-  backgroundTop: "#04070f",
-  backgroundBottom: "#04070f",
-  backgroundRGB: [4, 7, 15],
-  frameColor: [94, 118, 255],
-  meshColor: [135, 215, 245],
-  highlightColor: [245, 108, 182],
-  guideColor: "rgba(129, 150, 255, 0.12)",
-  textColor: "rgba(255, 216, 166, 0.94)"
-};
-const CAMERA_YAW = 15 * (Math.PI / 180);
-const CAMERA_PITCH = 26 * (Math.PI / 180);
-const CAMERA_DISTANCE = 8.9;
-const CAMERA_FOCAL_LENGTH = 2.4;
-const FRAME_DEPTH_EXTENT = 4.1;
-const AMPLITUDE_SCALE = 0.42;
-const FLOOR_Y = -0.64;
-function clamp$1(value, min, max) {
-  return Math.min(Math.max(value, min), max);
-}
-function lerp(start, end, amount) {
-  return start + (end - start) * amount;
-}
-function mixRGB(from, to, amount) {
-  return [
-    Math.round(lerp(from[0], to[0], amount)),
-    Math.round(lerp(from[1], to[1], amount)),
-    Math.round(lerp(from[2], to[2], amount))
-  ];
-}
-function toRGBA(rgb, alpha) {
-  return `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${alpha.toFixed(3)})`;
-}
-function assertFrames(frames) {
-  if (!Array.isArray(frames) || frames.length === 0) {
-    throw new Error("frames must be a non-empty array of Float32Array values");
-  }
-  const expectedLength = frames[0].length;
-  for (const frame of frames) {
-    if (!(frame instanceof Float32Array)) {
-      throw new Error("every frame must be a Float32Array");
-    }
-    if (frame.length !== expectedLength) {
-      throw new Error("all frames must have the same sample count");
-    }
-  }
-}
-function requestNextAnimationFrame(callback) {
-  if (typeof globalThis.requestAnimationFrame === "function") {
-    return globalThis.requestAnimationFrame(callback);
-  }
-  return setTimeout(() => callback(Date.now()), 0);
-}
-function cancelNextAnimationFrame(handle) {
-  if (typeof globalThis.cancelAnimationFrame === "function") {
-    globalThis.cancelAnimationFrame(handle);
-    return;
-  }
-  clearTimeout(handle);
-}
-function decimateFrame(frame, targetPointCount) {
-  const clampedPointCount = Math.max(2, Math.min(targetPointCount, frame.length));
-  if (clampedPointCount >= frame.length) {
-    return frame.slice();
-  }
-  const output = new Float32Array(clampedPointCount);
-  const lastSourceIndex = frame.length - 1;
-  for (let pointIndex = 0; pointIndex < clampedPointCount; pointIndex += 1) {
-    const sampleIndex = Math.round(pointIndex * lastSourceIndex / (clampedPointCount - 1));
-    output[pointIndex] = frame[sampleIndex];
-  }
-  return output;
-}
-function subtractPoints(a, b) {
-  return {
-    x: a.x - b.x,
-    y: a.y - b.y,
-    z: a.z - b.z
-  };
-}
-function crossProduct(a, b) {
-  return {
-    x: a.y * b.z - a.z * b.y,
-    y: a.z * b.x - a.x * b.z,
-    z: a.x * b.y - a.y * b.x
-  };
-}
-function dotProduct(a, b) {
-  return a.x * b.x + a.y * b.y + a.z * b.z;
-}
-function normalizeVector(vector) {
-  const magnitude = Math.hypot(vector.x, vector.y, vector.z);
-  if (magnitude < 1e-5) {
-    return { x: 0, y: 1, z: 0 };
-  }
-  return {
-    x: vector.x / magnitude,
-    y: vector.y / magnitude,
-    z: vector.z / magnitude
-  };
-}
-function createCamera() {
-  const target = {
-    x: 0,
-    y: FLOOR_Y,
-    z: FRAME_DEPTH_EXTENT * 0.5
-  };
-  const horizontalDistance = Math.cos(CAMERA_PITCH) * CAMERA_DISTANCE;
-  const position = {
-    x: target.x + Math.sin(CAMERA_YAW) * horizontalDistance,
-    y: target.y + Math.sin(CAMERA_PITCH) * CAMERA_DISTANCE,
-    z: target.z - Math.cos(CAMERA_YAW) * horizontalDistance
-  };
-  const worldUp = { x: 0, y: 1, z: 0 };
-  const forward = normalizeVector(subtractPoints(target, position));
-  const right = normalizeVector(crossProduct(worldUp, forward));
-  const up = normalizeVector(crossProduct(forward, right));
-  return {
-    position,
-    forward,
-    right,
-    up
-  };
-}
-function projectPoint(point, camera, width, height) {
-  const relative = subtractPoints(point, camera.position);
-  const cameraX = dotProduct(relative, camera.right);
-  const cameraY = dotProduct(relative, camera.up);
-  const cameraDepth = Math.max(1e-3, dotProduct(relative, camera.forward));
-  const perspective = CAMERA_FOCAL_LENGTH / cameraDepth;
-  const projectedX = cameraX * perspective;
-  const projectedY = cameraY * perspective;
-  const scale = Math.min(width * 0.76, height * 0.98);
-  return {
-    x: width * 0.52 + projectedX * scale,
-    y: height * 0.57 - projectedY * scale,
-    cameraDepth
-  };
-}
-function buildInterpolatedFrame(lowFrame, highFrame, amount) {
-  const output = new Float32Array(lowFrame.length);
-  for (let sampleIndex = 0; sampleIndex < lowFrame.length; sampleIndex += 1) {
-    output[sampleIndex] = lerp(lowFrame[sampleIndex], highFrame[sampleIndex], amount);
-  }
-  return output;
-}
-function createProjectedFrame(samples, frameIndex, frameCount, camera, width, height) {
-  const safeDenominator = Math.max(1, samples.length - 1);
-  const depth = frameCount <= 1 ? 0 : frameIndex / (frameCount - 1) * FRAME_DEPTH_EXTENT;
-  const points = [];
-  for (let sampleIndex = 0; sampleIndex < samples.length; sampleIndex += 1) {
-    const phase = sampleIndex / safeDenominator;
-    const point = {
-      x: lerp(-1, 1, phase),
-      y: samples[sampleIndex] * AMPLITUDE_SCALE,
-      z: depth
-    };
-    points.push(projectPoint(point, camera, width, height));
-  }
-  return {
-    frameIndex,
-    depthNormalized: frameCount <= 1 ? 0 : frameIndex / (frameCount - 1),
-    points
-  };
-}
-function tracePolyline(context, points) {
-  points.forEach((point, index) => {
-    if (index === 0) {
-      context.moveTo(point.x, point.y);
-    } else {
-      context.lineTo(point.x, point.y);
-    }
-  });
-}
-function drawGuideFrame(context, camera, width, height, theme) {
-  const frontFloor = [
-    projectPoint({ x: -1, y: FLOOR_Y, z: 0 }, camera, width, height),
-    projectPoint({ x: 1, y: FLOOR_Y, z: 0 }, camera, width, height)
-  ];
-  const backFloor = [
-    projectPoint({ x: -1, y: FLOOR_Y, z: FRAME_DEPTH_EXTENT }, camera, width, height),
-    projectPoint({ x: 1, y: FLOOR_Y, z: FRAME_DEPTH_EXTENT }, camera, width, height)
-  ];
-  const leftEdge = [
-    projectPoint({ x: -1, y: FLOOR_Y, z: 0 }, camera, width, height),
-    projectPoint({ x: -1, y: FLOOR_Y, z: FRAME_DEPTH_EXTENT }, camera, width, height)
-  ];
-  const rightEdge = [
-    projectPoint({ x: 1, y: FLOOR_Y, z: 0 }, camera, width, height),
-    projectPoint({ x: 1, y: FLOOR_Y, z: FRAME_DEPTH_EXTENT }, camera, width, height)
-  ];
-  context.save();
-  context.strokeStyle = theme.guideColor;
-  context.lineWidth = 1;
-  [frontFloor, backFloor, leftEdge, rightEdge].forEach((guideLine) => {
-    context.beginPath();
-    tracePolyline(context, guideLine);
-    context.stroke();
-  });
-  context.restore();
-}
-function drawFrameStack(context, projectedFrames, theme) {
-  for (const projectedFrame of projectedFrames) {
-    const alpha = lerp(0.08, 0.26, 1 - projectedFrame.depthNormalized);
-    const colorMix = lerp(0.75, 0.15, 1 - projectedFrame.depthNormalized);
-    const strokeColor = mixRGB(theme.frameColor, theme.backgroundRGB, colorMix);
-    context.save();
-    context.strokeStyle = toRGBA(strokeColor, alpha);
-    context.lineWidth = lerp(0.8, 1.6, 1 - projectedFrame.depthNormalized);
-    context.beginPath();
-    tracePolyline(context, projectedFrame.points);
-    context.stroke();
-    context.restore();
-  }
-}
-function drawMesh(context, projectedFrames, theme) {
-  if (projectedFrames.length < 2) {
-    return;
-  }
-  const step = clamp$1(Math.round(projectedFrames[0].points.length / 12), 6, 18);
-  for (let sampleIndex = 0; sampleIndex < projectedFrames[0].points.length; sampleIndex += step) {
-    context.save();
-    context.strokeStyle = toRGBA(theme.meshColor, 0.12);
-    context.lineWidth = 1;
-    context.beginPath();
-    projectedFrames.forEach((frame, frameIndex) => {
-      const point = frame.points[sampleIndex];
-      if (!point) {
-        return;
-      }
-      if (frameIndex === 0) {
-        context.moveTo(point.x, point.y);
-      } else {
-        context.lineTo(point.x, point.y);
-      }
-    });
-    context.stroke();
-    context.restore();
-  }
-}
-function drawCurrentFrame(context, frame, frameIndexLabel, theme, width) {
-  context.save();
-  context.strokeStyle = toRGBA(theme.highlightColor, 0.98);
-  context.lineWidth = 2.35;
-  context.shadowBlur = 12;
-  context.shadowColor = toRGBA(theme.highlightColor, 0.52);
-  context.beginPath();
-  tracePolyline(context, frame.points);
-  context.stroke();
-  context.restore();
-  const anchor = frame.points[Math.floor(frame.points.length * 0.78)] ?? frame.points[frame.points.length - 1];
-  if (!anchor) {
-    return;
-  }
-  const labelX = clamp$1(anchor.x + 14, 18, width - 180);
-  const labelY = clamp$1(anchor.y - 18, 24, 9999);
-  context.save();
-  context.fillStyle = toRGBA(theme.backgroundRGB, 0.78);
-  context.fillRect(labelX - 10, labelY - 14, 154, 24);
-  context.fillStyle = theme.textColor;
-  context.font = "600 12px Avenir Next, Avenir, sans-serif";
-  context.textAlign = "left";
-  context.fillText(frameIndexLabel, labelX, labelY + 2);
-  context.restore();
-}
-class CanvasWavetableDisplay {
-  canvas;
-  context;
-  theme;
-  requestAnimationFrameImpl;
-  cancelAnimationFrameImpl;
-  frames = [];
-  position = 0;
-  devicePixelRatio = 1;
-  cssWidth = 0;
-  cssHeight = 0;
-  pendingRenderHandle = null;
-  constructor(canvas, {
-    theme = DEFAULT_WAVETABLE_THEME,
-    requestAnimationFrame: requestAnimationFrame2 = requestNextAnimationFrame,
-    cancelAnimationFrame = cancelNextAnimationFrame
-  } = {}) {
-    this.canvas = canvas;
-    this.context = canvas.getContext("2d");
-    this.theme = theme;
-    this.requestAnimationFrameImpl = requestAnimationFrame2;
-    this.cancelAnimationFrameImpl = cancelAnimationFrame;
-  }
-  setFrames(frames) {
-    assertFrames(frames);
-    this.frames = frames.map((frame) => frame.slice());
-    this.queueRender();
-  }
-  setPosition(position) {
-    this.position = clamp$1(Number(position) || 0, 0, 1);
-    this.queueRender();
-  }
-  resize(width, height, devicePixelRatio = 1) {
-    const nextWidth = Math.max(1, Math.floor(width || this.canvas.clientWidth || 1));
-    const nextHeight = Math.max(1, Math.floor(height || this.canvas.clientHeight || 1));
-    const nextRatio = Math.max(1, Number(devicePixelRatio) || 1);
-    this.cssWidth = nextWidth;
-    this.cssHeight = nextHeight;
-    this.devicePixelRatio = nextRatio;
-    this.canvas.width = Math.max(1, Math.round(nextWidth * nextRatio));
-    this.canvas.height = Math.max(1, Math.round(nextHeight * nextRatio));
-    this.canvas.style.width = `${nextWidth}px`;
-    this.canvas.style.height = `${nextHeight}px`;
-    this.queueRender();
-  }
-  queueRender() {
-    if (this.pendingRenderHandle !== null) {
-      return;
-    }
-    this.pendingRenderHandle = this.requestAnimationFrameImpl(() => {
-      this.pendingRenderHandle = null;
-      this.render();
-    });
-  }
-  render() {
-    if (this.pendingRenderHandle !== null) {
-      this.cancelAnimationFrameImpl(this.pendingRenderHandle);
-      this.pendingRenderHandle = null;
-    }
-    if (!this.context || this.canvas.width === 0 || this.canvas.height === 0) {
-      return;
-    }
-    const width = this.cssWidth || this.canvas.clientWidth || Math.round(this.canvas.width / this.devicePixelRatio);
-    const height = this.cssHeight || this.canvas.clientHeight || Math.round(this.canvas.height / this.devicePixelRatio);
-    this.context.setTransform(this.devicePixelRatio, 0, 0, this.devicePixelRatio, 0, 0);
-    this.context.clearRect(0, 0, width, height);
-    const gradient = this.context.createLinearGradient(0, 0, 0, height);
-    gradient.addColorStop(0, this.theme.backgroundTop);
-    gradient.addColorStop(1, this.theme.backgroundBottom);
-    this.context.fillStyle = gradient;
-    this.context.fillRect(0, 0, width, height);
-    if (this.frames.length === 0) {
-      return;
-    }
-    const pointCount = clamp$1(Math.round(width / 4), 96, 256);
-    const decimatedFrames = this.frames.map((frame) => decimateFrame(frame, pointCount));
-    const camera = createCamera();
-    const projectedFrames = decimatedFrames.map(
-      (frame, frameIndex) => createProjectedFrame(frame, frameIndex, decimatedFrames.length, camera, width, height)
-    );
-    const currentFrameIndex = this.position * Math.max(0, decimatedFrames.length - 1);
-    const frameLo = Math.floor(currentFrameIndex);
-    const frameHi = Math.min(frameLo + 1, decimatedFrames.length - 1);
-    const frameT = currentFrameIndex - frameLo;
-    const blendedFrame = buildInterpolatedFrame(decimatedFrames[frameLo], decimatedFrames[frameHi], frameT);
-    const currentFrame = createProjectedFrame(blendedFrame, currentFrameIndex, decimatedFrames.length, camera, width, height);
-    drawGuideFrame(this.context, camera, width, height, this.theme);
-    drawFrameStack(this.context, projectedFrames, this.theme);
-    drawMesh(this.context, projectedFrames, this.theme);
-    drawCurrentFrame(
-      this.context,
-      currentFrame,
-      `Frame ${currentFrameIndex.toFixed(2)} / ${decimatedFrames.length - 1}`,
-      this.theme,
-      width
-    );
-  }
-}
-const midiInputEndpointID = "midiIn";
-const wavetablePositionEndpointID = "wavetablePosition";
-const wavetableSelectEndpointID = "wavetableSelect";
-const playModeEndpointID = "playMode";
-const glideTimeEndpointID = "glideTime";
-const runtimeSyncRequestEndpointID = "runtimeSyncRequest";
-const runtimeStateEndpointID = "runtimeState";
-const retryDesiredTableRequestEndpointID = "retryDesiredTableRequest";
-const effectiveWavetablePositionEndpointID = "effectiveWavetablePosition";
-const KEYBOARD_NOTE_COUNT = 25;
-const KEYBOARD_ROOT_NOTE_DEFAULT = 36;
-const KEYBOARD_ROOT_NOTE_MIN = 12;
-const KEYBOARD_ROOT_NOTE_MAX = 72;
-const GLIDE_TIME_MIN_SECONDS = 0;
-const GLIDE_TIME_MAX_SECONDS = 2;
-const GLIDE_TIME_STEP_SECONDS = 1e-3;
-const PLAY_MODE_OPTIONS = [
-  { value: 0, label: "Poly" },
-  { value: 1, label: "Mono" },
-  { value: 2, label: "Legato" }
-];
+const EFFECTIVE_WAVETABLE_POSITION_ENDPOINT_ID = "effectiveWavetablePosition";
 const DISPLAY_SWIPE_THRESHOLD_PX = 2;
-const MSEG_EDITOR_SAMPLES = 128;
 const MSEG_DRAG_THRESHOLD_PX = 8;
-const MSEG_PREVIEW_HORIZONTAL_PADDING_PX = 24;
-const MSEG_PREVIEW_VERTICAL_PADDING_PX = 22;
-const MSEG_GRID_STEPS = [0.25, 0.5, 0.75];
-function clamp(value, min, max) {
-  return Math.min(Math.max(value, min), max);
-}
+const WAVETABLE_POSITION_ENDPOINT_ID = "wavetablePosition";
+const WAVETABLE_SELECT_ENDPOINT_ID = "wavetableSelect";
+const PLAY_MODE_ENDPOINT_ID = "playMode";
+const GLIDE_TIME_ENDPOINT_ID = "glideTime";
+const RUNTIME_SYNC_REQUEST_ENDPOINT_ID = "runtimeSyncRequest";
+const RUNTIME_STATE_ENDPOINT_ID = "runtimeState";
+const RETRY_DESIRED_TABLE_REQUEST_ENDPOINT_ID = "retryDesiredTableRequest";
+const GLIDE_TIME_MIN_SECONDS$1 = 0;
+const GLIDE_TIME_MAX_SECONDS$1 = 2;
+const GLIDE_TIME_STEP_SECONDS$1 = 1e-3;
 function describeErrorMessage(error) {
   if (error && typeof error === "object") {
     const maybeError = error;
@@ -22184,68 +23496,8 @@ function describeErrorMessage(error) {
   }
   return String(error);
 }
-function formatSeconds(seconds) {
-  return `${seconds.toFixed(3)} s`;
-}
-function formatFrameIndex(position, frameCount) {
-  const safeFrameCount = Math.max(1, frameCount);
-  const frameIndex = Math.round(position * Math.max(0, safeFrameCount - 1)) + 1;
-  return `${String(frameIndex).padStart(2, "0")}/${String(safeFrameCount).padStart(2, "0")}`;
-}
-function formatKeyboardRootLabel(rootNote) {
-  const octave = Math.floor(rootNote / 12) - 1;
-  return `C${octave}`;
-}
-function getPitchClass(noteNumber) {
-  const safeNoteNumber = Math.round(Number(noteNumber) || 0);
-  return (safeNoteNumber % 12 + 12) % 12;
-}
-function isNaturalNoteNumber(noteNumber) {
-  const pitchClass = getPitchClass(noteNumber);
-  return pitchClass === 0 || pitchClass === 2 || pitchClass === 4 || pitchClass === 5 || pitchClass === 7 || pitchClass === 9 || pitchClass === 11;
-}
-function countNaturalNotesInRange(rootNote, noteCount) {
-  const safeRootNote = Math.round(Number(rootNote) || 0);
-  const safeNoteCount = Math.max(1, Math.round(Number(noteCount) || 0));
-  let naturalCount = 0;
-  for (let noteOffset = 0; noteOffset < safeNoteCount; noteOffset += 1) {
-    if (isNaturalNoteNumber(safeRootNote + noteOffset)) {
-      naturalCount += 1;
-    }
-  }
-  return Math.max(1, naturalCount);
-}
-function computeKeyboardDimensions(rootNote, noteCount, availableWidth) {
-  const naturalCount = countNaturalNotesInRange(rootNote, noteCount);
-  const safeAvailableWidth = Math.max(0, Number(availableWidth) || 0);
-  const naturalWidth = Math.max(18, (safeAvailableWidth - 1) / naturalCount);
-  const accidentalWidth = Math.max(8, naturalWidth * 0.58);
-  return {
-    naturalWidth,
-    accidentalWidth
-  };
-}
-function useResizeObserver(ref) {
-  const [size, setSize] = reactExports.useState({ width: 1, height: 1 });
-  reactExports.useLayoutEffect(() => {
-    const element = ref.current;
-    if (!element) {
-      return;
-    }
-    const update = () => {
-      const bounds = element.getBoundingClientRect();
-      const host = element;
-      setSize({
-        width: Math.max(1, bounds.width || host.clientWidth || 1),
-        height: Math.max(1, bounds.height || host.clientHeight || 1)
-      });
-    };
-    const observer = new ResizeObserver(update);
-    observer.observe(element);
-    update();
-    return () => observer.disconnect();
-  }, [ref]);
-  return size;
+function clamp(value, min, max) {
+  return Math.min(Math.max(value, min), max);
 }
 function useFactoryBankCatalog() {
   const resourceClient = useResourceClient();
@@ -22306,7 +23558,7 @@ function useFactoryTableFrames(tableIndex) {
   return state;
 }
 function useObservedDisplayPosition(parameterPosition) {
-  const message = usePatchEndpoint(effectiveWavetablePositionEndpointID, null);
+  const message = usePatchEndpoint(EFFECTIVE_WAVETABLE_POSITION_ENDPOINT_ID, null);
   const [observedState, setObservedState] = reactExports.useState(() => ({
     voiceGeneration: -1,
     position: parameterPosition
@@ -22336,819 +23588,6 @@ function useMsegState() {
     state,
     controller: controllerRef
   };
-}
-function createKeyboardTagName() {
-  return "cosimo-react-desktop-keyboard";
-}
-function ensureKeyboardElement(patchConnection) {
-  const tagName = createKeyboardTagName();
-  if (!patchConnection.utilities?.PianoKeyboard) {
-    return null;
-  }
-  if (!window.customElements.get(tagName)) {
-    const BaseKeyboard = patchConnection.utilities.PianoKeyboard;
-    class CosimoDesktopKeyboard extends BaseKeyboard {
-      constructor() {
-        super({
-          naturalNoteWidth: 22,
-          accidentalWidth: 13,
-          accidentalPercentageHeight: 64,
-          pressedNoteColour: "#f56cb6"
-        });
-      }
-    }
-    window.customElements.define(tagName, CosimoDesktopKeyboard);
-  }
-  return tagName;
-}
-function KeyboardDock({
-  rootNote,
-  noteCount = KEYBOARD_NOTE_COUNT,
-  keyboardRef
-}) {
-  const patchConnection = usePatchConnection();
-  const hostRef = reactExports.useRef(null);
-  const hostSize = useResizeObserver(hostRef);
-  reactExports.useEffect(() => {
-    const tagName = ensureKeyboardElement(patchConnection);
-    const host = hostRef.current;
-    if (!tagName || !host) {
-      return;
-    }
-    const KeyboardElement = window.customElements.get(tagName);
-    if (!KeyboardElement) {
-      return;
-    }
-    const keyboard = new KeyboardElement();
-    keyboard.classList.add("keyboard");
-    keyboard.style.display = "block";
-    keyboard.style.width = "100%";
-    keyboard.style.height = "100%";
-    keyboard.tabIndex = 0;
-    keyboard.setAttribute("root-note", String(rootNote));
-    keyboard.setAttribute("note-count", String(noteCount));
-    keyboard.refreshHTML();
-    keyboard.attachToPatchConnection?.(patchConnection, midiInputEndpointID);
-    keyboard.refreshActiveNoteElements?.();
-    keyboardRef.current = keyboard;
-    host.replaceChildren(keyboard);
-    return () => {
-      keyboard.detachPatchConnection?.(patchConnection);
-      keyboardRef.current = null;
-      host.replaceChildren();
-    };
-  }, [noteCount, patchConnection, rootNote]);
-  reactExports.useEffect(() => {
-    const keyboard = keyboardRef.current;
-    if (!keyboard) {
-      return;
-    }
-    const currentRootNote = Number(keyboard.getAttribute("root-note")) || KEYBOARD_ROOT_NOTE_DEFAULT;
-    const currentNoteCount = Number(keyboard.getAttribute("note-count")) || KEYBOARD_NOTE_COUNT;
-    if (currentRootNote === rootNote && currentNoteCount === noteCount) {
-      return;
-    }
-    keyboard.setAttribute("root-note", String(rootNote));
-    keyboard.setAttribute("note-count", String(noteCount));
-    keyboard.notes = [];
-    keyboard.refreshHTML();
-    keyboard.refreshActiveNoteElements();
-  }, [noteCount, rootNote]);
-  reactExports.useEffect(() => {
-    const keyboard = keyboardRef.current;
-    const host = hostRef.current;
-    if (!keyboard || !host || hostSize.width <= 0) {
-      return;
-    }
-    const { naturalWidth, accidentalWidth } = computeKeyboardDimensions(rootNote, noteCount, hostSize.width);
-    const currentNaturalWidth = Number(keyboard.naturalWidth) || 0;
-    const currentAccidentalWidth = Number(keyboard.accidentalWidth) || 0;
-    if (Math.abs(currentNaturalWidth - naturalWidth) < 0.01 && Math.abs(currentAccidentalWidth - accidentalWidth) < 0.01) {
-      return;
-    }
-    keyboard.naturalWidth = naturalWidth;
-    keyboard.accidentalWidth = accidentalWidth;
-    keyboard.notes = [];
-    keyboard.refreshHTML();
-    keyboard.refreshActiveNoteElements();
-  }, [hostSize.width, noteCount, rootNote]);
-  return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "rounded-[28px] border border-white/8 bg-white/[0.03] p-3 shadow-[0_18px_42px_rgba(3,6,18,0.45)]", children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { ref: hostRef, className: "h-[118px] w-full overflow-hidden rounded-[22px] bg-[#070b16]" }) });
-}
-function WavetableCanvas({
-  frames,
-  position
-}) {
-  const canvasRef = reactExports.useRef(null);
-  const viewportRef = reactExports.useRef(null);
-  const size = useResizeObserver(viewportRef);
-  const displayRef = reactExports.useRef(null);
-  reactExports.useLayoutEffect(() => {
-    if (!canvasRef.current) {
-      return;
-    }
-    displayRef.current = new CanvasWavetableDisplay(canvasRef.current);
-    return () => {
-      displayRef.current = null;
-    };
-  }, []);
-  reactExports.useEffect(() => {
-    if (!displayRef.current || !frames) {
-      return;
-    }
-    displayRef.current.setFrames(frames);
-  }, [frames]);
-  reactExports.useEffect(() => {
-    displayRef.current?.setPosition(position);
-  }, [position]);
-  reactExports.useEffect(() => {
-    displayRef.current?.resize(size.width, size.height, window.devicePixelRatio || 1);
-  }, [size]);
-  return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { ref: viewportRef, className: "absolute inset-0", children: /* @__PURE__ */ jsxRuntimeExports.jsx("canvas", { ref: canvasRef, className: "h-full w-full" }) });
-}
-function buildMsegSurfacePaths(points, width, height, options = {}) {
-  const metrics = createMsegEditorMetrics(width, height, {
-    pointRadius: options.pointRadius,
-    horizontalPadding: options.horizontalPadding ?? MSEG_EDITOR_HORIZONTAL_PADDING_PX,
-    verticalPadding: options.verticalPadding ?? MSEG_EDITOR_VERTICAL_PADDING_PX
-  });
-  let path = "";
-  for (let index = 0; index < MSEG_EDITOR_SAMPLES; index += 1) {
-    const x = index / (MSEG_EDITOR_SAMPLES - 1);
-    const y = evaluateMsegShape({ points }, x);
-    const coordinates = pointToMsegEditorCoordinates({ x, y }, width, height, {
-      pointRadius: options.pointRadius,
-      horizontalPadding: options.horizontalPadding,
-      verticalPadding: options.verticalPadding
-    });
-    path += `${index === 0 ? "M" : "L"} ${coordinates.x.toFixed(3)} ${coordinates.y.toFixed(3)} `;
-  }
-  const curvePath = path.trim();
-  const fillPath = `${curvePath} L ${metrics.plotRight.toFixed(3)} ${metrics.plotBottom.toFixed(3)} L ${metrics.plotLeft.toFixed(3)} ${metrics.plotBottom.toFixed(3)} Z`;
-  return { curvePath, fillPath, metrics };
-}
-function SelectChevron({ className }) {
-  return /* @__PURE__ */ jsxRuntimeExports.jsx(
-    "svg",
-    {
-      className,
-      viewBox: "0 0 12 12",
-      "aria-hidden": "true",
-      focusable: "false",
-      children: /* @__PURE__ */ jsxRuntimeExports.jsx(
-        "path",
-        {
-          d: "M3 4.5 6 7.5 9 4.5",
-          fill: "none",
-          stroke: "currentColor",
-          strokeLinecap: "round",
-          strokeLinejoin: "round",
-          strokeWidth: "1.4"
-        }
-      )
-    }
-  );
-}
-function styleNexusNumberInput(element, host) {
-  element.style.borderRadius = "16px";
-  element.style.border = "1px solid rgba(255,255,255,0.08)";
-  element.style.boxShadow = "inset 0 1px 0 rgba(255,255,255,0.04)";
-  element.style.fontFamily = '"SF Mono", "JetBrains Mono", ui-monospace, monospace';
-  element.style.letterSpacing = "0.12em";
-  element.style.fontSize = "14px";
-  element.style.padding = "10px 14px";
-  element.style.backgroundColor = "rgba(255,255,255,0.06)";
-  element.style.color = "#d6f4ff";
-  element.style.display = "block";
-  element.style.width = "118px";
-  element.style.height = "42px";
-  host.style.width = "118px";
-  host.style.height = "42px";
-  host.style.cursor = "ns-resize";
-}
-function MsegPreview({
-  points,
-  className
-}) {
-  const viewportRef = reactExports.useRef(null);
-  const size = useResizeObserver(viewportRef);
-  const { curvePath, fillPath, metrics } = reactExports.useMemo(() => {
-    return buildMsegSurfacePaths(points, size.width, size.height, {
-      pointRadius: 0,
-      horizontalPadding: MSEG_PREVIEW_HORIZONTAL_PADDING_PX,
-      verticalPadding: MSEG_PREVIEW_VERTICAL_PADDING_PX
-    });
-  }, [points, size.height, size.width]);
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs(
-    "svg",
-    {
-      ref: viewportRef,
-      className: className ?? "h-32 w-full overflow-hidden rounded-[20px] bg-white/[0.03]",
-      viewBox: `0 0 ${size.width} ${size.height}`,
-      children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("g", { children: [
-          MSEG_GRID_STEPS.map((step) => /* @__PURE__ */ jsxRuntimeExports.jsx(
-            "line",
-            {
-              className: "cosimo-grid-line",
-              x1: metrics.plotLeft,
-              y1: metrics.plotTop + metrics.plotHeight * (1 - step),
-              x2: metrics.plotRight,
-              y2: metrics.plotTop + metrics.plotHeight * (1 - step)
-            },
-            `h-${step}`
-          )),
-          MSEG_GRID_STEPS.map((step) => /* @__PURE__ */ jsxRuntimeExports.jsx(
-            "line",
-            {
-              className: "cosimo-grid-line",
-              x1: metrics.plotLeft + metrics.plotWidth * step,
-              y1: metrics.plotTop,
-              x2: metrics.plotLeft + metrics.plotWidth * step,
-              y2: metrics.plotBottom
-            },
-            `v-${step}`
-          ))
-        ] }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("path", { className: "cosimo-curve-fill", d: fillPath }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("path", { className: "cosimo-curve-line", d: curvePath })
-      ]
-    }
-  );
-}
-function EditableMsegSurface({
-  surfaceRef,
-  points,
-  selectedPointIndex,
-  onPointerDown,
-  onPointerMove,
-  onPointerUp
-}) {
-  const size = useResizeObserver(surfaceRef);
-  const { curvePath, fillPath } = reactExports.useMemo(() => {
-    return buildMsegSurfacePaths(points, size.width, size.height);
-  }, [points, size.height, size.width]);
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs(
-    "svg",
-    {
-      ref: surfaceRef,
-      className: "h-[320px] w-full touch-none overflow-hidden rounded-[20px] bg-white/[0.03]",
-      viewBox: `0 0 ${size.width} ${size.height}`,
-      onPointerDown,
-      onPointerMove,
-      onPointerUp,
-      onPointerCancel: onPointerUp,
-      children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("g", { children: [
-          MSEG_GRID_STEPS.map((step) => /* @__PURE__ */ jsxRuntimeExports.jsx(
-            "line",
-            {
-              className: "cosimo-grid-line",
-              x1: 0,
-              y1: size.height * (1 - step),
-              x2: size.width,
-              y2: size.height * (1 - step)
-            },
-            `editable-h-${step}`
-          )),
-          MSEG_GRID_STEPS.map((step) => /* @__PURE__ */ jsxRuntimeExports.jsx(
-            "line",
-            {
-              className: "cosimo-grid-line",
-              x1: size.width * step,
-              y1: 0,
-              x2: size.width * step,
-              y2: size.height
-            },
-            `editable-v-${step}`
-          ))
-        ] }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("path", { className: "cosimo-curve-fill", d: fillPath }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("path", { className: "cosimo-curve-line", d: curvePath }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("g", { children: points.map((point, pointIndex) => {
-          const coordinates = pointToMsegEditorCoordinates(point, size.width, size.height);
-          const isSelected = pointIndex === selectedPointIndex;
-          return /* @__PURE__ */ jsxRuntimeExports.jsx(
-            "circle",
-            {
-              cx: coordinates.x,
-              cy: coordinates.y,
-              r: isSelected ? MSEG_SELECTED_POINT_RADIUS_PX : MSEG_POINT_RADIUS_PX,
-              className: isSelected ? "fill-fuchsia-200 stroke-[#050913] stroke-[3px]" : "fill-cyan-200 stroke-[#050913] stroke-[2px]",
-              vectorEffect: "non-scaling-stroke"
-            },
-            `point-${pointIndex}-${point.x}-${point.y}`
-          );
-        }) })
-      ]
-    }
-  );
-}
-function RangeField({
-  label,
-  min,
-  max,
-  step,
-  value,
-  displayValue,
-  onChange,
-  onPointerDown,
-  onPointerUp,
-  onPointerCancel,
-  ariaLabel,
-  focusBindings
-}) {
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "grid gap-2", children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[11px] uppercase tracking-[0.18em] text-slate-300/60", children: label }),
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid grid-cols-[minmax(0,1fr)_88px] items-center gap-4", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx(
-        "input",
-        {
-          className: "cosimo-range",
-          type: "range",
-          min,
-          max,
-          step,
-          value: value.toFixed(3),
-          "aria-label": ariaLabel ?? label,
-          onPointerDown,
-          onPointerUp,
-          onPointerCancel,
-          onChange: (event) => onChange(Number(event.target.value)),
-          ...focusBindings
-        }
-      ),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-right font-mono text-sm tracking-[0.18em] text-cyan-200", children: displayValue })
-    ] })
-  ] });
-}
-function VoiceModeGlyph({
-  mode,
-  active
-}) {
-  const stroke = active ? "rgba(214,244,255,0.96)" : "rgba(189,204,223,0.72)";
-  const fill = active ? "rgba(143,232,255,0.24)" : "rgba(255,255,255,0.06)";
-  if (mode === 0) {
-    return /* @__PURE__ */ jsxRuntimeExports.jsxs("svg", { viewBox: "0 0 28 18", className: "h-4 w-6", "aria-hidden": "true", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx("circle", { cx: "7", cy: "11", r: "3.2", fill, stroke, strokeWidth: "1.3" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("circle", { cx: "14", cy: "8", r: "3.2", fill, stroke, strokeWidth: "1.3" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("circle", { cx: "21", cy: "11", r: "3.2", fill, stroke, strokeWidth: "1.3" })
-    ] });
-  }
-  if (mode === 1) {
-    return /* @__PURE__ */ jsxRuntimeExports.jsx("svg", { viewBox: "0 0 28 18", className: "h-4 w-6", "aria-hidden": "true", children: /* @__PURE__ */ jsxRuntimeExports.jsx("rect", { x: "8.5", y: "4.5", width: "11", height: "9", rx: "4.5", fill, stroke, strokeWidth: "1.3" }) });
-  }
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs("svg", { viewBox: "0 0 28 18", className: "h-4 w-6", "aria-hidden": "true", children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsx("circle", { cx: "8", cy: "9", r: "3", fill, stroke, strokeWidth: "1.3" }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx("circle", { cx: "20", cy: "9", r: "3", fill, stroke, strokeWidth: "1.3" }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx("path", { d: "M10.8 9 C12.5 5.5 15.5 5.5 17.2 9", fill: "none", stroke, strokeWidth: "1.4", strokeLinecap: "round" })
-  ] });
-}
-function VoiceModeToolbar({
-  playMode,
-  focusBindings
-}) {
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid gap-2", children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[10px] uppercase tracking-[0.18em] text-slate-300/60", children: "Voice" }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "inline-grid grid-cols-3 gap-1 rounded-[18px] border border-white/8 bg-black/25 p-1", ...focusBindings, children: PLAY_MODE_OPTIONS.map((option) => {
-      const isActive = option.value === playMode.value;
-      return /* @__PURE__ */ jsxRuntimeExports.jsx(
-        "button",
-        {
-          type: "button",
-          className: `rounded-[14px] px-3 py-2.5 text-left transition ${isActive ? "bg-white/[0.08] text-cyan-100 shadow-[inset_0_0_0_1px_rgba(143,232,255,0.18)]" : "text-slate-300/70 hover:bg-white/[0.04] hover:text-slate-100"}`,
-          onClick: () => playMode.commitValue(option.value),
-          "aria-pressed": isActive,
-          children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2", children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx(VoiceModeGlyph, { mode: option.value, active: isActive }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[11px] uppercase tracking-[0.16em]", children: option.label })
-          ] })
-        },
-        option.value
-      );
-    }) })
-  ] });
-}
-function NexusNumberField({
-  label,
-  binding,
-  min,
-  max,
-  step,
-  decimalPlaces = 3,
-  onActivate,
-  onBeginTextEntry,
-  onEndTextEntry
-}) {
-  const hostRef = reactExports.useRef(null);
-  const widgetRef = reactExports.useRef(null);
-  const bindingRef = reactExports.useRef(binding);
-  const callbackRef = reactExports.useRef({
-    onActivate,
-    onBeginTextEntry,
-    onEndTextEntry
-  });
-  reactExports.useEffect(() => {
-    bindingRef.current = binding;
-    callbackRef.current = {
-      onActivate,
-      onBeginTextEntry,
-      onEndTextEntry
-    };
-  }, [binding, onActivate, onBeginTextEntry, onEndTextEntry]);
-  reactExports.useEffect(() => {
-    const host = hostRef.current;
-    if (!host) {
-      return;
-    }
-    host.replaceChildren();
-    const widget = new Nexus.Number(host, {
-      size: [118, 42],
-      value: binding.value,
-      min,
-      max,
-      step
-    });
-    widget.decimalPlaces = decimalPlaces;
-    widget.colors.fill = "rgba(255,255,255,0.06)";
-    widget.colors.dark = "#d6f4ff";
-    widget.colors.light = "#06101f";
-    widget.colors.accent = "#8fe8ff";
-    widget.colorInterface();
-    widget.element.setAttribute("aria-label", label);
-    styleNexusNumberInput(widget.element, host);
-    const handleMouseDown = () => {
-      callbackRef.current.onActivate?.();
-    };
-    const handleFocus = () => {
-      callbackRef.current.onActivate?.();
-      callbackRef.current.onBeginTextEntry?.();
-    };
-    const handleBlur = () => {
-      callbackRef.current.onEndTextEntry?.();
-    };
-    const handleWidgetChange = (nextValue) => {
-      const safeValue = clamp(Number(nextValue) || 0, min, max);
-      bindingRef.current.setValue(safeValue);
-    };
-    widget.element.addEventListener("mousedown", handleMouseDown);
-    widget.element.addEventListener("focus", handleFocus);
-    widget.element.addEventListener("blur", handleBlur);
-    widget.on("change", handleWidgetChange);
-    widgetRef.current = widget;
-    return () => {
-      widget.element.removeEventListener("mousedown", handleMouseDown);
-      widget.element.removeEventListener("focus", handleFocus);
-      widget.element.removeEventListener("blur", handleBlur);
-      callbackRef.current.onEndTextEntry?.();
-      widget.destroy();
-      widgetRef.current = null;
-    };
-  }, [decimalPlaces, label, max, min, step]);
-  reactExports.useEffect(() => {
-    const widget = widgetRef.current;
-    if (!widget) {
-      return;
-    }
-    if (document.activeElement === widget.element) {
-      return;
-    }
-    if (Math.abs(widget.value - binding.value) <= step / 10) {
-      return;
-    }
-    widget.passiveUpdate(binding.value);
-    widget.render();
-  }, [binding.value, step]);
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "grid gap-2", children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[10px] uppercase tracking-[0.18em] text-slate-300/60", children: label }),
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-3", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { ref: hostRef, className: "h-[42px] w-[118px] rounded-[16px]" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono text-xs tracking-[0.18em] text-cyan-200/80", children: "s" })
-    ] })
-  ] });
-}
-function StatusHeader({ statusText }) {
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs("header", { className: "flex items-center justify-between gap-4", children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "rounded-full border border-white/8 bg-white/[0.03] px-4 py-2 text-[11px] uppercase tracking-[0.24em] text-blue-300/70", children: "Cosimo Synth" }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "rounded-full border border-white/8 bg-white/[0.04] px-4 py-2 text-right text-[11px] uppercase tracking-[0.16em] text-fuchsia-200/80", children: statusText })
-  ] });
-}
-function WavetableStageSection({
-  stageRef,
-  frames,
-  position,
-  tableName,
-  frameCount,
-  desiredTableIndex,
-  tableOptions,
-  canRetry,
-  onTableChange,
-  onRetry,
-  tableFocusBindings,
-  onPointerDown,
-  onPointerMove,
-  onPointerUp
-}) {
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs(
-    "section",
-    {
-      ref: stageRef,
-      className: "cosimo-stage relative min-h-[356px] overflow-hidden rounded-[30px] border border-white/8",
-      onPointerDown,
-      onPointerMove,
-      onPointerUp,
-      onPointerCancel: onPointerUp,
-      children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx(WavetableCanvas, { frames, position }),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "absolute inset-x-0 top-0 flex items-start justify-between gap-3 p-5 text-[11px] uppercase tracking-[0.16em] text-slate-300/70", children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "relative inline-flex max-w-[280px] cursor-pointer items-center", children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "inline-flex min-w-0 items-center rounded-full border border-white/10 bg-black/40 px-4 py-2.5 pr-10 text-left text-[11px] uppercase tracking-[0.18em] text-amber-100 shadow-[0_10px_28px_rgba(0,0,0,0.28)] backdrop-blur-md", children: /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "truncate", children: tableName }) }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx(SelectChevron, { className: "pointer-events-none absolute right-4 top-1/2 h-3 w-3 -translate-y-1/2 text-slate-300/75" }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx(
-              "select",
-              {
-                className: "absolute inset-0 cursor-pointer opacity-0",
-                value: String(desiredTableIndex),
-                onChange: (event) => onTableChange(Number(event.target.value)),
-                "aria-label": "Select wavetable",
-                ...tableFocusBindings,
-                children: tableOptions.map((table, tableIndex) => /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: tableIndex, children: table.name }, `${table.name}-${tableIndex}`))
-              }
-            )
-          ] }),
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2", children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "rounded-full border border-white/10 bg-black/35 px-3 py-2 text-cyan-200/80 shadow-[0_10px_28px_rgba(0,0,0,0.22)] backdrop-blur-md", children: [
-              "Frame ",
-              formatFrameIndex(position, frameCount)
-            ] }),
-            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "rounded-full border border-white/10 bg-black/35 px-3 py-2 text-slate-200/80 shadow-[0_10px_28px_rgba(0,0,0,0.22)] backdrop-blur-md", children: [
-              "Pos ",
-              clampDisplayPosition(position).toFixed(3)
-            ] })
-          ] })
-        ] }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "absolute inset-x-0 bottom-0 flex items-end justify-start gap-3 p-5", children: canRetry ? /* @__PURE__ */ jsxRuntimeExports.jsx(
-          "button",
-          {
-            type: "button",
-            className: "cosimo-button rounded-full px-4 py-2 text-[11px] uppercase tracking-[0.18em] disabled:opacity-40",
-            disabled: !canRetry,
-            onClick: onRetry,
-            children: "Retry Load"
-          }
-        ) : null })
-      ]
-    }
-  );
-}
-function MsegOverviewSection({
-  msegState,
-  onOpenEditor,
-  onDepthChange,
-  onRateChange,
-  onToggleLoop,
-  depthFocusBindings,
-  rateFocusBindings,
-  className
-}) {
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: `grid min-h-[356px] grid-rows-[auto_minmax(0,1fr)_auto] gap-3 rounded-[30px] border border-white/8 bg-white/[0.03] p-4 pb-5 ${className ?? ""}`, children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between gap-4", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-[11px] uppercase tracking-[0.22em] text-blue-300/70", children: "MSEG" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "font-mono text-sm tracking-[0.16em] text-cyan-200", children: msegState ? formatSeconds(clampMsegRateSeconds(msegState.playback.rate.seconds)) : "0.000 s" })
-    ] }),
-    msegState ? /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx(
-        "button",
-        {
-          type: "button",
-          className: "group min-h-0 overflow-hidden rounded-[24px] border border-white/6 bg-black/20 p-3 text-left transition hover:border-white/12 hover:bg-black/24",
-          onClick: onOpenEditor,
-          "aria-label": "Open MSEG editor",
-          children: /* @__PURE__ */ jsxRuntimeExports.jsx(
-            MsegPreview,
-            {
-              points: msegState.shape.points,
-              className: "h-full min-h-0 w-full overflow-hidden rounded-[18px] bg-white/[0.03]"
-            }
-          )
-        }
-      ),
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid gap-3 pt-1", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid grid-cols-[minmax(0,1fr)_92px] items-center gap-4", children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid gap-2", children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[11px] uppercase tracking-[0.18em] text-slate-300/60", children: "Depth" }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx(
-              "input",
-              {
-                className: "cosimo-range",
-                type: "range",
-                min: "-1",
-                max: "1",
-                step: "0.001",
-                value: Number(msegState.depth).toFixed(3),
-                onChange: (event) => onDepthChange(Number(event.target.value)),
-                ...depthFocusBindings
-              }
-            )
-          ] }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-right font-mono text-sm tracking-[0.16em] text-cyan-200", children: Number(msegState.depth).toFixed(3) })
-        ] }),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid grid-cols-[minmax(0,1fr)_92px_auto] items-center gap-4", children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid gap-2", children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[11px] uppercase tracking-[0.18em] text-slate-300/60", children: "Rate" }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx(
-              "input",
-              {
-                className: "cosimo-range",
-                type: "range",
-                min: MSEG_RATE_MIN_SECONDS,
-                max: MSEG_RATE_MAX_SECONDS,
-                step: "0.001",
-                value: clampMsegRateSeconds(msegState.playback.rate.seconds).toFixed(3),
-                onChange: (event) => onRateChange(Number(event.target.value)),
-                ...rateFocusBindings
-              }
-            )
-          ] }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-right font-mono text-sm tracking-[0.16em] text-cyan-200", children: formatSeconds(clampMsegRateSeconds(msegState.playback.rate.seconds)) }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx(
-            "button",
-            {
-              type: "button",
-              className: "cosimo-button h-11 rounded-2xl px-4 text-[11px] uppercase tracking-[0.18em]",
-              onClick: onToggleLoop,
-              children: msegState.playback.loop ? "Looping" : "One Shot"
-            }
-          )
-        ] })
-      ] })
-    ] }) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "rounded-2xl border border-white/8 bg-black/20 px-4 py-5 text-sm text-slate-300/70", children: "Loading MSEG state…" })
-  ] });
-}
-function OctaveShiftGlyph({
-  direction
-}) {
-  return /* @__PURE__ */ jsxRuntimeExports.jsx("svg", { viewBox: "0 0 16 16", className: "h-3.5 w-3.5", "aria-hidden": "true", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
-    "path",
-    {
-      d: direction === "up" ? "M4.5 9.75 8 6.25 11.5 9.75" : "M4.5 6.25 8 9.75 11.5 6.25",
-      fill: "none",
-      stroke: "currentColor",
-      strokeLinecap: "round",
-      strokeLinejoin: "round",
-      strokeWidth: "1.5"
-    }
-  ) });
-}
-function KeyboardToolbar({
-  playMode,
-  glideTime,
-  playModeFocusBindings,
-  glideFocusTarget
-}) {
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid grid-cols-[minmax(0,1fr)_auto] items-end gap-4 rounded-[24px] border border-white/8 bg-white/[0.03] px-4 py-3", children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsx(VoiceModeToolbar, { playMode, focusBindings: playModeFocusBindings }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx(
-      NexusNumberField,
-      {
-        label: "Glide",
-        binding: glideTime,
-        min: GLIDE_TIME_MIN_SECONDS,
-        max: GLIDE_TIME_MAX_SECONDS,
-        step: GLIDE_TIME_STEP_SECONDS,
-        onActivate: glideFocusTarget.onActivate,
-        onBeginTextEntry: glideFocusTarget.onBeginTextEntry,
-        onEndTextEntry: glideFocusTarget.onEndTextEntry
-      }
-    )
-  ] });
-}
-function KeyboardSection({
-  playMode,
-  glideTime,
-  keyboardRootNote,
-  onOctaveDown,
-  onOctaveUp,
-  playModeFocusBindings,
-  glideFocusTarget,
-  keyboardRef
-}) {
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "grid grid-cols-[56px_minmax(0,1fr)] gap-3", children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col items-center justify-end gap-2 rounded-[24px] border border-white/8 bg-white/[0.03] px-2 py-3", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[10px] uppercase tracking-[0.18em] text-slate-300/55", children: "Oct" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(
-        "button",
-        {
-          type: "button",
-          className: "cosimo-button flex h-10 w-10 items-center justify-center rounded-2xl p-0 disabled:opacity-35",
-          onClick: onOctaveUp,
-          disabled: keyboardRootNote >= KEYBOARD_ROOT_NOTE_MAX,
-          "aria-label": "Shift keyboard up one octave",
-          children: /* @__PURE__ */ jsxRuntimeExports.jsx(OctaveShiftGlyph, { direction: "up" })
-        }
-      ),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(
-        "button",
-        {
-          type: "button",
-          className: "cosimo-button flex h-10 w-10 items-center justify-center rounded-2xl p-0 disabled:opacity-35",
-          onClick: onOctaveDown,
-          disabled: keyboardRootNote <= KEYBOARD_ROOT_NOTE_MIN,
-          "aria-label": "Shift keyboard down one octave",
-          children: /* @__PURE__ */ jsxRuntimeExports.jsx(OctaveShiftGlyph, { direction: "down" })
-        }
-      ),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "font-mono text-[10px] tracking-[0.18em] text-cyan-200/70", children: formatKeyboardRootLabel(keyboardRootNote) })
-    ] }),
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid gap-3", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx(
-        KeyboardToolbar,
-        {
-          playMode,
-          glideTime,
-          playModeFocusBindings,
-          glideFocusTarget
-        }
-      ),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(KeyboardDock, { rootNote: keyboardRootNote, keyboardRef })
-    ] })
-  ] });
-}
-function MsegEditorModal({
-  isOpen,
-  msegState,
-  surfaceRef,
-  selectedPointIndex,
-  onClose,
-  onRateChange,
-  onToggleLoop,
-  onPointerDown,
-  onPointerMove,
-  onPointerUp,
-  rateFocusBindings
-}) {
-  if (!isOpen || !msegState) {
-    return null;
-  }
-  return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "absolute inset-0 z-20 flex items-center justify-center bg-[#030711]/85 p-6 backdrop-blur-md", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid h-full w-full max-w-[1080px] grid-rows-[auto_minmax(0,1fr)_auto] gap-5 rounded-[28px] border border-white/10 bg-[#09101d]/95 p-6 shadow-[0_36px_80px_rgba(0,0,0,0.5)]", children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-start justify-between gap-4", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-[11px] uppercase tracking-[0.22em] text-blue-300/70", children: "MSEG 1" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "mt-2 text-2xl font-semibold tracking-[-0.04em] text-amber-100", children: "Fixed Wavetable Route" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "mt-2 text-sm text-slate-300/70", children: "Drag a point to move it. Click an empty spot to add a point. Click an interior point without dragging to delete it." })
-      ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(
-        "button",
-        {
-          type: "button",
-          className: "cosimo-button h-11 rounded-2xl px-4 text-[11px] uppercase tracking-[0.18em]",
-          onClick: onClose,
-          children: "Done"
-        }
-      )
-    ] }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx(
-      EditableMsegSurface,
-      {
-        surfaceRef,
-        points: msegState.shape.points,
-        selectedPointIndex,
-        onPointerDown,
-        onPointerMove,
-        onPointerUp
-      }
-    ),
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid grid-cols-[minmax(0,1fr)_auto] items-end gap-5 rounded-[22px] border border-white/8 bg-white/[0.03] p-5", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx(
-        RangeField,
-        {
-          label: "Time In Seconds",
-          min: MSEG_RATE_MIN_SECONDS,
-          max: MSEG_RATE_MAX_SECONDS,
-          step: 1e-3,
-          value: clampMsegRateSeconds(msegState.playback.rate.seconds),
-          displayValue: formatSeconds(clampMsegRateSeconds(msegState.playback.rate.seconds)),
-          onChange: onRateChange,
-          ariaLabel: "MSEG rate",
-          focusBindings: rateFocusBindings
-        }
-      ),
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-3", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "font-mono text-sm tracking-[0.16em] text-cyan-200", children: formatSeconds(clampMsegRateSeconds(msegState.playback.rate.seconds)) }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx(
-          "button",
-          {
-            type: "button",
-            className: "cosimo-button h-11 rounded-2xl px-4 text-[11px] uppercase tracking-[0.18em]",
-            onClick: onToggleLoop,
-            children: msegState.playback.loop ? "Looping" : "One Shot"
-          }
-        )
-      ] })
-    ] })
-  ] }) });
-}
-function commitDiscreteParameter(binding, nextValue) {
-  binding.commitValue(nextValue);
 }
 function useStagePositionDrag({
   stageRef,
@@ -23336,35 +23775,85 @@ function useMsegEditorInteractions({
     handlePointerUp
   };
 }
-function DesktopPatchViewBody() {
-  const runtimeStateMessage = usePatchEndpoint(runtimeStateEndpointID, null);
+function useStableArrowTarget(targetID, onArrowStep) {
+  const onArrowStepRef = reactExports.useRef(onArrowStep);
+  reactExports.useEffect(() => {
+    onArrowStepRef.current = onArrowStep;
+  }, [onArrowStep]);
+  return reactExports.useMemo(() => ({
+    id: targetID,
+    onArrowStep: (direction) => {
+      onArrowStepRef.current(direction);
+    }
+  }), [targetID]);
+}
+function useSynthKeyboardRouting({
+  keyboardRef,
+  onStepWavetable,
+  onStepPlayMode,
+  onStepMsegDepth,
+  onStepMsegRate,
+  onStepGlideTime
+}) {
+  const synthInputRouter = useSynthInputRouter(keyboardRef);
+  const wavetableTarget = useStableArrowTarget("wavetable-select", onStepWavetable);
+  const playModeTarget = useStableArrowTarget("play-mode", onStepPlayMode);
+  const msegDepthTarget = useStableArrowTarget("mseg-depth", onStepMsegDepth);
+  const msegRateTarget = useStableArrowTarget("mseg-rate", onStepMsegRate);
+  const glideTarget = useStableArrowTarget("glide-time", onStepGlideTime);
+  return reactExports.useMemo(() => ({
+    wavetableFocusBindings: synthInputRouter.bindArrowTarget(wavetableTarget),
+    playModeFocusBindings: synthInputRouter.bindArrowTarget(playModeTarget),
+    msegDepthFocusBindings: synthInputRouter.bindArrowTarget(msegDepthTarget),
+    msegRateFocusBindings: synthInputRouter.bindArrowTarget(msegRateTarget),
+    glideFocusTarget: {
+      onActivate: () => synthInputRouter.activateArrowTarget(glideTarget),
+      onBeginTextEntry: () => synthInputRouter.beginTextEntry(glideTarget),
+      onEndTextEntry: () => synthInputRouter.endTextEntry()
+    }
+  }), [
+    glideTarget,
+    msegDepthTarget,
+    msegRateTarget,
+    playModeTarget,
+    synthInputRouter,
+    wavetableTarget
+  ]);
+}
+function useSynthPatchViewModel({
+  stageRef,
+  msegEditorSurfaceRef,
+  keyboardRef,
+  voiceModeCount
+}) {
+  const runtimeStateMessage = usePatchEndpoint(RUNTIME_STATE_ENDPOINT_ID, null);
   const normalizedRuntimeState = reactExports.useMemo(
     () => normalizeRuntimeTableState(runtimeStateMessage),
     [runtimeStateMessage]
   );
   const { catalog, error: catalogError } = useFactoryBankCatalog();
   const wavetablePosition = usePatchParameterBinding({
-    endpointID: wavetablePositionEndpointID,
+    endpointID: WAVETABLE_POSITION_ENDPOINT_ID,
     initialValue: 0,
     coerce: (value) => clampDisplayPosition(value)
   });
   const wavetableSelect = usePatchParameterBinding({
-    endpointID: wavetableSelectEndpointID,
+    endpointID: WAVETABLE_SELECT_ENDPOINT_ID,
     initialValue: 0,
     coerce: (value) => Math.max(0, Math.trunc(Number(value) || 0))
   });
   const playMode = usePatchParameterBinding({
-    endpointID: playModeEndpointID,
+    endpointID: PLAY_MODE_ENDPOINT_ID,
     initialValue: 0,
-    coerce: (value) => clamp(Math.round(Number(value) || 0), 0, PLAY_MODE_OPTIONS.length - 1)
+    coerce: (value) => clamp(Math.round(Number(value) || 0), 0, Math.max(0, voiceModeCount - 1))
   });
   const glideTime = usePatchParameterBinding({
-    endpointID: glideTimeEndpointID,
+    endpointID: GLIDE_TIME_ENDPOINT_ID,
     initialValue: 0,
-    coerce: (value) => clamp(Number(value) || 0, 0, 2)
+    coerce: (value) => clamp(Number(value) || 0, GLIDE_TIME_MIN_SECONDS$1, GLIDE_TIME_MAX_SECONDS$1)
   });
-  const requestRuntimeSync = usePatchEventTrigger(runtimeSyncRequestEndpointID);
-  const retryDesiredTableLoad = usePatchEventTrigger(retryDesiredTableRequestEndpointID);
+  const requestRuntimeSync = usePatchEventTrigger(RUNTIME_SYNC_REQUEST_ENDPOINT_ID);
+  const retryDesiredTableLoad = usePatchEventTrigger(RETRY_DESIRED_TABLE_REQUEST_ENDPOINT_ID);
   const observedPosition = useObservedDisplayPosition(Number(wavetablePosition.value) || 0);
   const runtimePresentation = reactExports.useMemo(
     () => resolveRuntimeTablePresentation(runtimeStateMessage, Number(wavetableSelect.value) || 0),
@@ -23373,30 +23862,13 @@ function DesktopPatchViewBody() {
   const presentedTableIndex = runtimePresentation.presentedTableIndex ?? 0;
   const desiredTableIndex = runtimePresentation.desiredTableIndex ?? 0;
   const { frames, error: frameError } = useFactoryTableFrames(presentedTableIndex);
-  const stageRef = reactExports.useRef(null);
-  const msegEditorSurfaceRef = reactExports.useRef(null);
-  const keyboardElementRef = reactExports.useRef(null);
   const { state: msegState, controller: msegController } = useMsegState();
-  const [keyboardRootNote, setKeyboardRootNote] = reactExports.useState(KEYBOARD_ROOT_NOTE_DEFAULT);
-  const synthInputRouter = useSynthInputRouter(keyboardElementRef);
-  const {
-    handleStagePointerDown,
-    handleStagePointerMove,
-    handleStagePointerUp
-  } = useStagePositionDrag({
+  const stageBindings = useStagePositionDrag({
     stageRef,
     observedPosition,
     binding: wavetablePosition
   });
-  const {
-    isOpen: isMsegEditorOpen,
-    selectedPointIndex: selectedMsegPointIndex,
-    openEditor: handleOpenMsegEditor,
-    closeEditor: handleCloseMsegEditor,
-    handlePointerDown: handleMsegPointerDown,
-    handlePointerMove: handleMsegPointerMove,
-    handlePointerUp: handleMsegPointerUp
-  } = useMsegEditorInteractions({
+  const msegEditor = useMsegEditorInteractions({
     msegState,
     msegController,
     surfaceRef: msegEditorSurfaceRef
@@ -23413,14 +23885,11 @@ function DesktopPatchViewBody() {
     requestRuntimeSync(1);
   }, [requestRuntimeSync]);
   const handleSelectWavetable = reactExports.useCallback((nextValue) => {
-    commitDiscreteParameter(wavetableSelect, nextValue);
+    wavetableSelect.commitValue(nextValue);
   }, [wavetableSelect]);
   const handleStepWavetable = reactExports.useCallback((direction) => {
     const maxTableIndex = Math.max(0, (catalog?.tables?.length ?? 1) - 1);
-    commitDiscreteParameter(
-      wavetableSelect,
-      clamp(desiredTableIndex + direction, 0, maxTableIndex)
-    );
+    wavetableSelect.commitValue(clamp(desiredTableIndex + direction, 0, maxTableIndex));
   }, [catalog?.tables?.length, desiredTableIndex, wavetableSelect]);
   const handleRetryLoad = reactExports.useCallback(() => {
     retryDesiredTableLoad(1);
@@ -23469,99 +23938,271 @@ function DesktopPatchViewBody() {
       noteOffPolicy: "finish_loop"
     });
   }, [msegController, msegState]);
-  const handleKeyboardOctaveDown = reactExports.useCallback(() => {
-    setKeyboardRootNote((previousRootNote) => clamp(previousRootNote - 12, KEYBOARD_ROOT_NOTE_MIN, KEYBOARD_ROOT_NOTE_MAX));
-  }, []);
-  const handleKeyboardOctaveUp = reactExports.useCallback(() => {
-    setKeyboardRootNote((previousRootNote) => clamp(previousRootNote + 12, KEYBOARD_ROOT_NOTE_MIN, KEYBOARD_ROOT_NOTE_MAX));
-  }, []);
   const handleStepPlayMode = reactExports.useCallback((direction) => {
-    commitDiscreteParameter(
-      playMode,
-      clamp(playMode.value + direction, 0, PLAY_MODE_OPTIONS.length - 1)
+    playMode.commitValue(
+      clamp(playMode.value + direction, 0, Math.max(0, voiceModeCount - 1))
     );
-  }, [playMode]);
+  }, [playMode, voiceModeCount]);
   const handleStepGlideTime = reactExports.useCallback((direction) => {
     glideTime.commitValue(clamp(
-      glideTime.value + direction * GLIDE_TIME_STEP_SECONDS,
-      GLIDE_TIME_MIN_SECONDS,
-      GLIDE_TIME_MAX_SECONDS
+      glideTime.value + direction * GLIDE_TIME_STEP_SECONDS$1,
+      GLIDE_TIME_MIN_SECONDS$1,
+      GLIDE_TIME_MAX_SECONDS$1
     ));
   }, [glideTime]);
-  const wavetableFocusBindings = synthInputRouter.bindArrowTarget({
-    id: "wavetable-select",
-    onArrowStep: handleStepWavetable
+  const keyboardRouting = useSynthKeyboardRouting({
+    keyboardRef,
+    onStepWavetable: handleStepWavetable,
+    onStepPlayMode: handleStepPlayMode,
+    onStepMsegDepth: handleStepMsegDepth,
+    onStepMsegRate: handleStepMsegRate,
+    onStepGlideTime: handleStepGlideTime
   });
-  const playModeFocusBindings = synthInputRouter.bindArrowTarget({
-    id: "play-mode",
-    onArrowStep: handleStepPlayMode
+  return {
+    frames,
+    observedPosition,
+    topStatus,
+    failureDetail,
+    displayedTableName: displayedTable?.name ?? "Factory bank",
+    displayedFrameCount,
+    desiredTableIndex,
+    tableOptions: catalog?.tables ?? [],
+    canRetryDesiredTableLoad: runtimePresentation.isRetryableFailure,
+    playMode,
+    glideTime,
+    msegState,
+    handleSelectWavetable,
+    handleRetryLoad,
+    handleMsegDepthChange,
+    handleMsegRateChange,
+    handleToggleMsegLoop,
+    stageBindings,
+    msegEditor,
+    keyboardRouting
+  };
+}
+const KEYBOARD_ROOT_NOTE_DEFAULT = 36;
+const KEYBOARD_ROOT_NOTE_MIN = 12;
+const KEYBOARD_ROOT_NOTE_MAX = 72;
+const GLIDE_TIME_MIN_SECONDS = 0;
+const GLIDE_TIME_MAX_SECONDS = 2;
+const GLIDE_TIME_STEP_SECONDS = 1e-3;
+function formatSeconds(seconds) {
+  return `${seconds.toFixed(3)} s`;
+}
+function formatKeyboardRootLabel(rootNote) {
+  const octave = Math.floor(rootNote / 12) - 1;
+  return `C${octave}`;
+}
+function StatusHeader({ statusText }) {
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("header", { className: "flex items-center justify-between gap-4", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "rounded-full border border-white/8 bg-white/[0.03] px-4 py-2 text-[11px] uppercase tracking-[0.24em] text-blue-300/70", children: "Cosimo Synth" }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "rounded-full border border-white/8 bg-white/[0.04] px-4 py-2 text-right text-[11px] uppercase tracking-[0.16em] text-fuchsia-200/80", children: statusText })
+  ] });
+}
+function KeyboardToolbar({
+  playMode,
+  glideTime,
+  playModeFocusBindings,
+  glideFocusTarget
+}) {
+  return /* @__PURE__ */ jsxRuntimeExports.jsx(
+    VoiceGlideControlSurface,
+    {
+      playModeValue: playMode.value,
+      onPlayModeChange: (nextValue) => playMode.commitValue(nextValue),
+      playModeFocusBindings,
+      className: "grid-cols-[minmax(0,1fr)_auto] items-end",
+      glideControl: /* @__PURE__ */ jsxRuntimeExports.jsx(
+        NexusNumberField,
+        {
+          label: "Glide",
+          binding: glideTime,
+          min: GLIDE_TIME_MIN_SECONDS,
+          max: GLIDE_TIME_MAX_SECONDS,
+          step: GLIDE_TIME_STEP_SECONDS,
+          onActivate: glideFocusTarget.onActivate,
+          onBeginTextEntry: glideFocusTarget.onBeginTextEntry,
+          onEndTextEntry: glideFocusTarget.onEndTextEntry
+        }
+      )
+    }
+  );
+}
+function KeyboardSection({
+  playMode,
+  glideTime,
+  keyboardRootNote,
+  onOctaveDown,
+  onOctaveUp,
+  playModeFocusBindings,
+  glideFocusTarget,
+  keyboardRef
+}) {
+  return /* @__PURE__ */ jsxRuntimeExports.jsx(
+    KeyboardSectionShell,
+    {
+      keyboardRootLabel: formatKeyboardRootLabel(keyboardRootNote),
+      canOctaveUp: keyboardRootNote < KEYBOARD_ROOT_NOTE_MAX,
+      canOctaveDown: keyboardRootNote > KEYBOARD_ROOT_NOTE_MIN,
+      onOctaveUp,
+      onOctaveDown,
+      className: "grid-cols-[56px_minmax(0,1fr)]",
+      railClassName: "px-2 py-3",
+      toolbar: /* @__PURE__ */ jsxRuntimeExports.jsx(
+        KeyboardToolbar,
+        {
+          playMode,
+          glideTime,
+          playModeFocusBindings,
+          glideFocusTarget
+        }
+      ),
+      keyboard: /* @__PURE__ */ jsxRuntimeExports.jsx(KeyboardDock, { rootNote: keyboardRootNote, keyboardRef })
+    }
+  );
+}
+function MsegEditorModal({
+  isOpen,
+  msegState,
+  surfaceRef,
+  selectedPointIndex,
+  onClose,
+  onRateChange,
+  onToggleLoop,
+  onPointerDown,
+  onPointerMove,
+  onPointerUp,
+  rateFocusBindings
+}) {
+  if (!isOpen || !msegState) {
+    return null;
+  }
+  return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "absolute inset-0 z-20 flex items-center justify-center bg-[#030711]/85 p-6 backdrop-blur-md", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid h-full w-full max-w-[1080px] grid-rows-[auto_minmax(0,1fr)_auto] gap-5 rounded-[28px] border border-white/10 bg-[#09101d]/95 p-6 shadow-[0_36px_80px_rgba(0,0,0,0.5)]", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-start justify-between gap-4", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-[11px] uppercase tracking-[0.22em] text-blue-300/70", children: "MSEG 1" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "mt-2 text-2xl font-semibold tracking-[-0.04em] text-amber-100", children: "Fixed Wavetable Route" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "mt-2 text-sm text-slate-300/70", children: "Drag a point to move it. Click an empty spot to add a point. Click an interior point without dragging to delete it." })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "button",
+        {
+          type: "button",
+          className: "cosimo-button h-11 rounded-2xl px-4 text-[11px] uppercase tracking-[0.18em]",
+          onClick: onClose,
+          children: "Done"
+        }
+      )
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx(
+      EditableMsegSurface,
+      {
+        surfaceRef,
+        points: msegState.shape.points,
+        selectedPointIndex,
+        onPointerDown,
+        onPointerMove,
+        onPointerUp,
+        className: "h-[320px]"
+      }
+    ),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid grid-cols-[minmax(0,1fr)_auto] items-end gap-5 rounded-[22px] border border-white/8 bg-white/[0.03] p-5", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        RangeField,
+        {
+          label: "Time In Seconds",
+          min: MSEG_RATE_MIN_SECONDS,
+          max: MSEG_RATE_MAX_SECONDS,
+          step: 1e-3,
+          value: clampMsegRateSeconds(msegState.playback.rate.seconds),
+          displayValue: formatSeconds(clampMsegRateSeconds(msegState.playback.rate.seconds)),
+          onChange: onRateChange,
+          ariaLabel: "MSEG rate",
+          focusBindings: rateFocusBindings
+        }
+      ),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-3", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "font-mono text-sm tracking-[0.16em] text-cyan-200", children: formatSeconds(clampMsegRateSeconds(msegState.playback.rate.seconds)) }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "button",
+          {
+            type: "button",
+            className: "cosimo-button h-11 rounded-2xl px-4 text-[11px] uppercase tracking-[0.18em]",
+            onClick: onToggleLoop,
+            children: msegState.playback.loop ? "Looping" : "One Shot"
+          }
+        )
+      ] })
+    ] })
+  ] }) });
+}
+function DesktopPatchViewBody() {
+  const stageRef = reactExports.useRef(null);
+  const msegEditorSurfaceRef = reactExports.useRef(null);
+  const keyboardElementRef = reactExports.useRef(null);
+  const [keyboardRootNote, setKeyboardRootNote] = reactExports.useState(KEYBOARD_ROOT_NOTE_DEFAULT);
+  const synthView = useSynthPatchViewModel({
+    stageRef,
+    msegEditorSurfaceRef,
+    keyboardRef: keyboardElementRef,
+    voiceModeCount: VOICE_MODE_OPTIONS.length
   });
-  const msegDepthFocusBindings = synthInputRouter.bindArrowTarget({
-    id: "mseg-depth",
-    onArrowStep: handleStepMsegDepth
-  });
-  const msegRateFocusBindings = synthInputRouter.bindArrowTarget({
-    id: "mseg-rate",
-    onArrowStep: handleStepMsegRate
-  });
-  const glideFocusTarget = reactExports.useMemo(() => ({
-    onActivate: () => synthInputRouter.activateArrowTarget({
-      id: "glide-time",
-      onArrowStep: handleStepGlideTime
-    }),
-    onBeginTextEntry: () => synthInputRouter.beginTextEntry({
-      id: "glide-time",
-      onArrowStep: handleStepGlideTime
-    }),
-    onEndTextEntry: () => synthInputRouter.endTextEntry()
-  }), [handleStepGlideTime, synthInputRouter]);
+  const handleKeyboardOctaveDown = reactExports.useCallback(() => {
+    setKeyboardRootNote((previousRootNote) => Math.min(Math.max(previousRootNote - 12, KEYBOARD_ROOT_NOTE_MIN), KEYBOARD_ROOT_NOTE_MAX));
+  }, []);
+  const handleKeyboardOctaveUp = reactExports.useCallback(() => {
+    setKeyboardRootNote((previousRootNote) => Math.min(Math.max(previousRootNote + 12, KEYBOARD_ROOT_NOTE_MIN), KEYBOARD_ROOT_NOTE_MAX));
+  }, []);
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "cosimo-surface relative flex h-full w-full flex-col gap-5 overflow-hidden rounded-[28px] border border-white/8 p-6 text-slate-100 shadow-[0_26px_80px_rgba(0,0,0,0.48)]", children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsx(StatusHeader, { statusText: topStatus }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx(StatusHeader, { statusText: synthView.topStatus }),
     /* @__PURE__ */ jsxRuntimeExports.jsxs("main", { className: "grid min-h-0 flex-1 grid-rows-[minmax(356px,0.9fr)_auto_auto] gap-5", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "grid min-h-0 grid-cols-[minmax(280px,1fr)_minmax(0,2fr)] gap-5", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           WavetableStageSection,
           {
             stageRef,
-            frames,
-            position: observedPosition,
-            tableName: displayedTable?.name ?? "Factory bank",
-            frameCount: displayedFrameCount,
-            desiredTableIndex,
-            tableOptions: catalog?.tables ?? [],
-            canRetry: runtimePresentation.isRetryableFailure,
-            onTableChange: handleSelectWavetable,
-            onRetry: handleRetryLoad,
-            tableFocusBindings: wavetableFocusBindings,
-            onPointerDown: handleStagePointerDown,
-            onPointerMove: handleStagePointerMove,
-            onPointerUp: handleStagePointerUp
+            frames: synthView.frames,
+            position: synthView.observedPosition,
+            tableName: synthView.displayedTableName,
+            frameCount: synthView.displayedFrameCount,
+            desiredTableIndex: synthView.desiredTableIndex,
+            tableOptions: synthView.tableOptions,
+            canRetry: synthView.canRetryDesiredTableLoad,
+            onTableChange: synthView.handleSelectWavetable,
+            onRetry: synthView.handleRetryLoad,
+            tableFocusBindings: synthView.keyboardRouting.wavetableFocusBindings,
+            onPointerDown: synthView.stageBindings.handleStagePointerDown,
+            onPointerMove: synthView.stageBindings.handleStagePointerMove,
+            onPointerUp: synthView.stageBindings.handleStagePointerUp,
+            className: "min-h-[356px]"
           }
         ),
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           MsegOverviewSection,
           {
-            msegState,
-            onOpenEditor: handleOpenMsegEditor,
-            onDepthChange: handleMsegDepthChange,
-            onRateChange: handleMsegRateChange,
-            onToggleLoop: handleToggleMsegLoop,
-            depthFocusBindings: msegDepthFocusBindings,
-            rateFocusBindings: msegRateFocusBindings
+            msegState: synthView.msegState,
+            onOpenEditor: synthView.msegEditor.openEditor,
+            onDepthChange: synthView.handleMsegDepthChange,
+            onRateChange: synthView.handleMsegRateChange,
+            onToggleLoop: synthView.handleToggleMsegLoop,
+            depthFocusBindings: synthView.keyboardRouting.msegDepthFocusBindings,
+            rateFocusBindings: synthView.keyboardRouting.msegRateFocusBindings,
+            className: "min-h-[356px]"
           }
         )
       ] }),
-      failureDetail ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "rounded-[22px] border border-fuchsia-300/15 bg-fuchsia-300/8 px-4 py-3 text-sm text-fuchsia-100/90", children: failureDetail }) : null,
+      synthView.failureDetail ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "rounded-[22px] border border-fuchsia-300/15 bg-fuchsia-300/8 px-4 py-3 text-sm text-fuchsia-100/90", children: synthView.failureDetail }) : null,
       /* @__PURE__ */ jsxRuntimeExports.jsx(
         KeyboardSection,
         {
-          playMode,
-          glideTime,
+          playMode: synthView.playMode,
+          glideTime: synthView.glideTime,
           keyboardRootNote,
           onOctaveDown: handleKeyboardOctaveDown,
           onOctaveUp: handleKeyboardOctaveUp,
-          playModeFocusBindings,
-          glideFocusTarget,
+          playModeFocusBindings: synthView.keyboardRouting.playModeFocusBindings,
+          glideFocusTarget: synthView.keyboardRouting.glideFocusTarget,
           keyboardRef: keyboardElementRef
         }
       )
@@ -23569,17 +24210,17 @@ function DesktopPatchViewBody() {
     /* @__PURE__ */ jsxRuntimeExports.jsx(
       MsegEditorModal,
       {
-        isOpen: isMsegEditorOpen,
-        msegState,
+        isOpen: synthView.msegEditor.isOpen,
+        msegState: synthView.msegState,
         surfaceRef: msegEditorSurfaceRef,
-        selectedPointIndex: selectedMsegPointIndex,
-        onClose: handleCloseMsegEditor,
-        onRateChange: handleMsegRateChange,
-        onToggleLoop: handleToggleMsegLoop,
-        onPointerDown: handleMsegPointerDown,
-        onPointerMove: handleMsegPointerMove,
-        onPointerUp: handleMsegPointerUp,
-        rateFocusBindings: msegRateFocusBindings
+        selectedPointIndex: synthView.msegEditor.selectedPointIndex,
+        onClose: synthView.msegEditor.closeEditor,
+        onRateChange: synthView.handleMsegRateChange,
+        onToggleLoop: synthView.handleToggleMsegLoop,
+        onPointerDown: synthView.msegEditor.handlePointerDown,
+        onPointerMove: synthView.msegEditor.handlePointerMove,
+        onPointerUp: synthView.msegEditor.handlePointerUp,
+        rateFocusBindings: synthView.keyboardRouting.msegRateFocusBindings
       }
     )
   ] });
@@ -23640,10 +24281,12 @@ class DesktopPatchErrorBoundary extends reactExports.Component {
 }
 class CosimoDesktopReactViewElement extends HTMLElement {
   patchConnection = null;
+  resourceClient = null;
   root = null;
   mountPoint = null;
-  setPatchConnection(patchConnection) {
+  setPatchConnection(patchConnection, resourceClient) {
     this.patchConnection = patchConnection;
+    this.resourceClient = resourceClient ?? null;
     this.renderApp();
   }
   connectedCallback() {
@@ -23679,7 +24322,7 @@ class CosimoDesktopReactViewElement extends HTMLElement {
         DesktopPatchView,
         {
           patchConnection: this.patchConnection,
-          resourceClient: createDesktopResourceClient(this.patchConnection)
+          resourceClient: this.resourceClient ?? createDesktopResourceClient(this.patchConnection)
         }
       ) })
     );
@@ -23688,13 +24331,13 @@ class CosimoDesktopReactViewElement extends HTMLElement {
 function getTagName() {
   return "cosimo-desktop-react-view";
 }
-function createDesktopPatchView(patchConnection) {
+function createDesktopPatchView(patchConnection, options = {}) {
   const tagName = getTagName();
   if (!window.customElements.get(tagName)) {
     window.customElements.define(tagName, CosimoDesktopReactViewElement);
   }
   const element = document.createElement(tagName);
-  element.setPatchConnection(patchConnection);
+  element.setPatchConnection(patchConnection, options.resourceClient);
   return element;
 }
 function createPatchView(patchConnection) {

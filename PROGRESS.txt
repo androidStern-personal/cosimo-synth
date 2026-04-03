@@ -394,3 +394,52 @@ What was verified for phase 6B
 - `node --test tests/test_mseg_renderer.mjs tests/test_mseg_editor.mjs tests/test_patch_view_layout.mjs tests/test_wavetable_display.mjs`
 - `uv run pytest -q tests/test_mseg_reference.py`
 - `uv run pytest -q tests/test_mseg_cmajor_probe.py -m cmajor`
+
+Detour started on 2026-04-02
+- Paused the `DesktopPatchView.tsx` extraction itself to build a real test safety net first.
+- Wrote `TRANSIENT_DESKTOP_PATCH_VIEW_EXTRACTION_TEST_PLAN.md` as the transient source of truth for the extraction test plan.
+- The immediate goal is to replace brittle source-text regex checks with one real browser harness suite that catches blank-screen regressions and covers the desktop behaviors that must survive the extraction.
+
+Detour progress on 2026-04-02
+- Dropped the first `jsdom` test-harness attempt because `nexusui` and the desktop custom-element path do not initialize cleanly there, which would have made the tests easy to fake and hard to trust.
+- Kept the real browser harness suite as the safety net instead: `tests/test_desktop_patch_view_browser.mjs` exercises the actual desktop harness in Chromium and verifies that catalog failures, frame failures, wavetable selection, retry, stage drag, keyboard routing, runtime pending-selection presentation, and MSEG editor wiring all work without the page going blank.
+- Instrumented the desktop harness-only mock connection in `ui/shared/patch-connection-mock.ts` and `ui/desktop/harness-main.tsx` so browser tests can inspect sent events, runtime state, keyboard activity, MIDI routing, and stored MSEG state without touching production code paths.
+- Removed the weakest desktop regex tests from `tests/test_patch_view_layout.mjs` now that the same behavior is covered by real browser interactions.
+
+What was verified for the DesktopPatchView extraction safety net
+- `node --test tests/test_patch_view_layout.mjs tests/test_wavetable_display.mjs tests/test_wavetable_worker.mjs tests/test_desktop_patch_view_browser.mjs`
+
+Detour completed on 2026-04-02
+- Added a real browser-level desktop React safety net in `tests/test_desktop_patch_view_browser.mjs` instead of continuing to rely on desktop source-text regex checks.
+- The new desktop browser suite now proves the real desktop harness page can boot without a blank screen, request `runtimeSyncRequest` on mount, surface catalog and frame-load failures visibly, commit wavetable selection, send retry requests, preserve wavetable stage drag semantics, preserve keyboard routing, and wire the MSEG modal editor into real stored-state updates.
+- Instrumented the desktop harness-only mock connection in `ui/shared/patch-connection-mock.ts` and `ui/desktop/harness-main.tsx` so browser tests can inspect sent events, runtime state, keyboard activity, and stored MSEG state without touching production code paths.
+- Removed the brittle desktop-specific source-text tests from `tests/test_patch_view_layout.mjs` that only grepped `DesktopPatchView.tsx` for strings instead of proving behavior.
+- Deleted the abandoned `jsdom` draft harness files and removed the unused `@testing-library/react`, `jsdom`, and `tsx` dev dependencies so the branch only carries the browser-based safety net we actually trust.
+- Rebuilt the generated UI assets with `npm run ui:build` after the testing changes.
+
+Detour completed on 2026-04-02
+- Finished the missing direct-test layers from `TRANSIENT_DESKTOP_PATCH_VIEW_EXTRACTION_TEST_PLAN.md` instead of stopping at the page-level browser suite.
+- Extracted the desktop-only adapters into `ui/desktop/desktop-keyboard-adapter.tsx` and `ui/desktop/desktop-nexus-number-field.tsx`, and extracted the shared desktop hooks into `ui/desktop/desktop-patch-hooks.ts` so they can be tested directly before the larger `DesktopPatchView.tsx` split.
+- Added direct browser-mounted adapter tests in `tests/test_desktop_widget_adapters_browser.mjs` for `ensureKeyboardElement`, `KeyboardDock`, and `NexusNumberField`, using `tests/helpers/desktop_patch_modules_browser.tsx` to mount the real modules under Chromium.
+- Added direct browser-mounted hook tests in `tests/test_shared_synth_hooks_browser.mjs` for `useFactoryBankCatalog`, `useFactoryTableFrames`, `useObservedDisplayPosition`, `useMsegState`, `useStagePositionDrag`, and `useMsegEditorInteractions`, again through the real extracted modules instead of source-text checks.
+- The direct adapter tests caught two real regressions in the extracted code: `KeyboardDock` was rebuilding the keyboard element whenever `rootNote` or `noteCount` changed, and `NexusNumberField` was ending text entry twice after a blur plus unmount. Both are now fixed in the extracted adapters.
+- The direct hook tests also caught a real harness mismatch in the MSEG editor interaction coverage: the old helper was feeding local SVG coordinates into pointer events even though the hook reads real client coordinates from `getBoundingClientRect()`. The helper now uses actual client coordinates so the delete and drag tests are exercising the real hit-testing path.
+- Added `patch_gui/wavetable-display.d.ts` and updated `tsconfig.json` so `npx tsc --noEmit` is clean while `ui/shared/wavetable-display.ts` re-exports the legacy iPhone renderer.
+
+What was verified for the direct adapter and hook layers
+- `npx tsc --noEmit`
+- `node --test tests/test_desktop_widget_adapters_browser.mjs`
+- `node --test tests/test_shared_synth_hooks_browser.mjs`
+- `node --test tests/test_desktop_patch_view_browser.mjs tests/test_desktop_widget_adapters_browser.mjs tests/test_shared_synth_hooks_browser.mjs tests/test_patch_view_layout.mjs tests/test_wavetable_display.mjs tests/test_wavetable_worker.mjs`
+
+DesktopPatchView extraction completed on 2026-04-02
+- Finished the structural extraction pass described by `DESKTOP_PATCH_VIEW_ARCHITECTURE_REVIEW.md` instead of stopping at the test harnesses.
+- Moved the reusable synth panels and controls out of `ui/desktop/DesktopPatchView.tsx` into `ui/shared/synth-components.tsx`, including the wavetable stage, MSEG overview, MSEG editor surface, voice-mode control, range field, and the shared canvas wavetable mount.
+- Left the desktop-only shell in `ui/desktop/DesktopPatchView.tsx`: the brand header, runtime-sync and patch-binding orchestration, the desktop keyboard row, the Nexus number widget usage, and the desktop modal wrapper still live there, which is the intended boundary for the future iPhone React shell.
+- Added direct browser-mounted shared-component tests in `tests/test_shared_synth_components_browser.mjs` so the extracted shared module is proven to work with plain props and callbacks instead of only through the desktop page.
+- The extraction cut `ui/desktop/DesktopPatchView.tsx` from the old 1201-line all-in-one file down to a much thinner desktop composition shell while keeping the real browser safety net green.
+
+What was verified for the DesktopPatchView extraction
+- `npx tsc --noEmit`
+- `npm run ui:build`
+- `node --test --test-concurrency=1 tests/test_shared_synth_components_browser.mjs tests/test_desktop_patch_view_browser.mjs tests/test_desktop_widget_adapters_browser.mjs tests/test_shared_synth_hooks_browser.mjs tests/test_patch_view_layout.mjs tests/test_wavetable_display.mjs tests/test_wavetable_worker.mjs`

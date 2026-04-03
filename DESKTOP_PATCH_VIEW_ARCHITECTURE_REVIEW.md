@@ -2,6 +2,12 @@
 
 Last updated: 2026-04-02
 
+Status on 2026-04-02
+
+- This file is the architectural review that drove the extraction pass.
+- The extraction described here has now landed: the shared hooks, desktop-only adapters, and shared synth components were moved out of `ui/desktop/DesktopPatchView.tsx`.
+- Keep this file as the record of why that split was necessary, not as a claim that the repo is still in the pre-extraction state.
+
 ## Why This File Exists
 
 This file records the architectural review of `ui/desktop/DesktopPatchView.tsx`.
