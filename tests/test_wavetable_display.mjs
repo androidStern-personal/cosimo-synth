@@ -69,6 +69,22 @@ function meanAbsoluteDifference(left, right) {
     return total / left.length;
 }
 
+function findLargestJumpIndex(samples) {
+    let largestJump = -1;
+    let largestJumpIndex = -1;
+
+    for (let index = 0; index < samples.length - 1; index += 1) {
+        const jump = Math.abs(samples[index + 1] - samples[index]);
+
+        if (jump > largestJump) {
+            largestJump = jump;
+            largestJumpIndex = index;
+        }
+    }
+
+    return largestJumpIndex;
+}
+
 function createSimpleFrames(frameValues) {
     return frameValues.map((values) => Float32Array.from(values));
 }
@@ -679,6 +695,97 @@ test("current slice is the exact blend of the surrounding stored frames", () => 
     );
 });
 
+test("bend warp remaps the highlighted slice shape instead of leaving the raw frame blend unchanged", () => {
+    const frames = createSimpleFrames([
+        [0, 0.25, 0.5, 0.75, 1],
+        [0, 0.25, 0.5, 0.75, 1],
+    ]);
+    const model = buildWavetableRenderModel({
+        frames,
+        position: 0.5,
+        warpMode: 1,
+        warpAmount: 1,
+        width: 320,
+        height: 220,
+    });
+
+    const warped = Array.from(model.currentSlice.samples).map((value) => Number(value.toFixed(3)));
+
+    assert.equal(warped[0], 0);
+    assert.ok(warped[1] > 0.25);
+    assert.equal(warped[2], 0.5);
+    assert.ok(warped[3] < 0.75);
+    assert.equal(warped[4], 1);
+    assert.match(model.currentSlice.label.text, /Bend \+100%/);
+});
+
+test("PWM compresses the source cycle and fills the remainder with a held tail value", () => {
+    const frames = createSimpleFrames([
+        [1, 0.75, 0.5, 0.25, 0],
+        [1, 0.75, 0.5, 0.25, 0],
+    ]);
+    const model = buildWavetableRenderModel({
+        frames,
+        position: 0.5,
+        warpMode: 2,
+        warpAmount: 1,
+        width: 320,
+        height: 220,
+    });
+
+    assert.deepEqual(
+        Array.from(model.currentSlice.samples).map((value) => Number(value.toFixed(3))),
+        [1, 0, 0, 0, 0]
+    );
+    assert.match(model.currentSlice.label.text, /PWM 100%/);
+});
+
+test("Asym +/- keeps linear source segments straight while skewing the whole cycle", () => {
+    const frames = createSimpleFrames([
+        [0, 0.25, 0.5, 0.75, 1],
+        [0, 0.25, 0.5, 0.75, 1],
+    ]);
+    const model = buildWavetableRenderModel({
+        frames,
+        position: 0.5,
+        warpMode: 3,
+        warpAmount: 1,
+        width: 320,
+        height: 220,
+    });
+    const warped = Array.from(model.currentSlice.samples);
+    const deltas = [
+        warped[1] - warped[0],
+        warped[2] - warped[1],
+        warped[3] - warped[2],
+    ];
+    const deltaSpan = Math.max(...deltas) - Math.min(...deltas);
+
+    assert.ok(deltaSpan <= 0.002, `expected the warped triangle deltas to stay nearly linear, got span ${deltaSpan}`);
+    assert.match(model.currentSlice.label.text, /Asym \+100%/);
+});
+
+test("Mirror turns a ramp into a mirrored triangle when the dial is centered", () => {
+    const frames = createSimpleFrames([
+        [0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1],
+        [0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1],
+    ]);
+    const model = buildWavetableRenderModel({
+        frames,
+        position: 0.5,
+        warpMode: 4,
+        warpAmount: 0.5,
+        width: 420,
+        height: 220,
+    });
+
+    assert.deepEqual(
+        Array.from(model.currentSlice.samples).slice(0, -1).map((value) => Number(value.toFixed(3))),
+        [0, 0.25, 0.5, 0.75, 1, 0.75, 0.5, 0.25]
+    );
+    assert.match(model.currentSlice.label.text, /Mirror 0%/);
+});
+
 test("perspective makes distant stored frames narrower than front frames", () => {
     const frames = createSimpleFrames([
         [-1, -0.25, 0.5, 1],
@@ -888,6 +995,35 @@ test("canvas display coalesces repeated position updates into one animation-fram
 
     animationFrame.flush();
     assert.equal(renderCount, 1);
+});
+
+test("canvas display coalesces repeated warp updates and keeps the cached raw mesh", () => {
+    const frames = createSimpleFrames([
+        [-1, -0.25, 0.5, 1],
+        [-1, -0.25, 0.5, 1],
+        [-1, -0.25, 0.5, 1],
+    ]);
+    const canvas = new FakeCanvas();
+    const animationFrame = createAnimationFrameHarness();
+    const display = new CanvasWavetableDisplay(canvas, {
+        requestAnimationFrame: animationFrame.requestAnimationFrame,
+        cancelAnimationFrame: animationFrame.cancelAnimationFrame,
+    });
+
+    display.resize(320, 220, 1);
+    display.setFrames(frames);
+    animationFrame.flush();
+
+    const staticSceneBeforeWarp = display.getStaticScene(320, 220);
+
+    display.setWarp(1, 0.2);
+    display.setWarp(2, 0.6);
+    display.setWarp(4, 0.4);
+
+    assert.equal(animationFrame.pendingCount, 1);
+    assert.equal(display.warpMode, 4);
+    assert.equal(display.warpAmount, 0.4);
+    assert.equal(display.getStaticScene(320, 220), staticSceneBeforeWarp);
 });
 
 test("boundary positions and exact stored-frame positions stay continuous", async () => {

@@ -9,6 +9,11 @@ const AMPLITUDE_SCALE = 0.3;
 const DISCONTINUITY_THRESHOLD = 0.5;
 const FLOOR_Y = -0.64;
 const GUIDE_TOP_Y = 0.28;
+const WARP_MODE_OFF = 0;
+const WARP_MODE_BEND = 1;
+const WARP_MODE_PWM = 2;
+const WARP_MODE_ASYM = 3;
+const WARP_MODE_MIRROR = 4;
 
 export const DEFAULT_WAVETABLE_THEME = createDefaultWavetableTheme();
 
@@ -65,6 +70,177 @@ function assertFrames(frames) {
             throw new Error("all frames must have the same sample count");
         }
     }
+}
+
+function resolveWarpMode(rawMode) {
+    return clamp(Math.round(Number(rawMode) || 0), WARP_MODE_OFF, WARP_MODE_MIRROR);
+}
+
+function isIdentityWarp(warpMode, warpAmount) {
+    const clampedAmount = clamp(Number(warpAmount) || 0, 0, 1);
+
+    if (warpMode <= WARP_MODE_OFF) {
+        return true;
+    }
+
+    if (warpMode === WARP_MODE_BEND) {
+        return Math.abs(clampedAmount - 0.5) <= 0.000001;
+    }
+
+    if (warpMode === WARP_MODE_PWM) {
+        return clampedAmount <= 0.000001;
+    }
+
+    if (warpMode === WARP_MODE_ASYM) {
+        return Math.abs(clampedAmount - 0.5) <= 0.000001;
+    }
+
+    if (warpMode === WARP_MODE_MIRROR) {
+        return false;
+    }
+
+    return true;
+}
+
+function curvedWarpRight(phase, amount) {
+    const clampedPhase = clamp(Number(phase) || 0, 0, 1);
+    const clampedAmount = clamp(Number(amount) || 0, 0, 1);
+    const exponent = Math.pow(2, 4 * clampedAmount);
+    return Math.pow(clampedPhase, exponent);
+}
+
+function curvedWarpLeft(phase, amount) {
+    const clampedPhase = clamp(Number(phase) || 0, 0, 1);
+    const clampedAmount = clamp(Number(amount) || 0, 0, 1);
+    const exponent = Math.pow(2, 4 * clampedAmount);
+    return 1 - Math.pow(1 - clampedPhase, exponent);
+}
+
+function curvedAsymSigned(phase, dial) {
+    const clampedDial = clamp(Number(dial) || 0, 0, 1);
+    const signedAmount = (2 * clampedDial) - 1;
+    const magnitude = Math.abs(signedAmount);
+    return signedAmount >= 0
+        ? curvedWarpRight(phase, magnitude)
+        : curvedWarpLeft(phase, magnitude);
+}
+
+function linearSkewSigned(phase, dial) {
+    const clampedPhase = clamp(Number(phase) || 0, 0, 1);
+    const clampedDial = clamp(Number(dial) || 0, 0, 1);
+    const signedAmount = (2 * clampedDial) - 1;
+    const split = clamp(0.5 + (0.48 * signedAmount), 0.02, 0.98);
+
+    if (clampedPhase < split) {
+        return 0.5 * (clampedPhase / split);
+    }
+
+    return 0.5 + (0.5 * ((clampedPhase - split) / (1 - split)));
+}
+
+function mirrorBasePhase(phase) {
+    const clampedPhase = clamp(Number(phase) || 0, 0, 1);
+
+    if (clampedPhase < 0.5) {
+        return clampedPhase * 2;
+    }
+
+    return 2 - (2 * clampedPhase);
+}
+
+function pwmActivePortion(amount) {
+    const clampedAmount = clamp(Number(amount) || 0, 0, 1);
+    return 1 - ((1 - 0.02) * clampedAmount);
+}
+
+function resolveDisplayWarpPhase(warpMode, warpAmount, phase) {
+    const clampedPhase = clamp(Number(phase) || 0, 0, 1);
+    const result = {
+        shouldLookup: true,
+        phase: clampedPhase,
+    };
+
+    if (warpMode <= WARP_MODE_OFF || clampedPhase >= 1) {
+        return result;
+    }
+
+    const clampedAmount = clamp(Number(warpAmount) || 0, 0, 1);
+
+    if (warpMode === WARP_MODE_BEND) {
+        const invertedDial = 1 - clampedAmount;
+
+        if (clampedPhase < 0.5) {
+            result.phase = 0.5 * curvedAsymSigned(clampedPhase * 2, invertedDial);
+        } else {
+            result.phase = 1 - (0.5 * curvedAsymSigned(2 - (2 * clampedPhase), invertedDial));
+        }
+
+        return result;
+    }
+
+    if (warpMode === WARP_MODE_PWM) {
+        const activePortion = pwmActivePortion(clampedAmount);
+
+        if (clampedPhase < activePortion) {
+            result.phase = clampedPhase / activePortion;
+        } else {
+            result.phase = 1;
+        }
+
+        return result;
+    }
+
+    if (warpMode === WARP_MODE_ASYM) {
+        result.phase = linearSkewSigned(clampedPhase, clampedAmount);
+        return result;
+    }
+
+    if (warpMode === WARP_MODE_MIRROR) {
+        result.phase = linearSkewSigned(mirrorBasePhase(clampedPhase), clampedAmount);
+        return result;
+    }
+
+    return result;
+}
+
+function sampleDisplayFrame(frame, phase) {
+    const safePhase = clamp(Number(phase) || 0, 0, 1);
+    const frameLength = frame.length;
+
+    if (frameLength === 0) {
+        return 0;
+    }
+
+    if (frameLength === 1 || safePhase >= 1) {
+        return frame[frameLength - 1];
+    }
+
+    const samplePosition = safePhase * (frameLength - 1);
+    const sampleIndex = Math.floor(samplePosition);
+    const sampleT = samplePosition - sampleIndex;
+    const nextIndex = Math.min(sampleIndex + 1, frameLength - 1);
+    return lerp(frame[sampleIndex], frame[nextIndex], sampleT);
+}
+
+function buildWarpedFrame(lowFrame, highFrame, amount, warpMode, warpAmount) {
+    const output = new Float32Array(lowFrame.length);
+    const denominator = Math.max(1, lowFrame.length - 1);
+
+    for (let sampleIndex = 0; sampleIndex < lowFrame.length; sampleIndex += 1) {
+        const phase = sampleIndex / denominator;
+        const warpedPhase = resolveDisplayWarpPhase(warpMode, warpAmount, phase);
+
+        if (!warpedPhase.shouldLookup) {
+            output[sampleIndex] = 0;
+            continue;
+        }
+
+        const lowSample = sampleDisplayFrame(lowFrame, warpedPhase.phase);
+        const highSample = sampleDisplayFrame(highFrame, warpedPhase.phase);
+        output[sampleIndex] = lerp(lowSample, highSample, amount);
+    }
+
+    return output;
 }
 
 function getFrameDepth(frameIndex, frameCount) {
@@ -576,7 +752,11 @@ function buildInterpolatedFrame(lowFrame, highFrame, amount) {
 function createCurrentSlice(staticScene, frameState) {
     const lowFrame = staticScene.contourFrames[frameState.frameLo];
     const highFrame = staticScene.contourFrames[frameState.frameHi];
-    const blendedSamples = buildInterpolatedFrame(lowFrame.samples, highFrame.samples, frameState.frameT);
+    const warpMode = resolveWarpMode(frameState.warpMode);
+    const warpAmount = clamp(Number(frameState.warpAmount) || 0, 0, 1);
+    const blendedSamples = isIdentityWarp(warpMode, warpAmount)
+        ? buildInterpolatedFrame(lowFrame.samples, highFrame.samples, frameState.frameT)
+        : buildWarpedFrame(lowFrame.samples, highFrame.samples, frameState.frameT, warpMode, warpAmount);
     const depth = getSceneDepth(frameState.frameIndex, staticScene.frameCount);
     const objectPoints = createObjectPoints(blendedSamples, depth);
     const floorObjectPoints = objectPoints.map((point) => ({ x: point.x, y: FLOOR_Y, z: point.z }));
@@ -588,8 +768,8 @@ function createCurrentSlice(staticScene, frameState) {
     );
     const labelAnchor = points[Math.floor(points.length * 0.78)] ?? points[points.length - 1];
     const label = {
-        text: `Frame ${frameState.frameIndex.toFixed(2)} / ${staticScene.frameCount - 1}`,
-        x: clamp(labelAnchor.x + 14, 18, staticScene.width - 180),
+        text: buildCurrentSliceLabel(frameState, staticScene.frameCount),
+        x: clamp(labelAnchor.x + 14, 18, staticScene.width - 236),
         y: clamp(labelAnchor.y - 18, 24, staticScene.height - 24),
     };
 
@@ -605,7 +785,38 @@ function createCurrentSlice(staticScene, frameState) {
     };
 }
 
-export function createFrameState(frameCount, position) {
+function buildCurrentSliceLabel(frameState, frameCount) {
+    const warpMode = resolveWarpMode(frameState.warpMode);
+    const warpAmount = clamp(Number(frameState.warpAmount) || 0, 0, 1);
+    const baseLabel = `Frame ${frameState.frameIndex.toFixed(2)} / ${frameCount - 1}`;
+
+    if (isIdentityWarp(warpMode, warpAmount)) {
+        return baseLabel;
+    }
+
+    if (warpMode === WARP_MODE_BEND) {
+        const signedAmount = Math.round((warpAmount - 0.5) * 200);
+        return `${baseLabel} · Bend ${signedAmount > 0 ? "+" : ""}${signedAmount}%`;
+    }
+
+    if (warpMode === WARP_MODE_PWM) {
+        return `${baseLabel} · PWM ${Math.round(warpAmount * 100)}%`;
+    }
+
+    if (warpMode === WARP_MODE_ASYM) {
+        const signedAmount = Math.round((warpAmount - 0.5) * 200);
+        return `${baseLabel} · Asym ${signedAmount > 0 ? "+" : ""}${signedAmount}%`;
+    }
+
+    if (warpMode === WARP_MODE_MIRROR) {
+        const signedAmount = Math.round((warpAmount - 0.5) * 200);
+        return `${baseLabel} · Mirror ${signedAmount > 0 ? "+" : ""}${signedAmount}%`;
+    }
+
+    return baseLabel;
+}
+
+export function createFrameState(frameCount, position, warpMode = 0, warpAmount = 0) {
     const safeFrameCount = Math.max(1, Number(frameCount) || 0);
     const clampedPosition = clamp(Number(position) || 0, 0, 1);
     const frameIndex = clampedPosition * (safeFrameCount - 1);
@@ -620,6 +831,8 @@ export function createFrameState(frameCount, position) {
         frameLo,
         frameHi,
         frameT,
+        warpMode: resolveWarpMode(warpMode),
+        warpAmount: clamp(Number(warpAmount) || 0, 0, 1),
     };
 }
 
@@ -686,6 +899,8 @@ export function buildWavetableStaticScene({
 export function buildWavetableRenderModel({
     frames = null,
     position = 0,
+    warpMode = 0,
+    warpAmount = 0,
     width = 640,
     height = 320,
     pixelRatio = 1,
@@ -697,7 +912,7 @@ export function buildWavetableRenderModel({
         height,
         pixelRatio,
     });
-    const frameState = createFrameState(scene.frameCount, position);
+    const frameState = createFrameState(scene.frameCount, position, warpMode, warpAmount);
 
     return {
         ...scene,
@@ -823,7 +1038,7 @@ export function drawWavetableModel(context, model, theme = DEFAULT_WAVETABLE_THE
 
     context.save();
     context.fillStyle = toRGBA(theme.backgroundRGB, 0.74);
-    context.fillRect(model.currentSlice.label.x - 10, model.currentSlice.label.y - 14, 154, 24);
+    context.fillRect(model.currentSlice.label.x - 10, model.currentSlice.label.y - 14, 210, 24);
     context.fillStyle = theme.textColor;
     context.font = "600 12px Avenir Next, Avenir, sans-serif";
     context.textAlign = "left";
@@ -847,6 +1062,8 @@ export class CanvasWavetableDisplay {
         this.cancelAnimationFrame = cancelAnimationFrame;
         this.frames = [];
         this.position = 0;
+        this.warpMode = 0;
+        this.warpAmount = 0;
         this.devicePixelRatio = 1;
         this.cssWidth = 0;
         this.cssHeight = 0;
@@ -871,6 +1088,12 @@ export class CanvasWavetableDisplay {
 
     setPosition(position) {
         this.position = clamp(Number(position) || 0, 0, 1);
+        this.queueRender();
+    }
+
+    setWarp(mode, amount) {
+        this.warpMode = resolveWarpMode(mode);
+        this.warpAmount = clamp(Number(amount) || 0, 0, 1);
         this.queueRender();
     }
 
@@ -950,6 +1173,8 @@ export class CanvasWavetableDisplay {
         const model = buildWavetableRenderModel({
             staticScene: this.getStaticScene(width, height),
             position: this.position,
+            warpMode: this.warpMode,
+            warpAmount: this.warpAmount,
         });
 
         drawWavetableModel(this.context, model, this.theme);

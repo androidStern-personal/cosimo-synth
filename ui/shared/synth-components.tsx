@@ -68,6 +68,8 @@ export type WavetableStageSectionProps = {
     stageRef: RefObject<HTMLDivElement | null>;
     frames: Float32Array[] | null;
     position: number;
+    warpMode: number;
+    warpAmount: number;
     tableName: string;
     frameCount: number;
     desiredTableIndex: number;
@@ -331,9 +333,13 @@ function VoiceModeGlyph({
 export function WavetableCanvas({
     frames,
     position,
+    warpMode,
+    warpAmount,
 }: {
     frames: Float32Array[] | null;
     position: number;
+    warpMode: number;
+    warpAmount: number;
 }) {
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
     const viewportRef = useRef<HTMLDivElement | null>(null);
@@ -362,6 +368,10 @@ export function WavetableCanvas({
     useEffect(() => {
         displayRef.current?.setPosition(position);
     }, [position]);
+
+    useEffect(() => {
+        displayRef.current?.setWarp(warpMode, warpAmount);
+    }, [warpAmount, warpMode]);
 
     useEffect(() => {
         displayRef.current?.resize(size.width, size.height, window.devicePixelRatio || 1);
@@ -635,6 +645,8 @@ export function WavetableStageSection({
     stageRef,
     frames,
     position,
+    warpMode,
+    warpAmount,
     tableName,
     frameCount,
     desiredTableIndex,
@@ -660,7 +672,12 @@ export function WavetableStageSection({
             onPointerUp={onPointerUp}
             onPointerCancel={onPointerUp}
         >
-            <WavetableCanvas frames={frames} position={position} />
+            <WavetableCanvas
+                frames={frames}
+                position={position}
+                warpMode={warpMode}
+                warpAmount={warpAmount}
+            />
 
             <div className="absolute inset-x-0 top-0 flex items-start justify-between gap-3 p-5 text-[11px] uppercase tracking-[0.16em] text-slate-300/70">
                 <label className="relative inline-flex max-w-[280px] cursor-pointer items-center">

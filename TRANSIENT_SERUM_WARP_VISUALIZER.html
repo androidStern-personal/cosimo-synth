@@ -1,0 +1,887 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Transient Serum Warp Visualizer</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #08111f;
+    --panel: rgba(11, 22, 39, 0.92);
+    --panel-border: rgba(130, 180, 255, 0.18);
+    --text: #e8eefb;
+    --muted: #94a6c7;
+    --accent: #67d2ff;
+    --accent-2: #ff7bc4;
+    --grid: rgba(133, 170, 227, 0.13);
+    --warning: #ffd38a;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    font-family: "SF Pro Display", "Segoe UI", sans-serif;
+    background:
+      radial-gradient(circle at top left, rgba(56, 99, 190, 0.22), transparent 35%),
+      radial-gradient(circle at top right, rgba(255, 123, 196, 0.16), transparent 30%),
+      linear-gradient(180deg, #0b1323 0%, #050913 100%);
+    color: var(--text);
+  }
+
+  .page {
+    max-width: 1360px;
+    margin: 0 auto;
+    padding: 28px;
+  }
+
+  .hero {
+    margin-bottom: 24px;
+  }
+
+  .eyebrow {
+    margin: 0 0 8px;
+    color: var(--accent);
+    letter-spacing: 0.22em;
+    font-size: 12px;
+    text-transform: uppercase;
+  }
+
+  h1 {
+    margin: 0 0 10px;
+    font-size: clamp(28px, 5vw, 48px);
+    line-height: 1.02;
+  }
+
+  .hero p {
+    max-width: 980px;
+    margin: 0;
+    color: var(--muted);
+    font-size: 16px;
+    line-height: 1.55;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: minmax(360px, 420px) minmax(0, 1fr);
+    gap: 22px;
+    align-items: start;
+  }
+
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: 22px;
+    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.33);
+    backdrop-filter: blur(18px);
+  }
+
+  .controls {
+    padding: 22px;
+  }
+
+  .section-title {
+    margin: 0 0 14px;
+    color: var(--accent);
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    font-size: 12px;
+  }
+
+  .control-block + .control-block {
+    margin-top: 20px;
+  }
+
+  label {
+    display: block;
+    margin-bottom: 8px;
+    color: var(--muted);
+    font-size: 13px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  select,
+  input[type="range"],
+  button {
+    width: 100%;
+  }
+
+  select,
+  button {
+    appearance: none;
+    border: 1px solid rgba(122, 172, 255, 0.22);
+    border-radius: 14px;
+    background: rgba(6, 12, 22, 0.9);
+    color: var(--text);
+    padding: 14px 16px;
+    font-size: 15px;
+  }
+
+  button {
+    cursor: pointer;
+    transition: transform 120ms ease, border-color 120ms ease, background 120ms ease;
+  }
+
+  button:hover {
+    transform: translateY(-1px);
+    border-color: rgba(122, 172, 255, 0.4);
+    background: rgba(10, 18, 34, 0.95);
+  }
+
+  .range-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 10px;
+    font-size: 14px;
+    color: var(--muted);
+  }
+
+  .amount-readout {
+    font-variant-numeric: tabular-nums;
+    color: var(--warning);
+  }
+
+  input[type="range"] {
+    height: 14px;
+    border-radius: 999px;
+    background:
+      linear-gradient(90deg, rgba(255, 123, 196, 0.22), rgba(103, 210, 255, 0.22));
+    outline: none;
+  }
+
+  .legend {
+    display: grid;
+    gap: 10px;
+    margin-top: 22px;
+    padding-top: 18px;
+    border-top: 1px solid rgba(130, 180, 255, 0.14);
+  }
+
+  .legend-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--muted);
+    font-size: 14px;
+  }
+
+  .swatch {
+    width: 14px;
+    height: 14px;
+    border-radius: 999px;
+  }
+
+  .docs {
+    margin-top: 22px;
+    padding: 16px;
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.03);
+    color: var(--muted);
+    line-height: 1.5;
+    font-size: 14px;
+  }
+
+  .docs strong {
+    color: var(--text);
+  }
+
+  .docs code {
+    color: var(--warning);
+    font-family: "SF Mono", ui-monospace, monospace;
+  }
+
+  .visuals {
+    padding: 18px;
+    display: grid;
+    gap: 18px;
+  }
+
+  .canvas-card {
+    padding: 16px;
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(130, 180, 255, 0.12);
+  }
+
+  .canvas-card h2 {
+    margin: 0 0 6px;
+    font-size: 18px;
+  }
+
+  .canvas-card p {
+    margin: 0 0 12px;
+    color: var(--muted);
+    font-size: 14px;
+    line-height: 1.45;
+  }
+
+  canvas {
+    display: block;
+    width: 100%;
+    height: auto;
+    border-radius: 12px;
+    background: linear-gradient(180deg, rgba(5, 9, 19, 0.9), rgba(7, 14, 26, 0.96));
+    border: 1px solid rgba(130, 180, 255, 0.12);
+  }
+
+  .formula {
+    margin-top: 18px;
+    padding: 16px;
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(130, 180, 255, 0.12);
+  }
+
+  .formula h2 {
+    margin: 0 0 10px;
+    font-size: 16px;
+  }
+
+  pre {
+    margin: 0;
+    white-space: pre-wrap;
+    color: var(--warning);
+    font-size: 13px;
+    line-height: 1.55;
+    font-family: "SF Mono", ui-monospace, monospace;
+  }
+
+  @media (max-width: 980px) {
+    .grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+</head>
+<body>
+  <div class="page">
+    <header class="hero">
+      <p class="eyebrow">Transient Review Tool</p>
+      <h1>Candidate Serum-Style Phase Warp Visualizer</h1>
+      <p>
+        This file does not use the current synth code. It is a standalone visualizer for the candidate transfer
+        equations for <strong>Bend +/-</strong>, <strong>PWM</strong>, <strong>Asym +/-</strong>, and
+        <strong>Mirror</strong>. The goal is to let you drag the knob and judge whether the transfer behavior
+        matches what you expect before we put any of it back into the oscillator.
+      </p>
+    </header>
+
+    <div class="grid">
+      <aside class="panel controls">
+        <h2 class="section-title">Controls</h2>
+
+        <div class="control-block">
+          <label for="mode">Mode</label>
+          <select id="mode">
+            <option value="bend">Bend +/-</option>
+            <option value="pwm">PWM</option>
+            <option value="asym">Asym +/-</option>
+            <option value="mirror">Mirror</option>
+          </select>
+        </div>
+
+        <div class="control-block">
+          <label for="amount">Warp Dial</label>
+          <input id="amount" type="range" min="0" max="1" step="0.001" value="0.5">
+          <div class="range-meta">
+            <span id="amountLeftLabel">-100%</span>
+            <strong id="amountReadout" class="amount-readout">0%</strong>
+            <span id="amountRightLabel">+100%</span>
+          </div>
+        </div>
+
+        <div class="control-block">
+          <button id="reset">Reset To Neutral</button>
+        </div>
+
+        <div class="legend">
+          <div class="legend-row"><span class="swatch" style="background:#67d2ff;"></span>Source wave</div>
+          <div class="legend-row"><span class="swatch" style="background:#ff7bc4;"></span>Warped wave</div>
+          <div class="legend-row"><span class="swatch" style="background:#ffd38a;"></span>Transfer curve</div>
+        </div>
+
+        <div class="docs" id="modeNotes"></div>
+
+        <div class="docs">
+          <strong>Source</strong><br>
+          The mode descriptions below are based on the public wording in the
+          <a href="https://www.xferrecords.com/manual/serum-2/docs" target="_blank" rel="noreferrer">Serum 2 User Guide</a>.
+          Xfer documents the behavior semantics, but not the exact internal equations. This visualizer therefore shows
+          one coherent candidate equation set that matches those documented semantics.
+        </div>
+      </aside>
+
+      <section class="panel visuals">
+        <div class="canvas-card">
+          <h2>Phase Transfer</h2>
+          <p>
+            Input phase on the x-axis, warped lookup phase on the y-axis. The diagonal is identity.
+          </p>
+          <canvas id="transferCanvas" width="880" height="420"></canvas>
+        </div>
+
+        <div class="canvas-card">
+          <h2>Saw Cycle</h2>
+          <p>
+            The blue line is a single raw saw cycle. The pink line is that same saw read at the warped phase.
+          </p>
+          <canvas id="waveCanvas" width="880" height="420"></canvas>
+        </div>
+
+        <div class="canvas-card">
+          <h2>More Waveforms</h2>
+          <p>
+            The same warp is shown against four source waves at once: sine, triangle, saw, and square.
+          </p>
+          <canvas id="galleryCanvas" width="880" height="900"></canvas>
+        </div>
+
+        <div class="formula">
+          <h2>Active Equation</h2>
+          <pre id="formulaBlock"></pre>
+        </div>
+      </section>
+    </div>
+  </div>
+
+<script>
+  const modeSelect = document.getElementById("mode");
+  const amountInput = document.getElementById("amount");
+  const resetButton = document.getElementById("reset");
+  const amountReadout = document.getElementById("amountReadout");
+  const amountLeftLabel = document.getElementById("amountLeftLabel");
+  const amountRightLabel = document.getElementById("amountRightLabel");
+  const modeNotes = document.getElementById("modeNotes");
+  const formulaBlock = document.getElementById("formulaBlock");
+  const transferCanvas = document.getElementById("transferCanvas");
+  const waveCanvas = document.getElementById("waveCanvas");
+  const galleryCanvas = document.getElementById("galleryCanvas");
+
+  const transferContext = transferCanvas.getContext("2d");
+  const waveContext = waveCanvas.getContext("2d");
+  const galleryContext = galleryCanvas.getContext("2d");
+
+  const modeConfig = {
+    bend: {
+      label: "Bend +/-",
+      defaultAmount: 0.5,
+      notes:
+        "<strong>Bend +/-</strong> is one bipolar mode. 50% is neutral. In this revised candidate, turning the dial right applies the same inward pinch that Serum shows, and turning it left applies the outward pull."
+    },
+    pwm: {
+      label: "PWM",
+      defaultAmount: 0.0,
+      notes:
+        "<strong>PWM</strong> is unipolar here. 0% is neutral. As the dial rises, the full source cycle is compressed into an earlier portion of the output cycle, and the rest of the cycle is held at a constant value. For a saw source, that means a ramp followed by a DC plateau."
+    },
+    asym: {
+      label: "Asym +/-",
+      defaultAmount: 0.5,
+      notes:
+        "<strong>Asym +/-</strong> is one bipolar mode. 50% is neutral. This revised candidate uses a piecewise-linear whole-cycle skew so triangle edges stay straight instead of curving."
+    },
+    mirror: {
+      label: "Mirror",
+      defaultAmount: 0.5,
+      notes:
+        "<strong>Mirror</strong> first duplicates the source cycle into both halves: forward on the first half, backward on the second half. That pure mirror shape is a triangle for a saw source. The local skew in this revised candidate is piecewise-linear, not curved, specifically to preserve straight segments on linear source waves like the triangle in your Serum screenshot."
+    }
+  };
+
+  function clamp(value, min, max) {
+    return Math.min(max, Math.max(min, value));
+  }
+
+  function gamma(amount) {
+    return Math.pow(2, 4 * clamp(amount, 0, 1));
+  }
+
+  function bendRight(u, amount) {
+    return Math.pow(clamp(u, 0, 1), gamma(amount));
+  }
+
+  function bendLeft(u, amount) {
+    const clamped = clamp(u, 0, 1);
+    return 1 - Math.pow(1 - clamped, gamma(amount));
+  }
+
+  function asymSigned(unitPhase, dial) {
+    const signed = (dial * 2) - 1;
+    const amount = Math.abs(signed);
+    return signed >= 0 ? bendRight(unitPhase, amount) : bendLeft(unitPhase, amount);
+  }
+
+  function linearSkewSigned(unitPhase, dial) {
+    const signed = (dial * 2) - 1;
+    const split = clamp(0.5 + (0.48 * signed), 0.02, 0.98);
+
+    if (unitPhase < split) {
+      return 0.5 * (unitPhase / split);
+    }
+
+    return 0.5 + (0.5 * ((unitPhase - split) / (1 - split)));
+  }
+
+  function bendSigned(phase, dial) {
+    const invertedDial = 1 - dial;
+
+    if (phase < 0.5) {
+      return 0.5 * asymSigned(phase * 2, invertedDial);
+    }
+
+    const mirrored = 2 - (2 * phase);
+    return 1 - (0.5 * asymSigned(mirrored, invertedDial));
+  }
+
+  function pwmActivePortion(dial) {
+    const amount = clamp(dial, 0, 1);
+    const epsilon = 0.02;
+    return 1 - ((1 - epsilon) * amount);
+  }
+
+  function pwmPhase(phase, dial) {
+    const activePortion = pwmActivePortion(dial);
+
+    if (phase < activePortion) {
+      return phase / activePortion;
+    }
+
+    return 1.0;
+  }
+
+  function mirrorBasePhase(phase) {
+    if (phase < 0.5) {
+      return phase * 2;
+    }
+
+    return 2 - (2 * phase);
+  }
+
+  function mirrorPhase(phase, dial) {
+    return linearSkewSigned(mirrorBasePhase(phase), dial);
+  }
+
+  function transferPhase(mode, dial, phase) {
+    const wrapped = ((phase % 1) + 1) % 1;
+
+    switch (mode) {
+      case "bend":
+        return bendSigned(wrapped, dial);
+      case "pwm":
+        return pwmPhase(wrapped, dial);
+      case "asym":
+        return linearSkewSigned(wrapped, dial);
+      case "mirror":
+        return mirrorPhase(wrapped, dial);
+      default:
+        return wrapped;
+    }
+  }
+
+  function saw(phase) {
+    return (2 * phase) - 1;
+  }
+
+  function waveformSample(kind, phase) {
+    const wrapped = ((phase % 1) + 1) % 1;
+
+    switch (kind) {
+      case "sine":
+        return -Math.cos(2 * Math.PI * wrapped);
+      case "triangle":
+        if (wrapped < 0.25) {
+          return 4 * wrapped;
+        }
+
+        if (wrapped < 0.75) {
+          return 2 - (4 * wrapped);
+        }
+
+        return (4 * wrapped) - 4;
+      case "square":
+        return wrapped < 0.5 ? 1 : -1;
+      case "saw":
+      default:
+        return saw(wrapped);
+    }
+  }
+
+  function warpedWave(mode, dial, phase, sourceKind) {
+    if (mode === "pwm") {
+      const activePortion = pwmActivePortion(dial);
+
+      if (phase < activePortion) {
+        return waveformSample(sourceKind, phase / activePortion);
+      }
+
+      return waveformSample(sourceKind, 1.0);
+    }
+
+    return waveformSample(sourceKind, transferPhase(mode, dial, phase));
+  }
+
+  function resizeCanvasForDisplay(canvas, context) {
+    const ratio = window.devicePixelRatio || 1;
+    const cssWidth = canvas.clientWidth;
+    const cssHeight = canvas.clientWidth * (canvas.height / canvas.width);
+    canvas.style.height = cssHeight + "px";
+
+    const targetWidth = Math.round(cssWidth * ratio);
+    const targetHeight = Math.round(cssHeight * ratio);
+
+    if (canvas.width !== targetWidth || canvas.height !== targetHeight) {
+      canvas.width = targetWidth;
+      canvas.height = targetHeight;
+    }
+
+    context.setTransform(1, 0, 0, 1, 0, 0);
+    context.scale(ratio, ratio);
+
+    return { width: cssWidth, height: cssHeight };
+  }
+
+  function drawGrid(context, width, height, left, top, plotWidth, plotHeight) {
+    context.save();
+    context.strokeStyle = "rgba(133, 170, 227, 0.13)";
+    context.lineWidth = 1;
+
+    for (let i = 0; i <= 4; i += 1) {
+      const x = left + ((plotWidth / 4) * i);
+      context.beginPath();
+      context.moveTo(x, top);
+      context.lineTo(x, top + plotHeight);
+      context.stroke();
+    }
+
+    for (let i = 0; i <= 4; i += 1) {
+      const y = top + ((plotHeight / 4) * i);
+      context.beginPath();
+      context.moveTo(left, y);
+      context.lineTo(left + plotWidth, y);
+      context.stroke();
+    }
+
+    context.restore();
+  }
+
+  function drawTransferGraph(mode, dial) {
+    const { width, height } = resizeCanvasForDisplay(transferCanvas, transferContext);
+    transferContext.clearRect(0, 0, width, height);
+
+    const left = 54;
+    const top = 20;
+    const plotWidth = width - 86;
+    const plotHeight = height - 54;
+
+    drawGrid(transferContext, width, height, left, top, plotWidth, plotHeight);
+
+    transferContext.save();
+    transferContext.strokeStyle = "rgba(103, 210, 255, 0.35)";
+    transferContext.setLineDash([8, 8]);
+    transferContext.lineWidth = 2;
+    transferContext.beginPath();
+    transferContext.moveTo(left, top + plotHeight);
+    transferContext.lineTo(left + plotWidth, top);
+    transferContext.stroke();
+    transferContext.restore();
+
+    transferContext.save();
+    transferContext.strokeStyle = "#ffd38a";
+    transferContext.lineWidth = 3;
+    transferContext.beginPath();
+
+    for (let i = 0; i <= 1024; i += 1) {
+      const phase = i / 1024;
+      const warped = transferPhase(mode, dial, phase);
+      const x = left + (phase * plotWidth);
+      const y = top + ((1 - warped) * plotHeight);
+
+      if (i === 0) {
+        transferContext.moveTo(x, y);
+      } else {
+        transferContext.lineTo(x, y);
+      }
+    }
+
+    transferContext.stroke();
+    transferContext.restore();
+
+    if (mode === "mirror") {
+      transferContext.save();
+      transferContext.strokeStyle = "rgba(255, 255, 255, 0.28)";
+      transferContext.setLineDash([6, 6]);
+      transferContext.lineWidth = 2;
+      transferContext.beginPath();
+
+      for (let i = 0; i <= 1024; i += 1) {
+        const phase = i / 1024;
+        const mirrored = mirrorBasePhase(phase);
+        const x = left + (phase * plotWidth);
+        const y = top + ((1 - mirrored) * plotHeight);
+
+        if (i === 0) {
+          transferContext.moveTo(x, y);
+        } else {
+          transferContext.lineTo(x, y);
+        }
+      }
+
+      transferContext.stroke();
+      transferContext.restore();
+    }
+  }
+
+  function drawWaveGraph(mode, dial) {
+    const { width, height } = resizeCanvasForDisplay(waveCanvas, waveContext);
+    waveContext.clearRect(0, 0, width, height);
+
+    const left = 54;
+    const top = 20;
+    const plotWidth = width - 86;
+    const plotHeight = height - 54;
+    const centerY = top + (plotHeight / 2);
+
+    drawGrid(waveContext, width, height, left, top, plotWidth, plotHeight);
+
+    waveContext.save();
+    waveContext.strokeStyle = "rgba(255,255,255,0.1)";
+    waveContext.lineWidth = 1.5;
+    waveContext.beginPath();
+    waveContext.moveTo(left, centerY);
+    waveContext.lineTo(left + plotWidth, centerY);
+    waveContext.stroke();
+    waveContext.restore();
+
+    const drawLine = (color, fn, dashed = false) => {
+      waveContext.save();
+      waveContext.strokeStyle = color;
+      waveContext.lineWidth = 3;
+      if (dashed) {
+        waveContext.setLineDash([8, 8]);
+      }
+      waveContext.beginPath();
+
+      for (let i = 0; i <= 1024; i += 1) {
+        const phase = i / 1024;
+        const sample = fn(phase);
+        const x = left + (phase * plotWidth);
+        const y = top + (((1 - sample) * 0.5) * plotHeight);
+
+        if (i === 0) {
+          waveContext.moveTo(x, y);
+        } else {
+          waveContext.lineTo(x, y);
+        }
+      }
+
+      waveContext.stroke();
+      waveContext.restore();
+    };
+
+    drawLine("#67d2ff", (phase) => waveformSample("saw", phase));
+
+    if (mode === "mirror") {
+      drawLine("rgba(255,255,255,0.3)", (phase) => waveformSample("saw", mirrorBasePhase(phase)), true);
+    }
+
+    drawLine("#ff7bc4", (phase) => warpedWave(mode, dial, phase, "saw"));
+  }
+
+  function drawWaveGallery(mode, dial) {
+    const { width, height } = resizeCanvasForDisplay(galleryCanvas, galleryContext);
+    galleryContext.clearRect(0, 0, width, height);
+
+    const rows = [
+      { kind: "sine", label: "Sine" },
+      { kind: "triangle", label: "Triangle" },
+      { kind: "saw", label: "Saw" },
+      { kind: "square", label: "Square" }
+    ];
+
+    const left = 78;
+    const top = 18;
+    const rightPadding = 30;
+    const plotWidth = width - left - rightPadding;
+    const gap = 18;
+    const rowHeight = (height - top - 18 - (gap * (rows.length - 1))) / rows.length;
+
+    const drawLine = (context, color, fn, rowTop, dashed = false) => {
+      context.save();
+      context.strokeStyle = color;
+      context.lineWidth = 3;
+      if (dashed) {
+        context.setLineDash([8, 8]);
+      }
+      context.beginPath();
+
+      for (let i = 0; i <= 1024; i += 1) {
+        const phase = i / 1024;
+        const sample = fn(phase);
+        const x = left + (phase * plotWidth);
+        const y = rowTop + (((1 - sample) * 0.5) * rowHeight);
+
+        if (i === 0) {
+          context.moveTo(x, y);
+        } else {
+          context.lineTo(x, y);
+        }
+      }
+
+      context.stroke();
+      context.restore();
+    };
+
+    rows.forEach((row, index) => {
+      const rowTop = top + (index * (rowHeight + gap));
+      const centerY = rowTop + (rowHeight / 2);
+
+      drawGrid(galleryContext, width, height, left, rowTop, plotWidth, rowHeight);
+
+      galleryContext.save();
+      galleryContext.strokeStyle = "rgba(255,255,255,0.1)";
+      galleryContext.lineWidth = 1.5;
+      galleryContext.beginPath();
+      galleryContext.moveTo(left, centerY);
+      galleryContext.lineTo(left + plotWidth, centerY);
+      galleryContext.stroke();
+      galleryContext.restore();
+
+      galleryContext.save();
+      galleryContext.fillStyle = "rgba(232, 238, 251, 0.82)";
+      galleryContext.font = "600 14px 'SF Pro Display', 'Segoe UI', sans-serif";
+      galleryContext.fillText(row.label, 18, rowTop + 22);
+      galleryContext.restore();
+
+      drawLine(galleryContext, "#67d2ff", (phase) => waveformSample(row.kind, phase), rowTop);
+
+      if (mode === "mirror") {
+        drawLine(galleryContext, "rgba(255,255,255,0.28)", (phase) => waveformSample(row.kind, mirrorBasePhase(phase)), rowTop, true);
+      }
+
+      drawLine(galleryContext, "#ff7bc4", (phase) => warpedWave(mode, dial, phase, row.kind), rowTop);
+    });
+  }
+
+  function updateLabels(mode, dial) {
+    const config = modeConfig[mode];
+    modeNotes.innerHTML = config.notes;
+
+    if (mode === "pwm") {
+      amountLeftLabel.textContent = "0%";
+      amountRightLabel.textContent = "100%";
+      amountReadout.textContent = `${Math.round(dial * 100)}%`;
+    } else if (mode === "mirror") {
+      const signed = Math.round(((dial * 2) - 1) * 100);
+      amountLeftLabel.textContent = "Left skew";
+      amountRightLabel.textContent = "Right skew";
+      amountReadout.textContent = signed > 0 ? `+${signed}%` : `${signed}%`;
+    } else {
+      const signed = Math.round(((dial * 2) - 1) * 100);
+      amountLeftLabel.textContent = "-100%";
+      amountRightLabel.textContent = "+100%";
+      amountReadout.textContent = signed > 0 ? `+${signed}%` : `${signed}%`;
+    }
+  }
+
+  function updateFormula(mode) {
+    if (mode === "bend") {
+      formulaBlock.textContent =
+`s = 2k - 1
+a = abs(s)
+gamma(a) = 2^(4a)
+
+bendRight(u, a) = u^gamma(a)
+bendLeft(u, a)  = 1 - (1 - u)^gamma(a)
+
+H(u, s) =
+  s >= 0 ? bendRight(u, a) : bendLeft(u, a)
+
+f(p, k) =
+  p < 0.5 ? 0.5 * H(2p, s)
+          : 1 - 0.5 * H(2 - 2p, s)`;
+      return;
+    }
+
+    if (mode === "pwm") {
+      formulaBlock.textContent =
+`eps = 0.02
+a(k) = 1 - (1 - eps) * k
+
+f(p, k) =
+  p < a(k) ? p / a(k)
+           : 1.0
+
+For a saw source:
+  y(p, k) =
+    p < a(k) ? saw(p / a(k))
+             : +1
+
+This is a compressed cycle followed by a DC hold.`;
+      return;
+    }
+
+    if (mode === "asym") {
+      formulaBlock.textContent =
+`s = 2k - 1
+split(k) = clamp(0.5 + 0.48 * (2k - 1), 0.02, 0.98)
+
+f(p, k) =
+  p < split(k) ? 0.5 * p / split(k)
+               : 0.5 + 0.5 * (p - split(k)) / (1 - split(k))
+
+This keeps linear source segments linear.`;
+      return;
+    }
+
+    formulaBlock.textContent =
+`s = 2k - 1
+MirrorBase(p) =
+  p < 0.5 ? 2p
+          : 2 - 2p
+
+split(k) = clamp(0.5 + 0.48 * (2k - 1), 0.02, 0.98)
+
+LocalSkew(u, k) =
+  u < split(k) ? 0.5 * u / split(k)
+               : 0.5 + 0.5 * (u - split(k)) / (1 - split(k))
+
+f(p, k) =
+  LocalSkew(MirrorBase(p), k)
+
+Center (k = 0.5) is the pure mirrored/octaved shape, not identity.
+The dashed reference curve is MirrorBase without any local skew.
+This version stays piecewise-linear on linear source waves.`;
+  }
+
+  function render() {
+    const mode = modeSelect.value;
+    const dial = Number(amountInput.value);
+    updateLabels(mode, dial);
+    updateFormula(mode);
+    drawTransferGraph(mode, dial);
+    drawWaveGraph(mode, dial);
+    drawWaveGallery(mode, dial);
+  }
+
+  modeSelect.addEventListener("change", () => {
+    amountInput.value = String(modeConfig[modeSelect.value].defaultAmount);
+    render();
+  });
+
+  amountInput.addEventListener("input", render);
+  resetButton.addEventListener("click", () => {
+    amountInput.value = String(modeConfig[modeSelect.value].defaultAmount);
+    render();
+  });
+
+  window.addEventListener("resize", render);
+  render();
+</script>
+</body>
+</html>

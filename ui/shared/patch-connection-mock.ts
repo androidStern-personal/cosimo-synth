@@ -5,6 +5,9 @@ const wavetablePositionEndpointID = "wavetablePosition";
 const wavetableSelectEndpointID = "wavetableSelect";
 const playModeEndpointID = "playMode";
 const glideTimeEndpointID = "glideTime";
+const warpModeEndpointID = "warpMode";
+const warpAmountEndpointID = "warpAmount";
+const warpMsegDepthEndpointID = "warpMsegDepth";
 const runtimeSyncRequestEndpointID = "runtimeSyncRequest";
 const runtimeStateEndpointID = "runtimeState";
 const effectiveWavetablePositionEndpointID = "effectiveWavetablePosition";
@@ -216,6 +219,36 @@ function buildHarnessStatus(manifest: unknown) {
                         init: 0,
                     },
                 },
+                {
+                    endpointID: warpModeEndpointID,
+                    purpose: "parameter",
+                    annotation: {
+                        name: "Warp Mode",
+                        min: 0,
+                        max: 4,
+                        init: 0,
+                    },
+                },
+                {
+                    endpointID: warpAmountEndpointID,
+                    purpose: "parameter",
+                    annotation: {
+                        name: "Warp Amount",
+                        min: 0,
+                        max: 1,
+                        init: 0,
+                    },
+                },
+                {
+                    endpointID: warpMsegDepthEndpointID,
+                    purpose: "parameter",
+                    annotation: {
+                        name: "Warp MSEG Depth",
+                        min: -1,
+                        max: 1,
+                        init: 0,
+                    },
+                },
             ],
         },
     };
@@ -240,6 +273,9 @@ export class MockPatchConnection implements PatchConnectionLike {
         [wavetableSelectEndpointID, 0],
         [playModeEndpointID, 0],
         [glideTimeEndpointID, 0.15],
+        [warpModeEndpointID, 0],
+        [warpAmountEndpointID, 0],
+        [warpMsegDepthEndpointID, 0],
     ]);
     private parameterListeners = new Map<string, Set<ParameterListener>>();
     private endpointListeners = new Map<string, Set<EndpointListener>>();

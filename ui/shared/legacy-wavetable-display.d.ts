@@ -11,6 +11,7 @@ declare module "../../patch_gui/wavetable-display.js" {
         invalidateStaticScene(): void;
         setFrames(frames: ArrayLike<ArrayLike<number>>): void;
         setPosition(position: number): void;
+        setWarp(mode: number, amount: number): void;
         resize(width?: number, height?: number, devicePixelRatio?: number): void;
         getStaticScene(width: number, height: number): unknown;
         queueRender(): void;

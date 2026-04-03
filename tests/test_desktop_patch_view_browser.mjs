@@ -40,9 +40,14 @@ async function dispatchInputValueChange(locator, nextValue) {
             throw new Error("Expected an HTMLInputElement.");
         }
 
-        element.value = String(value);
+        const setNativeValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+
+        if (!setNativeValue) {
+            throw new Error("Expected HTMLInputElement.prototype.value setter.");
+        }
+
+        setNativeValue.call(element, String(value));
         element.dispatchEvent(new Event("input", { bubbles: true }));
-        element.dispatchEvent(new Event("change", { bubbles: true }));
     }, String(nextValue));
 }
 
@@ -1073,6 +1078,72 @@ test("voice mode buttons commit the exact discrete playMode values", async () =>
             [{ endpointID: "playMode", value: 0 }],
         );
         assert.equal(await page.locator('button:has-text("Poly")').getAttribute("aria-pressed"), "true");
+    } finally {
+        await page.close();
+    }
+});
+
+test("warp controls commit mode, amount, and MSEG depth on the desktop harness", async () => {
+    const page = await openHarnessPage();
+
+    try {
+        await clearHarnessDebugLog(page);
+        await page.selectOption('select[aria-label="Warp mode"]', "3");
+
+        await page.waitForFunction(() => {
+            const snapshot = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot();
+            return Number(snapshot.parameterValues.warpMode) === 3;
+        });
+
+        let snapshot = await getHarnessSnapshot(page);
+        assert.deepEqual(
+            snapshot.sentMessages.filter(({ endpointID }) => endpointID === "warpMode"),
+            [{ endpointID: "warpMode", value: 3 }],
+        );
+        assert.equal(await page.locator('select[aria-label="Warp mode"]').inputValue(), "3");
+
+        await clearHarnessDebugLog(page);
+        await page.selectOption('select[aria-label="Warp mode"]', "4");
+
+        await page.waitForFunction(() => {
+            const snapshot = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot();
+            return Number(snapshot.parameterValues.warpMode) === 4;
+        });
+
+        snapshot = await getHarnessSnapshot(page);
+        assert.deepEqual(
+            snapshot.sentMessages.filter(({ endpointID }) => endpointID === "warpMode"),
+            [{ endpointID: "warpMode", value: 4 }],
+        );
+        assert.equal(await page.locator('select[aria-label="Warp mode"]').inputValue(), "4");
+
+        await clearHarnessDebugLog(page);
+        await dispatchInputValueChange(page.locator('input[aria-label="Warp amount"]'), 0.72);
+
+        await page.waitForFunction(() => {
+            const snapshot = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot();
+            return Math.abs(Number(snapshot.parameterValues.warpAmount) - 0.72) <= 1e-9;
+        });
+
+        snapshot = await getHarnessSnapshot(page);
+        assert.deepEqual(
+            snapshot.sentMessages.filter(({ endpointID }) => endpointID === "warpAmount"),
+            [{ endpointID: "warpAmount", value: 0.72 }],
+        );
+
+        await clearHarnessDebugLog(page);
+        await dispatchInputValueChange(page.locator('input[aria-label="Warp MSEG depth"]'), -0.35);
+
+        await page.waitForFunction(() => {
+            const snapshot = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot();
+            return Math.abs(Number(snapshot.parameterValues.warpMsegDepth) - (-0.35)) <= 1e-9;
+        });
+
+        snapshot = await getHarnessSnapshot(page);
+        assert.deepEqual(
+            snapshot.sentMessages.filter(({ endpointID }) => endpointID === "warpMsegDepth"),
+            [{ endpointID: "warpMsegDepth", value: -0.35 }],
+        );
     } finally {
         await page.close();
     }

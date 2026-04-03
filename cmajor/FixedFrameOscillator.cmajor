@@ -8,6 +8,14 @@ namespace wt
     let maxFramesPerTable = 256;
     let maxMipSampleCount = paddedFrameSize * maxFramesPerTable;
     let maxMipFrameSlots = mipLevelCount * maxFramesPerTable;
+    let warpModeOff = 0;
+    let warpModeBend = 1;
+    let warpModePWM = 2;
+    let warpModeAsym = 3;
+    let warpModeMirror = 4;
+    let warpOversampleFactor = 8;
+    let warpDecimatorTapCount = 257;
+    let warpDecimatorCutoffNyquist = 0.125f;
 
     struct WavetableLoadBegin
     {
@@ -165,6 +173,161 @@ namespace wt
 
         let hi = readFixedFrameSample (tableSamples, frameHi, phase);
         return lo + (hi - lo) * frameT;
+    }
+
+    struct WarpPhaseResult
+    {
+        bool shouldLookup;
+        bool holdCycleEndpoint;
+        float32 phase;
+    }
+
+    int32 resolveWarpMode (float32 rawMode)
+    {
+        return std::intrinsics::clamp (
+            int32 (std::intrinsics::floor (rawMode + 0.5f)),
+            warpModeOff,
+            warpModeMirror
+        );
+    }
+
+    float32 curvedWarpRight (float32 phase, float32 amount)
+    {
+        let clampedPhase = std::intrinsics::clamp (phase, 0.0f, 1.0f);
+        let clampedAmount = std::intrinsics::clamp (amount, 0.0f, 1.0f);
+        let exponent = std::intrinsics::pow (2.0f, 4.0f * clampedAmount);
+        return std::intrinsics::pow (clampedPhase, exponent);
+    }
+
+    float32 curvedWarpLeft (float32 phase, float32 amount)
+    {
+        let clampedPhase = std::intrinsics::clamp (phase, 0.0f, 1.0f);
+        let clampedAmount = std::intrinsics::clamp (amount, 0.0f, 1.0f);
+        let exponent = std::intrinsics::pow (2.0f, 4.0f * clampedAmount);
+        return 1.0f - std::intrinsics::pow (1.0f - clampedPhase, exponent);
+    }
+
+    float32 curvedAsymSigned (float32 phase, float32 dial)
+    {
+        let clampedDial = std::intrinsics::clamp (dial, 0.0f, 1.0f);
+        let signedAmount = (2.0f * clampedDial) - 1.0f;
+        let magnitude = std::intrinsics::abs (signedAmount);
+
+        if (signedAmount >= 0.0f)
+            return curvedWarpRight (phase, magnitude);
+
+        return curvedWarpLeft (phase, magnitude);
+    }
+
+    float32 linearSkewSigned (float32 phase, float32 dial)
+    {
+        let clampedPhase = std::intrinsics::clamp (phase, 0.0f, 1.0f);
+        let clampedDial = std::intrinsics::clamp (dial, 0.0f, 1.0f);
+        let signedAmount = (2.0f * clampedDial) - 1.0f;
+        let split = std::intrinsics::clamp (0.5f + (0.48f * signedAmount), 0.02f, 0.98f);
+
+        if (clampedPhase < split)
+            return 0.5f * (clampedPhase / split);
+
+        return 0.5f + (0.5f * ((clampedPhase - split) / (1.0f - split)));
+    }
+
+    float32 mirrorBasePhase (float32 phase)
+    {
+        let clampedPhase = std::intrinsics::clamp (phase, 0.0f, 1.0f);
+
+        if (clampedPhase < 0.5f)
+            return clampedPhase * 2.0f;
+
+        return 2.0f - (2.0f * clampedPhase);
+    }
+
+    float32 pwmActivePortion (float32 amount)
+    {
+        let clampedAmount = std::intrinsics::clamp (amount, 0.0f, 1.0f);
+        return 1.0f - ((1.0f - 0.02f) * clampedAmount);
+    }
+
+    bool isIdentityWarp (int32 warpMode, float32 warpAmount)
+    {
+        let clampedAmount = std::intrinsics::clamp (warpAmount, 0.0f, 1.0f);
+
+        if (warpMode <= warpModeOff)
+            return true;
+
+        if (warpMode == warpModeBend)
+            return std::intrinsics::abs (clampedAmount - 0.5f) <= 0.000001f;
+
+        if (warpMode == warpModePWM)
+            return clampedAmount <= 0.000001f;
+
+        if (warpMode == warpModeAsym)
+            return std::intrinsics::abs (clampedAmount - 0.5f) <= 0.000001f;
+
+        if (warpMode == warpModeMirror)
+            return false;
+
+        return true;
+    }
+
+    WarpPhaseResult resolveWarpPhase (int32 warpMode,
+                                      float32 warpAmount,
+                                      float32 phase)
+    {
+        WarpPhaseResult result;
+        let wrappedPhase = std::intrinsics::wrap (phase, 1.0f);
+        result.shouldLookup = true;
+        result.holdCycleEndpoint = false;
+        result.phase = wrappedPhase;
+
+        if (warpMode <= warpModeOff)
+            return result;
+
+        let clampedAmount = std::intrinsics::clamp (warpAmount, 0.0f, 1.0f);
+
+        if (warpMode == warpModeBend)
+        {
+            let invertedDial = 1.0f - clampedAmount;
+
+            if (wrappedPhase < 0.5f)
+                result.phase = 0.5f * curvedAsymSigned (wrappedPhase * 2.0f, invertedDial);
+            else
+                result.phase = 1.0f - (0.5f * curvedAsymSigned ((2.0f - (2.0f * wrappedPhase)), invertedDial));
+
+            return result;
+        }
+
+        if (warpMode == warpModePWM)
+        {
+            let activePortion = pwmActivePortion (clampedAmount);
+
+            if (wrappedPhase < activePortion)
+            {
+                result.phase = wrappedPhase / activePortion;
+            }
+            else
+            {
+                result.shouldLookup = false;
+                result.holdCycleEndpoint = true;
+                result.phase = 1.0f;
+            }
+
+            return result;
+        }
+
+        if (warpMode == warpModeAsym)
+        {
+            result.phase = linearSkewSigned (wrappedPhase, clampedAmount);
+            return result;
+        }
+
+        if (warpMode == warpModeMirror)
+        {
+            result.phase = linearSkewSigned (mirrorBasePhase (wrappedPhase), clampedAmount);
+            return result;
+        }
+
+        return result;
     }
 
     processor RetriggerableFixedASR (float32 attackSeconds,
@@ -490,6 +653,38 @@ namespace wt
             return 0.0f;
         }
 
+        float32 readFixedFrameEndpointSampleForMip (int32 mipIndex, int32 frameIndex)
+        {
+            let endpointIndex = frameBase (frameIndex) + samplesPerFrame;
+
+            if (mipIndex == 0) return mip0Samples.at (endpointIndex);
+            if (mipIndex == 1) return mip1Samples.at (endpointIndex);
+            if (mipIndex == 2) return mip2Samples.at (endpointIndex);
+            if (mipIndex == 3) return mip3Samples.at (endpointIndex);
+            if (mipIndex == 4) return mip4Samples.at (endpointIndex);
+            if (mipIndex == 5) return mip5Samples.at (endpointIndex);
+            if (mipIndex == 6) return mip6Samples.at (endpointIndex);
+            if (mipIndex == 7) return mip7Samples.at (endpointIndex);
+            if (mipIndex == 8) return mip8Samples.at (endpointIndex);
+            if (mipIndex == 9) return mip9Samples.at (endpointIndex);
+            if (mipIndex == 10) return mip10Samples.at (endpointIndex);
+            return 0.0f;
+        }
+
+        float32 readFrameBlendEndpointSampleForMip (int32 mipIndex,
+                                                    int32 frameLo,
+                                                    int32 frameHi,
+                                                    float32 frameT)
+        {
+            let lo = readFixedFrameEndpointSampleForMip (mipIndex, frameLo);
+
+            if (frameHi == frameLo)
+                return lo;
+
+            let hi = readFixedFrameEndpointSampleForMip (mipIndex, frameHi);
+            return lo + (hi - lo) * frameT;
+        }
+
         void emitMipRequest (int32 mipIndex, int32 urgencyLevel)
         {
             if (currentGeneration <= 0 || frameCount <= 0 || mipIndex < 0 || mipIndex >= mipLevelCount)
@@ -695,7 +890,10 @@ namespace wt
         input event wt::MsegPlaybackConfig msegPlaybackIn;
         input value float32 framePositionIn [[ name: "Wavetable Position", min: 0.0f, max: 1.0f, init: 0.0f ]];
         input value float32 msegDepthIn [[ name: "MSEG 1 Depth", min: -1.0f, max: 1.0f, init: 1.0f ]];
+        input value float32 warpMsegDepthIn [[ name: "Warp MSEG Depth", min: -1.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
         input value float32 glideTimeIn [[ name: "Glide Time", min: 0.0f, max: 2.0f, init: 0.0f, unit: "s", rampFrames: 0 ]];
+        input value float32 warpModeIn [[ name: "Warp Mode", min: 0.0f, max: 4.0f, init: 0.0f, discrete: true, step: 1.0f, rampFrames: 0 ]];
+        input value float32 warpAmountIn [[ name: "Warp Amount", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
         output event WavetableUploadAck wavetableUploadAckOut;
         output event WavetableMipRequest wavetableMipRequestOut;
         output event RuntimeServiceState runtimeServiceStateOut;
@@ -720,6 +918,9 @@ namespace wt
         int32[voiceCount] voiceActive;
         int32[voiceCount] voiceGeneration;
         float32[voiceCount] voiceEffectivePosition;
+        float32[warpDecimatorTapCount] warpDecimatorTapsState;
+        float32[voiceCount * warpDecimatorTapCount] voiceWarpHistory;
+        int32[voiceCount] voiceWarpHistoryWriteIndex;
 
         float32[maxMipSampleCount] mip0Samples;
         float32[maxMipSampleCount] mip1Samples;
@@ -766,6 +967,55 @@ namespace wt
             }
 
             isPlayable = 0;
+        }
+
+        int32 warpHistoryIndex (int32 voiceIndex, int32 tapIndex)
+        {
+            return (voiceIndex * warpDecimatorTapCount) + tapIndex;
+        }
+
+        void resetWarpRenderState (int32 voiceIndex)
+        {
+            let resolvedVoice = int32 (wrap<voiceCount> (voiceIndex));
+
+            for (int32 tapIndex = 0; tapIndex < warpDecimatorTapCount; ++tapIndex)
+                voiceWarpHistory.at (warpHistoryIndex (resolvedVoice, tapIndex)) = 0.0f;
+
+            voiceWarpHistoryWriteIndex.at (resolvedVoice) = 0;
+        }
+
+        void resetAllWarpRenderState()
+        {
+            for (wrap<voiceCount> voice)
+                resetWarpRenderState (int32 (voice));
+        }
+
+        void initialiseWarpDecimatorTaps()
+        {
+            let middleIndex = float32 (warpDecimatorTapCount - 1) * 0.5f;
+            float32 coefficientSum = 0.0f;
+
+            for (int32 tapIndex = 0; tapIndex < warpDecimatorTapCount; ++tapIndex)
+            {
+                let offsetFromMiddle = float32 (tapIndex) - middleIndex;
+                let sincValue = std::intrinsics::abs (offsetFromMiddle) <= 0.000001f
+                    ? warpDecimatorCutoffNyquist
+                    : std::intrinsics::sin (float32 (pi) * warpDecimatorCutoffNyquist * offsetFromMiddle)
+                        / (float32 (pi) * offsetFromMiddle);
+                let phase = float32 (twoPi) * float32 (tapIndex) / float32 (warpDecimatorTapCount - 1);
+                let window = 0.42f
+                           - (0.5f * std::intrinsics::cos (phase))
+                           + (0.08f * std::intrinsics::cos (2.0f * phase));
+                let coefficient = sincValue * window;
+                warpDecimatorTapsState.at (tapIndex) = coefficient;
+                coefficientSum += coefficient;
+            }
+
+            if (coefficientSum <= 0.0f)
+                return;
+
+            for (int32 tapIndex = 0; tapIndex < warpDecimatorTapCount; ++tapIndex)
+                warpDecimatorTapsState.at (tapIndex) /= coefficientSum;
         }
 
         bool isMipReady (int32 mipIndex)
@@ -941,6 +1191,38 @@ namespace wt
             return 0.0f;
         }
 
+        float32 readFixedFrameEndpointSampleForMip (int32 mipIndex, int32 frameIndex)
+        {
+            let endpointIndex = frameBase (frameIndex) + samplesPerFrame;
+
+            if (mipIndex == 0) return mip0Samples.at (endpointIndex);
+            if (mipIndex == 1) return mip1Samples.at (endpointIndex);
+            if (mipIndex == 2) return mip2Samples.at (endpointIndex);
+            if (mipIndex == 3) return mip3Samples.at (endpointIndex);
+            if (mipIndex == 4) return mip4Samples.at (endpointIndex);
+            if (mipIndex == 5) return mip5Samples.at (endpointIndex);
+            if (mipIndex == 6) return mip6Samples.at (endpointIndex);
+            if (mipIndex == 7) return mip7Samples.at (endpointIndex);
+            if (mipIndex == 8) return mip8Samples.at (endpointIndex);
+            if (mipIndex == 9) return mip9Samples.at (endpointIndex);
+            if (mipIndex == 10) return mip10Samples.at (endpointIndex);
+            return 0.0f;
+        }
+
+        float32 readFrameBlendEndpointSampleForMip (int32 mipIndex,
+                                                    int32 frameLo,
+                                                    int32 frameHi,
+                                                    float32 frameT)
+        {
+            let lo = readFixedFrameEndpointSampleForMip (mipIndex, frameLo);
+
+            if (frameHi == frameLo)
+                return lo;
+
+            let hi = readFixedFrameEndpointSampleForMip (mipIndex, frameHi);
+            return lo + (hi - lo) * frameT;
+        }
+
         void emitMipRequest (int32 mipIndex, int32 urgencyLevel)
         {
             if (currentGeneration <= 0 || frameCount <= 0 || mipIndex < 0 || mipIndex >= mipLevelCount)
@@ -1048,7 +1330,9 @@ namespace wt
 
         void maybeTransitionServiceToPlayable()
         {
-            let previewPhaseIncrement = previewFrequencyHzState / float32 (processor.frequency);
+            let previewWarpMode = resolveWarpMode (warpModeIn);
+            let previewOversampleFactor = previewWarpMode > warpModeOff ? warpOversampleFactor : 1;
+            let previewPhaseIncrement = previewFrequencyHzState / (float32 (processor.frequency) * float32 (previewOversampleFactor));
             let previewRequestedMip = selectMipIndexFromPhaseIncrement (previewPhaseIncrement);
             let previewPlayableMip = findPlayableMipIndex (previewRequestedMip);
 
@@ -1058,11 +1342,104 @@ namespace wt
             if (previewPlayableMip >= 0 && isPlayable == 0)
             {
                 for (wrap<voiceCount> voice)
+                {
                     phasors.at (voice).phase = 0.0f;
+                    resetWarpRenderState (int32 (voice));
+                }
 
                 isPlayable = 1;
                 emitRuntimeServiceState();
             }
+        }
+
+        float32 readVoiceSampleForMip (int32 playableMipIndex,
+                                       float32 effectivePosition,
+                                       float32 phase)
+        {
+            if (frameCount <= 1)
+                return readFixedFrameSampleForMip (playableMipIndex, 0, phase);
+
+            let frameIndex = effectivePosition * lastFrameIndexF;
+            let frameLo = int32 (std::intrinsics::floor (frameIndex));
+            let frameHi = std::intrinsics::min (frameLo + 1, lastFrameIndex);
+            let frameT = frameIndex - float32 (frameLo);
+            return readFrameBlendSampleForMip (playableMipIndex, frameLo, frameHi, phase, frameT);
+        }
+
+        float32 readVoiceEndpointSampleForMip (int32 playableMipIndex,
+                                               float32 effectivePosition)
+        {
+            if (frameCount <= 1)
+                return readFixedFrameEndpointSampleForMip (playableMipIndex, 0);
+
+            let frameIndex = effectivePosition * lastFrameIndexF;
+            let frameLo = int32 (std::intrinsics::floor (frameIndex));
+            let frameHi = std::intrinsics::min (frameLo + 1, lastFrameIndex);
+            let frameT = frameIndex - float32 (frameLo);
+            return readFrameBlendEndpointSampleForMip (playableMipIndex, frameLo, frameHi, frameT);
+        }
+
+        void pushWarpHistorySample (int32 voiceIndex, float32 sample)
+        {
+            let resolvedVoice = int32 (wrap<voiceCount> (voiceIndex));
+            let writeIndex = voiceWarpHistoryWriteIndex.at (resolvedVoice);
+            voiceWarpHistory.at (warpHistoryIndex (resolvedVoice, writeIndex)) = sample;
+            int32 nextWriteIndex = writeIndex + 1;
+
+            if (nextWriteIndex >= warpDecimatorTapCount)
+                nextWriteIndex = 0;
+
+            voiceWarpHistoryWriteIndex.at (resolvedVoice) = nextWriteIndex;
+        }
+
+        float32 readWarpDecimatorOutput (int32 voiceIndex)
+        {
+            let resolvedVoice = int32 (wrap<voiceCount> (voiceIndex));
+            int32 historyIndex = voiceWarpHistoryWriteIndex.at (resolvedVoice);
+            float32 sum = 0.0f;
+
+            for (int32 tapIndex = 0; tapIndex < warpDecimatorTapCount; ++tapIndex)
+            {
+                historyIndex -= 1;
+
+                if (historyIndex < 0)
+                    historyIndex = warpDecimatorTapCount - 1;
+
+                sum += voiceWarpHistory.at (warpHistoryIndex (resolvedVoice, historyIndex))
+                     * warpDecimatorTapsState.at (tapIndex);
+            }
+
+            return sum;
+        }
+
+        float32 renderWarpedVoiceSample (int32 voiceIndex,
+                                         int32 playableMipIndex,
+                                         float32 effectivePosition,
+                                         float32 basePhase,
+                                         float32 currentPhaseIncrement,
+                                         int32 warpMode,
+                                         float32 effectiveWarpAmount)
+        {
+            let oversampledPhaseIncrement = currentPhaseIncrement / float32 (warpOversampleFactor);
+
+            for (int32 oversampleIndex = 0; oversampleIndex < warpOversampleFactor; ++oversampleIndex)
+            {
+                let oversampledPhase = std::intrinsics::wrap (
+                    basePhase + (float32 (oversampleIndex) * oversampledPhaseIncrement),
+                    1.0f
+                );
+                let warpedPhase = resolveWarpPhase (warpMode, effectiveWarpAmount, oversampledPhase);
+                float32 oversampledSample = 0.0f;
+
+                if (warpedPhase.shouldLookup)
+                    oversampledSample = readVoiceSampleForMip (playableMipIndex, effectivePosition, warpedPhase.phase);
+                else if (warpedPhase.holdCycleEndpoint)
+                    oversampledSample = readVoiceEndpointSampleForMip (playableMipIndex, effectivePosition);
+
+                pushWarpHistorySample (voiceIndex, oversampledSample);
+            }
+
+            return readWarpDecimatorOutput (voiceIndex);
         }
 
         void updateVoiceFrequencyHz (int32 voiceIndex)
@@ -1144,6 +1521,7 @@ namespace wt
             voiceActive.at (voice) = 1;
             voiceGeneration.at (voice) = nextVoiceGeneration;
             nextVoiceGeneration += 1;
+            resetWarpRenderState (index);
 
             envelopes[voice].eventIn <- note;
             msegs[voice].triggerIn <- 1;
@@ -1205,6 +1583,7 @@ namespace wt
                 note.velocity = change.velocity;
                 voiceGeneration.at (voice) = nextVoiceGeneration;
                 nextVoiceGeneration += 1;
+                resetWarpRenderState (index);
                 envelopes[voice].eventIn <- note;
                 msegs[voice].triggerIn <- 1;
             }
@@ -1304,6 +1683,8 @@ namespace wt
         {
             previewFrequencyHzState = previewFrequencyHzState < 0.0f ? 0.0f : previewFrequencyHzState;
             glideTimeSecondsState = std::intrinsics::max (0.0f, glideTimeIn);
+            initialiseWarpDecimatorTaps();
+            resetAllWarpRenderState();
 
             let requestedInterval = int32 (
                 std::intrinsics::floor ((processor.frequency / wt::effectiveWavetablePositionMonitorHz) + 0.5f)
@@ -1338,6 +1719,14 @@ namespace wt
                         0.0f,
                         1.0f
                     );
+                    let warpMode = resolveWarpMode (warpModeIn);
+                    let effectiveWarpAmount = std::intrinsics::clamp (
+                        warpAmountIn + (modulation * warpMsegDepthIn),
+                        0.0f,
+                        1.0f
+                    );
+                    let shouldRenderWarpBackground = warpMode > warpModeOff;
+                    let shouldBypassWarpOutput = isIdentityWarp (warpMode, effectiveWarpAmount);
                     voiceEffectivePosition.at (voice) = effectivePosition;
 
                     if (envelopeGain <= 0.0f || voiceFrequencyHz.at (voice) <= 0.0f)
@@ -1346,6 +1735,8 @@ namespace wt
                     let currentPhaseIncrement = voiceFrequencyHz.at (voice) / float32 (processor.frequency);
                     let requestedMipIndex = selectMipIndexFromPhaseIncrement (currentPhaseIncrement);
                     let playableMipIndex = findPlayableMipIndex (requestedMipIndex);
+                    int32 warpRequestedMipIndex = requestedMipIndex;
+                    int32 warpPlayableMipIndex = playableMipIndex;
 
                     if (! isMipReady (requestedMipIndex))
                     {
@@ -1353,23 +1744,45 @@ namespace wt
                         emitMipRequest (requestedMipIndex, requestUrgency);
                     }
 
-                    if (playableMipIndex < 0)
+                    if (shouldRenderWarpBackground)
+                    {
+                        let warpPhaseIncrement = currentPhaseIncrement / float32 (warpOversampleFactor);
+                        warpRequestedMipIndex = selectMipIndexFromPhaseIncrement (warpPhaseIncrement);
+                        warpPlayableMipIndex = findPlayableMipIndex (warpRequestedMipIndex);
+
+                        if (! isMipReady (warpRequestedMipIndex))
+                        {
+                            let warpRequestUrgency = warpPlayableMipIndex < 0 ? 2 : (warpPlayableMipIndex < warpRequestedMipIndex ? 1 : 0);
+                            emitMipRequest (warpRequestedMipIndex, warpRequestUrgency);
+                        }
+                    }
+
+                    if (playableMipIndex < 0 && warpPlayableMipIndex < 0)
                         continue;
 
                     let phase = phasors.at (voice).next();
+                    float32 sample = 0.0f;
 
-                    if (frameCount <= 1)
+                    if (playableMipIndex >= 0)
+                        sample = readVoiceSampleForMip (playableMipIndex, effectivePosition, phase);
+
+                    if (shouldRenderWarpBackground && warpPlayableMipIndex >= 0)
                     {
-                        mix += readFixedFrameSampleForMip (playableMipIndex, 0, phase) * envelopeGain;
+                        let warpedSample = renderWarpedVoiceSample (
+                            int32 (voice),
+                            warpPlayableMipIndex,
+                            effectivePosition,
+                            phase,
+                            currentPhaseIncrement,
+                            warpMode,
+                            effectiveWarpAmount
+                        );
+
+                        if (! shouldBypassWarpOutput)
+                            sample = warpedSample;
                     }
-                    else
-                    {
-                        let frameIndex = effectivePosition * lastFrameIndexF;
-                        let frameLo = int32 (std::intrinsics::floor (frameIndex));
-                        let frameHi = std::intrinsics::min (frameLo + 1, lastFrameIndex);
-                        let frameT = frameIndex - float32 (frameLo);
-                        mix += readFrameBlendSampleForMip (playableMipIndex, frameLo, frameHi, phase, frameT) * envelopeGain;
-                    }
+
+                    mix += sample * envelopeGain;
                 }
 
                 out <- mix;

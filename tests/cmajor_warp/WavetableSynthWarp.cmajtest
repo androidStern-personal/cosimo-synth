@@ -1,0 +1,64 @@
+// Production-path Cmajor tests for the real patch main.
+// These tests intentionally exercise WavetableSynth.cmajorpatch without a probe graph
+// or a mainProcessor override.
+
+const patchPath = "../../WavetableSynth.cmajorpatch";
+const defaultFrequency = 44100;
+const pythonReferenceMaxDiffDb = -65.0;
+const bendPythonReferenceMaxDiffDb = -63.0;
+
+function patchRun(subDir, blockSize, samplesToRender)
+{
+    return {
+        patch: patchPath,
+        subDir,
+        frequency: defaultFrequency,
+        blockSize,
+        samplesToRender,
+        sessionID: 1,
+        skipMissingInputs: true
+    };
+}
+
+function audioOnlyPatchRun(subDir, blockSize, samplesToRender, maxDiffDb)
+{
+    let options = patchRun (subDir, blockSize, samplesToRender);
+    options.skipMissingOutputs = true;
+
+    if (maxDiffDb !== undefined)
+        options.maxDiffDb = maxDiffDb;
+
+    return options;
+}
+
+## runScript (patchRun("fixtures/identity_sine", 64, 4096))
+
+## runScript (patchRun("fixtures/identity_sine", 1, 4096))
+
+## runScript (patchRun("fixtures/identity_sine", 257, 4096))
+
+## runScript (patchRun("fixtures/scan_baseline", 64, 4096))
+
+## runScript (patchRun("fixtures/scan_baseline", 257, 4096))
+
+## runScript (patchRun("fixtures/poly_two_notes", 64, 4096))
+
+## runScript (patchRun("fixtures/mono_legato_glide", 64, 8192))
+
+## runScript (audioOnlyPatchRun("fixtures/neutral_equals_off_bend", 64, 4096))
+
+## runScript (audioOnlyPatchRun("fixtures/neutral_equals_off_pwm", 64, 4096))
+
+## runScript (audioOnlyPatchRun("fixtures/bend_harmonic", 64, 3072, bendPythonReferenceMaxDiffDb))
+
+## runScript (audioOnlyPatchRun("fixtures/pwm_edge", 64, 4096, pythonReferenceMaxDiffDb))
+
+## runScript (audioOnlyPatchRun("fixtures/asym_triangle", 64, 4096, pythonReferenceMaxDiffDb))
+
+## runScript (audioOnlyPatchRun("fixtures/mirror_triangle", 64, 4096, pythonReferenceMaxDiffDb))
+
+## runScript (audioOnlyPatchRun("fixtures/scan_plus_warp", 64, 4096, pythonReferenceMaxDiffDb))
+
+## runScript (audioOnlyPatchRun("fixtures/amount_automation", 64, 4096, pythonReferenceMaxDiffDb))
+
+## runScript (audioOnlyPatchRun("fixtures/poly_warp_mseg_staggered", 64, 4096, pythonReferenceMaxDiffDb))

@@ -1,0 +1,12 @@
+[
+  {
+    "frameOffset": 0,
+    "value": 0,
+    "framesToReachValue": 0
+  },
+  {
+    "frameOffset": 512,
+    "value": 1,
+    "framesToReachValue": 2048
+  }
+]

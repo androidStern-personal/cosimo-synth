@@ -444,6 +444,8 @@ const IOSWavetablePanel = memo(function IOSWavetablePanel({
     stageRef,
     frames,
     observedPosition,
+    warpMode,
+    warpAmount,
     displayedFrameCount,
     displayedTableIndex,
     desiredTableIndex,
@@ -461,6 +463,8 @@ const IOSWavetablePanel = memo(function IOSWavetablePanel({
     stageRef: RefObject<HTMLDivElement | null>;
     frames: Float32Array[] | null;
     observedPosition: number;
+    warpMode: number;
+    warpAmount: number;
     displayedFrameCount: number;
     displayedTableIndex: number;
     desiredTableIndex: number;
@@ -585,7 +589,12 @@ const IOSWavetablePanel = memo(function IOSWavetablePanel({
             >
                 <div className="wavetable-display-stack">
                     <div className="wavetable-layer">
-                        <WavetableCanvas frames={frames} position={observedPosition} />
+                        <WavetableCanvas
+                            frames={frames}
+                            position={observedPosition}
+                            warpMode={warpMode}
+                            warpAmount={warpAmount}
+                        />
                     </div>
                     <div className="wavetable-layer" aria-hidden="true" />
                 </div>
@@ -767,6 +776,8 @@ function IOSPatchViewBody() {
                                 stageRef={stageRef}
                                 frames={synthView.frames}
                                 observedPosition={synthView.observedPosition}
+                                warpMode={synthView.warpMode.value}
+                                warpAmount={synthView.warpAmount.value}
                                 displayedFrameCount={synthView.displayedFrameCount}
                                 displayedTableIndex={synthView.displayedTableIndex}
                                 desiredTableIndex={synthView.desiredTableIndex}

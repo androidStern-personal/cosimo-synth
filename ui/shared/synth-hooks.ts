@@ -54,6 +54,9 @@ const WAVETABLE_POSITION_ENDPOINT_ID = "wavetablePosition";
 const WAVETABLE_SELECT_ENDPOINT_ID = "wavetableSelect";
 const PLAY_MODE_ENDPOINT_ID = "playMode";
 const GLIDE_TIME_ENDPOINT_ID = "glideTime";
+const WARP_MODE_ENDPOINT_ID = "warpMode";
+const WARP_AMOUNT_ENDPOINT_ID = "warpAmount";
+const WARP_MSEG_DEPTH_ENDPOINT_ID = "warpMsegDepth";
 const RUNTIME_SYNC_REQUEST_ENDPOINT_ID = "runtimeSyncRequest";
 const RUNTIME_STATE_ENDPOINT_ID = "runtimeState";
 const RETRY_DESIRED_TABLE_REQUEST_ENDPOINT_ID = "retryDesiredTableRequest";
@@ -112,6 +115,9 @@ export type SynthPatchViewModel = {
     wavetablePosition: PatchControlBinding<number>;
     playMode: PatchControlBinding<number>;
     glideTime: PatchControlBinding<number>;
+    warpMode: PatchControlBinding<number>;
+    warpAmount: PatchControlBinding<number>;
+    warpMsegDepth: PatchControlBinding<number>;
     msegState: MsegState | null;
     handleSelectWavetable: (nextValue: number) => void;
     handleRetryLoad: () => void;
@@ -595,6 +601,21 @@ export function useSynthPatchViewModel({
         initialValue: 0,
         coerce: (value) => clamp(Number(value) || 0, GLIDE_TIME_MIN_SECONDS, GLIDE_TIME_MAX_SECONDS),
     });
+    const warpMode = usePatchParameterBinding<number>({
+        endpointID: WARP_MODE_ENDPOINT_ID,
+        initialValue: 0,
+        coerce: (value) => clamp(Math.round(Number(value) || 0), 0, 4),
+    });
+    const warpAmount = usePatchParameterBinding<number>({
+        endpointID: WARP_AMOUNT_ENDPOINT_ID,
+        initialValue: 0,
+        coerce: (value) => clamp(Number(value) || 0, 0, 1),
+    });
+    const warpMsegDepth = usePatchParameterBinding<number>({
+        endpointID: WARP_MSEG_DEPTH_ENDPOINT_ID,
+        initialValue: 0,
+        coerce: (value) => clamp(Number(value) || 0, -1, 1),
+    });
     const requestRuntimeSync = usePatchEventTrigger<number>(RUNTIME_SYNC_REQUEST_ENDPOINT_ID);
     const retryDesiredTableLoad = usePatchEventTrigger<number>(RETRY_DESIRED_TABLE_REQUEST_ENDPOINT_ID);
     const observedPosition = useObservedDisplayPosition(Number(wavetablePosition.value) || 0);
@@ -742,6 +763,9 @@ export function useSynthPatchViewModel({
         wavetablePosition,
         playMode,
         glideTime,
+        warpMode,
+        warpAmount,
+        warpMsegDepth,
         msegState,
         handleSelectWavetable,
         handleRetryLoad,

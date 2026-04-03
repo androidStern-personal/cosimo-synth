@@ -44,6 +44,13 @@ const KEYBOARD_ROOT_NOTE_MAX = 72;
 const GLIDE_TIME_MIN_SECONDS = 0;
 const GLIDE_TIME_MAX_SECONDS = 2;
 const GLIDE_TIME_STEP_SECONDS = 0.001;
+const WARP_MODE_OPTIONS = [
+    { value: 0, label: "Off" },
+    { value: 1, label: "Bend +/-" },
+    { value: 2, label: "PWM" },
+    { value: 3, label: "Asym +/-" },
+    { value: 4, label: "Mirror" },
+] as const;
 
 type HeaderProps = {
     statusText: string;
@@ -52,6 +59,12 @@ type HeaderProps = {
 type VoiceGlideSectionProps = {
     playMode: PatchControlBinding<number>;
     glideTime: PatchControlBinding<number>;
+};
+
+type WarpSectionProps = {
+    warpMode: PatchControlBinding<number>;
+    warpAmount: PatchControlBinding<number>;
+    warpMsegDepth: PatchControlBinding<number>;
 };
 
 type MsegEditorModalProps = {
@@ -76,6 +89,29 @@ function formatKeyboardRootLabel(rootNote: number) {
     const octave = Math.floor(rootNote / 12) - 1;
     return `C${octave}`;
 }
+
+function formatPercent(value: number) {
+    return `${Math.round(value * 100)}%`;
+}
+
+function formatSignedPercent(value: number) {
+    const percentValue = Math.round(value * 100);
+    return `${percentValue > 0 ? "+" : ""}${percentValue}%`;
+}
+
+function formatBipolarWarpAmount(value: number) {
+    const percentValue = Math.round((value - 0.5) * 200);
+    return `${percentValue > 0 ? "+" : ""}${percentValue}%`;
+}
+
+function formatWarpAmount(mode: number, value: number) {
+    if (mode === 1 || mode === 3 || mode === 4) {
+        return formatBipolarWarpAmount(value);
+    }
+
+    return formatPercent(value);
+}
+
 function StatusHeader({ statusText }: HeaderProps) {
     return (
         <header className="flex items-center justify-between gap-4">
@@ -86,6 +122,82 @@ function StatusHeader({ statusText }: HeaderProps) {
                 {statusText}
             </div>
         </header>
+    );
+}
+
+function WarpSection({
+    warpMode,
+    warpAmount,
+    warpMsegDepth,
+}: WarpSectionProps) {
+    return (
+        <section className="grid gap-4 rounded-[24px] border border-white/8 bg-white/[0.03] p-5">
+            <div className="flex items-start justify-between gap-4">
+                <div>
+                    <div className="text-[11px] uppercase tracking-[0.22em] text-cyan-300/70">Phase Warp</div>
+                    <div className="mt-2 text-sm text-slate-300/75">
+                        Remap oscillator phase before the wavetable lookup. The amount can also be driven per voice by MSEG 1.
+                    </div>
+                </div>
+                <div className="rounded-full border border-cyan-300/15 bg-cyan-300/8 px-3 py-1 text-[10px] uppercase tracking-[0.18em] text-cyan-100/85">
+                    Production Path
+                </div>
+            </div>
+
+            <div className="grid gap-5 lg:grid-cols-[220px_minmax(0,1fr)_minmax(0,1fr)]">
+                <label className="grid gap-2">
+                    <span className="text-[11px] uppercase tracking-[0.18em] text-slate-300/60">Mode</span>
+                    <div className="relative">
+                        <select
+                            aria-label="Warp mode"
+                            className="h-11 w-full appearance-none rounded-[16px] border border-white/8 bg-black/25 px-4 pr-10 text-[11px] uppercase tracking-[0.16em] text-cyan-100 outline-none transition hover:border-cyan-200/30 focus:border-cyan-200/45"
+                            value={String(warpMode.value)}
+                            onChange={(event) => warpMode.commitValue(Number(event.target.value))}
+                        >
+                            {WARP_MODE_OPTIONS.map((option) => (
+                                <option key={option.value} value={option.value}>
+                                    {option.label}
+                                </option>
+                            ))}
+                        </select>
+                        <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-4 text-slate-300/75">
+                            <svg className="h-3 w-3" viewBox="0 0 12 12" aria-hidden="true">
+                                <path
+                                    d="M3 4.5 6 7.5 9 4.5"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth="1.4"
+                                />
+                            </svg>
+                        </div>
+                    </div>
+                </label>
+
+                <RangeField
+                    label="Amount"
+                    min={0}
+                    max={1}
+                    step={0.001}
+                    value={warpAmount.value}
+                    displayValue={formatWarpAmount(warpMode.value, warpAmount.value)}
+                    onChange={(nextValue) => warpAmount.commitValue(nextValue)}
+                    ariaLabel="Warp amount"
+                />
+
+                <RangeField
+                    label="MSEG 1 Depth"
+                    min={-1}
+                    max={1}
+                    step={0.001}
+                    value={warpMsegDepth.value}
+                    displayValue={formatSignedPercent(warpMsegDepth.value)}
+                    onChange={(nextValue) => warpMsegDepth.commitValue(nextValue)}
+                    ariaLabel="Warp MSEG depth"
+                />
+            </div>
+        </section>
     );
 }
 
@@ -273,6 +385,8 @@ function DesktopPatchViewBody() {
                         stageRef={stageRef}
                         frames={synthView.frames}
                         position={synthView.observedPosition}
+                        warpMode={synthView.warpMode.value}
+                        warpAmount={synthView.warpAmount.value}
                         tableName={synthView.displayedTableName}
                         frameCount={synthView.displayedFrameCount}
                         desiredTableIndex={synthView.desiredTableIndex}
@@ -304,6 +418,12 @@ function DesktopPatchViewBody() {
                         {synthView.failureDetail}
                     </div>
                 ) : null}
+
+                <WarpSection
+                    warpMode={synthView.warpMode}
+                    warpAmount={synthView.warpAmount}
+                    warpMsegDepth={synthView.warpMsegDepth}
+                />
 
                 <KeyboardSection
                     playMode={synthView.playMode}

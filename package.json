@@ -9,7 +9,13 @@
     "ui:ios:build": "vite build --config ui/vite.ios.config.mjs",
     "ui:worker:build": "vite build --config ui/vite.worker.config.mjs",
     "ui:build": "node ui/build.mjs",
-    "ios:ui:dev": "vite --config ios_auv3/vite.config.mjs"
+    "ios:ui:dev": "vite --config ios_auv3/vite.config.mjs",
+    "test:desktop:warp-ui": "node --test --test-name-pattern='^warp controls commit mode, amount, and MSEG depth on the desktop harness$' tests/test_desktop_patch_view_browser.mjs",
+    "test:python:warp-alias": "uv run pytest tests/test_warp_aliasing.py",
+    "warp:fixtures:update-inputs": "node tests/helpers/generate_warp_cmajtest_fixtures.mjs && PYTHONPATH=. uv run python tests/helpers/generate_warp_reference_assets.py --expand-only",
+    "warp:reference:update": "PYTHONPATH=. uv run --extra debug python tests/helpers/generate_warp_reference_assets.py",
+    "warp:update-reference": "npm run warp:fixtures:update-inputs && npm run warp:reference:update",
+    "test:cmajor:warp": "npm run test:python:warp-alias && npm run test:desktop:warp-ui && cmaj test --singleThread --sessionID=1 tests/cmajor_warp"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.2.2",

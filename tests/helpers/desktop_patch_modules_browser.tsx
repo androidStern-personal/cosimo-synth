@@ -1186,6 +1186,8 @@ export async function installSharedWavetableStageHarness(target: HTMLElement) {
                     stageRef={stageRef}
                     frames={[Float32Array.from([0, 0.5, -0.5, 0])]}
                     position={0.5}
+                    warpMode={1}
+                    warpAmount={0.72}
                     tableName="BS2 - Acid"
                     frameCount={128}
                     desiredTableIndex={0}

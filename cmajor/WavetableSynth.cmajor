@@ -915,6 +915,9 @@ graph WavetableSynth [[ main ]]
     input value float32 playMode [[ name: "Play Mode", min: 0.0f, max: 2.0f, init: 0.0f, discrete: true, step: 1.0f, rampFrames: 0 ]];
     input value float32 glideTime [[ name: "Glide Time", min: 0.0f, max: 2.0f, init: 0.0f, unit: "s", rampFrames: 0 ]];
     input value float32 mseg1Depth [[ name: "MSEG 1 Depth", min: -1.0f, max: 1.0f, init: 1.0f, rampFrames: 64 ]];
+    input value float32 warpMsegDepth [[ name: "Warp MSEG Depth", min: -1.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
+    input value float32 warpMode [[ name: "Warp Mode", min: 0.0f, max: 4.0f, init: 0.0f, discrete: true, step: 1.0f, rampFrames: 0 ]];
+    input value float32 warpAmount [[ name: "Warp Amount", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
     output event wt::WavetableUploadAck wavetableUploadAck;
     output event wt::WavetableMipRequest wavetableMipRequest;
     output event wt::RuntimeState runtimeState;
@@ -947,6 +950,9 @@ graph WavetableSynth [[ main ]]
         wavetableSelect -> desiredTableMonitor.tableSelectIn;
         glideTime -> sharedEngine.glideTimeIn;
         mseg1Depth -> sharedEngine.msegDepthIn;
+        warpMsegDepth -> sharedEngine.warpMsegDepthIn;
+        warpMode -> sharedEngine.warpModeIn;
+        warpAmount -> sharedEngine.warpAmountIn;
         sharedEngine.wavetableUploadAckOut -> wavetableUploadAck;
         sharedEngine.wavetableMipRequestOut -> wavetableMipRequest;
         sharedEngine.runtimeServiceStateOut -> runtimeStateCoordinator.runtimeServiceStateIn;
