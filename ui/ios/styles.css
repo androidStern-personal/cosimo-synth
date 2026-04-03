@@ -66,6 +66,11 @@ select {
     grid-row: 1;
 }
 
+.ios-main-view[data-hidden="true"] {
+    visibility: hidden;
+    pointer-events: none;
+}
+
 .ios-scroll {
     height: 100%;
     min-height: 0;

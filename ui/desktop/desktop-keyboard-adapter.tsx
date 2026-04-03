@@ -10,6 +10,7 @@ import {
     usePatchConnection,
     type PatchConnectionLike,
 } from "../shared/cmajor-react";
+import { computeKeyboardDimensions } from "../shared/keyboard-geometry";
 
 const midiInputEndpointID = "midiIn";
 export const DEFAULT_KEYBOARD_NOTE_COUNT = 25;
@@ -27,49 +28,6 @@ export type PianoKeyboardElement = HTMLElement & {
     attachToPatchConnection?: (connection: PatchConnectionLike, endpointID: string) => void;
     detachPatchConnection?: (connection: PatchConnectionLike) => void;
 };
-
-function getPitchClass(noteNumber: number) {
-    const safeNoteNumber = Math.round(Number(noteNumber) || 0);
-    return ((safeNoteNumber % 12) + 12) % 12;
-}
-
-function isNaturalNoteNumber(noteNumber: number) {
-    const pitchClass = getPitchClass(noteNumber);
-
-    return pitchClass === 0 ||
-        pitchClass === 2 ||
-        pitchClass === 4 ||
-        pitchClass === 5 ||
-        pitchClass === 7 ||
-        pitchClass === 9 ||
-        pitchClass === 11;
-}
-
-function countNaturalNotesInRange(rootNote: number, noteCount: number) {
-    const safeRootNote = Math.round(Number(rootNote) || 0);
-    const safeNoteCount = Math.max(1, Math.round(Number(noteCount) || 0));
-    let naturalCount = 0;
-
-    for (let noteOffset = 0; noteOffset < safeNoteCount; noteOffset += 1) {
-        if (isNaturalNoteNumber(safeRootNote + noteOffset)) {
-            naturalCount += 1;
-        }
-    }
-
-    return Math.max(1, naturalCount);
-}
-
-function computeKeyboardDimensions(rootNote: number, noteCount: number, availableWidth: number) {
-    const naturalCount = countNaturalNotesInRange(rootNote, noteCount);
-    const safeAvailableWidth = Math.max(0, Number(availableWidth) || 0);
-    const naturalWidth = Math.max(18, (safeAvailableWidth - 1) / naturalCount);
-    const accidentalWidth = Math.max(8, naturalWidth * 0.58);
-
-    return {
-        naturalWidth,
-        accidentalWidth,
-    };
-}
 
 function useResizeObserver<TElement extends Element>(ref: RefObject<TElement | null>) {
     const [size, setSize] = useState({ width: 1, height: 1 });
@@ -215,7 +173,11 @@ export function KeyboardDock({
             return;
         }
 
-        const { naturalWidth, accidentalWidth } = computeKeyboardDimensions(rootNote, noteCount, hostSize.width);
+        const { naturalWidth, accidentalWidth } = computeKeyboardDimensions({
+            rootNote,
+            noteCount,
+            availableWidth: hostSize.width,
+        });
         const currentNaturalWidth = Number(keyboard.naturalWidth) || 0;
         const currentAccidentalWidth = Number(keyboard.accidentalWidth) || 0;
 

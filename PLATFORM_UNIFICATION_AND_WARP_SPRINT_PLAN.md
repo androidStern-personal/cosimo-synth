@@ -26,9 +26,8 @@ The goal of this file is that someone can come back later, read only this docume
 
 As of this file:
 
-- The current branch is `codex/UI-refactor`.
 - Desktop already has a new React, TypeScript, Tailwind, and Vite patch UI.
-- iPhone does **not** yet use that new frontend. iPhone still uses the older `patch_gui/index.js` UI stack.
+- iPhone also now uses the React and Vite frontend through `patch_gui/index.ios.js`.
 - iPhone **does** already have a repo-owned native shell built around raw `cmaj generate --target=cpp` output.
 - Desktop does **not** yet have that repo-owned native shell. Desktop still uses the stock Cmajor and JUCE host path.
 - Both platforms still depend on some browser-side Cmajor helper JavaScript, especially `cmaj-patch-view.js` and `cmaj-patch-connection.js`.
@@ -64,7 +63,7 @@ This is the JavaScript that runs inside the webview and:
 Current state:
 
 - desktop: new React frontend, but still booted through Cmajor browser helpers
-- iPhone: old non-React frontend, also still using Cmajor browser helpers
+- iPhone: React frontend, also still using Cmajor browser helpers
 
 Important consequence:
 

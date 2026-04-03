@@ -545,3 +545,14 @@ What was verified for the iPhone React portrait MSEG preview/editor split fix
 - `xcodebuild -project build/ios_device_run/CosimoSynthAUv3.xcodeproj -scheme CosimoSynth_Standalone -configuration Debug -destination id=00008120-000139383644C01E DEVELOPMENT_TEAM=JUFVT28775 CODE_SIGN_STYLE=Automatic CODE_SIGN_IDENTITY='Apple Development' -allowProvisioningUpdates build`
 - `xcrun devicectl device install app --device 00C7F433-8B6A-5CAC-856F-56D7385E12F9 'build/ios_device_run/CosimoSynth_artefacts/Debug/Standalone/Cosimo Synth.app'`
 - `xcrun devicectl device process launch --device 00C7F433-8B6A-5CAC-856F-56D7385E12F9 dev.cosimo.wavetable-synth`
+
+Legacy monolithic browser entrypoint removal on 2026-04-03
+- Deleted `patch_gui/index.js`. The repo no longer keeps the old monolithic iPhone browser UI file around after the React migration.
+- Added `ui/shared/display-gesture.ts` and `ui/shared/keyboard-geometry.ts` so the gesture math and keyboard sizing that used to be duplicated around the old path now live in shared frontend modules.
+- Added `tests/test_shared_frontend_logic.mjs` so the runtime-table, display-gesture, and keyboard-geometry behavior is now tested directly against the current shared frontend code instead of against the deleted legacy class.
+- Updated `tools/patch_gui_harnesses/dev-harness.mjs` to boot the real desktop React bundle directly, and updated the active plan files so they no longer describe iPhone as still running the deleted `patch_gui/index.js` UI path.
+
+What was verified for the legacy browser entrypoint removal
+- `npx tsc --noEmit`
+- `npm run ui:build`
+- `node --test --test-concurrency=1 tests/test_shared_frontend_logic.mjs tests/test_patch_view_layout.mjs tests/test_wavetable_display.mjs tests/test_wavetable_worker.mjs tests/test_ios_patch_view_browser.mjs tests/test_desktop_widget_adapters_browser.mjs tests/test_desktop_patch_view_browser.mjs tests/test_shared_synth_components_browser.mjs tests/test_shared_synth_hooks_browser.mjs`

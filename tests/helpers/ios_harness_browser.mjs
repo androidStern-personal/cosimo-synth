@@ -670,6 +670,7 @@ function createIOSHarnessInitScript(baseUrl) {
                     retryDisabled: retryButton instanceof HTMLButtonElement ? retryButton.disabled : null,
                     modalOpen: modalLayer?.dataset.open ?? null,
                     mainViewDisplay: mainView ? getComputedStyle(mainView).display : null,
+                    mainViewVisibility: mainView ? getComputedStyle(mainView).visibility : null,
                     footerVisible: isRenderedElementVisible(footer),
                     shellPaddingTop: shellStyle?.paddingTop ?? null,
                     shellPaddingRight: shellStyle?.paddingRight ?? null,

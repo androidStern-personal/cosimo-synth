@@ -12,11 +12,11 @@ This file is transient because the durable roadmap still lives in `PLATFORM_UNIF
 
 ## What The Current iPhone App Actually Does
 
-Right now the iPhone patch manifest in `WavetableSynth.iOS.cmajorpatch` points at `patch_gui/index.ios.js`.
+The iPhone patch manifest in `WavetableSynth.iOS.cmajorpatch` still points at `patch_gui/index.ios.js`.
 
-`patch_gui/index.ios.js` is only a thin wrapper. It still calls `createPatchViewWithOptions(...)` from `patch_gui/index.js`, which means the real iPhone UI is still the old monolithic browser UI in `patch_gui/index.js`.
+That path now contains the built React and Vite iPhone frontend, not a wrapper around `patch_gui/index.js`.
 
-The iPhone host bootstrap in `patch_gui/index.ios-host.js` is already on the new shared browser-side host contract and shared `resourceClient` contract. The frontend is the piece that still needs to migrate.
+The iPhone host bootstrap in `patch_gui/index.ios-host.js` is still the existing repo-owned host and shared `resourceClient` contract. The remaining work after the migration is cleanup and validation, not a host rewrite.
 
 The reusable React synth surface that should become the new iPhone frontend base now exists in:
 
@@ -58,7 +58,7 @@ The point is that the React migration should have to satisfy these tests instead
 
 ### 2. Extract the remaining mobile-only stage and layout behavior out of the old iPhone UI
 
-The shared React synth surface is ready for a lot of the synth behavior, but the old iPhone shell still contains mobile-specific stage and layout behavior that should not be forced into the desktop-shaped shared components.
+The shared React synth surface is ready for a lot of the synth behavior, but the old iPhone shell contained mobile-specific stage and layout behavior that should not be forced into the desktop-shaped shared components.
 
 That includes:
 
@@ -184,7 +184,7 @@ Rebuild and verify:
 - keyboard behavior
 - resource loading, including known tricky source WAV paths
 
-Do not delete the old iPhone frontend path until the new React shell clears that acceptance bar.
+The new React shell cleared that acceptance bar. The remaining cleanup is to remove the deleted legacy browser entrypoint and keep only the current shared-module coverage.
 
 ## Files I Expect To Add
 
@@ -211,7 +211,7 @@ Do not delete the old iPhone frontend path until the new React shell clears that
 
 The hard part is not `resourceClient`. That foundation is already done.
 
-The hard part is the iPhone-specific UI behavior that still lives inside `patch_gui/index.js`, especially:
+The hard part in this migration was the iPhone-specific UI behavior that used to live inside `patch_gui/index.js`, especially:
 
 - the stage shell
 - the overlay picker
@@ -230,7 +230,7 @@ So the right order is:
 
 This task is done only when:
 
-- the iPhone app no longer depends on the old `patch_gui/index.js` UI path
+- the iPhone app no longer depends on the old `patch_gui/index.js` UI path, and that old entrypoint is deleted
 - the new iPhone React shell uses the shared synth hooks and shared synth components
 - portrait and landscape both work in simulator and on the real phone
 - safe areas are correct

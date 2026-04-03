@@ -396,6 +396,7 @@ test("legacy patch shell resource client is emitted from the TypeScript source i
 
 test("the iPhone patch view is emitted as a real React bundle instead of a wrapper around patch_gui/index.js", async () => {
     const builtIOSPatchView = await fs.readFile(path.join(repoRoot, "patch_gui", "index.ios.js"), "utf8");
+    const legacyPatchViewPath = path.join(repoRoot, "patch_gui", "index.js");
 
     assert.match(builtIOSPatchView, /class CosimoIOSReactViewElement extends HTMLElement/);
     assert.match(builtIOSPatchView, /function createIOSPatchView/);
@@ -403,6 +404,11 @@ test("the iPhone patch view is emitted as a real React bundle instead of a wrapp
     assert.match(builtIOSPatchView, /Swipe \+ Drag/);
     assert.doesNotMatch(builtIOSPatchView, /createPatchViewWithOptions/);
     assert.doesNotMatch(builtIOSPatchView, /import \{ createPatchViewWithOptions \} from "\.\/index\.js"/);
+    await assert.rejects(
+        fs.access(legacyPatchViewPath),
+        /ENOENT/,
+        "The old monolithic iPhone browser UI should be deleted once the React bundle replaces it",
+    );
 });
 
 test("desktop and iPhone wavetable views share the same renderer implementation", async () => {

@@ -14880,9 +14880,6 @@ function MsegOverviewSection({
     ] }) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "rounded-2xl border border-white/8 bg-black/20 px-4 py-5 text-sm text-slate-300/70", children: "Loading MSEG state…" })
   ] });
 }
-const midiInputEndpointID = "midiIn";
-const DEFAULT_KEYBOARD_NOTE_COUNT = 25;
-const DEFAULT_KEYBOARD_ROOT_NOTE = 36;
 function getPitchClass(noteNumber) {
   const safeNoteNumber = Math.round(Number(noteNumber) || 0);
   return (safeNoteNumber % 12 + 12) % 12;
@@ -14902,16 +14899,26 @@ function countNaturalNotesInRange(rootNote, noteCount) {
   }
   return Math.max(1, naturalCount);
 }
-function computeKeyboardDimensions(rootNote, noteCount, availableWidth) {
+function computeKeyboardDimensions({
+  rootNote,
+  noteCount,
+  availableWidth,
+  minNaturalWidth = 18
+}) {
   const naturalCount = countNaturalNotesInRange(rootNote, noteCount);
   const safeAvailableWidth = Math.max(0, Number(availableWidth) || 0);
-  const naturalWidth = Math.max(18, (safeAvailableWidth - 1) / naturalCount);
+  const unclampedNaturalWidth = Math.max(1, (safeAvailableWidth - 1) / naturalCount);
+  const naturalWidth = Math.max(Number(minNaturalWidth) || 0, unclampedNaturalWidth);
   const accidentalWidth = Math.max(8, naturalWidth * 0.58);
   return {
+    naturalCount,
     naturalWidth,
     accidentalWidth
   };
 }
+const midiInputEndpointID = "midiIn";
+const DEFAULT_KEYBOARD_NOTE_COUNT = 25;
+const DEFAULT_KEYBOARD_ROOT_NOTE = 36;
 function useResizeObserver(ref) {
   const [size, setSize] = reactExports.useState({ width: 1, height: 1 });
   reactExports.useLayoutEffect(() => {
@@ -15017,7 +15024,11 @@ function KeyboardDock({
     if (!keyboard || !host || hostSize.width <= 0) {
       return;
     }
-    const { naturalWidth, accidentalWidth } = computeKeyboardDimensions(rootNote, noteCount, hostSize.width);
+    const { naturalWidth, accidentalWidth } = computeKeyboardDimensions({
+      rootNote,
+      noteCount,
+      availableWidth: hostSize.width
+    });
     const currentNaturalWidth = Number(keyboard.naturalWidth) || 0;
     const currentAccidentalWidth = Number(keyboard.accidentalWidth) || 0;
     if (Math.abs(currentNaturalWidth - naturalWidth) < 0.01 && Math.abs(currentAccidentalWidth - accidentalWidth) < 0.01) {
@@ -23117,11 +23128,14 @@ function NexusNumberField({
     ] })
   ] });
 }
+function serializeIdentity(value) {
+  return value;
+}
 function usePatchParameterBinding({
   endpointID,
   initialValue,
   coerce,
-  serialize = (value) => value
+  serialize = serializeIdentity
 }) {
   const parameter = usePatchParameter(endpointID, serialize(initialValue));
   const value = reactExports.useMemo(() => coerce(parameter.value), [coerce, parameter.value]);
@@ -23664,7 +23678,7 @@ function useMsegEditorInteractions({
 }) {
   const [isOpen, setIsOpen] = reactExports.useState(false);
   const [selectedPointIndex, setSelectedPointIndex] = reactExports.useState(0);
-  const [activePointer, setActivePointer] = reactExports.useState(null);
+  const activePointerRef = reactExports.useRef(null);
   reactExports.useEffect(() => {
     if (!msegState) {
       return;
@@ -23677,7 +23691,7 @@ function useMsegEditorInteractions({
   }, [msegState]);
   reactExports.useEffect(() => {
     if (!isOpen) {
-      setActivePointer(null);
+      activePointerRef.current = null;
       return;
     }
     const handleEscapeKey = (event) => {
@@ -23695,7 +23709,7 @@ function useMsegEditorInteractions({
   }, []);
   const closeEditor = reactExports.useCallback(() => {
     setIsOpen(false);
-    setActivePointer(null);
+    activePointerRef.current = null;
   }, []);
   const handlePointerDown = reactExports.useCallback((event) => {
     if (event.button !== 0 || !msegState || !surfaceRef.current) {
@@ -23713,14 +23727,14 @@ function useMsegEditorInteractions({
     );
     if (targetPointIndex >= 0) {
       setSelectedPointIndex(targetPointIndex);
-      setActivePointer({
+      activePointerRef.current = {
         pointerId: event.pointerId,
         pointIndex: targetPointIndex,
         startClientX: event.clientX,
         startClientY: event.clientY,
         moved: false,
         deleteOnRelease: targetPointIndex > 0 && targetPointIndex < msegState.shape.points.length - 1
-      });
+      };
       event.currentTarget.setPointerCapture(event.pointerId);
       event.preventDefault();
       return;
@@ -23743,6 +23757,7 @@ function useMsegEditorInteractions({
     event.preventDefault();
   }, [msegController, msegState, orientation, surfaceRef]);
   const handlePointerMove = reactExports.useCallback((event) => {
+    const activePointer = activePointerRef.current;
     if (!activePointer || activePointer.pointerId !== event.pointerId || !surfaceRef.current) {
       return;
     }
@@ -23761,25 +23776,31 @@ function useMsegEditorInteractions({
       bounds.height,
       { orientation }
     );
-    setActivePointer((previousPointer) => previousPointer ? { ...previousPointer, moved: true } : previousPointer);
+    if (!activePointer.moved) {
+      activePointerRef.current = {
+        ...activePointer,
+        moved: true
+      };
+    }
     msegController.current?.movePoint(activePointer.pointIndex, point.x, point.y);
     setSelectedPointIndex(activePointer.pointIndex);
     event.preventDefault();
-  }, [activePointer, msegController, orientation, surfaceRef]);
+  }, [msegController, orientation, surfaceRef]);
   const handlePointerUp = reactExports.useCallback((event) => {
+    const activePointer = activePointerRef.current;
     if (!activePointer || activePointer.pointerId !== event.pointerId) {
       return;
     }
     event.currentTarget.releasePointerCapture?.(event.pointerId);
     const pointerState = activePointer;
-    setActivePointer(null);
+    activePointerRef.current = null;
     if (!pointerState.moved && pointerState.deleteOnRelease && msegController.current) {
       msegController.current.deletePoint(pointerState.pointIndex);
       const pointCount = msegController.current.getState().shape.points.length;
       setSelectedPointIndex(clamp(pointerState.pointIndex - 1, 0, Math.max(0, pointCount - 1)));
     }
     event.preventDefault();
-  }, [activePointer, msegController]);
+  }, [msegController]);
   return {
     isOpen,
     selectedPointIndex,

@@ -286,6 +286,46 @@ async function dragAcrossShadowElement(page, selector, start, end) {
     );
 }
 
+async function startShadowMutationCounter(page, selector, counterKey) {
+    await page.evaluate(({ targetSelector, key }) => {
+        const shadowRoot = document.querySelector("cosimo-synth-view")?.shadowRoot;
+        const target = shadowRoot?.querySelector(targetSelector);
+
+        if (!(target instanceof Element)) {
+            throw new Error(`Could not observe ${targetSelector}.`);
+        }
+
+        const observer = new MutationObserver((records) => {
+            const counters = (window.__COSIMO_MUTATION_COUNTERS__ ??= {});
+            counters[key] = (counters[key] ?? 0) + records.length;
+        });
+
+        const observers = (window.__COSIMO_MUTATION_OBSERVERS__ ??= {});
+        const counters = (window.__COSIMO_MUTATION_COUNTERS__ ??= {});
+        observers[key]?.disconnect?.();
+        observer.observe(target, {
+            subtree: true,
+            childList: true,
+            attributes: true,
+            characterData: true,
+        });
+        observers[key] = observer;
+        counters[key] = 0;
+    }, { targetSelector: selector, key: counterKey });
+}
+
+async function stopShadowMutationCounter(page, counterKey) {
+    return page.evaluate((key) => {
+        const observers = window.__COSIMO_MUTATION_OBSERVERS__ ?? {};
+        const counters = window.__COSIMO_MUTATION_COUNTERS__ ?? {};
+        observers[key]?.disconnect?.();
+        delete observers[key];
+        const count = counters[key] ?? 0;
+        delete counters[key];
+        return count;
+    }, counterKey);
+}
+
 async function clickOctaveButtonUntilRootNote(page, selector, expectedRootNote) {
     for (let attempt = 0; attempt < 8; attempt += 1) {
         const renderedState = await getIOSHarnessRenderedState(page);
@@ -867,7 +907,7 @@ test("mounted iPhone keeps the main-panel MSEG preview horizontal in portrait wh
     }
 });
 
-test("mounted iPhone MSEG modal hides the main view, keeps the footer visible, and persists a shape edit", async () => {
+test("mounted iPhone MSEG modal keeps the main view layout-stable while hidden, keeps the footer visible, and persists a shape edit", async () => {
     for (const viewportSize of [
         { width: 390, height: 844 },
         { width: 844, height: 390 },
@@ -883,9 +923,15 @@ test("mounted iPhone MSEG modal hides the main view, keeps the footer visible, a
             let renderedState = await waitForRenderedState(
                 page,
                 `open MSEG modal at ${viewportSize.width}x${viewportSize.height}`,
-                (nextState) => nextState.modalOpen === "true" && nextState.mainViewDisplay === "none",
+                (nextState) => nextState.modalOpen === "true"
+                    && nextState.mainViewDisplay !== "none"
+                    && nextState.mainViewVisibility === "hidden"
+                    && (nextState.previewShellRect?.height ?? 0) > 0,
             );
             assert.equal(renderedState.footerVisible, true);
+            assert.equal(renderedState.mainViewDisplay, "grid");
+            assert.equal(renderedState.mainViewVisibility, "hidden");
+            assertRectHasArea(renderedState.previewShellRect, "hidden main-view MSEG preview shell");
 
             const modalRect = await getShadowElementRect(page, "[data-role='mseg-modal-viewport']");
             const modalShellRect = await getShadowElementRect(page, "[data-role='mseg-modal']");
@@ -980,7 +1026,9 @@ test("mounted iPhone MSEG modal hides the main view, keeps the footer visible, a
             renderedState = await waitForRenderedState(
                 page,
                 `close MSEG modal at ${viewportSize.width}x${viewportSize.height}`,
-                (nextState) => nextState.modalOpen === "false" && nextState.mainViewDisplay !== "none",
+                (nextState) => nextState.modalOpen === "false"
+                    && nextState.mainViewDisplay !== "none"
+                    && nextState.mainViewVisibility === "visible",
             );
             assert.equal(renderedState.footerVisible, true);
         } finally {
@@ -1068,17 +1116,24 @@ test("mounted iPhone stage gestures keep picker taps inert, swipe tables horizon
         assert.equal(snapshot.gestureEnds.includes("wavetablePosition"), false);
 
         await clearIOSHarnessDebugLog(page);
+        await startShadowMutationCounter(page, ".play-panel", "play-panel-stage-drag");
         await dragAcrossShadowElement(page, ".wavetable-stage", { x: 180, y: 170 }, { x: 182, y: 100 });
         snapshot = await waitForSnapshot(
             page,
             "mounted vertical stage drag",
             (nextSnapshot) => nextSnapshot.sentMessages.some((message) => message.endpointID === "wavetablePosition"),
         );
+        const playPanelMutationCount = await stopShadowMutationCounter(page, "play-panel-stage-drag");
         const positionUpdate = snapshot.sentMessages.find((message) => message.endpointID === "wavetablePosition");
         assert.equal(snapshot.gestureStarts.includes("wavetablePosition"), true);
         assert.equal(snapshot.gestureEnds.includes("wavetablePosition"), true);
         assert.ok(Number(positionUpdate?.value) > 0.28);
         assert.ok(Number(positionUpdate?.value) <= 1);
+        assert.equal(
+            playPanelMutationCount,
+            0,
+            "Vertical wavetable scrubbing should not rewrite the play controls while scan position changes.",
+        );
     } finally {
         await closeIOSHarnessPage(page);
     }

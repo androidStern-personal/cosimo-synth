@@ -1,4 +1,4 @@
-import createPatchView from "../../patch_gui/index.js";
+import createPatchView from "../../patch_gui/desktop/index.js";
 
 const midiInputEndpointID = "midiIn";
 const wavetablePositionEndpointID = "wavetablePosition";

@@ -341,7 +341,7 @@ export function useMsegEditorInteractions({
 }) {
     const [isOpen, setIsOpen] = useState(false);
     const [selectedPointIndex, setSelectedPointIndex] = useState(0);
-    const [activePointer, setActivePointer] = useState<ActiveMsegPointerState | null>(null);
+    const activePointerRef = useRef<ActiveMsegPointerState | null>(null);
 
     useEffect(() => {
         if (!msegState) {
@@ -357,7 +357,7 @@ export function useMsegEditorInteractions({
 
     useEffect(() => {
         if (!isOpen) {
-            setActivePointer(null);
+            activePointerRef.current = null;
             return;
         }
 
@@ -379,7 +379,7 @@ export function useMsegEditorInteractions({
 
     const closeEditor = useCallback(() => {
         setIsOpen(false);
-        setActivePointer(null);
+        activePointerRef.current = null;
     }, []);
 
     const handlePointerDown = useCallback((event: ReactPointerEvent<SVGSVGElement>) => {
@@ -400,14 +400,14 @@ export function useMsegEditorInteractions({
 
         if (targetPointIndex >= 0) {
             setSelectedPointIndex(targetPointIndex);
-            setActivePointer({
+            activePointerRef.current = {
                 pointerId: event.pointerId,
                 pointIndex: targetPointIndex,
                 startClientX: event.clientX,
                 startClientY: event.clientY,
                 moved: false,
                 deleteOnRelease: targetPointIndex > 0 && targetPointIndex < msegState.shape.points.length - 1,
-            });
+            };
             event.currentTarget.setPointerCapture(event.pointerId);
             event.preventDefault();
             return;
@@ -436,6 +436,7 @@ export function useMsegEditorInteractions({
     }, [msegController, msegState, orientation, surfaceRef]);
 
     const handlePointerMove = useCallback((event: ReactPointerEvent<SVGSVGElement>) => {
+        const activePointer = activePointerRef.current;
         if (!activePointer || activePointer.pointerId !== event.pointerId || !surfaceRef.current) {
             return;
         }
@@ -457,22 +458,26 @@ export function useMsegEditorInteractions({
             bounds.height,
             { orientation },
         );
-        setActivePointer((previousPointer) => previousPointer
-            ? { ...previousPointer, moved: true }
-            : previousPointer);
+        if (!activePointer.moved) {
+            activePointerRef.current = {
+                ...activePointer,
+                moved: true,
+            };
+        }
         msegController.current?.movePoint(activePointer.pointIndex, point.x, point.y);
         setSelectedPointIndex(activePointer.pointIndex);
         event.preventDefault();
-    }, [activePointer, msegController, orientation, surfaceRef]);
+    }, [msegController, orientation, surfaceRef]);
 
     const handlePointerUp = useCallback((event: ReactPointerEvent<SVGSVGElement>) => {
+        const activePointer = activePointerRef.current;
         if (!activePointer || activePointer.pointerId !== event.pointerId) {
             return;
         }
 
         event.currentTarget.releasePointerCapture?.(event.pointerId);
         const pointerState = activePointer;
-        setActivePointer(null);
+        activePointerRef.current = null;
 
         if (!pointerState.moved && pointerState.deleteOnRelease && msegController.current) {
             msegController.current.deletePoint(pointerState.pointIndex);
@@ -481,7 +486,7 @@ export function useMsegEditorInteractions({
         }
 
         event.preventDefault();
-    }, [activePointer, msegController]);
+    }, [msegController]);
 
     return {
         isOpen,

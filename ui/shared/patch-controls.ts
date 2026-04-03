@@ -2,6 +2,10 @@ import { useCallback, useMemo } from "react";
 
 import { usePatchConnection, usePatchParameter } from "./cmajor-react";
 
+function serializeIdentity<TValue>(value: TValue) {
+    return value;
+}
+
 export type PatchControlBinding<TValue> = {
     endpointID: string;
     value: TValue;
@@ -22,7 +26,7 @@ export function usePatchParameterBinding<TValue>({
     endpointID,
     initialValue,
     coerce,
-    serialize = (value) => value,
+    serialize = serializeIdentity,
 }: PatchParameterBindingOptions<TValue>): PatchControlBinding<TValue> {
     const parameter = usePatchParameter(endpointID, serialize(initialValue));
     const value = useMemo(() => coerce(parameter.value), [coerce, parameter.value]);
