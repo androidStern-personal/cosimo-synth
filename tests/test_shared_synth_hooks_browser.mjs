@@ -10,7 +10,7 @@ import {
     MSEG_POINT_RADIUS_PX,
     renderMsegShape,
     toMsegPlaybackConfigEvent,
-} from "../patch_gui/mseg.mjs";
+} from "../patch_gui/mseg.js";
 
 import { startDesktopHarnessServer } from "./helpers/desktop_harness_browser.mjs";
 
@@ -78,7 +78,7 @@ async function getHarnessSnapshot(page) {
 
 async function getSurfaceRect(page) {
     return page.evaluate(() => {
-        const surface = document.getElementById("mseg-surface");
+        const surface = document.querySelector('[data-role="mseg-surface"]');
         if (!(surface instanceof SVGSVGElement)) {
             throw new Error("MSEG surface is missing.");
         }
@@ -688,6 +688,128 @@ test("useMsegEditorInteractions maps add and move gestures through the vertical 
         assert.equal(snapshot.actionLog.at(-1).type, "move");
         assertAlmostEqual(snapshot.points[2].x, 0.6, 1e-6);
         assertAlmostEqual(snapshot.points[2].y, 0.64, 1e-6);
+    } finally {
+        await page.close();
+    }
+});
+
+test("useMsegEditorInteractions only highlights a hovered segment when the pointer is on the line and not on a point", async () => {
+    const page = await openModulePage();
+
+    try {
+        await installHarness(page, "installMsegEditorInteractionsHookHarness");
+        await invokeHarness(page, "openEditor");
+
+        const segmentPoint = await invokeHarness(page, "getNormalizedCoordinates", 0.25, 0.175);
+        await invokeHarness(page, "dispatchPointer", "pointermove", {
+            pointerId: 41,
+            clientX: segmentPoint.x,
+            clientY: segmentPoint.y,
+        });
+
+        let snapshot = await getHarnessSnapshot(page);
+        assert.equal(snapshot.hoveredSegmentIndex, 0);
+        assert.equal(snapshot.highlightedSegmentIndex, 0);
+        assert.deepEqual(snapshot.pointStates, ["highlighted", "highlighted", "muted"]);
+
+        const point = await invokeHarness(page, "getPointCoordinates", 1);
+        await invokeHarness(page, "dispatchPointer", "pointermove", {
+            pointerId: 41,
+            clientX: point.x,
+            clientY: point.y,
+        });
+
+        snapshot = await getHarnessSnapshot(page);
+        assert.equal(snapshot.hoveredSegmentIndex, -1);
+        assert.equal(snapshot.highlightedSegmentIndex, -1);
+        assert.deepEqual(snapshot.pointStates, ["selected", "default", "default"]);
+    } finally {
+        await page.close();
+    }
+});
+
+test("useMsegEditorInteractions drags an upward-rising segment upward to a more upward visual bend without adding or moving points", async () => {
+    const page = await openModulePage();
+
+    try {
+        await installHarness(page, "installMsegEditorInteractionsHookHarness");
+        await invokeHarness(page, "openEditor");
+
+        const beforeDrag = await getHarnessSnapshot(page);
+        const segmentPoint = await invokeHarness(page, "getNormalizedCoordinates", 0.25, 0.175);
+        await invokeHarness(page, "dispatchPointer", "pointerdown", {
+            pointerId: 42,
+            button: 0,
+            clientX: segmentPoint.x,
+            clientY: segmentPoint.y,
+        });
+        await invokeHarness(page, "dispatchPointer", "pointermove", {
+            pointerId: 42,
+            button: 0,
+            clientX: segmentPoint.x,
+            clientY: segmentPoint.y - 36,
+        });
+        await invokeHarness(page, "dispatchPointer", "pointerup", {
+            pointerId: 42,
+            button: 0,
+            clientX: segmentPoint.x,
+            clientY: segmentPoint.y - 36,
+        });
+
+        const snapshot = await getHarnessSnapshot(page);
+        assert.equal(snapshot.pointCount, beforeDrag.pointCount);
+        assert.equal(snapshot.points[0].x, beforeDrag.points[0].x);
+        assert.equal(snapshot.points[0].y, beforeDrag.points[0].y);
+        assert.equal(snapshot.points[1].x, beforeDrag.points[1].x);
+        assert.equal(snapshot.points[1].y, beforeDrag.points[1].y);
+        assert.ok(snapshot.points[0].curvePower < beforeDrag.points[0].curvePower);
+        assert.equal(snapshot.actionLog.length, 1);
+        assert.equal(snapshot.actionLog[0].type, "curve");
+        assert.ok(snapshot.actionLog[0].curvePower < 0);
+        assert.equal(snapshot.activeSegmentIndex, -1);
+    } finally {
+        await page.close();
+    }
+});
+
+test("useMsegEditorInteractions drags a downward-falling segment upward to a more upward visual bend without adding or moving points", async () => {
+    const page = await openModulePage();
+
+    try {
+        await installHarness(page, "installMsegEditorInteractionsHookHarness");
+        await invokeHarness(page, "openEditor");
+        await invokeHarness(page, "setShapePoint", 2, 1, 0);
+
+        const beforeDrag = await getHarnessSnapshot(page);
+        const segmentPoint = await invokeHarness(page, "getNormalizedCoordinates", 0.75, 0.175);
+        await invokeHarness(page, "dispatchPointer", "pointerdown", {
+            pointerId: 43,
+            button: 0,
+            clientX: segmentPoint.x,
+            clientY: segmentPoint.y,
+        });
+        await invokeHarness(page, "dispatchPointer", "pointermove", {
+            pointerId: 43,
+            button: 0,
+            clientX: segmentPoint.x,
+            clientY: segmentPoint.y - 36,
+        });
+        await invokeHarness(page, "dispatchPointer", "pointerup", {
+            pointerId: 43,
+            button: 0,
+            clientX: segmentPoint.x,
+            clientY: segmentPoint.y - 36,
+        });
+
+        const snapshot = await getHarnessSnapshot(page);
+        assert.equal(snapshot.pointCount, beforeDrag.pointCount);
+        assert.equal(snapshot.points[1].x, beforeDrag.points[1].x);
+        assert.equal(snapshot.points[1].y, beforeDrag.points[1].y);
+        assert.ok(snapshot.points[1].curvePower > beforeDrag.points[1].curvePower);
+        assert.equal(snapshot.actionLog.length, 1);
+        assert.equal(snapshot.actionLog[0].type, "curve");
+        assert.ok(snapshot.actionLog[0].curvePower > 0);
+        assert.equal(snapshot.activeSegmentIndex, -1);
     } finally {
         await page.close();
     }

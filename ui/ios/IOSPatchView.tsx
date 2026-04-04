@@ -341,8 +341,11 @@ const IOSMsegModal = memo(function IOSMsegModal({
     surfaceRef,
     orientation,
     selectedPointIndex,
+    hoveredSegmentIndex,
+    activeSegmentIndex,
     onPointerDown,
     onPointerMove,
+    onPointerLeave,
     onPointerUp,
     rateSeconds,
     onRateChange,
@@ -355,8 +358,11 @@ const IOSMsegModal = memo(function IOSMsegModal({
     surfaceRef: RefObject<SVGSVGElement | null>;
     orientation: MsegSurfaceOrientation;
     selectedPointIndex: number;
+    hoveredSegmentIndex: number;
+    activeSegmentIndex: number;
     onPointerDown: (event: ReactPointerEvent<SVGSVGElement>) => void;
     onPointerMove: (event: ReactPointerEvent<SVGSVGElement>) => void;
+    onPointerLeave: (event: ReactPointerEvent<SVGSVGElement>) => void;
     onPointerUp: (event: ReactPointerEvent<SVGSVGElement>) => void;
     rateSeconds: number;
     onRateChange: (nextValue: number) => void;
@@ -396,8 +402,11 @@ const IOSMsegModal = memo(function IOSMsegModal({
                                 orientation={orientation}
                                 points={msegState.shape.points}
                                 selectedPointIndex={selectedPointIndex}
+                                hoveredSegmentIndex={hoveredSegmentIndex}
+                                activeSegmentIndex={activeSegmentIndex}
                                 onPointerDown={onPointerDown}
                                 onPointerMove={onPointerMove}
+                                onPointerLeave={onPointerLeave}
                                 onPointerUp={onPointerUp}
                             />
                         ) : null}
@@ -829,8 +838,11 @@ function IOSPatchViewBody() {
                     surfaceRef={msegEditorSurfaceRef}
                     orientation={msegEditorOrientation}
                     selectedPointIndex={synthView.msegEditor.selectedPointIndex}
+                    hoveredSegmentIndex={synthView.msegEditor.hoveredSegmentIndex}
+                    activeSegmentIndex={synthView.msegEditor.activeSegmentIndex}
                     onPointerDown={synthView.msegEditor.handlePointerDown}
                     onPointerMove={synthView.msegEditor.handlePointerMove}
+                    onPointerLeave={synthView.msegEditor.handlePointerLeave}
                     onPointerUp={synthView.msegEditor.handlePointerUp}
                     rateSeconds={synthView.msegState?.playback.rate.seconds ?? 1}
                     onRateChange={synthView.handleMsegRateChange}

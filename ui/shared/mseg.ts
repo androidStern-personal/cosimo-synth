@@ -11,12 +11,22 @@ export const MSEG_NOTE_OFF_POLICY_FINISH_LOOP = 0;
 export const MSEG_NOTE_OFF_POLICY_IMMEDIATE = 1;
 export const MSEG_NOTE_OFF_POLICY_IGNORE = 2;
 export const MSEG_POINT_HIT_RADIUS_PX = 16;
+export const MSEG_SEGMENT_HIT_RADIUS_PX = 10;
 export const MSEG_POINT_RADIUS_PX = 8;
 export const MSEG_SELECTED_POINT_RADIUS_PX = 10;
 export const MSEG_EDITOR_HORIZONTAL_PADDING_PX = 14;
 export const MSEG_EDITOR_VERTICAL_PADDING_PX = 14;
+export const MSEG_EDITOR_CURVE_TOLERANCE_PX = 0.5;
+const MSEG_EDITOR_MAX_SUBDIVISION_DEPTH = 12;
 
 export type MsegSurfaceOrientation = "horizontal" | "vertical";
+
+type MsegEditorCoordinateOptions = {
+    orientation?: MsegSurfaceOrientation;
+    pointRadius?: number;
+    horizontalPadding?: number;
+    verticalPadding?: number;
+};
 
 const MSEG_NOTE_OFF_POLICY_VALUES = new Set([
     "finish_loop",
@@ -174,12 +184,7 @@ export function pointToMsegEditorCoordinates(
     point: Pick<MsegPoint, "x" | "y">,
     width: number,
     height: number,
-    options: {
-        orientation?: MsegSurfaceOrientation;
-        pointRadius?: number;
-        horizontalPadding?: number;
-        verticalPadding?: number;
-    } = {},
+    options: MsegEditorCoordinateOptions = {},
 ) {
     const metrics = createMsegEditorMetrics(width, height, options);
     const orientation = options.orientation === "vertical" ? "vertical" : "horizontal";
@@ -204,12 +209,7 @@ export function msegEditorCoordinatesToPoint(
     editorY: number,
     width: number,
     height: number,
-    options: {
-        orientation?: MsegSurfaceOrientation;
-        pointRadius?: number;
-        horizontalPadding?: number;
-        verticalPadding?: number;
-    } = {},
+    options: MsegEditorCoordinateOptions = {},
 ) {
     const metrics = createMsegEditorMetrics(width, height, options);
     const orientation = options.orientation === "vertical" ? "vertical" : "horizontal";
@@ -368,6 +368,21 @@ function powerScale(value: number, power: number) {
     return numerator / denominator;
 }
 
+function evaluateMsegSegmentPoint(
+    from: MsegPoint,
+    to: MsegPoint,
+    t: number,
+): MsegPoint {
+    const clampedT = clamp01(t);
+    const curvedT = clamp01(powerScale(clampedT, from.curvePower));
+
+    return {
+        x: from.x + ((to.x - from.x) * clampedT),
+        y: from.y + ((to.y - from.y) * curvedT),
+        curvePower: from.curvePower,
+    };
+}
+
 function findEvaluationSegment(points: MsegPoint[], x: number) {
     if (x <= points[0].x) {
         return { from: points[0], to: points[0], laterPointWins: false };
@@ -400,6 +415,132 @@ function findEvaluationSegment(points: MsegPoint[], x: number) {
         to: points[points.length - 1],
         laterPointWins: false,
     };
+}
+
+function distanceSquaredToLineSegment(
+    pointX: number,
+    pointY: number,
+    fromX: number,
+    fromY: number,
+    toX: number,
+    toY: number,
+) {
+    const deltaX = toX - fromX;
+    const deltaY = toY - fromY;
+    const lengthSquared = (deltaX * deltaX) + (deltaY * deltaY);
+
+    if (lengthSquared <= 1e-12) {
+        const fallbackDeltaX = pointX - fromX;
+        const fallbackDeltaY = pointY - fromY;
+        return (fallbackDeltaX * fallbackDeltaX) + (fallbackDeltaY * fallbackDeltaY);
+    }
+
+    const projection = clamp(
+        (((pointX - fromX) * deltaX) + ((pointY - fromY) * deltaY)) / lengthSquared,
+        0.0,
+        1.0,
+    );
+    const projectedX = fromX + (deltaX * projection);
+    const projectedY = fromY + (deltaY * projection);
+    const errorX = pointX - projectedX;
+    const errorY = pointY - projectedY;
+    return (errorX * errorX) + (errorY * errorY);
+}
+
+export function sampleMsegSegmentEditorPolyline(
+    shape: unknown,
+    segmentIndex: number,
+    width: number,
+    height: number,
+    editorOptions: MsegEditorCoordinateOptions = {},
+) {
+    const normalizedShape = normalizeMsegShape(shape);
+
+    if (!Number.isInteger(segmentIndex) || segmentIndex < 0 || segmentIndex >= normalizedShape.points.length - 1) {
+        return [];
+    }
+
+    const from = normalizedShape.points[segmentIndex];
+    const to = normalizedShape.points[segmentIndex + 1];
+    const startCoordinates = pointToMsegEditorCoordinates(from, width, height, editorOptions);
+    const endCoordinates = pointToMsegEditorCoordinates(to, width, height, editorOptions);
+
+    if (almostEqual(from.x, to.x)) {
+        return [startCoordinates, endCoordinates];
+    }
+
+    const polyline: Array<{ x: number; y: number }> = [startCoordinates];
+    const errorToleranceSquared = MSEG_EDITOR_CURVE_TOLERANCE_PX * MSEG_EDITOR_CURVE_TOLERANCE_PX;
+
+    const appendAdaptiveSamples = (
+        startT: number,
+        endT: number,
+        startPointCoordinates: { x: number; y: number },
+        endPointCoordinates: { x: number; y: number },
+        depth: number,
+    ) => {
+        if (depth >= MSEG_EDITOR_MAX_SUBDIVISION_DEPTH) {
+            polyline.push(endPointCoordinates);
+            return;
+        }
+
+        const midpointT = startT + ((endT - startT) * 0.5);
+        const midpoint = evaluateMsegSegmentPoint(from, to, midpointT);
+        const midpointCoordinates = pointToMsegEditorCoordinates(midpoint, width, height, editorOptions);
+        const errorSquared = distanceSquaredToLineSegment(
+            midpointCoordinates.x,
+            midpointCoordinates.y,
+            startPointCoordinates.x,
+            startPointCoordinates.y,
+            endPointCoordinates.x,
+            endPointCoordinates.y,
+        );
+
+        if (errorSquared <= errorToleranceSquared) {
+            polyline.push(endPointCoordinates);
+            return;
+        }
+
+        appendAdaptiveSamples(startT, midpointT, startPointCoordinates, midpointCoordinates, depth + 1);
+        appendAdaptiveSamples(midpointT, endT, midpointCoordinates, endPointCoordinates, depth + 1);
+    };
+
+    appendAdaptiveSamples(0.0, 1.0, startCoordinates, endCoordinates, 0);
+
+    return polyline;
+}
+
+export function sampleMsegEditorPolyline(
+    shape: unknown,
+    width: number,
+    height: number,
+    editorOptions: MsegEditorCoordinateOptions = {},
+) {
+    const normalizedShape = normalizeMsegShape(shape);
+    const polyline: Array<{ x: number; y: number }> = [];
+
+    for (let segmentIndex = 0; segmentIndex < normalizedShape.points.length - 1; segmentIndex += 1) {
+        const segmentPolyline = sampleMsegSegmentEditorPolyline(
+            normalizedShape,
+            segmentIndex,
+            width,
+            height,
+            editorOptions,
+        );
+
+        if (segmentPolyline.length === 0) {
+            continue;
+        }
+
+        if (polyline.length === 0) {
+            polyline.push(...segmentPolyline);
+            continue;
+        }
+
+        polyline.push(...segmentPolyline.slice(1));
+    }
+
+    return polyline;
 }
 
 export function evaluateMsegShape(shape: unknown, x: number) {
@@ -501,6 +642,58 @@ export function findMsegPointHitIndex(
     return closestPointIndex;
 }
 
+export function findMsegSegmentHitIndex(
+    shape: unknown,
+    editorX: number,
+    editorY: number,
+    width: number,
+    height: number,
+    hitRadius = MSEG_SEGMENT_HIT_RADIUS_PX,
+    editorOptions: MsegEditorCoordinateOptions = {},
+) {
+    const normalizedShape = normalizeMsegShape(shape);
+    const targetX = Number(editorX);
+    const targetY = Number(editorY);
+
+    if (!Number.isFinite(targetX) || !Number.isFinite(targetY)) {
+        return -1;
+    }
+
+    const safeHitRadius = Math.max(0, Number(hitRadius) || 0);
+    let closestSegmentIndex = -1;
+    let closestDistanceSquared = safeHitRadius * safeHitRadius;
+
+    for (let segmentIndex = 0; segmentIndex < normalizedShape.points.length - 1; segmentIndex += 1) {
+        const polyline = sampleMsegSegmentEditorPolyline(
+            normalizedShape,
+            segmentIndex,
+            width,
+            height,
+            editorOptions,
+        );
+
+        for (let pointIndex = 0; pointIndex < polyline.length - 1; pointIndex += 1) {
+            const from = polyline[pointIndex];
+            const to = polyline[pointIndex + 1];
+            const distanceSquared = distanceSquaredToLineSegment(
+                targetX,
+                targetY,
+                from.x,
+                from.y,
+                to.x,
+                to.y,
+            );
+
+            if (distanceSquared <= closestDistanceSquared) {
+                closestSegmentIndex = segmentIndex;
+                closestDistanceSquared = distanceSquared;
+            }
+        }
+    }
+
+    return closestSegmentIndex;
+}
+
 export function toMsegPlaybackConfigEvent(playback: unknown): MsegPlaybackConfigEvent {
     const normalizedPlayback = normalizeMsegPlayback(playback);
 
@@ -588,6 +781,24 @@ export function deleteMsegPoint(shape: unknown, pointIndex: number) {
     }
 
     const points = normalizedShape.points.filter((_, index) => index !== pointIndex);
+    return normalizeMsegShape({
+        ...normalizedShape,
+        points,
+    });
+}
+
+export function setMsegSegmentCurvePower(shape: unknown, segmentIndex: number, curvePower: number) {
+    const normalizedShape = normalizeMsegShape(shape);
+    if (!Number.isInteger(segmentIndex) || segmentIndex < 0 || segmentIndex >= normalizedShape.points.length - 1) {
+        throw new Error("segmentIndex must address a segment inside the shape");
+    }
+
+    const points = normalizedShape.points.map((point) => ({ ...point }));
+    points[segmentIndex] = {
+        ...points[segmentIndex],
+        curvePower: clampCurvePower(Number(curvePower)),
+    };
+
     return normalizeMsegShape({
         ...normalizedShape,
         points,

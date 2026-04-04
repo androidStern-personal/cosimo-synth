@@ -12497,7 +12497,7 @@ function requireClient() {
   return client.exports;
 }
 var clientExports = requireClient();
-const cssText = '/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com */\n@layer properties {\n  @supports (((-webkit-hyphens: none)) and (not (margin-trim: inline))) or ((-moz-orient: inline) and (not (color: rgb(from red r g b)))) {\n    *, :before, :after, ::backdrop {\n      --tw-translate-x: 0;\n      --tw-translate-y: 0;\n      --tw-translate-z: 0;\n      --tw-rotate-x: initial;\n      --tw-rotate-y: initial;\n      --tw-rotate-z: initial;\n      --tw-skew-x: initial;\n      --tw-skew-y: initial;\n      --tw-border-style: solid;\n      --tw-font-weight: initial;\n      --tw-tracking: initial;\n      --tw-ordinal: initial;\n      --tw-slashed-zero: initial;\n      --tw-numeric-figure: initial;\n      --tw-numeric-spacing: initial;\n      --tw-numeric-fraction: initial;\n      --tw-shadow: 0 0 #0000;\n      --tw-shadow-color: initial;\n      --tw-shadow-alpha: 100%;\n      --tw-inset-shadow: 0 0 #0000;\n      --tw-inset-shadow-color: initial;\n      --tw-inset-shadow-alpha: 100%;\n      --tw-ring-color: initial;\n      --tw-ring-shadow: 0 0 #0000;\n      --tw-inset-ring-color: initial;\n      --tw-inset-ring-shadow: 0 0 #0000;\n      --tw-ring-inset: initial;\n      --tw-ring-offset-width: 0px;\n      --tw-ring-offset-color: #fff;\n      --tw-ring-offset-shadow: 0 0 #0000;\n      --tw-outline-style: solid;\n      --tw-blur: initial;\n      --tw-brightness: initial;\n      --tw-contrast: initial;\n      --tw-grayscale: initial;\n      --tw-hue-rotate: initial;\n      --tw-invert: initial;\n      --tw-opacity: initial;\n      --tw-saturate: initial;\n      --tw-sepia: initial;\n      --tw-drop-shadow: initial;\n      --tw-drop-shadow-color: initial;\n      --tw-drop-shadow-alpha: 100%;\n      --tw-drop-shadow-size: initial;\n      --tw-backdrop-blur: initial;\n      --tw-backdrop-brightness: initial;\n      --tw-backdrop-contrast: initial;\n      --tw-backdrop-grayscale: initial;\n      --tw-backdrop-hue-rotate: initial;\n      --tw-backdrop-invert: initial;\n      --tw-backdrop-opacity: initial;\n      --tw-backdrop-saturate: initial;\n      --tw-backdrop-sepia: initial;\n    }\n  }\n}\n\n@layer theme {\n  :root, :host {\n    --font-sans: ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji",\n      "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";\n    --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",\n      "Courier New", monospace;\n    --color-amber-100: oklch(96.2% .059 95.617);\n    --color-cyan-100: oklch(95.6% .045 203.388);\n    --color-cyan-200: oklch(91.7% .08 205.041);\n    --color-cyan-300: oklch(86.5% .127 207.078);\n    --color-blue-300: oklch(80.9% .105 251.813);\n    --color-fuchsia-100: oklch(95.2% .037 318.852);\n    --color-fuchsia-200: oklch(90.3% .076 319.62);\n    --color-fuchsia-300: oklch(83.3% .145 321.434);\n    --color-slate-100: oklch(96.8% .007 247.896);\n    --color-slate-200: oklch(92.9% .013 255.508);\n    --color-slate-300: oklch(86.9% .022 252.894);\n    --color-black: #000;\n    --color-white: #fff;\n    --spacing: .25rem;\n    --text-xs: .75rem;\n    --text-xs--line-height: calc(1 / .75);\n    --text-sm: .875rem;\n    --text-sm--line-height: calc(1.25 / .875);\n    --text-2xl: 1.5rem;\n    --text-2xl--line-height: calc(2 / 1.5);\n    --text-3xl: 1.875rem;\n    --text-3xl--line-height: calc(2.25 / 1.875);\n    --font-weight-semibold: 600;\n    --radius-2xl: 1rem;\n    --blur-md: 12px;\n    --default-transition-duration: .15s;\n    --default-transition-timing-function: cubic-bezier(.4, 0, .2, 1);\n    --default-font-family: var(--font-sans);\n    --default-mono-font-family: var(--font-mono);\n  }\n}\n\n@layer base {\n  *, :after, :before, ::backdrop {\n    box-sizing: border-box;\n    border: 0 solid;\n    margin: 0;\n    padding: 0;\n  }\n\n  ::file-selector-button {\n    box-sizing: border-box;\n    border: 0 solid;\n    margin: 0;\n    padding: 0;\n  }\n\n  html, :host {\n    -webkit-text-size-adjust: 100%;\n    tab-size: 4;\n    line-height: 1.5;\n    font-family: var(--default-font-family, ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji");\n    font-feature-settings: var(--default-font-feature-settings, normal);\n    font-variation-settings: var(--default-font-variation-settings, normal);\n    -webkit-tap-highlight-color: transparent;\n  }\n\n  hr {\n    height: 0;\n    color: inherit;\n    border-top-width: 1px;\n  }\n\n  abbr:where([title]) {\n    -webkit-text-decoration: underline dotted;\n    text-decoration: underline dotted;\n  }\n\n  h1, h2, h3, h4, h5, h6 {\n    font-size: inherit;\n    font-weight: inherit;\n  }\n\n  a {\n    color: inherit;\n    -webkit-text-decoration: inherit;\n    -webkit-text-decoration: inherit;\n    -webkit-text-decoration: inherit;\n    text-decoration: inherit;\n  }\n\n  b, strong {\n    font-weight: bolder;\n  }\n\n  code, kbd, samp, pre {\n    font-family: var(--default-mono-font-family, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace);\n    font-feature-settings: var(--default-mono-font-feature-settings, normal);\n    font-variation-settings: var(--default-mono-font-variation-settings, normal);\n    font-size: 1em;\n  }\n\n  small {\n    font-size: 80%;\n  }\n\n  sub, sup {\n    vertical-align: baseline;\n    font-size: 75%;\n    line-height: 0;\n    position: relative;\n  }\n\n  sub {\n    bottom: -.25em;\n  }\n\n  sup {\n    top: -.5em;\n  }\n\n  table {\n    text-indent: 0;\n    border-color: inherit;\n    border-collapse: collapse;\n  }\n\n  :-moz-focusring {\n    outline: auto;\n  }\n\n  progress {\n    vertical-align: baseline;\n  }\n\n  summary {\n    display: list-item;\n  }\n\n  ol, ul, menu {\n    list-style: none;\n  }\n\n  img, svg, video, canvas, audio, iframe, embed, object {\n    vertical-align: middle;\n    display: block;\n  }\n\n  img, video {\n    max-width: 100%;\n    height: auto;\n  }\n\n  button, input, select, optgroup, textarea {\n    font: inherit;\n    font-feature-settings: inherit;\n    font-variation-settings: inherit;\n    letter-spacing: inherit;\n    color: inherit;\n    opacity: 1;\n    background-color: #0000;\n    border-radius: 0;\n  }\n\n  ::file-selector-button {\n    font: inherit;\n    font-feature-settings: inherit;\n    font-variation-settings: inherit;\n    letter-spacing: inherit;\n    color: inherit;\n    opacity: 1;\n    background-color: #0000;\n    border-radius: 0;\n  }\n\n  :where(select:is([multiple], [size])) optgroup {\n    font-weight: bolder;\n  }\n\n  :where(select:is([multiple], [size])) optgroup option {\n    padding-inline-start: 20px;\n  }\n\n  ::file-selector-button {\n    margin-inline-end: 4px;\n  }\n\n  ::placeholder {\n    opacity: 1;\n  }\n\n  @supports (not ((-webkit-appearance: -apple-pay-button))) or (contain-intrinsic-size: 1px) {\n    ::placeholder {\n      color: currentColor;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      ::placeholder {\n        color: color-mix(in oklab, currentcolor 50%, transparent);\n      }\n    }\n  }\n\n  textarea {\n    resize: vertical;\n  }\n\n  ::-webkit-search-decoration {\n    -webkit-appearance: none;\n  }\n\n  ::-webkit-date-and-time-value {\n    min-height: 1lh;\n    text-align: inherit;\n  }\n\n  ::-webkit-datetime-edit {\n    display: inline-flex;\n  }\n\n  ::-webkit-datetime-edit-fields-wrapper {\n    padding: 0;\n  }\n\n  ::-webkit-datetime-edit {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-year-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-month-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-day-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-hour-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-minute-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-second-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-millisecond-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-meridiem-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-calendar-picker-indicator {\n    line-height: 1;\n  }\n\n  :-moz-ui-invalid {\n    box-shadow: none;\n  }\n\n  button, input:where([type="button"], [type="reset"], [type="submit"]) {\n    appearance: button;\n  }\n\n  ::file-selector-button {\n    appearance: button;\n  }\n\n  ::-webkit-inner-spin-button {\n    height: auto;\n  }\n\n  ::-webkit-outer-spin-button {\n    height: auto;\n  }\n\n  [hidden]:where(:not([hidden="until-found"])) {\n    display: none !important;\n  }\n}\n\n@layer components;\n\n@layer utilities {\n  .pointer-events-none {\n    pointer-events: none;\n  }\n\n  .collapse {\n    visibility: collapse;\n  }\n\n  .visible {\n    visibility: visible;\n  }\n\n  .absolute {\n    position: absolute;\n  }\n\n  .fixed {\n    position: fixed;\n  }\n\n  .relative {\n    position: relative;\n  }\n\n  .static {\n    position: static;\n  }\n\n  .sticky {\n    position: sticky;\n  }\n\n  .inset-0 {\n    inset: calc(var(--spacing) * 0);\n  }\n\n  .inset-x-0 {\n    inset-inline: calc(var(--spacing) * 0);\n  }\n\n  .inset-y-0 {\n    inset-block: calc(var(--spacing) * 0);\n  }\n\n  .start {\n    inset-inline-start: var(--spacing);\n  }\n\n  .end {\n    inset-inline-end: var(--spacing);\n  }\n\n  .top-0 {\n    top: calc(var(--spacing) * 0);\n  }\n\n  .top-1 {\n    top: calc(var(--spacing) * 1);\n  }\n\n  .top-1\\/2 {\n    top: 50%;\n  }\n\n  .right-0 {\n    right: calc(var(--spacing) * 0);\n  }\n\n  .right-4 {\n    right: calc(var(--spacing) * 4);\n  }\n\n  .bottom-0 {\n    bottom: calc(var(--spacing) * 0);\n  }\n\n  .isolate {\n    isolation: isolate;\n  }\n\n  .z-20 {\n    z-index: 20;\n  }\n\n  .order-1 {\n    order: 1;\n  }\n\n  .\\!container {\n    width: 100% !important;\n  }\n\n  @media (min-width: 40rem) {\n    .\\!container {\n      max-width: 40rem !important;\n    }\n  }\n\n  @media (min-width: 48rem) {\n    .\\!container {\n      max-width: 48rem !important;\n    }\n  }\n\n  @media (min-width: 64rem) {\n    .\\!container {\n      max-width: 64rem !important;\n    }\n  }\n\n  @media (min-width: 80rem) {\n    .\\!container {\n      max-width: 80rem !important;\n    }\n  }\n\n  @media (min-width: 96rem) {\n    .\\!container {\n      max-width: 96rem !important;\n    }\n  }\n\n  .container {\n    width: 100%;\n  }\n\n  @media (min-width: 40rem) {\n    .container {\n      max-width: 40rem;\n    }\n  }\n\n  @media (min-width: 48rem) {\n    .container {\n      max-width: 48rem;\n    }\n  }\n\n  @media (min-width: 64rem) {\n    .container {\n      max-width: 64rem;\n    }\n  }\n\n  @media (min-width: 80rem) {\n    .container {\n      max-width: 80rem;\n    }\n  }\n\n  @media (min-width: 96rem) {\n    .container {\n      max-width: 96rem;\n    }\n  }\n\n  .m-1 {\n    margin: calc(var(--spacing) * 1);\n  }\n\n  .mt-1 {\n    margin-top: calc(var(--spacing) * 1);\n  }\n\n  .mt-2 {\n    margin-top: calc(var(--spacing) * 2);\n  }\n\n  .block {\n    display: block;\n  }\n\n  .contents {\n    display: contents;\n  }\n\n  .flex {\n    display: flex;\n  }\n\n  .grid {\n    display: grid;\n  }\n\n  .hidden {\n    display: none;\n  }\n\n  .inline {\n    display: inline;\n  }\n\n  .inline-flex {\n    display: inline-flex;\n  }\n\n  .inline-grid {\n    display: inline-grid;\n  }\n\n  .table {\n    display: table;\n  }\n\n  .h-3 {\n    height: calc(var(--spacing) * 3);\n  }\n\n  .h-3\\.5 {\n    height: calc(var(--spacing) * 3.5);\n  }\n\n  .h-4 {\n    height: calc(var(--spacing) * 4);\n  }\n\n  .h-10 {\n    height: calc(var(--spacing) * 10);\n  }\n\n  .h-11 {\n    height: calc(var(--spacing) * 11);\n  }\n\n  .h-12 {\n    height: calc(var(--spacing) * 12);\n  }\n\n  .h-32 {\n    height: calc(var(--spacing) * 32);\n  }\n\n  .h-\\[42px\\] {\n    height: 42px;\n  }\n\n  .h-\\[118px\\] {\n    height: 118px;\n  }\n\n  .h-\\[180px\\] {\n    height: 180px;\n  }\n\n  .h-\\[320px\\] {\n    height: 320px;\n  }\n\n  .h-full {\n    height: 100%;\n  }\n\n  .min-h-0 {\n    min-height: calc(var(--spacing) * 0);\n  }\n\n  .min-h-\\[220px\\] {\n    min-height: 220px;\n  }\n\n  .min-h-\\[356px\\] {\n    min-height: 356px;\n  }\n\n  .w-3 {\n    width: calc(var(--spacing) * 3);\n  }\n\n  .w-3\\.5 {\n    width: calc(var(--spacing) * 3.5);\n  }\n\n  .w-6 {\n    width: calc(var(--spacing) * 6);\n  }\n\n  .w-10 {\n    width: calc(var(--spacing) * 10);\n  }\n\n  .w-\\[118px\\] {\n    width: 118px;\n  }\n\n  .w-full {\n    width: 100%;\n  }\n\n  .max-w-\\[280px\\] {\n    max-width: 280px;\n  }\n\n  .max-w-\\[1080px\\] {\n    max-width: 1080px;\n  }\n\n  .min-w-0 {\n    min-width: calc(var(--spacing) * 0);\n  }\n\n  .flex-1 {\n    flex: 1;\n  }\n\n  .flex-shrink, .shrink {\n    flex-shrink: 1;\n  }\n\n  .flex-grow, .grow {\n    flex-grow: 1;\n  }\n\n  .border-collapse {\n    border-collapse: collapse;\n  }\n\n  .-translate-y-1 {\n    --tw-translate-y: calc(var(--spacing) * -1);\n    translate: var(--tw-translate-x) var(--tw-translate-y);\n  }\n\n  .-translate-y-1\\/2 {\n    --tw-translate-y: calc(calc(1 / 2 * 100%) * -1);\n    translate: var(--tw-translate-x) var(--tw-translate-y);\n  }\n\n  .transform {\n    transform: var(--tw-rotate-x, ) var(--tw-rotate-y, ) var(--tw-rotate-z, ) var(--tw-skew-x, ) var(--tw-skew-y, );\n  }\n\n  .cursor-pointer {\n    cursor: pointer;\n  }\n\n  .touch-none {\n    touch-action: none;\n  }\n\n  .resize {\n    resize: both;\n  }\n\n  .appearance-none {\n    appearance: none;\n  }\n\n  .grid-cols-1 {\n    grid-template-columns: repeat(1, minmax(0, 1fr));\n  }\n\n  .grid-cols-3 {\n    grid-template-columns: repeat(3, minmax(0, 1fr));\n  }\n\n  .grid-cols-\\[56px_minmax\\(0\\,1fr\\)\\] {\n    grid-template-columns: 56px minmax(0, 1fr);\n  }\n\n  .grid-cols-\\[minmax\\(0\\,1fr\\)_88px\\] {\n    grid-template-columns: minmax(0, 1fr) 88px;\n  }\n\n  .grid-cols-\\[minmax\\(0\\,1fr\\)_92px\\] {\n    grid-template-columns: minmax(0, 1fr) 92px;\n  }\n\n  .grid-cols-\\[minmax\\(0\\,1fr\\)_92px_auto\\] {\n    grid-template-columns: minmax(0, 1fr) 92px auto;\n  }\n\n  .grid-cols-\\[minmax\\(0\\,1fr\\)_auto\\] {\n    grid-template-columns: minmax(0, 1fr) auto;\n  }\n\n  .grid-cols-\\[minmax\\(280px\\,1fr\\)_minmax\\(0\\,2fr\\)\\] {\n    grid-template-columns: minmax(280px, 1fr) minmax(0, 2fr);\n  }\n\n  .grid-rows-\\[auto_minmax\\(0\\,1fr\\)_auto\\] {\n    grid-template-rows: auto minmax(0, 1fr) auto;\n  }\n\n  .grid-rows-\\[minmax\\(356px\\,0\\.9fr\\)_auto_auto\\] {\n    grid-template-rows: minmax(356px, .9fr) auto auto;\n  }\n\n  .flex-col {\n    flex-direction: column;\n  }\n\n  .flex-wrap {\n    flex-wrap: wrap;\n  }\n\n  .items-center {\n    align-items: center;\n  }\n\n  .items-end {\n    align-items: flex-end;\n  }\n\n  .items-start {\n    align-items: flex-start;\n  }\n\n  .items-stretch {\n    align-items: stretch;\n  }\n\n  .justify-between {\n    justify-content: space-between;\n  }\n\n  .justify-center {\n    justify-content: center;\n  }\n\n  .justify-end {\n    justify-content: flex-end;\n  }\n\n  .justify-start {\n    justify-content: flex-start;\n  }\n\n  .gap-1 {\n    gap: calc(var(--spacing) * 1);\n  }\n\n  .gap-2 {\n    gap: calc(var(--spacing) * 2);\n  }\n\n  .gap-3 {\n    gap: calc(var(--spacing) * 3);\n  }\n\n  .gap-4 {\n    gap: calc(var(--spacing) * 4);\n  }\n\n  .gap-5 {\n    gap: calc(var(--spacing) * 5);\n  }\n\n  .self-start {\n    align-self: flex-start;\n  }\n\n  .truncate {\n    text-overflow: ellipsis;\n    white-space: nowrap;\n    overflow: hidden;\n  }\n\n  .overflow-auto {\n    overflow: auto;\n  }\n\n  .overflow-hidden {\n    overflow: hidden;\n  }\n\n  .rounded {\n    border-radius: .25rem;\n  }\n\n  .rounded-2xl {\n    border-radius: var(--radius-2xl);\n  }\n\n  .rounded-\\[14px\\] {\n    border-radius: 14px;\n  }\n\n  .rounded-\\[16px\\] {\n    border-radius: 16px;\n  }\n\n  .rounded-\\[18px\\] {\n    border-radius: 18px;\n  }\n\n  .rounded-\\[20px\\] {\n    border-radius: 20px;\n  }\n\n  .rounded-\\[22px\\] {\n    border-radius: 22px;\n  }\n\n  .rounded-\\[24px\\] {\n    border-radius: 24px;\n  }\n\n  .rounded-\\[28px\\] {\n    border-radius: 28px;\n  }\n\n  .rounded-\\[30px\\] {\n    border-radius: 30px;\n  }\n\n  .rounded-full {\n    border-radius: 3.40282e38px;\n  }\n\n  .border {\n    border-style: var(--tw-border-style);\n    border-width: 1px;\n  }\n\n  .border-cyan-300 {\n    border-color: var(--color-cyan-300);\n  }\n\n  .border-cyan-300\\/15 {\n    border-color: #53eafd26;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-cyan-300\\/15 {\n      border-color: color-mix(in oklab, var(--color-cyan-300) 15%, transparent);\n    }\n  }\n\n  .border-fuchsia-300 {\n    border-color: var(--color-fuchsia-300);\n  }\n\n  .border-fuchsia-300\\/15 {\n    border-color: #f2a9ff26;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-fuchsia-300\\/15 {\n      border-color: color-mix(in oklab, var(--color-fuchsia-300) 15%, transparent);\n    }\n  }\n\n  .border-white {\n    border-color: var(--color-white);\n  }\n\n  .border-white\\/6 {\n    border-color: #ffffff0f;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-white\\/6 {\n      border-color: color-mix(in oklab, var(--color-white) 6%, transparent);\n    }\n  }\n\n  .border-white\\/8 {\n    border-color: #ffffff14;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-white\\/8 {\n      border-color: color-mix(in oklab, var(--color-white) 8%, transparent);\n    }\n  }\n\n  .border-white\\/10 {\n    border-color: #ffffff1a;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-white\\/10 {\n      border-color: color-mix(in oklab, var(--color-white) 10%, transparent);\n    }\n  }\n\n  .bg-\\[\\#070b16\\] {\n    background-color: #070b16;\n  }\n\n  .bg-\\[\\#09101d\\]\\/95 {\n    background-color: oklab(17.3432% -.0040513 -.029082 / .95);\n  }\n\n  .bg-\\[\\#030711\\]\\/85 {\n    background-color: oklab(12.8817% -.00430492 -.0249884 / .85);\n  }\n\n  .bg-black {\n    background-color: var(--color-black);\n  }\n\n  .bg-black\\/20 {\n    background-color: #0003;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-black\\/20 {\n      background-color: color-mix(in oklab, var(--color-black) 20%, transparent);\n    }\n  }\n\n  .bg-black\\/25 {\n    background-color: #00000040;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-black\\/25 {\n      background-color: color-mix(in oklab, var(--color-black) 25%, transparent);\n    }\n  }\n\n  .bg-black\\/35 {\n    background-color: #00000059;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-black\\/35 {\n      background-color: color-mix(in oklab, var(--color-black) 35%, transparent);\n    }\n  }\n\n  .bg-black\\/40 {\n    background-color: #0006;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-black\\/40 {\n      background-color: color-mix(in oklab, var(--color-black) 40%, transparent);\n    }\n  }\n\n  .bg-cyan-300 {\n    background-color: var(--color-cyan-300);\n  }\n\n  .bg-cyan-300\\/8 {\n    background-color: #53eafd14;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-cyan-300\\/8 {\n      background-color: color-mix(in oklab, var(--color-cyan-300) 8%, transparent);\n    }\n  }\n\n  .bg-fuchsia-300 {\n    background-color: var(--color-fuchsia-300);\n  }\n\n  .bg-fuchsia-300\\/8 {\n    background-color: #f2a9ff14;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-fuchsia-300\\/8 {\n      background-color: color-mix(in oklab, var(--color-fuchsia-300) 8%, transparent);\n    }\n  }\n\n  .bg-white {\n    background-color: var(--color-white);\n  }\n\n  .bg-white\\/\\[0\\.03\\] {\n    background-color: #ffffff08;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-white\\/\\[0\\.03\\] {\n      background-color: color-mix(in oklab, var(--color-white) 3%, transparent);\n    }\n  }\n\n  .bg-white\\/\\[0\\.04\\] {\n    background-color: #ffffff0a;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-white\\/\\[0\\.04\\] {\n      background-color: color-mix(in oklab, var(--color-white) 4%, transparent);\n    }\n  }\n\n  .bg-white\\/\\[0\\.08\\] {\n    background-color: #ffffff14;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-white\\/\\[0\\.08\\] {\n      background-color: color-mix(in oklab, var(--color-white) 8%, transparent);\n    }\n  }\n\n  .mask-repeat {\n    -webkit-mask-repeat: repeat;\n    mask-repeat: repeat;\n  }\n\n  .fill-cyan-200 {\n    fill: var(--color-cyan-200);\n  }\n\n  .fill-fuchsia-200 {\n    fill: var(--color-fuchsia-200);\n  }\n\n  .stroke-\\[\\#050913\\] {\n    stroke: #050913;\n  }\n\n  .stroke-\\[2px\\] {\n    stroke-width: 2px;\n  }\n\n  .stroke-\\[3px\\] {\n    stroke-width: 3px;\n  }\n\n  .p-0 {\n    padding: calc(var(--spacing) * 0);\n  }\n\n  .p-1 {\n    padding: calc(var(--spacing) * 1);\n  }\n\n  .p-2 {\n    padding: calc(var(--spacing) * 2);\n  }\n\n  .p-3 {\n    padding: calc(var(--spacing) * 3);\n  }\n\n  .p-4 {\n    padding: calc(var(--spacing) * 4);\n  }\n\n  .p-5 {\n    padding: calc(var(--spacing) * 5);\n  }\n\n  .p-6 {\n    padding: calc(var(--spacing) * 6);\n  }\n\n  .px-2 {\n    padding-inline: calc(var(--spacing) * 2);\n  }\n\n  .px-3 {\n    padding-inline: calc(var(--spacing) * 3);\n  }\n\n  .px-4 {\n    padding-inline: calc(var(--spacing) * 4);\n  }\n\n  .px-5 {\n    padding-inline: calc(var(--spacing) * 5);\n  }\n\n  .py-1 {\n    padding-block: calc(var(--spacing) * 1);\n  }\n\n  .py-2 {\n    padding-block: calc(var(--spacing) * 2);\n  }\n\n  .py-2\\.5 {\n    padding-block: calc(var(--spacing) * 2.5);\n  }\n\n  .py-3 {\n    padding-block: calc(var(--spacing) * 3);\n  }\n\n  .py-4 {\n    padding-block: calc(var(--spacing) * 4);\n  }\n\n  .py-5 {\n    padding-block: calc(var(--spacing) * 5);\n  }\n\n  .pt-1 {\n    padding-top: calc(var(--spacing) * 1);\n  }\n\n  .pr-1 {\n    padding-right: calc(var(--spacing) * 1);\n  }\n\n  .pr-4 {\n    padding-right: calc(var(--spacing) * 4);\n  }\n\n  .pr-10 {\n    padding-right: calc(var(--spacing) * 10);\n  }\n\n  .pb-5 {\n    padding-bottom: calc(var(--spacing) * 5);\n  }\n\n  .text-left {\n    text-align: left;\n  }\n\n  .text-right {\n    text-align: right;\n  }\n\n  .font-mono {\n    font-family: var(--font-mono);\n  }\n\n  .text-2xl {\n    font-size: var(--text-2xl);\n    line-height: var(--tw-leading, var(--text-2xl--line-height));\n  }\n\n  .text-3xl {\n    font-size: var(--text-3xl);\n    line-height: var(--tw-leading, var(--text-3xl--line-height));\n  }\n\n  .text-sm {\n    font-size: var(--text-sm);\n    line-height: var(--tw-leading, var(--text-sm--line-height));\n  }\n\n  .text-xs {\n    font-size: var(--text-xs);\n    line-height: var(--tw-leading, var(--text-xs--line-height));\n  }\n\n  .text-\\[10px\\] {\n    font-size: 10px;\n  }\n\n  .text-\\[11px\\] {\n    font-size: 11px;\n  }\n\n  .font-semibold {\n    --tw-font-weight: var(--font-weight-semibold);\n    font-weight: var(--font-weight-semibold);\n  }\n\n  .tracking-\\[-0\\.04em\\] {\n    --tw-tracking: -.04em;\n    letter-spacing: -.04em;\n  }\n\n  .tracking-\\[0\\.16em\\] {\n    --tw-tracking: .16em;\n    letter-spacing: .16em;\n  }\n\n  .tracking-\\[0\\.18em\\] {\n    --tw-tracking: .18em;\n    letter-spacing: .18em;\n  }\n\n  .tracking-\\[0\\.22em\\] {\n    --tw-tracking: .22em;\n    letter-spacing: .22em;\n  }\n\n  .tracking-\\[0\\.24em\\] {\n    --tw-tracking: .24em;\n    letter-spacing: .24em;\n  }\n\n  .text-wrap {\n    text-wrap: wrap;\n  }\n\n  .text-amber-100 {\n    color: var(--color-amber-100);\n  }\n\n  .text-blue-300 {\n    color: var(--color-blue-300);\n  }\n\n  .text-blue-300\\/70 {\n    color: #90c5ffb3;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-blue-300\\/70 {\n      color: color-mix(in oklab, var(--color-blue-300) 70%, transparent);\n    }\n  }\n\n  .text-cyan-100 {\n    color: var(--color-cyan-100);\n  }\n\n  .text-cyan-100\\/85 {\n    color: #cefafed9;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-cyan-100\\/85 {\n      color: color-mix(in oklab, var(--color-cyan-100) 85%, transparent);\n    }\n  }\n\n  .text-cyan-200 {\n    color: var(--color-cyan-200);\n  }\n\n  .text-cyan-200\\/70 {\n    color: #a2f4fdb3;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-cyan-200\\/70 {\n      color: color-mix(in oklab, var(--color-cyan-200) 70%, transparent);\n    }\n  }\n\n  .text-cyan-200\\/80 {\n    color: #a2f4fdcc;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-cyan-200\\/80 {\n      color: color-mix(in oklab, var(--color-cyan-200) 80%, transparent);\n    }\n  }\n\n  .text-cyan-300 {\n    color: var(--color-cyan-300);\n  }\n\n  .text-cyan-300\\/70 {\n    color: #53eafdb3;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-cyan-300\\/70 {\n      color: color-mix(in oklab, var(--color-cyan-300) 70%, transparent);\n    }\n  }\n\n  .text-fuchsia-100 {\n    color: var(--color-fuchsia-100);\n  }\n\n  .text-fuchsia-100\\/90 {\n    color: #fae8ffe6;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-fuchsia-100\\/90 {\n      color: color-mix(in oklab, var(--color-fuchsia-100) 90%, transparent);\n    }\n  }\n\n  .text-fuchsia-200 {\n    color: var(--color-fuchsia-200);\n  }\n\n  .text-fuchsia-200\\/80 {\n    color: #f6cfffcc;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-fuchsia-200\\/80 {\n      color: color-mix(in oklab, var(--color-fuchsia-200) 80%, transparent);\n    }\n  }\n\n  .text-slate-100 {\n    color: var(--color-slate-100);\n  }\n\n  .text-slate-200 {\n    color: var(--color-slate-200);\n  }\n\n  .text-slate-200\\/80 {\n    color: #e2e8f0cc;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-200\\/80 {\n      color: color-mix(in oklab, var(--color-slate-200) 80%, transparent);\n    }\n  }\n\n  .text-slate-300 {\n    color: var(--color-slate-300);\n  }\n\n  .text-slate-300\\/55 {\n    color: #cad5e28c;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-300\\/55 {\n      color: color-mix(in oklab, var(--color-slate-300) 55%, transparent);\n    }\n  }\n\n  .text-slate-300\\/60 {\n    color: #cad5e299;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-300\\/60 {\n      color: color-mix(in oklab, var(--color-slate-300) 60%, transparent);\n    }\n  }\n\n  .text-slate-300\\/70 {\n    color: #cad5e2b3;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-300\\/70 {\n      color: color-mix(in oklab, var(--color-slate-300) 70%, transparent);\n    }\n  }\n\n  .text-slate-300\\/75 {\n    color: #cad5e2bf;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-300\\/75 {\n      color: color-mix(in oklab, var(--color-slate-300) 75%, transparent);\n    }\n  }\n\n  .lowercase {\n    text-transform: lowercase;\n  }\n\n  .uppercase {\n    text-transform: uppercase;\n  }\n\n  .ordinal {\n    --tw-ordinal: ordinal;\n    font-variant-numeric: var(--tw-ordinal, ) var(--tw-slashed-zero, ) var(--tw-numeric-figure, ) var(--tw-numeric-spacing, ) var(--tw-numeric-fraction, );\n  }\n\n  .underline {\n    text-decoration-line: underline;\n  }\n\n  .opacity-0 {\n    opacity: 0;\n  }\n\n  .shadow {\n    --tw-shadow: 0 1px 3px 0 var(--tw-shadow-color, #0000001a), 0 1px 2px -1px var(--tw-shadow-color, #0000001a);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[0_10px_28px_rgba\\(0\\,0\\,0\\,0\\.22\\)\\] {\n    --tw-shadow: 0 10px 28px var(--tw-shadow-color, #00000038);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[0_10px_28px_rgba\\(0\\,0\\,0\\,0\\.28\\)\\] {\n    --tw-shadow: 0 10px 28px var(--tw-shadow-color, #00000047);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[0_18px_42px_rgba\\(3\\,6\\,18\\,0\\.45\\)\\] {\n    --tw-shadow: 0 18px 42px var(--tw-shadow-color, #03061273);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[0_26px_80px_rgba\\(0\\,0\\,0\\,0\\.48\\)\\] {\n    --tw-shadow: 0 26px 80px var(--tw-shadow-color, #0000007a);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[0_36px_80px_rgba\\(0\\,0\\,0\\,0\\.5\\)\\] {\n    --tw-shadow: 0 36px 80px var(--tw-shadow-color, #00000080);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[inset_0_0_0_1px_rgba\\(143\\,232\\,255\\,0\\.18\\)\\] {\n    --tw-shadow: inset 0 0 0 1px var(--tw-shadow-color, #8fe8ff2e);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .ring {\n    --tw-ring-shadow: var(--tw-ring-inset, ) 0 0 0 calc(1px + var(--tw-ring-offset-width)) var(--tw-ring-color, currentcolor);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .outline {\n    outline-style: var(--tw-outline-style);\n    outline-width: 1px;\n  }\n\n  .blur {\n    --tw-blur: blur(8px);\n    filter: var(--tw-blur, ) var(--tw-brightness, ) var(--tw-contrast, ) var(--tw-grayscale, ) var(--tw-hue-rotate, ) var(--tw-invert, ) var(--tw-saturate, ) var(--tw-sepia, ) var(--tw-drop-shadow, );\n  }\n\n  .invert {\n    --tw-invert: invert(100%);\n    filter: var(--tw-blur, ) var(--tw-brightness, ) var(--tw-contrast, ) var(--tw-grayscale, ) var(--tw-hue-rotate, ) var(--tw-invert, ) var(--tw-saturate, ) var(--tw-sepia, ) var(--tw-drop-shadow, );\n  }\n\n  .filter {\n    filter: var(--tw-blur, ) var(--tw-brightness, ) var(--tw-contrast, ) var(--tw-grayscale, ) var(--tw-hue-rotate, ) var(--tw-invert, ) var(--tw-saturate, ) var(--tw-sepia, ) var(--tw-drop-shadow, );\n  }\n\n  .backdrop-blur-md {\n    --tw-backdrop-blur: blur(var(--blur-md));\n    -webkit-backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );\n    backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );\n  }\n\n  .backdrop-filter {\n    -webkit-backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );\n    backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );\n  }\n\n  .transition {\n    transition-property: color, background-color, border-color, outline-color, text-decoration-color, fill, stroke, --tw-gradient-from, --tw-gradient-via, --tw-gradient-to, opacity, box-shadow, transform, translate, scale, rotate, filter, -webkit-backdrop-filter, backdrop-filter, display, content-visibility, overlay, pointer-events;\n    transition-timing-function: var(--tw-ease, var(--default-transition-timing-function));\n    transition-duration: var(--tw-duration, var(--default-transition-duration));\n  }\n\n  .outline-none {\n    --tw-outline-style: none;\n    outline-style: none;\n  }\n\n  @media (hover: hover) {\n    .hover\\:border-cyan-200\\/30:hover {\n      border-color: #a2f4fd4d;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:border-cyan-200\\/30:hover {\n        border-color: color-mix(in oklab, var(--color-cyan-200) 30%, transparent);\n      }\n    }\n\n    .hover\\:border-white\\/12:hover {\n      border-color: #ffffff1f;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:border-white\\/12:hover {\n        border-color: color-mix(in oklab, var(--color-white) 12%, transparent);\n      }\n    }\n\n    .hover\\:bg-black\\/24:hover {\n      background-color: #0000003d;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:bg-black\\/24:hover {\n        background-color: color-mix(in oklab, var(--color-black) 24%, transparent);\n      }\n    }\n\n    .hover\\:bg-white\\/\\[0\\.04\\]:hover {\n      background-color: #ffffff0a;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:bg-white\\/\\[0\\.04\\]:hover {\n        background-color: color-mix(in oklab, var(--color-white) 4%, transparent);\n      }\n    }\n\n    .hover\\:text-slate-100:hover {\n      color: var(--color-slate-100);\n    }\n  }\n\n  .focus\\:border-cyan-200\\/45:focus {\n    border-color: #a2f4fd73;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .focus\\:border-cyan-200\\/45:focus {\n      border-color: color-mix(in oklab, var(--color-cyan-200) 45%, transparent);\n    }\n  }\n\n  .disabled\\:opacity-35:disabled {\n    opacity: .35;\n  }\n\n  .disabled\\:opacity-40:disabled {\n    opacity: .4;\n  }\n\n  @media (min-width: 64rem) {\n    .lg\\:grid-cols-\\[220px_minmax\\(0\\,1fr\\)_minmax\\(0\\,1fr\\)\\] {\n      grid-template-columns: 220px minmax(0, 1fr) minmax(0, 1fr);\n    }\n  }\n}\n\n:host {\n  color-scheme: dark;\n  width: 100%;\n  height: 100%;\n  display: block;\n}\n\n* {\n  box-sizing: border-box;\n}\n\nbutton, input, select {\n  font: inherit;\n}\n\n.cosimo-surface {\n  background: radial-gradient(circle at top, #7a8eff2e, #0000 34%), linear-gradient(#060a16fa, #03050c);\n}\n\n.cosimo-stage {\n  background: linear-gradient(#ffffff05 1px, #0000 1px) 0 0 / 24px 24px, linear-gradient(90deg, #ffffff05 1px, #0000 1px) 0 0 / 24px 24px, radial-gradient(circle at top, #7a8eff33, #0000 38%), linear-gradient(#050915fa, #02040b);\n}\n\n.cosimo-stage:after {\n  content: "";\n  pointer-events: none;\n  position: absolute;\n  inset: 0;\n  box-shadow: inset 0 1px #ffffff14, inset 0 -48px 64px #00000059;\n}\n\n.cosimo-range {\n  appearance: none;\n  background: linear-gradient(90deg, #5463c973, #f56cb673);\n  border-radius: 999px;\n  outline: none;\n  width: 100%;\n  height: 10px;\n}\n\n.cosimo-range::-webkit-slider-thumb {\n  appearance: none;\n  background: linear-gradient(#ffd8a6 0%, #f56cb6 100%);\n  border: 0;\n  border-radius: 999px;\n  width: 22px;\n  height: 22px;\n  box-shadow: 0 6px 18px #f56cb659;\n}\n\n.cosimo-range::-moz-range-thumb {\n  background: linear-gradient(#ffd8a6 0%, #f56cb6 100%);\n  border: 0;\n  border-radius: 999px;\n  width: 22px;\n  height: 22px;\n  box-shadow: 0 6px 18px #f56cb659;\n}\n\n.cosimo-select, .cosimo-button {\n  color: #eef2f5;\n  background: #ffffff0a;\n  border: 1px solid #ffffff14;\n}\n\n.cosimo-grid-line {\n  stroke: #ffffff14;\n  stroke-width: 1px;\n}\n\n.cosimo-curve-fill {\n  fill: #87d7f514;\n}\n\n.cosimo-curve-line {\n  fill: none;\n  stroke: #87d7f5;\n  stroke-width: 3px;\n  stroke-linecap: round;\n  stroke-linejoin: round;\n}\n\n@property --tw-translate-x {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0;\n}\n\n@property --tw-translate-y {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0;\n}\n\n@property --tw-translate-z {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0;\n}\n\n@property --tw-rotate-x {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-rotate-y {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-rotate-z {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-skew-x {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-skew-y {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-border-style {\n  syntax: "*";\n  inherits: false;\n  initial-value: solid;\n}\n\n@property --tw-font-weight {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-tracking {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-ordinal {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-slashed-zero {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-numeric-figure {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-numeric-spacing {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-numeric-fraction {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-shadow {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0 0 #0000;\n}\n\n@property --tw-shadow-color {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-shadow-alpha {\n  syntax: "<percentage>";\n  inherits: false;\n  initial-value: 100%;\n}\n\n@property --tw-inset-shadow {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0 0 #0000;\n}\n\n@property --tw-inset-shadow-color {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-inset-shadow-alpha {\n  syntax: "<percentage>";\n  inherits: false;\n  initial-value: 100%;\n}\n\n@property --tw-ring-color {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-ring-shadow {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0 0 #0000;\n}\n\n@property --tw-inset-ring-color {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-inset-ring-shadow {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0 0 #0000;\n}\n\n@property --tw-ring-inset {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-ring-offset-width {\n  syntax: "<length>";\n  inherits: false;\n  initial-value: 0;\n}\n\n@property --tw-ring-offset-color {\n  syntax: "*";\n  inherits: false;\n  initial-value: #fff;\n}\n\n@property --tw-ring-offset-shadow {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0 0 #0000;\n}\n\n@property --tw-outline-style {\n  syntax: "*";\n  inherits: false;\n  initial-value: solid;\n}\n\n@property --tw-blur {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-brightness {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-contrast {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-grayscale {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-hue-rotate {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-invert {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-opacity {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-saturate {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-sepia {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-drop-shadow {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-drop-shadow-color {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-drop-shadow-alpha {\n  syntax: "<percentage>";\n  inherits: false;\n  initial-value: 100%;\n}\n\n@property --tw-drop-shadow-size {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-blur {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-brightness {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-contrast {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-grayscale {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-hue-rotate {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-invert {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-opacity {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-saturate {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-sepia {\n  syntax: "*";\n  inherits: false\n}\n';
+const cssText = '/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com */\n@layer properties {\n  @supports (((-webkit-hyphens: none)) and (not (margin-trim: inline))) or ((-moz-orient: inline) and (not (color: rgb(from red r g b)))) {\n    *, :before, :after, ::backdrop {\n      --tw-translate-x: 0;\n      --tw-translate-y: 0;\n      --tw-translate-z: 0;\n      --tw-rotate-x: initial;\n      --tw-rotate-y: initial;\n      --tw-rotate-z: initial;\n      --tw-skew-x: initial;\n      --tw-skew-y: initial;\n      --tw-border-style: solid;\n      --tw-font-weight: initial;\n      --tw-tracking: initial;\n      --tw-ordinal: initial;\n      --tw-slashed-zero: initial;\n      --tw-numeric-figure: initial;\n      --tw-numeric-spacing: initial;\n      --tw-numeric-fraction: initial;\n      --tw-shadow: 0 0 #0000;\n      --tw-shadow-color: initial;\n      --tw-shadow-alpha: 100%;\n      --tw-inset-shadow: 0 0 #0000;\n      --tw-inset-shadow-color: initial;\n      --tw-inset-shadow-alpha: 100%;\n      --tw-ring-color: initial;\n      --tw-ring-shadow: 0 0 #0000;\n      --tw-inset-ring-color: initial;\n      --tw-inset-ring-shadow: 0 0 #0000;\n      --tw-ring-inset: initial;\n      --tw-ring-offset-width: 0px;\n      --tw-ring-offset-color: #fff;\n      --tw-ring-offset-shadow: 0 0 #0000;\n      --tw-outline-style: solid;\n      --tw-blur: initial;\n      --tw-brightness: initial;\n      --tw-contrast: initial;\n      --tw-grayscale: initial;\n      --tw-hue-rotate: initial;\n      --tw-invert: initial;\n      --tw-opacity: initial;\n      --tw-saturate: initial;\n      --tw-sepia: initial;\n      --tw-drop-shadow: initial;\n      --tw-drop-shadow-color: initial;\n      --tw-drop-shadow-alpha: 100%;\n      --tw-drop-shadow-size: initial;\n      --tw-backdrop-blur: initial;\n      --tw-backdrop-brightness: initial;\n      --tw-backdrop-contrast: initial;\n      --tw-backdrop-grayscale: initial;\n      --tw-backdrop-hue-rotate: initial;\n      --tw-backdrop-invert: initial;\n      --tw-backdrop-opacity: initial;\n      --tw-backdrop-saturate: initial;\n      --tw-backdrop-sepia: initial;\n    }\n  }\n}\n\n@layer theme {\n  :root, :host {\n    --font-sans: ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji",\n      "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";\n    --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",\n      "Courier New", monospace;\n    --color-amber-100: oklch(96.2% .059 95.617);\n    --color-cyan-100: oklch(95.6% .045 203.388);\n    --color-cyan-200: oklch(91.7% .08 205.041);\n    --color-cyan-300: oklch(86.5% .127 207.078);\n    --color-blue-300: oklch(80.9% .105 251.813);\n    --color-fuchsia-100: oklch(95.2% .037 318.852);\n    --color-fuchsia-200: oklch(90.3% .076 319.62);\n    --color-fuchsia-300: oklch(83.3% .145 321.434);\n    --color-slate-100: oklch(96.8% .007 247.896);\n    --color-slate-200: oklch(92.9% .013 255.508);\n    --color-slate-300: oklch(86.9% .022 252.894);\n    --color-black: #000;\n    --color-white: #fff;\n    --spacing: .25rem;\n    --text-xs: .75rem;\n    --text-xs--line-height: calc(1 / .75);\n    --text-sm: .875rem;\n    --text-sm--line-height: calc(1.25 / .875);\n    --text-2xl: 1.5rem;\n    --text-2xl--line-height: calc(2 / 1.5);\n    --text-3xl: 1.875rem;\n    --text-3xl--line-height: calc(2.25 / 1.875);\n    --font-weight-semibold: 600;\n    --radius-2xl: 1rem;\n    --blur-md: 12px;\n    --default-transition-duration: .15s;\n    --default-transition-timing-function: cubic-bezier(.4, 0, .2, 1);\n    --default-font-family: var(--font-sans);\n    --default-mono-font-family: var(--font-mono);\n  }\n}\n\n@layer base {\n  *, :after, :before, ::backdrop {\n    box-sizing: border-box;\n    border: 0 solid;\n    margin: 0;\n    padding: 0;\n  }\n\n  ::file-selector-button {\n    box-sizing: border-box;\n    border: 0 solid;\n    margin: 0;\n    padding: 0;\n  }\n\n  html, :host {\n    -webkit-text-size-adjust: 100%;\n    tab-size: 4;\n    line-height: 1.5;\n    font-family: var(--default-font-family, ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji");\n    font-feature-settings: var(--default-font-feature-settings, normal);\n    font-variation-settings: var(--default-font-variation-settings, normal);\n    -webkit-tap-highlight-color: transparent;\n  }\n\n  hr {\n    height: 0;\n    color: inherit;\n    border-top-width: 1px;\n  }\n\n  abbr:where([title]) {\n    -webkit-text-decoration: underline dotted;\n    text-decoration: underline dotted;\n  }\n\n  h1, h2, h3, h4, h5, h6 {\n    font-size: inherit;\n    font-weight: inherit;\n  }\n\n  a {\n    color: inherit;\n    -webkit-text-decoration: inherit;\n    -webkit-text-decoration: inherit;\n    -webkit-text-decoration: inherit;\n    text-decoration: inherit;\n  }\n\n  b, strong {\n    font-weight: bolder;\n  }\n\n  code, kbd, samp, pre {\n    font-family: var(--default-mono-font-family, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace);\n    font-feature-settings: var(--default-mono-font-feature-settings, normal);\n    font-variation-settings: var(--default-mono-font-variation-settings, normal);\n    font-size: 1em;\n  }\n\n  small {\n    font-size: 80%;\n  }\n\n  sub, sup {\n    vertical-align: baseline;\n    font-size: 75%;\n    line-height: 0;\n    position: relative;\n  }\n\n  sub {\n    bottom: -.25em;\n  }\n\n  sup {\n    top: -.5em;\n  }\n\n  table {\n    text-indent: 0;\n    border-color: inherit;\n    border-collapse: collapse;\n  }\n\n  :-moz-focusring {\n    outline: auto;\n  }\n\n  progress {\n    vertical-align: baseline;\n  }\n\n  summary {\n    display: list-item;\n  }\n\n  ol, ul, menu {\n    list-style: none;\n  }\n\n  img, svg, video, canvas, audio, iframe, embed, object {\n    vertical-align: middle;\n    display: block;\n  }\n\n  img, video {\n    max-width: 100%;\n    height: auto;\n  }\n\n  button, input, select, optgroup, textarea {\n    font: inherit;\n    font-feature-settings: inherit;\n    font-variation-settings: inherit;\n    letter-spacing: inherit;\n    color: inherit;\n    opacity: 1;\n    background-color: #0000;\n    border-radius: 0;\n  }\n\n  ::file-selector-button {\n    font: inherit;\n    font-feature-settings: inherit;\n    font-variation-settings: inherit;\n    letter-spacing: inherit;\n    color: inherit;\n    opacity: 1;\n    background-color: #0000;\n    border-radius: 0;\n  }\n\n  :where(select:is([multiple], [size])) optgroup {\n    font-weight: bolder;\n  }\n\n  :where(select:is([multiple], [size])) optgroup option {\n    padding-inline-start: 20px;\n  }\n\n  ::file-selector-button {\n    margin-inline-end: 4px;\n  }\n\n  ::placeholder {\n    opacity: 1;\n  }\n\n  @supports (not ((-webkit-appearance: -apple-pay-button))) or (contain-intrinsic-size: 1px) {\n    ::placeholder {\n      color: currentColor;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      ::placeholder {\n        color: color-mix(in oklab, currentcolor 50%, transparent);\n      }\n    }\n  }\n\n  textarea {\n    resize: vertical;\n  }\n\n  ::-webkit-search-decoration {\n    -webkit-appearance: none;\n  }\n\n  ::-webkit-date-and-time-value {\n    min-height: 1lh;\n    text-align: inherit;\n  }\n\n  ::-webkit-datetime-edit {\n    display: inline-flex;\n  }\n\n  ::-webkit-datetime-edit-fields-wrapper {\n    padding: 0;\n  }\n\n  ::-webkit-datetime-edit {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-year-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-month-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-day-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-hour-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-minute-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-second-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-millisecond-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-meridiem-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-calendar-picker-indicator {\n    line-height: 1;\n  }\n\n  :-moz-ui-invalid {\n    box-shadow: none;\n  }\n\n  button, input:where([type="button"], [type="reset"], [type="submit"]) {\n    appearance: button;\n  }\n\n  ::file-selector-button {\n    appearance: button;\n  }\n\n  ::-webkit-inner-spin-button {\n    height: auto;\n  }\n\n  ::-webkit-outer-spin-button {\n    height: auto;\n  }\n\n  [hidden]:where(:not([hidden="until-found"])) {\n    display: none !important;\n  }\n}\n\n@layer components;\n\n@layer utilities {\n  .pointer-events-none {\n    pointer-events: none;\n  }\n\n  .collapse {\n    visibility: collapse;\n  }\n\n  .visible {\n    visibility: visible;\n  }\n\n  .absolute {\n    position: absolute;\n  }\n\n  .fixed {\n    position: fixed;\n  }\n\n  .relative {\n    position: relative;\n  }\n\n  .static {\n    position: static;\n  }\n\n  .sticky {\n    position: sticky;\n  }\n\n  .inset-0 {\n    inset: calc(var(--spacing) * 0);\n  }\n\n  .inset-x-0 {\n    inset-inline: calc(var(--spacing) * 0);\n  }\n\n  .inset-y-0 {\n    inset-block: calc(var(--spacing) * 0);\n  }\n\n  .start {\n    inset-inline-start: var(--spacing);\n  }\n\n  .end {\n    inset-inline-end: var(--spacing);\n  }\n\n  .top-0 {\n    top: calc(var(--spacing) * 0);\n  }\n\n  .top-1 {\n    top: calc(var(--spacing) * 1);\n  }\n\n  .top-1\\/2 {\n    top: 50%;\n  }\n\n  .right-0 {\n    right: calc(var(--spacing) * 0);\n  }\n\n  .right-4 {\n    right: calc(var(--spacing) * 4);\n  }\n\n  .bottom-0 {\n    bottom: calc(var(--spacing) * 0);\n  }\n\n  .isolate {\n    isolation: isolate;\n  }\n\n  .z-20 {\n    z-index: 20;\n  }\n\n  .order-1 {\n    order: 1;\n  }\n\n  .\\!container {\n    width: 100% !important;\n  }\n\n  @media (min-width: 40rem) {\n    .\\!container {\n      max-width: 40rem !important;\n    }\n  }\n\n  @media (min-width: 48rem) {\n    .\\!container {\n      max-width: 48rem !important;\n    }\n  }\n\n  @media (min-width: 64rem) {\n    .\\!container {\n      max-width: 64rem !important;\n    }\n  }\n\n  @media (min-width: 80rem) {\n    .\\!container {\n      max-width: 80rem !important;\n    }\n  }\n\n  @media (min-width: 96rem) {\n    .\\!container {\n      max-width: 96rem !important;\n    }\n  }\n\n  .container {\n    width: 100%;\n  }\n\n  @media (min-width: 40rem) {\n    .container {\n      max-width: 40rem;\n    }\n  }\n\n  @media (min-width: 48rem) {\n    .container {\n      max-width: 48rem;\n    }\n  }\n\n  @media (min-width: 64rem) {\n    .container {\n      max-width: 64rem;\n    }\n  }\n\n  @media (min-width: 80rem) {\n    .container {\n      max-width: 80rem;\n    }\n  }\n\n  @media (min-width: 96rem) {\n    .container {\n      max-width: 96rem;\n    }\n  }\n\n  .m-1 {\n    margin: calc(var(--spacing) * 1);\n  }\n\n  .mt-1 {\n    margin-top: calc(var(--spacing) * 1);\n  }\n\n  .mt-2 {\n    margin-top: calc(var(--spacing) * 2);\n  }\n\n  .block {\n    display: block;\n  }\n\n  .contents {\n    display: contents;\n  }\n\n  .flex {\n    display: flex;\n  }\n\n  .grid {\n    display: grid;\n  }\n\n  .hidden {\n    display: none;\n  }\n\n  .inline {\n    display: inline;\n  }\n\n  .inline-flex {\n    display: inline-flex;\n  }\n\n  .inline-grid {\n    display: inline-grid;\n  }\n\n  .table {\n    display: table;\n  }\n\n  .h-3 {\n    height: calc(var(--spacing) * 3);\n  }\n\n  .h-3\\.5 {\n    height: calc(var(--spacing) * 3.5);\n  }\n\n  .h-4 {\n    height: calc(var(--spacing) * 4);\n  }\n\n  .h-10 {\n    height: calc(var(--spacing) * 10);\n  }\n\n  .h-11 {\n    height: calc(var(--spacing) * 11);\n  }\n\n  .h-12 {\n    height: calc(var(--spacing) * 12);\n  }\n\n  .h-32 {\n    height: calc(var(--spacing) * 32);\n  }\n\n  .h-\\[42px\\] {\n    height: 42px;\n  }\n\n  .h-\\[118px\\] {\n    height: 118px;\n  }\n\n  .h-\\[180px\\] {\n    height: 180px;\n  }\n\n  .h-\\[320px\\] {\n    height: 320px;\n  }\n\n  .h-full {\n    height: 100%;\n  }\n\n  .min-h-0 {\n    min-height: calc(var(--spacing) * 0);\n  }\n\n  .min-h-\\[220px\\] {\n    min-height: 220px;\n  }\n\n  .min-h-\\[356px\\] {\n    min-height: 356px;\n  }\n\n  .w-3 {\n    width: calc(var(--spacing) * 3);\n  }\n\n  .w-3\\.5 {\n    width: calc(var(--spacing) * 3.5);\n  }\n\n  .w-6 {\n    width: calc(var(--spacing) * 6);\n  }\n\n  .w-10 {\n    width: calc(var(--spacing) * 10);\n  }\n\n  .w-\\[118px\\] {\n    width: 118px;\n  }\n\n  .w-full {\n    width: 100%;\n  }\n\n  .max-w-\\[280px\\] {\n    max-width: 280px;\n  }\n\n  .max-w-\\[1080px\\] {\n    max-width: 1080px;\n  }\n\n  .min-w-0 {\n    min-width: calc(var(--spacing) * 0);\n  }\n\n  .flex-1 {\n    flex: 1;\n  }\n\n  .flex-shrink, .shrink {\n    flex-shrink: 1;\n  }\n\n  .flex-grow, .grow {\n    flex-grow: 1;\n  }\n\n  .border-collapse {\n    border-collapse: collapse;\n  }\n\n  .-translate-y-1 {\n    --tw-translate-y: calc(var(--spacing) * -1);\n    translate: var(--tw-translate-x) var(--tw-translate-y);\n  }\n\n  .-translate-y-1\\/2 {\n    --tw-translate-y: calc(calc(1 / 2 * 100%) * -1);\n    translate: var(--tw-translate-x) var(--tw-translate-y);\n  }\n\n  .transform {\n    transform: var(--tw-rotate-x, ) var(--tw-rotate-y, ) var(--tw-rotate-z, ) var(--tw-skew-x, ) var(--tw-skew-y, );\n  }\n\n  .cursor-pointer {\n    cursor: pointer;\n  }\n\n  .touch-none {\n    touch-action: none;\n  }\n\n  .resize {\n    resize: both;\n  }\n\n  .appearance-none {\n    appearance: none;\n  }\n\n  .grid-cols-1 {\n    grid-template-columns: repeat(1, minmax(0, 1fr));\n  }\n\n  .grid-cols-3 {\n    grid-template-columns: repeat(3, minmax(0, 1fr));\n  }\n\n  .grid-cols-\\[56px_minmax\\(0\\,1fr\\)\\] {\n    grid-template-columns: 56px minmax(0, 1fr);\n  }\n\n  .grid-cols-\\[minmax\\(0\\,1fr\\)_88px\\] {\n    grid-template-columns: minmax(0, 1fr) 88px;\n  }\n\n  .grid-cols-\\[minmax\\(0\\,1fr\\)_92px\\] {\n    grid-template-columns: minmax(0, 1fr) 92px;\n  }\n\n  .grid-cols-\\[minmax\\(0\\,1fr\\)_92px_auto\\] {\n    grid-template-columns: minmax(0, 1fr) 92px auto;\n  }\n\n  .grid-cols-\\[minmax\\(0\\,1fr\\)_auto\\] {\n    grid-template-columns: minmax(0, 1fr) auto;\n  }\n\n  .grid-cols-\\[minmax\\(280px\\,1fr\\)_minmax\\(0\\,2fr\\)\\] {\n    grid-template-columns: minmax(280px, 1fr) minmax(0, 2fr);\n  }\n\n  .grid-rows-\\[auto_minmax\\(0\\,1fr\\)_auto\\] {\n    grid-template-rows: auto minmax(0, 1fr) auto;\n  }\n\n  .grid-rows-\\[minmax\\(356px\\,0\\.9fr\\)_auto_auto\\] {\n    grid-template-rows: minmax(356px, .9fr) auto auto;\n  }\n\n  .flex-col {\n    flex-direction: column;\n  }\n\n  .flex-wrap {\n    flex-wrap: wrap;\n  }\n\n  .items-center {\n    align-items: center;\n  }\n\n  .items-end {\n    align-items: flex-end;\n  }\n\n  .items-start {\n    align-items: flex-start;\n  }\n\n  .items-stretch {\n    align-items: stretch;\n  }\n\n  .justify-between {\n    justify-content: space-between;\n  }\n\n  .justify-center {\n    justify-content: center;\n  }\n\n  .justify-end {\n    justify-content: flex-end;\n  }\n\n  .justify-start {\n    justify-content: flex-start;\n  }\n\n  .gap-1 {\n    gap: calc(var(--spacing) * 1);\n  }\n\n  .gap-2 {\n    gap: calc(var(--spacing) * 2);\n  }\n\n  .gap-3 {\n    gap: calc(var(--spacing) * 3);\n  }\n\n  .gap-4 {\n    gap: calc(var(--spacing) * 4);\n  }\n\n  .gap-5 {\n    gap: calc(var(--spacing) * 5);\n  }\n\n  .self-start {\n    align-self: flex-start;\n  }\n\n  .truncate {\n    text-overflow: ellipsis;\n    white-space: nowrap;\n    overflow: hidden;\n  }\n\n  .overflow-auto {\n    overflow: auto;\n  }\n\n  .overflow-hidden {\n    overflow: hidden;\n  }\n\n  .rounded {\n    border-radius: .25rem;\n  }\n\n  .rounded-2xl {\n    border-radius: var(--radius-2xl);\n  }\n\n  .rounded-\\[14px\\] {\n    border-radius: 14px;\n  }\n\n  .rounded-\\[16px\\] {\n    border-radius: 16px;\n  }\n\n  .rounded-\\[18px\\] {\n    border-radius: 18px;\n  }\n\n  .rounded-\\[20px\\] {\n    border-radius: 20px;\n  }\n\n  .rounded-\\[22px\\] {\n    border-radius: 22px;\n  }\n\n  .rounded-\\[24px\\] {\n    border-radius: 24px;\n  }\n\n  .rounded-\\[28px\\] {\n    border-radius: 28px;\n  }\n\n  .rounded-\\[30px\\] {\n    border-radius: 30px;\n  }\n\n  .rounded-full {\n    border-radius: 3.40282e38px;\n  }\n\n  .border {\n    border-style: var(--tw-border-style);\n    border-width: 1px;\n  }\n\n  .border-cyan-300 {\n    border-color: var(--color-cyan-300);\n  }\n\n  .border-cyan-300\\/15 {\n    border-color: #53eafd26;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-cyan-300\\/15 {\n      border-color: color-mix(in oklab, var(--color-cyan-300) 15%, transparent);\n    }\n  }\n\n  .border-fuchsia-300 {\n    border-color: var(--color-fuchsia-300);\n  }\n\n  .border-fuchsia-300\\/15 {\n    border-color: #f2a9ff26;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-fuchsia-300\\/15 {\n      border-color: color-mix(in oklab, var(--color-fuchsia-300) 15%, transparent);\n    }\n  }\n\n  .border-white {\n    border-color: var(--color-white);\n  }\n\n  .border-white\\/6 {\n    border-color: #ffffff0f;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-white\\/6 {\n      border-color: color-mix(in oklab, var(--color-white) 6%, transparent);\n    }\n  }\n\n  .border-white\\/8 {\n    border-color: #ffffff14;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-white\\/8 {\n      border-color: color-mix(in oklab, var(--color-white) 8%, transparent);\n    }\n  }\n\n  .border-white\\/10 {\n    border-color: #ffffff1a;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-white\\/10 {\n      border-color: color-mix(in oklab, var(--color-white) 10%, transparent);\n    }\n  }\n\n  .bg-\\[\\#070b16\\] {\n    background-color: #070b16;\n  }\n\n  .bg-\\[\\#09101d\\]\\/95 {\n    background-color: oklab(17.3432% -.0040513 -.029082 / .95);\n  }\n\n  .bg-\\[\\#030711\\]\\/85 {\n    background-color: oklab(12.8817% -.00430492 -.0249884 / .85);\n  }\n\n  .bg-black {\n    background-color: var(--color-black);\n  }\n\n  .bg-black\\/20 {\n    background-color: #0003;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-black\\/20 {\n      background-color: color-mix(in oklab, var(--color-black) 20%, transparent);\n    }\n  }\n\n  .bg-black\\/25 {\n    background-color: #00000040;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-black\\/25 {\n      background-color: color-mix(in oklab, var(--color-black) 25%, transparent);\n    }\n  }\n\n  .bg-black\\/35 {\n    background-color: #00000059;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-black\\/35 {\n      background-color: color-mix(in oklab, var(--color-black) 35%, transparent);\n    }\n  }\n\n  .bg-black\\/40 {\n    background-color: #0006;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-black\\/40 {\n      background-color: color-mix(in oklab, var(--color-black) 40%, transparent);\n    }\n  }\n\n  .bg-cyan-300 {\n    background-color: var(--color-cyan-300);\n  }\n\n  .bg-cyan-300\\/8 {\n    background-color: #53eafd14;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-cyan-300\\/8 {\n      background-color: color-mix(in oklab, var(--color-cyan-300) 8%, transparent);\n    }\n  }\n\n  .bg-fuchsia-300 {\n    background-color: var(--color-fuchsia-300);\n  }\n\n  .bg-fuchsia-300\\/8 {\n    background-color: #f2a9ff14;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-fuchsia-300\\/8 {\n      background-color: color-mix(in oklab, var(--color-fuchsia-300) 8%, transparent);\n    }\n  }\n\n  .bg-white {\n    background-color: var(--color-white);\n  }\n\n  .bg-white\\/\\[0\\.03\\] {\n    background-color: #ffffff08;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-white\\/\\[0\\.03\\] {\n      background-color: color-mix(in oklab, var(--color-white) 3%, transparent);\n    }\n  }\n\n  .bg-white\\/\\[0\\.04\\] {\n    background-color: #ffffff0a;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-white\\/\\[0\\.04\\] {\n      background-color: color-mix(in oklab, var(--color-white) 4%, transparent);\n    }\n  }\n\n  .bg-white\\/\\[0\\.08\\] {\n    background-color: #ffffff14;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-white\\/\\[0\\.08\\] {\n      background-color: color-mix(in oklab, var(--color-white) 8%, transparent);\n    }\n  }\n\n  .mask-repeat {\n    -webkit-mask-repeat: repeat;\n    mask-repeat: repeat;\n  }\n\n  .fill-cyan-200 {\n    fill: var(--color-cyan-200);\n  }\n\n  .fill-fuchsia-200 {\n    fill: var(--color-fuchsia-200);\n  }\n\n  .stroke-\\[\\#050913\\] {\n    stroke: #050913;\n  }\n\n  .stroke-\\[2px\\] {\n    stroke-width: 2px;\n  }\n\n  .stroke-\\[3px\\] {\n    stroke-width: 3px;\n  }\n\n  .p-0 {\n    padding: calc(var(--spacing) * 0);\n  }\n\n  .p-1 {\n    padding: calc(var(--spacing) * 1);\n  }\n\n  .p-2 {\n    padding: calc(var(--spacing) * 2);\n  }\n\n  .p-3 {\n    padding: calc(var(--spacing) * 3);\n  }\n\n  .p-4 {\n    padding: calc(var(--spacing) * 4);\n  }\n\n  .p-5 {\n    padding: calc(var(--spacing) * 5);\n  }\n\n  .p-6 {\n    padding: calc(var(--spacing) * 6);\n  }\n\n  .px-2 {\n    padding-inline: calc(var(--spacing) * 2);\n  }\n\n  .px-3 {\n    padding-inline: calc(var(--spacing) * 3);\n  }\n\n  .px-4 {\n    padding-inline: calc(var(--spacing) * 4);\n  }\n\n  .px-5 {\n    padding-inline: calc(var(--spacing) * 5);\n  }\n\n  .py-1 {\n    padding-block: calc(var(--spacing) * 1);\n  }\n\n  .py-2 {\n    padding-block: calc(var(--spacing) * 2);\n  }\n\n  .py-2\\.5 {\n    padding-block: calc(var(--spacing) * 2.5);\n  }\n\n  .py-3 {\n    padding-block: calc(var(--spacing) * 3);\n  }\n\n  .py-4 {\n    padding-block: calc(var(--spacing) * 4);\n  }\n\n  .py-5 {\n    padding-block: calc(var(--spacing) * 5);\n  }\n\n  .pt-1 {\n    padding-top: calc(var(--spacing) * 1);\n  }\n\n  .pr-1 {\n    padding-right: calc(var(--spacing) * 1);\n  }\n\n  .pr-4 {\n    padding-right: calc(var(--spacing) * 4);\n  }\n\n  .pr-10 {\n    padding-right: calc(var(--spacing) * 10);\n  }\n\n  .pb-5 {\n    padding-bottom: calc(var(--spacing) * 5);\n  }\n\n  .text-left {\n    text-align: left;\n  }\n\n  .text-right {\n    text-align: right;\n  }\n\n  .font-mono {\n    font-family: var(--font-mono);\n  }\n\n  .text-2xl {\n    font-size: var(--text-2xl);\n    line-height: var(--tw-leading, var(--text-2xl--line-height));\n  }\n\n  .text-3xl {\n    font-size: var(--text-3xl);\n    line-height: var(--tw-leading, var(--text-3xl--line-height));\n  }\n\n  .text-sm {\n    font-size: var(--text-sm);\n    line-height: var(--tw-leading, var(--text-sm--line-height));\n  }\n\n  .text-xs {\n    font-size: var(--text-xs);\n    line-height: var(--tw-leading, var(--text-xs--line-height));\n  }\n\n  .text-\\[10px\\] {\n    font-size: 10px;\n  }\n\n  .text-\\[11px\\] {\n    font-size: 11px;\n  }\n\n  .font-semibold {\n    --tw-font-weight: var(--font-weight-semibold);\n    font-weight: var(--font-weight-semibold);\n  }\n\n  .tracking-\\[-0\\.04em\\] {\n    --tw-tracking: -.04em;\n    letter-spacing: -.04em;\n  }\n\n  .tracking-\\[0\\.16em\\] {\n    --tw-tracking: .16em;\n    letter-spacing: .16em;\n  }\n\n  .tracking-\\[0\\.18em\\] {\n    --tw-tracking: .18em;\n    letter-spacing: .18em;\n  }\n\n  .tracking-\\[0\\.22em\\] {\n    --tw-tracking: .22em;\n    letter-spacing: .22em;\n  }\n\n  .tracking-\\[0\\.24em\\] {\n    --tw-tracking: .24em;\n    letter-spacing: .24em;\n  }\n\n  .text-wrap {\n    text-wrap: wrap;\n  }\n\n  .text-amber-100 {\n    color: var(--color-amber-100);\n  }\n\n  .text-blue-300 {\n    color: var(--color-blue-300);\n  }\n\n  .text-blue-300\\/70 {\n    color: #90c5ffb3;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-blue-300\\/70 {\n      color: color-mix(in oklab, var(--color-blue-300) 70%, transparent);\n    }\n  }\n\n  .text-cyan-100 {\n    color: var(--color-cyan-100);\n  }\n\n  .text-cyan-100\\/85 {\n    color: #cefafed9;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-cyan-100\\/85 {\n      color: color-mix(in oklab, var(--color-cyan-100) 85%, transparent);\n    }\n  }\n\n  .text-cyan-200 {\n    color: var(--color-cyan-200);\n  }\n\n  .text-cyan-200\\/70 {\n    color: #a2f4fdb3;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-cyan-200\\/70 {\n      color: color-mix(in oklab, var(--color-cyan-200) 70%, transparent);\n    }\n  }\n\n  .text-cyan-200\\/80 {\n    color: #a2f4fdcc;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-cyan-200\\/80 {\n      color: color-mix(in oklab, var(--color-cyan-200) 80%, transparent);\n    }\n  }\n\n  .text-cyan-300 {\n    color: var(--color-cyan-300);\n  }\n\n  .text-cyan-300\\/70 {\n    color: #53eafdb3;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-cyan-300\\/70 {\n      color: color-mix(in oklab, var(--color-cyan-300) 70%, transparent);\n    }\n  }\n\n  .text-fuchsia-100 {\n    color: var(--color-fuchsia-100);\n  }\n\n  .text-fuchsia-100\\/90 {\n    color: #fae8ffe6;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-fuchsia-100\\/90 {\n      color: color-mix(in oklab, var(--color-fuchsia-100) 90%, transparent);\n    }\n  }\n\n  .text-fuchsia-200 {\n    color: var(--color-fuchsia-200);\n  }\n\n  .text-fuchsia-200\\/80 {\n    color: #f6cfffcc;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-fuchsia-200\\/80 {\n      color: color-mix(in oklab, var(--color-fuchsia-200) 80%, transparent);\n    }\n  }\n\n  .text-slate-100 {\n    color: var(--color-slate-100);\n  }\n\n  .text-slate-200 {\n    color: var(--color-slate-200);\n  }\n\n  .text-slate-200\\/80 {\n    color: #e2e8f0cc;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-200\\/80 {\n      color: color-mix(in oklab, var(--color-slate-200) 80%, transparent);\n    }\n  }\n\n  .text-slate-300 {\n    color: var(--color-slate-300);\n  }\n\n  .text-slate-300\\/55 {\n    color: #cad5e28c;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-300\\/55 {\n      color: color-mix(in oklab, var(--color-slate-300) 55%, transparent);\n    }\n  }\n\n  .text-slate-300\\/60 {\n    color: #cad5e299;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-300\\/60 {\n      color: color-mix(in oklab, var(--color-slate-300) 60%, transparent);\n    }\n  }\n\n  .text-slate-300\\/70 {\n    color: #cad5e2b3;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-300\\/70 {\n      color: color-mix(in oklab, var(--color-slate-300) 70%, transparent);\n    }\n  }\n\n  .text-slate-300\\/75 {\n    color: #cad5e2bf;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-300\\/75 {\n      color: color-mix(in oklab, var(--color-slate-300) 75%, transparent);\n    }\n  }\n\n  .lowercase {\n    text-transform: lowercase;\n  }\n\n  .uppercase {\n    text-transform: uppercase;\n  }\n\n  .ordinal {\n    --tw-ordinal: ordinal;\n    font-variant-numeric: var(--tw-ordinal, ) var(--tw-slashed-zero, ) var(--tw-numeric-figure, ) var(--tw-numeric-spacing, ) var(--tw-numeric-fraction, );\n  }\n\n  .underline {\n    text-decoration-line: underline;\n  }\n\n  .opacity-0 {\n    opacity: 0;\n  }\n\n  .shadow {\n    --tw-shadow: 0 1px 3px 0 var(--tw-shadow-color, #0000001a), 0 1px 2px -1px var(--tw-shadow-color, #0000001a);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[0_10px_28px_rgba\\(0\\,0\\,0\\,0\\.22\\)\\] {\n    --tw-shadow: 0 10px 28px var(--tw-shadow-color, #00000038);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[0_10px_28px_rgba\\(0\\,0\\,0\\,0\\.28\\)\\] {\n    --tw-shadow: 0 10px 28px var(--tw-shadow-color, #00000047);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[0_18px_42px_rgba\\(3\\,6\\,18\\,0\\.45\\)\\] {\n    --tw-shadow: 0 18px 42px var(--tw-shadow-color, #03061273);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[0_26px_80px_rgba\\(0\\,0\\,0\\,0\\.48\\)\\] {\n    --tw-shadow: 0 26px 80px var(--tw-shadow-color, #0000007a);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[0_36px_80px_rgba\\(0\\,0\\,0\\,0\\.5\\)\\] {\n    --tw-shadow: 0 36px 80px var(--tw-shadow-color, #00000080);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[inset_0_0_0_1px_rgba\\(143\\,232\\,255\\,0\\.18\\)\\] {\n    --tw-shadow: inset 0 0 0 1px var(--tw-shadow-color, #8fe8ff2e);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .ring {\n    --tw-ring-shadow: var(--tw-ring-inset, ) 0 0 0 calc(1px + var(--tw-ring-offset-width)) var(--tw-ring-color, currentcolor);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .outline {\n    outline-style: var(--tw-outline-style);\n    outline-width: 1px;\n  }\n\n  .blur {\n    --tw-blur: blur(8px);\n    filter: var(--tw-blur, ) var(--tw-brightness, ) var(--tw-contrast, ) var(--tw-grayscale, ) var(--tw-hue-rotate, ) var(--tw-invert, ) var(--tw-saturate, ) var(--tw-sepia, ) var(--tw-drop-shadow, );\n  }\n\n  .invert {\n    --tw-invert: invert(100%);\n    filter: var(--tw-blur, ) var(--tw-brightness, ) var(--tw-contrast, ) var(--tw-grayscale, ) var(--tw-hue-rotate, ) var(--tw-invert, ) var(--tw-saturate, ) var(--tw-sepia, ) var(--tw-drop-shadow, );\n  }\n\n  .filter {\n    filter: var(--tw-blur, ) var(--tw-brightness, ) var(--tw-contrast, ) var(--tw-grayscale, ) var(--tw-hue-rotate, ) var(--tw-invert, ) var(--tw-saturate, ) var(--tw-sepia, ) var(--tw-drop-shadow, );\n  }\n\n  .backdrop-blur-md {\n    --tw-backdrop-blur: blur(var(--blur-md));\n    -webkit-backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );\n    backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );\n  }\n\n  .backdrop-filter {\n    -webkit-backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );\n    backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );\n  }\n\n  .transition {\n    transition-property: color, background-color, border-color, outline-color, text-decoration-color, fill, stroke, --tw-gradient-from, --tw-gradient-via, --tw-gradient-to, opacity, box-shadow, transform, translate, scale, rotate, filter, -webkit-backdrop-filter, backdrop-filter, display, content-visibility, overlay, pointer-events;\n    transition-timing-function: var(--tw-ease, var(--default-transition-timing-function));\n    transition-duration: var(--tw-duration, var(--default-transition-duration));\n  }\n\n  .outline-none {\n    --tw-outline-style: none;\n    outline-style: none;\n  }\n\n  @media (hover: hover) {\n    .hover\\:border-cyan-200\\/30:hover {\n      border-color: #a2f4fd4d;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:border-cyan-200\\/30:hover {\n        border-color: color-mix(in oklab, var(--color-cyan-200) 30%, transparent);\n      }\n    }\n\n    .hover\\:border-white\\/12:hover {\n      border-color: #ffffff1f;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:border-white\\/12:hover {\n        border-color: color-mix(in oklab, var(--color-white) 12%, transparent);\n      }\n    }\n\n    .hover\\:bg-black\\/24:hover {\n      background-color: #0000003d;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:bg-black\\/24:hover {\n        background-color: color-mix(in oklab, var(--color-black) 24%, transparent);\n      }\n    }\n\n    .hover\\:bg-white\\/\\[0\\.04\\]:hover {\n      background-color: #ffffff0a;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:bg-white\\/\\[0\\.04\\]:hover {\n        background-color: color-mix(in oklab, var(--color-white) 4%, transparent);\n      }\n    }\n\n    .hover\\:text-slate-100:hover {\n      color: var(--color-slate-100);\n    }\n  }\n\n  .focus\\:border-cyan-200\\/45:focus {\n    border-color: #a2f4fd73;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .focus\\:border-cyan-200\\/45:focus {\n      border-color: color-mix(in oklab, var(--color-cyan-200) 45%, transparent);\n    }\n  }\n\n  .disabled\\:opacity-35:disabled {\n    opacity: .35;\n  }\n\n  .disabled\\:opacity-40:disabled {\n    opacity: .4;\n  }\n\n  @media (min-width: 64rem) {\n    .lg\\:grid-cols-\\[220px_minmax\\(0\\,1fr\\)_minmax\\(0\\,1fr\\)\\] {\n      grid-template-columns: 220px minmax(0, 1fr) minmax(0, 1fr);\n    }\n  }\n}\n\n:host {\n  color-scheme: dark;\n  width: 100%;\n  height: 100%;\n  display: block;\n}\n\n* {\n  box-sizing: border-box;\n}\n\nbutton, input, select {\n  font: inherit;\n}\n\n.cosimo-surface {\n  background: radial-gradient(circle at top, #7a8eff2e, #0000 34%), linear-gradient(#060a16fa, #03050c);\n}\n\n.cosimo-stage {\n  background: linear-gradient(#ffffff05 1px, #0000 1px) 0 0 / 24px 24px, linear-gradient(90deg, #ffffff05 1px, #0000 1px) 0 0 / 24px 24px, radial-gradient(circle at top, #7a8eff33, #0000 38%), linear-gradient(#050915fa, #02040b);\n}\n\n.cosimo-stage:after {\n  content: "";\n  pointer-events: none;\n  position: absolute;\n  inset: 0;\n  box-shadow: inset 0 1px #ffffff14, inset 0 -48px 64px #00000059;\n}\n\n.cosimo-range {\n  appearance: none;\n  background: linear-gradient(90deg, #5463c973, #f56cb673);\n  border-radius: 999px;\n  outline: none;\n  width: 100%;\n  height: 10px;\n}\n\n.cosimo-range::-webkit-slider-thumb {\n  appearance: none;\n  background: linear-gradient(#ffd8a6 0%, #f56cb6 100%);\n  border: 0;\n  border-radius: 999px;\n  width: 22px;\n  height: 22px;\n  box-shadow: 0 6px 18px #f56cb659;\n}\n\n.cosimo-range::-moz-range-thumb {\n  background: linear-gradient(#ffd8a6 0%, #f56cb6 100%);\n  border: 0;\n  border-radius: 999px;\n  width: 22px;\n  height: 22px;\n  box-shadow: 0 6px 18px #f56cb659;\n}\n\n.cosimo-select, .cosimo-button {\n  color: #eef2f5;\n  background: #ffffff0a;\n  border: 1px solid #ffffff14;\n}\n\n.cosimo-grid-line {\n  stroke: #ffffff14;\n  stroke-width: 1px;\n}\n\n.cosimo-curve-fill {\n  fill: #87d7f514;\n}\n\n.cosimo-curve-line {\n  fill: none;\n  stroke: #87d7f5;\n  stroke-width: 3px;\n  stroke-linecap: round;\n  stroke-linejoin: round;\n}\n\n.cosimo-curve-fill-muted {\n  fill: #e1e7f00a;\n}\n\n.cosimo-curve-line-muted {\n  stroke: #e1e7f061;\n}\n\n.cosimo-curve-line-highlight {\n  stroke: #32f0bc;\n}\n\n.cosimo-mseg-point-default {\n  fill: #87d7f5;\n  stroke: #050913;\n  stroke-width: 2px;\n}\n\n.cosimo-mseg-point-selected {\n  fill: #f5d0fe;\n  stroke: #050913;\n  stroke-width: 3px;\n}\n\n.cosimo-mseg-point-highlight {\n  fill: #32f0bc;\n  stroke: #050913;\n  stroke-width: 2px;\n}\n\n.cosimo-mseg-point-muted {\n  fill: #e1e7f0c7;\n  stroke: #050913;\n  stroke-width: 2px;\n  opacity: .62;\n}\n\n@property --tw-translate-x {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0;\n}\n\n@property --tw-translate-y {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0;\n}\n\n@property --tw-translate-z {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0;\n}\n\n@property --tw-rotate-x {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-rotate-y {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-rotate-z {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-skew-x {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-skew-y {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-border-style {\n  syntax: "*";\n  inherits: false;\n  initial-value: solid;\n}\n\n@property --tw-font-weight {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-tracking {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-ordinal {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-slashed-zero {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-numeric-figure {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-numeric-spacing {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-numeric-fraction {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-shadow {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0 0 #0000;\n}\n\n@property --tw-shadow-color {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-shadow-alpha {\n  syntax: "<percentage>";\n  inherits: false;\n  initial-value: 100%;\n}\n\n@property --tw-inset-shadow {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0 0 #0000;\n}\n\n@property --tw-inset-shadow-color {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-inset-shadow-alpha {\n  syntax: "<percentage>";\n  inherits: false;\n  initial-value: 100%;\n}\n\n@property --tw-ring-color {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-ring-shadow {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0 0 #0000;\n}\n\n@property --tw-inset-ring-color {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-inset-ring-shadow {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0 0 #0000;\n}\n\n@property --tw-ring-inset {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-ring-offset-width {\n  syntax: "<length>";\n  inherits: false;\n  initial-value: 0;\n}\n\n@property --tw-ring-offset-color {\n  syntax: "*";\n  inherits: false;\n  initial-value: #fff;\n}\n\n@property --tw-ring-offset-shadow {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0 0 #0000;\n}\n\n@property --tw-outline-style {\n  syntax: "*";\n  inherits: false;\n  initial-value: solid;\n}\n\n@property --tw-blur {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-brightness {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-contrast {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-grayscale {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-hue-rotate {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-invert {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-opacity {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-saturate {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-sepia {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-drop-shadow {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-drop-shadow-color {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-drop-shadow-alpha {\n  syntax: "<percentage>";\n  inherits: false;\n  initial-value: 100%;\n}\n\n@property --tw-drop-shadow-size {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-blur {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-brightness {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-contrast {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-grayscale {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-hue-rotate {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-invert {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-opacity {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-saturate {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-sepia {\n  syntax: "*";\n  inherits: false\n}\n';
 function assert$1(condition, message) {
   if (!condition) {
     throw new Error(message);
@@ -12934,10 +12934,13 @@ const MSEG_NOTE_OFF_POLICY_FINISH_LOOP = 0;
 const MSEG_NOTE_OFF_POLICY_IMMEDIATE = 1;
 const MSEG_NOTE_OFF_POLICY_IGNORE = 2;
 const MSEG_POINT_HIT_RADIUS_PX = 16;
+const MSEG_SEGMENT_HIT_RADIUS_PX = 10;
 const MSEG_POINT_RADIUS_PX = 8;
 const MSEG_SELECTED_POINT_RADIUS_PX = 10;
 const MSEG_EDITOR_HORIZONTAL_PADDING_PX = 14;
 const MSEG_EDITOR_VERTICAL_PADDING_PX = 14;
+const MSEG_EDITOR_CURVE_TOLERANCE_PX = 0.5;
+const MSEG_EDITOR_MAX_SUBDIVISION_DEPTH = 12;
 const MSEG_NOTE_OFF_POLICY_VALUES = /* @__PURE__ */ new Set([
   "finish_loop",
   "immediate",
@@ -13165,6 +13168,15 @@ function powerScale(value, power) {
   const denominator = Math.exp(power) - 1;
   return numerator / denominator;
 }
+function evaluateMsegSegmentPoint(from, to, t) {
+  const clampedT = clamp01(t);
+  const curvedT = clamp01(powerScale(clampedT, from.curvePower));
+  return {
+    x: from.x + (to.x - from.x) * clampedT,
+    y: from.y + (to.y - from.y) * curvedT,
+    curvePower: from.curvePower
+  };
+}
 function findEvaluationSegment(points, x) {
   if (x <= points[0].x) {
     return { from: points[0], to: points[0], laterPointWins: false };
@@ -13192,6 +13204,88 @@ function findEvaluationSegment(points, x) {
     to: points[points.length - 1],
     laterPointWins: false
   };
+}
+function distanceSquaredToLineSegment(pointX, pointY, fromX, fromY, toX, toY) {
+  const deltaX = toX - fromX;
+  const deltaY = toY - fromY;
+  const lengthSquared = deltaX * deltaX + deltaY * deltaY;
+  if (lengthSquared <= 1e-12) {
+    const fallbackDeltaX = pointX - fromX;
+    const fallbackDeltaY = pointY - fromY;
+    return fallbackDeltaX * fallbackDeltaX + fallbackDeltaY * fallbackDeltaY;
+  }
+  const projection = clamp$3(
+    ((pointX - fromX) * deltaX + (pointY - fromY) * deltaY) / lengthSquared,
+    0,
+    1
+  );
+  const projectedX = fromX + deltaX * projection;
+  const projectedY = fromY + deltaY * projection;
+  const errorX = pointX - projectedX;
+  const errorY = pointY - projectedY;
+  return errorX * errorX + errorY * errorY;
+}
+function sampleMsegSegmentEditorPolyline(shape, segmentIndex, width, height, editorOptions = {}) {
+  const normalizedShape = normalizeMsegShape(shape);
+  if (!Number.isInteger(segmentIndex) || segmentIndex < 0 || segmentIndex >= normalizedShape.points.length - 1) {
+    return [];
+  }
+  const from = normalizedShape.points[segmentIndex];
+  const to = normalizedShape.points[segmentIndex + 1];
+  const startCoordinates = pointToMsegEditorCoordinates(from, width, height, editorOptions);
+  const endCoordinates = pointToMsegEditorCoordinates(to, width, height, editorOptions);
+  if (almostEqual(from.x, to.x)) {
+    return [startCoordinates, endCoordinates];
+  }
+  const polyline = [startCoordinates];
+  const errorToleranceSquared = MSEG_EDITOR_CURVE_TOLERANCE_PX * MSEG_EDITOR_CURVE_TOLERANCE_PX;
+  const appendAdaptiveSamples = (startT, endT, startPointCoordinates, endPointCoordinates, depth) => {
+    if (depth >= MSEG_EDITOR_MAX_SUBDIVISION_DEPTH) {
+      polyline.push(endPointCoordinates);
+      return;
+    }
+    const midpointT = startT + (endT - startT) * 0.5;
+    const midpoint = evaluateMsegSegmentPoint(from, to, midpointT);
+    const midpointCoordinates = pointToMsegEditorCoordinates(midpoint, width, height, editorOptions);
+    const errorSquared = distanceSquaredToLineSegment(
+      midpointCoordinates.x,
+      midpointCoordinates.y,
+      startPointCoordinates.x,
+      startPointCoordinates.y,
+      endPointCoordinates.x,
+      endPointCoordinates.y
+    );
+    if (errorSquared <= errorToleranceSquared) {
+      polyline.push(endPointCoordinates);
+      return;
+    }
+    appendAdaptiveSamples(startT, midpointT, startPointCoordinates, midpointCoordinates, depth + 1);
+    appendAdaptiveSamples(midpointT, endT, midpointCoordinates, endPointCoordinates, depth + 1);
+  };
+  appendAdaptiveSamples(0, 1, startCoordinates, endCoordinates, 0);
+  return polyline;
+}
+function sampleMsegEditorPolyline(shape, width, height, editorOptions = {}) {
+  const normalizedShape = normalizeMsegShape(shape);
+  const polyline = [];
+  for (let segmentIndex = 0; segmentIndex < normalizedShape.points.length - 1; segmentIndex += 1) {
+    const segmentPolyline = sampleMsegSegmentEditorPolyline(
+      normalizedShape,
+      segmentIndex,
+      width,
+      height,
+      editorOptions
+    );
+    if (segmentPolyline.length === 0) {
+      continue;
+    }
+    if (polyline.length === 0) {
+      polyline.push(...segmentPolyline);
+      continue;
+    }
+    polyline.push(...segmentPolyline.slice(1));
+  }
+  return polyline;
 }
 function evaluateMsegShape(shape, x) {
   const { points } = normalizeMsegShape(shape);
@@ -13240,6 +13334,43 @@ function findMsegPointHitIndex(shape, editorX, editorY, width, height, hitRadius
     }
   });
   return closestPointIndex;
+}
+function findMsegSegmentHitIndex(shape, editorX, editorY, width, height, hitRadius = MSEG_SEGMENT_HIT_RADIUS_PX, editorOptions = {}) {
+  const normalizedShape = normalizeMsegShape(shape);
+  const targetX = Number(editorX);
+  const targetY = Number(editorY);
+  if (!Number.isFinite(targetX) || !Number.isFinite(targetY)) {
+    return -1;
+  }
+  const safeHitRadius = Math.max(0, Number(hitRadius) || 0);
+  let closestSegmentIndex = -1;
+  let closestDistanceSquared = safeHitRadius * safeHitRadius;
+  for (let segmentIndex = 0; segmentIndex < normalizedShape.points.length - 1; segmentIndex += 1) {
+    const polyline = sampleMsegSegmentEditorPolyline(
+      normalizedShape,
+      segmentIndex,
+      width,
+      height,
+      editorOptions
+    );
+    for (let pointIndex = 0; pointIndex < polyline.length - 1; pointIndex += 1) {
+      const from = polyline[pointIndex];
+      const to = polyline[pointIndex + 1];
+      const distanceSquared = distanceSquaredToLineSegment(
+        targetX,
+        targetY,
+        from.x,
+        from.y,
+        to.x,
+        to.y
+      );
+      if (distanceSquared <= closestDistanceSquared) {
+        closestSegmentIndex = segmentIndex;
+        closestDistanceSquared = distanceSquared;
+      }
+    }
+  }
+  return closestSegmentIndex;
 }
 function toMsegPlaybackConfigEvent(playback) {
   const normalizedPlayback = normalizeMsegPlayback(playback);
@@ -13310,6 +13441,21 @@ function deleteMsegPoint(shape, pointIndex) {
     return normalizedShape;
   }
   const points = normalizedShape.points.filter((_, index) => index !== pointIndex);
+  return normalizeMsegShape({
+    ...normalizedShape,
+    points
+  });
+}
+function setMsegSegmentCurvePower(shape, segmentIndex, curvePower) {
+  const normalizedShape = normalizeMsegShape(shape);
+  if (!Number.isInteger(segmentIndex) || segmentIndex < 0 || segmentIndex >= normalizedShape.points.length - 1) {
+    throw new Error("segmentIndex must address a segment inside the shape");
+  }
+  const points = normalizedShape.points.map((point) => ({ ...point }));
+  points[segmentIndex] = {
+    ...points[segmentIndex],
+    curvePower: clampCurvePower(Number(curvePower))
+  };
   return normalizeMsegShape({
     ...normalizedShape,
     points
@@ -14466,7 +14612,6 @@ const VOICE_MODE_OPTIONS = [
   { value: 1, label: "Mono" },
   { value: 2, label: "Legato" }
 ];
-const MSEG_EDITOR_SAMPLES = 128;
 const MSEG_GRID_STEPS = [0.25, 0.5, 0.75];
 const MSEG_PREVIEW_HORIZONTAL_PADDING_PX = 24;
 const MSEG_PREVIEW_VERTICAL_PADDING_PX = 22;
@@ -14509,21 +14654,34 @@ function buildMsegSurfacePaths(points, width, height, options = {}) {
     horizontalPadding: options.horizontalPadding ?? MSEG_EDITOR_HORIZONTAL_PADDING_PX,
     verticalPadding: options.verticalPadding ?? MSEG_EDITOR_VERTICAL_PADDING_PX
   });
-  let path = "";
-  for (let index = 0; index < MSEG_EDITOR_SAMPLES; index += 1) {
-    const x = index / (MSEG_EDITOR_SAMPLES - 1);
-    const y = evaluateMsegShape({ points }, x);
-    const coordinates = pointToMsegEditorCoordinates({ x, y }, width, height, {
+  const curvePath = polylineToSvgPath(sampleMsegEditorPolyline(
+    { points },
+    width,
+    height,
+    {
       orientation: options.orientation,
       pointRadius: options.pointRadius,
       horizontalPadding: options.horizontalPadding,
       verticalPadding: options.verticalPadding
-    });
-    path += `${index === 0 ? "M" : "L"} ${coordinates.x.toFixed(3)} ${coordinates.y.toFixed(3)} `;
-  }
-  const curvePath = path.trim();
+    }
+  ));
   const fillPath = options.orientation === "vertical" ? `${curvePath} L ${metrics.plotLeft.toFixed(3)} ${metrics.plotBottom.toFixed(3)} L ${metrics.plotLeft.toFixed(3)} ${metrics.plotTop.toFixed(3)} Z` : `${curvePath} L ${metrics.plotRight.toFixed(3)} ${metrics.plotBottom.toFixed(3)} L ${metrics.plotLeft.toFixed(3)} ${metrics.plotBottom.toFixed(3)} Z`;
   return { curvePath, fillPath, metrics };
+}
+function polylineToSvgPath(polyline) {
+  if (polyline.length === 0) {
+    return "";
+  }
+  return polyline.map((point, pointIndex) => `${pointIndex === 0 ? "M" : "L"} ${point.x.toFixed(3)} ${point.y.toFixed(3)}`).join(" ");
+}
+function buildMsegSegmentPath(points, segmentIndex, width, height, options = {}) {
+  return polylineToSvgPath(sampleMsegSegmentEditorPolyline(
+    { points },
+    segmentIndex,
+    width,
+    height,
+    options
+  ));
 }
 function SelectChevron({ className }) {
   return /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -14676,19 +14834,29 @@ function EditableMsegSurface({
   surfaceRef,
   points,
   selectedPointIndex,
+  hoveredSegmentIndex = -1,
+  activeSegmentIndex = -1,
   orientation = "horizontal",
   onPointerDown,
   onPointerMove,
+  onPointerLeave,
   onPointerUp,
   className,
   dataRole
 }) {
   const size = useResizeObserver$1(surfaceRef);
-  const { curvePath, fillPath, metrics } = reactExports.useMemo(() => {
-    return buildMsegSurfacePaths(points, size.width, size.height, {
+  const emphasizedSegmentIndex = activeSegmentIndex >= 0 ? activeSegmentIndex : hoveredSegmentIndex;
+  const hasEmphasizedSegment = emphasizedSegmentIndex >= 0;
+  const { curvePath, fillPath, highlightedSegmentPath, metrics } = reactExports.useMemo(() => {
+    const basePaths = buildMsegSurfacePaths(points, size.width, size.height, {
       orientation
     });
-  }, [orientation, points, size.height, size.width]);
+    const nextHighlightedSegmentPath = emphasizedSegmentIndex >= 0 ? buildMsegSegmentPath(points, emphasizedSegmentIndex, size.width, size.height, { orientation }) : "";
+    return {
+      ...basePaths,
+      highlightedSegmentPath: nextHighlightedSegmentPath
+    };
+  }, [emphasizedSegmentIndex, orientation, points, size.height, size.width]);
   return /* @__PURE__ */ jsxRuntimeExports.jsxs(
     "svg",
     {
@@ -14701,6 +14869,7 @@ function EditableMsegSurface({
       viewBox: `0 0 ${size.width} ${size.height}`,
       onPointerDown,
       onPointerMove,
+      onPointerLeave,
       onPointerUp,
       onPointerCancel: onPointerUp,
       children: [
@@ -14728,20 +14897,50 @@ function EditableMsegSurface({
             `editable-v-${step}`
           ))
         ] }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("path", { className: "cosimo-curve-fill", d: fillPath }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("path", { className: "cosimo-curve-line", d: curvePath }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "path",
+          {
+            "data-role": "mseg-base-fill",
+            className: joinClasses("cosimo-curve-fill", hasEmphasizedSegment && "cosimo-curve-fill-muted"),
+            d: fillPath
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "path",
+          {
+            "data-role": "mseg-base-curve",
+            className: joinClasses("cosimo-curve-line", hasEmphasizedSegment && "cosimo-curve-line-muted"),
+            d: curvePath
+          }
+        ),
+        highlightedSegmentPath ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "path",
+          {
+            "data-role": "mseg-highlight-segment",
+            "data-segment-index": String(emphasizedSegmentIndex),
+            className: "cosimo-curve-line cosimo-curve-line-highlight",
+            d: highlightedSegmentPath
+          }
+        ) : null,
         /* @__PURE__ */ jsxRuntimeExports.jsx("g", { children: points.map((point, pointIndex) => {
           const coordinates = pointToMsegEditorCoordinates(point, size.width, size.height, {
             orientation
           });
           const isSelected = pointIndex === selectedPointIndex;
+          const isEmphasizedSegmentEndpoint = hasEmphasizedSegment && (pointIndex === emphasizedSegmentIndex || pointIndex === emphasizedSegmentIndex + 1);
+          const pointState = hasEmphasizedSegment ? isEmphasizedSegmentEndpoint ? "highlighted" : "muted" : isSelected ? "selected" : "default";
+          const radius = pointState === "selected" ? MSEG_SELECTED_POINT_RADIUS_PX : MSEG_POINT_RADIUS_PX;
+          const pointClassName = pointState === "selected" ? "cosimo-mseg-point-selected" : pointState === "highlighted" ? "cosimo-mseg-point-highlight" : pointState === "muted" ? "cosimo-mseg-point-muted" : "cosimo-mseg-point-default";
           return /* @__PURE__ */ jsxRuntimeExports.jsx(
             "circle",
             {
+              "data-role": "mseg-point",
+              "data-point-index": String(pointIndex),
+              "data-point-state": pointState,
               cx: coordinates.x,
               cy: coordinates.y,
-              r: isSelected ? MSEG_SELECTED_POINT_RADIUS_PX : MSEG_POINT_RADIUS_PX,
-              className: isSelected ? "fill-fuchsia-200 stroke-[#050913] stroke-[3px]" : "fill-cyan-200 stroke-[#050913] stroke-[2px]",
+              r: radius,
+              className: pointClassName,
               vectorEffect: "non-scaling-stroke"
             },
             `point-${pointIndex}-${point.x}-${point.y}`
@@ -23499,6 +23698,9 @@ class MsegController {
   deletePoint(pointIndex) {
     this.setShape(deleteMsegPoint(this.shape, pointIndex));
   }
+  setSegmentCurvePower(segmentIndex, curvePower) {
+    this.setShape(setMsegSegmentCurvePower(this.shape, segmentIndex, curvePower));
+  }
   uploadAll() {
     this.uploadBuffer();
     this.uploadPlayback();
@@ -23692,6 +23894,7 @@ async function loadFactoryBankFrames(resourceClientInput, {
 const EFFECTIVE_WAVETABLE_POSITION_ENDPOINT_ID = "effectiveWavetablePosition";
 const DISPLAY_SWIPE_THRESHOLD_PX = 2;
 const MSEG_DRAG_THRESHOLD_PX = 8;
+const MSEG_CURVE_DRAG_PIXELS_PER_POWER = 10;
 const WAVETABLE_POSITION_ENDPOINT_ID = "wavetablePosition";
 const WAVETABLE_SELECT_ENDPOINT_ID = "wavetableSelect";
 const PLAY_MODE_ENDPOINT_ID = "playMode";
@@ -23870,9 +24073,13 @@ function useMsegEditorInteractions({
 }) {
   const [isOpen, setIsOpen] = reactExports.useState(false);
   const [selectedPointIndex, setSelectedPointIndex] = reactExports.useState(0);
+  const [hoveredSegmentIndex, setHoveredSegmentIndex] = reactExports.useState(-1);
+  const [activeSegmentIndex, setActiveSegmentIndex] = reactExports.useState(-1);
   const activePointerRef = reactExports.useRef(null);
   reactExports.useEffect(() => {
     if (!msegState) {
+      setHoveredSegmentIndex(-1);
+      setActiveSegmentIndex(-1);
       return;
     }
     setSelectedPointIndex((previousIndex) => clamp(
@@ -23880,10 +24087,14 @@ function useMsegEditorInteractions({
       0,
       Math.max(0, msegState.shape.points.length - 1)
     ));
+    setHoveredSegmentIndex((previousIndex) => previousIndex >= 0 ? clamp(previousIndex, -1, Math.max(-1, msegState.shape.points.length - 2)) : -1);
+    setActiveSegmentIndex((previousIndex) => previousIndex >= 0 ? clamp(previousIndex, -1, Math.max(-1, msegState.shape.points.length - 2)) : -1);
   }, [msegState]);
   reactExports.useEffect(() => {
     if (!isOpen) {
       activePointerRef.current = null;
+      setHoveredSegmentIndex(-1);
+      setActiveSegmentIndex(-1);
       return;
     }
     const handleEscapeKey = (event) => {
@@ -23901,41 +24112,95 @@ function useMsegEditorInteractions({
   }, []);
   const closeEditor = reactExports.useCallback(() => {
     setIsOpen(false);
+    setHoveredSegmentIndex(-1);
+    setActiveSegmentIndex(-1);
     activePointerRef.current = null;
   }, []);
-  const handlePointerDown = reactExports.useCallback((event) => {
-    if (event.button !== 0 || !msegState || !surfaceRef.current) {
-      return;
+  const resolvePointerLocation = reactExports.useCallback((clientX, clientY) => {
+    if (!msegState || !surfaceRef.current) {
+      return null;
     }
     const bounds = surfaceRef.current.getBoundingClientRect();
-    const targetPointIndex = findMsegPointHitIndex(
+    const localX = clientX - bounds.left;
+    const localY = clientY - bounds.top;
+    const pointIndex = findMsegPointHitIndex(
       msegState.shape,
-      event.clientX - bounds.left,
-      event.clientY - bounds.top,
+      localX,
+      localY,
       bounds.width,
       bounds.height,
       void 0,
       { orientation }
     );
-    if (targetPointIndex >= 0) {
-      setSelectedPointIndex(targetPointIndex);
+    const segmentIndex = pointIndex >= 0 ? -1 : findMsegSegmentHitIndex(
+      msegState.shape,
+      localX,
+      localY,
+      bounds.width,
+      bounds.height,
+      void 0,
+      { orientation }
+    );
+    return {
+      bounds,
+      localX,
+      localY,
+      pointIndex,
+      segmentIndex
+    };
+  }, [msegState, orientation, surfaceRef]);
+  const updateHoveredSegmentIndex = reactExports.useCallback((clientX, clientY) => {
+    const pointerLocation = resolvePointerLocation(clientX, clientY);
+    setHoveredSegmentIndex(pointerLocation?.segmentIndex ?? -1);
+    return pointerLocation;
+  }, [resolvePointerLocation]);
+  const handlePointerDown = reactExports.useCallback((event) => {
+    if (event.button !== 0 || !msegState || !surfaceRef.current) {
+      return;
+    }
+    const pointerLocation = updateHoveredSegmentIndex(event.clientX, event.clientY);
+    if (!pointerLocation) {
+      return;
+    }
+    if (pointerLocation.pointIndex >= 0) {
+      setSelectedPointIndex(pointerLocation.pointIndex);
+      setActiveSegmentIndex(-1);
       activePointerRef.current = {
+        kind: "point",
         pointerId: event.pointerId,
-        pointIndex: targetPointIndex,
+        pointIndex: pointerLocation.pointIndex,
         startClientX: event.clientX,
         startClientY: event.clientY,
         moved: false,
-        deleteOnRelease: targetPointIndex > 0 && targetPointIndex < msegState.shape.points.length - 1
+        deleteOnRelease: pointerLocation.pointIndex > 0 && pointerLocation.pointIndex < msegState.shape.points.length - 1
       };
       event.currentTarget.setPointerCapture(event.pointerId);
       event.preventDefault();
       return;
     }
+    if (pointerLocation.segmentIndex >= 0) {
+      const segmentFrom = msegState.shape.points[pointerLocation.segmentIndex];
+      const segmentTo = msegState.shape.points[pointerLocation.segmentIndex + 1];
+      const dragDirection = Math.sign((segmentTo?.y ?? 0) - (segmentFrom?.y ?? 0)) || 1;
+      activePointerRef.current = {
+        kind: "segment",
+        pointerId: event.pointerId,
+        segmentIndex: pointerLocation.segmentIndex,
+        startClientY: event.clientY,
+        startCurvePower: msegState.shape.points[pointerLocation.segmentIndex]?.curvePower ?? 0,
+        dragDirection
+      };
+      setActiveSegmentIndex(pointerLocation.segmentIndex);
+      setHoveredSegmentIndex(pointerLocation.segmentIndex);
+      event.currentTarget.setPointerCapture(event.pointerId);
+      event.preventDefault();
+      return;
+    }
     const point = msegEditorCoordinatesToPoint(
-      event.clientX - bounds.left,
-      event.clientY - bounds.top,
-      bounds.width,
-      bounds.height,
+      pointerLocation.localX,
+      pointerLocation.localY,
+      pointerLocation.bounds.width,
+      pointerLocation.bounds.height,
       { orientation }
     );
     msegController.current?.addPoint(point.x, point.y);
@@ -23947,10 +24212,22 @@ function useMsegEditorInteractions({
       setSelectedPointIndex(nextPointIndex);
     }
     event.preventDefault();
-  }, [msegController, msegState, orientation, surfaceRef]);
+  }, [msegController, msegState, orientation, surfaceRef, updateHoveredSegmentIndex]);
   const handlePointerMove = reactExports.useCallback((event) => {
     const activePointer = activePointerRef.current;
     if (!activePointer || activePointer.pointerId !== event.pointerId || !surfaceRef.current) {
+      updateHoveredSegmentIndex(event.clientX, event.clientY);
+      return;
+    }
+    if (activePointer.kind === "segment") {
+      const deltaCurvePower = (event.clientY - activePointer.startClientY) / MSEG_CURVE_DRAG_PIXELS_PER_POWER * activePointer.dragDirection;
+      msegController.current?.setSegmentCurvePower(
+        activePointer.segmentIndex,
+        activePointer.startCurvePower + deltaCurvePower
+      );
+      setActiveSegmentIndex(activePointer.segmentIndex);
+      setHoveredSegmentIndex(activePointer.segmentIndex);
+      event.preventDefault();
       return;
     }
     const movementDistance = Math.hypot(
@@ -23976,8 +24253,16 @@ function useMsegEditorInteractions({
     }
     msegController.current?.movePoint(activePointer.pointIndex, point.x, point.y);
     setSelectedPointIndex(activePointer.pointIndex);
+    setHoveredSegmentIndex(-1);
+    setActiveSegmentIndex(-1);
     event.preventDefault();
-  }, [msegController, orientation, surfaceRef]);
+  }, [msegController, orientation, surfaceRef, updateHoveredSegmentIndex]);
+  const handlePointerLeave = reactExports.useCallback((event) => {
+    if (activePointerRef.current?.pointerId === event.pointerId) {
+      return;
+    }
+    setHoveredSegmentIndex(-1);
+  }, []);
   const handlePointerUp = reactExports.useCallback((event) => {
     const activePointer = activePointerRef.current;
     if (!activePointer || activePointer.pointerId !== event.pointerId) {
@@ -23986,20 +24271,25 @@ function useMsegEditorInteractions({
     event.currentTarget.releasePointerCapture?.(event.pointerId);
     const pointerState = activePointer;
     activePointerRef.current = null;
-    if (!pointerState.moved && pointerState.deleteOnRelease && msegController.current) {
+    setActiveSegmentIndex(-1);
+    if (pointerState.kind === "point" && !pointerState.moved && pointerState.deleteOnRelease && msegController.current) {
       msegController.current.deletePoint(pointerState.pointIndex);
       const pointCount = msegController.current.getState().shape.points.length;
       setSelectedPointIndex(clamp(pointerState.pointIndex - 1, 0, Math.max(0, pointCount - 1)));
     }
+    setHoveredSegmentIndex(resolvePointerLocation(event.clientX, event.clientY)?.segmentIndex ?? -1);
     event.preventDefault();
-  }, [msegController]);
+  }, [msegController, resolvePointerLocation]);
   return {
     isOpen,
     selectedPointIndex,
+    hoveredSegmentIndex,
+    activeSegmentIndex,
     openEditor,
     closeEditor,
     handlePointerDown,
     handlePointerMove,
+    handlePointerLeave,
     handlePointerUp
   };
 }
@@ -24414,11 +24704,14 @@ function MsegEditorModal({
   msegState,
   surfaceRef,
   selectedPointIndex,
+  hoveredSegmentIndex,
+  activeSegmentIndex,
   onClose,
   onRateChange,
   onToggleLoop,
   onPointerDown,
   onPointerMove,
+  onPointerLeave,
   onPointerUp,
   rateFocusBindings
 }) {
@@ -24430,7 +24723,7 @@ function MsegEditorModal({
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-[11px] uppercase tracking-[0.22em] text-blue-300/70", children: "MSEG 1" }),
         /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "mt-2 text-2xl font-semibold tracking-[-0.04em] text-amber-100", children: "Fixed Wavetable Route" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "mt-2 text-sm text-slate-300/70", children: "Drag a point to move it. Click an empty spot to add a point. Click an interior point without dragging to delete it." })
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "mt-2 text-sm text-slate-300/70", children: "Drag a point to move it. Click and drag a segment up or down to bend it. Click an empty spot to add a point. Click an interior point without dragging to delete it." })
       ] }),
       /* @__PURE__ */ jsxRuntimeExports.jsx(
         "button",
@@ -24448,8 +24741,11 @@ function MsegEditorModal({
         surfaceRef,
         points: msegState.shape.points,
         selectedPointIndex,
+        hoveredSegmentIndex,
+        activeSegmentIndex,
         onPointerDown,
         onPointerMove,
+        onPointerLeave,
         onPointerUp,
         className: "h-[320px]"
       }
@@ -24571,11 +24867,14 @@ function DesktopPatchViewBody() {
         msegState: synthView.msegState,
         surfaceRef: msegEditorSurfaceRef,
         selectedPointIndex: synthView.msegEditor.selectedPointIndex,
+        hoveredSegmentIndex: synthView.msegEditor.hoveredSegmentIndex,
+        activeSegmentIndex: synthView.msegEditor.activeSegmentIndex,
         onClose: synthView.msegEditor.closeEditor,
         onRateChange: synthView.handleMsegRateChange,
         onToggleLoop: synthView.handleToggleMsegLoop,
         onPointerDown: synthView.msegEditor.handlePointerDown,
         onPointerMove: synthView.msegEditor.handlePointerMove,
+        onPointerLeave: synthView.msegEditor.handlePointerLeave,
         onPointerUp: synthView.msegEditor.handlePointerUp,
         rateFocusBindings: synthView.keyboardRouting.msegRateFocusBindings
       }

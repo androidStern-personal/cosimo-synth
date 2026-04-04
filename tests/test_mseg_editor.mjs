@@ -7,7 +7,7 @@ import {
     createDefaultMsegShape,
     renderMsegShape,
     serializeMsegShape,
-} from "../patch_gui/mseg.mjs";
+} from "../patch_gui/mseg.js";
 import {
     MSEG_BUFFER_ENDPOINT_ID,
     MSEG_DEPTH_ENDPOINT_ID,
@@ -16,7 +16,7 @@ import {
     MSEG_PLAYBACK_STATE_KEY,
     MSEG_SHAPE_STATE_KEY,
     MsegController,
-} from "../patch_gui/mseg-controller.mjs";
+} from "../patch_gui/mseg-controller.js";
 
 class FakePatchConnection {
     constructor(storedState = {}) {
@@ -206,6 +206,30 @@ test("delete_non_endpoint_point_updates_shape_and_reuploads_buffer", () => {
     controller.deletePoint(1);
 
     assert.equal(controller.getState().shape.points.length, 3);
+    assert.deepEqual(
+        lastEvent(patchConnection, MSEG_BUFFER_ENDPOINT_ID).value,
+        Array.from(renderMsegShape(controller.getState().shape))
+    );
+});
+
+test("segment_curve_change_updates_stored_shape_and_reuploads_buffer", () => {
+    const patchConnection = new FakePatchConnection();
+    const controller = new MsegController(patchConnection);
+
+    controller.attach();
+    controller.requestBootState();
+    controller.addPoint(0.5, 0.4);
+    patchConnection.events = [];
+    patchConnection.storedWrites = [];
+
+    controller.setSegmentCurvePower(1, -3.25);
+
+    assert.equal(controller.getState().shape.points[1].curvePower, -3.25);
+    assert.equal(patchConnection.storedWrites[0].key, MSEG_SHAPE_STATE_KEY);
+    assert.equal(
+        patchConnection.storedWrites[0].value,
+        serializeMsegShape(controller.getState().shape)
+    );
     assert.deepEqual(
         lastEvent(patchConnection, MSEG_BUFFER_ENDPOINT_ID).value,
         Array.from(renderMsegShape(controller.getState().shape))

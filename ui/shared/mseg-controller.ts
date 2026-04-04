@@ -15,6 +15,7 @@ import {
     normalizeMsegPlayback,
     normalizeMsegShape,
     renderMsegShape,
+    setMsegSegmentCurvePower,
     serializeMsegPlayback,
     serializeMsegShape,
     toMsegPlaybackConfigEvent,
@@ -213,6 +214,10 @@ export class MsegController {
 
     deletePoint(pointIndex: number) {
         this.setShape(deleteMsegPoint(this.shape, pointIndex));
+    }
+
+    setSegmentCurvePower(segmentIndex: number, curvePower: number) {
+        this.setShape(setMsegSegmentCurvePower(this.shape, segmentIndex, curvePower));
     }
 
     private uploadAll() {

@@ -2,7 +2,7 @@ import test, { after, before } from "node:test";
 import assert from "node:assert/strict";
 
 import { chromium } from "playwright";
-import { deserializeMsegShape, renderMsegShape } from "../patch_gui/mseg.mjs";
+import { deserializeMsegShape, pointToMsegEditorCoordinates, renderMsegShape } from "../patch_gui/mseg.js";
 
 import {
     clearHarnessDebugLog,
@@ -1246,11 +1246,12 @@ test("MSEG editor wiring can open, add a point, move it, and close with Escape",
         const box = await surface.boundingBox();
         assert.ok(box);
 
-        const centerX = box.x + (box.width * 0.5);
-        const centerY = box.y + (box.height * 0.5);
+        const addCoordinates = pointToMsegEditorCoordinates({ x: 0.5, y: 0.2 }, box.width, box.height);
+        const addPointX = box.x + addCoordinates.x;
+        const addPointY = box.y + addCoordinates.y;
 
         await clearHarnessDebugLog(page);
-        await page.mouse.click(centerX, centerY);
+        await page.mouse.click(addPointX, addPointY);
 
         await page.waitForFunction(() => {
             const snapshot = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot();
@@ -1270,10 +1271,16 @@ test("MSEG editor wiring can open, add a point, move it, and close with Escape",
         const addedPoint = { ...points[1] };
         assertLatestMsegBufferMatchesStoredShape(snapshot);
 
+        const addedPointCircle = surface.locator('[data-role="mseg-point"][data-point-index="1"]');
+        const addedPointBox = await addedPointCircle.boundingBox();
+        assert.ok(addedPointBox);
+        const addedPointX = addedPointBox.x + (addedPointBox.width * 0.5);
+        const addedPointY = addedPointBox.y + (addedPointBox.height * 0.5);
+
         await clearHarnessDebugLog(page);
-        await page.mouse.move(centerX, centerY);
+        await page.mouse.move(addedPointX, addedPointY);
         await page.mouse.down();
-        await page.mouse.move(centerX + 40, centerY - 48, { steps: 6 });
+        await page.mouse.move(addedPointX + 40, addedPointY - 48, { steps: 6 });
         await page.mouse.up();
 
         await page.waitForFunction(() => {
@@ -1301,7 +1308,7 @@ test("MSEG editor wiring can open, add a point, move it, and close with Escape",
         assertLatestMsegBufferMatchesStoredShape(snapshot);
 
         await clearHarnessDebugLog(page);
-        await surface.locator("circle").nth(1).click();
+        await surface.locator('[data-role="mseg-point"][data-point-index="1"]').click();
         await page.waitForFunction(() => {
             const snapshot = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot();
             const shape = snapshot.storedState["mseg1.shape"];
@@ -1320,7 +1327,7 @@ test("MSEG editor wiring can open, add a point, move it, and close with Escape",
         assertLatestMsegBufferMatchesStoredShape(snapshot);
 
         await clearHarnessDebugLog(page);
-        await surface.locator("circle").nth(0).click();
+        await surface.locator('[data-role="mseg-point"][data-point-index="0"]').click();
         await page.evaluate(() => new Promise((resolve) => {
             requestAnimationFrame(() => {
                 requestAnimationFrame(resolve);

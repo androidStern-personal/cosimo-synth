@@ -72,11 +72,14 @@ type MsegEditorModalProps = {
     msegState: MsegState | null;
     surfaceRef: RefObject<SVGSVGElement | null>;
     selectedPointIndex: number;
+    hoveredSegmentIndex: number;
+    activeSegmentIndex: number;
     onClose: () => void;
     onRateChange: (nextValue: number) => void;
     onToggleLoop: () => void;
     onPointerDown: (event: ReactPointerEvent<SVGSVGElement>) => void;
     onPointerMove: (event: ReactPointerEvent<SVGSVGElement>) => void;
+    onPointerLeave: (event: ReactPointerEvent<SVGSVGElement>) => void;
     onPointerUp: (event: ReactPointerEvent<SVGSVGElement>) => void;
     rateFocusBindings: SynthFocusBindings;
 };
@@ -284,11 +287,14 @@ function MsegEditorModal({
     msegState,
     surfaceRef,
     selectedPointIndex,
+    hoveredSegmentIndex,
+    activeSegmentIndex,
     onClose,
     onRateChange,
     onToggleLoop,
     onPointerDown,
     onPointerMove,
+    onPointerLeave,
     onPointerUp,
     rateFocusBindings,
 }: MsegEditorModalProps) {
@@ -303,7 +309,7 @@ function MsegEditorModal({
                     <div>
                         <div className="text-[11px] uppercase tracking-[0.22em] text-blue-300/70">MSEG 1</div>
                         <div className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-amber-100">Fixed Wavetable Route</div>
-                        <div className="mt-2 text-sm text-slate-300/70">Drag a point to move it. Click an empty spot to add a point. Click an interior point without dragging to delete it.</div>
+                        <div className="mt-2 text-sm text-slate-300/70">Drag a point to move it. Click and drag a segment up or down to bend it. Click an empty spot to add a point. Click an interior point without dragging to delete it.</div>
                     </div>
                     <button
                         type="button"
@@ -318,8 +324,11 @@ function MsegEditorModal({
                     surfaceRef={surfaceRef}
                     points={msegState.shape.points}
                     selectedPointIndex={selectedPointIndex}
+                    hoveredSegmentIndex={hoveredSegmentIndex}
+                    activeSegmentIndex={activeSegmentIndex}
                     onPointerDown={onPointerDown}
                     onPointerMove={onPointerMove}
+                    onPointerLeave={onPointerLeave}
                     onPointerUp={onPointerUp}
                     className="h-[320px]"
                 />
@@ -442,11 +451,14 @@ function DesktopPatchViewBody() {
                 msegState={synthView.msegState}
                 surfaceRef={msegEditorSurfaceRef}
                 selectedPointIndex={synthView.msegEditor.selectedPointIndex}
+                hoveredSegmentIndex={synthView.msegEditor.hoveredSegmentIndex}
+                activeSegmentIndex={synthView.msegEditor.activeSegmentIndex}
                 onClose={synthView.msegEditor.closeEditor}
                 onRateChange={synthView.handleMsegRateChange}
                 onToggleLoop={synthView.handleToggleMsegLoop}
                 onPointerDown={synthView.msegEditor.handlePointerDown}
                 onPointerMove={synthView.msegEditor.handlePointerMove}
+                onPointerLeave={synthView.msegEditor.handlePointerLeave}
                 onPointerUp={synthView.msegEditor.handlePointerUp}
                 rateFocusBindings={synthView.keyboardRouting.msegRateFocusBindings}
             />

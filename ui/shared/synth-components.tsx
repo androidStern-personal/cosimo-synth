@@ -19,8 +19,9 @@ import {
     MSEG_SELECTED_POINT_RADIUS_PX,
     clampMsegRateSeconds,
     createMsegEditorMetrics,
-    evaluateMsegShape,
     pointToMsegEditorCoordinates,
+    sampleMsegEditorPolyline,
+    sampleMsegSegmentEditorPolyline,
     type MsegSurfaceOrientation,
     type MsegState,
 } from "./mseg";
@@ -37,7 +38,6 @@ export const VOICE_MODE_OPTIONS: VoiceModeOption[] = [
     { value: 1, label: "Mono" },
     { value: 2, label: "Legato" },
 ];
-const MSEG_EDITOR_SAMPLES = 128;
 const MSEG_GRID_STEPS = [0.25, 0.5, 0.75] as const;
 const MSEG_PREVIEW_HORIZONTAL_PADDING_PX = 24;
 const MSEG_PREVIEW_VERTICAL_PADDING_PX = 22;
@@ -175,21 +175,17 @@ function buildMsegSurfacePaths(
         horizontalPadding: options.horizontalPadding ?? MSEG_EDITOR_HORIZONTAL_PADDING_PX,
         verticalPadding: options.verticalPadding ?? MSEG_EDITOR_VERTICAL_PADDING_PX,
     });
-    let path = "";
-
-    for (let index = 0; index < MSEG_EDITOR_SAMPLES; index += 1) {
-        const x = index / (MSEG_EDITOR_SAMPLES - 1);
-        const y = evaluateMsegShape({ points }, x);
-        const coordinates = pointToMsegEditorCoordinates({ x, y }, width, height, {
+    const curvePath = polylineToSvgPath(sampleMsegEditorPolyline(
+        { points },
+        width,
+        height,
+        {
             orientation: options.orientation,
             pointRadius: options.pointRadius,
             horizontalPadding: options.horizontalPadding,
             verticalPadding: options.verticalPadding,
-        });
-        path += `${index === 0 ? "M" : "L"} ${coordinates.x.toFixed(3)} ${coordinates.y.toFixed(3)} `;
-    }
-
-    const curvePath = path.trim();
+        },
+    ));
     const fillPath = options.orientation === "vertical"
         ? `${curvePath} L ${metrics.plotLeft.toFixed(3)} ${metrics.plotBottom.toFixed(3)} ` +
             `L ${metrics.plotLeft.toFixed(3)} ${metrics.plotTop.toFixed(3)} Z`
@@ -197,6 +193,37 @@ function buildMsegSurfacePaths(
             `L ${metrics.plotLeft.toFixed(3)} ${metrics.plotBottom.toFixed(3)} Z`;
 
     return { curvePath, fillPath, metrics };
+}
+
+function polylineToSvgPath(polyline: Array<{ x: number; y: number }>) {
+    if (polyline.length === 0) {
+        return "";
+    }
+
+    return polyline.map((point, pointIndex) => (
+        `${pointIndex === 0 ? "M" : "L"} ${point.x.toFixed(3)} ${point.y.toFixed(3)}`
+    )).join(" ");
+}
+
+function buildMsegSegmentPath(
+    points: Array<{ x: number; y: number; curvePower: number }>,
+    segmentIndex: number,
+    width: number,
+    height: number,
+    options: {
+        orientation?: MsegSurfaceOrientation;
+        pointRadius?: number;
+        horizontalPadding?: number;
+        verticalPadding?: number;
+    } = {},
+) {
+    return polylineToSvgPath(sampleMsegSegmentEditorPolyline(
+        { points },
+        segmentIndex,
+        width,
+        height,
+        options,
+    ));
 }
 
 function SelectChevron({ className }: { className?: string }) {
@@ -388,9 +415,12 @@ export function EditableMsegSurface({
     surfaceRef,
     points,
     selectedPointIndex,
+    hoveredSegmentIndex = -1,
+    activeSegmentIndex = -1,
     orientation = "horizontal",
     onPointerDown,
     onPointerMove,
+    onPointerLeave,
     onPointerUp,
     className,
     dataRole,
@@ -398,20 +428,33 @@ export function EditableMsegSurface({
     surfaceRef: RefObject<SVGSVGElement | null>;
     points: Array<{ x: number; y: number; curvePower: number }>;
     selectedPointIndex: number;
+    hoveredSegmentIndex?: number;
+    activeSegmentIndex?: number;
     orientation?: MsegSurfaceOrientation;
     onPointerDown: (event: ReactPointerEvent<SVGSVGElement>) => void;
     onPointerMove: (event: ReactPointerEvent<SVGSVGElement>) => void;
+    onPointerLeave?: (event: ReactPointerEvent<SVGSVGElement>) => void;
     onPointerUp: (event: ReactPointerEvent<SVGSVGElement>) => void;
     className?: string;
     dataRole?: string;
 }) {
     const size = useResizeObserver(surfaceRef);
+    const emphasizedSegmentIndex = activeSegmentIndex >= 0 ? activeSegmentIndex : hoveredSegmentIndex;
+    const hasEmphasizedSegment = emphasizedSegmentIndex >= 0;
 
-    const { curvePath, fillPath, metrics } = useMemo(() => {
-        return buildMsegSurfacePaths(points, size.width, size.height, {
+    const { curvePath, fillPath, highlightedSegmentPath, metrics } = useMemo(() => {
+        const basePaths = buildMsegSurfacePaths(points, size.width, size.height, {
             orientation,
         });
-    }, [orientation, points, size.height, size.width]);
+        const nextHighlightedSegmentPath = emphasizedSegmentIndex >= 0
+            ? buildMsegSegmentPath(points, emphasizedSegmentIndex, size.width, size.height, { orientation })
+            : "";
+
+        return {
+            ...basePaths,
+            highlightedSegmentPath: nextHighlightedSegmentPath,
+        };
+    }, [emphasizedSegmentIndex, orientation, points, size.height, size.width]);
 
     return (
         <svg
@@ -424,6 +467,7 @@ export function EditableMsegSurface({
             viewBox={`0 0 ${size.width} ${size.height}`}
             onPointerDown={onPointerDown}
             onPointerMove={onPointerMove}
+            onPointerLeave={onPointerLeave}
             onPointerUp={onPointerUp}
             onPointerCancel={onPointerUp}
         >
@@ -449,22 +493,61 @@ export function EditableMsegSurface({
                     />
                 ))}
             </g>
-            <path className="cosimo-curve-fill" d={fillPath} />
-            <path className="cosimo-curve-line" d={curvePath} />
+            <path
+                data-role="mseg-base-fill"
+                className={joinClasses("cosimo-curve-fill", hasEmphasizedSegment && "cosimo-curve-fill-muted")}
+                d={fillPath}
+            />
+            <path
+                data-role="mseg-base-curve"
+                className={joinClasses("cosimo-curve-line", hasEmphasizedSegment && "cosimo-curve-line-muted")}
+                d={curvePath}
+            />
+            {highlightedSegmentPath ? (
+                <path
+                    data-role="mseg-highlight-segment"
+                    data-segment-index={String(emphasizedSegmentIndex)}
+                    className="cosimo-curve-line cosimo-curve-line-highlight"
+                    d={highlightedSegmentPath}
+                />
+            ) : null}
             <g>
                 {points.map((point, pointIndex) => {
                     const coordinates = pointToMsegEditorCoordinates(point, size.width, size.height, {
                         orientation,
                     });
                     const isSelected = pointIndex === selectedPointIndex;
+                    const isEmphasizedSegmentEndpoint =
+                        hasEmphasizedSegment &&
+                        (pointIndex === emphasizedSegmentIndex || pointIndex === emphasizedSegmentIndex + 1);
+                    const pointState = hasEmphasizedSegment
+                        ? isEmphasizedSegmentEndpoint
+                            ? "highlighted"
+                            : "muted"
+                        : isSelected
+                            ? "selected"
+                            : "default";
+                    const radius = pointState === "selected"
+                        ? MSEG_SELECTED_POINT_RADIUS_PX
+                        : MSEG_POINT_RADIUS_PX;
+                    const pointClassName = pointState === "selected"
+                        ? "cosimo-mseg-point-selected"
+                        : pointState === "highlighted"
+                            ? "cosimo-mseg-point-highlight"
+                            : pointState === "muted"
+                                ? "cosimo-mseg-point-muted"
+                                : "cosimo-mseg-point-default";
 
                     return (
                         <circle
                             key={`point-${pointIndex}-${point.x}-${point.y}`}
+                            data-role="mseg-point"
+                            data-point-index={String(pointIndex)}
+                            data-point-state={pointState}
                             cx={coordinates.x}
                             cy={coordinates.y}
-                            r={isSelected ? MSEG_SELECTED_POINT_RADIUS_PX : MSEG_POINT_RADIUS_PX}
-                            className={isSelected ? "fill-fuchsia-200 stroke-[#050913] stroke-[3px]" : "fill-cyan-200 stroke-[#050913] stroke-[2px]"}
+                            r={radius}
+                            className={pointClassName}
                             vectorEffect="non-scaling-stroke"
                         />
                     );

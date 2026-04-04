@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import {
     MSEG_BODY_SAMPLES,
+    MSEG_EDITOR_CURVE_TOLERANCE_PX,
     MSEG_CURVE_POWER_LIMIT,
     MSEG_POINT_RADIUS_PX,
     MSEG_PADDED_SAMPLES,
@@ -12,14 +13,17 @@ import {
     createDefaultMsegShape,
     evaluateMsegShape,
     findMsegPointHitIndex,
+    findMsegSegmentHitIndex,
     msegEditorCoordinatesToPoint,
     normalizeMsegPlayback,
     normalizeMsegShape,
     pointToMsegEditorCoordinates,
     renderMsegShape,
+    sampleMsegSegmentEditorPolyline,
     sampleRenderedMsegBuffer,
+    setMsegSegmentCurvePower,
     toMsegPlaybackConfigEvent,
-} from "../patch_gui/mseg.mjs";
+} from "../patch_gui/mseg.js";
 
 function expectThrows(message, callback) {
     assert.throws(callback, new RegExp(message));
@@ -31,6 +35,33 @@ function powerScale(value, power) {
     }
 
     return (Math.exp(power * value) - 1.0) / (Math.exp(power) - 1.0);
+}
+
+function clamp(value, min, max) {
+    return Math.min(Math.max(value, min), max);
+}
+
+function distanceToLineSegment(pointX, pointY, fromX, fromY, toX, toY) {
+    const deltaX = toX - fromX;
+    const deltaY = toY - fromY;
+    const lengthSquared = (deltaX * deltaX) + (deltaY * deltaY);
+
+    if (lengthSquared <= 1e-12) {
+        const fallbackDeltaX = pointX - fromX;
+        const fallbackDeltaY = pointY - fromY;
+        return Math.sqrt((fallbackDeltaX * fallbackDeltaX) + (fallbackDeltaY * fallbackDeltaY));
+    }
+
+    const projection = clamp(
+        (((pointX - fromX) * deltaX) + ((pointY - fromY) * deltaY)) / lengthSquared,
+        0.0,
+        1.0,
+    );
+    const projectedX = fromX + (deltaX * projection);
+    const projectedY = fromY + (deltaY * projection);
+    const errorX = pointX - projectedX;
+    const errorY = pointY - projectedY;
+    return Math.sqrt((errorX * errorX) + (errorY * errorY));
 }
 
 test("default_shape_has_two_endpoints_and_default_playback", () => {
@@ -144,7 +175,7 @@ test("vertical editor orientation maps time along the long axis and amplitude ac
         { orientation: "vertical" }
     );
 
-    assert.ok(start.y > end.y);
+    assert.ok(start.y < end.y);
     assert.ok(start.x < end.x);
     assert.deepEqual(
         msegEditorCoordinatesToPoint(start.x, start.y, 180, 600, { orientation: "vertical" }),
@@ -154,6 +185,81 @@ test("vertical editor orientation maps time along the long axis and amplitude ac
         msegEditorCoordinatesToPoint(end.x, end.y, 180, 600, { orientation: "vertical" }),
         { x: 1.0, y: 1.0 }
     );
+});
+
+test("segment_hit_testing_tracks_the_drawn_line_without_using_point_hits", () => {
+    const shape = {
+        ...createDefaultMsegShape(),
+        points: [
+            { x: 0.0, y: 0.0, curvePower: 0.0 },
+            { x: 0.5, y: 0.5, curvePower: 0.0 },
+            { x: 1.0, y: 1.0, curvePower: 0.0 },
+        ],
+    };
+    const middleOfFirstSegment = pointToMsegEditorCoordinates({ x: 0.25, y: 0.25 }, 600, 180);
+
+    assert.equal(
+        findMsegSegmentHitIndex(shape, middleOfFirstSegment.x, middleOfFirstSegment.y, 600, 180),
+        0,
+    );
+    assert.equal(findMsegSegmentHitIndex(shape, 120, 150, 600, 180), -1);
+});
+
+test("adaptive segment sampling keeps a steep short curve smooth into the endpoint", () => {
+    const shape = {
+        ...createDefaultMsegShape(),
+        points: [
+            { x: 0.0, y: 0.0, curvePower: 16.0 },
+            { x: 0.08, y: 1.0, curvePower: 0.0 },
+            { x: 1.0, y: 1.0, curvePower: 0.0 },
+        ],
+    };
+    const polyline = sampleMsegSegmentEditorPolyline(shape, 0, 640, 240);
+
+    assert.ok(polyline.length >= 3, "Expected the sampled segment to contain interior points.");
+
+    const finalChordFrom = polyline.at(-2);
+    const finalChordTo = polyline.at(-1);
+    assert.ok(finalChordFrom);
+    assert.ok(finalChordTo);
+
+    const finalChordStart = msegEditorCoordinatesToPoint(finalChordFrom.x, finalChordFrom.y, 640, 240);
+    const finalChordEnd = msegEditorCoordinatesToPoint(finalChordTo.x, finalChordTo.y, 640, 240);
+    const midpointX = (finalChordStart.x + finalChordEnd.x) * 0.5;
+    const midpointCoordinates = pointToMsegEditorCoordinates(
+        { x: midpointX, y: evaluateMsegShape(shape, midpointX) },
+        640,
+        240,
+    );
+    const midpointErrorPx = distanceToLineSegment(
+        midpointCoordinates.x,
+        midpointCoordinates.y,
+        finalChordFrom.x,
+        finalChordFrom.y,
+        finalChordTo.x,
+        finalChordTo.y,
+    );
+
+    assert.ok(
+        midpointErrorPx <= MSEG_EDITOR_CURVE_TOLERANCE_PX + 0.05,
+        `Expected final chord error <= ${MSEG_EDITOR_CURVE_TOLERANCE_PX + 0.05}px, got ${midpointErrorPx.toFixed(3)}px`,
+    );
+});
+
+test("setting_segment_curve_power_updates_the_outgoing_segment_only", () => {
+    const shape = {
+        ...createDefaultMsegShape(),
+        points: [
+            { x: 0.0, y: 0.0, curvePower: 0.0 },
+            { x: 0.4, y: 0.7, curvePower: 0.0 },
+            { x: 1.0, y: 0.2, curvePower: 0.0 },
+        ],
+    };
+    const curved = setMsegSegmentCurvePower(shape, 1, -4.5);
+
+    assert.equal(curved.points[0].curvePower, 0.0);
+    assert.equal(curved.points[1].curvePower, -4.5);
+    assert.equal(curved.points[2].curvePower, 0.0);
 });
 
 test("shape_validation_rejects_fewer_than_two_points", () => {

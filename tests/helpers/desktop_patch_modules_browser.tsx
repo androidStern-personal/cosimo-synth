@@ -29,6 +29,7 @@ import {
     deleteMsegPoint,
     moveMsegPoint,
     pointToMsegEditorCoordinates,
+    setMsegSegmentCurvePower,
     type MsegState,
 } from "../../ui/shared/mseg";
 
@@ -63,6 +64,18 @@ function waitForMicrotask() {
     return new Promise<void>((resolve) => {
         queueMicrotask(() => resolve());
     });
+}
+
+function readSurfaceBounds(selector: string) {
+    const surface = document.querySelector(selector);
+    if (!(surface instanceof SVGSVGElement)) {
+        throw new Error("MSEG surface is missing.");
+    }
+
+    return {
+        surface,
+        bounds: surface.getBoundingClientRect(),
+    };
 }
 
 function readCurvePointsFromPath(pathElement: SVGPathElement | null, maxPoints = 48) {
@@ -890,7 +903,14 @@ export async function installStagePositionDragHookHarness(target: HTMLElement) {
 }
 
 export async function installMsegEditorInteractionsHookHarness(target: HTMLElement) {
-    const actionLog: Array<{ type: string; pointIndex?: number; x?: number; y?: number }> = [];
+    const actionLog: Array<{
+        type: string;
+        pointIndex?: number;
+        segmentIndex?: number;
+        x?: number;
+        y?: number;
+        curvePower?: number;
+    }> = [];
     let setMsegStateState: ((updater: (previousState: MsegState) => MsegState) => void) | null = null;
     let setOrientationState: ((nextValue: "horizontal" | "vertical") => void) | null = null;
     let currentOrientation: "horizontal" | "vertical" = "horizontal";
@@ -933,6 +953,13 @@ export async function installMsegEditorInteractionsHookHarness(target: HTMLEleme
                         shape: deleteMsegPoint(previousState.shape, pointIndex),
                     }));
                 },
+                setSegmentCurvePower(segmentIndex: number, curvePower: number) {
+                    actionLog.push({ type: "curve", segmentIndex, curvePower });
+                    setMsegState((previousState) => ({
+                        ...previousState,
+                        shape: setMsegSegmentCurvePower(previousState.shape, segmentIndex, curvePower),
+                    }));
+                },
                 getState() {
                     return currentStateRef.current;
                 },
@@ -940,10 +967,13 @@ export async function installMsegEditorInteractionsHookHarness(target: HTMLEleme
             const {
                 isOpen,
                 selectedPointIndex,
+                hoveredSegmentIndex,
+                activeSegmentIndex,
                 openEditor,
                 closeEditor,
                 handlePointerDown,
                 handlePointerMove,
+                handlePointerLeave,
                 handlePointerUp,
             } = useMsegEditorInteractions({
                 msegState,
@@ -965,16 +995,25 @@ export async function installMsegEditorInteractionsHookHarness(target: HTMLEleme
                 <div>
                     <button id="open-editor" type="button" onClick={openEditor}>Open</button>
                     <button id="close-editor" type="button" onClick={closeEditor}>Close</button>
-                    <div id="editor-state" data-open={isOpen ? "true" : "false"} data-selected={selectedPointIndex} />
-                    <svg
-                        id="mseg-surface"
-                        ref={surfaceRef}
-                        width="320"
-                        height="180"
-                        viewBox="0 0 320 180"
+                    <div
+                        id="editor-state"
+                        data-open={isOpen ? "true" : "false"}
+                        data-selected={selectedPointIndex}
+                        data-hovered-segment={hoveredSegmentIndex}
+                        data-active-segment={activeSegmentIndex}
+                    />
+                    <EditableMsegSurface
+                        surfaceRef={surfaceRef}
+                        points={msegState.shape.points}
+                        selectedPointIndex={selectedPointIndex}
+                        hoveredSegmentIndex={hoveredSegmentIndex}
+                        activeSegmentIndex={activeSegmentIndex}
                         onPointerDown={handlePointerDown}
                         onPointerMove={handlePointerMove}
+                        onPointerLeave={handlePointerLeave}
                         onPointerUp={handlePointerUp}
+                        className="h-[180px]"
+                        dataRole="mseg-surface"
                     />
                     <div id="point-count">{msegState.shape.points.length}</div>
                 </div>
@@ -990,10 +1029,7 @@ export async function installMsegEditorInteractionsHookHarness(target: HTMLEleme
             await waitForMicrotask();
         },
         async dispatchPointer(type: string, init: PointerEventInit) {
-            const surface = document.getElementById("mseg-surface");
-            if (!(surface instanceof SVGSVGElement)) {
-                throw new Error("MSEG surface is missing.");
-            }
+            const { surface } = readSurfaceBounds('[data-role="mseg-surface"]');
 
             surface.dispatchEvent(new PointerEvent(type, {
                 bubbles: true,
@@ -1018,38 +1054,46 @@ export async function installMsegEditorInteractionsHookHarness(target: HTMLEleme
         },
         getPointCoordinates(pointIndex: number) {
             const point = currentMsegState.shape.points[pointIndex];
-            const localCoordinates = pointToMsegEditorCoordinates(point, 320, 180, {
+            const { bounds } = readSurfaceBounds('[data-role="mseg-surface"]');
+            const localCoordinates = pointToMsegEditorCoordinates(point, bounds.width, bounds.height, {
                 orientation: currentOrientation,
             });
-            const surface = document.getElementById("mseg-surface");
-            const bounds = surface?.getBoundingClientRect();
 
             return {
-                x: (bounds?.left ?? 0) + localCoordinates.x,
-                y: (bounds?.top ?? 0) + localCoordinates.y,
+                x: bounds.left + localCoordinates.x,
+                y: bounds.top + localCoordinates.y,
             };
         },
         getNormalizedCoordinates(x: number, y: number) {
-            const localCoordinates = pointToMsegEditorCoordinates({ x, y }, 320, 180, {
+            const { bounds } = readSurfaceBounds('[data-role="mseg-surface"]');
+            const localCoordinates = pointToMsegEditorCoordinates({ x, y }, bounds.width, bounds.height, {
                 orientation: currentOrientation,
             });
-            const surface = document.getElementById("mseg-surface");
-            const bounds = surface?.getBoundingClientRect();
 
             return {
-                x: (bounds?.left ?? 0) + localCoordinates.x,
-                y: (bounds?.top ?? 0) + localCoordinates.y,
+                x: bounds.left + localCoordinates.x,
+                y: bounds.top + localCoordinates.y,
             };
         },
         getSnapshot() {
             const editorState = document.getElementById("editor-state");
             const selectedPointIndex = Number(editorState?.getAttribute("data-selected") ?? 0);
+            const hoveredSegmentIndex = Number(editorState?.getAttribute("data-hovered-segment") ?? -1);
+            const activeSegmentIndex = Number(editorState?.getAttribute("data-active-segment") ?? -1);
             const isOpen = editorState?.getAttribute("data-open") === "true";
             const pointCountText = document.getElementById("point-count")?.textContent ?? "0";
+            const highlightedSegment = document.querySelector('[data-role="mseg-highlight-segment"]');
+            const pointStates = Array.from(document.querySelectorAll('[data-role="mseg-point"]')).map((element) =>
+                element.getAttribute("data-point-state")
+            );
 
             return {
                 isOpen,
                 selectedPointIndex,
+                hoveredSegmentIndex,
+                activeSegmentIndex,
+                highlightedSegmentIndex: Number(highlightedSegment?.getAttribute("data-segment-index") ?? -1),
+                pointStates,
                 pointCount: Number(pointCountText) || 0,
                 actionLog: cloneValue(actionLog),
                 points: cloneValue(currentMsegState.shape.points),

@@ -8,7 +8,7 @@ import {
     MSEG_EDITOR_HORIZONTAL_PADDING_PX,
     MSEG_EDITOR_VERTICAL_PADDING_PX,
     MSEG_POINT_RADIUS_PX,
-} from "../patch_gui/mseg.mjs";
+} from "../patch_gui/mseg.js";
 
 import {
     clearIOSHarnessFailingResources,
@@ -351,7 +351,7 @@ function getPointAtFraction(points, fraction) {
 }
 
 function curveMatchesHorizontalFixture(points) {
-    if (points.length < 8) {
+    if (points.length < 4) {
         return false;
     }
 
@@ -368,7 +368,7 @@ function curveMatchesHorizontalFixture(points) {
 }
 
 function curveMatchesVerticalFixture(points) {
-    if (points.length < 8) {
+    if (points.length < 4) {
         return false;
     }
 
@@ -840,7 +840,7 @@ test("mounted iPhone keeps the main-panel MSEG preview horizontal in portrait wh
                 page,
                 `settled MSEG preview at ${viewportSize.width}x${viewportSize.height}`,
                 (nextState) => nextState.previewShellRect?.height > 0
-                    && nextState.previewCurvePoints.length >= 8,
+                    && nextState.previewCurvePoints.length >= 4,
                 (nextState) => ({
                     previewCurvePoints: nextState.previewCurvePoints,
                     previewShellRect: nextState.previewShellRect,
@@ -870,7 +870,7 @@ test("mounted iPhone keeps the main-panel MSEG preview horizontal in portrait wh
                 `settled MSEG modal at ${viewportSize.width}x${viewportSize.height}`,
                 (nextState) => nextState.modalOpen === "true"
                     && nextState.modalPointCenters.length >= 4
-                    && nextState.modalCurvePoints.length >= 8,
+                    && nextState.modalCurvePoints.length >= 4,
                 (nextState) => ({
                     modalCurvePoints: nextState.modalCurvePoints,
                     modalPointCenters: nextState.modalPointCenters,

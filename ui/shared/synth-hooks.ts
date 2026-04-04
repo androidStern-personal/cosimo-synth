@@ -21,6 +21,7 @@ import {
 import {
     clampMsegRateSeconds,
     findMsegPointHitIndex,
+    findMsegSegmentHitIndex,
     msegEditorCoordinatesToPoint,
     type MsegSurfaceOrientation,
     type MsegState,
@@ -50,6 +51,7 @@ import {
 export const EFFECTIVE_WAVETABLE_POSITION_ENDPOINT_ID = "effectiveWavetablePosition";
 export const DISPLAY_SWIPE_THRESHOLD_PX = 2;
 export const MSEG_DRAG_THRESHOLD_PX = 8;
+export const MSEG_CURVE_DRAG_PIXELS_PER_POWER = 10;
 const WAVETABLE_POSITION_ENDPOINT_ID = "wavetablePosition";
 const WAVETABLE_SELECT_ENDPOINT_ID = "wavetableSelect";
 const PLAY_MODE_ENDPOINT_ID = "playMode";
@@ -64,13 +66,31 @@ const GLIDE_TIME_MIN_SECONDS = 0;
 const GLIDE_TIME_MAX_SECONDS = 2;
 const GLIDE_TIME_STEP_SECONDS = 0.001;
 
-type ActiveMsegPointerState = {
-    pointerId: number;
-    pointIndex: number;
-    startClientX: number;
-    startClientY: number;
-    moved: boolean;
-    deleteOnRelease: boolean;
+type ActiveMsegPointerState =
+    | {
+        kind: "point";
+        pointerId: number;
+        pointIndex: number;
+        startClientX: number;
+        startClientY: number;
+        moved: boolean;
+        deleteOnRelease: boolean;
+    }
+    | {
+        kind: "segment";
+        pointerId: number;
+        segmentIndex: number;
+        startClientY: number;
+        startCurvePower: number;
+        dragDirection: number;
+    };
+
+type MsegEditorControllerLike = {
+    addPoint: (x: number, y: number) => void;
+    movePoint: (pointIndex: number, x: number, y: number) => void;
+    deletePoint: (pointIndex: number) => void;
+    setSegmentCurvePower: (segmentIndex: number, curvePower: number) => void;
+    getState: () => MsegState;
 };
 
 export type CatalogLoadState = {
@@ -341,16 +361,20 @@ export function useMsegEditorInteractions({
     orientation = "horizontal",
 }: {
     msegState: MsegState | null;
-    msegController: RefObject<MsegController | null>;
+    msegController: RefObject<MsegEditorControllerLike | null>;
     surfaceRef: RefObject<SVGSVGElement | null>;
     orientation?: MsegSurfaceOrientation;
 }) {
     const [isOpen, setIsOpen] = useState(false);
     const [selectedPointIndex, setSelectedPointIndex] = useState(0);
+    const [hoveredSegmentIndex, setHoveredSegmentIndex] = useState(-1);
+    const [activeSegmentIndex, setActiveSegmentIndex] = useState(-1);
     const activePointerRef = useRef<ActiveMsegPointerState | null>(null);
 
     useEffect(() => {
         if (!msegState) {
+            setHoveredSegmentIndex(-1);
+            setActiveSegmentIndex(-1);
             return;
         }
 
@@ -359,11 +383,19 @@ export function useMsegEditorInteractions({
             0,
             Math.max(0, msegState.shape.points.length - 1),
         ));
+        setHoveredSegmentIndex((previousIndex) => (
+            previousIndex >= 0 ? clamp(previousIndex, -1, Math.max(-1, msegState.shape.points.length - 2)) : -1
+        ));
+        setActiveSegmentIndex((previousIndex) => (
+            previousIndex >= 0 ? clamp(previousIndex, -1, Math.max(-1, msegState.shape.points.length - 2)) : -1
+        ));
     }, [msegState]);
 
     useEffect(() => {
         if (!isOpen) {
             activePointerRef.current = null;
+            setHoveredSegmentIndex(-1);
+            setActiveSegmentIndex(-1);
             return;
         }
 
@@ -385,45 +417,108 @@ export function useMsegEditorInteractions({
 
     const closeEditor = useCallback(() => {
         setIsOpen(false);
+        setHoveredSegmentIndex(-1);
+        setActiveSegmentIndex(-1);
         activePointerRef.current = null;
     }, []);
+
+    const resolvePointerLocation = useCallback((clientX: number, clientY: number) => {
+        if (!msegState || !surfaceRef.current) {
+            return null;
+        }
+
+        const bounds = surfaceRef.current.getBoundingClientRect();
+        const localX = clientX - bounds.left;
+        const localY = clientY - bounds.top;
+        const pointIndex = findMsegPointHitIndex(
+            msegState.shape,
+            localX,
+            localY,
+            bounds.width,
+            bounds.height,
+            undefined,
+            { orientation },
+        );
+        const segmentIndex = pointIndex >= 0
+            ? -1
+            : findMsegSegmentHitIndex(
+                msegState.shape,
+                localX,
+                localY,
+                bounds.width,
+                bounds.height,
+                undefined,
+                { orientation },
+            );
+
+        return {
+            bounds,
+            localX,
+            localY,
+            pointIndex,
+            segmentIndex,
+        };
+    }, [msegState, orientation, surfaceRef]);
+
+    const updateHoveredSegmentIndex = useCallback((clientX: number, clientY: number) => {
+        const pointerLocation = resolvePointerLocation(clientX, clientY);
+        setHoveredSegmentIndex(pointerLocation?.segmentIndex ?? -1);
+        return pointerLocation;
+    }, [resolvePointerLocation]);
 
     const handlePointerDown = useCallback((event: ReactPointerEvent<SVGSVGElement>) => {
         if (event.button !== 0 || !msegState || !surfaceRef.current) {
             return;
         }
 
-        const bounds = surfaceRef.current.getBoundingClientRect();
-        const targetPointIndex = findMsegPointHitIndex(
-            msegState.shape,
-            event.clientX - bounds.left,
-            event.clientY - bounds.top,
-            bounds.width,
-            bounds.height,
-            undefined,
-            { orientation },
-        );
+        const pointerLocation = updateHoveredSegmentIndex(event.clientX, event.clientY);
+        if (!pointerLocation) {
+            return;
+        }
 
-        if (targetPointIndex >= 0) {
-            setSelectedPointIndex(targetPointIndex);
+        if (pointerLocation.pointIndex >= 0) {
+            setSelectedPointIndex(pointerLocation.pointIndex);
+            setActiveSegmentIndex(-1);
             activePointerRef.current = {
+                kind: "point",
                 pointerId: event.pointerId,
-                pointIndex: targetPointIndex,
+                pointIndex: pointerLocation.pointIndex,
                 startClientX: event.clientX,
                 startClientY: event.clientY,
                 moved: false,
-                deleteOnRelease: targetPointIndex > 0 && targetPointIndex < msegState.shape.points.length - 1,
+                deleteOnRelease:
+                    pointerLocation.pointIndex > 0 &&
+                    pointerLocation.pointIndex < msegState.shape.points.length - 1,
             };
             event.currentTarget.setPointerCapture(event.pointerId);
             event.preventDefault();
             return;
         }
 
+        if (pointerLocation.segmentIndex >= 0) {
+            const segmentFrom = msegState.shape.points[pointerLocation.segmentIndex];
+            const segmentTo = msegState.shape.points[pointerLocation.segmentIndex + 1];
+            const dragDirection = Math.sign((segmentTo?.y ?? 0) - (segmentFrom?.y ?? 0)) || 1;
+            activePointerRef.current = {
+                kind: "segment",
+                pointerId: event.pointerId,
+                segmentIndex: pointerLocation.segmentIndex,
+                startClientY: event.clientY,
+                startCurvePower: msegState.shape.points[pointerLocation.segmentIndex]?.curvePower ?? 0.0,
+                dragDirection,
+            };
+            setActiveSegmentIndex(pointerLocation.segmentIndex);
+            setHoveredSegmentIndex(pointerLocation.segmentIndex);
+            event.currentTarget.setPointerCapture(event.pointerId);
+            event.preventDefault();
+            return;
+        }
+
         const point = msegEditorCoordinatesToPoint(
-            event.clientX - bounds.left,
-            event.clientY - bounds.top,
-            bounds.width,
-            bounds.height,
+            pointerLocation.localX,
+            pointerLocation.localY,
+            pointerLocation.bounds.width,
+            pointerLocation.bounds.height,
             { orientation },
         );
         msegController.current?.addPoint(point.x, point.y);
@@ -439,11 +534,26 @@ export function useMsegEditorInteractions({
         }
 
         event.preventDefault();
-    }, [msegController, msegState, orientation, surfaceRef]);
+    }, [msegController, msegState, orientation, surfaceRef, updateHoveredSegmentIndex]);
 
     const handlePointerMove = useCallback((event: ReactPointerEvent<SVGSVGElement>) => {
         const activePointer = activePointerRef.current;
         if (!activePointer || activePointer.pointerId !== event.pointerId || !surfaceRef.current) {
+            updateHoveredSegmentIndex(event.clientX, event.clientY);
+            return;
+        }
+
+        if (activePointer.kind === "segment") {
+            const deltaCurvePower =
+                ((event.clientY - activePointer.startClientY) / MSEG_CURVE_DRAG_PIXELS_PER_POWER) *
+                activePointer.dragDirection;
+            msegController.current?.setSegmentCurvePower(
+                activePointer.segmentIndex,
+                activePointer.startCurvePower + deltaCurvePower,
+            );
+            setActiveSegmentIndex(activePointer.segmentIndex);
+            setHoveredSegmentIndex(activePointer.segmentIndex);
+            event.preventDefault();
             return;
         }
 
@@ -472,8 +582,18 @@ export function useMsegEditorInteractions({
         }
         msegController.current?.movePoint(activePointer.pointIndex, point.x, point.y);
         setSelectedPointIndex(activePointer.pointIndex);
+        setHoveredSegmentIndex(-1);
+        setActiveSegmentIndex(-1);
         event.preventDefault();
-    }, [msegController, orientation, surfaceRef]);
+    }, [msegController, orientation, surfaceRef, updateHoveredSegmentIndex]);
+
+    const handlePointerLeave = useCallback((event: ReactPointerEvent<SVGSVGElement>) => {
+        if (activePointerRef.current?.pointerId === event.pointerId) {
+            return;
+        }
+
+        setHoveredSegmentIndex(-1);
+    }, []);
 
     const handlePointerUp = useCallback((event: ReactPointerEvent<SVGSVGElement>) => {
         const activePointer = activePointerRef.current;
@@ -484,23 +604,33 @@ export function useMsegEditorInteractions({
         event.currentTarget.releasePointerCapture?.(event.pointerId);
         const pointerState = activePointer;
         activePointerRef.current = null;
+        setActiveSegmentIndex(-1);
 
-        if (!pointerState.moved && pointerState.deleteOnRelease && msegController.current) {
+        if (
+            pointerState.kind === "point" &&
+            !pointerState.moved &&
+            pointerState.deleteOnRelease &&
+            msegController.current
+        ) {
             msegController.current.deletePoint(pointerState.pointIndex);
             const pointCount = msegController.current.getState().shape.points.length;
             setSelectedPointIndex(clamp(pointerState.pointIndex - 1, 0, Math.max(0, pointCount - 1)));
         }
 
+        setHoveredSegmentIndex(resolvePointerLocation(event.clientX, event.clientY)?.segmentIndex ?? -1);
         event.preventDefault();
-    }, [msegController]);
+    }, [msegController, resolvePointerLocation]);
 
     return {
         isOpen,
         selectedPointIndex,
+        hoveredSegmentIndex,
+        activeSegmentIndex,
         openEditor,
         closeEditor,
         handlePointerDown,
         handlePointerMove,
+        handlePointerLeave,
         handlePointerUp,
     };
 }

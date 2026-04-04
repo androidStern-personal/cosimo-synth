@@ -603,6 +603,43 @@ select {
     stroke-linejoin: round;
 }
 
+.cosimo-curve-fill-muted {
+    fill: rgba(225, 231, 240, 0.04);
+}
+
+.cosimo-curve-line-muted {
+    stroke: rgba(225, 231, 240, 0.38);
+}
+
+.cosimo-curve-line-highlight {
+    stroke: #32f0bc;
+}
+
+.cosimo-mseg-point-default {
+    fill: #87d7f5;
+    stroke: #050913;
+    stroke-width: 2px;
+}
+
+.cosimo-mseg-point-selected {
+    fill: #f5d0fe;
+    stroke: #050913;
+    stroke-width: 3px;
+}
+
+.cosimo-mseg-point-highlight {
+    fill: #32f0bc;
+    stroke: #050913;
+    stroke-width: 2px;
+}
+
+.cosimo-mseg-point-muted {
+    fill: rgba(225, 231, 240, 0.78);
+    stroke: #050913;
+    stroke-width: 2px;
+    opacity: 0.62;
+}
+
 @media (max-height: 720px) {
     .ios-content {
         gap: 14px;
