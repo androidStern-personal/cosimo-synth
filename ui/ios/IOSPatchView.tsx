@@ -797,8 +797,8 @@ function IOSPatchViewBody() {
                                 stageRef={stageRef}
                                 frames={synthView.frames}
                                 observedPosition={synthView.observedPosition}
-                                warpMode={synthView.warpMode.value}
-                                warpAmount={synthView.warpAmount.value}
+                                warpMode={synthView.observedWarpState.hasActive ? synthView.observedWarpState.mode : synthView.warpMode.value}
+                                warpAmount={synthView.observedWarpState.hasActive ? synthView.observedWarpState.amount : synthView.warpAmount.value}
                                 displayedFrameCount={synthView.displayedFrameCount}
                                 displayedTableIndex={synthView.displayedTableIndex}
                                 desiredTableIndex={synthView.desiredTableIndex}

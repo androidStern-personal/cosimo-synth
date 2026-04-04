@@ -12926,6 +12926,8 @@ const runtimeFailureReasonTimeout = 2;
 const runtimeFailureScopeService = 1;
 const FILTER_MODE_OFF = 0;
 const FILTER_MODE_PEAK = 5;
+const WARP_MODE_OFF$1 = 0;
+const WARP_MODE_MIRROR$1 = 4;
 const FILTER_CUTOFF_MIN_HZ = 20;
 const FILTER_CUTOFF_MAX_HZ = 2e4;
 const FILTER_Q_MIN = 0.1;
@@ -12941,6 +12943,12 @@ function clampFilterQ(value) {
 }
 function clampFilterMode(value) {
   return clamp$4(Math.round(Number(value) || 0), FILTER_MODE_OFF, FILTER_MODE_PEAK);
+}
+function clampWarpMode(value) {
+  return clamp$4(Math.round(Number(value) || 0), WARP_MODE_OFF$1, WARP_MODE_MIRROR$1);
+}
+function clampWarpAmount(value) {
+  return clamp$4(Number(value) || 0, 0, 1);
 }
 function clampDisplayPosition(value) {
   return clamp$4(Number(value) || 0, 0, 1);
@@ -13023,6 +13031,45 @@ function selectObservedEffectiveFilterState(currentState, message) {
     q: 0.707107
   };
   const nextState = normalizeEffectiveFilterStateMessage(message);
+  if (!nextState) {
+    return previousState;
+  }
+  if (nextState.voiceGeneration < previousState.voiceGeneration) {
+    return previousState;
+  }
+  return nextState;
+}
+function normalizeEffectiveWarpStateMessage(message) {
+  const payload = message?.event ?? message;
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+  const rawAmount = Number(payload.amount);
+  if (!Number.isFinite(rawAmount)) {
+    return null;
+  }
+  const rawGeneration = Number(payload.voiceGeneration);
+  const rawHasActive = payload.hasActive;
+  return {
+    voiceGeneration: Number.isFinite(rawGeneration) ? Math.max(0, Math.trunc(rawGeneration)) : 0,
+    hasActive: Boolean(rawHasActive),
+    mode: clampWarpMode(payload.mode),
+    amount: clampWarpAmount(rawAmount)
+  };
+}
+function selectObservedEffectiveWarpState(currentState, message) {
+  const previousState = currentState && typeof currentState === "object" ? {
+    voiceGeneration: Number.isFinite(Number(currentState.voiceGeneration)) ? Math.trunc(Number(currentState.voiceGeneration)) : -1,
+    hasActive: Boolean(currentState.hasActive),
+    mode: clampWarpMode(currentState.mode),
+    amount: clampWarpAmount(currentState.amount)
+  } : {
+    voiceGeneration: -1,
+    hasActive: false,
+    mode: WARP_MODE_OFF$1,
+    amount: 0
+  };
+  const nextState = normalizeEffectiveWarpStateMessage(message);
   if (!nextState) {
     return previousState;
   }
@@ -15394,6 +15441,7 @@ async function loadFactoryBankFrames(resourceClientInput, {
   };
 }
 const EFFECTIVE_WAVETABLE_POSITION_ENDPOINT_ID = "effectiveWavetablePosition";
+const EFFECTIVE_WARP_STATE_ENDPOINT_ID = "effectiveWarpState";
 const EFFECTIVE_FILTER_STATE_ENDPOINT_ID = "effectiveFilterState";
 const DISPLAY_SWIPE_THRESHOLD_PX = 2;
 const MSEG_DRAG_THRESHOLD_PX = 8;
@@ -15530,13 +15578,52 @@ function useObservedFilterState({
       q: Number(filterQ) || 0.707107
     };
   }
-  const normalizedMessage = normalizeEffectiveFilterStateMessage(message);
-  return normalizedMessage ? observedState : {
+  return observedState ?? {
     voiceGeneration: -1,
     hasActive: false,
     mode: Math.round(filterMode) || 0,
     cutoffHz: Number(filterCutoff) || 1e3,
     q: Number(filterQ) || 0.707107
+  };
+}
+function useObservedWarpState({
+  warpMode,
+  warpAmount
+}) {
+  const message = usePatchEndpoint(EFFECTIVE_WARP_STATE_ENDPOINT_ID, null);
+  const [observedState, setObservedState] = reactExports.useState(() => ({
+    voiceGeneration: -1,
+    hasActive: false,
+    mode: Math.round(warpMode) || 0,
+    amount: Number(warpAmount) || 0
+  }));
+  reactExports.useEffect(() => {
+    setObservedState((previousState) => selectObservedEffectiveWarpState(previousState, message));
+  }, [message]);
+  reactExports.useEffect(() => {
+    if (message) {
+      return;
+    }
+    setObservedState({
+      voiceGeneration: -1,
+      hasActive: false,
+      mode: Math.round(warpMode) || 0,
+      amount: Number(warpAmount) || 0
+    });
+  }, [message, warpAmount, warpMode]);
+  if (!message) {
+    return {
+      voiceGeneration: -1,
+      hasActive: false,
+      mode: Math.round(warpMode) || 0,
+      amount: Number(warpAmount) || 0
+    };
+  }
+  return observedState ?? {
+    voiceGeneration: -1,
+    hasActive: false,
+    mode: Math.round(warpMode) || 0,
+    amount: Number(warpAmount) || 0
   };
 }
 function useMsegState() {
@@ -15928,7 +16015,6 @@ function useMsegEditorInteractions({
       return;
     }
     if (pointerState.kind === "curve-drag") {
-      applyCurveEditFromClientCoordinates(pointerState.segmentIndex, event.clientX, event.clientY);
       setHoveredSegmentIndex(resolvePointerLocation(event.clientX, event.clientY)?.segmentIndex ?? -1);
       event.preventDefault();
       return;
@@ -15941,7 +16027,6 @@ function useMsegEditorInteractions({
     setHoveredSegmentIndex(resolvePointerLocation(event.clientX, event.clientY)?.segmentIndex ?? -1);
     event.preventDefault();
   }, [
-    applyCurveEditFromClientCoordinates,
     clearPendingSegmentTimer,
     msegController,
     orientation,
@@ -16079,6 +16164,10 @@ function useSynthPatchViewModel({
   const requestRuntimeSync = usePatchEventTrigger(RUNTIME_SYNC_REQUEST_ENDPOINT_ID);
   const retryDesiredTableLoad = usePatchEventTrigger(RETRY_DESIRED_TABLE_REQUEST_ENDPOINT_ID);
   const observedPosition = useObservedDisplayPosition(Number(wavetablePosition.value) || 0);
+  const observedWarpState = useObservedWarpState({
+    warpMode: warpMode.value,
+    warpAmount: warpAmount.value
+  });
   const observedFilterState = useObservedFilterState({
     filterMode: filterMode.value,
     filterCutoff: filterCutoff.value,
@@ -16216,6 +16305,7 @@ function useSynthPatchViewModel({
     filterQ,
     filterMsegDepth,
     observedFilterState,
+    observedWarpState,
     msegState,
     handleSelectWavetable,
     handleRetryLoad,
@@ -16990,8 +17080,8 @@ function IOSPatchViewBody() {
                 stageRef,
                 frames: synthView.frames,
                 observedPosition: synthView.observedPosition,
-                warpMode: synthView.warpMode.value,
-                warpAmount: synthView.warpAmount.value,
+                warpMode: synthView.observedWarpState.hasActive ? synthView.observedWarpState.mode : synthView.warpMode.value,
+                warpAmount: synthView.observedWarpState.hasActive ? synthView.observedWarpState.amount : synthView.warpAmount.value,
                 displayedFrameCount: synthView.displayedFrameCount,
                 displayedTableIndex: synthView.displayedTableIndex,
                 desiredTableIndex: synthView.desiredTableIndex,

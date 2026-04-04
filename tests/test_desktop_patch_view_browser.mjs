@@ -521,7 +521,7 @@ test("built desktop bundle mounts the custom-element wrapper and renders a real 
             true,
         );
         assert.equal(await page.locator(".cosimo-stage canvas").count(), 1);
-        assert.equal(await page.locator("pre").count(), 0);
+        assert.equal(await page.locator("#mount > pre").count(), 0);
 
         const builtBundleSnapshot = await page.evaluate(() => window.__COSIMO_BUILT_DESKTOP_DEBUG__.getSnapshot());
         assert.equal(
@@ -1200,6 +1200,86 @@ test("warp controls commit mode, amount, and MSEG depth on the desktop harness",
             snapshot.sentMessages.filter(({ endpointID }) => endpointID === "warpMsegDepth"),
             [{ endpointID: "warpMsegDepth", value: -0.35 }],
         );
+    } finally {
+        await page.close();
+    }
+});
+
+test("desktop wavetable stage follows live effective warp state and falls back to the base controls", async () => {
+    const page = await openHarnessPage();
+
+    try {
+        await page.waitForFunction(() => {
+            const rendered = window.__COSIMO_DESKTOP_HARNESS__.getRenderedState();
+            return rendered.stageDebug && typeof rendered.stageDebug.warpMode === "number";
+        });
+
+        await page.evaluate(() => {
+            window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("warpMode", 1);
+            window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("warpAmount", 0.18);
+        });
+
+        await page.waitForFunction(() => {
+            const rendered = window.__COSIMO_DESKTOP_HARNESS__.getRenderedState();
+            return Number(rendered.stageDebug?.warpMode) === 1
+                && Math.abs(Number(rendered.stageDebug?.warpAmount) - 0.18) <= 1e-9;
+        });
+
+        let renderedState = await getHarnessRenderedState(page);
+        assert.equal(renderedState.stageDebug.warpMode, 1);
+        assert.equal(Math.abs(renderedState.stageDebug.warpAmount - 0.18) <= 1e-9, true);
+
+        await page.evaluate(() => {
+            window.__COSIMO_DESKTOP_HARNESS__.emitEffectiveWarpState({
+                voiceGeneration: 7,
+                hasActive: true,
+                mode: 4,
+                amount: 0.82,
+            });
+        });
+
+        await page.waitForFunction(() => {
+            const rendered = window.__COSIMO_DESKTOP_HARNESS__.getRenderedState();
+            return Number(rendered.stageDebug?.warpMode) === 4
+                && Math.abs(Number(rendered.stageDebug?.warpAmount) - 0.82) <= 1e-9;
+        });
+
+        renderedState = await getHarnessRenderedState(page);
+        assert.equal(renderedState.stageDebug.warpMode, 4);
+        assert.equal(Math.abs(renderedState.stageDebug.warpAmount - 0.82) <= 1e-9, true);
+
+        await page.evaluate(() => {
+            window.__COSIMO_DESKTOP_HARNESS__.patchConnection.emitEndpoint("effectiveWarpState", {
+                voiceGeneration: 9,
+                hasActive: 1,
+                mode: 3,
+                amount: "broken",
+            });
+        });
+        await page.waitForTimeout(50);
+
+        renderedState = await getHarnessRenderedState(page);
+        assert.equal(renderedState.stageDebug.warpMode, 4);
+        assert.equal(Math.abs(renderedState.stageDebug.warpAmount - 0.82) <= 1e-9, true);
+
+        await page.evaluate(() => {
+            window.__COSIMO_DESKTOP_HARNESS__.emitEffectiveWarpState({
+                voiceGeneration: 8,
+                hasActive: false,
+                mode: 0,
+                amount: 0.5,
+            });
+        });
+
+        await page.waitForFunction(() => {
+            const rendered = window.__COSIMO_DESKTOP_HARNESS__.getRenderedState();
+            return Number(rendered.stageDebug?.warpMode) === 1
+                && Math.abs(Number(rendered.stageDebug?.warpAmount) - 0.18) <= 1e-9;
+        });
+
+        renderedState = await getHarnessRenderedState(page);
+        assert.equal(renderedState.stageDebug.warpMode, 1);
+        assert.equal(Math.abs(renderedState.stageDebug.warpAmount - 0.18) <= 1e-9, true);
     } finally {
         await page.close();
     }

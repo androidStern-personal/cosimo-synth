@@ -10,6 +10,11 @@ export const FILTER_MODE_HIGHPASS = 2;
 export const FILTER_MODE_BANDPASS = 3;
 export const FILTER_MODE_NOTCH = 4;
 export const FILTER_MODE_PEAK = 5;
+export const WARP_MODE_OFF = 0;
+export const WARP_MODE_BEND = 1;
+export const WARP_MODE_PWM = 2;
+export const WARP_MODE_ASYM = 3;
+export const WARP_MODE_MIRROR = 4;
 const FILTER_CUTOFF_MIN_HZ = 20;
 const FILTER_CUTOFF_MAX_HZ = 20_000;
 const FILTER_Q_MIN = 0.1;
@@ -26,6 +31,13 @@ export type EffectiveFilterState = {
     mode: number;
     cutoffHz: number;
     q: number;
+};
+
+export type EffectiveWarpState = {
+    voiceGeneration: number;
+    hasActive: boolean;
+    mode: number;
+    amount: number;
 };
 
 export type NormalizedRuntimeTableState = {
@@ -72,6 +84,14 @@ function clampFilterQ(value: unknown) {
 
 function clampFilterMode(value: unknown) {
     return clamp(Math.round(Number(value) || 0), FILTER_MODE_OFF, FILTER_MODE_PEAK);
+}
+
+function clampWarpMode(value: unknown) {
+    return clamp(Math.round(Number(value) || 0), WARP_MODE_OFF, WARP_MODE_MIRROR);
+}
+
+function clampWarpAmount(value: unknown) {
+    return clamp(Number(value) || 0, 0, 1);
 }
 
 export function clampDisplayPosition(value: unknown) {
@@ -199,6 +219,63 @@ export function selectObservedEffectiveFilterState(
             q: 0.707107,
         };
     const nextState = normalizeEffectiveFilterStateMessage(message);
+
+    if (!nextState) {
+        return previousState;
+    }
+
+    if (nextState.voiceGeneration < previousState.voiceGeneration) {
+        return previousState;
+    }
+
+    return nextState;
+}
+
+export function normalizeEffectiveWarpStateMessage(message: unknown): EffectiveWarpState | null {
+    const payload = (message as { event?: unknown } | null | undefined)?.event ?? message;
+
+    if (!payload || typeof payload !== "object") {
+        return null;
+    }
+
+    const rawAmount = Number((payload as { amount?: unknown }).amount);
+
+    if (!Number.isFinite(rawAmount)) {
+        return null;
+    }
+
+    const rawGeneration = Number((payload as { voiceGeneration?: unknown }).voiceGeneration);
+    const rawHasActive = (payload as { hasActive?: unknown }).hasActive;
+    return {
+        voiceGeneration: Number.isFinite(rawGeneration)
+            ? Math.max(0, Math.trunc(rawGeneration))
+            : 0,
+        hasActive: Boolean(rawHasActive),
+        mode: clampWarpMode((payload as { mode?: unknown }).mode),
+        amount: clampWarpAmount(rawAmount),
+    };
+}
+
+export function selectObservedEffectiveWarpState(
+    currentState: EffectiveWarpState | null | undefined,
+    message: unknown,
+) {
+    const previousState = currentState && typeof currentState === "object"
+        ? {
+            voiceGeneration: Number.isFinite(Number(currentState.voiceGeneration))
+                ? Math.trunc(Number(currentState.voiceGeneration))
+                : -1,
+            hasActive: Boolean(currentState.hasActive),
+            mode: clampWarpMode(currentState.mode),
+            amount: clampWarpAmount(currentState.amount),
+        }
+        : {
+            voiceGeneration: -1,
+            hasActive: false,
+            mode: WARP_MODE_OFF,
+            amount: 0,
+        };
+    const nextState = normalizeEffectiveWarpStateMessage(message);
 
     if (!nextState) {
         return previousState;

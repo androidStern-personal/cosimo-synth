@@ -943,6 +943,12 @@ export function WavetableStageSection({
     onPointerUp,
     className,
 }: WavetableStageSectionProps) {
+    const debugState = useMemo(() => ({
+        position: clampDisplayPosition(position),
+        warpMode: Math.round(Number(warpMode) || 0),
+        warpAmount: clamp(Number(warpAmount) || 0, 0, 1),
+    }), [position, warpAmount, warpMode]);
+
     return (
         <section
             ref={stageRef}
@@ -1005,6 +1011,10 @@ export function WavetableStageSection({
                     </button>
                 ) : null}
             </div>
+
+            <pre data-role="wavetable-stage-debug" className="hidden">
+                {JSON.stringify(debugState)}
+            </pre>
         </section>
     );
 }

@@ -949,6 +949,7 @@ namespace wt
         output event WavetableMipRequest wavetableMipRequestOut;
         output event RuntimeServiceState runtimeServiceStateOut;
         output event wt::EffectiveWavetablePositionMonitor effectiveWavetablePositionOut;
+        output event wt::EffectiveWarpStateMonitor effectiveWarpStateOut;
         output event wt::EffectiveFilterStateMonitor effectiveFilterStateOut;
         output stream float32 out;
 
@@ -971,6 +972,8 @@ namespace wt
         int32[voiceCount] voiceActive;
         int32[voiceCount] voiceGeneration;
         float32[voiceCount] voiceEffectivePosition;
+        int32[voiceCount] voiceEffectiveWarpMode;
+        float32[voiceCount] voiceEffectiveWarpAmount;
         int32[voiceCount] voiceEffectiveFilterMode;
         float32[voiceCount] voiceEffectiveFilterCutoffHz;
         float32[voiceCount] voiceEffectiveFilterQ;
@@ -1007,6 +1010,8 @@ namespace wt
         int32 nextVoiceGeneration = 1;
         int32 monitorUpdateIntervalFrames = 1;
         int32 framesUntilNextMonitorUpdate = 0;
+        int32 warpMonitorUpdateIntervalFrames = 1;
+        int32 framesUntilNextWarpMonitorUpdate = 0;
         int32 filterMonitorUpdateIntervalFrames = 1;
         int32 framesUntilNextFilterMonitorUpdate = 0;
         float32 previewFrequencyHzState = previewFrequencyHz;
@@ -1387,6 +1392,29 @@ namespace wt
             effectiveWavetablePositionOut <- monitor;
         }
 
+        void emitEffectiveWarpStateMonitor()
+        {
+            wt::EffectiveWarpStateMonitor monitor;
+            let newestVoiceIndex = findNewestMonitoredVoiceIndex();
+
+            if (newestVoiceIndex >= 0)
+            {
+                monitor.voiceGeneration = voiceGeneration.at (newestVoiceIndex);
+                monitor.hasActive = 1;
+                monitor.mode = voiceEffectiveWarpMode.at (newestVoiceIndex);
+                monitor.amount = std::intrinsics::clamp (voiceEffectiveWarpAmount.at (newestVoiceIndex), 0.0f, 1.0f);
+            }
+            else
+            {
+                monitor.voiceGeneration = findNewestVisibleGeneration();
+                monitor.hasActive = 0;
+                monitor.mode = resolveWarpMode (warpModeIn);
+                monitor.amount = std::intrinsics::clamp (warpAmountIn, 0.0f, 1.0f);
+            }
+
+            effectiveWarpStateOut <- monitor;
+        }
+
         void emitEffectiveFilterStateMonitor()
         {
             wt::EffectiveFilterStateMonitor monitor;
@@ -1423,6 +1451,16 @@ namespace wt
             else
             {
                 framesUntilNextMonitorUpdate -= 1;
+            }
+
+            if (framesUntilNextWarpMonitorUpdate <= 0)
+            {
+                emitEffectiveWarpStateMonitor();
+                framesUntilNextWarpMonitorUpdate = warpMonitorUpdateIntervalFrames - 1;
+            }
+            else
+            {
+                framesUntilNextWarpMonitorUpdate -= 1;
             }
 
             if (framesUntilNextFilterMonitorUpdate <= 0)
@@ -1801,6 +1839,11 @@ namespace wt
             );
             monitorUpdateIntervalFrames = std::intrinsics::max (1, requestedInterval);
             framesUntilNextMonitorUpdate = 0;
+            let requestedWarpInterval = int32 (
+                std::intrinsics::floor ((processor.frequency / wt::effectiveWarpStateMonitorHz) + 0.5f)
+            );
+            warpMonitorUpdateIntervalFrames = std::intrinsics::max (1, requestedWarpInterval);
+            framesUntilNextWarpMonitorUpdate = 0;
             let requestedFilterInterval = int32 (
                 std::intrinsics::floor ((processor.frequency / wt::effectiveFilterStateMonitorHz) + 0.5f)
             );
@@ -1852,6 +1895,8 @@ namespace wt
                     let shouldRenderWarpBackground = warpMode > warpModeOff;
                     let shouldBypassWarpOutput = isIdentityWarp (warpMode, effectiveWarpAmount);
                     voiceEffectivePosition.at (voice) = effectivePosition;
+                    voiceEffectiveWarpMode.at (voice) = warpMode;
+                    voiceEffectiveWarpAmount.at (voice) = effectiveWarpAmount;
                     voiceEffectiveFilterMode.at (voice) = filterMode;
                     voiceEffectiveFilterCutoffHz.at (voice) = effectiveFilterCutoffHz;
                     voiceEffectiveFilterQ.at (voice) = effectiveFilterQ;

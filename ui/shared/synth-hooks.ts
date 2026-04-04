@@ -32,12 +32,13 @@ import {
     clampDisplayPosition,
     describeRuntimeTableFailureDetails,
     mapDisplayDragToPosition,
-    normalizeEffectiveFilterStateMessage,
     normalizeRuntimeTableState,
     resolveRuntimeTablePresentation,
     selectObservedEffectiveFilterState,
+    selectObservedEffectiveWarpState,
     selectObservedWavetablePositionState,
     type EffectiveFilterState,
+    type EffectiveWarpState,
     type RuntimeTablePresentation,
 } from "./runtime-table-state";
 import {
@@ -53,6 +54,7 @@ import {
 } from "./wavetable-bank";
 
 export const EFFECTIVE_WAVETABLE_POSITION_ENDPOINT_ID = "effectiveWavetablePosition";
+export const EFFECTIVE_WARP_STATE_ENDPOINT_ID = "effectiveWarpState";
 export const EFFECTIVE_FILTER_STATE_ENDPOINT_ID = "effectiveFilterState";
 export const DISPLAY_SWIPE_THRESHOLD_PX = 2;
 export const MSEG_DRAG_THRESHOLD_PX = 8;
@@ -154,6 +156,7 @@ export type SynthPatchViewModel = {
     filterQ: PatchControlBinding<number>;
     filterMsegDepth: PatchControlBinding<number>;
     observedFilterState: EffectiveFilterState;
+    observedWarpState: EffectiveWarpState;
     msegState: MsegState | null;
     handleSelectWavetable: (nextValue: number) => void;
     handleRetryLoad: () => void;
@@ -320,6 +323,55 @@ export function useObservedFilterState({
         mode: Math.round(filterMode) || 0,
         cutoffHz: Number(filterCutoff) || 1000,
         q: Number(filterQ) || 0.707107,
+    };
+}
+
+export function useObservedWarpState({
+    warpMode,
+    warpAmount,
+}: {
+    warpMode: number;
+    warpAmount: number;
+}) {
+    const message = usePatchEndpoint<unknown | null>(EFFECTIVE_WARP_STATE_ENDPOINT_ID, null);
+    const [observedState, setObservedState] = useState<EffectiveWarpState>(() => ({
+        voiceGeneration: -1,
+        hasActive: false,
+        mode: Math.round(warpMode) || 0,
+        amount: Number(warpAmount) || 0,
+    }));
+
+    useEffect(() => {
+        setObservedState((previousState) => selectObservedEffectiveWarpState(previousState, message));
+    }, [message]);
+
+    useEffect(() => {
+        if (message) {
+            return;
+        }
+
+        setObservedState({
+            voiceGeneration: -1,
+            hasActive: false,
+            mode: Math.round(warpMode) || 0,
+            amount: Number(warpAmount) || 0,
+        });
+    }, [message, warpAmount, warpMode]);
+
+    if (!message) {
+        return {
+            voiceGeneration: -1,
+            hasActive: false,
+            mode: Math.round(warpMode) || 0,
+            amount: Number(warpAmount) || 0,
+        };
+    }
+
+    return observedState ?? {
+        voiceGeneration: -1,
+        hasActive: false,
+        mode: Math.round(warpMode) || 0,
+        amount: Number(warpAmount) || 0,
     };
 }
 
@@ -796,7 +848,6 @@ export function useMsegEditorInteractions({
         }
 
         if (pointerState.kind === "curve-drag") {
-            applyCurveEditFromClientCoordinates(pointerState.segmentIndex, event.clientX, event.clientY);
             setHoveredSegmentIndex(resolvePointerLocation(event.clientX, event.clientY)?.segmentIndex ?? -1);
             event.preventDefault();
             return;
@@ -811,7 +862,6 @@ export function useMsegEditorInteractions({
         setHoveredSegmentIndex(resolvePointerLocation(event.clientX, event.clientY)?.segmentIndex ?? -1);
         event.preventDefault();
     }, [
-        applyCurveEditFromClientCoordinates,
         clearPendingSegmentTimer,
         msegController,
         orientation,
@@ -971,6 +1021,10 @@ export function useSynthPatchViewModel({
     const requestRuntimeSync = usePatchEventTrigger<number>(RUNTIME_SYNC_REQUEST_ENDPOINT_ID);
     const retryDesiredTableLoad = usePatchEventTrigger<number>(RETRY_DESIRED_TABLE_REQUEST_ENDPOINT_ID);
     const observedPosition = useObservedDisplayPosition(Number(wavetablePosition.value) || 0);
+    const observedWarpState = useObservedWarpState({
+        warpMode: warpMode.value,
+        warpAmount: warpAmount.value,
+    });
     const observedFilterState = useObservedFilterState({
         filterMode: filterMode.value,
         filterCutoff: filterCutoff.value,
@@ -1130,6 +1184,7 @@ export function useSynthPatchViewModel({
         filterQ,
         filterMsegDepth,
         observedFilterState,
+        observedWarpState,
         msegState,
         handleSelectWavetable,
         handleRetryLoad,

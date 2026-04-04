@@ -14,6 +14,7 @@ declare global {
                 keyboardNoteCount: string | null;
                 keyboardRootNote: string | null;
                 stageLabel: string | null;
+                stageDebug: unknown | null;
                 filterGraphState: unknown | null;
             };
             clearDebugLog: () => void;
@@ -24,6 +25,7 @@ declare global {
                 emitEndpoint?: boolean,
             ) => void;
             emitEffectiveWavetablePosition: (position: number, voiceGeneration?: number) => void;
+            emitEffectiveWarpState: (nextState: Parameters<MockPatchConnection["emitEffectiveWarpState"]>[0]) => void;
             emitEffectiveFilterState: (nextState: Parameters<MockPatchConnection["emitEffectiveFilterState"]>[0]) => void;
             setStoredStateValue: (key: string, value: unknown) => void;
         };
@@ -84,6 +86,20 @@ function readFilterGraphState() {
     }
 }
 
+function readWavetableStageDebugState() {
+    const rawDebug = getDesktopShadowRoot()?.querySelector('[data-role="wavetable-stage-debug"]')?.textContent ?? null;
+
+    if (!rawDebug) {
+        return null;
+    }
+
+    try {
+        return JSON.parse(rawDebug);
+    } catch {
+        return null;
+    }
+}
+
 function renderFatalError(error: unknown) {
     const message = error instanceof Error
         ? error.stack || error.message
@@ -124,12 +140,13 @@ try {
         getRenderedState: () => {
             const shadowRoot = getDesktopShadowRoot();
             return {
-                errorText: shadowRoot?.querySelector("pre:not([data-role='filter-graph-debug'])")?.textContent ?? readHarnessFatalErrorText(),
+                errorText: readHarnessFatalErrorText(),
                 hasCanvas: Boolean(shadowRoot?.querySelector(".cosimo-stage canvas")),
                 keyboardDebug: readKeyboardDebug(),
                 keyboardNoteCount: readKeyboardAttribute("note-count"),
                 keyboardRootNote: readKeyboardAttribute("root-note"),
                 stageLabel: shadowRoot?.querySelector(".cosimo-stage .truncate")?.textContent?.trim() ?? null,
+                stageDebug: readWavetableStageDebugState(),
                 filterGraphState: readFilterGraphState(),
             };
         },
@@ -143,6 +160,9 @@ try {
         },
         emitEffectiveWavetablePosition: (position, voiceGeneration = 1) => {
             patchConnection.emitEffectiveWavetablePosition(position, voiceGeneration);
+        },
+        emitEffectiveWarpState: (nextState) => {
+            patchConnection.emitEffectiveWarpState(nextState);
         },
         emitEffectiveFilterState: (nextState) => {
             patchConnection.emitEffectiveFilterState(nextState);

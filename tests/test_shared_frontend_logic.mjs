@@ -183,6 +183,84 @@ test("observed filter state keeps the newest voice generation and preserves vali
     );
 });
 
+test("effective warp state normalization accepts wrapped payloads and rejects malformed ones", async () => {
+    const { normalizeEffectiveWarpStateMessage, WARP_MODE_MIRROR } = await loadRuntimeTableStateModule();
+
+    assert.deepEqual(normalizeEffectiveWarpStateMessage({
+        event: {
+            voiceGeneration: 4.8,
+            hasActive: 1,
+            mode: WARP_MODE_MIRROR,
+            amount: 1.3,
+        },
+    }), {
+        voiceGeneration: 4,
+        hasActive: true,
+        mode: WARP_MODE_MIRROR,
+        amount: 1,
+    });
+    assert.deepEqual(normalizeEffectiveWarpStateMessage({
+        event: {
+            voiceGeneration: 0,
+            hasActive: 0,
+            mode: -3,
+            amount: -0.25,
+        },
+    }), {
+        voiceGeneration: 0,
+        hasActive: false,
+        mode: 0,
+        amount: 0,
+    });
+    assert.equal(
+        normalizeEffectiveWarpStateMessage({ event: { voiceGeneration: 2, mode: 1 } }),
+        null,
+    );
+    assert.equal(normalizeEffectiveWarpStateMessage(null), null);
+});
+
+test("observed warp state keeps the newest voice generation and preserves valid state on malformed messages", async () => {
+    const { selectObservedEffectiveWarpState, WARP_MODE_BEND } = await loadRuntimeTableStateModule();
+    const previousState = {
+        voiceGeneration: 5,
+        hasActive: true,
+        mode: WARP_MODE_BEND,
+        amount: 0.83,
+    };
+
+    assert.deepEqual(
+        selectObservedEffectiveWarpState(previousState, {
+            event: {
+                voiceGeneration: 4,
+                hasActive: 1,
+                mode: 4,
+                amount: 0.2,
+            },
+        }),
+        previousState,
+    );
+    assert.deepEqual(
+        selectObservedEffectiveWarpState(previousState, {
+            event: {
+                voiceGeneration: 6,
+                hasActive: 0,
+                mode: 0,
+                amount: 0.1,
+            },
+        }),
+        {
+            voiceGeneration: 6,
+            hasActive: false,
+            mode: 0,
+            amount: 0.1,
+        },
+    );
+    assert.deepEqual(
+        selectObservedEffectiveWarpState(previousState, { event: { voiceGeneration: 7, hasActive: 1, mode: 1 } }),
+        previousState,
+    );
+});
+
 test("filter cutoff normalization uses a logarithmic mapping", async () => {
     const {
         filterCutoffHzToNormalized,

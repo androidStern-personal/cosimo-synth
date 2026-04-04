@@ -3,6 +3,7 @@ namespace wt
     let msegBodySamples = 2048;
     let msegPaddedSamples = 2051;
     let effectiveWavetablePositionMonitorHz = 30.0f;
+    let effectiveWarpStateMonitorHz = 30.0f;
     let effectiveFilterStateMonitorHz = 60.0f;
     let msegNoteOffPolicyFinishLoop = 0;
     let msegNoteOffPolicyImmediate = 1;
@@ -33,6 +34,14 @@ namespace wt
         int32 mode;
         float32 cutoffHz;
         float32 q;
+    }
+
+    struct EffectiveWarpStateMonitor
+    {
+        int32 voiceGeneration;
+        int32 hasActive;
+        int32 mode;
+        float32 amount;
     }
 
     float32 msegCatmullRom (float32 p0, float32 p1, float32 p2, float32 p3, float32 t)

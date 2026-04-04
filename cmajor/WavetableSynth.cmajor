@@ -926,6 +926,7 @@ graph WavetableSynth [[ main ]]
     output event wt::WavetableMipRequest wavetableMipRequest;
     output event wt::RuntimeState runtimeState;
     output event wt::EffectiveWavetablePositionMonitor effectiveWavetablePosition;
+    output event wt::EffectiveWarpStateMonitor effectiveWarpState;
     output event wt::EffectiveFilterStateMonitor effectiveFilterState;
     output stream float32<2> audioOut;
 
@@ -971,6 +972,7 @@ graph WavetableSynth [[ main ]]
         retryDesiredTableRequest -> runtimeStateCoordinator.retryDesiredTableRequestIn;
         runtimeStateCoordinator.runtimeStateOut -> runtimeState;
         sharedEngine.effectiveWavetablePositionOut -> effectiveWavetablePosition;
+        sharedEngine.effectiveWarpStateOut -> effectiveWarpState;
         sharedEngine.effectiveFilterStateOut -> effectiveFilterState;
         sharedEngine.out -> trim.in;
         trim.out -> stereo.in;

@@ -15,6 +15,7 @@ const filterMsegDepthEndpointID = "filterMsegDepth";
 const runtimeSyncRequestEndpointID = "runtimeSyncRequest";
 const runtimeStateEndpointID = "runtimeState";
 const effectiveWavetablePositionEndpointID = "effectiveWavetablePosition";
+const effectiveWarpStateEndpointID = "effectiveWarpState";
 const effectiveFilterStateEndpointID = "effectiveFilterState";
 const retryDesiredTableRequestEndpointID = "retryDesiredTableRequest";
 
@@ -580,6 +581,27 @@ export class MockPatchConnection implements PatchConnectionLike {
             mode,
             cutoffHz,
             q,
+        });
+    }
+
+    emitEffectiveWarpState(
+        {
+            voiceGeneration = 1,
+            hasActive = true,
+            mode = 1,
+            amount = 0.5,
+        }: {
+            voiceGeneration?: number;
+            hasActive?: boolean;
+            mode?: number;
+            amount?: number;
+        } = {},
+    ) {
+        this.emitEndpoint(effectiveWarpStateEndpointID, {
+            voiceGeneration,
+            hasActive: hasActive ? 1 : 0,
+            mode,
+            amount,
         });
     }
 

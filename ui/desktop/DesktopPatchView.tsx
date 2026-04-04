@@ -548,8 +548,8 @@ function DesktopPatchViewBody() {
                         stageRef={stageRef}
                         frames={synthView.frames}
                         position={synthView.observedPosition}
-                        warpMode={synthView.warpMode.value}
-                        warpAmount={synthView.warpAmount.value}
+                        warpMode={synthView.observedWarpState.hasActive ? synthView.observedWarpState.mode : synthView.warpMode.value}
+                        warpAmount={synthView.observedWarpState.hasActive ? synthView.observedWarpState.amount : synthView.warpAmount.value}
                         tableName={synthView.displayedTableName}
                         frameCount={synthView.displayedFrameCount}
                         desiredTableIndex={synthView.desiredTableIndex}
