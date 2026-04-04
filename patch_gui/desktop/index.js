@@ -12497,7 +12497,7 @@ function requireClient() {
   return client.exports;
 }
 var clientExports = requireClient();
-const cssText = '/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com */\n@layer properties {\n  @supports (((-webkit-hyphens: none)) and (not (margin-trim: inline))) or ((-moz-orient: inline) and (not (color: rgb(from red r g b)))) {\n    *, :before, :after, ::backdrop {\n      --tw-translate-x: 0;\n      --tw-translate-y: 0;\n      --tw-translate-z: 0;\n      --tw-rotate-x: initial;\n      --tw-rotate-y: initial;\n      --tw-rotate-z: initial;\n      --tw-skew-x: initial;\n      --tw-skew-y: initial;\n      --tw-border-style: solid;\n      --tw-font-weight: initial;\n      --tw-tracking: initial;\n      --tw-ordinal: initial;\n      --tw-slashed-zero: initial;\n      --tw-numeric-figure: initial;\n      --tw-numeric-spacing: initial;\n      --tw-numeric-fraction: initial;\n      --tw-shadow: 0 0 #0000;\n      --tw-shadow-color: initial;\n      --tw-shadow-alpha: 100%;\n      --tw-inset-shadow: 0 0 #0000;\n      --tw-inset-shadow-color: initial;\n      --tw-inset-shadow-alpha: 100%;\n      --tw-ring-color: initial;\n      --tw-ring-shadow: 0 0 #0000;\n      --tw-inset-ring-color: initial;\n      --tw-inset-ring-shadow: 0 0 #0000;\n      --tw-ring-inset: initial;\n      --tw-ring-offset-width: 0px;\n      --tw-ring-offset-color: #fff;\n      --tw-ring-offset-shadow: 0 0 #0000;\n      --tw-outline-style: solid;\n      --tw-blur: initial;\n      --tw-brightness: initial;\n      --tw-contrast: initial;\n      --tw-grayscale: initial;\n      --tw-hue-rotate: initial;\n      --tw-invert: initial;\n      --tw-opacity: initial;\n      --tw-saturate: initial;\n      --tw-sepia: initial;\n      --tw-drop-shadow: initial;\n      --tw-drop-shadow-color: initial;\n      --tw-drop-shadow-alpha: 100%;\n      --tw-drop-shadow-size: initial;\n      --tw-backdrop-blur: initial;\n      --tw-backdrop-brightness: initial;\n      --tw-backdrop-contrast: initial;\n      --tw-backdrop-grayscale: initial;\n      --tw-backdrop-hue-rotate: initial;\n      --tw-backdrop-invert: initial;\n      --tw-backdrop-opacity: initial;\n      --tw-backdrop-saturate: initial;\n      --tw-backdrop-sepia: initial;\n    }\n  }\n}\n\n@layer theme {\n  :root, :host {\n    --font-sans: ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji",\n      "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";\n    --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",\n      "Courier New", monospace;\n    --color-amber-100: oklch(96.2% .059 95.617);\n    --color-cyan-100: oklch(95.6% .045 203.388);\n    --color-cyan-200: oklch(91.7% .08 205.041);\n    --color-cyan-300: oklch(86.5% .127 207.078);\n    --color-blue-300: oklch(80.9% .105 251.813);\n    --color-fuchsia-100: oklch(95.2% .037 318.852);\n    --color-fuchsia-200: oklch(90.3% .076 319.62);\n    --color-fuchsia-300: oklch(83.3% .145 321.434);\n    --color-slate-100: oklch(96.8% .007 247.896);\n    --color-slate-200: oklch(92.9% .013 255.508);\n    --color-slate-300: oklch(86.9% .022 252.894);\n    --color-black: #000;\n    --color-white: #fff;\n    --spacing: .25rem;\n    --text-xs: .75rem;\n    --text-xs--line-height: calc(1 / .75);\n    --text-sm: .875rem;\n    --text-sm--line-height: calc(1.25 / .875);\n    --text-2xl: 1.5rem;\n    --text-2xl--line-height: calc(2 / 1.5);\n    --text-3xl: 1.875rem;\n    --text-3xl--line-height: calc(2.25 / 1.875);\n    --font-weight-semibold: 600;\n    --radius-2xl: 1rem;\n    --blur-md: 12px;\n    --default-transition-duration: .15s;\n    --default-transition-timing-function: cubic-bezier(.4, 0, .2, 1);\n    --default-font-family: var(--font-sans);\n    --default-mono-font-family: var(--font-mono);\n  }\n}\n\n@layer base {\n  *, :after, :before, ::backdrop {\n    box-sizing: border-box;\n    border: 0 solid;\n    margin: 0;\n    padding: 0;\n  }\n\n  ::file-selector-button {\n    box-sizing: border-box;\n    border: 0 solid;\n    margin: 0;\n    padding: 0;\n  }\n\n  html, :host {\n    -webkit-text-size-adjust: 100%;\n    tab-size: 4;\n    line-height: 1.5;\n    font-family: var(--default-font-family, ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji");\n    font-feature-settings: var(--default-font-feature-settings, normal);\n    font-variation-settings: var(--default-font-variation-settings, normal);\n    -webkit-tap-highlight-color: transparent;\n  }\n\n  hr {\n    height: 0;\n    color: inherit;\n    border-top-width: 1px;\n  }\n\n  abbr:where([title]) {\n    -webkit-text-decoration: underline dotted;\n    text-decoration: underline dotted;\n  }\n\n  h1, h2, h3, h4, h5, h6 {\n    font-size: inherit;\n    font-weight: inherit;\n  }\n\n  a {\n    color: inherit;\n    -webkit-text-decoration: inherit;\n    -webkit-text-decoration: inherit;\n    -webkit-text-decoration: inherit;\n    text-decoration: inherit;\n  }\n\n  b, strong {\n    font-weight: bolder;\n  }\n\n  code, kbd, samp, pre {\n    font-family: var(--default-mono-font-family, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace);\n    font-feature-settings: var(--default-mono-font-feature-settings, normal);\n    font-variation-settings: var(--default-mono-font-variation-settings, normal);\n    font-size: 1em;\n  }\n\n  small {\n    font-size: 80%;\n  }\n\n  sub, sup {\n    vertical-align: baseline;\n    font-size: 75%;\n    line-height: 0;\n    position: relative;\n  }\n\n  sub {\n    bottom: -.25em;\n  }\n\n  sup {\n    top: -.5em;\n  }\n\n  table {\n    text-indent: 0;\n    border-color: inherit;\n    border-collapse: collapse;\n  }\n\n  :-moz-focusring {\n    outline: auto;\n  }\n\n  progress {\n    vertical-align: baseline;\n  }\n\n  summary {\n    display: list-item;\n  }\n\n  ol, ul, menu {\n    list-style: none;\n  }\n\n  img, svg, video, canvas, audio, iframe, embed, object {\n    vertical-align: middle;\n    display: block;\n  }\n\n  img, video {\n    max-width: 100%;\n    height: auto;\n  }\n\n  button, input, select, optgroup, textarea {\n    font: inherit;\n    font-feature-settings: inherit;\n    font-variation-settings: inherit;\n    letter-spacing: inherit;\n    color: inherit;\n    opacity: 1;\n    background-color: #0000;\n    border-radius: 0;\n  }\n\n  ::file-selector-button {\n    font: inherit;\n    font-feature-settings: inherit;\n    font-variation-settings: inherit;\n    letter-spacing: inherit;\n    color: inherit;\n    opacity: 1;\n    background-color: #0000;\n    border-radius: 0;\n  }\n\n  :where(select:is([multiple], [size])) optgroup {\n    font-weight: bolder;\n  }\n\n  :where(select:is([multiple], [size])) optgroup option {\n    padding-inline-start: 20px;\n  }\n\n  ::file-selector-button {\n    margin-inline-end: 4px;\n  }\n\n  ::placeholder {\n    opacity: 1;\n  }\n\n  @supports (not ((-webkit-appearance: -apple-pay-button))) or (contain-intrinsic-size: 1px) {\n    ::placeholder {\n      color: currentColor;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      ::placeholder {\n        color: color-mix(in oklab, currentcolor 50%, transparent);\n      }\n    }\n  }\n\n  textarea {\n    resize: vertical;\n  }\n\n  ::-webkit-search-decoration {\n    -webkit-appearance: none;\n  }\n\n  ::-webkit-date-and-time-value {\n    min-height: 1lh;\n    text-align: inherit;\n  }\n\n  ::-webkit-datetime-edit {\n    display: inline-flex;\n  }\n\n  ::-webkit-datetime-edit-fields-wrapper {\n    padding: 0;\n  }\n\n  ::-webkit-datetime-edit {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-year-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-month-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-day-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-hour-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-minute-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-second-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-millisecond-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-meridiem-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-calendar-picker-indicator {\n    line-height: 1;\n  }\n\n  :-moz-ui-invalid {\n    box-shadow: none;\n  }\n\n  button, input:where([type="button"], [type="reset"], [type="submit"]) {\n    appearance: button;\n  }\n\n  ::file-selector-button {\n    appearance: button;\n  }\n\n  ::-webkit-inner-spin-button {\n    height: auto;\n  }\n\n  ::-webkit-outer-spin-button {\n    height: auto;\n  }\n\n  [hidden]:where(:not([hidden="until-found"])) {\n    display: none !important;\n  }\n}\n\n@layer components;\n\n@layer utilities {\n  .pointer-events-none {\n    pointer-events: none;\n  }\n\n  .collapse {\n    visibility: collapse;\n  }\n\n  .visible {\n    visibility: visible;\n  }\n\n  .absolute {\n    position: absolute;\n  }\n\n  .fixed {\n    position: fixed;\n  }\n\n  .relative {\n    position: relative;\n  }\n\n  .static {\n    position: static;\n  }\n\n  .sticky {\n    position: sticky;\n  }\n\n  .inset-0 {\n    inset: calc(var(--spacing) * 0);\n  }\n\n  .inset-x-0 {\n    inset-inline: calc(var(--spacing) * 0);\n  }\n\n  .inset-y-0 {\n    inset-block: calc(var(--spacing) * 0);\n  }\n\n  .start {\n    inset-inline-start: var(--spacing);\n  }\n\n  .end {\n    inset-inline-end: var(--spacing);\n  }\n\n  .top-0 {\n    top: calc(var(--spacing) * 0);\n  }\n\n  .top-1 {\n    top: calc(var(--spacing) * 1);\n  }\n\n  .top-1\\/2 {\n    top: 50%;\n  }\n\n  .right-0 {\n    right: calc(var(--spacing) * 0);\n  }\n\n  .right-4 {\n    right: calc(var(--spacing) * 4);\n  }\n\n  .bottom-0 {\n    bottom: calc(var(--spacing) * 0);\n  }\n\n  .isolate {\n    isolation: isolate;\n  }\n\n  .z-20 {\n    z-index: 20;\n  }\n\n  .order-1 {\n    order: 1;\n  }\n\n  .\\!container {\n    width: 100% !important;\n  }\n\n  @media (min-width: 40rem) {\n    .\\!container {\n      max-width: 40rem !important;\n    }\n  }\n\n  @media (min-width: 48rem) {\n    .\\!container {\n      max-width: 48rem !important;\n    }\n  }\n\n  @media (min-width: 64rem) {\n    .\\!container {\n      max-width: 64rem !important;\n    }\n  }\n\n  @media (min-width: 80rem) {\n    .\\!container {\n      max-width: 80rem !important;\n    }\n  }\n\n  @media (min-width: 96rem) {\n    .\\!container {\n      max-width: 96rem !important;\n    }\n  }\n\n  .container {\n    width: 100%;\n  }\n\n  @media (min-width: 40rem) {\n    .container {\n      max-width: 40rem;\n    }\n  }\n\n  @media (min-width: 48rem) {\n    .container {\n      max-width: 48rem;\n    }\n  }\n\n  @media (min-width: 64rem) {\n    .container {\n      max-width: 64rem;\n    }\n  }\n\n  @media (min-width: 80rem) {\n    .container {\n      max-width: 80rem;\n    }\n  }\n\n  @media (min-width: 96rem) {\n    .container {\n      max-width: 96rem;\n    }\n  }\n\n  .m-1 {\n    margin: calc(var(--spacing) * 1);\n  }\n\n  .mt-1 {\n    margin-top: calc(var(--spacing) * 1);\n  }\n\n  .mt-2 {\n    margin-top: calc(var(--spacing) * 2);\n  }\n\n  .block {\n    display: block;\n  }\n\n  .contents {\n    display: contents;\n  }\n\n  .flex {\n    display: flex;\n  }\n\n  .grid {\n    display: grid;\n  }\n\n  .hidden {\n    display: none;\n  }\n\n  .inline {\n    display: inline;\n  }\n\n  .inline-flex {\n    display: inline-flex;\n  }\n\n  .inline-grid {\n    display: inline-grid;\n  }\n\n  .table {\n    display: table;\n  }\n\n  .h-3 {\n    height: calc(var(--spacing) * 3);\n  }\n\n  .h-3\\.5 {\n    height: calc(var(--spacing) * 3.5);\n  }\n\n  .h-4 {\n    height: calc(var(--spacing) * 4);\n  }\n\n  .h-10 {\n    height: calc(var(--spacing) * 10);\n  }\n\n  .h-11 {\n    height: calc(var(--spacing) * 11);\n  }\n\n  .h-12 {\n    height: calc(var(--spacing) * 12);\n  }\n\n  .h-32 {\n    height: calc(var(--spacing) * 32);\n  }\n\n  .h-\\[42px\\] {\n    height: 42px;\n  }\n\n  .h-\\[118px\\] {\n    height: 118px;\n  }\n\n  .h-\\[180px\\] {\n    height: 180px;\n  }\n\n  .h-\\[320px\\] {\n    height: 320px;\n  }\n\n  .h-full {\n    height: 100%;\n  }\n\n  .min-h-0 {\n    min-height: calc(var(--spacing) * 0);\n  }\n\n  .min-h-\\[220px\\] {\n    min-height: 220px;\n  }\n\n  .min-h-\\[356px\\] {\n    min-height: 356px;\n  }\n\n  .w-3 {\n    width: calc(var(--spacing) * 3);\n  }\n\n  .w-3\\.5 {\n    width: calc(var(--spacing) * 3.5);\n  }\n\n  .w-6 {\n    width: calc(var(--spacing) * 6);\n  }\n\n  .w-10 {\n    width: calc(var(--spacing) * 10);\n  }\n\n  .w-\\[118px\\] {\n    width: 118px;\n  }\n\n  .w-full {\n    width: 100%;\n  }\n\n  .max-w-\\[280px\\] {\n    max-width: 280px;\n  }\n\n  .max-w-\\[1080px\\] {\n    max-width: 1080px;\n  }\n\n  .min-w-0 {\n    min-width: calc(var(--spacing) * 0);\n  }\n\n  .flex-1 {\n    flex: 1;\n  }\n\n  .flex-shrink, .shrink {\n    flex-shrink: 1;\n  }\n\n  .flex-grow, .grow {\n    flex-grow: 1;\n  }\n\n  .border-collapse {\n    border-collapse: collapse;\n  }\n\n  .-translate-y-1 {\n    --tw-translate-y: calc(var(--spacing) * -1);\n    translate: var(--tw-translate-x) var(--tw-translate-y);\n  }\n\n  .-translate-y-1\\/2 {\n    --tw-translate-y: calc(calc(1 / 2 * 100%) * -1);\n    translate: var(--tw-translate-x) var(--tw-translate-y);\n  }\n\n  .transform {\n    transform: var(--tw-rotate-x, ) var(--tw-rotate-y, ) var(--tw-rotate-z, ) var(--tw-skew-x, ) var(--tw-skew-y, );\n  }\n\n  .cursor-pointer {\n    cursor: pointer;\n  }\n\n  .touch-none {\n    touch-action: none;\n  }\n\n  .resize {\n    resize: both;\n  }\n\n  .appearance-none {\n    appearance: none;\n  }\n\n  .grid-cols-1 {\n    grid-template-columns: repeat(1, minmax(0, 1fr));\n  }\n\n  .grid-cols-3 {\n    grid-template-columns: repeat(3, minmax(0, 1fr));\n  }\n\n  .grid-cols-\\[56px_minmax\\(0\\,1fr\\)\\] {\n    grid-template-columns: 56px minmax(0, 1fr);\n  }\n\n  .grid-cols-\\[minmax\\(0\\,1fr\\)_88px\\] {\n    grid-template-columns: minmax(0, 1fr) 88px;\n  }\n\n  .grid-cols-\\[minmax\\(0\\,1fr\\)_92px\\] {\n    grid-template-columns: minmax(0, 1fr) 92px;\n  }\n\n  .grid-cols-\\[minmax\\(0\\,1fr\\)_92px_auto\\] {\n    grid-template-columns: minmax(0, 1fr) 92px auto;\n  }\n\n  .grid-cols-\\[minmax\\(0\\,1fr\\)_auto\\] {\n    grid-template-columns: minmax(0, 1fr) auto;\n  }\n\n  .grid-cols-\\[minmax\\(280px\\,1fr\\)_minmax\\(0\\,2fr\\)\\] {\n    grid-template-columns: minmax(280px, 1fr) minmax(0, 2fr);\n  }\n\n  .grid-rows-\\[auto_minmax\\(0\\,1fr\\)_auto\\] {\n    grid-template-rows: auto minmax(0, 1fr) auto;\n  }\n\n  .grid-rows-\\[minmax\\(356px\\,0\\.9fr\\)_auto_auto\\] {\n    grid-template-rows: minmax(356px, .9fr) auto auto;\n  }\n\n  .flex-col {\n    flex-direction: column;\n  }\n\n  .flex-wrap {\n    flex-wrap: wrap;\n  }\n\n  .items-center {\n    align-items: center;\n  }\n\n  .items-end {\n    align-items: flex-end;\n  }\n\n  .items-start {\n    align-items: flex-start;\n  }\n\n  .items-stretch {\n    align-items: stretch;\n  }\n\n  .justify-between {\n    justify-content: space-between;\n  }\n\n  .justify-center {\n    justify-content: center;\n  }\n\n  .justify-end {\n    justify-content: flex-end;\n  }\n\n  .justify-start {\n    justify-content: flex-start;\n  }\n\n  .gap-1 {\n    gap: calc(var(--spacing) * 1);\n  }\n\n  .gap-2 {\n    gap: calc(var(--spacing) * 2);\n  }\n\n  .gap-3 {\n    gap: calc(var(--spacing) * 3);\n  }\n\n  .gap-4 {\n    gap: calc(var(--spacing) * 4);\n  }\n\n  .gap-5 {\n    gap: calc(var(--spacing) * 5);\n  }\n\n  .self-start {\n    align-self: flex-start;\n  }\n\n  .truncate {\n    text-overflow: ellipsis;\n    white-space: nowrap;\n    overflow: hidden;\n  }\n\n  .overflow-auto {\n    overflow: auto;\n  }\n\n  .overflow-hidden {\n    overflow: hidden;\n  }\n\n  .rounded {\n    border-radius: .25rem;\n  }\n\n  .rounded-2xl {\n    border-radius: var(--radius-2xl);\n  }\n\n  .rounded-\\[14px\\] {\n    border-radius: 14px;\n  }\n\n  .rounded-\\[16px\\] {\n    border-radius: 16px;\n  }\n\n  .rounded-\\[18px\\] {\n    border-radius: 18px;\n  }\n\n  .rounded-\\[20px\\] {\n    border-radius: 20px;\n  }\n\n  .rounded-\\[22px\\] {\n    border-radius: 22px;\n  }\n\n  .rounded-\\[24px\\] {\n    border-radius: 24px;\n  }\n\n  .rounded-\\[28px\\] {\n    border-radius: 28px;\n  }\n\n  .rounded-\\[30px\\] {\n    border-radius: 30px;\n  }\n\n  .rounded-full {\n    border-radius: 3.40282e38px;\n  }\n\n  .border {\n    border-style: var(--tw-border-style);\n    border-width: 1px;\n  }\n\n  .border-cyan-300 {\n    border-color: var(--color-cyan-300);\n  }\n\n  .border-cyan-300\\/15 {\n    border-color: #53eafd26;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-cyan-300\\/15 {\n      border-color: color-mix(in oklab, var(--color-cyan-300) 15%, transparent);\n    }\n  }\n\n  .border-fuchsia-300 {\n    border-color: var(--color-fuchsia-300);\n  }\n\n  .border-fuchsia-300\\/15 {\n    border-color: #f2a9ff26;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-fuchsia-300\\/15 {\n      border-color: color-mix(in oklab, var(--color-fuchsia-300) 15%, transparent);\n    }\n  }\n\n  .border-white {\n    border-color: var(--color-white);\n  }\n\n  .border-white\\/6 {\n    border-color: #ffffff0f;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-white\\/6 {\n      border-color: color-mix(in oklab, var(--color-white) 6%, transparent);\n    }\n  }\n\n  .border-white\\/8 {\n    border-color: #ffffff14;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-white\\/8 {\n      border-color: color-mix(in oklab, var(--color-white) 8%, transparent);\n    }\n  }\n\n  .border-white\\/10 {\n    border-color: #ffffff1a;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-white\\/10 {\n      border-color: color-mix(in oklab, var(--color-white) 10%, transparent);\n    }\n  }\n\n  .bg-\\[\\#070b16\\] {\n    background-color: #070b16;\n  }\n\n  .bg-\\[\\#09101d\\]\\/95 {\n    background-color: oklab(17.3432% -.0040513 -.029082 / .95);\n  }\n\n  .bg-\\[\\#030711\\]\\/85 {\n    background-color: oklab(12.8817% -.00430492 -.0249884 / .85);\n  }\n\n  .bg-black {\n    background-color: var(--color-black);\n  }\n\n  .bg-black\\/20 {\n    background-color: #0003;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-black\\/20 {\n      background-color: color-mix(in oklab, var(--color-black) 20%, transparent);\n    }\n  }\n\n  .bg-black\\/25 {\n    background-color: #00000040;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-black\\/25 {\n      background-color: color-mix(in oklab, var(--color-black) 25%, transparent);\n    }\n  }\n\n  .bg-black\\/35 {\n    background-color: #00000059;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-black\\/35 {\n      background-color: color-mix(in oklab, var(--color-black) 35%, transparent);\n    }\n  }\n\n  .bg-black\\/40 {\n    background-color: #0006;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-black\\/40 {\n      background-color: color-mix(in oklab, var(--color-black) 40%, transparent);\n    }\n  }\n\n  .bg-cyan-300 {\n    background-color: var(--color-cyan-300);\n  }\n\n  .bg-cyan-300\\/8 {\n    background-color: #53eafd14;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-cyan-300\\/8 {\n      background-color: color-mix(in oklab, var(--color-cyan-300) 8%, transparent);\n    }\n  }\n\n  .bg-fuchsia-300 {\n    background-color: var(--color-fuchsia-300);\n  }\n\n  .bg-fuchsia-300\\/8 {\n    background-color: #f2a9ff14;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-fuchsia-300\\/8 {\n      background-color: color-mix(in oklab, var(--color-fuchsia-300) 8%, transparent);\n    }\n  }\n\n  .bg-white {\n    background-color: var(--color-white);\n  }\n\n  .bg-white\\/\\[0\\.03\\] {\n    background-color: #ffffff08;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-white\\/\\[0\\.03\\] {\n      background-color: color-mix(in oklab, var(--color-white) 3%, transparent);\n    }\n  }\n\n  .bg-white\\/\\[0\\.04\\] {\n    background-color: #ffffff0a;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-white\\/\\[0\\.04\\] {\n      background-color: color-mix(in oklab, var(--color-white) 4%, transparent);\n    }\n  }\n\n  .bg-white\\/\\[0\\.08\\] {\n    background-color: #ffffff14;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-white\\/\\[0\\.08\\] {\n      background-color: color-mix(in oklab, var(--color-white) 8%, transparent);\n    }\n  }\n\n  .mask-repeat {\n    -webkit-mask-repeat: repeat;\n    mask-repeat: repeat;\n  }\n\n  .fill-cyan-200 {\n    fill: var(--color-cyan-200);\n  }\n\n  .fill-fuchsia-200 {\n    fill: var(--color-fuchsia-200);\n  }\n\n  .stroke-\\[\\#050913\\] {\n    stroke: #050913;\n  }\n\n  .stroke-\\[2px\\] {\n    stroke-width: 2px;\n  }\n\n  .stroke-\\[3px\\] {\n    stroke-width: 3px;\n  }\n\n  .p-0 {\n    padding: calc(var(--spacing) * 0);\n  }\n\n  .p-1 {\n    padding: calc(var(--spacing) * 1);\n  }\n\n  .p-2 {\n    padding: calc(var(--spacing) * 2);\n  }\n\n  .p-3 {\n    padding: calc(var(--spacing) * 3);\n  }\n\n  .p-4 {\n    padding: calc(var(--spacing) * 4);\n  }\n\n  .p-5 {\n    padding: calc(var(--spacing) * 5);\n  }\n\n  .p-6 {\n    padding: calc(var(--spacing) * 6);\n  }\n\n  .px-2 {\n    padding-inline: calc(var(--spacing) * 2);\n  }\n\n  .px-3 {\n    padding-inline: calc(var(--spacing) * 3);\n  }\n\n  .px-4 {\n    padding-inline: calc(var(--spacing) * 4);\n  }\n\n  .px-5 {\n    padding-inline: calc(var(--spacing) * 5);\n  }\n\n  .py-1 {\n    padding-block: calc(var(--spacing) * 1);\n  }\n\n  .py-2 {\n    padding-block: calc(var(--spacing) * 2);\n  }\n\n  .py-2\\.5 {\n    padding-block: calc(var(--spacing) * 2.5);\n  }\n\n  .py-3 {\n    padding-block: calc(var(--spacing) * 3);\n  }\n\n  .py-4 {\n    padding-block: calc(var(--spacing) * 4);\n  }\n\n  .py-5 {\n    padding-block: calc(var(--spacing) * 5);\n  }\n\n  .pt-1 {\n    padding-top: calc(var(--spacing) * 1);\n  }\n\n  .pr-1 {\n    padding-right: calc(var(--spacing) * 1);\n  }\n\n  .pr-4 {\n    padding-right: calc(var(--spacing) * 4);\n  }\n\n  .pr-10 {\n    padding-right: calc(var(--spacing) * 10);\n  }\n\n  .pb-5 {\n    padding-bottom: calc(var(--spacing) * 5);\n  }\n\n  .text-left {\n    text-align: left;\n  }\n\n  .text-right {\n    text-align: right;\n  }\n\n  .font-mono {\n    font-family: var(--font-mono);\n  }\n\n  .text-2xl {\n    font-size: var(--text-2xl);\n    line-height: var(--tw-leading, var(--text-2xl--line-height));\n  }\n\n  .text-3xl {\n    font-size: var(--text-3xl);\n    line-height: var(--tw-leading, var(--text-3xl--line-height));\n  }\n\n  .text-sm {\n    font-size: var(--text-sm);\n    line-height: var(--tw-leading, var(--text-sm--line-height));\n  }\n\n  .text-xs {\n    font-size: var(--text-xs);\n    line-height: var(--tw-leading, var(--text-xs--line-height));\n  }\n\n  .text-\\[10px\\] {\n    font-size: 10px;\n  }\n\n  .text-\\[11px\\] {\n    font-size: 11px;\n  }\n\n  .font-semibold {\n    --tw-font-weight: var(--font-weight-semibold);\n    font-weight: var(--font-weight-semibold);\n  }\n\n  .tracking-\\[-0\\.04em\\] {\n    --tw-tracking: -.04em;\n    letter-spacing: -.04em;\n  }\n\n  .tracking-\\[0\\.16em\\] {\n    --tw-tracking: .16em;\n    letter-spacing: .16em;\n  }\n\n  .tracking-\\[0\\.18em\\] {\n    --tw-tracking: .18em;\n    letter-spacing: .18em;\n  }\n\n  .tracking-\\[0\\.22em\\] {\n    --tw-tracking: .22em;\n    letter-spacing: .22em;\n  }\n\n  .tracking-\\[0\\.24em\\] {\n    --tw-tracking: .24em;\n    letter-spacing: .24em;\n  }\n\n  .text-wrap {\n    text-wrap: wrap;\n  }\n\n  .text-amber-100 {\n    color: var(--color-amber-100);\n  }\n\n  .text-blue-300 {\n    color: var(--color-blue-300);\n  }\n\n  .text-blue-300\\/70 {\n    color: #90c5ffb3;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-blue-300\\/70 {\n      color: color-mix(in oklab, var(--color-blue-300) 70%, transparent);\n    }\n  }\n\n  .text-cyan-100 {\n    color: var(--color-cyan-100);\n  }\n\n  .text-cyan-100\\/85 {\n    color: #cefafed9;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-cyan-100\\/85 {\n      color: color-mix(in oklab, var(--color-cyan-100) 85%, transparent);\n    }\n  }\n\n  .text-cyan-200 {\n    color: var(--color-cyan-200);\n  }\n\n  .text-cyan-200\\/70 {\n    color: #a2f4fdb3;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-cyan-200\\/70 {\n      color: color-mix(in oklab, var(--color-cyan-200) 70%, transparent);\n    }\n  }\n\n  .text-cyan-200\\/80 {\n    color: #a2f4fdcc;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-cyan-200\\/80 {\n      color: color-mix(in oklab, var(--color-cyan-200) 80%, transparent);\n    }\n  }\n\n  .text-cyan-300 {\n    color: var(--color-cyan-300);\n  }\n\n  .text-cyan-300\\/70 {\n    color: #53eafdb3;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-cyan-300\\/70 {\n      color: color-mix(in oklab, var(--color-cyan-300) 70%, transparent);\n    }\n  }\n\n  .text-fuchsia-100 {\n    color: var(--color-fuchsia-100);\n  }\n\n  .text-fuchsia-100\\/90 {\n    color: #fae8ffe6;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-fuchsia-100\\/90 {\n      color: color-mix(in oklab, var(--color-fuchsia-100) 90%, transparent);\n    }\n  }\n\n  .text-fuchsia-200 {\n    color: var(--color-fuchsia-200);\n  }\n\n  .text-fuchsia-200\\/80 {\n    color: #f6cfffcc;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-fuchsia-200\\/80 {\n      color: color-mix(in oklab, var(--color-fuchsia-200) 80%, transparent);\n    }\n  }\n\n  .text-slate-100 {\n    color: var(--color-slate-100);\n  }\n\n  .text-slate-200 {\n    color: var(--color-slate-200);\n  }\n\n  .text-slate-200\\/80 {\n    color: #e2e8f0cc;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-200\\/80 {\n      color: color-mix(in oklab, var(--color-slate-200) 80%, transparent);\n    }\n  }\n\n  .text-slate-300 {\n    color: var(--color-slate-300);\n  }\n\n  .text-slate-300\\/55 {\n    color: #cad5e28c;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-300\\/55 {\n      color: color-mix(in oklab, var(--color-slate-300) 55%, transparent);\n    }\n  }\n\n  .text-slate-300\\/60 {\n    color: #cad5e299;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-300\\/60 {\n      color: color-mix(in oklab, var(--color-slate-300) 60%, transparent);\n    }\n  }\n\n  .text-slate-300\\/70 {\n    color: #cad5e2b3;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-300\\/70 {\n      color: color-mix(in oklab, var(--color-slate-300) 70%, transparent);\n    }\n  }\n\n  .text-slate-300\\/75 {\n    color: #cad5e2bf;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-300\\/75 {\n      color: color-mix(in oklab, var(--color-slate-300) 75%, transparent);\n    }\n  }\n\n  .lowercase {\n    text-transform: lowercase;\n  }\n\n  .uppercase {\n    text-transform: uppercase;\n  }\n\n  .ordinal {\n    --tw-ordinal: ordinal;\n    font-variant-numeric: var(--tw-ordinal, ) var(--tw-slashed-zero, ) var(--tw-numeric-figure, ) var(--tw-numeric-spacing, ) var(--tw-numeric-fraction, );\n  }\n\n  .underline {\n    text-decoration-line: underline;\n  }\n\n  .opacity-0 {\n    opacity: 0;\n  }\n\n  .shadow {\n    --tw-shadow: 0 1px 3px 0 var(--tw-shadow-color, #0000001a), 0 1px 2px -1px var(--tw-shadow-color, #0000001a);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[0_10px_28px_rgba\\(0\\,0\\,0\\,0\\.22\\)\\] {\n    --tw-shadow: 0 10px 28px var(--tw-shadow-color, #00000038);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[0_10px_28px_rgba\\(0\\,0\\,0\\,0\\.28\\)\\] {\n    --tw-shadow: 0 10px 28px var(--tw-shadow-color, #00000047);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[0_18px_42px_rgba\\(3\\,6\\,18\\,0\\.45\\)\\] {\n    --tw-shadow: 0 18px 42px var(--tw-shadow-color, #03061273);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[0_26px_80px_rgba\\(0\\,0\\,0\\,0\\.48\\)\\] {\n    --tw-shadow: 0 26px 80px var(--tw-shadow-color, #0000007a);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[0_36px_80px_rgba\\(0\\,0\\,0\\,0\\.5\\)\\] {\n    --tw-shadow: 0 36px 80px var(--tw-shadow-color, #00000080);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[inset_0_0_0_1px_rgba\\(143\\,232\\,255\\,0\\.18\\)\\] {\n    --tw-shadow: inset 0 0 0 1px var(--tw-shadow-color, #8fe8ff2e);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .ring {\n    --tw-ring-shadow: var(--tw-ring-inset, ) 0 0 0 calc(1px + var(--tw-ring-offset-width)) var(--tw-ring-color, currentcolor);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .outline {\n    outline-style: var(--tw-outline-style);\n    outline-width: 1px;\n  }\n\n  .blur {\n    --tw-blur: blur(8px);\n    filter: var(--tw-blur, ) var(--tw-brightness, ) var(--tw-contrast, ) var(--tw-grayscale, ) var(--tw-hue-rotate, ) var(--tw-invert, ) var(--tw-saturate, ) var(--tw-sepia, ) var(--tw-drop-shadow, );\n  }\n\n  .invert {\n    --tw-invert: invert(100%);\n    filter: var(--tw-blur, ) var(--tw-brightness, ) var(--tw-contrast, ) var(--tw-grayscale, ) var(--tw-hue-rotate, ) var(--tw-invert, ) var(--tw-saturate, ) var(--tw-sepia, ) var(--tw-drop-shadow, );\n  }\n\n  .filter {\n    filter: var(--tw-blur, ) var(--tw-brightness, ) var(--tw-contrast, ) var(--tw-grayscale, ) var(--tw-hue-rotate, ) var(--tw-invert, ) var(--tw-saturate, ) var(--tw-sepia, ) var(--tw-drop-shadow, );\n  }\n\n  .backdrop-blur-md {\n    --tw-backdrop-blur: blur(var(--blur-md));\n    -webkit-backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );\n    backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );\n  }\n\n  .backdrop-filter {\n    -webkit-backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );\n    backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );\n  }\n\n  .transition {\n    transition-property: color, background-color, border-color, outline-color, text-decoration-color, fill, stroke, --tw-gradient-from, --tw-gradient-via, --tw-gradient-to, opacity, box-shadow, transform, translate, scale, rotate, filter, -webkit-backdrop-filter, backdrop-filter, display, content-visibility, overlay, pointer-events;\n    transition-timing-function: var(--tw-ease, var(--default-transition-timing-function));\n    transition-duration: var(--tw-duration, var(--default-transition-duration));\n  }\n\n  .outline-none {\n    --tw-outline-style: none;\n    outline-style: none;\n  }\n\n  @media (hover: hover) {\n    .hover\\:border-cyan-200\\/30:hover {\n      border-color: #a2f4fd4d;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:border-cyan-200\\/30:hover {\n        border-color: color-mix(in oklab, var(--color-cyan-200) 30%, transparent);\n      }\n    }\n\n    .hover\\:border-white\\/12:hover {\n      border-color: #ffffff1f;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:border-white\\/12:hover {\n        border-color: color-mix(in oklab, var(--color-white) 12%, transparent);\n      }\n    }\n\n    .hover\\:bg-black\\/24:hover {\n      background-color: #0000003d;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:bg-black\\/24:hover {\n        background-color: color-mix(in oklab, var(--color-black) 24%, transparent);\n      }\n    }\n\n    .hover\\:bg-white\\/\\[0\\.04\\]:hover {\n      background-color: #ffffff0a;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:bg-white\\/\\[0\\.04\\]:hover {\n        background-color: color-mix(in oklab, var(--color-white) 4%, transparent);\n      }\n    }\n\n    .hover\\:text-slate-100:hover {\n      color: var(--color-slate-100);\n    }\n  }\n\n  .focus\\:border-cyan-200\\/45:focus {\n    border-color: #a2f4fd73;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .focus\\:border-cyan-200\\/45:focus {\n      border-color: color-mix(in oklab, var(--color-cyan-200) 45%, transparent);\n    }\n  }\n\n  .disabled\\:opacity-35:disabled {\n    opacity: .35;\n  }\n\n  .disabled\\:opacity-40:disabled {\n    opacity: .4;\n  }\n\n  @media (min-width: 64rem) {\n    .lg\\:grid-cols-\\[220px_minmax\\(0\\,1fr\\)_minmax\\(0\\,1fr\\)\\] {\n      grid-template-columns: 220px minmax(0, 1fr) minmax(0, 1fr);\n    }\n  }\n}\n\n:host {\n  color-scheme: dark;\n  width: 100%;\n  height: 100%;\n  display: block;\n}\n\n* {\n  box-sizing: border-box;\n}\n\nbutton, input, select {\n  font: inherit;\n}\n\n.cosimo-surface {\n  background: radial-gradient(circle at top, #7a8eff2e, #0000 34%), linear-gradient(#060a16fa, #03050c);\n}\n\n.cosimo-stage {\n  background: linear-gradient(#ffffff05 1px, #0000 1px) 0 0 / 24px 24px, linear-gradient(90deg, #ffffff05 1px, #0000 1px) 0 0 / 24px 24px, radial-gradient(circle at top, #7a8eff33, #0000 38%), linear-gradient(#050915fa, #02040b);\n}\n\n.cosimo-stage:after {\n  content: "";\n  pointer-events: none;\n  position: absolute;\n  inset: 0;\n  box-shadow: inset 0 1px #ffffff14, inset 0 -48px 64px #00000059;\n}\n\n.cosimo-range {\n  appearance: none;\n  background: linear-gradient(90deg, #5463c973, #f56cb673);\n  border-radius: 999px;\n  outline: none;\n  width: 100%;\n  height: 10px;\n}\n\n.cosimo-range::-webkit-slider-thumb {\n  appearance: none;\n  background: linear-gradient(#ffd8a6 0%, #f56cb6 100%);\n  border: 0;\n  border-radius: 999px;\n  width: 22px;\n  height: 22px;\n  box-shadow: 0 6px 18px #f56cb659;\n}\n\n.cosimo-range::-moz-range-thumb {\n  background: linear-gradient(#ffd8a6 0%, #f56cb6 100%);\n  border: 0;\n  border-radius: 999px;\n  width: 22px;\n  height: 22px;\n  box-shadow: 0 6px 18px #f56cb659;\n}\n\n.cosimo-select, .cosimo-button {\n  color: #eef2f5;\n  background: #ffffff0a;\n  border: 1px solid #ffffff14;\n}\n\n.cosimo-grid-line {\n  stroke: #ffffff14;\n  stroke-width: 1px;\n}\n\n.cosimo-curve-fill {\n  fill: #87d7f514;\n}\n\n.cosimo-curve-line {\n  fill: none;\n  stroke: #87d7f5;\n  stroke-width: 3px;\n  stroke-linecap: round;\n  stroke-linejoin: round;\n}\n\n.cosimo-curve-fill-muted {\n  fill: #e1e7f00a;\n}\n\n.cosimo-curve-line-muted {\n  stroke: #e1e7f061;\n}\n\n.cosimo-curve-line-highlight {\n  stroke: #32f0bc;\n}\n\n.cosimo-mseg-point-default {\n  fill: #87d7f5;\n  stroke: #050913;\n  stroke-width: 2px;\n}\n\n.cosimo-mseg-point-selected {\n  fill: #f5d0fe;\n  stroke: #050913;\n  stroke-width: 3px;\n}\n\n.cosimo-mseg-point-highlight {\n  fill: #32f0bc;\n  stroke: #050913;\n  stroke-width: 2px;\n}\n\n.cosimo-mseg-point-muted {\n  fill: #e1e7f0c7;\n  stroke: #050913;\n  stroke-width: 2px;\n  opacity: .62;\n}\n\n@property --tw-translate-x {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0;\n}\n\n@property --tw-translate-y {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0;\n}\n\n@property --tw-translate-z {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0;\n}\n\n@property --tw-rotate-x {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-rotate-y {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-rotate-z {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-skew-x {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-skew-y {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-border-style {\n  syntax: "*";\n  inherits: false;\n  initial-value: solid;\n}\n\n@property --tw-font-weight {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-tracking {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-ordinal {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-slashed-zero {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-numeric-figure {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-numeric-spacing {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-numeric-fraction {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-shadow {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0 0 #0000;\n}\n\n@property --tw-shadow-color {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-shadow-alpha {\n  syntax: "<percentage>";\n  inherits: false;\n  initial-value: 100%;\n}\n\n@property --tw-inset-shadow {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0 0 #0000;\n}\n\n@property --tw-inset-shadow-color {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-inset-shadow-alpha {\n  syntax: "<percentage>";\n  inherits: false;\n  initial-value: 100%;\n}\n\n@property --tw-ring-color {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-ring-shadow {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0 0 #0000;\n}\n\n@property --tw-inset-ring-color {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-inset-ring-shadow {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0 0 #0000;\n}\n\n@property --tw-ring-inset {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-ring-offset-width {\n  syntax: "<length>";\n  inherits: false;\n  initial-value: 0;\n}\n\n@property --tw-ring-offset-color {\n  syntax: "*";\n  inherits: false;\n  initial-value: #fff;\n}\n\n@property --tw-ring-offset-shadow {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0 0 #0000;\n}\n\n@property --tw-outline-style {\n  syntax: "*";\n  inherits: false;\n  initial-value: solid;\n}\n\n@property --tw-blur {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-brightness {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-contrast {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-grayscale {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-hue-rotate {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-invert {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-opacity {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-saturate {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-sepia {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-drop-shadow {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-drop-shadow-color {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-drop-shadow-alpha {\n  syntax: "<percentage>";\n  inherits: false;\n  initial-value: 100%;\n}\n\n@property --tw-drop-shadow-size {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-blur {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-brightness {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-contrast {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-grayscale {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-hue-rotate {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-invert {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-opacity {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-saturate {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-sepia {\n  syntax: "*";\n  inherits: false\n}\n';
+const cssText = '/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com */\n@layer properties {\n  @supports (((-webkit-hyphens: none)) and (not (margin-trim: inline))) or ((-moz-orient: inline) and (not (color: rgb(from red r g b)))) {\n    *, :before, :after, ::backdrop {\n      --tw-translate-x: 0;\n      --tw-translate-y: 0;\n      --tw-translate-z: 0;\n      --tw-rotate-x: initial;\n      --tw-rotate-y: initial;\n      --tw-rotate-z: initial;\n      --tw-skew-x: initial;\n      --tw-skew-y: initial;\n      --tw-border-style: solid;\n      --tw-font-weight: initial;\n      --tw-tracking: initial;\n      --tw-ordinal: initial;\n      --tw-slashed-zero: initial;\n      --tw-numeric-figure: initial;\n      --tw-numeric-spacing: initial;\n      --tw-numeric-fraction: initial;\n      --tw-shadow: 0 0 #0000;\n      --tw-shadow-color: initial;\n      --tw-shadow-alpha: 100%;\n      --tw-inset-shadow: 0 0 #0000;\n      --tw-inset-shadow-color: initial;\n      --tw-inset-shadow-alpha: 100%;\n      --tw-ring-color: initial;\n      --tw-ring-shadow: 0 0 #0000;\n      --tw-inset-ring-color: initial;\n      --tw-inset-ring-shadow: 0 0 #0000;\n      --tw-ring-inset: initial;\n      --tw-ring-offset-width: 0px;\n      --tw-ring-offset-color: #fff;\n      --tw-ring-offset-shadow: 0 0 #0000;\n      --tw-outline-style: solid;\n      --tw-blur: initial;\n      --tw-brightness: initial;\n      --tw-contrast: initial;\n      --tw-grayscale: initial;\n      --tw-hue-rotate: initial;\n      --tw-invert: initial;\n      --tw-opacity: initial;\n      --tw-saturate: initial;\n      --tw-sepia: initial;\n      --tw-drop-shadow: initial;\n      --tw-drop-shadow-color: initial;\n      --tw-drop-shadow-alpha: 100%;\n      --tw-drop-shadow-size: initial;\n      --tw-backdrop-blur: initial;\n      --tw-backdrop-brightness: initial;\n      --tw-backdrop-contrast: initial;\n      --tw-backdrop-grayscale: initial;\n      --tw-backdrop-hue-rotate: initial;\n      --tw-backdrop-invert: initial;\n      --tw-backdrop-opacity: initial;\n      --tw-backdrop-saturate: initial;\n      --tw-backdrop-sepia: initial;\n    }\n  }\n}\n\n@layer theme {\n  :root, :host {\n    --font-sans: ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji",\n      "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";\n    --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",\n      "Courier New", monospace;\n    --color-amber-100: oklch(96.2% .059 95.617);\n    --color-cyan-100: oklch(95.6% .045 203.388);\n    --color-cyan-200: oklch(91.7% .08 205.041);\n    --color-cyan-300: oklch(86.5% .127 207.078);\n    --color-sky-100: oklch(95.1% .026 236.824);\n    --color-sky-300: oklch(82.8% .111 230.318);\n    --color-blue-300: oklch(80.9% .105 251.813);\n    --color-fuchsia-100: oklch(95.2% .037 318.852);\n    --color-fuchsia-200: oklch(90.3% .076 319.62);\n    --color-fuchsia-300: oklch(83.3% .145 321.434);\n    --color-slate-100: oklch(96.8% .007 247.896);\n    --color-slate-200: oklch(92.9% .013 255.508);\n    --color-slate-300: oklch(86.9% .022 252.894);\n    --color-black: #000;\n    --color-white: #fff;\n    --spacing: .25rem;\n    --text-xs: .75rem;\n    --text-xs--line-height: calc(1 / .75);\n    --text-sm: .875rem;\n    --text-sm--line-height: calc(1.25 / .875);\n    --text-2xl: 1.5rem;\n    --text-2xl--line-height: calc(2 / 1.5);\n    --text-3xl: 1.875rem;\n    --text-3xl--line-height: calc(2.25 / 1.875);\n    --font-weight-semibold: 600;\n    --radius-2xl: 1rem;\n    --blur-md: 12px;\n    --default-transition-duration: .15s;\n    --default-transition-timing-function: cubic-bezier(.4, 0, .2, 1);\n    --default-font-family: var(--font-sans);\n    --default-mono-font-family: var(--font-mono);\n  }\n}\n\n@layer base {\n  *, :after, :before, ::backdrop {\n    box-sizing: border-box;\n    border: 0 solid;\n    margin: 0;\n    padding: 0;\n  }\n\n  ::file-selector-button {\n    box-sizing: border-box;\n    border: 0 solid;\n    margin: 0;\n    padding: 0;\n  }\n\n  html, :host {\n    -webkit-text-size-adjust: 100%;\n    tab-size: 4;\n    line-height: 1.5;\n    font-family: var(--default-font-family, ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji");\n    font-feature-settings: var(--default-font-feature-settings, normal);\n    font-variation-settings: var(--default-font-variation-settings, normal);\n    -webkit-tap-highlight-color: transparent;\n  }\n\n  hr {\n    height: 0;\n    color: inherit;\n    border-top-width: 1px;\n  }\n\n  abbr:where([title]) {\n    -webkit-text-decoration: underline dotted;\n    text-decoration: underline dotted;\n  }\n\n  h1, h2, h3, h4, h5, h6 {\n    font-size: inherit;\n    font-weight: inherit;\n  }\n\n  a {\n    color: inherit;\n    -webkit-text-decoration: inherit;\n    -webkit-text-decoration: inherit;\n    -webkit-text-decoration: inherit;\n    text-decoration: inherit;\n  }\n\n  b, strong {\n    font-weight: bolder;\n  }\n\n  code, kbd, samp, pre {\n    font-family: var(--default-mono-font-family, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace);\n    font-feature-settings: var(--default-mono-font-feature-settings, normal);\n    font-variation-settings: var(--default-mono-font-variation-settings, normal);\n    font-size: 1em;\n  }\n\n  small {\n    font-size: 80%;\n  }\n\n  sub, sup {\n    vertical-align: baseline;\n    font-size: 75%;\n    line-height: 0;\n    position: relative;\n  }\n\n  sub {\n    bottom: -.25em;\n  }\n\n  sup {\n    top: -.5em;\n  }\n\n  table {\n    text-indent: 0;\n    border-color: inherit;\n    border-collapse: collapse;\n  }\n\n  :-moz-focusring {\n    outline: auto;\n  }\n\n  progress {\n    vertical-align: baseline;\n  }\n\n  summary {\n    display: list-item;\n  }\n\n  ol, ul, menu {\n    list-style: none;\n  }\n\n  img, svg, video, canvas, audio, iframe, embed, object {\n    vertical-align: middle;\n    display: block;\n  }\n\n  img, video {\n    max-width: 100%;\n    height: auto;\n  }\n\n  button, input, select, optgroup, textarea {\n    font: inherit;\n    font-feature-settings: inherit;\n    font-variation-settings: inherit;\n    letter-spacing: inherit;\n    color: inherit;\n    opacity: 1;\n    background-color: #0000;\n    border-radius: 0;\n  }\n\n  ::file-selector-button {\n    font: inherit;\n    font-feature-settings: inherit;\n    font-variation-settings: inherit;\n    letter-spacing: inherit;\n    color: inherit;\n    opacity: 1;\n    background-color: #0000;\n    border-radius: 0;\n  }\n\n  :where(select:is([multiple], [size])) optgroup {\n    font-weight: bolder;\n  }\n\n  :where(select:is([multiple], [size])) optgroup option {\n    padding-inline-start: 20px;\n  }\n\n  ::file-selector-button {\n    margin-inline-end: 4px;\n  }\n\n  ::placeholder {\n    opacity: 1;\n  }\n\n  @supports (not ((-webkit-appearance: -apple-pay-button))) or (contain-intrinsic-size: 1px) {\n    ::placeholder {\n      color: currentColor;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      ::placeholder {\n        color: color-mix(in oklab, currentcolor 50%, transparent);\n      }\n    }\n  }\n\n  textarea {\n    resize: vertical;\n  }\n\n  ::-webkit-search-decoration {\n    -webkit-appearance: none;\n  }\n\n  ::-webkit-date-and-time-value {\n    min-height: 1lh;\n    text-align: inherit;\n  }\n\n  ::-webkit-datetime-edit {\n    display: inline-flex;\n  }\n\n  ::-webkit-datetime-edit-fields-wrapper {\n    padding: 0;\n  }\n\n  ::-webkit-datetime-edit {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-year-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-month-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-day-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-hour-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-minute-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-second-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-millisecond-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-meridiem-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-calendar-picker-indicator {\n    line-height: 1;\n  }\n\n  :-moz-ui-invalid {\n    box-shadow: none;\n  }\n\n  button, input:where([type="button"], [type="reset"], [type="submit"]) {\n    appearance: button;\n  }\n\n  ::file-selector-button {\n    appearance: button;\n  }\n\n  ::-webkit-inner-spin-button {\n    height: auto;\n  }\n\n  ::-webkit-outer-spin-button {\n    height: auto;\n  }\n\n  [hidden]:where(:not([hidden="until-found"])) {\n    display: none !important;\n  }\n}\n\n@layer components;\n\n@layer utilities {\n  .pointer-events-none {\n    pointer-events: none;\n  }\n\n  .collapse {\n    visibility: collapse;\n  }\n\n  .visible {\n    visibility: visible;\n  }\n\n  .absolute {\n    position: absolute;\n  }\n\n  .fixed {\n    position: fixed;\n  }\n\n  .relative {\n    position: relative;\n  }\n\n  .static {\n    position: static;\n  }\n\n  .sticky {\n    position: sticky;\n  }\n\n  .inset-0 {\n    inset: calc(var(--spacing) * 0);\n  }\n\n  .inset-x-0 {\n    inset-inline: calc(var(--spacing) * 0);\n  }\n\n  .inset-y-0 {\n    inset-block: calc(var(--spacing) * 0);\n  }\n\n  .start {\n    inset-inline-start: var(--spacing);\n  }\n\n  .end {\n    inset-inline-end: var(--spacing);\n  }\n\n  .top-0 {\n    top: calc(var(--spacing) * 0);\n  }\n\n  .top-1 {\n    top: calc(var(--spacing) * 1);\n  }\n\n  .top-1\\/2 {\n    top: 50%;\n  }\n\n  .right-0 {\n    right: calc(var(--spacing) * 0);\n  }\n\n  .right-4 {\n    right: calc(var(--spacing) * 4);\n  }\n\n  .bottom-0 {\n    bottom: calc(var(--spacing) * 0);\n  }\n\n  .isolate {\n    isolation: isolate;\n  }\n\n  .z-20 {\n    z-index: 20;\n  }\n\n  .order-1 {\n    order: 1;\n  }\n\n  .\\!container {\n    width: 100% !important;\n  }\n\n  @media (min-width: 40rem) {\n    .\\!container {\n      max-width: 40rem !important;\n    }\n  }\n\n  @media (min-width: 48rem) {\n    .\\!container {\n      max-width: 48rem !important;\n    }\n  }\n\n  @media (min-width: 64rem) {\n    .\\!container {\n      max-width: 64rem !important;\n    }\n  }\n\n  @media (min-width: 80rem) {\n    .\\!container {\n      max-width: 80rem !important;\n    }\n  }\n\n  @media (min-width: 96rem) {\n    .\\!container {\n      max-width: 96rem !important;\n    }\n  }\n\n  .container {\n    width: 100%;\n  }\n\n  @media (min-width: 40rem) {\n    .container {\n      max-width: 40rem;\n    }\n  }\n\n  @media (min-width: 48rem) {\n    .container {\n      max-width: 48rem;\n    }\n  }\n\n  @media (min-width: 64rem) {\n    .container {\n      max-width: 64rem;\n    }\n  }\n\n  @media (min-width: 80rem) {\n    .container {\n      max-width: 80rem;\n    }\n  }\n\n  @media (min-width: 96rem) {\n    .container {\n      max-width: 96rem;\n    }\n  }\n\n  .m-1 {\n    margin: calc(var(--spacing) * 1);\n  }\n\n  .mt-1 {\n    margin-top: calc(var(--spacing) * 1);\n  }\n\n  .mt-2 {\n    margin-top: calc(var(--spacing) * 2);\n  }\n\n  .block {\n    display: block;\n  }\n\n  .contents {\n    display: contents;\n  }\n\n  .flex {\n    display: flex;\n  }\n\n  .grid {\n    display: grid;\n  }\n\n  .hidden {\n    display: none;\n  }\n\n  .inline {\n    display: inline;\n  }\n\n  .inline-flex {\n    display: inline-flex;\n  }\n\n  .inline-grid {\n    display: inline-grid;\n  }\n\n  .table {\n    display: table;\n  }\n\n  .h-3 {\n    height: calc(var(--spacing) * 3);\n  }\n\n  .h-3\\.5 {\n    height: calc(var(--spacing) * 3.5);\n  }\n\n  .h-4 {\n    height: calc(var(--spacing) * 4);\n  }\n\n  .h-10 {\n    height: calc(var(--spacing) * 10);\n  }\n\n  .h-11 {\n    height: calc(var(--spacing) * 11);\n  }\n\n  .h-12 {\n    height: calc(var(--spacing) * 12);\n  }\n\n  .h-32 {\n    height: calc(var(--spacing) * 32);\n  }\n\n  .h-44 {\n    height: calc(var(--spacing) * 44);\n  }\n\n  .h-\\[42px\\] {\n    height: 42px;\n  }\n\n  .h-\\[118px\\] {\n    height: 118px;\n  }\n\n  .h-\\[180px\\] {\n    height: 180px;\n  }\n\n  .h-\\[320px\\] {\n    height: 320px;\n  }\n\n  .h-full {\n    height: 100%;\n  }\n\n  .min-h-0 {\n    min-height: calc(var(--spacing) * 0);\n  }\n\n  .min-h-\\[220px\\] {\n    min-height: 220px;\n  }\n\n  .min-h-\\[356px\\] {\n    min-height: 356px;\n  }\n\n  .w-3 {\n    width: calc(var(--spacing) * 3);\n  }\n\n  .w-3\\.5 {\n    width: calc(var(--spacing) * 3.5);\n  }\n\n  .w-6 {\n    width: calc(var(--spacing) * 6);\n  }\n\n  .w-10 {\n    width: calc(var(--spacing) * 10);\n  }\n\n  .w-\\[118px\\] {\n    width: 118px;\n  }\n\n  .w-full {\n    width: 100%;\n  }\n\n  .max-w-\\[280px\\] {\n    max-width: 280px;\n  }\n\n  .max-w-\\[1080px\\] {\n    max-width: 1080px;\n  }\n\n  .min-w-0 {\n    min-width: calc(var(--spacing) * 0);\n  }\n\n  .flex-1 {\n    flex: 1;\n  }\n\n  .flex-shrink, .shrink {\n    flex-shrink: 1;\n  }\n\n  .flex-grow, .grow {\n    flex-grow: 1;\n  }\n\n  .border-collapse {\n    border-collapse: collapse;\n  }\n\n  .-translate-y-1 {\n    --tw-translate-y: calc(var(--spacing) * -1);\n    translate: var(--tw-translate-x) var(--tw-translate-y);\n  }\n\n  .-translate-y-1\\/2 {\n    --tw-translate-y: calc(calc(1 / 2 * 100%) * -1);\n    translate: var(--tw-translate-x) var(--tw-translate-y);\n  }\n\n  .transform {\n    transform: var(--tw-rotate-x, ) var(--tw-rotate-y, ) var(--tw-rotate-z, ) var(--tw-skew-x, ) var(--tw-skew-y, );\n  }\n\n  .cursor-pointer {\n    cursor: pointer;\n  }\n\n  .touch-none {\n    touch-action: none;\n  }\n\n  .resize {\n    resize: both;\n  }\n\n  .appearance-none {\n    appearance: none;\n  }\n\n  .grid-cols-1 {\n    grid-template-columns: repeat(1, minmax(0, 1fr));\n  }\n\n  .grid-cols-3 {\n    grid-template-columns: repeat(3, minmax(0, 1fr));\n  }\n\n  .grid-cols-\\[56px_minmax\\(0\\,1fr\\)\\] {\n    grid-template-columns: 56px minmax(0, 1fr);\n  }\n\n  .grid-cols-\\[minmax\\(0\\,1fr\\)_88px\\] {\n    grid-template-columns: minmax(0, 1fr) 88px;\n  }\n\n  .grid-cols-\\[minmax\\(0\\,1fr\\)_92px\\] {\n    grid-template-columns: minmax(0, 1fr) 92px;\n  }\n\n  .grid-cols-\\[minmax\\(0\\,1fr\\)_92px_auto\\] {\n    grid-template-columns: minmax(0, 1fr) 92px auto;\n  }\n\n  .grid-cols-\\[minmax\\(0\\,1fr\\)_auto\\] {\n    grid-template-columns: minmax(0, 1fr) auto;\n  }\n\n  .grid-cols-\\[minmax\\(280px\\,1fr\\)_minmax\\(0\\,2fr\\)\\] {\n    grid-template-columns: minmax(280px, 1fr) minmax(0, 2fr);\n  }\n\n  .grid-rows-\\[auto_minmax\\(0\\,1fr\\)_auto\\] {\n    grid-template-rows: auto minmax(0, 1fr) auto;\n  }\n\n  .grid-rows-\\[minmax\\(356px\\,0\\.9fr\\)_auto_auto\\] {\n    grid-template-rows: minmax(356px, .9fr) auto auto;\n  }\n\n  .flex-col {\n    flex-direction: column;\n  }\n\n  .flex-wrap {\n    flex-wrap: wrap;\n  }\n\n  .items-center {\n    align-items: center;\n  }\n\n  .items-end {\n    align-items: flex-end;\n  }\n\n  .items-start {\n    align-items: flex-start;\n  }\n\n  .items-stretch {\n    align-items: stretch;\n  }\n\n  .justify-between {\n    justify-content: space-between;\n  }\n\n  .justify-center {\n    justify-content: center;\n  }\n\n  .justify-end {\n    justify-content: flex-end;\n  }\n\n  .justify-start {\n    justify-content: flex-start;\n  }\n\n  .gap-1 {\n    gap: calc(var(--spacing) * 1);\n  }\n\n  .gap-2 {\n    gap: calc(var(--spacing) * 2);\n  }\n\n  .gap-3 {\n    gap: calc(var(--spacing) * 3);\n  }\n\n  .gap-4 {\n    gap: calc(var(--spacing) * 4);\n  }\n\n  .gap-5 {\n    gap: calc(var(--spacing) * 5);\n  }\n\n  .self-start {\n    align-self: flex-start;\n  }\n\n  .truncate {\n    text-overflow: ellipsis;\n    white-space: nowrap;\n    overflow: hidden;\n  }\n\n  .overflow-auto {\n    overflow: auto;\n  }\n\n  .overflow-hidden {\n    overflow: hidden;\n  }\n\n  .overflow-x-hidden {\n    overflow-x: hidden;\n  }\n\n  .overflow-y-auto {\n    overflow-y: auto;\n  }\n\n  .rounded {\n    border-radius: .25rem;\n  }\n\n  .rounded-2xl {\n    border-radius: var(--radius-2xl);\n  }\n\n  .rounded-\\[14px\\] {\n    border-radius: 14px;\n  }\n\n  .rounded-\\[16px\\] {\n    border-radius: 16px;\n  }\n\n  .rounded-\\[18px\\] {\n    border-radius: 18px;\n  }\n\n  .rounded-\\[20px\\] {\n    border-radius: 20px;\n  }\n\n  .rounded-\\[22px\\] {\n    border-radius: 22px;\n  }\n\n  .rounded-\\[24px\\] {\n    border-radius: 24px;\n  }\n\n  .rounded-\\[28px\\] {\n    border-radius: 28px;\n  }\n\n  .rounded-\\[30px\\] {\n    border-radius: 30px;\n  }\n\n  .rounded-full {\n    border-radius: 3.40282e38px;\n  }\n\n  .border {\n    border-style: var(--tw-border-style);\n    border-width: 1px;\n  }\n\n  .border-cyan-300 {\n    border-color: var(--color-cyan-300);\n  }\n\n  .border-cyan-300\\/15 {\n    border-color: #53eafd26;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-cyan-300\\/15 {\n      border-color: color-mix(in oklab, var(--color-cyan-300) 15%, transparent);\n    }\n  }\n\n  .border-fuchsia-300 {\n    border-color: var(--color-fuchsia-300);\n  }\n\n  .border-fuchsia-300\\/15 {\n    border-color: #f2a9ff26;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-fuchsia-300\\/15 {\n      border-color: color-mix(in oklab, var(--color-fuchsia-300) 15%, transparent);\n    }\n  }\n\n  .border-sky-300 {\n    border-color: var(--color-sky-300);\n  }\n\n  .border-sky-300\\/15 {\n    border-color: #77d4ff26;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-sky-300\\/15 {\n      border-color: color-mix(in oklab, var(--color-sky-300) 15%, transparent);\n    }\n  }\n\n  .border-white {\n    border-color: var(--color-white);\n  }\n\n  .border-white\\/6 {\n    border-color: #ffffff0f;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-white\\/6 {\n      border-color: color-mix(in oklab, var(--color-white) 6%, transparent);\n    }\n  }\n\n  .border-white\\/8 {\n    border-color: #ffffff14;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-white\\/8 {\n      border-color: color-mix(in oklab, var(--color-white) 8%, transparent);\n    }\n  }\n\n  .border-white\\/10 {\n    border-color: #ffffff1a;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-white\\/10 {\n      border-color: color-mix(in oklab, var(--color-white) 10%, transparent);\n    }\n  }\n\n  .bg-\\[\\#070b16\\] {\n    background-color: #070b16;\n  }\n\n  .bg-\\[\\#09101d\\]\\/95 {\n    background-color: oklab(17.3432% -.0040513 -.029082 / .95);\n  }\n\n  .bg-\\[\\#030711\\]\\/85 {\n    background-color: oklab(12.8817% -.00430492 -.0249884 / .85);\n  }\n\n  .bg-black {\n    background-color: var(--color-black);\n  }\n\n  .bg-black\\/20 {\n    background-color: #0003;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-black\\/20 {\n      background-color: color-mix(in oklab, var(--color-black) 20%, transparent);\n    }\n  }\n\n  .bg-black\\/25 {\n    background-color: #00000040;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-black\\/25 {\n      background-color: color-mix(in oklab, var(--color-black) 25%, transparent);\n    }\n  }\n\n  .bg-black\\/35 {\n    background-color: #00000059;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-black\\/35 {\n      background-color: color-mix(in oklab, var(--color-black) 35%, transparent);\n    }\n  }\n\n  .bg-black\\/40 {\n    background-color: #0006;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-black\\/40 {\n      background-color: color-mix(in oklab, var(--color-black) 40%, transparent);\n    }\n  }\n\n  .bg-cyan-300 {\n    background-color: var(--color-cyan-300);\n  }\n\n  .bg-cyan-300\\/8 {\n    background-color: #53eafd14;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-cyan-300\\/8 {\n      background-color: color-mix(in oklab, var(--color-cyan-300) 8%, transparent);\n    }\n  }\n\n  .bg-fuchsia-300 {\n    background-color: var(--color-fuchsia-300);\n  }\n\n  .bg-fuchsia-300\\/8 {\n    background-color: #f2a9ff14;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-fuchsia-300\\/8 {\n      background-color: color-mix(in oklab, var(--color-fuchsia-300) 8%, transparent);\n    }\n  }\n\n  .bg-sky-300 {\n    background-color: var(--color-sky-300);\n  }\n\n  .bg-sky-300\\/8 {\n    background-color: #77d4ff14;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-sky-300\\/8 {\n      background-color: color-mix(in oklab, var(--color-sky-300) 8%, transparent);\n    }\n  }\n\n  .bg-white {\n    background-color: var(--color-white);\n  }\n\n  .bg-white\\/\\[0\\.03\\] {\n    background-color: #ffffff08;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-white\\/\\[0\\.03\\] {\n      background-color: color-mix(in oklab, var(--color-white) 3%, transparent);\n    }\n  }\n\n  .bg-white\\/\\[0\\.04\\] {\n    background-color: #ffffff0a;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-white\\/\\[0\\.04\\] {\n      background-color: color-mix(in oklab, var(--color-white) 4%, transparent);\n    }\n  }\n\n  .bg-white\\/\\[0\\.08\\] {\n    background-color: #ffffff14;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-white\\/\\[0\\.08\\] {\n      background-color: color-mix(in oklab, var(--color-white) 8%, transparent);\n    }\n  }\n\n  .mask-repeat {\n    -webkit-mask-repeat: repeat;\n    mask-repeat: repeat;\n  }\n\n  .fill-cyan-200 {\n    fill: var(--color-cyan-200);\n  }\n\n  .fill-fuchsia-200 {\n    fill: var(--color-fuchsia-200);\n  }\n\n  .p-0 {\n    padding: calc(var(--spacing) * 0);\n  }\n\n  .p-1 {\n    padding: calc(var(--spacing) * 1);\n  }\n\n  .p-2 {\n    padding: calc(var(--spacing) * 2);\n  }\n\n  .p-3 {\n    padding: calc(var(--spacing) * 3);\n  }\n\n  .p-4 {\n    padding: calc(var(--spacing) * 4);\n  }\n\n  .p-5 {\n    padding: calc(var(--spacing) * 5);\n  }\n\n  .p-6 {\n    padding: calc(var(--spacing) * 6);\n  }\n\n  .px-2 {\n    padding-inline: calc(var(--spacing) * 2);\n  }\n\n  .px-3 {\n    padding-inline: calc(var(--spacing) * 3);\n  }\n\n  .px-4 {\n    padding-inline: calc(var(--spacing) * 4);\n  }\n\n  .px-5 {\n    padding-inline: calc(var(--spacing) * 5);\n  }\n\n  .py-1 {\n    padding-block: calc(var(--spacing) * 1);\n  }\n\n  .py-2 {\n    padding-block: calc(var(--spacing) * 2);\n  }\n\n  .py-2\\.5 {\n    padding-block: calc(var(--spacing) * 2.5);\n  }\n\n  .py-3 {\n    padding-block: calc(var(--spacing) * 3);\n  }\n\n  .py-4 {\n    padding-block: calc(var(--spacing) * 4);\n  }\n\n  .py-5 {\n    padding-block: calc(var(--spacing) * 5);\n  }\n\n  .pt-1 {\n    padding-top: calc(var(--spacing) * 1);\n  }\n\n  .pr-1 {\n    padding-right: calc(var(--spacing) * 1);\n  }\n\n  .pr-4 {\n    padding-right: calc(var(--spacing) * 4);\n  }\n\n  .pr-10 {\n    padding-right: calc(var(--spacing) * 10);\n  }\n\n  .pb-5 {\n    padding-bottom: calc(var(--spacing) * 5);\n  }\n\n  .text-left {\n    text-align: left;\n  }\n\n  .text-right {\n    text-align: right;\n  }\n\n  .font-mono {\n    font-family: var(--font-mono);\n  }\n\n  .text-2xl {\n    font-size: var(--text-2xl);\n    line-height: var(--tw-leading, var(--text-2xl--line-height));\n  }\n\n  .text-3xl {\n    font-size: var(--text-3xl);\n    line-height: var(--tw-leading, var(--text-3xl--line-height));\n  }\n\n  .text-sm {\n    font-size: var(--text-sm);\n    line-height: var(--tw-leading, var(--text-sm--line-height));\n  }\n\n  .text-xs {\n    font-size: var(--text-xs);\n    line-height: var(--tw-leading, var(--text-xs--line-height));\n  }\n\n  .text-\\[10px\\] {\n    font-size: 10px;\n  }\n\n  .text-\\[11px\\] {\n    font-size: 11px;\n  }\n\n  .font-semibold {\n    --tw-font-weight: var(--font-weight-semibold);\n    font-weight: var(--font-weight-semibold);\n  }\n\n  .tracking-\\[-0\\.04em\\] {\n    --tw-tracking: -.04em;\n    letter-spacing: -.04em;\n  }\n\n  .tracking-\\[0\\.16em\\] {\n    --tw-tracking: .16em;\n    letter-spacing: .16em;\n  }\n\n  .tracking-\\[0\\.18em\\] {\n    --tw-tracking: .18em;\n    letter-spacing: .18em;\n  }\n\n  .tracking-\\[0\\.22em\\] {\n    --tw-tracking: .22em;\n    letter-spacing: .22em;\n  }\n\n  .tracking-\\[0\\.24em\\] {\n    --tw-tracking: .24em;\n    letter-spacing: .24em;\n  }\n\n  .text-wrap {\n    text-wrap: wrap;\n  }\n\n  .text-amber-100 {\n    color: var(--color-amber-100);\n  }\n\n  .text-blue-300 {\n    color: var(--color-blue-300);\n  }\n\n  .text-blue-300\\/70 {\n    color: #90c5ffb3;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-blue-300\\/70 {\n      color: color-mix(in oklab, var(--color-blue-300) 70%, transparent);\n    }\n  }\n\n  .text-cyan-100 {\n    color: var(--color-cyan-100);\n  }\n\n  .text-cyan-100\\/85 {\n    color: #cefafed9;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-cyan-100\\/85 {\n      color: color-mix(in oklab, var(--color-cyan-100) 85%, transparent);\n    }\n  }\n\n  .text-cyan-200 {\n    color: var(--color-cyan-200);\n  }\n\n  .text-cyan-200\\/70 {\n    color: #a2f4fdb3;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-cyan-200\\/70 {\n      color: color-mix(in oklab, var(--color-cyan-200) 70%, transparent);\n    }\n  }\n\n  .text-cyan-200\\/80 {\n    color: #a2f4fdcc;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-cyan-200\\/80 {\n      color: color-mix(in oklab, var(--color-cyan-200) 80%, transparent);\n    }\n  }\n\n  .text-cyan-300 {\n    color: var(--color-cyan-300);\n  }\n\n  .text-cyan-300\\/70 {\n    color: #53eafdb3;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-cyan-300\\/70 {\n      color: color-mix(in oklab, var(--color-cyan-300) 70%, transparent);\n    }\n  }\n\n  .text-fuchsia-100 {\n    color: var(--color-fuchsia-100);\n  }\n\n  .text-fuchsia-100\\/90 {\n    color: #fae8ffe6;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-fuchsia-100\\/90 {\n      color: color-mix(in oklab, var(--color-fuchsia-100) 90%, transparent);\n    }\n  }\n\n  .text-fuchsia-200 {\n    color: var(--color-fuchsia-200);\n  }\n\n  .text-fuchsia-200\\/80 {\n    color: #f6cfffcc;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-fuchsia-200\\/80 {\n      color: color-mix(in oklab, var(--color-fuchsia-200) 80%, transparent);\n    }\n  }\n\n  .text-sky-100 {\n    color: var(--color-sky-100);\n  }\n\n  .text-sky-100\\/85 {\n    color: #dff2fed9;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-sky-100\\/85 {\n      color: color-mix(in oklab, var(--color-sky-100) 85%, transparent);\n    }\n  }\n\n  .text-sky-300 {\n    color: var(--color-sky-300);\n  }\n\n  .text-sky-300\\/70 {\n    color: #77d4ffb3;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-sky-300\\/70 {\n      color: color-mix(in oklab, var(--color-sky-300) 70%, transparent);\n    }\n  }\n\n  .text-slate-100 {\n    color: var(--color-slate-100);\n  }\n\n  .text-slate-200 {\n    color: var(--color-slate-200);\n  }\n\n  .text-slate-200\\/80 {\n    color: #e2e8f0cc;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-200\\/80 {\n      color: color-mix(in oklab, var(--color-slate-200) 80%, transparent);\n    }\n  }\n\n  .text-slate-300 {\n    color: var(--color-slate-300);\n  }\n\n  .text-slate-300\\/55 {\n    color: #cad5e28c;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-300\\/55 {\n      color: color-mix(in oklab, var(--color-slate-300) 55%, transparent);\n    }\n  }\n\n  .text-slate-300\\/60 {\n    color: #cad5e299;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-300\\/60 {\n      color: color-mix(in oklab, var(--color-slate-300) 60%, transparent);\n    }\n  }\n\n  .text-slate-300\\/70 {\n    color: #cad5e2b3;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-300\\/70 {\n      color: color-mix(in oklab, var(--color-slate-300) 70%, transparent);\n    }\n  }\n\n  .text-slate-300\\/75 {\n    color: #cad5e2bf;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-300\\/75 {\n      color: color-mix(in oklab, var(--color-slate-300) 75%, transparent);\n    }\n  }\n\n  .lowercase {\n    text-transform: lowercase;\n  }\n\n  .uppercase {\n    text-transform: uppercase;\n  }\n\n  .ordinal {\n    --tw-ordinal: ordinal;\n    font-variant-numeric: var(--tw-ordinal, ) var(--tw-slashed-zero, ) var(--tw-numeric-figure, ) var(--tw-numeric-spacing, ) var(--tw-numeric-fraction, );\n  }\n\n  .underline {\n    text-decoration-line: underline;\n  }\n\n  .opacity-0 {\n    opacity: 0;\n  }\n\n  .shadow {\n    --tw-shadow: 0 1px 3px 0 var(--tw-shadow-color, #0000001a), 0 1px 2px -1px var(--tw-shadow-color, #0000001a);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[0_10px_28px_rgba\\(0\\,0\\,0\\,0\\.22\\)\\] {\n    --tw-shadow: 0 10px 28px var(--tw-shadow-color, #00000038);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[0_10px_28px_rgba\\(0\\,0\\,0\\,0\\.28\\)\\] {\n    --tw-shadow: 0 10px 28px var(--tw-shadow-color, #00000047);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[0_18px_42px_rgba\\(3\\,6\\,18\\,0\\.45\\)\\] {\n    --tw-shadow: 0 18px 42px var(--tw-shadow-color, #03061273);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[0_26px_80px_rgba\\(0\\,0\\,0\\,0\\.48\\)\\] {\n    --tw-shadow: 0 26px 80px var(--tw-shadow-color, #0000007a);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[0_36px_80px_rgba\\(0\\,0\\,0\\,0\\.5\\)\\] {\n    --tw-shadow: 0 36px 80px var(--tw-shadow-color, #00000080);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[inset_0_0_0_1px_rgba\\(143\\,232\\,255\\,0\\.18\\)\\] {\n    --tw-shadow: inset 0 0 0 1px var(--tw-shadow-color, #8fe8ff2e);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .ring {\n    --tw-ring-shadow: var(--tw-ring-inset, ) 0 0 0 calc(1px + var(--tw-ring-offset-width)) var(--tw-ring-color, currentcolor);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .outline {\n    outline-style: var(--tw-outline-style);\n    outline-width: 1px;\n  }\n\n  .blur {\n    --tw-blur: blur(8px);\n    filter: var(--tw-blur, ) var(--tw-brightness, ) var(--tw-contrast, ) var(--tw-grayscale, ) var(--tw-hue-rotate, ) var(--tw-invert, ) var(--tw-saturate, ) var(--tw-sepia, ) var(--tw-drop-shadow, );\n  }\n\n  .invert {\n    --tw-invert: invert(100%);\n    filter: var(--tw-blur, ) var(--tw-brightness, ) var(--tw-contrast, ) var(--tw-grayscale, ) var(--tw-hue-rotate, ) var(--tw-invert, ) var(--tw-saturate, ) var(--tw-sepia, ) var(--tw-drop-shadow, );\n  }\n\n  .filter {\n    filter: var(--tw-blur, ) var(--tw-brightness, ) var(--tw-contrast, ) var(--tw-grayscale, ) var(--tw-hue-rotate, ) var(--tw-invert, ) var(--tw-saturate, ) var(--tw-sepia, ) var(--tw-drop-shadow, );\n  }\n\n  .backdrop-blur-md {\n    --tw-backdrop-blur: blur(var(--blur-md));\n    -webkit-backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );\n    backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );\n  }\n\n  .backdrop-filter {\n    -webkit-backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );\n    backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );\n  }\n\n  .transition {\n    transition-property: color, background-color, border-color, outline-color, text-decoration-color, fill, stroke, --tw-gradient-from, --tw-gradient-via, --tw-gradient-to, opacity, box-shadow, transform, translate, scale, rotate, filter, -webkit-backdrop-filter, backdrop-filter, display, content-visibility, overlay, pointer-events;\n    transition-timing-function: var(--tw-ease, var(--default-transition-timing-function));\n    transition-duration: var(--tw-duration, var(--default-transition-duration));\n  }\n\n  .outline-none {\n    --tw-outline-style: none;\n    outline-style: none;\n  }\n\n  @media (hover: hover) {\n    .hover\\:border-cyan-200\\/30:hover {\n      border-color: #a2f4fd4d;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:border-cyan-200\\/30:hover {\n        border-color: color-mix(in oklab, var(--color-cyan-200) 30%, transparent);\n      }\n    }\n\n    .hover\\:border-white\\/12:hover {\n      border-color: #ffffff1f;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:border-white\\/12:hover {\n        border-color: color-mix(in oklab, var(--color-white) 12%, transparent);\n      }\n    }\n\n    .hover\\:bg-black\\/24:hover {\n      background-color: #0000003d;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:bg-black\\/24:hover {\n        background-color: color-mix(in oklab, var(--color-black) 24%, transparent);\n      }\n    }\n\n    .hover\\:bg-white\\/\\[0\\.04\\]:hover {\n      background-color: #ffffff0a;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:bg-white\\/\\[0\\.04\\]:hover {\n        background-color: color-mix(in oklab, var(--color-white) 4%, transparent);\n      }\n    }\n\n    .hover\\:text-slate-100:hover {\n      color: var(--color-slate-100);\n    }\n  }\n\n  .focus\\:border-cyan-200\\/45:focus {\n    border-color: #a2f4fd73;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .focus\\:border-cyan-200\\/45:focus {\n      border-color: color-mix(in oklab, var(--color-cyan-200) 45%, transparent);\n    }\n  }\n\n  .disabled\\:opacity-35:disabled {\n    opacity: .35;\n  }\n\n  .disabled\\:opacity-40:disabled {\n    opacity: .4;\n  }\n\n  @media (min-width: 64rem) {\n    .lg\\:grid-cols-\\[220px_minmax\\(0\\,1fr\\)_minmax\\(0\\,1fr\\)\\] {\n      grid-template-columns: 220px minmax(0, 1fr) minmax(0, 1fr);\n    }\n\n    .lg\\:grid-cols-\\[220px_minmax\\(0\\,1fr\\)_minmax\\(0\\,1fr\\)_minmax\\(0\\,1fr\\)\\] {\n      grid-template-columns: 220px minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr);\n    }\n  }\n}\n\n:host {\n  color-scheme: dark;\n  width: 100%;\n  height: 100%;\n  display: block;\n}\n\n* {\n  box-sizing: border-box;\n}\n\nbutton, input, select {\n  font: inherit;\n}\n\n.cosimo-surface {\n  background: radial-gradient(circle at top, #7a8eff2e, #0000 34%), linear-gradient(#060a16fa, #03050c);\n}\n\n.cosimo-stage {\n  background: linear-gradient(#ffffff05 1px, #0000 1px) 0 0 / 24px 24px, linear-gradient(90deg, #ffffff05 1px, #0000 1px) 0 0 / 24px 24px, radial-gradient(circle at top, #7a8eff33, #0000 38%), linear-gradient(#050915fa, #02040b);\n}\n\n.cosimo-stage:after {\n  content: "";\n  pointer-events: none;\n  position: absolute;\n  inset: 0;\n  box-shadow: inset 0 1px #ffffff14, inset 0 -48px 64px #00000059;\n}\n\n.cosimo-range {\n  appearance: none;\n  background: linear-gradient(90deg, #5463c973, #f56cb673);\n  border-radius: 999px;\n  outline: none;\n  width: 100%;\n  height: 10px;\n}\n\n.cosimo-range::-webkit-slider-thumb {\n  appearance: none;\n  background: linear-gradient(#ffd8a6 0%, #f56cb6 100%);\n  border: 0;\n  border-radius: 999px;\n  width: 22px;\n  height: 22px;\n  box-shadow: 0 6px 18px #f56cb659;\n}\n\n.cosimo-range::-moz-range-thumb {\n  background: linear-gradient(#ffd8a6 0%, #f56cb6 100%);\n  border: 0;\n  border-radius: 999px;\n  width: 22px;\n  height: 22px;\n  box-shadow: 0 6px 18px #f56cb659;\n}\n\n.cosimo-select, .cosimo-button {\n  color: #eef2f5;\n  background: #ffffff0a;\n  border: 1px solid #ffffff14;\n}\n\n.cosimo-grid-line {\n  stroke: #ffffff14;\n  stroke-width: 1px;\n}\n\n.cosimo-curve-fill {\n  fill: #87d7f514;\n}\n\n.cosimo-curve-line {\n  fill: none;\n  stroke: #87d7f5;\n  stroke-width: 3px;\n  stroke-linecap: round;\n  stroke-linejoin: round;\n}\n\n.cosimo-curve-fill-muted {\n  fill: #e1e7f00a;\n}\n\n.cosimo-curve-line-muted {\n  stroke: #e1e7f061;\n}\n\n.cosimo-curve-line-highlight {\n  stroke: #32f0bc;\n}\n\n.cosimo-mseg-point-default {\n  fill: #87d7f5;\n  stroke: #050913;\n  stroke-width: 2px;\n}\n\n.cosimo-mseg-point-selected {\n  fill: #f5d0fe;\n  stroke: #050913;\n  stroke-width: 3px;\n}\n\n.cosimo-mseg-point-highlight {\n  fill: #32f0bc;\n  stroke: #050913;\n  stroke-width: 2px;\n}\n\n.cosimo-mseg-point-muted {\n  fill: #e1e7f0c7;\n  stroke: #050913;\n  stroke-width: 2px;\n  opacity: .62;\n}\n\n@property --tw-translate-x {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0;\n}\n\n@property --tw-translate-y {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0;\n}\n\n@property --tw-translate-z {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0;\n}\n\n@property --tw-rotate-x {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-rotate-y {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-rotate-z {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-skew-x {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-skew-y {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-border-style {\n  syntax: "*";\n  inherits: false;\n  initial-value: solid;\n}\n\n@property --tw-font-weight {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-tracking {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-ordinal {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-slashed-zero {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-numeric-figure {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-numeric-spacing {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-numeric-fraction {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-shadow {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0 0 #0000;\n}\n\n@property --tw-shadow-color {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-shadow-alpha {\n  syntax: "<percentage>";\n  inherits: false;\n  initial-value: 100%;\n}\n\n@property --tw-inset-shadow {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0 0 #0000;\n}\n\n@property --tw-inset-shadow-color {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-inset-shadow-alpha {\n  syntax: "<percentage>";\n  inherits: false;\n  initial-value: 100%;\n}\n\n@property --tw-ring-color {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-ring-shadow {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0 0 #0000;\n}\n\n@property --tw-inset-ring-color {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-inset-ring-shadow {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0 0 #0000;\n}\n\n@property --tw-ring-inset {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-ring-offset-width {\n  syntax: "<length>";\n  inherits: false;\n  initial-value: 0;\n}\n\n@property --tw-ring-offset-color {\n  syntax: "*";\n  inherits: false;\n  initial-value: #fff;\n}\n\n@property --tw-ring-offset-shadow {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0 0 #0000;\n}\n\n@property --tw-outline-style {\n  syntax: "*";\n  inherits: false;\n  initial-value: solid;\n}\n\n@property --tw-blur {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-brightness {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-contrast {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-grayscale {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-hue-rotate {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-invert {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-opacity {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-saturate {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-sepia {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-drop-shadow {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-drop-shadow-color {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-drop-shadow-alpha {\n  syntax: "<percentage>";\n  inherits: false;\n  initial-value: 100%;\n}\n\n@property --tw-drop-shadow-size {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-blur {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-brightness {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-contrast {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-grayscale {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-hue-rotate {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-invert {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-opacity {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-saturate {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-sepia {\n  syntax: "*";\n  inherits: false\n}\n';
 function assert$1(condition, message) {
   if (!condition) {
     throw new Error(message);
@@ -12946,17 +12946,17 @@ const MSEG_NOTE_OFF_POLICY_VALUES = /* @__PURE__ */ new Set([
   "immediate",
   "ignore"
 ]);
-function clamp$3(value, min, max) {
+function clamp$6(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 function almostEqual(left, right, epsilon = 1e-12) {
   return Math.abs(left - right) <= epsilon;
 }
 function clampCurvePower(value) {
-  return clamp$3(Number.isFinite(value) ? value : 0, -MSEG_CURVE_POWER_LIMIT, MSEG_CURVE_POWER_LIMIT);
+  return clamp$6(Number.isFinite(value) ? value : 0, -MSEG_CURVE_POWER_LIMIT, MSEG_CURVE_POWER_LIMIT);
 }
 function clamp01(value) {
-  return clamp$3(Number.isFinite(value) ? value : 0, 0, 1);
+  return clamp$6(Number.isFinite(value) ? value : 0, 0, 1);
 }
 function createDefaultMsegShape(name = MSEG_DEFAULT_NAME) {
   return {
@@ -12985,11 +12985,11 @@ function createDefaultMsegPlayback() {
   };
 }
 function clampMsegDepth(value) {
-  return clamp$3(Number.isFinite(value) ? value : 0, -1, 1);
+  return clamp$6(Number.isFinite(value) ? value : 0, -1, 1);
 }
 function clampMsegRateSeconds(value) {
   const numericValue = Number(value);
-  return clamp$3(
+  return clamp$6(
     Number.isFinite(numericValue) ? numericValue : 1,
     MSEG_RATE_MIN_SECONDS,
     MSEG_RATE_MAX_SECONDS
@@ -13177,53 +13177,25 @@ function evaluateMsegSegmentPoint(from, to, t) {
     curvePower: from.curvePower
   };
 }
-function findEvaluationSegment(points, x) {
-  if (x <= points[0].x) {
-    return { from: points[0], to: points[0], laterPointWins: false };
-  }
-  for (let index = 0; index < points.length - 1; index += 1) {
-    const from = points[index];
-    const to = points[index + 1];
-    if (x < to.x) {
-      return { from, to, laterPointWins: false };
-    }
-    if (almostEqual(x, to.x)) {
-      let latestIndex = index + 1;
-      while (latestIndex + 1 < points.length && almostEqual(points[latestIndex + 1].x, x)) {
-        latestIndex += 1;
-      }
-      return {
-        from: points[latestIndex],
-        to: points[latestIndex],
-        laterPointWins: true
-      };
-    }
-  }
-  return {
-    from: points[points.length - 1],
-    to: points[points.length - 1],
-    laterPointWins: false
-  };
-}
-function distanceSquaredToLineSegment(pointX, pointY, fromX, fromY, toX, toY) {
+function distanceSquaredToLineSegment(targetX, targetY, fromX, fromY, toX, toY) {
   const deltaX = toX - fromX;
   const deltaY = toY - fromY;
-  const lengthSquared = deltaX * deltaX + deltaY * deltaY;
-  if (lengthSquared <= 1e-12) {
-    const fallbackDeltaX = pointX - fromX;
-    const fallbackDeltaY = pointY - fromY;
-    return fallbackDeltaX * fallbackDeltaX + fallbackDeltaY * fallbackDeltaY;
+  const segmentLengthSquared = deltaX * deltaX + deltaY * deltaY;
+  if (segmentLengthSquared <= 1e-12) {
+    const pointDeltaX2 = targetX - fromX;
+    const pointDeltaY2 = targetY - fromY;
+    return pointDeltaX2 * pointDeltaX2 + pointDeltaY2 * pointDeltaY2;
   }
-  const projection = clamp$3(
-    ((pointX - fromX) * deltaX + (pointY - fromY) * deltaY) / lengthSquared,
+  const projection = clamp$6(
+    ((targetX - fromX) * deltaX + (targetY - fromY) * deltaY) / segmentLengthSquared,
     0,
     1
   );
-  const projectedX = fromX + deltaX * projection;
-  const projectedY = fromY + deltaY * projection;
-  const errorX = pointX - projectedX;
-  const errorY = pointY - projectedY;
-  return errorX * errorX + errorY * errorY;
+  const closestX = fromX + deltaX * projection;
+  const closestY = fromY + deltaY * projection;
+  const pointDeltaX = targetX - closestX;
+  const pointDeltaY = targetY - closestY;
+  return pointDeltaX * pointDeltaX + pointDeltaY * pointDeltaY;
 }
 function sampleMsegSegmentEditorPolyline(shape, segmentIndex, width, height, editorOptions = {}) {
   const normalizedShape = normalizeMsegShape(shape);
@@ -13287,8 +13259,35 @@ function sampleMsegEditorPolyline(shape, width, height, editorOptions = {}) {
   }
   return polyline;
 }
-function evaluateMsegShape(shape, x) {
-  const { points } = normalizeMsegShape(shape);
+function findEvaluationSegment(points, x) {
+  if (x <= points[0].x) {
+    return { from: points[0], to: points[0], laterPointWins: false };
+  }
+  for (let index = 0; index < points.length - 1; index += 1) {
+    const from = points[index];
+    const to = points[index + 1];
+    if (x < to.x) {
+      return { from, to, laterPointWins: false };
+    }
+    if (almostEqual(x, to.x)) {
+      let latestIndex = index + 1;
+      while (latestIndex + 1 < points.length && almostEqual(points[latestIndex + 1].x, x)) {
+        latestIndex += 1;
+      }
+      return {
+        from: points[latestIndex],
+        to: points[latestIndex],
+        laterPointWins: true
+      };
+    }
+  }
+  return {
+    from: points[points.length - 1],
+    to: points[points.length - 1],
+    laterPointWins: false
+  };
+}
+function evaluateNormalizedMsegShape(points, x) {
   const clampedX = clamp01(Number(x));
   const segment = findEvaluationSegment(points, clampedX);
   if (segment.laterPointWins || almostEqual(segment.from.x, segment.to.x)) {
@@ -13298,6 +13297,9 @@ function evaluateMsegShape(shape, x) {
   const t = width <= 0 ? 1 : (clampedX - segment.from.x) / width;
   const curvedT = clamp01(powerScale(t, segment.from.curvePower));
   return segment.from.y + (segment.to.y - segment.from.y) * curvedT;
+}
+function evaluateMsegShape(shape, x) {
+  return evaluateNormalizedMsegShape(normalizeMsegShape(shape).points, x);
 }
 function renderMsegShape(shape) {
   const normalizedShape = normalizeMsegShape(shape);
@@ -13372,6 +13374,46 @@ function findMsegSegmentHitIndex(shape, editorX, editorY, width, height, hitRadi
   }
   return closestSegmentIndex;
 }
+function deriveMsegSegmentCurvePower(shape, segmentIndex, x, y) {
+  const normalizedShape = normalizeMsegShape(shape);
+  if (!Number.isInteger(segmentIndex) || segmentIndex < 0 || segmentIndex >= normalizedShape.points.length - 1) {
+    throw new Error("segmentIndex must address a segment inside the shape");
+  }
+  const from = normalizedShape.points[segmentIndex];
+  const to = normalizedShape.points[segmentIndex + 1];
+  const width = to.x - from.x;
+  const deltaY = to.y - from.y;
+  if (width <= 1e-12 || Math.abs(deltaY) <= 1e-12) {
+    return 0;
+  }
+  const localX = clamp$6(clamp01(Number(x)), from.x, to.x);
+  const t = clamp$6((localX - from.x) / width, 1e-4, 1 - 1e-4);
+  const targetCurvedT = clamp$6((Number(y) - from.y) / deltaY, 1e-4, 1 - 1e-4);
+  if (!Number.isFinite(targetCurvedT) || almostEqual(targetCurvedT, t, 1e-4)) {
+    return 0;
+  }
+  let low = -MSEG_CURVE_POWER_LIMIT;
+  let high = MSEG_CURVE_POWER_LIMIT;
+  let lowValue = powerScale(t, low);
+  let highValue = powerScale(t, high);
+  const target = clamp$6(targetCurvedT, Math.min(lowValue, highValue), Math.max(lowValue, highValue));
+  const ascending = lowValue <= highValue;
+  for (let iteration = 0; iteration < 32; iteration += 1) {
+    const middle = (low + high) * 0.5;
+    const middleValue = powerScale(t, middle);
+    if (almostEqual(middleValue, target, 1e-5)) {
+      return clampCurvePower(middle);
+    }
+    if (ascending && middleValue < target || !ascending && middleValue > target) {
+      low = middle;
+      lowValue = middleValue;
+    } else {
+      high = middle;
+      highValue = middleValue;
+    }
+  }
+  return clampCurvePower((low + high) * 0.5);
+}
 function toMsegPlaybackConfigEvent(playback) {
   const normalizedPlayback = normalizeMsegPlayback(playback);
   return {
@@ -13424,7 +13466,7 @@ function moveMsegPoint(shape, pointIndex, x, y) {
   } else if (pointIndex === points.length - 1) {
     moved.x = 1;
   } else {
-    moved.x = clamp$3(clamp01(Number(x)), previousX, nextX);
+    moved.x = clamp$6(clamp01(Number(x)), previousX, nextX);
   }
   points[pointIndex] = moved;
   return normalizeMsegShape({
@@ -13452,10 +13494,7 @@ function setMsegSegmentCurvePower(shape, segmentIndex, curvePower) {
     throw new Error("segmentIndex must address a segment inside the shape");
   }
   const points = normalizedShape.points.map((point) => ({ ...point }));
-  points[segmentIndex] = {
-    ...points[segmentIndex],
-    curvePower: clampCurvePower(Number(curvePower))
-  };
+  points[segmentIndex].curvePower = clampCurvePower(Number(curvePower));
   return normalizeMsegShape({
     ...normalizedShape,
     points
@@ -13466,11 +13505,26 @@ const runtimeFailurePhaseBuildMip = 2;
 const runtimeFailurePhaseTransferMip = 3;
 const runtimeFailureReasonTimeout = 2;
 const runtimeFailureScopeService = 1;
-function clamp$2(value, min, max) {
+const FILTER_MODE_OFF$1 = 0;
+const FILTER_MODE_PEAK$1 = 5;
+const FILTER_CUTOFF_MIN_HZ$1 = 20;
+const FILTER_CUTOFF_MAX_HZ$1 = 2e4;
+const FILTER_Q_MIN$1 = 0.1;
+const FILTER_Q_MAX$1 = 20;
+function clamp$5(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
+function clampFilterCutoffHz$1(value) {
+  return clamp$5(Number(value) || 0, FILTER_CUTOFF_MIN_HZ$1, FILTER_CUTOFF_MAX_HZ$1);
+}
+function clampFilterQ$1(value) {
+  return clamp$5(Number(value) || 0, FILTER_Q_MIN$1, FILTER_Q_MAX$1);
+}
+function clampFilterMode$1(value) {
+  return clamp$5(Math.round(Number(value) || 0), FILTER_MODE_OFF$1, FILTER_MODE_PEAK$1);
+}
 function clampDisplayPosition(value) {
-  return clamp$2(Number(value) || 0, 0, 1);
+  return clamp$5(Number(value) || 0, 0, 1);
 }
 function mapDisplayDragToPosition(startValue, startClientY, nextClientY, dragSpan) {
   const safeSpan = Math.max(1, Number(dragSpan) || 0);
@@ -13507,6 +13561,49 @@ function selectObservedWavetablePositionState(currentState, message) {
     position: 0
   };
   const nextState = normalizeEffectiveWavetablePositionMessage(message);
+  if (!nextState) {
+    return previousState;
+  }
+  if (nextState.voiceGeneration < previousState.voiceGeneration) {
+    return previousState;
+  }
+  return nextState;
+}
+function normalizeEffectiveFilterStateMessage(message) {
+  const payload = message?.event ?? message;
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+  const rawCutoff = Number(payload.cutoffHz);
+  const rawQ = Number(payload.q);
+  if (!Number.isFinite(rawCutoff) || !Number.isFinite(rawQ)) {
+    return null;
+  }
+  const rawGeneration = Number(payload.voiceGeneration);
+  const rawHasActive = payload.hasActive;
+  return {
+    voiceGeneration: Number.isFinite(rawGeneration) ? Math.max(0, Math.trunc(rawGeneration)) : 0,
+    hasActive: Boolean(rawHasActive),
+    mode: clampFilterMode$1(payload.mode),
+    cutoffHz: clampFilterCutoffHz$1(rawCutoff),
+    q: clampFilterQ$1(rawQ)
+  };
+}
+function selectObservedEffectiveFilterState(currentState, message) {
+  const previousState = currentState && typeof currentState === "object" ? {
+    voiceGeneration: Number.isFinite(Number(currentState.voiceGeneration)) ? Math.trunc(Number(currentState.voiceGeneration)) : -1,
+    hasActive: Boolean(currentState.hasActive),
+    mode: clampFilterMode$1(currentState.mode),
+    cutoffHz: clampFilterCutoffHz$1(currentState.cutoffHz),
+    q: clampFilterQ$1(currentState.q)
+  } : {
+    voiceGeneration: -1,
+    hasActive: false,
+    mode: FILTER_MODE_OFF$1,
+    cutoffHz: FILTER_CUTOFF_MIN_HZ$1,
+    q: 0.707107
+  };
+  const nextState = normalizeEffectiveFilterStateMessage(message);
   if (!nextState) {
     return previousState;
   }
@@ -13646,7 +13743,7 @@ const WARP_MODE_PWM = 2;
 const WARP_MODE_ASYM = 3;
 const WARP_MODE_MIRROR = 4;
 const DEFAULT_WAVETABLE_THEME = createDefaultWavetableTheme();
-function clamp$1(value, min, max) {
+function clamp$4(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 function requestNextAnimationFrame(callback) {
@@ -13690,10 +13787,10 @@ function assertFrames(frames) {
   }
 }
 function resolveWarpMode(rawMode) {
-  return clamp$1(Math.round(Number(rawMode) || 0), WARP_MODE_OFF, WARP_MODE_MIRROR);
+  return clamp$4(Math.round(Number(rawMode) || 0), WARP_MODE_OFF, WARP_MODE_MIRROR);
 }
 function isIdentityWarp(warpMode, warpAmount) {
-  const clampedAmount = clamp$1(Number(warpAmount) || 0, 0, 1);
+  const clampedAmount = clamp$4(Number(warpAmount) || 0, 0, 1);
   if (warpMode <= WARP_MODE_OFF) {
     return true;
   }
@@ -13712,46 +13809,46 @@ function isIdentityWarp(warpMode, warpAmount) {
   return true;
 }
 function curvedWarpRight(phase, amount) {
-  const clampedPhase = clamp$1(Number(phase) || 0, 0, 1);
-  const clampedAmount = clamp$1(Number(amount) || 0, 0, 1);
+  const clampedPhase = clamp$4(Number(phase) || 0, 0, 1);
+  const clampedAmount = clamp$4(Number(amount) || 0, 0, 1);
   const exponent = Math.pow(2, 4 * clampedAmount);
   return Math.pow(clampedPhase, exponent);
 }
 function curvedWarpLeft(phase, amount) {
-  const clampedPhase = clamp$1(Number(phase) || 0, 0, 1);
-  const clampedAmount = clamp$1(Number(amount) || 0, 0, 1);
+  const clampedPhase = clamp$4(Number(phase) || 0, 0, 1);
+  const clampedAmount = clamp$4(Number(amount) || 0, 0, 1);
   const exponent = Math.pow(2, 4 * clampedAmount);
   return 1 - Math.pow(1 - clampedPhase, exponent);
 }
 function curvedAsymSigned(phase, dial) {
-  const clampedDial = clamp$1(Number(dial) || 0, 0, 1);
+  const clampedDial = clamp$4(Number(dial) || 0, 0, 1);
   const signedAmount = 2 * clampedDial - 1;
   const magnitude = Math.abs(signedAmount);
   return signedAmount >= 0 ? curvedWarpRight(phase, magnitude) : curvedWarpLeft(phase, magnitude);
 }
 function linearSkewSigned(phase, dial) {
-  const clampedPhase = clamp$1(Number(phase) || 0, 0, 1);
-  const clampedDial = clamp$1(Number(dial) || 0, 0, 1);
+  const clampedPhase = clamp$4(Number(phase) || 0, 0, 1);
+  const clampedDial = clamp$4(Number(dial) || 0, 0, 1);
   const signedAmount = 2 * clampedDial - 1;
-  const split = clamp$1(0.5 + 0.48 * signedAmount, 0.02, 0.98);
+  const split = clamp$4(0.5 + 0.48 * signedAmount, 0.02, 0.98);
   if (clampedPhase < split) {
     return 0.5 * (clampedPhase / split);
   }
   return 0.5 + 0.5 * ((clampedPhase - split) / (1 - split));
 }
 function mirrorBasePhase(phase) {
-  const clampedPhase = clamp$1(Number(phase) || 0, 0, 1);
+  const clampedPhase = clamp$4(Number(phase) || 0, 0, 1);
   if (clampedPhase < 0.5) {
     return clampedPhase * 2;
   }
   return 2 - 2 * clampedPhase;
 }
 function pwmActivePortion(amount) {
-  const clampedAmount = clamp$1(Number(amount) || 0, 0, 1);
+  const clampedAmount = clamp$4(Number(amount) || 0, 0, 1);
   return 1 - (1 - 0.02) * clampedAmount;
 }
 function resolveDisplayWarpPhase(warpMode, warpAmount, phase) {
-  const clampedPhase = clamp$1(Number(phase) || 0, 0, 1);
+  const clampedPhase = clamp$4(Number(phase) || 0, 0, 1);
   const result = {
     shouldLookup: true,
     phase: clampedPhase
@@ -13759,7 +13856,7 @@ function resolveDisplayWarpPhase(warpMode, warpAmount, phase) {
   if (warpMode <= WARP_MODE_OFF || clampedPhase >= 1) {
     return result;
   }
-  const clampedAmount = clamp$1(Number(warpAmount) || 0, 0, 1);
+  const clampedAmount = clamp$4(Number(warpAmount) || 0, 0, 1);
   if (warpMode === WARP_MODE_BEND) {
     const invertedDial = 1 - clampedAmount;
     if (clampedPhase < 0.5) {
@@ -13789,7 +13886,7 @@ function resolveDisplayWarpPhase(warpMode, warpAmount, phase) {
   return result;
 }
 function sampleDisplayFrame(frame, phase) {
-  const safePhase = clamp$1(Number(phase) || 0, 0, 1);
+  const safePhase = clamp$4(Number(phase) || 0, 0, 1);
   const frameLength = frame.length;
   if (frameLength === 0) {
     return 0;
@@ -13900,10 +13997,10 @@ function createCamera() {
 }
 function createViewportPadding(width, height) {
   return {
-    left: clamp$1(width * 0.06, 22, 48),
-    right: clamp$1(width * 0.06, 22, 48),
-    top: clamp$1(height * 0.1, 20, 56),
-    bottom: clamp$1(height * 0.09, 20, 52)
+    left: clamp$4(width * 0.06, 22, 48),
+    right: clamp$4(width * 0.06, 22, 48),
+    top: clamp$4(height * 0.1, 20, 56),
+    bottom: clamp$4(height * 0.09, 20, 52)
   };
 }
 function projectWorldPoint(point, camera) {
@@ -13957,10 +14054,10 @@ function createProjection(points, width, height) {
   };
 }
 function getSurfacePointCount(width, sampleCount) {
-  return clamp$1(Math.round(width / 10), 64, Math.min(128, sampleCount));
+  return clamp$4(Math.round(width / 10), 64, Math.min(128, sampleCount));
 }
 function getContourPointCount(width, sampleCount) {
-  return clamp$1(Math.round(width / 4), 128, Math.min(256, sampleCount));
+  return clamp$4(Math.round(width / 4), 128, Math.min(256, sampleCount));
 }
 function createObjectPoints(samples, depth) {
   const points = new Array(samples.length);
@@ -14135,8 +14232,8 @@ function createSurfaceBands(projectedFrames) {
       const lightDirection = normaliseVector({ x: -0.2, y: 0.95, z: -0.5 });
       const averageCameraDepth = quad.reduce((total, point) => total + point.cameraDepth, 0) / quad.length;
       const depthNormalized = (frontFrame.depthNormalized + backFrame.depthNormalized) * 0.5;
-      const slopeLight = clamp$1((dotProduct(surfaceNormal, lightDirection) + 1) * 0.5, 0, 1);
-      const ridgeAmount = clamp$1(
+      const slopeLight = clamp$4((dotProduct(surfaceNormal, lightDirection) + 1) * 0.5, 0, 1);
+      const ridgeAmount = clamp$4(
         Math.abs(frontFrame.samples[sampleIndex + 1] - frontFrame.samples[sampleIndex]) * 0.95 + Math.abs(backFrame.samples[sampleIndex + 1] - backFrame.samples[sampleIndex]) * 0.95,
         0,
         1
@@ -14161,7 +14258,7 @@ function createSurfaceRibs(projectedFrames) {
   if (sampleCount < 3) {
     return [];
   }
-  const desiredRibCount = clamp$1(Math.round(sampleCount / 10), 8, 14);
+  const desiredRibCount = clamp$4(Math.round(sampleCount / 10), 8, 14);
   const selectedColumns = /* @__PURE__ */ new Set([0, sampleCount - 1]);
   for (let ribIndex = 1; ribIndex < desiredRibCount - 1; ribIndex += 1) {
     selectedColumns.add(
@@ -14204,7 +14301,7 @@ function createInterpolatedSurfaceSlices(sourceFrames, camera, projection) {
   if (frameCount === 0) {
     return [];
   }
-  const sliceCount = clamp$1(frameCount * 3 - 2, 17, 41);
+  const sliceCount = clamp$4(frameCount * 3 - 2, 17, 41);
   const slices = [];
   for (let sliceIndex = 0; sliceIndex < sliceCount; sliceIndex += 1) {
     const framePosition = sliceIndex * (frameCount - 1) / Math.max(1, sliceCount - 1);
@@ -14245,7 +14342,7 @@ function createCurrentSlice(staticScene, frameState) {
   const lowFrame = staticScene.contourFrames[frameState.frameLo];
   const highFrame = staticScene.contourFrames[frameState.frameHi];
   const warpMode = resolveWarpMode(frameState.warpMode);
-  const warpAmount = clamp$1(Number(frameState.warpAmount) || 0, 0, 1);
+  const warpAmount = clamp$4(Number(frameState.warpAmount) || 0, 0, 1);
   const blendedSamples = isIdentityWarp(warpMode, warpAmount) ? buildInterpolatedFrame(lowFrame.samples, highFrame.samples, frameState.frameT) : buildWarpedFrame(lowFrame.samples, highFrame.samples, frameState.frameT, warpMode, warpAmount);
   const depth = getSceneDepth(frameState.frameIndex, staticScene.frameCount);
   const objectPoints = createObjectPoints(blendedSamples, depth);
@@ -14259,8 +14356,8 @@ function createCurrentSlice(staticScene, frameState) {
   const labelAnchor = points[Math.floor(points.length * 0.78)] ?? points[points.length - 1];
   const label = {
     text: buildCurrentSliceLabel(frameState, staticScene.frameCount),
-    x: clamp$1(labelAnchor.x + 14, 18, staticScene.width - 236),
-    y: clamp$1(labelAnchor.y - 18, 24, staticScene.height - 24)
+    x: clamp$4(labelAnchor.x + 14, 18, staticScene.width - 236),
+    y: clamp$4(labelAnchor.y - 18, 24, staticScene.height - 24)
   };
   return {
     frameState,
@@ -14275,7 +14372,7 @@ function createCurrentSlice(staticScene, frameState) {
 }
 function buildCurrentSliceLabel(frameState, frameCount) {
   const warpMode = resolveWarpMode(frameState.warpMode);
-  const warpAmount = clamp$1(Number(frameState.warpAmount) || 0, 0, 1);
+  const warpAmount = clamp$4(Number(frameState.warpAmount) || 0, 0, 1);
   const baseLabel = `Frame ${frameState.frameIndex.toFixed(2)} / ${frameCount - 1}`;
   if (isIdentityWarp(warpMode, warpAmount)) {
     return baseLabel;
@@ -14299,7 +14396,7 @@ function buildCurrentSliceLabel(frameState, frameCount) {
 }
 function createFrameState(frameCount, position, warpMode = 0, warpAmount = 0) {
   const safeFrameCount = Math.max(1, Number(frameCount) || 0);
-  const clampedPosition = clamp$1(Number(position) || 0, 0, 1);
+  const clampedPosition = clamp$4(Number(position) || 0, 0, 1);
   const frameIndex = clampedPosition * (safeFrameCount - 1);
   const frameLo = Math.floor(frameIndex);
   const frameHi = Math.min(frameLo + 1, safeFrameCount - 1);
@@ -14312,7 +14409,7 @@ function createFrameState(frameCount, position, warpMode = 0, warpAmount = 0) {
     frameHi,
     frameT,
     warpMode: resolveWarpMode(warpMode),
-    warpAmount: clamp$1(Number(warpAmount) || 0, 0, 1)
+    warpAmount: clamp$4(Number(warpAmount) || 0, 0, 1)
   };
 }
 function decimateFrame(frame, targetPointCount) {
@@ -14474,7 +14571,7 @@ function drawWavetableModel(context, model, theme = DEFAULT_WAVETABLE_THEME) {
     context.restore();
   }
   for (const contour of model.contours) {
-    const strokeColour = mixRGB(theme.frameColor, theme.backgroundRGB, clamp$1(contour.colourMix, 0, 0.92));
+    const strokeColour = mixRGB(theme.frameColor, theme.backgroundRGB, clamp$4(contour.colourMix, 0, 0.92));
     context.save();
     context.strokeStyle = toRGBA(strokeColour, contour.alpha);
     context.lineWidth = contour.lineWidth;
@@ -14532,12 +14629,12 @@ class CanvasWavetableDisplay {
     this.queueRender();
   }
   setPosition(position) {
-    this.position = clamp$1(Number(position) || 0, 0, 1);
+    this.position = clamp$4(Number(position) || 0, 0, 1);
     this.queueRender();
   }
   setWarp(mode, amount) {
     this.warpMode = resolveWarpMode(mode);
-    this.warpAmount = clamp$1(Number(amount) || 0, 0, 1);
+    this.warpAmount = clamp$4(Number(amount) || 0, 0, 1);
     this.queueRender();
   }
   resize(width, height, devicePixelRatio = 1) {
@@ -14607,6 +14704,188 @@ class CanvasWavetableDisplay {
     drawWavetableModel(this.context, model, this.theme);
   }
 }
+const FILTER_CUTOFF_MIN_HZ = 20;
+const FILTER_CUTOFF_MAX_HZ = 2e4;
+const FILTER_Q_MIN = 0.1;
+const FILTER_Q_MAX = 20;
+const FILTER_RESPONSE_POINT_COUNT = 80;
+const FILTER_RESPONSE_FFT_WARMUP_CYCLES = 10;
+const FILTER_RESPONSE_FFT_MEASURE_CYCLES = 6;
+const FILTER_MODE_OFF = 0;
+const FILTER_MODE_LOWPASS = 1;
+const FILTER_MODE_HIGHPASS = 2;
+const FILTER_MODE_BANDPASS = 3;
+const FILTER_MODE_NOTCH = 4;
+const FILTER_MODE_PEAK = 5;
+function clamp$3(value, min, max) {
+  return Math.min(Math.max(value, min), max);
+}
+function clampFilterMode(value) {
+  return clamp$3(Math.round(Number(value) || 0), FILTER_MODE_OFF, FILTER_MODE_PEAK);
+}
+function clampFilterCutoffHz(value) {
+  return clamp$3(Number(value) || FILTER_CUTOFF_MIN_HZ, FILTER_CUTOFF_MIN_HZ, FILTER_CUTOFF_MAX_HZ);
+}
+function clampFilterQ(value) {
+  return clamp$3(Number(value) || 0, FILTER_Q_MIN, FILTER_Q_MAX);
+}
+function normalizedToFilterCutoffHz(value) {
+  const normalized = clamp$3(Number(value) || 0, 0, 1);
+  const minLog = Math.log(FILTER_CUTOFF_MIN_HZ);
+  const maxLog = Math.log(FILTER_CUTOFF_MAX_HZ);
+  return Math.exp(minLog + (maxLog - minLog) * normalized);
+}
+function normalizedToFilterQ(value) {
+  const normalized = clamp$3(Number(value) || 0, 0, 1);
+  return FILTER_Q_MIN + (FILTER_Q_MAX - FILTER_Q_MIN) * normalized;
+}
+class SimperFilter {
+  ic1eq = 0;
+  ic2eq = 0;
+  a1 = 0;
+  a2 = 0;
+  a3 = 0;
+  f0 = 0;
+  f1 = 0;
+  f2 = 1;
+  mode = FILTER_MODE_LOWPASS;
+  reset() {
+    this.ic1eq = 0;
+    this.ic2eq = 0;
+  }
+  setMode(nextMode) {
+    this.mode = clampFilterMode(nextMode);
+  }
+  setFrequency(sampleRate, cutoffHz, q) {
+    const safeSampleRate = Math.max(1, Number(sampleRate) || 44100);
+    const clampedCutoff = clampFilterCutoffHz(Math.min(Number(cutoffHz) || 0, safeSampleRate * 0.48));
+    const clampedQ = clampFilterQ(q);
+    const g = Math.tan(Math.PI * clampedCutoff / safeSampleRate);
+    const k = 1 / clampedQ;
+    if (this.mode === FILTER_MODE_LOWPASS) {
+      this.f0 = 0;
+      this.f1 = 0;
+      this.f2 = 1;
+    } else if (this.mode === FILTER_MODE_HIGHPASS) {
+      this.f0 = 1;
+      this.f1 = -k;
+      this.f2 = -1;
+    } else if (this.mode === FILTER_MODE_BANDPASS) {
+      this.f0 = 0;
+      this.f1 = 1;
+      this.f2 = 0;
+    } else if (this.mode === FILTER_MODE_NOTCH) {
+      this.f0 = 1;
+      this.f1 = -k;
+      this.f2 = 0;
+    } else if (this.mode === FILTER_MODE_PEAK) {
+      this.f0 = 1;
+      this.f1 = -k;
+      this.f2 = -2;
+    } else {
+      this.f0 = 1;
+      this.f1 = 0;
+      this.f2 = 0;
+    }
+    this.a1 = 1 / (1 + g * (g + k));
+    this.a2 = g * this.a1;
+    this.a3 = g * this.a2;
+  }
+  process(input) {
+    const v3 = input - this.ic2eq;
+    const v1 = this.a1 * this.ic1eq + this.a2 * v3;
+    const v2 = this.ic2eq + this.a2 * this.ic1eq + this.a3 * v3;
+    this.ic1eq = 2 * v1 - this.ic1eq;
+    this.ic2eq = 2 * v2 - this.ic2eq;
+    return this.f0 * input + this.f1 * v1 + this.f2 * v2;
+  }
+}
+function responseGainForFrequency({
+  mode,
+  cutoffHz,
+  q,
+  sampleRate,
+  frequencyHz
+}) {
+  if (mode === FILTER_MODE_OFF) {
+    return 1;
+  }
+  const filter = new SimperFilter();
+  filter.setMode(mode);
+  filter.setFrequency(sampleRate, cutoffHz, q);
+  const safeFrequency = clamp$3(frequencyHz, 10, sampleRate * 0.49);
+  const cycleLength = Math.max(8, Math.round(sampleRate / safeFrequency));
+  const warmupSamples = cycleLength * FILTER_RESPONSE_FFT_WARMUP_CYCLES;
+  const measureSamples = cycleLength * FILTER_RESPONSE_FFT_MEASURE_CYCLES;
+  let inCos = 0;
+  let inSin = 0;
+  let outCos = 0;
+  let outSin = 0;
+  for (let sampleIndex = 0; sampleIndex < warmupSamples + measureSamples; sampleIndex += 1) {
+    const phase = 2 * Math.PI * safeFrequency * sampleIndex / sampleRate;
+    const input = Math.sin(phase);
+    const output = filter.process(input);
+    if (sampleIndex < warmupSamples) {
+      continue;
+    }
+    inCos += input * Math.cos(phase);
+    inSin += input * Math.sin(phase);
+    outCos += output * Math.cos(phase);
+    outSin += output * Math.sin(phase);
+  }
+  const inputMagnitude = Math.hypot(inCos, inSin);
+  const outputMagnitude = Math.hypot(outCos, outSin);
+  if (inputMagnitude <= 1e-12) {
+    return 0;
+  }
+  return outputMagnitude / inputMagnitude;
+}
+function buildFrequencies(pointCount) {
+  return Array.from({ length: pointCount }, (_, index) => normalizedToFilterCutoffHz(index / Math.max(1, pointCount - 1)));
+}
+function createFilterResponseModel({
+  mode,
+  cutoffHz,
+  q,
+  sampleRate = 44100,
+  pointCount = FILTER_RESPONSE_POINT_COUNT
+}) {
+  const resolvedMode = clampFilterMode(mode);
+  const resolvedCutoff = clampFilterCutoffHz(cutoffHz);
+  const resolvedQ = clampFilterQ(q);
+  const resolvedSampleRate = Math.max(1, Math.round(sampleRate || 44100));
+  const frequenciesHz = buildFrequencies(pointCount);
+  const magnitudesDb = frequenciesHz.map((frequencyHz) => {
+    const gain = responseGainForFrequency({
+      mode: resolvedMode,
+      cutoffHz: resolvedCutoff,
+      q: resolvedQ,
+      sampleRate: resolvedSampleRate,
+      frequencyHz
+    });
+    return 20 * Math.log10(Math.max(gain, 1e-6));
+  });
+  let peakIndex = 0;
+  let minIndex = 0;
+  for (let index = 1; index < magnitudesDb.length; index += 1) {
+    if (magnitudesDb[index] > magnitudesDb[peakIndex]) {
+      peakIndex = index;
+    }
+    if (magnitudesDb[index] < magnitudesDb[minIndex]) {
+      minIndex = index;
+    }
+  }
+  return {
+    mode: resolvedMode,
+    cutoffHz: resolvedCutoff,
+    q: resolvedQ,
+    sampleRate: resolvedSampleRate,
+    frequenciesHz,
+    magnitudesDb,
+    peakIndex,
+    minIndex
+  };
+}
 const VOICE_MODE_OPTIONS = [
   { value: 0, label: "Poly" },
   { value: 1, label: "Mono" },
@@ -14647,6 +14926,9 @@ function formatFrameIndex(position, frameCount) {
   const safeFrameCount = Math.max(1, frameCount);
   const frameIndex = Math.round(position * Math.max(0, safeFrameCount - 1)) + 1;
   return `${String(frameIndex).padStart(2, "0")}/${String(safeFrameCount).padStart(2, "0")}`;
+}
+function clamp$2(value, min, max) {
+  return Math.min(Math.max(value, min), max);
 }
 function buildMsegSurfacePaths(points, width, height, options = {}) {
   const metrics = createMsegEditorMetrics(width, height, {
@@ -14986,6 +15268,166 @@ function RangeField({
       ),
       /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-right font-mono text-sm tracking-[0.18em] text-cyan-200", children: displayValue })
     ] })
+  ] });
+}
+function buildFilterResponsePath(magnitudesDb, width, height, {
+  horizontalPadding = 18,
+  verticalPadding = 16,
+  minDb = -24,
+  maxDb = 18
+} = {}) {
+  const plotLeft = horizontalPadding;
+  const plotRight = Math.max(horizontalPadding + 1, width - horizontalPadding);
+  const plotTop = verticalPadding;
+  const plotBottom = Math.max(verticalPadding + 1, height - verticalPadding);
+  const plotWidth = Math.max(1, plotRight - plotLeft);
+  const plotHeight = Math.max(1, plotBottom - plotTop);
+  let path = "";
+  for (let index = 0; index < magnitudesDb.length; index += 1) {
+    const x = plotLeft + plotWidth * (index / Math.max(1, magnitudesDb.length - 1));
+    const normalized = clamp$2((clamp$2(magnitudesDb[index], minDb, maxDb) - minDb) / (maxDb - minDb), 0, 1);
+    const y = plotBottom - plotHeight * normalized;
+    path += `${index === 0 ? "M" : "L"} ${x.toFixed(3)} ${y.toFixed(3)} `;
+  }
+  return {
+    path: path.trim(),
+    plotLeft,
+    plotRight,
+    plotTop,
+    plotBottom,
+    plotWidth,
+    plotHeight
+  };
+}
+function FilterResponseGraph({
+  baseMode,
+  baseCutoffHz,
+  baseQ,
+  liveMode,
+  liveCutoffHz,
+  liveQ,
+  liveHasActive,
+  onCutoffChange,
+  onQChange,
+  className
+}) {
+  const surfaceRef = reactExports.useRef(null);
+  const size = useResizeObserver$1(surfaceRef);
+  const [activePointerId, setActivePointerId] = reactExports.useState(null);
+  const baseModel = reactExports.useMemo(() => createFilterResponseModel({
+    mode: baseMode,
+    cutoffHz: baseCutoffHz,
+    q: baseQ
+  }), [baseCutoffHz, baseMode, baseQ]);
+  const liveModel = reactExports.useMemo(() => createFilterResponseModel({
+    mode: liveHasActive ? liveMode : baseMode,
+    cutoffHz: liveHasActive ? liveCutoffHz : baseCutoffHz,
+    q: liveHasActive ? liveQ : baseQ
+  }), [baseCutoffHz, baseMode, baseQ, liveCutoffHz, liveHasActive, liveMode, liveQ]);
+  const basePath = reactExports.useMemo(
+    () => buildFilterResponsePath(baseModel.magnitudesDb, size.width, size.height),
+    [baseModel.magnitudesDb, size.height, size.width]
+  );
+  const livePath = reactExports.useMemo(
+    () => buildFilterResponsePath(liveModel.magnitudesDb, size.width, size.height),
+    [liveModel.magnitudesDb, size.height, size.width]
+  );
+  const applyPointerPosition = (clientX, clientY) => {
+    const element = surfaceRef.current;
+    if (!element) {
+      return;
+    }
+    const bounds = element.getBoundingClientRect();
+    const normalizedX = clamp$2((clientX - bounds.left) / Math.max(1, bounds.width), 0, 1);
+    const normalizedY = clamp$2((clientY - bounds.top) / Math.max(1, bounds.height), 0, 1);
+    onCutoffChange(clamp$2(normalizedToFilterCutoffHz(normalizedX), FILTER_CUTOFF_MIN_HZ, FILTER_CUTOFF_MAX_HZ));
+    onQChange(clamp$2(normalizedToFilterQ(1 - normalizedY), FILTER_Q_MIN, FILTER_Q_MAX));
+  };
+  const debugState = reactExports.useMemo(() => ({
+    base: {
+      mode: baseModel.mode,
+      cutoffHz: baseModel.cutoffHz,
+      q: baseModel.q,
+      peakIndex: baseModel.peakIndex,
+      minIndex: baseModel.minIndex
+    },
+    live: {
+      hasActive: liveHasActive,
+      mode: liveModel.mode,
+      cutoffHz: liveModel.cutoffHz,
+      q: liveModel.q,
+      peakIndex: liveModel.peakIndex,
+      minIndex: liveModel.minIndex
+    }
+  }), [baseModel, liveHasActive, liveModel]);
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: joinClasses("grid gap-2", className), children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs(
+      "svg",
+      {
+        ref: surfaceRef,
+        "data-role": "filter-response-graph",
+        className: "h-44 w-full touch-none overflow-hidden rounded-[20px] border border-white/8 bg-black/25",
+        viewBox: `0 0 ${size.width} ${size.height}`,
+        onPointerDown: (event) => {
+          event.currentTarget.setPointerCapture(event.pointerId);
+          setActivePointerId(event.pointerId);
+          applyPointerPosition(event.clientX, event.clientY);
+        },
+        onPointerMove: (event) => {
+          if (activePointerId !== event.pointerId) {
+            return;
+          }
+          applyPointerPosition(event.clientX, event.clientY);
+        },
+        onPointerUp: (event) => {
+          if (activePointerId === event.pointerId) {
+            setActivePointerId(null);
+          }
+        },
+        onPointerCancel: (event) => {
+          if (activePointerId === event.pointerId) {
+            setActivePointerId(null);
+          }
+        },
+        children: [
+          [0.25, 0.5, 0.75].map((step) => /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "line",
+            {
+              x1: basePath.plotLeft,
+              x2: basePath.plotRight,
+              y1: basePath.plotTop + basePath.plotHeight * step,
+              y2: basePath.plotTop + basePath.plotHeight * step,
+              stroke: "rgba(255,255,255,0.08)",
+              strokeWidth: "1"
+            },
+            `filter-grid-h-${step}`
+          )),
+          [0.25, 0.5, 0.75].map((step) => /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "line",
+            {
+              y1: basePath.plotTop,
+              y2: basePath.plotBottom,
+              x1: basePath.plotLeft + basePath.plotWidth * step,
+              x2: basePath.plotLeft + basePath.plotWidth * step,
+              stroke: "rgba(255,255,255,0.06)",
+              strokeWidth: "1"
+            },
+            `filter-grid-v-${step}`
+          )),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("path", { d: basePath.path, fill: "none", stroke: "rgba(123, 197, 255, 0.46)", strokeWidth: "2" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "path",
+            {
+              d: livePath.path,
+              fill: "none",
+              stroke: liveHasActive ? "rgba(94, 215, 255, 0.98)" : "rgba(94, 215, 255, 0.72)",
+              strokeWidth: liveHasActive ? "3" : "2"
+            }
+          )
+        ]
+      }
+    ),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("pre", { "data-role": "filter-graph-debug", className: "hidden", children: JSON.stringify(debugState) })
   ] });
 }
 function VoiceModeToolbar({
@@ -23892,9 +24334,9 @@ async function loadFactoryBankFrames(resourceClientInput, {
   };
 }
 const EFFECTIVE_WAVETABLE_POSITION_ENDPOINT_ID = "effectiveWavetablePosition";
+const EFFECTIVE_FILTER_STATE_ENDPOINT_ID = "effectiveFilterState";
 const DISPLAY_SWIPE_THRESHOLD_PX = 2;
 const MSEG_DRAG_THRESHOLD_PX = 8;
-const MSEG_CURVE_DRAG_PIXELS_PER_POWER = 10;
 const WAVETABLE_POSITION_ENDPOINT_ID = "wavetablePosition";
 const WAVETABLE_SELECT_ENDPOINT_ID = "wavetableSelect";
 const PLAY_MODE_ENDPOINT_ID = "playMode";
@@ -23902,6 +24344,10 @@ const GLIDE_TIME_ENDPOINT_ID = "glideTime";
 const WARP_MODE_ENDPOINT_ID = "warpMode";
 const WARP_AMOUNT_ENDPOINT_ID = "warpAmount";
 const WARP_MSEG_DEPTH_ENDPOINT_ID = "warpMsegDepth";
+const FILTER_MODE_ENDPOINT_ID = "filterMode";
+const FILTER_CUTOFF_ENDPOINT_ID = "filterCutoff";
+const FILTER_Q_ENDPOINT_ID = "filterQ";
+const FILTER_MSEG_DEPTH_ENDPOINT_ID = "filterMsegDepth";
 const RUNTIME_SYNC_REQUEST_ENDPOINT_ID = "runtimeSyncRequest";
 const RUNTIME_STATE_ENDPOINT_ID = "runtimeState";
 const RETRY_DESIRED_TABLE_REQUEST_ENDPOINT_ID = "retryDesiredTableRequest";
@@ -23915,7 +24361,7 @@ function describeErrorMessage(error) {
   }
   return String(error);
 }
-function clamp(value, min, max) {
+function clamp$1(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 function useFactoryBankCatalog() {
@@ -23986,6 +24432,52 @@ function useObservedDisplayPosition(parameterPosition) {
     setObservedState((previousState) => selectObservedWavetablePositionState(previousState, message));
   }, [message]);
   return message ? observedState.position : parameterPosition;
+}
+function useObservedFilterState({
+  filterMode,
+  filterCutoff,
+  filterQ
+}) {
+  const message = usePatchEndpoint(EFFECTIVE_FILTER_STATE_ENDPOINT_ID, null);
+  const [observedState, setObservedState] = reactExports.useState(() => ({
+    voiceGeneration: -1,
+    hasActive: false,
+    mode: Math.round(filterMode) || 0,
+    cutoffHz: Number(filterCutoff) || 1e3,
+    q: Number(filterQ) || 0.707107
+  }));
+  reactExports.useEffect(() => {
+    setObservedState((previousState) => selectObservedEffectiveFilterState(previousState, message));
+  }, [message]);
+  reactExports.useEffect(() => {
+    if (message) {
+      return;
+    }
+    setObservedState({
+      voiceGeneration: -1,
+      hasActive: false,
+      mode: Math.round(filterMode) || 0,
+      cutoffHz: Number(filterCutoff) || 1e3,
+      q: Number(filterQ) || 0.707107
+    });
+  }, [filterCutoff, filterMode, filterQ, message]);
+  if (!message) {
+    return {
+      voiceGeneration: -1,
+      hasActive: false,
+      mode: Math.round(filterMode) || 0,
+      cutoffHz: Number(filterCutoff) || 1e3,
+      q: Number(filterQ) || 0.707107
+    };
+  }
+  const normalizedMessage = normalizeEffectiveFilterStateMessage(message);
+  return normalizedMessage ? observedState : {
+    voiceGeneration: -1,
+    hasActive: false,
+    mode: Math.round(filterMode) || 0,
+    cutoffHz: Number(filterCutoff) || 1e3,
+    q: Number(filterQ) || 0.707107
+  };
 }
 function useMsegState() {
   const patchConnection = usePatchConnection();
@@ -24069,53 +24561,32 @@ function useMsegEditorInteractions({
   msegState,
   msegController,
   surfaceRef,
-  orientation = "horizontal"
+  orientation = "horizontal",
+  curveEditActivationMode = "immediate",
+  curveEditHoldDelayMs = 350,
+  onCurveEditHoldActivated = null
 }) {
   const [isOpen, setIsOpen] = reactExports.useState(false);
   const [selectedPointIndex, setSelectedPointIndex] = reactExports.useState(0);
   const [hoveredSegmentIndex, setHoveredSegmentIndex] = reactExports.useState(-1);
   const [activeSegmentIndex, setActiveSegmentIndex] = reactExports.useState(-1);
   const activePointerRef = reactExports.useRef(null);
+  const clearPendingSegmentTimer = reactExports.useCallback((pointerState) => {
+    if (pointerState?.kind === "pending-segment" && pointerState.holdTimeoutId !== null) {
+      window.clearTimeout(pointerState.holdTimeoutId);
+      pointerState.holdTimeoutId = null;
+    }
+  }, []);
   reactExports.useEffect(() => {
     if (!msegState) {
-      setHoveredSegmentIndex(-1);
-      setActiveSegmentIndex(-1);
       return;
     }
-    setSelectedPointIndex((previousIndex) => clamp(
+    setSelectedPointIndex((previousIndex) => clamp$1(
       previousIndex,
       0,
       Math.max(0, msegState.shape.points.length - 1)
     ));
-    setHoveredSegmentIndex((previousIndex) => previousIndex >= 0 ? clamp(previousIndex, -1, Math.max(-1, msegState.shape.points.length - 2)) : -1);
-    setActiveSegmentIndex((previousIndex) => previousIndex >= 0 ? clamp(previousIndex, -1, Math.max(-1, msegState.shape.points.length - 2)) : -1);
   }, [msegState]);
-  reactExports.useEffect(() => {
-    if (!isOpen) {
-      activePointerRef.current = null;
-      setHoveredSegmentIndex(-1);
-      setActiveSegmentIndex(-1);
-      return;
-    }
-    const handleEscapeKey = (event) => {
-      if (event.key === "Escape") {
-        setIsOpen(false);
-      }
-    };
-    window.addEventListener("keydown", handleEscapeKey);
-    return () => {
-      window.removeEventListener("keydown", handleEscapeKey);
-    };
-  }, [isOpen]);
-  const openEditor = reactExports.useCallback(() => {
-    setIsOpen(true);
-  }, []);
-  const closeEditor = reactExports.useCallback(() => {
-    setIsOpen(false);
-    setHoveredSegmentIndex(-1);
-    setActiveSegmentIndex(-1);
-    activePointerRef.current = null;
-  }, []);
   const resolvePointerLocation = reactExports.useCallback((clientX, clientY) => {
     if (!msegState || !surfaceRef.current) {
       return null;
@@ -24123,8 +24594,9 @@ function useMsegEditorInteractions({
     const bounds = surfaceRef.current.getBoundingClientRect();
     const localX = clientX - bounds.left;
     const localY = clientY - bounds.top;
+    const currentShape = msegController.current?.getState().shape ?? msegState.shape;
     const pointIndex = findMsegPointHitIndex(
-      msegState.shape,
+      currentShape,
       localX,
       localY,
       bounds.width,
@@ -24133,7 +24605,7 @@ function useMsegEditorInteractions({
       { orientation }
     );
     const segmentIndex = pointIndex >= 0 ? -1 : findMsegSegmentHitIndex(
-      msegState.shape,
+      currentShape,
       localX,
       localY,
       bounds.width,
@@ -24148,12 +24620,59 @@ function useMsegEditorInteractions({
       pointIndex,
       segmentIndex
     };
-  }, [msegState, orientation, surfaceRef]);
+  }, [msegController, msegState, orientation, surfaceRef]);
   const updateHoveredSegmentIndex = reactExports.useCallback((clientX, clientY) => {
     const pointerLocation = resolvePointerLocation(clientX, clientY);
     setHoveredSegmentIndex(pointerLocation?.segmentIndex ?? -1);
     return pointerLocation;
   }, [resolvePointerLocation]);
+  reactExports.useEffect(() => {
+    if (!isOpen) {
+      clearPendingSegmentTimer(activePointerRef.current);
+      activePointerRef.current = null;
+      setHoveredSegmentIndex(-1);
+      setActiveSegmentIndex(-1);
+      return;
+    }
+    const handleEscapeKey = (event) => {
+      if (event.key === "Escape") {
+        setIsOpen(false);
+      }
+    };
+    window.addEventListener("keydown", handleEscapeKey);
+    return () => {
+      window.removeEventListener("keydown", handleEscapeKey);
+    };
+  }, [clearPendingSegmentTimer, isOpen]);
+  const openEditor = reactExports.useCallback(() => {
+    setIsOpen(true);
+  }, []);
+  const closeEditor = reactExports.useCallback(() => {
+    setIsOpen(false);
+    clearPendingSegmentTimer(activePointerRef.current);
+    activePointerRef.current = null;
+    setHoveredSegmentIndex(-1);
+    setActiveSegmentIndex(-1);
+  }, [clearPendingSegmentTimer]);
+  const applyCurveEditFromClientCoordinates = reactExports.useCallback((segmentIndex, clientX, clientY) => {
+    if (!surfaceRef.current || !msegController.current) {
+      return;
+    }
+    const currentShape = msegController.current.getState().shape ?? msegState?.shape;
+    if (!currentShape) {
+      return;
+    }
+    const bounds = surfaceRef.current.getBoundingClientRect();
+    const point = msegEditorCoordinatesToPoint(
+      clientX - bounds.left,
+      clientY - bounds.top,
+      bounds.width,
+      bounds.height,
+      { orientation }
+    );
+    const curvePower = deriveMsegSegmentCurvePower(currentShape, segmentIndex, point.x, point.y);
+    msegController.current.setSegmentCurvePower(segmentIndex, curvePower);
+  }, [msegController, msegState?.shape, orientation, surfaceRef]);
   const handlePointerDown = reactExports.useCallback((event) => {
     if (event.button !== 0 || !msegState || !surfaceRef.current) {
       return;
@@ -24166,7 +24685,7 @@ function useMsegEditorInteractions({
       setSelectedPointIndex(pointerLocation.pointIndex);
       setActiveSegmentIndex(-1);
       activePointerRef.current = {
-        kind: "point",
+        kind: "point-drag",
         pointerId: event.pointerId,
         pointIndex: pointerLocation.pointIndex,
         startClientX: event.clientX,
@@ -24179,19 +24698,38 @@ function useMsegEditorInteractions({
       return;
     }
     if (pointerLocation.segmentIndex >= 0) {
-      const segmentFrom = msegState.shape.points[pointerLocation.segmentIndex];
-      const segmentTo = msegState.shape.points[pointerLocation.segmentIndex + 1];
-      const dragDirection = Math.sign((segmentTo?.y ?? 0) - (segmentFrom?.y ?? 0)) || 1;
-      activePointerRef.current = {
-        kind: "segment",
-        pointerId: event.pointerId,
-        segmentIndex: pointerLocation.segmentIndex,
-        startClientY: event.clientY,
-        startCurvePower: msegState.shape.points[pointerLocation.segmentIndex]?.curvePower ?? 0,
-        dragDirection
-      };
       setActiveSegmentIndex(pointerLocation.segmentIndex);
       setHoveredSegmentIndex(pointerLocation.segmentIndex);
+      if (curveEditActivationMode === "immediate") {
+        activePointerRef.current = {
+          kind: "curve-drag",
+          pointerId: event.pointerId,
+          segmentIndex: pointerLocation.segmentIndex
+        };
+      } else {
+        const holdTimeoutId = window.setTimeout(() => {
+          const activePointer = activePointerRef.current;
+          if (!activePointer || activePointer.kind !== "pending-segment" || activePointer.pointerId !== event.pointerId) {
+            return;
+          }
+          activePointerRef.current = {
+            kind: "curve-drag",
+            pointerId: activePointer.pointerId,
+            segmentIndex: activePointer.segmentIndex
+          };
+          setActiveSegmentIndex(activePointer.segmentIndex);
+          setHoveredSegmentIndex(activePointer.segmentIndex);
+          onCurveEditHoldActivated?.();
+        }, curveEditHoldDelayMs);
+        activePointerRef.current = {
+          kind: "pending-segment",
+          pointerId: event.pointerId,
+          segmentIndex: pointerLocation.segmentIndex,
+          startClientX: event.clientX,
+          startClientY: event.clientY,
+          holdTimeoutId
+        };
+      }
       event.currentTarget.setPointerCapture(event.pointerId);
       event.preventDefault();
       return;
@@ -24211,22 +24749,48 @@ function useMsegEditorInteractions({
     if (nextPointIndex >= 0) {
       setSelectedPointIndex(nextPointIndex);
     }
+    setActiveSegmentIndex(-1);
     event.preventDefault();
-  }, [msegController, msegState, orientation, surfaceRef, updateHoveredSegmentIndex]);
+  }, [
+    curveEditActivationMode,
+    curveEditHoldDelayMs,
+    msegController,
+    msegState,
+    onCurveEditHoldActivated,
+    orientation,
+    surfaceRef,
+    updateHoveredSegmentIndex
+  ]);
   const handlePointerMove = reactExports.useCallback((event) => {
     const activePointer = activePointerRef.current;
     if (!activePointer || activePointer.pointerId !== event.pointerId || !surfaceRef.current) {
       updateHoveredSegmentIndex(event.clientX, event.clientY);
       return;
     }
-    if (activePointer.kind === "segment") {
-      const deltaCurvePower = (event.clientY - activePointer.startClientY) / MSEG_CURVE_DRAG_PIXELS_PER_POWER * activePointer.dragDirection;
-      msegController.current?.setSegmentCurvePower(
-        activePointer.segmentIndex,
-        activePointer.startCurvePower + deltaCurvePower
-      );
+    if (activePointer.kind === "curve-drag") {
+      applyCurveEditFromClientCoordinates(activePointer.segmentIndex, event.clientX, event.clientY);
       setActiveSegmentIndex(activePointer.segmentIndex);
       setHoveredSegmentIndex(activePointer.segmentIndex);
+      event.preventDefault();
+      return;
+    }
+    if (activePointer.kind === "pending-segment") {
+      const movementDistance2 = Math.hypot(
+        event.clientX - activePointer.startClientX,
+        event.clientY - activePointer.startClientY
+      );
+      if (movementDistance2 < MSEG_DRAG_THRESHOLD_PX) {
+        return;
+      }
+      clearPendingSegmentTimer(activePointer);
+      activePointerRef.current = {
+        kind: "curve-drag",
+        pointerId: activePointer.pointerId,
+        segmentIndex: activePointer.segmentIndex
+      };
+      setActiveSegmentIndex(activePointer.segmentIndex);
+      setHoveredSegmentIndex(activePointer.segmentIndex);
+      applyCurveEditFromClientCoordinates(activePointer.segmentIndex, event.clientX, event.clientY);
       event.preventDefault();
       return;
     }
@@ -24256,7 +24820,14 @@ function useMsegEditorInteractions({
     setHoveredSegmentIndex(-1);
     setActiveSegmentIndex(-1);
     event.preventDefault();
-  }, [msegController, orientation, surfaceRef, updateHoveredSegmentIndex]);
+  }, [
+    applyCurveEditFromClientCoordinates,
+    clearPendingSegmentTimer,
+    msegController,
+    orientation,
+    surfaceRef,
+    updateHoveredSegmentIndex
+  ]);
   const handlePointerLeave = reactExports.useCallback((event) => {
     if (activePointerRef.current?.pointerId === event.pointerId) {
       return;
@@ -24272,14 +24843,51 @@ function useMsegEditorInteractions({
     const pointerState = activePointer;
     activePointerRef.current = null;
     setActiveSegmentIndex(-1);
-    if (pointerState.kind === "point" && !pointerState.moved && pointerState.deleteOnRelease && msegController.current) {
+    if (pointerState.kind === "pending-segment") {
+      clearPendingSegmentTimer(pointerState);
+      if (surfaceRef.current) {
+        const bounds = surfaceRef.current.getBoundingClientRect();
+        const point = msegEditorCoordinatesToPoint(
+          event.clientX - bounds.left,
+          event.clientY - bounds.top,
+          bounds.width,
+          bounds.height,
+          { orientation }
+        );
+        msegController.current?.addPoint(point.x, point.y);
+        const points = msegController.current?.getState().shape.points ?? [];
+        const nextPointIndex = points.findIndex(
+          (nextPoint) => Math.abs(nextPoint.x - point.x) <= 1e-6 && Math.abs(nextPoint.y - point.y) <= 1e-6
+        );
+        if (nextPointIndex >= 0) {
+          setSelectedPointIndex(nextPointIndex);
+        }
+      }
+      event.preventDefault();
+      setHoveredSegmentIndex(resolvePointerLocation(event.clientX, event.clientY)?.segmentIndex ?? -1);
+      return;
+    }
+    if (pointerState.kind === "curve-drag") {
+      applyCurveEditFromClientCoordinates(pointerState.segmentIndex, event.clientX, event.clientY);
+      setHoveredSegmentIndex(resolvePointerLocation(event.clientX, event.clientY)?.segmentIndex ?? -1);
+      event.preventDefault();
+      return;
+    }
+    if (!pointerState.moved && pointerState.deleteOnRelease && msegController.current) {
       msegController.current.deletePoint(pointerState.pointIndex);
       const pointCount = msegController.current.getState().shape.points.length;
-      setSelectedPointIndex(clamp(pointerState.pointIndex - 1, 0, Math.max(0, pointCount - 1)));
+      setSelectedPointIndex(clamp$1(pointerState.pointIndex - 1, 0, Math.max(0, pointCount - 1)));
     }
     setHoveredSegmentIndex(resolvePointerLocation(event.clientX, event.clientY)?.segmentIndex ?? -1);
     event.preventDefault();
-  }, [msegController, resolvePointerLocation]);
+  }, [
+    applyCurveEditFromClientCoordinates,
+    clearPendingSegmentTimer,
+    msegController,
+    orientation,
+    resolvePointerLocation,
+    surfaceRef
+  ]);
   return {
     isOpen,
     selectedPointIndex,
@@ -24343,7 +24951,9 @@ function useSynthPatchViewModel({
   msegEditorSurfaceRef,
   keyboardRef,
   voiceModeCount,
-  msegSurfaceOrientation = "horizontal"
+  msegSurfaceOrientation = "horizontal",
+  msegCurveEditActivationMode = "immediate",
+  onMsegCurveEditHoldActivated = null
 }) {
   const runtimeStateMessage = usePatchEndpoint(RUNTIME_STATE_ENDPOINT_ID, null);
   const normalizedRuntimeState = reactExports.useMemo(
@@ -24364,31 +24974,56 @@ function useSynthPatchViewModel({
   const playMode = usePatchParameterBinding({
     endpointID: PLAY_MODE_ENDPOINT_ID,
     initialValue: 0,
-    coerce: (value) => clamp(Math.round(Number(value) || 0), 0, Math.max(0, voiceModeCount - 1))
+    coerce: (value) => clamp$1(Math.round(Number(value) || 0), 0, Math.max(0, voiceModeCount - 1))
   });
   const glideTime = usePatchParameterBinding({
     endpointID: GLIDE_TIME_ENDPOINT_ID,
     initialValue: 0,
-    coerce: (value) => clamp(Number(value) || 0, GLIDE_TIME_MIN_SECONDS$1, GLIDE_TIME_MAX_SECONDS$1)
+    coerce: (value) => clamp$1(Number(value) || 0, GLIDE_TIME_MIN_SECONDS$1, GLIDE_TIME_MAX_SECONDS$1)
   });
   const warpMode = usePatchParameterBinding({
     endpointID: WARP_MODE_ENDPOINT_ID,
     initialValue: 0,
-    coerce: (value) => clamp(Math.round(Number(value) || 0), 0, 4)
+    coerce: (value) => clamp$1(Math.round(Number(value) || 0), 0, 4)
   });
   const warpAmount = usePatchParameterBinding({
     endpointID: WARP_AMOUNT_ENDPOINT_ID,
     initialValue: 0,
-    coerce: (value) => clamp(Number(value) || 0, 0, 1)
+    coerce: (value) => clamp$1(Number(value) || 0, 0, 1)
   });
   const warpMsegDepth = usePatchParameterBinding({
     endpointID: WARP_MSEG_DEPTH_ENDPOINT_ID,
     initialValue: 0,
-    coerce: (value) => clamp(Number(value) || 0, -1, 1)
+    coerce: (value) => clamp$1(Number(value) || 0, -1, 1)
+  });
+  const filterMode = usePatchParameterBinding({
+    endpointID: FILTER_MODE_ENDPOINT_ID,
+    initialValue: 0,
+    coerce: (value) => clamp$1(Math.round(Number(value) || 0), 0, 5)
+  });
+  const filterCutoff = usePatchParameterBinding({
+    endpointID: FILTER_CUTOFF_ENDPOINT_ID,
+    initialValue: 1e3,
+    coerce: (value) => clamp$1(Number(value) || 0, 20, 2e4)
+  });
+  const filterQ = usePatchParameterBinding({
+    endpointID: FILTER_Q_ENDPOINT_ID,
+    initialValue: 0.707107,
+    coerce: (value) => clamp$1(Number(value) || 0, 0.1, 20)
+  });
+  const filterMsegDepth = usePatchParameterBinding({
+    endpointID: FILTER_MSEG_DEPTH_ENDPOINT_ID,
+    initialValue: 0,
+    coerce: (value) => clamp$1(Number(value) || 0, -6, 6)
   });
   const requestRuntimeSync = usePatchEventTrigger(RUNTIME_SYNC_REQUEST_ENDPOINT_ID);
   const retryDesiredTableLoad = usePatchEventTrigger(RETRY_DESIRED_TABLE_REQUEST_ENDPOINT_ID);
   const observedPosition = useObservedDisplayPosition(Number(wavetablePosition.value) || 0);
+  const observedFilterState = useObservedFilterState({
+    filterMode: filterMode.value,
+    filterCutoff: filterCutoff.value,
+    filterQ: filterQ.value
+  });
   const runtimePresentation = reactExports.useMemo(
     () => resolveRuntimeTablePresentation(runtimeStateMessage, Number(wavetableSelect.value) || 0),
     [runtimeStateMessage, wavetableSelect.value]
@@ -24406,7 +25041,9 @@ function useSynthPatchViewModel({
     msegState,
     msegController,
     surfaceRef: msegEditorSurfaceRef,
-    orientation: msegSurfaceOrientation
+    orientation: msegSurfaceOrientation,
+    curveEditActivationMode: msegCurveEditActivationMode,
+    onCurveEditHoldActivated: onMsegCurveEditHoldActivated
   });
   const displayedTable = catalog?.tables?.[presentedTableIndex] ?? null;
   const desiredTable = catalog?.tables?.[desiredTableIndex] ?? displayedTable;
@@ -24424,7 +25061,7 @@ function useSynthPatchViewModel({
   }, [wavetableSelect]);
   const handleStepWavetable = reactExports.useCallback((direction) => {
     const maxTableIndex = Math.max(0, (catalog?.tables?.length ?? 1) - 1);
-    wavetableSelect.commitValue(clamp(desiredTableIndex + direction, 0, maxTableIndex));
+    wavetableSelect.commitValue(clamp$1(desiredTableIndex + direction, 0, maxTableIndex));
   }, [catalog?.tables?.length, desiredTableIndex, wavetableSelect]);
   const handleRetryLoad = reactExports.useCallback(() => {
     retryDesiredTableLoad(1);
@@ -24436,7 +25073,7 @@ function useSynthPatchViewModel({
     if (!msegState) {
       return;
     }
-    msegController.current?.setDepth(clamp(Number(msegState.depth) + direction * 1e-3, -1, 1));
+    msegController.current?.setDepth(clamp$1(Number(msegState.depth) + direction * 1e-3, -1, 1));
   }, [msegController, msegState]);
   const handleMsegRateChange = reactExports.useCallback((nextValue) => {
     if (!msegState) {
@@ -24475,11 +25112,11 @@ function useSynthPatchViewModel({
   }, [msegController, msegState]);
   const handleStepPlayMode = reactExports.useCallback((direction) => {
     playMode.commitValue(
-      clamp(playMode.value + direction, 0, Math.max(0, voiceModeCount - 1))
+      clamp$1(playMode.value + direction, 0, Math.max(0, voiceModeCount - 1))
     );
   }, [playMode, voiceModeCount]);
   const handleStepGlideTime = reactExports.useCallback((direction) => {
-    glideTime.commitValue(clamp(
+    glideTime.commitValue(clamp$1(
       glideTime.value + direction * GLIDE_TIME_STEP_SECONDS$1,
       GLIDE_TIME_MIN_SECONDS$1,
       GLIDE_TIME_MAX_SECONDS$1
@@ -24514,6 +25151,11 @@ function useSynthPatchViewModel({
     warpMode,
     warpAmount,
     warpMsegDepth,
+    filterMode,
+    filterCutoff,
+    filterQ,
+    filterMsegDepth,
+    observedFilterState,
     msegState,
     handleSelectWavetable,
     handleRetryLoad,
@@ -24538,6 +25180,14 @@ const WARP_MODE_OPTIONS = [
   { value: 3, label: "Asym +/-" },
   { value: 4, label: "Mirror" }
 ];
+const FILTER_MODE_OPTIONS = [
+  { value: 0, label: "Off" },
+  { value: 1, label: "Lowpass" },
+  { value: 2, label: "Highpass" },
+  { value: 3, label: "Bandpass" },
+  { value: 4, label: "Notch" },
+  { value: 5, label: "Peak" }
+];
 function formatSeconds(seconds) {
   return `${seconds.toFixed(3)} s`;
 }
@@ -24552,6 +25202,9 @@ function formatSignedPercent(value) {
   const percentValue = Math.round(value * 100);
   return `${percentValue > 0 ? "+" : ""}${percentValue}%`;
 }
+function clamp(value, min, max) {
+  return Math.min(Math.max(value, min), max);
+}
 function formatBipolarWarpAmount(value) {
   const percentValue = Math.round((value - 0.5) * 200);
   return `${percentValue > 0 ? "+" : ""}${percentValue}%`;
@@ -24561,6 +25214,18 @@ function formatWarpAmount(mode, value) {
     return formatBipolarWarpAmount(value);
   }
   return formatPercent(value);
+}
+function formatCutoffHz(value) {
+  if (value >= 1e3) {
+    return `${(value / 1e3).toFixed(2)} kHz`;
+  }
+  return `${Math.round(value)} Hz`;
+}
+function formatQ(value) {
+  return value.toFixed(2);
+}
+function formatSignedOctaves(value) {
+  return `${value > 0 ? "+" : ""}${value.toFixed(2)} oct`;
 }
 function StatusHeader({ statusText }) {
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("header", { className: "flex items-center justify-between gap-4", children: [
@@ -24632,6 +25297,110 @@ function WarpSection({
           displayValue: formatSignedPercent(warpMsegDepth.value),
           onChange: (nextValue) => warpMsegDepth.commitValue(nextValue),
           ariaLabel: "Warp MSEG depth"
+        }
+      )
+    ] })
+  ] });
+}
+function FilterSection({
+  filterMode,
+  filterCutoff,
+  filterQ,
+  filterMsegDepth,
+  observedFilterState
+}) {
+  const normalizedCutoff = clamp(
+    (Math.log(Math.max(20, filterCutoff.value)) - Math.log(20)) / (Math.log(2e4) - Math.log(20)),
+    0,
+    1
+  );
+  const normalizedQ = clamp((filterQ.value - 0.1) / (20 - 0.1), 0, 1);
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "grid gap-4 rounded-[24px] border border-white/8 bg-white/[0.03] p-5", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-start justify-between gap-4", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-[11px] uppercase tracking-[0.22em] text-sky-300/70", children: "Filter" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "mt-2 text-sm text-slate-300/75", children: "Apply a per-voice multimode filter after the oscillator and let the graph follow the newest active note." })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "rounded-full border border-sky-300/15 bg-sky-300/8 px-3 py-1 text-[10px] uppercase tracking-[0.18em] text-sky-100/85", children: "Live Response" })
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx(
+      FilterResponseGraph,
+      {
+        baseMode: filterMode.value,
+        baseCutoffHz: filterCutoff.value,
+        baseQ: filterQ.value,
+        liveMode: observedFilterState.mode,
+        liveCutoffHz: observedFilterState.cutoffHz,
+        liveQ: observedFilterState.q,
+        liveHasActive: observedFilterState.hasActive,
+        onCutoffChange: (nextValue) => filterCutoff.commitValue(nextValue),
+        onQChange: (nextValue) => filterQ.commitValue(nextValue)
+      }
+    ),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid gap-5 lg:grid-cols-[220px_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)]", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "grid gap-2", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[11px] uppercase tracking-[0.18em] text-slate-300/60", children: "Mode" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "relative", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "select",
+            {
+              "aria-label": "Filter mode",
+              className: "h-11 w-full appearance-none rounded-[16px] border border-white/8 bg-black/25 px-4 pr-10 text-[11px] uppercase tracking-[0.16em] text-cyan-100 outline-none transition hover:border-cyan-200/30 focus:border-cyan-200/45",
+              value: String(filterMode.value),
+              onChange: (event) => filterMode.commitValue(Number(event.target.value)),
+              children: FILTER_MODE_OPTIONS.map((option) => /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: option.value, children: option.label }, option.value))
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "pointer-events-none absolute inset-y-0 right-0 flex items-center pr-4 text-slate-300/75", children: /* @__PURE__ */ jsxRuntimeExports.jsx("svg", { className: "h-3 w-3", viewBox: "0 0 12 12", "aria-hidden": "true", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "path",
+            {
+              d: "M3 4.5 6 7.5 9 4.5",
+              fill: "none",
+              stroke: "currentColor",
+              strokeLinecap: "round",
+              strokeLinejoin: "round",
+              strokeWidth: "1.4"
+            }
+          ) }) })
+        ] })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        RangeField,
+        {
+          label: "Cutoff",
+          min: 0,
+          max: 1,
+          step: 1e-3,
+          value: normalizedCutoff,
+          displayValue: formatCutoffHz(filterCutoff.value),
+          onChange: (nextValue) => filterCutoff.commitValue(Math.exp(Math.log(20) + (Math.log(2e4) - Math.log(20)) * nextValue)),
+          ariaLabel: "Filter cutoff"
+        }
+      ),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        RangeField,
+        {
+          label: "Resonance",
+          min: 0,
+          max: 1,
+          step: 1e-3,
+          value: normalizedQ,
+          displayValue: formatQ(filterQ.value),
+          onChange: (nextValue) => filterQ.commitValue(0.1 + (20 - 0.1) * nextValue),
+          ariaLabel: "Filter resonance"
+        }
+      ),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        RangeField,
+        {
+          label: "MSEG 1 Depth",
+          min: -6,
+          max: 6,
+          step: 1e-3,
+          value: filterMsegDepth.value,
+          displayValue: formatSignedOctaves(filterMsegDepth.value),
+          onChange: (nextValue) => filterMsegDepth.commitValue(nextValue),
+          ariaLabel: "Filter MSEG depth"
         }
       )
     ] })
@@ -24723,7 +25492,7 @@ function MsegEditorModal({
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-[11px] uppercase tracking-[0.22em] text-blue-300/70", children: "MSEG 1" }),
         /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "mt-2 text-2xl font-semibold tracking-[-0.04em] text-amber-100", children: "Fixed Wavetable Route" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "mt-2 text-sm text-slate-300/70", children: "Drag a point to move it. Click and drag a segment up or down to bend it. Click an empty spot to add a point. Click an interior point without dragging to delete it." })
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "mt-2 text-sm text-slate-300/70", children: "Drag a point to move it. Click an empty spot to add a point. Click an interior point without dragging to delete it." })
       ] }),
       /* @__PURE__ */ jsxRuntimeExports.jsx(
         "button",
@@ -24747,7 +25516,8 @@ function MsegEditorModal({
         onPointerMove,
         onPointerLeave,
         onPointerUp,
-        className: "h-[320px]"
+        className: "h-[320px]",
+        dataRole: "mseg-editor-surface"
       }
     ),
     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid grid-cols-[minmax(0,1fr)_auto] items-end gap-5 rounded-[22px] border border-white/8 bg-white/[0.03] p-5", children: [
@@ -24799,67 +25569,84 @@ function DesktopPatchViewBody() {
   }, []);
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "cosimo-surface relative flex h-full w-full flex-col gap-5 overflow-hidden rounded-[28px] border border-white/8 p-6 text-slate-100 shadow-[0_26px_80px_rgba(0,0,0,0.48)]", children: [
     /* @__PURE__ */ jsxRuntimeExports.jsx(StatusHeader, { statusText: synthView.topStatus }),
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("main", { className: "grid min-h-0 flex-1 grid-rows-[minmax(356px,0.9fr)_auto_auto] gap-5", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "grid min-h-0 grid-cols-[minmax(280px,1fr)_minmax(0,2fr)] gap-5", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx(
-          WavetableStageSection,
-          {
-            stageRef,
-            frames: synthView.frames,
-            position: synthView.observedPosition,
-            warpMode: synthView.warpMode.value,
-            warpAmount: synthView.warpAmount.value,
-            tableName: synthView.displayedTableName,
-            frameCount: synthView.displayedFrameCount,
-            desiredTableIndex: synthView.desiredTableIndex,
-            tableOptions: synthView.tableOptions,
-            canRetry: synthView.canRetryDesiredTableLoad,
-            onTableChange: synthView.handleSelectWavetable,
-            onRetry: synthView.handleRetryLoad,
-            tableFocusBindings: synthView.keyboardRouting.wavetableFocusBindings,
-            onPointerDown: synthView.stageBindings.handleStagePointerDown,
-            onPointerMove: synthView.stageBindings.handleStagePointerMove,
-            onPointerUp: synthView.stageBindings.handleStagePointerUp,
-            className: "min-h-[356px]"
-          }
-        ),
-        /* @__PURE__ */ jsxRuntimeExports.jsx(
-          MsegOverviewSection,
-          {
-            msegState: synthView.msegState,
-            onOpenEditor: synthView.msegEditor.openEditor,
-            onDepthChange: synthView.handleMsegDepthChange,
-            onRateChange: synthView.handleMsegRateChange,
-            onToggleLoop: synthView.handleToggleMsegLoop,
-            depthFocusBindings: synthView.keyboardRouting.msegDepthFocusBindings,
-            rateFocusBindings: synthView.keyboardRouting.msegRateFocusBindings,
-            className: "min-h-[356px]"
-          }
-        )
-      ] }),
-      synthView.failureDetail ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "rounded-[22px] border border-fuchsia-300/15 bg-fuchsia-300/8 px-4 py-3 text-sm text-fuchsia-100/90", children: synthView.failureDetail }) : null,
-      /* @__PURE__ */ jsxRuntimeExports.jsx(
-        WarpSection,
-        {
-          warpMode: synthView.warpMode,
-          warpAmount: synthView.warpAmount,
-          warpMsegDepth: synthView.warpMsegDepth
-        }
-      ),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(
-        KeyboardSection,
-        {
-          playMode: synthView.playMode,
-          glideTime: synthView.glideTime,
-          keyboardRootNote,
-          onOctaveDown: handleKeyboardOctaveDown,
-          onOctaveUp: handleKeyboardOctaveUp,
-          playModeFocusBindings: synthView.keyboardRouting.playModeFocusBindings,
-          glideFocusTarget: synthView.keyboardRouting.glideFocusTarget,
-          keyboardRef: keyboardElementRef
-        }
-      )
-    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs(
+      "main",
+      {
+        "data-role": "desktop-scroll-region",
+        className: "grid min-h-0 flex-1 grid-rows-[minmax(356px,0.9fr)_auto_auto] gap-5 overflow-x-hidden overflow-y-auto pr-1",
+        children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "grid min-h-0 grid-cols-[minmax(280px,1fr)_minmax(0,2fr)] gap-5", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              WavetableStageSection,
+              {
+                stageRef,
+                frames: synthView.frames,
+                position: synthView.observedPosition,
+                warpMode: synthView.warpMode.value,
+                warpAmount: synthView.warpAmount.value,
+                tableName: synthView.displayedTableName,
+                frameCount: synthView.displayedFrameCount,
+                desiredTableIndex: synthView.desiredTableIndex,
+                tableOptions: synthView.tableOptions,
+                canRetry: synthView.canRetryDesiredTableLoad,
+                onTableChange: synthView.handleSelectWavetable,
+                onRetry: synthView.handleRetryLoad,
+                tableFocusBindings: synthView.keyboardRouting.wavetableFocusBindings,
+                onPointerDown: synthView.stageBindings.handleStagePointerDown,
+                onPointerMove: synthView.stageBindings.handleStagePointerMove,
+                onPointerUp: synthView.stageBindings.handleStagePointerUp,
+                className: "min-h-[356px]"
+              }
+            ),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              MsegOverviewSection,
+              {
+                msegState: synthView.msegState,
+                onOpenEditor: synthView.msegEditor.openEditor,
+                onDepthChange: synthView.handleMsegDepthChange,
+                onRateChange: synthView.handleMsegRateChange,
+                onToggleLoop: synthView.handleToggleMsegLoop,
+                depthFocusBindings: synthView.keyboardRouting.msegDepthFocusBindings,
+                rateFocusBindings: synthView.keyboardRouting.msegRateFocusBindings,
+                className: "min-h-[356px]"
+              }
+            )
+          ] }),
+          synthView.failureDetail ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "rounded-[22px] border border-fuchsia-300/15 bg-fuchsia-300/8 px-4 py-3 text-sm text-fuchsia-100/90", children: synthView.failureDetail }) : null,
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            WarpSection,
+            {
+              warpMode: synthView.warpMode,
+              warpAmount: synthView.warpAmount,
+              warpMsegDepth: synthView.warpMsegDepth
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            FilterSection,
+            {
+              filterMode: synthView.filterMode,
+              filterCutoff: synthView.filterCutoff,
+              filterQ: synthView.filterQ,
+              filterMsegDepth: synthView.filterMsegDepth,
+              observedFilterState: synthView.observedFilterState
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            KeyboardSection,
+            {
+              playMode: synthView.playMode,
+              glideTime: synthView.glideTime,
+              keyboardRootNote,
+              onOctaveDown: handleKeyboardOctaveDown,
+              onOctaveUp: handleKeyboardOctaveUp,
+              playModeFocusBindings: synthView.keyboardRouting.playModeFocusBindings,
+              glideFocusTarget: synthView.keyboardRouting.glideFocusTarget,
+              keyboardRef: keyboardElementRef
+            }
+          )
+        ]
+      }
+    ),
     /* @__PURE__ */ jsxRuntimeExports.jsx(
       MsegEditorModal,
       {

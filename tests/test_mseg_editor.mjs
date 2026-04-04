@@ -212,7 +212,7 @@ test("delete_non_endpoint_point_updates_shape_and_reuploads_buffer", () => {
     );
 });
 
-test("segment_curve_change_updates_stored_shape_and_reuploads_buffer", () => {
+test("set_segment_curve_power_updates_only_that_segment_and_reuploads_buffer", () => {
     const patchConnection = new FakePatchConnection();
     const controller = new MsegController(patchConnection);
 
@@ -222,17 +222,20 @@ test("segment_curve_change_updates_stored_shape_and_reuploads_buffer", () => {
     patchConnection.events = [];
     patchConnection.storedWrites = [];
 
-    controller.setSegmentCurvePower(1, -3.25);
+    controller.setSegmentCurvePower(0, 6.5);
 
-    assert.equal(controller.getState().shape.points[1].curvePower, -3.25);
+    const { shape } = controller.getState();
+    assert.equal(shape.points.length, 3);
+    assert.equal(shape.points[0].curvePower, 6.5);
+    assert.equal(shape.points[1].curvePower, 0);
     assert.equal(patchConnection.storedWrites[0].key, MSEG_SHAPE_STATE_KEY);
     assert.equal(
         patchConnection.storedWrites[0].value,
-        serializeMsegShape(controller.getState().shape)
+        serializeMsegShape(shape)
     );
     assert.deepEqual(
         lastEvent(patchConnection, MSEG_BUFFER_ENDPOINT_ID).value,
-        Array.from(renderMsegShape(controller.getState().shape))
+        Array.from(renderMsegShape(shape))
     );
 });
 

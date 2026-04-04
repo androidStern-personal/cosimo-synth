@@ -903,17 +903,14 @@ export async function installStagePositionDragHookHarness(target: HTMLElement) {
 }
 
 export async function installMsegEditorInteractionsHookHarness(target: HTMLElement) {
-    const actionLog: Array<{
-        type: string;
-        pointIndex?: number;
-        segmentIndex?: number;
-        x?: number;
-        y?: number;
-        curvePower?: number;
-    }> = [];
+    const actionLog: Array<{ type: string; pointIndex?: number; segmentIndex?: number; x?: number; y?: number; curvePower?: number }> = [];
+    const hapticLog: string[] = [];
     let setMsegStateState: ((updater: (previousState: MsegState) => MsegState) => void) | null = null;
     let setOrientationState: ((nextValue: "horizontal" | "vertical") => void) | null = null;
+    let setCurveEditModeState: ((nextValue: "immediate" | "hold-or-drag") => void) | null = null;
+    let setCurveEditHoldDelayMsState: ((nextValue: number) => void) | null = null;
     let currentOrientation: "horizontal" | "vertical" = "horizontal";
+    let currentCurveEditMode: "immediate" | "hold-or-drag" = "immediate";
     let currentMsegState: MsegState = {
         shape: addMsegPoint(createDefaultMsegShape("Harness"), 0.5, 0.35),
         playback: createDefaultMsegPlayback(),
@@ -924,12 +921,17 @@ export async function installMsegEditorInteractionsHookHarness(target: HTMLEleme
         function Harness() {
             const [msegState, setMsegState] = useState<MsegState>(currentMsegState);
             const [orientation, setOrientation] = useState<"horizontal" | "vertical">("horizontal");
+            const [curveEditMode, setCurveEditMode] = useState<"immediate" | "hold-or-drag">("immediate");
+            const [curveEditHoldDelayMs, setCurveEditHoldDelayMs] = useState(350);
             setMsegStateState = (updater) => setMsegState((previousState) => updater(previousState));
             setOrientationState = setOrientation;
+            setCurveEditModeState = setCurveEditMode;
+            setCurveEditHoldDelayMsState = setCurveEditHoldDelayMs;
             const currentStateRef = useRef(msegState);
             currentStateRef.current = msegState;
             currentMsegState = msegState;
             currentOrientation = orientation;
+            currentCurveEditMode = curveEditMode;
             const surfaceRef = useRef<SVGSVGElement | null>(null);
             const controllerRef = useRef({
                 addPoint(x: number, y: number) {
@@ -980,6 +982,11 @@ export async function installMsegEditorInteractionsHookHarness(target: HTMLEleme
                 msegController: controllerRef,
                 surfaceRef,
                 orientation,
+                curveEditActivationMode: curveEditMode,
+                curveEditHoldDelayMs,
+                onCurveEditHoldActivated: () => {
+                    hapticLog.push("light");
+                },
             });
 
             useEffect(() => {
@@ -1052,6 +1059,14 @@ export async function installMsegEditorInteractionsHookHarness(target: HTMLEleme
             setOrientationState?.(nextValue);
             await waitForMicrotask();
         },
+        async setCurveEditMode(nextValue: "immediate" | "hold-or-drag") {
+            setCurveEditModeState?.(nextValue);
+            await waitForMicrotask();
+        },
+        async setCurveEditHoldDelayMs(nextValue: number) {
+            setCurveEditHoldDelayMsState?.(nextValue);
+            await waitForMicrotask();
+        },
         getPointCoordinates(pointIndex: number) {
             const point = currentMsegState.shape.points[pointIndex];
             const { bounds } = readSurfaceBounds('[data-role="mseg-surface"]');
@@ -1096,8 +1111,10 @@ export async function installMsegEditorInteractionsHookHarness(target: HTMLEleme
                 pointStates,
                 pointCount: Number(pointCountText) || 0,
                 actionLog: cloneValue(actionLog),
+                hapticLog: cloneValue(hapticLog),
                 points: cloneValue(currentMsegState.shape.points),
                 orientation: currentOrientation,
+                curveEditMode: currentCurveEditMode,
             };
         },
         async unmount() {

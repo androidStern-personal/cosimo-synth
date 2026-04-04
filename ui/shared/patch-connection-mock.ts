@@ -8,9 +8,14 @@ const glideTimeEndpointID = "glideTime";
 const warpModeEndpointID = "warpMode";
 const warpAmountEndpointID = "warpAmount";
 const warpMsegDepthEndpointID = "warpMsegDepth";
+const filterModeEndpointID = "filterMode";
+const filterCutoffEndpointID = "filterCutoff";
+const filterQEndpointID = "filterQ";
+const filterMsegDepthEndpointID = "filterMsegDepth";
 const runtimeSyncRequestEndpointID = "runtimeSyncRequest";
 const runtimeStateEndpointID = "runtimeState";
 const effectiveWavetablePositionEndpointID = "effectiveWavetablePosition";
+const effectiveFilterStateEndpointID = "effectiveFilterState";
 const retryDesiredTableRequestEndpointID = "retryDesiredTableRequest";
 
 type ParameterListener = (value: unknown) => void;
@@ -249,6 +254,46 @@ function buildHarnessStatus(manifest: unknown) {
                         init: 0,
                     },
                 },
+                {
+                    endpointID: filterModeEndpointID,
+                    purpose: "parameter",
+                    annotation: {
+                        name: "Filter Mode",
+                        min: 0,
+                        max: 5,
+                        init: 0,
+                    },
+                },
+                {
+                    endpointID: filterCutoffEndpointID,
+                    purpose: "parameter",
+                    annotation: {
+                        name: "Filter Cutoff",
+                        min: 20,
+                        max: 20000,
+                        init: 1000,
+                    },
+                },
+                {
+                    endpointID: filterQEndpointID,
+                    purpose: "parameter",
+                    annotation: {
+                        name: "Filter Q",
+                        min: 0.1,
+                        max: 20,
+                        init: 0.707107,
+                    },
+                },
+                {
+                    endpointID: filterMsegDepthEndpointID,
+                    purpose: "parameter",
+                    annotation: {
+                        name: "Filter MSEG Depth",
+                        min: -6,
+                        max: 6,
+                        init: 0,
+                    },
+                },
             ],
         },
     };
@@ -276,6 +321,10 @@ export class MockPatchConnection implements PatchConnectionLike {
         [warpModeEndpointID, 0],
         [warpAmountEndpointID, 0],
         [warpMsegDepthEndpointID, 0],
+        [filterModeEndpointID, 0],
+        [filterCutoffEndpointID, 1000],
+        [filterQEndpointID, 0.707107],
+        [filterMsegDepthEndpointID, 0],
     ]);
     private parameterListeners = new Map<string, Set<ParameterListener>>();
     private endpointListeners = new Map<string, Set<EndpointListener>>();
@@ -507,6 +556,30 @@ export class MockPatchConnection implements PatchConnectionLike {
         this.emitEndpoint(effectiveWavetablePositionEndpointID, {
             voiceGeneration,
             position,
+        });
+    }
+
+    emitEffectiveFilterState(
+        {
+            voiceGeneration = 1,
+            hasActive = true,
+            mode = 1,
+            cutoffHz = 1000,
+            q = 0.707107,
+        }: {
+            voiceGeneration?: number;
+            hasActive?: boolean;
+            mode?: number;
+            cutoffHz?: number;
+            q?: number;
+        } = {},
+    ) {
+        this.emitEndpoint(effectiveFilterStateEndpointID, {
+            voiceGeneration,
+            hasActive: hasActive ? 1 : 0,
+            mode,
+            cutoffHz,
+            q,
         });
     }
 

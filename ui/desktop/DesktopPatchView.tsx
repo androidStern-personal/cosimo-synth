@@ -22,6 +22,7 @@ import {
 } from "../shared/mseg";
 import {
     EditableMsegSurface,
+    FilterResponseGraph,
     KeyboardSectionShell,
     MsegOverviewSection,
     RangeField,
@@ -51,6 +52,14 @@ const WARP_MODE_OPTIONS = [
     { value: 3, label: "Asym +/-" },
     { value: 4, label: "Mirror" },
 ] as const;
+const FILTER_MODE_OPTIONS = [
+    { value: 0, label: "Off" },
+    { value: 1, label: "Lowpass" },
+    { value: 2, label: "Highpass" },
+    { value: 3, label: "Bandpass" },
+    { value: 4, label: "Notch" },
+    { value: 5, label: "Peak" },
+] as const;
 
 type HeaderProps = {
     statusText: string;
@@ -65,6 +74,19 @@ type WarpSectionProps = {
     warpMode: PatchControlBinding<number>;
     warpAmount: PatchControlBinding<number>;
     warpMsegDepth: PatchControlBinding<number>;
+};
+
+type FilterSectionProps = {
+    filterMode: PatchControlBinding<number>;
+    filterCutoff: PatchControlBinding<number>;
+    filterQ: PatchControlBinding<number>;
+    filterMsegDepth: PatchControlBinding<number>;
+    observedFilterState: {
+        hasActive: boolean;
+        mode: number;
+        cutoffHz: number;
+        q: number;
+    };
 };
 
 type MsegEditorModalProps = {
@@ -102,6 +124,10 @@ function formatSignedPercent(value: number) {
     return `${percentValue > 0 ? "+" : ""}${percentValue}%`;
 }
 
+function clamp(value: number, min: number, max: number) {
+    return Math.min(Math.max(value, min), max);
+}
+
 function formatBipolarWarpAmount(value: number) {
     const percentValue = Math.round((value - 0.5) * 200);
     return `${percentValue > 0 ? "+" : ""}${percentValue}%`;
@@ -113,6 +139,22 @@ function formatWarpAmount(mode: number, value: number) {
     }
 
     return formatPercent(value);
+}
+
+function formatCutoffHz(value: number) {
+    if (value >= 1000) {
+        return `${(value / 1000).toFixed(2)} kHz`;
+    }
+
+    return `${Math.round(value)} Hz`;
+}
+
+function formatQ(value: number) {
+    return value.toFixed(2);
+}
+
+function formatSignedOctaves(value: number) {
+    return `${value > 0 ? "+" : ""}${value.toFixed(2)} oct`;
 }
 
 function StatusHeader({ statusText }: HeaderProps) {
@@ -198,6 +240,114 @@ function WarpSection({
                     displayValue={formatSignedPercent(warpMsegDepth.value)}
                     onChange={(nextValue) => warpMsegDepth.commitValue(nextValue)}
                     ariaLabel="Warp MSEG depth"
+                />
+            </div>
+        </section>
+    );
+}
+
+function FilterSection({
+    filterMode,
+    filterCutoff,
+    filterQ,
+    filterMsegDepth,
+    observedFilterState,
+}: FilterSectionProps) {
+    const normalizedCutoff = clamp(
+        (Math.log(Math.max(20, filterCutoff.value)) - Math.log(20)) / (Math.log(20_000) - Math.log(20)),
+        0,
+        1,
+    );
+    const normalizedQ = clamp((filterQ.value - 0.1) / (20 - 0.1), 0, 1);
+
+    return (
+        <section className="grid gap-4 rounded-[24px] border border-white/8 bg-white/[0.03] p-5">
+            <div className="flex items-start justify-between gap-4">
+                <div>
+                    <div className="text-[11px] uppercase tracking-[0.22em] text-sky-300/70">Filter</div>
+                    <div className="mt-2 text-sm text-slate-300/75">
+                        Apply a per-voice multimode filter after the oscillator and let the graph follow the newest active note.
+                    </div>
+                </div>
+                <div className="rounded-full border border-sky-300/15 bg-sky-300/8 px-3 py-1 text-[10px] uppercase tracking-[0.18em] text-sky-100/85">
+                    Live Response
+                </div>
+            </div>
+
+            <FilterResponseGraph
+                baseMode={filterMode.value}
+                baseCutoffHz={filterCutoff.value}
+                baseQ={filterQ.value}
+                liveMode={observedFilterState.mode}
+                liveCutoffHz={observedFilterState.cutoffHz}
+                liveQ={observedFilterState.q}
+                liveHasActive={observedFilterState.hasActive}
+                onCutoffChange={(nextValue) => filterCutoff.commitValue(nextValue)}
+                onQChange={(nextValue) => filterQ.commitValue(nextValue)}
+            />
+
+            <div className="grid gap-5 lg:grid-cols-[220px_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)]">
+                <label className="grid gap-2">
+                    <span className="text-[11px] uppercase tracking-[0.18em] text-slate-300/60">Mode</span>
+                    <div className="relative">
+                        <select
+                            aria-label="Filter mode"
+                            className="h-11 w-full appearance-none rounded-[16px] border border-white/8 bg-black/25 px-4 pr-10 text-[11px] uppercase tracking-[0.16em] text-cyan-100 outline-none transition hover:border-cyan-200/30 focus:border-cyan-200/45"
+                            value={String(filterMode.value)}
+                            onChange={(event) => filterMode.commitValue(Number(event.target.value))}
+                        >
+                            {FILTER_MODE_OPTIONS.map((option) => (
+                                <option key={option.value} value={option.value}>
+                                    {option.label}
+                                </option>
+                            ))}
+                        </select>
+                        <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-4 text-slate-300/75">
+                            <svg className="h-3 w-3" viewBox="0 0 12 12" aria-hidden="true">
+                                <path
+                                    d="M3 4.5 6 7.5 9 4.5"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth="1.4"
+                                />
+                            </svg>
+                        </div>
+                    </div>
+                </label>
+
+                <RangeField
+                    label="Cutoff"
+                    min={0}
+                    max={1}
+                    step={0.001}
+                    value={normalizedCutoff}
+                    displayValue={formatCutoffHz(filterCutoff.value)}
+                    onChange={(nextValue) => filterCutoff.commitValue(Math.exp(Math.log(20) + ((Math.log(20_000) - Math.log(20)) * nextValue)))}
+                    ariaLabel="Filter cutoff"
+                />
+
+                <RangeField
+                    label="Resonance"
+                    min={0}
+                    max={1}
+                    step={0.001}
+                    value={normalizedQ}
+                    displayValue={formatQ(filterQ.value)}
+                    onChange={(nextValue) => filterQ.commitValue(0.1 + ((20 - 0.1) * nextValue))}
+                    ariaLabel="Filter resonance"
+                />
+
+                <RangeField
+                    label="MSEG 1 Depth"
+                    min={-6}
+                    max={6}
+                    step={0.001}
+                    value={filterMsegDepth.value}
+                    displayValue={formatSignedOctaves(filterMsegDepth.value)}
+                    onChange={(nextValue) => filterMsegDepth.commitValue(nextValue)}
+                    ariaLabel="Filter MSEG depth"
                 />
             </div>
         </section>
@@ -331,6 +481,7 @@ function MsegEditorModal({
                     onPointerLeave={onPointerLeave}
                     onPointerUp={onPointerUp}
                     className="h-[320px]"
+                    dataRole="mseg-editor-surface"
                 />
 
                 <div className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-5 rounded-[22px] border border-white/8 bg-white/[0.03] p-5">
@@ -388,7 +539,10 @@ function DesktopPatchViewBody() {
         <div className="cosimo-surface relative flex h-full w-full flex-col gap-5 overflow-hidden rounded-[28px] border border-white/8 p-6 text-slate-100 shadow-[0_26px_80px_rgba(0,0,0,0.48)]">
             <StatusHeader statusText={synthView.topStatus} />
 
-            <main className="grid min-h-0 flex-1 grid-rows-[minmax(356px,0.9fr)_auto_auto] gap-5">
+            <main
+                data-role="desktop-scroll-region"
+                className="grid min-h-0 flex-1 grid-rows-[minmax(356px,0.9fr)_auto_auto] gap-5 overflow-x-hidden overflow-y-auto pr-1"
+            >
                 <section className="grid min-h-0 grid-cols-[minmax(280px,1fr)_minmax(0,2fr)] gap-5">
                     <WavetableStageSection
                         stageRef={stageRef}
@@ -432,6 +586,14 @@ function DesktopPatchViewBody() {
                     warpMode={synthView.warpMode}
                     warpAmount={synthView.warpAmount}
                     warpMsegDepth={synthView.warpMsegDepth}
+                />
+
+                <FilterSection
+                    filterMode={synthView.filterMode}
+                    filterCutoff={synthView.filterCutoff}
+                    filterQ={synthView.filterQ}
+                    filterMsegDepth={synthView.filterMsegDepth}
+                    observedFilterState={synthView.observedFilterState}
                 />
 
                 <KeyboardSection

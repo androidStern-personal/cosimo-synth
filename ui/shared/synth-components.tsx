@@ -27,6 +27,15 @@ import {
 } from "./mseg";
 import { CanvasWavetableDisplay } from "./wavetable-display";
 import type { SynthFocusBindings } from "./synth-input-router";
+import {
+    createFilterResponseModel,
+    FILTER_CUTOFF_MAX_HZ,
+    FILTER_CUTOFF_MIN_HZ,
+    FILTER_Q_MAX,
+    FILTER_Q_MIN,
+    normalizedToFilterCutoffHz,
+    normalizedToFilterQ,
+} from "./filter-response";
 
 export type VoiceModeOption = {
     value: number;
@@ -103,6 +112,19 @@ export type VoiceGlideControlSurfaceProps = {
     className?: string;
 };
 
+export type FilterResponseGraphProps = {
+    baseMode: number;
+    baseCutoffHz: number;
+    baseQ: number;
+    liveMode: number;
+    liveCutoffHz: number;
+    liveQ: number;
+    liveHasActive: boolean;
+    onCutoffChange: (nextValue: number) => void;
+    onQChange: (nextValue: number) => void;
+    className?: string;
+};
+
 export type KeyboardSectionShellProps = {
     keyboardRootLabel: string;
     canOctaveUp: boolean;
@@ -157,6 +179,10 @@ function formatFrameIndex(position: number, frameCount: number) {
     const safeFrameCount = Math.max(1, frameCount);
     const frameIndex = Math.round(position * Math.max(0, safeFrameCount - 1)) + 1;
     return `${String(frameIndex).padStart(2, "0")}/${String(safeFrameCount).padStart(2, "0")}`;
+}
+
+function clamp(value: number, min: number, max: number) {
+    return Math.min(Math.max(value, min), max);
 }
 
 function buildMsegSurfacePaths(
@@ -594,6 +620,180 @@ export function RangeField({
                 </div>
             </div>
         </label>
+    );
+}
+
+function buildFilterResponsePath(
+    magnitudesDb: number[],
+    width: number,
+    height: number,
+    {
+        horizontalPadding = 18,
+        verticalPadding = 16,
+        minDb = -24,
+        maxDb = 18,
+    }: {
+        horizontalPadding?: number;
+        verticalPadding?: number;
+        minDb?: number;
+        maxDb?: number;
+    } = {},
+) {
+    const plotLeft = horizontalPadding;
+    const plotRight = Math.max(horizontalPadding + 1, width - horizontalPadding);
+    const plotTop = verticalPadding;
+    const plotBottom = Math.max(verticalPadding + 1, height - verticalPadding);
+    const plotWidth = Math.max(1, plotRight - plotLeft);
+    const plotHeight = Math.max(1, plotBottom - plotTop);
+    let path = "";
+
+    for (let index = 0; index < magnitudesDb.length; index += 1) {
+        const x = plotLeft + (plotWidth * (index / Math.max(1, magnitudesDb.length - 1)));
+        const normalized = clamp((clamp(magnitudesDb[index], minDb, maxDb) - minDb) / (maxDb - minDb), 0, 1);
+        const y = plotBottom - (plotHeight * normalized);
+        path += `${index === 0 ? "M" : "L"} ${x.toFixed(3)} ${y.toFixed(3)} `;
+    }
+
+    return {
+        path: path.trim(),
+        plotLeft,
+        plotRight,
+        plotTop,
+        plotBottom,
+        plotWidth,
+        plotHeight,
+    };
+}
+
+export function FilterResponseGraph({
+    baseMode,
+    baseCutoffHz,
+    baseQ,
+    liveMode,
+    liveCutoffHz,
+    liveQ,
+    liveHasActive,
+    onCutoffChange,
+    onQChange,
+    className,
+}: FilterResponseGraphProps) {
+    const surfaceRef = useRef<SVGSVGElement | null>(null);
+    const size = useResizeObserver(surfaceRef);
+    const [activePointerId, setActivePointerId] = useState<number | null>(null);
+    const baseModel = useMemo(() => createFilterResponseModel({
+        mode: baseMode,
+        cutoffHz: baseCutoffHz,
+        q: baseQ,
+    }), [baseCutoffHz, baseMode, baseQ]);
+    const liveModel = useMemo(() => createFilterResponseModel({
+        mode: liveHasActive ? liveMode : baseMode,
+        cutoffHz: liveHasActive ? liveCutoffHz : baseCutoffHz,
+        q: liveHasActive ? liveQ : baseQ,
+    }), [baseCutoffHz, baseMode, baseQ, liveCutoffHz, liveHasActive, liveMode, liveQ]);
+    const basePath = useMemo(
+        () => buildFilterResponsePath(baseModel.magnitudesDb, size.width, size.height),
+        [baseModel.magnitudesDb, size.height, size.width],
+    );
+    const livePath = useMemo(
+        () => buildFilterResponsePath(liveModel.magnitudesDb, size.width, size.height),
+        [liveModel.magnitudesDb, size.height, size.width],
+    );
+
+    const applyPointerPosition = (clientX: number, clientY: number) => {
+        const element = surfaceRef.current;
+
+        if (!element) {
+            return;
+        }
+
+        const bounds = element.getBoundingClientRect();
+        const normalizedX = clamp((clientX - bounds.left) / Math.max(1, bounds.width), 0, 1);
+        const normalizedY = clamp((clientY - bounds.top) / Math.max(1, bounds.height), 0, 1);
+        onCutoffChange(clamp(normalizedToFilterCutoffHz(normalizedX), FILTER_CUTOFF_MIN_HZ, FILTER_CUTOFF_MAX_HZ));
+        onQChange(clamp(normalizedToFilterQ(1 - normalizedY), FILTER_Q_MIN, FILTER_Q_MAX));
+    };
+
+    const debugState = useMemo(() => ({
+        base: {
+            mode: baseModel.mode,
+            cutoffHz: baseModel.cutoffHz,
+            q: baseModel.q,
+            peakIndex: baseModel.peakIndex,
+            minIndex: baseModel.minIndex,
+        },
+        live: {
+            hasActive: liveHasActive,
+            mode: liveModel.mode,
+            cutoffHz: liveModel.cutoffHz,
+            q: liveModel.q,
+            peakIndex: liveModel.peakIndex,
+            minIndex: liveModel.minIndex,
+        },
+    }), [baseModel, liveHasActive, liveModel]);
+
+    return (
+        <div className={joinClasses("grid gap-2", className)}>
+            <svg
+                ref={surfaceRef}
+                data-role="filter-response-graph"
+                className="h-44 w-full touch-none overflow-hidden rounded-[20px] border border-white/8 bg-black/25"
+                viewBox={`0 0 ${size.width} ${size.height}`}
+                onPointerDown={(event) => {
+                    event.currentTarget.setPointerCapture(event.pointerId);
+                    setActivePointerId(event.pointerId);
+                    applyPointerPosition(event.clientX, event.clientY);
+                }}
+                onPointerMove={(event) => {
+                    if (activePointerId !== event.pointerId) {
+                        return;
+                    }
+                    applyPointerPosition(event.clientX, event.clientY);
+                }}
+                onPointerUp={(event) => {
+                    if (activePointerId === event.pointerId) {
+                        setActivePointerId(null);
+                    }
+                }}
+                onPointerCancel={(event) => {
+                    if (activePointerId === event.pointerId) {
+                        setActivePointerId(null);
+                    }
+                }}
+            >
+                {[0.25, 0.5, 0.75].map((step) => (
+                    <line
+                        key={`filter-grid-h-${step}`}
+                        x1={basePath.plotLeft}
+                        x2={basePath.plotRight}
+                        y1={basePath.plotTop + (basePath.plotHeight * step)}
+                        y2={basePath.plotTop + (basePath.plotHeight * step)}
+                        stroke="rgba(255,255,255,0.08)"
+                        strokeWidth="1"
+                    />
+                ))}
+                {[0.25, 0.5, 0.75].map((step) => (
+                    <line
+                        key={`filter-grid-v-${step}`}
+                        y1={basePath.plotTop}
+                        y2={basePath.plotBottom}
+                        x1={basePath.plotLeft + (basePath.plotWidth * step)}
+                        x2={basePath.plotLeft + (basePath.plotWidth * step)}
+                        stroke="rgba(255,255,255,0.06)"
+                        strokeWidth="1"
+                    />
+                ))}
+                <path d={basePath.path} fill="none" stroke="rgba(123, 197, 255, 0.46)" strokeWidth="2" />
+                <path
+                    d={livePath.path}
+                    fill="none"
+                    stroke={liveHasActive ? "rgba(94, 215, 255, 0.98)" : "rgba(94, 215, 255, 0.72)"}
+                    strokeWidth={liveHasActive ? "3" : "2"}
+                />
+            </svg>
+            <pre data-role="filter-graph-debug" className="hidden">
+                {JSON.stringify(debugState)}
+            </pre>
+        </div>
     );
 }
 

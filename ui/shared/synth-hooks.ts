@@ -19,6 +19,7 @@ import {
     type PatchControlBinding,
 } from "./patch-controls";
 import {
+    deriveMsegSegmentCurvePower,
     clampMsegRateSeconds,
     findMsegPointHitIndex,
     findMsegSegmentHitIndex,
@@ -31,9 +32,12 @@ import {
     clampDisplayPosition,
     describeRuntimeTableFailureDetails,
     mapDisplayDragToPosition,
+    normalizeEffectiveFilterStateMessage,
     normalizeRuntimeTableState,
     resolveRuntimeTablePresentation,
+    selectObservedEffectiveFilterState,
     selectObservedWavetablePositionState,
+    type EffectiveFilterState,
     type RuntimeTablePresentation,
 } from "./runtime-table-state";
 import {
@@ -49,9 +53,9 @@ import {
 } from "./wavetable-bank";
 
 export const EFFECTIVE_WAVETABLE_POSITION_ENDPOINT_ID = "effectiveWavetablePosition";
+export const EFFECTIVE_FILTER_STATE_ENDPOINT_ID = "effectiveFilterState";
 export const DISPLAY_SWIPE_THRESHOLD_PX = 2;
 export const MSEG_DRAG_THRESHOLD_PX = 8;
-export const MSEG_CURVE_DRAG_PIXELS_PER_POWER = 10;
 const WAVETABLE_POSITION_ENDPOINT_ID = "wavetablePosition";
 const WAVETABLE_SELECT_ENDPOINT_ID = "wavetableSelect";
 const PLAY_MODE_ENDPOINT_ID = "playMode";
@@ -59,6 +63,10 @@ const GLIDE_TIME_ENDPOINT_ID = "glideTime";
 const WARP_MODE_ENDPOINT_ID = "warpMode";
 const WARP_AMOUNT_ENDPOINT_ID = "warpAmount";
 const WARP_MSEG_DEPTH_ENDPOINT_ID = "warpMsegDepth";
+const FILTER_MODE_ENDPOINT_ID = "filterMode";
+const FILTER_CUTOFF_ENDPOINT_ID = "filterCutoff";
+const FILTER_Q_ENDPOINT_ID = "filterQ";
+const FILTER_MSEG_DEPTH_ENDPOINT_ID = "filterMsegDepth";
 const RUNTIME_SYNC_REQUEST_ENDPOINT_ID = "runtimeSyncRequest";
 const RUNTIME_STATE_ENDPOINT_ID = "runtimeState";
 const RETRY_DESIRED_TABLE_REQUEST_ENDPOINT_ID = "retryDesiredTableRequest";
@@ -66,32 +74,35 @@ const GLIDE_TIME_MIN_SECONDS = 0;
 const GLIDE_TIME_MAX_SECONDS = 2;
 const GLIDE_TIME_STEP_SECONDS = 0.001;
 
-type ActiveMsegPointerState =
-    | {
-        kind: "point";
-        pointerId: number;
-        pointIndex: number;
-        startClientX: number;
-        startClientY: number;
-        moved: boolean;
-        deleteOnRelease: boolean;
-    }
-    | {
-        kind: "segment";
-        pointerId: number;
-        segmentIndex: number;
-        startClientY: number;
-        startCurvePower: number;
-        dragDirection: number;
-    };
-
-type MsegEditorControllerLike = {
-    addPoint: (x: number, y: number) => void;
-    movePoint: (pointIndex: number, x: number, y: number) => void;
-    deletePoint: (pointIndex: number) => void;
-    setSegmentCurvePower: (segmentIndex: number, curvePower: number) => void;
-    getState: () => MsegState;
+type ActiveMsegPointPointerState = {
+    kind: "point-drag";
+    pointerId: number;
+    pointIndex: number;
+    startClientX: number;
+    startClientY: number;
+    moved: boolean;
+    deleteOnRelease: boolean;
 };
+
+type ActiveMsegPendingSegmentPointerState = {
+    kind: "pending-segment";
+    pointerId: number;
+    segmentIndex: number;
+    startClientX: number;
+    startClientY: number;
+    holdTimeoutId: number | null;
+};
+
+type ActiveMsegCurvePointerState = {
+    kind: "curve-drag";
+    pointerId: number;
+    segmentIndex: number;
+};
+
+type ActiveMsegPointerState =
+    | ActiveMsegPointPointerState
+    | ActiveMsegPendingSegmentPointerState
+    | ActiveMsegCurvePointerState;
 
 export type CatalogLoadState = {
     catalog: FactoryBankCatalog | null;
@@ -138,6 +149,11 @@ export type SynthPatchViewModel = {
     warpMode: PatchControlBinding<number>;
     warpAmount: PatchControlBinding<number>;
     warpMsegDepth: PatchControlBinding<number>;
+    filterMode: PatchControlBinding<number>;
+    filterCutoff: PatchControlBinding<number>;
+    filterQ: PatchControlBinding<number>;
+    filterMsegDepth: PatchControlBinding<number>;
+    observedFilterState: EffectiveFilterState;
     msegState: MsegState | null;
     handleSelectWavetable: (nextValue: number) => void;
     handleRetryLoad: () => void;
@@ -252,6 +268,61 @@ export function useObservedDisplayPosition(parameterPosition: number) {
     return message ? observedState.position : parameterPosition;
 }
 
+export function useObservedFilterState({
+    filterMode,
+    filterCutoff,
+    filterQ,
+}: {
+    filterMode: number;
+    filterCutoff: number;
+    filterQ: number;
+}) {
+    const message = usePatchEndpoint<unknown | null>(EFFECTIVE_FILTER_STATE_ENDPOINT_ID, null);
+    const [observedState, setObservedState] = useState<EffectiveFilterState>(() => ({
+        voiceGeneration: -1,
+        hasActive: false,
+        mode: Math.round(filterMode) || 0,
+        cutoffHz: Number(filterCutoff) || 1000,
+        q: Number(filterQ) || 0.707107,
+    }));
+
+    useEffect(() => {
+        setObservedState((previousState) => selectObservedEffectiveFilterState(previousState, message));
+    }, [message]);
+
+    useEffect(() => {
+        if (message) {
+            return;
+        }
+
+        setObservedState({
+            voiceGeneration: -1,
+            hasActive: false,
+            mode: Math.round(filterMode) || 0,
+            cutoffHz: Number(filterCutoff) || 1000,
+            q: Number(filterQ) || 0.707107,
+        });
+    }, [filterCutoff, filterMode, filterQ, message]);
+
+    if (!message) {
+        return {
+            voiceGeneration: -1,
+            hasActive: false,
+            mode: Math.round(filterMode) || 0,
+            cutoffHz: Number(filterCutoff) || 1000,
+            q: Number(filterQ) || 0.707107,
+        };
+    }
+
+    return observedState ?? {
+        voiceGeneration: -1,
+        hasActive: false,
+        mode: Math.round(filterMode) || 0,
+        cutoffHz: Number(filterCutoff) || 1000,
+        q: Number(filterQ) || 0.707107,
+    };
+}
+
 export function useMsegState() {
     const patchConnection = usePatchConnection();
     const [state, setState] = useState<MsegState | null>(null);
@@ -359,11 +430,17 @@ export function useMsegEditorInteractions({
     msegController,
     surfaceRef,
     orientation = "horizontal",
+    curveEditActivationMode = "immediate",
+    curveEditHoldDelayMs = 350,
+    onCurveEditHoldActivated = null,
 }: {
     msegState: MsegState | null;
-    msegController: RefObject<MsegEditorControllerLike | null>;
+    msegController: RefObject<MsegController | null>;
     surfaceRef: RefObject<SVGSVGElement | null>;
     orientation?: MsegSurfaceOrientation;
+    curveEditActivationMode?: "immediate" | "hold-or-drag";
+    curveEditHoldDelayMs?: number;
+    onCurveEditHoldActivated?: (() => void) | null;
 }) {
     const [isOpen, setIsOpen] = useState(false);
     const [selectedPointIndex, setSelectedPointIndex] = useState(0);
@@ -371,10 +448,15 @@ export function useMsegEditorInteractions({
     const [activeSegmentIndex, setActiveSegmentIndex] = useState(-1);
     const activePointerRef = useRef<ActiveMsegPointerState | null>(null);
 
+    const clearPendingSegmentTimer = useCallback((pointerState: ActiveMsegPointerState | null) => {
+        if (pointerState?.kind === "pending-segment" && pointerState.holdTimeoutId !== null) {
+            window.clearTimeout(pointerState.holdTimeoutId);
+            pointerState.holdTimeoutId = null;
+        }
+    }, []);
+
     useEffect(() => {
         if (!msegState) {
-            setHoveredSegmentIndex(-1);
-            setActiveSegmentIndex(-1);
             return;
         }
 
@@ -383,16 +465,56 @@ export function useMsegEditorInteractions({
             0,
             Math.max(0, msegState.shape.points.length - 1),
         ));
-        setHoveredSegmentIndex((previousIndex) => (
-            previousIndex >= 0 ? clamp(previousIndex, -1, Math.max(-1, msegState.shape.points.length - 2)) : -1
-        ));
-        setActiveSegmentIndex((previousIndex) => (
-            previousIndex >= 0 ? clamp(previousIndex, -1, Math.max(-1, msegState.shape.points.length - 2)) : -1
-        ));
     }, [msegState]);
+
+    const resolvePointerLocation = useCallback((clientX: number, clientY: number) => {
+        if (!msegState || !surfaceRef.current) {
+            return null;
+        }
+
+        const bounds = surfaceRef.current.getBoundingClientRect();
+        const localX = clientX - bounds.left;
+        const localY = clientY - bounds.top;
+        const currentShape = msegController.current?.getState().shape ?? msegState.shape;
+        const pointIndex = findMsegPointHitIndex(
+            currentShape,
+            localX,
+            localY,
+            bounds.width,
+            bounds.height,
+            undefined,
+            { orientation },
+        );
+        const segmentIndex = pointIndex >= 0
+            ? -1
+            : findMsegSegmentHitIndex(
+                currentShape,
+                localX,
+                localY,
+                bounds.width,
+                bounds.height,
+                undefined,
+                { orientation },
+            );
+
+        return {
+            bounds,
+            localX,
+            localY,
+            pointIndex,
+            segmentIndex,
+        };
+    }, [msegController, msegState, orientation, surfaceRef]);
+
+    const updateHoveredSegmentIndex = useCallback((clientX: number, clientY: number) => {
+        const pointerLocation = resolvePointerLocation(clientX, clientY);
+        setHoveredSegmentIndex(pointerLocation?.segmentIndex ?? -1);
+        return pointerLocation;
+    }, [resolvePointerLocation]);
 
     useEffect(() => {
         if (!isOpen) {
+            clearPendingSegmentTimer(activePointerRef.current);
             activePointerRef.current = null;
             setHoveredSegmentIndex(-1);
             setActiveSegmentIndex(-1);
@@ -409,7 +531,7 @@ export function useMsegEditorInteractions({
         return () => {
             window.removeEventListener("keydown", handleEscapeKey);
         };
-    }, [isOpen]);
+    }, [clearPendingSegmentTimer, isOpen]);
 
     const openEditor = useCallback(() => {
         setIsOpen(true);
@@ -417,54 +539,33 @@ export function useMsegEditorInteractions({
 
     const closeEditor = useCallback(() => {
         setIsOpen(false);
+        clearPendingSegmentTimer(activePointerRef.current);
+        activePointerRef.current = null;
         setHoveredSegmentIndex(-1);
         setActiveSegmentIndex(-1);
-        activePointerRef.current = null;
-    }, []);
+    }, [clearPendingSegmentTimer]);
 
-    const resolvePointerLocation = useCallback((clientX: number, clientY: number) => {
-        if (!msegState || !surfaceRef.current) {
-            return null;
+    const applyCurveEditFromClientCoordinates = useCallback((segmentIndex: number, clientX: number, clientY: number) => {
+        if (!surfaceRef.current || !msegController.current) {
+            return;
+        }
+
+        const currentShape = msegController.current.getState().shape ?? msegState?.shape;
+        if (!currentShape) {
+            return;
         }
 
         const bounds = surfaceRef.current.getBoundingClientRect();
-        const localX = clientX - bounds.left;
-        const localY = clientY - bounds.top;
-        const pointIndex = findMsegPointHitIndex(
-            msegState.shape,
-            localX,
-            localY,
+        const point = msegEditorCoordinatesToPoint(
+            clientX - bounds.left,
+            clientY - bounds.top,
             bounds.width,
             bounds.height,
-            undefined,
             { orientation },
         );
-        const segmentIndex = pointIndex >= 0
-            ? -1
-            : findMsegSegmentHitIndex(
-                msegState.shape,
-                localX,
-                localY,
-                bounds.width,
-                bounds.height,
-                undefined,
-                { orientation },
-            );
-
-        return {
-            bounds,
-            localX,
-            localY,
-            pointIndex,
-            segmentIndex,
-        };
-    }, [msegState, orientation, surfaceRef]);
-
-    const updateHoveredSegmentIndex = useCallback((clientX: number, clientY: number) => {
-        const pointerLocation = resolvePointerLocation(clientX, clientY);
-        setHoveredSegmentIndex(pointerLocation?.segmentIndex ?? -1);
-        return pointerLocation;
-    }, [resolvePointerLocation]);
+        const curvePower = deriveMsegSegmentCurvePower(currentShape, segmentIndex, point.x, point.y);
+        msegController.current.setSegmentCurvePower(segmentIndex, curvePower);
+    }, [msegController, msegState?.shape, orientation, surfaceRef]);
 
     const handlePointerDown = useCallback((event: ReactPointerEvent<SVGSVGElement>) => {
         if (event.button !== 0 || !msegState || !surfaceRef.current) {
@@ -480,7 +581,7 @@ export function useMsegEditorInteractions({
             setSelectedPointIndex(pointerLocation.pointIndex);
             setActiveSegmentIndex(-1);
             activePointerRef.current = {
-                kind: "point",
+                kind: "point-drag",
                 pointerId: event.pointerId,
                 pointIndex: pointerLocation.pointIndex,
                 startClientX: event.clientX,
@@ -496,19 +597,45 @@ export function useMsegEditorInteractions({
         }
 
         if (pointerLocation.segmentIndex >= 0) {
-            const segmentFrom = msegState.shape.points[pointerLocation.segmentIndex];
-            const segmentTo = msegState.shape.points[pointerLocation.segmentIndex + 1];
-            const dragDirection = Math.sign((segmentTo?.y ?? 0) - (segmentFrom?.y ?? 0)) || 1;
-            activePointerRef.current = {
-                kind: "segment",
-                pointerId: event.pointerId,
-                segmentIndex: pointerLocation.segmentIndex,
-                startClientY: event.clientY,
-                startCurvePower: msegState.shape.points[pointerLocation.segmentIndex]?.curvePower ?? 0.0,
-                dragDirection,
-            };
             setActiveSegmentIndex(pointerLocation.segmentIndex);
             setHoveredSegmentIndex(pointerLocation.segmentIndex);
+            if (curveEditActivationMode === "immediate") {
+                activePointerRef.current = {
+                    kind: "curve-drag",
+                    pointerId: event.pointerId,
+                    segmentIndex: pointerLocation.segmentIndex,
+                };
+            } else {
+                const holdTimeoutId = window.setTimeout(() => {
+                    const activePointer = activePointerRef.current;
+                    if (
+                        !activePointer
+                        || activePointer.kind !== "pending-segment"
+                        || activePointer.pointerId !== event.pointerId
+                    ) {
+                        return;
+                    }
+
+                    activePointerRef.current = {
+                        kind: "curve-drag",
+                        pointerId: activePointer.pointerId,
+                        segmentIndex: activePointer.segmentIndex,
+                    };
+                    setActiveSegmentIndex(activePointer.segmentIndex);
+                    setHoveredSegmentIndex(activePointer.segmentIndex);
+                    onCurveEditHoldActivated?.();
+                }, curveEditHoldDelayMs);
+
+                activePointerRef.current = {
+                    kind: "pending-segment",
+                    pointerId: event.pointerId,
+                    segmentIndex: pointerLocation.segmentIndex,
+                    startClientX: event.clientX,
+                    startClientY: event.clientY,
+                    holdTimeoutId,
+                };
+            }
+
             event.currentTarget.setPointerCapture(event.pointerId);
             event.preventDefault();
             return;
@@ -529,12 +656,22 @@ export function useMsegEditorInteractions({
                 Math.abs(nextPoint.y - point.y) <= 1e-6,
         );
 
-        if (nextPointIndex >= 0) {
+            if (nextPointIndex >= 0) {
             setSelectedPointIndex(nextPointIndex);
         }
 
+        setActiveSegmentIndex(-1);
         event.preventDefault();
-    }, [msegController, msegState, orientation, surfaceRef, updateHoveredSegmentIndex]);
+    }, [
+        curveEditActivationMode,
+        curveEditHoldDelayMs,
+        msegController,
+        msegState,
+        onCurveEditHoldActivated,
+        orientation,
+        surfaceRef,
+        updateHoveredSegmentIndex,
+    ]);
 
     const handlePointerMove = useCallback((event: ReactPointerEvent<SVGSVGElement>) => {
         const activePointer = activePointerRef.current;
@@ -543,16 +680,33 @@ export function useMsegEditorInteractions({
             return;
         }
 
-        if (activePointer.kind === "segment") {
-            const deltaCurvePower =
-                ((event.clientY - activePointer.startClientY) / MSEG_CURVE_DRAG_PIXELS_PER_POWER) *
-                activePointer.dragDirection;
-            msegController.current?.setSegmentCurvePower(
-                activePointer.segmentIndex,
-                activePointer.startCurvePower + deltaCurvePower,
-            );
+        if (activePointer.kind === "curve-drag") {
+            applyCurveEditFromClientCoordinates(activePointer.segmentIndex, event.clientX, event.clientY);
             setActiveSegmentIndex(activePointer.segmentIndex);
             setHoveredSegmentIndex(activePointer.segmentIndex);
+            event.preventDefault();
+            return;
+        }
+
+        if (activePointer.kind === "pending-segment") {
+            const movementDistance = Math.hypot(
+                event.clientX - activePointer.startClientX,
+                event.clientY - activePointer.startClientY,
+            );
+
+            if (movementDistance < MSEG_DRAG_THRESHOLD_PX) {
+                return;
+            }
+
+            clearPendingSegmentTimer(activePointer);
+            activePointerRef.current = {
+                kind: "curve-drag",
+                pointerId: activePointer.pointerId,
+                segmentIndex: activePointer.segmentIndex,
+            };
+            setActiveSegmentIndex(activePointer.segmentIndex);
+            setHoveredSegmentIndex(activePointer.segmentIndex);
+            applyCurveEditFromClientCoordinates(activePointer.segmentIndex, event.clientX, event.clientY);
             event.preventDefault();
             return;
         }
@@ -585,7 +739,14 @@ export function useMsegEditorInteractions({
         setHoveredSegmentIndex(-1);
         setActiveSegmentIndex(-1);
         event.preventDefault();
-    }, [msegController, orientation, surfaceRef, updateHoveredSegmentIndex]);
+    }, [
+        applyCurveEditFromClientCoordinates,
+        clearPendingSegmentTimer,
+        msegController,
+        orientation,
+        surfaceRef,
+        updateHoveredSegmentIndex,
+    ]);
 
     const handlePointerLeave = useCallback((event: ReactPointerEvent<SVGSVGElement>) => {
         if (activePointerRef.current?.pointerId === event.pointerId) {
@@ -606,12 +767,42 @@ export function useMsegEditorInteractions({
         activePointerRef.current = null;
         setActiveSegmentIndex(-1);
 
-        if (
-            pointerState.kind === "point" &&
-            !pointerState.moved &&
-            pointerState.deleteOnRelease &&
-            msegController.current
-        ) {
+        if (pointerState.kind === "pending-segment") {
+            clearPendingSegmentTimer(pointerState);
+            if (surfaceRef.current) {
+                const bounds = surfaceRef.current.getBoundingClientRect();
+                const point = msegEditorCoordinatesToPoint(
+                    event.clientX - bounds.left,
+                    event.clientY - bounds.top,
+                    bounds.width,
+                    bounds.height,
+                    { orientation },
+                );
+                msegController.current?.addPoint(point.x, point.y);
+                const points = msegController.current?.getState().shape.points ?? [];
+                const nextPointIndex = points.findIndex(
+                    (nextPoint: { x: number; y: number }) =>
+                        Math.abs(nextPoint.x - point.x) <= 1e-6 &&
+                        Math.abs(nextPoint.y - point.y) <= 1e-6,
+                );
+
+                if (nextPointIndex >= 0) {
+                    setSelectedPointIndex(nextPointIndex);
+                }
+            }
+            event.preventDefault();
+            setHoveredSegmentIndex(resolvePointerLocation(event.clientX, event.clientY)?.segmentIndex ?? -1);
+            return;
+        }
+
+        if (pointerState.kind === "curve-drag") {
+            applyCurveEditFromClientCoordinates(pointerState.segmentIndex, event.clientX, event.clientY);
+            setHoveredSegmentIndex(resolvePointerLocation(event.clientX, event.clientY)?.segmentIndex ?? -1);
+            event.preventDefault();
+            return;
+        }
+
+        if (!pointerState.moved && pointerState.deleteOnRelease && msegController.current) {
             msegController.current.deletePoint(pointerState.pointIndex);
             const pointCount = msegController.current.getState().shape.points.length;
             setSelectedPointIndex(clamp(pointerState.pointIndex - 1, 0, Math.max(0, pointCount - 1)));
@@ -619,7 +810,14 @@ export function useMsegEditorInteractions({
 
         setHoveredSegmentIndex(resolvePointerLocation(event.clientX, event.clientY)?.segmentIndex ?? -1);
         event.preventDefault();
-    }, [msegController, resolvePointerLocation]);
+    }, [
+        applyCurveEditFromClientCoordinates,
+        clearPendingSegmentTimer,
+        msegController,
+        orientation,
+        resolvePointerLocation,
+        surfaceRef,
+    ]);
 
     return {
         isOpen,
@@ -698,12 +896,16 @@ export function useSynthPatchViewModel({
     keyboardRef,
     voiceModeCount,
     msegSurfaceOrientation = "horizontal",
+    msegCurveEditActivationMode = "immediate",
+    onMsegCurveEditHoldActivated = null,
 }: {
     stageRef: RefObject<HTMLDivElement | null>;
     msegEditorSurfaceRef: RefObject<SVGSVGElement | null>;
     keyboardRef: RefObject<SynthKeyboardLike | null>;
     voiceModeCount: number;
     msegSurfaceOrientation?: MsegSurfaceOrientation;
+    msegCurveEditActivationMode?: "immediate" | "hold-or-drag";
+    onMsegCurveEditHoldActivated?: (() => void) | null;
 }): SynthPatchViewModel {
     const runtimeStateMessage = usePatchEndpoint<unknown | null>(RUNTIME_STATE_ENDPOINT_ID, null);
     const normalizedRuntimeState = useMemo(
@@ -746,9 +948,34 @@ export function useSynthPatchViewModel({
         initialValue: 0,
         coerce: (value) => clamp(Number(value) || 0, -1, 1),
     });
+    const filterMode = usePatchParameterBinding<number>({
+        endpointID: FILTER_MODE_ENDPOINT_ID,
+        initialValue: 0,
+        coerce: (value) => clamp(Math.round(Number(value) || 0), 0, 5),
+    });
+    const filterCutoff = usePatchParameterBinding<number>({
+        endpointID: FILTER_CUTOFF_ENDPOINT_ID,
+        initialValue: 1000,
+        coerce: (value) => clamp(Number(value) || 0, 20, 20_000),
+    });
+    const filterQ = usePatchParameterBinding<number>({
+        endpointID: FILTER_Q_ENDPOINT_ID,
+        initialValue: 0.707107,
+        coerce: (value) => clamp(Number(value) || 0, 0.1, 20),
+    });
+    const filterMsegDepth = usePatchParameterBinding<number>({
+        endpointID: FILTER_MSEG_DEPTH_ENDPOINT_ID,
+        initialValue: 0,
+        coerce: (value) => clamp(Number(value) || 0, -6, 6),
+    });
     const requestRuntimeSync = usePatchEventTrigger<number>(RUNTIME_SYNC_REQUEST_ENDPOINT_ID);
     const retryDesiredTableLoad = usePatchEventTrigger<number>(RETRY_DESIRED_TABLE_REQUEST_ENDPOINT_ID);
     const observedPosition = useObservedDisplayPosition(Number(wavetablePosition.value) || 0);
+    const observedFilterState = useObservedFilterState({
+        filterMode: filterMode.value,
+        filterCutoff: filterCutoff.value,
+        filterQ: filterQ.value,
+    });
     const runtimePresentation = useMemo(
         () => resolveRuntimeTablePresentation(runtimeStateMessage, Number(wavetableSelect.value) || 0),
         [runtimeStateMessage, wavetableSelect.value],
@@ -767,6 +994,8 @@ export function useSynthPatchViewModel({
         msegController,
         surfaceRef: msegEditorSurfaceRef,
         orientation: msegSurfaceOrientation,
+        curveEditActivationMode: msegCurveEditActivationMode,
+        onCurveEditHoldActivated: onMsegCurveEditHoldActivated,
     });
 
     const displayedTable = catalog?.tables?.[presentedTableIndex] ?? null;
@@ -896,6 +1125,11 @@ export function useSynthPatchViewModel({
         warpMode,
         warpAmount,
         warpMsegDepth,
+        filterMode,
+        filterCutoff,
+        filterQ,
+        filterMsegDepth,
+        observedFilterState,
         msegState,
         handleSelectWavetable,
         handleRetryLoad,

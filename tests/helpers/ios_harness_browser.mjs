@@ -12,6 +12,7 @@ function createIOSHarnessInitScript(baseUrl) {
         const sentMessages = [];
         const gestureStarts = [];
         const gestureEnds = [];
+        const hapticEvents = [];
         const endpointMessages = [];
         const storedState = new Map();
         const endpointReplyTypes = new Map();
@@ -183,6 +184,9 @@ function createIOSHarnessInitScript(baseUrl) {
         };
         globalThis.cmaj_requestBundledFallback = () => {
             bundledFallbackRequestCount += 1;
+        };
+        globalThis.cmaj_triggerHaptic = async (style = "light") => {
+            hapticEvents.push(String(style || "light"));
         };
 
         globalThis._internalReadResource = async (requestedPath) => {
@@ -615,6 +619,7 @@ function createIOSHarnessInitScript(baseUrl) {
                     fetchedUrls: [...fetchedUrls],
                     gestureStarts: [...gestureStarts],
                     gestureEnds: [...gestureEnds],
+                    hapticEvents: [...hapticEvents],
                     endpointMessages: endpointMessages.map(({ endpointID, value }) => ({ endpointID, value })),
                     storedState: Object.fromEntries(storedState.entries()),
                     hostPage: globalThis.__cosimoInspectHostPage?.() ?? null,
@@ -699,6 +704,7 @@ function createIOSHarnessInitScript(baseUrl) {
                 fetchedUrls.length = 0;
                 gestureStarts.length = 0;
                 gestureEnds.length = 0;
+                hapticEvents.length = 0;
                 endpointMessages.length = 0;
             },
             setRuntimeState(nextState) {

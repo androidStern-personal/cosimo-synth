@@ -1,0 +1,34 @@
+// Production-path filter tests for the real synth patch main.
+// These tests intentionally exercise WavetableSynth.cmajorpatch instead of a probe voice graph.
+
+const patchPath = "../../WavetableSynth.cmajorpatch";
+const defaultFrequency = 44100;
+const pythonReferenceMaxDiffDb = -65.0;
+
+function audioOnlyPatchRun(subDir, blockSize, samplesToRender, maxDiffDb = pythonReferenceMaxDiffDb)
+{
+    return {
+        patch: patchPath,
+        subDir,
+        frequency: defaultFrequency,
+        blockSize,
+        samplesToRender,
+        sessionID: 1,
+        skipMissingInputs: true,
+        skipMissingOutputs: true,
+        maxDiffDb
+    };
+}
+
+## runScript (audioOnlyPatchRun("fixtures/filter_off_identity", 64, 4096))
+## runScript (audioOnlyPatchRun("fixtures/lowpass_static", 64, 4096))
+## runScript (audioOnlyPatchRun("fixtures/highpass_static", 64, 4096))
+## runScript (audioOnlyPatchRun("fixtures/bandpass_static", 64, 4096))
+## runScript (audioOnlyPatchRun("fixtures/notch_static", 64, 4096))
+## runScript (audioOnlyPatchRun("fixtures/peak_static", 64, 4096))
+## runScript (audioOnlyPatchRun("fixtures/mseg_lowpass_pluck", 64, 4096))
+## runScript (audioOnlyPatchRun("fixtures/resonance_extreme", 64, 4096))
+## runScript (audioOnlyPatchRun("fixtures/two_voice_staggered_mseg", 64, 4096))
+## runScript (audioOnlyPatchRun("fixtures/fast_mseg_cutoff_motion_lowpass", 64, 4096))
+## runScript (audioOnlyPatchRun("fixtures/fast_mseg_cutoff_motion_bandpass", 64, 4096))
+## runScript (audioOnlyPatchRun("fixtures/fast_mseg_cutoff_motion_peak_high_q", 64, 4096))

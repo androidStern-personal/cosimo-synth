@@ -455,6 +455,33 @@ private:
             return createPatchBootConfig (patch, currentView);
         });
 
+        boundOK = boundOK && view.bind ("cmaj_triggerHaptic", [] (const choc::value::ValueView& args) -> choc::value::Value
+        {
+            using namespace choc::objc;
+            CHOC_AUTORELEASE_BEGIN
+
+            int style = 0;
+
+            if (args.isArray() && args.size() != 0)
+            {
+                const auto styleName = args[0].toString();
+
+                if (styleName == "medium")      style = 1;
+                else if (styleName == "heavy")  style = 2;
+                else if (styleName == "soft")   style = 3;
+                else if (styleName == "rigid")  style = 4;
+            }
+
+            if (auto generator = call<id> (callClass<id> ("UIImpactFeedbackGenerator", "alloc"), "initWithStyle:", style))
+            {
+                call<void> (generator, "prepare");
+                call<void> (generator, "impactOccurred");
+            }
+
+            CHOC_AUTORELEASE_END
+            return {};
+        });
+
         boundOK = boundOK && view.bind ("cmaj_requestBundledFallback", [this] (const choc::value::ValueView&) -> choc::value::Value
         {
             navigateToBundlePage();

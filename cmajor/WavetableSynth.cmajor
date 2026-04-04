@@ -918,10 +918,15 @@ graph WavetableSynth [[ main ]]
     input value float32 warpMsegDepth [[ name: "Warp MSEG Depth", min: -1.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
     input value float32 warpMode [[ name: "Warp Mode", min: 0.0f, max: 4.0f, init: 0.0f, discrete: true, step: 1.0f, rampFrames: 0 ]];
     input value float32 warpAmount [[ name: "Warp Amount", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
+    input value float32 filterMode [[ name: "Filter Mode", min: 0.0f, max: 5.0f, init: 0.0f, discrete: true, step: 1.0f, rampFrames: 0 ]];
+    input value float32 filterCutoff [[ name: "Filter Cutoff", min: 20.0f, max: 20000.0f, init: 1000.0f, unit: "Hz", rampFrames: 64 ]];
+    input value float32 filterQ [[ name: "Filter Q", min: 0.1f, max: 20.0f, init: 0.707107f, rampFrames: 64 ]];
+    input value float32 filterMsegDepth [[ name: "Filter MSEG Depth", min: -6.0f, max: 6.0f, init: 0.0f, unit: "oct", rampFrames: 64 ]];
     output event wt::WavetableUploadAck wavetableUploadAck;
     output event wt::WavetableMipRequest wavetableMipRequest;
     output event wt::RuntimeState runtimeState;
     output event wt::EffectiveWavetablePositionMonitor effectiveWavetablePosition;
+    output event wt::EffectiveFilterStateMonitor effectiveFilterState;
     output stream float32<2> audioOut;
 
     let voiceCount = 16;
@@ -953,6 +958,10 @@ graph WavetableSynth [[ main ]]
         warpMsegDepth -> sharedEngine.warpMsegDepthIn;
         warpMode -> sharedEngine.warpModeIn;
         warpAmount -> sharedEngine.warpAmountIn;
+        filterMode -> sharedEngine.filterModeIn;
+        filterCutoff -> sharedEngine.filterCutoffIn;
+        filterQ -> sharedEngine.filterQIn;
+        filterMsegDepth -> sharedEngine.filterMsegDepthIn;
         sharedEngine.wavetableUploadAckOut -> wavetableUploadAck;
         sharedEngine.wavetableMipRequestOut -> wavetableMipRequest;
         sharedEngine.runtimeServiceStateOut -> runtimeStateCoordinator.runtimeServiceStateIn;
@@ -962,6 +971,7 @@ graph WavetableSynth [[ main ]]
         retryDesiredTableRequest -> runtimeStateCoordinator.retryDesiredTableRequestIn;
         runtimeStateCoordinator.runtimeStateOut -> runtimeState;
         sharedEngine.effectiveWavetablePositionOut -> effectiveWavetablePosition;
+        sharedEngine.effectiveFilterStateOut -> effectiveFilterState;
         sharedEngine.out -> trim.in;
         trim.out -> stereo.in;
         stereo.out -> audioOut;

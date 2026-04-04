@@ -2,7 +2,7 @@ import test, { after, before } from "node:test";
 import assert from "node:assert/strict";
 
 import { chromium } from "playwright";
-import { deserializeMsegShape, pointToMsegEditorCoordinates, renderMsegShape } from "../patch_gui/mseg.js";
+import { deserializeMsegShape, renderMsegShape } from "../patch_gui/mseg.js";
 
 import {
     clearHarnessDebugLog,
@@ -541,6 +541,62 @@ test("built desktop bundle mounts the custom-element wrapper and renders a real 
             true,
         );
         assert.deepEqual(builtBundleSnapshot.keyboardDebug?.attachCalls ?? [], [{ endpointID: "midiIn" }]);
+    } finally {
+        await page.close();
+    }
+});
+
+test("desktop patch view scrolls vertically when the window is shorter than the full layout", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: async (nextPage) => {
+            await nextPage.setViewportSize({ width: 1280, height: 720 });
+        },
+    });
+
+    try {
+        await page.waitForSelector("text=Filter");
+        const initialMetrics = await page.evaluate(() => {
+            const host = document.querySelector("cosimo-desktop-react-view");
+            const scrollRegion = host?.shadowRoot?.querySelector('[data-role="desktop-scroll-region"]');
+
+            if (!(scrollRegion instanceof HTMLElement)) {
+                throw new Error("Desktop scroll region is missing.");
+            }
+
+            return {
+                clientHeight: scrollRegion.clientHeight,
+                scrollHeight: scrollRegion.scrollHeight,
+                scrollTop: scrollRegion.scrollTop,
+            };
+        });
+
+        assert.ok(
+            initialMetrics.scrollHeight > initialMetrics.clientHeight,
+            `Expected the desktop patch view to overflow vertically. Got ${JSON.stringify(initialMetrics)}`,
+        );
+
+        const scrolledMetrics = await page.evaluate(async () => {
+            const host = document.querySelector("cosimo-desktop-react-view");
+            const scrollRegion = host?.shadowRoot?.querySelector('[data-role="desktop-scroll-region"]');
+
+            if (!(scrollRegion instanceof HTMLElement)) {
+                throw new Error("Desktop scroll region is missing.");
+            }
+
+            scrollRegion.scrollTop = scrollRegion.scrollHeight;
+            await new Promise((resolve) => requestAnimationFrame(() => resolve()));
+
+            return {
+                scrollTop: scrollRegion.scrollTop,
+                clientHeight: scrollRegion.clientHeight,
+                scrollHeight: scrollRegion.scrollHeight,
+            };
+        });
+
+        assert.ok(
+            scrolledMetrics.scrollTop > 0,
+            `Expected the desktop patch view to accept vertical scrolling. Got ${JSON.stringify(scrolledMetrics)}`,
+        );
     } finally {
         await page.close();
     }
@@ -1149,6 +1205,141 @@ test("warp controls commit mode, amount, and MSEG depth on the desktop harness",
     }
 });
 
+test("filter controls commit mode, cutoff, Q, and MSEG depth on the desktop harness", async () => {
+    const page = await openHarnessPage();
+
+    try {
+        await clearHarnessDebugLog(page);
+        await page.selectOption('select[aria-label="Filter mode"]', "4");
+
+        await page.waitForFunction(() => {
+            const snapshot = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot();
+            return Number(snapshot.parameterValues.filterMode) === 4;
+        });
+
+        let snapshot = await getHarnessSnapshot(page);
+        assert.deepEqual(
+            snapshot.sentMessages.filter(({ endpointID }) => endpointID === "filterMode"),
+            [{ endpointID: "filterMode", value: 4 }],
+        );
+
+        await clearHarnessDebugLog(page);
+        await dispatchInputValueChange(page.locator('input[aria-label="Filter cutoff"]'), 0.61);
+
+        await page.waitForFunction(() => {
+            const snapshot = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot();
+            return Number(snapshot.parameterValues.filterCutoff) > 1200;
+        });
+
+        snapshot = await getHarnessSnapshot(page);
+        assert.equal(
+            snapshot.sentMessages.some(({ endpointID, value }) => endpointID === "filterCutoff" && Number(value) > 1200),
+            true,
+        );
+
+        await clearHarnessDebugLog(page);
+        await dispatchInputValueChange(page.locator('input[aria-label="Filter resonance"]'), 0.37);
+
+        await page.waitForFunction(() => {
+            const snapshot = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot();
+            return Number(snapshot.parameterValues.filterQ) > 7.0;
+        });
+
+        snapshot = await getHarnessSnapshot(page);
+        assert.equal(
+            snapshot.sentMessages.some(({ endpointID, value }) => endpointID === "filterQ" && Number(value) > 7.0),
+            true,
+        );
+
+        await clearHarnessDebugLog(page);
+        await dispatchInputValueChange(page.locator('input[aria-label="Filter MSEG depth"]'), -2.5);
+
+        await page.waitForFunction(() => {
+            const snapshot = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot();
+            return Math.abs(Number(snapshot.parameterValues.filterMsegDepth) - (-2.5)) <= 1e-9;
+        });
+
+        snapshot = await getHarnessSnapshot(page);
+        assert.deepEqual(
+            snapshot.sentMessages.filter(({ endpointID }) => endpointID === "filterMsegDepth"),
+            [{ endpointID: "filterMsegDepth", value: -2.5 }],
+        );
+    } finally {
+        await page.close();
+    }
+});
+
+test("desktop filter graph follows live effective filter state and falls back to the base controls", async () => {
+    const page = await openHarnessPage();
+
+    try {
+        await page.waitForFunction(() => {
+            const rendered = window.__COSIMO_DESKTOP_HARNESS__.getRenderedState();
+            return rendered.filterGraphState && rendered.filterGraphState.base && rendered.filterGraphState.live;
+        });
+
+        let renderedState = await getHarnessRenderedState(page);
+        assert.equal(renderedState.filterGraphState.live.hasActive, false);
+
+        await page.evaluate(() => {
+            window.__COSIMO_DESKTOP_HARNESS__.emitEffectiveFilterState({
+                voiceGeneration: 7,
+                hasActive: true,
+                mode: 3,
+                cutoffHz: 2800,
+                q: 5.5,
+            });
+        });
+
+        await page.waitForFunction(() => {
+            const rendered = window.__COSIMO_DESKTOP_HARNESS__.getRenderedState();
+            return rendered.filterGraphState?.live?.hasActive === true
+                && Number(rendered.filterGraphState?.live?.mode) === 3
+                && Math.abs(Number(rendered.filterGraphState?.live?.cutoffHz) - 2800) <= 1;
+        });
+
+        renderedState = await getHarnessRenderedState(page);
+        assert.equal(renderedState.filterGraphState.live.hasActive, true);
+        assert.equal(renderedState.filterGraphState.live.mode, 3);
+        assert.equal(Math.abs(renderedState.filterGraphState.live.cutoffHz - 2800) <= 1, true);
+
+        await page.evaluate(() => {
+            window.__COSIMO_DESKTOP_HARNESS__.patchConnection.emitEndpoint("effectiveFilterState", {
+                voiceGeneration: 9,
+                hasActive: 1,
+                mode: 1,
+                cutoffHz: "broken",
+            });
+        });
+        await page.waitForTimeout(50);
+
+        renderedState = await getHarnessRenderedState(page);
+        assert.equal(renderedState.filterGraphState.live.hasActive, true);
+        assert.equal(renderedState.filterGraphState.live.mode, 3);
+        assert.equal(Math.abs(renderedState.filterGraphState.live.cutoffHz - 2800) <= 1, true);
+
+        await page.evaluate(() => {
+            window.__COSIMO_DESKTOP_HARNESS__.emitEffectiveFilterState({
+                voiceGeneration: 8,
+                hasActive: false,
+                mode: 0,
+                cutoffHz: 1000,
+                q: 0.707107,
+            });
+        });
+
+        await page.waitForFunction(() => {
+            const rendered = window.__COSIMO_DESKTOP_HARNESS__.getRenderedState();
+            return rendered.filterGraphState?.live?.hasActive === false;
+        });
+
+        renderedState = await getHarnessRenderedState(page);
+        assert.equal(renderedState.filterGraphState.live.hasActive, false);
+    } finally {
+        await page.close();
+    }
+});
+
 test("keyboard octave controls update the mounted keyboard root note and note routing", async () => {
     const page = await openHarnessPage();
 
@@ -1242,13 +1433,12 @@ test("MSEG editor wiring can open, add a point, move it, and close with Escape",
         await page.click('button[aria-label="Open MSEG editor"]');
         await page.waitForSelector("text=Fixed Wavetable Route");
 
-        const surface = page.locator("svg.touch-none");
+        const surface = page.locator('svg[data-role="mseg-editor-surface"]');
         const box = await surface.boundingBox();
         assert.ok(box);
 
-        const addCoordinates = pointToMsegEditorCoordinates({ x: 0.5, y: 0.2 }, box.width, box.height);
-        const addPointX = box.x + addCoordinates.x;
-        const addPointY = box.y + addCoordinates.y;
+        const addPointX = box.x + (box.width * 0.5);
+        const addPointY = box.y + (box.height * 0.25);
 
         await clearHarnessDebugLog(page);
         await page.mouse.click(addPointX, addPointY);
@@ -1271,16 +1461,16 @@ test("MSEG editor wiring can open, add a point, move it, and close with Escape",
         const addedPoint = { ...points[1] };
         assertLatestMsegBufferMatchesStoredShape(snapshot);
 
-        const addedPointCircle = surface.locator('[data-role="mseg-point"][data-point-index="1"]');
+        const addedPointCircle = surface.locator("circle").nth(1);
         const addedPointBox = await addedPointCircle.boundingBox();
         assert.ok(addedPointBox);
-        const addedPointX = addedPointBox.x + (addedPointBox.width * 0.5);
-        const addedPointY = addedPointBox.y + (addedPointBox.height * 0.5);
+        const addedPointCenterX = addedPointBox.x + (addedPointBox.width * 0.5);
+        const addedPointCenterY = addedPointBox.y + (addedPointBox.height * 0.5);
 
         await clearHarnessDebugLog(page);
-        await page.mouse.move(addedPointX, addedPointY);
+        await page.mouse.move(addedPointCenterX, addedPointCenterY);
         await page.mouse.down();
-        await page.mouse.move(addedPointX + 40, addedPointY - 48, { steps: 6 });
+        await page.mouse.move(addedPointCenterX + 40, addedPointCenterY - 48, { steps: 6 });
         await page.mouse.up();
 
         await page.waitForFunction(() => {
@@ -1308,7 +1498,7 @@ test("MSEG editor wiring can open, add a point, move it, and close with Escape",
         assertLatestMsegBufferMatchesStoredShape(snapshot);
 
         await clearHarnessDebugLog(page);
-        await surface.locator('[data-role="mseg-point"][data-point-index="1"]').click();
+        await surface.locator("circle").nth(1).click();
         await page.waitForFunction(() => {
             const snapshot = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot();
             const shape = snapshot.storedState["mseg1.shape"];
@@ -1327,7 +1517,7 @@ test("MSEG editor wiring can open, add a point, move it, and close with Escape",
         assertLatestMsegBufferMatchesStoredShape(snapshot);
 
         await clearHarnessDebugLog(page);
-        await surface.locator('[data-role="mseg-point"][data-point-index="0"]').click();
+        await surface.locator("circle").nth(0).click();
         await page.evaluate(() => new Promise((resolve) => {
             requestAnimationFrame(() => {
                 requestAnimationFrame(resolve);

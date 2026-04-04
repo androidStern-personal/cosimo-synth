@@ -18,6 +18,10 @@ async function loadKeyboardGeometryModule() {
     return await loadUIModule(repoRoot, "ui/shared/keyboard-geometry.ts");
 }
 
+async function loadFilterResponseModule() {
+    return await loadUIModule(repoRoot, "ui/shared/filter-response.ts");
+}
+
 test("display position matching ignores float noise after clamping but still rejects a real movement", async () => {
     const { displayPositionsMatch } = await loadRuntimeTableStateModule();
 
@@ -91,6 +95,152 @@ test("observed wavetable position state keeps the newest voice generation only",
             position: 0.33,
         },
     );
+});
+
+test("effective filter state normalization accepts wrapped payloads and rejects malformed ones", async () => {
+    const { normalizeEffectiveFilterStateMessage, FILTER_MODE_BANDPASS } = await loadRuntimeTableStateModule();
+
+    assert.deepEqual(normalizeEffectiveFilterStateMessage({
+        event: {
+            voiceGeneration: 3.9,
+            hasActive: 1,
+            mode: FILTER_MODE_BANDPASS,
+            cutoffHz: 22050,
+            q: 1.7,
+        },
+    }), {
+        voiceGeneration: 3,
+        hasActive: true,
+        mode: FILTER_MODE_BANDPASS,
+        cutoffHz: 20000,
+        q: 1.7,
+    });
+    assert.deepEqual(normalizeEffectiveFilterStateMessage({
+        event: {
+            voiceGeneration: 0,
+            hasActive: 0,
+            mode: 0,
+            cutoffHz: 10,
+            q: 0.01,
+        },
+    }), {
+        voiceGeneration: 0,
+        hasActive: false,
+        mode: 0,
+        cutoffHz: 20,
+        q: 0.1,
+    });
+    assert.equal(
+        normalizeEffectiveFilterStateMessage({ event: { voiceGeneration: 2, mode: 1, cutoffHz: 1000 } }),
+        null,
+    );
+    assert.equal(normalizeEffectiveFilterStateMessage(null), null);
+});
+
+test("observed filter state keeps the newest voice generation and preserves valid state on malformed messages", async () => {
+    const { selectObservedEffectiveFilterState, FILTER_MODE_LOWPASS } = await loadRuntimeTableStateModule();
+    const previousState = {
+        voiceGeneration: 5,
+        hasActive: true,
+        mode: FILTER_MODE_LOWPASS,
+        cutoffHz: 1800,
+        q: 1.2,
+    };
+
+    assert.deepEqual(
+        selectObservedEffectiveFilterState(previousState, {
+            event: {
+                voiceGeneration: 4,
+                hasActive: 1,
+                mode: 3,
+                cutoffHz: 4200,
+                q: 0.8,
+            },
+        }),
+        previousState,
+    );
+    assert.deepEqual(
+        selectObservedEffectiveFilterState(previousState, {
+            event: {
+                voiceGeneration: 7,
+                hasActive: 0,
+                mode: 0,
+                cutoffHz: 1200,
+                q: 0.707,
+            },
+        }),
+        {
+            voiceGeneration: 7,
+            hasActive: false,
+            mode: 0,
+            cutoffHz: 1200,
+            q: 0.707,
+        },
+    );
+    assert.deepEqual(
+        selectObservedEffectiveFilterState(previousState, { event: { voiceGeneration: 8 } }),
+        previousState,
+    );
+});
+
+test("filter cutoff normalization uses a logarithmic mapping", async () => {
+    const {
+        filterCutoffHzToNormalized,
+        normalizedToFilterCutoffHz,
+    } = await loadFilterResponseModule();
+
+    const normalizedA = filterCutoffHzToNormalized(200);
+    const normalizedB = filterCutoffHzToNormalized(2000);
+    const normalizedC = filterCutoffHzToNormalized(20000);
+
+    assert.ok(Math.abs(normalizedB - normalizedA - (normalizedC - normalizedB)) < 0.02);
+    assert.ok(Math.abs(normalizedToFilterCutoffHz(normalizedA) - 200) < 5);
+    assert.ok(Math.abs(normalizedToFilterCutoffHz(normalizedB) - 2000) < 50);
+});
+
+test("filter response curves show the expected shape for lowpass, highpass, bandpass, notch, and peak", async () => {
+    const {
+        FILTER_MODE_LOWPASS,
+        FILTER_MODE_HIGHPASS,
+        FILTER_MODE_BANDPASS,
+        FILTER_MODE_NOTCH,
+        FILTER_MODE_PEAK,
+        createFilterResponseModel,
+    } = await loadFilterResponseModule();
+    const sampleRate = 44100;
+    const cutoffHz = 1200;
+    const q = 3.5;
+
+    const lowpass = createFilterResponseModel({ mode: FILTER_MODE_LOWPASS, cutoffHz, q, sampleRate });
+    const highpass = createFilterResponseModel({ mode: FILTER_MODE_HIGHPASS, cutoffHz, q, sampleRate });
+    const bandpass = createFilterResponseModel({ mode: FILTER_MODE_BANDPASS, cutoffHz, q, sampleRate });
+    const notch = createFilterResponseModel({ mode: FILTER_MODE_NOTCH, cutoffHz, q, sampleRate });
+    const peak = createFilterResponseModel({ mode: FILTER_MODE_PEAK, cutoffHz, q, sampleRate });
+
+    assert.ok(lowpass.magnitudesDb[4] > lowpass.magnitudesDb[lowpass.magnitudesDb.length - 4]);
+    assert.ok(highpass.magnitudesDb[4] < highpass.magnitudesDb[highpass.magnitudesDb.length - 4]);
+    assert.equal(bandpass.peakIndex > 8 && bandpass.peakIndex < bandpass.magnitudesDb.length - 8, true);
+    assert.equal(notch.minIndex > 8 && notch.minIndex < notch.magnitudesDb.length - 8, true);
+    assert.ok(peak.magnitudesDb[peak.peakIndex] > 3.0);
+});
+
+test("higher Q narrows and raises the bandpass response", async () => {
+    const {
+        FILTER_MODE_BANDPASS,
+        createFilterResponseModel,
+        magnitudeAtFrequency,
+    } = await loadFilterResponseModule();
+    const sampleRate = 44100;
+    const cutoffHz = 1200;
+    const lowQ = createFilterResponseModel({ mode: FILTER_MODE_BANDPASS, cutoffHz, q: 0.707, sampleRate });
+    const highQ = createFilterResponseModel({ mode: FILTER_MODE_BANDPASS, cutoffHz, q: 6.0, sampleRate });
+    const lowQCenter = magnitudeAtFrequency(lowQ, cutoffHz);
+    const highQCenter = magnitudeAtFrequency(highQ, cutoffHz);
+    const lowQOffBand = magnitudeAtFrequency(lowQ, cutoffHz * 2.5);
+    const highQOffBand = magnitudeAtFrequency(highQ, cutoffHz * 2.5);
+
+    assert.ok(lowQCenter < highQCenter);
+    assert.ok((highQCenter - highQOffBand) > (lowQCenter - lowQOffBand));
 });
 
 test("runtime table presentation falls back cleanly when no runtime state exists", async () => {

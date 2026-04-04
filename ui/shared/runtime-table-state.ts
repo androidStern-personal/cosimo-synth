@@ -4,10 +4,28 @@ const runtimeFailurePhaseBuildMip = 2;
 const runtimeFailurePhaseTransferMip = 3;
 const runtimeFailureReasonTimeout = 2;
 const runtimeFailureScopeService = 1;
+export const FILTER_MODE_OFF = 0;
+export const FILTER_MODE_LOWPASS = 1;
+export const FILTER_MODE_HIGHPASS = 2;
+export const FILTER_MODE_BANDPASS = 3;
+export const FILTER_MODE_NOTCH = 4;
+export const FILTER_MODE_PEAK = 5;
+const FILTER_CUTOFF_MIN_HZ = 20;
+const FILTER_CUTOFF_MAX_HZ = 20_000;
+const FILTER_Q_MIN = 0.1;
+const FILTER_Q_MAX = 20;
 
 export type EffectiveWavetablePositionState = {
     voiceGeneration: number;
     position: number;
+};
+
+export type EffectiveFilterState = {
+    voiceGeneration: number;
+    hasActive: boolean;
+    mode: number;
+    cutoffHz: number;
+    q: number;
 };
 
 export type NormalizedRuntimeTableState = {
@@ -42,6 +60,18 @@ export type RuntimeTablePresentation = {
 
 function clamp(value: number, min: number, max: number) {
     return Math.min(Math.max(value, min), max);
+}
+
+function clampFilterCutoffHz(value: unknown) {
+    return clamp(Number(value) || 0, FILTER_CUTOFF_MIN_HZ, FILTER_CUTOFF_MAX_HZ);
+}
+
+function clampFilterQ(value: unknown) {
+    return clamp(Number(value) || 0, FILTER_Q_MIN, FILTER_Q_MAX);
+}
+
+function clampFilterMode(value: unknown) {
+    return clamp(Math.round(Number(value) || 0), FILTER_MODE_OFF, FILTER_MODE_PEAK);
 }
 
 export function clampDisplayPosition(value: unknown) {
@@ -108,6 +138,67 @@ export function selectObservedWavetablePositionState(
             position: 0,
         };
     const nextState = normalizeEffectiveWavetablePositionMessage(message);
+
+    if (!nextState) {
+        return previousState;
+    }
+
+    if (nextState.voiceGeneration < previousState.voiceGeneration) {
+        return previousState;
+    }
+
+    return nextState;
+}
+
+export function normalizeEffectiveFilterStateMessage(message: unknown): EffectiveFilterState | null {
+    const payload = (message as { event?: unknown } | null | undefined)?.event ?? message;
+
+    if (!payload || typeof payload !== "object") {
+        return null;
+    }
+
+    const rawCutoff = Number((payload as { cutoffHz?: unknown }).cutoffHz);
+    const rawQ = Number((payload as { q?: unknown }).q);
+
+    if (!Number.isFinite(rawCutoff) || !Number.isFinite(rawQ)) {
+        return null;
+    }
+
+    const rawGeneration = Number((payload as { voiceGeneration?: unknown }).voiceGeneration);
+    const rawHasActive = (payload as { hasActive?: unknown }).hasActive;
+    return {
+        voiceGeneration: Number.isFinite(rawGeneration)
+            ? Math.max(0, Math.trunc(rawGeneration))
+            : 0,
+        hasActive: Boolean(rawHasActive),
+        mode: clampFilterMode((payload as { mode?: unknown }).mode),
+        cutoffHz: clampFilterCutoffHz(rawCutoff),
+        q: clampFilterQ(rawQ),
+    };
+}
+
+export function selectObservedEffectiveFilterState(
+    currentState: EffectiveFilterState | null | undefined,
+    message: unknown,
+) {
+    const previousState = currentState && typeof currentState === "object"
+        ? {
+            voiceGeneration: Number.isFinite(Number(currentState.voiceGeneration))
+                ? Math.trunc(Number(currentState.voiceGeneration))
+                : -1,
+            hasActive: Boolean(currentState.hasActive),
+            mode: clampFilterMode(currentState.mode),
+            cutoffHz: clampFilterCutoffHz(currentState.cutoffHz),
+            q: clampFilterQ(currentState.q),
+        }
+        : {
+            voiceGeneration: -1,
+            hasActive: false,
+            mode: FILTER_MODE_OFF,
+            cutoffHz: FILTER_CUTOFF_MIN_HZ,
+            q: 0.707107,
+        };
+    const nextState = normalizeEffectiveFilterStateMessage(message);
 
     if (!nextState) {
         return previousState;

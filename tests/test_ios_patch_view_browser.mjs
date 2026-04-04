@@ -252,6 +252,51 @@ async function dispatchTouchDrag(page, start, end) {
     }
 }
 
+async function dispatchTouchHoldAndDrag(page, start, end, holdBeforeMoveMs) {
+    const client = await page.context().newCDPSession(page);
+
+    try {
+        await client.send("Input.dispatchTouchEvent", {
+            type: "touchStart",
+            touchPoints: [{
+                x: start.x,
+                y: start.y,
+                radiusX: 4,
+                radiusY: 4,
+                force: 1,
+                id: 1,
+            }],
+        });
+
+        if (holdBeforeMoveMs > 0) {
+            await page.waitForTimeout(holdBeforeMoveMs);
+        }
+
+        const steps = 6;
+        for (let index = 1; index <= steps; index += 1) {
+            const progress = index / steps;
+            await client.send("Input.dispatchTouchEvent", {
+                type: "touchMove",
+                touchPoints: [{
+                    x: start.x + ((end.x - start.x) * progress),
+                    y: start.y + ((end.y - start.y) * progress),
+                    radiusX: 4,
+                    radiusY: 4,
+                    force: 1,
+                    id: 1,
+                }],
+            });
+        }
+
+        await client.send("Input.dispatchTouchEvent", {
+            type: "touchEnd",
+            touchPoints: [],
+        });
+    } finally {
+        await client.detach();
+    }
+}
+
 async function tapShadowElementWithTouch(page, selector, x, y) {
     const rect = await getShadowElementRect(page, selector);
     const client = await page.context().newCDPSession(page);
@@ -275,6 +320,25 @@ async function tapShadowElementWithTouch(page, selector, x, y) {
     } finally {
         await client.detach();
     }
+}
+
+function getSurfacePointForMsegPoint(modalRect, normalizedX, normalizedY, orientation) {
+    const insetX = MSEG_POINT_RADIUS_PX + MSEG_EDITOR_HORIZONTAL_PADDING_PX;
+    const insetY = MSEG_POINT_RADIUS_PX + MSEG_EDITOR_VERTICAL_PADDING_PX;
+    const plotWidth = modalRect.width - (insetX * 2);
+    const plotHeight = modalRect.height - (insetY * 2);
+
+    if (orientation === "vertical") {
+        return {
+            x: insetX + (normalizedY * plotWidth),
+            y: insetY + (normalizedX * plotHeight),
+        };
+    }
+
+    return {
+        x: insetX + (normalizedX * plotWidth),
+        y: insetY + ((1 - normalizedY) * plotHeight),
+    };
 }
 
 async function dragAcrossShadowElement(page, selector, start, end) {
@@ -1034,6 +1098,97 @@ test("mounted iPhone MSEG modal keeps the main view layout-stable while hidden, 
         } finally {
             await closeIOSHarnessPage(page);
         }
+    }
+});
+
+test("mounted iPhone MSEG modal treats segment tap as add, immediate drag as curve edit, and hold-drag as curve edit with one haptic bump", async () => {
+    const page = await openIOSHarnessPage(browser, server.baseUrl, {
+        viewportSize: { width: 390, height: 844 },
+    });
+
+    try {
+        await waitForIOSHarnessReady(page);
+        await setIOSStoredStateValue(page, "mseg1.shape", "");
+        await clickShadowButton(page, ".mseg-preview-button");
+        await waitForRenderedState(
+            page,
+            "open MSEG modal for touch interaction checks",
+            (nextState) => nextState.modalOpen === "true" && (nextState.modalSurfaceRect?.height ?? 0) > 0,
+        );
+
+        const modalRect = await getShadowElementRect(page, "[data-role='mseg-modal-viewport']");
+        const orientation = "vertical";
+        const segmentPoint = getSurfacePointForMsegPoint(modalRect, 0.35, 0.35, orientation);
+
+        await clearIOSHarnessDebugLog(page);
+        await tapShadowElementWithTouch(
+            page,
+            "[data-role='mseg-modal-viewport']",
+            segmentPoint.x,
+            segmentPoint.y,
+        );
+
+        let snapshot = await waitForSnapshot(
+            page,
+            "segment tap inserts a point",
+            (nextSnapshot) => typeof nextSnapshot.storedState["mseg1.shape"] === "string"
+                && nextSnapshot.sentMessages.some((message) => message.endpointID === "mseg1Buffer"),
+        );
+        let storedShape = JSON.parse(snapshot.storedState["mseg1.shape"]);
+        assert.equal(storedShape.points.length, 3);
+        assert.deepEqual(snapshot.hapticEvents, []);
+
+        await setIOSStoredStateValue(page, "mseg1.shape", "");
+        await waitForRenderedState(
+            page,
+            "reset MSEG shape before segment drag",
+            (nextState) => nextState.modalPointCenters.length === 2,
+        );
+        await clearIOSHarnessDebugLog(page);
+        const curveTarget = getSurfacePointForMsegPoint(modalRect, 0.35, 0.7, orientation);
+        await dispatchTouchDrag(
+            page,
+            { x: modalRect.left + segmentPoint.x, y: modalRect.top + segmentPoint.y },
+            { x: modalRect.left + curveTarget.x, y: modalRect.top + curveTarget.y },
+        );
+
+        snapshot = await waitForSnapshot(
+            page,
+            "segment drag edits curve without inserting a point",
+            (nextSnapshot) => typeof nextSnapshot.storedState["mseg1.shape"] === "string"
+                && nextSnapshot.sentMessages.some((message) => message.endpointID === "mseg1Buffer"),
+        );
+        storedShape = JSON.parse(snapshot.storedState["mseg1.shape"]);
+        assert.equal(storedShape.points.length, 2);
+        assert.ok(Math.abs(storedShape.points[0].curvePower) > 0.1);
+        assert.deepEqual(snapshot.hapticEvents, []);
+
+        await setIOSStoredStateValue(page, "mseg1.shape", "");
+        await waitForRenderedState(
+            page,
+            "reset MSEG shape before segment hold-drag",
+            (nextState) => nextState.modalPointCenters.length === 2,
+        );
+        await clearIOSHarnessDebugLog(page);
+        await dispatchTouchHoldAndDrag(
+            page,
+            { x: modalRect.left + segmentPoint.x, y: modalRect.top + segmentPoint.y },
+            { x: modalRect.left + curveTarget.x, y: modalRect.top + curveTarget.y },
+            420,
+        );
+
+        snapshot = await waitForSnapshot(
+            page,
+            "segment hold-drag edits curve and triggers haptic",
+            (nextSnapshot) => typeof nextSnapshot.storedState["mseg1.shape"] === "string"
+                && nextSnapshot.sentMessages.some((message) => message.endpointID === "mseg1Buffer"),
+        );
+        storedShape = JSON.parse(snapshot.storedState["mseg1.shape"]);
+        assert.equal(storedShape.points.length, 2);
+        assert.ok(Math.abs(storedShape.points[0].curvePower) > 0.1);
+        assert.deepEqual(snapshot.hapticEvents, ["light"]);
+    } finally {
+        await closeIOSHarnessPage(page);
     }
 });
 

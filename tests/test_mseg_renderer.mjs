@@ -246,22 +246,6 @@ test("adaptive segment sampling keeps a steep short curve smooth into the endpoi
     );
 });
 
-test("setting_segment_curve_power_updates_the_outgoing_segment_only", () => {
-    const shape = {
-        ...createDefaultMsegShape(),
-        points: [
-            { x: 0.0, y: 0.0, curvePower: 0.0 },
-            { x: 0.4, y: 0.7, curvePower: 0.0 },
-            { x: 1.0, y: 0.2, curvePower: 0.0 },
-        ],
-    };
-    const curved = setMsegSegmentCurvePower(shape, 1, -4.5);
-
-    assert.equal(curved.points[0].curvePower, 0.0);
-    assert.equal(curved.points[1].curvePower, -4.5);
-    assert.equal(curved.points[2].curvePower, 0.0);
-});
-
 test("shape_validation_rejects_fewer_than_two_points", () => {
     expectThrows("at least two points", () => normalizeMsegShape({
         ...createDefaultMsegShape(),

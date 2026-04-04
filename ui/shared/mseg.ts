@@ -383,43 +383,9 @@ function evaluateMsegSegmentPoint(
     };
 }
 
-function findEvaluationSegment(points: MsegPoint[], x: number) {
-    if (x <= points[0].x) {
-        return { from: points[0], to: points[0], laterPointWins: false };
-    }
-
-    for (let index = 0; index < points.length - 1; index += 1) {
-        const from = points[index];
-        const to = points[index + 1];
-
-        if (x < to.x) {
-            return { from, to, laterPointWins: false };
-        }
-
-        if (almostEqual(x, to.x)) {
-            let latestIndex = index + 1;
-            while (latestIndex + 1 < points.length && almostEqual(points[latestIndex + 1].x, x)) {
-                latestIndex += 1;
-            }
-
-            return {
-                from: points[latestIndex],
-                to: points[latestIndex],
-                laterPointWins: true,
-            };
-        }
-    }
-
-    return {
-        from: points[points.length - 1],
-        to: points[points.length - 1],
-        laterPointWins: false,
-    };
-}
-
 function distanceSquaredToLineSegment(
-    pointX: number,
-    pointY: number,
+    targetX: number,
+    targetY: number,
     fromX: number,
     fromY: number,
     toX: number,
@@ -427,24 +393,24 @@ function distanceSquaredToLineSegment(
 ) {
     const deltaX = toX - fromX;
     const deltaY = toY - fromY;
-    const lengthSquared = (deltaX * deltaX) + (deltaY * deltaY);
+    const segmentLengthSquared = (deltaX * deltaX) + (deltaY * deltaY);
 
-    if (lengthSquared <= 1e-12) {
-        const fallbackDeltaX = pointX - fromX;
-        const fallbackDeltaY = pointY - fromY;
-        return (fallbackDeltaX * fallbackDeltaX) + (fallbackDeltaY * fallbackDeltaY);
+    if (segmentLengthSquared <= 1e-12) {
+        const pointDeltaX = targetX - fromX;
+        const pointDeltaY = targetY - fromY;
+        return (pointDeltaX * pointDeltaX) + (pointDeltaY * pointDeltaY);
     }
 
     const projection = clamp(
-        (((pointX - fromX) * deltaX) + ((pointY - fromY) * deltaY)) / lengthSquared,
-        0.0,
-        1.0,
+        (((targetX - fromX) * deltaX) + ((targetY - fromY) * deltaY)) / segmentLengthSquared,
+        0,
+        1,
     );
-    const projectedX = fromX + (deltaX * projection);
-    const projectedY = fromY + (deltaY * projection);
-    const errorX = pointX - projectedX;
-    const errorY = pointY - projectedY;
-    return (errorX * errorX) + (errorY * errorY);
+    const closestX = fromX + (deltaX * projection);
+    const closestY = fromY + (deltaY * projection);
+    const pointDeltaX = targetX - closestX;
+    const pointDeltaY = targetY - closestY;
+    return (pointDeltaX * pointDeltaX) + (pointDeltaY * pointDeltaY);
 }
 
 export function sampleMsegSegmentEditorPolyline(
@@ -543,8 +509,41 @@ export function sampleMsegEditorPolyline(
     return polyline;
 }
 
-export function evaluateMsegShape(shape: unknown, x: number) {
-    const { points } = normalizeMsegShape(shape);
+function findEvaluationSegment(points: MsegPoint[], x: number) {
+    if (x <= points[0].x) {
+        return { from: points[0], to: points[0], laterPointWins: false };
+    }
+
+    for (let index = 0; index < points.length - 1; index += 1) {
+        const from = points[index];
+        const to = points[index + 1];
+
+        if (x < to.x) {
+            return { from, to, laterPointWins: false };
+        }
+
+        if (almostEqual(x, to.x)) {
+            let latestIndex = index + 1;
+            while (latestIndex + 1 < points.length && almostEqual(points[latestIndex + 1].x, x)) {
+                latestIndex += 1;
+            }
+
+            return {
+                from: points[latestIndex],
+                to: points[latestIndex],
+                laterPointWins: true,
+            };
+        }
+    }
+
+    return {
+        from: points[points.length - 1],
+        to: points[points.length - 1],
+        laterPointWins: false,
+    };
+}
+
+function evaluateNormalizedMsegShape(points: MsegPoint[], x: number) {
     const clampedX = clamp01(Number(x));
     const segment = findEvaluationSegment(points, clampedX);
 
@@ -556,6 +555,10 @@ export function evaluateMsegShape(shape: unknown, x: number) {
     const t = width <= 0.0 ? 1.0 : (clampedX - segment.from.x) / width;
     const curvedT = clamp01(powerScale(t, segment.from.curvePower));
     return segment.from.y + ((segment.to.y - segment.from.y) * curvedT);
+}
+
+export function evaluateMsegShape(shape: unknown, x: number) {
+    return evaluateNormalizedMsegShape(normalizeMsegShape(shape).points, x);
 }
 
 function catmullRom(p0: number, p1: number, p2: number, p3: number, t: number) {
@@ -694,6 +697,61 @@ export function findMsegSegmentHitIndex(
     return closestSegmentIndex;
 }
 
+export function deriveMsegSegmentCurvePower(
+    shape: unknown,
+    segmentIndex: number,
+    x: number,
+    y: number,
+) {
+    const normalizedShape = normalizeMsegShape(shape);
+    if (!Number.isInteger(segmentIndex) || segmentIndex < 0 || segmentIndex >= normalizedShape.points.length - 1) {
+        throw new Error("segmentIndex must address a segment inside the shape");
+    }
+
+    const from = normalizedShape.points[segmentIndex];
+    const to = normalizedShape.points[segmentIndex + 1];
+    const width = to.x - from.x;
+    const deltaY = to.y - from.y;
+
+    if (width <= 1e-12 || Math.abs(deltaY) <= 1e-12) {
+        return 0;
+    }
+
+    const localX = clamp(clamp01(Number(x)), from.x, to.x);
+    const t = clamp((localX - from.x) / width, 1e-4, 1 - 1e-4);
+    const targetCurvedT = clamp((Number(y) - from.y) / deltaY, 1e-4, 1 - 1e-4);
+
+    if (!Number.isFinite(targetCurvedT) || almostEqual(targetCurvedT, t, 1e-4)) {
+        return 0;
+    }
+
+    let low = -MSEG_CURVE_POWER_LIMIT;
+    let high = MSEG_CURVE_POWER_LIMIT;
+    let lowValue = powerScale(t, low);
+    let highValue = powerScale(t, high);
+    const target = clamp(targetCurvedT, Math.min(lowValue, highValue), Math.max(lowValue, highValue));
+    const ascending = lowValue <= highValue;
+
+    for (let iteration = 0; iteration < 32; iteration += 1) {
+        const middle = (low + high) * 0.5;
+        const middleValue = powerScale(t, middle);
+
+        if (almostEqual(middleValue, target, 1e-5)) {
+            return clampCurvePower(middle);
+        }
+
+        if ((ascending && middleValue < target) || (!ascending && middleValue > target)) {
+            low = middle;
+            lowValue = middleValue;
+        } else {
+            high = middle;
+            highValue = middleValue;
+        }
+    }
+
+    return clampCurvePower((low + high) * 0.5);
+}
+
 export function toMsegPlaybackConfigEvent(playback: unknown): MsegPlaybackConfigEvent {
     const normalizedPlayback = normalizeMsegPlayback(playback);
 
@@ -794,10 +852,7 @@ export function setMsegSegmentCurvePower(shape: unknown, segmentIndex: number, c
     }
 
     const points = normalizedShape.points.map((point) => ({ ...point }));
-    points[segmentIndex] = {
-        ...points[segmentIndex],
-        curvePower: clampCurvePower(Number(curvePower)),
-    };
+    points[segmentIndex].curvePower = clampCurvePower(Number(curvePower));
 
     return normalizeMsegShape({
         ...normalizedShape,

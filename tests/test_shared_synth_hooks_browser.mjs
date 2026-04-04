@@ -635,6 +635,87 @@ test("useMsegEditorInteractions deletes an interior point on click-release, move
     }
 });
 
+test("useMsegEditorInteractions bends a segment immediately on desktop drag and arms touch hold mode with one haptic bump", async () => {
+    const desktopPage = await openModulePage();
+
+    try {
+        await installHarness(desktopPage, "installMsegEditorInteractionsHookHarness");
+        await invokeHarness(desktopPage, "openEditor");
+
+        const segmentStart = await invokeHarness(desktopPage, "getNormalizedCoordinates", 0.25, 0.175);
+        await invokeHarness(desktopPage, "dispatchPointer", "pointerdown", {
+            pointerId: 41,
+            button: 0,
+            clientX: segmentStart.x,
+            clientY: segmentStart.y,
+            pointerType: "mouse",
+        });
+        await invokeHarness(desktopPage, "dispatchPointer", "pointermove", {
+            pointerId: 41,
+            button: 0,
+            clientX: segmentStart.x,
+            clientY: segmentStart.y + 28,
+            pointerType: "mouse",
+        });
+        await invokeHarness(desktopPage, "dispatchPointer", "pointerup", {
+            pointerId: 41,
+            button: 0,
+            clientX: segmentStart.x,
+            clientY: segmentStart.y + 28,
+            pointerType: "mouse",
+        });
+
+        let snapshot = await getHarnessSnapshot(desktopPage);
+        assert.equal(snapshot.pointCount, 3);
+        assert.equal(snapshot.actionLog.at(-1).type, "curve");
+        assert.ok(Math.abs(snapshot.points[0].curvePower) > 0.1);
+        assert.deepEqual(snapshot.hapticLog, []);
+    } finally {
+        await desktopPage.close();
+    }
+
+    const touchPage = await openModulePage();
+
+    try {
+        await installHarness(touchPage, "installMsegEditorInteractionsHookHarness");
+        await invokeHarness(touchPage, "setCurveEditMode", "hold-or-drag");
+        await invokeHarness(touchPage, "setCurveEditHoldDelayMs", 40);
+        await invokeHarness(touchPage, "openEditor");
+
+        const segmentStart = await invokeHarness(touchPage, "getNormalizedCoordinates", 0.25, 0.175);
+        await invokeHarness(touchPage, "dispatchPointer", "pointerdown", {
+            pointerId: 42,
+            button: 0,
+            clientX: segmentStart.x,
+            clientY: segmentStart.y,
+            pointerType: "touch",
+        });
+        await touchPage.waitForTimeout(60);
+        await invokeHarness(touchPage, "dispatchPointer", "pointermove", {
+            pointerId: 42,
+            button: 0,
+            clientX: segmentStart.x,
+            clientY: segmentStart.y + 26,
+            pointerType: "touch",
+        });
+        await invokeHarness(touchPage, "dispatchPointer", "pointerup", {
+            pointerId: 42,
+            button: 0,
+            clientX: segmentStart.x,
+            clientY: segmentStart.y + 26,
+            pointerType: "touch",
+        });
+
+        const snapshot = await getHarnessSnapshot(touchPage);
+        assert.equal(snapshot.pointCount, 3);
+        assert.equal(snapshot.actionLog.at(-1).type, "curve");
+        assert.ok(Math.abs(snapshot.points[0].curvePower) > 0.1);
+        assert.deepEqual(snapshot.hapticLog, ["light"]);
+    } finally {
+        await touchPage.close();
+    }
+});
+
 test("useMsegEditorInteractions maps add and move gestures through the vertical iPhone editor orientation", async () => {
     const page = await openModulePage();
 

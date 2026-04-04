@@ -13,6 +13,16 @@ namespace wt
     let warpModePWM = 2;
     let warpModeAsym = 3;
     let warpModeMirror = 4;
+    let filterModeOff = 0;
+    let filterModeLowpass = 1;
+    let filterModeHighpass = 2;
+    let filterModeBandpass = 3;
+    let filterModeNotch = 4;
+    let filterModePeak = 5;
+    let filterCutoffMinHz = 20.0f;
+    let filterCutoffMaxHz = 20000.0f;
+    let filterQMin = 0.1f;
+    let filterQMax = 20.0f;
     let warpOversampleFactor = 8;
     let warpDecimatorTapCount = 257;
     let warpDecimatorCutoffNyquist = 0.125f;
@@ -180,6 +190,43 @@ namespace wt
         bool shouldLookup;
         bool holdCycleEndpoint;
         float32 phase;
+    }
+
+    int32 resolveFilterMode (float32 rawMode)
+    {
+        return std::intrinsics::clamp (
+            int32 (std::intrinsics::floor (rawMode + 0.5f)),
+            filterModeOff,
+            filterModePeak
+        );
+    }
+
+    float32 clampFilterCutoffHz (float32 cutoffHz, float32 processorFrequency)
+    {
+        let maxCutoffHz = std::intrinsics::min (filterCutoffMaxHz, processorFrequency * 0.48f);
+        return std::intrinsics::clamp (cutoffHz, filterCutoffMinHz, maxCutoffHz);
+    }
+
+    float32 clampFilterQ (float32 q)
+    {
+        return std::intrinsics::clamp (q, filterQMin, filterQMax);
+    }
+
+    int32 resolveSimperFilterMode (int32 filterMode)
+    {
+        if (filterMode == filterModeHighpass)
+            return std::filters::simper::Mode::highPass;
+
+        if (filterMode == filterModeBandpass)
+            return std::filters::simper::Mode::bandPass;
+
+        if (filterMode == filterModeNotch)
+            return std::filters::simper::Mode::notchPass;
+
+        if (filterMode == filterModePeak)
+            return std::filters::simper::Mode::peakPass;
+
+        return std::filters::simper::Mode::lowPass;
     }
 
     int32 resolveWarpMode (float32 rawMode)
@@ -894,15 +941,21 @@ namespace wt
         input value float32 glideTimeIn [[ name: "Glide Time", min: 0.0f, max: 2.0f, init: 0.0f, unit: "s", rampFrames: 0 ]];
         input value float32 warpModeIn [[ name: "Warp Mode", min: 0.0f, max: 4.0f, init: 0.0f, discrete: true, step: 1.0f, rampFrames: 0 ]];
         input value float32 warpAmountIn [[ name: "Warp Amount", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
+        input value float32 filterModeIn [[ name: "Filter Mode", min: 0.0f, max: 5.0f, init: 0.0f, discrete: true, step: 1.0f, rampFrames: 0 ]];
+        input value float32 filterCutoffIn [[ name: "Filter Cutoff", min: 20.0f, max: 20000.0f, init: 1000.0f, unit: "Hz", rampFrames: 64 ]];
+        input value float32 filterQIn [[ name: "Filter Q", min: 0.1f, max: 20.0f, init: 0.707107f, rampFrames: 64 ]];
+        input value float32 filterMsegDepthIn [[ name: "Filter MSEG Depth", min: -6.0f, max: 6.0f, init: 0.0f, unit: "oct", rampFrames: 64 ]];
         output event WavetableUploadAck wavetableUploadAckOut;
         output event WavetableMipRequest wavetableMipRequestOut;
         output event RuntimeServiceState runtimeServiceStateOut;
         output event wt::EffectiveWavetablePositionMonitor effectiveWavetablePositionOut;
+        output event wt::EffectiveFilterStateMonitor effectiveFilterStateOut;
         output stream float32 out;
 
         node envelopes = wt::RetriggerableFixedASR (0.01f, 0.20f)[voiceCount];
         node msegs = wt::MsegReader[voiceCount];
 
+        std::filters::simper::Implementation[voiceCount] filters;
         std::oscillators::PhasorState[voiceCount] phasors;
         int32[voiceCount] voiceChannel;
         float32[voiceCount] voiceBasePitch;
@@ -918,6 +971,9 @@ namespace wt
         int32[voiceCount] voiceActive;
         int32[voiceCount] voiceGeneration;
         float32[voiceCount] voiceEffectivePosition;
+        int32[voiceCount] voiceEffectiveFilterMode;
+        float32[voiceCount] voiceEffectiveFilterCutoffHz;
+        float32[voiceCount] voiceEffectiveFilterQ;
         float32[warpDecimatorTapCount] warpDecimatorTapsState;
         float32[voiceCount * warpDecimatorTapCount] voiceWarpHistory;
         int32[voiceCount] voiceWarpHistoryWriteIndex;
@@ -951,6 +1007,8 @@ namespace wt
         int32 nextVoiceGeneration = 1;
         int32 monitorUpdateIntervalFrames = 1;
         int32 framesUntilNextMonitorUpdate = 0;
+        int32 filterMonitorUpdateIntervalFrames = 1;
+        int32 framesUntilNextFilterMonitorUpdate = 0;
         float32 previewFrequencyHzState = previewFrequencyHz;
         float32 glideTimeSecondsState = 0.0f;
 
@@ -988,6 +1046,18 @@ namespace wt
         {
             for (wrap<voiceCount> voice)
                 resetWarpRenderState (int32 (voice));
+        }
+
+        void resetFilterState (int32 voiceIndex)
+        {
+            let resolvedVoice = int32 (wrap<voiceCount> (voiceIndex));
+            filters.at (resolvedVoice).reset();
+        }
+
+        void resetAllFilterState()
+        {
+            for (wrap<voiceCount> voice)
+                resetFilterState (int32 (voice));
         }
 
         void initialiseWarpDecimatorTaps()
@@ -1279,14 +1349,16 @@ namespace wt
             return newestGeneration;
         }
 
-        int32 findNewestActiveVoiceIndex()
+        int32 findNewestMonitoredVoiceIndex()
         {
             int32 newestGeneration = -1;
             int32 newestVoiceIndex = -1;
 
             for (wrap<voiceCount> voice)
             {
-                if (voiceActive.at (voice) != 0 && voiceGeneration.at (voice) >= newestGeneration)
+                let isVisible = voiceActive.at (voice) != 0 || envelopes[voice].gainOut > 0.0f;
+
+                if (isVisible && voiceGeneration.at (voice) >= newestGeneration)
                 {
                     newestGeneration = voiceGeneration.at (voice);
                     newestVoiceIndex = int32 (voice);
@@ -1299,7 +1371,7 @@ namespace wt
         void emitEffectiveWavetablePositionMonitor()
         {
             wt::EffectiveWavetablePositionMonitor monitor;
-            let newestVoiceIndex = findNewestActiveVoiceIndex();
+            let newestVoiceIndex = findNewestMonitoredVoiceIndex();
 
             if (newestVoiceIndex >= 0)
             {
@@ -1315,6 +1387,32 @@ namespace wt
             effectiveWavetablePositionOut <- monitor;
         }
 
+        void emitEffectiveFilterStateMonitor()
+        {
+            wt::EffectiveFilterStateMonitor monitor;
+            let newestVoiceIndex = findNewestMonitoredVoiceIndex();
+
+            if (newestVoiceIndex >= 0)
+            {
+                monitor.voiceGeneration = voiceGeneration.at (newestVoiceIndex);
+                monitor.hasActive = 1;
+                monitor.mode = voiceEffectiveFilterMode.at (newestVoiceIndex);
+                monitor.cutoffHz = voiceEffectiveFilterCutoffHz.at (newestVoiceIndex);
+                monitor.q = voiceEffectiveFilterQ.at (newestVoiceIndex);
+            }
+            else
+            {
+                let processorFrequency = float32 (processor.frequency);
+                monitor.voiceGeneration = findNewestVisibleGeneration();
+                monitor.hasActive = 0;
+                monitor.mode = resolveFilterMode (filterModeIn);
+                monitor.cutoffHz = clampFilterCutoffHz (filterCutoffIn, processorFrequency);
+                monitor.q = clampFilterQ (filterQIn);
+            }
+
+            effectiveFilterStateOut <- monitor;
+        }
+
         void maybeEmitMonitorUpdate()
         {
             if (framesUntilNextMonitorUpdate <= 0)
@@ -1325,6 +1423,16 @@ namespace wt
             else
             {
                 framesUntilNextMonitorUpdate -= 1;
+            }
+
+            if (framesUntilNextFilterMonitorUpdate <= 0)
+            {
+                emitEffectiveFilterStateMonitor();
+                framesUntilNextFilterMonitorUpdate = filterMonitorUpdateIntervalFrames - 1;
+            }
+            else
+            {
+                framesUntilNextFilterMonitorUpdate -= 1;
             }
         }
 
@@ -1522,6 +1630,7 @@ namespace wt
             voiceGeneration.at (voice) = nextVoiceGeneration;
             nextVoiceGeneration += 1;
             resetWarpRenderState (index);
+            resetFilterState (index);
 
             envelopes[voice].eventIn <- note;
             msegs[voice].triggerIn <- 1;
@@ -1584,6 +1693,7 @@ namespace wt
                 voiceGeneration.at (voice) = nextVoiceGeneration;
                 nextVoiceGeneration += 1;
                 resetWarpRenderState (index);
+                resetFilterState (index);
                 envelopes[voice].eventIn <- note;
                 msegs[voice].triggerIn <- 1;
             }
@@ -1691,6 +1801,12 @@ namespace wt
             );
             monitorUpdateIntervalFrames = std::intrinsics::max (1, requestedInterval);
             framesUntilNextMonitorUpdate = 0;
+            let requestedFilterInterval = int32 (
+                std::intrinsics::floor ((processor.frequency / wt::effectiveFilterStateMonitorHz) + 0.5f)
+            );
+            filterMonitorUpdateIntervalFrames = std::intrinsics::max (1, requestedFilterInterval);
+            framesUntilNextFilterMonitorUpdate = 0;
+            resetAllFilterState();
 
             loop
             {
@@ -1712,6 +1828,7 @@ namespace wt
                     msegs[voice].advance();
                     envelopes[voice].advance();
 
+                    let processorFrequency = float32 (processor.frequency);
                     let envelopeGain = envelopes[voice].gainOut;
                     let modulation = msegs[voice].out;
                     let effectivePosition = std::intrinsics::clamp (
@@ -1725,9 +1842,19 @@ namespace wt
                         0.0f,
                         1.0f
                     );
+                    let filterMode = resolveFilterMode (filterModeIn);
+                    let baseFilterCutoffHz = clampFilterCutoffHz (filterCutoffIn, processorFrequency);
+                    let effectiveFilterCutoffHz = clampFilterCutoffHz (
+                        baseFilterCutoffHz * std::intrinsics::pow (2.0f, modulation * filterMsegDepthIn),
+                        processorFrequency
+                    );
+                    let effectiveFilterQ = clampFilterQ (filterQIn);
                     let shouldRenderWarpBackground = warpMode > warpModeOff;
                     let shouldBypassWarpOutput = isIdentityWarp (warpMode, effectiveWarpAmount);
                     voiceEffectivePosition.at (voice) = effectivePosition;
+                    voiceEffectiveFilterMode.at (voice) = filterMode;
+                    voiceEffectiveFilterCutoffHz.at (voice) = effectiveFilterCutoffHz;
+                    voiceEffectiveFilterQ.at (voice) = effectiveFilterQ;
 
                     if (envelopeGain <= 0.0f || voiceFrequencyHz.at (voice) <= 0.0f)
                         continue;
@@ -1780,6 +1907,22 @@ namespace wt
 
                         if (! shouldBypassWarpOutput)
                             sample = warpedSample;
+                    }
+
+                    if (filterMode > filterModeOff)
+                    {
+                        filters.at (voice).setMode (resolveSimperFilterMode (filterMode));
+                        filters.at (voice).setFrequency (
+                            processor.frequency,
+                            effectiveFilterCutoffHz,
+                            effectiveFilterQ,
+                            0.0f
+                        );
+                        sample = filters.at (voice).process (sample);
+                    }
+                    else
+                    {
+                        resetFilterState (int32 (voice));
                     }
 
                     mix += sample * envelopeGain;

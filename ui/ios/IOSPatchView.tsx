@@ -47,6 +47,14 @@ const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", 
 const KEYBOARD_ROOT_NOTE_DEFAULT = 36;
 const KEYBOARD_ROOT_NOTE_MIN = 12;
 const KEYBOARD_ROOT_NOTE_MAX = 72;
+
+function triggerIOSHaptic(style = "light") {
+    const hapticTrigger = (globalThis as typeof globalThis & {
+        cmaj_triggerHaptic?: (nextStyle?: string) => unknown;
+    }).cmaj_triggerHaptic;
+    hapticTrigger?.(style);
+}
+
 type IOSResponsiveLayout = {
     isPortrait: boolean;
     noteCount: number;
@@ -675,6 +683,10 @@ function IOSPatchViewBody() {
         keyboardRef,
         voiceModeCount: VOICE_MODE_OPTIONS.length,
         msegSurfaceOrientation: msegEditorOrientation,
+        msegCurveEditActivationMode: "hold-or-drag",
+        onMsegCurveEditHoldActivated: () => {
+            triggerIOSHaptic("light");
+        },
     });
 
     const shellStyle = useMemo(() => ({
