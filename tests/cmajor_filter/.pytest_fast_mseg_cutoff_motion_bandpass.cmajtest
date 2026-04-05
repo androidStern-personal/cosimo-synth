@@ -1,0 +1,14 @@
+const patchPath = "../../WavetableSynth.cmajorpatch";
+
+function audioOnlyPatchRun() {
+  return {
+    patch: patchPath,
+    subDir: "/private/var/folders/jk/kstgbf411xd0zk52p9ytvwmw0000gp/T/pytest-of-winterfell/pytest-40/test_real_patch_filter_modulat1/fast_mseg_cutoff_motion_bandpass",
+    frequency: 44100,
+    blockSize: 64,
+    samplesToRender: 4096,
+    sessionID: 1,
+    skipMissingInputs: true,
+  };
+}
+## runScript (audioOnlyPatchRun())

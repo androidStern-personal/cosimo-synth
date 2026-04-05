@@ -14748,6 +14748,26 @@ class CanvasWavetableDisplay {
     drawWavetableModel(this.context, model, this.theme);
   }
 }
+function coerceFiniteNumber(value) {
+  const coerced = Number(value);
+  return Number.isFinite(coerced) ? coerced : null;
+}
+function normalizeFilterSpectrumMessage(message) {
+  const payload = message?.event ?? message;
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+  const sampleRateHz = coerceFiniteNumber(payload.sampleRateHz);
+  const magnitudes = payload.magnitudes;
+  if (!sampleRateHz || sampleRateHz <= 0 || !Array.isArray(magnitudes) || magnitudes.length < 8) {
+    return null;
+  }
+  const normalizedMagnitudes = magnitudes.map((value) => Math.max(0, Number(value) || 0));
+  return {
+    sampleRateHz,
+    magnitudes: normalizedMagnitudes
+  };
+}
 const VOICE_MODE_OPTIONS = [
   { value: 0, label: "Poly" },
   { value: 1, label: "Mono" },
@@ -15443,6 +15463,7 @@ async function loadFactoryBankFrames(resourceClientInput, {
 const EFFECTIVE_WAVETABLE_POSITION_ENDPOINT_ID = "effectiveWavetablePosition";
 const EFFECTIVE_WARP_STATE_ENDPOINT_ID = "effectiveWarpState";
 const EFFECTIVE_FILTER_STATE_ENDPOINT_ID = "effectiveFilterState";
+const FILTER_SPECTRUM_ENDPOINT_ID = "filterSpectrum";
 const DISPLAY_SWIPE_THRESHOLD_PX = 2;
 const MSEG_DRAG_THRESHOLD_PX = 8;
 const WAVETABLE_POSITION_ENDPOINT_ID = "wavetablePosition";
@@ -15585,6 +15606,21 @@ function useObservedFilterState({
     cutoffHz: Number(filterCutoff) || 1e3,
     q: Number(filterQ) || 0.707107
   };
+}
+function useObservedFilterSpectrum() {
+  const message = usePatchEndpoint(FILTER_SPECTRUM_ENDPOINT_ID, null);
+  const [observedState, setObservedState] = reactExports.useState(null);
+  reactExports.useEffect(() => {
+    if (!message) {
+      return;
+    }
+    const normalizedState = normalizeFilterSpectrumMessage(message);
+    if (!normalizedState) {
+      return;
+    }
+    setObservedState(normalizedState);
+  }, [message]);
+  return observedState;
 }
 function useObservedWarpState({
   warpMode,
@@ -16173,6 +16209,7 @@ function useSynthPatchViewModel({
     filterCutoff: filterCutoff.value,
     filterQ: filterQ.value
   });
+  const observedFilterSpectrum = useObservedFilterSpectrum();
   const runtimePresentation = reactExports.useMemo(
     () => resolveRuntimeTablePresentation(runtimeStateMessage, Number(wavetableSelect.value) || 0),
     [runtimeStateMessage, wavetableSelect.value]
@@ -16305,6 +16342,7 @@ function useSynthPatchViewModel({
     filterQ,
     filterMsegDepth,
     observedFilterState,
+    observedFilterSpectrum,
     observedWarpState,
     msegState,
     handleSelectWavetable,

@@ -22,6 +22,10 @@ async function loadFilterResponseModule() {
     return await loadUIModule(repoRoot, "ui/shared/filter-response.ts");
 }
 
+async function loadFilterSpectrumModule() {
+    return await loadUIModule(repoRoot, "ui/shared/filter-spectrum.ts");
+}
+
 test("display position matching ignores float noise after clamping but still rejects a real movement", async () => {
     const { displayPositionsMatch } = await loadRuntimeTableStateModule();
 
@@ -319,6 +323,89 @@ test("higher Q narrows and raises the bandpass response", async () => {
 
     assert.ok(lowQCenter < highQCenter);
     assert.ok((highQCenter - highQOffBand) > (lowQCenter - lowQOffBand));
+});
+
+test("filter spectrum normalization accepts wrapped payloads and rejects malformed messages", async () => {
+    const { normalizeFilterSpectrumMessage } = await loadFilterSpectrumModule();
+
+    assert.deepEqual(normalizeFilterSpectrumMessage({
+        event: {
+            sampleRateHz: 48_000,
+            magnitudes: [0, 1, 2, 3, 4, 5, 6, 7],
+        },
+    }), {
+        sampleRateHz: 48_000,
+        magnitudes: [0, 1, 2, 3, 4, 5, 6, 7],
+    });
+    assert.equal(normalizeFilterSpectrumMessage({
+        event: {
+            sampleRateHz: "broken",
+            magnitudes: [0, 1, 2, 3, 4, 5, 6, 7],
+        },
+    }), null);
+    assert.equal(normalizeFilterSpectrumMessage({
+        event: {
+            sampleRateHz: 44_100,
+            magnitudes: [0, 1, 2],
+        },
+    }), null);
+});
+
+test("filter spectrum display mapping preserves low-frequency and high-frequency emphasis independently", async () => {
+    const { createFilterSpectrumDisplay, FILTER_SPECTRUM_MIN_DB } = await loadFilterSpectrumModule();
+    const frequenciesHz = [40, 120, 500, 1_500, 8_000, 16_000, 20_000];
+    const lowHeavyMagnitudes = Array.from({ length: 64 }, (_, index) => (
+        index === 2 ? 12 : index === 3 ? 9 : 0.1
+    ));
+    const highHeavyMagnitudes = Array.from({ length: 64 }, (_, index) => (
+        index === 60 ? 12 : index === 58 ? 9 : 0.1
+    ));
+
+    const lowHeavyDisplay = createFilterSpectrumDisplay({
+        frame: {
+            sampleRateHz: 44_100,
+            magnitudes: lowHeavyMagnitudes,
+        },
+        frequenciesHz,
+    });
+    const highHeavyDisplay = createFilterSpectrumDisplay({
+        frame: {
+            sampleRateHz: 44_100,
+            magnitudes: highHeavyMagnitudes,
+        },
+        frequenciesHz,
+    });
+    const silentDisplay = createFilterSpectrumDisplay({
+        frame: {
+            sampleRateHz: 44_100,
+            magnitudes: new Array(64).fill(0),
+        },
+        frequenciesHz,
+    });
+
+    assert.ok(lowHeavyDisplay);
+    assert.ok(highHeavyDisplay);
+    assert.ok(silentDisplay);
+    assert.ok(lowHeavyDisplay.peakDisplayIndex <= Math.floor(frequenciesHz.length / 2));
+    assert.ok(highHeavyDisplay.peakDisplayIndex >= Math.floor(frequenciesHz.length / 2));
+    assert.deepEqual(
+        silentDisplay.displayMagnitudesDb,
+        frequenciesHz.map(() => FILTER_SPECTRUM_MIN_DB),
+    );
+});
+
+test("filter spectrum uses its own denser log-frequency display grid", async () => {
+    const { buildFilterSpectrumDisplayFrequencies, FILTER_SPECTRUM_DISPLAY_POINT_COUNT } = await loadFilterSpectrumModule();
+
+    const frequenciesHz = buildFilterSpectrumDisplayFrequencies();
+
+    assert.equal(frequenciesHz.length, FILTER_SPECTRUM_DISPLAY_POINT_COUNT);
+    assert.ok(frequenciesHz.length > 80);
+    assert.ok(Math.abs(frequenciesHz[0] - 20) < 1e-9);
+    assert.ok(frequenciesHz[frequenciesHz.length - 1] >= 19_999);
+    for (let index = 1; index < frequenciesHz.length; index += 1) {
+        assert.ok(frequenciesHz[index] > frequenciesHz[index - 1]);
+    }
 });
 
 test("runtime table presentation falls back cleanly when no runtime state exists", async () => {

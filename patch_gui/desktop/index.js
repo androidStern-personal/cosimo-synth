@@ -12946,17 +12946,17 @@ const MSEG_NOTE_OFF_POLICY_VALUES = /* @__PURE__ */ new Set([
   "immediate",
   "ignore"
 ]);
-function clamp$6(value, min, max) {
+function clamp$7(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 function almostEqual(left, right, epsilon = 1e-12) {
   return Math.abs(left - right) <= epsilon;
 }
 function clampCurvePower(value) {
-  return clamp$6(Number.isFinite(value) ? value : 0, -MSEG_CURVE_POWER_LIMIT, MSEG_CURVE_POWER_LIMIT);
+  return clamp$7(Number.isFinite(value) ? value : 0, -MSEG_CURVE_POWER_LIMIT, MSEG_CURVE_POWER_LIMIT);
 }
 function clamp01(value) {
-  return clamp$6(Number.isFinite(value) ? value : 0, 0, 1);
+  return clamp$7(Number.isFinite(value) ? value : 0, 0, 1);
 }
 function createDefaultMsegShape(name = MSEG_DEFAULT_NAME) {
   return {
@@ -12985,11 +12985,11 @@ function createDefaultMsegPlayback() {
   };
 }
 function clampMsegDepth(value) {
-  return clamp$6(Number.isFinite(value) ? value : 0, -1, 1);
+  return clamp$7(Number.isFinite(value) ? value : 0, -1, 1);
 }
 function clampMsegRateSeconds(value) {
   const numericValue = Number(value);
-  return clamp$6(
+  return clamp$7(
     Number.isFinite(numericValue) ? numericValue : 1,
     MSEG_RATE_MIN_SECONDS,
     MSEG_RATE_MAX_SECONDS
@@ -13186,7 +13186,7 @@ function distanceSquaredToLineSegment(targetX, targetY, fromX, fromY, toX, toY) 
     const pointDeltaY2 = targetY - fromY;
     return pointDeltaX2 * pointDeltaX2 + pointDeltaY2 * pointDeltaY2;
   }
-  const projection = clamp$6(
+  const projection = clamp$7(
     ((targetX - fromX) * deltaX + (targetY - fromY) * deltaY) / segmentLengthSquared,
     0,
     1
@@ -13386,9 +13386,9 @@ function deriveMsegSegmentCurvePower(shape, segmentIndex, x, y) {
   if (width <= 1e-12 || Math.abs(deltaY) <= 1e-12) {
     return 0;
   }
-  const localX = clamp$6(clamp01(Number(x)), from.x, to.x);
-  const t = clamp$6((localX - from.x) / width, 1e-4, 1 - 1e-4);
-  const targetCurvedT = clamp$6((Number(y) - from.y) / deltaY, 1e-4, 1 - 1e-4);
+  const localX = clamp$7(clamp01(Number(x)), from.x, to.x);
+  const t = clamp$7((localX - from.x) / width, 1e-4, 1 - 1e-4);
+  const targetCurvedT = clamp$7((Number(y) - from.y) / deltaY, 1e-4, 1 - 1e-4);
   if (!Number.isFinite(targetCurvedT) || almostEqual(targetCurvedT, t, 1e-4)) {
     return 0;
   }
@@ -13396,7 +13396,7 @@ function deriveMsegSegmentCurvePower(shape, segmentIndex, x, y) {
   let high = MSEG_CURVE_POWER_LIMIT;
   let lowValue = powerScale(t, low);
   let highValue = powerScale(t, high);
-  const target = clamp$6(targetCurvedT, Math.min(lowValue, highValue), Math.max(lowValue, highValue));
+  const target = clamp$7(targetCurvedT, Math.min(lowValue, highValue), Math.max(lowValue, highValue));
   const ascending = lowValue <= highValue;
   for (let iteration = 0; iteration < 32; iteration += 1) {
     const middle = (low + high) * 0.5;
@@ -13466,7 +13466,7 @@ function moveMsegPoint(shape, pointIndex, x, y) {
   } else if (pointIndex === points.length - 1) {
     moved.x = 1;
   } else {
-    moved.x = clamp$6(clamp01(Number(x)), previousX, nextX);
+    moved.x = clamp$7(clamp01(Number(x)), previousX, nextX);
   }
   points[pointIndex] = moved;
   return normalizeMsegShape({
@@ -13513,26 +13513,26 @@ const FILTER_CUTOFF_MIN_HZ$1 = 20;
 const FILTER_CUTOFF_MAX_HZ$1 = 2e4;
 const FILTER_Q_MIN$1 = 0.1;
 const FILTER_Q_MAX$1 = 20;
-function clamp$5(value, min, max) {
+function clamp$6(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 function clampFilterCutoffHz$1(value) {
-  return clamp$5(Number(value) || 0, FILTER_CUTOFF_MIN_HZ$1, FILTER_CUTOFF_MAX_HZ$1);
+  return clamp$6(Number(value) || 0, FILTER_CUTOFF_MIN_HZ$1, FILTER_CUTOFF_MAX_HZ$1);
 }
 function clampFilterQ$1(value) {
-  return clamp$5(Number(value) || 0, FILTER_Q_MIN$1, FILTER_Q_MAX$1);
+  return clamp$6(Number(value) || 0, FILTER_Q_MIN$1, FILTER_Q_MAX$1);
 }
 function clampFilterMode$1(value) {
-  return clamp$5(Math.round(Number(value) || 0), FILTER_MODE_OFF$1, FILTER_MODE_PEAK$1);
+  return clamp$6(Math.round(Number(value) || 0), FILTER_MODE_OFF$1, FILTER_MODE_PEAK$1);
 }
 function clampWarpMode(value) {
-  return clamp$5(Math.round(Number(value) || 0), WARP_MODE_OFF$1, WARP_MODE_MIRROR$1);
+  return clamp$6(Math.round(Number(value) || 0), WARP_MODE_OFF$1, WARP_MODE_MIRROR$1);
 }
 function clampWarpAmount(value) {
-  return clamp$5(Number(value) || 0, 0, 1);
+  return clamp$6(Number(value) || 0, 0, 1);
 }
 function clampDisplayPosition(value) {
-  return clamp$5(Number(value) || 0, 0, 1);
+  return clamp$6(Number(value) || 0, 0, 1);
 }
 function mapDisplayDragToPosition(startValue, startClientY, nextClientY, dragSpan) {
   const safeSpan = Math.max(1, Number(dragSpan) || 0);
@@ -13790,7 +13790,7 @@ const WARP_MODE_PWM = 2;
 const WARP_MODE_ASYM = 3;
 const WARP_MODE_MIRROR = 4;
 const DEFAULT_WAVETABLE_THEME = createDefaultWavetableTheme();
-function clamp$4(value, min, max) {
+function clamp$5(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 function requestNextAnimationFrame(callback) {
@@ -13834,10 +13834,10 @@ function assertFrames(frames) {
   }
 }
 function resolveWarpMode(rawMode) {
-  return clamp$4(Math.round(Number(rawMode) || 0), WARP_MODE_OFF, WARP_MODE_MIRROR);
+  return clamp$5(Math.round(Number(rawMode) || 0), WARP_MODE_OFF, WARP_MODE_MIRROR);
 }
 function isIdentityWarp(warpMode, warpAmount) {
-  const clampedAmount = clamp$4(Number(warpAmount) || 0, 0, 1);
+  const clampedAmount = clamp$5(Number(warpAmount) || 0, 0, 1);
   if (warpMode <= WARP_MODE_OFF) {
     return true;
   }
@@ -13856,46 +13856,46 @@ function isIdentityWarp(warpMode, warpAmount) {
   return true;
 }
 function curvedWarpRight(phase, amount) {
-  const clampedPhase = clamp$4(Number(phase) || 0, 0, 1);
-  const clampedAmount = clamp$4(Number(amount) || 0, 0, 1);
+  const clampedPhase = clamp$5(Number(phase) || 0, 0, 1);
+  const clampedAmount = clamp$5(Number(amount) || 0, 0, 1);
   const exponent = Math.pow(2, 4 * clampedAmount);
   return Math.pow(clampedPhase, exponent);
 }
 function curvedWarpLeft(phase, amount) {
-  const clampedPhase = clamp$4(Number(phase) || 0, 0, 1);
-  const clampedAmount = clamp$4(Number(amount) || 0, 0, 1);
+  const clampedPhase = clamp$5(Number(phase) || 0, 0, 1);
+  const clampedAmount = clamp$5(Number(amount) || 0, 0, 1);
   const exponent = Math.pow(2, 4 * clampedAmount);
   return 1 - Math.pow(1 - clampedPhase, exponent);
 }
 function curvedAsymSigned(phase, dial) {
-  const clampedDial = clamp$4(Number(dial) || 0, 0, 1);
+  const clampedDial = clamp$5(Number(dial) || 0, 0, 1);
   const signedAmount = 2 * clampedDial - 1;
   const magnitude = Math.abs(signedAmount);
   return signedAmount >= 0 ? curvedWarpRight(phase, magnitude) : curvedWarpLeft(phase, magnitude);
 }
 function linearSkewSigned(phase, dial) {
-  const clampedPhase = clamp$4(Number(phase) || 0, 0, 1);
-  const clampedDial = clamp$4(Number(dial) || 0, 0, 1);
+  const clampedPhase = clamp$5(Number(phase) || 0, 0, 1);
+  const clampedDial = clamp$5(Number(dial) || 0, 0, 1);
   const signedAmount = 2 * clampedDial - 1;
-  const split = clamp$4(0.5 + 0.48 * signedAmount, 0.02, 0.98);
+  const split = clamp$5(0.5 + 0.48 * signedAmount, 0.02, 0.98);
   if (clampedPhase < split) {
     return 0.5 * (clampedPhase / split);
   }
   return 0.5 + 0.5 * ((clampedPhase - split) / (1 - split));
 }
 function mirrorBasePhase(phase) {
-  const clampedPhase = clamp$4(Number(phase) || 0, 0, 1);
+  const clampedPhase = clamp$5(Number(phase) || 0, 0, 1);
   if (clampedPhase < 0.5) {
     return clampedPhase * 2;
   }
   return 2 - 2 * clampedPhase;
 }
 function pwmActivePortion(amount) {
-  const clampedAmount = clamp$4(Number(amount) || 0, 0, 1);
+  const clampedAmount = clamp$5(Number(amount) || 0, 0, 1);
   return 1 - (1 - 0.02) * clampedAmount;
 }
 function resolveDisplayWarpPhase(warpMode, warpAmount, phase) {
-  const clampedPhase = clamp$4(Number(phase) || 0, 0, 1);
+  const clampedPhase = clamp$5(Number(phase) || 0, 0, 1);
   const result = {
     shouldLookup: true,
     phase: clampedPhase
@@ -13903,7 +13903,7 @@ function resolveDisplayWarpPhase(warpMode, warpAmount, phase) {
   if (warpMode <= WARP_MODE_OFF || clampedPhase >= 1) {
     return result;
   }
-  const clampedAmount = clamp$4(Number(warpAmount) || 0, 0, 1);
+  const clampedAmount = clamp$5(Number(warpAmount) || 0, 0, 1);
   if (warpMode === WARP_MODE_BEND) {
     const invertedDial = 1 - clampedAmount;
     if (clampedPhase < 0.5) {
@@ -13933,7 +13933,7 @@ function resolveDisplayWarpPhase(warpMode, warpAmount, phase) {
   return result;
 }
 function sampleDisplayFrame(frame, phase) {
-  const safePhase = clamp$4(Number(phase) || 0, 0, 1);
+  const safePhase = clamp$5(Number(phase) || 0, 0, 1);
   const frameLength = frame.length;
   if (frameLength === 0) {
     return 0;
@@ -14044,10 +14044,10 @@ function createCamera() {
 }
 function createViewportPadding(width, height) {
   return {
-    left: clamp$4(width * 0.06, 22, 48),
-    right: clamp$4(width * 0.06, 22, 48),
-    top: clamp$4(height * 0.1, 20, 56),
-    bottom: clamp$4(height * 0.09, 20, 52)
+    left: clamp$5(width * 0.06, 22, 48),
+    right: clamp$5(width * 0.06, 22, 48),
+    top: clamp$5(height * 0.1, 20, 56),
+    bottom: clamp$5(height * 0.09, 20, 52)
   };
 }
 function projectWorldPoint(point, camera) {
@@ -14101,10 +14101,10 @@ function createProjection(points, width, height) {
   };
 }
 function getSurfacePointCount(width, sampleCount) {
-  return clamp$4(Math.round(width / 10), 64, Math.min(128, sampleCount));
+  return clamp$5(Math.round(width / 10), 64, Math.min(128, sampleCount));
 }
 function getContourPointCount(width, sampleCount) {
-  return clamp$4(Math.round(width / 4), 128, Math.min(256, sampleCount));
+  return clamp$5(Math.round(width / 4), 128, Math.min(256, sampleCount));
 }
 function createObjectPoints(samples, depth) {
   const points = new Array(samples.length);
@@ -14279,8 +14279,8 @@ function createSurfaceBands(projectedFrames) {
       const lightDirection = normaliseVector({ x: -0.2, y: 0.95, z: -0.5 });
       const averageCameraDepth = quad.reduce((total, point) => total + point.cameraDepth, 0) / quad.length;
       const depthNormalized = (frontFrame.depthNormalized + backFrame.depthNormalized) * 0.5;
-      const slopeLight = clamp$4((dotProduct(surfaceNormal, lightDirection) + 1) * 0.5, 0, 1);
-      const ridgeAmount = clamp$4(
+      const slopeLight = clamp$5((dotProduct(surfaceNormal, lightDirection) + 1) * 0.5, 0, 1);
+      const ridgeAmount = clamp$5(
         Math.abs(frontFrame.samples[sampleIndex + 1] - frontFrame.samples[sampleIndex]) * 0.95 + Math.abs(backFrame.samples[sampleIndex + 1] - backFrame.samples[sampleIndex]) * 0.95,
         0,
         1
@@ -14305,7 +14305,7 @@ function createSurfaceRibs(projectedFrames) {
   if (sampleCount < 3) {
     return [];
   }
-  const desiredRibCount = clamp$4(Math.round(sampleCount / 10), 8, 14);
+  const desiredRibCount = clamp$5(Math.round(sampleCount / 10), 8, 14);
   const selectedColumns = /* @__PURE__ */ new Set([0, sampleCount - 1]);
   for (let ribIndex = 1; ribIndex < desiredRibCount - 1; ribIndex += 1) {
     selectedColumns.add(
@@ -14348,7 +14348,7 @@ function createInterpolatedSurfaceSlices(sourceFrames, camera, projection) {
   if (frameCount === 0) {
     return [];
   }
-  const sliceCount = clamp$4(frameCount * 3 - 2, 17, 41);
+  const sliceCount = clamp$5(frameCount * 3 - 2, 17, 41);
   const slices = [];
   for (let sliceIndex = 0; sliceIndex < sliceCount; sliceIndex += 1) {
     const framePosition = sliceIndex * (frameCount - 1) / Math.max(1, sliceCount - 1);
@@ -14389,7 +14389,7 @@ function createCurrentSlice(staticScene, frameState) {
   const lowFrame = staticScene.contourFrames[frameState.frameLo];
   const highFrame = staticScene.contourFrames[frameState.frameHi];
   const warpMode = resolveWarpMode(frameState.warpMode);
-  const warpAmount = clamp$4(Number(frameState.warpAmount) || 0, 0, 1);
+  const warpAmount = clamp$5(Number(frameState.warpAmount) || 0, 0, 1);
   const blendedSamples = isIdentityWarp(warpMode, warpAmount) ? buildInterpolatedFrame(lowFrame.samples, highFrame.samples, frameState.frameT) : buildWarpedFrame(lowFrame.samples, highFrame.samples, frameState.frameT, warpMode, warpAmount);
   const depth = getSceneDepth(frameState.frameIndex, staticScene.frameCount);
   const objectPoints = createObjectPoints(blendedSamples, depth);
@@ -14403,8 +14403,8 @@ function createCurrentSlice(staticScene, frameState) {
   const labelAnchor = points[Math.floor(points.length * 0.78)] ?? points[points.length - 1];
   const label = {
     text: buildCurrentSliceLabel(frameState, staticScene.frameCount),
-    x: clamp$4(labelAnchor.x + 14, 18, staticScene.width - 236),
-    y: clamp$4(labelAnchor.y - 18, 24, staticScene.height - 24)
+    x: clamp$5(labelAnchor.x + 14, 18, staticScene.width - 236),
+    y: clamp$5(labelAnchor.y - 18, 24, staticScene.height - 24)
   };
   return {
     frameState,
@@ -14419,7 +14419,7 @@ function createCurrentSlice(staticScene, frameState) {
 }
 function buildCurrentSliceLabel(frameState, frameCount) {
   const warpMode = resolveWarpMode(frameState.warpMode);
-  const warpAmount = clamp$4(Number(frameState.warpAmount) || 0, 0, 1);
+  const warpAmount = clamp$5(Number(frameState.warpAmount) || 0, 0, 1);
   const baseLabel = `Frame ${frameState.frameIndex.toFixed(2)} / ${frameCount - 1}`;
   if (isIdentityWarp(warpMode, warpAmount)) {
     return baseLabel;
@@ -14443,7 +14443,7 @@ function buildCurrentSliceLabel(frameState, frameCount) {
 }
 function createFrameState(frameCount, position, warpMode = 0, warpAmount = 0) {
   const safeFrameCount = Math.max(1, Number(frameCount) || 0);
-  const clampedPosition = clamp$4(Number(position) || 0, 0, 1);
+  const clampedPosition = clamp$5(Number(position) || 0, 0, 1);
   const frameIndex = clampedPosition * (safeFrameCount - 1);
   const frameLo = Math.floor(frameIndex);
   const frameHi = Math.min(frameLo + 1, safeFrameCount - 1);
@@ -14456,7 +14456,7 @@ function createFrameState(frameCount, position, warpMode = 0, warpAmount = 0) {
     frameHi,
     frameT,
     warpMode: resolveWarpMode(warpMode),
-    warpAmount: clamp$4(Number(warpAmount) || 0, 0, 1)
+    warpAmount: clamp$5(Number(warpAmount) || 0, 0, 1)
   };
 }
 function decimateFrame(frame, targetPointCount) {
@@ -14618,7 +14618,7 @@ function drawWavetableModel(context, model, theme = DEFAULT_WAVETABLE_THEME) {
     context.restore();
   }
   for (const contour of model.contours) {
-    const strokeColour = mixRGB(theme.frameColor, theme.backgroundRGB, clamp$4(contour.colourMix, 0, 0.92));
+    const strokeColour = mixRGB(theme.frameColor, theme.backgroundRGB, clamp$5(contour.colourMix, 0, 0.92));
     context.save();
     context.strokeStyle = toRGBA(strokeColour, contour.alpha);
     context.lineWidth = contour.lineWidth;
@@ -14676,12 +14676,12 @@ class CanvasWavetableDisplay {
     this.queueRender();
   }
   setPosition(position) {
-    this.position = clamp$4(Number(position) || 0, 0, 1);
+    this.position = clamp$5(Number(position) || 0, 0, 1);
     this.queueRender();
   }
   setWarp(mode, amount) {
     this.warpMode = resolveWarpMode(mode);
-    this.warpAmount = clamp$4(Number(amount) || 0, 0, 1);
+    this.warpAmount = clamp$5(Number(amount) || 0, 0, 1);
     this.queueRender();
   }
   resize(width, height, devicePixelRatio = 1) {
@@ -14764,26 +14764,26 @@ const FILTER_MODE_HIGHPASS = 2;
 const FILTER_MODE_BANDPASS = 3;
 const FILTER_MODE_NOTCH = 4;
 const FILTER_MODE_PEAK = 5;
-function clamp$3(value, min, max) {
+function clamp$4(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 function clampFilterMode(value) {
-  return clamp$3(Math.round(Number(value) || 0), FILTER_MODE_OFF, FILTER_MODE_PEAK);
+  return clamp$4(Math.round(Number(value) || 0), FILTER_MODE_OFF, FILTER_MODE_PEAK);
 }
 function clampFilterCutoffHz(value) {
-  return clamp$3(Number(value) || FILTER_CUTOFF_MIN_HZ, FILTER_CUTOFF_MIN_HZ, FILTER_CUTOFF_MAX_HZ);
+  return clamp$4(Number(value) || FILTER_CUTOFF_MIN_HZ, FILTER_CUTOFF_MIN_HZ, FILTER_CUTOFF_MAX_HZ);
 }
 function clampFilterQ(value) {
-  return clamp$3(Number(value) || 0, FILTER_Q_MIN, FILTER_Q_MAX);
+  return clamp$4(Number(value) || 0, FILTER_Q_MIN, FILTER_Q_MAX);
 }
 function normalizedToFilterCutoffHz(value) {
-  const normalized = clamp$3(Number(value) || 0, 0, 1);
+  const normalized = clamp$4(Number(value) || 0, 0, 1);
   const minLog = Math.log(FILTER_CUTOFF_MIN_HZ);
   const maxLog = Math.log(FILTER_CUTOFF_MAX_HZ);
   return Math.exp(minLog + (maxLog - minLog) * normalized);
 }
 function normalizedToFilterQ(value) {
-  const normalized = clamp$3(Number(value) || 0, 0, 1);
+  const normalized = clamp$4(Number(value) || 0, 0, 1);
   return FILTER_Q_MIN + (FILTER_Q_MAX - FILTER_Q_MIN) * normalized;
 }
 class SimperFilter {
@@ -14860,7 +14860,7 @@ function responseGainForFrequency({
   const filter = new SimperFilter();
   filter.setMode(mode);
   filter.setFrequency(sampleRate, cutoffHz, q);
-  const safeFrequency = clamp$3(frequencyHz, 10, sampleRate * 0.49);
+  const safeFrequency = clamp$4(frequencyHz, 10, sampleRate * 0.49);
   const cycleLength = Math.max(8, Math.round(sampleRate / safeFrequency));
   const warmupSamples = cycleLength * FILTER_RESPONSE_FFT_WARMUP_CYCLES;
   const measureSamples = cycleLength * FILTER_RESPONSE_FFT_MEASURE_CYCLES;
@@ -14931,6 +14931,92 @@ function createFilterResponseModel({
     magnitudesDb,
     peakIndex,
     minIndex
+  };
+}
+const FILTER_SPECTRUM_MIN_DB = -60;
+const FILTER_SPECTRUM_MAX_DB = 0;
+const FILTER_SPECTRUM_DISPLAY_POINT_COUNT = 192;
+function buildFilterSpectrumDisplayFrequencies(pointCount = FILTER_SPECTRUM_DISPLAY_POINT_COUNT) {
+  return Array.from({ length: pointCount }, (_, index) => normalizedToFilterCutoffHz(index / Math.max(1, pointCount - 1)));
+}
+function clamp$3(value, min, max) {
+  return Math.min(Math.max(value, min), max);
+}
+function coerceFiniteNumber(value) {
+  const coerced = Number(value);
+  return Number.isFinite(coerced) ? coerced : null;
+}
+function normalizeFilterSpectrumMessage(message) {
+  const payload = message?.event ?? message;
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+  const sampleRateHz = coerceFiniteNumber(payload.sampleRateHz);
+  const magnitudes = payload.magnitudes;
+  if (!sampleRateHz || sampleRateHz <= 0 || !Array.isArray(magnitudes) || magnitudes.length < 8) {
+    return null;
+  }
+  const normalizedMagnitudes = magnitudes.map((value) => Math.max(0, Number(value) || 0));
+  return {
+    sampleRateHz,
+    magnitudes: normalizedMagnitudes
+  };
+}
+function sampleMagnitudeAtFrequency({
+  magnitudes,
+  sampleRateHz,
+  frequencyHz
+}) {
+  const nyquistHz = Math.max(1, sampleRateHz * 0.5);
+  const clampedFrequencyHz = clamp$3(clampFilterCutoffHz(frequencyHz), 0, nyquistHz);
+  const maxBinIndex = Math.max(0, magnitudes.length - 1);
+  const exactIndex = clampedFrequencyHz / nyquistHz * maxBinIndex;
+  const leftIndex = Math.max(0, Math.min(maxBinIndex, Math.floor(exactIndex)));
+  const rightIndex = Math.max(0, Math.min(maxBinIndex, Math.ceil(exactIndex)));
+  if (leftIndex === rightIndex) {
+    return magnitudes[leftIndex] ?? 0;
+  }
+  const mix = exactIndex - leftIndex;
+  const leftMagnitude = magnitudes[leftIndex] ?? 0;
+  const rightMagnitude = magnitudes[rightIndex] ?? 0;
+  return leftMagnitude + (rightMagnitude - leftMagnitude) * mix;
+}
+function createFilterSpectrumDisplay({
+  frame,
+  frequenciesHz
+}) {
+  if (!frame || !Array.isArray(frequenciesHz) || frequenciesHz.length === 0) {
+    return null;
+  }
+  const peakMagnitude = frame.magnitudes.reduce((maxMagnitude, magnitude) => Math.max(maxMagnitude, magnitude), 0);
+  if (peakMagnitude <= 0) {
+    return {
+      sampleRateHz: frame.sampleRateHz,
+      sourceBinCount: frame.magnitudes.length,
+      displayMagnitudesDb: frequenciesHz.map(() => FILTER_SPECTRUM_MIN_DB),
+      peakDisplayIndex: 0
+    };
+  }
+  const displayMagnitudesDb = frequenciesHz.map((frequencyHz) => {
+    const magnitude = sampleMagnitudeAtFrequency({
+      magnitudes: frame.magnitudes,
+      sampleRateHz: frame.sampleRateHz,
+      frequencyHz
+    });
+    const normalizedMagnitude = Math.max(1e-6, magnitude / peakMagnitude);
+    return clamp$3(20 * Math.log10(normalizedMagnitude), FILTER_SPECTRUM_MIN_DB, FILTER_SPECTRUM_MAX_DB);
+  });
+  let peakDisplayIndex = 0;
+  for (let index = 1; index < displayMagnitudesDb.length; index += 1) {
+    if (displayMagnitudesDb[index] > displayMagnitudesDb[peakDisplayIndex]) {
+      peakDisplayIndex = index;
+    }
+  }
+  return {
+    sampleRateHz: frame.sampleRateHz,
+    sourceBinCount: frame.magnitudes.length,
+    displayMagnitudesDb,
+    peakDisplayIndex
   };
 }
 const VOICE_MODE_OPTIONS = [
@@ -15317,7 +15403,7 @@ function RangeField({
     ] })
   ] });
 }
-function buildFilterResponsePath(magnitudesDb, width, height, {
+function buildMagnitudePlotPoints(magnitudesDb, width, height, {
   horizontalPadding = 18,
   verticalPadding = 16,
   minDb = -24,
@@ -15329,15 +15415,15 @@ function buildFilterResponsePath(magnitudesDb, width, height, {
   const plotBottom = Math.max(verticalPadding + 1, height - verticalPadding);
   const plotWidth = Math.max(1, plotRight - plotLeft);
   const plotHeight = Math.max(1, plotBottom - plotTop);
-  let path = "";
+  const points = [];
   for (let index = 0; index < magnitudesDb.length; index += 1) {
     const x = plotLeft + plotWidth * (index / Math.max(1, magnitudesDb.length - 1));
     const normalized = clamp$2((clamp$2(magnitudesDb[index], minDb, maxDb) - minDb) / (maxDb - minDb), 0, 1);
     const y = plotBottom - plotHeight * normalized;
-    path += `${index === 0 ? "M" : "L"} ${x.toFixed(3)} ${y.toFixed(3)} `;
+    points.push({ x, y });
   }
   return {
-    path: path.trim(),
+    points,
     plotLeft,
     plotRight,
     plotTop,
@@ -15345,6 +15431,69 @@ function buildFilterResponsePath(magnitudesDb, width, height, {
     plotWidth,
     plotHeight
   };
+}
+function buildFilterResponsePath(magnitudesDb, width, height, options = {}) {
+  const plot = buildMagnitudePlotPoints(magnitudesDb, width, height, options);
+  let path = "";
+  for (let index = 0; index < plot.points.length; index += 1) {
+    const point = plot.points[index];
+    path += `${index === 0 ? "M" : "L"} ${point.x.toFixed(3)} ${point.y.toFixed(3)} `;
+  }
+  return {
+    ...plot,
+    path: path.trim()
+  };
+}
+function drawFilterSpectrumOverlay({
+  canvas,
+  width,
+  height,
+  magnitudesDb
+}) {
+  const devicePixelRatio = window.devicePixelRatio || 1;
+  const scaledWidth = Math.max(1, Math.round(width * devicePixelRatio));
+  const scaledHeight = Math.max(1, Math.round(height * devicePixelRatio));
+  if (canvas.width !== scaledWidth || canvas.height !== scaledHeight) {
+    canvas.width = scaledWidth;
+    canvas.height = scaledHeight;
+  }
+  const context = canvas.getContext("2d");
+  if (!context) {
+    return;
+  }
+  context.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+  context.clearRect(0, 0, width, height);
+  const plot = buildMagnitudePlotPoints(magnitudesDb, width, height, {
+    minDb: FILTER_SPECTRUM_MIN_DB,
+    maxDb: FILTER_SPECTRUM_MAX_DB
+  });
+  if (plot.points.length === 0) {
+    return;
+  }
+  const gradient = context.createLinearGradient(0, plot.plotTop, 0, plot.plotBottom);
+  gradient.addColorStop(0, "rgba(94, 215, 255, 0.18)");
+  gradient.addColorStop(1, "rgba(94, 215, 255, 0.00)");
+  context.beginPath();
+  context.moveTo(plot.points[0].x, plot.plotBottom);
+  for (const point of plot.points) {
+    context.lineTo(point.x, point.y);
+  }
+  context.lineTo(plot.points[plot.points.length - 1].x, plot.plotBottom);
+  context.closePath();
+  context.fillStyle = gradient;
+  context.fill();
+  context.beginPath();
+  for (let index = 0; index < plot.points.length; index += 1) {
+    const point = plot.points[index];
+    if (index === 0) {
+      context.moveTo(point.x, point.y);
+    } else {
+      context.lineTo(point.x, point.y);
+    }
+  }
+  context.strokeStyle = "rgba(94, 215, 255, 0.34)";
+  context.lineWidth = 1.4;
+  context.stroke();
 }
 function FilterResponseGraph({
   baseMode,
@@ -15354,12 +15503,15 @@ function FilterResponseGraph({
   liveCutoffHz,
   liveQ,
   liveHasActive,
+  spectrumFrame = null,
   onCutoffChange,
   onQChange,
   className
 }) {
+  const viewportRef = reactExports.useRef(null);
+  const spectrumCanvasRef = reactExports.useRef(null);
   const surfaceRef = reactExports.useRef(null);
-  const size = useResizeObserver$1(surfaceRef);
+  const size = useResizeObserver$1(viewportRef);
   const [activePointerId, setActivePointerId] = reactExports.useState(null);
   const baseModel = reactExports.useMemo(() => createFilterResponseModel({
     mode: baseMode,
@@ -15379,6 +15531,37 @@ function FilterResponseGraph({
     () => buildFilterResponsePath(liveModel.magnitudesDb, size.width, size.height),
     [liveModel.magnitudesDb, size.height, size.width]
   );
+  const spectrumFrequenciesHz = reactExports.useMemo(() => buildFilterSpectrumDisplayFrequencies(), []);
+  const spectrumDisplay = reactExports.useMemo(() => createFilterSpectrumDisplay({
+    frame: spectrumFrame,
+    frequenciesHz: spectrumFrequenciesHz
+  }), [spectrumFrame, spectrumFrequenciesHz]);
+  reactExports.useEffect(() => {
+    const canvas = spectrumCanvasRef.current;
+    if (!canvas) {
+      return;
+    }
+    let animationFrameID = window.requestAnimationFrame(() => {
+      if (!spectrumDisplay) {
+        drawFilterSpectrumOverlay({
+          canvas,
+          width: size.width,
+          height: size.height,
+          magnitudesDb: spectrumFrequenciesHz.map(() => FILTER_SPECTRUM_MIN_DB)
+        });
+        return;
+      }
+      drawFilterSpectrumOverlay({
+        canvas,
+        width: size.width,
+        height: size.height,
+        magnitudesDb: spectrumDisplay.displayMagnitudesDb
+      });
+    });
+    return () => {
+      window.cancelAnimationFrame(animationFrameID);
+    };
+  }, [size.height, size.width, spectrumDisplay, spectrumFrequenciesHz]);
   const applyPointerPosition = (clientX, clientY) => {
     const element = surfaceRef.current;
     if (!element) {
@@ -15405,70 +15588,100 @@ function FilterResponseGraph({
       q: liveModel.q,
       peakIndex: liveModel.peakIndex,
       minIndex: liveModel.minIndex
+    },
+    spectrum: spectrumDisplay ? {
+      hasSpectrum: true,
+      sampleRateHz: spectrumDisplay.sampleRateHz,
+      sourceBinCount: spectrumDisplay.sourceBinCount,
+      peakDisplayIndex: spectrumDisplay.peakDisplayIndex,
+      displayMagnitudesDb: spectrumDisplay.displayMagnitudesDb
+    } : {
+      hasSpectrum: false,
+      sampleRateHz: null,
+      sourceBinCount: 0,
+      peakDisplayIndex: -1,
+      displayMagnitudesDb: []
     }
-  }), [baseModel, liveHasActive, liveModel]);
+  }), [baseModel, liveHasActive, liveModel, spectrumDisplay]);
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: joinClasses("grid gap-2", className), children: [
     /* @__PURE__ */ jsxRuntimeExports.jsxs(
-      "svg",
+      "div",
       {
-        ref: surfaceRef,
-        "data-role": "filter-response-graph",
-        className: "h-44 w-full touch-none overflow-hidden rounded-[20px] border border-white/8 bg-black/25",
-        viewBox: `0 0 ${size.width} ${size.height}`,
-        onPointerDown: (event) => {
-          event.currentTarget.setPointerCapture(event.pointerId);
-          setActivePointerId(event.pointerId);
-          applyPointerPosition(event.clientX, event.clientY);
-        },
-        onPointerMove: (event) => {
-          if (activePointerId !== event.pointerId) {
-            return;
-          }
-          applyPointerPosition(event.clientX, event.clientY);
-        },
-        onPointerUp: (event) => {
-          if (activePointerId === event.pointerId) {
-            setActivePointerId(null);
-          }
-        },
-        onPointerCancel: (event) => {
-          if (activePointerId === event.pointerId) {
-            setActivePointerId(null);
-          }
-        },
+        ref: viewportRef,
+        className: "relative h-44 w-full overflow-hidden rounded-[20px] border border-white/8 bg-black/25",
         children: [
-          [0.25, 0.5, 0.75].map((step) => /* @__PURE__ */ jsxRuntimeExports.jsx(
-            "line",
-            {
-              x1: basePath.plotLeft,
-              x2: basePath.plotRight,
-              y1: basePath.plotTop + basePath.plotHeight * step,
-              y2: basePath.plotTop + basePath.plotHeight * step,
-              stroke: "rgba(255,255,255,0.08)",
-              strokeWidth: "1"
-            },
-            `filter-grid-h-${step}`
-          )),
-          [0.25, 0.5, 0.75].map((step) => /* @__PURE__ */ jsxRuntimeExports.jsx(
-            "line",
-            {
-              y1: basePath.plotTop,
-              y2: basePath.plotBottom,
-              x1: basePath.plotLeft + basePath.plotWidth * step,
-              x2: basePath.plotLeft + basePath.plotWidth * step,
-              stroke: "rgba(255,255,255,0.06)",
-              strokeWidth: "1"
-            },
-            `filter-grid-v-${step}`
-          )),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("path", { d: basePath.path, fill: "none", stroke: "rgba(123, 197, 255, 0.46)", strokeWidth: "2" }),
           /* @__PURE__ */ jsxRuntimeExports.jsx(
-            "path",
+            "canvas",
             {
-              d: livePath.path,
-              fill: "none",
-              stroke: liveHasActive ? "rgba(94, 215, 255, 0.98)" : "rgba(94, 215, 255, 0.72)",
-              strokeWidth: liveHasActive ? "3" : "2"
+              ref: spectrumCanvasRef,
+              "data-role": "filter-spectrum-canvas",
+              className: "pointer-events-none absolute inset-0 h-full w-full"
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            "svg",
+            {
+              ref: surfaceRef,
+              "data-role": "filter-response-graph",
+              className: "absolute inset-0 h-full w-full touch-none overflow-hidden",
+              viewBox: `0 0 ${size.width} ${size.height}`,
+              onPointerDown: (event) => {
+                event.currentTarget.setPointerCapture(event.pointerId);
+                setActivePointerId(event.pointerId);
+                applyPointerPosition(event.clientX, event.clientY);
+              },
+              onPointerMove: (event) => {
+                if (activePointerId !== event.pointerId) {
+                  return;
+                }
+                applyPointerPosition(event.clientX, event.clientY);
+              },
+              onPointerUp: (event) => {
+                if (activePointerId === event.pointerId) {
+                  setActivePointerId(null);
+                }
+              },
+              onPointerCancel: (event) => {
+                if (activePointerId === event.pointerId) {
+                  setActivePointerId(null);
+                }
+              },
+              children: [
+                [0.25, 0.5, 0.75].map((step) => /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "line",
+                  {
+                    x1: basePath.plotLeft,
+                    x2: basePath.plotRight,
+                    y1: basePath.plotTop + basePath.plotHeight * step,
+                    y2: basePath.plotTop + basePath.plotHeight * step,
+                    stroke: "rgba(255,255,255,0.08)",
+                    strokeWidth: "1"
+                  },
+                  `filter-grid-h-${step}`
+                )),
+                [0.25, 0.5, 0.75].map((step) => /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "line",
+                  {
+                    y1: basePath.plotTop,
+                    y2: basePath.plotBottom,
+                    x1: basePath.plotLeft + basePath.plotWidth * step,
+                    x2: basePath.plotLeft + basePath.plotWidth * step,
+                    stroke: "rgba(255,255,255,0.06)",
+                    strokeWidth: "1"
+                  },
+                  `filter-grid-v-${step}`
+                )),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("path", { d: basePath.path, fill: "none", stroke: "rgba(123, 197, 255, 0.46)", strokeWidth: "2" }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "path",
+                  {
+                    d: livePath.path,
+                    fill: "none",
+                    stroke: liveHasActive ? "rgba(94, 215, 255, 0.98)" : "rgba(94, 215, 255, 0.72)",
+                    strokeWidth: liveHasActive ? "3" : "2"
+                  }
+                )
+              ]
             }
           )
         ]
@@ -24389,6 +24602,7 @@ async function loadFactoryBankFrames(resourceClientInput, {
 const EFFECTIVE_WAVETABLE_POSITION_ENDPOINT_ID = "effectiveWavetablePosition";
 const EFFECTIVE_WARP_STATE_ENDPOINT_ID = "effectiveWarpState";
 const EFFECTIVE_FILTER_STATE_ENDPOINT_ID = "effectiveFilterState";
+const FILTER_SPECTRUM_ENDPOINT_ID = "filterSpectrum";
 const DISPLAY_SWIPE_THRESHOLD_PX = 2;
 const MSEG_DRAG_THRESHOLD_PX = 8;
 const WAVETABLE_POSITION_ENDPOINT_ID = "wavetablePosition";
@@ -24531,6 +24745,21 @@ function useObservedFilterState({
     cutoffHz: Number(filterCutoff) || 1e3,
     q: Number(filterQ) || 0.707107
   };
+}
+function useObservedFilterSpectrum() {
+  const message = usePatchEndpoint(FILTER_SPECTRUM_ENDPOINT_ID, null);
+  const [observedState, setObservedState] = reactExports.useState(null);
+  reactExports.useEffect(() => {
+    if (!message) {
+      return;
+    }
+    const normalizedState = normalizeFilterSpectrumMessage(message);
+    if (!normalizedState) {
+      return;
+    }
+    setObservedState(normalizedState);
+  }, [message]);
+  return observedState;
 }
 function useObservedWarpState({
   warpMode,
@@ -25119,6 +25348,7 @@ function useSynthPatchViewModel({
     filterCutoff: filterCutoff.value,
     filterQ: filterQ.value
   });
+  const observedFilterSpectrum = useObservedFilterSpectrum();
   const runtimePresentation = reactExports.useMemo(
     () => resolveRuntimeTablePresentation(runtimeStateMessage, Number(wavetableSelect.value) || 0),
     [runtimeStateMessage, wavetableSelect.value]
@@ -25251,6 +25481,7 @@ function useSynthPatchViewModel({
     filterQ,
     filterMsegDepth,
     observedFilterState,
+    observedFilterSpectrum,
     observedWarpState,
     msegState,
     handleSelectWavetable,
@@ -25403,7 +25634,8 @@ function FilterSection({
   filterCutoff,
   filterQ,
   filterMsegDepth,
-  observedFilterState
+  observedFilterState,
+  observedFilterSpectrum
 }) {
   const normalizedCutoff = clamp(
     (Math.log(Math.max(20, filterCutoff.value)) - Math.log(20)) / (Math.log(2e4) - Math.log(20)),
@@ -25429,6 +25661,7 @@ function FilterSection({
         liveCutoffHz: observedFilterState.cutoffHz,
         liveQ: observedFilterState.q,
         liveHasActive: observedFilterState.hasActive,
+        spectrumFrame: observedFilterSpectrum,
         onCutoffChange: (nextValue) => filterCutoff.commitValue(nextValue),
         onQChange: (nextValue) => filterQ.commitValue(nextValue)
       }
@@ -25724,7 +25957,8 @@ function DesktopPatchViewBody() {
               filterCutoff: synthView.filterCutoff,
               filterQ: synthView.filterQ,
               filterMsegDepth: synthView.filterMsegDepth,
-              observedFilterState: synthView.observedFilterState
+              observedFilterState: synthView.observedFilterState,
+              observedFilterSpectrum: synthView.observedFilterSpectrum
             }
           ),
           /* @__PURE__ */ jsxRuntimeExports.jsx(

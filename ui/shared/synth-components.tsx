@@ -36,6 +36,13 @@ import {
     normalizedToFilterCutoffHz,
     normalizedToFilterQ,
 } from "./filter-response";
+import {
+    buildFilterSpectrumDisplayFrequencies,
+    createFilterSpectrumDisplay,
+    FILTER_SPECTRUM_MAX_DB,
+    FILTER_SPECTRUM_MIN_DB,
+    type FilterSpectrumFrame,
+} from "./filter-spectrum";
 
 export type VoiceModeOption = {
     value: number;
@@ -120,6 +127,7 @@ export type FilterResponseGraphProps = {
     liveCutoffHz: number;
     liveQ: number;
     liveHasActive: boolean;
+    spectrumFrame?: FilterSpectrumFrame | null;
     onCutoffChange: (nextValue: number) => void;
     onQChange: (nextValue: number) => void;
     className?: string;
@@ -623,7 +631,7 @@ export function RangeField({
     );
 }
 
-function buildFilterResponsePath(
+function buildMagnitudePlotPoints(
     magnitudesDb: number[],
     width: number,
     height: number,
@@ -645,17 +653,17 @@ function buildFilterResponsePath(
     const plotBottom = Math.max(verticalPadding + 1, height - verticalPadding);
     const plotWidth = Math.max(1, plotRight - plotLeft);
     const plotHeight = Math.max(1, plotBottom - plotTop);
-    let path = "";
+    const points: Array<{ x: number; y: number }> = [];
 
     for (let index = 0; index < magnitudesDb.length; index += 1) {
         const x = plotLeft + (plotWidth * (index / Math.max(1, magnitudesDb.length - 1)));
         const normalized = clamp((clamp(magnitudesDb[index], minDb, maxDb) - minDb) / (maxDb - minDb), 0, 1);
         const y = plotBottom - (plotHeight * normalized);
-        path += `${index === 0 ? "M" : "L"} ${x.toFixed(3)} ${y.toFixed(3)} `;
+        points.push({ x, y });
     }
 
     return {
-        path: path.trim(),
+        points,
         plotLeft,
         plotRight,
         plotTop,
@@ -663,6 +671,99 @@ function buildFilterResponsePath(
         plotWidth,
         plotHeight,
     };
+}
+
+function buildFilterResponsePath(
+    magnitudesDb: number[],
+    width: number,
+    height: number,
+    options: {
+        horizontalPadding?: number;
+        verticalPadding?: number;
+        minDb?: number;
+        maxDb?: number;
+    } = {},
+) {
+    const plot = buildMagnitudePlotPoints(magnitudesDb, width, height, options);
+    let path = "";
+
+    for (let index = 0; index < plot.points.length; index += 1) {
+        const point = plot.points[index];
+        path += `${index === 0 ? "M" : "L"} ${point.x.toFixed(3)} ${point.y.toFixed(3)} `;
+    }
+
+    return {
+        ...plot,
+        path: path.trim(),
+    };
+}
+
+function drawFilterSpectrumOverlay({
+    canvas,
+    width,
+    height,
+    magnitudesDb,
+}: {
+    canvas: HTMLCanvasElement;
+    width: number;
+    height: number;
+    magnitudesDb: number[];
+}) {
+    const devicePixelRatio = window.devicePixelRatio || 1;
+    const scaledWidth = Math.max(1, Math.round(width * devicePixelRatio));
+    const scaledHeight = Math.max(1, Math.round(height * devicePixelRatio));
+
+    if (canvas.width !== scaledWidth || canvas.height !== scaledHeight) {
+        canvas.width = scaledWidth;
+        canvas.height = scaledHeight;
+    }
+
+    const context = canvas.getContext("2d");
+
+    if (!context) {
+        return;
+    }
+
+    context.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+    context.clearRect(0, 0, width, height);
+
+    const plot = buildMagnitudePlotPoints(magnitudesDb, width, height, {
+        minDb: FILTER_SPECTRUM_MIN_DB,
+        maxDb: FILTER_SPECTRUM_MAX_DB,
+    });
+
+    if (plot.points.length === 0) {
+        return;
+    }
+
+    const gradient = context.createLinearGradient(0, plot.plotTop, 0, plot.plotBottom);
+    gradient.addColorStop(0, "rgba(94, 215, 255, 0.18)");
+    gradient.addColorStop(1, "rgba(94, 215, 255, 0.00)");
+
+    context.beginPath();
+    context.moveTo(plot.points[0].x, plot.plotBottom);
+
+    for (const point of plot.points) {
+        context.lineTo(point.x, point.y);
+    }
+
+    context.lineTo(plot.points[plot.points.length - 1].x, plot.plotBottom);
+    context.closePath();
+    context.fillStyle = gradient;
+    context.fill();
+
+    context.beginPath();
+    for (let index = 0; index < plot.points.length; index += 1) {
+        const point = plot.points[index];
+        if (index === 0) {
+            context.moveTo(point.x, point.y);
+        } else {
+            context.lineTo(point.x, point.y);
+        }
+    }
+    context.strokeStyle = "rgba(94, 215, 255, 0.34)";
+    context.lineWidth = 1.4;
+    context.stroke();
 }
 
 export function FilterResponseGraph({
@@ -673,12 +774,15 @@ export function FilterResponseGraph({
     liveCutoffHz,
     liveQ,
     liveHasActive,
+    spectrumFrame = null,
     onCutoffChange,
     onQChange,
     className,
 }: FilterResponseGraphProps) {
+    const viewportRef = useRef<HTMLDivElement | null>(null);
+    const spectrumCanvasRef = useRef<HTMLCanvasElement | null>(null);
     const surfaceRef = useRef<SVGSVGElement | null>(null);
-    const size = useResizeObserver(surfaceRef);
+    const size = useResizeObserver(viewportRef);
     const [activePointerId, setActivePointerId] = useState<number | null>(null);
     const baseModel = useMemo(() => createFilterResponseModel({
         mode: baseMode,
@@ -698,6 +802,42 @@ export function FilterResponseGraph({
         () => buildFilterResponsePath(liveModel.magnitudesDb, size.width, size.height),
         [liveModel.magnitudesDb, size.height, size.width],
     );
+    const spectrumFrequenciesHz = useMemo(() => buildFilterSpectrumDisplayFrequencies(), []);
+    const spectrumDisplay = useMemo(() => createFilterSpectrumDisplay({
+        frame: spectrumFrame,
+        frequenciesHz: spectrumFrequenciesHz,
+    }), [spectrumFrame, spectrumFrequenciesHz]);
+
+    useEffect(() => {
+        const canvas = spectrumCanvasRef.current;
+
+        if (!canvas) {
+            return;
+        }
+
+        let animationFrameID = window.requestAnimationFrame(() => {
+            if (!spectrumDisplay) {
+                    drawFilterSpectrumOverlay({
+                        canvas,
+                        width: size.width,
+                        height: size.height,
+                        magnitudesDb: spectrumFrequenciesHz.map(() => FILTER_SPECTRUM_MIN_DB),
+                    });
+                    return;
+                }
+
+            drawFilterSpectrumOverlay({
+                canvas,
+                width: size.width,
+                height: size.height,
+                magnitudesDb: spectrumDisplay.displayMagnitudesDb,
+            });
+        });
+
+        return () => {
+            window.cancelAnimationFrame(animationFrameID);
+        };
+    }, [size.height, size.width, spectrumDisplay, spectrumFrequenciesHz]);
 
     const applyPointerPosition = (clientX: number, clientY: number) => {
         const element = surfaceRef.current;
@@ -729,67 +869,90 @@ export function FilterResponseGraph({
             peakIndex: liveModel.peakIndex,
             minIndex: liveModel.minIndex,
         },
-    }), [baseModel, liveHasActive, liveModel]);
+        spectrum: spectrumDisplay ? {
+            hasSpectrum: true,
+            sampleRateHz: spectrumDisplay.sampleRateHz,
+            sourceBinCount: spectrumDisplay.sourceBinCount,
+            peakDisplayIndex: spectrumDisplay.peakDisplayIndex,
+            displayMagnitudesDb: spectrumDisplay.displayMagnitudesDb,
+        } : {
+            hasSpectrum: false,
+            sampleRateHz: null,
+            sourceBinCount: 0,
+            peakDisplayIndex: -1,
+            displayMagnitudesDb: [],
+        },
+    }), [baseModel, liveHasActive, liveModel, spectrumDisplay]);
 
     return (
         <div className={joinClasses("grid gap-2", className)}>
-            <svg
-                ref={surfaceRef}
-                data-role="filter-response-graph"
-                className="h-44 w-full touch-none overflow-hidden rounded-[20px] border border-white/8 bg-black/25"
-                viewBox={`0 0 ${size.width} ${size.height}`}
-                onPointerDown={(event) => {
-                    event.currentTarget.setPointerCapture(event.pointerId);
-                    setActivePointerId(event.pointerId);
-                    applyPointerPosition(event.clientX, event.clientY);
-                }}
-                onPointerMove={(event) => {
-                    if (activePointerId !== event.pointerId) {
-                        return;
-                    }
-                    applyPointerPosition(event.clientX, event.clientY);
-                }}
-                onPointerUp={(event) => {
-                    if (activePointerId === event.pointerId) {
-                        setActivePointerId(null);
-                    }
-                }}
-                onPointerCancel={(event) => {
-                    if (activePointerId === event.pointerId) {
-                        setActivePointerId(null);
-                    }
-                }}
+            <div
+                ref={viewportRef}
+                className="relative h-44 w-full overflow-hidden rounded-[20px] border border-white/8 bg-black/25"
             >
-                {[0.25, 0.5, 0.75].map((step) => (
-                    <line
-                        key={`filter-grid-h-${step}`}
-                        x1={basePath.plotLeft}
-                        x2={basePath.plotRight}
-                        y1={basePath.plotTop + (basePath.plotHeight * step)}
-                        y2={basePath.plotTop + (basePath.plotHeight * step)}
-                        stroke="rgba(255,255,255,0.08)"
-                        strokeWidth="1"
-                    />
-                ))}
-                {[0.25, 0.5, 0.75].map((step) => (
-                    <line
-                        key={`filter-grid-v-${step}`}
-                        y1={basePath.plotTop}
-                        y2={basePath.plotBottom}
-                        x1={basePath.plotLeft + (basePath.plotWidth * step)}
-                        x2={basePath.plotLeft + (basePath.plotWidth * step)}
-                        stroke="rgba(255,255,255,0.06)"
-                        strokeWidth="1"
-                    />
-                ))}
-                <path d={basePath.path} fill="none" stroke="rgba(123, 197, 255, 0.46)" strokeWidth="2" />
-                <path
-                    d={livePath.path}
-                    fill="none"
-                    stroke={liveHasActive ? "rgba(94, 215, 255, 0.98)" : "rgba(94, 215, 255, 0.72)"}
-                    strokeWidth={liveHasActive ? "3" : "2"}
+                <canvas
+                    ref={spectrumCanvasRef}
+                    data-role="filter-spectrum-canvas"
+                    className="pointer-events-none absolute inset-0 h-full w-full"
                 />
-            </svg>
+                <svg
+                    ref={surfaceRef}
+                    data-role="filter-response-graph"
+                    className="absolute inset-0 h-full w-full touch-none overflow-hidden"
+                    viewBox={`0 0 ${size.width} ${size.height}`}
+                    onPointerDown={(event) => {
+                        event.currentTarget.setPointerCapture(event.pointerId);
+                        setActivePointerId(event.pointerId);
+                        applyPointerPosition(event.clientX, event.clientY);
+                    }}
+                    onPointerMove={(event) => {
+                        if (activePointerId !== event.pointerId) {
+                            return;
+                        }
+                        applyPointerPosition(event.clientX, event.clientY);
+                    }}
+                    onPointerUp={(event) => {
+                        if (activePointerId === event.pointerId) {
+                            setActivePointerId(null);
+                        }
+                    }}
+                    onPointerCancel={(event) => {
+                        if (activePointerId === event.pointerId) {
+                            setActivePointerId(null);
+                        }
+                    }}
+                >
+                    {[0.25, 0.5, 0.75].map((step) => (
+                        <line
+                            key={`filter-grid-h-${step}`}
+                            x1={basePath.plotLeft}
+                            x2={basePath.plotRight}
+                            y1={basePath.plotTop + (basePath.plotHeight * step)}
+                            y2={basePath.plotTop + (basePath.plotHeight * step)}
+                            stroke="rgba(255,255,255,0.08)"
+                            strokeWidth="1"
+                        />
+                    ))}
+                    {[0.25, 0.5, 0.75].map((step) => (
+                        <line
+                            key={`filter-grid-v-${step}`}
+                            y1={basePath.plotTop}
+                            y2={basePath.plotBottom}
+                            x1={basePath.plotLeft + (basePath.plotWidth * step)}
+                            x2={basePath.plotLeft + (basePath.plotWidth * step)}
+                            stroke="rgba(255,255,255,0.06)"
+                            strokeWidth="1"
+                        />
+                    ))}
+                    <path d={basePath.path} fill="none" stroke="rgba(123, 197, 255, 0.46)" strokeWidth="2" />
+                    <path
+                        d={livePath.path}
+                        fill="none"
+                        stroke={liveHasActive ? "rgba(94, 215, 255, 0.98)" : "rgba(94, 215, 255, 0.72)"}
+                        strokeWidth={liveHasActive ? "3" : "2"}
+                    />
+                </svg>
+            </div>
             <pre data-role="filter-graph-debug" className="hidden">
                 {JSON.stringify(debugState)}
             </pre>

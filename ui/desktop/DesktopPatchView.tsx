@@ -87,6 +87,10 @@ type FilterSectionProps = {
         cutoffHz: number;
         q: number;
     };
+    observedFilterSpectrum: {
+        sampleRateHz: number;
+        magnitudes: number[];
+    } | null;
 };
 
 type MsegEditorModalProps = {
@@ -252,6 +256,7 @@ function FilterSection({
     filterQ,
     filterMsegDepth,
     observedFilterState,
+    observedFilterSpectrum,
 }: FilterSectionProps) {
     const normalizedCutoff = clamp(
         (Math.log(Math.max(20, filterCutoff.value)) - Math.log(20)) / (Math.log(20_000) - Math.log(20)),
@@ -282,6 +287,7 @@ function FilterSection({
                 liveCutoffHz={observedFilterState.cutoffHz}
                 liveQ={observedFilterState.q}
                 liveHasActive={observedFilterState.hasActive}
+                spectrumFrame={observedFilterSpectrum}
                 onCutoffChange={(nextValue) => filterCutoff.commitValue(nextValue)}
                 onQChange={(nextValue) => filterQ.commitValue(nextValue)}
             />
@@ -594,6 +600,7 @@ function DesktopPatchViewBody() {
                     filterQ={synthView.filterQ}
                     filterMsegDepth={synthView.filterMsegDepth}
                     observedFilterState={synthView.observedFilterState}
+                    observedFilterSpectrum={synthView.observedFilterSpectrum}
                 />
 
                 <KeyboardSection

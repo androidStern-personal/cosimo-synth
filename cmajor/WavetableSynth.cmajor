@@ -929,6 +929,7 @@ graph WavetableSynth [[ main ]]
     output event wt::EffectiveWarpStateMonitor effectiveWarpState;
     output event wt::EffectiveFilterStateMonitor effectiveFilterState;
     output stream float32<2> audioOut;
+    output filterSpectrumAnalyzer.filterSpectrum;
 
     let voiceCount = 16;
 
@@ -936,6 +937,7 @@ graph WavetableSynth [[ main ]]
     node noteDispatcher = wt::NoteDispatcher (voiceCount);
     node sharedEngine = wt::SharedVoiceEngine (voiceCount);
     node trim = std::levels::ConstantGain (float32, 0.18f);
+    node filterSpectrumAnalyzer = wt::FilterSpectrumAnalyzer;
     node stereo = std::mixers::MonoToStereo (float32);
     node desiredTableMonitor = wt::DesiredTableMonitor;
     node runtimeStateCoordinator = wt::RuntimeStateCoordinator;
@@ -975,7 +977,7 @@ graph WavetableSynth [[ main ]]
         sharedEngine.effectiveWarpStateOut -> effectiveWarpState;
         sharedEngine.effectiveFilterStateOut -> effectiveFilterState;
         sharedEngine.out -> trim.in;
-        trim.out -> stereo.in;
+        trim.out -> stereo.in, filterSpectrumAnalyzer.in;
         stereo.out -> audioOut;
     }
 }

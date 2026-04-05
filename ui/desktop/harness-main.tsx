@@ -27,6 +27,7 @@ declare global {
             emitEffectiveWavetablePosition: (position: number, voiceGeneration?: number) => void;
             emitEffectiveWarpState: (nextState: Parameters<MockPatchConnection["emitEffectiveWarpState"]>[0]) => void;
             emitEffectiveFilterState: (nextState: Parameters<MockPatchConnection["emitEffectiveFilterState"]>[0]) => void;
+            emitFilterSpectrum: (nextState: Parameters<MockPatchConnection["emitFilterSpectrum"]>[0]) => void;
             setStoredStateValue: (key: string, value: unknown) => void;
         };
     }
@@ -166,6 +167,9 @@ try {
         },
         emitEffectiveFilterState: (nextState) => {
             patchConnection.emitEffectiveFilterState(nextState);
+        },
+        emitFilterSpectrum: (nextState) => {
+            patchConnection.emitFilterSpectrum(nextState);
         },
         setStoredStateValue: (key, value) => patchConnection.setStoredStateValue(key, value),
     };

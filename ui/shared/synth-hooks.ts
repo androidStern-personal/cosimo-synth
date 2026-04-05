@@ -42,6 +42,10 @@ import {
     type RuntimeTablePresentation,
 } from "./runtime-table-state";
 import {
+    normalizeFilterSpectrumMessage,
+    type FilterSpectrumFrame,
+} from "./filter-spectrum";
+import {
     useSynthInputRouter,
     type ArrowStepDirection,
     type SynthFocusBindings,
@@ -56,6 +60,7 @@ import {
 export const EFFECTIVE_WAVETABLE_POSITION_ENDPOINT_ID = "effectiveWavetablePosition";
 export const EFFECTIVE_WARP_STATE_ENDPOINT_ID = "effectiveWarpState";
 export const EFFECTIVE_FILTER_STATE_ENDPOINT_ID = "effectiveFilterState";
+export const FILTER_SPECTRUM_ENDPOINT_ID = "filterSpectrum";
 export const DISPLAY_SWIPE_THRESHOLD_PX = 2;
 export const MSEG_DRAG_THRESHOLD_PX = 8;
 const WAVETABLE_POSITION_ENDPOINT_ID = "wavetablePosition";
@@ -156,6 +161,7 @@ export type SynthPatchViewModel = {
     filterQ: PatchControlBinding<number>;
     filterMsegDepth: PatchControlBinding<number>;
     observedFilterState: EffectiveFilterState;
+    observedFilterSpectrum: FilterSpectrumFrame | null;
     observedWarpState: EffectiveWarpState;
     msegState: MsegState | null;
     handleSelectWavetable: (nextValue: number) => void;
@@ -324,6 +330,26 @@ export function useObservedFilterState({
         cutoffHz: Number(filterCutoff) || 1000,
         q: Number(filterQ) || 0.707107,
     };
+}
+
+export function useObservedFilterSpectrum() {
+    const message = usePatchEndpoint<unknown | null>(FILTER_SPECTRUM_ENDPOINT_ID, null);
+    const [observedState, setObservedState] = useState<FilterSpectrumFrame | null>(null);
+
+    useEffect(() => {
+        if (!message) {
+            return;
+        }
+
+        const normalizedState = normalizeFilterSpectrumMessage(message);
+        if (!normalizedState) {
+            return;
+        }
+
+        setObservedState(normalizedState);
+    }, [message]);
+
+    return observedState;
 }
 
 export function useObservedWarpState({
@@ -1030,6 +1056,7 @@ export function useSynthPatchViewModel({
         filterCutoff: filterCutoff.value,
         filterQ: filterQ.value,
     });
+    const observedFilterSpectrum = useObservedFilterSpectrum();
     const runtimePresentation = useMemo(
         () => resolveRuntimeTablePresentation(runtimeStateMessage, Number(wavetableSelect.value) || 0),
         [runtimeStateMessage, wavetableSelect.value],
@@ -1184,6 +1211,7 @@ export function useSynthPatchViewModel({
         filterQ,
         filterMsegDepth,
         observedFilterState,
+        observedFilterSpectrum,
         observedWarpState,
         msegState,
         handleSelectWavetable,

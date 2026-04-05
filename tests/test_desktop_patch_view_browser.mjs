@@ -1420,6 +1420,83 @@ test("desktop filter graph follows live effective filter state and falls back to
     }
 });
 
+test("desktop filter graph renders the live filter spectrum endpoint and ignores malformed spectrum updates", async () => {
+    const page = await openHarnessPage();
+
+    try {
+        await page.waitForFunction(() => {
+            const rendered = window.__COSIMO_DESKTOP_HARNESS__.getRenderedState();
+            return rendered.filterGraphState && rendered.filterGraphState.spectrum;
+        });
+
+        let renderedState = await getHarnessRenderedState(page);
+        assert.equal(renderedState.filterGraphState.spectrum.hasSpectrum, false);
+
+        await page.evaluate(() => {
+            const magnitudes = Array.from({ length: 64 }, (_, index) => (
+                index === 2 ? 12 : index === 3 ? 9 : 0.1
+            ));
+            window.__COSIMO_DESKTOP_HARNESS__.emitFilterSpectrum({
+                sampleRateHz: 44_100,
+                magnitudes,
+            });
+        });
+
+        await page.waitForFunction(() => {
+            const spectrum = window.__COSIMO_DESKTOP_HARNESS__.getRenderedState().filterGraphState?.spectrum;
+            return spectrum?.hasSpectrum === true
+                && Array.isArray(spectrum?.displayMagnitudesDb)
+                && spectrum.displayMagnitudesDb.length > 0;
+        });
+
+        renderedState = await getHarnessRenderedState(page);
+        const lowHeavySpectrum = renderedState.filterGraphState.spectrum;
+        assert.equal(lowHeavySpectrum.hasSpectrum, true);
+        assert.equal(lowHeavySpectrum.sourceBinCount, 64);
+        assert.ok(lowHeavySpectrum.displayMagnitudesDb.length > 100);
+        assert.ok(Math.max(...lowHeavySpectrum.displayMagnitudesDb) > Math.min(...lowHeavySpectrum.displayMagnitudesDb));
+        const previousDisplayMagnitudesDb = [...lowHeavySpectrum.displayMagnitudesDb];
+
+        await page.evaluate(() => {
+            window.__COSIMO_DESKTOP_HARNESS__.patchConnection.emitEndpoint("filterSpectrum", {
+                sampleRateHz: "broken",
+                magnitudes: [1, 2, 3, 4, 5, 6, 7, 8],
+            });
+        });
+        await page.waitForTimeout(50);
+
+        renderedState = await getHarnessRenderedState(page);
+        assert.deepEqual(renderedState.filterGraphState.spectrum, lowHeavySpectrum);
+
+        await page.evaluate(() => {
+            const magnitudes = Array.from({ length: 64 }, (_, index) => (
+                index === 60 ? 12 : index === 58 ? 9 : 0.1
+            ));
+            window.__COSIMO_DESKTOP_HARNESS__.emitFilterSpectrum({
+                sampleRateHz: 44_100,
+                magnitudes,
+            });
+        });
+
+        await page.waitForFunction((previousSpectrum) => {
+            const spectrum = window.__COSIMO_DESKTOP_HARNESS__.getRenderedState().filterGraphState?.spectrum;
+            if (!spectrum?.hasSpectrum) {
+                return false;
+            }
+
+            return JSON.stringify(spectrum.displayMagnitudesDb) !== JSON.stringify(previousSpectrum);
+        }, previousDisplayMagnitudesDb);
+
+        renderedState = await getHarnessRenderedState(page);
+        assert.notDeepEqual(
+            renderedState.filterGraphState.spectrum.displayMagnitudesDb,
+            previousDisplayMagnitudesDb,
+        );
+    } finally {
+        await page.close();
+    }
+});
+
 test("keyboard octave controls update the mounted keyboard root note and note routing", async () => {
     const page = await openHarnessPage();
 

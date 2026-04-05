@@ -17,6 +17,7 @@ const runtimeStateEndpointID = "runtimeState";
 const effectiveWavetablePositionEndpointID = "effectiveWavetablePosition";
 const effectiveWarpStateEndpointID = "effectiveWarpState";
 const effectiveFilterStateEndpointID = "effectiveFilterState";
+const filterSpectrumEndpointID = "filterSpectrum";
 const retryDesiredTableRequestEndpointID = "retryDesiredTableRequest";
 
 type ParameterListener = (value: unknown) => void;
@@ -581,6 +582,21 @@ export class MockPatchConnection implements PatchConnectionLike {
             mode,
             cutoffHz,
             q,
+        });
+    }
+
+    emitFilterSpectrum(
+        {
+            sampleRateHz = 44_100,
+            magnitudes = [],
+        }: {
+            sampleRateHz?: number;
+            magnitudes?: number[];
+        } = {},
+    ) {
+        this.emitEndpoint(filterSpectrumEndpointID, {
+            sampleRateHz,
+            magnitudes,
         });
     }
 
