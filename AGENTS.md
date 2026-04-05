@@ -38,3 +38,10 @@
 - The app bundle should contain:
 - `Cosimo Synth.app/assets/factory-bank-catalog.json`
 - `Cosimo Synth.app/assets/factory_sources/`
+
+## Desktop UI Loading
+
+- `WavetableSynth.cmajorpatch` must keep `view.src` set to `patch_gui/desktop/index.js`.
+- `patch_gui/desktop/index.js` is a stable loader. It must default to the local compiled bundle `./app.js` and must not be rewritten into a dev-server-only file by `ui/build.mjs`.
+- The standalone live dev app chooses `dev-server` mode by injecting `window.__COSIMO_DESKTOP_UI_SOURCE_MODE__` and `window.__COSIMO_DESKTOP_DEV_SERVER_ORIGIN__` from `tools/live_dev_plugin/Source/cmaj_PatchLoaderPlugin.cpp` before the loader runs.
+- `scripts/build_live_dev_plugin.sh` must build the normal UI artifacts, then pass `COSIMO_DESKTOP_UI_SOURCE_MODE` into CMake. If that mode is `dev-server`, the script must fail unless `http://127.0.0.1:5174/patch_gui/desktop/index.js` is reachable.

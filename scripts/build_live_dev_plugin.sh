@@ -5,6 +5,9 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cache_root="${COSIMO_DEV_CACHE:-$HOME/Library/Caches/cosimo-synth-dev}"
 build_dir="$repo_root/build/live-dev-plugin"
 patch_path="$repo_root/WavetableSynth.cmajorpatch"
+desktop_ui_source_mode="${COSIMO_DESKTOP_UI_SOURCE_MODE:-dev-server}"
+desktop_dev_server_origin="${COSIMO_DESKTOP_DEV_SERVER_ORIGIN:-http://127.0.0.1:5174}"
+desktop_dev_server_module_url="${desktop_dev_server_origin%/}/patch_gui/desktop/index.js"
 
 cmajor_version="$(cmaj version | awk '/Cmajor Version:/ { print $3; exit }')"
 
@@ -29,6 +32,18 @@ fi
 
 npm run ui:build
 uv run python "$repo_root/build_assets.py"
+
+if [[ "$desktop_ui_source_mode" != "compiled" && "$desktop_ui_source_mode" != "dev-server" ]]; then
+  printf 'Unsupported COSIMO_DESKTOP_UI_SOURCE_MODE value: %s\n' "$desktop_ui_source_mode" >&2
+  exit 1
+fi
+
+if [[ "$desktop_ui_source_mode" == "dev-server" ]]; then
+  if ! curl --fail --silent --show-error "$desktop_dev_server_module_url" >/dev/null; then
+    printf 'Desktop Vite dev server is not reachable at %s\n' "$desktop_dev_server_module_url" >&2
+    exit 1
+  fi
+fi
 
 mkdir -p "$cache_root"
 
@@ -70,6 +85,8 @@ cmake -S "$repo_root/tools/live_dev_plugin" \
       -B "$build_dir" \
       -DCMAKE_BUILD_TYPE=Release \
       -DCOSIMO_PATCH_PATH="$patch_path" \
+      -DCOSIMO_DESKTOP_UI_SOURCE_MODE="$desktop_ui_source_mode" \
+      -DCOSIMO_DESKTOP_DEV_SERVER_ORIGIN="$desktop_dev_server_origin" \
       -DCMAJOR_SOURCE_PATH="$cmajor_source_path" \
       -DJUCE_PATH="$juce_path"
 

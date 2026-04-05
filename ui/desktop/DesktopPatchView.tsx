@@ -170,7 +170,7 @@ function StatusHeader({ statusText }: HeaderProps) {
     return (
         <header className="flex items-center justify-between gap-4">
             <div className="rounded-full border border-white/8 bg-white/[0.03] px-4 py-2 text-[11px] uppercase tracking-[0.24em] text-blue-300/70">
-                Cosimo Synth
+                UPDATED COSIMO
             </div>
             <div className="rounded-full border border-white/8 bg-white/[0.04] px-4 py-2 text-right text-[11px] uppercase tracking-[0.16em] text-fuchsia-200/80">
                 {statusText}
