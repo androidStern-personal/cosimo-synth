@@ -104,6 +104,34 @@ export function serveStaticDirectory(urlPrefix, sourceRoot) {
     };
 }
 
+export function serveStaticFile({ urlPath, sourceFile, contentType = null }) {
+    const normalizedSourceFile = path.resolve(sourceFile);
+
+    return {
+        name: `cosimo-static-file-${urlPath.replaceAll("/", "-") || "root"}`,
+        configureServer(server) {
+            server.middlewares.use(async (request, response, next) => {
+                const requestPath = (request.url ?? "").split("?")[0];
+
+                if (requestPath !== urlPath) {
+                    next();
+                    return;
+                }
+
+                try {
+                    const file = await fs.readFile(normalizedSourceFile);
+                    response.statusCode = 200;
+                    response.setHeader("Access-Control-Allow-Origin", "*");
+                    response.setHeader("Content-Type", contentType ?? contentTypeFor(normalizedSourceFile));
+                    response.end(file);
+                } catch (error) {
+                    next(error);
+                }
+            });
+        },
+    };
+}
+
 export function servePatchModuleAlias({
     urlPath,
     sourceFile,

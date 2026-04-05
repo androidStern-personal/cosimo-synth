@@ -111,15 +111,15 @@ set(JUCE_ENABLE_MODULE_SOURCE_GROUPS ON)
 add_subdirectory("${JUCE_PATH}" juce)
 
 file(
-    GLOB_RECURSE COSIMO_PATCH_UI_FILES
-    CONFIGURE_DEPENDS
-    "${COSIMO_REPO_ROOT}/patch_gui/*"
-)
-file(
     GLOB_RECURSE COSIMO_REACT_UI_FILES
     CONFIGURE_DEPENDS
     "${COSIMO_REPO_ROOT}/ui/ios/*"
     "${COSIMO_REPO_ROOT}/ui/shared/*"
+)
+file(
+    GLOB_RECURSE COSIMO_WORKER_UI_FILES
+    CONFIGURE_DEPENDS
+    "${COSIMO_REPO_ROOT}/ui/worker/*"
 )
 file(
     GLOB_RECURSE COSIMO_FACTORY_SOURCE_FILES
@@ -163,10 +163,12 @@ add_custom_command(
         "${COSIMO_REPO_ROOT}/assets/factory-table-catalog.json"
         "${COSIMO_REPO_ROOT}/assets/factory-bank-catalog.json"
         "${COSIMO_REPO_ROOT}/ui/build.mjs"
+        "${COSIMO_REPO_ROOT}/ui/vite.shared.mjs"
+        "${COSIMO_REPO_ROOT}/ui/vite.worker.config.mjs"
         "${COSIMO_REPO_ROOT}/ios_auv3/vite.config.mjs"
         ${COSIMO_FACTORY_SOURCE_FILES}
-        ${COSIMO_PATCH_UI_FILES}
         ${COSIMO_REACT_UI_FILES}
+        ${COSIMO_WORKER_UI_FILES}
         ${COSIMO_CMAJOR_WEB_FILES}
     COMMENT
         "Generating the raw Cmajor performer source for the iOS app and AUv3 extension"
@@ -253,9 +255,28 @@ foreach(bundle_target CosimoSynth_Standalone CosimoSynth_AUv3)
             "${CMAKE_COMMAND}" -E rm -rf
             "$<TARGET_FILE_DIR:${bundle_target}>/patch_gui"
         COMMAND
-            "${CMAKE_COMMAND}" -E copy_directory
-            "${COSIMO_REPO_ROOT}/patch_gui"
+            "${CMAKE_COMMAND}" -E make_directory
             "$<TARGET_FILE_DIR:${bundle_target}>/patch_gui"
+        COMMAND
+            "${CMAKE_COMMAND}" -E copy_if_different
+            "${COSIMO_REPO_ROOT}/patch_gui/index.ios.html"
+            "$<TARGET_FILE_DIR:${bundle_target}>/patch_gui/index.ios.html"
+        COMMAND
+            "${CMAKE_COMMAND}" -E copy_if_different
+            "${COSIMO_REPO_ROOT}/patch_gui/index.ios-host.js"
+            "$<TARGET_FILE_DIR:${bundle_target}>/patch_gui/index.ios-host.js"
+        COMMAND
+            "${CMAKE_COMMAND}" -E copy_if_different
+            "${COSIMO_REPO_ROOT}/patch_gui/index.ios.js"
+            "$<TARGET_FILE_DIR:${bundle_target}>/patch_gui/index.ios.js"
+        COMMAND
+            "${CMAKE_COMMAND}" -E copy_if_different
+            "${COSIMO_REPO_ROOT}/patch_gui/resource-client.js"
+            "$<TARGET_FILE_DIR:${bundle_target}>/patch_gui/resource-client.js"
+        COMMAND
+            "${CMAKE_COMMAND}" -E copy_if_different
+            "${COSIMO_REPO_ROOT}/patch_gui/wavetable-worker.js"
+            "$<TARGET_FILE_DIR:${bundle_target}>/patch_gui/wavetable-worker.js"
         COMMAND
             "${CMAKE_COMMAND}" -E rm -rf
             "$<TARGET_FILE_DIR:${bundle_target}>/cmaj_api"
@@ -279,7 +300,7 @@ foreach(bundle_target CosimoSynth_Standalone CosimoSynth_AUv3)
             "${COSIMO_RUNTIME_PATCH_FILE}"
             "$<TARGET_FILE_DIR:${bundle_target}>/WavetableSynth.iOS.cmajorpatch"
         COMMENT
-            "Copying the runtime patch, UI bundle, Cmajor web API, and factory assets into ${bundle_target}"
+            "Copying the runtime patch, iPhone UI runtime files, Cmajor web API, and factory assets into ${bundle_target}"
         VERBATIM
     )
 endforeach()

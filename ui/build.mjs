@@ -7,6 +7,11 @@ import { build, loadConfigFromFile } from "vite";
 
 const thisDirectory = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(thisDirectory, "..");
+const buildTargets = new Set(process.argv.slice(2));
+
+function shouldBuild(targetName) {
+    return buildTargets.size === 0 || buildTargets.has(targetName) || buildTargets.has("--all");
+}
 
 async function writeTextFileIfChanged(filePath, contents) {
     const normalizedContents = contents.replace(/\r\n/g, "\n");
@@ -25,6 +30,13 @@ async function writeTextFileIfChanged(filePath, contents) {
 
     await fs.mkdir(path.dirname(filePath), { recursive: true });
     await fs.writeFile(filePath, normalizedContents, "utf8");
+}
+
+async function copyTextFileIfChanged(sourceRelativePath, outputRelativePath) {
+    const sourceFile = path.join(repoRoot, sourceRelativePath);
+    const outputFile = path.join(repoRoot, outputRelativePath);
+    const sourceText = await fs.readFile(sourceFile, "utf8");
+    await writeTextFileIfChanged(outputFile, sourceText);
 }
 
 async function emitGeneratedPatchGuiModule(sourceRelativePath, outputRelativePath) {
@@ -83,10 +95,20 @@ async function runBuild(configRelativePath) {
     await build(loadedConfig.config);
 }
 
-await emitGeneratedPatchGuiModule("ui/shared/resource-client.ts", "patch_gui/resource-client.js");
-await emitGeneratedPatchGuiModule("ui/shared/mseg.ts", "patch_gui/mseg.js");
-await emitGeneratedPatchGuiModule("ui/shared/mseg-controller.ts", "patch_gui/mseg-controller.js");
-await runBuild("./vite.desktop.config.mjs");
-await emitGeneratedPatchGuiModule("ui/desktop/standalone-loader.js", "patch_gui/desktop/index.js");
-await runBuild("../ios_auv3/vite.config.mjs");
-await runBuild("./vite.worker.config.mjs");
+if (shouldBuild("--desktop") || shouldBuild("--ios")) {
+    await emitGeneratedPatchGuiModule("ui/shared/resource-client.ts", "patch_gui/resource-client.js");
+    await emitGeneratedPatchGuiModule("ui/shared/mseg.ts", "patch_gui/mseg.js");
+    await emitGeneratedPatchGuiModule("ui/shared/mseg-controller.ts", "patch_gui/mseg-controller.js");
+}
+
+if (shouldBuild("--ios")) {
+    await copyTextFileIfChanged("ui/ios/runtime-shell.html", "patch_gui/index.ios.html");
+    await emitGeneratedPatchGuiModule("ui/ios/runtime-host.js", "patch_gui/index.ios-host.js");
+    await runBuild("../ios_auv3/vite.config.mjs");
+    await runBuild("./vite.worker.config.mjs");
+}
+
+if (shouldBuild("--desktop")) {
+    await runBuild("./vite.desktop.config.mjs");
+    await emitGeneratedPatchGuiModule("ui/desktop/standalone-loader.js", "patch_gui/desktop/index.js");
+}

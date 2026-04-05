@@ -9,11 +9,14 @@ import {
     createViteRepoContext,
     serveHtmlEntry,
     servePatchModuleAlias,
+    serveStaticFile,
     serveStaticDirectory,
 } from "../ui/vite.shared.mjs";
 
 const { repoRoot, cmajorApiRoot } = createViteRepoContext(import.meta.url);
 const iosPatchViewSource = path.join(repoRoot, "ui", "ios", "patch-view-entry.tsx");
+const iosHostPageSource = path.join(repoRoot, "ui", "ios", "runtime-shell.html");
+const iosHostRuntimeSource = path.join(repoRoot, "ui", "ios", "runtime-host.js");
 const reactRefreshPreamble = createReactRefreshPreamble();
 
 export default defineConfig(({ command }) => ({
@@ -28,7 +31,7 @@ export default defineConfig(({ command }) => ({
         tailwindcss(),
         serveHtmlEntry({
             urlPath: "/patch_gui/index.ios.html",
-            sourceFile: path.join(repoRoot, "patch_gui", "index.ios.html"),
+            sourceFile: iosHostPageSource,
             headInjection: '<script type="module" src="/@vite/client"></script>',
         }),
         servePatchModuleAlias({
@@ -38,6 +41,11 @@ export default defineConfig(({ command }) => ({
             moduleBindingName: "iosPatchViewModule",
             createPatchViewExportName: "createIOSPatchView",
             reactRefreshPreamble,
+        }),
+        serveStaticFile({
+            urlPath: "/patch_gui/index.ios-host.js",
+            sourceFile: iosHostRuntimeSource,
+            contentType: "text/javascript; charset=utf-8",
         }),
         serveStaticDirectory("/patch_gui", path.join(repoRoot, "patch_gui")),
         serveStaticDirectory("/cmaj_api", cmajorApiRoot),

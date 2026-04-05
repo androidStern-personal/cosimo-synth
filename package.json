@@ -10,7 +10,7 @@
     "ui:worker:build": "vite build --config ui/vite.worker.config.mjs",
     "ui:build": "node ui/build.mjs",
     "ios:ui:dev": "vite --config ios_auv3/vite.config.mjs",
-    "ios:ui:build": "vite build --config ios_auv3/vite.config.mjs",
+    "ios:ui:build": "node ui/build.mjs --ios",
     "ios:project": "./scripts/generate_ios_auv3_xcode_project.sh build/ios_device_run",
     "test:desktop:ui": "node --test tests/test_desktop_patch_view_browser.mjs",
     "test:shared:hooks": "node --test tests/test_shared_synth_hooks_browser.mjs",

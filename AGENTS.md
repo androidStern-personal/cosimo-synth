@@ -11,7 +11,16 @@
 ## iPhone UI Dev Server
 
 - The only iPhone Vite dev server to use is `npm run ios:ui:dev`.
-- `ios_auv3/vite.config.mjs` is the single iPhone Vite config. It must serve both `patch_gui/index.ios.html` and the live React module at `patch_gui/index.ios.js`.
+- The canonical iPhone frontend build command is `npm run ios:ui:build`.
+- `ios_auv3/vite.config.mjs` is the single iPhone Vite config. It must serve `patch_gui/index.ios.html`, `patch_gui/index.ios-host.js`, and the live React module at `patch_gui/index.ios.js`.
+- `ui/ios/runtime-shell.html` and `ui/ios/runtime-host.js` are the iPhone host source files. `ui/build.mjs --ios` generates `patch_gui/index.ios.html` and `patch_gui/index.ios-host.js` from them.
+- The iPhone app bundle must only copy these `patch_gui` runtime files:
+- `index.ios.html`
+- `index.ios-host.js`
+- `index.ios.js`
+- `resource-client.js`
+- `wavetable-worker.js`
+- Do not copy the whole `patch_gui` directory into the iPhone app or AUv3 bundle.
 
 ## iPhone Signing
 

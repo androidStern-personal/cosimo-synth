@@ -39,6 +39,8 @@ IOS_SHARED_LIBRARY_ENTITLEMENTS = REPO_ROOT / "ios_auv3" / "Entitlements" / "Cos
 IOS_PLUGIN_MAIN = REPO_ROOT / "ios_auv3" / "Source" / "CosimoPluginMain.cpp"
 IOS_PLUGIN_SHELL = REPO_ROOT / "ios_auv3" / "Source" / "CosimoCmajorPlugin.h"
 IOS_VITE_CONFIG = REPO_ROOT / "ios_auv3" / "vite.config.mjs"
+IOS_HOST_SOURCE_HTML = REPO_ROOT / "ui" / "ios" / "runtime-shell.html"
+IOS_HOST_SOURCE_RUNTIME = REPO_ROOT / "ui" / "ios" / "runtime-host.js"
 IOS_PATCH_HOST_HTML = REPO_ROOT / "patch_gui" / "index.ios.html"
 IOS_PATCH_HOST_RUNTIME = REPO_ROOT / "patch_gui" / "index.ios-host.js"
 PACKAGE_JSON = REPO_ROOT / "package.json"
@@ -106,7 +108,18 @@ def _stage_bundle_root(destination: Path) -> None:
     shutil.copy2(REPO_ROOT / "WavetableSynth.cmajorpatch", destination / "WavetableSynth.cmajorpatch")
     shutil.copy2(REPO_ROOT / "WavetableSynth.iOS.cmajorpatch", destination / "WavetableSynth.iOS.cmajorpatch")
     shutil.copytree(REPO_ROOT / "assets", destination / "assets")
-    shutil.copytree(REPO_ROOT / "patch_gui", destination / "patch_gui")
+    patch_gui_destination = destination / "patch_gui"
+    patch_gui_destination.mkdir(parents=True, exist_ok=True)
+
+    for relative_path in (
+        "index.ios.html",
+        "index.ios-host.js",
+        "index.ios.js",
+        "resource-client.js",
+        "wavetable-worker.js",
+    ):
+        shutil.copy2(REPO_ROOT / "patch_gui" / relative_path, patch_gui_destination / relative_path)
+
     shutil.copytree(_cmajor_web_api_root(), destination / "cmaj_api")
 
 
@@ -750,16 +763,26 @@ def test_ios_auv3_cmake_declares_the_repo_owned_shell_and_bundle_copy_contract()
     assert "CosimoSharedWavetableLibrary.mm" in cmake_text
     assert "COSIMO_CMAJOR_RUNTIME_DIR" in cmake_text
     assert "COSIMO_REACT_UI_FILES" in cmake_text
+    assert "COSIMO_WORKER_UI_FILES" in cmake_text
     assert '${COSIMO_REPO_ROOT}/ui/ios/*' in cmake_text
     assert '${COSIMO_REPO_ROOT}/ui/shared/*' in cmake_text
+    assert '${COSIMO_REPO_ROOT}/ui/worker/*' in cmake_text
     assert '${COSIMO_REPO_ROOT}/package.json' in cmake_text
     assert '${COSIMO_REPO_ROOT}/ui/build.mjs' in cmake_text
+    assert '${COSIMO_REPO_ROOT}/ui/vite.shared.mjs' in cmake_text
+    assert '${COSIMO_REPO_ROOT}/ui/vite.worker.config.mjs' in cmake_text
     assert '${COSIMO_REPO_ROOT}/ios_auv3/vite.config.mjs' in cmake_text
     assert "copy_directory" in cmake_text
     assert "$<TARGET_FILE_DIR:${bundle_target}>/patch_gui" in cmake_text
     assert "$<TARGET_FILE_DIR:${bundle_target}>/cmaj_api" in cmake_text
     assert "$<TARGET_FILE_DIR:${bundle_target}>/assets" in cmake_text
     assert "$<TARGET_FILE_DIR:${bundle_target}>/WavetableSynth.iOS.cmajorpatch" in cmake_text
+    assert "${COSIMO_REPO_ROOT}/patch_gui/index.ios.html" in cmake_text
+    assert "${COSIMO_REPO_ROOT}/patch_gui/index.ios-host.js" in cmake_text
+    assert "${COSIMO_REPO_ROOT}/patch_gui/index.ios.js" in cmake_text
+    assert "${COSIMO_REPO_ROOT}/patch_gui/resource-client.js" in cmake_text
+    assert "${COSIMO_REPO_ROOT}/patch_gui/wavetable-worker.js" in cmake_text
+    assert '"${CMAKE_COMMAND}" -E copy_directory\n            "${COSIMO_REPO_ROOT}/patch_gui"' not in cmake_text
     assert "Vendor/cmajor" not in cmake_text
     assert "COSIMO_REPO_ROOT_PATH" not in cmake_text
     assert "COSIMO_ENABLE_LIVE_REPO_RESOURCES" not in cmake_text
@@ -770,8 +793,8 @@ def test_ios_auv3_cmake_declares_the_repo_owned_shell_and_bundle_copy_contract()
 def test_repo_owned_patch_shell_keeps_the_bridge_entrypoints_the_ui_depends_on() -> None:
     plugin_main = IOS_PLUGIN_MAIN.read_text(encoding="utf-8")
     plugin_shell = IOS_PLUGIN_SHELL.read_text(encoding="utf-8")
-    host_html = IOS_PATCH_HOST_HTML.read_text(encoding="utf-8")
-    host_runtime = IOS_PATCH_HOST_RUNTIME.read_text(encoding="utf-8")
+    host_html = IOS_HOST_SOURCE_HTML.read_text(encoding="utf-8")
+    host_runtime = IOS_HOST_SOURCE_RUNTIME.read_text(encoding="utf-8")
 
     assert '#include "CosimoCmajorPlugin.h"' in plugin_main
     assert '#include "cmajor/helpers/cmaj_JUCEPlugin.h"' not in plugin_main
@@ -802,7 +825,7 @@ def test_ios_ui_dev_server_configuration_exists() -> None:
     vite_config = IOS_VITE_CONFIG.read_text(encoding="utf-8")
 
     assert package_json["scripts"]["ios:ui:dev"] == "vite --config ios_auv3/vite.config.mjs"
-    assert package_json["scripts"]["ios:ui:build"] == "vite build --config ios_auv3/vite.config.mjs"
+    assert package_json["scripts"]["ios:ui:build"] == "node ui/build.mjs --ios"
     assert package_json["scripts"]["ios:project"] == "./scripts/generate_ios_auv3_xcode_project.sh build/ios_device_run"
     assert package_json["scripts"]["desktop:native:build"] == "./scripts/build_desktop_native.sh"
     assert package_json["scripts"]["desktop:native:dev"] == "COSIMO_DESKTOP_UI_SOURCE_MODE=dev-server COSIMO_DESKTOP_DEV_SERVER_ORIGIN=http://127.0.0.1:5174 ./scripts/build_desktop_native.sh"
@@ -812,6 +835,7 @@ def test_ios_ui_dev_server_configuration_exists() -> None:
     assert "ensure_cmajor_runtime.py" in shared_vite_helpers
     assert "export function createViteRepoContext" in shared_vite_helpers
     assert "export function serveStaticDirectory" in shared_vite_helpers
+    assert "export function serveStaticFile" in shared_vite_helpers
     assert "export function servePatchModuleAlias" in shared_vite_helpers
     assert "export function serveHtmlEntry" in shared_vite_helpers
     assert 'from "../ui/vite.shared.mjs"' in vite_config
@@ -819,6 +843,9 @@ def test_ios_ui_dev_server_configuration_exists() -> None:
     assert "tailwindcss()" in vite_config
     assert 'createViteRepoContext(import.meta.url)' in vite_config
     assert 'urlPath: "/patch_gui/index.ios.html"' in vite_config
+    assert 'sourceFile: iosHostPageSource' in vite_config
+    assert 'urlPath: "/patch_gui/index.ios-host.js"' in vite_config
+    assert 'sourceFile: iosHostRuntimeSource' in vite_config
     assert 'urlPath: "/patch_gui/index.ios.js"' in vite_config
     assert 'serveStaticDirectory("/patch_gui", path.join(repoRoot, "patch_gui"))' in vite_config
     assert 'serveStaticDirectory("/cmaj_api", cmajorApiRoot)' in vite_config
@@ -1141,13 +1168,15 @@ def test_built_app_and_extension_bundles_include_runtime_files(
         assert (bundle_root / "patch_gui" / "index.ios.html").is_file()
         assert (bundle_root / "patch_gui" / "index.ios-host.js").is_file()
         assert (bundle_root / "patch_gui" / "index.ios.js").is_file()
-        assert (bundle_root / "patch_gui" / "index.js").is_file()
+        assert (bundle_root / "patch_gui" / "resource-client.js").is_file()
+        assert (bundle_root / "patch_gui" / "wavetable-worker.js").is_file()
         assert (bundle_root / "cmaj_api" / "cmaj-patch-view.js").is_file()
         assert (bundle_root / "cmaj_api" / "cmaj-patch-connection.js").is_file()
         assert (bundle_root / "assets" / "factory-bank-catalog.json").is_file()
         assert (bundle_root / "assets" / "factory_sources" / "display-demo.wav").is_file()
         assert (bundle_root / "WavetableSynth.iOS.cmajorpatch").is_file()
         assert (bundle_root / "WavetableSynth.cmajorpatch").is_file()
+        assert not (bundle_root / "patch_gui" / "desktop").exists()
 
 
 def test_actual_built_bundle_roots_load_the_runtime_patch_and_ui_files(
