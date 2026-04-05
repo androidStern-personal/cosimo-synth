@@ -754,7 +754,7 @@ def test_ios_auv3_cmake_declares_the_repo_owned_shell_and_bundle_copy_contract()
     assert '${COSIMO_REPO_ROOT}/ui/shared/*' in cmake_text
     assert '${COSIMO_REPO_ROOT}/package.json' in cmake_text
     assert '${COSIMO_REPO_ROOT}/ui/build.mjs' in cmake_text
-    assert '${COSIMO_REPO_ROOT}/ui/vite.ios.config.mjs' in cmake_text
+    assert '${COSIMO_REPO_ROOT}/ios_auv3/vite.config.mjs' in cmake_text
     assert "copy_directory" in cmake_text
     assert "$<TARGET_FILE_DIR:${bundle_target}>/patch_gui" in cmake_text
     assert "$<TARGET_FILE_DIR:${bundle_target}>/cmaj_api" in cmake_text
@@ -798,16 +798,35 @@ def test_repo_owned_patch_shell_keeps_the_bridge_entrypoints_the_ui_depends_on()
 
 def test_ios_ui_dev_server_configuration_exists() -> None:
     package_json = json.loads(PACKAGE_JSON.read_text(encoding="utf-8"))
+    shared_vite_helpers = (REPO_ROOT / "ui" / "vite.shared.mjs").read_text(encoding="utf-8")
     vite_config = IOS_VITE_CONFIG.read_text(encoding="utf-8")
 
     assert package_json["scripts"]["ios:ui:dev"] == "vite --config ios_auv3/vite.config.mjs"
+    assert package_json["scripts"]["ios:ui:build"] == "vite build --config ios_auv3/vite.config.mjs"
+    assert package_json["scripts"]["ios:project"] == "./scripts/generate_ios_auv3_xcode_project.sh build/ios_device_run"
+    assert package_json["scripts"]["desktop:native:build"] == "./scripts/build_desktop_native.sh"
+    assert package_json["scripts"]["desktop:native:dev"] == "COSIMO_DESKTOP_UI_SOURCE_MODE=dev-server COSIMO_DESKTOP_DEV_SERVER_ORIGIN=http://127.0.0.1:5174 ./scripts/build_desktop_native.sh"
+    assert "ui:ios:dev" not in package_json["scripts"]
+    assert "ui:ios:build" not in package_json["scripts"]
     assert "vite" in package_json["devDependencies"]
-    assert "ensure_cmajor_runtime.py" in vite_config
+    assert "ensure_cmajor_runtime.py" in shared_vite_helpers
+    assert "export function createViteRepoContext" in shared_vite_helpers
+    assert "export function serveStaticDirectory" in shared_vite_helpers
+    assert "export function servePatchModuleAlias" in shared_vite_helpers
+    assert "export function serveHtmlEntry" in shared_vite_helpers
+    assert 'from "../ui/vite.shared.mjs"' in vite_config
+    assert "react()" in vite_config
+    assert "tailwindcss()" in vite_config
+    assert 'createViteRepoContext(import.meta.url)' in vite_config
+    assert 'urlPath: "/patch_gui/index.ios.html"' in vite_config
+    assert 'urlPath: "/patch_gui/index.ios.js"' in vite_config
+    assert 'serveStaticDirectory("/patch_gui", path.join(repoRoot, "patch_gui"))' in vite_config
     assert 'serveStaticDirectory("/cmaj_api", cmajorApiRoot)' in vite_config
     assert 'host: "0.0.0.0"' in vite_config
     assert "strictPort: true" in vite_config
     assert "cors: true" in vite_config
     assert "port: 5173" in vite_config
+    assert 'fileName: () => "index.ios.js"' in vite_config
     assert "Vendor/cmajor" not in vite_config
 
 

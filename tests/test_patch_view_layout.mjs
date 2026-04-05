@@ -216,36 +216,55 @@ test("iOS patch manifest keeps the synth graph but switches to the mobile editor
 
 test("desktop and iPhone React UI tooling are wired for Vite dev and build loops", async () => {
     const packageJson = JSON.parse(await fs.readFile(path.join(repoRoot, "package.json"), "utf8"));
+    const sharedViteHelpers = await fs.readFile(path.join(repoRoot, "ui", "vite.shared.mjs"), "utf8");
     const viteConfig = await fs.readFile(path.join(repoRoot, "ui", "vite.desktop.config.mjs"), "utf8");
-    const iosViteConfig = await fs.readFile(path.join(repoRoot, "ui", "vite.ios.config.mjs"), "utf8");
+    const iosViteConfig = await fs.readFile(path.join(repoRoot, "ios_auv3", "vite.config.mjs"), "utf8");
     const workerViteConfig = await fs.readFile(path.join(repoRoot, "ui", "vite.worker.config.mjs"), "utf8");
     const buildScript = await fs.readFile(path.join(repoRoot, "ui", "build.mjs"), "utf8");
 
     assert.equal(packageJson.scripts["ui:desktop:dev"], "vite --config ui/vite.desktop.config.mjs");
     assert.equal(packageJson.scripts["ui:desktop:build"], "vite build --config ui/vite.desktop.config.mjs");
-    assert.equal(packageJson.scripts["ui:ios:dev"], "vite --config ui/vite.ios.config.mjs");
-    assert.equal(packageJson.scripts["ui:ios:build"], "vite build --config ui/vite.ios.config.mjs");
+    assert.equal(packageJson.scripts["desktop:native:build"], "./scripts/build_desktop_native.sh");
+    assert.equal(
+        packageJson.scripts["desktop:native:dev"],
+        "COSIMO_DESKTOP_UI_SOURCE_MODE=dev-server COSIMO_DESKTOP_DEV_SERVER_ORIGIN=http://127.0.0.1:5174 ./scripts/build_desktop_native.sh",
+    );
+    assert.equal("ui:ios:dev" in packageJson.scripts, false);
+    assert.equal("ui:ios:build" in packageJson.scripts, false);
+    assert.equal(packageJson.scripts["ios:ui:dev"], "vite --config ios_auv3/vite.config.mjs");
+    assert.equal(packageJson.scripts["ios:ui:build"], "vite build --config ios_auv3/vite.config.mjs");
+    assert.equal(packageJson.scripts["ios:project"], "./scripts/generate_ios_auv3_xcode_project.sh build/ios_device_run");
     assert.equal(packageJson.scripts["ui:worker:build"], "vite build --config ui/vite.worker.config.mjs");
     assert.equal(packageJson.scripts["ui:build"], "node ui/build.mjs");
-    assert.match(viteConfig, /ensure_cmajor_runtime\.py/);
-    assert.match(viteConfig, /serveHtmlEntry\("\/", path\.join\(repoRoot,\s*"ui",\s*"desktop",\s*"index\.html"\)\)/);
-    assert.match(viteConfig, /serveHtmlEntry\("\/ui\/desktop\/index\.html", path\.join\(repoRoot,\s*"ui",\s*"desktop",\s*"index\.html"\)\)/);
-    assert.match(viteConfig, /servePatchModuleAlias\("\/patch_gui\/desktop\/index\.js"/);
+    assert.match(sharedViteHelpers, /ensure_cmajor_runtime\.py/);
+    assert.match(sharedViteHelpers, /export function createViteRepoContext/);
+    assert.match(sharedViteHelpers, /export function serveStaticDirectory/);
+    assert.match(sharedViteHelpers, /export function servePatchModuleAlias/);
+    assert.match(sharedViteHelpers, /export function serveHtmlEntry/);
+    assert.match(viteConfig, /from "\.\/vite\.shared\.mjs"/);
+    assert.match(viteConfig, /createViteRepoContext\(import\.meta\.url\)/);
+    assert.match(viteConfig, /serveHtmlEntry\(\{/);
+    assert.match(viteConfig, /urlPath:\s*"\/"/);
+    assert.match(viteConfig, /urlPath:\s*"\/ui\/desktop\/index\.html"/);
+    assert.match(viteConfig, /urlPath:\s*"\/tests\/helpers\/module_test_shell\.html"/);
+    assert.match(viteConfig, /urlPath:\s*"\/patch_gui\/desktop\/index\.js"/);
     assert.match(viteConfig, /serveStaticDirectory\("\/cmaj_api", cmajorApiRoot\)/);
     assert.doesNotMatch(viteConfig, /Vendor\/cmajor/);
     assert.match(viteConfig, /port:\s*5174/);
     assert.match(viteConfig, /outDir:\s*path\.join\(repoRoot,\s*"patch_gui",\s*"desktop"\)/);
     assert.match(viteConfig, /fileName:\s*\(\)\s*=>\s*"app\.js"/);
-    assert.match(iosViteConfig, /ensure_cmajor_runtime\.py/);
-    assert.match(iosViteConfig, /serveHtmlEntry\("\/", path\.join\(repoRoot,\s*"ui",\s*"ios",\s*"index\.html"\)\)/);
-    assert.match(iosViteConfig, /serveHtmlEntry\("\/ui\/ios\/index\.html", path\.join\(repoRoot,\s*"ui",\s*"ios",\s*"index\.html"\)\)/);
-    assert.match(iosViteConfig, /servePatchModuleAlias\("\/patch_gui\/index\.ios\.js"/);
+    assert.match(iosViteConfig, /from "\.\.\/ui\/vite\.shared\.mjs"/);
+    assert.match(iosViteConfig, /createViteRepoContext\(import\.meta\.url\)/);
+    assert.match(iosViteConfig, /react\(\)/);
+    assert.match(iosViteConfig, /tailwindcss\(\)/);
+    assert.match(iosViteConfig, /urlPath:\s*"\/patch_gui\/index\.ios\.html"/);
+    assert.match(iosViteConfig, /urlPath:\s*"\/patch_gui\/index\.ios\.js"/);
     assert.match(iosViteConfig, /serveStaticDirectory\("\/patch_gui", path\.join\(repoRoot,\s*"patch_gui"\)\)/);
     assert.match(iosViteConfig, /serveStaticDirectory\("\/cmaj_api", cmajorApiRoot\)/);
-    assert.match(iosViteConfig, /port:\s*5175/);
+    assert.match(iosViteConfig, /port:\s*5173/);
     assert.match(iosViteConfig, /outDir:\s*path\.join\(repoRoot,\s*"patch_gui"\)/);
     assert.match(iosViteConfig, /fileName:\s*\(\)\s*=>\s*"index\.ios\.js"/);
-    assert.match(buildScript, /runBuild\("\.\/vite\.ios\.config\.mjs"\)/);
+    assert.match(buildScript, /runBuild\("\.\.\/ios_auv3\/vite\.config\.mjs"\)/);
     assert.match(buildScript, /emitGeneratedPatchGuiModule\("ui\/desktop\/standalone-loader\.js", "patch_gui\/desktop\/index\.js"\)/);
     assert.doesNotMatch(buildScript, /COSIMO_DESKTOP_UI_SOURCE/);
     assert.match(workerViteConfig, /fileName:\s*\(\)\s*=>\s*"wavetable-worker\.js"/);
@@ -411,10 +430,10 @@ test("desktop Vite dev server serves the real Cmajor browser helpers and the des
 });
 
 test("desktop dev plug-in build enables the webview dev server and lets Vite build UI assets before Python writes manifests", async () => {
-    const cmakeSource = await fs.readFile(path.join(repoRoot, "tools", "live_dev_plugin", "CMakeLists.txt"), "utf8");
-    const buildScript = await fs.readFile(path.join(repoRoot, "scripts", "build_live_dev_plugin.sh"), "utf8");
+    const cmakeSource = await fs.readFile(path.join(repoRoot, "tools", "desktop_native", "CMakeLists.txt"), "utf8");
+    const buildScript = await fs.readFile(path.join(repoRoot, "scripts", "build_desktop_native.sh"), "utf8");
     const patchLoaderPluginSource = await fs.readFile(
-        path.join(repoRoot, "tools", "live_dev_plugin", "Source", "cmaj_PatchLoaderPlugin.cpp"),
+        path.join(repoRoot, "tools", "desktop_native", "Source", "cmaj_PatchLoaderPlugin.cpp"),
         "utf8",
     );
     const buildAssets = await fs.readFile(path.join(repoRoot, "build_assets.py"), "utf8");
@@ -423,13 +442,19 @@ test("desktop dev plug-in build enables the webview dev server and lets Vite bui
     assert.match(cmakeSource, /COSIMO_ENABLE_WEBVIEW_DEV_SERVER=1/);
     assert.match(cmakeSource, /COSIMO_DESKTOP_UI_SOURCE_MODE="\$\{COSIMO_DESKTOP_UI_SOURCE_MODE\}"/);
     assert.match(cmakeSource, /COSIMO_DESKTOP_DEV_SERVER_ORIGIN="\$\{COSIMO_DESKTOP_DEV_SERVER_ORIGIN\}"/);
-    assert.match(buildScript, /desktop_ui_source_mode="\$\{COSIMO_DESKTOP_UI_SOURCE_MODE:-dev-server\}"/);
+    assert.match(buildScript, /desktop_ui_source_mode="\$\{COSIMO_DESKTOP_UI_SOURCE_MODE:-compiled\}"/);
     assert.match(buildScript, /desktop_dev_server_origin="\$\{COSIMO_DESKTOP_DEV_SERVER_ORIGIN:-http:\/\/127\.0\.0\.1:5174\}"/);
     assert.match(buildScript, /npm run ui:build/);
     assert.doesNotMatch(buildScript, /COSIMO_DESKTOP_UI_SOURCE=dev-server npm run ui:build/);
     assert.match(buildScript, /curl --fail --silent --show-error "\$desktop_dev_server_module_url"/);
     assert.match(buildScript, /-DCOSIMO_DESKTOP_UI_SOURCE_MODE="\$desktop_ui_source_mode"/);
     assert.match(buildScript, /-DCOSIMO_DESKTOP_DEV_SERVER_ORIGIN="\$desktop_dev_server_origin"/);
+    assert.match(buildScript, /build_dir="\$repo_root\/build\/desktop_native"/);
+    assert.match(buildScript, /au_install_dir="\$HOME\/Library\/Audio\/Plug-Ins\/Components"/);
+    assert.match(buildScript, /au_bundle="\$au_install_dir\/CosimoDesktopNative\.component"/);
+    assert.match(buildScript, /CosimoDesktopNative_artefacts\/Release\/AU\/CosimoDesktopNative\.component/);
+    assert.match(buildScript, /CosimoDesktopNative_artefacts\/Release\/Standalone\/CosimoDesktopNative\.app/);
+    assert.doesNotMatch(buildScript, /vst3/i);
     assert.match(buildScript, /uv run python "\$repo_root\/build_assets\.py"/);
     assert.match(patchLoaderPluginSource, /if \(getDesktopUISourceMode\(\) == "dev-server"\)/);
     assert.match(patchLoaderPluginSource, /rule\.selectorText !== "\*"/);

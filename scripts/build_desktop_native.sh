@@ -3,9 +3,9 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cache_root="${COSIMO_DEV_CACHE:-$HOME/Library/Caches/cosimo-synth-dev}"
-build_dir="$repo_root/build/live-dev-plugin"
+build_dir="$repo_root/build/desktop_native"
 patch_path="$repo_root/WavetableSynth.cmajorpatch"
-desktop_ui_source_mode="${COSIMO_DESKTOP_UI_SOURCE_MODE:-dev-server}"
+desktop_ui_source_mode="${COSIMO_DESKTOP_UI_SOURCE_MODE:-compiled}"
 desktop_dev_server_origin="${COSIMO_DESKTOP_DEV_SERVER_ORIGIN:-http://127.0.0.1:5174}"
 desktop_dev_server_module_url="${desktop_dev_server_origin%/}/patch_gui/desktop/index.js"
 
@@ -17,13 +17,9 @@ dmg_path="$cache_root/cmajor-$cmajor_version.dmg"
 runtime_dylib="$cache_root/libCmajPerformer-$cmajor_version.dylib"
 mount_point="$cache_root/cmajor-dmg-$cmajor_version"
 
-vst3_install_dir="$HOME/Library/Audio/Plug-Ins/VST3"
 au_install_dir="$HOME/Library/Audio/Plug-Ins/Components"
 
-vst3_bundle="$vst3_install_dir/CmajInstrumentDev.vst3"
-au_bundle="$au_install_dir/CmajInstrumentDev.component"
-vst3_sidecar="$vst3_install_dir/CmajInstrumentDev.json"
-au_sidecar="$au_install_dir/CmajInstrumentDev.json"
+au_bundle="$au_install_dir/CosimoDesktopNative.component"
 
 if [[ ! -e "$patch_path" ]]; then
   printf 'Patch file not found: %s\n' "$patch_path" >&2
@@ -50,7 +46,7 @@ mkdir -p "$cache_root"
 if [[ -f "$build_dir/CMakeCache.txt" ]]; then
   cached_source_dir="$(awk -F= '/^CMAKE_HOME_DIRECTORY:INTERNAL=/{print $2; exit}' "$build_dir/CMakeCache.txt")"
 
-  if [[ -n "$cached_source_dir" && "$cached_source_dir" != "$repo_root/tools/live_dev_plugin" ]]; then
+  if [[ -n "$cached_source_dir" && "$cached_source_dir" != "$repo_root/tools/desktop_native" ]]; then
     rm -rf "$build_dir"
   fi
 fi
@@ -81,7 +77,7 @@ fi
 
 mkdir -p "$build_dir" "$au_install_dir"
 
-cmake -S "$repo_root/tools/live_dev_plugin" \
+cmake -S "$repo_root/tools/desktop_native" \
       -B "$build_dir" \
       -DCMAKE_BUILD_TYPE=Release \
       -DCOSIMO_PATCH_PATH="$patch_path" \
@@ -92,8 +88,8 @@ cmake -S "$repo_root/tools/live_dev_plugin" \
 
 cmake --build "$build_dir" --config Release
 
-au_built="$build_dir/CmajInstrumentDev_artefacts/Release/AU/CmajInstrumentDev.component"
-standalone_built="$build_dir/CmajInstrumentDev_artefacts/Release/Standalone/CmajInstrumentDev.app"
+au_built="$build_dir/CosimoDesktopNative_artefacts/Release/AU/CosimoDesktopNative.component"
+standalone_built="$build_dir/CosimoDesktopNative_artefacts/Release/Standalone/CosimoDesktopNative.app"
 
 if [[ ! -d "$au_built" ]]; then
   printf 'Built AU bundle not found: %s\n' "$au_built" >&2
@@ -105,8 +101,6 @@ if [[ ! -d "$standalone_built" ]]; then
   exit 1
 fi
 
-rm -rf "$vst3_bundle"
-rm -f "$vst3_sidecar" "$au_sidecar"
 rm -rf "$au_bundle"
 cp -R "$au_built" "$au_bundle"
 

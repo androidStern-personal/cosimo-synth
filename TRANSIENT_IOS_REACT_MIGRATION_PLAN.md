@@ -92,7 +92,7 @@ Add a dedicated iPhone Vite config and update the UI build so the iPhone React f
 
 Expected new or changed files:
 
-- `ui/vite.ios.config.mjs`
+- `ios_auv3/vite.config.mjs`
 - `ui/build.mjs`
 
 The end state should be that the build writes the real iPhone React bundle to `patch_gui/index.ios.js`, because the patch manifest already points at that path.
@@ -194,7 +194,7 @@ The new React shell cleared that acceptance bar. The remaining cleanup is to rem
 - `ui/ios/index.html`
 - `ui/ios/styles.css`
 - `ui/ios/ios-keyboard-adapter.tsx`
-- `ui/vite.ios.config.mjs`
+- `ios_auv3/vite.config.mjs`
 - `tests/test_ios_patch_view_browser.mjs`
 - `tests/helpers/ios_harness_browser.mjs`
 

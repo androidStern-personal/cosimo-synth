@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.16..3.22)
 
 project(
-    CmajInstrumentDev
+    CosimoDesktopNative
     VERSION 1.0.3066
     LANGUAGES CXX C)
 
@@ -39,9 +39,9 @@ set(JUCE_ENABLE_MODULE_SOURCE_GROUPS ON)
 
 add_subdirectory(${JUCE_PATH} juce)
 
-juce_add_plugin(CmajInstrumentDev
-    PRODUCT_NAME "CmajInstrumentDev"
-    BUNDLE_ID "dev.cosimo.cmajor.instrument.dev"
+juce_add_plugin(CosimoDesktopNative
+    PRODUCT_NAME "CosimoDesktopNative"
+    BUNDLE_ID "dev.cosimo.desktop.native"
     COMPANY_NAME "Cosimo"
     COMPANY_COPYRIGHT "(C)2026 Cosimo"
     PLUGIN_CODE CmDv
@@ -51,15 +51,15 @@ juce_add_plugin(CmajInstrumentDev
     IS_SYNTH TRUE
 )
 
-juce_generate_juce_header(CmajInstrumentDev)
+juce_generate_juce_header(CosimoDesktopNative)
 
-target_sources(CmajInstrumentDev PRIVATE
+target_sources(CosimoDesktopNative PRIVATE
     Source/cmaj_PatchLoaderPlugin.cpp
 )
 
-target_compile_features(CmajInstrumentDev PRIVATE cxx_std_17)
+target_compile_features(CosimoDesktopNative PRIVATE cxx_std_17)
 
-target_compile_definitions(CmajInstrumentDev PRIVATE
+target_compile_definitions(CosimoDesktopNative PRIVATE
     $<$<CONFIG:Debug>:DEBUG=1>
     $<$<CONFIG:Debug>:CMAJ_ENABLE_ALLOCATION_CHECKER=1>
     CMAJOR_DLL=1
@@ -73,12 +73,12 @@ target_compile_definitions(CmajInstrumentDev PRIVATE
     JUCE_USE_CURL=0
 )
 
-target_include_directories(CmajInstrumentDev PRIVATE
+target_include_directories(CosimoDesktopNative PRIVATE
     ${CMAJOR_SOURCE_PATH}/include
     ${CMAJOR_SOURCE_PATH}/include/choc
 )
 
-target_link_libraries(CmajInstrumentDev
+target_link_libraries(CosimoDesktopNative
     PRIVATE
         juce::juce_audio_utils
         $<$<AND:$<CXX_COMPILER_ID:GNU>,$<VERSION_LESS:$<CXX_COMPILER_VERSION>,9.0>>:stdc++fs>

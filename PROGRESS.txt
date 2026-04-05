@@ -122,7 +122,7 @@ What is true right now
 - Desktop:
   - The desktop UI is now the React and Vite build from `patch_gui/desktop/index.js`.
   - But the standalone desktop host still uses Cmajor's stock host stack:
-    - `tools/live_dev_plugin/Source/cmaj_PatchLoaderPlugin.cpp` derives from `cmaj::plugin::JUCEPluginBase`
+    - `tools/desktop_native/Source/cmaj_PatchLoaderPlugin.cpp` derives from `cmaj::plugin::JUCEPluginBase`
     - `cmaj_JUCEPlugin.h` still creates `cmaj::PatchWebView`
     - `cmaj_PatchWebView.h` still creates `choc::ui::WebView`
   - The desktop host changes on this branch were dev-server wiring and patch-manifest wiring, not a repo-owned native host rewrite.
@@ -492,7 +492,7 @@ Last iPhone safety-net tightening on 2026-04-03
 
 iPhone React frontend migration completed on 2026-04-03
 - Replaced the old browser-side iPhone UI path behind `patch_gui/index.ios.js` with a generated React and Vite bundle from `ui/ios/*`, while keeping the existing iPhone host bootstrap in `patch_gui/index.ios-host.js` unchanged. This was a frontend migration, not a native host rewrite.
-- Added the new iPhone React shell in `ui/ios/IOSPatchView.tsx`, the iPhone keyboard adapter in `ui/ios/ios-keyboard-adapter.tsx`, the shadow-root entrypoint in `ui/ios/patch-view-entry.tsx`, the iPhone stylesheet in `ui/ios/styles.css`, and the iPhone Vite config in `ui/vite.ios.config.mjs`. `ui/build.mjs` now emits the real shipped bundle at `patch_gui/index.ios.js`.
+- Added the new iPhone React shell in `ui/ios/IOSPatchView.tsx`, the iPhone keyboard adapter in `ui/ios/ios-keyboard-adapter.tsx`, the shadow-root entrypoint in `ui/ios/patch-view-entry.tsx`, the iPhone stylesheet in `ui/ios/styles.css`, and the iPhone Vite config in `ios_auv3/vite.config.mjs`. `ui/build.mjs` now emits the real shipped bundle at `patch_gui/index.ios.js`.
 - Preserved the iPhone-specific browser behavior that the strict mounted suite characterizes: the safe-area shell, footer keyboard docking, wavetable stage swipe-and-drag behavior, retry flow, MSEG modal flow, play-mode and glide controls, and the `BS2 - Acid.wav` URL-first source loading rule.
 - The real iPhone wrapper build initially failed because Xcode reused stale compile response files that still pointed at the removed `ios_auv3/Vendor/cmajor/include` path. A clean device rebuild regenerated those arguments from the current generated project, which already points at the pinned runtime under `build/deps/cmajor-1.0.3066/include`.
 - Built the real `CosimoSynth_Standalone` app from `build/ios_device_run/CosimoSynthAUv3.xcodeproj`, verified that the app bundle contains `assets/factory-bank-catalog.json`, `assets/factory_sources`, and the new React `patch_gui/index.ios.js` bundle, then installed and launched `dev.cosimo.wavetable-synth` on the paired iPhone.
@@ -525,7 +525,7 @@ iPhone React MSEG portrait direction correction on 2026-04-03
 iPhone React build-boundary fix on 2026-04-03
 - The strict simulator-bundle test exposed a real packaging regression after the iPhone React migration: `scripts/generate_ios_auv3_plugin.sh` started running `npm run ui:build`, but Xcode invokes that generator from a temporary build directory, not from the repo root. That made `npm` look for `package.json` under the temp Xcode build folder and fail before the app bundle could be rebuilt.
 - Fixed the generator script so both `npm run ui:build` and `uv run python build_assets.py` execute from the repo root explicitly. This does not change the iPhone native host; it only fixes the browser-bundle build step.
-- Tightened `ios_auv3/CMakeLists.txt` and `tests/test_ios_auv3_build.py` so the simulator and device bundle path now tracks `ui/ios/*`, `ui/shared/*`, `ui/build.mjs`, `ui/vite.ios.config.mjs`, and `package.json`, and the built-bundle test now fails unless the packaged `patch_gui/index.ios.js` contains the real React iPhone entry (`createIOSPatchView` and `CosimoIOSReactViewElement`) rather than the old wrapper path.
+- Tightened `ios_auv3/CMakeLists.txt` and `tests/test_ios_auv3_build.py` so the simulator and device bundle path now tracks `ui/ios/*`, `ui/shared/*`, `ui/build.mjs`, `ios_auv3/vite.config.mjs`, and `package.json`, and the built-bundle test now fails unless the packaged `patch_gui/index.ios.js` contains the real React iPhone entry (`createIOSPatchView` and `CosimoIOSReactViewElement`) rather than the old wrapper path.
 - Added a focused generator test in `tests/test_ios_auv3_build.py` that runs `generate_ios_auv3_plugin.sh` from the wrong working directory with fake `npm`, `uv`, and `cmaj` binaries, then proves the script still runs the frontend build from the repo root. This locks down the exact Xcode failure that surfaced here.
 
 What was verified for the iPhone React build-boundary fix

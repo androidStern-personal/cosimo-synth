@@ -3,25 +3,7 @@ import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
-import react from "@vitejs/plugin-react";
-import tailwindcss from "@tailwindcss/vite";
-import { defineConfig } from "vite";
-
-const thisDirectory = path.dirname(fileURLToPath(import.meta.url));
-const repoRoot = path.resolve(thisDirectory, "..");
-const cmajorRuntimeRoot = resolveCmajorRuntimeRoot(repoRoot);
-const cmajorWebRoot = path.join(cmajorRuntimeRoot, "javascript");
-const cmajorApiRoot = path.join(cmajorWebRoot, "cmaj_api");
-const iosPatchViewSource = path.join(repoRoot, "ui", "ios", "patch-view-entry.tsx");
-const reactRefreshPreamble = [
-    'import RefreshRuntime from "/@react-refresh";',
-    "RefreshRuntime.injectIntoGlobalHook(window);",
-    "window.$RefreshReg$ = () => {};",
-    "window.$RefreshSig$ = () => (type) => type;",
-    "window.__vite_plugin_react_preamble_installed__ = true;",
-].join("\n");
-
-function resolveCmajorRuntimeRoot(workspaceRoot) {
+export function resolveCmajorRuntimeRoot(workspaceRoot) {
     if (process.env.COSIMO_CMAJOR_RUNTIME_DIR) {
         return path.resolve(process.env.COSIMO_CMAJOR_RUNTIME_DIR);
     }
@@ -32,6 +14,22 @@ function resolveCmajorRuntimeRoot(workspaceRoot) {
         cwd: workspaceRoot,
         encoding: "utf8",
     }).trim();
+}
+
+export function createViteRepoContext(importMetaUrl) {
+    const configDirectory = path.dirname(fileURLToPath(importMetaUrl));
+    const repoRoot = path.resolve(configDirectory, "..");
+    const cmajorRuntimeRoot = resolveCmajorRuntimeRoot(repoRoot);
+    const cmajorWebRoot = path.join(cmajorRuntimeRoot, "javascript");
+    const cmajorApiRoot = path.join(cmajorWebRoot, "cmaj_api");
+
+    return {
+        configDirectory,
+        repoRoot,
+        cmajorRuntimeRoot,
+        cmajorWebRoot,
+        cmajorApiRoot,
+    };
 }
 
 function contentTypeFor(filePath) {
@@ -52,7 +50,17 @@ function contentTypeFor(filePath) {
     }
 }
 
-function serveStaticDirectory(urlPrefix, sourceRoot) {
+export function createReactRefreshPreamble() {
+    return [
+        'import RefreshRuntime from "/@react-refresh";',
+        "RefreshRuntime.injectIntoGlobalHook(window);",
+        "window.$RefreshReg$ = () => {};",
+        "window.$RefreshSig$ = () => (type) => type;",
+        "window.__vite_plugin_react_preamble_installed__ = true;",
+    ].join("\n");
+}
+
+export function serveStaticDirectory(urlPrefix, sourceRoot) {
     const normalizedSourceRoot = path.resolve(sourceRoot);
 
     return {
@@ -96,8 +104,16 @@ function serveStaticDirectory(urlPrefix, sourceRoot) {
     };
 }
 
-function servePatchModuleAlias(urlPath, sourceFile) {
+export function servePatchModuleAlias({
+    urlPath,
+    sourceFile,
+    repoRoot,
+    moduleBindingName,
+    createPatchViewExportName,
+    reactRefreshPreamble = "",
+}) {
     const relativeImportPath = `/${path.relative(repoRoot, sourceFile).split(path.sep).join("/")}`;
+    const preamble = reactRefreshPreamble ? `${reactRefreshPreamble}\n` : "";
 
     return {
         name: `cosimo-module-alias-${urlPath.replaceAll("/", "-")}`,
@@ -114,18 +130,19 @@ function servePatchModuleAlias(urlPath, sourceFile) {
                 response.setHeader("Access-Control-Allow-Origin", "*");
                 response.setHeader("Content-Type", "text/javascript; charset=utf-8");
                 response.end(
-                    `${reactRefreshPreamble}\n` +
-                    `const iosPatchViewModule = await import(${JSON.stringify(relativeImportPath)});\n` +
-                    `export const createIOSPatchView = iosPatchViewModule.createIOSPatchView;\n` +
-                    `export default iosPatchViewModule.default;\n`,
+                    `${preamble}` +
+                    `const ${moduleBindingName} = await import(${JSON.stringify(relativeImportPath)});\n` +
+                    `export const ${createPatchViewExportName} = ${moduleBindingName}.${createPatchViewExportName};\n` +
+                    `export default ${moduleBindingName}.default;\n`,
                 );
             });
         },
     };
 }
 
-function serveHtmlEntry(urlPath, sourceFile) {
+export function serveHtmlEntry({ urlPath, sourceFile, headInjection = "" }) {
     const normalizedSourceFile = path.resolve(sourceFile);
+    const injectedHead = headInjection ? `<head>\n${headInjection}` : "<head>";
 
     return {
         name: `cosimo-html-entry-${urlPath.replaceAll("/", "-") || "root"}`,
@@ -140,14 +157,7 @@ function serveHtmlEntry(urlPath, sourceFile) {
 
                 try {
                     const html = await fs.readFile(normalizedSourceFile, "utf8");
-                    const transformed = html.replace(
-                        "<head>",
-                        `<head>
-  <script type="module" src="/@vite/client"></script>
-  <script type="module">
-${reactRefreshPreamble}
-  </script>`,
-                    );
+                    const transformed = html.replace("<head>", injectedHead);
                     response.statusCode = 200;
                     response.setHeader("Access-Control-Allow-Origin", "*");
                     response.setHeader("Content-Type", "text/html; charset=utf-8");
@@ -159,46 +169,3 @@ ${reactRefreshPreamble}
         },
     };
 }
-
-export default defineConfig(({ command }) => ({
-    appType: "custom",
-    root: repoRoot,
-    clearScreen: false,
-    define: {
-        "process.env.NODE_ENV": JSON.stringify(command === "build" ? "production" : "development"),
-    },
-    plugins: [
-        react(),
-        tailwindcss(),
-        serveHtmlEntry("/", path.join(repoRoot, "ui", "ios", "index.html")),
-        serveHtmlEntry("/ui/ios/index.html", path.join(repoRoot, "ui", "ios", "index.html")),
-        servePatchModuleAlias("/patch_gui/index.ios.js", iosPatchViewSource),
-        serveStaticDirectory("/patch_gui", path.join(repoRoot, "patch_gui")),
-        serveStaticDirectory("/cmaj_api", cmajorApiRoot),
-    ],
-    server: {
-        host: "0.0.0.0",
-        port: 5175,
-        strictPort: true,
-        cors: true,
-        fs: {
-            allow: [repoRoot],
-        },
-    },
-    build: {
-        outDir: path.join(repoRoot, "patch_gui"),
-        emptyOutDir: false,
-        sourcemap: true,
-        minify: false,
-        lib: {
-            entry: iosPatchViewSource,
-            formats: ["es"],
-            fileName: () => "index.ios.js",
-        },
-        rollupOptions: {
-            output: {
-                inlineDynamicImports: true,
-            },
-        },
-    },
-}));

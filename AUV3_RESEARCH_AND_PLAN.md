@@ -1,7 +1,7 @@
 # AUv3 Research And Implementation Plan
 
 Historical note: this file was written before the iOS shell and repo cleanup landed.
-Current live paths are `ios_auv3/`, `tools/live_dev_plugin/`, and `cmajor/WavetableSynth.cmajor`.
+Current live paths are `ios_auv3/`, `tools/desktop_native/`, and `cmajor/WavetableSynth.cmajor`.
 
 ## Why this file exists
 
@@ -13,7 +13,7 @@ The goal is to keep one shared synth and add a separate iOS shell around it.
 
 ### The current macOS development plug-in works
 
-The working desktop plug-in is `live_dev_plugin`.
+The working desktop plug-in is `desktop_native`.
 
 It is:
 - a custom macOS development shell around Cmajor and JUCE
@@ -43,7 +43,7 @@ Right now the repo does not contain:
 - an iOS Xcode project generated from the repo
 - iOS asset catalog setup
 
-The only wrapper project in the repo today is `live_dev_plugin`.
+The only wrapper project in the repo today is `desktop_native`.
 
 ## The clean boundary
 
@@ -70,9 +70,9 @@ These things should exist in exactly one place:
 ### One desktop development shell
 
 These files should stay desktop-only:
-- `live_dev_plugin/CMakeLists.txt`
-- `live_dev_plugin/Source/cmaj_PatchLoaderPlugin.cpp`
-- `scripts/build_live_dev_plugin.sh`
+- `tools/desktop_native/CMakeLists.txt`
+- `tools/desktop_native/Source/cmaj_PatchLoaderPlugin.cpp`
+- `scripts/build_desktop_native.sh`
 
 Their job is:
 - point at the repo patch on disk
@@ -133,7 +133,7 @@ JUCE does not remove:
 The safest iOS path is not to stretch the current JIT dev shell into AUv3.
 
 The safest iOS path is:
-1. keep `live_dev_plugin` as the desktop dev tool
+1. keep `desktop_native` as the desktop dev tool
 2. add a new `ios_auv3` sibling project
 3. build the iOS shell from self-contained generated Cmajor JUCE code
 
@@ -433,7 +433,7 @@ Work:
 - create `ios_auv3/`
 - add a JUCE CMake project there
 - create one plug-in target that builds `Standalone + AUv3`
-- keep `live_dev_plugin/` unchanged as the macOS dev shell
+- keep `desktop_native/` unchanged as the macOS dev shell
 
 Done when:
 - the repo can generate an iOS Xcode project

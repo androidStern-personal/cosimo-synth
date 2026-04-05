@@ -3,9 +3,15 @@
 ## iPhone Build And Install
 
 - If `build/ios_device_run/CosimoSynthAUv3.xcodeproj` does not exist yet in the current worktree, generate it with `./scripts/generate_ios_auv3_xcode_project.sh build/ios_device_run`.
+- The canonical shortcut for that step is `npm run ios:project`.
 - To build the installable iPhone app, build the `CosimoSynth_Standalone` scheme from `build/ios_device_run/CosimoSynthAUv3.xcodeproj`.
 - Install `build/ios_device_run/CosimoSynth_artefacts/Debug/Standalone/Cosimo Synth.app` from the current worktree.
 - Do not install the `CosimoSynth` target output, `cosimo_ios_auv3_generated_plugin`, or anything under `generated/cmajor`. Those are intermediate build products, not the wrapper app bundle.
+
+## iPhone UI Dev Server
+
+- The only iPhone Vite dev server to use is `npm run ios:ui:dev`.
+- `ios_auv3/vite.config.mjs` is the single iPhone Vite config. It must serve both `patch_gui/index.ios.html` and the live React module at `patch_gui/index.ios.js`.
 
 ## iPhone Signing
 
@@ -43,7 +49,12 @@
 
 - `WavetableSynth.cmajorpatch` must keep `view.src` set to `patch_gui/desktop/index.js`.
 - `patch_gui/desktop/index.js` is a stable loader. It must default to the local compiled bundle `./app.js` and must not be rewritten into a dev-server-only file by `ui/build.mjs`.
-- The standalone live dev app chooses `dev-server` mode by injecting `window.__COSIMO_DESKTOP_UI_SOURCE_MODE__` and `window.__COSIMO_DESKTOP_DEV_SERVER_ORIGIN__` from `tools/live_dev_plugin/Source/cmaj_PatchLoaderPlugin.cpp` before the loader runs.
-- `scripts/build_live_dev_plugin.sh` must build the normal UI artifacts, then pass `COSIMO_DESKTOP_UI_SOURCE_MODE` into CMake. If that mode is `dev-server`, the script must fail unless `http://127.0.0.1:5174/patch_gui/desktop/index.js` is reachable.
+- The desktop native wrapper lives in `tools/desktop_native`.
+- The canonical compiled desktop build command is `npm run desktop:native:build`.
+- The canonical desktop HMR build command is `npm run desktop:native:dev`.
+- Both commands call `./scripts/build_desktop_native.sh`, which writes to `build/desktop_native`.
+- `./scripts/build_desktop_native.sh` defaults to the compiled desktop UI. `npm run desktop:native:dev` sets `COSIMO_DESKTOP_UI_SOURCE_MODE=dev-server` and `COSIMO_DESKTOP_DEV_SERVER_ORIGIN=http://127.0.0.1:5174`.
+- The desktop native wrapper chooses `dev-server` mode by injecting `window.__COSIMO_DESKTOP_UI_SOURCE_MODE__` and `window.__COSIMO_DESKTOP_DEV_SERVER_ORIGIN__` from `tools/desktop_native/Source/cmaj_PatchLoaderPlugin.cpp` before the loader runs.
+- If `COSIMO_DESKTOP_UI_SOURCE_MODE=dev-server`, `./scripts/build_desktop_native.sh` must fail unless `http://127.0.0.1:5174/patch_gui/desktop/index.js` is reachable.
 - React Grab for the standalone HMR path lives in `ui/desktop/patch-view-entry.tsx`. In Vite dev mode it must import `react-grab` and `@react-grab/mcp/client`. The Codex MCP config should use `npx -y @react-grab/mcp --stdio`; do not wire the deprecated `@react-grab/codex` package into this repo.
 - The standalone app only gets React Grab when it is running in `dev-server` mode against Vite. The compiled desktop bundle must not load React Grab.

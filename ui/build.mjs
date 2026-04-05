@@ -88,5 +88,5 @@ await emitGeneratedPatchGuiModule("ui/shared/mseg.ts", "patch_gui/mseg.js");
 await emitGeneratedPatchGuiModule("ui/shared/mseg-controller.ts", "patch_gui/mseg-controller.js");
 await runBuild("./vite.desktop.config.mjs");
 await emitGeneratedPatchGuiModule("ui/desktop/standalone-loader.js", "patch_gui/desktop/index.js");
-await runBuild("./vite.ios.config.mjs");
+await runBuild("../ios_auv3/vite.config.mjs");
 await runBuild("./vite.worker.config.mjs");

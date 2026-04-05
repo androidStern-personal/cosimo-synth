@@ -2,7 +2,7 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
-output_dir="${1:-$repo_root/build/ios_auv3/generated/cmajor}"
+output_dir="${1:-$repo_root/build/ios_device_run/generated/cmajor}"
 default_patch_path="$repo_root/WavetableSynth.iOS.cmajorpatch"
 generated_marker_filename=".cosimo-ios-auv3-generated"
 
