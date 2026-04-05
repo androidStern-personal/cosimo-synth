@@ -20,9 +20,25 @@ function audioOnlyPatchRun(subDir, blockSize, samplesToRender, maxDiffDb = pytho
     };
 }
 
+function fullPatchRun(subDir, blockSize, samplesToRender, maxDiffDb = pythonReferenceMaxDiffDb)
+{
+    return {
+        patch: patchPath,
+        subDir,
+        frequency: defaultFrequency,
+        blockSize,
+        samplesToRender,
+        sessionID: 1,
+        skipMissingInputs: true,
+        maxDiffDb
+    };
+}
+
 ## runScript (audioOnlyPatchRun("fixtures/filter_off_identity", 64, 4096))
 ## runScript (audioOnlyPatchRun("fixtures/lowpass_static", 64, 4096))
+## runScript (fullPatchRun("fixtures/lowpass_static", 64, 4096))
 ## runScript (audioOnlyPatchRun("fixtures/highpass_static", 64, 4096))
+## runScript (fullPatchRun("fixtures/highpass_static", 64, 4096))
 ## runScript (audioOnlyPatchRun("fixtures/bandpass_static", 64, 4096))
 ## runScript (audioOnlyPatchRun("fixtures/notch_static", 64, 4096))
 ## runScript (audioOnlyPatchRun("fixtures/peak_static", 64, 4096))

@@ -23,11 +23,13 @@
     "test:cmajor:filter": "npm run test:python:filter-stability && npm run test:desktop:filter-ui && npm run test:shared:hooks && cmaj test --singleThread --sessionID=1 tests/cmajor_filter"
   },
   "devDependencies": {
+    "@react-grab/mcp": "0.1.29",
     "@tailwindcss/vite": "^4.2.2",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.2.0",
     "playwright": "^1.59.0",
+    "react-grab": "0.1.29",
     "tailwindcss": "^4.2.2",
     "typescript": "^6.0.2",
     "vite": "^7.1.0"

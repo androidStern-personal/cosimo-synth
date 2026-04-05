@@ -240,7 +240,7 @@ async function openBuiltDesktopBundlePage() {
         };
 
         const createPatchView = (await import("/patch_gui/desktop/index.js")).default;
-        const patchView = createPatchView(patchConnection);
+        const patchView = await createPatchView(patchConnection);
         const mountPoint = document.getElementById("mount");
 
         if (!mountPoint) {
@@ -510,6 +510,33 @@ test("desktop harness renders the real React patch view and requests runtime syn
     }
 });
 
+test("desktop Vite harness installs React Grab and registers the official MCP plugin in dev mode", async () => {
+    const page = await openHarnessPage();
+
+    try {
+        const reactGrabState = await page.evaluate(() => {
+            const api = window.__REACT_GRAB__;
+
+            if (!api || typeof api !== "object") {
+                return null;
+            }
+
+            return {
+                hasRegisterPlugin: typeof api.registerPlugin === "function",
+                hasGetPlugins: typeof api.getPlugins === "function",
+                plugins: typeof api.getPlugins === "function" ? api.getPlugins() : null,
+            };
+        });
+
+        assert.equal(reactGrabState?.hasRegisterPlugin, true);
+        assert.equal(reactGrabState?.hasGetPlugins, true);
+        assert.equal(Array.isArray(reactGrabState?.plugins), true);
+        assert.equal(reactGrabState.plugins.includes("mcp"), true);
+    } finally {
+        await page.close();
+    }
+});
+
 test("built desktop bundle mounts the custom-element wrapper and renders a real stage", async () => {
     const page = await openBuiltDesktopBundlePage();
 
@@ -519,6 +546,10 @@ test("built desktop bundle mounts the custom-element wrapper and renders a real 
         assert.equal(
             await page.evaluate(() => Boolean(document.querySelector("cosimo-desktop-react-view")?.shadowRoot)),
             true,
+        );
+        assert.equal(
+            await page.evaluate(() => "__REACT_GRAB__" in window),
+            false,
         );
         assert.equal(await page.locator(".cosimo-stage canvas").count(), 1);
         assert.equal(await page.locator("#mount > pre").count(), 0);
@@ -557,7 +588,8 @@ test("desktop patch view scrolls vertically when the window is shorter than the 
         await page.waitForSelector("text=Filter");
         const initialMetrics = await page.evaluate(() => {
             const host = document.querySelector("cosimo-desktop-react-view");
-            const scrollRegion = host?.shadowRoot?.querySelector('[data-role="desktop-scroll-region"]');
+            const viewRoot = host?.shadowRoot ?? host;
+            const scrollRegion = viewRoot?.querySelector('[data-role="desktop-scroll-region"]');
 
             if (!(scrollRegion instanceof HTMLElement)) {
                 throw new Error("Desktop scroll region is missing.");
@@ -577,7 +609,8 @@ test("desktop patch view scrolls vertically when the window is shorter than the 
 
         const scrolledMetrics = await page.evaluate(async () => {
             const host = document.querySelector("cosimo-desktop-react-view");
-            const scrollRegion = host?.shadowRoot?.querySelector('[data-role="desktop-scroll-region"]');
+            const viewRoot = host?.shadowRoot ?? host;
+            const scrollRegion = viewRoot?.querySelector('[data-role="desktop-scroll-region"]');
 
             if (!(scrollRegion instanceof HTMLElement)) {
                 throw new Error("Desktop scroll region is missing.");
@@ -1420,6 +1453,162 @@ test("desktop filter graph follows live effective filter state and falls back to
     }
 });
 
+test("desktop filter graph cycles graph, bars, and round-bars analyzers while keeping live spectrum updates sane", async () => {
+    const page = await openHarnessPage();
+
+    try {
+        await page.waitForFunction(() => {
+            const rendered = window.__COSIMO_DESKTOP_HARNESS__.getRenderedState();
+            return rendered.filterGraphState && rendered.filterGraphState.spectrum;
+        });
+
+        let renderedState = await getHarnessRenderedState(page);
+        assert.equal(renderedState.filterGraphState.spectrum.hasSpectrum, false);
+
+        await page.evaluate(() => {
+            const magnitudes = Array.from({ length: 64 }, (_, index) => (
+                index === 2 ? 0.03 : index === 3 ? 0.022 : 1e-5
+            ));
+            window.__COSIMO_DESKTOP_HARNESS__.emitFilterSpectrum({
+                sampleRateHz: 44_100,
+                magnitudes,
+            });
+        });
+
+        await page.waitForFunction(() => {
+            const spectrum = window.__COSIMO_DESKTOP_HARNESS__.getRenderedState().filterGraphState?.spectrum;
+            return spectrum?.hasSpectrum === true
+                && Array.isArray(spectrum?.bandMagnitudesDb)
+                && spectrum.bandMagnitudesDb.length > 0;
+        });
+
+        renderedState = await getHarnessRenderedState(page);
+        const lowHeavySpectrum = renderedState.filterGraphState.spectrum;
+        assert.equal(lowHeavySpectrum.hasSpectrum, true);
+        assert.equal(lowHeavySpectrum.renderMode, "graph");
+        assert.equal(lowHeavySpectrum.sourceBinCount, 64);
+        assert.equal(lowHeavySpectrum.bandCount, 120);
+        assert.ok(lowHeavySpectrum.graphPointCount > lowHeavySpectrum.bandCount);
+        assert.equal(lowHeavySpectrum.bandMagnitudesDb.length, 120);
+        assert.equal(lowHeavySpectrum.smoothedMagnitudesDb.length, 120);
+        assert.equal(lowHeavySpectrum.peakMagnitudesDb.length, 120);
+        assert.deepEqual(lowHeavySpectrum.renderGeometry, {
+            kind: "graph",
+            pointCount: lowHeavySpectrum.graphPointCount,
+            peakPointCount: lowHeavySpectrum.graphPointCount,
+        });
+        assert.deepEqual(
+            lowHeavySpectrum.frequencyTicks.map(({ label }) => label),
+            ["20", "50", "100", "200", "500", "1k", "2k", "5k", "10k", "20k"],
+        );
+        assert.deepEqual(
+            lowHeavySpectrum.dbTicks.map(({ label }) => label),
+            ["-18", "-36", "-54", "-72", "-90"],
+        );
+        assert.ok(Math.max(...lowHeavySpectrum.bandMagnitudesDb) > Math.min(...lowHeavySpectrum.bandMagnitudesDb));
+        const previousBandMagnitudesDb = [...lowHeavySpectrum.bandMagnitudesDb];
+        const previousSmoothedMagnitudesDb = [...lowHeavySpectrum.smoothedMagnitudesDb];
+
+        await page.evaluate(() => {
+            window.__COSIMO_DESKTOP_HARNESS__.patchConnection.emitEndpoint("filterSpectrum", {
+                sampleRateHz: "broken",
+                magnitudes: [1, 2, 3, 4, 5, 6, 7, 8],
+            });
+        });
+        await page.waitForTimeout(50);
+
+        renderedState = await getHarnessRenderedState(page);
+        assert.deepEqual(renderedState.filterGraphState.spectrum, lowHeavySpectrum);
+
+        await page.click('button[aria-label="Analyzer view Bars"]');
+        await page.waitForFunction(() => {
+            const spectrum = window.__COSIMO_DESKTOP_HARNESS__.getRenderedState().filterGraphState?.spectrum;
+            return spectrum?.renderMode === "bars" && spectrum?.renderGeometry?.kind === "bars" && spectrum?.renderGeometry?.rounded === false;
+        });
+
+        renderedState = await getHarnessRenderedState(page);
+        assert.equal(renderedState.filterGraphState.spectrum.renderMode, "bars");
+        assert.deepEqual(renderedState.filterGraphState.spectrum.renderGeometry, {
+            kind: "bars",
+            barCount: renderedState.filterGraphState.spectrum.bandCount,
+            rounded: false,
+        });
+
+        await page.click('button[aria-label="Cycle analyzer view"]');
+        await page.waitForFunction(() => {
+            const spectrum = window.__COSIMO_DESKTOP_HARNESS__.getRenderedState().filterGraphState?.spectrum;
+            return spectrum?.renderMode === "round-bars" && spectrum?.renderGeometry?.kind === "bars" && spectrum?.renderGeometry?.rounded === true;
+        });
+
+        renderedState = await getHarnessRenderedState(page);
+        assert.equal(renderedState.filterGraphState.spectrum.renderMode, "round-bars");
+        assert.deepEqual(renderedState.filterGraphState.spectrum.renderGeometry, {
+            kind: "bars",
+            barCount: renderedState.filterGraphState.spectrum.bandCount,
+            rounded: true,
+        });
+
+        await page.click('button[aria-label="Cycle analyzer view"]');
+        await page.waitForFunction(() => {
+            const spectrum = window.__COSIMO_DESKTOP_HARNESS__.getRenderedState().filterGraphState?.spectrum;
+            return spectrum?.renderMode === "graph" && spectrum?.renderGeometry?.kind === "graph";
+        });
+
+        await page.evaluate(() => {
+            const magnitudes = Array.from({ length: 64 }, (_, index) => (
+                index === 60 ? 0.03 : index === 58 ? 0.022 : 1e-5
+            ));
+            window.__COSIMO_DESKTOP_HARNESS__.emitFilterSpectrum({
+                sampleRateHz: 44_100,
+                magnitudes,
+            });
+        });
+
+        await page.waitForFunction((previousSpectrum) => {
+            const spectrum = window.__COSIMO_DESKTOP_HARNESS__.getRenderedState().filterGraphState?.spectrum;
+            if (!spectrum?.hasSpectrum) {
+                return false;
+            }
+
+            return JSON.stringify(spectrum.bandMagnitudesDb) !== JSON.stringify(previousSpectrum);
+        }, previousBandMagnitudesDb);
+
+        renderedState = await getHarnessRenderedState(page);
+        const highHeavySpectrum = renderedState.filterGraphState.spectrum;
+        assert.notDeepEqual(highHeavySpectrum.bandMagnitudesDb, previousBandMagnitudesDb);
+        assert.notDeepEqual(highHeavySpectrum.smoothedMagnitudesDb, previousSmoothedMagnitudesDb);
+        assert.equal(highHeavySpectrum.renderMode, "graph");
+        assert.equal(highHeavySpectrum.renderGeometry.kind, "graph");
+
+        await page.evaluate(() => {
+            const magnitudes = Array.from({ length: 64 }, (_, index) => (
+                index === 60 ? 0.009 : index === 58 ? 0.006 : 1e-5
+            ));
+            window.__COSIMO_DESKTOP_HARNESS__.emitFilterSpectrum({
+                sampleRateHz: 44_100,
+                magnitudes,
+            });
+        });
+
+        await page.waitForFunction((previousSpectrum) => {
+            const spectrum = window.__COSIMO_DESKTOP_HARNESS__.getRenderedState().filterGraphState?.spectrum;
+            if (!spectrum?.hasSpectrum) {
+                return false;
+            }
+
+            return JSON.stringify(spectrum.bandMagnitudesDb) !== JSON.stringify(previousSpectrum);
+        }, highHeavySpectrum.bandMagnitudesDb);
+
+        renderedState = await getHarnessRenderedState(page);
+        const decayingSpectrum = renderedState.filterGraphState.spectrum;
+        const peakBandIndex = highHeavySpectrum.peakBandIndex;
+        assert.ok(decayingSpectrum.smoothedMagnitudesDb[peakBandIndex] > decayingSpectrum.bandMagnitudesDb[peakBandIndex]);
+        assert.ok(decayingSpectrum.peakMagnitudesDb[peakBandIndex] >= decayingSpectrum.smoothedMagnitudesDb[peakBandIndex]);
+    } finally {
+        await page.close();
+    }
+});
+
 test("keyboard octave controls update the mounted keyboard root note and note routing", async () => {
     const page = await openHarnessPage();
 
@@ -1638,8 +1827,9 @@ test("MSEG overview controls update the real desktop page depth, playback rate, 
 
         await clearHarnessDebugLog(page);
         const depthValue = await page.evaluate(async () => {
-            const shadowRoot = document.querySelector("cosimo-desktop-react-view")?.shadowRoot;
-            const depthInput = shadowRoot?.querySelectorAll("input.cosimo-range")?.[0];
+            const host = document.querySelector("cosimo-desktop-react-view");
+            const viewRoot = host?.shadowRoot ?? host;
+            const depthInput = viewRoot?.querySelectorAll("input.cosimo-range")?.[0];
 
             if (!(depthInput instanceof HTMLInputElement)) {
                 throw new Error("MSEG depth input is missing.");
@@ -1663,8 +1853,9 @@ test("MSEG overview controls update the real desktop page depth, playback rate, 
 
         await clearHarnessDebugLog(page);
         const playbackAfterRateChange = await page.evaluate(async () => {
-            const shadowRoot = document.querySelector("cosimo-desktop-react-view")?.shadowRoot;
-            const rateInput = shadowRoot?.querySelectorAll("input.cosimo-range")?.[1];
+            const host = document.querySelector("cosimo-desktop-react-view");
+            const viewRoot = host?.shadowRoot ?? host;
+            const rateInput = viewRoot?.querySelectorAll("input.cosimo-range")?.[1];
 
             if (!(rateInput instanceof HTMLInputElement)) {
                 throw new Error("MSEG rate input is missing.");
@@ -1688,8 +1879,9 @@ test("MSEG overview controls update the real desktop page depth, playback rate, 
 
         await clearHarnessDebugLog(page);
         const playbackAfterLoopToggle = await page.evaluate(async () => {
-            const shadowRoot = document.querySelector("cosimo-desktop-react-view")?.shadowRoot;
-            const loopButton = Array.from(shadowRoot?.querySelectorAll("button") ?? []).find((button) =>
+            const host = document.querySelector("cosimo-desktop-react-view");
+            const viewRoot = host?.shadowRoot ?? host;
+            const loopButton = Array.from(viewRoot?.querySelectorAll("button") ?? []).find((button) =>
                 button.textContent?.trim() === "Looping"
             );
 

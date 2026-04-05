@@ -288,8 +288,211 @@ For Cosimo Synth v1, the right target is:
 - frequency-response graph
 - direct drag editing of cutoff and Q
 - live movement from real DSP state during playback
+- a live FFT-style spectrum analyzer behind the response curve
 
-Do not attempt the FFT overlay in the first pass.
+The current analyzer is functionally correct but visually poor. The redesign should keep the Cmajor-side FFT architecture and replace the UI display model.
+
+## Filter Spectrum Redesign
+
+The real FFT source stays in Cmajor. Do not move analysis into the browser.
+
+Current problem areas in the UI:
+
+- every frame is normalized to its own peak, which makes the trace breathe and jump
+- the renderer samples a single FFT magnitude at each x position instead of aggregating into perceptual bands
+- the graph has no readable axis labels, so even correct data is hard to interpret
+- the visual is a thin debug-style line rather than an EQ-style analyzer
+
+Use audioMotion-analyzer as the visual reference model, not as a code dependency.
+
+Relevant reference behaviors from audioMotion:
+
+- fixed dB display range instead of per-frame peak normalization
+- log-frequency band grouping, including 1/12th-octave and denser modes
+- temporal smoothing and optional peak-hold / peak-fall behavior
+- readable x/y scales
+- line/area graph styling instead of a raw FFT scribble
+
+Sources:
+
+- audioMotion README: <https://github.com/hvianna/audioMotion-analyzer>
+- audioMotion overlay demo: <https://audiomotion.dev/demo/overlay.html>
+- audioMotion fluid demo: <https://audiomotion.dev/demo/fluid.html>
+- MDN AnalyserNode constructor and dB/smoothing controls:
+  - <https://developer.mozilla.org/en-US/docs/Web/API/AnalyserNode/AnalyserNode>
+  - <https://developer.mozilla.org/en-US/docs/Web/API/AnalyserNode/smoothingTimeConstant>
+
+### Spectrum Display Pipeline
+
+Keep the current Cmajor event endpoint that emits raw magnitude frames. Redesign only the UI path.
+
+New UI pipeline:
+
+1. `raw FFT frame`
+   - `sampleRateHz`
+   - `magnitudes[]`
+2. `log-band aggregation`
+   - convert linear FFT bins into fixed log-spaced display bands
+3. `temporal smoothing and peak state`
+   - maintain persistent analyzer state between frames
+4. `canvas rendering`
+   - draw a proper line/area analyzer with axes behind the response curves
+
+### Display-Band Plan
+
+Do not render one interpolated FFT sample per display x-position.
+
+Instead:
+
+- build fixed log-spaced bands from `20 Hz` to `20 kHz`
+- start with `120` bands, roughly matching a 1/12th-octave style display
+- aggregate FFT bins into those bands using `max` magnitude, not arithmetic mean
+
+Why `max`:
+
+- it preserves narrow resonant peaks
+- it reads better in a synth UI than a blurred average
+
+### dB Range Plan
+
+Stop normalizing each frame to its own peak.
+
+Use a fixed display range instead:
+
+- `FILTER_SPECTRUM_MIN_DB = -90`
+- `FILTER_SPECTRUM_MAX_DB = -18`
+
+This makes the analyzer visually stable and makes cutoff movement readable across frames.
+
+### Temporal Smoothing Plan
+
+The analyzer needs persistent display state, not a stateless transform.
+
+Maintain:
+
+- `smoothedBandsDb[]`
+- `peakBandsDb[]`
+- timestamps for peak hold / release
+
+Recommended initial tuning:
+
+- fast attack smoothing around `0.55`
+- slower release smoothing around `0.82`
+- peak hold around `300 ms`
+- peak fade around `700 ms`
+
+These are display parameters only. They do not change the synth DSP.
+
+### Axis And Grid Plan
+
+Add real labels and grid lines.
+
+Frequency ticks:
+
+- `20`
+- `50`
+- `100`
+- `200`
+- `500`
+- `1k`
+- `2k`
+- `5k`
+- `10k`
+- `20k`
+
+dB ticks:
+
+- `-18`
+- `-36`
+- `-54`
+- `-72`
+- `-90`
+
+The filter response curves and the analyzer should share the same plot box so the overlay stays visually aligned.
+
+### Visual Style Plan
+
+The analyzer should support the filter response curve, not overpower it.
+
+Recommended styling:
+
+- muted fill alpha around `0.10`
+- brighter analyzer stroke alpha around `0.55`
+- analyzer stroke width around `1.75`
+- optional faint peak trace alpha around `0.25`
+
+Keep the base filter curve and live filter curve visually dominant.
+
+### Rendering Cadence
+
+Keep the current event-driven one-shot `requestAnimationFrame` paint scheduling.
+
+Do not add a permanent animation loop yet.
+
+The analyzer should repaint:
+
+- when a new `filterSpectrum` event arrives
+- when the graph size changes
+
+### File-Level Implementation Plan
+
+`ui/shared/filter-spectrum.ts`
+
+- replace the current one-value-per-frequency sampling model
+- add:
+  - `buildSpectrumBands`
+  - `aggregateSpectrumBands`
+  - `buildSpectrumFrequencyTicks`
+  - `buildSpectrumDbTicks`
+  - fixed dB conversion
+
+`ui/shared/synth-hooks.ts`
+
+- add a stateful `useFilterSpectrumDisplayState` hook
+- this hook owns:
+  - smoothed band values
+  - peak hold/fade state
+  - per-frame display updates
+
+`ui/shared/synth-components.tsx`
+
+- keep the existing filter response curves
+- replace the current analyzer drawing with:
+  - grid
+  - axis labels
+  - smoothed area fill
+  - smoothed line
+  - optional peak trace
+
+### Test Plan For The Analyzer Redesign
+
+Shared logic tests:
+
+- log-band edges are monotonic and log-spaced
+- FFT bins map into the expected display band
+- a narrow synthetic peak lands in the correct band
+- fixed dB conversion does not breathe when the frame peak changes
+- smoothing rises quickly and falls gradually
+- peak hold persists for the configured interval, then fades
+- frequency and dB tick helpers produce the expected labels and ordering
+
+Browser tests:
+
+- a valid `filterSpectrum` event updates the analyzer debug state
+- a second quieter frame decays instead of instantly collapsing
+- malformed frames are ignored
+- the analyzer debug state reports:
+  - band count
+  - tick labels
+  - smoothed values
+  - peak values
+
+Acceptance criteria:
+
+- the spectrum no longer jumps around on steady notes
+- lowpass, highpass, peak, and notch produce visually distinct analyzer shapes
+- the user can read approximate frequencies directly from the graph
+- the analyzer looks like an EQ-style display, not a raw FFT debug trace
 
 ## UI Placement
 

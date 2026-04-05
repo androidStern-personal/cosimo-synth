@@ -1,0 +1,13 @@
+namespace wt
+{
+    let filterSpectrumFFTSize = 4096;
+    let filterSpectrumBinCount = filterSpectrumFFTSize / 2;
+    let filterSpectrumWindowSize = 1024;
+    let filterSpectrumFramesPerSecond = 20.0f;
+
+    struct FilterSpectrumFrame
+    {
+        float32 sampleRateHz;
+        float32[filterSpectrumBinCount] magnitudes;
+    }
+}

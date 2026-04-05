@@ -11,6 +11,14 @@
  #error COSIMO_PATCH_PATH must be defined
 #endif
 
+#ifndef COSIMO_DESKTOP_UI_SOURCE_MODE
+ #define COSIMO_DESKTOP_UI_SOURCE_MODE "compiled"
+#endif
+
+#ifndef COSIMO_DESKTOP_DEV_SERVER_ORIGIN
+ #define COSIMO_DESKTOP_DEV_SERVER_ORIGIN "http://127.0.0.1:5174"
+#endif
+
 static bool initialiseCmajorLibrary()
 {
     static std::once_flag once;
@@ -37,10 +45,70 @@ static std::filesystem::path getFixedPatchLocation()
     return std::filesystem::path (COSIMO_PATCH_PATH);
 }
 
+static std::string getDesktopUISourceMode()
+{
+    return COSIMO_DESKTOP_UI_SOURCE_MODE;
+}
+
+static std::string getDesktopDevServerOrigin()
+{
+    return COSIMO_DESKTOP_DEV_SERVER_ORIGIN;
+}
+
+static std::string createDesktopUILoaderSetupCode()
+{
+    auto setupCode = "window.__COSIMO_DESKTOP_UI_SOURCE_MODE__ = "
+                   + choc::json::getEscapedQuotedString (getDesktopUISourceMode())
+                   + ";";
+
+    if (getDesktopUISourceMode() == "dev-server")
+    {
+        setupCode += "\nwindow.__COSIMO_DESKTOP_DEV_SERVER_ORIGIN__ = "
+                  + choc::json::getEscapedQuotedString (getDesktopDevServerOrigin())
+                  + ";";
+
+        // The embedded Cmajor shell injects an unlayered blanket reset:
+        //   * { box-sizing: border-box; padding: 0; margin: 0; border: 0; }
+        // In light-DOM dev mode that outranks our layered Tailwind utilities and
+        // wipes layout spacing inside the synth UI. Strip only the destructive
+        // properties before the desktop view is created, while preserving the
+        // useful box-sizing reset.
+        setupCode += R"(
+for (const styleSheet of Array.from(document.styleSheets))
+{
+    let rules;
+
+    try
+    {
+        rules = styleSheet.cssRules;
+    }
+    catch
+    {
+        continue;
+    }
+
+    for (const rule of Array.from(rules))
+    {
+        if (!(rule instanceof CSSStyleRule) || rule.selectorText !== "*")
+            continue;
+
+        rule.style.removeProperty("padding");
+        rule.style.removeProperty("margin");
+        rule.style.removeProperty("border");
+    }
+}
+)";
+    }
+
+    return setupCode;
+}
+
 class FixedPatchInstrumentDevPlugin
     : public cmaj::plugin::JUCEPluginBase<FixedPatchInstrumentDevPlugin>
 {
 public:
+    struct Editor;
+
     FixedPatchInstrumentDevPlugin (std::shared_ptr<cmaj::Patch> patchToUse,
                                    std::filesystem::path manifestLocationToUse)
         : cmaj::plugin::JUCEPluginBase<FixedPatchInstrumentDevPlugin> (
@@ -48,10 +116,174 @@ public:
               preloadBusLayout (*patchToUse, manifestLocationToUse)),
           manifestLocation (std::move (manifestLocationToUse))
     {
+        patchChangeCallback = [this] (auto&)
+        {
+            if (auto* editor = dynamic_cast<Editor*> (getActiveEditor()))
+                editor->onPatchChanged();
+        };
+
+        patch->statusChanged = [this] (const auto& status)
+        {
+            setStatusMessage (status.statusMessage, status.messageList.hasErrors());
+
+            if (auto* editor = dynamic_cast<Editor*> (getActiveEditor()))
+                editor->statusMessageChanged();
+        };
+
         // Match Cmajor's fixed-patch startup order: give the patch valid playback
         // params before the first synchronous load so it can build a playable renderer.
         applyRateAndBlockSize (44100, 128);
         setFixedStateSynchronously (createEmptyState (manifestLocation));
+    }
+
+    struct Editor final : public juce::AudioProcessorEditor
+    {
+        explicit Editor (FixedPatchInstrumentDevPlugin& ownerToUse)
+            : juce::AudioProcessorEditor (ownerToUse),
+              owner (ownerToUse),
+              patchWebView (std::make_unique<cmaj::PatchWebView> (*owner.patch, derivePatchViewSize (owner)))
+        {
+            patchWebView->extraSetupCode = createDesktopUILoaderSetupCode();
+            patchWebViewHolder = choc::ui::createJUCEWebViewHolder (patchWebView->getWebView());
+            patchWebViewHolder->setSize ((int) patchWebView->width, (int) patchWebView->height);
+
+            setResizeLimits (250, 160, 32768, 32768);
+
+            lookAndFeel.setColour (juce::TextEditor::outlineColourId, juce::Colours::transparentBlack);
+            lookAndFeel.setColour (juce::TextEditor::backgroundColourId, juce::Colours::transparentBlack);
+
+            if (auto manifest = owner.patch->getManifest())
+                if (auto defaultView = manifest->findDefaultView())
+                    if (auto colour = choc::text::trim (defaultView->view["background"].toString()); ! colour.empty())
+                        lookAndFeel.setColour (juce::ResizableWindow::backgroundColourId, juce::Colour::fromString (colour));
+
+            setLookAndFeel (&lookAndFeel);
+
+            extraComp = owner.createExtraComponent();
+
+            onPatchChanged (false);
+
+            if (extraComp)
+                addAndMakeVisible (*extraComp);
+
+            statusMessageChanged();
+
+            juce::Font::setDefaultMinimumHorizontalScaleFactor (1.0f);
+        }
+
+        ~Editor() override
+        {
+            owner.editorBeingDeleted (this);
+            setLookAndFeel (nullptr);
+            patchWebViewHolder.reset();
+            patchWebView.reset();
+        }
+
+        void statusMessageChanged()
+        {
+            owner.refreshExtraComp (extraComp.get());
+            patchWebView->setStatusMessage (owner.statusMessage);
+        }
+
+        static cmaj::PatchManifest::View derivePatchViewSize (const FixedPatchInstrumentDevPlugin& owner)
+        {
+            auto view = cmaj::PatchManifest::View
+            {
+                choc::json::create ("width", owner.lastEditorWidth,
+                                    "height", owner.lastEditorHeight)
+            };
+
+            if (auto manifest = owner.patch->getManifest())
+                if (auto defaultView = manifest->findDefaultView())
+                    if (owner.lastEditorWidth == 0 && owner.lastEditorHeight == 0)
+                        view = *defaultView;
+
+            if (view.getWidth() == 0)   view.view.setMember ("width", defaultWidth);
+            if (view.getHeight() == 0)  view.view.setMember ("height", defaultHeight);
+
+            return view;
+        }
+
+        void onPatchChanged (bool forceReload = true)
+        {
+            if (owner.isViewVisible())
+            {
+                patchWebView->setActive (true);
+                patchWebView->update (derivePatchViewSize (owner));
+                patchWebViewHolder->setSize ((int) patchWebView->width, (int) patchWebView->height);
+
+                setResizable (patchWebView->resizable, false);
+
+                addAndMakeVisible (*patchWebViewHolder);
+                childBoundsChanged (nullptr);
+            }
+            else
+            {
+                removeChildComponent (patchWebViewHolder.get());
+
+                patchWebView->setActive (false);
+                patchWebViewHolder->setVisible (false);
+
+                setSize (defaultWidth, defaultHeight);
+                setResizable (true, false);
+            }
+
+            if (forceReload)
+                patchWebView->reload();
+        }
+
+        void childBoundsChanged (Component*) override
+        {
+            if (! isResizing && patchWebViewHolder->isVisible())
+                setSize (std::max (50, patchWebViewHolder->getWidth()),
+                         std::max (50, patchWebViewHolder->getHeight() + FixedPatchInstrumentDevPlugin::extraCompHeight));
+        }
+
+        void resized() override
+        {
+            isResizing = true;
+            juce::AudioProcessorEditor::resized();
+
+            auto bounds = getLocalBounds();
+
+            if (patchWebViewHolder->isVisible())
+            {
+                patchWebViewHolder->setBounds (bounds.removeFromTop (getHeight() - FixedPatchInstrumentDevPlugin::extraCompHeight));
+                bounds.removeFromTop (4);
+
+                if (getWidth() > 0 && getHeight() > 0)
+                {
+                    owner.lastEditorWidth = patchWebViewHolder->getWidth();
+                    owner.lastEditorHeight = patchWebViewHolder->getHeight();
+                }
+            }
+
+            if (extraComp)
+                extraComp->setBounds (bounds);
+
+            isResizing = false;
+        }
+
+        void paint (juce::Graphics& g) override
+        {
+            g.fillAll (getLookAndFeel().findColour (juce::ResizableWindow::backgroundColourId));
+        }
+
+        FixedPatchInstrumentDevPlugin& owner;
+        std::unique_ptr<cmaj::PatchWebView> patchWebView;
+        std::unique_ptr<juce::Component> patchWebViewHolder, extraComp;
+        juce::LookAndFeel_V4 lookAndFeel;
+        bool isResizing = false;
+
+        static constexpr int defaultWidth = 500;
+        static constexpr int defaultHeight = 400;
+
+        JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (Editor)
+    };
+
+    juce::AudioProcessorEditor* createEditor() override
+    {
+        return new Editor (*this);
     }
 
     void setStateInformation (const void* data, int size) override

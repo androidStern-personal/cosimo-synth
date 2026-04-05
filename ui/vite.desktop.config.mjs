@@ -196,7 +196,7 @@ export default defineConfig(({ command }) => ({
         lib: {
             entry: desktopPatchViewSource,
             formats: ["es"],
-            fileName: () => "index.js",
+            fileName: () => "app.js",
         },
         rollupOptions: {
             output: {

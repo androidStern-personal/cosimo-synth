@@ -27,6 +27,7 @@ declare global {
             emitEffectiveWavetablePosition: (position: number, voiceGeneration?: number) => void;
             emitEffectiveWarpState: (nextState: Parameters<MockPatchConnection["emitEffectiveWarpState"]>[0]) => void;
             emitEffectiveFilterState: (nextState: Parameters<MockPatchConnection["emitEffectiveFilterState"]>[0]) => void;
+            emitFilterSpectrum: (nextState: Parameters<MockPatchConnection["emitFilterSpectrum"]>[0]) => void;
             setStoredStateValue: (key: string, value: unknown) => void;
         };
     }
@@ -44,8 +45,14 @@ function getDesktopViewHost() {
     return harnessRoot.querySelector("cosimo-desktop-react-view");
 }
 
-function getDesktopShadowRoot() {
-    return getDesktopViewHost()?.shadowRoot ?? null;
+function getDesktopViewRoot() {
+    const host = getDesktopViewHost();
+
+    if (!host) {
+        return null;
+    }
+
+    return host.shadowRoot ?? host;
 }
 
 function readHarnessFatalErrorText() {
@@ -53,7 +60,7 @@ function readHarnessFatalErrorText() {
 }
 
 function readKeyboardDebug() {
-    const keyboard = getDesktopShadowRoot()?.querySelector(".keyboard") as {
+    const keyboard = getDesktopViewRoot()?.querySelector(".keyboard") as {
         debug?: unknown;
         resetDebug?: () => void;
     } | null;
@@ -61,19 +68,19 @@ function readKeyboardDebug() {
 }
 
 function readKeyboardAttribute(name: "note-count" | "root-note") {
-    const keyboard = getDesktopShadowRoot()?.querySelector(".keyboard");
+    const keyboard = getDesktopViewRoot()?.querySelector(".keyboard");
     return keyboard?.getAttribute(name) ?? null;
 }
 
 function clearKeyboardDebug() {
-    const keyboard = getDesktopShadowRoot()?.querySelector(".keyboard") as {
+    const keyboard = getDesktopViewRoot()?.querySelector(".keyboard") as {
         resetDebug?: () => void;
     } | null;
     keyboard?.resetDebug?.();
 }
 
 function readFilterGraphState() {
-    const rawDebug = getDesktopShadowRoot()?.querySelector('[data-role="filter-graph-debug"]')?.textContent ?? null;
+    const rawDebug = getDesktopViewRoot()?.querySelector('[data-role="filter-graph-debug"]')?.textContent ?? null;
 
     if (!rawDebug) {
         return null;
@@ -87,7 +94,7 @@ function readFilterGraphState() {
 }
 
 function readWavetableStageDebugState() {
-    const rawDebug = getDesktopShadowRoot()?.querySelector('[data-role="wavetable-stage-debug"]')?.textContent ?? null;
+    const rawDebug = getDesktopViewRoot()?.querySelector('[data-role="wavetable-stage-debug"]')?.textContent ?? null;
 
     if (!rawDebug) {
         return null;
@@ -138,14 +145,14 @@ try {
         patchConnection,
         getSnapshot: () => patchConnection.getDebugSnapshot(),
         getRenderedState: () => {
-            const shadowRoot = getDesktopShadowRoot();
+            const viewRoot = getDesktopViewRoot();
             return {
                 errorText: readHarnessFatalErrorText(),
-                hasCanvas: Boolean(shadowRoot?.querySelector(".cosimo-stage canvas")),
+                hasCanvas: Boolean(viewRoot?.querySelector(".cosimo-stage canvas")),
                 keyboardDebug: readKeyboardDebug(),
                 keyboardNoteCount: readKeyboardAttribute("note-count"),
                 keyboardRootNote: readKeyboardAttribute("root-note"),
-                stageLabel: shadowRoot?.querySelector(".cosimo-stage .truncate")?.textContent?.trim() ?? null,
+                stageLabel: viewRoot?.querySelector(".cosimo-stage .truncate")?.textContent?.trim() ?? null,
                 stageDebug: readWavetableStageDebugState(),
                 filterGraphState: readFilterGraphState(),
             };
@@ -166,6 +173,9 @@ try {
         },
         emitEffectiveFilterState: (nextState) => {
             patchConnection.emitEffectiveFilterState(nextState);
+        },
+        emitFilterSpectrum: (nextState) => {
+            patchConnection.emitFilterSpectrum(nextState);
         },
         setStoredStateValue: (key, value) => patchConnection.setStoredStateValue(key, value),
     };

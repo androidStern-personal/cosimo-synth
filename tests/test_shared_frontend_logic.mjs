@@ -22,6 +22,10 @@ async function loadFilterResponseModule() {
     return await loadUIModule(repoRoot, "ui/shared/filter-response.ts");
 }
 
+async function loadFilterSpectrumModule() {
+    return await loadUIModule(repoRoot, "ui/shared/filter-spectrum.ts");
+}
+
 test("display position matching ignores float noise after clamping but still rejects a real movement", async () => {
     const { displayPositionsMatch } = await loadRuntimeTableStateModule();
 
@@ -319,6 +323,256 @@ test("higher Q narrows and raises the bandpass response", async () => {
 
     assert.ok(lowQCenter < highQCenter);
     assert.ok((highQCenter - highQOffBand) > (lowQCenter - lowQOffBand));
+});
+
+test("filter spectrum normalization accepts wrapped payloads and rejects malformed messages", async () => {
+    const { normalizeFilterSpectrumMessage } = await loadFilterSpectrumModule();
+
+    assert.deepEqual(normalizeFilterSpectrumMessage({
+        event: {
+            sampleRateHz: 48_000,
+            magnitudes: [0, 1, 2, 3, 4, 5, 6, 7],
+        },
+    }), {
+        sampleRateHz: 48_000,
+        magnitudes: [0, 1, 2, 3, 4, 5, 6, 7],
+    });
+    assert.equal(normalizeFilterSpectrumMessage({
+        event: {
+            sampleRateHz: "broken",
+            magnitudes: [0, 1, 2, 3, 4, 5, 6, 7],
+        },
+    }), null);
+    assert.equal(normalizeFilterSpectrumMessage({
+        event: {
+            sampleRateHz: 44_100,
+            magnitudes: [0, 1, 2],
+        },
+    }), null);
+});
+
+test("filter spectrum bands are dense, monotonic, and log-spaced", async () => {
+    const {
+        buildFilterSpectrumBands,
+        buildFilterSpectrumGraphPoints,
+        FILTER_SPECTRUM_BAND_COUNT,
+        FILTER_SPECTRUM_GRAPH_POINT_COUNT,
+    } = await loadFilterSpectrumModule();
+
+    const bands = buildFilterSpectrumBands();
+    const graphPoints = buildFilterSpectrumGraphPoints();
+
+    assert.equal(bands.length, FILTER_SPECTRUM_BAND_COUNT);
+    assert.equal(graphPoints.length, FILTER_SPECTRUM_GRAPH_POINT_COUNT);
+    assert.ok(graphPoints.length > bands.length);
+    assert.ok(bands.length >= 120);
+    assert.ok(Math.abs(bands[0].lowHz - 20) < 1e-6);
+    assert.ok(Math.abs(bands[bands.length - 1].highHz - 20_000) < 1e-6);
+
+    for (let index = 1; index < bands.length; index += 1) {
+        assert.ok(bands[index].lowHz > bands[index - 1].lowHz);
+        assert.ok(bands[index].centerHz > bands[index - 1].centerHz);
+        assert.ok(bands[index].highHz > bands[index - 1].highHz);
+        assert.ok(bands[index].lowHz < bands[index].centerHz);
+        assert.ok(bands[index].centerHz < bands[index].highHz);
+    }
+
+    const ratioNearStart = bands[10].centerHz / bands[9].centerHz;
+    const ratioNearMiddle = bands[60].centerHz / bands[59].centerHz;
+    const ratioNearEnd = bands[110].centerHz / bands[109].centerHz;
+    assert.ok(Math.abs(ratioNearStart - ratioNearMiddle) < 0.01);
+    assert.ok(Math.abs(ratioNearMiddle - ratioNearEnd) < 0.01);
+});
+
+test("filter spectrum display frame preserves low-frequency and high-frequency emphasis and keeps absolute dB differences", async () => {
+    const {
+        buildFilterSpectrumBands,
+        buildFilterSpectrumGraphPoints,
+        createFilterSpectrumDisplayFrame,
+        FILTER_SPECTRUM_MIN_DB,
+    } = await loadFilterSpectrumModule();
+    const bands = buildFilterSpectrumBands();
+    const graphPoints = buildFilterSpectrumGraphPoints();
+    const lowHeavyMagnitudes = Array.from({ length: 64 }, (_, index) => (
+        index === 2 ? 0.03 : index === 3 ? 0.022 : 1e-5
+    ));
+    const highHeavyMagnitudes = Array.from({ length: 64 }, (_, index) => (
+        index === 60 ? 0.03 : index === 58 ? 0.022 : 1e-5
+    ));
+    const lowerLevelMagnitudes = lowHeavyMagnitudes.map((value) => value * 0.5);
+
+    const lowHeavyDisplay = createFilterSpectrumDisplayFrame({
+        frame: {
+            sampleRateHz: 44_100,
+            magnitudes: lowHeavyMagnitudes,
+        },
+        bands,
+        graphPoints,
+    });
+    const highHeavyDisplay = createFilterSpectrumDisplayFrame({
+        frame: {
+            sampleRateHz: 44_100,
+            magnitudes: highHeavyMagnitudes,
+        },
+        bands,
+        graphPoints,
+    });
+    const lowerLevelDisplay = createFilterSpectrumDisplayFrame({
+        frame: {
+            sampleRateHz: 44_100,
+            magnitudes: lowerLevelMagnitudes,
+        },
+        bands,
+        graphPoints,
+    });
+    const silentDisplay = createFilterSpectrumDisplayFrame({
+        frame: {
+            sampleRateHz: 44_100,
+            magnitudes: new Array(64).fill(0),
+        },
+        bands,
+        graphPoints,
+    });
+
+    assert.ok(lowHeavyDisplay);
+    assert.ok(highHeavyDisplay);
+    assert.ok(lowerLevelDisplay);
+    assert.ok(silentDisplay);
+    assert.ok(lowHeavyDisplay.peakBandIndex < highHeavyDisplay.peakBandIndex);
+    assert.ok(lowHeavyDisplay.peakGraphPointIndex < highHeavyDisplay.peakGraphPointIndex);
+    assert.equal(lowHeavyDisplay.graphMagnitudesDb.length, graphPoints.length);
+    assert.ok((lowHeavyDisplay.bandMagnitudesDb[lowHeavyDisplay.peakBandIndex] - lowerLevelDisplay.bandMagnitudesDb[lowerLevelDisplay.peakBandIndex]) > 5.5);
+    assert.deepEqual(
+        silentDisplay.bandMagnitudesDb,
+        bands.map(() => FILTER_SPECTRUM_MIN_DB),
+    );
+    assert.deepEqual(
+        silentDisplay.graphMagnitudesDb,
+        graphPoints.map(() => FILTER_SPECTRUM_MIN_DB),
+    );
+});
+
+test("filter spectrum smoothing decays gradually and peak hold persists before fading", async () => {
+    const {
+        advanceFilterSpectrumDisplayState,
+        buildFilterSpectrumBands,
+        buildFilterSpectrumGraphPoints,
+        createFilterSpectrumDisplayFrame,
+    } = await loadFilterSpectrumModule();
+
+    const bands = buildFilterSpectrumBands();
+    const graphPoints = buildFilterSpectrumGraphPoints();
+    const firstLoudFrame = createFilterSpectrumDisplayFrame({
+        frame: {
+            sampleRateHz: 44_100,
+            magnitudes: Array.from({ length: 64 }, (_, index) => (index === 2 ? 0.03 : 1e-5)),
+        },
+        bands,
+        graphPoints,
+    });
+    const quieterFrame = createFilterSpectrumDisplayFrame({
+        frame: {
+            sampleRateHz: 44_100,
+            magnitudes: Array.from({ length: 64 }, (_, index) => (index === 2 ? 0.002 : 1e-5)),
+        },
+        bands,
+        graphPoints,
+    });
+
+    const firstState = advanceFilterSpectrumDisplayState(null, firstLoudFrame, 0);
+    const holdState = advanceFilterSpectrumDisplayState(firstState, quieterFrame, 100);
+    const fadedState = advanceFilterSpectrumDisplayState(holdState, quieterFrame, 500);
+
+    const peakIndex = firstState.peakBandIndex;
+    assert.equal(firstState.smoothedMagnitudesDb[peakIndex], firstState.bandMagnitudesDb[peakIndex]);
+    assert.equal(firstState.peakMagnitudesDb[peakIndex], firstState.bandMagnitudesDb[peakIndex]);
+    assert.ok(holdState.smoothedMagnitudesDb[peakIndex] > quieterFrame.bandMagnitudesDb[peakIndex]);
+    assert.equal(holdState.peakMagnitudesDb[peakIndex], firstState.peakMagnitudesDb[peakIndex]);
+    assert.ok(fadedState.peakMagnitudesDb[peakIndex] < holdState.peakMagnitudesDb[peakIndex]);
+    assert.ok(fadedState.peakMagnitudesDb[peakIndex] >= fadedState.smoothedMagnitudesDb[peakIndex]);
+});
+
+test("filter spectrum render modes cycle predictably and change geometry shape", async () => {
+    const {
+        FILTER_SPECTRUM_RENDER_MODE_OPTIONS,
+        buildFilterSpectrumBands,
+        buildFilterSpectrumGraphPoints,
+        buildFilterSpectrumRenderGeometry,
+        createFilterSpectrumDisplayFrame,
+        advanceFilterSpectrumDisplayState,
+        cycleFilterSpectrumRenderMode,
+    } = await loadFilterSpectrumModule();
+
+    assert.deepEqual(
+        FILTER_SPECTRUM_RENDER_MODE_OPTIONS.map((option) => option.value),
+        ["graph", "bars", "round-bars"],
+    );
+    assert.equal(cycleFilterSpectrumRenderMode("graph"), "bars");
+    assert.equal(cycleFilterSpectrumRenderMode("bars"), "round-bars");
+    assert.equal(cycleFilterSpectrumRenderMode("round-bars"), "graph");
+
+    const frame = createFilterSpectrumDisplayFrame({
+        frame: {
+            sampleRateHz: 44_100,
+            magnitudes: Array.from({ length: 64 }, (_, index) => (
+                index === 2 ? 0.03 : index === 3 ? 0.018 : index === 48 ? 0.012 : 1e-5
+            )),
+        },
+        bands: buildFilterSpectrumBands(),
+        graphPoints: buildFilterSpectrumGraphPoints(),
+    });
+    const displayState = advanceFilterSpectrumDisplayState(null, frame, 0);
+    const graphGeometry = buildFilterSpectrumRenderGeometry({
+        renderMode: "graph",
+        width: 640,
+        height: 240,
+        displayState,
+    });
+    const barsGeometry = buildFilterSpectrumRenderGeometry({
+        renderMode: "bars",
+        width: 640,
+        height: 240,
+        displayState,
+    });
+    const roundBarsGeometry = buildFilterSpectrumRenderGeometry({
+        renderMode: "round-bars",
+        width: 640,
+        height: 240,
+        displayState,
+    });
+
+    assert.equal(graphGeometry.kind, "graph");
+    assert.equal(graphGeometry.pointCount, displayState.graphPoints.length);
+    assert.equal(barsGeometry.kind, "bars");
+    assert.equal(barsGeometry.barCount, displayState.bands.length);
+    assert.equal(barsGeometry.rounded, false);
+    assert.equal(roundBarsGeometry.kind, "bars");
+    assert.equal(roundBarsGeometry.barCount, displayState.bands.length);
+    assert.equal(roundBarsGeometry.rounded, true);
+    assert.ok(roundBarsGeometry.bars.every((bar) => bar.radius >= 0));
+    assert.ok(roundBarsGeometry.bars.some((bar) => bar.radius > 0));
+});
+
+test("filter spectrum tick helpers expose readable frequency and dB labels", async () => {
+    const { buildFilterSpectrumFrequencyTicks, buildFilterSpectrumDbTicks } = await loadFilterSpectrumModule();
+
+    const frequencyTicks = buildFilterSpectrumFrequencyTicks();
+    const dbTicks = buildFilterSpectrumDbTicks();
+
+    assert.deepEqual(
+        frequencyTicks.map((tick) => tick.label),
+        ["20", "50", "100", "200", "500", "1k", "2k", "5k", "10k", "20k"],
+    );
+    assert.deepEqual(
+        dbTicks.map((tick) => tick.label),
+        ["-18", "-36", "-54", "-72", "-90"],
+    );
+    for (let index = 1; index < frequencyTicks.length; index += 1) {
+        assert.ok(frequencyTicks[index].normalizedX > frequencyTicks[index - 1].normalizedX);
+    }
+    for (let index = 1; index < dbTicks.length; index += 1) {
+        assert.ok(dbTicks[index].normalizedY > dbTicks[index - 1].normalizedY);
+    }
 });
 
 test("runtime table presentation falls back cleanly when no runtime state exists", async () => {

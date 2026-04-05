@@ -1,0 +1,101 @@
+namespace wt
+{
+    processor FilterSpectrumAnalyzer
+    {
+        input stream float32 in;
+        output event FilterSpectrumFrame filterSpectrum;
+
+        let hopSize = int32 (float32 (processor.frequency) / filterSpectrumFramesPerSecond);
+        let overlapSize = filterSpectrumWindowSize - hopSize;
+
+        float32[filterSpectrumWindowSize] analysisBuffer;
+        float32[filterSpectrumFFTSize] fftBuffer;
+
+        float32[filterSpectrumWindowSize] hann()
+        {
+            float32[filterSpectrumWindowSize] window;
+
+            for (wrap<filterSpectrumWindowSize> index)
+                window[index] = 0.5f * (1.0f - std::intrinsics::cos (
+                    (float32 (twoPi) * float32 (index)) / float32 (filterSpectrumWindowSize - 1)
+                ));
+
+            return window;
+        }
+
+        float32[filterSpectrumWindowSize] window = hann();
+        float32 normalizationFactor = 1.0f / float32 (filterSpectrumWindowSize);
+
+        void copyAnalysisWindowToFFTBuffer()
+        {
+            for (wrap<filterSpectrumWindowSize> index)
+                fftBuffer[index] = analysisBuffer[index] * window[index];
+
+            for (int32 index = filterSpectrumWindowSize; index < filterSpectrumFFTSize; ++index)
+                fftBuffer.at (index) = 0.0f;
+        }
+
+        void primeAnalysisWindow()
+        {
+            for (wrap<filterSpectrumWindowSize> index)
+            {
+                analysisBuffer[index] = in;
+                advance();
+            }
+        }
+
+        void advanceToNextWindow()
+        {
+            if (hopSize >= filterSpectrumWindowSize)
+            {
+                for (wrap<filterSpectrumWindowSize> index)
+                {
+                    analysisBuffer[index] = in;
+                    advance();
+                }
+
+                let remainingFrames = hopSize - filterSpectrumWindowSize;
+
+                if (remainingFrames > 0)
+                    for (int32 index = 0; index < remainingFrames; ++index)
+                        advance();
+
+                return;
+            }
+
+            for (int32 index = 0; index < overlapSize; ++index)
+                analysisBuffer.at (index) = analysisBuffer.at (index + hopSize);
+
+            for (int32 index = overlapSize; index < filterSpectrumWindowSize; ++index)
+            {
+                analysisBuffer.at (index) = in;
+                advance();
+            }
+        }
+
+        void main()
+        {
+            primeAnalysisWindow();
+
+            loop
+            {
+                copyAnalysisWindowToFFTBuffer();
+                float32[filterSpectrumFFTSize] fft;
+                std::frequency::realOnlyForwardFFT (fftBuffer, fft);
+
+                FilterSpectrumFrame result;
+                result.sampleRateHz = float32 (processor.frequency);
+
+                for (wrap<filterSpectrumBinCount> index)
+                {
+                    let real = fft[index];
+                    let imag = fft.at (filterSpectrumBinCount + index);
+                    result.magnitudes[index] = std::intrinsics::sqrt ((real * real) + (imag * imag)) * normalizationFactor;
+                }
+
+                filterSpectrum <- result;
+                advanceToNextWindow();
+            }
+        }
+    }
+}

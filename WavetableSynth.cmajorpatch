@@ -13,6 +13,8 @@
   "isInstrument": true,
   "source": [
     "cmajor/FixedFrameOscillator.cmajor",
+    "cmajor/FilterSpectrumCommon.cmajor",
+    "cmajor/FilterSpectrumAnalyzer.cmajor",
     "cmajor/Mseg.cmajor",
     "cmajor/WavetableSynth.cmajor"
   ],

@@ -9,6 +9,11 @@ import {
     type ResourceClient,
 } from "../shared/resource-client";
 
+if (import.meta.env.DEV) {
+    void import("react-grab");
+    void import("@react-grab/mcp/client");
+}
+
 type ErrorBoundaryState = {
     errorMessage: string | null;
 };
@@ -86,20 +91,33 @@ class CosimoDesktopReactViewElement extends HTMLElement {
     }
 
     connectedCallback() {
-        if (!this.shadowRoot) {
-            this.attachShadow({ mode: "open" });
-        }
+        if (import.meta.env.DEV) {
+            this.ensureLightDomStyles();
 
-        if (!this.mountPoint || !this.root) {
-            const shadowRoot = this.shadowRoot!;
-            const style = document.createElement("style");
-            style.textContent = cssText;
-            const mountPoint = document.createElement("div");
-            mountPoint.style.width = "100%";
-            mountPoint.style.height = "100%";
-            shadowRoot.replaceChildren(style, mountPoint);
-            this.mountPoint = mountPoint;
-            this.root = createRoot(mountPoint);
+            if (!this.mountPoint || !this.root) {
+                const mountPoint = document.createElement("div");
+                mountPoint.style.width = "100%";
+                mountPoint.style.height = "100%";
+                this.replaceChildren(mountPoint);
+                this.mountPoint = mountPoint;
+                this.root = createRoot(mountPoint);
+            }
+        } else {
+            if (!this.shadowRoot) {
+                this.attachShadow({ mode: "open" });
+            }
+
+            if (!this.mountPoint || !this.root) {
+                const shadowRoot = this.shadowRoot!;
+                const style = document.createElement("style");
+                style.textContent = cssText;
+                const mountPoint = document.createElement("div");
+                mountPoint.style.width = "100%";
+                mountPoint.style.height = "100%";
+                shadowRoot.replaceChildren(style, mountPoint);
+                this.mountPoint = mountPoint;
+                this.root = createRoot(mountPoint);
+            }
         }
 
         this.style.display = "block";
@@ -111,6 +129,19 @@ class CosimoDesktopReactViewElement extends HTMLElement {
     disconnectedCallback() {
         this.root?.unmount();
         this.root = null;
+    }
+
+    private ensureLightDomStyles() {
+        const styleId = "cosimo-desktop-react-view-styles";
+
+        if (document.getElementById(styleId)) {
+            return;
+        }
+
+        const style = document.createElement("style");
+        style.id = styleId;
+        style.textContent = cssText.replaceAll(":host", getTagName());
+        document.head.appendChild(style);
     }
 
     private renderApp() {
