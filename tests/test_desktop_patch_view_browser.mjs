@@ -1420,7 +1420,7 @@ test("desktop filter graph follows live effective filter state and falls back to
     }
 });
 
-test("desktop filter graph renders smoothed spectrum bands with readable axes and ignores malformed updates", async () => {
+test("desktop filter graph cycles graph, bars, and round-bars analyzers while keeping live spectrum updates sane", async () => {
     const page = await openHarnessPage();
 
     try {
@@ -1452,11 +1452,18 @@ test("desktop filter graph renders smoothed spectrum bands with readable axes an
         renderedState = await getHarnessRenderedState(page);
         const lowHeavySpectrum = renderedState.filterGraphState.spectrum;
         assert.equal(lowHeavySpectrum.hasSpectrum, true);
+        assert.equal(lowHeavySpectrum.renderMode, "graph");
         assert.equal(lowHeavySpectrum.sourceBinCount, 64);
         assert.equal(lowHeavySpectrum.bandCount, 120);
+        assert.ok(lowHeavySpectrum.graphPointCount > lowHeavySpectrum.bandCount);
         assert.equal(lowHeavySpectrum.bandMagnitudesDb.length, 120);
         assert.equal(lowHeavySpectrum.smoothedMagnitudesDb.length, 120);
         assert.equal(lowHeavySpectrum.peakMagnitudesDb.length, 120);
+        assert.deepEqual(lowHeavySpectrum.renderGeometry, {
+            kind: "graph",
+            pointCount: lowHeavySpectrum.graphPointCount,
+            peakPointCount: lowHeavySpectrum.graphPointCount,
+        });
         assert.deepEqual(
             lowHeavySpectrum.frequencyTicks.map(({ label }) => label),
             ["20", "50", "100", "200", "500", "1k", "2k", "5k", "10k", "20k"],
@@ -1479,6 +1486,40 @@ test("desktop filter graph renders smoothed spectrum bands with readable axes an
 
         renderedState = await getHarnessRenderedState(page);
         assert.deepEqual(renderedState.filterGraphState.spectrum, lowHeavySpectrum);
+
+        await page.click('button[aria-label="Analyzer view Bars"]');
+        await page.waitForFunction(() => {
+            const spectrum = window.__COSIMO_DESKTOP_HARNESS__.getRenderedState().filterGraphState?.spectrum;
+            return spectrum?.renderMode === "bars" && spectrum?.renderGeometry?.kind === "bars" && spectrum?.renderGeometry?.rounded === false;
+        });
+
+        renderedState = await getHarnessRenderedState(page);
+        assert.equal(renderedState.filterGraphState.spectrum.renderMode, "bars");
+        assert.deepEqual(renderedState.filterGraphState.spectrum.renderGeometry, {
+            kind: "bars",
+            barCount: renderedState.filterGraphState.spectrum.bandCount,
+            rounded: false,
+        });
+
+        await page.click('button[aria-label="Cycle analyzer view"]');
+        await page.waitForFunction(() => {
+            const spectrum = window.__COSIMO_DESKTOP_HARNESS__.getRenderedState().filterGraphState?.spectrum;
+            return spectrum?.renderMode === "round-bars" && spectrum?.renderGeometry?.kind === "bars" && spectrum?.renderGeometry?.rounded === true;
+        });
+
+        renderedState = await getHarnessRenderedState(page);
+        assert.equal(renderedState.filterGraphState.spectrum.renderMode, "round-bars");
+        assert.deepEqual(renderedState.filterGraphState.spectrum.renderGeometry, {
+            kind: "bars",
+            barCount: renderedState.filterGraphState.spectrum.bandCount,
+            rounded: true,
+        });
+
+        await page.click('button[aria-label="Cycle analyzer view"]');
+        await page.waitForFunction(() => {
+            const spectrum = window.__COSIMO_DESKTOP_HARNESS__.getRenderedState().filterGraphState?.spectrum;
+            return spectrum?.renderMode === "graph" && spectrum?.renderGeometry?.kind === "graph";
+        });
 
         await page.evaluate(() => {
             const magnitudes = Array.from({ length: 64 }, (_, index) => (
@@ -1503,6 +1544,8 @@ test("desktop filter graph renders smoothed spectrum bands with readable axes an
         const highHeavySpectrum = renderedState.filterGraphState.spectrum;
         assert.notDeepEqual(highHeavySpectrum.bandMagnitudesDb, previousBandMagnitudesDb);
         assert.notDeepEqual(highHeavySpectrum.smoothedMagnitudesDb, previousSmoothedMagnitudesDb);
+        assert.equal(highHeavySpectrum.renderMode, "graph");
+        assert.equal(highHeavySpectrum.renderGeometry.kind, "graph");
 
         await page.evaluate(() => {
             const magnitudes = Array.from({ length: 64 }, (_, index) => (

@@ -38,6 +38,11 @@ import { NexusNumberField } from "./desktop-nexus-number-field";
 import {
     useSynthPatchViewModel,
 } from "../shared/synth-hooks";
+import {
+    FILTER_SPECTRUM_RENDER_MODE_OPTIONS,
+    cycleFilterSpectrumRenderMode,
+    type FilterSpectrumRenderMode,
+} from "../shared/filter-spectrum";
 
 const KEYBOARD_ROOT_NOTE_DEFAULT = 36;
 const KEYBOARD_ROOT_NOTE_MIN = 12;
@@ -258,6 +263,9 @@ function FilterSection({
     observedFilterState,
     observedFilterSpectrum,
 }: FilterSectionProps) {
+    const [spectrumRenderMode, setSpectrumRenderMode] = useState<FilterSpectrumRenderMode>("graph");
+    const selectedSpectrumMode = FILTER_SPECTRUM_RENDER_MODE_OPTIONS.find((option) => option.value === spectrumRenderMode)
+        ?? FILTER_SPECTRUM_RENDER_MODE_OPTIONS[0];
     const normalizedCutoff = clamp(
         (Math.log(Math.max(20, filterCutoff.value)) - Math.log(20)) / (Math.log(20_000) - Math.log(20)),
         0,
@@ -279,6 +287,36 @@ function FilterSection({
                 </div>
             </div>
 
+            <div className="flex flex-wrap items-center gap-2">
+                <div className="text-[11px] uppercase tracking-[0.18em] text-slate-300/60">Analyzer View</div>
+                <div className="inline-flex rounded-full border border-white/8 bg-black/20 p-1">
+                    {FILTER_SPECTRUM_RENDER_MODE_OPTIONS.map((option) => (
+                        <button
+                            key={option.value}
+                            type="button"
+                            aria-label={`Analyzer view ${option.label}`}
+                            aria-pressed={spectrumRenderMode === option.value}
+                            className={`rounded-full px-3 py-1 text-[10px] uppercase tracking-[0.18em] transition ${
+                                spectrumRenderMode === option.value
+                                    ? "bg-cyan-300/18 text-cyan-100"
+                                    : "text-slate-300/65 hover:text-slate-100"
+                            }`}
+                            onClick={() => setSpectrumRenderMode(option.value)}
+                        >
+                            {option.label}
+                        </button>
+                    ))}
+                </div>
+                <button
+                    type="button"
+                    aria-label="Cycle analyzer view"
+                    className="rounded-full border border-white/8 bg-black/20 px-3 py-2 text-[10px] uppercase tracking-[0.18em] text-slate-200/80 transition hover:border-cyan-200/35 hover:text-cyan-100"
+                    onClick={() => setSpectrumRenderMode((previousMode) => cycleFilterSpectrumRenderMode(previousMode))}
+                >
+                    Cycle: {selectedSpectrumMode.label}
+                </button>
+            </div>
+
             <FilterResponseGraph
                 baseMode={filterMode.value}
                 baseCutoffHz={filterCutoff.value}
@@ -288,6 +326,7 @@ function FilterSection({
                 liveQ={observedFilterState.q}
                 liveHasActive={observedFilterState.hasActive}
                 spectrumFrame={observedFilterSpectrum}
+                spectrumRenderMode={spectrumRenderMode}
                 onCutoffChange={(nextValue) => filterCutoff.commitValue(nextValue)}
                 onQChange={(nextValue) => filterQ.commitValue(nextValue)}
             />

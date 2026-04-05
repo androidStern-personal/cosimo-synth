@@ -41,9 +41,11 @@ import {
     buildFilterSpectrumBands,
     buildFilterSpectrumDbTicks,
     buildFilterSpectrumFrequencyTicks,
+    buildFilterSpectrumGraphPoints,
+    buildFilterSpectrumRenderGeometry,
     createFilterSpectrumDisplayFrame,
-    FILTER_SPECTRUM_MAX_DB,
-    FILTER_SPECTRUM_MIN_DB,
+    type FilterSpectrumRenderGeometry,
+    type FilterSpectrumRenderMode,
     type FilterSpectrumDisplayState,
     type FilterSpectrumFrame,
 } from "./filter-spectrum";
@@ -132,6 +134,7 @@ export type FilterResponseGraphProps = {
     liveQ: number;
     liveHasActive: boolean;
     spectrumFrame?: FilterSpectrumFrame | null;
+    spectrumRenderMode?: FilterSpectrumRenderMode;
     onCutoffChange: (nextValue: number) => void;
     onQChange: (nextValue: number) => void;
     className?: string;
@@ -706,14 +709,12 @@ function drawFilterSpectrumOverlay({
     canvas,
     width,
     height,
-    smoothedMagnitudesDb,
-    peakMagnitudesDb,
+    geometry,
 }: {
     canvas: HTMLCanvasElement;
     width: number;
     height: number;
-    smoothedMagnitudesDb: number[];
-    peakMagnitudesDb?: number[];
+    geometry: FilterSpectrumRenderGeometry;
 }) {
     const devicePixelRatio = window.devicePixelRatio || 1;
     const scaledWidth = Math.max(1, Math.round(width * devicePixelRatio));
@@ -733,53 +734,43 @@ function drawFilterSpectrumOverlay({
     context.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
     context.clearRect(0, 0, width, height);
 
-    const plot = buildMagnitudePlotPoints(smoothedMagnitudesDb, width, height, {
-        minDb: FILTER_SPECTRUM_MIN_DB,
-        maxDb: FILTER_SPECTRUM_MAX_DB,
-    });
-
-    if (plot.points.length === 0) {
-        return;
-    }
-
-    const gradient = context.createLinearGradient(0, plot.plotTop, 0, plot.plotBottom);
-    gradient.addColorStop(0, "rgba(94, 215, 255, 0.12)");
+    const gradient = context.createLinearGradient(0, geometry.plotTop, 0, geometry.plotBottom);
+    gradient.addColorStop(0, "rgba(94, 215, 255, 0.14)");
     gradient.addColorStop(1, "rgba(94, 215, 255, 0.00)");
 
-    context.beginPath();
-    context.moveTo(plot.points[0].x, plot.plotBottom);
-
-    for (const point of plot.points) {
-        context.lineTo(point.x, point.y);
-    }
-
-    context.lineTo(plot.points[plot.points.length - 1].x, plot.plotBottom);
-    context.closePath();
-    context.fillStyle = gradient;
-    context.fill();
-
-    context.beginPath();
-    for (let index = 0; index < plot.points.length; index += 1) {
-        const point = plot.points[index];
-        if (index === 0) {
-            context.moveTo(point.x, point.y);
-        } else {
-            context.lineTo(point.x, point.y);
+    if (geometry.kind === "graph") {
+        if (geometry.points.length === 0) {
+            return;
         }
-    }
-    context.strokeStyle = "rgba(114, 217, 255, 0.58)";
-    context.lineWidth = 1.75;
-    context.stroke();
-
-    if (Array.isArray(peakMagnitudesDb) && peakMagnitudesDb.length === smoothedMagnitudesDb.length) {
-        const peakPlot = buildMagnitudePlotPoints(peakMagnitudesDb, width, height, {
-            minDb: FILTER_SPECTRUM_MIN_DB,
-            maxDb: FILTER_SPECTRUM_MAX_DB,
-        });
 
         context.beginPath();
-        for (let index = 0; index < peakPlot.points.length; index += 1) {
-            const point = peakPlot.points[index];
+        context.moveTo(geometry.points[0].x, geometry.plotBottom);
+
+        for (const point of geometry.points) {
+            context.lineTo(point.x, point.y);
+        }
+
+        context.lineTo(geometry.points[geometry.points.length - 1].x, geometry.plotBottom);
+        context.closePath();
+        context.fillStyle = gradient;
+        context.fill();
+
+        context.beginPath();
+        for (let index = 0; index < geometry.points.length; index += 1) {
+            const point = geometry.points[index];
+            if (index === 0) {
+                context.moveTo(point.x, point.y);
+            } else {
+                context.lineTo(point.x, point.y);
+            }
+        }
+        context.strokeStyle = "rgba(114, 217, 255, 0.64)";
+        context.lineWidth = 1.9;
+        context.stroke();
+
+        context.beginPath();
+        for (let index = 0; index < geometry.peakPoints.length; index += 1) {
+            const point = geometry.peakPoints[index];
             if (index === 0) {
                 context.moveTo(point.x, point.y);
             } else {
@@ -787,10 +778,58 @@ function drawFilterSpectrumOverlay({
             }
         }
 
-        context.strokeStyle = "rgba(158, 231, 255, 0.28)";
+        context.strokeStyle = "rgba(158, 231, 255, 0.30)";
         context.lineWidth = 1;
         context.stroke();
+        return;
     }
+
+    const drawBarPath = (x: number, y: number, barWidth: number, barHeight: number, radius: number) => {
+        const right = x + barWidth;
+        const bottom = y + barHeight;
+        const safeRadius = Math.max(0, Math.min(radius, barWidth * 0.5, barHeight * 0.5));
+        context.beginPath();
+        context.moveTo(x, bottom);
+        context.lineTo(x, y + safeRadius);
+        if (safeRadius > 0) {
+            context.quadraticCurveTo(x, y, x + safeRadius, y);
+            context.lineTo(right - safeRadius, y);
+            context.quadraticCurveTo(right, y, right, y + safeRadius);
+        } else {
+            context.lineTo(x, y);
+            context.lineTo(right, y);
+        }
+        context.lineTo(right, bottom);
+        context.closePath();
+    };
+
+    for (const bar of geometry.bars) {
+        if (bar.height <= 0 || bar.width <= 0) {
+            continue;
+        }
+
+        drawBarPath(bar.x, bar.y, bar.width, bar.height, bar.radius);
+        context.fillStyle = gradient;
+        context.fill();
+        context.strokeStyle = "rgba(114, 217, 255, 0.56)";
+        context.lineWidth = geometry.rounded ? 1.45 : 1.1;
+        context.stroke();
+    }
+
+    context.beginPath();
+    for (const peakBar of geometry.peakBars) {
+        if (peakBar.width <= 0) {
+            continue;
+        }
+
+        const centerX = peakBar.x + (peakBar.width * 0.5);
+        const halfWidth = Math.min(5, peakBar.width * 0.45);
+        context.moveTo(centerX - halfWidth, peakBar.y);
+        context.lineTo(centerX + halfWidth, peakBar.y);
+    }
+    context.strokeStyle = "rgba(158, 231, 255, 0.32)";
+    context.lineWidth = 1;
+    context.stroke();
 }
 
 export function FilterResponseGraph({
@@ -802,6 +841,7 @@ export function FilterResponseGraph({
     liveQ,
     liveHasActive,
     spectrumFrame = null,
+    spectrumRenderMode = "graph",
     onCutoffChange,
     onQChange,
     className,
@@ -830,6 +870,7 @@ export function FilterResponseGraph({
         [liveModel.magnitudesDb, size.height, size.width],
     );
     const spectrumBands = useMemo(() => buildFilterSpectrumBands(), []);
+    const spectrumGraphPoints = useMemo(() => buildFilterSpectrumGraphPoints(), []);
     const spectrumFrequencyTicks = useMemo(() => buildFilterSpectrumFrequencyTicks(), []);
     const spectrumDbTicks = useMemo(() => buildFilterSpectrumDbTicks(), []);
     const [spectrumDisplay, setSpectrumDisplay] = useState<FilterSpectrumDisplayState | null>(null);
@@ -838,6 +879,7 @@ export function FilterResponseGraph({
         const nextFrame = createFilterSpectrumDisplayFrame({
             frame: spectrumFrame,
             bands: spectrumBands,
+            graphPoints: spectrumGraphPoints,
         });
 
         if (!nextFrame) {
@@ -847,7 +889,18 @@ export function FilterResponseGraph({
         setSpectrumDisplay((previousState) => (
             advanceFilterSpectrumDisplayState(previousState, nextFrame, performance.now())
         ));
-    }, [spectrumBands, spectrumFrame]);
+    }, [spectrumBands, spectrumFrame, spectrumGraphPoints]);
+
+    const spectrumGeometry = useMemo(() => (
+        spectrumDisplay
+            ? buildFilterSpectrumRenderGeometry({
+                renderMode: spectrumRenderMode,
+                width: size.width,
+                height: size.height,
+                displayState: spectrumDisplay,
+            })
+            : null
+    ), [size.height, size.width, spectrumDisplay, spectrumRenderMode]);
 
     useEffect(() => {
         const canvas = spectrumCanvasRef.current;
@@ -857,13 +910,13 @@ export function FilterResponseGraph({
         }
 
         let animationFrameID = window.requestAnimationFrame(() => {
-            if (!spectrumDisplay) {
-                drawFilterSpectrumOverlay({
-                    canvas,
-                    width: size.width,
-                    height: size.height,
-                    smoothedMagnitudesDb: spectrumBands.map(() => FILTER_SPECTRUM_MIN_DB),
-                });
+            if (!spectrumGeometry) {
+                const context = canvas.getContext("2d");
+                if (context) {
+                    const devicePixelRatio = window.devicePixelRatio || 1;
+                    context.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+                    context.clearRect(0, 0, size.width, size.height);
+                }
                 return;
             }
 
@@ -871,15 +924,14 @@ export function FilterResponseGraph({
                 canvas,
                 width: size.width,
                 height: size.height,
-                smoothedMagnitudesDb: spectrumDisplay.smoothedMagnitudesDb,
-                peakMagnitudesDb: spectrumDisplay.peakMagnitudesDb,
+                geometry: spectrumGeometry,
             });
         });
 
         return () => {
             window.cancelAnimationFrame(animationFrameID);
         };
-    }, [size.height, size.width, spectrumBands, spectrumDisplay]);
+    }, [size.height, size.width, spectrumGeometry]);
 
     const applyPointerPosition = (clientX: number, clientY: number) => {
         const element = surfaceRef.current;
@@ -913,28 +965,59 @@ export function FilterResponseGraph({
         },
         spectrum: spectrumDisplay ? {
             hasSpectrum: true,
+            renderMode: spectrumRenderMode,
             sampleRateHz: spectrumDisplay.sampleRateHz,
             sourceBinCount: spectrumDisplay.sourceBinCount,
             bandCount: spectrumDisplay.bands.length,
+            graphPointCount: spectrumDisplay.graphPoints.length,
             peakBandIndex: spectrumDisplay.peakBandIndex,
+            peakGraphPointIndex: spectrumDisplay.peakGraphPointIndex,
             bandMagnitudesDb: spectrumDisplay.bandMagnitudesDb,
             smoothedMagnitudesDb: spectrumDisplay.smoothedMagnitudesDb,
             peakMagnitudesDb: spectrumDisplay.peakMagnitudesDb,
+            renderGeometry: spectrumGeometry ? (
+                spectrumGeometry.kind === "graph"
+                    ? {
+                        kind: "graph",
+                        pointCount: spectrumGeometry.pointCount,
+                        peakPointCount: spectrumGeometry.peakPointCount,
+                    }
+                    : {
+                        kind: "bars",
+                        barCount: spectrumGeometry.barCount,
+                        rounded: spectrumGeometry.rounded,
+                    }
+            ) : null,
             frequencyTicks: spectrumDisplay.frequencyTicks,
             dbTicks: spectrumDisplay.dbTicks,
         } : {
             hasSpectrum: false,
+            renderMode: spectrumRenderMode,
             sampleRateHz: null,
             sourceBinCount: 0,
             bandCount: spectrumBands.length,
+            graphPointCount: spectrumGraphPoints.length,
             peakBandIndex: -1,
+            peakGraphPointIndex: -1,
             bandMagnitudesDb: [],
             smoothedMagnitudesDb: [],
             peakMagnitudesDb: [],
+            renderGeometry: null,
             frequencyTicks: spectrumFrequencyTicks,
             dbTicks: spectrumDbTicks,
         },
-    }), [baseModel, liveHasActive, liveModel, spectrumBands.length, spectrumDbTicks, spectrumDisplay, spectrumFrequencyTicks]);
+    }), [
+        baseModel,
+        liveHasActive,
+        liveModel,
+        spectrumBands.length,
+        spectrumDbTicks,
+        spectrumDisplay,
+        spectrumFrequencyTicks,
+        spectrumGeometry,
+        spectrumGraphPoints.length,
+        spectrumRenderMode,
+    ]);
 
     return (
         <div className={joinClasses("grid gap-2", className)}>
