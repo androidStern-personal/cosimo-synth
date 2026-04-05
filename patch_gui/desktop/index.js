@@ -14933,18 +14933,61 @@ function createFilterResponseModel({
     minIndex
   };
 }
-const FILTER_SPECTRUM_MIN_DB = -60;
-const FILTER_SPECTRUM_MAX_DB = 0;
-const FILTER_SPECTRUM_DISPLAY_POINT_COUNT = 192;
-function buildFilterSpectrumDisplayFrequencies(pointCount = FILTER_SPECTRUM_DISPLAY_POINT_COUNT) {
-  return Array.from({ length: pointCount }, (_, index) => normalizedToFilterCutoffHz(index / Math.max(1, pointCount - 1)));
-}
+const FILTER_SPECTRUM_MIN_DB = -90;
+const FILTER_SPECTRUM_MAX_DB = -18;
+const FILTER_SPECTRUM_BAND_COUNT = 120;
+const FILTER_SPECTRUM_ATTACK_TIME_MS = 70;
+const FILTER_SPECTRUM_RELEASE_TIME_MS = 180;
+const FILTER_SPECTRUM_PEAK_HOLD_MS = 300;
+const FILTER_SPECTRUM_PEAK_FALL_RATE_DB_PER_SECOND = 24;
+const FILTER_SPECTRUM_FREQUENCY_TICK_VALUES = [20, 50, 100, 200, 500, 1e3, 2e3, 5e3, 1e4, 2e4];
+const FILTER_SPECTRUM_DB_TICK_VALUES = [-18, -36, -54, -72, -90];
 function clamp$3(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 function coerceFiniteNumber(value) {
   const coerced = Number(value);
   return Number.isFinite(coerced) ? coerced : null;
+}
+function frequencyHzToNormalized(value) {
+  const clampedHz = clamp$3(value, FILTER_CUTOFF_MIN_HZ, FILTER_CUTOFF_MAX_HZ);
+  const minLog = Math.log(FILTER_CUTOFF_MIN_HZ);
+  const maxLog = Math.log(FILTER_CUTOFF_MAX_HZ);
+  return clamp$3((Math.log(clampedHz) - minLog) / (maxLog - minLog), 0, 1);
+}
+function dbToNormalizedY(value) {
+  return clamp$3((value - FILTER_SPECTRUM_MAX_DB) / (FILTER_SPECTRUM_MIN_DB - FILTER_SPECTRUM_MAX_DB), 0, 1);
+}
+function formatFrequencyLabel(frequencyHz) {
+  if (frequencyHz >= 1e3) {
+    const kilohertz = frequencyHz / 1e3;
+    return Number.isInteger(kilohertz) ? `${kilohertz}k` : `${kilohertz.toFixed(1)}k`;
+  }
+  return String(Math.round(frequencyHz));
+}
+function magnitudeToDb(magnitude) {
+  return clamp$3(20 * Math.log10(Math.max(1e-9, magnitude)), FILTER_SPECTRUM_MIN_DB, FILTER_SPECTRUM_MAX_DB);
+}
+function findPeakIndex(values) {
+  let peakIndex = 0;
+  for (let index = 1; index < values.length; index += 1) {
+    if (values[index] > values[peakIndex]) {
+      peakIndex = index;
+    }
+  }
+  return peakIndex;
+}
+function interpolateFrequency(minHz, maxHz, normalized) {
+  const minLog = Math.log(minHz);
+  const maxLog = Math.log(maxHz);
+  return Math.exp(minLog + (maxLog - minLog) * normalized);
+}
+function sampleMagnitudeAtIndexRange(magnitudes, startIndex, endIndex) {
+  let maxMagnitude = 0;
+  for (let index = startIndex; index <= endIndex; index += 1) {
+    maxMagnitude = Math.max(maxMagnitude, magnitudes[index] ?? 0);
+  }
+  return maxMagnitude;
 }
 function normalizeFilterSpectrumMessage(message) {
   const payload = message?.event ?? message;
@@ -14956,67 +14999,129 @@ function normalizeFilterSpectrumMessage(message) {
   if (!sampleRateHz || sampleRateHz <= 0 || !Array.isArray(magnitudes) || magnitudes.length < 8) {
     return null;
   }
-  const normalizedMagnitudes = magnitudes.map((value) => Math.max(0, Number(value) || 0));
   return {
     sampleRateHz,
-    magnitudes: normalizedMagnitudes
+    magnitudes: magnitudes.map((value) => Math.max(0, Number(value) || 0))
   };
 }
-function sampleMagnitudeAtFrequency({
-  magnitudes,
-  sampleRateHz,
-  frequencyHz
-}) {
-  const nyquistHz = Math.max(1, sampleRateHz * 0.5);
-  const clampedFrequencyHz = clamp$3(clampFilterCutoffHz(frequencyHz), 0, nyquistHz);
-  const maxBinIndex = Math.max(0, magnitudes.length - 1);
-  const exactIndex = clampedFrequencyHz / nyquistHz * maxBinIndex;
-  const leftIndex = Math.max(0, Math.min(maxBinIndex, Math.floor(exactIndex)));
-  const rightIndex = Math.max(0, Math.min(maxBinIndex, Math.ceil(exactIndex)));
-  if (leftIndex === rightIndex) {
-    return magnitudes[leftIndex] ?? 0;
-  }
-  const mix = exactIndex - leftIndex;
-  const leftMagnitude = magnitudes[leftIndex] ?? 0;
-  const rightMagnitude = magnitudes[rightIndex] ?? 0;
-  return leftMagnitude + (rightMagnitude - leftMagnitude) * mix;
+function buildFilterSpectrumBands(pointCount = FILTER_SPECTRUM_BAND_COUNT) {
+  const safeCount = Math.max(1, Math.round(pointCount || FILTER_SPECTRUM_BAND_COUNT));
+  const centers = Array.from({ length: safeCount }, (_, index) => interpolateFrequency(
+    FILTER_CUTOFF_MIN_HZ,
+    FILTER_CUTOFF_MAX_HZ,
+    index / Math.max(1, safeCount - 1)
+  ));
+  return centers.map((centerHz, index) => {
+    const previousCenterHz = centers[Math.max(0, index - 1)] ?? centerHz;
+    const nextCenterHz = centers[Math.min(safeCount - 1, index + 1)] ?? centerHz;
+    const lowHz = index === 0 ? FILTER_CUTOFF_MIN_HZ : Math.sqrt(previousCenterHz * centerHz);
+    const highHz = index === safeCount - 1 ? FILTER_CUTOFF_MAX_HZ : Math.sqrt(centerHz * nextCenterHz);
+    return {
+      lowHz,
+      centerHz,
+      highHz,
+      normalizedX: frequencyHzToNormalized(centerHz)
+    };
+  });
 }
-function createFilterSpectrumDisplay({
+function buildFilterSpectrumFrequencyTicks() {
+  return FILTER_SPECTRUM_FREQUENCY_TICK_VALUES.map((frequencyHz) => ({
+    label: formatFrequencyLabel(frequencyHz),
+    frequencyHz,
+    normalizedX: frequencyHzToNormalized(frequencyHz)
+  }));
+}
+function buildFilterSpectrumDbTicks() {
+  return FILTER_SPECTRUM_DB_TICK_VALUES.map((db) => ({
+    label: String(db),
+    db,
+    normalizedY: dbToNormalizedY(db)
+  }));
+}
+function createFilterSpectrumDisplayFrame({
   frame,
-  frequenciesHz
+  bands
 }) {
-  if (!frame || !Array.isArray(frequenciesHz) || frequenciesHz.length === 0) {
+  if (!frame || !Array.isArray(bands) || bands.length === 0) {
     return null;
   }
-  const peakMagnitude = frame.magnitudes.reduce((maxMagnitude, magnitude) => Math.max(maxMagnitude, magnitude), 0);
-  if (peakMagnitude <= 0) {
-    return {
-      sampleRateHz: frame.sampleRateHz,
-      sourceBinCount: frame.magnitudes.length,
-      displayMagnitudesDb: frequenciesHz.map(() => FILTER_SPECTRUM_MIN_DB),
-      peakDisplayIndex: 0
-    };
-  }
-  const displayMagnitudesDb = frequenciesHz.map((frequencyHz) => {
-    const magnitude = sampleMagnitudeAtFrequency({
-      magnitudes: frame.magnitudes,
-      sampleRateHz: frame.sampleRateHz,
-      frequencyHz
-    });
-    const normalizedMagnitude = Math.max(1e-6, magnitude / peakMagnitude);
-    return clamp$3(20 * Math.log10(normalizedMagnitude), FILTER_SPECTRUM_MIN_DB, FILTER_SPECTRUM_MAX_DB);
+  const sourceBinCount = frame.magnitudes.length;
+  const maxBinIndex = Math.max(0, sourceBinCount - 1);
+  const nyquistHz = Math.max(1, frame.sampleRateHz * 0.5);
+  const bandMagnitudesDb = bands.map((band) => {
+    const startIndex = clamp$3(Math.floor(clamp$3(band.lowHz, 0, nyquistHz) / nyquistHz * maxBinIndex), 0, maxBinIndex);
+    const endIndex = clamp$3(Math.ceil(clamp$3(band.highHz, 0, nyquistHz) / nyquistHz * maxBinIndex), startIndex, maxBinIndex);
+    return magnitudeToDb(sampleMagnitudeAtIndexRange(frame.magnitudes, startIndex, endIndex));
   });
-  let peakDisplayIndex = 0;
-  for (let index = 1; index < displayMagnitudesDb.length; index += 1) {
-    if (displayMagnitudesDb[index] > displayMagnitudesDb[peakDisplayIndex]) {
-      peakDisplayIndex = index;
-    }
-  }
   return {
     sampleRateHz: frame.sampleRateHz,
-    sourceBinCount: frame.magnitudes.length,
-    displayMagnitudesDb,
-    peakDisplayIndex
+    sourceBinCount,
+    bands,
+    bandMagnitudesDb,
+    peakBandIndex: findPeakIndex(bandMagnitudesDb)
+  };
+}
+function blendDb(previousDb, targetDb, deltaMs, timeMs) {
+  if (deltaMs <= 0 || timeMs <= 0) {
+    return targetDb;
+  }
+  const coefficient = Math.exp(-deltaMs / timeMs);
+  return targetDb + (previousDb - targetDb) * coefficient;
+}
+function advanceFilterSpectrumDisplayState(previousState, nextFrame, timestampMs) {
+  if (!nextFrame) {
+    return previousState;
+  }
+  const bandCount = nextFrame.bandMagnitudesDb.length;
+  const frequencyTicks = buildFilterSpectrumFrequencyTicks();
+  const dbTicks = buildFilterSpectrumDbTicks();
+  if (!previousState) {
+    const peakBandIndex = findPeakIndex(nextFrame.bandMagnitudesDb);
+    return {
+      ...nextFrame,
+      hasSpectrum: true,
+      smoothedMagnitudesDb: [...nextFrame.bandMagnitudesDb],
+      peakMagnitudesDb: [...nextFrame.bandMagnitudesDb],
+      frequencyTicks,
+      dbTicks,
+      timestampMs,
+      peakHoldUntilMs: new Array(bandCount).fill(timestampMs + FILTER_SPECTRUM_PEAK_HOLD_MS),
+      peakBandIndex
+    };
+  }
+  const deltaMs = Math.max(0, timestampMs - previousState.timestampMs);
+  const smoothedMagnitudesDb = nextFrame.bandMagnitudesDb.map((targetDb, index) => {
+    const previousDb = previousState.smoothedMagnitudesDb[index] ?? targetDb;
+    const timeMs = targetDb > previousDb ? FILTER_SPECTRUM_ATTACK_TIME_MS : FILTER_SPECTRUM_RELEASE_TIME_MS;
+    return blendDb(previousDb, targetDb, deltaMs, timeMs);
+  });
+  const peakMagnitudesDb = smoothedMagnitudesDb.map((smoothedDb, index) => {
+    const previousPeakDb = previousState.peakMagnitudesDb[index] ?? smoothedDb;
+    const holdUntilMs = previousState.peakHoldUntilMs[index] ?? timestampMs;
+    if (smoothedDb >= previousPeakDb) {
+      return smoothedDb;
+    }
+    if (timestampMs < holdUntilMs) {
+      return previousPeakDb;
+    }
+    const decayedPeakDb = previousPeakDb - deltaMs / 1e3 * FILTER_SPECTRUM_PEAK_FALL_RATE_DB_PER_SECOND;
+    return Math.max(smoothedDb, decayedPeakDb);
+  });
+  const peakHoldUntilMs = smoothedMagnitudesDb.map((smoothedDb, index) => {
+    const previousPeakDb = previousState.peakMagnitudesDb[index] ?? smoothedDb;
+    const previousHoldUntilMs = previousState.peakHoldUntilMs[index] ?? timestampMs;
+    return smoothedDb >= previousPeakDb ? timestampMs + FILTER_SPECTRUM_PEAK_HOLD_MS : previousHoldUntilMs;
+  });
+  return {
+    ...nextFrame,
+    hasSpectrum: true,
+    smoothedMagnitudesDb,
+    peakMagnitudesDb,
+    frequencyTicks,
+    dbTicks,
+    timestampMs,
+    peakHoldUntilMs,
+    peakBandIndex: findPeakIndex(smoothedMagnitudesDb)
   };
 }
 const VOICE_MODE_OPTIONS = [
@@ -15448,7 +15553,8 @@ function drawFilterSpectrumOverlay({
   canvas,
   width,
   height,
-  magnitudesDb
+  smoothedMagnitudesDb,
+  peakMagnitudesDb
 }) {
   const devicePixelRatio = window.devicePixelRatio || 1;
   const scaledWidth = Math.max(1, Math.round(width * devicePixelRatio));
@@ -15463,7 +15569,7 @@ function drawFilterSpectrumOverlay({
   }
   context.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
   context.clearRect(0, 0, width, height);
-  const plot = buildMagnitudePlotPoints(magnitudesDb, width, height, {
+  const plot = buildMagnitudePlotPoints(smoothedMagnitudesDb, width, height, {
     minDb: FILTER_SPECTRUM_MIN_DB,
     maxDb: FILTER_SPECTRUM_MAX_DB
   });
@@ -15471,7 +15577,7 @@ function drawFilterSpectrumOverlay({
     return;
   }
   const gradient = context.createLinearGradient(0, plot.plotTop, 0, plot.plotBottom);
-  gradient.addColorStop(0, "rgba(94, 215, 255, 0.18)");
+  gradient.addColorStop(0, "rgba(94, 215, 255, 0.12)");
   gradient.addColorStop(1, "rgba(94, 215, 255, 0.00)");
   context.beginPath();
   context.moveTo(plot.points[0].x, plot.plotBottom);
@@ -15491,9 +15597,27 @@ function drawFilterSpectrumOverlay({
       context.lineTo(point.x, point.y);
     }
   }
-  context.strokeStyle = "rgba(94, 215, 255, 0.34)";
-  context.lineWidth = 1.4;
+  context.strokeStyle = "rgba(114, 217, 255, 0.58)";
+  context.lineWidth = 1.75;
   context.stroke();
+  if (Array.isArray(peakMagnitudesDb) && peakMagnitudesDb.length === smoothedMagnitudesDb.length) {
+    const peakPlot = buildMagnitudePlotPoints(peakMagnitudesDb, width, height, {
+      minDb: FILTER_SPECTRUM_MIN_DB,
+      maxDb: FILTER_SPECTRUM_MAX_DB
+    });
+    context.beginPath();
+    for (let index = 0; index < peakPlot.points.length; index += 1) {
+      const point = peakPlot.points[index];
+      if (index === 0) {
+        context.moveTo(point.x, point.y);
+      } else {
+        context.lineTo(point.x, point.y);
+      }
+    }
+    context.strokeStyle = "rgba(158, 231, 255, 0.28)";
+    context.lineWidth = 1;
+    context.stroke();
+  }
 }
 function FilterResponseGraph({
   baseMode,
@@ -15531,11 +15655,20 @@ function FilterResponseGraph({
     () => buildFilterResponsePath(liveModel.magnitudesDb, size.width, size.height),
     [liveModel.magnitudesDb, size.height, size.width]
   );
-  const spectrumFrequenciesHz = reactExports.useMemo(() => buildFilterSpectrumDisplayFrequencies(), []);
-  const spectrumDisplay = reactExports.useMemo(() => createFilterSpectrumDisplay({
-    frame: spectrumFrame,
-    frequenciesHz: spectrumFrequenciesHz
-  }), [spectrumFrame, spectrumFrequenciesHz]);
+  const spectrumBands = reactExports.useMemo(() => buildFilterSpectrumBands(), []);
+  const spectrumFrequencyTicks = reactExports.useMemo(() => buildFilterSpectrumFrequencyTicks(), []);
+  const spectrumDbTicks = reactExports.useMemo(() => buildFilterSpectrumDbTicks(), []);
+  const [spectrumDisplay, setSpectrumDisplay] = reactExports.useState(null);
+  reactExports.useEffect(() => {
+    const nextFrame = createFilterSpectrumDisplayFrame({
+      frame: spectrumFrame,
+      bands: spectrumBands
+    });
+    if (!nextFrame) {
+      return;
+    }
+    setSpectrumDisplay((previousState) => advanceFilterSpectrumDisplayState(previousState, nextFrame, performance.now()));
+  }, [spectrumBands, spectrumFrame]);
   reactExports.useEffect(() => {
     const canvas = spectrumCanvasRef.current;
     if (!canvas) {
@@ -15547,7 +15680,7 @@ function FilterResponseGraph({
           canvas,
           width: size.width,
           height: size.height,
-          magnitudesDb: spectrumFrequenciesHz.map(() => FILTER_SPECTRUM_MIN_DB)
+          smoothedMagnitudesDb: spectrumBands.map(() => FILTER_SPECTRUM_MIN_DB)
         });
         return;
       }
@@ -15555,13 +15688,14 @@ function FilterResponseGraph({
         canvas,
         width: size.width,
         height: size.height,
-        magnitudesDb: spectrumDisplay.displayMagnitudesDb
+        smoothedMagnitudesDb: spectrumDisplay.smoothedMagnitudesDb,
+        peakMagnitudesDb: spectrumDisplay.peakMagnitudesDb
       });
     });
     return () => {
       window.cancelAnimationFrame(animationFrameID);
     };
-  }, [size.height, size.width, spectrumDisplay, spectrumFrequenciesHz]);
+  }, [size.height, size.width, spectrumBands, spectrumDisplay]);
   const applyPointerPosition = (clientX, clientY) => {
     const element = surfaceRef.current;
     if (!element) {
@@ -15593,16 +15727,26 @@ function FilterResponseGraph({
       hasSpectrum: true,
       sampleRateHz: spectrumDisplay.sampleRateHz,
       sourceBinCount: spectrumDisplay.sourceBinCount,
-      peakDisplayIndex: spectrumDisplay.peakDisplayIndex,
-      displayMagnitudesDb: spectrumDisplay.displayMagnitudesDb
+      bandCount: spectrumDisplay.bands.length,
+      peakBandIndex: spectrumDisplay.peakBandIndex,
+      bandMagnitudesDb: spectrumDisplay.bandMagnitudesDb,
+      smoothedMagnitudesDb: spectrumDisplay.smoothedMagnitudesDb,
+      peakMagnitudesDb: spectrumDisplay.peakMagnitudesDb,
+      frequencyTicks: spectrumDisplay.frequencyTicks,
+      dbTicks: spectrumDisplay.dbTicks
     } : {
       hasSpectrum: false,
       sampleRateHz: null,
       sourceBinCount: 0,
-      peakDisplayIndex: -1,
-      displayMagnitudesDb: []
+      bandCount: spectrumBands.length,
+      peakBandIndex: -1,
+      bandMagnitudesDb: [],
+      smoothedMagnitudesDb: [],
+      peakMagnitudesDb: [],
+      frequencyTicks: spectrumFrequencyTicks,
+      dbTicks: spectrumDbTicks
     }
-  }), [baseModel, liveHasActive, liveModel, spectrumDisplay]);
+  }), [baseModel, liveHasActive, liveModel, spectrumBands.length, spectrumDbTicks, spectrumDisplay, spectrumFrequencyTicks]);
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: joinClasses("grid gap-2", className), children: [
     /* @__PURE__ */ jsxRuntimeExports.jsxs(
       "div",
@@ -15647,29 +15791,52 @@ function FilterResponseGraph({
                 }
               },
               children: [
-                [0.25, 0.5, 0.75].map((step) => /* @__PURE__ */ jsxRuntimeExports.jsx(
+                spectrumDbTicks.map((tick) => /* @__PURE__ */ jsxRuntimeExports.jsx(
                   "line",
                   {
                     x1: basePath.plotLeft,
                     x2: basePath.plotRight,
-                    y1: basePath.plotTop + basePath.plotHeight * step,
-                    y2: basePath.plotTop + basePath.plotHeight * step,
-                    stroke: "rgba(255,255,255,0.08)",
+                    y1: basePath.plotTop + basePath.plotHeight * (tick.normalizedY ?? 0),
+                    y2: basePath.plotTop + basePath.plotHeight * (tick.normalizedY ?? 0),
+                    stroke: "rgba(255,255,255,0.07)",
                     strokeWidth: "1"
                   },
-                  `filter-grid-h-${step}`
+                  `filter-grid-h-${tick.label}`
                 )),
-                [0.25, 0.5, 0.75].map((step) => /* @__PURE__ */ jsxRuntimeExports.jsx(
+                spectrumFrequencyTicks.map((tick) => /* @__PURE__ */ jsxRuntimeExports.jsx(
                   "line",
                   {
                     y1: basePath.plotTop,
                     y2: basePath.plotBottom,
-                    x1: basePath.plotLeft + basePath.plotWidth * step,
-                    x2: basePath.plotLeft + basePath.plotWidth * step,
-                    stroke: "rgba(255,255,255,0.06)",
+                    x1: basePath.plotLeft + basePath.plotWidth * (tick.normalizedX ?? 0),
+                    x2: basePath.plotLeft + basePath.plotWidth * (tick.normalizedX ?? 0),
+                    stroke: "rgba(255,255,255,0.04)",
                     strokeWidth: "1"
                   },
-                  `filter-grid-v-${step}`
+                  `filter-grid-v-${tick.label}`
+                )),
+                spectrumDbTicks.map((tick) => /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "text",
+                  {
+                    x: basePath.plotLeft + 2,
+                    y: basePath.plotTop + basePath.plotHeight * (tick.normalizedY ?? 0) - 4,
+                    fill: "rgba(226,232,240,0.44)",
+                    fontSize: "10",
+                    children: tick.label
+                  },
+                  `filter-db-label-${tick.label}`
+                )),
+                spectrumFrequencyTicks.map((tick) => /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "text",
+                  {
+                    x: basePath.plotLeft + basePath.plotWidth * (tick.normalizedX ?? 0),
+                    y: Math.max(basePath.plotBottom - 6, 16),
+                    fill: "rgba(226,232,240,0.42)",
+                    fontSize: "10",
+                    textAnchor: "middle",
+                    children: tick.label
+                  },
+                  `filter-frequency-label-${tick.label}`
                 )),
                 /* @__PURE__ */ jsxRuntimeExports.jsx("path", { d: basePath.path, fill: "none", stroke: "rgba(123, 197, 255, 0.46)", strokeWidth: "2" }),
                 /* @__PURE__ */ jsxRuntimeExports.jsx(

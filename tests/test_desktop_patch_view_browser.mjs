@@ -1420,7 +1420,7 @@ test("desktop filter graph follows live effective filter state and falls back to
     }
 });
 
-test("desktop filter graph renders the live filter spectrum endpoint and ignores malformed spectrum updates", async () => {
+test("desktop filter graph renders smoothed spectrum bands with readable axes and ignores malformed updates", async () => {
     const page = await openHarnessPage();
 
     try {
@@ -1434,7 +1434,7 @@ test("desktop filter graph renders the live filter spectrum endpoint and ignores
 
         await page.evaluate(() => {
             const magnitudes = Array.from({ length: 64 }, (_, index) => (
-                index === 2 ? 12 : index === 3 ? 9 : 0.1
+                index === 2 ? 0.03 : index === 3 ? 0.022 : 1e-5
             ));
             window.__COSIMO_DESKTOP_HARNESS__.emitFilterSpectrum({
                 sampleRateHz: 44_100,
@@ -1445,17 +1445,29 @@ test("desktop filter graph renders the live filter spectrum endpoint and ignores
         await page.waitForFunction(() => {
             const spectrum = window.__COSIMO_DESKTOP_HARNESS__.getRenderedState().filterGraphState?.spectrum;
             return spectrum?.hasSpectrum === true
-                && Array.isArray(spectrum?.displayMagnitudesDb)
-                && spectrum.displayMagnitudesDb.length > 0;
+                && Array.isArray(spectrum?.bandMagnitudesDb)
+                && spectrum.bandMagnitudesDb.length > 0;
         });
 
         renderedState = await getHarnessRenderedState(page);
         const lowHeavySpectrum = renderedState.filterGraphState.spectrum;
         assert.equal(lowHeavySpectrum.hasSpectrum, true);
         assert.equal(lowHeavySpectrum.sourceBinCount, 64);
-        assert.ok(lowHeavySpectrum.displayMagnitudesDb.length > 100);
-        assert.ok(Math.max(...lowHeavySpectrum.displayMagnitudesDb) > Math.min(...lowHeavySpectrum.displayMagnitudesDb));
-        const previousDisplayMagnitudesDb = [...lowHeavySpectrum.displayMagnitudesDb];
+        assert.equal(lowHeavySpectrum.bandCount, 120);
+        assert.equal(lowHeavySpectrum.bandMagnitudesDb.length, 120);
+        assert.equal(lowHeavySpectrum.smoothedMagnitudesDb.length, 120);
+        assert.equal(lowHeavySpectrum.peakMagnitudesDb.length, 120);
+        assert.deepEqual(
+            lowHeavySpectrum.frequencyTicks.map(({ label }) => label),
+            ["20", "50", "100", "200", "500", "1k", "2k", "5k", "10k", "20k"],
+        );
+        assert.deepEqual(
+            lowHeavySpectrum.dbTicks.map(({ label }) => label),
+            ["-18", "-36", "-54", "-72", "-90"],
+        );
+        assert.ok(Math.max(...lowHeavySpectrum.bandMagnitudesDb) > Math.min(...lowHeavySpectrum.bandMagnitudesDb));
+        const previousBandMagnitudesDb = [...lowHeavySpectrum.bandMagnitudesDb];
+        const previousSmoothedMagnitudesDb = [...lowHeavySpectrum.smoothedMagnitudesDb];
 
         await page.evaluate(() => {
             window.__COSIMO_DESKTOP_HARNESS__.patchConnection.emitEndpoint("filterSpectrum", {
@@ -1470,7 +1482,7 @@ test("desktop filter graph renders the live filter spectrum endpoint and ignores
 
         await page.evaluate(() => {
             const magnitudes = Array.from({ length: 64 }, (_, index) => (
-                index === 60 ? 12 : index === 58 ? 9 : 0.1
+                index === 60 ? 0.03 : index === 58 ? 0.022 : 1e-5
             ));
             window.__COSIMO_DESKTOP_HARNESS__.emitFilterSpectrum({
                 sampleRateHz: 44_100,
@@ -1484,14 +1496,38 @@ test("desktop filter graph renders the live filter spectrum endpoint and ignores
                 return false;
             }
 
-            return JSON.stringify(spectrum.displayMagnitudesDb) !== JSON.stringify(previousSpectrum);
-        }, previousDisplayMagnitudesDb);
+            return JSON.stringify(spectrum.bandMagnitudesDb) !== JSON.stringify(previousSpectrum);
+        }, previousBandMagnitudesDb);
 
         renderedState = await getHarnessRenderedState(page);
-        assert.notDeepEqual(
-            renderedState.filterGraphState.spectrum.displayMagnitudesDb,
-            previousDisplayMagnitudesDb,
-        );
+        const highHeavySpectrum = renderedState.filterGraphState.spectrum;
+        assert.notDeepEqual(highHeavySpectrum.bandMagnitudesDb, previousBandMagnitudesDb);
+        assert.notDeepEqual(highHeavySpectrum.smoothedMagnitudesDb, previousSmoothedMagnitudesDb);
+
+        await page.evaluate(() => {
+            const magnitudes = Array.from({ length: 64 }, (_, index) => (
+                index === 60 ? 0.009 : index === 58 ? 0.006 : 1e-5
+            ));
+            window.__COSIMO_DESKTOP_HARNESS__.emitFilterSpectrum({
+                sampleRateHz: 44_100,
+                magnitudes,
+            });
+        });
+
+        await page.waitForFunction((previousSpectrum) => {
+            const spectrum = window.__COSIMO_DESKTOP_HARNESS__.getRenderedState().filterGraphState?.spectrum;
+            if (!spectrum?.hasSpectrum) {
+                return false;
+            }
+
+            return JSON.stringify(spectrum.bandMagnitudesDb) !== JSON.stringify(previousSpectrum);
+        }, highHeavySpectrum.bandMagnitudesDb);
+
+        renderedState = await getHarnessRenderedState(page);
+        const decayingSpectrum = renderedState.filterGraphState.spectrum;
+        const peakBandIndex = highHeavySpectrum.peakBandIndex;
+        assert.ok(decayingSpectrum.smoothedMagnitudesDb[peakBandIndex] > decayingSpectrum.bandMagnitudesDb[peakBandIndex]);
+        assert.ok(decayingSpectrum.peakMagnitudesDb[peakBandIndex] >= decayingSpectrum.smoothedMagnitudesDb[peakBandIndex]);
     } finally {
         await page.close();
     }

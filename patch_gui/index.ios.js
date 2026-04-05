@@ -14762,10 +14762,9 @@ function normalizeFilterSpectrumMessage(message) {
   if (!sampleRateHz || sampleRateHz <= 0 || !Array.isArray(magnitudes) || magnitudes.length < 8) {
     return null;
   }
-  const normalizedMagnitudes = magnitudes.map((value) => Math.max(0, Number(value) || 0));
   return {
     sampleRateHz,
-    magnitudes: normalizedMagnitudes
+    magnitudes: magnitudes.map((value) => Math.max(0, Number(value) || 0))
   };
 }
 const VOICE_MODE_OPTIONS = [

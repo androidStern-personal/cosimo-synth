@@ -351,60 +351,138 @@ test("filter spectrum normalization accepts wrapped payloads and rejects malform
     }), null);
 });
 
-test("filter spectrum display mapping preserves low-frequency and high-frequency emphasis independently", async () => {
-    const { createFilterSpectrumDisplay, FILTER_SPECTRUM_MIN_DB } = await loadFilterSpectrumModule();
-    const frequenciesHz = [40, 120, 500, 1_500, 8_000, 16_000, 20_000];
+test("filter spectrum bands are dense, monotonic, and log-spaced", async () => {
+    const { buildFilterSpectrumBands, FILTER_SPECTRUM_BAND_COUNT } = await loadFilterSpectrumModule();
+
+    const bands = buildFilterSpectrumBands();
+
+    assert.equal(bands.length, FILTER_SPECTRUM_BAND_COUNT);
+    assert.ok(bands.length >= 120);
+    assert.ok(Math.abs(bands[0].lowHz - 20) < 1e-6);
+    assert.ok(Math.abs(bands[bands.length - 1].highHz - 20_000) < 1e-6);
+
+    for (let index = 1; index < bands.length; index += 1) {
+        assert.ok(bands[index].lowHz > bands[index - 1].lowHz);
+        assert.ok(bands[index].centerHz > bands[index - 1].centerHz);
+        assert.ok(bands[index].highHz > bands[index - 1].highHz);
+        assert.ok(bands[index].lowHz < bands[index].centerHz);
+        assert.ok(bands[index].centerHz < bands[index].highHz);
+    }
+
+    const ratioNearStart = bands[10].centerHz / bands[9].centerHz;
+    const ratioNearMiddle = bands[60].centerHz / bands[59].centerHz;
+    const ratioNearEnd = bands[110].centerHz / bands[109].centerHz;
+    assert.ok(Math.abs(ratioNearStart - ratioNearMiddle) < 0.01);
+    assert.ok(Math.abs(ratioNearMiddle - ratioNearEnd) < 0.01);
+});
+
+test("filter spectrum display frame preserves low-frequency and high-frequency emphasis and keeps absolute dB differences", async () => {
+    const { buildFilterSpectrumBands, createFilterSpectrumDisplayFrame, FILTER_SPECTRUM_MIN_DB } = await loadFilterSpectrumModule();
+    const bands = buildFilterSpectrumBands();
     const lowHeavyMagnitudes = Array.from({ length: 64 }, (_, index) => (
-        index === 2 ? 12 : index === 3 ? 9 : 0.1
+        index === 2 ? 0.03 : index === 3 ? 0.022 : 1e-5
     ));
     const highHeavyMagnitudes = Array.from({ length: 64 }, (_, index) => (
-        index === 60 ? 12 : index === 58 ? 9 : 0.1
+        index === 60 ? 0.03 : index === 58 ? 0.022 : 1e-5
     ));
+    const lowerLevelMagnitudes = lowHeavyMagnitudes.map((value) => value * 0.5);
 
-    const lowHeavyDisplay = createFilterSpectrumDisplay({
+    const lowHeavyDisplay = createFilterSpectrumDisplayFrame({
         frame: {
             sampleRateHz: 44_100,
             magnitudes: lowHeavyMagnitudes,
         },
-        frequenciesHz,
+        bands,
     });
-    const highHeavyDisplay = createFilterSpectrumDisplay({
+    const highHeavyDisplay = createFilterSpectrumDisplayFrame({
         frame: {
             sampleRateHz: 44_100,
             magnitudes: highHeavyMagnitudes,
         },
-        frequenciesHz,
+        bands,
     });
-    const silentDisplay = createFilterSpectrumDisplay({
+    const lowerLevelDisplay = createFilterSpectrumDisplayFrame({
+        frame: {
+            sampleRateHz: 44_100,
+            magnitudes: lowerLevelMagnitudes,
+        },
+        bands,
+    });
+    const silentDisplay = createFilterSpectrumDisplayFrame({
         frame: {
             sampleRateHz: 44_100,
             magnitudes: new Array(64).fill(0),
         },
-        frequenciesHz,
+        bands,
     });
 
     assert.ok(lowHeavyDisplay);
     assert.ok(highHeavyDisplay);
+    assert.ok(lowerLevelDisplay);
     assert.ok(silentDisplay);
-    assert.ok(lowHeavyDisplay.peakDisplayIndex <= Math.floor(frequenciesHz.length / 2));
-    assert.ok(highHeavyDisplay.peakDisplayIndex >= Math.floor(frequenciesHz.length / 2));
+    assert.ok(lowHeavyDisplay.peakBandIndex < highHeavyDisplay.peakBandIndex);
+    assert.ok((lowHeavyDisplay.bandMagnitudesDb[lowHeavyDisplay.peakBandIndex] - lowerLevelDisplay.bandMagnitudesDb[lowerLevelDisplay.peakBandIndex]) > 5.5);
     assert.deepEqual(
-        silentDisplay.displayMagnitudesDb,
-        frequenciesHz.map(() => FILTER_SPECTRUM_MIN_DB),
+        silentDisplay.bandMagnitudesDb,
+        bands.map(() => FILTER_SPECTRUM_MIN_DB),
     );
 });
 
-test("filter spectrum uses its own denser log-frequency display grid", async () => {
-    const { buildFilterSpectrumDisplayFrequencies, FILTER_SPECTRUM_DISPLAY_POINT_COUNT } = await loadFilterSpectrumModule();
+test("filter spectrum smoothing decays gradually and peak hold persists before fading", async () => {
+    const {
+        advanceFilterSpectrumDisplayState,
+        buildFilterSpectrumBands,
+        createFilterSpectrumDisplayFrame,
+    } = await loadFilterSpectrumModule();
 
-    const frequenciesHz = buildFilterSpectrumDisplayFrequencies();
+    const bands = buildFilterSpectrumBands();
+    const firstLoudFrame = createFilterSpectrumDisplayFrame({
+        frame: {
+            sampleRateHz: 44_100,
+            magnitudes: Array.from({ length: 64 }, (_, index) => (index === 2 ? 0.03 : 1e-5)),
+        },
+        bands,
+    });
+    const quieterFrame = createFilterSpectrumDisplayFrame({
+        frame: {
+            sampleRateHz: 44_100,
+            magnitudes: Array.from({ length: 64 }, (_, index) => (index === 2 ? 0.002 : 1e-5)),
+        },
+        bands,
+    });
 
-    assert.equal(frequenciesHz.length, FILTER_SPECTRUM_DISPLAY_POINT_COUNT);
-    assert.ok(frequenciesHz.length > 80);
-    assert.ok(Math.abs(frequenciesHz[0] - 20) < 1e-9);
-    assert.ok(frequenciesHz[frequenciesHz.length - 1] >= 19_999);
-    for (let index = 1; index < frequenciesHz.length; index += 1) {
-        assert.ok(frequenciesHz[index] > frequenciesHz[index - 1]);
+    const firstState = advanceFilterSpectrumDisplayState(null, firstLoudFrame, 0);
+    const holdState = advanceFilterSpectrumDisplayState(firstState, quieterFrame, 100);
+    const fadedState = advanceFilterSpectrumDisplayState(holdState, quieterFrame, 500);
+
+    const peakIndex = firstState.peakBandIndex;
+    assert.equal(firstState.smoothedMagnitudesDb[peakIndex], firstState.bandMagnitudesDb[peakIndex]);
+    assert.equal(firstState.peakMagnitudesDb[peakIndex], firstState.bandMagnitudesDb[peakIndex]);
+    assert.ok(holdState.smoothedMagnitudesDb[peakIndex] > quieterFrame.bandMagnitudesDb[peakIndex]);
+    assert.equal(holdState.peakMagnitudesDb[peakIndex], firstState.peakMagnitudesDb[peakIndex]);
+    assert.ok(fadedState.peakMagnitudesDb[peakIndex] < holdState.peakMagnitudesDb[peakIndex]);
+    assert.ok(fadedState.peakMagnitudesDb[peakIndex] >= fadedState.smoothedMagnitudesDb[peakIndex]);
+});
+
+test("filter spectrum tick helpers expose readable frequency and dB labels", async () => {
+    const { buildFilterSpectrumFrequencyTicks, buildFilterSpectrumDbTicks } = await loadFilterSpectrumModule();
+
+    const frequencyTicks = buildFilterSpectrumFrequencyTicks();
+    const dbTicks = buildFilterSpectrumDbTicks();
+
+    assert.deepEqual(
+        frequencyTicks.map((tick) => tick.label),
+        ["20", "50", "100", "200", "500", "1k", "2k", "5k", "10k", "20k"],
+    );
+    assert.deepEqual(
+        dbTicks.map((tick) => tick.label),
+        ["-18", "-36", "-54", "-72", "-90"],
+    );
+    for (let index = 1; index < frequencyTicks.length; index += 1) {
+        assert.ok(frequencyTicks[index].normalizedX > frequencyTicks[index - 1].normalizedX);
+    }
+    for (let index = 1; index < dbTicks.length; index += 1) {
+        assert.ok(dbTicks[index].normalizedY > dbTicks[index - 1].normalizedY);
     }
 });
 

@@ -37,10 +37,14 @@ import {
     normalizedToFilterQ,
 } from "./filter-response";
 import {
-    buildFilterSpectrumDisplayFrequencies,
-    createFilterSpectrumDisplay,
+    advanceFilterSpectrumDisplayState,
+    buildFilterSpectrumBands,
+    buildFilterSpectrumDbTicks,
+    buildFilterSpectrumFrequencyTicks,
+    createFilterSpectrumDisplayFrame,
     FILTER_SPECTRUM_MAX_DB,
     FILTER_SPECTRUM_MIN_DB,
+    type FilterSpectrumDisplayState,
     type FilterSpectrumFrame,
 } from "./filter-spectrum";
 
@@ -702,12 +706,14 @@ function drawFilterSpectrumOverlay({
     canvas,
     width,
     height,
-    magnitudesDb,
+    smoothedMagnitudesDb,
+    peakMagnitudesDb,
 }: {
     canvas: HTMLCanvasElement;
     width: number;
     height: number;
-    magnitudesDb: number[];
+    smoothedMagnitudesDb: number[];
+    peakMagnitudesDb?: number[];
 }) {
     const devicePixelRatio = window.devicePixelRatio || 1;
     const scaledWidth = Math.max(1, Math.round(width * devicePixelRatio));
@@ -727,7 +733,7 @@ function drawFilterSpectrumOverlay({
     context.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
     context.clearRect(0, 0, width, height);
 
-    const plot = buildMagnitudePlotPoints(magnitudesDb, width, height, {
+    const plot = buildMagnitudePlotPoints(smoothedMagnitudesDb, width, height, {
         minDb: FILTER_SPECTRUM_MIN_DB,
         maxDb: FILTER_SPECTRUM_MAX_DB,
     });
@@ -737,7 +743,7 @@ function drawFilterSpectrumOverlay({
     }
 
     const gradient = context.createLinearGradient(0, plot.plotTop, 0, plot.plotBottom);
-    gradient.addColorStop(0, "rgba(94, 215, 255, 0.18)");
+    gradient.addColorStop(0, "rgba(94, 215, 255, 0.12)");
     gradient.addColorStop(1, "rgba(94, 215, 255, 0.00)");
 
     context.beginPath();
@@ -761,9 +767,30 @@ function drawFilterSpectrumOverlay({
             context.lineTo(point.x, point.y);
         }
     }
-    context.strokeStyle = "rgba(94, 215, 255, 0.34)";
-    context.lineWidth = 1.4;
+    context.strokeStyle = "rgba(114, 217, 255, 0.58)";
+    context.lineWidth = 1.75;
     context.stroke();
+
+    if (Array.isArray(peakMagnitudesDb) && peakMagnitudesDb.length === smoothedMagnitudesDb.length) {
+        const peakPlot = buildMagnitudePlotPoints(peakMagnitudesDb, width, height, {
+            minDb: FILTER_SPECTRUM_MIN_DB,
+            maxDb: FILTER_SPECTRUM_MAX_DB,
+        });
+
+        context.beginPath();
+        for (let index = 0; index < peakPlot.points.length; index += 1) {
+            const point = peakPlot.points[index];
+            if (index === 0) {
+                context.moveTo(point.x, point.y);
+            } else {
+                context.lineTo(point.x, point.y);
+            }
+        }
+
+        context.strokeStyle = "rgba(158, 231, 255, 0.28)";
+        context.lineWidth = 1;
+        context.stroke();
+    }
 }
 
 export function FilterResponseGraph({
@@ -802,11 +829,25 @@ export function FilterResponseGraph({
         () => buildFilterResponsePath(liveModel.magnitudesDb, size.width, size.height),
         [liveModel.magnitudesDb, size.height, size.width],
     );
-    const spectrumFrequenciesHz = useMemo(() => buildFilterSpectrumDisplayFrequencies(), []);
-    const spectrumDisplay = useMemo(() => createFilterSpectrumDisplay({
-        frame: spectrumFrame,
-        frequenciesHz: spectrumFrequenciesHz,
-    }), [spectrumFrame, spectrumFrequenciesHz]);
+    const spectrumBands = useMemo(() => buildFilterSpectrumBands(), []);
+    const spectrumFrequencyTicks = useMemo(() => buildFilterSpectrumFrequencyTicks(), []);
+    const spectrumDbTicks = useMemo(() => buildFilterSpectrumDbTicks(), []);
+    const [spectrumDisplay, setSpectrumDisplay] = useState<FilterSpectrumDisplayState | null>(null);
+
+    useEffect(() => {
+        const nextFrame = createFilterSpectrumDisplayFrame({
+            frame: spectrumFrame,
+            bands: spectrumBands,
+        });
+
+        if (!nextFrame) {
+            return;
+        }
+
+        setSpectrumDisplay((previousState) => (
+            advanceFilterSpectrumDisplayState(previousState, nextFrame, performance.now())
+        ));
+    }, [spectrumBands, spectrumFrame]);
 
     useEffect(() => {
         const canvas = spectrumCanvasRef.current;
@@ -817,27 +858,28 @@ export function FilterResponseGraph({
 
         let animationFrameID = window.requestAnimationFrame(() => {
             if (!spectrumDisplay) {
-                    drawFilterSpectrumOverlay({
-                        canvas,
-                        width: size.width,
-                        height: size.height,
-                        magnitudesDb: spectrumFrequenciesHz.map(() => FILTER_SPECTRUM_MIN_DB),
-                    });
-                    return;
-                }
+                drawFilterSpectrumOverlay({
+                    canvas,
+                    width: size.width,
+                    height: size.height,
+                    smoothedMagnitudesDb: spectrumBands.map(() => FILTER_SPECTRUM_MIN_DB),
+                });
+                return;
+            }
 
             drawFilterSpectrumOverlay({
                 canvas,
                 width: size.width,
                 height: size.height,
-                magnitudesDb: spectrumDisplay.displayMagnitudesDb,
+                smoothedMagnitudesDb: spectrumDisplay.smoothedMagnitudesDb,
+                peakMagnitudesDb: spectrumDisplay.peakMagnitudesDb,
             });
         });
 
         return () => {
             window.cancelAnimationFrame(animationFrameID);
         };
-    }, [size.height, size.width, spectrumDisplay, spectrumFrequenciesHz]);
+    }, [size.height, size.width, spectrumBands, spectrumDisplay]);
 
     const applyPointerPosition = (clientX: number, clientY: number) => {
         const element = surfaceRef.current;
@@ -873,16 +915,26 @@ export function FilterResponseGraph({
             hasSpectrum: true,
             sampleRateHz: spectrumDisplay.sampleRateHz,
             sourceBinCount: spectrumDisplay.sourceBinCount,
-            peakDisplayIndex: spectrumDisplay.peakDisplayIndex,
-            displayMagnitudesDb: spectrumDisplay.displayMagnitudesDb,
+            bandCount: spectrumDisplay.bands.length,
+            peakBandIndex: spectrumDisplay.peakBandIndex,
+            bandMagnitudesDb: spectrumDisplay.bandMagnitudesDb,
+            smoothedMagnitudesDb: spectrumDisplay.smoothedMagnitudesDb,
+            peakMagnitudesDb: spectrumDisplay.peakMagnitudesDb,
+            frequencyTicks: spectrumDisplay.frequencyTicks,
+            dbTicks: spectrumDisplay.dbTicks,
         } : {
             hasSpectrum: false,
             sampleRateHz: null,
             sourceBinCount: 0,
-            peakDisplayIndex: -1,
-            displayMagnitudesDb: [],
+            bandCount: spectrumBands.length,
+            peakBandIndex: -1,
+            bandMagnitudesDb: [],
+            smoothedMagnitudesDb: [],
+            peakMagnitudesDb: [],
+            frequencyTicks: spectrumFrequencyTicks,
+            dbTicks: spectrumDbTicks,
         },
-    }), [baseModel, liveHasActive, liveModel, spectrumDisplay]);
+    }), [baseModel, liveHasActive, liveModel, spectrumBands.length, spectrumDbTicks, spectrumDisplay, spectrumFrequencyTicks]);
 
     return (
         <div className={joinClasses("grid gap-2", className)}>
@@ -922,27 +974,50 @@ export function FilterResponseGraph({
                         }
                     }}
                 >
-                    {[0.25, 0.5, 0.75].map((step) => (
+                    {spectrumDbTicks.map((tick) => (
                         <line
-                            key={`filter-grid-h-${step}`}
+                            key={`filter-grid-h-${tick.label}`}
                             x1={basePath.plotLeft}
                             x2={basePath.plotRight}
-                            y1={basePath.plotTop + (basePath.plotHeight * step)}
-                            y2={basePath.plotTop + (basePath.plotHeight * step)}
-                            stroke="rgba(255,255,255,0.08)"
+                            y1={basePath.plotTop + (basePath.plotHeight * (tick.normalizedY ?? 0))}
+                            y2={basePath.plotTop + (basePath.plotHeight * (tick.normalizedY ?? 0))}
+                            stroke="rgba(255,255,255,0.07)"
                             strokeWidth="1"
                         />
                     ))}
-                    {[0.25, 0.5, 0.75].map((step) => (
+                    {spectrumFrequencyTicks.map((tick) => (
                         <line
-                            key={`filter-grid-v-${step}`}
+                            key={`filter-grid-v-${tick.label}`}
                             y1={basePath.plotTop}
                             y2={basePath.plotBottom}
-                            x1={basePath.plotLeft + (basePath.plotWidth * step)}
-                            x2={basePath.plotLeft + (basePath.plotWidth * step)}
-                            stroke="rgba(255,255,255,0.06)"
+                            x1={basePath.plotLeft + (basePath.plotWidth * (tick.normalizedX ?? 0))}
+                            x2={basePath.plotLeft + (basePath.plotWidth * (tick.normalizedX ?? 0))}
+                            stroke="rgba(255,255,255,0.04)"
                             strokeWidth="1"
                         />
+                    ))}
+                    {spectrumDbTicks.map((tick) => (
+                        <text
+                            key={`filter-db-label-${tick.label}`}
+                            x={basePath.plotLeft + 2}
+                            y={(basePath.plotTop + (basePath.plotHeight * (tick.normalizedY ?? 0))) - 4}
+                            fill="rgba(226,232,240,0.44)"
+                            fontSize="10"
+                        >
+                            {tick.label}
+                        </text>
+                    ))}
+                    {spectrumFrequencyTicks.map((tick) => (
+                        <text
+                            key={`filter-frequency-label-${tick.label}`}
+                            x={basePath.plotLeft + (basePath.plotWidth * (tick.normalizedX ?? 0))}
+                            y={Math.max(basePath.plotBottom - 6, 16)}
+                            fill="rgba(226,232,240,0.42)"
+                            fontSize="10"
+                            textAnchor="middle"
+                        >
+                            {tick.label}
+                        </text>
                     ))}
                     <path d={basePath.path} fill="none" stroke="rgba(123, 197, 255, 0.46)" strokeWidth="2" />
                     <path
