@@ -48,6 +48,21 @@ function readStoredRouteAmount(snapshot, sourceSlot, targetKind) {
     return Number(route?.amount ?? 0);
 }
 
+function routeSummary(route) {
+    return {
+        enabled: route.enabled,
+        sourceKind: route.sourceKind,
+        sourceSlot: route.sourceSlot,
+        polarity: route.polarity,
+        targetKind: route.targetKind,
+        amount: route.amount,
+    };
+}
+
+function routeSummaries(routes) {
+    return routes.map((route) => routeSummary(route));
+}
+
 async function dispatchInputValueChange(locator, nextValue) {
     await locator.evaluate((element, value) => {
         if (!(element instanceof HTMLInputElement)) {
@@ -110,6 +125,11 @@ async function dragLocatorBy(page, locator, deltaX, deltaY) {
     await page.mouse.down();
     await page.mouse.move(startX + deltaX, startY + deltaY, { steps: 10 });
     await page.mouse.up();
+}
+
+async function choosePrototypeSelectOption(page, buttonLabel, optionLabel) {
+    await page.getByRole("button", { name: buttonLabel }).click();
+    await page.getByRole("button", { name: `${buttonLabel} ${optionLabel}` }).click();
 }
 
 async function waitForHarnessSnapshot(page, description, predicate, {
@@ -1487,38 +1507,44 @@ test("warp controls commit mode and amount, and the matrix can route MSEG 1 into
             [{ endpointID: "warpAmount", value: 0.72 }],
         );
 
-        await clearHarnessDebugLog(page);
-        await page.getByRole("button", { name: "Add route" }).click();
-        await page.selectOption('select[aria-label="Route 1 target"]', "warpAmount");
-        await page.getByRole("button", { name: "Route 1 negative direction" }).click();
-        await dispatchInputValueChange(page.locator('input[aria-label="Route 1 depth"]'), 0.35);
+        assert.equal(await page.locator('[aria-label="Route 1 slot"]').count(), 0);
+        await choosePrototypeSelectOption(page, "Route 1 target", "WARP");
+        await page.getByRole("button", { name: "Route 1 polarity" }).click();
+        await dragLocatorBy(page, page.locator('[aria-label="Route 1 amount"]'), 0, -42);
 
         snapshot = await waitForHarnessSnapshot(
             page,
             "Route 1 targeting warp amount",
-            (nextSnapshot) => Math.abs(readStoredRouteAmount(nextSnapshot, 1, "warpAmount") - (-0.35)) <= 1e-9,
+            (nextSnapshot) => {
+                const route = readStoredModulationState(nextSnapshot).routes[0];
+                return route?.targetKind === "warpAmount"
+                    && route?.polarity === "bipolar"
+                    && Math.abs(Number(route.amount) - 0.35) <= 0.03;
+            },
         );
 
         const finalRouteUpload = [...snapshot.sentMessages]
             .reverse()
             .find(({ endpointID, value }) => endpointID === "modulationRoute" && Number(value?.routeIndex) === 0);
 
-        assert.deepEqual(readStoredModulationState(snapshot).routes, [{
+        assert.deepEqual(routeSummaries(readStoredModulationState(snapshot).routes), [{
             enabled: true,
             sourceKind: "mseg",
             sourceSlot: 1,
+            polarity: "bipolar",
             targetKind: "warpAmount",
-            amount: -0.35,
+            amount: readStoredModulationState(snapshot).routes[0].amount,
         }]);
         assert.deepEqual(finalRouteUpload?.value, {
             routeIndex: 0,
             enabled: true,
             sourceKind: 1,
             sourceSlot: 1,
+            polarityKind: 1,
             targetKind: 2,
-            amount: -0.35,
+            amount: readStoredModulationState(snapshot).routes[0].amount,
         });
-        assert.equal((await page.locator(".cosimo-mod-amount-readout").first().textContent())?.trim(), "-35% warp");
+        assert.equal((await page.locator('[data-role="route-row-1"] >> text=/±(35|34|36)%/').count()) >= 1, true);
     } finally {
         await page.close();
     }
@@ -1530,11 +1556,11 @@ test("Add route appends an inert row and scrolls the new row into view", async (
     try {
         await page.setViewportSize({ width: 1280, height: 600 });
 
-        for (let routeIndex = 0; routeIndex < 8; routeIndex += 1) {
+        for (let routeIndex = 0; routeIndex < 7; routeIndex += 1) {
             await page.getByRole("button", { name: "Add route" }).click();
             await page.waitForFunction((expectedRouteIndex) => (
                 document.querySelector(`[data-role="route-row-${expectedRouteIndex}"]`) instanceof HTMLElement
-            ), routeIndex + 1);
+            ), routeIndex + 2);
         }
 
         await page.waitForFunction(() => {
@@ -1550,11 +1576,12 @@ test("Add route appends an inert row and scrolls the new row into view", async (
 
         const snapshot = await getHarnessSnapshot(page);
         assert.deepEqual(
-            readStoredModulationState(snapshot).routes,
+            routeSummaries(readStoredModulationState(snapshot).routes),
             Array.from({ length: 8 }, () => ({
                 enabled: true,
                 sourceKind: "mseg",
                 sourceSlot: 1,
+                polarity: "unipolar",
                 targetKind: "wavetablePosition",
                 amount: 0,
             })),
@@ -1567,6 +1594,224 @@ test("Add route appends an inert row and scrolls the new row into view", async (
             )),
             true,
         );
+    } finally {
+        await page.close();
+    }
+});
+
+test("mod matrix keeps the list shell when empty and restores the seeded route when re-adding", async () => {
+    const page = await openHarnessPage();
+
+    try {
+        await page.getByRole("button", { name: "Remove route 1" }).click();
+
+        let snapshot = await waitForHarnessSnapshot(
+            page,
+            "route list empty after removing the seeded row",
+            (nextSnapshot) => readStoredModulationState(nextSnapshot).routes.length === 0,
+        );
+
+        assert.equal(await page.getByRole("button", { name: "Add route" }).count(), 1);
+        assert.equal(await page.locator('[data-role^="route-row-"]').count(), 0);
+        assert.equal(await page.getByText(/add a modulation slot/i).count(), 0);
+        assert.deepEqual(readStoredModulationState(snapshot).routes, []);
+
+        await page.getByRole("button", { name: "Add route" }).click();
+
+        snapshot = await waitForHarnessSnapshot(
+            page,
+            "seeded route returns after add",
+            (nextSnapshot) => {
+                const route = readStoredModulationState(nextSnapshot).routes[0];
+                return route !== undefined
+                    && route.enabled === true
+                    && route.sourceKind === "mseg"
+                    && route.sourceSlot === 1
+                    && route.polarity === "unipolar"
+                    && route.targetKind === "wavetablePosition"
+                    && Math.abs(Number(route.amount)) <= 1e-9;
+            },
+        );
+
+        assert.deepEqual(routeSummary(readStoredModulationState(snapshot).routes[0]), {
+            enabled: true,
+            sourceKind: "mseg",
+            sourceSlot: 1,
+            polarity: "unipolar",
+            targetKind: "wavetablePosition",
+            amount: 0,
+        });
+    } finally {
+        await page.close();
+    }
+});
+
+test("mod matrix source and target selects keep enough width for their menu content and bypass uses the flattened source model", async () => {
+    const page = await openHarnessPage();
+
+    try {
+        await page.getByRole("button", { name: "Route 1 source" }).click();
+
+        let sourceSizing = await page.evaluate(() => {
+            const trigger = document.querySelector('button[aria-label="Route 1 source"]');
+            const optionButtons = Array.from(document.querySelectorAll('button[aria-label^="Route 1 source "]'));
+            return {
+                triggerWidth: trigger instanceof HTMLElement ? trigger.getBoundingClientRect().width : 0,
+                widestOptionWidth: optionButtons.reduce((widest, button) => (
+                    button instanceof HTMLElement ? Math.max(widest, button.scrollWidth) : widest
+                ), 0),
+            };
+        });
+
+        assert.ok(sourceSizing.triggerWidth >= sourceSizing.widestOptionWidth);
+        await page.getByRole("button", { name: "Route 1 source ENV 3" }).click();
+
+        let snapshot = await waitForHarnessSnapshot(
+            page,
+            "flattened source selection updates to ENV 3",
+            (nextSnapshot) => {
+                const route = readStoredModulationState(nextSnapshot).routes[0];
+                return route?.sourceKind === "env" && route?.sourceSlot === 3;
+            },
+        );
+
+        assert.equal(await page.locator('[aria-label="Route 1 slot"]').count(), 0);
+        assert.deepEqual(routeSummary(readStoredModulationState(snapshot).routes[0]), {
+            enabled: true,
+            sourceKind: "env",
+            sourceSlot: 3,
+            polarity: "unipolar",
+            targetKind: "wavetablePosition",
+            amount: 0,
+        });
+
+        await page.getByRole("button", { name: "Route 1 target" }).click();
+
+        const targetSizing = await page.evaluate(() => {
+            const trigger = document.querySelector('button[aria-label="Route 1 target"]');
+            const optionButtons = Array.from(document.querySelectorAll('button[aria-label^="Route 1 target "]'));
+            return {
+                triggerWidth: trigger instanceof HTMLElement ? trigger.getBoundingClientRect().width : 0,
+                widestOptionWidth: optionButtons.reduce((widest, button) => (
+                    button instanceof HTMLElement ? Math.max(widest, button.scrollWidth) : widest
+                ), 0),
+            };
+        });
+
+        assert.ok(targetSizing.triggerWidth >= targetSizing.widestOptionWidth);
+        await page.getByRole("button", { name: "Route 1 target PITCH" }).click();
+
+        snapshot = await waitForHarnessSnapshot(
+            page,
+            "target selection updates to pitch",
+            (nextSnapshot) => readStoredModulationState(nextSnapshot).routes[0]?.targetKind === "pitchSemitones",
+        );
+
+        assert.deepEqual(routeSummary(readStoredModulationState(snapshot).routes[0]), {
+            enabled: true,
+            sourceKind: "env",
+            sourceSlot: 3,
+            polarity: "unipolar",
+            targetKind: "pitchSemitones",
+            amount: 0,
+        });
+
+        await page.getByRole("button", { name: "Route 1 bypass" }).click();
+
+        snapshot = await waitForHarnessSnapshot(
+            page,
+            "route bypass disables the first route",
+            (nextSnapshot) => readStoredModulationState(nextSnapshot).routes[0]?.enabled === false,
+        );
+
+        assert.deepEqual(routeSummary(readStoredModulationState(snapshot).routes[0]), {
+            enabled: false,
+            sourceKind: "env",
+            sourceSlot: 3,
+            polarity: "unipolar",
+            targetKind: "pitchSemitones",
+            amount: 0,
+        });
+        assert.equal(
+            snapshot.sentMessages.some(({ endpointID, value }) => (
+                endpointID === "modulationRoute"
+                && Number(value?.routeIndex) === 0
+                && value?.enabled === false
+            )),
+            true,
+        );
+    } finally {
+        await page.close();
+    }
+});
+
+test("mod matrix amount knob double-click entry uses the displayed units", async () => {
+    const page = await openHarnessPage();
+
+    try {
+        await choosePrototypeSelectOption(page, "Route 1 target", "WARP");
+
+        const amountKnob = page.locator('[aria-label="Route 1 amount"]');
+        await amountKnob.dblclick();
+
+        const amountInput = page.locator('input[aria-label="Route 1 amount value"]');
+        await amountInput.waitFor({ state: "visible" });
+        await amountInput.fill("12");
+        await amountInput.blur();
+
+        let snapshot = await waitForHarnessSnapshot(
+            page,
+            "typed route amount commit in displayed percent units",
+            (nextSnapshot) => {
+                const route = readStoredModulationState(nextSnapshot).routes[0];
+                return route?.targetKind === "warpAmount"
+                    && Math.abs(Number(route.amount) - 0.12) <= 1e-9;
+            },
+        );
+
+        assert.deepEqual(routeSummary(readStoredModulationState(snapshot).routes[0]), {
+            enabled: true,
+            sourceKind: "mseg",
+            sourceSlot: 1,
+            polarity: "unipolar",
+            targetKind: "warpAmount",
+            amount: 0.12,
+        });
+        assert.equal((await page.locator('[data-role="route-row-1"] >> text=/\\+?12%/').count()) >= 1, true);
+        assert.equal(
+            snapshot.sentMessages.some(({ endpointID, value }) => (
+                endpointID === "modulationRoute"
+                && Number(value?.routeIndex) === 0
+                && Math.abs(Number(value?.amount) - 0.12) <= 1e-9
+            )),
+            true,
+        );
+
+        await choosePrototypeSelectOption(page, "Route 1 target", "PAN");
+        await amountKnob.dblclick();
+        await amountInput.waitFor({ state: "visible" });
+        await amountInput.fill("-40");
+        await amountInput.blur();
+
+        snapshot = await waitForHarnessSnapshot(
+            page,
+            "typed signed pan amount commit",
+            (nextSnapshot) => {
+                const route = readStoredModulationState(nextSnapshot).routes[0];
+                return route?.targetKind === "pan"
+                    && Math.abs(Number(route.amount) - (-0.4)) <= 1e-9;
+            },
+        );
+
+        assert.deepEqual(routeSummary(readStoredModulationState(snapshot).routes[0]), {
+            enabled: true,
+            sourceKind: "mseg",
+            sourceSlot: 1,
+            polarity: "unipolar",
+            targetKind: "pan",
+            amount: -0.4,
+        });
+        assert.equal((await page.locator('[data-role="route-row-1"] >> text=/40% L/').count()) >= 1, true);
     } finally {
         await page.close();
     }
@@ -1758,18 +2003,18 @@ test("filter controls commit mode, cutoff, and Q, and the matrix can route MSEG 
             true,
         );
 
-        await clearHarnessDebugLog(page);
-        await page.getByRole("button", { name: "Add route" }).click();
-        await page.selectOption('select[aria-label="Route 1 target"]', "filterCutoffOctaves");
-        await page.getByRole("button", { name: "Route 1 negative direction" }).click();
-        await dispatchInputValueChange(page.locator('input[aria-label="Route 1 depth"]'), 0.5);
+        await choosePrototypeSelectOption(page, "Route 1 target", "CUTOFF");
+        await page.getByRole("button", { name: "Route 1 polarity" }).click();
+        await dragLocatorBy(page, page.locator('[aria-label="Route 1 amount"]'), 0, -60);
 
         snapshot = await waitForHarnessSnapshot(
             page,
             "Route 1 targeting filter cutoff",
             (nextSnapshot) => {
                 const route = readStoredModulationState(nextSnapshot).routes[0];
-                return route?.targetKind === "filterCutoffOctaves" && Math.abs(Number(route.amount) - (-3.0)) <= 1e-9;
+                return route?.targetKind === "filterCutoffOctaves"
+                    && route?.polarity === "bipolar"
+                    && Math.abs(Number(route.amount) - 3.0) <= 0.08;
             },
         );
 
@@ -1777,22 +2022,24 @@ test("filter controls commit mode, cutoff, and Q, and the matrix can route MSEG 
             .reverse()
             .find(({ endpointID, value }) => endpointID === "modulationRoute" && Number(value?.routeIndex) === 0);
 
-        assert.deepEqual(readStoredModulationState(snapshot).routes, [{
+        assert.deepEqual(routeSummaries(readStoredModulationState(snapshot).routes), [{
             enabled: true,
             sourceKind: "mseg",
             sourceSlot: 1,
+            polarity: "bipolar",
             targetKind: "filterCutoffOctaves",
-            amount: -3.0,
+            amount: readStoredModulationState(snapshot).routes[0].amount,
         }]);
         assert.deepEqual(finalRouteUpload?.value, {
             routeIndex: 0,
             enabled: true,
             sourceKind: 1,
             sourceSlot: 1,
+            polarityKind: 1,
             targetKind: 3,
-            amount: -3.0,
+            amount: readStoredModulationState(snapshot).routes[0].amount,
         });
-        assert.equal((await page.locator(".cosimo-mod-amount-readout").first().textContent())?.trim(), "-3.00 oct");
+        assert.equal((await page.locator('[data-role="route-row-1"] >> text=/±3\\.0[0-9] oct/').count()) >= 1, true);
     } finally {
         await page.close();
     }

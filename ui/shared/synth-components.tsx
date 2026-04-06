@@ -55,10 +55,10 @@ import {
     composeModulationAmount,
     formatModulationAmountReadout,
     getModulationAmountDepth,
-    getModulationAmountDirection,
     getModulationAmountPercentLabel,
+    getModulationAmountSliderPosition,
     getModulationTargetClampHint,
-    type ModulationAmountDirection,
+    type ModulationPolarity,
     type ModulationTargetKind,
 } from "./modulation";
 
@@ -75,6 +75,10 @@ export const VOICE_MODE_OPTIONS: VoiceModeOption[] = [
 const MSEG_GRID_STEPS = [0.25, 0.5, 0.75] as const;
 const MSEG_PREVIEW_HORIZONTAL_PADDING_PX = 24;
 const MSEG_PREVIEW_VERTICAL_PADDING_PX = 22;
+const MOD_KNOB_VIEWBOX_SIZE = 72;
+const MOD_KNOB_CENTER = MOD_KNOB_VIEWBOX_SIZE / 2;
+const MOD_KNOB_RADIUS = 30;
+const MOD_KNOB_SIDE_SWEEP_DEGREES = 132;
 
 export type FactoryTableOption = {
     tableId: string;
@@ -100,13 +104,37 @@ export type RangeFieldProps = {
 
 export type ModulationAmountFieldProps = {
     targetKind: ModulationTargetKind;
+    polarity: ModulationPolarity;
     amount: number;
     onChange: (nextAmount: number) => void;
+    onPolarityChange: (nextPolarity: ModulationPolarity) => void;
     knobAriaLabel: string;
-    positiveDirectionAriaLabel: string;
-    negativeDirectionAriaLabel: string;
+    polarityAriaLabel: string;
     className?: string;
 };
+
+function polarPointFromTop(center: number, radius: number, degreesFromTop: number) {
+    const radians = ((degreesFromTop - 90) * Math.PI) / 180;
+
+    return {
+        x: center + (radius * Math.cos(radians)),
+        y: center + (radius * Math.sin(radians)),
+    };
+}
+
+function describeArcPath(
+    center: number,
+    radius: number,
+    startDegreesFromTop: number,
+    endDegreesFromTop: number,
+) {
+    const start = polarPointFromTop(center, radius, startDegreesFromTop);
+    const end = polarPointFromTop(center, radius, endDegreesFromTop);
+    const largeArcFlag = Math.abs(endDegreesFromTop - startDegreesFromTop) > 180 ? 1 : 0;
+    const sweepFlag = endDegreesFromTop >= startDegreesFromTop ? 1 : 0;
+
+    return `M ${start.x} ${start.y} A ${radius} ${radius} 0 ${largeArcFlag} ${sweepFlag} ${end.x} ${end.y}`;
+}
 
 export type WavetableStageSectionProps = {
     stageRef: RefObject<HTMLDivElement | null>;
@@ -672,77 +700,103 @@ export function RangeField({
 
 export function ModulationAmountField({
     targetKind,
+    polarity,
     amount,
     onChange,
+    onPolarityChange,
     knobAriaLabel,
-    positiveDirectionAriaLabel,
-    negativeDirectionAriaLabel,
+    polarityAriaLabel,
     className,
 }: ModulationAmountFieldProps) {
-    const [zeroDirection, setZeroDirection] = useState<ModulationAmountDirection>(
-        () => getModulationAmountDirection(amount),
-    );
-
-    useEffect(() => {
-        if (amount < 0) {
-            setZeroDirection("negative");
-        } else if (amount > 0) {
-            setZeroDirection("positive");
-        }
-    }, [amount]);
-
-    const activeDirection = getModulationAmountDirection(amount, zeroDirection);
-    const depth = getModulationAmountDepth(targetKind, amount, zeroDirection);
-    const depthLabel = getModulationAmountPercentLabel(targetKind, amount, zeroDirection);
-    const unitReadout = formatModulationAmountReadout(targetKind, amount);
+    const depth = getModulationAmountDepth(targetKind, amount);
+    const knobPosition = getModulationAmountSliderPosition(targetKind, amount);
+    const depthLabel = getModulationAmountPercentLabel(targetKind, amount);
+    const unitReadout = formatModulationAmountReadout(targetKind, amount, polarity);
     const clampHint = getModulationTargetClampHint(targetKind);
-    const knobSweepDegrees = 264;
-    const knobStartDegrees = -132;
-    const fillDegrees = depth * knobSweepDegrees;
-    const knobIndicatorDegrees = knobStartDegrees + fillDegrees;
-    const shellClassName = className ? `cosimo-mod-amount-field ${className}` : "cosimo-mod-amount-field";
+    const knobIndicatorDegrees = (knobPosition - 0.5) * (MOD_KNOB_SIDE_SWEEP_DEGREES * 2);
+    const knobFillExtentDegrees = Math.abs(knobIndicatorDegrees);
+    const knobTrackPath = useMemo(
+        () => describeArcPath(MOD_KNOB_CENTER, MOD_KNOB_RADIUS, -MOD_KNOB_SIDE_SWEEP_DEGREES, MOD_KNOB_SIDE_SWEEP_DEGREES),
+        [],
+    );
+    const knobFillPath = useMemo(() => {
+        if (knobFillExtentDegrees <= 0.0001) {
+            return null;
+        }
 
-    const setDirection = (nextDirection: ModulationAmountDirection) => {
-        setZeroDirection(nextDirection);
-        onChange(composeModulationAmount(targetKind, depth, nextDirection));
-    };
+        if (polarity === "bipolar") {
+            return describeArcPath(
+                MOD_KNOB_CENTER,
+                MOD_KNOB_RADIUS,
+                -knobFillExtentDegrees,
+                knobFillExtentDegrees,
+            );
+        }
+
+        if (knobIndicatorDegrees < 0) {
+            return describeArcPath(
+                MOD_KNOB_CENTER,
+                MOD_KNOB_RADIUS,
+                knobIndicatorDegrees,
+                0,
+            );
+        }
+
+        return describeArcPath(
+            MOD_KNOB_CENTER,
+            MOD_KNOB_RADIUS,
+            0,
+            knobIndicatorDegrees,
+        );
+    }, [knobFillExtentDegrees, knobIndicatorDegrees, polarity]);
+    const shellClassName = className ? `cosimo-mod-amount-field ${className}` : "cosimo-mod-amount-field";
 
     return (
         <div className={shellClassName}>
-            <div className="cosimo-mod-direction-toggle" role="group" aria-label="Modulation direction">
+            <div className="cosimo-mod-direction-toggle" role="group" aria-label={polarityAriaLabel}>
                 <button
                     type="button"
-                    aria-label={positiveDirectionAriaLabel}
-                    aria-pressed={activeDirection === "positive" ? "true" : "false"}
+                    aria-label={`${polarityAriaLabel} unipolar`}
+                    aria-pressed={polarity === "unipolar" ? "true" : "false"}
                     className="cosimo-mod-direction-button"
-                    data-active={activeDirection === "positive" ? "true" : "false"}
-                    onClick={() => setDirection("positive")}
+                    data-active={polarity === "unipolar" ? "true" : "false"}
+                    onClick={() => onPolarityChange("unipolar")}
                 >
                     +
                 </button>
                 <button
                     type="button"
-                    aria-label={negativeDirectionAriaLabel}
-                    aria-pressed={activeDirection === "negative" ? "true" : "false"}
+                    aria-label={`${polarityAriaLabel} bipolar`}
+                    aria-pressed={polarity === "bipolar" ? "true" : "false"}
                     className="cosimo-mod-direction-button"
-                    data-active={activeDirection === "negative" ? "true" : "false"}
-                    onClick={() => setDirection("negative")}
+                    data-active={polarity === "bipolar" ? "true" : "false"}
+                    onClick={() => onPolarityChange("bipolar")}
                 >
-                    -
+                    ±
                 </button>
             </div>
 
             <div className="cosimo-mod-knob-stack">
-                <div className="cosimo-mod-knob" title={clampHint}>
-                    <div
-                        className="cosimo-mod-knob-track"
-                        style={{
-                            background: `conic-gradient(from ${knobStartDegrees}deg, rgba(103, 232, 249, 0.92) 0deg ${fillDegrees}deg, rgba(255,255,255,0.08) ${fillDegrees}deg ${knobSweepDegrees}deg, rgba(255,255,255,0.02) ${knobSweepDegrees}deg 360deg)`,
-                        }}
-                    >
+                <div className="cosimo-mod-knob" title={clampHint} data-polarity={polarity}>
+                    <div className="cosimo-mod-knob-track">
+                        <svg className="cosimo-mod-knob-arc" viewBox={`0 0 ${MOD_KNOB_VIEWBOX_SIZE} ${MOD_KNOB_VIEWBOX_SIZE}`} aria-hidden="true">
+                            <path
+                                d={knobTrackPath}
+                                className="cosimo-mod-knob-arc-track"
+                                pathLength="1"
+                            />
+                            {knobFillPath ? (
+                                <path
+                                    d={knobFillPath}
+                                    className="cosimo-mod-knob-arc-fill"
+                                    pathLength="1"
+                                />
+                            ) : null}
+                        </svg>
                         <div className="cosimo-mod-knob-core">
                             <div className="cosimo-mod-knob-percent">{depthLabel}</div>
                         </div>
+                        <div className="cosimo-mod-knob-center-marker" />
                         <div
                             className="cosimo-mod-knob-indicator"
                             style={{ transform: `translateX(-50%) rotate(${knobIndicatorDegrees}deg)` }}
@@ -755,8 +809,8 @@ export function ModulationAmountField({
                         max="1"
                         step="0.001"
                         aria-label={knobAriaLabel}
-                        value={depth.toFixed(3)}
-                        onChange={(event) => onChange(composeModulationAmount(targetKind, Number(event.target.value), activeDirection))}
+                        value={knobPosition.toFixed(3)}
+                        onChange={(event) => onChange(composeModulationAmount(targetKind, Number(event.target.value)))}
                     />
                 </div>
 

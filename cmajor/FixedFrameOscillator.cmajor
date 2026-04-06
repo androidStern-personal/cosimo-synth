@@ -31,6 +31,8 @@ namespace wt
     let modulationSourceVelocity = 3;
     let modulationSourcePressure = 4;
     let modulationSourceSlide = 5;
+    let modulationPolarityUnipolar = 0;
+    let modulationPolarityBipolar = 1;
     let modulationTargetWavetablePosition = 1;
     let modulationTargetWarpAmount = 2;
     let modulationTargetFilterCutoffOctaves = 3;
@@ -144,6 +146,7 @@ namespace wt
         bool enabled;
         int32 sourceKind;
         int32 sourceSlot;
+        int32 polarityKind;
         int32 targetKind;
         float32 amount;
     }
@@ -1271,6 +1274,7 @@ namespace wt
                 modulationRoutes.at (routeIndex).enabled = false;
                 modulationRoutes.at (routeIndex).sourceKind = modulationSourceMseg;
                 modulationRoutes.at (routeIndex).sourceSlot = 0;
+                modulationRoutes.at (routeIndex).polarityKind = modulationPolarityUnipolar;
                 modulationRoutes.at (routeIndex).targetKind = modulationTargetWavetablePosition;
                 modulationRoutes.at (routeIndex).amount = 0.0f;
             }
@@ -1414,6 +1418,16 @@ namespace wt
                 return std::intrinsics::clamp (voiceSlide.at (voice), 0.0f, 1.0f);
 
             return 0.0f;
+        }
+
+        float32 applyRoutePolarity (float32 sourceValue, ModulationRouteUpload route)
+        {
+            let clampedSourceValue = std::intrinsics::clamp (sourceValue, 0.0f, 1.0f);
+
+            if (route.polarityKind == modulationPolarityBipolar)
+                return (clampedSourceValue * 2.0f) - 1.0f;
+
+            return clampedSourceValue;
         }
 
         void initialiseWarpDecimatorTaps()
@@ -2273,8 +2287,10 @@ namespace wt
                         for (int32 routeIndex = 0; routeIndex < modulationRouteCount; ++routeIndex)
                         {
                             let route = modulationRoutes.at (routeIndex);
+                            if (! route.enabled)
+                                continue;
 
-                            let sourceValue = resolveRouteSourceValue (int32 (voice), route);
+                            let sourceValue = applyRoutePolarity (resolveRouteSourceValue (int32 (voice), route), route);
                             let routedValue = sourceValue * route.amount;
 
                             if (route.targetKind == modulationTargetWavetablePosition)

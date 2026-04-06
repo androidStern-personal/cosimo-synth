@@ -765,6 +765,7 @@ export async function installMsegStateHookHarness(target: HTMLElement) {
         enabled: true,
         sourceKind: "mseg",
         sourceSlot: 1,
+        polarity: "unipolar",
         targetKind: "wavetablePosition",
         amount: 0.42,
     }];

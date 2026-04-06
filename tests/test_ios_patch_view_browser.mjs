@@ -56,6 +56,17 @@ function readStoredModulationState(snapshot) {
     return deserializeModulationState(snapshot.storedState["modulation.v1"]);
 }
 
+function routeSummary(route) {
+    return {
+        enabled: route.enabled,
+        sourceKind: route.sourceKind,
+        sourceSlot: route.sourceSlot,
+        polarity: route.polarity,
+        targetKind: route.targetKind,
+        amount: route.amount,
+    };
+}
+
 async function setIOSStoredModulationState(page, nextState) {
     await setIOSStoredStateValue(page, "modulation.v1", serializeModulationState(nextState));
 }
@@ -1249,8 +1260,9 @@ test("mounted iPhone no longer exposes the legacy MSEG depth control because rou
             enabled: true,
             sourceKind: "mseg",
             sourceSlot: 1,
+            polarity: "bipolar",
             targetKind: "wavetablePosition",
-            amount: -0.25,
+            amount: 0.25,
         }];
         await setIOSStoredModulationState(page, modulationState);
         const renderedState = await waitForRenderedState(
@@ -1261,7 +1273,14 @@ test("mounted iPhone no longer exposes the legacy MSEG depth control because rou
         assert.equal(renderedState.msegDepthReadout, null);
 
         const snapshot = await getIOSHarnessSnapshot(page);
-        assert.equal(readStoredModulationState(snapshot).routes[0].amount, -0.25);
+        assert.deepEqual(routeSummary(readStoredModulationState(snapshot).routes[0]), {
+            enabled: true,
+            sourceKind: "mseg",
+            sourceSlot: 1,
+            polarity: "bipolar",
+            targetKind: "wavetablePosition",
+            amount: 0.25,
+        });
     } finally {
         await closeIOSHarnessPage(page);
     }
@@ -1279,6 +1298,7 @@ test("mounted iPhone route rows use the compact depth control and preserve targe
             enabled: true,
             sourceKind: "mseg",
             sourceSlot: 1,
+            polarity: "unipolar",
             targetKind: "pan",
             amount: 0.25,
         }];
@@ -1287,30 +1307,47 @@ test("mounted iPhone route rows use the compact depth control and preserve targe
         await waitForSnapshot(
             page,
             "initial pan route restore",
-            (nextSnapshot) => Math.abs(readStoredModulationState(nextSnapshot).routes[0]?.amount - 0.25) <= 1e-9,
+            (nextSnapshot) => {
+                const route = readStoredModulationState(nextSnapshot).routes[0];
+                return route?.polarity === "unipolar" && Math.abs(Number(route?.amount) - 0.25) <= 1e-9;
+            },
         );
 
-        await (await getShadowLocator(page, 'button[aria-label="Route 1 negative direction"]')).click();
-        await dispatchShadowInputValueChange(page, 'input[aria-label="Route 1 depth"]', 0.5);
+        assert.equal(await page.evaluate(() => (
+            document.querySelector("cosimo-synth-view")?.shadowRoot?.querySelector('[aria-label="Route 1 slot"]') === null
+        )), true);
+
+        await (await getShadowLocator(page, 'button[aria-label="Route 1 polarity bipolar"]')).click();
+        await dispatchShadowInputValueChange(page, 'input[aria-label="Route 1 depth"]', 0.75);
 
         const snapshot = await waitForSnapshot(
             page,
             "compact pan route edit",
             (nextSnapshot) => {
                 const route = readStoredModulationState(nextSnapshot).routes[0];
-                return route?.targetKind === "pan" && Math.abs(Number(route.amount) - (-0.5)) <= 1e-9;
+                return route?.targetKind === "pan"
+                    && route?.polarity === "bipolar"
+                    && Math.abs(Number(route.amount) - 0.5) <= 1e-9;
             },
         );
 
         assert.ok(snapshot.sentMessages.some((message) => (
             message.endpointID === "modulationRoute"
             && Number(message.value?.routeIndex) === 0
-            && Math.abs(Number(message.value?.amount) - (-0.5)) <= 1e-9
+            && Number(message.value?.polarityKind) === 1
+            && Math.abs(Number(message.value?.amount) - 0.5) <= 1e-9
         )));
-        assert.equal(readStoredModulationState(snapshot).routes[0].amount, -0.5);
+        assert.deepEqual(routeSummary(readStoredModulationState(snapshot).routes[0]), {
+            enabled: true,
+            sourceKind: "mseg",
+            sourceSlot: 1,
+            polarity: "bipolar",
+            targetKind: "pan",
+            amount: 0.5,
+        });
         assert.equal(
             await (await getShadowLocator(page, ".cosimo-mod-amount-readout")).evaluate((element) => element.textContent?.trim() ?? null),
-            "50% L",
+            "±50%",
         );
     } finally {
         await closeIOSHarnessPage(page);

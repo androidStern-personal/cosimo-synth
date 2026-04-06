@@ -15,7 +15,12 @@ import {
     MODULATION_ROUTE_ENDPOINT_ID,
     MODULATION_STATE_KEY,
     ModulationRuntimeBridge,
+    composeModulationAmount,
     createDefaultModulationState,
+    formatModulationAmountEditingValue,
+    getModulationAmountDepth,
+    getModulationAmountSliderPosition,
+    parseModulationAmountEditingValue,
     serializeModulationState,
 } from "../patch_gui/modulation.js";
 
@@ -76,6 +81,17 @@ function endpointEvents(connection, endpointID) {
     return connection.events.filter((entry) => entry.endpointID === endpointID);
 }
 
+function routeSummary(route) {
+    return {
+        enabled: route.enabled,
+        sourceKind: route.sourceKind,
+        sourceSlot: route.sourceSlot,
+        polarity: route.polarity,
+        targetKind: route.targetKind,
+        amount: route.amount,
+    };
+}
+
 async function flushMicrotasks(turns = 4) {
     for (let index = 0; index < turns; index += 1) {
         await Promise.resolve();
@@ -92,7 +108,15 @@ test("boot_without_saved_modulation_state_uploads_default_slots_envelopes_and_di
     const state = bridge.getState();
     assert.equal(state.msegSlots.length, 3);
     assert.equal(state.envelopeSlots.length, 3);
-    assert.deepEqual(state.routes, []);
+    assert.equal(state.routes.length, 1);
+    assert.deepEqual(routeSummary(state.routes[0]), {
+        enabled: true,
+        sourceKind: "mseg",
+        sourceSlot: 1,
+        polarity: "unipolar",
+        targetKind: "wavetablePosition",
+        amount: 0,
+    });
 
     assert.deepEqual(
         endpointEvents(patchConnection, MODULATION_ENABLE_ENDPOINT_ID).map(({ value }) => value),
@@ -103,7 +127,16 @@ test("boot_without_saved_modulation_state_uploads_default_slots_envelopes_and_di
     assert.equal(endpointEvents(patchConnection, MODULATION_MSEG_PLAYBACK_ENDPOINT_ID).length, 3);
     assert.equal(endpointEvents(patchConnection, MODULATION_ENV_ENDPOINT_ID).length, 3);
     assert.equal(endpointEvents(patchConnection, MODULATION_ROUTE_ENDPOINT_ID).length, MODULATION_MAX_ROUTES);
-    assert.equal(endpointEvents(patchConnection, MODULATION_ROUTE_ENDPOINT_ID)[0].value.enabled, false);
+    assert.deepEqual(endpointEvents(patchConnection, MODULATION_ROUTE_ENDPOINT_ID)[0].value, {
+        routeIndex: 0,
+        enabled: true,
+        sourceKind: 1,
+        sourceSlot: 1,
+        polarityKind: 0,
+        targetKind: 1,
+        amount: 0,
+    });
+    assert.equal(endpointEvents(patchConnection, MODULATION_ROUTE_ENDPOINT_ID)[1].value.enabled, false);
 });
 
 test("boot_with_saved_modulation_state_restores_slots_envelopes_and_routes", () => {
@@ -124,9 +157,11 @@ test("boot_with_saved_modulation_state_restores_slots_envelopes_and_routes", () 
         releaseSeconds: 0.9,
     };
     customState.routes = [{
+        id: "boot-route-1",
         enabled: true,
         sourceKind: "env",
         sourceSlot: 3,
+        polarity: "unipolar",
         targetKind: "filterCutoffOctaves",
         amount: 4.0,
     }];
@@ -153,6 +188,7 @@ test("boot_with_saved_modulation_state_restores_slots_envelopes_and_routes", () 
         enabled: true,
         sourceKind: 2,
         sourceSlot: 3,
+        polarityKind: 0,
         targetKind: 3,
         amount: 4,
     });
@@ -182,7 +218,7 @@ test("editing_one_mseg_slot_persists_modulation_v1_and_reuploads_only_that_slot_
     assert.equal(endpointEvents(patchConnection, MODULATION_ROUTE_ENDPOINT_ID).length, 0);
 });
 
-test("replacing_routes_uploads_every_route_slot_and_disables_the_unused_tail", () => {
+test("replacing_routes_preserves_signed_amounts_and_disables_the_unused_tail", () => {
     const patchConnection = new FakePatchConnection();
     const bridge = new ModulationRuntimeBridge(patchConnection);
 
@@ -192,18 +228,22 @@ test("replacing_routes_uploads_every_route_slot_and_disables_the_unused_tail", (
 
     bridge.replaceRoutes([
         {
+            id: "route-a",
             enabled: true,
-            sourceKind: "mseg",
+            sourceKind: "env",
             sourceSlot: 2,
-            targetKind: "pan",
-            amount: 0.5,
+            polarity: "unipolar",
+            targetKind: "filterCutoffOctaves",
+            amount: -2.5,
         },
         {
+            id: "route-b",
             enabled: true,
             sourceKind: "velocity",
             sourceSlot: null,
-            targetKind: "ampGainDb",
-            amount: -6.0,
+            polarity: "bipolar",
+            targetKind: "pan",
+            amount: 0.5,
         },
     ]);
 
@@ -212,18 +252,20 @@ test("replacing_routes_uploads_every_route_slot_and_disables_the_unused_tail", (
     assert.deepEqual(uploads[0].value, {
         routeIndex: 0,
         enabled: true,
-        sourceKind: 1,
+        sourceKind: 2,
         sourceSlot: 2,
-        targetKind: 7,
-        amount: 0.5,
+        polarityKind: 0,
+        targetKind: 3,
+        amount: -2.5,
     });
     assert.deepEqual(uploads[1].value, {
         routeIndex: 1,
         enabled: true,
         sourceKind: 3,
         sourceSlot: 0,
-        targetKind: 6,
-        amount: -6,
+        polarityKind: 1,
+        targetKind: 7,
+        amount: 0.5,
     });
     assert.equal(uploads.at(-1).value.enabled, false);
 });
@@ -242,4 +284,31 @@ test("async stored-state echoes do not retrigger modulation uploads", async () =
 
     assert.equal(uploadCountAfterEchoes, uploadCountBeforeEchoes);
     assert.equal(patchConnection.events.length, uploadCountBeforeEchoes);
+});
+
+test("zero-centered route amount mapping keeps zero at the midpoint and uses side-specific depth", () => {
+    assert.equal(composeModulationAmount("warpAmount", 0.5), 0);
+    assert.equal(composeModulationAmount("warpAmount", 0), -1);
+    assert.equal(composeModulationAmount("warpAmount", 1), 1);
+    assert.equal(composeModulationAmount("ampGainDb", 0.5), 0);
+    assert.equal(composeModulationAmount("ampGainDb", 0), -48);
+    assert.equal(composeModulationAmount("ampGainDb", 1), 6);
+
+    assert.equal(getModulationAmountSliderPosition("warpAmount", 0), 0.5);
+    assert.equal(getModulationAmountSliderPosition("warpAmount", -1), 0);
+    assert.equal(getModulationAmountSliderPosition("warpAmount", 1), 1);
+    assert.equal(getModulationAmountSliderPosition("ampGainDb", -48), 0);
+    assert.equal(getModulationAmountSliderPosition("ampGainDb", 0), 0.5);
+    assert.equal(getModulationAmountSliderPosition("ampGainDb", 6), 1);
+
+    assert.equal(getModulationAmountDepth("ampGainDb", -24), 0.5);
+    assert.equal(getModulationAmountDepth("ampGainDb", 3), 0.5);
+});
+
+test("matrix amount text entry uses user-facing units instead of raw route amounts", () => {
+    assert.equal(formatModulationAmountEditingValue("warpAmount", 0.12), "12");
+    assert.equal(parseModulationAmountEditingValue("warpAmount", "12"), 0.12);
+    assert.equal(parseModulationAmountEditingValue("pan", "-40"), -0.4);
+    assert.equal(parseModulationAmountEditingValue("pan", "40L"), -0.4);
+    assert.equal(parseModulationAmountEditingValue("pitchSemitones", "12"), 12);
 });

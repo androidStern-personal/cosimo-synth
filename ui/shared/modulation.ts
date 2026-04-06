@@ -35,6 +35,8 @@ export const MOD_SOURCE_ENV = 2;
 export const MOD_SOURCE_VELOCITY = 3;
 export const MOD_SOURCE_PRESSURE = 4;
 export const MOD_SOURCE_SLIDE = 5;
+export const MOD_POLARITY_UNIPOLAR = 0;
+export const MOD_POLARITY_BIPOLAR = 1;
 
 export const MOD_TARGET_WAVETABLE_POSITION = 1;
 export const MOD_TARGET_WARP_AMOUNT = 2;
@@ -78,7 +80,19 @@ export type ModulationTargetKind =
     | "pitchSemitones"
     | "ampGainDb"
     | "pan";
-export type ModulationAmountDirection = "positive" | "negative";
+export type ModulationPolarity = "unipolar" | "bipolar";
+
+export type ModulationSourceOption = {
+    value: string;
+    label: string;
+    sourceKind: ModulationSourceKind;
+    sourceSlot: number | null;
+};
+
+export type ModulationTargetOption = {
+    value: ModulationTargetKind;
+    label: string;
+};
 
 export type ModulationMsegSlot = {
     shape: MsegShape;
@@ -94,9 +108,11 @@ export type ModulationEnvelope = {
 };
 
 export type ModulationRoute = {
+    id: string;
     enabled: boolean;
     sourceKind: ModulationSourceKind;
     sourceSlot: number | null;
+    polarity: ModulationPolarity;
     targetKind: ModulationTargetKind;
     amount: number;
 };
@@ -139,14 +155,39 @@ export type ModulationRouteUpload = {
     enabled: boolean;
     sourceKind: number;
     sourceSlot: number;
+    polarityKind: number;
     targetKind: number;
     amount: number;
 };
+
+export const MODULATION_SOURCE_OPTIONS: ModulationSourceOption[] = [
+    { value: "mseg-1", label: "MSEG 1", sourceKind: "mseg", sourceSlot: 1 },
+    { value: "mseg-2", label: "MSEG 2", sourceKind: "mseg", sourceSlot: 2 },
+    { value: "mseg-3", label: "MSEG 3", sourceKind: "mseg", sourceSlot: 3 },
+    { value: "env-1", label: "ENV 1", sourceKind: "env", sourceSlot: 1 },
+    { value: "env-2", label: "ENV 2", sourceKind: "env", sourceSlot: 2 },
+    { value: "env-3", label: "ENV 3", sourceKind: "env", sourceSlot: 3 },
+    { value: "velocity", label: "VEL", sourceKind: "velocity", sourceSlot: null },
+    { value: "pressure", label: "AT", sourceKind: "pressure", sourceSlot: null },
+    { value: "slide", label: "SLIDE", sourceKind: "slide", sourceSlot: null },
+];
+
+export const MODULATION_TARGET_OPTIONS: ModulationTargetOption[] = [
+    { value: "wavetablePosition", label: "WT POS" },
+    { value: "warpAmount", label: "WARP" },
+    { value: "filterCutoffOctaves", label: "CUTOFF" },
+    { value: "filterQ", label: "RES" },
+    { value: "pitchSemitones", label: "PITCH" },
+    { value: "ampGainDb", label: "AMP" },
+    { value: "pan", label: "PAN" },
+];
 
 type StoredStateMessage = {
     key?: unknown;
     value?: unknown;
 };
+
+let generatedRouteIdCounter = 1;
 
 export type MsegEditorControllerLike = {
     getState: () => MsegState;
@@ -167,23 +208,63 @@ function clampEnvSeconds(value: number, fallback: number) {
     return clamp(Number.isFinite(numeric) ? numeric : fallback, ENV_MIN_SECONDS, ENV_MAX_SECONDS);
 }
 
-function formatSignedMagnitude(value: number, digits: number) {
+function formatMagnitude(value: number, digits: number) {
     const numeric = Number.isFinite(value) ? value : 0;
-    const magnitude = Math.abs(numeric).toFixed(digits);
-    if (numeric < 0) {
-        return `-${magnitude}`;
+    return Math.abs(numeric).toFixed(digits);
+}
+
+function formatSignedNumeric(value: number, digits: number) {
+    const numeric = Number.isFinite(value) ? Number(value.toFixed(digits)) : 0;
+    if (Math.abs(numeric) <= 1e-9) {
+        return "0";
     }
 
-    return numeric > 0 ? `+${magnitude}` : magnitude;
+    return String(numeric);
 }
 
 function getRouteAmountLimit(targetKind: ModulationTargetKind) {
     return ROUTE_AMOUNT_LIMITS[targetKind];
 }
 
-function getDirectionalAmountLimit(targetKind: ModulationTargetKind, direction: ModulationAmountDirection) {
+function getRouteAmountMagnitudeLimit(targetKind: ModulationTargetKind) {
     const limits = getRouteAmountLimit(targetKind);
-    return direction === "negative" ? Math.abs(limits.min) : Math.abs(limits.max);
+    return Math.max(Math.abs(limits.min), Math.abs(limits.max));
+}
+
+function getRouteAmountSideLimit(targetKind: ModulationTargetKind, amount: number) {
+    const limits = getRouteAmountLimit(targetKind);
+
+    if (amount < 0) {
+        return Math.abs(limits.min);
+    }
+
+    if (amount > 0) {
+        return Math.abs(limits.max);
+    }
+
+    return getRouteAmountMagnitudeLimit(targetKind);
+}
+
+function createGeneratedRouteId() {
+    const routeId = `mod-route-auto-${generatedRouteIdCounter}`;
+    generatedRouteIdCounter += 1;
+    return routeId;
+}
+
+function normalizeRouteId(value: unknown, routeIndex: number) {
+    if (typeof value === "string" && value.trim()) {
+        return value;
+    }
+
+    return `mod-route-${routeIndex + 1}`;
+}
+
+function normalizePolarity(value: unknown): ModulationPolarity {
+    return value === "bipolar" ? "bipolar" : "unipolar";
+}
+
+function polarityToCode(polarity: ModulationPolarity) {
+    return polarity === "bipolar" ? MOD_POLARITY_BIPOLAR : MOD_POLARITY_UNIPOLAR;
 }
 
 export function getModulationAmountBounds(targetKind: ModulationTargetKind) {
@@ -202,26 +283,9 @@ export function clampModulationRouteAmount(targetKind: ModulationTargetKind, val
     return clamp(Number.isFinite(numeric) ? numeric : 0.0, limits.min, limits.max);
 }
 
-export function getModulationAmountDirection(
-    amount: number,
-    fallbackDirection: ModulationAmountDirection = "positive",
-): ModulationAmountDirection {
-    const numeric = Number(amount);
-    if (!Number.isFinite(numeric) || numeric === 0) {
-        return fallbackDirection;
-    }
-
-    return numeric < 0 ? "negative" : "positive";
-}
-
-export function getModulationAmountDepth(
-    targetKind: ModulationTargetKind,
-    amount: number,
-    fallbackDirection: ModulationAmountDirection = "positive",
-) {
+export function getModulationAmountDepth(targetKind: ModulationTargetKind, amount: number) {
     const clampedAmount = clampModulationRouteAmount(targetKind, amount);
-    const direction = getModulationAmountDirection(clampedAmount, fallbackDirection);
-    const limit = getDirectionalAmountLimit(targetKind, direction);
+    const limit = getRouteAmountSideLimit(targetKind, clampedAmount);
 
     if (limit <= 0) {
         return 0;
@@ -230,53 +294,162 @@ export function getModulationAmountDepth(
     return clamp(Math.abs(clampedAmount) / limit, 0, 1);
 }
 
-export function composeModulationAmount(
-    targetKind: ModulationTargetKind,
-    depth: number,
-    direction: ModulationAmountDirection,
-) {
+export function composeModulationAmount(targetKind: ModulationTargetKind, depth: number) {
+    const limits = getRouteAmountLimit(targetKind);
     const clampedDepth = clamp(Number.isFinite(depth) ? depth : 0, 0, 1);
-    const limit = getDirectionalAmountLimit(targetKind, direction);
-    const signedAmount = (direction === "negative" ? -1 : 1) * clampedDepth * limit;
-    return clampModulationRouteAmount(targetKind, signedAmount);
+
+    if (Math.abs(clampedDepth - 0.5) <= 1e-9) {
+        return 0;
+    }
+
+    if (clampedDepth <= 0.5) {
+        if (Math.abs(limits.min) <= 1e-9) {
+            return 0;
+        }
+
+        const negativeRatio = 1 - (clampedDepth / 0.5);
+        return clampModulationRouteAmount(targetKind, limits.min * negativeRatio);
+    }
+
+    if (Math.abs(limits.max) <= 1e-9) {
+        return 0;
+    }
+
+    const positiveRatio = (clampedDepth - 0.5) / 0.5;
+    return clampModulationRouteAmount(targetKind, limits.max * positiveRatio);
 }
 
-export function formatModulationAmountReadout(targetKind: ModulationTargetKind, amount: number) {
+export function getModulationAmountSliderPosition(targetKind: ModulationTargetKind, amount: number) {
+    const limits = getRouteAmountLimit(targetKind);
+    const clampedAmount = clampModulationRouteAmount(targetKind, amount);
+
+    if (Math.abs(clampedAmount) <= 1e-9) {
+        return 0.5;
+    }
+
+    if (clampedAmount < 0) {
+        if (Math.abs(limits.min) <= 1e-9) {
+            return 0.5;
+        }
+
+        return clamp(0.5 * (1 - (Math.abs(clampedAmount) / Math.abs(limits.min))), 0, 0.5);
+    }
+
+    if (Math.abs(limits.max) <= 1e-9) {
+        return 0.5;
+    }
+
+    return clamp(0.5 + (0.5 * (clampedAmount / limits.max)), 0.5, 1);
+}
+
+export function formatModulationAmountReadout(
+    targetKind: ModulationTargetKind,
+    amount: number,
+    polarity: ModulationPolarity = "unipolar",
+) {
+    const clampedAmount = clampModulationRouteAmount(targetKind, amount);
+    const prefix = polarity === "bipolar"
+        ? (Math.abs(clampedAmount) <= 1e-9 ? "" : "±")
+        : (clampedAmount > 0 ? "+" : clampedAmount < 0 ? "-" : "");
+
+    switch (targetKind) {
+        case "wavetablePosition":
+            return `${prefix}${formatMagnitude(clampedAmount * 100, 0)}%`;
+        case "warpAmount":
+            return `${prefix}${formatMagnitude(clampedAmount * 100, 0)}%`;
+        case "filterCutoffOctaves":
+            return `${prefix}${formatMagnitude(clampedAmount, 2)} oct`;
+        case "filterQ":
+            return `${prefix}${formatMagnitude(clampedAmount, 2)} Q`;
+        case "pitchSemitones":
+            return `${prefix}${formatMagnitude(clampedAmount, 1)} st`;
+        case "ampGainDb":
+            return `${prefix}${formatMagnitude(clampedAmount, 1)} dB`;
+        case "pan": {
+            const panPercent = Math.round(Math.abs(clampedAmount) * 100);
+            if (panPercent === 0) {
+                return "0%";
+            }
+
+            if (polarity === "bipolar") {
+                return `±${panPercent}%`;
+            }
+
+            return `${panPercent}% ${clampedAmount < 0 ? "L" : "R"}`;
+        }
+        default:
+            return `${prefix}${formatMagnitude(clampedAmount, 3)}`;
+    }
+}
+
+export function formatModulationAmountEditingValue(targetKind: ModulationTargetKind, amount: number) {
     const clampedAmount = clampModulationRouteAmount(targetKind, amount);
 
     switch (targetKind) {
         case "wavetablePosition":
-            return `${formatSignedMagnitude(clampedAmount * 100, 0)}% scan`;
         case "warpAmount":
-            return `${formatSignedMagnitude(clampedAmount * 100, 0)}% warp`;
+        case "pan":
+            return formatSignedNumeric(clampedAmount * 100, 1);
         case "filterCutoffOctaves":
-            return `${formatSignedMagnitude(clampedAmount, 2)} oct`;
+            return formatSignedNumeric(clampedAmount, 2);
         case "filterQ":
-            return `${formatSignedMagnitude(clampedAmount, 2)} Q`;
+            return formatSignedNumeric(clampedAmount, 2);
         case "pitchSemitones":
-            return `${formatSignedMagnitude(clampedAmount, 1)} st`;
+            return formatSignedNumeric(clampedAmount, 2);
         case "ampGainDb":
-            return `${formatSignedMagnitude(clampedAmount, 1)} dB`;
-        case "pan": {
-            const clampedPan = clamp(clampedAmount, -1, 1);
-            const panPercent = Math.round(Math.abs(clampedPan) * 100);
-            if (panPercent === 0) {
-                return "Center";
-            }
-
-            return `${panPercent}% ${clampedPan < 0 ? "L" : "R"}`;
-        }
+            return formatSignedNumeric(clampedAmount, 1);
         default:
-            return formatSignedMagnitude(clampedAmount, 3);
+            return formatSignedNumeric(clampedAmount, 3);
     }
 }
 
-export function getModulationAmountPercentLabel(
-    targetKind: ModulationTargetKind,
-    amount: number,
-    fallbackDirection: ModulationAmountDirection = "positive",
-) {
-    return `${Math.round(getModulationAmountDepth(targetKind, amount, fallbackDirection) * 100)}%`;
+export function parseModulationAmountEditingValue(targetKind: ModulationTargetKind, rawText: string) {
+    const normalizedText = String(rawText ?? "")
+        .trim()
+        .toLowerCase()
+        .replace(/,/g, "")
+        .replace(/\s+/g, "");
+
+    if (!normalizedText) {
+        return null;
+    }
+
+    let suffixDirection = 1;
+    let numericText = normalizedText;
+
+    if (targetKind === "pan") {
+        if (numericText.endsWith("l")) {
+            suffixDirection = -1;
+            numericText = numericText.slice(0, -1);
+        } else if (numericText.endsWith("r")) {
+            suffixDirection = 1;
+            numericText = numericText.slice(0, -1);
+        }
+    }
+
+    numericText = numericText.replace(/%|oct|st|db|q/g, "");
+    const numericValue = Number.parseFloat(numericText);
+
+    if (!Number.isFinite(numericValue)) {
+        return null;
+    }
+
+    if (targetKind === "wavetablePosition" || targetKind === "warpAmount") {
+        return clampModulationRouteAmount(targetKind, numericValue / 100);
+    }
+
+    if (targetKind === "pan") {
+        const signedValue = /^[+-]/.test(numericText)
+            ? numericValue
+            : (Math.abs(numericValue) * suffixDirection);
+        return clampModulationRouteAmount(targetKind, signedValue / 100);
+    }
+
+    return clampModulationRouteAmount(targetKind, numericValue);
+}
+
+export function getModulationAmountPercentLabel(targetKind: ModulationTargetKind, amount: number) {
+    return `${Math.round(getModulationAmountDepth(targetKind, amount) * 100)}%`;
 }
 
 export function getModulationTargetClampHint(targetKind: ModulationTargetKind) {
@@ -358,27 +531,33 @@ export function normalizeEnvelope(value: unknown, slotIndex = 0): ModulationEnve
     };
 }
 
-export function createDefaultRoute(): ModulationRoute {
+export function createDefaultRoute(overrides: Partial<ModulationRoute> = {}): ModulationRoute {
     return {
+        id: overrides.id ?? createGeneratedRouteId(),
         enabled: true,
         sourceKind: "mseg",
         sourceSlot: 1,
+        polarity: "unipolar",
         targetKind: "wavetablePosition",
         amount: 0,
+        ...overrides,
     };
 }
 
-export function normalizeRoute(value: unknown): ModulationRoute {
+export function normalizeRoute(value: unknown, routeIndex = 0): ModulationRoute {
     const nextValue = value && typeof value === "object" ? value as Partial<ModulationRoute> : {};
     const sourceKind = normalizeSourceKind(nextValue.sourceKind);
     const targetKind = normalizeTargetKind(nextValue.targetKind);
+    const numericAmount = Number(nextValue.amount);
 
     return {
+        id: normalizeRouteId(nextValue.id, routeIndex),
         enabled: nextValue.enabled !== false,
         sourceKind,
         sourceSlot: normalizeSourceSlot(sourceKind, nextValue.sourceSlot),
+        polarity: normalizePolarity(nextValue.polarity),
         targetKind,
-        amount: clampModulationRouteAmount(targetKind, Number(nextValue.amount)),
+        amount: clampModulationRouteAmount(targetKind, numericAmount),
     };
 }
 
@@ -398,7 +577,7 @@ export function createDefaultModulationState(): ModulationState {
         version: 1,
         msegSlots: Array.from({ length: MODULATION_MSEG_SLOT_COUNT }, (_, slotIndex) => normalizeMsegSlot({}, slotIndex)),
         envelopeSlots: Array.from({ length: MODULATION_ENV_SLOT_COUNT }, (_, slotIndex) => createDefaultEnvelope(slotIndex)),
-        routes: [],
+        routes: [createDefaultRoute({ id: "mod-route-1" })],
     };
 }
 
@@ -413,7 +592,7 @@ export function normalizeModulationState(value: unknown = createDefaultModulatio
         version: 1,
         msegSlots: Array.from({ length: MODULATION_MSEG_SLOT_COUNT }, (_, slotIndex) => normalizeMsegSlot(inputMsegSlots[slotIndex], slotIndex)),
         envelopeSlots: Array.from({ length: MODULATION_ENV_SLOT_COUNT }, (_, slotIndex) => normalizeEnvelope(inputEnvelopeSlots[slotIndex], slotIndex)),
-        routes: inputRoutes.slice(0, MODULATION_MAX_ROUTES).map((route) => normalizeRoute(route)),
+        routes: inputRoutes.slice(0, MODULATION_MAX_ROUTES).map((route, routeIndex) => normalizeRoute(route, routeIndex)),
     };
 }
 
@@ -508,8 +687,32 @@ function toRouteUpload(routeIndex: number, route: ModulationRoute | null): Modul
         enabled: isEnabled,
         sourceKind: sourceKindToCode(normalizedRoute?.sourceKind ?? "mseg"),
         sourceSlot: isEnabled ? (normalizedRoute?.sourceSlot ?? 0) : 0,
+        polarityKind: polarityToCode(normalizedRoute?.polarity ?? "unipolar"),
         targetKind: targetKindToCode(normalizedRoute?.targetKind ?? "wavetablePosition"),
         amount: isEnabled ? (normalizedRoute?.amount ?? 0.0) : 0.0,
+    };
+}
+
+export function getModulationSourceOptionValue(route: Pick<ModulationRoute, "sourceKind" | "sourceSlot">) {
+    const match = MODULATION_SOURCE_OPTIONS.find((option) => (
+        option.sourceKind === route.sourceKind
+        && option.sourceSlot === route.sourceSlot
+    ));
+
+    return match?.value ?? MODULATION_SOURCE_OPTIONS[0].value;
+}
+
+export function applyModulationSourceOption(
+    route: ModulationRoute,
+    sourceValue: string,
+): ModulationRoute {
+    const option = MODULATION_SOURCE_OPTIONS.find((candidate) => candidate.value === sourceValue)
+        ?? MODULATION_SOURCE_OPTIONS[0];
+
+    return {
+        ...route,
+        sourceKind: option.sourceKind,
+        sourceSlot: option.sourceSlot,
     };
 }
 
@@ -695,7 +898,7 @@ export class ModulationRuntimeBridge {
 
     replaceRoutes(nextRoutes: unknown) {
         const normalizedRoutes = Array.isArray(nextRoutes)
-            ? nextRoutes.slice(0, MODULATION_MAX_ROUTES).map((route) => normalizeRoute(route))
+            ? nextRoutes.slice(0, MODULATION_MAX_ROUTES).map((route, routeIndex) => normalizeRoute(route, routeIndex))
             : [];
 
         if (JSON.stringify(this.state.routes) === JSON.stringify(normalizedRoutes)) {
@@ -710,7 +913,7 @@ export class ModulationRuntimeBridge {
     }
 
     setRoute(routeIndex: number, nextRoute: unknown) {
-        const normalizedRoute = normalizeRoute(nextRoute);
+        const normalizedRoute = normalizeRoute(nextRoute, routeIndex);
         const currentRoutes = [...this.state.routes];
 
         while (currentRoutes.length <= routeIndex) {
@@ -730,7 +933,7 @@ export class ModulationRuntimeBridge {
             return;
         }
 
-        this.replaceRoutes([...this.state.routes, normalizeRoute(nextRoute)]);
+        this.replaceRoutes([...this.state.routes, normalizeRoute(nextRoute, this.state.routes.length)]);
     }
 
     removeRoute(routeIndex: number) {

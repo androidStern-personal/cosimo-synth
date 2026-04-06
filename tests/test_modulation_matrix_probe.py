@@ -345,6 +345,7 @@ def test_velocity_route_can_pan_a_voice_hard_right() -> None:
                 "enabled": True,
                 "sourceKind": 3,
                 "sourceSlot": 0,
+                "polarityKind": 0,
                 "targetKind": 7,
                 "amount": 1.0,
             },
@@ -358,6 +359,34 @@ def test_velocity_route_can_pan_a_voice_hard_right() -> None:
 
     assert rms(right) > 0.05
     assert rms(left) < (rms(right) * 0.1)
+
+
+@pytest.mark.cmajor
+def test_bipolar_velocity_route_can_pull_a_voice_left_of_center() -> None:
+    extra_events = [
+        ("modulationClear", 1),
+        ("modulationEnable", 1),
+        (
+            "modulationRoute",
+            {
+                "routeIndex": 0,
+                "enabled": True,
+                "sourceKind": 3,
+                "sourceSlot": 0,
+                "polarityKind": 1,
+                "targetKind": 7,
+                "amount": 1.0,
+            },
+        ),
+    ]
+    setup_js = _build_setup_js(extra_events=extra_events)
+    schedule = [(0, _note_on_expr(1, 60.0, 0.25))]
+
+    left = _render_probe_audio(schedule, setup_js=setup_js, output_endpoint_id="leftOut", num_samples=16_384)
+    right = _render_probe_audio(schedule, setup_js=setup_js, output_endpoint_id="rightOut", num_samples=16_384)
+
+    assert rms(left) > 0.03
+    assert rms(left) > (rms(right) * 1.8)
 
 
 @pytest.mark.cmajor
@@ -393,6 +422,7 @@ def test_mseg_pitch_route_adds_on_top_of_pitch_bend() -> None:
                 "enabled": True,
                 "sourceKind": 1,
                 "sourceSlot": 1,
+                "polarityKind": 1,
                 "targetKind": 5,
                 "amount": 12.0,
             },
@@ -434,6 +464,7 @@ def test_envelope_route_can_raise_the_effective_filter_cutoff_monitor() -> None:
                 "enabled": True,
                 "sourceKind": 2,
                 "sourceSlot": 1,
+                "polarityKind": 0,
                 "targetKind": 3,
                 "amount": 2.0,
             },

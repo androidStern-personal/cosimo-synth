@@ -29,12 +29,14 @@ import {
     type MsegSurfaceOrientation,
 } from "../shared/mseg";
 import {
+    MODULATION_SOURCE_OPTIONS,
+    MODULATION_TARGET_OPTIONS,
     clampModulationRouteAmount,
+    applyModulationSourceOption,
     MODULATION_ENV_SLOT_COUNT,
     MODULATION_MSEG_SLOT_COUNT,
+    getModulationSourceOptionValue,
     type ModulationRoute,
-    type ModulationSourceKind,
-    type ModulationTargetKind,
 } from "../shared/modulation";
 import {
     clampDisplayPosition,
@@ -56,23 +58,6 @@ const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", 
 const KEYBOARD_ROOT_NOTE_DEFAULT = 36;
 const KEYBOARD_ROOT_NOTE_MIN = 12;
 const KEYBOARD_ROOT_NOTE_MAX = 72;
-const MOD_SOURCE_OPTIONS: Array<{ value: ModulationSourceKind; label: string }> = [
-    { value: "mseg", label: "MSEG" },
-    { value: "env", label: "Env" },
-    { value: "velocity", label: "Velocity" },
-    { value: "pressure", label: "Aftertouch" },
-    { value: "slide", label: "Slide" },
-];
-const MOD_TARGET_OPTIONS: Array<{ value: ModulationTargetKind; label: string }> = [
-    { value: "wavetablePosition", label: "Wave Pos" },
-    { value: "warpAmount", label: "Warp" },
-    { value: "filterCutoffOctaves", label: "Cutoff" },
-    { value: "filterQ", label: "Q" },
-    { value: "pitchSemitones", label: "Pitch" },
-    { value: "ampGainDb", label: "Amp" },
-    { value: "pan", label: "Pan" },
-];
-
 function triggerIOSHaptic(style = "light") {
     const hapticTrigger = (globalThis as typeof globalThis & {
         cmaj_triggerHaptic?: (nextStyle?: string) => unknown;
@@ -479,29 +464,14 @@ const IOSModulationMatrixPanel = memo(function IOSModulationMatrixPanel({
                     <div className="mseg-depth-label">Route Rows</div>
                     <button className="mseg-loop-button" type="button" aria-label="Add route" onClick={onAddRoute}>Add Route</button>
                 </div>
-                {routes.length === 0 ? (
-                    <div style={{
-                        borderRadius: "18px",
-                        border: "1px dashed rgba(255,255,255,0.12)",
-                        padding: "0.9rem",
-                        color: "rgba(226,232,240,0.65)",
-                        fontSize: "0.82rem",
-                    }}
-                    >
-                        No routes yet. Add one and choose a source, target, and depth.
-                    </div>
-                ) : null}
                 {routes.map((route, routeIndex) => {
-                    const needsSlot = route.sourceKind === "mseg" || route.sourceKind === "env";
-                    const maxSlot = route.sourceKind === "mseg" ? MODULATION_MSEG_SLOT_COUNT : MODULATION_ENV_SLOT_COUNT;
-
                     return (
                         <div
-                            key={`ios-route-${routeIndex}`}
+                            key={route.id}
                             style={{
                                 display: "grid",
                                 gap: "0.5rem",
-                                gridTemplateColumns: "minmax(0,1fr) 68px minmax(0,1fr) auto auto",
+                                gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr) auto auto",
                                 alignItems: "center",
                                 borderRadius: "18px",
                                 border: "1px solid rgba(255,255,255,0.08)",
@@ -511,77 +481,43 @@ const IOSModulationMatrixPanel = memo(function IOSModulationMatrixPanel({
                         >
                             <select
                                 aria-label={`Route ${routeIndex + 1} source`}
-                                value={route.sourceKind}
+                                value={getModulationSourceOptionValue(route)}
                                 onChange={(event) => {
-                                    const nextSourceKind = event.target.value as ModulationSourceKind;
-                                    onRouteChange(routeIndex, {
-                                        ...route,
-                                        sourceKind: nextSourceKind,
-                                        sourceSlot: nextSourceKind === "mseg" || nextSourceKind === "env" ? 1 : null,
-                                    });
+                                    onRouteChange(routeIndex, applyModulationSourceOption(route, event.target.value));
                                 }}
                             >
-                                {MOD_SOURCE_OPTIONS.map((option) => (
+                                {MODULATION_SOURCE_OPTIONS.map((option) => (
                                     <option key={option.value} value={option.value}>{option.label}</option>
                                 ))}
                             </select>
-                            {needsSlot ? (
-                                <select
-                                    aria-label={`Route ${routeIndex + 1} slot`}
-                                    value={String(route.sourceSlot ?? 1)}
-                                    onChange={(event) => {
-                                        onRouteChange(routeIndex, {
-                                            ...route,
-                                            sourceSlot: Number(event.target.value),
-                                        });
-                                    }}
-                                >
-                                    {Array.from({ length: maxSlot }, (_, slotIndex) => (
-                                        <option key={`ios-route-slot-${routeIndex}-${slotIndex + 1}`} value={String(slotIndex + 1)}>
-                                            {slotIndex + 1}
-                                        </option>
-                                    ))}
-                                </select>
-                            ) : (
-                                <div style={{
-                                    display: "flex",
-                                    alignItems: "center",
-                                    justifyContent: "center",
-                                    minHeight: "44px",
-                                    borderRadius: "14px",
-                                    border: "1px dashed rgba(255,255,255,0.12)",
-                                    background: "rgba(255,255,255,0.02)",
-                                    color: "rgba(148,163,184,0.78)",
-                                    fontSize: "0.62rem",
-                                    letterSpacing: "0.16em",
-                                    textTransform: "uppercase",
-                                }}
-                                >
-                                    Direct
-                                </div>
-                            )}
                             <select
                                 aria-label={`Route ${routeIndex + 1} target`}
                                 value={route.targetKind}
                                 onChange={(event) => {
-                                    const nextTargetKind = event.target.value as ModulationTargetKind;
+                                    const nextTargetKind = event.target.value;
                                     onRouteChange(routeIndex, {
                                         ...route,
-                                        targetKind: nextTargetKind,
-                                        amount: clampModulationRouteAmount(nextTargetKind, route.amount),
+                                        targetKind: nextTargetKind as ModulationRoute["targetKind"],
+                                        amount: clampModulationRouteAmount(nextTargetKind as ModulationRoute["targetKind"], route.amount),
                                     });
                                 }}
                             >
-                                {MOD_TARGET_OPTIONS.map((option) => (
+                                {MODULATION_TARGET_OPTIONS.map((option) => (
                                     <option key={option.value} value={option.value}>{option.label}</option>
                                 ))}
                             </select>
                             <ModulationAmountField
                                 targetKind={route.targetKind}
+                                polarity={route.polarity}
                                 amount={route.amount}
+                                onPolarityChange={(nextPolarity) => {
+                                    onRouteChange(routeIndex, {
+                                        ...route,
+                                        polarity: nextPolarity,
+                                    });
+                                }}
                                 knobAriaLabel={`Route ${routeIndex + 1} depth`}
-                                positiveDirectionAriaLabel={`Route ${routeIndex + 1} positive direction`}
-                                negativeDirectionAriaLabel={`Route ${routeIndex + 1} negative direction`}
+                                polarityAriaLabel={`Route ${routeIndex + 1} polarity`}
                                 onChange={(nextAmount) => {
                                     onRouteChange(routeIndex, {
                                         ...route,

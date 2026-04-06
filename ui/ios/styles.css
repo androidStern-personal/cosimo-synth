@@ -94,6 +94,30 @@ select {
         0 10px 20px rgba(0, 0, 0, 0.22);
 }
 
+.cosimo-mod-knob-arc {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+    pointer-events: none;
+}
+
+.cosimo-mod-knob-arc-track {
+    fill: none;
+    stroke: rgba(255, 255, 255, 0.1);
+    stroke-width: 4;
+    stroke-linecap: round;
+}
+
+.cosimo-mod-knob-arc-fill {
+    fill: none;
+    stroke: rgba(103, 232, 249, 0.92);
+    stroke-width: 4;
+    stroke-linecap: round;
+    filter: drop-shadow(0 0 8px rgba(103, 232, 249, 0.28));
+}
+
 .cosimo-mod-knob-core {
     position: absolute;
     inset: 9px;
@@ -125,6 +149,23 @@ select {
     transform-origin: 50% 26px;
     box-shadow: 0 0 12px rgba(244, 114, 182, 0.36);
     pointer-events: none;
+}
+
+.cosimo-mod-knob-center-marker {
+    position: absolute;
+    left: 50%;
+    top: 3px;
+    width: 2px;
+    height: 9px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.4);
+    transform: translateX(-50%);
+    pointer-events: none;
+}
+
+.cosimo-mod-knob[data-polarity="bipolar"] .cosimo-mod-knob-center-marker {
+    background: rgba(226, 232, 240, 0.84);
+    box-shadow: 0 0 8px rgba(226, 232, 240, 0.24);
 }
 
 .cosimo-mod-knob-input {

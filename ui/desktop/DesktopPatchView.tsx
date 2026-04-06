@@ -27,7 +27,6 @@ import {
     EditableMsegSurface,
     FilterResponseGraph,
     KeyboardSectionShell,
-    ModulationAmountField,
     MsegPreview,
     RangeField,
     VOICE_MODE_OPTIONS,
@@ -41,6 +40,7 @@ import {
 import { NexusNumberField } from "./desktop-nexus-number-field";
 import { PrecisionNumberField } from "./desktop-precision-number-field";
 import { useDesktopCurveLab } from "./desktop-curve-lab";
+import { DesktopModMatrix } from "./desktop-mod-matrix";
 import {
     useSynthPatchViewModel,
 } from "../shared/synth-hooks";
@@ -60,13 +60,9 @@ import {
     normalizedToFilterQ,
 } from "../shared/filter-response";
 import {
-    clampModulationRouteAmount,
     MODULATION_ENV_SLOT_COUNT,
-    MODULATION_MAX_ROUTES,
     MODULATION_MSEG_SLOT_COUNT,
     type ModulationRoute,
-    type ModulationSourceKind,
-    type ModulationTargetKind,
 } from "../shared/modulation";
 
 const KEYBOARD_ROOT_NOTE_DEFAULT = 36;
@@ -90,23 +86,6 @@ const FILTER_MODE_OPTIONS = [
     { value: 4, label: "Notch" },
     { value: 5, label: "Peak" },
 ] as const;
-const MOD_SOURCE_OPTIONS: Array<{ value: ModulationSourceKind; label: string }> = [
-    { value: "mseg", label: "MSEG" },
-    { value: "env", label: "Envelope" },
-    { value: "velocity", label: "Velocity" },
-    { value: "pressure", label: "Aftertouch" },
-    { value: "slide", label: "Slide" },
-];
-const MOD_TARGET_OPTIONS: Array<{ value: ModulationTargetKind; label: string }> = [
-    { value: "wavetablePosition", label: "Wavetable Pos" },
-    { value: "warpAmount", label: "Warp Amount" },
-    { value: "filterCutoffOctaves", label: "Filter Cutoff" },
-    { value: "filterQ", label: "Filter Q" },
-    { value: "pitchSemitones", label: "Pitch" },
-    { value: "ampGainDb", label: "Amp" },
-    { value: "pan", label: "Pan" },
-];
-
 type HeaderProps = {
     statusText: string;
 };
@@ -793,41 +772,6 @@ function ModulationMatrixSection({
     onRouteChange,
     msegRateFocusBindings,
 }: ModulationMatrixSectionProps) {
-    const routeRowRefs = useRef<Array<HTMLDivElement | null>>([]);
-    const pendingRouteScrollIndexRef = useRef<number | null>(null);
-
-    useEffect(() => {
-        const pendingRouteIndex = pendingRouteScrollIndexRef.current;
-
-        if (pendingRouteIndex === null || pendingRouteIndex >= routes.length) {
-            return;
-        }
-
-        pendingRouteScrollIndexRef.current = null;
-        const nextRouteElement = routeRowRefs.current[pendingRouteIndex];
-
-        if (!nextRouteElement) {
-            return;
-        }
-
-        window.requestAnimationFrame(() => {
-            nextRouteElement.scrollIntoView({
-                behavior: "smooth",
-                block: "nearest",
-                inline: "nearest",
-            });
-        });
-    }, [routes.length]);
-
-    const handleAddRouteClick = useCallback(() => {
-        if (routes.length >= MODULATION_MAX_ROUTES) {
-            return;
-        }
-
-        pendingRouteScrollIndexRef.current = routes.length;
-        onAddRoute();
-    }, [onAddRoute, routes.length]);
-
     return (
         <section className="grid gap-4 rounded-[22px] border border-white/[0.05] bg-white/[0.025] p-4">
             <div className="flex items-start justify-between gap-4">
@@ -984,135 +928,12 @@ function ModulationMatrixSection({
                 </div>
             </div>
 
-            <div className="grid gap-3">
-                <div className="flex items-center justify-between gap-3">
-                    <div className="text-[11px] uppercase tracking-[0.18em] text-slate-300/60">Route Rows</div>
-                    <button
-                        type="button"
-                        aria-label="Add route"
-                        className="cosimo-button h-11 rounded-2xl px-4 text-[11px] uppercase tracking-[0.18em]"
-                        onClick={handleAddRouteClick}
-                    >
-                        Add Route
-                    </button>
-                </div>
-                {routes.length > 0 ? (
-                    <div className="grid grid-cols-[minmax(0,1.1fr)_84px_minmax(0,1.2fr)_minmax(290px,auto)_44px] items-center gap-3 px-3 text-[9px] uppercase tracking-[0.18em] text-slate-300/45">
-                        <div>Source</div>
-                        <div>Slot</div>
-                        <div>Target</div>
-                        <div className="justify-self-end">Depth</div>
-                        <div />
-                    </div>
-                ) : null}
-                {routes.length === 0 ? (
-                    <div className="rounded-[18px] border border-dashed border-white/[0.08] bg-black/10 px-4 py-5 text-sm text-slate-300/60">
-                        No routes yet. Add one and choose a source, target, and depth.
-                    </div>
-                ) : routes.map((route, routeIndex) => {
-                    const needsSlot = route.sourceKind === "mseg" || route.sourceKind === "env";
-                    const maxSlot = route.sourceKind === "mseg" ? MODULATION_MSEG_SLOT_COUNT : MODULATION_ENV_SLOT_COUNT;
-
-                    return (
-                        <div
-                            key={`route-${routeIndex}`}
-                            ref={(element) => {
-                                routeRowRefs.current[routeIndex] = element;
-                            }}
-                            data-role={`route-row-${routeIndex + 1}`}
-                            className="grid items-center gap-3 rounded-[18px] bg-black/15 p-3 xl:grid-cols-[minmax(0,1.1fr)_84px_minmax(0,1.2fr)_minmax(290px,auto)_44px]"
-                        >
-                            <select
-                                aria-label={`Route ${routeIndex + 1} source`}
-                                className="h-11 rounded-[14px] border border-white/8 bg-black/25 px-3 text-[11px] uppercase tracking-[0.16em] text-cyan-100 outline-none"
-                                value={route.sourceKind}
-                                onChange={(event) => {
-                                    const nextSourceKind = event.target.value as ModulationSourceKind;
-                                    onRouteChange(routeIndex, {
-                                        ...route,
-                                        sourceKind: nextSourceKind,
-                                        sourceSlot: nextSourceKind === "mseg" || nextSourceKind === "env" ? 1 : null,
-                                    });
-                                }}
-                            >
-                                {MOD_SOURCE_OPTIONS.map((option) => (
-                                    <option key={option.value} value={option.value}>{option.label}</option>
-                                ))}
-                            </select>
-
-                            {needsSlot ? (
-                                <select
-                                    aria-label={`Route ${routeIndex + 1} slot`}
-                                    className="h-11 rounded-[14px] border border-white/8 bg-black/25 px-3 text-[11px] uppercase tracking-[0.16em] text-cyan-100 outline-none"
-                                    value={String(route.sourceSlot ?? 1)}
-                                    onChange={(event) => {
-                                        onRouteChange(routeIndex, {
-                                            ...route,
-                                            sourceSlot: Number(event.target.value),
-                                        });
-                                    }}
-                                >
-                                    {Array.from({ length: maxSlot }, (_, slotIndex) => (
-                                        <option key={`route-slot-${routeIndex}-${slotIndex + 1}`} value={String(slotIndex + 1)}>
-                                            {slotIndex + 1}
-                                        </option>
-                                    ))}
-                                </select>
-                            ) : (
-                                <div className="flex h-11 items-center justify-center rounded-[14px] border border-dashed border-white/8 bg-black/10 text-[10px] uppercase tracking-[0.18em] text-slate-400/75">
-                                    Direct
-                                </div>
-                            )}
-
-                            <select
-                                aria-label={`Route ${routeIndex + 1} target`}
-                                className="h-11 rounded-[14px] border border-white/8 bg-black/25 px-3 text-[11px] uppercase tracking-[0.16em] text-cyan-100 outline-none"
-                                value={route.targetKind}
-                                onChange={(event) => {
-                                    const nextTargetKind = event.target.value as ModulationTargetKind;
-                                    onRouteChange(routeIndex, {
-                                        ...route,
-                                        targetKind: nextTargetKind,
-                                        amount: clampModulationRouteAmount(nextTargetKind, route.amount),
-                                    });
-                                }}
-                            >
-                                {MOD_TARGET_OPTIONS.map((option) => (
-                                    <option key={option.value} value={option.value}>{option.label}</option>
-                                ))}
-                            </select>
-
-                            <div className="justify-self-end">
-                                <ModulationAmountField
-                                    targetKind={route.targetKind}
-                                    amount={route.amount}
-                                    knobAriaLabel={`Route ${routeIndex + 1} depth`}
-                                    positiveDirectionAriaLabel={`Route ${routeIndex + 1} positive direction`}
-                                    negativeDirectionAriaLabel={`Route ${routeIndex + 1} negative direction`}
-                                    onChange={(nextAmount) => {
-                                        onRouteChange(routeIndex, {
-                                            ...route,
-                                            amount: nextAmount,
-                                        });
-                                    }}
-                                />
-                            </div>
-
-                            <button
-                                type="button"
-                                aria-label={`Remove route ${routeIndex + 1}`}
-                                className="cosimo-button h-11 w-11 self-center rounded-2xl px-0 text-lg leading-none"
-                                onClick={() => onRemoveRoute(routeIndex)}
-                            >
-                                x
-                            </button>
-                        </div>
-                    );
-                })}
-                <div className="text-[11px] text-slate-300/55">
-                    Depth shows the movement this row asks for at full source. Position, warp, cutoff, Q, amp, and pan still stop at the synth&apos;s real limits.
-                </div>
-            </div>
+            <DesktopModMatrix
+                routes={routes}
+                onAddRoute={onAddRoute}
+                onRemoveRoute={onRemoveRoute}
+                onRouteChange={onRouteChange}
+            />
         </section>
     );
 }
