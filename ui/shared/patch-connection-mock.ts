@@ -5,13 +5,12 @@ const wavetablePositionEndpointID = "wavetablePosition";
 const wavetableSelectEndpointID = "wavetableSelect";
 const playModeEndpointID = "playMode";
 const glideTimeEndpointID = "glideTime";
+const panEndpointID = "pan";
 const warpModeEndpointID = "warpMode";
 const warpAmountEndpointID = "warpAmount";
-const warpMsegDepthEndpointID = "warpMsegDepth";
 const filterModeEndpointID = "filterMode";
 const filterCutoffEndpointID = "filterCutoff";
 const filterQEndpointID = "filterQ";
-const filterMsegDepthEndpointID = "filterMsegDepth";
 const runtimeSyncRequestEndpointID = "runtimeSyncRequest";
 const runtimeStateEndpointID = "runtimeState";
 const effectiveWavetablePositionEndpointID = "effectiveWavetablePosition";
@@ -227,6 +226,16 @@ function buildHarnessStatus(manifest: unknown) {
                     },
                 },
                 {
+                    endpointID: panEndpointID,
+                    purpose: "parameter",
+                    annotation: {
+                        name: "Pan",
+                        min: -1,
+                        max: 1,
+                        init: 0,
+                    },
+                },
+                {
                     endpointID: warpModeEndpointID,
                     purpose: "parameter",
                     annotation: {
@@ -242,16 +251,6 @@ function buildHarnessStatus(manifest: unknown) {
                     annotation: {
                         name: "Warp Amount",
                         min: 0,
-                        max: 1,
-                        init: 0,
-                    },
-                },
-                {
-                    endpointID: warpMsegDepthEndpointID,
-                    purpose: "parameter",
-                    annotation: {
-                        name: "Warp MSEG Depth",
-                        min: -1,
                         max: 1,
                         init: 0,
                     },
@@ -286,16 +285,6 @@ function buildHarnessStatus(manifest: unknown) {
                         init: 0.707107,
                     },
                 },
-                {
-                    endpointID: filterMsegDepthEndpointID,
-                    purpose: "parameter",
-                    annotation: {
-                        name: "Filter MSEG Depth",
-                        min: -6,
-                        max: 6,
-                        init: 0,
-                    },
-                },
             ],
         },
     };
@@ -320,13 +309,12 @@ export class MockPatchConnection implements PatchConnectionLike {
         [wavetableSelectEndpointID, 0],
         [playModeEndpointID, 0],
         [glideTimeEndpointID, 0.15],
+        [panEndpointID, 0],
         [warpModeEndpointID, 0],
         [warpAmountEndpointID, 0],
-        [warpMsegDepthEndpointID, 0],
         [filterModeEndpointID, 0],
         [filterCutoffEndpointID, 1000],
         [filterQEndpointID, 0.707107],
-        [filterMsegDepthEndpointID, 0],
     ]);
     private parameterListeners = new Map<string, Set<ParameterListener>>();
     private endpointListeners = new Map<string, Set<EndpointListener>>();

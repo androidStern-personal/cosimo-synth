@@ -23,6 +23,21 @@ namespace wt
     let filterCutoffMaxHz = 20000.0f;
     let filterQMin = 0.1f;
     let filterQMax = 20.0f;
+    let modulationMsegSlotCount = 3;
+    let modulationEnvSlotCount = 3;
+    let modulationRouteCount = 12;
+    let modulationSourceMseg = 1;
+    let modulationSourceEnv = 2;
+    let modulationSourceVelocity = 3;
+    let modulationSourcePressure = 4;
+    let modulationSourceSlide = 5;
+    let modulationTargetWavetablePosition = 1;
+    let modulationTargetWarpAmount = 2;
+    let modulationTargetFilterCutoffOctaves = 3;
+    let modulationTargetFilterQ = 4;
+    let modulationTargetPitchSemitones = 5;
+    let modulationTargetAmpGainDb = 6;
+    let modulationTargetPan = 7;
     let warpOversampleFactor = 8;
     let warpDecimatorTapCount = 257;
     let warpDecimatorCutoffNyquist = 0.125f;
@@ -93,6 +108,44 @@ namespace wt
         float32 pressure;
         float32 slide;
         bool retrigger, glide;
+    }
+
+    struct ModulationMsegBufferUpload
+    {
+        int32 slot;
+        float32[msegPaddedSamples] buffer;
+    }
+
+    struct ModulationMsegPlaybackUpload
+    {
+        int32 slot;
+        float32 seconds;
+        bool holdFinalValue;
+        int32 rateKind;
+        bool loopEnabled;
+        float32 loopStart;
+        float32 loopEnd;
+        int32 noteOffPolicy;
+        bool legatoRestarts;
+    }
+
+    struct ModulationEnvelopeUpload
+    {
+        int32 slot;
+        float32 attackSeconds;
+        float32 decaySeconds;
+        float32 sustain;
+        float32 releaseSeconds;
+    }
+
+    struct ModulationRouteUpload
+    {
+        int32 routeIndex;
+        bool enabled;
+        int32 sourceKind;
+        int32 sourceSlot;
+        int32 targetKind;
+        float32 amount;
     }
 
     float32 catmullRom (float32 p0, float32 p1, float32 p2, float32 p3, float32 t)
@@ -210,6 +263,33 @@ namespace wt
     float32 clampFilterQ (float32 q)
     {
         return std::intrinsics::clamp (q, filterQMin, filterQMax);
+    }
+
+    float32 clampPan (float32 pan)
+    {
+        return std::intrinsics::clamp (pan, -1.0f, 1.0f);
+    }
+
+    float32 clampAmpGainDb (float32 gainDb)
+    {
+        return std::intrinsics::clamp (gainDb, -48.0f, 6.0f);
+    }
+
+    float32 dbToGain (float32 gainDb)
+    {
+        return std::intrinsics::pow (10.0f, gainDb / 20.0f);
+    }
+
+    float32 panLeftGain (float32 pan)
+    {
+        let normalizedPan = (clampPan (pan) + 1.0f) * 0.25f * float32 (pi);
+        return std::intrinsics::cos (normalizedPan);
+    }
+
+    float32 panRightGain (float32 pan)
+    {
+        let normalizedPan = (clampPan (pan) + 1.0f) * 0.25f * float32 (pi);
+        return std::intrinsics::sin (normalizedPan);
     }
 
     int32 resolveSimperFilterMode (int32 filterMode)
@@ -468,6 +548,114 @@ namespace wt
                     if (handledNoteOnSerial != noteOnSerial)
                         break;
                 }
+            }
+        }
+    }
+
+    processor RetriggerableAdsr
+    {
+        input event (std::notes::NoteOn,
+                     std::notes::NoteOff) eventIn;
+        input event ModulationEnvelopeUpload configUpload;
+        output stream float32 gainOut;
+
+        float32 attackSeconds = 0.01f;
+        float32 decaySeconds = 0.25f;
+        float32 sustainLevel = 0.5f;
+        float32 releaseSeconds = 0.2f;
+        float32 currentLevel = 0.0f;
+        float32 attackStartLevel = 0.0f;
+        float32 releaseStartLevel = 0.0f;
+        int32 stage = 0;
+        int32 stageFrame = 0;
+        int32 stageLengthFrames = 0;
+
+        void startStage (int32 nextStage, float32 seconds)
+        {
+            stage = nextStage;
+            stageFrame = 0;
+            stageLengthFrames = std::intrinsics::max (
+                1,
+                int32 (std::intrinsics::floor ((std::intrinsics::max (seconds, 0.0f) * float32 (processor.frequency)) + 0.5f))
+            );
+        }
+
+        event configUpload (ModulationEnvelopeUpload config)
+        {
+            attackSeconds = std::intrinsics::max (0.001f, config.attackSeconds);
+            decaySeconds = std::intrinsics::max (0.001f, config.decaySeconds);
+            sustainLevel = std::intrinsics::clamp (config.sustain, 0.0f, 1.0f);
+            releaseSeconds = std::intrinsics::max (0.001f, config.releaseSeconds);
+        }
+
+        event eventIn (std::notes::NoteOn noteOn)
+        {
+            attackStartLevel = 0.0f;
+            currentLevel = 0.0f;
+            startStage (1, attackSeconds);
+        }
+
+        event eventIn (std::notes::NoteOff noteOff)
+        {
+            releaseStartLevel = currentLevel;
+            startStage (4, releaseSeconds);
+        }
+
+        void main()
+        {
+            loop
+            {
+                if (stage == 1)
+                {
+                    let t = float32 (stageFrame) / float32 (stageLengthFrames);
+                    currentLevel = attackStartLevel + ((1.0f - attackStartLevel) * std::intrinsics::clamp (t, 0.0f, 1.0f));
+                    stageFrame += 1;
+
+                    if (stageFrame >= stageLengthFrames)
+                    {
+                        currentLevel = 1.0f;
+                        startStage (2, decaySeconds);
+                    }
+                }
+                else if (stage == 2)
+                {
+                    let t = float32 (stageFrame) / float32 (stageLengthFrames);
+                    currentLevel = 1.0f + ((sustainLevel - 1.0f) * std::intrinsics::clamp (t, 0.0f, 1.0f));
+                    stageFrame += 1;
+
+                    if (stageFrame >= stageLengthFrames)
+                    {
+                        currentLevel = sustainLevel;
+                        stage = 3;
+                        stageFrame = 0;
+                        stageLengthFrames = 0;
+                    }
+                }
+                else if (stage == 3)
+                {
+                    currentLevel = sustainLevel;
+                }
+                else if (stage == 4)
+                {
+                    let t = float32 (stageFrame) / float32 (stageLengthFrames);
+                    currentLevel = releaseStartLevel * (1.0f - std::intrinsics::clamp (t, 0.0f, 1.0f));
+                    stageFrame += 1;
+
+                    if (stageFrame >= stageLengthFrames)
+                    {
+                        currentLevel = 0.0f;
+                        stage = 0;
+                        stageFrame = 0;
+                        stageLengthFrames = 0;
+                    }
+                }
+                else
+                {
+                    currentLevel = 0.0f;
+                }
+
+                gainOut <- currentLevel;
+                advance();
             }
         }
     }
@@ -933,28 +1121,35 @@ namespace wt
         input event WavetableLoadBegin wavetableLoadBeginIn;
         input event WavetableMipFrame wavetableMipFrameIn;
         input event ServiceLoadAbort serviceLoadAbortIn;
-        input event float32[msegPaddedSamples] msegBufferIn;
-        input event wt::MsegPlaybackConfig msegPlaybackIn;
+        input event int32 modulationClearIn;
+        input event int32 modulationEnableIn;
+        input event ModulationMsegBufferUpload modulationMsegBufferIn;
+        input event ModulationMsegPlaybackUpload modulationMsegPlaybackIn;
+        input event ModulationEnvelopeUpload modulationEnvelopeIn;
+        input event ModulationRouteUpload modulationRouteIn;
         input value float32 framePositionIn [[ name: "Wavetable Position", min: 0.0f, max: 1.0f, init: 0.0f ]];
-        input value float32 msegDepthIn [[ name: "MSEG 1 Depth", min: -1.0f, max: 1.0f, init: 1.0f ]];
-        input value float32 warpMsegDepthIn [[ name: "Warp MSEG Depth", min: -1.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
         input value float32 glideTimeIn [[ name: "Glide Time", min: 0.0f, max: 2.0f, init: 0.0f, unit: "s", rampFrames: 0 ]];
         input value float32 warpModeIn [[ name: "Warp Mode", min: 0.0f, max: 4.0f, init: 0.0f, discrete: true, step: 1.0f, rampFrames: 0 ]];
         input value float32 warpAmountIn [[ name: "Warp Amount", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
         input value float32 filterModeIn [[ name: "Filter Mode", min: 0.0f, max: 5.0f, init: 0.0f, discrete: true, step: 1.0f, rampFrames: 0 ]];
         input value float32 filterCutoffIn [[ name: "Filter Cutoff", min: 20.0f, max: 20000.0f, init: 1000.0f, unit: "Hz", rampFrames: 64 ]];
         input value float32 filterQIn [[ name: "Filter Q", min: 0.1f, max: 20.0f, init: 0.707107f, rampFrames: 64 ]];
-        input value float32 filterMsegDepthIn [[ name: "Filter MSEG Depth", min: -6.0f, max: 6.0f, init: 0.0f, unit: "oct", rampFrames: 64 ]];
+        input value float32 panIn [[ name: "Pan", min: -1.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
         output event WavetableUploadAck wavetableUploadAckOut;
         output event WavetableMipRequest wavetableMipRequestOut;
         output event RuntimeServiceState runtimeServiceStateOut;
         output event wt::EffectiveWavetablePositionMonitor effectiveWavetablePositionOut;
         output event wt::EffectiveWarpStateMonitor effectiveWarpStateOut;
         output event wt::EffectiveFilterStateMonitor effectiveFilterStateOut;
-        output stream float32 out;
+        output stream float32<2> out;
 
         node envelopes = wt::RetriggerableFixedASR (0.01f, 0.20f)[voiceCount];
-        node msegs = wt::MsegReader[voiceCount];
+        node mseg1 = wt::MsegReader[voiceCount];
+        node mseg2 = wt::MsegReader[voiceCount];
+        node mseg3 = wt::MsegReader[voiceCount];
+        node modEnv1 = wt::RetriggerableAdsr[voiceCount];
+        node modEnv2 = wt::RetriggerableAdsr[voiceCount];
+        node modEnv3 = wt::RetriggerableAdsr[voiceCount];
 
         std::filters::simper::Implementation[voiceCount] filters;
         std::oscillators::PhasorState[voiceCount] phasors;
@@ -977,9 +1172,12 @@ namespace wt
         int32[voiceCount] voiceEffectiveFilterMode;
         float32[voiceCount] voiceEffectiveFilterCutoffHz;
         float32[voiceCount] voiceEffectiveFilterQ;
+        float32[voiceCount] voiceEffectivePan;
         float32[warpDecimatorTapCount] warpDecimatorTapsState;
         float32[voiceCount * warpDecimatorTapCount] voiceWarpHistory;
         int32[voiceCount] voiceWarpHistoryWriteIndex;
+        ModulationRouteUpload[modulationRouteCount] modulationRoutes;
+        bool modulationEnabled = true;
 
         float32[maxMipSampleCount] mip0Samples;
         float32[maxMipSampleCount] mip1Samples;
@@ -1063,6 +1261,159 @@ namespace wt
         {
             for (wrap<voiceCount> voice)
                 resetFilterState (int32 (voice));
+        }
+
+        void clearModulationRoutes()
+        {
+            for (int32 routeIndex = 0; routeIndex < modulationRouteCount; ++routeIndex)
+            {
+                modulationRoutes.at (routeIndex).routeIndex = routeIndex;
+                modulationRoutes.at (routeIndex).enabled = false;
+                modulationRoutes.at (routeIndex).sourceKind = modulationSourceMseg;
+                modulationRoutes.at (routeIndex).sourceSlot = 0;
+                modulationRoutes.at (routeIndex).targetKind = modulationTargetWavetablePosition;
+                modulationRoutes.at (routeIndex).amount = 0.0f;
+            }
+        }
+
+        void uploadMsegBufferToSlot (int32 slot, const float32[msegPaddedSamples] buffer)
+        {
+            if (slot == 1)
+            {
+                for (wrap<voiceCount> voice)
+                    mseg1[voice].bufferUpload <- buffer;
+                return;
+            }
+
+            if (slot == 2)
+            {
+                for (wrap<voiceCount> voice)
+                    mseg2[voice].bufferUpload <- buffer;
+                return;
+            }
+
+            if (slot == 3)
+            {
+                for (wrap<voiceCount> voice)
+                    mseg3[voice].bufferUpload <- buffer;
+            }
+        }
+
+        void uploadMsegPlaybackToSlot (int32 slot, wt::MsegPlaybackConfig config)
+        {
+            if (slot == 1)
+            {
+                for (wrap<voiceCount> voice)
+                    mseg1[voice].playbackUpload <- config;
+                return;
+            }
+
+            if (slot == 2)
+            {
+                for (wrap<voiceCount> voice)
+                    mseg2[voice].playbackUpload <- config;
+                return;
+            }
+
+            if (slot == 3)
+            {
+                for (wrap<voiceCount> voice)
+                    mseg3[voice].playbackUpload <- config;
+            }
+        }
+
+        void uploadEnvelopeToSlot (int32 slot, ModulationEnvelopeUpload config)
+        {
+            if (slot == 1)
+            {
+                for (wrap<voiceCount> voice)
+                    modEnv1[voice].configUpload <- config;
+                return;
+            }
+
+            if (slot == 2)
+            {
+                for (wrap<voiceCount> voice)
+                    modEnv2[voice].configUpload <- config;
+                return;
+            }
+
+            if (slot == 3)
+            {
+                for (wrap<voiceCount> voice)
+                    modEnv3[voice].configUpload <- config;
+            }
+        }
+
+        void triggerVoiceModulators (int32 voiceIndex)
+        {
+            let voice = wrap<voiceCount> (voiceIndex);
+            mseg1[voice].triggerIn <- 1;
+            mseg2[voice].triggerIn <- 1;
+            mseg3[voice].triggerIn <- 1;
+
+            std::notes::NoteOn note;
+            note.channel = voiceChannel.at (voice);
+            note.pitch = voiceBasePitch.at (voice);
+            note.velocity = voiceVelocity.at (voice);
+            modEnv1[voice].eventIn <- note;
+            modEnv2[voice].eventIn <- note;
+            modEnv3[voice].eventIn <- note;
+        }
+
+        void noteOffVoiceModulators (int32 voiceIndex, std::notes::NoteOff note)
+        {
+            let voice = wrap<voiceCount> (voiceIndex);
+            mseg1[voice].noteOffIn <- 1;
+            mseg2[voice].noteOffIn <- 1;
+            mseg3[voice].noteOffIn <- 1;
+            modEnv1[voice].eventIn <- note;
+            modEnv2[voice].eventIn <- note;
+            modEnv3[voice].eventIn <- note;
+        }
+
+        float32 resolveMsegValue (int32 voiceIndex, int32 slot)
+        {
+            let voice = wrap<voiceCount> (voiceIndex);
+
+            if (slot == 1) return mseg1[voice].out;
+            if (slot == 2) return mseg2[voice].out;
+            if (slot == 3) return mseg3[voice].out;
+
+            return 0.0f;
+        }
+
+        float32 resolveEnvValue (int32 voiceIndex, int32 slot)
+        {
+            let voice = wrap<voiceCount> (voiceIndex);
+
+            if (slot == 1) return modEnv1[voice].gainOut;
+            if (slot == 2) return modEnv2[voice].gainOut;
+            if (slot == 3) return modEnv3[voice].gainOut;
+
+            return 0.0f;
+        }
+
+        float32 resolveRouteSourceValue (int32 voiceIndex, ModulationRouteUpload route)
+        {
+            if (route.sourceKind == modulationSourceMseg)
+                return resolveMsegValue (voiceIndex, route.sourceSlot);
+
+            if (route.sourceKind == modulationSourceEnv)
+                return resolveEnvValue (voiceIndex, route.sourceSlot);
+
+            let voice = wrap<voiceCount> (voiceIndex);
+
+            if (route.sourceKind == modulationSourceVelocity)
+                return std::intrinsics::clamp (voiceVelocity.at (voice), 0.0f, 1.0f);
+
+            if (route.sourceKind == modulationSourcePressure)
+                return std::intrinsics::clamp (voicePressure.at (voice), 0.0f, 1.0f);
+
+            if (route.sourceKind == modulationSourceSlide)
+                return std::intrinsics::clamp (voiceSlide.at (voice), 0.0f, 1.0f);
+
+            return 0.0f;
         }
 
         void initialiseWarpDecimatorTaps()
@@ -1671,7 +2022,7 @@ namespace wt
             resetFilterState (index);
 
             envelopes[voice].eventIn <- note;
-            msegs[voice].triggerIn <- 1;
+            triggerVoiceModulators (index);
         }
 
         event voiceEventIn (int index, std::notes::NoteOff note)
@@ -1679,7 +2030,7 @@ namespace wt
             let voice = wrap<voiceCount> (index);
             voiceActive.at (voice) = 0;
             envelopes[voice].eventIn <- note;
-            msegs[voice].noteOffIn <- 1;
+            noteOffVoiceModulators (index, note);
         }
 
         event voiceEventIn (int index, std::notes::PitchBend bend)
@@ -1733,20 +2084,50 @@ namespace wt
                 resetWarpRenderState (index);
                 resetFilterState (index);
                 envelopes[voice].eventIn <- note;
-                msegs[voice].triggerIn <- 1;
+                triggerVoiceModulators (index);
             }
         }
 
-        event msegBufferIn (float32[msegPaddedSamples] buffer)
+        event modulationClearIn (int32 unused)
         {
-            for (wrap<voiceCount> voice)
-                msegs[voice].bufferUpload <- buffer;
+            clearModulationRoutes();
         }
 
-        event msegPlaybackIn (wt::MsegPlaybackConfig config)
+        event modulationEnableIn (int32 enabled)
         {
-            for (wrap<voiceCount> voice)
-                msegs[voice].playbackUpload <- config;
+            modulationEnabled = enabled != 0;
+        }
+
+        event modulationMsegBufferIn (ModulationMsegBufferUpload upload)
+        {
+            uploadMsegBufferToSlot (upload.slot, upload.buffer);
+        }
+
+        event modulationMsegPlaybackIn (ModulationMsegPlaybackUpload upload)
+        {
+            wt::MsegPlaybackConfig config;
+            config.seconds = upload.seconds;
+            config.holdFinalValue = upload.holdFinalValue;
+            config.rateKind = upload.rateKind;
+            config.loopEnabled = upload.loopEnabled;
+            config.loopStart = upload.loopStart;
+            config.loopEnd = upload.loopEnd;
+            config.noteOffPolicy = upload.noteOffPolicy;
+            config.legatoRestarts = upload.legatoRestarts;
+            uploadMsegPlaybackToSlot (upload.slot, config);
+        }
+
+        event modulationEnvelopeIn (ModulationEnvelopeUpload upload)
+        {
+            uploadEnvelopeToSlot (upload.slot, upload);
+        }
+
+        event modulationRouteIn (ModulationRouteUpload upload)
+        {
+            if (upload.routeIndex < 0 || upload.routeIndex >= modulationRouteCount)
+                return;
+
+            modulationRoutes.at (upload.routeIndex) = upload;
         }
 
         event wavetableLoadBeginIn (WavetableLoadBegin request)
@@ -1863,35 +2244,77 @@ namespace wt
 
                 maybeTransitionServiceToPlayable();
 
-                float32 mix = 0.0f;
+                float32 leftMix = 0.0f;
+                float32 rightMix = 0.0f;
 
                 for (wrap<voiceCount> voice)
                 {
                     advanceVoicePitchState (int32 (voice));
-                    msegs[voice].advance();
+                    mseg1[voice].advance();
+                    mseg2[voice].advance();
+                    mseg3[voice].advance();
+                    modEnv1[voice].advance();
+                    modEnv2[voice].advance();
+                    modEnv3[voice].advance();
                     envelopes[voice].advance();
 
                     let processorFrequency = float32 (processor.frequency);
                     let envelopeGain = envelopes[voice].gainOut;
-                    let modulation = msegs[voice].out;
+                    float32 routePosition = 0.0f;
+                    float32 routeWarpAmount = 0.0f;
+                    float32 routeFilterCutoffOctaves = 0.0f;
+                    float32 routeFilterQ = 0.0f;
+                    float32 routePitchSemitones = 0.0f;
+                    float32 routeAmpGainDb = 0.0f;
+                    float32 routePan = 0.0f;
+
+                    if (modulationEnabled)
+                    {
+                        for (int32 routeIndex = 0; routeIndex < modulationRouteCount; ++routeIndex)
+                        {
+                            let route = modulationRoutes.at (routeIndex);
+
+                            let sourceValue = resolveRouteSourceValue (int32 (voice), route);
+                            let routedValue = sourceValue * route.amount;
+
+                            if (route.targetKind == modulationTargetWavetablePosition)
+                                routePosition += routedValue;
+                            else if (route.targetKind == modulationTargetWarpAmount)
+                                routeWarpAmount += routedValue;
+                            else if (route.targetKind == modulationTargetFilterCutoffOctaves)
+                                routeFilterCutoffOctaves += routedValue;
+                            else if (route.targetKind == modulationTargetFilterQ)
+                                routeFilterQ += routedValue;
+                            else if (route.targetKind == modulationTargetPitchSemitones)
+                                routePitchSemitones += routedValue;
+                            else if (route.targetKind == modulationTargetAmpGainDb)
+                                routeAmpGainDb += routedValue;
+                            else if (route.targetKind == modulationTargetPan)
+                                routePan += routedValue;
+                        }
+                    }
+
                     let effectivePosition = std::intrinsics::clamp (
-                        framePositionIn + (modulation * msegDepthIn),
+                        framePositionIn + routePosition,
                         0.0f,
                         1.0f
                     );
                     let warpMode = resolveWarpMode (warpModeIn);
                     let effectiveWarpAmount = std::intrinsics::clamp (
-                        warpAmountIn + (modulation * warpMsegDepthIn),
+                        warpAmountIn + routeWarpAmount,
                         0.0f,
                         1.0f
                     );
                     let filterMode = resolveFilterMode (filterModeIn);
                     let baseFilterCutoffHz = clampFilterCutoffHz (filterCutoffIn, processorFrequency);
                     let effectiveFilterCutoffHz = clampFilterCutoffHz (
-                        baseFilterCutoffHz * std::intrinsics::pow (2.0f, modulation * filterMsegDepthIn),
+                        baseFilterCutoffHz * std::intrinsics::pow (2.0f, routeFilterCutoffOctaves),
                         processorFrequency
                     );
-                    let effectiveFilterQ = clampFilterQ (filterQIn);
+                    let effectiveFilterQ = clampFilterQ (filterQIn + routeFilterQ);
+                    let effectivePan = clampPan (panIn + routePan);
+                    let effectivePitchSemitones = voiceCurrentPitch.at (voice) + voiceBendSemitones.at (voice) + routePitchSemitones;
+                    let effectiveFrequencyHz = std::notes::noteToFrequency (effectivePitchSemitones);
                     let shouldRenderWarpBackground = warpMode > warpModeOff;
                     let shouldBypassWarpOutput = isIdentityWarp (warpMode, effectiveWarpAmount);
                     voiceEffectivePosition.at (voice) = effectivePosition;
@@ -1900,11 +2323,13 @@ namespace wt
                     voiceEffectiveFilterMode.at (voice) = filterMode;
                     voiceEffectiveFilterCutoffHz.at (voice) = effectiveFilterCutoffHz;
                     voiceEffectiveFilterQ.at (voice) = effectiveFilterQ;
+                    voiceEffectivePan.at (voice) = effectivePan;
 
-                    if (envelopeGain <= 0.0f || voiceFrequencyHz.at (voice) <= 0.0f)
+                    if (envelopeGain <= 0.0f || effectiveFrequencyHz <= 0.0f)
                         continue;
 
-                    let currentPhaseIncrement = voiceFrequencyHz.at (voice) / float32 (processor.frequency);
+                    phasors.at (voice).setFrequency (processor.frequency, effectiveFrequencyHz);
+                    let currentPhaseIncrement = effectiveFrequencyHz / float32 (processor.frequency);
                     let requestedMipIndex = selectMipIndexFromPhaseIncrement (currentPhaseIncrement);
                     let playableMipIndex = findPlayableMipIndex (requestedMipIndex);
                     int32 warpRequestedMipIndex = requestedMipIndex;
@@ -1970,10 +2395,12 @@ namespace wt
                         resetFilterState (int32 (voice));
                     }
 
-                    mix += sample * envelopeGain;
+                    let gainedSample = sample * envelopeGain * dbToGain (clampAmpGainDb (routeAmpGainDb));
+                    leftMix += gainedSample * panLeftGain (effectivePan);
+                    rightMix += gainedSample * panRightGain (effectivePan);
                 }
 
-                out <- mix;
+                out <- float32<2> (leftMix, rightMix);
                 maybeEmitMonitorUpdate();
                 advance();
             }

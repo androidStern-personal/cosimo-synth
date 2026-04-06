@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import { chromium } from "playwright";
 import { deserializeMsegShape, renderMsegShape } from "../patch_gui/mseg.js";
+import { deserializeModulationState } from "../patch_gui/modulation.js";
 
 import {
     clearHarnessDebugLog,
@@ -24,14 +25,27 @@ function buildShortMidi(status, noteNumber, velocity = 0) {
     return status | (noteNumber << 8) | (velocity << 16);
 }
 
-function readStoredJson(snapshot, key) {
-    const rawValue = snapshot.storedState[key];
+function readStoredModulationState(snapshot) {
+    return deserializeModulationState(snapshot.storedState["modulation.v1"]);
+}
 
-    if (typeof rawValue !== "string") {
-        return rawValue ?? null;
-    }
+function readStoredMsegShape(snapshot, slotIndex = 0) {
+    return readStoredModulationState(snapshot).msegSlots[slotIndex].shape;
+}
 
-    return JSON.parse(rawValue);
+function readStoredMsegPlayback(snapshot, slotIndex = 0) {
+    return readStoredModulationState(snapshot).msegSlots[slotIndex].playback;
+}
+
+function readStoredRouteAmount(snapshot, sourceSlot, targetKind) {
+    const route = readStoredModulationState(snapshot).routes.find((candidate) => (
+        candidate.enabled !== false
+        && candidate.sourceKind === "mseg"
+        && candidate.sourceSlot === sourceSlot
+        && candidate.targetKind === targetKind
+    ));
+
+    return Number(route?.amount ?? 0);
 }
 
 async function dispatchInputValueChange(locator, nextValue) {
@@ -49,6 +63,53 @@ async function dispatchInputValueChange(locator, nextValue) {
         setNativeValue.call(element, String(value));
         element.dispatchEvent(new Event("input", { bubbles: true }));
     }, String(nextValue));
+}
+
+async function clickFilterGraphAt(page, normalizedX, normalizedY) {
+    const graph = page.locator('[data-role="filter-response-graph"]');
+    const box = await graph.boundingBox();
+
+    if (!box) {
+        throw new Error("Expected filter response graph bounding box.");
+    }
+
+    const targetX = box.x + (box.width * normalizedX);
+    const targetY = box.y + (box.height * normalizedY);
+
+    await page.mouse.click(targetX, targetY);
+}
+
+async function dragFilterHandleBy(page, deltaX, deltaY) {
+    const handle = page.locator('[data-role="filter-response-handle-hit-target"]');
+    const box = await handle.boundingBox();
+
+    if (!box) {
+        throw new Error("Expected filter response handle bounding box.");
+    }
+
+    const startX = box.x + (box.width * 0.5);
+    const startY = box.y + (box.height * 0.5);
+
+    await page.mouse.move(startX, startY);
+    await page.mouse.down();
+    await page.mouse.move(startX + deltaX, startY + deltaY, { steps: 10 });
+    await page.mouse.up();
+}
+
+async function dragLocatorBy(page, locator, deltaX, deltaY) {
+    const box = await locator.boundingBox();
+
+    if (!box) {
+        throw new Error("Expected locator bounding box.");
+    }
+
+    const startX = box.x + (box.width * 0.5);
+    const startY = box.y + (box.height * 0.5);
+
+    await page.mouse.move(startX, startY);
+    await page.mouse.down();
+    await page.mouse.move(startX + deltaX, startY + deltaY, { steps: 10 });
+    await page.mouse.up();
 }
 
 async function waitForHarnessSnapshot(page, description, predicate, {
@@ -476,14 +537,17 @@ after(async () => {
 });
 
 function assertLatestMsegBufferMatchesStoredShape(snapshot) {
-    const storedShape = deserializeMsegShape(snapshot.storedState["mseg1.shape"]);
+    const storedShape = readStoredMsegShape(snapshot);
     const expectedBuffer = Array.from(renderMsegShape(storedShape));
     const lastBufferMessage = [...snapshot.sentMessages]
         .reverse()
-        .find(({ endpointID }) => endpointID === "mseg1Buffer");
+        .find(({ endpointID, value }) => endpointID === "modulationMsegBuffer" && Number(value?.slot) === 1);
 
-    assert.ok(lastBufferMessage, "Expected an mseg1Buffer upload.");
-    assert.deepEqual(lastBufferMessage.value, expectedBuffer);
+    assert.ok(lastBufferMessage, "Expected a modulationMsegBuffer upload for slot 1.");
+    assert.deepEqual(lastBufferMessage.value, {
+        slot: 1,
+        buffer: expectedBuffer,
+    });
 }
 
 test("desktop harness renders the real React patch view and requests runtime sync on boot", async () => {
@@ -502,9 +566,9 @@ test("desktop harness renders the real React patch view and requests runtime syn
         );
 
         assert.equal(runtimeSyncMessages.length, 1);
-        assert.equal(snapshot.sentMessages.some(({ endpointID }) => endpointID === "mseg1Buffer"), true);
-        assert.equal(snapshot.sentMessages.some(({ endpointID }) => endpointID === "mseg1Playback"), true);
-        assert.equal(snapshot.sentMessages.some(({ endpointID }) => endpointID === "mseg1Depth"), true);
+        assert.equal(snapshot.sentMessages.some(({ endpointID }) => endpointID === "modulationMsegBuffer"), true);
+        assert.equal(snapshot.sentMessages.some(({ endpointID }) => endpointID === "modulationMsegPlayback"), true);
+        assert.equal(snapshot.sentMessages.some(({ endpointID }) => endpointID === "modulationRoute"), true);
     } finally {
         await page.close();
     }
@@ -551,6 +615,7 @@ test("built desktop bundle mounts the custom-element wrapper and renders a real 
             await page.evaluate(() => "__REACT_GRAB__" in window),
             false,
         );
+        assert.equal(await page.locator('[data-role="curve-lab-toggle"]').count(), 0);
         assert.equal(await page.locator(".cosimo-stage canvas").count(), 1);
         assert.equal(await page.locator("#mount > pre").count(), 0);
 
@@ -560,18 +625,207 @@ test("built desktop bundle mounts the custom-element wrapper and renders a real 
             true,
         );
         assert.equal(
-            builtBundleSnapshot.sentMessages.some(({ endpointID }) => endpointID === "mseg1Buffer"),
+            builtBundleSnapshot.sentMessages.some(({ endpointID }) => endpointID === "modulationMsegBuffer"),
             true,
         );
         assert.equal(
-            builtBundleSnapshot.sentMessages.some(({ endpointID }) => endpointID === "mseg1Playback"),
+            builtBundleSnapshot.sentMessages.some(({ endpointID }) => endpointID === "modulationMsegPlayback"),
             true,
         );
         assert.equal(
-            builtBundleSnapshot.sentMessages.some(({ endpointID }) => endpointID === "mseg1Depth"),
+            builtBundleSnapshot.sentMessages.some(({ endpointID }) => endpointID === "modulationRoute"),
             true,
         );
         assert.deepEqual(builtBundleSnapshot.keyboardDebug?.attachCalls ?? [], [{ endpointID: "midiIn" }]);
+    } finally {
+        await page.close();
+    }
+});
+
+test("desktop dev curve lab retunes the real filter resonance drag curve", async () => {
+    const page = await openHarnessPage();
+
+    try {
+        const curveLabToggle = page.locator('[data-role="curve-lab-toggle"]');
+        assert.equal(await curveLabToggle.count(), 1);
+
+        const popupPromise = page.waitForEvent("popup");
+        await curveLabToggle.click();
+        const curveLabPage = await popupPromise;
+        await curveLabPage.waitForLoadState("domcontentloaded");
+        await curveLabPage.waitForSelector('[data-role="curve-lab-panel"]');
+
+        const linearFamilyButton = curveLabPage.locator('[data-role="curve-lab-family-linear"]');
+        await linearFamilyButton.click();
+        await page.waitForFunction(() => (
+            window.__COSIMO_DESKTOP_HARNESS__.getRenderedState().filterGraphState?.resonanceCurve?.familyId === "linear"
+        ));
+
+        await page.evaluate(() => {
+            window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("filterQ", 0.1, true);
+        });
+        await page.waitForFunction(() => (
+            Math.abs(Number(window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().parameterValues.filterQ) - 0.1) <= 0.001
+        ));
+
+        await clearHarnessDebugLog(page);
+        await dragFilterHandleBy(page, 0, -72);
+        let snapshot = await waitForHarnessSnapshot(
+            page,
+            "linear filter resonance drag result",
+            (nextSnapshot) => Number(nextSnapshot.parameterValues.filterQ) > 0.3,
+        );
+        const linearDraggedQ = Number(snapshot.parameterValues.filterQ);
+
+        const balancedPowerFamilyButton = curveLabPage.locator('[data-role="curve-lab-family-balanced-power"]');
+        await balancedPowerFamilyButton.click();
+        await page.waitForFunction(() => (
+            window.__COSIMO_DESKTOP_HARNESS__.getRenderedState().filterGraphState?.resonanceCurve?.familyId === "balanced-power"
+        ));
+
+        const powerCoefficient = curveLabPage.locator('[data-role="curve-lab-coefficient-power"]');
+        await dispatchInputValueChange(powerCoefficient, 3.8);
+        await page.waitForFunction(() => {
+            const curve = window.__COSIMO_DESKTOP_HARNESS__.getRenderedState().filterGraphState?.resonanceCurve;
+            return curve?.familyId === "balanced-power"
+                && Math.abs(Number(curve?.coefficients?.power) - 3.8) <= 0.001;
+        });
+
+        await page.evaluate(() => {
+            window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("filterQ", 0.1, true);
+        });
+        await page.waitForFunction(() => (
+            Math.abs(Number(window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().parameterValues.filterQ) - 0.1) <= 0.001
+        ));
+
+        await clearHarnessDebugLog(page);
+        await dragFilterHandleBy(page, 0, -72);
+        snapshot = await waitForHarnessSnapshot(
+            page,
+            "balanced power filter resonance drag result",
+            (nextSnapshot) => Number(nextSnapshot.parameterValues.filterQ) > 0.12,
+        );
+        const curvedDraggedQ = Number(snapshot.parameterValues.filterQ);
+
+        assert.ok(
+            curvedDraggedQ < linearDraggedQ,
+            `Expected the balanced power curve to move resonance less near the floor. Linear=${linearDraggedQ}, curved=${curvedDraggedQ}`,
+        );
+
+        const popupClose = new Promise((resolve) => curveLabPage.once("close", resolve));
+        await curveLabPage.getByRole("button", { name: "Close", exact: true }).click();
+        await popupClose;
+        await page.waitForFunction(() => {
+            const curve = window.__COSIMO_DESKTOP_HARNESS__.getRenderedState().filterGraphState?.resonanceCurve;
+            return curve?.familyId === "sigmoid"
+                && Math.abs(Number(curve?.coefficients?.slope) - 11.1) <= 0.001
+                && Math.abs(Number(curve?.coefficients?.center) - 0.84) <= 0.001;
+        });
+    } finally {
+        await page.close();
+    }
+});
+
+test("desktop filter resonance drag defaults to the locked sigmoid curve", async () => {
+    const page = await openHarnessPage();
+
+    try {
+        await page.waitForFunction(() => {
+            const curve = window.__COSIMO_DESKTOP_HARNESS__.getRenderedState().filterGraphState?.resonanceCurve;
+            return curve?.familyId === "sigmoid"
+                && Math.abs(Number(curve?.coefficients?.slope) - 11.1) <= 0.001
+                && Math.abs(Number(curve?.coefficients?.center) - 0.84) <= 0.001;
+        });
+
+        const renderedState = await getHarnessRenderedState(page);
+        assert.equal(renderedState.filterGraphState.resonanceCurve.familyId, "sigmoid");
+        assert.equal(Math.abs(renderedState.filterGraphState.resonanceCurve.coefficients.slope - 11.1) <= 0.001, true);
+        assert.equal(Math.abs(renderedState.filterGraphState.resonanceCurve.coefficients.center - 0.84) <= 0.001, true);
+    } finally {
+        await page.close();
+    }
+});
+
+test("desktop dev curve lab uses the native desktop bridge when it is available", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: async (nextPage) => {
+            await nextPage.addInitScript(() => {
+                window.__COSIMO_NATIVE_CURVE_LAB_TEST__ = {
+                    openCalls: 0,
+                    closeCalls: 0,
+                    stateJSON: "",
+                };
+
+                window.cosimo_desktop_curve_lab_openWindow = async () => {
+                    window.__COSIMO_NATIVE_CURVE_LAB_TEST__.openCalls += 1;
+                };
+
+                window.cosimo_desktop_curve_lab_closeWindow = async () => {
+                    window.__COSIMO_NATIVE_CURVE_LAB_TEST__.closeCalls += 1;
+                };
+
+                window.cosimo_desktop_curve_lab_getState = async () => window.__COSIMO_NATIVE_CURVE_LAB_TEST__.stateJSON;
+
+                window.cosimo_desktop_curve_lab_setState = async (nextState) => {
+                    window.__COSIMO_NATIVE_CURVE_LAB_TEST__.stateJSON = String(nextState);
+                };
+            });
+        },
+    });
+
+    try {
+        await page.waitForFunction(() => (
+            typeof window.__COSIMO_NATIVE_CURVE_LAB_TEST__?.stateJSON === "string"
+            && window.__COSIMO_NATIVE_CURVE_LAB_TEST__.stateJSON.length > 0
+        ));
+
+        await page.evaluate(() => {
+            const nextState = JSON.parse(window.__COSIMO_NATIVE_CURVE_LAB_TEST__.stateJSON);
+            nextState.isOpen = false;
+            nextState.profiles["filter-resonance-handle"] = {
+                familyId: "sigmoid",
+                coefficients: {
+                    slope: 9.2,
+                    center: 0.31,
+                },
+            };
+            window.__COSIMO_NATIVE_CURVE_LAB_TEST__.stateJSON = JSON.stringify(nextState);
+            window.dispatchEvent(new CustomEvent("cosimo-desktop-curve-lab-state", { detail: nextState }));
+        });
+
+        await page.waitForTimeout(50);
+        let renderedState = await getHarnessRenderedState(page);
+        assert.equal(renderedState.filterGraphState.resonanceCurve.familyId, "sigmoid");
+        assert.equal(Math.abs(renderedState.filterGraphState.resonanceCurve.coefficients.slope - 11.1) <= 0.001, true);
+        assert.equal(Math.abs(renderedState.filterGraphState.resonanceCurve.coefficients.center - 0.84) <= 0.001, true);
+
+        const curveLabToggle = page.locator('[data-role="curve-lab-toggle"]');
+        await curveLabToggle.click();
+        assert.equal(await page.evaluate(() => window.__COSIMO_NATIVE_CURVE_LAB_TEST__.openCalls), 1);
+
+        await page.evaluate(() => {
+            const nextState = JSON.parse(window.__COSIMO_NATIVE_CURVE_LAB_TEST__.stateJSON);
+            nextState.isOpen = true;
+            nextState.profiles["filter-resonance-handle"] = {
+                familyId: "sigmoid",
+                coefficients: {
+                    slope: 9.2,
+                    center: 0.31,
+                },
+            };
+            window.__COSIMO_NATIVE_CURVE_LAB_TEST__.stateJSON = JSON.stringify(nextState);
+            window.dispatchEvent(new CustomEvent("cosimo-desktop-curve-lab-state", { detail: nextState }));
+        });
+
+        await page.waitForFunction(() => {
+            const curve = window.__COSIMO_DESKTOP_HARNESS__.getRenderedState().filterGraphState?.resonanceCurve;
+            return curve?.familyId === "sigmoid"
+                && Math.abs(Number(curve?.coefficients?.slope) - 9.2) <= 0.001
+                && Math.abs(Number(curve?.coefficients?.center) - 0.31) <= 0.001;
+        });
+
+        renderedState = await getHarnessRenderedState(page);
+        assert.equal(Math.abs(renderedState.filterGraphState.resonanceCurve.coefficients.slope - 9.2) <= 0.001, true);
     } finally {
         await page.close();
     }
@@ -1172,27 +1426,37 @@ test("voice mode buttons commit the exact discrete playMode values", async () =>
     }
 });
 
-test("warp controls commit mode, amount, and MSEG depth on the desktop harness", async () => {
+test("warp controls commit mode and amount, and the matrix can route MSEG 1 into warp amount", async () => {
     const page = await openHarnessPage();
 
     try {
-        await clearHarnessDebugLog(page);
-        await page.selectOption('select[aria-label="Warp mode"]', "3");
+        assert.equal(await page.locator('select[aria-label="Warp mode"]').count(), 0);
+        assert.equal(await page.getByText("Phase Warp", { exact: true }).count(), 0);
 
-        await page.waitForFunction(() => {
-            const snapshot = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot();
-            return Number(snapshot.parameterValues.warpMode) === 3;
-        });
+        await clearHarnessDebugLog(page);
+        const warpModeChip = page.locator('button[aria-label^="Cycle warp mode"]').first();
+        let currentMode = await page.evaluate(() => Number(window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().parameterValues.warpMode));
+
+        for (let guard = 0; guard < 8 && currentMode !== 3; guard += 1) {
+            await warpModeChip.click();
+            currentMode = await waitForPageValue(
+                page,
+                "warp mode cycling to asym",
+                () => window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().parameterValues.warpMode,
+                (value) => Number(value) !== Number(currentMode),
+            );
+        }
+
+        assert.equal(currentMode, 3);
 
         let snapshot = await getHarnessSnapshot(page);
-        assert.deepEqual(
-            snapshot.sentMessages.filter(({ endpointID }) => endpointID === "warpMode"),
-            [{ endpointID: "warpMode", value: 3 }],
+        assert.equal(
+            snapshot.sentMessages.some(({ endpointID, value }) => endpointID === "warpMode" && Number(value) === 3),
+            true,
         );
-        assert.equal(await page.locator('select[aria-label="Warp mode"]').inputValue(), "3");
 
         await clearHarnessDebugLog(page);
-        await page.selectOption('select[aria-label="Warp mode"]', "4");
+        await warpModeChip.click();
 
         await page.waitForFunction(() => {
             const snapshot = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot();
@@ -1200,14 +1464,17 @@ test("warp controls commit mode, amount, and MSEG depth on the desktop harness",
         });
 
         snapshot = await getHarnessSnapshot(page);
-        assert.deepEqual(
-            snapshot.sentMessages.filter(({ endpointID }) => endpointID === "warpMode"),
-            [{ endpointID: "warpMode", value: 4 }],
+        assert.equal(
+            snapshot.sentMessages.some(({ endpointID, value }) => endpointID === "warpMode" && Number(value) === 4),
+            true,
         );
-        assert.equal(await page.locator('select[aria-label="Warp mode"]').inputValue(), "4");
 
         await clearHarnessDebugLog(page);
-        await dispatchInputValueChange(page.locator('input[aria-label="Warp amount"]'), 0.72);
+        const warpAmountInput = page.locator('input[aria-label="Warp amount"]');
+        await warpAmountInput.dblclick();
+        await warpAmountInput.press(`${process.platform === "darwin" ? "Meta" : "Control"}+A`);
+        await warpAmountInput.type("0.720");
+        await warpAmountInput.blur();
 
         await page.waitForFunction(() => {
             const snapshot = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot();
@@ -1221,17 +1488,84 @@ test("warp controls commit mode, amount, and MSEG depth on the desktop harness",
         );
 
         await clearHarnessDebugLog(page);
-        await dispatchInputValueChange(page.locator('input[aria-label="Warp MSEG depth"]'), -0.35);
+        await page.getByRole("button", { name: "Add route" }).click();
+        await page.selectOption('select[aria-label="Route 1 target"]', "warpAmount");
+        await page.getByRole("button", { name: "Route 1 negative direction" }).click();
+        await dispatchInputValueChange(page.locator('input[aria-label="Route 1 depth"]'), 0.35);
+
+        snapshot = await waitForHarnessSnapshot(
+            page,
+            "Route 1 targeting warp amount",
+            (nextSnapshot) => Math.abs(readStoredRouteAmount(nextSnapshot, 1, "warpAmount") - (-0.35)) <= 1e-9,
+        );
+
+        const finalRouteUpload = [...snapshot.sentMessages]
+            .reverse()
+            .find(({ endpointID, value }) => endpointID === "modulationRoute" && Number(value?.routeIndex) === 0);
+
+        assert.deepEqual(readStoredModulationState(snapshot).routes, [{
+            enabled: true,
+            sourceKind: "mseg",
+            sourceSlot: 1,
+            targetKind: "warpAmount",
+            amount: -0.35,
+        }]);
+        assert.deepEqual(finalRouteUpload?.value, {
+            routeIndex: 0,
+            enabled: true,
+            sourceKind: 1,
+            sourceSlot: 1,
+            targetKind: 2,
+            amount: -0.35,
+        });
+        assert.equal((await page.locator(".cosimo-mod-amount-readout").first().textContent())?.trim(), "-35% warp");
+    } finally {
+        await page.close();
+    }
+});
+
+test("Add route appends an inert row and scrolls the new row into view", async () => {
+    const page = await openHarnessPage();
+
+    try {
+        await page.setViewportSize({ width: 1280, height: 600 });
+
+        for (let routeIndex = 0; routeIndex < 8; routeIndex += 1) {
+            await page.getByRole("button", { name: "Add route" }).click();
+            await page.waitForFunction((expectedRouteIndex) => (
+                document.querySelector(`[data-role="route-row-${expectedRouteIndex}"]`) instanceof HTMLElement
+            ), routeIndex + 1);
+        }
 
         await page.waitForFunction(() => {
-            const snapshot = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot();
-            return Math.abs(Number(snapshot.parameterValues.warpMsegDepth) - (-0.35)) <= 1e-9;
+            const routeRow = document.querySelector('[data-role="route-row-8"]');
+
+            if (!(routeRow instanceof HTMLElement)) {
+                return false;
+            }
+
+            const rect = routeRow.getBoundingClientRect();
+            return rect.top >= 0 && rect.bottom <= window.innerHeight;
         });
 
-        snapshot = await getHarnessSnapshot(page);
+        const snapshot = await getHarnessSnapshot(page);
         assert.deepEqual(
-            snapshot.sentMessages.filter(({ endpointID }) => endpointID === "warpMsegDepth"),
-            [{ endpointID: "warpMsegDepth", value: -0.35 }],
+            readStoredModulationState(snapshot).routes,
+            Array.from({ length: 8 }, () => ({
+                enabled: true,
+                sourceKind: "mseg",
+                sourceSlot: 1,
+                targetKind: "wavetablePosition",
+                amount: 0,
+            })),
+        );
+        assert.equal(
+            snapshot.sentMessages.some(({ endpointID, value }) => (
+                endpointID === "modulationRoute"
+                && Number(value?.routeIndex) === 7
+                && Math.abs(Number(value?.amount)) <= 1e-9
+            )),
+            true,
         );
     } finally {
         await page.close();
@@ -1318,65 +1652,147 @@ test("desktop wavetable stage follows live effective warp state and falls back t
     }
 });
 
-test("filter controls commit mode, cutoff, Q, and MSEG depth on the desktop harness", async () => {
+test("filter controls commit mode, cutoff, and Q, and the matrix can route MSEG 1 into filter cutoff", async () => {
     const page = await openHarnessPage();
 
     try {
         await clearHarnessDebugLog(page);
-        await page.selectOption('select[aria-label="Filter mode"]', "4");
+        const filterModeChip = page.locator('button[aria-label^="Cycle filter mode"]').first();
+        let currentMode = await page.evaluate(() => Number(window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().parameterValues.filterMode));
 
-        await page.waitForFunction(() => {
-            const snapshot = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot();
-            return Number(snapshot.parameterValues.filterMode) === 4;
-        });
+        for (let guard = 0; guard < 8 && currentMode !== 4; guard += 1) {
+            await filterModeChip.click();
+            currentMode = await waitForPageValue(
+                page,
+                "filter mode cycling",
+                () => window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().parameterValues.filterMode,
+                (value) => Number(value) !== Number(currentMode),
+            );
+        }
+
+        assert.equal(currentMode, 4);
 
         let snapshot = await getHarnessSnapshot(page);
-        assert.deepEqual(
-            snapshot.sentMessages.filter(({ endpointID }) => endpointID === "filterMode"),
-            [{ endpointID: "filterMode", value: 4 }],
-        );
-
-        await clearHarnessDebugLog(page);
-        await dispatchInputValueChange(page.locator('input[aria-label="Filter cutoff"]'), 0.61);
-
-        await page.waitForFunction(() => {
-            const snapshot = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot();
-            return Number(snapshot.parameterValues.filterCutoff) > 1200;
-        });
-
-        snapshot = await getHarnessSnapshot(page);
         assert.equal(
-            snapshot.sentMessages.some(({ endpointID, value }) => endpointID === "filterCutoff" && Number(value) > 1200),
+            snapshot.sentMessages.some(({ endpointID, value }) => endpointID === "filterMode" && Number(value) === 4),
             true,
         );
 
         await clearHarnessDebugLog(page);
-        await dispatchInputValueChange(page.locator('input[aria-label="Filter resonance"]'), 0.37);
+        const filterCutoffField = page.locator('[data-role="filter-cutoff-field"]');
+        await dragLocatorBy(page, filterCutoffField, 18, 0);
 
         await page.waitForFunction(() => {
             const snapshot = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot();
-            return Number(snapshot.parameterValues.filterQ) > 7.0;
+            return Number(snapshot.parameterValues.filterCutoff) > 1000;
         });
 
         snapshot = await getHarnessSnapshot(page);
         assert.equal(
-            snapshot.sentMessages.some(({ endpointID, value }) => endpointID === "filterQ" && Number(value) > 7.0),
+            snapshot.sentMessages.some(({ endpointID, value }) => endpointID === "filterCutoff" && Number(value) > 1000),
             true,
         );
 
         await clearHarnessDebugLog(page);
-        await dispatchInputValueChange(page.locator('input[aria-label="Filter MSEG depth"]'), -2.5);
+        const filterCutoffInput = page.locator('input[aria-label="Filter cutoff"]');
+        await filterCutoffInput.dblclick();
+        await page.waitForFunction(() => {
+            const input = document.querySelector('input[aria-label="Filter cutoff"]');
+            return input instanceof HTMLInputElement && input.readOnly === false;
+        });
+        await dispatchInputValueChange(filterCutoffInput, 1210);
+        await filterCutoffInput.blur();
+
+        snapshot = await waitForHarnessSnapshot(
+            page,
+            "typed filter cutoff commit",
+            (nextSnapshot) => (
+                Math.abs(Number(nextSnapshot.parameterValues.filterCutoff) - 1210) <= 1
+                && nextSnapshot.sentMessages.some(({ endpointID, value }) => (
+                    endpointID === "filterCutoff" && Math.abs(Number(value) - 1210) <= 1
+                ))
+            ),
+        );
+        assert.equal(
+            snapshot.sentMessages.some(({ endpointID, value }) => endpointID === "filterCutoff" && Math.abs(Number(value) - 1210) <= 1),
+            true,
+        );
+
+        await clearHarnessDebugLog(page);
+        const filterResonanceField = page.locator('[data-role="filter-resonance-field"]');
+        await dragLocatorBy(page, filterResonanceField, 10, 0);
 
         await page.waitForFunction(() => {
             const snapshot = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot();
-            return Math.abs(Number(snapshot.parameterValues.filterMsegDepth) - (-2.5)) <= 1e-9;
+            return Number(snapshot.parameterValues.filterQ) > 0.8;
         });
 
         snapshot = await getHarnessSnapshot(page);
-        assert.deepEqual(
-            snapshot.sentMessages.filter(({ endpointID }) => endpointID === "filterMsegDepth"),
-            [{ endpointID: "filterMsegDepth", value: -2.5 }],
+        assert.equal(
+            snapshot.sentMessages.some(({ endpointID, value }) => endpointID === "filterQ" && Number(value) > 0.8),
+            true,
         );
+
+        await clearHarnessDebugLog(page);
+        const filterResonanceInput = page.locator('input[aria-label="Filter resonance"]');
+        await filterResonanceInput.dblclick();
+        await page.waitForFunction(() => {
+            const input = document.querySelector('input[aria-label="Filter resonance"]');
+            return input instanceof HTMLInputElement && input.readOnly === false;
+        });
+        await dispatchInputValueChange(filterResonanceInput, 7.5);
+        await filterResonanceInput.blur();
+
+        snapshot = await waitForHarnessSnapshot(
+            page,
+            "typed filter resonance commit",
+            (nextSnapshot) => (
+                Math.abs(Number(nextSnapshot.parameterValues.filterQ) - 7.5) <= 0.01
+                && nextSnapshot.sentMessages.some(({ endpointID, value }) => (
+                    endpointID === "filterQ" && Math.abs(Number(value) - 7.5) <= 0.01
+                ))
+            ),
+        );
+        assert.equal(
+            snapshot.sentMessages.some(({ endpointID, value }) => endpointID === "filterQ" && Math.abs(Number(value) - 7.5) <= 0.01),
+            true,
+        );
+
+        await clearHarnessDebugLog(page);
+        await page.getByRole("button", { name: "Add route" }).click();
+        await page.selectOption('select[aria-label="Route 1 target"]', "filterCutoffOctaves");
+        await page.getByRole("button", { name: "Route 1 negative direction" }).click();
+        await dispatchInputValueChange(page.locator('input[aria-label="Route 1 depth"]'), 0.5);
+
+        snapshot = await waitForHarnessSnapshot(
+            page,
+            "Route 1 targeting filter cutoff",
+            (nextSnapshot) => {
+                const route = readStoredModulationState(nextSnapshot).routes[0];
+                return route?.targetKind === "filterCutoffOctaves" && Math.abs(Number(route.amount) - (-3.0)) <= 1e-9;
+            },
+        );
+
+        const finalRouteUpload = [...snapshot.sentMessages]
+            .reverse()
+            .find(({ endpointID, value }) => endpointID === "modulationRoute" && Number(value?.routeIndex) === 0);
+
+        assert.deepEqual(readStoredModulationState(snapshot).routes, [{
+            enabled: true,
+            sourceKind: "mseg",
+            sourceSlot: 1,
+            targetKind: "filterCutoffOctaves",
+            amount: -3.0,
+        }]);
+        assert.deepEqual(finalRouteUpload?.value, {
+            routeIndex: 0,
+            enabled: true,
+            sourceKind: 1,
+            sourceSlot: 1,
+            targetKind: 3,
+            amount: -3.0,
+        });
+        assert.equal((await page.locator(".cosimo-mod-amount-readout").first().textContent())?.trim(), "-3.00 oct");
     } finally {
         await page.close();
     }
@@ -1386,6 +1802,22 @@ test("desktop filter graph follows live effective filter state and falls back to
     const page = await openHarnessPage();
 
     try {
+        const filterCard = page.locator('[data-role="filter-card"]');
+        const filterGraph = page.locator('[data-role="filter-response-graph"]');
+        const filterHandle = page.locator('[data-role="filter-response-handle-hit-target"]');
+        const filterCardBox = await filterCard.boundingBox();
+        const filterGraphBox = await filterGraph.boundingBox();
+        const filterHandleBox = await filterHandle.boundingBox();
+
+        assert.ok(filterCardBox, "Expected filter card bounding box.");
+        assert.ok(filterGraphBox, "Expected filter graph bounding box.");
+        assert.ok(filterHandleBox, "Expected filter response handle bounding box.");
+        assert.ok((filterGraphBox.width / filterCardBox.width) >= 0.9);
+        assert.ok((filterGraphBox.height / filterCardBox.height) >= 0.9);
+        assert.equal(await filterCard.getByText("Analyzer View", { exact: true }).count(), 0);
+        assert.equal(await filterCard.getByText("Live Response", { exact: true }).count(), 0);
+        assert.equal(await filterCard.getByText("Filter", { exact: true }).count(), 0);
+
         await page.waitForFunction(() => {
             const rendered = window.__COSIMO_DESKTOP_HARNESS__.getRenderedState();
             return rendered.filterGraphState && rendered.filterGraphState.base && rendered.filterGraphState.live;
@@ -1393,6 +1825,65 @@ test("desktop filter graph follows live effective filter state and falls back to
 
         let renderedState = await getHarnessRenderedState(page);
         assert.equal(renderedState.filterGraphState.live.hasActive, false);
+
+        await clearHarnessDebugLog(page);
+        await clickFilterGraphAt(page, 0.06, 0.08);
+        await page.waitForTimeout(100);
+
+        let snapshot = await getHarnessSnapshot(page);
+        assert.equal(
+            snapshot.sentMessages.some(({ endpointID }) => endpointID === "filterCutoff" || endpointID === "filterQ"),
+            false,
+        );
+
+        await clearHarnessDebugLog(page);
+        await dragFilterHandleBy(page, 96, -54);
+
+        await page.waitForFunction(() => {
+            const snapshot = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot();
+            return Number(snapshot.parameterValues.filterCutoff) > 1000
+                && Number(snapshot.parameterValues.filterQ) > 0.707107;
+        });
+
+        snapshot = await getHarnessSnapshot(page);
+        assert.equal(
+            snapshot.sentMessages.some(({ endpointID, value }) => endpointID === "filterCutoff" && Number(value) > 1000),
+            true,
+        );
+        assert.equal(
+            snapshot.sentMessages.some(({ endpointID, value }) => endpointID === "filterQ" && Number(value) > 0.707107),
+            true,
+        );
+
+        await dragFilterHandleBy(page, 0, 420);
+
+        await page.waitForFunction(() => {
+            const harness = window.__COSIMO_DESKTOP_HARNESS__;
+            if (!harness) {
+                return false;
+            }
+
+            const snapshot = harness.getSnapshot();
+            return Math.abs(Number(snapshot.parameterValues.filterQ) - 0.1) <= 0.05;
+        });
+
+        snapshot = await getHarnessSnapshot(page);
+        assert.ok(Math.abs(Number(snapshot.parameterValues.filterQ) - 0.1) <= 0.05);
+
+        await dragFilterHandleBy(page, 0, -1200);
+
+        await page.waitForFunction(() => {
+            const harness = window.__COSIMO_DESKTOP_HARNESS__;
+            if (!harness) {
+                return false;
+            }
+
+            const snapshot = harness.getSnapshot();
+            return Math.abs(Number(snapshot.parameterValues.filterQ) - 20) <= 0.2;
+        });
+
+        snapshot = await getHarnessSnapshot(page);
+        assert.ok(Math.abs(Number(snapshot.parameterValues.filterQ) - 20) <= 0.2);
 
         await page.evaluate(() => {
             window.__COSIMO_DESKTOP_HARNESS__.emitEffectiveFilterState({
@@ -1457,6 +1948,8 @@ test("desktop filter graph cycles graph, bars, and round-bars analyzers while ke
     const page = await openHarnessPage();
 
     try {
+        const analyzerModeChip = page.locator('button[aria-label^="Cycle analyzer view"]').first();
+
         await page.waitForFunction(() => {
             const rendered = window.__COSIMO_DESKTOP_HARNESS__.getRenderedState();
             return rendered.filterGraphState && rendered.filterGraphState.spectrum;
@@ -1520,7 +2013,7 @@ test("desktop filter graph cycles graph, bars, and round-bars analyzers while ke
         renderedState = await getHarnessRenderedState(page);
         assert.deepEqual(renderedState.filterGraphState.spectrum, lowHeavySpectrum);
 
-        await page.click('button[aria-label="Analyzer view Bars"]');
+        await analyzerModeChip.click();
         await page.waitForFunction(() => {
             const spectrum = window.__COSIMO_DESKTOP_HARNESS__.getRenderedState().filterGraphState?.spectrum;
             return spectrum?.renderMode === "bars" && spectrum?.renderGeometry?.kind === "bars" && spectrum?.renderGeometry?.rounded === false;
@@ -1534,7 +2027,7 @@ test("desktop filter graph cycles graph, bars, and round-bars analyzers while ke
             rounded: false,
         });
 
-        await page.click('button[aria-label="Cycle analyzer view"]');
+        await analyzerModeChip.click();
         await page.waitForFunction(() => {
             const spectrum = window.__COSIMO_DESKTOP_HARNESS__.getRenderedState().filterGraphState?.spectrum;
             return spectrum?.renderMode === "round-bars" && spectrum?.renderGeometry?.kind === "bars" && spectrum?.renderGeometry?.rounded === true;
@@ -1548,7 +2041,7 @@ test("desktop filter graph cycles graph, bars, and round-bars analyzers while ke
             rounded: true,
         });
 
-        await page.click('button[aria-label="Cycle analyzer view"]');
+        await analyzerModeChip.click();
         await page.waitForFunction(() => {
             const spectrum = window.__COSIMO_DESKTOP_HARNESS__.getRenderedState().filterGraphState?.spectrum;
             return spectrum?.renderMode === "graph" && spectrum?.renderGeometry?.kind === "graph";
@@ -1700,7 +2193,7 @@ test("MSEG editor wiring can open, add a point, move it, and close with Escape",
 
     try {
         await page.click('button[aria-label="Open MSEG editor"]');
-        await page.waitForSelector("text=Fixed Wavetable Route");
+        await page.waitForSelector("text=Modulation Shape Editor");
 
         const surface = page.locator('svg[data-role="mseg-editor-surface"]');
         const box = await surface.boundingBox();
@@ -1712,20 +2205,12 @@ test("MSEG editor wiring can open, add a point, move it, and close with Escape",
         await clearHarnessDebugLog(page);
         await page.mouse.click(addPointX, addPointY);
 
-        await page.waitForFunction(() => {
-            const snapshot = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot();
-            const shape = snapshot.storedState["mseg1.shape"];
-
-            if (typeof shape !== "string") {
-                return false;
-            }
-
-            const parsedShape = JSON.parse(shape);
-            return Array.isArray(parsedShape.points) && parsedShape.points.length === 3;
-        });
-
-        let snapshot = await getHarnessSnapshot(page);
-        let points = readStoredJson(snapshot, "mseg1.shape").points;
+        let snapshot = await waitForHarnessSnapshot(
+            page,
+            "added MSEG point",
+            (nextSnapshot) => readStoredMsegShape(nextSnapshot).points.length === 3,
+        );
+        let points = readStoredMsegShape(snapshot).points;
         assert.equal(points.length, 3);
         const addedPoint = { ...points[1] };
         assertLatestMsegBufferMatchesStoredShape(snapshot);
@@ -1742,20 +2227,12 @@ test("MSEG editor wiring can open, add a point, move it, and close with Escape",
         await page.mouse.move(addedPointCenterX + 40, addedPointCenterY - 48, { steps: 6 });
         await page.mouse.up();
 
-        await page.waitForFunction(() => {
-            const snapshot = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot();
-            const shape = snapshot.storedState["mseg1.shape"];
-
-            if (typeof shape !== "string") {
-                return false;
-            }
-
-            const parsedShape = JSON.parse(shape);
-            return Array.isArray(parsedShape.points) && parsedShape.points[1] && parsedShape.points[1].x > 0.5;
-        });
-
-        snapshot = await getHarnessSnapshot(page);
-        points = readStoredJson(snapshot, "mseg1.shape").points;
+        snapshot = await waitForHarnessSnapshot(
+            page,
+            "moved MSEG point",
+            (nextSnapshot) => readStoredMsegShape(nextSnapshot).points[1]?.x > 0.5,
+        );
+        points = readStoredMsegShape(snapshot).points;
         assert.equal(points.length, 3);
         assert.equal(points[0].x, 0);
         assert.equal(points[0].y, 0);
@@ -1768,20 +2245,12 @@ test("MSEG editor wiring can open, add a point, move it, and close with Escape",
 
         await clearHarnessDebugLog(page);
         await surface.locator("circle").nth(1).click();
-        await page.waitForFunction(() => {
-            const snapshot = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot();
-            const shape = snapshot.storedState["mseg1.shape"];
-
-            if (typeof shape !== "string") {
-                return false;
-            }
-
-            const parsedShape = JSON.parse(shape);
-            return Array.isArray(parsedShape.points) && parsedShape.points.length === 2;
-        });
-
-        snapshot = await getHarnessSnapshot(page);
-        points = readStoredJson(snapshot, "mseg1.shape").points;
+        snapshot = await waitForHarnessSnapshot(
+            page,
+            "deleted MSEG point",
+            (nextSnapshot) => readStoredMsegShape(nextSnapshot).points.length === 2,
+        );
+        points = readStoredMsegShape(snapshot).points;
         assert.equal(points.length, 2);
         assertLatestMsegBufferMatchesStoredShape(snapshot);
 
@@ -1793,21 +2262,21 @@ test("MSEG editor wiring can open, add a point, move it, and close with Escape",
             });
         }));
         snapshot = await getHarnessSnapshot(page);
-        points = readStoredJson(snapshot, "mseg1.shape").points;
+        points = readStoredMsegShape(snapshot).points;
         assert.equal(points.length, 2);
         assert.equal(
-            snapshot.sentMessages.some(({ endpointID }) => endpointID === "mseg1Buffer"),
+            snapshot.sentMessages.some(({ endpointID }) => endpointID === "modulationMsegBuffer"),
             false,
         );
 
         await page.keyboard.press("Escape");
-        await page.waitForSelector("text=Fixed Wavetable Route", { state: "detached" });
+        await page.waitForSelector("text=Modulation Shape Editor", { state: "detached" });
     } finally {
         await page.close();
     }
 });
 
-test("MSEG overview controls update the real desktop page depth, playback rate, and loop state", { timeout: 60_000 }, async () => {
+test("MSEG overview playback controls update the canonical modulation state on the real desktop page", { timeout: 60_000 }, async () => {
     const isolatedServer = await startDesktopHarnessServer();
     const isolatedBrowser = await chromium.launch({ headless: true });
     const page = await isolatedBrowser.newPage();
@@ -1815,47 +2284,26 @@ test("MSEG overview controls update the real desktop page depth, playback rate, 
     try {
         await page.goto(isolatedServer.baseUrl, { waitUntil: "load" });
         await waitForHarnessReady(page);
-        const overviewRanges = page.locator(".cosimo-surface input.cosimo-range");
-        await overviewRanges.nth(1).waitFor();
         await waitForHarnessSnapshot(
             page,
             "initial MSEG boot sync",
-            (snapshot) => snapshot.sentMessages.some(({ endpointID }) => endpointID === "mseg1Buffer")
-                && snapshot.sentMessages.some(({ endpointID }) => endpointID === "mseg1Playback")
-                && snapshot.sentMessages.some(({ endpointID }) => endpointID === "mseg1Depth"),
+            (snapshot) => snapshot.sentMessages.some(({ endpointID, value }) => endpointID === "modulationMsegBuffer" && Number(value?.slot) === 1)
+                && snapshot.sentMessages.some(({ endpointID, value }) => endpointID === "modulationMsegPlayback" && Number(value?.slot) === 1)
+                && snapshot.sentMessages.some(({ endpointID, value }) => endpointID === "modulationRoute" && Number(value?.routeIndex) === 0),
         );
 
-        await clearHarnessDebugLog(page);
-        const depthValue = await page.evaluate(async () => {
+        const depthInputCount = await page.evaluate(() => {
             const host = document.querySelector("cosimo-desktop-react-view");
             const viewRoot = host?.shadowRoot ?? host;
-            const depthInput = viewRoot?.querySelectorAll("input.cosimo-range")?.[0];
-
-            if (!(depthInput instanceof HTMLInputElement)) {
-                throw new Error("MSEG depth input is missing.");
-            }
-
-            depthInput.value = "0.750";
-            depthInput.dispatchEvent(new Event("input", { bubbles: true }));
-            depthInput.dispatchEvent(new Event("change", { bubbles: true }));
-
-            for (let attempt = 0; attempt < 80; attempt += 1) {
-                const nextValue = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().storedState["mseg1.depth"];
-                if (Number(nextValue) === 0.75) {
-                    return nextValue;
-                }
-                await new Promise((resolve) => setTimeout(resolve, 50));
-            }
-
-            return window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().storedState["mseg1.depth"];
+            return viewRoot?.querySelectorAll('input[aria-label="MSEG depth"]').length ?? 0;
         });
-        assert.equal(Number(depthValue), 0.75);
+        assert.equal(depthInputCount, 0);
 
         await clearHarnessDebugLog(page);
         const playbackAfterRateChange = await page.evaluate(async () => {
             const host = document.querySelector("cosimo-desktop-react-view");
             const viewRoot = host?.shadowRoot ?? host;
-            const rateInput = viewRoot?.querySelectorAll("input.cosimo-range")?.[1];
+            const rateInput = viewRoot?.querySelector('input[aria-label="MSEG rate"]');
 
             if (!(rateInput instanceof HTMLInputElement)) {
                 throw new Error("MSEG rate input is missing.");
@@ -1866,16 +2314,28 @@ test("MSEG overview controls update the real desktop page depth, playback rate, 
             rateInput.dispatchEvent(new Event("change", { bubbles: true }));
 
             for (let attempt = 0; attempt < 80; attempt += 1) {
-                const playback = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().storedState["mseg1.playback"];
-                if (typeof playback === "string" && Math.abs(Number(JSON.parse(playback).rate.seconds) - 0.5) <= 1e-9) {
+                const snapshot = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot();
+                const rawState = snapshot.storedState["modulation.v1"];
+                if (typeof rawState !== "string") {
+                    await new Promise((resolve) => setTimeout(resolve, 50));
+                    continue;
+                }
+
+                const modulationState = JSON.parse(rawState);
+                const playback = modulationState.msegSlots?.[0]?.playback;
+                if (Math.abs(Number(playback?.rate?.seconds) - 0.5) <= 1e-9) {
                     return playback;
                 }
+
                 await new Promise((resolve) => setTimeout(resolve, 50));
             }
 
-            return window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().storedState["mseg1.playback"];
+            const snapshot = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot();
+            return JSON.parse(String(snapshot.storedState["modulation.v1"])).msegSlots?.[0]?.playback;
         });
-        assert.equal(JSON.parse(playbackAfterRateChange).rate.seconds, 0.5);
+        assert.equal(playbackAfterRateChange.rate.seconds, 0.5);
+        let snapshot = await getHarnessSnapshot(page);
+        assert.equal(readStoredMsegPlayback(snapshot).rate.seconds, 0.5);
 
         await clearHarnessDebugLog(page);
         const playbackAfterLoopToggle = await page.evaluate(async () => {
@@ -1892,17 +2352,29 @@ test("MSEG overview controls update the real desktop page depth, playback rate, 
             loopButton.click();
 
             for (let attempt = 0; attempt < 80; attempt += 1) {
-                const playback = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().storedState["mseg1.playback"];
-                if (typeof playback === "string" && JSON.parse(playback).loop === null) {
+                const snapshot = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot();
+                const rawState = snapshot.storedState["modulation.v1"];
+                if (typeof rawState !== "string") {
+                    await new Promise((resolve) => setTimeout(resolve, 50));
+                    continue;
+                }
+
+                const modulationState = JSON.parse(rawState);
+                const playback = modulationState.msegSlots?.[0]?.playback;
+                if (playback?.loop === null) {
                     return playback;
                 }
+
                 await new Promise((resolve) => setTimeout(resolve, 50));
             }
 
-            return window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().storedState["mseg1.playback"];
+            const snapshot = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot();
+            return JSON.parse(String(snapshot.storedState["modulation.v1"])).msegSlots?.[0]?.playback;
         });
-        assert.equal(JSON.parse(playbackAfterLoopToggle).loop, null);
-        assert.equal(await page.getByRole("button", { name: "One Shot" }).count(), 1);
+        assert.equal(playbackAfterLoopToggle.loop, null);
+        snapshot = await getHarnessSnapshot(page);
+        assert.equal(readStoredMsegPlayback(snapshot).loop, null);
+        assert.ok((await page.getByRole("button", { name: "One Shot" }).count()) >= 1);
     } finally {
         await page.close();
         await isolatedBrowser.close();

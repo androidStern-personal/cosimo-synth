@@ -9,6 +9,11 @@ import {
     MSEG_EDITOR_VERTICAL_PADDING_PX,
     MSEG_POINT_RADIUS_PX,
 } from "../patch_gui/mseg.js";
+import {
+    createDefaultModulationState,
+    deserializeModulationState,
+    serializeModulationState,
+} from "../patch_gui/modulation.js";
 
 import {
     clearIOSHarnessFailingResources,
@@ -42,6 +47,18 @@ const IOS_MSEG_ORIENTATION_SHAPE = {
         { x: 1, y: 1, curvePower: 0 },
     ],
 };
+
+function cloneJson(value) {
+    return JSON.parse(JSON.stringify(value));
+}
+
+function readStoredModulationState(snapshot) {
+    return deserializeModulationState(snapshot.storedState["modulation.v1"]);
+}
+
+async function setIOSStoredModulationState(page, nextState) {
+    await setIOSStoredStateValue(page, "modulation.v1", serializeModulationState(nextState));
+}
 
 async function waitForSnapshot(page, description, predicate, { attempts = 80, delayMs = 50 } = {}) {
     let lastSnapshot = null;
@@ -161,6 +178,24 @@ async function selectShadowOption(page, selector, nextValue) {
 async function fillShadowInput(page, selector, nextValue) {
     const locator = await getShadowLocator(page, selector);
     await locator.fill(String(nextValue));
+}
+
+async function dispatchShadowInputValueChange(page, selector, nextValue) {
+    const locator = await getShadowLocator(page, selector);
+    await locator.evaluate((element, value) => {
+        if (!(element instanceof HTMLInputElement)) {
+            throw new Error("Expected an HTMLInputElement.");
+        }
+
+        const setNativeValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+
+        if (!setNativeValue) {
+            throw new Error("Expected HTMLInputElement.prototype.value setter.");
+        }
+
+        setNativeValue.call(element, String(value));
+        element.dispatchEvent(new Event("input", { bubbles: true }));
+    }, String(nextValue));
 }
 
 async function readShadowState(page) {
@@ -889,7 +924,9 @@ test("mounted iPhone keeps the main-panel MSEG preview horizontal in portrait wh
 
         try {
             await waitForIOSHarnessReady(page);
-            await setIOSStoredStateValue(page, "mseg1.shape", JSON.stringify(IOS_MSEG_ORIENTATION_SHAPE));
+            const modulationState = createDefaultModulationState();
+            modulationState.msegSlots[0].shape = cloneJson(IOS_MSEG_ORIENTATION_SHAPE);
+            await setIOSStoredModulationState(page, modulationState);
 
             await waitForRenderedState(
                 page,
@@ -980,7 +1017,7 @@ test("mounted iPhone MSEG modal keeps the main view layout-stable while hidden, 
 
         try {
             await waitForIOSHarnessReady(page);
-            await setIOSStoredStateValue(page, "mseg1.shape", "");
+            await setIOSStoredModulationState(page, createDefaultModulationState());
             await clearIOSHarnessDebugLog(page);
             await clickShadowButton(page, ".mseg-preview-button");
 
@@ -1064,10 +1101,12 @@ test("mounted iPhone MSEG modal keeps the main view layout-stable while hidden, 
             const snapshot = await waitForSnapshot(
                 page,
                 `MSEG stored-state update after mounted edit at ${viewportSize.width}x${viewportSize.height}`,
-                (nextSnapshot) => typeof nextSnapshot.storedState["mseg1.shape"] === "string"
-                    && nextSnapshot.sentMessages.some((message) => message.endpointID === "mseg1Buffer"),
+                (nextSnapshot) => typeof nextSnapshot.storedState["modulation.v1"] === "string"
+                    && nextSnapshot.sentMessages.some((message) => (
+                        message.endpointID === "modulationMsegBuffer" && Number(message.value?.slot) === 1
+                    )),
             );
-            const storedShape = JSON.parse(snapshot.storedState["mseg1.shape"]);
+            const storedShape = readStoredModulationState(snapshot).msegSlots[0].shape;
             assert.equal(storedShape.format, "cosimo.mseg.shape");
             assert.equal(storedShape.points.length, 3);
             const insertedPoint = storedShape.points[1];
@@ -1108,7 +1147,7 @@ test("mounted iPhone MSEG modal treats segment tap as add, immediate drag as cur
 
     try {
         await waitForIOSHarnessReady(page);
-        await setIOSStoredStateValue(page, "mseg1.shape", "");
+        await setIOSStoredModulationState(page, createDefaultModulationState());
         await clickShadowButton(page, ".mseg-preview-button");
         await waitForRenderedState(
             page,
@@ -1131,14 +1170,16 @@ test("mounted iPhone MSEG modal treats segment tap as add, immediate drag as cur
         let snapshot = await waitForSnapshot(
             page,
             "segment tap inserts a point",
-            (nextSnapshot) => typeof nextSnapshot.storedState["mseg1.shape"] === "string"
-                && nextSnapshot.sentMessages.some((message) => message.endpointID === "mseg1Buffer"),
+            (nextSnapshot) => typeof nextSnapshot.storedState["modulation.v1"] === "string"
+                && nextSnapshot.sentMessages.some((message) => (
+                    message.endpointID === "modulationMsegBuffer" && Number(message.value?.slot) === 1
+                )),
         );
-        let storedShape = JSON.parse(snapshot.storedState["mseg1.shape"]);
+        let storedShape = readStoredModulationState(snapshot).msegSlots[0].shape;
         assert.equal(storedShape.points.length, 3);
         assert.deepEqual(snapshot.hapticEvents, []);
 
-        await setIOSStoredStateValue(page, "mseg1.shape", "");
+        await setIOSStoredModulationState(page, createDefaultModulationState());
         await waitForRenderedState(
             page,
             "reset MSEG shape before segment drag",
@@ -1155,15 +1196,17 @@ test("mounted iPhone MSEG modal treats segment tap as add, immediate drag as cur
         snapshot = await waitForSnapshot(
             page,
             "segment drag edits curve without inserting a point",
-            (nextSnapshot) => typeof nextSnapshot.storedState["mseg1.shape"] === "string"
-                && nextSnapshot.sentMessages.some((message) => message.endpointID === "mseg1Buffer"),
+            (nextSnapshot) => typeof nextSnapshot.storedState["modulation.v1"] === "string"
+                && nextSnapshot.sentMessages.some((message) => (
+                    message.endpointID === "modulationMsegBuffer" && Number(message.value?.slot) === 1
+                )),
         );
-        storedShape = JSON.parse(snapshot.storedState["mseg1.shape"]);
+        storedShape = readStoredModulationState(snapshot).msegSlots[0].shape;
         assert.equal(storedShape.points.length, 2);
         assert.ok(Math.abs(storedShape.points[0].curvePower) > 0.1);
         assert.deepEqual(snapshot.hapticEvents, []);
 
-        await setIOSStoredStateValue(page, "mseg1.shape", "");
+        await setIOSStoredModulationState(page, createDefaultModulationState());
         await waitForRenderedState(
             page,
             "reset MSEG shape before segment hold-drag",
@@ -1180,10 +1223,12 @@ test("mounted iPhone MSEG modal treats segment tap as add, immediate drag as cur
         snapshot = await waitForSnapshot(
             page,
             "segment hold-drag edits curve and triggers haptic",
-            (nextSnapshot) => typeof nextSnapshot.storedState["mseg1.shape"] === "string"
-                && nextSnapshot.sentMessages.some((message) => message.endpointID === "mseg1Buffer"),
+            (nextSnapshot) => typeof nextSnapshot.storedState["modulation.v1"] === "string"
+                && nextSnapshot.sentMessages.some((message) => (
+                    message.endpointID === "modulationMsegBuffer" && Number(message.value?.slot) === 1
+                )),
         );
-        storedShape = JSON.parse(snapshot.storedState["mseg1.shape"]);
+        storedShape = readStoredModulationState(snapshot).msegSlots[0].shape;
         assert.equal(storedShape.points.length, 2);
         assert.ok(Math.abs(storedShape.points[0].curvePower) > 0.1);
         assert.deepEqual(snapshot.hapticEvents, ["light"]);
@@ -1192,43 +1237,81 @@ test("mounted iPhone MSEG modal treats segment tap as add, immediate drag as cur
     }
 });
 
-test("mounted iPhone MSEG depth control syncs stored-state updates and emits the edited depth", async () => {
+test("mounted iPhone no longer exposes the legacy MSEG depth control because routing lives in the matrix", async () => {
     const page = await openIOSHarnessPage(browser, server.baseUrl, {
         viewportSize: { width: 390, height: 844 },
     });
 
     try {
         await waitForIOSHarnessReady(page);
-        await setIOSStoredStateValue(page, "mseg1.depth", -0.25);
-        let renderedState = await waitForRenderedState(
+        const modulationState = createDefaultModulationState();
+        modulationState.routes = [{
+            enabled: true,
+            sourceKind: "mseg",
+            sourceSlot: 1,
+            targetKind: "wavetablePosition",
+            amount: -0.25,
+        }];
+        await setIOSStoredModulationState(page, modulationState);
+        const renderedState = await waitForRenderedState(
             page,
-            "stored MSEG depth reflected in the mounted modal controls",
-            (nextState) => nextState.msegDepthReadout === "-0.250" && nextState.msegDepthValue === "-0.25",
+            "legacy MSEG depth control removed from the mounted iPhone launcher",
+            (nextState) => nextState.msegDepthReadout === null,
         );
-        assert.equal(renderedState.msegDepthReadout, "-0.250");
+        assert.equal(renderedState.msegDepthReadout, null);
 
-        await clearIOSHarnessDebugLog(page);
-        await fillShadowInput(page, ".mseg-depth-slider", "0.375");
+        const snapshot = await getIOSHarnessSnapshot(page);
+        assert.equal(readStoredModulationState(snapshot).routes[0].amount, -0.25);
+    } finally {
+        await closeIOSHarnessPage(page);
+    }
+});
+
+test("mounted iPhone route rows use the compact depth control and preserve target-specific units", async () => {
+    const page = await openIOSHarnessPage(browser, server.baseUrl, {
+        viewportSize: { width: 390, height: 844 },
+    });
+
+    try {
+        await waitForIOSHarnessReady(page);
+        const modulationState = createDefaultModulationState();
+        modulationState.routes = [{
+            enabled: true,
+            sourceKind: "mseg",
+            sourceSlot: 1,
+            targetKind: "pan",
+            amount: 0.25,
+        }];
+        await setIOSStoredModulationState(page, modulationState);
+
+        await waitForSnapshot(
+            page,
+            "initial pan route restore",
+            (nextSnapshot) => Math.abs(readStoredModulationState(nextSnapshot).routes[0]?.amount - 0.25) <= 1e-9,
+        );
+
+        await (await getShadowLocator(page, 'button[aria-label="Route 1 negative direction"]')).click();
+        await dispatchShadowInputValueChange(page, 'input[aria-label="Route 1 depth"]', 0.5);
 
         const snapshot = await waitForSnapshot(
             page,
-            "mounted MSEG depth edit",
-            (nextSnapshot) => (
-                nextSnapshot.sentMessages.some((message) => message.endpointID === "mseg1Depth" && Number(message.value) === 0.375)
-                && Number(nextSnapshot.storedState["mseg1.depth"]) === 0.375
-            ),
-        );
-        renderedState = await waitForRenderedState(
-            page,
-            "updated MSEG depth readout",
-            (nextState) => nextState.msegDepthReadout === "0.375" && nextState.msegDepthValue === "0.375",
+            "compact pan route edit",
+            (nextSnapshot) => {
+                const route = readStoredModulationState(nextSnapshot).routes[0];
+                return route?.targetKind === "pan" && Math.abs(Number(route.amount) - (-0.5)) <= 1e-9;
+            },
         );
 
         assert.ok(snapshot.sentMessages.some((message) => (
-            message.endpointID === "mseg1Depth" && Number(message.value) === 0.375
+            message.endpointID === "modulationRoute"
+            && Number(message.value?.routeIndex) === 0
+            && Math.abs(Number(message.value?.amount) - (-0.5)) <= 1e-9
         )));
-        assert.equal(Number(snapshot.storedState["mseg1.depth"]), 0.375);
-        assert.equal(renderedState.msegDepthReadout, "0.375");
+        assert.equal(readStoredModulationState(snapshot).routes[0].amount, -0.5);
+        assert.equal(
+            await (await getShadowLocator(page, ".cosimo-mod-amount-readout")).evaluate((element) => element.textContent?.trim() ?? null),
+            "50% L",
+        );
     } finally {
         await closeIOSHarnessPage(page);
     }

@@ -8,6 +8,10 @@ import {
     createIOSResourceClient,
     type ResourceClient,
 } from "../shared/resource-client";
+import {
+    acquireModulationRuntimeBridge,
+    releaseModulationRuntimeBridge,
+} from "../shared/modulation";
 
 type ErrorBoundaryState = {
     errorMessage: string | null;
@@ -78,10 +82,20 @@ class CosimoIOSReactViewElement extends HTMLElement {
     private resourceClient: ResourceClient | null = null;
     private root: Root | null = null;
     private mountPoint: HTMLDivElement | null = null;
+    private modulationRuntimePatchConnection: PatchConnectionLike | null = null;
 
     setPatchConnection(patchConnection: PatchConnectionLike, resourceClient?: ResourceClient) {
+        if (this.modulationRuntimePatchConnection && this.modulationRuntimePatchConnection !== patchConnection) {
+            releaseModulationRuntimeBridge(this.modulationRuntimePatchConnection);
+            this.modulationRuntimePatchConnection = null;
+        }
+
         this.patchConnection = patchConnection;
         this.resourceClient = resourceClient ?? null;
+        if (!this.modulationRuntimePatchConnection) {
+            acquireModulationRuntimeBridge(patchConnection);
+            this.modulationRuntimePatchConnection = patchConnection;
+        }
         this.renderApp();
     }
 
@@ -111,6 +125,11 @@ class CosimoIOSReactViewElement extends HTMLElement {
     disconnectedCallback() {
         this.root?.unmount();
         this.root = null;
+
+        if (this.modulationRuntimePatchConnection) {
+            releaseModulationRuntimeBridge(this.modulationRuntimePatchConnection);
+            this.modulationRuntimePatchConnection = null;
+        }
     }
 
     private renderApp() {

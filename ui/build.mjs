@@ -99,6 +99,7 @@ if (shouldBuild("--desktop") || shouldBuild("--ios")) {
     await emitGeneratedPatchGuiModule("ui/shared/resource-client.ts", "patch_gui/resource-client.js");
     await emitGeneratedPatchGuiModule("ui/shared/mseg.ts", "patch_gui/mseg.js");
     await emitGeneratedPatchGuiModule("ui/shared/mseg-controller.ts", "patch_gui/mseg-controller.js");
+    await emitGeneratedPatchGuiModule("ui/shared/modulation.ts", "patch_gui/modulation.js");
 }
 
 if (shouldBuild("--ios")) {

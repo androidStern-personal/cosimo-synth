@@ -14,6 +14,7 @@
 #include <utility>
 #include <vector>
 
+#include "../../native/ModulationRuntimeRestore.h"
 #include "CosimoSharedWavetableLibrary.h"
 #include "cmajor/helpers/cmaj_GeneratedCppEngine.h"
 #include "cmajor/helpers/cmaj_Patch.h"
@@ -1408,6 +1409,7 @@ private:
             applyCurrentRateAndBlockSize();
 
         patch->loadPatch (loadParams, true);
+        cosimo::modulation::uploadStoredModulationStateToPatch (*patch);
     }
 
     void unload (const std::string& message = {}, bool isError = false)

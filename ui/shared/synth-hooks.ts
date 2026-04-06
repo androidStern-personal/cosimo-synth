@@ -27,7 +27,17 @@ import {
     type MsegSurfaceOrientation,
     type MsegState,
 } from "./mseg";
-import { MsegController } from "./mseg-controller";
+import {
+    acquireModulationRuntimeBridge,
+    buildDisplayedMsegState,
+    createDefaultEnvelope,
+    createDefaultRoute,
+    releaseModulationRuntimeBridge,
+    type ModulationEnvelope,
+    type ModulationRoute,
+    type ModulationState,
+    type MsegEditorControllerLike,
+} from "./modulation";
 import {
     clampDisplayPosition,
     describeRuntimeTableFailureDetails,
@@ -67,13 +77,12 @@ const WAVETABLE_POSITION_ENDPOINT_ID = "wavetablePosition";
 const WAVETABLE_SELECT_ENDPOINT_ID = "wavetableSelect";
 const PLAY_MODE_ENDPOINT_ID = "playMode";
 const GLIDE_TIME_ENDPOINT_ID = "glideTime";
+const PAN_ENDPOINT_ID = "pan";
 const WARP_MODE_ENDPOINT_ID = "warpMode";
 const WARP_AMOUNT_ENDPOINT_ID = "warpAmount";
-const WARP_MSEG_DEPTH_ENDPOINT_ID = "warpMsegDepth";
 const FILTER_MODE_ENDPOINT_ID = "filterMode";
 const FILTER_CUTOFF_ENDPOINT_ID = "filterCutoff";
 const FILTER_Q_ENDPOINT_ID = "filterQ";
-const FILTER_MSEG_DEPTH_ENDPOINT_ID = "filterMsegDepth";
 const RUNTIME_SYNC_REQUEST_ENDPOINT_ID = "runtimeSyncRequest";
 const RUNTIME_STATE_ENDPOINT_ID = "runtimeState";
 const RETRY_DESIRED_TABLE_REQUEST_ENDPOINT_ID = "retryDesiredTableRequest";
@@ -130,7 +139,6 @@ export type SynthTextEntryFocusTarget = {
 export type SynthKeyboardRoutingBindings = {
     wavetableFocusBindings: SynthFocusBindings;
     playModeFocusBindings: SynthFocusBindings;
-    msegDepthFocusBindings: SynthFocusBindings;
     msegRateFocusBindings: SynthFocusBindings;
     glideFocusTarget: SynthTextEntryFocusTarget;
 };
@@ -153,20 +161,29 @@ export type SynthPatchViewModel = {
     wavetablePosition: PatchControlBinding<number>;
     playMode: PatchControlBinding<number>;
     glideTime: PatchControlBinding<number>;
+    pan: PatchControlBinding<number>;
     warpMode: PatchControlBinding<number>;
     warpAmount: PatchControlBinding<number>;
-    warpMsegDepth: PatchControlBinding<number>;
     filterMode: PatchControlBinding<number>;
     filterCutoff: PatchControlBinding<number>;
     filterQ: PatchControlBinding<number>;
-    filterMsegDepth: PatchControlBinding<number>;
     observedFilterState: EffectiveFilterState;
     observedFilterSpectrum: FilterSpectrumFrame | null;
     observedWarpState: EffectiveWarpState;
+    modulationState: ModulationState | null;
+    selectedMsegSlot: number;
+    selectedEnvelopeSlot: number;
+    selectedEnvelope: ModulationEnvelope | null;
+    routes: ModulationRoute[];
     msegState: MsegState | null;
+    handleSelectMsegSlot: (slotIndex: number) => void;
+    handleSelectEnvelopeSlot: (slotIndex: number) => void;
+    handleEnvelopeChange: (field: "attackSeconds" | "decaySeconds" | "sustain" | "releaseSeconds", nextValue: number) => void;
+    handleAddRoute: () => void;
+    handleRemoveRoute: (routeIndex: number) => void;
+    handleRouteChange: (routeIndex: number, nextRoute: ModulationRoute) => void;
     handleSelectWavetable: (nextValue: number) => void;
     handleRetryLoad: () => void;
-    handleMsegDepthChange: (nextValue: number) => void;
     handleMsegRateChange: (nextValue: number) => void;
     handleToggleMsegLoop: () => void;
     stageBindings: {
@@ -401,27 +418,40 @@ export function useObservedWarpState({
     };
 }
 
-export function useMsegState() {
+export function useModulationState() {
     const patchConnection = usePatchConnection();
-    const [state, setState] = useState<MsegState | null>(null);
-    const controllerRef = useRef<MsegController | null>(null);
+    const [state, setState] = useState<ModulationState | null>(null);
+    const bridgeRef = useRef<ReturnType<typeof acquireModulationRuntimeBridge> | null>(null);
 
     useEffect(() => {
-        const controller = new MsegController(patchConnection, {
-            onStateChange: setState,
-        });
-        controllerRef.current = controller;
-        controller.attach();
-        controller.requestBootState();
+        const bridge = acquireModulationRuntimeBridge(patchConnection);
+        bridgeRef.current = bridge;
+        setState(bridge.getState());
+        bridge.subscribe(setState);
 
         return () => {
-            controller.detach();
-            controllerRef.current = null;
+            bridge.unsubscribe(setState);
+            releaseModulationRuntimeBridge(patchConnection);
+            bridgeRef.current = null;
         };
     }, [patchConnection]);
 
     return {
         state,
+        bridge: bridgeRef,
+    };
+}
+
+export function useMsegState() {
+    const { state, bridge } = useModulationState();
+    const controllerRef = useRef<MsegEditorControllerLike | null>(null);
+
+    controllerRef.current = bridge.current?.getMsegSlotController(0) ?? null;
+
+    return {
+        state: state && bridge.current
+            ? buildDisplayedMsegState(bridge.current, 0)
+            : null,
         controller: controllerRef,
     };
 }
@@ -513,7 +543,7 @@ export function useMsegEditorInteractions({
     onCurveEditHoldActivated = null,
 }: {
     msegState: MsegState | null;
-    msegController: RefObject<MsegController | null>;
+    msegController: RefObject<MsegEditorControllerLike | null>;
     surfaceRef: RefObject<SVGSVGElement | null>;
     orientation?: MsegSurfaceOrientation;
     curveEditActivationMode?: "immediate" | "hold-or-drag";
@@ -928,28 +958,24 @@ export function useSynthKeyboardRouting({
     keyboardRef,
     onStepWavetable,
     onStepPlayMode,
-    onStepMsegDepth,
     onStepMsegRate,
     onStepGlideTime,
 }: {
     keyboardRef: RefObject<SynthKeyboardLike | null>;
     onStepWavetable: (direction: ArrowStepDirection) => void;
     onStepPlayMode: (direction: ArrowStepDirection) => void;
-    onStepMsegDepth: (direction: ArrowStepDirection) => void;
     onStepMsegRate: (direction: ArrowStepDirection) => void;
     onStepGlideTime: (direction: ArrowStepDirection) => void;
 }): SynthKeyboardRoutingBindings {
     const synthInputRouter = useSynthInputRouter(keyboardRef);
     const wavetableTarget = useStableArrowTarget("wavetable-select", onStepWavetable);
     const playModeTarget = useStableArrowTarget("play-mode", onStepPlayMode);
-    const msegDepthTarget = useStableArrowTarget("mseg-depth", onStepMsegDepth);
     const msegRateTarget = useStableArrowTarget("mseg-rate", onStepMsegRate);
     const glideTarget = useStableArrowTarget("glide-time", onStepGlideTime);
 
     return useMemo(() => ({
         wavetableFocusBindings: synthInputRouter.bindArrowTarget(wavetableTarget),
         playModeFocusBindings: synthInputRouter.bindArrowTarget(playModeTarget),
-        msegDepthFocusBindings: synthInputRouter.bindArrowTarget(msegDepthTarget),
         msegRateFocusBindings: synthInputRouter.bindArrowTarget(msegRateTarget),
         glideFocusTarget: {
             onActivate: () => synthInputRouter.activateArrowTarget(glideTarget),
@@ -958,7 +984,6 @@ export function useSynthKeyboardRouting({
         },
     }), [
         glideTarget,
-        msegDepthTarget,
         msegRateTarget,
         playModeTarget,
         synthInputRouter,
@@ -1009,6 +1034,11 @@ export function useSynthPatchViewModel({
         initialValue: 0,
         coerce: (value) => clamp(Number(value) || 0, GLIDE_TIME_MIN_SECONDS, GLIDE_TIME_MAX_SECONDS),
     });
+    const pan = usePatchParameterBinding<number>({
+        endpointID: PAN_ENDPOINT_ID,
+        initialValue: 0,
+        coerce: (value) => clamp(Number(value) || 0, -1, 1),
+    });
     const warpMode = usePatchParameterBinding<number>({
         endpointID: WARP_MODE_ENDPOINT_ID,
         initialValue: 0,
@@ -1018,11 +1048,6 @@ export function useSynthPatchViewModel({
         endpointID: WARP_AMOUNT_ENDPOINT_ID,
         initialValue: 0,
         coerce: (value) => clamp(Number(value) || 0, 0, 1),
-    });
-    const warpMsegDepth = usePatchParameterBinding<number>({
-        endpointID: WARP_MSEG_DEPTH_ENDPOINT_ID,
-        initialValue: 0,
-        coerce: (value) => clamp(Number(value) || 0, -1, 1),
     });
     const filterMode = usePatchParameterBinding<number>({
         endpointID: FILTER_MODE_ENDPOINT_ID,
@@ -1038,11 +1063,6 @@ export function useSynthPatchViewModel({
         endpointID: FILTER_Q_ENDPOINT_ID,
         initialValue: 0.707107,
         coerce: (value) => clamp(Number(value) || 0, 0.1, 20),
-    });
-    const filterMsegDepth = usePatchParameterBinding<number>({
-        endpointID: FILTER_MSEG_DEPTH_ENDPOINT_ID,
-        initialValue: 0,
-        coerce: (value) => clamp(Number(value) || 0, -6, 6),
     });
     const requestRuntimeSync = usePatchEventTrigger<number>(RUNTIME_SYNC_REQUEST_ENDPOINT_ID);
     const retryDesiredTableLoad = usePatchEventTrigger<number>(RETRY_DESIRED_TABLE_REQUEST_ENDPOINT_ID);
@@ -1064,7 +1084,19 @@ export function useSynthPatchViewModel({
     const presentedTableIndex = runtimePresentation.presentedTableIndex ?? 0;
     const desiredTableIndex = runtimePresentation.desiredTableIndex ?? 0;
     const { frames, error: frameError } = useFactoryTableFrames(presentedTableIndex);
-    const { state: msegState, controller: msegController } = useMsegState();
+    const { state: modulationState, bridge: modulationBridge } = useModulationState();
+    const [selectedMsegSlot, setSelectedMsegSlot] = useState(0);
+    const [selectedEnvelopeSlot, setSelectedEnvelopeSlot] = useState(0);
+    const displayedMsegControllerRef = useRef<MsegEditorControllerLike | null>(null);
+    displayedMsegControllerRef.current = modulationBridge.current?.getMsegSlotController(selectedMsegSlot) ?? null;
+    const routes = modulationState?.routes ?? [];
+    const msegState = useMemo(() => {
+        if (!modulationState || !modulationBridge.current) {
+            return null;
+        }
+        return buildDisplayedMsegState(modulationBridge.current, selectedMsegSlot);
+    }, [modulationBridge, modulationState, selectedMsegSlot]);
+    const selectedEnvelope = modulationState?.envelopeSlots[selectedEnvelopeSlot] ?? null;
     const stageBindings = useStagePositionDrag({
         stageRef,
         observedPosition,
@@ -1072,13 +1104,12 @@ export function useSynthPatchViewModel({
     });
     const msegEditor = useMsegEditorInteractions({
         msegState,
-        msegController,
+        msegController: displayedMsegControllerRef,
         surfaceRef: msegEditorSurfaceRef,
         orientation: msegSurfaceOrientation,
         curveEditActivationMode: msegCurveEditActivationMode,
         onCurveEditHoldActivated: onMsegCurveEditHoldActivated,
     });
-
     const displayedTable = catalog?.tables?.[presentedTableIndex] ?? null;
     const desiredTable = catalog?.tables?.[desiredTableIndex] ?? displayedTable;
     const displayedFrameCount = displayedTable?.frameCount ?? frames?.length ?? 1;
@@ -1109,31 +1140,27 @@ export function useSynthPatchViewModel({
         retryDesiredTableLoad(1);
     }, [retryDesiredTableLoad]);
 
-    const handleMsegDepthChange = useCallback((nextValue: number) => {
-        msegController.current?.setDepth(nextValue);
-    }, [msegController]);
+    const handleSelectMsegSlot = useCallback((slotIndex: number) => {
+        setSelectedMsegSlot(clamp(Math.round(slotIndex), 0, 2));
+    }, []);
 
-    const handleStepMsegDepth = useCallback((direction: ArrowStepDirection) => {
-        if (!msegState) {
-            return;
-        }
-
-        msegController.current?.setDepth(clamp(Number(msegState.depth) + (direction * 0.001), -1, 1));
-    }, [msegController, msegState]);
+    const handleSelectEnvelopeSlot = useCallback((slotIndex: number) => {
+        setSelectedEnvelopeSlot(clamp(Math.round(slotIndex), 0, 2));
+    }, []);
 
     const handleMsegRateChange = useCallback((nextValue: number) => {
         if (!msegState) {
             return;
         }
 
-        msegController.current?.setPlayback({
+        displayedMsegControllerRef.current?.setPlayback({
             ...msegState.playback,
             rate: {
                 kind: "seconds",
                 seconds: nextValue,
             },
         });
-    }, [msegController, msegState]);
+    }, [msegState]);
 
     const handleStepMsegRate = useCallback((direction: ArrowStepDirection) => {
         if (!msegState) {
@@ -1141,26 +1168,52 @@ export function useSynthPatchViewModel({
         }
 
         const nextRateSeconds = clampMsegRateSeconds(msegState.playback.rate.seconds + (direction * 0.001));
-        msegController.current?.setPlayback({
+        displayedMsegControllerRef.current?.setPlayback({
             ...msegState.playback,
             rate: {
                 kind: "seconds",
                 seconds: nextRateSeconds,
             },
         });
-    }, [msegController, msegState]);
+    }, [msegState]);
 
     const handleToggleMsegLoop = useCallback(() => {
         if (!msegState) {
             return;
         }
 
-        msegController.current?.setPlayback({
+        displayedMsegControllerRef.current?.setPlayback({
             ...msegState.playback,
             loop: msegState.playback.loop ? null : { startX: 0, endX: 1 },
             noteOffPolicy: "finish_loop",
         });
-    }, [msegController, msegState]);
+    }, [msegState]);
+
+    const handleEnvelopeChange = useCallback((
+        field: "attackSeconds" | "decaySeconds" | "sustain" | "releaseSeconds",
+        nextValue: number,
+    ) => {
+        if (!selectedEnvelope) {
+            return;
+        }
+
+        modulationBridge.current?.setEnvelope(selectedEnvelopeSlot, {
+            ...selectedEnvelope,
+            [field]: nextValue,
+        });
+    }, [modulationBridge, selectedEnvelope, selectedEnvelopeSlot]);
+
+    const handleAddRoute = useCallback(() => {
+        modulationBridge.current?.addRoute(createDefaultRoute());
+    }, [modulationBridge]);
+
+    const handleRemoveRoute = useCallback((routeIndex: number) => {
+        modulationBridge.current?.removeRoute(routeIndex);
+    }, [modulationBridge]);
+
+    const handleRouteChange = useCallback((routeIndex: number, nextRoute: ModulationRoute) => {
+        modulationBridge.current?.setRoute(routeIndex, nextRoute);
+    }, [modulationBridge]);
 
     const handleStepPlayMode = useCallback((direction: ArrowStepDirection) => {
         playMode.commitValue(
@@ -1180,7 +1233,6 @@ export function useSynthPatchViewModel({
         keyboardRef,
         onStepWavetable: handleStepWavetable,
         onStepPlayMode: handleStepPlayMode,
-        onStepMsegDepth: handleStepMsegDepth,
         onStepMsegRate: handleStepMsegRate,
         onStepGlideTime: handleStepGlideTime,
     });
@@ -1203,20 +1255,29 @@ export function useSynthPatchViewModel({
         wavetablePosition,
         playMode,
         glideTime,
+        pan,
         warpMode,
         warpAmount,
-        warpMsegDepth,
         filterMode,
         filterCutoff,
         filterQ,
-        filterMsegDepth,
         observedFilterState,
         observedFilterSpectrum,
         observedWarpState,
+        modulationState,
+        selectedMsegSlot,
+        selectedEnvelopeSlot,
+        selectedEnvelope,
+        routes,
         msegState,
+        handleSelectMsegSlot,
+        handleSelectEnvelopeSlot,
+        handleEnvelopeChange,
+        handleAddRoute,
+        handleRemoveRoute,
+        handleRouteChange,
         handleSelectWavetable,
         handleRetryLoad,
-        handleMsegDepthChange,
         handleMsegRateChange,
         handleToggleMsegLoop,
         stageBindings,

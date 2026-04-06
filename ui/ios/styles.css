@@ -35,6 +35,130 @@ select {
     font: inherit;
 }
 
+.cosimo-mod-amount-field {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+    min-width: 0;
+}
+
+.cosimo-mod-direction-toggle {
+    display: grid;
+    gap: 4px;
+    padding: 4px;
+    border-radius: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.cosimo-mod-direction-button {
+    width: 26px;
+    height: 26px;
+    border: 0;
+    border-radius: 11px;
+    background: transparent;
+    color: rgba(226, 232, 240, 0.72);
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.cosimo-mod-direction-button[data-active="true"] {
+    background: rgba(103, 232, 249, 0.18);
+    color: #cffafe;
+}
+
+.cosimo-mod-knob {
+    position: relative;
+    width: 66px;
+    height: 66px;
+    flex: 0 0 auto;
+}
+
+.cosimo-mod-knob-stack {
+    display: grid;
+    justify-items: center;
+    gap: 4px;
+    min-width: 0;
+}
+
+.cosimo-mod-knob-track {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.08),
+        0 10px 20px rgba(0, 0, 0, 0.22);
+}
+
+.cosimo-mod-knob-core {
+    position: absolute;
+    inset: 9px;
+    display: grid;
+    place-items: center;
+    border-radius: 999px;
+    background:
+        radial-gradient(circle at 35% 28%, rgba(255, 255, 255, 0.1), transparent 38%),
+        linear-gradient(180deg, rgba(12, 18, 34, 0.98), rgba(6, 9, 20, 0.98));
+    color: #cffafe;
+}
+
+.cosimo-mod-knob-percent {
+    font-family: "SF Mono", "IBM Plex Mono", Menlo, monospace;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
+.cosimo-mod-knob-indicator {
+    position: absolute;
+    left: 50%;
+    top: 7px;
+    width: 3px;
+    height: 19px;
+    border-radius: 999px;
+    background: linear-gradient(180deg, #fef3c7 0%, #f472b6 100%);
+    transform-origin: 50% 26px;
+    box-shadow: 0 0 12px rgba(244, 114, 182, 0.36);
+    pointer-events: none;
+}
+
+.cosimo-mod-knob-input {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    opacity: 0;
+}
+
+.cosimo-mod-amount-copy {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+}
+
+.cosimo-mod-amount-readout {
+    font-family: "SF Mono", "IBM Plex Mono", Menlo, monospace;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    color: #e2e8f0;
+    white-space: nowrap;
+}
+
+.cosimo-mod-amount-caption {
+    font-family: "SF Mono", "IBM Plex Mono", Menlo, monospace;
+    font-size: 9px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: rgba(148, 163, 184, 0.74);
+}
+
 .ios-shell {
     box-sizing: border-box;
     width: 100%;

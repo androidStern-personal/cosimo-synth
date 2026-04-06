@@ -10,6 +10,13 @@ export type NexusNumberFieldProps = {
     max: number;
     step: number;
     decimalPlaces?: number;
+    suffix?: string | null;
+    variant?: "default" | "overlay";
+    showLabel?: boolean;
+    width?: number;
+    height?: number;
+    displayValueFromBinding?: (bindingValue: number) => number;
+    bindingValueFromDisplay?: (displayValue: number) => number;
     onActivate?: () => void;
     onBeginTextEntry?: () => void;
     onEndTextEntry?: () => void;
@@ -53,22 +60,38 @@ function clampNumber(value: number, min: number, max: number) {
     return Math.min(Math.max(value, min), max);
 }
 
-export function styleNexusNumberInput(element: HTMLInputElement, host: HTMLDivElement) {
-    element.style.borderRadius = "16px";
-    element.style.border = "1px solid rgba(255,255,255,0.08)";
-    element.style.boxShadow = "inset 0 1px 0 rgba(255,255,255,0.04)";
+export function styleNexusNumberInput(
+    element: HTMLInputElement,
+    host: HTMLDivElement,
+    {
+        variant,
+        width,
+        height,
+    }: {
+        variant: "default" | "overlay";
+        width: number;
+        height: number;
+    },
+) {
+    element.style.borderRadius = variant === "overlay" ? "999px" : "16px";
+    element.style.border = variant === "overlay"
+        ? "1px solid rgba(255,255,255,0.10)"
+        : "1px solid rgba(255,255,255,0.08)";
+    element.style.boxShadow = variant === "overlay"
+        ? "0 10px 28px rgba(0,0,0,0.26), inset 0 1px 0 rgba(255,255,255,0.05)"
+        : "inset 0 1px 0 rgba(255,255,255,0.04)";
     element.style.fontFamily = "\"SF Mono\", \"JetBrains Mono\", ui-monospace, monospace";
     element.style.letterSpacing = "0.12em";
-    element.style.fontSize = "14px";
-    element.style.padding = "10px 14px";
-    element.style.backgroundColor = "rgba(255,255,255,0.06)";
+    element.style.fontSize = variant === "overlay" ? "13px" : "14px";
+    element.style.padding = variant === "overlay" ? "10px 16px" : "10px 14px";
+    element.style.backgroundColor = variant === "overlay" ? "rgba(0,0,0,0.45)" : "rgba(255,255,255,0.06)";
     element.style.color = "#d6f4ff";
     element.style.display = "block";
-    element.style.width = "118px";
-    element.style.height = "42px";
-    host.style.width = "118px";
-    host.style.height = "42px";
-    host.style.cursor = "ns-resize";
+    element.style.width = `${width}px`;
+    element.style.height = `${height}px`;
+    host.style.width = `${width}px`;
+    host.style.height = `${height}px`;
+    host.style.cursor = variant === "overlay" ? "ew-resize" : "ns-resize";
 }
 
 export function NexusNumberField({
@@ -78,6 +101,13 @@ export function NexusNumberField({
     max,
     step,
     decimalPlaces = 3,
+    suffix = "s",
+    variant = "default",
+    showLabel = true,
+    width = 118,
+    height = 42,
+    displayValueFromBinding,
+    bindingValueFromDisplay,
     onActivate,
     onBeginTextEntry,
     onEndTextEntry,
@@ -111,8 +141,8 @@ export function NexusNumberField({
         host.replaceChildren();
 
         const widget = new nexusNumberConstructor(host, {
-            size: [118, 42],
-            value: binding.value,
+            size: [width, height],
+            value: displayValueFromBinding ? displayValueFromBinding(binding.value) : binding.value,
             min,
             max,
             step,
@@ -124,7 +154,7 @@ export function NexusNumberField({
         widget.colors.accent = "#8fe8ff";
         widget.colorInterface();
         widget.element.setAttribute("aria-label", label);
-        styleNexusNumberInput(widget.element, host);
+        styleNexusNumberInput(widget.element, host, { variant, width, height });
         const handleMouseDown = () => {
             callbackRef.current.onActivate?.();
         };
@@ -138,8 +168,9 @@ export function NexusNumberField({
             callbackRef.current.onEndTextEntry?.();
         };
         const handleWidgetChange = (nextValue?: number) => {
-            const safeValue = clampNumber(Number(nextValue) || 0, min, max);
-            bindingRef.current.setValue(safeValue);
+            const safeDisplayValue = clampNumber(Number(nextValue) || 0, min, max);
+            const bindingValue = bindingValueFromDisplay ? bindingValueFromDisplay(safeDisplayValue) : safeDisplayValue;
+            bindingRef.current.setValue(bindingValue);
         };
 
         widget.element.addEventListener("mousedown", handleMouseDown);
@@ -160,7 +191,7 @@ export function NexusNumberField({
             widget.destroy();
             widgetRef.current = null;
         };
-    }, [decimalPlaces, label, max, min, step]);
+    }, [bindingValueFromDisplay, decimalPlaces, displayValueFromBinding, height, label, max, min, step, variant, width]);
 
     useEffect(() => {
         const widget = widgetRef.current;
@@ -173,20 +204,32 @@ export function NexusNumberField({
             return;
         }
 
-        if (Math.abs(widget.value - binding.value) <= step / 10) {
+        const displayValue = displayValueFromBinding ? displayValueFromBinding(binding.value) : binding.value;
+
+        if (Math.abs(widget.value - displayValue) <= step / 10) {
             return;
         }
 
-        widget.passiveUpdate(binding.value);
+        widget.passiveUpdate(displayValue);
         widget.render();
-    }, [binding.value, step]);
+    }, [binding.value, displayValueFromBinding, step]);
 
     return (
         <label className="grid gap-2">
-            <span className="text-[10px] uppercase tracking-[0.18em] text-slate-300/60">{label}</span>
+            {showLabel ? (
+                <span className="text-[10px] uppercase tracking-[0.18em] text-slate-300/60">{label}</span>
+            ) : (
+                <span className="sr-only">{label}</span>
+            )}
             <div className="flex items-center gap-3">
-                <div ref={hostRef} className="h-[42px] w-[118px] rounded-[16px]" />
-                <span className="font-mono text-xs tracking-[0.18em] text-cyan-200/80">s</span>
+                <div
+                    ref={hostRef}
+                    className={variant === "overlay" ? "rounded-full" : "rounded-[16px]"}
+                    style={{ width: `${width}px`, height: `${height}px` }}
+                />
+                {suffix ? (
+                    <span className="font-mono text-xs tracking-[0.18em] text-cyan-200/80">{suffix}</span>
+                ) : null}
             </div>
         </label>
     );

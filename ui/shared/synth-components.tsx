@@ -33,6 +33,8 @@ import {
     FILTER_CUTOFF_MIN_HZ,
     FILTER_Q_MAX,
     FILTER_Q_MIN,
+    filterCutoffHzToNormalized,
+    filterQToNormalized,
     normalizedToFilterCutoffHz,
     normalizedToFilterQ,
 } from "./filter-response";
@@ -49,6 +51,16 @@ import {
     type FilterSpectrumDisplayState,
     type FilterSpectrumFrame,
 } from "./filter-spectrum";
+import {
+    composeModulationAmount,
+    formatModulationAmountReadout,
+    getModulationAmountDepth,
+    getModulationAmountDirection,
+    getModulationAmountPercentLabel,
+    getModulationTargetClampHint,
+    type ModulationAmountDirection,
+    type ModulationTargetKind,
+} from "./modulation";
 
 export type VoiceModeOption = {
     value: number;
@@ -86,6 +98,16 @@ export type RangeFieldProps = {
     focusBindings?: SynthFocusBindings;
 };
 
+export type ModulationAmountFieldProps = {
+    targetKind: ModulationTargetKind;
+    amount: number;
+    onChange: (nextAmount: number) => void;
+    knobAriaLabel: string;
+    positiveDirectionAriaLabel: string;
+    negativeDirectionAriaLabel: string;
+    className?: string;
+};
+
 export type WavetableStageSectionProps = {
     stageRef: RefObject<HTMLDivElement | null>;
     frames: Float32Array[] | null;
@@ -103,6 +125,8 @@ export type WavetableStageSectionProps = {
     onPointerDown: (event: ReactPointerEvent<HTMLDivElement>) => void;
     onPointerMove: (event: ReactPointerEvent<HTMLDivElement>) => void;
     onPointerUp: (event: ReactPointerEvent<HTMLDivElement>) => void;
+    bottomLeftAccessory?: ReactNode;
+    bottomRightAccessory?: ReactNode;
     className?: string;
 };
 
@@ -135,8 +159,16 @@ export type FilterResponseGraphProps = {
     liveHasActive: boolean;
     spectrumFrame?: FilterSpectrumFrame | null;
     spectrumRenderMode?: FilterSpectrumRenderMode;
-    onCutoffChange: (nextValue: number) => void;
-    onQChange: (nextValue: number) => void;
+    resonanceNormalizedFromQ?: (qValue: number) => number;
+    resonanceQFromSurface?: (surfaceValue: number) => number;
+    resonanceCurveDebugState?: {
+        familyId: string;
+        coefficients: Record<string, number>;
+    };
+    onGestureStart?: () => void;
+    onGestureEnd?: () => void;
+    onCutoffSet: (nextValue: number) => void;
+    onQSet: (nextValue: number) => void;
     className?: string;
 };
 
@@ -638,6 +670,105 @@ export function RangeField({
     );
 }
 
+export function ModulationAmountField({
+    targetKind,
+    amount,
+    onChange,
+    knobAriaLabel,
+    positiveDirectionAriaLabel,
+    negativeDirectionAriaLabel,
+    className,
+}: ModulationAmountFieldProps) {
+    const [zeroDirection, setZeroDirection] = useState<ModulationAmountDirection>(
+        () => getModulationAmountDirection(amount),
+    );
+
+    useEffect(() => {
+        if (amount < 0) {
+            setZeroDirection("negative");
+        } else if (amount > 0) {
+            setZeroDirection("positive");
+        }
+    }, [amount]);
+
+    const activeDirection = getModulationAmountDirection(amount, zeroDirection);
+    const depth = getModulationAmountDepth(targetKind, amount, zeroDirection);
+    const depthLabel = getModulationAmountPercentLabel(targetKind, amount, zeroDirection);
+    const unitReadout = formatModulationAmountReadout(targetKind, amount);
+    const clampHint = getModulationTargetClampHint(targetKind);
+    const knobSweepDegrees = 264;
+    const knobStartDegrees = -132;
+    const fillDegrees = depth * knobSweepDegrees;
+    const knobIndicatorDegrees = knobStartDegrees + fillDegrees;
+    const shellClassName = className ? `cosimo-mod-amount-field ${className}` : "cosimo-mod-amount-field";
+
+    const setDirection = (nextDirection: ModulationAmountDirection) => {
+        setZeroDirection(nextDirection);
+        onChange(composeModulationAmount(targetKind, depth, nextDirection));
+    };
+
+    return (
+        <div className={shellClassName}>
+            <div className="cosimo-mod-direction-toggle" role="group" aria-label="Modulation direction">
+                <button
+                    type="button"
+                    aria-label={positiveDirectionAriaLabel}
+                    aria-pressed={activeDirection === "positive" ? "true" : "false"}
+                    className="cosimo-mod-direction-button"
+                    data-active={activeDirection === "positive" ? "true" : "false"}
+                    onClick={() => setDirection("positive")}
+                >
+                    +
+                </button>
+                <button
+                    type="button"
+                    aria-label={negativeDirectionAriaLabel}
+                    aria-pressed={activeDirection === "negative" ? "true" : "false"}
+                    className="cosimo-mod-direction-button"
+                    data-active={activeDirection === "negative" ? "true" : "false"}
+                    onClick={() => setDirection("negative")}
+                >
+                    -
+                </button>
+            </div>
+
+            <div className="cosimo-mod-knob-stack">
+                <div className="cosimo-mod-knob" title={clampHint}>
+                    <div
+                        className="cosimo-mod-knob-track"
+                        style={{
+                            background: `conic-gradient(from ${knobStartDegrees}deg, rgba(103, 232, 249, 0.92) 0deg ${fillDegrees}deg, rgba(255,255,255,0.08) ${fillDegrees}deg ${knobSweepDegrees}deg, rgba(255,255,255,0.02) ${knobSweepDegrees}deg 360deg)`,
+                        }}
+                    >
+                        <div className="cosimo-mod-knob-core">
+                            <div className="cosimo-mod-knob-percent">{depthLabel}</div>
+                        </div>
+                        <div
+                            className="cosimo-mod-knob-indicator"
+                            style={{ transform: `translateX(-50%) rotate(${knobIndicatorDegrees}deg)` }}
+                        />
+                    </div>
+                    <input
+                        className="cosimo-mod-knob-input"
+                        type="range"
+                        min="0"
+                        max="1"
+                        step="0.001"
+                        aria-label={knobAriaLabel}
+                        value={depth.toFixed(3)}
+                        onChange={(event) => onChange(composeModulationAmount(targetKind, Number(event.target.value), activeDirection))}
+                    />
+                </div>
+
+                <div className="cosimo-mod-amount-copy" title={clampHint}>
+                    <span className="cosimo-mod-amount-readout">{unitReadout}</span>
+                    <span className="cosimo-mod-amount-caption">Requested</span>
+                </div>
+            </div>
+        </div>
+    );
+}
+
 function buildMagnitudePlotPoints(
     magnitudesDb: number[],
     width: number,
@@ -842,8 +973,16 @@ export function FilterResponseGraph({
     liveHasActive,
     spectrumFrame = null,
     spectrumRenderMode = "graph",
-    onCutoffChange,
-    onQChange,
+    resonanceNormalizedFromQ = filterQToNormalized,
+    resonanceQFromSurface = normalizedToFilterQ,
+    resonanceCurveDebugState = {
+        familyId: "linear",
+        coefficients: {},
+    },
+    onGestureStart,
+    onGestureEnd,
+    onCutoffSet,
+    onQSet,
     className,
 }: FilterResponseGraphProps) {
     const viewportRef = useRef<HTMLDivElement | null>(null);
@@ -851,6 +990,14 @@ export function FilterResponseGraph({
     const surfaceRef = useRef<SVGSVGElement | null>(null);
     const size = useResizeObserver(viewportRef);
     const [activePointerId, setActivePointerId] = useState<number | null>(null);
+    const dragStateRef = useRef<{
+        pointerId: number;
+        startClientX: number;
+        startClientY: number;
+        pointerOffsetX: number;
+        pointerOffsetY: number;
+        hasMoved: boolean;
+    } | null>(null);
     const baseModel = useMemo(() => createFilterResponseModel({
         mode: baseMode,
         cutoffHz: baseCutoffHz,
@@ -933,18 +1080,65 @@ export function FilterResponseGraph({
         };
     }, [size.height, size.width, spectrumGeometry]);
 
-    const applyPointerPosition = (clientX: number, clientY: number) => {
-        const element = surfaceRef.current;
+    const baseHandle = useMemo(() => {
+        const cutoffNormalized = filterCutoffHzToNormalized(baseModel.cutoffHz);
+        const qNormalized = clamp(resonanceNormalizedFromQ(baseModel.q), 0, 1);
 
-        if (!element) {
+        return {
+            cutoffNormalized,
+            qNormalized,
+            x: basePath.plotLeft + (basePath.plotWidth * cutoffNormalized),
+            y: basePath.plotBottom - (basePath.plotHeight * qNormalized),
+        };
+    }, [baseModel, basePath, resonanceNormalizedFromQ]);
+
+    const applyHandlePointerPosition = (clientX: number, clientY: number) => {
+        const surface = surfaceRef.current;
+        const dragState = dragStateRef.current;
+
+        if (!surface || !dragState) {
             return;
         }
 
-        const bounds = element.getBoundingClientRect();
-        const normalizedX = clamp((clientX - bounds.left) / Math.max(1, bounds.width), 0, 1);
-        const normalizedY = clamp((clientY - bounds.top) / Math.max(1, bounds.height), 0, 1);
-        onCutoffChange(clamp(normalizedToFilterCutoffHz(normalizedX), FILTER_CUTOFF_MIN_HZ, FILTER_CUTOFF_MAX_HZ));
-        onQChange(clamp(normalizedToFilterQ(1 - normalizedY), FILTER_Q_MIN, FILTER_Q_MAX));
+        const bounds = surface.getBoundingClientRect();
+        const handleClientX = clientX - dragState.pointerOffsetX;
+        const handleClientY = clientY - dragState.pointerOffsetY;
+        const plotX = clamp(handleClientX - bounds.left, basePath.plotLeft, basePath.plotRight);
+        const plotY = clamp(handleClientY - bounds.top, basePath.plotTop, basePath.plotBottom);
+        const nextCutoffNormalized = clamp(
+            (plotX - basePath.plotLeft) / Math.max(1, basePath.plotWidth),
+            0,
+            1,
+        );
+        const nextQNormalized = clamp(
+            1 - ((plotY - basePath.plotTop) / Math.max(1, basePath.plotHeight)),
+            0,
+            1,
+        );
+
+        onCutoffSet(clamp(normalizedToFilterCutoffHz(nextCutoffNormalized), FILTER_CUTOFF_MIN_HZ, FILTER_CUTOFF_MAX_HZ));
+        onQSet(clamp(resonanceQFromSurface(nextQNormalized), FILTER_Q_MIN, FILTER_Q_MAX));
+    };
+
+    const endDrag = (pointerId: number) => {
+        const dragState = dragStateRef.current;
+
+        if (!dragState || dragState.pointerId !== pointerId) {
+            return;
+        }
+
+        const surface = surfaceRef.current;
+
+        if (surface?.hasPointerCapture(pointerId)) {
+            surface.releasePointerCapture(pointerId);
+        }
+
+        if (dragState?.hasMoved) {
+            onGestureEnd?.();
+        }
+
+        dragStateRef.current = null;
+        setActivePointerId(null);
     };
 
     const debugState = useMemo(() => ({
@@ -962,6 +1156,22 @@ export function FilterResponseGraph({
             q: liveModel.q,
             peakIndex: liveModel.peakIndex,
             minIndex: liveModel.minIndex,
+        },
+        handle: {
+            x: baseHandle.x,
+            y: baseHandle.y,
+            cutoffNormalized: baseHandle.cutoffNormalized,
+            qNormalized: baseHandle.qNormalized,
+            isDragging: activePointerId !== null,
+        },
+        resonanceCurve: resonanceCurveDebugState,
+        plot: {
+            left: basePath.plotLeft,
+            right: basePath.plotRight,
+            top: basePath.plotTop,
+            bottom: basePath.plotBottom,
+            width: basePath.plotWidth,
+            height: basePath.plotHeight,
         },
         spectrum: spectrumDisplay ? {
             hasSpectrum: true,
@@ -1008,8 +1218,10 @@ export function FilterResponseGraph({
         },
     }), [
         baseModel,
+        baseHandle,
         liveHasActive,
         liveModel,
+        activePointerId,
         spectrumBands.length,
         spectrumDbTicks,
         spectrumDisplay,
@@ -1017,13 +1229,38 @@ export function FilterResponseGraph({
         spectrumGeometry,
         spectrumGraphPoints.length,
         spectrumRenderMode,
+        resonanceCurveDebugState,
     ]);
 
+    const visibleFrequencyTicks = useMemo(() => {
+        if (size.width <= 360) {
+            return spectrumFrequencyTicks.filter((_, index) => [0, 2, 4, 6, 9].includes(index));
+        }
+
+        if (size.width <= 480) {
+            return spectrumFrequencyTicks.filter((_, index) => [0, 1, 2, 4, 6, 8, 9].includes(index));
+        }
+
+        return spectrumFrequencyTicks;
+    }, [size.width, spectrumFrequencyTicks]);
+
+    const visibleDbTicks = useMemo(() => {
+        if (size.width <= 360) {
+            return spectrumDbTicks.filter((_, index) => [0, 2, 4].includes(index));
+        }
+
+        if (size.width <= 480) {
+            return spectrumDbTicks.filter((_, index) => [0, 1, 2, 4].includes(index));
+        }
+
+        return spectrumDbTicks;
+    }, [size.width, spectrumDbTicks]);
+
     return (
-        <div className={joinClasses("grid gap-2", className)}>
+        <div className={joinClasses("relative h-full w-full", className)}>
             <div
                 ref={viewportRef}
-                className="relative h-44 w-full overflow-hidden rounded-[20px] border border-white/8 bg-black/25"
+                className="relative h-full w-full overflow-hidden rounded-[24px] border border-white/[0.05] bg-black/18 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
             >
                 <canvas
                     ref={spectrumCanvasRef}
@@ -1035,29 +1272,34 @@ export function FilterResponseGraph({
                     data-role="filter-response-graph"
                     className="absolute inset-0 h-full w-full touch-none overflow-hidden"
                     viewBox={`0 0 ${size.width} ${size.height}`}
-                    onPointerDown={(event) => {
-                        event.currentTarget.setPointerCapture(event.pointerId);
-                        setActivePointerId(event.pointerId);
-                        applyPointerPosition(event.clientX, event.clientY);
-                    }}
                     onPointerMove={(event) => {
-                        if (activePointerId !== event.pointerId) {
+                        const dragState = dragStateRef.current;
+
+                        if (!dragState || dragState.pointerId !== event.pointerId) {
                             return;
                         }
-                        applyPointerPosition(event.clientX, event.clientY);
+
+                        const deltaX = event.clientX - dragState.startClientX;
+                        const deltaY = event.clientY - dragState.startClientY;
+
+                        if (!dragState.hasMoved && Math.abs(deltaX) < 1.5 && Math.abs(deltaY) < 1.5) {
+                            return;
+                        }
+
+                        if (!dragState.hasMoved) {
+                            dragState.hasMoved = true;
+                            onGestureStart?.();
+                        }
+                        applyHandlePointerPosition(event.clientX, event.clientY);
                     }}
                     onPointerUp={(event) => {
-                        if (activePointerId === event.pointerId) {
-                            setActivePointerId(null);
-                        }
+                        endDrag(event.pointerId);
                     }}
                     onPointerCancel={(event) => {
-                        if (activePointerId === event.pointerId) {
-                            setActivePointerId(null);
-                        }
+                        endDrag(event.pointerId);
                     }}
                 >
-                    {spectrumDbTicks.map((tick) => (
+                    {visibleDbTicks.map((tick) => (
                         <line
                             key={`filter-grid-h-${tick.label}`}
                             x1={basePath.plotLeft}
@@ -1068,7 +1310,7 @@ export function FilterResponseGraph({
                             strokeWidth="1"
                         />
                     ))}
-                    {spectrumFrequencyTicks.map((tick) => (
+                    {visibleFrequencyTicks.map((tick) => (
                         <line
                             key={`filter-grid-v-${tick.label}`}
                             y1={basePath.plotTop}
@@ -1079,7 +1321,7 @@ export function FilterResponseGraph({
                             strokeWidth="1"
                         />
                     ))}
-                    {spectrumDbTicks.map((tick) => (
+                    {visibleDbTicks.map((tick) => (
                         <text
                             key={`filter-db-label-${tick.label}`}
                             x={basePath.plotLeft + 2}
@@ -1090,7 +1332,7 @@ export function FilterResponseGraph({
                             {tick.label}
                         </text>
                     ))}
-                    {spectrumFrequencyTicks.map((tick) => (
+                    {visibleFrequencyTicks.map((tick) => (
                         <text
                             key={`filter-frequency-label-${tick.label}`}
                             x={basePath.plotLeft + (basePath.plotWidth * (tick.normalizedX ?? 0))}
@@ -1108,6 +1350,64 @@ export function FilterResponseGraph({
                         fill="none"
                         stroke={liveHasActive ? "rgba(94, 215, 255, 0.98)" : "rgba(94, 215, 255, 0.72)"}
                         strokeWidth={liveHasActive ? "3" : "2"}
+                    />
+                    <line
+                        x1={baseHandle.x}
+                        x2={baseHandle.x}
+                        y1={basePath.plotBottom}
+                        y2={baseHandle.y}
+                        stroke="rgba(255, 196, 64, 0.18)"
+                        strokeWidth="1.5"
+                        strokeDasharray="4 4"
+                        pointerEvents="none"
+                    />
+                    <circle
+                        data-role="filter-response-handle-hit-target"
+                        cx={baseHandle.x}
+                        cy={baseHandle.y}
+                        r="18"
+                        fill="transparent"
+                        className="cursor-grab active:cursor-grabbing"
+                        onPointerDown={(event) => {
+                            event.preventDefault();
+                            surfaceRef.current?.setPointerCapture(event.pointerId);
+                            const bounds = surfaceRef.current?.getBoundingClientRect();
+                            dragStateRef.current = {
+                                pointerId: event.pointerId,
+                                startClientX: event.clientX,
+                                startClientY: event.clientY,
+                                pointerOffsetX: bounds ? event.clientX - (bounds.left + baseHandle.x) : 0,
+                                pointerOffsetY: bounds ? event.clientY - (bounds.top + baseHandle.y) : 0,
+                                hasMoved: false,
+                            };
+                            setActivePointerId(event.pointerId);
+                        }}
+                    />
+                    <circle
+                        cx={baseHandle.x}
+                        cy={baseHandle.y}
+                        r="15"
+                        fill="rgba(255, 180, 34, 0.18)"
+                        stroke="rgba(255, 211, 121, 0.18)"
+                        strokeWidth="1"
+                        pointerEvents="none"
+                    />
+                    <circle
+                        data-role="filter-response-handle"
+                        cx={baseHandle.x}
+                        cy={baseHandle.y}
+                        r="10.5"
+                        fill="#ffb81f"
+                        stroke="rgba(255, 244, 219, 0.55)"
+                        strokeWidth="1.6"
+                        pointerEvents="none"
+                    />
+                    <path
+                        d={`M ${baseHandle.x.toFixed(2)} ${(baseHandle.y - 4).toFixed(2)} L ${baseHandle.x.toFixed(2)} ${(baseHandle.y + 4).toFixed(2)} M ${(baseHandle.x - 4).toFixed(2)} ${baseHandle.y.toFixed(2)} L ${(baseHandle.x + 4).toFixed(2)} ${baseHandle.y.toFixed(2)}`}
+                        stroke="rgba(5, 9, 19, 0.72)"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                        pointerEvents="none"
                     />
                 </svg>
             </div>
@@ -1182,7 +1482,7 @@ export function VoiceGlideControlSurface({
 }: VoiceGlideControlSurfaceProps) {
     return (
         <div className={joinClasses(
-            "grid gap-4 rounded-[24px] border border-white/8 bg-white/[0.03] px-4 py-3",
+            "grid gap-3 rounded-[22px] border border-white/[0.05] bg-white/[0.025] px-4 py-3",
             className,
         )}>
             <VoiceModeToolbar
@@ -1210,7 +1510,7 @@ export function KeyboardSectionShell({
     return (
         <section className={joinClasses("grid gap-3", className)}>
             <div className={joinClasses(
-                "flex flex-col items-center justify-end gap-2 rounded-[24px] border border-white/8 bg-white/[0.03] px-2 py-3",
+                "flex flex-col items-center justify-end gap-2 rounded-[22px] border border-white/[0.05] bg-white/[0.025] px-2 py-3",
                 railClassName,
             )}>
                 <span className="text-[10px] uppercase tracking-[0.18em] text-slate-300/55">Oct</span>
@@ -1262,6 +1562,8 @@ export function WavetableStageSection({
     onPointerDown,
     onPointerMove,
     onPointerUp,
+    bottomLeftAccessory,
+    bottomRightAccessory,
     className,
 }: WavetableStageSectionProps) {
     const debugState = useMemo(() => ({
@@ -1274,7 +1576,7 @@ export function WavetableStageSection({
         <section
             ref={stageRef}
             className={joinClasses(
-                "cosimo-stage relative overflow-hidden rounded-[30px] border border-white/8",
+                "cosimo-stage relative overflow-hidden rounded-[28px] border border-white/[0.05]",
                 className,
             )}
             onPointerDown={onPointerDown}
@@ -1320,16 +1622,24 @@ export function WavetableStageSection({
                 </div>
             </div>
 
-            <div className="absolute inset-x-0 bottom-0 flex items-end justify-start gap-3 p-5">
-                {canRetry ? (
-                    <button
-                        type="button"
-                        className="cosimo-button rounded-full px-4 py-2 text-[11px] uppercase tracking-[0.18em] disabled:opacity-40"
-                        disabled={!canRetry}
-                        onClick={onRetry}
-                    >
-                        Retry Load
-                    </button>
+            <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-3 p-5">
+                <div className="flex min-w-0 items-end gap-3">
+                    {bottomLeftAccessory}
+                    {canRetry ? (
+                        <button
+                            type="button"
+                            className="cosimo-button rounded-full px-4 py-2 text-[11px] uppercase tracking-[0.18em] disabled:opacity-40"
+                            disabled={!canRetry}
+                            onClick={onRetry}
+                        >
+                            Retry Load
+                        </button>
+                    ) : null}
+                </div>
+                {bottomRightAccessory ? (
+                    <div className="flex min-w-0 items-end justify-end gap-3">
+                        {bottomRightAccessory}
+                    </div>
                 ) : null}
             </div>
 
@@ -1382,6 +1692,7 @@ export function MsegOverviewSection({
                                 <input
                                     className="cosimo-range"
                                     type="range"
+                                    aria-label="MSEG depth"
                                     min="-1"
                                     max="1"
                                     step="0.001"
@@ -1401,6 +1712,7 @@ export function MsegOverviewSection({
                                 <input
                                     className="cosimo-range"
                                     type="range"
+                                    aria-label="MSEG rate"
                                     min={MSEG_RATE_MIN_SECONDS}
                                     max={MSEG_RATE_MAX_SECONDS}
                                     step="0.001"

@@ -12497,7 +12497,7 @@ function requireClient() {
   return client.exports;
 }
 var clientExports = requireClient();
-const cssText = '/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com */\n@layer properties {\n  @supports (((-webkit-hyphens: none)) and (not (margin-trim: inline))) or ((-moz-orient: inline) and (not (color: rgb(from red r g b)))) {\n    *, :before, :after, ::backdrop {\n      --tw-translate-x: 0;\n      --tw-translate-y: 0;\n      --tw-translate-z: 0;\n      --tw-rotate-x: initial;\n      --tw-rotate-y: initial;\n      --tw-rotate-z: initial;\n      --tw-skew-x: initial;\n      --tw-skew-y: initial;\n      --tw-border-style: solid;\n      --tw-font-weight: initial;\n      --tw-tracking: initial;\n      --tw-ordinal: initial;\n      --tw-slashed-zero: initial;\n      --tw-numeric-figure: initial;\n      --tw-numeric-spacing: initial;\n      --tw-numeric-fraction: initial;\n      --tw-shadow: 0 0 #0000;\n      --tw-shadow-color: initial;\n      --tw-shadow-alpha: 100%;\n      --tw-inset-shadow: 0 0 #0000;\n      --tw-inset-shadow-color: initial;\n      --tw-inset-shadow-alpha: 100%;\n      --tw-ring-color: initial;\n      --tw-ring-shadow: 0 0 #0000;\n      --tw-inset-ring-color: initial;\n      --tw-inset-ring-shadow: 0 0 #0000;\n      --tw-ring-inset: initial;\n      --tw-ring-offset-width: 0px;\n      --tw-ring-offset-color: #fff;\n      --tw-ring-offset-shadow: 0 0 #0000;\n      --tw-outline-style: solid;\n      --tw-blur: initial;\n      --tw-brightness: initial;\n      --tw-contrast: initial;\n      --tw-grayscale: initial;\n      --tw-hue-rotate: initial;\n      --tw-invert: initial;\n      --tw-opacity: initial;\n      --tw-saturate: initial;\n      --tw-sepia: initial;\n      --tw-drop-shadow: initial;\n      --tw-drop-shadow-color: initial;\n      --tw-drop-shadow-alpha: 100%;\n      --tw-drop-shadow-size: initial;\n      --tw-backdrop-blur: initial;\n      --tw-backdrop-brightness: initial;\n      --tw-backdrop-contrast: initial;\n      --tw-backdrop-grayscale: initial;\n      --tw-backdrop-hue-rotate: initial;\n      --tw-backdrop-invert: initial;\n      --tw-backdrop-opacity: initial;\n      --tw-backdrop-saturate: initial;\n      --tw-backdrop-sepia: initial;\n    }\n  }\n}\n\n@layer theme {\n  :root, :host {\n    --font-sans: ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji",\n      "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";\n    --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",\n      "Courier New", monospace;\n    --color-amber-100: oklch(96.2% .059 95.617);\n    --color-cyan-100: oklch(95.6% .045 203.388);\n    --color-cyan-200: oklch(91.7% .08 205.041);\n    --color-cyan-300: oklch(86.5% .127 207.078);\n    --color-sky-100: oklch(95.1% .026 236.824);\n    --color-sky-300: oklch(82.8% .111 230.318);\n    --color-blue-300: oklch(80.9% .105 251.813);\n    --color-fuchsia-100: oklch(95.2% .037 318.852);\n    --color-fuchsia-200: oklch(90.3% .076 319.62);\n    --color-fuchsia-300: oklch(83.3% .145 321.434);\n    --color-slate-100: oklch(96.8% .007 247.896);\n    --color-slate-200: oklch(92.9% .013 255.508);\n    --color-slate-300: oklch(86.9% .022 252.894);\n    --color-black: #000;\n    --color-white: #fff;\n    --spacing: .25rem;\n    --text-xs: .75rem;\n    --text-xs--line-height: calc(1 / .75);\n    --text-sm: .875rem;\n    --text-sm--line-height: calc(1.25 / .875);\n    --text-2xl: 1.5rem;\n    --text-2xl--line-height: calc(2 / 1.5);\n    --text-3xl: 1.875rem;\n    --text-3xl--line-height: calc(2.25 / 1.875);\n    --font-weight-semibold: 600;\n    --radius-2xl: 1rem;\n    --blur-md: 12px;\n    --default-transition-duration: .15s;\n    --default-transition-timing-function: cubic-bezier(.4, 0, .2, 1);\n    --default-font-family: var(--font-sans);\n    --default-mono-font-family: var(--font-mono);\n  }\n}\n\n@layer base {\n  *, :after, :before, ::backdrop {\n    box-sizing: border-box;\n    border: 0 solid;\n    margin: 0;\n    padding: 0;\n  }\n\n  ::file-selector-button {\n    box-sizing: border-box;\n    border: 0 solid;\n    margin: 0;\n    padding: 0;\n  }\n\n  html, :host {\n    -webkit-text-size-adjust: 100%;\n    tab-size: 4;\n    line-height: 1.5;\n    font-family: var(--default-font-family, ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji");\n    font-feature-settings: var(--default-font-feature-settings, normal);\n    font-variation-settings: var(--default-font-variation-settings, normal);\n    -webkit-tap-highlight-color: transparent;\n  }\n\n  hr {\n    height: 0;\n    color: inherit;\n    border-top-width: 1px;\n  }\n\n  abbr:where([title]) {\n    -webkit-text-decoration: underline dotted;\n    text-decoration: underline dotted;\n  }\n\n  h1, h2, h3, h4, h5, h6 {\n    font-size: inherit;\n    font-weight: inherit;\n  }\n\n  a {\n    color: inherit;\n    -webkit-text-decoration: inherit;\n    -webkit-text-decoration: inherit;\n    -webkit-text-decoration: inherit;\n    text-decoration: inherit;\n  }\n\n  b, strong {\n    font-weight: bolder;\n  }\n\n  code, kbd, samp, pre {\n    font-family: var(--default-mono-font-family, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace);\n    font-feature-settings: var(--default-mono-font-feature-settings, normal);\n    font-variation-settings: var(--default-mono-font-variation-settings, normal);\n    font-size: 1em;\n  }\n\n  small {\n    font-size: 80%;\n  }\n\n  sub, sup {\n    vertical-align: baseline;\n    font-size: 75%;\n    line-height: 0;\n    position: relative;\n  }\n\n  sub {\n    bottom: -.25em;\n  }\n\n  sup {\n    top: -.5em;\n  }\n\n  table {\n    text-indent: 0;\n    border-color: inherit;\n    border-collapse: collapse;\n  }\n\n  :-moz-focusring {\n    outline: auto;\n  }\n\n  progress {\n    vertical-align: baseline;\n  }\n\n  summary {\n    display: list-item;\n  }\n\n  ol, ul, menu {\n    list-style: none;\n  }\n\n  img, svg, video, canvas, audio, iframe, embed, object {\n    vertical-align: middle;\n    display: block;\n  }\n\n  img, video {\n    max-width: 100%;\n    height: auto;\n  }\n\n  button, input, select, optgroup, textarea {\n    font: inherit;\n    font-feature-settings: inherit;\n    font-variation-settings: inherit;\n    letter-spacing: inherit;\n    color: inherit;\n    opacity: 1;\n    background-color: #0000;\n    border-radius: 0;\n  }\n\n  ::file-selector-button {\n    font: inherit;\n    font-feature-settings: inherit;\n    font-variation-settings: inherit;\n    letter-spacing: inherit;\n    color: inherit;\n    opacity: 1;\n    background-color: #0000;\n    border-radius: 0;\n  }\n\n  :where(select:is([multiple], [size])) optgroup {\n    font-weight: bolder;\n  }\n\n  :where(select:is([multiple], [size])) optgroup option {\n    padding-inline-start: 20px;\n  }\n\n  ::file-selector-button {\n    margin-inline-end: 4px;\n  }\n\n  ::placeholder {\n    opacity: 1;\n  }\n\n  @supports (not ((-webkit-appearance: -apple-pay-button))) or (contain-intrinsic-size: 1px) {\n    ::placeholder {\n      color: currentColor;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      ::placeholder {\n        color: color-mix(in oklab, currentcolor 50%, transparent);\n      }\n    }\n  }\n\n  textarea {\n    resize: vertical;\n  }\n\n  ::-webkit-search-decoration {\n    -webkit-appearance: none;\n  }\n\n  ::-webkit-date-and-time-value {\n    min-height: 1lh;\n    text-align: inherit;\n  }\n\n  ::-webkit-datetime-edit {\n    display: inline-flex;\n  }\n\n  ::-webkit-datetime-edit-fields-wrapper {\n    padding: 0;\n  }\n\n  ::-webkit-datetime-edit {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-year-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-month-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-day-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-hour-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-minute-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-second-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-millisecond-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-meridiem-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-calendar-picker-indicator {\n    line-height: 1;\n  }\n\n  :-moz-ui-invalid {\n    box-shadow: none;\n  }\n\n  button, input:where([type="button"], [type="reset"], [type="submit"]) {\n    appearance: button;\n  }\n\n  ::file-selector-button {\n    appearance: button;\n  }\n\n  ::-webkit-inner-spin-button {\n    height: auto;\n  }\n\n  ::-webkit-outer-spin-button {\n    height: auto;\n  }\n\n  [hidden]:where(:not([hidden="until-found"])) {\n    display: none !important;\n  }\n}\n\n@layer components;\n\n@layer utilities {\n  .pointer-events-none {\n    pointer-events: none;\n  }\n\n  .collapse {\n    visibility: collapse;\n  }\n\n  .visible {\n    visibility: visible;\n  }\n\n  .absolute {\n    position: absolute;\n  }\n\n  .fixed {\n    position: fixed;\n  }\n\n  .relative {\n    position: relative;\n  }\n\n  .static {\n    position: static;\n  }\n\n  .sticky {\n    position: sticky;\n  }\n\n  .inset-0 {\n    inset: calc(var(--spacing) * 0);\n  }\n\n  .inset-x-0 {\n    inset-inline: calc(var(--spacing) * 0);\n  }\n\n  .inset-y-0 {\n    inset-block: calc(var(--spacing) * 0);\n  }\n\n  .start {\n    inset-inline-start: var(--spacing);\n  }\n\n  .end {\n    inset-inline-end: var(--spacing);\n  }\n\n  .top-0 {\n    top: calc(var(--spacing) * 0);\n  }\n\n  .top-1 {\n    top: calc(var(--spacing) * 1);\n  }\n\n  .top-1\\/2 {\n    top: 50%;\n  }\n\n  .right-0 {\n    right: calc(var(--spacing) * 0);\n  }\n\n  .right-4 {\n    right: calc(var(--spacing) * 4);\n  }\n\n  .bottom-0 {\n    bottom: calc(var(--spacing) * 0);\n  }\n\n  .isolate {\n    isolation: isolate;\n  }\n\n  .z-20 {\n    z-index: 20;\n  }\n\n  .order-1 {\n    order: 1;\n  }\n\n  .\\!container {\n    width: 100% !important;\n  }\n\n  @media (min-width: 40rem) {\n    .\\!container {\n      max-width: 40rem !important;\n    }\n  }\n\n  @media (min-width: 48rem) {\n    .\\!container {\n      max-width: 48rem !important;\n    }\n  }\n\n  @media (min-width: 64rem) {\n    .\\!container {\n      max-width: 64rem !important;\n    }\n  }\n\n  @media (min-width: 80rem) {\n    .\\!container {\n      max-width: 80rem !important;\n    }\n  }\n\n  @media (min-width: 96rem) {\n    .\\!container {\n      max-width: 96rem !important;\n    }\n  }\n\n  .container {\n    width: 100%;\n  }\n\n  @media (min-width: 40rem) {\n    .container {\n      max-width: 40rem;\n    }\n  }\n\n  @media (min-width: 48rem) {\n    .container {\n      max-width: 48rem;\n    }\n  }\n\n  @media (min-width: 64rem) {\n    .container {\n      max-width: 64rem;\n    }\n  }\n\n  @media (min-width: 80rem) {\n    .container {\n      max-width: 80rem;\n    }\n  }\n\n  @media (min-width: 96rem) {\n    .container {\n      max-width: 96rem;\n    }\n  }\n\n  .m-1 {\n    margin: calc(var(--spacing) * 1);\n  }\n\n  .mt-1 {\n    margin-top: calc(var(--spacing) * 1);\n  }\n\n  .mt-2 {\n    margin-top: calc(var(--spacing) * 2);\n  }\n\n  .block {\n    display: block;\n  }\n\n  .contents {\n    display: contents;\n  }\n\n  .flex {\n    display: flex;\n  }\n\n  .grid {\n    display: grid;\n  }\n\n  .hidden {\n    display: none;\n  }\n\n  .inline {\n    display: inline;\n  }\n\n  .inline-flex {\n    display: inline-flex;\n  }\n\n  .inline-grid {\n    display: inline-grid;\n  }\n\n  .table {\n    display: table;\n  }\n\n  .h-3 {\n    height: calc(var(--spacing) * 3);\n  }\n\n  .h-3\\.5 {\n    height: calc(var(--spacing) * 3.5);\n  }\n\n  .h-4 {\n    height: calc(var(--spacing) * 4);\n  }\n\n  .h-10 {\n    height: calc(var(--spacing) * 10);\n  }\n\n  .h-11 {\n    height: calc(var(--spacing) * 11);\n  }\n\n  .h-12 {\n    height: calc(var(--spacing) * 12);\n  }\n\n  .h-32 {\n    height: calc(var(--spacing) * 32);\n  }\n\n  .h-44 {\n    height: calc(var(--spacing) * 44);\n  }\n\n  .h-\\[42px\\] {\n    height: 42px;\n  }\n\n  .h-\\[118px\\] {\n    height: 118px;\n  }\n\n  .h-\\[180px\\] {\n    height: 180px;\n  }\n\n  .h-\\[320px\\] {\n    height: 320px;\n  }\n\n  .h-full {\n    height: 100%;\n  }\n\n  .min-h-0 {\n    min-height: calc(var(--spacing) * 0);\n  }\n\n  .min-h-\\[220px\\] {\n    min-height: 220px;\n  }\n\n  .min-h-\\[356px\\] {\n    min-height: 356px;\n  }\n\n  .w-3 {\n    width: calc(var(--spacing) * 3);\n  }\n\n  .w-3\\.5 {\n    width: calc(var(--spacing) * 3.5);\n  }\n\n  .w-6 {\n    width: calc(var(--spacing) * 6);\n  }\n\n  .w-10 {\n    width: calc(var(--spacing) * 10);\n  }\n\n  .w-\\[118px\\] {\n    width: 118px;\n  }\n\n  .w-full {\n    width: 100%;\n  }\n\n  .max-w-\\[280px\\] {\n    max-width: 280px;\n  }\n\n  .max-w-\\[1080px\\] {\n    max-width: 1080px;\n  }\n\n  .min-w-0 {\n    min-width: calc(var(--spacing) * 0);\n  }\n\n  .flex-1 {\n    flex: 1;\n  }\n\n  .flex-shrink, .shrink {\n    flex-shrink: 1;\n  }\n\n  .flex-grow, .grow {\n    flex-grow: 1;\n  }\n\n  .border-collapse {\n    border-collapse: collapse;\n  }\n\n  .-translate-y-1 {\n    --tw-translate-y: calc(var(--spacing) * -1);\n    translate: var(--tw-translate-x) var(--tw-translate-y);\n  }\n\n  .-translate-y-1\\/2 {\n    --tw-translate-y: calc(calc(1 / 2 * 100%) * -1);\n    translate: var(--tw-translate-x) var(--tw-translate-y);\n  }\n\n  .transform {\n    transform: var(--tw-rotate-x, ) var(--tw-rotate-y, ) var(--tw-rotate-z, ) var(--tw-skew-x, ) var(--tw-skew-y, );\n  }\n\n  .cursor-pointer {\n    cursor: pointer;\n  }\n\n  .touch-none {\n    touch-action: none;\n  }\n\n  .resize {\n    resize: both;\n  }\n\n  .appearance-none {\n    appearance: none;\n  }\n\n  .grid-cols-1 {\n    grid-template-columns: repeat(1, minmax(0, 1fr));\n  }\n\n  .grid-cols-3 {\n    grid-template-columns: repeat(3, minmax(0, 1fr));\n  }\n\n  .grid-cols-\\[56px_minmax\\(0\\,1fr\\)\\] {\n    grid-template-columns: 56px minmax(0, 1fr);\n  }\n\n  .grid-cols-\\[minmax\\(0\\,1fr\\)_88px\\] {\n    grid-template-columns: minmax(0, 1fr) 88px;\n  }\n\n  .grid-cols-\\[minmax\\(0\\,1fr\\)_92px\\] {\n    grid-template-columns: minmax(0, 1fr) 92px;\n  }\n\n  .grid-cols-\\[minmax\\(0\\,1fr\\)_92px_auto\\] {\n    grid-template-columns: minmax(0, 1fr) 92px auto;\n  }\n\n  .grid-cols-\\[minmax\\(0\\,1fr\\)_auto\\] {\n    grid-template-columns: minmax(0, 1fr) auto;\n  }\n\n  .grid-cols-\\[minmax\\(280px\\,1fr\\)_minmax\\(0\\,2fr\\)\\] {\n    grid-template-columns: minmax(280px, 1fr) minmax(0, 2fr);\n  }\n\n  .grid-rows-\\[auto_minmax\\(0\\,1fr\\)_auto\\] {\n    grid-template-rows: auto minmax(0, 1fr) auto;\n  }\n\n  .grid-rows-\\[minmax\\(356px\\,0\\.9fr\\)_auto_auto\\] {\n    grid-template-rows: minmax(356px, .9fr) auto auto;\n  }\n\n  .flex-col {\n    flex-direction: column;\n  }\n\n  .flex-wrap {\n    flex-wrap: wrap;\n  }\n\n  .items-center {\n    align-items: center;\n  }\n\n  .items-end {\n    align-items: flex-end;\n  }\n\n  .items-start {\n    align-items: flex-start;\n  }\n\n  .items-stretch {\n    align-items: stretch;\n  }\n\n  .justify-between {\n    justify-content: space-between;\n  }\n\n  .justify-center {\n    justify-content: center;\n  }\n\n  .justify-end {\n    justify-content: flex-end;\n  }\n\n  .justify-start {\n    justify-content: flex-start;\n  }\n\n  .gap-1 {\n    gap: calc(var(--spacing) * 1);\n  }\n\n  .gap-2 {\n    gap: calc(var(--spacing) * 2);\n  }\n\n  .gap-3 {\n    gap: calc(var(--spacing) * 3);\n  }\n\n  .gap-4 {\n    gap: calc(var(--spacing) * 4);\n  }\n\n  .gap-5 {\n    gap: calc(var(--spacing) * 5);\n  }\n\n  .self-start {\n    align-self: flex-start;\n  }\n\n  .truncate {\n    text-overflow: ellipsis;\n    white-space: nowrap;\n    overflow: hidden;\n  }\n\n  .overflow-auto {\n    overflow: auto;\n  }\n\n  .overflow-hidden {\n    overflow: hidden;\n  }\n\n  .overflow-x-hidden {\n    overflow-x: hidden;\n  }\n\n  .overflow-y-auto {\n    overflow-y: auto;\n  }\n\n  .rounded {\n    border-radius: .25rem;\n  }\n\n  .rounded-2xl {\n    border-radius: var(--radius-2xl);\n  }\n\n  .rounded-\\[14px\\] {\n    border-radius: 14px;\n  }\n\n  .rounded-\\[16px\\] {\n    border-radius: 16px;\n  }\n\n  .rounded-\\[18px\\] {\n    border-radius: 18px;\n  }\n\n  .rounded-\\[20px\\] {\n    border-radius: 20px;\n  }\n\n  .rounded-\\[22px\\] {\n    border-radius: 22px;\n  }\n\n  .rounded-\\[24px\\] {\n    border-radius: 24px;\n  }\n\n  .rounded-\\[28px\\] {\n    border-radius: 28px;\n  }\n\n  .rounded-\\[30px\\] {\n    border-radius: 30px;\n  }\n\n  .rounded-full {\n    border-radius: 3.40282e38px;\n  }\n\n  .border {\n    border-style: var(--tw-border-style);\n    border-width: 1px;\n  }\n\n  .border-cyan-300 {\n    border-color: var(--color-cyan-300);\n  }\n\n  .border-cyan-300\\/15 {\n    border-color: #53eafd26;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-cyan-300\\/15 {\n      border-color: color-mix(in oklab, var(--color-cyan-300) 15%, transparent);\n    }\n  }\n\n  .border-fuchsia-300 {\n    border-color: var(--color-fuchsia-300);\n  }\n\n  .border-fuchsia-300\\/15 {\n    border-color: #f2a9ff26;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-fuchsia-300\\/15 {\n      border-color: color-mix(in oklab, var(--color-fuchsia-300) 15%, transparent);\n    }\n  }\n\n  .border-sky-300 {\n    border-color: var(--color-sky-300);\n  }\n\n  .border-sky-300\\/15 {\n    border-color: #77d4ff26;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-sky-300\\/15 {\n      border-color: color-mix(in oklab, var(--color-sky-300) 15%, transparent);\n    }\n  }\n\n  .border-white {\n    border-color: var(--color-white);\n  }\n\n  .border-white\\/6 {\n    border-color: #ffffff0f;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-white\\/6 {\n      border-color: color-mix(in oklab, var(--color-white) 6%, transparent);\n    }\n  }\n\n  .border-white\\/8 {\n    border-color: #ffffff14;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-white\\/8 {\n      border-color: color-mix(in oklab, var(--color-white) 8%, transparent);\n    }\n  }\n\n  .border-white\\/10 {\n    border-color: #ffffff1a;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-white\\/10 {\n      border-color: color-mix(in oklab, var(--color-white) 10%, transparent);\n    }\n  }\n\n  .bg-\\[\\#070b16\\] {\n    background-color: #070b16;\n  }\n\n  .bg-\\[\\#09101d\\]\\/95 {\n    background-color: oklab(17.3432% -.0040513 -.029082 / .95);\n  }\n\n  .bg-\\[\\#030711\\]\\/85 {\n    background-color: oklab(12.8817% -.00430492 -.0249884 / .85);\n  }\n\n  .bg-black {\n    background-color: var(--color-black);\n  }\n\n  .bg-black\\/20 {\n    background-color: #0003;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-black\\/20 {\n      background-color: color-mix(in oklab, var(--color-black) 20%, transparent);\n    }\n  }\n\n  .bg-black\\/25 {\n    background-color: #00000040;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-black\\/25 {\n      background-color: color-mix(in oklab, var(--color-black) 25%, transparent);\n    }\n  }\n\n  .bg-black\\/35 {\n    background-color: #00000059;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-black\\/35 {\n      background-color: color-mix(in oklab, var(--color-black) 35%, transparent);\n    }\n  }\n\n  .bg-black\\/40 {\n    background-color: #0006;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-black\\/40 {\n      background-color: color-mix(in oklab, var(--color-black) 40%, transparent);\n    }\n  }\n\n  .bg-cyan-300 {\n    background-color: var(--color-cyan-300);\n  }\n\n  .bg-cyan-300\\/8 {\n    background-color: #53eafd14;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-cyan-300\\/8 {\n      background-color: color-mix(in oklab, var(--color-cyan-300) 8%, transparent);\n    }\n  }\n\n  .bg-cyan-300\\/18 {\n    background-color: #53eafd2e;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-cyan-300\\/18 {\n      background-color: color-mix(in oklab, var(--color-cyan-300) 18%, transparent);\n    }\n  }\n\n  .bg-fuchsia-300 {\n    background-color: var(--color-fuchsia-300);\n  }\n\n  .bg-fuchsia-300\\/8 {\n    background-color: #f2a9ff14;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-fuchsia-300\\/8 {\n      background-color: color-mix(in oklab, var(--color-fuchsia-300) 8%, transparent);\n    }\n  }\n\n  .bg-sky-300 {\n    background-color: var(--color-sky-300);\n  }\n\n  .bg-sky-300\\/8 {\n    background-color: #77d4ff14;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-sky-300\\/8 {\n      background-color: color-mix(in oklab, var(--color-sky-300) 8%, transparent);\n    }\n  }\n\n  .bg-white {\n    background-color: var(--color-white);\n  }\n\n  .bg-white\\/\\[0\\.03\\] {\n    background-color: #ffffff08;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-white\\/\\[0\\.03\\] {\n      background-color: color-mix(in oklab, var(--color-white) 3%, transparent);\n    }\n  }\n\n  .bg-white\\/\\[0\\.04\\] {\n    background-color: #ffffff0a;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-white\\/\\[0\\.04\\] {\n      background-color: color-mix(in oklab, var(--color-white) 4%, transparent);\n    }\n  }\n\n  .bg-white\\/\\[0\\.08\\] {\n    background-color: #ffffff14;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-white\\/\\[0\\.08\\] {\n      background-color: color-mix(in oklab, var(--color-white) 8%, transparent);\n    }\n  }\n\n  .mask-repeat {\n    -webkit-mask-repeat: repeat;\n    mask-repeat: repeat;\n  }\n\n  .fill-cyan-200 {\n    fill: var(--color-cyan-200);\n  }\n\n  .fill-fuchsia-200 {\n    fill: var(--color-fuchsia-200);\n  }\n\n  .p-0 {\n    padding: calc(var(--spacing) * 0);\n  }\n\n  .p-1 {\n    padding: calc(var(--spacing) * 1);\n  }\n\n  .p-2 {\n    padding: calc(var(--spacing) * 2);\n  }\n\n  .p-3 {\n    padding: calc(var(--spacing) * 3);\n  }\n\n  .p-4 {\n    padding: calc(var(--spacing) * 4);\n  }\n\n  .p-5 {\n    padding: calc(var(--spacing) * 5);\n  }\n\n  .p-6 {\n    padding: calc(var(--spacing) * 6);\n  }\n\n  .px-2 {\n    padding-inline: calc(var(--spacing) * 2);\n  }\n\n  .px-3 {\n    padding-inline: calc(var(--spacing) * 3);\n  }\n\n  .px-4 {\n    padding-inline: calc(var(--spacing) * 4);\n  }\n\n  .px-5 {\n    padding-inline: calc(var(--spacing) * 5);\n  }\n\n  .py-1 {\n    padding-block: calc(var(--spacing) * 1);\n  }\n\n  .py-2 {\n    padding-block: calc(var(--spacing) * 2);\n  }\n\n  .py-2\\.5 {\n    padding-block: calc(var(--spacing) * 2.5);\n  }\n\n  .py-3 {\n    padding-block: calc(var(--spacing) * 3);\n  }\n\n  .py-4 {\n    padding-block: calc(var(--spacing) * 4);\n  }\n\n  .py-5 {\n    padding-block: calc(var(--spacing) * 5);\n  }\n\n  .pt-1 {\n    padding-top: calc(var(--spacing) * 1);\n  }\n\n  .pr-1 {\n    padding-right: calc(var(--spacing) * 1);\n  }\n\n  .pr-4 {\n    padding-right: calc(var(--spacing) * 4);\n  }\n\n  .pr-10 {\n    padding-right: calc(var(--spacing) * 10);\n  }\n\n  .pb-5 {\n    padding-bottom: calc(var(--spacing) * 5);\n  }\n\n  .text-left {\n    text-align: left;\n  }\n\n  .text-right {\n    text-align: right;\n  }\n\n  .font-mono {\n    font-family: var(--font-mono);\n  }\n\n  .text-2xl {\n    font-size: var(--text-2xl);\n    line-height: var(--tw-leading, var(--text-2xl--line-height));\n  }\n\n  .text-3xl {\n    font-size: var(--text-3xl);\n    line-height: var(--tw-leading, var(--text-3xl--line-height));\n  }\n\n  .text-sm {\n    font-size: var(--text-sm);\n    line-height: var(--tw-leading, var(--text-sm--line-height));\n  }\n\n  .text-xs {\n    font-size: var(--text-xs);\n    line-height: var(--tw-leading, var(--text-xs--line-height));\n  }\n\n  .text-\\[10px\\] {\n    font-size: 10px;\n  }\n\n  .text-\\[11px\\] {\n    font-size: 11px;\n  }\n\n  .font-semibold {\n    --tw-font-weight: var(--font-weight-semibold);\n    font-weight: var(--font-weight-semibold);\n  }\n\n  .tracking-\\[-0\\.04em\\] {\n    --tw-tracking: -.04em;\n    letter-spacing: -.04em;\n  }\n\n  .tracking-\\[0\\.16em\\] {\n    --tw-tracking: .16em;\n    letter-spacing: .16em;\n  }\n\n  .tracking-\\[0\\.18em\\] {\n    --tw-tracking: .18em;\n    letter-spacing: .18em;\n  }\n\n  .tracking-\\[0\\.22em\\] {\n    --tw-tracking: .22em;\n    letter-spacing: .22em;\n  }\n\n  .tracking-\\[0\\.24em\\] {\n    --tw-tracking: .24em;\n    letter-spacing: .24em;\n  }\n\n  .text-wrap {\n    text-wrap: wrap;\n  }\n\n  .text-amber-100 {\n    color: var(--color-amber-100);\n  }\n\n  .text-blue-300 {\n    color: var(--color-blue-300);\n  }\n\n  .text-blue-300\\/70 {\n    color: #90c5ffb3;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-blue-300\\/70 {\n      color: color-mix(in oklab, var(--color-blue-300) 70%, transparent);\n    }\n  }\n\n  .text-cyan-100 {\n    color: var(--color-cyan-100);\n  }\n\n  .text-cyan-100\\/85 {\n    color: #cefafed9;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-cyan-100\\/85 {\n      color: color-mix(in oklab, var(--color-cyan-100) 85%, transparent);\n    }\n  }\n\n  .text-cyan-200 {\n    color: var(--color-cyan-200);\n  }\n\n  .text-cyan-200\\/70 {\n    color: #a2f4fdb3;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-cyan-200\\/70 {\n      color: color-mix(in oklab, var(--color-cyan-200) 70%, transparent);\n    }\n  }\n\n  .text-cyan-200\\/80 {\n    color: #a2f4fdcc;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-cyan-200\\/80 {\n      color: color-mix(in oklab, var(--color-cyan-200) 80%, transparent);\n    }\n  }\n\n  .text-cyan-300 {\n    color: var(--color-cyan-300);\n  }\n\n  .text-cyan-300\\/70 {\n    color: #53eafdb3;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-cyan-300\\/70 {\n      color: color-mix(in oklab, var(--color-cyan-300) 70%, transparent);\n    }\n  }\n\n  .text-fuchsia-100 {\n    color: var(--color-fuchsia-100);\n  }\n\n  .text-fuchsia-100\\/90 {\n    color: #fae8ffe6;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-fuchsia-100\\/90 {\n      color: color-mix(in oklab, var(--color-fuchsia-100) 90%, transparent);\n    }\n  }\n\n  .text-fuchsia-200 {\n    color: var(--color-fuchsia-200);\n  }\n\n  .text-fuchsia-200\\/80 {\n    color: #f6cfffcc;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-fuchsia-200\\/80 {\n      color: color-mix(in oklab, var(--color-fuchsia-200) 80%, transparent);\n    }\n  }\n\n  .text-sky-100 {\n    color: var(--color-sky-100);\n  }\n\n  .text-sky-100\\/85 {\n    color: #dff2fed9;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-sky-100\\/85 {\n      color: color-mix(in oklab, var(--color-sky-100) 85%, transparent);\n    }\n  }\n\n  .text-sky-300 {\n    color: var(--color-sky-300);\n  }\n\n  .text-sky-300\\/70 {\n    color: #77d4ffb3;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-sky-300\\/70 {\n      color: color-mix(in oklab, var(--color-sky-300) 70%, transparent);\n    }\n  }\n\n  .text-slate-100 {\n    color: var(--color-slate-100);\n  }\n\n  .text-slate-200 {\n    color: var(--color-slate-200);\n  }\n\n  .text-slate-200\\/80 {\n    color: #e2e8f0cc;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-200\\/80 {\n      color: color-mix(in oklab, var(--color-slate-200) 80%, transparent);\n    }\n  }\n\n  .text-slate-300 {\n    color: var(--color-slate-300);\n  }\n\n  .text-slate-300\\/55 {\n    color: #cad5e28c;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-300\\/55 {\n      color: color-mix(in oklab, var(--color-slate-300) 55%, transparent);\n    }\n  }\n\n  .text-slate-300\\/60 {\n    color: #cad5e299;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-300\\/60 {\n      color: color-mix(in oklab, var(--color-slate-300) 60%, transparent);\n    }\n  }\n\n  .text-slate-300\\/65 {\n    color: #cad5e2a6;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-300\\/65 {\n      color: color-mix(in oklab, var(--color-slate-300) 65%, transparent);\n    }\n  }\n\n  .text-slate-300\\/70 {\n    color: #cad5e2b3;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-300\\/70 {\n      color: color-mix(in oklab, var(--color-slate-300) 70%, transparent);\n    }\n  }\n\n  .text-slate-300\\/75 {\n    color: #cad5e2bf;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-300\\/75 {\n      color: color-mix(in oklab, var(--color-slate-300) 75%, transparent);\n    }\n  }\n\n  .lowercase {\n    text-transform: lowercase;\n  }\n\n  .uppercase {\n    text-transform: uppercase;\n  }\n\n  .ordinal {\n    --tw-ordinal: ordinal;\n    font-variant-numeric: var(--tw-ordinal, ) var(--tw-slashed-zero, ) var(--tw-numeric-figure, ) var(--tw-numeric-spacing, ) var(--tw-numeric-fraction, );\n  }\n\n  .underline {\n    text-decoration-line: underline;\n  }\n\n  .opacity-0 {\n    opacity: 0;\n  }\n\n  .shadow {\n    --tw-shadow: 0 1px 3px 0 var(--tw-shadow-color, #0000001a), 0 1px 2px -1px var(--tw-shadow-color, #0000001a);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[0_10px_28px_rgba\\(0\\,0\\,0\\,0\\.22\\)\\] {\n    --tw-shadow: 0 10px 28px var(--tw-shadow-color, #00000038);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[0_10px_28px_rgba\\(0\\,0\\,0\\,0\\.28\\)\\] {\n    --tw-shadow: 0 10px 28px var(--tw-shadow-color, #00000047);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[0_18px_42px_rgba\\(3\\,6\\,18\\,0\\.45\\)\\] {\n    --tw-shadow: 0 18px 42px var(--tw-shadow-color, #03061273);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[0_26px_80px_rgba\\(0\\,0\\,0\\,0\\.48\\)\\] {\n    --tw-shadow: 0 26px 80px var(--tw-shadow-color, #0000007a);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[0_36px_80px_rgba\\(0\\,0\\,0\\,0\\.5\\)\\] {\n    --tw-shadow: 0 36px 80px var(--tw-shadow-color, #00000080);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[inset_0_0_0_1px_rgba\\(143\\,232\\,255\\,0\\.18\\)\\] {\n    --tw-shadow: inset 0 0 0 1px var(--tw-shadow-color, #8fe8ff2e);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .ring {\n    --tw-ring-shadow: var(--tw-ring-inset, ) 0 0 0 calc(1px + var(--tw-ring-offset-width)) var(--tw-ring-color, currentcolor);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .outline {\n    outline-style: var(--tw-outline-style);\n    outline-width: 1px;\n  }\n\n  .blur {\n    --tw-blur: blur(8px);\n    filter: var(--tw-blur, ) var(--tw-brightness, ) var(--tw-contrast, ) var(--tw-grayscale, ) var(--tw-hue-rotate, ) var(--tw-invert, ) var(--tw-saturate, ) var(--tw-sepia, ) var(--tw-drop-shadow, );\n  }\n\n  .invert {\n    --tw-invert: invert(100%);\n    filter: var(--tw-blur, ) var(--tw-brightness, ) var(--tw-contrast, ) var(--tw-grayscale, ) var(--tw-hue-rotate, ) var(--tw-invert, ) var(--tw-saturate, ) var(--tw-sepia, ) var(--tw-drop-shadow, );\n  }\n\n  .filter {\n    filter: var(--tw-blur, ) var(--tw-brightness, ) var(--tw-contrast, ) var(--tw-grayscale, ) var(--tw-hue-rotate, ) var(--tw-invert, ) var(--tw-saturate, ) var(--tw-sepia, ) var(--tw-drop-shadow, );\n  }\n\n  .backdrop-blur-md {\n    --tw-backdrop-blur: blur(var(--blur-md));\n    -webkit-backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );\n    backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );\n  }\n\n  .backdrop-filter {\n    -webkit-backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );\n    backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );\n  }\n\n  .transition {\n    transition-property: color, background-color, border-color, outline-color, text-decoration-color, fill, stroke, --tw-gradient-from, --tw-gradient-via, --tw-gradient-to, opacity, box-shadow, transform, translate, scale, rotate, filter, -webkit-backdrop-filter, backdrop-filter, display, content-visibility, overlay, pointer-events;\n    transition-timing-function: var(--tw-ease, var(--default-transition-timing-function));\n    transition-duration: var(--tw-duration, var(--default-transition-duration));\n  }\n\n  .outline-none {\n    --tw-outline-style: none;\n    outline-style: none;\n  }\n\n  @media (hover: hover) {\n    .hover\\:border-cyan-200\\/30:hover {\n      border-color: #a2f4fd4d;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:border-cyan-200\\/30:hover {\n        border-color: color-mix(in oklab, var(--color-cyan-200) 30%, transparent);\n      }\n    }\n\n    .hover\\:border-cyan-200\\/35:hover {\n      border-color: #a2f4fd59;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:border-cyan-200\\/35:hover {\n        border-color: color-mix(in oklab, var(--color-cyan-200) 35%, transparent);\n      }\n    }\n\n    .hover\\:border-white\\/12:hover {\n      border-color: #ffffff1f;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:border-white\\/12:hover {\n        border-color: color-mix(in oklab, var(--color-white) 12%, transparent);\n      }\n    }\n\n    .hover\\:bg-black\\/24:hover {\n      background-color: #0000003d;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:bg-black\\/24:hover {\n        background-color: color-mix(in oklab, var(--color-black) 24%, transparent);\n      }\n    }\n\n    .hover\\:bg-white\\/\\[0\\.04\\]:hover {\n      background-color: #ffffff0a;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:bg-white\\/\\[0\\.04\\]:hover {\n        background-color: color-mix(in oklab, var(--color-white) 4%, transparent);\n      }\n    }\n\n    .hover\\:text-cyan-100:hover {\n      color: var(--color-cyan-100);\n    }\n\n    .hover\\:text-slate-100:hover {\n      color: var(--color-slate-100);\n    }\n  }\n\n  .focus\\:border-cyan-200\\/45:focus {\n    border-color: #a2f4fd73;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .focus\\:border-cyan-200\\/45:focus {\n      border-color: color-mix(in oklab, var(--color-cyan-200) 45%, transparent);\n    }\n  }\n\n  .disabled\\:opacity-35:disabled {\n    opacity: .35;\n  }\n\n  .disabled\\:opacity-40:disabled {\n    opacity: .4;\n  }\n\n  @media (min-width: 64rem) {\n    .lg\\:grid-cols-\\[220px_minmax\\(0\\,1fr\\)_minmax\\(0\\,1fr\\)\\] {\n      grid-template-columns: 220px minmax(0, 1fr) minmax(0, 1fr);\n    }\n\n    .lg\\:grid-cols-\\[220px_minmax\\(0\\,1fr\\)_minmax\\(0\\,1fr\\)_minmax\\(0\\,1fr\\)\\] {\n      grid-template-columns: 220px minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr);\n    }\n  }\n}\n\n:host {\n  color-scheme: dark;\n  width: 100%;\n  height: 100%;\n  display: block;\n}\n\n* {\n  box-sizing: border-box;\n}\n\nbutton, input, select {\n  font: inherit;\n}\n\n.cosimo-surface {\n  background: radial-gradient(circle at top, #7a8eff2e, #0000 34%), linear-gradient(#060a16fa, #03050c);\n}\n\n.cosimo-stage {\n  background: linear-gradient(#ffffff05 1px, #0000 1px) 0 0 / 24px 24px, linear-gradient(90deg, #ffffff05 1px, #0000 1px) 0 0 / 24px 24px, radial-gradient(circle at top, #7a8eff33, #0000 38%), linear-gradient(#050915fa, #02040b);\n}\n\n.cosimo-stage:after {\n  content: "";\n  pointer-events: none;\n  position: absolute;\n  inset: 0;\n  box-shadow: inset 0 1px #ffffff14, inset 0 -48px 64px #00000059;\n}\n\n.cosimo-range {\n  appearance: none;\n  background: linear-gradient(90deg, #5463c973, #f56cb673);\n  border-radius: 999px;\n  outline: none;\n  width: 100%;\n  height: 10px;\n}\n\n.cosimo-range::-webkit-slider-thumb {\n  appearance: none;\n  background: linear-gradient(#ffd8a6 0%, #f56cb6 100%);\n  border: 0;\n  border-radius: 999px;\n  width: 22px;\n  height: 22px;\n  box-shadow: 0 6px 18px #f56cb659;\n}\n\n.cosimo-range::-moz-range-thumb {\n  background: linear-gradient(#ffd8a6 0%, #f56cb6 100%);\n  border: 0;\n  border-radius: 999px;\n  width: 22px;\n  height: 22px;\n  box-shadow: 0 6px 18px #f56cb659;\n}\n\n.cosimo-select, .cosimo-button {\n  color: #eef2f5;\n  background: #ffffff0a;\n  border: 1px solid #ffffff14;\n}\n\n.cosimo-grid-line {\n  stroke: #ffffff14;\n  stroke-width: 1px;\n}\n\n.cosimo-curve-fill {\n  fill: #87d7f514;\n}\n\n.cosimo-curve-line {\n  fill: none;\n  stroke: #87d7f5;\n  stroke-width: 3px;\n  stroke-linecap: round;\n  stroke-linejoin: round;\n}\n\n.cosimo-curve-fill-muted {\n  fill: #e1e7f00a;\n}\n\n.cosimo-curve-line-muted {\n  stroke: #e1e7f061;\n}\n\n.cosimo-curve-line-highlight {\n  stroke: #32f0bc;\n}\n\n.cosimo-mseg-point-default {\n  fill: #87d7f5;\n  stroke: #050913;\n  stroke-width: 2px;\n}\n\n.cosimo-mseg-point-selected {\n  fill: #f5d0fe;\n  stroke: #050913;\n  stroke-width: 3px;\n}\n\n.cosimo-mseg-point-highlight {\n  fill: #32f0bc;\n  stroke: #050913;\n  stroke-width: 2px;\n}\n\n.cosimo-mseg-point-muted {\n  fill: #e1e7f0c7;\n  stroke: #050913;\n  stroke-width: 2px;\n  opacity: .62;\n}\n\n@property --tw-translate-x {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0;\n}\n\n@property --tw-translate-y {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0;\n}\n\n@property --tw-translate-z {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0;\n}\n\n@property --tw-rotate-x {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-rotate-y {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-rotate-z {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-skew-x {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-skew-y {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-border-style {\n  syntax: "*";\n  inherits: false;\n  initial-value: solid;\n}\n\n@property --tw-font-weight {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-tracking {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-ordinal {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-slashed-zero {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-numeric-figure {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-numeric-spacing {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-numeric-fraction {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-shadow {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0 0 #0000;\n}\n\n@property --tw-shadow-color {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-shadow-alpha {\n  syntax: "<percentage>";\n  inherits: false;\n  initial-value: 100%;\n}\n\n@property --tw-inset-shadow {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0 0 #0000;\n}\n\n@property --tw-inset-shadow-color {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-inset-shadow-alpha {\n  syntax: "<percentage>";\n  inherits: false;\n  initial-value: 100%;\n}\n\n@property --tw-ring-color {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-ring-shadow {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0 0 #0000;\n}\n\n@property --tw-inset-ring-color {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-inset-ring-shadow {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0 0 #0000;\n}\n\n@property --tw-ring-inset {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-ring-offset-width {\n  syntax: "<length>";\n  inherits: false;\n  initial-value: 0;\n}\n\n@property --tw-ring-offset-color {\n  syntax: "*";\n  inherits: false;\n  initial-value: #fff;\n}\n\n@property --tw-ring-offset-shadow {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0 0 #0000;\n}\n\n@property --tw-outline-style {\n  syntax: "*";\n  inherits: false;\n  initial-value: solid;\n}\n\n@property --tw-blur {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-brightness {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-contrast {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-grayscale {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-hue-rotate {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-invert {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-opacity {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-saturate {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-sepia {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-drop-shadow {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-drop-shadow-color {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-drop-shadow-alpha {\n  syntax: "<percentage>";\n  inherits: false;\n  initial-value: 100%;\n}\n\n@property --tw-drop-shadow-size {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-blur {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-brightness {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-contrast {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-grayscale {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-hue-rotate {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-invert {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-opacity {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-saturate {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-sepia {\n  syntax: "*";\n  inherits: false\n}\n';
+const cssText = '/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com */\n@layer properties {\n  @supports (((-webkit-hyphens: none)) and (not (margin-trim: inline))) or ((-moz-orient: inline) and (not (color: rgb(from red r g b)))) {\n    *, :before, :after, ::backdrop {\n      --tw-translate-x: 0;\n      --tw-translate-y: 0;\n      --tw-translate-z: 0;\n      --tw-rotate-x: initial;\n      --tw-rotate-y: initial;\n      --tw-rotate-z: initial;\n      --tw-skew-x: initial;\n      --tw-skew-y: initial;\n      --tw-border-style: solid;\n      --tw-leading: initial;\n      --tw-font-weight: initial;\n      --tw-tracking: initial;\n      --tw-ordinal: initial;\n      --tw-slashed-zero: initial;\n      --tw-numeric-figure: initial;\n      --tw-numeric-spacing: initial;\n      --tw-numeric-fraction: initial;\n      --tw-shadow: 0 0 #0000;\n      --tw-shadow-color: initial;\n      --tw-shadow-alpha: 100%;\n      --tw-inset-shadow: 0 0 #0000;\n      --tw-inset-shadow-color: initial;\n      --tw-inset-shadow-alpha: 100%;\n      --tw-ring-color: initial;\n      --tw-ring-shadow: 0 0 #0000;\n      --tw-inset-ring-color: initial;\n      --tw-inset-ring-shadow: 0 0 #0000;\n      --tw-ring-inset: initial;\n      --tw-ring-offset-width: 0px;\n      --tw-ring-offset-color: #fff;\n      --tw-ring-offset-shadow: 0 0 #0000;\n      --tw-outline-style: solid;\n      --tw-blur: initial;\n      --tw-brightness: initial;\n      --tw-contrast: initial;\n      --tw-grayscale: initial;\n      --tw-hue-rotate: initial;\n      --tw-invert: initial;\n      --tw-opacity: initial;\n      --tw-saturate: initial;\n      --tw-sepia: initial;\n      --tw-drop-shadow: initial;\n      --tw-drop-shadow-color: initial;\n      --tw-drop-shadow-alpha: 100%;\n      --tw-drop-shadow-size: initial;\n      --tw-backdrop-blur: initial;\n      --tw-backdrop-brightness: initial;\n      --tw-backdrop-contrast: initial;\n      --tw-backdrop-grayscale: initial;\n      --tw-backdrop-hue-rotate: initial;\n      --tw-backdrop-invert: initial;\n      --tw-backdrop-opacity: initial;\n      --tw-backdrop-saturate: initial;\n      --tw-backdrop-sepia: initial;\n    }\n  }\n}\n\n@layer theme {\n  :root, :host {\n    --font-sans: ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji",\n      "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";\n    --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",\n      "Courier New", monospace;\n    --color-amber-100: oklch(96.2% .059 95.617);\n    --color-amber-200: oklch(92.4% .12 95.746);\n    --color-emerald-100: oklch(95% .052 163.051);\n    --color-emerald-300: oklch(84.5% .143 164.978);\n    --color-cyan-100: oklch(95.6% .045 203.388);\n    --color-cyan-200: oklch(91.7% .08 205.041);\n    --color-cyan-300: oklch(86.5% .127 207.078);\n    --color-sky-100: oklch(95.1% .026 236.824);\n    --color-sky-300: oklch(82.8% .111 230.318);\n    --color-blue-300: oklch(80.9% .105 251.813);\n    --color-fuchsia-100: oklch(95.2% .037 318.852);\n    --color-fuchsia-200: oklch(90.3% .076 319.62);\n    --color-fuchsia-300: oklch(83.3% .145 321.434);\n    --color-slate-50: oklch(98.4% .003 247.858);\n    --color-slate-100: oklch(96.8% .007 247.896);\n    --color-slate-200: oklch(92.9% .013 255.508);\n    --color-slate-300: oklch(86.9% .022 252.894);\n    --color-slate-400: oklch(70.4% .04 256.788);\n    --color-black: #000;\n    --color-white: #fff;\n    --spacing: .25rem;\n    --text-xs: .75rem;\n    --text-xs--line-height: calc(1 / .75);\n    --text-sm: .875rem;\n    --text-sm--line-height: calc(1.25 / .875);\n    --text-lg: 1.125rem;\n    --text-lg--line-height: calc(1.75 / 1.125);\n    --text-2xl: 1.5rem;\n    --text-2xl--line-height: calc(2 / 1.5);\n    --text-3xl: 1.875rem;\n    --text-3xl--line-height: calc(2.25 / 1.875);\n    --font-weight-medium: 500;\n    --font-weight-semibold: 600;\n    --leading-relaxed: 1.625;\n    --radius-2xl: 1rem;\n    --blur-md: 12px;\n    --blur-xl: 24px;\n    --default-transition-duration: .15s;\n    --default-transition-timing-function: cubic-bezier(.4, 0, .2, 1);\n    --default-font-family: var(--font-sans);\n    --default-mono-font-family: var(--font-mono);\n  }\n}\n\n@layer base {\n  *, :after, :before, ::backdrop {\n    box-sizing: border-box;\n    border: 0 solid;\n    margin: 0;\n    padding: 0;\n  }\n\n  ::file-selector-button {\n    box-sizing: border-box;\n    border: 0 solid;\n    margin: 0;\n    padding: 0;\n  }\n\n  html, :host {\n    -webkit-text-size-adjust: 100%;\n    tab-size: 4;\n    line-height: 1.5;\n    font-family: var(--default-font-family, ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji");\n    font-feature-settings: var(--default-font-feature-settings, normal);\n    font-variation-settings: var(--default-font-variation-settings, normal);\n    -webkit-tap-highlight-color: transparent;\n  }\n\n  hr {\n    height: 0;\n    color: inherit;\n    border-top-width: 1px;\n  }\n\n  abbr:where([title]) {\n    -webkit-text-decoration: underline dotted;\n    text-decoration: underline dotted;\n  }\n\n  h1, h2, h3, h4, h5, h6 {\n    font-size: inherit;\n    font-weight: inherit;\n  }\n\n  a {\n    color: inherit;\n    -webkit-text-decoration: inherit;\n    -webkit-text-decoration: inherit;\n    -webkit-text-decoration: inherit;\n    text-decoration: inherit;\n  }\n\n  b, strong {\n    font-weight: bolder;\n  }\n\n  code, kbd, samp, pre {\n    font-family: var(--default-mono-font-family, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace);\n    font-feature-settings: var(--default-mono-font-feature-settings, normal);\n    font-variation-settings: var(--default-mono-font-variation-settings, normal);\n    font-size: 1em;\n  }\n\n  small {\n    font-size: 80%;\n  }\n\n  sub, sup {\n    vertical-align: baseline;\n    font-size: 75%;\n    line-height: 0;\n    position: relative;\n  }\n\n  sub {\n    bottom: -.25em;\n  }\n\n  sup {\n    top: -.5em;\n  }\n\n  table {\n    text-indent: 0;\n    border-color: inherit;\n    border-collapse: collapse;\n  }\n\n  :-moz-focusring {\n    outline: auto;\n  }\n\n  progress {\n    vertical-align: baseline;\n  }\n\n  summary {\n    display: list-item;\n  }\n\n  ol, ul, menu {\n    list-style: none;\n  }\n\n  img, svg, video, canvas, audio, iframe, embed, object {\n    vertical-align: middle;\n    display: block;\n  }\n\n  img, video {\n    max-width: 100%;\n    height: auto;\n  }\n\n  button, input, select, optgroup, textarea {\n    font: inherit;\n    font-feature-settings: inherit;\n    font-variation-settings: inherit;\n    letter-spacing: inherit;\n    color: inherit;\n    opacity: 1;\n    background-color: #0000;\n    border-radius: 0;\n  }\n\n  ::file-selector-button {\n    font: inherit;\n    font-feature-settings: inherit;\n    font-variation-settings: inherit;\n    letter-spacing: inherit;\n    color: inherit;\n    opacity: 1;\n    background-color: #0000;\n    border-radius: 0;\n  }\n\n  :where(select:is([multiple], [size])) optgroup {\n    font-weight: bolder;\n  }\n\n  :where(select:is([multiple], [size])) optgroup option {\n    padding-inline-start: 20px;\n  }\n\n  ::file-selector-button {\n    margin-inline-end: 4px;\n  }\n\n  ::placeholder {\n    opacity: 1;\n  }\n\n  @supports (not ((-webkit-appearance: -apple-pay-button))) or (contain-intrinsic-size: 1px) {\n    ::placeholder {\n      color: currentColor;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      ::placeholder {\n        color: color-mix(in oklab, currentcolor 50%, transparent);\n      }\n    }\n  }\n\n  textarea {\n    resize: vertical;\n  }\n\n  ::-webkit-search-decoration {\n    -webkit-appearance: none;\n  }\n\n  ::-webkit-date-and-time-value {\n    min-height: 1lh;\n    text-align: inherit;\n  }\n\n  ::-webkit-datetime-edit {\n    display: inline-flex;\n  }\n\n  ::-webkit-datetime-edit-fields-wrapper {\n    padding: 0;\n  }\n\n  ::-webkit-datetime-edit {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-year-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-month-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-day-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-hour-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-minute-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-second-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-millisecond-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-meridiem-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-calendar-picker-indicator {\n    line-height: 1;\n  }\n\n  :-moz-ui-invalid {\n    box-shadow: none;\n  }\n\n  button, input:where([type="button"], [type="reset"], [type="submit"]) {\n    appearance: button;\n  }\n\n  ::file-selector-button {\n    appearance: button;\n  }\n\n  ::-webkit-inner-spin-button {\n    height: auto;\n  }\n\n  ::-webkit-outer-spin-button {\n    height: auto;\n  }\n\n  [hidden]:where(:not([hidden="until-found"])) {\n    display: none !important;\n  }\n}\n\n@layer components;\n\n@layer utilities {\n  .pointer-events-auto {\n    pointer-events: auto;\n  }\n\n  .pointer-events-none {\n    pointer-events: none;\n  }\n\n  .collapse {\n    visibility: collapse;\n  }\n\n  .visible {\n    visibility: visible;\n  }\n\n  .sr-only {\n    clip-path: inset(50%);\n    white-space: nowrap;\n    border-width: 0;\n    width: 1px;\n    height: 1px;\n    margin: -1px;\n    padding: 0;\n    position: absolute;\n    overflow: hidden;\n  }\n\n  .absolute {\n    position: absolute;\n  }\n\n  .fixed {\n    position: fixed;\n  }\n\n  .relative {\n    position: relative;\n  }\n\n  .static {\n    position: static;\n  }\n\n  .sticky {\n    position: sticky;\n  }\n\n  .inset-0 {\n    inset: calc(var(--spacing) * 0);\n  }\n\n  .inset-x-0 {\n    inset-inline: calc(var(--spacing) * 0);\n  }\n\n  .inset-y-0 {\n    inset-block: calc(var(--spacing) * 0);\n  }\n\n  .inset-y-4 {\n    inset-block: calc(var(--spacing) * 4);\n  }\n\n  .start {\n    inset-inline-start: var(--spacing);\n  }\n\n  .end {\n    inset-inline-end: var(--spacing);\n  }\n\n  .top-0 {\n    top: calc(var(--spacing) * 0);\n  }\n\n  .top-1 {\n    top: calc(var(--spacing) * 1);\n  }\n\n  .top-1\\/2 {\n    top: 50%;\n  }\n\n  .right-0 {\n    right: calc(var(--spacing) * 0);\n  }\n\n  .right-4 {\n    right: calc(var(--spacing) * 4);\n  }\n\n  .bottom-0 {\n    bottom: calc(var(--spacing) * 0);\n  }\n\n  .bottom-4 {\n    bottom: calc(var(--spacing) * 4);\n  }\n\n  .isolate {\n    isolation: isolate;\n  }\n\n  .z-10 {\n    z-index: 10;\n  }\n\n  .z-20 {\n    z-index: 20;\n  }\n\n  .z-40 {\n    z-index: 40;\n  }\n\n  .order-1 {\n    order: 1;\n  }\n\n  .\\!container {\n    width: 100% !important;\n  }\n\n  @media (min-width: 40rem) {\n    .\\!container {\n      max-width: 40rem !important;\n    }\n  }\n\n  @media (min-width: 48rem) {\n    .\\!container {\n      max-width: 48rem !important;\n    }\n  }\n\n  @media (min-width: 64rem) {\n    .\\!container {\n      max-width: 64rem !important;\n    }\n  }\n\n  @media (min-width: 80rem) {\n    .\\!container {\n      max-width: 80rem !important;\n    }\n  }\n\n  @media (min-width: 96rem) {\n    .\\!container {\n      max-width: 96rem !important;\n    }\n  }\n\n  .container {\n    width: 100%;\n  }\n\n  @media (min-width: 40rem) {\n    .container {\n      max-width: 40rem;\n    }\n  }\n\n  @media (min-width: 48rem) {\n    .container {\n      max-width: 48rem;\n    }\n  }\n\n  @media (min-width: 64rem) {\n    .container {\n      max-width: 64rem;\n    }\n  }\n\n  @media (min-width: 80rem) {\n    .container {\n      max-width: 80rem;\n    }\n  }\n\n  @media (min-width: 96rem) {\n    .container {\n      max-width: 96rem;\n    }\n  }\n\n  .m-1 {\n    margin: calc(var(--spacing) * 1);\n  }\n\n  .mt-1 {\n    margin-top: calc(var(--spacing) * 1);\n  }\n\n  .mt-2 {\n    margin-top: calc(var(--spacing) * 2);\n  }\n\n  .mt-auto {\n    margin-top: auto;\n  }\n\n  .block {\n    display: block;\n  }\n\n  .contents {\n    display: contents;\n  }\n\n  .flex {\n    display: flex;\n  }\n\n  .grid {\n    display: grid;\n  }\n\n  .hidden {\n    display: none;\n  }\n\n  .inline {\n    display: inline;\n  }\n\n  .inline-flex {\n    display: inline-flex;\n  }\n\n  .inline-grid {\n    display: inline-grid;\n  }\n\n  .table {\n    display: table;\n  }\n\n  .aspect-square {\n    aspect-ratio: 1;\n  }\n\n  .h-3 {\n    height: calc(var(--spacing) * 3);\n  }\n\n  .h-3\\.5 {\n    height: calc(var(--spacing) * 3.5);\n  }\n\n  .h-4 {\n    height: calc(var(--spacing) * 4);\n  }\n\n  .h-10 {\n    height: calc(var(--spacing) * 10);\n  }\n\n  .h-11 {\n    height: calc(var(--spacing) * 11);\n  }\n\n  .h-12 {\n    height: calc(var(--spacing) * 12);\n  }\n\n  .h-24 {\n    height: calc(var(--spacing) * 24);\n  }\n\n  .h-32 {\n    height: calc(var(--spacing) * 32);\n  }\n\n  .h-44 {\n    height: calc(var(--spacing) * 44);\n  }\n\n  .h-\\[18px\\] {\n    height: 18px;\n  }\n\n  .h-\\[118px\\] {\n    height: 118px;\n  }\n\n  .h-\\[180px\\] {\n    height: 180px;\n  }\n\n  .h-\\[190px\\] {\n    height: 190px;\n  }\n\n  .h-\\[320px\\] {\n    height: 320px;\n  }\n\n  .h-full {\n    height: 100%;\n  }\n\n  .min-h-0 {\n    min-height: calc(var(--spacing) * 0);\n  }\n\n  .min-h-\\[100dvh\\] {\n    min-height: 100dvh;\n  }\n\n  .min-h-\\[220px\\] {\n    min-height: 220px;\n  }\n\n  .min-h-\\[320px\\] {\n    min-height: 320px;\n  }\n\n  .min-h-\\[calc\\(100dvh-2rem\\)\\] {\n    min-height: calc(100dvh - 2rem);\n  }\n\n  .min-h-full {\n    min-height: 100%;\n  }\n\n  .w-3 {\n    width: calc(var(--spacing) * 3);\n  }\n\n  .w-3\\.5 {\n    width: calc(var(--spacing) * 3.5);\n  }\n\n  .w-6 {\n    width: calc(var(--spacing) * 6);\n  }\n\n  .w-10 {\n    width: calc(var(--spacing) * 10);\n  }\n\n  .w-11 {\n    width: calc(var(--spacing) * 11);\n  }\n\n  .w-\\[18px\\] {\n    width: 18px;\n  }\n\n  .w-full {\n    width: 100%;\n  }\n\n  .max-w-\\[34ch\\] {\n    max-width: 34ch;\n  }\n\n  .max-w-\\[280px\\] {\n    max-width: 280px;\n  }\n\n  .max-w-\\[1080px\\] {\n    max-width: 1080px;\n  }\n\n  .min-w-0 {\n    min-width: calc(var(--spacing) * 0);\n  }\n\n  .flex-1 {\n    flex: 1;\n  }\n\n  .flex-shrink, .shrink {\n    flex-shrink: 1;\n  }\n\n  .flex-grow, .grow {\n    flex-grow: 1;\n  }\n\n  .border-collapse {\n    border-collapse: collapse;\n  }\n\n  .-translate-y-1 {\n    --tw-translate-y: calc(var(--spacing) * -1);\n    translate: var(--tw-translate-x) var(--tw-translate-y);\n  }\n\n  .-translate-y-1\\/2 {\n    --tw-translate-y: calc(calc(1 / 2 * 100%) * -1);\n    translate: var(--tw-translate-x) var(--tw-translate-y);\n  }\n\n  .transform {\n    transform: var(--tw-rotate-x, ) var(--tw-rotate-y, ) var(--tw-rotate-z, ) var(--tw-skew-x, ) var(--tw-skew-y, );\n  }\n\n  .cursor-ew-resize {\n    cursor: ew-resize;\n  }\n\n  .cursor-grab {\n    cursor: grab;\n  }\n\n  .cursor-pointer {\n    cursor: pointer;\n  }\n\n  .cursor-text {\n    cursor: text;\n  }\n\n  .touch-none {\n    touch-action: none;\n  }\n\n  .resize {\n    resize: both;\n  }\n\n  .appearance-none {\n    appearance: none;\n  }\n\n  .auto-rows-max {\n    grid-auto-rows: max-content;\n  }\n\n  .grid-cols-1 {\n    grid-template-columns: repeat(1, minmax(0, 1fr));\n  }\n\n  .grid-cols-2 {\n    grid-template-columns: repeat(2, minmax(0, 1fr));\n  }\n\n  .grid-cols-3 {\n    grid-template-columns: repeat(3, minmax(0, 1fr));\n  }\n\n  .grid-cols-5 {\n    grid-template-columns: repeat(5, minmax(0, 1fr));\n  }\n\n  .grid-cols-\\[56px_minmax\\(0\\,1fr\\)\\] {\n    grid-template-columns: 56px minmax(0, 1fr);\n  }\n\n  .grid-cols-\\[minmax\\(0\\,1\\.1fr\\)_84px_minmax\\(0\\,1\\.2fr\\)_minmax\\(290px\\,auto\\)_44px\\] {\n    grid-template-columns: minmax(0, 1.1fr) 84px minmax(0, 1.2fr) minmax(290px, auto) 44px;\n  }\n\n  .grid-cols-\\[minmax\\(0\\,1fr\\)_88px\\] {\n    grid-template-columns: minmax(0, 1fr) 88px;\n  }\n\n  .grid-cols-\\[minmax\\(0\\,1fr\\)_92px\\] {\n    grid-template-columns: minmax(0, 1fr) 92px;\n  }\n\n  .grid-cols-\\[minmax\\(0\\,1fr\\)_92px_auto\\] {\n    grid-template-columns: minmax(0, 1fr) 92px auto;\n  }\n\n  .grid-cols-\\[minmax\\(0\\,1fr\\)_auto\\] {\n    grid-template-columns: minmax(0, 1fr) auto;\n  }\n\n  .grid-rows-\\[auto_minmax\\(0\\,1fr\\)_auto\\] {\n    grid-template-rows: auto minmax(0, 1fr) auto;\n  }\n\n  .flex-col {\n    flex-direction: column;\n  }\n\n  .flex-wrap {\n    flex-wrap: wrap;\n  }\n\n  .items-center {\n    align-items: center;\n  }\n\n  .items-end {\n    align-items: flex-end;\n  }\n\n  .items-start {\n    align-items: flex-start;\n  }\n\n  .items-stretch {\n    align-items: stretch;\n  }\n\n  .justify-between {\n    justify-content: space-between;\n  }\n\n  .justify-center {\n    justify-content: center;\n  }\n\n  .justify-end {\n    justify-content: flex-end;\n  }\n\n  .justify-start {\n    justify-content: flex-start;\n  }\n\n  .gap-1 {\n    gap: calc(var(--spacing) * 1);\n  }\n\n  .gap-2 {\n    gap: calc(var(--spacing) * 2);\n  }\n\n  .gap-3 {\n    gap: calc(var(--spacing) * 3);\n  }\n\n  .gap-4 {\n    gap: calc(var(--spacing) * 4);\n  }\n\n  .gap-5 {\n    gap: calc(var(--spacing) * 5);\n  }\n\n  .self-center {\n    align-self: center;\n  }\n\n  .self-end {\n    align-self: flex-end;\n  }\n\n  .self-start {\n    align-self: flex-start;\n  }\n\n  .justify-self-end {\n    justify-self: flex-end;\n  }\n\n  .truncate {\n    text-overflow: ellipsis;\n    white-space: nowrap;\n    overflow: hidden;\n  }\n\n  .overflow-auto {\n    overflow: auto;\n  }\n\n  .overflow-hidden {\n    overflow: hidden;\n  }\n\n  .overflow-visible {\n    overflow: visible;\n  }\n\n  .overflow-x-hidden {\n    overflow-x: hidden;\n  }\n\n  .overflow-y-auto {\n    overflow-y: auto;\n  }\n\n  .rounded {\n    border-radius: .25rem;\n  }\n\n  .rounded-2xl {\n    border-radius: var(--radius-2xl);\n  }\n\n  .rounded-\\[14px\\] {\n    border-radius: 14px;\n  }\n\n  .rounded-\\[16px\\] {\n    border-radius: 16px;\n  }\n\n  .rounded-\\[18px\\] {\n    border-radius: 18px;\n  }\n\n  .rounded-\\[20px\\] {\n    border-radius: 20px;\n  }\n\n  .rounded-\\[22px\\] {\n    border-radius: 22px;\n  }\n\n  .rounded-\\[24px\\] {\n    border-radius: 24px;\n  }\n\n  .rounded-\\[28px\\] {\n    border-radius: 28px;\n  }\n\n  .rounded-\\[30px\\] {\n    border-radius: 30px;\n  }\n\n  .rounded-full {\n    border-radius: 3.40282e38px;\n  }\n\n  .border {\n    border-style: var(--tw-border-style);\n    border-width: 1px;\n  }\n\n  .border-dashed {\n    --tw-border-style: dashed;\n    border-style: dashed;\n  }\n\n  .border-amber-200 {\n    border-color: var(--color-amber-200);\n  }\n\n  .border-amber-200\\/18 {\n    border-color: #fee6852e;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-amber-200\\/18 {\n      border-color: color-mix(in oklab, var(--color-amber-200) 18%, transparent);\n    }\n  }\n\n  .border-cyan-200 {\n    border-color: var(--color-cyan-200);\n  }\n\n  .border-cyan-200\\/28 {\n    border-color: #a2f4fd47;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-cyan-200\\/28 {\n      border-color: color-mix(in oklab, var(--color-cyan-200) 28%, transparent);\n    }\n  }\n\n  .border-cyan-300 {\n    border-color: var(--color-cyan-300);\n  }\n\n  .border-fuchsia-300 {\n    border-color: var(--color-fuchsia-300);\n  }\n\n  .border-fuchsia-300\\/15 {\n    border-color: #f2a9ff26;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-fuchsia-300\\/15 {\n      border-color: color-mix(in oklab, var(--color-fuchsia-300) 15%, transparent);\n    }\n  }\n\n  .border-sky-300 {\n    border-color: var(--color-sky-300);\n  }\n\n  .border-white {\n    border-color: var(--color-white);\n  }\n\n  .border-white\\/6 {\n    border-color: #ffffff0f;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-white\\/6 {\n      border-color: color-mix(in oklab, var(--color-white) 6%, transparent);\n    }\n  }\n\n  .border-white\\/8 {\n    border-color: #ffffff14;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-white\\/8 {\n      border-color: color-mix(in oklab, var(--color-white) 8%, transparent);\n    }\n  }\n\n  .border-white\\/10 {\n    border-color: #ffffff1a;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-white\\/10 {\n      border-color: color-mix(in oklab, var(--color-white) 10%, transparent);\n    }\n  }\n\n  .border-white\\/\\[0\\.04\\] {\n    border-color: #ffffff0a;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-white\\/\\[0\\.04\\] {\n      border-color: color-mix(in oklab, var(--color-white) 4%, transparent);\n    }\n  }\n\n  .border-white\\/\\[0\\.05\\] {\n    border-color: #ffffff0d;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-white\\/\\[0\\.05\\] {\n      border-color: color-mix(in oklab, var(--color-white) 5%, transparent);\n    }\n  }\n\n  .border-white\\/\\[0\\.08\\] {\n    border-color: #ffffff14;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-white\\/\\[0\\.08\\] {\n      border-color: color-mix(in oklab, var(--color-white) 8%, transparent);\n    }\n  }\n\n  .border-white\\/\\[0\\.10\\] {\n    border-color: #ffffff1a;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-white\\/\\[0\\.10\\] {\n      border-color: color-mix(in oklab, var(--color-white) 10%, transparent);\n    }\n  }\n\n  .bg-\\[\\#070b16\\] {\n    background-color: #070b16;\n  }\n\n  .bg-\\[\\#09101d\\]\\/95 {\n    background-color: oklab(17.3432% -.0040513 -.029082 / .95);\n  }\n\n  .bg-\\[\\#030711\\]\\/85 {\n    background-color: oklab(12.8817% -.00430492 -.0249884 / .85);\n  }\n\n  .bg-black {\n    background-color: var(--color-black);\n  }\n\n  .bg-black\\/10 {\n    background-color: #0000001a;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-black\\/10 {\n      background-color: color-mix(in oklab, var(--color-black) 10%, transparent);\n    }\n  }\n\n  .bg-black\\/15 {\n    background-color: #00000026;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-black\\/15 {\n      background-color: color-mix(in oklab, var(--color-black) 15%, transparent);\n    }\n  }\n\n  .bg-black\\/16 {\n    background-color: #00000029;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-black\\/16 {\n      background-color: color-mix(in oklab, var(--color-black) 16%, transparent);\n    }\n  }\n\n  .bg-black\\/18 {\n    background-color: #0000002e;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-black\\/18 {\n      background-color: color-mix(in oklab, var(--color-black) 18%, transparent);\n    }\n  }\n\n  .bg-black\\/20 {\n    background-color: #0003;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-black\\/20 {\n      background-color: color-mix(in oklab, var(--color-black) 20%, transparent);\n    }\n  }\n\n  .bg-black\\/25 {\n    background-color: #00000040;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-black\\/25 {\n      background-color: color-mix(in oklab, var(--color-black) 25%, transparent);\n    }\n  }\n\n  .bg-black\\/35 {\n    background-color: #00000059;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-black\\/35 {\n      background-color: color-mix(in oklab, var(--color-black) 35%, transparent);\n    }\n  }\n\n  .bg-black\\/40 {\n    background-color: #0006;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-black\\/40 {\n      background-color: color-mix(in oklab, var(--color-black) 40%, transparent);\n    }\n  }\n\n  .bg-black\\/42 {\n    background-color: #0000006b;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-black\\/42 {\n      background-color: color-mix(in oklab, var(--color-black) 42%, transparent);\n    }\n  }\n\n  .bg-black\\/45 {\n    background-color: #00000073;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-black\\/45 {\n      background-color: color-mix(in oklab, var(--color-black) 45%, transparent);\n    }\n  }\n\n  .bg-black\\/48 {\n    background-color: #0000007a;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-black\\/48 {\n      background-color: color-mix(in oklab, var(--color-black) 48%, transparent);\n    }\n  }\n\n  .bg-cyan-300 {\n    background-color: var(--color-cyan-300);\n  }\n\n  .bg-cyan-300\\/18 {\n    background-color: #53eafd2e;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-cyan-300\\/18 {\n      background-color: color-mix(in oklab, var(--color-cyan-300) 18%, transparent);\n    }\n  }\n\n  .bg-cyan-300\\/\\[0\\.08\\] {\n    background-color: #53eafd14;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-cyan-300\\/\\[0\\.08\\] {\n      background-color: color-mix(in oklab, var(--color-cyan-300) 8%, transparent);\n    }\n  }\n\n  .bg-emerald-300 {\n    background-color: var(--color-emerald-300);\n  }\n\n  .bg-emerald-300\\/18 {\n    background-color: #5ee9b52e;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-emerald-300\\/18 {\n      background-color: color-mix(in oklab, var(--color-emerald-300) 18%, transparent);\n    }\n  }\n\n  .bg-fuchsia-300 {\n    background-color: var(--color-fuchsia-300);\n  }\n\n  .bg-fuchsia-300\\/8 {\n    background-color: #f2a9ff14;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-fuchsia-300\\/8 {\n      background-color: color-mix(in oklab, var(--color-fuchsia-300) 8%, transparent);\n    }\n  }\n\n  .bg-sky-300 {\n    background-color: var(--color-sky-300);\n  }\n\n  .bg-transparent {\n    background-color: #0000;\n  }\n\n  .bg-white {\n    background-color: var(--color-white);\n  }\n\n  .bg-white\\/\\[0\\.03\\] {\n    background-color: #ffffff08;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-white\\/\\[0\\.03\\] {\n      background-color: color-mix(in oklab, var(--color-white) 3%, transparent);\n    }\n  }\n\n  .bg-white\\/\\[0\\.04\\] {\n    background-color: #ffffff0a;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-white\\/\\[0\\.04\\] {\n      background-color: color-mix(in oklab, var(--color-white) 4%, transparent);\n    }\n  }\n\n  .bg-white\\/\\[0\\.08\\] {\n    background-color: #ffffff14;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-white\\/\\[0\\.08\\] {\n      background-color: color-mix(in oklab, var(--color-white) 8%, transparent);\n    }\n  }\n\n  .bg-white\\/\\[0\\.025\\] {\n    background-color: #ffffff06;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-white\\/\\[0\\.025\\] {\n      background-color: color-mix(in oklab, var(--color-white) 2.5%, transparent);\n    }\n  }\n\n  .bg-\\[linear-gradient\\(180deg\\,rgba\\(9\\,13\\,24\\,0\\.98\\)\\,rgba\\(3\\,5\\,12\\,0\\.98\\)\\)\\] {\n    background-image: linear-gradient(#090d18fa, #03050cfa);\n  }\n\n  .bg-\\[linear-gradient\\(180deg\\,rgba\\(17\\,22\\,33\\,0\\.94\\)\\,rgba\\(5\\,8\\,16\\,0\\.98\\)\\)\\] {\n    background-image: linear-gradient(#111621f0, #050810fa);\n  }\n\n  .bg-\\[linear-gradient\\(180deg\\,rgba\\(18\\,25\\,40\\,0\\.94\\)\\,rgba\\(4\\,7\\,16\\,0\\.98\\)\\)\\] {\n    background-image: linear-gradient(#121928f0, #040710fa);\n  }\n\n  .bg-\\[radial-gradient\\(circle_at_top\\,rgba\\(93\\,173\\,255\\,0\\.14\\)\\,transparent_34\\%\\)\\,linear-gradient\\(180deg\\,rgba\\(6\\,10\\,22\\,0\\.98\\)\\,rgba\\(2\\,4\\,11\\,1\\)\\)\\] {\n    background-image: radial-gradient(circle at top, #5dadff24, #0000 34%), linear-gradient(#060a16fa, #02040b);\n  }\n\n  .bg-\\[radial-gradient\\(circle_at_top\\,rgba\\(120\\,112\\,255\\,0\\.10\\)\\,transparent_38\\%\\)\\,linear-gradient\\(180deg\\,rgba\\(5\\,8\\,18\\,1\\)\\,rgba\\(2\\,3\\,10\\,1\\)\\)\\] {\n    background-image: radial-gradient(circle at top, #7870ff1a, #0000 38%), linear-gradient(#050812, #02030a);\n  }\n\n  .mask-repeat {\n    -webkit-mask-repeat: repeat;\n    mask-repeat: repeat;\n  }\n\n  .fill-cyan-200 {\n    fill: var(--color-cyan-200);\n  }\n\n  .fill-fuchsia-200 {\n    fill: var(--color-fuchsia-200);\n  }\n\n  .p-0 {\n    padding: calc(var(--spacing) * 0);\n  }\n\n  .p-1 {\n    padding: calc(var(--spacing) * 1);\n  }\n\n  .p-2 {\n    padding: calc(var(--spacing) * 2);\n  }\n\n  .p-3 {\n    padding: calc(var(--spacing) * 3);\n  }\n\n  .p-4 {\n    padding: calc(var(--spacing) * 4);\n  }\n\n  .p-5 {\n    padding: calc(var(--spacing) * 5);\n  }\n\n  .p-6 {\n    padding: calc(var(--spacing) * 6);\n  }\n\n  .p-8 {\n    padding: calc(var(--spacing) * 8);\n  }\n\n  .px-0 {\n    padding-inline: calc(var(--spacing) * 0);\n  }\n\n  .px-2 {\n    padding-inline: calc(var(--spacing) * 2);\n  }\n\n  .px-3 {\n    padding-inline: calc(var(--spacing) * 3);\n  }\n\n  .px-4 {\n    padding-inline: calc(var(--spacing) * 4);\n  }\n\n  .px-5 {\n    padding-inline: calc(var(--spacing) * 5);\n  }\n\n  .py-1 {\n    padding-block: calc(var(--spacing) * 1);\n  }\n\n  .py-2 {\n    padding-block: calc(var(--spacing) * 2);\n  }\n\n  .py-2\\.5 {\n    padding-block: calc(var(--spacing) * 2.5);\n  }\n\n  .py-3 {\n    padding-block: calc(var(--spacing) * 3);\n  }\n\n  .py-4 {\n    padding-block: calc(var(--spacing) * 4);\n  }\n\n  .py-5 {\n    padding-block: calc(var(--spacing) * 5);\n  }\n\n  .py-6 {\n    padding-block: calc(var(--spacing) * 6);\n  }\n\n  .pt-1 {\n    padding-top: calc(var(--spacing) * 1);\n  }\n\n  .pr-1 {\n    padding-right: calc(var(--spacing) * 1);\n  }\n\n  .pr-4 {\n    padding-right: calc(var(--spacing) * 4);\n  }\n\n  .pr-10 {\n    padding-right: calc(var(--spacing) * 10);\n  }\n\n  .pr-11 {\n    padding-right: calc(var(--spacing) * 11);\n  }\n\n  .pb-5 {\n    padding-bottom: calc(var(--spacing) * 5);\n  }\n\n  .pl-4 {\n    padding-left: calc(var(--spacing) * 4);\n  }\n\n  .text-center {\n    text-align: center;\n  }\n\n  .text-left {\n    text-align: left;\n  }\n\n  .text-right {\n    text-align: right;\n  }\n\n  .font-mono {\n    font-family: var(--font-mono);\n  }\n\n  .text-2xl {\n    font-size: var(--text-2xl);\n    line-height: var(--tw-leading, var(--text-2xl--line-height));\n  }\n\n  .text-3xl {\n    font-size: var(--text-3xl);\n    line-height: var(--tw-leading, var(--text-3xl--line-height));\n  }\n\n  .text-lg {\n    font-size: var(--text-lg);\n    line-height: var(--tw-leading, var(--text-lg--line-height));\n  }\n\n  .text-sm {\n    font-size: var(--text-sm);\n    line-height: var(--tw-leading, var(--text-sm--line-height));\n  }\n\n  .text-xs {\n    font-size: var(--text-xs);\n    line-height: var(--tw-leading, var(--text-xs--line-height));\n  }\n\n  .text-\\[9px\\] {\n    font-size: 9px;\n  }\n\n  .text-\\[10px\\] {\n    font-size: 10px;\n  }\n\n  .text-\\[11px\\] {\n    font-size: 11px;\n  }\n\n  .text-\\[12px\\] {\n    font-size: 12px;\n  }\n\n  .text-\\[13px\\] {\n    font-size: 13px;\n  }\n\n  .text-\\[20px\\] {\n    font-size: 20px;\n  }\n\n  .leading-none {\n    --tw-leading: 1;\n    line-height: 1;\n  }\n\n  .leading-relaxed {\n    --tw-leading: var(--leading-relaxed);\n    line-height: var(--leading-relaxed);\n  }\n\n  .font-medium {\n    --tw-font-weight: var(--font-weight-medium);\n    font-weight: var(--font-weight-medium);\n  }\n\n  .font-semibold {\n    --tw-font-weight: var(--font-weight-semibold);\n    font-weight: var(--font-weight-semibold);\n  }\n\n  .tracking-\\[-0\\.03em\\] {\n    --tw-tracking: -.03em;\n    letter-spacing: -.03em;\n  }\n\n  .tracking-\\[-0\\.04em\\] {\n    --tw-tracking: -.04em;\n    letter-spacing: -.04em;\n  }\n\n  .tracking-\\[0\\.2em\\] {\n    --tw-tracking: .2em;\n    letter-spacing: .2em;\n  }\n\n  .tracking-\\[0\\.12em\\] {\n    --tw-tracking: .12em;\n    letter-spacing: .12em;\n  }\n\n  .tracking-\\[0\\.16em\\] {\n    --tw-tracking: .16em;\n    letter-spacing: .16em;\n  }\n\n  .tracking-\\[0\\.18em\\] {\n    --tw-tracking: .18em;\n    letter-spacing: .18em;\n  }\n\n  .tracking-\\[0\\.22em\\] {\n    --tw-tracking: .22em;\n    letter-spacing: .22em;\n  }\n\n  .tracking-\\[0\\.24em\\] {\n    --tw-tracking: .24em;\n    letter-spacing: .24em;\n  }\n\n  .text-wrap {\n    text-wrap: wrap;\n  }\n\n  .text-amber-100 {\n    color: var(--color-amber-100);\n  }\n\n  .text-amber-200 {\n    color: var(--color-amber-200);\n  }\n\n  .text-amber-200\\/78 {\n    color: #fee685c7;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-amber-200\\/78 {\n      color: color-mix(in oklab, var(--color-amber-200) 78%, transparent);\n    }\n  }\n\n  .text-blue-300 {\n    color: var(--color-blue-300);\n  }\n\n  .text-blue-300\\/70 {\n    color: #90c5ffb3;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-blue-300\\/70 {\n      color: color-mix(in oklab, var(--color-blue-300) 70%, transparent);\n    }\n  }\n\n  .text-cyan-100 {\n    color: var(--color-cyan-100);\n  }\n\n  .text-cyan-100\\/58 {\n    color: #cefafe94;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-cyan-100\\/58 {\n      color: color-mix(in oklab, var(--color-cyan-100) 58%, transparent);\n    }\n  }\n\n  .text-cyan-100\\/75 {\n    color: #cefafebf;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-cyan-100\\/75 {\n      color: color-mix(in oklab, var(--color-cyan-100) 75%, transparent);\n    }\n  }\n\n  .text-cyan-200 {\n    color: var(--color-cyan-200);\n  }\n\n  .text-cyan-200\\/70 {\n    color: #a2f4fdb3;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-cyan-200\\/70 {\n      color: color-mix(in oklab, var(--color-cyan-200) 70%, transparent);\n    }\n  }\n\n  .text-cyan-200\\/80 {\n    color: #a2f4fdcc;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-cyan-200\\/80 {\n      color: color-mix(in oklab, var(--color-cyan-200) 80%, transparent);\n    }\n  }\n\n  .text-cyan-300 {\n    color: var(--color-cyan-300);\n  }\n\n  .text-emerald-100 {\n    color: var(--color-emerald-100);\n  }\n\n  .text-emerald-300 {\n    color: var(--color-emerald-300);\n  }\n\n  .text-emerald-300\\/70 {\n    color: #5ee9b5b3;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-emerald-300\\/70 {\n      color: color-mix(in oklab, var(--color-emerald-300) 70%, transparent);\n    }\n  }\n\n  .text-fuchsia-100 {\n    color: var(--color-fuchsia-100);\n  }\n\n  .text-fuchsia-100\\/90 {\n    color: #fae8ffe6;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-fuchsia-100\\/90 {\n      color: color-mix(in oklab, var(--color-fuchsia-100) 90%, transparent);\n    }\n  }\n\n  .text-fuchsia-200 {\n    color: var(--color-fuchsia-200);\n  }\n\n  .text-fuchsia-200\\/80 {\n    color: #f6cfffcc;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-fuchsia-200\\/80 {\n      color: color-mix(in oklab, var(--color-fuchsia-200) 80%, transparent);\n    }\n  }\n\n  .text-sky-100 {\n    color: var(--color-sky-100);\n  }\n\n  .text-sky-300 {\n    color: var(--color-sky-300);\n  }\n\n  .text-slate-50 {\n    color: var(--color-slate-50);\n  }\n\n  .text-slate-100 {\n    color: var(--color-slate-100);\n  }\n\n  .text-slate-200 {\n    color: var(--color-slate-200);\n  }\n\n  .text-slate-200\\/80 {\n    color: #e2e8f0cc;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-200\\/80 {\n      color: color-mix(in oklab, var(--color-slate-200) 80%, transparent);\n    }\n  }\n\n  .text-slate-300 {\n    color: var(--color-slate-300);\n  }\n\n  .text-slate-300\\/45 {\n    color: #cad5e273;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-300\\/45 {\n      color: color-mix(in oklab, var(--color-slate-300) 45%, transparent);\n    }\n  }\n\n  .text-slate-300\\/55 {\n    color: #cad5e28c;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-300\\/55 {\n      color: color-mix(in oklab, var(--color-slate-300) 55%, transparent);\n    }\n  }\n\n  .text-slate-300\\/60 {\n    color: #cad5e299;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-300\\/60 {\n      color: color-mix(in oklab, var(--color-slate-300) 60%, transparent);\n    }\n  }\n\n  .text-slate-300\\/65 {\n    color: #cad5e2a6;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-300\\/65 {\n      color: color-mix(in oklab, var(--color-slate-300) 65%, transparent);\n    }\n  }\n\n  .text-slate-300\\/70 {\n    color: #cad5e2b3;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-300\\/70 {\n      color: color-mix(in oklab, var(--color-slate-300) 70%, transparent);\n    }\n  }\n\n  .text-slate-300\\/72 {\n    color: #cad5e2b8;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-300\\/72 {\n      color: color-mix(in oklab, var(--color-slate-300) 72%, transparent);\n    }\n  }\n\n  .text-slate-300\\/75 {\n    color: #cad5e2bf;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-300\\/75 {\n      color: color-mix(in oklab, var(--color-slate-300) 75%, transparent);\n    }\n  }\n\n  .text-slate-400 {\n    color: var(--color-slate-400);\n  }\n\n  .text-slate-400\\/74 {\n    color: #90a1b9bd;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-400\\/74 {\n      color: color-mix(in oklab, var(--color-slate-400) 74%, transparent);\n    }\n  }\n\n  .text-slate-400\\/75 {\n    color: #90a1b9bf;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-400\\/75 {\n      color: color-mix(in oklab, var(--color-slate-400) 75%, transparent);\n    }\n  }\n\n  .text-slate-400\\/80 {\n    color: #90a1b9cc;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-400\\/80 {\n      color: color-mix(in oklab, var(--color-slate-400) 80%, transparent);\n    }\n  }\n\n  .text-slate-400\\/85 {\n    color: #90a1b9d9;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-400\\/85 {\n      color: color-mix(in oklab, var(--color-slate-400) 85%, transparent);\n    }\n  }\n\n  .lowercase {\n    text-transform: lowercase;\n  }\n\n  .uppercase {\n    text-transform: uppercase;\n  }\n\n  .ordinal {\n    --tw-ordinal: ordinal;\n    font-variant-numeric: var(--tw-ordinal, ) var(--tw-slashed-zero, ) var(--tw-numeric-figure, ) var(--tw-numeric-spacing, ) var(--tw-numeric-fraction, );\n  }\n\n  .underline {\n    text-decoration-line: underline;\n  }\n\n  .opacity-0 {\n    opacity: 0;\n  }\n\n  .shadow {\n    --tw-shadow: 0 1px 3px 0 var(--tw-shadow-color, #0000001a), 0 1px 2px -1px var(--tw-shadow-color, #0000001a);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[0_10px_28px_rgba\\(0\\,0\\,0\\,0\\.22\\)\\] {\n    --tw-shadow: 0 10px 28px var(--tw-shadow-color, #00000038);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[0_10px_28px_rgba\\(0\\,0\\,0\\,0\\.26\\)\\,inset_0_1px_0_rgba\\(255\\,255\\,255\\,0\\.05\\)\\] {\n    --tw-shadow: 0 10px 28px var(--tw-shadow-color, #00000042), inset 0 1px 0 var(--tw-shadow-color, #ffffff0d);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[0_10px_28px_rgba\\(0\\,0\\,0\\,0\\.28\\)\\] {\n    --tw-shadow: 0 10px 28px var(--tw-shadow-color, #00000047);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[0_12px_28px_rgba\\(0\\,0\\,0\\,0\\.32\\)\\] {\n    --tw-shadow: 0 12px 28px var(--tw-shadow-color, #00000052);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[0_18px_40px_rgba\\(0\\,0\\,0\\,0\\.45\\)\\] {\n    --tw-shadow: 0 18px 40px var(--tw-shadow-color, #00000073);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[0_18px_42px_rgba\\(3\\,6\\,18\\,0\\.45\\)\\] {\n    --tw-shadow: 0 18px 42px var(--tw-shadow-color, #03061273);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[0_22px_40px_rgba\\(0\\,0\\,0\\,0\\.32\\)\\] {\n    --tw-shadow: 0 22px 40px var(--tw-shadow-color, #00000052);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[0_26px_80px_rgba\\(0\\,0\\,0\\,0\\.48\\)\\] {\n    --tw-shadow: 0 26px 80px var(--tw-shadow-color, #0000007a);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[0_28px_80px_rgba\\(0\\,0\\,0\\,0\\.56\\)\\] {\n    --tw-shadow: 0 28px 80px var(--tw-shadow-color, #0000008f);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[0_36px_80px_rgba\\(0\\,0\\,0\\,0\\.5\\)\\] {\n    --tw-shadow: 0 36px 80px var(--tw-shadow-color, #00000080);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[inset_0_0_0_1px_rgba\\(143\\,232\\,255\\,0\\.18\\)\\] {\n    --tw-shadow: inset 0 0 0 1px var(--tw-shadow-color, #8fe8ff2e);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[inset_0_1px_0_rgba\\(255\\,255\\,255\\,0\\.04\\)\\] {\n    --tw-shadow: inset 0 1px 0 var(--tw-shadow-color, #ffffff0a);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[inset_0_1px_0_rgba\\(255\\,255\\,255\\,0\\.08\\)\\,inset_0_-64px_80px_rgba\\(0\\,0\\,0\\,0\\.34\\)\\] {\n    --tw-shadow: inset 0 1px 0 var(--tw-shadow-color, #ffffff14), inset 0 -64px 80px var(--tw-shadow-color, #00000057);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .ring {\n    --tw-ring-shadow: var(--tw-ring-inset, ) 0 0 0 calc(1px + var(--tw-ring-offset-width)) var(--tw-ring-color, currentcolor);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .outline {\n    outline-style: var(--tw-outline-style);\n    outline-width: 1px;\n  }\n\n  .blur {\n    --tw-blur: blur(8px);\n    filter: var(--tw-blur, ) var(--tw-brightness, ) var(--tw-contrast, ) var(--tw-grayscale, ) var(--tw-hue-rotate, ) var(--tw-invert, ) var(--tw-saturate, ) var(--tw-sepia, ) var(--tw-drop-shadow, );\n  }\n\n  .invert {\n    --tw-invert: invert(100%);\n    filter: var(--tw-blur, ) var(--tw-brightness, ) var(--tw-contrast, ) var(--tw-grayscale, ) var(--tw-hue-rotate, ) var(--tw-invert, ) var(--tw-saturate, ) var(--tw-sepia, ) var(--tw-drop-shadow, );\n  }\n\n  .filter {\n    filter: var(--tw-blur, ) var(--tw-brightness, ) var(--tw-contrast, ) var(--tw-grayscale, ) var(--tw-hue-rotate, ) var(--tw-invert, ) var(--tw-saturate, ) var(--tw-sepia, ) var(--tw-drop-shadow, );\n  }\n\n  .backdrop-blur-md {\n    --tw-backdrop-blur: blur(var(--blur-md));\n    -webkit-backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );\n    backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );\n  }\n\n  .backdrop-blur-xl {\n    --tw-backdrop-blur: blur(var(--blur-xl));\n    -webkit-backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );\n    backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );\n  }\n\n  .backdrop-filter {\n    -webkit-backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );\n    backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );\n  }\n\n  .transition {\n    transition-property: color, background-color, border-color, outline-color, text-decoration-color, fill, stroke, --tw-gradient-from, --tw-gradient-via, --tw-gradient-to, opacity, box-shadow, transform, translate, scale, rotate, filter, -webkit-backdrop-filter, backdrop-filter, display, content-visibility, overlay, pointer-events;\n    transition-timing-function: var(--tw-ease, var(--default-transition-timing-function));\n    transition-duration: var(--tw-duration, var(--default-transition-duration));\n  }\n\n  .outline-none {\n    --tw-outline-style: none;\n    outline-style: none;\n  }\n\n  .select-none {\n    -webkit-user-select: none;\n    user-select: none;\n  }\n\n  .selection\\:bg-cyan-300\\/25 ::selection {\n    background-color: #53eafd40;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .selection\\:bg-cyan-300\\/25 ::selection {\n      background-color: color-mix(in oklab, var(--color-cyan-300) 25%, transparent);\n    }\n  }\n\n  .selection\\:bg-cyan-300\\/25::selection {\n    background-color: #53eafd40;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .selection\\:bg-cyan-300\\/25::selection {\n      background-color: color-mix(in oklab, var(--color-cyan-300) 25%, transparent);\n    }\n  }\n\n  @media (hover: hover) {\n    .hover\\:border-amber-200\\/30:hover {\n      border-color: #fee6854d;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:border-amber-200\\/30:hover {\n        border-color: color-mix(in oklab, var(--color-amber-200) 30%, transparent);\n      }\n    }\n\n    .hover\\:border-cyan-200\\/25:hover {\n      border-color: #a2f4fd40;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:border-cyan-200\\/25:hover {\n        border-color: color-mix(in oklab, var(--color-cyan-200) 25%, transparent);\n      }\n    }\n\n    .hover\\:border-cyan-200\\/30:hover {\n      border-color: #a2f4fd4d;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:border-cyan-200\\/30:hover {\n        border-color: color-mix(in oklab, var(--color-cyan-200) 30%, transparent);\n      }\n    }\n\n    .hover\\:border-white\\/12:hover {\n      border-color: #ffffff1f;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:border-white\\/12:hover {\n        border-color: color-mix(in oklab, var(--color-white) 12%, transparent);\n      }\n    }\n\n    .hover\\:border-white\\/18:hover {\n      border-color: #ffffff2e;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:border-white\\/18:hover {\n        border-color: color-mix(in oklab, var(--color-white) 18%, transparent);\n      }\n    }\n\n    .hover\\:bg-black\\/24:hover {\n      background-color: #0000003d;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:bg-black\\/24:hover {\n        background-color: color-mix(in oklab, var(--color-black) 24%, transparent);\n      }\n    }\n\n    .hover\\:bg-white\\/\\[0\\.04\\]:hover {\n      background-color: #ffffff0a;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:bg-white\\/\\[0\\.04\\]:hover {\n        background-color: color-mix(in oklab, var(--color-white) 4%, transparent);\n      }\n    }\n\n    .hover\\:bg-white\\/\\[0\\.05\\]:hover {\n      background-color: #ffffff0d;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:bg-white\\/\\[0\\.05\\]:hover {\n        background-color: color-mix(in oklab, var(--color-white) 5%, transparent);\n      }\n    }\n\n    .hover\\:text-cyan-100:hover {\n      color: var(--color-cyan-100);\n    }\n\n    .hover\\:text-slate-100:hover {\n      color: var(--color-slate-100);\n    }\n  }\n\n  .active\\:cursor-grabbing:active {\n    cursor: grabbing;\n  }\n\n  .disabled\\:opacity-35:disabled {\n    opacity: .35;\n  }\n\n  .disabled\\:opacity-40:disabled {\n    opacity: .4;\n  }\n\n  @media (min-width: 40rem) {\n    .sm\\:grid-cols-2 {\n      grid-template-columns: repeat(2, minmax(0, 1fr));\n    }\n  }\n\n  @media (min-width: 48rem) {\n    .md\\:grid-cols-2 {\n      grid-template-columns: repeat(2, minmax(0, 1fr));\n    }\n  }\n\n  @media (min-width: 64rem) {\n    .lg\\:grid-cols-2 {\n      grid-template-columns: repeat(2, minmax(0, 1fr));\n    }\n  }\n\n  @media (min-width: 80rem) {\n    .xl\\:grid-cols-\\[minmax\\(0\\,1\\.1fr\\)_84px_minmax\\(0\\,1\\.2fr\\)_minmax\\(290px\\,auto\\)_44px\\] {\n      grid-template-columns: minmax(0, 1.1fr) 84px minmax(0, 1.2fr) minmax(290px, auto) 44px;\n    }\n\n    .xl\\:grid-cols-\\[minmax\\(0\\,1\\.15fr\\)_minmax\\(0\\,0\\.85fr\\)\\] {\n      grid-template-columns: minmax(0, 1.15fr) minmax(0, .85fr);\n    }\n  }\n}\n\n:host {\n  color-scheme: dark;\n  width: 100%;\n  height: 100%;\n  display: block;\n}\n\n* {\n  box-sizing: border-box;\n}\n\nbutton, input, select {\n  font: inherit;\n}\n\n.cosimo-surface {\n  background: radial-gradient(circle at top, #7a8eff2e, #0000 34%), linear-gradient(#060a16fa, #03050c);\n}\n\n.cosimo-stage {\n  background: linear-gradient(#ffffff05 1px, #0000 1px) 0 0 / 24px 24px, linear-gradient(90deg, #ffffff05 1px, #0000 1px) 0 0 / 24px 24px, radial-gradient(circle at top, #7a8eff33, #0000 38%), linear-gradient(#050915fa, #02040b);\n}\n\n.cosimo-stage:after {\n  content: "";\n  pointer-events: none;\n  position: absolute;\n  inset: 0;\n  box-shadow: inset 0 1px #ffffff14, inset 0 -48px 64px #00000059;\n}\n\n.cosimo-range {\n  appearance: none;\n  background: linear-gradient(90deg, #5463c973, #f56cb673);\n  border-radius: 999px;\n  outline: none;\n  width: 100%;\n  height: 10px;\n}\n\n.cosimo-range::-webkit-slider-thumb {\n  appearance: none;\n  background: linear-gradient(#ffd8a6 0%, #f56cb6 100%);\n  border: 0;\n  border-radius: 999px;\n  width: 22px;\n  height: 22px;\n  box-shadow: 0 6px 18px #f56cb659;\n}\n\n.cosimo-range::-moz-range-thumb {\n  background: linear-gradient(#ffd8a6 0%, #f56cb6 100%);\n  border: 0;\n  border-radius: 999px;\n  width: 22px;\n  height: 22px;\n  box-shadow: 0 6px 18px #f56cb659;\n}\n\n.cosimo-select, .cosimo-button {\n  color: #eef2f5;\n  background: #ffffff0a;\n  border: 1px solid #ffffff14;\n}\n\n.cosimo-mod-amount-field {\n  justify-content: flex-end;\n  align-items: center;\n  gap: 12px;\n  min-width: 0;\n  display: flex;\n}\n\n.cosimo-mod-direction-toggle {\n  background: #ffffff0a;\n  border: 1px solid #ffffff14;\n  border-radius: 18px;\n  gap: 4px;\n  padding: 4px;\n  display: grid;\n}\n\n.cosimo-mod-direction-button {\n  color: #e2e8f0b8;\n  background: none;\n  border: 0;\n  border-radius: 12px;\n  width: 28px;\n  height: 28px;\n  font-size: 15px;\n  font-weight: 700;\n  line-height: 1;\n}\n\n.cosimo-mod-direction-button[data-active="true"] {\n  color: #cffafe;\n  background: #67e8f929;\n}\n\n.cosimo-mod-knob {\n  flex: none;\n  width: 72px;\n  height: 72px;\n  position: relative;\n}\n\n.cosimo-mod-knob-stack {\n  align-items: center;\n  gap: 12px;\n  min-width: 0;\n  display: flex;\n}\n\n.cosimo-mod-knob-track {\n  border: 1px solid #ffffff0f;\n  border-radius: 999px;\n  width: 100%;\n  height: 100%;\n  position: relative;\n  box-shadow: inset 0 1px #ffffff14, 0 10px 24px #00000047;\n}\n\n.cosimo-mod-knob-core {\n  color: #cffafe;\n  background: radial-gradient(circle at 35% 28%, #ffffff1a, #0000 38%), linear-gradient(#0c1222fa, #060914fa);\n  border-radius: 999px;\n  place-items: center;\n  display: grid;\n  position: absolute;\n  inset: 9px;\n}\n\n.cosimo-mod-knob-percent {\n  letter-spacing: .12em;\n  text-transform: uppercase;\n  font-size: 11px;\n  font-weight: 700;\n}\n\n.cosimo-mod-knob-indicator {\n  transform-origin: 50% 29px;\n  pointer-events: none;\n  background: linear-gradient(#fef3c7 0%, #f472b6 100%);\n  border-radius: 999px;\n  width: 3px;\n  height: 21px;\n  position: absolute;\n  top: 7px;\n  left: 50%;\n  box-shadow: 0 0 12px #f472b65c;\n}\n\n.cosimo-mod-knob-input {\n  opacity: 0;\n  cursor: ew-resize;\n  width: 100%;\n  height: 100%;\n  margin: 0;\n  position: absolute;\n  inset: 0;\n}\n\n.cosimo-mod-amount-copy {\n  gap: 2px;\n  min-width: 0;\n  display: grid;\n}\n\n.cosimo-mod-amount-readout {\n  letter-spacing: .06em;\n  color: #e2e8f0;\n  white-space: nowrap;\n  font-size: 12px;\n  font-weight: 600;\n}\n\n.cosimo-mod-amount-caption {\n  letter-spacing: .18em;\n  text-transform: uppercase;\n  color: #94a3b8bd;\n  font-size: 10px;\n}\n\n.cosimo-grid-line {\n  stroke: #ffffff14;\n  stroke-width: 1px;\n}\n\n.cosimo-curve-fill {\n  fill: #87d7f514;\n}\n\n.cosimo-curve-line {\n  fill: none;\n  stroke: #87d7f5;\n  stroke-width: 3px;\n  stroke-linecap: round;\n  stroke-linejoin: round;\n}\n\n.cosimo-curve-fill-muted {\n  fill: #e1e7f00a;\n}\n\n.cosimo-curve-line-muted {\n  stroke: #e1e7f061;\n}\n\n.cosimo-curve-line-highlight {\n  stroke: #32f0bc;\n}\n\n.cosimo-mseg-point-default {\n  fill: #87d7f5;\n  stroke: #050913;\n  stroke-width: 2px;\n}\n\n.cosimo-mseg-point-selected {\n  fill: #f5d0fe;\n  stroke: #050913;\n  stroke-width: 3px;\n}\n\n.cosimo-mseg-point-highlight {\n  fill: #32f0bc;\n  stroke: #050913;\n  stroke-width: 2px;\n}\n\n.cosimo-mseg-point-muted {\n  fill: #e1e7f0c7;\n  stroke: #050913;\n  stroke-width: 2px;\n  opacity: .62;\n}\n\n@property --tw-translate-x {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0;\n}\n\n@property --tw-translate-y {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0;\n}\n\n@property --tw-translate-z {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0;\n}\n\n@property --tw-rotate-x {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-rotate-y {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-rotate-z {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-skew-x {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-skew-y {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-border-style {\n  syntax: "*";\n  inherits: false;\n  initial-value: solid;\n}\n\n@property --tw-leading {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-font-weight {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-tracking {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-ordinal {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-slashed-zero {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-numeric-figure {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-numeric-spacing {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-numeric-fraction {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-shadow {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0 0 #0000;\n}\n\n@property --tw-shadow-color {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-shadow-alpha {\n  syntax: "<percentage>";\n  inherits: false;\n  initial-value: 100%;\n}\n\n@property --tw-inset-shadow {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0 0 #0000;\n}\n\n@property --tw-inset-shadow-color {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-inset-shadow-alpha {\n  syntax: "<percentage>";\n  inherits: false;\n  initial-value: 100%;\n}\n\n@property --tw-ring-color {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-ring-shadow {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0 0 #0000;\n}\n\n@property --tw-inset-ring-color {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-inset-ring-shadow {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0 0 #0000;\n}\n\n@property --tw-ring-inset {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-ring-offset-width {\n  syntax: "<length>";\n  inherits: false;\n  initial-value: 0;\n}\n\n@property --tw-ring-offset-color {\n  syntax: "*";\n  inherits: false;\n  initial-value: #fff;\n}\n\n@property --tw-ring-offset-shadow {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0 0 #0000;\n}\n\n@property --tw-outline-style {\n  syntax: "*";\n  inherits: false;\n  initial-value: solid;\n}\n\n@property --tw-blur {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-brightness {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-contrast {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-grayscale {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-hue-rotate {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-invert {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-opacity {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-saturate {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-sepia {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-drop-shadow {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-drop-shadow-color {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-drop-shadow-alpha {\n  syntax: "<percentage>";\n  inherits: false;\n  initial-value: 100%;\n}\n\n@property --tw-drop-shadow-size {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-blur {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-brightness {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-contrast {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-grayscale {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-hue-rotate {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-invert {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-opacity {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-saturate {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-sepia {\n  syntax: "*";\n  inherits: false\n}\n';
 function assert$1(condition, message) {
   if (!condition) {
     throw new Error(message);
@@ -12929,10 +12929,6 @@ const MSEG_DEFAULT_NAME = "MSEG 1";
 const MSEG_DEFAULT_DEPTH = 1;
 const MSEG_RATE_MIN_SECONDS = 0;
 const MSEG_RATE_MAX_SECONDS = 2;
-const MSEG_RATE_KIND_SECONDS = 0;
-const MSEG_NOTE_OFF_POLICY_FINISH_LOOP = 0;
-const MSEG_NOTE_OFF_POLICY_IMMEDIATE = 1;
-const MSEG_NOTE_OFF_POLICY_IGNORE = 2;
 const MSEG_POINT_HIT_RADIUS_PX = 16;
 const MSEG_SEGMENT_HIT_RADIUS_PX = 10;
 const MSEG_POINT_RADIUS_PX = 8;
@@ -12946,17 +12942,17 @@ const MSEG_NOTE_OFF_POLICY_VALUES = /* @__PURE__ */ new Set([
   "immediate",
   "ignore"
 ]);
-function clamp$7(value, min, max) {
+function clamp$8(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 function almostEqual(left, right, epsilon = 1e-12) {
   return Math.abs(left - right) <= epsilon;
 }
 function clampCurvePower(value) {
-  return clamp$7(Number.isFinite(value) ? value : 0, -MSEG_CURVE_POWER_LIMIT, MSEG_CURVE_POWER_LIMIT);
+  return clamp$8(Number.isFinite(value) ? value : 0, -MSEG_CURVE_POWER_LIMIT, MSEG_CURVE_POWER_LIMIT);
 }
 function clamp01(value) {
-  return clamp$7(Number.isFinite(value) ? value : 0, 0, 1);
+  return clamp$8(Number.isFinite(value) ? value : 0, 0, 1);
 }
 function createDefaultMsegShape(name = MSEG_DEFAULT_NAME) {
   return {
@@ -12984,12 +12980,9 @@ function createDefaultMsegPlayback() {
     holdFinalValue: true
   };
 }
-function clampMsegDepth(value) {
-  return clamp$7(Number.isFinite(value) ? value : 0, -1, 1);
-}
 function clampMsegRateSeconds(value) {
   const numericValue = Number(value);
-  return clamp$7(
+  return clamp$8(
     Number.isFinite(numericValue) ? numericValue : 1,
     MSEG_RATE_MIN_SECONDS,
     MSEG_RATE_MAX_SECONDS
@@ -13133,32 +13126,8 @@ function normalizeMsegShape(shape = createDefaultMsegShape()) {
 function serializeMsegShape(shape) {
   return JSON.stringify(normalizeMsegShape(shape));
 }
-function deserializeMsegShape(value) {
-  if (typeof value !== "string" || !value.trim()) {
-    return createDefaultMsegShape();
-  }
-  try {
-    return normalizeMsegShape(JSON.parse(value));
-  } catch {
-    return createDefaultMsegShape();
-  }
-}
 function serializeMsegPlayback(playback) {
   return JSON.stringify(normalizeMsegPlayback(playback));
-}
-function deserializeMsegPlayback(value) {
-  if (typeof value !== "string" || !value.trim()) {
-    return createDefaultMsegPlayback();
-  }
-  try {
-    return normalizeMsegPlayback(JSON.parse(value));
-  } catch {
-    return createDefaultMsegPlayback();
-  }
-}
-function deserializeMsegDepth(value) {
-  const numericValue = Number(value);
-  return clampMsegDepth(Number.isFinite(numericValue) ? numericValue : MSEG_DEFAULT_DEPTH);
 }
 function powerScale(value, power) {
   if (Math.abs(power) < 0.01) {
@@ -13186,7 +13155,7 @@ function distanceSquaredToLineSegment(targetX, targetY, fromX, fromY, toX, toY) 
     const pointDeltaY2 = targetY - fromY;
     return pointDeltaX2 * pointDeltaX2 + pointDeltaY2 * pointDeltaY2;
   }
-  const projection = clamp$7(
+  const projection = clamp$8(
     ((targetX - fromX) * deltaX + (targetY - fromY) * deltaY) / segmentLengthSquared,
     0,
     1
@@ -13386,9 +13355,9 @@ function deriveMsegSegmentCurvePower(shape, segmentIndex, x, y) {
   if (width <= 1e-12 || Math.abs(deltaY) <= 1e-12) {
     return 0;
   }
-  const localX = clamp$7(clamp01(Number(x)), from.x, to.x);
-  const t = clamp$7((localX - from.x) / width, 1e-4, 1 - 1e-4);
-  const targetCurvedT = clamp$7((Number(y) - from.y) / deltaY, 1e-4, 1 - 1e-4);
+  const localX = clamp$8(clamp01(Number(x)), from.x, to.x);
+  const t = clamp$8((localX - from.x) / width, 1e-4, 1 - 1e-4);
+  const targetCurvedT = clamp$8((Number(y) - from.y) / deltaY, 1e-4, 1 - 1e-4);
   if (!Number.isFinite(targetCurvedT) || almostEqual(targetCurvedT, t, 1e-4)) {
     return 0;
   }
@@ -13396,7 +13365,7 @@ function deriveMsegSegmentCurvePower(shape, segmentIndex, x, y) {
   let high = MSEG_CURVE_POWER_LIMIT;
   let lowValue = powerScale(t, low);
   let highValue = powerScale(t, high);
-  const target = clamp$7(targetCurvedT, Math.min(lowValue, highValue), Math.max(lowValue, highValue));
+  const target = clamp$8(targetCurvedT, Math.min(lowValue, highValue), Math.max(lowValue, highValue));
   const ascending = lowValue <= highValue;
   for (let iteration = 0; iteration < 32; iteration += 1) {
     const middle = (low + high) * 0.5;
@@ -13413,19 +13382,6 @@ function deriveMsegSegmentCurvePower(shape, segmentIndex, x, y) {
     }
   }
   return clampCurvePower((low + high) * 0.5);
-}
-function toMsegPlaybackConfigEvent(playback) {
-  const normalizedPlayback = normalizeMsegPlayback(playback);
-  return {
-    seconds: normalizedPlayback.rate.seconds,
-    holdFinalValue: normalizedPlayback.holdFinalValue,
-    rateKind: MSEG_RATE_KIND_SECONDS,
-    loopEnabled: normalizedPlayback.loop !== null,
-    loopStart: normalizedPlayback.loop?.startX ?? 0,
-    loopEnd: normalizedPlayback.loop?.endX ?? 0,
-    noteOffPolicy: normalizedPlayback.noteOffPolicy === "immediate" ? MSEG_NOTE_OFF_POLICY_IMMEDIATE : normalizedPlayback.noteOffPolicy === "ignore" ? MSEG_NOTE_OFF_POLICY_IGNORE : MSEG_NOTE_OFF_POLICY_FINISH_LOOP,
-    legatoRestarts: normalizedPlayback.legatoRestarts
-  };
 }
 function msegShapesEqual(left, right) {
   return serializeMsegShape(left) === serializeMsegShape(right);
@@ -13466,7 +13422,7 @@ function moveMsegPoint(shape, pointIndex, x, y) {
   } else if (pointIndex === points.length - 1) {
     moved.x = 1;
   } else {
-    moved.x = clamp$7(clamp01(Number(x)), previousX, nextX);
+    moved.x = clamp$8(clamp01(Number(x)), previousX, nextX);
   }
   points[pointIndex] = moved;
   return normalizeMsegShape({
@@ -13511,28 +13467,28 @@ const WARP_MODE_OFF$1 = 0;
 const WARP_MODE_MIRROR$1 = 4;
 const FILTER_CUTOFF_MIN_HZ$1 = 20;
 const FILTER_CUTOFF_MAX_HZ$1 = 2e4;
-const FILTER_Q_MIN$1 = 0.1;
-const FILTER_Q_MAX$1 = 20;
-function clamp$6(value, min, max) {
+const FILTER_Q_MIN$2 = 0.1;
+const FILTER_Q_MAX$2 = 20;
+function clamp$7(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 function clampFilterCutoffHz$1(value) {
-  return clamp$6(Number(value) || 0, FILTER_CUTOFF_MIN_HZ$1, FILTER_CUTOFF_MAX_HZ$1);
+  return clamp$7(Number(value) || 0, FILTER_CUTOFF_MIN_HZ$1, FILTER_CUTOFF_MAX_HZ$1);
 }
 function clampFilterQ$1(value) {
-  return clamp$6(Number(value) || 0, FILTER_Q_MIN$1, FILTER_Q_MAX$1);
+  return clamp$7(Number(value) || 0, FILTER_Q_MIN$2, FILTER_Q_MAX$2);
 }
 function clampFilterMode$1(value) {
-  return clamp$6(Math.round(Number(value) || 0), FILTER_MODE_OFF$1, FILTER_MODE_PEAK$1);
+  return clamp$7(Math.round(Number(value) || 0), FILTER_MODE_OFF$1, FILTER_MODE_PEAK$1);
 }
 function clampWarpMode(value) {
-  return clamp$6(Math.round(Number(value) || 0), WARP_MODE_OFF$1, WARP_MODE_MIRROR$1);
+  return clamp$7(Math.round(Number(value) || 0), WARP_MODE_OFF$1, WARP_MODE_MIRROR$1);
 }
 function clampWarpAmount(value) {
-  return clamp$6(Number(value) || 0, 0, 1);
+  return clamp$7(Number(value) || 0, 0, 1);
 }
 function clampDisplayPosition(value) {
-  return clamp$6(Number(value) || 0, 0, 1);
+  return clamp$7(Number(value) || 0, 0, 1);
 }
 function mapDisplayDragToPosition(startValue, startClientY, nextClientY, dragSpan) {
   const safeSpan = Math.max(1, Number(dragSpan) || 0);
@@ -13790,7 +13746,7 @@ const WARP_MODE_PWM = 2;
 const WARP_MODE_ASYM = 3;
 const WARP_MODE_MIRROR = 4;
 const DEFAULT_WAVETABLE_THEME = createDefaultWavetableTheme();
-function clamp$5(value, min, max) {
+function clamp$6(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 function requestNextAnimationFrame(callback) {
@@ -13834,10 +13790,10 @@ function assertFrames(frames) {
   }
 }
 function resolveWarpMode(rawMode) {
-  return clamp$5(Math.round(Number(rawMode) || 0), WARP_MODE_OFF, WARP_MODE_MIRROR);
+  return clamp$6(Math.round(Number(rawMode) || 0), WARP_MODE_OFF, WARP_MODE_MIRROR);
 }
 function isIdentityWarp(warpMode, warpAmount) {
-  const clampedAmount = clamp$5(Number(warpAmount) || 0, 0, 1);
+  const clampedAmount = clamp$6(Number(warpAmount) || 0, 0, 1);
   if (warpMode <= WARP_MODE_OFF) {
     return true;
   }
@@ -13856,46 +13812,46 @@ function isIdentityWarp(warpMode, warpAmount) {
   return true;
 }
 function curvedWarpRight(phase, amount) {
-  const clampedPhase = clamp$5(Number(phase) || 0, 0, 1);
-  const clampedAmount = clamp$5(Number(amount) || 0, 0, 1);
+  const clampedPhase = clamp$6(Number(phase) || 0, 0, 1);
+  const clampedAmount = clamp$6(Number(amount) || 0, 0, 1);
   const exponent = Math.pow(2, 4 * clampedAmount);
   return Math.pow(clampedPhase, exponent);
 }
 function curvedWarpLeft(phase, amount) {
-  const clampedPhase = clamp$5(Number(phase) || 0, 0, 1);
-  const clampedAmount = clamp$5(Number(amount) || 0, 0, 1);
+  const clampedPhase = clamp$6(Number(phase) || 0, 0, 1);
+  const clampedAmount = clamp$6(Number(amount) || 0, 0, 1);
   const exponent = Math.pow(2, 4 * clampedAmount);
   return 1 - Math.pow(1 - clampedPhase, exponent);
 }
 function curvedAsymSigned(phase, dial) {
-  const clampedDial = clamp$5(Number(dial) || 0, 0, 1);
+  const clampedDial = clamp$6(Number(dial) || 0, 0, 1);
   const signedAmount = 2 * clampedDial - 1;
   const magnitude = Math.abs(signedAmount);
   return signedAmount >= 0 ? curvedWarpRight(phase, magnitude) : curvedWarpLeft(phase, magnitude);
 }
 function linearSkewSigned(phase, dial) {
-  const clampedPhase = clamp$5(Number(phase) || 0, 0, 1);
-  const clampedDial = clamp$5(Number(dial) || 0, 0, 1);
+  const clampedPhase = clamp$6(Number(phase) || 0, 0, 1);
+  const clampedDial = clamp$6(Number(dial) || 0, 0, 1);
   const signedAmount = 2 * clampedDial - 1;
-  const split = clamp$5(0.5 + 0.48 * signedAmount, 0.02, 0.98);
+  const split = clamp$6(0.5 + 0.48 * signedAmount, 0.02, 0.98);
   if (clampedPhase < split) {
     return 0.5 * (clampedPhase / split);
   }
   return 0.5 + 0.5 * ((clampedPhase - split) / (1 - split));
 }
 function mirrorBasePhase(phase) {
-  const clampedPhase = clamp$5(Number(phase) || 0, 0, 1);
+  const clampedPhase = clamp$6(Number(phase) || 0, 0, 1);
   if (clampedPhase < 0.5) {
     return clampedPhase * 2;
   }
   return 2 - 2 * clampedPhase;
 }
 function pwmActivePortion(amount) {
-  const clampedAmount = clamp$5(Number(amount) || 0, 0, 1);
+  const clampedAmount = clamp$6(Number(amount) || 0, 0, 1);
   return 1 - (1 - 0.02) * clampedAmount;
 }
 function resolveDisplayWarpPhase(warpMode, warpAmount, phase) {
-  const clampedPhase = clamp$5(Number(phase) || 0, 0, 1);
+  const clampedPhase = clamp$6(Number(phase) || 0, 0, 1);
   const result = {
     shouldLookup: true,
     phase: clampedPhase
@@ -13903,7 +13859,7 @@ function resolveDisplayWarpPhase(warpMode, warpAmount, phase) {
   if (warpMode <= WARP_MODE_OFF || clampedPhase >= 1) {
     return result;
   }
-  const clampedAmount = clamp$5(Number(warpAmount) || 0, 0, 1);
+  const clampedAmount = clamp$6(Number(warpAmount) || 0, 0, 1);
   if (warpMode === WARP_MODE_BEND) {
     const invertedDial = 1 - clampedAmount;
     if (clampedPhase < 0.5) {
@@ -13933,7 +13889,7 @@ function resolveDisplayWarpPhase(warpMode, warpAmount, phase) {
   return result;
 }
 function sampleDisplayFrame(frame, phase) {
-  const safePhase = clamp$5(Number(phase) || 0, 0, 1);
+  const safePhase = clamp$6(Number(phase) || 0, 0, 1);
   const frameLength = frame.length;
   if (frameLength === 0) {
     return 0;
@@ -14044,10 +14000,10 @@ function createCamera() {
 }
 function createViewportPadding(width, height) {
   return {
-    left: clamp$5(width * 0.06, 22, 48),
-    right: clamp$5(width * 0.06, 22, 48),
-    top: clamp$5(height * 0.1, 20, 56),
-    bottom: clamp$5(height * 0.09, 20, 52)
+    left: clamp$6(width * 0.06, 22, 48),
+    right: clamp$6(width * 0.06, 22, 48),
+    top: clamp$6(height * 0.1, 20, 56),
+    bottom: clamp$6(height * 0.09, 20, 52)
   };
 }
 function projectWorldPoint(point, camera) {
@@ -14101,10 +14057,10 @@ function createProjection(points, width, height) {
   };
 }
 function getSurfacePointCount(width, sampleCount) {
-  return clamp$5(Math.round(width / 10), 64, Math.min(128, sampleCount));
+  return clamp$6(Math.round(width / 10), 64, Math.min(128, sampleCount));
 }
 function getContourPointCount(width, sampleCount) {
-  return clamp$5(Math.round(width / 4), 128, Math.min(256, sampleCount));
+  return clamp$6(Math.round(width / 4), 128, Math.min(256, sampleCount));
 }
 function createObjectPoints(samples, depth) {
   const points = new Array(samples.length);
@@ -14279,8 +14235,8 @@ function createSurfaceBands(projectedFrames) {
       const lightDirection = normaliseVector({ x: -0.2, y: 0.95, z: -0.5 });
       const averageCameraDepth = quad.reduce((total, point) => total + point.cameraDepth, 0) / quad.length;
       const depthNormalized = (frontFrame.depthNormalized + backFrame.depthNormalized) * 0.5;
-      const slopeLight = clamp$5((dotProduct(surfaceNormal, lightDirection) + 1) * 0.5, 0, 1);
-      const ridgeAmount = clamp$5(
+      const slopeLight = clamp$6((dotProduct(surfaceNormal, lightDirection) + 1) * 0.5, 0, 1);
+      const ridgeAmount = clamp$6(
         Math.abs(frontFrame.samples[sampleIndex + 1] - frontFrame.samples[sampleIndex]) * 0.95 + Math.abs(backFrame.samples[sampleIndex + 1] - backFrame.samples[sampleIndex]) * 0.95,
         0,
         1
@@ -14305,7 +14261,7 @@ function createSurfaceRibs(projectedFrames) {
   if (sampleCount < 3) {
     return [];
   }
-  const desiredRibCount = clamp$5(Math.round(sampleCount / 10), 8, 14);
+  const desiredRibCount = clamp$6(Math.round(sampleCount / 10), 8, 14);
   const selectedColumns = /* @__PURE__ */ new Set([0, sampleCount - 1]);
   for (let ribIndex = 1; ribIndex < desiredRibCount - 1; ribIndex += 1) {
     selectedColumns.add(
@@ -14348,7 +14304,7 @@ function createInterpolatedSurfaceSlices(sourceFrames, camera, projection) {
   if (frameCount === 0) {
     return [];
   }
-  const sliceCount = clamp$5(frameCount * 3 - 2, 17, 41);
+  const sliceCount = clamp$6(frameCount * 3 - 2, 17, 41);
   const slices = [];
   for (let sliceIndex = 0; sliceIndex < sliceCount; sliceIndex += 1) {
     const framePosition = sliceIndex * (frameCount - 1) / Math.max(1, sliceCount - 1);
@@ -14389,7 +14345,7 @@ function createCurrentSlice(staticScene, frameState) {
   const lowFrame = staticScene.contourFrames[frameState.frameLo];
   const highFrame = staticScene.contourFrames[frameState.frameHi];
   const warpMode = resolveWarpMode(frameState.warpMode);
-  const warpAmount = clamp$5(Number(frameState.warpAmount) || 0, 0, 1);
+  const warpAmount = clamp$6(Number(frameState.warpAmount) || 0, 0, 1);
   const blendedSamples = isIdentityWarp(warpMode, warpAmount) ? buildInterpolatedFrame(lowFrame.samples, highFrame.samples, frameState.frameT) : buildWarpedFrame(lowFrame.samples, highFrame.samples, frameState.frameT, warpMode, warpAmount);
   const depth = getSceneDepth(frameState.frameIndex, staticScene.frameCount);
   const objectPoints = createObjectPoints(blendedSamples, depth);
@@ -14403,8 +14359,8 @@ function createCurrentSlice(staticScene, frameState) {
   const labelAnchor = points[Math.floor(points.length * 0.78)] ?? points[points.length - 1];
   const label = {
     text: buildCurrentSliceLabel(frameState, staticScene.frameCount),
-    x: clamp$5(labelAnchor.x + 14, 18, staticScene.width - 236),
-    y: clamp$5(labelAnchor.y - 18, 24, staticScene.height - 24)
+    x: clamp$6(labelAnchor.x + 14, 18, staticScene.width - 236),
+    y: clamp$6(labelAnchor.y - 18, 24, staticScene.height - 24)
   };
   return {
     frameState,
@@ -14419,7 +14375,7 @@ function createCurrentSlice(staticScene, frameState) {
 }
 function buildCurrentSliceLabel(frameState, frameCount) {
   const warpMode = resolveWarpMode(frameState.warpMode);
-  const warpAmount = clamp$5(Number(frameState.warpAmount) || 0, 0, 1);
+  const warpAmount = clamp$6(Number(frameState.warpAmount) || 0, 0, 1);
   const baseLabel = `Frame ${frameState.frameIndex.toFixed(2)} / ${frameCount - 1}`;
   if (isIdentityWarp(warpMode, warpAmount)) {
     return baseLabel;
@@ -14443,7 +14399,7 @@ function buildCurrentSliceLabel(frameState, frameCount) {
 }
 function createFrameState(frameCount, position, warpMode = 0, warpAmount = 0) {
   const safeFrameCount = Math.max(1, Number(frameCount) || 0);
-  const clampedPosition = clamp$5(Number(position) || 0, 0, 1);
+  const clampedPosition = clamp$6(Number(position) || 0, 0, 1);
   const frameIndex = clampedPosition * (safeFrameCount - 1);
   const frameLo = Math.floor(frameIndex);
   const frameHi = Math.min(frameLo + 1, safeFrameCount - 1);
@@ -14456,7 +14412,7 @@ function createFrameState(frameCount, position, warpMode = 0, warpAmount = 0) {
     frameHi,
     frameT,
     warpMode: resolveWarpMode(warpMode),
-    warpAmount: clamp$5(Number(warpAmount) || 0, 0, 1)
+    warpAmount: clamp$6(Number(warpAmount) || 0, 0, 1)
   };
 }
 function decimateFrame(frame, targetPointCount) {
@@ -14618,7 +14574,7 @@ function drawWavetableModel(context, model, theme = DEFAULT_WAVETABLE_THEME) {
     context.restore();
   }
   for (const contour of model.contours) {
-    const strokeColour = mixRGB(theme.frameColor, theme.backgroundRGB, clamp$5(contour.colourMix, 0, 0.92));
+    const strokeColour = mixRGB(theme.frameColor, theme.backgroundRGB, clamp$6(contour.colourMix, 0, 0.92));
     context.save();
     context.strokeStyle = toRGBA(strokeColour, contour.alpha);
     context.lineWidth = contour.lineWidth;
@@ -14676,12 +14632,12 @@ class CanvasWavetableDisplay {
     this.queueRender();
   }
   setPosition(position) {
-    this.position = clamp$5(Number(position) || 0, 0, 1);
+    this.position = clamp$6(Number(position) || 0, 0, 1);
     this.queueRender();
   }
   setWarp(mode, amount) {
     this.warpMode = resolveWarpMode(mode);
-    this.warpAmount = clamp$5(Number(amount) || 0, 0, 1);
+    this.warpAmount = clamp$6(Number(amount) || 0, 0, 1);
     this.queueRender();
   }
   resize(width, height, devicePixelRatio = 1) {
@@ -14753,8 +14709,8 @@ class CanvasWavetableDisplay {
 }
 const FILTER_CUTOFF_MIN_HZ = 20;
 const FILTER_CUTOFF_MAX_HZ = 2e4;
-const FILTER_Q_MIN = 0.1;
-const FILTER_Q_MAX = 20;
+const FILTER_Q_MIN$1 = 0.1;
+const FILTER_Q_MAX$1 = 20;
 const FILTER_RESPONSE_POINT_COUNT = 80;
 const FILTER_RESPONSE_FFT_WARMUP_CYCLES = 10;
 const FILTER_RESPONSE_FFT_MEASURE_CYCLES = 6;
@@ -14764,27 +14720,37 @@ const FILTER_MODE_HIGHPASS = 2;
 const FILTER_MODE_BANDPASS = 3;
 const FILTER_MODE_NOTCH = 4;
 const FILTER_MODE_PEAK = 5;
-function clamp$4(value, min, max) {
+function clamp$5(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 function clampFilterMode(value) {
-  return clamp$4(Math.round(Number(value) || 0), FILTER_MODE_OFF, FILTER_MODE_PEAK);
+  return clamp$5(Math.round(Number(value) || 0), FILTER_MODE_OFF, FILTER_MODE_PEAK);
 }
 function clampFilterCutoffHz(value) {
-  return clamp$4(Number(value) || FILTER_CUTOFF_MIN_HZ, FILTER_CUTOFF_MIN_HZ, FILTER_CUTOFF_MAX_HZ);
+  return clamp$5(Number(value) || FILTER_CUTOFF_MIN_HZ, FILTER_CUTOFF_MIN_HZ, FILTER_CUTOFF_MAX_HZ);
 }
 function clampFilterQ(value) {
-  return clamp$4(Number(value) || 0, FILTER_Q_MIN, FILTER_Q_MAX);
+  return clamp$5(Number(value) || 0, FILTER_Q_MIN$1, FILTER_Q_MAX$1);
+}
+function filterCutoffHzToNormalized(value) {
+  const clampedHz = clampFilterCutoffHz(value);
+  const minLog = Math.log(FILTER_CUTOFF_MIN_HZ);
+  const maxLog = Math.log(FILTER_CUTOFF_MAX_HZ);
+  return clamp$5((Math.log(clampedHz) - minLog) / (maxLog - minLog), 0, 1);
 }
 function normalizedToFilterCutoffHz(value) {
-  const normalized = clamp$4(Number(value) || 0, 0, 1);
+  const normalized = clamp$5(Number(value) || 0, 0, 1);
   const minLog = Math.log(FILTER_CUTOFF_MIN_HZ);
   const maxLog = Math.log(FILTER_CUTOFF_MAX_HZ);
   return Math.exp(minLog + (maxLog - minLog) * normalized);
 }
+function filterQToNormalized(value) {
+  const clampedQ = clampFilterQ(value);
+  return (clampedQ - FILTER_Q_MIN$1) / (FILTER_Q_MAX$1 - FILTER_Q_MIN$1);
+}
 function normalizedToFilterQ(value) {
-  const normalized = clamp$4(Number(value) || 0, 0, 1);
-  return FILTER_Q_MIN + (FILTER_Q_MAX - FILTER_Q_MIN) * normalized;
+  const normalized = clamp$5(Number(value) || 0, 0, 1);
+  return FILTER_Q_MIN$1 + (FILTER_Q_MAX$1 - FILTER_Q_MIN$1) * normalized;
 }
 class SimperFilter {
   ic1eq = 0;
@@ -14860,7 +14826,7 @@ function responseGainForFrequency({
   const filter = new SimperFilter();
   filter.setMode(mode);
   filter.setFrequency(sampleRate, cutoffHz, q);
-  const safeFrequency = clamp$4(frequencyHz, 10, sampleRate * 0.49);
+  const safeFrequency = clamp$5(frequencyHz, 10, sampleRate * 0.49);
   const cycleLength = Math.max(8, Math.round(sampleRate / safeFrequency));
   const warmupSamples = cycleLength * FILTER_RESPONSE_FFT_WARMUP_CYCLES;
   const measureSamples = cycleLength * FILTER_RESPONSE_FFT_MEASURE_CYCLES;
@@ -14948,7 +14914,7 @@ const FILTER_SPECTRUM_RENDER_MODE_OPTIONS = [
   { value: "bars", label: "Bars" },
   { value: "round-bars", label: "Round Bars" }
 ];
-function clamp$3(value, min, max) {
+function clamp$4(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 function coerceFiniteNumber(value) {
@@ -14956,13 +14922,13 @@ function coerceFiniteNumber(value) {
   return Number.isFinite(coerced) ? coerced : null;
 }
 function frequencyHzToNormalized(value) {
-  const clampedHz = clamp$3(value, FILTER_CUTOFF_MIN_HZ, FILTER_CUTOFF_MAX_HZ);
+  const clampedHz = clamp$4(value, FILTER_CUTOFF_MIN_HZ, FILTER_CUTOFF_MAX_HZ);
   const minLog = Math.log(FILTER_CUTOFF_MIN_HZ);
   const maxLog = Math.log(FILTER_CUTOFF_MAX_HZ);
-  return clamp$3((Math.log(clampedHz) - minLog) / (maxLog - minLog), 0, 1);
+  return clamp$4((Math.log(clampedHz) - minLog) / (maxLog - minLog), 0, 1);
 }
 function dbToNormalizedY(value) {
-  return clamp$3((value - FILTER_SPECTRUM_MAX_DB) / (FILTER_SPECTRUM_MIN_DB - FILTER_SPECTRUM_MAX_DB), 0, 1);
+  return clamp$4((value - FILTER_SPECTRUM_MAX_DB) / (FILTER_SPECTRUM_MIN_DB - FILTER_SPECTRUM_MAX_DB), 0, 1);
 }
 function formatFrequencyLabel(frequencyHz) {
   if (frequencyHz >= 1e3) {
@@ -14972,7 +14938,7 @@ function formatFrequencyLabel(frequencyHz) {
   return String(Math.round(frequencyHz));
 }
 function magnitudeToDb(magnitude) {
-  return clamp$3(20 * Math.log10(Math.max(1e-9, magnitude)), FILTER_SPECTRUM_MIN_DB, FILTER_SPECTRUM_MAX_DB);
+  return clamp$4(20 * Math.log10(Math.max(1e-9, magnitude)), FILTER_SPECTRUM_MIN_DB, FILTER_SPECTRUM_MAX_DB);
 }
 function findPeakIndex(values) {
   let peakIndex = 0;
@@ -15074,8 +15040,8 @@ function createPlotMetrics(width, height, {
   };
 }
 function createPlotPoint(normalizedX, magnitudeDb, plot) {
-  const x = plot.plotLeft + plot.plotWidth * clamp$3(normalizedX, 0, 1);
-  const normalizedY = clamp$3((clamp$3(magnitudeDb, FILTER_SPECTRUM_MIN_DB, FILTER_SPECTRUM_MAX_DB) - FILTER_SPECTRUM_MIN_DB) / (FILTER_SPECTRUM_MAX_DB - FILTER_SPECTRUM_MIN_DB), 0, 1);
+  const x = plot.plotLeft + plot.plotWidth * clamp$4(normalizedX, 0, 1);
+  const normalizedY = clamp$4((clamp$4(magnitudeDb, FILTER_SPECTRUM_MIN_DB, FILTER_SPECTRUM_MAX_DB) - FILTER_SPECTRUM_MIN_DB) / (FILTER_SPECTRUM_MAX_DB - FILTER_SPECTRUM_MIN_DB), 0, 1);
   const y = plot.plotBottom - plot.plotHeight * normalizedY;
   return { x, y };
 }
@@ -15154,8 +15120,8 @@ function createFilterSpectrumDisplayFrame({
   const maxBinIndex = Math.max(0, sourceBinCount - 1);
   const nyquistHz = Math.max(1, frame.sampleRateHz * 0.5);
   const sampleDisplayRange = (range) => {
-    const startIndex = clamp$3(Math.floor(clamp$3(range.lowHz, 0, nyquistHz) / nyquistHz * maxBinIndex), 0, maxBinIndex);
-    const endIndex = clamp$3(Math.ceil(clamp$3(range.highHz, 0, nyquistHz) / nyquistHz * maxBinIndex), startIndex, maxBinIndex);
+    const startIndex = clamp$4(Math.floor(clamp$4(range.lowHz, 0, nyquistHz) / nyquistHz * maxBinIndex), 0, maxBinIndex);
+    const endIndex = clamp$4(Math.ceil(clamp$4(range.highHz, 0, nyquistHz) / nyquistHz * maxBinIndex), startIndex, maxBinIndex);
     return magnitudeToDb(sampleMagnitudeAtIndexRange(frame.magnitudes, startIndex, endIndex));
   };
   const bandMagnitudesDb = bands.map(sampleDisplayRange);
@@ -15256,6 +15222,631 @@ function buildFilterSpectrumRenderGeometry({
     ...plot
   };
 }
+const MODULATION_STATE_KEY = "modulation.v1";
+const MODULATION_MAX_ROUTES = 12;
+const MODULATION_MSEG_SLOT_COUNT = 3;
+const MODULATION_ENV_SLOT_COUNT = 3;
+const MODULATION_CLEAR_ENDPOINT_ID = "modulationClear";
+const MODULATION_ENABLE_ENDPOINT_ID = "modulationEnable";
+const MODULATION_MSEG_BUFFER_ENDPOINT_ID = "modulationMsegBuffer";
+const MODULATION_MSEG_PLAYBACK_ENDPOINT_ID = "modulationMsegPlayback";
+const MODULATION_ENV_ENDPOINT_ID = "modulationEnvelope";
+const MODULATION_ROUTE_ENDPOINT_ID = "modulationRoute";
+const MOD_SOURCE_MSEG = 1;
+const MOD_SOURCE_ENV = 2;
+const MOD_SOURCE_VELOCITY = 3;
+const MOD_SOURCE_PRESSURE = 4;
+const MOD_SOURCE_SLIDE = 5;
+const MOD_TARGET_WAVETABLE_POSITION = 1;
+const MOD_TARGET_WARP_AMOUNT = 2;
+const MOD_TARGET_FILTER_CUTOFF_OCTAVES = 3;
+const MOD_TARGET_FILTER_Q = 4;
+const MOD_TARGET_PITCH_SEMITONES = 5;
+const MOD_TARGET_AMP_GAIN_DB = 6;
+const MOD_TARGET_PAN = 7;
+const MSEG_SLOT_NAMES = ["MSEG 1", "MSEG 2", "MSEG 3"];
+const ENV_SLOT_NAMES = ["Env 1", "Env 2", "Env 3"];
+const ENV_MIN_SECONDS = 1e-3;
+const ENV_MAX_SECONDS = 10;
+const FILTER_Q_MIN = 0.1;
+const FILTER_Q_MAX = 20;
+const ROUTE_AMOUNT_LIMITS = {
+  wavetablePosition: { min: -1, max: 1 },
+  warpAmount: { min: -1, max: 1 },
+  filterCutoffOctaves: { min: -6, max: 6 },
+  filterQ: { min: -19.9, max: FILTER_Q_MAX - FILTER_Q_MIN },
+  pitchSemitones: { min: -48, max: 48 },
+  ampGainDb: { min: -48, max: 6 },
+  pan: { min: -1, max: 1 }
+};
+function clamp$3(value, min, max) {
+  return Math.min(Math.max(value, min), max);
+}
+function clampEnvSeconds(value, fallback) {
+  const numeric = Number(value);
+  return clamp$3(Number.isFinite(numeric) ? numeric : fallback, ENV_MIN_SECONDS, ENV_MAX_SECONDS);
+}
+function formatSignedMagnitude(value, digits) {
+  const numeric = Number.isFinite(value) ? value : 0;
+  const magnitude = Math.abs(numeric).toFixed(digits);
+  if (numeric < 0) {
+    return `-${magnitude}`;
+  }
+  return numeric > 0 ? `+${magnitude}` : magnitude;
+}
+function getRouteAmountLimit(targetKind) {
+  return ROUTE_AMOUNT_LIMITS[targetKind];
+}
+function getDirectionalAmountLimit(targetKind, direction) {
+  const limits = getRouteAmountLimit(targetKind);
+  return direction === "negative" ? Math.abs(limits.min) : Math.abs(limits.max);
+}
+function clampModulationRouteAmount(targetKind, value) {
+  const limits = ROUTE_AMOUNT_LIMITS[targetKind];
+  const numeric = Number(value);
+  return clamp$3(Number.isFinite(numeric) ? numeric : 0, limits.min, limits.max);
+}
+function getModulationAmountDirection(amount, fallbackDirection = "positive") {
+  const numeric = Number(amount);
+  if (!Number.isFinite(numeric) || numeric === 0) {
+    return fallbackDirection;
+  }
+  return numeric < 0 ? "negative" : "positive";
+}
+function getModulationAmountDepth(targetKind, amount, fallbackDirection = "positive") {
+  const clampedAmount = clampModulationRouteAmount(targetKind, amount);
+  const direction = getModulationAmountDirection(clampedAmount, fallbackDirection);
+  const limit = getDirectionalAmountLimit(targetKind, direction);
+  if (limit <= 0) {
+    return 0;
+  }
+  return clamp$3(Math.abs(clampedAmount) / limit, 0, 1);
+}
+function composeModulationAmount(targetKind, depth, direction) {
+  const clampedDepth = clamp$3(Number.isFinite(depth) ? depth : 0, 0, 1);
+  const limit = getDirectionalAmountLimit(targetKind, direction);
+  const signedAmount = (direction === "negative" ? -1 : 1) * clampedDepth * limit;
+  return clampModulationRouteAmount(targetKind, signedAmount);
+}
+function formatModulationAmountReadout(targetKind, amount) {
+  const clampedAmount = clampModulationRouteAmount(targetKind, amount);
+  switch (targetKind) {
+    case "wavetablePosition":
+      return `${formatSignedMagnitude(clampedAmount * 100, 0)}% scan`;
+    case "warpAmount":
+      return `${formatSignedMagnitude(clampedAmount * 100, 0)}% warp`;
+    case "filterCutoffOctaves":
+      return `${formatSignedMagnitude(clampedAmount, 2)} oct`;
+    case "filterQ":
+      return `${formatSignedMagnitude(clampedAmount, 2)} Q`;
+    case "pitchSemitones":
+      return `${formatSignedMagnitude(clampedAmount, 1)} st`;
+    case "ampGainDb":
+      return `${formatSignedMagnitude(clampedAmount, 1)} dB`;
+    case "pan": {
+      const clampedPan = clamp$3(clampedAmount, -1, 1);
+      const panPercent = Math.round(Math.abs(clampedPan) * 100);
+      if (panPercent === 0) {
+        return "Center";
+      }
+      return `${panPercent}% ${clampedPan < 0 ? "L" : "R"}`;
+    }
+    default:
+      return formatSignedMagnitude(clampedAmount, 3);
+  }
+}
+function getModulationAmountPercentLabel(targetKind, amount, fallbackDirection = "positive") {
+  return `${Math.round(getModulationAmountDepth(targetKind, amount, fallbackDirection) * 100)}%`;
+}
+function getModulationTargetClampHint(targetKind) {
+  switch (targetKind) {
+    case "wavetablePosition":
+      return "Wavetable scan still clamps to the table range.";
+    case "warpAmount":
+      return "Warp amount still clamps to the oscillator's warp range.";
+    case "filterCutoffOctaves":
+      return "Requested cutoff movement is converted to Hz and still clamps to the filter range.";
+    case "filterQ":
+      return "Resonance still clamps to the synth's Q range.";
+    case "pitchSemitones":
+      return "Pitch depth adds on top of note, glide, and bend.";
+    case "ampGainDb":
+      return "Amplitude still clamps to the synth's gain range.";
+    case "pan":
+      return "Pan still clamps between full left and full right.";
+    default:
+      return "";
+  }
+}
+function normalizeSourceKind(value) {
+  if (value === "mseg" || value === "env" || value === "velocity" || value === "pressure" || value === "slide") {
+    return value;
+  }
+  return "mseg";
+}
+function normalizeTargetKind(value) {
+  if (value === "wavetablePosition" || value === "warpAmount" || value === "filterCutoffOctaves" || value === "filterQ" || value === "pitchSemitones" || value === "ampGainDb" || value === "pan") {
+    return value;
+  }
+  return "wavetablePosition";
+}
+function normalizeSourceSlot(sourceKind, rawSlot) {
+  const numericSlot = Math.round(Number(rawSlot));
+  if (sourceKind === "velocity" || sourceKind === "pressure" || sourceKind === "slide") {
+    return null;
+  }
+  const maxSlot = sourceKind === "mseg" ? MODULATION_MSEG_SLOT_COUNT : MODULATION_ENV_SLOT_COUNT;
+  return clamp$3(Number.isFinite(numericSlot) ? numericSlot : 1, 1, maxSlot);
+}
+function createDefaultEnvelope(slotIndex) {
+  return {
+    name: ENV_SLOT_NAMES[slotIndex] ?? `Env ${slotIndex + 1}`,
+    attackSeconds: 0.01,
+    decaySeconds: 0.25,
+    sustain: 0.5,
+    releaseSeconds: 0.2
+  };
+}
+function normalizeEnvelope(value, slotIndex = 0) {
+  const nextValue = value && typeof value === "object" ? value : {};
+  const fallback = createDefaultEnvelope(slotIndex);
+  return {
+    name: typeof nextValue.name === "string" && nextValue.name.trim() ? nextValue.name : fallback.name,
+    attackSeconds: clampEnvSeconds(nextValue.attackSeconds ?? fallback.attackSeconds, fallback.attackSeconds),
+    decaySeconds: clampEnvSeconds(nextValue.decaySeconds ?? fallback.decaySeconds, fallback.decaySeconds),
+    sustain: clamp01(nextValue.sustain ?? fallback.sustain),
+    releaseSeconds: clampEnvSeconds(nextValue.releaseSeconds ?? fallback.releaseSeconds, fallback.releaseSeconds)
+  };
+}
+function createDefaultRoute() {
+  return {
+    enabled: true,
+    sourceKind: "mseg",
+    sourceSlot: 1,
+    targetKind: "wavetablePosition",
+    amount: 0
+  };
+}
+function normalizeRoute(value) {
+  const nextValue = value && typeof value === "object" ? value : {};
+  const sourceKind = normalizeSourceKind(nextValue.sourceKind);
+  const targetKind = normalizeTargetKind(nextValue.targetKind);
+  return {
+    enabled: nextValue.enabled !== false,
+    sourceKind,
+    sourceSlot: normalizeSourceSlot(sourceKind, nextValue.sourceSlot),
+    targetKind,
+    amount: clampModulationRouteAmount(targetKind, Number(nextValue.amount))
+  };
+}
+function normalizeMsegSlot(value, slotIndex) {
+  const nextValue = value && typeof value === "object" ? value : {};
+  const defaultShape = createDefaultMsegShape(MSEG_SLOT_NAMES[slotIndex] ?? `MSEG ${slotIndex + 1}`);
+  return {
+    shape: normalizeMsegShape(nextValue.shape ?? defaultShape),
+    playback: normalizeMsegPlayback(nextValue.playback ?? createDefaultMsegPlayback())
+  };
+}
+function createDefaultModulationState() {
+  return {
+    format: "cosimo.modulation",
+    version: 1,
+    msegSlots: Array.from({ length: MODULATION_MSEG_SLOT_COUNT }, (_, slotIndex) => normalizeMsegSlot({}, slotIndex)),
+    envelopeSlots: Array.from({ length: MODULATION_ENV_SLOT_COUNT }, (_, slotIndex) => createDefaultEnvelope(slotIndex)),
+    routes: []
+  };
+}
+function normalizeModulationState(value = createDefaultModulationState()) {
+  const nextValue = value && typeof value === "object" ? value : {};
+  const inputMsegSlots = Array.isArray(nextValue.msegSlots) ? nextValue.msegSlots : [];
+  const inputEnvelopeSlots = Array.isArray(nextValue.envelopeSlots) ? nextValue.envelopeSlots : [];
+  const inputRoutes = Array.isArray(nextValue.routes) ? nextValue.routes : [];
+  return {
+    format: "cosimo.modulation",
+    version: 1,
+    msegSlots: Array.from({ length: MODULATION_MSEG_SLOT_COUNT }, (_, slotIndex) => normalizeMsegSlot(inputMsegSlots[slotIndex], slotIndex)),
+    envelopeSlots: Array.from({ length: MODULATION_ENV_SLOT_COUNT }, (_, slotIndex) => normalizeEnvelope(inputEnvelopeSlots[slotIndex], slotIndex)),
+    routes: inputRoutes.slice(0, MODULATION_MAX_ROUTES).map((route) => normalizeRoute(route))
+  };
+}
+function serializeModulationState(state) {
+  return JSON.stringify(normalizeModulationState(state));
+}
+function deserializeModulationState(value) {
+  if (typeof value !== "string" || value.trim() === "") {
+    return createDefaultModulationState();
+  }
+  try {
+    return normalizeModulationState(JSON.parse(value));
+  } catch {
+    return createDefaultModulationState();
+  }
+}
+function modulationStatesEqual(left, right) {
+  return serializeModulationState(left) === serializeModulationState(right);
+}
+function toStoredStateEchoToken(value) {
+  try {
+    return `${typeof value}:${JSON.stringify(value)}`;
+  } catch {
+    return `${typeof value}:${String(value)}`;
+  }
+}
+function sourceKindToCode(sourceKind) {
+  if (sourceKind === "mseg") return MOD_SOURCE_MSEG;
+  if (sourceKind === "env") return MOD_SOURCE_ENV;
+  if (sourceKind === "velocity") return MOD_SOURCE_VELOCITY;
+  if (sourceKind === "pressure") return MOD_SOURCE_PRESSURE;
+  return MOD_SOURCE_SLIDE;
+}
+function targetKindToCode(targetKind) {
+  if (targetKind === "wavetablePosition") return MOD_TARGET_WAVETABLE_POSITION;
+  if (targetKind === "warpAmount") return MOD_TARGET_WARP_AMOUNT;
+  if (targetKind === "filterCutoffOctaves") return MOD_TARGET_FILTER_CUTOFF_OCTAVES;
+  if (targetKind === "filterQ") return MOD_TARGET_FILTER_Q;
+  if (targetKind === "pitchSemitones") return MOD_TARGET_PITCH_SEMITONES;
+  if (targetKind === "ampGainDb") return MOD_TARGET_AMP_GAIN_DB;
+  return MOD_TARGET_PAN;
+}
+function toMsegPlaybackUpload(slotIndex, playback) {
+  return {
+    slot: slotIndex + 1,
+    seconds: clampMsegRateSeconds(playback.rate.seconds),
+    holdFinalValue: playback.holdFinalValue !== false,
+    rateKind: 0,
+    loopEnabled: Boolean(playback.loop),
+    loopStart: playback.loop?.startX ?? 0,
+    loopEnd: playback.loop?.endX ?? 1,
+    noteOffPolicy: playback.noteOffPolicy === "immediate" ? 1 : playback.noteOffPolicy === "ignore" ? 2 : 0,
+    legatoRestarts: Boolean(playback.legatoRestarts)
+  };
+}
+function toMsegBufferUpload(slotIndex, shape) {
+  return {
+    slot: slotIndex + 1,
+    buffer: Array.from(renderMsegShape(shape))
+  };
+}
+function toEnvelopeUpload(slotIndex, envelope) {
+  return {
+    slot: slotIndex + 1,
+    attackSeconds: envelope.attackSeconds,
+    decaySeconds: envelope.decaySeconds,
+    sustain: envelope.sustain,
+    releaseSeconds: envelope.releaseSeconds
+  };
+}
+function toRouteUpload(routeIndex, route) {
+  const normalizedRoute = route ? normalizeRoute(route) : null;
+  const isEnabled = normalizedRoute?.enabled ?? false;
+  return {
+    routeIndex,
+    enabled: isEnabled,
+    sourceKind: sourceKindToCode(normalizedRoute?.sourceKind ?? "mseg"),
+    sourceSlot: isEnabled ? normalizedRoute?.sourceSlot ?? 0 : 0,
+    targetKind: targetKindToCode(normalizedRoute?.targetKind ?? "wavetablePosition"),
+    amount: isEnabled ? normalizedRoute?.amount ?? 0 : 0
+  };
+}
+class ModulationMsegSlotController {
+  bridge;
+  slotIndex;
+  constructor(bridge, slotIndex) {
+    this.bridge = bridge;
+    this.slotIndex = slotIndex;
+  }
+  getState() {
+    const slot = this.bridge.getState().msegSlots[this.slotIndex];
+    return {
+      shape: slot.shape,
+      playback: slot.playback,
+      depth: MSEG_DEFAULT_DEPTH
+    };
+  }
+  setShape(nextShape) {
+    this.bridge.setMsegSlotShape(this.slotIndex, nextShape);
+  }
+  setPlayback(nextPlayback) {
+    this.bridge.setMsegSlotPlayback(this.slotIndex, nextPlayback);
+  }
+  addPoint(x, y) {
+    this.setShape(addMsegPoint(this.getState().shape, x, y));
+  }
+  movePoint(pointIndex, x, y) {
+    this.setShape(moveMsegPoint(this.getState().shape, pointIndex, x, y));
+  }
+  deletePoint(pointIndex) {
+    this.setShape(deleteMsegPoint(this.getState().shape, pointIndex));
+  }
+  setSegmentCurvePower(segmentIndex, curvePower) {
+    this.setShape(setMsegSegmentCurvePower(this.getState().shape, segmentIndex, curvePower));
+  }
+}
+class ModulationRuntimeBridge {
+  patchConnection;
+  state = createDefaultModulationState();
+  suppressStoredStateEvents = 0;
+  pendingStoredStateEchoes = /* @__PURE__ */ new Map();
+  stateListeners = /* @__PURE__ */ new Set();
+  slotControllers = Array.from(
+    { length: MODULATION_MSEG_SLOT_COUNT },
+    (_, slotIndex) => new ModulationMsegSlotController(this, slotIndex)
+  );
+  constructor(patchConnection) {
+    this.patchConnection = patchConnection;
+    this.handleStoredStateValue = this.handleStoredStateValue.bind(this);
+  }
+  attach() {
+    this.patchConnection.addStoredStateValueListener?.(this.handleStoredStateValue);
+  }
+  detach() {
+    this.patchConnection.removeStoredStateValueListener?.(this.handleStoredStateValue);
+  }
+  requestBootState() {
+    if (typeof this.patchConnection.requestFullStoredState === "function") {
+      this.patchConnection.requestFullStoredState((storedState) => {
+        const fullState = storedState && typeof storedState === "object" ? storedState : {};
+        this.applyStoredState(fullState[MODULATION_STATE_KEY], true);
+      });
+      return;
+    }
+    if (typeof this.patchConnection.requestStoredStateValue === "function") {
+      this.patchConnection.requestStoredStateValue(MODULATION_STATE_KEY);
+      return;
+    }
+    this.uploadAll();
+    this.emitStateChange();
+  }
+  getState() {
+    return this.state;
+  }
+  subscribe(listener) {
+    this.stateListeners.add(listener);
+  }
+  unsubscribe(listener) {
+    this.stateListeners.delete(listener);
+  }
+  getMsegSlotController(slotIndex) {
+    return this.slotControllers[clamp$3(Math.round(slotIndex), 0, MODULATION_MSEG_SLOT_COUNT - 1)];
+  }
+  setState(nextState) {
+    const normalizedState = normalizeModulationState(nextState);
+    if (modulationStatesEqual(this.state, normalizedState)) {
+      return;
+    }
+    this.state = normalizedState;
+    this.persistState();
+    this.uploadAll();
+    this.emitStateChange();
+  }
+  setMsegSlotShape(slotIndex, nextShape) {
+    const normalizedShape = normalizeMsegShape(nextShape);
+    const currentSlot = this.state.msegSlots[slotIndex];
+    if (msegShapesEqual(currentSlot.shape, normalizedShape)) {
+      return;
+    }
+    this.updateState((previousState) => {
+      const nextMsegSlots = previousState.msegSlots.map((slot, index) => index === slotIndex ? { ...slot, shape: normalizedShape } : slot);
+      return {
+        ...previousState,
+        msegSlots: nextMsegSlots
+      };
+    });
+    this.uploadMsegBuffer(slotIndex);
+  }
+  setMsegSlotPlayback(slotIndex, nextPlayback) {
+    const normalizedPlayback = normalizeMsegPlayback(nextPlayback);
+    const currentSlot = this.state.msegSlots[slotIndex];
+    if (msegPlaybacksEqual(currentSlot.playback, normalizedPlayback)) {
+      return;
+    }
+    this.updateState((previousState) => {
+      const nextMsegSlots = previousState.msegSlots.map((slot, index) => index === slotIndex ? { ...slot, playback: normalizedPlayback } : slot);
+      return {
+        ...previousState,
+        msegSlots: nextMsegSlots
+      };
+    });
+    this.uploadMsegPlayback(slotIndex);
+  }
+  setEnvelope(slotIndex, nextEnvelope) {
+    const normalizedEnvelope = normalizeEnvelope(nextEnvelope, slotIndex);
+    const currentEnvelope = this.state.envelopeSlots[slotIndex];
+    if (JSON.stringify(currentEnvelope) === JSON.stringify(normalizedEnvelope)) {
+      return;
+    }
+    this.updateState((previousState) => ({
+      ...previousState,
+      envelopeSlots: previousState.envelopeSlots.map((envelope, index) => index === slotIndex ? normalizedEnvelope : envelope)
+    }));
+    this.uploadEnvelope(slotIndex);
+  }
+  replaceRoutes(nextRoutes) {
+    const normalizedRoutes = Array.isArray(nextRoutes) ? nextRoutes.slice(0, MODULATION_MAX_ROUTES).map((route) => normalizeRoute(route)) : [];
+    if (JSON.stringify(this.state.routes) === JSON.stringify(normalizedRoutes)) {
+      return;
+    }
+    this.updateState((previousState) => ({
+      ...previousState,
+      routes: normalizedRoutes
+    }));
+    this.uploadRoutes();
+  }
+  setRoute(routeIndex, nextRoute) {
+    const normalizedRoute = normalizeRoute(nextRoute);
+    const currentRoutes = [...this.state.routes];
+    while (currentRoutes.length <= routeIndex) {
+      currentRoutes.push(createDefaultRoute());
+    }
+    if (JSON.stringify(currentRoutes[routeIndex]) === JSON.stringify(normalizedRoute)) {
+      return;
+    }
+    currentRoutes[routeIndex] = normalizedRoute;
+    this.replaceRoutes(currentRoutes);
+  }
+  addRoute(nextRoute = createDefaultRoute()) {
+    if (this.state.routes.length >= MODULATION_MAX_ROUTES) {
+      return;
+    }
+    this.replaceRoutes([...this.state.routes, normalizeRoute(nextRoute)]);
+  }
+  removeRoute(routeIndex) {
+    if (routeIndex < 0 || routeIndex >= this.state.routes.length) {
+      return;
+    }
+    const nextRoutes = this.state.routes.filter((_, index) => index !== routeIndex);
+    this.replaceRoutes(nextRoutes);
+  }
+  updateState(update) {
+    const nextState = normalizeModulationState(update(this.state));
+    if (modulationStatesEqual(this.state, nextState)) {
+      return;
+    }
+    this.state = nextState;
+    this.persistState();
+    this.emitStateChange();
+  }
+  applyStoredState(rawValue, uploadAll) {
+    const nextState = deserializeModulationState(rawValue);
+    this.state = nextState;
+    if (uploadAll) {
+      this.uploadAll();
+    }
+    this.emitStateChange();
+  }
+  handleStoredStateValue(message) {
+    if (!message || typeof message !== "object") {
+      return;
+    }
+    const nextMessage = message;
+    if (this.suppressStoredStateEvents > 0) {
+      return;
+    }
+    if (typeof nextMessage.key === "string" && this.consumePendingStoredStateEcho(nextMessage.key, nextMessage.value)) {
+      return;
+    }
+    if (nextMessage.key === MODULATION_STATE_KEY) {
+      this.applyStoredState(nextMessage.value, true);
+    }
+  }
+  persistState() {
+    if (typeof this.patchConnection.sendStoredStateValue !== "function") {
+      return;
+    }
+    const persistedModulationState = serializeModulationState(this.state);
+    this.suppressStoredStateEvents += 1;
+    try {
+      this.rememberPendingStoredStateEcho(MODULATION_STATE_KEY, persistedModulationState);
+      this.patchConnection.sendStoredStateValue(MODULATION_STATE_KEY, persistedModulationState);
+    } finally {
+      this.suppressStoredStateEvents -= 1;
+    }
+  }
+  uploadAll() {
+    this.patchConnection.sendEventOrValue?.(MODULATION_ENABLE_ENDPOINT_ID, 0);
+    this.patchConnection.sendEventOrValue?.(MODULATION_CLEAR_ENDPOINT_ID, 1);
+    for (let slotIndex = 0; slotIndex < MODULATION_MSEG_SLOT_COUNT; slotIndex += 1) {
+      this.uploadMsegSlot(slotIndex);
+    }
+    for (let slotIndex = 0; slotIndex < MODULATION_ENV_SLOT_COUNT; slotIndex += 1) {
+      this.uploadEnvelope(slotIndex);
+    }
+    this.uploadRoutes();
+    this.patchConnection.sendEventOrValue?.(MODULATION_ENABLE_ENDPOINT_ID, 1);
+  }
+  uploadMsegSlot(slotIndex) {
+    this.uploadMsegBuffer(slotIndex);
+    this.uploadMsegPlayback(slotIndex);
+  }
+  uploadMsegBuffer(slotIndex) {
+    const slot = this.state.msegSlots[slotIndex];
+    this.patchConnection.sendEventOrValue?.(
+      MODULATION_MSEG_BUFFER_ENDPOINT_ID,
+      toMsegBufferUpload(slotIndex, slot.shape)
+    );
+  }
+  uploadMsegPlayback(slotIndex) {
+    const slot = this.state.msegSlots[slotIndex];
+    this.patchConnection.sendEventOrValue?.(
+      MODULATION_MSEG_PLAYBACK_ENDPOINT_ID,
+      toMsegPlaybackUpload(slotIndex, slot.playback)
+    );
+  }
+  uploadEnvelope(slotIndex) {
+    this.patchConnection.sendEventOrValue?.(
+      MODULATION_ENV_ENDPOINT_ID,
+      toEnvelopeUpload(slotIndex, this.state.envelopeSlots[slotIndex])
+    );
+  }
+  uploadRoutes() {
+    for (let routeIndex = 0; routeIndex < MODULATION_MAX_ROUTES; routeIndex += 1) {
+      this.patchConnection.sendEventOrValue?.(
+        MODULATION_ROUTE_ENDPOINT_ID,
+        toRouteUpload(routeIndex, this.state.routes[routeIndex] ?? null)
+      );
+    }
+  }
+  emitStateChange() {
+    this.stateListeners.forEach((listener) => listener(this.state));
+  }
+  rememberPendingStoredStateEcho(key, value) {
+    const token = toStoredStateEchoToken(value);
+    const pendingByToken = this.pendingStoredStateEchoes.get(key) ?? /* @__PURE__ */ new Map();
+    pendingByToken.set(token, (pendingByToken.get(token) ?? 0) + 1);
+    this.pendingStoredStateEchoes.set(key, pendingByToken);
+  }
+  consumePendingStoredStateEcho(key, value) {
+    const pendingByToken = this.pendingStoredStateEchoes.get(key);
+    if (!pendingByToken) {
+      return false;
+    }
+    const token = toStoredStateEchoToken(value);
+    const pendingCount = pendingByToken.get(token) ?? 0;
+    if (pendingCount <= 0) {
+      return false;
+    }
+    if (pendingCount === 1) {
+      pendingByToken.delete(token);
+    } else {
+      pendingByToken.set(token, pendingCount - 1);
+    }
+    if (pendingByToken.size === 0) {
+      this.pendingStoredStateEchoes.delete(key);
+    }
+    return true;
+  }
+}
+function buildDisplayedMsegState(bridge, slotIndex) {
+  return bridge.getMsegSlotController(slotIndex).getState();
+}
+const sharedRuntimeBridges = /* @__PURE__ */ new WeakMap();
+function acquireModulationRuntimeBridge(patchConnection) {
+  const existingEntry = sharedRuntimeBridges.get(patchConnection);
+  if (existingEntry) {
+    existingEntry.refCount += 1;
+    return existingEntry.bridge;
+  }
+  const bridge = new ModulationRuntimeBridge(patchConnection);
+  bridge.attach();
+  bridge.requestBootState();
+  sharedRuntimeBridges.set(patchConnection, {
+    bridge,
+    refCount: 1
+  });
+  return bridge;
+}
+function releaseModulationRuntimeBridge(patchConnection) {
+  const entry = sharedRuntimeBridges.get(patchConnection);
+  if (!entry) {
+    return;
+  }
+  entry.refCount -= 1;
+  if (entry.refCount > 0) {
+    return;
+  }
+  entry.bridge.detach();
+  sharedRuntimeBridges.delete(patchConnection);
+}
 const VOICE_MODE_OPTIONS = [
   { value: 0, label: "Poly" },
   { value: 1, label: "Mono" },
@@ -15288,9 +15879,6 @@ function useResizeObserver$1(ref) {
     return () => observer.disconnect();
   }, [ref]);
   return size;
-}
-function formatSeconds$1(seconds) {
-  return `${seconds.toFixed(3)} s`;
 }
 function formatFrameIndex(position, frameCount) {
   const safeFrameCount = Math.max(1, frameCount);
@@ -15640,6 +16228,108 @@ function RangeField({
     ] })
   ] });
 }
+function ModulationAmountField({
+  targetKind,
+  amount,
+  onChange,
+  knobAriaLabel,
+  positiveDirectionAriaLabel,
+  negativeDirectionAriaLabel,
+  className
+}) {
+  const [zeroDirection, setZeroDirection] = reactExports.useState(
+    () => getModulationAmountDirection(amount)
+  );
+  reactExports.useEffect(() => {
+    if (amount < 0) {
+      setZeroDirection("negative");
+    } else if (amount > 0) {
+      setZeroDirection("positive");
+    }
+  }, [amount]);
+  const activeDirection = getModulationAmountDirection(amount, zeroDirection);
+  const depth = getModulationAmountDepth(targetKind, amount, zeroDirection);
+  const depthLabel = getModulationAmountPercentLabel(targetKind, amount, zeroDirection);
+  const unitReadout = formatModulationAmountReadout(targetKind, amount);
+  const clampHint = getModulationTargetClampHint(targetKind);
+  const knobSweepDegrees = 264;
+  const knobStartDegrees = -132;
+  const fillDegrees = depth * knobSweepDegrees;
+  const knobIndicatorDegrees = knobStartDegrees + fillDegrees;
+  const shellClassName = className ? `cosimo-mod-amount-field ${className}` : "cosimo-mod-amount-field";
+  const setDirection = (nextDirection) => {
+    setZeroDirection(nextDirection);
+    onChange(composeModulationAmount(targetKind, depth, nextDirection));
+  };
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: shellClassName, children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "cosimo-mod-direction-toggle", role: "group", "aria-label": "Modulation direction", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "button",
+        {
+          type: "button",
+          "aria-label": positiveDirectionAriaLabel,
+          "aria-pressed": activeDirection === "positive" ? "true" : "false",
+          className: "cosimo-mod-direction-button",
+          "data-active": activeDirection === "positive" ? "true" : "false",
+          onClick: () => setDirection("positive"),
+          children: "+"
+        }
+      ),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "button",
+        {
+          type: "button",
+          "aria-label": negativeDirectionAriaLabel,
+          "aria-pressed": activeDirection === "negative" ? "true" : "false",
+          className: "cosimo-mod-direction-button",
+          "data-active": activeDirection === "negative" ? "true" : "false",
+          onClick: () => setDirection("negative"),
+          children: "-"
+        }
+      )
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "cosimo-mod-knob-stack", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "cosimo-mod-knob", title: clampHint, children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          "div",
+          {
+            className: "cosimo-mod-knob-track",
+            style: {
+              background: `conic-gradient(from ${knobStartDegrees}deg, rgba(103, 232, 249, 0.92) 0deg ${fillDegrees}deg, rgba(255,255,255,0.08) ${fillDegrees}deg ${knobSweepDegrees}deg, rgba(255,255,255,0.02) ${knobSweepDegrees}deg 360deg)`
+            },
+            children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "cosimo-mod-knob-core", children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "cosimo-mod-knob-percent", children: depthLabel }) }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "div",
+                {
+                  className: "cosimo-mod-knob-indicator",
+                  style: { transform: `translateX(-50%) rotate(${knobIndicatorDegrees}deg)` }
+                }
+              )
+            ]
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "input",
+          {
+            className: "cosimo-mod-knob-input",
+            type: "range",
+            min: "0",
+            max: "1",
+            step: "0.001",
+            "aria-label": knobAriaLabel,
+            value: depth.toFixed(3),
+            onChange: (event) => onChange(composeModulationAmount(targetKind, Number(event.target.value), activeDirection))
+          }
+        )
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "cosimo-mod-amount-copy", title: clampHint, children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "cosimo-mod-amount-readout", children: unitReadout }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "cosimo-mod-amount-caption", children: "Requested" })
+      ] })
+    ] })
+  ] });
+}
 function buildMagnitudePlotPoints(magnitudesDb, width, height, {
   horizontalPadding = 18,
   verticalPadding = 16,
@@ -15795,8 +16485,16 @@ function FilterResponseGraph({
   liveHasActive,
   spectrumFrame = null,
   spectrumRenderMode = "graph",
-  onCutoffChange,
-  onQChange,
+  resonanceNormalizedFromQ = filterQToNormalized,
+  resonanceQFromSurface = normalizedToFilterQ,
+  resonanceCurveDebugState = {
+    familyId: "linear",
+    coefficients: {}
+  },
+  onGestureStart,
+  onGestureEnd,
+  onCutoffSet,
+  onQSet,
   className
 }) {
   const viewportRef = reactExports.useRef(null);
@@ -15804,6 +16502,7 @@ function FilterResponseGraph({
   const surfaceRef = reactExports.useRef(null);
   const size = useResizeObserver$1(viewportRef);
   const [activePointerId, setActivePointerId] = reactExports.useState(null);
+  const dragStateRef = reactExports.useRef(null);
   const baseModel = reactExports.useMemo(() => createFilterResponseModel({
     mode: baseMode,
     cutoffHz: baseCutoffHz,
@@ -15870,16 +16569,54 @@ function FilterResponseGraph({
       window.cancelAnimationFrame(animationFrameID);
     };
   }, [size.height, size.width, spectrumGeometry]);
-  const applyPointerPosition = (clientX, clientY) => {
-    const element = surfaceRef.current;
-    if (!element) {
+  const baseHandle = reactExports.useMemo(() => {
+    const cutoffNormalized = filterCutoffHzToNormalized(baseModel.cutoffHz);
+    const qNormalized = clamp$2(resonanceNormalizedFromQ(baseModel.q), 0, 1);
+    return {
+      cutoffNormalized,
+      qNormalized,
+      x: basePath.plotLeft + basePath.plotWidth * cutoffNormalized,
+      y: basePath.plotBottom - basePath.plotHeight * qNormalized
+    };
+  }, [baseModel, basePath, resonanceNormalizedFromQ]);
+  const applyHandlePointerPosition = (clientX, clientY) => {
+    const surface = surfaceRef.current;
+    const dragState = dragStateRef.current;
+    if (!surface || !dragState) {
       return;
     }
-    const bounds = element.getBoundingClientRect();
-    const normalizedX = clamp$2((clientX - bounds.left) / Math.max(1, bounds.width), 0, 1);
-    const normalizedY = clamp$2((clientY - bounds.top) / Math.max(1, bounds.height), 0, 1);
-    onCutoffChange(clamp$2(normalizedToFilterCutoffHz(normalizedX), FILTER_CUTOFF_MIN_HZ, FILTER_CUTOFF_MAX_HZ));
-    onQChange(clamp$2(normalizedToFilterQ(1 - normalizedY), FILTER_Q_MIN, FILTER_Q_MAX));
+    const bounds = surface.getBoundingClientRect();
+    const handleClientX = clientX - dragState.pointerOffsetX;
+    const handleClientY = clientY - dragState.pointerOffsetY;
+    const plotX = clamp$2(handleClientX - bounds.left, basePath.plotLeft, basePath.plotRight);
+    const plotY = clamp$2(handleClientY - bounds.top, basePath.plotTop, basePath.plotBottom);
+    const nextCutoffNormalized = clamp$2(
+      (plotX - basePath.plotLeft) / Math.max(1, basePath.plotWidth),
+      0,
+      1
+    );
+    const nextQNormalized = clamp$2(
+      1 - (plotY - basePath.plotTop) / Math.max(1, basePath.plotHeight),
+      0,
+      1
+    );
+    onCutoffSet(clamp$2(normalizedToFilterCutoffHz(nextCutoffNormalized), FILTER_CUTOFF_MIN_HZ, FILTER_CUTOFF_MAX_HZ));
+    onQSet(clamp$2(resonanceQFromSurface(nextQNormalized), FILTER_Q_MIN$1, FILTER_Q_MAX$1));
+  };
+  const endDrag = (pointerId) => {
+    const dragState = dragStateRef.current;
+    if (!dragState || dragState.pointerId !== pointerId) {
+      return;
+    }
+    const surface = surfaceRef.current;
+    if (surface?.hasPointerCapture(pointerId)) {
+      surface.releasePointerCapture(pointerId);
+    }
+    if (dragState?.hasMoved) {
+      onGestureEnd?.();
+    }
+    dragStateRef.current = null;
+    setActivePointerId(null);
   };
   const debugState = reactExports.useMemo(() => ({
     base: {
@@ -15896,6 +16633,22 @@ function FilterResponseGraph({
       q: liveModel.q,
       peakIndex: liveModel.peakIndex,
       minIndex: liveModel.minIndex
+    },
+    handle: {
+      x: baseHandle.x,
+      y: baseHandle.y,
+      cutoffNormalized: baseHandle.cutoffNormalized,
+      qNormalized: baseHandle.qNormalized,
+      isDragging: activePointerId !== null
+    },
+    resonanceCurve: resonanceCurveDebugState,
+    plot: {
+      left: basePath.plotLeft,
+      right: basePath.plotRight,
+      top: basePath.plotTop,
+      bottom: basePath.plotBottom,
+      width: basePath.plotWidth,
+      height: basePath.plotHeight
     },
     spectrum: spectrumDisplay ? {
       hasSpectrum: true,
@@ -15938,22 +16691,43 @@ function FilterResponseGraph({
     }
   }), [
     baseModel,
+    baseHandle,
     liveHasActive,
     liveModel,
+    activePointerId,
     spectrumBands.length,
     spectrumDbTicks,
     spectrumDisplay,
     spectrumFrequencyTicks,
     spectrumGeometry,
     spectrumGraphPoints.length,
-    spectrumRenderMode
+    spectrumRenderMode,
+    resonanceCurveDebugState
   ]);
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: joinClasses("grid gap-2", className), children: [
+  const visibleFrequencyTicks = reactExports.useMemo(() => {
+    if (size.width <= 360) {
+      return spectrumFrequencyTicks.filter((_, index) => [0, 2, 4, 6, 9].includes(index));
+    }
+    if (size.width <= 480) {
+      return spectrumFrequencyTicks.filter((_, index) => [0, 1, 2, 4, 6, 8, 9].includes(index));
+    }
+    return spectrumFrequencyTicks;
+  }, [size.width, spectrumFrequencyTicks]);
+  const visibleDbTicks = reactExports.useMemo(() => {
+    if (size.width <= 360) {
+      return spectrumDbTicks.filter((_, index) => [0, 2, 4].includes(index));
+    }
+    if (size.width <= 480) {
+      return spectrumDbTicks.filter((_, index) => [0, 1, 2, 4].includes(index));
+    }
+    return spectrumDbTicks;
+  }, [size.width, spectrumDbTicks]);
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: joinClasses("relative h-full w-full", className), children: [
     /* @__PURE__ */ jsxRuntimeExports.jsxs(
       "div",
       {
         ref: viewportRef,
-        className: "relative h-44 w-full overflow-hidden rounded-[20px] border border-white/8 bg-black/25",
+        className: "relative h-full w-full overflow-hidden rounded-[24px] border border-white/[0.05] bg-black/18 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]",
         children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx(
             "canvas",
@@ -15970,29 +16744,30 @@ function FilterResponseGraph({
               "data-role": "filter-response-graph",
               className: "absolute inset-0 h-full w-full touch-none overflow-hidden",
               viewBox: `0 0 ${size.width} ${size.height}`,
-              onPointerDown: (event) => {
-                event.currentTarget.setPointerCapture(event.pointerId);
-                setActivePointerId(event.pointerId);
-                applyPointerPosition(event.clientX, event.clientY);
-              },
               onPointerMove: (event) => {
-                if (activePointerId !== event.pointerId) {
+                const dragState = dragStateRef.current;
+                if (!dragState || dragState.pointerId !== event.pointerId) {
                   return;
                 }
-                applyPointerPosition(event.clientX, event.clientY);
+                const deltaX = event.clientX - dragState.startClientX;
+                const deltaY = event.clientY - dragState.startClientY;
+                if (!dragState.hasMoved && Math.abs(deltaX) < 1.5 && Math.abs(deltaY) < 1.5) {
+                  return;
+                }
+                if (!dragState.hasMoved) {
+                  dragState.hasMoved = true;
+                  onGestureStart?.();
+                }
+                applyHandlePointerPosition(event.clientX, event.clientY);
               },
               onPointerUp: (event) => {
-                if (activePointerId === event.pointerId) {
-                  setActivePointerId(null);
-                }
+                endDrag(event.pointerId);
               },
               onPointerCancel: (event) => {
-                if (activePointerId === event.pointerId) {
-                  setActivePointerId(null);
-                }
+                endDrag(event.pointerId);
               },
               children: [
-                spectrumDbTicks.map((tick) => /* @__PURE__ */ jsxRuntimeExports.jsx(
+                visibleDbTicks.map((tick) => /* @__PURE__ */ jsxRuntimeExports.jsx(
                   "line",
                   {
                     x1: basePath.plotLeft,
@@ -16004,7 +16779,7 @@ function FilterResponseGraph({
                   },
                   `filter-grid-h-${tick.label}`
                 )),
-                spectrumFrequencyTicks.map((tick) => /* @__PURE__ */ jsxRuntimeExports.jsx(
+                visibleFrequencyTicks.map((tick) => /* @__PURE__ */ jsxRuntimeExports.jsx(
                   "line",
                   {
                     y1: basePath.plotTop,
@@ -16016,7 +16791,7 @@ function FilterResponseGraph({
                   },
                   `filter-grid-v-${tick.label}`
                 )),
-                spectrumDbTicks.map((tick) => /* @__PURE__ */ jsxRuntimeExports.jsx(
+                visibleDbTicks.map((tick) => /* @__PURE__ */ jsxRuntimeExports.jsx(
                   "text",
                   {
                     x: basePath.plotLeft + 2,
@@ -16027,7 +16802,7 @@ function FilterResponseGraph({
                   },
                   `filter-db-label-${tick.label}`
                 )),
-                spectrumFrequencyTicks.map((tick) => /* @__PURE__ */ jsxRuntimeExports.jsx(
+                visibleFrequencyTicks.map((tick) => /* @__PURE__ */ jsxRuntimeExports.jsx(
                   "text",
                   {
                     x: basePath.plotLeft + basePath.plotWidth * (tick.normalizedX ?? 0),
@@ -16047,6 +16822,79 @@ function FilterResponseGraph({
                     fill: "none",
                     stroke: liveHasActive ? "rgba(94, 215, 255, 0.98)" : "rgba(94, 215, 255, 0.72)",
                     strokeWidth: liveHasActive ? "3" : "2"
+                  }
+                ),
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "line",
+                  {
+                    x1: baseHandle.x,
+                    x2: baseHandle.x,
+                    y1: basePath.plotBottom,
+                    y2: baseHandle.y,
+                    stroke: "rgba(255, 196, 64, 0.18)",
+                    strokeWidth: "1.5",
+                    strokeDasharray: "4 4",
+                    pointerEvents: "none"
+                  }
+                ),
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "circle",
+                  {
+                    "data-role": "filter-response-handle-hit-target",
+                    cx: baseHandle.x,
+                    cy: baseHandle.y,
+                    r: "18",
+                    fill: "transparent",
+                    className: "cursor-grab active:cursor-grabbing",
+                    onPointerDown: (event) => {
+                      event.preventDefault();
+                      surfaceRef.current?.setPointerCapture(event.pointerId);
+                      const bounds = surfaceRef.current?.getBoundingClientRect();
+                      dragStateRef.current = {
+                        pointerId: event.pointerId,
+                        startClientX: event.clientX,
+                        startClientY: event.clientY,
+                        pointerOffsetX: bounds ? event.clientX - (bounds.left + baseHandle.x) : 0,
+                        pointerOffsetY: bounds ? event.clientY - (bounds.top + baseHandle.y) : 0,
+                        hasMoved: false
+                      };
+                      setActivePointerId(event.pointerId);
+                    }
+                  }
+                ),
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "circle",
+                  {
+                    cx: baseHandle.x,
+                    cy: baseHandle.y,
+                    r: "15",
+                    fill: "rgba(255, 180, 34, 0.18)",
+                    stroke: "rgba(255, 211, 121, 0.18)",
+                    strokeWidth: "1",
+                    pointerEvents: "none"
+                  }
+                ),
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "circle",
+                  {
+                    "data-role": "filter-response-handle",
+                    cx: baseHandle.x,
+                    cy: baseHandle.y,
+                    r: "10.5",
+                    fill: "#ffb81f",
+                    stroke: "rgba(255, 244, 219, 0.55)",
+                    strokeWidth: "1.6",
+                    pointerEvents: "none"
+                  }
+                ),
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "path",
+                  {
+                    d: `M ${baseHandle.x.toFixed(2)} ${(baseHandle.y - 4).toFixed(2)} L ${baseHandle.x.toFixed(2)} ${(baseHandle.y + 4).toFixed(2)} M ${(baseHandle.x - 4).toFixed(2)} ${baseHandle.y.toFixed(2)} L ${(baseHandle.x + 4).toFixed(2)} ${baseHandle.y.toFixed(2)}`,
+                    stroke: "rgba(5, 9, 19, 0.72)",
+                    strokeWidth: "1.8",
+                    strokeLinecap: "round",
+                    pointerEvents: "none"
                   }
                 )
               ]
@@ -16107,7 +16955,7 @@ function VoiceGlideControlSurface({
   className
 }) {
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: joinClasses(
-    "grid gap-4 rounded-[24px] border border-white/8 bg-white/[0.03] px-4 py-3",
+    "grid gap-3 rounded-[22px] border border-white/[0.05] bg-white/[0.025] px-4 py-3",
     className
   ), children: [
     /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -16135,7 +16983,7 @@ function KeyboardSectionShell({
 }) {
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: joinClasses("grid gap-3", className), children: [
     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: joinClasses(
-      "flex flex-col items-center justify-end gap-2 rounded-[24px] border border-white/8 bg-white/[0.03] px-2 py-3",
+      "flex flex-col items-center justify-end gap-2 rounded-[22px] border border-white/[0.05] bg-white/[0.025] px-2 py-3",
       railClassName
     ), children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[10px] uppercase tracking-[0.18em] text-slate-300/55", children: "Oct" }),
@@ -16186,6 +17034,8 @@ function WavetableStageSection({
   onPointerDown,
   onPointerMove,
   onPointerUp,
+  bottomLeftAccessory,
+  bottomRightAccessory,
   className
 }) {
   const debugState = reactExports.useMemo(() => ({
@@ -16198,7 +17048,7 @@ function WavetableStageSection({
     {
       ref: stageRef,
       className: joinClasses(
-        "cosimo-stage relative overflow-hidden rounded-[30px] border border-white/8",
+        "cosimo-stage relative overflow-hidden rounded-[28px] border border-white/[0.05]",
         className
       ),
       onPointerDown,
@@ -16242,107 +17092,26 @@ function WavetableStageSection({
             ] })
           ] })
         ] }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "absolute inset-x-0 bottom-0 flex items-end justify-start gap-3 p-5", children: canRetry ? /* @__PURE__ */ jsxRuntimeExports.jsx(
-          "button",
-          {
-            type: "button",
-            className: "cosimo-button rounded-full px-4 py-2 text-[11px] uppercase tracking-[0.18em] disabled:opacity-40",
-            disabled: !canRetry,
-            onClick: onRetry,
-            children: "Retry Load"
-          }
-        ) : null }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "absolute inset-x-0 bottom-0 flex items-end justify-between gap-3 p-5", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex min-w-0 items-end gap-3", children: [
+            bottomLeftAccessory,
+            canRetry ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "button",
+              {
+                type: "button",
+                className: "cosimo-button rounded-full px-4 py-2 text-[11px] uppercase tracking-[0.18em] disabled:opacity-40",
+                disabled: !canRetry,
+                onClick: onRetry,
+                children: "Retry Load"
+              }
+            ) : null
+          ] }),
+          bottomRightAccessory ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex min-w-0 items-end justify-end gap-3", children: bottomRightAccessory }) : null
+        ] }),
         /* @__PURE__ */ jsxRuntimeExports.jsx("pre", { "data-role": "wavetable-stage-debug", className: "hidden", children: JSON.stringify(debugState) })
       ]
     }
   );
-}
-function MsegOverviewSection({
-  msegState,
-  onOpenEditor,
-  onDepthChange,
-  onRateChange,
-  onToggleLoop,
-  depthFocusBindings,
-  rateFocusBindings,
-  className
-}) {
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: joinClasses(
-    "grid grid-rows-[auto_minmax(0,1fr)_auto] gap-3 rounded-[30px] border border-white/8 bg-white/[0.03] p-4 pb-5",
-    className
-  ), children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between gap-4", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-[11px] uppercase tracking-[0.22em] text-blue-300/70", children: "MSEG" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "font-mono text-sm tracking-[0.16em] text-cyan-200", children: msegState ? formatSeconds$1(clampMsegRateSeconds(msegState.playback.rate.seconds)) : "0.000 s" })
-    ] }),
-    msegState ? /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx(
-        "button",
-        {
-          type: "button",
-          className: "group min-h-0 overflow-hidden rounded-[24px] border border-white/6 bg-black/20 p-3 text-left transition hover:border-white/12 hover:bg-black/24",
-          onClick: onOpenEditor,
-          "aria-label": "Open MSEG editor",
-          children: /* @__PURE__ */ jsxRuntimeExports.jsx(
-            MsegPreview,
-            {
-              points: msegState.shape.points,
-              className: "h-full min-h-0 w-full overflow-hidden rounded-[18px] bg-white/[0.03]"
-            }
-          )
-        }
-      ),
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid gap-3 pt-1", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid grid-cols-[minmax(0,1fr)_92px] items-center gap-4", children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid gap-2", children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[11px] uppercase tracking-[0.18em] text-slate-300/60", children: "Depth" }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx(
-              "input",
-              {
-                className: "cosimo-range",
-                type: "range",
-                min: "-1",
-                max: "1",
-                step: "0.001",
-                value: Number(msegState.depth).toFixed(3),
-                onChange: (event) => onDepthChange(Number(event.target.value)),
-                ...depthFocusBindings
-              }
-            )
-          ] }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-right font-mono text-sm tracking-[0.16em] text-cyan-200", children: Number(msegState.depth).toFixed(3) })
-        ] }),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid grid-cols-[minmax(0,1fr)_92px_auto] items-center gap-4", children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid gap-2", children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[11px] uppercase tracking-[0.18em] text-slate-300/60", children: "Rate" }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx(
-              "input",
-              {
-                className: "cosimo-range",
-                type: "range",
-                min: MSEG_RATE_MIN_SECONDS,
-                max: MSEG_RATE_MAX_SECONDS,
-                step: "0.001",
-                value: clampMsegRateSeconds(msegState.playback.rate.seconds).toFixed(3),
-                onChange: (event) => onRateChange(Number(event.target.value)),
-                ...rateFocusBindings
-              }
-            )
-          ] }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-right font-mono text-sm tracking-[0.16em] text-cyan-200", children: formatSeconds$1(clampMsegRateSeconds(msegState.playback.rate.seconds)) }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx(
-            "button",
-            {
-              type: "button",
-              className: "cosimo-button h-11 rounded-2xl px-4 text-[11px] uppercase tracking-[0.18em]",
-              onClick: onToggleLoop,
-              children: msegState.playback.loop ? "Looping" : "One Shot"
-            }
-          )
-        ] })
-      ] })
-    ] }) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "rounded-2xl border border-white/8 bg-black/20 px-4 py-5 text-sm text-slate-300/70", children: "Loading MSEG state…" })
-  ] });
 }
 function getPitchClass(noteNumber) {
   const safeNoteNumber = Math.round(Number(noteNumber) || 0);
@@ -24468,25 +25237,29 @@ function requireNexusUI() {
 var NexusUIExports = requireNexusUI();
 const Nexus = /* @__PURE__ */ getDefaultExportFromCjs(NexusUIExports);
 let nexusNumberConstructor = Nexus.Number;
-function clampNumber(value, min, max) {
+function clampNumber$1(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
-function styleNexusNumberInput(element, host) {
-  element.style.borderRadius = "16px";
-  element.style.border = "1px solid rgba(255,255,255,0.08)";
-  element.style.boxShadow = "inset 0 1px 0 rgba(255,255,255,0.04)";
+function styleNexusNumberInput(element, host, {
+  variant,
+  width,
+  height
+}) {
+  element.style.borderRadius = variant === "overlay" ? "999px" : "16px";
+  element.style.border = variant === "overlay" ? "1px solid rgba(255,255,255,0.10)" : "1px solid rgba(255,255,255,0.08)";
+  element.style.boxShadow = variant === "overlay" ? "0 10px 28px rgba(0,0,0,0.26), inset 0 1px 0 rgba(255,255,255,0.05)" : "inset 0 1px 0 rgba(255,255,255,0.04)";
   element.style.fontFamily = '"SF Mono", "JetBrains Mono", ui-monospace, monospace';
   element.style.letterSpacing = "0.12em";
-  element.style.fontSize = "14px";
-  element.style.padding = "10px 14px";
-  element.style.backgroundColor = "rgba(255,255,255,0.06)";
+  element.style.fontSize = variant === "overlay" ? "13px" : "14px";
+  element.style.padding = variant === "overlay" ? "10px 16px" : "10px 14px";
+  element.style.backgroundColor = variant === "overlay" ? "rgba(0,0,0,0.45)" : "rgba(255,255,255,0.06)";
   element.style.color = "#d6f4ff";
   element.style.display = "block";
-  element.style.width = "118px";
-  element.style.height = "42px";
-  host.style.width = "118px";
-  host.style.height = "42px";
-  host.style.cursor = "ns-resize";
+  element.style.width = `${width}px`;
+  element.style.height = `${height}px`;
+  host.style.width = `${width}px`;
+  host.style.height = `${height}px`;
+  host.style.cursor = variant === "overlay" ? "ew-resize" : "ns-resize";
 }
 function NexusNumberField({
   label,
@@ -24495,6 +25268,13 @@ function NexusNumberField({
   max,
   step,
   decimalPlaces = 3,
+  suffix = "s",
+  variant = "default",
+  showLabel = true,
+  width = 118,
+  height = 42,
+  displayValueFromBinding,
+  bindingValueFromDisplay,
   onActivate,
   onBeginTextEntry,
   onEndTextEntry
@@ -24523,8 +25303,8 @@ function NexusNumberField({
     }
     host.replaceChildren();
     const widget = new nexusNumberConstructor(host, {
-      size: [118, 42],
-      value: binding.value,
+      size: [width, height],
+      value: displayValueFromBinding ? displayValueFromBinding(binding.value) : binding.value,
       min,
       max,
       step
@@ -24536,7 +25316,7 @@ function NexusNumberField({
     widget.colors.accent = "#8fe8ff";
     widget.colorInterface();
     widget.element.setAttribute("aria-label", label);
-    styleNexusNumberInput(widget.element, host);
+    styleNexusNumberInput(widget.element, host, { variant, width, height });
     const handleMouseDown = () => {
       callbackRef.current.onActivate?.();
     };
@@ -24550,8 +25330,9 @@ function NexusNumberField({
       callbackRef.current.onEndTextEntry?.();
     };
     const handleWidgetChange = (nextValue) => {
-      const safeValue = clampNumber(Number(nextValue) || 0, min, max);
-      bindingRef.current.setValue(safeValue);
+      const safeDisplayValue = clampNumber$1(Number(nextValue) || 0, min, max);
+      const bindingValue = bindingValueFromDisplay ? bindingValueFromDisplay(safeDisplayValue) : safeDisplayValue;
+      bindingRef.current.setValue(bindingValue);
     };
     widget.element.addEventListener("mousedown", handleMouseDown);
     widget.element.addEventListener("focus", handleFocus);
@@ -24569,7 +25350,7 @@ function NexusNumberField({
       widget.destroy();
       widgetRef.current = null;
     };
-  }, [decimalPlaces, label, max, min, step]);
+  }, [bindingValueFromDisplay, decimalPlaces, displayValueFromBinding, height, label, max, min, step, variant, width]);
   reactExports.useEffect(() => {
     const widget = widgetRef.current;
     if (!widget) {
@@ -24578,19 +25359,581 @@ function NexusNumberField({
     if (document.activeElement === widget.element) {
       return;
     }
-    if (Math.abs(widget.value - binding.value) <= step / 10) {
+    const displayValue = displayValueFromBinding ? displayValueFromBinding(binding.value) : binding.value;
+    if (Math.abs(widget.value - displayValue) <= step / 10) {
       return;
     }
-    widget.passiveUpdate(binding.value);
+    widget.passiveUpdate(displayValue);
     widget.render();
-  }, [binding.value, step]);
+  }, [binding.value, displayValueFromBinding, step]);
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "grid gap-2", children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[10px] uppercase tracking-[0.18em] text-slate-300/60", children: label }),
+    showLabel ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[10px] uppercase tracking-[0.18em] text-slate-300/60", children: label }) : /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "sr-only", children: label }),
     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-3", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { ref: hostRef, className: "h-[42px] w-[118px] rounded-[16px]" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono text-xs tracking-[0.18em] text-cyan-200/80", children: "s" })
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "div",
+        {
+          ref: hostRef,
+          className: variant === "overlay" ? "rounded-full" : "rounded-[16px]",
+          style: { width: `${width}px`, height: `${height}px` }
+        }
+      ),
+      suffix ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono text-xs tracking-[0.18em] text-cyan-200/80", children: suffix }) : null
     ] })
   ] });
+}
+const DRAG_START_THRESHOLD_PX = 2;
+function clampNumber(value, min, max) {
+  return Math.min(Math.max(value, min), max);
+}
+function quantizeToStep(value, min, max, step) {
+  if (!(step > 0)) {
+    return clampNumber(value, min, max);
+  }
+  const quantized = min + Math.round((value - min) / step) * step;
+  return clampNumber(Number(quantized.toFixed(8)), min, max);
+}
+function defaultFormatEditingValue(value) {
+  return String(value);
+}
+function defaultParseText(rawText) {
+  const numericValue = Number.parseFloat(rawText.trim());
+  return Number.isFinite(numericValue) ? numericValue : null;
+}
+function PrecisionNumberField({
+  ariaLabel,
+  binding,
+  min,
+  max,
+  step = 0,
+  width = 128,
+  height = 40,
+  suffix = null,
+  normalizedFromValue = (value) => value,
+  valueFromNormalized = (value) => value,
+  pixelsPerFullRange = 180,
+  fineDragMultiplier = 0.2,
+  formatDisplay = defaultFormatEditingValue,
+  formatEditingValue = defaultFormatEditingValue,
+  parseText = defaultParseText,
+  dataRole
+}) {
+  const inputRef = reactExports.useRef(null);
+  const activeDragRef = reactExports.useRef(null);
+  const draftValueRef = reactExports.useRef("");
+  const skipCommitOnBlurRef = reactExports.useRef(false);
+  const [isEditing, setIsEditing] = reactExports.useState(false);
+  const [draftValue, setDraftValue] = reactExports.useState("");
+  const normalizedMin = reactExports.useMemo(
+    () => Math.min(normalizedFromValue(min), normalizedFromValue(max)),
+    [max, min, normalizedFromValue]
+  );
+  const normalizedMax = reactExports.useMemo(
+    () => Math.max(normalizedFromValue(min), normalizedFromValue(max)),
+    [max, min, normalizedFromValue]
+  );
+  const displayValue = reactExports.useMemo(() => isEditing ? draftValue : formatDisplay(binding.value), [binding.value, draftValue, formatDisplay, isEditing]);
+  reactExports.useEffect(() => {
+    draftValueRef.current = draftValue;
+  }, [draftValue]);
+  reactExports.useEffect(() => {
+    if (!isEditing) {
+      return;
+    }
+    setDraftValue(formatEditingValue(binding.value));
+    const animationFrameID = window.requestAnimationFrame(() => {
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    });
+    return () => {
+      window.cancelAnimationFrame(animationFrameID);
+    };
+  }, [binding.value, formatEditingValue, isEditing]);
+  const commitTextEntry = (rawText) => {
+    const parsedValue = parseText(rawText);
+    const nextValue = quantizeToStep(
+      clampNumber(parsedValue ?? binding.value, min, max),
+      min,
+      max,
+      step
+    );
+    setDraftValue(formatEditingValue(nextValue));
+    if (Math.abs(nextValue - binding.value) <= Math.max(step / 10, 1e-9)) {
+      return;
+    }
+    binding.commitValue(nextValue);
+  };
+  const finishTextEntry = (commit) => {
+    if (!isEditing) {
+      return;
+    }
+    const nextDraftValue = draftValueRef.current;
+    setIsEditing(false);
+    if (commit) {
+      commitTextEntry(nextDraftValue);
+      return;
+    }
+    setDraftValue(formatEditingValue(binding.value));
+  };
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "grid gap-1", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "sr-only", children: ariaLabel }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs(
+      "div",
+      {
+        "data-role": dataRole,
+        className: "relative rounded-full border border-white/[0.10] bg-black/48 shadow-[0_10px_28px_rgba(0,0,0,0.26),inset_0_1px_0_rgba(255,255,255,0.05)]",
+        style: { width: `${width}px`, height: `${height}px` },
+        children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "input",
+            {
+              ref: inputRef,
+              "aria-label": ariaLabel,
+              type: "text",
+              inputMode: "decimal",
+              autoComplete: "off",
+              spellCheck: false,
+              readOnly: !isEditing,
+              value: displayValue,
+              className: `h-full w-full bg-transparent font-mono text-[13px] tracking-[0.12em] text-cyan-100 outline-none ${suffix && !isEditing ? "pr-11" : "pr-4"} pl-4 ${isEditing ? "cursor-text selection:bg-cyan-300/25" : "cursor-ew-resize select-none"}`,
+              onPointerDown: (event) => {
+                if (event.button !== 0 || isEditing) {
+                  return;
+                }
+                activeDragRef.current = {
+                  pointerId: event.pointerId,
+                  startClientX: event.clientX,
+                  startNormalizedValue: clampNumber(normalizedFromValue(binding.value), normalizedMin, normalizedMax),
+                  moved: false
+                };
+                binding.beginGesture();
+                event.currentTarget.setPointerCapture(event.pointerId);
+                event.preventDefault();
+              },
+              onPointerMove: (event) => {
+                const activeDrag = activeDragRef.current;
+                if (!activeDrag || activeDrag.pointerId !== event.pointerId || isEditing) {
+                  return;
+                }
+                const deltaX = event.clientX - activeDrag.startClientX;
+                if (Math.abs(deltaX) >= DRAG_START_THRESHOLD_PX) {
+                  activeDrag.moved = true;
+                }
+                const normalizedSpan = Math.max(1e-9, normalizedMax - normalizedMin);
+                const scaledDelta = deltaX / Math.max(1, pixelsPerFullRange) * normalizedSpan * (event.shiftKey ? fineDragMultiplier : 1);
+                const nextNormalizedValue = clampNumber(
+                  activeDrag.startNormalizedValue + scaledDelta,
+                  normalizedMin,
+                  normalizedMax
+                );
+                const nextBindingValue = quantizeToStep(
+                  clampNumber(valueFromNormalized(nextNormalizedValue), min, max),
+                  min,
+                  max,
+                  step
+                );
+                binding.setValue(nextBindingValue);
+              },
+              onPointerUp: (event) => {
+                const activeDrag = activeDragRef.current;
+                if (!activeDrag || activeDrag.pointerId !== event.pointerId || isEditing) {
+                  return;
+                }
+                activeDragRef.current = null;
+                event.currentTarget.releasePointerCapture?.(event.pointerId);
+                binding.endGesture();
+                if (!activeDrag.moved) {
+                  inputRef.current?.focus();
+                }
+              },
+              onPointerCancel: (event) => {
+                const activeDrag = activeDragRef.current;
+                if (!activeDrag || activeDrag.pointerId !== event.pointerId || isEditing) {
+                  return;
+                }
+                activeDragRef.current = null;
+                event.currentTarget.releasePointerCapture?.(event.pointerId);
+                binding.endGesture();
+              },
+              onDoubleClick: (event) => {
+                if (event.button !== 0) {
+                  return;
+                }
+                event.preventDefault();
+                setIsEditing(true);
+              },
+              onChange: (event) => {
+                if (!isEditing) {
+                  return;
+                }
+                setDraftValue(event.currentTarget.value);
+              },
+              onBlur: () => {
+                const shouldCommit = !skipCommitOnBlurRef.current;
+                skipCommitOnBlurRef.current = false;
+                finishTextEntry(shouldCommit);
+              },
+              onKeyDown: (event) => {
+                if (!isEditing) {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    setIsEditing(true);
+                  }
+                  return;
+                }
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  inputRef.current?.blur();
+                  return;
+                }
+                if (event.key === "Escape") {
+                  event.preventDefault();
+                  skipCommitOnBlurRef.current = true;
+                  finishTextEntry(false);
+                  inputRef.current?.blur();
+                }
+              }
+            }
+          ),
+          suffix && !isEditing ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 font-mono text-[10px] tracking-[0.16em] text-cyan-100/58", children: suffix }) : null
+        ]
+      }
+    )
+  ] });
+}
+function clamp$1(value, min, max) {
+  return Math.min(Math.max(value, min), max);
+}
+function formatPercent$1(value) {
+  return `${Math.round(value * 100)}%`;
+}
+function formatQValue(value) {
+  const qValue = normalizedToFilterQ(value);
+  return `${qValue >= 10 ? qValue.toFixed(1) : qValue.toFixed(2)} Q`;
+}
+function smoothstep(value) {
+  const clampedValue = clamp$1(value, 0, 1);
+  return clampedValue * clampedValue * (3 - 2 * clampedValue);
+}
+function smootherstep(value) {
+  const clampedValue = clamp$1(value, 0, 1);
+  return clampedValue * clampedValue * clampedValue * (clampedValue * (clampedValue * 6 - 15) + 10);
+}
+function evaluateBalancedPower(normalizedInput, coefficients) {
+  const x = clamp$1(normalizedInput, 0, 1);
+  const power = clamp$1(Number(coefficients.power) || 2.25, 0.35, 6);
+  if (x <= 0.5) {
+    return 0.5 * Math.pow(x * 2, power);
+  }
+  return 1 - 0.5 * Math.pow((1 - x) * 2, power);
+}
+function evaluateSmoothstepBlend(normalizedInput, coefficients) {
+  const x = clamp$1(normalizedInput, 0, 1);
+  const blend = clamp$1(Number(coefficients.blend) || 0.65, 0, 1);
+  const shaping = clamp$1(Number(coefficients.shaping) || 0.6, 0, 1);
+  const curved = smoothstep(x) * (1 - shaping) + smootherstep(x) * shaping;
+  return clamp$1(x * (1 - blend) + curved * blend, 0, 1);
+}
+function evaluateSigmoid(normalizedInput, coefficients) {
+  const x = clamp$1(normalizedInput, 0, 1);
+  const slope = clamp$1(Number(coefficients.slope) || 7, 0.5, 20);
+  const center = clamp$1(Number(coefficients.center) || 0.5, 0.08, 0.92);
+  const logistic = (sample) => 1 / (1 + Math.exp(-slope * (sample - center)));
+  const low = logistic(0);
+  const high = logistic(1);
+  const span = Math.max(1e-9, high - low);
+  return clamp$1((logistic(x) - low) / span, 0, 1);
+}
+const CURVE_FAMILY_DEFINITIONS = [
+  {
+    id: "linear",
+    label: "Linear",
+    equation: "y = x",
+    description: "Direct 1:1 motion with no shaping.",
+    coefficients: [],
+    evaluate: (normalizedInput) => clamp$1(normalizedInput, 0, 1)
+  },
+  {
+    id: "balanced-power",
+    label: "Balanced Power",
+    equation: "Piecewise power S-curve",
+    description: "Slower near the floor and ceiling, quicker through the middle.",
+    coefficients: [
+      {
+        key: "power",
+        label: "Power",
+        min: 0.35,
+        max: 6,
+        step: 0.01,
+        defaultValue: 2.25,
+        formatValue: (value) => value.toFixed(2)
+      }
+    ],
+    evaluate: evaluateBalancedPower
+  },
+  {
+    id: "smoothstep-blend",
+    label: "Smoothstep Blend",
+    equation: "mix(x, smoothstep(x), blend)",
+    description: "Gentle S-curve that can stay close to linear or lean into a softer middle.",
+    coefficients: [
+      {
+        key: "blend",
+        label: "Blend",
+        min: 0,
+        max: 1,
+        step: 0.01,
+        defaultValue: 0.65,
+        formatValue: formatPercent$1
+      },
+      {
+        key: "shaping",
+        label: "Shape",
+        min: 0,
+        max: 1,
+        step: 0.01,
+        defaultValue: 0.6,
+        formatValue: formatPercent$1
+      }
+    ],
+    evaluate: evaluateSmoothstepBlend
+  },
+  {
+    id: "sigmoid",
+    label: "Sigmoid",
+    equation: "Normalized logistic curve",
+    description: "Lets you move the center and tighten or loosen the middle response.",
+    coefficients: [
+      {
+        key: "slope",
+        label: "Slope",
+        min: 0.5,
+        max: 20,
+        step: 0.1,
+        defaultValue: 7,
+        formatValue: (value) => value.toFixed(1)
+      },
+      {
+        key: "center",
+        label: "Center",
+        min: 0.08,
+        max: 0.92,
+        step: 0.01,
+        defaultValue: 0.5,
+        formatValue: (value) => `${Math.round(value * 100)}%`
+      }
+    ],
+    evaluate: evaluateSigmoid
+  }
+];
+const CURVE_TARGET_DEFINITIONS = [
+  {
+    id: "filter-resonance-handle",
+    label: "Filter Resonance Drag",
+    description: "Controls how the filter graph handle and resonance drag field translate vertical travel into resonance.",
+    defaultFamilyId: "sigmoid",
+    defaultProfile: {
+      familyId: "sigmoid",
+      coefficients: {
+        slope: 11.1,
+        center: 0.84
+      }
+    },
+    allowedFamilyIds: [
+      "linear",
+      "balanced-power",
+      "smoothstep-blend",
+      "sigmoid"
+    ],
+    previewRangeLabel: `${FILTER_Q_MIN$1.toFixed(1)} Q -> ${FILTER_Q_MAX$1.toFixed(0)} Q`,
+    formatOutput: formatQValue
+  }
+];
+function getFamilyDefinitionInternal(familyId) {
+  return CURVE_FAMILY_DEFINITIONS.find((candidate) => candidate.id === familyId) ?? CURVE_FAMILY_DEFINITIONS[0];
+}
+function getTargetDefinitionInternal(targetId) {
+  return CURVE_TARGET_DEFINITIONS.find((candidate) => candidate.id === targetId) ?? CURVE_TARGET_DEFINITIONS[0];
+}
+function createDefaultCurveProfile(targetId) {
+  const target = getTargetDefinitionInternal(targetId);
+  const requestedFamilyId = typeof target.defaultProfile?.familyId === "string" ? target.defaultProfile.familyId : target.defaultFamilyId;
+  const family = target.allowedFamilyIds.includes(requestedFamilyId) ? getFamilyDefinitionInternal(requestedFamilyId) : getFamilyDefinitionInternal(target.defaultFamilyId);
+  return {
+    familyId: family.id,
+    coefficients: Object.fromEntries(
+      family.coefficients.map((coefficient) => {
+        const requestedValue = target.defaultProfile?.coefficients?.[coefficient.key];
+        const resolvedValue = Number.isFinite(Number(requestedValue)) ? Number(requestedValue) : coefficient.defaultValue;
+        return [
+          coefficient.key,
+          clamp$1(resolvedValue, coefficient.min, coefficient.max)
+        ];
+      })
+    )
+  };
+}
+function createDefaultCurveLabState() {
+  const activeTarget = CURVE_TARGET_DEFINITIONS[0];
+  return {
+    isOpen: false,
+    activeTargetId: activeTarget.id,
+    profiles: Object.fromEntries(
+      CURVE_TARGET_DEFINITIONS.map((target) => [target.id, createDefaultCurveProfile(target.id)])
+    )
+  };
+}
+function sanitizeCurveProfile(targetId, profile) {
+  const target = getTargetDefinitionInternal(targetId);
+  const fallback = createDefaultCurveProfile(target.id);
+  const requestedFamilyId = typeof profile?.familyId === "string" ? profile.familyId : fallback.familyId;
+  const family = target.allowedFamilyIds.includes(requestedFamilyId) ? getFamilyDefinitionInternal(requestedFamilyId) : getFamilyDefinitionInternal(fallback.familyId);
+  const coefficients = Object.fromEntries(
+    family.coefficients.map((definition) => {
+      const rawValue = profile?.coefficients?.[definition.key];
+      const resolvedValue = Number.isFinite(Number(rawValue)) ? Number(rawValue) : definition.defaultValue;
+      return [
+        definition.key,
+        clamp$1(resolvedValue, definition.min, definition.max)
+      ];
+    })
+  );
+  return {
+    familyId: family.id,
+    coefficients
+  };
+}
+function evaluateCurveProfile(targetId, profile, normalizedInput) {
+  const target = getTargetDefinitionInternal(targetId);
+  const sanitizedProfile = sanitizeCurveProfile(target.id, profile);
+  const family = getFamilyDefinitionInternal(sanitizedProfile.familyId);
+  return clamp$1(family.evaluate(normalizedInput, sanitizedProfile.coefficients), 0, 1);
+}
+function invertCurveProfile(targetId, profile, normalizedOutput) {
+  const target = getTargetDefinitionInternal(targetId);
+  const sanitizedProfile = sanitizeCurveProfile(target.id, profile);
+  const desiredOutput = clamp$1(normalizedOutput, 0, 1);
+  if (desiredOutput <= 0) {
+    return 0;
+  }
+  if (desiredOutput >= 1) {
+    return 1;
+  }
+  let low = 0;
+  let high = 1;
+  for (let iteration = 0; iteration < 32; iteration += 1) {
+    const mid = (low + high) * 0.5;
+    const sample = evaluateCurveProfile(target.id, sanitizedProfile, mid);
+    if (sample < desiredOutput) {
+      low = mid;
+    } else {
+      high = mid;
+    }
+  }
+  return (low + high) * 0.5;
+}
+const DESKTOP_WINDOW_KIND_KEY = "__COSIMO_DESKTOP_WINDOW_KIND__";
+const CURVE_LAB_WINDOW_KIND = "curve-lab";
+function isCurveLabStandaloneWindow(globalObject = window) {
+  return globalObject[DESKTOP_WINDOW_KIND_KEY] === CURVE_LAB_WINDOW_KIND;
+}
+function DesktopCurveLabStandaloneView() {
+  const isDevMode = false;
+  const nativeBridge = reactExports.useMemo(
+    () => null,
+    [isDevMode]
+  );
+  const [state, setState] = reactExports.useState(() => ({
+    ...createDefaultCurveLabState(),
+    isOpen: true
+  }));
+  reactExports.useRef(null);
+  const [hasHydratedNativeState, setHasHydratedNativeState] = reactExports.useState(false);
+  reactExports.useEffect(() => {
+    {
+      return;
+    }
+  }, [isDevMode, nativeBridge]);
+  reactExports.useEffect(() => {
+    {
+      return;
+    }
+  }, [hasHydratedNativeState, isDevMode, nativeBridge, state]);
+  {
+    return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex min-h-full items-center justify-center p-8 text-center text-[13px] text-slate-300/75", children: "Curve Lab is only available in the desktop dev app." });
+  }
+}
+function useDesktopCurveLab() {
+  const isDevMode = false;
+  const [state, setState] = reactExports.useState(() => createDefaultCurveLabState());
+  const nativeBridge = reactExports.useMemo(
+    () => null,
+    [isDevMode]
+  );
+  const usesNativeCurveLabWindow = nativeBridge !== null && !isCurveLabStandaloneWindow();
+  reactExports.useRef(null);
+  const [hasHydratedNativeState, setHasHydratedNativeState] = reactExports.useState(false);
+  const popupWindowRef = reactExports.useRef(null);
+  const popupRootRef = reactExports.useRef(null);
+  reactExports.useEffect(() => {
+    {
+      return;
+    }
+  }, [isDevMode, nativeBridge, usesNativeCurveLabWindow]);
+  reactExports.useEffect(() => {
+    {
+      return;
+    }
+  }, [hasHydratedNativeState, isDevMode, nativeBridge, state, usesNativeCurveLabWindow]);
+  reactExports.useEffect(() => {
+    {
+      return;
+    }
+  }, [isDevMode, state]);
+  const isCurveLabActive = isDevMode;
+  const closePopupWindow = reactExports.useCallback(() => {
+    popupRootRef.current?.unmount();
+    popupRootRef.current = null;
+    const popupWindow = popupWindowRef.current;
+    popupWindowRef.current = null;
+    if (popupWindow && !popupWindow.closed) {
+      popupWindow.close();
+    }
+  }, []);
+  const ensurePopupWindow = reactExports.useCallback(() => {
+    {
+      return null;
+    }
+  }, [isDevMode]);
+  reactExports.useEffect(() => {
+    {
+      return;
+    }
+  }, [closePopupWindow, ensurePopupWindow, isDevMode, state.isOpen, usesNativeCurveLabWindow]);
+  reactExports.useEffect(() => {
+    {
+      return;
+    }
+  }, [ensurePopupWindow, isDevMode, state, usesNativeCurveLabWindow]);
+  reactExports.useEffect(() => {
+    {
+      return;
+    }
+  }, [isDevMode, state.isOpen, usesNativeCurveLabWindow]);
+  reactExports.useEffect(() => () => {
+    closePopupWindow();
+  }, [closePopupWindow]);
+  const getProfile = (targetId) => state.profiles[targetId] ?? createDefaultCurveProfile(targetId);
+  const getActiveProfile = (targetId) => isCurveLabActive ? getProfile(targetId) : createDefaultCurveProfile(targetId);
+  const evaluateTarget = (targetId, normalizedInput) => evaluateCurveProfile(targetId, getActiveProfile(targetId), normalizedInput);
+  const invertTarget = (targetId, normalizedOutput) => invertCurveProfile(targetId, getActiveProfile(targetId), normalizedOutput);
+  const launcher = null;
+  return {
+    isDevMode,
+    panel: launcher,
+    getProfile: getActiveProfile,
+    evaluateTarget,
+    invertTarget
+  };
 }
 function serializeIdentity(value) {
   return value;
@@ -24625,175 +25968,6 @@ function usePatchEventTrigger(endpointID) {
   return reactExports.useCallback((value) => {
     patchConnection.sendEventOrValue?.(endpointID, value);
   }, [endpointID, patchConnection]);
-}
-const MSEG_SHAPE_STATE_KEY = "mseg1.shape";
-const MSEG_PLAYBACK_STATE_KEY = "mseg1.playback";
-const MSEG_DEPTH_STATE_KEY = "mseg1.depth";
-const MSEG_BUFFER_ENDPOINT_ID = "mseg1Buffer";
-const MSEG_PLAYBACK_ENDPOINT_ID = "mseg1Playback";
-const MSEG_DEPTH_ENDPOINT_ID = "mseg1Depth";
-class MsegController {
-  patchConnection;
-  options;
-  shape = createDefaultMsegShape();
-  playback = createDefaultMsegPlayback();
-  depth = MSEG_DEFAULT_DEPTH;
-  pendingBootState = null;
-  pendingBootKeys = null;
-  constructor(patchConnection, options = {}) {
-    this.patchConnection = patchConnection;
-    this.options = {
-      shapeKey: MSEG_SHAPE_STATE_KEY,
-      playbackKey: MSEG_PLAYBACK_STATE_KEY,
-      depthKey: MSEG_DEPTH_STATE_KEY,
-      bufferEndpointID: MSEG_BUFFER_ENDPOINT_ID,
-      playbackEndpointID: MSEG_PLAYBACK_ENDPOINT_ID,
-      depthEndpointID: MSEG_DEPTH_ENDPOINT_ID,
-      onStateChange: null,
-      ...options
-    };
-    this.handleStoredStateValue = this.handleStoredStateValue.bind(this);
-  }
-  attach() {
-    this.patchConnection.addStoredStateValueListener?.(this.handleStoredStateValue);
-  }
-  detach() {
-    this.patchConnection.removeStoredStateValueListener?.(this.handleStoredStateValue);
-  }
-  requestBootState() {
-    if (typeof this.patchConnection.requestFullStoredState === "function") {
-      this.patchConnection.requestFullStoredState((state) => {
-        this.applyBootState(state);
-      });
-      return;
-    }
-    if (typeof this.patchConnection.requestStoredStateValue !== "function") {
-      this.uploadAll();
-      this.emitStateChange();
-      return;
-    }
-    this.pendingBootState = {};
-    this.pendingBootKeys = /* @__PURE__ */ new Set([
-      this.options.shapeKey,
-      this.options.playbackKey,
-      this.options.depthKey
-    ]);
-    this.patchConnection.requestStoredStateValue(this.options.shapeKey);
-    this.patchConnection.requestStoredStateValue(this.options.playbackKey);
-    this.patchConnection.requestStoredStateValue(this.options.depthKey);
-  }
-  getState() {
-    return {
-      shape: this.shape,
-      playback: this.playback,
-      depth: this.depth
-    };
-  }
-  handleStoredStateValue(message) {
-    if (!message || typeof message !== "object") {
-      return;
-    }
-    const nextMessage = message;
-    const key = typeof nextMessage.key === "string" ? nextMessage.key : null;
-    if (!key) {
-      return;
-    }
-    if (this.pendingBootKeys?.has(key)) {
-      if (this.pendingBootState) {
-        this.pendingBootState[key] = nextMessage.value;
-      }
-      this.pendingBootKeys.delete(key);
-      if (this.pendingBootKeys.size === 0) {
-        const nextBootState = this.pendingBootState;
-        this.pendingBootState = null;
-        this.pendingBootKeys = null;
-        this.applyBootState(nextBootState ?? {});
-      }
-      return;
-    }
-    if (key === this.options.shapeKey) {
-      this.shape = deserializeMsegShape(nextMessage.value);
-      this.uploadBuffer();
-      this.emitStateChange();
-    } else if (key === this.options.playbackKey) {
-      this.playback = deserializeMsegPlayback(nextMessage.value);
-      this.uploadPlayback();
-      this.emitStateChange();
-    } else if (key === this.options.depthKey) {
-      this.depth = deserializeMsegDepth(nextMessage.value);
-      this.uploadDepth();
-      this.emitStateChange();
-    }
-  }
-  applyBootState(state) {
-    const fullState = state && typeof state === "object" ? state : {};
-    this.shape = deserializeMsegShape(fullState[this.options.shapeKey]);
-    this.playback = deserializeMsegPlayback(fullState[this.options.playbackKey]);
-    this.depth = deserializeMsegDepth(fullState[this.options.depthKey]);
-    this.pendingBootState = null;
-    this.pendingBootKeys = null;
-    this.uploadAll();
-    this.emitStateChange();
-  }
-  setShape(nextShape) {
-    const normalizedShape = normalizeMsegShape(nextShape);
-    if (msegShapesEqual(this.shape, normalizedShape)) {
-      return;
-    }
-    this.shape = normalizedShape;
-    this.patchConnection.sendStoredStateValue?.(this.options.shapeKey, serializeMsegShape(this.shape));
-    this.uploadBuffer();
-    this.emitStateChange();
-  }
-  setPlayback(nextPlayback) {
-    const normalizedPlayback = normalizeMsegPlayback(nextPlayback);
-    if (msegPlaybacksEqual(this.playback, normalizedPlayback)) {
-      return;
-    }
-    this.playback = normalizedPlayback;
-    this.patchConnection.sendStoredStateValue?.(this.options.playbackKey, serializeMsegPlayback(this.playback));
-    this.uploadPlayback();
-    this.emitStateChange();
-  }
-  setDepth(nextDepth) {
-    const clampedDepth = clampMsegDepth(nextDepth);
-    if (this.depth === clampedDepth) {
-      return;
-    }
-    this.depth = clampedDepth;
-    this.patchConnection.sendStoredStateValue?.(this.options.depthKey, this.depth);
-    this.uploadDepth();
-    this.emitStateChange();
-  }
-  addPoint(x, y) {
-    this.setShape(addMsegPoint(this.shape, x, y));
-  }
-  movePoint(pointIndex, x, y) {
-    this.setShape(moveMsegPoint(this.shape, pointIndex, x, y));
-  }
-  deletePoint(pointIndex) {
-    this.setShape(deleteMsegPoint(this.shape, pointIndex));
-  }
-  setSegmentCurvePower(segmentIndex, curvePower) {
-    this.setShape(setMsegSegmentCurvePower(this.shape, segmentIndex, curvePower));
-  }
-  uploadAll() {
-    this.uploadBuffer();
-    this.uploadPlayback();
-    this.uploadDepth();
-  }
-  uploadBuffer() {
-    this.patchConnection.sendEventOrValue?.(this.options.bufferEndpointID, Array.from(renderMsegShape(this.shape)));
-  }
-  uploadPlayback() {
-    this.patchConnection.sendEventOrValue?.(this.options.playbackEndpointID, toMsegPlaybackConfigEvent(this.playback));
-  }
-  uploadDepth() {
-    this.patchConnection.sendEventOrValue?.(this.options.depthEndpointID, this.depth);
-  }
-  emitStateChange() {
-    this.options.onStateChange?.(this.getState());
-  }
 }
 function hasCommandModifier(event) {
   return event.metaKey || event.ctrlKey || event.altKey;
@@ -24977,13 +26151,12 @@ const WAVETABLE_POSITION_ENDPOINT_ID = "wavetablePosition";
 const WAVETABLE_SELECT_ENDPOINT_ID = "wavetableSelect";
 const PLAY_MODE_ENDPOINT_ID = "playMode";
 const GLIDE_TIME_ENDPOINT_ID = "glideTime";
+const PAN_ENDPOINT_ID = "pan";
 const WARP_MODE_ENDPOINT_ID = "warpMode";
 const WARP_AMOUNT_ENDPOINT_ID = "warpAmount";
-const WARP_MSEG_DEPTH_ENDPOINT_ID = "warpMsegDepth";
 const FILTER_MODE_ENDPOINT_ID = "filterMode";
 const FILTER_CUTOFF_ENDPOINT_ID = "filterCutoff";
 const FILTER_Q_ENDPOINT_ID = "filterQ";
-const FILTER_MSEG_DEPTH_ENDPOINT_ID = "filterMsegDepth";
 const RUNTIME_SYNC_REQUEST_ENDPOINT_ID = "runtimeSyncRequest";
 const RUNTIME_STATE_ENDPOINT_ID = "runtimeState";
 const RETRY_DESIRED_TABLE_REQUEST_ENDPOINT_ID = "retryDesiredTableRequest";
@@ -24997,7 +26170,7 @@ function describeErrorMessage(error) {
   }
   return String(error);
 }
-function clamp$1(value, min, max) {
+function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 function useFactoryBankCatalog() {
@@ -25169,25 +26342,24 @@ function useObservedWarpState({
     amount: Number(warpAmount) || 0
   };
 }
-function useMsegState() {
+function useModulationState() {
   const patchConnection = usePatchConnection();
   const [state, setState] = reactExports.useState(null);
-  const controllerRef = reactExports.useRef(null);
+  const bridgeRef = reactExports.useRef(null);
   reactExports.useEffect(() => {
-    const controller = new MsegController(patchConnection, {
-      onStateChange: setState
-    });
-    controllerRef.current = controller;
-    controller.attach();
-    controller.requestBootState();
+    const bridge = acquireModulationRuntimeBridge(patchConnection);
+    bridgeRef.current = bridge;
+    setState(bridge.getState());
+    bridge.subscribe(setState);
     return () => {
-      controller.detach();
-      controllerRef.current = null;
+      bridge.unsubscribe(setState);
+      releaseModulationRuntimeBridge(patchConnection);
+      bridgeRef.current = null;
     };
   }, [patchConnection]);
   return {
     state,
-    controller: controllerRef
+    bridge: bridgeRef
   };
 }
 function useStagePositionDrag({
@@ -25271,7 +26443,7 @@ function useMsegEditorInteractions({
     if (!msegState) {
       return;
     }
-    setSelectedPointIndex((previousIndex) => clamp$1(
+    setSelectedPointIndex((previousIndex) => clamp(
       previousIndex,
       0,
       Math.max(0, msegState.shape.points.length - 1)
@@ -25565,7 +26737,7 @@ function useMsegEditorInteractions({
     if (!pointerState.moved && pointerState.deleteOnRelease && msegController.current) {
       msegController.current.deletePoint(pointerState.pointIndex);
       const pointCount = msegController.current.getState().shape.points.length;
-      setSelectedPointIndex(clamp$1(pointerState.pointIndex - 1, 0, Math.max(0, pointCount - 1)));
+      setSelectedPointIndex(clamp(pointerState.pointIndex - 1, 0, Math.max(0, pointCount - 1)));
     }
     setHoveredSegmentIndex(resolvePointerLocation(event.clientX, event.clientY)?.segmentIndex ?? -1);
     event.preventDefault();
@@ -25605,20 +26777,17 @@ function useSynthKeyboardRouting({
   keyboardRef,
   onStepWavetable,
   onStepPlayMode,
-  onStepMsegDepth,
   onStepMsegRate,
   onStepGlideTime
 }) {
   const synthInputRouter = useSynthInputRouter(keyboardRef);
   const wavetableTarget = useStableArrowTarget("wavetable-select", onStepWavetable);
   const playModeTarget = useStableArrowTarget("play-mode", onStepPlayMode);
-  const msegDepthTarget = useStableArrowTarget("mseg-depth", onStepMsegDepth);
   const msegRateTarget = useStableArrowTarget("mseg-rate", onStepMsegRate);
   const glideTarget = useStableArrowTarget("glide-time", onStepGlideTime);
   return reactExports.useMemo(() => ({
     wavetableFocusBindings: synthInputRouter.bindArrowTarget(wavetableTarget),
     playModeFocusBindings: synthInputRouter.bindArrowTarget(playModeTarget),
-    msegDepthFocusBindings: synthInputRouter.bindArrowTarget(msegDepthTarget),
     msegRateFocusBindings: synthInputRouter.bindArrowTarget(msegRateTarget),
     glideFocusTarget: {
       onActivate: () => synthInputRouter.activateArrowTarget(glideTarget),
@@ -25627,7 +26796,6 @@ function useSynthKeyboardRouting({
     }
   }), [
     glideTarget,
-    msegDepthTarget,
     msegRateTarget,
     playModeTarget,
     synthInputRouter,
@@ -25662,47 +26830,42 @@ function useSynthPatchViewModel({
   const playMode = usePatchParameterBinding({
     endpointID: PLAY_MODE_ENDPOINT_ID,
     initialValue: 0,
-    coerce: (value) => clamp$1(Math.round(Number(value) || 0), 0, Math.max(0, voiceModeCount - 1))
+    coerce: (value) => clamp(Math.round(Number(value) || 0), 0, Math.max(0, voiceModeCount - 1))
   });
   const glideTime = usePatchParameterBinding({
     endpointID: GLIDE_TIME_ENDPOINT_ID,
     initialValue: 0,
-    coerce: (value) => clamp$1(Number(value) || 0, GLIDE_TIME_MIN_SECONDS$1, GLIDE_TIME_MAX_SECONDS$1)
+    coerce: (value) => clamp(Number(value) || 0, GLIDE_TIME_MIN_SECONDS$1, GLIDE_TIME_MAX_SECONDS$1)
+  });
+  const pan = usePatchParameterBinding({
+    endpointID: PAN_ENDPOINT_ID,
+    initialValue: 0,
+    coerce: (value) => clamp(Number(value) || 0, -1, 1)
   });
   const warpMode = usePatchParameterBinding({
     endpointID: WARP_MODE_ENDPOINT_ID,
     initialValue: 0,
-    coerce: (value) => clamp$1(Math.round(Number(value) || 0), 0, 4)
+    coerce: (value) => clamp(Math.round(Number(value) || 0), 0, 4)
   });
   const warpAmount = usePatchParameterBinding({
     endpointID: WARP_AMOUNT_ENDPOINT_ID,
     initialValue: 0,
-    coerce: (value) => clamp$1(Number(value) || 0, 0, 1)
-  });
-  const warpMsegDepth = usePatchParameterBinding({
-    endpointID: WARP_MSEG_DEPTH_ENDPOINT_ID,
-    initialValue: 0,
-    coerce: (value) => clamp$1(Number(value) || 0, -1, 1)
+    coerce: (value) => clamp(Number(value) || 0, 0, 1)
   });
   const filterMode = usePatchParameterBinding({
     endpointID: FILTER_MODE_ENDPOINT_ID,
     initialValue: 0,
-    coerce: (value) => clamp$1(Math.round(Number(value) || 0), 0, 5)
+    coerce: (value) => clamp(Math.round(Number(value) || 0), 0, 5)
   });
   const filterCutoff = usePatchParameterBinding({
     endpointID: FILTER_CUTOFF_ENDPOINT_ID,
     initialValue: 1e3,
-    coerce: (value) => clamp$1(Number(value) || 0, 20, 2e4)
+    coerce: (value) => clamp(Number(value) || 0, 20, 2e4)
   });
   const filterQ = usePatchParameterBinding({
     endpointID: FILTER_Q_ENDPOINT_ID,
     initialValue: 0.707107,
-    coerce: (value) => clamp$1(Number(value) || 0, 0.1, 20)
-  });
-  const filterMsegDepth = usePatchParameterBinding({
-    endpointID: FILTER_MSEG_DEPTH_ENDPOINT_ID,
-    initialValue: 0,
-    coerce: (value) => clamp$1(Number(value) || 0, -6, 6)
+    coerce: (value) => clamp(Number(value) || 0, 0.1, 20)
   });
   const requestRuntimeSync = usePatchEventTrigger(RUNTIME_SYNC_REQUEST_ENDPOINT_ID);
   const retryDesiredTableLoad = usePatchEventTrigger(RETRY_DESIRED_TABLE_REQUEST_ENDPOINT_ID);
@@ -25724,7 +26887,19 @@ function useSynthPatchViewModel({
   const presentedTableIndex = runtimePresentation.presentedTableIndex ?? 0;
   const desiredTableIndex = runtimePresentation.desiredTableIndex ?? 0;
   const { frames, error: frameError } = useFactoryTableFrames(presentedTableIndex);
-  const { state: msegState, controller: msegController } = useMsegState();
+  const { state: modulationState, bridge: modulationBridge } = useModulationState();
+  const [selectedMsegSlot, setSelectedMsegSlot] = reactExports.useState(0);
+  const [selectedEnvelopeSlot, setSelectedEnvelopeSlot] = reactExports.useState(0);
+  const displayedMsegControllerRef = reactExports.useRef(null);
+  displayedMsegControllerRef.current = modulationBridge.current?.getMsegSlotController(selectedMsegSlot) ?? null;
+  const routes = modulationState?.routes ?? [];
+  const msegState = reactExports.useMemo(() => {
+    if (!modulationState || !modulationBridge.current) {
+      return null;
+    }
+    return buildDisplayedMsegState(modulationBridge.current, selectedMsegSlot);
+  }, [modulationBridge, modulationState, selectedMsegSlot]);
+  const selectedEnvelope = modulationState?.envelopeSlots[selectedEnvelopeSlot] ?? null;
   const stageBindings = useStagePositionDrag({
     stageRef,
     observedPosition,
@@ -25732,7 +26907,7 @@ function useSynthPatchViewModel({
   });
   const msegEditor = useMsegEditorInteractions({
     msegState,
-    msegController,
+    msegController: displayedMsegControllerRef,
     surfaceRef: msegEditorSurfaceRef,
     orientation: msegSurfaceOrientation,
     curveEditActivationMode: msegCurveEditActivationMode,
@@ -25754,62 +26929,77 @@ function useSynthPatchViewModel({
   }, [wavetableSelect]);
   const handleStepWavetable = reactExports.useCallback((direction) => {
     const maxTableIndex = Math.max(0, (catalog?.tables?.length ?? 1) - 1);
-    wavetableSelect.commitValue(clamp$1(desiredTableIndex + direction, 0, maxTableIndex));
+    wavetableSelect.commitValue(clamp(desiredTableIndex + direction, 0, maxTableIndex));
   }, [catalog?.tables?.length, desiredTableIndex, wavetableSelect]);
   const handleRetryLoad = reactExports.useCallback(() => {
     retryDesiredTableLoad(1);
   }, [retryDesiredTableLoad]);
-  const handleMsegDepthChange = reactExports.useCallback((nextValue) => {
-    msegController.current?.setDepth(nextValue);
-  }, [msegController]);
-  const handleStepMsegDepth = reactExports.useCallback((direction) => {
-    if (!msegState) {
-      return;
-    }
-    msegController.current?.setDepth(clamp$1(Number(msegState.depth) + direction * 1e-3, -1, 1));
-  }, [msegController, msegState]);
+  const handleSelectMsegSlot = reactExports.useCallback((slotIndex) => {
+    setSelectedMsegSlot(clamp(Math.round(slotIndex), 0, 2));
+  }, []);
+  const handleSelectEnvelopeSlot = reactExports.useCallback((slotIndex) => {
+    setSelectedEnvelopeSlot(clamp(Math.round(slotIndex), 0, 2));
+  }, []);
   const handleMsegRateChange = reactExports.useCallback((nextValue) => {
     if (!msegState) {
       return;
     }
-    msegController.current?.setPlayback({
+    displayedMsegControllerRef.current?.setPlayback({
       ...msegState.playback,
       rate: {
         kind: "seconds",
         seconds: nextValue
       }
     });
-  }, [msegController, msegState]);
+  }, [msegState]);
   const handleStepMsegRate = reactExports.useCallback((direction) => {
     if (!msegState) {
       return;
     }
     const nextRateSeconds = clampMsegRateSeconds(msegState.playback.rate.seconds + direction * 1e-3);
-    msegController.current?.setPlayback({
+    displayedMsegControllerRef.current?.setPlayback({
       ...msegState.playback,
       rate: {
         kind: "seconds",
         seconds: nextRateSeconds
       }
     });
-  }, [msegController, msegState]);
+  }, [msegState]);
   const handleToggleMsegLoop = reactExports.useCallback(() => {
     if (!msegState) {
       return;
     }
-    msegController.current?.setPlayback({
+    displayedMsegControllerRef.current?.setPlayback({
       ...msegState.playback,
       loop: msegState.playback.loop ? null : { startX: 0, endX: 1 },
       noteOffPolicy: "finish_loop"
     });
-  }, [msegController, msegState]);
+  }, [msegState]);
+  const handleEnvelopeChange = reactExports.useCallback((field, nextValue) => {
+    if (!selectedEnvelope) {
+      return;
+    }
+    modulationBridge.current?.setEnvelope(selectedEnvelopeSlot, {
+      ...selectedEnvelope,
+      [field]: nextValue
+    });
+  }, [modulationBridge, selectedEnvelope, selectedEnvelopeSlot]);
+  const handleAddRoute = reactExports.useCallback(() => {
+    modulationBridge.current?.addRoute(createDefaultRoute());
+  }, [modulationBridge]);
+  const handleRemoveRoute = reactExports.useCallback((routeIndex) => {
+    modulationBridge.current?.removeRoute(routeIndex);
+  }, [modulationBridge]);
+  const handleRouteChange = reactExports.useCallback((routeIndex, nextRoute) => {
+    modulationBridge.current?.setRoute(routeIndex, nextRoute);
+  }, [modulationBridge]);
   const handleStepPlayMode = reactExports.useCallback((direction) => {
     playMode.commitValue(
-      clamp$1(playMode.value + direction, 0, Math.max(0, voiceModeCount - 1))
+      clamp(playMode.value + direction, 0, Math.max(0, voiceModeCount - 1))
     );
   }, [playMode, voiceModeCount]);
   const handleStepGlideTime = reactExports.useCallback((direction) => {
-    glideTime.commitValue(clamp$1(
+    glideTime.commitValue(clamp(
       glideTime.value + direction * GLIDE_TIME_STEP_SECONDS$1,
       GLIDE_TIME_MIN_SECONDS$1,
       GLIDE_TIME_MAX_SECONDS$1
@@ -25819,7 +27009,6 @@ function useSynthPatchViewModel({
     keyboardRef,
     onStepWavetable: handleStepWavetable,
     onStepPlayMode: handleStepPlayMode,
-    onStepMsegDepth: handleStepMsegDepth,
     onStepMsegRate: handleStepMsegRate,
     onStepGlideTime: handleStepGlideTime
   });
@@ -25841,20 +27030,29 @@ function useSynthPatchViewModel({
     wavetablePosition,
     playMode,
     glideTime,
+    pan,
     warpMode,
     warpAmount,
-    warpMsegDepth,
     filterMode,
     filterCutoff,
     filterQ,
-    filterMsegDepth,
     observedFilterState,
     observedFilterSpectrum,
     observedWarpState,
+    modulationState,
+    selectedMsegSlot,
+    selectedEnvelopeSlot,
+    selectedEnvelope,
+    routes,
     msegState,
+    handleSelectMsegSlot,
+    handleSelectEnvelopeSlot,
+    handleEnvelopeChange,
+    handleAddRoute,
+    handleRemoveRoute,
+    handleRouteChange,
     handleSelectWavetable,
     handleRetryLoad,
-    handleMsegDepthChange,
     handleMsegRateChange,
     handleToggleMsegLoop,
     stageBindings,
@@ -25883,6 +27081,22 @@ const FILTER_MODE_OPTIONS = [
   { value: 4, label: "Notch" },
   { value: 5, label: "Peak" }
 ];
+const MOD_SOURCE_OPTIONS = [
+  { value: "mseg", label: "MSEG" },
+  { value: "env", label: "Envelope" },
+  { value: "velocity", label: "Velocity" },
+  { value: "pressure", label: "Aftertouch" },
+  { value: "slide", label: "Slide" }
+];
+const MOD_TARGET_OPTIONS = [
+  { value: "wavetablePosition", label: "Wavetable Pos" },
+  { value: "warpAmount", label: "Warp Amount" },
+  { value: "filterCutoffOctaves", label: "Filter Cutoff" },
+  { value: "filterQ", label: "Filter Q" },
+  { value: "pitchSemitones", label: "Pitch" },
+  { value: "ampGainDb", label: "Amp" },
+  { value: "pan", label: "Pan" }
+];
 function formatSeconds(seconds) {
   return `${seconds.toFixed(3)} s`;
 }
@@ -25897,30 +27111,202 @@ function formatSignedPercent(value) {
   const percentValue = Math.round(value * 100);
   return `${percentValue > 0 ? "+" : ""}${percentValue}%`;
 }
-function clamp(value, min, max) {
-  return Math.min(Math.max(value, min), max);
+function cycleWarpMode(currentMode) {
+  const currentIndex = WARP_MODE_OPTIONS.findIndex((option) => option.value === currentMode);
+  const nextIndex = currentIndex >= 0 ? (currentIndex + 1) % WARP_MODE_OPTIONS.length : 0;
+  return WARP_MODE_OPTIONS[nextIndex]?.value ?? WARP_MODE_OPTIONS[0].value;
 }
-function formatBipolarWarpAmount(value) {
-  const percentValue = Math.round((value - 0.5) * 200);
-  return `${percentValue > 0 ? "+" : ""}${percentValue}%`;
+function getWarpModeLabel(mode) {
+  return WARP_MODE_OPTIONS.find((option) => option.value === mode)?.label ?? "Off";
 }
-function formatWarpAmount(mode, value) {
-  if (mode === 1 || mode === 3 || mode === 4) {
-    return formatBipolarWarpAmount(value);
+function cycleFilterMode(currentMode) {
+  const currentIndex = FILTER_MODE_OPTIONS.findIndex((option) => option.value === currentMode);
+  const nextIndex = currentIndex >= 0 ? (currentIndex + 1) % FILTER_MODE_OPTIONS.length : 0;
+  return FILTER_MODE_OPTIONS[nextIndex]?.value ?? FILTER_MODE_OPTIONS[0].value;
+}
+function getFilterModeLabel(mode) {
+  return FILTER_MODE_OPTIONS.find((option) => option.value === mode)?.label ?? "Off";
+}
+function getFilterSpectrumRenderModeLabel(mode) {
+  return FILTER_SPECTRUM_RENDER_MODE_OPTIONS.find((option) => option.value === mode)?.label ?? "Graph";
+}
+function formatCutoffDisplay(value) {
+  const safeValue = Math.min(Math.max(Number(value) || FILTER_CUTOFF_MIN_HZ, FILTER_CUTOFF_MIN_HZ), FILTER_CUTOFF_MAX_HZ);
+  if (safeValue >= 1e4) {
+    return `${(safeValue / 1e3).toFixed(1)}k`;
   }
-  return formatPercent(value);
-}
-function formatCutoffHz(value) {
-  if (value >= 1e3) {
-    return `${(value / 1e3).toFixed(2)} kHz`;
+  if (safeValue >= 1e3) {
+    return `${(safeValue / 1e3).toFixed(2)}k`;
   }
-  return `${Math.round(value)} Hz`;
+  return `${Math.round(safeValue)}`;
 }
-function formatQ(value) {
-  return value.toFixed(2);
+function formatCutoffEditingValue(value) {
+  return `${Math.round(Math.min(Math.max(Number(value) || FILTER_CUTOFF_MIN_HZ, FILTER_CUTOFF_MIN_HZ), FILTER_CUTOFF_MAX_HZ))}`;
 }
-function formatSignedOctaves(value) {
-  return `${value > 0 ? "+" : ""}${value.toFixed(2)} oct`;
+function parseCutoffInput(text) {
+  const normalizedText = String(text ?? "").trim().toLowerCase().replace(/,/g, "").replace(/\s+/g, "");
+  if (!normalizedText) {
+    return null;
+  }
+  const match = normalizedText.match(/^(-?\d*\.?\d+)(k|khz|hz)?$/);
+  if (!match) {
+    return null;
+  }
+  const numericValue = Number(match[1]);
+  if (!Number.isFinite(numericValue)) {
+    return null;
+  }
+  return match[2]?.startsWith("k") ? numericValue * 1e3 : numericValue;
+}
+function formatResonanceDisplay(value) {
+  const safeValue = Math.min(Math.max(Number(value) || FILTER_Q_MIN$1, FILTER_Q_MIN$1), FILTER_Q_MAX$1);
+  return safeValue.toFixed(safeValue >= 10 ? 1 : 2);
+}
+function parseResonanceInput(text) {
+  const normalizedText = String(text ?? "").trim().toLowerCase().replace(/q/g, "");
+  if (!normalizedText) {
+    return null;
+  }
+  const numericValue = Number(normalizedText);
+  return Number.isFinite(numericValue) ? numericValue : null;
+}
+function WarpModeGlyph({ mode }) {
+  switch (mode) {
+    case 1:
+      return /* @__PURE__ */ jsxRuntimeExports.jsx("svg", { viewBox: "0 0 24 24", className: "h-[18px] w-[18px]", "aria-hidden": "true", children: /* @__PURE__ */ jsxRuntimeExports.jsx("path", { d: "M4 17.5 8.5 7 12 17.5 15.5 7 20 17.5", fill: "none", stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: "1.8" }) });
+    case 2:
+      return /* @__PURE__ */ jsxRuntimeExports.jsx("svg", { viewBox: "0 0 24 24", className: "h-[18px] w-[18px]", "aria-hidden": "true", children: /* @__PURE__ */ jsxRuntimeExports.jsx("path", { d: "M4 16V8L8 8V16L12 16V8L16 8V16L20 16V8", fill: "none", stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: "1.8" }) });
+    case 3:
+      return /* @__PURE__ */ jsxRuntimeExports.jsx("svg", { viewBox: "0 0 24 24", className: "h-[18px] w-[18px]", "aria-hidden": "true", children: /* @__PURE__ */ jsxRuntimeExports.jsx("path", { d: "M4 16.5C7 16.5 8 6.5 11 6.5C14 6.5 15 17.5 18 17.5C19.5 17.5 20.3 14.5 20 8.5", fill: "none", stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: "1.8" }) });
+    case 4:
+      return /* @__PURE__ */ jsxRuntimeExports.jsxs("svg", { viewBox: "0 0 24 24", className: "h-[18px] w-[18px]", "aria-hidden": "true", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("path", { d: "M4 17L10.5 7L13.5 12L20 7", fill: "none", stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: "1.8" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("path", { d: "M4 7L10.5 17L13.5 12L20 17", fill: "none", stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: "1.2", opacity: "0.8" })
+      ] });
+    default:
+      return /* @__PURE__ */ jsxRuntimeExports.jsx("svg", { viewBox: "0 0 24 24", className: "h-[18px] w-[18px]", "aria-hidden": "true", children: /* @__PURE__ */ jsxRuntimeExports.jsx("path", { d: "M3 12H21", fill: "none", stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: "1.8" }) });
+  }
+}
+function FilterModeGlyph({ mode }) {
+  switch (mode) {
+    case 1:
+      return /* @__PURE__ */ jsxRuntimeExports.jsx("svg", { viewBox: "0 0 24 24", className: "h-[18px] w-[18px]", "aria-hidden": "true", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "path",
+        {
+          d: "M3 7.5H9.5C12.5 7.5 15.5 9 16.5 12.5L18.5 19",
+          fill: "none",
+          stroke: "currentColor",
+          strokeLinecap: "round",
+          strokeLinejoin: "round",
+          strokeWidth: "1.8"
+        }
+      ) });
+    case 2:
+      return /* @__PURE__ */ jsxRuntimeExports.jsx("svg", { viewBox: "0 0 24 24", className: "h-[18px] w-[18px]", "aria-hidden": "true", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "path",
+        {
+          d: "M3 18.5L5.5 15.5C7.5 12.5 9.5 8.5 13 7.5H21",
+          fill: "none",
+          stroke: "currentColor",
+          strokeLinecap: "round",
+          strokeLinejoin: "round",
+          strokeWidth: "1.8"
+        }
+      ) });
+    case 3:
+      return /* @__PURE__ */ jsxRuntimeExports.jsx("svg", { viewBox: "0 0 24 24", className: "h-[18px] w-[18px]", "aria-hidden": "true", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "path",
+        {
+          d: "M3 18.5C6.5 18.5 8 18 9.5 14.5C11 11 11.5 8 12 8C12.5 8 13 11 14.5 14.5C16 18 17.5 18.5 21 18.5",
+          fill: "none",
+          stroke: "currentColor",
+          strokeLinecap: "round",
+          strokeLinejoin: "round",
+          strokeWidth: "1.8"
+        }
+      ) });
+    case 4:
+      return /* @__PURE__ */ jsxRuntimeExports.jsx("svg", { viewBox: "0 0 24 24", className: "h-[18px] w-[18px]", "aria-hidden": "true", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "path",
+        {
+          d: "M3 8.5C8 8.5 9 8.5 10.5 13.5C11.25 16 11.75 17.5 12 17.5C12.25 17.5 12.75 16 13.5 13.5C15 8.5 16 8.5 21 8.5",
+          fill: "none",
+          stroke: "currentColor",
+          strokeLinecap: "round",
+          strokeLinejoin: "round",
+          strokeWidth: "1.8"
+        }
+      ) });
+    case 5:
+      return /* @__PURE__ */ jsxRuntimeExports.jsx("svg", { viewBox: "0 0 24 24", className: "h-[18px] w-[18px]", "aria-hidden": "true", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "path",
+        {
+          d: "M3 18.5C8 18.5 9 18 10.5 12C11.3 8 11.8 5.5 12 5.5C12.2 5.5 12.7 8 13.5 12C15 18 16 18.5 21 18.5",
+          fill: "none",
+          stroke: "currentColor",
+          strokeLinecap: "round",
+          strokeLinejoin: "round",
+          strokeWidth: "1.8"
+        }
+      ) });
+    default:
+      return /* @__PURE__ */ jsxRuntimeExports.jsx("svg", { viewBox: "0 0 24 24", className: "h-[18px] w-[18px]", "aria-hidden": "true", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "path",
+        {
+          d: "M3 12H21",
+          fill: "none",
+          stroke: "currentColor",
+          strokeLinecap: "round",
+          strokeLinejoin: "round",
+          strokeWidth: "1.8"
+        }
+      ) });
+  }
+}
+function FilterSpectrumModeGlyph({ mode }) {
+  if (mode === "bars") {
+    return /* @__PURE__ */ jsxRuntimeExports.jsxs("svg", { viewBox: "0 0 24 24", className: "h-[18px] w-[18px]", "aria-hidden": "true", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("rect", { x: "4", y: "12", width: "3", height: "7", fill: "currentColor" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("rect", { x: "10.5", y: "8", width: "3", height: "11", fill: "currentColor" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("rect", { x: "17", y: "5", width: "3", height: "14", fill: "currentColor" })
+    ] });
+  }
+  if (mode === "round-bars") {
+    return /* @__PURE__ */ jsxRuntimeExports.jsxs("svg", { viewBox: "0 0 24 24", className: "h-[18px] w-[18px]", "aria-hidden": "true", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("rect", { x: "4", y: "12", width: "3.2", height: "7", rx: "1.6", fill: "currentColor" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("rect", { x: "10.4", y: "8", width: "3.2", height: "11", rx: "1.6", fill: "currentColor" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("rect", { x: "16.8", y: "5", width: "3.2", height: "14", rx: "1.6", fill: "currentColor" })
+    ] });
+  }
+  return /* @__PURE__ */ jsxRuntimeExports.jsx("svg", { viewBox: "0 0 24 24", className: "h-[18px] w-[18px]", "aria-hidden": "true", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+    "path",
+    {
+      d: "M4 16.5L8.5 13L12 9.5L15 11.5L20 6.5",
+      fill: "none",
+      stroke: "currentColor",
+      strokeLinecap: "round",
+      strokeLinejoin: "round",
+      strokeWidth: "1.8"
+    }
+  ) });
+}
+function OverlayIconChip({
+  ariaLabel,
+  title,
+  onClick,
+  children
+}) {
+  return /* @__PURE__ */ jsxRuntimeExports.jsx(
+    "button",
+    {
+      type: "button",
+      "aria-label": ariaLabel,
+      title,
+      className: "flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-black/45 text-slate-100 shadow-[0_12px_28px_rgba(0,0,0,0.32)] backdrop-blur-md transition hover:border-cyan-200/30 hover:text-cyan-100",
+      onClick,
+      children
+    }
+  );
 }
 function StatusHeader({ statusText }) {
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("header", { className: "flex items-center justify-between gap-4", children: [
@@ -25928,211 +27314,127 @@ function StatusHeader({ statusText }) {
     /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "rounded-full border border-white/8 bg-white/[0.04] px-4 py-2 text-right text-[11px] uppercase tracking-[0.16em] text-fuchsia-200/80", children: statusText })
   ] });
 }
-function WarpSection({
-  warpMode,
-  warpAmount,
-  warpMsegDepth
-}) {
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "grid gap-4 rounded-[24px] border border-white/8 bg-white/[0.03] p-5", children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-start justify-between gap-4", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-[11px] uppercase tracking-[0.22em] text-cyan-300/70", children: "Phase Warp" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "mt-2 text-sm text-slate-300/75", children: "Remap oscillator phase before the wavetable lookup. The amount can also be driven per voice by MSEG 1." })
-      ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "rounded-full border border-cyan-300/15 bg-cyan-300/8 px-3 py-1 text-[10px] uppercase tracking-[0.18em] text-cyan-100/85", children: "Production Path" })
-    ] }),
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid gap-5 lg:grid-cols-[220px_minmax(0,1fr)_minmax(0,1fr)]", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "grid gap-2", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[11px] uppercase tracking-[0.18em] text-slate-300/60", children: "Mode" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "relative", children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx(
-            "select",
-            {
-              "aria-label": "Warp mode",
-              className: "h-11 w-full appearance-none rounded-[16px] border border-white/8 bg-black/25 px-4 pr-10 text-[11px] uppercase tracking-[0.16em] text-cyan-100 outline-none transition hover:border-cyan-200/30 focus:border-cyan-200/45",
-              value: String(warpMode.value),
-              onChange: (event) => warpMode.commitValue(Number(event.target.value)),
-              children: WARP_MODE_OPTIONS.map((option) => /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: option.value, children: option.label }, option.value))
-            }
-          ),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "pointer-events-none absolute inset-y-0 right-0 flex items-center pr-4 text-slate-300/75", children: /* @__PURE__ */ jsxRuntimeExports.jsx("svg", { className: "h-3 w-3", viewBox: "0 0 12 12", "aria-hidden": "true", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
-            "path",
-            {
-              d: "M3 4.5 6 7.5 9 4.5",
-              fill: "none",
-              stroke: "currentColor",
-              strokeLinecap: "round",
-              strokeLinejoin: "round",
-              strokeWidth: "1.4"
-            }
-          ) }) })
-        ] })
-      ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(
-        RangeField,
-        {
-          label: "Amount",
-          min: 0,
-          max: 1,
-          step: 1e-3,
-          value: warpAmount.value,
-          displayValue: formatWarpAmount(warpMode.value, warpAmount.value),
-          onChange: (nextValue) => warpAmount.commitValue(nextValue),
-          ariaLabel: "Warp amount"
-        }
-      ),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(
-        RangeField,
-        {
-          label: "MSEG 1 Depth",
-          min: -1,
-          max: 1,
-          step: 1e-3,
-          value: warpMsegDepth.value,
-          displayValue: formatSignedPercent(warpMsegDepth.value),
-          onChange: (nextValue) => warpMsegDepth.commitValue(nextValue),
-          ariaLabel: "Warp MSEG depth"
-        }
-      )
-    ] })
-  ] });
-}
 function FilterSection({
   filterMode,
   filterCutoff,
   filterQ,
-  filterMsegDepth,
   observedFilterState,
-  observedFilterSpectrum
+  observedFilterSpectrum,
+  resonanceNormalizedFromQ,
+  resonanceQFromSurface,
+  resonanceCurveDebugState,
+  className
 }) {
   const [spectrumRenderMode, setSpectrumRenderMode] = reactExports.useState("graph");
-  const selectedSpectrumMode = FILTER_SPECTRUM_RENDER_MODE_OPTIONS.find((option) => option.value === spectrumRenderMode) ?? FILTER_SPECTRUM_RENDER_MODE_OPTIONS[0];
-  const normalizedCutoff = clamp(
-    (Math.log(Math.max(20, filterCutoff.value)) - Math.log(20)) / (Math.log(2e4) - Math.log(20)),
-    0,
-    1
-  );
-  const normalizedQ = clamp((filterQ.value - 0.1) / (20 - 0.1), 0, 1);
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "grid gap-4 rounded-[24px] border border-white/8 bg-white/[0.03] p-5", children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-start justify-between gap-4", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-[11px] uppercase tracking-[0.22em] text-sky-300/70", children: "Filter" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "mt-2 text-sm text-slate-300/75", children: "Apply a per-voice multimode filter after the oscillator and let the graph follow the newest active note." })
-      ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "rounded-full border border-sky-300/15 bg-sky-300/8 px-3 py-1 text-[10px] uppercase tracking-[0.18em] text-sky-100/85", children: "Live Response" })
-    ] }),
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-wrap items-center gap-2", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-[11px] uppercase tracking-[0.18em] text-slate-300/60", children: "Analyzer View" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "inline-flex rounded-full border border-white/8 bg-black/20 p-1", children: FILTER_SPECTRUM_RENDER_MODE_OPTIONS.map((option) => /* @__PURE__ */ jsxRuntimeExports.jsx(
-        "button",
-        {
-          type: "button",
-          "aria-label": `Analyzer view ${option.label}`,
-          "aria-pressed": spectrumRenderMode === option.value,
-          className: `rounded-full px-3 py-1 text-[10px] uppercase tracking-[0.18em] transition ${spectrumRenderMode === option.value ? "bg-cyan-300/18 text-cyan-100" : "text-slate-300/65 hover:text-slate-100"}`,
-          onClick: () => setSpectrumRenderMode(option.value),
-          children: option.label
-        },
-        option.value
-      )) }),
-      /* @__PURE__ */ jsxRuntimeExports.jsxs(
-        "button",
-        {
-          type: "button",
-          "aria-label": "Cycle analyzer view",
-          className: "rounded-full border border-white/8 bg-black/20 px-3 py-2 text-[10px] uppercase tracking-[0.18em] text-slate-200/80 transition hover:border-cyan-200/35 hover:text-cyan-100",
-          onClick: () => setSpectrumRenderMode((previousMode) => cycleFilterSpectrumRenderMode(previousMode)),
-          children: [
-            "Cycle: ",
-            selectedSpectrumMode.label
-          ]
-        }
-      )
-    ] }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx(
-      FilterResponseGraph,
-      {
-        baseMode: filterMode.value,
-        baseCutoffHz: filterCutoff.value,
-        baseQ: filterQ.value,
-        liveMode: observedFilterState.mode,
-        liveCutoffHz: observedFilterState.cutoffHz,
-        liveQ: observedFilterState.q,
-        liveHasActive: observedFilterState.hasActive,
-        spectrumFrame: observedFilterSpectrum,
-        spectrumRenderMode,
-        onCutoffChange: (nextValue) => filterCutoff.commitValue(nextValue),
-        onQChange: (nextValue) => filterQ.commitValue(nextValue)
-      }
-    ),
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid gap-5 lg:grid-cols-[220px_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)]", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "grid gap-2", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[11px] uppercase tracking-[0.18em] text-slate-300/60", children: "Mode" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "relative", children: [
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+    "section",
+    {
+      "data-role": "filter-card",
+      className: `relative min-h-0 overflow-hidden rounded-[28px] border border-white/[0.04] bg-[radial-gradient(circle_at_top,rgba(93,173,255,0.14),transparent_34%),linear-gradient(180deg,rgba(6,10,22,0.98),rgba(2,4,11,1))] ${className ?? ""}`,
+      children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "absolute inset-0 rounded-[28px] shadow-[inset_0_1px_0_rgba(255,255,255,0.08),inset_0_-64px_80px_rgba(0,0,0,0.34)]" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "absolute inset-0 p-3", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+          FilterResponseGraph,
+          {
+            baseMode: filterMode.value,
+            baseCutoffHz: filterCutoff.value,
+            baseQ: filterQ.value,
+            liveMode: observedFilterState.mode,
+            liveCutoffHz: observedFilterState.cutoffHz,
+            liveQ: observedFilterState.q,
+            liveHasActive: observedFilterState.hasActive,
+            spectrumFrame: observedFilterSpectrum,
+            spectrumRenderMode,
+            resonanceNormalizedFromQ,
+            resonanceQFromSurface,
+            resonanceCurveDebugState,
+            onGestureStart: () => {
+              filterCutoff.beginGesture();
+              filterQ.beginGesture();
+            },
+            onGestureEnd: () => {
+              filterCutoff.endGesture();
+              filterQ.endGesture();
+            },
+            onCutoffSet: (nextValue) => filterCutoff.setValue(nextValue),
+            onQSet: (nextValue) => filterQ.setValue(nextValue),
+            className: "h-full w-full"
+          }
+        ) }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "absolute inset-x-0 top-0 z-10 flex items-start justify-between p-3", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            OverlayIconChip,
+            {
+              ariaLabel: `Cycle filter mode (currently ${getFilterModeLabel(filterMode.value)})`,
+              title: `Filter mode: ${getFilterModeLabel(filterMode.value)}`,
+              onClick: () => filterMode.commitValue(cycleFilterMode(filterMode.value)),
+              children: /* @__PURE__ */ jsxRuntimeExports.jsx(FilterModeGlyph, { mode: filterMode.value })
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            OverlayIconChip,
+            {
+              ariaLabel: `Cycle analyzer view (currently ${getFilterSpectrumRenderModeLabel(spectrumRenderMode)})`,
+              title: `Analyzer view: ${getFilterSpectrumRenderModeLabel(spectrumRenderMode)}`,
+              onClick: () => setSpectrumRenderMode((previousMode) => cycleFilterSpectrumRenderMode(previousMode)),
+              children: /* @__PURE__ */ jsxRuntimeExports.jsx(FilterSpectrumModeGlyph, { mode: spectrumRenderMode })
+            }
+          )
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "pointer-events-none absolute inset-x-0 bottom-0 z-10 flex items-end justify-between gap-3 p-3", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "pointer-events-auto", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+            PrecisionNumberField,
+            {
+              ariaLabel: "Filter cutoff",
+              binding: filterCutoff,
+              min: FILTER_CUTOFF_MIN_HZ,
+              max: FILTER_CUTOFF_MAX_HZ,
+              step: 1,
+              formatDisplay: formatCutoffDisplay,
+              formatEditingValue: formatCutoffEditingValue,
+              parseText: parseCutoffInput,
+              normalizedFromValue: filterCutoffHzToNormalized,
+              valueFromNormalized: normalizedToFilterCutoffHz,
+              pixelsPerFullRange: 220,
+              dataRole: "filter-cutoff-field",
+              width: 122,
+              height: 40
+            }
+          ) }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "pointer-events-auto", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+            PrecisionNumberField,
+            {
+              ariaLabel: "Filter resonance",
+              binding: filterQ,
+              min: FILTER_Q_MIN$1,
+              max: FILTER_Q_MAX$1,
+              step: 0.01,
+              formatDisplay: formatResonanceDisplay,
+              parseText: parseResonanceInput,
+              normalizedFromValue: resonanceNormalizedFromQ,
+              valueFromNormalized: resonanceQFromSurface,
+              pixelsPerFullRange: 180,
+              dataRole: "filter-resonance-field",
+              width: 92,
+              height: 40
+            }
+          ) })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "sr-only", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { children: [
+          "Filter mode",
           /* @__PURE__ */ jsxRuntimeExports.jsx(
             "select",
             {
               "aria-label": "Filter mode",
-              className: "h-11 w-full appearance-none rounded-[16px] border border-white/8 bg-black/25 px-4 pr-10 text-[11px] uppercase tracking-[0.16em] text-cyan-100 outline-none transition hover:border-cyan-200/30 focus:border-cyan-200/45",
               value: String(filterMode.value),
               onChange: (event) => filterMode.commitValue(Number(event.target.value)),
               children: FILTER_MODE_OPTIONS.map((option) => /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: option.value, children: option.label }, option.value))
             }
-          ),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "pointer-events-none absolute inset-y-0 right-0 flex items-center pr-4 text-slate-300/75", children: /* @__PURE__ */ jsxRuntimeExports.jsx("svg", { className: "h-3 w-3", viewBox: "0 0 12 12", "aria-hidden": "true", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
-            "path",
-            {
-              d: "M3 4.5 6 7.5 9 4.5",
-              fill: "none",
-              stroke: "currentColor",
-              strokeLinecap: "round",
-              strokeLinejoin: "round",
-              strokeWidth: "1.4"
-            }
-          ) }) })
-        ] })
-      ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(
-        RangeField,
-        {
-          label: "Cutoff",
-          min: 0,
-          max: 1,
-          step: 1e-3,
-          value: normalizedCutoff,
-          displayValue: formatCutoffHz(filterCutoff.value),
-          onChange: (nextValue) => filterCutoff.commitValue(Math.exp(Math.log(20) + (Math.log(2e4) - Math.log(20)) * nextValue)),
-          ariaLabel: "Filter cutoff"
-        }
-      ),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(
-        RangeField,
-        {
-          label: "Resonance",
-          min: 0,
-          max: 1,
-          step: 1e-3,
-          value: normalizedQ,
-          displayValue: formatQ(filterQ.value),
-          onChange: (nextValue) => filterQ.commitValue(0.1 + (20 - 0.1) * nextValue),
-          ariaLabel: "Filter resonance"
-        }
-      ),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(
-        RangeField,
-        {
-          label: "MSEG 1 Depth",
-          min: -6,
-          max: 6,
-          step: 1e-3,
-          value: filterMsegDepth.value,
-          displayValue: formatSignedOctaves(filterMsegDepth.value),
-          onChange: (nextValue) => filterMsegDepth.commitValue(nextValue),
-          ariaLabel: "Filter MSEG depth"
-        }
-      )
-    ] })
-  ] });
+          )
+        ] }) })
+      ]
+    }
+  );
 }
 function KeyboardToolbar({
   playMode,
@@ -26198,6 +27500,7 @@ function KeyboardSection({
 }
 function MsegEditorModal({
   isOpen,
+  slotLabel,
   msegState,
   surfaceRef,
   selectedPointIndex,
@@ -26218,8 +27521,8 @@ function MsegEditorModal({
   return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "absolute inset-0 z-20 flex items-center justify-center bg-[#030711]/85 p-6 backdrop-blur-md", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid h-full w-full max-w-[1080px] grid-rows-[auto_minmax(0,1fr)_auto] gap-5 rounded-[28px] border border-white/10 bg-[#09101d]/95 p-6 shadow-[0_36px_80px_rgba(0,0,0,0.5)]", children: [
     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-start justify-between gap-4", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-[11px] uppercase tracking-[0.22em] text-blue-300/70", children: "MSEG 1" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "mt-2 text-2xl font-semibold tracking-[-0.04em] text-amber-100", children: "Fixed Wavetable Route" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-[11px] uppercase tracking-[0.22em] text-blue-300/70", children: slotLabel }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "mt-2 text-2xl font-semibold tracking-[-0.04em] text-amber-100", children: "Modulation Shape Editor" }),
         /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "mt-2 text-sm text-slate-300/70", children: "Drag a point to move it. Click and drag a segment up or down to bend it. Click an empty spot to add a point. Click an interior point without dragging to delete it." })
       ] }),
       /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -26278,32 +27581,375 @@ function MsegEditorModal({
     ] })
   ] }) });
 }
+function ModulationMatrixSection({
+  pan,
+  selectedMsegSlot,
+  msegState,
+  selectedEnvelopeSlot,
+  selectedEnvelope,
+  routes,
+  onSelectMsegSlot,
+  onOpenMsegEditor,
+  onMsegRateChange,
+  onToggleMsegLoop,
+  onSelectEnvelopeSlot,
+  onEnvelopeChange,
+  onAddRoute,
+  onRemoveRoute,
+  onRouteChange,
+  msegRateFocusBindings
+}) {
+  const routeRowRefs = reactExports.useRef([]);
+  const pendingRouteScrollIndexRef = reactExports.useRef(null);
+  reactExports.useEffect(() => {
+    const pendingRouteIndex = pendingRouteScrollIndexRef.current;
+    if (pendingRouteIndex === null || pendingRouteIndex >= routes.length) {
+      return;
+    }
+    pendingRouteScrollIndexRef.current = null;
+    const nextRouteElement = routeRowRefs.current[pendingRouteIndex];
+    if (!nextRouteElement) {
+      return;
+    }
+    window.requestAnimationFrame(() => {
+      nextRouteElement.scrollIntoView({
+        behavior: "smooth",
+        block: "nearest",
+        inline: "nearest"
+      });
+    });
+  }, [routes.length]);
+  const handleAddRouteClick = reactExports.useCallback(() => {
+    if (routes.length >= MODULATION_MAX_ROUTES) {
+      return;
+    }
+    pendingRouteScrollIndexRef.current = routes.length;
+    onAddRoute();
+  }, [onAddRoute, routes.length]);
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "grid gap-4 rounded-[22px] border border-white/[0.05] bg-white/[0.025] p-4", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex items-start justify-between gap-4", children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-[11px] uppercase tracking-[0.22em] text-emerald-300/70", children: "Modulation" }) }) }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid gap-3 rounded-[20px] bg-black/16 p-3", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between gap-4", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-[11px] uppercase tracking-[0.18em] text-slate-300/60", children: "MSEG Slots" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "inline-flex rounded-full border border-white/8 bg-white/[0.03] p-1", children: Array.from({ length: MODULATION_MSEG_SLOT_COUNT }, (_, slotIndex) => /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "button",
+            {
+              type: "button",
+              "aria-label": `Select MSEG ${slotIndex + 1}`,
+              className: `rounded-full px-3 py-1 text-[10px] uppercase tracking-[0.18em] transition ${selectedMsegSlot === slotIndex ? "bg-cyan-300/18 text-cyan-100" : "text-slate-300/65 hover:text-slate-100"}`,
+              onClick: () => onSelectMsegSlot(slotIndex),
+              children: `MSEG ${slotIndex + 1}`
+            },
+            `mseg-slot-${slotIndex + 1}`
+          )) })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          "button",
+          {
+            type: "button",
+            className: "grid gap-3 rounded-[18px] bg-white/[0.03] p-3 text-left transition hover:bg-white/[0.05]",
+            onClick: onOpenMsegEditor,
+            "aria-label": "Open MSEG editor",
+            children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between gap-4", children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-[10px] uppercase tracking-[0.18em] text-slate-300/55", children: `MSEG ${selectedMsegSlot + 1}` }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "mt-1 text-sm font-medium text-slate-100", children: "Open Shape Editor" })
+                ] }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-[10px] uppercase tracking-[0.18em] text-cyan-100/75", children: msegState?.playback.loop ? "Loop" : "One Shot" })
+              ] }),
+              msegState ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+                MsegPreview,
+                {
+                  points: msegState.shape.points,
+                  className: "h-24 w-full overflow-hidden rounded-[18px] bg-white/[0.03]"
+                }
+              ) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "h-24 rounded-[18px] bg-white/[0.03]" })
+            ]
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          RangeField,
+          {
+            label: "Rate",
+            min: MSEG_RATE_MIN_SECONDS,
+            max: MSEG_RATE_MAX_SECONDS,
+            step: 1e-3,
+            value: clampMsegRateSeconds(Number(msegState?.playback.rate.seconds ?? 1)),
+            displayValue: formatSeconds(Number(msegState?.playback.rate.seconds ?? 1)),
+            onChange: onMsegRateChange,
+            ariaLabel: "MSEG rate",
+            focusBindings: msegRateFocusBindings
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "button",
+          {
+            type: "button",
+            className: "cosimo-button h-11 rounded-2xl px-4 text-[11px] uppercase tracking-[0.18em]",
+            onClick: onToggleMsegLoop,
+            "aria-label": msegState?.playback.loop ? "Looping" : "One Shot",
+            children: msegState?.playback.loop ? "Looping" : "One Shot"
+          }
+        )
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid gap-3 rounded-[20px] bg-black/16 p-3", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between gap-4", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-[11px] uppercase tracking-[0.18em] text-slate-300/60", children: "Envelope Slots" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "inline-flex rounded-full border border-white/8 bg-white/[0.03] p-1", children: Array.from({ length: MODULATION_ENV_SLOT_COUNT }, (_, slotIndex) => /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "button",
+            {
+              type: "button",
+              "aria-label": `Select envelope ${slotIndex + 1}`,
+              className: `rounded-full px-3 py-1 text-[10px] uppercase tracking-[0.18em] transition ${selectedEnvelopeSlot === slotIndex ? "bg-emerald-300/18 text-emerald-100" : "text-slate-300/65 hover:text-slate-100"}`,
+              onClick: () => onSelectEnvelopeSlot(slotIndex),
+              children: `Env ${slotIndex + 1}`
+            },
+            `env-slot-${slotIndex + 1}`
+          )) })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          RangeField,
+          {
+            label: "Pan",
+            min: -1,
+            max: 1,
+            step: 1e-3,
+            value: pan.value,
+            displayValue: formatSignedPercent(pan.value),
+            onChange: (nextValue) => pan.commitValue(nextValue),
+            ariaLabel: "Pan"
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid gap-3 sm:grid-cols-2", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            RangeField,
+            {
+              label: "Attack",
+              min: 1e-3,
+              max: 10,
+              step: 1e-3,
+              value: Number(selectedEnvelope?.attackSeconds ?? 0.01),
+              displayValue: formatSeconds(Number(selectedEnvelope?.attackSeconds ?? 0.01)),
+              onChange: (nextValue) => onEnvelopeChange("attackSeconds", nextValue),
+              ariaLabel: "Envelope attack"
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            RangeField,
+            {
+              label: "Decay",
+              min: 1e-3,
+              max: 10,
+              step: 1e-3,
+              value: Number(selectedEnvelope?.decaySeconds ?? 0.25),
+              displayValue: formatSeconds(Number(selectedEnvelope?.decaySeconds ?? 0.25)),
+              onChange: (nextValue) => onEnvelopeChange("decaySeconds", nextValue),
+              ariaLabel: "Envelope decay"
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            RangeField,
+            {
+              label: "Sustain",
+              min: 0,
+              max: 1,
+              step: 1e-3,
+              value: Number(selectedEnvelope?.sustain ?? 0.5),
+              displayValue: formatPercent(Number(selectedEnvelope?.sustain ?? 0.5)),
+              onChange: (nextValue) => onEnvelopeChange("sustain", nextValue),
+              ariaLabel: "Envelope sustain"
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            RangeField,
+            {
+              label: "Release",
+              min: 1e-3,
+              max: 10,
+              step: 1e-3,
+              value: Number(selectedEnvelope?.releaseSeconds ?? 0.2),
+              displayValue: formatSeconds(Number(selectedEnvelope?.releaseSeconds ?? 0.2)),
+              onChange: (nextValue) => onEnvelopeChange("releaseSeconds", nextValue),
+              ariaLabel: "Envelope release"
+            }
+          )
+        ] })
+      ] })
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid gap-3", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between gap-3", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-[11px] uppercase tracking-[0.18em] text-slate-300/60", children: "Route Rows" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "button",
+          {
+            type: "button",
+            "aria-label": "Add route",
+            className: "cosimo-button h-11 rounded-2xl px-4 text-[11px] uppercase tracking-[0.18em]",
+            onClick: handleAddRouteClick,
+            children: "Add Route"
+          }
+        )
+      ] }),
+      routes.length > 0 ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid grid-cols-[minmax(0,1.1fr)_84px_minmax(0,1.2fr)_minmax(290px,auto)_44px] items-center gap-3 px-3 text-[9px] uppercase tracking-[0.18em] text-slate-300/45", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { children: "Source" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { children: "Slot" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { children: "Target" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "justify-self-end", children: "Depth" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", {})
+      ] }) : null,
+      routes.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "rounded-[18px] border border-dashed border-white/[0.08] bg-black/10 px-4 py-5 text-sm text-slate-300/60", children: "No routes yet. Add one and choose a source, target, and depth." }) : routes.map((route, routeIndex) => {
+        const needsSlot = route.sourceKind === "mseg" || route.sourceKind === "env";
+        const maxSlot = route.sourceKind === "mseg" ? MODULATION_MSEG_SLOT_COUNT : MODULATION_ENV_SLOT_COUNT;
+        return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          "div",
+          {
+            ref: (element) => {
+              routeRowRefs.current[routeIndex] = element;
+            },
+            "data-role": `route-row-${routeIndex + 1}`,
+            className: "grid items-center gap-3 rounded-[18px] bg-black/15 p-3 xl:grid-cols-[minmax(0,1.1fr)_84px_minmax(0,1.2fr)_minmax(290px,auto)_44px]",
+            children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "select",
+                {
+                  "aria-label": `Route ${routeIndex + 1} source`,
+                  className: "h-11 rounded-[14px] border border-white/8 bg-black/25 px-3 text-[11px] uppercase tracking-[0.16em] text-cyan-100 outline-none",
+                  value: route.sourceKind,
+                  onChange: (event) => {
+                    const nextSourceKind = event.target.value;
+                    onRouteChange(routeIndex, {
+                      ...route,
+                      sourceKind: nextSourceKind,
+                      sourceSlot: nextSourceKind === "mseg" || nextSourceKind === "env" ? 1 : null
+                    });
+                  },
+                  children: MOD_SOURCE_OPTIONS.map((option) => /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: option.value, children: option.label }, option.value))
+                }
+              ),
+              needsSlot ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "select",
+                {
+                  "aria-label": `Route ${routeIndex + 1} slot`,
+                  className: "h-11 rounded-[14px] border border-white/8 bg-black/25 px-3 text-[11px] uppercase tracking-[0.16em] text-cyan-100 outline-none",
+                  value: String(route.sourceSlot ?? 1),
+                  onChange: (event) => {
+                    onRouteChange(routeIndex, {
+                      ...route,
+                      sourceSlot: Number(event.target.value)
+                    });
+                  },
+                  children: Array.from({ length: maxSlot }, (_, slotIndex) => /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: String(slotIndex + 1), children: slotIndex + 1 }, `route-slot-${routeIndex}-${slotIndex + 1}`))
+                }
+              ) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex h-11 items-center justify-center rounded-[14px] border border-dashed border-white/8 bg-black/10 text-[10px] uppercase tracking-[0.18em] text-slate-400/75", children: "Direct" }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "select",
+                {
+                  "aria-label": `Route ${routeIndex + 1} target`,
+                  className: "h-11 rounded-[14px] border border-white/8 bg-black/25 px-3 text-[11px] uppercase tracking-[0.16em] text-cyan-100 outline-none",
+                  value: route.targetKind,
+                  onChange: (event) => {
+                    const nextTargetKind = event.target.value;
+                    onRouteChange(routeIndex, {
+                      ...route,
+                      targetKind: nextTargetKind,
+                      amount: clampModulationRouteAmount(nextTargetKind, route.amount)
+                    });
+                  },
+                  children: MOD_TARGET_OPTIONS.map((option) => /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: option.value, children: option.label }, option.value))
+                }
+              ),
+              /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "justify-self-end", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                ModulationAmountField,
+                {
+                  targetKind: route.targetKind,
+                  amount: route.amount,
+                  knobAriaLabel: `Route ${routeIndex + 1} depth`,
+                  positiveDirectionAriaLabel: `Route ${routeIndex + 1} positive direction`,
+                  negativeDirectionAriaLabel: `Route ${routeIndex + 1} negative direction`,
+                  onChange: (nextAmount) => {
+                    onRouteChange(routeIndex, {
+                      ...route,
+                      amount: nextAmount
+                    });
+                  }
+                }
+              ) }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "button",
+                {
+                  type: "button",
+                  "aria-label": `Remove route ${routeIndex + 1}`,
+                  className: "cosimo-button h-11 w-11 self-center rounded-2xl px-0 text-lg leading-none",
+                  onClick: () => onRemoveRoute(routeIndex),
+                  children: "x"
+                }
+              )
+            ]
+          },
+          `route-${routeIndex}`
+        );
+      }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-[11px] text-slate-300/55", children: "Depth shows the movement this row asks for at full source. Position, warp, cutoff, Q, amp, and pan still stop at the synth's real limits." })
+    ] })
+  ] });
+}
 function DesktopPatchViewBody() {
   const stageRef = reactExports.useRef(null);
   const msegEditorSurfaceRef = reactExports.useRef(null);
   const keyboardElementRef = reactExports.useRef(null);
   const [keyboardRootNote, setKeyboardRootNote] = reactExports.useState(KEYBOARD_ROOT_NOTE_DEFAULT);
+  const curveLab = useDesktopCurveLab();
   const synthView = useSynthPatchViewModel({
     stageRef,
     msegEditorSurfaceRef,
     keyboardRef: keyboardElementRef,
     voiceModeCount: VOICE_MODE_OPTIONS.length
   });
+  const filterResonanceCurveProfile = curveLab.getProfile("filter-resonance-handle");
+  const resonanceNormalizedFromQ = reactExports.useCallback((qValue) => curveLab.invertTarget("filter-resonance-handle", filterQToNormalized(qValue)), [curveLab]);
+  const resonanceQFromSurface = reactExports.useCallback((surfaceValue) => normalizedToFilterQ(curveLab.evaluateTarget("filter-resonance-handle", surfaceValue)), [curveLab]);
   const handleKeyboardOctaveDown = reactExports.useCallback(() => {
     setKeyboardRootNote((previousRootNote) => Math.min(Math.max(previousRootNote - 12, KEYBOARD_ROOT_NOTE_MIN), KEYBOARD_ROOT_NOTE_MAX));
   }, []);
   const handleKeyboardOctaveUp = reactExports.useCallback(() => {
     setKeyboardRootNote((previousRootNote) => Math.min(Math.max(previousRootNote + 12, KEYBOARD_ROOT_NOTE_MIN), KEYBOARD_ROOT_NOTE_MAX));
   }, []);
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "cosimo-surface relative flex h-full w-full flex-col gap-5 overflow-hidden rounded-[28px] border border-white/8 p-6 text-slate-100 shadow-[0_26px_80px_rgba(0,0,0,0.48)]", children: [
+  const warpModeChip = reactExports.useMemo(() => /* @__PURE__ */ jsxRuntimeExports.jsx(
+    OverlayIconChip,
+    {
+      ariaLabel: `Cycle warp mode (currently ${getWarpModeLabel(synthView.warpMode.value)})`,
+      title: `Warp mode: ${getWarpModeLabel(synthView.warpMode.value)}`,
+      onClick: () => synthView.warpMode.commitValue(cycleWarpMode(synthView.warpMode.value)),
+      children: /* @__PURE__ */ jsxRuntimeExports.jsx(WarpModeGlyph, { mode: synthView.warpMode.value })
+    }
+  ), [synthView.warpMode]);
+  const warpAmountField = reactExports.useMemo(() => /* @__PURE__ */ jsxRuntimeExports.jsx(
+    NexusNumberField,
+    {
+      label: "Warp amount",
+      binding: synthView.warpAmount,
+      min: 0,
+      max: 1,
+      step: 1e-3,
+      decimalPlaces: 3,
+      suffix: null,
+      variant: "overlay",
+      showLabel: false,
+      width: 116,
+      height: 40
+    }
+  ), [synthView.warpAmount]);
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "cosimo-surface relative flex h-full w-full flex-col gap-4 overflow-hidden rounded-[28px] border border-white/[0.05] p-5 text-slate-100 shadow-[0_26px_80px_rgba(0,0,0,0.48)]", children: [
     /* @__PURE__ */ jsxRuntimeExports.jsx(StatusHeader, { statusText: synthView.topStatus }),
     /* @__PURE__ */ jsxRuntimeExports.jsxs(
       "main",
       {
         "data-role": "desktop-scroll-region",
-        className: "grid min-h-0 flex-1 grid-rows-[minmax(356px,0.9fr)_auto_auto] gap-5 overflow-x-hidden overflow-y-auto pr-1",
+        className: "grid min-h-0 flex-1 auto-rows-max gap-4 overflow-x-hidden overflow-y-auto pr-1",
         children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "grid min-h-0 grid-cols-[minmax(280px,1fr)_minmax(0,2fr)] gap-5", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "grid min-h-0 items-stretch gap-4 md:grid-cols-2", children: [
             /* @__PURE__ */ jsxRuntimeExports.jsx(
               WavetableStageSection,
               {
@@ -26323,41 +27969,46 @@ function DesktopPatchViewBody() {
                 onPointerDown: synthView.stageBindings.handleStagePointerDown,
                 onPointerMove: synthView.stageBindings.handleStagePointerMove,
                 onPointerUp: synthView.stageBindings.handleStagePointerUp,
-                className: "min-h-[356px]"
+                bottomLeftAccessory: warpModeChip,
+                bottomRightAccessory: warpAmountField,
+                className: "aspect-square min-h-[320px]"
               }
             ),
             /* @__PURE__ */ jsxRuntimeExports.jsx(
-              MsegOverviewSection,
+              FilterSection,
               {
-                msegState: synthView.msegState,
-                onOpenEditor: synthView.msegEditor.openEditor,
-                onDepthChange: synthView.handleMsegDepthChange,
-                onRateChange: synthView.handleMsegRateChange,
-                onToggleLoop: synthView.handleToggleMsegLoop,
-                depthFocusBindings: synthView.keyboardRouting.msegDepthFocusBindings,
-                rateFocusBindings: synthView.keyboardRouting.msegRateFocusBindings,
-                className: "min-h-[356px]"
+                filterMode: synthView.filterMode,
+                filterCutoff: synthView.filterCutoff,
+                filterQ: synthView.filterQ,
+                observedFilterState: synthView.observedFilterState,
+                observedFilterSpectrum: synthView.observedFilterSpectrum,
+                resonanceNormalizedFromQ,
+                resonanceQFromSurface,
+                resonanceCurveDebugState: filterResonanceCurveProfile,
+                className: "aspect-square min-h-[320px]"
               }
             )
           ] }),
           synthView.failureDetail ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "rounded-[22px] border border-fuchsia-300/15 bg-fuchsia-300/8 px-4 py-3 text-sm text-fuchsia-100/90", children: synthView.failureDetail }) : null,
           /* @__PURE__ */ jsxRuntimeExports.jsx(
-            WarpSection,
+            ModulationMatrixSection,
             {
-              warpMode: synthView.warpMode,
-              warpAmount: synthView.warpAmount,
-              warpMsegDepth: synthView.warpMsegDepth
-            }
-          ),
-          /* @__PURE__ */ jsxRuntimeExports.jsx(
-            FilterSection,
-            {
-              filterMode: synthView.filterMode,
-              filterCutoff: synthView.filterCutoff,
-              filterQ: synthView.filterQ,
-              filterMsegDepth: synthView.filterMsegDepth,
-              observedFilterState: synthView.observedFilterState,
-              observedFilterSpectrum: synthView.observedFilterSpectrum
+              pan: synthView.pan,
+              selectedMsegSlot: synthView.selectedMsegSlot,
+              msegState: synthView.msegState,
+              selectedEnvelopeSlot: synthView.selectedEnvelopeSlot,
+              selectedEnvelope: synthView.selectedEnvelope,
+              routes: synthView.routes,
+              onSelectMsegSlot: synthView.handleSelectMsegSlot,
+              onOpenMsegEditor: synthView.msegEditor.openEditor,
+              onMsegRateChange: synthView.handleMsegRateChange,
+              onToggleMsegLoop: synthView.handleToggleMsegLoop,
+              onSelectEnvelopeSlot: synthView.handleSelectEnvelopeSlot,
+              onEnvelopeChange: synthView.handleEnvelopeChange,
+              onAddRoute: synthView.handleAddRoute,
+              onRemoveRoute: synthView.handleRemoveRoute,
+              onRouteChange: synthView.handleRouteChange,
+              msegRateFocusBindings: synthView.keyboardRouting.msegRateFocusBindings
             }
           ),
           /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -26380,6 +28031,7 @@ function DesktopPatchViewBody() {
       MsegEditorModal,
       {
         isOpen: synthView.msegEditor.isOpen,
+        slotLabel: `MSEG ${synthView.selectedMsegSlot + 1}`,
         msegState: synthView.msegState,
         surfaceRef: msegEditorSurfaceRef,
         selectedPointIndex: synthView.msegEditor.selectedPointIndex,
@@ -26394,7 +28046,8 @@ function DesktopPatchViewBody() {
         onPointerUp: synthView.msegEditor.handlePointerUp,
         rateFocusBindings: synthView.keyboardRouting.msegRateFocusBindings
       }
-    )
+    ),
+    curveLab.panel
   ] });
 }
 function DesktopPatchView({
@@ -26456,9 +28109,18 @@ class CosimoDesktopReactViewElement extends HTMLElement {
   resourceClient = null;
   root = null;
   mountPoint = null;
+  modulationRuntimePatchConnection = null;
   setPatchConnection(patchConnection, resourceClient) {
+    if (this.modulationRuntimePatchConnection && this.modulationRuntimePatchConnection !== patchConnection) {
+      releaseModulationRuntimeBridge(this.modulationRuntimePatchConnection);
+      this.modulationRuntimePatchConnection = null;
+    }
     this.patchConnection = patchConnection;
     this.resourceClient = resourceClient ?? null;
+    if (!this.modulationRuntimePatchConnection) {
+      acquireModulationRuntimeBridge(patchConnection);
+      this.modulationRuntimePatchConnection = patchConnection;
+    }
     this.renderApp();
   }
   connectedCallback() {
@@ -26486,6 +28148,10 @@ class CosimoDesktopReactViewElement extends HTMLElement {
   disconnectedCallback() {
     this.root?.unmount();
     this.root = null;
+    if (this.modulationRuntimePatchConnection) {
+      releaseModulationRuntimeBridge(this.modulationRuntimePatchConnection);
+      this.modulationRuntimePatchConnection = null;
+    }
   }
   ensureLightDomStyles() {
     const styleId = "cosimo-desktop-react-view-styles";
@@ -26512,8 +28178,56 @@ class CosimoDesktopReactViewElement extends HTMLElement {
     );
   }
 }
+class CosimoDesktopCurveLabElement extends HTMLElement {
+  root = null;
+  mountPoint = null;
+  connectedCallback() {
+    {
+      if (!this.shadowRoot) {
+        this.attachShadow({ mode: "open" });
+      }
+      if (!this.mountPoint || !this.root) {
+        const shadowRoot = this.shadowRoot;
+        const style = document.createElement("style");
+        style.textContent = cssText;
+        const mountPoint = document.createElement("div");
+        mountPoint.style.width = "100%";
+        mountPoint.style.height = "100%";
+        shadowRoot.replaceChildren(style, mountPoint);
+        this.mountPoint = mountPoint;
+        this.root = clientExports.createRoot(mountPoint);
+      }
+    }
+    this.style.display = "block";
+    this.style.width = "100%";
+    this.style.height = "100%";
+    this.root?.render(
+      /* @__PURE__ */ jsxRuntimeExports.jsx(DesktopPatchErrorBoundary, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(DesktopCurveLabStandaloneView, {}) })
+    );
+  }
+  disconnectedCallback() {
+    this.root?.unmount();
+    this.root = null;
+  }
+  ensureLightDomStyles() {
+    const styleId = "cosimo-desktop-curve-lab-styles";
+    if (document.getElementById(styleId)) {
+      return;
+    }
+    const style = document.createElement("style");
+    style.id = styleId;
+    style.textContent = cssText.replaceAll(":host", getCurveLabTagName());
+    document.head.appendChild(style);
+  }
+}
 function getTagName() {
   return "cosimo-desktop-react-view";
+}
+function getCurveLabTagName() {
+  return "cosimo-desktop-curve-lab";
+}
+function getDesktopWindowKind(globalObject = globalThis) {
+  return typeof globalObject.__COSIMO_DESKTOP_WINDOW_KIND__ === "string" ? globalObject.__COSIMO_DESKTOP_WINDOW_KIND__.trim() : "";
 }
 function createDesktopPatchView(patchConnection, options = {}) {
   const tagName = getTagName();
@@ -26524,10 +28238,21 @@ function createDesktopPatchView(patchConnection, options = {}) {
   element.setPatchConnection(patchConnection, options.resourceClient);
   return element;
 }
+function createDesktopCurveLabView() {
+  const tagName = getCurveLabTagName();
+  if (!window.customElements.get(tagName)) {
+    window.customElements.define(tagName, CosimoDesktopCurveLabElement);
+  }
+  return document.createElement(tagName);
+}
 function createPatchView(patchConnection) {
+  if (getDesktopWindowKind() === "curve-lab") {
+    return createDesktopCurveLabView();
+  }
   return createDesktopPatchView(patchConnection);
 }
 export {
+  createDesktopCurveLabView,
   createDesktopPatchView,
   createPatchView as default
 };

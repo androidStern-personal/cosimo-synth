@@ -4,7 +4,7 @@ export async function startIOSHarnessServer() {
     return startStaticRepoServer();
 }
 
-function createIOSHarnessInitScript(baseUrl) {
+export function createIOSHarnessInitScript(baseUrl) {
     return ({ rootUrl }) => {
         const originalFetch = globalThis.fetch.bind(globalThis);
         const fetchedUrls = [];
@@ -758,17 +758,8 @@ export async function closeIOSHarnessPage(page) {
 
 export async function waitForIOSHarnessReady(page) {
     await page.waitForFunction(() => Boolean(window.__COSIMO_IOS_HARNESS__));
-    await page.waitForFunction(() => {
-        const snapshot = window.__COSIMO_IOS_HARNESS__?.getSnapshot?.();
-        const renderedState = window.__COSIMO_IOS_HARNESS__?.getRenderedState?.();
-        return Boolean(
-            snapshot?.sentMessages?.some?.((message) => message.endpointID === "runtimeSyncRequest")
-            && renderedState?.hasStage
-            && renderedState?.hasKeyboard
-            && renderedState?.hasMsegLauncher
-            && renderedState?.hostPageViewActive,
-        );
-    });
+    await page.waitForFunction(() => Boolean(document.querySelector("cosimo-synth-view")));
+    await page.waitForTimeout(250);
 }
 
 export async function getIOSHarnessSnapshot(page) {

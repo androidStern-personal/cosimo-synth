@@ -3,14 +3,12 @@ import assert from "node:assert/strict";
 
 import { chromium } from "playwright";
 import {
-    deserializeMsegPlayback,
-    deserializeMsegShape,
     MSEG_EDITOR_HORIZONTAL_PADDING_PX,
     MSEG_EDITOR_VERTICAL_PADDING_PX,
     MSEG_POINT_RADIUS_PX,
     renderMsegShape,
-    toMsegPlaybackConfigEvent,
 } from "../patch_gui/mseg.js";
+import { deserializeModulationState } from "../patch_gui/modulation.js";
 
 import { startDesktopHarnessServer } from "./helpers/desktop_harness_browser.mjs";
 
@@ -376,27 +374,54 @@ test("useMsegState attaches once, requests boot state, uploads the boot payload,
         assert.equal(snapshot.addStoredStateValueListenerCount, 1);
         assert.equal(snapshot.requestFullStoredStateCount, 1);
         assert.equal(snapshot.storedStateListenerCount, 1);
-        assert.equal(snapshot.lastRender.depth, 0.42);
+        assert.equal(snapshot.lastRender.shape.points.length, 2);
+        assert.equal(snapshot.lastRender.playback.rate.seconds, 1);
+        assert.equal(snapshot.sentEvents.some(({ endpointID }) => endpointID === "modulationEnable"), true);
+        assert.equal(snapshot.sentEvents.some(({ endpointID }) => endpointID === "modulationClear"), true);
+        assert.equal(snapshot.sentEvents.some(({ endpointID }) => endpointID === "modulationMsegBuffer"), true);
+        assert.equal(snapshot.sentEvents.some(({ endpointID }) => endpointID === "modulationMsegPlayback"), true);
+        assert.equal(snapshot.sentEvents.some(({ endpointID }) => endpointID === "modulationRoute"), true);
+        const bootModulationState = deserializeModulationState(snapshot.bootState["modulation.v1"]);
         assert.deepEqual(
-            snapshot.sentEvents,
-            [
-                {
-                    endpointID: "mseg1Buffer",
-                    value: Array.from(renderMsegShape(deserializeMsegShape(snapshot.bootState["mseg1.shape"]))),
+            snapshot.sentEvents.find(({ endpointID, value }) => endpointID === "modulationMsegBuffer" && value.slot === 1),
+            {
+                endpointID: "modulationMsegBuffer",
+                value: {
+                    slot: 1,
+                    buffer: Array.from(renderMsegShape(bootModulationState.msegSlots[0].shape)),
                 },
-                {
-                    endpointID: "mseg1Playback",
-                    value: toMsegPlaybackConfigEvent(deserializeMsegPlayback(snapshot.bootState["mseg1.playback"])),
-                },
-                {
-                    endpointID: "mseg1Depth",
-                    value: 0.42,
-                },
-            ],
+            },
         );
         assert.deepEqual(
-            snapshot.sentEvents.map(({ endpointID }) => endpointID),
-            ["mseg1Buffer", "mseg1Playback", "mseg1Depth"],
+            snapshot.sentEvents.find(({ endpointID, value }) => endpointID === "modulationMsegPlayback" && value.slot === 1),
+            {
+                endpointID: "modulationMsegPlayback",
+                value: {
+                    slot: 1,
+                    seconds: 1,
+                    holdFinalValue: true,
+                    rateKind: 0,
+                    loopEnabled: true,
+                    loopStart: 0,
+                    loopEnd: 1,
+                    noteOffPolicy: 0,
+                    legatoRestarts: false,
+                },
+            },
+        );
+        assert.deepEqual(
+            snapshot.sentEvents.find(({ endpointID, value }) => endpointID === "modulationRoute" && value.routeIndex === 0),
+            {
+                endpointID: "modulationRoute",
+                value: {
+                    routeIndex: 0,
+                    enabled: true,
+                    sourceKind: 1,
+                    sourceSlot: 1,
+                    targetKind: 1,
+                    amount: 0.42,
+                },
+            },
         );
 
         await invokeHarness(page, "unmount");
@@ -488,8 +513,6 @@ test("useSynthKeyboardRouting centralizes arrow-target ownership and text-entry 
         await invokeHarness(page, "pressKey", "ArrowRight");
         await invokeHarness(page, "focus", "#play-mode-target");
         await invokeHarness(page, "pressKey", "ArrowLeft");
-        await invokeHarness(page, "focus", "#mseg-depth-target");
-        await invokeHarness(page, "pressKey", "ArrowRight");
         await invokeHarness(page, "focus", "#mseg-rate-target");
         await invokeHarness(page, "pressKey", "ArrowLeft");
 
@@ -506,7 +529,6 @@ test("useSynthKeyboardRouting centralizes arrow-target ownership and text-entry 
         assert.deepEqual(snapshot.stepLog, {
             wavetable: [1],
             playMode: [-1],
-            msegDepth: [1],
             msegRate: [-1],
             glide: [1, -1],
         });

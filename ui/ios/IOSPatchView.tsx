@@ -17,6 +17,7 @@ import {
 import type { ResourceClient } from "../shared/resource-client";
 import {
     EditableMsegSurface,
+    ModulationAmountField,
     MsegPreview,
     VOICE_MODE_OPTIONS,
     WavetableCanvas,
@@ -27,6 +28,14 @@ import {
     MSEG_RATE_MIN_SECONDS,
     type MsegSurfaceOrientation,
 } from "../shared/mseg";
+import {
+    clampModulationRouteAmount,
+    MODULATION_ENV_SLOT_COUNT,
+    MODULATION_MSEG_SLOT_COUNT,
+    type ModulationRoute,
+    type ModulationSourceKind,
+    type ModulationTargetKind,
+} from "../shared/modulation";
 import {
     clampDisplayPosition,
 } from "../shared/runtime-table-state";
@@ -47,6 +56,22 @@ const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", 
 const KEYBOARD_ROOT_NOTE_DEFAULT = 36;
 const KEYBOARD_ROOT_NOTE_MIN = 12;
 const KEYBOARD_ROOT_NOTE_MAX = 72;
+const MOD_SOURCE_OPTIONS: Array<{ value: ModulationSourceKind; label: string }> = [
+    { value: "mseg", label: "MSEG" },
+    { value: "env", label: "Env" },
+    { value: "velocity", label: "Velocity" },
+    { value: "pressure", label: "Aftertouch" },
+    { value: "slide", label: "Slide" },
+];
+const MOD_TARGET_OPTIONS: Array<{ value: ModulationTargetKind; label: string }> = [
+    { value: "wavetablePosition", label: "Wave Pos" },
+    { value: "warpAmount", label: "Warp" },
+    { value: "filterCutoffOctaves", label: "Cutoff" },
+    { value: "filterQ", label: "Q" },
+    { value: "pitchSemitones", label: "Pitch" },
+    { value: "ampGainDb", label: "Amp" },
+    { value: "pan", label: "Pan" },
+];
 
 function triggerIOSHaptic(style = "light") {
     const hapticTrigger = (globalThis as typeof globalThis & {
@@ -223,27 +248,54 @@ const IOSPlayPanel = memo(function IOSPlayPanel({
 
 const IOSMsegLauncher = memo(function IOSMsegLauncher({
     msegState,
+    selectedMsegSlot,
     previewOrientation,
     onOpenEditor,
     onToggleLoop,
-    onDepthChange,
-    depthFocusBindings,
+    panValue,
+    onPanChange,
+    onSelectMsegSlot,
 }: {
     msegState: ReturnType<typeof useSynthPatchViewModel>["msegState"];
+    selectedMsegSlot: number;
     previewOrientation: MsegSurfaceOrientation;
     onOpenEditor: () => void;
     onToggleLoop: () => void;
-    onDepthChange: (nextValue: number) => void;
-    depthFocusBindings: ReturnType<typeof useSynthPatchViewModel>["keyboardRouting"]["msegDepthFocusBindings"];
+    panValue: number;
+    onPanChange: (nextValue: number) => void;
+    onSelectMsegSlot: (slotIndex: number) => void;
 }) {
     return (
         <div className="mseg-shell">
             <div className="mseg-launcher">
                 <div className="mseg-launcher-head">
                     <div className="mseg-launcher-copy">
-                        <div className="mseg-eyebrow">MSEG 1</div>
-                        <strong className="mseg-route-title">Fixed Wavetable Route</strong>
+                        <div className="mseg-eyebrow">{`MSEG ${selectedMsegSlot + 1}`}</div>
+                        <strong className="mseg-route-title">Modulation Shape</strong>
                     </div>
+                </div>
+
+                <div style={{ display: "flex", gap: "0.5rem", marginBottom: "0.75rem" }}>
+                    {Array.from({ length: MODULATION_MSEG_SLOT_COUNT }, (_, slotIndex) => (
+                        <button
+                            key={`ios-mseg-slot-${slotIndex + 1}`}
+                            type="button"
+                            aria-label={`Select MSEG ${slotIndex + 1}`}
+                            onClick={() => onSelectMsegSlot(slotIndex)}
+                            style={{
+                                borderRadius: "999px",
+                                border: "1px solid rgba(255,255,255,0.1)",
+                                padding: "0.35rem 0.8rem",
+                                background: selectedMsegSlot === slotIndex ? "rgba(88, 234, 208, 0.18)" : "rgba(255,255,255,0.04)",
+                                color: "rgba(240,248,255,0.92)",
+                                fontSize: "0.7rem",
+                                letterSpacing: "0.14em",
+                                textTransform: "uppercase",
+                            }}
+                        >
+                            {slotIndex + 1}
+                        </button>
+                    ))}
                 </div>
 
                 <button
@@ -281,20 +333,19 @@ const IOSMsegLauncher = memo(function IOSMsegLauncher({
 
                 <div className="mseg-controls">
                     <label className="mseg-depth">
-                        <span className="mseg-depth-label">Depth To Wavetable Position</span>
+                        <span className="mseg-depth-label">Pan</span>
                         <input
                             className="mseg-depth-slider"
                             type="range"
                             min="-1"
                             max="1"
                             step="0.001"
-                            value={Number(msegState?.depth ?? 0).toFixed(3)}
-                            onChange={(event) => onDepthChange(Number(event.target.value))}
-                            {...depthFocusBindings}
+                            value={Number(panValue).toFixed(3)}
+                            onChange={(event) => onPanChange(Number(event.target.value))}
                         />
                     </label>
-                    <div className="mseg-depth-readout" data-role="mseg-depth-readout">
-                        {Number(msegState?.depth ?? 0).toFixed(3)}
+                    <div className="mseg-depth-readout">
+                        {Number(panValue).toFixed(3)}
                     </div>
                 </div>
             </div>
@@ -342,9 +393,230 @@ const IOSKeyboardToolbar = memo(function IOSKeyboardToolbar({
     );
 });
 
+const IOSModulationMatrixPanel = memo(function IOSModulationMatrixPanel({
+    selectedEnvelopeSlot,
+    selectedEnvelope,
+    routes,
+    onSelectEnvelopeSlot,
+    onEnvelopeChange,
+    onAddRoute,
+    onRemoveRoute,
+    onRouteChange,
+}: {
+    selectedEnvelopeSlot: number;
+    selectedEnvelope: ReturnType<typeof useSynthPatchViewModel>["selectedEnvelope"];
+    routes: ReturnType<typeof useSynthPatchViewModel>["routes"];
+    onSelectEnvelopeSlot: (slotIndex: number) => void;
+    onEnvelopeChange: (field: "attackSeconds" | "decaySeconds" | "sustain" | "releaseSeconds", nextValue: number) => void;
+    onAddRoute: () => void;
+    onRemoveRoute: (routeIndex: number) => void;
+    onRouteChange: (routeIndex: number, nextRoute: ModulationRoute) => void;
+}) {
+    return (
+        <div style={{
+            display: "grid",
+            gap: "0.9rem",
+            border: "1px solid rgba(255,255,255,0.08)",
+            borderRadius: "24px",
+            padding: "1rem",
+            background: "rgba(255,255,255,0.03)",
+        }}
+        >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.75rem" }}>
+                <div>
+                    <div className="mseg-eyebrow">Envelopes + Routes</div>
+                    <strong className="mseg-route-title">Modulation Matrix</strong>
+                </div>
+            </div>
+
+            <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                {Array.from({ length: MODULATION_ENV_SLOT_COUNT }, (_, slotIndex) => (
+                    <button
+                        key={`ios-env-slot-${slotIndex + 1}`}
+                        type="button"
+                        aria-label={`Select envelope ${slotIndex + 1}`}
+                        onClick={() => onSelectEnvelopeSlot(slotIndex)}
+                        style={{
+                            borderRadius: "999px",
+                            border: "1px solid rgba(255,255,255,0.1)",
+                            padding: "0.35rem 0.8rem",
+                            background: selectedEnvelopeSlot === slotIndex ? "rgba(52, 211, 153, 0.2)" : "rgba(255,255,255,0.04)",
+                            color: "rgba(240,248,255,0.92)",
+                            fontSize: "0.7rem",
+                            letterSpacing: "0.14em",
+                            textTransform: "uppercase",
+                        }}
+                    >
+                        {`Env ${slotIndex + 1}`}
+                    </button>
+                ))}
+            </div>
+
+            <div style={{ display: "grid", gap: "0.75rem" }}>
+                {[
+                    ["attackSeconds", "Attack", 0.001, 10, 0.001, Number(selectedEnvelope?.attackSeconds ?? 0.01)],
+                    ["decaySeconds", "Decay", 0.001, 10, 0.001, Number(selectedEnvelope?.decaySeconds ?? 0.25)],
+                    ["sustain", "Sustain", 0, 1, 0.001, Number(selectedEnvelope?.sustain ?? 0.5)],
+                    ["releaseSeconds", "Release", 0.001, 10, 0.001, Number(selectedEnvelope?.releaseSeconds ?? 0.2)],
+                ].map(([field, label, min, max, step, value]) => (
+                    <label key={String(field)} style={{ display: "grid", gap: "0.35rem" }}>
+                        <span className="mseg-depth-label">{String(label)}</span>
+                        <input
+                            className="mseg-rate-slider"
+                            type="range"
+                            min={String(min)}
+                            max={String(max)}
+                            step={String(step)}
+                            value={Number(value).toFixed(3)}
+                            onChange={(event) => onEnvelopeChange(field as "attackSeconds" | "decaySeconds" | "sustain" | "releaseSeconds", Number(event.target.value))}
+                        />
+                    </label>
+                ))}
+            </div>
+
+            <div style={{ display: "grid", gap: "0.75rem" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.75rem" }}>
+                    <div className="mseg-depth-label">Route Rows</div>
+                    <button className="mseg-loop-button" type="button" aria-label="Add route" onClick={onAddRoute}>Add Route</button>
+                </div>
+                {routes.length === 0 ? (
+                    <div style={{
+                        borderRadius: "18px",
+                        border: "1px dashed rgba(255,255,255,0.12)",
+                        padding: "0.9rem",
+                        color: "rgba(226,232,240,0.65)",
+                        fontSize: "0.82rem",
+                    }}
+                    >
+                        No routes yet. Add one and choose a source, target, and depth.
+                    </div>
+                ) : null}
+                {routes.map((route, routeIndex) => {
+                    const needsSlot = route.sourceKind === "mseg" || route.sourceKind === "env";
+                    const maxSlot = route.sourceKind === "mseg" ? MODULATION_MSEG_SLOT_COUNT : MODULATION_ENV_SLOT_COUNT;
+
+                    return (
+                        <div
+                            key={`ios-route-${routeIndex}`}
+                            style={{
+                                display: "grid",
+                                gap: "0.5rem",
+                                gridTemplateColumns: "minmax(0,1fr) 68px minmax(0,1fr) auto auto",
+                                alignItems: "center",
+                                borderRadius: "18px",
+                                border: "1px solid rgba(255,255,255,0.08)",
+                                padding: "0.75rem",
+                                background: "rgba(0,0,0,0.16)",
+                            }}
+                        >
+                            <select
+                                aria-label={`Route ${routeIndex + 1} source`}
+                                value={route.sourceKind}
+                                onChange={(event) => {
+                                    const nextSourceKind = event.target.value as ModulationSourceKind;
+                                    onRouteChange(routeIndex, {
+                                        ...route,
+                                        sourceKind: nextSourceKind,
+                                        sourceSlot: nextSourceKind === "mseg" || nextSourceKind === "env" ? 1 : null,
+                                    });
+                                }}
+                            >
+                                {MOD_SOURCE_OPTIONS.map((option) => (
+                                    <option key={option.value} value={option.value}>{option.label}</option>
+                                ))}
+                            </select>
+                            {needsSlot ? (
+                                <select
+                                    aria-label={`Route ${routeIndex + 1} slot`}
+                                    value={String(route.sourceSlot ?? 1)}
+                                    onChange={(event) => {
+                                        onRouteChange(routeIndex, {
+                                            ...route,
+                                            sourceSlot: Number(event.target.value),
+                                        });
+                                    }}
+                                >
+                                    {Array.from({ length: maxSlot }, (_, slotIndex) => (
+                                        <option key={`ios-route-slot-${routeIndex}-${slotIndex + 1}`} value={String(slotIndex + 1)}>
+                                            {slotIndex + 1}
+                                        </option>
+                                    ))}
+                                </select>
+                            ) : (
+                                <div style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    minHeight: "44px",
+                                    borderRadius: "14px",
+                                    border: "1px dashed rgba(255,255,255,0.12)",
+                                    background: "rgba(255,255,255,0.02)",
+                                    color: "rgba(148,163,184,0.78)",
+                                    fontSize: "0.62rem",
+                                    letterSpacing: "0.16em",
+                                    textTransform: "uppercase",
+                                }}
+                                >
+                                    Direct
+                                </div>
+                            )}
+                            <select
+                                aria-label={`Route ${routeIndex + 1} target`}
+                                value={route.targetKind}
+                                onChange={(event) => {
+                                    const nextTargetKind = event.target.value as ModulationTargetKind;
+                                    onRouteChange(routeIndex, {
+                                        ...route,
+                                        targetKind: nextTargetKind,
+                                        amount: clampModulationRouteAmount(nextTargetKind, route.amount),
+                                    });
+                                }}
+                            >
+                                {MOD_TARGET_OPTIONS.map((option) => (
+                                    <option key={option.value} value={option.value}>{option.label}</option>
+                                ))}
+                            </select>
+                            <ModulationAmountField
+                                targetKind={route.targetKind}
+                                amount={route.amount}
+                                knobAriaLabel={`Route ${routeIndex + 1} depth`}
+                                positiveDirectionAriaLabel={`Route ${routeIndex + 1} positive direction`}
+                                negativeDirectionAriaLabel={`Route ${routeIndex + 1} negative direction`}
+                                onChange={(nextAmount) => {
+                                    onRouteChange(routeIndex, {
+                                        ...route,
+                                        amount: nextAmount,
+                                    });
+                                }}
+                            />
+                            <button
+                                className="mseg-loop-button"
+                                type="button"
+                                aria-label={`Remove route ${routeIndex + 1}`}
+                                onClick={() => onRemoveRoute(routeIndex)}
+                            >
+                                x
+                            </button>
+                        </div>
+                    );
+                })}
+                <div style={{
+                    color: "rgba(226,232,240,0.58)",
+                    fontSize: "0.72rem",
+                    lineHeight: 1.45,
+                }}
+                >
+                    Depth shows the movement this row asks for at full source. Position, warp, cutoff, Q, amp, and pan still stop at the synth&apos;s real limits.
+                </div>
+            </div>
+        </div>
+    );
+});
+
 const IOSMsegModal = memo(function IOSMsegModal({
     isOpen,
     onClose,
+    slotLabel,
     msegState,
     surfaceRef,
     orientation,
@@ -362,6 +634,7 @@ const IOSMsegModal = memo(function IOSMsegModal({
 }: {
     isOpen: boolean;
     onClose: () => void;
+    slotLabel: string;
     msegState: ReturnType<typeof useSynthPatchViewModel>["msegState"];
     surfaceRef: RefObject<SVGSVGElement | null>;
     orientation: MsegSurfaceOrientation;
@@ -387,8 +660,8 @@ const IOSMsegModal = memo(function IOSMsegModal({
                 >
                     <div className="mseg-modal-head">
                         <div className="mseg-modal-copy">
-                            <div className="mseg-eyebrow">MSEG 1</div>
-                            <strong className="mseg-route-title">Fixed Wavetable Route</strong>
+                            <div className="mseg-eyebrow">{slotLabel}</div>
+                            <strong className="mseg-route-title">Modulation Shape</strong>
                         </div>
                         <button
                             className="mseg-modal-close"
@@ -825,11 +1098,24 @@ function IOSPatchViewBody() {
 
                             <IOSMsegLauncher
                                 msegState={synthView.msegState}
+                                selectedMsegSlot={synthView.selectedMsegSlot}
                                 previewOrientation={msegPreviewOrientation}
                                 onOpenEditor={openMsegModal}
                                 onToggleLoop={synthView.handleToggleMsegLoop}
-                                onDepthChange={synthView.handleMsegDepthChange}
-                                depthFocusBindings={synthView.keyboardRouting.msegDepthFocusBindings}
+                                panValue={synthView.pan.value}
+                                onPanChange={synthView.pan.commitValue}
+                                onSelectMsegSlot={synthView.handleSelectMsegSlot}
+                            />
+
+                            <IOSModulationMatrixPanel
+                                selectedEnvelopeSlot={synthView.selectedEnvelopeSlot}
+                                selectedEnvelope={synthView.selectedEnvelope}
+                                routes={synthView.routes}
+                                onSelectEnvelopeSlot={synthView.handleSelectEnvelopeSlot}
+                                onEnvelopeChange={synthView.handleEnvelopeChange}
+                                onAddRoute={synthView.handleAddRoute}
+                                onRemoveRoute={synthView.handleRemoveRoute}
+                                onRouteChange={synthView.handleRouteChange}
                             />
 
                             <IOSKeyboardToolbar
@@ -846,6 +1132,7 @@ function IOSPatchViewBody() {
                 <IOSMsegModal
                     isOpen={isMsegModalOpen}
                     onClose={closeMsegModal}
+                    slotLabel={`MSEG ${synthView.selectedMsegSlot + 1}`}
                     msegState={synthView.msegState}
                     surfaceRef={msegEditorSurfaceRef}
                     orientation={msegEditorOrientation}

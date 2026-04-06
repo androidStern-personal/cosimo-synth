@@ -32,6 +32,10 @@ import {
     setMsegSegmentCurvePower,
     type MsegState,
 } from "../../ui/shared/mseg";
+import {
+    createDefaultModulationState,
+    serializeModulationState,
+} from "../../ui/shared/modulation";
 
 type Deferred<TValue> = {
     promise: Promise<TValue>;
@@ -752,10 +756,20 @@ export async function installMsegStateHookHarness(target: HTMLElement) {
     let addStoredStateValueListenerCount = 0;
     let removeStoredStateValueListenerCount = 0;
 
+    const bootModulationState = createDefaultModulationState();
+    bootModulationState.msegSlots[0] = {
+        shape: createDefaultMsegShape("Test MSEG"),
+        playback: createDefaultMsegPlayback(),
+    };
+    bootModulationState.routes = [{
+        enabled: true,
+        sourceKind: "mseg",
+        sourceSlot: 1,
+        targetKind: "wavetablePosition",
+        amount: 0.42,
+    }];
     const bootState = {
-        "mseg1.shape": JSON.stringify(createDefaultMsegShape("Test MSEG")),
-        "mseg1.playback": JSON.stringify(createDefaultMsegPlayback()),
-        "mseg1.depth": 0.42,
+        "modulation.v1": serializeModulationState(bootModulationState),
     };
     const patchConnection: PatchConnectionLike = {
         addStoredStateValueListener(listener) {
@@ -1130,7 +1144,6 @@ export async function installSynthKeyboardRoutingHookHarness(target: HTMLElement
     const stepLog = {
         wavetable: [] as number[],
         playMode: [] as number[],
-        msegDepth: [] as number[],
         msegRate: [] as number[],
         glide: [] as number[],
     };
@@ -1152,14 +1165,12 @@ export async function installSynthKeyboardRoutingHookHarness(target: HTMLElement
             const {
                 wavetableFocusBindings,
                 playModeFocusBindings,
-                msegDepthFocusBindings,
                 msegRateFocusBindings,
                 glideFocusTarget,
             } = useSynthKeyboardRouting({
                 keyboardRef,
                 onStepWavetable: (direction) => stepLog.wavetable.push(direction),
                 onStepPlayMode: (direction) => stepLog.playMode.push(direction),
-                onStepMsegDepth: (direction) => stepLog.msegDepth.push(direction),
                 onStepMsegRate: (direction) => stepLog.msegRate.push(direction),
                 onStepGlideTime: (direction) => stepLog.glide.push(direction),
             });
@@ -1168,7 +1179,6 @@ export async function installSynthKeyboardRoutingHookHarness(target: HTMLElement
                 <div>
                     <button id="wavetable-target" type="button" {...wavetableFocusBindings}>Wavetable</button>
                     <button id="play-mode-target" type="button" {...playModeFocusBindings}>Play Mode</button>
-                    <button id="mseg-depth-target" type="button" {...msegDepthFocusBindings}>MSEG Depth</button>
                     <button id="mseg-rate-target" type="button" {...msegRateFocusBindings}>MSEG Rate</button>
                     <input
                         id="glide-target"

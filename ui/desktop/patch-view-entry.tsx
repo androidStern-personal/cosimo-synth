@@ -3,11 +3,16 @@ import { createRoot, type Root } from "react-dom/client";
 
 import cssText from "./styles.css?inline";
 import { DesktopPatchView } from "./DesktopPatchView";
+import { DesktopCurveLabStandaloneView } from "./desktop-curve-lab";
 import type { PatchConnectionLike } from "../shared/cmajor-react";
 import {
     createDesktopResourceClient,
     type ResourceClient,
 } from "../shared/resource-client";
+import {
+    acquireModulationRuntimeBridge,
+    releaseModulationRuntimeBridge,
+} from "../shared/modulation";
 
 if (import.meta.env.DEV) {
     void import("react-grab");
@@ -83,10 +88,20 @@ class CosimoDesktopReactViewElement extends HTMLElement {
     private resourceClient: ResourceClient | null = null;
     private root: Root | null = null;
     private mountPoint: HTMLDivElement | null = null;
+    private modulationRuntimePatchConnection: PatchConnectionLike | null = null;
 
     setPatchConnection(patchConnection: PatchConnectionLike, resourceClient?: ResourceClient) {
+        if (this.modulationRuntimePatchConnection && this.modulationRuntimePatchConnection !== patchConnection) {
+            releaseModulationRuntimeBridge(this.modulationRuntimePatchConnection);
+            this.modulationRuntimePatchConnection = null;
+        }
+
         this.patchConnection = patchConnection;
         this.resourceClient = resourceClient ?? null;
+        if (!this.modulationRuntimePatchConnection) {
+            acquireModulationRuntimeBridge(patchConnection);
+            this.modulationRuntimePatchConnection = patchConnection;
+        }
         this.renderApp();
     }
 
@@ -129,6 +144,11 @@ class CosimoDesktopReactViewElement extends HTMLElement {
     disconnectedCallback() {
         this.root?.unmount();
         this.root = null;
+
+        if (this.modulationRuntimePatchConnection) {
+            releaseModulationRuntimeBridge(this.modulationRuntimePatchConnection);
+            this.modulationRuntimePatchConnection = null;
+        }
     }
 
     private ensureLightDomStyles() {
@@ -160,8 +180,81 @@ class CosimoDesktopReactViewElement extends HTMLElement {
     }
 }
 
+class CosimoDesktopCurveLabElement extends HTMLElement {
+    private root: Root | null = null;
+    private mountPoint: HTMLDivElement | null = null;
+
+    connectedCallback() {
+        if (import.meta.env.DEV) {
+            this.ensureLightDomStyles();
+
+            if (!this.mountPoint || !this.root) {
+                const mountPoint = document.createElement("div");
+                mountPoint.style.width = "100%";
+                mountPoint.style.height = "100%";
+                this.replaceChildren(mountPoint);
+                this.mountPoint = mountPoint;
+                this.root = createRoot(mountPoint);
+            }
+        } else {
+            if (!this.shadowRoot) {
+                this.attachShadow({ mode: "open" });
+            }
+
+            if (!this.mountPoint || !this.root) {
+                const shadowRoot = this.shadowRoot!;
+                const style = document.createElement("style");
+                style.textContent = cssText;
+                const mountPoint = document.createElement("div");
+                mountPoint.style.width = "100%";
+                mountPoint.style.height = "100%";
+                shadowRoot.replaceChildren(style, mountPoint);
+                this.mountPoint = mountPoint;
+                this.root = createRoot(mountPoint);
+            }
+        }
+
+        this.style.display = "block";
+        this.style.width = "100%";
+        this.style.height = "100%";
+        this.root?.render(
+            <DesktopPatchErrorBoundary>
+                <DesktopCurveLabStandaloneView />
+            </DesktopPatchErrorBoundary>,
+        );
+    }
+
+    disconnectedCallback() {
+        this.root?.unmount();
+        this.root = null;
+    }
+
+    private ensureLightDomStyles() {
+        const styleId = "cosimo-desktop-curve-lab-styles";
+
+        if (document.getElementById(styleId)) {
+            return;
+        }
+
+        const style = document.createElement("style");
+        style.id = styleId;
+        style.textContent = cssText.replaceAll(":host", getCurveLabTagName());
+        document.head.appendChild(style);
+    }
+}
+
 function getTagName() {
     return "cosimo-desktop-react-view";
+}
+
+function getCurveLabTagName() {
+    return "cosimo-desktop-curve-lab";
+}
+
+function getDesktopWindowKind(globalObject: typeof globalThis = globalThis) {
+    return typeof globalObject.__COSIMO_DESKTOP_WINDOW_KIND__ === "string"
+        ? globalObject.__COSIMO_DESKTOP_WINDOW_KIND__.trim()
+        : "";
 }
 
 export function createDesktopPatchView(
@@ -179,6 +272,20 @@ export function createDesktopPatchView(
     return element;
 }
 
+export function createDesktopCurveLabView() {
+    const tagName = getCurveLabTagName();
+
+    if (!window.customElements.get(tagName)) {
+        window.customElements.define(tagName, CosimoDesktopCurveLabElement);
+    }
+
+    return document.createElement(tagName);
+}
+
 export default function createPatchView(patchConnection: PatchConnectionLike) {
+    if (getDesktopWindowKind() === "curve-lab") {
+        return createDesktopCurveLabView();
+    }
+
     return createDesktopPatchView(patchConnection);
 }

@@ -897,6 +897,36 @@ namespace wt
             stereo.out -> out;
         }
     }
+
+    processor StereoTrim (float32 gain)
+    {
+        input stream float32<2> in;
+        output stream float32<2> out;
+
+        void main()
+        {
+            loop
+            {
+                out <- in * gain;
+                advance();
+            }
+        }
+    }
+
+    processor StereoToMonoAverage
+    {
+        input stream float32<2> in;
+        output stream float32 out;
+
+        void main()
+        {
+            loop
+            {
+                out <- (in[0] + in[1]) * 0.5f;
+                advance();
+            }
+        }
+    }
 }
 
 graph WavetableSynth [[ main ]]
@@ -908,20 +938,22 @@ graph WavetableSynth [[ main ]]
     input event wt::WorkerLoadFailure workerLoadFailure;
     input event int32 runtimeSyncRequest;
     input event int32 retryDesiredTableRequest;
-    input event float32[wt::msegPaddedSamples] mseg1Buffer;
-    input event wt::MsegPlaybackConfig mseg1Playback;
+    input event int32 modulationClear;
+    input event int32 modulationEnable;
+    input event wt::ModulationMsegBufferUpload modulationMsegBuffer;
+    input event wt::ModulationMsegPlaybackUpload modulationMsegPlayback;
+    input event wt::ModulationEnvelopeUpload modulationEnvelope;
+    input event wt::ModulationRouteUpload modulationRoute;
     input value float32 wavetablePosition [[ name: "Wavetable Position", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
     input value float32 wavetableSelect [[ name: "Wavetable Select", min: 0.0f, max: 255.0f, init: 0.0f, discrete: true, step: 1.0f, rampFrames: 0 ]];
     input value float32 playMode [[ name: "Play Mode", min: 0.0f, max: 2.0f, init: 0.0f, discrete: true, step: 1.0f, rampFrames: 0 ]];
     input value float32 glideTime [[ name: "Glide Time", min: 0.0f, max: 2.0f, init: 0.0f, unit: "s", rampFrames: 0 ]];
-    input value float32 mseg1Depth [[ name: "MSEG 1 Depth", min: -1.0f, max: 1.0f, init: 1.0f, rampFrames: 64 ]];
-    input value float32 warpMsegDepth [[ name: "Warp MSEG Depth", min: -1.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
+    input value float32 pan [[ name: "Pan", min: -1.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
     input value float32 warpMode [[ name: "Warp Mode", min: 0.0f, max: 4.0f, init: 0.0f, discrete: true, step: 1.0f, rampFrames: 0 ]];
     input value float32 warpAmount [[ name: "Warp Amount", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
     input value float32 filterMode [[ name: "Filter Mode", min: 0.0f, max: 5.0f, init: 0.0f, discrete: true, step: 1.0f, rampFrames: 0 ]];
     input value float32 filterCutoff [[ name: "Filter Cutoff", min: 20.0f, max: 20000.0f, init: 1000.0f, unit: "Hz", rampFrames: 64 ]];
     input value float32 filterQ [[ name: "Filter Q", min: 0.1f, max: 20.0f, init: 0.707107f, rampFrames: 64 ]];
-    input value float32 filterMsegDepth [[ name: "Filter MSEG Depth", min: -6.0f, max: 6.0f, init: 0.0f, unit: "oct", rampFrames: 64 ]];
     output event wt::WavetableUploadAck wavetableUploadAck;
     output event wt::WavetableMipRequest wavetableMipRequest;
     output event wt::RuntimeState runtimeState;
@@ -936,9 +968,9 @@ graph WavetableSynth [[ main ]]
     node mpe   = std::midi::MPEConverter;
     node noteDispatcher = wt::NoteDispatcher (voiceCount);
     node sharedEngine = wt::SharedVoiceEngine (voiceCount);
-    node trim = std::levels::ConstantGain (float32, 0.18f);
+    node trim = wt::StereoTrim (0.18f);
+    node analyzerDownmix = wt::StereoToMonoAverage;
     node filterSpectrumAnalyzer = wt::FilterSpectrumAnalyzer;
-    node stereo = std::mixers::MonoToStereo (float32);
     node desiredTableMonitor = wt::DesiredTableMonitor;
     node runtimeStateCoordinator = wt::RuntimeStateCoordinator;
 
@@ -952,19 +984,21 @@ graph WavetableSynth [[ main ]]
         wavetableLoadBegin -> sharedEngine.wavetableLoadBeginIn;
         wavetableMipFrame -> sharedEngine.wavetableMipFrameIn;
         serviceLoadAbort -> sharedEngine.serviceLoadAbortIn;
-        mseg1Buffer -> sharedEngine.msegBufferIn;
-        mseg1Playback -> sharedEngine.msegPlaybackIn;
+        modulationClear -> sharedEngine.modulationClearIn;
+        modulationEnable -> sharedEngine.modulationEnableIn;
+        modulationMsegBuffer -> sharedEngine.modulationMsegBufferIn;
+        modulationMsegPlayback -> sharedEngine.modulationMsegPlaybackIn;
+        modulationEnvelope -> sharedEngine.modulationEnvelopeIn;
+        modulationRoute -> sharedEngine.modulationRouteIn;
         wavetablePosition -> sharedEngine.framePositionIn;
         wavetableSelect -> desiredTableMonitor.tableSelectIn;
         glideTime -> sharedEngine.glideTimeIn;
-        mseg1Depth -> sharedEngine.msegDepthIn;
-        warpMsegDepth -> sharedEngine.warpMsegDepthIn;
+        pan -> sharedEngine.panIn;
         warpMode -> sharedEngine.warpModeIn;
         warpAmount -> sharedEngine.warpAmountIn;
         filterMode -> sharedEngine.filterModeIn;
         filterCutoff -> sharedEngine.filterCutoffIn;
         filterQ -> sharedEngine.filterQIn;
-        filterMsegDepth -> sharedEngine.filterMsegDepthIn;
         sharedEngine.wavetableUploadAckOut -> wavetableUploadAck;
         sharedEngine.wavetableMipRequestOut -> wavetableMipRequest;
         sharedEngine.runtimeServiceStateOut -> runtimeStateCoordinator.runtimeServiceStateIn;
@@ -977,7 +1011,7 @@ graph WavetableSynth [[ main ]]
         sharedEngine.effectiveWarpStateOut -> effectiveWarpState;
         sharedEngine.effectiveFilterStateOut -> effectiveFilterState;
         sharedEngine.out -> trim.in;
-        trim.out -> stereo.in, filterSpectrumAnalyzer.in;
-        stereo.out -> audioOut;
+        trim.out -> audioOut, analyzerDownmix.in;
+        analyzerDownmix.out -> filterSpectrumAnalyzer.in;
     }
 }

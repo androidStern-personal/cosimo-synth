@@ -2,6 +2,8 @@
 #include <assert.h>
 #include <mutex>
 
+#include "../../../native/ModulationRuntimeRestore.h"
+
 #define CHOC_ASSERT(x) assert(x)
 #include "cmajor/COM/cmaj_Library.h"
 #include "cmajor/helpers/cmaj_JUCEPluginFormat.h"
@@ -55,11 +57,15 @@ static std::string getDesktopDevServerOrigin()
     return COSIMO_DESKTOP_DEV_SERVER_ORIGIN;
 }
 
-static std::string createDesktopUILoaderSetupCode()
+static std::string createDesktopUILoaderSetupCode (std::string_view windowKind = "patch")
 {
     auto setupCode = "window.__COSIMO_DESKTOP_UI_SOURCE_MODE__ = "
                    + choc::json::getEscapedQuotedString (getDesktopUISourceMode())
                    + ";";
+
+    setupCode += "\nwindow.__COSIMO_DESKTOP_WINDOW_KIND__ = "
+              + choc::json::getEscapedQuotedString (windowKind)
+              + ";";
 
     if (getDesktopUISourceMode() == "dev-server")
     {
@@ -138,12 +144,91 @@ public:
 
     struct Editor final : public juce::AudioProcessorEditor
     {
+        struct CurveLabWindow final : public juce::DocumentWindow
+        {
+            explicit CurveLabWindow (Editor& ownerToUse)
+                : juce::DocumentWindow ("Curve Lab",
+                                        juce::Colour::fromString ("ff050812"),
+                                        juce::DocumentWindow::allButtons),
+                  owner (ownerToUse),
+                  patchWebView (std::make_unique<cmaj::PatchWebView> (
+                      *owner.owner.patch,
+                      cmaj::PatchManifest::View {
+                          choc::json::create ("width", windowWidth,
+                                              "height", windowHeight)
+                      }))
+            {
+                patchWebView->extraSetupCode = createDesktopUILoaderSetupCode ("curve-lab");
+                owner.bindCurveLabBridge (*patchWebView);
+
+                patchWebViewHolder = choc::ui::createJUCEWebViewHolder (patchWebView->getWebView());
+                patchWebView->setActive (true);
+                patchWebView->update (cmaj::PatchManifest::View {
+                    choc::json::create ("width", windowWidth,
+                                        "height", windowHeight)
+                });
+                patchWebViewHolder->setSize ((int) patchWebView->width, (int) patchWebView->height);
+
+                setUsingNativeTitleBar (true);
+                setResizable (true, true);
+                setResizeLimits (360, 520, 2200, 2400);
+                setContentNonOwned (patchWebViewHolder.get(), true);
+                centreAroundComponent (&owner, windowWidth, windowHeight);
+                setVisible (true);
+                toFront (true);
+                patchWebView->reload();
+            }
+
+            ~CurveLabWindow() override
+            {
+                clearContentComponent();
+                patchWebViewHolder.reset();
+                patchWebView.reset();
+            }
+
+            void closeButtonPressed() override
+            {
+                auto safeOwner = juce::Component::SafePointer<Editor> (&owner);
+
+                juce::MessageManager::callAsync ([safeOwner]
+                {
+                    if (safeOwner != nullptr)
+                        safeOwner->closeCurveLabWindow();
+                });
+            }
+
+            void resized() override
+            {
+                juce::DocumentWindow::resized();
+
+                if (patchWebView == nullptr || patchWebViewHolder == nullptr)
+                    return;
+
+                auto bounds = getLocalBounds();
+                patchWebViewHolder->setBounds (bounds);
+
+                patchWebView->update (cmaj::PatchManifest::View {
+                    choc::json::create ("width", std::max (1, bounds.getWidth()),
+                                        "height", std::max (1, bounds.getHeight()))
+                });
+                patchWebViewHolder->setSize ((int) patchWebView->width, (int) patchWebView->height);
+            }
+
+            Editor& owner;
+            std::unique_ptr<cmaj::PatchWebView> patchWebView;
+            std::unique_ptr<juce::Component> patchWebViewHolder;
+
+            static constexpr int windowWidth = 460;
+            static constexpr int windowHeight = 880;
+        };
+
         explicit Editor (FixedPatchInstrumentDevPlugin& ownerToUse)
             : juce::AudioProcessorEditor (ownerToUse),
               owner (ownerToUse),
               patchWebView (std::make_unique<cmaj::PatchWebView> (*owner.patch, derivePatchViewSize (owner)))
         {
-            patchWebView->extraSetupCode = createDesktopUILoaderSetupCode();
+            patchWebView->extraSetupCode = createDesktopUILoaderSetupCode ("patch");
+            bindCurveLabBridge (*patchWebView);
             patchWebViewHolder = choc::ui::createJUCEWebViewHolder (patchWebView->getWebView());
             patchWebViewHolder->setSize ((int) patchWebView->width, (int) patchWebView->height);
 
@@ -173,10 +258,119 @@ public:
 
         ~Editor() override
         {
+            closeCurveLabWindow();
             owner.editorBeingDeleted (this);
             setLookAndFeel (nullptr);
             patchWebViewHolder.reset();
             patchWebView.reset();
+        }
+
+        void bindCurveLabBridge (cmaj::PatchWebView& targetPatchWebView)
+        {
+            auto& webView = targetPatchWebView.getWebView();
+
+            auto openBindingOK = webView.bind ("cosimo_desktop_curve_lab_openWindow",
+                                               [this] (const choc::value::ValueView&) -> choc::value::Value
+            {
+                openOrFocusCurveLabWindow();
+                return {};
+            });
+
+            auto closeBindingOK = webView.bind ("cosimo_desktop_curve_lab_closeWindow",
+                                                [this] (const choc::value::ValueView&) -> choc::value::Value
+            {
+                closeCurveLabWindow();
+                return {};
+            });
+
+            auto getStateBindingOK = webView.bind ("cosimo_desktop_curve_lab_getState",
+                                                   [this] (const choc::value::ValueView&) -> choc::value::Value
+            {
+                return choc::value::Value (std::string_view (curveLabStateJSON));
+            });
+
+            auto setStateBindingOK = webView.bind ("cosimo_desktop_curve_lab_setState",
+                                                   [this] (const choc::value::ValueView& args) -> choc::value::Value
+            {
+                if (args.isArray() && args.size() > 0)
+                    updateCurveLabState (args[0].toString());
+
+                return {};
+            });
+
+            (void) openBindingOK;
+            (void) closeBindingOK;
+            (void) getStateBindingOK;
+            (void) setStateBindingOK;
+            jassert (openBindingOK && closeBindingOK && getStateBindingOK && setStateBindingOK);
+        }
+
+        void openOrFocusCurveLabWindow()
+        {
+            if (curveLabWindow == nullptr)
+                curveLabWindow = std::make_unique<CurveLabWindow> (*this);
+
+            setCurveLabWindowOpen (true);
+            curveLabWindow->setVisible (true);
+            curveLabWindow->toFront (true);
+            curveLabWindow->grabKeyboardFocus();
+        }
+
+        void closeCurveLabWindow()
+        {
+            if (curveLabWindow == nullptr)
+            {
+                setCurveLabWindowOpen (false);
+                return;
+            }
+
+            setCurveLabWindowOpen (false);
+            curveLabWindow->setVisible (false);
+            curveLabWindow.reset();
+        }
+
+        void updateCurveLabState (std::string newStateJSON)
+        {
+            curveLabStateJSON = std::move (newStateJSON);
+            broadcastCurveLabState();
+        }
+
+        void setCurveLabWindowOpen (bool shouldBeOpen)
+        {
+            choc::value::Value state = choc::json::create ("isOpen", shouldBeOpen);
+
+            if (! curveLabStateJSON.empty())
+            {
+                try
+                {
+                    auto parsedState = choc::json::parse (curveLabStateJSON);
+
+                    if (parsedState.isObject())
+                        state = parsedState;
+                }
+                catch (...)
+                {
+                }
+            }
+
+            state.setMember ("isOpen", shouldBeOpen);
+            curveLabStateJSON = state.toString();
+            broadcastCurveLabState();
+        }
+
+        void broadcastCurveLabState()
+        {
+            if (curveLabStateJSON.empty())
+                return;
+
+            auto script = "window.dispatchEvent(new CustomEvent('cosimo-desktop-curve-lab-state', { detail: "
+                        + curveLabStateJSON
+                        + " }));";
+
+            patchWebView->getWebView().evaluateJavascript (script);
+
+            if (curveLabWindow != nullptr && curveLabWindow->patchWebView != nullptr)
+                curveLabWindow->patchWebView->getWebView().evaluateJavascript (script);
         }
 
         void statusMessageChanged()
@@ -229,7 +423,11 @@ public:
             }
 
             if (forceReload)
+            {
                 patchWebView->reload();
+                if (curveLabWindow != nullptr && curveLabWindow->patchWebView != nullptr)
+                    curveLabWindow->patchWebView->reload();
+            }
         }
 
         void childBoundsChanged (Component*) override
@@ -271,8 +469,10 @@ public:
 
         FixedPatchInstrumentDevPlugin& owner;
         std::unique_ptr<cmaj::PatchWebView> patchWebView;
+        std::unique_ptr<CurveLabWindow> curveLabWindow;
         std::unique_ptr<juce::Component> patchWebViewHolder, extraComp;
         juce::LookAndFeel_V4 lookAndFeel;
+        std::string curveLabStateJSON;
         bool isResizing = false;
 
         static constexpr int defaultWidth = 500;
@@ -397,6 +597,7 @@ private:
             applyCurrentRateAndBlockSize();
 
         patch->loadPatch (loadParams, true);
+        cosimo::modulation::uploadStoredModulationStateToPatch (*patch);
     }
 
     std::filesystem::path manifestLocation;

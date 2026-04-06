@@ -1,0 +1,938 @@
+import type { PatchConnectionLike } from "./cmajor-react";
+import {
+    MSEG_DEFAULT_DEPTH,
+    addMsegPoint,
+    clamp01,
+    clampMsegRateSeconds,
+    createDefaultMsegPlayback,
+    createDefaultMsegShape,
+    deleteMsegPoint,
+    msegPlaybacksEqual,
+    msegShapesEqual,
+    moveMsegPoint,
+    normalizeMsegPlayback,
+    normalizeMsegShape,
+    renderMsegShape,
+    setMsegSegmentCurvePower,
+    type MsegPlayback,
+    type MsegShape,
+    type MsegState,
+} from "./mseg";
+
+export const MODULATION_STATE_KEY = "modulation.v1";
+export const MODULATION_MAX_ROUTES = 12;
+export const MODULATION_MSEG_SLOT_COUNT = 3;
+export const MODULATION_ENV_SLOT_COUNT = 3;
+export const MODULATION_CLEAR_ENDPOINT_ID = "modulationClear";
+export const MODULATION_ENABLE_ENDPOINT_ID = "modulationEnable";
+export const MODULATION_MSEG_BUFFER_ENDPOINT_ID = "modulationMsegBuffer";
+export const MODULATION_MSEG_PLAYBACK_ENDPOINT_ID = "modulationMsegPlayback";
+export const MODULATION_ENV_ENDPOINT_ID = "modulationEnvelope";
+export const MODULATION_ROUTE_ENDPOINT_ID = "modulationRoute";
+
+export const MOD_SOURCE_MSEG = 1;
+export const MOD_SOURCE_ENV = 2;
+export const MOD_SOURCE_VELOCITY = 3;
+export const MOD_SOURCE_PRESSURE = 4;
+export const MOD_SOURCE_SLIDE = 5;
+
+export const MOD_TARGET_WAVETABLE_POSITION = 1;
+export const MOD_TARGET_WARP_AMOUNT = 2;
+export const MOD_TARGET_FILTER_CUTOFF_OCTAVES = 3;
+export const MOD_TARGET_FILTER_Q = 4;
+export const MOD_TARGET_PITCH_SEMITONES = 5;
+export const MOD_TARGET_AMP_GAIN_DB = 6;
+export const MOD_TARGET_PAN = 7;
+
+const MSEG_SLOT_NAMES = ["MSEG 1", "MSEG 2", "MSEG 3"] as const;
+const ENV_SLOT_NAMES = ["Env 1", "Env 2", "Env 3"] as const;
+const ENV_MIN_SECONDS = 0.001;
+const ENV_MAX_SECONDS = 10.0;
+const FILTER_Q_MIN = 0.1;
+const FILTER_Q_MAX = 20.0;
+const ROUTE_AMOUNT_LIMITS = {
+    wavetablePosition: { min: -1.0, max: 1.0 },
+    warpAmount: { min: -1.0, max: 1.0 },
+    filterCutoffOctaves: { min: -6.0, max: 6.0 },
+    filterQ: { min: -(FILTER_Q_MAX - FILTER_Q_MIN), max: FILTER_Q_MAX - FILTER_Q_MIN },
+    pitchSemitones: { min: -48.0, max: 48.0 },
+    ampGainDb: { min: -48.0, max: 6.0 },
+    pan: { min: -1.0, max: 1.0 },
+} as const;
+const ROUTE_AMOUNT_STEPS = {
+    wavetablePosition: 0.001,
+    warpAmount: 0.001,
+    filterCutoffOctaves: 0.001,
+    filterQ: 0.001,
+    pitchSemitones: 0.01,
+    ampGainDb: 0.1,
+    pan: 0.001,
+} as const;
+
+export type ModulationSourceKind = "mseg" | "env" | "velocity" | "pressure" | "slide";
+export type ModulationTargetKind =
+    | "wavetablePosition"
+    | "warpAmount"
+    | "filterCutoffOctaves"
+    | "filterQ"
+    | "pitchSemitones"
+    | "ampGainDb"
+    | "pan";
+export type ModulationAmountDirection = "positive" | "negative";
+
+export type ModulationMsegSlot = {
+    shape: MsegShape;
+    playback: MsegPlayback;
+};
+
+export type ModulationEnvelope = {
+    name: string;
+    attackSeconds: number;
+    decaySeconds: number;
+    sustain: number;
+    releaseSeconds: number;
+};
+
+export type ModulationRoute = {
+    enabled: boolean;
+    sourceKind: ModulationSourceKind;
+    sourceSlot: number | null;
+    targetKind: ModulationTargetKind;
+    amount: number;
+};
+
+export type ModulationState = {
+    format: "cosimo.modulation";
+    version: 1;
+    msegSlots: ModulationMsegSlot[];
+    envelopeSlots: ModulationEnvelope[];
+    routes: ModulationRoute[];
+};
+
+export type ModulationMsegBufferUpload = {
+    slot: number;
+    buffer: number[];
+};
+
+export type ModulationMsegPlaybackUpload = {
+    slot: number;
+    seconds: number;
+    holdFinalValue: boolean;
+    rateKind: number;
+    loopEnabled: boolean;
+    loopStart: number;
+    loopEnd: number;
+    noteOffPolicy: number;
+    legatoRestarts: boolean;
+};
+
+export type ModulationEnvelopeUpload = {
+    slot: number;
+    attackSeconds: number;
+    decaySeconds: number;
+    sustain: number;
+    releaseSeconds: number;
+};
+
+export type ModulationRouteUpload = {
+    routeIndex: number;
+    enabled: boolean;
+    sourceKind: number;
+    sourceSlot: number;
+    targetKind: number;
+    amount: number;
+};
+
+type StoredStateMessage = {
+    key?: unknown;
+    value?: unknown;
+};
+
+export type MsegEditorControllerLike = {
+    getState: () => MsegState;
+    setShape: (nextShape: unknown) => void;
+    setPlayback: (nextPlayback: unknown) => void;
+    addPoint: (x: number, y: number) => void;
+    movePoint: (pointIndex: number, x: number, y: number) => void;
+    deletePoint: (pointIndex: number) => void;
+    setSegmentCurvePower: (segmentIndex: number, curvePower: number) => void;
+};
+
+function clamp(value: number, min: number, max: number) {
+    return Math.min(Math.max(value, min), max);
+}
+
+function clampEnvSeconds(value: number, fallback: number) {
+    const numeric = Number(value);
+    return clamp(Number.isFinite(numeric) ? numeric : fallback, ENV_MIN_SECONDS, ENV_MAX_SECONDS);
+}
+
+function formatSignedMagnitude(value: number, digits: number) {
+    const numeric = Number.isFinite(value) ? value : 0;
+    const magnitude = Math.abs(numeric).toFixed(digits);
+    if (numeric < 0) {
+        return `-${magnitude}`;
+    }
+
+    return numeric > 0 ? `+${magnitude}` : magnitude;
+}
+
+function getRouteAmountLimit(targetKind: ModulationTargetKind) {
+    return ROUTE_AMOUNT_LIMITS[targetKind];
+}
+
+function getDirectionalAmountLimit(targetKind: ModulationTargetKind, direction: ModulationAmountDirection) {
+    const limits = getRouteAmountLimit(targetKind);
+    return direction === "negative" ? Math.abs(limits.min) : Math.abs(limits.max);
+}
+
+export function getModulationAmountBounds(targetKind: ModulationTargetKind) {
+    const limits = getRouteAmountLimit(targetKind);
+
+    return {
+        min: limits.min,
+        max: limits.max,
+        step: ROUTE_AMOUNT_STEPS[targetKind],
+    };
+}
+
+export function clampModulationRouteAmount(targetKind: ModulationTargetKind, value: number) {
+    const limits = ROUTE_AMOUNT_LIMITS[targetKind];
+    const numeric = Number(value);
+    return clamp(Number.isFinite(numeric) ? numeric : 0.0, limits.min, limits.max);
+}
+
+export function getModulationAmountDirection(
+    amount: number,
+    fallbackDirection: ModulationAmountDirection = "positive",
+): ModulationAmountDirection {
+    const numeric = Number(amount);
+    if (!Number.isFinite(numeric) || numeric === 0) {
+        return fallbackDirection;
+    }
+
+    return numeric < 0 ? "negative" : "positive";
+}
+
+export function getModulationAmountDepth(
+    targetKind: ModulationTargetKind,
+    amount: number,
+    fallbackDirection: ModulationAmountDirection = "positive",
+) {
+    const clampedAmount = clampModulationRouteAmount(targetKind, amount);
+    const direction = getModulationAmountDirection(clampedAmount, fallbackDirection);
+    const limit = getDirectionalAmountLimit(targetKind, direction);
+
+    if (limit <= 0) {
+        return 0;
+    }
+
+    return clamp(Math.abs(clampedAmount) / limit, 0, 1);
+}
+
+export function composeModulationAmount(
+    targetKind: ModulationTargetKind,
+    depth: number,
+    direction: ModulationAmountDirection,
+) {
+    const clampedDepth = clamp(Number.isFinite(depth) ? depth : 0, 0, 1);
+    const limit = getDirectionalAmountLimit(targetKind, direction);
+    const signedAmount = (direction === "negative" ? -1 : 1) * clampedDepth * limit;
+    return clampModulationRouteAmount(targetKind, signedAmount);
+}
+
+export function formatModulationAmountReadout(targetKind: ModulationTargetKind, amount: number) {
+    const clampedAmount = clampModulationRouteAmount(targetKind, amount);
+
+    switch (targetKind) {
+        case "wavetablePosition":
+            return `${formatSignedMagnitude(clampedAmount * 100, 0)}% scan`;
+        case "warpAmount":
+            return `${formatSignedMagnitude(clampedAmount * 100, 0)}% warp`;
+        case "filterCutoffOctaves":
+            return `${formatSignedMagnitude(clampedAmount, 2)} oct`;
+        case "filterQ":
+            return `${formatSignedMagnitude(clampedAmount, 2)} Q`;
+        case "pitchSemitones":
+            return `${formatSignedMagnitude(clampedAmount, 1)} st`;
+        case "ampGainDb":
+            return `${formatSignedMagnitude(clampedAmount, 1)} dB`;
+        case "pan": {
+            const clampedPan = clamp(clampedAmount, -1, 1);
+            const panPercent = Math.round(Math.abs(clampedPan) * 100);
+            if (panPercent === 0) {
+                return "Center";
+            }
+
+            return `${panPercent}% ${clampedPan < 0 ? "L" : "R"}`;
+        }
+        default:
+            return formatSignedMagnitude(clampedAmount, 3);
+    }
+}
+
+export function getModulationAmountPercentLabel(
+    targetKind: ModulationTargetKind,
+    amount: number,
+    fallbackDirection: ModulationAmountDirection = "positive",
+) {
+    return `${Math.round(getModulationAmountDepth(targetKind, amount, fallbackDirection) * 100)}%`;
+}
+
+export function getModulationTargetClampHint(targetKind: ModulationTargetKind) {
+    switch (targetKind) {
+        case "wavetablePosition":
+            return "Wavetable scan still clamps to the table range.";
+        case "warpAmount":
+            return "Warp amount still clamps to the oscillator's warp range.";
+        case "filterCutoffOctaves":
+            return "Requested cutoff movement is converted to Hz and still clamps to the filter range.";
+        case "filterQ":
+            return "Resonance still clamps to the synth's Q range.";
+        case "pitchSemitones":
+            return "Pitch depth adds on top of note, glide, and bend.";
+        case "ampGainDb":
+            return "Amplitude still clamps to the synth's gain range.";
+        case "pan":
+            return "Pan still clamps between full left and full right.";
+        default:
+            return "";
+    }
+}
+
+function normalizeSourceKind(value: unknown): ModulationSourceKind {
+    if (value === "mseg" || value === "env" || value === "velocity" || value === "pressure" || value === "slide") {
+        return value;
+    }
+
+    return "mseg";
+}
+
+function normalizeTargetKind(value: unknown): ModulationTargetKind {
+    if (
+        value === "wavetablePosition"
+        || value === "warpAmount"
+        || value === "filterCutoffOctaves"
+        || value === "filterQ"
+        || value === "pitchSemitones"
+        || value === "ampGainDb"
+        || value === "pan"
+    ) {
+        return value;
+    }
+
+    return "wavetablePosition";
+}
+
+function normalizeSourceSlot(sourceKind: ModulationSourceKind, rawSlot: unknown) {
+    const numericSlot = Math.round(Number(rawSlot));
+
+    if (sourceKind === "velocity" || sourceKind === "pressure" || sourceKind === "slide") {
+        return null;
+    }
+
+    const maxSlot = sourceKind === "mseg" ? MODULATION_MSEG_SLOT_COUNT : MODULATION_ENV_SLOT_COUNT;
+    return clamp(Number.isFinite(numericSlot) ? numericSlot : 1, 1, maxSlot);
+}
+
+export function createDefaultEnvelope(slotIndex: number): ModulationEnvelope {
+    return {
+        name: ENV_SLOT_NAMES[slotIndex] ?? `Env ${slotIndex + 1}`,
+        attackSeconds: 0.01,
+        decaySeconds: 0.25,
+        sustain: 0.5,
+        releaseSeconds: 0.2,
+    };
+}
+
+export function normalizeEnvelope(value: unknown, slotIndex = 0): ModulationEnvelope {
+    const nextValue = value && typeof value === "object" ? value as Partial<ModulationEnvelope> : {};
+    const fallback = createDefaultEnvelope(slotIndex);
+
+    return {
+        name: typeof nextValue.name === "string" && nextValue.name.trim() ? nextValue.name : fallback.name,
+        attackSeconds: clampEnvSeconds(nextValue.attackSeconds ?? fallback.attackSeconds, fallback.attackSeconds),
+        decaySeconds: clampEnvSeconds(nextValue.decaySeconds ?? fallback.decaySeconds, fallback.decaySeconds),
+        sustain: clamp01(nextValue.sustain ?? fallback.sustain),
+        releaseSeconds: clampEnvSeconds(nextValue.releaseSeconds ?? fallback.releaseSeconds, fallback.releaseSeconds),
+    };
+}
+
+export function createDefaultRoute(): ModulationRoute {
+    return {
+        enabled: true,
+        sourceKind: "mseg",
+        sourceSlot: 1,
+        targetKind: "wavetablePosition",
+        amount: 0,
+    };
+}
+
+export function normalizeRoute(value: unknown): ModulationRoute {
+    const nextValue = value && typeof value === "object" ? value as Partial<ModulationRoute> : {};
+    const sourceKind = normalizeSourceKind(nextValue.sourceKind);
+    const targetKind = normalizeTargetKind(nextValue.targetKind);
+
+    return {
+        enabled: nextValue.enabled !== false,
+        sourceKind,
+        sourceSlot: normalizeSourceSlot(sourceKind, nextValue.sourceSlot),
+        targetKind,
+        amount: clampModulationRouteAmount(targetKind, Number(nextValue.amount)),
+    };
+}
+
+function normalizeMsegSlot(value: unknown, slotIndex: number): ModulationMsegSlot {
+    const nextValue = value && typeof value === "object" ? value as Partial<ModulationMsegSlot> : {};
+    const defaultShape = createDefaultMsegShape(MSEG_SLOT_NAMES[slotIndex] ?? `MSEG ${slotIndex + 1}`);
+
+    return {
+        shape: normalizeMsegShape(nextValue.shape ?? defaultShape),
+        playback: normalizeMsegPlayback(nextValue.playback ?? createDefaultMsegPlayback()),
+    };
+}
+
+export function createDefaultModulationState(): ModulationState {
+    return {
+        format: "cosimo.modulation",
+        version: 1,
+        msegSlots: Array.from({ length: MODULATION_MSEG_SLOT_COUNT }, (_, slotIndex) => normalizeMsegSlot({}, slotIndex)),
+        envelopeSlots: Array.from({ length: MODULATION_ENV_SLOT_COUNT }, (_, slotIndex) => createDefaultEnvelope(slotIndex)),
+        routes: [],
+    };
+}
+
+export function normalizeModulationState(value: unknown = createDefaultModulationState()): ModulationState {
+    const nextValue = value && typeof value === "object" ? value as Partial<ModulationState> : {};
+    const inputMsegSlots = Array.isArray(nextValue.msegSlots) ? nextValue.msegSlots : [];
+    const inputEnvelopeSlots = Array.isArray(nextValue.envelopeSlots) ? nextValue.envelopeSlots : [];
+    const inputRoutes = Array.isArray(nextValue.routes) ? nextValue.routes : [];
+
+    return {
+        format: "cosimo.modulation",
+        version: 1,
+        msegSlots: Array.from({ length: MODULATION_MSEG_SLOT_COUNT }, (_, slotIndex) => normalizeMsegSlot(inputMsegSlots[slotIndex], slotIndex)),
+        envelopeSlots: Array.from({ length: MODULATION_ENV_SLOT_COUNT }, (_, slotIndex) => normalizeEnvelope(inputEnvelopeSlots[slotIndex], slotIndex)),
+        routes: inputRoutes.slice(0, MODULATION_MAX_ROUTES).map((route) => normalizeRoute(route)),
+    };
+}
+
+export function serializeModulationState(state: unknown) {
+    return JSON.stringify(normalizeModulationState(state));
+}
+
+export function deserializeModulationState(value: unknown): ModulationState {
+    if (typeof value !== "string" || value.trim() === "") {
+        return createDefaultModulationState();
+    }
+
+    try {
+        return normalizeModulationState(JSON.parse(value));
+    } catch {
+        return createDefaultModulationState();
+    }
+}
+
+function modulationStatesEqual(left: ModulationState, right: ModulationState) {
+    return serializeModulationState(left) === serializeModulationState(right);
+}
+
+function toStoredStateEchoToken(value: unknown) {
+    try {
+        return `${typeof value}:${JSON.stringify(value)}`;
+    } catch {
+        return `${typeof value}:${String(value)}`;
+    }
+}
+
+function sourceKindToCode(sourceKind: ModulationSourceKind) {
+    if (sourceKind === "mseg") return MOD_SOURCE_MSEG;
+    if (sourceKind === "env") return MOD_SOURCE_ENV;
+    if (sourceKind === "velocity") return MOD_SOURCE_VELOCITY;
+    if (sourceKind === "pressure") return MOD_SOURCE_PRESSURE;
+    return MOD_SOURCE_SLIDE;
+}
+
+function targetKindToCode(targetKind: ModulationTargetKind) {
+    if (targetKind === "wavetablePosition") return MOD_TARGET_WAVETABLE_POSITION;
+    if (targetKind === "warpAmount") return MOD_TARGET_WARP_AMOUNT;
+    if (targetKind === "filterCutoffOctaves") return MOD_TARGET_FILTER_CUTOFF_OCTAVES;
+    if (targetKind === "filterQ") return MOD_TARGET_FILTER_Q;
+    if (targetKind === "pitchSemitones") return MOD_TARGET_PITCH_SEMITONES;
+    if (targetKind === "ampGainDb") return MOD_TARGET_AMP_GAIN_DB;
+    return MOD_TARGET_PAN;
+}
+
+function toMsegPlaybackUpload(slotIndex: number, playback: MsegPlayback): ModulationMsegPlaybackUpload {
+    return {
+        slot: slotIndex + 1,
+        seconds: clampMsegRateSeconds(playback.rate.seconds),
+        holdFinalValue: playback.holdFinalValue !== false,
+        rateKind: 0,
+        loopEnabled: Boolean(playback.loop),
+        loopStart: playback.loop?.startX ?? 0,
+        loopEnd: playback.loop?.endX ?? 1,
+        noteOffPolicy:
+            playback.noteOffPolicy === "immediate"
+                ? 1
+                : playback.noteOffPolicy === "ignore"
+                    ? 2
+                    : 0,
+        legatoRestarts: Boolean(playback.legatoRestarts),
+    };
+}
+
+function toMsegBufferUpload(slotIndex: number, shape: MsegShape): ModulationMsegBufferUpload {
+    return {
+        slot: slotIndex + 1,
+        buffer: Array.from(renderMsegShape(shape)),
+    };
+}
+
+function toEnvelopeUpload(slotIndex: number, envelope: ModulationEnvelope): ModulationEnvelopeUpload {
+    return {
+        slot: slotIndex + 1,
+        attackSeconds: envelope.attackSeconds,
+        decaySeconds: envelope.decaySeconds,
+        sustain: envelope.sustain,
+        releaseSeconds: envelope.releaseSeconds,
+    };
+}
+
+function toRouteUpload(routeIndex: number, route: ModulationRoute | null): ModulationRouteUpload {
+    const normalizedRoute = route ? normalizeRoute(route) : null;
+    const isEnabled = normalizedRoute?.enabled ?? false;
+
+    return {
+        routeIndex,
+        enabled: isEnabled,
+        sourceKind: sourceKindToCode(normalizedRoute?.sourceKind ?? "mseg"),
+        sourceSlot: isEnabled ? (normalizedRoute?.sourceSlot ?? 0) : 0,
+        targetKind: targetKindToCode(normalizedRoute?.targetKind ?? "wavetablePosition"),
+        amount: isEnabled ? (normalizedRoute?.amount ?? 0.0) : 0.0,
+    };
+}
+
+class ModulationMsegSlotController implements MsegEditorControllerLike {
+    private readonly bridge: ModulationRuntimeBridge;
+    private readonly slotIndex: number;
+
+    constructor(bridge: ModulationRuntimeBridge, slotIndex: number) {
+        this.bridge = bridge;
+        this.slotIndex = slotIndex;
+    }
+
+    getState(): MsegState {
+        const slot = this.bridge.getState().msegSlots[this.slotIndex];
+
+        return {
+            shape: slot.shape,
+            playback: slot.playback,
+            depth: MSEG_DEFAULT_DEPTH,
+        };
+    }
+
+    setShape(nextShape: unknown) {
+        this.bridge.setMsegSlotShape(this.slotIndex, nextShape);
+    }
+
+    setPlayback(nextPlayback: unknown) {
+        this.bridge.setMsegSlotPlayback(this.slotIndex, nextPlayback);
+    }
+
+    addPoint(x: number, y: number) {
+        this.setShape(addMsegPoint(this.getState().shape, x, y));
+    }
+
+    movePoint(pointIndex: number, x: number, y: number) {
+        this.setShape(moveMsegPoint(this.getState().shape, pointIndex, x, y));
+    }
+
+    deletePoint(pointIndex: number) {
+        this.setShape(deleteMsegPoint(this.getState().shape, pointIndex));
+    }
+
+    setSegmentCurvePower(segmentIndex: number, curvePower: number) {
+        this.setShape(setMsegSegmentCurvePower(this.getState().shape, segmentIndex, curvePower));
+    }
+}
+
+export class ModulationRuntimeBridge {
+    private readonly patchConnection: PatchConnectionLike;
+    private state = createDefaultModulationState();
+    private suppressStoredStateEvents = 0;
+    private readonly pendingStoredStateEchoes = new Map<string, Map<string, number>>();
+    private readonly stateListeners = new Set<(state: ModulationState) => void>();
+    private readonly slotControllers = Array.from(
+        { length: MODULATION_MSEG_SLOT_COUNT },
+        (_, slotIndex) => new ModulationMsegSlotController(this, slotIndex),
+    );
+
+    constructor(patchConnection: PatchConnectionLike) {
+        this.patchConnection = patchConnection;
+        this.handleStoredStateValue = this.handleStoredStateValue.bind(this);
+    }
+
+    attach() {
+        this.patchConnection.addStoredStateValueListener?.(this.handleStoredStateValue);
+    }
+
+    detach() {
+        this.patchConnection.removeStoredStateValueListener?.(this.handleStoredStateValue);
+    }
+
+    requestBootState() {
+        if (typeof this.patchConnection.requestFullStoredState === "function") {
+            this.patchConnection.requestFullStoredState((storedState) => {
+                const fullState = storedState && typeof storedState === "object"
+                    ? storedState as Record<string, unknown>
+                    : {};
+                this.applyStoredState(fullState[MODULATION_STATE_KEY], true);
+            });
+            return;
+        }
+
+        if (typeof this.patchConnection.requestStoredStateValue === "function") {
+            this.patchConnection.requestStoredStateValue(MODULATION_STATE_KEY);
+            return;
+        }
+
+        this.uploadAll();
+        this.emitStateChange();
+    }
+
+    getState() {
+        return this.state;
+    }
+
+    subscribe(listener: (state: ModulationState) => void) {
+        this.stateListeners.add(listener);
+    }
+
+    unsubscribe(listener: (state: ModulationState) => void) {
+        this.stateListeners.delete(listener);
+    }
+
+    getMsegSlotController(slotIndex: number) {
+        return this.slotControllers[clamp(Math.round(slotIndex), 0, MODULATION_MSEG_SLOT_COUNT - 1)];
+    }
+
+    setState(nextState: unknown) {
+        const normalizedState = normalizeModulationState(nextState);
+
+        if (modulationStatesEqual(this.state, normalizedState)) {
+            return;
+        }
+
+        this.state = normalizedState;
+        this.persistState();
+        this.uploadAll();
+        this.emitStateChange();
+    }
+
+    setMsegSlotShape(slotIndex: number, nextShape: unknown) {
+        const normalizedShape = normalizeMsegShape(nextShape);
+        const currentSlot = this.state.msegSlots[slotIndex];
+
+        if (msegShapesEqual(currentSlot.shape, normalizedShape)) {
+            return;
+        }
+
+        this.updateState((previousState) => {
+            const nextMsegSlots = previousState.msegSlots.map((slot, index) => (
+                index === slotIndex
+                    ? { ...slot, shape: normalizedShape }
+                    : slot
+            ));
+
+            return {
+                ...previousState,
+                msegSlots: nextMsegSlots,
+            };
+        });
+        this.uploadMsegBuffer(slotIndex);
+    }
+
+    setMsegSlotPlayback(slotIndex: number, nextPlayback: unknown) {
+        const normalizedPlayback = normalizeMsegPlayback(nextPlayback);
+        const currentSlot = this.state.msegSlots[slotIndex];
+
+        if (msegPlaybacksEqual(currentSlot.playback, normalizedPlayback)) {
+            return;
+        }
+
+        this.updateState((previousState) => {
+            const nextMsegSlots = previousState.msegSlots.map((slot, index) => (
+                index === slotIndex
+                    ? { ...slot, playback: normalizedPlayback }
+                    : slot
+            ));
+
+            return {
+                ...previousState,
+                msegSlots: nextMsegSlots,
+            };
+        });
+        this.uploadMsegPlayback(slotIndex);
+    }
+
+    setEnvelope(slotIndex: number, nextEnvelope: unknown) {
+        const normalizedEnvelope = normalizeEnvelope(nextEnvelope, slotIndex);
+        const currentEnvelope = this.state.envelopeSlots[slotIndex];
+
+        if (JSON.stringify(currentEnvelope) === JSON.stringify(normalizedEnvelope)) {
+            return;
+        }
+
+        this.updateState((previousState) => ({
+            ...previousState,
+            envelopeSlots: previousState.envelopeSlots.map((envelope, index) => (
+                index === slotIndex ? normalizedEnvelope : envelope
+            )),
+        }));
+        this.uploadEnvelope(slotIndex);
+    }
+
+    replaceRoutes(nextRoutes: unknown) {
+        const normalizedRoutes = Array.isArray(nextRoutes)
+            ? nextRoutes.slice(0, MODULATION_MAX_ROUTES).map((route) => normalizeRoute(route))
+            : [];
+
+        if (JSON.stringify(this.state.routes) === JSON.stringify(normalizedRoutes)) {
+            return;
+        }
+
+        this.updateState((previousState) => ({
+            ...previousState,
+            routes: normalizedRoutes,
+        }));
+        this.uploadRoutes();
+    }
+
+    setRoute(routeIndex: number, nextRoute: unknown) {
+        const normalizedRoute = normalizeRoute(nextRoute);
+        const currentRoutes = [...this.state.routes];
+
+        while (currentRoutes.length <= routeIndex) {
+            currentRoutes.push(createDefaultRoute());
+        }
+
+        if (JSON.stringify(currentRoutes[routeIndex]) === JSON.stringify(normalizedRoute)) {
+            return;
+        }
+
+        currentRoutes[routeIndex] = normalizedRoute;
+        this.replaceRoutes(currentRoutes);
+    }
+
+    addRoute(nextRoute: unknown = createDefaultRoute()) {
+        if (this.state.routes.length >= MODULATION_MAX_ROUTES) {
+            return;
+        }
+
+        this.replaceRoutes([...this.state.routes, normalizeRoute(nextRoute)]);
+    }
+
+    removeRoute(routeIndex: number) {
+        if (routeIndex < 0 || routeIndex >= this.state.routes.length) {
+            return;
+        }
+
+        const nextRoutes = this.state.routes.filter((_, index) => index !== routeIndex);
+        this.replaceRoutes(nextRoutes);
+    }
+
+    private updateState(update: (previousState: ModulationState) => ModulationState) {
+        const nextState = normalizeModulationState(update(this.state));
+
+        if (modulationStatesEqual(this.state, nextState)) {
+            return;
+        }
+
+        this.state = nextState;
+        this.persistState();
+        this.emitStateChange();
+    }
+
+    private applyStoredState(rawValue: unknown, uploadAll: boolean) {
+        const nextState = deserializeModulationState(rawValue);
+        this.state = nextState;
+
+        if (uploadAll) {
+            this.uploadAll();
+        }
+
+        this.emitStateChange();
+    }
+
+    private handleStoredStateValue(message: unknown) {
+        if (!message || typeof message !== "object") {
+            return;
+        }
+
+        const nextMessage = message as StoredStateMessage;
+        if (this.suppressStoredStateEvents > 0) {
+            return;
+        }
+
+        if (typeof nextMessage.key === "string" && this.consumePendingStoredStateEcho(nextMessage.key, nextMessage.value)) {
+            return;
+        }
+
+        if (nextMessage.key === MODULATION_STATE_KEY) {
+            this.applyStoredState(nextMessage.value, true);
+        }
+    }
+
+    private persistState() {
+        if (typeof this.patchConnection.sendStoredStateValue !== "function") {
+            return;
+        }
+
+        const persistedModulationState = serializeModulationState(this.state);
+        this.suppressStoredStateEvents += 1;
+        try {
+            this.rememberPendingStoredStateEcho(MODULATION_STATE_KEY, persistedModulationState);
+            this.patchConnection.sendStoredStateValue(MODULATION_STATE_KEY, persistedModulationState);
+        } finally {
+            this.suppressStoredStateEvents -= 1;
+        }
+    }
+
+    private uploadAll() {
+        this.patchConnection.sendEventOrValue?.(MODULATION_ENABLE_ENDPOINT_ID, 0);
+        this.patchConnection.sendEventOrValue?.(MODULATION_CLEAR_ENDPOINT_ID, 1);
+
+        for (let slotIndex = 0; slotIndex < MODULATION_MSEG_SLOT_COUNT; slotIndex += 1) {
+            this.uploadMsegSlot(slotIndex);
+        }
+
+        for (let slotIndex = 0; slotIndex < MODULATION_ENV_SLOT_COUNT; slotIndex += 1) {
+            this.uploadEnvelope(slotIndex);
+        }
+
+        this.uploadRoutes();
+        this.patchConnection.sendEventOrValue?.(MODULATION_ENABLE_ENDPOINT_ID, 1);
+    }
+
+    private uploadMsegSlot(slotIndex: number) {
+        this.uploadMsegBuffer(slotIndex);
+        this.uploadMsegPlayback(slotIndex);
+    }
+
+    private uploadMsegBuffer(slotIndex: number) {
+        const slot = this.state.msegSlots[slotIndex];
+        this.patchConnection.sendEventOrValue?.(
+            MODULATION_MSEG_BUFFER_ENDPOINT_ID,
+            toMsegBufferUpload(slotIndex, slot.shape),
+        );
+    }
+
+    private uploadMsegPlayback(slotIndex: number) {
+        const slot = this.state.msegSlots[slotIndex];
+        this.patchConnection.sendEventOrValue?.(
+            MODULATION_MSEG_PLAYBACK_ENDPOINT_ID,
+            toMsegPlaybackUpload(slotIndex, slot.playback),
+        );
+    }
+
+    private uploadEnvelope(slotIndex: number) {
+        this.patchConnection.sendEventOrValue?.(
+            MODULATION_ENV_ENDPOINT_ID,
+            toEnvelopeUpload(slotIndex, this.state.envelopeSlots[slotIndex]),
+        );
+    }
+
+    private uploadRoutes() {
+        for (let routeIndex = 0; routeIndex < MODULATION_MAX_ROUTES; routeIndex += 1) {
+            this.patchConnection.sendEventOrValue?.(
+                MODULATION_ROUTE_ENDPOINT_ID,
+                toRouteUpload(routeIndex, this.state.routes[routeIndex] ?? null),
+            );
+        }
+    }
+
+    private emitStateChange() {
+        this.stateListeners.forEach((listener) => listener(this.state));
+    }
+
+    private rememberPendingStoredStateEcho(key: string, value: unknown) {
+        const token = toStoredStateEchoToken(value);
+        const pendingByToken = this.pendingStoredStateEchoes.get(key) ?? new Map<string, number>();
+        pendingByToken.set(token, (pendingByToken.get(token) ?? 0) + 1);
+        this.pendingStoredStateEchoes.set(key, pendingByToken);
+    }
+
+    private consumePendingStoredStateEcho(key: string, value: unknown) {
+        const pendingByToken = this.pendingStoredStateEchoes.get(key);
+
+        if (!pendingByToken) {
+            return false;
+        }
+
+        const token = toStoredStateEchoToken(value);
+        const pendingCount = pendingByToken.get(token) ?? 0;
+
+        if (pendingCount <= 0) {
+            return false;
+        }
+
+        if (pendingCount === 1) {
+            pendingByToken.delete(token);
+        } else {
+            pendingByToken.set(token, pendingCount - 1);
+        }
+
+        if (pendingByToken.size === 0) {
+            this.pendingStoredStateEchoes.delete(key);
+        }
+
+        return true;
+    }
+}
+
+export function buildDisplayedMsegState(bridge: ModulationRuntimeBridge, slotIndex: number): MsegState {
+    return bridge.getMsegSlotController(slotIndex).getState();
+}
+
+type SharedRuntimeBridgeEntry = {
+    bridge: ModulationRuntimeBridge;
+    refCount: number;
+};
+
+const sharedRuntimeBridges = new WeakMap<PatchConnectionLike, SharedRuntimeBridgeEntry>();
+
+export function acquireModulationRuntimeBridge(patchConnection: PatchConnectionLike) {
+    const existingEntry = sharedRuntimeBridges.get(patchConnection);
+
+    if (existingEntry) {
+        existingEntry.refCount += 1;
+        return existingEntry.bridge;
+    }
+
+    const bridge = new ModulationRuntimeBridge(patchConnection);
+    bridge.attach();
+    bridge.requestBootState();
+    sharedRuntimeBridges.set(patchConnection, {
+        bridge,
+        refCount: 1,
+    });
+    return bridge;
+}
+
+export function releaseModulationRuntimeBridge(patchConnection: PatchConnectionLike) {
+    const entry = sharedRuntimeBridges.get(patchConnection);
+
+    if (!entry) {
+        return;
+    }
+
+    entry.refCount -= 1;
+
+    if (entry.refCount > 0) {
+        return;
+    }
+
+    entry.bridge.detach();
+    sharedRuntimeBridges.delete(patchConnection);
+}
