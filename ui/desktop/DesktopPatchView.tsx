@@ -5,6 +5,7 @@ import {
     useRef,
     useState,
     type ReactNode,
+    type KeyboardEvent as ReactKeyboardEvent,
     type PointerEvent as ReactPointerEvent,
     type RefObject,
 } from "react";
@@ -71,6 +72,18 @@ const KEYBOARD_ROOT_NOTE_MAX = 72;
 const GLIDE_TIME_MIN_SECONDS = 0;
 const GLIDE_TIME_MAX_SECONDS = 2;
 const GLIDE_TIME_STEP_SECONDS = 0.001;
+const ENVELOPE_TIME_MIN_SECONDS = 0.001;
+const ENVELOPE_TIME_MAX_SECONDS = 10;
+const ENVELOPE_TIME_RESPONSE = 1.4;
+const ENVELOPE_NOTE_OFF_RATIO = 0.76;
+const ENVELOPE_VIEWBOX = {
+    width: 920,
+    height: 520,
+    left: 44,
+    right: 44,
+    top: 42,
+    bottom: 118,
+} as const;
 const WARP_MODE_OPTIONS = [
     { value: 0, label: "Off" },
     { value: 1, label: "Bend +/-" },
@@ -178,8 +191,102 @@ function formatSignedPercent(value: number) {
     return `${percentValue > 0 ? "+" : ""}${percentValue}%`;
 }
 
+function formatEnvelopeTimeDisplay(seconds: number) {
+    return seconds >= 1 ? `${seconds.toFixed(2)} s` : `${Math.round(seconds * 1000)} ms`;
+}
+
+function parseEnvelopeTimeInput(text: string, currentSeconds: number) {
+    const normalizedText = String(text ?? "")
+        .trim()
+        .toLowerCase();
+
+    if (!normalizedText) {
+        return null;
+    }
+
+    const match = normalizedText.match(/^(-?\d+(?:\.\d+)?)\s*(ms|msec|milliseconds|s|sec|secs|second|seconds)?$/);
+
+    if (!match) {
+        return null;
+    }
+
+    const numericValue = Number(match[1]);
+
+    if (!Number.isFinite(numericValue)) {
+        return null;
+    }
+
+    const unit = match[2];
+
+    if (unit === "ms" || unit === "msec" || unit === "milliseconds") {
+        return numericValue / 1000;
+    }
+
+    if (unit === "s" || unit === "sec" || unit === "secs" || unit === "second" || unit === "seconds") {
+        return numericValue;
+    }
+
+    if (currentSeconds < 1) {
+        return numericValue >= 10 ? numericValue / 1000 : numericValue;
+    }
+
+    return numericValue;
+}
+
 function clamp(value: number, min: number, max: number) {
     return Math.min(Math.max(value, min), max);
+}
+
+function secondsToEnvelopeNormalized(seconds: number) {
+    const clampedSeconds = clamp(seconds, ENVELOPE_TIME_MIN_SECONDS, ENVELOPE_TIME_MAX_SECONDS);
+    const raw = Math.log(clampedSeconds / ENVELOPE_TIME_MIN_SECONDS) / Math.log(ENVELOPE_TIME_MAX_SECONDS / ENVELOPE_TIME_MIN_SECONDS);
+    return clamp(Math.pow(clamp(raw, 0, 1), ENVELOPE_TIME_RESPONSE), 0, 1);
+}
+
+function normalizedToEnvelopeSeconds(normalized: number) {
+    const raw = Math.pow(clamp(normalized, 0, 1), 1 / ENVELOPE_TIME_RESPONSE);
+    return ENVELOPE_TIME_MIN_SECONDS * Math.pow(ENVELOPE_TIME_MAX_SECONDS / ENVELOPE_TIME_MIN_SECONDS, raw);
+}
+
+function envelopeSustainToY(sustain: number) {
+    const plotHeight = ENVELOPE_VIEWBOX.height - ENVELOPE_VIEWBOX.top - ENVELOPE_VIEWBOX.bottom;
+    return ENVELOPE_VIEWBOX.top + ((1 - clamp(sustain, 0, 1)) * plotHeight);
+}
+
+function envelopeYToSustain(y: number) {
+    const plotHeight = ENVELOPE_VIEWBOX.height - ENVELOPE_VIEWBOX.top - ENVELOPE_VIEWBOX.bottom;
+    return clamp(1 - ((y - ENVELOPE_VIEWBOX.top) / plotHeight), 0, 1);
+}
+
+function computeEnvelopeGeometry(envelope: NonNullable<ModulationMatrixSectionProps["selectedEnvelope"]>) {
+    const plotWidth = ENVELOPE_VIEWBOX.width - ENVELOPE_VIEWBOX.left - ENVELOPE_VIEWBOX.right;
+    const attackRegionWidth = plotWidth * 0.30;
+    const decayRegionWidth = plotWidth * 0.28;
+    const noteOffX = ENVELOPE_VIEWBOX.left + (plotWidth * ENVELOPE_NOTE_OFF_RATIO);
+    const releaseRegionWidth = ENVELOPE_VIEWBOX.width - ENVELOPE_VIEWBOX.right - noteOffX;
+    const attackX = ENVELOPE_VIEWBOX.left + (secondsToEnvelopeNormalized(envelope.attackSeconds) * attackRegionWidth);
+    const decayRegionStart = ENVELOPE_VIEWBOX.left + attackRegionWidth;
+    const decayX = decayRegionStart + (secondsToEnvelopeNormalized(envelope.decaySeconds) * decayRegionWidth);
+    const sustainY = envelopeSustainToY(envelope.sustain);
+    const releaseX = noteOffX + (secondsToEnvelopeNormalized(envelope.releaseSeconds) * releaseRegionWidth);
+
+    return {
+        noteOffX,
+        attackRegionWidth,
+        decayRegionStart,
+        decayRegionWidth,
+        releaseRegionWidth,
+        attackX,
+        decayX,
+        sustainY,
+        releaseX,
+        plotWidth,
+        plotHeight: ENVELOPE_VIEWBOX.height - ENVELOPE_VIEWBOX.top - ENVELOPE_VIEWBOX.bottom,
+        plotBottom: ENVELOPE_VIEWBOX.height - ENVELOPE_VIEWBOX.bottom,
+        plotTop: ENVELOPE_VIEWBOX.top,
+        plotLeft: ENVELOPE_VIEWBOX.left,
+        plotRight: ENVELOPE_VIEWBOX.width - ENVELOPE_VIEWBOX.right,
+    };
 }
 
 function formatSignedOctaves(value: number) {
@@ -452,6 +559,421 @@ function OverlayIconChip({
         >
             {children}
         </button>
+    );
+}
+
+function DesktopEnvelopeEditor({
+    selectedEnvelope,
+    onEnvelopeChange,
+}: {
+    selectedEnvelope: NonNullable<ModulationMatrixSectionProps["selectedEnvelope"]>;
+    onEnvelopeChange: ModulationMatrixSectionProps["onEnvelopeChange"];
+}) {
+    const svgRef = useRef<SVGSVGElement | null>(null);
+    const [draftAttack, setDraftAttack] = useState("");
+    const [draftDecay, setDraftDecay] = useState("");
+    const [draftSustain, setDraftSustain] = useState("");
+    const [draftRelease, setDraftRelease] = useState("");
+    const [activeHandle, setActiveHandle] = useState<null | "attack" | "decay-sustain" | "release">(null);
+    const [activePointerId, setActivePointerId] = useState<number | null>(null);
+
+    useEffect(() => {
+        setDraftAttack(formatEnvelopeTimeDisplay(selectedEnvelope.attackSeconds));
+        setDraftDecay(formatEnvelopeTimeDisplay(selectedEnvelope.decaySeconds));
+        setDraftSustain((selectedEnvelope.sustain * 100).toFixed(1));
+        setDraftRelease(formatEnvelopeTimeDisplay(selectedEnvelope.releaseSeconds));
+    }, [
+        selectedEnvelope.attackSeconds,
+        selectedEnvelope.decaySeconds,
+        selectedEnvelope.releaseSeconds,
+        selectedEnvelope.sustain,
+    ]);
+
+    const geometry = useMemo(() => computeEnvelopeGeometry(selectedEnvelope), [selectedEnvelope]);
+
+    const envelopePath = useMemo(() => [
+        `M ${geometry.plotLeft} ${geometry.plotBottom}`,
+        `L ${geometry.attackX} ${geometry.plotTop}`,
+        `L ${geometry.decayX} ${geometry.sustainY}`,
+        `L ${geometry.noteOffX} ${geometry.sustainY}`,
+        `L ${geometry.releaseX} ${geometry.plotBottom}`,
+        `L ${geometry.plotRight} ${geometry.plotBottom}`,
+    ].join(" "), [geometry]);
+
+    const envelopeFillPath = useMemo(() => [
+        `M ${geometry.plotLeft} ${geometry.plotBottom}`,
+        `L ${geometry.attackX} ${geometry.plotTop}`,
+        `L ${geometry.decayX} ${geometry.sustainY}`,
+        `L ${geometry.noteOffX} ${geometry.sustainY}`,
+        `L ${geometry.releaseX} ${geometry.plotBottom}`,
+        `L ${geometry.plotRight} ${geometry.plotBottom}`,
+        `L ${geometry.plotLeft} ${geometry.plotBottom}`,
+        "Z",
+    ].join(" "), [geometry]);
+
+    const readStagePoint = useCallback((clientX: number, clientY: number) => {
+        const svg = svgRef.current;
+
+        if (!svg) {
+            return null;
+        }
+
+        const rect = svg.getBoundingClientRect();
+
+        if (rect.width <= 0 || rect.height <= 0) {
+            return null;
+        }
+
+        const normalizedX = (clientX - rect.left) / rect.width;
+        const normalizedY = (clientY - rect.top) / rect.height;
+
+        return {
+            x: normalizedX * ENVELOPE_VIEWBOX.width,
+            y: normalizedY * ENVELOPE_VIEWBOX.height,
+        };
+    }, []);
+
+    useEffect(() => {
+        if (!activeHandle || activePointerId === null) {
+            return;
+        }
+
+        const handlePointerMove = (event: PointerEvent) => {
+            if (event.pointerId !== activePointerId) {
+                return;
+            }
+
+            const point = readStagePoint(event.clientX, event.clientY);
+
+            if (!point) {
+                return;
+            }
+
+            if (activeHandle === "attack") {
+                const normalized = clamp(
+                    (point.x - geometry.plotLeft) / Math.max(1, geometry.attackRegionWidth),
+                    0,
+                    1,
+                );
+                onEnvelopeChange("attackSeconds", normalizedToEnvelopeSeconds(normalized));
+                return;
+            }
+
+            if (activeHandle === "decay-sustain") {
+                const normalizedDecay = clamp(
+                    (point.x - geometry.decayRegionStart) / Math.max(1, geometry.decayRegionWidth),
+                    0,
+                    1,
+                );
+                onEnvelopeChange("decaySeconds", normalizedToEnvelopeSeconds(normalizedDecay));
+                onEnvelopeChange("sustain", envelopeYToSustain(point.y));
+                return;
+            }
+
+            const normalizedRelease = clamp(
+                (point.x - geometry.noteOffX) / Math.max(1, geometry.releaseRegionWidth),
+                0,
+                1,
+            );
+            onEnvelopeChange("releaseSeconds", normalizedToEnvelopeSeconds(normalizedRelease));
+        };
+
+        const clearActiveDrag = () => {
+            setActiveHandle(null);
+            setActivePointerId(null);
+        };
+
+        window.addEventListener("pointermove", handlePointerMove);
+        window.addEventListener("pointerup", clearActiveDrag);
+        window.addEventListener("pointercancel", clearActiveDrag);
+
+        return () => {
+            window.removeEventListener("pointermove", handlePointerMove);
+            window.removeEventListener("pointerup", clearActiveDrag);
+            window.removeEventListener("pointercancel", clearActiveDrag);
+        };
+    }, [activeHandle, activePointerId, geometry, onEnvelopeChange, readStagePoint]);
+
+    const beginHandleDrag = useCallback((
+        handleName: "attack" | "decay-sustain" | "release",
+        event: ReactPointerEvent<SVGCircleElement>,
+    ) => {
+        event.preventDefault();
+        event.stopPropagation();
+        setActiveHandle(handleName);
+        setActivePointerId(event.pointerId);
+    }, []);
+
+    const commitDurationField = useCallback((
+        field: "attackSeconds" | "decaySeconds" | "releaseSeconds",
+        draftValue: string,
+        currentSeconds: number,
+    ) => {
+        const parsedValue = parseEnvelopeTimeInput(draftValue, currentSeconds);
+
+        if (parsedValue === null) {
+            setDraftAttack(formatEnvelopeTimeDisplay(selectedEnvelope.attackSeconds));
+            setDraftDecay(formatEnvelopeTimeDisplay(selectedEnvelope.decaySeconds));
+            setDraftRelease(formatEnvelopeTimeDisplay(selectedEnvelope.releaseSeconds));
+            return;
+        }
+
+        onEnvelopeChange(field, clamp(parsedValue, ENVELOPE_TIME_MIN_SECONDS, ENVELOPE_TIME_MAX_SECONDS));
+    }, [
+        onEnvelopeChange,
+        selectedEnvelope.attackSeconds,
+        selectedEnvelope.decaySeconds,
+        selectedEnvelope.releaseSeconds,
+    ]);
+
+    const handleDurationFieldKeyDown = useCallback((
+        event: ReactKeyboardEvent<HTMLInputElement>,
+        field: "attackSeconds" | "decaySeconds" | "releaseSeconds",
+        draftValue: string,
+        currentSeconds: number,
+    ) => {
+        if (event.key === "Enter") {
+            event.preventDefault();
+            commitDurationField(field, draftValue, currentSeconds);
+            return;
+        }
+
+        if (event.key === "Escape") {
+            event.preventDefault();
+
+            if (field === "attackSeconds") {
+                setDraftAttack(formatEnvelopeTimeDisplay(selectedEnvelope.attackSeconds));
+            } else if (field === "decaySeconds") {
+                setDraftDecay(formatEnvelopeTimeDisplay(selectedEnvelope.decaySeconds));
+            } else {
+                setDraftRelease(formatEnvelopeTimeDisplay(selectedEnvelope.releaseSeconds));
+            }
+
+            event.currentTarget.blur();
+        }
+    }, [
+        commitDurationField,
+        selectedEnvelope.attackSeconds,
+        selectedEnvelope.decaySeconds,
+        selectedEnvelope.releaseSeconds,
+    ]);
+
+    return (
+        <div className="grid gap-3">
+            <div className="relative overflow-hidden rounded-[22px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01)),linear-gradient(180deg,rgba(5,9,19,0.92),rgba(7,13,24,0.96))]">
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_22%,rgba(109,216,255,0.10),transparent_26%),radial-gradient(circle_at_82%_78%,rgba(248,184,77,0.10),transparent_20%)]" />
+                <svg
+                    ref={svgRef}
+                    viewBox={`0 0 ${ENVELOPE_VIEWBOX.width} ${ENVELOPE_VIEWBOX.height}`}
+                    className="relative z-10 block h-auto w-full touch-none"
+                    data-role="adsr-editor-surface"
+                    aria-label="Envelope editor"
+                >
+                    {Array.from({ length: 9 }, (_, step) => {
+                        const x = geometry.plotLeft + ((geometry.plotWidth * step) / 8);
+                        return (
+                            <line
+                                key={`env-grid-x-${step}`}
+                                x1={x}
+                                y1={geometry.plotTop}
+                                x2={x}
+                                y2={geometry.plotBottom}
+                                stroke="rgba(145,163,199,0.12)"
+                            />
+                        );
+                    })}
+                    {Array.from({ length: 5 }, (_, step) => {
+                        const y = geometry.plotTop + ((geometry.plotHeight * step) / 4);
+                        return (
+                            <line
+                                key={`env-grid-y-${step}`}
+                                x1={geometry.plotLeft}
+                                y1={y}
+                                x2={geometry.plotRight}
+                                y2={y}
+                                stroke="rgba(145,163,199,0.12)"
+                            />
+                        );
+                    })}
+
+                    <rect
+                        x={geometry.plotLeft}
+                        y={geometry.plotTop}
+                        width={geometry.attackRegionWidth}
+                        height={geometry.plotHeight}
+                        rx={16}
+                        fill="rgba(109,216,255,0.03)"
+                    />
+                    <rect
+                        x={geometry.decayRegionStart}
+                        y={geometry.plotTop}
+                        width={geometry.decayRegionWidth}
+                        height={geometry.plotHeight}
+                        rx={16}
+                        fill="rgba(109,216,255,0.045)"
+                    />
+                    <rect
+                        x={geometry.noteOffX}
+                        y={geometry.plotTop}
+                        width={geometry.releaseRegionWidth}
+                        height={geometry.plotHeight}
+                        rx={16}
+                        fill="rgba(248,184,77,0.04)"
+                    />
+
+                    <line
+                        x1={geometry.noteOffX}
+                        y1={geometry.plotTop}
+                        x2={geometry.noteOffX}
+                        y2={geometry.plotBottom}
+                        stroke="rgba(248,184,77,0.84)"
+                        strokeWidth={2}
+                        strokeDasharray="7 7"
+                    />
+
+                    <path d={envelopeFillPath} fill="rgba(109,216,255,0.10)" />
+                    <path
+                        d={envelopePath}
+                        fill="none"
+                        stroke="rgba(109,216,255,0.98)"
+                        strokeWidth={4}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                    />
+
+                    <circle
+                        cx={geometry.attackX}
+                        cy={geometry.plotTop}
+                        r={13}
+                        fill="rgba(8,16,28,0.94)"
+                        stroke="rgba(109,216,255,0.98)"
+                        strokeWidth={3}
+                    />
+                    <circle cx={geometry.attackX} cy={geometry.plotTop} r={4} fill="rgba(109,216,255,0.98)" />
+                    <circle
+                        data-role="adsr-attack-handle-hit-target"
+                        cx={geometry.attackX}
+                        cy={geometry.plotTop}
+                        r={34}
+                        fill="transparent"
+                        className="cursor-ew-resize"
+                        onPointerDown={(event) => beginHandleDrag("attack", event)}
+                    />
+
+                    <circle
+                        cx={geometry.decayX}
+                        cy={geometry.sustainY}
+                        r={13}
+                        fill="rgba(8,16,28,0.94)"
+                        stroke="rgba(248,184,77,0.98)"
+                        strokeWidth={3}
+                    />
+                    <circle cx={geometry.decayX} cy={geometry.sustainY} r={4} fill="rgba(248,184,77,0.98)" />
+                    <circle
+                        data-role="adsr-decay-sustain-handle-hit-target"
+                        cx={geometry.decayX}
+                        cy={geometry.sustainY}
+                        r={34}
+                        fill="transparent"
+                        className="cursor-move"
+                        onPointerDown={(event) => beginHandleDrag("decay-sustain", event)}
+                    />
+
+                    <circle
+                        cx={geometry.releaseX}
+                        cy={geometry.plotBottom}
+                        r={13}
+                        fill="rgba(8,16,28,0.94)"
+                        stroke="rgba(109,216,255,0.98)"
+                        strokeWidth={3}
+                    />
+                    <circle cx={geometry.releaseX} cy={geometry.plotBottom} r={4} fill="rgba(109,216,255,0.98)" />
+                    <circle
+                        data-role="adsr-release-handle-hit-target"
+                        cx={geometry.releaseX}
+                        cy={geometry.plotBottom}
+                        r={34}
+                        fill="transparent"
+                        className="cursor-ew-resize"
+                        onPointerDown={(event) => beginHandleDrag("release", event)}
+                    />
+                </svg>
+
+                <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 p-3">
+                    <div className="pointer-events-auto grid grid-cols-4 gap-2 rounded-2xl bg-black/30 px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-md">
+                        <label className="flex min-w-0 items-center gap-1.5" htmlFor="desktop-envelope-attack">
+                            <span className="shrink-0 text-[10px] uppercase tracking-[0.18em] text-slate-300/65">A</span>
+                            <input
+                                id="desktop-envelope-attack"
+                                aria-label="Envelope attack value"
+                                className="min-w-0 flex-1 bg-transparent p-0 text-left font-mono text-[12px] tabular-nums text-slate-100 outline-none focus:text-amber-200"
+                                value={draftAttack}
+                                onChange={(event) => setDraftAttack(event.currentTarget.value)}
+                                onBlur={() => commitDurationField("attackSeconds", draftAttack, selectedEnvelope.attackSeconds)}
+                                onKeyDown={(event) => handleDurationFieldKeyDown(event, "attackSeconds", draftAttack, selectedEnvelope.attackSeconds)}
+                            />
+                        </label>
+                        <label className="flex min-w-0 items-center gap-1.5" htmlFor="desktop-envelope-decay">
+                            <span className="shrink-0 text-[10px] uppercase tracking-[0.18em] text-slate-300/65">D</span>
+                            <input
+                                id="desktop-envelope-decay"
+                                aria-label="Envelope decay value"
+                                className="min-w-0 flex-1 bg-transparent p-0 text-left font-mono text-[12px] tabular-nums text-slate-100 outline-none focus:text-amber-200"
+                                value={draftDecay}
+                                onChange={(event) => setDraftDecay(event.currentTarget.value)}
+                                onBlur={() => commitDurationField("decaySeconds", draftDecay, selectedEnvelope.decaySeconds)}
+                                onKeyDown={(event) => handleDurationFieldKeyDown(event, "decaySeconds", draftDecay, selectedEnvelope.decaySeconds)}
+                            />
+                        </label>
+                        <label className="flex min-w-0 items-center gap-1.5" htmlFor="desktop-envelope-sustain">
+                            <span className="shrink-0 text-[10px] uppercase tracking-[0.18em] text-slate-300/65">S</span>
+                            <input
+                                id="desktop-envelope-sustain"
+                                aria-label="Envelope sustain value"
+                                className="min-w-0 flex-1 bg-transparent p-0 text-left font-mono text-[12px] tabular-nums text-slate-100 outline-none focus:text-amber-200"
+                                value={draftSustain}
+                                onChange={(event) => setDraftSustain(event.currentTarget.value)}
+                                onBlur={() => {
+                                    const nextValue = Number(draftSustain);
+
+                                    if (!Number.isFinite(nextValue)) {
+                                        setDraftSustain((selectedEnvelope.sustain * 100).toFixed(1));
+                                        return;
+                                    }
+
+                                    onEnvelopeChange("sustain", clamp(nextValue / 100, 0, 1));
+                                }}
+                                onKeyDown={(event) => {
+                                    if (event.key === "Enter") {
+                                        event.preventDefault();
+                                        event.currentTarget.blur();
+                                        return;
+                                    }
+
+                                    if (event.key === "Escape") {
+                                        event.preventDefault();
+                                        setDraftSustain((selectedEnvelope.sustain * 100).toFixed(1));
+                                        event.currentTarget.blur();
+                                    }
+                                }}
+                            />
+                        </label>
+                        <label className="flex min-w-0 items-center gap-1.5" htmlFor="desktop-envelope-release">
+                            <span className="shrink-0 text-[10px] uppercase tracking-[0.18em] text-slate-300/65">R</span>
+                            <input
+                                id="desktop-envelope-release"
+                                aria-label="Envelope release value"
+                                className="min-w-0 flex-1 bg-transparent p-0 text-left font-mono text-[12px] tabular-nums text-slate-100 outline-none focus:text-amber-200"
+                                value={draftRelease}
+                                onChange={(event) => setDraftRelease(event.currentTarget.value)}
+                                onBlur={() => commitDurationField("releaseSeconds", draftRelease, selectedEnvelope.releaseSeconds)}
+                                onKeyDown={(event) => handleDurationFieldKeyDown(event, "releaseSeconds", draftRelease, selectedEnvelope.releaseSeconds)}
+                            />
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </div>
     );
 }
 
@@ -883,48 +1405,12 @@ function ModulationMatrixSection({
                         ariaLabel="Pan"
                     />
 
-                    <div className="grid gap-3 sm:grid-cols-2">
-                        <RangeField
-                            label="Attack"
-                            min={0.001}
-                            max={10}
-                            step={0.001}
-                            value={Number(selectedEnvelope?.attackSeconds ?? 0.01)}
-                            displayValue={formatSeconds(Number(selectedEnvelope?.attackSeconds ?? 0.01))}
-                            onChange={(nextValue) => onEnvelopeChange("attackSeconds", nextValue)}
-                            ariaLabel="Envelope attack"
+                    {selectedEnvelope ? (
+                        <DesktopEnvelopeEditor
+                            selectedEnvelope={selectedEnvelope}
+                            onEnvelopeChange={onEnvelopeChange}
                         />
-                        <RangeField
-                            label="Decay"
-                            min={0.001}
-                            max={10}
-                            step={0.001}
-                            value={Number(selectedEnvelope?.decaySeconds ?? 0.25)}
-                            displayValue={formatSeconds(Number(selectedEnvelope?.decaySeconds ?? 0.25))}
-                            onChange={(nextValue) => onEnvelopeChange("decaySeconds", nextValue)}
-                            ariaLabel="Envelope decay"
-                        />
-                        <RangeField
-                            label="Sustain"
-                            min={0}
-                            max={1}
-                            step={0.001}
-                            value={Number(selectedEnvelope?.sustain ?? 0.5)}
-                            displayValue={formatPercent(Number(selectedEnvelope?.sustain ?? 0.5))}
-                            onChange={(nextValue) => onEnvelopeChange("sustain", nextValue)}
-                            ariaLabel="Envelope sustain"
-                        />
-                        <RangeField
-                            label="Release"
-                            min={0.001}
-                            max={10}
-                            step={0.001}
-                            value={Number(selectedEnvelope?.releaseSeconds ?? 0.2)}
-                            displayValue={formatSeconds(Number(selectedEnvelope?.releaseSeconds ?? 0.2))}
-                            onChange={(nextValue) => onEnvelopeChange("releaseSeconds", nextValue)}
-                            ariaLabel="Envelope release"
-                        />
-                    </div>
+                    ) : null}
                 </div>
             </div>
 

@@ -111,6 +111,23 @@ async function dragFilterHandleBy(page, deltaX, deltaY) {
     await page.mouse.up();
 }
 
+async function dragEnvelopeHandleBy(page, dataRole, deltaX, deltaY) {
+    const handle = page.locator(`[data-role="${dataRole}"]`);
+    const box = await handle.boundingBox();
+
+    if (!box) {
+        throw new Error(`Expected envelope handle bounding box for ${dataRole}.`);
+    }
+
+    const startX = box.x + (box.width * 0.5);
+    const startY = box.y + (box.height * 0.5);
+
+    await page.mouse.move(startX, startY);
+    await page.mouse.down();
+    await page.mouse.move(startX + deltaX, startY + deltaY, { steps: 10 });
+    await page.mouse.up();
+}
+
 async function dragLocatorBy(page, locator, deltaX, deltaY) {
     const box = await locator.boundingBox();
 
@@ -1812,6 +1829,85 @@ test("mod matrix amount knob double-click entry uses the displayed units", async
             amount: -0.4,
         });
         assert.equal((await page.locator('[data-role="route-row-1"] >> text=/40% L/').count()) >= 1, true);
+    } finally {
+        await page.close();
+    }
+});
+
+test("desktop envelope editor drags handles and commits compact rail values for the selected slot", async () => {
+    const page = await openHarnessPage();
+
+    try {
+        await page.getByRole("button", { name: "Select envelope 2" }).click();
+        assert.equal(
+            await page.locator('input[aria-label="Envelope decay value"]').evaluate((element) => getComputedStyle(element).textAlign),
+            "left",
+        );
+
+        await dragEnvelopeHandleBy(page, "adsr-attack-handle-hit-target", 110, 0);
+
+        let snapshot = await waitForHarnessSnapshot(
+            page,
+            "envelope attack drag updates slot 2",
+            (nextSnapshot) => {
+                const state = readStoredModulationState(nextSnapshot);
+                return Number(state.envelopeSlots[1]?.attackSeconds) > 0.08
+                    && Math.abs(Number(state.envelopeSlots[0]?.attackSeconds) - 0.01) <= 1e-9
+                    && nextSnapshot.sentMessages.some(({ endpointID, value }) => (
+                        endpointID === "modulationEnvelope"
+                        && Number(value?.slot) === 2
+                        && Number(value?.attackSeconds) > 0.08
+                    ));
+            },
+        );
+
+        assert.equal(Number(readStoredModulationState(snapshot).envelopeSlots[1].attackSeconds) > 0.08, true);
+        assert.equal(Math.abs(Number(readStoredModulationState(snapshot).envelopeSlots[0].attackSeconds) - 0.01) <= 1e-9, true);
+
+        await dragEnvelopeHandleBy(page, "adsr-decay-sustain-handle-hit-target", 60, 70);
+
+        snapshot = await waitForHarnessSnapshot(
+            page,
+            "decay-sustain handle drag updates decay horizontally and sustain vertically for slot 2",
+            (nextSnapshot) => {
+                const state = readStoredModulationState(nextSnapshot);
+                return Number(state.envelopeSlots[1]?.decaySeconds) > 0.45
+                    && Number(state.envelopeSlots[1]?.sustain) < 0.4
+                    && Math.abs(Number(state.envelopeSlots[0]?.decaySeconds) - 0.25) <= 1e-9
+                    && Math.abs(Number(state.envelopeSlots[0]?.sustain) - 0.5) <= 1e-9
+                    && nextSnapshot.sentMessages.some(({ endpointID, value }) => (
+                        endpointID === "modulationEnvelope"
+                        && Number(value?.slot) === 2
+                        && Number(value?.decaySeconds) > 0.45
+                        && Number(value?.sustain) < 0.4
+                    ));
+            },
+        );
+
+        assert.equal(Number(readStoredModulationState(snapshot).envelopeSlots[1].decaySeconds) > 0.45, true);
+        assert.equal(Number(readStoredModulationState(snapshot).envelopeSlots[1].sustain) < 0.4, true);
+        assert.equal(Math.abs(Number(readStoredModulationState(snapshot).envelopeSlots[0].decaySeconds) - 0.25) <= 1e-9, true);
+        assert.equal(Math.abs(Number(readStoredModulationState(snapshot).envelopeSlots[0].sustain) - 0.5) <= 1e-9, true);
+
+        const releaseInput = page.locator('input[aria-label="Envelope release value"]');
+        await releaseInput.fill("800 ms");
+        await releaseInput.blur();
+
+        snapshot = await waitForHarnessSnapshot(
+            page,
+            "compact release field commits milliseconds for slot 2",
+            (nextSnapshot) => {
+                const state = readStoredModulationState(nextSnapshot);
+                return Math.abs(Number(state.envelopeSlots[1]?.releaseSeconds) - 0.8) <= 1e-9
+                    && nextSnapshot.sentMessages.some(({ endpointID, value }) => (
+                        endpointID === "modulationEnvelope"
+                        && Number(value?.slot) === 2
+                        && Math.abs(Number(value?.releaseSeconds) - 0.8) <= 1e-9
+                    ));
+            },
+        );
+
+        assert.equal(Math.abs(Number(readStoredModulationState(snapshot).envelopeSlots[1].releaseSeconds) - 0.8) <= 1e-9, true);
     } finally {
         await page.close();
     }

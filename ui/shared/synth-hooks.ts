@@ -1197,8 +1197,11 @@ export function useSynthPatchViewModel({
             return;
         }
 
+        const currentEnvelope = modulationBridge.current?.getState().envelopeSlots[selectedEnvelopeSlot]
+            ?? selectedEnvelope;
+
         modulationBridge.current?.setEnvelope(selectedEnvelopeSlot, {
-            ...selectedEnvelope,
+            ...currentEnvelope,
             [field]: nextValue,
         });
     }, [modulationBridge, selectedEnvelope, selectedEnvelopeSlot]);

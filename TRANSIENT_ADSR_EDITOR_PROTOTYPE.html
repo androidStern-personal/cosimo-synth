@@ -1,0 +1,1168 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Transient ADSR Editor Prototype</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg-0: #050913;
+    --bg-1: #0a1220;
+    --panel: rgba(9, 16, 28, 0.92);
+    --panel-border: rgba(121, 151, 204, 0.14);
+    --text: #edf3ff;
+    --muted: #91a3c7;
+    --accent: #6dd8ff;
+    --accent-soft: rgba(109, 216, 255, 0.16);
+    --accent-2: #f8b84d;
+    --accent-2-soft: rgba(248, 184, 77, 0.18);
+    --grid: rgba(145, 163, 199, 0.14);
+    --line: rgba(255, 255, 255, 0.08);
+    --surface: rgba(255, 255, 255, 0.03);
+    --surface-strong: rgba(255, 255, 255, 0.05);
+    --shadow: 0 32px 80px rgba(0, 0, 0, 0.38);
+    --radius-xl: 28px;
+    --radius-lg: 20px;
+    --radius-md: 14px;
+    --font-ui: "SF Pro Display", "Inter", "Segoe UI", sans-serif;
+    --font-mono: "SF Mono", "JetBrains Mono", ui-monospace, monospace;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  html, body {
+    margin: 0;
+    min-height: 100%;
+    overflow-x: hidden;
+    overscroll-behavior-x: none;
+  }
+
+  body {
+    min-height: 100dvh;
+    font-family: var(--font-ui);
+    color: var(--text);
+    overscroll-behavior: none;
+    background:
+      radial-gradient(circle at top left, rgba(92, 124, 255, 0.18), transparent 34%),
+      radial-gradient(circle at top right, rgba(109, 216, 255, 0.14), transparent 28%),
+      linear-gradient(180deg, #0b1220 0%, #050913 100%);
+  }
+
+  button,
+  input {
+    font: inherit;
+  }
+
+  .page {
+    max-width: 1440px;
+    margin: 0 auto;
+    padding: 28px;
+  }
+
+  .hero {
+    display: grid;
+    gap: 10px;
+    margin-bottom: 22px;
+  }
+
+  .eyebrow {
+    margin: 0;
+    font-size: 11px;
+    letter-spacing: 0.24em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+
+  h1 {
+    margin: 0;
+    font-size: clamp(30px, 5vw, 54px);
+    line-height: 0.98;
+    letter-spacing: -0.04em;
+  }
+
+  .hero-copy {
+    max-width: 860px;
+    margin: 0;
+    color: var(--muted);
+    line-height: 1.55;
+    font-size: 15px;
+  }
+
+  .layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1.2fr) minmax(320px, 380px);
+    gap: 24px;
+    align-items: start;
+  }
+
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow);
+    backdrop-filter: blur(20px);
+  }
+
+  .editor {
+    padding: 20px;
+    display: grid;
+    gap: 18px;
+  }
+
+  .toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+  }
+
+  .slot-group {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .slot-button {
+    min-width: 86px;
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.03);
+    color: var(--muted);
+    padding: 10px 16px;
+    font-size: 12px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: border-color 140ms ease, color 140ms ease, background 140ms ease, transform 140ms ease;
+  }
+
+  .slot-button:hover {
+    transform: translateY(-1px);
+    border-color: rgba(109, 216, 255, 0.28);
+    color: var(--text);
+  }
+
+  .slot-button[data-active="true"] {
+    background: linear-gradient(180deg, rgba(109, 216, 255, 0.18), rgba(109, 216, 255, 0.08));
+    border-color: rgba(109, 216, 255, 0.32);
+    color: var(--text);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  }
+
+  .toolbar-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .ghost-button {
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.03);
+    color: var(--muted);
+    padding: 10px 14px;
+    font-size: 12px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: border-color 140ms ease, color 140ms ease, background 140ms ease;
+  }
+
+  .ghost-button:hover {
+    border-color: rgba(109, 216, 255, 0.28);
+    color: var(--text);
+    background: rgba(255, 255, 255, 0.06);
+  }
+
+  .stage-shell {
+    position: relative;
+    overflow: hidden;
+    border-radius: 24px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0.01)),
+      linear-gradient(180deg, rgba(5, 9, 19, 0.92), rgba(7, 13, 24, 0.96));
+  }
+
+  .stage-backdrop {
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(circle at 18% 22%, rgba(109, 216, 255, 0.10), transparent 26%),
+      radial-gradient(circle at 82% 78%, rgba(248, 184, 77, 0.10), transparent 20%);
+    pointer-events: none;
+  }
+
+  #adsrStage {
+    position: relative;
+    z-index: 1;
+    display: block;
+    width: 100%;
+    height: auto;
+    touch-action: none;
+  }
+
+  .stage-overlay {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 2;
+  }
+
+  .control-rail {
+    pointer-events: auto;
+    position: absolute;
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+    padding: 6px 8px;
+    border-radius: 14px;
+    background: rgba(0, 0, 0, 0.28);
+    backdrop-filter: blur(18px);
+  }
+
+  .rail-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    padding: 0;
+  }
+
+  .rail-label {
+    flex: 0 0 auto;
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .rail-input {
+    width: 100%;
+    min-width: 0;
+    border: none;
+    background: transparent;
+    color: var(--text);
+    padding: 0;
+    font-size: 12px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    outline: none;
+    transition: color 140ms ease;
+  }
+
+  .rail-input:focus {
+    color: var(--accent-2);
+  }
+
+  .dev-panel {
+    padding: 22px;
+    display: grid;
+    gap: 18px;
+  }
+
+  .panel-title {
+    margin: 0;
+    font-size: 12px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+
+  .panel-heading {
+    display: grid;
+    gap: 8px;
+  }
+
+  .panel-heading h2 {
+    margin: 0;
+    font-size: 26px;
+    line-height: 1.04;
+    letter-spacing: -0.03em;
+  }
+
+  .panel-heading p {
+    margin: 0;
+    color: var(--muted);
+    line-height: 1.55;
+    font-size: 14px;
+  }
+
+  .stack {
+    display: grid;
+    gap: 16px;
+  }
+
+  .control-panel {
+    padding: 16px;
+    border-radius: var(--radius-lg);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: var(--surface);
+    display: grid;
+    gap: 12px;
+  }
+
+  .control-row {
+    display: grid;
+    gap: 8px;
+  }
+
+  .control-row label {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    font-size: 11px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .control-row output {
+    font-family: var(--font-mono);
+    color: var(--accent-2);
+    font-size: 12px;
+    letter-spacing: 0;
+  }
+
+  .control-row input[type="range"] {
+    width: 100%;
+    appearance: none;
+    height: 10px;
+    border-radius: 999px;
+    background:
+      linear-gradient(90deg, rgba(109, 216, 255, 0.22), rgba(248, 184, 77, 0.24));
+    outline: none;
+  }
+
+  .control-row input[type="range"]::-webkit-slider-thumb {
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 999px;
+    background: var(--text);
+    border: 2px solid rgba(9, 16, 28, 0.9);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+    cursor: pointer;
+  }
+
+  .mini-card {
+    border-radius: 18px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(0, 0, 0, 0.18);
+    padding: 14px;
+  }
+
+  .mini-card h3 {
+    margin: 0 0 10px;
+    font-size: 11px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  #mappingPreview {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+
+  pre {
+    margin: 0;
+    white-space: pre-wrap;
+    word-break: break-word;
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    line-height: 1.55;
+  }
+
+  .hint {
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.55;
+  }
+
+  .hint strong {
+    color: var(--text);
+  }
+
+  @media (max-width: 1120px) {
+    .layout {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  @media (max-width: 720px) {
+    .page {
+      padding: 8px;
+    }
+
+    .hero {
+      margin-bottom: 10px;
+      gap: 6px;
+    }
+
+    .eyebrow {
+      font-size: 10px;
+      letter-spacing: 0.18em;
+    }
+
+    h1 {
+      font-size: 34px;
+    }
+
+    .hero-copy {
+      display: none;
+    }
+
+    .panel {
+      border-radius: 22px;
+    }
+
+    .toolbar {
+      align-items: stretch;
+      gap: 10px;
+    }
+
+    .slot-group,
+    .toolbar-actions {
+      gap: 6px;
+    }
+
+    .slot-button,
+    .ghost-button {
+      min-width: 72px;
+      padding: 8px 12px;
+      font-size: 11px;
+    }
+
+    .editor {
+      padding: 10px;
+      gap: 10px;
+    }
+
+    .stage-shell {
+      border-radius: 18px;
+    }
+
+    .control-rail {
+      left: 8px;
+      right: 8px;
+      bottom: 8px;
+      gap: 8px;
+      padding: 5px 6px;
+      border-radius: 14px;
+    }
+
+    .rail-item {
+      gap: 4px;
+      padding: 0;
+    }
+
+    .rail-label {
+      font-size: 10px;
+      letter-spacing: 0.14em;
+    }
+
+    .rail-input {
+      padding: 0;
+      font-size: 10px;
+    }
+  }
+</style>
+</head>
+<body>
+  <main class="page">
+    <section class="hero">
+      <p class="eyebrow">Transient Prototype</p>
+      <h1>ADSR editor test bed</h1>
+      <p class="hero-copy">
+        This is a standalone ADSR editor prototype, not wired into the synth. The graph is the main control surface, each stage handle is draggable, and the exact values stay editable below it. The time response slider on the right exists so we can tune the short-time feel before we move this into the app.
+      </p>
+    </section>
+
+    <section class="layout">
+      <div class="panel editor">
+        <div class="toolbar">
+          <div class="slot-group" id="slotGroup" aria-label="Envelope slots"></div>
+          <div class="toolbar-actions">
+            <button class="ghost-button" id="resetSlotButton" type="button">Reset slot</button>
+            <button class="ghost-button" id="copyJsonButton" type="button">Copy JSON</button>
+          </div>
+        </div>
+
+        <div class="stage-shell">
+          <div class="stage-backdrop"></div>
+          <svg id="adsrStage" viewBox="0 0 920 520" role="img" aria-label="ADSR envelope editor"></svg>
+          <div class="stage-overlay">
+            <div class="control-rail" aria-label="Envelope values">
+              <label class="rail-item" for="attackInput">
+                <span class="rail-label">A</span>
+                <input class="rail-input" id="attackInput" type="text" inputmode="decimal" spellcheck="false">
+              </label>
+              <label class="rail-item" for="decayInput">
+                <span class="rail-label">D</span>
+                <input class="rail-input" id="decayInput" type="text" inputmode="decimal" spellcheck="false">
+              </label>
+              <label class="rail-item" for="sustainInput">
+                <span class="rail-label">S</span>
+                <input class="rail-input" id="sustainInput" type="number" min="0" max="100" step="0.1">
+              </label>
+              <label class="rail-item" for="releaseInput">
+                <span class="rail-label">R</span>
+                <input class="rail-input" id="releaseInput" type="text" inputmode="decimal" spellcheck="false">
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <aside class="panel dev-panel">
+        <div class="panel-heading">
+          <p class="panel-title">Tuning</p>
+          <h2>Dial in the feel before touching the app</h2>
+          <p>This side is only for tuning the prototype. The important control is the time response, because the ADSR time range is too wide for a naive linear drag.</p>
+        </div>
+
+        <div class="stack">
+          <div class="control-panel">
+            <div class="control-row">
+              <label for="timeBiasInput">
+                Time response
+                <output id="timeBiasValue">1.40</output>
+              </label>
+              <input id="timeBiasInput" type="range" min="0.45" max="1.4" step="0.01" value="1.4">
+            </div>
+            <div class="control-row">
+              <label for="noteOffRatioInput">
+                Note-off position
+                <output id="noteOffRatioValue">76%</output>
+              </label>
+              <input id="noteOffRatioInput" type="range" min="0.64" max="0.86" step="0.01" value="0.76">
+            </div>
+          </div>
+
+          <div class="mini-card">
+            <h3>Time mapping preview</h3>
+            <svg id="mappingPreview" viewBox="0 0 320 180" aria-hidden="true"></svg>
+          </div>
+
+          <div class="mini-card">
+            <h3>Current slot JSON</h3>
+            <pre id="jsonPreview"></pre>
+          </div>
+
+          <div class="mini-card hint">
+            <strong>Interaction contract</strong><br>
+            Drag only the handles. Attack moves horizontally. Decay/sustain moves horizontally and vertically. Release moves horizontally. The vertical gold line marks note-off. Shift-drag uses fine adjustment.
+          </div>
+        </div>
+      </aside>
+    </section>
+  </main>
+
+<script>
+  const SVG_NS = "http://www.w3.org/2000/svg";
+  const MIN_SECONDS = 0.001;
+  const MAX_SECONDS = 10;
+  const DEFAULT_ENVELOPES = [
+    { attack: 0.01, decay: 0.25, sustain: 0.5, release: 0.2 },
+    { attack: 0.08, decay: 0.45, sustain: 0.35, release: 0.65 },
+    { attack: 0.002, decay: 0.12, sustain: 0.82, release: 0.09 },
+  ];
+
+  const state = {
+    selectedSlot: 0,
+    selectedStage: "Attack",
+    timeBias: 1.4,
+    noteOffRatio: 0.76,
+    envelopes: DEFAULT_ENVELOPES.map((env) => ({ ...env })),
+  };
+
+  const geometry = {
+    width: 920,
+    height: 520,
+    left: 44,
+    right: 44,
+    top: 42,
+    bottom: 118,
+  };
+
+  const stage = document.getElementById("adsrStage");
+  const slotGroup = document.getElementById("slotGroup");
+  const attackInput = document.getElementById("attackInput");
+  const decayInput = document.getElementById("decayInput");
+  const sustainInput = document.getElementById("sustainInput");
+  const releaseInput = document.getElementById("releaseInput");
+  const timeBiasInput = document.getElementById("timeBiasInput");
+  const timeBiasValue = document.getElementById("timeBiasValue");
+  const noteOffRatioInput = document.getElementById("noteOffRatioInput");
+  const noteOffRatioValue = document.getElementById("noteOffRatioValue");
+  const mappingPreview = document.getElementById("mappingPreview");
+  const jsonPreview = document.getElementById("jsonPreview");
+  const resetSlotButton = document.getElementById("resetSlotButton");
+  const copyJsonButton = document.getElementById("copyJsonButton");
+
+  function clamp(value, min, max) {
+    return Math.min(Math.max(value, min), max);
+  }
+
+  function formatSeconds(value) {
+    if (value >= 1) {
+      return `${value.toFixed(3)} s`;
+    }
+
+    return `${Math.round(value * 1000)} ms`;
+  }
+
+  function formatDurationFieldValue(value) {
+    if (value >= 1) {
+      return `${value.toFixed(2)} s`;
+    }
+
+    return `${Math.round(value * 1000)} ms`;
+  }
+
+  function parseDurationInput(rawValue, currentSeconds) {
+    const normalized = String(rawValue).trim().toLowerCase();
+
+    if (!normalized) {
+      return null;
+    }
+
+    const match = normalized.match(/^(-?\d+(?:\.\d+)?)\s*(ms|msec|milliseconds|s|sec|secs|second|seconds)?$/);
+
+    if (!match) {
+      return null;
+    }
+
+    const numericValue = Number(match[1]);
+
+    if (!Number.isFinite(numericValue)) {
+      return null;
+    }
+
+    const unit = match[2];
+
+    if (unit === "ms" || unit === "msec" || unit === "milliseconds") {
+      return numericValue / 1000;
+    }
+
+    if (unit === "s" || unit === "sec" || unit === "secs" || unit === "second" || unit === "seconds") {
+      return numericValue;
+    }
+
+    if (currentSeconds < 1) {
+      return numericValue >= 10 ? numericValue / 1000 : numericValue;
+    }
+
+    return numericValue;
+  }
+
+  function formatPercent(value) {
+    return `${Math.round(value * 100)}%`;
+  }
+
+  function getEnvelope() {
+    return state.envelopes[state.selectedSlot];
+  }
+
+  function setEnvelope(nextEnvelope) {
+    state.envelopes[state.selectedSlot] = {
+      attack: clamp(nextEnvelope.attack, MIN_SECONDS, MAX_SECONDS),
+      decay: clamp(nextEnvelope.decay, MIN_SECONDS, MAX_SECONDS),
+      sustain: clamp(nextEnvelope.sustain, 0, 1),
+      release: clamp(nextEnvelope.release, MIN_SECONDS, MAX_SECONDS),
+    };
+  }
+
+  function secondsToNormalized(seconds) {
+    const raw = Math.log(seconds / MIN_SECONDS) / Math.log(MAX_SECONDS / MIN_SECONDS);
+    return clamp(Math.pow(clamp(raw, 0, 1), state.timeBias), 0, 1);
+  }
+
+  function normalizedToSeconds(normalized) {
+    const raw = Math.pow(clamp(normalized, 0, 1), 1 / state.timeBias);
+    return MIN_SECONDS * Math.pow(MAX_SECONDS / MIN_SECONDS, raw);
+  }
+
+  function sustainToY(sustain) {
+    const plotHeight = geometry.height - geometry.top - geometry.bottom;
+    return geometry.top + ((1 - clamp(sustain, 0, 1)) * plotHeight);
+  }
+
+  function yToSustain(y) {
+    const plotHeight = geometry.height - geometry.top - geometry.bottom;
+    return clamp(1 - ((y - geometry.top) / plotHeight), 0, 1);
+  }
+
+  function computeStageGeometry(env) {
+    const plotWidth = geometry.width - geometry.left - geometry.right;
+    const attackRegionWidth = plotWidth * 0.30;
+    const decayRegionWidth = plotWidth * 0.28;
+    const noteOffX = geometry.left + (plotWidth * state.noteOffRatio);
+    const releaseRegionWidth = geometry.width - geometry.right - noteOffX;
+    const attackX = geometry.left + (secondsToNormalized(env.attack) * attackRegionWidth);
+    const decayRegionStart = geometry.left + attackRegionWidth;
+    const decayX = decayRegionStart + (secondsToNormalized(env.decay) * decayRegionWidth);
+    const sustainY = sustainToY(env.sustain);
+    const releaseX = noteOffX + (secondsToNormalized(env.release) * releaseRegionWidth);
+
+    return {
+      noteOffX,
+      attackRegionWidth,
+      decayRegionStart,
+      decayRegionWidth,
+      releaseRegionWidth,
+      attackX,
+      decayX,
+      sustainY,
+      releaseX,
+      plotWidth,
+      plotHeight: geometry.height - geometry.top - geometry.bottom,
+      plotBottom: geometry.height - geometry.bottom,
+      plotTop: geometry.top,
+      plotLeft: geometry.left,
+      plotRight: geometry.width - geometry.right,
+    };
+  }
+
+  function describePath(points) {
+    return points.map((point, index) => `${index === 0 ? "M" : "L"} ${point.x.toFixed(2)} ${point.y.toFixed(2)}`).join(" ");
+  }
+
+  function createSvgNode(tag, attrs = {}) {
+    const node = document.createElementNS(SVG_NS, tag);
+    Object.entries(attrs).forEach(([key, value]) => {
+      node.setAttribute(key, String(value));
+    });
+    return node;
+  }
+
+  function renderSlots() {
+    slotGroup.textContent = "";
+
+    state.envelopes.forEach((_, slotIndex) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "slot-button";
+      button.dataset.active = slotIndex === state.selectedSlot ? "true" : "false";
+      button.textContent = `Env ${slotIndex + 1}`;
+      button.addEventListener("click", () => {
+        state.selectedSlot = slotIndex;
+        render();
+      });
+      slotGroup.appendChild(button);
+    });
+  }
+
+  function renderMappingPreview() {
+    mappingPreview.textContent = "";
+
+    const width = 320;
+    const height = 180;
+    const left = 20;
+    const top = 16;
+    const right = 16;
+    const bottom = 18;
+    const plotWidth = width - left - right;
+    const plotHeight = height - top - bottom;
+
+    const background = createSvgNode("rect", {
+      x: 0,
+      y: 0,
+      width,
+      height,
+      rx: 18,
+      fill: "rgba(0,0,0,0.16)",
+      stroke: "rgba(255,255,255,0.06)",
+    });
+    mappingPreview.appendChild(background);
+
+    for (let i = 0; i <= 4; i += 1) {
+      const x = left + ((plotWidth * i) / 4);
+      const y = top + ((plotHeight * i) / 4);
+      mappingPreview.appendChild(createSvgNode("line", {
+        x1: x,
+        y1: top,
+        x2: x,
+        y2: top + plotHeight,
+        stroke: "rgba(145, 163, 199, 0.12)",
+      }));
+      mappingPreview.appendChild(createSvgNode("line", {
+        x1: left,
+        y1: y,
+        x2: left + plotWidth,
+        y2: y,
+        stroke: "rgba(145, 163, 199, 0.12)",
+      }));
+    }
+
+    const points = [];
+
+    for (let i = 0; i <= 64; i += 1) {
+      const xNorm = i / 64;
+      const seconds = normalizedToSeconds(xNorm);
+      const mapped = secondsToNormalized(seconds);
+      points.push({
+        x: left + (xNorm * plotWidth),
+        y: top + ((1 - mapped) * plotHeight),
+      });
+    }
+
+    mappingPreview.appendChild(createSvgNode("path", {
+      d: describePath(points),
+      fill: "none",
+      stroke: "rgba(109, 216, 255, 0.96)",
+      "stroke-width": 3,
+      "stroke-linecap": "round",
+      "stroke-linejoin": "round",
+    }));
+  }
+
+  function render() {
+    renderSlots();
+
+    const env = getEnvelope();
+    const g = computeStageGeometry(env);
+
+    attackInput.value = formatDurationFieldValue(env.attack);
+    decayInput.value = formatDurationFieldValue(env.decay);
+    sustainInput.value = (env.sustain * 100).toFixed(1);
+    releaseInput.value = formatDurationFieldValue(env.release);
+    timeBiasInput.value = state.timeBias.toFixed(2);
+    timeBiasValue.textContent = state.timeBias.toFixed(2);
+    noteOffRatioInput.value = state.noteOffRatio.toFixed(2);
+    noteOffRatioValue.textContent = `${Math.round(state.noteOffRatio * 100)}%`;
+    jsonPreview.textContent = JSON.stringify({
+      slot: state.selectedSlot + 1,
+      ...env,
+      timeResponse: Number(state.timeBias.toFixed(2)),
+      noteOffRatio: Number(state.noteOffRatio.toFixed(2)),
+    }, null, 2);
+
+    renderMappingPreview();
+
+    stage.textContent = "";
+
+    const plotBottom = g.plotBottom;
+    const plotTop = g.plotTop;
+    const sustainY = g.sustainY;
+
+    const bg = createSvgNode("rect", {
+      x: 0,
+      y: 0,
+      width: geometry.width,
+      height: geometry.height,
+      fill: "transparent",
+    });
+    stage.appendChild(bg);
+
+    for (let step = 0; step <= 8; step += 1) {
+      const x = g.plotLeft + ((g.plotWidth * step) / 8);
+      stage.appendChild(createSvgNode("line", {
+        x1: x,
+        y1: g.plotTop,
+        x2: x,
+        y2: g.plotBottom,
+        stroke: "rgba(145, 163, 199, 0.12)",
+      }));
+    }
+
+    for (let step = 0; step <= 4; step += 1) {
+      const y = g.plotTop + ((g.plotHeight * step) / 4);
+      stage.appendChild(createSvgNode("line", {
+        x1: g.plotLeft,
+        y1: y,
+        x2: g.plotRight,
+        y2: y,
+        stroke: "rgba(145, 163, 199, 0.12)",
+      }));
+    }
+
+    stage.appendChild(createSvgNode("rect", {
+      x: g.plotLeft,
+      y: g.plotTop,
+      width: g.attackRegionWidth,
+      height: g.plotHeight,
+      fill: "rgba(109, 216, 255, 0.03)",
+      rx: 16,
+    }));
+    stage.appendChild(createSvgNode("rect", {
+      x: g.decayRegionStart,
+      y: g.plotTop,
+      width: g.decayRegionWidth,
+      height: g.plotHeight,
+      fill: "rgba(109, 216, 255, 0.045)",
+      rx: 16,
+    }));
+    stage.appendChild(createSvgNode("rect", {
+      x: g.noteOffX,
+      y: g.plotTop,
+      width: g.releaseRegionWidth,
+      height: g.plotHeight,
+      fill: "rgba(248, 184, 77, 0.04)",
+      rx: 16,
+    }));
+
+    const noteOffLine = createSvgNode("line", {
+      x1: g.noteOffX,
+      y1: g.plotTop,
+      x2: g.noteOffX,
+      y2: g.plotBottom,
+      stroke: "rgba(248, 184, 77, 0.84)",
+      "stroke-width": 2,
+      "stroke-dasharray": "7 7",
+    });
+    stage.appendChild(noteOffLine);
+
+    const envelopePoints = [
+      { x: g.plotLeft, y: plotBottom },
+      { x: g.attackX, y: plotTop },
+      { x: g.decayX, y: sustainY },
+      { x: g.noteOffX, y: sustainY },
+      { x: g.releaseX, y: plotBottom },
+      { x: g.plotRight, y: plotBottom },
+    ];
+
+    const fillPath = describePath([
+      { x: g.plotLeft, y: plotBottom },
+      { x: g.attackX, y: plotTop },
+      { x: g.decayX, y: sustainY },
+      { x: g.noteOffX, y: sustainY },
+      { x: g.releaseX, y: plotBottom },
+      { x: g.plotRight, y: plotBottom },
+      { x: g.plotLeft, y: plotBottom },
+    ]) + " Z";
+
+    stage.appendChild(createSvgNode("path", {
+      d: fillPath,
+      fill: "rgba(109, 216, 255, 0.10)",
+    }));
+
+    stage.appendChild(createSvgNode("path", {
+      d: describePath(envelopePoints),
+      fill: "none",
+      stroke: "rgba(109, 216, 255, 0.98)",
+      "stroke-width": 4,
+      "stroke-linecap": "round",
+      "stroke-linejoin": "round",
+    }));
+
+    const handles = [
+      {
+        stageName: "Attack",
+        x: g.attackX,
+        y: plotTop,
+        color: "rgba(109, 216, 255, 0.98)",
+        cursor: "ew-resize",
+        onDrag(pointerX, _pointerY, fine) {
+          const minX = g.plotLeft;
+          const maxX = g.plotLeft + g.attackRegionWidth;
+          const normalized = clamp((pointerX - minX) / Math.max(1, maxX - minX), 0, 1);
+          const nextAttack = normalizedToSeconds(fine ? blendNormalized(env.attack, normalized, 0.2) : normalized);
+          setEnvelope({ ...getEnvelope(), attack: nextAttack });
+        },
+      },
+      {
+        stageName: "Decay / Sustain",
+        x: g.decayX,
+        y: sustainY,
+        color: "rgba(248, 184, 77, 0.98)",
+        cursor: "move",
+        onDrag(pointerX, pointerY, fine) {
+          const minX = g.decayRegionStart;
+          const maxX = g.decayRegionStart + g.decayRegionWidth;
+          const normalizedDecay = clamp((pointerX - minX) / Math.max(1, maxX - minX), 0, 1);
+          const nextDecay = normalizedToSeconds(fine ? blendNormalized(env.decay, normalizedDecay, 0.2) : normalizedDecay);
+          const nextSustain = yToSustain(pointerY);
+          setEnvelope({ ...getEnvelope(), decay: nextDecay, sustain: fine ? blendLinear(env.sustain, nextSustain, 0.2) : nextSustain });
+        },
+      },
+      {
+        stageName: "Release",
+        x: g.releaseX,
+        y: plotBottom,
+        color: "rgba(109, 216, 255, 0.98)",
+        cursor: "ew-resize",
+        onDrag(pointerX, _pointerY, fine) {
+          const minX = g.noteOffX;
+          const maxX = g.noteOffX + g.releaseRegionWidth;
+          const normalized = clamp((pointerX - minX) / Math.max(1, maxX - minX), 0, 1);
+          const nextRelease = normalizedToSeconds(fine ? blendNormalized(env.release, normalized, 0.2) : normalized);
+          setEnvelope({ ...getEnvelope(), release: nextRelease });
+        },
+      },
+    ];
+
+    handles.forEach((handle) => {
+      stage.appendChild(createSvgNode("circle", {
+        cx: handle.x,
+        cy: handle.y,
+        r: 26,
+        fill: "transparent",
+        cursor: handle.cursor,
+      }));
+
+      stage.appendChild(createSvgNode("circle", {
+        cx: handle.x,
+        cy: handle.y,
+        r: 13,
+        fill: "rgba(8, 16, 28, 0.94)",
+        stroke: handle.color,
+        "stroke-width": 3,
+      }));
+
+      stage.appendChild(createSvgNode("circle", {
+        cx: handle.x,
+        cy: handle.y,
+        r: 4,
+        fill: handle.color,
+      }));
+
+      const hitTarget = createSvgNode("circle", {
+        cx: handle.x,
+        cy: handle.y,
+        r: 34,
+        fill: "transparent",
+        cursor: handle.cursor,
+      });
+
+      hitTarget.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        state.selectedStage = handle.stageName;
+        render();
+
+        const startX = event.clientX;
+        const startY = event.clientY;
+
+        const onPointerMove = (moveEvent) => {
+          const fine = moveEvent.shiftKey;
+          const scale = fine ? 0.25 : 1;
+          const nextX = handle.x + ((moveEvent.clientX - startX) * scale);
+          const nextY = handle.y + ((moveEvent.clientY - startY) * scale);
+          handle.onDrag(nextX, nextY, fine);
+          render();
+        };
+
+        const onPointerUp = () => {
+          window.removeEventListener("pointermove", onPointerMove);
+          window.removeEventListener("pointerup", onPointerUp);
+        };
+
+        window.addEventListener("pointermove", onPointerMove);
+        window.addEventListener("pointerup", onPointerUp);
+      });
+
+      stage.appendChild(hitTarget);
+    });
+  }
+
+  function blendLinear(current, next, amount) {
+    return current + ((next - current) * amount);
+  }
+
+  function blendNormalized(currentSeconds, nextNormalized, amount) {
+    const currentNormalized = secondsToNormalized(currentSeconds);
+    return blendLinear(currentNormalized, nextNormalized, amount);
+  }
+
+  function bindNumberInputs() {
+    const bindDurationInput = (input, field) => {
+      const commitValue = () => {
+        const currentEnvelope = getEnvelope();
+        const nextValue = parseDurationInput(input.value, currentEnvelope[field]);
+
+        if (nextValue === null) {
+          render();
+          return;
+        }
+
+        setEnvelope({ ...currentEnvelope, [field]: nextValue });
+        render();
+      };
+
+      input.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          commitValue();
+        }
+      });
+
+      input.addEventListener("focus", () => {
+        input.select();
+      });
+
+      input.addEventListener("blur", commitValue);
+    };
+
+    bindDurationInput(attackInput, "attack");
+    attackInput.addEventListener("focus", () => {
+      state.selectedStage = "Attack";
+    });
+    bindDurationInput(decayInput, "decay");
+    decayInput.addEventListener("focus", () => {
+      state.selectedStage = "Decay / Sustain";
+    });
+    sustainInput.addEventListener("input", () => {
+      setEnvelope({ ...getEnvelope(), sustain: Number(sustainInput.value) / 100 });
+      state.selectedStage = "Decay / Sustain";
+      render();
+    });
+    bindDurationInput(releaseInput, "release");
+    releaseInput.addEventListener("focus", () => {
+      state.selectedStage = "Release";
+    });
+
+    timeBiasInput.addEventListener("input", () => {
+      state.timeBias = Number(timeBiasInput.value);
+      render();
+    });
+
+    noteOffRatioInput.addEventListener("input", () => {
+      state.noteOffRatio = clamp(Number(noteOffRatioInput.value), 0.64, 0.86);
+      render();
+    });
+
+    resetSlotButton.addEventListener("click", () => {
+      state.envelopes[state.selectedSlot] = { ...DEFAULT_ENVELOPES[state.selectedSlot] };
+      state.selectedStage = "Attack";
+      render();
+    });
+
+    copyJsonButton.addEventListener("click", async () => {
+      const payload = JSON.stringify({
+        selectedSlot: state.selectedSlot + 1,
+        timeResponse: Number(state.timeBias.toFixed(2)),
+        noteOffRatio: Number(state.noteOffRatio.toFixed(2)),
+        envelope: getEnvelope(),
+      }, null, 2);
+
+      try {
+        await navigator.clipboard.writeText(payload);
+        copyJsonButton.textContent = "Copied";
+        setTimeout(() => {
+          copyJsonButton.textContent = "Copy JSON";
+        }, 1200);
+      } catch (_error) {
+        copyJsonButton.textContent = "Clipboard blocked";
+        setTimeout(() => {
+          copyJsonButton.textContent = "Copy JSON";
+        }, 1200);
+      }
+    });
+  }
+
+  bindNumberInputs();
+  render();
+</script>
+</body>
+</html>
