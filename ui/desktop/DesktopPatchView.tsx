@@ -84,6 +84,7 @@ const ENVELOPE_VIEWBOX = {
     top: 42,
     bottom: 118,
 } as const;
+const DESKTOP_GRID_CARD_CLASS = "aspect-[5/3] min-h-[220px]";
 const WARP_MODE_OPTIONS = [
     { value: 0, label: "Off" },
     { value: 1, label: "Bend +/-" },
@@ -150,7 +151,6 @@ type MsegEditorModalProps = {
 };
 
 type ModulationMatrixSectionProps = {
-    pan: PatchControlBinding<number>;
     selectedMsegSlot: number;
     msegState: MsegState | null;
     selectedEnvelopeSlot: number;
@@ -189,6 +189,30 @@ function formatPercent(value: number) {
 function formatSignedPercent(value: number) {
     const percentValue = Math.round(value * 100);
     return `${percentValue > 0 ? "+" : ""}${percentValue}%`;
+}
+
+function formatPanEditingValue(value: number) {
+    return String(Math.round(clamp(value, -1, 1) * 100));
+}
+
+function parsePanInput(text: string) {
+    const normalizedText = String(text ?? "")
+        .trim()
+        .toLowerCase()
+        .replace(/%/g, "")
+        .replace(/\s+/g, "");
+
+    if (!normalizedText) {
+        return null;
+    }
+
+    const numericValue = Number.parseFloat(normalizedText);
+
+    if (!Number.isFinite(numericValue)) {
+        return null;
+    }
+
+    return numericValue / 100;
 }
 
 function formatEnvelopeTimeDisplay(seconds: number) {
@@ -1277,7 +1301,6 @@ function MsegEditorModal({
 }
 
 function ModulationMatrixSection({
-    pan,
     selectedMsegSlot,
     msegState,
     selectedEnvelopeSlot,
@@ -1294,132 +1317,120 @@ function ModulationMatrixSection({
     onRouteChange,
     msegRateFocusBindings,
 }: ModulationMatrixSectionProps) {
+    const [activeEditorTab, setActiveEditorTab] = useState<{
+        kind: "mseg" | "envelope";
+        slotIndex: number;
+    }>({
+        kind: "mseg",
+        slotIndex: 0,
+    });
+
+    const activeMsegSlot = activeEditorTab.kind === "mseg" ? activeEditorTab.slotIndex : selectedMsegSlot;
+    const activeEnvelopeSlot = activeEditorTab.kind === "envelope" ? activeEditorTab.slotIndex : selectedEnvelopeSlot;
+
     return (
-        <section className="grid gap-4 rounded-[22px] border border-white/[0.05] bg-white/[0.025] p-4">
-            <div className="flex items-start justify-between gap-4">
-                <div>
-                    <div className="text-[11px] uppercase tracking-[0.22em] text-emerald-300/70">Modulation</div>
+        <section className={`flex h-full flex-col gap-3 rounded-[22px] border border-white/[0.05] bg-white/[0.025] p-4 ${DESKTOP_GRID_CARD_CLASS}`}>
+            <div className="overflow-x-auto pb-1">
+                <div className="inline-flex min-w-full rounded-full border border-white/8 bg-white/[0.03] p-1">
+                    {Array.from({ length: MODULATION_MSEG_SLOT_COUNT }, (_, slotIndex) => (
+                        <button
+                            key={`mseg-slot-${slotIndex + 1}`}
+                            type="button"
+                            aria-label={`Select MSEG ${slotIndex + 1}`}
+                            className={`rounded-full px-3 py-1 text-[10px] uppercase tracking-[0.18em] transition ${
+                                activeEditorTab.kind === "mseg" && activeMsegSlot === slotIndex
+                                    ? "bg-cyan-300/18 text-cyan-100"
+                                    : "text-slate-300/65 hover:text-slate-100"
+                            }`}
+                            onClick={() => {
+                                onSelectMsegSlot(slotIndex);
+                                setActiveEditorTab({ kind: "mseg", slotIndex });
+                            }}
+                        >
+                            {`MSEG ${slotIndex + 1}`}
+                        </button>
+                    ))}
+                    {Array.from({ length: MODULATION_ENV_SLOT_COUNT }, (_, slotIndex) => (
+                        <button
+                            key={`env-slot-${slotIndex + 1}`}
+                            type="button"
+                            aria-label={`Select envelope ${slotIndex + 1}`}
+                            className={`rounded-full px-3 py-1 text-[10px] uppercase tracking-[0.18em] transition ${
+                                activeEditorTab.kind === "envelope" && activeEnvelopeSlot === slotIndex
+                                    ? "bg-emerald-300/18 text-emerald-100"
+                                    : "text-slate-300/65 hover:text-slate-100"
+                            }`}
+                            onClick={() => {
+                                onSelectEnvelopeSlot(slotIndex);
+                                setActiveEditorTab({ kind: "envelope", slotIndex });
+                            }}
+                        >
+                            {`Env ${slotIndex + 1}`}
+                        </button>
+                    ))}
                 </div>
             </div>
 
-            <div className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
-                <div className="grid gap-3 rounded-[20px] bg-black/16 p-3">
-                    <div className="flex items-center justify-between gap-4">
-                        <div className="text-[11px] uppercase tracking-[0.18em] text-slate-300/60">MSEG Slots</div>
-                        <div className="inline-flex rounded-full border border-white/8 bg-white/[0.03] p-1">
-                            {Array.from({ length: MODULATION_MSEG_SLOT_COUNT }, (_, slotIndex) => (
-                                <button
-                                    key={`mseg-slot-${slotIndex + 1}`}
-                                    type="button"
-                                    aria-label={`Select MSEG ${slotIndex + 1}`}
-                                    className={`rounded-full px-3 py-1 text-[10px] uppercase tracking-[0.18em] transition ${
-                                        selectedMsegSlot === slotIndex
-                                            ? "bg-cyan-300/18 text-cyan-100"
-                                            : "text-slate-300/65 hover:text-slate-100"
-                                    }`}
-                                    onClick={() => onSelectMsegSlot(slotIndex)}
-                                >
-                                    {`MSEG ${slotIndex + 1}`}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-
-                    <button
-                        type="button"
-                        className="grid gap-3 rounded-[18px] bg-white/[0.03] p-3 text-left transition hover:bg-white/[0.05]"
-                        onClick={onOpenMsegEditor}
-                        aria-label="Open MSEG editor"
-                    >
-                        <div className="flex items-center justify-between gap-4">
-                            <div>
-                                <div className="text-[10px] uppercase tracking-[0.18em] text-slate-300/55">{`MSEG ${selectedMsegSlot + 1}`}</div>
-                                <div className="mt-1 text-sm font-medium text-slate-100">Open Shape Editor</div>
+            <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+                {activeEditorTab.kind === "mseg" ? (
+                    <div className="grid gap-3">
+                        <button
+                            type="button"
+                            className="grid gap-3 rounded-[18px] bg-white/[0.03] p-3 text-left transition hover:bg-white/[0.05]"
+                            onClick={onOpenMsegEditor}
+                            aria-label="Open MSEG editor"
+                        >
+                            <div className="flex items-center justify-between gap-4">
+                                <div>
+                                    <div className="text-[10px] uppercase tracking-[0.18em] text-slate-300/55">{`MSEG ${activeMsegSlot + 1}`}</div>
+                                    <div className="mt-1 text-sm font-medium text-slate-100">Open Shape Editor</div>
+                                </div>
+                                <div className="text-[10px] uppercase tracking-[0.18em] text-cyan-100/75">
+                                    {msegState?.playback.loop ? "Loop" : "One Shot"}
+                                </div>
                             </div>
-                            <div className="text-[10px] uppercase tracking-[0.18em] text-cyan-100/75">
-                                {msegState?.playback.loop ? "Loop" : "One Shot"}
-                            </div>
-                        </div>
-                        {msegState ? (
-                            <MsegPreview
-                                points={msegState.shape.points}
-                                className="h-24 w-full overflow-hidden rounded-[18px] bg-white/[0.03]"
-                            />
-                        ) : (
-                            <div className="h-24 rounded-[18px] bg-white/[0.03]" />
-                        )}
-                    </button>
+                            {msegState ? (
+                                <MsegPreview
+                                    points={msegState.shape.points}
+                                    className="h-24 w-full overflow-hidden rounded-[18px] bg-white/[0.03]"
+                                />
+                            ) : (
+                                <div className="h-24 rounded-[18px] bg-white/[0.03]" />
+                            )}
+                        </button>
 
-                    <RangeField
-                        label="Rate"
-                        min={MSEG_RATE_MIN_SECONDS}
-                        max={MSEG_RATE_MAX_SECONDS}
-                        step={0.001}
-                        value={clampMsegRateSeconds(Number(msegState?.playback.rate.seconds ?? 1))}
-                        displayValue={formatSeconds(Number(msegState?.playback.rate.seconds ?? 1))}
-                        onChange={onMsegRateChange}
-                        ariaLabel="MSEG rate"
-                        focusBindings={msegRateFocusBindings}
-                    />
-
-                    <button
-                        type="button"
-                        className="cosimo-button h-11 rounded-2xl px-4 text-[11px] uppercase tracking-[0.18em]"
-                        onClick={onToggleMsegLoop}
-                        aria-label={msegState?.playback.loop ? "Looping" : "One Shot"}
-                    >
-                        {msegState?.playback.loop ? "Looping" : "One Shot"}
-                    </button>
-                </div>
-
-                <div className="grid gap-3 rounded-[20px] bg-black/16 p-3">
-                    <div className="flex items-center justify-between gap-4">
-                        <div className="text-[11px] uppercase tracking-[0.18em] text-slate-300/60">Envelope Slots</div>
-                        <div className="inline-flex rounded-full border border-white/8 bg-white/[0.03] p-1">
-                            {Array.from({ length: MODULATION_ENV_SLOT_COUNT }, (_, slotIndex) => (
-                                <button
-                                    key={`env-slot-${slotIndex + 1}`}
-                                    type="button"
-                                    aria-label={`Select envelope ${slotIndex + 1}`}
-                                    className={`rounded-full px-3 py-1 text-[10px] uppercase tracking-[0.18em] transition ${
-                                        selectedEnvelopeSlot === slotIndex
-                                            ? "bg-emerald-300/18 text-emerald-100"
-                                            : "text-slate-300/65 hover:text-slate-100"
-                                    }`}
-                                    onClick={() => onSelectEnvelopeSlot(slotIndex)}
-                                >
-                                    {`Env ${slotIndex + 1}`}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-
-                    <RangeField
-                        label="Pan"
-                        min={-1}
-                        max={1}
-                        step={0.001}
-                        value={pan.value}
-                        displayValue={formatSignedPercent(pan.value)}
-                        onChange={(nextValue) => pan.commitValue(nextValue)}
-                        ariaLabel="Pan"
-                    />
-
-                    {selectedEnvelope ? (
-                        <DesktopEnvelopeEditor
-                            selectedEnvelope={selectedEnvelope}
-                            onEnvelopeChange={onEnvelopeChange}
+                        <RangeField
+                            label="Rate"
+                            min={MSEG_RATE_MIN_SECONDS}
+                            max={MSEG_RATE_MAX_SECONDS}
+                            step={0.001}
+                            value={clampMsegRateSeconds(Number(msegState?.playback.rate.seconds ?? 1))}
+                            displayValue={formatSeconds(Number(msegState?.playback.rate.seconds ?? 1))}
+                            onChange={onMsegRateChange}
+                            ariaLabel="MSEG rate"
+                            focusBindings={msegRateFocusBindings}
                         />
-                    ) : null}
-                </div>
-            </div>
 
-            <DesktopModMatrix
-                routes={routes}
-                onAddRoute={onAddRoute}
-                onRemoveRoute={onRemoveRoute}
-                onRouteChange={onRouteChange}
-            />
+                        <button
+                            type="button"
+                            className="cosimo-button h-11 rounded-2xl px-4 text-[11px] uppercase tracking-[0.18em]"
+                            onClick={onToggleMsegLoop}
+                            aria-label={msegState?.playback.loop ? "Looping" : "One Shot"}
+                        >
+                            {msegState?.playback.loop ? "Looping" : "One Shot"}
+                        </button>
+                    </div>
+                ) : (
+                    <div className="grid gap-3">
+                        {selectedEnvelope ? (
+                            <DesktopEnvelopeEditor
+                                selectedEnvelope={selectedEnvelope}
+                                onEnvelopeChange={onEnvelopeChange}
+                            />
+                        ) : null}
+                    </div>
+                )}
+            </div>
         </section>
     );
 }
@@ -1478,6 +1489,23 @@ function DesktopPatchViewBody() {
         />
     ), [synthView.warpAmount]);
 
+    const panField = useMemo(() => (
+        <PrecisionNumberField
+            ariaLabel="Pan"
+            binding={synthView.pan}
+            min={-1}
+            max={1}
+            step={0.001}
+            formatDisplay={formatSignedPercent}
+            formatEditingValue={formatPanEditingValue}
+            parseText={parsePanInput}
+            pixelsPerFullRange={180}
+            dataRole="wavetable-pan-field"
+            width={92}
+            height={40}
+        />
+    ), [synthView.pan]);
+
     return (
         <div className="cosimo-surface relative flex h-full w-full flex-col gap-4 overflow-hidden rounded-[28px] border border-white/[0.05] p-5 text-slate-100 shadow-[0_26px_80px_rgba(0,0,0,0.48)]">
             <StatusHeader statusText={synthView.topStatus} />
@@ -1505,8 +1533,13 @@ function DesktopPatchViewBody() {
                         onPointerMove={synthView.stageBindings.handleStagePointerMove}
                         onPointerUp={synthView.stageBindings.handleStagePointerUp}
                         bottomLeftAccessory={warpModeChip}
-                        bottomRightAccessory={warpAmountField}
-                        className="aspect-square min-h-[320px]"
+                        bottomRightAccessory={
+                            <>
+                                {panField}
+                                {warpAmountField}
+                            </>
+                        }
+                        className={DESKTOP_GRID_CARD_CLASS}
                     />
 
                     <FilterSection
@@ -1518,7 +1551,7 @@ function DesktopPatchViewBody() {
                         resonanceNormalizedFromQ={resonanceNormalizedFromQ}
                         resonanceQFromSurface={resonanceQFromSurface}
                         resonanceCurveDebugState={filterResonanceCurveProfile}
-                        className="aspect-square min-h-[320px]"
+                        className={DESKTOP_GRID_CARD_CLASS}
                     />
                 </section>
 
@@ -1528,24 +1561,34 @@ function DesktopPatchViewBody() {
                     </div>
                 ) : null}
 
-                <ModulationMatrixSection
-                    pan={synthView.pan}
-                    selectedMsegSlot={synthView.selectedMsegSlot}
-                    msegState={synthView.msegState}
-                    selectedEnvelopeSlot={synthView.selectedEnvelopeSlot}
-                    selectedEnvelope={synthView.selectedEnvelope}
-                    routes={synthView.routes}
-                    onSelectMsegSlot={synthView.handleSelectMsegSlot}
-                    onOpenMsegEditor={synthView.msegEditor.openEditor}
-                    onMsegRateChange={synthView.handleMsegRateChange}
-                    onToggleMsegLoop={synthView.handleToggleMsegLoop}
-                    onSelectEnvelopeSlot={synthView.handleSelectEnvelopeSlot}
-                    onEnvelopeChange={synthView.handleEnvelopeChange}
-                    onAddRoute={synthView.handleAddRoute}
-                    onRemoveRoute={synthView.handleRemoveRoute}
-                    onRouteChange={synthView.handleRouteChange}
-                    msegRateFocusBindings={synthView.keyboardRouting.msegRateFocusBindings}
-                />
+                <section className="grid min-h-0 items-stretch gap-4 md:grid-cols-2">
+                    <ModulationMatrixSection
+                        selectedMsegSlot={synthView.selectedMsegSlot}
+                        msegState={synthView.msegState}
+                        selectedEnvelopeSlot={synthView.selectedEnvelopeSlot}
+                        selectedEnvelope={synthView.selectedEnvelope}
+                        routes={synthView.routes}
+                        onSelectMsegSlot={synthView.handleSelectMsegSlot}
+                        onOpenMsegEditor={synthView.msegEditor.openEditor}
+                        onMsegRateChange={synthView.handleMsegRateChange}
+                        onToggleMsegLoop={synthView.handleToggleMsegLoop}
+                        onSelectEnvelopeSlot={synthView.handleSelectEnvelopeSlot}
+                        onEnvelopeChange={synthView.handleEnvelopeChange}
+                        onAddRoute={synthView.handleAddRoute}
+                        onRemoveRoute={synthView.handleRemoveRoute}
+                        onRouteChange={synthView.handleRouteChange}
+                        msegRateFocusBindings={synthView.keyboardRouting.msegRateFocusBindings}
+                    />
+
+                    <section className={`flex flex-col rounded-[22px] border border-white/[0.05] bg-white/[0.025] p-4 ${DESKTOP_GRID_CARD_CLASS}`}>
+                        <DesktopModMatrix
+                            routes={synthView.routes}
+                            onAddRoute={synthView.handleAddRoute}
+                            onRemoveRoute={synthView.handleRemoveRoute}
+                            onRouteChange={synthView.handleRouteChange}
+                        />
+                    </section>
+                </section>
 
                 <KeyboardSection
                     playMode={synthView.playMode}

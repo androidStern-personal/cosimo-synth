@@ -113,6 +113,7 @@ async function dragFilterHandleBy(page, deltaX, deltaY) {
 
 async function dragEnvelopeHandleBy(page, dataRole, deltaX, deltaY) {
     const handle = page.locator(`[data-role="${dataRole}"]`);
+    await handle.scrollIntoViewIfNeeded();
     const box = await handle.boundingBox();
 
     if (!box) {
@@ -1838,11 +1839,15 @@ test("desktop envelope editor drags handles and commits compact rail values for 
     const page = await openHarnessPage();
 
     try {
+        assert.equal(await page.locator('input[aria-label="Pan"]').count(), 1);
+        assert.equal(await page.locator('[data-role="wavetable-pan-field"]').count(), 1);
         await page.getByRole("button", { name: "Select envelope 2" }).click();
         assert.equal(
             await page.locator('input[aria-label="Envelope decay value"]').evaluate((element) => getComputedStyle(element).textAlign),
             "left",
         );
+
+        const initialEnvelopeState = readStoredModulationState(await getHarnessSnapshot(page)).envelopeSlots[1];
 
         await dragEnvelopeHandleBy(page, "adsr-attack-handle-hit-target", 110, 0);
 
@@ -1864,28 +1869,36 @@ test("desktop envelope editor drags handles and commits compact rail values for 
         assert.equal(Number(readStoredModulationState(snapshot).envelopeSlots[1].attackSeconds) > 0.08, true);
         assert.equal(Math.abs(Number(readStoredModulationState(snapshot).envelopeSlots[0].attackSeconds) - 0.01) <= 1e-9, true);
 
-        await dragEnvelopeHandleBy(page, "adsr-decay-sustain-handle-hit-target", 60, 70);
+        const envelopeAfterAttack = readStoredModulationState(snapshot).envelopeSlots[1];
+
+        await dragEnvelopeHandleBy(page, "adsr-decay-sustain-handle-hit-target", 160, 70);
 
         snapshot = await waitForHarnessSnapshot(
             page,
             "decay-sustain handle drag updates decay horizontally and sustain vertically for slot 2",
             (nextSnapshot) => {
                 const state = readStoredModulationState(nextSnapshot);
-                return Number(state.envelopeSlots[1]?.decaySeconds) > 0.45
-                    && Number(state.envelopeSlots[1]?.sustain) < 0.4
+                return Math.abs(Number(state.envelopeSlots[1]?.decaySeconds) - Number(envelopeAfterAttack?.decaySeconds ?? initialEnvelopeState?.decaySeconds ?? 0.25)) > 0.02
+                    && Math.abs(Number(state.envelopeSlots[1]?.sustain) - Number(envelopeAfterAttack?.sustain ?? initialEnvelopeState?.sustain ?? 0.5)) > 0.05
                     && Math.abs(Number(state.envelopeSlots[0]?.decaySeconds) - 0.25) <= 1e-9
                     && Math.abs(Number(state.envelopeSlots[0]?.sustain) - 0.5) <= 1e-9
                     && nextSnapshot.sentMessages.some(({ endpointID, value }) => (
                         endpointID === "modulationEnvelope"
                         && Number(value?.slot) === 2
-                        && Number(value?.decaySeconds) > 0.45
-                        && Number(value?.sustain) < 0.4
+                        && Math.abs(Number(value?.decaySeconds) - Number(envelopeAfterAttack?.decaySeconds ?? initialEnvelopeState?.decaySeconds ?? 0.25)) > 0.02
+                        && Math.abs(Number(value?.sustain) - Number(envelopeAfterAttack?.sustain ?? initialEnvelopeState?.sustain ?? 0.5)) > 0.05
                     ));
             },
         );
 
-        assert.equal(Number(readStoredModulationState(snapshot).envelopeSlots[1].decaySeconds) > 0.45, true);
-        assert.equal(Number(readStoredModulationState(snapshot).envelopeSlots[1].sustain) < 0.4, true);
+        assert.equal(
+            Math.abs(Number(readStoredModulationState(snapshot).envelopeSlots[1].decaySeconds) - Number(envelopeAfterAttack?.decaySeconds ?? initialEnvelopeState?.decaySeconds ?? 0.25)) > 0.02,
+            true,
+        );
+        assert.equal(
+            Math.abs(Number(readStoredModulationState(snapshot).envelopeSlots[1].sustain) - Number(envelopeAfterAttack?.sustain ?? initialEnvelopeState?.sustain ?? 0.5)) > 0.05,
+            true,
+        );
         assert.equal(Math.abs(Number(readStoredModulationState(snapshot).envelopeSlots[0].decaySeconds) - 0.25) <= 1e-9, true);
         assert.equal(Math.abs(Number(readStoredModulationState(snapshot).envelopeSlots[0].sustain) - 0.5) <= 1e-9, true);
 

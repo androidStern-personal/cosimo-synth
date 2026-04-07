@@ -505,11 +505,13 @@ export function DesktopModMatrix({
     onAddRoute,
     onRemoveRoute,
     onRouteChange,
+    className = "",
 }: {
     routes: ModulationRoute[];
     onAddRoute: () => void;
     onRemoveRoute: (routeIndex: number) => void;
     onRouteChange: (routeIndex: number, nextRoute: ModulationRoute) => void;
+    className?: string;
 }) {
     const routeRowRefs = useRef<Array<HTMLDivElement | null>>([]);
     const pendingRouteScrollIndexRef = useRef<number | null>(null);
@@ -547,7 +549,7 @@ export function DesktopModMatrix({
     }, [onAddRoute, routes.length]);
 
     return (
-        <div className="cosimo-mod-prototype-theme w-full">
+        <div className={`cosimo-mod-prototype-theme flex h-full min-h-0 w-full flex-col ${className}`}>
             <div className="mb-3 flex items-center justify-between">
                 <h2 className="text-sm font-medium uppercase tracking-wide text-foreground/80">Mod Matrix</h2>
                 <button
@@ -561,7 +563,7 @@ export function DesktopModMatrix({
                 </button>
             </div>
 
-            <div className="space-y-1.5">
+            <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto pr-1">
                 {routes.map((route, routeIndex) => (
                     <RouteRow
                         key={route.id}
