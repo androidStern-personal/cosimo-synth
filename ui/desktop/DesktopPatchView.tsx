@@ -642,24 +642,8 @@ function DesktopEnvelopeEditor({
     onEnvelopeChange: ModulationMatrixSectionProps["onEnvelopeChange"];
 }) {
     const svgRef = useRef<SVGSVGElement | null>(null);
-    const [draftAttack, setDraftAttack] = useState("");
-    const [draftDecay, setDraftDecay] = useState("");
-    const [draftSustain, setDraftSustain] = useState("");
-    const [draftRelease, setDraftRelease] = useState("");
     const [activeHandle, setActiveHandle] = useState<null | "attack" | "decay-sustain" | "release">(null);
     const [activePointerId, setActivePointerId] = useState<number | null>(null);
-
-    useEffect(() => {
-        setDraftAttack(formatEnvelopeTimeDisplay(selectedEnvelope.attackSeconds));
-        setDraftDecay(formatEnvelopeTimeDisplay(selectedEnvelope.decaySeconds));
-        setDraftSustain((selectedEnvelope.sustain * 100).toFixed(1));
-        setDraftRelease(formatEnvelopeTimeDisplay(selectedEnvelope.releaseSeconds));
-    }, [
-        selectedEnvelope.attackSeconds,
-        selectedEnvelope.decaySeconds,
-        selectedEnvelope.releaseSeconds,
-        selectedEnvelope.sustain,
-    ]);
 
     const geometry = useMemo(() => computeEnvelopeGeometry(selectedEnvelope), [selectedEnvelope]);
 
@@ -776,68 +760,13 @@ function DesktopEnvelopeEditor({
         setActivePointerId(event.pointerId);
     }, []);
 
-    const commitDurationField = useCallback((
-        field: "attackSeconds" | "decaySeconds" | "releaseSeconds",
-        draftValue: string,
-        currentSeconds: number,
-    ) => {
-        const parsedValue = parseEnvelopeTimeInput(draftValue, currentSeconds);
-
-        if (parsedValue === null) {
-            setDraftAttack(formatEnvelopeTimeDisplay(selectedEnvelope.attackSeconds));
-            setDraftDecay(formatEnvelopeTimeDisplay(selectedEnvelope.decaySeconds));
-            setDraftRelease(formatEnvelopeTimeDisplay(selectedEnvelope.releaseSeconds));
-            return;
-        }
-
-        onEnvelopeChange(field, clamp(parsedValue, ENVELOPE_TIME_MIN_SECONDS, ENVELOPE_TIME_MAX_SECONDS));
-    }, [
-        onEnvelopeChange,
-        selectedEnvelope.attackSeconds,
-        selectedEnvelope.decaySeconds,
-        selectedEnvelope.releaseSeconds,
-    ]);
-
-    const handleDurationFieldKeyDown = useCallback((
-        event: ReactKeyboardEvent<HTMLInputElement>,
-        field: "attackSeconds" | "decaySeconds" | "releaseSeconds",
-        draftValue: string,
-        currentSeconds: number,
-    ) => {
-        if (event.key === "Enter") {
-            event.preventDefault();
-            commitDurationField(field, draftValue, currentSeconds);
-            return;
-        }
-
-        if (event.key === "Escape") {
-            event.preventDefault();
-
-            if (field === "attackSeconds") {
-                setDraftAttack(formatEnvelopeTimeDisplay(selectedEnvelope.attackSeconds));
-            } else if (field === "decaySeconds") {
-                setDraftDecay(formatEnvelopeTimeDisplay(selectedEnvelope.decaySeconds));
-            } else {
-                setDraftRelease(formatEnvelopeTimeDisplay(selectedEnvelope.releaseSeconds));
-            }
-
-            event.currentTarget.blur();
-        }
-    }, [
-        commitDurationField,
-        selectedEnvelope.attackSeconds,
-        selectedEnvelope.decaySeconds,
-        selectedEnvelope.releaseSeconds,
-    ]);
-
     return (
-        <div className="grid gap-3">
-            <div className="relative overflow-hidden rounded-[22px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01)),linear-gradient(180deg,rgba(5,9,19,0.92),rgba(7,13,24,0.96))]">
+        <div className="relative h-full overflow-hidden bg-[linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01)),linear-gradient(180deg,rgba(5,9,19,0.92),rgba(7,13,24,0.96))]">
                 <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_22%,rgba(109,216,255,0.10),transparent_26%),radial-gradient(circle_at_82%_78%,rgba(248,184,77,0.10),transparent_20%)]" />
                 <svg
                     ref={svgRef}
                     viewBox={`0 0 ${ENVELOPE_VIEWBOX.width} ${ENVELOPE_VIEWBOX.height}`}
-                    className="relative z-10 block h-auto w-full touch-none"
+                    className="relative z-10 block h-full w-full touch-none"
                     data-role="adsr-editor-surface"
                     aria-label="Envelope editor"
                 >
@@ -970,81 +899,6 @@ function DesktopEnvelopeEditor({
                         onPointerDown={(event) => beginHandleDrag("release", event)}
                     />
                 </svg>
-
-                <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 p-3">
-                    <div className="pointer-events-auto grid grid-cols-4 gap-2 rounded-2xl bg-black/30 px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-md">
-                        <label className="flex min-w-0 items-center gap-1.5" htmlFor="desktop-envelope-attack">
-                            <span className="shrink-0 text-[10px] uppercase tracking-[0.18em] text-slate-300/65">A</span>
-                            <input
-                                id="desktop-envelope-attack"
-                                aria-label="Envelope attack value"
-                                className="min-w-0 flex-1 bg-transparent p-0 text-left font-mono text-[12px] tabular-nums text-slate-100 outline-none focus:text-amber-200"
-                                value={draftAttack}
-                                onChange={(event) => setDraftAttack(event.currentTarget.value)}
-                                onBlur={() => commitDurationField("attackSeconds", draftAttack, selectedEnvelope.attackSeconds)}
-                                onKeyDown={(event) => handleDurationFieldKeyDown(event, "attackSeconds", draftAttack, selectedEnvelope.attackSeconds)}
-                            />
-                        </label>
-                        <label className="flex min-w-0 items-center gap-1.5" htmlFor="desktop-envelope-decay">
-                            <span className="shrink-0 text-[10px] uppercase tracking-[0.18em] text-slate-300/65">D</span>
-                            <input
-                                id="desktop-envelope-decay"
-                                aria-label="Envelope decay value"
-                                className="min-w-0 flex-1 bg-transparent p-0 text-left font-mono text-[12px] tabular-nums text-slate-100 outline-none focus:text-amber-200"
-                                value={draftDecay}
-                                onChange={(event) => setDraftDecay(event.currentTarget.value)}
-                                onBlur={() => commitDurationField("decaySeconds", draftDecay, selectedEnvelope.decaySeconds)}
-                                onKeyDown={(event) => handleDurationFieldKeyDown(event, "decaySeconds", draftDecay, selectedEnvelope.decaySeconds)}
-                            />
-                        </label>
-                        <label className="flex min-w-0 items-center gap-1.5" htmlFor="desktop-envelope-sustain">
-                            <span className="shrink-0 text-[10px] uppercase tracking-[0.18em] text-slate-300/65">S</span>
-                            <input
-                                id="desktop-envelope-sustain"
-                                aria-label="Envelope sustain value"
-                                className="min-w-0 flex-1 bg-transparent p-0 text-left font-mono text-[12px] tabular-nums text-slate-100 outline-none focus:text-amber-200"
-                                value={draftSustain}
-                                onChange={(event) => setDraftSustain(event.currentTarget.value)}
-                                onBlur={() => {
-                                    const nextValue = Number(draftSustain);
-
-                                    if (!Number.isFinite(nextValue)) {
-                                        setDraftSustain((selectedEnvelope.sustain * 100).toFixed(1));
-                                        return;
-                                    }
-
-                                    onEnvelopeChange("sustain", clamp(nextValue / 100, 0, 1));
-                                }}
-                                onKeyDown={(event) => {
-                                    if (event.key === "Enter") {
-                                        event.preventDefault();
-                                        event.currentTarget.blur();
-                                        return;
-                                    }
-
-                                    if (event.key === "Escape") {
-                                        event.preventDefault();
-                                        setDraftSustain((selectedEnvelope.sustain * 100).toFixed(1));
-                                        event.currentTarget.blur();
-                                    }
-                                }}
-                            />
-                        </label>
-                        <label className="flex min-w-0 items-center gap-1.5" htmlFor="desktop-envelope-release">
-                            <span className="shrink-0 text-[10px] uppercase tracking-[0.18em] text-slate-300/65">R</span>
-                            <input
-                                id="desktop-envelope-release"
-                                aria-label="Envelope release value"
-                                className="min-w-0 flex-1 bg-transparent p-0 text-left font-mono text-[12px] tabular-nums text-slate-100 outline-none focus:text-amber-200"
-                                value={draftRelease}
-                                onChange={(event) => setDraftRelease(event.currentTarget.value)}
-                                onBlur={() => commitDurationField("releaseSeconds", draftRelease, selectedEnvelope.releaseSeconds)}
-                                onKeyDown={(event) => handleDurationFieldKeyDown(event, "releaseSeconds", draftRelease, selectedEnvelope.releaseSeconds)}
-                            />
-                        </label>
-                    </div>
-                </div>
-            </div>
         </div>
     );
 }
@@ -1532,108 +1386,337 @@ function ModulationMatrixSection({
     const activeMsegSlot = activeEditorTab.kind === "mseg" ? activeEditorTab.slotIndex : selectedMsegSlot;
     const activeEnvelopeSlot = activeEditorTab.kind === "envelope" ? activeEditorTab.slotIndex : selectedEnvelopeSlot;
 
+    // MSEG rate drag/edit state
+    const msegRateRef = useRef<HTMLInputElement | null>(null);
+    const msegRateDragRef = useRef<{
+        pointerId: number;
+        startClientX: number;
+        startValue: number;
+        moved: boolean;
+    } | null>(null);
+    const [isEditingMsegRate, setIsEditingMsegRate] = useState(false);
+    const [draftMsegRate, setDraftMsegRate] = useState("");
+
+    const currentMsegRate = clampMsegRateSeconds(Number(msegState?.playback.rate.seconds ?? 1));
+
+    useEffect(() => {
+        const el = msegRateRef.current;
+        if (!el) return;
+        const handler = (event: WheelEvent) => {
+            if (isEditingMsegRate) return;
+            event.preventDefault();
+            const step = ((MSEG_RATE_MAX_SECONDS - MSEG_RATE_MIN_SECONDS) / 400) * (event.deltaY > 0 ? -1 : 1);
+            onMsegRateChange(clamp(currentMsegRate + step, MSEG_RATE_MIN_SECONDS, MSEG_RATE_MAX_SECONDS));
+        };
+        el.addEventListener("wheel", handler, { passive: false });
+        return () => el.removeEventListener("wheel", handler);
+    }, [isEditingMsegRate, currentMsegRate, onMsegRateChange]);
+
+    const commitMsegRateText = useCallback((text: string) => {
+        const parsed = parseFloat(text);
+        if (Number.isFinite(parsed)) {
+            onMsegRateChange(clamp(parsed, MSEG_RATE_MIN_SECONDS, MSEG_RATE_MAX_SECONDS));
+        }
+        setIsEditingMsegRate(false);
+    }, [onMsegRateChange]);
+
+    // ADSR draft state (for envelope tab top-bar inputs)
+    const [draftAttack, setDraftAttack] = useState("");
+    const [draftDecay, setDraftDecay] = useState("");
+    const [draftSustain, setDraftSustain] = useState("");
+    const [draftRelease, setDraftRelease] = useState("");
+
+    useEffect(() => {
+        if (!selectedEnvelope) {
+            return;
+        }
+        setDraftAttack(formatEnvelopeTimeDisplay(selectedEnvelope.attackSeconds));
+        setDraftDecay(formatEnvelopeTimeDisplay(selectedEnvelope.decaySeconds));
+        setDraftSustain((selectedEnvelope.sustain * 100).toFixed(1));
+        setDraftRelease(formatEnvelopeTimeDisplay(selectedEnvelope.releaseSeconds));
+    }, [
+        selectedEnvelope?.attackSeconds,
+        selectedEnvelope?.decaySeconds,
+        selectedEnvelope?.releaseSeconds,
+        selectedEnvelope?.sustain,
+    ]);
+
+    const commitEnvelopeDurationField = useCallback((
+        field: "attackSeconds" | "decaySeconds" | "releaseSeconds",
+        draftValue: string,
+        currentSeconds: number,
+    ) => {
+        if (!selectedEnvelope) {
+            return;
+        }
+        const parsedValue = parseEnvelopeTimeInput(draftValue, currentSeconds);
+        if (parsedValue === null) {
+            setDraftAttack(formatEnvelopeTimeDisplay(selectedEnvelope.attackSeconds));
+            setDraftDecay(formatEnvelopeTimeDisplay(selectedEnvelope.decaySeconds));
+            setDraftRelease(formatEnvelopeTimeDisplay(selectedEnvelope.releaseSeconds));
+            return;
+        }
+        onEnvelopeChange(field, clamp(parsedValue, ENVELOPE_TIME_MIN_SECONDS, ENVELOPE_TIME_MAX_SECONDS));
+    }, [onEnvelopeChange, selectedEnvelope]);
+
+    const handleEnvelopeFieldKeyDown = useCallback((
+        event: ReactKeyboardEvent<HTMLInputElement>,
+        field: "attackSeconds" | "decaySeconds" | "releaseSeconds",
+        draftValue: string,
+        currentSeconds: number,
+    ) => {
+        if (!selectedEnvelope) {
+            return;
+        }
+        if (event.key === "Enter") {
+            event.preventDefault();
+            commitEnvelopeDurationField(field, draftValue, currentSeconds);
+            return;
+        }
+        if (event.key === "Escape") {
+            event.preventDefault();
+            if (field === "attackSeconds") {
+                setDraftAttack(formatEnvelopeTimeDisplay(selectedEnvelope.attackSeconds));
+            } else if (field === "decaySeconds") {
+                setDraftDecay(formatEnvelopeTimeDisplay(selectedEnvelope.decaySeconds));
+            } else {
+                setDraftRelease(formatEnvelopeTimeDisplay(selectedEnvelope.releaseSeconds));
+            }
+            event.currentTarget.blur();
+        }
+    }, [commitEnvelopeDurationField, selectedEnvelope]);
+
     return (
-        <section className={`flex h-full flex-col gap-3 rounded-[22px] border border-white/[0.05] bg-white/[0.025] p-4 ${DESKTOP_GRID_CARD_CLASS}`}>
-            <div className="overflow-x-auto pb-1">
-                <div className="inline-flex min-w-full rounded-full border border-white/8 bg-white/[0.03] p-1">
+        <section className={`flex h-full flex-col overflow-hidden rounded-[14px] bg-white/[0.02] ${DESKTOP_GRID_CARD_CLASS}`}>
+            {/* ── Pip selector top-bar ── */}
+            <div className="flex shrink-0 items-center gap-1.5 px-2.5 py-1.5">
+                {/* MSEG pips */}
+                <div className="flex gap-[3px]">
                     {Array.from({ length: MODULATION_MSEG_SLOT_COUNT }, (_, slotIndex) => (
                         <button
-                            key={`mseg-slot-${slotIndex + 1}`}
+                            key={`mseg-pip-${slotIndex}`}
                             type="button"
                             aria-label={`Select MSEG ${slotIndex + 1}`}
-                            className={`rounded-full px-3 py-1 text-[10px] uppercase tracking-[0.18em] transition ${
+                            className={`grid size-[18px] place-items-center rounded-[5px] border p-0 text-[8px] leading-none font-bold transition max-[480px]:size-7 max-[480px]:rounded-[6px] max-[480px]:text-[10px] ${
                                 activeEditorTab.kind === "mseg" && activeMsegSlot === slotIndex
-                                    ? "bg-cyan-300/18 text-cyan-100"
-                                    : "text-slate-300/65 hover:text-slate-100"
+                                    ? "border-cyan-300/25 bg-cyan-300/15 text-cyan-50/90"
+                                    : "border-white/[0.06] bg-white/[0.02] text-slate-300/40 hover:border-white/10 hover:text-slate-300/65"
                             }`}
                             onClick={() => {
                                 onSelectMsegSlot(slotIndex);
                                 setActiveEditorTab({ kind: "mseg", slotIndex });
                             }}
                         >
-                            {`MSEG ${slotIndex + 1}`}
+                            {slotIndex + 1}
                         </button>
                     ))}
+                </div>
+                <span className="ml-0.5 text-[10px] leading-none font-semibold uppercase tracking-[0.12em] text-cyan-100/60">Mseg</span>
+
+                {/* Separator */}
+                <div className="mx-0.5 h-3 w-px shrink-0 bg-white/[0.06]" />
+
+                {/* ENV pips */}
+                <div className="flex gap-[3px]">
                     {Array.from({ length: MODULATION_ENV_SLOT_COUNT }, (_, slotIndex) => (
                         <button
-                            key={`env-slot-${slotIndex + 1}`}
+                            key={`env-pip-${slotIndex}`}
                             type="button"
                             aria-label={`Select envelope ${slotIndex + 1}`}
-                            className={`rounded-full px-3 py-1 text-[10px] uppercase tracking-[0.18em] transition ${
+                            className={`grid size-[18px] place-items-center rounded-[5px] border p-0 text-[8px] leading-none font-bold transition max-[480px]:size-7 max-[480px]:rounded-[6px] max-[480px]:text-[10px] ${
                                 activeEditorTab.kind === "envelope" && activeEnvelopeSlot === slotIndex
-                                    ? "bg-emerald-300/18 text-emerald-100"
-                                    : "text-slate-300/65 hover:text-slate-100"
+                                    ? "border-emerald-300/25 bg-emerald-300/12 text-emerald-100/90"
+                                    : "border-white/[0.06] bg-white/[0.02] text-slate-300/40 hover:border-white/10 hover:text-slate-300/65"
                             }`}
                             onClick={() => {
                                 onSelectEnvelopeSlot(slotIndex);
                                 setActiveEditorTab({ kind: "envelope", slotIndex });
                             }}
                         >
-                            {`Env ${slotIndex + 1}`}
+                            {slotIndex + 1}
                         </button>
                     ))}
                 </div>
+                <span className="ml-0.5 text-[10px] leading-none font-semibold uppercase tracking-[0.12em] text-emerald-200/50">Env</span>
+
+                {/* Right-aligned controls — fixed-height container, both layers always rendered */}
+                <div className="relative ml-auto h-[22px] shrink-0 max-[480px]:h-7">
+                    {/* MSEG controls */}
+                    <div className={`absolute inset-0 flex items-center justify-end gap-2 ${activeEditorTab.kind === "mseg" ? "visible" : "invisible"}`}>
+                        <button
+                            type="button"
+                            aria-label={msegState?.playback.loop ? "Disable loop" : "Enable loop"}
+                            className={`grid size-[22px] shrink-0 place-items-center rounded-[6px] border p-0 transition max-[480px]:size-7 ${
+                                msegState?.playback.loop
+                                    ? "border-cyan-300/20 bg-cyan-300/10"
+                                    : "border-white/[0.06] bg-white/[0.02]"
+                            }`}
+                            onClick={onToggleMsegLoop}
+                            tabIndex={activeEditorTab.kind === "mseg" ? 0 : -1}
+                        >
+                            <svg
+                                viewBox="0 0 16 16"
+                                className={`size-3 fill-none stroke-[1.5] stroke-current max-[480px]:size-3.5 ${
+                                    msegState?.playback.loop ? "text-cyan-300/85" : "text-slate-300/40"
+                                }`}
+                            >
+                                <path d="M4 6 L12 6 L12 4 L15 7 L12 10 L12 8 L4 8 L4 10 L1 7 L4 4 Z" strokeLinecap="round" />
+                            </svg>
+                        </button>
+                        <input
+                            ref={msegRateRef}
+                            type="text"
+                            inputMode="decimal"
+                            autoComplete="off"
+                            spellCheck={false}
+                            readOnly={!isEditingMsegRate}
+                            aria-label="MSEG rate"
+                            title="MSEG rate — drag to adjust, scroll for fine control"
+                            className={`w-[56px] select-none whitespace-nowrap rounded border border-white/[0.04] bg-white/[0.03] px-1.5 py-[3px] text-center font-mono text-[10px] leading-none tracking-[0.06em] text-cyan-200/70 outline-none max-[480px]:w-[64px] max-[480px]:px-2 max-[480px]:py-1 max-[480px]:text-[11px] ${
+                                isEditingMsegRate
+                                    ? "cursor-text selection:bg-cyan-300/25"
+                                    : "cursor-ew-resize"
+                            }`}
+                            value={isEditingMsegRate ? draftMsegRate : formatSeconds(currentMsegRate)}
+                            tabIndex={activeEditorTab.kind === "mseg" ? 0 : -1}
+                            onPointerDown={(event) => {
+                                if (event.button !== 0 || isEditingMsegRate) return;
+                                msegRateDragRef.current = {
+                                    pointerId: event.pointerId,
+                                    startClientX: event.clientX,
+                                    startValue: currentMsegRate,
+                                    moved: false,
+                                };
+                                event.currentTarget.setPointerCapture(event.pointerId);
+                                event.preventDefault();
+                            }}
+                            onPointerMove={(event) => {
+                                const drag = msegRateDragRef.current;
+                                if (!drag || drag.pointerId !== event.pointerId || isEditingMsegRate) return;
+                                const deltaX = event.clientX - drag.startClientX;
+                                if (Math.abs(deltaX) >= 2) drag.moved = true;
+                                const range = MSEG_RATE_MAX_SECONDS - MSEG_RATE_MIN_SECONDS;
+                                const scaled = (deltaX / 120) * range;
+                                onMsegRateChange(clamp(drag.startValue + scaled, MSEG_RATE_MIN_SECONDS, MSEG_RATE_MAX_SECONDS));
+                            }}
+                            onPointerUp={(event) => {
+                                const drag = msegRateDragRef.current;
+                                if (!drag || drag.pointerId !== event.pointerId || isEditingMsegRate) return;
+                                msegRateDragRef.current = null;
+                                event.currentTarget.releasePointerCapture(event.pointerId);
+                                if (!drag.moved) {
+                                    setDraftMsegRate(currentMsegRate.toFixed(3));
+                                    setIsEditingMsegRate(true);
+                                    requestAnimationFrame(() => {
+                                        msegRateRef.current?.focus();
+                                        msegRateRef.current?.select();
+                                    });
+                                }
+                            }}
+                            onPointerCancel={(event) => {
+                                const drag = msegRateDragRef.current;
+                                if (!drag || drag.pointerId !== event.pointerId) return;
+                                msegRateDragRef.current = null;
+                                event.currentTarget.releasePointerCapture(event.pointerId);
+                            }}
+                            onChange={(event) => {
+                                if (isEditingMsegRate) setDraftMsegRate(event.currentTarget.value);
+                            }}
+                            onKeyDown={(event) => {
+                                if (!isEditingMsegRate) {
+                                    if (event.key === "Enter") { event.preventDefault(); setDraftMsegRate(currentMsegRate.toFixed(3)); setIsEditingMsegRate(true); }
+                                    return;
+                                }
+                                if (event.key === "Enter") { event.preventDefault(); commitMsegRateText(draftMsegRate); msegRateRef.current?.blur(); }
+                                if (event.key === "Escape") { event.preventDefault(); setIsEditingMsegRate(false); msegRateRef.current?.blur(); }
+                            }}
+                            onBlur={() => {
+                                if (isEditingMsegRate) commitMsegRateText(draftMsegRate);
+                            }}
+                            {...msegRateFocusBindings}
+                        />
+                    </div>
+
+                    {/* Envelope ADSR controls */}
+                    <div className={`absolute inset-0 flex items-center justify-end gap-1.5 ${activeEditorTab.kind === "envelope" && selectedEnvelope ? "visible" : "invisible"}`}>
+                        {selectedEnvelope ? ([
+                            { label: "A", field: "attackSeconds" as const, draft: draftAttack, setDraft: setDraftAttack, current: selectedEnvelope.attackSeconds },
+                            { label: "D", field: "decaySeconds" as const, draft: draftDecay, setDraft: setDraftDecay, current: selectedEnvelope.decaySeconds },
+                            { label: "S", field: null, draft: draftSustain, setDraft: setDraftSustain, current: selectedEnvelope.sustain },
+                            { label: "R", field: "releaseSeconds" as const, draft: draftRelease, setDraft: setDraftRelease, current: selectedEnvelope.releaseSeconds },
+                        ] as const).map((param) => (
+                            <label key={param.label} className="flex items-center gap-[3px]">
+                                <span className="text-[9px] font-semibold uppercase text-slate-400/60">{param.label}</span>
+                                <input
+                                    type="text"
+                                    inputMode="decimal"
+                                    className="w-[38px] rounded border border-white/[0.06] bg-white/[0.03] px-1 py-[2px] text-center font-mono text-[9px] leading-none text-slate-200/80 outline-none focus:border-emerald-300/30 max-[480px]:w-[44px] max-[480px]:text-[10px]"
+                                    value={param.draft}
+                                    onChange={(e) => param.setDraft(e.target.value)}
+                                    onBlur={() => {
+                                        if (param.field) {
+                                            commitEnvelopeDurationField(param.field, param.draft, param.current);
+                                        } else {
+                                            const parsed = parseFloat(param.draft);
+                                            if (!Number.isFinite(parsed)) {
+                                                param.setDraft((selectedEnvelope.sustain * 100).toFixed(1));
+                                                return;
+                                            }
+                                            onEnvelopeChange("sustain", clamp(parsed / 100, 0, 1));
+                                        }
+                                    }}
+                                    onKeyDown={(e) => {
+                                        if (param.field) {
+                                            handleEnvelopeFieldKeyDown(e, param.field, param.draft, param.current);
+                                        } else if (e.key === "Enter") {
+                                            e.preventDefault();
+                                            const parsed = parseFloat(param.draft);
+                                            if (Number.isFinite(parsed)) {
+                                                onEnvelopeChange("sustain", clamp(parsed / 100, 0, 1));
+                                            }
+                                        } else if (e.key === "Escape") {
+                                            e.preventDefault();
+                                            param.setDraft((selectedEnvelope.sustain * 100).toFixed(1));
+                                            e.currentTarget.blur();
+                                        }
+                                    }}
+                                    tabIndex={activeEditorTab.kind === "envelope" ? 0 : -1}
+                                />
+                            </label>
+                        )) : null}
+                    </div>
+                </div>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+            {/* ── Body: MSEG preview or envelope editor ── */}
+            <div className="min-h-0 flex-1">
                 {activeEditorTab.kind === "mseg" ? (
-                    <div className="grid gap-3">
-                        <button
-                            type="button"
-                            className="grid gap-3 rounded-[18px] bg-white/[0.03] p-3 text-left transition hover:bg-white/[0.05]"
-                            onClick={onOpenMsegEditor}
-                            aria-label="Open MSEG editor"
-                        >
-                            <div className="flex items-center justify-between gap-4">
-                                <div>
-                                    <div className="text-[10px] uppercase tracking-[0.18em] text-slate-300/55">{`MSEG ${activeMsegSlot + 1}`}</div>
-                                    <div className="mt-1 text-sm font-medium text-slate-100">Open Shape Editor</div>
-                                </div>
-                                <div className="text-[10px] uppercase tracking-[0.18em] text-cyan-100/75">
-                                    {msegState?.playback.loop ? "Loop" : "One Shot"}
-                                </div>
-                            </div>
-                            {msegState ? (
-                                <MsegPreview
-                                    points={msegState.shape.points}
-                                    className="h-24 w-full overflow-hidden rounded-[18px] bg-white/[0.03]"
-                                />
-                            ) : (
-                                <div className="h-24 rounded-[18px] bg-white/[0.03]" />
-                            )}
-                        </button>
-
-                        <RangeField
-                            label="Rate"
-                            min={MSEG_RATE_MIN_SECONDS}
-                            max={MSEG_RATE_MAX_SECONDS}
-                            step={0.001}
-                            value={clampMsegRateSeconds(Number(msegState?.playback.rate.seconds ?? 1))}
-                            displayValue={formatSeconds(Number(msegState?.playback.rate.seconds ?? 1))}
-                            onChange={onMsegRateChange}
-                            ariaLabel="MSEG rate"
-                            focusBindings={msegRateFocusBindings}
-                        />
-
-                        <button
-                            type="button"
-                            className="cosimo-button h-11 rounded-2xl px-4 text-[11px] uppercase tracking-[0.18em]"
-                            onClick={onToggleMsegLoop}
-                            aria-label={msegState?.playback.loop ? "Looping" : "One Shot"}
-                        >
-                            {msegState?.playback.loop ? "Looping" : "One Shot"}
-                        </button>
-                    </div>
-                ) : (
-                    <div className="grid gap-3">
-                        {selectedEnvelope ? (
-                            <DesktopEnvelopeEditor
-                                selectedEnvelope={selectedEnvelope}
-                                onEnvelopeChange={onEnvelopeChange}
+                    <button
+                        type="button"
+                        className="group relative h-full w-full cursor-pointer transition hover:bg-white/[0.01]"
+                        onClick={onOpenMsegEditor}
+                        aria-label="Open MSEG editor"
+                    >
+                        {msegState ? (
+                            <MsegPreview
+                                points={msegState.shape.points}
+                                className="h-full w-full"
                             />
-                        ) : null}
-                    </div>
-                )}
+                        ) : (
+                            <div className="h-full w-full bg-white/[0.02]" />
+                        )}
+                        <div className="pointer-events-none absolute inset-0 grid place-items-center opacity-0 transition-opacity group-hover:opacity-100">
+                            <span className="rounded-[6px] bg-[rgba(3,5,12,0.6)] px-2.5 py-1 text-[10px] uppercase tracking-[0.15em] text-cyan-300/40">
+                                Edit Shape
+                            </span>
+                        </div>
+                    </button>
+                ) : selectedEnvelope ? (
+                    <DesktopEnvelopeEditor
+                        selectedEnvelope={selectedEnvelope}
+                        onEnvelopeChange={onEnvelopeChange}
+                    />
+                ) : null}
             </div>
         </section>
     );
