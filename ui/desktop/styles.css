@@ -277,6 +277,10 @@
     fill: rgba(135, 215, 245, 0.08);
 }
 
+.cosimo-curve-fill-progress {
+    fill: rgba(135, 215, 245, 0.22);
+}
+
 .cosimo-curve-line {
     fill: none;
     stroke: #87d7f5;
@@ -295,6 +299,12 @@
 
 .cosimo-curve-line-highlight {
     stroke: #32f0bc;
+}
+
+.cosimo-mseg-playhead {
+    stroke: rgba(244, 251, 255, 0.96);
+    stroke-width: 2;
+    stroke-linecap: round;
 }
 
 .cosimo-mseg-point-default {

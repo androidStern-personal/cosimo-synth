@@ -385,6 +385,41 @@ export function createIOSHarnessInitScript(baseUrl) {
             };
         };
 
+        const readMsegPreviewOverlay = (rootElement) => {
+            const svg = rootElement?.querySelector('[data-role="mseg-preview-surface"]');
+
+            if (!(svg instanceof SVGSVGElement)) {
+                return null;
+            }
+
+            const playhead = svg.querySelector('[data-role="mseg-preview-playhead"]');
+            const progressClip = svg.querySelector('[data-role="mseg-preview-progress-clip"]');
+            const [, , width, height] = (svg.getAttribute("viewBox") ?? "0 0 0 0")
+                .split(/\s+/)
+                .map((value) => Number(value) || 0);
+
+            return {
+                width,
+                height,
+                playhead: playhead instanceof SVGLineElement
+                    ? {
+                        x1: Number(playhead.getAttribute("x1")) || 0,
+                        y1: Number(playhead.getAttribute("y1")) || 0,
+                        x2: Number(playhead.getAttribute("x2")) || 0,
+                        y2: Number(playhead.getAttribute("y2")) || 0,
+                    }
+                    : null,
+                progressClip: progressClip instanceof SVGRectElement
+                    ? {
+                        x: Number(progressClip.getAttribute("x")) || 0,
+                        y: Number(progressClip.getAttribute("y")) || 0,
+                        width: Number(progressClip.getAttribute("width")) || 0,
+                        height: Number(progressClip.getAttribute("height")) || 0,
+                    }
+                    : null,
+            };
+        };
+
         const readPathEndpoints = (pathData) => {
             const tokens = String(pathData).match(/[AaCcHhLlMmQqSsTtVvZz]|-?\d*\.?\d+(?:e[-+]?\d+)?/g) ?? [];
             const endpoints = [];
@@ -737,6 +772,7 @@ export function createIOSHarnessInitScript(baseUrl) {
                     previewShellRect: rectToObject(previewShell),
                     modalSurfaceRect: rectToObject(modalSurface),
                     previewCurvePoints: readRenderedCurvePoints(previewCurve),
+                    previewPlayheadState: readMsegPreviewOverlay(shadowRoot),
                     modalCurvePoints: readRenderedCurvePoints(modalCurve),
                     modalPointCenters: readRenderedCircleCenters(modalSurface),
                     shellRect,
@@ -778,6 +814,9 @@ export function createIOSHarnessInitScript(baseUrl) {
             },
             emitDistortionHistory(nextState) {
                 emitEndpoint("distortionHistory", nextState);
+            },
+            emitEffectiveMsegState(nextState) {
+                emitEndpoint("effectiveMsegState", nextState);
             },
             setStoredStateValue(key, value) {
                 storedState.set(key, value);
@@ -858,6 +897,12 @@ export async function emitIOSHarnessDistortionScope(page, nextState) {
 export async function emitIOSHarnessDistortionHistory(page, nextState) {
     await page.evaluate((state) => {
         window.__COSIMO_IOS_HARNESS__.emitDistortionHistory(state);
+    }, nextState);
+}
+
+export async function emitIOSHarnessEffectiveMsegState(page, nextState) {
+    await page.evaluate((state) => {
+        window.__COSIMO_IOS_HARNESS__.emitEffectiveMsegState(state);
     }, nextState);
 }
 

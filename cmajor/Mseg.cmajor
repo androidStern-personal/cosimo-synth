@@ -5,6 +5,7 @@ namespace wt
     let effectiveWavetablePositionMonitorHz = 30.0f;
     let effectiveWarpStateMonitorHz = 30.0f;
     let effectiveFilterStateMonitorHz = 60.0f;
+    let effectiveMsegStateMonitorHz = 60.0f;
     let msegNoteOffPolicyFinishLoop = 0;
     let msegNoteOffPolicyImmediate = 1;
     let msegNoteOffPolicyIgnore = 2;
@@ -42,6 +43,13 @@ namespace wt
         int32 hasActive;
         int32 mode;
         float32 amount;
+    }
+
+    struct EffectiveMsegStateMonitor
+    {
+        int32 voiceGeneration;
+        int32 hasActive;
+        float32[3] positions;
     }
 
     float32 msegCatmullRom (float32 p0, float32 p1, float32 p2, float32 p3, float32 t)
@@ -177,6 +185,7 @@ namespace wt
         input event int32 triggerIn;
         input event int32 noteOffIn;
         output stream float32 out;
+        output value float32 progressOut;
 
         float32[msegPaddedSamples] buffer;
         float32 currentValue = 0.5f;
@@ -325,6 +334,8 @@ namespace wt
 
             loop
             {
+                let displayedProgress = std::intrinsics::clamp (progress, 0.0f, 1.0f);
+
                 if (active)
                 {
                     currentValue = sampleAt (progress);
@@ -340,6 +351,7 @@ namespace wt
                 }
 
                 out <- holdFinalValue || active ? currentValue : 0.0f;
+                progressOut <- displayedProgress;
                 advance();
             }
         }

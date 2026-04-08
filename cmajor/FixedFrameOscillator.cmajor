@@ -1144,6 +1144,7 @@ namespace wt
         output event wt::EffectiveWavetablePositionMonitor effectiveWavetablePositionOut;
         output event wt::EffectiveWarpStateMonitor effectiveWarpStateOut;
         output event wt::EffectiveFilterStateMonitor effectiveFilterStateOut;
+        output event wt::EffectiveMsegStateMonitor effectiveMsegStateOut;
         output stream float32<2> out;
 
         node envelopes = wt::RetriggerableFixedASR (0.01f, 0.20f)[voiceCount];
@@ -1215,6 +1216,8 @@ namespace wt
         int32 framesUntilNextWarpMonitorUpdate = 0;
         int32 filterMonitorUpdateIntervalFrames = 1;
         int32 framesUntilNextFilterMonitorUpdate = 0;
+        int32 msegMonitorUpdateIntervalFrames = 1;
+        int32 framesUntilNextMsegMonitorUpdate = 0;
         float32 previewFrequencyHzState = previewFrequencyHz;
         float32 glideTimeSecondsState = 0.0f;
 
@@ -1806,6 +1809,31 @@ namespace wt
             effectiveFilterStateOut <- monitor;
         }
 
+        void emitEffectiveMsegStateMonitor()
+        {
+            wt::EffectiveMsegStateMonitor monitor;
+            let newestVoiceIndex = findNewestMonitoredVoiceIndex();
+
+            if (newestVoiceIndex >= 0)
+            {
+                monitor.voiceGeneration = voiceGeneration.at (newestVoiceIndex);
+                monitor.hasActive = 1;
+                monitor.positions[0] = std::intrinsics::clamp (mseg1[newestVoiceIndex].progressOut, 0.0f, 1.0f);
+                monitor.positions[1] = std::intrinsics::clamp (mseg2[newestVoiceIndex].progressOut, 0.0f, 1.0f);
+                monitor.positions[2] = std::intrinsics::clamp (mseg3[newestVoiceIndex].progressOut, 0.0f, 1.0f);
+            }
+            else
+            {
+                monitor.voiceGeneration = findNewestVisibleGeneration();
+                monitor.hasActive = 0;
+                monitor.positions[0] = 0.0f;
+                monitor.positions[1] = 0.0f;
+                monitor.positions[2] = 0.0f;
+            }
+
+            effectiveMsegStateOut <- monitor;
+        }
+
         void maybeEmitMonitorUpdate()
         {
             if (framesUntilNextMonitorUpdate <= 0)
@@ -1836,6 +1864,16 @@ namespace wt
             else
             {
                 framesUntilNextFilterMonitorUpdate -= 1;
+            }
+
+            if (framesUntilNextMsegMonitorUpdate <= 0)
+            {
+                emitEffectiveMsegStateMonitor();
+                framesUntilNextMsegMonitorUpdate = msegMonitorUpdateIntervalFrames - 1;
+            }
+            else
+            {
+                framesUntilNextMsegMonitorUpdate -= 1;
             }
         }
 
@@ -2244,6 +2282,11 @@ namespace wt
             );
             filterMonitorUpdateIntervalFrames = std::intrinsics::max (1, requestedFilterInterval);
             framesUntilNextFilterMonitorUpdate = 0;
+            let requestedMsegInterval = int32 (
+                std::intrinsics::floor ((processor.frequency / wt::effectiveMsegStateMonitorHz) + 0.5f)
+            );
+            msegMonitorUpdateIntervalFrames = std::intrinsics::max (1, requestedMsegInterval);
+            framesUntilNextMsegMonitorUpdate = 0;
             resetAllFilterState();
 
             loop

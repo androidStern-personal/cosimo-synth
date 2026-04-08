@@ -20,6 +20,12 @@ let server;
 let builtBundleServer;
 let browser;
 const TEST_SAMPLES_PER_FRAME = 2048;
+const MSEG_PREVIEW_HORIZONTAL_PADDING_PX = 24;
+
+function expectedMsegPreviewProgressClipWidth(previewState, progress) {
+    const plotWidth = Math.max(1, previewState.width - (MSEG_PREVIEW_HORIZONTAL_PADDING_PX * 2));
+    return plotWidth * progress;
+}
 
 function buildShortMidi(status, noteNumber, velocity = 0) {
     return status | (noteNumber << 8) | (velocity << 16);
@@ -2764,6 +2770,71 @@ test("MSEG editor wiring can open, add a point, move it, and close with Escape",
 
         await page.keyboard.press("Escape");
         await page.waitForSelector("text=Modulation Shape Editor", { state: "detached" });
+    } finally {
+        await page.close();
+    }
+});
+
+test("MSEG preview progress fill follows the selected DSP slot and clears when the monitor goes inactive", async () => {
+    const page = await openHarnessPage();
+
+    try {
+        await page.evaluate(() => {
+            window.__COSIMO_DESKTOP_HARNESS__.emitEffectiveMsegState({
+                voiceGeneration: 7,
+                hasActive: 1,
+                positions: [0.2, 0.58, 0.86],
+            });
+        });
+        await page.waitForFunction(() => {
+            const preview = window.__COSIMO_DESKTOP_HARNESS__.getRenderedState().msegPreviewState;
+            return Boolean(preview?.progressClip);
+        });
+
+        let renderedState = await getHarnessRenderedState(page);
+        let previewState = renderedState.msegPreviewState;
+        assert.ok(previewState);
+        assert.ok(previewState.progressClip);
+        assert.equal(previewState.playhead, null);
+        assert.equal(
+            Math.abs(previewState.progressClip.width - expectedMsegPreviewProgressClipWidth(previewState, 0.2)) <= 1.5,
+            true,
+        );
+
+        await page.click('button[aria-label="Select MSEG 2"]');
+        await page.waitForFunction(() => {
+            const preview = window.__COSIMO_DESKTOP_HARNESS__.getRenderedState().msegPreviewState;
+            return Boolean(preview?.progressClip)
+                && preview.progressClip.width > 100;
+        });
+
+        renderedState = await getHarnessRenderedState(page);
+        previewState = renderedState.msegPreviewState;
+        assert.ok(previewState);
+        assert.ok(previewState.progressClip);
+        assert.equal(previewState.playhead, null);
+        assert.equal(
+            Math.abs(previewState.progressClip.width - expectedMsegPreviewProgressClipWidth(previewState, 0.58)) <= 1.5,
+            true,
+        );
+
+        await page.evaluate(() => {
+            window.__COSIMO_DESKTOP_HARNESS__.emitEffectiveMsegState({
+                voiceGeneration: 8,
+                hasActive: 0,
+                positions: [1, 1, 1],
+            });
+        });
+        await page.waitForFunction(() => {
+            const preview = window.__COSIMO_DESKTOP_HARNESS__.getRenderedState().msegPreviewState;
+            return Boolean(preview) && !preview.progressClip;
+        });
+
+        renderedState = await getHarnessRenderedState(page);
+        previewState = renderedState.msegPreviewState;
+        assert.ok(previewState);
+        assert.equal(previewState.playhead, null);
+        assert.equal(previewState.progressClip, null);
     } finally {
         await page.close();
     }

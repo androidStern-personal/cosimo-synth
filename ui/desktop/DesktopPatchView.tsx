@@ -170,6 +170,7 @@ type MsegEditorModalProps = {
 type ModulationMatrixSectionProps = {
     selectedMsegSlot: number;
     msegState: MsegState | null;
+    observedMsegPlayhead: ReturnType<typeof useSynthPatchViewModel>["observedMsegPlayhead"];
     selectedEnvelopeSlot: number;
     selectedEnvelope: {
         attackSeconds: number;
@@ -1361,6 +1362,7 @@ function MsegEditorModal({
 function ModulationMatrixSection({
     selectedMsegSlot,
     msegState,
+    observedMsegPlayhead,
     selectedEnvelopeSlot,
     selectedEnvelope,
     routes,
@@ -1388,6 +1390,7 @@ function ModulationMatrixSection({
 
     // MSEG rate drag/edit state
     const msegRateRef = useRef<HTMLInputElement | null>(null);
+    const msegRateWheelCursorTimerRef = useRef<number>(0);
     const msegRateDragRef = useRef<{
         pointerId: number;
         startClientX: number;
@@ -1402,10 +1405,14 @@ function ModulationMatrixSection({
     useEffect(() => {
         const el = msegRateRef.current;
         if (!el) return;
+        const timerRef = msegRateWheelCursorTimerRef;
         const handler = (event: WheelEvent) => {
             if (isEditingMsegRate) return;
             event.preventDefault();
-            const step = ((MSEG_RATE_MAX_SECONDS - MSEG_RATE_MIN_SECONDS) / 400) * (event.deltaY > 0 ? -1 : 1);
+            el.style.cursor = "none";
+            clearTimeout(timerRef.current);
+            timerRef.current = window.setTimeout(() => { el.style.cursor = ""; }, 400);
+            const step = ((MSEG_RATE_MAX_SECONDS - MSEG_RATE_MIN_SECONDS) / 400) * (event.deltaY > 0 ? 1 : -1);
             onMsegRateChange(clamp(currentMsegRate + step, MSEG_RATE_MIN_SECONDS, MSEG_RATE_MAX_SECONDS));
         };
         el.addEventListener("wheel", handler, { passive: false });
@@ -1571,7 +1578,6 @@ function ModulationMatrixSection({
                             spellCheck={false}
                             readOnly={!isEditingMsegRate}
                             aria-label="MSEG rate"
-                            title="MSEG rate — drag to adjust, scroll for fine control"
                             className={`w-[56px] select-none whitespace-nowrap rounded border border-white/[0.04] bg-white/[0.03] px-1.5 py-[3px] text-center font-mono text-[10px] leading-none tracking-[0.06em] text-cyan-200/70 outline-none max-[480px]:w-[64px] max-[480px]:px-2 max-[480px]:py-1 max-[480px]:text-[11px] ${
                                 isEditingMsegRate
                                     ? "cursor-text selection:bg-cyan-300/25"
@@ -1701,6 +1707,7 @@ function ModulationMatrixSection({
                             <MsegPreview
                                 points={msegState.shape.points}
                                 className="h-full w-full"
+                                progressFillEnd={observedMsegPlayhead.progressFillEnd}
                             />
                         ) : (
                             <div className="h-full w-full bg-white/[0.02]" />
@@ -1882,6 +1889,7 @@ function DesktopPatchViewBody() {
                     <ModulationMatrixSection
                         selectedMsegSlot={synthView.selectedMsegSlot}
                         msegState={synthView.msegState}
+                        observedMsegPlayhead={synthView.observedMsegPlayhead}
                         selectedEnvelopeSlot={synthView.selectedEnvelopeSlot}
                         selectedEnvelope={synthView.selectedEnvelope}
                         routes={synthView.routes}

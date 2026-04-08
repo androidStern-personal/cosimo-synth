@@ -13,6 +13,12 @@ declare global {
                 keyboardDebug: unknown | null;
                 keyboardNoteCount: string | null;
                 keyboardRootNote: string | null;
+                msegPreviewState: {
+                    width: number;
+                    height: number;
+                    playhead: { x1: number; y1: number; x2: number; y2: number } | null;
+                    progressClip: { x: number; y: number; width: number; height: number } | null;
+                } | null;
                 stageLabel: string | null;
                 stageDebug: unknown | null;
                 filterGraphState: unknown | null;
@@ -28,6 +34,7 @@ declare global {
             emitEffectiveWavetablePosition: (position: number, voiceGeneration?: number) => void;
             emitEffectiveWarpState: (nextState: Parameters<MockPatchConnection["emitEffectiveWarpState"]>[0]) => void;
             emitEffectiveFilterState: (nextState: Parameters<MockPatchConnection["emitEffectiveFilterState"]>[0]) => void;
+            emitEffectiveMsegState: (nextState: Parameters<MockPatchConnection["emitEffectiveMsegState"]>[0]) => void;
             emitFilterSpectrum: (nextState: Parameters<MockPatchConnection["emitFilterSpectrum"]>[0]) => void;
             emitDistortionHistory: (nextState: Parameters<MockPatchConnection["emitDistortionHistory"]>[0]) => void;
             emitDistortionScope: (nextState: Parameters<MockPatchConnection["emitDistortionScope"]>[0]) => void;
@@ -124,6 +131,41 @@ function readWavetableStageDebugState() {
     }
 }
 
+function readMsegPreviewState() {
+    const svg = getDesktopViewRoot()?.querySelector('[data-role="mseg-preview-surface"]');
+
+    if (!(svg instanceof SVGSVGElement)) {
+        return null;
+    }
+
+    const playhead = svg.querySelector('[data-role="mseg-preview-playhead"]');
+    const progressClip = svg.querySelector('[data-role="mseg-preview-progress-clip"]');
+    const [, , width, height] = (svg.getAttribute("viewBox") ?? "0 0 0 0")
+        .split(/\s+/)
+        .map((value) => Number(value) || 0);
+
+    return {
+        width,
+        height,
+        playhead: playhead instanceof SVGLineElement
+            ? {
+                x1: Number(playhead.getAttribute("x1")) || 0,
+                y1: Number(playhead.getAttribute("y1")) || 0,
+                x2: Number(playhead.getAttribute("x2")) || 0,
+                y2: Number(playhead.getAttribute("y2")) || 0,
+            }
+            : null,
+        progressClip: progressClip instanceof SVGRectElement
+            ? {
+                x: Number(progressClip.getAttribute("x")) || 0,
+                y: Number(progressClip.getAttribute("y")) || 0,
+                width: Number(progressClip.getAttribute("width")) || 0,
+                height: Number(progressClip.getAttribute("height")) || 0,
+            }
+            : null,
+    };
+}
+
 function renderFatalError(error: unknown) {
     const message = error instanceof Error
         ? error.stack || error.message
@@ -169,6 +211,7 @@ try {
                 keyboardDebug: readKeyboardDebug(),
                 keyboardNoteCount: readKeyboardAttribute("note-count"),
                 keyboardRootNote: readKeyboardAttribute("root-note"),
+                msegPreviewState: readMsegPreviewState(),
                 stageLabel: viewRoot?.querySelector(".cosimo-stage .truncate")?.textContent?.trim() ?? null,
                 stageDebug: readWavetableStageDebugState(),
                 filterGraphState: readFilterGraphState(),
@@ -191,6 +234,9 @@ try {
         },
         emitEffectiveFilterState: (nextState) => {
             patchConnection.emitEffectiveFilterState(nextState);
+        },
+        emitEffectiveMsegState: (nextState) => {
+            patchConnection.emitEffectiveMsegState(nextState);
         },
         emitFilterSpectrum: (nextState) => {
             patchConnection.emitFilterSpectrum(nextState);

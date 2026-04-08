@@ -30,6 +30,10 @@ async function loadDistortionVisualizationModule() {
     return await loadUIModule(repoRoot, "ui/shared/distortion-visualization.ts");
 }
 
+async function loadMsegMonitorModule() {
+    return await loadUIModule(repoRoot, "ui/shared/mseg-monitor.ts");
+}
+
 test("display position matching ignores float noise after clamping but still rejects a real movement", async () => {
     const { displayPositionsMatch } = await loadRuntimeTableStateModule();
 
@@ -37,6 +41,123 @@ test("display position matching ignores float noise after clamping but still rej
     assert.equal(displayPositionsMatch(-4, 0), true);
     assert.equal(displayPositionsMatch(3, 1), true);
     assert.equal(displayPositionsMatch(0.5, 0.50002), false);
+});
+
+test("effective MSEG state normalization clamps slot positions and keeps the newest voice generation only", async () => {
+    const {
+        normalizeEffectiveMsegStateMessage,
+        selectObservedEffectiveMsegState,
+    } = await loadMsegMonitorModule();
+
+    assert.deepEqual(normalizeEffectiveMsegStateMessage({
+        event: {
+            voiceGeneration: 4.8,
+            hasActive: 1,
+            positions: [-0.2, 0.5, 1.4],
+        },
+    }), {
+        voiceGeneration: 4,
+        hasActive: true,
+        positions: [0, 0.5, 1],
+    });
+    assert.equal(normalizeEffectiveMsegStateMessage({ event: { positions: [0.1, 0.2] } }), null);
+
+    const previousState = {
+        voiceGeneration: 7,
+        hasActive: true,
+        positions: [0.25, 0.5, 0.75],
+    };
+
+    assert.deepEqual(
+        selectObservedEffectiveMsegState(previousState, {
+            event: {
+                voiceGeneration: 6,
+                hasActive: 1,
+                positions: [0.9, 0.9, 0.9],
+            },
+        }),
+        previousState,
+    );
+    assert.deepEqual(
+        selectObservedEffectiveMsegState(previousState, {
+            event: {
+                voiceGeneration: 8,
+                hasActive: 0,
+                positions: [0.1, 0.2, 0.3],
+            },
+        }),
+        {
+            voiceGeneration: 8,
+            hasActive: false,
+            positions: [0.1, 0.2, 0.3],
+        },
+    );
+});
+
+test("MSEG preview playhead fill stays honest for one-shot and full-span loops only", async () => {
+    const { resolveMsegPreviewPlayheadState } = await loadMsegMonitorModule();
+    const observedState = {
+        voiceGeneration: 9,
+        hasActive: true,
+        positions: [0.18, 0.62, 0.91],
+    };
+
+    assert.deepEqual(
+        resolveMsegPreviewPlayheadState({
+            observedState,
+            playback: { loop: null },
+            slotIndex: 1,
+        }),
+        {
+            voiceGeneration: 9,
+            hasActive: true,
+            progress: 0.62,
+            progressFillEnd: 0.62,
+        },
+    );
+    assert.deepEqual(
+        resolveMsegPreviewPlayheadState({
+            observedState,
+            playback: { loop: { startX: 0, endX: 1 } },
+            slotIndex: 2,
+        }),
+        {
+            voiceGeneration: 9,
+            hasActive: true,
+            progress: 0.91,
+            progressFillEnd: 0.91,
+        },
+    );
+    assert.deepEqual(
+        resolveMsegPreviewPlayheadState({
+            observedState,
+            playback: { loop: { startX: 0.25, endX: 0.75 } },
+            slotIndex: 0,
+        }),
+        {
+            voiceGeneration: 9,
+            hasActive: true,
+            progress: 0.18,
+            progressFillEnd: null,
+        },
+    );
+    assert.deepEqual(
+        resolveMsegPreviewPlayheadState({
+            observedState: {
+                voiceGeneration: 10,
+                hasActive: false,
+                positions: [1, 1, 1],
+            },
+            playback: { loop: null },
+            slotIndex: 0,
+        }),
+        {
+            voiceGeneration: 10,
+            hasActive: false,
+            progress: null,
+            progressFillEnd: null,
+        },
+    );
 });
 
 test("display drag mapping follows upward finger motion and clamps at the ends", async () => {

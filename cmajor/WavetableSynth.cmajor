@@ -965,6 +965,7 @@ graph WavetableSynth [[ main ]]
     output event wt::EffectiveWavetablePositionMonitor effectiveWavetablePosition;
     output event wt::EffectiveWarpStateMonitor effectiveWarpState;
     output event wt::EffectiveFilterStateMonitor effectiveFilterState;
+    output event wt::EffectiveMsegStateMonitor effectiveMsegState;
     output stream float32<2> audioOut;
     output filterSpectrumAnalyzer.filterSpectrum;
     output distortionScopeAnalyzer.distortionScope;
@@ -1025,6 +1026,7 @@ graph WavetableSynth [[ main ]]
         sharedEngine.effectiveWavetablePositionOut -> effectiveWavetablePosition;
         sharedEngine.effectiveWarpStateOut -> effectiveWarpState;
         sharedEngine.effectiveFilterStateOut -> effectiveFilterState;
+        sharedEngine.effectiveMsegStateOut -> effectiveMsegState;
         sharedEngine.out -> trim.in;
         trim.out -> analyzerDownmix.in, distortion.in;
         analyzerDownmix.out -> filterSpectrumAnalyzer.in;

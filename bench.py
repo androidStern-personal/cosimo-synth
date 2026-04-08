@@ -1401,6 +1401,153 @@ def render_cmajor_scan_position_monitor_probe(
         )
 
 
+def _build_mseg_progress_probe_wrapper_source(
+    *,
+    trigger_offsets: Sequence[int],
+    note_off_offsets: Sequence[int],
+) -> str:
+    trigger_storage_size = max(len(trigger_offsets), 1)
+    stored_trigger_offsets = [int(offset) for offset in trigger_offsets] or [0]
+    note_off_storage_size = max(len(note_off_offsets), 1)
+    stored_note_off_offsets = [int(offset) for offset in note_off_offsets] or [0]
+    return (
+        "processor MsegProgressProbeControl\n"
+        + "{\n"
+        + "    output event int32 triggerOut;\n"
+        + "    output event int32 noteOffOut;\n"
+        + "    let triggerEventCount = "
+        + _cmajor_int_literal(len(trigger_offsets))
+        + ";\n"
+        + "    let noteOffEventCount = "
+        + _cmajor_int_literal(len(note_off_offsets))
+        + ";\n"
+        + "    int32["
+        + _cmajor_int_literal(trigger_storage_size)
+        + "] triggerEventOffsets = ("
+        + _cmajor_int_array_literal(stored_trigger_offsets)
+        + ");\n"
+        + "    int32["
+        + _cmajor_int_literal(note_off_storage_size)
+        + "] noteOffEventOffsets = ("
+        + _cmajor_int_array_literal(stored_note_off_offsets)
+        + ");\n"
+        + "    int32 frameIndex = 0;\n"
+        + "    int32 nextTriggerEvent = 0;\n"
+        + "    int32 nextNoteOffEvent = 0;\n"
+        + "    void main()\n"
+        + "    {\n"
+        + "        loop\n"
+        + "        {\n"
+        + "            if (nextTriggerEvent < triggerEventCount && frameIndex == triggerEventOffsets.at (nextTriggerEvent))\n"
+        + "            {\n"
+        + "                triggerOut <- 1;\n"
+        + "                nextTriggerEvent += 1;\n"
+        + "            }\n"
+        + "            if (nextNoteOffEvent < noteOffEventCount && frameIndex == noteOffEventOffsets.at (nextNoteOffEvent))\n"
+        + "            {\n"
+        + "                noteOffOut <- 1;\n"
+        + "                nextNoteOffEvent += 1;\n"
+        + "            }\n"
+        + "            advance();\n"
+        + "            frameIndex += 1;\n"
+        + "        }\n"
+        + "    }\n"
+        + "}\n"
+        + "graph MsegProgressProbe [[ main ]]\n"
+        + "{\n"
+        + "    input event float32[wt::msegPaddedSamples] msegBuffer;\n"
+        + "    input event wt::MsegPlaybackConfig msegPlayback;\n"
+        + "    output stream float32 progressOut;\n"
+        + "    node control = MsegProgressProbeControl;\n"
+        + "    node mseg = wt::MsegReader;\n"
+        + "    node progress = wt::ValueToStream;\n"
+        + "    connection\n"
+        + "    {\n"
+        + "        msegBuffer -> mseg.bufferUpload;\n"
+        + "        msegPlayback -> mseg.playbackUpload;\n"
+        + "        control.triggerOut -> mseg.triggerIn;\n"
+        + "        control.noteOffOut -> mseg.noteOffIn;\n"
+        + "        mseg.progressOut -> progress.valueIn;\n"
+        + "        progress.out -> progressOut;\n"
+        + "    }\n"
+        + "}\n"
+    )
+
+
+def render_cmajor_mseg_progress_probe(
+    recipe: Recipe,
+    *,
+    mseg_buffer: Float32Array,
+    playback: MsegPlayback,
+    trigger_offsets: Sequence[int] = (0,),
+    note_off_offsets: Sequence[int] = (),
+) -> Float32Array:
+    if mseg_buffer.shape != (MSEG_PADDED_SAMPLES,):
+        raise ValueError(f"mseg_buffer must have shape {(MSEG_PADDED_SAMPLES,)}")
+    if not CMAJOR_MSEG_SOURCE.exists():
+        raise RuntimeError(
+            f"Checked-in MSEG source is missing: {CMAJOR_MSEG_SOURCE}"
+        )
+
+    previous_trigger_offset = -1
+    for trigger_offset in trigger_offsets:
+        if not 0 <= trigger_offset < recipe.num_samples:
+            raise ValueError("trigger_offsets must stay inside the rendered buffer")
+        if trigger_offset < previous_trigger_offset:
+            raise ValueError("trigger_offsets must be sorted in ascending order")
+        previous_trigger_offset = trigger_offset
+    previous_note_off_offset = -1
+    for note_off_offset in note_off_offsets:
+        if not 0 <= note_off_offset < recipe.num_samples:
+            raise ValueError("note_off_offsets must stay inside the rendered buffer")
+        if note_off_offset < previous_note_off_offset:
+            raise ValueError("note_off_offsets must be sorted in ascending order")
+        previous_note_off_offset = note_off_offset
+
+    with tempfile.TemporaryDirectory(prefix="cmajor_mseg_progress_probe_") as temp_dir_name:
+        temp_dir = Path(temp_dir_name)
+        combined_source_path = temp_dir / "MsegProgressProbe.cmajor"
+        patch_path = temp_dir / "MsegProgressProbe.cmajorpatch"
+
+        combined_source_path.write_text(
+            CMAJOR_MSEG_SOURCE.read_text(encoding="utf-8")
+            + "\n"
+            + _build_mseg_progress_probe_wrapper_source(
+                trigger_offsets=trigger_offsets,
+                note_off_offsets=note_off_offsets,
+            ),
+            encoding="utf-8",
+        )
+        patch_path.write_text(
+            json.dumps(
+                {
+                    "CmajorVersion": 1,
+                    "ID": "dev.cosimo.mseg-progress-probe",
+                    "version": "1.0",
+                    "name": "MSEG Progress Probe",
+                    "description": "Collects the normalized MSEG progress signal",
+                    "source": [combined_source_path.name],
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        playback_event = _build_mseg_playback_event(playback)
+
+        return _render_cmajor_patch_via_generated_javascript(
+            patch_path,
+            sample_rate=recipe.sample_rate,
+            num_samples=recipe.num_samples,
+            output_endpoint_id="progressOut",
+            setup_js=(
+                f"patch.sendInputEvent_msegBuffer({json.dumps(mseg_buffer.tolist())});\n"
+                f"patch.sendInputEvent_msegPlayback({json.dumps(playback_event)});"
+            ),
+        )
+
+
 def _sample_positions() -> Float64Array:
     return np.arange(SAMPLES_PER_FRAME, dtype=np.float64) / SAMPLES_PER_FRAME
 

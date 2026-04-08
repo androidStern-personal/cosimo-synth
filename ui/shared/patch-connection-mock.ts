@@ -21,6 +21,7 @@ const runtimeStateEndpointID = "runtimeState";
 const effectiveWavetablePositionEndpointID = "effectiveWavetablePosition";
 const effectiveWarpStateEndpointID = "effectiveWarpState";
 const effectiveFilterStateEndpointID = "effectiveFilterState";
+const effectiveMsegStateEndpointID = "effectiveMsegState";
 const filterSpectrumEndpointID = "filterSpectrum";
 const distortionHistoryEndpointID = "distortionHistory";
 const distortionScopeEndpointID = "distortionScope";
@@ -632,6 +633,24 @@ export class MockPatchConnection implements PatchConnectionLike {
             mode,
             cutoffHz,
             q,
+        });
+    }
+
+    emitEffectiveMsegState(
+        {
+            voiceGeneration = 1,
+            hasActive = true,
+            positions = [0, 0, 0],
+        }: {
+            voiceGeneration?: number;
+            hasActive?: boolean;
+            positions?: number[];
+        } = {},
+    ) {
+        this.emitEndpoint(effectiveMsegStateEndpointID, {
+            voiceGeneration,
+            hasActive: hasActive ? 1 : 0,
+            positions,
         });
     }
 

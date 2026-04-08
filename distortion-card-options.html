@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Distortion Card — Design Options</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+    background: #0a0c14;
+    color: #e2e8f0;
+    padding: 40px 32px;
+    display: grid;
+    gap: 64px;
+  }
+  h1 {
+    font-size: 14px; font-weight: 600; letter-spacing: 0.22em;
+    text-transform: uppercase; color: rgba(248, 113, 113, 0.7);
+    margin-bottom: 4px;
+  }
+  h2 {
+    font-size: 11px; font-weight: 500; letter-spacing: 0.14em;
+    text-transform: uppercase; color: rgba(226, 232, 240, 0.4);
+    margin-bottom: 20px;
+  }
+
+  .card {
+    border-radius: 14px;
+    overflow: hidden;
+    background:
+      radial-gradient(circle at top left, rgba(248, 113, 113, 0.10), transparent 34%),
+      linear-gradient(180deg, rgba(9, 8, 15, 0.98), rgba(2, 4, 11, 1));
+  }
+
+  /* num-box: same pattern as MSEG rate control */
+  .num-box {
+    font-family: ui-monospace, monospace;
+    font-size: 9px; letter-spacing: 0.06em;
+    color: rgba(226, 232, 240, 0.7);
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 4px;
+    padding: 2px 5px;
+    cursor: ew-resize; user-select: none; text-align: center;
+  }
+  .param-label {
+    font-size: 9px; font-weight: 600; letter-spacing: 0.1em;
+    text-transform: uppercase; color: rgba(148,163,184,0.5);
+  }
+  .sep-v {
+    width: 1px; height: 12px; background: rgba(255,255,255,0.06);
+    flex-shrink: 0; margin: 0 2px;
+  }
+  .peak-readout {
+    font-family: ui-monospace, monospace;
+    font-size: 9px; letter-spacing: 0.06em;
+  }
+  .peak-in    { color: rgba(226,232,240,0.35); }
+  .peak-in  b { color: rgba(226,232,240,0.65); font-weight: 400; }
+  .peak-out   { color: rgba(103,232,249,0.35); }
+  .peak-out b { color: rgba(103,232,249,0.65); font-weight: 400; }
+  .peak-rem   { color: rgba(248,113,113,0.35); }
+  .peak-rem b { color: rgba(248,113,113,0.65); font-weight: 400; }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- OPTION A: Top-bar controls, both plots stacked vertically below   -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<div>
+  <h1>Option A — Stacked Plots, Top Bar</h1>
+  <h2>Controls + peaks in top bar. Transfer &amp; history fill remaining height as one SVG.</h2>
+
+  <div class="card" style="width: 780px; display: flex; flex-direction: column;">
+    <!-- Top bar -->
+    <div style="display: flex; align-items: center; gap: 8px; padding: 6px 10px; flex-shrink: 0;">
+      <span style="font-size: 10px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: rgba(248,113,113,0.55);">Dist</span>
+      <div class="sep-v"></div>
+
+      <div style="display: flex; align-items: center; gap: 4px;">
+        <span class="param-label">Drv</span>
+        <span class="num-box">18.5 dB</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 4px;">
+        <span class="param-label">Kne</span>
+        <span class="num-box">50%</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 4px;">
+        <span class="param-label">Mix</span>
+        <span class="num-box">100%</span>
+      </div>
+      <div class="sep-v"></div>
+      <div style="display: flex; align-items: center; gap: 4px;">
+        <span class="param-label">HP</span>
+        <span class="num-box">20 Hz</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 4px;">
+        <span class="param-label">LP</span>
+        <span class="num-box">20.0 kHz</span>
+      </div>
+
+      <div style="flex: 1;"></div>
+
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <span class="peak-readout peak-in">In <b>0.842</b></span>
+        <span class="peak-readout peak-out">Out <b>0.761</b></span>
+        <span class="peak-readout peak-rem">Rem <b>0.081</b></span>
+      </div>
+    </div>
+
+    <!-- Combined SVG: transfer (top 60%) + history (bottom 40%) -->
+    <div style="flex: 1; min-height: 0;">
+      <svg viewBox="0 0 640 420" style="display: block; width: 100%; height: auto;" preserveAspectRatio="xMidYMid meet">
+        <rect width="640" height="420" fill="#020611"/>
+
+        <!-- Transfer plot area -->
+        <rect x="28" y="16" width="584" height="230" rx="8" fill="rgba(255,255,255,0.02)" stroke="rgba(255,255,255,0.05)"/>
+        <!-- Grid lines -->
+        <line x1="28" x2="612" y1="73" y2="73" stroke="rgba(248,113,113,0.18)" stroke-dasharray="6 6"/>
+        <line x1="28" x2="612" y1="131" y2="131" stroke="rgba(255,255,255,0.10)"/>
+        <line x1="28" x2="612" y1="189" y2="189" stroke="rgba(248,113,113,0.18)" stroke-dasharray="6 6"/>
+        <line x1="320" y1="16" x2="320" y2="246" stroke="rgba(255,255,255,0.10)"/>
+        <line x1="174" y1="16" x2="174" y2="246" stroke="rgba(248,113,113,0.14)" stroke-dasharray="6 6"/>
+        <line x1="466" y1="16" x2="466" y2="246" stroke="rgba(248,113,113,0.14)" stroke-dasharray="6 6"/>
+        <!-- Transfer curve (soft clip shape) -->
+        <path d="M 60 210 C 120 210, 160 200, 200 180 C 240 160, 270 145, 300 132 C 340 115, 380 95, 420 80 C 450 68, 480 55, 520 48 C 555 42, 580 40, 600 38" fill="none" stroke="rgba(103,232,249,0.92)" stroke-width="2.5" stroke-linecap="round"/>
+        <!-- Occupancy ribbon (signal density) -->
+        <path d="M 200 174 C 240 155, 270 140, 300 127 L 420 75 L 420 85 L 300 137 C 270 150, 240 165, 200 186 Z" fill="rgba(255,255,255,0.08)" opacity="0.5"/>
+        <!-- Clipped ribbon hint -->
+        <path d="M 460 58 L 520 44 L 520 52 L 460 65 Z" fill="rgba(251,113,133,0.25)" opacity="0.6"/>
+        <!-- Axis labels -->
+        <text x="36" y="70" fill="rgba(248,113,113,0.6)" font-size="10" font-family="ui-monospace, monospace">+1</text>
+        <text x="36" y="128" fill="rgba(226,232,240,0.4)" font-size="10" font-family="ui-monospace, monospace">0</text>
+        <text x="36" y="186" fill="rgba(248,113,113,0.6)" font-size="10" font-family="ui-monospace, monospace">-1</text>
+        <text x="577" y="32" fill="rgba(226,232,240,0.35)" font-size="9" font-family="ui-monospace, monospace" text-anchor="end">±2.00</text>
+
+        <!-- History plot area -->
+        <rect x="28" y="262" width="584" height="142" rx="8" fill="rgba(255,255,255,0.02)" stroke="rgba(255,255,255,0.05)"/>
+        <!-- Grid lines -->
+        <line x1="28" x2="612" y1="298" y2="298" stroke="rgba(248,113,113,0.18)" stroke-dasharray="6 6"/>
+        <line x1="28" x2="612" y1="333" y2="333" stroke="rgba(255,255,255,0.10)"/>
+        <line x1="28" x2="612" y1="368" y2="368" stroke="rgba(248,113,113,0.18)" stroke-dasharray="6 6"/>
+        <!-- History bars (output = white, removed = pink extending beyond) -->
+        <g>
+          <rect x="42" y="322" width="14" height="22" rx="1.5" fill="rgba(255,255,255,0.85)"/>
+          <rect x="42" y="314" width="14" height="8" rx="1.5" fill="rgba(251,113,133,0.7)"/>
+          <rect x="42" y="344" width="14" height="8" rx="1.5" fill="rgba(251,113,133,0.7)"/>
+
+          <rect x="60" y="318" width="14" height="30" rx="1.5" fill="rgba(255,255,255,0.85)"/>
+          <rect x="60" y="308" width="14" height="10" rx="1.5" fill="rgba(251,113,133,0.7)"/>
+          <rect x="60" y="348" width="14" height="10" rx="1.5" fill="rgba(251,113,133,0.7)"/>
+
+          <rect x="78" y="324" width="14" height="18" rx="1.5" fill="rgba(255,255,255,0.85)"/>
+
+          <rect x="96" y="315" width="14" height="36" rx="1.5" fill="rgba(255,255,255,0.85)"/>
+          <rect x="96" y="304" width="14" height="11" rx="1.5" fill="rgba(251,113,133,0.7)"/>
+          <rect x="96" y="351" width="14" height="11" rx="1.5" fill="rgba(251,113,133,0.7)"/>
+
+          <rect x="114" y="320" width="14" height="26" rx="1.5" fill="rgba(255,255,255,0.85)"/>
+          <rect x="132" y="326" width="14" height="14" rx="1.5" fill="rgba(255,255,255,0.85)"/>
+          <rect x="150" y="319" width="14" height="28" rx="1.5" fill="rgba(255,255,255,0.85)"/>
+
+          <rect x="168" y="312" width="14" height="42" rx="1.5" fill="rgba(255,255,255,0.85)"/>
+          <rect x="168" y="300" width="14" height="12" rx="1.5" fill="rgba(251,113,133,0.7)"/>
+          <rect x="168" y="354" width="14" height="12" rx="1.5" fill="rgba(251,113,133,0.7)"/>
+
+          <rect x="186" y="316" width="14" height="34" rx="1.5" fill="rgba(255,255,255,0.85)"/>
+          <rect x="186" y="308" width="14" height="8" rx="1.5" fill="rgba(251,113,133,0.7)"/>
+          <rect x="186" y="350" width="14" height="8" rx="1.5" fill="rgba(251,113,133,0.7)"/>
+
+          <rect x="204" y="322" width="14" height="22" rx="1.5" fill="rgba(255,255,255,0.85)"/>
+          <rect x="222" y="325" width="14" height="16" rx="1.5" fill="rgba(255,255,255,0.85)"/>
+          <rect x="240" y="328" width="14" height="10" rx="1.5" fill="rgba(255,255,255,0.85)"/>
+          <rect x="258" y="327" width="14" height="12" rx="1.5" fill="rgba(255,255,255,0.85)"/>
+          <rect x="276" y="324" width="14" height="18" rx="1.5" fill="rgba(255,255,255,0.85)"/>
+
+          <rect x="294" y="318" width="14" height="30" rx="1.5" fill="rgba(255,255,255,0.85)"/>
+          <rect x="294" y="310" width="14" height="8" rx="1.5" fill="rgba(251,113,133,0.7)"/>
+          <rect x="294" y="348" width="14" height="8" rx="1.5" fill="rgba(251,113,133,0.7)"/>
+
+          <rect x="312" y="322" width="14" height="22" rx="1.5" fill="rgba(255,255,255,0.85)"/>
+          <rect x="330" y="320" width="14" height="26" rx="1.5" fill="rgba(255,255,255,0.85)"/>
+          <rect x="348" y="326" width="14" height="14" rx="1.5" fill="rgba(255,255,255,0.85)"/>
+          <rect x="366" y="328" width="14" height="10" rx="1.5" fill="rgba(255,255,255,0.85)"/>
+        </g>
+        <!-- History axis labels -->
+        <text x="36" y="296" fill="rgba(248,113,113,0.6)" font-size="10" font-family="ui-monospace, monospace">+1</text>
+        <text x="36" y="330" fill="rgba(226,232,240,0.4)" font-size="10" font-family="ui-monospace, monospace">0</text>
+        <text x="36" y="366" fill="rgba(248,113,113,0.6)" font-size="10" font-family="ui-monospace, monospace">-1</text>
+        <text x="577" y="278" fill="rgba(226,232,240,0.35)" font-size="9" font-family="ui-monospace, monospace" text-anchor="end">4.0s overview</text>
+      </svg>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- OPTION B: Side-by-side plots, controls in top bar                  -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<div>
+  <h1>Option B — Side-by-Side Plots</h1>
+  <h2>Transfer curve on left, history on right. Controls in top bar. More horizontal, less vertical.</h2>
+
+  <div class="card" style="width: 780px; display: flex; flex-direction: column;">
+    <!-- Top bar -->
+    <div style="display: flex; align-items: center; gap: 8px; padding: 6px 10px; flex-shrink: 0;">
+      <span style="font-size: 10px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: rgba(248,113,113,0.55);">Dist</span>
+      <div class="sep-v"></div>
+      <div style="display: flex; align-items: center; gap: 4px;">
+        <span class="param-label">Drv</span><span class="num-box">18.5 dB</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 4px;">
+        <span class="param-label">Kne</span><span class="num-box">50%</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 4px;">
+        <span class="param-label">Mix</span><span class="num-box">100%</span>
+      </div>
+      <div class="sep-v"></div>
+      <div style="display: flex; align-items: center; gap: 4px;">
+        <span class="param-label">HP</span><span class="num-box">20 Hz</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 4px;">
+        <span class="param-label">LP</span><span class="num-box">20.0 kHz</span>
+      </div>
+      <div style="flex: 1;"></div>
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <span class="peak-readout peak-in">In <b>0.842</b></span>
+        <span class="peak-readout peak-out">Out <b>0.761</b></span>
+        <span class="peak-readout peak-rem">Rem <b>0.081</b></span>
+      </div>
+    </div>
+
+    <!-- Side-by-side plots -->
+    <div style="display: flex; min-height: 0;">
+      <!-- Transfer curve (left, ~55%) -->
+      <div style="flex: 1.2; min-width: 0;">
+        <svg viewBox="0 0 340 260" style="display: block; width: 100%; height: auto;">
+          <rect width="340" height="260" fill="#020611"/>
+          <rect x="24" y="12" width="300" height="236" rx="6" fill="rgba(255,255,255,0.02)" stroke="rgba(255,255,255,0.05)"/>
+          <!-- Grid -->
+          <line x1="24" x2="324" y1="71" y2="71" stroke="rgba(248,113,113,0.18)" stroke-dasharray="5 5"/>
+          <line x1="24" x2="324" y1="130" y2="130" stroke="rgba(255,255,255,0.10)"/>
+          <line x1="24" x2="324" y1="189" y2="189" stroke="rgba(248,113,113,0.18)" stroke-dasharray="5 5"/>
+          <line x1="174" y1="12" x2="174" y2="248" stroke="rgba(255,255,255,0.10)"/>
+          <line x1="99" y1="12" x2="99" y2="248" stroke="rgba(248,113,113,0.14)" stroke-dasharray="5 5"/>
+          <line x1="249" y1="12" x2="249" y2="248" stroke="rgba(248,113,113,0.14)" stroke-dasharray="5 5"/>
+          <!-- Transfer curve -->
+          <path d="M 40 210 C 80 205, 100 195, 130 175 C 160 155, 175 140, 190 128 C 210 112, 230 95, 250 80 C 270 66, 285 55, 305 46" fill="none" stroke="rgba(103,232,249,0.92)" stroke-width="2.2" stroke-linecap="round"/>
+          <!-- Occupancy -->
+          <path d="M 130 170 C 160 150, 175 135, 190 123 L 250 75 L 250 85 L 190 133 C 175 145, 160 160, 130 180 Z" fill="rgba(255,255,255,0.08)" opacity="0.5"/>
+          <path d="M 270 60 L 305 42 L 305 50 L 270 68 Z" fill="rgba(251,113,133,0.25)" opacity="0.6"/>
+          <!-- Labels -->
+          <text x="30" y="68" fill="rgba(248,113,113,0.55)" font-size="9" font-family="ui-monospace, monospace">+1</text>
+          <text x="30" y="127" fill="rgba(226,232,240,0.35)" font-size="9" font-family="ui-monospace, monospace">0</text>
+          <text x="30" y="186" fill="rgba(248,113,113,0.55)" font-size="9" font-family="ui-monospace, monospace">-1</text>
+          <text x="47" y="24" fill="rgba(226,232,240,0.30)" font-size="8" font-family="ui-monospace, monospace" letter-spacing="0.15em">TRANSFER</text>
+        </svg>
+      </div>
+
+      <!-- 1px separator -->
+      <div style="width: 1px; background: rgba(255,255,255,0.04); flex-shrink: 0;"></div>
+
+      <!-- History (right, ~45%) -->
+      <div style="flex: 1; min-width: 0;">
+        <svg viewBox="0 0 300 260" style="display: block; width: 100%; height: auto;">
+          <rect width="300" height="260" fill="#020611"/>
+          <rect x="20" y="12" width="264" height="236" rx="6" fill="rgba(255,255,255,0.02)" stroke="rgba(255,255,255,0.05)"/>
+          <!-- Grid -->
+          <line x1="20" x2="284" y1="71" y2="71" stroke="rgba(248,113,113,0.18)" stroke-dasharray="5 5"/>
+          <line x1="20" x2="284" y1="130" y2="130" stroke="rgba(255,255,255,0.10)"/>
+          <line x1="20" x2="284" y1="189" y2="189" stroke="rgba(248,113,113,0.18)" stroke-dasharray="5 5"/>
+          <!-- Bars -->
+          <g>
+            <rect x="30" y="118" width="10" height="24" rx="1.5" fill="rgba(255,255,255,0.85)"/>
+            <rect x="30" y="110" width="10" height="8" rx="1.5" fill="rgba(251,113,133,0.7)"/>
+            <rect x="30" y="142" width="10" height="8" rx="1.5" fill="rgba(251,113,133,0.7)"/>
+
+            <rect x="44" y="114" width="10" height="32" rx="1.5" fill="rgba(255,255,255,0.85)"/>
+            <rect x="44" y="104" width="10" height="10" rx="1.5" fill="rgba(251,113,133,0.7)"/>
+            <rect x="44" y="146" width="10" height="10" rx="1.5" fill="rgba(251,113,133,0.7)"/>
+
+            <rect x="58" y="120" width="10" height="20" rx="1.5" fill="rgba(255,255,255,0.85)"/>
+
+            <rect x="72" y="110" width="10" height="40" rx="1.5" fill="rgba(255,255,255,0.85)"/>
+            <rect x="72" y="100" width="10" height="10" rx="1.5" fill="rgba(251,113,133,0.7)"/>
+            <rect x="72" y="150" width="10" height="10" rx="1.5" fill="rgba(251,113,133,0.7)"/>
+
+            <rect x="86" y="116" width="10" height="28" rx="1.5" fill="rgba(255,255,255,0.85)"/>
+            <rect x="100" y="122" width="10" height="16" rx="1.5" fill="rgba(255,255,255,0.85)"/>
+            <rect x="114" y="115" width="10" height="30" rx="1.5" fill="rgba(255,255,255,0.85)"/>
+
+            <rect x="128" y="106" width="10" height="48" rx="1.5" fill="rgba(255,255,255,0.85)"/>
+            <rect x="128" y="96" width="10" height="10" rx="1.5" fill="rgba(251,113,133,0.7)"/>
+            <rect x="128" y="154" width="10" height="10" rx="1.5" fill="rgba(251,113,133,0.7)"/>
+
+            <rect x="142" y="112" width="10" height="36" rx="1.5" fill="rgba(255,255,255,0.85)"/>
+            <rect x="142" y="104" width="10" height="8" rx="1.5" fill="rgba(251,113,133,0.7)"/>
+            <rect x="142" y="148" width="10" height="8" rx="1.5" fill="rgba(251,113,133,0.7)"/>
+
+            <rect x="156" y="118" width="10" height="24" rx="1.5" fill="rgba(255,255,255,0.85)"/>
+            <rect x="170" y="123" width="10" height="14" rx="1.5" fill="rgba(255,255,255,0.85)"/>
+            <rect x="184" y="126" width="10" height="8" rx="1.5" fill="rgba(255,255,255,0.85)"/>
+            <rect x="198" y="124" width="10" height="12" rx="1.5" fill="rgba(255,255,255,0.85)"/>
+            <rect x="212" y="120" width="10" height="20" rx="1.5" fill="rgba(255,255,255,0.85)"/>
+            <rect x="226" y="122" width="10" height="16" rx="1.5" fill="rgba(255,255,255,0.85)"/>
+            <rect x="240" y="125" width="10" height="10" rx="1.5" fill="rgba(255,255,255,0.85)"/>
+            <rect x="254" y="127" width="10" height="6" rx="1.5" fill="rgba(255,255,255,0.85)"/>
+          </g>
+          <!-- Labels -->
+          <text x="26" y="68" fill="rgba(248,113,113,0.55)" font-size="9" font-family="ui-monospace, monospace">+1</text>
+          <text x="26" y="127" fill="rgba(226,232,240,0.35)" font-size="9" font-family="ui-monospace, monospace">0</text>
+          <text x="26" y="186" fill="rgba(248,113,113,0.55)" font-size="9" font-family="ui-monospace, monospace">-1</text>
+          <text x="40" y="24" fill="rgba(226,232,240,0.30)" font-size="8" font-family="ui-monospace, monospace" letter-spacing="0.15em">HISTORY</text>
+          <text x="260" y="24" fill="rgba(226,232,240,0.25)" font-size="8" font-family="ui-monospace, monospace" text-anchor="end">4.0s</text>
+        </svg>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- OPTION C: Transfer dominates, history as thin strip at bottom      -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<div>
+  <h1>Option C — Transfer Focus, History Strip</h1>
+  <h2>Transfer curve gets most space. History compressed to a narrow strip at bottom. Controls in top bar.</h2>
+
+  <div class="card" style="width: 780px; display: flex; flex-direction: column;">
+    <!-- Top bar -->
+    <div style="display: flex; align-items: center; gap: 8px; padding: 6px 10px; flex-shrink: 0;">
+      <span style="font-size: 10px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: rgba(248,113,113,0.55);">Dist</span>
+      <div class="sep-v"></div>
+      <div style="display: flex; align-items: center; gap: 4px;">
+        <span class="param-label">Drv</span><span class="num-box">18.5 dB</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 4px;">
+        <span class="param-label">Kne</span><span class="num-box">50%</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 4px;">
+        <span class="param-label">Mix</span><span class="num-box">100%</span>
+      </div>
+      <div class="sep-v"></div>
+      <div style="display: flex; align-items: center; gap: 4px;">
+        <span class="param-label">HP</span><span class="num-box">20 Hz</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 4px;">
+        <span class="param-label">LP</span><span class="num-box">20.0 kHz</span>
+      </div>
+      <div style="flex: 1;"></div>
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <span class="peak-readout peak-in">In <b>0.842</b></span>
+        <span class="peak-readout peak-out">Out <b>0.761</b></span>
+        <span class="peak-readout peak-rem">Rem <b>0.081</b></span>
+      </div>
+    </div>
+
+    <!-- Transfer curve (main area) -->
+    <div style="flex: 1; min-height: 0;">
+      <svg viewBox="0 0 640 280" style="display: block; width: 100%; height: auto;">
+        <rect width="640" height="280" fill="#020611"/>
+        <rect x="28" y="12" width="584" height="256" rx="6" fill="rgba(255,255,255,0.02)" stroke="rgba(255,255,255,0.05)"/>
+        <!-- Grid -->
+        <line x1="28" x2="612" y1="76" y2="76" stroke="rgba(248,113,113,0.18)" stroke-dasharray="6 6"/>
+        <line x1="28" x2="612" y1="140" y2="140" stroke="rgba(255,255,255,0.10)"/>
+        <line x1="28" x2="612" y1="204" y2="204" stroke="rgba(248,113,113,0.18)" stroke-dasharray="6 6"/>
+        <line x1="320" y1="12" x2="320" y2="268" stroke="rgba(255,255,255,0.10)"/>
+        <line x1="174" y1="12" x2="174" y2="268" stroke="rgba(248,113,113,0.14)" stroke-dasharray="6 6"/>
+        <line x1="466" y1="12" x2="466" y2="268" stroke="rgba(248,113,113,0.14)" stroke-dasharray="6 6"/>
+        <!-- Transfer curve -->
+        <path d="M 55 228 C 110 225, 150 215, 200 192 C 250 170, 280 150, 310 138 C 350 120, 390 100, 440 82 C 480 66, 520 52, 570 42" fill="none" stroke="rgba(103,232,249,0.92)" stroke-width="2.5" stroke-linecap="round"/>
+        <!-- Occupancy + clipped -->
+        <path d="M 200 186 C 250 164, 280 144, 310 132 L 440 76 L 440 88 L 310 144 C 280 156, 250 176, 200 198 Z" fill="rgba(255,255,255,0.08)" opacity="0.5"/>
+        <path d="M 490 58 L 570 38 L 570 48 L 490 66 Z" fill="rgba(251,113,133,0.25)" opacity="0.6"/>
+        <!-- Labels -->
+        <text x="36" y="73" fill="rgba(248,113,113,0.55)" font-size="10" font-family="ui-monospace, monospace">+1</text>
+        <text x="36" y="137" fill="rgba(226,232,240,0.35)" font-size="10" font-family="ui-monospace, monospace">0</text>
+        <text x="36" y="201" fill="rgba(248,113,113,0.55)" font-size="10" font-family="ui-monospace, monospace">-1</text>
+        <text x="580" y="28" fill="rgba(226,232,240,0.30)" font-size="9" font-family="ui-monospace, monospace" text-anchor="end">±2.00</text>
+      </svg>
+    </div>
+
+    <!-- History as thin strip -->
+    <div style="flex-shrink: 0; border-top: 1px solid rgba(255,255,255,0.04);">
+      <svg viewBox="0 0 640 70" style="display: block; width: 100%; height: auto;">
+        <rect width="640" height="70" fill="#020611"/>
+        <!-- Zero line -->
+        <line x1="28" x2="612" y1="35" y2="35" stroke="rgba(255,255,255,0.08)"/>
+        <line x1="28" x2="612" y1="14" y2="14" stroke="rgba(248,113,113,0.12)" stroke-dasharray="4 4"/>
+        <line x1="28" x2="612" y1="56" y2="56" stroke="rgba(248,113,113,0.12)" stroke-dasharray="4 4"/>
+        <!-- Bars (compressed height) -->
+        <g>
+          <rect x="36" y="28" width="16" height="14" rx="1" fill="rgba(255,255,255,0.82)"/>
+          <rect x="36" y="24" width="16" height="4" rx="1" fill="rgba(251,113,133,0.65)"/>
+          <rect x="36" y="42" width="16" height="4" rx="1" fill="rgba(251,113,133,0.65)"/>
+
+          <rect x="56" y="25" width="16" height="20" rx="1" fill="rgba(255,255,255,0.82)"/>
+          <rect x="56" y="20" width="16" height="5" rx="1" fill="rgba(251,113,133,0.65)"/>
+          <rect x="56" y="45" width="16" height="5" rx="1" fill="rgba(251,113,133,0.65)"/>
+
+          <rect x="76" y="29" width="16" height="12" rx="1" fill="rgba(255,255,255,0.82)"/>
+          <rect x="96" y="23" width="16" height="24" rx="1" fill="rgba(255,255,255,0.82)"/>
+          <rect x="96" y="18" width="16" height="5" rx="1" fill="rgba(251,113,133,0.65)"/>
+          <rect x="96" y="47" width="16" height="5" rx="1" fill="rgba(251,113,133,0.65)"/>
+
+          <rect x="116" y="27" width="16" height="16" rx="1" fill="rgba(255,255,255,0.82)"/>
+          <rect x="136" y="30" width="16" height="10" rx="1" fill="rgba(255,255,255,0.82)"/>
+          <rect x="156" y="26" width="16" height="18" rx="1" fill="rgba(255,255,255,0.82)"/>
+          <rect x="176" y="22" width="16" height="26" rx="1" fill="rgba(255,255,255,0.82)"/>
+          <rect x="176" y="17" width="16" height="5" rx="1" fill="rgba(251,113,133,0.65)"/>
+          <rect x="176" y="48" width="16" height="5" rx="1" fill="rgba(251,113,133,0.65)"/>
+
+          <rect x="196" y="25" width="16" height="20" rx="1" fill="rgba(255,255,255,0.82)"/>
+          <rect x="196" y="20" width="16" height="5" rx="1" fill="rgba(251,113,133,0.65)"/>
+          <rect x="196" y="45" width="16" height="5" rx="1" fill="rgba(251,113,133,0.65)"/>
+
+          <rect x="216" y="28" width="16" height="14" rx="1" fill="rgba(255,255,255,0.82)"/>
+          <rect x="236" y="30" width="16" height="10" rx="1" fill="rgba(255,255,255,0.82)"/>
+          <rect x="256" y="32" width="16" height="6" rx="1" fill="rgba(255,255,255,0.82)"/>
+          <rect x="276" y="31" width="16" height="8" rx="1" fill="rgba(255,255,255,0.82)"/>
+          <rect x="296" y="29" width="16" height="12" rx="1" fill="rgba(255,255,255,0.82)"/>
+          <rect x="316" y="30" width="16" height="10" rx="1" fill="rgba(255,255,255,0.82)"/>
+          <rect x="336" y="32" width="16" height="6" rx="1" fill="rgba(255,255,255,0.82)"/>
+          <rect x="356" y="33" width="16" height="4" rx="1" fill="rgba(255,255,255,0.82)"/>
+        </g>
+        <text x="595" y="10" fill="rgba(226,232,240,0.25)" font-size="8" font-family="ui-monospace, monospace" text-anchor="end">4.0s</text>
+      </svg>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- OPTION D: Keep combined SVG as-is, just strip all chrome           -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<div>
+  <h1>Option D — Existing SVG, Zero Chrome</h1>
+  <h2>Keep the combined transfer+history SVG untouched. Just strip borders, padding, redundant text. Top bar for controls.</h2>
+
+  <div class="card" style="width: 780px; display: flex; flex-direction: column;">
+    <!-- Top bar -->
+    <div style="display: flex; align-items: center; gap: 8px; padding: 6px 10px; flex-shrink: 0;">
+      <span style="font-size: 10px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: rgba(248,113,113,0.55);">Dist</span>
+      <div class="sep-v"></div>
+      <div style="display: flex; align-items: center; gap: 4px;">
+        <span class="param-label">Drv</span><span class="num-box">18.5 dB</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 4px;">
+        <span class="param-label">Kne</span><span class="num-box">50%</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 4px;">
+        <span class="param-label">Mix</span><span class="num-box">100%</span>
+      </div>
+      <div class="sep-v"></div>
+      <div style="display: flex; align-items: center; gap: 4px;">
+        <span class="param-label">HP</span><span class="num-box">20 Hz</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 4px;">
+        <span class="param-label">LP</span><span class="num-box">20.0 kHz</span>
+      </div>
+      <div style="flex: 1;"></div>
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <span class="peak-readout peak-in">In <b>0.842</b></span>
+        <span class="peak-readout peak-out">Out <b>0.761</b></span>
+        <span class="peak-readout peak-rem">Rem <b>0.081</b></span>
+      </div>
+    </div>
+
+    <!-- The actual DistortionVisualizer SVG (640x532 viewBox), rendered full-bleed -->
+    <!-- This is exactly what the existing component renders, minus the outer containers -->
+    <div style="flex: 1; min-height: 0;">
+      <svg viewBox="0 0 640 532" style="display: block; width: 100%; height: auto;">
+        <rect width="640" height="532" fill="#020611"/>
+
+        <!-- Transfer plot background -->
+        <rect x="34" y="30" width="572" height="248" rx="22" fill="rgba(255,255,255,0.025)" stroke="rgba(255,255,255,0.06)"/>
+        <!-- History plot background -->
+        <rect x="34" y="322" width="572" height="164" rx="22" fill="rgba(255,255,255,0.025)" stroke="rgba(255,255,255,0.06)"/>
+
+        <!-- Transfer grid -->
+        <line x1="34" x2="606" y1="92" y2="92" stroke="rgba(248,113,113,0.22)" stroke-dasharray="6 6"/>
+        <line x1="34" x2="606" y1="154" y2="154" stroke="rgba(255,255,255,0.12)" stroke-width="1.2"/>
+        <line x1="34" x2="606" y1="216" y2="216" stroke="rgba(248,113,113,0.22)" stroke-dasharray="6 6"/>
+        <line x1="320" y1="30" x2="320" y2="278" stroke="rgba(255,255,255,0.12)" stroke-width="1.2"/>
+        <line x1="177" y1="30" x2="177" y2="278" stroke="rgba(248,113,113,0.18)" stroke-dasharray="6 6"/>
+        <line x1="463" y1="30" x2="463" y2="278" stroke="rgba(248,113,113,0.18)" stroke-dasharray="6 6"/>
+
+        <!-- Transfer curve -->
+        <path d="M 70 240 C 130 235, 170 220, 210 195 C 250 170, 280 155, 310 140 C 350 120, 390 100, 440 80 C 480 62, 530 48, 580 38" fill="none" stroke="rgba(103,232,249,0.98)" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+        <!-- Occupancy ribbon -->
+        <path d="M 210 188 C 250 163, 280 148, 310 133 L 440 73 L 440 87 L 310 147 C 280 162, 250 177, 210 202 Z" fill="rgba(255,255,255,0.08)" opacity="0.45" filter="url(#blur1)"/>
+        <path d="M 210 190 C 250 165, 280 150, 310 135 L 440 75 L 440 85 L 310 145 C 280 160, 250 175, 210 200 Z" fill="rgba(255,255,255,0.26)" opacity="0.4"/>
+        <!-- Clipped ribbon -->
+        <path d="M 500 52 L 580 34 L 580 44 L 500 60 Z" fill="rgba(251,113,133,0.36)" opacity="0.6"/>
+        <!-- Transfer labels -->
+        <text x="48" y="52" fill="rgba(226,232,240,0.58)" font-size="11" letter-spacing="0.2em" font-family="ui-sans-serif, system-ui, sans-serif">CURVE DOMAIN</text>
+        <text x="42" y="88" fill="rgba(248,113,113,0.74)" font-size="11" font-family="ui-monospace, monospace">+1</text>
+        <text x="42" y="150" fill="rgba(226,232,240,0.54)" font-size="11" font-family="ui-monospace, monospace">0</text>
+        <text x="42" y="212" fill="rgba(248,113,113,0.74)" font-size="11" font-family="ui-monospace, monospace">-1</text>
+        <text x="596" y="52" fill="rgba(226,232,240,0.54)" font-size="11" font-family="ui-monospace, monospace" text-anchor="end">fixed ±2.00</text>
+
+        <!-- History grid -->
+        <line x1="34" x2="606" y1="367" y2="367" stroke="rgba(248,113,113,0.22)" stroke-dasharray="6 6"/>
+        <line x1="34" x2="606" y1="404" y2="404" stroke="rgba(255,255,255,0.12)" stroke-width="1.2"/>
+        <line x1="34" x2="606" y1="441" y2="441" stroke="rgba(248,113,113,0.22)" stroke-dasharray="6 6"/>
+
+        <!-- History bars -->
+        <g>
+          <rect x="48" y="390" width="14" height="28" rx="2" fill="rgba(255,255,255,0.92)"/>
+          <rect x="48" y="380" width="14" height="10" rx="2" fill="rgba(251,113,133,0.88)"/>
+          <rect x="48" y="418" width="14" height="10" rx="2" fill="rgba(251,113,133,0.88)"/>
+
+          <rect x="66" y="385" width="14" height="38" rx="2" fill="rgba(255,255,255,0.92)"/>
+          <rect x="66" y="373" width="14" height="12" rx="2" fill="rgba(251,113,133,0.88)"/>
+          <rect x="66" y="423" width="14" height="12" rx="2" fill="rgba(251,113,133,0.88)"/>
+
+          <rect x="84" y="392" width="14" height="24" rx="2" fill="rgba(255,255,255,0.92)"/>
+          <rect x="102" y="382" width="14" height="44" rx="2" fill="rgba(255,255,255,0.92)"/>
+          <rect x="102" y="370" width="14" height="12" rx="2" fill="rgba(251,113,133,0.88)"/>
+          <rect x="102" y="426" width="14" height="12" rx="2" fill="rgba(251,113,133,0.88)"/>
+
+          <rect x="120" y="388" width="14" height="32" rx="2" fill="rgba(255,255,255,0.92)"/>
+          <rect x="138" y="395" width="14" height="18" rx="2" fill="rgba(255,255,255,0.92)"/>
+          <rect x="156" y="386" width="14" height="36" rx="2" fill="rgba(255,255,255,0.92)"/>
+
+          <rect x="174" y="378" width="14" height="52" rx="2" fill="rgba(255,255,255,0.92)"/>
+          <rect x="174" y="366" width="14" height="12" rx="2" fill="rgba(251,113,133,0.88)"/>
+          <rect x="174" y="430" width="14" height="12" rx="2" fill="rgba(251,113,133,0.88)"/>
+
+          <rect x="192" y="384" width="14" height="40" rx="2" fill="rgba(255,255,255,0.92)"/>
+          <rect x="192" y="375" width="14" height="9" rx="2" fill="rgba(251,113,133,0.88)"/>
+          <rect x="192" y="424" width="14" height="9" rx="2" fill="rgba(251,113,133,0.88)"/>
+
+          <rect x="210" y="390" width="14" height="28" rx="2" fill="rgba(255,255,255,0.92)"/>
+          <rect x="228" y="396" width="14" height="16" rx="2" fill="rgba(255,255,255,0.92)"/>
+          <rect x="246" y="399" width="14" height="10" rx="2" fill="rgba(255,255,255,0.92)"/>
+          <rect x="264" y="397" width="14" height="14" rx="2" fill="rgba(255,255,255,0.92)"/>
+          <rect x="282" y="393" width="14" height="22" rx="2" fill="rgba(255,255,255,0.92)"/>
+          <rect x="300" y="395" width="14" height="18" rx="2" fill="rgba(255,255,255,0.92)"/>
+          <rect x="318" y="399" width="14" height="10" rx="2" fill="rgba(255,255,255,0.92)"/>
+          <rect x="336" y="401" width="14" height="6" rx="2" fill="rgba(255,255,255,0.92)"/>
+        </g>
+        <!-- History labels -->
+        <text x="48" y="344" fill="rgba(226,232,240,0.58)" font-size="11" letter-spacing="0.2em" font-family="ui-sans-serif, system-ui, sans-serif">OUTPUT + REMOVAL</text>
+        <text x="42" y="363" fill="rgba(248,113,113,0.74)" font-size="11" font-family="ui-monospace, monospace">+1</text>
+        <text x="42" y="400" fill="rgba(226,232,240,0.54)" font-size="11" font-family="ui-monospace, monospace">0</text>
+        <text x="42" y="437" fill="rgba(248,113,113,0.74)" font-size="11" font-family="ui-monospace, monospace">-1</text>
+        <text x="596" y="344" fill="rgba(226,232,240,0.54)" font-size="11" font-family="ui-monospace, monospace" text-anchor="end">4.0s overview</text>
+
+        <defs>
+          <filter id="blur1" x="-18%" y="-18%" width="136%" height="136%">
+            <feGaussianBlur stdDeviation="5.6"/>
+          </filter>
+        </defs>
+      </svg>
+    </div>
+  </div>
+</div>
+
+
+</body>
+</html>

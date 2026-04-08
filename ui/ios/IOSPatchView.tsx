@@ -269,6 +269,7 @@ const IOSPlayPanel = memo(function IOSPlayPanel({
 
 const IOSMsegLauncher = memo(function IOSMsegLauncher({
     msegState,
+    observedMsegPlayhead,
     selectedMsegSlot,
     previewOrientation,
     onOpenEditor,
@@ -278,6 +279,7 @@ const IOSMsegLauncher = memo(function IOSMsegLauncher({
     onSelectMsegSlot,
 }: {
     msegState: ReturnType<typeof useSynthPatchViewModel>["msegState"];
+    observedMsegPlayhead: ReturnType<typeof useSynthPatchViewModel>["observedMsegPlayhead"];
     selectedMsegSlot: number;
     previewOrientation: MsegSurfaceOrientation;
     onOpenEditor: () => void;
@@ -331,6 +333,7 @@ const IOSMsegLauncher = memo(function IOSMsegLauncher({
                                 points={msegState.shape.points}
                                 orientation={previewOrientation}
                                 className="h-full w-full overflow-hidden rounded-[20px] bg-white/[0.03]"
+                                progressFillEnd={observedMsegPlayhead.progressFillEnd}
                             />
                         ) : null}
                     </div>
@@ -1290,6 +1293,7 @@ function IOSPatchViewBody() {
 
                             <IOSMsegLauncher
                                 msegState={synthView.msegState}
+                                observedMsegPlayhead={synthView.observedMsegPlayhead}
                                 selectedMsegSlot={synthView.selectedMsegSlot}
                                 previewOrientation={msegPreviewOrientation}
                                 onOpenEditor={openMsegModal}

@@ -64,6 +64,14 @@ import {
     type DistortionScopeFrame,
 } from "./distortion-visualization";
 import {
+    EFFECTIVE_MSEG_STATE_ENDPOINT_ID,
+    normalizeEffectiveMsegStateMessage,
+    resolveMsegPreviewPlayheadState,
+    selectObservedEffectiveMsegState,
+    type EffectiveMsegState,
+    type MsegPreviewPlayheadState,
+} from "./mseg-monitor";
+import {
     useSynthInputRouter,
     type ArrowStepDirection,
     type SynthFocusBindings,
@@ -189,6 +197,7 @@ export type SynthPatchViewModel = {
     observedFilterSpectrum: FilterSpectrumFrame | null;
     observedDistortionHistory: DistortionHistoryFrame | null;
     observedDistortionScope: DistortionScopeFrame | null;
+    observedMsegPlayhead: MsegPreviewPlayheadState;
     observedWarpState: EffectiveWarpState;
     modulationState: ModulationState | null;
     selectedMsegSlot: number;
@@ -424,6 +433,25 @@ export function useObservedDistortionHistory() {
         }
 
         setObservedState(normalizedState);
+    }, [message]);
+
+    return observedState;
+}
+
+export function useObservedMsegState() {
+    const message = usePatchEndpoint<unknown | null>(EFFECTIVE_MSEG_STATE_ENDPOINT_ID, null);
+    const [observedState, setObservedState] = useState<EffectiveMsegState | null>(null);
+
+    useEffect(() => {
+        if (!message) {
+            return;
+        }
+
+        if (!normalizeEffectiveMsegStateMessage(message)) {
+            return;
+        }
+
+        setObservedState((previousState) => selectObservedEffectiveMsegState(previousState, message));
     }, [message]);
 
     return observedState;
@@ -1175,6 +1203,7 @@ export function useSynthPatchViewModel({
     const observedFilterSpectrum = useObservedFilterSpectrum();
     const observedDistortionHistory = useObservedDistortionHistory();
     const observedDistortionScope = useObservedDistortionScope();
+    const observedMsegState = useObservedMsegState();
     const runtimePresentation = useMemo(
         () => resolveRuntimeTablePresentation(runtimeStateMessage, Number(wavetableSelect.value) || 0),
         [runtimeStateMessage, wavetableSelect.value],
@@ -1194,6 +1223,13 @@ export function useSynthPatchViewModel({
         }
         return buildDisplayedMsegState(modulationBridge.current, selectedMsegSlot);
     }, [modulationBridge, modulationState, selectedMsegSlot]);
+    const observedMsegPlayhead = useMemo(() => {
+        return resolveMsegPreviewPlayheadState({
+            observedState: observedMsegState,
+            playback: msegState?.playback,
+            slotIndex: selectedMsegSlot,
+        });
+    }, [msegState?.playback, observedMsegState, selectedMsegSlot]);
     const selectedEnvelope = modulationState?.envelopeSlots[selectedEnvelopeSlot] ?? null;
     const stageBindings = useStagePositionDrag({
         stageRef,
@@ -1373,6 +1409,7 @@ export function useSynthPatchViewModel({
         observedFilterSpectrum,
         observedDistortionHistory,
         observedDistortionScope,
+        observedMsegPlayhead,
         observedWarpState,
         modulationState,
         selectedMsegSlot,

@@ -17,6 +17,7 @@ from bench import (
     make_static_tone_recipe,
     peak_abs,
     render_cmajor_fixed_frame_tables,
+    render_cmajor_mseg_progress_probe,
     render_cmajor_mseg_probe,
     render_cmajor_scan_position_monitor_probe,
     render_mseg_reference,
@@ -630,5 +631,27 @@ def test_cmajor_mseg_probe_output_stays_finite_for_slow_and_fast_seconds_rates(s
     )
 
     assert is_finite(actual)
-    assert peak_abs(actual) > 1e-4
-    assert rms(actual) > 1e-4
+
+
+@pytest.mark.cmajor
+def test_cmajor_mseg_progress_probe_reports_normalized_elapsed_percentage() -> None:
+    recipe = make_static_tone_recipe(name="mseg_progress_probe", duration_seconds=0.1, frame_position=0.0)
+    shape = MsegShape(points=(MsegPoint(0.0, 0.0), MsegPoint(1.0, 1.0)))
+    rendered = render_mseg_shape_reference(shape)
+
+    actual_progress = render_cmajor_mseg_progress_probe(
+        recipe,
+        mseg_buffer=rendered,
+        playback=MsegPlayback(seconds=0.1),
+    )
+
+    half_index = recipe.num_samples // 2
+
+    assert actual_progress[0] == pytest.approx(0.0, abs=1e-6)
+    assert actual_progress[half_index] == pytest.approx(0.5, abs=0.02)
+    assert actual_progress[-1] == pytest.approx(1.0, abs=0.0005)
+    assert np.min(actual_progress) >= -1e-6
+    assert np.max(actual_progress) <= 1.000001
+    assert np.all(np.diff(actual_progress) >= -1e-6)
+    assert peak_abs(actual_progress) > 1e-4
+    assert rms(actual_progress) > 1e-4

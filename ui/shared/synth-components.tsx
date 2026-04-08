@@ -1,6 +1,7 @@
 import {
     type ReactNode,
     useEffect,
+    useId,
     useLayoutEffect,
     useMemo,
     useRef,
@@ -371,13 +372,16 @@ export function MsegPreview({
     points,
     orientation = "horizontal",
     className,
+    progressFillEnd = null,
 }: {
     points: Array<{ x: number; y: number; curvePower: number }>;
     orientation?: MsegSurfaceOrientation;
     className?: string;
+    progressFillEnd?: number | null;
 }) {
     const viewportRef = useRef<SVGSVGElement | null>(null);
     const size = useResizeObserver(viewportRef);
+    const clipPathId = useId().replace(/:/g, "_");
 
     const { curvePath, fillPath, metrics } = useMemo(() => {
         return buildMsegSurfacePaths(points, size.width, size.height, {
@@ -387,13 +391,53 @@ export function MsegPreview({
             verticalPadding: MSEG_PREVIEW_VERTICAL_PADDING_PX,
         });
     }, [orientation, points, size.height, size.width]);
+    const clampedProgressFillEnd = progressFillEnd !== null
+        && progressFillEnd !== undefined
+        && Number.isFinite(Number(progressFillEnd))
+        ? clamp(Number(progressFillEnd), 0, 1)
+        : null;
+    const progressClipRect = useMemo(() => {
+        if (clampedProgressFillEnd === null) {
+            return null;
+        }
+
+        if (orientation === "vertical") {
+            return {
+                x: metrics.plotLeft,
+                y: metrics.plotTop,
+                width: metrics.plotWidth,
+                height: metrics.plotHeight * clampedProgressFillEnd,
+            };
+        }
+
+        return {
+            x: metrics.plotLeft,
+            y: metrics.plotTop,
+            width: metrics.plotWidth * clampedProgressFillEnd,
+            height: metrics.plotHeight,
+        };
+    }, [clampedProgressFillEnd, metrics.plotHeight, metrics.plotLeft, metrics.plotTop, metrics.plotWidth, orientation]);
 
     return (
         <svg
             ref={viewportRef}
+            data-role="mseg-preview-surface"
             className={className ?? "h-32 w-full overflow-hidden rounded-[20px] bg-white/[0.03]"}
             viewBox={`0 0 ${size.width} ${size.height}`}
         >
+            <defs>
+                {progressClipRect ? (
+                    <clipPath id={clipPathId}>
+                        <rect
+                            data-role="mseg-preview-progress-clip"
+                            x={progressClipRect.x}
+                            y={progressClipRect.y}
+                            width={progressClipRect.width}
+                            height={progressClipRect.height}
+                        />
+                    </clipPath>
+                ) : null}
+            </defs>
             <g>
                 {MSEG_GRID_STEPS.map((step) => (
                     <line
@@ -417,6 +461,15 @@ export function MsegPreview({
                 ))}
             </g>
             <path className="cosimo-curve-fill" d={fillPath} />
+            {progressClipRect ? (
+                <g clipPath={`url(#${clipPathId})`}>
+                    <path
+                        className="cosimo-curve-fill cosimo-curve-fill-progress"
+                        d={fillPath}
+                        data-role="mseg-preview-progress-fill"
+                    />
+                </g>
+            ) : null}
             <path className="cosimo-curve-line" d={curvePath} />
         </svg>
     );

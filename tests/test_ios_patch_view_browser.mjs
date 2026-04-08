@@ -21,6 +21,7 @@ import {
     closeIOSHarnessPage,
     emitIOSHarnessDistortionHistory,
     emitIOSHarnessDistortionScope,
+    emitIOSHarnessEffectiveMsegState,
     getIOSHarnessRenderedState,
     getIOSHarnessSnapshot,
     openIOSHarnessPage,
@@ -37,6 +38,7 @@ const repoRoot = path.resolve(import.meta.dirname, "..");
 let server;
 let browser;
 let factoryCatalog;
+const MSEG_PREVIEW_HORIZONTAL_PADDING_PX = 24;
 const IOS_MSEG_ORIENTATION_SHAPE = {
     format: "cosimo.mseg.shape",
     version: 1,
@@ -52,6 +54,11 @@ const IOS_MSEG_ORIENTATION_SHAPE = {
 
 function cloneJson(value) {
     return JSON.parse(JSON.stringify(value));
+}
+
+function expectedMsegPreviewProgressClipWidth(previewState, progress) {
+    const plotWidth = Math.max(1, previewState.width - (MSEG_PREVIEW_HORIZONTAL_PADDING_PX * 2));
+    return plotWidth * progress;
 }
 
 function buildDistortionScopeFixture({ amplitude = 1.58, sampleCount = 224 } = {}) {
@@ -1080,6 +1087,74 @@ test("mounted iPhone keeps the main-panel MSEG preview horizontal in portrait wh
         } finally {
             await closeIOSHarnessPage(page);
         }
+    }
+});
+
+test("mounted iPhone MSEG preview shows the selected-slot progress fill from the DSP monitor", async () => {
+    const page = await openIOSHarnessPage(browser, server.baseUrl, {
+        viewportSize: { width: 390, height: 844 },
+    });
+
+    try {
+        await waitForIOSHarnessReady(page);
+        await emitIOSHarnessEffectiveMsegState(page, {
+            voiceGeneration: 5,
+            hasActive: 1,
+            positions: [0.22, 0.61, 0.88],
+        });
+        await waitForRenderedState(
+            page,
+            "active iPhone MSEG preview progress fill",
+            (nextState) => Boolean(nextState.previewPlayheadState?.progressClip),
+        );
+
+        let renderedState = await getIOSHarnessRenderedState(page);
+        let previewState = renderedState.previewPlayheadState;
+        assert.ok(previewState);
+        assert.ok(previewState.progressClip);
+        assert.equal(previewState.playhead, null);
+        assert.equal(
+            Math.abs(previewState.progressClip.width - expectedMsegPreviewProgressClipWidth(previewState, 0.22)) <= 1.5,
+            true,
+        );
+
+        await page.getByRole("button", { name: "Select MSEG 2" }).click();
+        await waitForRenderedState(
+            page,
+            "selected iPhone MSEG 2 progress fill",
+            (nextState) => Boolean(nextState.previewPlayheadState?.progressClip)
+                && nextState.previewPlayheadState.progressClip.width > 100,
+        );
+
+        renderedState = await getIOSHarnessRenderedState(page);
+        previewState = renderedState.previewPlayheadState;
+        assert.ok(previewState);
+        assert.ok(previewState.progressClip);
+        assert.equal(previewState.playhead, null);
+        assert.equal(
+            Math.abs(previewState.progressClip.width - expectedMsegPreviewProgressClipWidth(previewState, 0.61)) <= 1.5,
+            true,
+        );
+
+        await emitIOSHarnessEffectiveMsegState(page, {
+            voiceGeneration: 6,
+            hasActive: 0,
+            positions: [1, 1, 1],
+        });
+        await waitForRenderedState(
+            page,
+            "inactive iPhone MSEG preview progress fill",
+            (nextState) => Boolean(nextState.previewPlayheadState)
+                && !nextState.previewPlayheadState.progressClip,
+        );
+
+        renderedState = await getIOSHarnessRenderedState(page);
+        previewState = renderedState.previewPlayheadState;
+        assert.ok(previewState);
+        assert.equal(previewState.playhead, null);
+        assert.equal(previewState.progressClip, null);
+    } finally {
+        await closeIOSHarnessPage(page);
     }
 });
 
