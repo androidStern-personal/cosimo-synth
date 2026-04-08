@@ -132,6 +132,32 @@ export function serveStaticFile({ urlPath, sourceFile, contentType = null }) {
     };
 }
 
+export function serveJsonValue({ urlPath, valueFactory }) {
+    return {
+        name: `cosimo-json-value-${urlPath.replaceAll("/", "-") || "root"}`,
+        configureServer(server) {
+            server.middlewares.use(async (request, response, next) => {
+                const requestPath = (request.url ?? "").split("?")[0];
+
+                if (requestPath !== urlPath) {
+                    next();
+                    return;
+                }
+
+                try {
+                    const payload = await valueFactory({ request, server });
+                    response.statusCode = 200;
+                    response.setHeader("Access-Control-Allow-Origin", "*");
+                    response.setHeader("Content-Type", "application/json; charset=utf-8");
+                    response.end(JSON.stringify(payload));
+                } catch (error) {
+                    next(error);
+                }
+            });
+        },
+    };
+}
+
 export function servePatchModuleAlias({
     urlPath,
     sourceFile,
@@ -139,9 +165,11 @@ export function servePatchModuleAlias({
     moduleBindingName,
     createPatchViewExportName,
     reactRefreshPreamble = "",
+    includeViteClient = false,
 }) {
     const relativeImportPath = `/${path.relative(repoRoot, sourceFile).split(path.sep).join("/")}`;
     const preamble = reactRefreshPreamble ? `${reactRefreshPreamble}\n` : "";
+    const viteClientImport = includeViteClient ? 'import "/@vite/client";\n' : "";
 
     return {
         name: `cosimo-module-alias-${urlPath.replaceAll("/", "-")}`,
@@ -158,6 +186,7 @@ export function servePatchModuleAlias({
                 response.setHeader("Access-Control-Allow-Origin", "*");
                 response.setHeader("Content-Type", "text/javascript; charset=utf-8");
                 response.end(
+                    `${viteClientImport}` +
                     `${preamble}` +
                     `const ${moduleBindingName} = await import(${JSON.stringify(relativeImportPath)});\n` +
                     `export const ${createPatchViewExportName} = ${moduleBindingName}.${createPatchViewExportName};\n` +

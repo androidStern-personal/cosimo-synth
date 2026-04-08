@@ -12,19 +12,6 @@ SAMPLES_PER_FRAME = 2048
 MAX_FRAMES_PER_TABLE = 256
 WAVE_FORMAT_PCM = 0x0001
 WAVE_FORMAT_IEEE_FLOAT = 0x0003
-PATCH_DESCRIPTION = (
-    "Single-oscillator wavetable synth with MIDI input, automatable wavetable "
-    "position, runtime table selection, and runtime-loaded Serum-style wavetable files."
-)
-PATCH_WORKER_SRC = "patch_gui/wavetable-worker.js"
-PATCH_SOURCE_FILES = (
-    "cmajor/Distortion.cmajor",
-    "cmajor/FixedFrameOscillator.cmajor",
-    "cmajor/FilterSpectrumCommon.cmajor",
-    "cmajor/FilterSpectrumAnalyzer.cmajor",
-    "cmajor/Mseg.cmajor",
-    "cmajor/WavetableSynth.cmajor",
-)
 
 
 @dataclass(frozen=True, slots=True)
@@ -38,31 +25,6 @@ class FactoryTableSpec:
 @dataclass(frozen=True, slots=True)
 class SourceTableInfo:
     frame_count: int
-
-
-@dataclass(frozen=True, slots=True)
-class PatchVariant:
-    manifest_filename: str
-    view_src: str
-    view_width: int | None = None
-    view_height: int | None = None
-    view_resizable: bool = True
-    resource_files: tuple[str, ...] = ()
-
-
-PATCH_VARIANTS = (
-    PatchVariant(
-        manifest_filename="WavetableSynth.cmajorpatch",
-        view_src="patch_gui/desktop/index.js",
-        view_width=1120,
-        view_height=680,
-    ),
-    PatchVariant(
-        manifest_filename="WavetableSynth.iOS.cmajorpatch",
-        view_src="patch_gui/index.ios.js",
-        resource_files=(),
-    ),
-)
 
 
 def load_factory_table_specs(catalog_path: str | Path) -> tuple[FactoryTableSpec, ...]:
@@ -213,45 +175,6 @@ def build_factory_bank_catalog_value(
     }
 
 
-def update_patch_manifest(
-    repo_root: Path,
-    variant: PatchVariant,
-) -> None:
-    view = {
-        "src": variant.view_src,
-        "resizable": variant.view_resizable,
-    }
-
-    if variant.view_width is not None:
-        view["width"] = variant.view_width
-
-    if variant.view_height is not None:
-        view["height"] = variant.view_height
-
-    manifest = {
-        "CmajorVersion": 1,
-        "ID": "dev.cosimo.wavetable-synth",
-        "version": "0.1.1",
-        "name": "Cosimo Synth",
-        "description": PATCH_DESCRIPTION,
-        "category": "generator",
-        "manufacturer": "Cosimo",
-        "plugin": {
-            "pluginCode": "CmDv",
-            "manufacturerCode": "Manu",
-        },
-        "isInstrument": True,
-        "source": list(PATCH_SOURCE_FILES),
-        "worker": PATCH_WORKER_SRC,
-        "resources": list(variant.resource_files),
-        "view": view,
-    }
-    (repo_root / variant.manifest_filename).write_text(
-        json.dumps(manifest, indent=2) + "\n",
-        encoding="utf-8",
-    )
-
-
 def remove_obsolete_bank_outputs(assets_dir: Path) -> None:
     obsolete_paths = (
         assets_dir / LEGACY_FACTORY_BANK_RUNTIME_CATALOG_FILENAME,
@@ -277,9 +200,6 @@ def main() -> None:
         encoding="utf-8",
     )
     remove_obsolete_bank_outputs(assets_dir)
-
-    for variant in PATCH_VARIANTS:
-        update_patch_manifest(repo_root, variant)
 
 
 if __name__ == "__main__":

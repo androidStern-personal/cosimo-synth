@@ -556,3 +556,32 @@ What was verified for the legacy browser entrypoint removal
 - `npx tsc --noEmit`
 - `npm run ui:build`
 - `node --test --test-concurrency=1 tests/test_shared_frontend_logic.mjs tests/test_patch_view_layout.mjs tests/test_wavetable_display.mjs tests/test_wavetable_worker.mjs tests/test_ios_patch_view_browser.mjs tests/test_desktop_widget_adapters_browser.mjs tests/test_desktop_patch_view_browser.mjs tests/test_shared_synth_components_browser.mjs tests/test_shared_synth_hooks_browser.mjs`
+
+Desktop native HMR launcher hardening on 2026-04-08
+- The old desktop dev path was not real Vite HMR. The standalone app in `dev-server` mode was importing `http://127.0.0.1:5174/patch_gui/desktop/index.js` directly, which meant the desktop app could keep talking to a stale in-memory transform graph if the long-lived Vite server missed a file invalidation.
+- Fixed the desktop dev server in `ui/vite.desktop.config.mjs` so the live desktop entry it serves now imports `@vite/client`, exposes a repo-local status endpoint at `http://127.0.0.1:5174/__cosimo-dev-status`, and uses explicit polling with `awaitWriteFinish` for the desktop source tree.
+- Added `scripts/run_desktop_native_dev.sh` and changed `npm run desktop:native:dev` to use it. That launcher now starts a fresh desktop Vite server for this repo, rebuilds the native wrapper in `dev-server` mode, and launches `CosimoDesktopNative.app` from the rebuilt wrapper path instead of assuming some old process on port `5174` is still valid.
+- Split the desktop runtime loader generation from the compiled desktop bundle build. In `dev-server` mode, `scripts/build_desktop_native.sh` now regenerates the stable `patch_gui/desktop/index.js` loader with `node ui/build.mjs --desktop-runtime` and does not depend on rebuilding the compiled desktop `patch_gui/desktop/app.js` bundle.
+- The desktop loader contract did not change: `WavetableSynth.cmajorpatch` still points at `patch_gui/desktop/index.js`, and the compiled desktop app still loads `./app.js` by default outside `dev-server` mode.
+
+What was verified for the desktop native HMR launcher hardening
+- `bun x tsc --noEmit`
+- `node --test tests/test_desktop_standalone_loader.mjs tests/test_patch_view_layout.mjs`
+- `uv run pytest -q tests/test_ios_auv3_build.py -k test_ios_ui_dev_server_configuration_exists`
+- `node ui/build.mjs --desktop-runtime`
+- `npm run ui:build`
+- `npm run desktop:native:dev`
+- After `npm run desktop:native:dev`, the live desktop Vite status endpoint replied with `kind = "cosimo-desktop-vite"`, `usesViteClient = true`, and `watchMode = "polling"`, the server stayed listening on `127.0.0.1:5174`, and the standalone `CosimoDesktopNative` app process was running from the rebuilt wrapper.
+- Verified the live watch path directly by adding and then removing a harmless probe token in `ui/desktop/patch-view-entry.tsx` and confirming the running Vite server updated the transformed module at `http://127.0.0.1:5174/ui/desktop/patch-view-entry.tsx` immediately in both directions while the dev session stayed up.
+
+Patch manifest generation removal on 2026-04-08
+- `build_assets.py` no longer rewrites `WavetableSynth.cmajorpatch` or `WavetableSynth.iOS.cmajorpatch`. Those two patch manifests are now treated as checked-in source files that must be edited directly when the synth source list, worker path, or view entry changes.
+- `build_assets.py` now has one build responsibility: regenerate the derived runtime wavetable catalog `assets/factory-bank-catalog.json` from `assets/factory-table-catalog.json` and the referenced source wavetable files.
+- Updated the durable repo guidance in `AGENTS.md` so the desktop/build instructions no longer imply that Python rewrites the manifests during normal builds.
+- Tightened the build-system regression tests so they no longer describe manifest regeneration as intentional and now prove that `uv run python build_assets.py` leaves both patch manifests untouched.
+
+What was verified for the patch manifest generation removal
+- `uv run python build_assets.py`
+- `node --test tests/test_patch_view_layout.mjs`
+- `uv run pytest -q tests/test_ios_auv3_build.py -k 'test_ios_ui_dev_server_configuration_exists or test_ios_auv3_generator_runs_npm_and_build_assets_from_the_repo_root'`
+- `npm run desktop:native:dev`

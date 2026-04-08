@@ -8,6 +8,7 @@ import { defineConfig } from "vite";
 import {
     createReactRefreshPreamble,
     createViteRepoContext,
+    serveJsonValue,
     serveHtmlEntry,
     servePatchModuleAlias,
     serveStaticDirectory,
@@ -18,6 +19,7 @@ const desktopPatchViewSource = path.join(repoRoot, "ui", "desktop", "patch-view-
 const desktopStandaloneLoaderSource = path.join(repoRoot, "ui", "desktop", "standalone-loader.js");
 const desktopStandaloneLoaderOutput = path.join(repoRoot, "patch_gui", "desktop", "index.js");
 const reactRefreshPreamble = createReactRefreshPreamble();
+const desktopDevServerStartedAt = new Date().toISOString();
 
 function emitDesktopStandaloneLoader() {
     return {
@@ -72,6 +74,20 @@ ${reactRefreshPreamble}
             moduleBindingName: "desktopPatchViewModule",
             createPatchViewExportName: "createDesktopPatchView",
             reactRefreshPreamble,
+            includeViteClient: true,
+        }),
+        serveJsonValue({
+            urlPath: "/__cosimo-dev-status",
+            valueFactory: () => ({
+                kind: "cosimo-desktop-vite",
+                repoRoot,
+                pid: process.pid,
+                startedAt: desktopDevServerStartedAt,
+                entry: "/patch_gui/desktop/index.js",
+                sourceEntry: "/ui/desktop/patch-view-entry.tsx",
+                usesViteClient: true,
+                watchMode: "polling",
+            }),
         }),
         emitDesktopStandaloneLoader(),
         serveStaticDirectory("/cmaj_api", cmajorApiRoot),
@@ -83,6 +99,14 @@ ${reactRefreshPreamble}
         cors: true,
         fs: {
             allow: [repoRoot],
+        },
+        watch: {
+            usePolling: true,
+            interval: 120,
+            awaitWriteFinish: {
+                stabilityThreshold: 150,
+                pollInterval: 50,
+            },
         },
     },
     build: {

@@ -95,7 +95,7 @@ async function runBuild(configRelativePath) {
     await build(loadedConfig.config);
 }
 
-if (shouldBuild("--desktop") || shouldBuild("--ios")) {
+if (shouldBuild("--desktop") || shouldBuild("--desktop-runtime") || shouldBuild("--ios")) {
     await emitGeneratedPatchGuiModule("ui/shared/resource-client.ts", "patch_gui/resource-client.js");
     await emitGeneratedPatchGuiModule("ui/shared/mseg.ts", "patch_gui/mseg.js");
     await emitGeneratedPatchGuiModule("ui/shared/mseg-controller.ts", "patch_gui/mseg-controller.js");
@@ -109,7 +109,9 @@ if (shouldBuild("--ios")) {
     await runBuild("./vite.worker.config.mjs");
 }
 
-if (shouldBuild("--desktop")) {
-    await runBuild("./vite.desktop.config.mjs");
+if (shouldBuild("--desktop") || shouldBuild("--desktop-runtime")) {
+    if (shouldBuild("--desktop")) {
+        await runBuild("./vite.desktop.config.mjs");
+    }
     await emitGeneratedPatchGuiModule("ui/desktop/standalone-loader.js", "patch_gui/desktop/index.js");
 }

@@ -8,6 +8,7 @@ patch_path="$repo_root/WavetableSynth.cmajorpatch"
 desktop_ui_source_mode="${COSIMO_DESKTOP_UI_SOURCE_MODE:-compiled}"
 desktop_dev_server_origin="${COSIMO_DESKTOP_DEV_SERVER_ORIGIN:-http://127.0.0.1:5174}"
 desktop_dev_server_module_url="${desktop_dev_server_origin%/}/patch_gui/desktop/index.js"
+desktop_dev_server_status_url="${desktop_dev_server_origin%/}/__cosimo-dev-status"
 
 cmajor_version="$(cmaj version | awk '/Cmajor Version:/ { print $3; exit }')"
 
@@ -26,7 +27,11 @@ if [[ ! -e "$patch_path" ]]; then
   exit 1
 fi
 
-npm run ui:build
+if [[ "$desktop_ui_source_mode" == "compiled" ]]; then
+  npm run ui:build
+else
+  node ui/build.mjs --desktop-runtime
+fi
 uv run python "$repo_root/build_assets.py"
 
 if [[ "$desktop_ui_source_mode" != "compiled" && "$desktop_ui_source_mode" != "dev-server" ]]; then
@@ -35,8 +40,13 @@ if [[ "$desktop_ui_source_mode" != "compiled" && "$desktop_ui_source_mode" != "d
 fi
 
 if [[ "$desktop_ui_source_mode" == "dev-server" ]]; then
+  if ! curl --fail --silent --show-error "$desktop_dev_server_status_url" >/dev/null; then
+    printf 'Desktop Vite dev server status is not reachable at %s\n' "$desktop_dev_server_status_url" >&2
+    exit 1
+  fi
+
   if ! curl --fail --silent --show-error "$desktop_dev_server_module_url" >/dev/null; then
-    printf 'Desktop Vite dev server is not reachable at %s\n' "$desktop_dev_server_module_url" >&2
+    printf 'Desktop Vite dev server entry module is not reachable at %s\n' "$desktop_dev_server_module_url" >&2
     exit 1
   fi
 fi

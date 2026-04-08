@@ -6,7 +6,7 @@
     "ui:desktop:dev": "vite --config ui/vite.desktop.config.mjs",
     "ui:desktop:build": "vite build --config ui/vite.desktop.config.mjs",
     "desktop:native:build": "./scripts/build_desktop_native.sh",
-    "desktop:native:dev": "COSIMO_DESKTOP_UI_SOURCE_MODE=dev-server COSIMO_DESKTOP_DEV_SERVER_ORIGIN=http://127.0.0.1:5174 ./scripts/build_desktop_native.sh",
+    "desktop:native:dev": "./scripts/run_desktop_native_dev.sh",
     "ui:worker:build": "vite build --config ui/vite.worker.config.mjs",
     "ui:build": "node ui/build.mjs",
     "ios:ui:dev": "vite --config ios_auv3/vite.config.mjs",

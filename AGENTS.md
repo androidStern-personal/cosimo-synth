@@ -57,15 +57,17 @@
 ## Desktop UI Loading
 
 - `WavetableSynth.cmajorpatch` must keep `view.src` set to `patch_gui/desktop/index.js`.
+- `WavetableSynth.cmajorpatch` and `WavetableSynth.iOS.cmajorpatch` are checked-in source files, not generated outputs. If the synth source list, worker path, or view entry changes, edit those manifest files directly.
 - `patch_gui/desktop/index.js` is a stable loader. It must default to the local compiled bundle `./app.js` and must not be rewritten into a dev-server-only file by `ui/build.mjs`.
 - The desktop native wrapper lives in `tools/desktop_native`.
 - The canonical compiled desktop build command is `npm run desktop:native:build`.
-- The canonical desktop HMR build command is `npm run desktop:native:dev`.
-- During desktop UI development, do not claim the standalone app is verified or ready for review unless the Vite dev server is actually running at `http://127.0.0.1:5174/patch_gui/desktop/index.js` and the wrapper was rebuilt through `npm run desktop:native:dev`.
+- The canonical desktop HMR launcher command is `npm run desktop:native:dev`.
+- During desktop UI development, do not claim the standalone app is verified or ready for review unless `npm run desktop:native:dev` started a fresh Vite dev server for this repo, the wrapper was rebuilt against that dev server, and the standalone app was relaunched from that dev session.
 - During desktop UI development, do not deliver the compiled standalone build as if it were the active development app. If the app is not running against the dev server with HMR, say that explicitly.
 - Both commands call `./scripts/build_desktop_native.sh`, which writes to `build/desktop_native`.
-- `./scripts/build_desktop_native.sh` defaults to the compiled desktop UI. `npm run desktop:native:dev` sets `COSIMO_DESKTOP_UI_SOURCE_MODE=dev-server` and `COSIMO_DESKTOP_DEV_SERVER_ORIGIN=http://127.0.0.1:5174`.
+- `./scripts/build_desktop_native.sh` defaults to the compiled desktop UI. `npm run desktop:native:dev` now starts the desktop Vite server itself, rebuilds the wrapper in `dev-server` mode, and launches the standalone app against `http://127.0.0.1:5174`.
 - The desktop native wrapper chooses `dev-server` mode by injecting `window.__COSIMO_DESKTOP_UI_SOURCE_MODE__` and `window.__COSIMO_DESKTOP_DEV_SERVER_ORIGIN__` from `tools/desktop_native/Source/cmaj_PatchLoaderPlugin.cpp` before the loader runs.
 - If `COSIMO_DESKTOP_UI_SOURCE_MODE=dev-server`, `./scripts/build_desktop_native.sh` must fail unless `http://127.0.0.1:5174/patch_gui/desktop/index.js` is reachable.
+- `build_assets.py` only regenerates the derived wavetable runtime catalog `assets/factory-bank-catalog.json` from `assets/factory-table-catalog.json`. It must not rewrite either patch manifest.
 - React Grab for the standalone HMR path lives in `ui/desktop/patch-view-entry.tsx`. In Vite dev mode it must import `react-grab` and `@react-grab/mcp/client`. The Codex MCP config should use `npx -y @react-grab/mcp --stdio`; do not wire the deprecated `@react-grab/codex` package into this repo.
 - The standalone app only gets React Grab when it is running in `dev-server` mode against Vite. The compiled desktop bundle must not load React Grab.

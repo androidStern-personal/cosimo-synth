@@ -828,7 +828,7 @@ def test_ios_ui_dev_server_configuration_exists() -> None:
     assert package_json["scripts"]["ios:ui:build"] == "node ui/build.mjs --ios"
     assert package_json["scripts"]["ios:project"] == "./scripts/generate_ios_auv3_xcode_project.sh build/ios_device_run"
     assert package_json["scripts"]["desktop:native:build"] == "./scripts/build_desktop_native.sh"
-    assert package_json["scripts"]["desktop:native:dev"] == "COSIMO_DESKTOP_UI_SOURCE_MODE=dev-server COSIMO_DESKTOP_DEV_SERVER_ORIGIN=http://127.0.0.1:5174 ./scripts/build_desktop_native.sh"
+    assert package_json["scripts"]["desktop:native:dev"] == "./scripts/run_desktop_native_dev.sh"
     assert "ui:ios:dev" not in package_json["scripts"]
     assert "ui:ios:build" not in package_json["scripts"]
     assert "vite" in package_json["devDependencies"]
@@ -836,6 +836,7 @@ def test_ios_ui_dev_server_configuration_exists() -> None:
     assert "export function createViteRepoContext" in shared_vite_helpers
     assert "export function serveStaticDirectory" in shared_vite_helpers
     assert "export function serveStaticFile" in shared_vite_helpers
+    assert "export function serveJsonValue" in shared_vite_helpers
     assert "export function servePatchModuleAlias" in shared_vite_helpers
     assert "export function serveHtmlEntry" in shared_vite_helpers
     assert 'from "../ui/vite.shared.mjs"' in vite_config
