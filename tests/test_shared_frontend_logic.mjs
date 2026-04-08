@@ -723,6 +723,33 @@ test("distortion scope normalization unwraps endpoint payloads and recomputes pe
     assert.equal(normalizeDistortionScopeMessage({ event: { inputSamples: [0.1] } }), null);
 });
 
+test("distortion history normalization unwraps endpoint payloads and preserves valid-bin metadata", async () => {
+    const { normalizeDistortionHistoryMessage } = await loadDistortionVisualizationModule();
+
+    const normalized = normalizeDistortionHistoryMessage({
+        event: {
+            sampleRateHz: 48_000,
+            horizonMs: 2_000,
+            binDurationMs: 12.5,
+            binCount: 4.8,
+            validBinCount: 3.2,
+            inputMins: [-1.4, -0.8, -0.3, -0.1],
+            inputMaxs: [1.4, 0.8, 0.3, 0.1],
+            outputMins: [-1, -0.6, -0.25, -0.1],
+            outputMaxs: [1, 0.6, 0.25, 0.1],
+        },
+    });
+
+    assert.equal(normalized?.sampleRateHz, 48_000);
+    assert.equal(normalized?.horizonMs, 2_000);
+    assert.equal(normalized?.binDurationMs, 12.5);
+    assert.equal(normalized?.binCount, 4);
+    assert.equal(normalized?.validBinCount, 3);
+    assert.deepEqual(normalized?.inputMins, [-1.4, -0.8, -0.3, -0.1]);
+    assert.deepEqual(normalized?.outputMaxs, [1, 0.6, 0.25, 0.1]);
+    assert.equal(normalizeDistortionHistoryMessage({ event: { inputMins: [0.1] } }), null);
+});
+
 test("distortion display range stays fixed while the active frame updates", async () => {
     const { advanceDistortionDisplayState } = await loadDistortionVisualizationModule();
 
@@ -755,10 +782,12 @@ test("distortion display range stays fixed while the active frame updates", asyn
 
 test("distortion curve family stays symmetric and sample classification marks removed peaks", async () => {
     const {
+        buildDistortionHistoryBins,
         buildDistortionSamplePoints,
         buildDistortionTransferOccupancy,
         sampleDistortionCurve,
         shapeDistortionSample,
+        summarizeDistortionHistoryFrame,
     } = await loadDistortionVisualizationModule();
 
     const curve = sampleDistortionCurve({
@@ -813,6 +842,36 @@ test("distortion curve family stays symmetric and sample classification marks re
         summarizeOccupancy(forwardOccupancy),
         summarizeOccupancy(reversedOccupancy),
     );
+
+    const historyBins = buildDistortionHistoryBins({
+        sampleRateHz: 44_100,
+        horizonMs: 2_000,
+        binDurationMs: 12.5,
+        binCount: 4,
+        validBinCount: 3,
+        inputMins: [-1.3, -0.55, -0.2, -0.05],
+        inputMaxs: [1.3, 0.55, 0.2, 0.05],
+        outputMins: [-1, -0.5, -0.2, -0.05],
+        outputMaxs: [1, 0.5, 0.2, 0.05],
+    });
+    const historySummary = summarizeDistortionHistoryFrame({
+        sampleRateHz: 44_100,
+        horizonMs: 2_000,
+        binDurationMs: 12.5,
+        binCount: 4,
+        validBinCount: 3,
+        inputMins: [-1.3, -0.55, -0.2, -0.05],
+        inputMaxs: [1.3, 0.55, 0.2, 0.05],
+        outputMins: [-1, -0.5, -0.2, -0.05],
+        outputMaxs: [1, 0.5, 0.2, 0.05],
+    });
+
+    assert.deepEqual(historyBins.map((bin) => bin.valid), [false, true, true, true]);
+    assert.equal(historyBins[1]?.clipped, true);
+    assert.equal(historyBins[2]?.clipped, true);
+    assert.equal(historySummary.inputPeak, 1.3);
+    assert.equal(historySummary.outputPeak, 1);
+    assert.equal(Math.abs(historySummary.removedPeak - 0.3) <= 1e-9, true);
 });
 
 test("horizontal swipe commit threshold uses the greater of the minimum distance and stage ratio", async () => {

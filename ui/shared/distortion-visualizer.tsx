@@ -2,11 +2,14 @@ import { useEffect, useMemo, useState } from "react";
 
 import {
     advanceDistortionDisplayState,
+    buildDistortionHistoryBins,
     buildDistortionSamplePoints,
     buildDistortionTransferOccupancy,
     sampleDistortionCurve,
     type DistortionDisplayState,
+    type DistortionHistoryFrame,
     type DistortionScopeFrame,
+    summarizeDistortionHistoryFrame,
 } from "./distortion-visualization";
 
 const VIEWBOX_WIDTH = 640;
@@ -23,13 +26,14 @@ const HISTORY_PLOT = {
     width: 572,
     height: 164,
 };
-const HISTORY_CLIPPED_POINT_STRIDE = 9;
+const HISTORY_BAR_GAP = 0.6;
 
 type PlotRect = typeof TRANSFER_PLOT;
 
 export type DistortionVisualizerProps = {
     knee: number;
-    frame: DistortionScopeFrame | null;
+    transferFrame: DistortionScopeFrame | null;
+    historyFrame: DistortionHistoryFrame | null;
     className?: string;
 };
 
@@ -150,26 +154,35 @@ function buildAxisLabelY(sampleValue: number, plot: PlotRect, range: number) {
 
 export function DistortionVisualizer({
     knee,
-    frame,
+    transferFrame,
+    historyFrame,
     className,
 }: DistortionVisualizerProps) {
     const [displayState, setDisplayState] = useState<DistortionDisplayState | null>(null);
 
     useEffect(() => {
-        if (!frame) {
+        if (!transferFrame) {
             return;
         }
 
         setDisplayState((previousState) => (
-            advanceDistortionDisplayState(previousState, frame, performance.now())
+            advanceDistortionDisplayState(previousState, transferFrame, performance.now())
         ));
-    }, [frame]);
+    }, [transferFrame]);
 
-    const activeFrame = displayState?.frame ?? frame;
+    const activeTransferFrame = displayState?.frame ?? transferFrame;
     const displayRange = displayState?.displayRange ?? 2.0;
     const samplePoints = useMemo(
-        () => activeFrame ? buildDistortionSamplePoints(activeFrame) : [],
-        [activeFrame],
+        () => activeTransferFrame ? buildDistortionSamplePoints(activeTransferFrame) : [],
+        [activeTransferFrame],
+    );
+    const historyBins = useMemo(
+        () => historyFrame ? buildDistortionHistoryBins(historyFrame) : [],
+        [historyFrame],
+    );
+    const historySummary = useMemo(
+        () => historyFrame ? summarizeDistortionHistoryFrame(historyFrame) : { inputPeak: 0, outputPeak: 0, removedPeak: 0 },
+        [historyFrame],
     );
     const transferCurve = useMemo(
         () => sampleDistortionCurve({ knee, inputRange: displayRange }),
@@ -221,45 +234,64 @@ export function DistortionVisualizer({
         })
         .filter((segment) => segment.occupancyPath), [displayRange, transferOccupancy]);
 
-    const historyInputPoints = useMemo(() => (
-        samplePoints.map((point, index) => ({
-            x: mapHistoryX(index, samplePoints.length),
-            y: mapPlotY(point.input, HISTORY_PLOT, displayRange),
-            clipped: point.clipped,
-        }))
-    ), [displayRange, samplePoints]);
-    const historyOutputPoints = useMemo(() => (
-        samplePoints.map((point, index) => ({
-            x: mapHistoryX(index, samplePoints.length),
-            y: mapPlotY(point.output, HISTORY_PLOT, displayRange),
-            clipped: point.clipped,
-        }))
-    ), [displayRange, samplePoints]);
-    const historyInputPath = useMemo(() => buildPolylinePath(
-        historyInputPoints.map(({ x, y }) => ({ x, y })),
-    ), [historyInputPoints]);
-    const historyOutputPath = useMemo(() => buildPolylinePath(
-        historyOutputPoints.map(({ x, y }) => ({ x, y })),
-    ), [historyOutputPoints]);
-    const removedFillPath = useMemo(() => buildFilledBridgePath(
-        historyInputPoints.map(({ x, y }) => ({ x, y })),
-        historyOutputPoints.map(({ x, y }) => ({ x, y })),
-    ), [historyInputPoints, historyOutputPoints]);
-    const clippedHistoryPoints = useMemo(() => (
-        historyInputPoints.filter((point, index) => point.clipped && (index % HISTORY_CLIPPED_POINT_STRIDE === 0))
-    ), [historyInputPoints]);
+    const historyColumns = useMemo(() => {
+        const plotBinCount = Math.max(1, historyBins.length);
+        const columnWidth = HISTORY_PLOT.width / plotBinCount;
 
-    const overshoot = Math.max(0, (activeFrame?.inputPeak ?? 0) - 1);
-    const headroom = Math.max(0, 1 - (activeFrame?.inputPeak ?? 0));
+        return historyBins.map((bin, index) => {
+            const left = HISTORY_PLOT.left + (index * columnWidth) + (HISTORY_BAR_GAP * 0.5);
+            const width = Math.max(1, columnWidth - HISTORY_BAR_GAP);
+            const outputTop = mapPlotY(bin.outputPeak, HISTORY_PLOT, displayRange);
+            const outputBottom = mapPlotY(-bin.outputPeak, HISTORY_PLOT, displayRange);
+            const inputTop = mapPlotY(bin.inputPeak, HISTORY_PLOT, displayRange);
+            const inputBottom = mapPlotY(-bin.inputPeak, HISTORY_PLOT, displayRange);
+            const hasRemoval = bin.valid && (bin.inputPeak > (bin.outputPeak + 1e-4));
+            const outputHeight = Math.max(0, outputBottom - outputTop);
+            const removedTopHeight = Math.max(0, outputTop - inputTop);
+            const removedBottomHeight = Math.max(0, inputBottom - outputBottom);
+
+            return {
+                valid: bin.valid,
+                clipped: bin.clipped,
+                output: {
+                    x: left,
+                    y: outputTop,
+                    width,
+                    height: outputHeight,
+                },
+                removedTop: hasRemoval
+                    ? {
+                        x: left,
+                        y: inputTop,
+                        width,
+                        height: removedTopHeight,
+                    }
+                    : null,
+                removedBottom: hasRemoval
+                    ? {
+                        x: left,
+                        y: outputBottom,
+                        width,
+                        height: removedBottomHeight,
+                    }
+                    : null,
+            };
+        });
+    }, [displayRange, historyBins]);
+
+    const overshoot = Math.max(0, (activeTransferFrame?.inputPeak ?? 0) - 1);
+    const headroom = Math.max(0, 1 - (activeTransferFrame?.inputPeak ?? 0));
     const clippedSampleCount = samplePoints.reduce((count, point) => count + (point.clipped ? 1 : 0), 0);
+    const clippedHistoryBinCount = historyBins.reduce((count, bin) => count + (bin.clipped ? 1 : 0), 0);
     const debugState = useMemo(() => ({
-        hasScope: Boolean(activeFrame),
+        hasTransferScope: Boolean(activeTransferFrame),
+        hasHistory: Boolean(historyFrame),
         displayRange,
         sampleCount: samplePoints.length,
         clippedSampleCount,
-        inputPeak: activeFrame?.inputPeak ?? 0,
-        outputPeak: activeFrame?.outputPeak ?? 0,
-        removedPeak: activeFrame?.removedPeak ?? 0,
+        inputPeak: activeTransferFrame?.inputPeak ?? 0,
+        outputPeak: activeTransferFrame?.outputPeak ?? 0,
+        removedPeak: activeTransferFrame?.removedPeak ?? 0,
         overshoot,
         headroom,
         transfer: {
@@ -273,17 +305,27 @@ export function DistortionVisualizer({
             plot: TRANSFER_PLOT,
         },
         history: {
-            pointCount: historyInputPoints.length,
-            clippedPointCount: clippedHistoryPoints.length,
+            binCount: historyBins.length,
+            validBinCount: historyFrame?.validBinCount ?? 0,
+            clippedBinCount: clippedHistoryBinCount,
+            horizonMs: historyFrame?.horizonMs ?? 0,
+            binDurationMs: historyFrame?.binDurationMs ?? 0,
+            inputPeak: historySummary.inputPeak,
+            outputPeak: historySummary.outputPeak,
+            removedPeak: historySummary.removedPeak,
             plot: HISTORY_PLOT,
         },
     }), [
-        activeFrame,
-        clippedHistoryPoints.length,
+        activeTransferFrame,
+        clippedHistoryBinCount,
         clippedSampleCount,
         displayRange,
         headroom,
-        historyInputPoints.length,
+        historyBins.length,
+        historyFrame,
+        historySummary.inputPeak,
+        historySummary.outputPeak,
+        historySummary.removedPeak,
         overshoot,
         samplePoints.length,
         transferOccupancy.leftOverflowCount,
@@ -354,7 +396,7 @@ export function DistortionVisualizer({
                         CURVE DOMAIN
                     </text>
                     <text x={HISTORY_PLOT.left + 14} y={HISTORY_PLOT.top + 22} fill="rgba(226,232,240,0.58)" fontSize="11" letterSpacing="0.2em">
-                        TIME HISTORY
+                        OUTPUT + REMOVAL
                     </text>
 
                     {[ceilingYTransferTop, zeroYTransfer, ceilingYTransferBottom].map((yValue, index) => (
@@ -394,10 +436,6 @@ export function DistortionVisualizer({
                         />
                     ))}
 
-                    {removedFillPath ? (
-                        <path d={removedFillPath} fill="url(#distortionRemovedFill)" />
-                    ) : null}
-
                     {transferOccupancyPaths.map((segment, index) => (
                         <g key={`transfer-occupancy-${index}`}>
                             <path
@@ -433,35 +471,42 @@ export function DistortionVisualizer({
                             strokeLinejoin="round"
                         />
                     ) : null}
-                    {historyInputPath ? (
-                        <path
-                            d={historyInputPath}
-                            fill="none"
-                            stroke="rgba(255,255,255,0.42)"
-                            strokeWidth="1.35"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                        />
-                    ) : null}
-                    {historyOutputPath ? (
-                        <path
-                            d={historyOutputPath}
-                            fill="none"
-                            stroke="rgba(103,232,249,0.96)"
-                            strokeWidth="2.4"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                        />
-                    ) : null}
-
-                    {clippedHistoryPoints.map((point, index) => (
-                        <circle
-                            key={`history-clipped-${index}`}
-                            cx={point.x}
-                            cy={point.y}
-                            r="2.3"
-                            fill="rgba(251,113,133,0.84)"
-                        />
+                    {historyColumns.map((column, index) => (
+                        <g key={`history-column-${index}`}>
+                            {column.valid ? (
+                                <rect
+                                    data-role="distortion-history-output-column"
+                                    x={column.output.x}
+                                    y={column.output.y}
+                                    width={column.output.width}
+                                    height={column.output.height}
+                                    rx={Math.min(2.2, column.output.width * 0.45)}
+                                    fill="rgba(255,255,255,0.92)"
+                                />
+                            ) : null}
+                            {column.removedTop ? (
+                                <rect
+                                    data-role="distortion-history-removed-column"
+                                    x={column.removedTop.x}
+                                    y={column.removedTop.y}
+                                    width={column.removedTop.width}
+                                    height={column.removedTop.height}
+                                    rx={Math.min(2.2, column.removedTop.width * 0.45)}
+                                    fill="rgba(251,113,133,0.88)"
+                                />
+                            ) : null}
+                            {column.removedBottom ? (
+                                <rect
+                                    data-role="distortion-history-removed-column"
+                                    x={column.removedBottom.x}
+                                    y={column.removedBottom.y}
+                                    width={column.removedBottom.width}
+                                    height={column.removedBottom.height}
+                                    rx={Math.min(2.2, column.removedBottom.width * 0.45)}
+                                    fill="rgba(251,113,133,0.88)"
+                                />
+                            ) : null}
+                        </g>
                     ))}
 
                     <text x={TRANSFER_PLOT.left + 8} y={ceilingYTransferTop - 6} fill="rgba(248,113,113,0.74)" fontSize="11">+1</text>
@@ -477,7 +522,7 @@ export function DistortionVisualizer({
                         fixed ±{displayRange.toFixed(2)}
                     </text>
                     <text x={HISTORY_PLOT.left + HISTORY_PLOT.width - 10} y={HISTORY_PLOT.top + 24} fill="rgba(226,232,240,0.54)" fontSize="11" textAnchor="end">
-                        removed {(activeFrame?.removedPeak ?? 0).toFixed(3)}
+                        {historyFrame ? `${(historyFrame.horizonMs / 1000).toFixed(1)}s overview` : "waiting"}
                     </text>
                 </svg>
             </div>

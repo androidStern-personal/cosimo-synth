@@ -591,6 +591,7 @@ const IOSDistortionPanel = memo(function IOSDistortionPanel({
     wetValue,
     wetHPHzValue,
     wetLPHzValue,
+    historyFrame,
     scopeFrame,
     onDriveChange,
     onKneeChange,
@@ -603,6 +604,7 @@ const IOSDistortionPanel = memo(function IOSDistortionPanel({
     wetValue: number;
     wetHPHzValue: number;
     wetLPHzValue: number;
+    historyFrame: ReturnType<typeof useSynthPatchViewModel>["observedDistortionHistory"];
     scopeFrame: ReturnType<typeof useSynthPatchViewModel>["observedDistortionScope"];
     onDriveChange: (nextValue: number) => void;
     onKneeChange: (nextValue: number) => void;
@@ -632,7 +634,7 @@ const IOSDistortionPanel = memo(function IOSDistortionPanel({
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", gap: "0.75rem" }}>
                 <div>
                     <div className="mseg-eyebrow">Distortion</div>
-                    <strong className="mseg-route-title">Wet Curve + Waveform</strong>
+                    <strong className="mseg-route-title">Wet Curve + Overview</strong>
                 </div>
                 <div style={{
                     display: "grid",
@@ -652,7 +654,8 @@ const IOSDistortionPanel = memo(function IOSDistortionPanel({
 
             <DistortionVisualizer
                 knee={kneeValue}
-                frame={scopeFrame}
+                transferFrame={scopeFrame}
+                historyFrame={historyFrame}
             />
 
             <div style={{ display: "grid", gap: "0.8rem" }}>
@@ -1276,6 +1279,7 @@ function IOSPatchViewBody() {
                                 wetValue={synthView.distortionWet.value}
                                 wetHPHzValue={synthView.distortionWetHPHz.value}
                                 wetLPHzValue={synthView.distortionWetLPHz.value}
+                                historyFrame={synthView.observedDistortionHistory}
                                 scopeFrame={synthView.observedDistortionScope}
                                 onDriveChange={synthView.distortionDriveDb.commitValue}
                                 onKneeChange={synthView.distortionKnee.commitValue}

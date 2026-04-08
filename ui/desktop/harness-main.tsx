@@ -29,6 +29,7 @@ declare global {
             emitEffectiveWarpState: (nextState: Parameters<MockPatchConnection["emitEffectiveWarpState"]>[0]) => void;
             emitEffectiveFilterState: (nextState: Parameters<MockPatchConnection["emitEffectiveFilterState"]>[0]) => void;
             emitFilterSpectrum: (nextState: Parameters<MockPatchConnection["emitFilterSpectrum"]>[0]) => void;
+            emitDistortionHistory: (nextState: Parameters<MockPatchConnection["emitDistortionHistory"]>[0]) => void;
             emitDistortionScope: (nextState: Parameters<MockPatchConnection["emitDistortionScope"]>[0]) => void;
             setStoredStateValue: (key: string, value: unknown) => void;
         };
@@ -193,6 +194,9 @@ try {
         },
         emitFilterSpectrum: (nextState) => {
             patchConnection.emitFilterSpectrum(nextState);
+        },
+        emitDistortionHistory: (nextState) => {
+            patchConnection.emitDistortionHistory(nextState);
         },
         emitDistortionScope: (nextState) => {
             patchConnection.emitDistortionScope(nextState);

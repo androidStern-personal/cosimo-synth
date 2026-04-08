@@ -19,6 +19,7 @@ import {
     clearIOSHarnessFailingResources,
     clearIOSHarnessDebugLog,
     closeIOSHarnessPage,
+    emitIOSHarnessDistortionHistory,
     emitIOSHarnessDistortionScope,
     getIOSHarnessRenderedState,
     getIOSHarnessSnapshot,
@@ -81,6 +82,37 @@ function buildDistortionScopeFixture({ amplitude = 1.58, sampleCount = 224 } = {
         removedPeak,
         inputSamples,
         outputSamples,
+    };
+}
+
+function buildDistortionHistoryFixture({ amplitude = 1.56, binCount = 160 } = {}) {
+    const inputMins = [];
+    const inputMaxs = [];
+    const outputMins = [];
+    const outputMaxs = [];
+
+    for (let index = 0; index < binCount; index += 1) {
+        const normalized = index / Math.max(1, binCount - 1);
+        const motion = 0.18 + (0.82 * Math.abs(Math.sin(normalized * Math.PI * 4.6)));
+        const inputPeak = amplitude * motion;
+        const outputPeak = inputPeak / Math.pow(1 + Math.pow(inputPeak, 8), 1 / 8);
+
+        inputMins.push(-inputPeak);
+        inputMaxs.push(inputPeak);
+        outputMins.push(-outputPeak);
+        outputMaxs.push(outputPeak);
+    }
+
+    return {
+        sampleRateHz: 44_100,
+        horizonMs: 2_000,
+        binDurationMs: 12.5,
+        binCount,
+        validBinCount: binCount,
+        inputMins,
+        inputMaxs,
+        outputMins,
+        outputMaxs,
     };
 }
 
@@ -1521,12 +1553,19 @@ test("mounted iPhone distortion panel renders transfer occupancy on the shared s
 
     try {
         await waitForIOSHarnessReady(page);
-        await emitIOSHarnessDistortionScope(page, buildDistortionScopeFixture());
+        const scopeFixture = buildDistortionScopeFixture();
+        const historyFixture = buildDistortionHistoryFixture();
+
+        await emitIOSHarnessDistortionScope(page, scopeFixture);
+        await emitIOSHarnessDistortionHistory(page, historyFixture);
 
         const renderedState = await waitForRenderedState(
             page,
             "iPhone distortion graph state",
-            (nextState) => Boolean(nextState.distortionGraphState?.transfer?.occupancySegmentCount > 0),
+            (nextState) => Boolean(
+                nextState.distortionGraphState?.transfer?.occupancySegmentCount > 0
+                && nextState.distortionGraphState?.history?.validBinCount > 0
+            ),
         );
 
         assert.equal(renderedState.distortionGraphState.displayRange, 2);
@@ -1535,6 +1574,10 @@ test("mounted iPhone distortion panel renders transfer occupancy on the shared s
         assert.equal(renderedState.distortionGraphState.clippedSampleCount > 0, true);
         assert.equal(renderedState.distortionGraphState.transfer.occupancySegmentCount > 0, true);
         assert.equal(renderedState.distortionGraphState.transfer.clippedOccupancySegmentCount > 0, true);
+        assert.equal(renderedState.distortionGraphState.history.binCount, historyFixture.binCount);
+        assert.equal(renderedState.distortionGraphState.history.validBinCount, historyFixture.validBinCount);
+        assert.equal(renderedState.distortionGraphState.history.clippedBinCount > 0, true);
+        assert.equal(renderedState.distortionGraphState.history.removedPeak > 0.1, true);
         assert.match(renderedState.distortionDriveReadout ?? "", /dB/);
         assert.match(renderedState.distortionMixReadout ?? "", /%/);
     } finally {

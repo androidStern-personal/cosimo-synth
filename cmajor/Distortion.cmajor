@@ -3,6 +3,9 @@ namespace wt
     let distortionOversampleFactor = 4;
     let distortionScopeSampleCount = 768;
     let distortionScopeFramesPerSecond = 20.0f;
+    let distortionHistoryBinCount = 160;
+    let distortionHistoryHorizonMs = 2000.0f;
+    let distortionHistoryFramesPerSecond = 20.0f;
     let distortionDriveMinDb = 0.0f;
     let distortionDriveMaxDb = 36.0f;
     let distortionKneeMin = 0.0f;
@@ -25,6 +28,19 @@ namespace wt
         float32 removedPeak;
         float32[distortionScopeSampleCount] inputSamples;
         float32[distortionScopeSampleCount] outputSamples;
+    }
+
+    struct DistortionHistoryFrame
+    {
+        float32 sampleRateHz;
+        float32 horizonMs;
+        float32 binDurationMs;
+        int32 binCount;
+        int32 validBinCount;
+        float32[distortionHistoryBinCount] inputMins;
+        float32[distortionHistoryBinCount] inputMaxs;
+        float32[distortionHistoryBinCount] outputMins;
+        float32[distortionHistoryBinCount] outputMaxs;
     }
 
     float32 clampDistortionDriveDb (float32 value)
@@ -223,6 +239,22 @@ namespace wt
             return peak;
         }
 
+        float32 findRemovedPeak (
+            float32[distortionScopeSampleCount] inputBuffer,
+            float32[distortionScopeSampleCount] outputBuffer
+        )
+        {
+            float32 peak = 0.0f;
+
+            for (wrap<distortionScopeSampleCount> index)
+                peak = std::intrinsics::max (
+                    peak,
+                    std::intrinsics::abs (inputBuffer[index] - outputBuffer[index])
+                );
+
+            return peak;
+        }
+
         void main()
         {
             loop
@@ -238,9 +270,9 @@ namespace wt
 
                 if (warmupFrames >= distortionScopeSampleCount && framesUntilEmit <= 0)
                 {
-                    let leftInputPeak = findPeak (inputHistoryLeft);
-                    let rightInputPeak = findPeak (inputHistoryRight);
-                    let useRightChannel = rightInputPeak > leftInputPeak;
+                    let leftRemovedPeak = findRemovedPeak (inputHistoryLeft, outputHistoryLeft);
+                    let rightRemovedPeak = findRemovedPeak (inputHistoryRight, outputHistoryRight);
+                    let useRightChannel = rightRemovedPeak > leftRemovedPeak;
 
                     DistortionScopeFrame frame;
                     frame.sampleRateHz = float32 (processor.frequency);
@@ -269,6 +301,168 @@ namespace wt
 
                     distortionScope <- frame;
                     framesUntilEmit = hopSize;
+                }
+
+                advance();
+            }
+        }
+    }
+
+    processor DistortionHistoryAnalyzer
+    {
+        input stream float32 previewInputLeft;
+        input stream float32 previewInputRight;
+        input stream float32 previewOutputLeft;
+        input stream float32 previewOutputRight;
+
+        output event DistortionHistoryFrame distortionHistory;
+
+        let historyBinFrames = int32 (std::intrinsics::max (
+            1.0f,
+            (float32 (processor.frequency) * distortionHistoryHorizonMs * 0.001f)
+                / float32 (distortionHistoryBinCount)
+        ));
+        let emitHopFrames = int32 (std::intrinsics::max (
+            1.0f,
+            float32 (processor.frequency) / distortionHistoryFramesPerSecond
+        ));
+
+        float32[distortionHistoryBinCount] inputMinBins;
+        float32[distortionHistoryBinCount] inputMaxBins;
+        float32[distortionHistoryBinCount] outputMinBins;
+        float32[distortionHistoryBinCount] outputMaxBins;
+        int32 binWriteIndex = 0;
+        int32 validBinCount = 0;
+        int32 framesInCurrentBin = 0;
+        int32 framesUntilEmit = emitHopFrames;
+        int32 currentBinPrimed = 0;
+        float32 currentInputMin = 0.0f;
+        float32 currentInputMax = 0.0f;
+        float32 currentOutputMin = 0.0f;
+        float32 currentOutputMax = 0.0f;
+
+        void resetCurrentBin()
+        {
+            framesInCurrentBin = 0;
+            currentBinPrimed = 0;
+            currentInputMin = 0.0f;
+            currentInputMax = 0.0f;
+            currentOutputMin = 0.0f;
+            currentOutputMax = 0.0f;
+        }
+
+        void commitCurrentBin()
+        {
+            if (currentBinPrimed == 0)
+                return;
+
+            inputMinBins[binWriteIndex] = currentInputMin;
+            inputMaxBins[binWriteIndex] = currentInputMax;
+            outputMinBins[binWriteIndex] = currentOutputMin;
+            outputMaxBins[binWriteIndex] = currentOutputMax;
+
+            binWriteIndex = (binWriteIndex + 1) % distortionHistoryBinCount;
+
+            if (validBinCount < distortionHistoryBinCount)
+                validBinCount += 1;
+
+            resetCurrentBin();
+        }
+
+        void pushSample (
+            float32 inputLeft,
+            float32 inputRight,
+            float32 outputLeft,
+            float32 outputRight
+        )
+        {
+            let collapsedInputMin = std::intrinsics::min (inputLeft, inputRight);
+            let collapsedInputMax = std::intrinsics::max (inputLeft, inputRight);
+            let collapsedOutputMin = std::intrinsics::min (outputLeft, outputRight);
+            let collapsedOutputMax = std::intrinsics::max (outputLeft, outputRight);
+
+            if (currentBinPrimed == 0)
+            {
+                currentInputMin = collapsedInputMin;
+                currentInputMax = collapsedInputMax;
+                currentOutputMin = collapsedOutputMin;
+                currentOutputMax = collapsedOutputMax;
+                currentBinPrimed = 1;
+            }
+            else
+            {
+                currentInputMin = std::intrinsics::min (currentInputMin, collapsedInputMin);
+                currentInputMax = std::intrinsics::max (currentInputMax, collapsedInputMax);
+                currentOutputMin = std::intrinsics::min (currentOutputMin, collapsedOutputMin);
+                currentOutputMax = std::intrinsics::max (currentOutputMax, collapsedOutputMax);
+            }
+
+            framesInCurrentBin += 1;
+
+            if (framesInCurrentBin >= historyBinFrames)
+                commitCurrentBin();
+        }
+
+        int32 getReadIndex (int32 offset)
+        {
+            if (validBinCount < distortionHistoryBinCount)
+                return offset;
+
+            return (binWriteIndex + offset) % distortionHistoryBinCount;
+        }
+
+        void emitHistoryFrame()
+        {
+            DistortionHistoryFrame frame;
+            frame.sampleRateHz = float32 (processor.frequency);
+            frame.binCount = distortionHistoryBinCount;
+            frame.validBinCount = validBinCount;
+            frame.binDurationMs = (1000.0f * float32 (historyBinFrames)) / float32 (processor.frequency);
+            frame.horizonMs = frame.binDurationMs * float32 (distortionHistoryBinCount);
+
+            for (wrap<distortionHistoryBinCount> index)
+            {
+                let offset = int32 (index);
+
+                if (offset < validBinCount)
+                {
+                    let readIndex = getReadIndex (offset);
+                    frame.inputMins[index] = inputMinBins[readIndex];
+                    frame.inputMaxs[index] = inputMaxBins[readIndex];
+                    frame.outputMins[index] = outputMinBins[readIndex];
+                    frame.outputMaxs[index] = outputMaxBins[readIndex];
+                }
+                else
+                {
+                    frame.inputMins[index] = 0.0f;
+                    frame.inputMaxs[index] = 0.0f;
+                    frame.outputMins[index] = 0.0f;
+                    frame.outputMaxs[index] = 0.0f;
+                }
+            }
+
+            distortionHistory <- frame;
+        }
+
+        void main()
+        {
+            resetCurrentBin();
+
+            loop
+            {
+                pushSample (
+                    previewInputLeft,
+                    previewInputRight,
+                    previewOutputLeft,
+                    previewOutputRight
+                );
+
+                framesUntilEmit -= 1;
+
+                if (validBinCount > 0 && framesUntilEmit <= 0)
+                {
+                    emitHistoryFrame();
+                    framesUntilEmit = emitHopFrames;
                 }
 
                 advance();

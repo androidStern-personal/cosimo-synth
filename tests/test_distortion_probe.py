@@ -194,6 +194,7 @@ def _build_distortion_probe_source(scheduled_events: list[tuple[int, str]]) -> s
         + "    input value float32 distortionWetLPHz [[ init: 18000.0f ]];\n"
         + "    output stream float leftOut;\n"
         + "    output stream float rightOut;\n"
+        + "    output event wt::DistortionHistoryFrame distortionHistory;\n"
         + "    output event wt::DistortionScopeFrame distortionScope;\n"
         + "    node scheduler = ScheduledEvents;\n"
         + "    node adapter = RuntimeSessionAdapter;\n"
@@ -201,6 +202,7 @@ def _build_distortion_probe_source(scheduled_events: list[tuple[int, str]]) -> s
         + "    node engine = wt::SharedVoiceEngine (2);\n"
         + "    node trim = wt::StereoTrim (0.18f);\n"
         + "    node distortion = wt::DistortionBus;\n"
+        + "    node history = wt::DistortionHistoryAnalyzer;\n"
         + "    node scope = wt::DistortionScopeAnalyzer;\n"
         + "    node splitter = StereoSplitter;\n"
         + "    event wavetableLoadBegin (wt::WavetableLoadBegin load) { adapter.loadBeginIn <- load; }\n"
@@ -230,9 +232,14 @@ def _build_distortion_probe_source(scheduled_events: list[tuple[int, str]]) -> s
         + "        distortion.previewInputRight -> scope.previewInputRight;\n"
         + "        distortion.previewOutputLeft -> scope.previewOutputLeft;\n"
         + "        distortion.previewOutputRight -> scope.previewOutputRight;\n"
+        + "        distortion.previewInputLeft -> history.previewInputLeft;\n"
+        + "        distortion.previewInputRight -> history.previewInputRight;\n"
+        + "        distortion.previewOutputLeft -> history.previewOutputLeft;\n"
+        + "        distortion.previewOutputRight -> history.previewOutputRight;\n"
         + "        distortion.out -> splitter.in;\n"
         + "        splitter.leftOut -> leftOut;\n"
         + "        splitter.rightOut -> rightOut;\n"
+        + "        history.distortionHistory -> distortionHistory;\n"
         + "        scope.distortionScope -> distortionScope;\n"
         + "    }\n"
         + "}\n"
@@ -419,4 +426,63 @@ def test_distortion_scope_reports_more_removed_peak_as_drive_rises() -> None:
     )
     assert high_removed_peak > low_removed_peak + 0.05, (
         f"Expected higher drive to remove more signal. low={low_removed_peak:.6f}, high={high_removed_peak:.6f}."
+    )
+
+
+@pytest.mark.cmajor
+def test_distortion_history_emits_binned_overview_with_removed_peaks() -> None:
+    schedule = [(0, _note_on_expr(1, 60.0, 1.0))]
+    history_events = _collect_probe_events(
+        schedule,
+        setup_js=_build_setup_js(
+            distortion_drive_db=24.0,
+            distortion_knee=0.35,
+            distortion_wet=1.0,
+        ),
+        output_endpoint_id="distortionHistory",
+        num_samples=12_288,
+    )
+
+    assert history_events, "Expected distortion history probe to emit at least one history frame."
+
+    payload = history_events[-1].get("event", history_events[-1])
+    assert isinstance(payload, dict), "Expected distortion history event payload to be an object."
+
+    bin_count = int(payload.get("binCount", 0))
+    valid_bin_count = int(payload.get("validBinCount", 0))
+    input_mins = payload.get("inputMins", [])
+    input_maxs = payload.get("inputMaxs", [])
+    output_mins = payload.get("outputMins", [])
+    output_maxs = payload.get("outputMaxs", [])
+
+    assert isinstance(input_mins, list) and isinstance(input_maxs, list)
+    assert isinstance(output_mins, list) and isinstance(output_maxs, list)
+    assert bin_count == 160, f"Expected 160 history bins. binCount was {bin_count}."
+    assert valid_bin_count > 0, f"Expected at least one valid history bin. validBinCount was {valid_bin_count}."
+    assert len(input_mins) == bin_count
+    assert len(input_maxs) == bin_count
+    assert len(output_mins) == bin_count
+    assert len(output_maxs) == bin_count
+
+    max_removed = 0.0
+    max_input_peak = 0.0
+    max_output_peak = 0.0
+
+    for index in range(valid_bin_count):
+        input_min = float(input_mins[index])
+        input_max = float(input_maxs[index])
+        output_min = float(output_mins[index])
+        output_max = float(output_maxs[index])
+        max_input_peak = max(max_input_peak, abs(input_min), abs(input_max))
+        max_output_peak = max(max_output_peak, abs(output_min), abs(output_max))
+        max_removed = max(max_removed, max(0.0, input_max - output_max, output_min - input_min))
+
+    assert max_input_peak > 1.1, (
+        f"Expected history bins to show driven wet input above the shaper ceiling. inputPeak was {max_input_peak:.6f}."
+    )
+    assert max_output_peak <= 1.05, (
+        f"Expected history bins to show shaped wet output near the normalized ceiling. outputPeak was {max_output_peak:.6f}."
+    )
+    assert max_removed > 0.05, (
+        f"Expected history bins to show removed signal. removedPeak was {max_removed:.6f}."
     )

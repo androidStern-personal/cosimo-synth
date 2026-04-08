@@ -56,8 +56,11 @@ import {
     type FilterSpectrumFrame,
 } from "./filter-spectrum";
 import {
+    DISTORTION_HISTORY_ENDPOINT_ID,
     DISTORTION_SCOPE_ENDPOINT_ID,
+    normalizeDistortionHistoryMessage,
     normalizeDistortionScopeMessage,
+    type DistortionHistoryFrame,
     type DistortionScopeFrame,
 } from "./distortion-visualization";
 import {
@@ -184,6 +187,7 @@ export type SynthPatchViewModel = {
     distortionWetLPHz: PatchControlBinding<number>;
     observedFilterState: EffectiveFilterState;
     observedFilterSpectrum: FilterSpectrumFrame | null;
+    observedDistortionHistory: DistortionHistoryFrame | null;
     observedDistortionScope: DistortionScopeFrame | null;
     observedWarpState: EffectiveWarpState;
     modulationState: ModulationState | null;
@@ -395,6 +399,26 @@ export function useObservedDistortionScope() {
         }
 
         const normalizedState = normalizeDistortionScopeMessage(message);
+        if (!normalizedState) {
+            return;
+        }
+
+        setObservedState(normalizedState);
+    }, [message]);
+
+    return observedState;
+}
+
+export function useObservedDistortionHistory() {
+    const message = usePatchEndpoint<unknown | null>(DISTORTION_HISTORY_ENDPOINT_ID, null);
+    const [observedState, setObservedState] = useState<DistortionHistoryFrame | null>(null);
+
+    useEffect(() => {
+        if (!message) {
+            return;
+        }
+
+        const normalizedState = normalizeDistortionHistoryMessage(message);
         if (!normalizedState) {
             return;
         }
@@ -1149,6 +1173,7 @@ export function useSynthPatchViewModel({
         filterQ: filterQ.value,
     });
     const observedFilterSpectrum = useObservedFilterSpectrum();
+    const observedDistortionHistory = useObservedDistortionHistory();
     const observedDistortionScope = useObservedDistortionScope();
     const runtimePresentation = useMemo(
         () => resolveRuntimeTablePresentation(runtimeStateMessage, Number(wavetableSelect.value) || 0),
@@ -1346,6 +1371,7 @@ export function useSynthPatchViewModel({
         distortionWetLPHz,
         observedFilterState,
         observedFilterSpectrum,
+        observedDistortionHistory,
         observedDistortionScope,
         observedWarpState,
         modulationState,

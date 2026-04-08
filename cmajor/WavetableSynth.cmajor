@@ -968,6 +968,7 @@ graph WavetableSynth [[ main ]]
     output stream float32<2> audioOut;
     output filterSpectrumAnalyzer.filterSpectrum;
     output distortionScopeAnalyzer.distortionScope;
+    output distortionHistoryAnalyzer.distortionHistory;
 
     let voiceCount = 16;
 
@@ -979,6 +980,7 @@ graph WavetableSynth [[ main ]]
     node analyzerDownmix = wt::StereoToMonoAverage;
     node filterSpectrumAnalyzer = wt::FilterSpectrumAnalyzer;
     node distortionScopeAnalyzer = wt::DistortionScopeAnalyzer;
+    node distortionHistoryAnalyzer = wt::DistortionHistoryAnalyzer;
     node desiredTableMonitor = wt::DesiredTableMonitor;
     node runtimeStateCoordinator = wt::RuntimeStateCoordinator;
 
@@ -1030,6 +1032,10 @@ graph WavetableSynth [[ main ]]
         distortion.previewInputRight -> distortionScopeAnalyzer.previewInputRight;
         distortion.previewOutputLeft -> distortionScopeAnalyzer.previewOutputLeft;
         distortion.previewOutputRight -> distortionScopeAnalyzer.previewOutputRight;
+        distortion.previewInputLeft -> distortionHistoryAnalyzer.previewInputLeft;
+        distortion.previewInputRight -> distortionHistoryAnalyzer.previewInputRight;
+        distortion.previewOutputLeft -> distortionHistoryAnalyzer.previewOutputLeft;
+        distortion.previewOutputRight -> distortionHistoryAnalyzer.previewOutputRight;
         distortion.out -> audioOut;
     }
 }

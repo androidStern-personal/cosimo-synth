@@ -35,7 +35,7 @@ import {
     WavetableStageSection,
 } from "../shared/synth-components";
 import { DistortionVisualizer } from "../shared/distortion-visualizer";
-import type { DistortionScopeFrame } from "../shared/distortion-visualization";
+import type { DistortionHistoryFrame, DistortionScopeFrame } from "../shared/distortion-visualization";
 import {
     KeyboardDock,
     type PianoKeyboardElement,
@@ -144,6 +144,7 @@ type DistortionSectionProps = {
     distortionWet: PatchControlBinding<number>;
     distortionWetHPHz: PatchControlBinding<number>;
     distortionWetLPHz: PatchControlBinding<number>;
+    observedDistortionHistory: DistortionHistoryFrame | null;
     observedDistortionScope: DistortionScopeFrame | null;
     className?: string;
 };
@@ -1191,6 +1192,7 @@ function DistortionSection({
     distortionWet,
     distortionWetHPHz,
     distortionWetLPHz,
+    observedDistortionHistory,
     observedDistortionScope,
     className,
 }: DistortionSectionProps) {
@@ -1240,7 +1242,7 @@ function DistortionSection({
                     <div className="flex items-center justify-between gap-4">
                         <div>
                             <div className="text-[11px] uppercase tracking-[0.22em] text-rose-200/70">Distortion</div>
-                            <div className="mt-1 text-sm text-slate-200/78">Wet waveform against the live shaping curve.</div>
+                            <div className="mt-1 text-sm text-slate-200/78">Wet transfer above. Output + removal overview below.</div>
                         </div>
                         <div className="grid gap-1 text-right font-mono text-[11px] tracking-[0.18em] text-slate-200/70">
                             <div>{overshoot > 0 ? `Ceiling +${overshoot.toFixed(2)}` : `Ceiling ${Math.round(headroom * 100)}% clear`}</div>
@@ -1250,7 +1252,8 @@ function DistortionSection({
 
                     <DistortionVisualizer
                         knee={distortionKnee.value}
-                        frame={observedDistortionScope}
+                        transferFrame={observedDistortionScope}
+                        historyFrame={observedDistortionHistory}
                         className="min-h-0"
                     />
                 </div>
@@ -1782,6 +1785,7 @@ function DesktopPatchViewBody() {
                     distortionWet={synthView.distortionWet}
                     distortionWetHPHz={synthView.distortionWetHPHz}
                     distortionWetLPHz={synthView.distortionWetLPHz}
+                    observedDistortionHistory={synthView.observedDistortionHistory}
                     observedDistortionScope={synthView.observedDistortionScope}
                 />
 

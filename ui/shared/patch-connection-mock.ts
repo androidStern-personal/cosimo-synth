@@ -22,6 +22,7 @@ const effectiveWavetablePositionEndpointID = "effectiveWavetablePosition";
 const effectiveWarpStateEndpointID = "effectiveWarpState";
 const effectiveFilterStateEndpointID = "effectiveFilterState";
 const filterSpectrumEndpointID = "filterSpectrum";
+const distortionHistoryEndpointID = "distortionHistory";
 const distortionScopeEndpointID = "distortionScope";
 const retryDesiredTableRequestEndpointID = "retryDesiredTableRequest";
 
@@ -676,6 +677,42 @@ export class MockPatchConnection implements PatchConnectionLike {
             removedPeak,
             inputSamples,
             outputSamples,
+        });
+    }
+
+    emitDistortionHistory(
+        {
+            sampleRateHz = 44_100,
+            horizonMs = 2_000,
+            binDurationMs = 12.5,
+            binCount = 160,
+            validBinCount = 160,
+            inputMins = [],
+            inputMaxs = [],
+            outputMins = [],
+            outputMaxs = [],
+        }: {
+            sampleRateHz?: number;
+            horizonMs?: number;
+            binDurationMs?: number;
+            binCount?: number;
+            validBinCount?: number;
+            inputMins?: number[];
+            inputMaxs?: number[];
+            outputMins?: number[];
+            outputMaxs?: number[];
+        } = {},
+    ) {
+        this.emitEndpoint(distortionHistoryEndpointID, {
+            sampleRateHz,
+            horizonMs,
+            binDurationMs,
+            binCount,
+            validBinCount,
+            inputMins,
+            inputMaxs,
+            outputMins,
+            outputMaxs,
         });
     }
 

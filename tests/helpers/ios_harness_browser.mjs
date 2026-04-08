@@ -776,6 +776,9 @@ export function createIOSHarnessInitScript(baseUrl) {
             emitDistortionScope(nextState) {
                 emitEndpoint("distortionScope", nextState);
             },
+            emitDistortionHistory(nextState) {
+                emitEndpoint("distortionHistory", nextState);
+            },
             setStoredStateValue(key, value) {
                 storedState.set(key, value);
                 emitStoredStateValue(key);
@@ -849,6 +852,12 @@ export async function setIOSHarnessParameterValue(page, endpointID, value, emitE
 export async function emitIOSHarnessDistortionScope(page, nextState) {
     await page.evaluate((state) => {
         window.__COSIMO_IOS_HARNESS__.emitDistortionScope(state);
+    }, nextState);
+}
+
+export async function emitIOSHarnessDistortionHistory(page, nextState) {
+    await page.evaluate((state) => {
+        window.__COSIMO_IOS_HARNESS__.emitDistortionHistory(state);
     }, nextState);
 }
 

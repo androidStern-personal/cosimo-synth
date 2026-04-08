@@ -1,4 +1,5 @@
 export const DISTORTION_SCOPE_ENDPOINT_ID = "distortionScope";
+export const DISTORTION_HISTORY_ENDPOINT_ID = "distortionHistory";
 export const DISTORTION_SCOPE_CLIP_EPSILON = 0.0025;
 export const DISTORTION_FIXED_DISPLAY_RANGE = 2.0;
 export const DISTORTION_CURVE_POINT_COUNT = 241;
@@ -13,6 +14,18 @@ export type DistortionScopeFrame = {
     removedPeak: number;
     inputSamples: number[];
     outputSamples: number[];
+};
+
+export type DistortionHistoryFrame = {
+    sampleRateHz: number;
+    horizonMs: number;
+    binDurationMs: number;
+    binCount: number;
+    validBinCount: number;
+    inputMins: number[];
+    inputMaxs: number[];
+    outputMins: number[];
+    outputMaxs: number[];
 };
 
 export type DistortionDisplayState = {
@@ -43,6 +56,18 @@ export type DistortionTransferOccupancy = {
     peakRemoved: number;
 };
 
+export type DistortionHistoryBin = {
+    valid: boolean;
+    inputMin: number;
+    inputMax: number;
+    outputMin: number;
+    outputMax: number;
+    inputPeak: number;
+    outputPeak: number;
+    removedPeak: number;
+    clipped: boolean;
+};
+
 function clamp(value: number, min: number, max: number) {
     return Math.min(Math.max(value, min), max);
 }
@@ -67,6 +92,21 @@ function findPeak(samples: number[]) {
 
     for (const sample of samples) {
         peak = Math.max(peak, Math.abs(sample));
+    }
+
+    return peak;
+}
+
+function findBoundPeak(mins: number[], maxs: number[]) {
+    const sampleCount = Math.min(mins.length, maxs.length);
+    let peak = 0;
+
+    for (let index = 0; index < sampleCount; index += 1) {
+        peak = Math.max(
+            peak,
+            Math.abs(mins[index] ?? 0),
+            Math.abs(maxs[index] ?? 0),
+        );
     }
 
     return peak;
@@ -117,6 +157,73 @@ export function normalizeDistortionScopeMessage(message: unknown): DistortionSco
     };
 }
 
+export function normalizeDistortionHistoryMessage(message: unknown): DistortionHistoryFrame | null {
+    const payload = (
+        message
+        && typeof message === "object"
+        && "event" in message
+        && (message as { event?: unknown }).event
+    ) ? (message as { event: unknown }).event : message;
+
+    if (!payload || typeof payload !== "object") {
+        return null;
+    }
+
+    const record = payload as Record<string, unknown>;
+    const inputMins = coerceNumberArray(record.inputMins);
+    const inputMaxs = coerceNumberArray(record.inputMaxs);
+    const outputMins = coerceNumberArray(record.outputMins);
+    const outputMaxs = coerceNumberArray(record.outputMaxs);
+
+    if (!inputMins || !inputMaxs || !outputMins || !outputMaxs) {
+        return null;
+    }
+
+    const availableBinCount = Math.min(
+        inputMins.length,
+        inputMaxs.length,
+        outputMins.length,
+        outputMaxs.length,
+    );
+
+    if (availableBinCount <= 0) {
+        return null;
+    }
+
+    const binCount = clamp(
+        Math.round(coerceFiniteNumber(record.binCount) ?? availableBinCount),
+        1,
+        availableBinCount,
+    );
+    const validBinCount = clamp(
+        Math.round(coerceFiniteNumber(record.validBinCount) ?? binCount),
+        0,
+        binCount,
+    );
+    const horizonMs = Math.max(
+        0,
+        coerceFiniteNumber(record.horizonMs)
+            ?? ((coerceFiniteNumber(record.binDurationMs) ?? 0) * binCount),
+    );
+    const binDurationMs = Math.max(
+        0,
+        coerceFiniteNumber(record.binDurationMs)
+            ?? (horizonMs > 0 ? horizonMs / Math.max(1, binCount) : 0),
+    );
+
+    return {
+        sampleRateHz: Math.max(1, coerceFiniteNumber(record.sampleRateHz) ?? 44_100),
+        horizonMs,
+        binDurationMs,
+        binCount,
+        validBinCount,
+        inputMins: inputMins.slice(0, binCount),
+        inputMaxs: inputMaxs.slice(0, binCount),
+        outputMins: outputMins.slice(0, binCount),
+        outputMaxs: outputMaxs.slice(0, binCount),
+    };
+}
+
 export function shapeDistortionSample(inputSample: number, knee: number) {
     const clampedKnee = clamp(Number(knee) || 0, 0, 1);
     const exponent = 2 + (14 * clampedKnee * clampedKnee);
@@ -144,6 +251,84 @@ export function buildDistortionSamplePoints(frame: DistortionScopeFrame) {
     }
 
     return points;
+}
+
+export function buildDistortionHistoryBins(frame: DistortionHistoryFrame) {
+    const activeBinCount = Math.min(
+        frame.binCount,
+        frame.inputMins.length,
+        frame.inputMaxs.length,
+        frame.outputMins.length,
+        frame.outputMaxs.length,
+    );
+    const safeValidBinCount = clamp(frame.validBinCount, 0, activeBinCount);
+    const leadingPaddingCount = Math.max(0, activeBinCount - safeValidBinCount);
+    const bins: DistortionHistoryBin[] = [];
+
+    for (let index = 0; index < leadingPaddingCount; index += 1) {
+        bins.push({
+            valid: false,
+            inputMin: 0,
+            inputMax: 0,
+            outputMin: 0,
+            outputMax: 0,
+            inputPeak: 0,
+            outputPeak: 0,
+            removedPeak: 0,
+            clipped: false,
+        });
+    }
+
+    for (let index = 0; index < safeValidBinCount; index += 1) {
+        const inputMin = frame.inputMins[index] ?? 0;
+        const inputMax = frame.inputMaxs[index] ?? 0;
+        const outputMin = frame.outputMins[index] ?? 0;
+        const outputMax = frame.outputMaxs[index] ?? 0;
+        const inputPeak = Math.max(Math.abs(inputMin), Math.abs(inputMax));
+        const outputPeak = Math.max(Math.abs(outputMin), Math.abs(outputMax));
+        const removedPeak = Math.max(
+            0,
+            inputMax - outputMax,
+            outputMin - inputMin,
+        );
+
+        bins.push({
+            valid: true,
+            inputMin,
+            inputMax,
+            outputMin,
+            outputMax,
+            inputPeak,
+            outputPeak,
+            removedPeak,
+            clipped: removedPeak >= DISTORTION_SCOPE_CLIP_EPSILON,
+        });
+    }
+
+    return bins;
+}
+
+export function summarizeDistortionHistoryFrame(frame: DistortionHistoryFrame) {
+    const inputPeak = findBoundPeak(frame.inputMins, frame.inputMaxs);
+    const outputPeak = findBoundPeak(frame.outputMins, frame.outputMaxs);
+    let removedPeak = 0;
+
+    for (let index = 0; index < Math.min(frame.validBinCount, frame.binCount); index += 1) {
+        removedPeak = Math.max(
+            removedPeak,
+            Math.max(
+                0,
+                (frame.inputMaxs[index] ?? 0) - (frame.outputMaxs[index] ?? 0),
+                (frame.outputMins[index] ?? 0) - (frame.inputMins[index] ?? 0),
+            ),
+        );
+    }
+
+    return {
+        inputPeak,
+        outputPeak,
+        removedPeak,
+    };
 }
 
 function smoothSeries(values: number[]) {

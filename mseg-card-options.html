@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>MSEG Card – Option D Responsive</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Inter', system-ui, sans-serif;
+    background: linear-gradient(180deg, rgba(6, 10, 22, 0.98), rgba(3, 5, 12, 1));
+    color: #eef2f5;
+    padding: 32px;
+    min-height: 100vh;
+  }
+
+  h1 {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: rgba(148, 163, 184, 0.5);
+    margin-bottom: 32px;
+    text-align: center;
+  }
+
+  /* Preview frames to simulate viewports */
+  .preview-grid {
+    display: flex;
+    gap: 40px;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-bottom: 48px;
+  }
+  .frame {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .frame-label {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: rgba(148, 163, 184, 0.4);
+    text-align: center;
+  }
+  .frame-box {
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 12px;
+    overflow: hidden;
+    background: rgba(3,5,12,1);
+  }
+
+  /* ── Shared cosimo styles ── */
+  .cosimo-grid-line { stroke: rgba(255, 255, 255, 0.08); stroke-width: 1; }
+  .cosimo-curve-fill { fill: rgba(135, 215, 245, 0.08); }
+  .cosimo-curve-line { fill: none; stroke: #87d7f5; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+
+  /* ─────────────────────────────────────────────
+     OPTION D – Pip Selector (responsive)
+     ───────────────────────────────────────────── */
+  .opt-d {
+    border-radius: 14px;
+    background: rgba(255,255,255,0.02);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .opt-d .top-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    flex-shrink: 0;
+  }
+
+  .opt-d .top-bar .pips,
+  .opt-d .top-bar .env-pips {
+    display: flex;
+    gap: 3px;
+  }
+  .opt-d .top-bar .pips button,
+  .opt-d .top-bar .env-pips button {
+    width: 18px; height: 18px;
+    border-radius: 5px;
+    border: 1px solid rgba(255,255,255,0.06);
+    background: rgba(255,255,255,0.02);
+    font-size: 8px;
+    font-weight: 700;
+    color: rgba(148,163,184,0.4);
+    cursor: pointer;
+    font-family: inherit;
+    display: grid;
+    place-items: center;
+    transition: all 0.12s;
+    padding: 0;
+  }
+  .opt-d .top-bar .pips button.active {
+    background: rgba(103,232,249,0.15);
+    border-color: rgba(103,232,249,0.25);
+    color: rgba(207,250,254,0.9);
+  }
+  .opt-d .top-bar .pips button:hover:not(.active),
+  .opt-d .top-bar .env-pips button:hover:not(.active) {
+    border-color: rgba(255,255,255,0.1);
+    color: rgba(148,163,184,0.65);
+  }
+  .opt-d .top-bar .env-pips button.active {
+    background: rgba(50,240,188,0.12);
+    border-color: rgba(50,240,188,0.25);
+    color: rgba(187,247,208,0.9);
+  }
+
+  .opt-d .top-bar .slot-label {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: rgba(207,250,254,0.6);
+    margin-left: 2px;
+    white-space: nowrap;
+  }
+
+  .opt-d .top-bar .sep2 {
+    width: 1px; height: 12px;
+    background: rgba(255,255,255,0.06);
+    margin: 0 2px;
+    flex-shrink: 0;
+  }
+
+  .opt-d .top-bar .right-controls {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+
+  .opt-d .top-bar .loop-icon {
+    width: 22px; height: 22px;
+    border-radius: 6px;
+    border: 1px solid rgba(255,255,255,0.06);
+    background: rgba(255,255,255,0.02);
+    cursor: pointer;
+    display: grid;
+    place-items: center;
+    transition: all 0.15s;
+    padding: 0;
+    flex-shrink: 0;
+  }
+  .opt-d .top-bar .loop-icon svg {
+    width: 12px; height: 12px;
+    stroke: rgba(148,163,184,0.4);
+    fill: none;
+    stroke-width: 1.5;
+    stroke-linecap: round;
+  }
+  .opt-d .top-bar .loop-icon.on {
+    background: rgba(103,232,249,0.1);
+    border-color: rgba(103,232,249,0.2);
+  }
+  .opt-d .top-bar .loop-icon.on svg { stroke: rgba(103,232,249,0.85); }
+
+  .opt-d .top-bar .rate-readout {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    color: rgba(103,232,249,0.7);
+    cursor: ew-resize;
+    padding: 3px 6px;
+    border-radius: 4px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.04);
+    user-select: none;
+    white-space: nowrap;
+  }
+  .opt-d .top-bar .rate-readout:hover {
+    border-color: rgba(103,232,249,0.15);
+    color: rgba(103,232,249,0.9);
+  }
+
+  .opt-d .canvas-d {
+    flex: 1;
+    min-height: 0;
+    cursor: pointer;
+    position: relative;
+  }
+  .opt-d .canvas-d svg { display: block; width: 100%; height: 100%; }
+  .opt-d .canvas-d:hover { background: rgba(255,255,255,0.01); }
+
+  .opt-d .canvas-d .click-hint {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    opacity: 0;
+    transition: opacity 0.15s;
+    pointer-events: none;
+  }
+  .opt-d .canvas-d:hover .click-hint { opacity: 1; }
+  .opt-d .canvas-d .click-hint span {
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: rgba(103,232,249,0.4);
+    background: rgba(3,5,12,0.6);
+    padding: 4px 10px;
+    border-radius: 6px;
+  }
+
+  /* ── Mobile: tighten up, enlarge touch targets ── */
+  @media (max-width: 480px) {
+    .opt-d {
+      border-radius: 10px;
+    }
+
+    .opt-d .top-bar {
+      gap: 4px;
+      padding: 5px 8px;
+    }
+
+    /* Larger touch targets on mobile */
+    .opt-d .top-bar .pips button,
+    .opt-d .top-bar .env-pips button {
+      width: 28px; height: 28px;
+      border-radius: 6px;
+      font-size: 10px;
+    }
+
+    .opt-d .top-bar .slot-label {
+      font-size: 9px;
+      letter-spacing: 0.08em;
+      margin-left: 1px;
+    }
+
+    .opt-d .top-bar .sep2 {
+      margin: 0 1px;
+      height: 14px;
+    }
+
+    .opt-d .top-bar .loop-icon {
+      width: 28px; height: 28px;
+      border-radius: 6px;
+    }
+    .opt-d .top-bar .loop-icon svg {
+      width: 14px; height: 14px;
+    }
+
+    .opt-d .top-bar .rate-readout {
+      font-size: 11px;
+      padding: 4px 8px;
+      border-radius: 6px;
+    }
+
+    .opt-d .canvas-d .click-hint span {
+      font-size: 11px;
+      padding: 6px 14px;
+    }
+  }
+
+  /* ── Very small screens (iPhone SE etc) ── */
+  @media (max-width: 360px) {
+    .opt-d .top-bar {
+      gap: 3px;
+      padding: 4px 6px;
+    }
+
+    .opt-d .top-bar .pips button,
+    .opt-d .top-bar .env-pips button {
+      width: 26px; height: 26px;
+      font-size: 9px;
+    }
+
+    .opt-d .top-bar .slot-label {
+      font-size: 8px;
+    }
+
+    .opt-d .top-bar .loop-icon {
+      width: 26px; height: 26px;
+    }
+
+    .opt-d .top-bar .rate-readout {
+      font-size: 10px;
+      padding: 3px 6px;
+    }
+  }
+
+  /* ─── Live-resize demo section ─── */
+  .live-section {
+    max-width: 800px;
+    margin: 0 auto;
+  }
+  .live-section h2 {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: rgba(103, 232, 249, 0.5);
+    margin-bottom: 12px;
+    text-align: center;
+  }
+  .live-section p {
+    font-size: 11px;
+    color: rgba(148, 163, 184, 0.4);
+    text-align: center;
+    margin-bottom: 16px;
+  }
+
+</style>
+</head>
+<body>
+
+<h1>Option D – Responsive Preview</h1>
+
+<!-- ═══ Static previews at fixed widths ═══ -->
+<div class="preview-grid">
+
+  <!-- Desktop 460px -->
+  <div class="frame">
+    <div class="frame-label">Desktop (460px)</div>
+    <div class="frame-box" style="width: 460px;">
+      <div class="opt-d" style="height: 180px;">
+        <div class="top-bar">
+          <div class="pips">
+            <button class="active">1</button>
+            <button>2</button>
+            <button>3</button>
+          </div>
+          <span class="slot-label">Mseg</span>
+          <span class="sep2"></span>
+          <div class="env-pips">
+            <button>1</button>
+            <button>2</button>
+            <button>3</button>
+          </div>
+          <span class="slot-label" style="color: rgba(50,240,188,0.5)">Env</span>
+          <div class="right-controls">
+            <button class="loop-icon on" title="Toggle loop">
+              <svg viewBox="0 0 16 16"><path d="M4 6 L12 6 L12 4 L15 7 L12 10 L12 8 L4 8 L4 10 L1 7 L4 4 Z"/></svg>
+            </button>
+            <span class="rate-readout">1.000 s</span>
+          </div>
+        </div>
+        <div class="canvas-d">
+          <svg viewBox="0 0 400 130" preserveAspectRatio="none">
+            <line class="cosimo-grid-line" x1="10" y1="32" x2="390" y2="32" />
+            <line class="cosimo-grid-line" x1="10" y1="65" x2="390" y2="65" />
+            <line class="cosimo-grid-line" x1="10" y1="98" x2="390" y2="98" />
+            <line class="cosimo-grid-line" x1="100" y1="10" x2="100" y2="110" />
+            <line class="cosimo-grid-line" x1="200" y1="10" x2="200" y2="110" />
+            <line class="cosimo-grid-line" x1="300" y1="10" x2="300" y2="110" />
+            <path class="cosimo-curve-fill" d="M10,120 L10,85 C60,25 100,18 150,55 C200,90 250,25 300,45 C350,65 380,35 390,28 L390,120 Z" />
+            <path class="cosimo-curve-line" d="M10,85 C60,25 100,18 150,55 C200,90 250,25 300,45 C350,65 380,35 390,28" />
+          </svg>
+          <div class="click-hint"><span>Edit Shape</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Mobile 375px (iPhone) -->
+  <div class="frame">
+    <div class="frame-label">Mobile (375px)</div>
+    <div class="frame-box" style="width: 375px;">
+      <div class="opt-d opt-d--mobile" style="height: 140px;">
+        <div class="top-bar">
+          <div class="pips">
+            <button class="active">1</button>
+            <button>2</button>
+            <button>3</button>
+          </div>
+          <span class="slot-label">Mseg</span>
+          <span class="sep2"></span>
+          <div class="env-pips">
+            <button>1</button>
+            <button>2</button>
+            <button>3</button>
+          </div>
+          <span class="slot-label" style="color: rgba(50,240,188,0.5)">Env</span>
+          <div class="right-controls">
+            <button class="loop-icon on" title="Toggle loop">
+              <svg viewBox="0 0 16 16"><path d="M4 6 L12 6 L12 4 L15 7 L12 10 L12 8 L4 8 L4 10 L1 7 L4 4 Z"/></svg>
+            </button>
+            <span class="rate-readout">1.000 s</span>
+          </div>
+        </div>
+        <div class="canvas-d">
+          <svg viewBox="0 0 400 130" preserveAspectRatio="none">
+            <line class="cosimo-grid-line" x1="10" y1="32" x2="390" y2="32" />
+            <line class="cosimo-grid-line" x1="10" y1="65" x2="390" y2="65" />
+            <line class="cosimo-grid-line" x1="10" y1="98" x2="390" y2="98" />
+            <line class="cosimo-grid-line" x1="100" y1="10" x2="100" y2="110" />
+            <line class="cosimo-grid-line" x1="200" y1="10" x2="200" y2="110" />
+            <line class="cosimo-grid-line" x1="300" y1="10" x2="300" y2="110" />
+            <path class="cosimo-curve-fill" d="M10,120 L10,85 C60,25 100,18 150,55 C200,90 250,25 300,45 C350,65 380,35 390,28 L390,120 Z" />
+            <path class="cosimo-curve-line" d="M10,85 C60,25 100,18 150,55 C200,90 250,25 300,45 C350,65 380,35 390,28" />
+          </svg>
+          <div class="click-hint"><span>Edit Shape</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Small mobile 320px (iPhone SE) -->
+  <div class="frame">
+    <div class="frame-label">Small (320px)</div>
+    <div class="frame-box" style="width: 320px;">
+      <div class="opt-d opt-d--small" style="height: 120px;">
+        <div class="top-bar">
+          <div class="pips">
+            <button class="active">1</button>
+            <button>2</button>
+            <button>3</button>
+          </div>
+          <span class="slot-label">Mseg</span>
+          <span class="sep2"></span>
+          <div class="env-pips">
+            <button>1</button>
+            <button>2</button>
+            <button>3</button>
+          </div>
+          <span class="slot-label" style="color: rgba(50,240,188,0.5)">Env</span>
+          <div class="right-controls">
+            <button class="loop-icon on" title="Toggle loop">
+              <svg viewBox="0 0 16 16"><path d="M4 6 L12 6 L12 4 L15 7 L12 10 L12 8 L4 8 L4 10 L1 7 L4 4 Z"/></svg>
+            </button>
+            <span class="rate-readout">1.000 s</span>
+          </div>
+        </div>
+        <div class="canvas-d">
+          <svg viewBox="0 0 400 130" preserveAspectRatio="none">
+            <line class="cosimo-grid-line" x1="10" y1="32" x2="390" y2="32" />
+            <line class="cosimo-grid-line" x1="10" y1="65" x2="390" y2="65" />
+            <line class="cosimo-grid-line" x1="10" y1="98" x2="390" y2="98" />
+            <line class="cosimo-grid-line" x1="100" y1="10" x2="100" y2="110" />
+            <line class="cosimo-grid-line" x1="200" y1="10" x2="200" y2="110" />
+            <line class="cosimo-grid-line" x1="300" y1="10" x2="300" y2="110" />
+            <path class="cosimo-curve-fill" d="M10,120 L10,85 C60,25 100,18 150,55 C200,90 250,25 300,45 C350,65 380,35 390,28 L390,120 Z" />
+            <path class="cosimo-curve-line" d="M10,85 C60,25 100,18 150,55 C200,90 250,25 300,45 C350,65 380,35 390,28" />
+          </svg>
+          <div class="click-hint"><span>Edit Shape</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ═══ Live-resize version ═══ -->
+<div class="live-section">
+  <h2>Live Resize</h2>
+  <p>Resize your browser window to see the responsive behavior</p>
+  <div class="opt-d" style="height: clamp(120px, 22vw, 200px);">
+    <div class="top-bar">
+      <div class="pips">
+        <button class="active">1</button>
+        <button>2</button>
+        <button>3</button>
+      </div>
+      <span class="slot-label">Mseg</span>
+      <span class="sep2"></span>
+      <div class="env-pips">
+        <button>1</button>
+        <button>2</button>
+        <button>3</button>
+      </div>
+      <span class="slot-label" style="color: rgba(50,240,188,0.5)">Env</span>
+      <div class="right-controls">
+        <button class="loop-icon on" title="Toggle loop">
+          <svg viewBox="0 0 16 16"><path d="M4 6 L12 6 L12 4 L15 7 L12 10 L12 8 L4 8 L4 10 L1 7 L4 4 Z"/></svg>
+        </button>
+        <span class="rate-readout">1.000 s</span>
+      </div>
+    </div>
+    <div class="canvas-d">
+      <svg viewBox="0 0 400 130" preserveAspectRatio="none">
+        <line class="cosimo-grid-line" x1="10" y1="32" x2="390" y2="32" />
+        <line class="cosimo-grid-line" x1="10" y1="65" x2="390" y2="65" />
+        <line class="cosimo-grid-line" x1="10" y1="98" x2="390" y2="98" />
+        <line class="cosimo-grid-line" x1="100" y1="10" x2="100" y2="110" />
+        <line class="cosimo-grid-line" x1="200" y1="10" x2="200" y2="110" />
+        <line class="cosimo-grid-line" x1="300" y1="10" x2="300" y2="110" />
+        <path class="cosimo-curve-fill" d="M10,120 L10,85 C60,25 100,18 150,55 C200,90 250,25 300,45 C350,65 380,35 390,28 L390,120 Z" />
+        <path class="cosimo-curve-line" d="M10,85 C60,25 100,18 150,55 C200,90 250,25 300,45 C350,65 380,35 390,28" />
+      </svg>
+      <div class="click-hint"><span>Edit Shape</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- Force mobile styles on static previews via classes -->
+<style>
+  /* Mobile preview simulation (applied via class, not media query) */
+  .opt-d--mobile {
+    border-radius: 10px;
+  }
+  .opt-d--mobile .top-bar {
+    gap: 4px;
+    padding: 5px 8px;
+  }
+  .opt-d--mobile .top-bar .pips button,
+  .opt-d--mobile .top-bar .env-pips button {
+    width: 28px; height: 28px;
+    border-radius: 6px;
+    font-size: 10px;
+  }
+  .opt-d--mobile .top-bar .slot-label {
+    font-size: 9px;
+    letter-spacing: 0.08em;
+    margin-left: 1px;
+  }
+  .opt-d--mobile .top-bar .sep2 {
+    margin: 0 1px;
+    height: 14px;
+  }
+  .opt-d--mobile .top-bar .loop-icon {
+    width: 28px; height: 28px;
+  }
+  .opt-d--mobile .top-bar .loop-icon svg {
+    width: 14px; height: 14px;
+  }
+  .opt-d--mobile .top-bar .rate-readout {
+    font-size: 11px;
+    padding: 4px 8px;
+    border-radius: 6px;
+  }
+  .opt-d--mobile .canvas-d .click-hint span {
+    font-size: 11px;
+    padding: 6px 14px;
+  }
+
+  /* Small mobile preview simulation */
+  .opt-d--small {
+    border-radius: 10px;
+  }
+  .opt-d--small .top-bar {
+    gap: 3px;
+    padding: 4px 6px;
+  }
+  .opt-d--small .top-bar .pips button,
+  .opt-d--small .top-bar .env-pips button {
+    width: 26px; height: 26px;
+    border-radius: 6px;
+    font-size: 9px;
+  }
+  .opt-d--small .top-bar .slot-label {
+    font-size: 8px;
+    letter-spacing: 0.06em;
+    margin-left: 1px;
+  }
+  .opt-d--small .top-bar .sep2 {
+    margin: 0 1px;
+    height: 12px;
+  }
+  .opt-d--small .top-bar .loop-icon {
+    width: 26px; height: 26px;
+  }
+  .opt-d--small .top-bar .loop-icon svg {
+    width: 13px; height: 13px;
+  }
+  .opt-d--small .top-bar .rate-readout {
+    font-size: 10px;
+    padding: 3px 6px;
+    border-radius: 5px;
+  }
+  .opt-d--small .canvas-d .click-hint span {
+    font-size: 10px;
+    padding: 5px 12px;
+  }
+</style>
+
+</body>
+</html>

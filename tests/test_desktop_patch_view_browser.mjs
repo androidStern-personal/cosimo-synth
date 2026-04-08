@@ -94,6 +94,37 @@ function buildDistortionScopeFixture({ amplitude = 1.62, sampleCount = 256 } = {
     };
 }
 
+function buildDistortionHistoryFixture({ amplitude = 1.7, binCount = 160 } = {}) {
+    const inputMins = [];
+    const inputMaxs = [];
+    const outputMins = [];
+    const outputMaxs = [];
+
+    for (let index = 0; index < binCount; index += 1) {
+        const normalized = index / Math.max(1, binCount - 1);
+        const motion = 0.2 + (0.8 * Math.abs(Math.sin(normalized * Math.PI * 5.2)));
+        const inputPeak = amplitude * motion;
+        const outputPeak = inputPeak / Math.pow(1 + Math.pow(inputPeak, 8), 1 / 8);
+
+        inputMins.push(-inputPeak);
+        inputMaxs.push(inputPeak);
+        outputMins.push(-outputPeak);
+        outputMaxs.push(outputPeak);
+    }
+
+    return {
+        sampleRateHz: 44_100,
+        horizonMs: 2_000,
+        binDurationMs: 12.5,
+        binCount,
+        validBinCount: binCount,
+        inputMins,
+        inputMaxs,
+        outputMins,
+        outputMaxs,
+    };
+}
+
 async function dispatchInputValueChange(locator, nextValue) {
     await locator.evaluate((element, value) => {
         if (!(element instanceof HTMLInputElement)) {
@@ -2945,17 +2976,26 @@ test("desktop distortion graph renders occupancy bands on the fixed transfer sca
     const page = await openHarnessPage();
 
     try {
-        const fixture = buildDistortionScopeFixture();
+        const scopeFixture = buildDistortionScopeFixture();
+        const historyFixture = buildDistortionHistoryFixture();
 
-        await page.evaluate((nextFixture) => {
-            window.__COSIMO_DESKTOP_HARNESS__.emitDistortionScope(nextFixture);
-        }, fixture);
+        await page.evaluate(({ nextScopeFixture, nextHistoryFixture }) => {
+            window.__COSIMO_DESKTOP_HARNESS__.emitDistortionScope(nextScopeFixture);
+            window.__COSIMO_DESKTOP_HARNESS__.emitDistortionHistory(nextHistoryFixture);
+        }, {
+            nextScopeFixture: scopeFixture,
+            nextHistoryFixture: historyFixture,
+        });
 
         const renderedState = await waitForPageValue(
             page,
             "desktop distortion graph state",
             () => window.__COSIMO_DESKTOP_HARNESS__.getRenderedState().distortionGraphState,
-            (graphState) => Boolean(graphState && graphState.transfer?.occupancySegmentCount > 0),
+            (graphState) => Boolean(
+                graphState
+                && graphState.transfer?.occupancySegmentCount > 0
+                && graphState.history?.validBinCount > 0
+            ),
         );
         const overlayState = await page.evaluate(() => {
             const host = document.querySelector("cosimo-desktop-react-view");
@@ -2964,6 +3004,8 @@ test("desktop distortion graph renders occupancy bands on the fixed transfer sca
             return {
                 occupancyCount: viewRoot?.querySelectorAll('[data-role="distortion-transfer-occupancy"]').length ?? 0,
                 clippedOccupancyCount: viewRoot?.querySelectorAll('[data-role="distortion-transfer-clipped-occupancy"]').length ?? 0,
+                historyOutputColumnCount: viewRoot?.querySelectorAll('[data-role="distortion-history-output-column"]').length ?? 0,
+                historyRemovedColumnCount: viewRoot?.querySelectorAll('[data-role="distortion-history-removed-column"]').length ?? 0,
                 legacyTraceCount: viewRoot?.querySelectorAll('[data-role="distortion-transfer-trace"]').length ?? 0,
                 legacyClippedPointCount: viewRoot?.querySelectorAll('[data-role="distortion-transfer-clipped-point"]').length ?? 0,
             };
@@ -2975,8 +3017,14 @@ test("desktop distortion graph renders occupancy bands on the fixed transfer sca
         assert.equal(renderedState.clippedSampleCount > 0, true);
         assert.equal(renderedState.transfer.occupancySegmentCount > 0, true);
         assert.equal(renderedState.transfer.clippedOccupancySegmentCount > 0, true);
+        assert.equal(renderedState.history.binCount, historyFixture.binCount);
+        assert.equal(renderedState.history.validBinCount, historyFixture.validBinCount);
+        assert.equal(renderedState.history.clippedBinCount > 0, true);
+        assert.equal(renderedState.history.removedPeak > 0.1, true);
         assert.equal(overlayState.occupancyCount > 0, true);
         assert.equal(overlayState.clippedOccupancyCount > 0, true);
+        assert.equal(overlayState.historyOutputColumnCount, historyFixture.binCount);
+        assert.equal(overlayState.historyRemovedColumnCount > 0, true);
         assert.equal(overlayState.legacyTraceCount, 0);
         assert.equal(overlayState.legacyClippedPointCount, 0);
     } finally {
