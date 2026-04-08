@@ -22,6 +22,7 @@ import {
     VOICE_MODE_OPTIONS,
     WavetableCanvas,
 } from "../shared/synth-components";
+import { DistortionVisualizer } from "../shared/distortion-visualizer";
 import {
     clampMsegRateSeconds,
     MSEG_RATE_MAX_SECONDS,
@@ -58,6 +59,10 @@ const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", 
 const KEYBOARD_ROOT_NOTE_DEFAULT = 36;
 const KEYBOARD_ROOT_NOTE_MIN = 12;
 const KEYBOARD_ROOT_NOTE_MAX = 72;
+const DISTORTION_WET_HP_MIN_HZ = 20;
+const DISTORTION_WET_HP_MAX_HZ = 4_000;
+const DISTORTION_WET_LP_MIN_HZ = 20;
+const DISTORTION_WET_LP_MAX_HZ = 20_000;
 function triggerIOSHaptic(style = "light") {
     const hapticTrigger = (globalThis as typeof globalThis & {
         cmaj_triggerHaptic?: (nextStyle?: string) => unknown;
@@ -106,6 +111,37 @@ function formatGlideTime(seconds: number) {
 
 function formatSeconds(seconds: number) {
     return `${clampMsegRateSeconds(seconds).toFixed(3)} s`;
+}
+
+function formatDriveDb(value: number) {
+    return `${Number(value).toFixed(1)} dB`;
+}
+
+function formatPercent(value: number) {
+    return `${Math.round(clamp(Number(value) || 0, 0, 1) * 100)}%`;
+}
+
+function formatFrequencyHz(value: number) {
+    const safeValue = Math.max(20, Number(value) || 0);
+
+    if (safeValue >= 10_000) {
+        return `${(safeValue / 1000).toFixed(1)} kHz`;
+    }
+
+    if (safeValue >= 1000) {
+        return `${(safeValue / 1000).toFixed(2)} kHz`;
+    }
+
+    return `${Math.round(safeValue)} Hz`;
+}
+
+function frequencyHzToLogNormalized(value: number, minHz: number, maxHz: number) {
+    const safeValue = clamp(value, minHz, maxHz);
+    return Math.log(safeValue / minHz) / Math.log(maxHz / minHz);
+}
+
+function normalizedToLogFrequencyHz(normalized: number, minHz: number, maxHz: number) {
+    return minHz * Math.pow(maxHz / minHz, clamp(normalized, 0, 1));
 }
 
 function formatFrameReadout(position: number, frameCount: number) {
@@ -544,6 +580,208 @@ const IOSModulationMatrixPanel = memo(function IOSModulationMatrixPanel({
                 >
                     Depth shows the movement this row asks for at full source. Position, warp, cutoff, Q, amp, and pan still stop at the synth&apos;s real limits.
                 </div>
+            </div>
+        </div>
+    );
+});
+
+const IOSDistortionPanel = memo(function IOSDistortionPanel({
+    driveValue,
+    kneeValue,
+    wetValue,
+    wetHPHzValue,
+    wetLPHzValue,
+    scopeFrame,
+    onDriveChange,
+    onKneeChange,
+    onWetChange,
+    onWetHPHzChange,
+    onWetLPHzChange,
+}: {
+    driveValue: number;
+    kneeValue: number;
+    wetValue: number;
+    wetHPHzValue: number;
+    wetLPHzValue: number;
+    scopeFrame: ReturnType<typeof useSynthPatchViewModel>["observedDistortionScope"];
+    onDriveChange: (nextValue: number) => void;
+    onKneeChange: (nextValue: number) => void;
+    onWetChange: (nextValue: number) => void;
+    onWetHPHzChange: (nextValue: number) => void;
+    onWetLPHzChange: (nextValue: number) => void;
+}) {
+    const inputPeak = scopeFrame?.inputPeak ?? 0;
+    const outputPeak = scopeFrame?.outputPeak ?? 0;
+    const removedPeak = scopeFrame?.removedPeak ?? 0;
+    const overshoot = Math.max(0, inputPeak - 1);
+    const headroom = Math.max(0, 1 - inputPeak);
+
+    return (
+        <div
+            data-role="ios-distortion-panel"
+            style={{
+                display: "grid",
+                gap: "0.9rem",
+                border: "1px solid rgba(255,255,255,0.08)",
+                borderRadius: "24px",
+                padding: "1rem",
+                background: "linear-gradient(180deg, rgba(22,10,16,0.96), rgba(7,8,14,0.98))",
+                boxShadow: "inset 0 1px 0 rgba(255,255,255,0.06)",
+            }}
+        >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", gap: "0.75rem" }}>
+                <div>
+                    <div className="mseg-eyebrow">Distortion</div>
+                    <strong className="mseg-route-title">Wet Curve + Waveform</strong>
+                </div>
+                <div style={{
+                    display: "grid",
+                    gap: "0.2rem",
+                    textAlign: "right",
+                    fontFamily: "\"SF Mono\", Menlo, monospace",
+                    fontSize: "0.66rem",
+                    letterSpacing: "0.14em",
+                    textTransform: "uppercase",
+                    color: "rgba(226,232,240,0.76)",
+                }}
+                >
+                    <div>{overshoot > 0 ? `Ceiling +${overshoot.toFixed(2)}` : `Ceiling ${Math.round(headroom * 100)}% clear`}</div>
+                    <div>{`Out ${outputPeak.toFixed(3)} • Removed ${removedPeak.toFixed(3)}`}</div>
+                </div>
+            </div>
+
+            <DistortionVisualizer
+                knee={kneeValue}
+                frame={scopeFrame}
+            />
+
+            <div style={{ display: "grid", gap: "0.8rem" }}>
+                {[
+                    {
+                        label: "Drive",
+                        value: driveValue,
+                        min: 0,
+                        max: 36,
+                        step: 0.01,
+                        readout: formatDriveDb(driveValue),
+                        onChange: onDriveChange,
+                        dataRole: "distortion-drive-slider",
+                        readoutRole: "distortion-drive-readout",
+                    },
+                    {
+                        label: "Knee",
+                        value: kneeValue,
+                        min: 0,
+                        max: 1,
+                        step: 0.001,
+                        readout: formatPercent(kneeValue),
+                        onChange: onKneeChange,
+                        dataRole: "distortion-knee-slider",
+                        readoutRole: null,
+                    },
+                    {
+                        label: "Mix",
+                        value: wetValue,
+                        min: 0,
+                        max: 1,
+                        step: 0.001,
+                        readout: formatPercent(wetValue),
+                        onChange: onWetChange,
+                        dataRole: "distortion-mix-slider",
+                        readoutRole: "distortion-mix-readout",
+                    },
+                ].map((field) => (
+                    <label key={field.label} style={{ display: "grid", gap: "0.32rem" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", gap: "0.75rem" }}>
+                            <span className="mseg-depth-label">{field.label}</span>
+                            <span
+                                data-role={field.readoutRole ?? undefined}
+                                style={{
+                                    fontFamily: "\"SF Mono\", Menlo, monospace",
+                                    fontSize: "0.72rem",
+                                    letterSpacing: "0.08em",
+                                    color: "rgba(226,232,240,0.92)",
+                                }}
+                            >
+                                {field.readout}
+                            </span>
+                        </div>
+                        <input
+                            data-role={field.dataRole}
+                            className="mseg-rate-slider"
+                            type="range"
+                            min={String(field.min)}
+                            max={String(field.max)}
+                            step={String(field.step)}
+                            value={Number(field.value).toFixed(3)}
+                            onChange={(event) => field.onChange(Number(event.target.value))}
+                        />
+                    </label>
+                ))}
+
+                <label style={{ display: "grid", gap: "0.32rem" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: "0.75rem" }}>
+                        <span className="mseg-depth-label">Wet HP</span>
+                        <span style={{
+                            fontFamily: "\"SF Mono\", Menlo, monospace",
+                            fontSize: "0.72rem",
+                            letterSpacing: "0.08em",
+                            color: "rgba(226,232,240,0.92)",
+                        }}
+                        >
+                            {formatFrequencyHz(wetHPHzValue)}
+                        </span>
+                    </div>
+                    <input
+                        data-role="distortion-wet-hp-slider"
+                        className="mseg-rate-slider"
+                        type="range"
+                        min="0"
+                        max="1"
+                        step="0.001"
+                        value={frequencyHzToLogNormalized(wetHPHzValue, DISTORTION_WET_HP_MIN_HZ, DISTORTION_WET_HP_MAX_HZ).toFixed(3)}
+                        onChange={(event) => {
+                            const nextValue = clamp(
+                                normalizedToLogFrequencyHz(Number(event.target.value), DISTORTION_WET_HP_MIN_HZ, DISTORTION_WET_HP_MAX_HZ),
+                                DISTORTION_WET_HP_MIN_HZ,
+                                Math.min(DISTORTION_WET_HP_MAX_HZ, wetLPHzValue),
+                            );
+                            onWetHPHzChange(nextValue);
+                        }}
+                    />
+                </label>
+
+                <label style={{ display: "grid", gap: "0.32rem" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: "0.75rem" }}>
+                        <span className="mseg-depth-label">Wet LP</span>
+                        <span style={{
+                            fontFamily: "\"SF Mono\", Menlo, monospace",
+                            fontSize: "0.72rem",
+                            letterSpacing: "0.08em",
+                            color: "rgba(226,232,240,0.92)",
+                        }}
+                        >
+                            {formatFrequencyHz(wetLPHzValue)}
+                        </span>
+                    </div>
+                    <input
+                        data-role="distortion-wet-lp-slider"
+                        className="mseg-rate-slider"
+                        type="range"
+                        min="0"
+                        max="1"
+                        step="0.001"
+                        value={frequencyHzToLogNormalized(wetLPHzValue, DISTORTION_WET_LP_MIN_HZ, DISTORTION_WET_LP_MAX_HZ).toFixed(3)}
+                        onChange={(event) => {
+                            const nextValue = clamp(
+                                normalizedToLogFrequencyHz(Number(event.target.value), DISTORTION_WET_LP_MIN_HZ, DISTORTION_WET_LP_MAX_HZ),
+                                Math.max(DISTORTION_WET_LP_MIN_HZ, wetHPHzValue),
+                                DISTORTION_WET_LP_MAX_HZ,
+                            );
+                            onWetLPHzChange(nextValue);
+                        }}
+                    />
+                </label>
             </div>
         </div>
     );
@@ -1030,6 +1268,20 @@ function IOSPatchViewBody() {
                                 glideValue={synthView.glideTime.value}
                                 onGlideChange={synthView.glideTime.commitValue}
                                 glideFocusTarget={synthView.keyboardRouting.glideFocusTarget}
+                            />
+
+                            <IOSDistortionPanel
+                                driveValue={synthView.distortionDriveDb.value}
+                                kneeValue={synthView.distortionKnee.value}
+                                wetValue={synthView.distortionWet.value}
+                                wetHPHzValue={synthView.distortionWetHPHz.value}
+                                wetLPHzValue={synthView.distortionWetLPHz.value}
+                                scopeFrame={synthView.observedDistortionScope}
+                                onDriveChange={synthView.distortionDriveDb.commitValue}
+                                onKneeChange={synthView.distortionKnee.commitValue}
+                                onWetChange={synthView.distortionWet.commitValue}
+                                onWetHPHzChange={synthView.distortionWetHPHz.commitValue}
+                                onWetLPHzChange={synthView.distortionWetLPHz.commitValue}
                             />
 
                             <IOSMsegLauncher

@@ -12,6 +12,7 @@
   },
   "isInstrument": true,
   "source": [
+    "cmajor/Distortion.cmajor",
     "cmajor/FixedFrameOscillator.cmajor",
     "cmajor/FilterSpectrumCommon.cmajor",
     "cmajor/FilterSpectrumAnalyzer.cmajor",

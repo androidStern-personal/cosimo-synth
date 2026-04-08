@@ -34,6 +34,8 @@ import {
     VoiceGlideControlSurface,
     WavetableStageSection,
 } from "../shared/synth-components";
+import { DistortionVisualizer } from "../shared/distortion-visualizer";
+import type { DistortionScopeFrame } from "../shared/distortion-visualization";
 import {
     KeyboardDock,
     type PianoKeyboardElement,
@@ -100,6 +102,10 @@ const FILTER_MODE_OPTIONS = [
     { value: 4, label: "Notch" },
     { value: 5, label: "Peak" },
 ] as const;
+const DISTORTION_WET_HP_MIN_HZ = 20;
+const DISTORTION_WET_HP_MAX_HZ = 4_000;
+const DISTORTION_WET_LP_MIN_HZ = 20;
+const DISTORTION_WET_LP_MAX_HZ = 20_000;
 type HeaderProps = {
     statusText: string;
 };
@@ -129,6 +135,16 @@ type FilterSectionProps = {
         familyId: string;
         coefficients: Record<string, number>;
     };
+    className?: string;
+};
+
+type DistortionSectionProps = {
+    distortionDriveDb: PatchControlBinding<number>;
+    distortionKnee: PatchControlBinding<number>;
+    distortionWet: PatchControlBinding<number>;
+    distortionWetHPHz: PatchControlBinding<number>;
+    distortionWetLPHz: PatchControlBinding<number>;
+    observedDistortionScope: DistortionScopeFrame | null;
     className?: string;
 };
 
@@ -189,6 +205,14 @@ function formatPercent(value: number) {
 function formatSignedPercent(value: number) {
     const percentValue = Math.round(value * 100);
     return `${percentValue > 0 ? "+" : ""}${percentValue}%`;
+}
+
+function formatDriveDb(value: number) {
+    return `${value.toFixed(1)} dB`;
+}
+
+function formatUnitPercent(value: number) {
+    return `${Math.round(clamp(value, 0, 1) * 100)}%`;
 }
 
 function formatPanEditingValue(value: number) {
@@ -357,6 +381,29 @@ function formatCutoffDisplay(value: number) {
     }
 
     return `${Math.round(safeValue)}`;
+}
+
+function formatFrequencyHz(value: number) {
+    const safeValue = Math.max(20, Number(value) || 0);
+
+    if (safeValue >= 10_000) {
+        return `${(safeValue / 1000).toFixed(1)} kHz`;
+    }
+
+    if (safeValue >= 1000) {
+        return `${(safeValue / 1000).toFixed(2)} kHz`;
+    }
+
+    return `${Math.round(safeValue)} Hz`;
+}
+
+function frequencyHzToLogNormalized(value: number, minHz: number, maxHz: number) {
+    const safeValue = clamp(value, minHz, maxHz);
+    return Math.log(safeValue / minHz) / Math.log(maxHz / minHz);
+}
+
+function normalizedToLogFrequencyHz(normalized: number, minHz: number, maxHz: number) {
+    return minHz * Math.pow(maxHz / minHz, clamp(normalized, 0, 1));
 }
 
 function formatCutoffEditingValue(value: number) {
@@ -1138,6 +1185,160 @@ function FilterSection({
     );
 }
 
+function DistortionSection({
+    distortionDriveDb,
+    distortionKnee,
+    distortionWet,
+    distortionWetHPHz,
+    distortionWetLPHz,
+    observedDistortionScope,
+    className,
+}: DistortionSectionProps) {
+    const inputPeak = observedDistortionScope?.inputPeak ?? 0;
+    const outputPeak = observedDistortionScope?.outputPeak ?? 0;
+    const removedPeak = observedDistortionScope?.removedPeak ?? 0;
+    const overshoot = Math.max(0, inputPeak - 1);
+    const headroom = Math.max(0, 1 - inputPeak);
+    const wetHPNormalized = frequencyHzToLogNormalized(
+        distortionWetHPHz.value,
+        DISTORTION_WET_HP_MIN_HZ,
+        DISTORTION_WET_HP_MAX_HZ,
+    );
+    const wetLPNormalized = frequencyHzToLogNormalized(
+        distortionWetLPHz.value,
+        DISTORTION_WET_LP_MIN_HZ,
+        DISTORTION_WET_LP_MAX_HZ,
+    );
+
+    const handleWetHPChange = useCallback((nextNormalized: number) => {
+        const nextValue = clamp(
+            normalizedToLogFrequencyHz(nextNormalized, DISTORTION_WET_HP_MIN_HZ, DISTORTION_WET_HP_MAX_HZ),
+            DISTORTION_WET_HP_MIN_HZ,
+            Math.min(DISTORTION_WET_HP_MAX_HZ, distortionWetLPHz.value),
+        );
+        distortionWetHPHz.setValue(nextValue);
+    }, [distortionWetHPHz, distortionWetLPHz.value]);
+
+    const handleWetLPChange = useCallback((nextNormalized: number) => {
+        const nextValue = clamp(
+            normalizedToLogFrequencyHz(nextNormalized, DISTORTION_WET_LP_MIN_HZ, DISTORTION_WET_LP_MAX_HZ),
+            Math.max(DISTORTION_WET_LP_MIN_HZ, distortionWetHPHz.value),
+            DISTORTION_WET_LP_MAX_HZ,
+        );
+        distortionWetLPHz.setValue(nextValue);
+    }, [distortionWetHPHz.value, distortionWetLPHz]);
+
+    return (
+        <section
+            data-role="distortion-card"
+            className={`relative overflow-hidden rounded-[28px] border border-white/[0.04] bg-[radial-gradient(circle_at_top_left,rgba(248,113,113,0.14),transparent_34%),linear-gradient(180deg,rgba(9,8,15,0.98),rgba(2,4,11,1))] ${className ?? ""}`}
+        >
+            <div className="absolute inset-0 rounded-[28px] shadow-[inset_0_1px_0_rgba(255,255,255,0.08),inset_0_-64px_80px_rgba(0,0,0,0.34)]" />
+
+            <div className="relative grid gap-4 p-5 xl:grid-cols-[minmax(0,1.5fr)_340px]">
+                <div className="grid gap-4">
+                    <div className="flex items-center justify-between gap-4">
+                        <div>
+                            <div className="text-[11px] uppercase tracking-[0.22em] text-rose-200/70">Distortion</div>
+                            <div className="mt-1 text-sm text-slate-200/78">Wet waveform against the live shaping curve.</div>
+                        </div>
+                        <div className="grid gap-1 text-right font-mono text-[11px] tracking-[0.18em] text-slate-200/70">
+                            <div>{overshoot > 0 ? `Ceiling +${overshoot.toFixed(2)}` : `Ceiling ${Math.round(headroom * 100)}% clear`}</div>
+                            <div>{`Out ${outputPeak.toFixed(3)} • Removed ${removedPeak.toFixed(3)}`}</div>
+                        </div>
+                    </div>
+
+                    <DistortionVisualizer
+                        knee={distortionKnee.value}
+                        frame={observedDistortionScope}
+                        className="min-h-0"
+                    />
+                </div>
+
+                <div className="grid content-start gap-4">
+                    <div className="grid gap-4 rounded-[24px] border border-white/8 bg-black/20 p-4">
+                        <RangeField
+                            label="Drive"
+                            min={0}
+                            max={36}
+                            step={0.01}
+                            value={distortionDriveDb.value}
+                            displayValue={formatDriveDb(distortionDriveDb.value)}
+                            onChange={distortionDriveDb.setValue}
+                            onPointerDown={distortionDriveDb.beginGesture}
+                            onPointerUp={distortionDriveDb.endGesture}
+                            onPointerCancel={distortionDriveDb.endGesture}
+                            dataRole="distortion-drive-field"
+                        />
+                        <RangeField
+                            label="Knee"
+                            min={0}
+                            max={1}
+                            step={0.001}
+                            value={distortionKnee.value}
+                            displayValue={formatUnitPercent(distortionKnee.value)}
+                            onChange={distortionKnee.setValue}
+                            onPointerDown={distortionKnee.beginGesture}
+                            onPointerUp={distortionKnee.endGesture}
+                            onPointerCancel={distortionKnee.endGesture}
+                            dataRole="distortion-knee-field"
+                        />
+                        <RangeField
+                            label="Mix"
+                            min={0}
+                            max={1}
+                            step={0.001}
+                            value={distortionWet.value}
+                            displayValue={formatUnitPercent(distortionWet.value)}
+                            onChange={distortionWet.setValue}
+                            onPointerDown={distortionWet.beginGesture}
+                            onPointerUp={distortionWet.endGesture}
+                            onPointerCancel={distortionWet.endGesture}
+                            dataRole="distortion-mix-field"
+                        />
+                    </div>
+
+                    <div className="grid gap-4 rounded-[24px] border border-white/8 bg-black/20 p-4">
+                        <RangeField
+                            label="Wet HP"
+                            min={0}
+                            max={1}
+                            step={0.001}
+                            value={wetHPNormalized}
+                            displayValue={formatFrequencyHz(distortionWetHPHz.value)}
+                            onChange={handleWetHPChange}
+                            onPointerDown={distortionWetHPHz.beginGesture}
+                            onPointerUp={distortionWetHPHz.endGesture}
+                            onPointerCancel={distortionWetHPHz.endGesture}
+                            dataRole="distortion-wet-hp-field"
+                        />
+                        <RangeField
+                            label="Wet LP"
+                            min={0}
+                            max={1}
+                            step={0.001}
+                            value={wetLPNormalized}
+                            displayValue={formatFrequencyHz(distortionWetLPHz.value)}
+                            onChange={handleWetLPChange}
+                            onPointerDown={distortionWetLPHz.beginGesture}
+                            onPointerUp={distortionWetLPHz.endGesture}
+                            onPointerCancel={distortionWetLPHz.endGesture}
+                            dataRole="distortion-wet-lp-field"
+                        />
+                    </div>
+
+                    <div className="grid gap-2 rounded-[24px] border border-rose-300/10 bg-rose-400/[0.04] p-4">
+                        <div className="text-[11px] uppercase tracking-[0.18em] text-rose-200/70">Peak Readout</div>
+                        <div className="font-mono text-sm tracking-[0.16em] text-slate-100/88">{`Input ${inputPeak.toFixed(3)}`}</div>
+                        <div className="font-mono text-sm tracking-[0.16em] text-cyan-100/88">{`Output ${outputPeak.toFixed(3)}`}</div>
+                        <div className="font-mono text-sm tracking-[0.16em] text-rose-200/88">{`Removed ${removedPeak.toFixed(3)}`}</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    );
+}
+
 function KeyboardToolbar({
     playMode,
     glideTime,
@@ -1440,12 +1641,32 @@ function DesktopPatchViewBody() {
     const msegEditorSurfaceRef = useRef<SVGSVGElement | null>(null);
     const keyboardElementRef = useRef<PianoKeyboardElement | null>(null);
     const [keyboardRootNote, setKeyboardRootNote] = useState(KEYBOARD_ROOT_NOTE_DEFAULT);
+    const shiftKeyboardRootNote = useCallback((direction: -1 | 1, { releaseHeldNotes = true }: { releaseHeldNotes?: boolean } = {}) => {
+        if (
+            (direction < 0 && keyboardRootNote <= KEYBOARD_ROOT_NOTE_MIN)
+            || (direction > 0 && keyboardRootNote >= KEYBOARD_ROOT_NOTE_MAX)
+        ) {
+            return false;
+        }
+
+        if (releaseHeldNotes) {
+            keyboardElementRef.current?.allNotesOff?.();
+        }
+
+        setKeyboardRootNote((previousRootNote) => Math.min(
+            Math.max(previousRootNote + (direction * 12), KEYBOARD_ROOT_NOTE_MIN),
+            KEYBOARD_ROOT_NOTE_MAX,
+        ));
+        return true;
+    }, [keyboardRootNote]);
     const curveLab = useDesktopCurveLab();
     const synthView = useSynthPatchViewModel({
         stageRef,
         msegEditorSurfaceRef,
         keyboardRef: keyboardElementRef,
         voiceModeCount: VOICE_MODE_OPTIONS.length,
+        onKeyboardOctaveDown: () => shiftKeyboardRootNote(-1, { releaseHeldNotes: false }),
+        onKeyboardOctaveUp: () => shiftKeyboardRootNote(1, { releaseHeldNotes: false }),
     });
     const filterResonanceCurveProfile = curveLab.getProfile("filter-resonance-handle");
     const resonanceNormalizedFromQ = useCallback((qValue: number) => (
@@ -1456,12 +1677,12 @@ function DesktopPatchViewBody() {
     ), [curveLab]);
 
     const handleKeyboardOctaveDown = useCallback(() => {
-        setKeyboardRootNote((previousRootNote) => Math.min(Math.max(previousRootNote - 12, KEYBOARD_ROOT_NOTE_MIN), KEYBOARD_ROOT_NOTE_MAX));
-    }, []);
+        shiftKeyboardRootNote(-1);
+    }, [shiftKeyboardRootNote]);
 
     const handleKeyboardOctaveUp = useCallback(() => {
-        setKeyboardRootNote((previousRootNote) => Math.min(Math.max(previousRootNote + 12, KEYBOARD_ROOT_NOTE_MIN), KEYBOARD_ROOT_NOTE_MAX));
-    }, []);
+        shiftKeyboardRootNote(1);
+    }, [shiftKeyboardRootNote]);
 
     const warpModeChip = useMemo(() => (
         <OverlayIconChip
@@ -1554,6 +1775,15 @@ function DesktopPatchViewBody() {
                         className={DESKTOP_GRID_CARD_CLASS}
                     />
                 </section>
+
+                <DistortionSection
+                    distortionDriveDb={synthView.distortionDriveDb}
+                    distortionKnee={synthView.distortionKnee}
+                    distortionWet={synthView.distortionWet}
+                    distortionWetHPHz={synthView.distortionWetHPHz}
+                    distortionWetLPHz={synthView.distortionWetLPHz}
+                    observedDistortionScope={synthView.observedDistortionScope}
+                />
 
                 {synthView.failureDetail ? (
                     <div className="rounded-[22px] border border-fuchsia-300/15 bg-fuchsia-300/8 px-4 py-3 text-sm text-fuchsia-100/90">

@@ -18,6 +18,7 @@ PATCH_DESCRIPTION = (
 )
 PATCH_WORKER_SRC = "patch_gui/wavetable-worker.js"
 PATCH_SOURCE_FILES = (
+    "cmajor/Distortion.cmajor",
     "cmajor/FixedFrameOscillator.cmajor",
     "cmajor/FilterSpectrumCommon.cmajor",
     "cmajor/FilterSpectrumAnalyzer.cmajor",

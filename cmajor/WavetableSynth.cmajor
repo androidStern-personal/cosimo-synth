@@ -954,6 +954,11 @@ graph WavetableSynth [[ main ]]
     input value float32 filterMode [[ name: "Filter Mode", min: 0.0f, max: 5.0f, init: 0.0f, discrete: true, step: 1.0f, rampFrames: 0 ]];
     input value float32 filterCutoff [[ name: "Filter Cutoff", min: 20.0f, max: 20000.0f, init: 1000.0f, unit: "Hz", rampFrames: 64 ]];
     input value float32 filterQ [[ name: "Filter Q", min: 0.1f, max: 20.0f, init: 0.707107f, rampFrames: 64 ]];
+    input value float32 distortionDriveDb [[ name: "Distortion Drive", min: 0.0f, max: 36.0f, init: 12.0f, unit: "dB", rampFrames: 64 ]];
+    input value float32 distortionKnee [[ name: "Distortion Knee", min: 0.0f, max: 1.0f, init: 0.35f, rampFrames: 64 ]];
+    input value float32 distortionWet [[ name: "Distortion Mix", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
+    input value float32 distortionWetHPHz [[ name: "Distortion Wet HP", min: 20.0f, max: 4000.0f, init: 40.0f, unit: "Hz", rampFrames: 64 ]];
+    input value float32 distortionWetLPHz [[ name: "Distortion Wet LP", min: 20.0f, max: 20000.0f, init: 18000.0f, unit: "Hz", rampFrames: 64 ]];
     output event wt::WavetableUploadAck wavetableUploadAck;
     output event wt::WavetableMipRequest wavetableMipRequest;
     output event wt::RuntimeState runtimeState;
@@ -962,6 +967,7 @@ graph WavetableSynth [[ main ]]
     output event wt::EffectiveFilterStateMonitor effectiveFilterState;
     output stream float32<2> audioOut;
     output filterSpectrumAnalyzer.filterSpectrum;
+    output distortionScopeAnalyzer.distortionScope;
 
     let voiceCount = 16;
 
@@ -969,8 +975,10 @@ graph WavetableSynth [[ main ]]
     node noteDispatcher = wt::NoteDispatcher (voiceCount);
     node sharedEngine = wt::SharedVoiceEngine (voiceCount);
     node trim = wt::StereoTrim (0.18f);
+    node distortion = wt::DistortionBus;
     node analyzerDownmix = wt::StereoToMonoAverage;
     node filterSpectrumAnalyzer = wt::FilterSpectrumAnalyzer;
+    node distortionScopeAnalyzer = wt::DistortionScopeAnalyzer;
     node desiredTableMonitor = wt::DesiredTableMonitor;
     node runtimeStateCoordinator = wt::RuntimeStateCoordinator;
 
@@ -999,6 +1007,11 @@ graph WavetableSynth [[ main ]]
         filterMode -> sharedEngine.filterModeIn;
         filterCutoff -> sharedEngine.filterCutoffIn;
         filterQ -> sharedEngine.filterQIn;
+        distortionDriveDb -> distortion.driveDbIn;
+        distortionKnee -> distortion.kneeIn;
+        distortionWet -> distortion.wetIn;
+        distortionWetHPHz -> distortion.wetHPHzIn;
+        distortionWetLPHz -> distortion.wetLPHzIn;
         sharedEngine.wavetableUploadAckOut -> wavetableUploadAck;
         sharedEngine.wavetableMipRequestOut -> wavetableMipRequest;
         sharedEngine.runtimeServiceStateOut -> runtimeStateCoordinator.runtimeServiceStateIn;
@@ -1011,7 +1024,12 @@ graph WavetableSynth [[ main ]]
         sharedEngine.effectiveWarpStateOut -> effectiveWarpState;
         sharedEngine.effectiveFilterStateOut -> effectiveFilterState;
         sharedEngine.out -> trim.in;
-        trim.out -> audioOut, analyzerDownmix.in;
+        trim.out -> analyzerDownmix.in, distortion.in;
         analyzerDownmix.out -> filterSpectrumAnalyzer.in;
+        distortion.previewInputLeft -> distortionScopeAnalyzer.previewInputLeft;
+        distortion.previewInputRight -> distortionScopeAnalyzer.previewInputRight;
+        distortion.previewOutputLeft -> distortionScopeAnalyzer.previewOutputLeft;
+        distortion.previewOutputRight -> distortionScopeAnalyzer.previewOutputRight;
+        distortion.out -> audioOut;
     }
 }

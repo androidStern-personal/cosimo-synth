@@ -16,6 +16,7 @@ declare global {
                 stageLabel: string | null;
                 stageDebug: unknown | null;
                 filterGraphState: unknown | null;
+                distortionGraphState: unknown | null;
             };
             clearDebugLog: () => void;
             setRuntimeState: (nextState: Parameters<MockPatchConnection["setRuntimeState"]>[0]) => void;
@@ -28,6 +29,7 @@ declare global {
             emitEffectiveWarpState: (nextState: Parameters<MockPatchConnection["emitEffectiveWarpState"]>[0]) => void;
             emitEffectiveFilterState: (nextState: Parameters<MockPatchConnection["emitEffectiveFilterState"]>[0]) => void;
             emitFilterSpectrum: (nextState: Parameters<MockPatchConnection["emitFilterSpectrum"]>[0]) => void;
+            emitDistortionScope: (nextState: Parameters<MockPatchConnection["emitDistortionScope"]>[0]) => void;
             setStoredStateValue: (key: string, value: unknown) => void;
         };
     }
@@ -81,6 +83,20 @@ function clearKeyboardDebug() {
 
 function readFilterGraphState() {
     const rawDebug = getDesktopViewRoot()?.querySelector('[data-role="filter-graph-debug"]')?.textContent ?? null;
+
+    if (!rawDebug) {
+        return null;
+    }
+
+    try {
+        return JSON.parse(rawDebug);
+    } catch {
+        return null;
+    }
+}
+
+function readDistortionGraphState() {
+    const rawDebug = getDesktopViewRoot()?.querySelector('[data-role="distortion-graph-debug"]')?.textContent ?? null;
 
     if (!rawDebug) {
         return null;
@@ -155,6 +171,7 @@ try {
                 stageLabel: viewRoot?.querySelector(".cosimo-stage .truncate")?.textContent?.trim() ?? null,
                 stageDebug: readWavetableStageDebugState(),
                 filterGraphState: readFilterGraphState(),
+                distortionGraphState: readDistortionGraphState(),
             };
         },
         clearDebugLog: () => {
@@ -176,6 +193,9 @@ try {
         },
         emitFilterSpectrum: (nextState) => {
             patchConnection.emitFilterSpectrum(nextState);
+        },
+        emitDistortionScope: (nextState) => {
+            patchConnection.emitDistortionScope(nextState);
         },
         setStoredStateValue: (key, value) => patchConnection.setStoredStateValue(key, value),
     };

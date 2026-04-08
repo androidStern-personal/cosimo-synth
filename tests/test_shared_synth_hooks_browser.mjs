@@ -504,7 +504,7 @@ test("useStagePositionDrag ignores pointer starts on select, button, and input c
     }
 });
 
-test("useSynthKeyboardRouting centralizes arrow-target ownership and text-entry gating", async () => {
+test("useSynthKeyboardRouting keeps arrow ownership, blocks note entry during text edits, and shifts octaves on z and x", async () => {
     const page = await openModulePage();
 
     try {
@@ -522,22 +522,44 @@ test("useSynthKeyboardRouting centralizes arrow-target ownership and text-entry 
         await invokeHarness(page, "pressKey", "ArrowRight");
         await invokeHarness(page, "pressKey", "ArrowLeft");
         await invokeHarness(page, "pressKey", "a");
+        await invokeHarness(page, "pressKey", "z");
+
+        let snapshot = await getHarnessSnapshot(page);
+        assert.equal(snapshot.rootNote, 36);
+
         await invokeHarness(page, "blur", "#glide-target");
+        await invokeHarness(page, "pressKey", "z");
+        await invokeHarness(page, "pressKey", "z", false);
+
+        snapshot = await getHarnessSnapshot(page);
+        assert.equal(snapshot.rootNote, 24);
+
+        await invokeHarness(page, "pressKey", "x");
+        await invokeHarness(page, "pressKey", "x", false);
         await invokeHarness(page, "pressKey", "a");
         await invokeHarness(page, "pressKey", "a", false);
 
-        const snapshot = await getHarnessSnapshot(page);
+        snapshot = await getHarnessSnapshot(page);
         assert.deepEqual(snapshot.stepLog, {
             wavetable: [1],
             playMode: [-1],
             msegRate: [-1],
             glide: [1, -1],
         });
-        assert.equal(snapshot.keyboardLog.allNotesOffCount, 1);
+        assert.equal(snapshot.rootNote, 36);
+        assert.equal(snapshot.keyboardLog.allNotesOffCount, 3);
         assert.deepEqual(snapshot.keyboardLog.handledKeys, [
             { key: "a", isDown: true },
             { key: "a", isDown: false },
         ]);
+
+        await invokeHarness(page, "pressKey", "z");
+        await invokeHarness(page, "pressKey", "z");
+        await invokeHarness(page, "pressKey", "z");
+
+        snapshot = await getHarnessSnapshot(page);
+        assert.equal(snapshot.rootNote, 12);
+        assert.equal(snapshot.keyboardLog.allNotesOffCount, 5);
     } finally {
         await page.close();
     }

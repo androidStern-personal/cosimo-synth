@@ -1152,9 +1152,16 @@ export async function installSynthKeyboardRoutingHookHarness(target: HTMLElement
         handledKeys: [] as Array<{ key: string; isDown: boolean }>,
         allNotesOffCount: 0,
     };
+    const keyboardRootNoteBounds = {
+        min: 12,
+        max: 72,
+    };
+    let currentRootNote = 36;
 
     const mounted = mountHarness(target, (root) => {
         function Harness() {
+            const [rootNote, setRootNote] = useState(36);
+            currentRootNote = rootNote;
             const keyboardRef = useRef({
                 handleKey(event: KeyboardEvent, isDown: boolean) {
                     keyboardLog.handledKeys.push({ key: event.key, isDown });
@@ -1174,6 +1181,22 @@ export async function installSynthKeyboardRoutingHookHarness(target: HTMLElement
                 onStepPlayMode: (direction) => stepLog.playMode.push(direction),
                 onStepMsegRate: (direction) => stepLog.msegRate.push(direction),
                 onStepGlideTime: (direction) => stepLog.glide.push(direction),
+                onKeyboardOctaveDown: () => {
+                    if (currentRootNote <= keyboardRootNoteBounds.min) {
+                        return false;
+                    }
+
+                    setRootNote((previousRootNote) => Math.max(previousRootNote - 12, keyboardRootNoteBounds.min));
+                    return true;
+                },
+                onKeyboardOctaveUp: () => {
+                    if (currentRootNote >= keyboardRootNoteBounds.max) {
+                        return false;
+                    }
+
+                    setRootNote((previousRootNote) => Math.min(previousRootNote + 12, keyboardRootNoteBounds.max));
+                    return true;
+                },
             });
 
             return (
@@ -1234,6 +1257,7 @@ export async function installSynthKeyboardRoutingHookHarness(target: HTMLElement
                 stepLog: cloneValue(stepLog),
                 keyboardLog: cloneValue(keyboardLog),
                 activeElementID: (document.activeElement as HTMLElement | null)?.id ?? null,
+                rootNote: currentRootNote,
             };
         },
         async unmount() {

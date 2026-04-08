@@ -100,6 +100,7 @@ export type RangeFieldProps = {
     onPointerCancel?: () => void;
     ariaLabel?: string;
     focusBindings?: SynthFocusBindings;
+    dataRole?: string;
 };
 
 export type ModulationAmountFieldProps = {
@@ -671,6 +672,7 @@ export function RangeField({
     onPointerCancel,
     ariaLabel,
     focusBindings,
+    dataRole,
 }: RangeFieldProps) {
     return (
         <label className="grid gap-2">
@@ -683,6 +685,7 @@ export function RangeField({
                     max={max}
                     step={step}
                     value={value.toFixed(3)}
+                    data-role={dataRole}
                     aria-label={ariaLabel ?? label}
                     onPointerDown={onPointerDown}
                     onPointerUp={onPointerUp}

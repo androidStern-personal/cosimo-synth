@@ -56,6 +56,11 @@ import {
     type FilterSpectrumFrame,
 } from "./filter-spectrum";
 import {
+    DISTORTION_SCOPE_ENDPOINT_ID,
+    normalizeDistortionScopeMessage,
+    type DistortionScopeFrame,
+} from "./distortion-visualization";
+import {
     useSynthInputRouter,
     type ArrowStepDirection,
     type SynthFocusBindings,
@@ -83,6 +88,11 @@ const WARP_AMOUNT_ENDPOINT_ID = "warpAmount";
 const FILTER_MODE_ENDPOINT_ID = "filterMode";
 const FILTER_CUTOFF_ENDPOINT_ID = "filterCutoff";
 const FILTER_Q_ENDPOINT_ID = "filterQ";
+const DISTORTION_DRIVE_DB_ENDPOINT_ID = "distortionDriveDb";
+const DISTORTION_KNEE_ENDPOINT_ID = "distortionKnee";
+const DISTORTION_WET_ENDPOINT_ID = "distortionWet";
+const DISTORTION_WET_HP_HZ_ENDPOINT_ID = "distortionWetHPHz";
+const DISTORTION_WET_LP_HZ_ENDPOINT_ID = "distortionWetLPHz";
 const RUNTIME_SYNC_REQUEST_ENDPOINT_ID = "runtimeSyncRequest";
 const RUNTIME_STATE_ENDPOINT_ID = "runtimeState";
 const RETRY_DESIRED_TABLE_REQUEST_ENDPOINT_ID = "retryDesiredTableRequest";
@@ -167,8 +177,14 @@ export type SynthPatchViewModel = {
     filterMode: PatchControlBinding<number>;
     filterCutoff: PatchControlBinding<number>;
     filterQ: PatchControlBinding<number>;
+    distortionDriveDb: PatchControlBinding<number>;
+    distortionKnee: PatchControlBinding<number>;
+    distortionWet: PatchControlBinding<number>;
+    distortionWetHPHz: PatchControlBinding<number>;
+    distortionWetLPHz: PatchControlBinding<number>;
     observedFilterState: EffectiveFilterState;
     observedFilterSpectrum: FilterSpectrumFrame | null;
+    observedDistortionScope: DistortionScopeFrame | null;
     observedWarpState: EffectiveWarpState;
     modulationState: ModulationState | null;
     selectedMsegSlot: number;
@@ -359,6 +375,26 @@ export function useObservedFilterSpectrum() {
         }
 
         const normalizedState = normalizeFilterSpectrumMessage(message);
+        if (!normalizedState) {
+            return;
+        }
+
+        setObservedState(normalizedState);
+    }, [message]);
+
+    return observedState;
+}
+
+export function useObservedDistortionScope() {
+    const message = usePatchEndpoint<unknown | null>(DISTORTION_SCOPE_ENDPOINT_ID, null);
+    const [observedState, setObservedState] = useState<DistortionScopeFrame | null>(null);
+
+    useEffect(() => {
+        if (!message) {
+            return;
+        }
+
+        const normalizedState = normalizeDistortionScopeMessage(message);
         if (!normalizedState) {
             return;
         }
@@ -960,14 +996,21 @@ export function useSynthKeyboardRouting({
     onStepPlayMode,
     onStepMsegRate,
     onStepGlideTime,
+    onKeyboardOctaveDown,
+    onKeyboardOctaveUp,
 }: {
     keyboardRef: RefObject<SynthKeyboardLike | null>;
     onStepWavetable: (direction: ArrowStepDirection) => void;
     onStepPlayMode: (direction: ArrowStepDirection) => void;
     onStepMsegRate: (direction: ArrowStepDirection) => void;
     onStepGlideTime: (direction: ArrowStepDirection) => void;
+    onKeyboardOctaveDown?: () => boolean;
+    onKeyboardOctaveUp?: () => boolean;
 }): SynthKeyboardRoutingBindings {
-    const synthInputRouter = useSynthInputRouter(keyboardRef);
+    const synthInputRouter = useSynthInputRouter(keyboardRef, {
+        handleKeyboardOctaveDown: onKeyboardOctaveDown,
+        handleKeyboardOctaveUp: onKeyboardOctaveUp,
+    });
     const wavetableTarget = useStableArrowTarget("wavetable-select", onStepWavetable);
     const playModeTarget = useStableArrowTarget("play-mode", onStepPlayMode);
     const msegRateTarget = useStableArrowTarget("mseg-rate", onStepMsegRate);
@@ -999,6 +1042,8 @@ export function useSynthPatchViewModel({
     msegSurfaceOrientation = "horizontal",
     msegCurveEditActivationMode = "immediate",
     onMsegCurveEditHoldActivated = null,
+    onKeyboardOctaveDown,
+    onKeyboardOctaveUp,
 }: {
     stageRef: RefObject<HTMLDivElement | null>;
     msegEditorSurfaceRef: RefObject<SVGSVGElement | null>;
@@ -1007,6 +1052,8 @@ export function useSynthPatchViewModel({
     msegSurfaceOrientation?: MsegSurfaceOrientation;
     msegCurveEditActivationMode?: "immediate" | "hold-or-drag";
     onMsegCurveEditHoldActivated?: (() => void) | null;
+    onKeyboardOctaveDown?: () => boolean;
+    onKeyboardOctaveUp?: () => boolean;
 }): SynthPatchViewModel {
     const runtimeStateMessage = usePatchEndpoint<unknown | null>(RUNTIME_STATE_ENDPOINT_ID, null);
     const normalizedRuntimeState = useMemo(
@@ -1064,6 +1111,31 @@ export function useSynthPatchViewModel({
         initialValue: 0.707107,
         coerce: (value) => clamp(Number(value) || 0, 0.1, 20),
     });
+    const distortionDriveDb = usePatchParameterBinding<number>({
+        endpointID: DISTORTION_DRIVE_DB_ENDPOINT_ID,
+        initialValue: 12,
+        coerce: (value) => clamp(Number(value) || 0, 0, 36),
+    });
+    const distortionKnee = usePatchParameterBinding<number>({
+        endpointID: DISTORTION_KNEE_ENDPOINT_ID,
+        initialValue: 0.35,
+        coerce: (value) => clamp(Number(value) || 0, 0, 1),
+    });
+    const distortionWet = usePatchParameterBinding<number>({
+        endpointID: DISTORTION_WET_ENDPOINT_ID,
+        initialValue: 0,
+        coerce: (value) => clamp(Number(value) || 0, 0, 1),
+    });
+    const distortionWetHPHz = usePatchParameterBinding<number>({
+        endpointID: DISTORTION_WET_HP_HZ_ENDPOINT_ID,
+        initialValue: 40,
+        coerce: (value) => clamp(Number(value) || 0, 20, 4_000),
+    });
+    const distortionWetLPHz = usePatchParameterBinding<number>({
+        endpointID: DISTORTION_WET_LP_HZ_ENDPOINT_ID,
+        initialValue: 18_000,
+        coerce: (value) => clamp(Number(value) || 0, 20, 20_000),
+    });
     const requestRuntimeSync = usePatchEventTrigger<number>(RUNTIME_SYNC_REQUEST_ENDPOINT_ID);
     const retryDesiredTableLoad = usePatchEventTrigger<number>(RETRY_DESIRED_TABLE_REQUEST_ENDPOINT_ID);
     const observedPosition = useObservedDisplayPosition(Number(wavetablePosition.value) || 0);
@@ -1077,6 +1149,7 @@ export function useSynthPatchViewModel({
         filterQ: filterQ.value,
     });
     const observedFilterSpectrum = useObservedFilterSpectrum();
+    const observedDistortionScope = useObservedDistortionScope();
     const runtimePresentation = useMemo(
         () => resolveRuntimeTablePresentation(runtimeStateMessage, Number(wavetableSelect.value) || 0),
         [runtimeStateMessage, wavetableSelect.value],
@@ -1238,6 +1311,8 @@ export function useSynthPatchViewModel({
         onStepPlayMode: handleStepPlayMode,
         onStepMsegRate: handleStepMsegRate,
         onStepGlideTime: handleStepGlideTime,
+        onKeyboardOctaveDown,
+        onKeyboardOctaveUp,
     });
 
     return {
@@ -1264,8 +1339,14 @@ export function useSynthPatchViewModel({
         filterMode,
         filterCutoff,
         filterQ,
+        distortionDriveDb,
+        distortionKnee,
+        distortionWet,
+        distortionWetHPHz,
+        distortionWetLPHz,
         observedFilterState,
         observedFilterSpectrum,
+        observedDistortionScope,
         observedWarpState,
         modulationState,
         selectedMsegSlot,

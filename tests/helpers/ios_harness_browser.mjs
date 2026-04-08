@@ -22,6 +22,12 @@ export function createIOSHarnessInitScript(baseUrl) {
             ["wavetableSelect", 0],
             ["playMode", 0],
             ["glideTime", 0.15],
+            ["pan", 0],
+            ["distortionDriveDb", 12],
+            ["distortionKnee", 0.35],
+            ["distortionWet", 0],
+            ["distortionWetHPHz", 40],
+            ["distortionWetLPHz", 18000],
         ]);
         let readyNotificationCount = 0;
         let bundledFallbackRequestCount = 0;
@@ -117,6 +123,36 @@ export function createIOSHarnessInitScript(baseUrl) {
                         endpointID: "glideTime",
                         purpose: "parameter",
                         annotation: { name: "Glide Time", min: 0, max: 2, init: 0 },
+                    },
+                    {
+                        endpointID: "pan",
+                        purpose: "parameter",
+                        annotation: { name: "Pan", min: -1, max: 1, init: 0 },
+                    },
+                    {
+                        endpointID: "distortionDriveDb",
+                        purpose: "parameter",
+                        annotation: { name: "Distortion Drive", min: 0, max: 36, init: 12 },
+                    },
+                    {
+                        endpointID: "distortionKnee",
+                        purpose: "parameter",
+                        annotation: { name: "Distortion Knee", min: 0, max: 1, init: 0.35 },
+                    },
+                    {
+                        endpointID: "distortionWet",
+                        purpose: "parameter",
+                        annotation: { name: "Distortion Mix", min: 0, max: 1, init: 0 },
+                    },
+                    {
+                        endpointID: "distortionWetHPHz",
+                        purpose: "parameter",
+                        annotation: { name: "Distortion Wet HP", min: 20, max: 4000, init: 40 },
+                    },
+                    {
+                        endpointID: "distortionWetLPHz",
+                        purpose: "parameter",
+                        annotation: { name: "Distortion Wet LP", min: 20, max: 20000, init: 18000 },
                     },
                 ],
             },
@@ -651,6 +687,18 @@ export function createIOSHarnessInitScript(baseUrl) {
                 const previewCurve = shadowRoot?.querySelector(".mseg-preview-shell .cosimo-curve-line");
                 const modalCurve = shadowRoot?.querySelector("[data-role='mseg-modal-viewport'] .cosimo-curve-line");
                 const modalSurface = shadowRoot?.querySelector("[data-role='mseg-modal-viewport']");
+                const distortionDebug = shadowRoot?.querySelector("[data-role='distortion-graph-debug']")?.textContent ?? null;
+                const readDistortionDebug = () => {
+                    if (!distortionDebug) {
+                        return null;
+                    }
+
+                    try {
+                        return JSON.parse(distortionDebug);
+                    } catch {
+                        return null;
+                    }
+                };
 
                 return {
                     errorText: document.body.querySelector("pre")?.textContent ?? null,
@@ -683,6 +731,9 @@ export function createIOSHarnessInitScript(baseUrl) {
                     shellPaddingLeft: shellStyle?.paddingLeft ?? null,
                     msegDepthValue: shadowRoot?.querySelector(".mseg-depth-slider")?.value ?? null,
                     msegDepthReadout: shadowRoot?.querySelector("[data-role='mseg-depth-readout']")?.textContent?.trim() ?? null,
+                    distortionDriveReadout: shadowRoot?.querySelector("[data-role='distortion-drive-readout']")?.textContent?.trim() ?? null,
+                    distortionMixReadout: shadowRoot?.querySelector("[data-role='distortion-mix-readout']")?.textContent?.trim() ?? null,
+                    distortionGraphState: readDistortionDebug(),
                     previewShellRect: rectToObject(previewShell),
                     modalSurfaceRect: rectToObject(modalSurface),
                     previewCurvePoints: readRenderedCurvePoints(previewCurve),
@@ -721,6 +772,9 @@ export function createIOSHarnessInitScript(baseUrl) {
                 if (emitEndpointDirectly) {
                     emitEndpoint(endpointID, value);
                 }
+            },
+            emitDistortionScope(nextState) {
+                emitEndpoint("distortionScope", nextState);
             },
             setStoredStateValue(key, value) {
                 storedState.set(key, value);
@@ -790,6 +844,12 @@ export async function setIOSHarnessParameterValue(page, endpointID, value, emitE
         nextValue: value,
         shouldEmitEndpoint: emitEndpoint,
     });
+}
+
+export async function emitIOSHarnessDistortionScope(page, nextState) {
+    await page.evaluate((state) => {
+        window.__COSIMO_IOS_HARNESS__.emitDistortionScope(state);
+    }, nextState);
 }
 
 export async function setIOSStoredStateValue(page, key, value) {

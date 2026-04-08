@@ -57,6 +57,7 @@ MIN_AUDIBLE_PEAK = 1.0e-3
 MIN_REFERENCE_LEVEL_DB = -12.0
 MAX_REFERENCE_LEVEL_DB = 1.0
 REQUIRED_PATCH_SOURCES = (
+    "cmajor/Distortion.cmajor",
     "cmajor/FilterSpectrumCommon.cmajor",
     "cmajor/FilterSpectrumAnalyzer.cmajor",
 )

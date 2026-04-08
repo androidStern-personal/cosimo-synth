@@ -252,8 +252,12 @@ function getCurveLabTagName() {
 }
 
 function getDesktopWindowKind(globalObject: typeof globalThis = globalThis) {
-    return typeof globalObject.__COSIMO_DESKTOP_WINDOW_KIND__ === "string"
-        ? globalObject.__COSIMO_DESKTOP_WINDOW_KIND__.trim()
+    const desktopWindow = globalObject as typeof globalThis & {
+        __COSIMO_DESKTOP_WINDOW_KIND__?: string;
+    };
+
+    return typeof desktopWindow.__COSIMO_DESKTOP_WINDOW_KIND__ === "string"
+        ? desktopWindow.__COSIMO_DESKTOP_WINDOW_KIND__.trim()
         : "";
 }
 

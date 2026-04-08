@@ -19,6 +19,7 @@ import {
     clearIOSHarnessFailingResources,
     clearIOSHarnessDebugLog,
     closeIOSHarnessPage,
+    emitIOSHarnessDistortionScope,
     getIOSHarnessRenderedState,
     getIOSHarnessSnapshot,
     openIOSHarnessPage,
@@ -50,6 +51,37 @@ const IOS_MSEG_ORIENTATION_SHAPE = {
 
 function cloneJson(value) {
     return JSON.parse(JSON.stringify(value));
+}
+
+function buildDistortionScopeFixture({ amplitude = 1.58, sampleCount = 224 } = {}) {
+    const inputSamples = [];
+    const outputSamples = [];
+
+    for (let index = 0; index < sampleCount; index += 1) {
+        const phase = (index / Math.max(1, sampleCount - 1)) * Math.PI * 6;
+        const envelope = 0.84 + (0.16 * Math.sin((index / Math.max(1, sampleCount - 1)) * Math.PI * 2));
+        const input = amplitude * envelope * Math.sin(phase);
+        const output = input / Math.pow(1 + Math.pow(Math.abs(input), 8), 1 / 8);
+
+        inputSamples.push(input);
+        outputSamples.push(output);
+    }
+
+    const inputPeak = Math.max(...inputSamples.map((sample) => Math.abs(sample)));
+    const outputPeak = Math.max(...outputSamples.map((sample) => Math.abs(sample)));
+    const removedPeak = Math.max(...inputSamples.map((sample, index) => (
+        Math.abs(sample - outputSamples[index])
+    )));
+
+    return {
+        sampleRateHz: 44_100,
+        dominantChannel: 0,
+        inputPeak,
+        outputPeak,
+        removedPeak,
+        inputSamples,
+        outputSamples,
+    };
 }
 
 function readStoredModulationState(snapshot) {
@@ -1446,6 +1478,65 @@ test("mounted iPhone octave controls update the footer keyboard root note and cl
         shadowState = await readShadowState(page);
         assert.equal(shadowState.octaveUpDisabled, true);
         assert.match(renderedState.octaveReadout, /^C5 - /);
+    } finally {
+        await closeIOSHarnessPage(page);
+    }
+});
+
+test("mounted iPhone distortion controls send parameter updates through the patch connection", async () => {
+    const page = await openIOSHarnessPage(browser, server.baseUrl, {
+        viewportSize: { width: 390, height: 844 },
+    });
+
+    try {
+        await waitForIOSHarnessReady(page);
+        await clearIOSHarnessDebugLog(page);
+
+        await dispatchShadowInputValueChange(page, "[data-role='distortion-drive-slider']", "16.500");
+        await dispatchShadowInputValueChange(page, "[data-role='distortion-mix-slider']", "0.580");
+
+        const snapshot = await waitForSnapshot(
+            page,
+            "iPhone distortion parameter updates",
+            (nextSnapshot) => nextSnapshot.sentMessages.some(({ endpointID, value }) => (
+                endpointID === "distortionDriveDb"
+                && Math.abs(Number(value) - 16.5) <= 1e-6
+            )) && nextSnapshot.sentMessages.some(({ endpointID, value }) => (
+                endpointID === "distortionWet"
+                && Math.abs(Number(value) - 0.58) <= 1e-6
+            )),
+        );
+
+        assert.equal(snapshot.sentMessages.some(({ endpointID }) => endpointID === "distortionDriveDb"), true);
+        assert.equal(snapshot.sentMessages.some(({ endpointID }) => endpointID === "distortionWet"), true);
+    } finally {
+        await closeIOSHarnessPage(page);
+    }
+});
+
+test("mounted iPhone distortion panel renders transfer occupancy on the shared scale", async () => {
+    const page = await openIOSHarnessPage(browser, server.baseUrl, {
+        viewportSize: { width: 390, height: 844 },
+    });
+
+    try {
+        await waitForIOSHarnessReady(page);
+        await emitIOSHarnessDistortionScope(page, buildDistortionScopeFixture());
+
+        const renderedState = await waitForRenderedState(
+            page,
+            "iPhone distortion graph state",
+            (nextState) => Boolean(nextState.distortionGraphState?.transfer?.occupancySegmentCount > 0),
+        );
+
+        assert.equal(renderedState.distortionGraphState.displayRange, 2);
+        assert.equal(renderedState.distortionGraphState.inputPeak > renderedState.distortionGraphState.outputPeak, true);
+        assert.equal(renderedState.distortionGraphState.removedPeak > 0.1, true);
+        assert.equal(renderedState.distortionGraphState.clippedSampleCount > 0, true);
+        assert.equal(renderedState.distortionGraphState.transfer.occupancySegmentCount > 0, true);
+        assert.equal(renderedState.distortionGraphState.transfer.clippedOccupancySegmentCount > 0, true);
+        assert.match(renderedState.distortionDriveReadout ?? "", /dB/);
+        assert.match(renderedState.distortionMixReadout ?? "", /%/);
     } finally {
         await closeIOSHarnessPage(page);
     }

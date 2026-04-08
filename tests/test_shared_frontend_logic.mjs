@@ -26,6 +26,10 @@ async function loadFilterSpectrumModule() {
     return await loadUIModule(repoRoot, "ui/shared/filter-spectrum.ts");
 }
 
+async function loadDistortionVisualizationModule() {
+    return await loadUIModule(repoRoot, "ui/shared/distortion-visualization.ts");
+}
+
 test("display position matching ignores float noise after clamping but still rejects a real movement", async () => {
     const { displayPositionsMatch } = await loadRuntimeTableStateModule();
 
@@ -695,6 +699,120 @@ test("horizontal swipe targeting advances one table and clamps at either edge", 
         targetTableIndex: 7,
         hasTarget: false,
     });
+});
+
+test("distortion scope normalization unwraps endpoint payloads and recomputes peaks when needed", async () => {
+    const { normalizeDistortionScopeMessage } = await loadDistortionVisualizationModule();
+
+    const normalized = normalizeDistortionScopeMessage({
+        event: {
+            sampleRateHz: 48_000,
+            dominantChannel: 1.7,
+            inputSamples: [-1.4, -0.25, 0, 1.1],
+            outputSamples: [-1, -0.25, 0, 0.94],
+        },
+    });
+
+    assert.equal(normalized?.sampleRateHz, 48_000);
+    assert.equal(normalized?.dominantChannel, 1);
+    assert.equal(normalized?.inputPeak, 1.4);
+    assert.equal(normalized?.outputPeak, 1);
+    assert.equal(Math.abs((normalized?.removedPeak ?? 0) - 0.4) <= 1e-9, true);
+    assert.deepEqual(normalized?.inputSamples, [-1.4, -0.25, 0, 1.1]);
+    assert.deepEqual(normalized?.outputSamples, [-1, -0.25, 0, 0.94]);
+    assert.equal(normalizeDistortionScopeMessage({ event: { inputSamples: [0.1] } }), null);
+});
+
+test("distortion display range stays fixed while the active frame updates", async () => {
+    const { advanceDistortionDisplayState } = await loadDistortionVisualizationModule();
+
+    const loudFrame = {
+        sampleRateHz: 44_100,
+        dominantChannel: 0,
+        inputPeak: 1.82,
+        outputPeak: 1,
+        removedPeak: 0.82,
+        inputSamples: [-1.82, -0.6, 0.3, 1.64],
+        outputSamples: [-1, -0.55, 0.29, 0.97],
+    };
+    const quietFrame = {
+        sampleRateHz: 44_100,
+        dominantChannel: 0,
+        inputPeak: 0.44,
+        outputPeak: 0.41,
+        removedPeak: 0.03,
+        inputSamples: [-0.44, -0.15, 0.1, 0.34],
+        outputSamples: [-0.41, -0.14, 0.1, 0.33],
+    };
+
+    const firstState = advanceDistortionDisplayState(null, loudFrame, 0);
+    const heldState = advanceDistortionDisplayState(firstState, quietFrame, 120);
+
+    assert.equal(firstState.displayRange, 2);
+    assert.equal(heldState.displayRange, 2);
+    assert.deepEqual(heldState.frame, quietFrame);
+});
+
+test("distortion curve family stays symmetric and sample classification marks removed peaks", async () => {
+    const {
+        buildDistortionSamplePoints,
+        buildDistortionTransferOccupancy,
+        sampleDistortionCurve,
+        shapeDistortionSample,
+    } = await loadDistortionVisualizationModule();
+
+    const curve = sampleDistortionCurve({
+        knee: 0.65,
+        inputRange: 2,
+        pointCount: 5,
+    });
+    assert.equal(curve[0].input, -2);
+    assert.equal(curve[curve.length - 1].input, 2);
+    assert.equal(Math.abs(curve[0].output + curve[curve.length - 1].output) <= 1e-9, true);
+    assert.equal(Math.abs(shapeDistortionSample(-0.9, 0.65) + shapeDistortionSample(0.9, 0.65)) <= 1e-9, true);
+
+    const points = buildDistortionSamplePoints({
+        sampleRateHz: 44_100,
+        dominantChannel: 0,
+        inputPeak: 1.2,
+        outputPeak: 1,
+        removedPeak: 0.2,
+        inputSamples: [-1.2, -0.2, 0.15, 1.1],
+        outputSamples: [-1, -0.2, 0.15, 0.96],
+    });
+    assert.deepEqual(points.map((point) => point.clipped), [true, false, false, true]);
+
+    const forwardOccupancy = buildDistortionTransferOccupancy({
+        samplePoints: points,
+        knee: 0.65,
+        inputRange: 2,
+        binCount: 17,
+    });
+    const reversedOccupancy = buildDistortionTransferOccupancy({
+        samplePoints: [...points].reverse(),
+        knee: 0.65,
+        inputRange: 2,
+        binCount: 17,
+    });
+    const summarizeOccupancy = (occupancy) => ({
+        leftOverflowCount: occupancy.leftOverflowCount,
+        rightOverflowCount: occupancy.rightOverflowCount,
+        peakDensity: Number(occupancy.peakDensity.toFixed(4)),
+        peakRemoved: Number(occupancy.peakRemoved.toFixed(4)),
+        segments: occupancy.segments.map((segment) => segment.map((point) => ({
+            input: Number(point.input.toFixed(3)),
+            density: Number(point.density.toFixed(4)),
+            removed: Number(point.removed.toFixed(4)),
+            clipped: Number(point.clipped.toFixed(4)),
+        }))),
+    });
+
+    assert.equal(forwardOccupancy.segments.length > 0, true);
+    assert.equal(forwardOccupancy.peakRemoved > 0, true);
+    assert.deepEqual(
+        summarizeOccupancy(forwardOccupancy),
+        summarizeOccupancy(reversedOccupancy),
+    );
 });
 
 test("horizontal swipe commit threshold uses the greater of the minimum distance and stage ratio", async () => {

@@ -63,6 +63,37 @@ function routeSummaries(routes) {
     return routes.map((route) => routeSummary(route));
 }
 
+function buildDistortionScopeFixture({ amplitude = 1.62, sampleCount = 256 } = {}) {
+    const inputSamples = [];
+    const outputSamples = [];
+
+    for (let index = 0; index < sampleCount; index += 1) {
+        const phase = (index / Math.max(1, sampleCount - 1)) * Math.PI * 6;
+        const envelope = 0.82 + (0.18 * Math.cos((index / Math.max(1, sampleCount - 1)) * Math.PI * 2));
+        const input = amplitude * envelope * Math.sin(phase);
+        const output = input / Math.pow(1 + Math.pow(Math.abs(input), 8), 1 / 8);
+
+        inputSamples.push(input);
+        outputSamples.push(output);
+    }
+
+    const inputPeak = Math.max(...inputSamples.map((sample) => Math.abs(sample)));
+    const outputPeak = Math.max(...outputSamples.map((sample) => Math.abs(sample)));
+    const removedPeak = Math.max(...inputSamples.map((sample, index) => (
+        Math.abs(sample - outputSamples[index])
+    )));
+
+    return {
+        sampleRateHz: 44_100,
+        dominantChannel: 0,
+        inputPeak,
+        outputPeak,
+        removedPeak,
+        inputSamples,
+        outputSamples,
+    };
+}
+
 async function dispatchInputValueChange(locator, nextValue) {
     await locator.evaluate((element, value) => {
         if (!(element instanceof HTMLInputElement)) {
@@ -2513,6 +2544,81 @@ test("keyboard octave controls update the mounted keyboard root note and note ro
     }
 });
 
+test("z and x shift the mounted keyboard octave without forwarding those keys to note routing", async () => {
+    const page = await openHarnessPage();
+
+    try {
+        await page.waitForFunction(() => {
+            const renderedState = window.__COSIMO_DESKTOP_HARNESS__.getRenderedState();
+            return renderedState.keyboardRootNote === "36" && renderedState.keyboardNoteCount === "25";
+        });
+
+        await clearHarnessDebugLog(page);
+        await page.click("text=Cosimo Synth");
+        await page.keyboard.press("z");
+        await page.waitForFunction(() => window.__COSIMO_DESKTOP_HARNESS__.getRenderedState().keyboardRootNote === "24");
+
+        let keyboardDebug = await getKeyboardDebug(page);
+        assert.ok(keyboardDebug);
+        assert.equal(keyboardDebug.allNotesOffCount, 1);
+        assert.deepEqual(keyboardDebug.handledKeys, []);
+
+        let snapshot = await getHarnessSnapshot(page);
+        assert.deepEqual(snapshot.midiInputEvents, []);
+
+        await clearHarnessDebugLog(page);
+        await page.click("text=Cosimo Synth");
+        await page.keyboard.down("a");
+        await page.keyboard.up("a");
+        await page.waitForFunction(() => {
+            const nextSnapshot = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot();
+            return nextSnapshot.midiInputEvents.length === 2;
+        });
+
+        snapshot = await getHarnessSnapshot(page);
+        assert.deepEqual(
+            snapshot.midiInputEvents,
+            [
+                { endpointID: "midiIn", value: buildShortMidi(0x90, 24, 100) },
+                { endpointID: "midiIn", value: buildShortMidi(0x80, 24) },
+            ],
+        );
+
+        await clearHarnessDebugLog(page);
+        await page.click("text=Cosimo Synth");
+        await page.keyboard.press("x");
+        await page.waitForFunction(() => window.__COSIMO_DESKTOP_HARNESS__.getRenderedState().keyboardRootNote === "36");
+
+        keyboardDebug = await getKeyboardDebug(page);
+        assert.ok(keyboardDebug);
+        assert.equal(keyboardDebug.allNotesOffCount, 1);
+        assert.deepEqual(keyboardDebug.handledKeys, []);
+
+        snapshot = await getHarnessSnapshot(page);
+        assert.deepEqual(snapshot.midiInputEvents, []);
+
+        await clearHarnessDebugLog(page);
+        await page.click("text=Cosimo Synth");
+        await page.keyboard.down("a");
+        await page.keyboard.up("a");
+        await page.waitForFunction(() => {
+            const nextSnapshot = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot();
+            return nextSnapshot.midiInputEvents.length === 2;
+        });
+
+        snapshot = await getHarnessSnapshot(page);
+        assert.deepEqual(
+            snapshot.midiInputEvents,
+            [
+                { endpointID: "midiIn", value: buildShortMidi(0x90, 36, 100) },
+                { endpointID: "midiIn", value: buildShortMidi(0x80, 36) },
+            ],
+        );
+    } finally {
+        await page.close();
+    }
+});
+
 test("keyboard octave buttons disable at the configured minimum and maximum root notes", async () => {
     const page = await openHarnessPage();
 
@@ -2759,6 +2865,120 @@ test("desktop custom-element wrapper detaches the keyboard when the host element
         const snapshot = await getHarnessSnapshot(page);
         assert.deepEqual(snapshot.keyboardAttachCalls, [{ endpointID: "midiIn" }]);
         assert.equal(snapshot.keyboardDetachCount, 1);
+    } finally {
+        await page.close();
+    }
+});
+
+test("desktop distortion controls send live parameter updates", async () => {
+    const page = await openHarnessPage();
+
+    try {
+        await page.waitForSelector('[data-role="distortion-card"]');
+        await clearHarnessDebugLog(page);
+
+        await dispatchInputValueChange(page.locator('[data-role="distortion-drive-field"]'), "18.500");
+        await dispatchInputValueChange(page.locator('[data-role="distortion-mix-field"]'), "0.640");
+
+        const snapshot = await waitForHarnessSnapshot(
+            page,
+            "distortion parameter updates",
+            (nextSnapshot) => nextSnapshot.sentMessages.some(({ endpointID, value }) => (
+                endpointID === "distortionDriveDb"
+                && Math.abs(Number(value) - 18.5) <= 1e-6
+            )) && nextSnapshot.sentMessages.some(({ endpointID, value }) => (
+                endpointID === "distortionWet"
+                && Math.abs(Number(value) - 0.64) <= 1e-6
+            )),
+        );
+
+        assert.equal(snapshot.sentMessages.some(({ endpointID }) => endpointID === "distortionDriveDb"), true);
+        assert.equal(snapshot.sentMessages.some(({ endpointID }) => endpointID === "distortionWet"), true);
+    } finally {
+        await page.close();
+    }
+});
+
+test("desktop distortion wet low-pass slider renders the full 20 Hz floor", async () => {
+    const page = await openHarnessPage();
+
+    try {
+        await page.waitForSelector('[data-role="distortion-card"]');
+
+        await page.evaluate(() => {
+            window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("distortionWetLPHz", 20, true);
+        });
+
+        const sliderState = await waitForPageValue(
+            page,
+            "desktop distortion wet low-pass slider state",
+            () => {
+                const input = document.querySelector('[data-role="distortion-wet-lp-field"]');
+
+                if (!(input instanceof HTMLInputElement)) {
+                    return null;
+                }
+
+                return {
+                    min: input.min,
+                    max: input.max,
+                    value: input.value,
+                };
+            },
+            (nextState) => Boolean(
+                nextState
+                && nextState.min === "0"
+                && nextState.max === "1"
+                && Math.abs(Number(nextState.value)) <= 0.001
+            ),
+        );
+
+        assert.equal(sliderState.min, "0");
+        assert.equal(sliderState.max, "1");
+        assert.equal(Math.abs(Number(sliderState.value)) <= 0.001, true);
+    } finally {
+        await page.close();
+    }
+});
+
+test("desktop distortion graph renders occupancy bands on the fixed transfer scale", async () => {
+    const page = await openHarnessPage();
+
+    try {
+        const fixture = buildDistortionScopeFixture();
+
+        await page.evaluate((nextFixture) => {
+            window.__COSIMO_DESKTOP_HARNESS__.emitDistortionScope(nextFixture);
+        }, fixture);
+
+        const renderedState = await waitForPageValue(
+            page,
+            "desktop distortion graph state",
+            () => window.__COSIMO_DESKTOP_HARNESS__.getRenderedState().distortionGraphState,
+            (graphState) => Boolean(graphState && graphState.transfer?.occupancySegmentCount > 0),
+        );
+        const overlayState = await page.evaluate(() => {
+            const host = document.querySelector("cosimo-desktop-react-view");
+            const viewRoot = host?.shadowRoot ?? host;
+
+            return {
+                occupancyCount: viewRoot?.querySelectorAll('[data-role="distortion-transfer-occupancy"]').length ?? 0,
+                clippedOccupancyCount: viewRoot?.querySelectorAll('[data-role="distortion-transfer-clipped-occupancy"]').length ?? 0,
+                legacyTraceCount: viewRoot?.querySelectorAll('[data-role="distortion-transfer-trace"]').length ?? 0,
+                legacyClippedPointCount: viewRoot?.querySelectorAll('[data-role="distortion-transfer-clipped-point"]').length ?? 0,
+            };
+        });
+
+        assert.equal(renderedState.displayRange, 2);
+        assert.equal(renderedState.inputPeak > renderedState.outputPeak, true);
+        assert.equal(renderedState.removedPeak > 0.1, true);
+        assert.equal(renderedState.clippedSampleCount > 0, true);
+        assert.equal(renderedState.transfer.occupancySegmentCount > 0, true);
+        assert.equal(renderedState.transfer.clippedOccupancySegmentCount > 0, true);
+        assert.equal(overlayState.occupancyCount > 0, true);
+        assert.equal(overlayState.clippedOccupancyCount > 0, true);
+        assert.equal(overlayState.legacyTraceCount, 0);
+        assert.equal(overlayState.legacyClippedPointCount, 0);
     } finally {
         await page.close();
     }

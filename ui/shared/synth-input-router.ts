@@ -21,13 +21,34 @@ export type SynthTextEntryBindings = SynthFocusBindings & {
     onBlurCapture: FocusEventHandler<HTMLElement>;
 };
 
+export type SynthInputRouterOptions = {
+    handleKeyboardOctaveDown?: () => boolean;
+    handleKeyboardOctaveUp?: () => boolean;
+};
+
 function hasCommandModifier(event: KeyboardEvent) {
     return event.metaKey || event.ctrlKey || event.altKey;
 }
 
-export function useSynthInputRouter(keyboardRef: RefObject<SynthKeyboardLike | null>) {
+export function useSynthInputRouter(
+    keyboardRef: RefObject<SynthKeyboardLike | null>,
+    {
+        handleKeyboardOctaveDown,
+        handleKeyboardOctaveUp,
+    }: SynthInputRouterOptions = {},
+) {
     const activeArrowTargetRef = useRef<SynthArrowTarget | null>(null);
     const textEntryDepthRef = useRef(0);
+    const handleKeyboardOctaveDownRef = useRef(handleKeyboardOctaveDown);
+    const handleKeyboardOctaveUpRef = useRef(handleKeyboardOctaveUp);
+
+    useEffect(() => {
+        handleKeyboardOctaveDownRef.current = handleKeyboardOctaveDown;
+    }, [handleKeyboardOctaveDown]);
+
+    useEffect(() => {
+        handleKeyboardOctaveUpRef.current = handleKeyboardOctaveUp;
+    }, [handleKeyboardOctaveUp]);
 
     const activateArrowTarget = useCallback((target: SynthArrowTarget) => {
         activeArrowTargetRef.current = target;
@@ -61,11 +82,49 @@ export function useSynthInputRouter(keyboardRef: RefObject<SynthKeyboardLike | n
                 return;
             }
 
+            const normalizedKey = event.key.toLowerCase();
+
+            if (normalizedKey === "z" && handleKeyboardOctaveDownRef.current) {
+                if (!event.repeat) {
+                    const didShiftKeyboardOctave = handleKeyboardOctaveDownRef.current();
+
+                    if (didShiftKeyboardOctave) {
+                        keyboardRef.current?.allNotesOff?.();
+                    }
+                }
+
+                event.preventDefault();
+                return;
+            }
+
+            if (normalizedKey === "x" && handleKeyboardOctaveUpRef.current) {
+                if (!event.repeat) {
+                    const didShiftKeyboardOctave = handleKeyboardOctaveUpRef.current();
+
+                    if (didShiftKeyboardOctave) {
+                        keyboardRef.current?.allNotesOff?.();
+                    }
+                }
+
+                event.preventDefault();
+                return;
+            }
+
             keyboardRef.current?.handleKey?.(event, true);
         };
 
         const handleKeyUp = (event: KeyboardEvent) => {
             if (hasCommandModifier(event) || textEntryDepthRef.current > 0) {
+                return;
+            }
+
+            const normalizedKey = event.key.toLowerCase();
+
+            if (
+                (normalizedKey === "z" && handleKeyboardOctaveDownRef.current)
+                || (normalizedKey === "x" && handleKeyboardOctaveUpRef.current)
+            ) {
+                event.preventDefault();
                 return;
             }
 

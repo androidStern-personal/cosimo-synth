@@ -11,12 +11,18 @@ const warpAmountEndpointID = "warpAmount";
 const filterModeEndpointID = "filterMode";
 const filterCutoffEndpointID = "filterCutoff";
 const filterQEndpointID = "filterQ";
+const distortionDriveDbEndpointID = "distortionDriveDb";
+const distortionKneeEndpointID = "distortionKnee";
+const distortionWetEndpointID = "distortionWet";
+const distortionWetHPHzEndpointID = "distortionWetHPHz";
+const distortionWetLPHzEndpointID = "distortionWetLPHz";
 const runtimeSyncRequestEndpointID = "runtimeSyncRequest";
 const runtimeStateEndpointID = "runtimeState";
 const effectiveWavetablePositionEndpointID = "effectiveWavetablePosition";
 const effectiveWarpStateEndpointID = "effectiveWarpState";
 const effectiveFilterStateEndpointID = "effectiveFilterState";
 const filterSpectrumEndpointID = "filterSpectrum";
+const distortionScopeEndpointID = "distortionScope";
 const retryDesiredTableRequestEndpointID = "retryDesiredTableRequest";
 
 type ParameterListener = (value: unknown) => void;
@@ -285,6 +291,56 @@ function buildHarnessStatus(manifest: unknown) {
                         init: 0.707107,
                     },
                 },
+                {
+                    endpointID: distortionDriveDbEndpointID,
+                    purpose: "parameter",
+                    annotation: {
+                        name: "Distortion Drive",
+                        min: 0,
+                        max: 36,
+                        init: 12,
+                    },
+                },
+                {
+                    endpointID: distortionKneeEndpointID,
+                    purpose: "parameter",
+                    annotation: {
+                        name: "Distortion Knee",
+                        min: 0,
+                        max: 1,
+                        init: 0.35,
+                    },
+                },
+                {
+                    endpointID: distortionWetEndpointID,
+                    purpose: "parameter",
+                    annotation: {
+                        name: "Distortion Mix",
+                        min: 0,
+                        max: 1,
+                        init: 0,
+                    },
+                },
+                {
+                    endpointID: distortionWetHPHzEndpointID,
+                    purpose: "parameter",
+                    annotation: {
+                        name: "Distortion Wet HP",
+                        min: 20,
+                        max: 4000,
+                        init: 40,
+                    },
+                },
+                {
+                    endpointID: distortionWetLPHzEndpointID,
+                    purpose: "parameter",
+                    annotation: {
+                        name: "Distortion Wet LP",
+                        min: 20,
+                        max: 20000,
+                        init: 18000,
+                    },
+                },
             ],
         },
     };
@@ -315,6 +371,11 @@ export class MockPatchConnection implements PatchConnectionLike {
         [filterModeEndpointID, 0],
         [filterCutoffEndpointID, 1000],
         [filterQEndpointID, 0.707107],
+        [distortionDriveDbEndpointID, 12],
+        [distortionKneeEndpointID, 0.35],
+        [distortionWetEndpointID, 0],
+        [distortionWetHPHzEndpointID, 40],
+        [distortionWetLPHzEndpointID, 18_000],
     ]);
     private parameterListeners = new Map<string, Set<ParameterListener>>();
     private endpointListeners = new Map<string, Set<EndpointListener>>();
@@ -585,6 +646,36 @@ export class MockPatchConnection implements PatchConnectionLike {
         this.emitEndpoint(filterSpectrumEndpointID, {
             sampleRateHz,
             magnitudes,
+        });
+    }
+
+    emitDistortionScope(
+        {
+            sampleRateHz = 44_100,
+            dominantChannel = 0,
+            inputPeak = 0,
+            outputPeak = 0,
+            removedPeak = 0,
+            inputSamples = [],
+            outputSamples = [],
+        }: {
+            sampleRateHz?: number;
+            dominantChannel?: number;
+            inputPeak?: number;
+            outputPeak?: number;
+            removedPeak?: number;
+            inputSamples?: number[];
+            outputSamples?: number[];
+        } = {},
+    ) {
+        this.emitEndpoint(distortionScopeEndpointID, {
+            sampleRateHz,
+            dominantChannel,
+            inputPeak,
+            outputPeak,
+            removedPeak,
+            inputSamples,
+            outputSamples,
         });
     }
 

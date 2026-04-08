@@ -1,0 +1,278 @@
+namespace wt
+{
+    let distortionOversampleFactor = 4;
+    let distortionScopeSampleCount = 768;
+    let distortionScopeFramesPerSecond = 20.0f;
+    let distortionDriveMinDb = 0.0f;
+    let distortionDriveMaxDb = 36.0f;
+    let distortionKneeMin = 0.0f;
+    let distortionKneeMax = 1.0f;
+    let distortionWetMin = 0.0f;
+    let distortionWetMax = 1.0f;
+    let distortionWetHPMinHz = 20.0f;
+    let distortionWetHPMaxHz = 4000.0f;
+    let distortionWetLPMinHz = 20.0f;
+    let distortionWetLPMaxHz = 20000.0f;
+    let distortionLowPassMode = 0;
+    let distortionHighPassMode = 1;
+
+    struct DistortionScopeFrame
+    {
+        float32 sampleRateHz;
+        int32 dominantChannel;
+        float32 inputPeak;
+        float32 outputPeak;
+        float32 removedPeak;
+        float32[distortionScopeSampleCount] inputSamples;
+        float32[distortionScopeSampleCount] outputSamples;
+    }
+
+    float32 clampDistortionDriveDb (float32 value)
+    {
+        return std::intrinsics::clamp (value, distortionDriveMinDb, distortionDriveMaxDb);
+    }
+
+    float32 clampDistortionKnee (float32 value)
+    {
+        return std::intrinsics::clamp (value, distortionKneeMin, distortionKneeMax);
+    }
+
+    float32 clampDistortionWet (float32 value)
+    {
+        return std::intrinsics::clamp (value, distortionWetMin, distortionWetMax);
+    }
+
+    float32 clampDistortionWetHPHz (float32 value)
+    {
+        return std::intrinsics::clamp (value, distortionWetHPMinHz, distortionWetHPMaxHz);
+    }
+
+    float32 clampDistortionWetLPHz (float32 value, float32 wetHPHz)
+    {
+        let minimumLowPassHz = std::intrinsics::max (distortionWetLPMinHz, wetHPHz);
+        return std::intrinsics::clamp (value, minimumLowPassHz, distortionWetLPMaxHz);
+    }
+
+    processor DistortionCoreChannel
+    {
+        input stream float32 in;
+        input value float32 kneeIn [[ init: 0.35f ]];
+        output stream float32 out;
+
+        float32 shapeSample (float32 x, float32 knee)
+        {
+            let clampedKnee = clampDistortionKnee (knee);
+            let exponent = 2.0f + (14.0f * clampedKnee * clampedKnee);
+            let magnitude = std::intrinsics::abs (x);
+            let denominator = std::intrinsics::pow (
+                1.0f + std::intrinsics::pow (magnitude, exponent),
+                1.0f / exponent
+            );
+
+            return x / denominator;
+        }
+
+        void main()
+        {
+            loop
+            {
+                out <- shapeSample (in, kneeIn);
+                advance();
+            }
+        }
+    }
+
+    processor DistortionBus
+    {
+        input stream float32<2> in;
+        input value float32 driveDbIn [[ init: 12.0f ]];
+        input value float32 kneeIn [[ init: 0.35f ]];
+        input value float32 wetIn [[ init: 0.0f ]];
+        input value float32 wetHPHzIn [[ init: 40.0f ]];
+        input value float32 wetLPHzIn [[ init: 18000.0f ]];
+
+        output stream float32<2> out;
+        output stream float32 previewInputLeft;
+        output stream float32 previewInputRight;
+        output stream float32 previewOutputLeft;
+        output stream float32 previewOutputRight;
+
+        node leftCore = wt::DistortionCoreChannel * distortionOversampleFactor;
+        node rightCore = wt::DistortionCoreChannel * distortionOversampleFactor;
+
+        var wetHighPass = std::filters (float32<2>, float64, 32)::butterworth (4)::create (
+            distortionHighPassMode,
+            processor.frequency,
+            40.0f
+        );
+        var wetLowPass = std::filters (float32<2>, float64, 32)::butterworth (4)::create (
+            distortionLowPassMode,
+            processor.frequency,
+            18000.0f
+        );
+        var dcBlocker = std::filters (float32<2>, float64, 32)::dcblocker::create();
+
+        float32 currentWetHPHz = 40.0f;
+        float32 currentWetLPHz = 18000.0f;
+
+        void updatePrefilterFrequencies()
+        {
+            let nextWetHPHz = clampDistortionWetHPHz (wetHPHzIn);
+            let nextWetLPHz = clampDistortionWetLPHz (wetLPHzIn, nextWetHPHz);
+
+            if (std::intrinsics::abs (nextWetHPHz - currentWetHPHz) > 0.001f)
+            {
+                wetHighPass.setFrequency (processor.frequency, nextWetHPHz);
+                currentWetHPHz = nextWetHPHz;
+            }
+
+            if (std::intrinsics::abs (nextWetLPHz - currentWetLPHz) > 0.001f)
+            {
+                wetLowPass.setFrequency (processor.frequency, nextWetLPHz);
+                currentWetLPHz = nextWetLPHz;
+            }
+        }
+
+        void main()
+        {
+            loop
+            {
+                updatePrefilterFrequencies();
+
+                let dry = in;
+                let driveGain = std::levels::dBtoGain (clampDistortionDriveDb (driveDbIn));
+                let filtered = wetLowPass.process (wetHighPass.process (dry));
+                let driven = filtered * driveGain;
+
+                leftCore.in <- driven[0];
+                leftCore.kneeIn <- clampDistortionKnee (kneeIn);
+                leftCore.advance();
+
+                rightCore.in <- driven[1];
+                rightCore.kneeIn <- clampDistortionKnee (kneeIn);
+                rightCore.advance();
+
+                let shaped = float32<2> (leftCore.out, rightCore.out);
+                let wetSignal = dcBlocker.process (shaped);
+                let wetAmount = clampDistortionWet (wetIn);
+                let dryGain = float32 (std::intrinsics::cos (0.5f * pi * wetAmount));
+                let wetGain = float32 (std::intrinsics::sin (0.5f * pi * wetAmount));
+
+                out <- (dry * dryGain) + (wetSignal * wetGain);
+                previewInputLeft <- driven[0];
+                previewInputRight <- driven[1];
+                previewOutputLeft <- wetSignal[0];
+                previewOutputRight <- wetSignal[1];
+
+                advance();
+            }
+        }
+    }
+
+    processor DistortionScopeAnalyzer
+    {
+        input stream float32 previewInputLeft;
+        input stream float32 previewInputRight;
+        input stream float32 previewOutputLeft;
+        input stream float32 previewOutputRight;
+
+        output event DistortionScopeFrame distortionScope;
+
+        let hopSize = int32 (
+            std::intrinsics::max (1.0f, float32 (processor.frequency) / distortionScopeFramesPerSecond)
+        );
+
+        float32[distortionScopeSampleCount] inputHistoryLeft;
+        float32[distortionScopeSampleCount] inputHistoryRight;
+        float32[distortionScopeSampleCount] outputHistoryLeft;
+        float32[distortionScopeSampleCount] outputHistoryRight;
+        int32 historyWriteIndex = 0;
+        int32 warmupFrames = 0;
+        int32 framesUntilEmit = hopSize;
+
+        void pushSample (
+            float32 inputLeft,
+            float32 inputRight,
+            float32 outputLeft,
+            float32 outputRight
+        )
+        {
+            inputHistoryLeft[historyWriteIndex] = inputLeft;
+            inputHistoryRight[historyWriteIndex] = inputRight;
+            outputHistoryLeft[historyWriteIndex] = outputLeft;
+            outputHistoryRight[historyWriteIndex] = outputRight;
+
+            historyWriteIndex = (historyWriteIndex + 1) % distortionScopeSampleCount;
+
+            if (warmupFrames < distortionScopeSampleCount)
+                warmupFrames += 1;
+        }
+
+        float32 readHistorySample (float32[distortionScopeSampleCount] buffer, int32 offset)
+        {
+            return buffer[(historyWriteIndex + offset) % distortionScopeSampleCount];
+        }
+
+        float32 findPeak (float32[distortionScopeSampleCount] buffer)
+        {
+            float32 peak = 0.0f;
+
+            for (wrap<distortionScopeSampleCount> index)
+                peak = std::intrinsics::max (peak, std::intrinsics::abs (buffer[index]));
+
+            return peak;
+        }
+
+        void main()
+        {
+            loop
+            {
+                pushSample (
+                    previewInputLeft,
+                    previewInputRight,
+                    previewOutputLeft,
+                    previewOutputRight
+                );
+
+                framesUntilEmit -= 1;
+
+                if (warmupFrames >= distortionScopeSampleCount && framesUntilEmit <= 0)
+                {
+                    let leftInputPeak = findPeak (inputHistoryLeft);
+                    let rightInputPeak = findPeak (inputHistoryRight);
+                    let useRightChannel = rightInputPeak > leftInputPeak;
+
+                    DistortionScopeFrame frame;
+                    frame.sampleRateHz = float32 (processor.frequency);
+                    frame.dominantChannel = useRightChannel ? 1 : 0;
+                    frame.inputPeak = 0.0f;
+                    frame.outputPeak = 0.0f;
+                    frame.removedPeak = 0.0f;
+
+                    for (wrap<distortionScopeSampleCount> index)
+                    {
+                        let offset = int32 (index);
+                        let inputSample = useRightChannel
+                            ? readHistorySample (inputHistoryRight, offset)
+                            : readHistorySample (inputHistoryLeft, offset);
+                        let outputSample = useRightChannel
+                            ? readHistorySample (outputHistoryRight, offset)
+                            : readHistorySample (outputHistoryLeft, offset);
+                        let removedSample = inputSample - outputSample;
+
+                        frame.inputSamples[index] = inputSample;
+                        frame.outputSamples[index] = outputSample;
+                        frame.inputPeak = std::intrinsics::max (frame.inputPeak, std::intrinsics::abs (inputSample));
+                        frame.outputPeak = std::intrinsics::max (frame.outputPeak, std::intrinsics::abs (outputSample));
+                        frame.removedPeak = std::intrinsics::max (frame.removedPeak, std::intrinsics::abs (removedSample));
+                    }
+
+                    distortionScope <- frame;
+                    framesUntilEmit = hopSize;
+                }
+
+                advance();
+            }
+        }
+    }
+}

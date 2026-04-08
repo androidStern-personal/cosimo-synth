@@ -61,6 +61,8 @@
 - The desktop native wrapper lives in `tools/desktop_native`.
 - The canonical compiled desktop build command is `npm run desktop:native:build`.
 - The canonical desktop HMR build command is `npm run desktop:native:dev`.
+- During desktop UI development, do not claim the standalone app is verified or ready for review unless the Vite dev server is actually running at `http://127.0.0.1:5174/patch_gui/desktop/index.js` and the wrapper was rebuilt through `npm run desktop:native:dev`.
+- During desktop UI development, do not deliver the compiled standalone build as if it were the active development app. If the app is not running against the dev server with HMR, say that explicitly.
 - Both commands call `./scripts/build_desktop_native.sh`, which writes to `build/desktop_native`.
 - `./scripts/build_desktop_native.sh` defaults to the compiled desktop UI. `npm run desktop:native:dev` sets `COSIMO_DESKTOP_UI_SOURCE_MODE=dev-server` and `COSIMO_DESKTOP_DEV_SERVER_ORIGIN=http://127.0.0.1:5174`.
 - The desktop native wrapper chooses `dev-server` mode by injecting `window.__COSIMO_DESKTOP_UI_SOURCE_MODE__` and `window.__COSIMO_DESKTOP_DEV_SERVER_ORIGIN__` from `tools/desktop_native/Source/cmaj_PatchLoaderPlugin.cpp` before the loader runs.

@@ -203,6 +203,7 @@ test("iOS patch manifest keeps the synth graph but switches to the mobile editor
     assert.deepEqual(iosManifest.source, desktopManifest.source);
     assert.deepEqual(desktopManifest.source, [
         "cmajor/FixedFrameOscillator.cmajor",
+        "cmajor/Distortion.cmajor",
         "cmajor/FilterSpectrumCommon.cmajor",
         "cmajor/FilterSpectrumAnalyzer.cmajor",
         "cmajor/Mseg.cmajor",
