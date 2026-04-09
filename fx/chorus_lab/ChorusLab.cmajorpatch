@@ -1,0 +1,21 @@
+{
+  "CmajorVersion": 1,
+  "ID": "dev.cosimo.chorus-lab",
+  "version": "0.1.0",
+  "name": "Chorus Lab",
+  "description": "Standalone chorus effect lab for fast DSP iteration with diffusion and shimmer experiments.",
+  "category": "effect",
+  "manufacturer": "Cosimo",
+  "plugin": {
+    "pluginCode": "CsCh",
+    "manufacturerCode": "Cosi"
+  },
+  "view": {
+    "src": "view/index.js",
+    "width": 920,
+    "height": 680,
+    "resizable": true
+  },
+  "isInstrument": false,
+  "source": "ChorusLab.cmajor"
+}

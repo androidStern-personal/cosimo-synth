@@ -1,0 +1,483 @@
+namespace choruslab
+{
+    let kPi = 3.14159265358979323846f;
+    let kGroupCount = 4;
+    let kInnerPairCount = 2;
+    let kChannelCount = 2;
+    let kDiffusionStageCount = 2;
+    let kMaxChorusDelayMs = 96.0f;
+    let kMaxDiffusionDelayMs = 40.0f;
+    let kMaxShimmerGrainMs = 80.0f;
+
+    float32 lerp (float32 start, float32 end, float32 amount)
+    {
+        return start + ((end - start) * amount);
+    }
+
+    float32 catmullRom (float32 p0, float32 p1, float32 p2, float32 p3, float32 t)
+    {
+        return p1 + 0.5f * t * ((p2 - p0) + t * ((2.0f * p0 - 5.0f * p1 + 4.0f * p2 - p3)
+               + t * (-p0 + 3.0f * p1 - 3.0f * p2 + p3)));
+    }
+
+    float32 wrap01 (float32 value)
+    {
+        return std::intrinsics::wrap (value, 1.0f);
+    }
+
+    float32 hann (float32 phase)
+    {
+        return 0.5f - 0.5f * std::intrinsics::cos (2.0f * kPi * phase);
+    }
+
+    float32 softClip (float32 value)
+    {
+        let magnitude = std::intrinsics::abs (value);
+        return value / (1.0f + magnitude);
+    }
+
+    float32 softClipLarge (float32 value, float32 drive)
+    {
+        let scaled = value * drive * 0.125f;
+        return softClip (scaled) * 8.0f;
+    }
+
+    float32 coefficientForCutoff (float32 sampleRate, float32 cutoffHz)
+    {
+        let clampedCutoff = std::intrinsics::clamp (cutoffHz, 10.0f, sampleRate * 0.45f);
+        return 1.0f - std::intrinsics::exp ((-2.0f * kPi * clampedCutoff) / sampleRate);
+    }
+}
+
+processor ChorusLab [[ main ]]
+{
+    input stream float32<2> in;
+    output stream float32<2> out;
+
+    input value float32 mix                  [[ name: "Mix",               group: "Output", min: 0.0f,   max: 100.0f, init: 50.0f,  unit: "%",   rampFrames: 256 ]];
+
+    input value float32 voices              [[ name: "Voices",            group: "Chorus", min: 1.0f,   max: 4.0f,   init: 4.0f,   unit: "",    rampFrames: 256 ]];
+    input value float32 rateHz              [[ name: "Rate",              group: "Chorus", min: 0.02f,  max: 6.0f,   init: 0.33f,  unit: "Hz",  rampFrames: 256 ]];
+    input value float32 delayAms            [[ name: "Delay A",           group: "Chorus", min: 2.0f,   max: 30.0f,  init: 8.0f,   unit: "ms",  rampFrames: 256 ]];
+    input value float32 delayBms            [[ name: "Delay B",           group: "Chorus", min: 2.0f,   max: 30.0f,  init: 14.0f,  unit: "ms",  rampFrames: 256 ]];
+    input value float32 modDepthMs          [[ name: "Mod Depth",         group: "Chorus", min: 0.0f,   max: 30.0f,  init: 7.0f,   unit: "ms",  rampFrames: 256 ]];
+    input value float32 driftMs             [[ name: "Drift",             group: "Chorus", min: 0.0f,   max: 4.0f,   init: 0.4f,   unit: "ms",  rampFrames: 256 ]];
+
+    input value float32 groupPhaseSpread    [[ name: "Group Spread",      group: "Phase",  min: 0.0f,   max: 0.5f,   init: 0.25f,  unit: "cyc", rampFrames: 256 ]];
+    input value float32 rightPhaseOffset    [[ name: "Right Offset",      group: "Phase",  min: 0.0f,   max: 0.5f,   init: 0.25f,  unit: "cyc", rampFrames: 256 ]];
+    input value float32 innerPairOffset     [[ name: "Inner Pair Offset", group: "Phase",  min: 0.0f,   max: 1.0f,   init: 0.5f,   unit: "cyc", rampFrames: 256 ]];
+
+    input value float32 feedback            [[ name: "Feedback",          group: "Loop",   min: -95.0f, max: 95.0f,  init: 40.0f,  unit: "%",   rampFrames: 256 ]];
+    input value float32 loopHighpassHz      [[ name: "Loop HP",           group: "Loop",   min: 20.0f,  max: 1200.0f, init: 90.0f,  unit: "Hz",  rampFrames: 256 ]];
+    input value float32 loopLowpassHz       [[ name: "Loop LP",           group: "Loop",   min: 800.0f, max: 18000.0f, init: 6400.0f, unit: "Hz", rampFrames: 256 ]];
+    input value float32 drive               [[ name: "Drive",             group: "Loop",   min: 0.5f,   max: 4.0f,   init: 1.35f,  unit: "x",   rampFrames: 256 ]];
+
+    input value float32 diffuse             [[ name: "Diffuse",           group: "Bloom",  min: 0.0f,   max: 100.0f, init: 24.0f,  unit: "%",   rampFrames: 256 ]];
+    input value float32 diffuseDelayMs      [[ name: "Diffuse Delay",     group: "Bloom",  min: 2.0f,   max: 18.0f,  init: 7.0f,   unit: "ms",  rampFrames: 256 ]];
+    input value float32 diffuseMod          [[ name: "Diffuse Mod",       group: "Bloom",  min: 0.0f,   max: 100.0f, init: 22.0f,  unit: "%",   rampFrames: 256 ]];
+    input value float32 shimmer             [[ name: "Shimmer",           group: "Bloom",  min: 0.0f,   max: 100.0f, init: 16.0f,  unit: "%",   rampFrames: 256 ]];
+    input value float32 shimmerGrainMs      [[ name: "Shimmer Grain",     group: "Bloom",  min: 18.0f,  max: 80.0f,  init: 42.0f,  unit: "ms",  rampFrames: 256 ]];
+    input value float32 shimmerTone         [[ name: "Shimmer Tone",      group: "Bloom",  min: 0.0f,   max: 100.0f, init: 58.0f,  unit: "%",   rampFrames: 256 ]];
+
+    let chorusBufferSize = int (processor.maxFrequency * choruslab::kMaxChorusDelayMs * 0.001f) + 8;
+    let diffusionBufferSize = int (processor.maxFrequency * choruslab::kMaxDiffusionDelayMs * 0.001f) + 8;
+    let shimmerBufferSize = int (processor.maxFrequency * choruslab::kMaxShimmerGrainMs * 0.001f) + 512;
+
+    float32[choruslab::kGroupCount, choruslab::kInnerPairCount, choruslab::kChannelCount, chorusBufferSize] delayBuffers;
+    wrap<chorusBufferSize>[choruslab::kGroupCount, choruslab::kInnerPairCount, choruslab::kChannelCount] delayWritePositions;
+
+    float32[choruslab::kGroupCount, choruslab::kInnerPairCount, choruslab::kChannelCount] loopHighpassState;
+    float32[choruslab::kGroupCount, choruslab::kInnerPairCount, choruslab::kChannelCount] loopLowpassState;
+    float32[choruslab::kGroupCount, choruslab::kInnerPairCount, choruslab::kChannelCount] regenInjectionState;
+
+    float32[choruslab::kChannelCount, choruslab::kDiffusionStageCount, diffusionBufferSize] diffusionBuffers;
+    wrap<diffusionBufferSize>[choruslab::kChannelCount, choruslab::kDiffusionStageCount] diffusionWritePositions;
+
+    float32[choruslab::kChannelCount, shimmerBufferSize] shimmerBuffers;
+    wrap<shimmerBufferSize>[choruslab::kChannelCount] shimmerWritePositions;
+    float32[choruslab::kChannelCount] shimmerLowpassState;
+
+    std::random::RNG[choruslab::kGroupCount, choruslab::kInnerPairCount] driftRng;
+    float32[choruslab::kGroupCount, choruslab::kInnerPairCount] driftValue;
+    float32[choruslab::kGroupCount, choruslab::kInnerPairCount] driftTarget;
+    int32[choruslab::kGroupCount, choruslab::kInnerPairCount] driftCounter;
+
+    float32 lfoPhase;
+    float32 shimmerPhase;
+
+    void init()
+    {
+        for (wrap<choruslab::kGroupCount> group)
+        {
+            for (wrap<choruslab::kInnerPairCount> innerPair)
+            {
+                let seed = 1001L
+                         + int64 (processor.id) * 37L
+                         + int64 (int32 (group)) * 149L
+                         + int64 (int32 (innerPair)) * 311L;
+                driftRng[group, innerPair].seed (seed);
+                driftTarget[group, innerPair] = driftRng[group, innerPair].getBipolar();
+                driftValue[group, innerPair] = driftTarget[group, innerPair] * 0.18f;
+                driftCounter[group, innerPair] = int32 (processor.frequency * (0.18f + 0.09f * float32 (int32 (group) + int32 (innerPair) + 1)));
+            }
+        }
+    }
+
+    float32 readDelaySample (wrap<choruslab::kGroupCount> group,
+                             wrap<choruslab::kInnerPairCount> innerPair,
+                             wrap<choruslab::kChannelCount> channel,
+                             float32 delaySamples)
+    {
+        let clampedDelay = std::intrinsics::clamp (delaySamples, 2.0f, float32 (chorusBufferSize - 4));
+        let writeIndex = int32 (delayWritePositions[group, innerPair, channel]);
+        let readPos = std::intrinsics::wrap (float32 (writeIndex) - clampedDelay, float32 (chorusBufferSize));
+        let index1 = int32 (std::intrinsics::floor (readPos));
+        let fraction = readPos - float32 (index1);
+        let i0 = wrap<chorusBufferSize> (index1 + chorusBufferSize - 1);
+        let i1 = wrap<chorusBufferSize> (index1);
+        let i2 = wrap<chorusBufferSize> (index1 + 1);
+        let i3 = wrap<chorusBufferSize> (index1 + 2);
+
+        return choruslab::catmullRom (
+            delayBuffers[group, innerPair, channel, i0],
+            delayBuffers[group, innerPair, channel, i1],
+            delayBuffers[group, innerPair, channel, i2],
+            delayBuffers[group, innerPair, channel, i3],
+            fraction
+        );
+    }
+
+    void writeDelaySample (wrap<choruslab::kGroupCount> group,
+                           wrap<choruslab::kInnerPairCount> innerPair,
+                           wrap<choruslab::kChannelCount> channel,
+                           float32 sample)
+    {
+        let writeIndex = delayWritePositions[group, innerPair, channel];
+        delayBuffers[group, innerPair, channel, writeIndex] = sample;
+        delayWritePositions[group, innerPair, channel] = wrap<chorusBufferSize> (int32 (writeIndex) + 1);
+    }
+
+    float32 readDiffusionSample (wrap<choruslab::kChannelCount> channel,
+                                 wrap<choruslab::kDiffusionStageCount> stage,
+                                 float32 delaySamples)
+    {
+        let clampedDelay = std::intrinsics::clamp (delaySamples, 2.0f, float32 (diffusionBufferSize - 4));
+        let writeIndex = int32 (diffusionWritePositions[channel, stage]);
+        let readPos = std::intrinsics::wrap (float32 (writeIndex) - clampedDelay, float32 (diffusionBufferSize));
+        let index1 = int32 (std::intrinsics::floor (readPos));
+        let fraction = readPos - float32 (index1);
+        let i0 = wrap<diffusionBufferSize> (index1 + diffusionBufferSize - 1);
+        let i1 = wrap<diffusionBufferSize> (index1);
+        let i2 = wrap<diffusionBufferSize> (index1 + 1);
+        let i3 = wrap<diffusionBufferSize> (index1 + 2);
+
+        return choruslab::catmullRom (
+            diffusionBuffers[channel, stage, i0],
+            diffusionBuffers[channel, stage, i1],
+            diffusionBuffers[channel, stage, i2],
+            diffusionBuffers[channel, stage, i3],
+            fraction
+        );
+    }
+
+    void writeDiffusionSample (wrap<choruslab::kChannelCount> channel,
+                               wrap<choruslab::kDiffusionStageCount> stage,
+                               float32 sample)
+    {
+        let writeIndex = diffusionWritePositions[channel, stage];
+        diffusionBuffers[channel, stage, writeIndex] = sample;
+        diffusionWritePositions[channel, stage] = wrap<diffusionBufferSize> (int32 (writeIndex) + 1);
+    }
+
+    float32 readShimmerSample (wrap<choruslab::kChannelCount> channel,
+                               float32 delaySamples)
+    {
+        let clampedDelay = std::intrinsics::clamp (delaySamples, 2.0f, float32 (shimmerBufferSize - 4));
+        let writeIndex = int32 (shimmerWritePositions[channel]);
+        let readPos = std::intrinsics::wrap (float32 (writeIndex) - clampedDelay, float32 (shimmerBufferSize));
+        let index1 = int32 (std::intrinsics::floor (readPos));
+        let fraction = readPos - float32 (index1);
+        let i0 = wrap<shimmerBufferSize> (index1 + shimmerBufferSize - 1);
+        let i1 = wrap<shimmerBufferSize> (index1);
+        let i2 = wrap<shimmerBufferSize> (index1 + 1);
+        let i3 = wrap<shimmerBufferSize> (index1 + 2);
+
+        return choruslab::catmullRom (
+            shimmerBuffers[channel, i0],
+            shimmerBuffers[channel, i1],
+            shimmerBuffers[channel, i2],
+            shimmerBuffers[channel, i3],
+            fraction
+        );
+    }
+
+    float32 updateDrift (wrap<choruslab::kGroupCount> group,
+                         wrap<choruslab::kInnerPairCount> innerPair)
+    {
+        let minimumHold = int32 (processor.frequency * 0.18f);
+        let maximumHold = int32 (processor.frequency * 0.72f);
+        var counter = driftCounter[group, innerPair] - 1;
+
+        if (counter <= 0)
+        {
+            let holdRange = maximumHold - minimumHold;
+            counter = minimumHold + int32 (float32 (holdRange) * driftRng[group, innerPair].getUnipolar());
+            driftTarget[group, innerPair] = driftRng[group, innerPair].getBipolar();
+        }
+
+        driftCounter[group, innerPair] = counter;
+        driftValue[group, innerPair] += (driftTarget[group, innerPair] - driftValue[group, innerPair]) * 0.00065f;
+        return driftValue[group, innerPair];
+    }
+
+    float32 baseDelayForLane (wrap<choruslab::kGroupCount> group,
+                              wrap<choruslab::kInnerPairCount> innerPair,
+                              float32 delayA,
+                              float32 delayB,
+                              int32 activeGroups)
+    {
+        let averageDelay = 0.5f * (delayA + delayB);
+        let laneDelay = innerPair == 0 ? delayA : delayB;
+
+        if (activeGroups <= 1)
+            return laneDelay;
+
+        let delayT = float32 (int32 (group)) / float32 (activeGroups - 1);
+        return choruslab::lerp (laneDelay, averageDelay, delayT);
+    }
+
+    float32 colorLoopWrite (wrap<choruslab::kGroupCount> group,
+                            wrap<choruslab::kInnerPairCount> innerPair,
+                            wrap<choruslab::kChannelCount> channel,
+                            float32 writeRaw,
+                            float32 lowCoeff,
+                            float32 highCoeff,
+                            float32 driveAmount)
+    {
+        let saturated = choruslab::softClipLarge (writeRaw, driveAmount);
+        let lowPassed = loopLowpassState[group, innerPair, channel]
+                      + lowCoeff * (saturated - loopLowpassState[group, innerPair, channel]);
+        loopLowpassState[group, innerPair, channel] = lowPassed;
+
+        let highpassLow = loopHighpassState[group, innerPair, channel]
+                        + highCoeff * (lowPassed - loopHighpassState[group, innerPair, channel]);
+        loopHighpassState[group, innerPair, channel] = highpassLow;
+
+        return lowPassed - highpassLow;
+    }
+
+    float32 filterShimmerReturn (wrap<choruslab::kChannelCount> channel,
+                                 float32 inputSample,
+                                 float32 tone01)
+    {
+        let shimmerCutoff = choruslab::lerp (3200.0f, 9800.0f, tone01);
+        let coefficient = choruslab::coefficientForCutoff (float32 (processor.frequency), shimmerCutoff);
+        let current = shimmerLowpassState[channel]
+                    + coefficient * (inputSample - shimmerLowpassState[channel]);
+        shimmerLowpassState[channel] = current;
+        return current;
+    }
+
+    float32 processAllpassStage (wrap<choruslab::kChannelCount> channel,
+                                 wrap<choruslab::kDiffusionStageCount> stage,
+                                 float32 inputSample,
+                                 float32 baseDelaySamples,
+                                 float32 amount01,
+                                 float32 modAmount01)
+    {
+        let stageScale = stage == 0 ? 0.54f : 0.90f;
+        let modRateScale = stage == 0 ? 0.47f : 0.73f;
+        let delayMod = std::intrinsics::sin (
+            2.0f * choruslab::kPi
+            * ((lfoPhase * modRateScale)
+               + float32 (int32 (stage)) * 0.21f
+               + float32 (int32 (channel)) * 0.13f)
+        );
+        let delaySamples = 4.0f
+                         + (baseDelaySamples * stageScale)
+                         + (baseDelaySamples * 0.18f * amount01 * modAmount01 * delayMod);
+        let gain = 0.22f + amount01 * 0.42f;
+        let delayed = readDiffusionSample (channel, stage, delaySamples);
+        let outputSample = delayed - (gain * inputSample);
+        let writeValue = inputSample + (gain * outputSample);
+
+        writeDiffusionSample (channel, stage, writeValue);
+        return outputSample;
+    }
+
+    float32 processDiffusion (wrap<choruslab::kChannelCount> channel,
+                              float32 inputSample,
+                              float32 baseDelaySamples,
+                              float32 amount01,
+                              float32 modAmount01)
+    {
+        if (amount01 <= 0.0001f)
+            return inputSample;
+
+        var current = inputSample;
+
+        for (wrap<choruslab::kDiffusionStageCount> stage)
+            current = processAllpassStage (channel, stage, current, baseDelaySamples, amount01, modAmount01);
+
+        return current;
+    }
+
+    float32 processShimmer (wrap<choruslab::kChannelCount> channel,
+                            float32 inputSample,
+                            float32 grainSamples)
+    {
+        let writeIndex = shimmerWritePositions[channel];
+        shimmerBuffers[channel, writeIndex] = inputSample;
+        shimmerWritePositions[channel] = wrap<shimmerBufferSize> (int32 (writeIndex) + 1);
+
+        let minDelaySamples = 48.0f;
+        let phaseA = shimmerPhase;
+        let phaseB = choruslab::wrap01 (shimmerPhase + 0.5f);
+        let delayA = minDelaySamples + ((1.0f - phaseA) * grainSamples);
+        let delayB = minDelaySamples + ((1.0f - phaseB) * grainSamples);
+        let windowA = choruslab::hann (phaseA);
+        let windowB = choruslab::hann (phaseB);
+        let sampleA = readShimmerSample (channel, delayA);
+        let sampleB = readShimmerSample (channel, delayB);
+
+        return (sampleA * windowA + sampleB * windowB)
+             / std::intrinsics::max (0.0001f, windowA + windowB);
+    }
+
+    void main()
+    {
+        loop
+        {
+            let sampleRate = float32 (processor.frequency);
+            let dry = in;
+
+            let mix01 = std::intrinsics::clamp (mix * 0.01f, 0.0f, 1.0f);
+            let activeGroups = int32 (std::intrinsics::clamp (std::intrinsics::floor (voices + 0.5f), 1.0f, float32 (choruslab::kGroupCount)));
+            let delayA = std::intrinsics::clamp (delayAms * sampleRate * 0.001f, 3.0f, float32 (chorusBufferSize - 8));
+            let delayB = std::intrinsics::clamp (delayBms * sampleRate * 0.001f, 3.0f, float32 (chorusBufferSize - 8));
+            let modDepthSamples = std::intrinsics::clamp (modDepthMs * sampleRate * 0.001f, 0.0f, sampleRate * 0.030f);
+            let driftDepthSamples = std::intrinsics::clamp (driftMs * sampleRate * 0.001f, 0.0f, sampleRate * 0.008f);
+
+            let rightOffset = std::intrinsics::clamp (rightPhaseOffset, 0.0f, 0.5f);
+            let innerOffset = std::intrinsics::clamp (innerPairOffset, 0.0f, 1.0f);
+            let groupSpread = std::intrinsics::clamp (groupPhaseSpread, 0.0f, 0.5f);
+
+            let feedback01 = std::intrinsics::clamp (feedback * 0.01f, -0.95f, 0.95f);
+            let feedbackMagnitude = std::intrinsics::abs (feedback01);
+            let hpCutoff = std::intrinsics::clamp (loopHighpassHz, 20.0f, sampleRate * 0.20f);
+            let lpCutoff = std::intrinsics::clamp (std::intrinsics::max (loopLowpassHz, hpCutoff + 10.0f), hpCutoff + 10.0f, sampleRate * 0.45f);
+            let lowCoeff = choruslab::coefficientForCutoff (sampleRate, lpCutoff);
+            let highCoeff = choruslab::coefficientForCutoff (sampleRate, hpCutoff);
+            let driveAmount = std::intrinsics::clamp (drive, 0.5f, 4.0f);
+
+            let diffuse01 = std::intrinsics::clamp (diffuse * 0.01f, 0.0f, 1.0f);
+            let diffuseDelaySamples = std::intrinsics::clamp (diffuseDelayMs * sampleRate * 0.001f, 4.0f, float32 (diffusionBufferSize - 8));
+            let diffuseMod01 = std::intrinsics::clamp (diffuseMod * 0.01f, 0.0f, 1.0f);
+            let shimmer01 = std::intrinsics::clamp (shimmer * 0.01f, 0.0f, 1.0f);
+            let shimmerTone01 = std::intrinsics::clamp (shimmerTone * 0.01f, 0.0f, 1.0f);
+            let shimmerGrainSamples = std::intrinsics::clamp (shimmerGrainMs * sampleRate * 0.001f, sampleRate * 0.018f, float32 (shimmerBufferSize - 256));
+
+            let dryGain = std::intrinsics::cos (0.5f * choruslab::kPi * mix01);
+            let wetGain = std::intrinsics::sin (0.5f * choruslab::kPi * mix01);
+
+            var chorusWetLeft = 0.0f;
+            var chorusWetRight = 0.0f;
+            var regenAccumulatorLeft = 0.0f;
+            var regenAccumulatorRight = 0.0f;
+            let activeLanePairs = float32 (activeGroups * choruslab::kInnerPairCount);
+
+            for (wrap<choruslab::kGroupCount> group)
+            {
+                if (int32 (group) >= activeGroups)
+                    continue;
+
+                let groupPhaseOffset = float32 (int32 (group)) * groupSpread / float32 (activeGroups);
+
+                var groupWetLeft = 0.0f;
+                var groupWetRight = 0.0f;
+                var groupLoopLeft = 0.0f;
+                var groupLoopRight = 0.0f;
+
+                for (wrap<choruslab::kInnerPairCount> innerPair)
+                {
+                    let baseDelay = baseDelayForLane (group, innerPair, delayA, delayB, activeGroups);
+                    let drift = updateDrift (group, innerPair);
+                    let driftOffset = drift * driftDepthSamples;
+
+                    for (wrap<choruslab::kChannelCount> channel)
+                    {
+                        let channelPhaseOffset = channel == 0 ? 0.0f : rightOffset;
+                        let pairPhaseOffset = innerPair == 0 ? 0.0f : innerOffset;
+                        let phase = choruslab::wrap01 (lfoPhase + groupPhaseOffset + channelPhaseOffset + pairPhaseOffset);
+                        let mod = std::intrinsics::sin (2.0f * choruslab::kPi * phase) * 0.5f + 1.0f;
+                        let delaySamples = std::intrinsics::clamp (
+                            baseDelay + (modDepthSamples * mod) + driftOffset,
+                            3.0f,
+                            float32 (chorusBufferSize - 8)
+                        );
+
+                        let delayed = readDelaySample (group, innerPair, channel, delaySamples);
+                        let writeRaw = dry[channel]
+                                      + regenInjectionState[group, innerPair, channel]
+                                      + delayed * feedback01;
+                        let filteredWrite = colorLoopWrite (group, innerPair, channel, writeRaw, lowCoeff, highCoeff, driveAmount);
+                        writeDelaySample (group, innerPair, channel, filteredWrite);
+
+                        if (channel == 0)
+                        {
+                            groupWetLeft += delayed * 0.5f;
+                            groupLoopLeft += filteredWrite * 0.5f;
+                        }
+                        else
+                        {
+                            groupWetRight += delayed * 0.5f;
+                            groupLoopRight += filteredWrite * 0.5f;
+                        }
+                    }
+                }
+
+                chorusWetLeft += groupWetLeft;
+                chorusWetRight += groupWetRight;
+                regenAccumulatorLeft += groupLoopLeft;
+                regenAccumulatorRight += groupLoopRight;
+            }
+
+            regenAccumulatorLeft /= std::intrinsics::max (1.0f, activeLanePairs);
+            regenAccumulatorRight /= std::intrinsics::max (1.0f, activeLanePairs);
+
+            let diffusedLeft = processDiffusion (0, regenAccumulatorLeft, diffuseDelaySamples, diffuse01, diffuseMod01);
+            let diffusedRight = processDiffusion (1, regenAccumulatorRight, diffuseDelaySamples, diffuse01, diffuseMod01);
+
+            let shimmerSend = shimmer01 * feedbackMagnitude;
+            let shimmerShiftLeft = shimmerSend > 0.0001f ? processShimmer (0, diffusedLeft * shimmerSend, shimmerGrainSamples) : 0.0f;
+            let shimmerShiftRight = shimmerSend > 0.0001f ? processShimmer (1, diffusedRight * shimmerSend, shimmerGrainSamples) : 0.0f;
+            let shimmerBloomLeft = filterShimmerReturn (0, shimmerShiftLeft, shimmerTone01);
+            let shimmerBloomRight = filterShimmerReturn (1, shimmerShiftRight, shimmerTone01);
+
+            let bloomGain = feedbackMagnitude * (0.24f + 0.44f * diffuse01);
+            let bloomLeft = ((diffusedLeft * (0.32f + 0.28f * diffuse01)) + (shimmerBloomLeft * (0.18f + 0.52f * shimmer01))) * bloomGain;
+            let bloomRight = ((diffusedRight * (0.32f + 0.28f * diffuse01)) + (shimmerBloomRight * (0.18f + 0.52f * shimmer01))) * bloomGain;
+
+            for (wrap<choruslab::kGroupCount> group)
+            {
+                if (int32 (group) >= activeGroups)
+                    continue;
+
+                for (wrap<choruslab::kInnerPairCount> innerPair)
+                {
+                    let polarity = ((int32 (group) + int32 (innerPair)) & 1) == 0 ? -1.0f : 1.0f;
+                    let shape = 0.86f + 0.05f * float32 (int32 (group)) + 0.06f * float32 (int32 (innerPair));
+
+                    regenInjectionState[group, innerPair, 0] = bloomLeft * shape * (1.0f - 0.08f * polarity);
+                    regenInjectionState[group, innerPair, 1] = bloomRight * shape * (1.0f + 0.08f * polarity);
+                }
+            }
+
+            out <- (dry * dryGain) + (float32<2> (chorusWetLeft, chorusWetRight) * wetGain);
+
+            lfoPhase = choruslab::wrap01 (lfoPhase + (std::intrinsics::clamp (rateHz, 0.02f, 6.0f) / sampleRate));
+            shimmerPhase = choruslab::wrap01 (shimmerPhase + (1.0f / shimmerGrainSamples));
+            advance();
+        }
+    }
+}
