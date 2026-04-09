@@ -1,8 +1,8 @@
 namespace choruslab
 {
     let kPi = 3.14159265358979323846f;
-    let kGroupCount = 4;
-    let kInnerPairCount = 2;
+    let kGroupCount = 3;
+    let kInnerPairCount = 3;
     let kChannelCount = 2;
     let kDiffusionStageCount = 4;
     let kMaxChorusDelayMs = 96.0f;
@@ -56,7 +56,7 @@ processor ChorusLab [[ main ]]
 
     input value float32 mix                  [[ name: "Mix",               group: "Output", min: 0.0f,   max: 100.0f, init: 50.0f,  unit: "%",   rampFrames: 256 ]];
 
-    input value float32 voices              [[ name: "Voices",            group: "Chorus", min: 1.0f,   max: 4.0f,   init: 4.0f,   unit: "",    rampFrames: 256 ]];
+    input value float32 voices              [[ name: "Voices",            group: "Chorus", min: 1.0f,   max: 3.0f,   init: 3.0f,   unit: "",    rampFrames: 256 ]];
     input value float32 rateHz              [[ name: "Rate",              group: "Chorus", min: 0.02f,  max: 6.0f,   init: 0.33f,  unit: "Hz",  rampFrames: 256 ]];
     input value float32 delayAms            [[ name: "Delay A",           group: "Chorus", min: 2.0f,   max: 30.0f,  init: 8.0f,   unit: "ms",  rampFrames: 256 ]];
     input value float32 delayBms            [[ name: "Delay B",           group: "Chorus", min: 2.0f,   max: 30.0f,  init: 14.0f,  unit: "ms",  rampFrames: 256 ]];
@@ -239,14 +239,21 @@ processor ChorusLab [[ main ]]
                               float32 delayB,
                               int32 activeGroups)
     {
-        let averageDelay = 0.5f * (delayA + delayB);
-        let laneDelay = innerPair == 0 ? delayA : delayB;
-
-        if (activeGroups <= 1)
-            return laneDelay;
-
-        let delayT = float32 (int32 (group)) / float32 (activeGroups - 1);
-        return choruslab::lerp (laneDelay, averageDelay, delayT);
+        let innerT = float32 (int32 (innerPair)) / float32 (choruslab::kInnerPairCount - 1);
+        let groupT = activeGroups <= 1 ? 0.5f
+                                       : float32 (int32 (group)) / float32 (activeGroups - 1);
+        let centeredInner = innerT - 0.5f;
+        let centeredGroup = groupT - 0.5f;
+        let blendedT = std::intrinsics::clamp (
+            0.5f
+            + (centeredInner * 0.72f)
+            + (centeredGroup * 0.28f)
+            + (centeredInner * centeredGroup * 0.26f),
+            0.0f,
+            1.0f
+        );
+        let curvedT = blendedT * blendedT * (3.0f - 2.0f * blendedT);
+        return choruslab::lerp (delayA, delayB, curvedT);
     }
 
     float32 colorLoopWrite (wrap<choruslab::kGroupCount> group,
@@ -397,7 +404,9 @@ processor ChorusLab [[ main ]]
                 if (int32 (group) >= activeGroups)
                     continue;
 
-                let groupPhaseOffset = float32 (int32 (group)) * groupSpread / float32 (activeGroups);
+                let groupPhaseT = activeGroups <= 1 ? 0.5f
+                                                    : float32 (int32 (group)) / float32 (activeGroups - 1);
+                let groupPhaseOffset = (groupPhaseT - 0.5f) * groupSpread;
 
                 var groupWetLeft = 0.0f;
                 var groupWetRight = 0.0f;
@@ -413,7 +422,8 @@ processor ChorusLab [[ main ]]
                     for (wrap<choruslab::kChannelCount> channel)
                     {
                         let channelPhaseOffset = channel == 0 ? 0.0f : rightOffset;
-                        let pairPhaseOffset = innerPair == 0 ? 0.0f : innerOffset;
+                        let innerPhaseT = float32 (int32 (innerPair)) / float32 (choruslab::kInnerPairCount - 1);
+                        let pairPhaseOffset = (innerPhaseT - 0.5f) * innerOffset;
                         let phase = choruslab::wrap01 (lfoPhase + groupPhaseOffset + channelPhaseOffset + pairPhaseOffset);
                         let mod = std::intrinsics::sin (2.0f * choruslab::kPi * phase) * 0.5f + 1.0f;
                         let delaySamples = std::intrinsics::clamp (
@@ -431,13 +441,13 @@ processor ChorusLab [[ main ]]
 
                         if (channel == 0)
                         {
-                            groupWetLeft += delayed * 0.5f;
-                            groupLoopLeft += filteredWrite * 0.5f;
+                            groupWetLeft += delayed / float32 (choruslab::kInnerPairCount);
+                            groupLoopLeft += filteredWrite / float32 (choruslab::kInnerPairCount);
                         }
                         else
                         {
-                            groupWetRight += delayed * 0.5f;
-                            groupLoopRight += filteredWrite * 0.5f;
+                            groupWetRight += delayed / float32 (choruslab::kInnerPairCount);
+                            groupLoopRight += filteredWrite / float32 (choruslab::kInnerPairCount);
                         }
                     }
                 }
