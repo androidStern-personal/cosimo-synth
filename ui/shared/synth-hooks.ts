@@ -99,6 +99,7 @@ const WARP_AMOUNT_ENDPOINT_ID = "warpAmount";
 const FILTER_MODE_ENDPOINT_ID = "filterMode";
 const FILTER_CUTOFF_ENDPOINT_ID = "filterCutoff";
 const FILTER_Q_ENDPOINT_ID = "filterQ";
+const DISTORTION_MODE_ENDPOINT_ID = "distortionMode";
 const DISTORTION_DRIVE_DB_ENDPOINT_ID = "distortionDriveDb";
 const DISTORTION_KNEE_ENDPOINT_ID = "distortionKnee";
 const DISTORTION_WET_ENDPOINT_ID = "distortionWet";
@@ -188,6 +189,7 @@ export type SynthPatchViewModel = {
     filterMode: PatchControlBinding<number>;
     filterCutoff: PatchControlBinding<number>;
     filterQ: PatchControlBinding<number>;
+    distortionMode: PatchControlBinding<number>;
     distortionDriveDb: PatchControlBinding<number>;
     distortionKnee: PatchControlBinding<number>;
     distortionWet: PatchControlBinding<number>;
@@ -1163,6 +1165,11 @@ export function useSynthPatchViewModel({
         initialValue: 0.707107,
         coerce: (value) => clamp(Number(value) || 0, 0.1, 20),
     });
+    const distortionMode = usePatchParameterBinding<number>({
+        endpointID: DISTORTION_MODE_ENDPOINT_ID,
+        initialValue: 0,
+        coerce: (value) => clamp(Math.round(Number(value) || 0), 0, 1),
+    });
     const distortionDriveDb = usePatchParameterBinding<number>({
         endpointID: DISTORTION_DRIVE_DB_ENDPOINT_ID,
         initialValue: 12,
@@ -1400,6 +1407,7 @@ export function useSynthPatchViewModel({
         filterMode,
         filterCutoff,
         filterQ,
+        distortionMode,
         distortionDriveDb,
         distortionKnee,
         distortionWet,

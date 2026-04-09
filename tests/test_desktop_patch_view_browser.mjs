@@ -2979,6 +2979,7 @@ test("desktop distortion controls send live parameter updates", async () => {
         await page.waitForSelector('[data-role="distortion-card"]');
         await clearHarnessDebugLog(page);
 
+        await page.click('[data-role="distortion-mode-option-1"]');
         await dispatchInputValueChange(page.locator('[data-role="distortion-drive-field"]'), "18.500");
         await dispatchInputValueChange(page.locator('[data-role="distortion-mix-field"]'), "0.640");
 
@@ -2986,6 +2987,9 @@ test("desktop distortion controls send live parameter updates", async () => {
             page,
             "distortion parameter updates",
             (nextSnapshot) => nextSnapshot.sentMessages.some(({ endpointID, value }) => (
+                endpointID === "distortionMode"
+                && Number(value) === 1
+            )) && nextSnapshot.sentMessages.some(({ endpointID, value }) => (
                 endpointID === "distortionDriveDb"
                 && Math.abs(Number(value) - 18.5) <= 1e-6
             )) && nextSnapshot.sentMessages.some(({ endpointID, value }) => (
@@ -2994,6 +2998,7 @@ test("desktop distortion controls send live parameter updates", async () => {
             )),
         );
 
+        assert.equal(snapshot.sentMessages.some(({ endpointID }) => endpointID === "distortionMode"), true);
         assert.equal(snapshot.sentMessages.some(({ endpointID }) => endpointID === "distortionDriveDb"), true);
         assert.equal(snapshot.sentMessages.some(({ endpointID }) => endpointID === "distortionWet"), true);
     } finally {

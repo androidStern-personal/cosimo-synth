@@ -12,6 +12,9 @@ namespace wt
     let distortionKneeMax = 1.0f;
     let distortionWetMin = 0.0f;
     let distortionWetMax = 1.0f;
+    let distortionModeHarmonics = 1;
+    let distortionModeMin = 0.0f;
+    let distortionModeMax = 1.0f;
     let distortionWetHPMinHz = 20.0f;
     let distortionWetHPMaxHz = 4000.0f;
     let distortionWetLPMinHz = 20.0f;
@@ -56,6 +59,11 @@ namespace wt
     float32 clampDistortionWet (float32 value)
     {
         return std::intrinsics::clamp (value, distortionWetMin, distortionWetMax);
+    }
+
+    int32 clampDistortionMode (float32 value)
+    {
+        return int32 (std::intrinsics::clamp (value, distortionModeMin, distortionModeMax) + 0.5f);
     }
 
     float32 clampDistortionWetHPHz (float32 value)
@@ -104,6 +112,7 @@ namespace wt
         input value float32 driveDbIn [[ init: 12.0f ]];
         input value float32 kneeIn [[ init: 0.35f ]];
         input value float32 wetIn [[ init: 0.0f ]];
+        input value float32 modeIn [[ init: 0.0f ]];
         input value float32 wetHPHzIn [[ init: 40.0f ]];
         input value float32 wetLPHzIn [[ init: 18000.0f ]];
 
@@ -126,7 +135,8 @@ namespace wt
             processor.frequency,
             18000.0f
         );
-        var dcBlocker = std::filters (float32<2>, float64, 32)::dcblocker::create();
+        var classicDcBlocker = std::filters (float32<2>, float64, 32)::dcblocker::create();
+        var residueDcBlocker = std::filters (float32<2>, float64, 32)::dcblocker::create();
 
         float32 currentWetHPHz = 40.0f;
         float32 currentWetLPHz = 18000.0f;
@@ -169,16 +179,20 @@ namespace wt
                 rightCore.advance();
 
                 let shaped = float32<2> (leftCore.out, rightCore.out);
-                let wetSignal = dcBlocker.process (shaped);
+                let classicWet = classicDcBlocker.process (shaped);
+                let residue = residueDcBlocker.process (shaped - driven);
                 let wetAmount = clampDistortionWet (wetIn);
+                let distortionMode = clampDistortionMode (modeIn);
                 let dryGain = float32 (std::intrinsics::cos (0.5f * pi * wetAmount));
                 let wetGain = float32 (std::intrinsics::sin (0.5f * pi * wetAmount));
+                let classicOut = (dry * dryGain) + (classicWet * wetGain);
+                let harmonicsOut = dry + (residue * wetAmount);
 
-                out <- (dry * dryGain) + (wetSignal * wetGain);
+                out <- distortionMode == distortionModeHarmonics ? harmonicsOut : classicOut;
                 previewInputLeft <- driven[0];
                 previewInputRight <- driven[1];
-                previewOutputLeft <- wetSignal[0];
-                previewOutputRight <- wetSignal[1];
+                previewOutputLeft <- shaped[0];
+                previewOutputRight <- shaped[1];
 
                 advance();
             }

@@ -1599,6 +1599,14 @@ test("mounted iPhone distortion controls send parameter updates through the patc
         await waitForIOSHarnessReady(page);
         await clearIOSHarnessDebugLog(page);
 
+        await page.evaluate(() => {
+            const shadowRoot = document.querySelector("cosimo-synth-view")?.shadowRoot;
+            const button = shadowRoot?.querySelector("[data-role='distortion-mode-option-1']");
+
+            if (button instanceof HTMLButtonElement) {
+                button.click();
+            }
+        });
         await dispatchShadowInputValueChange(page, "[data-role='distortion-drive-slider']", "16.500");
         await dispatchShadowInputValueChange(page, "[data-role='distortion-mix-slider']", "0.580");
 
@@ -1606,6 +1614,9 @@ test("mounted iPhone distortion controls send parameter updates through the patc
             page,
             "iPhone distortion parameter updates",
             (nextSnapshot) => nextSnapshot.sentMessages.some(({ endpointID, value }) => (
+                endpointID === "distortionMode"
+                && Number(value) === 1
+            )) && nextSnapshot.sentMessages.some(({ endpointID, value }) => (
                 endpointID === "distortionDriveDb"
                 && Math.abs(Number(value) - 16.5) <= 1e-6
             )) && nextSnapshot.sentMessages.some(({ endpointID, value }) => (
@@ -1614,6 +1625,7 @@ test("mounted iPhone distortion controls send parameter updates through the patc
             )),
         );
 
+        assert.equal(snapshot.sentMessages.some(({ endpointID }) => endpointID === "distortionMode"), true);
         assert.equal(snapshot.sentMessages.some(({ endpointID }) => endpointID === "distortionDriveDb"), true);
         assert.equal(snapshot.sentMessages.some(({ endpointID }) => endpointID === "distortionWet"), true);
     } finally {

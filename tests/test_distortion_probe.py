@@ -187,6 +187,7 @@ def _build_distortion_probe_source(scheduled_events: list[tuple[int, str]]) -> s
         + "    input value float32 filterMode [[ init: 0.0f ]];\n"
         + "    input value float32 filterCutoff [[ init: 1000.0f ]];\n"
         + "    input value float32 filterQ [[ init: 0.707107f ]];\n"
+        + "    input value float32 distortionMode [[ init: 0.0f ]];\n"
         + "    input value float32 distortionDriveDb [[ init: 12.0f ]];\n"
         + "    input value float32 distortionKnee [[ init: 0.35f ]];\n"
         + "    input value float32 distortionWet [[ init: 0.0f ]];\n"
@@ -223,6 +224,7 @@ def _build_distortion_probe_source(scheduled_events: list[tuple[int, str]]) -> s
         + "        filterQ -> engine.filterQIn;\n"
         + "        engine.out -> trim.in;\n"
         + "        trim.out -> distortion.in;\n"
+        + "        distortionMode -> distortion.modeIn;\n"
         + "        distortionDriveDb -> distortion.driveDbIn;\n"
         + "        distortionKnee -> distortion.kneeIn;\n"
         + "        distortionWet -> distortion.wetIn;\n"
@@ -260,6 +262,7 @@ def _build_manifest(source_filename: str) -> dict[str, object]:
 
 def _build_setup_js(
     *,
+    distortion_mode: int = 0,
     distortion_drive_db: float,
     distortion_knee: float,
     distortion_wet: float,
@@ -276,6 +279,7 @@ def _build_setup_js(
         "patch.setInputValue_filterMode(0.0, 0);",
         "patch.setInputValue_filterCutoff(1000.0, 0);",
         "patch.setInputValue_filterQ(0.707107, 0);",
+        f"patch.setInputValue_distortionMode({int(distortion_mode)}, 0);",
         f"patch.setInputValue_distortionDriveDb({float(distortion_drive_db):.6f}, 0);",
         f"patch.setInputValue_distortionKnee({float(distortion_knee):.6f}, 0);",
         f"patch.setInputValue_distortionWet({float(distortion_wet):.6f}, 0);",
@@ -383,6 +387,56 @@ def test_distortion_wet_mix_changes_the_real_synth_bus_audio() -> None:
     assert rms(wet) > 0.01
     assert rms(difference) > 0.003, (
         f"Expected distortion wet mix to change the synth bus output. Difference RMS was {rms(difference):.6f}."
+    )
+
+
+@pytest.mark.cmajor
+def test_distortion_harmonics_mode_stays_closer_to_the_dry_bus_level_than_classic_mode() -> None:
+    schedule = [(0, _note_on_expr(1, 60.0, 1.0))]
+    dry = _render_probe_audio(
+        schedule,
+        setup_js=_build_setup_js(
+            distortion_mode=1,
+            distortion_drive_db=24.0,
+            distortion_knee=0.35,
+            distortion_wet=0.0,
+        ),
+        output_endpoint_id="leftOut",
+        num_samples=16_384,
+    )
+    classic = _render_probe_audio(
+        schedule,
+        setup_js=_build_setup_js(
+            distortion_mode=0,
+            distortion_drive_db=24.0,
+            distortion_knee=0.35,
+            distortion_wet=1.0,
+        ),
+        output_endpoint_id="leftOut",
+        num_samples=16_384,
+    )
+    harmonics = _render_probe_audio(
+        schedule,
+        setup_js=_build_setup_js(
+            distortion_mode=1,
+            distortion_drive_db=24.0,
+            distortion_knee=0.35,
+            distortion_wet=1.0,
+        ),
+        output_endpoint_id="leftOut",
+        num_samples=16_384,
+    )
+
+    dry_rms = rms(dry)
+    classic_rms = rms(classic)
+    harmonics_rms = rms(harmonics)
+    classic_delta = abs(classic_rms - dry_rms)
+    harmonics_delta = abs(harmonics_rms - dry_rms)
+
+    assert rms(harmonics - dry) > 0.001, "Expected harmonics mode at full mix to audibly change the bus output."
+    assert harmonics_delta < classic_delta, (
+        "Expected harmonics mode to stay closer to the dry bus level than classic mode. "
+        f"dry={dry_rms:.6f}, classic={classic_rms:.6f}, harmonics={harmonics_rms:.6f}"
     )
 
 

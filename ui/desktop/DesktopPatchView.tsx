@@ -102,6 +102,10 @@ const FILTER_MODE_OPTIONS = [
     { value: 4, label: "Notch" },
     { value: 5, label: "Peak" },
 ] as const;
+const DISTORTION_MODE_OPTIONS = [
+    { value: 0, label: "Classic", summary: "Equal-power crossfade between dry and clipped wet." },
+    { value: 1, label: "Harmonics", summary: "Keep the dry body and add only the nonlinear residue." },
+] as const;
 const DISTORTION_WET_HP_MIN_HZ = 20;
 const DISTORTION_WET_HP_MAX_HZ = 4_000;
 const DISTORTION_WET_LP_MIN_HZ = 20;
@@ -139,6 +143,7 @@ type FilterSectionProps = {
 };
 
 type DistortionSectionProps = {
+    distortionMode: PatchControlBinding<number>;
     distortionDriveDb: PatchControlBinding<number>;
     distortionKnee: PatchControlBinding<number>;
     distortionWet: PatchControlBinding<number>;
@@ -1042,6 +1047,7 @@ function FilterSection({
 }
 
 function DistortionSection({
+    distortionMode,
     distortionDriveDb,
     distortionKnee,
     distortionWet,
@@ -1051,6 +1057,8 @@ function DistortionSection({
     observedDistortionScope,
     className,
 }: DistortionSectionProps) {
+    const distortionModeOption = DISTORTION_MODE_OPTIONS.find((option) => option.value === distortionMode.value)
+        ?? DISTORTION_MODE_OPTIONS[0];
     const inputPeak = observedDistortionScope?.inputPeak ?? 0;
     const outputPeak = observedDistortionScope?.outputPeak ?? 0;
     const removedPeak = observedDistortionScope?.removedPeak ?? 0;
@@ -1097,11 +1105,11 @@ function DistortionSection({
                     <div className="flex items-center justify-between gap-4">
                         <div>
                             <div className="text-[11px] uppercase tracking-[0.22em] text-rose-200/70">Distortion</div>
-                            <div className="mt-1 text-sm text-slate-200/78">Wet transfer above. Output + removal overview below.</div>
+                            <div className="mt-1 text-sm text-slate-200/78">Driven transfer above. Core delta overview below.</div>
                         </div>
                         <div className="grid gap-1 text-right font-mono text-[11px] tracking-[0.18em] text-slate-200/70">
                             <div>{overshoot > 0 ? `Ceiling +${overshoot.toFixed(2)}` : `Ceiling ${Math.round(headroom * 100)}% clear`}</div>
-                            <div>{`Out ${outputPeak.toFixed(3)} • Removed ${removedPeak.toFixed(3)}`}</div>
+                            <div>{`Out ${outputPeak.toFixed(3)} • Delta ${removedPeak.toFixed(3)}`}</div>
                         </div>
                     </div>
 
@@ -1115,6 +1123,32 @@ function DistortionSection({
 
                 <div className="grid content-start gap-4">
                     <div className="grid gap-4 rounded-[24px] border border-white/8 bg-black/20 p-4">
+                        <div className="grid gap-2">
+                            <div className="text-[11px] uppercase tracking-[0.18em] text-slate-300/72">Mode</div>
+                            <div className="grid grid-cols-2 gap-2">
+                                {DISTORTION_MODE_OPTIONS.map((option) => {
+                                    const active = distortionMode.value === option.value;
+
+                                    return (
+                                        <button
+                                            key={option.value}
+                                            type="button"
+                                            data-role={`distortion-mode-option-${option.value}`}
+                                            aria-pressed={active ? "true" : "false"}
+                                            className={`rounded-[16px] border px-3 py-2 text-left transition ${
+                                                active
+                                                    ? "border-cyan-300/40 bg-cyan-300/12 text-cyan-50 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
+                                                    : "border-white/8 bg-white/[0.03] text-slate-200/78 hover:border-white/12 hover:bg-white/[0.05]"
+                                            }`}
+                                            onClick={() => distortionMode.commitValue(option.value)}
+                                        >
+                                            <div className="text-[12px] font-semibold tracking-[0.08em]">{option.label}</div>
+                                            <div className={`mt-1 text-[10px] leading-4 ${active ? "text-cyan-100/78" : "text-slate-300/62"}`}>{option.summary}</div>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
                         <RangeField
                             label="Drive"
                             min={0}
@@ -1158,7 +1192,7 @@ function DistortionSection({
 
                     <div className="grid gap-4 rounded-[24px] border border-white/8 bg-black/20 p-4">
                         <RangeField
-                            label="Wet HP"
+                            label="Band HP"
                             min={0}
                             max={1}
                             step={0.001}
@@ -1171,7 +1205,7 @@ function DistortionSection({
                             dataRole="distortion-wet-hp-field"
                         />
                         <RangeField
-                            label="Wet LP"
+                            label="Band LP"
                             min={0}
                             max={1}
                             step={0.001}
@@ -1186,10 +1220,10 @@ function DistortionSection({
                     </div>
 
                     <div className="grid gap-2 rounded-[24px] border border-rose-300/10 bg-rose-400/[0.04] p-4">
-                        <div className="text-[11px] uppercase tracking-[0.18em] text-rose-200/70">Peak Readout</div>
+                        <div className="text-[11px] uppercase tracking-[0.18em] text-rose-200/70">{`${distortionModeOption.label} Readout`}</div>
                         <div className="font-mono text-sm tracking-[0.16em] text-slate-100/88">{`Input ${inputPeak.toFixed(3)}`}</div>
                         <div className="font-mono text-sm tracking-[0.16em] text-cyan-100/88">{`Output ${outputPeak.toFixed(3)}`}</div>
-                        <div className="font-mono text-sm tracking-[0.16em] text-rose-200/88">{`Removed ${removedPeak.toFixed(3)}`}</div>
+                        <div className="font-mono text-sm tracking-[0.16em] text-rose-200/88">{`Delta ${removedPeak.toFixed(3)}`}</div>
                     </div>
                 </div>
             </div>
@@ -1870,6 +1904,7 @@ function DesktopPatchViewBody() {
                 </section>
 
                 <DistortionSection
+                    distortionMode={synthView.distortionMode}
                     distortionDriveDb={synthView.distortionDriveDb}
                     distortionKnee={synthView.distortionKnee}
                     distortionWet={synthView.distortionWet}

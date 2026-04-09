@@ -11,6 +11,7 @@ const warpAmountEndpointID = "warpAmount";
 const filterModeEndpointID = "filterMode";
 const filterCutoffEndpointID = "filterCutoff";
 const filterQEndpointID = "filterQ";
+const distortionModeEndpointID = "distortionMode";
 const distortionDriveDbEndpointID = "distortionDriveDb";
 const distortionKneeEndpointID = "distortionKnee";
 const distortionWetEndpointID = "distortionWet";
@@ -294,6 +295,16 @@ function buildHarnessStatus(manifest: unknown) {
                     },
                 },
                 {
+                    endpointID: distortionModeEndpointID,
+                    purpose: "parameter",
+                    annotation: {
+                        name: "Distortion Mode",
+                        min: 0,
+                        max: 1,
+                        init: 0,
+                    },
+                },
+                {
                     endpointID: distortionDriveDbEndpointID,
                     purpose: "parameter",
                     annotation: {
@@ -327,7 +338,7 @@ function buildHarnessStatus(manifest: unknown) {
                     endpointID: distortionWetHPHzEndpointID,
                     purpose: "parameter",
                     annotation: {
-                        name: "Distortion Wet HP",
+                        name: "Distortion Band HP",
                         min: 20,
                         max: 4000,
                         init: 40,
@@ -337,7 +348,7 @@ function buildHarnessStatus(manifest: unknown) {
                     endpointID: distortionWetLPHzEndpointID,
                     purpose: "parameter",
                     annotation: {
-                        name: "Distortion Wet LP",
+                        name: "Distortion Band LP",
                         min: 20,
                         max: 20000,
                         init: 18000,
@@ -373,6 +384,7 @@ export class MockPatchConnection implements PatchConnectionLike {
         [filterModeEndpointID, 0],
         [filterCutoffEndpointID, 1000],
         [filterQEndpointID, 0.707107],
+        [distortionModeEndpointID, 0],
         [distortionDriveDbEndpointID, 12],
         [distortionKneeEndpointID, 0.35],
         [distortionWetEndpointID, 0],

@@ -348,7 +348,7 @@ export function DistortionVisualizer({
     return (
         <div className={joinClasses("grid gap-3", className)}>
             <div className="flex items-center justify-between gap-3 text-[11px] uppercase tracking-[0.18em] text-slate-300/62">
-                <div>Wet Transfer</div>
+                <div>Driven Transfer</div>
                 <div className="font-mono text-[10px] tracking-[0.18em] text-cyan-100/75">
                     {overshoot > 0 ? `Overshoot +${overshoot.toFixed(2)}` : `Headroom ${(headroom * 100).toFixed(0)}%`}
                 </div>
@@ -396,7 +396,7 @@ export function DistortionVisualizer({
                         CURVE DOMAIN
                     </text>
                     <text x={HISTORY_PLOT.left + 14} y={HISTORY_PLOT.top + 22} fill="rgba(226,232,240,0.58)" fontSize="11" letterSpacing="0.2em">
-                        OUTPUT + REMOVAL
+                        OUTPUT + DELTA
                     </text>
 
                     {[ceilingYTransferTop, zeroYTransfer, ceilingYTransferBottom].map((yValue, index) => (
