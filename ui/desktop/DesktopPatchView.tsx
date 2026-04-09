@@ -86,7 +86,7 @@ const ENVELOPE_VIEWBOX = {
     top: 42,
     bottom: 118,
 } as const;
-const DESKTOP_GRID_CARD_CLASS = "aspect-[5/3] min-h-[220px]";
+const DESKTOP_GRID_CARD_CLASS = "aspect-[50/27] min-h-[198px]";
 const WARP_MODE_OPTIONS = [
     { value: 0, label: "Off" },
     { value: 1, label: "Bend +/-" },
@@ -911,13 +911,9 @@ function DesktopEnvelopeEditor({
 
 function StatusHeader({ statusText }: HeaderProps) {
     return (
-        <header className="flex items-center justify-between gap-4">
-            <div className="rounded-full border border-white/8 bg-white/[0.03] px-4 py-2 text-[11px] uppercase tracking-[0.24em] text-blue-300/70">
-                Cosimo Synth
-            </div>
-            <div className="rounded-full border border-white/8 bg-white/[0.04] px-4 py-2 text-right text-[11px] uppercase tracking-[0.16em] text-fuchsia-200/80">
-                {statusText}
-            </div>
+        <header className="flex items-center justify-between gap-3">
+            <span className="text-[10px] font-semibold uppercase tracking-[0.24em] text-blue-300/55">Cosimo Synth</span>
+            <span className="text-[10px] uppercase tracking-[0.16em] text-fuchsia-200/60">{statusText}</span>
         </header>
     );
 }
@@ -1954,7 +1950,7 @@ function DesktopPatchViewBody() {
     ), [synthView.pan]);
 
     return (
-        <div className="cosimo-surface relative flex h-full w-full flex-col gap-4 overflow-hidden rounded-[28px] border border-white/[0.05] p-5 text-slate-100 shadow-[0_26px_80px_rgba(0,0,0,0.48)]">
+        <div className="cosimo-surface relative flex h-full w-full flex-col gap-3 overflow-hidden rounded-[28px] border border-white/[0.05] px-4 pb-4 pt-2.5 text-slate-100 shadow-[0_26px_80px_rgba(0,0,0,0.48)]">
             <StatusHeader statusText={synthView.topStatus} />
 
             <main
