@@ -1093,138 +1093,237 @@ function DistortionSection({
         distortionWetLPHz.setValue(nextValue);
     }, [distortionWetHPHz.value, distortionWetLPHz]);
 
+    const normalizedDrive = distortionDriveDb.value / 36;
+    const normalizedKnee = distortionKnee.value;
+    const normalizedMix = distortionWet.value;
+
+    const driveTrackRef = useRef<HTMLDivElement>(null);
+    const kneeTrackRef = useRef<HTMLDivElement>(null);
+    const mixTrackRef = useRef<HTMLDivElement>(null);
+    const hpTrackRef = useRef<HTMLDivElement>(null);
+    const dragRef = useRef<{
+        pointerId: number;
+        startClientY: number;
+        startClientX: number;
+        startNormalized: number;
+        binding: PatchControlBinding<number>;
+        axis: "vertical" | "horizontal";
+        min: number;
+        max: number;
+        trackElement: HTMLDivElement;
+        onChange?: (normalized: number) => void;
+    } | null>(null);
+
+    const handleSliderPointerDown = useCallback((
+        event: ReactPointerEvent<HTMLDivElement>,
+        trackElement: HTMLDivElement | null,
+        binding: PatchControlBinding<number>,
+        currentNormalized: number,
+        min: number,
+        max: number,
+        axis: "vertical" | "horizontal",
+        onChange?: (normalized: number) => void,
+    ) => {
+        if (!trackElement) return;
+        event.preventDefault();
+        trackElement.setPointerCapture(event.pointerId);
+        binding.beginGesture();
+        dragRef.current = {
+            pointerId: event.pointerId,
+            startClientY: event.clientY,
+            startClientX: event.clientX,
+            startNormalized: currentNormalized,
+            binding,
+            axis,
+            min,
+            max,
+            trackElement,
+            onChange,
+        };
+    }, []);
+
+    const handleSliderPointerMove = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+        const drag = dragRef.current;
+        if (!drag || event.pointerId !== drag.pointerId) return;
+        const rect = drag.trackElement.getBoundingClientRect();
+        let nextNormalized: number;
+        if (drag.axis === "vertical") {
+            const deltaY = drag.startClientY - event.clientY;
+            const trackHeight = rect.height;
+            nextNormalized = clamp(drag.startNormalized + (deltaY / trackHeight), 0, 1);
+        } else {
+            const deltaX = event.clientX - rect.left;
+            nextNormalized = clamp(deltaX / rect.width, 0, 1);
+        }
+        if (drag.onChange) {
+            drag.onChange(nextNormalized);
+        } else {
+            const denormalized = drag.min + (nextNormalized * (drag.max - drag.min));
+            drag.binding.setValue(denormalized);
+        }
+    }, []);
+
+    const handleSliderPointerUp = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+        const drag = dragRef.current;
+        if (!drag || event.pointerId !== drag.pointerId) return;
+        drag.trackElement.releasePointerCapture(event.pointerId);
+        drag.binding.endGesture();
+        dragRef.current = null;
+    }, []);
+
     return (
         <section
             data-role="distortion-card"
-            className={`relative overflow-hidden rounded-[28px] border border-white/[0.04] bg-[radial-gradient(circle_at_top_left,rgba(248,113,113,0.14),transparent_34%),linear-gradient(180deg,rgba(9,8,15,0.98),rgba(2,4,11,1))] ${className ?? ""}`}
+            className={`flex h-full flex-col overflow-hidden rounded-[14px] bg-[radial-gradient(circle_at_top_left,rgba(248,113,113,0.10),transparent_34%),linear-gradient(180deg,rgba(9,8,15,0.98),rgba(2,4,11,1))] ${className ?? ""}`}
         >
-            <div className="absolute inset-0 rounded-[28px] shadow-[inset_0_1px_0_rgba(255,255,255,0.08),inset_0_-64px_80px_rgba(0,0,0,0.34)]" />
-
-            <div className="relative grid gap-4 p-5 xl:grid-cols-[minmax(0,1.5fr)_340px]">
-                <div className="grid gap-4">
-                    <div className="flex items-center justify-between gap-4">
-                        <div>
-                            <div className="text-[11px] uppercase tracking-[0.22em] text-rose-200/70">Distortion</div>
-                            <div className="mt-1 text-sm text-slate-200/78">Driven transfer above. Core delta overview below.</div>
-                        </div>
-                        <div className="grid gap-1 text-right font-mono text-[11px] tracking-[0.18em] text-slate-200/70">
-                            <div>{overshoot > 0 ? `Ceiling +${overshoot.toFixed(2)}` : `Ceiling ${Math.round(headroom * 100)}% clear`}</div>
-                            <div>{`Out ${outputPeak.toFixed(3)} • Delta ${removedPeak.toFixed(3)}`}</div>
-                        </div>
+            <div className="flex min-h-0 flex-1">
+                {/* Drive slider */}
+                <div
+                    className="flex w-7 shrink-0 flex-col items-center gap-1 py-2"
+                >
+                    <span className="text-[8px] font-bold uppercase tracking-[0.1em] text-slate-400/45">Drv</span>
+                    <div
+                        ref={driveTrackRef}
+                        className="relative w-1.5 flex-1 cursor-ns-resize rounded-full bg-white/[0.04]"
+                        onPointerDown={(e) => handleSliderPointerDown(e, driveTrackRef.current, distortionDriveDb, normalizedDrive, 0, 36, "vertical")}
+                        onPointerMove={handleSliderPointerMove}
+                        onPointerUp={handleSliderPointerUp}
+                    >
+                        <div
+                            className="absolute bottom-0 left-0 right-0 rounded-full bg-gradient-to-t from-rose-400/50 to-rose-400/20"
+                            style={{ height: `${normalizedDrive * 100}%` }}
+                        />
+                        <div
+                            className="absolute left-1/2 size-3.5 -translate-x-1/2 translate-y-1/2 rounded-full border-2 border-[rgba(3,5,12,0.7)] bg-gradient-to-b from-[rgba(255,220,200,0.9)] to-[rgba(248,113,113,0.7)] shadow-[0_2px_8px_rgba(248,113,113,0.3)]"
+                            style={{ bottom: `${normalizedDrive * 100}%` }}
+                        />
                     </div>
+                    <span className="font-mono text-[8px] tracking-[0.04em] text-slate-200/55">{distortionDriveDb.value.toFixed(1)}</span>
+                </div>
 
+                {/* Knee slider */}
+                <div
+                    className="flex w-7 shrink-0 flex-col items-center gap-1 py-2"
+                >
+                    <span className="text-[8px] font-bold uppercase tracking-[0.1em] text-slate-400/45">Kne</span>
+                    <div
+                        ref={kneeTrackRef}
+                        className="relative w-1.5 flex-1 cursor-ns-resize rounded-full bg-white/[0.04]"
+                        onPointerDown={(e) => handleSliderPointerDown(e, kneeTrackRef.current, distortionKnee, normalizedKnee, 0, 1, "vertical")}
+                        onPointerMove={handleSliderPointerMove}
+                        onPointerUp={handleSliderPointerUp}
+                    >
+                        <div
+                            className="absolute bottom-0 left-0 right-0 rounded-full bg-gradient-to-t from-amber-400/45 to-amber-400/15"
+                            style={{ height: `${normalizedKnee * 100}%` }}
+                        />
+                        <div
+                            className="absolute left-1/2 size-3.5 -translate-x-1/2 translate-y-1/2 rounded-full border-2 border-[rgba(3,5,12,0.7)] bg-gradient-to-b from-[rgba(255,240,200,0.9)] to-[rgba(251,191,36,0.7)] shadow-[0_2px_8px_rgba(251,191,36,0.3)]"
+                            style={{ bottom: `${normalizedKnee * 100}%` }}
+                        />
+                    </div>
+                    <span className="font-mono text-[8px] tracking-[0.04em] text-slate-200/55">{formatUnitPercent(distortionKnee.value)}</span>
+                </div>
+
+                {/* Center: SVG + overlays */}
+                <div className="relative min-h-0 min-w-0 flex-1">
                     <DistortionVisualizer
+                        compact
                         knee={distortionKnee.value}
                         transferFrame={observedDistortionScope}
                         historyFrame={observedDistortionHistory}
-                        className="min-h-0"
                     />
+
+                    {/* Top-left overlay: DIST label + mode toggle */}
+                    <div className="absolute left-3 top-2 flex items-center gap-2">
+                        <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-rose-400/40">Dist</span>
+                        <button
+                            type="button"
+                            className={`rounded px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-[0.08em] transition ${
+                                distortionMode.value === 0
+                                    ? "bg-white/[0.06] text-slate-300/60"
+                                    : "bg-cyan-400/10 text-cyan-300/70"
+                            }`}
+                            onClick={() => distortionMode.commitValue(distortionMode.value === 0 ? 1 : 0)}
+                        >
+                            {distortionModeOption.label}
+                        </button>
+                    </div>
+
+                    {/* Bottom-right overlay: peak readouts */}
+                    <div className="absolute bottom-5 right-2 grid gap-0.5 rounded-[5px] bg-black/50 px-2 py-1.5">
+                        <span className="font-mono text-[8px] text-slate-200/55">In <span className="text-slate-200/85">{inputPeak.toFixed(3)}</span></span>
+                        <span className="font-mono text-[8px] text-cyan-400/45">Out <span className="text-cyan-400/80">{outputPeak.toFixed(3)}</span></span>
+                        <span className="font-mono text-[8px] text-rose-400/45">Rem <span className="text-rose-400/80">{removedPeak.toFixed(3)}</span></span>
+                    </div>
+
+                    {/* Bottom strip: HP/LP frequency range selector */}
+                    <div
+                        ref={hpTrackRef}
+                        className="absolute bottom-1 left-3 right-3 h-3.5"
+                        onPointerMove={handleSliderPointerMove}
+                        onPointerUp={handleSliderPointerUp}
+                    >
+                        <div className="absolute inset-0 rounded bg-white/[0.02]" />
+                        <div
+                            className="absolute bottom-0 left-0 top-0 rounded-l bg-rose-400/[0.035]"
+                            style={{ width: `${wetHPNormalized * 100}%` }}
+                        />
+                        <div
+                            className="absolute bottom-0 top-0 bg-cyan-400/[0.08]"
+                            style={{ left: `${wetHPNormalized * 100}%`, right: `${(1 - wetLPNormalized) * 100}%` }}
+                        />
+                        <div
+                            className="absolute bottom-0 right-0 top-0 rounded-r bg-rose-400/[0.035]"
+                            style={{ width: `${(1 - wetLPNormalized) * 100}%` }}
+                        />
+                        <div
+                            className="absolute top-1/2 size-[11px] -translate-x-1/2 -translate-y-1/2 cursor-ew-resize rounded-full border-2 border-[#020611] bg-cyan-400/60"
+                            style={{ left: `${wetHPNormalized * 100}%` }}
+                            onPointerDown={(e) => handleSliderPointerDown(e, hpTrackRef.current, distortionWetHPHz, wetHPNormalized, 0, 1, "horizontal", handleWetHPChange)}
+                        />
+                        <div
+                            className="absolute top-1/2 size-[11px] -translate-x-1/2 -translate-y-1/2 cursor-ew-resize rounded-full border-2 border-[#020611] bg-cyan-400/60"
+                            style={{ left: `${wetLPNormalized * 100}%` }}
+                            onPointerDown={(e) => handleSliderPointerDown(e, hpTrackRef.current, distortionWetLPHz, wetLPNormalized, 0, 1, "horizontal", handleWetLPChange)}
+                        />
+                        <span
+                            className="absolute -top-3 -translate-x-1/2 font-mono text-[7px] text-cyan-400/45"
+                            style={{ left: `${wetHPNormalized * 100}%` }}
+                        >
+                            {formatFrequencyHz(distortionWetHPHz.value)}
+                        </span>
+                        <span
+                            className="absolute -top-3 -translate-x-1/2 font-mono text-[7px] text-cyan-400/45"
+                            style={{ left: `${wetLPNormalized * 100}%` }}
+                        >
+                            {formatFrequencyHz(distortionWetLPHz.value)}
+                        </span>
+                    </div>
                 </div>
 
-                <div className="grid content-start gap-4">
-                    <div className="grid gap-4 rounded-[24px] border border-white/8 bg-black/20 p-4">
-                        <div className="grid gap-2">
-                            <div className="text-[11px] uppercase tracking-[0.18em] text-slate-300/72">Mode</div>
-                            <div className="grid grid-cols-2 gap-2">
-                                {DISTORTION_MODE_OPTIONS.map((option) => {
-                                    const active = distortionMode.value === option.value;
-
-                                    return (
-                                        <button
-                                            key={option.value}
-                                            type="button"
-                                            data-role={`distortion-mode-option-${option.value}`}
-                                            aria-pressed={active ? "true" : "false"}
-                                            className={`rounded-[16px] border px-3 py-2 text-left transition ${
-                                                active
-                                                    ? "border-cyan-300/40 bg-cyan-300/12 text-cyan-50 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
-                                                    : "border-white/8 bg-white/[0.03] text-slate-200/78 hover:border-white/12 hover:bg-white/[0.05]"
-                                            }`}
-                                            onClick={() => distortionMode.commitValue(option.value)}
-                                        >
-                                            <div className="text-[12px] font-semibold tracking-[0.08em]">{option.label}</div>
-                                            <div className={`mt-1 text-[10px] leading-4 ${active ? "text-cyan-100/78" : "text-slate-300/62"}`}>{option.summary}</div>
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        </div>
-                        <RangeField
-                            label="Drive"
-                            min={0}
-                            max={36}
-                            step={0.01}
-                            value={distortionDriveDb.value}
-                            displayValue={formatDriveDb(distortionDriveDb.value)}
-                            onChange={distortionDriveDb.setValue}
-                            onPointerDown={distortionDriveDb.beginGesture}
-                            onPointerUp={distortionDriveDb.endGesture}
-                            onPointerCancel={distortionDriveDb.endGesture}
-                            dataRole="distortion-drive-field"
+                {/* Mix slider */}
+                <div
+                    className="flex w-7 shrink-0 flex-col items-center gap-1 py-2"
+                >
+                    <span className="text-[8px] font-bold uppercase tracking-[0.1em] text-slate-400/45">Mix</span>
+                    <div
+                        ref={mixTrackRef}
+                        className="relative w-1.5 flex-1 cursor-ns-resize rounded-full bg-white/[0.04]"
+                        onPointerDown={(e) => handleSliderPointerDown(e, mixTrackRef.current, distortionWet, normalizedMix, 0, 1, "vertical")}
+                        onPointerMove={handleSliderPointerMove}
+                        onPointerUp={handleSliderPointerUp}
+                    >
+                        <div
+                            className="absolute bottom-0 left-0 right-0 rounded-full bg-gradient-to-t from-cyan-400/40 to-cyan-400/15"
+                            style={{ height: `${normalizedMix * 100}%` }}
                         />
-                        <RangeField
-                            label="Knee"
-                            min={0}
-                            max={1}
-                            step={0.001}
-                            value={distortionKnee.value}
-                            displayValue={formatUnitPercent(distortionKnee.value)}
-                            onChange={distortionKnee.setValue}
-                            onPointerDown={distortionKnee.beginGesture}
-                            onPointerUp={distortionKnee.endGesture}
-                            onPointerCancel={distortionKnee.endGesture}
-                            dataRole="distortion-knee-field"
-                        />
-                        <RangeField
-                            label="Mix"
-                            min={0}
-                            max={1}
-                            step={0.001}
-                            value={distortionWet.value}
-                            displayValue={formatUnitPercent(distortionWet.value)}
-                            onChange={distortionWet.setValue}
-                            onPointerDown={distortionWet.beginGesture}
-                            onPointerUp={distortionWet.endGesture}
-                            onPointerCancel={distortionWet.endGesture}
-                            dataRole="distortion-mix-field"
+                        <div
+                            className="absolute left-1/2 size-3.5 -translate-x-1/2 translate-y-1/2 rounded-full border-2 border-[rgba(3,5,12,0.7)] bg-gradient-to-b from-[rgba(200,240,255,0.9)] to-[rgba(103,232,249,0.7)] shadow-[0_2px_8px_rgba(103,232,249,0.3)]"
+                            style={{ bottom: `${normalizedMix * 100}%` }}
                         />
                     </div>
-
-                    <div className="grid gap-4 rounded-[24px] border border-white/8 bg-black/20 p-4">
-                        <RangeField
-                            label="Band HP"
-                            min={0}
-                            max={1}
-                            step={0.001}
-                            value={wetHPNormalized}
-                            displayValue={formatFrequencyHz(distortionWetHPHz.value)}
-                            onChange={handleWetHPChange}
-                            onPointerDown={distortionWetHPHz.beginGesture}
-                            onPointerUp={distortionWetHPHz.endGesture}
-                            onPointerCancel={distortionWetHPHz.endGesture}
-                            dataRole="distortion-wet-hp-field"
-                        />
-                        <RangeField
-                            label="Band LP"
-                            min={0}
-                            max={1}
-                            step={0.001}
-                            value={wetLPNormalized}
-                            displayValue={formatFrequencyHz(distortionWetLPHz.value)}
-                            onChange={handleWetLPChange}
-                            onPointerDown={distortionWetLPHz.beginGesture}
-                            onPointerUp={distortionWetLPHz.endGesture}
-                            onPointerCancel={distortionWetLPHz.endGesture}
-                            dataRole="distortion-wet-lp-field"
-                        />
-                    </div>
-
-                    <div className="grid gap-2 rounded-[24px] border border-rose-300/10 bg-rose-400/[0.04] p-4">
-                        <div className="text-[11px] uppercase tracking-[0.18em] text-rose-200/70">{`${distortionModeOption.label} Readout`}</div>
-                        <div className="font-mono text-sm tracking-[0.16em] text-slate-100/88">{`Input ${inputPeak.toFixed(3)}`}</div>
-                        <div className="font-mono text-sm tracking-[0.16em] text-cyan-100/88">{`Output ${outputPeak.toFixed(3)}`}</div>
-                        <div className="font-mono text-sm tracking-[0.16em] text-rose-200/88">{`Delta ${removedPeak.toFixed(3)}`}</div>
-                    </div>
+                    <span className="font-mono text-[8px] tracking-[0.04em] text-slate-200/55">{formatUnitPercent(distortionWet.value)}</span>
                 </div>
             </div>
         </section>
@@ -1903,16 +2002,20 @@ function DesktopPatchViewBody() {
                     />
                 </section>
 
-                <DistortionSection
-                    distortionMode={synthView.distortionMode}
-                    distortionDriveDb={synthView.distortionDriveDb}
-                    distortionKnee={synthView.distortionKnee}
-                    distortionWet={synthView.distortionWet}
-                    distortionWetHPHz={synthView.distortionWetHPHz}
-                    distortionWetLPHz={synthView.distortionWetLPHz}
-                    observedDistortionHistory={synthView.observedDistortionHistory}
-                    observedDistortionScope={synthView.observedDistortionScope}
-                />
+                <section className="grid min-h-0 items-stretch gap-4 md:grid-cols-2">
+                    <DistortionSection
+                        distortionMode={synthView.distortionMode}
+                        distortionDriveDb={synthView.distortionDriveDb}
+                        distortionKnee={synthView.distortionKnee}
+                        distortionWet={synthView.distortionWet}
+                        distortionWetHPHz={synthView.distortionWetHPHz}
+                        distortionWetLPHz={synthView.distortionWetLPHz}
+                        observedDistortionHistory={synthView.observedDistortionHistory}
+                        observedDistortionScope={synthView.observedDistortionScope}
+                        className={DESKTOP_GRID_CARD_CLASS}
+                    />
+                    <div className={`rounded-[14px] border border-white/[0.04] bg-white/[0.015] ${DESKTOP_GRID_CARD_CLASS}`} />
+                </section>
 
                 {synthView.failureDetail ? (
                     <div className="rounded-[22px] border border-fuchsia-300/15 bg-fuchsia-300/8 px-4 py-3 text-sm text-fuchsia-100/90">

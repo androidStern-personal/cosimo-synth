@@ -30,7 +30,17 @@ const HISTORY_BAR_GAP = 0.6;
 
 type PlotRect = typeof TRANSFER_PLOT;
 
+const COMPACT_VIEWBOX_WIDTH = 600;
+const COMPACT_VIEWBOX_HEIGHT = 340;
+const COMPACT_PLOT = {
+    left: 12,
+    top: 8,
+    width: 576,
+    height: 300,
+};
+
 export type DistortionVisualizerProps = {
+    compact?: boolean;
     knee: number;
     transferFrame: DistortionScopeFrame | null;
     historyFrame: DistortionHistoryFrame | null;
@@ -153,6 +163,7 @@ function buildAxisLabelY(sampleValue: number, plot: PlotRect, range: number) {
 }
 
 export function DistortionVisualizer({
+    compact,
     knee,
     transferFrame,
     historyFrame,
@@ -194,18 +205,21 @@ export function DistortionVisualizer({
         inputRange: displayRange,
     }), [displayRange, knee, samplePoints]);
 
+    const transferPlotRect = compact ? COMPACT_PLOT : TRANSFER_PLOT;
+    const historyPlotRect = compact ? COMPACT_PLOT : HISTORY_PLOT;
+
     const transferCurvePath = useMemo(() => buildPolylinePath(
         transferCurve.map((point) => ({
-            x: mapPlotX(point.input, TRANSFER_PLOT, displayRange),
-            y: mapPlotY(point.output, TRANSFER_PLOT, displayRange),
+            x: mapPlotX(point.input, transferPlotRect, displayRange),
+            y: mapPlotY(point.output, transferPlotRect, displayRange),
         })),
-    ), [displayRange, transferCurve]);
+    ), [displayRange, transferCurve, transferPlotRect]);
 
     const transferOccupancyPaths = useMemo(() => transferOccupancy.segments
         .map((segment) => {
             const mappedPoints = segment.map((point) => ({
-                x: mapPlotX(point.input, TRANSFER_PLOT, displayRange),
-                y: mapPlotY(point.output, TRANSFER_PLOT, displayRange),
+                x: mapPlotX(point.input, transferPlotRect, displayRange),
+                y: mapPlotY(point.output, transferPlotRect, displayRange),
                 density: point.density,
                 removed: point.removed,
                 clipped: point.clipped,
@@ -232,19 +246,19 @@ export function DistortionVisualizer({
                 clippedOpacity: clamp((peakRemoved * 0.62) + (peakClipped * 0.24), 0, 0.72),
             };
         })
-        .filter((segment) => segment.occupancyPath), [displayRange, transferOccupancy]);
+        .filter((segment) => segment.occupancyPath), [displayRange, transferOccupancy, transferPlotRect]);
 
     const historyColumns = useMemo(() => {
         const plotBinCount = Math.max(1, historyBins.length);
-        const columnWidth = HISTORY_PLOT.width / plotBinCount;
+        const columnWidth = historyPlotRect.width / plotBinCount;
 
         return historyBins.map((bin, index) => {
-            const left = HISTORY_PLOT.left + (index * columnWidth) + (HISTORY_BAR_GAP * 0.5);
+            const left = historyPlotRect.left + (index * columnWidth) + (HISTORY_BAR_GAP * 0.5);
             const width = Math.max(1, columnWidth - HISTORY_BAR_GAP);
-            const outputTop = mapPlotY(bin.outputPeak, HISTORY_PLOT, displayRange);
-            const outputBottom = mapPlotY(-bin.outputPeak, HISTORY_PLOT, displayRange);
-            const inputTop = mapPlotY(bin.inputPeak, HISTORY_PLOT, displayRange);
-            const inputBottom = mapPlotY(-bin.inputPeak, HISTORY_PLOT, displayRange);
+            const outputTop = mapPlotY(bin.outputPeak, historyPlotRect, displayRange);
+            const outputBottom = mapPlotY(-bin.outputPeak, historyPlotRect, displayRange);
+            const inputTop = mapPlotY(bin.inputPeak, historyPlotRect, displayRange);
+            const inputBottom = mapPlotY(-bin.inputPeak, historyPlotRect, displayRange);
             const hasRemoval = bin.valid && (bin.inputPeak > (bin.outputPeak + 1e-4));
             const outputHeight = Math.max(0, outputBottom - outputTop);
             const removedTopHeight = Math.max(0, outputTop - inputTop);
@@ -277,7 +291,7 @@ export function DistortionVisualizer({
                     : null,
             };
         });
-    }, [displayRange, historyBins]);
+    }, [displayRange, historyBins, historyPlotRect]);
 
     const overshoot = Math.max(0, (activeTransferFrame?.inputPeak ?? 0) - 1);
     const headroom = Math.max(0, 1 - (activeTransferFrame?.inputPeak ?? 0));
@@ -335,15 +349,152 @@ export function DistortionVisualizer({
         transferOccupancyPaths,
     ]);
 
-    const ceilingYTransferTop = buildAxisLabelY(1, TRANSFER_PLOT, displayRange);
-    const ceilingYTransferBottom = buildAxisLabelY(-1, TRANSFER_PLOT, displayRange);
-    const ceilingXTransferLeft = buildAxisLabelX(-1, TRANSFER_PLOT, displayRange);
-    const ceilingXTransferRight = buildAxisLabelX(1, TRANSFER_PLOT, displayRange);
-    const ceilingYHistoryTop = buildAxisLabelY(1, HISTORY_PLOT, displayRange);
-    const ceilingYHistoryBottom = buildAxisLabelY(-1, HISTORY_PLOT, displayRange);
-    const zeroYTransfer = buildAxisLabelY(0, TRANSFER_PLOT, displayRange);
-    const zeroXTransfer = buildAxisLabelX(0, TRANSFER_PLOT, displayRange);
-    const zeroYHistory = buildAxisLabelY(0, HISTORY_PLOT, displayRange);
+    const ceilingYTransferTop = buildAxisLabelY(1, transferPlotRect, displayRange);
+    const ceilingYTransferBottom = buildAxisLabelY(-1, transferPlotRect, displayRange);
+    const ceilingXTransferLeft = buildAxisLabelX(-1, transferPlotRect, displayRange);
+    const ceilingXTransferRight = buildAxisLabelX(1, transferPlotRect, displayRange);
+    const ceilingYHistoryTop = buildAxisLabelY(1, historyPlotRect, displayRange);
+    const ceilingYHistoryBottom = buildAxisLabelY(-1, historyPlotRect, displayRange);
+    const zeroYTransfer = buildAxisLabelY(0, transferPlotRect, displayRange);
+    const zeroXTransfer = buildAxisLabelX(0, transferPlotRect, displayRange);
+    const zeroYHistory = buildAxisLabelY(0, historyPlotRect, displayRange);
+
+    if (compact) {
+        return (
+            <svg
+                data-role="distortion-visualizer"
+                viewBox={`0 0 ${COMPACT_VIEWBOX_WIDTH} ${COMPACT_VIEWBOX_HEIGHT}`}
+                className={joinClasses("block h-full w-full", className)}
+                aria-label="Distortion visualization"
+            >
+                <defs>
+                    <linearGradient id="distortionRemovedFill" x1="0" x2="0" y1="0" y2="1">
+                        <stop offset="0%" stopColor="rgba(251,113,133,0.42)" />
+                        <stop offset="100%" stopColor="rgba(239,68,68,0.04)" />
+                    </linearGradient>
+                    <filter id="distortionTransferOccupancyGlow" x="-18%" y="-18%" width="136%" height="136%">
+                        <feGaussianBlur stdDeviation="5.6" />
+                    </filter>
+                </defs>
+
+                <rect x="0" y="0" width={COMPACT_VIEWBOX_WIDTH} height={COMPACT_VIEWBOX_HEIGHT} fill="#020611" />
+                <rect
+                    x={COMPACT_PLOT.left}
+                    y={COMPACT_PLOT.top}
+                    width={COMPACT_PLOT.width}
+                    height={COMPACT_PLOT.height}
+                    rx="10"
+                    fill="rgba(255,255,255,0.025)"
+                />
+
+                {/* Grid lines: 3 horizontal (+1, 0, -1), 3 vertical (-1, 0, +1) */}
+                {[ceilingYTransferTop, zeroYTransfer, ceilingYTransferBottom].map((yValue, index) => (
+                    <line
+                        key={`compact-h-${index}`}
+                        x1={COMPACT_PLOT.left}
+                        x2={COMPACT_PLOT.left + COMPACT_PLOT.width}
+                        y1={yValue}
+                        y2={yValue}
+                        stroke={index === 1 ? "rgba(255,255,255,0.12)" : "rgba(248,113,113,0.22)"}
+                        strokeDasharray={index === 1 ? "0" : "6 6"}
+                        strokeWidth={index === 1 ? "1.2" : "1"}
+                    />
+                ))}
+                {[ceilingXTransferLeft, zeroXTransfer, ceilingXTransferRight].map((xValue, index) => (
+                    <line
+                        key={`compact-v-${index}`}
+                        y1={COMPACT_PLOT.top}
+                        y2={COMPACT_PLOT.top + COMPACT_PLOT.height}
+                        x1={xValue}
+                        x2={xValue}
+                        stroke={index === 1 ? "rgba(255,255,255,0.12)" : "rgba(248,113,113,0.18)"}
+                        strokeDasharray={index === 1 ? "0" : "6 6"}
+                        strokeWidth={index === 1 ? "1.2" : "1"}
+                    />
+                ))}
+
+                {/* History columns as subtle background */}
+                {historyColumns.map((column, index) => (
+                    <g key={`compact-hist-${index}`}>
+                        {column.valid ? (
+                            <rect
+                                x={column.output.x}
+                                y={column.output.y}
+                                width={column.output.width}
+                                height={column.output.height}
+                                rx={Math.min(2.2, column.output.width * 0.45)}
+                                fill="rgba(255,255,255,0.92)"
+                                opacity={0.18}
+                            />
+                        ) : null}
+                        {column.removedTop ? (
+                            <rect
+                                x={column.removedTop.x}
+                                y={column.removedTop.y}
+                                width={column.removedTop.width}
+                                height={column.removedTop.height}
+                                rx={Math.min(2.2, column.removedTop.width * 0.45)}
+                                fill="rgba(251,113,133,0.88)"
+                                opacity={0.30}
+                            />
+                        ) : null}
+                        {column.removedBottom ? (
+                            <rect
+                                x={column.removedBottom.x}
+                                y={column.removedBottom.y}
+                                width={column.removedBottom.width}
+                                height={column.removedBottom.height}
+                                rx={Math.min(2.2, column.removedBottom.width * 0.45)}
+                                fill="rgba(251,113,133,0.88)"
+                                opacity={0.30}
+                            />
+                        ) : null}
+                    </g>
+                ))}
+
+                {/* Occupancy ribbons */}
+                {transferOccupancyPaths.map((segment, index) => (
+                    <g key={`compact-occ-${index}`}>
+                        <path
+                            d={segment.occupancyPath}
+                            fill="rgba(255,255,255,0.14)"
+                            opacity={segment.occupancyOpacity}
+                            filter="url(#distortionTransferOccupancyGlow)"
+                        />
+                        <path
+                            d={segment.occupancyPath}
+                            fill="rgba(255,255,255,0.26)"
+                            opacity={Math.min(1, segment.occupancyOpacity + 0.1)}
+                        />
+                        {segment.clippedPath ? (
+                            <path
+                                d={segment.clippedPath}
+                                fill="rgba(251,113,133,0.36)"
+                                opacity={segment.clippedOpacity}
+                            />
+                        ) : null}
+                    </g>
+                ))}
+
+                {/* Transfer curve */}
+                {transferCurvePath ? (
+                    <path
+                        d={transferCurvePath}
+                        fill="none"
+                        stroke="rgba(103,232,249,0.98)"
+                        strokeWidth="3.2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                    />
+                ) : null}
+
+                {/* Y-axis labels */}
+                <text x={COMPACT_PLOT.left + 8} y={ceilingYTransferTop - 4} fill="rgba(248,113,113,0.74)" fontSize="10">+1</text>
+                <text x={COMPACT_PLOT.left + 8} y={zeroYTransfer - 4} fill="rgba(226,232,240,0.54)" fontSize="10">0</text>
+                <text x={COMPACT_PLOT.left + 8} y={ceilingYTransferBottom - 4} fill="rgba(248,113,113,0.74)" fontSize="10">-1</text>
+            </svg>
+        );
+    }
 
     return (
         <div className={joinClasses("grid gap-3", className)}>
