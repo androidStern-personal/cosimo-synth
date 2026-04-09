@@ -4,9 +4,9 @@ namespace choruslab
     let kGroupCount = 4;
     let kInnerPairCount = 2;
     let kChannelCount = 2;
-    let kDiffusionStageCount = 2;
+    let kDiffusionStageCount = 4;
     let kMaxChorusDelayMs = 96.0f;
-    let kMaxDiffusionDelayMs = 40.0f;
+    let kMaxDiffusionDelayMs = 72.0f;
     let kMaxShimmerGrainMs = 80.0f;
 
     float32 lerp (float32 start, float32 end, float32 amount)
@@ -73,11 +73,14 @@ processor ChorusLab [[ main ]]
     input value float32 drive               [[ name: "Drive",             group: "Loop",   min: 0.5f,   max: 4.0f,   init: 1.35f,  unit: "x",   rampFrames: 256 ]];
 
     input value float32 diffuse             [[ name: "Diffuse",           group: "Bloom",  min: 0.0f,   max: 100.0f, init: 24.0f,  unit: "%",   rampFrames: 256 ]];
-    input value float32 diffuseDelayMs      [[ name: "Diffuse Delay",     group: "Bloom",  min: 2.0f,   max: 18.0f,  init: 7.0f,   unit: "ms",  rampFrames: 256 ]];
+    input value float32 diffuseDelayMs      [[ name: "Diffuse Delay",     group: "Bloom",  min: 2.0f,   max: 40.0f,  init: 7.0f,   unit: "ms",  rampFrames: 256 ]];
     input value float32 diffuseMod          [[ name: "Diffuse Mod",       group: "Bloom",  min: 0.0f,   max: 100.0f, init: 22.0f,  unit: "%",   rampFrames: 256 ]];
+    input value float32 diffuseReturnGain   [[ name: "Diffuse Return",    group: "Bloom",  min: 0.0f,   max: 400.0f, init: 100.0f, unit: "%",   rampFrames: 256 ]];
     input value float32 shimmer             [[ name: "Shimmer",           group: "Bloom",  min: 0.0f,   max: 100.0f, init: 16.0f,  unit: "%",   rampFrames: 256 ]];
+    input value float32 shimmerReturnGain   [[ name: "Shimmer Return",    group: "Bloom",  min: 0.0f,   max: 400.0f, init: 100.0f, unit: "%",   rampFrames: 256 ]];
     input value float32 shimmerGrainMs      [[ name: "Shimmer Grain",     group: "Bloom",  min: 18.0f,  max: 80.0f,  init: 42.0f,  unit: "ms",  rampFrames: 256 ]];
     input value float32 shimmerTone         [[ name: "Shimmer Tone",      group: "Bloom",  min: 0.0f,   max: 100.0f, init: 58.0f,  unit: "%",   rampFrames: 256 ]];
+    input value bool shimmerSolo            [[ name: "Shimmer Solo",      group: "Bloom",  init: false, boolean ]];
 
     let chorusBufferSize = int (processor.maxFrequency * choruslab::kMaxChorusDelayMs * 0.001f) + 8;
     let diffusionBufferSize = int (processor.maxFrequency * choruslab::kMaxDiffusionDelayMs * 0.001f) + 8;
@@ -285,12 +288,13 @@ processor ChorusLab [[ main ]]
                                  float32 amount01,
                                  float32 modAmount01)
     {
-        let stageScale = stage == 0 ? 0.54f : 0.90f;
-        let modRateScale = stage == 0 ? 0.47f : 0.73f;
+        let stageIndex = float32 (int32 (stage));
+        let stageScale = 0.42f + (stageIndex * 0.28f);
+        let modRateScale = 0.37f + (stageIndex * 0.16f);
         let delayMod = std::intrinsics::sin (
             2.0f * choruslab::kPi
             * ((lfoPhase * modRateScale)
-               + float32 (int32 (stage)) * 0.21f
+               + stageIndex * 0.17f
                + float32 (int32 (channel)) * 0.13f)
         );
         let delaySamples = 4.0f
@@ -373,7 +377,9 @@ processor ChorusLab [[ main ]]
             let diffuse01 = std::intrinsics::clamp (diffuse * 0.01f, 0.0f, 1.0f);
             let diffuseDelaySamples = std::intrinsics::clamp (diffuseDelayMs * sampleRate * 0.001f, 4.0f, float32 (diffusionBufferSize - 8));
             let diffuseMod01 = std::intrinsics::clamp (diffuseMod * 0.01f, 0.0f, 1.0f);
+            let diffuseReturnGain01 = std::intrinsics::max (diffuseReturnGain * 0.01f, 0.0f);
             let shimmer01 = std::intrinsics::clamp (shimmer * 0.01f, 0.0f, 1.0f);
+            let shimmerReturnGain01 = std::intrinsics::max (shimmerReturnGain * 0.01f, 0.0f);
             let shimmerTone01 = std::intrinsics::clamp (shimmerTone * 0.01f, 0.0f, 1.0f);
             let shimmerGrainSamples = std::intrinsics::clamp (shimmerGrainMs * sampleRate * 0.001f, sampleRate * 0.018f, float32 (shimmerBufferSize - 256));
 
@@ -453,10 +459,12 @@ processor ChorusLab [[ main ]]
             let shimmerShiftRight = shimmerSend > 0.0001f ? processShimmer (1, diffusedRight * shimmerSend, shimmerGrainSamples) : 0.0f;
             let shimmerBloomLeft = filterShimmerReturn (0, shimmerShiftLeft, shimmerTone01);
             let shimmerBloomRight = filterShimmerReturn (1, shimmerShiftRight, shimmerTone01);
+            let shimmerMonitorLeft = shimmerBloomLeft * shimmerReturnGain01;
+            let shimmerMonitorRight = shimmerBloomRight * shimmerReturnGain01;
 
             let bloomGain = feedbackMagnitude * (0.24f + 0.44f * diffuse01);
-            let bloomLeft = ((diffusedLeft * (0.32f + 0.28f * diffuse01)) + (shimmerBloomLeft * (0.18f + 0.52f * shimmer01))) * bloomGain;
-            let bloomRight = ((diffusedRight * (0.32f + 0.28f * diffuse01)) + (shimmerBloomRight * (0.18f + 0.52f * shimmer01))) * bloomGain;
+            let bloomLeft = ((diffusedLeft * diffuseReturnGain01 * (0.32f + 0.28f * diffuse01)) + (shimmerMonitorLeft * (0.18f + 0.52f * shimmer01))) * bloomGain;
+            let bloomRight = ((diffusedRight * diffuseReturnGain01 * (0.32f + 0.28f * diffuse01)) + (shimmerMonitorRight * (0.18f + 0.52f * shimmer01))) * bloomGain;
 
             for (wrap<choruslab::kGroupCount> group)
             {
@@ -473,7 +481,8 @@ processor ChorusLab [[ main ]]
                 }
             }
 
-            out <- (dry * dryGain) + (float32<2> (chorusWetLeft, chorusWetRight) * wetGain);
+            let mainOut = (dry * dryGain) + (float32<2> (chorusWetLeft, chorusWetRight) * wetGain);
+            out <- shimmerSolo ? float32<2> (shimmerMonitorLeft, shimmerMonitorRight) : mainOut;
 
             lfoPhase = choruslab::wrap01 (lfoPhase + (std::intrinsics::clamp (rateHz, 0.02f, 6.0f) / sampleRate));
             shimmerPhase = choruslab::wrap01 (shimmerPhase + (1.0f / shimmerGrainSamples));
