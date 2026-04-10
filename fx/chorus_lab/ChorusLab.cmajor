@@ -55,6 +55,7 @@ processor ChorusLab [[ main ]]
     input stream float32<2> in;
     output stream float32<2> out;
 
+    input value bool bypass                  [[ name: "Bypass",           group: "Output", init: false, boolean ]];
     input value float32 mix                  [[ name: "Mix",               group: "Output", min: 0.0f,   max: 100.0f, init: 50.0f,  unit: "%",   rampFrames: 256 ]];
 
     input value float32 voices              [[ name: "Voices",            group: "Chorus", min: 1.0f,   max: 3.0f,   init: 3.0f,   unit: "",    rampFrames: 256 ]];
@@ -72,10 +73,14 @@ processor ChorusLab [[ main ]]
     input value float32 loopHighpassHz      [[ name: "Loop HP",           group: "Loop",   min: 20.0f,  max: 1200.0f, init: 90.0f,  unit: "Hz",  rampFrames: 256 ]];
     input value float32 loopLowpassHz       [[ name: "Loop LP",           group: "Loop",   min: 800.0f, max: 18000.0f, init: 6400.0f, unit: "Hz", rampFrames: 256 ]];
     input value float32 drive               [[ name: "Drive",             group: "Loop",   min: 0.5f,   max: 4.0f,   init: 1.35f,  unit: "x",   rampFrames: 256 ]];
+    input value float32 ringModMix          [[ name: "Ring Mod Mix",      group: "Loop",   min: 0.0f,   max: 100.0f, init: 0.0f,   unit: "%",   rampFrames: 256 ]];
+    input value float32 ringModHz           [[ name: "Ring Mod Freq",     group: "Loop",   min: 0.1f,   max: 2000.0f, init: 28.0f,  unit: "Hz",  rampFrames: 256 ]];
+    input value float32 ringModDepth        [[ name: "Ring Mod Depth",    group: "Loop",   min: 0.0f,   max: 100.0f, init: 100.0f, unit: "%",   rampFrames: 256 ]];
 
     input value float32 diffuse             [[ name: "Diffuse",           group: "Bloom",  min: 0.0f,   max: 100.0f, init: 24.0f,  unit: "%",   rampFrames: 256 ]];
     input value float32 diffuseDelayMs      [[ name: "Diffuse Delay",     group: "Bloom",  min: 2.0f,   max: 40.0f,  init: 7.0f,   unit: "ms",  rampFrames: 256 ]];
     input value float32 diffuseMod          [[ name: "Diffuse Mod",       group: "Bloom",  min: 0.0f,   max: 100.0f, init: 22.0f,  unit: "%",   rampFrames: 256 ]];
+    input value float32 diffuseCoeff        [[ name: "Diffuse Coeff",     group: "Bloom",  min: 0.05f,  max: 0.86f,  init: 0.48f,  unit: "",    rampFrames: 256 ]];
     input value float32 diffuseReturnGain   [[ name: "Diffuse Return",    group: "Bloom",  min: 0.0f,   max: 400.0f, init: 100.0f, unit: "%",   rampFrames: 256 ]];
     input value float32 shimmer             [[ name: "Shimmer",           group: "Bloom",  min: 0.0f,   max: 100.0f, init: 16.0f,  unit: "%",   rampFrames: 256 ]];
     input value float32 shimmerReturnGain   [[ name: "Shimmer Return",    group: "Bloom",  min: 0.0f,   max: 400.0f, init: 100.0f, unit: "%",   rampFrames: 256 ]];
@@ -109,6 +114,7 @@ processor ChorusLab [[ main ]]
 
     float32 lfoPhase;
     float32[choruslab::kGroupCount] shimmerPhase;
+    float32 ringModPhase;
 
     void init()
     {
@@ -126,6 +132,7 @@ processor ChorusLab [[ main ]]
                 driftTarget[group, innerPair] = driftRng[group, innerPair].getBipolar();
                 driftValue[group, innerPair] = driftTarget[group, innerPair] * 0.18f;
                 driftCounter[group, innerPair] = int32 (processor.frequency * (0.18f + 0.09f * float32 (int32 (group) + int32 (innerPair) + 1)));
+
             }
         }
     }
@@ -302,7 +309,8 @@ processor ChorusLab [[ main ]]
                                  float32 inputSample,
                                  float32 baseDelaySamples,
                                  float32 amount01,
-                                 float32 modAmount01)
+                                 float32 modAmount01,
+                                 float32 allpassCoeff)
     {
         let stageIndex = float32 (int32 (stage));
         let stageScale = 0.42f + (stageIndex * 0.28f);
@@ -317,7 +325,7 @@ processor ChorusLab [[ main ]]
         let delaySamples = 4.0f
                          + (baseDelaySamples * stageScale)
                          + (baseDelaySamples * 0.18f * amount01 * modAmount01 * delayMod);
-        let gain = 0.22f + amount01 * 0.42f;
+        let gain = std::intrinsics::clamp (allpassCoeff, 0.02f, 0.90f);
         let delayed = readDiffusionSample (group, channel, stage, delaySamples);
         let outputSample = delayed - (gain * inputSample);
         let writeValue = inputSample + (gain * outputSample);
@@ -331,7 +339,8 @@ processor ChorusLab [[ main ]]
                               float32 inputSample,
                               float32 baseDelaySamples,
                               float32 amount01,
-                              float32 modAmount01)
+                              float32 modAmount01,
+                              float32 allpassCoeff)
     {
         if (amount01 <= 0.0001f)
             return inputSample;
@@ -339,7 +348,7 @@ processor ChorusLab [[ main ]]
         var current = inputSample;
 
         for (wrap<choruslab::kDiffusionStageCount> stage)
-            current = processAllpassStage (group, channel, stage, current, baseDelaySamples, amount01, modAmount01);
+            current = processAllpassStage (group, channel, stage, current, baseDelaySamples, amount01, modAmount01, allpassCoeff);
 
         return current;
     }
@@ -394,10 +403,17 @@ processor ChorusLab [[ main ]]
             let lowCoeff = choruslab::coefficientForCutoff (sampleRate, lpCutoff);
             let highCoeff = choruslab::coefficientForCutoff (sampleRate, hpCutoff);
             let driveAmount = std::intrinsics::clamp (drive, 0.5f, 4.0f);
+            let ringMix01 = std::intrinsics::clamp (ringModMix * 0.01f, 0.0f, 1.0f);
+            let ringDepth01 = std::intrinsics::clamp (ringModDepth * 0.01f, 0.0f, 1.0f);
+            let ringPhaseStep = std::intrinsics::clamp (ringModHz, 0.0f, sampleRate * 0.45f) / sampleRate;
+            let ringAngle = 2.0f * choruslab::kPi * ringModPhase;
+            let ringCarrier = std::intrinsics::sin (ringAngle);
+            let ringMultiplier = choruslab::lerp (1.0f, ringCarrier, ringDepth01);
 
             let diffuse01 = std::intrinsics::clamp (diffuse * 0.01f, 0.0f, 1.0f);
             let diffuseDelaySamples = std::intrinsics::clamp (diffuseDelayMs * sampleRate * 0.001f, 4.0f, float32 (diffusionBufferSize - 8));
             let diffuseMod01 = std::intrinsics::clamp (diffuseMod * 0.01f, 0.0f, 1.0f);
+            let diffuseAllpassCoeff = std::intrinsics::clamp (diffuseCoeff, 0.05f, 0.86f);
             let diffuseReturnGain01 = std::intrinsics::max (diffuseReturnGain * 0.01f, 0.0f);
             let shimmer01 = std::intrinsics::clamp (shimmer * 0.01f, 0.0f, 1.0f);
             let shimmerReturnGain01 = std::intrinsics::max (shimmerReturnGain * 0.01f, 0.0f);
@@ -449,7 +465,9 @@ processor ChorusLab [[ main ]]
                         let writeRaw = dry[channel]
                                       + regenInjectionState[group, innerPair, channel]
                                       + delayed * feedback01;
-                        let filteredWrite = colorLoopWrite (group, innerPair, channel, writeRaw, lowCoeff, highCoeff, driveAmount);
+                        let coloredWrite = colorLoopWrite (group, innerPair, channel, writeRaw, lowCoeff, highCoeff, driveAmount);
+                        let ringedWrite = coloredWrite * ringMultiplier;
+                        let filteredWrite = choruslab::lerp (coloredWrite, ringedWrite, ringMix01);
                         writeDelaySample (group, innerPair, channel, filteredWrite);
 
                         if (channel == 0)
@@ -486,8 +504,8 @@ processor ChorusLab [[ main ]]
                     : 2.0f;
                 let fieldShimmerSend = shimmer01 * feedbackMagnitude * (0.82f + 0.11f * fieldIndex);
 
-                let diffusedLeft = processDiffusion (group, 0, groupLoopLeft, fieldDiffuseDelaySamples, diffuse01, fieldDiffuseMod01);
-                let diffusedRight = processDiffusion (group, 1, groupLoopRight, fieldDiffuseDelaySamples, diffuse01, fieldDiffuseMod01);
+                let diffusedLeft = processDiffusion (group, 0, groupLoopLeft, fieldDiffuseDelaySamples, diffuse01, fieldDiffuseMod01, diffuseAllpassCoeff);
+                let diffusedRight = processDiffusion (group, 1, groupLoopRight, fieldDiffuseDelaySamples, diffuse01, fieldDiffuseMod01, diffuseAllpassCoeff);
 
                 let shimmerShiftLeft = fieldShimmerSend > 0.0001f ? processShimmer (group, 0, diffusedLeft * fieldShimmerSend, fieldShimmerGrainSamples, fieldPitchRatio) : 0.0f;
                 let shimmerShiftRight = fieldShimmerSend > 0.0001f ? processShimmer (group, 1, diffusedRight * fieldShimmerSend, fieldShimmerGrainSamples, fieldPitchRatio) : 0.0f;
@@ -515,8 +533,10 @@ processor ChorusLab [[ main ]]
             }
 
             let mainOut = (dry * dryGain) + (float32<2> (chorusWetLeft, chorusWetRight) * wetGain);
-            out <- shimmerSolo ? float32<2> (shimmerSoloLeft, shimmerSoloRight) : mainOut;
+            let wetOrSolo = shimmerSolo ? float32<2> (shimmerSoloLeft, shimmerSoloRight) : mainOut;
+            out <- bypass ? dry : wetOrSolo;
 
+            ringModPhase = choruslab::wrap01 (ringModPhase + ringPhaseStep);
             lfoPhase = choruslab::wrap01 (lfoPhase + (std::intrinsics::clamp (rateHz, 0.02f, 6.0f) / sampleRate));
             advance();
         }
