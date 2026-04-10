@@ -6,6 +6,7 @@ namespace choruslab
     let kInnerPairCount = 3;
     let kChannelCount = 2;
     let kDiffusionStageCount = 4;
+    let kMidiHeldNoteCount = 16;
     let kMaxChorusDelayMs = 96.0f;
     let kMaxDiffusionDelayMs = 72.0f;
     let kMaxShimmerGrainMs = 80.0f;
@@ -53,6 +54,7 @@ namespace choruslab
 processor ChorusLab [[ main ]]
 {
     input stream float32<2> in;
+    input event std::midi::Message midiIn [[ name: "MIDI input" ]];
     output stream float32<2> out;
 
     input value bool bypass                  [[ name: "Bypass",           group: "Output", init: false, boolean ]];
@@ -76,6 +78,9 @@ processor ChorusLab [[ main ]]
     input value float32 ringModMix          [[ name: "Ring Mod Mix",      group: "Loop",   min: 0.0f,   max: 100.0f, init: 0.0f,   unit: "%",   rampFrames: 256 ]];
     input value float32 ringModHz           [[ name: "Ring Mod Freq",     group: "Loop",   min: 0.1f,   max: 2000.0f, init: 28.0f,  unit: "Hz",  rampFrames: 256 ]];
     input value float32 ringModDepth        [[ name: "Ring Mod Depth",    group: "Loop",   min: 0.0f,   max: 100.0f, init: 100.0f, unit: "%",   rampFrames: 256 ]];
+    input value bool ringModTrackMidi       [[ name: "Ring Track",        group: "Loop",   init: false, boolean ]];
+    input value float32 ringModOffset       [[ name: "Ring Offset",       group: "Loop",   min: -48.0f, max: 48.0f,  init: 0.0f,   unit: "st",  rampFrames: 256 ]];
+    input value float32 ringModGlideMs      [[ name: "Ring Glide",        group: "Loop",   min: 0.0f,   max: 500.0f, init: 40.0f,  unit: "ms",  rampFrames: 256 ]];
 
     input value float32 diffuse             [[ name: "Diffuse",           group: "Bloom",  min: 0.0f,   max: 100.0f, init: 24.0f,  unit: "%",   rampFrames: 256 ]];
     input value float32 diffuseDelayMs      [[ name: "Diffuse Delay",     group: "Bloom",  min: 2.0f,   max: 40.0f,  init: 7.0f,   unit: "ms",  rampFrames: 256 ]];
@@ -115,6 +120,11 @@ processor ChorusLab [[ main ]]
     float32 lfoPhase;
     float32[choruslab::kGroupCount] shimmerPhase;
     float32 ringModPhase;
+    float32 ringTrackedPitch = 69.0f;
+    float32 ringTrackedHz;
+    bool ringHasHeldNote;
+    int32 ringHeldNoteCount;
+    int32[choruslab::kMidiHeldNoteCount] ringHeldNotes;
 
     void init()
     {
@@ -135,6 +145,73 @@ processor ChorusLab [[ main ]]
 
             }
         }
+    }
+
+    void refreshTrackedMidiPitch()
+    {
+        ringHasHeldNote = ringHeldNoteCount > 0;
+
+        if (ringHasHeldNote)
+            ringTrackedPitch = float32 (ringHeldNotes.at (ringHeldNoteCount - 1));
+    }
+
+    void clearHeldMidiNotes()
+    {
+        ringHeldNoteCount = 0;
+        refreshTrackedMidiPitch();
+    }
+
+    void removeHeldMidiNote (int32 noteNumber)
+    {
+        var removed = false;
+
+        for (int32 index = 0; index < ringHeldNoteCount; ++index)
+        {
+            if (ringHeldNotes.at (index) == noteNumber)
+                removed = true;
+
+            if (removed && index < ringHeldNoteCount - 1)
+                ringHeldNotes.at (index) = ringHeldNotes.at (index + 1);
+        }
+
+        if (removed)
+            ringHeldNoteCount -= 1;
+
+        refreshTrackedMidiPitch();
+    }
+
+    void addHeldMidiNote (int32 noteNumber)
+    {
+        removeHeldMidiNote (noteNumber);
+
+        if (ringHeldNoteCount < choruslab::kMidiHeldNoteCount)
+        {
+            ringHeldNotes.at (ringHeldNoteCount) = noteNumber;
+            ringHeldNoteCount += 1;
+        }
+        else
+        {
+            for (int32 index = 1; index < choruslab::kMidiHeldNoteCount; ++index)
+                ringHeldNotes.at (index - 1) = ringHeldNotes.at (index);
+
+            ringHeldNotes.at (choruslab::kMidiHeldNoteCount - 1) = noteNumber;
+        }
+
+        refreshTrackedMidiPitch();
+    }
+
+    event midiIn (std::midi::Message message)
+    {
+        if (message.isAllNotesOff() || message.isAllSoundOff())
+        {
+            clearHeldMidiNotes();
+            return;
+        }
+
+        if (message.isNoteOn())
+            addHeldMidiNote (message.getNoteNumber());
+        else if (message.isNoteOff())
+            removeHeldMidiNote (message.getNoteNumber());
     }
 
     float32 readDelaySample (wrap<choruslab::kGroupCount> group,
@@ -405,7 +482,21 @@ processor ChorusLab [[ main ]]
             let driveAmount = std::intrinsics::clamp (drive, 0.5f, 4.0f);
             let ringMix01 = std::intrinsics::clamp (ringModMix * 0.01f, 0.0f, 1.0f);
             let ringDepth01 = std::intrinsics::clamp (ringModDepth * 0.01f, 0.0f, 1.0f);
-            let ringPhaseStep = std::intrinsics::clamp (ringModHz, 0.0f, sampleRate * 0.45f) / sampleRate;
+            var targetRingHz = ringModHz;
+
+            if (ringModTrackMidi && ringHasHeldNote)
+                targetRingHz = std::notes::noteToFrequency (ringTrackedPitch + ringModOffset);
+
+            let clampedRingTargetHz = std::intrinsics::clamp (targetRingHz, 0.1f, sampleRate * 0.45f);
+
+            if (ringTrackedHz <= 0.0f)
+                ringTrackedHz = clampedRingTargetHz;
+
+            let ringGlideSamples = std::intrinsics::max (1.0f, ringModGlideMs * sampleRate * 0.001f);
+            let ringGlideCoeff = 1.0f - std::intrinsics::exp (-1.0f / ringGlideSamples);
+            ringTrackedHz += (clampedRingTargetHz - ringTrackedHz) * ringGlideCoeff;
+
+            let ringPhaseStep = ringTrackedHz / sampleRate;
             let ringAngle = 2.0f * choruslab::kPi * ringModPhase;
             let ringCarrier = std::intrinsics::sin (ringAngle);
             let ringMultiplier = choruslab::lerp (1.0f, ringCarrier, ringDepth01);
