@@ -22,6 +22,7 @@ from tests.helpers.generate_warp_reference_assets import (
     _note_off_offsets_for_segment,
     _note_to_frequency,
     _pad_frame,
+    _read_json,
     _read_bank_frame_sample32,
     _read_value_events,
     _write_reference_wav,
@@ -55,6 +56,9 @@ FILTER_CUTOFF_MIN_HZ = 20.0
 FILTER_CUTOFF_MAX_HZ = 20_000.0
 FILTER_Q_MIN = 0.1
 FILTER_Q_MAX = 20.0
+CENTER_PAN_GAIN = np.float32(2.0 ** -0.5)
+MODULATION_SOURCE_MSEG = 1
+MODULATION_TARGET_FILTER_CUTOFF_OCTAVES = 3
 
 
 @dataclass(frozen=True, slots=True)
@@ -168,13 +172,27 @@ def _expand_filter_curves(
         events=_read_value_events(fixture_dir / "filterQ.json"),
         scale=1,
     )
-    filter_mseg_depth = _expand_value_curve(
-        num_samples=num_samples,
-        default=0.0,
-        events=_read_value_events(fixture_dir / "filterMsegDepth.json"),
-        scale=1,
-    )
+    filter_mseg_depth = np.full(num_samples, _read_filter_mseg_depth(fixture_dir), dtype=np.float32)
     return wavetable_position, mseg1_depth, filter_mode, filter_cutoff, filter_q, filter_mseg_depth
+
+
+def _read_filter_mseg_depth(fixture_dir: Path) -> float:
+    route_path = fixture_dir / "modulationRoute.json"
+    if route_path.exists():
+        for entry in _read_json(route_path):
+            event = entry.get("event", {})
+            if (
+                bool(event.get("enabled", False))
+                and int(event.get("sourceKind", 0)) == MODULATION_SOURCE_MSEG
+                and int(event.get("sourceSlot", 0)) == 1
+                and int(event.get("targetKind", 0)) == MODULATION_TARGET_FILTER_CUTOFF_OCTAVES
+            ):
+                return float(event.get("amount", 0.0))
+
+    events = _read_value_events(fixture_dir / "filterMsegDepth.json")
+    if not events:
+        return 0.0
+    return float(events[-1].get("value", 0.0))
 
 
 def _read_oscillator_sample(
@@ -253,7 +271,9 @@ def render_filter_reference_audio(fixture_dir: Path, *, num_samples: int) -> np.
             else:
                 filter_state.reset()
 
-            mixed[sample_index] = np.float32(mixed[sample_index] + (sample * gain * np.float32(TRIM_GAIN)))
+            mixed[sample_index] = np.float32(
+                mixed[sample_index] + (sample * gain * np.float32(TRIM_GAIN) * CENTER_PAN_GAIN)
+            )
             phase = np.float32(np.mod(np.float32(phase + current_phase_increment), np.float32(1.0)))
 
     return np.column_stack((mixed, mixed)).astype(np.float32)

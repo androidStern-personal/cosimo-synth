@@ -28,6 +28,15 @@ export function createIOSHarnessInitScript(baseUrl) {
             ["distortionWet", 0],
             ["distortionWetHPHz", 40],
             ["distortionWetLPHz", 18000],
+            ["chorusEnabled", 0],
+            ["chorusMix", 0],
+            ["chorusMotionMode", 1],
+            ["chorusBloomMode", 0],
+            ["chorusTone", 0.5],
+            ["chorusFeedback", 0.42],
+            ["chorusRingAmount", 0],
+            ["chorusRingOffsetMode", 0],
+            ["chorusRingFineSemitones", 0],
         ]);
         let readyNotificationCount = 0;
         let bundledFallbackRequestCount = 0;
@@ -153,6 +162,51 @@ export function createIOSHarnessInitScript(baseUrl) {
                         endpointID: "distortionWetLPHz",
                         purpose: "parameter",
                         annotation: { name: "Distortion Wet LP", min: 20, max: 20000, init: 18000 },
+                    },
+                    {
+                        endpointID: "chorusEnabled",
+                        purpose: "parameter",
+                        annotation: { name: "Chorus On", min: 0, max: 1, init: 0 },
+                    },
+                    {
+                        endpointID: "chorusMix",
+                        purpose: "parameter",
+                        annotation: { name: "Chorus Mix", min: 0, max: 1, init: 0 },
+                    },
+                    {
+                        endpointID: "chorusMotionMode",
+                        purpose: "parameter",
+                        annotation: { name: "Chorus Motion", min: 0, max: 3, init: 1 },
+                    },
+                    {
+                        endpointID: "chorusBloomMode",
+                        purpose: "parameter",
+                        annotation: { name: "Chorus Bloom", min: 0, max: 4, init: 0 },
+                    },
+                    {
+                        endpointID: "chorusTone",
+                        purpose: "parameter",
+                        annotation: { name: "Chorus Tone", min: 0, max: 1, init: 0.5 },
+                    },
+                    {
+                        endpointID: "chorusFeedback",
+                        purpose: "parameter",
+                        annotation: { name: "Chorus Feedback", min: 0, max: 0.95, init: 0.42 },
+                    },
+                    {
+                        endpointID: "chorusRingAmount",
+                        purpose: "parameter",
+                        annotation: { name: "Chorus Ring", min: 0, max: 1, init: 0 },
+                    },
+                    {
+                        endpointID: "chorusRingOffsetMode",
+                        purpose: "parameter",
+                        annotation: { name: "Chorus Ring Pitch", min: 0, max: 3, init: 0 },
+                    },
+                    {
+                        endpointID: "chorusRingFineSemitones",
+                        purpose: "parameter",
+                        annotation: { name: "Chorus Ring Fine", min: -2, max: 2, init: 0 },
                     },
                 ],
             },
@@ -323,6 +377,15 @@ export function createIOSHarnessInitScript(baseUrl) {
                     || endpointID === "wavetableSelect"
                     || endpointID === "playMode"
                     || endpointID === "glideTime"
+                    || endpointID === "chorusEnabled"
+                    || endpointID === "chorusMix"
+                    || endpointID === "chorusMotionMode"
+                    || endpointID === "chorusBloomMode"
+                    || endpointID === "chorusTone"
+                    || endpointID === "chorusFeedback"
+                    || endpointID === "chorusRingAmount"
+                    || endpointID === "chorusRingOffsetMode"
+                    || endpointID === "chorusRingFineSemitones"
                 ) {
                     parameterValues.set(endpointID, value);
                     queueMicrotask(() => emitParameterValue(endpointID, value));

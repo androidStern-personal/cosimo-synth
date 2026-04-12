@@ -153,9 +153,64 @@ function msegBufferEvent(buffer) {
     ];
 }
 
+function modulationEnableEvent() {
+    return [
+        {
+            frameOffset: 0,
+            event: 1,
+        },
+    ];
+}
+
+function modulationMsegBufferEvent(slot, buffer) {
+    if (!Array.isArray(buffer) || buffer.length !== msegPaddedSamples) {
+        throw new Error(`MSEG buffers must have exactly ${msegPaddedSamples} samples.`);
+    }
+
+    return [
+        {
+            frameOffset: 0,
+            event: {
+                slot,
+                buffer,
+            },
+        },
+    ];
+}
+
+function modulationMsegPlaybackEvent(slot, playback) {
+    return [
+        {
+            frameOffset: 0,
+            event: {
+                slot,
+                ...playback[0].event,
+            },
+        },
+    ];
+}
+
+function modulationFilterCutoffRouteEvent(amount) {
+    return [
+        {
+            frameOffset: 0,
+            event: {
+                routeIndex: 0,
+                enabled: true,
+                sourceKind: 1,
+                sourceSlot: 1,
+                polarityKind: 0,
+                targetKind: 3,
+                amount: Math.fround(amount),
+            },
+        },
+    ];
+}
+
 async function writeFixture(name, spec) {
     const dir = path.join(fixtureRoot, name);
     await mkdir(dir, { recursive: true });
+    const filterMsegDepth = spec.filterMsegDepth ?? [valueEvent(0, 0)];
 
     await writeJson(path.join(dir, "wavetableLoadBegin.json"), wavetableLoadBegin(spec.frames.length));
     await writeJson(path.join(dir, "wavetableMipFrame.json"), wavetableMipFrames(spec.frames));
@@ -165,7 +220,7 @@ async function writeFixture(name, spec) {
     await writeJson(path.join(dir, "filterMode.json"), spec.filterMode);
     await writeJson(path.join(dir, "filterCutoff.json"), spec.filterCutoff);
     await writeJson(path.join(dir, "filterQ.json"), spec.filterQ);
-    await writeJson(path.join(dir, "filterMsegDepth.json"), spec.filterMsegDepth ?? [valueEvent(0, 0)]);
+    await writeJson(path.join(dir, "filterMsegDepth.json"), filterMsegDepth);
 
     if (spec.mseg1Buffer) {
         await writeJson(path.join(dir, "mseg1Buffer.json"), spec.mseg1Buffer);
@@ -173,6 +228,20 @@ async function writeFixture(name, spec) {
 
     if (spec.mseg1Playback) {
         await writeJson(path.join(dir, "mseg1Playback.json"), spec.mseg1Playback);
+    }
+
+    const filterDepth = filterMsegDepth[0]?.value ?? 0;
+    if (spec.mseg1Buffer && spec.mseg1Playback && filterDepth !== 0) {
+        await writeJson(path.join(dir, "modulationEnable.json"), modulationEnableEvent());
+        await writeJson(
+            path.join(dir, "modulationMsegBuffer.json"),
+            modulationMsegBufferEvent(1, spec.mseg1Buffer[0].event),
+        );
+        await writeJson(
+            path.join(dir, "modulationMsegPlayback.json"),
+            modulationMsegPlaybackEvent(1, spec.mseg1Playback),
+        );
+        await writeJson(path.join(dir, "modulationRoute.json"), modulationFilterCutoffRouteEvent(filterDepth));
     }
 }
 

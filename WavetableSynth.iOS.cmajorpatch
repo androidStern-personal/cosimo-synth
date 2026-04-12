@@ -13,6 +13,7 @@
   "isInstrument": true,
   "source": [
     "cmajor/Distortion.cmajor",
+    "cmajor/Chorus.cmajor",
     "cmajor/FixedFrameOscillator.cmajor",
     "cmajor/FilterSpectrumCommon.cmajor",
     "cmajor/FilterSpectrumAnalyzer.cmajor",

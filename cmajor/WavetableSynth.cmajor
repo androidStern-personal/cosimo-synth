@@ -960,6 +960,15 @@ graph WavetableSynth [[ main ]]
     input value float32 distortionWet [[ name: "Distortion Mix", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
     input value float32 distortionWetHPHz [[ name: "Distortion Band HP", min: 20.0f, max: 4000.0f, init: 40.0f, unit: "Hz", rampFrames: 64 ]];
     input value float32 distortionWetLPHz [[ name: "Distortion Band LP", min: 20.0f, max: 20000.0f, init: 18000.0f, unit: "Hz", rampFrames: 64 ]];
+    input value float32 chorusEnabled [[ name: "Chorus On", min: 0.0f, max: 1.0f, init: 0.0f, discrete: true, step: 1.0f, rampFrames: 0 ]];
+    input value float32 chorusMix [[ name: "Chorus Mix", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 128 ]];
+    input value float32 chorusMotionMode [[ name: "Chorus Motion", min: 0.0f, max: 3.0f, init: 1.0f, discrete: true, step: 1.0f, text: "Subtle|Wide Slow|Classic|Fast Light", rampFrames: 0 ]];
+    input value float32 chorusBloomMode [[ name: "Chorus Bloom", min: 0.0f, max: 4.0f, init: 0.0f, discrete: true, step: 1.0f, text: "Clean|Small|Large|Small+Shimmer|Large+Shimmer", rampFrames: 0 ]];
+    input value float32 chorusTone [[ name: "Chorus Tone", min: 0.0f, max: 1.0f, init: 0.5f, rampFrames: 128 ]];
+    input value float32 chorusFeedback [[ name: "Chorus Feedback", min: 0.0f, max: 0.95f, init: 0.42f, rampFrames: 128 ]];
+    input value float32 chorusRingAmount [[ name: "Chorus Ring", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 128 ]];
+    input value float32 chorusRingOffsetMode [[ name: "Chorus Ring Pitch", min: 0.0f, max: 3.0f, init: 0.0f, discrete: true, step: 1.0f, text: "+5th|Low 5th|+Oct|-Oct", rampFrames: 0 ]];
+    input value float32 chorusRingFineSemitones [[ name: "Chorus Ring Fine", min: -2.0f, max: 2.0f, init: 0.0f, unit: "st", rampFrames: 128 ]];
     output event wt::WavetableUploadAck wavetableUploadAck;
     output event wt::WavetableMipRequest wavetableMipRequest;
     output event wt::RuntimeState runtimeState;
@@ -979,6 +988,7 @@ graph WavetableSynth [[ main ]]
     node sharedEngine = wt::SharedVoiceEngine (voiceCount);
     node trim = wt::StereoTrim (0.18f);
     node distortion = wt::DistortionBus;
+    node chorus = wt::ChorusBus;
     node analyzerDownmix = wt::StereoToMonoAverage;
     node filterSpectrumAnalyzer = wt::FilterSpectrumAnalyzer;
     node distortionScopeAnalyzer = wt::DistortionScopeAnalyzer;
@@ -1017,6 +1027,15 @@ graph WavetableSynth [[ main ]]
         distortionWet -> distortion.wetIn;
         distortionWetHPHz -> distortion.wetHPHzIn;
         distortionWetLPHz -> distortion.wetLPHzIn;
+        chorusEnabled -> chorus.enabledIn;
+        chorusMix -> chorus.mixIn;
+        chorusMotionMode -> chorus.motionModeIn;
+        chorusBloomMode -> chorus.bloomModeIn;
+        chorusTone -> chorus.toneIn;
+        chorusFeedback -> chorus.feedbackIn;
+        chorusRingAmount -> chorus.ringAmountIn;
+        chorusRingOffsetMode -> chorus.ringOffsetModeIn;
+        chorusRingFineSemitones -> chorus.ringFineSemitonesIn;
         sharedEngine.wavetableUploadAckOut -> wavetableUploadAck;
         sharedEngine.wavetableMipRequestOut -> wavetableMipRequest;
         sharedEngine.runtimeServiceStateOut -> runtimeStateCoordinator.runtimeServiceStateIn;
@@ -1040,6 +1059,8 @@ graph WavetableSynth [[ main ]]
         distortion.previewInputRight -> distortionHistoryAnalyzer.previewInputRight;
         distortion.previewOutputLeft -> distortionHistoryAnalyzer.previewOutputLeft;
         distortion.previewOutputRight -> distortionHistoryAnalyzer.previewOutputRight;
-        distortion.out -> audioOut;
+        distortion.out -> chorus.in;
+        sharedEngine.trackingPitchHzOut -> chorus.trackingPitchHzIn;
+        chorus.out -> audioOut;
     }
 }

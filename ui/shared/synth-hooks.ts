@@ -105,6 +105,15 @@ const DISTORTION_KNEE_ENDPOINT_ID = "distortionKnee";
 const DISTORTION_WET_ENDPOINT_ID = "distortionWet";
 const DISTORTION_WET_HP_HZ_ENDPOINT_ID = "distortionWetHPHz";
 const DISTORTION_WET_LP_HZ_ENDPOINT_ID = "distortionWetLPHz";
+const CHORUS_ENABLED_ENDPOINT_ID = "chorusEnabled";
+const CHORUS_MIX_ENDPOINT_ID = "chorusMix";
+const CHORUS_MOTION_MODE_ENDPOINT_ID = "chorusMotionMode";
+const CHORUS_BLOOM_MODE_ENDPOINT_ID = "chorusBloomMode";
+const CHORUS_TONE_ENDPOINT_ID = "chorusTone";
+const CHORUS_FEEDBACK_ENDPOINT_ID = "chorusFeedback";
+const CHORUS_RING_AMOUNT_ENDPOINT_ID = "chorusRingAmount";
+const CHORUS_RING_OFFSET_MODE_ENDPOINT_ID = "chorusRingOffsetMode";
+const CHORUS_RING_FINE_SEMITONES_ENDPOINT_ID = "chorusRingFineSemitones";
 const RUNTIME_SYNC_REQUEST_ENDPOINT_ID = "runtimeSyncRequest";
 const RUNTIME_STATE_ENDPOINT_ID = "runtimeState";
 const RETRY_DESIRED_TABLE_REQUEST_ENDPOINT_ID = "retryDesiredTableRequest";
@@ -195,6 +204,15 @@ export type SynthPatchViewModel = {
     distortionWet: PatchControlBinding<number>;
     distortionWetHPHz: PatchControlBinding<number>;
     distortionWetLPHz: PatchControlBinding<number>;
+    chorusEnabled: PatchControlBinding<number>;
+    chorusMix: PatchControlBinding<number>;
+    chorusMotionMode: PatchControlBinding<number>;
+    chorusBloomMode: PatchControlBinding<number>;
+    chorusTone: PatchControlBinding<number>;
+    chorusFeedback: PatchControlBinding<number>;
+    chorusRingAmount: PatchControlBinding<number>;
+    chorusRingOffsetMode: PatchControlBinding<number>;
+    chorusRingFineSemitones: PatchControlBinding<number>;
     observedFilterState: EffectiveFilterState;
     observedFilterSpectrum: FilterSpectrumFrame | null;
     observedDistortionHistory: DistortionHistoryFrame | null;
@@ -1195,6 +1213,51 @@ export function useSynthPatchViewModel({
         initialValue: 18_000,
         coerce: (value) => clamp(Number(value) || 0, 20, 20_000),
     });
+    const chorusEnabled = usePatchParameterBinding<number>({
+        endpointID: CHORUS_ENABLED_ENDPOINT_ID,
+        initialValue: 0,
+        coerce: (value) => clamp(Math.round(Number(value) || 0), 0, 1),
+    });
+    const chorusMix = usePatchParameterBinding<number>({
+        endpointID: CHORUS_MIX_ENDPOINT_ID,
+        initialValue: 0,
+        coerce: (value) => clamp(Number(value) || 0, 0, 1),
+    });
+    const chorusMotionMode = usePatchParameterBinding<number>({
+        endpointID: CHORUS_MOTION_MODE_ENDPOINT_ID,
+        initialValue: 1,
+        coerce: (value) => clamp(Math.round(Number(value) || 0), 0, 3),
+    });
+    const chorusBloomMode = usePatchParameterBinding<number>({
+        endpointID: CHORUS_BLOOM_MODE_ENDPOINT_ID,
+        initialValue: 0,
+        coerce: (value) => clamp(Math.round(Number(value) || 0), 0, 4),
+    });
+    const chorusTone = usePatchParameterBinding<number>({
+        endpointID: CHORUS_TONE_ENDPOINT_ID,
+        initialValue: 0.5,
+        coerce: (value) => clamp(Number(value) || 0, 0, 1),
+    });
+    const chorusFeedback = usePatchParameterBinding<number>({
+        endpointID: CHORUS_FEEDBACK_ENDPOINT_ID,
+        initialValue: 0.42,
+        coerce: (value) => clamp(Number(value) || 0, 0, 0.95),
+    });
+    const chorusRingAmount = usePatchParameterBinding<number>({
+        endpointID: CHORUS_RING_AMOUNT_ENDPOINT_ID,
+        initialValue: 0,
+        coerce: (value) => clamp(Number(value) || 0, 0, 1),
+    });
+    const chorusRingOffsetMode = usePatchParameterBinding<number>({
+        endpointID: CHORUS_RING_OFFSET_MODE_ENDPOINT_ID,
+        initialValue: 0,
+        coerce: (value) => clamp(Math.round(Number(value) || 0), 0, 3),
+    });
+    const chorusRingFineSemitones = usePatchParameterBinding<number>({
+        endpointID: CHORUS_RING_FINE_SEMITONES_ENDPOINT_ID,
+        initialValue: 0,
+        coerce: (value) => clamp(Number(value) || 0, -2, 2),
+    });
     const requestRuntimeSync = usePatchEventTrigger<number>(RUNTIME_SYNC_REQUEST_ENDPOINT_ID);
     const retryDesiredTableLoad = usePatchEventTrigger<number>(RETRY_DESIRED_TABLE_REQUEST_ENDPOINT_ID);
     const observedPosition = useObservedDisplayPosition(Number(wavetablePosition.value) || 0);
@@ -1413,6 +1476,15 @@ export function useSynthPatchViewModel({
         distortionWet,
         distortionWetHPHz,
         distortionWetLPHz,
+        chorusEnabled,
+        chorusMix,
+        chorusMotionMode,
+        chorusBloomMode,
+        chorusTone,
+        chorusFeedback,
+        chorusRingAmount,
+        chorusRingOffsetMode,
+        chorusRingFineSemitones,
         observedFilterState,
         observedFilterSpectrum,
         observedDistortionHistory,

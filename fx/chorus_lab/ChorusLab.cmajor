@@ -7,6 +7,13 @@ namespace choruslab
     let kChannelCount = 2;
     let kDiffusionStageCount = 4;
     let kMidiHeldNoteCount = 16;
+    let kDelayAMs = 8.0f;
+    let kDelayBMs = 14.0f;
+    let kGroupPhaseSpread = 0.25f;
+    let kRightPhaseOffset = 0.25f;
+    let kInnerPairOffset = 0.5f;
+    let kRingFallbackHz = 28.0f;
+    let kRingGlideMs = 5.0f;
     let kMaxChorusDelayMs = 96.0f;
     let kMaxDiffusionDelayMs = 72.0f;
     let kMaxShimmerGrainMs = 80.0f;
@@ -62,25 +69,16 @@ processor ChorusLab [[ main ]]
 
     input value float32 voices              [[ name: "Voices",            group: "Chorus", min: 1.0f,   max: 3.0f,   init: 3.0f,   unit: "",    rampFrames: 256 ]];
     input value float32 rateHz              [[ name: "Rate",              group: "Chorus", min: 0.02f,  max: 6.0f,   init: 0.33f,  unit: "Hz",  rampFrames: 256 ]];
-    input value float32 delayAms            [[ name: "Delay A",           group: "Chorus", min: 2.0f,   max: 30.0f,  init: 8.0f,   unit: "ms",  rampFrames: 256 ]];
-    input value float32 delayBms            [[ name: "Delay B",           group: "Chorus", min: 2.0f,   max: 30.0f,  init: 14.0f,  unit: "ms",  rampFrames: 256 ]];
     input value float32 modDepthMs          [[ name: "Mod Depth",         group: "Chorus", min: 0.0f,   max: 30.0f,  init: 7.0f,   unit: "ms",  rampFrames: 256 ]];
     input value float32 driftMs             [[ name: "Drift",             group: "Chorus", min: 0.0f,   max: 4.0f,   init: 0.4f,   unit: "ms",  rampFrames: 256 ]];
-
-    input value float32 groupPhaseSpread    [[ name: "Group Spread",      group: "Phase",  min: 0.0f,   max: 0.5f,   init: 0.25f,  unit: "cyc", rampFrames: 256 ]];
-    input value float32 rightPhaseOffset    [[ name: "Right Offset",      group: "Phase",  min: 0.0f,   max: 0.5f,   init: 0.25f,  unit: "cyc", rampFrames: 256 ]];
-    input value float32 innerPairOffset     [[ name: "Inner Pair Offset", group: "Phase",  min: 0.0f,   max: 1.0f,   init: 0.5f,   unit: "cyc", rampFrames: 256 ]];
 
     input value float32 feedback            [[ name: "Feedback",          group: "Loop",   min: -95.0f, max: 95.0f,  init: 40.0f,  unit: "%",   rampFrames: 256 ]];
     input value float32 loopHighpassHz      [[ name: "Loop HP",           group: "Loop",   min: 20.0f,  max: 1200.0f, init: 90.0f,  unit: "Hz",  rampFrames: 256 ]];
     input value float32 loopLowpassHz       [[ name: "Loop LP",           group: "Loop",   min: 800.0f, max: 18000.0f, init: 6400.0f, unit: "Hz", rampFrames: 256 ]];
     input value float32 drive               [[ name: "Drive",             group: "Loop",   min: 0.5f,   max: 4.0f,   init: 1.35f,  unit: "x",   rampFrames: 256 ]];
     input value float32 ringModMix          [[ name: "Ring Mod Mix",      group: "Loop",   min: 0.0f,   max: 100.0f, init: 0.0f,   unit: "%",   rampFrames: 256 ]];
-    input value float32 ringModHz           [[ name: "Ring Mod Freq",     group: "Loop",   min: 0.1f,   max: 2000.0f, init: 28.0f,  unit: "Hz",  rampFrames: 256 ]];
     input value float32 ringModDepth        [[ name: "Ring Mod Depth",    group: "Loop",   min: 0.0f,   max: 100.0f, init: 100.0f, unit: "%",   rampFrames: 256 ]];
-    input value bool ringModTrackMidi       [[ name: "Ring Track",        group: "Loop",   init: false, boolean ]];
     input value float32 ringModOffset       [[ name: "Ring Offset",       group: "Loop",   min: -48.0f, max: 48.0f,  init: 0.0f,   unit: "st",  rampFrames: 256 ]];
-    input value float32 ringModGlideMs      [[ name: "Ring Glide",        group: "Loop",   min: 0.0f,   max: 500.0f, init: 40.0f,  unit: "ms",  rampFrames: 256 ]];
 
     input value float32 diffuse             [[ name: "Diffuse",           group: "Bloom",  min: 0.0f,   max: 100.0f, init: 24.0f,  unit: "%",   rampFrames: 256 ]];
     input value float32 diffuseDelayMs      [[ name: "Diffuse Delay",     group: "Bloom",  min: 2.0f,   max: 40.0f,  init: 7.0f,   unit: "ms",  rampFrames: 256 ]];
@@ -464,14 +462,14 @@ processor ChorusLab [[ main ]]
 
             let mix01 = std::intrinsics::clamp (mix * 0.01f, 0.0f, 1.0f);
             let activeGroups = int32 (std::intrinsics::clamp (std::intrinsics::floor (voices + 0.5f), 1.0f, float32 (choruslab::kGroupCount)));
-            let delayA = std::intrinsics::clamp (delayAms * sampleRate * 0.001f, 3.0f, float32 (chorusBufferSize - 8));
-            let delayB = std::intrinsics::clamp (delayBms * sampleRate * 0.001f, 3.0f, float32 (chorusBufferSize - 8));
+            let delayA = std::intrinsics::clamp (choruslab::kDelayAMs * sampleRate * 0.001f, 3.0f, float32 (chorusBufferSize - 8));
+            let delayB = std::intrinsics::clamp (choruslab::kDelayBMs * sampleRate * 0.001f, 3.0f, float32 (chorusBufferSize - 8));
             let modDepthSamples = std::intrinsics::clamp (modDepthMs * sampleRate * 0.001f, 0.0f, sampleRate * 0.030f);
             let driftDepthSamples = std::intrinsics::clamp (driftMs * sampleRate * 0.001f, 0.0f, sampleRate * 0.008f);
 
-            let rightOffset = std::intrinsics::clamp (rightPhaseOffset, 0.0f, 0.5f);
-            let innerOffset = std::intrinsics::clamp (innerPairOffset, 0.0f, 1.0f);
-            let groupSpread = std::intrinsics::clamp (groupPhaseSpread, 0.0f, 0.5f);
+            let rightOffset = choruslab::kRightPhaseOffset;
+            let innerOffset = choruslab::kInnerPairOffset;
+            let groupSpread = choruslab::kGroupPhaseSpread;
 
             let feedback01 = std::intrinsics::clamp (feedback * 0.01f, -0.95f, 0.95f);
             let feedbackMagnitude = std::intrinsics::abs (feedback01);
@@ -482,9 +480,9 @@ processor ChorusLab [[ main ]]
             let driveAmount = std::intrinsics::clamp (drive, 0.5f, 4.0f);
             let ringMix01 = std::intrinsics::clamp (ringModMix * 0.01f, 0.0f, 1.0f);
             let ringDepth01 = std::intrinsics::clamp (ringModDepth * 0.01f, 0.0f, 1.0f);
-            var targetRingHz = ringModHz;
+            var targetRingHz = choruslab::kRingFallbackHz;
 
-            if (ringModTrackMidi && ringHasHeldNote)
+            if (ringHasHeldNote)
                 targetRingHz = std::notes::noteToFrequency (ringTrackedPitch + ringModOffset);
 
             let clampedRingTargetHz = std::intrinsics::clamp (targetRingHz, 0.1f, sampleRate * 0.45f);
@@ -492,7 +490,7 @@ processor ChorusLab [[ main ]]
             if (ringTrackedHz <= 0.0f)
                 ringTrackedHz = clampedRingTargetHz;
 
-            let ringGlideSamples = std::intrinsics::max (1.0f, ringModGlideMs * sampleRate * 0.001f);
+            let ringGlideSamples = std::intrinsics::max (1.0f, choruslab::kRingGlideMs * sampleRate * 0.001f);
             let ringGlideCoeff = 1.0f - std::intrinsics::exp (-1.0f / ringGlideSamples);
             ringTrackedHz += (clampedRingTargetHz - ringTrackedHz) * ringGlideCoeff;
 

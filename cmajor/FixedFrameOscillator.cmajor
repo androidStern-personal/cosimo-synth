@@ -1146,6 +1146,7 @@ namespace wt
         output event wt::EffectiveFilterStateMonitor effectiveFilterStateOut;
         output event wt::EffectiveMsegStateMonitor effectiveMsegStateOut;
         output stream float32<2> out;
+        output stream float32 trackingPitchHzOut;
 
         node envelopes = wt::RetriggerableFixedASR (0.01f, 0.20f)[voiceCount];
         node mseg1 = wt::MsegReader[voiceCount];
@@ -1170,6 +1171,7 @@ namespace wt
         float32[voiceCount] voiceFrequencyHz;
         int32[voiceCount] voiceActive;
         int32[voiceCount] voiceGeneration;
+        int32[voiceCount] voiceTrackingSerial;
         float32[voiceCount] voiceEffectivePosition;
         int32[voiceCount] voiceEffectiveWarpMode;
         float32[voiceCount] voiceEffectiveWarpAmount;
@@ -1177,6 +1179,9 @@ namespace wt
         float32[voiceCount] voiceEffectiveFilterCutoffHz;
         float32[voiceCount] voiceEffectiveFilterQ;
         float32[voiceCount] voiceEffectivePan;
+        float32[voiceCount] voiceMsegProgress1;
+        float32[voiceCount] voiceMsegProgress2;
+        float32[voiceCount] voiceMsegProgress3;
         float32[warpDecimatorTapCount] warpDecimatorTapsState;
         float32[voiceCount * warpDecimatorTapCount] voiceWarpHistory;
         int32[voiceCount] voiceWarpHistoryWriteIndex;
@@ -1210,6 +1215,7 @@ namespace wt
         bool hasEmittedInitialRuntimeState = false;
 
         int32 nextVoiceGeneration = 1;
+        int32 nextVoiceTrackingSerial = 1;
         int32 monitorUpdateIntervalFrames = 1;
         int32 framesUntilNextMonitorUpdate = 0;
         int32 warpMonitorUpdateIntervalFrames = 1;
@@ -1818,9 +1824,9 @@ namespace wt
             {
                 monitor.voiceGeneration = voiceGeneration.at (newestVoiceIndex);
                 monitor.hasActive = 1;
-                monitor.positions[0] = std::intrinsics::clamp (mseg1[newestVoiceIndex].progressOut, 0.0f, 1.0f);
-                monitor.positions[1] = std::intrinsics::clamp (mseg2[newestVoiceIndex].progressOut, 0.0f, 1.0f);
-                monitor.positions[2] = std::intrinsics::clamp (mseg3[newestVoiceIndex].progressOut, 0.0f, 1.0f);
+                monitor.positions[0] = std::intrinsics::clamp (voiceMsegProgress1.at (newestVoiceIndex), 0.0f, 1.0f);
+                monitor.positions[1] = std::intrinsics::clamp (voiceMsegProgress2.at (newestVoiceIndex), 0.0f, 1.0f);
+                monitor.positions[2] = std::intrinsics::clamp (voiceMsegProgress3.at (newestVoiceIndex), 0.0f, 1.0f);
             }
             else
             {
@@ -2070,6 +2076,8 @@ namespace wt
             voiceActive.at (voice) = 1;
             voiceGeneration.at (voice) = nextVoiceGeneration;
             nextVoiceGeneration += 1;
+            voiceTrackingSerial.at (voice) = nextVoiceTrackingSerial;
+            nextVoiceTrackingSerial += 1;
             resetWarpRenderState (index);
             resetFilterState (index);
 
@@ -2124,6 +2132,8 @@ namespace wt
                 setVoicePitchImmediate (index, change.pitch);
 
             voiceActive.at (voice) = 1;
+            voiceTrackingSerial.at (voice) = nextVoiceTrackingSerial;
+            nextVoiceTrackingSerial += 1;
 
             if (shouldRetrigger)
             {
@@ -2303,6 +2313,8 @@ namespace wt
 
                 float32 leftMix = 0.0f;
                 float32 rightMix = 0.0f;
+                float32 trackingPitchHz = 0.0f;
+                int32 trackingSerial = -1;
 
                 for (wrap<voiceCount> voice)
                 {
@@ -2314,6 +2326,9 @@ namespace wt
                     modEnv2[voice].advance();
                     modEnv3[voice].advance();
                     envelopes[voice].advance();
+                    voiceMsegProgress1[voice] = mseg1[voice].progressOut;
+                    voiceMsegProgress2[voice] = mseg2[voice].progressOut;
+                    voiceMsegProgress3[voice] = mseg3[voice].progressOut;
 
                     let processorFrequency = float32 (processor.frequency);
                     let envelopeGain = envelopes[voice].gainOut;
@@ -2374,6 +2389,14 @@ namespace wt
                     let effectivePan = clampPan (panIn + routePan);
                     let effectivePitchSemitones = voiceCurrentPitch.at (voice) + voiceBendSemitones.at (voice) + routePitchSemitones;
                     let effectiveFrequencyHz = std::notes::noteToFrequency (effectivePitchSemitones);
+                    let voiceSerial = voiceTrackingSerial.at (voice);
+
+                    if (voiceActive.at (voice) != 0 && voiceSerial > trackingSerial)
+                    {
+                        trackingSerial = voiceSerial;
+                        trackingPitchHz = effectiveFrequencyHz;
+                    }
+
                     let shouldRenderWarpBackground = warpMode > warpModeOff;
                     let shouldBypassWarpOutput = isIdentityWarp (warpMode, effectiveWarpAmount);
                     voiceEffectivePosition.at (voice) = effectivePosition;
@@ -2460,6 +2483,7 @@ namespace wt
                 }
 
                 out <- float32<2> (leftMix, rightMix);
+                trackingPitchHzOut <- trackingPitchHz;
                 maybeEmitMonitorUpdate();
                 advance();
             }

@@ -185,7 +185,7 @@ namespace wt
         input event int32 triggerIn;
         input event int32 noteOffIn;
         output stream float32 out;
-        output value float32 progressOut;
+        output stream float32 progressOut;
 
         float32[msegPaddedSamples] buffer;
         float32 currentValue = 0.5f;

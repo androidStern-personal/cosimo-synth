@@ -3006,6 +3006,374 @@ test("desktop distortion controls send live parameter updates", async () => {
     }
 });
 
+test("desktop effects rack renders four vertical effect columns with chorus occupying one column", async () => {
+    const page = await openHarnessPage();
+
+    try {
+        await page.waitForSelector('[data-role="effects-rack-card"]');
+
+        const layout = await page.evaluate(() => {
+            const rack = document.querySelector('[data-role="effects-rack-card"]');
+            const chorus = document.querySelector('[data-role="chorus-effect-column"]');
+            const columns = Array.from(document.querySelectorAll('[data-role="effect-rack-column"]'));
+
+            if (!(rack instanceof HTMLElement) || !(chorus instanceof HTMLElement)) {
+                return null;
+            }
+
+            const rackRect = rack.getBoundingClientRect();
+            const chorusRect = chorus.getBoundingClientRect();
+
+            return {
+                columnCount: columns.length,
+                rackWidth: rackRect.width,
+                rackHeight: rackRect.height,
+                chorusWidth: chorusRect.width,
+                chorusHeight: chorusRect.height,
+            };
+        });
+
+        assert.ok(layout, "Expected effects rack and chorus column to render.");
+        assert.equal(layout.columnCount, 4);
+        assert.ok(layout.chorusWidth / layout.rackWidth >= 0.20, `Chorus column too narrow: ${JSON.stringify(layout)}`);
+        assert.ok(layout.chorusWidth / layout.rackWidth <= 0.30, `Chorus column too wide: ${JSON.stringify(layout)}`);
+        assert.ok(layout.chorusHeight / layout.rackHeight >= 0.90, `Chorus column should be full-height: ${JSON.stringify(layout)}`);
+    } finally {
+        await page.close();
+    }
+});
+
+test("desktop chorus mode buttons do not visually collide in the compact effects column", async () => {
+    const page = await openHarnessPage();
+
+    try {
+        await page.waitForSelector('[data-role="chorus-effect-column"]');
+        await page.evaluate(() => {
+            window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("chorusMotionMode", 2, true);
+            window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("chorusBloomMode", 2, true);
+            window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("chorusRingOffsetMode", 1, true);
+        });
+
+        await page.waitForFunction(() => (
+            document.querySelector('[data-role="chorus-motion-mode-control"]')?.textContent?.trim() === "MotionClassic"
+            && document.querySelector('[data-role="chorus-bloom-mode-control"]')?.textContent?.trim() === "BloomLarge"
+            && document.querySelector('[data-role="chorus-ring-offset-mode-control"]')?.textContent?.trim() === "PitchLow 5th"
+        ));
+
+        const layout = await page.evaluate(() => {
+            const roles = [
+                "chorus-motion-mode-control",
+                "chorus-bloom-mode-control",
+                "chorus-ring-offset-mode-control",
+            ];
+            const buttons = roles.map((role) => document.querySelector(`[data-role="${role}"]`));
+
+            if (!buttons.every((button) => button instanceof HTMLElement)) {
+                return null;
+            }
+
+            const rects = buttons.map((button) => {
+                const rect = button.getBoundingClientRect();
+                const style = window.getComputedStyle(button);
+                return {
+                    role: button.getAttribute("data-role"),
+                    left: rect.left,
+                    right: rect.right,
+                    top: rect.top,
+                    bottom: rect.bottom,
+                    width: rect.width,
+                    scrollWidth: button.scrollWidth,
+                    clientWidth: button.clientWidth,
+                    overflowX: style.overflowX,
+                    text: button.textContent?.trim(),
+                };
+            });
+
+            return {
+                rects,
+                noBoxOverlap: rects.every((rect, index) => index === 0 || rects[index - 1].bottom <= rect.top),
+                clipsInternalOverflow: rects.every((rect) => rect.overflowX === "hidden"),
+                contentFits: rects.every((rect) => rect.scrollWidth <= rect.clientWidth + 1),
+            };
+        });
+
+        assert.ok(layout, "Expected chorus mode buttons to render.");
+        assert.equal(layout.noBoxOverlap, true, `Mode button boxes overlap: ${JSON.stringify(layout.rects)}`);
+        assert.equal(layout.clipsInternalOverflow, true, `Mode button labels can paint outside their boxes: ${JSON.stringify(layout.rects)}`);
+        assert.equal(layout.contentFits, true, `Longest chorus mode labels do not fit their buttons: ${JSON.stringify(layout.rects)}`);
+    } finally {
+        await page.close();
+    }
+});
+
+test("desktop chorus controls send exact parameter updates", async () => {
+    const page = await openHarnessPage();
+
+    try {
+        await page.waitForSelector('[data-role="chorus-effect-column"]');
+        await page.evaluate(() => {
+            window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("chorusEnabled", 0, true);
+            window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("chorusMotionMode", 0, true);
+            window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("chorusBloomMode", 0, true);
+            window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("chorusRingOffsetMode", 0, true);
+        });
+        await clearHarnessDebugLog(page);
+
+        await page.click('[data-role="chorus-enabled-control"]');
+        await dispatchInputValueChange(page.locator('[data-role="chorus-mix-control"]'), "0.660");
+        await page.click('[data-role="chorus-motion-mode-control"]');
+        await page.click('[data-role="chorus-bloom-mode-control"]');
+        await page.click('[data-role="chorus-ring-offset-mode-control"]');
+        await dispatchInputValueChange(page.locator('[data-role="chorus-tone-control"]'), "0.800");
+        await dispatchInputValueChange(page.locator('[data-role="chorus-feedback-control"]'), "0.700");
+        await dispatchInputValueChange(page.locator('[data-role="chorus-ring-amount-control"]'), "0.500");
+        await dispatchInputValueChange(page.locator('[data-role="chorus-ring-fine-control"]'), "-0.750");
+
+        const snapshot = await waitForHarnessSnapshot(
+            page,
+            "chorus parameter updates",
+            (nextSnapshot) => (
+                nextSnapshot.sentMessages.some(({ endpointID, value }) => endpointID === "chorusEnabled" && Number(value) === 1)
+                && nextSnapshot.sentMessages.some(({ endpointID, value }) => endpointID === "chorusMix" && Math.abs(Number(value) - 0.66) <= 1e-6)
+                && nextSnapshot.sentMessages.some(({ endpointID, value }) => endpointID === "chorusMotionMode" && Number(value) === 1)
+                && nextSnapshot.sentMessages.some(({ endpointID, value }) => endpointID === "chorusBloomMode" && Number(value) === 1)
+                && nextSnapshot.sentMessages.some(({ endpointID, value }) => endpointID === "chorusRingOffsetMode" && Number(value) === 1)
+                && nextSnapshot.sentMessages.some(({ endpointID, value }) => endpointID === "chorusTone" && Math.abs(Number(value) - 0.8) <= 1e-6)
+                && nextSnapshot.sentMessages.some(({ endpointID, value }) => endpointID === "chorusFeedback" && Math.abs(Number(value) - 0.7) <= 1e-6)
+                && nextSnapshot.sentMessages.some(({ endpointID, value }) => endpointID === "chorusRingAmount" && Math.abs(Number(value) - 0.5) <= 1e-6)
+                && nextSnapshot.sentMessages.some(({ endpointID, value }) => endpointID === "chorusRingFineSemitones" && Math.abs(Number(value) + 0.75) <= 1e-6)
+            ),
+        );
+
+        assert.equal(snapshot.sentMessages.some(({ endpointID }) => endpointID === "chorusMix"), true);
+    } finally {
+        await page.close();
+    }
+});
+
+test("desktop chorus controls render host values before edits", async () => {
+    const page = await openHarnessPage();
+
+    try {
+        await page.waitForSelector('[data-role="chorus-effect-column"]');
+        await page.evaluate(() => {
+            window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("chorusEnabled", 1, true);
+            window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("chorusMix", 0.375, true);
+            window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("chorusMotionMode", 3, true);
+            window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("chorusBloomMode", 4, true);
+            window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("chorusRingOffsetMode", 2, true);
+            window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("chorusTone", 0.825, true);
+            window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("chorusFeedback", 0.615, true);
+            window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("chorusRingAmount", 0.285, true);
+            window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("chorusRingFineSemitones", 1.25, true);
+        });
+
+        await page.waitForFunction(() => {
+            const readInputValue = (role) => document.querySelector(`[data-role="${role}"]`)?.value ?? "";
+            const readText = (role) => document.querySelector(`[data-role="${role}"]`)?.textContent ?? "";
+
+            return readInputValue("chorus-mix-control") === "0.375"
+                && readInputValue("chorus-tone-control") === "0.825"
+                && readInputValue("chorus-feedback-control") === "0.615"
+                && readInputValue("chorus-ring-amount-control") === "0.285"
+                && readInputValue("chorus-ring-fine-control") === "1.25"
+                && readText("chorus-enabled-control").includes("On")
+                && readText("chorus-motion-mode-control").includes("Fast")
+                && readText("chorus-bloom-mode-control").includes("Lg+Sh")
+                && readText("chorus-ring-offset-mode-control").includes("+Oct");
+        });
+
+        const rendered = await page.evaluate(() => ({
+            mix: document.querySelector('[data-role="chorus-mix-control"]')?.value,
+            tone: document.querySelector('[data-role="chorus-tone-control"]')?.value,
+            feedback: document.querySelector('[data-role="chorus-feedback-control"]')?.value,
+            ring: document.querySelector('[data-role="chorus-ring-amount-control"]')?.value,
+            ringFine: document.querySelector('[data-role="chorus-ring-fine-control"]')?.value,
+            enabledText: document.querySelector('[data-role="chorus-enabled-control"]')?.textContent?.trim(),
+            motionText: document.querySelector('[data-role="chorus-motion-mode-control"]')?.textContent?.trim(),
+            bloomText: document.querySelector('[data-role="chorus-bloom-mode-control"]')?.textContent?.trim(),
+            ringOffsetText: document.querySelector('[data-role="chorus-ring-offset-mode-control"]')?.textContent?.trim(),
+        }));
+
+        assert.deepEqual(rendered, {
+            mix: "0.375",
+            tone: "0.825",
+            feedback: "0.615",
+            ring: "0.285",
+            ringFine: "1.25",
+            enabledText: "On",
+            motionText: "MotionFast",
+            bloomText: "BloomLg+Sh",
+            ringOffsetText: "Pitch+Oct",
+        });
+    } finally {
+        await page.close();
+    }
+});
+
+test("desktop chorus slider closes host gesture on pointer cancellation", async () => {
+    const page = await openHarnessPage();
+
+    try {
+        await page.waitForSelector('[data-role="chorus-mix-control"]');
+        await clearHarnessDebugLog(page);
+
+        await page.locator('[data-role="chorus-mix-control"]').evaluate((element) => {
+            if (!(element instanceof HTMLInputElement)) {
+                throw new Error("Expected chorus mix control to be an input.");
+            }
+
+            element.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, pointerId: 7 }));
+            element.dispatchEvent(new PointerEvent("pointercancel", { bubbles: true, pointerId: 7 }));
+        });
+
+        const snapshot = await waitForHarnessSnapshot(
+            page,
+            "chorus cancelled gesture",
+            (nextSnapshot) => (
+                nextSnapshot.gestureStarts.includes("chorusMix")
+                && nextSnapshot.gestureEnds.includes("chorusMix")
+            ),
+        );
+
+        assert.deepEqual(snapshot.gestureStarts, ["chorusMix"]);
+        assert.deepEqual(snapshot.gestureEnds, ["chorusMix"]);
+    } finally {
+        await page.close();
+    }
+});
+
+test("desktop chorus slider closes host gesture when pointer movement reports no pressed buttons", async () => {
+    const page = await openHarnessPage();
+
+    try {
+        await page.waitForSelector('[data-role="chorus-mix-control"]');
+        await clearHarnessDebugLog(page);
+
+        await page.locator('[data-role="chorus-mix-control"]').evaluate((element) => {
+            if (!(element instanceof HTMLInputElement)) {
+                throw new Error("Expected chorus mix control to be an input.");
+            }
+
+            element.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, buttons: 1, pointerId: 9 }));
+            element.dispatchEvent(new PointerEvent("pointermove", { bubbles: true, buttons: 0, pointerId: 9 }));
+        });
+
+        const snapshot = await waitForHarnessSnapshot(
+            page,
+            "chorus zero-button pointer cleanup",
+            (nextSnapshot) => (
+                nextSnapshot.gestureStarts.includes("chorusMix")
+                && nextSnapshot.gestureEnds.includes("chorusMix")
+            ),
+        );
+
+        assert.deepEqual(snapshot.gestureStarts, ["chorusMix"]);
+        assert.deepEqual(snapshot.gestureEnds, ["chorusMix"]);
+    } finally {
+        await page.close();
+    }
+});
+
+test("desktop chorus slider ignores mouse movement after a completed drag release", async () => {
+    const page = await openHarnessPage();
+
+    try {
+        await page.waitForSelector('[data-role="chorus-mix-control"]');
+        await page.evaluate(() => {
+            window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("chorusMix", 0.2, true);
+        });
+        await clearHarnessDebugLog(page);
+
+        const slider = page.locator('[data-role="chorus-mix-control"]');
+        const box = await slider.boundingBox();
+
+        if (!box) {
+            throw new Error("Expected chorus mix control bounding box.");
+        }
+
+        const centerY = box.y + (box.height * 0.5);
+        await page.mouse.move(box.x + (box.width * 0.2), centerY);
+        await page.mouse.down();
+        await page.mouse.move(box.x + (box.width * 0.8), centerY, { steps: 8 });
+        await page.mouse.up();
+
+        const valueAfterRelease = await slider.inputValue();
+        await clearHarnessDebugLog(page);
+
+        await page.mouse.move(box.x + (box.width * 0.05), centerY, { steps: 10 });
+        await page.mouse.move(box.x + (box.width * 0.95), centerY, { steps: 10 });
+        await page.waitForTimeout(100);
+
+        const valueAfterHover = await slider.inputValue();
+        const snapshot = await getHarnessSnapshot(page);
+
+        assert.equal(valueAfterHover, valueAfterRelease);
+        assert.deepEqual(snapshot.sentMessages.filter(({ endpointID }) => endpointID === "chorusMix"), []);
+        assert.deepEqual(snapshot.gestureStarts, []);
+        assert.deepEqual(snapshot.gestureEnds, []);
+    } finally {
+        await page.close();
+    }
+});
+
+test("desktop chorus cycle buttons wrap through all modes", async () => {
+    const page = await openHarnessPage();
+
+    try {
+        await page.waitForSelector('[data-role="chorus-effect-column"]');
+        await page.evaluate(() => {
+            window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("chorusMotionMode", 0, true);
+            window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("chorusBloomMode", 0, true);
+            window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("chorusRingOffsetMode", 0, true);
+        });
+        await clearHarnessDebugLog(page);
+
+        for (let i = 0; i < 5; i += 1) {
+            await page.click('[data-role="chorus-motion-mode-control"]');
+        }
+
+        for (let i = 0; i < 6; i += 1) {
+            await page.click('[data-role="chorus-bloom-mode-control"]');
+        }
+
+        for (let i = 0; i < 5; i += 1) {
+            await page.click('[data-role="chorus-ring-offset-mode-control"]');
+        }
+
+        const snapshot = await waitForHarnessSnapshot(
+            page,
+            "chorus cycle button updates",
+            (nextSnapshot) => (
+                nextSnapshot.sentMessages.filter(({ endpointID }) => endpointID === "chorusMotionMode").length >= 5
+                && nextSnapshot.sentMessages.filter(({ endpointID }) => endpointID === "chorusBloomMode").length >= 6
+                && nextSnapshot.sentMessages.filter(({ endpointID }) => endpointID === "chorusRingOffsetMode").length >= 5
+            ),
+        );
+
+        assert.deepEqual(
+            snapshot.sentMessages
+                .filter(({ endpointID }) => endpointID === "chorusMotionMode")
+                .map(({ value }) => Number(value)),
+            [1, 2, 3, 0, 1],
+        );
+        assert.deepEqual(
+            snapshot.sentMessages
+                .filter(({ endpointID }) => endpointID === "chorusBloomMode")
+                .map(({ value }) => Number(value)),
+            [1, 2, 3, 4, 0, 1],
+        );
+        assert.deepEqual(
+            snapshot.sentMessages
+                .filter(({ endpointID }) => endpointID === "chorusRingOffsetMode")
+                .map(({ value }) => Number(value)),
+            [1, 2, 3, 0, 1],
+        );
+    } finally {
+        await page.close();
+    }
+});
+
 test("desktop distortion wet low-pass slider renders the full 20 Hz floor", async () => {
     const page = await openHarnessPage();
 

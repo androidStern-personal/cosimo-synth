@@ -1,5 +1,4 @@
 import path from "node:path";
-import fs from "node:fs/promises";
 
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
@@ -16,22 +15,8 @@ import {
 
 const { repoRoot, cmajorApiRoot } = createViteRepoContext(import.meta.url);
 const desktopPatchViewSource = path.join(repoRoot, "ui", "desktop", "patch-view-entry.tsx");
-const desktopStandaloneLoaderSource = path.join(repoRoot, "ui", "desktop", "standalone-loader.js");
-const desktopStandaloneLoaderOutput = path.join(repoRoot, "patch_gui", "desktop", "index.js");
 const reactRefreshPreamble = createReactRefreshPreamble();
 const desktopDevServerStartedAt = new Date().toISOString();
-
-function emitDesktopStandaloneLoader() {
-    return {
-        name: "cosimo-emit-desktop-standalone-loader",
-        apply: "build",
-        async closeBundle() {
-            const loaderSource = await fs.readFile(desktopStandaloneLoaderSource, "utf8");
-            await fs.mkdir(path.dirname(desktopStandaloneLoaderOutput), { recursive: true });
-            await fs.writeFile(desktopStandaloneLoaderOutput, loaderSource, "utf8");
-        },
-    };
-}
 
 export default defineConfig(({ command }) => ({
     appType: "custom",
@@ -89,7 +74,6 @@ ${reactRefreshPreamble}
                 watchMode: "polling",
             }),
         }),
-        emitDesktopStandaloneLoader(),
         serveStaticDirectory("/cmaj_api", cmajorApiRoot),
     ],
     server: {

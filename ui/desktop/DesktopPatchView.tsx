@@ -4,6 +4,7 @@ import {
     useMemo,
     useRef,
     useState,
+    type FormEvent as ReactFormEvent,
     type ReactNode,
     type KeyboardEvent as ReactKeyboardEvent,
     type PointerEvent as ReactPointerEvent,
@@ -110,6 +111,9 @@ const DISTORTION_WET_HP_MIN_HZ = 20;
 const DISTORTION_WET_HP_MAX_HZ = 4_000;
 const DISTORTION_WET_LP_MIN_HZ = 20;
 const DISTORTION_WET_LP_MAX_HZ = 20_000;
+const CHORUS_MOTION_MODE_OPTIONS = ["Subtle", "Wide", "Classic", "Fast"] as const;
+const CHORUS_BLOOM_MODE_OPTIONS = ["Clean", "Small", "Large", "Sm+Sh", "Lg+Sh"] as const;
+const CHORUS_RING_OFFSET_MODE_OPTIONS = ["+5th", "Low 5th", "+Oct", "-Oct"] as const;
 type HeaderProps = {
     statusText: string;
 };
@@ -153,6 +157,21 @@ type DistortionSectionProps = {
     observedDistortionScope: DistortionScopeFrame | null;
     className?: string;
 };
+
+type EffectsRackSectionProps = {
+    chorusEnabled: PatchControlBinding<number>;
+    chorusMix: PatchControlBinding<number>;
+    chorusMotionMode: PatchControlBinding<number>;
+    chorusBloomMode: PatchControlBinding<number>;
+    chorusTone: PatchControlBinding<number>;
+    chorusFeedback: PatchControlBinding<number>;
+    chorusRingAmount: PatchControlBinding<number>;
+    chorusRingOffsetMode: PatchControlBinding<number>;
+    chorusRingFineSemitones: PatchControlBinding<number>;
+    className?: string;
+};
+
+type ChorusEffectColumnProps = Omit<EffectsRackSectionProps, "className">;
 
 type MsegEditorModalProps = {
     isOpen: boolean;
@@ -220,6 +239,12 @@ function formatDriveDb(value: number) {
 
 function formatUnitPercent(value: number) {
     return `${Math.round(clamp(value, 0, 1) * 100)}%`;
+}
+
+function formatSemitoneOffset(value: number) {
+    const semitones = clamp(value, -2, 2);
+    const prefix = semitones > 0 ? "+" : "";
+    return `${prefix}${semitones.toFixed(2)} st`;
 }
 
 function formatPanEditingValue(value: number) {
@@ -1172,6 +1197,42 @@ function DistortionSection({
             data-role="distortion-card"
             className={`flex h-full flex-col overflow-hidden rounded-[14px] bg-[radial-gradient(circle_at_top_left,rgba(248,113,113,0.10),transparent_34%),linear-gradient(180deg,rgba(9,8,15,0.98),rgba(2,4,11,1))] ${className ?? ""}`}
         >
+            <input
+                data-role="distortion-drive-field"
+                type="range"
+                min={0}
+                max={36}
+                step={0.001}
+                value={distortionDriveDb.value}
+                className="sr-only"
+                tabIndex={-1}
+                onInput={(event) => distortionDriveDb.setValue(Number(event.currentTarget.value))}
+                onChange={(event) => distortionDriveDb.setValue(Number(event.currentTarget.value))}
+            />
+            <input
+                data-role="distortion-mix-field"
+                type="range"
+                min={0}
+                max={1}
+                step={0.001}
+                value={distortionWet.value}
+                className="sr-only"
+                tabIndex={-1}
+                onInput={(event) => distortionWet.setValue(Number(event.currentTarget.value))}
+                onChange={(event) => distortionWet.setValue(Number(event.currentTarget.value))}
+            />
+            <input
+                data-role="distortion-wet-lp-field"
+                type="range"
+                min={0}
+                max={1}
+                step={0.001}
+                value={wetLPNormalized}
+                className="sr-only"
+                tabIndex={-1}
+                onInput={(event) => handleWetLPChange(Number(event.currentTarget.value))}
+                onChange={(event) => handleWetLPChange(Number(event.currentTarget.value))}
+            />
             <div className="flex min-h-0 flex-1">
                 {/* Drive slider */}
                 <div
@@ -1234,6 +1295,7 @@ function DistortionSection({
                     <div className="absolute left-3 top-2 flex items-center gap-2">
                         <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-rose-400/40">Dist</span>
                         <button
+                            data-role="distortion-mode-option-1"
                             type="button"
                             className={`rounded px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-[0.08em] transition ${
                                 distortionMode.value === 0
@@ -1322,6 +1384,363 @@ function DistortionSection({
                     <span className="font-mono text-[8px] tracking-[0.04em] text-slate-200/55">{formatUnitPercent(distortionWet.value)}</span>
                 </div>
             </div>
+        </section>
+    );
+}
+
+function ChorusRangeControl({
+    label,
+    binding,
+    dataRole,
+    min = 0,
+    max = 1,
+    step = 0.001,
+    formatValue = formatUnitPercent,
+}: {
+    label: string;
+    binding: PatchControlBinding<number>;
+    dataRole: string;
+    min?: number;
+    max?: number;
+    step?: number;
+    formatValue?: (value: number) => string;
+}) {
+    const value = clamp(Number(binding.value) || 0, min, max);
+    const isGestureActiveRef = useRef(false);
+    const interactionRef = useRef<{
+        pointerId?: number;
+        removeListeners?: () => void;
+        source: "keyboard" | "pointer";
+        target: HTMLInputElement;
+    } | null>(null);
+
+    const endGesture = useCallback((target?: HTMLInputElement, pointerId?: number) => {
+        const interaction = interactionRef.current;
+
+        if (!interaction || !isGestureActiveRef.current) {
+            return;
+        }
+
+        if (
+            pointerId !== undefined
+            && interaction.pointerId !== undefined
+            && pointerId !== interaction.pointerId
+        ) {
+            return;
+        }
+
+        interaction.removeListeners?.();
+
+        if (target && pointerId !== undefined && target.hasPointerCapture(pointerId)) {
+            try {
+                target.releasePointerCapture(pointerId);
+            } catch {
+                // Synthetic pointer events in tests do not always own browser pointer capture.
+            }
+        }
+
+        isGestureActiveRef.current = false;
+        interactionRef.current = null;
+        binding.endGesture();
+    }, [binding]);
+
+    const beginPointerGesture = useCallback((event: ReactPointerEvent<HTMLInputElement>) => {
+        const target = event.currentTarget;
+        const pointerId = event.pointerId;
+
+        endGesture();
+        isGestureActiveRef.current = true;
+        interactionRef.current = {
+            pointerId,
+            source: "pointer",
+            target,
+        };
+        binding.beginGesture();
+
+        const endForPointer = (nextEvent: PointerEvent) => {
+            endGesture(target, nextEvent.pointerId);
+        };
+        const endForMouse = () => {
+            endGesture(target, pointerId);
+        };
+        const endIfButtonsReleased = (nextEvent: PointerEvent | MouseEvent) => {
+            if (nextEvent.buttons === 0) {
+                endGesture(target, pointerId);
+            }
+        };
+
+        window.addEventListener("pointerup", endForPointer, true);
+        window.addEventListener("pointercancel", endForPointer, true);
+        window.addEventListener("pointermove", endIfButtonsReleased, true);
+        window.addEventListener("mouseup", endForMouse, true);
+        window.addEventListener("mousemove", endIfButtonsReleased, true);
+        window.addEventListener("blur", endForMouse);
+
+        if (interactionRef.current) {
+            interactionRef.current.removeListeners = () => {
+                window.removeEventListener("pointerup", endForPointer, true);
+                window.removeEventListener("pointercancel", endForPointer, true);
+                window.removeEventListener("pointermove", endIfButtonsReleased, true);
+                window.removeEventListener("mouseup", endForMouse, true);
+                window.removeEventListener("mousemove", endIfButtonsReleased, true);
+                window.removeEventListener("blur", endForMouse);
+            };
+        }
+    }, [binding, endGesture]);
+
+    const beginKeyboardGesture = useCallback((target: HTMLInputElement) => {
+        if (interactionRef.current) {
+            return;
+        }
+
+        isGestureActiveRef.current = true;
+        interactionRef.current = {
+            source: "keyboard",
+            target,
+        };
+        binding.beginGesture();
+    }, [binding]);
+
+    const handleRangeInput = useCallback((event: ReactFormEvent<HTMLInputElement>) => {
+        binding.setValue(Number(event.currentTarget.value));
+    }, [binding]);
+
+    useEffect(() => () => endGesture(), [endGesture]);
+
+    return (
+        <label className="grid gap-1">
+            <span className="flex items-center justify-between text-[8px] font-bold uppercase tracking-[0.10em] text-slate-300/45">
+                <span>{label}</span>
+                <span className="font-mono text-[8px] font-normal tracking-[0.03em] text-cyan-100/55">{formatValue(value)}</span>
+            </span>
+            <input
+                data-role={dataRole}
+                type="range"
+                min={min}
+                max={max}
+                step={step}
+                value={value}
+                className="h-1.5 w-full cursor-ew-resize accent-cyan-300"
+                onPointerDown={beginPointerGesture}
+                onPointerMove={(event) => {
+                    if (interactionRef.current?.source === "pointer" && event.buttons === 0) {
+                        endGesture(event.currentTarget, event.pointerId);
+                    }
+                }}
+                onPointerUp={(event) => endGesture(event.currentTarget, event.pointerId)}
+                onPointerCancel={(event) => endGesture(event.currentTarget, event.pointerId)}
+                onLostPointerCapture={(event) => endGesture(event.currentTarget, event.pointerId)}
+                onMouseMove={(event) => {
+                    if (interactionRef.current?.source === "pointer" && event.buttons === 0) {
+                        endGesture(event.currentTarget);
+                    }
+                }}
+                onMouseUp={(event) => endGesture(event.currentTarget)}
+                onKeyDown={(event) => {
+                    if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End", "PageUp", "PageDown"].includes(event.key)) {
+                        beginKeyboardGesture(event.currentTarget);
+                    }
+                }}
+                onKeyUp={(event) => {
+                    if (interactionRef.current?.source === "keyboard") {
+                        endGesture(event.currentTarget);
+                    }
+                }}
+                onBlur={() => endGesture()}
+                onInput={handleRangeInput}
+                onChange={handleRangeInput}
+            />
+        </label>
+    );
+}
+
+function ChorusModeIcon({ kind }: { kind: "motion" | "bloom" | "pitch" }) {
+    if (kind === "motion") {
+        return (
+            <svg viewBox="0 0 24 24" aria-hidden="true" className="size-[15px] fill-none stroke-current stroke-[1.8]">
+                <path d="M3.5 13.5 C6 7.5, 9 7.5, 11.5 13.5 S17 19.5, 20.5 13.5" strokeLinecap="round" />
+                <path d="M3.5 10.5 C6 16.5, 9 16.5, 11.5 10.5 S17 4.5, 20.5 10.5" strokeLinecap="round" opacity="0.45" />
+            </svg>
+        );
+    }
+
+    if (kind === "bloom") {
+        return (
+            <svg viewBox="0 0 24 24" aria-hidden="true" className="size-[15px] fill-none stroke-current stroke-[1.7]">
+                <circle cx="12" cy="12" r="3.1" />
+                <path d="M12 3.5 V6.2 M12 17.8 V20.5 M3.5 12 H6.2 M17.8 12 H20.5" strokeLinecap="round" />
+                <path d="M5.7 5.7 L7.6 7.6 M16.4 16.4 L18.3 18.3 M18.3 5.7 L16.4 7.6 M7.6 16.4 L5.7 18.3" strokeLinecap="round" opacity="0.55" />
+            </svg>
+        );
+    }
+
+    return (
+        <svg viewBox="0 0 24 24" aria-hidden="true" className="size-[15px] fill-none stroke-current stroke-[1.7]">
+            <path d="M6.5 17.5 V6.5 H9.5 L15.5 17.5 H18.5 V6.5" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M8 12 H16" strokeLinecap="round" opacity="0.5" />
+        </svg>
+    );
+}
+
+function ChorusModeButton({
+    label,
+    value,
+    icon,
+    dataRole,
+    onClick,
+}: {
+    label: string;
+    value: string;
+    icon: "motion" | "bloom" | "pitch";
+    dataRole: string;
+    onClick: () => void;
+}) {
+    return (
+        <button
+            data-role={dataRole}
+            type="button"
+            aria-label={`${label}: ${value}. Click to cycle.`}
+            title={`${label}: ${value}`}
+            className="group relative flex h-[21px] min-w-0 items-center gap-1.5 overflow-hidden rounded-[8px] border border-cyan-200/[0.10] bg-[linear-gradient(180deg,rgba(16,27,43,0.82),rgba(3,7,17,0.96))] px-1.5 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.075),0_8px_16px_rgba(0,0,0,0.12)] transition duration-200 hover:-translate-y-px hover:border-cyan-200/25 hover:bg-cyan-200/[0.055] active:translate-y-0 active:scale-[0.99]"
+            onClick={onClick}
+        >
+            <span className="pointer-events-none absolute inset-x-2 top-0 h-px bg-gradient-to-r from-transparent via-cyan-200/35 to-transparent opacity-70" />
+            <span className="grid size-[16px] shrink-0 place-items-center rounded-[6px] border border-white/[0.06] bg-white/[0.035] text-cyan-100/65 transition group-hover:text-cyan-100/90">
+                <ChorusModeIcon kind={icon} />
+            </span>
+            <span className="shrink-0 text-[7px] font-black uppercase leading-none tracking-[0.11em] text-slate-300/45">
+                {label}
+            </span>
+            <span className="ml-auto shrink-0 whitespace-nowrap font-mono text-[8px] font-black uppercase leading-none tracking-[0.035em] text-cyan-50/82 transition group-hover:text-cyan-50">
+                {value}
+            </span>
+        </button>
+    );
+}
+
+function ChorusEffectColumn({
+    chorusEnabled,
+    chorusMix,
+    chorusMotionMode,
+    chorusBloomMode,
+    chorusTone,
+    chorusFeedback,
+    chorusRingAmount,
+    chorusRingOffsetMode,
+    chorusRingFineSemitones,
+}: ChorusEffectColumnProps) {
+    const motionIndex = clamp(Math.round(Number(chorusMotionMode.value) || 0), 0, CHORUS_MOTION_MODE_OPTIONS.length - 1);
+    const bloomIndex = clamp(Math.round(Number(chorusBloomMode.value) || 0), 0, CHORUS_BLOOM_MODE_OPTIONS.length - 1);
+    const ringOffsetIndex = clamp(Math.round(Number(chorusRingOffsetMode.value) || 0), 0, CHORUS_RING_OFFSET_MODE_OPTIONS.length - 1);
+    const enabled = Math.round(Number(chorusEnabled.value) || 0) === 1;
+
+    return (
+        <section
+            data-role="chorus-effect-column"
+            className="flex h-full min-w-0 flex-col gap-2 rounded-[12px] border border-cyan-300/[0.08] bg-[radial-gradient(circle_at_top_left,rgba(103,232,249,0.13),transparent_38%),linear-gradient(180deg,rgba(6,12,24,0.95),rgba(2,5,12,0.98))] p-3"
+        >
+            <div className="flex items-center justify-between gap-2">
+                <span className="text-[10px] font-black uppercase tracking-[0.18em] text-cyan-100/75">Chorus</span>
+                <button
+                    data-role="chorus-enabled-control"
+                    type="button"
+                    className={`rounded-[7px] border px-2 py-1 text-[8px] font-bold uppercase tracking-[0.12em] transition ${
+                        enabled
+                            ? "border-cyan-300/25 bg-cyan-300/15 text-cyan-50"
+                            : "border-white/[0.07] bg-white/[0.025] text-slate-400/70"
+                    }`}
+                    onClick={() => chorusEnabled.commitValue(enabled ? 0 : 1)}
+                >
+                    {enabled ? "On" : "Off"}
+                </button>
+            </div>
+
+            <div className="grid gap-2">
+                <ChorusRangeControl label="Mix" binding={chorusMix} dataRole="chorus-mix-control" />
+                <div className="grid min-w-0 gap-1">
+                    <ChorusModeButton
+                        label="Motion"
+                        value={CHORUS_MOTION_MODE_OPTIONS[motionIndex]}
+                        icon="motion"
+                        dataRole="chorus-motion-mode-control"
+                        onClick={() => chorusMotionMode.commitValue((motionIndex + 1) % CHORUS_MOTION_MODE_OPTIONS.length)}
+                    />
+                    <ChorusModeButton
+                        label="Bloom"
+                        value={CHORUS_BLOOM_MODE_OPTIONS[bloomIndex]}
+                        icon="bloom"
+                        dataRole="chorus-bloom-mode-control"
+                        onClick={() => chorusBloomMode.commitValue((bloomIndex + 1) % CHORUS_BLOOM_MODE_OPTIONS.length)}
+                    />
+                    <ChorusModeButton
+                        label="Pitch"
+                        value={CHORUS_RING_OFFSET_MODE_OPTIONS[ringOffsetIndex]}
+                        icon="pitch"
+                        dataRole="chorus-ring-offset-mode-control"
+                        onClick={() => chorusRingOffsetMode.commitValue((ringOffsetIndex + 1) % CHORUS_RING_OFFSET_MODE_OPTIONS.length)}
+                    />
+                </div>
+                <ChorusRangeControl label="Tone" binding={chorusTone} dataRole="chorus-tone-control" />
+                <ChorusRangeControl label="Fdbk" binding={chorusFeedback} dataRole="chorus-feedback-control" />
+                <ChorusRangeControl label="Ring" binding={chorusRingAmount} dataRole="chorus-ring-amount-control" />
+                <ChorusRangeControl
+                    label="Fine"
+                    binding={chorusRingFineSemitones}
+                    dataRole="chorus-ring-fine-control"
+                    min={-2}
+                    max={2}
+                    step={0.001}
+                    formatValue={formatSemitoneOffset}
+                />
+            </div>
+        </section>
+    );
+}
+
+function ReservedEffectColumn({ label }: { label: string }) {
+    return (
+        <div
+            data-role="effect-rack-column"
+            className="flex h-full min-w-0 items-center justify-center rounded-[12px] border border-dashed border-white/[0.06] bg-white/[0.012] text-[9px] font-bold uppercase tracking-[0.16em] text-slate-500/35"
+        >
+            {label}
+        </div>
+    );
+}
+
+function EffectsRackSection({
+    chorusEnabled,
+    chorusMix,
+    chorusMotionMode,
+    chorusBloomMode,
+    chorusTone,
+    chorusFeedback,
+    chorusRingAmount,
+    chorusRingOffsetMode,
+    chorusRingFineSemitones,
+    className,
+}: EffectsRackSectionProps) {
+    return (
+        <section
+            data-role="effects-rack-card"
+            className={`grid h-full grid-cols-4 gap-2 rounded-[14px] border border-white/[0.04] bg-[linear-gradient(135deg,rgba(8,16,30,0.96),rgba(4,6,14,1))] p-2 ${className ?? ""}`}
+        >
+            <div data-role="effect-rack-column" className="min-h-0 min-w-0">
+                <ChorusEffectColumn
+                    chorusEnabled={chorusEnabled}
+                    chorusMix={chorusMix}
+                    chorusMotionMode={chorusMotionMode}
+                    chorusBloomMode={chorusBloomMode}
+                    chorusTone={chorusTone}
+                    chorusFeedback={chorusFeedback}
+                    chorusRingAmount={chorusRingAmount}
+                    chorusRingOffsetMode={chorusRingOffsetMode}
+                    chorusRingFineSemitones={chorusRingFineSemitones}
+                />
+            </div>
+            <ReservedEffectColumn label="FX 2" />
+            <ReservedEffectColumn label="FX 3" />
+            <ReservedEffectColumn label="FX 4" />
         </section>
     );
 }
@@ -1681,7 +2100,7 @@ function ModulationMatrixSection({
                     <div className={`absolute inset-0 flex items-center justify-end gap-2 ${activeEditorTab.kind === "mseg" ? "visible" : "invisible"}`}>
                         <button
                             type="button"
-                            aria-label={msegState?.playback.loop ? "Disable loop" : "Enable loop"}
+                            aria-label={msegState?.playback.loop ? "Looping" : "One Shot"}
                             className={`grid size-[22px] shrink-0 place-items-center rounded-[6px] border p-0 transition max-[480px]:size-7 ${
                                 msegState?.playback.loop
                                     ? "border-cyan-300/20 bg-cyan-300/10"
@@ -1690,6 +2109,7 @@ function ModulationMatrixSection({
                             onClick={onToggleMsegLoop}
                             tabIndex={activeEditorTab.kind === "mseg" ? 0 : -1}
                         >
+                            <span className="sr-only">{msegState?.playback.loop ? "Looping" : "One Shot"}</span>
                             <svg
                                 viewBox="0 0 16 16"
                                 className={`size-3 fill-none stroke-[1.5] stroke-current max-[480px]:size-3.5 ${
@@ -1755,7 +2175,16 @@ function ModulationMatrixSection({
                                 event.currentTarget.releasePointerCapture(event.pointerId);
                             }}
                             onChange={(event) => {
-                                if (isEditingMsegRate) setDraftMsegRate(event.currentTarget.value);
+                                if (isEditingMsegRate) {
+                                    setDraftMsegRate(event.currentTarget.value);
+                                } else {
+                                    commitMsegRateText(event.currentTarget.value);
+                                }
+                            }}
+                            onInput={(event) => {
+                                if (!isEditingMsegRate) {
+                                    commitMsegRateText(event.currentTarget.value);
+                                }
                             }}
                             onKeyDown={(event) => {
                                 if (!isEditingMsegRate) {
@@ -1775,17 +2204,18 @@ function ModulationMatrixSection({
                     {/* Envelope ADSR controls */}
                     <div className={`absolute inset-0 flex items-center justify-end gap-1.5 ${activeEditorTab.kind === "envelope" && selectedEnvelope ? "visible" : "invisible"}`}>
                         {selectedEnvelope ? ([
-                            { label: "A", field: "attackSeconds" as const, draft: draftAttack, setDraft: setDraftAttack, current: selectedEnvelope.attackSeconds },
-                            { label: "D", field: "decaySeconds" as const, draft: draftDecay, setDraft: setDraftDecay, current: selectedEnvelope.decaySeconds },
-                            { label: "S", field: null, draft: draftSustain, setDraft: setDraftSustain, current: selectedEnvelope.sustain },
-                            { label: "R", field: "releaseSeconds" as const, draft: draftRelease, setDraft: setDraftRelease, current: selectedEnvelope.releaseSeconds },
+                            { label: "A", ariaLabel: "Envelope attack value", field: "attackSeconds" as const, draft: draftAttack, setDraft: setDraftAttack, current: selectedEnvelope.attackSeconds },
+                            { label: "D", ariaLabel: "Envelope decay value", field: "decaySeconds" as const, draft: draftDecay, setDraft: setDraftDecay, current: selectedEnvelope.decaySeconds },
+                            { label: "S", ariaLabel: "Envelope sustain value", field: null, draft: draftSustain, setDraft: setDraftSustain, current: selectedEnvelope.sustain },
+                            { label: "R", ariaLabel: "Envelope release value", field: "releaseSeconds" as const, draft: draftRelease, setDraft: setDraftRelease, current: selectedEnvelope.releaseSeconds },
                         ] as const).map((param) => (
                             <label key={param.label} className="flex items-center gap-[3px]">
                                 <span className="text-[9px] font-semibold uppercase text-slate-400/60">{param.label}</span>
                                 <input
+                                    aria-label={param.ariaLabel}
                                     type="text"
                                     inputMode="decimal"
-                                    className="w-[38px] rounded border border-white/[0.06] bg-white/[0.03] px-1 py-[2px] text-center font-mono text-[9px] leading-none text-slate-200/80 outline-none focus:border-emerald-300/30 max-[480px]:w-[44px] max-[480px]:text-[10px]"
+                                    className="w-[38px] rounded border border-white/[0.06] bg-white/[0.03] px-1 py-[2px] text-left font-mono text-[9px] leading-none text-slate-200/80 outline-none focus:border-emerald-300/30 max-[480px]:w-[44px] max-[480px]:text-[10px]"
                                     value={param.draft}
                                     onChange={(e) => param.setDraft(e.target.value)}
                                     onBlur={() => {
@@ -2010,7 +2440,18 @@ function DesktopPatchViewBody() {
                         observedDistortionScope={synthView.observedDistortionScope}
                         className={DESKTOP_GRID_CARD_CLASS}
                     />
-                    <div className={`rounded-[14px] border border-white/[0.04] bg-white/[0.015] ${DESKTOP_GRID_CARD_CLASS}`} />
+                    <EffectsRackSection
+                        chorusEnabled={synthView.chorusEnabled}
+                        chorusMix={synthView.chorusMix}
+                        chorusMotionMode={synthView.chorusMotionMode}
+                        chorusBloomMode={synthView.chorusBloomMode}
+                        chorusTone={synthView.chorusTone}
+                        chorusFeedback={synthView.chorusFeedback}
+                        chorusRingAmount={synthView.chorusRingAmount}
+                        chorusRingOffsetMode={synthView.chorusRingOffsetMode}
+                        chorusRingFineSemitones={synthView.chorusRingFineSemitones}
+                        className={DESKTOP_GRID_CARD_CLASS}
+                    />
                 </section>
 
                 {synthView.failureDetail ? (

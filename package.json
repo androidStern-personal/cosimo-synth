@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "ui:desktop:dev": "vite --config ui/vite.desktop.config.mjs",
-    "ui:desktop:build": "vite build --config ui/vite.desktop.config.mjs",
+    "ui:desktop:build": "node ui/build.mjs --desktop",
     "desktop:native:build": "./scripts/build_desktop_native.sh",
     "desktop:native:dev": "./scripts/run_desktop_native_dev.sh",
     "chorus:play": "cmaj play fx/chorus_lab/ChorusLab.cmajorpatch",

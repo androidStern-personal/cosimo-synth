@@ -162,6 +162,60 @@ function msegBufferEvent(buffer) {
     ];
 }
 
+function modulationEnableEvent() {
+    return [
+        {
+            frameOffset: 0,
+            event: 1,
+        },
+    ];
+}
+
+function modulationMsegBufferEvent(slot, buffer) {
+    if (!Array.isArray(buffer) || buffer.length !== msegPaddedSamples) {
+        throw new Error(`MSEG buffers must have exactly ${msegPaddedSamples} samples.`);
+    }
+
+    return [
+        {
+            frameOffset: 0,
+            event: {
+                slot,
+                buffer,
+            },
+        },
+    ];
+}
+
+function modulationMsegPlaybackEvent(slot, playback) {
+    return [
+        {
+            frameOffset: 0,
+            event: {
+                slot,
+                ...playback[0].event,
+            },
+        },
+    ];
+}
+
+function modulationWarpAmountRouteEvent(amount) {
+    return [
+        {
+            frameOffset: 0,
+            event: {
+                routeIndex: 0,
+                enabled: true,
+                sourceKind: 1,
+                sourceSlot: 1,
+                polarityKind: 0,
+                targetKind: 2,
+                amount: Math.fround(amount),
+            },
+        },
+    ];
+}
+
 async function writeFixture(name, spec) {
     const dir = path.join(fixtureRoot, name);
     await mkdir(dir, { recursive: true });
@@ -207,6 +261,20 @@ async function writeFixture(name, spec) {
 
     if (spec.mseg1Playback) {
         await writeJson(path.join(dir, "mseg1Playback.json"), spec.mseg1Playback);
+    }
+
+    const warpMsegDepth = spec.warpMsegDepth?.[0]?.value ?? 0;
+    if (spec.mseg1Buffer && spec.mseg1Playback && warpMsegDepth !== 0) {
+        await writeJson(path.join(dir, "modulationEnable.json"), modulationEnableEvent());
+        await writeJson(
+            path.join(dir, "modulationMsegBuffer.json"),
+            modulationMsegBufferEvent(1, spec.mseg1Buffer[0].event),
+        );
+        await writeJson(
+            path.join(dir, "modulationMsegPlayback.json"),
+            modulationMsegPlaybackEvent(1, spec.mseg1Playback),
+        );
+        await writeJson(path.join(dir, "modulationRoute.json"), modulationWarpAmountRouteEvent(warpMsegDepth));
     }
 }
 

@@ -1,0 +1,16 @@
+[
+  {
+    "frameOffset": 0,
+    "event": {
+      "slot": 1,
+      "seconds": 0.03999999910593033,
+      "holdFinalValue": true,
+      "rateKind": 0,
+      "loopEnabled": false,
+      "loopStart": 0,
+      "loopEnd": 1,
+      "noteOffPolicy": 0,
+      "legatoRestarts": false
+    }
+  }
+]

@@ -17,6 +17,15 @@ const distortionKneeEndpointID = "distortionKnee";
 const distortionWetEndpointID = "distortionWet";
 const distortionWetHPHzEndpointID = "distortionWetHPHz";
 const distortionWetLPHzEndpointID = "distortionWetLPHz";
+const chorusEnabledEndpointID = "chorusEnabled";
+const chorusMixEndpointID = "chorusMix";
+const chorusMotionModeEndpointID = "chorusMotionMode";
+const chorusBloomModeEndpointID = "chorusBloomMode";
+const chorusToneEndpointID = "chorusTone";
+const chorusFeedbackEndpointID = "chorusFeedback";
+const chorusRingAmountEndpointID = "chorusRingAmount";
+const chorusRingOffsetModeEndpointID = "chorusRingOffsetMode";
+const chorusRingFineSemitonesEndpointID = "chorusRingFineSemitones";
 const runtimeSyncRequestEndpointID = "runtimeSyncRequest";
 const runtimeStateEndpointID = "runtimeState";
 const effectiveWavetablePositionEndpointID = "effectiveWavetablePosition";
@@ -354,6 +363,96 @@ function buildHarnessStatus(manifest: unknown) {
                         init: 18000,
                     },
                 },
+                {
+                    endpointID: chorusEnabledEndpointID,
+                    purpose: "parameter",
+                    annotation: {
+                        name: "Chorus On",
+                        min: 0,
+                        max: 1,
+                        init: 0,
+                    },
+                },
+                {
+                    endpointID: chorusMixEndpointID,
+                    purpose: "parameter",
+                    annotation: {
+                        name: "Chorus Mix",
+                        min: 0,
+                        max: 1,
+                        init: 0,
+                    },
+                },
+                {
+                    endpointID: chorusMotionModeEndpointID,
+                    purpose: "parameter",
+                    annotation: {
+                        name: "Chorus Motion",
+                        min: 0,
+                        max: 3,
+                        init: 1,
+                    },
+                },
+                {
+                    endpointID: chorusBloomModeEndpointID,
+                    purpose: "parameter",
+                    annotation: {
+                        name: "Chorus Bloom",
+                        min: 0,
+                        max: 4,
+                        init: 0,
+                    },
+                },
+                {
+                    endpointID: chorusToneEndpointID,
+                    purpose: "parameter",
+                    annotation: {
+                        name: "Chorus Tone",
+                        min: 0,
+                        max: 1,
+                        init: 0.5,
+                    },
+                },
+                {
+                    endpointID: chorusFeedbackEndpointID,
+                    purpose: "parameter",
+                    annotation: {
+                        name: "Chorus Feedback",
+                        min: 0,
+                        max: 0.95,
+                        init: 0.42,
+                    },
+                },
+                {
+                    endpointID: chorusRingAmountEndpointID,
+                    purpose: "parameter",
+                    annotation: {
+                        name: "Chorus Ring",
+                        min: 0,
+                        max: 1,
+                        init: 0,
+                    },
+                },
+                {
+                    endpointID: chorusRingOffsetModeEndpointID,
+                    purpose: "parameter",
+                    annotation: {
+                        name: "Chorus Ring Pitch",
+                        min: 0,
+                        max: 3,
+                        init: 0,
+                    },
+                },
+                {
+                    endpointID: chorusRingFineSemitonesEndpointID,
+                    purpose: "parameter",
+                    annotation: {
+                        name: "Chorus Ring Fine",
+                        min: -2,
+                        max: 2,
+                        init: 0,
+                    },
+                },
             ],
         },
     };
@@ -390,6 +489,15 @@ export class MockPatchConnection implements PatchConnectionLike {
         [distortionWetEndpointID, 0],
         [distortionWetHPHzEndpointID, 40],
         [distortionWetLPHzEndpointID, 18_000],
+        [chorusEnabledEndpointID, 0],
+        [chorusMixEndpointID, 0],
+        [chorusMotionModeEndpointID, 1],
+        [chorusBloomModeEndpointID, 0],
+        [chorusToneEndpointID, 0.5],
+        [chorusFeedbackEndpointID, 0.42],
+        [chorusRingAmountEndpointID, 0],
+        [chorusRingOffsetModeEndpointID, 0],
+        [chorusRingFineSemitonesEndpointID, 0],
     ]);
     private parameterListeners = new Map<string, Set<ParameterListener>>();
     private endpointListeners = new Map<string, Set<EndpointListener>>();

@@ -35,6 +35,20 @@ PY
 
 desktop_dev_server_host="$(parse_origin_field host)"
 desktop_dev_server_port="$(parse_origin_field port)"
+desktop_dev_server_pid=""
+script_succeeded=0
+
+cleanup_started_server_on_failure() {
+  if [[ "$script_succeeded" -eq 1 ]]; then
+    return
+  fi
+
+  if [[ -n "$desktop_dev_server_pid" ]]; then
+    kill_listener_pid "$desktop_dev_server_pid"
+  fi
+}
+
+trap cleanup_started_server_on_failure EXIT
 
 read_status_field() {
   local payload="$1"
@@ -184,3 +198,4 @@ open -na "$app_path"
 printf 'Started desktop Vite dev server at %s (pid %s)\n' "$desktop_dev_server_origin" "$desktop_dev_server_pid"
 printf 'Log: %s\n' "$log_file"
 printf 'Launched %s\n' "$app_path"
+script_succeeded=1

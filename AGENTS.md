@@ -62,6 +62,7 @@
 - The desktop native wrapper lives in `tools/desktop_native`.
 - The canonical compiled desktop build command is `npm run desktop:native:build`.
 - The canonical desktop HMR launcher command is `npm run desktop:native:dev`.
+- If a task changes the desktop UI, the final delivery must include a running standalone dev app unless the user explicitly says not to launch it. Run `npm run desktop:native:dev` after the changes, confirm it starts `http://127.0.0.1:5174`, and confirm it launches `build/desktop_native/CosimoDesktopNative_artefacts/Release/Standalone/CosimoDesktopNative.app`.
 - During desktop UI development, do not claim the standalone app is verified or ready for review unless `npm run desktop:native:dev` started a fresh Vite dev server for this repo, the wrapper was rebuilt against that dev server, and the standalone app was relaunched from that dev session.
 - During desktop UI development, do not deliver the compiled standalone build as if it were the active development app. If the app is not running against the dev server with HMR, say that explicitly.
 - Both commands call `./scripts/build_desktop_native.sh`, which writes to `build/desktop_native`.
@@ -71,3 +72,7 @@
 - `build_assets.py` only regenerates the derived wavetable runtime catalog `assets/factory-bank-catalog.json` from `assets/factory-table-catalog.json`. It must not rewrite either patch manifest.
 - React Grab for the standalone HMR path lives in `ui/desktop/patch-view-entry.tsx`. In Vite dev mode it must import `react-grab` and `@react-grab/mcp/client`. The Codex MCP config should use `npx -y @react-grab/mcp --stdio`; do not wire the deprecated `@react-grab/codex` package into this repo.
 - The standalone app only gets React Grab when it is running in `dev-server` mode against Vite. The compiled desktop bundle must not load React Grab.
+
+## Desktop Plugin Keyboard Focus
+
+- In Ableton, Cmajor's `WKWebView` can steal QWERTY Musical Typing input. The working pattern from `ChorusLabFocusProbe` is: deny WebView keyboard focus by default, allow it only during deliberate text entry, never call `resignFirstResponder` on the `WKWebView`, and forward `keyDown:`, `keyUp:`, and `flagsChanged:` to the next native responder when text entry is not active.

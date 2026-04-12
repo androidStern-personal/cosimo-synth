@@ -216,7 +216,7 @@ namespace wt
         float32[distortionScopeSampleCount] inputHistoryRight;
         float32[distortionScopeSampleCount] outputHistoryLeft;
         float32[distortionScopeSampleCount] outputHistoryRight;
-        int32 historyWriteIndex = 0;
+        wrap<distortionScopeSampleCount> historyWriteIndex = 0;
         int32 warmupFrames = 0;
         int32 framesUntilEmit = hopSize;
 
@@ -232,15 +232,15 @@ namespace wt
             outputHistoryLeft[historyWriteIndex] = outputLeft;
             outputHistoryRight[historyWriteIndex] = outputRight;
 
-            historyWriteIndex = (historyWriteIndex + 1) % distortionScopeSampleCount;
+            historyWriteIndex += 1;
 
             if (warmupFrames < distortionScopeSampleCount)
                 warmupFrames += 1;
         }
 
-        float32 readHistorySample (float32[distortionScopeSampleCount] buffer, int32 offset)
+        float32 readHistorySample (float32[distortionScopeSampleCount] buffer, wrap<distortionScopeSampleCount> offset)
         {
-            return buffer[(historyWriteIndex + offset) % distortionScopeSampleCount];
+            return buffer[historyWriteIndex + offset];
         }
 
         float32 findPeak (float32[distortionScopeSampleCount] buffer)
@@ -297,7 +297,7 @@ namespace wt
 
                     for (wrap<distortionScopeSampleCount> index)
                     {
-                        let offset = int32 (index);
+                        let offset = index;
                         let inputSample = useRightChannel
                             ? readHistorySample (inputHistoryRight, offset)
                             : readHistorySample (inputHistoryLeft, offset);
@@ -345,7 +345,7 @@ namespace wt
         float32[distortionHistoryBinCount] inputMaxBins;
         float32[distortionHistoryBinCount] outputMinBins;
         float32[distortionHistoryBinCount] outputMaxBins;
-        int32 binWriteIndex = 0;
+        wrap<distortionHistoryBinCount> binWriteIndex = 0;
         int32 validBinCount = 0;
         int32 framesInCurrentBin = 0;
         int32 framesUntilEmit = emitHopFrames;
@@ -375,7 +375,7 @@ namespace wt
             outputMinBins[binWriteIndex] = currentOutputMin;
             outputMaxBins[binWriteIndex] = currentOutputMax;
 
-            binWriteIndex = (binWriteIndex + 1) % distortionHistoryBinCount;
+            binWriteIndex += 1;
 
             if (validBinCount < distortionHistoryBinCount)
                 validBinCount += 1;
@@ -417,12 +417,12 @@ namespace wt
                 commitCurrentBin();
         }
 
-        int32 getReadIndex (int32 offset)
+        wrap<distortionHistoryBinCount> getReadIndex (int32 offset)
         {
             if (validBinCount < distortionHistoryBinCount)
-                return offset;
+                return wrap<distortionHistoryBinCount> (offset);
 
-            return (binWriteIndex + offset) % distortionHistoryBinCount;
+            return binWriteIndex + wrap<distortionHistoryBinCount> (offset);
         }
 
         void emitHistoryFrame()

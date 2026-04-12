@@ -25,7 +25,6 @@ VALUE_ENDPOINT_IDS = (
     "wavetableSelect",
     "playMode",
     "glideTime",
-    "mseg1Depth",
     "warpMsegDepth",
     "warpMode",
     "warpAmount",
@@ -48,7 +47,6 @@ ALIAS_STRESS_FIXTURES = (
 REQUIRED_ALIAS_FIXTURE_FILES = (
     ALIAS_REFERENCE_FILENAME,
     "midiIn.json",
-    "mseg1Depth.json",
     "warpAmount.json",
     "warpMode.json",
     "wavetableLoadBegin.json",

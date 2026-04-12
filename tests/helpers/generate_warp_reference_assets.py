@@ -27,14 +27,14 @@ PRODUCTION_OVERSAMPLE_FACTOR = 8
 PRODUCTION_DECIMATOR_TAP_COUNT = 257
 PRODUCTION_DECIMATOR_CUTOFF_NYQUIST = 0.125
 TRIM_GAIN = 0.18
+CENTER_PAN_GAIN = np.float32(2.0 ** -0.5)
+MODULATION_SOURCE_MSEG = 1
+MODULATION_TARGET_WARP_AMOUNT = 2
 ATTACK_SECONDS = 0.01
 RELEASE_SECONDS = 0.20
 ALIAS_REFERENCE_FILENAME = "expectedAliasReference-audioOut.wav"
 REQUIRED_WARP_INPUT_FILES = (
     "midiIn.json",
-    "mseg1Depth.json",
-    "warpAmount.json",
-    "warpMode.json",
     "wavetableLoadBegin.json",
     "wavetableMipFrame.json",
     "wavetablePosition.json",
@@ -815,13 +815,27 @@ def _expand_fixture_curves(fixture_dir: Path, *, num_samples: int) -> tuple[np.n
         events=_read_value_events(fixture_dir / "warpAmount.json"),
         scale=1,
     )
-    warp_mseg_depth = _expand_value_curve(
-        num_samples=num_samples,
-        default=0.0,
-        events=_read_value_events(fixture_dir / "warpMsegDepth.json"),
-        scale=1,
-    )
+    warp_mseg_depth = np.full(num_samples, _read_warp_mseg_depth(fixture_dir), dtype=np.float64)
     return wavetable_position, mseg1_depth, warp_mode_curve, warp_amount_curve, warp_mseg_depth
+
+
+def _read_warp_mseg_depth(fixture_dir: Path) -> float:
+    route_path = fixture_dir / "modulationRoute.json"
+    if route_path.exists():
+        for entry in _read_json(route_path):
+            event = entry.get("event", {})
+            if (
+                bool(event.get("enabled", False))
+                and int(event.get("sourceKind", 0)) == MODULATION_SOURCE_MSEG
+                and int(event.get("sourceSlot", 0)) == 1
+                and int(event.get("targetKind", 0)) == MODULATION_TARGET_WARP_AMOUNT
+            ):
+                return float(event.get("amount", 0.0))
+
+    events = _read_value_events(fixture_dir / "warpMsegDepth.json")
+    if not events:
+        return 0.0
+    return float(events[-1].get("value", 0.0))
 
 
 def _note_off_offsets_for_segment(segment: NoteSegment, *, num_samples: int) -> tuple[int, ...]:
@@ -912,7 +926,7 @@ def _render_alias_voice_segment(
     else:
         audio = audio[:num_samples]
 
-    return np.asarray(audio * gain_curve * TRIM_GAIN, dtype=np.float64)
+    return np.asarray(audio * gain_curve * TRIM_GAIN * CENTER_PAN_GAIN, dtype=np.float64)
 
 
 def _render_production_voice_segment(
@@ -1028,7 +1042,7 @@ def _render_production_voice_segment(
             if not _is_identity_warp(warp_mode, effective_warp_amount):
                 sample = np.float32(read_history())
 
-        audio[sample_index] = np.float32(sample * gain * np.float32(TRIM_GAIN))
+        audio[sample_index] = np.float32(sample * gain * np.float32(TRIM_GAIN) * CENTER_PAN_GAIN)
         phase = np.float32(np.mod(np.float32(phase + current_phase_increment), np.float32(1.0)))
 
     return audio

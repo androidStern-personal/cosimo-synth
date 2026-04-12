@@ -361,138 +361,149 @@ export function DistortionVisualizer({
 
     if (compact) {
         return (
-            <svg
-                data-role="distortion-visualizer"
-                viewBox={`0 0 ${COMPACT_VIEWBOX_WIDTH} ${COMPACT_VIEWBOX_HEIGHT}`}
-                className={joinClasses("block h-full w-full", className)}
-                aria-label="Distortion visualization"
-            >
-                <defs>
-                    <linearGradient id="distortionRemovedFill" x1="0" x2="0" y1="0" y2="1">
-                        <stop offset="0%" stopColor="rgba(251,113,133,0.42)" />
-                        <stop offset="100%" stopColor="rgba(239,68,68,0.04)" />
-                    </linearGradient>
-                    <filter id="distortionTransferOccupancyGlow" x="-18%" y="-18%" width="136%" height="136%">
-                        <feGaussianBlur stdDeviation="5.6" />
-                    </filter>
-                </defs>
+            <div className={joinClasses("h-full w-full", className)}>
+                <svg
+                    data-role="distortion-visualizer"
+                    viewBox={`0 0 ${COMPACT_VIEWBOX_WIDTH} ${COMPACT_VIEWBOX_HEIGHT}`}
+                    className="block h-full w-full"
+                    aria-label="Distortion visualization"
+                >
+                    <defs>
+                        <linearGradient id="distortionRemovedFill" x1="0" x2="0" y1="0" y2="1">
+                            <stop offset="0%" stopColor="rgba(251,113,133,0.42)" />
+                            <stop offset="100%" stopColor="rgba(239,68,68,0.04)" />
+                        </linearGradient>
+                        <filter id="distortionTransferOccupancyGlow" x="-18%" y="-18%" width="136%" height="136%">
+                            <feGaussianBlur stdDeviation="5.6" />
+                        </filter>
+                    </defs>
 
-                <rect x="0" y="0" width={COMPACT_VIEWBOX_WIDTH} height={COMPACT_VIEWBOX_HEIGHT} fill="#020611" />
-                <rect
-                    x={COMPACT_PLOT.left}
-                    y={COMPACT_PLOT.top}
-                    width={COMPACT_PLOT.width}
-                    height={COMPACT_PLOT.height}
-                    rx="10"
-                    fill="rgba(255,255,255,0.025)"
-                />
-
-                {/* Grid lines: 3 horizontal (+1, 0, -1), 3 vertical (-1, 0, +1) */}
-                {[ceilingYTransferTop, zeroYTransfer, ceilingYTransferBottom].map((yValue, index) => (
-                    <line
-                        key={`compact-h-${index}`}
-                        x1={COMPACT_PLOT.left}
-                        x2={COMPACT_PLOT.left + COMPACT_PLOT.width}
-                        y1={yValue}
-                        y2={yValue}
-                        stroke={index === 1 ? "rgba(255,255,255,0.12)" : "rgba(248,113,113,0.22)"}
-                        strokeDasharray={index === 1 ? "0" : "6 6"}
-                        strokeWidth={index === 1 ? "1.2" : "1"}
+                    <rect x="0" y="0" width={COMPACT_VIEWBOX_WIDTH} height={COMPACT_VIEWBOX_HEIGHT} fill="#020611" />
+                    <rect
+                        x={COMPACT_PLOT.left}
+                        y={COMPACT_PLOT.top}
+                        width={COMPACT_PLOT.width}
+                        height={COMPACT_PLOT.height}
+                        rx="10"
+                        fill="rgba(255,255,255,0.025)"
                     />
-                ))}
-                {[ceilingXTransferLeft, zeroXTransfer, ceilingXTransferRight].map((xValue, index) => (
-                    <line
-                        key={`compact-v-${index}`}
-                        y1={COMPACT_PLOT.top}
-                        y2={COMPACT_PLOT.top + COMPACT_PLOT.height}
-                        x1={xValue}
-                        x2={xValue}
-                        stroke={index === 1 ? "rgba(255,255,255,0.12)" : "rgba(248,113,113,0.18)"}
-                        strokeDasharray={index === 1 ? "0" : "6 6"}
-                        strokeWidth={index === 1 ? "1.2" : "1"}
-                    />
-                ))}
 
-                {/* History columns as subtle background */}
-                {historyColumns.map((column, index) => (
-                    <g key={`compact-hist-${index}`}>
-                        {column.valid ? (
-                            <rect
-                                x={column.output.x}
-                                y={column.output.y}
-                                width={column.output.width}
-                                height={column.output.height}
-                                rx={Math.min(2.2, column.output.width * 0.45)}
-                                fill="rgba(255,255,255,0.92)"
-                                opacity={0.18}
-                            />
-                        ) : null}
-                        {column.removedTop ? (
-                            <rect
-                                x={column.removedTop.x}
-                                y={column.removedTop.y}
-                                width={column.removedTop.width}
-                                height={column.removedTop.height}
-                                rx={Math.min(2.2, column.removedTop.width * 0.45)}
-                                fill="rgba(251,113,133,0.88)"
-                                opacity={0.30}
-                            />
-                        ) : null}
-                        {column.removedBottom ? (
-                            <rect
-                                x={column.removedBottom.x}
-                                y={column.removedBottom.y}
-                                width={column.removedBottom.width}
-                                height={column.removedBottom.height}
-                                rx={Math.min(2.2, column.removedBottom.width * 0.45)}
-                                fill="rgba(251,113,133,0.88)"
-                                opacity={0.30}
-                            />
-                        ) : null}
-                    </g>
-                ))}
+                    {/* Grid lines: 3 horizontal (+1, 0, -1), 3 vertical (-1, 0, +1) */}
+                    {[ceilingYTransferTop, zeroYTransfer, ceilingYTransferBottom].map((yValue, index) => (
+                        <line
+                            key={`compact-h-${index}`}
+                            x1={COMPACT_PLOT.left}
+                            x2={COMPACT_PLOT.left + COMPACT_PLOT.width}
+                            y1={yValue}
+                            y2={yValue}
+                            stroke={index === 1 ? "rgba(255,255,255,0.12)" : "rgba(248,113,113,0.22)"}
+                            strokeDasharray={index === 1 ? "0" : "6 6"}
+                            strokeWidth={index === 1 ? "1.2" : "1"}
+                        />
+                    ))}
+                    {[ceilingXTransferLeft, zeroXTransfer, ceilingXTransferRight].map((xValue, index) => (
+                        <line
+                            key={`compact-v-${index}`}
+                            y1={COMPACT_PLOT.top}
+                            y2={COMPACT_PLOT.top + COMPACT_PLOT.height}
+                            x1={xValue}
+                            x2={xValue}
+                            stroke={index === 1 ? "rgba(255,255,255,0.12)" : "rgba(248,113,113,0.18)"}
+                            strokeDasharray={index === 1 ? "0" : "6 6"}
+                            strokeWidth={index === 1 ? "1.2" : "1"}
+                        />
+                    ))}
 
-                {/* Occupancy ribbons */}
-                {transferOccupancyPaths.map((segment, index) => (
-                    <g key={`compact-occ-${index}`}>
-                        <path
-                            d={segment.occupancyPath}
-                            fill="rgba(255,255,255,0.14)"
-                            opacity={segment.occupancyOpacity}
-                            filter="url(#distortionTransferOccupancyGlow)"
-                        />
-                        <path
-                            d={segment.occupancyPath}
-                            fill="rgba(255,255,255,0.26)"
-                            opacity={Math.min(1, segment.occupancyOpacity + 0.1)}
-                        />
-                        {segment.clippedPath ? (
+                    {/* History columns as subtle background */}
+                    {historyColumns.map((column, index) => (
+                        <g key={`compact-hist-${index}`}>
+                            {column.valid ? (
+                                <rect
+                                    data-role="distortion-history-output-column"
+                                    x={column.output.x}
+                                    y={column.output.y}
+                                    width={column.output.width}
+                                    height={column.output.height}
+                                    rx={Math.min(2.2, column.output.width * 0.45)}
+                                    fill="rgba(255,255,255,0.92)"
+                                    opacity={0.18}
+                                />
+                            ) : null}
+                            {column.removedTop ? (
+                                <rect
+                                    data-role="distortion-history-removed-column"
+                                    x={column.removedTop.x}
+                                    y={column.removedTop.y}
+                                    width={column.removedTop.width}
+                                    height={column.removedTop.height}
+                                    rx={Math.min(2.2, column.removedTop.width * 0.45)}
+                                    fill="rgba(251,113,133,0.88)"
+                                    opacity={0.30}
+                                />
+                            ) : null}
+                            {column.removedBottom ? (
+                                <rect
+                                    data-role="distortion-history-removed-column"
+                                    x={column.removedBottom.x}
+                                    y={column.removedBottom.y}
+                                    width={column.removedBottom.width}
+                                    height={column.removedBottom.height}
+                                    rx={Math.min(2.2, column.removedBottom.width * 0.45)}
+                                    fill="rgba(251,113,133,0.88)"
+                                    opacity={0.30}
+                                />
+                            ) : null}
+                        </g>
+                    ))}
+
+                    {/* Occupancy ribbons */}
+                    {transferOccupancyPaths.map((segment, index) => (
+                        <g key={`compact-occ-${index}`}>
                             <path
-                                d={segment.clippedPath}
-                                fill="rgba(251,113,133,0.36)"
-                                opacity={segment.clippedOpacity}
+                                data-role="distortion-transfer-occupancy"
+                                d={segment.occupancyPath}
+                                fill="rgba(255,255,255,0.14)"
+                                opacity={segment.occupancyOpacity}
+                                filter="url(#distortionTransferOccupancyGlow)"
                             />
-                        ) : null}
-                    </g>
-                ))}
+                            <path
+                                data-role="distortion-transfer-occupancy"
+                                d={segment.occupancyPath}
+                                fill="rgba(255,255,255,0.26)"
+                                opacity={Math.min(1, segment.occupancyOpacity + 0.1)}
+                            />
+                            {segment.clippedPath ? (
+                                <path
+                                    data-role="distortion-transfer-clipped-occupancy"
+                                    d={segment.clippedPath}
+                                    fill="rgba(251,113,133,0.36)"
+                                    opacity={segment.clippedOpacity}
+                                />
+                            ) : null}
+                        </g>
+                    ))}
 
-                {/* Transfer curve */}
-                {transferCurvePath ? (
-                    <path
-                        d={transferCurvePath}
-                        fill="none"
-                        stroke="rgba(103,232,249,0.98)"
-                        strokeWidth="3.2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                    />
-                ) : null}
+                    {/* Transfer curve */}
+                    {transferCurvePath ? (
+                        <path
+                            d={transferCurvePath}
+                            fill="none"
+                            stroke="rgba(103,232,249,0.98)"
+                            strokeWidth="3.2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                        />
+                    ) : null}
 
-                {/* Y-axis labels */}
-                <text x={COMPACT_PLOT.left + 8} y={ceilingYTransferTop - 4} fill="rgba(248,113,113,0.74)" fontSize="10">+1</text>
-                <text x={COMPACT_PLOT.left + 8} y={zeroYTransfer - 4} fill="rgba(226,232,240,0.54)" fontSize="10">0</text>
-                <text x={COMPACT_PLOT.left + 8} y={ceilingYTransferBottom - 4} fill="rgba(248,113,113,0.74)" fontSize="10">-1</text>
-            </svg>
+                    {/* Y-axis labels */}
+                    <text x={COMPACT_PLOT.left + 8} y={ceilingYTransferTop - 4} fill="rgba(248,113,113,0.74)" fontSize="10">+1</text>
+                    <text x={COMPACT_PLOT.left + 8} y={zeroYTransfer - 4} fill="rgba(226,232,240,0.54)" fontSize="10">0</text>
+                    <text x={COMPACT_PLOT.left + 8} y={ceilingYTransferBottom - 4} fill="rgba(248,113,113,0.74)" fontSize="10">-1</text>
+                </svg>
+                <pre data-role="distortion-graph-debug" className="hidden">
+                    {JSON.stringify(debugState)}
+                </pre>
+            </div>
         );
     }
 

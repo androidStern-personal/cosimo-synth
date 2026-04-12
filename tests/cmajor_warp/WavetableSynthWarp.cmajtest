@@ -45,9 +45,9 @@ function audioOnlyPatchRun(subDir, blockSize, samplesToRender, maxDiffDb)
 
 ## runScript (patchRun("fixtures/mono_legato_glide", 64, 8192))
 
-## runScript (audioOnlyPatchRun("fixtures/neutral_equals_off_bend", 64, 4096))
+## runScript (audioOnlyPatchRun("fixtures/neutral_equals_off_bend", 64, 4096, pythonReferenceMaxDiffDb))
 
-## runScript (audioOnlyPatchRun("fixtures/neutral_equals_off_pwm", 64, 4096))
+## runScript (audioOnlyPatchRun("fixtures/neutral_equals_off_pwm", 64, 4096, pythonReferenceMaxDiffDb))
 
 ## runScript (audioOnlyPatchRun("fixtures/bend_harmonic", 64, 3072, bendPythonReferenceMaxDiffDb))
 

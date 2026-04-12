@@ -1,0 +1,14 @@
+[
+  {
+    "frameOffset": 0,
+    "event": {
+      "routeIndex": 0,
+      "enabled": true,
+      "sourceKind": 1,
+      "sourceSlot": 1,
+      "polarityKind": 0,
+      "targetKind": 3,
+      "amount": 5.5
+    }
+  }
+]
