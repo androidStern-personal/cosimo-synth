@@ -45,7 +45,7 @@ juce_add_plugin(CosimoDesktopNative
     COMPANY_NAME "Cosimo"
     COMPANY_COPYRIGHT "(C)2026 Cosimo"
     PLUGIN_CODE CmDv
-    FORMATS AU Standalone
+    FORMATS AU VST3 Standalone
     NEEDS_MIDI_INPUT TRUE
     NEEDS_MIDI_OUTPUT TRUE
     IS_SYNTH TRUE
