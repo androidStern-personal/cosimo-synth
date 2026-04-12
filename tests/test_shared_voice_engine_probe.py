@@ -127,11 +127,31 @@ def _build_scheduler_source(schedule: list[tuple[int, str, float]]) -> str:
     )
 
 
+def _build_stereo_to_mono_probe_source() -> str:
+    return (
+        "processor StereoToMonoProbe\n"
+        + "{\n"
+        + "    input stream float32<2> in;\n"
+        + "    output stream float32 out;\n"
+        + "    void main()\n"
+        + "    {\n"
+        + "        loop\n"
+        + "        {\n"
+        + "            out <- (in[0] + in[1]) * 0.5f;\n"
+        + "            advance();\n"
+        + "        }\n"
+        + "    }\n"
+        + "}\n"
+    )
+
+
 def _build_shared_voice_probe_source(schedule: list[tuple[int, str, float]]) -> str:
     return (
         MSEG_SOURCE.read_text(encoding="utf-8")
         + "\n"
         + FIXED_FRAME_SOURCE.read_text(encoding="utf-8")
+        + "\n"
+        + _build_stereo_to_mono_probe_source()
         + "\n"
         + "processor RuntimeSessionAdapter\n"
         + "{\n"
@@ -165,12 +185,12 @@ def _build_shared_voice_probe_source(schedule: list[tuple[int, str, float]]) -> 
         + "    input event wt::WavetableLoadBegin wavetableLoadBegin;\n"
         + "    input event wt::WavetableMipFrame wavetableMipFrame;\n"
         + "    input value float32 framePosition [[ init: 0.0f ]];\n"
-        + "    input value float32 msegDepth [[ init: 0.0f ]];\n"
         + "    output stream float out;\n"
         + "    node scheduler = SharedVoiceNoteScheduler;\n"
         + "    node adapter = RuntimeSessionAdapter;\n"
         + "    node allocator = std::voices::VoiceAllocator (2);\n"
         + "    node engine = wt::SharedVoiceEngine (2);\n"
+        + "    node downmix = StereoToMonoProbe;\n"
         + "    event wavetableLoadBegin (wt::WavetableLoadBegin load) { adapter.loadBeginIn <- load; }\n"
         + "    event wavetableMipFrame (wt::WavetableMipFrame frame) { adapter.mipFrameIn <- frame; }\n"
         + "    connection\n"
@@ -180,8 +200,8 @@ def _build_shared_voice_probe_source(schedule: list[tuple[int, str, float]]) -> 
         + "        adapter.loadBeginOut -> engine.wavetableLoadBeginIn;\n"
         + "        adapter.mipFrameOut -> engine.wavetableMipFrameIn;\n"
         + "        framePosition -> engine.framePositionIn;\n"
-        + "        msegDepth -> engine.msegDepthIn;\n"
-        + "        engine.out -> out;\n"
+        + "        engine.out -> downmix.in;\n"
+        + "        downmix.out -> out;\n"
         + "    }\n"
         + "}\n"
     )

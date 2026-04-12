@@ -291,9 +291,10 @@ inline choc::value::Value createPatchBootConfig (const cmaj::Patch& patch, const
 class PatchWebViewHost final : public cmaj::PatchView
 {
 public:
-    PatchWebViewHost (cmaj::Patch& patchToUse, const cmaj::PatchManifest::View& preferredView)
+    PatchWebViewHost (cmaj::Patch& patchToUse, const cmaj::PatchManifest::View& preferredView, bool shouldLoadBootPageHTML)
         : cmaj::PatchView (patchToUse, preferredView),
-          currentView (preferredView)
+          currentView (preferredView),
+          loadBootPageHTML (shouldLoadBootPageHTML)
     {
         choc::ui::WebView::Options options;
         options.enableDebugMode = false;
@@ -349,7 +350,10 @@ public:
 
     void reload()
     {
-        getWebView().evaluateJavascript ("window.location.reload();");
+        // On iOS the first patch reload can happen while WKWebView is still on
+        // about:blank. Always re-enter through the bundled boot page so the
+        // dev-server redirect and bundled fallback logic run from a known URL.
+        navigateToBundlePage();
     }
 
     void updateView (const cmaj::PatchManifest::View& newView)
@@ -500,8 +504,19 @@ private:
 
     void navigateToBundlePage()
     {
-        if (webView != nullptr)
-            webView->navigate (getBundlePageURL());
+        if (webView == nullptr)
+            return;
+
+        if (loadBootPageHTML)
+        {
+            if (auto htmlFile = resolveBundleResourceFile ("patch_gui/index.ios.html"); htmlFile.existsAsFile())
+            {
+                webView->setHTML (htmlFile.loadFileAsString().toStdString());
+                return;
+            }
+        }
+
+        webView->navigate (getBundlePageURL());
     }
 
     std::optional<choc::ui::WebView::Options::Resource> onRequest (const std::string& path) const
@@ -530,6 +545,7 @@ private:
 
     std::unique_ptr<choc::ui::WebView> webView;
     cmaj::PatchManifest::View currentView;
+    bool loadBootPageHTML = false;
     bool bridgeInitialised = false;
 };
 
@@ -953,7 +969,8 @@ private:
               patchWebView (std::make_unique<detail::PatchWebViewHost> (*owner.patch,
                                                                         detail::derivePatchViewSize (*owner.patch,
                                                                                                     owner.lastEditorWidth,
-                                                                                                    owner.lastEditorHeight)))
+                                                                                                    owner.lastEditorHeight),
+                                                                        owner.wrapperType == juce::AudioProcessor::wrapperType_Standalone))
         {
             patchWebViewHolder = choc::ui::createJUCEWebViewHolder (patchWebView->getWebView());
             patchWebViewHolder->setSize (static_cast<int> (patchWebView->width), static_cast<int> (patchWebView->height));
@@ -1090,7 +1107,9 @@ private:
     }
 
     const boot = globalThis.__COSIMO_PATCH_BOOT ?? {};
-    const currentURL = window.location.href;
+    const currentURL = window.location.href === 'about:blank' && typeof boot.bundlePageURL === 'string'
+      ? boot.bundlePageURL
+      : window.location.href;
     const devServerURL = typeof boot.devServerURL === 'string' ? boot.devServerURL : '';
     const bundlePageURL = typeof boot.bundlePageURL === 'string' ? boot.bundlePageURL : '';
     const bundleResourceBaseURL = typeof boot.bundleResourceBaseURL === 'string' ? boot.bundleResourceBaseURL : '';
@@ -1116,7 +1135,7 @@ private:
   const domMetrics = typeof window.__cosimoCollectLayoutMetrics === 'function' ? window.__cosimoCollectLayoutMetrics() : null;
   const catalog = globalThis.__cosimoLatestCatalogSnapshot ?? null;
   const runtime = typeof window.__cosimoInspectRuntimeState === 'function' ? window.__cosimoInspectRuntimeState() : null;
-  return { hostPage, domMetrics, catalog, runtime };
+  return JSON.stringify({ hostPage, domMetrics, catalog, runtime });
 })())";
 
             patchWebView->getWebView().evaluateJavascript (inspectionScript,
@@ -1135,51 +1154,78 @@ private:
                 bool hostPageReady = false;
                 bool runtimeReady = false;
                 bool useContinuousPolling = false;
+                bool shouldReloadBlankPage = false;
+                auto errorMessage = error;
+                auto inspectedResult = result;
+                auto parsedInspectionResult = choc::value::Value();
 
-                if (! result.isVoid() && result.isObject())
+                if (errorMessage.empty() && result.isString())
                 {
-                    if (result.hasObjectMember ("hostPage") && ! result["hostPage"].isVoid())
+                    try
                     {
-                        hostPageJSON = choc::json::toString (result["hostPage"], true);
-                        hostPageReady = result["hostPage"].isObject()
-                            && result["hostPage"].hasObjectMember ("viewActive")
-                            && result["hostPage"]["viewActive"].getWithDefault (false);
-                        useContinuousPolling = result["hostPage"].isObject()
-                            && result["hostPage"].hasObjectMember ("bootSource")
-                            && result["hostPage"]["bootSource"].toString() == "devServer";
+                        parsedInspectionResult = choc::json::parse (result.toString());
+                        inspectedResult = parsedInspectionResult;
+                    }
+                    catch (const std::exception& e)
+                    {
+                        errorMessage = std::string ("Could not parse iOS editor inspection JSON: ") + e.what();
+                    }
+                }
+
+                if (! inspectedResult.isVoid() && inspectedResult.isObject())
+                {
+                    if (inspectedResult.hasObjectMember ("hostPage") && ! inspectedResult["hostPage"].isVoid())
+                    {
+                        hostPageJSON = choc::json::toString (inspectedResult["hostPage"], true);
+                        hostPageReady = inspectedResult["hostPage"].isObject()
+                            && inspectedResult["hostPage"].hasObjectMember ("viewActive")
+                            && inspectedResult["hostPage"]["viewActive"].getWithDefault (false);
+                        useContinuousPolling = inspectedResult["hostPage"].isObject()
+                            && inspectedResult["hostPage"].hasObjectMember ("bootSource")
+                            && inspectedResult["hostPage"]["bootSource"].toString() == "devServer";
+                        shouldReloadBlankPage = inspectedResult["hostPage"].isObject()
+                            && inspectedResult["hostPage"].hasObjectMember ("currentURL")
+                            && inspectedResult["hostPage"]["currentURL"].toString() == "about:blank";
                     }
 
-                    if (result.hasObjectMember ("domMetrics") && ! result["domMetrics"].isVoid())
+                    if (inspectedResult.hasObjectMember ("domMetrics") && ! inspectedResult["domMetrics"].isVoid())
                     {
-                        domMetricsJSON = choc::json::toString (result["domMetrics"], true);
-                        domReady = result["domMetrics"].isObject()
-                            && result["domMetrics"].hasObjectMember ("isReady")
-                            && result["domMetrics"]["isReady"].getWithDefault (false);
+                        domMetricsJSON = choc::json::toString (inspectedResult["domMetrics"], true);
+                        domReady = inspectedResult["domMetrics"].isObject()
+                            && inspectedResult["domMetrics"].hasObjectMember ("isReady")
+                            && inspectedResult["domMetrics"]["isReady"].getWithDefault (false);
                     }
 
-                    if (result.hasObjectMember ("catalog") && ! result["catalog"].isVoid())
+                    if (inspectedResult.hasObjectMember ("catalog") && ! inspectedResult["catalog"].isVoid())
                     {
-                        catalogJSON = choc::json::toString (result["catalog"], true);
-                        catalogReady = result["catalog"].isObject()
-                            && (! result["catalog"].hasObjectMember ("pending")
-                                || ! result["catalog"]["pending"].getWithDefault (false));
+                        catalogJSON = choc::json::toString (inspectedResult["catalog"], true);
+                        catalogReady = inspectedResult["catalog"].isObject()
+                            && (! inspectedResult["catalog"].hasObjectMember ("pending")
+                                || ! inspectedResult["catalog"]["pending"].getWithDefault (false));
                     }
 
-                    if (result.hasObjectMember ("runtime") && ! result["runtime"].isVoid())
+                    if (inspectedResult.hasObjectMember ("runtime") && ! inspectedResult["runtime"].isVoid())
                     {
-                        runtimeJSON = choc::json::toString (result["runtime"], true);
-                        runtimeReady = result["runtime"].isObject()
-                            && result["runtime"].hasObjectMember ("hasRuntimeStateEvent")
-                            && result["runtime"]["hasRuntimeStateEvent"].getWithDefault (false);
+                        runtimeJSON = choc::json::toString (inspectedResult["runtime"], true);
+                        runtimeReady = inspectedResult["runtime"].isObject()
+                            && inspectedResult["runtime"].hasObjectMember ("hasRuntimeStateEvent")
+                            && inspectedResult["runtime"]["hasRuntimeStateEvent"].getWithDefault (false);
                     }
                 }
 
                 const bool inspectionReady = hostPageReady && domReady && catalogReady && runtimeReady;
 
-                if (inspectionReady || ! error.empty() || remainingAttempts <= 0 || ! getIOSDebugInspectionFile().existsAsFile())
-                    writeSnapshot (screenModeName, error, hostPageJSON, domMetricsJSON, catalogJSON, runtimeJSON);
+                if (shouldReloadBlankPage && errorMessage.empty() && remainingAttempts > 0)
+                {
+                    safeThis->patchWebView->reload();
+                    safeThis->scheduleIOSDebugInspectionDump (remainingAttempts - 1);
+                    return;
+                }
 
-                if ((useContinuousPolling || ! inspectionReady) && error.empty() && remainingAttempts > 0)
+                if (inspectionReady || ! errorMessage.empty() || remainingAttempts <= 0 || ! getIOSDebugInspectionFile().existsAsFile())
+                    writeSnapshot (screenModeName, errorMessage, hostPageJSON, domMetricsJSON, catalogJSON, runtimeJSON);
+
+                if ((useContinuousPolling || ! inspectionReady) && errorMessage.empty() && remainingAttempts > 0)
                     safeThis->scheduleIOSDebugInspectionDump (remainingAttempts - 1);
             });
         }
@@ -1210,8 +1256,8 @@ private:
                 else
                     resized();
 
-                if (forceReload)
-                    patchWebView->reload();
+                if (forceReload || ! hasLoadedPatchWebView)
+                    reloadPatchWebViewAsync();
             }
             else
             {
@@ -1240,6 +1286,18 @@ private:
             if (! isResizing && patchWebViewHolder->isVisible() && ! patchWebView->resizable)
                 setSize (std::max (50, patchWebViewHolder->getWidth()),
                          std::max (50, patchWebViewHolder->getHeight()));
+        }
+
+        void reloadPatchWebViewAsync()
+        {
+            hasLoadedPatchWebView = true;
+
+            auto safeThis = juce::Component::SafePointer<Editor> (this);
+            juce::MessageManager::callAsync ([safeThis]
+            {
+                if (safeThis != nullptr && safeThis->patchWebView != nullptr)
+                    safeThis->patchWebView->reload();
+            });
         }
 
         void resized() override
@@ -1281,6 +1339,7 @@ private:
         std::unique_ptr<juce::Component> extraComponent;
         juce::LookAndFeel_V4 lookAndFeel;
         bool isResizing = false;
+        bool hasLoadedPatchWebView = false;
         static constexpr int defaultWidth = 500;
         static constexpr int defaultHeight = 400;
     };

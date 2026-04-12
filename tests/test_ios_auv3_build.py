@@ -416,8 +416,8 @@ def _write_repo_dev_server_markers(
     base_html: str | None = None,
     base_js: str | None = None,
 ) -> tuple[str, str]:
-    original_html = IOS_PATCH_HOST_HTML.read_text(encoding="utf-8")
-    original_js = IOS_PATCH_HOST_RUNTIME.read_text(encoding="utf-8")
+    original_html = IOS_HOST_SOURCE_HTML.read_text(encoding="utf-8")
+    original_js = IOS_HOST_SOURCE_RUNTIME.read_text(encoding="utf-8")
     html_source = original_html if base_html is None else base_html
     js_source = original_js if base_js is None else base_js
 
@@ -428,8 +428,8 @@ def _write_repo_dev_server_markers(
         "    const boot = await loadBootConfig();\n",
         1,
     )
-    IOS_PATCH_HOST_HTML.write_text(html_text, encoding="utf-8")
-    IOS_PATCH_HOST_RUNTIME.write_text(
+    IOS_HOST_SOURCE_HTML.write_text(html_text, encoding="utf-8")
+    IOS_HOST_SOURCE_RUNTIME.write_text(
         f'globalThis.__COSIMO_DEV_JS_MARKER = "{js_marker}";\n{js_source}',
         encoding="utf-8",
     )
@@ -438,8 +438,8 @@ def _write_repo_dev_server_markers(
 
 
 def _restore_repo_dev_server_sources(original_html: str, original_js: str) -> None:
-    IOS_PATCH_HOST_HTML.write_text(original_html, encoding="utf-8")
-    IOS_PATCH_HOST_RUNTIME.write_text(original_js, encoding="utf-8")
+    IOS_HOST_SOURCE_HTML.write_text(original_html, encoding="utf-8")
+    IOS_HOST_SOURCE_RUNTIME.write_text(original_js, encoding="utf-8")
 
 
 class _QuietSimpleHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
@@ -1734,5 +1734,11 @@ def test_ios_host_smoke_keeps_the_editor_inside_phone_and_tablet_viewports(
 
         dom_metrics = editor["domMetrics"]
 
-        assert dom_metrics["keyboardBottomGap"] <= 1.0
-        assert dom_metrics["footerBottomGap"] <= 1.0
+        assert dom_metrics["keyboardBottomGap"] == pytest.approx(
+            dom_metrics["shellPaddingBottom"],
+            abs=1.0,
+        )
+        assert dom_metrics["footerBottomGap"] == pytest.approx(
+            dom_metrics["shellPaddingBottom"],
+            abs=1.0,
+        )

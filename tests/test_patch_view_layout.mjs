@@ -42,6 +42,23 @@ async function loadPatchManifest(fileName) {
     );
 }
 
+function parseGraphInputValues(sourceText, graphName) {
+    const graphStart = sourceText.indexOf(`graph ${graphName}`);
+
+    if (graphStart < 0) {
+        throw new Error(`Graph not found: ${graphName}`);
+    }
+
+    const graphText = sourceText.slice(graphStart);
+    const inputValuePattern = /^\s*input value\s+([^\s]+)\s+([A-Za-z_][A-Za-z0-9_]*)\s+\[\[([^\]]*)\]\];/gm;
+
+    return Array.from(graphText.matchAll(inputValuePattern), ([, type, identifier, annotation]) => ({
+        type,
+        identifier,
+        annotation,
+    }));
+}
+
 async function runUiBuild(extraEnv = {}) {
     await new Promise((resolve, reject) => {
         const child = spawn(process.execPath, ["ui/build.mjs"], {
@@ -203,6 +220,7 @@ test("iOS patch manifest keeps the synth graph but switches to the mobile editor
     assert.deepEqual(iosManifest.source, desktopManifest.source);
     assert.deepEqual(desktopManifest.source, [
         "cmajor/Distortion.cmajor",
+        "cmajor/Chorus.cmajor",
         "cmajor/FixedFrameOscillator.cmajor",
         "cmajor/FilterSpectrumCommon.cmajor",
         "cmajor/FilterSpectrumAnalyzer.cmajor",
@@ -213,6 +231,24 @@ test("iOS patch manifest keeps the synth graph but switches to the mobile editor
     assert.deepEqual(iosManifest.resources, []);
     assert.equal("externals" in desktopManifest, false);
     assert.equal("externals" in iosManifest, false);
+});
+
+test("desktop synth reserves Cmajor host parameter slot 0 away from musical controls", async () => {
+    const synthSource = await fs.readFile(path.join(repoRoot, "cmajor", "WavetableSynth.cmajor"), "utf8");
+    const graphInputValues = parseGraphInputValues(synthSource, "WavetableSynth");
+
+    assert.equal(graphInputValues[0]?.identifier, "hostSlot0Guard");
+    assert.equal(graphInputValues[0]?.type, "float32");
+    assert.match(graphInputValues[0]?.annotation ?? "", /name:\s*"Host Slot 0 Guard"/);
+    assert.match(graphInputValues[0]?.annotation ?? "", /hidden:\s*true/);
+    assert.match(graphInputValues[0]?.annotation ?? "", /automatable:\s*false/);
+    assert.match(graphInputValues[0]?.annotation ?? "", /rampFrames:\s*0/);
+    assert.equal(graphInputValues[1]?.identifier, "wavetablePosition");
+    assert.doesNotMatch(
+        synthSource,
+        /hostSlot0Guard\s*->/,
+        "The slot-0 guard must reserve the host parameter position without changing synth audio or UI state.",
+    );
 });
 
 test("desktop and iPhone React UI tooling are wired for Vite dev and build loops", async () => {
@@ -228,7 +264,7 @@ test("desktop and iPhone React UI tooling are wired for Vite dev and build loops
     );
 
     assert.equal(packageJson.scripts["ui:desktop:dev"], "vite --config ui/vite.desktop.config.mjs");
-    assert.equal(packageJson.scripts["ui:desktop:build"], "vite build --config ui/vite.desktop.config.mjs");
+    assert.equal(packageJson.scripts["ui:desktop:build"], "node ui/build.mjs --desktop");
     assert.equal(packageJson.scripts["desktop:native:build"], "./scripts/build_desktop_native.sh");
     assert.equal(packageJson.scripts["desktop:native:dev"], "./scripts/run_desktop_native_dev.sh");
     assert.equal("ui:ios:dev" in packageJson.scripts, false);
@@ -485,9 +521,15 @@ test("desktop dev plug-in build enables the webview dev server and regenerates t
     assert.match(buildScript, /build_dir="\$repo_root\/build\/desktop_native"/);
     assert.match(buildScript, /au_install_dir="\$HOME\/Library\/Audio\/Plug-Ins\/Components"/);
     assert.match(buildScript, /au_bundle="\$au_install_dir\/CosimoDesktopNative\.component"/);
+    assert.match(buildScript, /vst3_install_dir="\$HOME\/Library\/Audio\/Plug-Ins\/VST3"/);
+    assert.match(buildScript, /vst3_bundle="\$vst3_install_dir\/CosimoDesktopNative\.vst3"/);
     assert.match(buildScript, /CosimoDesktopNative_artefacts\/Release\/AU\/CosimoDesktopNative\.component/);
+    assert.match(buildScript, /CosimoDesktopNative_artefacts\/Release\/VST3\/CosimoDesktopNative\.vst3/);
     assert.match(buildScript, /CosimoDesktopNative_artefacts\/Release\/Standalone\/CosimoDesktopNative\.app/);
-    assert.doesNotMatch(buildScript, /vst3/i);
+    assert.match(buildScript, /rm -rf "\$vst3_bundle"\s+cp -R "\$vst3_built" "\$vst3_bundle"/s);
+    assert.match(buildScript, /cp "\$runtime_dylib" "\$vst3_bundle\/Contents\/Resources\/libCmajPerformer\.dylib"/);
+    assert.match(buildScript, /codesign --force --deep --sign - "\$vst3_bundle"/);
+    assert.match(cmakeSource, /FORMATS AU VST3 Standalone/);
     assert.match(buildScript, /uv run python "\$repo_root\/build_assets\.py"/);
     assert.match(desktopDevLauncherScript, /subprocess\.Popen\(/);
     assert.match(desktopDevLauncherScript, /start_new_session=True/);

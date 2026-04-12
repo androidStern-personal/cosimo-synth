@@ -10,6 +10,7 @@ from bench import _collect_cmajor_output_events_via_generated_javascript
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+MSEG_SOURCE = REPO_ROOT / "cmajor" / "Mseg.cmajor"
 FIXED_FRAME_OSCILLATOR_SOURCE = REPO_ROOT / "cmajor" / "FixedFrameOscillator.cmajor"
 WAVETABLE_SYNTH_SOURCE = REPO_ROOT / "cmajor" / "WavetableSynth.cmajor"
 DEFAULT_SAMPLE_RATE = 44100
@@ -22,7 +23,9 @@ def _build_runtime_state_coordinator_probe_source() -> str:
     ).split("graph Voice")[0]
 
     return (
-        FIXED_FRAME_OSCILLATOR_SOURCE.read_text(encoding="utf-8")
+        MSEG_SOURCE.read_text(encoding="utf-8")
+        + "\n"
+        + FIXED_FRAME_OSCILLATOR_SOURCE.read_text(encoding="utf-8")
         + "\n"
         + coordinator_source
         + "\n}\n"

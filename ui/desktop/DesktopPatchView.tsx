@@ -1247,11 +1247,13 @@ function DistortionSection({
                         onPointerUp={handleSliderPointerUp}
                     >
                         <div
-                            className="absolute bottom-0 left-0 right-0 rounded-full bg-gradient-to-t from-rose-400/50 to-rose-400/20"
+                            data-role="distortion-drive-fill"
+                            className="cosimo-distortion-drive-fill absolute bottom-0 left-0 right-0 rounded-full"
                             style={{ height: `${normalizedDrive * 100}%` }}
                         />
                         <div
-                            className="absolute left-1/2 size-3.5 -translate-x-1/2 translate-y-1/2 rounded-full border-2 border-[rgba(3,5,12,0.7)] bg-gradient-to-b from-[rgba(255,220,200,0.9)] to-[rgba(248,113,113,0.7)] shadow-[0_2px_8px_rgba(248,113,113,0.3)]"
+                            data-role="distortion-drive-handle"
+                            className="cosimo-distortion-drive-handle absolute left-1/2 size-3.5 -translate-x-1/2 translate-y-1/2 rounded-full border-2 border-[rgba(3,5,12,0.7)]"
                             style={{ bottom: `${normalizedDrive * 100}%` }}
                         />
                     </div>
@@ -1271,11 +1273,13 @@ function DistortionSection({
                         onPointerUp={handleSliderPointerUp}
                     >
                         <div
-                            className="absolute bottom-0 left-0 right-0 rounded-full bg-gradient-to-t from-amber-400/45 to-amber-400/15"
+                            data-role="distortion-knee-fill"
+                            className="cosimo-distortion-knee-fill absolute bottom-0 left-0 right-0 rounded-full"
                             style={{ height: `${normalizedKnee * 100}%` }}
                         />
                         <div
-                            className="absolute left-1/2 size-3.5 -translate-x-1/2 translate-y-1/2 rounded-full border-2 border-[rgba(3,5,12,0.7)] bg-gradient-to-b from-[rgba(255,240,200,0.9)] to-[rgba(251,191,36,0.7)] shadow-[0_2px_8px_rgba(251,191,36,0.3)]"
+                            data-role="distortion-knee-handle"
+                            className="cosimo-distortion-knee-handle absolute left-1/2 size-3.5 -translate-x-1/2 translate-y-1/2 rounded-full border-2 border-[rgba(3,5,12,0.7)]"
                             style={{ bottom: `${normalizedKnee * 100}%` }}
                         />
                     </div>
@@ -1373,11 +1377,13 @@ function DistortionSection({
                         onPointerUp={handleSliderPointerUp}
                     >
                         <div
-                            className="absolute bottom-0 left-0 right-0 rounded-full bg-gradient-to-t from-cyan-400/40 to-cyan-400/15"
+                            data-role="distortion-mix-fill"
+                            className="cosimo-distortion-mix-fill absolute bottom-0 left-0 right-0 rounded-full"
                             style={{ height: `${normalizedMix * 100}%` }}
                         />
                         <div
-                            className="absolute left-1/2 size-3.5 -translate-x-1/2 translate-y-1/2 rounded-full border-2 border-[rgba(3,5,12,0.7)] bg-gradient-to-b from-[rgba(200,240,255,0.9)] to-[rgba(103,232,249,0.7)] shadow-[0_2px_8px_rgba(103,232,249,0.3)]"
+                            data-role="distortion-mix-handle"
+                            className="cosimo-distortion-mix-handle absolute left-1/2 size-3.5 -translate-x-1/2 translate-y-1/2 rounded-full border-2 border-[rgba(3,5,12,0.7)]"
                             style={{ bottom: `${normalizedMix * 100}%` }}
                         />
                     </div>

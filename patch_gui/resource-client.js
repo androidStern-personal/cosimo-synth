@@ -303,9 +303,11 @@ export function createDesktopResourceClient(source) {
     });
 }
 export function createIOSResourceClient(source) {
-    return createResourceClient(source ?? {}, {
+    const normalizedSource = source ?? {};
+    const prefersBridgeAudio = Boolean(normalizedSource.prefersAudioResourceReadBridge);
+    return createResourceClient(normalizedSource, {
         textPreference: "bridge",
-        audioPreference: "url",
+        audioPreference: prefersBridgeAudio ? "bridge" : "url",
     });
 }
 function normalizeResourceClient(value) {

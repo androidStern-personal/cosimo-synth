@@ -43,14 +43,311 @@ function getRuntimeState() {
     };
 }
 
+class EventListenerList {
+    constructor() {
+        this.listenersPerType = {};
+    }
+
+    addEventListener(type, listener) {
+        if (!type || !listener) {
+            return;
+        }
+
+        const listeners = this.listenersPerType[type] ?? [];
+        listeners.push(listener);
+        this.listenersPerType[type] = listeners;
+    }
+
+    removeEventListener(type, listener) {
+        const listeners = this.listenersPerType[type];
+
+        if (!listeners) {
+            return;
+        }
+
+        const index = listeners.indexOf(listener);
+
+        if (index >= 0) {
+            listeners.splice(index, 1);
+        }
+    }
+
+    addSingleUseListener(type, listener) {
+        const wrapped = (message) => {
+            this.removeEventListener(type, wrapped);
+            listener?.(message);
+        };
+
+        this.addEventListener(type, wrapped);
+    }
+
+    dispatchEvent(type, event) {
+        for (const listener of this.listenersPerType[type] ?? []) {
+            listener?.(event);
+        }
+    }
+}
+
+class IOSPianoKeyboard extends HTMLElement {
+    constructor(options = {}) {
+        super();
+        this.naturalWidth = Number(options.naturalNoteWidth) || 24;
+        this.accidentalWidth = Number(options.accidentalWidth) || 13;
+        this.root = this.attachShadow({ mode: "open" });
+        this.noteHolder = document.createElement("div");
+        this.noteHolder.className = "note-holder";
+        this.noteHolder.style.display = "flex";
+        this.noteHolder.style.width = "100%";
+        this.noteHolder.style.height = "100%";
+        this.notes = [];
+        this.activeNotes = new Set();
+        this.callbacks = new Map();
+    }
+
+    static get observedAttributes() {
+        return ["root-note", "note-count"];
+    }
+
+    connectedCallback() {
+        this.refreshHTML();
+    }
+
+    attributeChangedCallback() {
+        this.refreshHTML();
+    }
+
+    attachToPatchConnection(patchConnection, endpointID) {
+        this.patchConnection = patchConnection;
+        this.endpointID = endpointID;
+        this.callbacks.set(patchConnection, {
+            midiInputEndpointID: endpointID,
+        });
+    }
+
+    detachPatchConnection(patchConnection) {
+        this.allNotesOff();
+        this.callbacks.delete(patchConnection ?? this.patchConnection);
+        this.patchConnection = null;
+        this.endpointID = "";
+    }
+
+    refreshHTML() {
+        const rootNote = Number(this.getAttribute("root-note")) || 48;
+        const noteCount = Number(this.getAttribute("note-count")) || 24;
+        this.noteHolder.replaceChildren();
+        this.notes = [];
+
+        if (!this.noteHolder.isConnected) {
+            this.root.appendChild(this.noteHolder);
+        }
+
+        for (let index = 0; index < noteCount; index += 1) {
+            const midiNote = rootNote + index;
+            const key = document.createElement("button");
+            key.type = "button";
+            key.dataset.midiNote = String(midiNote);
+            key.style.flex = "1 1 0";
+            key.style.height = "100%";
+            key.style.border = "1px solid rgba(0, 0, 0, 0.45)";
+            key.style.background = this.activeNotes.has(midiNote) ? "#f56cb6" : "#f5f1df";
+            key.style.touchAction = "none";
+            this.noteHolder.appendChild(key);
+            this.notes.push(key);
+        }
+    }
+
+    sendNote(midiNote, isOn) {
+        if (!this.patchConnection || !this.endpointID) {
+            return;
+        }
+
+        const status = isOn ? 0x90 : 0x80;
+        const velocity = isOn ? 100 : 0;
+        this.patchConnection.sendMIDIInputEvent?.(this.endpointID, (status << 16) | (midiNote << 8) | velocity);
+    }
+
+    setNoteActive(midiNote, isActive) {
+        if (isActive) {
+            this.activeNotes.add(midiNote);
+        } else {
+            this.activeNotes.delete(midiNote);
+        }
+
+        this.refreshActiveNoteElements();
+    }
+
+    noteFromEvent(event) {
+        const target = event.target?.closest?.("[data-midi-note]");
+        return target ? Number(target.dataset.midiNote) : null;
+    }
+
+    touchStart(event) {
+        event.preventDefault?.();
+        const midiNote = this.noteFromEvent(event);
+
+        if (Number.isFinite(midiNote)) {
+            this.setNoteActive(midiNote, true);
+            this.sendNote(midiNote, true);
+        }
+    }
+
+    touchEnd(event) {
+        const midiNote = this.noteFromEvent(event);
+
+        if (Number.isFinite(midiNote)) {
+            this.setNoteActive(midiNote, false);
+            this.sendNote(midiNote, false);
+        }
+    }
+
+    refreshActiveNoteElements() {
+        for (const key of this.noteHolder.children) {
+            const midiNote = Number(key.dataset.midiNote);
+            key.style.background = this.activeNotes.has(midiNote) ? "#f56cb6" : "#f5f1df";
+        }
+    }
+
+    allNotesOff() {
+        for (const midiNote of this.activeNotes) {
+            this.sendNote(midiNote, false);
+        }
+
+        this.activeNotes.clear();
+        this.refreshActiveNoteElements();
+    }
+}
+
+class EmbeddedPatchConnectionBase extends EventListenerList {
+    utilities = {
+        PianoKeyboard: IOSPianoKeyboard,
+    };
+
+    requestStatusUpdate() {
+        this.sendMessageToServer({ type: "req_status" });
+    }
+
+    addStatusListener(listener) {
+        this.addEventListener("status", listener);
+    }
+
+    removeStatusListener(listener) {
+        this.removeEventListener("status", listener);
+    }
+
+    sendEventOrValue(endpointID, value, rampFrames, timeoutMillisecs) {
+        this.sendMessageToServer({ type: "send_value", id: endpointID, value, rampFrames, timeout: timeoutMillisecs });
+    }
+
+    sendMIDIInputEvent(endpointID, shortMIDICode) {
+        this.sendEventOrValue(endpointID, { message: shortMIDICode });
+    }
+
+    sendParameterGestureStart(endpointID) {
+        this.sendMessageToServer({ type: "send_gesture_start", id: endpointID });
+    }
+
+    sendParameterGestureEnd(endpointID) {
+        this.sendMessageToServer({ type: "send_gesture_end", id: endpointID });
+    }
+
+    requestStoredStateValue(key) {
+        this.sendMessageToServer({ type: "req_state_value", key });
+    }
+
+    sendStoredStateValue(key, value) {
+        this.sendMessageToServer({ type: "send_state_value", key, value });
+    }
+
+    requestFullStoredState(callback) {
+        const replyType = `fullstate_response_${Math.floor(Math.random() * 100000000)}`;
+        this.addSingleUseListener(replyType, callback);
+        this.sendMessageToServer({ type: "req_full_state", replyType });
+    }
+
+    addStoredStateValueListener(listener) {
+        this.addEventListener("state_key_value", listener);
+    }
+
+    removeStoredStateValueListener(listener) {
+        this.removeEventListener("state_key_value", listener);
+    }
+
+    requestParameterValue(endpointID) {
+        this.sendMessageToServer({ type: "req_param_value", id: endpointID });
+    }
+
+    addParameterListener(endpointID, listener) {
+        this.addEventListener(`param_value_${endpointID}`, listener);
+    }
+
+    removeParameterListener(endpointID, listener) {
+        this.removeEventListener(`param_value_${endpointID}`, listener);
+    }
+
+    addAllParameterListener(listener) {
+        this.addEventListener("param_value", listener);
+    }
+
+    removeAllParameterListener(listener) {
+        this.removeEventListener("param_value", listener);
+    }
+
+    addEndpointListener(endpointID, listener, granularity, sendFullAudioData) {
+        const listenerID = `event_${endpointID}_${Math.floor(Math.random() * 100000000)}`;
+        listener[`cmaj_endpointListenerID_${endpointID}`] = listenerID;
+        this.addEventListener(listenerID, listener);
+        this.sendMessageToServer({
+            type: "add_endpoint_listener",
+            endpoint: endpointID,
+            replyType: listenerID,
+            granularity,
+            fullAudioData: sendFullAudioData,
+        });
+    }
+
+    removeEndpointListener(endpointID, listener) {
+        const listenerID = listener[`cmaj_endpointListenerID_${endpointID}`];
+        listener[`cmaj_endpointListenerID_${endpointID}`] = undefined;
+        this.removeEventListener(listenerID, listener);
+        this.sendMessageToServer({ type: "remove_endpoint_listener", endpoint: endpointID, replyType: listenerID });
+    }
+
+    deliverMessageFromServer(message) {
+        if (message.type === "status") {
+            this.manifest = message.message?.manifest;
+        }
+
+        if (message.type === "param_value") {
+            this.dispatchEvent(`param_value_${message.message.endpointID}`, message.message.value);
+        }
+
+        this.dispatchEvent(message.type, message.message);
+    }
+}
+
 async function importRuntimeModules(runtimeState) {
     try {
-        const patchConnectionModule = await import(new URL("cmaj_api/cmaj-patch-connection.js", runtimeState.resourceBaseURL).toString());
-        const patchViewModule = await import(new URL("cmaj_api/cmaj-patch-view.js", runtimeState.resourceBaseURL).toString());
+        const viewSource = runtimeState.boot.preferredView?.src || "patch_gui/index.ios.js";
+        const patchViewModule = await import(new URL(viewSource, runtimeState.resourceBaseURL).toString());
 
         return {
-            PatchConnection: patchConnectionModule.PatchConnection,
-            createPatchViewHolder: patchViewModule.createPatchViewHolder,
+            PatchConnection: EmbeddedPatchConnectionBase,
+            createPatchViewHolder: async (patchConnection) => {
+                const createView = patchViewModule.default ?? patchViewModule.createIOSPatchView;
+                const view = await createView?.(patchConnection);
+
+                if (!view) {
+                    return undefined;
+                }
+
+                const holder = document.createElement("div");
+                holder.style.display = "block";
+                holder.style.position = "relative";
+                holder.style.width = "100%";
+                holder.style.height = "100%";
+                holder.appendChild(view);
+                return holder;
+            },
         };
     } catch (error) {
         if (
@@ -76,6 +373,8 @@ function createEmbeddedPatchConnectionClass(PatchConnectionClass, runtimeState) 
                 this.manifest.view = runtimeState.boot.preferredView;
             }
 
+            const prefersNativeAudioBridge = runtimeState.bundleResourceBaseURL.startsWith("cosimo://");
+            this.prefersAudioResourceReadBridge = prefersNativeAudioBridge;
             this.prefersResourceReadBridge = true;
             globalThis.cmaj_deliverMessageFromServer = (message) => this.deliverMessageFromServer(message);
         }
@@ -102,6 +401,7 @@ const runtimeState = getRuntimeState();
 const container = document.getElementById("cmaj-view-container");
 const state = {
     runtimeState,
+    phase: "created",
     isViewActive: false,
     statusText: "",
     hasReadyNotification: false,
@@ -113,6 +413,14 @@ const state = {
         latestEffectiveWavetablePosition: null,
     },
 };
+
+function describeError(error) {
+    return error?.stack || error?.message || String(error);
+}
+
+function setPhase(phase) {
+    state.phase = phase;
+}
 
 globalThis.setStatusMessage = (message) => {
     const messageText = typeof message === "string" ? message : String(message ?? "");
@@ -132,12 +440,16 @@ globalThis.setStatusMessage = (message) => {
 
 globalThis.__cosimoInspectHostPage = () => ({
     bootSource: state.runtimeState.bootSource,
-    currentURL: window.location.href,
+    currentURL:
+        state.runtimeState.bootSource === "bundle" && window.location.href === "about:blank"
+            ? state.runtimeState.boot.bundlePageURL ?? ""
+            : window.location.href,
     bundlePageURL: state.runtimeState.boot.bundlePageURL ?? "",
     bundleResourceBaseURL: state.runtimeState.bundleResourceBaseURL,
     devServerURL: state.runtimeState.devServerURL,
     devServerProbe: globalThis.__COSIMO_DEV_SERVER_PROBE ?? null,
     resourceBaseURL: state.runtimeState.resourceBaseURL,
+    phase: state.phase,
     documentTitle: document.title,
     htmlMarker: globalThis.__COSIMO_DEV_HTML_MARKER ?? "",
     jsMarker: globalThis.__COSIMO_DEV_JS_MARKER ?? "",
@@ -152,6 +464,47 @@ globalThis.__cosimoInspectRuntimeState = () => ({
     latestRuntimeState: state.runtimeSnapshot.latestRuntimeState,
     latestEffectiveWavetablePosition: state.runtimeSnapshot.latestEffectiveWavetablePosition,
 });
+
+function rectToObject(rect) {
+    if (!rect) {
+        return null;
+    }
+
+    return {
+        x: rect.x,
+        y: rect.y,
+        width: rect.width,
+        height: rect.height,
+        top: rect.top,
+        right: rect.right,
+        bottom: rect.bottom,
+        left: rect.left,
+    };
+}
+
+globalThis.__cosimoCollectLayoutMetrics = () => {
+    const viewElement = container.querySelector("cosimo-synth-view");
+    const shadowRoot = viewElement?.shadowRoot ?? null;
+    const shell = shadowRoot?.querySelector(".ios-shell") ?? null;
+    const footer = shadowRoot?.querySelector(".keyboard-footer") ?? null;
+    const keyboard = shadowRoot?.querySelector(".keyboard") ?? null;
+    const shellRect = shell?.getBoundingClientRect?.() ?? null;
+    const footerRect = footer?.getBoundingClientRect?.() ?? null;
+    const keyboardRect = keyboard?.getBoundingClientRect?.() ?? null;
+    const keyboardBottom = keyboardRect?.bottom ?? footerRect?.bottom ?? null;
+    const shellStyle = shell ? getComputedStyle(shell) : null;
+    const shellPaddingBottom = shellStyle ? Number.parseFloat(shellStyle.paddingBottom) || 0 : null;
+
+    return {
+        isReady: Boolean(state.isViewActive && shell && footer && keyboard),
+        shellRect: rectToObject(shellRect),
+        footerRect: rectToObject(footerRect),
+        keyboardRect: rectToObject(keyboardRect),
+        shellPaddingBottom,
+        footerBottomGap: shellRect && footerRect ? shellRect.bottom - footerRect.bottom : null,
+        keyboardBottomGap: shellRect && keyboardBottom !== null ? shellRect.bottom - keyboardBottom : null,
+    };
+};
 
 globalThis.__cosimoLatestCatalogSnapshot = null;
 
@@ -188,7 +541,7 @@ async function refreshCatalogSnapshot(patchConnection) {
                 firstTableAudioSampleRate = Number(audioFile?.sampleRate) || 0;
                 firstTableAudioFrameCount = audioFile?.samples?.length ?? 0;
             } catch (error) {
-                firstTableAudioError = error?.stack || error?.message || String(error);
+                firstTableAudioError = describeError(error);
             }
         }
 
@@ -204,7 +557,7 @@ async function refreshCatalogSnapshot(patchConnection) {
     } catch (error) {
         state.catalogSnapshot = {
             pending: false,
-            error: error?.stack || error?.message || String(error),
+            error: describeError(error),
         };
     }
 
@@ -212,12 +565,16 @@ async function refreshCatalogSnapshot(patchConnection) {
 }
 
 async function initialisePatch() {
+    setPhase("initialise");
+
     if (typeof globalThis.cmaj_notifyHostPageReady === "function" && !state.hasReadyNotification) {
         state.hasReadyNotification = true;
         globalThis.cmaj_notifyHostPageReady();
     }
 
+    setPhase("import-runtime-modules");
     const runtimeModules = await importRuntimeModules(state.runtimeState);
+    setPhase("create-patch-connection");
     const EmbeddedPatchConnection = createEmbeddedPatchConnectionClass(runtimeModules.PatchConnection, state.runtimeState);
     const patchConnection = new EmbeddedPatchConnection();
     patchConnection.resourceClient = createIOSResourceClient(patchConnection);
@@ -231,7 +588,7 @@ async function initialisePatch() {
             });
         } catch (error) {
             state.runtimeSnapshot.latestRuntimeState = {
-                inspectError: error?.stack || error?.message || String(error),
+                inspectError: describeError(error),
             };
         }
 
@@ -242,7 +599,7 @@ async function initialisePatch() {
             });
         } catch (error) {
             state.runtimeSnapshot.latestEffectiveWavetablePosition = {
-                inspectError: error?.stack || error?.message || String(error),
+                inspectError: describeError(error),
             };
         }
     }
@@ -254,8 +611,10 @@ async function initialisePatch() {
             return;
         }
 
+        setPhase("create-patch-view");
         container.innerHTML = "";
         const view = await runtimeModules.createPatchViewHolder(patchConnection);
+        setPhase("patch-view-created");
 
         if (!view) {
             globalThis.setStatusMessage("Could not create a patch view.");
@@ -263,17 +622,24 @@ async function initialisePatch() {
         }
 
         state.isViewActive = true;
+        setPhase("patch-view-active");
         container.appendChild(view);
     };
-
-    if (document.readyState === "loading") {
-        document.addEventListener("DOMContentLoaded", () => {
-            void createViewIfNeeded();
-        }, { once: true });
-        return;
-    }
 
     await createViewIfNeeded();
 }
 
-void initialisePatch();
+window.addEventListener("error", (event) => {
+    setPhase("window-error");
+    globalThis.setStatusMessage(describeError(event.error ?? event.message));
+});
+
+window.addEventListener("unhandledrejection", (event) => {
+    setPhase("unhandled-rejection");
+    globalThis.setStatusMessage(describeError(event.reason));
+});
+
+void initialisePatch().catch((error) => {
+    setPhase("initialise-error");
+    globalThis.setStatusMessage(describeError(error));
+});

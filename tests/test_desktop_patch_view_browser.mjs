@@ -748,6 +748,64 @@ test("built desktop bundle mounts the custom-element wrapper and renders a real 
     }
 });
 
+test("built desktop bundle renders visible distortion slider handles inside the shadow DOM", async () => {
+    const page = await openBuiltDesktopBundlePage();
+
+    try {
+        await page.waitForSelector("cosimo-desktop-react-view");
+
+        const handleState = await page.evaluate(() => {
+            const host = document.querySelector("cosimo-desktop-react-view");
+            const root = host?.shadowRoot;
+
+            if (!root) {
+                return null;
+            }
+
+            return [
+                "distortion-drive-handle",
+                "distortion-knee-handle",
+                "distortion-mix-handle",
+            ].map((dataRole) => {
+                const element = root.querySelector(`[data-role="${dataRole}"]`);
+
+                if (!(element instanceof HTMLElement)) {
+                    return {
+                        dataRole,
+                        exists: false,
+                    };
+                }
+
+                const rect = element.getBoundingClientRect();
+                const style = getComputedStyle(element);
+
+                return {
+                    dataRole,
+                    exists: true,
+                    width: rect.width,
+                    height: rect.height,
+                    backgroundImage: style.backgroundImage,
+                    opacity: style.opacity,
+                    visibility: style.visibility,
+                };
+            });
+        });
+
+        assert.notEqual(handleState, null);
+
+        for (const handle of handleState) {
+            assert.equal(handle.exists, true, `${handle.dataRole} should exist`);
+            assert.equal(handle.width >= 10, true, `${handle.dataRole} should have a visible width`);
+            assert.equal(handle.height >= 10, true, `${handle.dataRole} should have a visible height`);
+            assert.notEqual(handle.backgroundImage, "none", `${handle.dataRole} should render its explicit gradient`);
+            assert.equal(handle.opacity, "1", `${handle.dataRole} should not be transparent`);
+            assert.equal(handle.visibility, "visible", `${handle.dataRole} should not be hidden`);
+        }
+    } finally {
+        await page.close();
+    }
+});
+
 test("desktop dev curve lab retunes the real filter resonance drag curve", async () => {
     const page = await openHarnessPage();
 

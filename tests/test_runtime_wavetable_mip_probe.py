@@ -22,6 +22,7 @@ from bench import (
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+MSEG_SOURCE = REPO_ROOT / "cmajor" / "Mseg.cmajor"
 FIXED_FRAME_OSCILLATOR_SOURCE = REPO_ROOT / "cmajor" / "FixedFrameOscillator.cmajor"
 SAMPLES_PER_FRAME = 2048
 OSCILLATOR_MIP_COUNT = 11
@@ -40,7 +41,9 @@ def _expected_mip_frame(frame: np.ndarray, mip_index: int) -> np.ndarray:
 
 def _build_runtime_probe_source(*, initial_frequency_hz: float, frame_position: float) -> str:
     return (
-        FIXED_FRAME_OSCILLATOR_SOURCE.read_text(encoding="utf-8")
+        MSEG_SOURCE.read_text(encoding="utf-8")
+        + "\n"
+        + FIXED_FRAME_OSCILLATOR_SOURCE.read_text(encoding="utf-8")
         + "\n"
         + "processor RuntimeSessionAdapter\n"
         + "{\n"
@@ -121,7 +124,9 @@ def _build_runtime_probe_source(*, initial_frequency_hz: float, frame_position: 
 
 def _build_runtime_protocol_probe_source(*, initial_frequency_hz: float) -> str:
     return (
-        FIXED_FRAME_OSCILLATOR_SOURCE.read_text(encoding="utf-8")
+        MSEG_SOURCE.read_text(encoding="utf-8")
+        + "\n"
+        + FIXED_FRAME_OSCILLATOR_SOURCE.read_text(encoding="utf-8")
         + "\n"
         + "processor RuntimeSessionAdapter\n"
         + "{\n"

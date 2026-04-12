@@ -1,6 +1,11 @@
 {
   "parameters": [
     {
+      "address": 182584410154073987,
+      "identifier": "hostSlot0Guard",
+      "displayName": "Host Slot 0 Guard"
+    },
+    {
       "address": 10299632488404189556,
       "identifier": "wavetablePosition",
       "displayName": "Wavetable Position"
@@ -21,9 +26,109 @@
       "displayName": "Glide Time"
     },
     {
-      "address": 9787453917618359882,
-      "identifier": "mseg1Depth",
-      "displayName": "MSEG 1 Depth"
+      "address": 1152419,
+      "identifier": "pan",
+      "displayName": "Pan"
+    },
+    {
+      "address": 12862588031379431,
+      "identifier": "warpMode",
+      "displayName": "Warp Mode"
+    },
+    {
+      "address": 2084051865816895258,
+      "identifier": "warpAmount",
+      "displayName": "Warp Amount"
+    },
+    {
+      "address": 2024136184060723739,
+      "identifier": "filterMode",
+      "displayName": "Filter Mode"
+    },
+    {
+      "address": 6306595017994557861,
+      "identifier": "filterCutoff",
+      "displayName": "Filter Cutoff"
+    },
+    {
+      "address": 109389974994027,
+      "identifier": "filterQ",
+      "displayName": "Filter Q"
+    },
+    {
+      "address": 12674614796774714668,
+      "identifier": "distortionMode",
+      "displayName": "Distortion Mode"
+    },
+    {
+      "address": 15255758461290921375,
+      "identifier": "distortionDriveDb",
+      "displayName": "Distortion Drive"
+    },
+    {
+      "address": 12674614796772643966,
+      "identifier": "distortionKnee",
+      "displayName": "Distortion Knee"
+    },
+    {
+      "address": 15467337791964230227,
+      "identifier": "distortionWet",
+      "displayName": "Distortion Mix"
+    },
+    {
+      "address": 15255778494639533053,
+      "identifier": "distortionWetHPHz",
+      "displayName": "Distortion Band HP"
+    },
+    {
+      "address": 15255778494643654257,
+      "identifier": "distortionWetLPHz",
+      "displayName": "Distortion Band LP"
+    },
+    {
+      "address": 12146312146003246687,
+      "identifier": "chorusEnabled",
+      "displayName": "Chorus On"
+    },
+    {
+      "address": 1083297385416233762,
+      "identifier": "chorusMix",
+      "displayName": "Chorus Mix"
+    },
+    {
+      "address": 2899369631486326543,
+      "identifier": "chorusMotionMode",
+      "displayName": "Chorus Motion"
+    },
+    {
+      "address": 16164317215524407742,
+      "identifier": "chorusBloomMode",
+      "displayName": "Chorus Bloom"
+    },
+    {
+      "address": 17179315558499124286,
+      "identifier": "chorusTone",
+      "displayName": "Chorus Tone"
+    },
+    {
+      "address": 9292515583589543021,
+      "identifier": "chorusFeedback",
+      "displayName": "Chorus Feedback"
+    },
+    {
+      "address": 8302178704785289852,
+      "identifier": "chorusRingAmount",
+      "displayName": "Chorus Ring"
+    },
+    {
+      "address": 18435406500741510400,
+      "identifier": "chorusRingOffsetMode",
+      "displayName": "Chorus Ring Pitch"
+    },
+    {
+      "address": 8850256332223215657,
+      "identifier": "chorusRingFineSemitones",
+      "displayName": "Chorus Ring Fine"
     }
   ],
   "savedStateKeys": [

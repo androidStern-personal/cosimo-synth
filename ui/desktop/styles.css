@@ -98,6 +98,33 @@
     border: 0;
 }
 
+.cosimo-distortion-drive-fill {
+    background: linear-gradient(0deg, rgba(248, 113, 113, 0.5), rgba(248, 113, 113, 0.2));
+}
+
+.cosimo-distortion-knee-fill {
+    background: linear-gradient(0deg, rgba(251, 191, 36, 0.45), rgba(251, 191, 36, 0.15));
+}
+
+.cosimo-distortion-mix-fill {
+    background: linear-gradient(0deg, rgba(34, 211, 238, 0.4), rgba(34, 211, 238, 0.15));
+}
+
+.cosimo-distortion-drive-handle {
+    background: linear-gradient(180deg, rgba(255, 220, 200, 0.9), rgba(248, 113, 113, 0.7));
+    box-shadow: 0 2px 8px rgba(248, 113, 113, 0.3);
+}
+
+.cosimo-distortion-knee-handle {
+    background: linear-gradient(180deg, rgba(255, 240, 200, 0.9), rgba(251, 191, 36, 0.7));
+    box-shadow: 0 2px 8px rgba(251, 191, 36, 0.3);
+}
+
+.cosimo-distortion-mix-handle {
+    background: linear-gradient(180deg, rgba(200, 240, 255, 0.9), rgba(103, 232, 249, 0.7));
+    box-shadow: 0 2px 8px rgba(103, 232, 249, 0.3);
+}
+
 .cosimo-select,
 .cosimo-button {
     border: 1px solid rgba(255, 255, 255, 0.08);

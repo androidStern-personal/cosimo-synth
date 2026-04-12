@@ -350,67 +350,68 @@ def run_host_mode(
 
     payload = wait_for_output(output_path)
 
-    if terminate_after_output:
-        run_allow_failure(["xcrun", "simctl", "terminate", udid, HOST_BUNDLE_ID])
+    try:
+        if "error" in payload:
+            raise RuntimeError(f"Host app smoke mode {mode} failed: {payload['error']}")
 
-    if "error" in payload:
-        raise RuntimeError(f"Host app smoke mode {mode} failed: {payload['error']}")
+        editor_payload = payload.get("editor")
 
-    editor_payload = payload.get("editor")
+        if isinstance(editor_payload, dict):
+            geometry_payload = wait_for_editor_metrics(udid)
 
-    if isinstance(editor_payload, dict):
-        geometry_payload = wait_for_editor_metrics(udid)
+            if isinstance(geometry_payload, dict):
+                dom_metrics = geometry_payload.get("domMetrics")
+                native_metrics = geometry_payload.get("native")
+                geometry_error = geometry_payload.get("error")
+                host_page = geometry_payload.get("hostPage")
+                catalog = geometry_payload.get("catalog")
+                runtime = geometry_payload.get("runtime")
+                screen_mode = geometry_payload.get("screenMode")
+                geometry_patch_view_ready = (
+                    isinstance(dom_metrics, dict)
+                    and bool(dom_metrics.get("isReady"))
+                    and (screen_mode != "patchView" or isinstance(host_page, dict))
+                )
 
-        if isinstance(geometry_payload, dict):
-            dom_metrics = geometry_payload.get("domMetrics")
-            native_metrics = geometry_payload.get("native")
-            geometry_error = geometry_payload.get("error")
-            host_page = geometry_payload.get("hostPage")
-            catalog = geometry_payload.get("catalog")
-            runtime = geometry_payload.get("runtime")
-            screen_mode = geometry_payload.get("screenMode")
-            geometry_patch_view_ready = (
-                isinstance(dom_metrics, dict)
-                and bool(dom_metrics.get("isReady"))
-                and (screen_mode != "patchView" or isinstance(host_page, dict))
-            )
+                if isinstance(dom_metrics, dict):
+                    editor_payload["domMetrics"] = dom_metrics
 
-            if isinstance(dom_metrics, dict):
-                editor_payload["domMetrics"] = dom_metrics
+                if isinstance(native_metrics, dict):
+                    editor_payload["nativeMetrics"] = native_metrics
 
-            if isinstance(native_metrics, dict):
-                editor_payload["nativeMetrics"] = native_metrics
+                if isinstance(host_page, dict) and (
+                    geometry_patch_view_ready or "hostPage" not in editor_payload
+                ):
+                    editor_payload["hostPage"] = host_page
 
-            if isinstance(host_page, dict) and (
-                geometry_patch_view_ready or "hostPage" not in editor_payload
-            ):
-                editor_payload["hostPage"] = host_page
+                if isinstance(catalog, dict):
+                    editor_payload["catalog"] = catalog
 
-            if isinstance(catalog, dict):
-                editor_payload["catalog"] = catalog
+                if isinstance(runtime, dict):
+                    editor_payload["runtime"] = runtime
 
-            if isinstance(runtime, dict):
-                editor_payload["runtime"] = runtime
+                if isinstance(screen_mode, str) and screen_mode:
+                    editor_payload["screenMode"] = screen_mode
 
-            if isinstance(screen_mode, str) and screen_mode:
-                editor_payload["screenMode"] = screen_mode
+                if geometry_error and "domMetrics" not in editor_payload:
+                    editor_payload["domMetricsError"] = geometry_error
 
-            if geometry_error and "domMetrics" not in editor_payload:
-                editor_payload["domMetricsError"] = geometry_error
+            if require_ready_patch_view_metrics:
+                screen_mode = editor_payload.get("screenMode")
+                dom_metrics = editor_payload.get("domMetrics")
+                host_page = editor_payload.get("hostPage")
+                patch_view_ready = (
+                    screen_mode == "patchView"
+                    and isinstance(dom_metrics, dict)
+                    and bool(dom_metrics.get("isReady"))
+                    and isinstance(host_page, dict)
+                )
 
-        if require_ready_patch_view_metrics:
-            screen_mode = editor_payload.get("screenMode")
-            dom_metrics = editor_payload.get("domMetrics")
-            host_page = editor_payload.get("hostPage")
-            patch_view_ready = (
-                screen_mode == "patchView"
-                and isinstance(dom_metrics, dict)
-                and bool(dom_metrics.get("isReady"))
-                and isinstance(host_page, dict)
-            )
-
-            if not patch_view_ready:
-                raise RuntimeError(f"Host app mode {mode} did not produce ready patch-view editor metrics: {editor_payload}")
+                if not patch_view_ready:
+                    raise RuntimeError(f"Host app mode {mode} did not produce ready patch-view editor metrics: {editor_payload}")
+    finally:
+        if terminate_after_output:
+            run_allow_failure(["xcrun", "simctl", "terminate", udid, HOST_BUNDLE_ID])
 
     return payload
 

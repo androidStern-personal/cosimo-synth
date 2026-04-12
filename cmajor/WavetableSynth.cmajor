@@ -944,6 +944,10 @@ graph WavetableSynth [[ main ]]
     input event wt::ModulationMsegPlaybackUpload modulationMsegPlayback;
     input event wt::ModulationEnvelopeUpload modulationEnvelope;
     input event wt::ModulationRouteUpload modulationRoute;
+    // Keep a hidden no-op parameter in host slot 0. Ableton plus the Cmajor
+    // JUCE wrapper can treat parameter slot 0 specially, so visible synth
+    // parameters must start at slot 1.
+    input value float32 hostSlot0Guard [[ name: "Host Slot 0 Guard", min: 0.0f, max: 1.0f, init: 0.0f, discrete: true, step: 1.0f, hidden: true, automatable: false, rampFrames: 0 ]];
     input value float32 wavetablePosition [[ name: "Wavetable Position", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
     input value float32 wavetableSelect [[ name: "Wavetable Select", min: 0.0f, max: 255.0f, init: 0.0f, discrete: true, step: 1.0f, rampFrames: 0 ]];
     input value float32 playMode [[ name: "Play Mode", min: 0.0f, max: 2.0f, init: 0.0f, discrete: true, step: 1.0f, rampFrames: 0 ]];

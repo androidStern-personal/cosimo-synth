@@ -95,7 +95,6 @@ def _build_setup_js(
         f"patch.setInputValue_playMode({float(play_mode):.1f}, 0);",
         f"patch.setInputValue_glideTime({float(glide_time):.6f}, 0);",
         "patch.setInputValue_framePosition(0.0, 0);",
-        "patch.setInputValue_msegDepth(0.0, 0);",
     ]
 
     if include_bank:
@@ -123,6 +122,10 @@ def _pitch_bend_expr(channel: int, semitones: float) -> str:
 
 def _strip_main_annotation(source: str) -> str:
     return re.sub(r"graph\s+WavetableSynth\s+\[\[\s*main\s*\]\]", "graph WavetableSynth", source, count=1)
+
+
+def _extract_wavetable_synth_prelude(source: str) -> str:
+    return _strip_main_annotation(source).split("    graph Voice", maxsplit=1)[0] + "\n}\n"
 
 
 def _build_scheduler_source(scheduled_events: list[tuple[int, str]]) -> str:
@@ -193,13 +196,31 @@ def _build_runtime_session_adapter_source() -> str:
     )
 
 
+def _build_stereo_to_mono_probe_source() -> str:
+    return (
+        "processor StereoToMonoProbe\n"
+        + "{\n"
+        + "    input stream float32<2> in;\n"
+        + "    output stream float32 out;\n"
+        + "    void main()\n"
+        + "    {\n"
+        + "        loop\n"
+        + "        {\n"
+        + "            out <- (in[0] + in[1]) * 0.5f;\n"
+        + "            advance();\n"
+        + "        }\n"
+        + "    }\n"
+        + "}\n"
+    )
+
+
 def _build_dispatcher_probe_source(scheduled_events: list[tuple[int, str]]) -> str:
     return (
         MSEG_SOURCE.read_text(encoding="utf-8")
         + "\n"
         + FIXED_FRAME_SOURCE.read_text(encoding="utf-8")
         + "\n"
-        + _strip_main_annotation(WAVETABLE_SYNTH_SOURCE.read_text(encoding="utf-8"))
+        + _extract_wavetable_synth_prelude(WAVETABLE_SYNTH_SOURCE.read_text(encoding="utf-8"))
         + "\n"
         + _build_scheduler_source(scheduled_events)
         + "graph NoteDispatcherProbe [[ main ]]\n"
@@ -207,7 +228,6 @@ def _build_dispatcher_probe_source(scheduled_events: list[tuple[int, str]]) -> s
         + "    input value float32 playMode [[ init: 0.0f ]];\n"
         + "    input value float32 glideTime [[ init: 0.0f ]];\n"
         + "    input value float32 framePosition [[ init: 0.0f ]];\n"
-        + "    input value float32 msegDepth [[ init: 0.0f ]];\n"
         + "    output event wt::VoiceRetune monoRetune;\n"
         + "    node scheduler = ScheduledEvents;\n"
         + "    node dispatcher = wt::NoteDispatcher (4);\n"
@@ -227,9 +247,10 @@ def _build_audio_probe_source(scheduled_events: list[tuple[int, str]]) -> str:
         + "\n"
         + FIXED_FRAME_SOURCE.read_text(encoding="utf-8")
         + "\n"
-        + _strip_main_annotation(WAVETABLE_SYNTH_SOURCE.read_text(encoding="utf-8"))
+        + _extract_wavetable_synth_prelude(WAVETABLE_SYNTH_SOURCE.read_text(encoding="utf-8"))
         + "\n"
         + _build_runtime_session_adapter_source()
+        + _build_stereo_to_mono_probe_source()
         + _build_scheduler_source(scheduled_events)
         + "graph NoteDispatcherAudioProbe [[ main ]]\n"
         + "{\n"
@@ -238,12 +259,12 @@ def _build_audio_probe_source(scheduled_events: list[tuple[int, str]]) -> str:
         + "    input value float32 playMode [[ init: 0.0f ]];\n"
         + "    input value float32 glideTime [[ init: 0.0f ]];\n"
         + "    input value float32 framePosition [[ init: 0.0f ]];\n"
-        + "    input value float32 msegDepth [[ init: 0.0f ]];\n"
         + "    output stream float out;\n"
         + "    node scheduler = ScheduledEvents;\n"
         + "    node adapter = RuntimeSessionAdapter;\n"
         + "    node dispatcher = wt::NoteDispatcher (4);\n"
         + "    node engine = wt::SharedVoiceEngine (4);\n"
+        + "    node downmix = StereoToMonoProbe;\n"
         + "    event wavetableLoadBegin (wt::WavetableLoadBegin load) { adapter.loadBeginIn <- load; }\n"
         + "    event wavetableMipFrame (wt::WavetableMipFrame frame) { adapter.mipFrameIn <- frame; }\n"
         + "    connection\n"
@@ -254,10 +275,10 @@ def _build_audio_probe_source(scheduled_events: list[tuple[int, str]]) -> str:
         + "        dispatcher.voiceRetuneOut -> engine.voiceRetuneIn;\n"
         + "        glideTime -> engine.glideTimeIn;\n"
         + "        framePosition -> engine.framePositionIn;\n"
-        + "        msegDepth -> engine.msegDepthIn;\n"
         + "        adapter.loadBeginOut -> engine.wavetableLoadBeginIn;\n"
         + "        adapter.mipFrameOut -> engine.wavetableMipFrameIn;\n"
-        + "        engine.out -> out;\n"
+        + "        engine.out -> downmix.in;\n"
+        + "        downmix.out -> out;\n"
         + "    }\n"
         + "}\n"
     )

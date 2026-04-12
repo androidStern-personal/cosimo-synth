@@ -442,9 +442,12 @@ export function createDesktopResourceClient(source: PatchConnectionResourceSourc
 }
 
 export function createIOSResourceClient(source: PatchConnectionResourceSource | null | undefined) {
-    return createResourceClient(source ?? {}, {
+    const normalizedSource = source ?? {};
+    const prefersBridgeAudio = Boolean(normalizedSource.prefersAudioResourceReadBridge);
+
+    return createResourceClient(normalizedSource, {
         textPreference: "bridge",
-        audioPreference: "url",
+        audioPreference: prefersBridgeAudio ? "bridge" : "url",
     });
 }
 
