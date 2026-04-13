@@ -601,8 +601,25 @@ OTT lab transient clamp fix on 2026-04-12
 - The default OTT lab patch was creating a loud onset spike because the band input/output gain boosts were active immediately, while the compressor gain reduction started from silence and took too long to catch up. With a 0.75 peak 1 kHz loud step, the old default wet output peaked around 1.84 in the first 5 ms.
 - Changed `fx/ott_lab/OttLab.cmajor` so each band now has separate upper and lower detector envelopes. The upper detector is clamped to the lower edge of the above-threshold soft knee for downward compression, and the lower detector is clamped to the upper edge of the below-threshold soft knee for upward compression. This matches the actual above-threshold/below-threshold compressor structure more closely than using one shared envelope for both jobs.
 - Kept the band attack/release controls on the detector envelopes and reduced the final gain smoother to `0.04 ms`. That final smoother is only anti-zipper protection now; it is no longer a second slow attack stage after the detector.
-- Added a regression test that renders the real generated Cmajor OTT lab patch at the default settings and fails if the first 5 ms of a loud step becomes more than 2% louder than the dry input. The same test also proves the sustained section is still compressed, so it cannot pass by bypassing the effect.
+- Added a fixed internal `3 ms` wet-path lookahead. The detector reads the current crossover bands, while the audio being gain-controlled is delayed by the lookahead buffer. The internal dry path used for the wet/dry mix is delayed by the same band buffers, while bypass and `Mix = 0%` still output the original dry input.
+- Added a regression test that renders the real generated Cmajor OTT lab patch at the default settings, finds the first loud processed-output window, and fails if that onset is still a dry-level spike. The same test also proves the sustained section is still compressed, so it cannot pass by bypassing the effect.
 
 What was verified for the OTT lab transient clamp fix
+- `npm run ott:dry-run`
+- `uv run pytest -q tests/test_ott_lab_probe.py`
+
+OTT lab static per-band drive on 2026-04-12
+- Added a global `Band Drive` parameter to `fx/ott_lab/OttLab.cmajor`. It drives all three bands into their own soft saturator after that band's OTT compression and band output gain, before the bands are summed back together.
+- This is deliberately static gain staging. There is no envelope follower, no dynamic output trim, and no automatic loudness compensation. At `Band Drive = 0%`, the saturator returns the compressed band sample unchanged.
+- The soft-clip ceiling for each band is derived from that band's downward-compression threshold plus that band's output gain plus a fixed `6 dB` peak margin. The drive range is `0 dB` to `18 dB`; the saturator applies a fixed half-drive output trim so higher drive clamps peaks without collapsing the output to silence.
+- Measured with the default OTT settings, a 1 kHz sine at 0.75 input amplitude, and the fixed 3 ms lookahead still active:
+  - `Band Drive 0%`: peak `0.129856`, RMS `0.091752`
+  - `Band Drive 25%`: peak `0.144693`, RMS `0.107772`
+  - `Band Drive 50%`: peak `0.131583`, RMS `0.107900`
+  - `Band Drive 75%`: peak `0.105390`, RMS `0.093464`
+  - `Band Drive 100%`: peak `0.082876`, RMS `0.076225`
+- Added Cmajor probe tests that prove the new knob changes the processed OTT path, does not silence the output, and does not clip the unprocessed path when OTT `Amount = 0%`.
+
+What was verified for the OTT lab static per-band drive
 - `npm run ott:dry-run`
 - `uv run pytest -q tests/test_ott_lab_probe.py`

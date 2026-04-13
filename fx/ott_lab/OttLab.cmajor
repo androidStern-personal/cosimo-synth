@@ -4,8 +4,12 @@ namespace ottlab
     let defaultMidHighHz = 2499.99951f;
     let expansionLimitDb = 30.0f;
     let detectorFloor = 1.0e-12f;
+    let lookaheadMs = 3.0f;
     // The attack/release controls live in the detector. This final ramp only prevents zippering.
     let gainSmoothingMs = 0.04f;
+    let bandDriveMaxDb = 18.0f;
+    let bandSaturationPeakMarginDb = 6.0f;
+    let bandSaturationExponent = 4.0f;
 
     float32 clamp01 (float32 value)
     {
@@ -127,6 +131,26 @@ namespace ottlab
         return slope * kneeDistance * kneeDistance / (2.0f * kneeDb);
     }
 
+    float32 staticBandSaturate (float32 sample, float32 aboveThresholdDb, float32 bandOutputGainDb, float32 bandDrive01)
+    {
+        if (bandDrive01 <= 0.0001f)
+            return sample;
+
+        let driveDb = bandDriveMaxDb * clamp01 (bandDrive01);
+        let ceilingDb = aboveThresholdDb + bandOutputGainDb + bandSaturationPeakMarginDb;
+        let ceiling = std::levels::dBtoGain (ceilingDb);
+        let driveGain = std::levels::dBtoGain (driveDb);
+        let outputTrim = std::levels::dBtoGain (driveDb * -0.5f);
+        let normalized = (sample * driveGain) / std::intrinsics::max (ceiling, detectorFloor);
+        let magnitude = std::intrinsics::abs (normalized);
+        let denominator = std::intrinsics::pow (
+            1.0f + std::intrinsics::pow (magnitude, bandSaturationExponent),
+            1.0f / bandSaturationExponent
+        );
+
+        return ceiling * normalized * outputTrim / denominator;
+    }
+
     struct BandDynamicsState
     {
         float32 upperRmsEnvLeft, upperRmsEnvRight, upperRmsEnvLinked;
@@ -136,13 +160,15 @@ namespace ottlab
         float32 gainDbLeft, gainDbRight;
 
         float32<2> process (
-            float32<2> band,
+            float32<2> detectorBand,
+            float32<2> audioBand,
             float32 sampleRate,
             bool usePeakDetector,
             float32 stereoLink01,
             float32 amount01,
             float32 upAmount01,
             float32 downAmount01,
+            float32 bandDrive01,
             float32 globalInputGainDb,
             float32 bandInputGainDb,
             float32 bandOutputGainDb,
@@ -155,11 +181,12 @@ namespace ottlab
             float32 kneeDb)
         {
             let inputGain = std::levels::dBtoGain (globalInputGainDb + bandInputGainDb);
-            let bandInput = band * inputGain;
-            let absLeft = std::intrinsics::abs (bandInput[0]);
-            let absRight = std::intrinsics::abs (bandInput[1]);
-            let powerLeft = bandInput[0] * bandInput[0];
-            let powerRight = bandInput[1] * bandInput[1];
+            let detectorInput = detectorBand * inputGain;
+            let audioInput = audioBand * inputGain;
+            let absLeft = std::intrinsics::abs (detectorInput[0]);
+            let absRight = std::intrinsics::abs (detectorInput[1]);
+            let powerLeft = detectorInput[0] * detectorInput[0];
+            let powerRight = detectorInput[1] * detectorInput[1];
             let linkedPower = std::intrinsics::max (powerLeft, powerRight);
             let linkedPeak = std::intrinsics::max (absLeft, absRight);
             let attackCoeff = timeCoefficient (sampleRate, attackMs);
@@ -210,11 +237,13 @@ namespace ottlab
             this.gainDbLeft = smoothTowards (this.gainDbLeft, targetGainDbLeft, gainSmoothCoeff);
             this.gainDbRight = smoothTowards (this.gainDbRight, targetGainDbRight, gainSmoothCoeff);
 
-            let wetLeft = bandInput[0] * std::levels::dBtoGain (this.gainDbLeft + bandOutputGainDb);
-            let wetRight = bandInput[1] * std::levels::dBtoGain (this.gainDbRight + bandOutputGainDb);
+            let wetLeft = audioInput[0] * std::levels::dBtoGain (this.gainDbLeft + bandOutputGainDb);
+            let wetRight = audioInput[1] * std::levels::dBtoGain (this.gainDbRight + bandOutputGainDb);
+            let saturatedWetLeft = staticBandSaturate (wetLeft, aboveThresholdDb, bandOutputGainDb, bandDrive01);
+            let saturatedWetRight = staticBandSaturate (wetRight, aboveThresholdDb, bandOutputGainDb, bandDrive01);
             return float32<2> (
-                lerp (band[0], wetLeft, amount01),
-                lerp (band[1], wetRight, amount01)
+                lerp (audioBand[0], saturatedWetLeft, amount01),
+                lerp (audioBand[1], saturatedWetRight, amount01)
             );
         }
     }
@@ -240,6 +269,7 @@ processor OttLab [[ main ]]
     input value bool softKnee [[ name: "Soft Knee", group: "Character", init: true, boolean ]];
     input value float32 kneeWidthDb [[ name: "Knee Width", group: "Character", min: 0.0f, max: 24.0f, init: 6.0f, unit: "dB", rampFrames: 256 ]];
     input value float32 stereoLink [[ name: "Stereo Link", group: "Character", min: 0.0f, max: 100.0f, init: 100.0f, unit: "%", rampFrames: 256 ]];
+    input value float32 bandDrive [[ name: "Band Drive", group: "Character", min: 0.0f, max: 100.0f, init: 0.0f, unit: "%", rampFrames: 256 ]];
 
     input value float32 lowMidHz [[ name: "Low/Mid", group: "Crossovers", min: 30.0f, max: 3000.0f, init: ottlab::defaultLowMidHz, unit: "Hz", rampFrames: 256 ]];
     input value float32 midHighHz [[ name: "Mid/High", group: "Crossovers", min: 300.0f, max: 15000.0f, init: ottlab::defaultMidHighHz, unit: "Hz", rampFrames: 256 ]];
@@ -279,6 +309,11 @@ processor OttLab [[ main ]]
         processor.frequency,
         ottlab::defaultMidHighHz
     );
+    let lookaheadBufferSize = int (processor.maxFrequency * ottlab::lookaheadMs * 0.001f) + 8;
+    float32<2>[lookaheadBufferSize] lowLookaheadBuffer;
+    float32<2>[lookaheadBufferSize] midLookaheadBuffer;
+    float32<2>[lookaheadBufferSize] highLookaheadBuffer;
+    wrap<lookaheadBufferSize> lookaheadWritePosition;
 
     ottlab::BandDynamicsState lowDynamics;
     ottlab::BandDynamicsState midDynamics;
@@ -318,6 +353,12 @@ processor OttLab [[ main ]]
             let midBand = splitMidHigh[0];
             let highBand = splitMidHigh[1];
             let sampleRate = float32 (processor.frequency);
+            let lookaheadSamples = int32 (std::intrinsics::clamp (ottlab::lookaheadMs * sampleRate * 0.001f, 1.0f, float32 (lookaheadBufferSize - 1)));
+            let lookaheadReadPosition = wrap<lookaheadBufferSize> (int32 (lookaheadWritePosition) + lookaheadBufferSize - lookaheadSamples);
+            float32<2> delayedLowBand = lowLookaheadBuffer[lookaheadReadPosition];
+            float32<2> delayedMidBand = midLookaheadBuffer[lookaheadReadPosition];
+            float32<2> delayedHighBand = highLookaheadBuffer[lookaheadReadPosition];
+            float32<2> delayedDry = delayedLowBand + delayedMidBand + delayedHighBand;
             let amount01 = ottlab::clamp01 (amount * 0.01f);
             let mix01 = ottlab::clamp01 (mix * 0.01f);
             let timeScale = std::intrinsics::clamp (timePercent * 0.01f, 0.1f, 10.0f);
@@ -326,26 +367,35 @@ processor OttLab [[ main ]]
             let usePeakDetector = detectorMode >= 0.5f;
             let kneeDb = softKnee ? std::intrinsics::clamp (kneeWidthDb, 0.0f, 24.0f) : 0.0f;
             let stereoLink01 = ottlab::clamp01 (stereoLink * 0.01f);
+            let bandDrive01 = ottlab::clamp01 (bandDrive * 0.01f);
 
             let processedLow = lowDynamics.process (
-                lowBand, sampleRate, usePeakDetector, stereoLink01, amount01, upAmount01, downAmount01,
+                lowBand, delayedLowBand, sampleRate, usePeakDetector, stereoLink01, amount01, upAmount01, downAmount01, bandDrive01,
                 inputGainDb, lowInputGainDb, lowOutputGainDb, lowAboveDb, lowBelowDb,
                 lowDownRatio, lowUpRatio, lowAttackMs * timeScale, lowReleaseMs * timeScale, kneeDb
             );
             let processedMid = midDynamics.process (
-                midBand, sampleRate, usePeakDetector, stereoLink01, amount01, upAmount01, downAmount01,
+                midBand, delayedMidBand, sampleRate, usePeakDetector, stereoLink01, amount01, upAmount01, downAmount01, bandDrive01,
                 inputGainDb, midInputGainDb, midOutputGainDb, midAboveDb, midBelowDb,
                 midDownRatio, midUpRatio, midAttackMs * timeScale, midReleaseMs * timeScale, kneeDb
             );
             let processedHigh = highDynamics.process (
-                highBand, sampleRate, usePeakDetector, stereoLink01, amount01, upAmount01, downAmount01,
+                highBand, delayedHighBand, sampleRate, usePeakDetector, stereoLink01, amount01, upAmount01, downAmount01, bandDrive01,
                 inputGainDb, highInputGainDb, highOutputGainDb, highAboveDb, highBelowDb,
                 highDownRatio, highUpRatio, highAttackMs * timeScale, highReleaseMs * timeScale, kneeDb
             );
-            let wet = (processedLow + processedMid + processedHigh) * std::levels::dBtoGain (outputGainDb);
-            let mixed = dry + ((wet - dry) * mix01);
+            float32<2> wet = (processedLow + processedMid + processedHigh) * std::levels::dBtoGain (outputGainDb);
+            float32<2> mixed = delayedDry + ((wet - delayedDry) * mix01);
 
-            out <- bypass ? dry : mixed;
+            lowLookaheadBuffer[lookaheadWritePosition] = lowBand;
+            midLookaheadBuffer[lookaheadWritePosition] = midBand;
+            highLookaheadBuffer[lookaheadWritePosition] = highBand;
+            lookaheadWritePosition = wrap<lookaheadBufferSize> (int32 (lookaheadWritePosition) + 1);
+
+            if (bypass || (mix01 <= 0.0f))
+                out <- dry;
+            else
+                out <- mixed;
             advance();
         }
     }

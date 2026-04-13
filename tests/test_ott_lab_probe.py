@@ -103,6 +103,7 @@ graph OttProbe [[ main ]]
     input value bool softKnee [[ init: true ]];
     input value float32 kneeWidthDb [[ init: 6.0f ]];
     input value float32 stereoLink [[ init: 100.0f ]];
+    input value float32 bandDrive [[ init: 0.0f ]];
     input value float32 lowMidHz [[ init: 88.2818146f ]];
     input value float32 midHighHz [[ init: 2499.99951f ]];
     input value float32 lowAboveDb [[ init: -33.75f ]];
@@ -159,6 +160,7 @@ graph OttProbe [[ main ]]
         softKnee -> ott.softKnee;
         kneeWidthDb -> ott.kneeWidthDb;
         stereoLink -> ott.stereoLink;
+        bandDrive -> ott.bandDrive;
         lowMidHz -> ott.lowMidHz;
         midHighHz -> ott.midHighHz;
         lowAboveDb -> ott.lowAboveDb;
@@ -247,6 +249,7 @@ def _flat_band_setup(**overrides: bool | float | int) -> str:
         "softKnee": False,
         "kneeWidthDb": 0.0,
         "stereoLink": 100.0,
+        "bandDrive": 0.0,
         "lowMidHz": 88.2818146,
         "midHighHz": 2499.99951,
         "lowDownRatio": 1.0,
@@ -285,6 +288,7 @@ def _default_ott_setup(**overrides: bool | float | int) -> str:
         "softKnee": True,
         "kneeWidthDb": 6.0,
         "stereoLink": 100.0,
+        "bandDrive": 0.0,
         "lowMidHz": 88.2818146,
         "midHighHz": 2499.99951,
         "lowAboveDb": -33.75,
@@ -443,16 +447,76 @@ def test_default_ott_loud_step_does_not_add_attack_spike_above_the_dry_input() -
     processed = _render_ott(setup_js=setup, output_endpoint_id="leftOut", num_samples=DEFAULT_SAMPLE_RATE)
     dry = _render_ott(setup_js=setup, output_endpoint_id="dryLeftOut", num_samples=DEFAULT_SAMPLE_RATE)
     step_frame = int(0.25 * DEFAULT_SAMPLE_RATE)
-    first_5_ms = slice(step_frame, step_frame + int(0.005 * DEFAULT_SAMPLE_RATE))
+    dry_first_5_ms = slice(step_frame, step_frame + int(0.005 * DEFAULT_SAMPLE_RATE))
     settled = slice(step_frame + int(0.15 * DEFAULT_SAMPLE_RATE), step_frame + int(0.25 * DEFAULT_SAMPLE_RATE))
 
-    dry_peak = peak_abs(dry[first_5_ms])
-    processed_peak = peak_abs(processed[first_5_ms])
+    dry_peak = peak_abs(dry[dry_first_5_ms])
+    onset_search = np.abs(processed[step_frame : step_frame + int(0.02 * DEFAULT_SAMPLE_RATE)])
+    loud_indices = np.flatnonzero(onset_search > dry_peak * 0.4)
 
     assert is_finite(processed)
     assert dry_peak > 0.7
-    assert processed_peak <= dry_peak * 1.02
+    assert loud_indices.size > 0
+    processed_onset = step_frame + int(loud_indices[0])
+    assert int(0.001 * DEFAULT_SAMPLE_RATE) <= processed_onset - step_frame <= int(0.006 * DEFAULT_SAMPLE_RATE)
+
+    processed_first_5_ms = slice(processed_onset, processed_onset + int(0.005 * DEFAULT_SAMPLE_RATE))
+    assert peak_abs(processed[processed_first_5_ms]) <= dry_peak * 0.8
     assert rms(processed[settled]) < rms(dry[settled]) * 0.35
+
+
+@pytest.mark.cmajor
+def test_band_drive_soft_clips_after_default_band_dynamics_without_silencing_the_signal() -> None:
+    base_setup = dict(
+        sourceFrequencyHz=1000.0,
+        sourceLeftAmplitude=0.75,
+        sourceRightAmplitude=0.75,
+    )
+    no_drive = _render_ott(
+        setup_js=_default_ott_setup(**base_setup, bandDrive=0.0),
+        output_endpoint_id="leftOut",
+        num_samples=DEFAULT_SAMPLE_RATE,
+    )
+    driven = _render_ott(
+        setup_js=_default_ott_setup(**base_setup, bandDrive=100.0),
+        output_endpoint_id="leftOut",
+        num_samples=DEFAULT_SAMPLE_RATE,
+    )
+    steady = slice(int(0.5 * DEFAULT_SAMPLE_RATE), DEFAULT_SAMPLE_RATE)
+    no_drive_peak = peak_abs(no_drive[steady])
+    driven_peak = peak_abs(driven[steady])
+
+    assert is_finite(driven)
+    assert no_drive_peak > 0.05
+    assert driven_peak < no_drive_peak * 0.65
+    assert rms(driven[steady]) > rms(no_drive[steady]) * 0.2
+
+
+@pytest.mark.cmajor
+def test_band_drive_does_not_clip_the_unprocessed_amount_zero_path() -> None:
+    base_setup = dict(
+        sourceFrequencyHz=1000.0,
+        sourceLeftAmplitude=0.75,
+        sourceRightAmplitude=0.75,
+        amount=0.0,
+        mix=100.0,
+    )
+    no_drive = _render_ott(
+        setup_js=_default_ott_setup(**base_setup, bandDrive=0.0),
+        output_endpoint_id="leftOut",
+        num_samples=DEFAULT_SAMPLE_RATE,
+    )
+    driven = _render_ott(
+        setup_js=_default_ott_setup(**base_setup, bandDrive=100.0),
+        output_endpoint_id="leftOut",
+        num_samples=DEFAULT_SAMPLE_RATE,
+    )
+    steady = slice(int(0.5 * DEFAULT_SAMPLE_RATE), DEFAULT_SAMPLE_RATE)
+    residual = driven[steady] - no_drive[steady]
+
+    assert is_finite(driven)
+    assert peak_abs(no_drive[steady]) > 0.5
+    assert peak_abs(residual) < 1.0e-6
 
 
 @pytest.mark.cmajor
