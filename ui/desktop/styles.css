@@ -125,6 +125,51 @@
     box-shadow: 0 2px 8px rgba(103, 232, 249, 0.3);
 }
 
+.cosimo-chorus-mix-fill {
+    background: linear-gradient(0deg, rgba(34, 211, 238, 0.5), rgba(34, 211, 238, 0.2));
+}
+
+.cosimo-chorus-tone-fill {
+    background: linear-gradient(0deg, rgba(45, 212, 191, 0.5), rgba(45, 212, 191, 0.2));
+}
+
+.cosimo-chorus-feedback-fill {
+    background: linear-gradient(0deg, rgba(167, 139, 250, 0.5), rgba(167, 139, 250, 0.2));
+}
+
+.cosimo-chorus-ring-fill {
+    background: linear-gradient(0deg, rgba(251, 191, 36, 0.5), rgba(251, 191, 36, 0.2));
+}
+
+.cosimo-chorus-fine-fill {
+    background: linear-gradient(0deg, rgba(34, 211, 238, 0.5), rgba(34, 211, 238, 0.2));
+}
+
+.cosimo-chorus-mix-handle {
+    background: linear-gradient(180deg, rgba(200, 240, 255, 0.9), rgba(34, 211, 238, 0.7));
+    box-shadow: 0 2px 8px rgba(34, 211, 238, 0.3);
+}
+
+.cosimo-chorus-tone-handle {
+    background: linear-gradient(180deg, rgba(200, 245, 240, 0.9), rgba(45, 212, 191, 0.7));
+    box-shadow: 0 2px 8px rgba(45, 212, 191, 0.3);
+}
+
+.cosimo-chorus-feedback-handle {
+    background: linear-gradient(180deg, rgba(230, 215, 255, 0.9), rgba(167, 139, 250, 0.7));
+    box-shadow: 0 2px 8px rgba(167, 139, 250, 0.3);
+}
+
+.cosimo-chorus-ring-handle {
+    background: linear-gradient(180deg, rgba(255, 240, 200, 0.9), rgba(251, 191, 36, 0.7));
+    box-shadow: 0 2px 8px rgba(251, 191, 36, 0.3);
+}
+
+.cosimo-chorus-fine-handle {
+    background: linear-gradient(180deg, rgba(200, 240, 255, 0.9), rgba(34, 211, 238, 0.7));
+    box-shadow: 0 2px 8px rgba(34, 211, 238, 0.3);
+}
+
 .cosimo-select,
 .cosimo-button {
     border: 1px solid rgba(255, 255, 255, 0.08);

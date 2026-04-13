@@ -4,7 +4,6 @@ import {
     useMemo,
     useRef,
     useState,
-    type FormEvent as ReactFormEvent,
     type ReactNode,
     type KeyboardEvent as ReactKeyboardEvent,
     type PointerEvent as ReactPointerEvent,
@@ -31,10 +30,12 @@ import {
     KeyboardSectionShell,
     MsegPreview,
     RangeField,
+    VerticalSlider,
     VOICE_MODE_OPTIONS,
     VoiceGlideControlSurface,
     WavetableStageSection,
 } from "../shared/synth-components";
+import { useSliderDrag } from "../shared/use-slider-drag";
 import { DistortionVisualizer } from "../shared/distortion-visualizer";
 import type { DistortionHistoryFrame, DistortionScopeFrame } from "../shared/distortion-visualization";
 import {
@@ -1114,113 +1115,14 @@ function DistortionSection({
         distortionWetLPHz.setValue(nextValue);
     }, [distortionWetHPHz.value, distortionWetLPHz]);
 
-    const normalizedDrive = distortionDriveDb.value / 36;
-    const normalizedKnee = distortionKnee.value;
-    const normalizedMix = distortionWet.value;
-
-    const driveTrackRef = useRef<HTMLDivElement>(null);
-    const kneeTrackRef = useRef<HTMLDivElement>(null);
-    const mixTrackRef = useRef<HTMLDivElement>(null);
     const hpTrackRef = useRef<HTMLDivElement>(null);
-    const dragRef = useRef<{
-        pointerId: number;
-        startClientY: number;
-        startClientX: number;
-        startNormalized: number;
-        binding: PatchControlBinding<number>;
-        axis: "vertical" | "horizontal";
-        min: number;
-        max: number;
-        trackElement: HTMLDivElement;
-        onChange?: (normalized: number) => void;
-    } | null>(null);
-
-    const handleSliderPointerDown = useCallback((
-        event: ReactPointerEvent<HTMLDivElement>,
-        trackElement: HTMLDivElement | null,
-        binding: PatchControlBinding<number>,
-        currentNormalized: number,
-        min: number,
-        max: number,
-        axis: "vertical" | "horizontal",
-        onChange?: (normalized: number) => void,
-    ) => {
-        if (!trackElement) return;
-        event.preventDefault();
-        trackElement.setPointerCapture(event.pointerId);
-        binding.beginGesture();
-        dragRef.current = {
-            pointerId: event.pointerId,
-            startClientY: event.clientY,
-            startClientX: event.clientX,
-            startNormalized: currentNormalized,
-            binding,
-            axis,
-            min,
-            max,
-            trackElement,
-            onChange,
-        };
-    }, []);
-
-    const handleSliderPointerMove = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
-        const drag = dragRef.current;
-        if (!drag || event.pointerId !== drag.pointerId) return;
-        const rect = drag.trackElement.getBoundingClientRect();
-        let nextNormalized: number;
-        if (drag.axis === "vertical") {
-            const deltaY = drag.startClientY - event.clientY;
-            const trackHeight = rect.height;
-            nextNormalized = clamp(drag.startNormalized + (deltaY / trackHeight), 0, 1);
-        } else {
-            const deltaX = event.clientX - rect.left;
-            nextNormalized = clamp(deltaX / rect.width, 0, 1);
-        }
-        if (drag.onChange) {
-            drag.onChange(nextNormalized);
-        } else {
-            const denormalized = drag.min + (nextNormalized * (drag.max - drag.min));
-            drag.binding.setValue(denormalized);
-        }
-    }, []);
-
-    const handleSliderPointerUp = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
-        const drag = dragRef.current;
-        if (!drag || event.pointerId !== drag.pointerId) return;
-        drag.trackElement.releasePointerCapture(event.pointerId);
-        drag.binding.endGesture();
-        dragRef.current = null;
-    }, []);
+    const { handlePointerDown: handleSliderPointerDown, handlePointerMove: handleSliderPointerMove, handlePointerUp: handleSliderPointerUp } = useSliderDrag();
 
     return (
         <section
             data-role="distortion-card"
             className={`flex h-full flex-col overflow-hidden rounded-[14px] bg-[radial-gradient(circle_at_top_left,rgba(248,113,113,0.10),transparent_34%),linear-gradient(180deg,rgba(9,8,15,0.98),rgba(2,4,11,1))] ${className ?? ""}`}
         >
-            <input
-                data-role="distortion-drive-field"
-                type="range"
-                min={0}
-                max={36}
-                step={0.001}
-                value={distortionDriveDb.value}
-                className="sr-only"
-                tabIndex={-1}
-                onInput={(event) => distortionDriveDb.setValue(Number(event.currentTarget.value))}
-                onChange={(event) => distortionDriveDb.setValue(Number(event.currentTarget.value))}
-            />
-            <input
-                data-role="distortion-mix-field"
-                type="range"
-                min={0}
-                max={1}
-                step={0.001}
-                value={distortionWet.value}
-                className="sr-only"
-                tabIndex={-1}
-                onInput={(event) => distortionWet.setValue(Number(event.currentTarget.value))}
-                onChange={(event) => distortionWet.setValue(Number(event.currentTarget.value))}
-            />
             <input
                 data-role="distortion-wet-lp-field"
                 type="range"
@@ -1234,57 +1136,31 @@ function DistortionSection({
                 onChange={(event) => handleWetLPChange(Number(event.currentTarget.value))}
             />
             <div className="flex min-h-0 flex-1">
-                {/* Drive slider */}
-                <div
-                    className="flex w-7 shrink-0 flex-col items-center gap-1 py-2"
-                >
-                    <span className="text-[8px] font-bold uppercase tracking-[0.1em] text-slate-400/45">Drv</span>
-                    <div
-                        ref={driveTrackRef}
-                        className="relative w-1.5 flex-1 cursor-ns-resize rounded-full bg-white/[0.04]"
-                        onPointerDown={(e) => handleSliderPointerDown(e, driveTrackRef.current, distortionDriveDb, normalizedDrive, 0, 36, "vertical")}
-                        onPointerMove={handleSliderPointerMove}
-                        onPointerUp={handleSliderPointerUp}
-                    >
-                        <div
-                            data-role="distortion-drive-fill"
-                            className="cosimo-distortion-drive-fill absolute bottom-0 left-0 right-0 rounded-full"
-                            style={{ height: `${normalizedDrive * 100}%` }}
-                        />
-                        <div
-                            data-role="distortion-drive-handle"
-                            className="cosimo-distortion-drive-handle absolute left-1/2 size-3.5 -translate-x-1/2 translate-y-1/2 rounded-full border-2 border-[rgba(3,5,12,0.7)]"
-                            style={{ bottom: `${normalizedDrive * 100}%` }}
-                        />
-                    </div>
-                    <span className="font-mono text-[8px] tracking-[0.04em] text-slate-200/55">{distortionDriveDb.value.toFixed(1)}</span>
-                </div>
-
-                {/* Knee slider */}
-                <div
-                    className="flex w-7 shrink-0 flex-col items-center gap-1 py-2"
-                >
-                    <span className="text-[8px] font-bold uppercase tracking-[0.1em] text-slate-400/45">Kne</span>
-                    <div
-                        ref={kneeTrackRef}
-                        className="relative w-1.5 flex-1 cursor-ns-resize rounded-full bg-white/[0.04]"
-                        onPointerDown={(e) => handleSliderPointerDown(e, kneeTrackRef.current, distortionKnee, normalizedKnee, 0, 1, "vertical")}
-                        onPointerMove={handleSliderPointerMove}
-                        onPointerUp={handleSliderPointerUp}
-                    >
-                        <div
-                            data-role="distortion-knee-fill"
-                            className="cosimo-distortion-knee-fill absolute bottom-0 left-0 right-0 rounded-full"
-                            style={{ height: `${normalizedKnee * 100}%` }}
-                        />
-                        <div
-                            data-role="distortion-knee-handle"
-                            className="cosimo-distortion-knee-handle absolute left-1/2 size-3.5 -translate-x-1/2 translate-y-1/2 rounded-full border-2 border-[rgba(3,5,12,0.7)]"
-                            style={{ bottom: `${normalizedKnee * 100}%` }}
-                        />
-                    </div>
-                    <span className="font-mono text-[8px] tracking-[0.04em] text-slate-200/55">{formatUnitPercent(distortionKnee.value)}</span>
-                </div>
+                <VerticalSlider
+                    label="Drv"
+                    binding={distortionDriveDb}
+                    min={0}
+                    max={36}
+                    fillClassName="cosimo-distortion-drive-fill"
+                    handleClassName="cosimo-distortion-drive-handle"
+                    fillDataRole="distortion-drive-fill"
+                    handleDataRole="distortion-drive-handle"
+                    inputDataRole="distortion-drive-field"
+                    formatValue={(v) => v.toFixed(1)}
+                    className="w-7"
+                />
+                <VerticalSlider
+                    label="Kne"
+                    binding={distortionKnee}
+                    min={0}
+                    max={1}
+                    fillClassName="cosimo-distortion-knee-fill"
+                    handleClassName="cosimo-distortion-knee-handle"
+                    fillDataRole="distortion-knee-fill"
+                    handleDataRole="distortion-knee-handle"
+                    formatValue={formatUnitPercent}
+                    className="w-7"
+                />
 
                 {/* Center: SVG + overlays */}
                 <div className="relative min-h-0 min-w-0 flex-1">
@@ -1364,240 +1240,32 @@ function DistortionSection({
                     </div>
                 </div>
 
-                {/* Mix slider */}
-                <div
-                    className="flex w-7 shrink-0 flex-col items-center gap-1 py-2"
-                >
-                    <span className="text-[8px] font-bold uppercase tracking-[0.1em] text-slate-400/45">Mix</span>
-                    <div
-                        ref={mixTrackRef}
-                        className="relative w-1.5 flex-1 cursor-ns-resize rounded-full bg-white/[0.04]"
-                        onPointerDown={(e) => handleSliderPointerDown(e, mixTrackRef.current, distortionWet, normalizedMix, 0, 1, "vertical")}
-                        onPointerMove={handleSliderPointerMove}
-                        onPointerUp={handleSliderPointerUp}
-                    >
-                        <div
-                            data-role="distortion-mix-fill"
-                            className="cosimo-distortion-mix-fill absolute bottom-0 left-0 right-0 rounded-full"
-                            style={{ height: `${normalizedMix * 100}%` }}
-                        />
-                        <div
-                            data-role="distortion-mix-handle"
-                            className="cosimo-distortion-mix-handle absolute left-1/2 size-3.5 -translate-x-1/2 translate-y-1/2 rounded-full border-2 border-[rgba(3,5,12,0.7)]"
-                            style={{ bottom: `${normalizedMix * 100}%` }}
-                        />
-                    </div>
-                    <span className="font-mono text-[8px] tracking-[0.04em] text-slate-200/55">{formatUnitPercent(distortionWet.value)}</span>
-                </div>
+                <VerticalSlider
+                    label="Mix"
+                    binding={distortionWet}
+                    min={0}
+                    max={1}
+                    fillClassName="cosimo-distortion-mix-fill"
+                    handleClassName="cosimo-distortion-mix-handle"
+                    fillDataRole="distortion-mix-fill"
+                    handleDataRole="distortion-mix-handle"
+                    inputDataRole="distortion-mix-field"
+                    formatValue={formatUnitPercent}
+                    className="w-7"
+                />
             </div>
         </section>
     );
 }
 
-function ChorusRangeControl({
-    label,
-    binding,
-    dataRole,
-    min = 0,
-    max = 1,
-    step = 0.001,
-    formatValue = formatUnitPercent,
-}: {
-    label: string;
-    binding: PatchControlBinding<number>;
-    dataRole: string;
-    min?: number;
-    max?: number;
-    step?: number;
-    formatValue?: (value: number) => string;
-}) {
-    const value = clamp(Number(binding.value) || 0, min, max);
-    const isGestureActiveRef = useRef(false);
-    const interactionRef = useRef<{
-        pointerId?: number;
-        removeListeners?: () => void;
-        source: "keyboard" | "pointer";
-        target: HTMLInputElement;
-    } | null>(null);
-
-    const endGesture = useCallback((target?: HTMLInputElement, pointerId?: number) => {
-        const interaction = interactionRef.current;
-
-        if (!interaction || !isGestureActiveRef.current) {
-            return;
-        }
-
-        if (
-            pointerId !== undefined
-            && interaction.pointerId !== undefined
-            && pointerId !== interaction.pointerId
-        ) {
-            return;
-        }
-
-        interaction.removeListeners?.();
-
-        if (target && pointerId !== undefined && target.hasPointerCapture(pointerId)) {
-            try {
-                target.releasePointerCapture(pointerId);
-            } catch {
-                // Synthetic pointer events in tests do not always own browser pointer capture.
-            }
-        }
-
-        isGestureActiveRef.current = false;
-        interactionRef.current = null;
-        binding.endGesture();
-    }, [binding]);
-
-    const beginPointerGesture = useCallback((event: ReactPointerEvent<HTMLInputElement>) => {
-        const target = event.currentTarget;
-        const pointerId = event.pointerId;
-
-        endGesture();
-        isGestureActiveRef.current = true;
-        interactionRef.current = {
-            pointerId,
-            source: "pointer",
-            target,
-        };
-        binding.beginGesture();
-
-        const endForPointer = (nextEvent: PointerEvent) => {
-            endGesture(target, nextEvent.pointerId);
-        };
-        const endForMouse = () => {
-            endGesture(target, pointerId);
-        };
-        const endIfButtonsReleased = (nextEvent: PointerEvent | MouseEvent) => {
-            if (nextEvent.buttons === 0) {
-                endGesture(target, pointerId);
-            }
-        };
-
-        window.addEventListener("pointerup", endForPointer, true);
-        window.addEventListener("pointercancel", endForPointer, true);
-        window.addEventListener("pointermove", endIfButtonsReleased, true);
-        window.addEventListener("mouseup", endForMouse, true);
-        window.addEventListener("mousemove", endIfButtonsReleased, true);
-        window.addEventListener("blur", endForMouse);
-
-        if (interactionRef.current) {
-            interactionRef.current.removeListeners = () => {
-                window.removeEventListener("pointerup", endForPointer, true);
-                window.removeEventListener("pointercancel", endForPointer, true);
-                window.removeEventListener("pointermove", endIfButtonsReleased, true);
-                window.removeEventListener("mouseup", endForMouse, true);
-                window.removeEventListener("mousemove", endIfButtonsReleased, true);
-                window.removeEventListener("blur", endForMouse);
-            };
-        }
-    }, [binding, endGesture]);
-
-    const beginKeyboardGesture = useCallback((target: HTMLInputElement) => {
-        if (interactionRef.current) {
-            return;
-        }
-
-        isGestureActiveRef.current = true;
-        interactionRef.current = {
-            source: "keyboard",
-            target,
-        };
-        binding.beginGesture();
-    }, [binding]);
-
-    const handleRangeInput = useCallback((event: ReactFormEvent<HTMLInputElement>) => {
-        binding.setValue(Number(event.currentTarget.value));
-    }, [binding]);
-
-    useEffect(() => () => endGesture(), [endGesture]);
-
-    return (
-        <label className="grid gap-1">
-            <span className="flex items-center justify-between text-[8px] font-bold uppercase tracking-[0.10em] text-slate-300/45">
-                <span>{label}</span>
-                <span className="font-mono text-[8px] font-normal tracking-[0.03em] text-cyan-100/55">{formatValue(value)}</span>
-            </span>
-            <input
-                data-role={dataRole}
-                type="range"
-                min={min}
-                max={max}
-                step={step}
-                value={value}
-                className="h-1.5 w-full cursor-ew-resize accent-cyan-300"
-                onPointerDown={beginPointerGesture}
-                onPointerMove={(event) => {
-                    if (interactionRef.current?.source === "pointer" && event.buttons === 0) {
-                        endGesture(event.currentTarget, event.pointerId);
-                    }
-                }}
-                onPointerUp={(event) => endGesture(event.currentTarget, event.pointerId)}
-                onPointerCancel={(event) => endGesture(event.currentTarget, event.pointerId)}
-                onLostPointerCapture={(event) => endGesture(event.currentTarget, event.pointerId)}
-                onMouseMove={(event) => {
-                    if (interactionRef.current?.source === "pointer" && event.buttons === 0) {
-                        endGesture(event.currentTarget);
-                    }
-                }}
-                onMouseUp={(event) => endGesture(event.currentTarget)}
-                onKeyDown={(event) => {
-                    if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End", "PageUp", "PageDown"].includes(event.key)) {
-                        beginKeyboardGesture(event.currentTarget);
-                    }
-                }}
-                onKeyUp={(event) => {
-                    if (interactionRef.current?.source === "keyboard") {
-                        endGesture(event.currentTarget);
-                    }
-                }}
-                onBlur={() => endGesture()}
-                onInput={handleRangeInput}
-                onChange={handleRangeInput}
-            />
-        </label>
-    );
-}
-
-function ChorusModeIcon({ kind }: { kind: "motion" | "bloom" | "pitch" }) {
-    if (kind === "motion") {
-        return (
-            <svg viewBox="0 0 24 24" aria-hidden="true" className="size-[15px] fill-none stroke-current stroke-[1.8]">
-                <path d="M3.5 13.5 C6 7.5, 9 7.5, 11.5 13.5 S17 19.5, 20.5 13.5" strokeLinecap="round" />
-                <path d="M3.5 10.5 C6 16.5, 9 16.5, 11.5 10.5 S17 4.5, 20.5 10.5" strokeLinecap="round" opacity="0.45" />
-            </svg>
-        );
-    }
-
-    if (kind === "bloom") {
-        return (
-            <svg viewBox="0 0 24 24" aria-hidden="true" className="size-[15px] fill-none stroke-current stroke-[1.7]">
-                <circle cx="12" cy="12" r="3.1" />
-                <path d="M12 3.5 V6.2 M12 17.8 V20.5 M3.5 12 H6.2 M17.8 12 H20.5" strokeLinecap="round" />
-                <path d="M5.7 5.7 L7.6 7.6 M16.4 16.4 L18.3 18.3 M18.3 5.7 L16.4 7.6 M7.6 16.4 L5.7 18.3" strokeLinecap="round" opacity="0.55" />
-            </svg>
-        );
-    }
-
-    return (
-        <svg viewBox="0 0 24 24" aria-hidden="true" className="size-[15px] fill-none stroke-current stroke-[1.7]">
-            <path d="M6.5 17.5 V6.5 H9.5 L15.5 17.5 H18.5 V6.5" strokeLinecap="round" strokeLinejoin="round" />
-            <path d="M8 12 H16" strokeLinecap="round" opacity="0.5" />
-        </svg>
-    );
-}
-
-function ChorusModeButton({
+function ChorusModeRow({
     label,
     value,
-    icon,
     dataRole,
     onClick,
 }: {
     label: string;
     value: string;
-    icon: "motion" | "bloom" | "pitch";
     dataRole: string;
     onClick: () => void;
 }) {
@@ -1607,17 +1275,13 @@ function ChorusModeButton({
             type="button"
             aria-label={`${label}: ${value}. Click to cycle.`}
             title={`${label}: ${value}`}
-            className="group relative flex h-[21px] min-w-0 items-center gap-1.5 overflow-hidden rounded-[8px] border border-cyan-200/[0.10] bg-[linear-gradient(180deg,rgba(16,27,43,0.82),rgba(3,7,17,0.96))] px-1.5 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.075),0_8px_16px_rgba(0,0,0,0.12)] transition duration-200 hover:-translate-y-px hover:border-cyan-200/25 hover:bg-cyan-200/[0.055] active:translate-y-0 active:scale-[0.99]"
+            className="flex min-w-0 items-center justify-between overflow-hidden rounded px-1.5 py-0.5 text-left transition hover:bg-white/[0.04]"
             onClick={onClick}
         >
-            <span className="pointer-events-none absolute inset-x-2 top-0 h-px bg-gradient-to-r from-transparent via-cyan-200/35 to-transparent opacity-70" />
-            <span className="grid size-[16px] shrink-0 place-items-center rounded-[6px] border border-white/[0.06] bg-white/[0.035] text-cyan-100/65 transition group-hover:text-cyan-100/90">
-                <ChorusModeIcon kind={icon} />
-            </span>
-            <span className="shrink-0 text-[7px] font-black uppercase leading-none tracking-[0.11em] text-slate-300/45">
+            <span className="text-[7px] font-bold uppercase tracking-[0.10em] text-slate-400/50">
                 {label}
             </span>
-            <span className="ml-auto shrink-0 whitespace-nowrap font-mono text-[8px] font-black uppercase leading-none tracking-[0.035em] text-cyan-50/82 transition group-hover:text-cyan-50">
+            <span className="font-mono text-[8px] font-bold uppercase tracking-[0.03em] text-cyan-50/80">
                 {value}
             </span>
         </button>
@@ -1643,7 +1307,7 @@ function ChorusEffectColumn({
     return (
         <section
             data-role="chorus-effect-column"
-            className="flex h-full min-w-0 flex-col gap-2 rounded-[12px] border border-cyan-300/[0.08] bg-[radial-gradient(circle_at_top_left,rgba(103,232,249,0.13),transparent_38%),linear-gradient(180deg,rgba(6,12,24,0.95),rgba(2,5,12,0.98))] p-3"
+            className="flex h-full min-w-0 flex-col gap-1.5 rounded-[12px] bg-[radial-gradient(circle_at_top_left,rgba(103,232,249,0.13),transparent_38%),linear-gradient(180deg,rgba(6,12,24,0.95),rgba(2,5,12,0.98))] p-2"
         >
             <div className="flex items-center justify-between gap-2">
                 <span className="text-[10px] font-black uppercase tracking-[0.18em] text-cyan-100/75">Chorus</span>
@@ -1661,42 +1325,96 @@ function ChorusEffectColumn({
                 </button>
             </div>
 
-            <div className="grid gap-2">
-                <ChorusRangeControl label="Mix" binding={chorusMix} dataRole="chorus-mix-control" />
-                <div className="grid min-w-0 gap-1">
-                    <ChorusModeButton
-                        label="Motion"
-                        value={CHORUS_MOTION_MODE_OPTIONS[motionIndex]}
-                        icon="motion"
-                        dataRole="chorus-motion-mode-control"
-                        onClick={() => chorusMotionMode.commitValue((motionIndex + 1) % CHORUS_MOTION_MODE_OPTIONS.length)}
-                    />
-                    <ChorusModeButton
-                        label="Bloom"
-                        value={CHORUS_BLOOM_MODE_OPTIONS[bloomIndex]}
-                        icon="bloom"
-                        dataRole="chorus-bloom-mode-control"
-                        onClick={() => chorusBloomMode.commitValue((bloomIndex + 1) % CHORUS_BLOOM_MODE_OPTIONS.length)}
-                    />
-                    <ChorusModeButton
-                        label="Pitch"
-                        value={CHORUS_RING_OFFSET_MODE_OPTIONS[ringOffsetIndex]}
-                        icon="pitch"
-                        dataRole="chorus-ring-offset-mode-control"
-                        onClick={() => chorusRingOffsetMode.commitValue((ringOffsetIndex + 1) % CHORUS_RING_OFFSET_MODE_OPTIONS.length)}
-                    />
-                </div>
-                <ChorusRangeControl label="Tone" binding={chorusTone} dataRole="chorus-tone-control" />
-                <ChorusRangeControl label="Fdbk" binding={chorusFeedback} dataRole="chorus-feedback-control" />
-                <ChorusRangeControl label="Ring" binding={chorusRingAmount} dataRole="chorus-ring-amount-control" />
-                <ChorusRangeControl
-                    label="Fine"
+            <div className="grid min-w-0 gap-0.5">
+                <ChorusModeRow
+                    label="Motion"
+                    value={CHORUS_MOTION_MODE_OPTIONS[motionIndex]}
+                    dataRole="chorus-motion-mode-control"
+                    onClick={() => chorusMotionMode.commitValue((motionIndex + 1) % CHORUS_MOTION_MODE_OPTIONS.length)}
+                />
+                <ChorusModeRow
+                    label="Bloom"
+                    value={CHORUS_BLOOM_MODE_OPTIONS[bloomIndex]}
+                    dataRole="chorus-bloom-mode-control"
+                    onClick={() => chorusBloomMode.commitValue((bloomIndex + 1) % CHORUS_BLOOM_MODE_OPTIONS.length)}
+                />
+                <ChorusModeRow
+                    label="Pitch"
+                    value={CHORUS_RING_OFFSET_MODE_OPTIONS[ringOffsetIndex]}
+                    dataRole="chorus-ring-offset-mode-control"
+                    onClick={() => chorusRingOffsetMode.commitValue((ringOffsetIndex + 1) % CHORUS_RING_OFFSET_MODE_OPTIONS.length)}
+                />
+            </div>
+
+            <div className="h-px bg-white/[0.06]" />
+
+            <div className="flex min-h-0 flex-1 gap-0.5">
+                <VerticalSlider
+                    label="Mix"
+                    binding={chorusMix}
+                    min={0}
+                    max={1}
+                    fillClassName="cosimo-chorus-mix-fill"
+                    handleClassName="cosimo-chorus-mix-handle"
+                    fillDataRole="chorus-mix-fill"
+                    handleDataRole="chorus-mix-handle"
+                    inputDataRole="chorus-mix-control"
+                    trackDataRole="chorus-mix-track"
+                    formatValue={formatUnitPercent}
+                    className="flex-1"
+                />
+                <VerticalSlider
+                    label="Tn"
+                    binding={chorusTone}
+                    min={0}
+                    max={1}
+                    fillClassName="cosimo-chorus-tone-fill"
+                    handleClassName="cosimo-chorus-tone-handle"
+                    fillDataRole="chorus-tone-fill"
+                    handleDataRole="chorus-tone-handle"
+                    inputDataRole="chorus-tone-control"
+                    formatValue={formatUnitPercent}
+                    className="flex-1"
+                />
+                <VerticalSlider
+                    label="Fb"
+                    binding={chorusFeedback}
+                    min={0}
+                    max={0.95}
+                    fillClassName="cosimo-chorus-feedback-fill"
+                    handleClassName="cosimo-chorus-feedback-handle"
+                    fillDataRole="chorus-feedback-fill"
+                    handleDataRole="chorus-feedback-handle"
+                    inputDataRole="chorus-feedback-control"
+                    formatValue={formatUnitPercent}
+                    className="flex-1"
+                />
+                <VerticalSlider
+                    label="Rg"
+                    binding={chorusRingAmount}
+                    min={0}
+                    max={1}
+                    fillClassName="cosimo-chorus-ring-fill"
+                    handleClassName="cosimo-chorus-ring-handle"
+                    fillDataRole="chorus-ring-fill"
+                    handleDataRole="chorus-ring-handle"
+                    inputDataRole="chorus-ring-amount-control"
+                    formatValue={formatUnitPercent}
+                    className="flex-1"
+                />
+                <VerticalSlider
+                    label="Fn"
                     binding={chorusRingFineSemitones}
-                    dataRole="chorus-ring-fine-control"
                     min={-2}
                     max={2}
-                    step={0.001}
+                    bipolar
+                    fillClassName="cosimo-chorus-fine-fill"
+                    handleClassName="cosimo-chorus-fine-handle"
+                    fillDataRole="chorus-fine-fill"
+                    handleDataRole="chorus-fine-handle"
+                    inputDataRole="chorus-ring-fine-control"
                     formatValue={formatSemitoneOffset}
+                    className="flex-1"
                 />
             </div>
         </section>

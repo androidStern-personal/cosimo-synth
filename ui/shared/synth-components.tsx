@@ -10,6 +10,8 @@ import {
     type RefObject,
 } from "react";
 
+import type { PatchControlBinding } from "./patch-controls";
+import { useSliderDrag } from "./use-slider-drag";
 import { clampDisplayPosition } from "./runtime-table-state";
 import {
     MSEG_EDITOR_HORIZONTAL_PADDING_PX,
@@ -1757,6 +1759,101 @@ export function WavetableStageSection({
                 {JSON.stringify(debugState)}
             </pre>
         </section>
+    );
+}
+
+export type VerticalSliderProps = {
+    label: string;
+    binding: PatchControlBinding<number>;
+    min: number;
+    max: number;
+    bipolar?: boolean;
+    fillClassName: string;
+    handleClassName: string;
+    fillDataRole?: string;
+    handleDataRole?: string;
+    inputDataRole?: string;
+    trackDataRole?: string;
+    formatValue?: (value: number) => string;
+    onChange?: (normalized: number) => void;
+    className?: string;
+};
+
+function defaultFormatValue(value: number, min: number, max: number): string {
+    if (max <= 1 && min >= -1) {
+        return `${Math.round(clamp(value, min, max) * 100)}`;
+    }
+    return value.toFixed(1);
+}
+
+export function VerticalSlider({
+    label,
+    binding,
+    min,
+    max,
+    bipolar = false,
+    fillClassName,
+    handleClassName,
+    fillDataRole,
+    handleDataRole,
+    inputDataRole,
+    trackDataRole,
+    formatValue,
+    onChange,
+    className,
+}: VerticalSliderProps) {
+    const trackRef = useRef<HTMLDivElement>(null);
+    const { handlePointerDown, handlePointerMove, handlePointerUp, handlePointerCancel } = useSliderDrag();
+
+    const normalized = clamp((binding.value - min) / (max - min), 0, 1);
+    const displayValue = formatValue ? formatValue(binding.value) : defaultFormatValue(binding.value, min, max);
+
+    const fillStyle = bipolar
+        ? normalized >= 0.5
+            ? { bottom: "50%", height: `${(normalized - 0.5) * 100}%` }
+            : { bottom: `${normalized * 100}%`, height: `${(0.5 - normalized) * 100}%` }
+        : { height: `${normalized * 100}%` };
+
+    return (
+        <div className={`flex shrink-0 flex-col items-center gap-1 py-2 ${className ?? ""}`}>
+            <span className="text-[8px] font-bold uppercase tracking-[0.1em] text-slate-400/45">{label}</span>
+            <div
+                ref={trackRef}
+                data-role={trackDataRole}
+                className="relative w-1.5 flex-1 cursor-ns-resize rounded-full bg-white/[0.04]"
+                onPointerDown={(e) => handlePointerDown(e, trackRef.current, binding, normalized, min, max, "vertical", onChange)}
+                onPointerMove={handlePointerMove}
+                onPointerUp={handlePointerUp}
+                onPointerCancel={handlePointerCancel}
+            >
+                {bipolar && (
+                    <div className="absolute left-0 right-0 top-1/2 h-px -translate-y-px bg-white/[0.12]" />
+                )}
+                <div
+                    data-role={fillDataRole}
+                    className={`${fillClassName} absolute bottom-0 left-0 right-0 rounded-full`}
+                    style={fillStyle}
+                />
+                <div
+                    data-role={handleDataRole}
+                    className={`${handleClassName} absolute left-1/2 size-3.5 -translate-x-1/2 translate-y-1/2 rounded-full border-2 border-[rgba(3,5,12,0.7)]`}
+                    style={{ bottom: `${normalized * 100}%` }}
+                />
+            </div>
+            <span className="font-mono text-[8px] tracking-[0.04em] text-slate-200/55">{displayValue}</span>
+            <input
+                data-role={inputDataRole}
+                type="range"
+                min={min}
+                max={max}
+                step={0.001}
+                value={binding.value}
+                className="sr-only"
+                tabIndex={-1}
+                onInput={(event) => binding.setValue(Number(event.currentTarget.value))}
+                onChange={(event) => binding.setValue(Number(event.currentTarget.value))}
+            />
+        </div>
     );
 }
 

@@ -3273,14 +3273,10 @@ test("desktop chorus slider closes host gesture on pointer cancellation", async 
     const page = await openHarnessPage();
 
     try {
-        await page.waitForSelector('[data-role="chorus-mix-control"]');
+        await page.waitForSelector('[data-role="chorus-mix-track"]');
         await clearHarnessDebugLog(page);
 
-        await page.locator('[data-role="chorus-mix-control"]').evaluate((element) => {
-            if (!(element instanceof HTMLInputElement)) {
-                throw new Error("Expected chorus mix control to be an input.");
-            }
-
+        await page.locator('[data-role="chorus-mix-track"]').evaluate((element) => {
             element.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, pointerId: 7 }));
             element.dispatchEvent(new PointerEvent("pointercancel", { bubbles: true, pointerId: 7 }));
         });
@@ -3305,14 +3301,10 @@ test("desktop chorus slider closes host gesture when pointer movement reports no
     const page = await openHarnessPage();
 
     try {
-        await page.waitForSelector('[data-role="chorus-mix-control"]');
+        await page.waitForSelector('[data-role="chorus-mix-track"]');
         await clearHarnessDebugLog(page);
 
-        await page.locator('[data-role="chorus-mix-control"]').evaluate((element) => {
-            if (!(element instanceof HTMLInputElement)) {
-                throw new Error("Expected chorus mix control to be an input.");
-            }
-
+        await page.locator('[data-role="chorus-mix-track"]').evaluate((element) => {
             element.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, buttons: 1, pointerId: 9 }));
             element.dispatchEvent(new PointerEvent("pointermove", { bubbles: true, buttons: 0, pointerId: 9 }));
         });

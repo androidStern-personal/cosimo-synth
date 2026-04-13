@@ -76,3 +76,10 @@
 ## Desktop Plugin Keyboard Focus
 
 - In Ableton, Cmajor's `WKWebView` can steal QWERTY Musical Typing input. The working pattern from `ChorusLabFocusProbe` is: deny WebView keyboard focus by default, allow it only during deliberate text entry, never call `resignFirstResponder` on the `WKWebView`, and forward `keyDown:`, `keyUp:`, and `flagsChanged:` to the next native responder when text entry is not active.
+
+## Desktop CmajPlugin Ableton Parameter Safety
+
+- In Ableton Live 11.3.43 on macOS 26.2, turning a WebView knob in the official generic AU loader `CmajPlugin.component` can crash in `JuceAU::audioProcessorParameterChanged -> sendValueChangedMessageToListeners -> PatchParameter::setValue`. This is a host parameter-notification crash, not a DSP crash.
+- The official generic VST3 loader `CmajPlugin.vst3` did not reproduce that crash with the same OTT lab patch. For fast Ableton lab testing, prefer the official generic VST3 plus `~/Library/Audio/Plug-Ins/VST3/CmajPlugin.json`.
+- Do not install or recommend the official generic AU loader `~/Library/Audio/Plug-Ins/Components/CmajPlugin.component` for Ableton WebView knob testing unless the task is specifically to reproduce the AU crash.
+- `scripts/install_ott_lab_cmajplugin.sh` and `scripts/install_chorus_lab_cmajplugin.sh` intentionally install only `CmajPlugin.vst3` and write only the VST3 `CmajPlugin.json`. If a repo-pointed generic AU loader is present, those scripts move it out of Ableton's scan path.

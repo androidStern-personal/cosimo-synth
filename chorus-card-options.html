@@ -1,0 +1,829 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chorus Panel — Design Options (True Dimensions)</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+    background: #0a0c14;
+    color: #e2e8f0;
+    padding: 40px 24px;
+    display: grid;
+    gap: 80px;
+  }
+
+  h1 {
+    font-size: 14px; font-weight: 600; letter-spacing: 0.22em;
+    text-transform: uppercase; color: rgba(103, 232, 249, 0.7);
+    margin-bottom: 4px;
+  }
+  h2 {
+    font-size: 11px; font-weight: 500; letter-spacing: 0.14em;
+    text-transform: uppercase; color: rgba(226, 232, 240, 0.4);
+    margin-bottom: 20px; max-width: 700px;
+  }
+  .notes {
+    font-size: 11px; line-height: 1.6; color: rgba(148, 163, 184, 0.55);
+    margin-top: 16px; max-width: 700px;
+  }
+  .notes strong { color: rgba(148, 163, 184, 0.75); }
+
+  .dim-label {
+    font-size: 10px; font-weight: 500; letter-spacing: 0.12em;
+    text-transform: uppercase; color: rgba(148, 163, 184, 0.35);
+    margin-bottom: 8px;
+  }
+
+  .viewport-row {
+    display: flex;
+    gap: 32px;
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+  .viewport-frame {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  /* ── Effects rack container (matches real code) ── */
+  .rack {
+    border-radius: 14px;
+    border: 1px solid rgba(255,255,255,0.04);
+    background: linear-gradient(135deg, rgba(8,16,30,0.96), rgba(4,6,14,1));
+    padding: 8px;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+  }
+
+  /* ── Reserved slot ── */
+  .reserved-slot {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 12px;
+    border: 1px dashed rgba(255,255,255,0.06);
+    background: rgba(255,255,255,0.012);
+    font-size: 9px; font-weight: 700; letter-spacing: 0.16em;
+    text-transform: uppercase; color: rgba(100,116,139,0.35);
+    min-height: 0;
+  }
+
+  /* ── Chorus column card base (no border — unlike current) ── */
+  .chorus-col {
+    border-radius: 12px;
+    overflow: hidden;
+    background:
+      radial-gradient(circle at top left, rgba(103,232,249,0.10), transparent 38%),
+      linear-gradient(180deg, rgba(6,12,24,0.95), rgba(2,5,12,0.98));
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    min-width: 0;
+  }
+
+  /* ── Current (border version) ── */
+  .chorus-col-current {
+    border: 1px solid rgba(103,232,249,0.08);
+    padding: 12px;
+    gap: 8px;
+  }
+
+  /* ── Toggle pill ── */
+  .toggle-on {
+    border-radius: 7px;
+    padding: 2px 6px;
+    font-size: 7px; font-weight: 700; letter-spacing: 0.10em;
+    text-transform: uppercase;
+    border: none;
+    cursor: pointer;
+    font-family: inherit;
+    background: rgba(103,232,249,0.15);
+    color: rgba(207,250,254,0.9);
+  }
+
+  /* ── Separator ── */
+  .sep { height: 1px; background: rgba(255,255,255,0.04); }
+
+  /* ── Mini native range (current design) ── */
+  .mini-range {
+    appearance: none;
+    width: 100%;
+    height: 6px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.06);
+    outline: none;
+    accent-color: #67e8f9;
+  }
+  .mini-range::-webkit-slider-thumb {
+    appearance: none;
+    width: 10px; height: 10px;
+    border-radius: 999px;
+    background: #67e8f9;
+  }
+</style>
+</head>
+<body>
+
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- CURRENT DESIGN (for comparison)                                    -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<div>
+  <h1>Current Design</h1>
+  <h2>Visible section border, native range inputs, bordered mode buttons with inset shadows, p-3 padding eating width</h2>
+
+  <div class="viewport-row">
+    <!-- 1000px viewport sim -->
+    <div class="viewport-frame">
+      <div class="dim-label">~1000px viewport (rack ~492px)</div>
+      <div class="rack" style="width: 492px; aspect-ratio: 50/27;">
+        <!-- Chorus: current design -->
+        <div class="chorus-col chorus-col-current">
+          <div style="display: flex; align-items: center; justify-content: space-between;">
+            <span style="font-size: 9px; font-weight: 900; letter-spacing: 0.16em; text-transform: uppercase; color: rgba(207,250,254,0.75);">Chorus</span>
+            <button class="toggle-on">On</button>
+          </div>
+          <label style="display: grid; gap: 4px;">
+            <span style="display: flex; justify-content: space-between; font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.10em; color: rgba(148,163,184,0.45);">
+              <span>Mix</span><span style="font-family: ui-monospace, monospace; font-weight: 400; letter-spacing: 0.03em; color: rgba(207,250,254,0.55);">72%</span>
+            </span>
+            <input type="range" class="mini-range" value="72">
+          </label>
+          <div style="display: grid; gap: 3px;">
+            <div style="display: flex; align-items: center; gap: 4px; height: 21px; border-radius: 8px; border: 1px solid rgba(103,232,249,0.10); background: linear-gradient(180deg, rgba(16,27,43,0.82), rgba(3,7,17,0.96)); padding: 0 6px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.075), 0 8px 16px rgba(0,0,0,0.12); overflow: hidden;">
+              <span style="font-size: 7px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.08em; color: rgba(148,163,184,0.45); white-space: nowrap;">Motion</span>
+              <span style="margin-left: auto; font-family: ui-monospace, monospace; font-size: 8px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.03em; color: rgba(207,250,254,0.82); white-space: nowrap;">Drift</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 4px; height: 21px; border-radius: 8px; border: 1px solid rgba(103,232,249,0.10); background: linear-gradient(180deg, rgba(16,27,43,0.82), rgba(3,7,17,0.96)); padding: 0 6px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.075), 0 8px 16px rgba(0,0,0,0.12); overflow: hidden;">
+              <span style="font-size: 7px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.08em; color: rgba(148,163,184,0.45); white-space: nowrap;">Bloom</span>
+              <span style="margin-left: auto; font-family: ui-monospace, monospace; font-size: 8px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.03em; color: rgba(207,250,254,0.82); white-space: nowrap;">Warm</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 4px; height: 21px; border-radius: 8px; border: 1px solid rgba(103,232,249,0.10); background: linear-gradient(180deg, rgba(16,27,43,0.82), rgba(3,7,17,0.96)); padding: 0 6px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.075), 0 8px 16px rgba(0,0,0,0.12); overflow: hidden;">
+              <span style="font-size: 7px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.08em; color: rgba(148,163,184,0.45); white-space: nowrap;">Pitch</span>
+              <span style="margin-left: auto; font-family: ui-monospace, monospace; font-size: 8px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.03em; color: rgba(207,250,254,0.82); white-space: nowrap;">5th</span>
+            </div>
+          </div>
+          <label style="display: grid; gap: 4px;">
+            <span style="display: flex; justify-content: space-between; font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.10em; color: rgba(148,163,184,0.45);">
+              <span>Tone</span><span style="font-family: ui-monospace, monospace; font-weight: 400; letter-spacing: 0.03em; color: rgba(207,250,254,0.55);">50%</span>
+            </span>
+            <input type="range" class="mini-range" value="50">
+          </label>
+          <label style="display: grid; gap: 4px;">
+            <span style="display: flex; justify-content: space-between; font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.10em; color: rgba(148,163,184,0.45);">
+              <span>Fdbk</span><span style="font-family: ui-monospace, monospace; font-weight: 400; letter-spacing: 0.03em; color: rgba(207,250,254,0.55);">30%</span>
+            </span>
+            <input type="range" class="mini-range" value="30">
+          </label>
+          <label style="display: grid; gap: 4px;">
+            <span style="display: flex; justify-content: space-between; font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.10em; color: rgba(148,163,184,0.45);">
+              <span>Ring</span><span style="font-family: ui-monospace, monospace; font-weight: 400; letter-spacing: 0.03em; color: rgba(207,250,254,0.55);">45%</span>
+            </span>
+            <input type="range" class="mini-range" value="45">
+          </label>
+          <label style="display: grid; gap: 4px;">
+            <span style="display: flex; justify-content: space-between; font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.10em; color: rgba(148,163,184,0.45);">
+              <span>Fine</span><span style="font-family: ui-monospace, monospace; font-weight: 400; letter-spacing: 0.03em; color: rgba(207,250,254,0.55);">+0.50</span>
+            </span>
+            <input type="range" class="mini-range" value="62">
+          </label>
+        </div>
+        <div class="reserved-slot">FX 2</div>
+        <div class="reserved-slot">FX 3</div>
+        <div class="reserved-slot">FX 4</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="notes">
+    <strong>Problems visible at true size:</strong> p-3 (12px) padding + 1px border eats ~26px from an already ~113px column. Mode buttons with their own borders and inset shadows create visual noise at this scale. Native range inputs look alien. Controls overflow or become cramped.
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- OPTION A: Borderless Dense Stack                                   -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<div>
+  <h1>Option A — Borderless Dense Stack</h1>
+  <h2>Remove section border. Reduce padding to p-2 (8px). Custom 3px slider tracks with 8px thumbs. Flat mode rows (no borders/shadows). Tighter vertical gaps.</h2>
+
+  <div class="viewport-row">
+    <!-- 800px viewport -->
+    <div class="viewport-frame">
+      <div class="dim-label">800px viewport (~88px col)</div>
+      <div class="rack" style="width: 392px; aspect-ratio: 50/27;">
+        <div class="chorus-col" style="padding: 6px 7px; gap: 0;">
+          <!-- Header -->
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px;">
+            <span style="font-size: 8px; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; color: rgba(103,232,249,0.55);">Chr</span>
+            <button class="toggle-on">On</button>
+          </div>
+          <!-- Mix -->
+          <div style="margin-bottom: 4px;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
+              <span style="font-size: 7px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: rgba(148,163,184,0.4);">Mix</span>
+              <span style="font-family: ui-monospace, monospace; font-size: 7px; color: rgba(103,232,249,0.55);">72%</span>
+            </div>
+            <div style="height: 3px; border-radius: 999px; background: rgba(255,255,255,0.04); position: relative;">
+              <div style="position: absolute; inset: 0; width: 72%; border-radius: 999px; background: linear-gradient(90deg, rgba(103,232,249,0.25), rgba(103,232,249,0.5));"></div>
+              <div style="position: absolute; top: 50%; left: 72%; width: 8px; height: 8px; border-radius: 999px; transform: translate(-50%, -50%); background: linear-gradient(180deg, rgba(200,240,255,0.9), rgba(103,232,249,0.7)); border: 1.5px solid rgba(3,5,12,0.7);"></div>
+            </div>
+          </div>
+          <!-- Modes -->
+          <div style="display: flex; flex-direction: column; gap: 1px; margin-bottom: 4px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; height: 14px; cursor: pointer;">
+              <span style="font-size: 7px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: rgba(148,163,184,0.35);">Mtn</span>
+              <span style="font-family: ui-monospace, monospace; font-size: 7px; font-weight: 600; color: rgba(207,250,254,0.72);">Drift</span>
+            </div>
+            <div style="display: flex; align-items: center; justify-content: space-between; height: 14px; cursor: pointer;">
+              <span style="font-size: 7px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: rgba(148,163,184,0.35);">Blm</span>
+              <span style="font-family: ui-monospace, monospace; font-size: 7px; font-weight: 600; color: rgba(207,250,254,0.72);">Warm</span>
+            </div>
+            <div style="display: flex; align-items: center; justify-content: space-between; height: 14px; cursor: pointer;">
+              <span style="font-size: 7px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: rgba(148,163,184,0.35);">Pch</span>
+              <span style="font-family: ui-monospace, monospace; font-size: 7px; font-weight: 600; color: rgba(207,250,254,0.72);">5th</span>
+            </div>
+          </div>
+          <div class="sep"></div>
+          <!-- Continuous params -->
+          <div style="display: flex; flex-direction: column; gap: 4px; margin-top: 4px;">
+            <!-- Tone -->
+            <div>
+              <div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
+                <span style="font-size: 7px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: rgba(148,163,184,0.4);">Tone</span>
+                <span style="font-family: ui-monospace, monospace; font-size: 7px; color: rgba(45,212,191,0.55);">50%</span>
+              </div>
+              <div style="height: 3px; border-radius: 999px; background: rgba(255,255,255,0.04); position: relative;">
+                <div style="position: absolute; inset: 0; width: 50%; border-radius: 999px; background: linear-gradient(90deg, rgba(45,212,191,0.25), rgba(45,212,191,0.5));"></div>
+                <div style="position: absolute; top: 50%; left: 50%; width: 8px; height: 8px; border-radius: 999px; transform: translate(-50%, -50%); background: linear-gradient(180deg, rgba(200,245,235,0.9), rgba(45,212,191,0.7)); border: 1.5px solid rgba(3,5,12,0.7);"></div>
+              </div>
+            </div>
+            <!-- Fdbk -->
+            <div>
+              <div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
+                <span style="font-size: 7px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: rgba(148,163,184,0.4);">Fdbk</span>
+                <span style="font-family: ui-monospace, monospace; font-size: 7px; color: rgba(167,139,250,0.55);">30%</span>
+              </div>
+              <div style="height: 3px; border-radius: 999px; background: rgba(255,255,255,0.04); position: relative;">
+                <div style="position: absolute; inset: 0; width: 30%; border-radius: 999px; background: linear-gradient(90deg, rgba(167,139,250,0.25), rgba(167,139,250,0.5));"></div>
+                <div style="position: absolute; top: 50%; left: 30%; width: 8px; height: 8px; border-radius: 999px; transform: translate(-50%, -50%); background: linear-gradient(180deg, rgba(230,220,255,0.9), rgba(167,139,250,0.7)); border: 1.5px solid rgba(3,5,12,0.7);"></div>
+              </div>
+            </div>
+            <!-- Ring -->
+            <div>
+              <div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
+                <span style="font-size: 7px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: rgba(148,163,184,0.4);">Ring</span>
+                <span style="font-family: ui-monospace, monospace; font-size: 7px; color: rgba(251,191,36,0.55);">45%</span>
+              </div>
+              <div style="height: 3px; border-radius: 999px; background: rgba(255,255,255,0.04); position: relative;">
+                <div style="position: absolute; inset: 0; width: 45%; border-radius: 999px; background: linear-gradient(90deg, rgba(251,191,36,0.25), rgba(251,191,36,0.5));"></div>
+                <div style="position: absolute; top: 50%; left: 45%; width: 8px; height: 8px; border-radius: 999px; transform: translate(-50%, -50%); background: linear-gradient(180deg, rgba(255,240,200,0.9), rgba(251,191,36,0.7)); border: 1.5px solid rgba(3,5,12,0.7);"></div>
+              </div>
+            </div>
+            <!-- Fine -->
+            <div>
+              <div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
+                <span style="font-size: 7px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: rgba(148,163,184,0.4);">Fine</span>
+                <span style="font-family: ui-monospace, monospace; font-size: 7px; color: rgba(103,232,249,0.55);">+.50</span>
+              </div>
+              <div style="height: 3px; border-radius: 999px; background: rgba(255,255,255,0.04); position: relative;">
+                <div style="position: absolute; top: -1px; bottom: -1px; left: 50%; width: 1px; background: rgba(255,255,255,0.1);"></div>
+                <div style="position: absolute; top: 0; bottom: 0; left: 50%; width: 12.5%; border-radius: 999px; background: rgba(103,232,249,0.25);"></div>
+                <div style="position: absolute; top: 50%; left: 62.5%; width: 8px; height: 8px; border-radius: 999px; transform: translate(-50%, -50%); background: linear-gradient(180deg, rgba(200,240,255,0.9), rgba(103,232,249,0.7)); border: 1.5px solid rgba(3,5,12,0.7);"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="reserved-slot">FX 2</div>
+        <div class="reserved-slot">FX 3</div>
+        <div class="reserved-slot">FX 4</div>
+      </div>
+    </div>
+
+    <!-- 1000px viewport -->
+    <div class="viewport-frame">
+      <div class="dim-label">1000px viewport (~113px col)</div>
+      <div class="rack" style="width: 492px; aspect-ratio: 50/27;">
+        <div class="chorus-col" style="padding: 6px 7px; gap: 0;">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px;">
+            <span style="font-size: 8px; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; color: rgba(103,232,249,0.55);">Chr</span>
+            <button class="toggle-on">On</button>
+          </div>
+          <div style="margin-bottom: 4px;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
+              <span style="font-size: 7px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: rgba(148,163,184,0.4);">Mix</span>
+              <span style="font-family: ui-monospace, monospace; font-size: 7px; color: rgba(103,232,249,0.55);">72%</span>
+            </div>
+            <div style="height: 3px; border-radius: 999px; background: rgba(255,255,255,0.04); position: relative;">
+              <div style="position: absolute; inset: 0; width: 72%; border-radius: 999px; background: linear-gradient(90deg, rgba(103,232,249,0.25), rgba(103,232,249,0.5));"></div>
+              <div style="position: absolute; top: 50%; left: 72%; width: 8px; height: 8px; border-radius: 999px; transform: translate(-50%, -50%); background: linear-gradient(180deg, rgba(200,240,255,0.9), rgba(103,232,249,0.7)); border: 1.5px solid rgba(3,5,12,0.7);"></div>
+            </div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 1px; margin-bottom: 4px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; height: 14px; cursor: pointer;">
+              <span style="font-size: 7px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: rgba(148,163,184,0.35);">Mtn</span>
+              <span style="font-family: ui-monospace, monospace; font-size: 7px; font-weight: 600; color: rgba(207,250,254,0.72);">Drift</span>
+            </div>
+            <div style="display: flex; align-items: center; justify-content: space-between; height: 14px; cursor: pointer;">
+              <span style="font-size: 7px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: rgba(148,163,184,0.35);">Blm</span>
+              <span style="font-family: ui-monospace, monospace; font-size: 7px; font-weight: 600; color: rgba(207,250,254,0.72);">Warm</span>
+            </div>
+            <div style="display: flex; align-items: center; justify-content: space-between; height: 14px; cursor: pointer;">
+              <span style="font-size: 7px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: rgba(148,163,184,0.35);">Pch</span>
+              <span style="font-family: ui-monospace, monospace; font-size: 7px; font-weight: 600; color: rgba(207,250,254,0.72);">5th</span>
+            </div>
+          </div>
+          <div class="sep"></div>
+          <div style="display: flex; flex-direction: column; gap: 4px; margin-top: 4px;">
+            <div>
+              <div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
+                <span style="font-size: 7px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: rgba(148,163,184,0.4);">Tone</span>
+                <span style="font-family: ui-monospace, monospace; font-size: 7px; color: rgba(45,212,191,0.55);">50%</span>
+              </div>
+              <div style="height: 3px; border-radius: 999px; background: rgba(255,255,255,0.04); position: relative;">
+                <div style="position: absolute; inset: 0; width: 50%; border-radius: 999px; background: linear-gradient(90deg, rgba(45,212,191,0.25), rgba(45,212,191,0.5));"></div>
+                <div style="position: absolute; top: 50%; left: 50%; width: 8px; height: 8px; border-radius: 999px; transform: translate(-50%, -50%); background: linear-gradient(180deg, rgba(200,245,235,0.9), rgba(45,212,191,0.7)); border: 1.5px solid rgba(3,5,12,0.7);"></div>
+              </div>
+            </div>
+            <div>
+              <div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
+                <span style="font-size: 7px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: rgba(148,163,184,0.4);">Fdbk</span>
+                <span style="font-family: ui-monospace, monospace; font-size: 7px; color: rgba(167,139,250,0.55);">30%</span>
+              </div>
+              <div style="height: 3px; border-radius: 999px; background: rgba(255,255,255,0.04); position: relative;">
+                <div style="position: absolute; inset: 0; width: 30%; border-radius: 999px; background: linear-gradient(90deg, rgba(167,139,250,0.25), rgba(167,139,250,0.5));"></div>
+                <div style="position: absolute; top: 50%; left: 30%; width: 8px; height: 8px; border-radius: 999px; transform: translate(-50%, -50%); background: linear-gradient(180deg, rgba(230,220,255,0.9), rgba(167,139,250,0.7)); border: 1.5px solid rgba(3,5,12,0.7);"></div>
+              </div>
+            </div>
+            <div>
+              <div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
+                <span style="font-size: 7px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: rgba(148,163,184,0.4);">Ring</span>
+                <span style="font-family: ui-monospace, monospace; font-size: 7px; color: rgba(251,191,36,0.55);">45%</span>
+              </div>
+              <div style="height: 3px; border-radius: 999px; background: rgba(255,255,255,0.04); position: relative;">
+                <div style="position: absolute; inset: 0; width: 45%; border-radius: 999px; background: linear-gradient(90deg, rgba(251,191,36,0.25), rgba(251,191,36,0.5));"></div>
+                <div style="position: absolute; top: 50%; left: 45%; width: 8px; height: 8px; border-radius: 999px; transform: translate(-50%, -50%); background: linear-gradient(180deg, rgba(255,240,200,0.9), rgba(251,191,36,0.7)); border: 1.5px solid rgba(3,5,12,0.7);"></div>
+              </div>
+            </div>
+            <div>
+              <div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
+                <span style="font-size: 7px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: rgba(148,163,184,0.4);">Fine</span>
+                <span style="font-family: ui-monospace, monospace; font-size: 7px; color: rgba(103,232,249,0.55);">+.50</span>
+              </div>
+              <div style="height: 3px; border-radius: 999px; background: rgba(255,255,255,0.04); position: relative;">
+                <div style="position: absolute; top: -1px; bottom: -1px; left: 50%; width: 1px; background: rgba(255,255,255,0.1);"></div>
+                <div style="position: absolute; top: 0; bottom: 0; left: 50%; width: 12.5%; border-radius: 999px; background: rgba(103,232,249,0.25);"></div>
+                <div style="position: absolute; top: 50%; left: 62.5%; width: 8px; height: 8px; border-radius: 999px; transform: translate(-50%, -50%); background: linear-gradient(180deg, rgba(200,240,255,0.9), rgba(103,232,249,0.7)); border: 1.5px solid rgba(3,5,12,0.7);"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="reserved-slot">FX 2</div>
+        <div class="reserved-slot">FX 3</div>
+        <div class="reserved-slot">FX 4</div>
+      </div>
+    </div>
+
+    <!-- 1200px viewport -->
+    <div class="viewport-frame">
+      <div class="dim-label">1200px viewport (~138px col)</div>
+      <div class="rack" style="width: 592px; aspect-ratio: 50/27;">
+        <div class="chorus-col" style="padding: 6px 7px; gap: 0;">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px;">
+            <span style="font-size: 9px; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; color: rgba(103,232,249,0.55);">Chorus</span>
+            <button class="toggle-on">On</button>
+          </div>
+          <div style="margin-bottom: 5px;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
+              <span style="font-size: 7px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: rgba(148,163,184,0.4);">Mix</span>
+              <span style="font-family: ui-monospace, monospace; font-size: 7px; color: rgba(103,232,249,0.55);">72%</span>
+            </div>
+            <div style="height: 3px; border-radius: 999px; background: rgba(255,255,255,0.04); position: relative;">
+              <div style="position: absolute; inset: 0; width: 72%; border-radius: 999px; background: linear-gradient(90deg, rgba(103,232,249,0.25), rgba(103,232,249,0.5));"></div>
+              <div style="position: absolute; top: 50%; left: 72%; width: 8px; height: 8px; border-radius: 999px; transform: translate(-50%, -50%); background: linear-gradient(180deg, rgba(200,240,255,0.9), rgba(103,232,249,0.7)); border: 1.5px solid rgba(3,5,12,0.7);"></div>
+            </div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 2px; margin-bottom: 5px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; height: 15px; cursor: pointer;">
+              <span style="font-size: 7px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: rgba(148,163,184,0.35);">Motion</span>
+              <span style="font-family: ui-monospace, monospace; font-size: 8px; font-weight: 600; color: rgba(207,250,254,0.72);">Drift</span>
+            </div>
+            <div style="display: flex; align-items: center; justify-content: space-between; height: 15px; cursor: pointer;">
+              <span style="font-size: 7px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: rgba(148,163,184,0.35);">Bloom</span>
+              <span style="font-family: ui-monospace, monospace; font-size: 8px; font-weight: 600; color: rgba(207,250,254,0.72);">Warm</span>
+            </div>
+            <div style="display: flex; align-items: center; justify-content: space-between; height: 15px; cursor: pointer;">
+              <span style="font-size: 7px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: rgba(148,163,184,0.35);">Pitch</span>
+              <span style="font-family: ui-monospace, monospace; font-size: 8px; font-weight: 600; color: rgba(207,250,254,0.72);">5th</span>
+            </div>
+          </div>
+          <div class="sep"></div>
+          <div style="display: flex; flex-direction: column; gap: 5px; margin-top: 5px;">
+            <div>
+              <div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
+                <span style="font-size: 7px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: rgba(148,163,184,0.4);">Tone</span>
+                <span style="font-family: ui-monospace, monospace; font-size: 7px; color: rgba(45,212,191,0.55);">50%</span>
+              </div>
+              <div style="height: 3px; border-radius: 999px; background: rgba(255,255,255,0.04); position: relative;">
+                <div style="position: absolute; inset: 0; width: 50%; border-radius: 999px; background: linear-gradient(90deg, rgba(45,212,191,0.25), rgba(45,212,191,0.5));"></div>
+                <div style="position: absolute; top: 50%; left: 50%; width: 8px; height: 8px; border-radius: 999px; transform: translate(-50%, -50%); background: linear-gradient(180deg, rgba(200,245,235,0.9), rgba(45,212,191,0.7)); border: 1.5px solid rgba(3,5,12,0.7);"></div>
+              </div>
+            </div>
+            <div>
+              <div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
+                <span style="font-size: 7px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: rgba(148,163,184,0.4);">Fdbk</span>
+                <span style="font-family: ui-monospace, monospace; font-size: 7px; color: rgba(167,139,250,0.55);">30%</span>
+              </div>
+              <div style="height: 3px; border-radius: 999px; background: rgba(255,255,255,0.04); position: relative;">
+                <div style="position: absolute; inset: 0; width: 30%; border-radius: 999px; background: linear-gradient(90deg, rgba(167,139,250,0.25), rgba(167,139,250,0.5));"></div>
+                <div style="position: absolute; top: 50%; left: 30%; width: 8px; height: 8px; border-radius: 999px; transform: translate(-50%, -50%); background: linear-gradient(180deg, rgba(230,220,255,0.9), rgba(167,139,250,0.7)); border: 1.5px solid rgba(3,5,12,0.7);"></div>
+              </div>
+            </div>
+            <div>
+              <div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
+                <span style="font-size: 7px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: rgba(148,163,184,0.4);">Ring</span>
+                <span style="font-family: ui-monospace, monospace; font-size: 7px; color: rgba(251,191,36,0.55);">45%</span>
+              </div>
+              <div style="height: 3px; border-radius: 999px; background: rgba(255,255,255,0.04); position: relative;">
+                <div style="position: absolute; inset: 0; width: 45%; border-radius: 999px; background: linear-gradient(90deg, rgba(251,191,36,0.25), rgba(251,191,36,0.5));"></div>
+                <div style="position: absolute; top: 50%; left: 45%; width: 8px; height: 8px; border-radius: 999px; transform: translate(-50%, -50%); background: linear-gradient(180deg, rgba(255,240,200,0.9), rgba(251,191,36,0.7)); border: 1.5px solid rgba(3,5,12,0.7);"></div>
+              </div>
+            </div>
+            <div>
+              <div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
+                <span style="font-size: 7px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: rgba(148,163,184,0.4);">Fine</span>
+                <span style="font-family: ui-monospace, monospace; font-size: 7px; color: rgba(103,232,249,0.55);">+0.50 st</span>
+              </div>
+              <div style="height: 3px; border-radius: 999px; background: rgba(255,255,255,0.04); position: relative;">
+                <div style="position: absolute; top: -1px; bottom: -1px; left: 50%; width: 1px; background: rgba(255,255,255,0.1);"></div>
+                <div style="position: absolute; top: 0; bottom: 0; left: 50%; width: 12.5%; border-radius: 999px; background: rgba(103,232,249,0.25);"></div>
+                <div style="position: absolute; top: 50%; left: 62.5%; width: 8px; height: 8px; border-radius: 999px; transform: translate(-50%, -50%); background: linear-gradient(180deg, rgba(200,240,255,0.9), rgba(103,232,249,0.7)); border: 1.5px solid rgba(3,5,12,0.7);"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="reserved-slot">FX 2</div>
+        <div class="reserved-slot">FX 3</div>
+        <div class="reserved-slot">FX 4</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="notes">
+    <strong>Changes:</strong> No section border. Padding reduced to 6px/7px. Custom 3px tracks with 8px color-coded thumbs (distortion design language). Mode rows are bare label+value text — zero borders/shadows/backgrounds. Vertical gaps compressed to 1-4px. Works at all 3 breakpoints.<br>
+    <strong>Trade-off:</strong> Keeps horizontal slider orientation since the column is too narrow for vertical sliders (would need ~5 sliders in ~74-124px horizontal space).
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- OPTION B: Modes Merged Into Slider Rows                           -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<div>
+  <h1>Option B — Interleaved Modes + Sliders</h1>
+  <h2>Mode selectors and their associated continuous params on the same row. Every row has both a tappable mode value and a draggable slider. No sections, no dividers.</h2>
+
+  <div class="viewport-row">
+    <!-- 800px viewport -->
+    <div class="viewport-frame">
+      <div class="dim-label">800px viewport (~88px col)</div>
+      <div class="rack" style="width: 392px; aspect-ratio: 50/27;">
+        <div class="chorus-col" style="padding: 5px 6px; gap: 0;">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
+            <span style="font-size: 8px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: rgba(103,232,249,0.55);">Chr</span>
+            <button class="toggle-on">On</button>
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 3px;">
+            <!-- Mix: full-width slider (no mode) -->
+            <div>
+              <div style="display: flex; justify-content: space-between; margin-bottom: 1px;">
+                <span style="font-size: 6px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: rgba(148,163,184,0.4);">Mix</span>
+                <span style="font-family: ui-monospace, monospace; font-size: 6px; color: rgba(103,232,249,0.55);">72%</span>
+              </div>
+              <div style="height: 3px; border-radius: 999px; background: rgba(255,255,255,0.04); position: relative;">
+                <div style="position: absolute; inset: 0; width: 72%; border-radius: 999px; background: linear-gradient(90deg, rgba(103,232,249,0.3), rgba(103,232,249,0.55));"></div>
+                <div style="position: absolute; top: 50%; left: 72%; width: 7px; height: 7px; border-radius: 999px; transform: translate(-50%, -50%); background: rgba(103,232,249,0.85); border: 1.5px solid rgba(3,5,12,0.7);"></div>
+              </div>
+            </div>
+
+            <!-- Motion mode row — tappable value, then Tone slider -->
+            <div style="display: flex; align-items: center; gap: 4px;">
+              <div style="display: flex; align-items: baseline; gap: 2px; flex-shrink: 0; cursor: pointer; min-width: 0;">
+                <span style="font-size: 6px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: rgba(148,163,184,0.35);">M</span>
+                <span style="font-family: ui-monospace, monospace; font-size: 7px; font-weight: 600; color: rgba(207,250,254,0.7); white-space: nowrap;">Dft</span>
+              </div>
+              <div style="flex: 1; height: 3px; border-radius: 999px; background: rgba(255,255,255,0.04); position: relative; min-width: 0;">
+                <div style="position: absolute; inset: 0; width: 50%; border-radius: 999px; background: linear-gradient(90deg, rgba(45,212,191,0.25), rgba(45,212,191,0.5));"></div>
+                <div style="position: absolute; top: 50%; left: 50%; width: 7px; height: 7px; border-radius: 999px; transform: translate(-50%, -50%); background: rgba(45,212,191,0.85); border: 1.5px solid rgba(3,5,12,0.7);"></div>
+              </div>
+              <span style="font-size: 6px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: rgba(45,212,191,0.4); flex-shrink: 0;">Tn</span>
+            </div>
+
+            <!-- Bloom mode row + Fdbk slider -->
+            <div style="display: flex; align-items: center; gap: 4px;">
+              <div style="display: flex; align-items: baseline; gap: 2px; flex-shrink: 0; cursor: pointer; min-width: 0;">
+                <span style="font-size: 6px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: rgba(148,163,184,0.35);">B</span>
+                <span style="font-family: ui-monospace, monospace; font-size: 7px; font-weight: 600; color: rgba(207,250,254,0.7); white-space: nowrap;">Wrm</span>
+              </div>
+              <div style="flex: 1; height: 3px; border-radius: 999px; background: rgba(255,255,255,0.04); position: relative; min-width: 0;">
+                <div style="position: absolute; inset: 0; width: 30%; border-radius: 999px; background: linear-gradient(90deg, rgba(167,139,250,0.25), rgba(167,139,250,0.5));"></div>
+                <div style="position: absolute; top: 50%; left: 30%; width: 7px; height: 7px; border-radius: 999px; transform: translate(-50%, -50%); background: rgba(167,139,250,0.85); border: 1.5px solid rgba(3,5,12,0.7);"></div>
+              </div>
+              <span style="font-size: 6px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: rgba(167,139,250,0.4); flex-shrink: 0;">Fb</span>
+            </div>
+
+            <!-- Pitch mode row + Ring slider -->
+            <div style="display: flex; align-items: center; gap: 4px;">
+              <div style="display: flex; align-items: baseline; gap: 2px; flex-shrink: 0; cursor: pointer; min-width: 0;">
+                <span style="font-size: 6px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: rgba(148,163,184,0.35);">P</span>
+                <span style="font-family: ui-monospace, monospace; font-size: 7px; font-weight: 600; color: rgba(207,250,254,0.7); white-space: nowrap;">5th</span>
+              </div>
+              <div style="flex: 1; height: 3px; border-radius: 999px; background: rgba(255,255,255,0.04); position: relative; min-width: 0;">
+                <div style="position: absolute; inset: 0; width: 45%; border-radius: 999px; background: linear-gradient(90deg, rgba(251,191,36,0.25), rgba(251,191,36,0.5));"></div>
+                <div style="position: absolute; top: 50%; left: 45%; width: 7px; height: 7px; border-radius: 999px; transform: translate(-50%, -50%); background: rgba(251,191,36,0.85); border: 1.5px solid rgba(3,5,12,0.7);"></div>
+              </div>
+              <span style="font-size: 6px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: rgba(251,191,36,0.4); flex-shrink: 0;">Rg</span>
+            </div>
+
+            <!-- Fine: full width bipolar -->
+            <div>
+              <div style="display: flex; justify-content: space-between; margin-bottom: 1px;">
+                <span style="font-size: 6px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: rgba(148,163,184,0.4);">Fine</span>
+                <span style="font-family: ui-monospace, monospace; font-size: 6px; color: rgba(103,232,249,0.55);">+.50</span>
+              </div>
+              <div style="height: 3px; border-radius: 999px; background: rgba(255,255,255,0.04); position: relative;">
+                <div style="position: absolute; top: -1px; bottom: -1px; left: 50%; width: 1px; background: rgba(255,255,255,0.1);"></div>
+                <div style="position: absolute; top: 0; bottom: 0; left: 50%; width: 12.5%; border-radius: 999px; background: rgba(103,232,249,0.25);"></div>
+                <div style="position: absolute; top: 50%; left: 62.5%; width: 7px; height: 7px; border-radius: 999px; transform: translate(-50%, -50%); background: rgba(103,232,249,0.85); border: 1.5px solid rgba(3,5,12,0.7);"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="reserved-slot">FX 2</div>
+        <div class="reserved-slot">FX 3</div>
+        <div class="reserved-slot">FX 4</div>
+      </div>
+    </div>
+
+    <!-- 1000px viewport -->
+    <div class="viewport-frame">
+      <div class="dim-label">1000px viewport (~113px col)</div>
+      <div class="rack" style="width: 492px; aspect-ratio: 50/27;">
+        <div class="chorus-col" style="padding: 5px 6px; gap: 0;">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
+            <span style="font-size: 8px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: rgba(103,232,249,0.55);">Chorus</span>
+            <button class="toggle-on">On</button>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 4px;">
+            <div>
+              <div style="display: flex; justify-content: space-between; margin-bottom: 1px;">
+                <span style="font-size: 7px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: rgba(148,163,184,0.4);">Mix</span>
+                <span style="font-family: ui-monospace, monospace; font-size: 7px; color: rgba(103,232,249,0.55);">72%</span>
+              </div>
+              <div style="height: 3px; border-radius: 999px; background: rgba(255,255,255,0.04); position: relative;">
+                <div style="position: absolute; inset: 0; width: 72%; border-radius: 999px; background: linear-gradient(90deg, rgba(103,232,249,0.3), rgba(103,232,249,0.55));"></div>
+                <div style="position: absolute; top: 50%; left: 72%; width: 8px; height: 8px; border-radius: 999px; transform: translate(-50%, -50%); background: rgba(103,232,249,0.85); border: 1.5px solid rgba(3,5,12,0.7);"></div>
+              </div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 4px;">
+              <div style="display: flex; align-items: baseline; gap: 3px; flex-shrink: 0; cursor: pointer;">
+                <span style="font-size: 6px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: rgba(148,163,184,0.35);">Mtn</span>
+                <span style="font-family: ui-monospace, monospace; font-size: 7px; font-weight: 600; color: rgba(207,250,254,0.7);">Drift</span>
+              </div>
+              <div style="flex: 1; height: 3px; border-radius: 999px; background: rgba(255,255,255,0.04); position: relative; min-width: 0;">
+                <div style="position: absolute; inset: 0; width: 50%; border-radius: 999px; background: linear-gradient(90deg, rgba(45,212,191,0.25), rgba(45,212,191,0.5));"></div>
+                <div style="position: absolute; top: 50%; left: 50%; width: 8px; height: 8px; border-radius: 999px; transform: translate(-50%, -50%); background: rgba(45,212,191,0.85); border: 1.5px solid rgba(3,5,12,0.7);"></div>
+              </div>
+              <span style="font-size: 6px; font-weight: 700; text-transform: uppercase; color: rgba(45,212,191,0.4); flex-shrink: 0;">Tone</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 4px;">
+              <div style="display: flex; align-items: baseline; gap: 3px; flex-shrink: 0; cursor: pointer;">
+                <span style="font-size: 6px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: rgba(148,163,184,0.35);">Blm</span>
+                <span style="font-family: ui-monospace, monospace; font-size: 7px; font-weight: 600; color: rgba(207,250,254,0.7);">Warm</span>
+              </div>
+              <div style="flex: 1; height: 3px; border-radius: 999px; background: rgba(255,255,255,0.04); position: relative; min-width: 0;">
+                <div style="position: absolute; inset: 0; width: 30%; border-radius: 999px; background: linear-gradient(90deg, rgba(167,139,250,0.25), rgba(167,139,250,0.5));"></div>
+                <div style="position: absolute; top: 50%; left: 30%; width: 8px; height: 8px; border-radius: 999px; transform: translate(-50%, -50%); background: rgba(167,139,250,0.85); border: 1.5px solid rgba(3,5,12,0.7);"></div>
+              </div>
+              <span style="font-size: 6px; font-weight: 700; text-transform: uppercase; color: rgba(167,139,250,0.4); flex-shrink: 0;">Fdbk</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 4px;">
+              <div style="display: flex; align-items: baseline; gap: 3px; flex-shrink: 0; cursor: pointer;">
+                <span style="font-size: 6px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: rgba(148,163,184,0.35);">Pch</span>
+                <span style="font-family: ui-monospace, monospace; font-size: 7px; font-weight: 600; color: rgba(207,250,254,0.7);">5th</span>
+              </div>
+              <div style="flex: 1; height: 3px; border-radius: 999px; background: rgba(255,255,255,0.04); position: relative; min-width: 0;">
+                <div style="position: absolute; inset: 0; width: 45%; border-radius: 999px; background: linear-gradient(90deg, rgba(251,191,36,0.25), rgba(251,191,36,0.5));"></div>
+                <div style="position: absolute; top: 50%; left: 45%; width: 8px; height: 8px; border-radius: 999px; transform: translate(-50%, -50%); background: rgba(251,191,36,0.85); border: 1.5px solid rgba(3,5,12,0.7);"></div>
+              </div>
+              <span style="font-size: 6px; font-weight: 700; text-transform: uppercase; color: rgba(251,191,36,0.4); flex-shrink: 0;">Ring</span>
+            </div>
+            <div>
+              <div style="display: flex; justify-content: space-between; margin-bottom: 1px;">
+                <span style="font-size: 7px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: rgba(148,163,184,0.4);">Fine</span>
+                <span style="font-family: ui-monospace, monospace; font-size: 7px; color: rgba(103,232,249,0.55);">+0.50 st</span>
+              </div>
+              <div style="height: 3px; border-radius: 999px; background: rgba(255,255,255,0.04); position: relative;">
+                <div style="position: absolute; top: -1px; bottom: -1px; left: 50%; width: 1px; background: rgba(255,255,255,0.1);"></div>
+                <div style="position: absolute; top: 0; bottom: 0; left: 50%; width: 12.5%; border-radius: 999px; background: rgba(103,232,249,0.25);"></div>
+                <div style="position: absolute; top: 50%; left: 62.5%; width: 8px; height: 8px; border-radius: 999px; transform: translate(-50%, -50%); background: rgba(103,232,249,0.85); border: 1.5px solid rgba(3,5,12,0.7);"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="reserved-slot">FX 2</div>
+        <div class="reserved-slot">FX 3</div>
+        <div class="reserved-slot">FX 4</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="notes">
+    <strong>Key idea:</strong> Each row pairs a mode selector (left: tappable label+value) with its related continuous param slider (right). Motion+Tone, Bloom+Fdbk, Pitch+Ring. Collapses 8 params into 5 rows. Modes and sliders are visually distinct (text vs track) so no confusion about what's tappable vs draggable. Uses color coding per-row to reinforce grouping.
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- OPTION C: Vertical Sliders (if width allows)                      -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<div>
+  <h1>Option C — Vertical Sliders with Mode Strip</h1>
+  <h2>Vertical sliders for the 4 continuous params (like distortion), modes as a compact top strip. Only works at wider viewports.</h2>
+
+  <div class="viewport-row">
+    <!-- 1000px viewport -->
+    <div class="viewport-frame">
+      <div class="dim-label">1000px viewport (~113px col)</div>
+      <div class="rack" style="width: 492px; aspect-ratio: 50/27;">
+        <div class="chorus-col" style="padding: 0; gap: 0;">
+          <!-- Header strip -->
+          <div style="display: flex; align-items: center; justify-content: space-between; padding: 5px 7px 3px; flex-shrink: 0;">
+            <span style="font-size: 8px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: rgba(103,232,249,0.5);">Chorus</span>
+            <button class="toggle-on">On</button>
+          </div>
+
+          <!-- Mode strip -->
+          <div style="display: flex; flex-direction: column; gap: 1px; padding: 0 7px 4px; flex-shrink: 0;">
+            <div style="display: flex; align-items: center; justify-content: space-between; height: 13px; cursor: pointer;">
+              <span style="font-size: 6px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: rgba(148,163,184,0.32);">Mtn</span>
+              <span style="font-family: ui-monospace, monospace; font-size: 7px; font-weight: 600; color: rgba(207,250,254,0.68);">Drift</span>
+            </div>
+            <div style="display: flex; align-items: center; justify-content: space-between; height: 13px; cursor: pointer;">
+              <span style="font-size: 6px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: rgba(148,163,184,0.32);">Blm</span>
+              <span style="font-family: ui-monospace, monospace; font-size: 7px; font-weight: 600; color: rgba(207,250,254,0.68);">Warm</span>
+            </div>
+            <div style="display: flex; align-items: center; justify-content: space-between; height: 13px; cursor: pointer;">
+              <span style="font-size: 6px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: rgba(148,163,184,0.32);">Pch</span>
+              <span style="font-family: ui-monospace, monospace; font-size: 7px; font-weight: 600; color: rgba(207,250,254,0.68);">5th</span>
+            </div>
+          </div>
+
+          <div style="height: 1px; background: rgba(255,255,255,0.04); flex-shrink: 0;"></div>
+
+          <!-- Vertical sliders -->
+          <div style="flex: 1; min-height: 0; display: flex; justify-content: space-around; padding: 4px 3px 3px;">
+            <!-- Mix -->
+            <div style="display: flex; flex-direction: column; align-items: center; gap: 2px; width: 20px; flex-shrink: 0;">
+              <span style="font-size: 6px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: rgba(148,163,184,0.4);">Mix</span>
+              <div style="flex: 1; width: 4px; border-radius: 999px; background: rgba(255,255,255,0.04); position: relative; min-height: 0;">
+                <div style="position: absolute; bottom: 0; left: 0; right: 0; height: 72%; border-radius: 999px; background: linear-gradient(0deg, rgba(103,232,249,0.45), rgba(103,232,249,0.15));"></div>
+                <div style="position: absolute; left: 50%; bottom: 72%; width: 10px; height: 10px; border-radius: 999px; transform: translate(-50%, 50%); background: linear-gradient(180deg, rgba(200,240,255,0.9), rgba(103,232,249,0.7)); border: 1.5px solid rgba(3,5,12,0.7); box-shadow: 0 1px 4px rgba(103,232,249,0.3);"></div>
+              </div>
+              <span style="font-family: ui-monospace, monospace; font-size: 6px; color: rgba(226,232,240,0.5);">72</span>
+            </div>
+            <!-- Tone -->
+            <div style="display: flex; flex-direction: column; align-items: center; gap: 2px; width: 20px; flex-shrink: 0;">
+              <span style="font-size: 6px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: rgba(148,163,184,0.4);">Tn</span>
+              <div style="flex: 1; width: 4px; border-radius: 999px; background: rgba(255,255,255,0.04); position: relative; min-height: 0;">
+                <div style="position: absolute; bottom: 0; left: 0; right: 0; height: 50%; border-radius: 999px; background: linear-gradient(0deg, rgba(45,212,191,0.45), rgba(45,212,191,0.15));"></div>
+                <div style="position: absolute; left: 50%; bottom: 50%; width: 10px; height: 10px; border-radius: 999px; transform: translate(-50%, 50%); background: linear-gradient(180deg, rgba(200,245,235,0.9), rgba(45,212,191,0.7)); border: 1.5px solid rgba(3,5,12,0.7); box-shadow: 0 1px 4px rgba(45,212,191,0.3);"></div>
+              </div>
+              <span style="font-family: ui-monospace, monospace; font-size: 6px; color: rgba(226,232,240,0.5);">50</span>
+            </div>
+            <!-- Fdbk -->
+            <div style="display: flex; flex-direction: column; align-items: center; gap: 2px; width: 20px; flex-shrink: 0;">
+              <span style="font-size: 6px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: rgba(148,163,184,0.4);">Fb</span>
+              <div style="flex: 1; width: 4px; border-radius: 999px; background: rgba(255,255,255,0.04); position: relative; min-height: 0;">
+                <div style="position: absolute; bottom: 0; left: 0; right: 0; height: 30%; border-radius: 999px; background: linear-gradient(0deg, rgba(167,139,250,0.45), rgba(167,139,250,0.15));"></div>
+                <div style="position: absolute; left: 50%; bottom: 30%; width: 10px; height: 10px; border-radius: 999px; transform: translate(-50%, 50%); background: linear-gradient(180deg, rgba(230,220,255,0.9), rgba(167,139,250,0.7)); border: 1.5px solid rgba(3,5,12,0.7); box-shadow: 0 1px 4px rgba(167,139,250,0.3);"></div>
+              </div>
+              <span style="font-family: ui-monospace, monospace; font-size: 6px; color: rgba(226,232,240,0.5);">30</span>
+            </div>
+            <!-- Ring -->
+            <div style="display: flex; flex-direction: column; align-items: center; gap: 2px; width: 20px; flex-shrink: 0;">
+              <span style="font-size: 6px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: rgba(148,163,184,0.4);">Rg</span>
+              <div style="flex: 1; width: 4px; border-radius: 999px; background: rgba(255,255,255,0.04); position: relative; min-height: 0;">
+                <div style="position: absolute; bottom: 0; left: 0; right: 0; height: 45%; border-radius: 999px; background: linear-gradient(0deg, rgba(251,191,36,0.45), rgba(251,191,36,0.15));"></div>
+                <div style="position: absolute; left: 50%; bottom: 45%; width: 10px; height: 10px; border-radius: 999px; transform: translate(-50%, 50%); background: linear-gradient(180deg, rgba(255,240,200,0.9), rgba(251,191,36,0.7)); border: 1.5px solid rgba(3,5,12,0.7); box-shadow: 0 1px 4px rgba(251,191,36,0.3);"></div>
+              </div>
+              <span style="font-family: ui-monospace, monospace; font-size: 6px; color: rgba(226,232,240,0.5);">45</span>
+            </div>
+            <!-- Fine (bipolar) -->
+            <div style="display: flex; flex-direction: column; align-items: center; gap: 2px; width: 20px; flex-shrink: 0;">
+              <span style="font-size: 6px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: rgba(148,163,184,0.4);">Fn</span>
+              <div style="flex: 1; width: 4px; border-radius: 999px; background: rgba(255,255,255,0.04); position: relative; min-height: 0;">
+                <div style="position: absolute; left: 0; right: 0; top: 50%; height: 1px; background: rgba(255,255,255,0.1);"></div>
+                <div style="position: absolute; left: 0; right: 0; bottom: 50%; height: 12.5%; border-radius: 999px; background: linear-gradient(0deg, rgba(103,232,249,0.4), rgba(103,232,249,0.2));"></div>
+                <div style="position: absolute; left: 50%; bottom: 62.5%; width: 10px; height: 10px; border-radius: 999px; transform: translate(-50%, 50%); background: linear-gradient(180deg, rgba(200,240,255,0.9), rgba(103,232,249,0.7)); border: 1.5px solid rgba(3,5,12,0.7); box-shadow: 0 1px 4px rgba(103,232,249,0.3);"></div>
+              </div>
+              <span style="font-family: ui-monospace, monospace; font-size: 6px; color: rgba(226,232,240,0.5);">+.5</span>
+            </div>
+          </div>
+        </div>
+        <div class="reserved-slot">FX 2</div>
+        <div class="reserved-slot">FX 3</div>
+        <div class="reserved-slot">FX 4</div>
+      </div>
+    </div>
+
+    <!-- 1200px viewport -->
+    <div class="viewport-frame">
+      <div class="dim-label">1200px viewport (~138px col)</div>
+      <div class="rack" style="width: 592px; aspect-ratio: 50/27;">
+        <div class="chorus-col" style="padding: 0; gap: 0;">
+          <div style="display: flex; align-items: center; justify-content: space-between; padding: 6px 8px 3px; flex-shrink: 0;">
+            <span style="font-size: 9px; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; color: rgba(103,232,249,0.5);">Chorus</span>
+            <button class="toggle-on">On</button>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 1px; padding: 0 8px 5px; flex-shrink: 0;">
+            <div style="display: flex; align-items: center; justify-content: space-between; height: 14px; cursor: pointer;">
+              <span style="font-size: 7px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: rgba(148,163,184,0.32);">Motion</span>
+              <span style="font-family: ui-monospace, monospace; font-size: 8px; font-weight: 600; color: rgba(207,250,254,0.68);">Drift</span>
+            </div>
+            <div style="display: flex; align-items: center; justify-content: space-between; height: 14px; cursor: pointer;">
+              <span style="font-size: 7px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: rgba(148,163,184,0.32);">Bloom</span>
+              <span style="font-family: ui-monospace, monospace; font-size: 8px; font-weight: 600; color: rgba(207,250,254,0.68);">Warm</span>
+            </div>
+            <div style="display: flex; align-items: center; justify-content: space-between; height: 14px; cursor: pointer;">
+              <span style="font-size: 7px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: rgba(148,163,184,0.32);">Pitch</span>
+              <span style="font-family: ui-monospace, monospace; font-size: 8px; font-weight: 600; color: rgba(207,250,254,0.68);">5th</span>
+            </div>
+          </div>
+          <div style="height: 1px; background: rgba(255,255,255,0.04); flex-shrink: 0;"></div>
+          <div style="flex: 1; min-height: 0; display: flex; justify-content: space-around; padding: 5px 4px 4px;">
+            <div style="display: flex; flex-direction: column; align-items: center; gap: 3px; width: 22px;">
+              <span style="font-size: 7px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: rgba(148,163,184,0.4);">Mix</span>
+              <div style="flex: 1; width: 5px; border-radius: 999px; background: rgba(255,255,255,0.04); position: relative; min-height: 0;">
+                <div style="position: absolute; bottom: 0; left: 0; right: 0; height: 72%; border-radius: 999px; background: linear-gradient(0deg, rgba(103,232,249,0.45), rgba(103,232,249,0.15));"></div>
+                <div style="position: absolute; left: 50%; bottom: 72%; width: 12px; height: 12px; border-radius: 999px; transform: translate(-50%, 50%); background: linear-gradient(180deg, rgba(200,240,255,0.9), rgba(103,232,249,0.7)); border: 2px solid rgba(3,5,12,0.7); box-shadow: 0 1px 6px rgba(103,232,249,0.3);"></div>
+              </div>
+              <span style="font-family: ui-monospace, monospace; font-size: 7px; color: rgba(226,232,240,0.5);">72%</span>
+            </div>
+            <div style="display: flex; flex-direction: column; align-items: center; gap: 3px; width: 22px;">
+              <span style="font-size: 7px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: rgba(148,163,184,0.4);">Tone</span>
+              <div style="flex: 1; width: 5px; border-radius: 999px; background: rgba(255,255,255,0.04); position: relative; min-height: 0;">
+                <div style="position: absolute; bottom: 0; left: 0; right: 0; height: 50%; border-radius: 999px; background: linear-gradient(0deg, rgba(45,212,191,0.45), rgba(45,212,191,0.15));"></div>
+                <div style="position: absolute; left: 50%; bottom: 50%; width: 12px; height: 12px; border-radius: 999px; transform: translate(-50%, 50%); background: linear-gradient(180deg, rgba(200,245,235,0.9), rgba(45,212,191,0.7)); border: 2px solid rgba(3,5,12,0.7); box-shadow: 0 1px 6px rgba(45,212,191,0.3);"></div>
+              </div>
+              <span style="font-family: ui-monospace, monospace; font-size: 7px; color: rgba(226,232,240,0.5);">50%</span>
+            </div>
+            <div style="display: flex; flex-direction: column; align-items: center; gap: 3px; width: 22px;">
+              <span style="font-size: 7px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: rgba(148,163,184,0.4);">Fdbk</span>
+              <div style="flex: 1; width: 5px; border-radius: 999px; background: rgba(255,255,255,0.04); position: relative; min-height: 0;">
+                <div style="position: absolute; bottom: 0; left: 0; right: 0; height: 30%; border-radius: 999px; background: linear-gradient(0deg, rgba(167,139,250,0.45), rgba(167,139,250,0.15));"></div>
+                <div style="position: absolute; left: 50%; bottom: 30%; width: 12px; height: 12px; border-radius: 999px; transform: translate(-50%, 50%); background: linear-gradient(180deg, rgba(230,220,255,0.9), rgba(167,139,250,0.7)); border: 2px solid rgba(3,5,12,0.7); box-shadow: 0 1px 6px rgba(167,139,250,0.3);"></div>
+              </div>
+              <span style="font-family: ui-monospace, monospace; font-size: 7px; color: rgba(226,232,240,0.5);">30%</span>
+            </div>
+            <div style="display: flex; flex-direction: column; align-items: center; gap: 3px; width: 22px;">
+              <span style="font-size: 7px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: rgba(148,163,184,0.4);">Ring</span>
+              <div style="flex: 1; width: 5px; border-radius: 999px; background: rgba(255,255,255,0.04); position: relative; min-height: 0;">
+                <div style="position: absolute; bottom: 0; left: 0; right: 0; height: 45%; border-radius: 999px; background: linear-gradient(0deg, rgba(251,191,36,0.45), rgba(251,191,36,0.15));"></div>
+                <div style="position: absolute; left: 50%; bottom: 45%; width: 12px; height: 12px; border-radius: 999px; transform: translate(-50%, 50%); background: linear-gradient(180deg, rgba(255,240,200,0.9), rgba(251,191,36,0.7)); border: 2px solid rgba(3,5,12,0.7); box-shadow: 0 1px 6px rgba(251,191,36,0.3);"></div>
+              </div>
+              <span style="font-family: ui-monospace, monospace; font-size: 7px; color: rgba(226,232,240,0.5);">45%</span>
+            </div>
+            <div style="display: flex; flex-direction: column; align-items: center; gap: 3px; width: 22px;">
+              <span style="font-size: 7px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: rgba(148,163,184,0.4);">Fine</span>
+              <div style="flex: 1; width: 5px; border-radius: 999px; background: rgba(255,255,255,0.04); position: relative; min-height: 0;">
+                <div style="position: absolute; left: 0; right: 0; top: 50%; height: 1px; background: rgba(255,255,255,0.1);"></div>
+                <div style="position: absolute; left: 0; right: 0; bottom: 50%; height: 12.5%; border-radius: 999px; background: linear-gradient(0deg, rgba(103,232,249,0.4), rgba(103,232,249,0.2));"></div>
+                <div style="position: absolute; left: 50%; bottom: 62.5%; width: 12px; height: 12px; border-radius: 999px; transform: translate(-50%, 50%); background: linear-gradient(180deg, rgba(200,240,255,0.9), rgba(103,232,249,0.7)); border: 2px solid rgba(3,5,12,0.7); box-shadow: 0 1px 6px rgba(103,232,249,0.3);"></div>
+              </div>
+              <span style="font-family: ui-monospace, monospace; font-size: 7px; color: rgba(226,232,240,0.5);">+.50</span>
+            </div>
+          </div>
+        </div>
+        <div class="reserved-slot">FX 2</div>
+        <div class="reserved-slot">FX 3</div>
+        <div class="reserved-slot">FX 4</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="notes">
+    <strong>Closest to distortion pattern:</strong> Modes occupy a compact text strip at top, then vertical sliders fill the remaining height. Color-coded 4-5px tracks with 10-12px gradient thumbs — same design language as distortion's Drv/Kne/Mix sliders. Takes advantage of the tall aspect ratio. 5 sliders in ~100-130px works because each column is only 20-22px. Abbreviated labels (Tn, Fb, Rg, Fn) save width at small sizes.
+  </div>
+</div>
+
+
+</body>
+</html>

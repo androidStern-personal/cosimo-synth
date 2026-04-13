@@ -1,0 +1,352 @@
+namespace ottlab
+{
+    let defaultLowMidHz = 88.2818146f;
+    let defaultMidHighHz = 2499.99951f;
+    let expansionLimitDb = 30.0f;
+    let detectorFloor = 1.0e-12f;
+    // The attack/release controls live in the detector. This final ramp only prevents zippering.
+    let gainSmoothingMs = 0.04f;
+
+    float32 clamp01 (float32 value)
+    {
+        return std::intrinsics::clamp (value, 0.0f, 1.0f);
+    }
+
+    float32 lerp (float32 start, float32 end, float32 amount)
+    {
+        return start + ((end - start) * amount);
+    }
+
+    float32 timeCoefficient (float32 sampleRate, float32 milliseconds)
+    {
+        let safeMs = std::intrinsics::max (milliseconds, 0.01f);
+        return std::intrinsics::exp (-1.0f / (safeMs * 0.001f * sampleRate));
+    }
+
+    float32 smoothTowards (float32 current, float32 target, float32 coefficient)
+    {
+        return target + ((current - target) * coefficient);
+    }
+
+    float32 smoothAttackRelease (float32 current, float32 target, float32 attackCoeff, float32 releaseCoeff)
+    {
+        let coefficient = target > current ? attackCoeff : releaseCoeff;
+        return smoothTowards (current, target, coefficient);
+    }
+
+    float32 gainFromDb (float32 db)
+    {
+        return std::levels::dBtoGain (db);
+    }
+
+    float32 powerFromDb (float32 db)
+    {
+        let gain = gainFromDb (db);
+        return gain * gain;
+    }
+
+    float32 smoothUpperPowerEnvelope (float32 current, float32 samplePower, float32 clampDb, float32 attackCoeff, float32 releaseCoeff)
+    {
+        let clampPower = powerFromDb (clampDb);
+        let clampedCurrent = std::intrinsics::max (current, clampPower);
+        let smoothed = smoothAttackRelease (clampedCurrent, samplePower, attackCoeff, releaseCoeff);
+        return std::intrinsics::max (smoothed, clampPower);
+    }
+
+    float32 smoothLowerPowerEnvelope (float32 current, float32 samplePower, float32 clampDb, float32 attackCoeff, float32 releaseCoeff)
+    {
+        let clampPower = powerFromDb (clampDb);
+        let smoothed = smoothAttackRelease (current, samplePower, attackCoeff, releaseCoeff);
+        return std::intrinsics::min (smoothed, clampPower);
+    }
+
+    float32 smoothUpperPeakEnvelope (float32 current, float32 samplePeak, float32 clampDb, float32 attackCoeff, float32 releaseCoeff)
+    {
+        let clampPeak = gainFromDb (clampDb);
+        let clampedCurrent = std::intrinsics::max (current, clampPeak);
+        let smoothed = smoothAttackRelease (clampedCurrent, samplePeak, attackCoeff, releaseCoeff);
+        return std::intrinsics::max (smoothed, clampPeak);
+    }
+
+    float32 smoothLowerPeakEnvelope (float32 current, float32 samplePeak, float32 clampDb, float32 attackCoeff, float32 releaseCoeff)
+    {
+        let clampPeak = gainFromDb (clampDb);
+        let smoothed = smoothAttackRelease (current, samplePeak, attackCoeff, releaseCoeff);
+        return std::intrinsics::min (smoothed, clampPeak);
+    }
+
+    float32 levelDbFromPower (float32 power)
+    {
+        return std::levels::gainTodB (std::intrinsics::sqrt (std::intrinsics::max (power, detectorFloor)));
+    }
+
+    float32 levelDbFromPeak (float32 peak)
+    {
+        return std::levels::gainTodB (std::intrinsics::max (peak, detectorFloor));
+    }
+
+    float32 downwardGainDb (float32 levelDb, float32 thresholdDb, float32 ratio, float32 kneeDb)
+    {
+        let safeRatio = std::intrinsics::max (ratio, 1.0f);
+        let slope = (1.0f / safeRatio) - 1.0f;
+        let distance = levelDb - thresholdDb;
+
+        if (kneeDb <= 0.001f)
+            return distance > 0.0f ? slope * distance : 0.0f;
+
+        let halfKnee = kneeDb * 0.5f;
+
+        if (distance <= -halfKnee)
+            return 0.0f;
+
+        if (distance >= halfKnee)
+            return slope * distance;
+
+        let kneeDistance = distance + halfKnee;
+        return slope * kneeDistance * kneeDistance / (2.0f * kneeDb);
+    }
+
+    float32 upwardGainDb (float32 levelDb, float32 thresholdDb, float32 ratio, float32 kneeDb)
+    {
+        let safeRatio = std::intrinsics::max (ratio, 1.0f);
+        let slope = 1.0f - (1.0f / safeRatio);
+        let distance = thresholdDb - levelDb;
+
+        if (kneeDb <= 0.001f)
+            return distance > 0.0f ? slope * distance : 0.0f;
+
+        let halfKnee = kneeDb * 0.5f;
+
+        if (distance <= -halfKnee)
+            return 0.0f;
+
+        if (distance >= halfKnee)
+            return slope * distance;
+
+        let kneeDistance = distance + halfKnee;
+        return slope * kneeDistance * kneeDistance / (2.0f * kneeDb);
+    }
+
+    struct BandDynamicsState
+    {
+        float32 upperRmsEnvLeft, upperRmsEnvRight, upperRmsEnvLinked;
+        float32 lowerRmsEnvLeft, lowerRmsEnvRight, lowerRmsEnvLinked;
+        float32 upperPeakEnvLeft, upperPeakEnvRight, upperPeakEnvLinked;
+        float32 lowerPeakEnvLeft, lowerPeakEnvRight, lowerPeakEnvLinked;
+        float32 gainDbLeft, gainDbRight;
+
+        float32<2> process (
+            float32<2> band,
+            float32 sampleRate,
+            bool usePeakDetector,
+            float32 stereoLink01,
+            float32 amount01,
+            float32 upAmount01,
+            float32 downAmount01,
+            float32 globalInputGainDb,
+            float32 bandInputGainDb,
+            float32 bandOutputGainDb,
+            float32 aboveThresholdDb,
+            float32 belowThresholdDb,
+            float32 downRatio,
+            float32 upRatio,
+            float32 attackMs,
+            float32 releaseMs,
+            float32 kneeDb)
+        {
+            let inputGain = std::levels::dBtoGain (globalInputGainDb + bandInputGainDb);
+            let bandInput = band * inputGain;
+            let absLeft = std::intrinsics::abs (bandInput[0]);
+            let absRight = std::intrinsics::abs (bandInput[1]);
+            let powerLeft = bandInput[0] * bandInput[0];
+            let powerRight = bandInput[1] * bandInput[1];
+            let linkedPower = std::intrinsics::max (powerLeft, powerRight);
+            let linkedPeak = std::intrinsics::max (absLeft, absRight);
+            let attackCoeff = timeCoefficient (sampleRate, attackMs);
+            let releaseCoeff = timeCoefficient (sampleRate, releaseMs);
+            let gainSmoothCoeff = timeCoefficient (sampleRate, gainSmoothingMs);
+            let upperClampDb = aboveThresholdDb - (kneeDb * 0.5f);
+            let lowerClampDb = belowThresholdDb + (kneeDb * 0.5f);
+
+            this.upperRmsEnvLeft = smoothUpperPowerEnvelope (this.upperRmsEnvLeft, powerLeft, upperClampDb, attackCoeff, releaseCoeff);
+            this.upperRmsEnvRight = smoothUpperPowerEnvelope (this.upperRmsEnvRight, powerRight, upperClampDb, attackCoeff, releaseCoeff);
+            this.upperRmsEnvLinked = smoothUpperPowerEnvelope (this.upperRmsEnvLinked, linkedPower, upperClampDb, attackCoeff, releaseCoeff);
+            this.lowerRmsEnvLeft = smoothLowerPowerEnvelope (this.lowerRmsEnvLeft, powerLeft, lowerClampDb, attackCoeff, releaseCoeff);
+            this.lowerRmsEnvRight = smoothLowerPowerEnvelope (this.lowerRmsEnvRight, powerRight, lowerClampDb, attackCoeff, releaseCoeff);
+            this.lowerRmsEnvLinked = smoothLowerPowerEnvelope (this.lowerRmsEnvLinked, linkedPower, lowerClampDb, attackCoeff, releaseCoeff);
+            this.upperPeakEnvLeft = smoothUpperPeakEnvelope (this.upperPeakEnvLeft, absLeft, upperClampDb, attackCoeff, releaseCoeff);
+            this.upperPeakEnvRight = smoothUpperPeakEnvelope (this.upperPeakEnvRight, absRight, upperClampDb, attackCoeff, releaseCoeff);
+            this.upperPeakEnvLinked = smoothUpperPeakEnvelope (this.upperPeakEnvLinked, linkedPeak, upperClampDb, attackCoeff, releaseCoeff);
+            this.lowerPeakEnvLeft = smoothLowerPeakEnvelope (this.lowerPeakEnvLeft, absLeft, lowerClampDb, attackCoeff, releaseCoeff);
+            this.lowerPeakEnvRight = smoothLowerPeakEnvelope (this.lowerPeakEnvRight, absRight, lowerClampDb, attackCoeff, releaseCoeff);
+            this.lowerPeakEnvLinked = smoothLowerPeakEnvelope (this.lowerPeakEnvLinked, linkedPeak, lowerClampDb, attackCoeff, releaseCoeff);
+
+            let levelDownLeft = usePeakDetector ? levelDbFromPeak (this.upperPeakEnvLeft)
+                                                : levelDbFromPower (this.upperRmsEnvLeft);
+            let levelDownRight = usePeakDetector ? levelDbFromPeak (this.upperPeakEnvRight)
+                                                 : levelDbFromPower (this.upperRmsEnvRight);
+            let levelDownLinked = usePeakDetector ? levelDbFromPeak (this.upperPeakEnvLinked)
+                                                  : levelDbFromPower (this.upperRmsEnvLinked);
+            let levelUpLeft = usePeakDetector ? levelDbFromPeak (this.lowerPeakEnvLeft)
+                                              : levelDbFromPower (this.lowerRmsEnvLeft);
+            let levelUpRight = usePeakDetector ? levelDbFromPeak (this.lowerPeakEnvRight)
+                                               : levelDbFromPower (this.lowerRmsEnvRight);
+            let levelUpLinked = usePeakDetector ? levelDbFromPeak (this.lowerPeakEnvLinked)
+                                                : levelDbFromPower (this.lowerRmsEnvLinked);
+
+            let targetDownLeftIndependent = downwardGainDb (levelDownLeft, aboveThresholdDb, downRatio, kneeDb) * downAmount01;
+            let targetDownRightIndependent = downwardGainDb (levelDownRight, aboveThresholdDb, downRatio, kneeDb) * downAmount01;
+            let targetDownLinked = downwardGainDb (levelDownLinked, aboveThresholdDb, downRatio, kneeDb) * downAmount01;
+            let targetUpLeftIndependent = upwardGainDb (levelUpLeft, belowThresholdDb, upRatio, kneeDb) * upAmount01;
+            let targetUpRightIndependent = upwardGainDb (levelUpRight, belowThresholdDb, upRatio, kneeDb) * upAmount01;
+            let targetUpLinked = upwardGainDb (levelUpLinked, belowThresholdDb, upRatio, kneeDb) * upAmount01;
+            let targetDownLeft = lerp (targetDownLeftIndependent, targetDownLinked, stereoLink01);
+            let targetDownRight = lerp (targetDownRightIndependent, targetDownLinked, stereoLink01);
+            let targetUpLeft = lerp (targetUpLeftIndependent, targetUpLinked, stereoLink01);
+            let targetUpRight = lerp (targetUpRightIndependent, targetUpLinked, stereoLink01);
+            let targetGainDbLeft = std::intrinsics::clamp ((targetDownLeft + targetUpLeft) * amount01, -96.0f, expansionLimitDb);
+            let targetGainDbRight = std::intrinsics::clamp ((targetDownRight + targetUpRight) * amount01, -96.0f, expansionLimitDb);
+
+            this.gainDbLeft = smoothTowards (this.gainDbLeft, targetGainDbLeft, gainSmoothCoeff);
+            this.gainDbRight = smoothTowards (this.gainDbRight, targetGainDbRight, gainSmoothCoeff);
+
+            let wetLeft = bandInput[0] * std::levels::dBtoGain (this.gainDbLeft + bandOutputGainDb);
+            let wetRight = bandInput[1] * std::levels::dBtoGain (this.gainDbRight + bandOutputGainDb);
+            return float32<2> (
+                lerp (band[0], wetLeft, amount01),
+                lerp (band[1], wetRight, amount01)
+            );
+        }
+    }
+}
+
+processor OttLab [[ main ]]
+{
+    input stream float32<2> in;
+    output stream float32<2> out;
+
+    input value float32 hostSlot0Guard [[ name: "Host Slot Guard", group: "Internal", min: 0.0f, max: 1.0f, init: 0.0f, hidden: true, rampFrames: 0 ]];
+
+    input value bool bypass [[ name: "Bypass", group: "Output", init: false, boolean ]];
+    input value float32 mix [[ name: "Mix", group: "Output", min: 0.0f, max: 100.0f, init: 100.0f, unit: "%", rampFrames: 256 ]];
+    input value float32 amount [[ name: "Amount", group: "Output", min: 0.0f, max: 100.0f, init: 100.0f, unit: "%", rampFrames: 256 ]];
+    input value float32 timePercent [[ name: "Time", group: "Output", min: 10.0f, max: 1000.0f, init: 100.0f, unit: "%", rampFrames: 256 ]];
+    input value float32 inputGainDb [[ name: "Input Gain", group: "Output", min: -24.0f, max: 24.0f, init: 0.0f, unit: "dB", rampFrames: 256 ]];
+    input value float32 outputGainDb [[ name: "Output Gain", group: "Output", min: -24.0f, max: 24.0f, init: 0.0f, unit: "dB", rampFrames: 256 ]];
+
+    input value float32 upAmount [[ name: "Up Amount", group: "Character", min: 0.0f, max: 200.0f, init: 100.0f, unit: "%", rampFrames: 256 ]];
+    input value float32 downAmount [[ name: "Down Amount", group: "Character", min: 0.0f, max: 200.0f, init: 100.0f, unit: "%", rampFrames: 256 ]];
+    input value float32 detectorMode [[ name: "Detector", group: "Character", min: 0.0f, max: 1.0f, init: 0.0f, discrete: true, step: 1.0f, text: "RMS|Peak", rampFrames: 0 ]];
+    input value bool softKnee [[ name: "Soft Knee", group: "Character", init: true, boolean ]];
+    input value float32 kneeWidthDb [[ name: "Knee Width", group: "Character", min: 0.0f, max: 24.0f, init: 6.0f, unit: "dB", rampFrames: 256 ]];
+    input value float32 stereoLink [[ name: "Stereo Link", group: "Character", min: 0.0f, max: 100.0f, init: 100.0f, unit: "%", rampFrames: 256 ]];
+
+    input value float32 lowMidHz [[ name: "Low/Mid", group: "Crossovers", min: 30.0f, max: 3000.0f, init: ottlab::defaultLowMidHz, unit: "Hz", rampFrames: 256 ]];
+    input value float32 midHighHz [[ name: "Mid/High", group: "Crossovers", min: 300.0f, max: 15000.0f, init: ottlab::defaultMidHighHz, unit: "Hz", rampFrames: 256 ]];
+
+    input value float32 lowAboveDb [[ name: "Above Threshold", group: "Low", min: -80.0f, max: 0.0f, init: -33.75f, unit: "dB", rampFrames: 256 ]];
+    input value float32 lowBelowDb [[ name: "Below Threshold", group: "Low", min: -80.0f, max: 0.0f, init: -40.75f, unit: "dB", rampFrames: 256 ]];
+    input value float32 lowDownRatio [[ name: "Down Ratio", group: "Low", min: 1.0f, max: 1000.0f, init: 66.7f, rampFrames: 256 ]];
+    input value float32 lowUpRatio [[ name: "Up Ratio", group: "Low", min: 1.0f, max: 20.0f, init: 4.17f, rampFrames: 256 ]];
+    input value float32 lowAttackMs [[ name: "Attack", group: "Low", min: 0.1f, max: 5000.0f, init: 47.8499336f, unit: "ms", rampFrames: 256 ]];
+    input value float32 lowReleaseMs [[ name: "Release", group: "Low", min: 0.1f, max: 5000.0f, init: 282.361938f, unit: "ms", rampFrames: 256 ]];
+    input value float32 lowInputGainDb [[ name: "Band Input", group: "Low", min: -24.0f, max: 24.0f, init: 5.19999981f, unit: "dB", rampFrames: 256 ]];
+    input value float32 lowOutputGainDb [[ name: "Band Output", group: "Low", min: -24.0f, max: 24.0f, init: 10.3000002f, unit: "dB", rampFrames: 256 ]];
+
+    input value float32 midAboveDb [[ name: "Above Threshold", group: "Mid", min: -80.0f, max: 0.0f, init: -30.25f, unit: "dB", rampFrames: 256 ]];
+    input value float32 midBelowDb [[ name: "Below Threshold", group: "Mid", min: -80.0f, max: 0.0f, init: -41.75f, unit: "dB", rampFrames: 256 ]];
+    input value float32 midDownRatio [[ name: "Down Ratio", group: "Mid", min: 1.0f, max: 1000.0f, init: 66.7f, rampFrames: 256 ]];
+    input value float32 midUpRatio [[ name: "Up Ratio", group: "Mid", min: 1.0f, max: 20.0f, init: 4.17f, rampFrames: 256 ]];
+    input value float32 midAttackMs [[ name: "Attack", group: "Mid", min: 0.1f, max: 5000.0f, init: 22.3606815f, unit: "ms", rampFrames: 256 ]];
+    input value float32 midReleaseMs [[ name: "Release", group: "Mid", min: 0.1f, max: 5000.0f, init: 282.361938f, unit: "ms", rampFrames: 256 ]];
+    input value float32 midInputGainDb [[ name: "Band Input", group: "Mid", min: -24.0f, max: 24.0f, init: 5.19999981f, unit: "dB", rampFrames: 256 ]];
+    input value float32 midOutputGainDb [[ name: "Band Output", group: "Mid", min: -24.0f, max: 24.0f, init: 5.69999981f, unit: "dB", rampFrames: 256 ]];
+
+    input value float32 highAboveDb [[ name: "Above Threshold", group: "High", min: -80.0f, max: 0.0f, init: -35.5f, unit: "dB", rampFrames: 256 ]];
+    input value float32 highBelowDb [[ name: "Below Threshold", group: "High", min: -80.0f, max: 0.0f, init: -40.75f, unit: "dB", rampFrames: 256 ]];
+    input value float32 highDownRatio [[ name: "Down Ratio", group: "High", min: 1.0f, max: 1000.0f, init: 1000.0f, rampFrames: 256 ]];
+    input value float32 highUpRatio [[ name: "Up Ratio", group: "High", min: 1.0f, max: 20.0f, init: 4.17f, rampFrames: 256 ]];
+    input value float32 highAttackMs [[ name: "Attack", group: "High", min: 0.1f, max: 5000.0f, init: 13.4654493f, unit: "ms", rampFrames: 256 ]];
+    input value float32 highReleaseMs [[ name: "Release", group: "High", min: 0.1f, max: 5000.0f, init: 131.950104f, unit: "ms", rampFrames: 256 ]];
+    input value float32 highInputGainDb [[ name: "Band Input", group: "High", min: -24.0f, max: 24.0f, init: 5.19999981f, unit: "dB", rampFrames: 256 ]];
+    input value float32 highOutputGainDb [[ name: "Band Output", group: "High", min: -24.0f, max: 24.0f, init: 10.3000002f, unit: "dB", rampFrames: 256 ]];
+
+    var lowMidCrossover = std::filters (float32<2>, float64, 32)::crossover::create (
+        processor.frequency,
+        ottlab::defaultLowMidHz
+    );
+    var midHighCrossover = std::filters (float32<2>, float64, 32)::crossover::create (
+        processor.frequency,
+        ottlab::defaultMidHighHz
+    );
+
+    ottlab::BandDynamicsState lowDynamics;
+    ottlab::BandDynamicsState midDynamics;
+    ottlab::BandDynamicsState highDynamics;
+
+    float32 currentLowMidHz = ottlab::defaultLowMidHz;
+    float32 currentMidHighHz = ottlab::defaultMidHighHz;
+
+    void updateCrossoverFrequencies()
+    {
+        let nextLowMidHz = std::intrinsics::clamp (lowMidHz, 30.0f, 3000.0f);
+        let nextMidHighHz = std::intrinsics::clamp (std::intrinsics::max (midHighHz, nextLowMidHz + 10.0f), 300.0f, 15000.0f);
+
+        if (std::intrinsics::abs (nextLowMidHz - currentLowMidHz) > 0.001f)
+        {
+            lowMidCrossover.setFrequency (processor.frequency, nextLowMidHz);
+            currentLowMidHz = nextLowMidHz;
+        }
+
+        if (std::intrinsics::abs (nextMidHighHz - currentMidHighHz) > 0.001f)
+        {
+            midHighCrossover.setFrequency (processor.frequency, nextMidHighHz);
+            currentMidHighHz = nextMidHighHz;
+        }
+    }
+
+    void main()
+    {
+        loop
+        {
+            updateCrossoverFrequencies();
+
+            let dry = in;
+            let splitLowRest = lowMidCrossover.process (dry);
+            let lowBand = splitLowRest[0];
+            let splitMidHigh = midHighCrossover.process (splitLowRest[1]);
+            let midBand = splitMidHigh[0];
+            let highBand = splitMidHigh[1];
+            let sampleRate = float32 (processor.frequency);
+            let amount01 = ottlab::clamp01 (amount * 0.01f);
+            let mix01 = ottlab::clamp01 (mix * 0.01f);
+            let timeScale = std::intrinsics::clamp (timePercent * 0.01f, 0.1f, 10.0f);
+            let upAmount01 = std::intrinsics::clamp (upAmount * 0.01f, 0.0f, 2.0f);
+            let downAmount01 = std::intrinsics::clamp (downAmount * 0.01f, 0.0f, 2.0f);
+            let usePeakDetector = detectorMode >= 0.5f;
+            let kneeDb = softKnee ? std::intrinsics::clamp (kneeWidthDb, 0.0f, 24.0f) : 0.0f;
+            let stereoLink01 = ottlab::clamp01 (stereoLink * 0.01f);
+
+            let processedLow = lowDynamics.process (
+                lowBand, sampleRate, usePeakDetector, stereoLink01, amount01, upAmount01, downAmount01,
+                inputGainDb, lowInputGainDb, lowOutputGainDb, lowAboveDb, lowBelowDb,
+                lowDownRatio, lowUpRatio, lowAttackMs * timeScale, lowReleaseMs * timeScale, kneeDb
+            );
+            let processedMid = midDynamics.process (
+                midBand, sampleRate, usePeakDetector, stereoLink01, amount01, upAmount01, downAmount01,
+                inputGainDb, midInputGainDb, midOutputGainDb, midAboveDb, midBelowDb,
+                midDownRatio, midUpRatio, midAttackMs * timeScale, midReleaseMs * timeScale, kneeDb
+            );
+            let processedHigh = highDynamics.process (
+                highBand, sampleRate, usePeakDetector, stereoLink01, amount01, upAmount01, downAmount01,
+                inputGainDb, highInputGainDb, highOutputGainDb, highAboveDb, highBelowDb,
+                highDownRatio, highUpRatio, highAttackMs * timeScale, highReleaseMs * timeScale, kneeDb
+            );
+            let wet = (processedLow + processedMid + processedHigh) * std::levels::dBtoGain (outputGainDb);
+            let mixed = dry + ((wet - dry) * mix01);
+
+            out <- bypass ? dry : mixed;
+            advance();
+        }
+    }
+}

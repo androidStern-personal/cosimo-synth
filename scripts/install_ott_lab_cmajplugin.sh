@@ -3,7 +3,7 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cache_root="${COSIMO_DEV_CACHE:-$HOME/Library/Caches/cosimo-synth-dev}"
-patch_path="$repo_root/fx/chorus_lab/ChorusLab.cmajorpatch"
+patch_path="$repo_root/fx/ott_lab/OttLab.cmajorpatch"
 
 cmajor_version="$(cmaj version | awk '/Cmajor Version:/ { print $3; exit }')"
 dmg_path="$cache_root/cmajor-$cmajor_version.dmg"

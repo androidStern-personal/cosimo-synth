@@ -585,3 +585,24 @@ What was verified for the patch manifest generation removal
 - `node --test tests/test_patch_view_layout.mjs`
 - `uv run pytest -q tests/test_ios_auv3_build.py -k 'test_ios_ui_dev_server_configuration_exists or test_ios_auv3_generator_runs_npm_and_build_assets_from_the_repo_root'`
 - `npm run desktop:native:dev`
+
+OTT lab Ableton plugin crash fix on 2026-04-12
+- Ableton crashed when it loaded the official Cmajor generic AU named `CmajPlugin.component`, with `CmajPlugin.json` pointing at `fx/ott_lab/OttLab.cmajorpatch`. The crash report showed the value-change host notification path: `JuceAU::audioProcessorParameterChanged -> sendValueChangedMessageToListeners -> PatchParameter::setValue`.
+- The same OTT patch did not crash when loaded through the official generic VST3 named `CmajPlugin.vst3`. The practical conclusion is: use official generic VST3 for fast Ableton lab patch iteration, and do not use official generic AU for WebView knob testing.
+- Removed the generated-wrapper patching path from the default OTT/Chorus lab workflow. `npm run ott:jit:install` and `npm run chorus:jit:install` now install only `CmajPlugin.vst3` plus the VST3 `CmajPlugin.json`. If a repo-pointed generic AU loader exists, the install script moves it out of Ableton's scan path. The earlier generated `OTTLab.component` and `OTTLab.vst3` bundles were also removed from Ableton's plugin folders so the only active OTT lab loader is `CmajPlugin.vst3`.
+
+What was verified for the OTT lab Ableton plugin crash fix
+- User tested official generic `CmajPlugin.vst3` in Ableton with the OTT lab patch and reported no crash when turning the knob.
+- `npm run ott:jit:install`
+- `npm run ott:dry-run`
+- `uv run pytest -q tests/test_ott_lab_probe.py`
+
+OTT lab transient clamp fix on 2026-04-12
+- The default OTT lab patch was creating a loud onset spike because the band input/output gain boosts were active immediately, while the compressor gain reduction started from silence and took too long to catch up. With a 0.75 peak 1 kHz loud step, the old default wet output peaked around 1.84 in the first 5 ms.
+- Changed `fx/ott_lab/OttLab.cmajor` so each band now has separate upper and lower detector envelopes. The upper detector is clamped to the lower edge of the above-threshold soft knee for downward compression, and the lower detector is clamped to the upper edge of the below-threshold soft knee for upward compression. This matches the actual above-threshold/below-threshold compressor structure more closely than using one shared envelope for both jobs.
+- Kept the band attack/release controls on the detector envelopes and reduced the final gain smoother to `0.04 ms`. That final smoother is only anti-zipper protection now; it is no longer a second slow attack stage after the detector.
+- Added a regression test that renders the real generated Cmajor OTT lab patch at the default settings and fails if the first 5 ms of a loud step becomes more than 2% louder than the dry input. The same test also proves the sustained section is still compressed, so it cannot pass by bypassing the effect.
+
+What was verified for the OTT lab transient clamp fix
+- `npm run ott:dry-run`
+- `uv run pytest -q tests/test_ott_lab_probe.py`
