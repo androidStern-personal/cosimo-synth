@@ -11,7 +11,7 @@
     "manufacturerCode": "Cosi"
   },
   "view": {
-    "src": "view/index.js",
+    "src": "view/bundle.js",
     "width": 920,
     "height": 680,
     "resizable": true

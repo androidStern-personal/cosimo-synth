@@ -1,3 +1,6 @@
+import { createPresetBar } from "../../../ui/shared/effects/preset-bar.ts";
+import { createStandaloneEffectPresetController } from "../../../ui/shared/effects/standalone-effect-presets.ts";
+
 class ChorusLabView extends HTMLElement {
   constructor(patchConnection) {
     super();
@@ -7,18 +10,29 @@ class ChorusLabView extends HTMLElement {
     this.startupSeedInFlight = false;
     this.startupSeedComplete = false;
     this.startupSeedToken = 0;
+    this.presetController = createStandaloneEffectPresetController({
+      effectID: "chorus",
+      patchConnection,
+    });
+    this.presetBar = createPresetBar();
+    this.presetBar.controller = this.presetController;
+
     this.attachShadow({ mode: "open" });
     this.shadowRoot.innerHTML = this.getMarkup();
+    this.shadowRoot.querySelector(".frame").before(this.presetBar);
     this.groupsHost = this.shadowRoot.querySelector("[data-groups]");
   }
 
   connectedCallback() {
+    this.presetController.attach();
     this.statusListener = status => this.renderFromStatus(status);
     this.patchConnection.addStatusListener(this.statusListener);
     this.patchConnection.requestStatusUpdate();
   }
 
   disconnectedCallback() {
+    this.presetController.detach();
+    this.presetBar.controller = null;
     this.cancelStartupSeedProbe();
 
     if (this.statusListener)

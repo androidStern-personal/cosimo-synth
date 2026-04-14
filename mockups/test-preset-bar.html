@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Preset Bar Component — Visual Test</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html {
+    font-family: "SF Mono", Menlo, Monaco, Consolas, monospace;
+    background: #0a0d0c; color: #eff7ee;
+  }
+  body { padding: 40px 24px; }
+
+  .plugin-frame {
+    width: 920px; min-height: 500px; border-radius: 18px;
+    background:
+      radial-gradient(circle at 16% 6%, rgba(143,240,164,0.19), transparent 30%),
+      radial-gradient(circle at 86% 0%, rgba(255,232,132,0.13), transparent 28%),
+      linear-gradient(180deg, #111714 0%, #070a09 100%);
+    border: 1px solid rgba(255,255,255,0.06);
+    overflow: visible;
+    position: relative;
+  }
+
+  cosimo-preset-bar {
+    --preset-bar-border-radius: 18px 18px 0 0;
+  }
+
+  .title-section {
+    padding: 18px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    background: rgba(255,255,255,0.02);
+  }
+  .title-section h1 {
+    font-size: 22px; letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 4px;
+  }
+  .title-section .subtitle {
+    font-size: 11px; color: rgba(239,247,238,0.5); line-height: 1.5;
+  }
+
+  .param-placeholder {
+    display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px; padding: 18px;
+  }
+  .param-group {
+    border: 1px solid rgba(255,255,255,0.06); border-radius: 14px;
+    background: rgba(255,255,255,0.025); padding: 14px; min-height: 140px;
+  }
+  .param-group-label {
+    font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+    color: rgba(239,247,238,0.5); margin-bottom: 12px;
+  }
+  .param-knobs { display: flex; gap: 14px; flex-wrap: wrap; }
+  .param-knob { width: 52px; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .param-knob-circle {
+    width: 42px; height: 42px; border-radius: 50%;
+    border: 1.5px solid rgba(255,255,255,0.15);
+    background: rgba(255,255,255,0.03); position: relative;
+  }
+  .param-knob-circle::after {
+    content: ""; position: absolute; top: 3px; left: 50%; transform: translateX(-50%);
+    width: 2px; height: 10px; background: rgba(239,247,238,0.5); border-radius: 1px;
+  }
+  .param-knob-name {
+    font-size: 8px; letter-spacing: 0.04em; color: rgba(239,247,238,0.5);
+    text-align: center; text-transform: uppercase;
+  }
+
+  .help-hint {
+    margin-top: 24px; font-size: 10px; color: rgba(239,247,238,0.25);
+    letter-spacing: 0.03em;
+  }
+</style>
+</head>
+<body>
+
+<div class="plugin-frame" id="plugin">
+  <!-- Preset bar component gets inserted here -->
+  <div id="bar-mount"></div>
+
+  <div class="title-section">
+    <h1>OTT Lab</h1>
+    <span class="subtitle">Standalone multiband upward/downward dynamics lab</span>
+  </div>
+  <div class="param-placeholder">
+    <div class="param-group">
+      <div class="param-group-label">Dynamics</div>
+      <div class="param-knobs">
+        <div class="param-knob"><div class="param-knob-circle"></div><span class="param-knob-name">Mix</span></div>
+        <div class="param-knob"><div class="param-knob-circle"></div><span class="param-knob-name">Amount</span></div>
+        <div class="param-knob"><div class="param-knob-circle"></div><span class="param-knob-name">Time</span></div>
+      </div>
+    </div>
+    <div class="param-group">
+      <div class="param-group-label">Character</div>
+      <div class="param-knobs">
+        <div class="param-knob"><div class="param-knob-circle"></div><span class="param-knob-name">Drive</span></div>
+        <div class="param-knob"><div class="param-knob-circle"></div><span class="param-knob-name">Match</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="help-hint">
+  Click preset name to open flyout. Press D to toggle dirty state.
+</div>
+
+<script type="module">
+import { createPresetBar } from "../ui/shared/effects/preset-bar.ts";
+
+// Mock preset data matching the mockup exactly
+const PRESETS = [
+  { presetKey: "factory:ott.default-smash", presetID: "ott.default-smash", label: "Default Smash", effectID: "ott", source: "factory", preset: {}, isActive: true, dirty: false, canApply: true, canRename: false, canOverwrite: false, canDelete: false, canExport: true },
+  { presetKey: "factory:ott.envelope-tamed", presetID: "ott.envelope-tamed", label: "Envelope Tamed", effectID: "ott", source: "factory", preset: {}, isActive: false, dirty: false, canApply: true, canRename: false, canOverwrite: false, canDelete: false, canExport: true },
+  { presetKey: "user:ott.my-gentle-squeeze", presetID: "ott.my-gentle-squeeze", label: "My Gentle Squeeze", effectID: "ott", source: "user", preset: {}, isActive: false, dirty: false, canApply: true, canRename: true, canOverwrite: true, canDelete: true, canExport: true },
+  { presetKey: "user:ott.hard-pump", presetID: "ott.hard-pump", label: "Hard Pump", effectID: "ott", source: "user", preset: {}, isActive: false, dirty: false, canApply: true, canRename: true, canOverwrite: true, canDelete: true, canExport: true },
+  { presetKey: "user:ott.lo-fi-crunch", presetID: "ott.lo-fi-crunch", label: "Lo-Fi Crunch", effectID: "ott", source: "user", preset: {}, isActive: false, dirty: false, canApply: true, canRename: true, canOverwrite: true, canDelete: true, canExport: true },
+  { presetKey: "user:ott.vocal-lift", presetID: "ott.vocal-lift", label: "Vocal Lift", effectID: "ott", source: "user", preset: {}, isActive: false, dirty: false, canApply: true, canRename: true, canOverwrite: true, canDelete: true, canExport: true },
+];
+
+let activeIndex = 0;
+let dirty = false;
+let filterSource = "all";
+let filterQuery = "";
+let listeners = new Set();
+
+function getState() {
+  const presets = PRESETS.map((p, i) => ({
+    ...p,
+    isActive: i === activeIndex,
+    dirty: i === activeIndex && dirty,
+  }));
+
+  const visiblePresets = presets.filter(p => {
+    if (filterSource !== "all" && p.source !== filterSource) return false;
+    if (filterQuery && !p.label.toLowerCase().includes(filterQuery.toLowerCase())) return false;
+    return true;
+  });
+
+  return {
+    effectID: "ott",
+    ready: true,
+    filter: { query: filterQuery, source: filterSource },
+    presets,
+    visiblePresets,
+    factoryPresets: presets.filter(p => p.source === "factory"),
+    userPresets: presets.filter(p => p.source === "user"),
+    activePreset: presets[activeIndex] ? { presetID: PRESETS[activeIndex].presetID, label: PRESETS[activeIndex].label, dirty } : null,
+    activePresetID: PRESETS[activeIndex]?.presetID ?? null,
+    activeLabel: PRESETS[activeIndex]?.label ?? "",
+    dirty,
+    currentValues: {},
+    missingCurrentValueEndpointIDs: [],
+    lastError: null,
+  };
+}
+
+function notify() {
+  const state = getState();
+  for (const listener of listeners) listener(state);
+}
+
+const mockController = {
+  getState,
+  subscribe(listener) {
+    listeners.add(listener);
+    return () => listeners.delete(listener);
+  },
+  getMutations() {
+    return {
+      setFilter(filter) {
+        if (filter.source !== undefined) filterSource = filter.source;
+        if (filter.query !== undefined) filterQuery = filter.query;
+        notify();
+      },
+      clearLastError() { notify(); },
+      refreshCurrentValues() { return { ok: true, value: [], message: "Refreshed." }; },
+      applyPreset(presetKey) {
+        const idx = PRESETS.findIndex(p => p.presetKey === presetKey);
+        if (idx >= 0) { activeIndex = idx; dirty = false; notify(); }
+        return { ok: true, value: PRESETS[idx]?.preset ?? {}, message: `Loaded "${PRESETS[idx]?.label}"` };
+      },
+      reapplyActivePreset() { dirty = false; notify(); return { ok: true, value: {}, message: "Reverted." }; },
+      saveCurrentAsNewPreset(label) {
+        PRESETS.push({ presetKey: `user:ott.${Date.now()}`, presetID: `ott.${Date.now()}`, label, effectID: "ott", source: "user", preset: {}, isActive: false, dirty: false, canApply: true, canRename: true, canOverwrite: true, canDelete: true, canExport: true });
+        activeIndex = PRESETS.length - 1; dirty = false; notify();
+        return { ok: true, value: {}, message: `Saved "${label}"` };
+      },
+      overwriteUserPreset(presetKey) { dirty = false; notify(); return { ok: true, value: {}, message: "Overwritten." }; },
+      renamePreset(presetKey, label) {
+        const p = PRESETS.find(x => x.presetKey === presetKey);
+        if (p) { p.label = label; notify(); }
+        return { ok: true, value: {}, message: "Renamed." };
+      },
+      deletePreset(presetKey) {
+        const idx = PRESETS.findIndex(x => x.presetKey === presetKey);
+        if (idx >= 0) { PRESETS.splice(idx, 1); if (activeIndex >= PRESETS.length) activeIndex = PRESETS.length - 1; notify(); }
+        return { ok: true, value: {}, message: "Deleted." };
+      },
+      duplicatePresetAsUserPreset(presetKey, label) {
+        const src = PRESETS.find(x => x.presetKey === presetKey);
+        if (src) { PRESETS.push({ ...src, presetKey: `user:ott.dup-${Date.now()}`, presetID: `ott.dup-${Date.now()}`, label, source: "user", canRename: true, canOverwrite: true, canDelete: true }); notify(); }
+        return { ok: true, value: {}, message: `Duplicated as "${label}"` };
+      },
+      exportPresetText(presetKey) { return { ok: true, value: "{}", message: "Exported." }; },
+      importPresetText(text) { return { ok: true, value: {}, message: "Imported." }; },
+      async copyPresetToClipboard(presetKey) { return { ok: true, value: "{}", message: "Copied to clipboard." }; },
+      async pastePresetFromClipboard(opts) { return { ok: true, value: {}, message: "Pasted." }; },
+    };
+  },
+};
+
+// Mount the component
+const bar = createPresetBar();
+bar.controller = mockController;
+document.getElementById("bar-mount").replaceWith(bar);
+
+// D key to toggle dirty
+document.addEventListener("keydown", e => {
+  if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
+  if (e.key === "d" && !e.metaKey && !e.ctrlKey && !e.altKey) {
+    dirty = !dirty;
+    notify();
+  }
+});
+</script>
+
+</body>
+</html>

@@ -1,3 +1,6 @@
+import { createPresetBar } from "../../../ui/shared/effects/preset-bar.ts";
+import { createStandaloneEffectPresetController } from "../../../ui/shared/effects/standalone-effect-presets.ts";
+
 const SNAPSHOT_SLOT_IDS = ["A", "B", "C", "D", "E", "F", "G"];
 const SNAPSHOT_STORAGE_KEY = "cosimo.ottLab.snapshotSlots.v1";
 const SNAPSHOT_EXPORT_KIND = "cosimo.ottLab.snapshot";
@@ -22,8 +25,16 @@ class OttLabView extends HTMLElement {
     this.snapshotStorageWarningShown = false;
     this.copyFallbackToken = 0;
     this.pasteFallbackToken = 0;
+    this.presetController = createStandaloneEffectPresetController({
+      effectID: "ott",
+      patchConnection,
+    });
+    this.presetBar = createPresetBar();
+    this.presetBar.controller = this.presetController;
+
     this.attachShadow({ mode: "open" });
     this.shadowRoot.innerHTML = this.getMarkup();
+    this.shadowRoot.querySelector(".frame").before(this.presetBar);
     this.groupsHost = this.shadowRoot.querySelector("[data-groups]");
     this.snapshotHost = this.shadowRoot.querySelector("[data-snapshot-slots]");
     this.snapshotLabelInput = this.shadowRoot.querySelector("[data-snapshot-label-input]");
@@ -36,12 +47,15 @@ class OttLabView extends HTMLElement {
   }
 
   connectedCallback() {
+    this.presetController.attach();
     this.statusListener = status => this.renderFromStatus(status);
     this.patchConnection.addStatusListener(this.statusListener);
     this.patchConnection.requestStatusUpdate();
   }
 
   disconnectedCallback() {
+    this.presetController.detach();
+    this.presetBar.controller = null;
     this.cancelStartupSeedProbe();
     this.cancelSnapshotParameterListeners();
     this.clearSnapshotMessageTimer();
