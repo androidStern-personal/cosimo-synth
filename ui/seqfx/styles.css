@@ -1,0 +1,327 @@
+:host {
+    display: block;
+    width: 100%;
+    height: 100%;
+    color: #eef2ef;
+    background: #151816;
+    font-family: "Geist", "Avenir Next", "Helvetica Neue", Arial, sans-serif;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+button,
+input,
+select {
+    font: inherit;
+}
+
+.seqfx-root {
+    min-height: 100%;
+    padding: 18px;
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0) 260px),
+        #151816;
+}
+
+.seqfx-topbar {
+    display: grid;
+    grid-template-columns: minmax(160px, 1fr) auto auto;
+    align-items: end;
+    gap: 18px;
+    margin-bottom: 18px;
+    border-bottom: 1px solid rgba(238, 242, 239, 0.12);
+    padding-bottom: 16px;
+}
+
+.seqfx-title {
+    display: grid;
+    gap: 2px;
+}
+
+.seqfx-kicker {
+    color: #8bbf9a;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.seqfx-title h1 {
+    margin: 0;
+    color: #f6faf7;
+    font-size: 32px;
+    line-height: 1;
+    letter-spacing: 0;
+}
+
+.seqfx-patterns,
+.seqfx-transport {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    justify-content: flex-end;
+}
+
+.seqfx-pattern,
+.seqfx-transport button {
+    min-width: 34px;
+    height: 34px;
+    border: 1px solid rgba(238, 242, 239, 0.14);
+    border-radius: 7px;
+    color: #d9e2dc;
+    background: rgba(255, 255, 255, 0.045);
+    cursor: pointer;
+    transition: transform 140ms ease, background-color 140ms ease, border-color 140ms ease;
+}
+
+.seqfx-transport button {
+    min-width: 58px;
+    padding: 0 12px;
+}
+
+.seqfx-pattern:hover,
+.seqfx-transport button:hover {
+    border-color: rgba(139, 191, 154, 0.62);
+    background: rgba(139, 191, 154, 0.12);
+}
+
+.seqfx-pattern:active,
+.seqfx-transport button:active,
+.seqfx-cell:active {
+    transform: translateY(1px);
+}
+
+.seqfx-pattern.is-selected {
+    border-color: rgba(139, 191, 154, 0.9);
+    color: #0f1511;
+    background: #8bbf9a;
+}
+
+.seqfx-workspace {
+    display: grid;
+    grid-template-columns: minmax(680px, 1fr) 300px;
+    gap: 18px;
+    align-items: start;
+}
+
+.seqfx-grid-shell,
+.seqfx-inspector {
+    border: 1px solid rgba(238, 242, 239, 0.12);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.035);
+}
+
+.seqfx-grid-shell {
+    overflow: auto;
+    padding: 12px;
+}
+
+.seqfx-step-header,
+.seqfx-lane-row {
+    display: grid;
+    grid-template-columns: 96px repeat(32, minmax(22px, 1fr));
+    gap: 5px;
+    min-width: 980px;
+}
+
+.seqfx-step-header {
+    margin-bottom: 8px;
+}
+
+.seqfx-lane-row + .seqfx-lane-row {
+    margin-top: 8px;
+}
+
+.seqfx-lane-label {
+    display: flex;
+    align-items: center;
+    min-height: 28px;
+    color: #b7c5bc;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.seqfx-step-number {
+    color: rgba(238, 242, 239, 0.45);
+    font-size: 10px;
+    line-height: 1;
+    text-align: center;
+}
+
+.seqfx-step-number.is-playhead {
+    color: #8bbf9a;
+}
+
+.seqfx-cell {
+    position: relative;
+    display: block;
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    border: 1px solid rgba(238, 242, 239, 0.12);
+    border-radius: 5px;
+    padding: 0;
+    background: rgba(255, 255, 255, 0.04);
+    cursor: pointer;
+    transition: border-color 120ms ease, background-color 120ms ease, transform 120ms ease;
+}
+
+.seqfx-cell span {
+    position: absolute;
+    inset: 5px;
+    border-radius: 3px;
+    background: transparent;
+}
+
+.seqfx-cell.is-active {
+    border-color: rgba(139, 191, 154, 0.62);
+    background: rgba(139, 191, 154, 0.22);
+}
+
+.seqfx-cell.is-active span {
+    background: #8bbf9a;
+}
+
+.seqfx-cell.is-trigger::after {
+    position: absolute;
+    top: 3px;
+    right: 3px;
+    width: 5px;
+    height: 5px;
+    border-radius: 999px;
+    background: #f2d16b;
+    content: "";
+}
+
+.seqfx-cell.is-selected {
+    outline: 2px solid #f6faf7;
+    outline-offset: 1px;
+}
+
+.seqfx-cell.is-playhead {
+    box-shadow: inset 0 -3px 0 #8bbf9a;
+}
+
+.seqfx-inspector {
+    display: grid;
+    gap: 14px;
+    padding: 16px;
+}
+
+.seqfx-inspector-heading {
+    display: grid;
+    gap: 4px;
+}
+
+.seqfx-inspector-heading span {
+    color: #8bbf9a;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.seqfx-inspector-heading strong {
+    color: #f6faf7;
+    font-size: 18px;
+}
+
+.seqfx-empty,
+.seqfx-field small {
+    margin: 0;
+    color: rgba(238, 242, 239, 0.62);
+    font-size: 12px;
+    line-height: 1.45;
+}
+
+.seqfx-field {
+    display: grid;
+    gap: 7px;
+}
+
+.seqfx-field span {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    color: #d9e2dc;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.seqfx-field em {
+    border: 1px solid rgba(242, 209, 107, 0.4);
+    border-radius: 999px;
+    padding: 2px 6px;
+    color: #f2d16b;
+    font-size: 10px;
+    font-style: normal;
+}
+
+.seqfx-field input,
+.seqfx-field select {
+    width: 100%;
+    min-height: 34px;
+    border: 1px solid rgba(238, 242, 239, 0.14);
+    border-radius: 7px;
+    padding: 6px 9px;
+    color: #eef2ef;
+    background: rgba(21, 24, 22, 0.85);
+}
+
+.seqfx-field input[type="range"] {
+    padding: 0;
+    accent-color: #8bbf9a;
+}
+
+.seqfx-field input:disabled,
+.seqfx-field select:disabled {
+    opacity: 0.55;
+}
+
+.seqfx-field output {
+    color: #eef2ef;
+    font-family: "Geist Mono", Menlo, Monaco, monospace;
+    font-size: 12px;
+}
+
+.seqfx-chain {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 5px;
+    border-top: 1px solid rgba(238, 242, 239, 0.12);
+    padding-top: 14px;
+}
+
+.seqfx-chain span {
+    border: 1px solid rgba(139, 191, 154, 0.22);
+    border-radius: 6px;
+    padding: 6px 4px;
+    color: #c5d5cb;
+    font-size: 11px;
+    text-align: center;
+}
+
+.seqfx-debug {
+    display: none;
+}
+
+@media (max-width: 980px) {
+    .seqfx-root {
+        padding: 12px;
+    }
+
+    .seqfx-topbar,
+    .seqfx-workspace {
+        grid-template-columns: 1fr;
+    }
+
+    .seqfx-patterns,
+    .seqfx-transport {
+        justify-content: flex-start;
+    }
+
+    .seqfx-inspector {
+        width: 100%;
+    }
+}

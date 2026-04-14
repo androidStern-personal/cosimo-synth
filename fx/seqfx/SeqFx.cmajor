@@ -1,0 +1,899 @@
+namespace seqfx
+{
+    let stepCount = 32;
+    let laneCount = 4;
+    let patternCount = 12;
+    let paramCount = 8;
+    let laneFilter = 0;
+    let laneCrusher = 1;
+    let laneTapeStop = 2;
+    let laneStutter = 3;
+    let maxTapeSeconds = 1.0f;
+    let maxStutterSeconds = 1.0f;
+    let pi = 3.14159265358979323846f;
+
+    struct SeqPatternUpload
+    {
+        int32 patternIndex;
+        int32 revision;
+        bool authoritative;
+
+        bool[laneCount, stepCount] activeSteps;
+        bool[laneCount, stepCount] triggerSteps;
+
+        float32[laneCount, stepCount] mix;
+        float32[laneCount, stepCount, paramCount] params;
+    }
+
+    struct SeqMonitor
+    {
+        int32 patternIndex;
+        int32 stepIndex;
+        bool transportRunning;
+        float32 stepProgress;
+    }
+
+    int32 roundToInt (float32 value)
+    {
+        return int32 (std::intrinsics::floor (value + 0.5f));
+    }
+
+    int32 clampInt (int32 value, int32 minValue, int32 maxValue)
+    {
+        return std::intrinsics::clamp (value, minValue, maxValue);
+    }
+
+    float32 clampFloat (float32 value, float32 minValue, float32 maxValue)
+    {
+        return std::intrinsics::clamp (value, minValue, maxValue);
+    }
+
+    float32 moveTowards (float32 current, float32 target, float32 maxDelta)
+    {
+        if (current < target)
+            return std::intrinsics::min (target, current + maxDelta);
+
+        return std::intrinsics::max (target, current - maxDelta);
+    }
+
+    float32 dbToGain (float32 db)
+    {
+        return std::intrinsics::pow (10.0f, db / 20.0f);
+    }
+
+    float32 curve01 (float32 phase, float32 curvePower)
+    {
+        return std::intrinsics::pow (
+            clampFloat (phase, 0.0f, 1.0f),
+            clampFloat (curvePower, 0.25f, 4.0f)
+        );
+    }
+
+    float32 logLerpHz (float32 startHz, float32 endHz, float32 amount)
+    {
+        let safeStart = std::intrinsics::max (20.0f, startHz);
+        let safeEnd = std::intrinsics::max (20.0f, endHz);
+        let logStart = std::intrinsics::log (safeStart);
+        let logEnd = std::intrinsics::log (safeEnd);
+        return std::intrinsics::exp (logStart + ((logEnd - logStart) * clampFloat (amount, 0.0f, 1.0f)));
+    }
+
+    float32 quantize (float32 sample, float32 levels)
+    {
+        let scaled = sample * levels;
+
+        if (scaled >= 0.0f)
+            return std::intrinsics::floor (scaled + 0.5f) / levels;
+
+        return -std::intrinsics::floor (-scaled + 0.5f) / levels;
+    }
+
+    int32 resolveFilterMode (int32 mode)
+    {
+        if (mode == 1)
+            return std::filters::simper::Mode::highPass;
+
+        if (mode == 2)
+            return std::filters::simper::Mode::bandPass;
+
+        return std::filters::simper::Mode::lowPass;
+    }
+}
+
+processor SeqFx [[ main ]]
+{
+    input stream float32<2> audioIn;
+    output stream float32<2> audioOut;
+
+    input event std::timeline::Position positionIn;
+    input event std::timeline::Tempo tempoIn;
+    input event std::timeline::TransportState transportStateIn;
+
+    input value float32 enabled       [[ name: "SeqFX On", min: 0.0f, max: 1.0f, init: 1.0f, discrete: true, step: 1.0f, rampFrames: 0 ]];
+    input value float32 globalMix     [[ name: "SeqFX Mix", min: 0.0f, max: 1.0f, init: 1.0f, rampFrames: 128 ]];
+    input value float32 patternSelect [[ name: "Pattern", min: 0.0f, max: 11.0f, init: 0.0f, discrete: true, step: 1.0f, rampFrames: 0 ]];
+    input value float32 clockMode     [[ name: "Clock", min: 0.0f, max: 2.0f, init: 0.0f, discrete: true, step: 1.0f, text: "Host|Internal|Manual", rampFrames: 0 ]];
+    input value float32 manualBpm     [[ name: "Manual BPM", min: 20.0f, max: 300.0f, init: 120.0f, rampFrames: 128 ]];
+    input value float32 rate          [[ name: "Rate", min: 0.0f, max: 2.0f, init: 1.0f, discrete: true, step: 1.0f, text: "1/8|1/16|1/32", rampFrames: 0 ]];
+    input value float32 swing         [[ name: "Swing", min: 0.0f, max: 0.45f, init: 0.0f, rampFrames: 128 ]];
+    input value float32 loopStart     [[ name: "Loop Start", min: 0.0f, max: 31.0f, init: 0.0f, discrete: true, step: 1.0f, rampFrames: 0 ]];
+    input value float32 loopLength    [[ name: "Loop Length", min: 1.0f, max: 32.0f, init: 32.0f, discrete: true, step: 1.0f, rampFrames: 0 ]];
+
+    input event seqfx::SeqPatternUpload patternUpload;
+    input event int32 internalPlay;
+    input event int32 internalReset;
+
+    output event seqfx::SeqMonitor monitorOut;
+
+    let tapeBufferSize = int (processor.maxFrequency * seqfx::maxTapeSeconds) + 8;
+    let stutterBufferSize = int (processor.maxFrequency * seqfx::maxStutterSeconds) + 8;
+
+    bool[seqfx::laneCount, seqfx::stepCount] activeSteps;
+    bool[seqfx::laneCount, seqfx::stepCount] triggerSteps;
+    float32[seqfx::laneCount, seqfx::stepCount] stepMix;
+    float32[seqfx::laneCount, seqfx::stepCount, seqfx::paramCount] stepParams;
+    int32[seqfx::patternCount] acceptedRevisions;
+
+    std::filters::simper::Implementation[2] filterStates;
+
+    float32<2>[tapeBufferSize] tapeHistory;
+    float32<2>[stutterBufferSize] stutterHistory;
+    wrap<tapeBufferSize> tapeWriteIndex;
+    wrap<stutterBufferSize> stutterWriteIndex;
+    int32 validTapeFrames;
+    int32 validStutterFrames;
+
+    int32 selectedPatternIndex;
+    int32 currentStep;
+    float64 stepProgressFrames;
+    float64 currentStepFrames = 1.0;
+    bool internalRunning;
+    bool hostRunning;
+    float32 hostBpm = 120.0f;
+    float64 hostQuarterNote;
+    bool resetRequested;
+    bool hostPositionPending;
+    bool needsStepLatch = true;
+    int32 monitorCountdown;
+
+    bool filterActive;
+    int32 filterMode;
+    int32 previousFilterMode;
+    float32 filterStartHz = 2000.0f;
+    float32 filterEndHz = 500.0f;
+    float32 filterQ = 0.707f;
+    float32 filterCurve = 1.0f;
+    float32 filterAgeFrames;
+    float32 filterDurationFrames = 1.0f;
+    float32 filterMixCurrent;
+    float32 filterMixTarget;
+    float32 filterModeFade = 1.0f;
+
+    bool crusherActive;
+    int32 crusherBits = 8;
+    int32 crusherHoldFrames = 1;
+    float32 crusherDriveDb;
+    float32 crusherMixCurrent;
+    float32 crusherMixTarget;
+    float32<2> crusherHeld;
+    int32 crusherHoldCounter;
+    bool crusherNeedsRecapture;
+
+    bool tapeLaneActive;
+    bool tapePlaying;
+    float32 tapeMixCurrent;
+    float32 tapeMixTarget;
+    float32 tapeDurationScale = 1.0f;
+    float32 tapeCurvePower = 1.0f;
+    int32 tapeEndBehavior;
+    float32 tapeReleaseMs = 30.0f;
+    float32 tapeElapsedFrames;
+    float32 tapeDurationFrames = 1.0f;
+    float32 tapeReadPosition;
+    float32<2> tapeLastSample;
+
+    bool stutterLaneActive;
+    bool stutterPlaying;
+    float32 stutterMixCurrent;
+    float32 stutterMixTarget;
+    int32 stutterSliceIndex = 1;
+    float32 stutterPlaybackSpeed = 1.0f;
+    int32 stutterRetriggerMode;
+    float32 stutterReadStart;
+    float32 stutterReadLength = 1.0f;
+    float32 stutterPhaseFrames;
+
+    void init()
+    {
+        initialiseDefaultPattern();
+        currentStep = 0;
+        currentStepFrames = 1.0;
+        needsStepLatch = true;
+    }
+
+    void initialiseDefaultPattern()
+    {
+        for (int32 lane = 0; lane < seqfx::laneCount; ++lane)
+        {
+            for (int32 step = 0; step < seqfx::stepCount; ++step)
+            {
+                activeSteps[lane, step] = false;
+                triggerSteps[lane, step] = false;
+                stepMix[lane, step] = 1.0f;
+
+                for (int32 param = 0; param < seqfx::paramCount; ++param)
+                    stepParams[lane, step, param] = 0.0f;
+            }
+        }
+
+        for (int32 step = 0; step < seqfx::stepCount; ++step)
+        {
+            stepParams[seqfx::laneFilter, step, 0] = 0.0f;
+            stepParams[seqfx::laneFilter, step, 1] = 2000.0f;
+            stepParams[seqfx::laneFilter, step, 2] = 500.0f;
+            stepParams[seqfx::laneFilter, step, 3] = 0.707f;
+            stepParams[seqfx::laneFilter, step, 4] = 1.0f;
+
+            stepParams[seqfx::laneCrusher, step, 0] = 8.0f;
+            stepParams[seqfx::laneCrusher, step, 1] = 1.0f;
+            stepParams[seqfx::laneCrusher, step, 2] = 0.0f;
+
+            stepParams[seqfx::laneTapeStop, step, 0] = 1.0f;
+            stepParams[seqfx::laneTapeStop, step, 1] = 1.0f;
+            stepParams[seqfx::laneTapeStop, step, 2] = 0.0f;
+            stepParams[seqfx::laneTapeStop, step, 3] = 30.0f;
+
+            stepParams[seqfx::laneStutter, step, 0] = 1.0f;
+            stepParams[seqfx::laneStutter, step, 1] = 1.0f;
+            stepParams[seqfx::laneStutter, step, 2] = 0.0f;
+        }
+    }
+
+    event patternUpload (seqfx::SeqPatternUpload upload)
+    {
+        let uploadPatternIndex = seqfx::clampInt (upload.patternIndex, 0, seqfx::patternCount - 1);
+        let acceptedRevision = acceptedRevisions[uploadPatternIndex];
+
+        if (! upload.authoritative && upload.revision < acceptedRevision)
+            return;
+
+        acceptedRevisions[uploadPatternIndex] = upload.revision;
+
+        if (uploadPatternIndex != selectedPatternIndex)
+            return;
+
+        for (int32 lane = 0; lane < seqfx::laneCount; ++lane)
+        {
+            for (int32 step = 0; step < seqfx::stepCount; ++step)
+            {
+                activeSteps[lane, step] = upload.activeSteps[lane, step];
+                triggerSteps[lane, step] = upload.triggerSteps[lane, step];
+                stepMix[lane, step] = seqfx::clampFloat (upload.mix[lane, step], 0.0f, 1.0f);
+
+                for (int32 param = 0; param < seqfx::paramCount; ++param)
+                    stepParams[lane, step, param] = upload.params[lane, step, param];
+            }
+        }
+
+        releaseTimeEffects();
+        needsStepLatch = true;
+    }
+
+    event internalPlay (int32 value)
+    {
+        internalRunning = value != 0;
+        needsStepLatch = true;
+    }
+
+    event internalReset (int32 value)
+    {
+        if (value == 0)
+            return;
+
+        resetRequested = true;
+    }
+
+    event tempoIn (std::timeline::Tempo tempo)
+    {
+        hostBpm = seqfx::clampFloat (tempo.bpm, 20.0f, 300.0f);
+    }
+
+    event transportStateIn (std::timeline::TransportState state)
+    {
+        hostRunning = state.isPlaying();
+        if (! hostRunning)
+            releaseTimeEffects();
+    }
+
+    event positionIn (std::timeline::Position position)
+    {
+        hostQuarterNote = position.quarterNote;
+        hostPositionPending = true;
+    }
+
+    int32 snapValue (float32 value, int32 minValue, int32 maxValue)
+    {
+        return seqfx::clampInt (seqfx::roundToInt (value), minValue, maxValue);
+    }
+
+    int32 resolveClockMode()
+    {
+        return snapValue (clockMode, 0, 2);
+    }
+
+    int32 resolveLoopStart()
+    {
+        return snapValue (loopStart, 0, seqfx::stepCount - 1);
+    }
+
+    int32 resolveLoopLength()
+    {
+        let start = resolveLoopStart();
+        let maximum = seqfx::stepCount - start;
+        return snapValue (loopLength, 1, maximum);
+    }
+
+    int32 resolveLoopEndExclusive()
+    {
+        return resolveLoopStart() + resolveLoopLength();
+    }
+
+    int32 resolveRate()
+    {
+        return snapValue (rate, 0, 2);
+    }
+
+    float64 stepQuarterNotes()
+    {
+        let snappedRate = resolveRate();
+
+        if (snappedRate == 0)
+            return 0.5;
+
+        if (snappedRate == 2)
+            return 0.125;
+
+        return 0.25;
+    }
+
+    float64 framesPerQuarter()
+    {
+        let bpm = seqfx::clampFloat (resolveClockMode() == 0 ? hostBpm : manualBpm, 20.0f, 300.0f);
+        return processor.frequency * (60.0 / float64 (bpm));
+    }
+
+    float64 stepDurationFramesForStep (int32 step)
+    {
+        let base = framesPerQuarter() * stepQuarterNotes();
+        let start = resolveLoopStart();
+        let relativeStep = std::intrinsics::max (0, step - start);
+        let swingAmount = float64 (seqfx::clampFloat (swing, 0.0f, 0.45f));
+
+        if ((relativeStep % 2) == 0)
+            return std::intrinsics::max (16.0, base * (1.0 - swingAmount));
+
+        return std::intrinsics::max (16.0, base * (1.0 + swingAmount));
+    }
+
+    int32 nextStepInLoop (int32 step)
+    {
+        let next = step + 1;
+
+        if (next >= resolveLoopEndExclusive())
+            return resolveLoopStart();
+
+        return next;
+    }
+
+    bool isClockRunning()
+    {
+        let mode = resolveClockMode();
+
+        if (mode == 0)
+            return hostRunning;
+
+        if (mode == 1)
+            return internalRunning;
+
+        return true;
+    }
+
+    void resetClockToLoopStart()
+    {
+        currentStep = resolveLoopStart();
+        stepProgressFrames = 0.0;
+        currentStepFrames = stepDurationFramesForStep (currentStep);
+    }
+
+    void syncHostStepFromQuarterNote()
+    {
+        let start = resolveLoopStart();
+        let length = resolveLoopLength();
+        let absoluteStep = int64 (std::intrinsics::floor (hostQuarterNote / stepQuarterNotes()));
+        var relative = int32 (absoluteStep % int64 (length));
+
+        if (relative < 0)
+            relative += length;
+
+        let nextStep = start + relative;
+
+        if (nextStep != currentStep)
+        {
+            currentStep = nextStep;
+            stepProgressFrames = 0.0;
+            currentStepFrames = stepDurationFramesForStep (currentStep);
+            releaseTimeEffects();
+            needsStepLatch = true;
+        }
+    }
+
+    void refreshSelectedPattern()
+    {
+        let nextPattern = snapValue (patternSelect, 0, seqfx::patternCount - 1);
+
+        if (nextPattern == selectedPatternIndex)
+            return;
+
+        selectedPatternIndex = nextPattern;
+        releaseTimeEffects();
+        needsStepLatch = true;
+    }
+
+    void releaseTimeEffects()
+    {
+        tapePlaying = false;
+        stutterPlaying = false;
+        tapeMixTarget = 0.0f;
+        stutterMixTarget = 0.0f;
+    }
+
+    float32 segmentDurationFrames (int32 lane, int32 step)
+    {
+        var sum = 0.0;
+        var cursor = step;
+
+        for (int32 offset = 0; offset < seqfx::stepCount; ++offset)
+        {
+            if (! activeSteps[lane, cursor])
+                break;
+
+            if (offset > 0 && triggerSteps[lane, cursor])
+                break;
+
+            sum += stepDurationFramesForStep (cursor);
+            cursor = nextStepInLoop (cursor);
+
+            if (cursor == step)
+                break;
+        }
+
+        return float32 (std::intrinsics::max (1.0, sum));
+    }
+
+    void latchStep()
+    {
+        latchFilterStep();
+        latchCrusherStep();
+        latchTapeStep();
+        latchStutterStep();
+        emitMonitor();
+    }
+
+    void latchFilterStep()
+    {
+        let lane = seqfx::laneFilter;
+        filterActive = activeSteps[lane, currentStep];
+        filterMixTarget = filterActive ? stepMix[lane, currentStep] : 0.0f;
+
+        if (! filterActive)
+            return;
+
+        filterAgeFrames = 0.0f;
+        filterDurationFrames = float32 (std::intrinsics::max (1.0, currentStepFrames));
+        previousFilterMode = filterMode;
+        filterMode = snapValue (stepParams[lane, currentStep, 0], 0, 2);
+        filterStartHz = clampCutoffHz (stepParams[lane, currentStep, 1]);
+        filterEndHz = clampCutoffHz (stepParams[lane, currentStep, 2]);
+        filterQ = seqfx::clampFloat (stepParams[lane, currentStep, 3], 0.1f, 20.0f);
+        filterCurve = seqfx::clampFloat (stepParams[lane, currentStep, 4], 0.25f, 4.0f);
+
+        if (filterMode != previousFilterMode)
+        {
+            filterStates.at (0).reset();
+            filterStates.at (1).reset();
+            filterModeFade = 0.0f;
+        }
+    }
+
+    float32 clampCutoffHz (float32 value)
+    {
+        let maximum = std::intrinsics::min (20000.0f, float32 (processor.frequency) * 0.45f);
+        return seqfx::clampFloat (value, 20.0f, maximum);
+    }
+
+    void latchCrusherStep()
+    {
+        let lane = seqfx::laneCrusher;
+        crusherActive = activeSteps[lane, currentStep];
+        crusherMixTarget = crusherActive ? stepMix[lane, currentStep] : 0.0f;
+
+        if (! crusherActive)
+            return;
+
+        crusherBits = snapValue (stepParams[lane, currentStep, 0], 4, 16);
+        crusherHoldFrames = snapValue (stepParams[lane, currentStep, 1], 1, 64);
+        crusherDriveDb = seqfx::clampFloat (stepParams[lane, currentStep, 2], 0.0f, 36.0f);
+        crusherHoldCounter = 0;
+        crusherNeedsRecapture = true;
+    }
+
+    void latchTapeStep()
+    {
+        let lane = seqfx::laneTapeStop;
+        let wasActive = tapeLaneActive;
+        tapeLaneActive = activeSteps[lane, currentStep];
+        tapeMixTarget = tapeLaneActive ? stepMix[lane, currentStep] : 0.0f;
+
+        if (! tapeLaneActive)
+        {
+            tapePlaying = false;
+            return;
+        }
+
+        tapeCurvePower = seqfx::clampFloat (stepParams[lane, currentStep, 1], 0.25f, 4.0f);
+        tapeEndBehavior = snapValue (stepParams[lane, currentStep, 2], 0, 1);
+        tapeReleaseMs = seqfx::clampFloat (stepParams[lane, currentStep, 3], 1.0f, 250.0f);
+
+        if (! wasActive || triggerSteps[lane, currentStep])
+        {
+            tapeDurationScale = seqfx::clampFloat (stepParams[lane, currentStep, 0], 0.05f, 4.0f);
+            startTapeStop (segmentDurationFrames (lane, currentStep) * tapeDurationScale);
+        }
+    }
+
+    void latchStutterStep()
+    {
+        let lane = seqfx::laneStutter;
+        let wasActive = stutterLaneActive;
+        stutterLaneActive = activeSteps[lane, currentStep];
+        stutterMixTarget = stutterLaneActive ? stepMix[lane, currentStep] : 0.0f;
+
+        if (! stutterLaneActive)
+        {
+            stutterPlaying = false;
+            return;
+        }
+
+        stutterPlaybackSpeed = seqfx::clampFloat (stepParams[lane, currentStep, 1], 0.5f, 2.0f);
+        stutterRetriggerMode = snapValue (stepParams[lane, currentStep, 2], 0, 1);
+
+        if (! wasActive || triggerSteps[lane, currentStep] || stutterRetriggerMode == 1)
+        {
+            stutterSliceIndex = snapValue (stepParams[lane, currentStep, 0], 0, 5);
+            startStutter (resolveSliceFrames (segmentDurationFrames (lane, currentStep)));
+        }
+    }
+
+    float32 resolveSliceFrames (float32 blockFrames)
+    {
+        if (stutterSliceIndex == 5)
+            return seqfx::clampFloat (blockFrames, 2.0f, float32 (stutterBufferSize - 8));
+
+        var quarterNotes = 0.25f;
+
+        if (stutterSliceIndex == 0)
+            quarterNotes = 0.0625f;
+        else if (stutterSliceIndex == 1)
+            quarterNotes = 0.125f;
+        else if (stutterSliceIndex == 2)
+            quarterNotes = 0.25f;
+        else if (stutterSliceIndex == 3)
+            quarterNotes = 0.5f;
+        else if (stutterSliceIndex == 4)
+            quarterNotes = 1.0f;
+
+        return seqfx::clampFloat (float32 (framesPerQuarter()) * quarterNotes, 2.0f, float32 (stutterBufferSize - 8));
+    }
+
+    void startTapeStop (float32 durationFrames)
+    {
+        if (validTapeFrames < 8)
+        {
+            tapePlaying = false;
+            return;
+        }
+
+        tapePlaying = true;
+        tapeElapsedFrames = 0.0f;
+        tapeDurationFrames = std::intrinsics::max (1.0f, durationFrames);
+        tapeReadPosition = std::intrinsics::wrap (float32 (int32 (tapeWriteIndex)) - 4.0f, float32 (tapeBufferSize));
+    }
+
+    void startStutter (float32 requestedSliceFrames)
+    {
+        let sliceFrames = seqfx::clampFloat (requestedSliceFrames, 2.0f, float32 (stutterBufferSize - 8));
+        let sliceFrameCount = int32 (sliceFrames);
+
+        if (validStutterFrames < sliceFrameCount + 2)
+        {
+            stutterPlaying = false;
+            return;
+        }
+
+        stutterPlaying = true;
+        stutterReadLength = sliceFrames;
+        stutterPhaseFrames = 0.0f;
+        stutterReadStart = std::intrinsics::wrap (
+            float32 (int32 (stutterWriteIndex)) - sliceFrames,
+            float32 (stutterBufferSize)
+        );
+    }
+
+    void writeTapeHistory (float32<2> sample)
+    {
+        tapeHistory[tapeWriteIndex] = sample;
+        tapeWriteIndex = wrap<tapeBufferSize> (int32 (tapeWriteIndex) + 1);
+
+        if (validTapeFrames < tapeBufferSize - 4)
+            validTapeFrames += 1;
+    }
+
+    void writeStutterHistory (float32<2> sample)
+    {
+        stutterHistory[stutterWriteIndex] = sample;
+        stutterWriteIndex = wrap<stutterBufferSize> (int32 (stutterWriteIndex) + 1);
+
+        if (validStutterFrames < stutterBufferSize - 4)
+            validStutterFrames += 1;
+    }
+
+    float32<2> readTapeHistory (float32 position)
+    {
+        let wrapped = std::intrinsics::wrap (position, float32 (tapeBufferSize));
+        let index0 = int32 (std::intrinsics::floor (wrapped));
+        let fraction = wrapped - float32 (index0);
+        let i0 = wrap<tapeBufferSize> (index0);
+        let i1 = wrap<tapeBufferSize> (index0 + 1);
+        return tapeHistory[i0] + ((tapeHistory[i1] - tapeHistory[i0]) * fraction);
+    }
+
+    float32<2> readStutterHistory (float32 position)
+    {
+        let wrapped = std::intrinsics::wrap (position, float32 (stutterBufferSize));
+        let index0 = int32 (std::intrinsics::floor (wrapped));
+        let fraction = wrapped - float32 (index0);
+        let i0 = wrap<stutterBufferSize> (index0);
+        let i1 = wrap<stutterBufferSize> (index0 + 1);
+        return stutterHistory[i0] + ((stutterHistory[i1] - stutterHistory[i0]) * fraction);
+    }
+
+    float32<2> processFilter (float32<2> stage)
+    {
+        filterMixCurrent = seqfx::moveTowards (filterMixCurrent, filterMixTarget, 1.0f / 96.0f);
+
+        if (filterMixCurrent <= 0.00001f)
+            return stage;
+
+        let phase = filterAgeFrames / std::intrinsics::max (1.0f, filterDurationFrames);
+        let envelope = seqfx::curve01 (phase, filterCurve);
+        let cutoffHz = seqfx::logLerpHz (filterStartHz, filterEndHz, envelope);
+        let mode = seqfx::resolveFilterMode (filterMode);
+
+        filterStates.at (0).setMode (mode);
+        filterStates.at (1).setMode (mode);
+        filterStates.at (0).setFrequency (processor.frequency, cutoffHz, filterQ, 0.0f);
+        filterStates.at (1).setFrequency (processor.frequency, cutoffHz, filterQ, 0.0f);
+
+        var filtered = float32<2> (
+            filterStates.at (0).process (stage[0]),
+            filterStates.at (1).process (stage[1])
+        );
+
+        filterModeFade = seqfx::moveTowards (filterModeFade, 1.0f, 1.0f / std::intrinsics::max (1.0f, float32 (processor.frequency) * 0.005f));
+        filtered = stage + ((filtered - stage) * filterModeFade);
+
+        if (filterActive)
+            filterAgeFrames += 1.0f;
+
+        return stage + ((filtered - stage) * filterMixCurrent);
+    }
+
+    float32<2> processCrusher (float32<2> stage)
+    {
+        crusherMixCurrent = seqfx::moveTowards (crusherMixCurrent, crusherMixTarget, 1.0f / 64.0f);
+
+        if (crusherMixCurrent <= 0.00001f)
+            return stage;
+
+        let driveGain = seqfx::dbToGain (crusherDriveDb);
+        let driven = float32<2> (
+            seqfx::clampFloat (stage[0], -1.0f, 1.0f),
+            seqfx::clampFloat (stage[1], -1.0f, 1.0f)
+        ) * driveGain;
+        let clipped = float32<2> (
+            seqfx::clampFloat (driven[0], -1.0f, 1.0f),
+            seqfx::clampFloat (driven[1], -1.0f, 1.0f)
+        );
+
+        if (crusherNeedsRecapture || crusherHoldCounter <= 0)
+        {
+            crusherHeld = clipped;
+            crusherNeedsRecapture = false;
+            crusherHoldCounter = crusherHoldFrames;
+        }
+
+        crusherHoldCounter -= 1;
+
+        let levels = float32 ((1 << (crusherBits - 1)) - 1);
+        let crushed = float32<2> (
+            seqfx::quantize (crusherHeld[0], levels),
+            seqfx::quantize (crusherHeld[1], levels)
+        );
+
+        return stage + ((crushed - stage) * crusherMixCurrent);
+    }
+
+    float32<2> processTapeStop (float32<2> stage)
+    {
+        tapeMixCurrent = seqfx::moveTowards (tapeMixCurrent, tapeMixTarget, 1.0f / 96.0f);
+
+        if (tapeMixCurrent <= 0.00001f || ! tapePlaying)
+            return stage;
+
+        let progress = tapeElapsedFrames / std::intrinsics::max (1.0f, tapeDurationFrames);
+        let speed = std::intrinsics::pow (
+            std::intrinsics::max (0.0f, 1.0f - seqfx::clampFloat (progress, 0.0f, 1.0f)),
+            tapeCurvePower
+        );
+
+        if (progress >= 1.0f)
+        {
+            if (tapeEndBehavior == 0)
+            {
+                let releaseFrames = std::intrinsics::max (1.0f, (tapeReleaseMs * 0.001f) * float32 (processor.frequency));
+                let releaseAmount = seqfx::clampFloat ((tapeElapsedFrames - tapeDurationFrames) / releaseFrames, 0.0f, 1.0f);
+                let faded = tapeLastSample * (1.0f - releaseAmount);
+
+                if (releaseAmount >= 1.0f)
+                    tapePlaying = false;
+
+                tapeElapsedFrames += 1.0f;
+                return stage + ((faded - stage) * tapeMixCurrent);
+            }
+
+            tapeElapsedFrames += 1.0f;
+            return stage + ((tapeLastSample - stage) * tapeMixCurrent);
+        }
+
+        let tapeOut = readTapeHistory (tapeReadPosition);
+        tapeLastSample = tapeOut;
+        tapeReadPosition = std::intrinsics::wrap (tapeReadPosition + speed, float32 (tapeBufferSize));
+        tapeElapsedFrames += 1.0f;
+        return stage + ((tapeOut - stage) * tapeMixCurrent);
+    }
+
+    float32<2> processStutter (float32<2> stage)
+    {
+        stutterMixCurrent = seqfx::moveTowards (stutterMixCurrent, stutterMixTarget, 1.0f / 64.0f);
+
+        if (stutterMixCurrent <= 0.00001f || ! stutterPlaying)
+            return stage;
+
+        let crossfadeFrames = seqfx::clampFloat (
+            std::intrinsics::min (float32 (processor.frequency) * 0.005f, stutterReadLength * 0.25f),
+            1.0f,
+            std::intrinsics::max (1.0f, stutterReadLength * 0.5f)
+        );
+        let readPosition = stutterReadStart + stutterPhaseFrames;
+        var stutterOut = readStutterHistory (readPosition);
+
+        if (stutterPhaseFrames > stutterReadLength - crossfadeFrames)
+        {
+            let fade = (stutterPhaseFrames - (stutterReadLength - crossfadeFrames)) / crossfadeFrames;
+            let head = readStutterHistory (stutterReadStart + (fade * crossfadeFrames));
+            stutterOut = (stutterOut * (1.0f - fade)) + (head * fade);
+        }
+
+        stutterPhaseFrames += stutterPlaybackSpeed;
+
+        while (stutterPhaseFrames >= stutterReadLength)
+            stutterPhaseFrames -= stutterReadLength;
+
+        return stage + ((stutterOut - stage) * stutterMixCurrent);
+    }
+
+    void advanceSequencer()
+    {
+        if (! isClockRunning())
+            return;
+
+        stepProgressFrames += 1.0;
+
+        if (stepProgressFrames < currentStepFrames)
+            return;
+
+        stepProgressFrames -= currentStepFrames;
+        currentStep = nextStepInLoop (currentStep);
+        currentStepFrames = stepDurationFramesForStep (currentStep);
+        latchStep();
+    }
+
+    void emitMonitor()
+    {
+        seqfx::SeqMonitor monitor;
+        monitor.patternIndex = selectedPatternIndex;
+        monitor.stepIndex = currentStep;
+        monitor.transportRunning = isClockRunning();
+        monitor.stepProgress = float32 (stepProgressFrames / std::intrinsics::max (1.0, currentStepFrames));
+        monitorOut <- monitor;
+    }
+
+    void maybeEmitMonitor()
+    {
+        monitorCountdown -= 1;
+
+        if (monitorCountdown > 0)
+            return;
+
+        monitorCountdown = int32 (processor.frequency / 30.0);
+        emitMonitor();
+    }
+
+    void main()
+    {
+        loop
+        {
+            if (resetRequested)
+            {
+                resetClockToLoopStart();
+                releaseTimeEffects();
+                needsStepLatch = true;
+                resetRequested = false;
+            }
+
+            if (hostPositionPending)
+            {
+                if (resolveClockMode() == 0)
+                    syncHostStepFromQuarterNote();
+
+                hostPositionPending = false;
+            }
+
+            refreshSelectedPattern();
+
+            if (needsStepLatch)
+            {
+                currentStepFrames = stepDurationFramesForStep (currentStep);
+                latchStep();
+                needsStepLatch = false;
+            }
+
+            let dry = audioIn;
+            var stage = dry;
+
+            if (isClockRunning())
+            {
+                stage = processFilter (stage);
+                stage = processCrusher (stage);
+
+                writeTapeHistory (stage);
+                stage = processTapeStop (stage);
+
+                writeStutterHistory (stage);
+                stage = processStutter (stage);
+            }
+            else
+            {
+                writeTapeHistory (stage);
+                writeStutterHistory (stage);
+            }
+
+            let effectiveMix = enabled >= 0.5f ? seqfx::clampFloat (globalMix, 0.0f, 1.0f) : 0.0f;
+            audioOut <- dry + ((stage - dry) * effectiveMix);
+
+            advanceSequencer();
+            maybeEmitMonitor();
+            advance();
+        }
+    }
+}

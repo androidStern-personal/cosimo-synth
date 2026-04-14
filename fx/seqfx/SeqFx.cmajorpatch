@@ -1,0 +1,23 @@
+{
+  "CmajorVersion": 1,
+  "ID": "dev.cosimo.seqfx",
+  "version": "0.1.0",
+  "name": "Cosimo SeqFX",
+  "description": "Step-sequenced stereo effect with filter envelope, bit crusher, tape stop, and stutter lanes.",
+  "category": "effect",
+  "manufacturer": "Cosimo",
+  "plugin": {
+    "pluginCode": "CsFx",
+    "manufacturerCode": "Cosi"
+  },
+  "isInstrument": false,
+  "source": [
+    "SeqFx.cmajor"
+  ],
+  "view": {
+    "src": "view/index.js",
+    "resizable": true,
+    "width": 1120,
+    "height": 680
+  }
+}
