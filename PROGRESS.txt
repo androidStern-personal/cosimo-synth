@@ -623,3 +623,61 @@ OTT lab static per-band drive on 2026-04-12
 What was verified for the OTT lab static per-band drive
 - `npm run ott:dry-run`
 - `uv run pytest -q tests/test_ott_lab_probe.py`
+
+OTT lab broadband envelope match on 2026-04-12
+- Added broadband envelope matching to `fx/ott_lab/OttLab.cmajor`. It compares the delayed dry reference envelope against the summed processed wet envelope, applies a bounded correction to the wet signal, then applies the normal `Output Gain` and `Mix`.
+- This is not per-band matching. The low, mid, and high bands are already recombined before the matcher sees the signal.
+- Added development-facing controls:
+  - `Envelope Match`: `0%` to `100%`, default `0%`
+  - `Env Boost Clamp`: max upward correction in dB, default `6 dB`
+  - `Env Cut Clamp`: max downward correction in dB, default `6 dB`
+  - `Env Attack`: detector attack speed, default `5 ms`
+  - `Env Release`: detector release speed, default `120 ms`
+- The detector keeps tracking even when `Envelope Match = 0%`, so turning the knob up later does not start from stale zero envelope state.
+- Measured with default OTT settings and a 1 kHz sine at 0.75 input amplitude:
+  - dry reference: peak `0.750000`, RMS `0.530330`
+  - unmatched processed wet: peak `0.129856`, RMS `0.091752`
+  - `Envelope Match 100%`, `6 dB` clamps: peak `0.259096`, RMS `0.183070`
+  - `Envelope Match 100%`, `12 dB` clamps: peak `0.516965`, RMS `0.365272`
+- Added Cmajor probe tests that prove broadband matching pulls the summed wet level toward the dry reference, boost clamp controls upward correction, cut clamp controls downward correction, and attack speed changes how quickly matching reacts to a loud step.
+
+What was verified for the OTT lab broadband envelope match
+- `npm run ott:dry-run`
+- `uv run pytest -q tests/test_ott_lab_probe.py`
+- `npm run ott:jit:install`
+- `git diff --check`
+
+OTT lab detector timing retune on 2026-04-13
+- Retuned the default OTT lab detector attack/release values to match the `vitOTT`/Vital-style timings the user selected:
+  - Low: `2.8 ms` attack, `40 ms` release
+  - Mid: `1.4 ms` attack, `28 ms` release
+  - High: `0.7 ms` attack, `15 ms` release
+- `Time = 100%` now uses those values directly. `Time = 10%` still scales them down to one tenth, and `Time = 1000%` still scales them up by ten.
+- Updated the Cmajor probe wrapper and the timing-sensitive probe assertions so the tests describe the new faster default behavior instead of the older slow Ableton-style millisecond values. The previous 2026-04-12 measurement bullets remain historical measurements from before this retune.
+
+What was verified for the OTT lab detector timing retune
+- `npm run ott:dry-run`
+- `uv run pytest -q tests/test_ott_lab_probe.py`
+- `git diff --check`
+
+OTT lab local A-G snapshots on 2026-04-13
+- Added a compact local snapshot strip to `fx/ott_lab/view/index.js` for slots `A` through `G`.
+- Each slot is a single small focusable text input. There are no per-slot `SAVE`, `COPY`, or `PASTE` buttons.
+- Clicking an empty slot starts that slot from the current visible parameter values. Clicking a filled slot recalls it and makes it active.
+- After a slot is active, parameter changes automatically update that slot in `localStorage`; there is no separate save action.
+- The text field next to the `A` through `G` slots edits the active slot's free-text `label`. Switching active slots updates that text field, and typing in the field persists to the active slot immediately.
+- When a slot input is focused, `Cmd+C` copies that slot's JSON and `Cmd+V` pastes JSON into that slot. The paste target can be an empty slot or an existing slot.
+- The slot controls are editable text inputs that self-reset to their slot letter, so the browser/WebView has a native text-focus target for clipboard shortcuts without letting accidental typing rename the slot buttons. The view handles native `copy` and `paste` events, with delayed keyboard fallback paths if those native events do not arrive.
+- Copy, paste, recall, and validation failures now show a small toast inside the OTT lab card instead of relying on a large inline message.
+- Snapshots are browser-side only. They store visible Cmajor parameter endpoint values in `localStorage` under `cosimo.ottLab.snapshotSlots.v1`; hidden/internal parameters are not saved.
+- `COPY` exports a JSON object with `kind`, `schema`, `patchID`, `slot`, `label`, and `values`, so the text can be pasted back into any slot with the sound label intact.
+- `PASTE` first tries the browser clipboard API. If WebKit blocks clipboard reads, the view opens a small manual paste box where the same JSON can be pasted and applied.
+- Pasted snapshots validate the OTT lab `patchID`, schema, known endpoint IDs, numeric finiteness, and parameter ranges before anything is sent to Cmajor. Invalid JSON does not partially change the sound.
+- Added `npm run test:ott:view` for the browser-level snapshot test.
+
+What was verified for the OTT lab local A-G snapshots
+- `npm run test:ott:view`
+- `npm run ott:dry-run`
+- `uv run pytest -q tests/test_ott_lab_probe.py`
+- `npm run ott:jit:install`
+- `git diff --check`

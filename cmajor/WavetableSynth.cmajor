@@ -973,6 +973,11 @@ graph WavetableSynth [[ main ]]
     input value float32 chorusRingAmount [[ name: "Chorus Ring", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 128 ]];
     input value float32 chorusRingOffsetMode [[ name: "Chorus Ring Pitch", min: 0.0f, max: 3.0f, init: 0.0f, discrete: true, step: 1.0f, text: "+5th|Low 5th|+Oct|-Oct", rampFrames: 0 ]];
     input value float32 chorusRingFineSemitones [[ name: "Chorus Ring Fine", min: -2.0f, max: 2.0f, init: 0.0f, unit: "st", rampFrames: 128 ]];
+    input value float32 ottMix [[ name: "OTT Mix", min: 0.0f, max: 100.0f, init: 100.0f, unit: "%", rampFrames: 128 ]];
+    input value float32 ottAmount [[ name: "OTT Amount", min: 0.0f, max: 100.0f, init: 100.0f, unit: "%", rampFrames: 128 ]];
+    input value float32 ottTimePercent [[ name: "OTT Time", min: 10.0f, max: 1000.0f, init: 100.0f, unit: "%", rampFrames: 128 ]];
+    input value float32 ottBandDrive [[ name: "OTT Band Drive", min: 0.0f, max: 100.0f, init: 0.0f, unit: "%", rampFrames: 128 ]];
+    input value float32 ottEnvelopeMatch [[ name: "OTT Envelope Match", min: 0.0f, max: 100.0f, init: 0.0f, unit: "%", rampFrames: 128 ]];
     output event wt::WavetableUploadAck wavetableUploadAck;
     output event wt::WavetableMipRequest wavetableMipRequest;
     output event wt::RuntimeState runtimeState;

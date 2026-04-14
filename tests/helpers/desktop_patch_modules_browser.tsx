@@ -36,6 +36,12 @@ import {
     createDefaultModulationState,
     serializeModulationState,
 } from "../../ui/shared/modulation";
+import { useStandaloneEffectPresets } from "../../ui/shared/effects/use-standalone-effect-presets";
+import type {
+    EffectPreset,
+    EffectPresetDescriptorRegistry,
+    EffectPresetValue,
+} from "../../ui/shared/effects/effect-preset-schema";
 
 type Deferred<TValue> = {
     promise: Promise<TValue>;
@@ -107,6 +113,134 @@ function cloneValue<TValue>(value: TValue): TValue {
     }
 
     return JSON.parse(JSON.stringify(value)) as TValue;
+}
+
+function createStandalonePresetDescriptorRegistry(): EffectPresetDescriptorRegistry {
+    return {
+        ott: {
+            effectID: "ott",
+            label: "OTT",
+            params: {
+                ottMix: { type: "number", min: 0, max: 100, defaultValue: 100 },
+                ottAmount: { type: "number", min: 0, max: 100, defaultValue: 100 },
+                ottTimePercent: { type: "number", min: 10, max: 1000, defaultValue: 100, clamp: true },
+                ottBandDrive: { type: "number", min: 0, max: 100, defaultValue: 0 },
+                ottEnvelopeMatch: { type: "number", min: 0, max: 100, defaultValue: 0 },
+            },
+        },
+    };
+}
+
+function createStandaloneFactoryPresets(): Record<string, EffectPreset[]> {
+    return {
+        ott: [{
+            kind: "cosimo.effectPreset",
+            version: 1,
+            effectID: "ott",
+            presetID: "ott.default-smash",
+            label: "Default Smash",
+            values: {
+                ottMix: 100,
+                ottAmount: 100,
+                ottTimePercent: 100,
+                ottBandDrive: 0,
+                ottEnvelopeMatch: 0,
+            },
+        }, {
+            kind: "cosimo.effectPreset",
+            version: 1,
+            effectID: "ott",
+            presetID: "ott.envelope-tamed",
+            label: "Envelope Tamed",
+            values: {
+                ottMix: 86,
+                ottAmount: 92,
+                ottTimePercent: 100,
+                ottBandDrive: 12,
+                ottEnvelopeMatch: 38,
+            },
+        }],
+    };
+}
+
+class StandalonePresetHookPatchConnection implements PatchConnectionLike {
+    storedState: Record<string, unknown> = {};
+    parameterValues: Record<string, EffectPresetValue> = {
+        ottMix: 11,
+        ottAmount: 22,
+        ottTimePercent: 100,
+        ottBandDrive: 0,
+        ottEnvelopeMatch: 0,
+    };
+    events: Array<{ endpointID: string; value: unknown }> = [];
+    storedWrites: Array<{ key: string; value: unknown }> = [];
+    requestedParameters: string[] = [];
+    private storedStateListeners = new Set<(message: unknown) => void>();
+    private parameterListeners = new Map<string, Set<(value: unknown) => void>>();
+
+    addStoredStateValueListener(listener: (message: unknown) => void) {
+        this.storedStateListeners.add(listener);
+    }
+
+    removeStoredStateValueListener(listener: (message: unknown) => void) {
+        this.storedStateListeners.delete(listener);
+    }
+
+    requestFullStoredState(callback: (state: Record<string, unknown>) => void) {
+        callback({ ...this.storedState });
+    }
+
+    sendStoredStateValue(key: string, value: unknown) {
+        this.storedState[key] = value;
+        this.storedWrites.push({ key, value });
+
+        for (const listener of this.storedStateListeners) {
+            listener({ key, value });
+        }
+    }
+
+    addParameterListener(endpointID: string, listener: (value: unknown) => void) {
+        if (!this.parameterListeners.has(endpointID)) {
+            this.parameterListeners.set(endpointID, new Set());
+        }
+
+        this.parameterListeners.get(endpointID)?.add(listener);
+    }
+
+    removeParameterListener(endpointID: string, listener: (value: unknown) => void) {
+        this.parameterListeners.get(endpointID)?.delete(listener);
+    }
+
+    requestParameterValue(endpointID: string) {
+        this.requestedParameters.push(endpointID);
+
+        if (Object.prototype.hasOwnProperty.call(this.parameterValues, endpointID)) {
+            this.emitParameterValue(endpointID, this.parameterValues[endpointID]);
+        }
+    }
+
+    sendEventOrValue(endpointID: string, value: unknown) {
+        this.events.push({ endpointID, value });
+        this.emitParameterValue(endpointID, value as EffectPresetValue);
+    }
+
+    emitParameterValue(endpointID: string, value: EffectPresetValue) {
+        this.parameterValues[endpointID] = value;
+
+        for (const listener of this.parameterListeners.get(endpointID) ?? []) {
+            listener(value);
+        }
+    }
+
+    getListenerCounts() {
+        return {
+            storedState: this.storedStateListeners.size,
+            parameters: Object.fromEntries(Array.from(this.parameterListeners.entries()).map(([endpointID, listeners]) => [
+                endpointID,
+                listeners.size,
+            ])),
+        };
+    }
 }
 
 function mountHarness(target: HTMLElement, render: (root: Root) => void) {
@@ -1712,6 +1846,83 @@ export async function installSharedKeyboardSectionShellHarness(target: HTMLEleme
                     upDisabled: upButton instanceof HTMLButtonElement ? upButton.disabled : null,
                     downDisabled: downButton instanceof HTMLButtonElement ? downButton.disabled : null,
                 },
+            };
+        },
+        async unmount() {
+            mounted.unmount();
+            await waitForMicrotask();
+        },
+    };
+
+    await waitForMicrotask();
+}
+
+export async function installStandaloneEffectPresetHookHarness(target: HTMLElement) {
+    const patchConnection = new StandalonePresetHookPatchConnection();
+    const descriptorRegistry = createStandalonePresetDescriptorRegistry();
+    const factoryPresets = createStandaloneFactoryPresets();
+    let latestSnapshot: Record<string, unknown> | null = null;
+    let latestMutations: ReturnType<typeof useStandaloneEffectPresets>["mutations"] | null = null;
+    let firstMutations: ReturnType<typeof useStandaloneEffectPresets>["mutations"] | null = null;
+    let mutationsStable = true;
+
+    const mounted = mountHarness(target, (root) => {
+        function Harness() {
+            const { state, mutations } = useStandaloneEffectPresets("ott", {
+                descriptorRegistry,
+                factoryPresets,
+                initialFilter: { query: "env" },
+            });
+
+            if (!firstMutations) {
+                firstMutations = mutations;
+            } else if (firstMutations !== mutations) {
+                mutationsStable = false;
+            }
+
+            latestMutations = mutations;
+
+            useEffect(() => {
+                latestSnapshot = {
+                    ready: state.ready,
+                    filter: state.filter,
+                    visibleLabels: state.visiblePresets.map((preset) => preset.label),
+                    presetKeys: state.presets.map((preset) => preset.presetKey),
+                    activePreset: state.activePreset,
+                    currentValues: state.currentValues,
+                    missingCurrentValueEndpointIDs: state.missingCurrentValueEndpointIDs,
+                    mutationKeys: Object.keys(mutations).sort(),
+                    mutationsStable,
+                };
+            });
+
+            return null;
+        }
+
+        root.render(
+            <PatchConnectionProvider patchConnection={patchConnection}>
+                <Harness />
+            </PatchConnectionProvider>,
+        );
+    });
+
+    window.__COSIMO_DESKTOP_MODULE_HARNESS__ = {
+        async applyEnvelopeTamed() {
+            if (!latestMutations) {
+                throw new Error("Standalone preset mutations are not available.");
+            }
+
+            const result = latestMutations.applyPreset("factory:ott.envelope-tamed");
+            await waitForMicrotask();
+            return result;
+        },
+        getSnapshot() {
+            return {
+                latest: cloneValue(latestSnapshot),
+                events: cloneValue(patchConnection.events),
+                storedWrites: cloneValue(patchConnection.storedWrites),
+                requestedParameters: cloneValue(patchConnection.requestedParameters),
+                listenerCounts: patchConnection.getListenerCounts(),
             };
         },
         async unmount() {

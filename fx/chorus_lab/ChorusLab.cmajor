@@ -64,8 +64,15 @@ processor ChorusLab [[ main ]]
     input event std::midi::Message midiIn [[ name: "MIDI input" ]];
     output stream float32<2> out;
 
-    input value bool bypass                  [[ name: "Bypass",           group: "Output", init: false, boolean ]];
-    input value float32 mix                  [[ name: "Mix",               group: "Output", min: 0.0f,   max: 100.0f, init: 50.0f,  unit: "%",   rampFrames: 256 ]];
+    input value float32 chorusEnabled        [[ name: "Chorus On",         group: "Output", min: 0.0f,   max: 1.0f,  init: 0.0f,  discrete: true, step: 1.0f, rampFrames: 0 ]];
+    input value float32 chorusMix            [[ name: "Mix",               group: "Output", min: 0.0f,   max: 1.0f,  init: 0.0f,  rampFrames: 128 ]];
+    input value float32 chorusMotionMode     [[ name: "Motion",            group: "Chorus", min: 0.0f,   max: 3.0f,  init: 1.0f,  discrete: true, step: 1.0f, text: "Subtle|Wide Slow|Classic|Fast Light", rampFrames: 0 ]];
+    input value float32 chorusBloomMode      [[ name: "Bloom",             group: "Chorus", min: 0.0f,   max: 4.0f,  init: 0.0f,  discrete: true, step: 1.0f, text: "Clean|Small|Large|Small+Shimmer|Large+Shimmer", rampFrames: 0 ]];
+    input value float32 chorusTone           [[ name: "Tone",              group: "Chorus", min: 0.0f,   max: 1.0f,  init: 0.5f,  rampFrames: 128 ]];
+    input value float32 chorusFeedback       [[ name: "Feedback",          group: "Chorus", min: 0.0f,   max: 0.95f, init: 0.42f, rampFrames: 128 ]];
+    input value float32 chorusRingAmount     [[ name: "Ring",              group: "Chorus", min: 0.0f,   max: 1.0f,  init: 0.0f,  rampFrames: 128 ]];
+    input value float32 chorusRingOffsetMode [[ name: "Ring Pitch",        group: "Chorus", min: 0.0f,   max: 3.0f,  init: 0.0f,  discrete: true, step: 1.0f, text: "+5th|Low 5th|+Oct|-Oct", rampFrames: 0 ]];
+    input value float32 chorusRingFineSemitones [[ name: "Ring Fine",      group: "Chorus", min: -2.0f,  max: 2.0f,  init: 0.0f,  unit: "st", rampFrames: 128 ]];
 
     input value float32 voices              [[ name: "Voices",            group: "Chorus", min: 1.0f,   max: 3.0f,   init: 3.0f,   unit: "",    rampFrames: 256 ]];
     input value float32 rateHz              [[ name: "Rate",              group: "Chorus", min: 0.02f,  max: 6.0f,   init: 0.33f,  unit: "Hz",  rampFrames: 256 ]];
@@ -460,30 +467,90 @@ processor ChorusLab [[ main ]]
             let sampleRate = float32 (processor.frequency);
             let dry = in;
 
-            let mix01 = std::intrinsics::clamp (mix * 0.01f, 0.0f, 1.0f);
-            let activeGroups = int32 (std::intrinsics::clamp (std::intrinsics::floor (voices + 0.5f), 1.0f, float32 (choruslab::kGroupCount)));
+            let productionEnabled = chorusEnabled >= 0.5f;
+            let mix01 = std::intrinsics::clamp (chorusMix, 0.0f, 1.0f);
+
+            var effectiveVoices = voices;
+            var effectiveRateHz = rateHz;
+            var effectiveModDepthMs = modDepthMs;
+            var effectiveDriftMs = driftMs;
+
+            {
+                let motionMode = int32 (std::intrinsics::clamp (std::intrinsics::floor (chorusMotionMode + 0.5f), 0.0f, 3.0f));
+
+                if (motionMode == 0)
+                {
+                    effectiveVoices = 2.0f;
+                    effectiveRateHz = 0.18f;
+                    effectiveModDepthMs = 4.5f;
+                    effectiveDriftMs = 0.15f;
+                }
+                else if (motionMode == 1)
+                {
+                    effectiveVoices = 3.0f;
+                    effectiveRateHz = 0.28f;
+                    effectiveModDepthMs = 8.5f;
+                    effectiveDriftMs = 0.4f;
+                }
+                else if (motionMode == 2)
+                {
+                    effectiveVoices = 3.0f;
+                    effectiveRateHz = 0.75f;
+                    effectiveModDepthMs = 6.5f;
+                    effectiveDriftMs = 0.25f;
+                }
+                else
+                {
+                    effectiveVoices = 2.0f;
+                    effectiveRateHz = 1.6f;
+                    effectiveModDepthMs = 3.0f;
+                    effectiveDriftMs = 0.1f;
+                }
+            }
+
+            let activeGroups = int32 (std::intrinsics::clamp (std::intrinsics::floor (effectiveVoices + 0.5f), 1.0f, float32 (choruslab::kGroupCount)));
             let delayA = std::intrinsics::clamp (choruslab::kDelayAMs * sampleRate * 0.001f, 3.0f, float32 (chorusBufferSize - 8));
             let delayB = std::intrinsics::clamp (choruslab::kDelayBMs * sampleRate * 0.001f, 3.0f, float32 (chorusBufferSize - 8));
-            let modDepthSamples = std::intrinsics::clamp (modDepthMs * sampleRate * 0.001f, 0.0f, sampleRate * 0.030f);
-            let driftDepthSamples = std::intrinsics::clamp (driftMs * sampleRate * 0.001f, 0.0f, sampleRate * 0.008f);
+            let modDepthSamples = std::intrinsics::clamp (effectiveModDepthMs * sampleRate * 0.001f, 0.0f, sampleRate * 0.030f);
+            let driftDepthSamples = std::intrinsics::clamp (effectiveDriftMs * sampleRate * 0.001f, 0.0f, sampleRate * 0.008f);
 
             let rightOffset = choruslab::kRightPhaseOffset;
             let innerOffset = choruslab::kInnerPairOffset;
             let groupSpread = choruslab::kGroupPhaseSpread;
 
-            let feedback01 = std::intrinsics::clamp (feedback * 0.01f, -0.95f, 0.95f);
+            let feedback01 = std::intrinsics::clamp (chorusFeedback, 0.0f, 0.95f);
             let feedbackMagnitude = std::intrinsics::abs (feedback01);
-            let hpCutoff = std::intrinsics::clamp (loopHighpassHz, 20.0f, sampleRate * 0.20f);
-            let lpCutoff = std::intrinsics::clamp (std::intrinsics::max (loopLowpassHz, hpCutoff + 10.0f), hpCutoff + 10.0f, sampleRate * 0.45f);
+            let tone01 = std::intrinsics::clamp (chorusTone, 0.0f, 1.0f);
+            let effectiveHighpassHz = choruslab::lerp (60.0f, 220.0f, tone01);
+            let effectiveLowpassHz = choruslab::lerp (3000.0f, 11000.0f, tone01);
+            let hpCutoff = std::intrinsics::clamp (effectiveHighpassHz, 20.0f, sampleRate * 0.20f);
+            let lpCutoff = std::intrinsics::clamp (std::intrinsics::max (effectiveLowpassHz, hpCutoff + 10.0f), hpCutoff + 10.0f, sampleRate * 0.45f);
             let lowCoeff = choruslab::coefficientForCutoff (sampleRate, lpCutoff);
             let highCoeff = choruslab::coefficientForCutoff (sampleRate, hpCutoff);
-            let driveAmount = std::intrinsics::clamp (drive, 0.5f, 4.0f);
-            let ringMix01 = std::intrinsics::clamp (ringModMix * 0.01f, 0.0f, 1.0f);
-            let ringDepth01 = std::intrinsics::clamp (ringModDepth * 0.01f, 0.0f, 1.0f);
+            let driveAmount = 1.35f;
+            let ringMix01 = std::intrinsics::clamp (chorusRingAmount, 0.0f, 1.0f);
+            let ringDepth01 = 1.0f;
+            var effectiveRingOffset = 0.0f;
+
+            {
+                let ringOffsetMode = int32 (std::intrinsics::clamp (std::intrinsics::floor (chorusRingOffsetMode + 0.5f), 0.0f, 3.0f));
+
+                if (ringOffsetMode == 0)
+                    effectiveRingOffset = 7.0f;
+                else if (ringOffsetMode == 1)
+                    effectiveRingOffset = -5.0f;
+                else if (ringOffsetMode == 2)
+                    effectiveRingOffset = 12.0f;
+                else
+                    effectiveRingOffset = -12.0f;
+            }
+
+            effectiveRingOffset += std::intrinsics::clamp (chorusRingFineSemitones, -2.0f, 2.0f);
+
             var targetRingHz = choruslab::kRingFallbackHz;
 
             if (ringHasHeldNote)
-                targetRingHz = std::notes::noteToFrequency (ringTrackedPitch + ringModOffset);
+                targetRingHz = std::notes::noteToFrequency (ringTrackedPitch + effectiveRingOffset);
 
             let clampedRingTargetHz = std::intrinsics::clamp (targetRingHz, 0.1f, sampleRate * 0.45f);
 
@@ -499,12 +566,45 @@ processor ChorusLab [[ main ]]
             let ringCarrier = std::intrinsics::sin (ringAngle);
             let ringMultiplier = choruslab::lerp (1.0f, ringCarrier, ringDepth01);
 
-            let diffuse01 = std::intrinsics::clamp (diffuse * 0.01f, 0.0f, 1.0f);
+            var effectiveDiffuse = 0.0f;
+            var effectiveShimmer = 0.0f;
+
+            {
+                let bloomMode = int32 (std::intrinsics::clamp (std::intrinsics::floor (chorusBloomMode + 0.5f), 0.0f, 4.0f));
+
+                if (bloomMode == 0)
+                {
+                    effectiveDiffuse = 0.0f;
+                    effectiveShimmer = 0.0f;
+                }
+                else if (bloomMode == 1)
+                {
+                    effectiveDiffuse = 18.0f;
+                    effectiveShimmer = 0.0f;
+                }
+                else if (bloomMode == 2)
+                {
+                    effectiveDiffuse = 35.0f;
+                    effectiveShimmer = 0.0f;
+                }
+                else if (bloomMode == 3)
+                {
+                    effectiveDiffuse = 18.0f;
+                    effectiveShimmer = 12.0f;
+                }
+                else
+                {
+                    effectiveDiffuse = 35.0f;
+                    effectiveShimmer = 18.0f;
+                }
+            }
+
+            let diffuse01 = std::intrinsics::clamp (effectiveDiffuse * 0.01f, 0.0f, 1.0f);
             let diffuseDelaySamples = std::intrinsics::clamp (diffuseDelayMs * sampleRate * 0.001f, 4.0f, float32 (diffusionBufferSize - 8));
             let diffuseMod01 = std::intrinsics::clamp (diffuseMod * 0.01f, 0.0f, 1.0f);
             let diffuseAllpassCoeff = std::intrinsics::clamp (diffuseCoeff, 0.05f, 0.86f);
             let diffuseReturnGain01 = std::intrinsics::max (diffuseReturnGain * 0.01f, 0.0f);
-            let shimmer01 = std::intrinsics::clamp (shimmer * 0.01f, 0.0f, 1.0f);
+            let shimmer01 = std::intrinsics::clamp (effectiveShimmer * 0.01f, 0.0f, 1.0f);
             let shimmerReturnGain01 = std::intrinsics::max (shimmerReturnGain * 0.01f, 0.0f);
             let shimmerTone01 = std::intrinsics::clamp (shimmerTone * 0.01f, 0.0f, 1.0f);
             let shimmerGrainSamples = std::intrinsics::clamp (shimmerGrainMs * sampleRate * 0.001f, sampleRate * 0.018f, float32 (shimmerBufferSize - 256));
@@ -623,10 +723,10 @@ processor ChorusLab [[ main ]]
 
             let mainOut = (dry * dryGain) + (float32<2> (chorusWetLeft, chorusWetRight) * wetGain);
             let wetOrSolo = shimmerSolo ? float32<2> (shimmerSoloLeft, shimmerSoloRight) : mainOut;
-            out <- bypass ? dry : wetOrSolo;
+            out <- productionEnabled ? wetOrSolo : dry;
 
             ringModPhase = choruslab::wrap01 (ringModPhase + ringPhaseStep);
-            lfoPhase = choruslab::wrap01 (lfoPhase + (std::intrinsics::clamp (rateHz, 0.02f, 6.0f) / sampleRate));
+            lfoPhase = choruslab::wrap01 (lfoPhase + (std::intrinsics::clamp (effectiveRateHz, 0.02f, 6.0f) / sampleRate));
             advance();
         }
     }

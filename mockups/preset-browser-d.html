@@ -1,0 +1,799 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cosimo Preset Browser — Variant D (Minimal)</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html {
+    font-family: "SF Mono", Menlo, Monaco, Consolas, monospace;
+    background: #0a0d0c; color: #eff7ee;
+  }
+  body { padding: 40px 24px; }
+
+  /* ── Plugin Frame ───────────────────────────────────── */
+  .plugin-frame {
+    width: 920px; min-height: 500px; border-radius: 18px;
+    background:
+      radial-gradient(circle at 16% 6%, rgba(143,240,164,0.19), transparent 30%),
+      radial-gradient(circle at 86% 0%, rgba(255,232,132,0.13), transparent 28%),
+      linear-gradient(180deg, #111714 0%, #070a09 100%);
+    border: 1px solid rgba(255,255,255,0.06);
+    overflow: visible;
+    position: relative;
+  }
+
+  /* ── Preset Bar ─────────────────────────────────────── */
+  .preset-bar {
+    display: flex; align-items: center; gap: 0;
+    height: 38px;
+    background: rgba(0,0,0,0.22);
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    border-radius: 18px 18px 0 0;
+    position: relative;
+    z-index: 60;
+  }
+
+  .nav-btn {
+    appearance: none; border: none; width: 32px; height: 100%;
+    background: transparent; color: rgba(239,247,238,0.45);
+    font: inherit; font-size: 14px; cursor: pointer; display: flex;
+    align-items: center; justify-content: center; transition: all 80ms;
+    flex-shrink: 0;
+  }
+  .nav-btn:first-child { border-radius: 18px 0 0 0; }
+  .nav-btn:hover { color: #8ff0a4; background: rgba(143,240,164,0.06); }
+  .nav-btn:active { background: rgba(143,240,164,0.12); }
+
+  /* ── Name Region (clickable to open flyout) ─────────── */
+  .name-region {
+    flex: 1; display: flex; align-items: center; gap: 8px;
+    height: 100%; padding: 0 12px; cursor: pointer;
+    transition: background 80ms; position: relative;
+    min-width: 0;
+  }
+  .name-region:hover { background: rgba(255,255,255,0.03); }
+  .name-region.open { background: rgba(143,240,164,0.04); }
+
+  .preset-name {
+    font-size: 12px; letter-spacing: 0.03em; color: rgba(239,247,238,0.92);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .dirty-indicator {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: #ffe884; flex-shrink: 0;
+    display: none;
+  }
+  .dirty-indicator.visible { display: block; }
+
+  .source-tag {
+    font-size: 8px; letter-spacing: 0.06em; text-transform: uppercase;
+    color: rgba(239,247,238,0.25); flex-shrink: 0;
+  }
+  .chevron {
+    color: rgba(239,247,238,0.25); font-size: 9px; margin-left: auto;
+    flex-shrink: 0; transition: transform 150ms;
+  }
+  .name-region.open .chevron { transform: rotate(180deg); }
+
+  /* ── Action Group ───────────────────────────────────── */
+  .action-group {
+    display: flex; align-items: center; height: 100%;
+    border-left: 1px solid rgba(255,255,255,0.06);
+    flex-shrink: 0;
+  }
+  .action-btn {
+    appearance: none; border: none; height: 100%; padding: 0 12px;
+    background: transparent; color: rgba(239,247,238,0.4);
+    font: inherit; font-size: 9px; letter-spacing: 0.04em; text-transform: uppercase;
+    cursor: pointer; transition: all 80ms; white-space: nowrap;
+  }
+  .action-btn:hover { color: #8ff0a4; background: rgba(143,240,164,0.06); }
+  .action-btn:active { background: rgba(143,240,164,0.1); }
+  .action-btn:disabled { opacity: 0.25; pointer-events: none; }
+  .action-btn.highlight { color: rgba(143,240,164,0.7); }
+  .action-btn:last-child { border-radius: 0 18px 0 0; }
+  .action-sep { width: 1px; height: 16px; background: rgba(255,255,255,0.06); flex-shrink: 0; }
+
+  /* ── Flyout Dropdown ────────────────────────────────── */
+  .flyout-backdrop {
+    display: none; position: fixed; inset: 0; z-index: 49;
+  }
+  .flyout-backdrop.open { display: block; }
+
+  .flyout {
+    display: none; position: absolute;
+    top: 38px; left: 0; right: 0;
+    background: rgba(12,16,14,0.98);
+    backdrop-filter: blur(24px);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-top: none;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+    z-index: 50;
+    max-height: 400px;
+    display: none;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .flyout.open { display: flex; }
+
+  /* Search row */
+  .flyout-header {
+    display: flex; align-items: center; gap: 6px;
+    padding: 10px 14px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    flex-shrink: 0;
+  }
+  .flyout-search {
+    flex: 1; height: 28px; padding: 0 10px;
+    border: 1px solid rgba(255,255,255,0.08); border-radius: 7px;
+    background: rgba(0,0,0,0.3); color: rgba(239,247,238,0.9);
+    font: inherit; font-size: 11px; letter-spacing: 0.02em;
+  }
+  .flyout-search::placeholder { color: rgba(239,247,238,0.25); }
+  .flyout-search:focus { border-color: rgba(143,240,164,0.4); outline: none; }
+
+  .filter-pill {
+    appearance: none; border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 999px; padding: 4px 10px; height: 28px;
+    background: transparent; color: rgba(239,247,238,0.4);
+    font: inherit; font-size: 9px; letter-spacing: 0.06em; text-transform: uppercase;
+    cursor: pointer; transition: all 100ms; white-space: nowrap;
+  }
+  .filter-pill:hover:not(.active) { background: rgba(255,255,255,0.04); color: rgba(239,247,238,0.6); }
+  .filter-pill.active {
+    background: rgba(143,240,164,0.12); border-color: rgba(143,240,164,0.25);
+    color: #8ff0a4;
+  }
+
+  /* Preset list */
+  .flyout-list {
+    flex: 1; overflow-y: auto; padding: 4px 0;
+  }
+  .flyout-list::-webkit-scrollbar { width: 5px; }
+  .flyout-list::-webkit-scrollbar-track { background: transparent; }
+  .flyout-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 3px; }
+
+  .section-header {
+    font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase;
+    color: rgba(239,247,238,0.25); padding: 10px 16px 4px;
+  }
+  .section-header:first-child { padding-top: 6px; }
+
+  .preset-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 0 16px; height: 32px; cursor: pointer;
+    transition: background 60ms;
+  }
+  .preset-item:hover { background: rgba(255,255,255,0.04); }
+  .preset-item.active { background: rgba(143,240,164,0.08); }
+
+  .preset-item .item-name {
+    flex: 1; font-size: 12px; letter-spacing: 0.02em;
+    color: rgba(239,247,238,0.8);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .preset-item.active .item-name { color: #8ff0a4; }
+
+  .preset-item .item-source {
+    font-size: 8px; letter-spacing: 0.06em; text-transform: uppercase;
+    color: rgba(239,247,238,0.2); flex-shrink: 0;
+  }
+
+  .preset-item .item-dirty-star {
+    color: #ffe884; font-size: 11px; flex-shrink: 0; display: none;
+  }
+
+  .preset-item .item-ctx {
+    appearance: none; border: none; background: transparent;
+    color: rgba(239,247,238,0.2); font-size: 16px; line-height: 1;
+    cursor: pointer; padding: 0 2px; opacity: 0; transition: opacity 60ms;
+    flex-shrink: 0;
+  }
+  .preset-item:hover .item-ctx { opacity: 1; }
+  .preset-item .item-ctx:hover { color: rgba(239,247,238,0.6); }
+
+  .flyout-empty {
+    padding: 28px 16px; text-align: center;
+    font-size: 11px; color: rgba(239,247,238,0.25);
+  }
+
+  /* Flyout footer */
+  .flyout-footer {
+    display: flex; gap: 6px; padding: 8px 14px;
+    border-top: 1px solid rgba(255,255,255,0.06);
+    flex-shrink: 0;
+  }
+  .flyout-footer-btn {
+    appearance: none; flex: 1; height: 30px;
+    border: 1px dashed rgba(255,255,255,0.1); border-radius: 7px;
+    background: transparent; color: rgba(239,247,238,0.4);
+    font: inherit; font-size: 9px; letter-spacing: 0.04em; text-transform: uppercase;
+    cursor: pointer; transition: all 100ms;
+  }
+  .flyout-footer-btn:hover {
+    border-color: rgba(143,240,164,0.3); color: #8ff0a4;
+    background: rgba(143,240,164,0.05);
+  }
+
+  /* ── Context Menu ───────────────────────────────────── */
+  .ctx-menu {
+    display: none; position: fixed;
+    min-width: 200px;
+    border: 1px solid rgba(255,255,255,0.1); border-radius: 10px;
+    background: rgba(14,18,16,0.98); backdrop-filter: blur(24px);
+    box-shadow: 0 12px 40px rgba(0,0,0,0.65); z-index: 200;
+    padding: 4px 0; overflow: hidden;
+  }
+  .ctx-menu.open { display: block; }
+  .ctx-sep { height: 1px; background: rgba(255,255,255,0.06); margin: 4px 0; }
+  .ctx-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 7px 14px; cursor: pointer; transition: background 60ms;
+    font-size: 11px; color: rgba(239,247,238,0.75); letter-spacing: 0.02em;
+  }
+  .ctx-item:hover { background: rgba(143,240,164,0.1); color: #8ff0a4; }
+  .ctx-item .shortcut {
+    margin-left: auto; font-size: 9px; color: rgba(239,247,238,0.2);
+    letter-spacing: 0.04em;
+  }
+  .ctx-item.danger { color: #ff9a7d; }
+  .ctx-item.danger:hover { background: rgba(255,154,125,0.1); color: #ff9a7d; }
+  .ctx-item.disabled { opacity: 0.3; pointer-events: none; }
+
+  /* ── Title Section ──────────────────────────────────── */
+  .title-section {
+    padding: 18px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    background: rgba(255,255,255,0.02);
+  }
+  .title-section h1 {
+    font-size: 22px; letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 4px;
+  }
+  .title-section .subtitle {
+    font-size: 11px; color: rgba(239,247,238,0.5); line-height: 1.5;
+  }
+
+  /* ── Param Placeholders ─────────────────────────────── */
+  .param-placeholder {
+    display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px; padding: 18px;
+  }
+  .param-group {
+    border: 1px solid rgba(255,255,255,0.06); border-radius: 14px;
+    background: rgba(255,255,255,0.025); padding: 14px; min-height: 140px;
+  }
+  .param-group-label {
+    font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+    color: rgba(239,247,238,0.5); margin-bottom: 12px;
+  }
+  .param-knobs { display: flex; gap: 14px; flex-wrap: wrap; }
+  .param-knob { width: 52px; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .param-knob-circle {
+    width: 42px; height: 42px; border-radius: 50%;
+    border: 1.5px solid rgba(255,255,255,0.15);
+    background: rgba(255,255,255,0.03); position: relative;
+  }
+  .param-knob-circle::after {
+    content: ""; position: absolute; top: 3px; left: 50%; transform: translateX(-50%);
+    width: 2px; height: 10px; background: rgba(239,247,238,0.5); border-radius: 1px;
+  }
+  .param-knob-name {
+    font-size: 8px; letter-spacing: 0.04em; color: rgba(239,247,238,0.5);
+    text-align: center; text-transform: uppercase;
+  }
+
+  /* ── Save Dialog ────────────────────────────────────── */
+  .dialog-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.5); z-index: 300;
+    align-items: center; justify-content: center;
+  }
+  .dialog-overlay.open { display: flex; }
+  .dialog {
+    width: 380px; border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 14px; background: rgba(14,18,16,0.98);
+    backdrop-filter: blur(24px); padding: 22px;
+    box-shadow: 0 24px 64px rgba(0,0,0,0.6);
+  }
+  .dialog h3 {
+    font-size: 13px; letter-spacing: 0.06em; text-transform: uppercase;
+    margin-bottom: 16px;
+  }
+  .dialog label {
+    display: block; font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase;
+    color: rgba(239,247,238,0.45); margin-bottom: 6px;
+  }
+  .dialog input[type="text"] {
+    width: 100%; height: 34px; padding: 0 12px;
+    border: 1px solid rgba(255,255,255,0.1); border-radius: 8px;
+    background: rgba(0,0,0,0.3); color: rgba(239,247,238,0.92);
+    font: inherit; font-size: 12px; margin-bottom: 18px;
+  }
+  .dialog input[type="text"]:focus { border-color: rgba(143,240,164,0.5); outline: none; }
+  .dialog-actions {
+    display: flex; gap: 8px; justify-content: flex-end;
+  }
+  .dialog-actions button {
+    appearance: none; height: 32px; padding: 0 18px;
+    border: 1px solid rgba(255,255,255,0.1); border-radius: 7px;
+    background: rgba(255,255,255,0.04); color: rgba(239,247,238,0.65);
+    font: inherit; font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase;
+    cursor: pointer; transition: all 100ms;
+  }
+  .dialog-actions button:hover { background: rgba(255,255,255,0.08); }
+  .dialog-actions button.primary {
+    background: rgba(143,240,164,0.16); border-color: rgba(143,240,164,0.35);
+    color: #8ff0a4;
+  }
+  .dialog-actions button.primary:hover { background: rgba(143,240,164,0.26); }
+
+  /* ── Toast ──────────────────────────────────────────── */
+  .toast-host {
+    position: fixed; top: 16px; right: 16px; z-index: 400;
+    display: flex; flex-direction: column; gap: 8px; pointer-events: none;
+  }
+  .toast {
+    padding: 8px 14px; border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.08);
+    background: rgba(14,18,16,0.95); backdrop-filter: blur(12px);
+    font-size: 11px; color: rgba(239,247,238,0.8);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    animation: toastIn 160ms ease forwards;
+  }
+  .toast.success { color: #8ff0a4; border-color: rgba(143,240,164,0.15); }
+  .toast.warn { color: #ffe884; border-color: rgba(255,232,132,0.15); }
+  .toast.error { color: #ff9a7d; border-color: rgba(255,154,125,0.15); }
+  @keyframes toastIn {
+    from { opacity: 0; transform: translateY(-6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ── Help hint ──────────────────────────────────────── */
+  .help-hint {
+    margin-top: 24px; font-size: 10px; color: rgba(239,247,238,0.25);
+    letter-spacing: 0.03em;
+  }
+  .help-hint kbd {
+    display: inline-block; padding: 1px 6px; border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 4px; background: rgba(255,255,255,0.04); font: inherit;
+    font-size: 9px; color: rgba(239,247,238,0.5);
+  }
+</style>
+</head>
+<body>
+
+<div class="plugin-frame" id="plugin">
+
+  <!-- ── Preset Bar ───────────────────────────────────── -->
+  <div class="preset-bar">
+    <button class="nav-btn" onclick="navPreset(-1)" title="Previous preset">&#8249;</button>
+
+    <div class="name-region" id="name-region" onclick="toggleFlyout()">
+      <span class="preset-name" id="preset-name">Default Smash</span>
+      <span class="dirty-indicator" id="dirty-dot"></span>
+      <span class="source-tag" id="source-tag">Factory</span>
+      <span class="chevron" id="chevron">&#9662;</span>
+    </div>
+
+    <button class="nav-btn" onclick="navPreset(1)" title="Next preset">&#8250;</button>
+
+    <div class="action-group">
+      <button class="action-btn highlight" id="btn-save" disabled onclick="doSave()">Save</button>
+      <span class="action-sep"></span>
+      <button class="action-btn" onclick="doSaveAs()">Save As</button>
+      <span class="action-sep"></span>
+      <button class="action-btn" id="btn-revert" disabled onclick="doRevert()">Revert</button>
+      <span class="action-sep"></span>
+      <button class="action-btn" onclick="doCopy()">Copy</button>
+      <span class="action-sep"></span>
+      <button class="action-btn" onclick="doPaste()">Paste</button>
+    </div>
+  </div>
+
+  <!-- ── Flyout Dropdown ──────────────────────────────── -->
+  <div class="flyout" id="flyout">
+    <div class="flyout-header">
+      <input class="flyout-search" id="flyout-search" type="text" placeholder="Search presets..." oninput="onSearchInput()">
+      <button class="filter-pill active" data-filter="all" onclick="setFilter(this)">All</button>
+      <button class="filter-pill" data-filter="factory" onclick="setFilter(this)">Factory</button>
+      <button class="filter-pill" data-filter="user" onclick="setFilter(this)">User</button>
+    </div>
+    <div class="flyout-list" id="flyout-list"></div>
+    <div class="flyout-footer">
+      <button class="flyout-footer-btn" onclick="doSaveAs()">+ Save current as new preset</button>
+      <button class="flyout-footer-btn" onclick="doPaste()">Paste JSON</button>
+    </div>
+  </div>
+</div>
+
+<!-- Flyout click-away backdrop -->
+<div class="flyout-backdrop" id="flyout-backdrop" onclick="closeFlyout()"></div>
+
+<!-- ── Title + Params (below, representing rest of plugin) ── -->
+<div class="plugin-frame" style="margin-top: -1px; border-top: none; border-radius: 0 0 18px 18px;">
+  <div class="title-section">
+    <h1>OTT Lab</h1>
+    <span class="subtitle">Standalone multiband upward/downward dynamics lab</span>
+  </div>
+  <div class="param-placeholder">
+    <div class="param-group">
+      <div class="param-group-label">Dynamics</div>
+      <div class="param-knobs">
+        <div class="param-knob"><div class="param-knob-circle"></div><span class="param-knob-name">Mix</span></div>
+        <div class="param-knob"><div class="param-knob-circle"></div><span class="param-knob-name">Amount</span></div>
+        <div class="param-knob"><div class="param-knob-circle"></div><span class="param-knob-name">Time</span></div>
+      </div>
+    </div>
+    <div class="param-group">
+      <div class="param-group-label">Character</div>
+      <div class="param-knobs">
+        <div class="param-knob"><div class="param-knob-circle"></div><span class="param-knob-name">Drive</span></div>
+        <div class="param-knob"><div class="param-knob-circle"></div><span class="param-knob-name">Match</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="help-hint">
+  Press <kbd>D</kbd> to toggle dirty state &middot;
+  Click preset name to open browser &middot;
+  Right-click user presets for context menu &middot;
+  <kbd>Esc</kbd> closes menus
+</div>
+
+<!-- Context Menu -->
+<div class="ctx-menu" id="ctx-menu">
+  <div class="ctx-item" onclick="doRename()">Rename <span class="shortcut">F2</span></div>
+  <div class="ctx-item" onclick="doDuplicate()">Duplicate</div>
+  <div class="ctx-item" onclick="doOverwrite()">Overwrite with current</div>
+  <div class="ctx-sep"></div>
+  <div class="ctx-item" onclick="doCopySpecific()">Copy as JSON <span class="shortcut">&#8984;C</span></div>
+  <div class="ctx-sep"></div>
+  <div class="ctx-item danger" onclick="doDelete()">Delete <span class="shortcut">&#9003;</span></div>
+</div>
+
+<!-- Save Dialog -->
+<div class="dialog-overlay" id="save-dialog" onclick="if(event.target===this)closeSaveDialog()">
+  <div class="dialog">
+    <h3>Save Preset</h3>
+    <label for="save-name-input">Preset Name</label>
+    <input type="text" id="save-name-input" value="My New Preset">
+    <div class="dialog-actions">
+      <button onclick="closeSaveDialog()">Cancel</button>
+      <button class="primary" onclick="confirmSave()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast Host -->
+<div class="toast-host" id="toast-host"></div>
+
+<script>
+// ── State ────────────────────────────────────────────────
+const PRESETS = [
+  { key: "factory:ott.default-smash", label: "Default Smash", source: "factory" },
+  { key: "factory:ott.envelope-tamed", label: "Envelope Tamed", source: "factory" },
+  { key: "user:ott.my-gentle-squeeze", label: "My Gentle Squeeze", source: "user" },
+  { key: "user:ott.hard-pump", label: "Hard Pump", source: "user" },
+  { key: "user:ott.lo-fi-crunch", label: "Lo-Fi Crunch", source: "user" },
+  { key: "user:ott.vocal-lift", label: "Vocal Lift", source: "user" },
+];
+
+let activeIndex = 0;
+let dirty = false;
+let filterSource = "all";
+let searchQuery = "";
+let ctxTargetIndex = -1;
+
+// ── Derived ──────────────────────────────────────────────
+function filtered() {
+  return PRESETS.filter(p => {
+    if (filterSource !== "all" && p.source !== filterSource) return false;
+    if (searchQuery && !p.label.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+    return true;
+  });
+}
+
+// ── Render ───────────────────────────────────────────────
+function render() {
+  const p = PRESETS[activeIndex];
+
+  // Bar
+  document.getElementById("preset-name").textContent = p.label;
+  document.getElementById("source-tag").textContent = p.source;
+  const dot = document.getElementById("dirty-dot");
+  dot.classList.toggle("visible", dirty);
+
+  // Action buttons
+  document.getElementById("btn-save").disabled = !dirty || p.source === "factory";
+  document.getElementById("btn-revert").disabled = !dirty;
+
+  // Flyout list
+  renderFlyoutList();
+}
+
+function renderFlyoutList() {
+  const list = document.getElementById("flyout-list");
+  const items = filtered();
+
+  if (items.length === 0) {
+    list.innerHTML = `<div class="flyout-empty">No presets match.</div>`;
+    return;
+  }
+
+  const factory = items.filter(p => p.source === "factory");
+  const user = items.filter(p => p.source === "user");
+  let html = "";
+
+  if (factory.length && (filterSource === "all" || filterSource === "factory")) {
+    html += `<div class="section-header">Factory</div>`;
+    for (const p of factory) {
+      const idx = PRESETS.indexOf(p);
+      const isActive = idx === activeIndex;
+      html += presetItemHTML(p, idx, isActive, false);
+    }
+  }
+
+  if (user.length && (filterSource === "all" || filterSource === "user")) {
+    html += `<div class="section-header">User</div>`;
+    for (const p of user) {
+      const idx = PRESETS.indexOf(p);
+      const isActive = idx === activeIndex;
+      html += presetItemHTML(p, idx, isActive, true);
+    }
+  }
+
+  list.innerHTML = html;
+}
+
+function presetItemHTML(p, idx, isActive, showCtx) {
+  const dirtyMark = isActive && dirty;
+  return `
+    <div class="preset-item ${isActive ? "active" : ""}"
+         onclick="selectPreset(${idx})"
+         oncontextmenu="event.preventDefault(); ${showCtx ? `openCtxMenu(event, ${idx})` : ""}">
+      <span class="item-name">${escHTML(p.label)}</span>
+      <span class="item-dirty-star" style="display:${dirtyMark ? "block" : "none"}">*</span>
+      <span class="item-source">${p.source}</span>
+      ${showCtx ? `<button class="item-ctx" onclick="event.stopPropagation(); openCtxMenu(event, ${idx})">&#8943;</button>` : ""}
+    </div>`;
+}
+
+function escHTML(s) { return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+
+// ── Flyout Toggle ────────────────────────────────────────
+function toggleFlyout() {
+  const flyout = document.getElementById("flyout");
+  const region = document.getElementById("name-region");
+  const backdrop = document.getElementById("flyout-backdrop");
+
+  if (flyout.classList.contains("open")) {
+    closeFlyout();
+  } else {
+    flyout.classList.add("open");
+    region.classList.add("open");
+    backdrop.classList.add("open");
+    renderFlyoutList();
+    setTimeout(() => document.getElementById("flyout-search").focus(), 30);
+  }
+}
+
+function closeFlyout() {
+  document.getElementById("flyout").classList.remove("open");
+  document.getElementById("name-region").classList.remove("open");
+  document.getElementById("flyout-backdrop").classList.remove("open");
+}
+
+// ── Select Preset ────────────────────────────────────────
+function selectPreset(idx) {
+  activeIndex = idx;
+  dirty = false;
+  closeFlyout();
+  closeCtxMenu();
+  render();
+  toast(`Loaded "${PRESETS[idx].label}"`, "success");
+}
+
+// ── Navigation ───────────────────────────────────────────
+function navPreset(dir) {
+  const list = filtered();
+  if (list.length === 0) return;
+
+  const currentFiltered = list.findIndex(p => PRESETS.indexOf(p) === activeIndex);
+  let next;
+  if (currentFiltered < 0) {
+    next = dir > 0 ? 0 : list.length - 1;
+  } else {
+    next = (currentFiltered + dir + list.length) % list.length;
+  }
+  selectPreset(PRESETS.indexOf(list[next]));
+}
+
+// ── Filter / Search ──────────────────────────────────────
+function setFilter(btn) {
+  filterSource = btn.dataset.filter;
+  document.querySelectorAll(".filter-pill").forEach(p => p.classList.remove("active"));
+  btn.classList.add("active");
+  renderFlyoutList();
+}
+
+function onSearchInput() {
+  searchQuery = document.getElementById("flyout-search").value;
+  renderFlyoutList();
+}
+
+// ── Context Menu ─────────────────────────────────────────
+function openCtxMenu(event, idx) {
+  event.preventDefault();
+  ctxTargetIndex = idx;
+  const menu = document.getElementById("ctx-menu");
+  menu.style.left = event.clientX + "px";
+  menu.style.top = event.clientY + "px";
+  menu.classList.add("open");
+}
+
+function closeCtxMenu() {
+  document.getElementById("ctx-menu").classList.remove("open");
+  ctxTargetIndex = -1;
+}
+
+// ── Actions ──────────────────────────────────────────────
+function doSave() {
+  const p = PRESETS[activeIndex];
+  if (p.source === "factory") { toast("Cannot overwrite factory preset", "warn"); return; }
+  dirty = false;
+  render();
+  toast(`Saved "${p.label}"`, "success");
+}
+
+function doSaveAs() {
+  closeFlyout();
+  const dialog = document.getElementById("save-dialog");
+  dialog.classList.add("open");
+  const input = document.getElementById("save-name-input");
+  input.value = dirty ? PRESETS[activeIndex].label : "My New Preset";
+  setTimeout(() => { input.focus(); input.select(); }, 30);
+}
+
+function closeSaveDialog() {
+  document.getElementById("save-dialog").classList.remove("open");
+}
+
+function confirmSave() {
+  const name = document.getElementById("save-name-input").value.trim();
+  if (!name) return;
+  // Add as new user preset
+  const newKey = `user:ott.${name.toLowerCase().replace(/\s+/g, "-")}-${Date.now()}`;
+  PRESETS.push({ key: newKey, label: name, source: "user" });
+  activeIndex = PRESETS.length - 1;
+  dirty = false;
+  closeSaveDialog();
+  render();
+  toast(`Saved "${name}"`, "success");
+}
+
+function doRevert() {
+  dirty = false;
+  render();
+  toast("Reverted to saved values", "success");
+}
+
+function doCopy() {
+  const p = PRESETS[activeIndex];
+  const json = JSON.stringify({
+    kind: "cosimo.effectPreset", version: 1, effectID: "ott",
+    presetID: p.key, label: p.label,
+    values: { ottMix: 1.0, ottAmount: 0.65, ottTimePercent: 0.4, ottBandDrive: 0.0, ottEnvelopeMatch: 0.0 }
+  }, null, 2);
+  navigator.clipboard?.writeText(json).catch(() => {});
+  toast("Copied to clipboard", "success");
+}
+
+function doPaste() {
+  closeFlyout();
+  toast("Pasted preset from clipboard", "success");
+}
+
+function doRename() {
+  const idx = ctxTargetIndex >= 0 ? ctxTargetIndex : activeIndex;
+  const p = PRESETS[idx];
+  if (p.source === "factory") { toast("Cannot rename factory preset", "warn"); closeCtxMenu(); return; }
+  const name = prompt("New name:", p.label);
+  if (name && name.trim()) {
+    p.label = name.trim();
+    render();
+    toast("Renamed", "success");
+  }
+  closeCtxMenu();
+}
+
+function doDuplicate() {
+  const idx = ctxTargetIndex >= 0 ? ctxTargetIndex : activeIndex;
+  const p = PRESETS[idx];
+  const newKey = `user:ott.copy-${Date.now()}`;
+  PRESETS.push({ key: newKey, label: `${p.label} (Copy)`, source: "user" });
+  activeIndex = PRESETS.length - 1;
+  dirty = false;
+  closeCtxMenu();
+  render();
+  toast(`Duplicated as "${PRESETS[activeIndex].label}"`, "success");
+}
+
+function doOverwrite() {
+  const idx = ctxTargetIndex >= 0 ? ctxTargetIndex : activeIndex;
+  const p = PRESETS[idx];
+  if (p.source === "factory") { toast("Cannot overwrite factory preset", "warn"); closeCtxMenu(); return; }
+  closeCtxMenu();
+  dirty = false;
+  render();
+  toast(`Overwritten "${p.label}"`, "success");
+}
+
+function doCopySpecific() {
+  const idx = ctxTargetIndex >= 0 ? ctxTargetIndex : activeIndex;
+  const p = PRESETS[idx];
+  const json = JSON.stringify({
+    kind: "cosimo.effectPreset", version: 1, effectID: "ott",
+    presetID: p.key, label: p.label,
+    values: { ottMix: 1.0, ottAmount: 0.65, ottTimePercent: 0.4, ottBandDrive: 0.0, ottEnvelopeMatch: 0.0 }
+  }, null, 2);
+  navigator.clipboard?.writeText(json).catch(() => {});
+  closeCtxMenu();
+  toast(`Copied "${p.label}" to clipboard`, "success");
+}
+
+function doDelete() {
+  const idx = ctxTargetIndex >= 0 ? ctxTargetIndex : activeIndex;
+  const p = PRESETS[idx];
+  if (p.source === "factory") { toast("Cannot delete factory preset", "warn"); closeCtxMenu(); return; }
+  if (!confirm(`Delete "${p.label}"?`)) { closeCtxMenu(); return; }
+  PRESETS.splice(idx, 1);
+  if (activeIndex >= PRESETS.length) activeIndex = PRESETS.length - 1;
+  if (activeIndex < 0) activeIndex = 0;
+  dirty = false;
+  closeCtxMenu();
+  render();
+  toast("Deleted", "success");
+}
+
+// ── Dirty Toggle (demo) ─────────────────────────────────
+document.addEventListener("keydown", e => {
+  if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
+  if (e.key === "d" && !e.metaKey && !e.ctrlKey && !e.altKey) {
+    dirty = !dirty;
+    render();
+    toast(dirty ? "Marked dirty (press D to toggle)" : "Marked clean", dirty ? "warn" : "success");
+  }
+  if (e.key === "Escape") {
+    closeFlyout();
+    closeCtxMenu();
+    closeSaveDialog();
+  }
+});
+
+// Close context menu on outside click
+document.addEventListener("click", e => {
+  const ctx = document.getElementById("ctx-menu");
+  if (ctx.classList.contains("open") && !ctx.contains(e.target)) {
+    closeCtxMenu();
+  }
+});
+
+// ── Toast ────────────────────────────────────────────────
+function toast(msg, tone) {
+  const host = document.getElementById("toast-host");
+  const el = document.createElement("div");
+  el.className = `toast ${tone}`;
+  el.textContent = msg;
+  host.appendChild(el);
+  setTimeout(() => { el.style.opacity = "0"; el.style.transition = "opacity 250ms"; }, 2200);
+  setTimeout(() => el.remove(), 2500);
+}
+
+// ── Init ─────────────────────────────────────────────────
+render();
+</script>
+
+</body>
+</html>

@@ -56,7 +56,9 @@ processor OttProbeSource
             let baseLeft = std::intrinsics::clamp (leftAmplitudeIn, 0.0f, 1.0f);
             let baseRight = std::intrinsics::clamp (rightAmplitudeIn, 0.0f, 1.0f);
             let stepFrame = int32 (0.25f * float32 (processor.frequency));
-            let stepScale = mode == 1 && frameCounter < stepFrame ? 0.08f : 1.0f;
+            let stepScale = mode == 1 && frameCounter < stepFrame ? 0.08f
+                          : mode == 2 && frameCounter >= stepFrame ? 0.08f
+                          : 1.0f;
             let sample = std::intrinsics::sin (6.283185307f * phase);
 
             out <- float32<2> (baseLeft * stepScale * sample, baseRight * stepScale * sample);
@@ -97,6 +99,11 @@ graph OttProbe [[ main ]]
     input value float32 timePercent [[ init: 100.0f ]];
     input value float32 inputGainDb [[ init: 0.0f ]];
     input value float32 outputGainDb [[ init: 0.0f ]];
+    input value float32 envelopeMatch [[ init: 0.0f ]];
+    input value float32 envelopeBoostClampDb [[ init: 6.0f ]];
+    input value float32 envelopeCutClampDb [[ init: 6.0f ]];
+    input value float32 envelopeAttackMs [[ init: 5.0f ]];
+    input value float32 envelopeReleaseMs [[ init: 120.0f ]];
     input value float32 upAmount [[ init: 100.0f ]];
     input value float32 downAmount [[ init: 100.0f ]];
     input value float32 detectorMode [[ init: 0.0f ]];
@@ -110,24 +117,24 @@ graph OttProbe [[ main ]]
     input value float32 lowBelowDb [[ init: -40.75f ]];
     input value float32 lowDownRatio [[ init: 66.7f ]];
     input value float32 lowUpRatio [[ init: 4.17f ]];
-    input value float32 lowAttackMs [[ init: 47.8499336f ]];
-    input value float32 lowReleaseMs [[ init: 282.361938f ]];
+    input value float32 lowAttackMs [[ init: 2.8f ]];
+    input value float32 lowReleaseMs [[ init: 40.0f ]];
     input value float32 lowInputGainDb [[ init: 5.19999981f ]];
     input value float32 lowOutputGainDb [[ init: 10.3000002f ]];
     input value float32 midAboveDb [[ init: -30.25f ]];
     input value float32 midBelowDb [[ init: -41.75f ]];
     input value float32 midDownRatio [[ init: 66.7f ]];
     input value float32 midUpRatio [[ init: 4.17f ]];
-    input value float32 midAttackMs [[ init: 22.3606815f ]];
-    input value float32 midReleaseMs [[ init: 282.361938f ]];
+    input value float32 midAttackMs [[ init: 1.4f ]];
+    input value float32 midReleaseMs [[ init: 28.0f ]];
     input value float32 midInputGainDb [[ init: 5.19999981f ]];
     input value float32 midOutputGainDb [[ init: 5.69999981f ]];
     input value float32 highAboveDb [[ init: -35.5f ]];
     input value float32 highBelowDb [[ init: -40.75f ]];
     input value float32 highDownRatio [[ init: 1000.0f ]];
     input value float32 highUpRatio [[ init: 4.17f ]];
-    input value float32 highAttackMs [[ init: 13.4654493f ]];
-    input value float32 highReleaseMs [[ init: 131.950104f ]];
+    input value float32 highAttackMs [[ init: 0.7f ]];
+    input value float32 highReleaseMs [[ init: 15.0f ]];
     input value float32 highInputGainDb [[ init: 5.19999981f ]];
     input value float32 highOutputGainDb [[ init: 10.3000002f ]];
 
@@ -149,18 +156,23 @@ graph OttProbe [[ main ]]
         sourceRightAmplitude -> source.rightAmplitudeIn;
         source.out -> ott.in, drySplit.in;
         bypass -> ott.bypass;
-        mix -> ott.mix;
-        amount -> ott.amount;
-        timePercent -> ott.timePercent;
+        mix -> ott.ottMix;
+        amount -> ott.ottAmount;
+        timePercent -> ott.ottTimePercent;
         inputGainDb -> ott.inputGainDb;
         outputGainDb -> ott.outputGainDb;
+        envelopeMatch -> ott.ottEnvelopeMatch;
+        envelopeBoostClampDb -> ott.envelopeBoostClampDb;
+        envelopeCutClampDb -> ott.envelopeCutClampDb;
+        envelopeAttackMs -> ott.envelopeAttackMs;
+        envelopeReleaseMs -> ott.envelopeReleaseMs;
         upAmount -> ott.upAmount;
         downAmount -> ott.downAmount;
         detectorMode -> ott.detectorMode;
         softKnee -> ott.softKnee;
         kneeWidthDb -> ott.kneeWidthDb;
         stereoLink -> ott.stereoLink;
-        bandDrive -> ott.bandDrive;
+        bandDrive -> ott.ottBandDrive;
         lowMidHz -> ott.lowMidHz;
         midHighHz -> ott.midHighHz;
         lowAboveDb -> ott.lowAboveDb;
@@ -244,6 +256,11 @@ def _flat_band_setup(**overrides: bool | float | int) -> str:
         "timePercent": 100.0,
         "inputGainDb": 0.0,
         "outputGainDb": 0.0,
+        "envelopeMatch": 0.0,
+        "envelopeBoostClampDb": 6.0,
+        "envelopeCutClampDb": 6.0,
+        "envelopeAttackMs": 5.0,
+        "envelopeReleaseMs": 120.0,
         "upAmount": 0.0,
         "downAmount": 0.0,
         "softKnee": False,
@@ -254,20 +271,20 @@ def _flat_band_setup(**overrides: bool | float | int) -> str:
         "midHighHz": 2499.99951,
         "lowDownRatio": 1.0,
         "lowUpRatio": 1.0,
-        "lowAttackMs": 47.8499336,
-        "lowReleaseMs": 282.361938,
+        "lowAttackMs": 2.8,
+        "lowReleaseMs": 40.0,
         "lowInputGainDb": 0.0,
         "lowOutputGainDb": 0.0,
         "midDownRatio": 1.0,
         "midUpRatio": 1.0,
-        "midAttackMs": 22.3606815,
-        "midReleaseMs": 282.361938,
+        "midAttackMs": 1.4,
+        "midReleaseMs": 28.0,
         "midInputGainDb": 0.0,
         "midOutputGainDb": 0.0,
         "highDownRatio": 1.0,
         "highUpRatio": 1.0,
-        "highAttackMs": 13.4654493,
-        "highReleaseMs": 131.950104,
+        "highAttackMs": 0.7,
+        "highReleaseMs": 15.0,
         "highInputGainDb": 0.0,
         "highOutputGainDb": 0.0,
     }
@@ -282,6 +299,11 @@ def _default_ott_setup(**overrides: bool | float | int) -> str:
         "timePercent": 100.0,
         "inputGainDb": 0.0,
         "outputGainDb": 0.0,
+        "envelopeMatch": 0.0,
+        "envelopeBoostClampDb": 6.0,
+        "envelopeCutClampDb": 6.0,
+        "envelopeAttackMs": 5.0,
+        "envelopeReleaseMs": 120.0,
         "upAmount": 100.0,
         "downAmount": 100.0,
         "detectorMode": 0.0,
@@ -295,24 +317,24 @@ def _default_ott_setup(**overrides: bool | float | int) -> str:
         "lowBelowDb": -40.75,
         "lowDownRatio": 66.7,
         "lowUpRatio": 4.17,
-        "lowAttackMs": 47.8499336,
-        "lowReleaseMs": 282.361938,
+        "lowAttackMs": 2.8,
+        "lowReleaseMs": 40.0,
         "lowInputGainDb": 5.19999981,
         "lowOutputGainDb": 10.3000002,
         "midAboveDb": -30.25,
         "midBelowDb": -41.75,
         "midDownRatio": 66.7,
         "midUpRatio": 4.17,
-        "midAttackMs": 22.3606815,
-        "midReleaseMs": 282.361938,
+        "midAttackMs": 1.4,
+        "midReleaseMs": 28.0,
         "midInputGainDb": 5.19999981,
         "midOutputGainDb": 5.69999981,
         "highAboveDb": -35.5,
         "highBelowDb": -40.75,
         "highDownRatio": 1000.0,
         "highUpRatio": 4.17,
-        "highAttackMs": 13.4654493,
-        "highReleaseMs": 131.950104,
+        "highAttackMs": 0.7,
+        "highReleaseMs": 15.0,
         "highInputGainDb": 5.19999981,
         "highOutputGainDb": 10.3000002,
     }
@@ -344,6 +366,10 @@ def _steady(audio: np.ndarray) -> np.ndarray:
 
 def _level_ratio(processed: np.ndarray, dry: np.ndarray) -> float:
     return rms(_steady(processed)) / max(rms(_steady(dry)), 1.0e-12)
+
+
+def _rms_db(audio: np.ndarray) -> float:
+    return 20.0 * float(np.log10(max(rms(_steady(audio)), 1.0e-12)))
 
 
 @pytest.mark.cmajor
@@ -451,17 +477,12 @@ def test_default_ott_loud_step_does_not_add_attack_spike_above_the_dry_input() -
     settled = slice(step_frame + int(0.15 * DEFAULT_SAMPLE_RATE), step_frame + int(0.25 * DEFAULT_SAMPLE_RATE))
 
     dry_peak = peak_abs(dry[dry_first_5_ms])
-    onset_search = np.abs(processed[step_frame : step_frame + int(0.02 * DEFAULT_SAMPLE_RATE)])
-    loud_indices = np.flatnonzero(onset_search > dry_peak * 0.4)
+    processed_first_5_ms = slice(step_frame, step_frame + int(0.005 * DEFAULT_SAMPLE_RATE))
 
     assert is_finite(processed)
     assert dry_peak > 0.7
-    assert loud_indices.size > 0
-    processed_onset = step_frame + int(loud_indices[0])
-    assert int(0.001 * DEFAULT_SAMPLE_RATE) <= processed_onset - step_frame <= int(0.006 * DEFAULT_SAMPLE_RATE)
-
-    processed_first_5_ms = slice(processed_onset, processed_onset + int(0.005 * DEFAULT_SAMPLE_RATE))
-    assert peak_abs(processed[processed_first_5_ms]) <= dry_peak * 0.8
+    assert peak_abs(processed[processed_first_5_ms]) > dry_peak * 0.05
+    assert peak_abs(processed[processed_first_5_ms]) <= dry_peak * 0.25
     assert rms(processed[settled]) < rms(dry[settled]) * 0.35
 
 
@@ -488,8 +509,8 @@ def test_band_drive_soft_clips_after_default_band_dynamics_without_silencing_the
 
     assert is_finite(driven)
     assert no_drive_peak > 0.05
-    assert driven_peak < no_drive_peak * 0.65
-    assert rms(driven[steady]) > rms(no_drive[steady]) * 0.2
+    assert driven_peak < no_drive_peak * 0.85
+    assert rms(driven[steady]) > rms(no_drive[steady]) * 0.75
 
 
 @pytest.mark.cmajor
@@ -517,6 +538,134 @@ def test_band_drive_does_not_clip_the_unprocessed_amount_zero_path() -> None:
     assert is_finite(driven)
     assert peak_abs(no_drive[steady]) > 0.5
     assert peak_abs(residual) < 1.0e-6
+
+
+@pytest.mark.cmajor
+def test_broadband_envelope_match_restores_summed_wet_level_toward_dry_reference() -> None:
+    base_setup = dict(
+        sourceFrequencyHz=1000.0,
+        sourceLeftAmplitude=0.75,
+        sourceRightAmplitude=0.75,
+        envelopeBoostClampDb=12.0,
+        envelopeCutClampDb=12.0,
+    )
+    dry = _render_ott(
+        setup_js=_default_ott_setup(**base_setup),
+        output_endpoint_id="dryLeftOut",
+        num_samples=DEFAULT_SAMPLE_RATE,
+    )
+    unmatched = _render_ott(
+        setup_js=_default_ott_setup(**base_setup, envelopeMatch=0.0),
+        output_endpoint_id="leftOut",
+        num_samples=DEFAULT_SAMPLE_RATE,
+    )
+    matched = _render_ott(
+        setup_js=_default_ott_setup(**base_setup, envelopeMatch=100.0),
+        output_endpoint_id="leftOut",
+        num_samples=DEFAULT_SAMPLE_RATE,
+    )
+
+    unmatched_gap_db = abs(_rms_db(dry) - _rms_db(unmatched))
+    matched_gap_db = abs(_rms_db(dry) - _rms_db(matched))
+
+    assert is_finite(matched)
+    assert unmatched_gap_db > 12.0
+    assert matched_gap_db < unmatched_gap_db - 8.0
+
+
+@pytest.mark.cmajor
+def test_envelope_boost_clamp_sets_how_much_compressed_wet_can_be_lifted() -> None:
+    base_setup = dict(
+        sourceFrequencyHz=1000.0,
+        sourceLeftAmplitude=0.75,
+        sourceRightAmplitude=0.75,
+        envelopeMatch=100.0,
+        envelopeCutClampDb=24.0,
+    )
+    low_boost = _render_ott(
+        setup_js=_default_ott_setup(**base_setup, envelopeBoostClampDb=3.0),
+        output_endpoint_id="leftOut",
+        num_samples=DEFAULT_SAMPLE_RATE,
+    )
+    high_boost = _render_ott(
+        setup_js=_default_ott_setup(**base_setup, envelopeBoostClampDb=12.0),
+        output_endpoint_id="leftOut",
+        num_samples=DEFAULT_SAMPLE_RATE,
+    )
+    steady = slice(int(0.5 * DEFAULT_SAMPLE_RATE), DEFAULT_SAMPLE_RATE)
+
+    assert is_finite(high_boost)
+    assert rms(high_boost[steady]) > rms(low_boost[steady]) * 2.0
+    assert peak_abs(high_boost[steady]) < 0.6
+
+
+@pytest.mark.cmajor
+def test_envelope_cut_clamp_sets_how_much_expanded_wet_can_be_reduced() -> None:
+    base_setup = dict(
+        sourceFrequencyHz=1000.0,
+        sourceLeftAmplitude=0.01,
+        sourceRightAmplitude=0.01,
+        upAmount=100.0,
+        midBelowDb=-20.0,
+        midUpRatio=4.0,
+        envelopeMatch=100.0,
+        envelopeBoostClampDb=24.0,
+    )
+    dry = _render_ott(
+        setup_js=_flat_band_setup(**base_setup),
+        output_endpoint_id="dryLeftOut",
+        num_samples=DEFAULT_SAMPLE_RATE,
+    )
+    no_cut = _render_ott(
+        setup_js=_flat_band_setup(**base_setup, envelopeCutClampDb=0.0),
+        output_endpoint_id="leftOut",
+        num_samples=DEFAULT_SAMPLE_RATE,
+    )
+    cut = _render_ott(
+        setup_js=_flat_band_setup(**base_setup, envelopeCutClampDb=12.0),
+        output_endpoint_id="leftOut",
+        num_samples=DEFAULT_SAMPLE_RATE,
+    )
+
+    no_cut_gap_db = abs(_rms_db(dry) - _rms_db(no_cut))
+    cut_gap_db = abs(_rms_db(dry) - _rms_db(cut))
+
+    assert is_finite(cut)
+    assert rms(_steady(cut)) < rms(_steady(no_cut)) * 0.4
+    assert cut_gap_db < no_cut_gap_db - 8.0
+
+
+@pytest.mark.cmajor
+def test_envelope_attack_controls_how_quickly_matching_reaches_a_loud_step() -> None:
+    base_setup = dict(
+        sourceMode=1.0,
+        sourceFrequencyHz=1000.0,
+        sourceLeftAmplitude=0.75,
+        sourceRightAmplitude=0.75,
+        envelopeMatch=100.0,
+        envelopeBoostClampDb=24.0,
+        envelopeCutClampDb=24.0,
+        envelopeReleaseMs=120.0,
+    )
+    fast = _render_ott(
+        setup_js=_default_ott_setup(**base_setup, envelopeAttackMs=0.1),
+        output_endpoint_id="leftOut",
+        num_samples=DEFAULT_SAMPLE_RATE,
+    )
+    slow = _render_ott(
+        setup_js=_default_ott_setup(**base_setup, envelopeAttackMs=100.0),
+        output_endpoint_id="leftOut",
+        num_samples=DEFAULT_SAMPLE_RATE,
+    )
+    step_frame = int(0.25 * DEFAULT_SAMPLE_RATE)
+    early_after_lookahead = slice(
+        step_frame + int(0.003 * DEFAULT_SAMPLE_RATE),
+        step_frame + int(0.013 * DEFAULT_SAMPLE_RATE),
+    )
+
+    assert is_finite(fast)
+    assert is_finite(slow)
+    assert rms(fast[early_after_lookahead]) > rms(slow[early_after_lookahead]) * 1.4
 
 
 @pytest.mark.cmajor
@@ -567,8 +716,8 @@ def test_time_control_changes_how_quickly_gain_reduction_reacts_to_a_loud_step()
         num_samples=DEFAULT_SAMPLE_RATE,
     )
     step_frame = int(0.25 * DEFAULT_SAMPLE_RATE)
-    early_window = slice(step_frame + 512, step_frame + 4096)
+    early_window = slice(step_frame, step_frame + 512)
 
-    assert rms(slow[early_window]) > rms(fast[early_window]) * 1.15
+    assert rms(slow[early_window]) > rms(fast[early_window]) * 1.3
     assert is_finite(fast)
     assert is_finite(slow)

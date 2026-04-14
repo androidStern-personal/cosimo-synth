@@ -15,6 +15,8 @@
     "ott:dry-run": "cmaj play --dry-run --stop-on-error fx/ott_lab/OttLab.cmajorpatch",
     "ott:plugin:generate": "./scripts/generate_ott_lab_plugin.sh",
     "ott:jit:install": "./scripts/install_ott_lab_cmajplugin.sh",
+    "test:ott:view": "node --test tests/test_ott_lab_view_browser.mjs",
+    "test:effect-presets": "node --test tests/test_effect_preset_schema.mjs tests/test_effect_preset_state.mjs tests/test_effect_preset_contract.mjs tests/test_standalone_effect_presets.mjs tests/test_standalone_effect_preset_hook_browser.mjs",
     "ui:worker:build": "vite build --config ui/vite.worker.config.mjs",
     "ui:build": "node ui/build.mjs",
     "ios:ui:dev": "vite --config ios_auv3/vite.config.mjs",

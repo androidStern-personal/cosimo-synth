@@ -1,0 +1,1365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cosimo Preset Browser — UI Variants</title>
+<style>
+  /* ── Reset & Global ─────────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { font-family: "SF Mono", Menlo, Monaco, Consolas, monospace; background: #0a0d0c; color: #eff7ee; }
+
+  /* ── Variant Picker ─────────────────────────────────── */
+  .variant-tabs {
+    position: sticky; top: 0; z-index: 100;
+    display: flex; gap: 2px; padding: 12px 24px;
+    background: rgba(10, 13, 12, 0.96);
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    backdrop-filter: blur(12px);
+  }
+  .variant-tabs button {
+    appearance: none; border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 7px; padding: 8px 18px;
+    background: rgba(255,255,255,0.04); color: rgba(239,247,238,0.7);
+    font: inherit; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase;
+    cursor: pointer; transition: all 140ms;
+  }
+  .variant-tabs button:hover { background: rgba(143,240,164,0.08); border-color: rgba(143,240,164,0.3); }
+  .variant-tabs button.active {
+    background: rgba(143,240,164,0.14); border-color: rgba(143,240,164,0.5);
+    color: #8ff0a4;
+  }
+  .variant-tabs .tab-desc {
+    margin-left: auto; display: flex; align-items: center;
+    font-size: 11px; color: rgba(239,247,238,0.45); letter-spacing: 0.03em;
+  }
+
+  .variant-panel { display: none; padding: 40px 24px; }
+  .variant-panel.active { display: block; }
+
+  .variant-label {
+    font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: rgba(239,247,238,0.4); margin-bottom: 8px;
+  }
+  .variant-title {
+    font-size: 18px; letter-spacing: 0.06em; margin-bottom: 6px;
+  }
+  .variant-desc {
+    font-size: 12px; color: rgba(239,247,238,0.55); line-height: 1.6;
+    max-width: 680px; margin-bottom: 32px;
+  }
+
+  /* ── Shared: Plugin Frame ───────────────────────────── */
+  .plugin-frame {
+    width: 920px; min-height: 200px; border-radius: 18px;
+    background:
+      radial-gradient(circle at 16% 6%, rgba(143,240,164,0.19), transparent 30%),
+      radial-gradient(circle at 86% 0%, rgba(255,232,132,0.13), transparent 28%),
+      linear-gradient(180deg, #111714 0%, #070a09 100%);
+    border: 1px solid rgba(255,255,255,0.06);
+    overflow: hidden;
+  }
+
+  /* ── Shared: Title Section (simulates existing OTT Lab title) ── */
+  .title-section {
+    position: relative;
+    padding: 18px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    background: rgba(255,255,255,0.02);
+  }
+  .title-section h1 {
+    font-size: 22px; letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 4px;
+  }
+  .title-section .subtitle {
+    font-size: 11px; color: rgba(239,247,238,0.5); line-height: 1.5;
+  }
+
+  /* ── Shared: Param Groups (placeholder) ─────────────── */
+  .param-placeholder {
+    display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px; padding: 18px;
+  }
+  .param-group {
+    border: 1px solid rgba(255,255,255,0.06); border-radius: 14px;
+    background: rgba(255,255,255,0.025); padding: 14px;
+    min-height: 140px;
+  }
+  .param-group-label {
+    font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+    color: rgba(239,247,238,0.5); margin-bottom: 12px;
+  }
+  .param-knobs { display: flex; gap: 14px; flex-wrap: wrap; }
+  .param-knob {
+    width: 52px; display: flex; flex-direction: column; align-items: center; gap: 4px;
+  }
+  .param-knob-circle {
+    width: 42px; height: 42px; border-radius: 50%;
+    border: 1.5px solid rgba(255,255,255,0.15);
+    background: rgba(255,255,255,0.03);
+    position: relative;
+  }
+  .param-knob-circle::after {
+    content: ""; position: absolute; top: 3px; left: 50%; transform: translateX(-50%);
+    width: 2px; height: 10px; background: rgba(239,247,238,0.5); border-radius: 1px;
+  }
+  .param-knob-name {
+    font-size: 8px; letter-spacing: 0.04em; color: rgba(239,247,238,0.5);
+    text-align: center; text-transform: uppercase;
+  }
+
+  /* ═══════════════════════════════════════════════════════
+     VARIANT A — Compact Toolbar + Dropdown
+     ═══════════════════════════════════════════════════════ */
+  .va-preset-bar {
+    display: flex; align-items: center; gap: 6px;
+    padding: 10px 18px;
+    background: rgba(0,0,0,0.25);
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+  .va-preset-label {
+    font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase;
+    color: rgba(239,247,238,0.4); margin-right: 4px; flex-shrink: 0;
+  }
+  .va-nav-btn {
+    appearance: none; border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 6px; width: 26px; height: 26px;
+    background: rgba(255,255,255,0.04); color: rgba(239,247,238,0.7);
+    font: inherit; font-size: 13px; cursor: pointer; display: flex;
+    align-items: center; justify-content: center; transition: all 100ms;
+    flex-shrink: 0;
+  }
+  .va-nav-btn:hover { background: rgba(143,240,164,0.1); border-color: rgba(143,240,164,0.35); color: #8ff0a4; }
+
+  .va-preset-name-btn {
+    appearance: none; border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 7px; height: 26px; padding: 0 12px;
+    background: rgba(0,0,0,0.22); color: rgba(239,247,238,0.92);
+    font: inherit; font-size: 11px; letter-spacing: 0.03em;
+    cursor: pointer; transition: all 100ms; min-width: 160px;
+    text-align: left; position: relative;
+  }
+  .va-preset-name-btn:hover { border-color: rgba(143,240,164,0.4); background: rgba(143,240,164,0.06); }
+  .va-preset-name-btn.open { border-color: rgba(143,240,164,0.5); background: rgba(143,240,164,0.08); }
+  .va-dirty-dot {
+    display: inline-block; width: 5px; height: 5px; border-radius: 50%;
+    background: #ffe884; margin-left: 6px; vertical-align: middle;
+  }
+
+  .va-action-btn {
+    appearance: none; border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 6px; height: 26px; padding: 0 10px;
+    background: rgba(255,255,255,0.04); color: rgba(239,247,238,0.65);
+    font: inherit; font-size: 9px; letter-spacing: 0.06em; text-transform: uppercase;
+    cursor: pointer; transition: all 100ms; flex-shrink: 0; white-space: nowrap;
+  }
+  .va-action-btn:hover { background: rgba(143,240,164,0.08); border-color: rgba(143,240,164,0.3); color: #8ff0a4; }
+  .va-action-btn.primary {
+    background: rgba(143,240,164,0.12); border-color: rgba(143,240,164,0.3);
+    color: #8ff0a4;
+  }
+  .va-action-btn.primary:hover {
+    background: rgba(143,240,164,0.2); border-color: rgba(143,240,164,0.5);
+  }
+  .va-action-btn:disabled { opacity: 0.35; pointer-events: none; }
+  .va-spacer { flex: 1; }
+
+  /* Dropdown */
+  .va-dropdown-anchor { position: relative; }
+  .va-dropdown {
+    display: none; position: absolute; top: calc(100% + 6px); left: 0;
+    width: 340px; max-height: 420px;
+    border: 1px solid rgba(255,255,255,0.1); border-radius: 12px;
+    background: rgba(14,18,16,0.97); backdrop-filter: blur(24px);
+    box-shadow: 0 16px 48px rgba(0,0,0,0.55); z-index: 50;
+    overflow: hidden; flex-direction: column;
+  }
+  .va-dropdown.open { display: flex; }
+
+  .va-search {
+    padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+  .va-search input {
+    width: 100%; height: 28px; padding: 0 10px;
+    border: 1px solid rgba(255,255,255,0.08); border-radius: 7px;
+    background: rgba(0,0,0,0.3); color: rgba(239,247,238,0.9);
+    font: inherit; font-size: 11px; letter-spacing: 0.02em;
+  }
+  .va-search input::placeholder { color: rgba(239,247,238,0.3); }
+  .va-search input:focus { border-color: rgba(143,240,164,0.4); outline: none; }
+
+  .va-filter-bar {
+    display: flex; gap: 2px; padding: 6px 12px;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+  }
+  .va-filter-pill {
+    appearance: none; border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 999px; padding: 3px 10px;
+    background: transparent; color: rgba(239,247,238,0.5);
+    font: inherit; font-size: 9px; letter-spacing: 0.06em; text-transform: uppercase;
+    cursor: pointer; transition: all 100ms;
+  }
+  .va-filter-pill.active {
+    background: rgba(143,240,164,0.12); border-color: rgba(143,240,164,0.3);
+    color: #8ff0a4;
+  }
+  .va-filter-pill:hover:not(.active) { background: rgba(255,255,255,0.04); color: rgba(239,247,238,0.7); }
+
+  .va-preset-list {
+    overflow-y: auto; flex: 1; padding: 6px 0;
+  }
+  .va-preset-list::-webkit-scrollbar { width: 6px; }
+  .va-preset-list::-webkit-scrollbar-track { background: transparent; }
+  .va-preset-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
+
+  .va-section-header {
+    font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase;
+    color: rgba(239,247,238,0.3); padding: 8px 14px 4px;
+  }
+  .va-preset-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 14px; cursor: pointer; transition: background 80ms;
+  }
+  .va-preset-item:hover { background: rgba(255,255,255,0.04); }
+  .va-preset-item.active { background: rgba(143,240,164,0.1); }
+  .va-preset-item .name {
+    flex: 1; font-size: 12px; letter-spacing: 0.02em;
+    color: rgba(239,247,238,0.85);
+  }
+  .va-preset-item.active .name { color: #8ff0a4; }
+  .va-preset-item .source-badge {
+    font-size: 8px; letter-spacing: 0.08em; text-transform: uppercase;
+    color: rgba(239,247,238,0.3); flex-shrink: 0;
+  }
+  .va-preset-item .ctx-btn {
+    appearance: none; border: none; background: transparent;
+    color: rgba(239,247,238,0.3); font-size: 14px; cursor: pointer;
+    padding: 0 2px; opacity: 0; transition: opacity 80ms;
+  }
+  .va-preset-item:hover .ctx-btn { opacity: 1; }
+  .va-preset-item .ctx-btn:hover { color: rgba(239,247,238,0.7); }
+
+  .va-dropdown-footer {
+    padding: 8px 12px; border-top: 1px solid rgba(255,255,255,0.06);
+    display: flex; gap: 6px;
+  }
+  .va-dropdown-footer button {
+    appearance: none; flex: 1; height: 28px;
+    border: 1px dashed rgba(255,255,255,0.12); border-radius: 7px;
+    background: transparent; color: rgba(239,247,238,0.5);
+    font: inherit; font-size: 9px; letter-spacing: 0.04em; text-transform: uppercase;
+    cursor: pointer; transition: all 100ms;
+  }
+  .va-dropdown-footer button:hover {
+    border-color: rgba(143,240,164,0.3); color: #8ff0a4;
+    background: rgba(143,240,164,0.06);
+  }
+
+  /* Context menu */
+  .va-ctx-menu {
+    display: none; position: fixed;
+    min-width: 180px;
+    border: 1px solid rgba(255,255,255,0.12); border-radius: 10px;
+    background: rgba(14,18,16,0.97); backdrop-filter: blur(24px);
+    box-shadow: 0 12px 36px rgba(0,0,0,0.6); z-index: 200;
+    padding: 4px 0; overflow: hidden;
+  }
+  .va-ctx-menu.open { display: block; }
+  .va-ctx-sep {
+    height: 1px; background: rgba(255,255,255,0.06); margin: 4px 0;
+  }
+  .va-ctx-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 7px 14px; cursor: pointer; transition: background 60ms;
+    font-size: 11px; color: rgba(239,247,238,0.8); letter-spacing: 0.02em;
+  }
+  .va-ctx-item:hover { background: rgba(143,240,164,0.1); color: #8ff0a4; }
+  .va-ctx-item .shortcut {
+    margin-left: auto; font-size: 9px; color: rgba(239,247,238,0.3);
+    letter-spacing: 0.04em;
+  }
+  .va-ctx-item.danger { color: #ff9a7d; }
+  .va-ctx-item.danger:hover { background: rgba(255,154,125,0.1); }
+  .va-ctx-item.disabled { opacity: 0.35; pointer-events: none; }
+
+  /* ═══════════════════════════════════════════════════════
+     VARIANT B — Integrated Panel Browser
+     ═══════════════════════════════════════════════════════ */
+  .vb-preset-bar {
+    display: flex; align-items: center; gap: 6px;
+    padding: 10px 18px;
+    background: rgba(0,0,0,0.25);
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+  .vb-preset-label {
+    font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase;
+    color: rgba(239,247,238,0.4); margin-right: 4px;
+  }
+  .vb-nav-btn { /* same as va */
+    appearance: none; border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 6px; width: 26px; height: 26px;
+    background: rgba(255,255,255,0.04); color: rgba(239,247,238,0.7);
+    font: inherit; font-size: 13px; cursor: pointer; display: flex;
+    align-items: center; justify-content: center; transition: all 100ms;
+  }
+  .vb-nav-btn:hover { background: rgba(143,240,164,0.1); border-color: rgba(143,240,164,0.35); color: #8ff0a4; }
+
+  .vb-preset-name {
+    flex: 1; font-size: 12px; letter-spacing: 0.03em;
+    color: rgba(239,247,238,0.92); padding: 0 8px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .vb-dirty-star { color: #ffe884; font-weight: bold; }
+
+  .vb-browse-btn {
+    appearance: none; border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 6px; width: 26px; height: 26px;
+    background: rgba(255,255,255,0.04); color: rgba(239,247,238,0.5);
+    font-size: 14px; cursor: pointer; display: flex;
+    align-items: center; justify-content: center; transition: all 100ms;
+  }
+  .vb-browse-btn:hover { background: rgba(143,240,164,0.1); border-color: rgba(143,240,164,0.35); color: #8ff0a4; }
+  .vb-browse-btn.open { background: rgba(143,240,164,0.14); border-color: rgba(143,240,164,0.5); color: #8ff0a4; }
+
+  .vb-action-btn {
+    appearance: none; border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 6px; height: 26px; padding: 0 10px;
+    background: rgba(255,255,255,0.04); color: rgba(239,247,238,0.55);
+    font: inherit; font-size: 9px; letter-spacing: 0.06em; text-transform: uppercase;
+    cursor: pointer; transition: all 100ms; white-space: nowrap;
+  }
+  .vb-action-btn:hover { background: rgba(143,240,164,0.08); border-color: rgba(143,240,164,0.3); color: #8ff0a4; }
+  .vb-action-btn:disabled { opacity: 0.35; pointer-events: none; }
+
+  .vb-panel {
+    display: none;
+    background: rgba(0,0,0,0.18);
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    overflow: hidden; transition: max-height 180ms ease;
+  }
+  .vb-panel.open { display: block; }
+  .vb-panel-inner {
+    display: grid; grid-template-columns: 160px 1fr; min-height: 240px;
+  }
+
+  .vb-sidebar {
+    border-right: 1px solid rgba(255,255,255,0.06);
+    padding: 10px 0;
+  }
+  .vb-sidebar-item {
+    display: block; width: 100%; padding: 6px 14px;
+    font: inherit; font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase;
+    color: rgba(239,247,238,0.5); background: transparent;
+    border: none; cursor: pointer; text-align: left; transition: all 80ms;
+  }
+  .vb-sidebar-item:hover { color: rgba(239,247,238,0.8); background: rgba(255,255,255,0.03); }
+  .vb-sidebar-item.active { color: #8ff0a4; background: rgba(143,240,164,0.08); }
+  .vb-sidebar-count {
+    float: right; font-size: 9px; color: rgba(239,247,238,0.3);
+  }
+
+  .vb-main {
+    display: flex; flex-direction: column;
+  }
+  .vb-main-header {
+    display: flex; align-items: center; gap: 8px;
+    padding: 10px 14px;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+  }
+  .vb-main-search {
+    flex: 1; height: 26px; padding: 0 10px;
+    border: 1px solid rgba(255,255,255,0.08); border-radius: 7px;
+    background: rgba(0,0,0,0.3); color: rgba(239,247,238,0.9);
+    font: inherit; font-size: 11px;
+  }
+  .vb-main-search::placeholder { color: rgba(239,247,238,0.3); }
+  .vb-main-search:focus { border-color: rgba(143,240,164,0.4); outline: none; }
+  .vb-main-sort {
+    appearance: none; border: 1px solid rgba(255,255,255,0.08); border-radius: 6px;
+    height: 26px; padding: 0 8px;
+    background: rgba(0,0,0,0.22); color: rgba(239,247,238,0.5);
+    font: inherit; font-size: 9px;
+  }
+
+  .vb-preset-grid {
+    flex: 1; overflow-y: auto; padding: 8px;
+    display: grid; grid-template-columns: repeat(2, 1fr);
+    gap: 4px; align-content: start;
+  }
+  .vb-preset-grid::-webkit-scrollbar { width: 6px; }
+  .vb-preset-grid::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
+
+  .vb-preset-card {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 12px; border-radius: 8px;
+    cursor: pointer; transition: background 80ms;
+  }
+  .vb-preset-card:hover { background: rgba(255,255,255,0.04); }
+  .vb-preset-card.active { background: rgba(143,240,164,0.1); }
+  .vb-preset-card .card-name {
+    flex: 1; font-size: 11px; letter-spacing: 0.02em;
+    color: rgba(239,247,238,0.8);
+  }
+  .vb-preset-card.active .card-name { color: #8ff0a4; }
+  .vb-preset-card .card-source {
+    font-size: 8px; letter-spacing: 0.06em; text-transform: uppercase;
+    color: rgba(239,247,238,0.25);
+  }
+  .vb-preset-card .card-ctx {
+    appearance: none; border: none; background: transparent;
+    color: rgba(239,247,238,0.2); font-size: 14px;
+    cursor: pointer; opacity: 0; transition: opacity 80ms;
+  }
+  .vb-preset-card:hover .card-ctx { opacity: 1; }
+
+  /* ═══════════════════════════════════════════════════════
+     VARIANT C — Power Strip (Everything Inline)
+     ═══════════════════════════════════════════════════════ */
+  .vc-preset-strip {
+    display: flex; align-items: center; gap: 4px;
+    padding: 8px 18px;
+    background: rgba(0,0,0,0.28);
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    flex-wrap: wrap;
+  }
+  .vc-section-sep {
+    width: 1px; height: 18px; background: rgba(255,255,255,0.08);
+    margin: 0 4px;
+  }
+  .vc-label {
+    font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase;
+    color: rgba(239,247,238,0.35);
+  }
+  .vc-nav-btn {
+    appearance: none; border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 5px; width: 22px; height: 22px;
+    background: rgba(255,255,255,0.03); color: rgba(239,247,238,0.6);
+    font: inherit; font-size: 11px; cursor: pointer; display: flex;
+    align-items: center; justify-content: center; transition: all 100ms;
+  }
+  .vc-nav-btn:hover { background: rgba(143,240,164,0.1); border-color: rgba(143,240,164,0.3); color: #8ff0a4; }
+
+  .vc-preset-selector {
+    appearance: none; border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 6px; height: 22px; padding: 0 8px;
+    background: rgba(0,0,0,0.22); color: rgba(239,247,238,0.88);
+    font: inherit; font-size: 10px; letter-spacing: 0.02em;
+    min-width: 150px; cursor: pointer;
+  }
+  .vc-preset-selector:hover { border-color: rgba(143,240,164,0.35); }
+  .vc-preset-selector:focus { border-color: rgba(143,240,164,0.5); outline: none; }
+
+  .vc-dirty-badge {
+    font-size: 8px; letter-spacing: 0.06em; text-transform: uppercase;
+    color: #ffe884; border: 1px solid rgba(255,232,132,0.3);
+    border-radius: 999px; padding: 2px 7px;
+    background: rgba(255,232,132,0.08);
+  }
+
+  .vc-icon-btn {
+    appearance: none; border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 5px; width: 22px; height: 22px;
+    background: rgba(255,255,255,0.02); color: rgba(239,247,238,0.45);
+    font: inherit; font-size: 11px; cursor: pointer; display: flex;
+    align-items: center; justify-content: center; transition: all 100ms;
+  }
+  .vc-icon-btn:hover { background: rgba(143,240,164,0.08); border-color: rgba(143,240,164,0.25); color: #8ff0a4; }
+  .vc-icon-btn:disabled { opacity: 0.3; pointer-events: none; }
+
+  .vc-text-btn {
+    appearance: none; border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 5px; height: 22px; padding: 0 8px;
+    background: rgba(255,255,255,0.02); color: rgba(239,247,238,0.45);
+    font: inherit; font-size: 8px; letter-spacing: 0.06em; text-transform: uppercase;
+    cursor: pointer; transition: all 100ms; white-space: nowrap;
+  }
+  .vc-text-btn:hover { background: rgba(143,240,164,0.08); border-color: rgba(143,240,164,0.25); color: #8ff0a4; }
+  .vc-text-btn:disabled { opacity: 0.3; pointer-events: none; }
+  .vc-text-btn.save-active {
+    border-color: rgba(143,240,164,0.3); color: #8ff0a4;
+    background: rgba(143,240,164,0.1);
+  }
+  .vc-spacer { flex: 1; }
+
+  /* Tooltip */
+  [data-tip] { position: relative; }
+  [data-tip]:hover::after {
+    content: attr(data-tip); position: absolute; bottom: calc(100% + 6px);
+    left: 50%; transform: translateX(-50%);
+    padding: 4px 8px; border-radius: 5px;
+    background: rgba(0,0,0,0.85); color: rgba(239,247,238,0.8);
+    font-size: 9px; letter-spacing: 0.03em; white-space: nowrap;
+    pointer-events: none; z-index: 100;
+    border: 1px solid rgba(255,255,255,0.08);
+  }
+
+  /* ═══════════════════════════════════════════════════════
+     VARIANT D — Minimal Inline + Flyout Menu
+     ═══════════════════════════════════════════════════════ */
+  .vd-preset-bar {
+    display: flex; align-items: center; gap: 0;
+    padding: 0 18px; height: 38px;
+    background: rgba(0,0,0,0.22);
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+  .vd-nav-btn {
+    appearance: none; border: none; width: 28px; height: 100%;
+    background: transparent; color: rgba(239,247,238,0.45);
+    font: inherit; font-size: 13px; cursor: pointer; display: flex;
+    align-items: center; justify-content: center; transition: all 80ms;
+  }
+  .vd-nav-btn:hover { color: #8ff0a4; background: rgba(143,240,164,0.06); }
+
+  .vd-name-region {
+    flex: 1; display: flex; align-items: center; gap: 6px;
+    height: 100%; padding: 0 10px; cursor: pointer;
+    transition: background 80ms; position: relative;
+  }
+  .vd-name-region:hover { background: rgba(255,255,255,0.03); }
+
+  .vd-preset-name {
+    font-size: 12px; letter-spacing: 0.03em; color: rgba(239,247,238,0.92);
+  }
+  .vd-dirty-indicator {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: #ffe884; flex-shrink: 0;
+  }
+  .vd-source-tag {
+    font-size: 8px; letter-spacing: 0.06em; text-transform: uppercase;
+    color: rgba(239,247,238,0.25); flex-shrink: 0;
+  }
+  .vd-chevron {
+    color: rgba(239,247,238,0.3); font-size: 10px; margin-left: auto;
+  }
+
+  .vd-action-group {
+    display: flex; align-items: center; height: 100%;
+    border-left: 1px solid rgba(255,255,255,0.06);
+  }
+  .vd-action-btn {
+    appearance: none; border: none; height: 100%; padding: 0 12px;
+    background: transparent; color: rgba(239,247,238,0.45);
+    font: inherit; font-size: 9px; letter-spacing: 0.04em; text-transform: uppercase;
+    cursor: pointer; transition: all 80ms; white-space: nowrap;
+  }
+  .vd-action-btn:hover { color: #8ff0a4; background: rgba(143,240,164,0.06); }
+  .vd-action-btn:disabled { opacity: 0.3; pointer-events: none; }
+  .vd-action-btn.save-active { color: #8ff0a4; }
+  .vd-action-sep {
+    width: 1px; height: 16px; background: rgba(255,255,255,0.06);
+  }
+
+  /* Flyout for Variant D */
+  .vd-flyout {
+    display: none; position: absolute; top: 100%; left: 0; right: 0;
+    border: 1px solid rgba(255,255,255,0.08); border-top: none;
+    background: rgba(12,16,14,0.97); backdrop-filter: blur(24px);
+    box-shadow: 0 16px 48px rgba(0,0,0,0.5); z-index: 50;
+    max-height: 380px; overflow-y: auto;
+  }
+  .vd-flyout.open { display: block; }
+  .vd-flyout-search {
+    position: sticky; top: 0; padding: 10px 14px;
+    background: rgba(12,16,14,0.97); backdrop-filter: blur(24px);
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+  }
+  .vd-flyout-search input {
+    width: 100%; height: 26px; padding: 0 10px;
+    border: 1px solid rgba(255,255,255,0.08); border-radius: 6px;
+    background: rgba(0,0,0,0.3); color: rgba(239,247,238,0.9);
+    font: inherit; font-size: 11px;
+  }
+  .vd-flyout-search input::placeholder { color: rgba(239,247,238,0.25); }
+  .vd-flyout-search input:focus { border-color: rgba(143,240,164,0.4); outline: none; }
+  .vd-flyout .va-section-header { /* reuse */ }
+  .vd-flyout .va-preset-item { /* reuse */ }
+
+  /* ── Save Dialog (shared) ───────────────────────────── */
+  .save-dialog-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.5); z-index: 300;
+    align-items: center; justify-content: center;
+  }
+  .save-dialog-overlay.open { display: flex; }
+  .save-dialog {
+    width: 360px; border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 14px; background: rgba(14,18,16,0.98);
+    backdrop-filter: blur(24px); padding: 20px;
+    box-shadow: 0 24px 64px rgba(0,0,0,0.6);
+  }
+  .save-dialog h3 {
+    font-size: 13px; letter-spacing: 0.06em; text-transform: uppercase;
+    margin-bottom: 14px;
+  }
+  .save-dialog label {
+    display: block; font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase;
+    color: rgba(239,247,238,0.5); margin-bottom: 6px;
+  }
+  .save-dialog input {
+    width: 100%; height: 32px; padding: 0 12px;
+    border: 1px solid rgba(255,255,255,0.12); border-radius: 8px;
+    background: rgba(0,0,0,0.3); color: rgba(239,247,238,0.92);
+    font: inherit; font-size: 12px; margin-bottom: 16px;
+  }
+  .save-dialog input:focus { border-color: rgba(143,240,164,0.5); outline: none; }
+  .save-dialog-actions {
+    display: flex; gap: 8px; justify-content: flex-end;
+  }
+  .save-dialog-actions button {
+    appearance: none; height: 30px; padding: 0 16px;
+    border: 1px solid rgba(255,255,255,0.1); border-radius: 7px;
+    background: rgba(255,255,255,0.04); color: rgba(239,247,238,0.7);
+    font: inherit; font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase;
+    cursor: pointer; transition: all 100ms;
+  }
+  .save-dialog-actions button:hover { background: rgba(255,255,255,0.08); }
+  .save-dialog-actions button.primary {
+    background: rgba(143,240,164,0.18); border-color: rgba(143,240,164,0.4);
+    color: #8ff0a4;
+  }
+  .save-dialog-actions button.primary:hover {
+    background: rgba(143,240,164,0.28);
+  }
+
+  /* ── Toast ──────────────────────────────────────────── */
+  .toast-host {
+    position: fixed; top: 16px; right: 16px; z-index: 400;
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  .toast {
+    padding: 8px 14px; border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.1);
+    background: rgba(14,18,16,0.95); backdrop-filter: blur(12px);
+    font-size: 11px; color: rgba(239,247,238,0.8);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    animation: toastIn 180ms ease forwards;
+  }
+  .toast.success { color: #8ff0a4; border-color: rgba(143,240,164,0.2); }
+  .toast.warn { color: #ffe884; border-color: rgba(255,232,132,0.2); }
+  .toast.error { color: #ff9a7d; border-color: rgba(255,154,125,0.2); }
+  @keyframes toastIn {
+    from { opacity: 0; transform: translateY(-8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+</style>
+</head>
+<body>
+
+<!-- Variant Tabs -->
+<nav class="variant-tabs">
+  <button class="active" onclick="showVariant('a')">A — Dropdown</button>
+  <button onclick="showVariant('b')">B — Panel</button>
+  <button onclick="showVariant('c')">C — Power Strip</button>
+  <button onclick="showVariant('d')">D — Minimal</button>
+  <span class="tab-desc" id="tab-desc">Compact toolbar with dropdown list — most common VST pattern</span>
+</nav>
+
+<!-- ═══════════════════════════════════════════════════════
+     VARIANT A — Compact Toolbar + Dropdown
+     ═══════════════════════════════════════════════════════ -->
+<div class="variant-panel active" id="variant-a">
+  <div class="variant-label">Variant A</div>
+  <div class="variant-title">Compact Toolbar + Dropdown List</div>
+  <div class="variant-desc">
+    The standard VST pattern. A narrow horizontal bar shows the active preset name with prev/next arrows.
+    Clicking the name opens a dropdown with search, factory/user filter pills, and a scrollable preset list.
+    Right-click any preset for context actions. This is what Surge, Vital, Diva, and FabFilter all use.
+  </div>
+
+  <div class="plugin-frame">
+    <!-- Preset bar -->
+    <div class="va-preset-bar">
+      <span class="va-preset-label">Preset</span>
+      <button class="va-nav-btn" data-tip="Previous" onclick="navPreset(-1)">&#8249;</button>
+      <div class="va-dropdown-anchor">
+        <button class="va-preset-name-btn" id="va-name-btn" onclick="toggleDropdown()">
+          <span id="va-active-name">Default Smash</span>
+          <span class="va-dirty-dot" id="va-dirty-dot" style="display:none"></span>
+        </button>
+        <div class="va-dropdown" id="va-dropdown">
+          <div class="va-search">
+            <input type="text" placeholder="Search presets..." id="va-search" oninput="filterPresets()">
+          </div>
+          <div class="va-filter-bar">
+            <button class="va-filter-pill active" onclick="setFilter(this,'all')">All</button>
+            <button class="va-filter-pill" onclick="setFilter(this,'factory')">Factory</button>
+            <button class="va-filter-pill" onclick="setFilter(this,'user')">User</button>
+          </div>
+          <div class="va-preset-list" id="va-preset-list"></div>
+          <div class="va-dropdown-footer">
+            <button onclick="showSaveDialog()">+ Save As New</button>
+            <button onclick="pastePreset()">Paste JSON</button>
+          </div>
+        </div>
+      </div>
+      <button class="va-nav-btn" data-tip="Next" onclick="navPreset(1)">&#8250;</button>
+      <span class="va-spacer"></span>
+      <button class="va-action-btn" id="va-revert-btn" disabled onclick="revertPreset()" data-tip="Revert to saved">Revert</button>
+      <button class="va-action-btn primary" id="va-save-btn" disabled onclick="savePreset()">Save</button>
+      <button class="va-action-btn" onclick="showSaveDialog()">Save As</button>
+      <button class="va-action-btn" onclick="copyPreset()" data-tip="Copy JSON">Copy</button>
+    </div>
+
+    <!-- Title section -->
+    <div class="title-section">
+      <h1>OTT Lab</h1>
+      <span class="subtitle">Standalone multiband dynamics lab</span>
+    </div>
+
+    <!-- Placeholder params -->
+    <div class="param-placeholder">
+      <div class="param-group">
+        <div class="param-group-label">Dynamics</div>
+        <div class="param-knobs">
+          <div class="param-knob"><div class="param-knob-circle"></div><span class="param-knob-name">Mix</span></div>
+          <div class="param-knob"><div class="param-knob-circle"></div><span class="param-knob-name">Amount</span></div>
+          <div class="param-knob"><div class="param-knob-circle"></div><span class="param-knob-name">Time</span></div>
+        </div>
+      </div>
+      <div class="param-group">
+        <div class="param-group-label">Character</div>
+        <div class="param-knobs">
+          <div class="param-knob"><div class="param-knob-circle"></div><span class="param-knob-name">Drive</span></div>
+          <div class="param-knob"><div class="param-knob-circle"></div><span class="param-knob-name">Match</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     VARIANT B — Integrated Panel Browser
+     ═══════════════════════════════════════════════════════ -->
+<div class="variant-panel" id="variant-b">
+  <div class="variant-label">Variant B</div>
+  <div class="variant-title">Integrated Panel Browser</div>
+  <div class="variant-desc">
+    A collapsible panel expands below the toolbar showing a sidebar with categories and a two-column
+    preset grid. Better for browsing larger libraries. The panel pushes content down rather than overlapping.
+    Similar to Phase Plant and Pigments.
+  </div>
+
+  <div class="plugin-frame">
+    <div class="vb-preset-bar">
+      <span class="vb-preset-label">Preset</span>
+      <button class="vb-nav-btn" onclick="navPreset(-1)">&#8249;</button>
+      <span class="vb-preset-name">
+        Default Smash <span class="vb-dirty-star" id="vb-dirty-star" style="display:none">*</span>
+      </span>
+      <button class="vb-nav-btn" onclick="navPreset(1)">&#8250;</button>
+      <button class="vb-browse-btn" id="vb-browse-btn" onclick="togglePanel()" title="Browse presets">&#9776;</button>
+      <button class="vb-action-btn" id="vb-save-btn" disabled>Save</button>
+      <button class="vb-action-btn" onclick="showSaveDialog()">Save As</button>
+      <button class="vb-action-btn" onclick="copyPreset()">Copy</button>
+      <button class="vb-action-btn" onclick="pastePreset()">Paste</button>
+    </div>
+
+    <div class="vb-panel" id="vb-panel">
+      <div class="vb-panel-inner">
+        <div class="vb-sidebar">
+          <button class="vb-sidebar-item active" onclick="setSidebarFilter(this, 'all')">All Presets <span class="vb-sidebar-count">6</span></button>
+          <button class="vb-sidebar-item" onclick="setSidebarFilter(this, 'factory')">Factory <span class="vb-sidebar-count">2</span></button>
+          <button class="vb-sidebar-item" onclick="setSidebarFilter(this, 'user')">User <span class="vb-sidebar-count">4</span></button>
+        </div>
+        <div class="vb-main">
+          <div class="vb-main-header">
+            <input class="vb-main-search" type="text" placeholder="Search...">
+          </div>
+          <div class="vb-preset-grid" id="vb-preset-grid"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="title-section">
+      <h1>OTT Lab</h1>
+      <span class="subtitle">Standalone multiband dynamics lab</span>
+    </div>
+
+    <div class="param-placeholder">
+      <div class="param-group">
+        <div class="param-group-label">Dynamics</div>
+        <div class="param-knobs">
+          <div class="param-knob"><div class="param-knob-circle"></div><span class="param-knob-name">Mix</span></div>
+          <div class="param-knob"><div class="param-knob-circle"></div><span class="param-knob-name">Amount</span></div>
+          <div class="param-knob"><div class="param-knob-circle"></div><span class="param-knob-name">Time</span></div>
+        </div>
+      </div>
+      <div class="param-group">
+        <div class="param-group-label">Character</div>
+        <div class="param-knobs">
+          <div class="param-knob"><div class="param-knob-circle"></div><span class="param-knob-name">Drive</span></div>
+          <div class="param-knob"><div class="param-knob-circle"></div><span class="param-knob-name">Match</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     VARIANT C — Power Strip
+     ═══════════════════════════════════════════════════════ -->
+<div class="variant-panel" id="variant-c">
+  <div class="variant-label">Variant C</div>
+  <div class="variant-title">Power Strip — Everything Inline</div>
+  <div class="variant-desc">
+    All actions visible in a dense single-row strip. Uses a native select for browsing and icon buttons
+    for every action. No hidden menus — designed for power users who want zero clicks to reach any function.
+    Similar to FabFilter's approach but denser.
+  </div>
+
+  <div class="plugin-frame">
+    <div class="vc-preset-strip">
+      <span class="vc-label">Preset</span>
+      <button class="vc-nav-btn" onclick="navPreset(-1)" data-tip="Previous">&#8249;</button>
+      <select class="vc-preset-selector" id="vc-selector" onchange="selectPresetFromDropdown(this)">
+        <optgroup label="Factory">
+          <option value="factory:ott.default-smash" selected>Default Smash</option>
+          <option value="factory:ott.envelope-tamed">Envelope Tamed</option>
+        </optgroup>
+        <optgroup label="User">
+          <option value="user:ott.my-gentle-squeeze">My Gentle Squeeze</option>
+          <option value="user:ott.hard-pump">Hard Pump</option>
+          <option value="user:ott.lo-fi-crunch">Lo-Fi Crunch</option>
+          <option value="user:ott.vocal-lift">Vocal Lift</option>
+        </optgroup>
+      </select>
+      <button class="vc-nav-btn" onclick="navPreset(1)" data-tip="Next">&#8250;</button>
+      <span class="vc-dirty-badge" id="vc-dirty" style="display:none">Modified</span>
+
+      <div class="vc-section-sep"></div>
+
+      <button class="vc-text-btn save-active" id="vc-save" disabled onclick="savePreset()" data-tip="Save (overwrite)">Save</button>
+      <button class="vc-text-btn" onclick="showSaveDialog()" data-tip="Save as new preset">Save As</button>
+      <button class="vc-text-btn" id="vc-revert" disabled onclick="revertPreset()" data-tip="Revert to saved values">Revert</button>
+
+      <div class="vc-section-sep"></div>
+
+      <button class="vc-icon-btn" onclick="copyPreset()" data-tip="Copy JSON">&#x2398;</button>
+      <button class="vc-icon-btn" onclick="pastePreset()" data-tip="Paste JSON">&#x2399;</button>
+      <button class="vc-icon-btn" onclick="duplicatePreset()" data-tip="Duplicate">&#x2750;</button>
+      <button class="vc-icon-btn" id="vc-rename" onclick="renamePreset()" data-tip="Rename" disabled>&#x270E;</button>
+      <button class="vc-icon-btn" id="vc-delete" onclick="deletePreset()" data-tip="Delete" disabled>&#x2715;</button>
+
+      <span class="vc-spacer"></span>
+      <button class="vc-icon-btn" onclick="randomPreset()" data-tip="Random preset">&#x2684;</button>
+    </div>
+
+    <div class="title-section">
+      <h1>OTT Lab</h1>
+      <span class="subtitle">Standalone multiband dynamics lab</span>
+    </div>
+
+    <div class="param-placeholder">
+      <div class="param-group">
+        <div class="param-group-label">Dynamics</div>
+        <div class="param-knobs">
+          <div class="param-knob"><div class="param-knob-circle"></div><span class="param-knob-name">Mix</span></div>
+          <div class="param-knob"><div class="param-knob-circle"></div><span class="param-knob-name">Amount</span></div>
+          <div class="param-knob"><div class="param-knob-circle"></div><span class="param-knob-name">Time</span></div>
+        </div>
+      </div>
+      <div class="param-group">
+        <div class="param-group-label">Character</div>
+        <div class="param-knobs">
+          <div class="param-knob"><div class="param-knob-circle"></div><span class="param-knob-name">Drive</span></div>
+          <div class="param-knob"><div class="param-knob-circle"></div><span class="param-knob-name">Match</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     VARIANT D — Minimal Inline + Flyout
+     ═══════════════════════════════════════════════════════ -->
+<div class="variant-panel" id="variant-d">
+  <div class="variant-label">Variant D</div>
+  <div class="variant-title">Minimal Bar + Full-Width Flyout</div>
+  <div class="variant-desc">
+    Borderless, segmented bar where preset name takes center stage. Actions are flush text buttons
+    separated by thin dividers. Clicking the name opens a full-width flyout below the bar.
+    Cleanest look — inspired by Ableton's preset navigation and Diva's minimal chrome.
+  </div>
+
+  <div class="plugin-frame" style="position:relative">
+    <div class="vd-preset-bar">
+      <button class="vd-nav-btn" onclick="navPreset(-1)">&#8249;</button>
+      <div class="vd-name-region" id="vd-name-region" onclick="toggleFlyout()">
+        <span class="vd-preset-name" id="vd-active-name">Default Smash</span>
+        <span class="vd-dirty-indicator" id="vd-dirty" style="display:none"></span>
+        <span class="vd-source-tag" id="vd-source-tag">Factory</span>
+        <span class="vd-chevron">&#9662;</span>
+      </div>
+      <button class="vd-nav-btn" onclick="navPreset(1)">&#8250;</button>
+      <div class="vd-action-group">
+        <button class="vd-action-btn save-active" id="vd-save" disabled onclick="savePreset()">Save</button>
+        <span class="vd-action-sep"></span>
+        <button class="vd-action-btn" onclick="showSaveDialog()">Save As</button>
+        <span class="vd-action-sep"></span>
+        <button class="vd-action-btn" id="vd-revert" disabled onclick="revertPreset()">Revert</button>
+        <span class="vd-action-sep"></span>
+        <button class="vd-action-btn" onclick="copyPreset()">Copy</button>
+        <span class="vd-action-sep"></span>
+        <button class="vd-action-btn" onclick="pastePreset()">Paste</button>
+      </div>
+    </div>
+
+    <div class="vd-flyout" id="vd-flyout">
+      <div class="vd-flyout-search">
+        <input type="text" placeholder="Search presets...">
+      </div>
+      <div class="va-section-header">Factory</div>
+      <div class="va-preset-item active" onclick="selectPreset(this, 'Default Smash')">
+        <span class="name">Default Smash</span>
+      </div>
+      <div class="va-preset-item" onclick="selectPreset(this, 'Envelope Tamed')">
+        <span class="name">Envelope Tamed</span>
+      </div>
+      <div class="va-section-header">User</div>
+      <div class="va-preset-item" onclick="selectPreset(this, 'My Gentle Squeeze')">
+        <span class="name">My Gentle Squeeze</span>
+        <button class="ctx-btn" onclick="event.stopPropagation(); showCtxMenu(event)">&#8943;</button>
+      </div>
+      <div class="va-preset-item" onclick="selectPreset(this, 'Hard Pump')">
+        <span class="name">Hard Pump</span>
+        <button class="ctx-btn" onclick="event.stopPropagation(); showCtxMenu(event)">&#8943;</button>
+      </div>
+      <div class="va-preset-item" onclick="selectPreset(this, 'Lo-Fi Crunch')">
+        <span class="name">Lo-Fi Crunch</span>
+        <button class="ctx-btn" onclick="event.stopPropagation(); showCtxMenu(event)">&#8943;</button>
+      </div>
+      <div class="va-preset-item" onclick="selectPreset(this, 'Vocal Lift')">
+        <span class="name">Vocal Lift</span>
+        <button class="ctx-btn" onclick="event.stopPropagation(); showCtxMenu(event)">&#8943;</button>
+      </div>
+    </div>
+
+    <div class="title-section">
+      <h1>OTT Lab</h1>
+      <span class="subtitle">Standalone multiband dynamics lab</span>
+    </div>
+
+    <div class="param-placeholder">
+      <div class="param-group">
+        <div class="param-group-label">Dynamics</div>
+        <div class="param-knobs">
+          <div class="param-knob"><div class="param-knob-circle"></div><span class="param-knob-name">Mix</span></div>
+          <div class="param-knob"><div class="param-knob-circle"></div><span class="param-knob-name">Amount</span></div>
+          <div class="param-knob"><div class="param-knob-circle"></div><span class="param-knob-name">Time</span></div>
+        </div>
+      </div>
+      <div class="param-group">
+        <div class="param-group-label">Character</div>
+        <div class="param-knobs">
+          <div class="param-knob"><div class="param-knob-circle"></div><span class="param-knob-name">Drive</span></div>
+          <div class="param-knob"><div class="param-knob-circle"></div><span class="param-knob-name">Match</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Context Menu (shared) -->
+<div class="va-ctx-menu" id="ctx-menu">
+  <div class="va-ctx-item" onclick="renamePreset()">Rename <span class="shortcut">F2</span></div>
+  <div class="va-ctx-item" onclick="duplicatePreset()">Duplicate</div>
+  <div class="va-ctx-item" onclick="savePreset()">Overwrite with current</div>
+  <div class="va-ctx-sep"></div>
+  <div class="va-ctx-item" onclick="copyPreset()">Copy as JSON <span class="shortcut">&#8984;C</span></div>
+  <div class="va-ctx-item" onclick="exportPreset()">Export to file...</div>
+  <div class="va-ctx-sep"></div>
+  <div class="va-ctx-item danger" onclick="deletePreset()">Delete <span class="shortcut">&#9003;</span></div>
+</div>
+
+<!-- Save Dialog (shared) -->
+<div class="save-dialog-overlay" id="save-dialog">
+  <div class="save-dialog">
+    <h3>Save Preset</h3>
+    <label for="save-name">Preset Name</label>
+    <input type="text" id="save-name" value="My New Preset" autofocus>
+    <div class="save-dialog-actions">
+      <button onclick="closeSaveDialog()">Cancel</button>
+      <button class="primary" onclick="confirmSave()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast Host -->
+<div class="toast-host" id="toast-host"></div>
+
+<script>
+// ── Mock Data ────────────────────────────────────────────
+const PRESETS = [
+  { key: "factory:ott.default-smash", label: "Default Smash", source: "factory", active: true, dirty: false },
+  { key: "factory:ott.envelope-tamed", label: "Envelope Tamed", source: "factory", active: false, dirty: false },
+  { key: "user:ott.my-gentle-squeeze", label: "My Gentle Squeeze", source: "user", active: false, dirty: false },
+  { key: "user:ott.hard-pump", label: "Hard Pump", source: "user", active: false, dirty: false },
+  { key: "user:ott.lo-fi-crunch", label: "Lo-Fi Crunch", source: "user", active: false, dirty: false },
+  { key: "user:ott.vocal-lift", label: "Vocal Lift", source: "user", active: false, dirty: false },
+];
+
+let activeIndex = 0;
+let isDirty = false;
+let currentFilter = "all";
+let currentQuery = "";
+
+const DESCS = {
+  a: "Compact toolbar with dropdown list — most common VST pattern",
+  b: "Collapsible panel with sidebar categories — for larger libraries",
+  c: "Dense inline strip with all actions visible — power-user workflow",
+  d: "Minimal borderless bar with full-width flyout — cleanest aesthetic",
+};
+
+// ── Variant Tabs ─────────────────────────────────────────
+function showVariant(id) {
+  document.querySelectorAll(".variant-panel").forEach(p => p.classList.remove("active"));
+  document.querySelectorAll(".variant-tabs button").forEach(b => b.classList.remove("active"));
+  document.getElementById(`variant-${id}`).classList.add("active");
+  document.querySelectorAll(".variant-tabs button").forEach(b => {
+    if (b.textContent.toLowerCase().startsWith(id)) b.classList.add("active");
+  });
+  document.getElementById("tab-desc").textContent = DESCS[id];
+  closeAllMenus();
+}
+
+// ── Render Presets ───────────────────────────────────────
+function getFilteredPresets() {
+  return PRESETS.filter(p => {
+    if (currentFilter !== "all" && p.source !== currentFilter) return false;
+    if (currentQuery && !p.label.toLowerCase().includes(currentQuery.toLowerCase())) return false;
+    return true;
+  });
+}
+
+function renderDropdownList() {
+  const list = document.getElementById("va-preset-list");
+  if (!list) return;
+  const filtered = getFilteredPresets();
+  const factory = filtered.filter(p => p.source === "factory");
+  const user = filtered.filter(p => p.source === "user");
+  let html = "";
+
+  if (factory.length) {
+    html += `<div class="va-section-header">Factory</div>`;
+    for (const p of factory) {
+      const isActive = PRESETS.indexOf(p) === activeIndex;
+      html += `<div class="va-preset-item ${isActive ? "active" : ""}" onclick="selectPresetByIndex(${PRESETS.indexOf(p)})" oncontextmenu="event.preventDefault(); ${p.source === "user" ? "showCtxMenu(event)" : ""}">
+        <span class="name">${p.label}</span>
+        <span class="source-badge">${p.source}</span>
+        ${p.source === "user" ? `<button class="ctx-btn" onclick="event.stopPropagation(); showCtxMenu(event)">&#8943;</button>` : ""}
+      </div>`;
+    }
+  }
+  if (user.length) {
+    html += `<div class="va-section-header">User</div>`;
+    for (const p of user) {
+      const isActive = PRESETS.indexOf(p) === activeIndex;
+      html += `<div class="va-preset-item ${isActive ? "active" : ""}" onclick="selectPresetByIndex(${PRESETS.indexOf(p)})" oncontextmenu="event.preventDefault(); showCtxMenu(event)">
+        <span class="name">${p.label}${isActive && isDirty ? " *" : ""}</span>
+        <span class="source-badge">${p.source}</span>
+        <button class="ctx-btn" onclick="event.stopPropagation(); showCtxMenu(event)">&#8943;</button>
+      </div>`;
+    }
+  }
+
+  if (!factory.length && !user.length) {
+    html = `<div style="padding:20px 14px; text-align:center; color:rgba(239,247,238,0.3); font-size:11px;">No presets match.</div>`;
+  }
+
+  list.innerHTML = html;
+}
+
+function renderPanelGrid() {
+  const grid = document.getElementById("vb-preset-grid");
+  if (!grid) return;
+  const filtered = getFilteredPresets();
+  let html = "";
+  for (const p of filtered) {
+    const isActive = PRESETS.indexOf(p) === activeIndex;
+    html += `<div class="vb-preset-card ${isActive ? "active" : ""}" onclick="selectPresetByIndex(${PRESETS.indexOf(p)})" oncontextmenu="event.preventDefault(); showCtxMenu(event)">
+      <span class="card-name">${p.label}${isActive && isDirty ? " *" : ""}</span>
+      <span class="card-source">${p.source}</span>
+      ${p.source === "user" ? `<button class="card-ctx" onclick="event.stopPropagation(); showCtxMenu(event)">&#8943;</button>` : ""}
+    </div>`;
+  }
+  grid.innerHTML = html;
+}
+
+function updateAllViews() {
+  const p = PRESETS[activeIndex];
+
+  // Variant A
+  const vaName = document.getElementById("va-active-name");
+  if (vaName) vaName.textContent = p.label;
+  const vaDot = document.getElementById("va-dirty-dot");
+  if (vaDot) vaDot.style.display = isDirty ? "inline-block" : "none";
+  const vaSave = document.getElementById("va-save-btn");
+  if (vaSave) vaSave.disabled = !isDirty || p.source === "factory";
+  const vaRevert = document.getElementById("va-revert-btn");
+  if (vaRevert) vaRevert.disabled = !isDirty;
+
+  // Variant B
+  const vbStar = document.getElementById("vb-dirty-star");
+  if (vbStar) vbStar.style.display = isDirty ? "inline" : "none";
+  const vbSave = document.getElementById("vb-save-btn");
+  if (vbSave) vbSave.disabled = !isDirty || p.source === "factory";
+
+  // Variant C
+  const vcDirty = document.getElementById("vc-dirty");
+  if (vcDirty) vcDirty.style.display = isDirty ? "inline-block" : "none";
+  const vcSave = document.getElementById("vc-save");
+  if (vcSave) vcSave.disabled = !isDirty || p.source === "factory";
+  const vcRevert = document.getElementById("vc-revert");
+  if (vcRevert) vcRevert.disabled = !isDirty;
+  const vcRename = document.getElementById("vc-rename");
+  if (vcRename) vcRename.disabled = p.source === "factory";
+  const vcDelete = document.getElementById("vc-delete");
+  if (vcDelete) vcDelete.disabled = p.source === "factory";
+  const vcSel = document.getElementById("vc-selector");
+  if (vcSel) vcSel.value = p.key;
+
+  // Variant D
+  const vdName = document.getElementById("vd-active-name");
+  if (vdName) vdName.textContent = p.label;
+  const vdDirty = document.getElementById("vd-dirty");
+  if (vdDirty) vdDirty.style.display = isDirty ? "inline-block" : "none";
+  const vdSource = document.getElementById("vd-source-tag");
+  if (vdSource) vdSource.textContent = p.source;
+  const vdSave = document.getElementById("vd-save");
+  if (vdSave) vdSave.disabled = !isDirty || p.source === "factory";
+  const vdRevert = document.getElementById("vd-revert");
+  if (vdRevert) vdRevert.disabled = !isDirty;
+
+  renderDropdownList();
+  renderPanelGrid();
+}
+
+// ── Actions ──────────────────────────────────────────────
+function selectPresetByIndex(idx) {
+  if (isDirty && !confirm("Discard unsaved changes?")) return;
+  activeIndex = idx;
+  isDirty = false;
+  closeAllMenus();
+  updateAllViews();
+  showToast(`Loaded "${PRESETS[idx].label}"`, "success");
+}
+
+function selectPreset(el, name) {
+  const idx = PRESETS.findIndex(p => p.label === name);
+  if (idx >= 0) selectPresetByIndex(idx);
+}
+
+function selectPresetFromDropdown(sel) {
+  const idx = PRESETS.findIndex(p => p.key === sel.value);
+  if (idx >= 0) selectPresetByIndex(idx);
+}
+
+function navPreset(dir) {
+  const filtered = getFilteredPresets();
+  if (filtered.length === 0) return;
+
+  const currentInFiltered = filtered.findIndex(p => PRESETS.indexOf(p) === activeIndex);
+  let next;
+  if (currentInFiltered < 0) {
+    next = 0;
+  } else {
+    next = (currentInFiltered + dir + filtered.length) % filtered.length;
+  }
+  selectPresetByIndex(PRESETS.indexOf(filtered[next]));
+}
+
+function savePreset() {
+  const p = PRESETS[activeIndex];
+  if (p.source === "factory") { showToast("Cannot overwrite factory preset", "warn"); return; }
+  isDirty = false;
+  updateAllViews();
+  showToast(`Saved "${p.label}"`, "success");
+}
+
+function revertPreset() {
+  isDirty = false;
+  updateAllViews();
+  showToast("Reverted to saved values", "success");
+}
+
+function copyPreset() {
+  const p = PRESETS[activeIndex];
+  const json = JSON.stringify({
+    kind: "cosimo.effectPreset", version: 1, effectID: "ott",
+    presetID: p.key, label: p.label, values: { ottMix: 1.0, ottAmount: 0.65, ottTimePercent: 0.4, ottBandDrive: 0.0, ottEnvelopeMatch: 0.0 }
+  }, null, 2);
+  navigator.clipboard?.writeText(json);
+  showToast("Copied to clipboard", "success");
+}
+
+function pastePreset() {
+  showToast("Pasted preset from clipboard", "success");
+}
+
+function duplicatePreset() {
+  const p = PRESETS[activeIndex];
+  showToast(`Duplicated "${p.label}"`, "success");
+  closeAllMenus();
+}
+
+function renamePreset() {
+  const name = prompt("New name:", PRESETS[activeIndex].label);
+  if (name) {
+    PRESETS[activeIndex].label = name.trim();
+    updateAllViews();
+    showToast("Renamed", "success");
+  }
+  closeAllMenus();
+}
+
+function exportPreset() {
+  showToast("Exported preset file", "success");
+  closeAllMenus();
+}
+
+function deletePreset() {
+  if (confirm(`Delete "${PRESETS[activeIndex].label}"?`)) {
+    showToast("Deleted", "success");
+  }
+  closeAllMenus();
+}
+
+function randomPreset() {
+  const idx = Math.floor(Math.random() * PRESETS.length);
+  selectPresetByIndex(idx);
+}
+
+// ── Dirty Toggle (for demo) ─────────────────────────────
+document.addEventListener("keydown", e => {
+  if (e.key === "d" && !e.metaKey && !e.ctrlKey && !e.altKey &&
+      e.target.tagName !== "INPUT" && e.target.tagName !== "TEXTAREA") {
+    isDirty = !isDirty;
+    updateAllViews();
+    showToast(isDirty ? "Marked dirty (press D to toggle)" : "Marked clean", isDirty ? "warn" : "success");
+  }
+});
+
+// ── Dropdown / Panel / Flyout ────────────────────────────
+function toggleDropdown() {
+  const dd = document.getElementById("va-dropdown");
+  const btn = document.getElementById("va-name-btn");
+  const isOpen = dd.classList.contains("open");
+  closeAllMenus();
+  if (!isOpen) {
+    dd.classList.add("open");
+    btn.classList.add("open");
+    document.getElementById("va-search")?.focus();
+    renderDropdownList();
+  }
+}
+
+function togglePanel() {
+  const panel = document.getElementById("vb-panel");
+  const btn = document.getElementById("vb-browse-btn");
+  const isOpen = panel.classList.contains("open");
+  closeAllMenus();
+  if (!isOpen) {
+    panel.classList.add("open");
+    btn.classList.add("open");
+    renderPanelGrid();
+  }
+}
+
+function toggleFlyout() {
+  const flyout = document.getElementById("vd-flyout");
+  const isOpen = flyout.classList.contains("open");
+  closeAllMenus();
+  if (!isOpen) {
+    flyout.classList.add("open");
+  }
+}
+
+function closeAllMenus() {
+  document.getElementById("va-dropdown")?.classList.remove("open");
+  document.getElementById("va-name-btn")?.classList.remove("open");
+  document.getElementById("vb-panel")?.classList.remove("open");
+  document.getElementById("vb-browse-btn")?.classList.remove("open");
+  document.getElementById("vd-flyout")?.classList.remove("open");
+  document.getElementById("ctx-menu")?.classList.remove("open");
+}
+
+function showCtxMenu(event) {
+  event.preventDefault();
+  const menu = document.getElementById("ctx-menu");
+  menu.style.left = event.clientX + "px";
+  menu.style.top = event.clientY + "px";
+  menu.classList.add("open");
+}
+
+document.addEventListener("click", e => {
+  const ctx = document.getElementById("ctx-menu");
+  if (!ctx.contains(e.target)) ctx.classList.remove("open");
+});
+
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape") closeAllMenus();
+});
+
+// ── Filters ──────────────────────────────────────────────
+function setFilter(btn, filter) {
+  currentFilter = filter;
+  btn.closest(".va-filter-bar").querySelectorAll(".va-filter-pill").forEach(p => p.classList.remove("active"));
+  btn.classList.add("active");
+  renderDropdownList();
+}
+
+function setSidebarFilter(btn, filter) {
+  currentFilter = filter;
+  btn.closest(".vb-sidebar").querySelectorAll(".vb-sidebar-item").forEach(p => p.classList.remove("active"));
+  btn.classList.add("active");
+  renderPanelGrid();
+}
+
+function filterPresets() {
+  currentQuery = document.getElementById("va-search")?.value || "";
+  renderDropdownList();
+}
+
+// ── Save Dialog ──────────────────────────────────────────
+function showSaveDialog() {
+  closeAllMenus();
+  const dialog = document.getElementById("save-dialog");
+  dialog.classList.add("open");
+  const input = document.getElementById("save-name");
+  input.value = isDirty ? PRESETS[activeIndex].label : "My New Preset";
+  input.focus();
+  input.select();
+}
+
+function closeSaveDialog() {
+  document.getElementById("save-dialog").classList.remove("open");
+}
+
+function confirmSave() {
+  const name = document.getElementById("save-name").value.trim();
+  if (!name) return;
+  closeSaveDialog();
+  isDirty = false;
+  updateAllViews();
+  showToast(`Saved "${name}"`, "success");
+}
+
+document.getElementById("save-dialog").addEventListener("click", e => {
+  if (e.target.classList.contains("save-dialog-overlay")) closeSaveDialog();
+});
+
+// ── Toast ────────────────────────────────────────────────
+function showToast(msg, tone = "success") {
+  const host = document.getElementById("toast-host");
+  const toast = document.createElement("div");
+  toast.className = `toast ${tone}`;
+  toast.textContent = msg;
+  host.appendChild(toast);
+  setTimeout(() => { toast.style.opacity = "0"; toast.style.transition = "opacity 300ms"; }, 2400);
+  setTimeout(() => toast.remove(), 2800);
+}
+
+// ── Init ─────────────────────────────────────────────────
+updateAllViews();
+</script>
+
+</body>
+</html>
