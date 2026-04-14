@@ -353,6 +353,31 @@ def test_filter_lane_reduces_high_frequency_energy(
     assert output_rms < input_rms * 0.35
 
 
+def test_filter_envelope_uses_the_full_stretched_block_duration(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    upload = _empty_upload()
+    for step in range(4):
+        _activate_step(
+            upload,
+            lane=LANE_FILTER,
+            step=step,
+            trigger=(step == 0),
+            params=[0, 220.0, 20_000.0, 0.707, 1.0],
+        )
+
+    input_audio = _sine(STEP_FRAMES * 4, 3_000.0)
+    output = _render(generated_runtime, tmp_path, input_audio, _base_schedule(upload))
+
+    first_step_start = output[350:900, 0]
+    fourth_step_start = output[(STEP_FRAMES * 3) + 350 : (STEP_FRAMES * 3) + 900, 0]
+    first_rms = float(np.sqrt(np.mean(first_step_start**2)))
+    fourth_rms = float(np.sqrt(np.mean(fourth_step_start**2)))
+
+    assert fourth_rms > first_rms * 6.0
+
+
 def test_tape_stop_lowers_zero_crossing_rate_during_active_block(
     generated_runtime: GeneratedRuntime,
     tmp_path: Path,
@@ -375,7 +400,7 @@ def test_stutter_repeats_the_captured_slice(
 ) -> None:
     upload = _empty_upload()
     for step in (2, 3):
-        _activate_step(upload, lane=LANE_STUTTER, step=step, trigger=(step == 2), params=[0.0, 1.0, 0.0])
+        _activate_step(upload, lane=LANE_STUTTER, step=step, trigger=(step == 2), params=[4.0, 1.0, 0.0])
 
     frames = STEP_FRAMES * 4
     t = np.arange(frames, dtype=np.float64) / SAMPLE_RATE
@@ -383,9 +408,77 @@ def test_stutter_repeats_the_captured_slice(
     input_audio = np.column_stack([mono, mono]).astype(np.float32)
     output = _render(generated_runtime, tmp_path, input_audio, _base_schedule(upload))
 
-    first_loop = output[STEP_FRAMES * 2 : (STEP_FRAMES * 2) + 1_500, 0]
-    second_loop = output[(STEP_FRAMES * 2) + 1_500 : STEP_FRAMES * 3, 0]
+    slice_frames = (STEP_FRAMES * 2) // 4
+    window = slice(120, 1_200)
+    first_loop = output[(STEP_FRAMES * 2) + window.start : (STEP_FRAMES * 2) + window.stop, 0]
+    second_loop = output[(STEP_FRAMES * 2) + slice_frames + window.start : (STEP_FRAMES * 2) + slice_frames + window.stop, 0]
 
     difference = float(np.sqrt(np.mean((first_loop - second_loop) ** 2)))
     reference = float(np.sqrt(np.mean(first_loop**2)))
     assert difference < reference * 0.12
+
+
+def test_stutter_captures_first_slice_when_transport_starts_on_the_block(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    upload = _empty_upload()
+    _activate_step(upload, lane=LANE_STUTTER, step=0, trigger=True, params=[8.0, 1.0, 0.0])
+
+    slice_frames = STEP_FRAMES // 8
+    frames = STEP_FRAMES * 2
+    mono = np.zeros(frames, dtype=np.float32)
+    n = np.arange(slice_frames, dtype=np.float64)
+    captured_slice = (
+        0.42 * np.sin(2.0 * np.pi * 330.0 * n / SAMPLE_RATE)
+        + 0.18 * np.sin(2.0 * np.pi * 970.0 * n / SAMPLE_RATE)
+    ).astype(np.float32)
+    mono[:slice_frames] = captured_slice
+    input_audio = np.column_stack([mono, mono]).astype(np.float32)
+
+    output = _render(generated_runtime, tmp_path, input_audio, _base_schedule(upload))
+
+    window_start = 80
+    window_end = 250
+    original_window = captured_slice[window_start:window_end]
+    first_repeat = output[slice_frames + window_start : slice_frames + window_end, 0]
+    second_repeat = output[(slice_frames * 2) + window_start : (slice_frames * 2) + window_end, 0]
+
+    original_rms = float(np.sqrt(np.mean(original_window**2)))
+    assert original_rms > 0.2
+    assert float(np.sqrt(np.mean(first_repeat**2))) > original_rms * 0.8
+    assert float(np.sqrt(np.mean(second_repeat**2))) > original_rms * 0.8
+    assert float(np.sqrt(np.mean((first_repeat - original_window) ** 2))) < original_rms * 0.18
+    assert float(np.sqrt(np.mean((second_repeat - original_window) ** 2))) < original_rms * 0.18
+
+
+def test_stutter_captures_first_slice_even_when_block_start_mix_is_zero(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    upload = _empty_upload()
+    _activate_step(upload, lane=LANE_STUTTER, step=0, trigger=True, mix=0.0, params=[4.0, 1.0, 0.0])
+    _activate_step(upload, lane=LANE_STUTTER, step=1, trigger=False, mix=1.0, params=[4.0, 1.0, 0.0])
+
+    slice_frames = (STEP_FRAMES * 2) // 4
+    frames = STEP_FRAMES * 3
+    mono = np.zeros(frames, dtype=np.float32)
+    n = np.arange(slice_frames, dtype=np.float64)
+    captured_slice = (
+        0.45 * np.sin(2.0 * np.pi * 290.0 * n / SAMPLE_RATE)
+        + 0.12 * np.sin(2.0 * np.pi * 1_030.0 * n / SAMPLE_RATE)
+    ).astype(np.float32)
+    mono[:slice_frames] = captured_slice
+    input_audio = np.column_stack([mono, mono]).astype(np.float32)
+
+    output = _render(generated_runtime, tmp_path, input_audio, _base_schedule(upload))
+
+    window_start = 180
+    window_end = 820
+    original_window = captured_slice[window_start:window_end]
+    audible_repeat = output[STEP_FRAMES + window_start : STEP_FRAMES + window_end, 0]
+
+    original_rms = float(np.sqrt(np.mean(original_window**2)))
+    assert original_rms > 0.2
+    assert float(np.sqrt(np.mean(audible_repeat**2))) > original_rms * 0.8
+    assert float(np.sqrt(np.mean((audible_repeat - original_window) ** 2))) < original_rms * 0.18

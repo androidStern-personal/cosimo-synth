@@ -1,6 +1,11 @@
 import type { PatchConnectionLike } from "../shared/cmajor-react";
 import {
     SEQFX_STATE_KEY,
+    applySeqFxBlockCreate,
+    applySeqFxBlockDelete,
+    applySeqFxBlockMixEdit,
+    applySeqFxBlockParamEdit,
+    applySeqFxBlockResize,
     applySeqFxCellToggle,
     applySeqFxMixEdit,
     applySeqFxParamEdit,
@@ -8,6 +13,11 @@ import {
     createDefaultSeqFxState,
     normalizeSeqFxState,
     serializeSeqFxState,
+    type SeqFxBlockCreateEdit,
+    type SeqFxBlockDeleteEdit,
+    type SeqFxBlockMixEdit,
+    type SeqFxBlockParamEdit,
+    type SeqFxBlockResizeEdit,
     type SeqFxCellToggleEdit,
     type SeqFxMixEdit,
     type SeqFxParamEdit,
@@ -162,6 +172,26 @@ export class SeqFxRuntimeBridge {
 
     toggleCell(edit: SeqFxCellToggleEdit) {
         this.commitState(applySeqFxCellToggle(this.state, edit), edit.patternIndex);
+    }
+
+    createBlock(edit: SeqFxBlockCreateEdit) {
+        this.commitState(applySeqFxBlockCreate(this.state, edit), edit.patternIndex);
+    }
+
+    resizeBlock(edit: SeqFxBlockResizeEdit) {
+        this.commitState(applySeqFxBlockResize(this.state, edit), edit.patternIndex);
+    }
+
+    deleteBlock(edit: SeqFxBlockDeleteEdit) {
+        this.commitState(applySeqFxBlockDelete(this.state, edit), edit.patternIndex);
+    }
+
+    setBlockMix(edit: SeqFxBlockMixEdit) {
+        this.commitState(applySeqFxBlockMixEdit(this.state, edit), edit.patternIndex);
+    }
+
+    setBlockParam(edit: SeqFxBlockParamEdit) {
+        this.commitState(applySeqFxBlockParamEdit(this.state, edit), edit.patternIndex);
     }
 
     setStepMix(edit: SeqFxMixEdit) {

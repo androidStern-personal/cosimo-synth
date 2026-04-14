@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type PointerEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
 
 import type { PatchConnectionLike } from "../shared/cmajor-react";
 import {
@@ -6,6 +6,8 @@ import {
     SEQFX_LANE_NAMES,
     SEQFX_PATTERN_COUNT,
     SEQFX_STEP_COUNT,
+    getSeqFxBlockAtStep,
+    getSeqFxLaneBlocks,
     isSeqFxTriggerLatchedParam,
     type SeqFxState,
 } from "./seqfx-state";
@@ -29,6 +31,7 @@ type ParamDefinition = {
     step: number;
     kind?: "select";
     options?: string[];
+    hint?: string;
 };
 
 const PARAM_DEFINITIONS: Record<number, ParamDefinition[]> = {
@@ -51,9 +54,8 @@ const PARAM_DEFINITIONS: Record<number, ParamDefinition[]> = {
         { index: 3, label: "Release", min: 1, max: 250, step: 1 },
     ],
     [SEQFX_LANES.stutter]: [
-        { index: 0, label: "Slice", min: 0, max: 5, step: 1, kind: "select", options: ["1/64", "1/32", "1/16", "1/8", "1/4", "Block"] },
-        { index: 1, label: "Speed", min: 0.5, max: 2, step: 0.01 },
-        { index: 2, label: "Retrigger", min: 0, max: 1, step: 1, kind: "select", options: ["Block", "Every cell"] },
+        { index: 0, label: "Slices", min: 2, max: 32, step: 1, hint: "Record slice 1; repeat the rest." },
+        { index: 1, label: "Speed", min: 0.5, max: 2, step: 0.01, hint: "1.00 keeps the captured pitch." },
     ],
 };
 
@@ -104,7 +106,13 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
     const [selectedCell, setSelectedCell] = useState<SelectedCell | null>(null);
     const [selection, setSelection] = useState<Selection | null>(null);
     const [playheadStep, setPlayheadStep] = useState<number | null>(null);
-    const [paintState, setPaintState] = useState<{ lane: number; active: boolean } | null>(null);
+    const [resizeState, setResizeState] = useState<{ lane: number; startStep: number } | null>(null);
+    const laneTrackRefs = useRef(new Map<number, HTMLDivElement>());
+    const stateRef = useRef(state);
+    const selectedPatternRef = useRef(selectedPattern);
+
+    stateRef.current = state;
+    selectedPatternRef.current = selectedPattern;
 
     useEffect(() => {
         bridge.attach();
@@ -126,19 +134,50 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
     }, [bridge]);
 
     useEffect(() => {
-        if (!paintState) {
+        if (!resizeState) {
             return undefined;
         }
 
-        const stopPainting = () => setPaintState(null);
-        window.addEventListener("pointerup", stopPainting);
-        window.addEventListener("pointercancel", stopPainting);
+        const resizeFromPointer = (event: globalThis.PointerEvent) => {
+            const track = laneTrackRefs.current.get(resizeState.lane);
+            if (!track) {
+                return;
+            }
+
+            const bounds = track.getBoundingClientRect();
+            const cellWidth = bounds.width / SEQFX_STEP_COUNT;
+            const rawStep = Math.floor((event.clientX - bounds.left) / Math.max(1, cellWidth));
+            const endStep = Math.min(SEQFX_STEP_COUNT - 1, Math.max(resizeState.startStep, rawStep));
+            const length = endStep - resizeState.startStep + 1;
+
+            try {
+                bridge.resizeBlock({
+                    patternIndex: selectedPatternRef.current,
+                    lane: resizeState.lane,
+                    startStep: resizeState.startStep,
+                    length,
+                });
+                setSelectedCell({ lane: resizeState.lane, step: resizeState.startStep });
+                setSelection({
+                    lane: resizeState.lane,
+                    steps: Array.from({ length }, (_unused, index) => resizeState.startStep + index),
+                });
+            } catch {
+                // Overlap attempts are ignored so the gesture stops at the last valid length.
+            }
+        };
+        const stopResizing = () => setResizeState(null);
+
+        window.addEventListener("pointermove", resizeFromPointer);
+        window.addEventListener("pointerup", stopResizing);
+        window.addEventListener("pointercancel", stopResizing);
 
         return () => {
-            window.removeEventListener("pointerup", stopPainting);
-            window.removeEventListener("pointercancel", stopPainting);
+            window.removeEventListener("pointermove", resizeFromPointer);
+            window.removeEventListener("pointerup", stopResizing);
+            window.removeEventListener("pointercancel", stopResizing);
         };
-    }, [paintState]);
+    }, [bridge, resizeState]);
 
     const selectedPatternState = state.patterns[selectedPattern];
     const activeSelection = selection ?? selectionFromCell(selectedCell);
@@ -147,6 +186,16 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
     const inspectedCell = inspectedLane !== null && inspectedStep !== null
         ? selectedPatternState.lanes[inspectedLane].steps[inspectedStep]
         : null;
+    const inspectedBlock = inspectedLane !== null && inspectedStep !== null
+        ? getSeqFxBlockAtStep(selectedPatternState, inspectedLane, inspectedStep)
+        : null;
+    const selectedWholeBlock = Boolean(
+        activeSelection
+        && inspectedBlock
+        && activeSelection.lane === inspectedBlock.lane
+        && activeSelection.steps.length === inspectedBlock.length
+        && activeSelection.steps[0] === inspectedBlock.startStep,
+    );
 
     function selectPattern(patternIndex: number) {
         bridge.selectPattern(patternIndex);
@@ -154,37 +203,36 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
         setSelection(null);
     }
 
-    function toggleCell(lane: number, step: number, active: boolean | undefined = undefined) {
-        bridge.toggleCell({
-            patternIndex: selectedPattern,
-            lane,
-            step,
-            active,
-        });
-    }
-
     function handleCellPointerDown(event: PointerEvent<HTMLButtonElement>, lane: number, step: number) {
-        const stepState = selectedPatternState.lanes[lane].steps[step];
-        const nextActive = !stepState.active;
-
         if (event.shiftKey && selectedCell && selectedCell.lane === lane) {
             const nextSelection = mergeRangeSelection(selectedCell, { lane, step });
             setSelection(nextSelection);
             return;
         }
 
+        bridge.createBlock({
+            patternIndex: selectedPattern,
+            lane,
+            startStep: step,
+            length: 1,
+        });
         setSelectedCell({ lane, step });
-        setSelection(null);
-        setPaintState({ lane, active: nextActive });
-        toggleCell(lane, step, nextActive);
+        setSelection({ lane, steps: [step] });
     }
 
-    function handleCellPointerEnter(lane: number, step: number) {
-        if (!paintState || paintState.lane !== lane) {
-            return;
-        }
+    function handleBlockPointerDown(event: PointerEvent<HTMLButtonElement>, lane: number, startStep: number, length: number) {
+        event.stopPropagation();
+        setSelectedCell({ lane, step: startStep });
+        setSelection({
+            lane,
+            steps: Array.from({ length }, (_unused, index) => startStep + index),
+        });
+    }
 
-        toggleCell(lane, step, paintState.active);
+    function handleResizePointerDown(event: PointerEvent<HTMLSpanElement>, lane: number, startStep: number) {
+        event.preventDefault();
+        event.stopPropagation();
+        setResizeState({ lane, startStep });
     }
 
     function setMix(value: number) {
@@ -192,12 +240,21 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
             return;
         }
 
-        bridge.setStepMix({
-            patternIndex: selectedPattern,
-            lane: activeSelection.lane,
-            steps: activeSelection.steps,
-            value,
-        });
+        if (selectedWholeBlock && inspectedBlock) {
+            bridge.setBlockMix({
+                patternIndex: selectedPattern,
+                lane: inspectedBlock.lane,
+                startStep: inspectedBlock.startStep,
+                value,
+            });
+        } else {
+            bridge.setStepMix({
+                patternIndex: selectedPattern,
+                lane: activeSelection.lane,
+                steps: activeSelection.steps,
+                value,
+            });
+        }
     }
 
     function setParam(paramIndex: number, value: number) {
@@ -205,13 +262,37 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
             return;
         }
 
-        bridge.setStepParam({
+        if (selectedWholeBlock && inspectedBlock) {
+            bridge.setBlockParam({
+                patternIndex: selectedPattern,
+                lane: inspectedBlock.lane,
+                startStep: inspectedBlock.startStep,
+                paramIndex,
+                value,
+            });
+        } else {
+            bridge.setStepParam({
+                patternIndex: selectedPattern,
+                lane: activeSelection.lane,
+                steps: activeSelection.steps,
+                paramIndex,
+                value,
+            });
+        }
+    }
+
+    function deleteSelectedBlock() {
+        if (!inspectedBlock) {
+            return;
+        }
+
+        bridge.deleteBlock({
             patternIndex: selectedPattern,
-            lane: activeSelection.lane,
-            steps: activeSelection.steps,
-            paramIndex,
-            value,
+            lane: inspectedBlock.lane,
+            startStep: inspectedBlock.startStep,
         });
+        setSelectedCell(null);
+        setSelection(null);
     }
 
     return (
@@ -247,48 +328,102 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
                 <div className="seqfx-grid-shell" aria-label="Effect sequence grid">
                     <div className="seqfx-step-header">
                         <div className="seqfx-lane-spacer" />
-                        {STEP_NUMBERS.map((step) => (
-                            <div
-                                className={playheadStep === step ? "seqfx-step-number is-playhead" : "seqfx-step-number"}
-                                key={step}
-                            >
-                                {step + 1}
-                            </div>
-                        ))}
-                    </div>
-                    {SEQFX_LANE_NAMES.map((laneName, lane) => (
-                        <div className="seqfx-lane-row" key={laneName}>
-                            <div className="seqfx-lane-label">{laneName}</div>
-                            {STEP_NUMBERS.map((step) => {
-                                const cell = selectedPatternState.lanes[lane].steps[step];
-                                const selected = activeSelection?.lane === lane && activeSelection.steps.includes(step);
-                                const className = [
-                                    "seqfx-cell",
-                                    cell.active ? "is-active" : "",
-                                    cell.trigger ? "is-trigger" : "",
-                                    selected ? "is-selected" : "",
-                                    playheadStep === step ? "is-playhead" : "",
-                                ].filter(Boolean).join(" ");
-
-                                return (
-                                    <button
-                                        aria-label={`${laneName} step ${step + 1}`}
-                                        aria-pressed={cell.active}
-                                        className={className}
-                                        data-role="seqfx-cell"
-                                        data-lane={lane}
-                                        data-step={step}
-                                        key={step}
-                                        onPointerDown={(event) => handleCellPointerDown(event, lane, step)}
-                                        onPointerEnter={() => handleCellPointerEnter(lane, step)}
-                                        type="button"
-                                    >
-                                        <span />
-                                    </button>
-                                );
-                            })}
+                        <div className="seqfx-step-track">
+                            {STEP_NUMBERS.map((step) => (
+                                <div
+                                    className={playheadStep === step ? "seqfx-step-number is-playhead" : "seqfx-step-number"}
+                                    key={step}
+                                    style={{ gridColumn: step + 1 }}
+                                >
+                                    {step + 1}
+                                </div>
+                            ))}
                         </div>
-                    ))}
+                    </div>
+                    {SEQFX_LANE_NAMES.map((laneName, lane) => {
+                        const laneBlocks = getSeqFxLaneBlocks(selectedPatternState, lane);
+
+                        return (
+                            <div className="seqfx-lane-row" key={laneName}>
+                                <div className="seqfx-lane-label">{laneName}</div>
+                                <div
+                                    className="seqfx-lane-track"
+                                    ref={(node) => {
+                                        if (node) {
+                                            laneTrackRefs.current.set(lane, node);
+                                        } else {
+                                            laneTrackRefs.current.delete(lane);
+                                        }
+                                    }}
+                                >
+                                    {STEP_NUMBERS.map((step) => {
+                                        const cell = selectedPatternState.lanes[lane].steps[step];
+                                        const selected = activeSelection?.lane === lane && activeSelection.steps.includes(step);
+                                        const className = [
+                                            "seqfx-cell",
+                                            cell.active ? "is-covered" : "",
+                                            selected ? "is-selected" : "",
+                                            playheadStep === step ? "is-playhead" : "",
+                                        ].filter(Boolean).join(" ");
+
+                                        return (
+                                            <button
+                                                aria-label={`${laneName} step ${step + 1}`}
+                                                aria-pressed={cell.active}
+                                                className={className}
+                                                data-role="seqfx-cell"
+                                                data-lane={lane}
+                                                data-step={step}
+                                                key={step}
+                                                onPointerDown={(event) => handleCellPointerDown(event, lane, step)}
+                                                style={{ gridColumn: step + 1, gridRow: 1 }}
+                                                type="button"
+                                            >
+                                                <span />
+                                            </button>
+                                        );
+                                    })}
+                                    {laneBlocks.map((block) => {
+                                        const selected = activeSelection?.lane === lane
+                                            && activeSelection.steps[0] === block.startStep
+                                            && activeSelection.steps.length === block.length;
+                                        const className = [
+                                            "seqfx-block",
+                                            selected ? "is-selected" : "",
+                                            playheadStep !== null && playheadStep >= block.startStep && playheadStep <= block.endStep ? "is-playhead" : "",
+                                        ].filter(Boolean).join(" ");
+                                        const ariaLabel = block.length === 1
+                                            ? `${laneName} block ${block.startStep + 1}`
+                                            : `${laneName} block ${block.startStep + 1}-${block.endStep + 1}`;
+
+                                        return (
+                                            <button
+                                                aria-label={ariaLabel}
+                                                className={className}
+                                                data-role="seqfx-block"
+                                                data-lane={lane}
+                                                data-start={block.startStep}
+                                                key={`${lane}:${block.startStep}`}
+                                                onPointerDown={(event) => handleBlockPointerDown(event, lane, block.startStep, block.length)}
+                                                style={{ gridColumn: `${block.startStep + 1} / span ${block.length}`, gridRow: 1 }}
+                                                type="button"
+                                            >
+                                                <span className="seqfx-block-fill" />
+                                                <span
+                                                    aria-hidden="true"
+                                                    className="seqfx-block-resize"
+                                                    data-role="seqfx-block-resize"
+                                                    data-lane={lane}
+                                                    data-start={block.startStep}
+                                                    onPointerDown={(event) => handleResizePointerDown(event, lane, block.startStep)}
+                                                />
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        );
+                    })}
                 </div>
 
                 <aside className="seqfx-inspector" data-role="seqfx-inspector">
@@ -315,7 +450,7 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
                             </label>
                             {PARAM_DEFINITIONS[inspectedLane].map((definition) => {
                                 const triggerLatched = isSeqFxTriggerLatchedParam(inspectedLane, definition.index);
-                                const disabled = triggerLatched && (activeSelection?.steps.length ?? 0) > 1;
+                                const disabled = triggerLatched && !selectedWholeBlock && (activeSelection?.steps.length ?? 0) > 1;
                                 const value = inspectedCell.params[definition.index];
 
                                 return (
@@ -350,11 +485,23 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
                                             />
                                         )}
                                         <small>
-                                            {disabled ? "Select one cell to edit this trigger." : `${definition.min} to ${definition.max}`}
+                                            {disabled
+                                                ? "Select one cell to edit this trigger."
+                                                : definition.hint ?? `${definition.min} to ${definition.max}`}
                                         </small>
                                     </label>
                                 );
                             })}
+                            {selectedWholeBlock && inspectedBlock ? (
+                                <button
+                                    className="seqfx-delete-block"
+                                    data-role="seqfx-delete-block"
+                                    onClick={deleteSelectedBlock}
+                                    type="button"
+                                >
+                                    Delete Block
+                                </button>
+                            ) : null}
                         </>
                     )}
                     <div className="seqfx-chain" aria-label="Fixed signal path">

@@ -82,7 +82,7 @@ test("seqfx_grid_cell_and_inspector_edits_send_complete_pattern_uploads", async 
     await page.close();
 });
 
-test("seqfx_shift_selection_disables_trigger_latched_stutter_slice_edit", async () => {
+test("seqfx_shift_selection_disables_trigger_latched_stutter_slices_edit", async () => {
     const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
     await page.goto(DEV_SERVER_ORIGIN);
     await page.locator('[data-role="seqfx-root"]').waitFor();
@@ -91,6 +91,7 @@ test("seqfx_shift_selection_disables_trigger_latched_stutter_slice_edit", async 
     await page.getByRole("button", { name: "Stutter step 4", exact: true }).click({ modifiers: ["Shift"] });
 
     await page.locator('[data-role="seqfx-inspector"]').getByText("Stutter steps 3-4").waitFor();
+    await page.locator('[data-role="seqfx-inspector"]').getByText("Slices").waitFor();
     await assert.doesNotReject(
         page.locator('[data-role="seqfx-param"][data-param="0"]').waitFor({ state: "attached" }),
     );
@@ -115,28 +116,38 @@ test("seqfx_pattern_buttons_send_pattern_select_and_authoritative_upload", async
     await page.close();
 });
 
-test("seqfx_drag_paints_a_contiguous_lane_block", async () => {
+test("seqfx_right_edge_drag_resizes_a_block_without_retriggering_continuation_steps", async () => {
     const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
     await page.goto(DEV_SERVER_ORIGIN);
     await page.locator('[data-role="seqfx-root"]').waitFor();
     await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
 
-    const first = page.getByRole("button", { name: "Crusher step 1", exact: true });
-    const fourth = page.getByRole("button", { name: "Crusher step 4", exact: true });
-    const firstBox = await first.boundingBox();
+    const first = page.getByRole("button", { name: "Tape Stop step 1", exact: true });
+    const fourth = page.getByRole("button", { name: "Tape Stop step 4", exact: true });
+    await first.click();
+
+    const resizeHandle = page.locator('[data-role="seqfx-block-resize"][data-lane="2"][data-start="0"]');
+    await resizeHandle.waitFor();
+    const handleBox = await resizeHandle.boundingBox();
     const fourthBox = await fourth.boundingBox();
 
-    assert.ok(firstBox);
+    assert.ok(handleBox);
     assert.ok(fourthBox);
 
-    await page.mouse.move(firstBox.x + firstBox.width / 2, firstBox.y + firstBox.height / 2);
+    await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2);
     await page.mouse.down();
-    await page.mouse.move(fourthBox.x + fourthBox.width / 2, fourthBox.y + fourthBox.height / 2, { steps: 8 });
+    await page.mouse.move(fourthBox.x + fourthBox.width - 2, fourthBox.y + fourthBox.height / 2, { steps: 8 });
     await page.mouse.up();
 
     const snapshot = await getHarnessSnapshot(page);
     const lastUpload = patternUploads(snapshot).at(-1).value;
-    assert.deepEqual(lastUpload.activeSteps[1].slice(0, 4), [true, true, true, true]);
+    assert.deepEqual(lastUpload.activeSteps[2].slice(0, 4), [true, true, true, true]);
+    assert.deepEqual(lastUpload.triggerSteps[2].slice(0, 4), [true, false, false, false]);
+    assert.equal(await page.locator('[data-role="seqfx-param"][data-param="0"]').isDisabled(), false);
+
+    await page.locator('[data-role="seqfx-delete-block"]').click();
+    const deleteUpload = patternUploads(await getHarnessSnapshot(page)).at(-1).value;
+    assert.deepEqual(deleteUpload.activeSteps[2].slice(0, 4), [false, false, false, false]);
 
     await page.close();
 });

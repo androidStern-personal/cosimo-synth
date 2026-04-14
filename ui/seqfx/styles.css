@@ -121,7 +121,7 @@ select {
 .seqfx-step-header,
 .seqfx-lane-row {
     display: grid;
-    grid-template-columns: 96px repeat(32, minmax(22px, 1fr));
+    grid-template-columns: 96px minmax(880px, 1fr);
     gap: 5px;
     min-width: 980px;
 }
@@ -141,6 +141,17 @@ select {
     color: #b7c5bc;
     font-size: 12px;
     font-weight: 700;
+}
+
+.seqfx-step-track,
+.seqfx-lane-track {
+    display: grid;
+    grid-template-columns: repeat(32, minmax(22px, 1fr));
+    gap: 5px;
+}
+
+.seqfx-lane-track {
+    position: relative;
 }
 
 .seqfx-step-number {
@@ -167,6 +178,10 @@ select {
     transition: border-color 120ms ease, background-color 120ms ease, transform 120ms ease;
 }
 
+.seqfx-cell.is-covered {
+    opacity: 0.22;
+}
+
 .seqfx-cell span {
     position: absolute;
     inset: 5px;
@@ -174,19 +189,39 @@ select {
     background: transparent;
 }
 
-.seqfx-cell.is-active {
+.seqfx-cell.is-active,
+.seqfx-block {
     border-color: rgba(139, 191, 154, 0.62);
     background: rgba(139, 191, 154, 0.22);
 }
 
-.seqfx-cell.is-active span {
+.seqfx-cell.is-active span,
+.seqfx-block-fill {
     background: #8bbf9a;
 }
 
-.seqfx-cell.is-trigger::after {
+.seqfx-block {
+    position: relative;
+    z-index: 2;
+    display: block;
+    min-height: 28px;
+    border: 1px solid rgba(139, 191, 154, 0.72);
+    border-radius: 5px;
+    padding: 0;
+    cursor: pointer;
+    transition: border-color 120ms ease, background-color 120ms ease, transform 120ms ease;
+}
+
+.seqfx-block-fill {
+    position: absolute;
+    inset: 5px;
+    border-radius: 3px;
+}
+
+.seqfx-block::before {
     position: absolute;
     top: 3px;
-    right: 3px;
+    left: 3px;
     width: 5px;
     height: 5px;
     border-radius: 999px;
@@ -194,12 +229,37 @@ select {
     content: "";
 }
 
-.seqfx-cell.is-selected {
+.seqfx-block-resize {
+    position: absolute;
+    top: 2px;
+    right: 0;
+    bottom: 2px;
+    width: 10px;
+    border-left: 1px solid rgba(21, 24, 22, 0.46);
+    border-radius: 0 4px 4px 0;
+    background: rgba(246, 250, 247, 0.26);
+    cursor: ew-resize;
+}
+
+.seqfx-block-resize::after {
+    position: absolute;
+    top: 6px;
+    right: 3px;
+    bottom: 6px;
+    width: 2px;
+    border-radius: 999px;
+    background: rgba(21, 24, 22, 0.5);
+    content: "";
+}
+
+.seqfx-cell.is-selected,
+.seqfx-block.is-selected {
     outline: 2px solid #f6faf7;
     outline-offset: 1px;
 }
 
-.seqfx-cell.is-playhead {
+.seqfx-cell.is-playhead,
+.seqfx-block.is-playhead {
     box-shadow: inset 0 -3px 0 #8bbf9a;
 }
 
@@ -283,6 +343,25 @@ select {
     color: #eef2ef;
     font-family: "Geist Mono", Menlo, Monaco, monospace;
     font-size: 12px;
+}
+
+.seqfx-delete-block {
+    min-height: 34px;
+    border: 1px solid rgba(238, 242, 239, 0.16);
+    border-radius: 7px;
+    color: #eef2ef;
+    background: rgba(255, 255, 255, 0.045);
+    cursor: pointer;
+    transition: transform 140ms ease, background-color 140ms ease, border-color 140ms ease;
+}
+
+.seqfx-delete-block:hover {
+    border-color: rgba(242, 209, 107, 0.5);
+    background: rgba(242, 209, 107, 0.1);
+}
+
+.seqfx-delete-block:active {
+    transform: translateY(1px);
 }
 
 .seqfx-chain {

@@ -15,6 +15,10 @@ const {
     SEQFX_PATTERN_COUNT,
     SEQFX_STEP_COUNT,
     SEQFX_LANES,
+    applySeqFxBlockCreate,
+    applySeqFxBlockDelete,
+    applySeqFxBlockParamEdit,
+    applySeqFxBlockResize,
     applySeqFxCellToggle,
     applySeqFxMixEdit,
     applySeqFxParamEdit,
@@ -55,6 +59,7 @@ test("default_seqfx_state_contains_twelve_complete_four_lane_patterns", () => {
     assert.equal(upload.activeSteps.length, SEQFX_LANE_COUNT);
     assert.equal(upload.activeSteps[0].length, SEQFX_STEP_COUNT);
     assert.equal(upload.params[0][0].length, SEQFX_PARAM_COUNT);
+    assert.equal(upload.params[SEQFX_LANES.stutter][0][0], 8);
 });
 
 test("serializing_and_normalizing_seqfx_state_preserves_per_step_parameters", () => {
@@ -167,4 +172,137 @@ test("multi_step_edits_allow_step_latched_values_but_reject_trigger_latched_valu
         }),
         /trigger-latched/i,
     );
+});
+
+test("creating_a_seqfx_block_writes_one_trigger_and_continuation_steps", () => {
+    let state = createDefaultSeqFxState();
+    state = applySeqFxBlockCreate(state, {
+        patternIndex: 0,
+        lane: SEQFX_LANES.tapeStop,
+        startStep: 2,
+        length: 4,
+    });
+
+    const upload = buildSeqPatternUpload(state, {
+        patternIndex: 0,
+        authoritative: false,
+    });
+
+    assert.deepEqual(upload.activeSteps[SEQFX_LANES.tapeStop].slice(0, 8), [
+        false,
+        false,
+        true,
+        true,
+        true,
+        true,
+        false,
+        false,
+    ]);
+    assert.deepEqual(upload.triggerSteps[SEQFX_LANES.tapeStop].slice(0, 8), [
+        false,
+        false,
+        true,
+        false,
+        false,
+        false,
+        false,
+        false,
+    ]);
+});
+
+test("resizing_a_seqfx_block_preserves_one_trigger_and_clears_old_tail_cells", () => {
+    let state = createDefaultSeqFxState();
+    state = applySeqFxBlockCreate(state, {
+        patternIndex: 0,
+        lane: SEQFX_LANES.filter,
+        startStep: 4,
+        length: 2,
+    });
+    state = applySeqFxBlockResize(state, {
+        patternIndex: 0,
+        lane: SEQFX_LANES.filter,
+        startStep: 4,
+        length: 5,
+    });
+    state = applySeqFxBlockResize(state, {
+        patternIndex: 0,
+        lane: SEQFX_LANES.filter,
+        startStep: 4,
+        length: 3,
+    });
+
+    const upload = buildSeqPatternUpload(state, {
+        patternIndex: 0,
+        authoritative: false,
+    });
+
+    assert.deepEqual(upload.activeSteps[SEQFX_LANES.filter].slice(3, 10), [
+        false,
+        true,
+        true,
+        true,
+        false,
+        false,
+        false,
+    ]);
+    assert.deepEqual(upload.triggerSteps[SEQFX_LANES.filter].slice(3, 10), [
+        false,
+        true,
+        false,
+        false,
+        false,
+        false,
+        false,
+    ]);
+});
+
+test("block_parameter_edits_copy_settings_across_the_block_without_retriggering_continuations", () => {
+    let state = createDefaultSeqFxState();
+    state = applySeqFxBlockCreate(state, {
+        patternIndex: 0,
+        lane: SEQFX_LANES.tapeStop,
+        startStep: 10,
+        length: 3,
+    });
+    state = applySeqFxBlockParamEdit(state, {
+        patternIndex: 0,
+        lane: SEQFX_LANES.tapeStop,
+        startStep: 10,
+        paramIndex: 0,
+        value: 2.5,
+    });
+
+    const upload = buildSeqPatternUpload(state, {
+        patternIndex: 0,
+        authoritative: false,
+    });
+
+    assert.deepEqual(upload.triggerSteps[SEQFX_LANES.tapeStop].slice(10, 13), [true, false, false]);
+    assert.deepEqual(
+        upload.params[SEQFX_LANES.tapeStop].slice(10, 13).map((params) => params[0]),
+        [2.5, 2.5, 2.5],
+    );
+});
+
+test("deleting_a_seqfx_block_clears_all_active_and_trigger_steps_in_that_block", () => {
+    let state = createDefaultSeqFxState();
+    state = applySeqFxBlockCreate(state, {
+        patternIndex: 0,
+        lane: SEQFX_LANES.filter,
+        startStep: 6,
+        length: 4,
+    });
+    state = applySeqFxBlockDelete(state, {
+        patternIndex: 0,
+        lane: SEQFX_LANES.filter,
+        startStep: 6,
+    });
+
+    const upload = buildSeqPatternUpload(state, {
+        patternIndex: 0,
+        authoritative: false,
+    });
+
+    assert.deepEqual(upload.activeSteps[SEQFX_LANES.filter].slice(6, 10), [false, false, false, false]);
+    assert.deepEqual(upload.triggerSteps[SEQFX_LANES.filter].slice(6, 10), [false, false, false, false]);
 });

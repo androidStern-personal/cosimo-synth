@@ -153,6 +153,37 @@ test("editing_selected_pattern_persists_state_and_uploads_one_complete_non_autho
     assert.equal(uploads.at(-1).value.params[SEQFX_LANES.filter][6][1], 330);
 });
 
+test("resizing_selected_pattern_block_persists_and_uploads_continuation_cells_without_retriggers", () => {
+    const initialState = createDefaultSeqFxState();
+    const connection = new FakePatchConnection({
+        [SEQFX_STATE_KEY]: serializeSeqFxState(initialState),
+    });
+    const bridge = new SeqFxRuntimeBridge(connection);
+
+    bridge.attach();
+    bridge.requestBootState();
+    connection.events = [];
+    connection.storedWrites = [];
+
+    bridge.createBlock({
+        patternIndex: 0,
+        lane: SEQFX_LANES.tapeStop,
+        startStep: 4,
+        length: 1,
+    });
+    bridge.resizeBlock({
+        patternIndex: 0,
+        lane: SEQFX_LANES.tapeStop,
+        startStep: 4,
+        length: 4,
+    });
+
+    assert.equal(connection.storedWrites.length, 2);
+    const uploads = endpointEvents(connection, SEQFX_ENDPOINTS.patternUpload);
+    assert.deepEqual(uploads.at(-1).value.activeSteps[SEQFX_LANES.tapeStop].slice(4, 8), [true, true, true, true]);
+    assert.deepEqual(uploads.at(-1).value.triggerSteps[SEQFX_LANES.tapeStop].slice(4, 8), [true, false, false, false]);
+});
+
 test("selecting_a_pattern_sends_pattern_parameter_and_authoritative_upload_for_that_pattern", () => {
     const state = createDefaultSeqFxState();
     const connection = new FakePatchConnection({

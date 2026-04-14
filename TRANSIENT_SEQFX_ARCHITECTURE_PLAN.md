@@ -26,7 +26,7 @@ dry input
 
 The fixed order is part of the sound design. The filter shapes the incoming material before lo-fi destruction, the crusher degrades the filtered signal, the tape stop slows the degraded signal, and the stutter repeats the final effected signal. For v1, do not add draggable lane order.
 
-Implementation note from the first build pass: the generated Cmajor JavaScript target rejected the original eight-second fixed tape/stutter history buffers with `Too many array elements`. The implemented v1 uses one-second fixed tape and stutter history buffers so the patch compiles, the JavaScript render tests can exercise the effects, and the generated JUCE standalone can build. This still supports the requested four-lane effect chain and the tested 1/64 through 1/4 stutter slices at normal tempos, but very slow tempos or very long block-duration captures are capped by that fixed buffer size.
+Implementation note from the first build pass: the generated Cmajor JavaScript target rejected the original eight-second fixed tape/stutter history buffers with `Too many array elements`. The implemented v1 uses one-second fixed tape and stutter buffers so the patch compiles, the JavaScript render tests can exercise the effects, and the generated JUCE standalone can build. The stutter buffer stores the first captured slice of the active block, so very slow tempos, very long blocks, or very low slice counts are capped by that fixed buffer size.
 
 ## Research Anchors
 
@@ -259,7 +259,7 @@ Per-step settings are part of the core model. Every lane step stores its own mix
 Filter step 5 can have its own mode, start cutoff, end cutoff, resonance, curve, and mix.
 Crusher step 9 can have its own bit depth, rate reduction, drive, and mix.
 Tape step 12 can have its own duration scale, slowdown curve, end behavior, release, and mix. Editing duration scale makes step 12 a trigger.
-Stutter step 20 can have its own slice length, playback speed, retrigger mode, and mix. Editing slice length makes step 20 a trigger.
+Stutter step 20 can have its own slice count, playback speed, and mix. Editing slice count makes step 20 a trigger.
 ```
 
 That means the UI inspector edits the selected step or selected block by writing into `params[lane, step, paramIndex]` and `mix[lane, step]`.
@@ -289,9 +289,9 @@ Tape params:
 4-7 reserved, write 0 and ignore
 
 Stutter params:
-0 sliceLength, trigger-latched, discrete length index
+0 sliceCount, trigger-latched, snapped 2 to 32
 1 playbackSpeed, step-latched, clamped 0.5x to 2x
-2 retriggerMode, step-latched, 0 block start / 1 every active cell
+2 reserved, write 0 and ignore
 3-7 reserved, write 0 and ignore
 ```
 
@@ -325,7 +325,7 @@ Editing a trigger-latched param in the UI automatically marks that cell as a tri
 triggerSteps only decide whether a stateful effect restarts or captures a new buffer point.
 ```
 
-A single dragged 4-step block can therefore keep one continuous tape/stutter state while still changing cutoff, resonance, crusher bits, wet mix, stutter speed, or other step-latched parameters at each step. If the user edits a trigger-latched field such as tape duration or stutter slice length on a later step, the UI makes that later step a trigger so the entered setting is audible on that step.
+A single dragged 4-step block can therefore keep one continuous tape/stutter state while still changing cutoff, resonance, crusher bits, wet mix, stutter speed, or other step-latched parameters at each step. If the user edits a trigger-latched field such as tape duration or stutter slice count on a later step, the UI makes that later step a trigger so the entered setting is audible on that step.
 
 Parameter classes:
 
@@ -334,8 +334,8 @@ Filter step-latched: mode, start cutoff, end cutoff, resonance/Q, curve, mix.
 Crusher step-latched: bit depth, rate reduction, drive, mix.
 Tape trigger-latched: duration scale.
 Tape step-latched: slowdown curve, end behavior, release, mix.
-Stutter trigger-latched: slice length.
-Stutter step-latched: playback speed, retrigger mode, mix.
+Stutter trigger-latched: slice count.
+Stutter step-latched: playback speed, mix.
 ```
 
 Do not hide this in code. The UI should visually distinguish trigger-latched fields from normal step-latched fields, because changing those fields changes capture/restart behavior.
@@ -643,30 +643,36 @@ input: tape stop output
 output: final wet chain before global wet/dry
 ```
 
-Use zero added latency for v1. The stutter captures the signal immediately before the trigger point. If we later need to capture transients just after the grid line, that requires a lookahead mode with fixed plugin latency.
+Use zero added latency for v1. The stutter captures the first slice of the active block after the trigger point, passes that first slice through dry, then repeats that captured slice for the remaining slices in the block. This is the only v1 stutter source behavior; do not add a user-facing source mode for previous-buffer, rolling, or lookahead capture.
 
-Continuously write the post-tape chain signal into `stutterHistory`. On trigger:
+On trigger:
 
 ```text
-sliceFrames = clamp(map slice parameter to tempo length, 2, stutterBufferSize - safety)
-readStart = stutterWriteIndex - sliceFrames
-readLength = sliceFrames
+sliceCount = clamp(round(slices parameter), 2, 32)
+sliceFrames = clamp(blockDurationFrames / sliceCount, 2, stutterBufferSize - safety)
+captureWrite = 0
 phase = 0
-start 2-5 ms capture crossfade from old stutter output to new loop output if stutter was already wet
+state = capturing
 ```
 
-At every active step boundary, update stutter mix, playback speed, and retrigger mode from that step's params. Slice length is trigger-latched: only a trigger captures a new slice start with the step's slice length. The UI automatically marks a step as a trigger when the user edits slice length for that step.
+While capturing, write the post-tape chain signal into `stutterHistory[0..sliceFrames)`. The audible output for the capture slice is the live input, so a stutter block can be placed on the first beat of an arrangement and still produce stutter after the first slice without needing warmed previous history.
 
-If `validStutterFrames < sliceFrames`, do not start the loop yet. Dry-pass or use a zero-wet ramp until enough signal has accumulated. This avoids stale buffer reads on first load, reset, and very long slice requests.
+At every active step boundary, update stutter mix and playback speed from that step's params. Slice count is trigger-latched: only the block trigger chooses how long the first captured slice is. The UI automatically marks a step as a trigger when the user edits slice count for that step.
 
 Each sample while active:
 
 ```text
-readPosition = readStart + phase * readLength
-loopOut = readRingFractional(stutterHistory, readPosition)
-phase += playbackSpeed / readLength
-if phase >= 1:
-  phase -= floor(phase)
+if capturing:
+  stutterHistory[captureWrite] = input
+  captureWrite += 1
+  output = input
+  if captureWrite >= sliceFrames:
+    state = playing
+else:
+  loopOut = readCapturedSliceFractional(stutterHistory, phase)
+  phase += playbackSpeed
+  while phase >= sliceFrames:
+    phase -= sliceFrames
 ```
 
 At the loop wrap, crossfade the end and beginning of the slice:
@@ -678,19 +684,19 @@ crossfadeFrames = clamp(min(5 ms, readLength / 4), 1, max(1, readLength / 2))
 Buffer:
 
 ```text
-maxStutterSeconds = 8
+maxStutterSeconds = 1
 stutterBufferSize = int(processor.maxFrequency * maxStutterSeconds) + safety
 float32<2>[stutterBufferSize] stutterHistory
-wrap<stutterBufferSize> stutterWriteIndex
-int32 validStutterFrames
+int32 stutterReadFrames
+float32 stutterCaptureFrames
+float32 stutterPhaseFrames
 ```
 
 Parameters:
 
 - Mix
-- Slice length: 1/64, 1/32, 1/16, 1/8, 1/4, or block
+- Slices: 2 to 32 equal slices across the selected block
 - Playback speed: 0.5x, 1x, 2x
-- Retrigger mode: block start or every active cell
 
 Defer reverse playback, randomization, probability, and granular modes until the basic stutter is correct.
 
@@ -726,14 +732,14 @@ Inspector:
 - Filter: mix, mode, start cutoff, end cutoff, resonance, curve
 - Crusher: mix, bits, rate, drive
 - Tape Stop: mix, duration, curve, end behavior, release
-- Stutter: mix, slice, speed, retrigger mode
+- Stutter: mix, slices, speed
 
 Inspector edit rules:
 
 - The selected cell is the default editable unit.
 - A cell edit changes only `mix[lane, step]` and `params[lane, step]` for that cell.
 - A block edit is an explicit multi-select operation and copies edited values into every selected active step.
-- Trigger-latched fields, such as tape duration or stutter slice length, are single-cell edits in v1.
+- Trigger-latched fields, such as tape duration or stutter slice count, are single-cell edits in v1.
 - Editing a trigger-latched field automatically sets `triggerSteps[lane, step] = true` for that one cell.
 - Multi-select editing disables trigger-latched fields unless the user collapses the selection to one cell.
 
@@ -834,7 +840,7 @@ DSP tests:
 - Tape stop on a sine lowers zero-crossing rate over the block.
 - Filter envelope changes low/high spectral energy in the expected direction.
 - A multi-step active run with different per-step filter cutoff or crusher bits changes audibly at each step without requiring a new trigger.
-- Editing tape duration or stutter slice length on a later step creates a trigger and makes the new capture setting audible on that step.
+- Editing tape duration or stutter slice count on a later step creates a trigger and makes the new capture setting audible on that step.
 - Bit crusher recaptures or re-quantizes the held sample when bit depth or hold length changes at a step boundary.
 - Tape curve clamps keep `curvePower` positive and bounded.
 - Tape and stutter retrigger while already wet crossfade without a hard discontinuity.
@@ -843,7 +849,7 @@ DSP tests:
 - Transport jumps, pattern changes, and loop changes do not produce NaN or infinite samples.
 - A 2-step block with swing enabled uses the sum of the two actual swung step durations.
 - Tempo/rate/swing changes during an active tape or stutter block release or retime cleanly according to the documented rule.
-- Tape and stutter warmup dry-pass until their history buffers contain enough valid frames.
+- Tape warmup dry-passes until its history buffer contains enough valid frames. Stutter dry-passes during its first-slice capture and then repeats that slice.
 - Filter cutoff clamps prevent `log(0)` and negative cutoff values.
 - Tape duration clamps prevent division by zero and hold/fade uses the final interpolated sample.
 
@@ -895,7 +901,7 @@ Each of those can be added later, but none is required to prove the core plugin.
 
 Host timeline reliability is unknown until tested in a generated plugin. The internal clock is the fallback, not an optional extra.
 
-Zero-latency stutter captures pre-trigger audio. If users expect post-grid transient capture, we need a fixed-latency lookahead mode.
+Zero-latency stutter now captures the first slice after the trigger point. The first slice must pass through live because the plugin has not captured it yet. A fixed-latency lookahead mode could make the repeat audible from the first sample, but that is deliberately out of scope for the simple v1 behavior.
 
 Tape stop behavior depends on correct fractional buffer reads and ramping. It should be tested with simple sine and impulse inputs before judging it by ear.
 
@@ -991,18 +997,19 @@ Scope:
 dry input -> filter envelope -> bit crusher -> tape stop -> stutter/loop -> global wet/dry
 ```
 
-- Implement shared wrap-safe circular fractional reads for tape and stutter.
+- Implement shared wrap-safe circular fractional reads for tape and first-slice stutter playback.
 - Implement tape trigger-latched duration scale plus step-latched curve, end behavior, release, and mix.
-- Implement stutter trigger-latched slice length plus step-latched playback speed, retrigger mode, and mix.
-- Implement warmup behavior, capture crossfades, loop-wrap crossfades, release ramps, positive bounded tape `curvePower`, and ring-buffer wraparound safety.
+- Implement stutter trigger-latched slice count plus step-latched playback speed and mix.
+- Implement capture dry-pass, loop-wrap crossfades, release ramps, positive bounded tape `curvePower`, and ring-buffer wraparound safety.
 
 Acceptance criteria:
 
-- Editing tape duration or stutter slice length marks that cell as a trigger and makes the new capture setting audible on that step.
+- Editing tape duration or stutter slice count marks that cell as a trigger and makes the new capture setting audible on that step.
 - Multi-select editing disables trigger-latched fields so one block edit cannot accidentally create repeated tape/stutter retriggers.
 - Tape stop on a sine lowers zero-crossing rate over the segment and never produces NaN or infinity.
-- Stutter repeats a known slice, handles fractional playback speed, and crossfades wrap points.
-- Tape and stutter dry-pass until history buffers contain enough valid frames.
+- Stutter captures the first slice of a block and repeats it, including when playback starts on the same beat as the stutter block.
+- Stutter handles fractional playback speed and crossfades wrap points.
+- Tape dry-passes until its history buffer contains enough valid frames. Stutter does not need previous history; it dry-passes only during its own first-slice capture.
 - Render tests run past the physical tape/stutter buffer sizes and trigger near wraparound.
 - Retriggering tape or stutter while already wet crossfades without a hard discontinuity.
 
@@ -1032,3 +1039,57 @@ filter envelope -> bit crusher -> tape stop -> stutter/loop
 - The final result includes all four requested lanes and passes the focused DSP/UI tests for each lane plus the integration tests above.
 
 Do not start with a large generalized sequencer library. Start with the one plugin behavior described here, then complete every lane in the requested chain.
+
+## Block Resize Refactor
+
+The first implementation exposed a mismatch between what the grid looked like and what the DSP received. Painting adjacent cells made a visually contiguous run, but the UI marked every painted cell as `trigger = true`. Stateful effects then restarted at each cell boundary. That is wrong for tape stop, stutter in block mode, and the filter envelope.
+
+The refactor keeps the existing Cmajor upload shape because it is simple and already validated:
+
+```text
+activeSteps[lane][step]
+triggerSteps[lane][step]
+mix[lane][step]
+params[lane][step][param]
+```
+
+The UI/state layer becomes block-aware:
+
+```text
+first cell in block:        active = true, trigger = true
+continuation cell in block: active = true, trigger = false
+```
+
+Right-edge dragging is the required v1 block edit. Dragging the right edge of a block snaps to whole grid cells. A Tape Stop block dragged across four 1/16 cells must make one four-cell tape stop, not four separate 1/16 tape stops. A Filter block dragged across four 1/16 cells must make one filter envelope whose start-to-end cutoff sweep lasts four cells.
+
+Scope for this refactor:
+
+- Click an empty grid cell to create a one-cell block.
+- Click a block to select it.
+- Drag the block's right edge to extend or shrink it by whole cells.
+- Keep one trigger at the block start and continuation cells without triggers.
+- Store block settings on every cell in the block for a complete upload, but treat the first trigger cell as the canonical block start.
+- Edit inspector values for the selected block and copy them across the full block.
+- Prevent same-lane block overlap during resize.
+
+Explicitly out of scope for this refactor:
+
+- Fractional-cell block lengths.
+- Moving a block by dragging its body.
+- Independent per-cell automation inside one stretched block.
+
+DSP changes required:
+
+- Filter must start its envelope only on a block trigger and set `filterDurationFrames` to the full contiguous block length.
+- Filter continuation cells must keep the envelope running instead of resetting `filterAgeFrames`.
+- Tape stop must keep using the full contiguous block length from the trigger step.
+- Stutter block mode must keep using the full contiguous block length from the trigger step.
+- Crusher continuation cells should stay active without reinitialising the held-sample state unless a new trigger starts a new block.
+
+Acceptance criteria:
+
+- State tests prove a resized four-cell block uploads `[true, false, false, false]` for trigger steps.
+- Browser tests prove dragging the right edge extends a visual block and uploads one trigger plus continuation cells.
+- DSP render tests prove a stretched Filter block sweeps over the whole block duration, not one cell.
+- DSP render tests keep proving Tape Stop slows over a contiguous multi-cell block.
+- `npm run test:seqfx`, `npm run seqfx:plugin:install`, and `pluginval` pass before delivery.

@@ -57,6 +57,38 @@ export type SeqFxEditTarget = {
     steps: number[];
 };
 
+export type SeqFxBlock = {
+    lane: number;
+    startStep: number;
+    length: number;
+    endStep: number;
+};
+
+export type SeqFxBlockEditTarget = {
+    patternIndex: number;
+    lane: number;
+    startStep: number;
+};
+
+export type SeqFxBlockCreateEdit = SeqFxBlockEditTarget & {
+    length: number;
+};
+
+export type SeqFxBlockResizeEdit = SeqFxBlockEditTarget & {
+    length: number;
+};
+
+export type SeqFxBlockDeleteEdit = SeqFxBlockEditTarget;
+
+export type SeqFxBlockParamEdit = SeqFxBlockEditTarget & {
+    paramIndex: number;
+    value: number;
+};
+
+export type SeqFxBlockMixEdit = SeqFxBlockEditTarget & {
+    value: number;
+};
+
 export type SeqFxCellToggleEdit = {
     patternIndex: number;
     lane: number;
@@ -77,7 +109,7 @@ const DEFAULT_LANE_PARAMS: number[][] = [
     [0, 2_000, 500, 0.707, 1, 0, 0, 0],
     [8, 1, 0, 0, 0, 0, 0, 0],
     [1, 1, 0, 30, 0, 0, 0, 0],
-    [1, 1, 0, 0, 0, 0, 0, 0],
+    [8, 1, 0, 0, 0, 0, 0, 0],
 ];
 
 const PARAM_LIMITS: Array<Array<[number, number]>> = [
@@ -112,9 +144,9 @@ const PARAM_LIMITS: Array<Array<[number, number]>> = [
         [0, 0],
     ],
     [
-        [0, 5],
+        [2, 32],
         [0.5, 2],
-        [0, 1],
+        [0, 0],
         [0, 0],
         [0, 0],
         [0, 0],
@@ -302,14 +334,217 @@ function normalizeSteps(steps: number[]): number[] {
     return [...unique].sort((a, b) => a - b);
 }
 
+function normalizeBlockLength(startStep: number, length: number): number {
+    const maximum = SEQFX_STEP_COUNT - startStep;
+    return Math.min(maximum, Math.max(1, Math.trunc(Number(length)) || 1));
+}
+
+function stepIsInsideRange(step: number, startStep: number, length: number): boolean {
+    return step >= startStep && step < startStep + length;
+}
+
+function getBlockForStep(pattern: SeqFxPattern, lane: number, step: number): SeqFxBlock | null {
+    const laneSteps = pattern.lanes[lane]?.steps;
+    if (!laneSteps?.[step]?.active) {
+        return null;
+    }
+
+    let startStep = step;
+    while (
+        startStep > 0
+        && laneSteps[startStep].active
+        && !laneSteps[startStep].trigger
+        && laneSteps[startStep - 1].active
+    ) {
+        startStep -= 1;
+    }
+
+    let endStep = startStep;
+    while (
+        endStep + 1 < SEQFX_STEP_COUNT
+        && laneSteps[endStep + 1].active
+        && !laneSteps[endStep + 1].trigger
+    ) {
+        endStep += 1;
+    }
+
+    return {
+        lane,
+        startStep,
+        length: endStep - startStep + 1,
+        endStep,
+    };
+}
+
+function clearBlock(pattern: SeqFxPattern, lane: number, block: SeqFxBlock): void {
+    for (let step = block.startStep; step <= block.endStep; step += 1) {
+        pattern.lanes[lane].steps[step] = createDefaultStep(lane);
+    }
+}
+
+function assertBlockRangeAvailable(
+    pattern: SeqFxPattern,
+    lane: number,
+    startStep: number,
+    length: number,
+    ignoreBlock: SeqFxBlock | null = null,
+): void {
+    const laneSteps = pattern.lanes[lane].steps;
+    for (let step = startStep; step < startStep + length; step += 1) {
+        if (!laneSteps[step].active) {
+            continue;
+        }
+
+        if (ignoreBlock && stepIsInsideRange(step, ignoreBlock.startStep, ignoreBlock.length)) {
+            continue;
+        }
+
+        throw new Error("SeqFX blocks cannot overlap in the same lane.");
+    }
+}
+
+function writeBlock(
+    pattern: SeqFxPattern,
+    lane: number,
+    startStep: number,
+    length: number,
+    template: SeqFxStep,
+): void {
+    for (let offset = 0; offset < length; offset += 1) {
+        const step = startStep + offset;
+        pattern.lanes[lane].steps[step] = {
+            active: true,
+            trigger: offset === 0,
+            mix: normalizeMix(template.mix),
+            params: Array.from({ length: SEQFX_PARAM_COUNT }, (_unused, paramIndex) => (
+                normalizeParam(lane, paramIndex, template.params[paramIndex])
+            )),
+        };
+    }
+}
+
+export function getSeqFxLaneBlocks(pattern: SeqFxPattern, lane: number): SeqFxBlock[] {
+    const laneIndex = clampIndex(lane, SEQFX_LANE_COUNT, "lane");
+    const blocks: SeqFxBlock[] = [];
+    let step = 0;
+
+    while (step < SEQFX_STEP_COUNT) {
+        const block = getBlockForStep(pattern, laneIndex, step);
+        if (!block || block.startStep !== step) {
+            step += 1;
+            continue;
+        }
+
+        blocks.push(block);
+        step = block.endStep + 1;
+    }
+
+    return blocks;
+}
+
+export function getSeqFxBlockAtStep(pattern: SeqFxPattern, lane: number, step: number): SeqFxBlock | null {
+    return getBlockForStep(
+        pattern,
+        clampIndex(lane, SEQFX_LANE_COUNT, "lane"),
+        clampIndex(step, SEQFX_STEP_COUNT, "step"),
+    );
+}
+
+export function applySeqFxBlockCreate(state: SeqFxState, edit: SeqFxBlockCreateEdit): SeqFxState {
+    return withEditedPattern(state, edit.patternIndex, (pattern) => {
+        const lane = clampIndex(edit.lane, SEQFX_LANE_COUNT, "lane");
+        const startStep = clampIndex(edit.startStep, SEQFX_STEP_COUNT, "startStep");
+        const length = normalizeBlockLength(startStep, edit.length);
+        assertBlockRangeAvailable(pattern, lane, startStep, length);
+        writeBlock(pattern, lane, startStep, length, createDefaultStep(lane));
+    });
+}
+
+export function applySeqFxBlockResize(state: SeqFxState, edit: SeqFxBlockResizeEdit): SeqFxState {
+    return withEditedPattern(state, edit.patternIndex, (pattern) => {
+        const lane = clampIndex(edit.lane, SEQFX_LANE_COUNT, "lane");
+        const requestedStart = clampIndex(edit.startStep, SEQFX_STEP_COUNT, "startStep");
+        const block = getBlockForStep(pattern, lane, requestedStart);
+
+        if (!block) {
+            throw new Error("Cannot resize a missing SeqFX block.");
+        }
+
+        const length = normalizeBlockLength(block.startStep, edit.length);
+        const template = pattern.lanes[lane].steps[block.startStep];
+        assertBlockRangeAvailable(pattern, lane, block.startStep, length, block);
+        clearBlock(pattern, lane, block);
+        writeBlock(pattern, lane, block.startStep, length, template);
+    });
+}
+
+export function applySeqFxBlockDelete(state: SeqFxState, edit: SeqFxBlockDeleteEdit): SeqFxState {
+    return withEditedPattern(state, edit.patternIndex, (pattern) => {
+        const lane = clampIndex(edit.lane, SEQFX_LANE_COUNT, "lane");
+        const startStep = clampIndex(edit.startStep, SEQFX_STEP_COUNT, "startStep");
+        const block = getBlockForStep(pattern, lane, startStep);
+        if (!block) {
+            return;
+        }
+
+        clearBlock(pattern, lane, block);
+    });
+}
+
+export function applySeqFxBlockMixEdit(state: SeqFxState, edit: SeqFxBlockMixEdit): SeqFxState {
+    return withEditedPattern(state, edit.patternIndex, (pattern) => {
+        const lane = clampIndex(edit.lane, SEQFX_LANE_COUNT, "lane");
+        const startStep = clampIndex(edit.startStep, SEQFX_STEP_COUNT, "startStep");
+        const block = getBlockForStep(pattern, lane, startStep);
+        if (!block) {
+            throw new Error("Cannot edit mix for a missing SeqFX block.");
+        }
+
+        const mix = normalizeMix(edit.value);
+        for (let step = block.startStep; step <= block.endStep; step += 1) {
+            pattern.lanes[lane].steps[step].mix = mix;
+        }
+    });
+}
+
+export function applySeqFxBlockParamEdit(state: SeqFxState, edit: SeqFxBlockParamEdit): SeqFxState {
+    return withEditedPattern(state, edit.patternIndex, (pattern) => {
+        const lane = clampIndex(edit.lane, SEQFX_LANE_COUNT, "lane");
+        const startStep = clampIndex(edit.startStep, SEQFX_STEP_COUNT, "startStep");
+        const paramIndex = clampIndex(edit.paramIndex, SEQFX_PARAM_COUNT, "paramIndex");
+        const block = getBlockForStep(pattern, lane, startStep);
+        if (!block) {
+            throw new Error("Cannot edit parameter for a missing SeqFX block.");
+        }
+
+        const value = normalizeParam(lane, paramIndex, edit.value);
+        for (let step = block.startStep; step <= block.endStep; step += 1) {
+            pattern.lanes[lane].steps[step].params[paramIndex] = value;
+        }
+    });
+}
+
 export function applySeqFxCellToggle(state: SeqFxState, edit: SeqFxCellToggleEdit): SeqFxState {
     return withEditedPattern(state, edit.patternIndex, (pattern) => {
         const lane = clampIndex(edit.lane, SEQFX_LANE_COUNT, "lane");
         const step = clampIndex(edit.step, SEQFX_STEP_COUNT, "step");
         const target = pattern.lanes[lane].steps[step];
         const active = edit.active ?? !target.active;
-        target.active = active;
-        target.trigger = active ? true : false;
+
+        if (active) {
+            if (target.active) {
+                return;
+            }
+
+            assertBlockRangeAvailable(pattern, lane, step, 1);
+            writeBlock(pattern, lane, step, 1, createDefaultStep(lane));
+            return;
+        }
+
+        const block = getBlockForStep(pattern, lane, step);
+        if (block) {
+            clearBlock(pattern, lane, block);
+        }
     });
 }
 
