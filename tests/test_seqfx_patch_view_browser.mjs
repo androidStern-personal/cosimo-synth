@@ -145,6 +145,22 @@ test("seqfx_right_edge_drag_resizes_a_block_without_retriggering_continuation_st
     assert.deepEqual(lastUpload.triggerSteps[2].slice(0, 4), [true, false, false, false]);
     assert.equal(await page.locator('[data-role="seqfx-param"][data-param="0"]').isDisabled(), false);
 
+    const resizedBlockBox = await page.getByRole("button", { name: "Tape Stop block 1-4", exact: true }).boundingBox();
+    const firstCellBox = await first.boundingBox();
+    const secondCellBox = await page.getByRole("button", { name: "Tape Stop step 2", exact: true }).boundingBox();
+    assert.ok(resizedBlockBox);
+    assert.ok(firstCellBox);
+    assert.ok(secondCellBox);
+    const cellGap = secondCellBox.x - (firstCellBox.x + firstCellBox.width);
+    assert.ok(
+        Math.abs(resizedBlockBox.height - firstCellBox.height) <= 1,
+        `expected resized block height ${resizedBlockBox.height} to match cell height ${firstCellBox.height}`,
+    );
+    assert.ok(
+        Math.abs(resizedBlockBox.width - ((firstCellBox.width * 4) + (cellGap * 3))) <= 1,
+        `expected resized block width ${resizedBlockBox.width} to span 4 cells of ${firstCellBox.width} with gap ${cellGap}`,
+    );
+
     await page.locator('[data-role="seqfx-delete-block"]').click();
     const deleteUpload = patternUploads(await getHarnessSnapshot(page)).at(-1).value;
     assert.deepEqual(deleteUpload.activeSteps[2].slice(0, 4), [false, false, false, false]);

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type MouseEvent, type PointerEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent, type PointerEvent } from "react";
 
 import type { PatchConnectionLike } from "../shared/cmajor-react";
 import {
@@ -96,6 +96,58 @@ function buildStepNumbers() {
 }
 
 const STEP_NUMBERS = buildStepNumbers();
+const SEQFX_CELL_GAP_PX = 5;
+const SEQFX_MIN_CELL_SIZE_PX = 22;
+
+function cellSizeFromTrackWidth(width: number) {
+    if (!Number.isFinite(width) || width <= 0) {
+        return SEQFX_MIN_CELL_SIZE_PX;
+    }
+
+    const availableCellWidth = width - (SEQFX_CELL_GAP_PX * (SEQFX_STEP_COUNT - 1));
+    const cellSize = availableCellWidth / SEQFX_STEP_COUNT;
+
+    return Math.max(SEQFX_MIN_CELL_SIZE_PX, Number(cellSize.toFixed(4)));
+}
+
+function trackWidthForCellSize(cellSize: number) {
+    return (cellSize * SEQFX_STEP_COUNT) + (SEQFX_CELL_GAP_PX * (SEQFX_STEP_COUNT - 1));
+}
+
+function leftForStep(step: number, cellSize: number) {
+    return step * (cellSize + SEQFX_CELL_GAP_PX);
+}
+
+function stepAtClientX(bounds: DOMRect, clientX: number, cellSize: number) {
+    const pitch = Math.max(1, cellSize + SEQFX_CELL_GAP_PX);
+    return Math.min(
+        SEQFX_STEP_COUNT - 1,
+        Math.max(0, Math.floor((clientX - bounds.left) / pitch)),
+    );
+}
+
+function cellStyle(step: number, cellSize: number): CSSProperties {
+    return {
+        left: `${leftForStep(step, cellSize)}px`,
+        width: `${cellSize}px`,
+        height: `${cellSize}px`,
+    };
+}
+
+function blockStyle(startStep: number, length: number, cellSize: number): CSSProperties {
+    return {
+        left: `${leftForStep(startStep, cellSize)}px`,
+        width: `${(cellSize * length) + (SEQFX_CELL_GAP_PX * (length - 1))}px`,
+        height: `${cellSize}px`,
+    };
+}
+
+function stepNumberStyle(step: number, cellSize: number): CSSProperties {
+    return {
+        left: `${leftForStep(step, cellSize)}px`,
+        width: `${cellSize}px`,
+    };
+}
 
 function formatValue(value: number) {
     if (Math.abs(value) >= 100) {
@@ -143,14 +195,28 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
     const [selection, setSelection] = useState<Selection | null>(null);
     const [playheadStep, setPlayheadStep] = useState<number | null>(null);
     const [gestureState, setGestureState] = useState<BlockGesture | null>(null);
+    const [cellSize, setCellSize] = useState(SEQFX_MIN_CELL_SIZE_PX);
+    const measureTrackRef = useRef<HTMLDivElement | null>(null);
     const laneTrackRefs = useRef(new Map<number, HTMLDivElement>());
     const gestureRef = useRef<BlockGesture | null>(null);
     const optionKeyRef = useRef(false);
+    const cellSizeRef = useRef(cellSize);
     const stateRef = useRef(state);
     const selectedPatternRef = useRef(selectedPattern);
 
+    cellSizeRef.current = cellSize;
     stateRef.current = state;
     selectedPatternRef.current = selectedPattern;
+
+    const trackWidth = useMemo(() => trackWidthForCellSize(cellSize), [cellSize]);
+    const stepTrackStyle = useMemo<CSSProperties>(() => ({
+        minWidth: `${trackWidth}px`,
+        height: "12px",
+    }), [trackWidth]);
+    const laneTrackStyle = useMemo<CSSProperties>(() => ({
+        minWidth: `${trackWidth}px`,
+        height: `${cellSize}px`,
+    }), [cellSize, trackWidth]);
 
     useEffect(() => {
         bridge.attach();
@@ -170,6 +236,50 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
             bridge.detach();
         };
     }, [bridge]);
+
+    useEffect(() => {
+        let animationFrame: number | null = null;
+        let observer: ResizeObserver | null = null;
+
+        const updateCellSize = () => {
+            const track = measureTrackRef.current;
+            if (!track) {
+                return;
+            }
+
+            const nextCellSize = cellSizeFromTrackWidth(track.getBoundingClientRect().width);
+            setCellSize((currentCellSize) => (
+                Math.abs(currentCellSize - nextCellSize) < 0.01 ? currentCellSize : nextCellSize
+            ));
+        };
+
+        const scheduleCellSizeUpdate = () => {
+            if (animationFrame !== null) {
+                window.cancelAnimationFrame(animationFrame);
+            }
+
+            animationFrame = window.requestAnimationFrame(updateCellSize);
+        };
+
+        scheduleCellSizeUpdate();
+
+        if (typeof ResizeObserver !== "undefined") {
+            observer = new ResizeObserver(scheduleCellSizeUpdate);
+            if (measureTrackRef.current) {
+                observer.observe(measureTrackRef.current);
+            }
+        }
+
+        window.addEventListener("resize", scheduleCellSizeUpdate);
+
+        return () => {
+            if (animationFrame !== null) {
+                window.cancelAnimationFrame(animationFrame);
+            }
+            observer?.disconnect();
+            window.removeEventListener("resize", scheduleCellSizeUpdate);
+        };
+    }, []);
 
     useEffect(() => {
         const handleKeyDown = (event: KeyboardEvent) => {
@@ -205,11 +315,7 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
             }
 
             const bounds = track.getBoundingClientRect();
-            const cellWidth = bounds.width / SEQFX_STEP_COUNT;
-            return Math.min(
-                SEQFX_STEP_COUNT - 1,
-                Math.max(0, Math.floor((event.clientX - bounds.left) / Math.max(1, cellWidth))),
-            );
+            return stepAtClientX(bounds, event.clientX, cellSizeRef.current);
         };
 
         const selectBlockRange = (lane: number, startStep: number, length: number) => {
@@ -369,11 +475,7 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
         }
 
         const bounds = track.getBoundingClientRect();
-        const cellWidth = bounds.width / SEQFX_STEP_COUNT;
-        const pointerStep = Math.min(
-            SEQFX_STEP_COUNT - 1,
-            Math.max(0, Math.floor((clientX - bounds.left) / Math.max(1, cellWidth))),
-        );
+        const pointerStep = stepAtClientX(bounds, clientX, cellSizeRef.current);
 
         return Math.min(length - 1, Math.max(0, pointerStep - startStep));
     }
@@ -420,7 +522,7 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
         setSelection(null);
     }
 
-    function handleCellPointerDown(event: PointerEvent<HTMLButtonElement>, lane: number, step: number) {
+    function handleCellPointerDown(event: PointerEvent<HTMLDivElement>, lane: number, step: number) {
         if (event.shiftKey && selectedCell && selectedCell.lane === lane) {
             const nextSelection = mergeRangeSelection(selectedCell, { lane, step });
             setSelection(nextSelection);
@@ -437,7 +539,7 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
         setSelection({ lane, steps: [step] });
     }
 
-    function handleBlockPointerDown(event: PointerEvent<HTMLButtonElement>, lane: number, startStep: number, length: number) {
+    function handleBlockPointerDown(event: PointerEvent<HTMLDivElement>, lane: number, startStep: number, length: number) {
         if (event.button !== 0) {
             return;
         }
@@ -474,13 +576,13 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
         });
     }
 
-    function handleBlockDoubleClick(event: MouseEvent<HTMLButtonElement>, lane: number, startStep: number) {
+    function handleBlockDoubleClick(event: MouseEvent<HTMLDivElement>, lane: number, startStep: number) {
         event.preventDefault();
         event.stopPropagation();
         deleteBlockAt(lane, startStep);
     }
 
-    function handleCellDoubleClick(event: MouseEvent<HTMLButtonElement>, lane: number, step: number) {
+    function handleCellDoubleClick(event: MouseEvent<HTMLDivElement>, lane: number, step: number) {
         event.preventDefault();
         event.stopPropagation();
         deleteBlockAt(lane, step);
@@ -585,12 +687,12 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
                 <div className="seqfx-grid-shell" aria-label="Effect sequence grid">
                     <div className="seqfx-step-header">
                         <div className="seqfx-lane-spacer" />
-                        <div className="seqfx-step-track">
+                        <div className="seqfx-step-track" ref={measureTrackRef} style={stepTrackStyle}>
                             {STEP_NUMBERS.map((step) => (
                                 <div
                                     className={playheadStep === step ? "seqfx-step-number is-playhead" : "seqfx-step-number"}
                                     key={step}
-                                    style={{ gridColumn: step + 1 }}
+                                    style={stepNumberStyle(step, cellSize)}
                                 >
                                     {step + 1}
                                 </div>
@@ -612,6 +714,7 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
                                             laneTrackRefs.current.delete(lane);
                                         }
                                     }}
+                                    style={laneTrackStyle}
                                 >
                                     {STEP_NUMBERS.map((step) => {
                                         const cell = selectedPatternState.lanes[lane].steps[step];
@@ -624,7 +727,7 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
                                         ].filter(Boolean).join(" ");
 
                                         return (
-                                            <button
+                                            <div
                                                 aria-label={`${laneName} step ${step + 1}`}
                                                 aria-pressed={cell.active}
                                                 className={className}
@@ -634,11 +737,12 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
                                                 key={step}
                                                 onDoubleClick={(event) => handleCellDoubleClick(event, lane, step)}
                                                 onPointerDown={(event) => handleCellPointerDown(event, lane, step)}
-                                                style={{ gridColumn: step + 1, gridRow: 1 }}
-                                                type="button"
+                                                role="button"
+                                                style={cellStyle(step, cellSize)}
+                                                tabIndex={0}
                                             >
                                                 <span />
-                                            </button>
+                                            </div>
                                         );
                                     })}
                                     {laneBlocks.map((block) => {
@@ -655,7 +759,7 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
                                             : `${laneName} block ${block.startStep + 1}-${block.endStep + 1}`;
 
                                         return (
-                                            <button
+                                            <div
                                                 aria-label={ariaLabel}
                                                 className={className}
                                                 data-role="seqfx-block"
@@ -664,8 +768,9 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
                                                 key={`${lane}:${block.startStep}`}
                                                 onDoubleClick={(event) => handleBlockDoubleClick(event, lane, block.startStep)}
                                                 onPointerDown={(event) => handleBlockPointerDown(event, lane, block.startStep, block.length)}
-                                                style={{ gridColumn: `${block.startStep + 1} / span ${block.length}`, gridRow: 1 }}
-                                                type="button"
+                                                role="button"
+                                                style={blockStyle(block.startStep, block.length, cellSize)}
+                                                tabIndex={0}
                                             >
                                                 <span className="seqfx-block-fill" />
                                                 <span
@@ -676,7 +781,7 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
                                                     data-start={block.startStep}
                                                     onPointerDown={(event) => handleResizePointerDown(event, lane, block.startStep)}
                                                 />
-                                            </button>
+                                            </div>
                                         );
                                     })}
                                 </div>

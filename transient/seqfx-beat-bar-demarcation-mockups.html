@@ -1,0 +1,655 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SeqFX Beat And Bar Demarcation Mockups</title>
+    <style>
+        :root {
+            color: #eef2ef;
+            background: #151816;
+            font-family: "Geist", "Avenir Next", "Helvetica Neue", Arial, sans-serif;
+            --cell: 45px;
+            --gap: 5px;
+            --label: 96px;
+            --track: calc((var(--cell) * 32) + (var(--gap) * 31));
+            --beat: calc((var(--cell) * 4) + (var(--gap) * 3));
+            --bar: calc((var(--cell) * 16) + (var(--gap) * 15));
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100dvh;
+            background:
+                linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0) 260px),
+                #151816;
+        }
+
+        .page {
+            display: grid;
+            gap: 22px;
+            padding: 18px;
+        }
+
+        .note {
+            display: grid;
+            gap: 6px;
+            max-width: 980px;
+            color: rgba(238, 242, 239, 0.72);
+            font-size: 13px;
+            line-height: 1.45;
+        }
+
+        .note strong {
+            color: #f6faf7;
+        }
+
+        .mockup {
+            display: grid;
+            gap: 14px;
+            border: 1px solid rgba(238, 242, 239, 0.12);
+            border-radius: 8px;
+            padding: 18px;
+            background: rgba(255, 255, 255, 0.035);
+            overflow: auto;
+        }
+
+        .mockup h2 {
+            margin: 0;
+            color: #f6faf7;
+            font-size: 16px;
+            letter-spacing: 0;
+        }
+
+        .mockup p {
+            margin: 0;
+            max-width: 980px;
+            color: rgba(238, 242, 239, 0.65);
+            font-size: 12px;
+            line-height: 1.45;
+        }
+
+        .seqfx-grid {
+            width: calc(var(--label) + 5px + var(--track));
+            min-width: calc(var(--label) + 5px + var(--track));
+        }
+
+        .step-header,
+        .lane-row {
+            display: grid;
+            grid-template-columns: var(--label) var(--track);
+            gap: 5px;
+            align-items: start;
+        }
+
+        .step-header {
+            margin-bottom: 8px;
+        }
+
+        .lane-row + .lane-row {
+            margin-top: 8px;
+        }
+
+        .lane-label {
+            display: flex;
+            align-items: center;
+            min-height: var(--cell);
+            color: #b7c5bc;
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .track {
+            position: relative;
+            width: var(--track);
+            height: var(--cell);
+        }
+
+        .steps {
+            height: 16px;
+        }
+
+        .step-number,
+        .cell,
+        .block {
+            position: absolute;
+            left: calc(var(--i) * (var(--cell) + var(--gap)));
+            width: var(--cell);
+        }
+
+        .step-number {
+            top: 0;
+            z-index: 3;
+            color: rgba(238, 242, 239, 0.45);
+            font-size: 10px;
+            line-height: 1;
+            text-align: center;
+        }
+
+        .cell,
+        .block {
+            top: 0;
+            z-index: 2;
+            height: var(--cell);
+            border: 1px solid rgba(238, 242, 239, 0.12);
+            border-radius: 5px;
+            background: rgba(255, 255, 255, 0.04);
+        }
+
+        .cell::after {
+            position: absolute;
+            inset: auto 0 0;
+            height: 5px;
+            border-radius: 0 0 4px 4px;
+            background: #8bbf9a;
+            content: "";
+            opacity: 0;
+        }
+
+        .playhead .cell:first-child::after {
+            opacity: 1;
+        }
+
+        .block {
+            z-index: 4;
+            border-color: rgba(139, 191, 154, 0.72);
+            background: rgba(139, 191, 154, 0.22);
+            box-shadow: inset 0 -3px 0 #8bbf9a;
+        }
+
+        .block::before {
+            position: absolute;
+            top: 5px;
+            left: 5px;
+            width: 8px;
+            height: 8px;
+            border-radius: 999px;
+            background: #f2d16b;
+            content: "";
+        }
+
+        .block::after {
+            position: absolute;
+            inset: 9px 10px 9px 16px;
+            border-radius: 3px;
+            background: #8bbf9a;
+            content: "";
+        }
+
+        .block.length-2 {
+            width: calc((var(--cell) * 2) + var(--gap));
+        }
+
+        .block.length-4 {
+            width: calc((var(--cell) * 4) + (var(--gap) * 3));
+        }
+
+        .track::before,
+        .track::after {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            content: "";
+        }
+
+        .track::before {
+            z-index: 0;
+        }
+
+        .track::after {
+            z-index: 1;
+        }
+
+        .grid-frame {
+            position: relative;
+            border: 1px solid rgba(238, 242, 239, 0.12);
+            border-radius: 8px;
+            padding: 12px;
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .grid-frame .seqfx-grid {
+            position: relative;
+            z-index: 2;
+        }
+
+        .bar-band {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            z-index: 0;
+            border-radius: 6px;
+            pointer-events: none;
+        }
+
+        .bar-band.is-alt {
+            background: rgba(255, 255, 255, 0.045);
+        }
+
+        .design-breathing-bars .grid-frame {
+            background: rgba(255, 255, 255, 0.018);
+        }
+
+        .design-breathing-bars .cell,
+        .design-breathing-bars .block {
+            border-color: rgba(238, 242, 239, 0.15);
+        }
+
+        .design-breathing-bars .block {
+            border-color: rgba(139, 191, 154, 0.74);
+        }
+
+        .design-breathing-bars .step-number.is-bar-start {
+            color: rgba(139, 191, 154, 0.88);
+            font-weight: 700;
+        }
+
+        .design-zebra .track::before {
+            background:
+                repeating-linear-gradient(
+                    90deg,
+                    rgba(139, 191, 154, 0.18) 0,
+                    rgba(139, 191, 154, 0.18) 2px,
+                    transparent 2px,
+                    transparent calc((var(--cell) + var(--gap)) * 16)
+                ),
+                repeating-linear-gradient(
+                    90deg,
+                    transparent 0,
+                    transparent calc((var(--cell) + var(--gap)) * 4),
+                    rgba(255, 255, 255, 0.035) calc((var(--cell) + var(--gap)) * 4),
+                    rgba(255, 255, 255, 0.035) calc((var(--cell) + var(--gap)) * 8)
+                );
+        }
+
+        .design-zebra .track::after {
+            background:
+                repeating-linear-gradient(
+                    90deg,
+                    transparent 0,
+                    transparent calc(((var(--cell) + var(--gap)) * 4) - 1px),
+                    rgba(238, 242, 239, 0.12) calc(((var(--cell) + var(--gap)) * 4) - 1px),
+                    rgba(238, 242, 239, 0.12) calc((var(--cell) + var(--gap)) * 4)
+                );
+        }
+
+        .design-ruler .steps {
+            height: 26px;
+        }
+
+        .design-ruler .step-number {
+            height: 24px;
+            border-bottom: 1px solid transparent;
+            color: rgba(238, 242, 239, 0.22);
+        }
+
+        .design-ruler .step-number.is-beat-start {
+            border-bottom-color: rgba(238, 242, 239, 0.22);
+            color: rgba(238, 242, 239, 0.68);
+        }
+
+        .design-ruler .step-number.is-bar-start {
+            border-bottom: 3px solid rgba(139, 191, 154, 0.56);
+            color: rgba(139, 191, 154, 0.92);
+            font-weight: 700;
+        }
+
+        .design-ruler .track:not(.steps)::before {
+            background:
+                repeating-linear-gradient(
+                    90deg,
+                    rgba(139, 191, 154, 0.10) 0,
+                    rgba(139, 191, 154, 0.10) 2px,
+                    transparent 2px,
+                    transparent calc((var(--cell) + var(--gap)) * 16)
+                );
+        }
+
+        .design-gutter .cell.is-beat-start::before,
+        .design-gutter .cell.is-bar-start::before {
+            position: absolute;
+            top: -1px;
+            bottom: -1px;
+            left: -4px;
+            width: 1px;
+            background: rgba(238, 242, 239, 0.18);
+            content: "";
+            pointer-events: none;
+        }
+
+        .design-gutter .cell.is-bar-start::before {
+            width: 2px;
+            background: rgba(139, 191, 154, 0.44);
+        }
+
+        .design-gutter .track::before {
+            background:
+                repeating-linear-gradient(
+                    90deg,
+                    rgba(139, 191, 154, 0.08) 0,
+                    rgba(139, 191, 154, 0.08) 2px,
+                    transparent 2px,
+                    transparent calc((var(--cell) + var(--gap)) * 16)
+                );
+        }
+
+        .design-gutter .block.is-beat-start {
+            border-left-color: rgba(238, 242, 239, 0.58);
+        }
+
+        .design-gutter .block.is-bar-start {
+            border-left-color: rgba(139, 191, 154, 0.96);
+            border-left-width: 2px;
+        }
+    </style>
+</head>
+<body>
+    <main class="page">
+        <section class="note">
+            <strong>Disposable UI-only SeqFX beat/bar prototype.</strong>
+            <span>This file is not loaded by the plugin. The timing assumption for these mockups is one sixteenth-note cell, four cells per beat, and sixteen cells per 4/4 bar.</span>
+        </section>
+
+        <section class="mockup baseline" data-design="baseline">
+            <h2>Baseline Copy</h2>
+            <p>Current square-cell grid with no additional beat or bar treatment.</p>
+            <div class="grid-frame">
+                <div class="seqfx-grid playhead">
+                    <div class="step-header">
+                        <div></div>
+                        <div class="track steps"></div>
+                    </div>
+                    <div class="lane-row">
+                        <div class="lane-label">Filter</div>
+                        <div class="track"></div>
+                    </div>
+                    <div class="lane-row">
+                        <div class="lane-label">Crusher</div>
+                        <div class="track"></div>
+                    </div>
+                    <div class="lane-row">
+                        <div class="lane-label">Tape Stop</div>
+                        <div class="track"></div>
+                    </div>
+                    <div class="lane-row">
+                        <div class="lane-label">Stutter</div>
+                        <div class="track"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="mockup design-breathing-bars" data-design="breathing-bars">
+            <h2>Preferred: Breathing Beats And Bar Bands</h2>
+            <p>Beat boundaries are wider gaps in the grid. Bars are alternating background bands behind the cells. This keeps beat-reading spatial and bar-reading tonal.</p>
+            <div class="grid-frame">
+                <div class="seqfx-grid playhead">
+                    <div class="step-header">
+                        <div></div>
+                        <div class="track steps"></div>
+                    </div>
+                    <div class="lane-row">
+                        <div class="lane-label">Filter</div>
+                        <div class="track"></div>
+                    </div>
+                    <div class="lane-row">
+                        <div class="lane-label">Crusher</div>
+                        <div class="track"></div>
+                    </div>
+                    <div class="lane-row">
+                        <div class="lane-label">Tape Stop</div>
+                        <div class="track"></div>
+                    </div>
+                    <div class="lane-row">
+                        <div class="lane-label">Stutter</div>
+                        <div class="track"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="mockup design-zebra" data-design="zebra">
+            <h2>Design 2: Zebra Beats</h2>
+            <p>Alternating beat backgrounds sit behind the cells, with stronger bar-start lines. This keeps the existing square cell geometry and pointer math untouched.</p>
+            <div class="grid-frame">
+                <div class="seqfx-grid playhead">
+                    <div class="step-header">
+                        <div></div>
+                        <div class="track steps"></div>
+                    </div>
+                    <div class="lane-row">
+                        <div class="lane-label">Filter</div>
+                        <div class="track"></div>
+                    </div>
+                    <div class="lane-row">
+                        <div class="lane-label">Crusher</div>
+                        <div class="track"></div>
+                    </div>
+                    <div class="lane-row">
+                        <div class="lane-label">Tape Stop</div>
+                        <div class="track"></div>
+                    </div>
+                    <div class="lane-row">
+                        <div class="lane-label">Stutter</div>
+                        <div class="track"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="mockup design-ruler" data-design="ruler">
+            <h2>Design 3: Ruler Ticks</h2>
+            <p>Beat and bar information lives mostly in the header. Lanes stay visually clean, with only a faint bar guide carried downward.</p>
+            <div class="grid-frame">
+                <div class="seqfx-grid playhead">
+                    <div class="step-header">
+                        <div></div>
+                        <div class="track steps"></div>
+                    </div>
+                    <div class="lane-row">
+                        <div class="lane-label">Filter</div>
+                        <div class="track"></div>
+                    </div>
+                    <div class="lane-row">
+                        <div class="lane-label">Crusher</div>
+                        <div class="track"></div>
+                    </div>
+                    <div class="lane-row">
+                        <div class="lane-label">Tape Stop</div>
+                        <div class="track"></div>
+                    </div>
+                    <div class="lane-row">
+                        <div class="lane-label">Stutter</div>
+                        <div class="track"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="mockup design-gutter" data-design="gutter">
+            <h2>Design 4: Gutter Lines</h2>
+            <p>The first cell of each beat gets a subtle line in the gap before it; the first cell of each bar gets a stronger green line. This keeps the guide directly in the editing area.</p>
+            <div class="grid-frame">
+                <div class="seqfx-grid playhead">
+                    <div class="step-header">
+                        <div></div>
+                        <div class="track steps"></div>
+                    </div>
+                    <div class="lane-row">
+                        <div class="lane-label">Filter</div>
+                        <div class="track"></div>
+                    </div>
+                    <div class="lane-row">
+                        <div class="lane-label">Crusher</div>
+                        <div class="track"></div>
+                    </div>
+                    <div class="lane-row">
+                        <div class="lane-label">Tape Stop</div>
+                        <div class="track"></div>
+                    </div>
+                    <div class="lane-row">
+                        <div class="lane-label">Stutter</div>
+                        <div class="track"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+    <script>
+        const stepCount = 32;
+        const cellsPerBeat = 4;
+        const beatsPerBar = 4;
+        const cellsPerBar = cellsPerBeat * beatsPerBar;
+        const cellSize = 45;
+        const normalGap = 5;
+        const beatGap = 9;
+        const barGap = 14;
+
+        function usesBreathingGaps(design) {
+            return design === "breathing" || design === "breathing-bars";
+        }
+
+        function gapAfterStep(step, design) {
+            if (!usesBreathingGaps(design)) {
+                return normalGap;
+            }
+
+            const nextStep = step + 1;
+            if (nextStep % cellsPerBar === 0) {
+                return barGap;
+            }
+            if (nextStep % cellsPerBeat === 0) {
+                return beatGap;
+            }
+            return normalGap;
+        }
+
+        function positionsForDesign(design) {
+            const positions = [];
+            let x = 0;
+            for (let step = 0; step < stepCount; step += 1) {
+                positions.push(x);
+                x += cellSize + gapAfterStep(step, design);
+            }
+
+            return {
+                lefts: positions,
+                trackWidth: x - gapAfterStep(stepCount - 1, design),
+            };
+        }
+
+        function blockWidth(startStep, length, design) {
+            let width = cellSize * length;
+            for (let step = startStep; step < startStep + length - 1; step += 1) {
+                width += gapAfterStep(step, design);
+            }
+            return width;
+        }
+
+        function appendBarBands(track, lefts, trackWidth, design) {
+            if (design !== "breathing-bars") {
+                return;
+            }
+
+            for (let barStart = 0, barIndex = 0; barStart < stepCount; barStart += cellsPerBar, barIndex += 1) {
+                const band = document.createElement("div");
+                band.className = ["bar-band", barIndex % 2 === 1 ? "is-alt" : ""].filter(Boolean).join(" ");
+                const barEnd = Math.min(stepCount, barStart + cellsPerBar);
+                const left = lefts[barStart];
+                const right = barEnd < stepCount
+                    ? lefts[barEnd] - gapAfterStep(barEnd - 1, design)
+                    : trackWidth;
+
+                band.style.left = `${left}px`;
+                band.style.width = `${right - left}px`;
+                track.append(band);
+            }
+        }
+
+        function boundaryClass(step) {
+            if (step % cellsPerBar === 0) {
+                return "is-bar-start is-beat-start";
+            }
+            if (step % cellsPerBeat === 0) {
+                return "is-beat-start";
+            }
+            return "";
+        }
+
+        function stepLabel(step, design) {
+            if (design !== "ruler") {
+                return String(step + 1);
+            }
+            if (step % cellsPerBar === 0) {
+                return `Bar ${(step / cellsPerBar) + 1}`;
+            }
+            if (step % cellsPerBeat === 0) {
+                return String(step + 1);
+            }
+            return "";
+        }
+
+        function appendBlock(lane, lefts, design, startStep, length) {
+            const block = document.createElement("div");
+            block.className = [
+                "block",
+                length === 2 ? "length-2" : "",
+                length === 4 ? "length-4" : "",
+                boundaryClass(startStep),
+            ].filter(Boolean).join(" ");
+            block.style.left = `${lefts[startStep]}px`;
+            block.style.width = `${blockWidth(startStep, length, design)}px`;
+            lane.append(block);
+        }
+
+        document.querySelectorAll(".mockup").forEach((mockup) => {
+            const design = mockup.dataset.design ?? "baseline";
+            const { lefts, trackWidth } = positionsForDesign(design);
+            const grid = mockup.querySelector(".seqfx-grid");
+            const stepTrack = mockup.querySelector(".step-header .track");
+            const lanes = mockup.querySelectorAll(".lane-row .track");
+
+            grid.style.width = `calc(var(--label) + 5px + ${trackWidth}px)`;
+            grid.style.minWidth = `calc(var(--label) + 5px + ${trackWidth}px)`;
+
+            [stepTrack, ...lanes].forEach((track) => {
+                track.style.width = `${trackWidth}px`;
+                appendBarBands(track, lefts, trackWidth, design);
+            });
+
+            for (let step = 0; step < stepCount; step += 1) {
+                const number = document.createElement("div");
+                number.className = ["step-number", boundaryClass(step)].filter(Boolean).join(" ");
+                number.style.left = `${lefts[step]}px`;
+                number.textContent = stepLabel(step, design);
+                stepTrack.append(number);
+            }
+
+            lanes.forEach((lane, laneIndex) => {
+                for (let step = 0; step < stepCount; step += 1) {
+                    const cell = document.createElement("div");
+                    cell.className = ["cell", boundaryClass(step)].filter(Boolean).join(" ");
+                    cell.style.left = `${lefts[step]}px`;
+                    lane.append(cell);
+                }
+
+                if (laneIndex === 1) {
+                    appendBlock(lane, lefts, design, 6, 1);
+                }
+
+                if (laneIndex === 2) {
+                    appendBlock(lane, lefts, design, 12, 4);
+                }
+
+                if (laneIndex === 3) {
+                    appendBlock(lane, lefts, design, 20, 2);
+                }
+            });
+        });
+    </script>
+</body>
+</html>
