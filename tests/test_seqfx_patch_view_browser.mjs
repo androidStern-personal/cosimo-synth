@@ -151,3 +151,120 @@ test("seqfx_right_edge_drag_resizes_a_block_without_retriggering_continuation_st
 
     await page.close();
 });
+
+test("seqfx_single_cell_blocks_keep_the_same_square_geometry_as_grid_cells", async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
+    await page.goto(DEV_SERVER_ORIGIN);
+    await page.locator('[data-role="seqfx-root"]').waitFor();
+
+    await page.getByRole("button", { name: "Crusher step 1", exact: true }).click();
+    const blockBox = await page.getByRole("button", { name: "Crusher block 1", exact: true }).boundingBox();
+    const cellBox = await page.getByRole("button", { name: "Crusher step 2", exact: true }).boundingBox();
+    assert.ok(blockBox);
+    assert.ok(cellBox);
+
+    assert.ok(
+        Math.abs(blockBox.width - cellBox.width) <= 1,
+        `expected block width ${blockBox.width} to match cell width ${cellBox.width}`,
+    );
+    assert.ok(
+        Math.abs(blockBox.height - cellBox.height) <= 1,
+        `expected block height ${blockBox.height} to match cell height ${cellBox.height}`,
+    );
+
+    await page.close();
+});
+
+test("seqfx_double_click_deletes_the_clicked_block", async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
+    await page.goto(DEV_SERVER_ORIGIN);
+    await page.locator('[data-role="seqfx-root"]').waitFor();
+    await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
+
+    await page.getByRole("button", { name: "Stutter step 2", exact: true }).click();
+    await page.getByRole("button", { name: "Stutter block 2", exact: true }).dblclick();
+
+    const snapshot = await getHarnessSnapshot(page);
+    const deleteUpload = patternUploads(snapshot).at(-1).value;
+    assert.equal(deleteUpload.activeSteps[3][1], false);
+    assert.equal(deleteUpload.triggerSteps[3][1], false);
+    await page.locator('[data-role="seqfx-inspector"]').getByText("Select a cell").waitFor();
+
+    await page.close();
+});
+
+test("seqfx_dragging_block_body_moves_the_block_without_resizing_it", async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
+    await page.goto(DEV_SERVER_ORIGIN);
+    await page.locator('[data-role="seqfx-root"]').waitFor();
+    await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
+
+    await page.getByRole("button", { name: "Filter step 2", exact: true }).click();
+    const resizeHandle = page.locator('[data-role="seqfx-block-resize"][data-lane="0"][data-start="1"]');
+    await resizeHandle.waitFor();
+    const handleBox = await resizeHandle.boundingBox();
+    const thirdCellBox = await page.getByRole("button", { name: "Filter step 4", exact: true }).boundingBox();
+    assert.ok(handleBox);
+    assert.ok(thirdCellBox);
+
+    await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(thirdCellBox.x + thirdCellBox.width - 2, thirdCellBox.y + thirdCellBox.height / 2, { steps: 8 });
+    await page.mouse.up();
+
+    const movedBlock = page.getByRole("button", { name: "Filter block 2-4", exact: true });
+    await movedBlock.waitFor();
+    const movedBlockBox = await movedBlock.boundingBox();
+    const targetCellBox = await page.getByRole("button", { name: "Filter step 7", exact: true }).boundingBox();
+    assert.ok(movedBlockBox);
+    assert.ok(targetCellBox);
+
+    await page.mouse.move(movedBlockBox.x + movedBlockBox.width * 0.35, movedBlockBox.y + movedBlockBox.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(targetCellBox.x + targetCellBox.width * 0.35, targetCellBox.y + targetCellBox.height / 2, { steps: 10 });
+    await page.mouse.up();
+
+    const snapshot = await getHarnessSnapshot(page);
+    const moveUpload = patternUploads(snapshot).at(-1).value;
+    assert.deepEqual(moveUpload.activeSteps[0].slice(1, 4), [false, false, false]);
+    assert.deepEqual(moveUpload.activeSteps[0].slice(6, 9), [true, true, true]);
+    assert.deepEqual(moveUpload.triggerSteps[0].slice(6, 9), [true, false, false]);
+    await page.getByRole("button", { name: "Filter block 7-9", exact: true }).waitFor();
+
+    await page.close();
+});
+
+test("seqfx_option_drag_copies_a_block_to_each_valid_cell_dragged_over", async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
+    await page.goto(DEV_SERVER_ORIGIN);
+    await page.locator('[data-role="seqfx-root"]').waitFor();
+    await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
+
+    await page.getByRole("button", { name: "Crusher step 1", exact: true }).click();
+    const block = page.getByRole("button", { name: "Crusher block 1", exact: true });
+    await block.waitFor();
+    const blockBox = await block.boundingBox();
+    const fourthCellBox = await page.getByRole("button", { name: "Crusher step 4", exact: true }).boundingBox();
+    assert.ok(blockBox);
+    assert.ok(fourthCellBox);
+
+    await page.keyboard.down("Alt");
+    await page.evaluate(() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "Alt" })));
+    await page.mouse.move(blockBox.x + blockBox.width / 2, blockBox.y + blockBox.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(fourthCellBox.x + fourthCellBox.width / 2, fourthCellBox.y + fourthCellBox.height / 2, { steps: 12 });
+    await page.mouse.up();
+    await page.evaluate(() => window.dispatchEvent(new KeyboardEvent("keyup", { key: "Alt" })));
+    await page.keyboard.up("Alt");
+
+    const snapshot = await getHarnessSnapshot(page);
+    const copyUpload = patternUploads(snapshot).at(-1).value;
+    assert.deepEqual(copyUpload.activeSteps[1].slice(0, 4), [true, true, true, true]);
+    assert.deepEqual(copyUpload.triggerSteps[1].slice(0, 4), [true, true, true, true]);
+    await page.getByRole("button", { name: "Crusher block 1", exact: true }).waitFor();
+    await page.getByRole("button", { name: "Crusher block 2", exact: true }).waitFor();
+    await page.getByRole("button", { name: "Crusher block 3", exact: true }).waitFor();
+    await page.getByRole("button", { name: "Crusher block 4", exact: true }).waitFor();
+
+    await page.close();
+});

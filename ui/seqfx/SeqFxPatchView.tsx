@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type MouseEvent, type PointerEvent } from "react";
 
 import type { PatchConnectionLike } from "../shared/cmajor-react";
 import {
@@ -22,6 +22,38 @@ type Selection = {
     lane: number;
     steps: number[];
 };
+
+type ResizeGesture = {
+    mode: "resize";
+    lane: number;
+    startStep: number;
+};
+
+type MoveGesture = {
+    mode: "move";
+    lane: number;
+    length: number;
+    grabOffset: number;
+    pointerStartX: number;
+    pointerStartY: number;
+    hasMoved: boolean;
+    lastStartStep: number;
+};
+
+type CopyGesture = {
+    mode: "copy";
+    lane: number;
+    sourceStartStep: number;
+    length: number;
+    grabOffset: number;
+    pointerStartX: number;
+    pointerStartY: number;
+    hasMoved: boolean;
+    copiedStarts: Set<number>;
+    lastCopiedStartStep: number | null;
+};
+
+type BlockGesture = ResizeGesture | MoveGesture | CopyGesture;
 
 type ParamDefinition = {
     index: number;
@@ -99,6 +131,10 @@ function getSelectionLabel(selection: Selection | null) {
     return `${SEQFX_LANE_NAMES[selection.lane]} steps ${selection.steps[0] + 1}-${selection.steps.at(-1)! + 1}`;
 }
 
+function clampBlockStart(startStep: number, length: number) {
+    return Math.min(SEQFX_STEP_COUNT - length, Math.max(0, startStep));
+}
+
 export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConnectionLike }) {
     const bridge = useMemo(() => new SeqFxRuntimeBridge(patchConnection), [patchConnection]);
     const [state, setState] = useState<SeqFxState>(() => bridge.getState());
@@ -106,8 +142,10 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
     const [selectedCell, setSelectedCell] = useState<SelectedCell | null>(null);
     const [selection, setSelection] = useState<Selection | null>(null);
     const [playheadStep, setPlayheadStep] = useState<number | null>(null);
-    const [resizeState, setResizeState] = useState<{ lane: number; startStep: number } | null>(null);
+    const [gestureState, setGestureState] = useState<BlockGesture | null>(null);
     const laneTrackRefs = useRef(new Map<number, HTMLDivElement>());
+    const gestureRef = useRef<BlockGesture | null>(null);
+    const optionKeyRef = useRef(false);
     const stateRef = useRef(state);
     const selectedPatternRef = useRef(selectedPattern);
 
@@ -134,50 +172,229 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
     }, [bridge]);
 
     useEffect(() => {
-        if (!resizeState) {
-            return undefined;
-        }
+        const handleKeyDown = (event: KeyboardEvent) => {
+            if (event.key === "Alt") {
+                optionKeyRef.current = true;
+            }
+        };
+        const handleKeyUp = (event: KeyboardEvent) => {
+            if (event.key === "Alt") {
+                optionKeyRef.current = false;
+            }
+        };
+        const clearOptionKey = () => {
+            optionKeyRef.current = false;
+        };
 
-        const resizeFromPointer = (event: globalThis.PointerEvent) => {
-            const track = laneTrackRefs.current.get(resizeState.lane);
+        window.addEventListener("keydown", handleKeyDown);
+        window.addEventListener("keyup", handleKeyUp);
+        window.addEventListener("blur", clearOptionKey);
+
+        return () => {
+            window.removeEventListener("keydown", handleKeyDown);
+            window.removeEventListener("keyup", handleKeyUp);
+            window.removeEventListener("blur", clearOptionKey);
+        };
+    }, []);
+
+    useEffect(() => {
+        const pointerStepForLane = (lane: number, event: globalThis.PointerEvent) => {
+            const track = laneTrackRefs.current.get(lane);
             if (!track) {
-                return;
+                return null;
             }
 
             const bounds = track.getBoundingClientRect();
             const cellWidth = bounds.width / SEQFX_STEP_COUNT;
-            const rawStep = Math.floor((event.clientX - bounds.left) / Math.max(1, cellWidth));
-            const endStep = Math.min(SEQFX_STEP_COUNT - 1, Math.max(resizeState.startStep, rawStep));
-            const length = endStep - resizeState.startStep + 1;
+            return Math.min(
+                SEQFX_STEP_COUNT - 1,
+                Math.max(0, Math.floor((event.clientX - bounds.left) / Math.max(1, cellWidth))),
+            );
+        };
+
+        const selectBlockRange = (lane: number, startStep: number, length: number) => {
+            setSelectedCell({ lane, step: startStep });
+            setSelection({
+                lane,
+                steps: Array.from({ length }, (_unused, index) => startStep + index),
+            });
+        };
+
+        const targetStartFromPointer = (gesture: MoveGesture | CopyGesture, event: globalThis.PointerEvent) => {
+            const pointerStep = pointerStepForLane(gesture.lane, event);
+            if (pointerStep === null) {
+                return null;
+            }
+
+            return clampBlockStart(pointerStep - gesture.grabOffset, gesture.length);
+        };
+
+        const gestureMovedEnough = (gesture: MoveGesture | CopyGesture, event: globalThis.PointerEvent) => {
+            const deltaX = event.clientX - gesture.pointerStartX;
+            const deltaY = event.clientY - gesture.pointerStartY;
+            return (deltaX * deltaX) + (deltaY * deltaY) >= 16;
+        };
+
+        const handlePointerMove = (event: globalThis.PointerEvent) => {
+            const gesture = gestureRef.current;
+            if (!gesture) {
+                return;
+            }
+
+            event.preventDefault();
+
+            if (gesture.mode === "resize") {
+                const rawStep = pointerStepForLane(gesture.lane, event);
+                if (rawStep === null) {
+                    return;
+                }
+
+                const endStep = Math.min(SEQFX_STEP_COUNT - 1, Math.max(gesture.startStep, rawStep));
+                const length = endStep - gesture.startStep + 1;
+
+                try {
+                    bridge.resizeBlock({
+                        patternIndex: selectedPatternRef.current,
+                        lane: gesture.lane,
+                        startStep: gesture.startStep,
+                        length,
+                    });
+                    selectBlockRange(gesture.lane, gesture.startStep, length);
+                } catch {
+                    // Overlap attempts are ignored so the gesture stops at the last valid length.
+                }
+                return;
+            }
+
+            if (!gesture.hasMoved && !gestureMovedEnough(gesture, event)) {
+                return;
+            }
+
+            gesture.hasMoved = true;
+            const targetStartStep = targetStartFromPointer(gesture, event);
+            if (targetStartStep === null) {
+                return;
+            }
+
+            if (gesture.mode === "move") {
+                if (targetStartStep === gesture.lastStartStep) {
+                    return;
+                }
+
+                try {
+                    bridge.moveBlock({
+                        patternIndex: selectedPatternRef.current,
+                        lane: gesture.lane,
+                        startStep: gesture.lastStartStep,
+                        targetStartStep,
+                    });
+                    gesture.lastStartStep = targetStartStep;
+                    selectBlockRange(gesture.lane, targetStartStep, gesture.length);
+                } catch {
+                    // Invalid targets, such as overlaps, keep the block at its last valid start.
+                }
+                return;
+            }
+
+            if (
+                targetStartStep === gesture.sourceStartStep
+                || gesture.copiedStarts.has(targetStartStep)
+            ) {
+                return;
+            }
 
             try {
-                bridge.resizeBlock({
+                bridge.copyBlock({
                     patternIndex: selectedPatternRef.current,
-                    lane: resizeState.lane,
-                    startStep: resizeState.startStep,
-                    length,
+                    lane: gesture.lane,
+                    startStep: gesture.sourceStartStep,
+                    targetStartStep,
                 });
-                setSelectedCell({ lane: resizeState.lane, step: resizeState.startStep });
-                setSelection({
-                    lane: resizeState.lane,
-                    steps: Array.from({ length }, (_unused, index) => resizeState.startStep + index),
-                });
+                gesture.copiedStarts.add(targetStartStep);
+                gesture.lastCopiedStartStep = targetStartStep;
+                selectBlockRange(gesture.lane, targetStartStep, gesture.length);
             } catch {
-                // Overlap attempts are ignored so the gesture stops at the last valid length.
+                // Invalid copy targets are skipped so dragging over occupied cells is harmless.
             }
         };
-        const stopResizing = () => setResizeState(null);
 
-        window.addEventListener("pointermove", resizeFromPointer);
-        window.addEventListener("pointerup", stopResizing);
-        window.addEventListener("pointercancel", stopResizing);
+        const stopGesture = () => {
+            const gesture = gestureRef.current;
+            if (!gesture) {
+                return;
+            }
+
+            if (gesture.mode === "move" && gesture.hasMoved) {
+                selectBlockRange(gesture.lane, gesture.lastStartStep, gesture.length);
+            } else if (
+                gesture.mode === "copy"
+                && gesture.hasMoved
+                && gesture.lastCopiedStartStep !== null
+            ) {
+                selectBlockRange(gesture.lane, gesture.lastCopiedStartStep, gesture.length);
+            }
+
+            gestureRef.current = null;
+            setGestureState(null);
+        };
+
+        window.addEventListener("pointermove", handlePointerMove, { passive: false });
+        window.addEventListener("pointerup", stopGesture);
+        window.addEventListener("pointercancel", stopGesture);
 
         return () => {
-            window.removeEventListener("pointermove", resizeFromPointer);
-            window.removeEventListener("pointerup", stopResizing);
-            window.removeEventListener("pointercancel", stopResizing);
+            window.removeEventListener("pointermove", handlePointerMove);
+            window.removeEventListener("pointerup", stopGesture);
+            window.removeEventListener("pointercancel", stopGesture);
         };
-    }, [bridge, resizeState]);
+    }, [bridge]);
+
+    function beginGesture(gesture: BlockGesture) {
+        gestureRef.current = gesture;
+        setGestureState(gesture);
+    }
+
+    function selectBlockRange(lane: number, startStep: number, length: number) {
+        setSelectedCell({ lane, step: startStep });
+        setSelection({
+            lane,
+            steps: Array.from({ length }, (_unused, index) => startStep + index),
+        });
+    }
+
+    function pointerGrabOffset(lane: number, startStep: number, length: number, clientX: number) {
+        const track = laneTrackRefs.current.get(lane);
+        if (!track) {
+            return 0;
+        }
+
+        const bounds = track.getBoundingClientRect();
+        const cellWidth = bounds.width / SEQFX_STEP_COUNT;
+        const pointerStep = Math.min(
+            SEQFX_STEP_COUNT - 1,
+            Math.max(0, Math.floor((clientX - bounds.left) / Math.max(1, cellWidth))),
+        );
+
+        return Math.min(length - 1, Math.max(0, pointerStep - startStep));
+    }
+
+    function deleteBlockAt(lane: number, step: number) {
+        const pattern = stateRef.current.patterns[selectedPatternRef.current];
+        const block = getSeqFxBlockAtStep(pattern, lane, step);
+        if (!block) {
+            return;
+        }
+
+        bridge.deleteBlock({
+            patternIndex: selectedPatternRef.current,
+            lane: block.lane,
+            startStep: block.startStep,
+        });
+        setSelectedCell(null);
+        setSelection(null);
+        gestureRef.current = null;
+        setGestureState(null);
+    }
 
     const selectedPatternState = state.patterns[selectedPattern];
     const activeSelection = selection ?? selectionFromCell(selectedCell);
@@ -221,18 +438,58 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
     }
 
     function handleBlockPointerDown(event: PointerEvent<HTMLButtonElement>, lane: number, startStep: number, length: number) {
+        if (event.button !== 0) {
+            return;
+        }
+
         event.stopPropagation();
-        setSelectedCell({ lane, step: startStep });
-        setSelection({
+        selectBlockRange(lane, startStep, length);
+        const grabOffset = pointerGrabOffset(lane, startStep, length, event.clientX);
+
+        if (event.altKey || event.getModifierState("Alt") || optionKeyRef.current) {
+            beginGesture({
+                mode: "copy",
+                lane,
+                sourceStartStep: startStep,
+                length,
+                grabOffset,
+                pointerStartX: event.clientX,
+                pointerStartY: event.clientY,
+                hasMoved: false,
+                copiedStarts: new Set<number>(),
+                lastCopiedStartStep: null,
+            });
+            return;
+        }
+
+        beginGesture({
+            mode: "move",
             lane,
-            steps: Array.from({ length }, (_unused, index) => startStep + index),
+            length,
+            grabOffset,
+            pointerStartX: event.clientX,
+            pointerStartY: event.clientY,
+            hasMoved: false,
+            lastStartStep: startStep,
         });
+    }
+
+    function handleBlockDoubleClick(event: MouseEvent<HTMLButtonElement>, lane: number, startStep: number) {
+        event.preventDefault();
+        event.stopPropagation();
+        deleteBlockAt(lane, startStep);
+    }
+
+    function handleCellDoubleClick(event: MouseEvent<HTMLButtonElement>, lane: number, step: number) {
+        event.preventDefault();
+        event.stopPropagation();
+        deleteBlockAt(lane, step);
     }
 
     function handleResizePointerDown(event: PointerEvent<HTMLSpanElement>, lane: number, startStep: number) {
         event.preventDefault();
         event.stopPropagation();
-        setResizeState({ lane, startStep });
+        beginGesture({ mode: "resize", lane, startStep });
     }
 
     function setMix(value: number) {
@@ -296,7 +553,7 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
     }
 
     return (
-        <main className="seqfx-root" data-role="seqfx-root">
+        <main className={gestureState ? "seqfx-root is-dragging" : "seqfx-root"} data-role="seqfx-root">
             <section className="seqfx-topbar" aria-label="SeqFX transport and pattern controls">
                 <div className="seqfx-title">
                     <span className="seqfx-kicker">Cosimo</span>
@@ -375,6 +632,7 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
                                                 data-lane={lane}
                                                 data-step={step}
                                                 key={step}
+                                                onDoubleClick={(event) => handleCellDoubleClick(event, lane, step)}
                                                 onPointerDown={(event) => handleCellPointerDown(event, lane, step)}
                                                 style={{ gridColumn: step + 1, gridRow: 1 }}
                                                 type="button"
@@ -404,6 +662,7 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
                                                 data-lane={lane}
                                                 data-start={block.startStep}
                                                 key={`${lane}:${block.startStep}`}
+                                                onDoubleClick={(event) => handleBlockDoubleClick(event, lane, block.startStep)}
                                                 onPointerDown={(event) => handleBlockPointerDown(event, lane, block.startStep, block.length)}
                                                 style={{ gridColumn: `${block.startStep + 1} / span ${block.length}`, gridRow: 1 }}
                                                 type="button"

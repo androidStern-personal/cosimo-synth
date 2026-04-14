@@ -12494,7 +12494,7 @@ function requireClient() {
   return client.exports;
 }
 var clientExports = requireClient();
-const cssText = ':host {\n    display: block;\n    width: 100%;\n    height: 100%;\n    color: #eef2ef;\n    background: #151816;\n    font-family: "Geist", "Avenir Next", "Helvetica Neue", Arial, sans-serif;\n}\n\n* {\n    box-sizing: border-box;\n}\n\nbutton,\ninput,\nselect {\n    font: inherit;\n}\n\n.seqfx-root {\n    min-height: 100%;\n    padding: 18px;\n    background:\n        linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0) 260px),\n        #151816;\n}\n\n.seqfx-topbar {\n    display: grid;\n    grid-template-columns: minmax(160px, 1fr) auto auto;\n    align-items: end;\n    gap: 18px;\n    margin-bottom: 18px;\n    border-bottom: 1px solid rgba(238, 242, 239, 0.12);\n    padding-bottom: 16px;\n}\n\n.seqfx-title {\n    display: grid;\n    gap: 2px;\n}\n\n.seqfx-kicker {\n    color: #8bbf9a;\n    font-size: 11px;\n    font-weight: 700;\n    letter-spacing: 0.08em;\n    text-transform: uppercase;\n}\n\n.seqfx-title h1 {\n    margin: 0;\n    color: #f6faf7;\n    font-size: 32px;\n    line-height: 1;\n    letter-spacing: 0;\n}\n\n.seqfx-patterns,\n.seqfx-transport {\n    display: flex;\n    flex-wrap: wrap;\n    gap: 6px;\n    justify-content: flex-end;\n}\n\n.seqfx-pattern,\n.seqfx-transport button {\n    min-width: 34px;\n    height: 34px;\n    border: 1px solid rgba(238, 242, 239, 0.14);\n    border-radius: 7px;\n    color: #d9e2dc;\n    background: rgba(255, 255, 255, 0.045);\n    cursor: pointer;\n    transition: transform 140ms ease, background-color 140ms ease, border-color 140ms ease;\n}\n\n.seqfx-transport button {\n    min-width: 58px;\n    padding: 0 12px;\n}\n\n.seqfx-pattern:hover,\n.seqfx-transport button:hover {\n    border-color: rgba(139, 191, 154, 0.62);\n    background: rgba(139, 191, 154, 0.12);\n}\n\n.seqfx-pattern:active,\n.seqfx-transport button:active,\n.seqfx-cell:active {\n    transform: translateY(1px);\n}\n\n.seqfx-pattern.is-selected {\n    border-color: rgba(139, 191, 154, 0.9);\n    color: #0f1511;\n    background: #8bbf9a;\n}\n\n.seqfx-workspace {\n    display: grid;\n    grid-template-columns: minmax(680px, 1fr) 300px;\n    gap: 18px;\n    align-items: start;\n}\n\n.seqfx-grid-shell,\n.seqfx-inspector {\n    border: 1px solid rgba(238, 242, 239, 0.12);\n    border-radius: 8px;\n    background: rgba(255, 255, 255, 0.035);\n}\n\n.seqfx-grid-shell {\n    overflow: auto;\n    padding: 12px;\n}\n\n.seqfx-step-header,\n.seqfx-lane-row {\n    display: grid;\n    grid-template-columns: 96px minmax(880px, 1fr);\n    gap: 5px;\n    min-width: 980px;\n}\n\n.seqfx-step-header {\n    margin-bottom: 8px;\n}\n\n.seqfx-lane-row + .seqfx-lane-row {\n    margin-top: 8px;\n}\n\n.seqfx-lane-label {\n    display: flex;\n    align-items: center;\n    min-height: 28px;\n    color: #b7c5bc;\n    font-size: 12px;\n    font-weight: 700;\n}\n\n.seqfx-step-track,\n.seqfx-lane-track {\n    display: grid;\n    grid-template-columns: repeat(32, minmax(22px, 1fr));\n    gap: 5px;\n}\n\n.seqfx-lane-track {\n    position: relative;\n}\n\n.seqfx-step-number {\n    color: rgba(238, 242, 239, 0.45);\n    font-size: 10px;\n    line-height: 1;\n    text-align: center;\n}\n\n.seqfx-step-number.is-playhead {\n    color: #8bbf9a;\n}\n\n.seqfx-cell {\n    position: relative;\n    display: block;\n    width: 100%;\n    aspect-ratio: 1 / 1;\n    border: 1px solid rgba(238, 242, 239, 0.12);\n    border-radius: 5px;\n    padding: 0;\n    background: rgba(255, 255, 255, 0.04);\n    cursor: pointer;\n    transition: border-color 120ms ease, background-color 120ms ease, transform 120ms ease;\n}\n\n.seqfx-cell.is-covered {\n    opacity: 0.22;\n}\n\n.seqfx-cell span {\n    position: absolute;\n    inset: 5px;\n    border-radius: 3px;\n    background: transparent;\n}\n\n.seqfx-cell.is-active,\n.seqfx-block {\n    border-color: rgba(139, 191, 154, 0.62);\n    background: rgba(139, 191, 154, 0.22);\n}\n\n.seqfx-cell.is-active span,\n.seqfx-block-fill {\n    background: #8bbf9a;\n}\n\n.seqfx-block {\n    position: relative;\n    z-index: 2;\n    display: block;\n    min-height: 28px;\n    border: 1px solid rgba(139, 191, 154, 0.72);\n    border-radius: 5px;\n    padding: 0;\n    cursor: pointer;\n    transition: border-color 120ms ease, background-color 120ms ease, transform 120ms ease;\n}\n\n.seqfx-block-fill {\n    position: absolute;\n    inset: 5px;\n    border-radius: 3px;\n}\n\n.seqfx-block::before {\n    position: absolute;\n    top: 3px;\n    left: 3px;\n    width: 5px;\n    height: 5px;\n    border-radius: 999px;\n    background: #f2d16b;\n    content: "";\n}\n\n.seqfx-block-resize {\n    position: absolute;\n    top: 2px;\n    right: 0;\n    bottom: 2px;\n    width: 10px;\n    border-left: 1px solid rgba(21, 24, 22, 0.46);\n    border-radius: 0 4px 4px 0;\n    background: rgba(246, 250, 247, 0.26);\n    cursor: ew-resize;\n}\n\n.seqfx-block-resize::after {\n    position: absolute;\n    top: 6px;\n    right: 3px;\n    bottom: 6px;\n    width: 2px;\n    border-radius: 999px;\n    background: rgba(21, 24, 22, 0.5);\n    content: "";\n}\n\n.seqfx-cell.is-selected,\n.seqfx-block.is-selected {\n    outline: 2px solid #f6faf7;\n    outline-offset: 1px;\n}\n\n.seqfx-cell.is-playhead,\n.seqfx-block.is-playhead {\n    box-shadow: inset 0 -3px 0 #8bbf9a;\n}\n\n.seqfx-inspector {\n    display: grid;\n    gap: 14px;\n    padding: 16px;\n}\n\n.seqfx-inspector-heading {\n    display: grid;\n    gap: 4px;\n}\n\n.seqfx-inspector-heading span {\n    color: #8bbf9a;\n    font-size: 11px;\n    font-weight: 700;\n    letter-spacing: 0.08em;\n    text-transform: uppercase;\n}\n\n.seqfx-inspector-heading strong {\n    color: #f6faf7;\n    font-size: 18px;\n}\n\n.seqfx-empty,\n.seqfx-field small {\n    margin: 0;\n    color: rgba(238, 242, 239, 0.62);\n    font-size: 12px;\n    line-height: 1.45;\n}\n\n.seqfx-field {\n    display: grid;\n    gap: 7px;\n}\n\n.seqfx-field span {\n    display: flex;\n    align-items: center;\n    justify-content: space-between;\n    color: #d9e2dc;\n    font-size: 12px;\n    font-weight: 700;\n}\n\n.seqfx-field em {\n    border: 1px solid rgba(242, 209, 107, 0.4);\n    border-radius: 999px;\n    padding: 2px 6px;\n    color: #f2d16b;\n    font-size: 10px;\n    font-style: normal;\n}\n\n.seqfx-field input,\n.seqfx-field select {\n    width: 100%;\n    min-height: 34px;\n    border: 1px solid rgba(238, 242, 239, 0.14);\n    border-radius: 7px;\n    padding: 6px 9px;\n    color: #eef2ef;\n    background: rgba(21, 24, 22, 0.85);\n}\n\n.seqfx-field input[type="range"] {\n    padding: 0;\n    accent-color: #8bbf9a;\n}\n\n.seqfx-field input:disabled,\n.seqfx-field select:disabled {\n    opacity: 0.55;\n}\n\n.seqfx-field output {\n    color: #eef2ef;\n    font-family: "Geist Mono", Menlo, Monaco, monospace;\n    font-size: 12px;\n}\n\n.seqfx-delete-block {\n    min-height: 34px;\n    border: 1px solid rgba(238, 242, 239, 0.16);\n    border-radius: 7px;\n    color: #eef2ef;\n    background: rgba(255, 255, 255, 0.045);\n    cursor: pointer;\n    transition: transform 140ms ease, background-color 140ms ease, border-color 140ms ease;\n}\n\n.seqfx-delete-block:hover {\n    border-color: rgba(242, 209, 107, 0.5);\n    background: rgba(242, 209, 107, 0.1);\n}\n\n.seqfx-delete-block:active {\n    transform: translateY(1px);\n}\n\n.seqfx-chain {\n    display: grid;\n    grid-template-columns: repeat(5, 1fr);\n    gap: 5px;\n    border-top: 1px solid rgba(238, 242, 239, 0.12);\n    padding-top: 14px;\n}\n\n.seqfx-chain span {\n    border: 1px solid rgba(139, 191, 154, 0.22);\n    border-radius: 6px;\n    padding: 6px 4px;\n    color: #c5d5cb;\n    font-size: 11px;\n    text-align: center;\n}\n\n.seqfx-debug {\n    display: none;\n}\n\n@media (max-width: 980px) {\n    .seqfx-root {\n        padding: 12px;\n    }\n\n    .seqfx-topbar,\n    .seqfx-workspace {\n        grid-template-columns: 1fr;\n    }\n\n    .seqfx-patterns,\n    .seqfx-transport {\n        justify-content: flex-start;\n    }\n\n    .seqfx-inspector {\n        width: 100%;\n    }\n}\n';
+const cssText = ':host {\n    display: block;\n    width: 100%;\n    height: 100%;\n    color: #eef2ef;\n    background: #151816;\n    font-family: "Geist", "Avenir Next", "Helvetica Neue", Arial, sans-serif;\n}\n\n* {\n    box-sizing: border-box;\n}\n\nbutton,\ninput,\nselect {\n    font: inherit;\n}\n\n.seqfx-root {\n    min-height: 100%;\n    padding: 18px;\n    background:\n        linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0) 260px),\n        #151816;\n}\n\n.seqfx-topbar {\n    display: grid;\n    grid-template-columns: minmax(160px, 1fr) auto auto;\n    align-items: end;\n    gap: 18px;\n    margin-bottom: 18px;\n    border-bottom: 1px solid rgba(238, 242, 239, 0.12);\n    padding-bottom: 16px;\n}\n\n.seqfx-title {\n    display: grid;\n    gap: 2px;\n}\n\n.seqfx-kicker {\n    color: #8bbf9a;\n    font-size: 11px;\n    font-weight: 700;\n    letter-spacing: 0.08em;\n    text-transform: uppercase;\n}\n\n.seqfx-title h1 {\n    margin: 0;\n    color: #f6faf7;\n    font-size: 32px;\n    line-height: 1;\n    letter-spacing: 0;\n}\n\n.seqfx-patterns,\n.seqfx-transport {\n    display: flex;\n    flex-wrap: wrap;\n    gap: 6px;\n    justify-content: flex-end;\n}\n\n.seqfx-pattern,\n.seqfx-transport button {\n    min-width: 34px;\n    height: 34px;\n    border: 1px solid rgba(238, 242, 239, 0.14);\n    border-radius: 7px;\n    color: #d9e2dc;\n    background: rgba(255, 255, 255, 0.045);\n    cursor: pointer;\n    transition: transform 140ms ease, background-color 140ms ease, border-color 140ms ease;\n}\n\n.seqfx-transport button {\n    min-width: 58px;\n    padding: 0 12px;\n}\n\n.seqfx-pattern:hover,\n.seqfx-transport button:hover {\n    border-color: rgba(139, 191, 154, 0.62);\n    background: rgba(139, 191, 154, 0.12);\n}\n\n.seqfx-pattern:active,\n.seqfx-transport button:active,\n.seqfx-cell:active {\n    transform: translateY(1px);\n}\n\n.seqfx-pattern.is-selected {\n    border-color: rgba(139, 191, 154, 0.9);\n    color: #0f1511;\n    background: #8bbf9a;\n}\n\n.seqfx-workspace {\n    display: grid;\n    grid-template-columns: minmax(680px, 1fr) 300px;\n    gap: 18px;\n    align-items: start;\n}\n\n.seqfx-grid-shell,\n.seqfx-inspector {\n    border: 1px solid rgba(238, 242, 239, 0.12);\n    border-radius: 8px;\n    background: rgba(255, 255, 255, 0.035);\n}\n\n.seqfx-grid-shell {\n    overflow: auto;\n    padding: 12px;\n}\n\n.seqfx-step-header,\n.seqfx-lane-row {\n    display: grid;\n    grid-template-columns: 96px minmax(880px, 1fr);\n    gap: 5px;\n    min-width: 980px;\n}\n\n.seqfx-step-header {\n    margin-bottom: 8px;\n}\n\n.seqfx-lane-row + .seqfx-lane-row {\n    margin-top: 8px;\n}\n\n.seqfx-lane-label {\n    display: flex;\n    align-items: center;\n    min-height: 28px;\n    color: #b7c5bc;\n    font-size: 12px;\n    font-weight: 700;\n}\n\n.seqfx-step-track,\n.seqfx-lane-track {\n    display: grid;\n    grid-template-columns: repeat(32, minmax(22px, 1fr));\n    gap: 5px;\n}\n\n.seqfx-lane-track {\n    position: relative;\n    align-self: start;\n}\n\n.seqfx-step-number {\n    color: rgba(238, 242, 239, 0.45);\n    font-size: 10px;\n    line-height: 1;\n    text-align: center;\n}\n\n.seqfx-step-number.is-playhead {\n    color: #8bbf9a;\n}\n\n.seqfx-cell {\n    position: relative;\n    display: block;\n    width: 100%;\n    aspect-ratio: 1 / 1;\n    border: 1px solid rgba(238, 242, 239, 0.12);\n    border-radius: 5px;\n    padding: 0;\n    background: rgba(255, 255, 255, 0.04);\n    cursor: pointer;\n    transition: border-color 120ms ease, background-color 120ms ease, transform 120ms ease;\n}\n\n.seqfx-cell.is-covered {\n    opacity: 0.22;\n}\n\n.seqfx-cell span {\n    position: absolute;\n    inset: 5px;\n    border-radius: 3px;\n    background: transparent;\n}\n\n.seqfx-cell.is-active,\n.seqfx-block {\n    border-color: rgba(139, 191, 154, 0.62);\n    background: rgba(139, 191, 154, 0.22);\n}\n\n.seqfx-cell.is-active span,\n.seqfx-block-fill {\n    background: #8bbf9a;\n}\n\n.seqfx-block {\n    position: absolute;\n    top: 0;\n    right: 0;\n    bottom: 0;\n    left: 0;\n    z-index: 2;\n    display: block;\n    appearance: none;\n    -webkit-appearance: none;\n    width: auto;\n    min-width: 0;\n    min-height: 0;\n    height: auto;\n    border: 1px solid rgba(139, 191, 154, 0.72);\n    border-radius: 5px;\n    margin: 0;\n    padding: 0;\n    cursor: grab;\n    touch-action: none;\n    transition: border-color 120ms ease, background-color 120ms ease, transform 120ms ease;\n}\n\n.seqfx-block:active {\n    cursor: grabbing;\n}\n\n.seqfx-block-fill {\n    position: absolute;\n    inset: 5px;\n    border-radius: 3px;\n}\n\n.seqfx-block::before {\n    position: absolute;\n    top: 3px;\n    left: 3px;\n    width: 5px;\n    height: 5px;\n    border-radius: 999px;\n    background: #f2d16b;\n    content: "";\n}\n\n.seqfx-block-resize {\n    position: absolute;\n    top: 2px;\n    right: 0;\n    bottom: 2px;\n    width: min(8px, 30%);\n    border-left: 1px solid rgba(21, 24, 22, 0.46);\n    border-radius: 0 4px 4px 0;\n    background: rgba(246, 250, 247, 0.26);\n    cursor: ew-resize;\n    touch-action: none;\n}\n\n.seqfx-block-resize::after {\n    position: absolute;\n    top: 6px;\n    right: 3px;\n    bottom: 6px;\n    width: 2px;\n    border-radius: 999px;\n    background: rgba(21, 24, 22, 0.5);\n    content: "";\n}\n\n.seqfx-cell.is-selected,\n.seqfx-block.is-selected {\n    outline: 2px solid #f6faf7;\n    outline-offset: 1px;\n}\n\n.seqfx-cell.is-playhead,\n.seqfx-block.is-playhead {\n    box-shadow: inset 0 -3px 0 #8bbf9a;\n}\n\n.seqfx-inspector {\n    display: grid;\n    gap: 14px;\n    padding: 16px;\n}\n\n.seqfx-inspector-heading {\n    display: grid;\n    gap: 4px;\n}\n\n.seqfx-inspector-heading span {\n    color: #8bbf9a;\n    font-size: 11px;\n    font-weight: 700;\n    letter-spacing: 0.08em;\n    text-transform: uppercase;\n}\n\n.seqfx-inspector-heading strong {\n    color: #f6faf7;\n    font-size: 18px;\n}\n\n.seqfx-empty,\n.seqfx-field small {\n    margin: 0;\n    color: rgba(238, 242, 239, 0.62);\n    font-size: 12px;\n    line-height: 1.45;\n}\n\n.seqfx-field {\n    display: grid;\n    gap: 7px;\n}\n\n.seqfx-field span {\n    display: flex;\n    align-items: center;\n    justify-content: space-between;\n    color: #d9e2dc;\n    font-size: 12px;\n    font-weight: 700;\n}\n\n.seqfx-field em {\n    border: 1px solid rgba(242, 209, 107, 0.4);\n    border-radius: 999px;\n    padding: 2px 6px;\n    color: #f2d16b;\n    font-size: 10px;\n    font-style: normal;\n}\n\n.seqfx-field input,\n.seqfx-field select {\n    width: 100%;\n    min-height: 34px;\n    border: 1px solid rgba(238, 242, 239, 0.14);\n    border-radius: 7px;\n    padding: 6px 9px;\n    color: #eef2ef;\n    background: rgba(21, 24, 22, 0.85);\n}\n\n.seqfx-field input[type="range"] {\n    padding: 0;\n    accent-color: #8bbf9a;\n}\n\n.seqfx-field input:disabled,\n.seqfx-field select:disabled {\n    opacity: 0.55;\n}\n\n.seqfx-field output {\n    color: #eef2ef;\n    font-family: "Geist Mono", Menlo, Monaco, monospace;\n    font-size: 12px;\n}\n\n.seqfx-delete-block {\n    min-height: 34px;\n    border: 1px solid rgba(238, 242, 239, 0.16);\n    border-radius: 7px;\n    color: #eef2ef;\n    background: rgba(255, 255, 255, 0.045);\n    cursor: pointer;\n    transition: transform 140ms ease, background-color 140ms ease, border-color 140ms ease;\n}\n\n.seqfx-delete-block:hover {\n    border-color: rgba(242, 209, 107, 0.5);\n    background: rgba(242, 209, 107, 0.1);\n}\n\n.seqfx-delete-block:active {\n    transform: translateY(1px);\n}\n\n.seqfx-chain {\n    display: grid;\n    grid-template-columns: repeat(5, 1fr);\n    gap: 5px;\n    border-top: 1px solid rgba(238, 242, 239, 0.12);\n    padding-top: 14px;\n}\n\n.seqfx-chain span {\n    border: 1px solid rgba(139, 191, 154, 0.22);\n    border-radius: 6px;\n    padding: 6px 4px;\n    color: #c5d5cb;\n    font-size: 11px;\n    text-align: center;\n}\n\n.seqfx-debug {\n    display: none;\n}\n\n@media (max-width: 980px) {\n    .seqfx-root {\n        padding: 12px;\n    }\n\n    .seqfx-topbar,\n    .seqfx-workspace {\n        grid-template-columns: 1fr;\n    }\n\n    .seqfx-patterns,\n    .seqfx-transport {\n        justify-content: flex-start;\n    }\n\n    .seqfx-inspector {\n        width: 100%;\n    }\n}\n';
 const SEQFX_STATE_KEY = "seqfx.v1";
 const SEQFX_STEP_COUNT = 32;
 const SEQFX_LANE_COUNT = 4;
@@ -12726,6 +12726,11 @@ function clearBlock(pattern, lane, block) {
     pattern.lanes[lane].steps[step] = createDefaultStep(lane);
   }
 }
+function assertBlockFits(startStep, length) {
+  if (startStep + length > SEQFX_STEP_COUNT) {
+    throw new RangeError("SeqFX block target range is outside the valid step range.");
+  }
+}
 function assertBlockRangeAvailable(pattern, lane, startStep, length, ignoreBlock = null) {
   const laneSteps = pattern.lanes[lane].steps;
   for (let step = startStep; step < startStep + length; step += 1) {
@@ -12746,6 +12751,28 @@ function writeBlock(pattern, lane, startStep, length, template) {
       trigger: offset === 0,
       mix: normalizeMix(template.mix),
       params: Array.from({ length: SEQFX_PARAM_COUNT }, (_unused, paramIndex) => normalizeParam(lane, paramIndex, template.params[paramIndex]))
+    };
+  }
+}
+function cloneBlockSteps(pattern, lane, block) {
+  return Array.from({ length: block.length }, (_unused, offset) => {
+    const source = pattern.lanes[lane].steps[block.startStep + offset];
+    return {
+      active: true,
+      trigger: offset === 0,
+      mix: normalizeMix(source.mix),
+      params: Array.from({ length: SEQFX_PARAM_COUNT }, (_unusedParam, paramIndex) => normalizeParam(lane, paramIndex, source.params[paramIndex]))
+    };
+  });
+}
+function writeBlockSteps(pattern, lane, startStep, steps) {
+  for (let offset = 0; offset < steps.length; offset += 1) {
+    const source = steps[offset];
+    pattern.lanes[lane].steps[startStep + offset] = {
+      active: true,
+      trigger: offset === 0,
+      mix: normalizeMix(source.mix),
+      params: Array.from({ length: SEQFX_PARAM_COUNT }, (_unusedParam, paramIndex) => normalizeParam(lane, paramIndex, source.params[paramIndex]))
     };
   }
 }
@@ -12793,6 +12820,39 @@ function applySeqFxBlockResize(state, edit) {
     assertBlockRangeAvailable(pattern, lane, block.startStep, length, block);
     clearBlock(pattern, lane, block);
     writeBlock(pattern, lane, block.startStep, length, template);
+  });
+}
+function applySeqFxBlockMove(state, edit) {
+  return withEditedPattern(state, edit.patternIndex, (pattern) => {
+    const lane = clampIndex(edit.lane, SEQFX_LANE_COUNT, "lane");
+    const requestedStart = clampIndex(edit.startStep, SEQFX_STEP_COUNT, "startStep");
+    const targetStartStep = clampIndex(edit.targetStartStep, SEQFX_STEP_COUNT, "targetStartStep");
+    const block = getBlockForStep(pattern, lane, requestedStart);
+    if (!block) {
+      throw new Error("Cannot move a missing SeqFX block.");
+    }
+    if (targetStartStep === block.startStep) {
+      return;
+    }
+    assertBlockFits(targetStartStep, block.length);
+    const clonedSteps = cloneBlockSteps(pattern, lane, block);
+    clearBlock(pattern, lane, block);
+    assertBlockRangeAvailable(pattern, lane, targetStartStep, block.length);
+    writeBlockSteps(pattern, lane, targetStartStep, clonedSteps);
+  });
+}
+function applySeqFxBlockCopy(state, edit) {
+  return withEditedPattern(state, edit.patternIndex, (pattern) => {
+    const lane = clampIndex(edit.lane, SEQFX_LANE_COUNT, "lane");
+    const requestedStart = clampIndex(edit.startStep, SEQFX_STEP_COUNT, "startStep");
+    const targetStartStep = clampIndex(edit.targetStartStep, SEQFX_STEP_COUNT, "targetStartStep");
+    const block = getBlockForStep(pattern, lane, requestedStart);
+    if (!block) {
+      throw new Error("Cannot copy a missing SeqFX block.");
+    }
+    assertBlockFits(targetStartStep, block.length);
+    assertBlockRangeAvailable(pattern, lane, targetStartStep, block.length);
+    writeBlockSteps(pattern, lane, targetStartStep, cloneBlockSteps(pattern, lane, block));
   });
 }
 function applySeqFxBlockDelete(state, edit) {
@@ -13019,6 +13079,12 @@ class SeqFxRuntimeBridge {
   resizeBlock(edit) {
     this.commitState(applySeqFxBlockResize(this.state, edit), edit.patternIndex);
   }
+  moveBlock(edit) {
+    this.commitState(applySeqFxBlockMove(this.state, edit), edit.patternIndex);
+  }
+  copyBlock(edit) {
+    this.commitState(applySeqFxBlockCopy(this.state, edit), edit.patternIndex);
+  }
   deleteBlock(edit) {
     this.commitState(applySeqFxBlockDelete(this.state, edit), edit.patternIndex);
   }
@@ -13156,6 +13222,9 @@ function getSelectionLabel(selection) {
   }
   return `${SEQFX_LANE_NAMES[selection.lane]} steps ${selection.steps[0] + 1}-${selection.steps.at(-1) + 1}`;
 }
+function clampBlockStart(startStep, length) {
+  return Math.min(SEQFX_STEP_COUNT - length, Math.max(0, startStep));
+}
 function SeqFxPatchView({ patchConnection }) {
   const bridge = reactExports.useMemo(() => new SeqFxRuntimeBridge(patchConnection), [patchConnection]);
   const [state, setState] = reactExports.useState(() => bridge.getState());
@@ -13163,8 +13232,10 @@ function SeqFxPatchView({ patchConnection }) {
   const [selectedCell, setSelectedCell] = reactExports.useState(null);
   const [selection, setSelection] = reactExports.useState(null);
   const [playheadStep, setPlayheadStep] = reactExports.useState(null);
-  const [resizeState, setResizeState] = reactExports.useState(null);
+  const [gestureState, setGestureState] = reactExports.useState(null);
   const laneTrackRefs = reactExports.useRef(/* @__PURE__ */ new Map());
+  const gestureRef = reactExports.useRef(null);
+  const optionKeyRef = reactExports.useRef(false);
   const stateRef = reactExports.useRef(state);
   const selectedPatternRef = reactExports.useRef(selectedPattern);
   stateRef.current = state;
@@ -13187,44 +13258,188 @@ function SeqFxPatchView({ patchConnection }) {
     };
   }, [bridge]);
   reactExports.useEffect(() => {
-    if (!resizeState) {
-      return void 0;
-    }
-    const resizeFromPointer = (event) => {
-      const track = laneTrackRefs.current.get(resizeState.lane);
+    const handleKeyDown = (event) => {
+      if (event.key === "Alt") {
+        optionKeyRef.current = true;
+      }
+    };
+    const handleKeyUp = (event) => {
+      if (event.key === "Alt") {
+        optionKeyRef.current = false;
+      }
+    };
+    const clearOptionKey = () => {
+      optionKeyRef.current = false;
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keyup", handleKeyUp);
+    window.addEventListener("blur", clearOptionKey);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
+      window.removeEventListener("blur", clearOptionKey);
+    };
+  }, []);
+  reactExports.useEffect(() => {
+    const pointerStepForLane = (lane, event) => {
+      const track = laneTrackRefs.current.get(lane);
       if (!track) {
-        return;
+        return null;
       }
       const bounds = track.getBoundingClientRect();
       const cellWidth = bounds.width / SEQFX_STEP_COUNT;
-      const rawStep = Math.floor((event.clientX - bounds.left) / Math.max(1, cellWidth));
-      const endStep = Math.min(SEQFX_STEP_COUNT - 1, Math.max(resizeState.startStep, rawStep));
-      const length = endStep - resizeState.startStep + 1;
+      return Math.min(
+        SEQFX_STEP_COUNT - 1,
+        Math.max(0, Math.floor((event.clientX - bounds.left) / Math.max(1, cellWidth)))
+      );
+    };
+    const selectBlockRange2 = (lane, startStep, length) => {
+      setSelectedCell({ lane, step: startStep });
+      setSelection({
+        lane,
+        steps: Array.from({ length }, (_unused, index) => startStep + index)
+      });
+    };
+    const targetStartFromPointer = (gesture, event) => {
+      const pointerStep = pointerStepForLane(gesture.lane, event);
+      if (pointerStep === null) {
+        return null;
+      }
+      return clampBlockStart(pointerStep - gesture.grabOffset, gesture.length);
+    };
+    const gestureMovedEnough = (gesture, event) => {
+      const deltaX = event.clientX - gesture.pointerStartX;
+      const deltaY = event.clientY - gesture.pointerStartY;
+      return deltaX * deltaX + deltaY * deltaY >= 16;
+    };
+    const handlePointerMove = (event) => {
+      const gesture = gestureRef.current;
+      if (!gesture) {
+        return;
+      }
+      event.preventDefault();
+      if (gesture.mode === "resize") {
+        const rawStep = pointerStepForLane(gesture.lane, event);
+        if (rawStep === null) {
+          return;
+        }
+        const endStep = Math.min(SEQFX_STEP_COUNT - 1, Math.max(gesture.startStep, rawStep));
+        const length = endStep - gesture.startStep + 1;
+        try {
+          bridge.resizeBlock({
+            patternIndex: selectedPatternRef.current,
+            lane: gesture.lane,
+            startStep: gesture.startStep,
+            length
+          });
+          selectBlockRange2(gesture.lane, gesture.startStep, length);
+        } catch {
+        }
+        return;
+      }
+      if (!gesture.hasMoved && !gestureMovedEnough(gesture, event)) {
+        return;
+      }
+      gesture.hasMoved = true;
+      const targetStartStep = targetStartFromPointer(gesture, event);
+      if (targetStartStep === null) {
+        return;
+      }
+      if (gesture.mode === "move") {
+        if (targetStartStep === gesture.lastStartStep) {
+          return;
+        }
+        try {
+          bridge.moveBlock({
+            patternIndex: selectedPatternRef.current,
+            lane: gesture.lane,
+            startStep: gesture.lastStartStep,
+            targetStartStep
+          });
+          gesture.lastStartStep = targetStartStep;
+          selectBlockRange2(gesture.lane, targetStartStep, gesture.length);
+        } catch {
+        }
+        return;
+      }
+      if (targetStartStep === gesture.sourceStartStep || gesture.copiedStarts.has(targetStartStep)) {
+        return;
+      }
       try {
-        bridge.resizeBlock({
+        bridge.copyBlock({
           patternIndex: selectedPatternRef.current,
-          lane: resizeState.lane,
-          startStep: resizeState.startStep,
-          length
+          lane: gesture.lane,
+          startStep: gesture.sourceStartStep,
+          targetStartStep
         });
-        setSelectedCell({ lane: resizeState.lane, step: resizeState.startStep });
-        setSelection({
-          lane: resizeState.lane,
-          steps: Array.from({ length }, (_unused, index) => resizeState.startStep + index)
-        });
+        gesture.copiedStarts.add(targetStartStep);
+        gesture.lastCopiedStartStep = targetStartStep;
+        selectBlockRange2(gesture.lane, targetStartStep, gesture.length);
       } catch {
       }
     };
-    const stopResizing = () => setResizeState(null);
-    window.addEventListener("pointermove", resizeFromPointer);
-    window.addEventListener("pointerup", stopResizing);
-    window.addEventListener("pointercancel", stopResizing);
-    return () => {
-      window.removeEventListener("pointermove", resizeFromPointer);
-      window.removeEventListener("pointerup", stopResizing);
-      window.removeEventListener("pointercancel", stopResizing);
+    const stopGesture = () => {
+      const gesture = gestureRef.current;
+      if (!gesture) {
+        return;
+      }
+      if (gesture.mode === "move" && gesture.hasMoved) {
+        selectBlockRange2(gesture.lane, gesture.lastStartStep, gesture.length);
+      } else if (gesture.mode === "copy" && gesture.hasMoved && gesture.lastCopiedStartStep !== null) {
+        selectBlockRange2(gesture.lane, gesture.lastCopiedStartStep, gesture.length);
+      }
+      gestureRef.current = null;
+      setGestureState(null);
     };
-  }, [bridge, resizeState]);
+    window.addEventListener("pointermove", handlePointerMove, { passive: false });
+    window.addEventListener("pointerup", stopGesture);
+    window.addEventListener("pointercancel", stopGesture);
+    return () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", stopGesture);
+      window.removeEventListener("pointercancel", stopGesture);
+    };
+  }, [bridge]);
+  function beginGesture(gesture) {
+    gestureRef.current = gesture;
+    setGestureState(gesture);
+  }
+  function selectBlockRange(lane, startStep, length) {
+    setSelectedCell({ lane, step: startStep });
+    setSelection({
+      lane,
+      steps: Array.from({ length }, (_unused, index) => startStep + index)
+    });
+  }
+  function pointerGrabOffset(lane, startStep, length, clientX) {
+    const track = laneTrackRefs.current.get(lane);
+    if (!track) {
+      return 0;
+    }
+    const bounds = track.getBoundingClientRect();
+    const cellWidth = bounds.width / SEQFX_STEP_COUNT;
+    const pointerStep = Math.min(
+      SEQFX_STEP_COUNT - 1,
+      Math.max(0, Math.floor((clientX - bounds.left) / Math.max(1, cellWidth)))
+    );
+    return Math.min(length - 1, Math.max(0, pointerStep - startStep));
+  }
+  function deleteBlockAt(lane, step) {
+    const pattern = stateRef.current.patterns[selectedPatternRef.current];
+    const block = getSeqFxBlockAtStep(pattern, lane, step);
+    if (!block) {
+      return;
+    }
+    bridge.deleteBlock({
+      patternIndex: selectedPatternRef.current,
+      lane: block.lane,
+      startStep: block.startStep
+    });
+    setSelectedCell(null);
+    setSelection(null);
+    gestureRef.current = null;
+    setGestureState(null);
+  }
   const selectedPatternState = state.patterns[selectedPattern];
   const activeSelection = selection ?? selectionFromCell(selectedCell);
   const inspectedLane = activeSelection?.lane ?? selectedCell?.lane ?? null;
@@ -13255,17 +13470,52 @@ function SeqFxPatchView({ patchConnection }) {
     setSelection({ lane, steps: [step] });
   }
   function handleBlockPointerDown(event, lane, startStep, length) {
+    if (event.button !== 0) {
+      return;
+    }
     event.stopPropagation();
-    setSelectedCell({ lane, step: startStep });
-    setSelection({
+    selectBlockRange(lane, startStep, length);
+    const grabOffset = pointerGrabOffset(lane, startStep, length, event.clientX);
+    if (event.altKey || event.getModifierState("Alt") || optionKeyRef.current) {
+      beginGesture({
+        mode: "copy",
+        lane,
+        sourceStartStep: startStep,
+        length,
+        grabOffset,
+        pointerStartX: event.clientX,
+        pointerStartY: event.clientY,
+        hasMoved: false,
+        copiedStarts: /* @__PURE__ */ new Set(),
+        lastCopiedStartStep: null
+      });
+      return;
+    }
+    beginGesture({
+      mode: "move",
       lane,
-      steps: Array.from({ length }, (_unused, index) => startStep + index)
+      length,
+      grabOffset,
+      pointerStartX: event.clientX,
+      pointerStartY: event.clientY,
+      hasMoved: false,
+      lastStartStep: startStep
     });
+  }
+  function handleBlockDoubleClick(event, lane, startStep) {
+    event.preventDefault();
+    event.stopPropagation();
+    deleteBlockAt(lane, startStep);
+  }
+  function handleCellDoubleClick(event, lane, step) {
+    event.preventDefault();
+    event.stopPropagation();
+    deleteBlockAt(lane, step);
   }
   function handleResizePointerDown(event, lane, startStep) {
     event.preventDefault();
     event.stopPropagation();
-    setResizeState({ lane, startStep });
+    beginGesture({ mode: "resize", lane, startStep });
   }
   function setMix(value) {
     if (!activeSelection) {
@@ -13321,7 +13571,7 @@ function SeqFxPatchView({ patchConnection }) {
     setSelectedCell(null);
     setSelection(null);
   }
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs("main", { className: "seqfx-root", "data-role": "seqfx-root", children: [
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("main", { className: gestureState ? "seqfx-root is-dragging" : "seqfx-root", "data-role": "seqfx-root", children: [
     /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "seqfx-topbar", "aria-label": "SeqFX transport and pattern controls", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "seqfx-title", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "seqfx-kicker", children: "Cosimo" }),
@@ -13394,6 +13644,7 @@ function SeqFxPatchView({ patchConnection }) {
                         "data-role": "seqfx-cell",
                         "data-lane": lane,
                         "data-step": step,
+                        onDoubleClick: (event) => handleCellDoubleClick(event, lane, step),
                         onPointerDown: (event) => handleCellPointerDown(event, lane, step),
                         style: { gridColumn: step + 1, gridRow: 1 },
                         type: "button",
@@ -13418,6 +13669,7 @@ function SeqFxPatchView({ patchConnection }) {
                         "data-role": "seqfx-block",
                         "data-lane": lane,
                         "data-start": block.startStep,
+                        onDoubleClick: (event) => handleBlockDoubleClick(event, lane, block.startStep),
                         onPointerDown: (event) => handleBlockPointerDown(event, lane, block.startStep, block.length),
                         style: { gridColumn: `${block.startStep + 1} / span ${block.length}`, gridRow: 1 },
                         type: "button",

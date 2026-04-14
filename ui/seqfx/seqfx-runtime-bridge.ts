@@ -2,8 +2,10 @@ import type { PatchConnectionLike } from "../shared/cmajor-react";
 import {
     SEQFX_STATE_KEY,
     applySeqFxBlockCreate,
+    applySeqFxBlockCopy,
     applySeqFxBlockDelete,
     applySeqFxBlockMixEdit,
+    applySeqFxBlockMove,
     applySeqFxBlockParamEdit,
     applySeqFxBlockResize,
     applySeqFxCellToggle,
@@ -14,8 +16,10 @@ import {
     normalizeSeqFxState,
     serializeSeqFxState,
     type SeqFxBlockCreateEdit,
+    type SeqFxBlockCopyEdit,
     type SeqFxBlockDeleteEdit,
     type SeqFxBlockMixEdit,
+    type SeqFxBlockMoveEdit,
     type SeqFxBlockParamEdit,
     type SeqFxBlockResizeEdit,
     type SeqFxCellToggleEdit,
@@ -180,6 +184,14 @@ export class SeqFxRuntimeBridge {
 
     resizeBlock(edit: SeqFxBlockResizeEdit) {
         this.commitState(applySeqFxBlockResize(this.state, edit), edit.patternIndex);
+    }
+
+    moveBlock(edit: SeqFxBlockMoveEdit) {
+        this.commitState(applySeqFxBlockMove(this.state, edit), edit.patternIndex);
+    }
+
+    copyBlock(edit: SeqFxBlockCopyEdit) {
+        this.commitState(applySeqFxBlockCopy(this.state, edit), edit.patternIndex);
     }
 
     deleteBlock(edit: SeqFxBlockDeleteEdit) {

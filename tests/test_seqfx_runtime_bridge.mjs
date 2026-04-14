@@ -184,6 +184,46 @@ test("resizing_selected_pattern_block_persists_and_uploads_continuation_cells_wi
     assert.deepEqual(uploads.at(-1).value.triggerSteps[SEQFX_LANES.tapeStop].slice(4, 8), [true, false, false, false]);
 });
 
+test("moving_and_copying_selected_pattern_blocks_persist_and_upload_complete_patterns", () => {
+    const initialState = createDefaultSeqFxState();
+    const connection = new FakePatchConnection({
+        [SEQFX_STATE_KEY]: serializeSeqFxState(initialState),
+    });
+    const bridge = new SeqFxRuntimeBridge(connection);
+
+    bridge.attach();
+    bridge.requestBootState();
+    connection.events = [];
+    connection.storedWrites = [];
+
+    bridge.createBlock({
+        patternIndex: 0,
+        lane: SEQFX_LANES.stutter,
+        startStep: 1,
+        length: 2,
+    });
+    bridge.moveBlock({
+        patternIndex: 0,
+        lane: SEQFX_LANES.stutter,
+        startStep: 1,
+        targetStartStep: 5,
+    });
+    bridge.copyBlock({
+        patternIndex: 0,
+        lane: SEQFX_LANES.stutter,
+        startStep: 5,
+        targetStartStep: 9,
+    });
+
+    assert.equal(connection.storedWrites.length, 3);
+    const uploads = endpointEvents(connection, SEQFX_ENDPOINTS.patternUpload);
+    assert.deepEqual(uploads.at(-1).value.activeSteps[SEQFX_LANES.stutter].slice(1, 3), [false, false]);
+    assert.deepEqual(uploads.at(-1).value.activeSteps[SEQFX_LANES.stutter].slice(5, 7), [true, true]);
+    assert.deepEqual(uploads.at(-1).value.triggerSteps[SEQFX_LANES.stutter].slice(5, 7), [true, false]);
+    assert.deepEqual(uploads.at(-1).value.activeSteps[SEQFX_LANES.stutter].slice(9, 11), [true, true]);
+    assert.deepEqual(uploads.at(-1).value.triggerSteps[SEQFX_LANES.stutter].slice(9, 11), [true, false]);
+});
+
 test("selecting_a_pattern_sends_pattern_parameter_and_authoritative_upload_for_that_pattern", () => {
     const state = createDefaultSeqFxState();
     const connection = new FakePatchConnection({

@@ -78,6 +78,14 @@ export type SeqFxBlockResizeEdit = SeqFxBlockEditTarget & {
     length: number;
 };
 
+export type SeqFxBlockMoveEdit = SeqFxBlockEditTarget & {
+    targetStartStep: number;
+};
+
+export type SeqFxBlockCopyEdit = SeqFxBlockEditTarget & {
+    targetStartStep: number;
+};
+
 export type SeqFxBlockDeleteEdit = SeqFxBlockEditTarget;
 
 export type SeqFxBlockParamEdit = SeqFxBlockEditTarget & {
@@ -382,6 +390,12 @@ function clearBlock(pattern: SeqFxPattern, lane: number, block: SeqFxBlock): voi
     }
 }
 
+function assertBlockFits(startStep: number, length: number): void {
+    if (startStep + length > SEQFX_STEP_COUNT) {
+        throw new RangeError("SeqFX block target range is outside the valid step range.");
+    }
+}
+
 function assertBlockRangeAvailable(
     pattern: SeqFxPattern,
     lane: number,
@@ -418,6 +432,39 @@ function writeBlock(
             mix: normalizeMix(template.mix),
             params: Array.from({ length: SEQFX_PARAM_COUNT }, (_unused, paramIndex) => (
                 normalizeParam(lane, paramIndex, template.params[paramIndex])
+            )),
+        };
+    }
+}
+
+function cloneBlockSteps(pattern: SeqFxPattern, lane: number, block: SeqFxBlock): SeqFxStep[] {
+    return Array.from({ length: block.length }, (_unused, offset) => {
+        const source = pattern.lanes[lane].steps[block.startStep + offset];
+        return {
+            active: true,
+            trigger: offset === 0,
+            mix: normalizeMix(source.mix),
+            params: Array.from({ length: SEQFX_PARAM_COUNT }, (_unusedParam, paramIndex) => (
+                normalizeParam(lane, paramIndex, source.params[paramIndex])
+            )),
+        };
+    });
+}
+
+function writeBlockSteps(
+    pattern: SeqFxPattern,
+    lane: number,
+    startStep: number,
+    steps: SeqFxStep[],
+): void {
+    for (let offset = 0; offset < steps.length; offset += 1) {
+        const source = steps[offset];
+        pattern.lanes[lane].steps[startStep + offset] = {
+            active: true,
+            trigger: offset === 0,
+            mix: normalizeMix(source.mix),
+            params: Array.from({ length: SEQFX_PARAM_COUNT }, (_unusedParam, paramIndex) => (
+                normalizeParam(lane, paramIndex, source.params[paramIndex])
             )),
         };
     }
@@ -475,6 +522,46 @@ export function applySeqFxBlockResize(state: SeqFxState, edit: SeqFxBlockResizeE
         assertBlockRangeAvailable(pattern, lane, block.startStep, length, block);
         clearBlock(pattern, lane, block);
         writeBlock(pattern, lane, block.startStep, length, template);
+    });
+}
+
+export function applySeqFxBlockMove(state: SeqFxState, edit: SeqFxBlockMoveEdit): SeqFxState {
+    return withEditedPattern(state, edit.patternIndex, (pattern) => {
+        const lane = clampIndex(edit.lane, SEQFX_LANE_COUNT, "lane");
+        const requestedStart = clampIndex(edit.startStep, SEQFX_STEP_COUNT, "startStep");
+        const targetStartStep = clampIndex(edit.targetStartStep, SEQFX_STEP_COUNT, "targetStartStep");
+        const block = getBlockForStep(pattern, lane, requestedStart);
+
+        if (!block) {
+            throw new Error("Cannot move a missing SeqFX block.");
+        }
+
+        if (targetStartStep === block.startStep) {
+            return;
+        }
+
+        assertBlockFits(targetStartStep, block.length);
+        const clonedSteps = cloneBlockSteps(pattern, lane, block);
+        clearBlock(pattern, lane, block);
+        assertBlockRangeAvailable(pattern, lane, targetStartStep, block.length);
+        writeBlockSteps(pattern, lane, targetStartStep, clonedSteps);
+    });
+}
+
+export function applySeqFxBlockCopy(state: SeqFxState, edit: SeqFxBlockCopyEdit): SeqFxState {
+    return withEditedPattern(state, edit.patternIndex, (pattern) => {
+        const lane = clampIndex(edit.lane, SEQFX_LANE_COUNT, "lane");
+        const requestedStart = clampIndex(edit.startStep, SEQFX_STEP_COUNT, "startStep");
+        const targetStartStep = clampIndex(edit.targetStartStep, SEQFX_STEP_COUNT, "targetStartStep");
+        const block = getBlockForStep(pattern, lane, requestedStart);
+
+        if (!block) {
+            throw new Error("Cannot copy a missing SeqFX block.");
+        }
+
+        assertBlockFits(targetStartStep, block.length);
+        assertBlockRangeAvailable(pattern, lane, targetStartStep, block.length);
+        writeBlockSteps(pattern, lane, targetStartStep, cloneBlockSteps(pattern, lane, block));
     });
 }
 
