@@ -46,6 +46,138 @@ contain this fix. They were already compiled against stock CHOC. To use this
 system in a generic loader, rebuild the loader from a Cmajor checkout whose
 `include/choc` points at the patched CHOC fork.
 
+## Migrating The Cosimo Effect Plugins
+
+The standalone effects use two different plugin workflows, and they need to be
+handled separately.
+
+Generated VST3 workflow:
+
+- `ChorusLab` uses `scripts/generate_chorus_lab_plugin.sh`.
+- `OTT Lab` uses `scripts/generate_ott_lab_plugin.sh`.
+- `SeqFX`, on branch `codex/effect-sequencer`, uses
+  `scripts/generate_seqfx_plugin.sh`.
+
+All three generator scripts follow the same dependency pattern:
+
+```bash
+cmajor_source_path="${CMAJOR_SOURCE_PATH:-$cache_root/cmajor-source-$cmajor_version}"
+...
+cmaj generate ... --cmajorIncludePath="$cmajor_source_path/include"
+```
+
+That means the generated plugin builds pick up whichever CHOC lives at:
+
+```text
+$cmajor_source_path/include/choc
+```
+
+To migrate the generated `ChorusLab`, `OTT Lab`, and `SeqFX` VST3s, make their
+shared Cmajor source checkout use the patched CHOC fork, or call each generator
+with `CMAJOR_SOURCE_PATH=/absolute/path/to/patched-cmajor`. Once that is true,
+the existing generated VST3 workflow can stay simple: run the normal generator,
+build the generated JUCE project, and install the dedicated VST3.
+
+Generic JIT loader workflow:
+
+- `scripts/install_chorus_lab_cmajplugin.sh` installs official `CmajPlugin.vst3`
+  from the Cmajor DMG and writes `~/Library/Audio/Plug-Ins/VST3/CmajPlugin.json`
+  pointing at `fx/chorus_lab/ChorusLab.cmajorpatch`.
+- `scripts/install_ott_lab_cmajplugin.sh` does the same for
+  `fx/ott_lab/OttLab.cmajorpatch`.
+- `scripts/install_seqfx_cmajplugin.sh`, on branch `codex/effect-sequencer`,
+  does the same for `fx/seqfx/SeqFx.cmajorpatch`.
+
+Those scripts are good for hot-reloading Cmajor source during development, but
+they currently install the official generic loader, so they do not include the
+patched CHOC keyboard bridge. Migrating this workflow means replacing the DMG
+copy step with a locally built patched `CmajPlugin.vst3`, while keeping the
+`CmajPlugin.json` file-per-effect behavior.
+
+Only one generic `CmajPlugin.json` can be active in the user VST3 folder at a
+time. Installing the Chorus generic loader points `CmajPlugin.vst3` at Chorus;
+installing the OTT generic loader points the same `CmajPlugin.vst3` at OTT;
+installing the SeqFX generic loader points it at SeqFX. That is expected for the
+generic loader workflow.
+
+Use the dedicated generated VST3s when testing final plugin identity, host
+metadata, packaging, signing, and distribution behavior. Use the patched generic
+`CmajPlugin.vst3` when actively editing `.cmajor` DSP source and wanting runtime
+reloads inside the host.
+
+## Building A Patched Generic CmajPlugin.vst3
+
+Cmajor includes the generic loader source. It is not binary-only.
+
+```text
+cmajor/tools/CmajPlugin/Source/cmaj_PatchLoaderPlugin.cpp
+```
+
+That loader:
+
+- includes CHOC through Cmajor's `include/choc` tree;
+- creates a `cmaj::Patch`;
+- calls `patch->setAutoRebuildOnFileChange(true)`;
+- finds a `.cmajorpatch` from sibling JSON, sibling patch, or sibling folder;
+- creates `cmaj::plugin::SinglePatchJITPlugin`, which compiles the patch at
+  runtime and watches source files for changes.
+
+So a patched generic loader is just the normal Cmajor `CmajPlugin.vst3` rebuilt
+from a Cmajor checkout whose `include/choc` points at the patched CHOC fork.
+
+Example build:
+
+```bash
+cmake -S /absolute/path/to/patched-cmajor \
+  -B /absolute/path/to/build-cmajplugin \
+  -DBUILD_PLUGIN=ON \
+  -DBUILD_CMAJ=OFF \
+  -DBUILD_CMAJ_LIB=OFF \
+  -DBUILD_EXAMPLES=OFF \
+  -DJUCE_PATH="$HOME/Library/Caches/cosimo-synth-dev/JUCE" \
+  -DCMAKE_BUILD_TYPE=Release
+
+cmake --build /absolute/path/to/build-cmajplugin \
+  --config Release \
+  --target CmajPlugin_VST3 \
+  -j 8
+```
+
+The built VST3 is expected under:
+
+```text
+/absolute/path/to/build-cmajplugin/tools/CmajPlugin/CmajPlugin_artefacts/Release/VST3/CmajPlugin.vst3
+```
+
+Install that VST3 into:
+
+```text
+~/Library/Audio/Plug-Ins/VST3/CmajPlugin.vst3
+```
+
+Then write the active patch pointer:
+
+```json
+{
+  "location": "/absolute/path/to/repo/fx/ott_lab/OttLab.cmajorpatch"
+}
+```
+
+to:
+
+```text
+~/Library/Audio/Plug-Ins/VST3/CmajPlugin.json
+```
+
+The patched generic loader should keep the same Cmajor hot-reload behavior as
+the official generic loader, because the hot-reload behavior comes from
+`SinglePatchJITPlugin` and `Patch::setAutoRebuildOnFileChange(true)`, not from
+anything unique to the official prebuilt binary.
+
+Do not use the official generic AU loader for Ableton development. The official
+generic VST3 did not reproduce the Ableton WebView knob crash; the official
+generic AU did.
+
 ## Setup
 
 1. Fork CHOC from the exact CHOC commit used by the target Cmajor release.
