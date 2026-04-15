@@ -24,7 +24,7 @@ const {
 class FakePatchConnection {
     constructor(storedState = {}, parameters = {}) {
         this.storedState = { ...storedState };
-        this.parameters = { patternSelect: 0, ...parameters };
+        this.parameters = { patternSelect: 0, rate: 1, ...parameters };
         this.events = [];
         this.storedWrites = [];
         this.requestedParameters = [];
@@ -78,11 +78,13 @@ class FakePatchConnection {
 
     sendEventOrValue(endpointID, value) {
         this.events.push({ endpointID, value });
-        if (endpointID === SEQFX_ENDPOINTS.patternSelect) {
-            this.parameters.patternSelect = value;
-            for (const listener of this.parameterListeners.get(endpointID) ?? []) {
-                listener(value);
-            }
+        this.emitParameter(endpointID, value);
+    }
+
+    emitParameter(endpointID, value) {
+        this.parameters[endpointID] = value;
+        for (const listener of this.parameterListeners.get(endpointID) ?? []) {
+            listener(value);
         }
     }
 
@@ -111,6 +113,7 @@ test("boot_without_saved_seqfx_state_persists_normalized_default_and_uploads_aut
     assert.equal(connection.storedWrites.length, 1);
     assert.equal(connection.storedWrites[0].key, SEQFX_STATE_KEY);
     assert.equal(connection.requestedParameters.includes(SEQFX_ENDPOINTS.patternSelect), true);
+    assert.equal(connection.requestedParameters.includes(SEQFX_ENDPOINTS.rate), true);
 
     const uploads = endpointEvents(connection, SEQFX_ENDPOINTS.patternUpload);
     assert.equal(uploads.length, 1);
@@ -243,4 +246,38 @@ test("selecting_a_pattern_sends_pattern_parameter_and_authoritative_upload_for_t
     assert.deepEqual(patternSelectEvents.map((entry) => entry.value), [4]);
     assert.equal(uploads.at(-1).value.patternIndex, 4);
     assert.equal(uploads.at(-1).value.authoritative, true);
+});
+
+test("rate_parameter_defaults_to_sixteenth_note_grid_and_notifies_snapped_subscribers", () => {
+    const connection = new FakePatchConnection({}, { rate: 1 });
+    const bridge = new SeqFxRuntimeBridge(connection);
+    const observedRates = [];
+
+    assert.equal(bridge.getRateIndex(), 1);
+
+    bridge.attach();
+    const unsubscribe = bridge.subscribeRate((rateIndex) => {
+        observedRates.push(rateIndex);
+    });
+    bridge.requestBootState();
+
+    assert.equal(connection.requestedParameters.includes(SEQFX_ENDPOINTS.rate), true);
+    assert.deepEqual(observedRates, [1]);
+
+    for (const [rawValue, expected] of [
+        [-1, 0],
+        [0.49, 0],
+        [1.5, 2],
+        [2.01, 2],
+        [Number.NaN, 1],
+        [Number.POSITIVE_INFINITY, 2],
+    ]) {
+        connection.emitParameter(SEQFX_ENDPOINTS.rate, rawValue);
+        assert.equal(bridge.getRateIndex(), expected, `rate ${rawValue} should snap to ${expected}`);
+        assert.equal(observedRates.at(-1), expected);
+    }
+
+    unsubscribe();
+    connection.emitParameter(SEQFX_ENDPOINTS.rate, 0);
+    assert.equal(observedRates.at(-1), 2);
 });

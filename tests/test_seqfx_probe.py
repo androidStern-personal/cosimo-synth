@@ -124,6 +124,7 @@ const schedulePath = process.argv[4];
 const outputPath = process.argv[5];
 const numFrames = Number(process.argv[6]);
 const sampleRate = Number(process.argv[7]);
+const monitorPath = process.argv[8];
 const schedule = JSON.parse(fs.readFileSync(schedulePath, "utf8"));
 const inputBuffer = fs.readFileSync(inputPath);
 const input = new Float32Array(
@@ -137,6 +138,7 @@ const input = new Float32Array(
     await patch.initialise(2, sampleRate);
 
     const output = new Float32Array(numFrames * 2);
+    const monitors = [];
     const offsets = Object.keys(schedule).map((value) => Number(value)).sort((a, b) => a - b);
     let cursor = 0;
     let nextOffsetIndex = 0;
@@ -148,9 +150,27 @@ const input = new Float32Array(
             if (kind === "value") {
                 patch[`setInputValue_${endpointID}`](payload, rampFrames ?? 0);
             } else {
-                patch[`sendInputEvent_${endpointID}`](payload);
+                const eventPayload = endpointID === "positionIn"
+                    ? { ...payload, frameIndex: BigInt(payload.frameIndex) }
+                    : payload;
+                patch[`sendInputEvent_${endpointID}`](eventPayload);
             }
         }
+    }
+
+    function captureMonitorEvents(frameOffset) {
+        if (!monitorPath) {
+            return;
+        }
+
+        const count = patch.getOutputEventCount_monitorOut();
+        for (let index = 0; index < count; index += 1) {
+            monitors.push({
+                frame: frameOffset,
+                value: patch.getOutputEvent_monitorOut(index),
+            });
+        }
+        patch.resetOutputEventCount_monitorOut();
     }
 
     while (nextOffsetIndex < offsets.length && offsets[nextOffsetIndex] === 0) {
@@ -179,6 +199,7 @@ const input = new Float32Array(
 
             patch.setInputStreamFrames_audioIn([blockLeft, blockRight], framesThisStep, 0);
             patch.advance(framesThisStep);
+            captureMonitorEvents(cursor + framesThisStep);
 
             const outLeft = new Float32Array(framesThisStep);
             const outRight = new Float32Array(framesThisStep);
@@ -200,6 +221,9 @@ const input = new Float32Array(
     }
 
     fs.writeFileSync(outputPath, Buffer.from(output.buffer, output.byteOffset, output.byteLength));
+    if (monitorPath) {
+        fs.writeFileSync(monitorPath, JSON.stringify(monitors));
+    }
 })().catch((error) => {
     console.error(error?.stack || String(error));
     process.exit(1);
@@ -217,6 +241,15 @@ def _render(
     input_audio: np.ndarray,
     schedule: dict[int, list[list[object]]],
 ) -> np.ndarray:
+    return _render_with_monitor_events(generated_runtime, tmp_path, input_audio, schedule)[0]
+
+
+def _render_with_monitor_events(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+    input_audio: np.ndarray,
+    schedule: dict[int, list[list[object]]],
+) -> tuple[np.ndarray, list[dict[str, object]]]:
     node = _require_tool("node")
     input_audio = np.asarray(input_audio, dtype=np.float32)
     if input_audio.ndim != 2 or input_audio.shape[1] != 2:
@@ -225,6 +258,7 @@ def _render(
     input_path = tmp_path / "input.f32"
     schedule_path = tmp_path / "schedule.json"
     output_path = tmp_path / "output.f32"
+    monitor_path = tmp_path / "monitor.json"
     input_path.write_bytes(input_audio.reshape(-1).tobytes())
     schedule_path.write_text(json.dumps({str(k): v for k, v in schedule.items()}), encoding="utf-8")
 
@@ -238,6 +272,7 @@ def _render(
             str(output_path),
             str(input_audio.shape[0]),
             str(SAMPLE_RATE),
+            str(monitor_path),
         ],
         cwd=PATCH_PATH.parent,
         capture_output=True,
@@ -251,22 +286,33 @@ def _render(
         raise AssertionError(f"node runtime render failed:\n{details}")
 
     output = np.frombuffer(output_path.read_bytes(), dtype=np.float32)
-    return output.reshape((-1, 2)).copy()
+    monitors = json.loads(monitor_path.read_text(encoding="utf-8"))
+    return output.reshape((-1, 2)).copy(), monitors
 
 
-def _base_schedule(upload: dict[str, object], *, global_mix: float = 1.0) -> dict[int, list[list[object]]]:
+def _base_schedule(
+    upload: dict[str, object],
+    *,
+    global_mix: float = 1.0,
+    clock_mode: float = 1.0,
+    manual_bpm: float = 120.0,
+    rate: float = 2.0,
+    swing: float = 0.0,
+    loop_start: float = 0.0,
+    loop_length: float = 32.0,
+) -> dict[int, list[list[object]]]:
     return {
         0: [
             ["event", "patternUpload", upload],
             ["value", "enabled", 1.0, 0],
             ["value", "globalMix", global_mix, 0],
             ["value", "patternSelect", 0.0, 0],
-            ["value", "clockMode", 1.0, 0],
-            ["value", "manualBpm", 120.0, 0],
-            ["value", "rate", 2.0, 0],
-            ["value", "swing", 0.0, 0],
-            ["value", "loopStart", 0.0, 0],
-            ["value", "loopLength", 32.0, 0],
+            ["value", "clockMode", clock_mode, 0],
+            ["value", "manualBpm", manual_bpm, 0],
+            ["value", "rate", rate, 0],
+            ["value", "swing", swing, 0],
+            ["value", "loopStart", loop_start, 0],
+            ["value", "loopLength", loop_length, 0],
             ["event", "internalReset", 1],
             ["event", "internalPlay", 1],
         ]
@@ -287,6 +333,86 @@ def _ramp(frames: int) -> np.ndarray:
 def _zero_crossing_rate(samples: np.ndarray) -> float:
     signs = np.signbit(samples)
     return float(np.count_nonzero(signs[1:] != signs[:-1]) / max(1, samples.size))
+
+
+def _first_monitor_frame_for_step(monitors: list[dict[str, object]], step_index: int) -> int:
+    for monitor in monitors:
+        value = monitor["value"]
+        assert isinstance(value, dict)
+        event = value["event"]
+        assert isinstance(event, dict)
+        if int(event["stepIndex"]) == step_index:
+            return int(monitor["frame"])
+
+    raise AssertionError(f"No monitor event reported step {step_index}; saw {monitors[:8]}")
+
+
+@pytest.mark.parametrize(
+    ("rate_index", "expected_step_frames"),
+    [
+        (0.0, 12_000),
+        (1.0, 6_000),
+        (2.0, 3_000),
+    ],
+)
+def test_internal_clock_rate_labels_match_reported_step_duration(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+    rate_index: float,
+    expected_step_frames: int,
+) -> None:
+    upload = _empty_upload()
+    input_audio = np.zeros((expected_step_frames + 2_800, 2), dtype=np.float32)
+    _output, monitors = _render_with_monitor_events(
+        generated_runtime,
+        tmp_path,
+        input_audio,
+        _base_schedule(upload, rate=rate_index),
+    )
+
+    first_step_one_frame = _first_monitor_frame_for_step(monitors, 1)
+    assert expected_step_frames <= first_step_one_frame <= expected_step_frames + 1_800
+
+
+def test_host_clock_rate_uses_quarter_note_position_for_step_index(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    upload = _empty_upload()
+    input_audio = np.zeros((8_500, 2), dtype=np.float32)
+    schedule = _base_schedule(upload, clock_mode=0.0, rate=1.0)
+    schedule[0].extend([
+        ["event", "tempoIn", {"bpm": 120.0}],
+        ["event", "transportStateIn", {"flags": 1}],
+        ["event", "positionIn", {"frameIndex": 0, "quarterNote": 0.0, "barStartQuarterNote": 0.0}],
+    ])
+    schedule[6_000] = [
+        ["event", "positionIn", {"frameIndex": 6_000, "quarterNote": 0.25, "barStartQuarterNote": 0.0}],
+    ]
+
+    _output, monitors = _render_with_monitor_events(generated_runtime, tmp_path, input_audio, schedule)
+
+    first_step_one_frame = _first_monitor_frame_for_step(monitors, 1)
+    assert 6_000 <= first_step_one_frame <= 7_800
+
+
+def test_swing_changes_reported_step_durations_without_changing_rate_label(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    upload = _empty_upload()
+    input_audio = np.zeros((8_500, 2), dtype=np.float32)
+    _output, monitors = _render_with_monitor_events(
+        generated_runtime,
+        tmp_path,
+        input_audio,
+        _base_schedule(upload, rate=2.0, swing=0.25),
+    )
+
+    first_step_one_frame = _first_monitor_frame_for_step(monitors, 1)
+    first_step_two_frame = _first_monitor_frame_for_step(monitors, 2)
+    assert 2_250 <= first_step_one_frame <= 4_050
+    assert 6_000 <= first_step_two_frame <= 7_800
 
 
 def test_empty_seqfx_pattern_passes_audio_unchanged(

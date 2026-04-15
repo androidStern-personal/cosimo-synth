@@ -7,6 +7,7 @@ class SeqFxHarnessPatchConnection {
     events: Array<{ endpointID: string; value: unknown }> = [];
     parameters: Record<string, unknown> = {
         patternSelect: 0,
+        rate: 1,
     };
 
     private storedStateListeners = new Set<Listener>();
@@ -56,12 +57,13 @@ class SeqFxHarnessPatchConnection {
 
     sendEventOrValue(endpointID: string, value: unknown) {
         this.events.push({ endpointID, value });
+        this.emitParameter(endpointID, value);
+    }
 
-        if (endpointID === "patternSelect") {
-            this.parameters.patternSelect = value;
-            for (const listener of this.parameterListeners.get(endpointID) ?? []) {
-                listener(value);
-            }
+    emitParameter(endpointID: string, value: unknown) {
+        this.parameters[endpointID] = value;
+        for (const listener of this.parameterListeners.get(endpointID) ?? []) {
+            listener(value);
         }
     }
 
@@ -96,6 +98,7 @@ declare global {
             patchConnection: SeqFxHarnessPatchConnection;
             getSnapshot: () => ReturnType<SeqFxHarnessPatchConnection["getSnapshot"]>;
             clearEvents: () => void;
+            emitParameter: (endpointID: string, value: unknown) => void;
             emitMonitor: (stepIndex: number) => void;
         };
     }
@@ -116,6 +119,9 @@ window.__SEQFX_HARNESS__ = {
     getSnapshot: () => patchConnection.getSnapshot(),
     clearEvents: () => {
         patchConnection.events = [];
+    },
+    emitParameter: (endpointID: string, value: unknown) => {
+        patchConnection.emitParameter(endpointID, value);
     },
     emitMonitor: (stepIndex: number) => {
         patchConnection.emitEndpoint("monitorOut", {

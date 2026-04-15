@@ -1,10 +1,15 @@
 import test, { after, before } from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
+import { inflateSync } from "node:zlib";
 
 import { chromium } from "playwright";
 
 const DEV_SERVER_ORIGIN = "http://127.0.0.1:5175";
+const SEQFX_STEP_COUNT = 32;
+const SEQFX_NORMAL_GAP_PX = 5;
+const SEQFX_BEAT_GAP_PX = 9;
+const SEQFX_MIN_CELL_SIZE_PX = 22;
 
 let serverProcess;
 let browser;
@@ -37,6 +42,154 @@ function patternUploads(snapshot) {
     return snapshot.events.filter((entry) => entry.endpointID === "patternUpload");
 }
 
+function gapAfterStep(step, cellsPerBeat) {
+    if (step >= SEQFX_STEP_COUNT - 1) {
+        return 0;
+    }
+
+    return (step + 1) % cellsPerBeat === 0 ? SEQFX_BEAT_GAP_PX : SEQFX_NORMAL_GAP_PX;
+}
+
+function expectedGridGeometry(trackWidth, cellsPerBeat) {
+    const totalGapWidth = Array.from({ length: SEQFX_STEP_COUNT - 1 }, (_unused, step) => (
+        gapAfterStep(step, cellsPerBeat)
+    )).reduce((sum, gap) => sum + gap, 0);
+    const cellSize = Math.max(
+        SEQFX_MIN_CELL_SIZE_PX,
+        Number(((trackWidth - totalGapWidth) / SEQFX_STEP_COUNT).toFixed(4)),
+    );
+    const lefts = [];
+    let cursor = 0;
+
+    for (let step = 0; step < SEQFX_STEP_COUNT; step += 1) {
+        lefts.push(cursor);
+        cursor += cellSize + gapAfterStep(step, cellsPerBeat);
+    }
+
+    return {
+        cellSize,
+        lefts,
+        trackWidth: (cellSize * SEQFX_STEP_COUNT) + totalGapWidth,
+    };
+}
+
+async function boundingBoxForCell(page, lane, step) {
+    const box = await page.locator(`[data-role="seqfx-cell"][data-lane="${lane}"][data-step="${step}"]`).boundingBox();
+    assert.ok(box, `expected lane ${lane} step ${step} to have a bounding box`);
+    return box;
+}
+
+function assertClose(actual, expected, tolerance, message) {
+    assert.ok(
+        Math.abs(actual - expected) <= tolerance,
+        `${message}: expected ${actual} to be within ${tolerance} of ${expected}`,
+    );
+}
+
+function parsePng(buffer) {
+    const signature = buffer.subarray(0, 8);
+    assert.deepEqual([...signature], [137, 80, 78, 71, 13, 10, 26, 10]);
+
+    let offset = 8;
+    let width = 0;
+    let height = 0;
+    let bitDepth = 0;
+    let colorType = 0;
+    const idatChunks = [];
+
+    while (offset < buffer.length) {
+        const length = buffer.readUInt32BE(offset);
+        const type = buffer.toString("ascii", offset + 4, offset + 8);
+        const data = buffer.subarray(offset + 8, offset + 8 + length);
+        offset += 12 + length;
+
+        if (type === "IHDR") {
+            width = data.readUInt32BE(0);
+            height = data.readUInt32BE(4);
+            bitDepth = data[8];
+            colorType = data[9];
+        } else if (type === "IDAT") {
+            idatChunks.push(data);
+        } else if (type === "IEND") {
+            break;
+        }
+    }
+
+    assert.equal(bitDepth, 8);
+    assert.equal(colorType === 6 || colorType === 2, true);
+
+    const inflated = inflateSync(Buffer.concat(idatChunks));
+    const bytesPerPixel = colorType === 6 ? 4 : 3;
+    const stride = width * bytesPerPixel;
+    const pixels = Buffer.alloc(width * height * 4);
+    let sourceOffset = 0;
+
+    for (let y = 0; y < height; y += 1) {
+        const filter = inflated[sourceOffset];
+        sourceOffset += 1;
+        const rowStart = y * stride;
+        const previousRowStart = (y - 1) * stride;
+        const targetRowStart = y * width * 4;
+        const previousTargetRowStart = (y - 1) * width * 4;
+
+        for (let x = 0; x < stride; x += 1) {
+            const raw = inflated[sourceOffset + x];
+            const targetX = Math.floor(x / bytesPerPixel) * 4 + (x % bytesPerPixel);
+            const left = x >= bytesPerPixel ? pixels[targetRowStart + targetX - 4] : 0;
+            const up = y > 0 ? pixels[previousTargetRowStart + targetX] : 0;
+            const upLeft = y > 0 && x >= bytesPerPixel ? pixels[previousTargetRowStart + targetX - 4] : 0;
+            let value;
+
+            if (filter === 0) {
+                value = raw;
+            } else if (filter === 1) {
+                value = raw + left;
+            } else if (filter === 2) {
+                value = raw + up;
+            } else if (filter === 3) {
+                value = raw + Math.floor((left + up) / 2);
+            } else if (filter === 4) {
+                const p = left + up - upLeft;
+                const pa = Math.abs(p - left);
+                const pb = Math.abs(p - up);
+                const pc = Math.abs(p - upLeft);
+                const predictor = pa <= pb && pa <= pc ? left : pb <= pc ? up : upLeft;
+                value = raw + predictor;
+            } else {
+                throw new Error(`Unsupported PNG filter ${filter}`);
+            }
+
+            pixels[targetRowStart + targetX] = value & 255;
+
+            if (bytesPerPixel === 3 && x % bytesPerPixel === 2) {
+                pixels[targetRowStart + targetX + 1] = 255;
+            }
+        }
+
+        sourceOffset += stride;
+    }
+
+    return { width, height, pixels };
+}
+
+function pixelAt(png, x, y) {
+    const clampedX = Math.min(png.width - 1, Math.max(0, Math.round(x)));
+    const clampedY = Math.min(png.height - 1, Math.max(0, Math.round(y)));
+    const offset = ((clampedY * png.width) + clampedX) * 4;
+    return [
+        png.pixels[offset],
+        png.pixels[offset + 1],
+        png.pixels[offset + 2],
+        png.pixels[offset + 3],
+    ];
+}
+
+function colorDistance(left, right) {
+    return Math.abs(left[0] - right[0])
+        + Math.abs(left[1] - right[1])
+        + Math.abs(left[2] - right[2]);
+}
+
 before(async () => {
     serverProcess = spawn("npm", ["run", "seqfx:ui:dev"], {
         cwd: new URL("..", import.meta.url).pathname,
@@ -45,6 +198,125 @@ before(async () => {
 
     await waitForServer();
     browser = await chromium.launch();
+});
+
+test("seqfx_rate_one_grid_uses_beat_gutters_and_per_cell_bar_fill", async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
+    await page.goto(DEV_SERVER_ORIGIN);
+    await page.locator('[data-role="seqfx-root"]').waitFor();
+
+    const trackBox = await page.locator('.seqfx-lane-track').first().boundingBox();
+    assert.ok(trackBox);
+    const expected = expectedGridGeometry(trackBox.width, 4);
+
+    for (const step of [0, 1, 3, 4, 16, 31]) {
+        const box = await boundingBoxForCell(page, 0, step);
+        assertClose(box.x - trackBox.x, expected.lefts[step], 1, `step ${step + 1} x position`);
+        assertClose(box.width, expected.cellSize, 1, `step ${step + 1} width`);
+        assertClose(box.height, expected.cellSize, 1, `step ${step + 1} height`);
+    }
+
+    const step2 = await boundingBoxForCell(page, 0, 1);
+    const step3 = await boundingBoxForCell(page, 0, 2);
+    const step4 = await boundingBoxForCell(page, 0, 3);
+    const step5 = await boundingBoxForCell(page, 0, 4);
+    assertClose(step3.x - (step2.x + step2.width), SEQFX_NORMAL_GAP_PX, 1, "ordinary within-beat gutter");
+    assertClose(step5.x - (step4.x + step4.width), SEQFX_BEAT_GAP_PX, 1, "beat-boundary gutter");
+
+    assert.equal(await page.locator('[data-role="seqfx-cell"][data-lane="0"][data-step="15"]').evaluate((node) => node.classList.contains("is-alt-bar")), false);
+    assert.equal(await page.locator('[data-role="seqfx-cell"][data-lane="0"][data-step="16"]').evaluate((node) => node.classList.contains("is-alt-bar")), true);
+
+    const pseudoDecorations = await page.evaluate(() => (
+        Array.from(document.querySelectorAll(".seqfx-lane-track, .seqfx-step-track")).map((node) => ({
+            before: getComputedStyle(node, "::before").content,
+            after: getComputedStyle(node, "::after").content,
+        }))
+    ));
+    assert.equal(
+        pseudoDecorations.every((entry) => (
+            (entry.before === "none" || entry.before === "\"\"")
+            && (entry.after === "none" || entry.after === "\"\"")
+        )),
+        true,
+    );
+
+    const screenshot = parsePng(await page.screenshot({ type: "png" }));
+    const sampleY = trackBox.y + (expected.cellSize / 2);
+    const evenCell = pixelAt(screenshot, trackBox.x + expected.lefts[0] + (expected.cellSize / 2), sampleY);
+    const oddCell = pixelAt(screenshot, trackBox.x + expected.lefts[16] + (expected.cellSize / 2), sampleY);
+    const barBoundaryGutter = pixelAt(
+        screenshot,
+        trackBox.x + expected.lefts[15] + expected.cellSize + (SEQFX_BEAT_GAP_PX / 2),
+        sampleY,
+    );
+
+    assert.ok(colorDistance(evenCell, oddCell) >= 4, "alternate-bar cell fill should differ from ordinary cell fill");
+    assert.ok(colorDistance(barBoundaryGutter, oddCell) > colorDistance(evenCell, oddCell), "bar-boundary gutter should not use alternate-bar fill");
+
+    await page.close();
+});
+
+test("seqfx_rate_parameter_reflows_grid_without_window_resize", async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
+    await page.goto(DEV_SERVER_ORIGIN);
+    await page.locator('[data-role="seqfx-root"]').waitFor();
+
+    await page.evaluate(() => window.__SEQFX_HARNESS__?.emitParameter("rate", 0));
+    await page.waitForFunction(() => document.querySelector('[data-role="seqfx-cell"][data-lane="0"][data-step="8"]')?.classList.contains("is-alt-bar"));
+
+    let trackBox = await page.locator('.seqfx-lane-track').first().boundingBox();
+    assert.ok(trackBox);
+    let expected = expectedGridGeometry(trackBox.width, 2);
+    let step2 = await boundingBoxForCell(page, 0, 1);
+    let step3 = await boundingBoxForCell(page, 0, 2);
+    assertClose(step3.x - (step2.x + step2.width), SEQFX_BEAT_GAP_PX, 1, "rate 0 beat gutter after two cells");
+    assertClose(step3.x - trackBox.x, expected.lefts[2], 1, "rate 0 reflowed third cell");
+
+    await page.evaluate(() => window.__SEQFX_HARNESS__?.emitParameter("rate", 2));
+    await page.waitForFunction(() => (
+        Array.from(document.querySelectorAll('[data-role="seqfx-cell"].is-alt-bar')).length === 0
+    ));
+
+    trackBox = await page.locator('.seqfx-lane-track').first().boundingBox();
+    assert.ok(trackBox);
+    expected = expectedGridGeometry(trackBox.width, 8);
+    const step8 = await boundingBoxForCell(page, 0, 7);
+    const step9 = await boundingBoxForCell(page, 0, 8);
+    assertClose(step9.x - (step8.x + step8.width), SEQFX_BEAT_GAP_PX, 1, "rate 2 beat gutter after eight cells");
+    assertClose(step9.x - trackBox.x, expected.lefts[8], 1, "rate 2 reflowed ninth cell");
+
+    await page.close();
+});
+
+test("seqfx_rate_change_cancels_an_active_drag_instead_of_remapping_the_pointer", async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
+    await page.goto(DEV_SERVER_ORIGIN);
+    await page.locator('[data-role="seqfx-root"]').waitFor();
+    await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
+
+    await page.getByRole("button", { name: "Filter step 1", exact: true }).click();
+    const block = page.getByRole("button", { name: "Filter block 1", exact: true });
+    await block.waitFor();
+    const blockBox = await block.boundingBox();
+    const targetBox = await page.getByRole("button", { name: "Filter step 8", exact: true }).boundingBox();
+    assert.ok(blockBox);
+    assert.ok(targetBox);
+
+    await page.mouse.move(blockBox.x + blockBox.width / 2, blockBox.y + blockBox.height / 2);
+    await page.mouse.down();
+    await page.evaluate(() => window.__SEQFX_HARNESS__?.emitParameter("rate", 0));
+    await page.mouse.move(targetBox.x + targetBox.width / 2, targetBox.y + targetBox.height / 2, { steps: 8 });
+    await page.mouse.up();
+
+    const snapshot = await getHarnessSnapshot(page);
+    const lastUpload = patternUploads(snapshot).at(-1).value;
+    assert.deepEqual(lastUpload.activeSteps[0].slice(0, 8), [true, false, false, false, false, false, false, false]);
+    await page.getByRole("button", { name: "Filter block 1", exact: true }).waitFor();
+    await assert.rejects(
+        page.getByRole("button", { name: "Filter block 8", exact: true }).waitFor({ timeout: 300 }),
+    );
+
+    await page.close();
 });
 
 after(async () => {
@@ -123,47 +395,47 @@ test("seqfx_right_edge_drag_resizes_a_block_without_retriggering_continuation_st
     await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
 
     const first = page.getByRole("button", { name: "Tape Stop step 1", exact: true });
-    const fourth = page.getByRole("button", { name: "Tape Stop step 4", exact: true });
+    const fifth = page.getByRole("button", { name: "Tape Stop step 5", exact: true });
     await first.click();
 
     const resizeHandle = page.locator('[data-role="seqfx-block-resize"][data-lane="2"][data-start="0"]');
     await resizeHandle.waitFor();
     const handleBox = await resizeHandle.boundingBox();
-    const fourthBox = await fourth.boundingBox();
+    const fifthBox = await fifth.boundingBox();
 
     assert.ok(handleBox);
-    assert.ok(fourthBox);
+    assert.ok(fifthBox);
 
     await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2);
     await page.mouse.down();
-    await page.mouse.move(fourthBox.x + fourthBox.width - 2, fourthBox.y + fourthBox.height / 2, { steps: 8 });
+    await page.mouse.move(fifthBox.x + fifthBox.width - 2, fifthBox.y + fifthBox.height / 2, { steps: 8 });
     await page.mouse.up();
 
     const snapshot = await getHarnessSnapshot(page);
     const lastUpload = patternUploads(snapshot).at(-1).value;
-    assert.deepEqual(lastUpload.activeSteps[2].slice(0, 4), [true, true, true, true]);
-    assert.deepEqual(lastUpload.triggerSteps[2].slice(0, 4), [true, false, false, false]);
+    assert.deepEqual(lastUpload.activeSteps[2].slice(0, 5), [true, true, true, true, true]);
+    assert.deepEqual(lastUpload.triggerSteps[2].slice(0, 5), [true, false, false, false, false]);
     assert.equal(await page.locator('[data-role="seqfx-param"][data-param="0"]').isDisabled(), false);
 
-    const resizedBlockBox = await page.getByRole("button", { name: "Tape Stop block 1-4", exact: true }).boundingBox();
+    const resizedBlockBox = await page.getByRole("button", { name: "Tape Stop block 1-5", exact: true }).boundingBox();
     const firstCellBox = await first.boundingBox();
-    const secondCellBox = await page.getByRole("button", { name: "Tape Stop step 2", exact: true }).boundingBox();
+    const trackBox = await page.locator('[data-role="seqfx-cell"][data-lane="2"][data-step="0"]').locator("xpath=..").boundingBox();
     assert.ok(resizedBlockBox);
     assert.ok(firstCellBox);
-    assert.ok(secondCellBox);
-    const cellGap = secondCellBox.x - (firstCellBox.x + firstCellBox.width);
+    assert.ok(trackBox);
+    const expected = expectedGridGeometry(trackBox.width, 4);
     assert.ok(
         Math.abs(resizedBlockBox.height - firstCellBox.height) <= 1,
         `expected resized block height ${resizedBlockBox.height} to match cell height ${firstCellBox.height}`,
     );
     assert.ok(
-        Math.abs(resizedBlockBox.width - ((firstCellBox.width * 4) + (cellGap * 3))) <= 1,
-        `expected resized block width ${resizedBlockBox.width} to span 4 cells of ${firstCellBox.width} with gap ${cellGap}`,
+        Math.abs(resizedBlockBox.width - ((expected.cellSize * 5) + (SEQFX_NORMAL_GAP_PX * 3) + SEQFX_BEAT_GAP_PX)) <= 1,
+        `expected resized block width ${resizedBlockBox.width} to span 5 cells across a beat gutter`,
     );
 
     await page.locator('[data-role="seqfx-delete-block"]').click();
     const deleteUpload = patternUploads(await getHarnessSnapshot(page)).at(-1).value;
-    assert.deepEqual(deleteUpload.activeSteps[2].slice(0, 4), [false, false, false, false]);
+    assert.deepEqual(deleteUpload.activeSteps[2].slice(0, 5), [false, false, false, false, false]);
 
     await page.close();
 });
@@ -197,13 +469,13 @@ test("seqfx_double_click_deletes_the_clicked_block", async () => {
     await page.locator('[data-role="seqfx-root"]').waitFor();
     await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
 
-    await page.getByRole("button", { name: "Stutter step 2", exact: true }).click();
-    await page.getByRole("button", { name: "Stutter block 2", exact: true }).dblclick();
+    await page.getByRole("button", { name: "Stutter step 5", exact: true }).click();
+    await page.getByRole("button", { name: "Stutter block 5", exact: true }).dblclick();
 
     const snapshot = await getHarnessSnapshot(page);
     const deleteUpload = patternUploads(snapshot).at(-1).value;
-    assert.equal(deleteUpload.activeSteps[3][1], false);
-    assert.equal(deleteUpload.triggerSteps[3][1], false);
+    assert.equal(deleteUpload.activeSteps[3][4], false);
+    assert.equal(deleteUpload.triggerSteps[3][4], false);
     await page.locator('[data-role="seqfx-inspector"]').getByText("Select a cell").waitFor();
 
     await page.close();
@@ -235,9 +507,9 @@ test("seqfx_dragging_block_body_moves_the_block_without_resizing_it", async () =
     assert.ok(movedBlockBox);
     assert.ok(targetCellBox);
 
-    await page.mouse.move(movedBlockBox.x + movedBlockBox.width * 0.35, movedBlockBox.y + movedBlockBox.height / 2);
+    await page.mouse.move(movedBlockBox.x + movedBlockBox.width * 0.15, movedBlockBox.y + movedBlockBox.height / 2);
     await page.mouse.down();
-    await page.mouse.move(targetCellBox.x + targetCellBox.width * 0.35, targetCellBox.y + targetCellBox.height / 2, { steps: 10 });
+    await page.mouse.move(targetCellBox.x + targetCellBox.width * 0.15, targetCellBox.y + targetCellBox.height / 2, { steps: 10 });
     await page.mouse.up();
 
     const snapshot = await getHarnessSnapshot(page);
@@ -260,27 +532,53 @@ test("seqfx_option_drag_copies_a_block_to_each_valid_cell_dragged_over", async (
     const block = page.getByRole("button", { name: "Crusher block 1", exact: true });
     await block.waitFor();
     const blockBox = await block.boundingBox();
-    const fourthCellBox = await page.getByRole("button", { name: "Crusher step 4", exact: true }).boundingBox();
+    const fifthCellBox = await page.getByRole("button", { name: "Crusher step 5", exact: true }).boundingBox();
     assert.ok(blockBox);
-    assert.ok(fourthCellBox);
+    assert.ok(fifthCellBox);
 
     await page.keyboard.down("Alt");
     await page.evaluate(() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "Alt" })));
     await page.mouse.move(blockBox.x + blockBox.width / 2, blockBox.y + blockBox.height / 2);
     await page.mouse.down();
-    await page.mouse.move(fourthCellBox.x + fourthCellBox.width / 2, fourthCellBox.y + fourthCellBox.height / 2, { steps: 12 });
+    await page.mouse.move(fifthCellBox.x + fifthCellBox.width / 2, fifthCellBox.y + fifthCellBox.height / 2, { steps: 12 });
     await page.mouse.up();
     await page.evaluate(() => window.dispatchEvent(new KeyboardEvent("keyup", { key: "Alt" })));
     await page.keyboard.up("Alt");
 
     const snapshot = await getHarnessSnapshot(page);
     const copyUpload = patternUploads(snapshot).at(-1).value;
-    assert.deepEqual(copyUpload.activeSteps[1].slice(0, 4), [true, true, true, true]);
-    assert.deepEqual(copyUpload.triggerSteps[1].slice(0, 4), [true, true, true, true]);
+    assert.deepEqual(copyUpload.activeSteps[1].slice(0, 5), [true, true, true, true, true]);
+    assert.deepEqual(copyUpload.triggerSteps[1].slice(0, 5), [true, true, true, true, true]);
     await page.getByRole("button", { name: "Crusher block 1", exact: true }).waitFor();
     await page.getByRole("button", { name: "Crusher block 2", exact: true }).waitFor();
     await page.getByRole("button", { name: "Crusher block 3", exact: true }).waitFor();
     await page.getByRole("button", { name: "Crusher block 4", exact: true }).waitFor();
+    await page.getByRole("button", { name: "Crusher block 5", exact: true }).waitFor();
+
+    await page.close();
+});
+
+test("seqfx_keyboard_activation_creates_and_selects_grid_blocks", async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
+    await page.goto(DEV_SERVER_ORIGIN);
+    await page.locator('[data-role="seqfx-root"]').waitFor();
+    await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
+
+    const filterStep = page.getByRole("button", { name: "Filter step 5", exact: true });
+    await filterStep.focus();
+    await page.keyboard.press("Enter");
+    await page.getByRole("button", { name: "Filter block 5", exact: true }).waitFor();
+
+    let snapshot = await getHarnessSnapshot(page);
+    assert.equal(patternUploads(snapshot).at(-1).value.activeSteps[0][4], true);
+
+    await page.getByRole("button", { name: "Filter step 9", exact: true }).focus();
+    await page.keyboard.press("Space");
+    await page.getByRole("button", { name: "Filter block 9", exact: true }).waitFor();
+
+    snapshot = await getHarnessSnapshot(page);
+    assert.equal(patternUploads(snapshot).at(-1).value.activeSteps[0][8], true);
+    await page.locator('[data-role="seqfx-inspector"]').getByText("Filter step 9").waitFor();
 
     await page.close();
 });

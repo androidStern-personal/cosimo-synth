@@ -181,6 +181,10 @@ select {
     transition: border-color 120ms ease, background-color 120ms ease, transform 120ms ease;
 }
 
+.seqfx-cell.is-alt-bar {
+    background: rgba(255, 255, 255, 0.085);
+}
+
 .seqfx-cell.is-covered {
     opacity: 0.22;
 }
@@ -192,13 +196,11 @@ select {
     background: transparent;
 }
 
-.seqfx-cell.is-active,
 .seqfx-block {
     border-color: rgba(139, 191, 154, 0.62);
     background: rgba(139, 191, 154, 0.22);
 }
 
-.seqfx-cell.is-active span,
 .seqfx-block-fill {
     background: #8bbf9a;
 }
@@ -269,6 +271,12 @@ select {
 .seqfx-block.is-selected {
     outline: 2px solid #f6faf7;
     outline-offset: 1px;
+}
+
+.seqfx-cell:focus-visible,
+.seqfx-block:focus-visible {
+    outline: 2px solid #f2d16b;
+    outline-offset: 2px;
 }
 
 .seqfx-cell.is-playhead,

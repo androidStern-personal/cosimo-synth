@@ -31,6 +31,7 @@ import {
 export const SEQFX_ENDPOINTS = {
     patternUpload: "patternUpload",
     patternSelect: "patternSelect",
+    rate: "rate",
     monitorOut: "monitorOut",
     internalPlay: "internalPlay",
     internalReset: "internalReset",
@@ -43,6 +44,7 @@ type StoredStateMessage = {
 
 type BridgeListener = (state: SeqFxState) => void;
 type MonitorListener = (value: unknown) => void;
+type RateListener = (rateIndex: number) => void;
 
 function toEchoToken(value: unknown): string {
     return typeof value === "string" ? value : JSON.stringify(value);
@@ -57,11 +59,34 @@ function resolvePatternIndex(value: unknown): number {
     return Math.min(11, Math.max(0, Math.round(numeric)));
 }
 
+function resolveRateIndex(value: unknown): number {
+    const numeric = Number(value);
+    if (Number.isNaN(numeric)) {
+        return 1;
+    }
+
+    if (numeric === Number.POSITIVE_INFINITY) {
+        return 2;
+    }
+
+    if (numeric === Number.NEGATIVE_INFINITY) {
+        return 0;
+    }
+
+    if (!Number.isFinite(numeric)) {
+        return 1;
+    }
+
+    return Math.min(2, Math.max(0, Math.round(numeric)));
+}
+
 export class SeqFxRuntimeBridge {
     private state: SeqFxState = createDefaultSeqFxState();
     private selectedPatternIndex = 0;
+    private rateIndex = 1;
     private readonly stateListeners = new Set<BridgeListener>();
     private readonly monitorListeners = new Set<MonitorListener>();
+    private readonly rateListeners = new Set<RateListener>();
     private readonly pendingStoredEchoes = new Map<string, number>();
     private attached = false;
     private patternSelectResolvedDuringRequest = false;
@@ -87,6 +112,16 @@ export class SeqFxRuntimeBridge {
         this.notifyStateListeners();
     };
 
+    private readonly handleRate = (value: unknown) => {
+        const nextRateIndex = resolveRateIndex(value);
+        if (nextRateIndex === this.rateIndex) {
+            return;
+        }
+
+        this.rateIndex = nextRateIndex;
+        this.notifyRateListeners();
+    };
+
     private readonly handleMonitor = (value: unknown) => {
         for (const listener of this.monitorListeners) {
             listener(value);
@@ -103,6 +138,7 @@ export class SeqFxRuntimeBridge {
         this.attached = true;
         this.patchConnection.addStoredStateValueListener?.(this.handleStoredStateValue);
         this.patchConnection.addParameterListener?.(SEQFX_ENDPOINTS.patternSelect, this.handlePatternSelect);
+        this.patchConnection.addParameterListener?.(SEQFX_ENDPOINTS.rate, this.handleRate);
         this.patchConnection.addEndpointListener?.(SEQFX_ENDPOINTS.monitorOut, this.handleMonitor);
     }
 
@@ -114,6 +150,7 @@ export class SeqFxRuntimeBridge {
         this.attached = false;
         this.patchConnection.removeStoredStateValueListener?.(this.handleStoredStateValue);
         this.patchConnection.removeParameterListener?.(SEQFX_ENDPOINTS.patternSelect, this.handlePatternSelect);
+        this.patchConnection.removeParameterListener?.(SEQFX_ENDPOINTS.rate, this.handleRate);
         this.patchConnection.removeEndpointListener?.(SEQFX_ENDPOINTS.monitorOut, this.handleMonitor);
     }
 
@@ -131,6 +168,7 @@ export class SeqFxRuntimeBridge {
 
         this.patternSelectResolvedDuringRequest = false;
         this.patchConnection.requestParameterValue?.(SEQFX_ENDPOINTS.patternSelect);
+        this.patchConnection.requestParameterValue?.(SEQFX_ENDPOINTS.rate);
 
         if (!this.patternSelectResolvedDuringRequest) {
             this.uploadSelectedPattern(true);
@@ -158,12 +196,25 @@ export class SeqFxRuntimeBridge {
         };
     }
 
+    subscribeRate(listener: RateListener) {
+        this.rateListeners.add(listener);
+        listener(this.rateIndex);
+
+        return () => {
+            this.rateListeners.delete(listener);
+        };
+    }
+
     getState() {
         return this.state;
     }
 
     getSelectedPatternIndex() {
         return this.selectedPatternIndex;
+    }
+
+    getRateIndex() {
+        return this.rateIndex;
     }
 
     selectPattern(patternIndex: number) {
@@ -297,6 +348,12 @@ export class SeqFxRuntimeBridge {
     private notifyStateListeners() {
         for (const listener of this.stateListeners) {
             listener(this.state);
+        }
+    }
+
+    private notifyRateListeners() {
+        for (const listener of this.rateListeners) {
+            listener(this.rateIndex);
         }
     }
 }
