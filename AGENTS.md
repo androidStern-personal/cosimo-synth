@@ -75,7 +75,12 @@
 
 ## Desktop Plugin Keyboard Focus
 
-- In Ableton, Cmajor's `WKWebView` can steal QWERTY Musical Typing input. The working pattern from `ChorusLabFocusProbe` is: deny WebView keyboard focus by default, allow it only during deliberate text entry, never call `resignFirstResponder` on the `WKWebView`, and forward `keyDown:`, `keyUp:`, and `flagsChanged:` to the next native responder when text entry is not active.
+- In Ableton, Cmajor's `WKWebView` can steal QWERTY Musical Typing input. The current viable pattern is a native pending buffer for original `keyDown:`/`keyUp:` `NSEvent` objects plus a document-start JavaScript keyboard router that decides whether ordinary DOM events are claimed by text entry/plugin shortcuts or forwarded to the host.
+- Do not rely on `[NSApp currentEvent]` for JavaScript-requested forwarding. It races with `LeftMouseDragged`, `MouseMoved`, and `Pressure` events during active knob drags.
+- Do not call `resignFirstResponder` on the `WKWebView`; previous Ableton testing showed direct and deferred calls can crash the host.
+- Do not buffer `flagsChanged:` by default. Plugin shortcuts like `Cmd+C` or `Shift+A` should be handled from normal DOM `keydown`/`keyup` events with modifier flags; raw modifier-only native forwarding is unproven and polluted the pending buffer in the probe.
+- Keep native forwarding hidden below a reusable platform adapter. Product UI code should use normal browser keyboard handling and call `event.preventDefault()` when it owns a shortcut; it should not call native host-forwarding APIs.
+- `KEYBOARD_INVESTIGATION.md` is the current learnings document for this issue.
 
 ## Desktop CmajPlugin Ableton Parameter Safety
 
