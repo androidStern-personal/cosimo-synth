@@ -217,6 +217,13 @@ export class SeqFxRuntimeBridge {
         return this.rateIndex;
     }
 
+    replaceStateFromPreset(nextState: SeqFxState) {
+        this.state = normalizeSeqFxState(nextState);
+        this.persistState();
+        this.uploadSelectedPattern(true);
+        this.notifyStateListeners();
+    }
+
     selectPattern(patternIndex: number) {
         const nextPatternIndex = resolvePatternIndex(patternIndex);
         this.selectedPatternIndex = nextPatternIndex;

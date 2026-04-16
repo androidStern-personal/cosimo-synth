@@ -25,6 +25,10 @@ select {
         #151816;
 }
 
+.seqfx-preset-row {
+    margin-bottom: 14px;
+}
+
 .seqfx-topbar {
     display: grid;
     grid-template-columns: minmax(160px, 1fr) auto auto;

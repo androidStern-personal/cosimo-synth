@@ -37,6 +37,17 @@ import {
     serializeModulationState,
 } from "../../ui/shared/modulation";
 import { useStandaloneEffectPresets } from "../../ui/shared/effects/use-standalone-effect-presets";
+import {
+    buildCanonicalPluginStateContract,
+    buildPluginStateContract,
+} from "../../ui/shared/effects/effect-state-contract";
+import {
+    EFFECT_PRESET_V2_KIND,
+    EFFECT_PRESET_V2_SCHEMA_VERSION,
+    type EffectPresetMigration,
+    type EffectPresetV2,
+    type EffectStoredStateAdapter,
+} from "../../ui/shared/effects/effect-preset-v2";
 import type {
     EffectPreset,
     EffectPresetDescriptorRegistry,
@@ -126,6 +137,7 @@ function createStandalonePresetDescriptorRegistry(): EffectPresetDescriptorRegis
                 ottTimePercent: { type: "number", min: 10, max: 1000, defaultValue: 100, clamp: true },
                 ottBandDrive: { type: "number", min: 0, max: 100, defaultValue: 0 },
                 ottEnvelopeMatch: { type: "number", min: 0, max: 100, defaultValue: 0 },
+                envelopeBoostClampDb: { type: "number", min: 0, max: 24, defaultValue: 6 },
             },
         },
     };
@@ -145,6 +157,7 @@ function createStandaloneFactoryPresets(): Record<string, EffectPreset[]> {
                 ottTimePercent: 100,
                 ottBandDrive: 0,
                 ottEnvelopeMatch: 0,
+                envelopeBoostClampDb: 6,
             },
         }, {
             kind: "cosimo.effectPreset",
@@ -158,6 +171,7 @@ function createStandaloneFactoryPresets(): Record<string, EffectPreset[]> {
                 ottTimePercent: 100,
                 ottBandDrive: 12,
                 ottEnvelopeMatch: 38,
+                envelopeBoostClampDb: 6,
             },
         }],
     };
@@ -171,12 +185,42 @@ class StandalonePresetHookPatchConnection implements PatchConnectionLike {
         ottTimePercent: 100,
         ottBandDrive: 0,
         ottEnvelopeMatch: 0,
+        envelopeBoostClampDb: 6,
     };
     events: Array<{ endpointID: string; value: unknown }> = [];
     storedWrites: Array<{ key: string; value: unknown }> = [];
     requestedParameters: string[] = [];
     private storedStateListeners = new Set<(message: unknown) => void>();
     private parameterListeners = new Map<string, Set<(value: unknown) => void>>();
+    private statusListeners = new Set<(status: unknown) => void>();
+
+    addStatusListener(listener: (status: unknown) => void) {
+        this.statusListeners.add(listener);
+    }
+
+    removeStatusListener(listener: (status: unknown) => void) {
+        this.statusListeners.delete(listener);
+    }
+
+    requestStatusUpdate() {
+        const status = {
+            details: {
+                inputs: [
+                    { endpointID: "hostSlot0Guard", purpose: "parameter", annotation: { hidden: true, init: 0, min: 0, max: 1 } },
+                    { endpointID: "ottMix", purpose: "parameter", annotation: { init: 100, min: 0, max: 100 } },
+                    { endpointID: "ottAmount", purpose: "parameter", annotation: { init: 100, min: 0, max: 100 } },
+                    { endpointID: "ottTimePercent", purpose: "parameter", annotation: { init: 100, min: 10, max: 1000 } },
+                    { endpointID: "ottBandDrive", purpose: "parameter", annotation: { init: 0, min: 0, max: 100 } },
+                    { endpointID: "ottEnvelopeMatch", purpose: "parameter", annotation: { init: 0, min: 0, max: 100 } },
+                    { endpointID: "envelopeBoostClampDb", purpose: "parameter", annotation: { init: 6, min: 0, max: 24 } },
+                ],
+            },
+        };
+
+        for (const listener of this.statusListeners) {
+            listener(status);
+        }
+    }
 
     addStoredStateValueListener(listener: (message: unknown) => void) {
         this.storedStateListeners.add(listener);
@@ -240,6 +284,95 @@ class StandalonePresetHookPatchConnection implements PatchConnectionLike {
                 listeners.size,
             ])),
         };
+    }
+}
+
+const statefulHookStatus = {
+    details: {
+        inputs: [
+            { endpointID: "amount", purpose: "parameter", annotation: { init: 0.5, min: 0, max: 1 } },
+        ],
+    },
+};
+
+class StatefulPresetHookPatchConnection implements PatchConnectionLike {
+    storedState: Record<string, unknown> = {};
+    parameterValues: Record<string, EffectPresetValue> = {
+        amount: 0.25,
+    };
+    events: Array<{ endpointID: string; value: unknown }> = [];
+    storedWrites: Array<{ key: string; value: unknown }> = [];
+    requestedParameters: string[] = [];
+    private storedStateListeners = new Set<(message: unknown) => void>();
+    private parameterListeners = new Map<string, Set<(value: unknown) => void>>();
+    private statusListeners = new Set<(status: unknown) => void>();
+
+    addStatusListener(listener: (status: unknown) => void) {
+        this.statusListeners.add(listener);
+    }
+
+    removeStatusListener(listener: (status: unknown) => void) {
+        this.statusListeners.delete(listener);
+    }
+
+    requestStatusUpdate() {
+        for (const listener of this.statusListeners) {
+            listener(statefulHookStatus);
+        }
+    }
+
+    addStoredStateValueListener(listener: (message: unknown) => void) {
+        this.storedStateListeners.add(listener);
+    }
+
+    removeStoredStateValueListener(listener: (message: unknown) => void) {
+        this.storedStateListeners.delete(listener);
+    }
+
+    requestFullStoredState(callback: (state: Record<string, unknown>) => void) {
+        callback({ ...this.storedState });
+    }
+
+    sendStoredStateValue(key: string, value: unknown) {
+        this.storedState[key] = value;
+        this.storedWrites.push({ key, value });
+
+        for (const listener of this.storedStateListeners) {
+            listener({ key, value });
+        }
+    }
+
+    addParameterListener(endpointID: string, listener: (value: unknown) => void) {
+        if (!this.parameterListeners.has(endpointID)) {
+            this.parameterListeners.set(endpointID, new Set());
+        }
+
+        this.parameterListeners.get(endpointID)?.add(listener);
+    }
+
+    removeParameterListener(endpointID: string, listener: (value: unknown) => void) {
+        this.parameterListeners.get(endpointID)?.delete(listener);
+    }
+
+    requestParameterValue(endpointID: string) {
+        this.requestedParameters.push(endpointID);
+
+        if (Object.prototype.hasOwnProperty.call(this.parameterValues, endpointID)) {
+            this.emitParameterValue(endpointID, this.parameterValues[endpointID]);
+        }
+    }
+
+    sendEventOrValue(endpointID: string, value: unknown) {
+        this.events.push({ endpointID, value });
+        this.emitParameterValue(endpointID, value as EffectPresetValue);
+    }
+
+    emitParameterValue(endpointID: string, value: EffectPresetValue) {
+        this.parameterValues[endpointID] = value;
+
+        for (const listener of this.parameterListeners.get(endpointID) ?? []) {
+            listener(value);
+        }
     }
 }
 
@@ -1923,6 +2056,154 @@ export async function installStandaloneEffectPresetHookHarness(target: HTMLEleme
                 storedWrites: cloneValue(patchConnection.storedWrites),
                 requestedParameters: cloneValue(patchConnection.requestedParameters),
                 listenerCounts: patchConnection.getListenerCounts(),
+            };
+        },
+        async unmount() {
+            mounted.unmount();
+            await waitForMicrotask();
+        },
+    };
+
+    await waitForMicrotask();
+}
+
+export async function installStandaloneEffectPresetHookOptionsHarness(target: HTMLElement) {
+    const effectID = "hook-stateful";
+    const patchConnection = new StatefulPresetHookPatchConnection();
+    const adapterApplies: unknown[] = [];
+    const storedStateAdapters: Array<EffectStoredStateAdapter<{ pattern: string }>> = [{
+        key: "hook.matrix.v1",
+        schemaVersion: 1,
+        getContract() {
+            return {
+                key: "hook.matrix.v1",
+                schemaVersion: 1,
+                required: true,
+            };
+        },
+        capture() {
+            return { pattern: "captured" };
+        },
+        normalizeForPreset(value) {
+            if (!value || typeof value !== "object" || Array.isArray(value) || (value as { pattern?: unknown }).pattern !== "ok") {
+                throw new Error("hook matrix state must contain pattern ok.");
+            }
+
+            return { pattern: "ok" };
+        },
+        serializeForPreset(value) {
+            return { pattern: value.pattern };
+        },
+        apply(value) {
+            adapterApplies.push({ pattern: value.pattern });
+        },
+    }];
+    const oldContract = buildCanonicalPluginStateContract({
+        effectID,
+        parameters: [{
+            endpointID: "mix",
+            type: "number",
+            min: 0,
+            max: 1,
+            defaultValue: 0.5,
+        }],
+    });
+    const currentContract = buildPluginStateContract({
+        effectID,
+        status: statefulHookStatus,
+        storedState: storedStateAdapters,
+    });
+    const factoryPreset: EffectPresetV2 = {
+        kind: EFFECT_PRESET_V2_KIND,
+        version: EFFECT_PRESET_V2_SCHEMA_VERSION,
+        effectID,
+        presetID: "hook.old-mix",
+        label: "Old Mix",
+        contract: oldContract,
+        parameters: {
+            mix: 0.75,
+        },
+        storedState: {},
+    };
+    let migrationCallCount = 0;
+    const presetMigrations: EffectPresetMigration[] = [{
+        effectID,
+        fromHash: oldContract.hash,
+        toHash: currentContract.hash,
+        migrate(preset) {
+            migrationCallCount += 1;
+
+            return {
+                ...preset,
+                contract: currentContract,
+                parameters: {
+                    amount: preset.parameters.mix,
+                },
+                storedState: {
+                    "hook.matrix.v1": { pattern: "ok" },
+                },
+            };
+        },
+    }];
+    let latestSnapshot: Record<string, unknown> | null = null;
+    let latestMutations: ReturnType<typeof useStandaloneEffectPresets>["mutations"] | null = null;
+
+    const mounted = mountHarness(target, (root) => {
+        function Harness() {
+            const { state, mutations } = useStandaloneEffectPresets(effectID, {
+                factoryPresets: {
+                    [effectID]: [factoryPreset],
+                },
+                storedStateAdapters,
+                presetMigrations,
+            });
+
+            latestMutations = mutations;
+
+            useEffect(() => {
+                latestSnapshot = {
+                    ready: state.ready,
+                    lastError: state.lastError,
+                    currentContractHash: state.currentContract?.hash ?? null,
+                    currentContractStoredStateKeys: state.currentContract?.storedState.map((entry) => entry.key) ?? [],
+                    presets: state.presets.map((preset) => ({
+                        presetKey: preset.presetKey,
+                        canApply: preset.canApply,
+                        parameters: preset.preset.parameters,
+                        storedState: preset.preset.storedState,
+                        contractHash: preset.preset.contract.hash,
+                    })),
+                };
+            });
+
+            return null;
+        }
+
+        root.render(
+            <PatchConnectionProvider patchConnection={patchConnection}>
+                <Harness />
+            </PatchConnectionProvider>,
+        );
+    });
+
+    window.__COSIMO_DESKTOP_MODULE_HARNESS__ = {
+        async applyMigratedFactory() {
+            if (!latestMutations) {
+                throw new Error("Standalone preset mutations are not available.");
+            }
+
+            const result = latestMutations.applyPreset("factory:hook.old-mix");
+            await waitForMicrotask();
+            return result;
+        },
+        getSnapshot() {
+            return {
+                latest: cloneValue(latestSnapshot),
+                events: cloneValue(patchConnection.events),
+                storedWrites: cloneValue(patchConnection.storedWrites),
+                requestedParameters: cloneValue(patchConnection.requestedParameters),
+                adapterApplies: cloneValue(adapterApplies),
+                migrationCallCount,
             };
         },
         async unmount() {

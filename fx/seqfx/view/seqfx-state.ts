@@ -209,6 +209,41 @@ function normalizeMix(value: number): number {
     return clamp(Number(value), 0, 1);
 }
 
+function assertInRange(value: number, min: number, max: number, label: string) {
+    if (!Number.isFinite(value)) {
+        throw new Error(`${label} must be finite.`);
+    }
+
+    if (value < min || value > max) {
+        throw new Error(`${label} value ${value} is outside ${min} to ${max}.`);
+    }
+}
+
+export function assertSeqFxStateValuesInRange(state: SeqFxState) {
+    state.patterns.forEach((pattern, patternIndex) => {
+        if (!Number.isInteger(pattern.revision) || pattern.revision < 1) {
+            throw new Error(`SeqFX pattern ${patternIndex} revision must be a positive integer.`);
+        }
+
+        pattern.lanes.forEach((lane, laneIndex) => {
+            lane.steps.forEach((step, stepIndex) => {
+                assertInRange(step.mix, 0, 1, `SeqFX pattern ${patternIndex} lane ${laneIndex} step ${stepIndex} mix`);
+
+                step.params.forEach((param, paramIndex) => {
+                    const [min, max] = PARAM_LIMITS[laneIndex]?.[paramIndex] ?? [0, 0];
+                    const label = `SeqFX pattern ${patternIndex} lane ${laneIndex} step ${stepIndex} param ${paramIndex}`;
+
+                    assertInRange(param, min, max, label);
+
+                    if (INTEGER_PARAMS.has(`${laneIndex}:${paramIndex}`) && !Number.isInteger(param)) {
+                        throw new Error(`${label} must be an integer.`);
+                    }
+                });
+            });
+        });
+    });
+}
+
 export function isSeqFxTriggerLatchedParam(lane: number, paramIndex: number): boolean {
     return TRIGGER_LATCHED_PARAMS.has(`${lane}:${paramIndex}`);
 }

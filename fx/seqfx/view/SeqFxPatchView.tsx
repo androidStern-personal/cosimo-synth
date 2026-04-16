@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent, type PointerEvent } from "react";
 
 import type { PatchConnectionLike } from "../../../ui/shared/cmajor-react";
+import { createPresetBar } from "../../../ui/shared/effects/preset-bar";
+import { createStandaloneEffectPresetController } from "../../../ui/shared/effects/standalone-effect-presets";
 import {
     SEQFX_LANES,
     SEQFX_LANE_NAMES,
@@ -11,6 +13,7 @@ import {
     isSeqFxTriggerLatchedParam,
     type SeqFxState,
 } from "./seqfx-state";
+import { createSeqFxPresetStateAdapter } from "./seqfx-preset-adapter";
 import { SEQFX_ENDPOINTS, SeqFxRuntimeBridge } from "./seqfx-runtime-bridge";
 
 type SelectedCell = {
@@ -246,6 +249,46 @@ function getSelectionLabel(selection: Selection | null) {
 
 function clampBlockStart(startStep: number, length: number) {
     return Math.min(SEQFX_STEP_COUNT - length, Math.max(0, startStep));
+}
+
+function SeqFxPresetBarHost({
+    bridge,
+    patchConnection,
+}: {
+    bridge: SeqFxRuntimeBridge;
+    patchConnection: PatchConnectionLike;
+}) {
+    const hostRef = useRef<HTMLDivElement | null>(null);
+    const storedStateAdapter = useMemo(() => createSeqFxPresetStateAdapter({
+        bridge,
+        patchConnection,
+    }), [bridge, patchConnection]);
+    const presetController = useMemo(() => createStandaloneEffectPresetController({
+        effectID: "seqfx",
+        patchConnection,
+        storedStateAdapters: [storedStateAdapter],
+    }), [patchConnection, storedStateAdapter]);
+
+    useEffect(() => {
+        const host = hostRef.current;
+
+        if (!host) {
+            return;
+        }
+
+        const presetBar = createPresetBar();
+        presetBar.controller = presetController;
+        host.replaceChildren(presetBar);
+        presetController.attach();
+
+        return () => {
+            presetController.detach();
+            presetBar.controller = null;
+            presetBar.remove();
+        };
+    }, [presetController]);
+
+    return <div className="seqfx-preset-row" ref={hostRef} />;
 }
 
 export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConnectionLike }) {
@@ -761,6 +804,8 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
 
     return (
         <main className={gestureState ? "seqfx-root is-dragging" : "seqfx-root"} data-role="seqfx-root">
+            <SeqFxPresetBarHost bridge={bridge} patchConnection={patchConnection} />
+
             <section className="seqfx-topbar" aria-label="SeqFX transport and pattern controls">
                 <div className="seqfx-title">
                     <span className="seqfx-kicker">Cosimo</span>

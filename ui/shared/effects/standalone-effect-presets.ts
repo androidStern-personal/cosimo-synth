@@ -1,23 +1,32 @@
 import type { PatchConnectionLike } from "../cmajor-react";
 import {
-    applyEffectPreset,
-    assertNoDuplicateJsonKeys,
-    captureEffectPreset,
-    createActivePresetMetadataFromPreset,
-    EFFECT_PRESET_KIND,
-    EFFECT_PRESET_SCHEMA_VERSION,
-    normalizeEffectPreset,
-    type EffectPreset,
-    type EffectPresetActiveMetadata,
-    type EffectPresetDescriptorRegistry,
-    type EffectPresetState,
-    type EffectPresetValue,
-} from "./effect-preset-schema";
+    buildPluginStateContract,
+    clonePluginStateContract,
+    type EffectParameterContract,
+    type EffectParameterValue,
+    type EffectPluginStateContract,
+} from "./effect-state-contract";
+import {
+    applyEffectPresetV2,
+    captureEffectPresetV2,
+    cloneEffectPresetV2,
+    EFFECT_PRESET_V2_KIND,
+    EFFECT_PRESET_V2_SCHEMA_VERSION,
+    normalizeEffectPresetV2,
+    parseEffectPresetV2Text,
+    type EffectPresetMigration,
+    type EffectPresetV2,
+    type EffectStoredStateAdapter,
+} from "./effect-preset-v2";
 import {
     EFFECT_FACTORY_PRESETS,
-    EFFECT_PRESET_DESCRIPTORS,
 } from "./effect-preset-descriptors";
-import { EffectPresetRuntimeBridge } from "./effect-preset-store";
+import type { EffectPreset } from "./effect-preset-schema";
+import {
+    createActivePresetMetadataFromPresetV2,
+    EffectPresetRuntimeBridgeV2,
+    type EffectPresetStateV2,
+} from "./effect-preset-store-v2";
 
 export type StandaloneEffectPresetSource = "factory" | "user";
 export type StandaloneEffectPresetSourceFilter = "all" | StandaloneEffectPresetSource;
@@ -33,7 +42,7 @@ export type StandaloneEffectPresetListItem = {
     label: string;
     effectID: string;
     source: StandaloneEffectPresetSource;
-    preset: EffectPreset;
+    preset: EffectPresetV2;
     isActive: boolean;
     dirty: boolean;
     canApply: boolean;
@@ -51,12 +60,17 @@ export type StandaloneEffectPresetState = {
     visiblePresets: StandaloneEffectPresetListItem[];
     factoryPresets: StandaloneEffectPresetListItem[];
     userPresets: StandaloneEffectPresetListItem[];
-    activePreset: EffectPresetActiveMetadata | null;
+    activePreset: {
+        presetID: string;
+        label: string;
+        dirty: boolean;
+    } | null;
     activePresetID: string | null;
     activeLabel: string;
     dirty: boolean;
-    currentValues: Record<string, EffectPresetValue>;
+    currentValues: Record<string, EffectParameterValue>;
     missingCurrentValueEndpointIDs: string[];
+    currentContract: EffectPluginStateContract | null;
     lastError: string | null;
 };
 
@@ -70,11 +84,14 @@ export type StandaloneEffectPresetMutationResult<T> = {
     message: string;
 };
 
+export type StandaloneEffectFactoryPreset = EffectPresetV2 | EffectPreset;
+
 export type StandaloneEffectPresetControllerOptions = {
     effectID: string;
     patchConnection: PatchConnectionLike;
-    descriptorRegistry?: EffectPresetDescriptorRegistry;
-    factoryPresets?: Record<string, EffectPreset[]>;
+    factoryPresets?: Record<string, StandaloneEffectFactoryPreset[]>;
+    storedStateAdapters?: EffectStoredStateAdapter[];
+    presetMigrations?: EffectPresetMigration[];
     createPresetID?: (context: {
         effectID: string;
         label: string;
@@ -82,6 +99,9 @@ export type StandaloneEffectPresetControllerOptions = {
     }) => string;
     readClipboardText?: () => string | Promise<string>;
     writeClipboardText?: (text: string) => void | Promise<void>;
+
+    // Kept only so older callers fail by behavior, not by TypeScript shape.
+    descriptorRegistry?: unknown;
 };
 
 export type StandaloneEffectPresetImportOptions = {
@@ -93,24 +113,13 @@ type StandaloneEffectPresetStateListener = (state: StandaloneEffectPresetState) 
 
 type ResolvedPreset = {
     source: StandaloneEffectPresetSource;
-    preset: EffectPreset;
+    preset: EffectPresetV2;
 };
 
 const defaultFilter: StandaloneEffectPresetFilter = {
     query: "",
     source: "all",
 };
-
-function clonePreset(preset: EffectPreset): EffectPreset {
-    return {
-        ...preset,
-        values: { ...preset.values },
-    };
-}
-
-function clonePresets(presets: EffectPreset[]) {
-    return presets.map(clonePreset);
-}
 
 function errorFromUnknown(error: unknown) {
     return error instanceof Error ? error : new Error(String(error));
@@ -131,7 +140,7 @@ function defaultCreatePresetID({
     return `user.${effectID}.${timestamp}-${randomSuffix}${attemptSuffix}`;
 }
 
-function valuesEqual(left: EffectPresetValue | undefined, right: EffectPresetValue) {
+function valuesEqual(left: EffectParameterValue | undefined, right: EffectParameterValue) {
     return Object.is(left, right);
 }
 
@@ -161,37 +170,131 @@ function ensureParameterWriter(patchConnection: PatchConnectionLike, operation: 
     }
 }
 
+function defaultParameterValues(contract: EffectPluginStateContract) {
+    const values: Record<string, EffectParameterValue> = {};
+
+    for (const parameter of contract.parameters) {
+        values[parameter.endpointID] = parameter.defaultValue;
+    }
+
+    return values;
+}
+
+function normalizeRuntimeParameterValue(parameter: EffectParameterContract, value: unknown): EffectParameterValue {
+    if (parameter.type === "boolean") {
+        if (typeof value === "boolean") {
+            return value;
+        }
+
+        if (value === 0 || value === 1) {
+            return value === 1;
+        }
+
+        throw new Error(`${parameter.endpointID} must be a boolean.`);
+    }
+
+    const numericValue = Number(value);
+
+    if (!Number.isFinite(numericValue)) {
+        throw new Error(`${parameter.endpointID} must be a finite number.`);
+    }
+
+    if (parameter.type === "integer" && !Number.isInteger(numericValue)) {
+        throw new Error(`${parameter.endpointID} must be an integer.`);
+    }
+
+    if (typeof parameter.min === "number" && numericValue < parameter.min) {
+        throw new Error(`${parameter.endpointID} value ${numericValue} is below minimum ${parameter.min}.`);
+    }
+
+    if (typeof parameter.max === "number" && numericValue > parameter.max) {
+        throw new Error(`${parameter.endpointID} value ${numericValue} is above maximum ${parameter.max}.`);
+    }
+
+    return numericValue;
+}
+
+function legacyFactoryPresetToV2(
+    preset: EffectPreset,
+    currentContract: EffectPluginStateContract,
+    storedStateAdapters: EffectStoredStateAdapter[],
+) {
+    if (currentContract.storedState.length > 0) {
+        throw new Error(`Factory preset "${preset.presetID}" must be a v2 preset because "${currentContract.effectID}" has non-parameter state.`);
+    }
+
+    return normalizeEffectPresetV2({
+        kind: EFFECT_PRESET_V2_KIND,
+        version: EFFECT_PRESET_V2_SCHEMA_VERSION,
+        effectID: preset.effectID,
+        presetID: preset.presetID,
+        label: preset.label,
+        contract: clonePluginStateContract(currentContract),
+        parameters: {
+            ...defaultParameterValues(currentContract),
+            ...preset.values,
+        },
+        storedState: {},
+    }, { currentContract, storedStateAdapters });
+}
+
+function factoryPresetToV2(
+    preset: StandaloneEffectFactoryPreset,
+    currentContract: EffectPluginStateContract,
+    storedStateAdapters: EffectStoredStateAdapter[],
+    presetMigrations: EffectPresetMigration[],
+) {
+    if (preset.version === EFFECT_PRESET_V2_SCHEMA_VERSION && "parameters" in preset) {
+        return normalizeEffectPresetV2(preset, {
+            currentContract,
+            storedStateAdapters,
+            migrations: presetMigrations,
+        });
+    }
+
+    return legacyFactoryPresetToV2(preset as EffectPreset, currentContract, storedStateAdapters);
+}
+
 export class StandaloneEffectPresetController {
-    private readonly bridge: EffectPresetRuntimeBridge;
-    private readonly descriptorRegistry: EffectPresetDescriptorRegistry;
-    private readonly factoryPresetRegistry: Record<string, EffectPreset[]>;
+    private readonly bridge: EffectPresetRuntimeBridgeV2;
+    private readonly factoryPresetRegistry: Record<string, StandaloneEffectFactoryPreset[]>;
+    private readonly storedStateAdapters: EffectStoredStateAdapter[];
+    private readonly presetMigrations: EffectPresetMigration[];
     private readonly createPresetID: NonNullable<StandaloneEffectPresetControllerOptions["createPresetID"]>;
     private readonly readClipboardText?: StandaloneEffectPresetControllerOptions["readClipboardText"];
     private readonly writeClipboardText?: StandaloneEffectPresetControllerOptions["writeClipboardText"];
     private readonly listeners = new Set<StandaloneEffectPresetStateListener>();
-    private readonly currentValues = new Map<string, EffectPresetValue>();
+    private readonly currentValues = new Map<string, EffectParameterValue>();
     private readonly hydratingEndpointIDs = new Set<string>();
-    private readonly suppressedParameterValues = new Map<string, EffectPresetValue[]>();
+    private readonly suppressedParameterValues = new Map<string, EffectParameterValue[]>();
     private readonly parameterListenerCleanups: Array<() => void> = [];
-    private readonly handleBridgeStateBound: (state: EffectPresetState) => void;
+    private readonly handleBridgeStateBound: (state: EffectPresetStateV2) => void;
+    private readonly handleBridgeErrorBound: (error: Error) => void;
+    private readonly handleStatusBound: (status: unknown) => void;
 
-    private bridgeState: EffectPresetState;
+    private bridgeState: EffectPresetStateV2;
+    private currentContract: EffectPluginStateContract | null = null;
     private filter: StandaloneEffectPresetFilter = { ...defaultFilter };
     private attached = false;
     private ready = false;
     private lastError: string | null = null;
 
     constructor(private readonly options: StandaloneEffectPresetControllerOptions) {
-        this.descriptorRegistry = options.descriptorRegistry ?? EFFECT_PRESET_DESCRIPTORS;
+        if (typeof options.effectID !== "string" || options.effectID.trim().length === 0) {
+            throw new Error("Effect preset controller effectID must be a non-empty string.");
+        }
+
         this.factoryPresetRegistry = options.factoryPresets ?? EFFECT_FACTORY_PRESETS;
+        this.storedStateAdapters = options.storedStateAdapters ?? [];
+        this.presetMigrations = options.presetMigrations ?? [];
         this.createPresetID = options.createPresetID ?? defaultCreatePresetID;
         this.readClipboardText = options.readClipboardText;
         this.writeClipboardText = options.writeClipboardText;
-        this.bridge = new EffectPresetRuntimeBridge(options.patchConnection, this.descriptorRegistry);
+        this.bridge = new EffectPresetRuntimeBridgeV2(options.patchConnection);
         this.bridgeState = this.bridge.getState();
         this.handleBridgeStateBound = this.handleBridgeState.bind(this);
-
-        this.getDescriptor();
+        this.handleBridgeErrorBound = this.handleBridgeError.bind(this);
+        this.handleStatusBound = this.handleStatus.bind(this);
     }
 
     attach() {
@@ -201,10 +304,11 @@ export class StandaloneEffectPresetController {
 
         this.attached = true;
         this.bridge.subscribe(this.handleBridgeStateBound);
+        this.bridge.subscribeErrors(this.handleBridgeErrorBound);
         this.bridge.attach();
         this.bridge.requestBootState();
-        this.attachParameterListeners();
-        this.ready = true;
+        this.options.patchConnection.addStatusListener?.(this.handleStatusBound);
+        this.options.patchConnection.requestStatusUpdate?.();
         this.notify();
     }
 
@@ -213,15 +317,11 @@ export class StandaloneEffectPresetController {
             return;
         }
 
-        for (const cleanup of this.parameterListenerCleanups) {
-            cleanup();
-        }
-
-        this.parameterListenerCleanups.length = 0;
-        this.hydratingEndpointIDs.clear();
-        this.suppressedParameterValues.clear();
+        this.detachParameterListeners();
         this.bridge.unsubscribe(this.handleBridgeStateBound);
+        this.bridge.unsubscribeErrors(this.handleBridgeErrorBound);
         this.bridge.detach();
+        this.options.patchConnection.removeStatusListener?.(this.handleStatusBound);
         this.attached = false;
         this.ready = false;
         this.notify();
@@ -253,6 +353,7 @@ export class StandaloneEffectPresetController {
             dirty: activePreset?.dirty ?? false,
             currentValues: this.getCurrentValuesRecord(),
             missingCurrentValueEndpointIDs: this.getMissingCurrentValueEndpointIDs(),
+            currentContract: this.currentContract ? clonePluginStateContract(this.currentContract) : null,
             lastError: this.lastError,
         };
     }
@@ -296,20 +397,20 @@ export class StandaloneEffectPresetController {
         }, "Current parameter values refreshed.");
     }
 
-    applyPreset(presetKey: string): StandaloneEffectPresetMutationResult<EffectPreset> {
+    applyPreset(presetKey: string): StandaloneEffectPresetMutationResult<EffectPresetV2> {
         return this.runMutation(() => {
             ensureStoredStateWriter(this.options.patchConnection, "apply effect presets");
             ensureParameterWriter(this.options.patchConnection, "apply effect presets");
 
             const { preset } = this.resolvePreset(presetKey);
-            this.bridge.setActivePresetMetadata(this.options.effectID, createActivePresetMetadataFromPreset(preset));
-            this.applyPresetValuesToPatch(preset);
+            const normalizedPreset = this.normalizePresetForCurrentContract(preset);
+            this.commitActivePresetAndApply(normalizedPreset);
 
-            return clonePreset(preset);
+            return cloneEffectPresetV2(normalizedPreset);
         }, "Preset applied.");
     }
 
-    reapplyActivePreset(): StandaloneEffectPresetMutationResult<EffectPreset> {
+    reapplyActivePreset(): StandaloneEffectPresetMutationResult<EffectPresetV2> {
         return this.runMutation(() => {
             const activePreset = this.bridgeState.activePresetByEffect[this.options.effectID];
 
@@ -326,14 +427,14 @@ export class StandaloneEffectPresetController {
                 throw new Error(`Active preset "${activePreset.presetID}" is not available.`);
             }
 
-            this.bridge.setActivePresetMetadata(this.options.effectID, createActivePresetMetadataFromPreset(preset));
-            this.applyPresetValuesToPatch(preset);
+            const normalizedPreset = this.normalizePresetForCurrentContract(preset);
+            this.commitActivePresetAndApply(normalizedPreset);
 
-            return clonePreset(preset);
+            return cloneEffectPresetV2(normalizedPreset);
         }, "Preset reapplied.");
     }
 
-    saveCurrentAsNewPreset(label: string): StandaloneEffectPresetMutationResult<EffectPreset> {
+    saveCurrentAsNewPreset(label: string): StandaloneEffectPresetMutationResult<EffectPresetV2> {
         return this.runMutation(() => {
             ensureStoredStateWriter(this.options.patchConnection, "save effect presets");
 
@@ -342,11 +443,11 @@ export class StandaloneEffectPresetController {
             const preset = this.captureCurrentPreset(presetID, normalizedLabel);
 
             this.bridge.saveUserPreset(preset, { activate: true });
-            return clonePreset(preset);
+            return cloneEffectPresetV2(preset);
         }, "Preset saved.");
     }
 
-    overwriteUserPreset(presetKey: string): StandaloneEffectPresetMutationResult<EffectPreset> {
+    overwriteUserPreset(presetKey: string): StandaloneEffectPresetMutationResult<EffectPresetV2> {
         return this.runMutation(() => {
             ensureStoredStateWriter(this.options.patchConnection, "overwrite effect presets");
 
@@ -359,11 +460,11 @@ export class StandaloneEffectPresetController {
             const nextPreset = this.captureCurrentPreset(preset.presetID, preset.label);
             this.bridge.saveUserPreset(nextPreset, { activate: true });
 
-            return clonePreset(nextPreset);
+            return cloneEffectPresetV2(nextPreset);
         }, "Preset overwritten.");
     }
 
-    renamePreset(presetKey: string, label: string): StandaloneEffectPresetMutationResult<EffectPreset> {
+    renamePreset(presetKey: string, label: string): StandaloneEffectPresetMutationResult<EffectPresetV2> {
         return this.runMutation(() => {
             ensureStoredStateWriter(this.options.patchConnection, "rename effect presets");
 
@@ -373,10 +474,10 @@ export class StandaloneEffectPresetController {
                 throw new Error("Factory presets cannot be renamed.");
             }
 
-            const nextPreset = normalizeEffectPreset({
+            const nextPreset = this.normalizePresetForCurrentContract({
                 ...preset,
                 label: normalizeLabel(label),
-            }, this.descriptorRegistry);
+            });
             const activePreset = this.bridgeState.activePresetByEffect[this.options.effectID];
             const nextActivePreset = activePreset?.presetID === preset.presetID
                 ? { ...activePreset, label: nextPreset.label }
@@ -390,11 +491,11 @@ export class StandaloneEffectPresetController {
                 nextActivePreset,
             );
 
-            return clonePreset(nextPreset);
+            return cloneEffectPresetV2(nextPreset);
         }, "Preset renamed.");
     }
 
-    deletePreset(presetKey: string): StandaloneEffectPresetMutationResult<EffectPreset> {
+    deletePreset(presetKey: string): StandaloneEffectPresetMutationResult<EffectPresetV2> {
         return this.runMutation(() => {
             ensureStoredStateWriter(this.options.patchConnection, "delete effect presets");
 
@@ -413,38 +514,38 @@ export class StandaloneEffectPresetController {
                 nextActivePreset,
             );
 
-            return clonePreset(preset);
+            return cloneEffectPresetV2(preset);
         }, "Preset deleted.");
     }
 
-    duplicatePresetAsUserPreset(presetKey: string, label: string): StandaloneEffectPresetMutationResult<EffectPreset> {
+    duplicatePresetAsUserPreset(presetKey: string, label: string): StandaloneEffectPresetMutationResult<EffectPresetV2> {
         return this.runMutation(() => {
             ensureStoredStateWriter(this.options.patchConnection, "duplicate effect presets");
 
             const { preset } = this.resolvePreset(presetKey);
             const normalizedLabel = normalizeLabel(label);
-            const nextPreset = normalizeEffectPreset({
+            const nextPreset = this.normalizePresetForCurrentContract({
                 ...preset,
                 presetID: this.createUniqueUserPresetID(normalizedLabel),
                 label: normalizedLabel,
-            }, this.descriptorRegistry);
+            });
 
             this.bridge.saveUserPreset(nextPreset);
-            return clonePreset(nextPreset);
+            return cloneEffectPresetV2(nextPreset);
         }, "Preset duplicated.");
     }
 
     exportPresetText(presetKey: string): StandaloneEffectPresetMutationResult<string> {
         return this.runMutation(() => {
             const { preset } = this.resolvePreset(presetKey);
-            return JSON.stringify(preset, null, 2);
+            return JSON.stringify(this.normalizePresetForCurrentContract(preset), null, 2);
         }, "Preset exported.");
     }
 
     importPresetText(
         text: string,
         options: StandaloneEffectPresetImportOptions = {},
-    ): StandaloneEffectPresetMutationResult<EffectPreset> {
+    ): StandaloneEffectPresetMutationResult<EffectPresetV2> {
         return this.runMutation(() => {
             ensureStoredStateWriter(this.options.patchConnection, "import effect presets");
 
@@ -453,13 +554,12 @@ export class StandaloneEffectPresetController {
 
             if (options.applyAfterImport) {
                 ensureParameterWriter(this.options.patchConnection, "import and apply effect presets");
-                this.bridge.saveUserPreset(preset, { activate: true });
-                this.applyPresetValuesToPatch(preset);
+                this.commitImportedPresetAndApply(preset);
             } else {
                 this.bridge.saveUserPreset(preset);
             }
 
-            return clonePreset(preset);
+            return cloneEffectPresetV2(preset);
         }, "Preset imported.");
     }
 
@@ -493,7 +593,7 @@ export class StandaloneEffectPresetController {
 
     async pastePresetFromClipboard(
         options: StandaloneEffectPresetImportOptions = {},
-    ): Promise<StandaloneEffectPresetMutationResult<EffectPreset>> {
+    ): Promise<StandaloneEffectPresetMutationResult<EffectPresetV2>> {
         try {
             const readClipboardText = this.readClipboardText ?? globalThis.navigator?.clipboard?.readText?.bind(globalThis.navigator.clipboard);
 
@@ -508,15 +608,40 @@ export class StandaloneEffectPresetController {
         }
     }
 
-    private handleBridgeState(state: EffectPresetState) {
+    private handleBridgeState(state: EffectPresetStateV2) {
         this.bridgeState = state;
         this.notify();
     }
 
-    private attachParameterListeners() {
-        const endpointIDs = Object.keys(this.getDescriptor().params);
+    private handleBridgeError(error: Error) {
+        this.lastError = error.message;
+        this.notify();
+    }
 
-        for (const endpointID of endpointIDs) {
+    private handleStatus(status: unknown) {
+        const nextContract = buildPluginStateContract({
+            effectID: this.options.effectID,
+            status,
+            storedState: this.storedStateAdapters,
+        });
+
+        if (this.currentContract?.hash === nextContract.hash) {
+            return;
+        }
+
+        this.currentContract = nextContract;
+        this.ready = true;
+        this.currentValues.clear();
+        this.detachParameterListeners();
+        this.attachParameterListeners();
+        this.notify();
+    }
+
+    private attachParameterListeners() {
+        const contract = this.requireCurrentContract();
+
+        for (const parameter of contract.parameters) {
+            const endpointID = parameter.endpointID;
             this.hydratingEndpointIDs.add(endpointID);
 
             const listener = (value: unknown) => this.handleParameterValue(endpointID, value);
@@ -529,18 +654,30 @@ export class StandaloneEffectPresetController {
         this.requestCurrentParameterValues();
     }
 
+    private detachParameterListeners() {
+        for (const cleanup of this.parameterListenerCleanups) {
+            cleanup();
+        }
+
+        this.parameterListenerCleanups.length = 0;
+        this.hydratingEndpointIDs.clear();
+        this.suppressedParameterValues.clear();
+    }
+
     private requestCurrentParameterValues() {
-        for (const endpointID of Object.keys(this.getDescriptor().params)) {
-            this.options.patchConnection.requestParameterValue?.(endpointID);
+        for (const parameter of this.currentContract?.parameters ?? []) {
+            this.options.patchConnection.requestParameterValue?.(parameter.endpointID);
         }
     }
 
     private handleParameterValue(endpointID: string, value: unknown) {
-        let normalizedValue: EffectPresetValue;
+        let normalizedValue: EffectParameterValue;
 
         try {
             normalizedValue = this.normalizeEndpointValue(endpointID, value);
-        } catch {
+        } catch (error) {
+            this.lastError = errorFromUnknown(error).message;
+            this.notify();
             return;
         }
 
@@ -561,26 +698,16 @@ export class StandaloneEffectPresetController {
     }
 
     private normalizeEndpointValue(endpointID: string, value: unknown) {
-        const normalizedPreset = normalizeEffectPreset({
-            kind: EFFECT_PRESET_KIND,
-            version: EFFECT_PRESET_SCHEMA_VERSION,
-            effectID: this.options.effectID,
-            presetID: "current.endpoint",
-            label: "Current Endpoint",
-            values: {
-                [endpointID]: value,
-            },
-        }, this.descriptorRegistry);
-        const normalizedValue = normalizedPreset.values[endpointID];
+        const parameter = this.currentContract?.parameters.find((candidate) => candidate.endpointID === endpointID);
 
-        if (normalizedValue === undefined) {
-            throw new Error(`No normalized value was produced for "${endpointID}".`);
+        if (!parameter) {
+            throw new Error(`Unknown parameter "${endpointID}".`);
         }
 
-        return normalizedValue;
+        return normalizeRuntimeParameterValue(parameter, value);
     }
 
-    private markActivePresetDirtyIfNeeded(endpointID: string, value: EffectPresetValue) {
+    private markActivePresetDirtyIfNeeded(endpointID: string, value: EffectParameterValue) {
         const activePreset = this.bridgeState.activePresetByEffect[this.options.effectID];
 
         if (!activePreset || activePreset.dirty) {
@@ -589,7 +716,7 @@ export class StandaloneEffectPresetController {
 
         const activePresetPayload = this.findPresetByID(activePreset.presetID);
 
-        if (activePresetPayload && valuesEqual(activePresetPayload.values[endpointID], value)) {
+        if (activePresetPayload && valuesEqual(activePresetPayload.parameters[endpointID], value)) {
             return;
         }
 
@@ -599,31 +726,40 @@ export class StandaloneEffectPresetController {
         });
     }
 
-    private getDescriptor() {
-        const descriptor = this.descriptorRegistry[this.options.effectID];
-
-        if (!descriptor) {
-            throw new Error(`Unknown effectID "${this.options.effectID}".`);
+    private requireCurrentContract() {
+        if (!this.currentContract) {
+            throw new Error("Cannot use effect presets until the Cmajor status contract is available.");
         }
 
-        return descriptor;
+        return this.currentContract;
     }
 
     private getFactoryPresets() {
-        return clonePresets(this.factoryPresetRegistry[this.options.effectID] ?? [])
-            .map((preset) => normalizeEffectPreset(preset, this.descriptorRegistry));
+        if (!this.currentContract) {
+            return [];
+        }
+
+        return (this.factoryPresetRegistry[this.options.effectID] ?? []).map((preset) => (
+            factoryPresetToV2(
+                preset,
+                this.currentContract as EffectPluginStateContract,
+                this.storedStateAdapters,
+                this.presetMigrations,
+            )
+        ));
     }
 
     private getUserPresets() {
-        return clonePresets(this.bridgeState.userPresets[this.options.effectID] ?? []);
+        return (this.bridgeState.userPresets[this.options.effectID] ?? []).map(cloneEffectPresetV2);
     }
 
-    private buildPresetItems(source: StandaloneEffectPresetSource, presets: EffectPreset[]) {
+    private buildPresetItems(source: StandaloneEffectPresetSource, presets: EffectPresetV2[]) {
         const activePreset = this.bridgeState.activePresetByEffect[this.options.effectID];
 
         return presets.map((preset): StandaloneEffectPresetListItem => {
             const isActive = activePreset?.presetID === preset.presetID;
             const isUser = source === "user";
+            const canApply = this.canApplyPreset(preset);
 
             return {
                 presetKey: presetKeyFor(source, preset.presetID),
@@ -631,16 +767,29 @@ export class StandaloneEffectPresetController {
                 label: preset.label,
                 effectID: preset.effectID,
                 source,
-                preset: clonePreset(preset),
+                preset: cloneEffectPresetV2(preset),
                 isActive,
                 dirty: Boolean(isActive && activePreset?.dirty),
-                canApply: true,
+                canApply,
                 canRename: isUser,
                 canOverwrite: isUser,
                 canDelete: isUser,
-                canExport: true,
+                canExport: canApply,
             };
         });
+    }
+
+    private canApplyPreset(preset: EffectPresetV2) {
+        if (!this.currentContract) {
+            return false;
+        }
+
+        try {
+            this.normalizePresetForCurrentContract(preset);
+            return true;
+        } catch {
+            return false;
+        }
     }
 
     private presetMatchesFilter(preset: StandaloneEffectPresetListItem) {
@@ -659,11 +808,11 @@ export class StandaloneEffectPresetController {
     }
 
     private getCurrentValuesRecord() {
-        const values: Record<string, EffectPresetValue> = {};
+        const values: Record<string, EffectParameterValue> = {};
 
-        for (const endpointID of Object.keys(this.getDescriptor().params)) {
-            if (this.currentValues.has(endpointID)) {
-                values[endpointID] = this.currentValues.get(endpointID) as EffectPresetValue;
+        for (const parameter of this.currentContract?.parameters ?? []) {
+            if (this.currentValues.has(parameter.endpointID)) {
+                values[parameter.endpointID] = this.currentValues.get(parameter.endpointID) as EffectParameterValue;
             }
         }
 
@@ -671,7 +820,9 @@ export class StandaloneEffectPresetController {
     }
 
     private getMissingCurrentValueEndpointIDs() {
-        return Object.keys(this.getDescriptor().params).filter((endpointID) => !this.currentValues.has(endpointID));
+        return (this.currentContract?.parameters ?? [])
+            .filter((parameter) => !this.currentValues.has(parameter.endpointID))
+            .map((parameter) => parameter.endpointID);
     }
 
     private createUniqueUserPresetID(label: string) {
@@ -695,18 +846,13 @@ export class StandaloneEffectPresetController {
     }
 
     private captureCurrentPreset(presetID: string, label: string) {
-        const missingEndpointIDs = this.getMissingCurrentValueEndpointIDs();
-
-        if (missingEndpointIDs.length > 0) {
-            throw new Error(`Cannot save preset because current values are missing for ${missingEndpointIDs.join(", ")}.`);
-        }
-
-        return captureEffectPreset({
+        return captureEffectPresetV2({
             effectID: this.options.effectID,
             presetID,
             label,
-            currentValues: this.getCurrentValuesRecord(),
-            descriptorRegistry: this.descriptorRegistry,
+            currentContract: this.requireCurrentContract(),
+            currentParameterValues: this.getCurrentValuesRecord(),
+            storedStateAdapters: this.storedStateAdapters,
         });
     }
 
@@ -760,9 +906,8 @@ export class StandaloneEffectPresetController {
             throw new Error("Preset import text must be a string.");
         }
 
-        assertNoDuplicateJsonKeys(text);
-        const parsed = JSON.parse(text);
-        const preset = normalizeEffectPreset(parsed, this.descriptorRegistry);
+        const parsed = parseEffectPresetV2Text(text);
+        const preset = this.normalizePresetForCurrentContract(parsed);
 
         if (preset.effectID !== this.options.effectID) {
             throw new Error(`Cannot import ${preset.effectID} preset into ${this.options.effectID}.`);
@@ -781,7 +926,51 @@ export class StandaloneEffectPresetController {
         }
     }
 
-    private applyPresetValuesToPatch(preset: EffectPreset) {
+    private normalizePresetForCurrentContract(preset: unknown) {
+        return normalizeEffectPresetV2(preset, {
+            currentContract: this.requireCurrentContract(),
+            storedStateAdapters: this.storedStateAdapters,
+            migrations: this.presetMigrations,
+        });
+    }
+
+    private commitActivePresetAndApply(preset: EffectPresetV2) {
+        const previousState = this.bridge.getState();
+
+        this.bridge.setActivePresetMetadata(this.options.effectID, createActivePresetMetadataFromPresetV2(preset));
+
+        try {
+            this.applyPresetValuesToPatch(preset);
+        } catch (error) {
+            this.restoreBridgeStateAfterApplyFailure(previousState, error);
+        }
+    }
+
+    private commitImportedPresetAndApply(preset: EffectPresetV2) {
+        const previousState = this.bridge.getState();
+
+        this.bridge.saveUserPreset(preset, { activate: true });
+
+        try {
+            this.applyPresetValuesToPatch(preset);
+        } catch (error) {
+            this.restoreBridgeStateAfterApplyFailure(previousState, error);
+        }
+    }
+
+    private restoreBridgeStateAfterApplyFailure(previousState: EffectPresetStateV2, originalError: unknown): never {
+        try {
+            this.bridge.replaceState(previousState);
+        } catch (rollbackError) {
+            const original = errorFromUnknown(originalError);
+            const rollback = errorFromUnknown(rollbackError);
+            throw new Error(`${original.message}; failed to restore previous preset metadata: ${rollback.message}`);
+        }
+
+        throw errorFromUnknown(originalError);
+    }
+
+    private applyPresetValuesToPatch(preset: EffectPresetV2) {
         const sendEventOrValue = this.options.patchConnection.sendEventOrValue;
 
         if (typeof sendEventOrValue !== "function") {
@@ -791,14 +980,17 @@ export class StandaloneEffectPresetController {
         this.queueSuppressedPresetValues(preset);
 
         try {
-            applyEffectPreset({
+            applyEffectPresetV2({
                 patchConnection: {
                     sendParameterGestureStart: this.options.patchConnection.sendParameterGestureStart?.bind(this.options.patchConnection),
                     sendEventOrValue: sendEventOrValue.bind(this.options.patchConnection),
                     sendParameterGestureEnd: this.options.patchConnection.sendParameterGestureEnd?.bind(this.options.patchConnection),
+                    sendStoredStateValue: this.options.patchConnection.sendStoredStateValue?.bind(this.options.patchConnection),
                 },
                 preset,
-                descriptorRegistry: this.descriptorRegistry,
+                currentContract: this.requireCurrentContract(),
+                storedStateAdapters: this.storedStateAdapters,
+                migrations: this.presetMigrations,
             });
         } catch (error) {
             this.suppressedParameterValues.clear();
@@ -806,15 +998,15 @@ export class StandaloneEffectPresetController {
         }
     }
 
-    private queueSuppressedPresetValues(preset: EffectPreset) {
-        for (const [endpointID, value] of Object.entries(preset.values)) {
+    private queueSuppressedPresetValues(preset: EffectPresetV2) {
+        for (const [endpointID, value] of Object.entries(preset.parameters)) {
             const queue = this.suppressedParameterValues.get(endpointID) ?? [];
             queue.push(value);
             this.suppressedParameterValues.set(endpointID, queue);
         }
     }
 
-    private consumeSuppressedParameterValue(endpointID: string, value: EffectPresetValue) {
+    private consumeSuppressedParameterValue(endpointID: string, value: EffectParameterValue) {
         const queue = this.suppressedParameterValues.get(endpointID);
 
         if (!queue || queue.length === 0) {

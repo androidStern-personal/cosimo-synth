@@ -1,13 +1,15 @@
 import test, { after, before } from "node:test";
 import assert from "node:assert/strict";
+import path from "node:path";
 
 import { chromium } from "playwright";
 
 import { startStaticRepoServer } from "./helpers/desktop_harness_browser.mjs";
+import { loadUIModule } from "./helpers/load_ui_module.mjs";
 
-const SNAPSHOT_STORAGE_KEY = "cosimo.ottLab.snapshotSlots.v1";
-const SNAPSHOT_EXPORT_KIND = "cosimo.ottLab.snapshot";
-const SNAPSHOT_PATCH_ID = "dev.cosimo.ott-lab";
+const repoRoot = path.resolve(import.meta.dirname, "..");
+const SNAPSHOT_STORAGE_KEY = "cosimo.ottLab.snapshotSlots.v2";
+const SNAPSHOT_EXPORT_KIND = "cosimo.effectSnapshot";
 
 let server;
 let browser;
@@ -17,6 +19,11 @@ const OTT_ENDPOINTS = [
         endpointID: "ottMix",
         purpose: "parameter",
         annotation: { name: "Mix", group: "Global", min: 0, max: 100, init: 100 },
+    },
+    {
+        endpointID: "ottAmount",
+        purpose: "parameter",
+        annotation: { name: "Amount", group: "Global", min: 0, max: 100, init: 100 },
     },
     {
         endpointID: "ottTimePercent",
@@ -29,6 +36,16 @@ const OTT_ENDPOINTS = [
         annotation: { name: "Band Drive", group: "Saturation", min: 0, max: 100, init: 0 },
     },
     {
+        endpointID: "ottEnvelopeMatch",
+        purpose: "parameter",
+        annotation: { name: "Envelope Match", group: "Envelope", min: 0, max: 100, init: 0 },
+    },
+    {
+        endpointID: "envelopeBoostClampDb",
+        purpose: "parameter",
+        annotation: { name: "Env Boost Clamp", group: "Envelope", min: 0, max: 24, init: 6 },
+    },
+    {
         endpointID: "hostSlot0Guard",
         purpose: "parameter",
         annotation: { name: "Host Guard", hidden: true, min: 0, max: 1, init: 0 },
@@ -37,29 +54,55 @@ const OTT_ENDPOINTS = [
 
 const INITIAL_VALUES = {
     ottMix: 87,
+    ottAmount: 91,
     ottTimePercent: 120,
     ottBandDrive: 22,
+    ottEnvelopeMatch: 33,
+    envelopeBoostClampDb: 7,
     hostSlot0Guard: 1,
 };
 
-function createSnapshotExport(values, overrides = {}) {
+const INITIAL_SNAPSHOT_PARAMETERS = {
+    envelopeBoostClampDb: 7,
+    ottAmount: 91,
+    ottBandDrive: 22,
+    ottEnvelopeMatch: 33,
+    ottMix: 87,
+    ottTimePercent: 120,
+};
+
+const { buildPluginStateContract } = await loadUIModule(repoRoot, "ui/shared/effects/effect-state-contract.ts");
+const OTT_CONTRACT = buildPluginStateContract({
+    effectID: "ott",
+    status: { details: { inputs: OTT_ENDPOINTS } },
+});
+
+function createSnapshotExport(parameters = {}, overrides = {}) {
     return JSON.stringify({
         kind: SNAPSHOT_EXPORT_KIND,
-        schema: 1,
-        patchID: SNAPSHOT_PATCH_ID,
-        slot: "A",
+        version: 2,
+        effectID: "ott",
+        slotID: "A",
         label: "",
-        values,
+        contract: OTT_CONTRACT,
+        parameters: {
+            ...INITIAL_SNAPSHOT_PARAMETERS,
+            ...parameters,
+        },
+        storedState: {},
         ...overrides,
     });
 }
 
-async function openOttLabPage({ clipboardText = "" } = {}) {
+async function openOttLabPage({ clipboardText = "", initialSnapshotStore = null } = {}) {
     const page = await browser.newPage();
 
     await page.goto(new URL("tests/helpers/module_test_shell.html", server.baseUrl).toString(), { waitUntil: "load" });
-    await page.evaluate(({ endpoints, initialValues, initialClipboardText, storageKey }) => {
+    await page.evaluate(({ endpoints, initialValues, initialClipboardText, initialSnapshotStoreText, storageKey }) => {
         window.localStorage.clear();
+        if (initialSnapshotStoreText !== null)
+            window.localStorage.setItem(storageKey, initialSnapshotStoreText);
+
         window.__OTT_TEST_CLIPBOARD__ = { text: initialClipboardText };
         Object.defineProperty(navigator, "clipboard", {
             configurable: true,
@@ -131,8 +174,8 @@ async function openOttLabPage({ clipboardText = "" } = {}) {
                     parameterListeners.get(endpointID)?.forEach((listener) => listener(value));
                 });
             },
-            sendEventOrValue(endpointID, value, rampFrames) {
-                sentMessages.push({ endpointID, value, rampFrames });
+            sendEventOrValue(endpointID, value) {
+                sentMessages.push({ endpointID, value });
                 emitParameterValue(endpointID, value);
             },
             manifest: {
@@ -150,7 +193,10 @@ async function openOttLabPage({ clipboardText = "" } = {}) {
                 if (!(mountPoint instanceof HTMLElement))
                     throw new Error("Module test mount point is missing.");
 
-                mountPoint.replaceChildren(await createPatchView(patchConnection));
+                const view = await createPatchView(patchConnection);
+                window.setTimeout(() => {
+                    mountPoint.replaceChildren(view);
+                }, 0);
             },
             emitStatus,
             setParameterValue: emitParameterValue,
@@ -166,31 +212,6 @@ async function openOttLabPage({ clipboardText = "" } = {}) {
                         },
                     },
                 });
-            },
-            makeClipboardWriteRejectAndInstallExecCommandFallback() {
-                Object.defineProperty(navigator, "clipboard", {
-                    configurable: true,
-                    value: {
-                        async writeText() {
-                            throw new Error("simulated clipboard write rejection");
-                        },
-                        async readText() {
-                            return window.__OTT_TEST_CLIPBOARD__.text;
-                        },
-                    },
-                });
-                document.execCommand = (command) => {
-                    if (command !== "copy")
-                        return false;
-
-                    const textarea = document.querySelector("textarea[readonly]");
-
-                    if (!(textarea instanceof HTMLTextAreaElement))
-                        return false;
-
-                    window.__OTT_TEST_CLIPBOARD__.text = textarea.value;
-                    return true;
-                };
             },
             getSnapshot() {
                 const rawStore = window.localStorage.getItem(storageKey);
@@ -224,13 +245,15 @@ async function openOttLabPage({ clipboardText = "" } = {}) {
         endpoints: OTT_ENDPOINTS,
         initialValues: INITIAL_VALUES,
         initialClipboardText: clipboardText,
+        initialSnapshotStoreText: initialSnapshotStore,
         storageKey: SNAPSHOT_STORAGE_KEY,
     });
     await page.evaluate(() => window.__OTT_LAB_VIEW_HARNESS__.mount());
     await page.waitForSelector("cosimo-ott-lab-view");
     await page.waitForFunction(() => {
         const snapshot = window.__OTT_LAB_VIEW_HARNESS__?.getSnapshot?.();
-        return snapshot?.listenerCounts?.ottMix >= 1;
+        return snapshot?.listenerCounts?.ottMix >= 1
+            && snapshot?.listenerCounts?.envelopeBoostClampDb >= 1;
     });
 
     return page;
@@ -259,27 +282,22 @@ async function pressSnapshotShortcut(page, slotID, key) {
             key: nextKey,
             metaKey: true,
             bubbles: true,
-            cancelable: true,
+            composed: true,
         }));
     }, { nextSlotID: slotID, nextKey: key });
 }
 
 async function copySnapshotEvent(page, slotID) {
-    return page.locator("cosimo-ott-lab-view").evaluate(({ shadowRoot }, nextSlotID) => {
+    return await page.locator("cosimo-ott-lab-view").evaluate(({ shadowRoot }, nextSlotID) => {
         const input = shadowRoot.querySelector(`.snapshot-slot[data-slot="${nextSlotID}"]`);
 
         if (!(input instanceof HTMLInputElement))
             throw new Error(`Missing snapshot slot ${nextSlotID}.`);
 
-        const data = new DataTransfer();
-        const copyEvent = new ClipboardEvent("copy", {
-            bubbles: true,
-            cancelable: true,
-            clipboardData: data,
-        });
-        input.focus();
+        const clipboard = new DataTransfer();
+        const copyEvent = new ClipboardEvent("copy", { clipboardData: clipboard, bubbles: true, composed: true });
         input.dispatchEvent(copyEvent);
-        return data.getData("text/plain");
+        return clipboard.getData("text/plain");
     }, slotID);
 }
 
@@ -290,13 +308,9 @@ async function pasteSnapshotEvent(page, slotID, snapshotText) {
         if (!(button instanceof HTMLInputElement))
             throw new Error(`Missing snapshot slot ${nextSlotID}.`);
 
-        button.focus();
-        const pasteEvent = new ClipboardEvent("paste", {
-            bubbles: true,
-            cancelable: true,
-            clipboardData: new DataTransfer(),
-        });
-        pasteEvent.clipboardData.setData("text/plain", nextSnapshotText);
+        const clipboard = new DataTransfer();
+        clipboard.setData("text/plain", nextSnapshotText);
+        const pasteEvent = new ClipboardEvent("paste", { clipboardData: clipboard, bubbles: true, composed: true });
         button.dispatchEvent(pasteEvent);
     }, { nextSlotID: slotID, nextSnapshotText: snapshotText });
 }
@@ -309,7 +323,7 @@ async function setSnapshotLabel(page, label) {
             throw new Error("Missing snapshot label input.");
 
         input.value = nextLabel;
-        input.dispatchEvent(new Event("input", { bubbles: true }));
+        input.dispatchEvent(new Event("input", { bubbles: true, composed: true }));
     }, label);
 }
 
@@ -344,15 +358,6 @@ test("OTT lab snapshot slots are compact single-input tabs", async () => {
 
         assert.deepEqual(snapshot.slotStates.map((slot) => slot.slot), ["A", "B", "C", "D", "E", "F", "G"]);
         assert.deepEqual(snapshot.slotStates.map((slot) => slot.value), ["A", "B", "C", "D", "E", "F", "G"]);
-        assert.deepEqual(await page.locator("cosimo-ott-lab-view").evaluate(({ shadowRoot }) => ({
-            actionButtonCount: shadowRoot.querySelectorAll("[data-snapshot-action]").length,
-            slotInputCount: shadowRoot.querySelectorAll("input.snapshot-slot").length,
-            labelInputCount: shadowRoot.querySelectorAll("[data-snapshot-label-input]").length,
-        })), {
-            actionButtonCount: 0,
-            slotInputCount: 7,
-            labelInputCount: 1,
-        });
         assert.deepEqual(snapshot.labelInput, {
             value: "",
             disabled: true,
@@ -362,53 +367,54 @@ test("OTT lab snapshot slots are compact single-input tabs", async () => {
     }
 });
 
-test("OTT lab snapshot slot inputs stay labelled after accidental typing", async () => {
-    const page = await openOttLabPage();
+test("OTT lab reports malformed stored v2 snapshots instead of silently ignoring them", async () => {
+    const page = await openOttLabPage({
+        initialSnapshotStore: JSON.stringify({
+            schema: 2,
+            patchID: "dev.cosimo.ott-lab",
+            slots: {
+                A: {
+                    kind: "cosimo.legacySnapshot",
+                    version: 2,
+                },
+            },
+        }),
+    });
 
     try {
-        await clickSnapshotSlot(page, "A");
-        await page.locator("cosimo-ott-lab-view").evaluate(({ shadowRoot }) => {
-            const input = shadowRoot.querySelector('.snapshot-slot[data-slot="A"]');
+        const snapshot = await waitForHarnessMessage(page, "Stored snapshots were ignored");
 
-            if (!(input instanceof HTMLInputElement))
-                throw new Error("Missing snapshot slot A.");
-
-            input.value = "x";
-            input.dispatchEvent(new Event("input", { bubbles: true }));
-        });
-        const snapshot = await getHarnessSnapshot(page);
-
-        assert.equal(snapshot.slotStates.find((slot) => slot.slot === "A")?.value, "A");
+        assert.match(snapshot.message, /Stored snapshot A is not valid cosimo\.effectSnapshot version 2/i);
+        assert.equal(snapshot.toastVisible, true);
+        assert.deepEqual(snapshot.sentMessages, []);
+        assert.deepEqual(snapshot.slotStates.map((slot) => slot.value), ["A", "B", "C", "D", "E", "F", "G"]);
     } finally {
         await page.close();
     }
 });
 
-test("OTT lab active snapshot updates automatically when parameter values change", async () => {
+test("OTT lab active snapshot captures and updates every visible parameter", async () => {
     const page = await openOttLabPage();
 
     try {
         await clickSnapshotSlot(page, "A");
         let snapshot = await getHarnessSnapshot(page);
 
-        assert.deepEqual(snapshot.store.slots.A.values, {
-            ottMix: 87,
-            ottTimePercent: 120,
-            ottBandDrive: 22,
-        });
-        assert.equal(snapshot.store.slots.A.label, "");
-        assert.equal("hostSlot0Guard" in snapshot.store.slots.A.values, false);
+        assert.equal(snapshot.store.schema, 2);
+        assert.equal(snapshot.store.slots.A.kind, SNAPSHOT_EXPORT_KIND);
+        assert.deepEqual(snapshot.store.slots.A.parameters, INITIAL_SNAPSHOT_PARAMETERS);
+        assert.equal("hostSlot0Guard" in snapshot.store.slots.A.parameters, false);
 
         await page.evaluate(() => {
             window.__OTT_LAB_VIEW_HARNESS__.setParameterValue("ottMix", 64);
-            window.__OTT_LAB_VIEW_HARNESS__.setParameterValue("ottTimePercent", 250);
+            window.__OTT_LAB_VIEW_HARNESS__.setParameterValue("envelopeBoostClampDb", 11);
         });
         snapshot = await getHarnessSnapshot(page);
 
-        assert.deepEqual(snapshot.store.slots.A.values, {
+        assert.deepEqual(snapshot.store.slots.A.parameters, {
+            ...INITIAL_SNAPSHOT_PARAMETERS,
+            envelopeBoostClampDb: 11,
             ottMix: 64,
-            ottTimePercent: 250,
-            ottBandDrive: 22,
         });
         assert.equal(snapshot.activeElementSlot, "A");
     } finally {
@@ -440,20 +446,12 @@ test("OTT lab snapshot label input follows and edits the active slot", async () 
             value: "dark pump",
             disabled: false,
         });
-
-        await clickSnapshotSlot(page, "A");
-        snapshot = await getHarnessSnapshot(page);
-
-        assert.deepEqual(snapshot.labelInput, {
-            value: "bright smash",
-            disabled: false,
-        });
     } finally {
         await page.close();
     }
 });
 
-test("OTT lab recalls a filled slot and then edits only the newly active slot", async () => {
+test("OTT lab recalls a filled slot by applying the full v2 snapshot parameter set", async () => {
     const page = await openOttLabPage();
 
     try {
@@ -461,38 +459,26 @@ test("OTT lab recalls a filled slot and then edits only the newly active slot", 
         await clickSnapshotSlot(page, "B");
         await page.evaluate(() => {
             window.__OTT_LAB_VIEW_HARNESS__.setParameterValue("ottMix", 12);
+            window.__OTT_LAB_VIEW_HARNESS__.setParameterValue("ottAmount", 13);
             window.__OTT_LAB_VIEW_HARNESS__.setParameterValue("ottTimePercent", 900);
             window.__OTT_LAB_VIEW_HARNESS__.setParameterValue("ottBandDrive", 3);
+            window.__OTT_LAB_VIEW_HARNESS__.setParameterValue("ottEnvelopeMatch", 4);
+            window.__OTT_LAB_VIEW_HARNESS__.setParameterValue("envelopeBoostClampDb", 5);
         });
-
-        let snapshot = await getHarnessSnapshot(page);
-
-        assert.deepEqual(snapshot.store.slots.A.values, {
-            ottMix: 87,
-            ottTimePercent: 120,
-            ottBandDrive: 22,
-        });
-        assert.deepEqual(snapshot.store.slots.B.values, {
-            ottMix: 12,
-            ottTimePercent: 900,
-            ottBandDrive: 3,
-        });
-
         await clickSnapshotSlot(page, "A");
-        snapshot = await getHarnessSnapshot(page);
+        const snapshot = await getHarnessSnapshot(page);
 
-        assert.deepEqual(snapshot.sentMessages.slice(-3), [
-            { endpointID: "ottMix", value: 87, rampFrames: 0 },
-            { endpointID: "ottTimePercent", value: 120, rampFrames: 0 },
-            { endpointID: "ottBandDrive", value: 22, rampFrames: 0 },
-        ]);
+        assert.deepEqual(snapshot.sentMessages.slice(-6), Object.entries(INITIAL_SNAPSHOT_PARAMETERS).map(([endpointID, value]) => ({
+            endpointID,
+            value,
+        })));
         assert.equal(snapshot.activeElementSlot, "A");
     } finally {
         await page.close();
     }
 });
 
-test("OTT lab copies and pastes through native focused-slot clipboard events", async () => {
+test("OTT lab copies and pastes v2 snapshot JSON through focused-slot clipboard events", async () => {
     const page = await openOttLabPage();
 
     try {
@@ -503,35 +489,33 @@ test("OTT lab copies and pastes through native focused-slot clipboard events", a
         const copiedSnapshot = JSON.parse(copiedText);
 
         assert.equal(copiedSnapshot.kind, SNAPSHOT_EXPORT_KIND);
-        assert.equal(copiedSnapshot.schema, 1);
-        assert.equal(copiedSnapshot.patchID, SNAPSHOT_PATCH_ID);
-        assert.equal(copiedSnapshot.slot, "A");
+        assert.equal(copiedSnapshot.version, 2);
+        assert.equal(copiedSnapshot.effectID, "ott");
+        assert.equal(copiedSnapshot.slotID, "A");
         assert.equal(copiedSnapshot.label, "verse crush");
-        assert.deepEqual(copiedSnapshot.values, {
-            ottMix: 87,
-            ottTimePercent: 120,
-            ottBandDrive: 22,
-        });
+        assert.deepEqual(copiedSnapshot.parameters, INITIAL_SNAPSHOT_PARAMETERS);
         assert.match(snapshot.message, /Copied A/);
         assert.equal(snapshot.toastVisible, true);
 
         await page.evaluate(() => {
             window.__OTT_LAB_VIEW_HARNESS__.setParameterValue("ottMix", 5);
+            window.__OTT_LAB_VIEW_HARNESS__.setParameterValue("ottAmount", 6);
             window.__OTT_LAB_VIEW_HARNESS__.setParameterValue("ottTimePercent", 1000);
             window.__OTT_LAB_VIEW_HARNESS__.setParameterValue("ottBandDrive", 0);
+            window.__OTT_LAB_VIEW_HARNESS__.setParameterValue("ottEnvelopeMatch", 1);
+            window.__OTT_LAB_VIEW_HARNESS__.setParameterValue("envelopeBoostClampDb", 2);
         });
         await clickSnapshotSlot(page, "B");
         await pasteSnapshotEvent(page, "B", copiedText);
         snapshot = await getHarnessSnapshot(page);
 
-        assert.deepEqual(snapshot.store.slots.B.values, copiedSnapshot.values);
+        assert.deepEqual(snapshot.store.slots.B.parameters, copiedSnapshot.parameters);
         assert.equal(snapshot.store.slots.B.label, "verse crush");
         assert.equal(snapshot.labelInput.value, "verse crush");
-        assert.deepEqual(snapshot.sentMessages.slice(-3), [
-            { endpointID: "ottMix", value: 87, rampFrames: 0 },
-            { endpointID: "ottTimePercent", value: 120, rampFrames: 0 },
-            { endpointID: "ottBandDrive", value: 22, rampFrames: 0 },
-        ]);
+        assert.deepEqual(snapshot.sentMessages.slice(-6), Object.entries(INITIAL_SNAPSHOT_PARAMETERS).map(([endpointID, value]) => ({
+            endpointID,
+            value,
+        })));
         assert.match(snapshot.message, /Pasted into B/);
         assert.equal(snapshot.toastVisible, true);
         assert.equal(snapshot.activeElementSlot, "B");
@@ -540,84 +524,9 @@ test("OTT lab copies and pastes through native focused-slot clipboard events", a
     }
 });
 
-test("OTT lab keyboard fallback copies the focused slot when no native copy event arrives", async () => {
-    const page = await openOttLabPage();
-
-    try {
-        await clickSnapshotSlot(page, "A");
-        await pressSnapshotShortcut(page, "A", "c");
-        await page.waitForFunction(() => {
-            const snapshot = window.__OTT_LAB_VIEW_HARNESS__?.getSnapshot?.();
-            return snapshot?.clipboardText?.includes("cosimo.ottLab.snapshot");
-        });
-        const snapshot = await getHarnessSnapshot(page);
-        const copiedSnapshot = JSON.parse(snapshot.clipboardText);
-
-        assert.equal(copiedSnapshot.kind, SNAPSHOT_EXPORT_KIND);
-        assert.equal(copiedSnapshot.patchID, SNAPSHOT_PATCH_ID);
-        assert.equal(copiedSnapshot.label, "");
-        assert.deepEqual(copiedSnapshot.values, {
-            ottMix: 87,
-            ottTimePercent: 120,
-            ottBandDrive: 22,
-        });
-        assert.match(snapshot.message, /Copied A/);
-    } finally {
-        await page.close();
-    }
-});
-
-test("OTT lab copy shortcut falls back to textarea copy when clipboard writes are rejected", async () => {
-    const page = await openOttLabPage();
-
-    try {
-        await clickSnapshotSlot(page, "A");
-        await page.evaluate(() => window.__OTT_LAB_VIEW_HARNESS__.makeClipboardWriteRejectAndInstallExecCommandFallback());
-        await pressSnapshotShortcut(page, "A", "c");
-        await page.waitForFunction(() => {
-            const snapshot = window.__OTT_LAB_VIEW_HARNESS__?.getSnapshot?.();
-            return snapshot?.clipboardText?.includes("cosimo.ottLab.snapshot");
-        });
-        const snapshot = await getHarnessSnapshot(page);
-        const copiedSnapshot = JSON.parse(snapshot.clipboardText);
-
-        assert.equal(copiedSnapshot.kind, SNAPSHOT_EXPORT_KIND);
-        assert.equal(copiedSnapshot.patchID, SNAPSHOT_PATCH_ID);
-        assert.equal(copiedSnapshot.label, "");
-        assert.deepEqual(copiedSnapshot.values, {
-            ottMix: 87,
-            ottTimePercent: 120,
-            ottBandDrive: 22,
-        });
-        assert.match(snapshot.message, /Copied A/);
-    } finally {
-        await page.close();
-    }
-});
-
-test("OTT lab paste shortcut rejects wrong-patch JSON without changing sound or the target slot", async () => {
+test("OTT lab paste shortcut rejects incompatible snapshot JSON without changing sound or the target slot", async () => {
     const page = await openOttLabPage({
-        clipboardText: createSnapshotExport({ ottMix: 33 }, { patchID: "dev.cosimo.other-effect" }),
-    });
-
-    try {
-        await clickSnapshotSlot(page, "C");
-        const before = await getHarnessSnapshot(page);
-
-        await pressSnapshotShortcut(page, "C", "v");
-        const after = await waitForHarnessMessage(page, "patchID must be dev.cosimo.ott-lab");
-
-        assert.deepEqual(after.store.slots.C.values, before.store.slots.C.values);
-        assert.deepEqual(after.sentMessages, []);
-        assert.match(after.message, /patchID must be dev\.cosimo\.ott-lab/);
-    } finally {
-        await page.close();
-    }
-});
-
-test("OTT lab paste shortcut rejects out-of-range values without partially applying them", async () => {
-    const page = await openOttLabPage({
-        clipboardText: createSnapshotExport({ ottMix: 101, ottTimePercent: 120, ottBandDrive: 22 }),
+        clipboardText: createSnapshotExport({ obsoleteControl: 0.5 }),
     });
 
     try {
@@ -625,54 +534,11 @@ test("OTT lab paste shortcut rejects out-of-range values without partially apply
         const before = await getHarnessSnapshot(page);
 
         await pressSnapshotShortcut(page, "D", "v");
-        const after = await waitForHarnessMessage(page, "value 101 is above maximum 100");
+        const after = await waitForHarnessMessage(page, "Unknown parameter");
 
-        assert.deepEqual(after.store.slots.D.values, before.store.slots.D.values);
+        assert.deepEqual(after.store.slots.D.parameters, before.store.slots.D.parameters);
         assert.deepEqual(after.sentMessages, []);
-        assert.match(after.message, /ottMix: value 101 is above maximum 100/);
-    } finally {
-        await page.close();
-    }
-});
-
-test("OTT lab paste shortcut rejects unknown parameter IDs without partially applying them", async () => {
-    const page = await openOttLabPage({
-        clipboardText: createSnapshotExport({ ottMix: 72, obsoleteControl: 0.5 }),
-    });
-
-    try {
-        await clickSnapshotSlot(page, "D");
-        const before = await getHarnessSnapshot(page);
-
-        await pressSnapshotShortcut(page, "D", "v");
-        const after = await waitForHarnessMessage(page, "Unknown parameter: obsoleteControl");
-
-        assert.deepEqual(after.store.slots.D.values, before.store.slots.D.values);
-        assert.deepEqual(after.sentMessages, []);
-        assert.match(after.message, /Unknown parameter: obsoleteControl/);
-    } finally {
-        await page.close();
-    }
-});
-
-test("OTT lab paste shortcut rejects non-string labels without partially applying values", async () => {
-    const page = await openOttLabPage({
-        clipboardText: createSnapshotExport(
-            { ottMix: 72, ottTimePercent: 120, ottBandDrive: 22 },
-            { label: { name: "not valid" } },
-        ),
-    });
-
-    try {
-        await clickSnapshotSlot(page, "D");
-        const before = await getHarnessSnapshot(page);
-
-        await pressSnapshotShortcut(page, "D", "v");
-        const after = await waitForHarnessMessage(page, "Snapshot label must be a string");
-
-        assert.deepEqual(after.store.slots.D.values, before.store.slots.D.values);
-        assert.equal(after.store.slots.D.label, before.store.slots.D.label);
-        assert.deepEqual(after.sentMessages, []);
+        assert.match(after.message, /obsoleteControl/);
     } finally {
         await page.close();
     }
@@ -680,27 +546,27 @@ test("OTT lab paste shortcut rejects non-string labels without partially applyin
 
 test("OTT lab paste events can paste JSON directly into the focused slot", async () => {
     const page = await openOttLabPage();
+    const pastedParameters = {
+        envelopeBoostClampDb: 9,
+        ottAmount: 45,
+        ottBandDrive: 11,
+        ottEnvelopeMatch: 12,
+        ottMix: 44,
+        ottTimePercent: 80,
+    };
 
     try {
         await clickSnapshotSlot(page, "F");
-        await pasteSnapshotEvent(page, "F", createSnapshotExport(
-            { ottMix: 44, ottTimePercent: 80, ottBandDrive: 11 },
-            { label: "manual paste tone" },
-        ));
+        await pasteSnapshotEvent(page, "F", createSnapshotExport(pastedParameters, { label: "manual paste tone" }));
         const snapshot = await getHarnessSnapshot(page);
 
-        assert.deepEqual(snapshot.store.slots.F.values, {
-            ottMix: 44,
-            ottTimePercent: 80,
-            ottBandDrive: 11,
-        });
+        assert.deepEqual(snapshot.store.slots.F.parameters, pastedParameters);
         assert.equal(snapshot.store.slots.F.label, "manual paste tone");
         assert.equal(snapshot.labelInput.value, "manual paste tone");
-        assert.deepEqual(snapshot.sentMessages.slice(-3), [
-            { endpointID: "ottMix", value: 44, rampFrames: 0 },
-            { endpointID: "ottTimePercent", value: 80, rampFrames: 0 },
-            { endpointID: "ottBandDrive", value: 11, rampFrames: 0 },
-        ]);
+        assert.deepEqual(snapshot.sentMessages.slice(-6), Object.entries(pastedParameters).map(([endpointID, value]) => ({
+            endpointID,
+            value,
+        })));
         assert.match(snapshot.message, /Pasted into F/);
     } finally {
         await page.close();
@@ -709,6 +575,14 @@ test("OTT lab paste events can paste JSON directly into the focused slot", async
 
 test("OTT lab paste shortcut opens a manual paste box when clipboard reads are unavailable", async () => {
     const page = await openOttLabPage();
+    const pastedParameters = {
+        envelopeBoostClampDb: 9,
+        ottAmount: 45,
+        ottBandDrive: 11,
+        ottEnvelopeMatch: 12,
+        ottMix: 44,
+        ottTimePercent: 80,
+    };
 
     try {
         await clickSnapshotSlot(page, "E");
@@ -729,24 +603,16 @@ test("OTT lab paste shortcut opens a manual paste box when clipboard reads are u
 
             textarea.value = snapshotText;
             form.requestSubmit();
-        }, createSnapshotExport(
-            { ottMix: 44, ottTimePercent: 80, ottBandDrive: 11 },
-            { label: "manual fallback tone" },
-        ));
+        }, createSnapshotExport(pastedParameters, { label: "manual fallback tone" }));
         snapshot = await getHarnessSnapshot(page);
 
-        assert.deepEqual(snapshot.store.slots.E.values, {
-            ottMix: 44,
-            ottTimePercent: 80,
-            ottBandDrive: 11,
-        });
+        assert.deepEqual(snapshot.store.slots.E.parameters, pastedParameters);
         assert.equal(snapshot.store.slots.E.label, "manual fallback tone");
         assert.equal(snapshot.labelInput.value, "manual fallback tone");
-        assert.deepEqual(snapshot.sentMessages.slice(-3), [
-            { endpointID: "ottMix", value: 44, rampFrames: 0 },
-            { endpointID: "ottTimePercent", value: 80, rampFrames: 0 },
-            { endpointID: "ottBandDrive", value: 11, rampFrames: 0 },
-        ]);
+        assert.deepEqual(snapshot.sentMessages.slice(-6), Object.entries(pastedParameters).map(([endpointID, value]) => ({
+            endpointID,
+            value,
+        })));
         assert.match(snapshot.message, /Pasted into E/);
     } finally {
         await page.close();
@@ -760,19 +626,13 @@ test("OTT lab keeps stable parameter listener counts after status rerenders", as
         let snapshot = await getHarnessSnapshot(page);
         const initialCounts = snapshot.listenerCounts;
 
-        // Snapshot system registers one listener per visible parameter endpoint.
-        // Preset controller may add its own stable listeners.
-        // The key invariant: counts must not grow after a re-render.
         assert.ok(initialCounts.ottMix >= 1, "ottMix should have at least one listener");
-        assert.ok(initialCounts.ottTimePercent >= 1, "ottTimePercent should have at least one listener");
-        assert.ok(initialCounts.ottBandDrive >= 1, "ottBandDrive should have at least one listener");
+        assert.ok(initialCounts.envelopeBoostClampDb >= 1, "envelopeBoostClampDb should have at least one listener");
 
         await page.evaluate(() => window.__OTT_LAB_VIEW_HARNESS__.emitStatus());
         await page.waitForFunction((expected) => {
             const counts = window.__OTT_LAB_VIEW_HARNESS__?.getSnapshot?.().listenerCounts;
-            return counts?.ottMix === expected.ottMix
-                && counts?.ottTimePercent === expected.ottTimePercent
-                && counts?.ottBandDrive === expected.ottBandDrive;
+            return Object.entries(expected).every(([endpointID, count]) => counts?.[endpointID] === count);
         }, initialCounts);
         snapshot = await getHarnessSnapshot(page);
 

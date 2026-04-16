@@ -1,11 +1,21 @@
 import { createPresetBar } from "../../../ui/shared/effects/preset-bar.ts";
 import { createStandaloneEffectPresetController } from "../../../ui/shared/effects/standalone-effect-presets.ts";
+import { buildPluginStateContract } from "../../../ui/shared/effects/effect-state-contract.ts";
+import {
+  EFFECT_SNAPSHOT_KIND,
+  EFFECT_SNAPSHOT_SCHEMA_VERSION,
+  applyEffectSnapshot,
+  captureEffectSnapshot,
+  normalizeEffectSnapshot,
+  parseEffectSnapshotText,
+} from "../../../ui/shared/effects/effect-snapshots.ts";
 
 const SNAPSHOT_SLOT_IDS = ["A", "B", "C", "D", "E", "F", "G"];
-const SNAPSHOT_STORAGE_KEY = "cosimo.ottLab.snapshotSlots.v1";
-const SNAPSHOT_EXPORT_KIND = "cosimo.ottLab.snapshot";
+const SNAPSHOT_STORAGE_KEY = "cosimo.ottLab.snapshotSlots.v2";
+const LEGACY_SNAPSHOT_STORAGE_KEY = "cosimo.ottLab.snapshotSlots.v1";
+const SNAPSHOT_EXPORT_KIND = EFFECT_SNAPSHOT_KIND;
 const SNAPSHOT_PATCH_ID = "dev.cosimo.ott-lab";
-const SNAPSHOT_SCHEMA = 1;
+const SNAPSHOT_SCHEMA = EFFECT_SNAPSHOT_SCHEMA_VERSION;
 
 class OttLabView extends HTMLElement {
   constructor(patchConnection) {
@@ -20,6 +30,7 @@ class OttLabView extends HTMLElement {
     this.snapshotParameterCleanups = [];
     this.parameterValues = new Map();
     this.parameterInfoByID = new Map();
+    this.snapshotContract = null;
     this.activeSnapshotSlot = undefined;
     this.snapshotMessageTimeoutID = undefined;
     this.snapshotStorageWarningShown = false;
@@ -44,6 +55,10 @@ class OttLabView extends HTMLElement {
       this.updateActiveSnapshotLabel(this.snapshotLabelInput.value);
     });
     this.renderSnapshotSlots();
+
+    if (this.snapshotStore.__loadError) {
+      window.queueMicrotask(() => this.setSnapshotMessage(this.snapshotStore.__loadError, "error"));
+    }
   }
 
   connectedCallback() {
@@ -70,6 +85,15 @@ class OttLabView extends HTMLElement {
 
     const parameters = (status?.details?.inputs || [])
       .filter(endpoint => endpoint?.purpose === "parameter" && !endpoint?.annotation?.hidden);
+
+    try {
+      this.snapshotContract = buildPluginStateContract({
+        effectID: "ott",
+        status,
+      });
+    } catch {
+      this.snapshotContract = null;
+    }
 
     this.parameterInfoByID = new Map(parameters.map(parameter => [parameter.endpointID, parameter]));
     this.syncSnapshotParameterListeners(parameters);
@@ -323,17 +347,18 @@ class OttLabView extends HTMLElement {
     if (this.snapshotStore.slots[slotID])
       return true;
 
-    const values = this.captureCurrentSnapshotValues();
+    let snapshot;
 
-    if (Object.keys(values).length === 0) {
-      this.setSnapshotMessage("No visible parameters to capture.", "error");
+    try {
+      snapshot = this.captureCurrentSnapshot(slotID);
+    } catch (error) {
+      this.setSnapshotMessage(`Snapshot ${slotID} failed: ${messageFromError(error)}`, "error");
       return false;
     }
 
     this.snapshotStore.slots[slotID] = {
-      label: "",
+      ...snapshot,
       updatedAt: new Date().toISOString(),
-      values,
     };
     return true;
   }
@@ -346,8 +371,26 @@ class OttLabView extends HTMLElement {
       return;
 
     const slot = this.snapshotStore.slots[this.activeSnapshotSlot];
-    slot.values[endpointID] = value;
-    slot.updatedAt = new Date().toISOString();
+    const nextSnapshot = {
+      ...slot,
+      parameters: {
+        ...slot.parameters,
+        [endpointID]: value,
+      },
+    };
+
+    try {
+      this.snapshotStore.slots[this.activeSnapshotSlot] = {
+        ...normalizeEffectSnapshot(nextSnapshot, {
+          currentContract: this.requireSnapshotContract(),
+        }),
+        updatedAt: new Date().toISOString(),
+      };
+    } catch (error) {
+      this.setSnapshotMessage(`Snapshot ${this.activeSnapshotSlot} failed: ${messageFromError(error)}`, "error");
+      return;
+    }
+
     this.persistSnapshotStore({ silent: true });
   }
 
@@ -389,14 +432,21 @@ class OttLabView extends HTMLElement {
       return false;
     }
 
-    const validation = validateSnapshotValues(slot.values, this.parameterInfoByID);
-
-    if (!validation.ok) {
-      this.setSnapshotMessage(validation.message, "error");
+    try {
+      const appliedSnapshot = applyEffectSnapshot({
+        snapshot: slot,
+        currentContract: this.requireSnapshotContract(),
+        patchConnection: this.patchConnection,
+      });
+      this.snapshotStore.slots[slotID] = {
+        ...appliedSnapshot,
+        updatedAt: slot.updatedAt,
+      };
+    } catch (error) {
+      this.setSnapshotMessage(messageFromError(error), "error");
       return false;
     }
 
-    this.applySnapshotValues(validation.values);
     this.activeSnapshotSlot = slotID;
     this.renderSnapshotSlots();
     this.focusSnapshotSlot(slotID);
@@ -462,20 +512,31 @@ class OttLabView extends HTMLElement {
       return false;
     }
 
-    const validation = validateSnapshotPayload(parsed.payload, this.parameterInfoByID);
+    let snapshot;
 
-    if (!validation.ok) {
-      this.setSnapshotMessage(validation.message, "error");
+    try {
+      snapshot = this.normalizeImportedSnapshot(parsed.payload, slotID);
+    } catch (error) {
+      this.setSnapshotMessage(messageFromError(error), "error");
+      return false;
+    }
+
+    try {
+      applyEffectSnapshot({
+        snapshot,
+        currentContract: this.requireSnapshotContract(),
+        patchConnection: this.patchConnection,
+      });
+    } catch (error) {
+      this.setSnapshotMessage(messageFromError(error), "error");
       return false;
     }
 
     this.snapshotStore.slots[slotID] = {
-      label: validation.label,
+      ...snapshot,
       updatedAt: new Date().toISOString(),
-      values: validation.values,
     };
     this.persistSnapshotStore();
-    this.applySnapshotValues(validation.values);
     this.activeSnapshotSlot = slotID;
     this.renderSnapshotSlots();
     this.focusSnapshotSlot(slotID);
@@ -518,40 +579,52 @@ class OttLabView extends HTMLElement {
     this.setSnapshotMessage("Clipboard read was blocked. Paste JSON manually.", "warn");
   }
 
-  captureCurrentSnapshotValues() {
-    const values = {};
+  requireSnapshotContract() {
+    if (!this.snapshotContract)
+      throw new Error("Snapshot contract is not available yet.");
 
-    for (const [endpointID, parameter] of this.parameterInfoByID) {
-      if (parameter?.annotation?.hidden)
-        continue;
-
-      if (this.parameterValues.has(endpointID)) {
-        const normalisedValue = normaliseParameterValue(parameter, this.parameterValues.get(endpointID));
-
-        if (normalisedValue !== undefined)
-          values[endpointID] = normalisedValue;
-
-        continue;
-      }
-
-      const initValue = parameter?.annotation?.init;
-
-      if (initValue !== undefined) {
-        const normalisedValue = normaliseParameterValue(parameter, initValue);
-
-        if (normalisedValue !== undefined)
-          values[endpointID] = normalisedValue;
-      }
-    }
-
-    return values;
+    return this.snapshotContract;
   }
 
-  applySnapshotValues(values) {
-    for (const [endpointID, value] of Object.entries(values)) {
-      this.parameterValues.set(endpointID, value);
-      this.patchConnection.sendEventOrValue(endpointID, value, 0);
+  captureCurrentSnapshot(slotID) {
+    const currentParameterValues = {};
+
+    for (const parameter of this.requireSnapshotContract().parameters) {
+      if (this.parameterValues.has(parameter.endpointID))
+        currentParameterValues[parameter.endpointID] = this.parameterValues.get(parameter.endpointID);
     }
+
+    return captureEffectSnapshot({
+      slotID,
+      currentContract: this.requireSnapshotContract(),
+      currentParameterValues,
+      label: this.snapshotStore.slots[slotID]?.label ?? "",
+    });
+  }
+
+  normalizeImportedSnapshot(payload, slotID) {
+    if (!payload || typeof payload !== "object" || Array.isArray(payload))
+      throw new Error("Snapshot JSON must be an object.");
+
+    if (payload.kind !== SNAPSHOT_EXPORT_KIND)
+      throw new Error(`Snapshot kind must be ${SNAPSHOT_EXPORT_KIND}.`);
+
+    if (payload.version !== SNAPSHOT_SCHEMA)
+      throw new Error(`Snapshot version must be ${SNAPSHOT_SCHEMA}.`);
+
+    if (payload.effectID !== "ott")
+      throw new Error(`Cannot import ${payload.effectID} snapshot into ott.`);
+
+    if (payload.label !== undefined && typeof payload.label !== "string")
+      throw new Error("Snapshot label must be a string.");
+
+    return normalizeEffectSnapshot({
+      ...payload,
+      slotID,
+      label: payload.label ?? "",
+    }, {
+      currentContract: this.requireSnapshotContract(),
+    });
   }
 
   focusSnapshotSlot(slotID) {
@@ -938,16 +1011,26 @@ class OttLabView extends HTMLElement {
   }
 }
 
-function createEmptySnapshotStore() {
-  return {
+function createEmptySnapshotStore(loadError) {
+  const store = {
     schema: SNAPSHOT_SCHEMA,
     patchID: SNAPSHOT_PATCH_ID,
     slots: Object.fromEntries(SNAPSHOT_SLOT_IDS.map(slotID => [slotID, null])),
   };
+
+  if (loadError) {
+    Object.defineProperty(store, "__loadError", {
+      value: loadError,
+      enumerable: false,
+    });
+  }
+
+  return store;
 }
 
 function loadSnapshotStore() {
   try {
+    window.localStorage?.removeItem(LEGACY_SNAPSHOT_STORAGE_KEY);
     const rawStore = window.localStorage?.getItem(SNAPSHOT_STORAGE_KEY);
 
     if (!rawStore)
@@ -963,19 +1046,22 @@ function loadSnapshotStore() {
     for (const slotID of SNAPSHOT_SLOT_IDS) {
       const slot = parsedStore.slots?.[slotID];
 
-      if (!slot || typeof slot !== "object" || typeof slot.values !== "object" || Array.isArray(slot.values))
+      if (!slot)
         continue;
 
+      if (typeof slot !== "object" || slot.kind !== SNAPSHOT_EXPORT_KIND || slot.version !== SNAPSHOT_SCHEMA)
+        throw new Error(`Stored snapshot ${slotID} is not valid ${SNAPSHOT_EXPORT_KIND} version ${SNAPSHOT_SCHEMA}.`);
+
       store.slots[slotID] = {
-        label: typeof slot.label === "string" ? slot.label : "",
+        ...slot,
+        slotID,
         updatedAt: typeof slot.updatedAt === "string" ? slot.updatedAt : undefined,
-        values: { ...slot.values },
       };
     }
 
     return store;
-  } catch {
-    return createEmptySnapshotStore();
+  } catch (error) {
+    return createEmptySnapshotStore(`Stored snapshots were ignored: ${messageFromError(error)}`);
   }
 }
 
@@ -993,12 +1079,14 @@ function saveSnapshotStore(store) {
 
 function createSnapshotExport(slotID, slot) {
   return {
-    kind: SNAPSHOT_EXPORT_KIND,
-    schema: SNAPSHOT_SCHEMA,
-    patchID: SNAPSHOT_PATCH_ID,
-    slot: slotID,
+    kind: slot.kind,
+    version: slot.version,
+    effectID: slot.effectID,
+    slotID,
     label: slot.label ?? "",
-    values: { ...slot.values },
+    contract: slot.contract,
+    parameters: { ...slot.parameters },
+    storedState: { ...slot.storedState },
   };
 }
 
@@ -1007,93 +1095,10 @@ function parseSnapshotText(snapshotText) {
     return { ok: false, message: "Paste JSON is empty." };
 
   try {
-    return { ok: true, payload: JSON.parse(snapshotText) };
+    return { ok: true, payload: parseEffectSnapshotText(snapshotText) };
   } catch (error) {
     return { ok: false, message: `Invalid JSON: ${messageFromError(error)}` };
   }
-}
-
-function validateSnapshotPayload(payload, parameterInfoByID) {
-  if (!payload || typeof payload !== "object" || Array.isArray(payload))
-    return { ok: false, message: "Snapshot JSON must be an object." };
-
-  if (payload.kind !== SNAPSHOT_EXPORT_KIND)
-    return { ok: false, message: `Snapshot kind must be ${SNAPSHOT_EXPORT_KIND}.` };
-
-  if (payload.schema !== SNAPSHOT_SCHEMA)
-    return { ok: false, message: `Snapshot schema must be ${SNAPSHOT_SCHEMA}.` };
-
-  if (payload.patchID !== SNAPSHOT_PATCH_ID)
-    return { ok: false, message: `Snapshot patchID must be ${SNAPSHOT_PATCH_ID}.` };
-
-  if (payload.label !== undefined && typeof payload.label !== "string")
-    return { ok: false, message: "Snapshot label must be a string." };
-
-  const validation = validateSnapshotValues(payload.values, parameterInfoByID);
-
-  if (!validation.ok)
-    return validation;
-
-  return {
-    ok: true,
-    label: payload.label ?? "",
-    values: validation.values,
-  };
-}
-
-function validateSnapshotValues(values, parameterInfoByID) {
-  if (!values || typeof values !== "object" || Array.isArray(values))
-    return { ok: false, message: "Snapshot values must be an object." };
-
-  if (Object.keys(values).length === 0)
-    return { ok: false, message: "Snapshot values cannot be empty." };
-
-  const validatedValues = {};
-
-  for (const [endpointID, value] of Object.entries(values)) {
-    const parameter = parameterInfoByID.get(endpointID);
-
-    if (!parameter)
-      return { ok: false, message: `Unknown parameter: ${endpointID}.` };
-
-    const validatedValue = validateSnapshotValue(parameter, value);
-
-    if (!validatedValue.ok)
-      return { ok: false, message: `${endpointID}: ${validatedValue.message}` };
-
-    validatedValues[endpointID] = validatedValue.value;
-  }
-
-  return { ok: true, values: validatedValues };
-}
-
-function validateSnapshotValue(parameter, value) {
-  if (parameter?.annotation?.boolean) {
-    if (value === true || value === false)
-      return { ok: true, value };
-
-    if (value === 0 || value === 1)
-      return { ok: true, value: value === 1 };
-
-    return { ok: false, message: "expected boolean value." };
-  }
-
-  const numericValue = Number(value);
-
-  if (!Number.isFinite(numericValue))
-    return { ok: false, message: "expected finite number." };
-
-  const min = parameter?.annotation?.min;
-  const max = parameter?.annotation?.max;
-  const epsilon = 1.0e-6 * Math.max(1, Math.abs(min ?? 0), Math.abs(max ?? 0));
-
-  if (min !== undefined && numericValue < min - epsilon)
-    return { ok: false, message: `value ${numericValue} is below minimum ${min}.` };
-
-  if (max !== undefined && numericValue > max + epsilon)
-    return { ok: false, message: `value ${numericValue} is above maximum ${max}.` };
-
-  return { ok: true, value: numericValue };
 }
 
 function normaliseParameterValue(parameter, value) {

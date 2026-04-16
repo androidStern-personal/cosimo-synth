@@ -10,28 +10,29 @@ async function loadStandaloneModule() {
     return await loadUIModule(repoRoot, "ui/shared/effects/standalone-effect-presets.ts");
 }
 
-function createDescriptorRegistry() {
+async function loadContractModule() {
+    return await loadUIModule(repoRoot, "ui/shared/effects/effect-state-contract.ts");
+}
+
+const ottStatus = {
+    details: {
+        inputs: [
+            parameter("hostSlot0Guard", { hidden: true, init: 0, min: 0, max: 1 }),
+            parameter("ottMix", { init: 100, min: 0, max: 100 }),
+            parameter("ottAmount", { init: 100, min: 0, max: 100 }),
+            parameter("ottTimePercent", { init: 100, min: 10, max: 1000 }),
+            parameter("ottBandDrive", { init: 0, min: 0, max: 100 }),
+            parameter("ottEnvelopeMatch", { init: 0, min: 0, max: 100 }),
+            parameter("envelopeBoostClampDb", { init: 6, min: 0, max: 24 }),
+        ],
+    },
+};
+
+function parameter(endpointID, annotation = {}) {
     return {
-        ott: {
-            effectID: "ott",
-            label: "OTT",
-            params: {
-                ottMix: { type: "number", min: 0, max: 100, defaultValue: 100 },
-                ottAmount: { type: "number", min: 0, max: 100, defaultValue: 100 },
-                ottTimePercent: { type: "number", min: 10, max: 1000, defaultValue: 100, clamp: true },
-                ottBandDrive: { type: "number", min: 0, max: 100, defaultValue: 0 },
-                ottEnvelopeMatch: { type: "number", min: 0, max: 100, defaultValue: 0 },
-            },
-        },
-        chorus: {
-            effectID: "chorus",
-            label: "Chorus",
-            params: {
-                chorusEnabled: { type: "integer", min: 0, max: 1, defaultValue: 0 },
-                chorusMix: { type: "number", min: 0, max: 1, defaultValue: 0 },
-                chorusMotionMode: { type: "integer", min: 0, max: 3, defaultValue: 1 },
-            },
-        },
+        endpointID,
+        purpose: "parameter",
+        annotation,
     };
 }
 
@@ -67,61 +68,38 @@ function factoryPresets() {
                 },
             },
         ],
-        chorus: [
-            {
-                kind: "cosimo.effectPreset",
-                version: 1,
-                effectID: "chorus",
-                presetID: "chorus.wide",
-                label: "Wide Chorus",
-                values: {
-                    chorusEnabled: 1,
-                    chorusMix: 0.62,
-                    chorusMotionMode: 2,
-                },
-            },
-        ],
     };
 }
 
-function ottUserPreset(overrides = {}) {
+async function createV2Preset({
+    presetID = "user.ott.soft-smash",
+    label = "Soft Smash",
+    status = ottStatus,
+    parameters = {},
+} = {}) {
+    const { buildPluginStateContract } = await loadContractModule();
+    const contract = buildPluginStateContract({ effectID: "ott", status });
+    const defaults = Object.fromEntries(contract.parameters.map((param) => [param.endpointID, param.defaultValue]));
+
     return {
         kind: "cosimo.effectPreset",
-        version: 1,
+        version: 2,
         effectID: "ott",
-        presetID: "user.ott.soft-smash",
-        label: "Soft Smash",
-        values: {
-            ottMix: 82,
-            ottAmount: 91,
-            ottTimePercent: 100,
-            ottBandDrive: 14,
-            ottEnvelopeMatch: 63,
+        presetID,
+        label,
+        contract,
+        parameters: {
+            ...defaults,
+            ...parameters,
         },
-        ...overrides,
+        storedState: {},
     };
 }
 
-function chorusUserPreset(overrides = {}) {
-    return {
-        kind: "cosimo.effectPreset",
-        version: 1,
-        effectID: "chorus",
-        presetID: "user.chorus.wide",
-        label: "Wide",
-        values: {
-            chorusEnabled: 1,
-            chorusMix: 0.62,
-            chorusMotionMode: 2,
-        },
-        ...overrides,
-    };
-}
-
-function storedPresetState(overrides = {}) {
+function storedPresetStateV2(overrides = {}) {
     return JSON.stringify({
         kind: "cosimo.effectPresetState",
-        version: 1,
+        version: 2,
         userPresets: {},
         activePresetByEffect: {},
         ...overrides,
@@ -131,30 +109,6 @@ function storedPresetState(overrides = {}) {
 function parseStoredWrite(write) {
     assert.equal(typeof write.value, "string");
     return JSON.parse(write.value);
-}
-
-function createPresetController({
-    patchConnection = new FakeStandalonePatchConnection(),
-    createPresetID = () => "user.ott.generated",
-    clipboard = createClipboardHarness(),
-} = {}) {
-    return {
-        patchConnection,
-        clipboard,
-        async create(effectID = "ott") {
-            const { StandaloneEffectPresetController } = await loadStandaloneModule();
-
-            return new StandaloneEffectPresetController({
-                effectID,
-                patchConnection,
-                descriptorRegistry: createDescriptorRegistry(),
-                factoryPresets: factoryPresets(),
-                createPresetID,
-                readClipboardText: clipboard.read,
-                writeClipboardText: clipboard.write,
-            });
-        },
-    };
 }
 
 function createClipboardHarness(initialText = "") {
@@ -171,8 +125,31 @@ function createClipboardHarness(initialText = "") {
     };
 }
 
+async function createPresetController({
+    patchConnection = new FakeStandalonePatchConnection(),
+    createPresetID = () => "user.ott.generated",
+    clipboard = createClipboardHarness(),
+} = {}) {
+    const { StandaloneEffectPresetController } = await loadStandaloneModule();
+
+    return new StandaloneEffectPresetController({
+        effectID: "ott",
+        patchConnection,
+        factoryPresets: factoryPresets(),
+        createPresetID,
+        readClipboardText: clipboard.read,
+        writeClipboardText: clipboard.write,
+    });
+}
+
 class FakeStandalonePatchConnection {
-    constructor({ storedState = {}, parameterValues = {}, canPersistState = true } = {}) {
+    constructor({
+        status = ottStatus,
+        storedState = {},
+        parameterValues = {},
+        canPersistState = true,
+    } = {}) {
+        this.status = status;
         this.storedState = { ...storedState };
         this.parameterValues = { ...parameterValues };
         this.canPersistState = canPersistState;
@@ -182,9 +159,24 @@ class FakeStandalonePatchConnection {
         this.requestedParameters = [];
         this.storedStateListeners = new Set();
         this.parameterListeners = new Map();
+        this.statusListeners = new Set();
 
         if (!canPersistState) {
             this.sendStoredStateValue = undefined;
+        }
+    }
+
+    addStatusListener(listener) {
+        this.statusListeners.add(listener);
+    }
+
+    removeStatusListener(listener) {
+        this.statusListeners.delete(listener);
+    }
+
+    requestStatusUpdate() {
+        for (const listener of this.statusListeners) {
+            listener(this.status);
         }
     }
 
@@ -263,45 +255,64 @@ class ThrowingStoredStatePatchConnection extends FakeStandalonePatchConnection {
     }
 }
 
-test("standalone controller lists a flat preset set and filters by query and source", async () => {
-    const { patchConnection, create } = createPresetController({
-        patchConnection: new FakeStandalonePatchConnection({
-            storedState: {
-                "effects.presets.v1": storedPresetState({
-                    userPresets: {
-                        ott: [ottUserPreset()],
-                        chorus: [chorusUserPreset()],
-                    },
-                }),
-            },
-        }),
-    });
-    const controller = await create();
+class ThrowingParameterPatchConnection extends FakeStandalonePatchConnection {
+    constructor({
+        throwOnEndpointID,
+        ...options
+    }) {
+        super(options);
+        this.throwOnEndpointID = throwOnEndpointID;
+    }
+
+    sendEventOrValue(endpointID, value) {
+        if (endpointID === this.throwOnEndpointID) {
+            throw new Error(`parameter write failed for ${endpointID}`);
+        }
+
+        super.sendEventOrValue(endpointID, value);
+    }
+}
+
+test("standalone controller derives preset contract from Cmajor status and fills legacy factory presets with every parameter", async () => {
+    const patchConnection = new FakeStandalonePatchConnection();
+    const controller = await createPresetController({ patchConnection });
 
     controller.attach();
 
-    assert.deepEqual(controller.getState().presets.map((preset) => ({
+    const state = controller.getState();
+    assert.equal(state.ready, true);
+    assert.deepEqual(state.currentContract.parameters.map((param) => param.endpointID), [
+        "envelopeBoostClampDb",
+        "ottAmount",
+        "ottBandDrive",
+        "ottEnvelopeMatch",
+        "ottMix",
+        "ottTimePercent",
+    ]);
+    assert.equal(state.currentContract.parameters.some((param) => param.endpointID === "hostSlot0Guard"), false);
+    assert.deepEqual(state.presets.map((preset) => ({
         key: preset.presetKey,
         label: preset.label,
         source: preset.source,
         canDelete: preset.canDelete,
+        canApply: preset.canApply,
     })), [
-        { key: "factory:ott.default-smash", label: "Default Smash", source: "factory", canDelete: false },
-        { key: "factory:ott.envelope-tamed", label: "Envelope Tamed", source: "factory", canDelete: false },
-        { key: "user:user.ott.soft-smash", label: "Soft Smash", source: "user", canDelete: true },
+        { key: "factory:ott.default-smash", label: "Default Smash", source: "factory", canDelete: false, canApply: true },
+        { key: "factory:ott.envelope-tamed", label: "Envelope Tamed", source: "factory", canDelete: false, canApply: true },
     ]);
-
-    controller.setFilter({ query: "env" });
-    assert.deepEqual(controller.getState().visiblePresets.map((preset) => preset.label), ["Envelope Tamed"]);
-
-    controller.setFilter({ source: "user", query: "" });
-    assert.deepEqual(controller.getState().visiblePresets.map((preset) => preset.label), ["Soft Smash"]);
-    assert.deepEqual(patchConnection.events, []);
+    assert.deepEqual(state.factoryPresets[0].preset.parameters, {
+        envelopeBoostClampDb: 6,
+        ottAmount: 100,
+        ottBandDrive: 0,
+        ottEnvelopeMatch: 0,
+        ottMix: 100,
+        ottTimePercent: 100,
+    });
 });
 
-test("standalone controller applies a preset key through real parameters and stores active metadata", async () => {
-    const { patchConnection, create } = createPresetController();
-    const controller = await create();
+test("standalone controller applies a v2 factory preset and stores active metadata under the v2 state key", async () => {
+    const patchConnection = new FakeStandalonePatchConnection();
+    const controller = await createPresetController({ patchConnection });
 
     controller.attach();
     patchConnection.storedWrites = [];
@@ -310,41 +321,42 @@ test("standalone controller applies a preset key through real parameters and sto
 
     assert.equal(result.ok, true);
     assert.deepEqual(patchConnection.events, [
-        { endpointID: "ottMix", value: 86 },
+        { endpointID: "envelopeBoostClampDb", value: 6 },
         { endpointID: "ottAmount", value: 92 },
-        { endpointID: "ottTimePercent", value: 100 },
         { endpointID: "ottBandDrive", value: 12 },
         { endpointID: "ottEnvelopeMatch", value: 38 },
+        { endpointID: "ottMix", value: 86 },
+        { endpointID: "ottTimePercent", value: 100 },
     ]);
     assert.deepEqual(controller.getState().activePreset, {
         presetID: "ott.envelope-tamed",
         label: "Envelope Tamed",
         dirty: false,
     });
-    assert.deepEqual(parseStoredWrite(patchConnection.storedWrites.at(-1)).activePresetByEffect, {
-        ott: {
-            presetID: "ott.envelope-tamed",
-            label: "Envelope Tamed",
-            dirty: false,
-        },
+    assert.equal(patchConnection.storedWrites.at(-1).key, "effects.presets.v2");
+    assert.deepEqual(parseStoredWrite(patchConnection.storedWrites.at(-1)).activePresetByEffect.ott, {
+        presetID: "ott.envelope-tamed",
+        label: "Envelope Tamed",
+        dirty: false,
     });
 });
 
-test("standalone controller saves current descriptor values as an active clean user preset", async () => {
-    const { patchConnection, create } = createPresetController({
-        patchConnection: new FakeStandalonePatchConnection({
-            parameterValues: {
-                ottMix: 55,
-                ottAmount: 70,
-                ottTimePercent: 125,
-                ottBandDrive: 8,
-                ottEnvelopeMatch: 44,
-                hostSlot0Guard: 1,
-            },
-        }),
+test("standalone controller saves every live parameter and excludes hidden guard parameters", async () => {
+    const patchConnection = new FakeStandalonePatchConnection({
+        parameterValues: {
+            hostSlot0Guard: 1,
+            ottMix: 55,
+            ottAmount: 70,
+            ottTimePercent: 125,
+            ottBandDrive: 8,
+            ottEnvelopeMatch: 44,
+            envelopeBoostClampDb: 11,
+        },
+    });
+    const controller = await createPresetController({
+        patchConnection,
         createPresetID: () => "user.ott.captured",
     });
-    const controller = await create();
 
     controller.attach();
     patchConnection.storedWrites = [];
@@ -353,30 +365,21 @@ test("standalone controller saves current descriptor values as an active clean u
     const result = controller.saveCurrentAsNewPreset("Captured");
 
     assert.equal(result.ok, true);
-    assert.deepEqual(result.value.values, {
-        ottMix: 55,
+    assert.deepEqual(result.value.parameters, {
+        envelopeBoostClampDb: 11,
         ottAmount: 70,
-        ottTimePercent: 125,
         ottBandDrive: 8,
         ottEnvelopeMatch: 44,
+        ottMix: 55,
+        ottTimePercent: 125,
     });
+    assert.equal("hostSlot0Guard" in result.value.parameters, false);
     assert.deepEqual(patchConnection.events, []);
 
     const persisted = parseStoredWrite(patchConnection.storedWrites.at(-1));
-    assert.deepEqual(persisted.userPresets.ott, [{
-        kind: "cosimo.effectPreset",
-        version: 1,
-        effectID: "ott",
-        presetID: "user.ott.captured",
-        label: "Captured",
-        values: {
-            ottMix: 55,
-            ottAmount: 70,
-            ottTimePercent: 125,
-            ottBandDrive: 8,
-            ottEnvelopeMatch: 44,
-        },
-    }]);
+    assert.equal(persisted.version, 2);
+    assert.deepEqual(persisted.userPresets.ott[0].parameters, result.value.parameters);
+    assert.equal(persisted.userPresets.ott[0].contract.hash, controller.getState().currentContract.hash);
     assert.deepEqual(persisted.activePresetByEffect.ott, {
         presetID: "user.ott.captured",
         label: "Captured",
@@ -384,16 +387,14 @@ test("standalone controller saves current descriptor values as an active clean u
     });
 });
 
-test("standalone controller refuses to save partial current values", async () => {
-    const { patchConnection, create } = createPresetController({
-        patchConnection: new FakeStandalonePatchConnection({
-            parameterValues: {
-                ottMix: 55,
-                ottAmount: 70,
-            },
-        }),
+test("standalone controller refuses to save while any current parameter value is missing", async () => {
+    const patchConnection = new FakeStandalonePatchConnection({
+        parameterValues: {
+            ottMix: 55,
+            ottAmount: 70,
+        },
     });
-    const controller = await create();
+    const controller = await createPresetController({ patchConnection });
 
     controller.attach();
     patchConnection.storedWrites = [];
@@ -401,184 +402,139 @@ test("standalone controller refuses to save partial current values", async () =>
     const result = controller.saveCurrentAsNewPreset("Incomplete");
 
     assert.equal(result.ok, false);
-    assert.match(result.message, /missing.*ottTimePercent.*ottBandDrive.*ottEnvelopeMatch/i);
+    assert.match(result.message, /missing.*envelopeBoostClampDb/i);
+    assert.match(result.message, /missing.*ottBandDrive/i);
+    assert.match(result.message, /missing.*ottEnvelopeMatch/i);
+    assert.match(result.message, /missing.*ottTimePercent/i);
     assert.deepEqual(patchConnection.storedWrites, []);
     assert.deepEqual(controller.getState().userPresets, []);
 });
 
 test("standalone controller does not assume current parameter value requests resolve synchronously", async () => {
-    const { patchConnection, create } = createPresetController({
-        patchConnection: new DelayedParameterPatchConnection(),
+    const patchConnection = new DelayedParameterPatchConnection();
+    const controller = await createPresetController({
+        patchConnection,
         createPresetID: () => "user.ott.async-capture",
     });
-    const controller = await create();
 
     controller.attach();
     patchConnection.storedWrites = [];
-    const initialRequests = [
-        "ottMix",
+    assert.deepEqual(patchConnection.requestedParameters, [
+        "envelopeBoostClampDb",
         "ottAmount",
-        "ottTimePercent",
         "ottBandDrive",
         "ottEnvelopeMatch",
-    ];
-    assert.deepEqual(patchConnection.requestedParameters, initialRequests);
+        "ottMix",
+        "ottTimePercent",
+    ]);
 
     const saveBeforeValuesResult = controller.saveCurrentAsNewPreset("Async Capture");
     assert.equal(saveBeforeValuesResult.ok, false);
-    assert.match(saveBeforeValuesResult.message, /missing.*ottMix.*ottAmount.*ottTimePercent.*ottBandDrive.*ottEnvelopeMatch/i);
+    assert.match(saveBeforeValuesResult.message, /missing.*envelopeBoostClampDb.*ottAmount.*ottBandDrive.*ottEnvelopeMatch.*ottMix.*ottTimePercent/i);
     assert.deepEqual(patchConnection.storedWrites, []);
     assert.deepEqual(controller.getState().userPresets, []);
-    assert.deepEqual(patchConnection.requestedParameters, initialRequests);
 
-    patchConnection.emitParameterValue("ottMix", 41);
+    patchConnection.emitParameterValue("envelopeBoostClampDb", 10);
     patchConnection.emitParameterValue("ottAmount", 42);
-    patchConnection.emitParameterValue("ottTimePercent", 43);
     patchConnection.emitParameterValue("ottBandDrive", 44);
     patchConnection.emitParameterValue("ottEnvelopeMatch", 45);
+    patchConnection.emitParameterValue("ottMix", 41);
+    patchConnection.emitParameterValue("ottTimePercent", 43);
 
     const saveAfterValuesResult = controller.saveCurrentAsNewPreset("Async Capture");
 
     assert.equal(saveAfterValuesResult.ok, true);
-    assert.deepEqual(saveAfterValuesResult.value.values, {
-        ottMix: 41,
+    assert.deepEqual(saveAfterValuesResult.value.parameters, {
+        envelopeBoostClampDb: 10,
         ottAmount: 42,
-        ottTimePercent: 43,
         ottBandDrive: 44,
         ottEnvelopeMatch: 45,
+        ottMix: 41,
+        ottTimePercent: 43,
     });
-    assert.deepEqual(parseStoredWrite(patchConnection.storedWrites.at(-1)).userPresets.ott[0], {
-        kind: "cosimo.effectPreset",
-        version: 1,
-        effectID: "ott",
-        presetID: "user.ott.async-capture",
-        label: "Async Capture",
-        values: {
-            ottMix: 41,
-            ottAmount: 42,
-            ottTimePercent: 43,
-            ottBandDrive: 44,
-            ottEnvelopeMatch: 45,
-        },
-    });
-    assert.deepEqual(patchConnection.requestedParameters, initialRequests);
 });
 
-test("standalone controller renames overwrites and deletes user presets without allowing factory mutation", async () => {
-    const { patchConnection, create } = createPresetController({
-        patchConnection: new FakeStandalonePatchConnection({
-            storedState: {
-                "effects.presets.v1": storedPresetState({
-                    userPresets: {
-                        ott: [ottUserPreset()],
-                    },
-                    activePresetByEffect: {
-                        ott: {
-                            presetID: "user.ott.soft-smash",
-                            label: "Soft Smash",
-                            dirty: true,
-                        },
-                    },
-                }),
-            },
-            parameterValues: {
-                ottMix: 12,
-                ottAmount: 34,
-                ottTimePercent: 56,
-                ottBandDrive: 7,
-                ottEnvelopeMatch: 89,
-            },
-        }),
-    });
-    const controller = await create();
-
-    controller.attach();
-    patchConnection.storedWrites = [];
-
-    const renameResult = controller.renamePreset("user:user.ott.soft-smash", "Renamed Smash");
-    assert.equal(renameResult.ok, true);
-    assert.deepEqual(controller.getState().activePreset, {
-        presetID: "user.ott.soft-smash",
-        label: "Renamed Smash",
-        dirty: true,
-    });
-    assert.deepEqual(parseStoredWrite(patchConnection.storedWrites.at(-1)).activePresetByEffect.ott, {
-        presetID: "user.ott.soft-smash",
-        label: "Renamed Smash",
-        dirty: true,
-    });
-
-    const overwriteResult = controller.overwriteUserPreset("user:user.ott.soft-smash");
-    assert.equal(overwriteResult.ok, true);
-    assert.deepEqual(overwriteResult.value.values, {
-        ottMix: 12,
-        ottAmount: 34,
-        ottTimePercent: 56,
-        ottBandDrive: 7,
-        ottEnvelopeMatch: 89,
-    });
-    assert.deepEqual(controller.getState().activePreset, {
-        presetID: "user.ott.soft-smash",
-        label: "Renamed Smash",
-        dirty: false,
-    });
-    assert.deepEqual(parseStoredWrite(patchConnection.storedWrites.at(-1)).userPresets.ott[0], {
-        kind: "cosimo.effectPreset",
-        version: 1,
-        effectID: "ott",
-        presetID: "user.ott.soft-smash",
-        label: "Renamed Smash",
-        values: {
-            ottMix: 12,
-            ottAmount: 34,
-            ottTimePercent: 56,
-            ottBandDrive: 7,
-            ottEnvelopeMatch: 89,
-        },
-    });
-
-    const storedWriteCountBeforeFactoryDelete = patchConnection.storedWrites.length;
-    const factoryDeleteResult = controller.deletePreset("factory:ott.default-smash");
-    assert.equal(factoryDeleteResult.ok, false);
-    assert.match(factoryDeleteResult.message, /factory.*delete/i);
-    assert.equal(patchConnection.storedWrites.length, storedWriteCountBeforeFactoryDelete);
-
-    const deleteResult = controller.deletePreset("user:user.ott.soft-smash");
-    assert.equal(deleteResult.ok, true);
-    assert.deepEqual(controller.getState().userPresets, []);
-    assert.equal(controller.getState().activePreset, null);
-    assert.deepEqual(parseStoredWrite(patchConnection.storedWrites.at(-1)).userPresets.ott, []);
-    assert.deepEqual(parseStoredWrite(patchConnection.storedWrites.at(-1)).activePresetByEffect, {});
-});
-
-test("standalone import is effect scoped and invalid imports leave state untouched", async () => {
-    const { patchConnection, create } = createPresetController();
-    const controller = await create();
-
-    controller.attach();
-    patchConnection.storedWrites = [];
-
-    const wrongEffectResult = controller.importPresetText(JSON.stringify(chorusUserPreset()));
-    assert.equal(wrongEffectResult.ok, false);
-    assert.match(wrongEffectResult.message, /chorus.*ott|ott.*chorus/i);
-
-    const unknownEndpointResult = controller.importPresetText(JSON.stringify(ottUserPreset({
-        presetID: "user.ott.bad-endpoint",
-        values: {
+test("standalone controller reports invalid live parameter values instead of silently dropping them", async () => {
+    const patchConnection = new FakeStandalonePatchConnection({
+        parameterValues: {
             ottMix: 50,
-            ottNotReal: 1,
         },
-    })));
-    assert.equal(unknownEndpointResult.ok, false);
-    assert.match(unknownEndpointResult.message, /unknown.*ottNotReal/i);
+    });
+    const controller = await createPresetController({ patchConnection });
 
+    controller.attach();
+    assert.equal(controller.getState().currentValues.ottMix, 50);
+
+    patchConnection.emitParameterValue("ottMix", 200);
+    const state = controller.getState();
+
+    assert.match(state.lastError, /ottMix value 200 is above maximum 100/i);
+    assert.equal(state.currentValues.ottMix, 50);
+});
+
+test("standalone import rejects stale or incomplete v2 presets before memory or sound writes", async () => {
+    const patchConnection = new FakeStandalonePatchConnection();
+    const controller = await createPresetController({ patchConnection });
+    const stalePreset = await createV2Preset({
+        parameters: {
+            obsoleteControl: 1,
+        },
+    });
+
+    stalePreset.contract = {
+        ...stalePreset.contract,
+        hash: "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    };
+
+    controller.attach();
+    patchConnection.storedWrites = [];
+    patchConnection.events = [];
+
+    const result = controller.importPresetText(JSON.stringify(stalePreset), { applyAfterImport: true });
+
+    assert.equal(result.ok, false);
+    assert.match(result.message, /unknown saved parameters/i);
+    assert.match(result.message, /obsoleteControl/i);
+    assert.match(result.message, /no migration/i);
+    assert.deepEqual(patchConnection.events, []);
     assert.deepEqual(patchConnection.storedWrites, []);
     assert.deepEqual(controller.getState().userPresets, []);
 });
 
+test("standalone controller reports invalid persisted v2 state instead of silently clearing it", async () => {
+    const patchConnection = new FakeStandalonePatchConnection({
+        storedState: {
+            "effects.presets.v2": JSON.stringify({
+                kind: "cosimo.effectPresetState",
+                version: 2,
+                userPresets: {
+                    ott: [{
+                        kind: "cosimo.effectPreset",
+                        version: 999,
+                        effectID: "ott",
+                        presetID: "user.ott.stale",
+                        label: "Stale",
+                        contract: { hash: "sha256:deadbeef" },
+                        parameters: {},
+                        storedState: {},
+                    }],
+                },
+                activePresetByEffect: {},
+            }),
+        },
+    });
+    const controller = await createPresetController({ patchConnection });
+
+    controller.attach();
+
+    assert.match(controller.getState().lastError, /unsupported effect preset version/i);
+    assert.deepEqual(controller.getState().userPresets, []);
+    assert.deepEqual(patchConnection.storedWrites, []);
+});
+
 test("standalone dirty tracking ignores apply writes and persists the first later edit", async () => {
-    const { patchConnection, create } = createPresetController();
-    const controller = await create();
+    const patchConnection = new FakeStandalonePatchConnection();
+    const controller = await createPresetController({ patchConnection });
 
     controller.attach();
     patchConnection.storedWrites = [];
@@ -606,19 +562,18 @@ test("standalone dirty tracking ignores apply writes and persists the first late
 });
 
 test("standalone persistent mutations fail before sound writes when stored state cannot be saved", async () => {
-    const { patchConnection, create } = createPresetController({
-        patchConnection: new FakeStandalonePatchConnection({
-            canPersistState: false,
-            parameterValues: {
-                ottMix: 55,
-                ottAmount: 70,
-                ottTimePercent: 125,
-                ottBandDrive: 8,
-                ottEnvelopeMatch: 44,
-            },
-        }),
+    const patchConnection = new FakeStandalonePatchConnection({
+        canPersistState: false,
+        parameterValues: {
+            envelopeBoostClampDb: 11,
+            ottAmount: 70,
+            ottBandDrive: 8,
+            ottEnvelopeMatch: 44,
+            ottMix: 55,
+            ottTimePercent: 125,
+        },
     });
-    const controller = await create();
+    const controller = await createPresetController({ patchConnection });
 
     controller.attach();
 
@@ -634,27 +589,35 @@ test("standalone persistent mutations fail before sound writes when stored state
 });
 
 test("standalone persistent mutations do not change sound or memory state when stored state writes throw", async () => {
-    const { patchConnection, create } = createPresetController({
-        patchConnection: new ThrowingStoredStatePatchConnection({
-            parameterValues: {
-                ottMix: 55,
-                ottAmount: 70,
-                ottTimePercent: 125,
-                ottBandDrive: 8,
-                ottEnvelopeMatch: 44,
-            },
-        }),
+    const patchConnection = new ThrowingStoredStatePatchConnection({
+        parameterValues: {
+            envelopeBoostClampDb: 11,
+            ottAmount: 70,
+            ottBandDrive: 8,
+            ottEnvelopeMatch: 44,
+            ottMix: 55,
+            ottTimePercent: 125,
+        },
     });
-    const controller = await create();
+    const controller = await createPresetController({ patchConnection });
+    const importPreset = await createV2Preset({
+        presetID: "user.ott.imported-after-throw",
+        parameters: {
+            envelopeBoostClampDb: 9,
+            ottAmount: 80,
+            ottBandDrive: 9,
+            ottEnvelopeMatch: 40,
+            ottMix: 60,
+            ottTimePercent: 110,
+        },
+    });
 
     controller.attach();
     patchConnection.events = [];
 
     const applyResult = controller.applyPreset("factory:ott.envelope-tamed");
     const saveResult = controller.saveCurrentAsNewPreset("Captured");
-    const importResult = controller.importPresetText(JSON.stringify(ottUserPreset({
-        presetID: "user.ott.imported-after-throw",
-    })), { applyAfterImport: true });
+    const importResult = controller.importPresetText(JSON.stringify(importPreset), { applyAfterImport: true });
 
     assert.equal(applyResult.ok, false);
     assert.equal(saveResult.ok, false);
@@ -667,29 +630,86 @@ test("standalone persistent mutations do not change sound or memory state when s
     assert.deepEqual(controller.getState().userPresets, []);
 });
 
-test("standalone clipboard mutations export and import preset json", async () => {
+test("standalone apply rolls back active metadata when parameter writes fail", async () => {
+    const patchConnection = new ThrowingParameterPatchConnection({
+        throwOnEndpointID: "ottAmount",
+    });
+    const controller = await createPresetController({ patchConnection });
+
+    controller.attach();
+    patchConnection.storedWrites = [];
+
+    const result = controller.applyPreset("factory:ott.envelope-tamed");
+
+    assert.equal(result.ok, false);
+    assert.match(result.message, /parameter write failed for ottAmount/i);
+    assert.deepEqual(controller.getState().activePreset, null);
+    assert.deepEqual(JSON.parse(patchConnection.storedWrites.at(-1).value).activePresetByEffect, {});
+});
+
+test("standalone import with apply rolls back imported preset when parameter writes fail", async () => {
+    const patchConnection = new ThrowingParameterPatchConnection({
+        throwOnEndpointID: "ottAmount",
+    });
+    const controller = await createPresetController({ patchConnection });
+    const importPreset = await createV2Preset({
+        presetID: "user.ott.imported-then-failed",
+        parameters: {
+            envelopeBoostClampDb: 9,
+            ottAmount: 80,
+            ottBandDrive: 9,
+            ottEnvelopeMatch: 40,
+            ottMix: 60,
+            ottTimePercent: 110,
+        },
+    });
+
+    controller.attach();
+    patchConnection.storedWrites = [];
+
+    const result = controller.importPresetText(JSON.stringify(importPreset), { applyAfterImport: true });
+
+    assert.equal(result.ok, false);
+    assert.match(result.message, /parameter write failed for ottAmount/i);
+    assert.deepEqual(controller.getState().activePreset, null);
+    assert.deepEqual(controller.getState().userPresets, []);
+
+    const finalStoredState = JSON.parse(patchConnection.storedWrites.at(-1).value);
+    assert.deepEqual(finalStoredState.userPresets, {});
+    assert.deepEqual(finalStoredState.activePresetByEffect, {});
+});
+
+test("standalone clipboard mutations export and import v2 preset json", async () => {
     const clipboard = createClipboardHarness();
+    const userPreset = await createV2Preset({
+        parameters: {
+            envelopeBoostClampDb: 10,
+            ottAmount: 91,
+            ottBandDrive: 14,
+            ottEnvelopeMatch: 63,
+            ottMix: 82,
+            ottTimePercent: 100,
+        },
+    });
     const sourcePatchConnection = new FakeStandalonePatchConnection({
         storedState: {
-            "effects.presets.v1": storedPresetState({
+            "effects.presets.v2": storedPresetStateV2({
                 userPresets: {
-                    ott: [ottUserPreset()],
+                    ott: [userPreset],
                 },
             }),
         },
     });
-    const sourceHarness = createPresetController({ patchConnection: sourcePatchConnection, clipboard });
-    const sourceController = await sourceHarness.create();
+    const sourceController = await createPresetController({ patchConnection: sourcePatchConnection, clipboard });
 
     sourceController.attach();
 
     const copyResult = await sourceController.copyPresetToClipboard("user:user.ott.soft-smash");
     assert.equal(copyResult.ok, true);
-    assert.deepEqual(JSON.parse(clipboard.text), ottUserPreset());
+    assert.deepEqual(JSON.parse(clipboard.text), userPreset);
 
     const destinationPatchConnection = new FakeStandalonePatchConnection();
-    const destinationHarness = createPresetController({ patchConnection: destinationPatchConnection, clipboard });
-    const destinationController = await destinationHarness.create();
+    const destinationController = await createPresetController({ patchConnection: destinationPatchConnection, clipboard });
 
     destinationController.attach();
     destinationPatchConnection.storedWrites = [];
@@ -697,13 +717,14 @@ test("standalone clipboard mutations export and import preset json", async () =>
     const pasteResult = await destinationController.pastePresetFromClipboard({ applyAfterImport: true });
 
     assert.equal(pasteResult.ok, true);
-    assert.deepEqual(pasteResult.value, ottUserPreset());
+    assert.deepEqual(pasteResult.value.parameters, userPreset.parameters);
     assert.deepEqual(destinationPatchConnection.events, [
-        { endpointID: "ottMix", value: 82 },
+        { endpointID: "envelopeBoostClampDb", value: 10 },
         { endpointID: "ottAmount", value: 91 },
-        { endpointID: "ottTimePercent", value: 100 },
         { endpointID: "ottBandDrive", value: 14 },
         { endpointID: "ottEnvelopeMatch", value: 63 },
+        { endpointID: "ottMix", value: 82 },
+        { endpointID: "ottTimePercent", value: 100 },
     ]);
-    assert.deepEqual(parseStoredWrite(destinationPatchConnection.storedWrites.at(-1)).userPresets.ott, [ottUserPreset()]);
+    assert.deepEqual(parseStoredWrite(destinationPatchConnection.storedWrites.at(-1)).userPresets.ott[0].parameters, userPreset.parameters);
 });
