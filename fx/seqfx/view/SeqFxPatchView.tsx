@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type MouseEvent, type PointerEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent, type PointerEvent } from "react";
 
-import type { PatchConnectionLike } from "../shared/cmajor-react";
+import type { PatchConnectionLike } from "../../../ui/shared/cmajor-react";
 import {
     SEQFX_LANES,
     SEQFX_LANE_NAMES,
@@ -357,12 +357,12 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
     }, [cellsPerBeat]);
 
     useEffect(() => {
-        const handleKeyDown = (event: KeyboardEvent) => {
+        const handleKeyDown = (event: globalThis.KeyboardEvent) => {
             if (event.key === "Alt") {
                 optionKeyRef.current = true;
             }
         };
-        const handleKeyUp = (event: KeyboardEvent) => {
+        const handleKeyUp = (event: globalThis.KeyboardEvent) => {
             if (event.key === "Alt") {
                 optionKeyRef.current = false;
             }
@@ -622,11 +622,11 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
         activateCell(lane, step, event.shiftKey);
     }
 
-    function isKeyboardActivation(event: KeyboardEvent<HTMLDivElement>) {
+    function isKeyboardActivation(event: ReactKeyboardEvent<HTMLDivElement>) {
         return event.key === "Enter" || event.key === " " || event.key === "Spacebar";
     }
 
-    function handleCellKeyDown(event: KeyboardEvent<HTMLDivElement>, lane: number, step: number) {
+    function handleCellKeyDown(event: ReactKeyboardEvent<HTMLDivElement>, lane: number, step: number) {
         if (!isKeyboardActivation(event)) {
             return;
         }
@@ -672,7 +672,7 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
         });
     }
 
-    function handleBlockKeyDown(event: KeyboardEvent<HTMLDivElement>, lane: number, startStep: number, length: number) {
+    function handleBlockKeyDown(event: ReactKeyboardEvent<HTMLDivElement>, lane: number, startStep: number, length: number) {
         if (!isKeyboardActivation(event)) {
             return;
         }

@@ -1,4 +1,4 @@
-import { createSeqFxPatchView } from "./patch-view-entry";
+import { createSeqFxPatchView } from "./source";
 
 type Listener = (value: unknown) => void;
 

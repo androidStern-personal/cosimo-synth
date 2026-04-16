@@ -154,6 +154,16 @@ async function buildJuceProject(pluginName, plugin) {
         `${plugin.cmakeTarget}_VST3`,
     ]);
 
+    const builtVST3 = getBuiltVST3Path(plugin);
+
+    if (!await pathExists(builtVST3))
+        throw new Error(`Built VST3 bundle not found: ${builtVST3}`);
+
+    if (process.platform === "darwin") {
+        signVST3Bundle(builtVST3);
+        verifyVST3Bundle(builtVST3);
+    }
+
     console.log(`Built ${pluginName} dedicated plugin project at ${path.relative(repoRoot, cmakeBuildDir)}`);
 }
 
@@ -186,18 +196,17 @@ function getBuiltVST3BinaryPath(plugin) {
     return path.join(getBuiltVST3Path(plugin), "Contents", "MacOS", plugin.productName);
 }
 
-function signInstalledVST3(vst3Path) {
+function signVST3Bundle(vst3Path) {
     run("codesign", ["--force", "--deep", "--sign", "-", vst3Path], { capture: true });
 }
 
-function verifyInstalledVST3(vst3Path) {
+function verifyVST3Bundle(vst3Path) {
     run("codesign", ["--verify", "--deep", "--strict", "--verbose=4", vst3Path], { capture: true });
 }
 
 function verifyKeyboardBridge(binaryPath) {
-    const binaryStrings = run("strings", [binaryPath], { capture: true });
-    const missingStrings = keyboardBridgeRequiredStrings.filter((marker) => !binaryStrings.includes(marker));
-    const presentForbiddenStrings = keyboardBridgeForbiddenStrings.filter((marker) => binaryStrings.includes(marker));
+    const missingStrings = keyboardBridgeRequiredStrings.filter((marker) => !binaryContainsString(binaryPath, marker));
+    const presentForbiddenStrings = keyboardBridgeForbiddenStrings.filter((marker) => binaryContainsString(binaryPath, marker));
 
     if (missingStrings.length > 0) {
         throw new Error(
@@ -216,6 +225,22 @@ function verifyKeyboardBridge(binaryPath) {
             ].join("\n"),
         );
     }
+}
+
+function binaryContainsString(binaryPath, marker) {
+    const result = spawnSync("grep", ["-a", "-F", "-q", marker, binaryPath], {
+        cwd: repoRoot,
+        stdio: ["ignore", "ignore", "pipe"],
+        encoding: "utf8",
+    });
+
+    if (result.status === 0)
+        return true;
+
+    if (result.status === 1)
+        return false;
+
+    throw new Error(result.stderr?.trim() || `grep failed while checking ${binaryPath}`);
 }
 
 async function installVST3(pluginName, plugin, options) {
@@ -242,8 +267,8 @@ async function installVST3(pluginName, plugin, options) {
     await mkdir(installDir, { recursive: true });
     await rm(installedVST3, { recursive: true, force: true });
     await cp(builtVST3, installedVST3, { recursive: true });
-    signInstalledVST3(installedVST3);
-    verifyInstalledVST3(installedVST3);
+    signVST3Bundle(installedVST3);
+    verifyVST3Bundle(installedVST3);
     verifyKeyboardBridge(installedVST3Binary);
 
     console.log(`Installed ${pluginName} VST3: ${installedVST3}`);

@@ -1,11 +1,14 @@
 import test, { after, before } from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { inflateSync } from "node:zlib";
 
 import { chromium } from "playwright";
 
 const DEV_SERVER_ORIGIN = "http://127.0.0.1:5175";
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const SEQFX_STEP_COUNT = 32;
 const SEQFX_NORMAL_GAP_PX = 5;
 const SEQFX_BEAT_GAP_PX = 9;
@@ -20,8 +23,15 @@ async function waitForServer() {
 
     while (Date.now() - startedAt < 20_000) {
         try {
-            const response = await fetch(`${DEV_SERVER_ORIGIN}/__seqfx-dev-status`);
-            if (response.ok) {
+            const response = await fetch(`${DEV_SERVER_ORIGIN}/__fx-dev-status`);
+            const status = response.ok ? await response.json() : undefined;
+            const seqfxPlugin = status?.plugins?.find?.((plugin) => plugin.name === "seqfx");
+
+            if (
+                status?.kind === "fx-vite-dev-server"
+                && path.resolve(status.repoRoot) === repoRoot
+                && seqfxPlugin?.sourceModule === "/fx/seqfx/view/source.tsx"
+            ) {
                 return;
             }
         } catch (error) {
@@ -84,6 +94,35 @@ function assertClose(actual, expected, tolerance, message) {
         Math.abs(actual - expected) <= tolerance,
         `${message}: expected ${actual} to be within ${tolerance} of ${expected}`,
     );
+}
+
+async function waitForGridGeometry(page, cellsPerBeat, step, message) {
+    const deadline = Date.now() + 2_000;
+    let last;
+
+    while (Date.now() < deadline) {
+        const trackBox = await page.locator('.seqfx-lane-track').first().boundingBox();
+        assert.ok(trackBox);
+        const expected = expectedGridGeometry(trackBox.width, cellsPerBeat);
+        const cellBox = await boundingBoxForCell(page, 0, step);
+        const actualLeft = cellBox.x - trackBox.x;
+        last = { actualLeft, cellBox, expected, trackBox };
+
+        if (
+            Math.abs(actualLeft - expected.lefts[step]) <= 1
+            && Math.abs(cellBox.width - expected.cellSize) <= 1
+            && Math.abs(cellBox.height - expected.cellSize) <= 1
+        ) {
+            return last;
+        }
+
+        await page.waitForTimeout(50);
+    }
+
+    assertClose(last.actualLeft, last.expected.lefts[step], 1, message);
+    assertClose(last.cellBox.width, last.expected.cellSize, 1, `${message} width`);
+    assertClose(last.cellBox.height, last.expected.cellSize, 1, `${message} height`);
+    return last;
 }
 
 function parsePng(buffer) {
@@ -190,19 +229,205 @@ function colorDistance(left, right) {
         + Math.abs(left[2] - right[2]);
 }
 
-before(async () => {
-    serverProcess = spawn("npm", ["run", "seqfx:ui:dev"], {
-        cwd: new URL("..", import.meta.url).pathname,
-        stdio: ["ignore", "pipe", "pipe"],
+async function canUseExistingServer() {
+    try {
+        const response = await fetch(`${DEV_SERVER_ORIGIN}/__fx-dev-status`);
+        if (!response.ok) {
+            return false;
+        }
+
+        const status = await response.json();
+        const seqfxPlugin = status?.plugins?.find?.((plugin) => plugin.name === "seqfx");
+        return status?.kind === "fx-vite-dev-server"
+            && path.resolve(status.repoRoot) === repoRoot
+            && seqfxPlugin?.sourceModule === "/fx/seqfx/view/source.tsx";
+    } catch {
+        return false;
+    }
+}
+
+async function openSameOriginBlankPage(page) {
+    await page.goto(`${DEV_SERVER_ORIGIN}/__fx-dev-status`);
+    await page.setContent('<!doctype html><html><head><title>SeqFX Test</title></head><body></body></html>');
+}
+
+async function loadSeqFxHarness(page) {
+    await openSameOriginBlankPage(page);
+    await page.setContent(`
+        <!doctype html>
+        <html>
+            <head>
+                <title>SeqFX Harness</title>
+                <style>
+                    html,
+                    body,
+                    #root {
+                        width: 100%;
+                        height: 100%;
+                        margin: 0;
+                    }
+                </style>
+            </head>
+            <body>
+                <div id="root"></div>
+                <script type="module">
+                    import RefreshRuntime from "/@react-refresh";
+                    RefreshRuntime.injectIntoGlobalHook(window);
+                    window.$RefreshReg$ = () => {};
+                    window.$RefreshSig$ = () => (type) => type;
+                    window.__vite_plugin_react_preamble_installed__ = true;
+                </script>
+                <script type="module" src="/fx/seqfx/view/harness-main.ts"></script>
+            </body>
+        </html>
+    `);
+}
+
+async function createLoaderHarness(page) {
+    await openSameOriginBlankPage(page);
+    await page.evaluate(async () => {
+        document.body.innerHTML = '<div id="root" style="width:1120px;height:680px"></div>';
+
+        class SeqFxLoaderHarnessPatchConnection {
+            constructor() {
+                this.manifest = {
+                    view: {
+                        devModule: "/fx/seqfx/view/source.tsx",
+                    },
+                };
+                this.storedState = {};
+                this.events = [];
+                this.parameters = {
+                    patternSelect: 0,
+                    rate: 1,
+                };
+                this.storedStateListeners = new Set();
+                this.parameterListeners = new Map();
+                this.endpointListeners = new Map();
+            }
+
+            addStoredStateValueListener(listener) {
+                this.storedStateListeners.add(listener);
+            }
+
+            removeStoredStateValueListener(listener) {
+                this.storedStateListeners.delete(listener);
+            }
+
+            requestFullStoredState(callback) {
+                callback({ ...this.storedState });
+            }
+
+            requestStoredStateValue(key) {
+                for (const listener of this.storedStateListeners) {
+                    listener({ key, value: this.storedState[key] });
+                }
+            }
+
+            sendStoredStateValue(key, value) {
+                this.storedState[key] = value;
+                for (const listener of this.storedStateListeners) {
+                    listener({ key, value });
+                }
+            }
+
+            addParameterListener(endpointID, listener) {
+                const listeners = this.parameterListeners.get(endpointID) ?? new Set();
+                listeners.add(listener);
+                this.parameterListeners.set(endpointID, listeners);
+            }
+
+            removeParameterListener(endpointID, listener) {
+                this.parameterListeners.get(endpointID)?.delete(listener);
+            }
+
+            requestParameterValue(endpointID) {
+                for (const listener of this.parameterListeners.get(endpointID) ?? []) {
+                    listener(this.parameters[endpointID] ?? 0);
+                }
+            }
+
+            sendEventOrValue(endpointID, value) {
+                this.events.push({ endpointID, value });
+                this.parameters[endpointID] = value;
+                for (const listener of this.parameterListeners.get(endpointID) ?? []) {
+                    listener(value);
+                }
+            }
+
+            addEndpointListener(endpointID, listener) {
+                const listeners = this.endpointListeners.get(endpointID) ?? new Set();
+                listeners.add(listener);
+                this.endpointListeners.set(endpointID, listeners);
+            }
+
+            removeEndpointListener(endpointID, listener) {
+                this.endpointListeners.get(endpointID)?.delete(listener);
+            }
+
+            getSnapshot() {
+                return {
+                    events: [...this.events],
+                    storedState: { ...this.storedState },
+                    parameters: { ...this.parameters },
+                };
+            }
+        }
+
+        const patchConnection = new SeqFxLoaderHarnessPatchConnection();
+        const loaderModule = await import(`/fx/seqfx/view/index.js?seqfx-loader-test=${Date.now()}`);
+        const view = await loaderModule.default(patchConnection);
+        document.getElementById("root").appendChild(view);
+        window.__SEQFX_LOADER_HARNESS__ = {
+            patchConnection,
+            getSnapshot: () => patchConnection.getSnapshot(),
+        };
     });
+}
+
+before(async () => {
+    if (!await canUseExistingServer()) {
+        serverProcess = spawn("npm", ["run", "fx:dev"], {
+            cwd: new URL("..", import.meta.url).pathname,
+            stdio: ["ignore", "pipe", "pipe"],
+        });
+    }
 
     await waitForServer();
     browser = await chromium.launch();
 });
 
+test("seqfx_shared_effect_loader_imports_react_dev_module_from_manifest", async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
+    const pageErrors = [];
+    page.on("pageerror", (error) => {
+        pageErrors.push(error.message);
+    });
+
+    await createLoaderHarness(page);
+    await page.locator('[data-role="seqfx-root"]').waitFor();
+
+    const snapshot = await page.evaluate(() => ({
+        customElementDefined: Boolean(window.customElements.get("cosimo-seqfx-react-view")),
+        refreshPreambleInstalled: Boolean(window.__vite_plugin_react_preamble_installed__),
+        viewTagName: document.querySelector("cosimo-seqfx-react-view")?.tagName.toLowerCase(),
+        uploads: window.__SEQFX_LOADER_HARNESS__?.getSnapshot().events
+            .filter((entry) => entry.endpointID === "patternUpload"),
+    }));
+
+    assert.equal(snapshot.customElementDefined, true);
+    assert.equal(snapshot.refreshPreambleInstalled, true);
+    assert.equal(snapshot.viewTagName, "cosimo-seqfx-react-view");
+    assert.equal(snapshot.uploads.length >= 1, true);
+    assert.equal(snapshot.uploads.at(-1).value.patternIndex, 0);
+    assert.deepEqual(pageErrors, []);
+
+    await page.close();
+});
+
 test("seqfx_rate_one_grid_uses_beat_gutters_and_per_cell_bar_fill", async () => {
     const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
-    await page.goto(DEV_SERVER_ORIGIN);
+    await loadSeqFxHarness(page);
     await page.locator('[data-role="seqfx-root"]').waitFor();
 
     const trackBox = await page.locator('.seqfx-lane-track').first().boundingBox();
@@ -258,11 +483,12 @@ test("seqfx_rate_one_grid_uses_beat_gutters_and_per_cell_bar_fill", async () => 
 
 test("seqfx_rate_parameter_reflows_grid_without_window_resize", async () => {
     const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
-    await page.goto(DEV_SERVER_ORIGIN);
+    await loadSeqFxHarness(page);
     await page.locator('[data-role="seqfx-root"]').waitFor();
 
     await page.evaluate(() => window.__SEQFX_HARNESS__?.emitParameter("rate", 0));
     await page.waitForFunction(() => document.querySelector('[data-role="seqfx-cell"][data-lane="0"][data-step="8"]')?.classList.contains("is-alt-bar"));
+    await waitForGridGeometry(page, 2, 2, "rate 0 reflowed third cell");
 
     let trackBox = await page.locator('.seqfx-lane-track').first().boundingBox();
     assert.ok(trackBox);
@@ -276,6 +502,7 @@ test("seqfx_rate_parameter_reflows_grid_without_window_resize", async () => {
     await page.waitForFunction(() => (
         Array.from(document.querySelectorAll('[data-role="seqfx-cell"].is-alt-bar')).length === 0
     ));
+    await waitForGridGeometry(page, 8, 8, "rate 2 reflowed ninth cell");
 
     trackBox = await page.locator('.seqfx-lane-track').first().boundingBox();
     assert.ok(trackBox);
@@ -290,7 +517,7 @@ test("seqfx_rate_parameter_reflows_grid_without_window_resize", async () => {
 
 test("seqfx_rate_change_cancels_an_active_drag_instead_of_remapping_the_pointer", async () => {
     const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
-    await page.goto(DEV_SERVER_ORIGIN);
+    await loadSeqFxHarness(page);
     await page.locator('[data-role="seqfx-root"]').waitFor();
     await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
 
@@ -329,7 +556,7 @@ after(async () => {
 
 test("seqfx_grid_cell_and_inspector_edits_send_complete_pattern_uploads", async () => {
     const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
-    await page.goto(DEV_SERVER_ORIGIN);
+    await loadSeqFxHarness(page);
     await page.locator('[data-role="seqfx-root"]').waitFor();
     await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
 
@@ -356,7 +583,7 @@ test("seqfx_grid_cell_and_inspector_edits_send_complete_pattern_uploads", async 
 
 test("seqfx_shift_selection_disables_trigger_latched_stutter_slices_edit", async () => {
     const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
-    await page.goto(DEV_SERVER_ORIGIN);
+    await loadSeqFxHarness(page);
     await page.locator('[data-role="seqfx-root"]').waitFor();
 
     await page.getByRole("button", { name: "Stutter step 3", exact: true }).click();
@@ -374,7 +601,7 @@ test("seqfx_shift_selection_disables_trigger_latched_stutter_slices_edit", async
 
 test("seqfx_pattern_buttons_send_pattern_select_and_authoritative_upload", async () => {
     const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
-    await page.goto(DEV_SERVER_ORIGIN);
+    await loadSeqFxHarness(page);
     await page.locator('[data-role="seqfx-root"]').waitFor();
     await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
 
@@ -390,7 +617,7 @@ test("seqfx_pattern_buttons_send_pattern_select_and_authoritative_upload", async
 
 test("seqfx_right_edge_drag_resizes_a_block_without_retriggering_continuation_steps", async () => {
     const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
-    await page.goto(DEV_SERVER_ORIGIN);
+    await loadSeqFxHarness(page);
     await page.locator('[data-role="seqfx-root"]').waitFor();
     await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
 
@@ -442,7 +669,7 @@ test("seqfx_right_edge_drag_resizes_a_block_without_retriggering_continuation_st
 
 test("seqfx_single_cell_blocks_keep_the_same_square_geometry_as_grid_cells", async () => {
     const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
-    await page.goto(DEV_SERVER_ORIGIN);
+    await loadSeqFxHarness(page);
     await page.locator('[data-role="seqfx-root"]').waitFor();
 
     await page.getByRole("button", { name: "Crusher step 1", exact: true }).click();
@@ -465,7 +692,7 @@ test("seqfx_single_cell_blocks_keep_the_same_square_geometry_as_grid_cells", asy
 
 test("seqfx_double_click_deletes_the_clicked_block", async () => {
     const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
-    await page.goto(DEV_SERVER_ORIGIN);
+    await loadSeqFxHarness(page);
     await page.locator('[data-role="seqfx-root"]').waitFor();
     await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
 
@@ -483,7 +710,7 @@ test("seqfx_double_click_deletes_the_clicked_block", async () => {
 
 test("seqfx_dragging_block_body_moves_the_block_without_resizing_it", async () => {
     const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
-    await page.goto(DEV_SERVER_ORIGIN);
+    await loadSeqFxHarness(page);
     await page.locator('[data-role="seqfx-root"]').waitFor();
     await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
 
@@ -524,7 +751,7 @@ test("seqfx_dragging_block_body_moves_the_block_without_resizing_it", async () =
 
 test("seqfx_option_drag_copies_a_block_to_each_valid_cell_dragged_over", async () => {
     const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
-    await page.goto(DEV_SERVER_ORIGIN);
+    await loadSeqFxHarness(page);
     await page.locator('[data-role="seqfx-root"]').waitFor();
     await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
 
@@ -560,7 +787,7 @@ test("seqfx_option_drag_copies_a_block_to_each_valid_cell_dragged_over", async (
 
 test("seqfx_keyboard_activation_creates_and_selects_grid_blocks", async () => {
     const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
-    await page.goto(DEV_SERVER_ORIGIN);
+    await loadSeqFxHarness(page);
     await page.locator('[data-role="seqfx-root"]').waitFor();
     await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
 

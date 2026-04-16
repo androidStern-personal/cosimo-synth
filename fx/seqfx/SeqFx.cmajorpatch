@@ -16,6 +16,7 @@
   ],
   "view": {
     "src": "view/index.js",
+    "devModule": "/fx/seqfx/view/source.tsx",
     "resizable": true,
     "width": 1120,
     "height": 680

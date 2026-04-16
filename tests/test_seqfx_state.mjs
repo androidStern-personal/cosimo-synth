@@ -7,7 +7,7 @@ import { loadUIModule } from "./helpers/load_ui_module.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
-const stateModule = await loadUIModule(repoRoot, "ui/seqfx/seqfx-state.ts");
+const stateModule = await loadUIModule(repoRoot, "fx/seqfx/view/seqfx-state.ts");
 
 const {
     SEQFX_LANE_COUNT,

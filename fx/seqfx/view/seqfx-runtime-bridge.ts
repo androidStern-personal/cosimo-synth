@@ -1,4 +1,4 @@
-import type { PatchConnectionLike } from "../shared/cmajor-react";
+import type { PatchConnectionLike } from "../../../ui/shared/cmajor-react";
 import {
     SEQFX_STATE_KEY,
     applySeqFxBlockCreate,

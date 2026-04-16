@@ -55,8 +55,7 @@ Generated VST3 workflow:
 
 - `ChorusLab` uses `npm run fx:prod:build -- chorus`.
 - `OTT Lab` uses `npm run fx:prod:build -- ott`.
-- `SeqFX`, on branch `codex/effect-sequencer`, uses
-  `scripts/generate_seqfx_plugin.sh`.
+- `SeqFX` uses `npm run fx:prod:build -- seqfx`.
 
 The shared production build follows the same dependency pattern:
 
@@ -76,9 +75,9 @@ chocHostKeyboard
 __chocHostKeyboardBridgeInstalled
 ```
 
-So the generated `ChorusLab` and `OTT Lab` VST3 workflow stays simple: run the
-normal production build command and the build fails if it is not using patched
-CHOC.
+So the generated `ChorusLab`, `OTT Lab`, and `SeqFX` VST3 workflow stays
+simple: run the normal production build command and the build fails if it is not
+using patched CHOC.
 
 Generic JIT loader workflow:
 
@@ -89,6 +88,7 @@ Generic JIT loader workflow:
 ```text
 npm run fx:jit:install -- ott
 npm run fx:jit:install -- chorus
+npm run fx:jit:install -- seqfx
 ```
 
 That script does not install `CmajPlugin.vst3`, does not download the Cmajor
@@ -154,8 +154,8 @@ build/cmajplugin_vst3/tools/CmajPlugin/CmajPlugin_artefacts/Release/VST3/CmajPlu
 ~/Library/Audio/Plug-Ins/VST3/CmajPlugin.vst3
 ```
 
-Then write the active patch pointer with `npm run fx:jit:install -- ott` or
-`npm run fx:jit:install -- chorus`:
+Then write the active patch pointer with `npm run fx:jit:install -- ott`,
+`npm run fx:jit:install -- chorus`, or `npm run fx:jit:install -- seqfx`:
 
 ```json
 {

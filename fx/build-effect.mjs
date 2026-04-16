@@ -1,6 +1,7 @@
 import { cp, mkdir, readFile, rm } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import react from "@vitejs/plugin-react";
 import { build } from "vite";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
@@ -20,6 +21,13 @@ export const effectPlugins = {
         juceOut: "build/chorus_lab_juce",
         cmakeTarget: "ChorusLab",
         productName: "ChorusLab",
+    },
+    seqfx: {
+        patch: "fx/seqfx/SeqFx.cmajorpatch",
+        runtimeOut: "build/fx/seqfx_runtime",
+        juceOut: "build/seqfx_juce",
+        cmakeTarget: "CosimoSeqFX",
+        productName: "CosimoSeqFX",
     },
 };
 
@@ -105,6 +113,12 @@ export async function buildPlugin(pluginName) {
     await build({
         configFile: false,
         root: repoRoot,
+        define: {
+            "process.env.NODE_ENV": JSON.stringify("production"),
+        },
+        plugins: [
+            react(),
+        ],
         build: {
             target: "esnext",
             minify: false,
@@ -115,6 +129,11 @@ export async function buildPlugin(pluginName) {
                 fileName: () => "app.js",
             },
             outDir: runtimeViewRoot,
+            rollupOptions: {
+                output: {
+                    inlineDynamicImports: true,
+                },
+            },
         },
     });
 

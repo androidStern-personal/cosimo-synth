@@ -14,6 +14,7 @@ Usage: npm run fx:jit:install -- <plugin> [--dry-run]
 Available plugins:
   chorus
   ott
+  seqfx
 USAGE
 }
 
@@ -82,6 +83,9 @@ case "$plugin" in
     ;;
   ott)
     patch_rel="fx/ott_lab/OttLab.cmajorpatch"
+    ;;
+  seqfx)
+    patch_rel="fx/seqfx/SeqFx.cmajorpatch"
     ;;
   *)
     printf 'Unknown effect plugin: %s\n\n' "$plugin" >&2

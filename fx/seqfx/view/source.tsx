@@ -3,7 +3,7 @@ import { createRoot, type Root } from "react-dom/client";
 
 import cssText from "./styles.css?inline";
 import { SeqFxPatchView } from "./SeqFxPatchView";
-import type { PatchConnectionLike } from "../shared/cmajor-react";
+import type { PatchConnectionLike } from "../../../ui/shared/cmajor-react";
 
 type ErrorBoundaryState = {
     errorMessage: string | null;

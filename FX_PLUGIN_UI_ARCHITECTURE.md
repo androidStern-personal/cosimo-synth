@@ -2,7 +2,7 @@
 
 This document describes the architecture for standalone effect plugin UIs under `fx/`.
 
-OTT Lab and Chorus Lab follow this architecture.
+OTT Lab, Chorus Lab, and SeqFX follow this architecture.
 
 ## Goals
 
@@ -21,7 +21,7 @@ A patch manifest is the `.cmajorpatch` file that tells Cmajor which DSP source a
 
 A view entry file is `view/index.js`. Cmajor loads this file first.
 
-A view source file is `view/source.js`. This is the human-edited UI module for one plugin.
+A view source file is the human-edited UI module for one plugin. Simple JavaScript effects can use `view/source.js`; React or TypeScript effects can use a manifest-declared module such as `view/source.tsx`.
 
 The shared effect view loader is one reusable JavaScript module that decides whether to load the Vite-served UI or the production UI.
 
@@ -46,7 +46,7 @@ fx/ott_lab/
 fx/ott_lab/view/index.js -> ../../../ui/shared/effects/effect-view-loader.js
 ```
 
-`view/source.js` is the actual plugin UI source. It can import shared preset modules and local lab UI code because Vite handles those imports in development and production builds.
+The `view.devModule` entry in the patch manifest points at the actual plugin UI source. That source can be JavaScript or TypeScript, and it can import shared preset modules, React modules, and local plugin UI code because Vite handles those imports in development and production builds.
 
 The source tree must not contain generated UI bundles such as:
 
@@ -71,7 +71,7 @@ The patch manifest should keep one stable UI entrypoint:
 
 `src` is the file Cmajor loads. It stays `view/index.js` in development and production.
 
-`devModule` is custom effect-plugin metadata. It is the Vite-served source module path for this plugin. This is the only plugin-specific UI path that must be declared.
+`devModule` is custom effect-plugin metadata. It is the Vite-served source module path for this plugin. This is the only plugin-specific UI source path that must be declared.
 
 The dev server origin should not be repeated per plugin. All effect plugins use the same origin, for example:
 
@@ -174,6 +174,13 @@ export const effectPlugins = {
     juceOut: "build/chorus_lab_juce",
     cmakeTarget: "ChorusLab",
     productName: "ChorusLab",
+  },
+  seqfx: {
+    patch: "fx/seqfx/SeqFx.cmajorpatch",
+    runtimeOut: "build/fx/seqfx_runtime",
+    juceOut: "build/seqfx_juce",
+    cmakeTarget: "CosimoSeqFX",
+    productName: "CosimoSeqFX",
   },
 };
 ```
@@ -309,7 +316,7 @@ To add a new effect plugin:
 
 ```text
 1. Add the Cmajor patch files under fx/<plugin_name>/.
-2. Add view/source.js as the editable UI module.
+2. Add an editable UI module such as view/source.js or view/source.tsx.
 3. Add view/index.js as a symlink to the shared loader.
 4. Add view.devModule to the patch manifest.
 5. Add one entry to the effect plugin registry.

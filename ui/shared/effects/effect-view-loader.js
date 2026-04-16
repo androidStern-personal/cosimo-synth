@@ -75,6 +75,25 @@ async function loadViteClient(origin) {
     await import(/* @vite-ignore */ `${normalizeOrigin(origin)}/@vite/client`);
 }
 
+async function loadReactRefreshPreamble(origin) {
+    const targetWindow = globalThis.window;
+
+    if (!targetWindow || targetWindow.__vite_plugin_react_preamble_installed__) {
+        return;
+    }
+
+    try {
+        const refreshRuntime = await import(/* @vite-ignore */ `${normalizeOrigin(origin)}/@react-refresh`);
+        refreshRuntime.injectIntoGlobalHook(targetWindow);
+        targetWindow.$RefreshReg$ = () => {};
+        targetWindow.$RefreshSig$ = () => (type) => type;
+        targetWindow.__vite_plugin_react_preamble_installed__ = true;
+    } catch {
+        // Not every effect UI needs React. If the dev server does not expose the
+        // refresh runtime, vanilla modules can still load normally.
+    }
+}
+
 function createProductionLoadError({ productionModuleUrl, devOrigin, devModulePath, cause }) {
     const devHint = devModulePath
         ? `The effects dev server was not reachable at ${normalizeOrigin(devOrigin)}${EFFECT_DEV_STATUS_PATH}. Start the shared effects Vite dev server, or build a production runtime that contains ${DEFAULT_EFFECT_PRODUCTION_MODULE}.`
@@ -107,6 +126,7 @@ export function createEffectPatchView(options = {}) {
         if (devModulePath && await canLoadEffectDevServer(devOrigin)) {
             const devModuleUrl = resolveDevModuleUrl(devOrigin, devModulePath);
             await loadViteClient(devOrigin);
+            await loadReactRefreshPreamble(devOrigin);
             return await loadViewFromModule(devModuleUrl, patchConnection, `Dev module ${devModuleUrl}`);
         }
 

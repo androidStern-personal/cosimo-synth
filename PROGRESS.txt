@@ -681,3 +681,46 @@ What was verified for the OTT lab local A-G snapshots
 - `uv run pytest -q tests/test_ott_lab_probe.py`
 - `npm run ott:jit:install`
 - `git diff --check`
+
+SeqFX shared effect pipeline migration on 2026-04-16
+- Rebasing `codex/effect-sequencer` onto `master` completed on this branch only. `master` was not checked out, merged into, or changed.
+- SeqFX now follows the shared effect plugin structure: `fx/seqfx/SeqFx.cmajorpatch` loads `view/index.js`, `view/index.js` is a symlink to `ui/shared/effects/effect-view-loader.js`, and the editable React source lives under `fx/seqfx/view/source.tsx`.
+- Removed the old SeqFX-only Vite config and SeqFX-specific generator/install scripts. SeqFX now uses the shared commands: `npm run fx:dev`, `npm run fx:build -- seqfx`, `npm run fx:prod:build -- seqfx`, `npm run fx:prod:install -- seqfx`, and `npm run fx:jit:install -- seqfx`.
+- The shared effects Vite server now reads each patch manifest's `view.devModule`, so SeqFX can use `source.tsx` without a special directory exception.
+- The shared effect build now supports React/TSX entries and builds SeqFX into `build/fx/seqfx_runtime/view/app.js`.
+- The shared effect loader now installs the React refresh preamble before importing Vite-served React effect modules, so React effect UIs can be loaded through the same `view/index.js` loader that Cmajor sees.
+- The shared production VST3 build signs and verifies the generated VST3 bundle after CMake finishes, because the generated VST3 helper adds `moduleinfo.json` after its own signing step.
+
+What was verified for the SeqFX shared effect pipeline migration
+- `node --test tests/test_seqfx_state.mjs tests/test_seqfx_runtime_bridge.mjs`
+- `npm run fx:build -- seqfx`
+- `node --test tests/test_seqfx_patch_view_browser.mjs`
+- `cmaj play --dry-run --stop-on-error build/fx/seqfx_runtime/SeqFx.cmajorpatch`
+- `PYTHONPATH=. uv run pytest tests/test_seqfx_probe.py -q`
+- `npm run fx:jit:install -- seqfx --dry-run`
+- `npm run fx:prod:build -- seqfx`
+- `codesign --verify --deep --strict --verbose=4 build/seqfx_juce/_build/CosimoSeqFX_artefacts/Release/VST3/CosimoSeqFX.vst3`
+- `npm run fx:prod:install -- seqfx --dry-run`
+- `npx tsc --noEmit`
+
+Sibling FX plugin verification after the SeqFX migration on 2026-04-16
+- The shared FX registry currently contains `ott`, `chorus`, and `seqfx`.
+- After the SeqFX migration, OTT Lab and Chorus Lab were rebuilt and checked through the shared runtime, shared JIT install validation, browser/probe tests, and dedicated production VST3 build paths.
+
+What was verified for OTT Lab and Chorus Lab after the SeqFX migration
+- `npm run fx:build -- ott`
+- `npm run fx:build -- chorus`
+- `cmaj play --dry-run --stop-on-error build/fx/ott_lab_runtime/OttLab.cmajorpatch`
+- `cmaj play --dry-run --stop-on-error build/fx/chorus_lab_runtime/ChorusLab.cmajorpatch`
+- `npm run fx:jit:install -- ott --dry-run`
+- `npm run fx:jit:install -- chorus --dry-run`
+- `npm run test:ott:view`
+- `PYTHONPATH=. uv run pytest tests/test_ott_lab_probe.py tests/test_chorus_probe.py -q`
+- `npm run fx:prod:build -- ott`
+- `npm run fx:prod:build -- chorus`
+- `codesign --verify --deep --strict --verbose=4 build/ott_lab_juce/_build/OTTLab_artefacts/Release/VST3/OTTLab.vst3`
+- `codesign --verify --deep --strict --verbose=4 build/chorus_lab_juce/_build/ChorusLab_artefacts/Release/VST3/ChorusLab.vst3`
+- `npm run fx:prod:install -- ott --dry-run`
+- `npm run fx:prod:install -- chorus --dry-run`
+- `npx tsc --noEmit`
+- `git diff --check`

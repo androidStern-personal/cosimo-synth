@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
 const configDir = path.dirname(fileURLToPath(import.meta.url));
@@ -20,18 +21,24 @@ function discoverEffectPlugins() {
             const pluginRoot = path.join(fxRoot, entry.name);
             const patchFile = fs.readdirSync(pluginRoot)
                 .find(fileName => fileName.endsWith(".cmajorpatch"));
-            const sourceModule = path.join(pluginRoot, "view", "source.js");
 
             if (!patchFile) {
                 return undefined;
             }
 
+            const patchPath = path.join(pluginRoot, patchFile);
+            let manifest = {};
+
+            try {
+                manifest = JSON.parse(fs.readFileSync(patchPath, "utf8"));
+            } catch {
+                manifest = {};
+            }
+
             return {
                 name: entry.name,
                 patch: `/fx/${entry.name}/${patchFile}`,
-                sourceModule: fs.existsSync(sourceModule)
-                    ? `/fx/${entry.name}/view/source.js`
-                    : undefined,
+                sourceModule: manifest.view?.devModule,
             };
         })
         .filter(Boolean);
@@ -64,11 +71,15 @@ function serveEffectDevStatus() {
     };
 }
 
-export default defineConfig({
+export default defineConfig(({ command }) => ({
     appType: "custom",
     root: repoRoot,
     clearScreen: false,
+    define: {
+        "process.env.NODE_ENV": JSON.stringify(command === "build" ? "production" : "development"),
+    },
     plugins: [
+        react(),
         serveEffectDevStatus(),
     ],
     server: {
@@ -88,4 +99,4 @@ export default defineConfig({
             },
         },
     },
-});
+}));

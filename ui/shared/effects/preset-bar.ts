@@ -766,7 +766,7 @@ class PresetBar extends HTMLElement {
 
         // Escape key
         root.addEventListener("keydown", (e) => {
-            if (e.key === "Escape") {
+            if ((e as globalThis.KeyboardEvent).key === "Escape") {
                 if (this._els["dialog-overlay"].classList.contains("open")) {
                     this._closeDialog();
                 } else if (this._els["ctx-menu"].classList.contains("open")) {
