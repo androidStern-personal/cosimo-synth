@@ -11,7 +11,8 @@
     "manufacturerCode": "Cosi"
   },
   "view": {
-    "src": "view/bundle.js",
+    "src": "view/index.js",
+    "devModule": "/fx/chorus_lab/view/source.js",
     "width": 920,
     "height": 680,
     "resizable": true

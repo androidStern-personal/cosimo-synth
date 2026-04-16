@@ -135,11 +135,16 @@ async function openOttLabPage({ clipboardText = "" } = {}) {
                 sentMessages.push({ endpointID, value, rampFrames });
                 emitParameterValue(endpointID, value);
             },
+            manifest: {
+                view: {
+                    devModule: "/fx/ott_lab/view/source.js",
+                },
+            },
         };
 
         window.__OTT_LAB_VIEW_HARNESS__ = {
             async mount() {
-                const createPatchView = (await import("/fx/ott_lab/view/bundle.js")).default;
+                const createPatchView = (await import("/build/fx/ott_lab_runtime/view/index.js")).default;
                 const mountPoint = document.getElementById("mount");
 
                 if (!(mountPoint instanceof HTMLElement))

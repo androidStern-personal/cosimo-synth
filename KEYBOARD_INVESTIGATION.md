@@ -53,12 +53,12 @@ handled separately.
 
 Generated VST3 workflow:
 
-- `ChorusLab` uses `scripts/generate_chorus_lab_plugin.sh`.
-- `OTT Lab` uses `scripts/generate_ott_lab_plugin.sh`.
+- `ChorusLab` uses `npm run fx:prod:build -- chorus`.
+- `OTT Lab` uses `npm run fx:prod:build -- ott`.
 - `SeqFX`, on branch `codex/effect-sequencer`, uses
   `scripts/generate_seqfx_plugin.sh`.
 
-All three generator scripts follow the same dependency pattern:
+The shared production build follows the same dependency pattern:
 
 ```bash
 cmajor_source_path="${CMAJOR_SOURCE_PATH:-$cache_root/cmajor-source-$cmajor_version}"
@@ -80,25 +80,23 @@ build the generated JUCE project, and install the dedicated VST3.
 
 Generic JIT loader workflow:
 
-- `scripts/install_chorus_lab_cmajplugin.sh` installs official `CmajPlugin.vst3`
-  from the Cmajor DMG and writes `~/Library/Audio/Plug-Ins/VST3/CmajPlugin.json`
-  pointing at `fx/chorus_lab/ChorusLab.cmajorpatch`.
-- `scripts/install_ott_lab_cmajplugin.sh` does the same for
-  `fx/ott_lab/OttLab.cmajorpatch`.
-- `scripts/install_seqfx_cmajplugin.sh`, on branch `codex/effect-sequencer`,
-  does the same for `fx/seqfx/SeqFx.cmajorpatch`.
+`scripts/install_fx_cmajplugin.sh` validates a selected effect patch and writes
+`~/Library/Audio/Plug-Ins/VST3/CmajPlugin.json` so the already-installed generic
+`CmajPlugin.vst3` loads that patch.
 
-Those scripts are good for hot-reloading Cmajor source during development, but
-they currently install the official generic loader, so they do not include the
-patched CHOC keyboard bridge. Migrating this workflow means replacing the DMG
-copy step with a locally built patched `CmajPlugin.vst3`, while keeping the
-`CmajPlugin.json` file-per-effect behavior.
+```text
+npm run fx:jit:install -- ott
+npm run fx:jit:install -- chorus
+```
+
+That script does not install `CmajPlugin.vst3`, does not download the Cmajor DMG,
+and does not touch AU plugins. Install or replace the generic VST3 separately
+when testing a patched Cmajor/CHOC build.
 
 Only one generic `CmajPlugin.json` can be active in the user VST3 folder at a
-time. Installing the Chorus generic loader points `CmajPlugin.vst3` at Chorus;
-installing the OTT generic loader points the same `CmajPlugin.vst3` at OTT;
-installing the SeqFX generic loader points it at SeqFX. That is expected for the
-generic loader workflow.
+time. Running `npm run fx:jit:install -- chorus` points `CmajPlugin.vst3` at
+Chorus; running `npm run fx:jit:install -- ott` points the same
+`CmajPlugin.vst3` at OTT. That is expected for the generic loader workflow.
 
 Use the dedicated generated VST3s when testing final plugin identity, host
 metadata, packaging, signing, and distribution behavior. Use the patched generic
