@@ -230,6 +230,16 @@ select {
     cursor: grabbing;
 }
 
+.seqfx-block.is-copy-preview {
+    border-style: dashed;
+    border-color: rgba(242, 209, 107, 0.78);
+    background: rgba(242, 209, 107, 0.14);
+}
+
+.seqfx-block.is-copy-preview .seqfx-block-fill {
+    background: rgba(242, 209, 107, 0.62);
+}
+
 .seqfx-block-fill {
     position: absolute;
     inset: 5px;

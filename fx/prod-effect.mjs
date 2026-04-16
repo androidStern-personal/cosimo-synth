@@ -11,9 +11,11 @@ import {
 const cacheRoot = process.env.COSIMO_DEV_CACHE
     ? path.resolve(process.env.COSIMO_DEV_CACHE)
     : path.join(process.env.HOME, "Library/Caches/cosimo-synth-dev");
-const keyboardBridgeRequiredStrings = [
+const patchedWebViewRequiredStrings = [
     "chocHostKeyboard",
     "__chocHostKeyboardBridgeInstalled",
+    "__chocUserFiles",
+    "chocUserFiles",
 ];
 const keyboardBridgeForbiddenStrings = [
     "cosimoKeyboard",
@@ -86,12 +88,12 @@ async function verifyPatchedCmajorRuntime(cmajorSourcePath) {
         throw new Error(`Cmajor runtime is missing CHOC WebView header: ${webViewHeaderPath}`);
     }
 
-    const missingMarkers = keyboardBridgeRequiredStrings.filter((marker) => !webViewHeader.includes(marker));
+    const missingMarkers = patchedWebViewRequiredStrings.filter((marker) => !webViewHeader.includes(marker));
 
     if (missingMarkers.length > 0) {
         throw new Error(
             [
-                `Cmajor runtime does not include the patched CHOC keyboard bridge: ${cmajorSourcePath}`,
+                `Cmajor runtime does not include the required patched CHOC WebView features: ${cmajorSourcePath}`,
                 `Missing marker(s): ${missingMarkers.join(", ")}`,
                 "Use scripts/ensure_cmajor_runtime.py --path or set CMAJOR_SOURCE_PATH to a patched Cmajor checkout.",
             ].join("\n"),
@@ -164,6 +166,8 @@ async function buildJuceProject(pluginName, plugin) {
         verifyVST3Bundle(builtVST3);
     }
 
+    verifyPatchedWebView(getBuiltVST3BinaryPath(plugin));
+
     console.log(`Built ${pluginName} dedicated plugin project at ${path.relative(repoRoot, cmakeBuildDir)}`);
 }
 
@@ -204,14 +208,14 @@ function verifyVST3Bundle(vst3Path) {
     run("codesign", ["--verify", "--deep", "--strict", "--verbose=4", vst3Path], { capture: true });
 }
 
-function verifyKeyboardBridge(binaryPath) {
-    const missingStrings = keyboardBridgeRequiredStrings.filter((marker) => !binaryContainsString(binaryPath, marker));
+function verifyPatchedWebView(binaryPath) {
+    const missingStrings = patchedWebViewRequiredStrings.filter((marker) => !binaryContainsString(binaryPath, marker));
     const presentForbiddenStrings = keyboardBridgeForbiddenStrings.filter((marker) => binaryContainsString(binaryPath, marker));
 
     if (missingStrings.length > 0) {
         throw new Error(
             [
-                `VST3 binary was not built with the patched CHOC keyboard bridge: ${binaryPath}`,
+                `VST3 binary was not built with the required patched CHOC WebView features: ${binaryPath}`,
                 `Missing marker(s): ${missingStrings.join(", ")}`,
             ].join("\n"),
         );
@@ -256,7 +260,7 @@ async function installVST3(pluginName, plugin, options) {
     if (!await pathExists(builtVST3Binary))
         throw new Error(`Built VST3 binary not found: ${builtVST3Binary}`);
 
-    verifyKeyboardBridge(builtVST3Binary);
+    verifyPatchedWebView(builtVST3Binary);
 
     if (options.dryRun) {
         console.log(`Would install ${pluginName} VST3 from: ${builtVST3}`);
@@ -269,7 +273,7 @@ async function installVST3(pluginName, plugin, options) {
     await cp(builtVST3, installedVST3, { recursive: true });
     signVST3Bundle(installedVST3);
     verifyVST3Bundle(installedVST3);
-    verifyKeyboardBridge(installedVST3Binary);
+    verifyPatchedWebView(installedVST3Binary);
 
     console.log(`Installed ${pluginName} VST3: ${installedVST3}`);
 }

@@ -50,8 +50,10 @@ validate_patched_binary() {
   binary_strings="$(strings "$binary_path")"
 
   if [[ "$binary_strings" != *chocHostKeyboard* \
-      || "$binary_strings" != *__chocHostKeyboardBridgeInstalled* ]]; then
-    printf 'CmajPlugin binary was not built with the patched CHOC keyboard bridge: %s\n' "$binary_path" >&2
+      || "$binary_strings" != *__chocHostKeyboardBridgeInstalled* \
+      || "$binary_strings" != *__chocUserFiles* \
+      || "$binary_strings" != *chocUserFiles* ]]; then
+    printf 'CmajPlugin binary was not built with the required patched CHOC WebView features: %s\n' "$binary_path" >&2
     exit 1
   fi
 

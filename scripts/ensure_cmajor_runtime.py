@@ -14,12 +14,14 @@ RUNTIME_TAG = "1.0.3066"
 RUNTIME_COMMIT = "172db53232337154d5a1c0f9a448318129dfacd9"
 PATCHED_CHOC_GIT_URL = "https://github.com/androidStern/choc.git"
 PATCHED_CHOC_BRANCH = "cosimo-keyboard-bridge"
-PATCHED_CHOC_COMMIT = "1e79d904209abd842d688433358f9e0df7d55454"
+PATCHED_CHOC_COMMIT = "e50b21a272a1729bc1dd1fd368c112095cb18d5a"
 PATCHED_CHOC_SHORT_COMMIT = PATCHED_CHOC_COMMIT[:8]
 RUNTIME_DESTINATION = REPO_ROOT / "build" / "deps" / f"cmajor-{RUNTIME_TAG}-choc-{PATCHED_CHOC_SHORT_COMMIT}"
-KEYBOARD_BRIDGE_MARKERS = (
+PATCHED_CHOC_MARKERS = (
     "chocHostKeyboard",
     "__chocHostKeyboardBridgeInstalled",
+    "__chocUserFiles",
+    "chocUserFiles",
 )
 
 
@@ -66,14 +68,14 @@ def _choc_head(runtime_root: Path) -> str | None:
         return None
 
 
-def _runtime_contains_keyboard_bridge(runtime_root: Path) -> bool:
+def _runtime_contains_required_choc_patches(runtime_root: Path) -> bool:
     webview_header = runtime_root / "include" / "choc" / "choc" / "gui" / "choc_WebView.h"
 
     if not webview_header.exists():
         return False
 
     header_text = webview_header.read_text(encoding="utf-8")
-    return all(marker in header_text for marker in KEYBOARD_BRIDGE_MARKERS)
+    return all(marker in header_text for marker in PATCHED_CHOC_MARKERS)
 
 
 def _runtime_head(runtime_root: Path) -> str | None:
@@ -145,9 +147,9 @@ def _clone_runtime(destination: Path) -> None:
             f"Fetched CHOC commit {fetched_choc_head or '<missing>'}, expected {PATCHED_CHOC_COMMIT}."
         )
 
-    if not _runtime_contains_keyboard_bridge(temp_destination):
+    if not _runtime_contains_required_choc_patches(temp_destination):
         raise RuntimeError(
-            "Fetched CHOC checkout does not contain the host keyboard bridge markers."
+            "Fetched CHOC checkout does not contain the required WebView patch markers."
         )
 
     if destination.exists():
@@ -163,7 +165,7 @@ def ensure_runtime() -> Path:
     if (
         current_head == RUNTIME_COMMIT
         and current_choc_head == PATCHED_CHOC_COMMIT
-        and _runtime_contains_keyboard_bridge(RUNTIME_DESTINATION)
+        and _runtime_contains_required_choc_patches(RUNTIME_DESTINATION)
         and _runtime_looks_complete(RUNTIME_DESTINATION)
     ):
         return RUNTIME_DESTINATION
@@ -177,7 +179,7 @@ def ensure_runtime() -> Path:
         if (
             current_head == RUNTIME_COMMIT
             and current_choc_head == PATCHED_CHOC_COMMIT
-            and _runtime_contains_keyboard_bridge(RUNTIME_DESTINATION)
+            and _runtime_contains_required_choc_patches(RUNTIME_DESTINATION)
             and _runtime_looks_complete(RUNTIME_DESTINATION)
         ):
             return RUNTIME_DESTINATION
@@ -200,9 +202,9 @@ def ensure_runtime() -> Path:
             f"Patched CHOC fetch completed, but {RUNTIME_DESTINATION / 'include/choc'} resolved to {current_choc_head or '<missing>'} instead of {PATCHED_CHOC_COMMIT}."
         )
 
-    if not _runtime_contains_keyboard_bridge(RUNTIME_DESTINATION):
+    if not _runtime_contains_required_choc_patches(RUNTIME_DESTINATION):
         raise RuntimeError(
-            f"Patched CHOC checkout is missing keyboard bridge markers in {RUNTIME_DESTINATION / 'include/choc/choc/gui/choc_WebView.h'}."
+            f"Patched CHOC checkout is missing required WebView patch markers in {RUNTIME_DESTINATION / 'include/choc/choc/gui/choc_WebView.h'}."
         )
 
     return RUNTIME_DESTINATION

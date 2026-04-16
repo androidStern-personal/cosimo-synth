@@ -227,6 +227,56 @@ test("moving_and_copying_selected_pattern_blocks_persist_and_upload_complete_pat
     assert.deepEqual(uploads.at(-1).value.triggerSteps[SEQFX_LANES.stutter].slice(9, 11), [true, false]);
 });
 
+test("previewing_copy_paint_does_not_persist_or_upload_until_commit", () => {
+    const initialState = createDefaultSeqFxState();
+    const connection = new FakePatchConnection({
+        [SEQFX_STATE_KEY]: serializeSeqFxState(initialState),
+    });
+    const bridge = new SeqFxRuntimeBridge(connection);
+
+    bridge.attach();
+    bridge.requestBootState();
+    connection.events = [];
+    connection.storedWrites = [];
+
+    bridge.createBlock({
+        patternIndex: 0,
+        lane: SEQFX_LANES.crusher,
+        startStep: 0,
+        length: 1,
+    });
+    connection.events = [];
+    connection.storedWrites = [];
+
+    const preview = bridge.previewBlockCopyPaint({
+        patternIndex: 0,
+        lane: SEQFX_LANES.crusher,
+        startStep: 0,
+        targetStartStep: 3,
+    });
+
+    assert.deepEqual(preview.copiedStartSteps, [1, 2, 3]);
+    assert.equal(connection.storedWrites.length, 0);
+    assert.equal(endpointEvents(connection, SEQFX_ENDPOINTS.patternUpload).length, 0);
+    assert.deepEqual(
+        preview.state.patterns[0].lanes[SEQFX_LANES.crusher].steps.slice(0, 5).map((step) => step.active),
+        [true, true, true, true, false],
+    );
+
+    const committed = bridge.copyBlockPaint({
+        patternIndex: 0,
+        lane: SEQFX_LANES.crusher,
+        startStep: 0,
+        targetStartStep: 3,
+    });
+
+    assert.deepEqual(committed.copiedStartSteps, [1, 2, 3]);
+    assert.equal(connection.storedWrites.length, 1);
+    const uploads = endpointEvents(connection, SEQFX_ENDPOINTS.patternUpload);
+    assert.equal(uploads.length, 1);
+    assert.deepEqual(uploads.at(-1).value.activeSteps[SEQFX_LANES.crusher].slice(0, 5), [true, true, true, true, false]);
+});
+
 test("selecting_a_pattern_sends_pattern_parameter_and_authoritative_upload_for_that_pattern", () => {
     const state = createDefaultSeqFxState();
     const connection = new FakePatchConnection({

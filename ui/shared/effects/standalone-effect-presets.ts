@@ -290,7 +290,9 @@ export class StandaloneEffectPresetController {
         this.createPresetID = options.createPresetID ?? defaultCreatePresetID;
         this.readClipboardText = options.readClipboardText;
         this.writeClipboardText = options.writeClipboardText;
-        this.bridge = new EffectPresetRuntimeBridgeV2(options.patchConnection);
+        this.bridge = new EffectPresetRuntimeBridgeV2(options.patchConnection, {
+            fileStoreEffectID: options.effectID,
+        });
         this.bridgeState = this.bridge.getState();
         this.handleBridgeStateBound = this.handleBridgeState.bind(this);
         this.handleBridgeErrorBound = this.handleBridgeError.bind(this);

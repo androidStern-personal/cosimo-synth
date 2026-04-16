@@ -29,8 +29,10 @@ validate_patched_cmajplugin() {
   binary_strings="$(strings "$vst3_binary")"
 
   if [[ "$binary_strings" != *chocHostKeyboard* \
-      || "$binary_strings" != *__chocHostKeyboardBridgeInstalled* ]]; then
-    printf 'Installed CmajPlugin.vst3 was not built with the patched CHOC keyboard bridge: %s\n' "$vst3_bundle" >&2
+      || "$binary_strings" != *__chocHostKeyboardBridgeInstalled* \
+      || "$binary_strings" != *__chocUserFiles* \
+      || "$binary_strings" != *chocUserFiles* ]]; then
+    printf 'Installed CmajPlugin.vst3 was not built with the required patched CHOC WebView features: %s\n' "$vst3_bundle" >&2
     printf 'Run npm run cmajplugin:build and npm run cmajplugin:install first.\n' >&2
     exit 1
   fi

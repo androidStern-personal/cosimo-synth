@@ -25,6 +25,13 @@ type StoredStateMessage = {
     value?: unknown;
 };
 
+type ChocUserFiles = {
+    list: (scope: string) => Promise<string[]>;
+    read: (scope: string, fileName: string) => Promise<string>;
+    write: (scope: string, fileName: string, contents: string) => Promise<unknown>;
+    delete: (scope: string, fileName: string) => Promise<unknown>;
+};
+
 type EffectPresetStateV2Listener = (state: EffectPresetStateV2) => void;
 type EffectPresetStateV2ErrorListener = (error: Error) => void;
 
@@ -134,6 +141,34 @@ function replacePresetInBank(bank: EffectPresetV2[], preset: EffectPresetV2) {
     return nextBank;
 }
 
+function getChocUserFiles(): ChocUserFiles | null {
+    const candidate = (globalThis as typeof globalThis & {
+        chocUserFiles?: ChocUserFiles;
+        window?: { chocUserFiles?: ChocUserFiles };
+    }).chocUserFiles ?? (globalThis as typeof globalThis & {
+        window?: { chocUserFiles?: ChocUserFiles };
+    }).window?.chocUserFiles;
+
+    if (!candidate) {
+        return null;
+    }
+
+    if (
+        typeof candidate.list !== "function"
+        || typeof candidate.read !== "function"
+        || typeof candidate.write !== "function"
+        || typeof candidate.delete !== "function"
+    ) {
+        throw new Error("window.chocUserFiles is missing list, read, write, or delete.");
+    }
+
+    return candidate;
+}
+
+function userPresetFileName(presetID: string) {
+    return `${presetID}.json`;
+}
+
 export function createDefaultEffectPresetStateV2(): EffectPresetStateV2 {
     return {
         kind: EFFECT_PRESET_V2_STATE_KIND,
@@ -223,10 +258,15 @@ export class EffectPresetRuntimeBridgeV2 {
     private readonly errorListeners = new Set<EffectPresetStateV2ErrorListener>();
     private readonly pendingStoredStateEchoes = new Map<string, number>();
     private readonly handleStoredStateValueBound: (message: unknown) => void;
+    private readonly userFiles: ChocUserFiles | null;
 
-    constructor(private readonly patchConnection: PatchConnectionLike) {
+    constructor(
+        private readonly patchConnection: PatchConnectionLike,
+        private readonly options: { fileStoreEffectID?: string } = {},
+    ) {
         this.state = createDefaultEffectPresetStateV2();
         this.handleStoredStateValueBound = this.handleStoredStateValue.bind(this);
+        this.userFiles = getChocUserFiles();
     }
 
     attach() {
@@ -254,15 +294,18 @@ export class EffectPresetRuntimeBridgeV2 {
 
                 if (value === undefined && typeof this.patchConnection.requestStoredStateValue === "function") {
                     this.patchConnection.requestStoredStateValue(EFFECT_PRESETS_V2_STATE_KEY);
+                    void this.loadUserPresetFiles();
                     return;
                 }
 
                 this.applyStoredState(value);
+                void this.loadUserPresetFiles();
             });
             return;
         }
 
         this.patchConnection.requestStoredStateValue?.(EFFECT_PRESETS_V2_STATE_KEY);
+        void this.loadUserPresetFiles();
     }
 
     getState() {
@@ -304,6 +347,8 @@ export class EffectPresetRuntimeBridgeV2 {
             activePresetByEffect: nextActivePresetByEffect,
         });
 
+        this.writeUserPresetFile(normalizedPreset);
+
         return normalizedPreset;
     }
 
@@ -329,6 +374,8 @@ export class EffectPresetRuntimeBridgeV2 {
             activePresetByEffect,
         });
 
+        this.syncUserPresetFilesForEffect(effectID, nextState.userPresets[effectID] ?? []);
+
         return nextState.userPresets[effectID] ?? [];
     }
 
@@ -343,12 +390,22 @@ export class EffectPresetRuntimeBridgeV2 {
     }
 
     replaceState(state: EffectPresetStateV2) {
-        return this.commitState(state);
+        const nextState = this.commitState(state);
+
+        for (const [effectID, presets] of Object.entries(nextState.userPresets)) {
+            this.syncUserPresetFilesForEffect(effectID, presets);
+        }
+
+        return nextState;
     }
 
     private applyStoredState(rawValue: unknown) {
         try {
-            this.setState(deserializeEffectPresetStateV2(rawValue));
+            const storedState = deserializeEffectPresetStateV2(rawValue);
+            this.setState(this.userFiles ? {
+                ...storedState,
+                userPresets: this.state.userPresets,
+            } : storedState);
         } catch (error) {
             this.notifyError(errorFromUnknown(error));
         }
@@ -389,7 +446,11 @@ export class EffectPresetRuntimeBridgeV2 {
 
     private commitState(nextState: EffectPresetStateV2) {
         const normalizedState = normalizeEffectPresetStateV2(nextState);
-        const serializedState = serializeEffectPresetStateV2(normalizedState);
+        const storedState = this.userFiles ? {
+            ...normalizedState,
+            userPresets: {},
+        } : normalizedState;
+        const serializedState = serializeEffectPresetStateV2(storedState);
         const sendStoredStateValue = this.patchConnection.sendStoredStateValue?.bind(this.patchConnection);
 
         if (sendStoredStateValue) {
@@ -406,6 +467,74 @@ export class EffectPresetRuntimeBridgeV2 {
         this.setState(normalizedState);
 
         return this.getState();
+    }
+
+    private async loadUserPresetFiles() {
+        if (!this.userFiles || !this.options.fileStoreEffectID) {
+            return;
+        }
+
+        try {
+            const effectID = this.options.fileStoreEffectID;
+            const fileNames = (await this.userFiles.list(effectID)).filter((fileName) => fileName.endsWith(".json"));
+            const presets: EffectPresetV2[] = [];
+
+            for (const fileName of fileNames) {
+                const preset = normalizePresetShape(JSON.parse(await this.userFiles.read(effectID, fileName)));
+
+                if (preset.effectID !== effectID) {
+                    throw new Error(`Preset file "${fileName}" contains effect "${preset.effectID}" instead of "${effectID}".`);
+                }
+
+                presets.push(preset);
+            }
+
+            this.setState({
+                ...this.state,
+                userPresets: {
+                    ...this.state.userPresets,
+                    [effectID]: presets,
+                },
+            });
+        } catch (error) {
+            this.notifyError(errorFromUnknown(error));
+        }
+    }
+
+    private writeUserPresetFile(preset: EffectPresetV2) {
+        if (!this.userFiles || !this.options.fileStoreEffectID || preset.effectID !== this.options.fileStoreEffectID) {
+            return;
+        }
+
+        void this.userFiles
+            .write(preset.effectID, userPresetFileName(preset.presetID), JSON.stringify(normalizePresetShape(preset), null, 2))
+            .catch((error: unknown) => this.notifyError(errorFromUnknown(error)));
+    }
+
+    private syncUserPresetFilesForEffect(effectID: string, presets: EffectPresetV2[]) {
+        if (!this.userFiles || effectID !== this.options.fileStoreEffectID) {
+            return;
+        }
+
+        void this.syncUserPresetFilesForEffectAsync(effectID, presets)
+            .catch((error: unknown) => this.notifyError(errorFromUnknown(error)));
+    }
+
+    private async syncUserPresetFilesForEffectAsync(effectID: string, presets: EffectPresetV2[]) {
+        if (!this.userFiles) {
+            return;
+        }
+
+        const nextFileNames = new Set(presets.map((preset) => userPresetFileName(preset.presetID)));
+        const existingFileNames = (await this.userFiles.list(effectID)).filter((fileName) => fileName.endsWith(".json"));
+
+        await Promise.all(presets.map((preset) => (
+            this.userFiles!.write(effectID, userPresetFileName(preset.presetID), JSON.stringify(normalizePresetShape(preset), null, 2))
+        )));
+
+        await Promise.all(existingFileNames
+            .filter((fileName) => !nextFileNames.has(fileName))
+            .map((fileName) => this.userFiles!.delete(effectID, fileName)));
     }
 
     private rememberPendingStoredStateEcho(value: unknown) {

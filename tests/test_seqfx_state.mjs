@@ -17,6 +17,7 @@ const {
     SEQFX_LANES,
     applySeqFxBlockCreate,
     applySeqFxBlockCopy,
+    applySeqFxBlockCopyPaint,
     applySeqFxBlockDelete,
     applySeqFxBlockMove,
     applySeqFxBlockParamEdit,
@@ -437,5 +438,41 @@ test("copying_a_seqfx_block_preserves_source_and_rejects_overlaps", () => {
     assert.deepEqual(
         upload.params[SEQFX_LANES.tapeStop].slice(6, 8).map((params) => params[1]),
         [1, 1.75],
+    );
+});
+
+test("copy_paint_fills_signed_delta_from_source_block_start", () => {
+    let state = createDefaultSeqFxState();
+    state = applySeqFxBlockCreate(state, {
+        patternIndex: 0,
+        lane: SEQFX_LANES.crusher,
+        startStep: 4,
+        length: 1,
+    });
+    state = applySeqFxParamEdit(state, {
+        patternIndex: 0,
+        lane: SEQFX_LANES.crusher,
+        steps: [4],
+        paramIndex: 0,
+        value: 6,
+    });
+
+    const paintResult = applySeqFxBlockCopyPaint(state, {
+        patternIndex: 0,
+        lane: SEQFX_LANES.crusher,
+        startStep: 4,
+        targetStartStep: 2,
+    });
+    const upload = buildSeqPatternUpload(paintResult.state, {
+        patternIndex: 0,
+        authoritative: false,
+    });
+
+    assert.deepEqual(paintResult.copiedStartSteps, [3, 2]);
+    assert.deepEqual(upload.activeSteps[SEQFX_LANES.crusher].slice(0, 6), [false, false, true, true, true, false]);
+    assert.deepEqual(upload.triggerSteps[SEQFX_LANES.crusher].slice(0, 6), [false, false, true, true, true, false]);
+    assert.deepEqual(
+        upload.params[SEQFX_LANES.crusher].slice(2, 5).map((params) => params[0]),
+        [6, 6, 6],
     );
 });

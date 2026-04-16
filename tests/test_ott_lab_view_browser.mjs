@@ -367,6 +367,48 @@ test("OTT lab snapshot slots are compact single-input tabs", async () => {
     }
 });
 
+test("OTT lab preset browser does not trap page wheel scrolling after the top bar scrolls away", async () => {
+    const page = await openOttLabPage();
+
+    try {
+        await page.setViewportSize({ width: 980, height: 360 });
+        await page.evaluate(() => window.scrollTo(0, 0));
+        await page.locator("cosimo-ott-lab-view").evaluate(({ shadowRoot }) => {
+            const presetBar = shadowRoot.querySelector("cosimo-preset-bar");
+            const nameRegion = presetBar?.shadowRoot?.querySelector(".name-region");
+
+            if (!(nameRegion instanceof HTMLElement)) {
+                throw new Error("Preset browser trigger is missing.");
+            }
+
+            nameRegion.click();
+        });
+        await page.waitForFunction(() => {
+            const presetBar = document.querySelector("cosimo-ott-lab-view")?.shadowRoot?.querySelector("cosimo-preset-bar");
+            return presetBar?.shadowRoot?.querySelector(".flyout")?.classList.contains("open") === true;
+        });
+
+        await page.evaluate(() => window.scrollTo(0, 260));
+        await page.waitForFunction(() => window.scrollY === 260);
+        await page.mouse.move(520, 320);
+        await page.mouse.wheel(0, -180);
+        await page.waitForFunction(() => window.scrollY < 260);
+
+        const metrics = await page.evaluate(() => {
+            const presetBar = document.querySelector("cosimo-ott-lab-view")?.shadowRoot?.querySelector("cosimo-preset-bar");
+            return {
+                scrollY: window.scrollY,
+                flyoutOpen: presetBar?.shadowRoot?.querySelector(".flyout")?.classList.contains("open") ?? null,
+            };
+        });
+
+        assert.equal(metrics.flyoutOpen, false);
+        assert.equal(metrics.scrollY < 260, true);
+    } finally {
+        await page.close();
+    }
+});
+
 test("OTT lab reports malformed stored v2 snapshots instead of silently ignoring them", async () => {
     const page = await openOttLabPage({
         initialSnapshotStore: JSON.stringify({

@@ -24,8 +24,10 @@ validate_patched_binary() {
   binary_strings="$(strings "$binary_path")"
 
   if [[ "$binary_strings" != *chocHostKeyboard* \
-      || "$binary_strings" != *__chocHostKeyboardBridgeInstalled* ]]; then
-    printf 'CmajPlugin binary was not built with the patched CHOC keyboard bridge: %s\n' "$binary_path" >&2
+      || "$binary_strings" != *__chocHostKeyboardBridgeInstalled* \
+      || "$binary_strings" != *__chocUserFiles* \
+      || "$binary_strings" != *chocUserFiles* ]]; then
+    printf 'CmajPlugin binary was not built with the required patched CHOC WebView features: %s\n' "$binary_path" >&2
     exit 1
   fi
 
@@ -47,14 +49,24 @@ validate_patched_cmajor_runtime() {
   fi
 
   if ! grep -Fq 'chocHostKeyboard' "$webview_header" \
-      || ! grep -Fq '__chocHostKeyboardBridgeInstalled' "$webview_header"; then
-    printf 'Cmajor runtime does not include the patched CHOC keyboard bridge: %s\n' "$cmajor_source_path" >&2
+      || ! grep -Fq '__chocHostKeyboardBridgeInstalled' "$webview_header" \
+      || ! grep -Fq '__chocUserFiles' "$webview_header" \
+      || ! grep -Fq 'chocUserFiles' "$webview_header"; then
+    printf 'Cmajor runtime does not include the required patched CHOC WebView features: %s\n' "$cmajor_source_path" >&2
     printf 'Use scripts/ensure_cmajor_runtime.py --path or set CMAJOR_SOURCE_PATH to a patched Cmajor checkout.\n' >&2
     exit 1
   fi
 }
 
 validate_patched_cmajor_runtime
+
+if [[ -f "$build_dir/CMakeCache.txt" ]]; then
+  cached_source_dir="$(awk -F= '/^CMAKE_HOME_DIRECTORY:INTERNAL=/{print $2; exit}' "$build_dir/CMakeCache.txt")"
+
+  if [[ -n "$cached_source_dir" && "$cached_source_dir" != "$cmajor_source_path" ]]; then
+    rm -rf "$build_dir"
+  fi
+fi
 
 if [[ ! -d "$juce_path/.git" ]]; then
   mkdir -p "$cache_root"

@@ -188,6 +188,7 @@ const PRESET_BAR_CSS = /* css */ `
     position: fixed;
     inset: 0;
     z-index: 49;
+    pointer-events: none;
   }
   .flyout-backdrop.open { display: block; }
 
@@ -622,6 +623,31 @@ class PresetBar extends HTMLElement {
     // Cached DOM refs
     private _els!: Record<string, HTMLElement>;
 
+    private readonly _handleDocumentPointerDown = (event: PointerEvent) => {
+        if (!this._flyoutOpen && !this._els["ctx-menu"].classList.contains("open")) {
+            return;
+        }
+
+        if (event.composedPath().includes(this)) {
+            return;
+        }
+
+        this._closeFlyout();
+        this._closeCtxMenu();
+    };
+
+    private readonly _handleDocumentWheel = (event: WheelEvent) => {
+        if (!this._flyoutOpen) {
+            return;
+        }
+
+        if (event.composedPath().includes(this._els["flyout"])) {
+            return;
+        }
+
+        this._closeFlyout();
+    };
+
     constructor() {
         super();
         const shadow = this.attachShadow({ mode: "open" });
@@ -659,6 +685,7 @@ class PresetBar extends HTMLElement {
             this._unsubscribe = null;
         }
 
+        this._removeDocumentListeners();
         this._closeFlyout();
         this._closeCtxMenu();
         this._closeDialog();
@@ -920,6 +947,7 @@ class PresetBar extends HTMLElement {
         this._els["flyout"].classList.add("open");
         this._els["flyout-backdrop"].classList.add("open");
         this.shadowRoot!.querySelector(".name-region")!.classList.add("open");
+        this._addDocumentListeners();
         this._renderFlyoutList();
         setTimeout(() => (this._els["flyout-search"] as HTMLInputElement).focus(), 30);
     }
@@ -929,6 +957,21 @@ class PresetBar extends HTMLElement {
         this._els["flyout"].classList.remove("open");
         this._els["flyout-backdrop"].classList.remove("open");
         this.shadowRoot!.querySelector(".name-region")!.classList.remove("open");
+        this._removeDocumentListeners();
+
+        if (this.shadowRoot?.activeElement === this._els["flyout-search"]) {
+            (this._els["flyout-search"] as HTMLInputElement).blur();
+        }
+    }
+
+    private _addDocumentListeners() {
+        document.addEventListener("pointerdown", this._handleDocumentPointerDown, { capture: true });
+        document.addEventListener("wheel", this._handleDocumentWheel, { capture: true, passive: true });
+    }
+
+    private _removeDocumentListeners() {
+        document.removeEventListener("pointerdown", this._handleDocumentPointerDown, true);
+        document.removeEventListener("wheel", this._handleDocumentWheel, true);
     }
 
     // ── Context Menu ─────────────────────────────────────

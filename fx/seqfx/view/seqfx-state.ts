@@ -86,6 +86,15 @@ export type SeqFxBlockCopyEdit = SeqFxBlockEditTarget & {
     targetStartStep: number;
 };
 
+export type SeqFxBlockCopyPaintEdit = SeqFxBlockEditTarget & {
+    targetStartStep: number;
+};
+
+export type SeqFxBlockCopyPaintResult = {
+    state: SeqFxState;
+    copiedStartSteps: number[];
+};
+
 export type SeqFxBlockDeleteEdit = SeqFxBlockEditTarget;
 
 export type SeqFxBlockParamEdit = SeqFxBlockEditTarget & {
@@ -598,6 +607,54 @@ export function applySeqFxBlockCopy(state: SeqFxState, edit: SeqFxBlockCopyEdit)
         assertBlockRangeAvailable(pattern, lane, targetStartStep, block.length);
         writeBlockSteps(pattern, lane, targetStartStep, cloneBlockSteps(pattern, lane, block));
     });
+}
+
+export function applySeqFxBlockCopyPaint(state: SeqFxState, edit: SeqFxBlockCopyPaintEdit): SeqFxBlockCopyPaintResult {
+    let copiedStartSteps: number[] = [];
+    const nextState = withEditedPattern(state, edit.patternIndex, (pattern) => {
+        const lane = clampIndex(edit.lane, SEQFX_LANE_COUNT, "lane");
+        const requestedStart = clampIndex(edit.startStep, SEQFX_STEP_COUNT, "startStep");
+        const targetStartStep = clampIndex(edit.targetStartStep, SEQFX_STEP_COUNT, "targetStartStep");
+        const block = getBlockForStep(pattern, lane, requestedStart);
+
+        if (!block) {
+            throw new Error("Cannot copy a missing SeqFX block.");
+        }
+
+        if (targetStartStep === block.startStep) {
+            return;
+        }
+
+        const direction = targetStartStep > block.startStep ? 1 : -1;
+        const clonedSteps = cloneBlockSteps(pattern, lane, block);
+
+        for (
+            let nextStartStep = block.startStep + direction;
+            direction > 0 ? nextStartStep <= targetStartStep : nextStartStep >= targetStartStep;
+            nextStartStep += direction
+        ) {
+            try {
+                assertBlockFits(nextStartStep, block.length);
+                assertBlockRangeAvailable(pattern, lane, nextStartStep, block.length);
+                writeBlockSteps(pattern, lane, nextStartStep, clonedSteps);
+                copiedStartSteps.push(nextStartStep);
+            } catch {
+                // Copy-paint skips occupied or out-of-range targets so dragging stays reversible and harmless.
+            }
+        }
+    });
+
+    if (copiedStartSteps.length === 0) {
+        return {
+            state: normalizeSeqFxState(state),
+            copiedStartSteps,
+        };
+    }
+
+    return {
+        state: nextState,
+        copiedStartSteps,
+    };
 }
 
 export function applySeqFxBlockDelete(state: SeqFxState, edit: SeqFxBlockDeleteEdit): SeqFxState {

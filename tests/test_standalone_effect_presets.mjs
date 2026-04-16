@@ -125,6 +125,69 @@ function createClipboardHarness(initialText = "") {
     };
 }
 
+function createChocUserFilesHarness(initialFiles = {}) {
+    const files = new Map(Object.entries(initialFiles));
+    const calls = [];
+    const keyFor = (scope, fileName) => `${scope}/${fileName}`;
+
+    return {
+        files,
+        calls,
+        api: {
+            async list(scope) {
+                calls.push({ operation: "list", scope });
+                const prefix = `${scope}/`;
+                return [...files.keys()]
+                    .filter((key) => key.startsWith(prefix))
+                    .map((key) => key.slice(prefix.length));
+            },
+            async read(scope, fileName) {
+                calls.push({ operation: "read", scope, fileName });
+                const key = keyFor(scope, fileName);
+
+                if (!files.has(key)) {
+                    throw new Error(`Missing test user file: ${key}`);
+                }
+
+                return files.get(key);
+            },
+            async write(scope, fileName, contents) {
+                calls.push({ operation: "write", scope, fileName, contents });
+                files.set(keyFor(scope, fileName), contents);
+            },
+            async delete(scope, fileName) {
+                calls.push({ operation: "delete", scope, fileName });
+                return files.delete(keyFor(scope, fileName));
+            },
+        },
+    };
+}
+
+async function withChocUserFiles(chocUserFiles, run) {
+    const descriptor = Object.getOwnPropertyDescriptor(globalThis, "chocUserFiles");
+
+    Object.defineProperty(globalThis, "chocUserFiles", {
+        configurable: true,
+        value: chocUserFiles.api,
+    });
+
+    try {
+        return await run();
+    } finally {
+        if (descriptor) {
+            Object.defineProperty(globalThis, "chocUserFiles", descriptor);
+        } else {
+            delete globalThis.chocUserFiles;
+        }
+    }
+}
+
+async function flushMicrotasks(turns = 8) {
+    for (let index = 0; index < turns; index += 1) {
+        await Promise.resolve();
+    }
+}
+
 async function createPresetController({
     patchConnection = new FakeStandalonePatchConnection(),
     createPresetID = () => "user.ott.generated",
@@ -384,6 +447,167 @@ test("standalone controller saves every live parameter and excludes hidden guard
         presetID: "user.ott.captured",
         label: "Captured",
         dirty: false,
+    });
+});
+
+test("standalone controller loads user presets from CHOC files instead of Cmajor stored state", async () => {
+    const filePreset = await createV2Preset({
+        presetID: "user.ott.file-preset",
+        label: "File Preset",
+        parameters: {
+            envelopeBoostClampDb: 10,
+            ottAmount: 71,
+            ottBandDrive: 9,
+            ottEnvelopeMatch: 45,
+            ottMix: 56,
+            ottTimePercent: 126,
+        },
+    });
+    const staleStoredPreset = await createV2Preset({
+        presetID: "user.ott.stale-stored-state",
+        label: "Stale Stored State",
+    });
+    const chocUserFiles = createChocUserFilesHarness({
+        "ott/user.ott.file-preset.json": JSON.stringify(filePreset),
+    });
+
+    await withChocUserFiles(chocUserFiles, async () => {
+        const patchConnection = new FakeStandalonePatchConnection({
+            storedState: {
+                "effects.presets.v2": storedPresetStateV2({
+                    userPresets: {
+                        ott: [staleStoredPreset],
+                    },
+                    activePresetByEffect: {
+                        ott: {
+                            presetID: "user.ott.file-preset",
+                            label: "File Preset",
+                            dirty: false,
+                        },
+                    },
+                }),
+            },
+        });
+        const controller = await createPresetController({ patchConnection });
+
+        controller.attach();
+        await flushMicrotasks();
+
+        assert.deepEqual(controller.getState().userPresets.map((preset) => ({
+            presetID: preset.presetID,
+            label: preset.label,
+            source: preset.source,
+        })), [{
+            presetID: "user.ott.file-preset",
+            label: "File Preset",
+            source: "user",
+        }]);
+        assert.deepEqual(controller.getState().activePreset, {
+            presetID: "user.ott.file-preset",
+            label: "File Preset",
+            dirty: false,
+        });
+        assert.deepEqual(chocUserFiles.calls.map((call) => ({
+            operation: call.operation,
+            scope: call.scope,
+            fileName: call.fileName,
+        })), [
+            { operation: "list", scope: "ott", fileName: undefined },
+            { operation: "read", scope: "ott", fileName: "user.ott.file-preset.json" },
+        ]);
+    });
+});
+
+test("standalone controller writes user presets to CHOC files and keeps Cmajor stored state metadata-only", async () => {
+    const chocUserFiles = createChocUserFilesHarness();
+
+    await withChocUserFiles(chocUserFiles, async () => {
+        const patchConnection = new FakeStandalonePatchConnection({
+            parameterValues: {
+                hostSlot0Guard: 1,
+                ottMix: 55,
+                ottAmount: 70,
+                ottTimePercent: 125,
+                ottBandDrive: 8,
+                ottEnvelopeMatch: 44,
+                envelopeBoostClampDb: 11,
+            },
+        });
+        const controller = await createPresetController({
+            patchConnection,
+            createPresetID: () => "user.ott.file-write",
+        });
+
+        controller.attach();
+        patchConnection.storedWrites = [];
+
+        const result = controller.saveCurrentAsNewPreset("File Write");
+        await flushMicrotasks();
+
+        assert.equal(result.ok, true);
+        assert.deepEqual(JSON.parse(chocUserFiles.files.get("ott/user.ott.file-write.json")).parameters, {
+            envelopeBoostClampDb: 11,
+            ottAmount: 70,
+            ottBandDrive: 8,
+            ottEnvelopeMatch: 44,
+            ottMix: 55,
+            ottTimePercent: 125,
+        });
+
+        const persisted = parseStoredWrite(patchConnection.storedWrites.at(-1));
+        assert.deepEqual(persisted.userPresets, {});
+        assert.deepEqual(persisted.activePresetByEffect.ott, {
+            presetID: "user.ott.file-write",
+            label: "File Write",
+            dirty: false,
+        });
+        assert.deepEqual(chocUserFiles.calls
+            .filter((call) => call.operation === "write")
+            .map((call) => ({
+                operation: call.operation,
+                scope: call.scope,
+                fileName: call.fileName,
+            })), [{
+            operation: "write",
+            scope: "ott",
+            fileName: "user.ott.file-write.json",
+        }]);
+    });
+});
+
+test("standalone controller deletes removed user presets from CHOC files", async () => {
+    const filePreset = await createV2Preset({
+        presetID: "user.ott.delete-me",
+        label: "Delete Me",
+    });
+    const chocUserFiles = createChocUserFilesHarness({
+        "ott/user.ott.delete-me.json": JSON.stringify(filePreset),
+    });
+
+    await withChocUserFiles(chocUserFiles, async () => {
+        const patchConnection = new FakeStandalonePatchConnection();
+        const controller = await createPresetController({ patchConnection });
+
+        controller.attach();
+        await flushMicrotasks();
+
+        const result = controller.deletePreset("user:user.ott.delete-me");
+        await flushMicrotasks();
+
+        assert.equal(result.ok, true);
+        assert.equal(chocUserFiles.files.has("ott/user.ott.delete-me.json"), false);
+        assert.deepEqual(chocUserFiles.calls
+            .filter((call) => call.operation === "delete")
+            .map((call) => ({
+                operation: call.operation,
+                scope: call.scope,
+                fileName: call.fileName,
+            })), [{
+            operation: "delete",
+            scope: "ott",
+            fileName: "user.ott.delete-me.json",
+        }]);
+        assert.deepEqual(controller.getState().userPresets, []);
     });
 });
 

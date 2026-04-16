@@ -194,6 +194,7 @@ test("useStandaloneEffectPresets forwards stored-state adapters and migrations t
             const snapshot = window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.();
             return snapshot?.latest?.ready === true
                 && snapshot.latest.presets.length === 1
+                && snapshot.latest.presets[0].presetKey === "factory:hook.old-mix"
                 && snapshot.latest.presets[0].canApply === true;
         });
 

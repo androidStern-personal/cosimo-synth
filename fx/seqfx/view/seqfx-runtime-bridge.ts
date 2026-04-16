@@ -3,6 +3,7 @@ import {
     SEQFX_STATE_KEY,
     applySeqFxBlockCreate,
     applySeqFxBlockCopy,
+    applySeqFxBlockCopyPaint,
     applySeqFxBlockDelete,
     applySeqFxBlockMixEdit,
     applySeqFxBlockMove,
@@ -17,6 +18,8 @@ import {
     serializeSeqFxState,
     type SeqFxBlockCreateEdit,
     type SeqFxBlockCopyEdit,
+    type SeqFxBlockCopyPaintEdit,
+    type SeqFxBlockCopyPaintResult,
     type SeqFxBlockDeleteEdit,
     type SeqFxBlockMixEdit,
     type SeqFxBlockMoveEdit,
@@ -250,6 +253,18 @@ export class SeqFxRuntimeBridge {
 
     copyBlock(edit: SeqFxBlockCopyEdit) {
         this.commitState(applySeqFxBlockCopy(this.state, edit), edit.patternIndex);
+    }
+
+    previewBlockCopyPaint(edit: SeqFxBlockCopyPaintEdit): SeqFxBlockCopyPaintResult {
+        return applySeqFxBlockCopyPaint(this.state, edit);
+    }
+
+    copyBlockPaint(edit: SeqFxBlockCopyPaintEdit): SeqFxBlockCopyPaintResult {
+        const result = applySeqFxBlockCopyPaint(this.state, edit);
+        if (result.copiedStartSteps.length > 0) {
+            this.commitState(result.state, edit.patternIndex);
+        }
+        return result;
     }
 
     deleteBlock(edit: SeqFxBlockDeleteEdit) {

@@ -749,7 +749,7 @@ test("seqfx_dragging_block_body_moves_the_block_without_resizing_it", async () =
     await page.close();
 });
 
-test("seqfx_option_drag_copies_a_block_to_each_valid_cell_dragged_over", async () => {
+test("seqfx_option_drag_previews_copy_paint_and_commits_once_on_release", async () => {
     const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
     await loadSeqFxHarness(page);
     await page.locator('[data-role="seqfx-root"]').waitFor();
@@ -758,9 +758,12 @@ test("seqfx_option_drag_copies_a_block_to_each_valid_cell_dragged_over", async (
     await page.getByRole("button", { name: "Crusher step 1", exact: true }).click();
     const block = page.getByRole("button", { name: "Crusher block 1", exact: true });
     await block.waitFor();
+    await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
     const blockBox = await block.boundingBox();
+    const thirdCellBox = await page.getByRole("button", { name: "Crusher step 3", exact: true }).boundingBox();
     const fifthCellBox = await page.getByRole("button", { name: "Crusher step 5", exact: true }).boundingBox();
     assert.ok(blockBox);
+    assert.ok(thirdCellBox);
     assert.ok(fifthCellBox);
 
     await page.keyboard.down("Alt");
@@ -768,19 +771,42 @@ test("seqfx_option_drag_copies_a_block_to_each_valid_cell_dragged_over", async (
     await page.mouse.move(blockBox.x + blockBox.width / 2, blockBox.y + blockBox.height / 2);
     await page.mouse.down();
     await page.mouse.move(fifthCellBox.x + fifthCellBox.width / 2, fifthCellBox.y + fifthCellBox.height / 2, { steps: 12 });
+
+    await page.waitForFunction(() => (
+        Array.from(document.querySelectorAll('[data-role="seqfx-block"][data-preview="true"]'))
+            .map((node) => Number(node.getAttribute("data-start")))
+            .join(",") === "1,2,3,4"
+    ));
+    assert.equal(patternUploads(await getHarnessSnapshot(page)).length, 0);
+
+    await page.mouse.move(thirdCellBox.x + thirdCellBox.width / 2, thirdCellBox.y + thirdCellBox.height / 2, { steps: 8 });
+    await page.waitForFunction(() => (
+        Array.from(document.querySelectorAll('[data-role="seqfx-block"][data-preview="true"]'))
+            .map((node) => Number(node.getAttribute("data-start")))
+            .join(",") === "1,2"
+    ));
+    assert.equal(patternUploads(await getHarnessSnapshot(page)).length, 0);
+
     await page.mouse.up();
     await page.evaluate(() => window.dispatchEvent(new KeyboardEvent("keyup", { key: "Alt" })));
     await page.keyboard.up("Alt");
 
     const snapshot = await getHarnessSnapshot(page);
-    const copyUpload = patternUploads(snapshot).at(-1).value;
-    assert.deepEqual(copyUpload.activeSteps[1].slice(0, 5), [true, true, true, true, true]);
-    assert.deepEqual(copyUpload.triggerSteps[1].slice(0, 5), [true, true, true, true, true]);
+    const uploads = patternUploads(snapshot);
+    assert.equal(uploads.length, 1);
+    const copyUpload = uploads.at(-1).value;
+    assert.deepEqual(copyUpload.activeSteps[1].slice(0, 5), [true, true, true, false, false]);
+    assert.deepEqual(copyUpload.triggerSteps[1].slice(0, 5), [true, true, true, false, false]);
+    assert.equal(await page.locator('[data-role="seqfx-block"][data-preview="true"]').count(), 0);
     await page.getByRole("button", { name: "Crusher block 1", exact: true }).waitFor();
     await page.getByRole("button", { name: "Crusher block 2", exact: true }).waitFor();
     await page.getByRole("button", { name: "Crusher block 3", exact: true }).waitFor();
-    await page.getByRole("button", { name: "Crusher block 4", exact: true }).waitFor();
-    await page.getByRole("button", { name: "Crusher block 5", exact: true }).waitFor();
+    await assert.rejects(
+        page.getByRole("button", { name: "Crusher block 4", exact: true }).waitFor({ timeout: 300 }),
+    );
+    await assert.rejects(
+        page.getByRole("button", { name: "Crusher block 5", exact: true }).waitFor({ timeout: 300 }),
+    );
 
     await page.close();
 });
