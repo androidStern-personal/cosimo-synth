@@ -46,7 +46,7 @@ contain this fix. They were already compiled against stock CHOC. To use this
 system in a generic loader, rebuild the loader from a Cmajor checkout whose
 `include/choc` points at the patched CHOC fork.
 
-## Migrating The Cosimo Effect Plugins
+## Migrating This Repo's Effect Plugins
 
 The standalone effects use two different plugin workflows, and they need to be
 handled separately.
@@ -60,23 +60,25 @@ Generated VST3 workflow:
 
 The shared production build follows the same dependency pattern:
 
-```bash
-cmajor_source_path="${CMAJOR_SOURCE_PATH:-$cache_root/cmajor-source-$cmajor_version}"
-...
-cmaj generate ... --cmajorIncludePath="$cmajor_source_path/include"
+```text
+scripts/ensure_cmajor_runtime.py
+  -> build/deps/cmajor-1.0.3066-choc-1e79d904
+  -> include/choc at 1e79d904209abd842d688433358f9e0df7d55454
+  -> cmaj generate ... --cmajorIncludePath=<patched runtime>/include
 ```
 
-That means the generated plugin builds pick up whichever CHOC lives at:
+That means the generated plugin builds pick up the patched CHOC checkout by
+default. If `CMAJOR_SOURCE_PATH` is set manually, the scripts still validate
+that its CHOC WebView header contains the bridge markers:
 
 ```text
-$cmajor_source_path/include/choc
+chocHostKeyboard
+__chocHostKeyboardBridgeInstalled
 ```
 
-To migrate the generated `ChorusLab`, `OTT Lab`, and `SeqFX` VST3s, make their
-shared Cmajor source checkout use the patched CHOC fork, or call each generator
-with `CMAJOR_SOURCE_PATH=/absolute/path/to/patched-cmajor`. Once that is true,
-the existing generated VST3 workflow can stay simple: run the normal generator,
-build the generated JUCE project, and install the dedicated VST3.
+So the generated `ChorusLab` and `OTT Lab` VST3 workflow stays simple: run the
+normal production build command and the build fails if it is not using patched
+CHOC.
 
 Generic JIT loader workflow:
 
@@ -89,9 +91,16 @@ npm run fx:jit:install -- ott
 npm run fx:jit:install -- chorus
 ```
 
-That script does not install `CmajPlugin.vst3`, does not download the Cmajor DMG,
-and does not touch AU plugins. Install or replace the generic VST3 separately
-when testing a patched Cmajor/CHOC build.
+That script does not install `CmajPlugin.vst3`, does not download the Cmajor
+DMG, and does not touch AU plugins. It now requires the installed generic VST3
+to already be signed and built with the patched CHOC keyboard bridge.
+
+Build and install the patched generic VST3 separately:
+
+```text
+npm run cmajplugin:build
+npm run cmajplugin:install
+```
 
 Only one generic `CmajPlugin.json` can be active in the user VST3 folder at a
 time. Running `npm run fx:jit:install -- chorus` points `CmajPlugin.vst3` at
@@ -122,38 +131,31 @@ That loader:
 
 So a patched generic loader is just the normal Cmajor `CmajPlugin.vst3` rebuilt
 from a Cmajor checkout whose `include/choc` points at the patched CHOC fork.
+In this repo, use:
 
-Example build:
-
-```bash
-cmake -S /absolute/path/to/patched-cmajor \
-  -B /absolute/path/to/build-cmajplugin \
-  -DBUILD_PLUGIN=ON \
-  -DBUILD_CMAJ=OFF \
-  -DBUILD_CMAJ_LIB=OFF \
-  -DBUILD_EXAMPLES=OFF \
-  -DJUCE_PATH="$HOME/Library/Caches/cosimo-synth-dev/JUCE" \
-  -DCMAKE_BUILD_TYPE=Release
-
-cmake --build /absolute/path/to/build-cmajplugin \
-  --config Release \
-  --target CmajPlugin_VST3 \
-  -j 8
+```text
+npm run cmajplugin:build
+npm run cmajplugin:install
 ```
+
+`npm run cmajplugin:build` uses `scripts/ensure_cmajor_runtime.py` by default,
+configures Cmajor's `CmajPlugin_VST3` target with CMake, builds it, and verifies
+that the built binary contains the bridge strings.
 
 The built VST3 is expected under:
 
 ```text
-/absolute/path/to/build-cmajplugin/tools/CmajPlugin/CmajPlugin_artefacts/Release/VST3/CmajPlugin.vst3
+build/cmajplugin_vst3/tools/CmajPlugin/CmajPlugin_artefacts/Release/VST3/CmajPlugin.vst3
 ```
 
-Install that VST3 into:
+`npm run cmajplugin:install` copies that already-built VST3 into:
 
 ```text
 ~/Library/Audio/Plug-Ins/VST3/CmajPlugin.vst3
 ```
 
-Then write the active patch pointer:
+Then write the active patch pointer with `npm run fx:jit:install -- ott` or
+`npm run fx:jit:install -- chorus`:
 
 ```json
 {

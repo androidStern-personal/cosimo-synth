@@ -11,6 +11,16 @@ import {
 const cacheRoot = process.env.COSIMO_DEV_CACHE
     ? path.resolve(process.env.COSIMO_DEV_CACHE)
     : path.join(process.env.HOME, "Library/Caches/cosimo-synth-dev");
+const keyboardBridgeRequiredStrings = [
+    "chocHostKeyboard",
+    "__chocHostKeyboardBridgeInstalled",
+];
+const keyboardBridgeForbiddenStrings = [
+    "cosimoKeyboard",
+    "cosimoKeyboardProbe",
+    "cosimo-keyboard-probe-panel",
+    "forwarded-buffered-flags-changed",
+];
 
 function availablePluginNames() {
     return Object.keys(effectPlugins).join(", ");
@@ -55,16 +65,6 @@ async function pathExists(nextPath) {
     }
 }
 
-function getCmajorVersion() {
-    const output = run("cmaj", ["version"], { capture: true });
-    const match = output.match(/Cmajor Version:\s*(\S+)/);
-
-    if (!match)
-        throw new Error("Could not determine Cmajor version from `cmaj version`.");
-
-    return match[1];
-}
-
 async function ensureJucePath() {
     const jucePath = process.env.JUCE_PATH
         ? path.resolve(process.env.JUCE_PATH)
@@ -76,28 +76,35 @@ async function ensureJucePath() {
     return jucePath;
 }
 
-async function ensureCmajorSourcePath() {
-    const cmajorVersion = getCmajorVersion();
-    const cmajorSourcePath = process.env.CMAJOR_SOURCE_PATH
-        ? path.resolve(process.env.CMAJOR_SOURCE_PATH)
-        : path.join(cacheRoot, `cmajor-source-${cmajorVersion}`);
+async function verifyPatchedCmajorRuntime(cmajorSourcePath) {
+    const webViewHeaderPath = path.join(cmajorSourcePath, "include/choc/choc/gui/choc_WebView.h");
+    let webViewHeader = "";
 
-    if (!await pathExists(path.join(cmajorSourcePath, ".git"))) {
-        run("git", [
-            "clone",
-            "--depth",
-            "1",
-            "--branch",
-            cmajorVersion,
-            "https://github.com/cmajor-lang/cmajor.git",
-            cmajorSourcePath,
-        ]);
+    try {
+        webViewHeader = await readFile(webViewHeaderPath, "utf8");
+    } catch {
+        throw new Error(`Cmajor runtime is missing CHOC WebView header: ${webViewHeaderPath}`);
     }
 
-    const chocJsonPath = path.join(cmajorSourcePath, "include/choc/choc/json/choc_JSON.h");
+    const missingMarkers = keyboardBridgeRequiredStrings.filter((marker) => !webViewHeader.includes(marker));
 
-    if (!await pathExists(chocJsonPath))
-        run("git", ["-C", cmajorSourcePath, "submodule", "update", "--init", "--depth", "1", "include/choc"]);
+    if (missingMarkers.length > 0) {
+        throw new Error(
+            [
+                `Cmajor runtime does not include the patched CHOC keyboard bridge: ${cmajorSourcePath}`,
+                `Missing marker(s): ${missingMarkers.join(", ")}`,
+                "Use scripts/ensure_cmajor_runtime.py --path or set CMAJOR_SOURCE_PATH to a patched Cmajor checkout.",
+            ].join("\n"),
+        );
+    }
+}
+
+async function ensureCmajorSourcePath() {
+    const cmajorSourcePath = process.env.CMAJOR_SOURCE_PATH
+        ? path.resolve(process.env.CMAJOR_SOURCE_PATH)
+        : run("python3", [path.join(repoRoot, "scripts/ensure_cmajor_runtime.py"), "--path"], { capture: true });
+
+    await verifyPatchedCmajorRuntime(cmajorSourcePath);
 
     return cmajorSourcePath;
 }
@@ -187,17 +194,44 @@ function verifyInstalledVST3(vst3Path) {
     run("codesign", ["--verify", "--deep", "--strict", "--verbose=4", vst3Path], { capture: true });
 }
 
+function verifyKeyboardBridge(binaryPath) {
+    const binaryStrings = run("strings", [binaryPath], { capture: true });
+    const missingStrings = keyboardBridgeRequiredStrings.filter((marker) => !binaryStrings.includes(marker));
+    const presentForbiddenStrings = keyboardBridgeForbiddenStrings.filter((marker) => binaryStrings.includes(marker));
+
+    if (missingStrings.length > 0) {
+        throw new Error(
+            [
+                `VST3 binary was not built with the patched CHOC keyboard bridge: ${binaryPath}`,
+                `Missing marker(s): ${missingStrings.join(", ")}`,
+            ].join("\n"),
+        );
+    }
+
+    if (presentForbiddenStrings.length > 0) {
+        throw new Error(
+            [
+                `VST3 binary still contains old keyboard probe marker(s): ${binaryPath}`,
+                `Forbidden marker(s): ${presentForbiddenStrings.join(", ")}`,
+            ].join("\n"),
+        );
+    }
+}
+
 async function installVST3(pluginName, plugin, options) {
     const builtVST3 = getBuiltVST3Path(plugin);
     const builtVST3Binary = getBuiltVST3BinaryPath(plugin);
     const installDir = path.join(process.env.HOME, "Library/Audio/Plug-Ins/VST3");
     const installedVST3 = path.join(installDir, `${plugin.productName}.vst3`);
+    const installedVST3Binary = path.join(installedVST3, "Contents", "MacOS", plugin.productName);
 
     if (!await pathExists(builtVST3))
         throw new Error(`Built VST3 bundle not found: ${builtVST3}`);
 
     if (!await pathExists(builtVST3Binary))
         throw new Error(`Built VST3 binary not found: ${builtVST3Binary}`);
+
+    verifyKeyboardBridge(builtVST3Binary);
 
     if (options.dryRun) {
         console.log(`Would install ${pluginName} VST3 from: ${builtVST3}`);
@@ -210,6 +244,7 @@ async function installVST3(pluginName, plugin, options) {
     await cp(builtVST3, installedVST3, { recursive: true });
     signInstalledVST3(installedVST3);
     verifyInstalledVST3(installedVST3);
+    verifyKeyboardBridge(installedVST3Binary);
 
     console.log(`Installed ${pluginName} VST3: ${installedVST3}`);
 }

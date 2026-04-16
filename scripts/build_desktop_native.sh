@@ -12,7 +12,12 @@ desktop_dev_server_status_url="${desktop_dev_server_origin%/}/__cosimo-dev-statu
 
 cmajor_version="$(cmaj version | awk '/Cmajor Version:/ { print $3; exit }')"
 
-cmajor_source_path="${CMAJOR_SOURCE_PATH:-$cache_root/cmajor-source-$cmajor_version}"
+if [[ -n "${CMAJOR_SOURCE_PATH:-}" ]]; then
+  cmajor_source_path="$CMAJOR_SOURCE_PATH"
+else
+  cmajor_source_path="$(python3 "$repo_root/scripts/ensure_cmajor_runtime.py" --path)"
+fi
+
 juce_path="${JUCE_PATH:-$cache_root/JUCE}"
 dmg_path="$cache_root/cmajor-$cmajor_version.dmg"
 runtime_dylib="$cache_root/libCmajPerformer-$cmajor_version.dylib"
@@ -24,10 +29,28 @@ vst3_install_dir="$HOME/Library/Audio/Plug-Ins/VST3"
 au_bundle="$au_install_dir/CosimoDesktopNative.component"
 vst3_bundle="$vst3_install_dir/CosimoDesktopNative.vst3"
 
+validate_patched_cmajor_runtime() {
+  local webview_header="$cmajor_source_path/include/choc/choc/gui/choc_WebView.h"
+
+  if [[ ! -f "$webview_header" ]]; then
+    printf 'Cmajor runtime is missing CHOC WebView header: %s\n' "$webview_header" >&2
+    exit 1
+  fi
+
+  if ! grep -Fq 'chocHostKeyboard' "$webview_header" \
+      || ! grep -Fq '__chocHostKeyboardBridgeInstalled' "$webview_header"; then
+    printf 'Cmajor runtime does not include the patched CHOC keyboard bridge: %s\n' "$cmajor_source_path" >&2
+    printf 'Use scripts/ensure_cmajor_runtime.py --path or set CMAJOR_SOURCE_PATH to a patched Cmajor checkout.\n' >&2
+    exit 1
+  fi
+}
+
 if [[ ! -e "$patch_path" ]]; then
   printf 'Patch file not found: %s\n' "$patch_path" >&2
   exit 1
 fi
+
+validate_patched_cmajor_runtime
 
 if [[ "$desktop_ui_source_mode" == "compiled" ]]; then
   npm run ui:build
@@ -65,14 +88,6 @@ fi
 
 if [[ ! -d "$juce_path/.git" ]]; then
   git clone --depth 1 https://github.com/juce-framework/JUCE.git "$juce_path"
-fi
-
-if [[ ! -d "$cmajor_source_path/.git" ]]; then
-  git clone --depth 1 --branch "$cmajor_version" https://github.com/cmajor-lang/cmajor.git "$cmajor_source_path"
-fi
-
-if [[ ! -f "$cmajor_source_path/include/choc/choc/json/choc_JSON.h" ]]; then
-  git -C "$cmajor_source_path" submodule update --init --depth 1 include/choc
 fi
 
 if [[ ! -f "$runtime_dylib" ]]; then

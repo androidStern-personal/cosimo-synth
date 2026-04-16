@@ -209,9 +209,11 @@ It should:
 
 ```text
 1. Run the runtime build above.
-2. Run cmaj generate --target=juce against the generated runtime patch.
-3. Configure and build the generated JUCE project with CMake.
-4. Leave the dedicated plugin artifacts under build/.
+2. Use scripts/ensure_cmajor_runtime.py as the default patched Cmajor source.
+3. Run cmaj generate --target=juce against the generated runtime patch.
+4. Configure and build the generated JUCE project with CMake.
+5. Verify the built binary contains the patched CHOC keyboard bridge.
+6. Leave the dedicated plugin artifacts under build/.
 ```
 
 The canonical production plugin install command should be:
@@ -236,13 +238,35 @@ npm run fx:dev
 
 It should start one Vite server for all effect plugin UIs at the shared origin.
 
+The canonical patched generic plugin build command should be:
+
+```text
+npm run cmajplugin:build
+```
+
+It builds Cmajor's generic `CmajPlugin.vst3` from the same patched Cmajor source used by production effect builds.
+
+The canonical patched generic plugin install command should be:
+
+```text
+npm run cmajplugin:install
+```
+
+It copies the already-built generic `CmajPlugin.vst3` into:
+
+```text
+~/Library/Audio/Plug-Ins/VST3/CmajPlugin.vst3
+```
+
+It signs the installed bundle, verifies the signature, verifies the patched CHOC keyboard bridge strings, and does not write `CmajPlugin.json`.
+
 The canonical generic plugin install command should be:
 
 ```text
 npm run fx:jit:install -- ott
 ```
 
-It validates the source patch, confirms `CmajPlugin.vst3` is already installed, and writes the VST3 patch association file:
+It validates the source patch, confirms the installed generic `CmajPlugin.vst3` is signed and contains the patched CHOC keyboard bridge, and writes the VST3 patch association file:
 
 ```text
 ~/Library/Audio/Plug-Ins/VST3/CmajPlugin.json
