@@ -1,7 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { createWavetableWorkerController } from "../patch_gui/wavetable-worker.js";
+import runWavetableWorker, { createWavetableWorkerController } from "../patch_gui/wavetable-worker.js";
+import {
+    MODULATION_STATE_KEY,
+    createDefaultModulationState,
+    serializeModulationState,
+} from "../patch_gui/modulation.js";
 
 const samplesPerFrame = 2048;
 const failurePhaseLoadSource = 1;
@@ -213,6 +218,63 @@ class FakePatchConnection {
     }
 }
 
+class FakeWorkerPatchConnection {
+    constructor(storedState = {}) {
+        this.storedState = { ...storedState };
+        this.endpointListeners = new Map();
+        this.storedStateListeners = new Set();
+        this.sentEvents = [];
+        this.storedWrites = [];
+    }
+
+    addEndpointListener(endpointID, listener) {
+        const listeners = this.endpointListeners.get(endpointID) ?? [];
+        listeners.push(listener);
+        this.endpointListeners.set(endpointID, listeners);
+    }
+
+    removeEndpointListener(endpointID, listener) {
+        const listeners = this.endpointListeners.get(endpointID) ?? [];
+        this.endpointListeners.set(
+            endpointID,
+            listeners.filter((candidate) => candidate !== listener),
+        );
+    }
+
+    addStoredStateValueListener(listener) {
+        this.storedStateListeners.add(listener);
+    }
+
+    removeStoredStateValueListener(listener) {
+        this.storedStateListeners.delete(listener);
+    }
+
+    requestFullStoredState(callback) {
+        callback({ ...this.storedState });
+    }
+
+    sendStoredStateValue(key, value) {
+        this.storedWrites.push({ key, value });
+    }
+
+    sendEventOrValue(endpointID, value) {
+        this.sentEvents.push({ endpointID, value });
+
+        if (endpointID === "runtimeSyncRequest") {
+            queueMicrotask(() => {
+                this.emitEndpoint("runtimeState", {
+                    dspSessionId: 0,
+                });
+            });
+        }
+    }
+
+    emitEndpoint(endpointID, payload) {
+        const listeners = this.endpointListeners.get(endpointID) ?? [];
+        listeners.forEach((listener) => listener(payload));
+    }
+}
+
 function createDefaultCatalog() {
     return {
         tables: [
@@ -259,6 +321,51 @@ async function withPatchedFetch(fakeFetch, callback) {
         globalThis.fetch = originalFetch;
     }
 }
+
+test("default worker starts the modulation stored-state mirror without writing stored state", async () => {
+    const modulationState = createDefaultModulationState();
+    modulationState.routes = [{
+        id: "worker-route",
+        enabled: true,
+        sourceKind: "env",
+        sourceSlot: 3,
+        polarity: "unipolar",
+        targetKind: "filterCutoffOctaves",
+        amount: 4,
+    }];
+
+    const connection = new FakeWorkerPatchConnection({
+        [MODULATION_STATE_KEY]: serializeModulationState(modulationState),
+    });
+    const host = await runWavetableWorker(connection, {
+        logger: () => {},
+        maxFramesInFlight: 1,
+    });
+    await flushMicrotasks();
+
+    try {
+        const firstRouteUpload = connection.sentEvents.find(({ endpointID, value }) => (
+            endpointID === "modulationRoute" && value.routeIndex === 0
+        ));
+
+        assert.deepEqual(firstRouteUpload, {
+            endpointID: "modulationRoute",
+            value: {
+                routeIndex: 0,
+                enabled: true,
+                sourceKind: 2,
+                sourceSlot: 3,
+                polarityKind: 0,
+                targetKind: 3,
+                amount: 4,
+            },
+        });
+        assert.equal(connection.sentEvents.some(({ endpointID }) => endpointID === "runtimeSyncRequest"), true);
+        assert.deepEqual(connection.storedWrites, []);
+    } finally {
+        await host.stop();
+    }
+});
 
 test("worker bootstraps from runtimeState instead of requesting wavetableSelect directly", async () => {
     const connection = new FakePatchConnection({

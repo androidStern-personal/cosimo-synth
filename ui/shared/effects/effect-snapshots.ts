@@ -6,6 +6,7 @@ import {
     EFFECT_PRESET_V2_SCHEMA_VERSION,
     normalizeEffectPresetV2,
     type EffectPresetMigration,
+    type EffectPresetV2,
     type EffectStoredStateAdapter,
 } from "./effect-preset-v2";
 import { assertNoDuplicateJsonKeys } from "./effect-preset-schema";
@@ -24,7 +25,14 @@ export type EffectSnapshot = {
     storedState: Record<string, unknown>;
 };
 
-function snapshotToPreset(snapshot: EffectSnapshot) {
+export type EffectSnapshotMigration = {
+    effectID: string;
+    fromHash: string;
+    toHash: string;
+    migrate: (snapshot: EffectSnapshot) => EffectSnapshot;
+};
+
+function snapshotToPreset(snapshot: EffectSnapshot): EffectPresetV2 {
     return {
         kind: EFFECT_PRESET_V2_KIND,
         version: EFFECT_PRESET_V2_SCHEMA_VERSION,
@@ -37,7 +45,7 @@ function snapshotToPreset(snapshot: EffectSnapshot) {
     };
 }
 
-function presetToSnapshot(preset: ReturnType<typeof snapshotToPreset>, slotID: string): EffectSnapshot {
+function presetToSnapshot(preset: EffectPresetV2, slotID: string): EffectSnapshot {
     return {
         kind: EFFECT_SNAPSHOT_KIND,
         version: EFFECT_SNAPSHOT_SCHEMA_VERSION,
@@ -76,14 +84,14 @@ export function captureEffectSnapshot({
 }
 
 function wrapSnapshotMigrations(
-    migrations: Array<EffectPresetMigration<EffectSnapshot>>,
+    migrations: EffectSnapshotMigration[],
     slotID: string,
-) {
-    return migrations.map((migration) => ({
+): EffectPresetMigration[] {
+    return migrations.map((migration): EffectPresetMigration => ({
         effectID: migration.effectID,
         fromHash: migration.fromHash,
         toHash: migration.toHash,
-        migrate(preset: ReturnType<typeof snapshotToPreset>) {
+        migrate(preset) {
             const snapshot = presetToSnapshot(preset, slotID);
             return snapshotToPreset(migration.migrate(snapshot));
         },
@@ -100,7 +108,7 @@ export function applyEffectSnapshot({
     snapshot: EffectSnapshot;
     currentContract: EffectPluginStateContract;
     patchConnection: Parameters<typeof applyEffectPresetV2>[0]["patchConnection"];
-    migrations?: Array<EffectPresetMigration<EffectSnapshot>>;
+    migrations?: EffectSnapshotMigration[];
     storedStateAdapters?: Array<EffectStoredStateAdapter>;
 }) {
     const preset = snapshotToPreset(snapshot);
@@ -139,7 +147,7 @@ export function normalizeEffectSnapshot(
     }: {
         currentContract: EffectPluginStateContract;
         storedStateAdapters?: Array<EffectStoredStateAdapter>;
-        migrations?: Array<EffectPresetMigration<EffectSnapshot>>;
+        migrations?: EffectSnapshotMigration[];
     },
 ) {
     const normalizedPreset = normalizeEffectPresetV2(snapshotToPreset(snapshot), {

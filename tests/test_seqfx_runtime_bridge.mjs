@@ -12,6 +12,7 @@ const bridgeModule = await loadUIModule(repoRoot, "fx/seqfx/view/seqfx-runtime-b
 const {
     SEQFX_LANES,
     SEQFX_STATE_KEY,
+    applySeqFxBlockCreate,
     createDefaultSeqFxState,
     serializeSeqFxState,
 } = stateModule;
@@ -99,6 +100,27 @@ class FakePatchConnection {
     }
 }
 
+class AsyncFullStatePatchConnection extends FakePatchConnection {
+    fullStateCallback = null;
+
+    requestFullStoredState(callback) {
+        this.fullStateCallback = callback;
+    }
+
+    flushFullStoredState() {
+        assert.equal(typeof this.fullStateCallback, "function");
+        const callback = this.fullStateCallback;
+        this.fullStateCallback = null;
+        callback({ ...this.storedState });
+    }
+}
+
+class MissingFullStatePatchConnection extends FakePatchConnection {
+    requestFullStoredState(callback) {
+        callback({});
+    }
+}
+
 function endpointEvents(connection, endpointID) {
     return connection.events.filter((entry) => entry.endpointID === endpointID);
 }
@@ -119,6 +141,76 @@ test("boot_without_saved_seqfx_state_persists_normalized_default_and_uploads_aut
     assert.equal(uploads.length, 1);
     assert.equal(uploads.at(-1).value.patternIndex, 0);
     assert.equal(uploads.at(-1).value.authoritative, true);
+});
+
+test("boot_waits_for_async_full_stored_state_before_uploading_or_persisting", () => {
+    let savedState = createDefaultSeqFxState();
+    savedState = applySeqFxBlockCreate(savedState, {
+        patternIndex: 0,
+        lane: SEQFX_LANES.stutter,
+        startStep: 5,
+        length: 2,
+    });
+    const connection = new AsyncFullStatePatchConnection({
+        [SEQFX_STATE_KEY]: serializeSeqFxState(savedState),
+    });
+    const bridge = new SeqFxRuntimeBridge(connection);
+
+    bridge.attach();
+    bridge.requestBootState();
+
+    assert.equal(connection.storedWrites.length, 0);
+    assert.equal(endpointEvents(connection, SEQFX_ENDPOINTS.patternUpload).length, 0);
+    assert.deepEqual(connection.requestedParameters, []);
+
+    connection.flushFullStoredState();
+
+    assert.equal(connection.storedWrites.length, 0);
+    assert.deepEqual(connection.requestedParameters, [
+        SEQFX_ENDPOINTS.patternSelect,
+        SEQFX_ENDPOINTS.rate,
+    ]);
+
+    const uploads = endpointEvents(connection, SEQFX_ENDPOINTS.patternUpload);
+    assert.equal(uploads.length, 1);
+    assert.equal(uploads[0].value.authoritative, true);
+    assert.deepEqual(
+        uploads[0].value.activeSteps[SEQFX_LANES.stutter].slice(5, 7),
+        [true, true],
+    );
+    assert.deepEqual(
+        uploads[0].value.triggerSteps[SEQFX_LANES.stutter].slice(5, 7),
+        [true, false],
+    );
+});
+
+test("boot_falls_back_to_specific_stored_state_request_when_full_state_omits_seqfx_key", () => {
+    let savedState = createDefaultSeqFxState();
+    savedState = applySeqFxBlockCreate(savedState, {
+        patternIndex: 0,
+        lane: SEQFX_LANES.tapeStop,
+        startStep: 12,
+        length: 3,
+    });
+    const connection = new MissingFullStatePatchConnection({
+        [SEQFX_STATE_KEY]: serializeSeqFxState(savedState),
+    });
+    const bridge = new SeqFxRuntimeBridge(connection);
+
+    bridge.attach();
+    bridge.requestBootState();
+
+    assert.equal(connection.storedWrites.length, 0);
+    const uploads = endpointEvents(connection, SEQFX_ENDPOINTS.patternUpload);
+    assert.equal(uploads.length, 1);
+    assert.deepEqual(
+        uploads[0].value.activeSteps[SEQFX_LANES.tapeStop].slice(12, 15),
+        [true, true, true],
+    );
+    assert.deepEqual(
+        uploads[0].value.triggerSteps[SEQFX_LANES.tapeStop].slice(12, 15),
+        [true, false, false],
+    );
 });
 
 test("editing_selected_pattern_persists_state_and_uploads_one_complete_non_authoritative_pattern", () => {

@@ -13,6 +13,7 @@ const SEQFX_STEP_COUNT = 32;
 const SEQFX_NORMAL_GAP_PX = 5;
 const SEQFX_BEAT_GAP_PX = 9;
 const SEQFX_MIN_CELL_SIZE_PX = 22;
+const SEQFX_LANE_NAMES = ["Filter", "Crusher", "Tape Stop", "Stutter"];
 
 let serverProcess;
 let browser;
@@ -87,6 +88,22 @@ async function boundingBoxForCell(page, lane, step) {
     const box = await page.locator(`[data-role="seqfx-cell"][data-lane="${lane}"][data-step="${step}"]`).boundingBox();
     assert.ok(box, `expected lane ${lane} step ${step} to have a bounding box`);
     return box;
+}
+
+async function resizeBlockToStep(page, lane, startStep, endStep) {
+    const laneName = SEQFX_LANE_NAMES[lane];
+    const resizeHandle = page.locator(`[data-role="seqfx-block-resize"][data-lane="${lane}"][data-start="${startStep - 1}"]`);
+    await resizeHandle.waitFor();
+    const handleBox = await resizeHandle.boundingBox();
+    const endCellBox = await page.getByRole("button", { name: `${laneName} step ${endStep}`, exact: true }).boundingBox();
+    assert.ok(handleBox);
+    assert.ok(endCellBox);
+
+    await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(endCellBox.x + endCellBox.width - 2, endCellBox.y + endCellBox.height / 2, { steps: 8 });
+    await page.mouse.up();
+    await page.getByRole("button", { name: `${laneName} block ${startStep}-${endStep}`, exact: true }).waitFor();
 }
 
 function assertClose(actual, expected, tolerance, message) {
@@ -807,6 +824,192 @@ test("seqfx_option_drag_previews_copy_paint_and_commits_once_on_release", async 
     await assert.rejects(
         page.getByRole("button", { name: "Crusher block 5", exact: true }).waitFor({ timeout: 300 }),
     );
+
+    await page.close();
+});
+
+test("seqfx_shift_click_selects_active_blocks_and_edits_or_deletes_the_group", async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
+    await loadSeqFxHarness(page);
+    await page.locator('[data-role="seqfx-root"]').waitFor();
+
+    for (const step of [2, 4, 7, 11]) {
+        await page.getByRole("button", { name: `Crusher step ${step}`, exact: true }).click();
+    }
+    await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
+
+    await page.getByRole("button", { name: "Crusher block 2", exact: true }).click();
+    await page.getByRole("button", { name: "Crusher block 7", exact: true }).click({ modifiers: ["Shift"] });
+
+    await page.waitForFunction(() => (
+        Array.from(document.querySelectorAll('[data-role="seqfx-block"].is-selected[data-lane="1"]'))
+            .map((node) => Number(node.getAttribute("data-start")))
+            .join(",") === "1,3,6"
+    ));
+
+    const bitsInput = page.locator('[data-role="seqfx-param"][data-param="0"]');
+    await bitsInput.fill("5");
+    await bitsInput.dispatchEvent("change");
+
+    let snapshot = await getHarnessSnapshot(page);
+    let upload = patternUploads(snapshot).at(-1).value;
+    assert.deepEqual(
+        [1, 3, 6, 10].map((step) => upload.params[1][step][0]),
+        [5, 5, 5, 8],
+    );
+
+    await page.locator('[data-role="seqfx-delete-block"]').click();
+
+    snapshot = await getHarnessSnapshot(page);
+    upload = patternUploads(snapshot).at(-1).value;
+    assert.deepEqual(upload.activeSteps[1].slice(0, 12), [
+        false, false, false, false, false, false, false, false, false, false, true, false,
+    ]);
+    await assert.rejects(
+        page.getByRole("button", { name: "Crusher block 2", exact: true }).waitFor({ timeout: 300 }),
+    );
+    await page.getByRole("button", { name: "Crusher block 11", exact: true }).waitFor();
+
+    await page.close();
+});
+
+test("seqfx_selected_active_blocks_drag_as_a_group", async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
+    await loadSeqFxHarness(page);
+    await page.locator('[data-role="seqfx-root"]').waitFor();
+
+    for (const step of [2, 4, 7, 11]) {
+        await page.getByRole("button", { name: `Filter step ${step}`, exact: true }).click();
+    }
+    await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
+
+    await page.getByRole("button", { name: "Filter block 2", exact: true }).click();
+    await page.getByRole("button", { name: "Filter block 7", exact: true }).click({ modifiers: ["Shift"] });
+    await page.waitForFunction(() => (
+        Array.from(document.querySelectorAll('[data-role="seqfx-block"].is-selected[data-lane="0"]'))
+            .map((node) => Number(node.getAttribute("data-start")))
+            .join(",") === "1,3,6"
+    ));
+
+    const anchorBlock = page.getByRole("button", { name: "Filter block 4", exact: true });
+    const anchorBox = await anchorBlock.boundingBox();
+    const targetBox = await page.getByRole("button", { name: "Filter step 6", exact: true }).boundingBox();
+    assert.ok(anchorBox);
+    assert.ok(targetBox);
+
+    await page.mouse.move(anchorBox.x + anchorBox.width / 2, anchorBox.y + anchorBox.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(targetBox.x + targetBox.width / 2, targetBox.y + targetBox.height / 2, { steps: 10 });
+    await page.mouse.up();
+
+    const snapshot = await getHarnessSnapshot(page);
+    const upload = patternUploads(snapshot).at(-1).value;
+    assert.deepEqual(upload.activeSteps[0].slice(0, 13), [
+        false, false, false, true, false, true, false, false, true, false, true, false, false,
+    ]);
+    await page.getByRole("button", { name: "Filter block 4", exact: true }).waitFor();
+    await page.getByRole("button", { name: "Filter block 6", exact: true }).waitFor();
+    await page.getByRole("button", { name: "Filter block 9", exact: true }).waitFor();
+    await page.getByRole("button", { name: "Filter block 11", exact: true }).waitFor();
+
+    await page.close();
+});
+
+test("seqfx_double_clicking_a_selected_block_deletes_the_selected_group", async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
+    await loadSeqFxHarness(page);
+    await page.locator('[data-role="seqfx-root"]').waitFor();
+
+    for (const step of [2, 5, 9]) {
+        await page.getByRole("button", { name: `Stutter step ${step}`, exact: true }).click();
+    }
+    await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
+
+    await page.getByRole("button", { name: "Stutter block 2", exact: true }).click();
+    await page.getByRole("button", { name: "Stutter block 5", exact: true }).click({ modifiers: ["Shift"] });
+    await page.waitForFunction(() => (
+        Array.from(document.querySelectorAll('[data-role="seqfx-block"].is-selected[data-lane="3"]'))
+            .map((node) => Number(node.getAttribute("data-start")))
+            .join(",") === "1,4"
+    ));
+
+    await page.getByRole("button", { name: "Stutter block 2", exact: true }).dblclick();
+
+    const snapshot = await getHarnessSnapshot(page);
+    const upload = patternUploads(snapshot).at(-1).value;
+    assert.deepEqual(upload.activeSteps[3].slice(0, 10), [
+        false, false, false, false, false, false, false, false, true, false,
+    ]);
+    await assert.rejects(
+        page.getByRole("button", { name: "Stutter block 2", exact: true }).waitFor({ timeout: 300 }),
+    );
+    await assert.rejects(
+        page.getByRole("button", { name: "Stutter block 5", exact: true }).waitFor({ timeout: 300 }),
+    );
+    await page.getByRole("button", { name: "Stutter block 9", exact: true }).waitFor();
+
+    await page.close();
+});
+
+test("seqfx_selected_multi_step_blocks_edit_and_drag_as_whole_blocks", async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
+    await loadSeqFxHarness(page);
+    await page.locator('[data-role="seqfx-root"]').waitFor();
+
+    await page.getByRole("button", { name: "Filter step 2", exact: true }).click();
+    await resizeBlockToStep(page, 0, 2, 4);
+    await page.getByRole("button", { name: "Filter step 8", exact: true }).click();
+    await resizeBlockToStep(page, 0, 8, 9);
+    await page.getByRole("button", { name: "Filter step 22", exact: true }).click();
+    await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
+
+    await page.getByRole("button", { name: "Filter block 2-4", exact: true }).click();
+    await page.getByRole("button", { name: "Filter block 8-9", exact: true }).click({ modifiers: ["Shift"] });
+    await page.waitForFunction(() => (
+        Array.from(document.querySelectorAll('[data-role="seqfx-block"].is-selected[data-lane="0"]'))
+            .map((node) => Number(node.getAttribute("data-start")))
+            .join(",") === "1,7"
+    ));
+
+    const cutoffInput = page.locator('[data-role="seqfx-param"][data-param="1"]');
+    await cutoffInput.fill("2222");
+    await cutoffInput.dispatchEvent("change");
+
+    let snapshot = await getHarnessSnapshot(page);
+    let upload = patternUploads(snapshot).at(-1).value;
+    assert.deepEqual(
+        [1, 2, 3, 7, 8].map((step) => upload.params[0][step][1]),
+        [2222, 2222, 2222, 2222, 2222],
+    );
+    assert.equal(upload.params[0][21][1], 2000);
+
+    const anchorBox = await page.getByRole("button", { name: "Filter block 2-4", exact: true }).boundingBox();
+    const targetBox = await page.getByRole("button", { name: "Filter step 11", exact: true }).boundingBox();
+    assert.ok(anchorBox);
+    assert.ok(targetBox);
+
+    await page.mouse.move(anchorBox.x + anchorBox.width * 0.15, anchorBox.y + anchorBox.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(targetBox.x + targetBox.width * 0.15, targetBox.y + targetBox.height / 2, { steps: 12 });
+    await page.mouse.up();
+
+    snapshot = await getHarnessSnapshot(page);
+    upload = patternUploads(snapshot).at(-1).value;
+    assert.deepEqual(upload.activeSteps[0].slice(1, 4), [false, false, false]);
+    assert.deepEqual(upload.activeSteps[0].slice(7, 9), [false, false]);
+    assert.deepEqual(upload.activeSteps[0].slice(10, 13), [true, true, true]);
+    assert.deepEqual(upload.triggerSteps[0].slice(10, 13), [true, false, false]);
+    assert.deepEqual(upload.activeSteps[0].slice(16, 18), [true, true]);
+    assert.deepEqual(upload.triggerSteps[0].slice(16, 18), [true, false]);
+    assert.deepEqual(
+        [10, 11, 12, 16, 17].map((step) => upload.params[0][step][1]),
+        [2222, 2222, 2222, 2222, 2222],
+    );
+    assert.equal(upload.activeSteps[0][21], true);
+    assert.equal(upload.params[0][21][1], 2000);
+    await page.getByRole("button", { name: "Filter block 11-13", exact: true }).waitFor();
+    await page.getByRole("button", { name: "Filter block 17-18", exact: true }).waitFor();
+    await page.getByRole("button", { name: "Filter block 22", exact: true }).waitFor();
 
     await page.close();
 });

@@ -9,6 +9,10 @@ import {
     applySeqFxBlockMove,
     applySeqFxBlockParamEdit,
     applySeqFxBlockResize,
+    applySeqFxBlockSelectionDelete,
+    applySeqFxBlockSelectionMixEdit,
+    applySeqFxBlockSelectionMove,
+    applySeqFxBlockSelectionParamEdit,
     applySeqFxCellToggle,
     applySeqFxMixEdit,
     applySeqFxParamEdit,
@@ -25,6 +29,11 @@ import {
     type SeqFxBlockMoveEdit,
     type SeqFxBlockParamEdit,
     type SeqFxBlockResizeEdit,
+    type SeqFxBlockSelectionEditTarget,
+    type SeqFxBlockSelectionMixEdit,
+    type SeqFxBlockSelectionMoveEdit,
+    type SeqFxBlockSelectionMoveResult,
+    type SeqFxBlockSelectionParamEdit,
     type SeqFxCellToggleEdit,
     type SeqFxMixEdit,
     type SeqFxParamEdit,
@@ -48,6 +57,14 @@ type StoredStateMessage = {
 type BridgeListener = (state: SeqFxState) => void;
 type MonitorListener = (value: unknown) => void;
 type RateListener = (rateIndex: number) => void;
+
+function hasOwnStoredStateKey(storedState: unknown): storedState is Record<string, unknown> {
+    return Boolean(
+        storedState
+        && typeof storedState === "object"
+        && Object.prototype.hasOwnProperty.call(storedState, SEQFX_STATE_KEY),
+    );
+}
 
 function toEchoToken(value: unknown): string {
     return typeof value === "string" ? value : JSON.stringify(value);
@@ -93,6 +110,7 @@ export class SeqFxRuntimeBridge {
     private readonly pendingStoredEchoes = new Map<string, number>();
     private attached = false;
     private patternSelectResolvedDuringRequest = false;
+    private bootStoredStatePending = false;
 
     private readonly handleStoredStateValue = (message: unknown) => {
         const stored = message as StoredStateMessage;
@@ -105,7 +123,13 @@ export class SeqFxRuntimeBridge {
             return;
         }
 
-        this.applyStoredState(stored.value, true);
+        const isBootResponse = this.bootStoredStatePending;
+        this.bootStoredStatePending = false;
+        this.applyStoredState(stored.value, !isBootResponse);
+
+        if (isBootResponse) {
+            this.requestRuntimeValuesAfterBootState();
+        }
     };
 
     private readonly handlePatternSelect = (value: unknown) => {
@@ -158,28 +182,37 @@ export class SeqFxRuntimeBridge {
     }
 
     requestBootState() {
-        let sawFullState = false;
+        if (typeof this.patchConnection.requestFullStoredState === "function") {
+            this.patchConnection.requestFullStoredState((storedState) => {
+                if (hasOwnStoredStateKey(storedState)) {
+                    this.bootStoredStatePending = false;
+                    this.applyStoredState(storedState[SEQFX_STATE_KEY], false);
+                    this.requestRuntimeValuesAfterBootState();
+                    return;
+                }
 
-        this.patchConnection.requestFullStoredState?.((storedState) => {
-            sawFullState = true;
-            this.applyStoredState(storedState?.[SEQFX_STATE_KEY], false);
-        });
+                if (typeof this.patchConnection.requestStoredStateValue === "function") {
+                    this.bootStoredStatePending = true;
+                    this.patchConnection.requestStoredStateValue(SEQFX_STATE_KEY);
+                    return;
+                }
 
-        if (!sawFullState) {
-            this.applyStoredState(undefined, false);
+                this.bootStoredStatePending = false;
+                this.applyStoredState(undefined, false);
+                this.requestRuntimeValuesAfterBootState();
+            });
+            return;
         }
 
-        this.patternSelectResolvedDuringRequest = false;
-        this.patchConnection.requestParameterValue?.(SEQFX_ENDPOINTS.patternSelect);
-        this.patchConnection.requestParameterValue?.(SEQFX_ENDPOINTS.rate);
-
-        if (!this.patternSelectResolvedDuringRequest) {
-            this.uploadSelectedPattern(true);
+        if (typeof this.patchConnection.requestStoredStateValue === "function") {
+            this.bootStoredStatePending = true;
+            this.patchConnection.requestStoredStateValue(SEQFX_STATE_KEY);
+            return;
         }
 
-        if (!sawFullState) {
-            this.patchConnection.requestStoredStateValue?.(SEQFX_STATE_KEY);
-        }
+        this.bootStoredStatePending = false;
+        this.applyStoredState(undefined, false);
+        this.requestRuntimeValuesAfterBootState();
     }
 
     subscribe(listener: BridgeListener) {
@@ -251,6 +284,12 @@ export class SeqFxRuntimeBridge {
         this.commitState(applySeqFxBlockMove(this.state, edit), edit.patternIndex);
     }
 
+    moveBlockSelection(edit: SeqFxBlockSelectionMoveEdit): SeqFxBlockSelectionMoveResult {
+        const result = applySeqFxBlockSelectionMove(this.state, edit);
+        this.commitState(result.state, edit.patternIndex);
+        return result;
+    }
+
     copyBlock(edit: SeqFxBlockCopyEdit) {
         this.commitState(applySeqFxBlockCopy(this.state, edit), edit.patternIndex);
     }
@@ -271,12 +310,24 @@ export class SeqFxRuntimeBridge {
         this.commitState(applySeqFxBlockDelete(this.state, edit), edit.patternIndex);
     }
 
+    deleteBlockSelection(edit: SeqFxBlockSelectionEditTarget) {
+        this.commitState(applySeqFxBlockSelectionDelete(this.state, edit), edit.patternIndex);
+    }
+
     setBlockMix(edit: SeqFxBlockMixEdit) {
         this.commitState(applySeqFxBlockMixEdit(this.state, edit), edit.patternIndex);
     }
 
+    setBlockSelectionMix(edit: SeqFxBlockSelectionMixEdit) {
+        this.commitState(applySeqFxBlockSelectionMixEdit(this.state, edit), edit.patternIndex);
+    }
+
     setBlockParam(edit: SeqFxBlockParamEdit) {
         this.commitState(applySeqFxBlockParamEdit(this.state, edit), edit.patternIndex);
+    }
+
+    setBlockSelectionParam(edit: SeqFxBlockSelectionParamEdit) {
+        this.commitState(applySeqFxBlockSelectionParamEdit(this.state, edit), edit.patternIndex);
     }
 
     setStepMix(edit: SeqFxMixEdit) {
@@ -343,6 +394,16 @@ export class SeqFxRuntimeBridge {
                 authoritative,
             }),
         );
+    }
+
+    private requestRuntimeValuesAfterBootState() {
+        this.patternSelectResolvedDuringRequest = false;
+        this.patchConnection.requestParameterValue?.(SEQFX_ENDPOINTS.patternSelect);
+        this.patchConnection.requestParameterValue?.(SEQFX_ENDPOINTS.rate);
+
+        if (!this.patternSelectResolvedDuringRequest) {
+            this.uploadSelectedPattern(true);
+        }
     }
 
     private rememberStoredEcho(value: unknown) {

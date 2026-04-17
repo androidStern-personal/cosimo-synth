@@ -25,6 +25,10 @@ export type EffectPluginStateContract = {
 };
 
 export type StoredStateContractSource = EffectStoredStateContract | {
+    key: string;
+    schemaVersion: number;
+    required?: true;
+} | {
     getContract: () => EffectStoredStateContract;
 };
 
@@ -101,8 +105,14 @@ function normalizeParameterContract(parameter: unknown): EffectParameterContract
     return contract;
 }
 
+function hasStoredStateContractGetter(
+    entry: StoredStateContractSource,
+): entry is { getContract: () => EffectStoredStateContract } {
+    return typeof (entry as { getContract?: unknown }).getContract === "function";
+}
+
 function normalizeStoredStateContract(entry: StoredStateContractSource): EffectStoredStateContract {
-    const rawEntry = "getContract" in entry && typeof entry.getContract === "function"
+    const rawEntry = hasStoredStateContractGetter(entry)
         ? entry.getContract()
         : entry;
 

@@ -95,7 +95,7 @@ export function createSeqFxPresetStateAdapter({
 }: {
     bridge: SeqFxRuntimeBridge;
     patchConnection: PatchConnectionLike;
-}): EffectStoredStateAdapter<string> {
+}): EffectStoredStateAdapter {
     return {
         key: SEQFX_STATE_KEY,
         schemaVersion: 1,
@@ -115,13 +115,13 @@ export function createSeqFxPresetStateAdapter({
             assertSeqFxStateValuesInRange(parsed);
             return serializeSeqFxState(normalizeSeqFxState(parsed));
         },
-        serializeForPreset(value: string) {
+        serializeForPreset(value: unknown) {
             const parsed = parseStateCandidate(value);
             assertStrictSeqFxState(parsed);
             assertSeqFxStateValuesInRange(parsed);
             return serializeSeqFxState(normalizeSeqFxState(parsed));
         },
-        apply(value: string) {
+        apply(value: unknown) {
             const parsed = parseStateCandidate(value);
             assertStrictSeqFxState(parsed);
             assertSeqFxStateValuesInRange(parsed);

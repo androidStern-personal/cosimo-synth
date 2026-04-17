@@ -488,6 +488,38 @@ function toRouteUpload(routeIndex, route) {
         amount: isEnabled ? (normalizedRoute?.amount ?? 0.0) : 0.0,
     };
 }
+export function buildModulationRuntimeEvents(stateValue) {
+    const state = normalizeModulationState(stateValue);
+    const events = [
+        { endpointID: MODULATION_ENABLE_ENDPOINT_ID, value: 0 },
+        { endpointID: MODULATION_CLEAR_ENDPOINT_ID, value: 1 },
+    ];
+    for (let slotIndex = 0; slotIndex < MODULATION_MSEG_SLOT_COUNT; slotIndex += 1) {
+        const slot = state.msegSlots[slotIndex];
+        events.push({
+            endpointID: MODULATION_MSEG_BUFFER_ENDPOINT_ID,
+            value: toMsegBufferUpload(slotIndex, slot.shape),
+        });
+        events.push({
+            endpointID: MODULATION_MSEG_PLAYBACK_ENDPOINT_ID,
+            value: toMsegPlaybackUpload(slotIndex, slot.playback),
+        });
+    }
+    for (let slotIndex = 0; slotIndex < MODULATION_ENV_SLOT_COUNT; slotIndex += 1) {
+        events.push({
+            endpointID: MODULATION_ENV_ENDPOINT_ID,
+            value: toEnvelopeUpload(slotIndex, state.envelopeSlots[slotIndex]),
+        });
+    }
+    for (let routeIndex = 0; routeIndex < MODULATION_MAX_ROUTES; routeIndex += 1) {
+        events.push({
+            endpointID: MODULATION_ROUTE_ENDPOINT_ID,
+            value: toRouteUpload(routeIndex, state.routes[routeIndex] ?? null),
+        });
+    }
+    events.push({ endpointID: MODULATION_ENABLE_ENDPOINT_ID, value: 1 });
+    return events;
+}
 export function getModulationSourceOptionValue(route) {
     const match = MODULATION_SOURCE_OPTIONS.find((option) => (option.sourceKind === route.sourceKind
         && option.sourceSlot === route.sourceSlot));
@@ -559,7 +591,7 @@ export class ModulationRuntimeBridge {
                 const fullState = storedState && typeof storedState === "object"
                     ? storedState
                     : {};
-                this.applyStoredState(fullState[MODULATION_STATE_KEY], true);
+                this.applyStoredState(fullState[MODULATION_STATE_KEY]);
             });
             return;
         }
@@ -567,7 +599,6 @@ export class ModulationRuntimeBridge {
             this.patchConnection.requestStoredStateValue(MODULATION_STATE_KEY);
             return;
         }
-        this.uploadAll();
         this.emitStateChange();
     }
     getState() {
@@ -589,7 +620,6 @@ export class ModulationRuntimeBridge {
         }
         this.state = normalizedState;
         this.persistState();
-        this.uploadAll();
         this.emitStateChange();
     }
     setMsegSlotShape(slotIndex, nextShape) {
@@ -607,7 +637,6 @@ export class ModulationRuntimeBridge {
                 msegSlots: nextMsegSlots,
             };
         });
-        this.uploadMsegBuffer(slotIndex);
     }
     setMsegSlotPlayback(slotIndex, nextPlayback) {
         const normalizedPlayback = normalizeMsegPlayback(nextPlayback);
@@ -624,7 +653,6 @@ export class ModulationRuntimeBridge {
                 msegSlots: nextMsegSlots,
             };
         });
-        this.uploadMsegPlayback(slotIndex);
     }
     setEnvelope(slotIndex, nextEnvelope) {
         const normalizedEnvelope = normalizeEnvelope(nextEnvelope, slotIndex);
@@ -636,7 +664,6 @@ export class ModulationRuntimeBridge {
             ...previousState,
             envelopeSlots: previousState.envelopeSlots.map((envelope, index) => (index === slotIndex ? normalizedEnvelope : envelope)),
         }));
-        this.uploadEnvelope(slotIndex);
     }
     replaceRoutes(nextRoutes) {
         const normalizedRoutes = Array.isArray(nextRoutes)
@@ -649,7 +676,6 @@ export class ModulationRuntimeBridge {
             ...previousState,
             routes: normalizedRoutes,
         }));
-        this.uploadRoutes();
     }
     setRoute(routeIndex, nextRoute) {
         const normalizedRoute = normalizeRoute(nextRoute, routeIndex);
@@ -685,12 +711,9 @@ export class ModulationRuntimeBridge {
         this.persistState();
         this.emitStateChange();
     }
-    applyStoredState(rawValue, uploadAll) {
+    applyStoredState(rawValue) {
         const nextState = deserializeModulationState(rawValue);
         this.state = nextState;
-        if (uploadAll) {
-            this.uploadAll();
-        }
         this.emitStateChange();
     }
     handleStoredStateValue(message) {
@@ -705,7 +728,7 @@ export class ModulationRuntimeBridge {
             return;
         }
         if (nextMessage.key === MODULATION_STATE_KEY) {
-            this.applyStoredState(nextMessage.value, true);
+            this.applyStoredState(nextMessage.value);
         }
     }
     persistState() {
@@ -720,38 +743,6 @@ export class ModulationRuntimeBridge {
         }
         finally {
             this.suppressStoredStateEvents -= 1;
-        }
-    }
-    uploadAll() {
-        this.patchConnection.sendEventOrValue?.(MODULATION_ENABLE_ENDPOINT_ID, 0);
-        this.patchConnection.sendEventOrValue?.(MODULATION_CLEAR_ENDPOINT_ID, 1);
-        for (let slotIndex = 0; slotIndex < MODULATION_MSEG_SLOT_COUNT; slotIndex += 1) {
-            this.uploadMsegSlot(slotIndex);
-        }
-        for (let slotIndex = 0; slotIndex < MODULATION_ENV_SLOT_COUNT; slotIndex += 1) {
-            this.uploadEnvelope(slotIndex);
-        }
-        this.uploadRoutes();
-        this.patchConnection.sendEventOrValue?.(MODULATION_ENABLE_ENDPOINT_ID, 1);
-    }
-    uploadMsegSlot(slotIndex) {
-        this.uploadMsegBuffer(slotIndex);
-        this.uploadMsegPlayback(slotIndex);
-    }
-    uploadMsegBuffer(slotIndex) {
-        const slot = this.state.msegSlots[slotIndex];
-        this.patchConnection.sendEventOrValue?.(MODULATION_MSEG_BUFFER_ENDPOINT_ID, toMsegBufferUpload(slotIndex, slot.shape));
-    }
-    uploadMsegPlayback(slotIndex) {
-        const slot = this.state.msegSlots[slotIndex];
-        this.patchConnection.sendEventOrValue?.(MODULATION_MSEG_PLAYBACK_ENDPOINT_ID, toMsegPlaybackUpload(slotIndex, slot.playback));
-    }
-    uploadEnvelope(slotIndex) {
-        this.patchConnection.sendEventOrValue?.(MODULATION_ENV_ENDPOINT_ID, toEnvelopeUpload(slotIndex, this.state.envelopeSlots[slotIndex]));
-    }
-    uploadRoutes() {
-        for (let routeIndex = 0; routeIndex < MODULATION_MAX_ROUTES; routeIndex += 1) {
-            this.patchConnection.sendEventOrValue?.(MODULATION_ROUTE_ENDPOINT_ID, toRouteUpload(routeIndex, this.state.routes[routeIndex] ?? null));
         }
     }
     emitStateChange() {

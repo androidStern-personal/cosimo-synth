@@ -9,6 +9,7 @@ import { loadUIModule } from "./helpers/load_ui_module.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 const SNAPSHOT_STORAGE_KEY = "cosimo.ottLab.snapshotSlots.v2";
+const ACTIVE_SNAPSHOT_SLOT_STATE_KEY = "cosimo.ottLab.activeSnapshotSlot";
 const SNAPSHOT_EXPORT_KIND = "cosimo.effectSnapshot";
 
 let server;
@@ -78,11 +79,15 @@ const OTT_CONTRACT = buildPluginStateContract({
 });
 
 function createSnapshotExport(parameters = {}, overrides = {}) {
-    return JSON.stringify({
+    return JSON.stringify(createSnapshotSlot("A", parameters, overrides));
+}
+
+function createSnapshotSlot(slotID, parameters = {}, overrides = {}) {
+    return {
         kind: SNAPSHOT_EXPORT_KIND,
         version: 2,
         effectID: "ott",
-        slotID: "A",
+        slotID,
         label: "",
         contract: OTT_CONTRACT,
         parameters: {
@@ -91,14 +96,43 @@ function createSnapshotExport(parameters = {}, overrides = {}) {
         },
         storedState: {},
         ...overrides,
+    };
+}
+
+function createSnapshotStore(slots = {}) {
+    return JSON.stringify({
+        schema: 2,
+        patchID: "dev.cosimo.ott-lab",
+        slots: Object.fromEntries(["A", "B", "C", "D", "E", "F", "G"].map((slotID) => [
+            slotID,
+            slots[slotID] ?? null,
+        ])),
     });
 }
 
-async function openOttLabPage({ clipboardText = "", initialSnapshotStore = null } = {}) {
+async function openOttLabPage({
+    clipboardText = "",
+    initialSnapshotStore = null,
+    initialStoredState = {},
+    delayStoredStateRequests = false,
+    delayStoredStateValueRequests = false,
+    omitActiveSlotFromFullStoredState = false,
+} = {}) {
     const page = await browser.newPage();
 
     await page.goto(new URL("tests/helpers/module_test_shell.html", server.baseUrl).toString(), { waitUntil: "load" });
-    await page.evaluate(({ endpoints, initialValues, initialClipboardText, initialSnapshotStoreText, storageKey }) => {
+    await page.evaluate(({
+        endpoints,
+        initialValues,
+        initialClipboardText,
+        initialSnapshotStoreText,
+        initialStoredStateEntries,
+        shouldDelayStoredStateRequests,
+        shouldDelayStoredStateValueRequests,
+        shouldOmitActiveSlotFromFullStoredState,
+        activeSlotStateKey,
+        storageKey,
+    }) => {
         window.localStorage.clear();
         if (initialSnapshotStoreText !== null)
             window.localStorage.setItem(storageKey, initialSnapshotStoreText);
@@ -117,9 +151,14 @@ async function openOttLabPage({ clipboardText = "", initialSnapshotStore = null 
         });
 
         const sentMessages = [];
+        const storedWrites = [];
         const parameterValues = new Map(Object.entries(initialValues));
+        const storedState = new Map(initialStoredStateEntries);
         const parameterListeners = new Map();
+        const storedStateListeners = new Set();
         const statusListeners = new Set();
+        const pendingFullStoredStateResponses = [];
+        const pendingStoredStateValueResponses = [];
 
         const addParameterListener = (endpointID, listener) => {
             const listeners = parameterListeners.get(endpointID) ?? new Set();
@@ -178,6 +217,47 @@ async function openOttLabPage({ clipboardText = "", initialSnapshotStore = null 
                 sentMessages.push({ endpointID, value });
                 emitParameterValue(endpointID, value);
             },
+            addStoredStateValueListener(listener) {
+                storedStateListeners.add(listener);
+            },
+            removeStoredStateValueListener(listener) {
+                storedStateListeners.delete(listener);
+            },
+            requestFullStoredState(callback) {
+                const snapshot = Object.fromEntries(storedState.entries());
+
+                if (shouldOmitActiveSlotFromFullStoredState)
+                    delete snapshot[activeSlotStateKey];
+
+                if (shouldDelayStoredStateRequests) {
+                    pendingFullStoredStateResponses.push(() => callback(snapshot));
+                    return;
+                }
+
+                queueMicrotask(() => callback(snapshot));
+            },
+            requestStoredStateValue(key) {
+                const value = storedState.get(key);
+
+                if (shouldDelayStoredStateValueRequests) {
+                    pendingStoredStateValueResponses.push(() => {
+                        const message = { key, value };
+                        storedStateListeners.forEach((listener) => listener(message));
+                    });
+                    return;
+                }
+
+                queueMicrotask(() => {
+                    const message = { key, value };
+                    storedStateListeners.forEach((listener) => listener(message));
+                });
+            },
+            sendStoredStateValue(key, value) {
+                storedState.set(key, value);
+                storedWrites.push({ key, value });
+                const message = { key, value };
+                storedStateListeners.forEach((listener) => listener(message));
+            },
             manifest: {
                 view: {
                     devModule: "/fx/ott_lab/view/source.js",
@@ -197,6 +277,35 @@ async function openOttLabPage({ clipboardText = "", initialSnapshotStore = null 
                 window.setTimeout(() => {
                     mountPoint.replaceChildren(view);
                 }, 0);
+            },
+            async unmount() {
+                const mountPoint = document.getElementById("mount");
+
+                if (!(mountPoint instanceof HTMLElement))
+                    throw new Error("Module test mount point is missing.");
+
+                mountPoint.replaceChildren();
+                await new Promise((resolve) => window.setTimeout(resolve, 0));
+            },
+            async remount() {
+                await this.unmount();
+                await this.mount();
+            },
+            async flushStoredStateRequests() {
+                const responses = pendingFullStoredStateResponses.splice(0);
+
+                for (const respond of responses)
+                    queueMicrotask(respond);
+
+                await new Promise((resolve) => window.setTimeout(resolve, 0));
+            },
+            async flushStoredStateValueRequests() {
+                const responses = pendingStoredStateValueResponses.splice(0);
+
+                for (const respond of responses)
+                    queueMicrotask(respond);
+
+                await new Promise((resolve) => window.setTimeout(resolve, 0));
             },
             emitStatus,
             setParameterValue: emitParameterValue,
@@ -220,7 +329,11 @@ async function openOttLabPage({ clipboardText = "", initialSnapshotStore = null 
 
                 return {
                     activeElementSlot: root?.activeElement?.dataset?.slot ?? null,
+                    activeSlot: Array.from(root?.querySelectorAll(".snapshot-slot") ?? [])
+                        .find((slot) => slot.classList.contains("is-active"))?.dataset.slot ?? null,
                     sentMessages: sentMessages.map((message) => ({ ...message })),
+                    storedWrites: storedWrites.map((write) => ({ ...write })),
+                    storedState: Object.fromEntries(storedState.entries()),
                     store: rawStore ? JSON.parse(rawStore) : null,
                     clipboardText: window.__OTT_TEST_CLIPBOARD__.text,
                     message: root?.querySelector("[data-snapshot-message]")?.textContent ?? "",
@@ -232,6 +345,7 @@ async function openOttLabPage({ clipboardText = "", initialSnapshotStore = null 
                     listenerCounts: Object.fromEntries(
                         Array.from(parameterListeners.entries()).map(([endpointID, listeners]) => [endpointID, listeners.size]),
                     ),
+                    storedStateListenerCount: storedStateListeners.size,
                     slotStates: Array.from(root?.querySelectorAll(".snapshot-slot") ?? []).map((slot) => ({
                         slot: slot.dataset.slot,
                         className: slot.className,
@@ -246,17 +360,26 @@ async function openOttLabPage({ clipboardText = "", initialSnapshotStore = null 
         initialValues: INITIAL_VALUES,
         initialClipboardText: clipboardText,
         initialSnapshotStoreText: initialSnapshotStore,
+        initialStoredStateEntries: Object.entries(initialStoredState),
+        shouldDelayStoredStateRequests: delayStoredStateRequests,
+        shouldDelayStoredStateValueRequests: delayStoredStateValueRequests,
+        shouldOmitActiveSlotFromFullStoredState: omitActiveSlotFromFullStoredState,
+        activeSlotStateKey: ACTIVE_SNAPSHOT_SLOT_STATE_KEY,
         storageKey: SNAPSHOT_STORAGE_KEY,
     });
     await page.evaluate(() => window.__OTT_LAB_VIEW_HARNESS__.mount());
     await page.waitForSelector("cosimo-ott-lab-view");
+    await waitForOttLabListeners(page);
+
+    return page;
+}
+
+async function waitForOttLabListeners(page) {
     await page.waitForFunction(() => {
         const snapshot = window.__OTT_LAB_VIEW_HARNESS__?.getSnapshot?.();
         return snapshot?.listenerCounts?.ottMix >= 1
             && snapshot?.listenerCounts?.envelopeBoostClampDb >= 1;
     });
-
-    return page;
 }
 
 async function clickSnapshotSlot(page, slotID) {
@@ -327,6 +450,31 @@ async function setSnapshotLabel(page, label) {
     }, label);
 }
 
+async function applyPresetFromBar(page, presetKey) {
+    await page.locator("cosimo-ott-lab-view").evaluate(({ shadowRoot }) => {
+        const presetBar = shadowRoot.querySelector("cosimo-preset-bar");
+        const nameRegion = presetBar?.shadowRoot?.querySelector("[data-action='toggle-flyout']");
+
+        if (!(nameRegion instanceof HTMLElement))
+            throw new Error("Preset browser trigger is missing.");
+
+        nameRegion.click();
+    });
+    await page.waitForFunction((nextPresetKey) => {
+        const presetBar = document.querySelector("cosimo-ott-lab-view")?.shadowRoot?.querySelector("cosimo-preset-bar");
+        return presetBar?.shadowRoot?.querySelector(`[data-preset-key="${nextPresetKey}"]`) instanceof HTMLElement;
+    }, presetKey);
+    await page.locator("cosimo-ott-lab-view").evaluate(({ shadowRoot }, nextPresetKey) => {
+        const presetBar = shadowRoot.querySelector("cosimo-preset-bar");
+        const presetItem = presetBar.shadowRoot.querySelector(`[data-preset-key="${nextPresetKey}"]`);
+
+        if (!(presetItem instanceof HTMLElement))
+            throw new Error(`Preset item ${nextPresetKey} is missing.`);
+
+        presetItem.click();
+    }, presetKey);
+}
+
 async function getHarnessSnapshot(page) {
     return page.evaluate(() => window.__OTT_LAB_VIEW_HARNESS__.getSnapshot());
 }
@@ -392,7 +540,11 @@ test("OTT lab preset browser does not trap page wheel scrolling after the top ba
         await page.waitForFunction(() => window.scrollY === 260);
         await page.mouse.move(520, 320);
         await page.mouse.wheel(0, -180);
-        await page.waitForFunction(() => window.scrollY < 260);
+        await page.waitForFunction(() => {
+            const presetBar = document.querySelector("cosimo-ott-lab-view")?.shadowRoot?.querySelector("cosimo-preset-bar");
+            return window.scrollY < 260
+                && presetBar?.shadowRoot?.querySelector(".flyout")?.classList.contains("open") === false;
+        });
 
         const metrics = await page.evaluate(() => {
             const presetBar = document.querySelector("cosimo-ott-lab-view")?.shadowRoot?.querySelector("cosimo-preset-bar");
@@ -464,6 +616,87 @@ test("OTT lab active snapshot captures and updates every visible parameter", asy
     }
 });
 
+test("OTT lab restores the active snapshot highlight after the UI remounts", async () => {
+    const page = await openOttLabPage();
+
+    try {
+        await clickSnapshotSlot(page, "A");
+        let snapshot = await getHarnessSnapshot(page);
+
+        assert.equal(snapshot.activeSlot, "A");
+        assert.equal(snapshot.storedState[ACTIVE_SNAPSHOT_SLOT_STATE_KEY], "A");
+        assert.deepEqual(snapshot.labelInput, {
+            value: "",
+            disabled: false,
+        });
+
+        await page.evaluate(() => window.__OTT_LAB_VIEW_HARNESS__.remount());
+        await page.waitForSelector("cosimo-ott-lab-view");
+        await waitForOttLabListeners(page);
+        await page.waitForFunction(() => window.__OTT_LAB_VIEW_HARNESS__?.getSnapshot?.().activeSlot === "A");
+        snapshot = await getHarnessSnapshot(page);
+
+        assert.equal(snapshot.activeSlot, "A");
+        assert.equal(snapshot.storedState[ACTIVE_SNAPSHOT_SLOT_STATE_KEY], "A");
+        assert.deepEqual(snapshot.store.slots.A.parameters, INITIAL_SNAPSHOT_PARAMETERS);
+        assert.deepEqual(snapshot.labelInput, {
+            value: "",
+            disabled: false,
+        });
+    } finally {
+        await page.close();
+    }
+});
+
+test("OTT lab ignores stale boot active-slot state after the user selects a new slot", async () => {
+    const page = await openOttLabPage({
+        initialStoredState: { [ACTIVE_SNAPSHOT_SLOT_STATE_KEY]: "A" },
+        delayStoredStateRequests: true,
+    });
+
+    try {
+        await clickSnapshotSlot(page, "B");
+        let snapshot = await getHarnessSnapshot(page);
+
+        assert.equal(snapshot.activeSlot, "B");
+        assert.equal(snapshot.storedState[ACTIVE_SNAPSHOT_SLOT_STATE_KEY], "B");
+
+        await page.evaluate(() => window.__OTT_LAB_VIEW_HARNESS__.flushStoredStateRequests());
+        snapshot = await getHarnessSnapshot(page);
+
+        assert.equal(snapshot.activeSlot, "B");
+        assert.equal(snapshot.storedState[ACTIVE_SNAPSHOT_SLOT_STATE_KEY], "B");
+        assert.deepEqual(snapshot.store.slots.B.parameters, INITIAL_SNAPSHOT_PARAMETERS);
+    } finally {
+        await page.close();
+    }
+});
+
+test("OTT lab ignores stale fallback active-slot state after the user selects a new slot", async () => {
+    const page = await openOttLabPage({
+        initialStoredState: { [ACTIVE_SNAPSHOT_SLOT_STATE_KEY]: "A" },
+        delayStoredStateValueRequests: true,
+        omitActiveSlotFromFullStoredState: true,
+    });
+
+    try {
+        await clickSnapshotSlot(page, "B");
+        let snapshot = await getHarnessSnapshot(page);
+
+        assert.equal(snapshot.activeSlot, "B");
+        assert.equal(snapshot.storedState[ACTIVE_SNAPSHOT_SLOT_STATE_KEY], "B");
+
+        await page.evaluate(() => window.__OTT_LAB_VIEW_HARNESS__.flushStoredStateValueRequests());
+        snapshot = await getHarnessSnapshot(page);
+
+        assert.equal(snapshot.activeSlot, "B");
+        assert.equal(snapshot.storedState[ACTIVE_SNAPSHOT_SLOT_STATE_KEY], "B");
+        assert.deepEqual(snapshot.store.slots.B.parameters, INITIAL_SNAPSHOT_PARAMETERS);
+    } finally {
+        await page.close();
+    }
+});
+
 test("OTT lab snapshot label input follows and edits the active slot", async () => {
     const page = await openOttLabPage();
 
@@ -493,6 +726,44 @@ test("OTT lab snapshot label input follows and edits the active slot", async () 
     }
 });
 
+test("OTT lab recalls a snapshot without overwriting the previously active slot", async () => {
+    const bParameters = {
+        envelopeBoostClampDb: 5,
+        ottAmount: 13,
+        ottBandDrive: 3,
+        ottEnvelopeMatch: 4,
+        ottMix: 12,
+        ottTimePercent: 900,
+    };
+    const page = await openOttLabPage({
+        initialSnapshotStore: createSnapshotStore({
+            A: createSnapshotSlot("A"),
+            B: createSnapshotSlot("B", bParameters),
+        }),
+    });
+
+    try {
+        await clickSnapshotSlot(page, "B");
+        let snapshot = await getHarnessSnapshot(page);
+
+        assert.equal(snapshot.activeSlot, "B");
+        assert.deepEqual(snapshot.store.slots.B.parameters, bParameters);
+
+        await clickSnapshotSlot(page, "A");
+        snapshot = await getHarnessSnapshot(page);
+
+        assert.deepEqual(snapshot.sentMessages.slice(-6), Object.entries(INITIAL_SNAPSHOT_PARAMETERS).map(([endpointID, value]) => ({
+            endpointID,
+            value,
+        })));
+        assert.equal(snapshot.activeSlot, "A");
+        assert.deepEqual(snapshot.store.slots.A.parameters, INITIAL_SNAPSHOT_PARAMETERS);
+        assert.deepEqual(snapshot.store.slots.B.parameters, bParameters);
+    } finally {
+        await page.close();
+    }
+});
+
 test("OTT lab recalls a filled slot by applying the full v2 snapshot parameter set", async () => {
     const page = await openOttLabPage();
 
@@ -515,6 +786,34 @@ test("OTT lab recalls a filled slot by applying the full v2 snapshot parameter s
             value,
         })));
         assert.equal(snapshot.activeElementSlot, "A");
+    } finally {
+        await page.close();
+    }
+});
+
+test("OTT lab writes loaded preset values into the active snapshot slot", async () => {
+    const envelopeTamedParameters = {
+        envelopeBoostClampDb: 6,
+        ottAmount: 92,
+        ottBandDrive: 12,
+        ottEnvelopeMatch: 38,
+        ottMix: 86,
+        ottTimePercent: 100,
+    };
+    const page = await openOttLabPage();
+
+    try {
+        await clickSnapshotSlot(page, "A");
+        await applyPresetFromBar(page, "factory:ott.envelope-tamed");
+        const snapshot = await getHarnessSnapshot(page);
+
+        assert.equal(snapshot.activeSlot, "A");
+        assert.deepEqual(snapshot.sentMessages.slice(-6), Object.entries(envelopeTamedParameters).map(([endpointID, value]) => ({
+            endpointID,
+            value,
+        })));
+        assert.deepEqual(snapshot.store.slots.A.parameters, envelopeTamedParameters);
+        assert.equal(snapshot.storedState[ACTIVE_SNAPSHOT_SLOT_STATE_KEY], "A");
     } finally {
         await page.close();
     }

@@ -536,6 +536,724 @@ function buildMipFrameFromSpectrum(spectrum, mipIndex, {
   fftComplexInPlace(real, imaginary, true);
   return Float32Array.from(real);
 }
+class PatchWorkerServiceHost {
+  connection;
+  serviceFactories;
+  services = [];
+  started = false;
+  constructor(connection, serviceFactories) {
+    this.connection = connection;
+    this.serviceFactories = serviceFactories;
+  }
+  async start() {
+    if (this.started) {
+      return;
+    }
+    this.started = true;
+    try {
+      for (const serviceFactory of this.serviceFactories) {
+        const service = typeof serviceFactory === "function" ? await serviceFactory(this.connection) : serviceFactory;
+        this.services.push(service);
+        await service.start();
+      }
+    } catch (startError) {
+      const cleanupErrors = [];
+      for (const service of [...this.services].reverse()) {
+        try {
+          await service.stop?.();
+        } catch (cleanupError) {
+          cleanupErrors.push(cleanupError);
+        }
+      }
+      this.services.length = 0;
+      this.started = false;
+      if (cleanupErrors.length > 0) {
+        throw new AggregateError(
+          [startError, ...cleanupErrors],
+          "Patch worker service startup failed and cleanup also failed"
+        );
+      }
+      throw startError;
+    }
+  }
+  async stop() {
+    if (!this.started) {
+      return;
+    }
+    this.started = false;
+    for (const service of [...this.services].reverse()) {
+      await service.stop?.();
+    }
+    this.services.length = 0;
+  }
+  getServices() {
+    return [...this.services];
+  }
+}
+function createPatchWorkerServiceHost(connection, serviceFactories) {
+  return new PatchWorkerServiceHost(connection, serviceFactories);
+}
+async function startPatchWorkerServices(connection, serviceFactories) {
+  const host = createPatchWorkerServiceHost(connection, serviceFactories);
+  await host.start();
+  return host;
+}
+const MSEG_BODY_SAMPLES = 2048;
+const MSEG_PADDED_SAMPLES = MSEG_BODY_SAMPLES + 3;
+const MSEG_CURVE_POWER_LIMIT = 20;
+const MSEG_DEFAULT_NAME = "MSEG 1";
+const MSEG_RATE_MIN_SECONDS = 0;
+const MSEG_RATE_MAX_SECONDS = 2;
+const MSEG_NOTE_OFF_POLICY_VALUES = /* @__PURE__ */ new Set([
+  "finish_loop",
+  "immediate",
+  "ignore"
+]);
+function clamp$2(value, min, max) {
+  return Math.min(Math.max(value, min), max);
+}
+function almostEqual(left, right, epsilon = 1e-12) {
+  return Math.abs(left - right) <= epsilon;
+}
+function clampCurvePower(value) {
+  return clamp$2(Number.isFinite(value) ? value : 0, -MSEG_CURVE_POWER_LIMIT, MSEG_CURVE_POWER_LIMIT);
+}
+function clamp01(value) {
+  return clamp$2(Number.isFinite(value) ? value : 0, 0, 1);
+}
+function createDefaultMsegShape(name = MSEG_DEFAULT_NAME) {
+  return {
+    format: "cosimo.mseg.shape",
+    version: 1,
+    name,
+    globalSmooth: false,
+    points: [
+      { x: 0, y: 0, curvePower: 0 },
+      { x: 1, y: 1, curvePower: 0 }
+    ]
+  };
+}
+function createDefaultMsegPlayback() {
+  return {
+    format: "cosimo.mseg.playback",
+    version: 1,
+    rate: {
+      kind: "seconds",
+      seconds: 1
+    },
+    loop: { startX: 0, endX: 1 },
+    noteOffPolicy: "finish_loop",
+    legatoRestarts: false,
+    holdFinalValue: true
+  };
+}
+function clampMsegRateSeconds(value) {
+  const numericValue = Number(value);
+  return clamp$2(
+    Number.isFinite(numericValue) ? numericValue : 1,
+    MSEG_RATE_MIN_SECONDS,
+    MSEG_RATE_MAX_SECONDS
+  );
+}
+function normalizeMsegLoop(loop) {
+  if (!loop || typeof loop !== "object") {
+    return null;
+  }
+  const nextLoop = loop;
+  const startX = clamp01(Number(nextLoop.startX));
+  const endX = clamp01(Number(nextLoop.endX));
+  if (almostEqual(startX, endX)) {
+    return null;
+  }
+  if (endX < startX) {
+    return {
+      startX: endX,
+      endX: startX
+    };
+  }
+  return { startX, endX };
+}
+function normalizeMsegPlayback(playback = createDefaultMsegPlayback()) {
+  const next = playback && typeof playback === "object" ? playback : {};
+  const rate = next.rate && typeof next.rate === "object" ? next.rate : {};
+  const seconds = Number(rate.seconds);
+  const noteOffPolicyCandidate = next.noteOffPolicy;
+  const noteOffPolicy = MSEG_NOTE_OFF_POLICY_VALUES.has(noteOffPolicyCandidate) ? noteOffPolicyCandidate : "finish_loop";
+  return {
+    format: "cosimo.mseg.playback",
+    version: 1,
+    rate: {
+      kind: "seconds",
+      seconds: clampMsegRateSeconds(Number.isFinite(seconds) ? seconds : 1)
+    },
+    loop: normalizeMsegLoop(next.loop),
+    noteOffPolicy,
+    legatoRestarts: Boolean(next.legatoRestarts),
+    holdFinalValue: next.holdFinalValue !== false
+  };
+}
+function normalizePoint(point, pointIndex, pointCount) {
+  const nextPoint = point && typeof point === "object" ? point : {};
+  let x = Number(nextPoint.x);
+  if (!Number.isFinite(x)) {
+    x = pointIndex === 0 ? 0 : pointIndex === pointCount - 1 ? 1 : 0;
+  }
+  if (pointIndex !== 0 && pointIndex !== pointCount - 1) {
+    x = clamp01(x);
+  }
+  return {
+    x,
+    y: clamp01(Number(nextPoint.y)),
+    curvePower: clampCurvePower(Number(nextPoint.curvePower))
+  };
+}
+function normalizeMsegShape(shape = createDefaultMsegShape()) {
+  const next = shape && typeof shape === "object" ? shape : {};
+  const inputPoints = Array.isArray(next.points) ? next.points : [];
+  if (inputPoints.length < 2) {
+    throw new Error("MSEG shapes require at least two points");
+  }
+  const points = inputPoints.map((point, index) => normalizePoint(point, index, inputPoints.length));
+  if (!almostEqual(points[0].x, 0) || !almostEqual(points[points.length - 1].x, 1)) {
+    throw new Error("MSEG shapes must start at x = 0 and end at x = 1");
+  }
+  for (let index = 1; index < points.length; index += 1) {
+    if (points[index].x < points[index - 1].x) {
+      throw new Error("MSEG shape points must stay in non-decreasing x order");
+    }
+  }
+  return {
+    format: "cosimo.mseg.shape",
+    version: 1,
+    name: typeof next.name === "string" && next.name.trim() ? next.name : MSEG_DEFAULT_NAME,
+    globalSmooth: Boolean(next.globalSmooth),
+    points
+  };
+}
+function powerScale(value, power) {
+  if (Math.abs(power) < 0.01) {
+    return value;
+  }
+  const numerator = Math.exp(power * value) - 1;
+  const denominator = Math.exp(power) - 1;
+  return numerator / denominator;
+}
+function findEvaluationSegment(points, x) {
+  if (x <= points[0].x) {
+    return { from: points[0], to: points[0], laterPointWins: false };
+  }
+  for (let index = 0; index < points.length - 1; index += 1) {
+    const from = points[index];
+    const to = points[index + 1];
+    if (x < to.x) {
+      return { from, to, laterPointWins: false };
+    }
+    if (almostEqual(x, to.x)) {
+      let latestIndex = index + 1;
+      while (latestIndex + 1 < points.length && almostEqual(points[latestIndex + 1].x, x)) {
+        latestIndex += 1;
+      }
+      return {
+        from: points[latestIndex],
+        to: points[latestIndex],
+        laterPointWins: true
+      };
+    }
+  }
+  return {
+    from: points[points.length - 1],
+    to: points[points.length - 1],
+    laterPointWins: false
+  };
+}
+function evaluateNormalizedMsegShape(points, x) {
+  const clampedX = clamp01(Number(x));
+  const segment = findEvaluationSegment(points, clampedX);
+  if (segment.laterPointWins || almostEqual(segment.from.x, segment.to.x)) {
+    return segment.to.y;
+  }
+  const width = segment.to.x - segment.from.x;
+  const t = width <= 0 ? 1 : (clampedX - segment.from.x) / width;
+  const curvedT = clamp01(powerScale(t, segment.from.curvePower));
+  return segment.from.y + (segment.to.y - segment.from.y) * curvedT;
+}
+function evaluateMsegShape(shape, x) {
+  return evaluateNormalizedMsegShape(normalizeMsegShape(shape).points, x);
+}
+function renderMsegShape(shape) {
+  const normalizedShape = normalizeMsegShape(shape);
+  const body = new Float32Array(MSEG_BODY_SAMPLES);
+  for (let sampleIndex = 0; sampleIndex < MSEG_BODY_SAMPLES; sampleIndex += 1) {
+    const x = sampleIndex / (MSEG_BODY_SAMPLES - 1);
+    body[sampleIndex] = evaluateMsegShape(normalizedShape, x);
+  }
+  const padded = new Float32Array(MSEG_PADDED_SAMPLES);
+  padded[0] = body[0];
+  padded.set(body, 1);
+  padded[MSEG_BODY_SAMPLES + 1] = body[MSEG_BODY_SAMPLES - 1];
+  padded[MSEG_BODY_SAMPLES + 2] = body[MSEG_BODY_SAMPLES - 1];
+  return padded;
+}
+const MODULATION_STATE_KEY = "modulation.v1";
+const MODULATION_MAX_ROUTES = 12;
+const MODULATION_MSEG_SLOT_COUNT = 3;
+const MODULATION_ENV_SLOT_COUNT = 3;
+const MODULATION_CLEAR_ENDPOINT_ID = "modulationClear";
+const MODULATION_ENABLE_ENDPOINT_ID = "modulationEnable";
+const MODULATION_MSEG_BUFFER_ENDPOINT_ID = "modulationMsegBuffer";
+const MODULATION_MSEG_PLAYBACK_ENDPOINT_ID = "modulationMsegPlayback";
+const MODULATION_ENV_ENDPOINT_ID = "modulationEnvelope";
+const MODULATION_ROUTE_ENDPOINT_ID = "modulationRoute";
+const MOD_SOURCE_MSEG = 1;
+const MOD_SOURCE_ENV = 2;
+const MOD_SOURCE_VELOCITY = 3;
+const MOD_SOURCE_PRESSURE = 4;
+const MOD_SOURCE_SLIDE = 5;
+const MOD_POLARITY_UNIPOLAR = 0;
+const MOD_POLARITY_BIPOLAR = 1;
+const MOD_TARGET_WAVETABLE_POSITION = 1;
+const MOD_TARGET_WARP_AMOUNT = 2;
+const MOD_TARGET_FILTER_CUTOFF_OCTAVES = 3;
+const MOD_TARGET_FILTER_Q = 4;
+const MOD_TARGET_PITCH_SEMITONES = 5;
+const MOD_TARGET_AMP_GAIN_DB = 6;
+const MOD_TARGET_PAN = 7;
+const MSEG_SLOT_NAMES = ["MSEG 1", "MSEG 2", "MSEG 3"];
+const ENV_SLOT_NAMES = ["Env 1", "Env 2", "Env 3"];
+const ENV_MIN_SECONDS = 1e-3;
+const ENV_MAX_SECONDS = 10;
+const FILTER_Q_MIN = 0.1;
+const FILTER_Q_MAX = 20;
+const ROUTE_AMOUNT_LIMITS = {
+  wavetablePosition: { min: -1, max: 1 },
+  warpAmount: { min: -1, max: 1 },
+  filterCutoffOctaves: { min: -6, max: 6 },
+  filterQ: { min: -19.9, max: FILTER_Q_MAX - FILTER_Q_MIN },
+  pitchSemitones: { min: -48, max: 48 },
+  ampGainDb: { min: -48, max: 6 },
+  pan: { min: -1, max: 1 }
+};
+let generatedRouteIdCounter = 1;
+function clamp$1(value, min, max) {
+  return Math.min(Math.max(value, min), max);
+}
+function clampEnvSeconds(value, fallback) {
+  const numeric = Number(value);
+  return clamp$1(Number.isFinite(numeric) ? numeric : fallback, ENV_MIN_SECONDS, ENV_MAX_SECONDS);
+}
+function createGeneratedRouteId() {
+  const routeId = `mod-route-auto-${generatedRouteIdCounter}`;
+  generatedRouteIdCounter += 1;
+  return routeId;
+}
+function normalizeRouteId(value, routeIndex) {
+  if (typeof value === "string" && value.trim()) {
+    return value;
+  }
+  return `mod-route-${routeIndex + 1}`;
+}
+function normalizePolarity(value) {
+  return value === "bipolar" ? "bipolar" : "unipolar";
+}
+function polarityToCode(polarity) {
+  return polarity === "bipolar" ? MOD_POLARITY_BIPOLAR : MOD_POLARITY_UNIPOLAR;
+}
+function clampModulationRouteAmount(targetKind, value) {
+  const limits = ROUTE_AMOUNT_LIMITS[targetKind];
+  const numeric = Number(value);
+  return clamp$1(Number.isFinite(numeric) ? numeric : 0, limits.min, limits.max);
+}
+function normalizeSourceKind(value) {
+  if (value === "mseg" || value === "env" || value === "velocity" || value === "pressure" || value === "slide") {
+    return value;
+  }
+  return "mseg";
+}
+function normalizeTargetKind(value) {
+  if (value === "wavetablePosition" || value === "warpAmount" || value === "filterCutoffOctaves" || value === "filterQ" || value === "pitchSemitones" || value === "ampGainDb" || value === "pan") {
+    return value;
+  }
+  return "wavetablePosition";
+}
+function normalizeSourceSlot(sourceKind, rawSlot) {
+  const numericSlot = Math.round(Number(rawSlot));
+  if (sourceKind === "velocity" || sourceKind === "pressure" || sourceKind === "slide") {
+    return null;
+  }
+  const maxSlot = sourceKind === "mseg" ? MODULATION_MSEG_SLOT_COUNT : MODULATION_ENV_SLOT_COUNT;
+  return clamp$1(Number.isFinite(numericSlot) ? numericSlot : 1, 1, maxSlot);
+}
+function createDefaultEnvelope(slotIndex) {
+  return {
+    name: ENV_SLOT_NAMES[slotIndex] ?? `Env ${slotIndex + 1}`,
+    attackSeconds: 0.01,
+    decaySeconds: 0.25,
+    sustain: 0.5,
+    releaseSeconds: 0.2
+  };
+}
+function normalizeEnvelope(value, slotIndex = 0) {
+  const nextValue = value && typeof value === "object" ? value : {};
+  const fallback = createDefaultEnvelope(slotIndex);
+  return {
+    name: typeof nextValue.name === "string" && nextValue.name.trim() ? nextValue.name : fallback.name,
+    attackSeconds: clampEnvSeconds(nextValue.attackSeconds ?? fallback.attackSeconds, fallback.attackSeconds),
+    decaySeconds: clampEnvSeconds(nextValue.decaySeconds ?? fallback.decaySeconds, fallback.decaySeconds),
+    sustain: clamp01(nextValue.sustain ?? fallback.sustain),
+    releaseSeconds: clampEnvSeconds(nextValue.releaseSeconds ?? fallback.releaseSeconds, fallback.releaseSeconds)
+  };
+}
+function createDefaultRoute(overrides = {}) {
+  return {
+    id: overrides.id ?? createGeneratedRouteId(),
+    enabled: true,
+    sourceKind: "mseg",
+    sourceSlot: 1,
+    polarity: "unipolar",
+    targetKind: "wavetablePosition",
+    amount: 0,
+    ...overrides
+  };
+}
+function normalizeRoute(value, routeIndex = 0) {
+  const nextValue = value && typeof value === "object" ? value : {};
+  const sourceKind = normalizeSourceKind(nextValue.sourceKind);
+  const targetKind = normalizeTargetKind(nextValue.targetKind);
+  const numericAmount = Number(nextValue.amount);
+  return {
+    id: normalizeRouteId(nextValue.id, routeIndex),
+    enabled: nextValue.enabled !== false,
+    sourceKind,
+    sourceSlot: normalizeSourceSlot(sourceKind, nextValue.sourceSlot),
+    polarity: normalizePolarity(nextValue.polarity),
+    targetKind,
+    amount: clampModulationRouteAmount(targetKind, numericAmount)
+  };
+}
+function normalizeMsegSlot(value, slotIndex) {
+  const nextValue = value && typeof value === "object" ? value : {};
+  const defaultShape = createDefaultMsegShape(MSEG_SLOT_NAMES[slotIndex] ?? `MSEG ${slotIndex + 1}`);
+  return {
+    shape: normalizeMsegShape(nextValue.shape ?? defaultShape),
+    playback: normalizeMsegPlayback(nextValue.playback ?? createDefaultMsegPlayback())
+  };
+}
+function createDefaultModulationState() {
+  return {
+    format: "cosimo.modulation",
+    version: 1,
+    msegSlots: Array.from({ length: MODULATION_MSEG_SLOT_COUNT }, (_, slotIndex) => normalizeMsegSlot({}, slotIndex)),
+    envelopeSlots: Array.from({ length: MODULATION_ENV_SLOT_COUNT }, (_, slotIndex) => createDefaultEnvelope(slotIndex)),
+    routes: [createDefaultRoute({ id: "mod-route-1" })]
+  };
+}
+function normalizeModulationState(value = createDefaultModulationState()) {
+  const nextValue = value && typeof value === "object" ? value : {};
+  const inputMsegSlots = Array.isArray(nextValue.msegSlots) ? nextValue.msegSlots : [];
+  const inputEnvelopeSlots = Array.isArray(nextValue.envelopeSlots) ? nextValue.envelopeSlots : [];
+  const inputRoutes = Array.isArray(nextValue.routes) ? nextValue.routes : [];
+  return {
+    format: "cosimo.modulation",
+    version: 1,
+    msegSlots: Array.from({ length: MODULATION_MSEG_SLOT_COUNT }, (_, slotIndex) => normalizeMsegSlot(inputMsegSlots[slotIndex], slotIndex)),
+    envelopeSlots: Array.from({ length: MODULATION_ENV_SLOT_COUNT }, (_, slotIndex) => normalizeEnvelope(inputEnvelopeSlots[slotIndex], slotIndex)),
+    routes: inputRoutes.slice(0, MODULATION_MAX_ROUTES).map((route, routeIndex) => normalizeRoute(route, routeIndex))
+  };
+}
+function deserializeModulationState(value) {
+  if (typeof value !== "string" || value.trim() === "") {
+    return createDefaultModulationState();
+  }
+  try {
+    return normalizeModulationState(JSON.parse(value));
+  } catch {
+    return createDefaultModulationState();
+  }
+}
+function sourceKindToCode(sourceKind) {
+  if (sourceKind === "mseg") return MOD_SOURCE_MSEG;
+  if (sourceKind === "env") return MOD_SOURCE_ENV;
+  if (sourceKind === "velocity") return MOD_SOURCE_VELOCITY;
+  if (sourceKind === "pressure") return MOD_SOURCE_PRESSURE;
+  return MOD_SOURCE_SLIDE;
+}
+function targetKindToCode(targetKind) {
+  if (targetKind === "wavetablePosition") return MOD_TARGET_WAVETABLE_POSITION;
+  if (targetKind === "warpAmount") return MOD_TARGET_WARP_AMOUNT;
+  if (targetKind === "filterCutoffOctaves") return MOD_TARGET_FILTER_CUTOFF_OCTAVES;
+  if (targetKind === "filterQ") return MOD_TARGET_FILTER_Q;
+  if (targetKind === "pitchSemitones") return MOD_TARGET_PITCH_SEMITONES;
+  if (targetKind === "ampGainDb") return MOD_TARGET_AMP_GAIN_DB;
+  return MOD_TARGET_PAN;
+}
+function toMsegPlaybackUpload(slotIndex, playback) {
+  return {
+    slot: slotIndex + 1,
+    seconds: clampMsegRateSeconds(playback.rate.seconds),
+    holdFinalValue: playback.holdFinalValue !== false,
+    rateKind: 0,
+    loopEnabled: Boolean(playback.loop),
+    loopStart: playback.loop?.startX ?? 0,
+    loopEnd: playback.loop?.endX ?? 1,
+    noteOffPolicy: playback.noteOffPolicy === "immediate" ? 1 : playback.noteOffPolicy === "ignore" ? 2 : 0,
+    legatoRestarts: Boolean(playback.legatoRestarts)
+  };
+}
+function toMsegBufferUpload(slotIndex, shape) {
+  return {
+    slot: slotIndex + 1,
+    buffer: Array.from(renderMsegShape(shape))
+  };
+}
+function toEnvelopeUpload(slotIndex, envelope) {
+  return {
+    slot: slotIndex + 1,
+    attackSeconds: envelope.attackSeconds,
+    decaySeconds: envelope.decaySeconds,
+    sustain: envelope.sustain,
+    releaseSeconds: envelope.releaseSeconds
+  };
+}
+function toRouteUpload(routeIndex, route) {
+  const normalizedRoute = route ? normalizeRoute(route) : null;
+  const isEnabled = normalizedRoute?.enabled ?? false;
+  return {
+    routeIndex,
+    enabled: isEnabled,
+    sourceKind: sourceKindToCode(normalizedRoute?.sourceKind ?? "mseg"),
+    sourceSlot: isEnabled ? normalizedRoute?.sourceSlot ?? 0 : 0,
+    polarityKind: polarityToCode(normalizedRoute?.polarity ?? "unipolar"),
+    targetKind: targetKindToCode(normalizedRoute?.targetKind ?? "wavetablePosition"),
+    amount: isEnabled ? normalizedRoute?.amount ?? 0 : 0
+  };
+}
+function buildModulationRuntimeEvents(stateValue) {
+  const state = normalizeModulationState(stateValue);
+  const events = [
+    { endpointID: MODULATION_ENABLE_ENDPOINT_ID, value: 0 },
+    { endpointID: MODULATION_CLEAR_ENDPOINT_ID, value: 1 }
+  ];
+  for (let slotIndex = 0; slotIndex < MODULATION_MSEG_SLOT_COUNT; slotIndex += 1) {
+    const slot = state.msegSlots[slotIndex];
+    events.push({
+      endpointID: MODULATION_MSEG_BUFFER_ENDPOINT_ID,
+      value: toMsegBufferUpload(slotIndex, slot.shape)
+    });
+    events.push({
+      endpointID: MODULATION_MSEG_PLAYBACK_ENDPOINT_ID,
+      value: toMsegPlaybackUpload(slotIndex, slot.playback)
+    });
+  }
+  for (let slotIndex = 0; slotIndex < MODULATION_ENV_SLOT_COUNT; slotIndex += 1) {
+    events.push({
+      endpointID: MODULATION_ENV_ENDPOINT_ID,
+      value: toEnvelopeUpload(slotIndex, state.envelopeSlots[slotIndex])
+    });
+  }
+  for (let routeIndex = 0; routeIndex < MODULATION_MAX_ROUTES; routeIndex += 1) {
+    events.push({
+      endpointID: MODULATION_ROUTE_ENDPOINT_ID,
+      value: toRouteUpload(routeIndex, state.routes[routeIndex] ?? null)
+    });
+  }
+  events.push({ endpointID: MODULATION_ENABLE_ENDPOINT_ID, value: 1 });
+  return events;
+}
+function hasOwnValue(record, key) {
+  return Object.prototype.hasOwnProperty.call(record, key);
+}
+function toStableToken(value) {
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+class StoredStateRuntimeMirror {
+  connection;
+  options;
+  parameterEndpointIDs;
+  runtimeEndpointDependencies;
+  parameterValues = /* @__PURE__ */ new Map();
+  parameterListeners = /* @__PURE__ */ new Map();
+  runtimeEndpointValues = /* @__PURE__ */ new Map();
+  runtimeEndpointListeners = /* @__PURE__ */ new Map();
+  state = null;
+  hasState = false;
+  started = false;
+  lastAppliedToken = null;
+  constructor(connection, options) {
+    this.connection = connection;
+    this.options = options;
+    this.parameterEndpointIDs = [...new Set(options.parameterEndpointIDs ?? [])];
+    this.runtimeEndpointDependencies = dedupeRuntimeEndpointDependencies(options.runtimeEndpointDependencies ?? []);
+    this.handleStoredStateValue = this.handleStoredStateValue.bind(this);
+  }
+  start() {
+    if (this.started) {
+      return;
+    }
+    this.started = true;
+    this.connection.addStoredStateValueListener?.(this.handleStoredStateValue);
+    for (const endpointID of this.parameterEndpointIDs) {
+      this.connection.addParameterListener?.(endpointID, this.getParameterListener(endpointID));
+      this.connection.requestParameterValue?.(endpointID);
+    }
+    for (const dependency of this.runtimeEndpointDependencies) {
+      this.connection.addEndpointListener?.(dependency.endpointID, this.getRuntimeEndpointListener(dependency));
+    }
+    this.requestStoredState();
+  }
+  stop() {
+    if (!this.started) {
+      return;
+    }
+    this.started = false;
+    this.connection.removeStoredStateValueListener?.(this.handleStoredStateValue);
+    for (const endpointID of this.parameterEndpointIDs) {
+      this.connection.removeParameterListener?.(endpointID, this.getParameterListener(endpointID));
+    }
+    for (const dependency of this.runtimeEndpointDependencies) {
+      this.connection.removeEndpointListener?.(dependency.endpointID, this.getRuntimeEndpointListener(dependency));
+    }
+  }
+  requestStoredState() {
+    if (typeof this.connection.requestFullStoredState === "function") {
+      this.connection.requestFullStoredState((storedState) => {
+        const fullState = storedState && typeof storedState === "object" ? storedState : {};
+        if (hasOwnValue(fullState, this.options.stateKey)) {
+          this.applyStoredValue(fullState[this.options.stateKey]);
+          return;
+        }
+        this.handleMissingStoredState();
+      });
+      return;
+    }
+    if (typeof this.connection.requestStoredStateValue === "function") {
+      this.connection.requestStoredStateValue(this.options.stateKey);
+      return;
+    }
+    this.handleMissingStoredState();
+  }
+  handleMissingStoredState() {
+    if (this.options.applyDefaultRuntimeStateWhenMissing) {
+      this.applyStoredValue(void 0);
+      return;
+    }
+    this.connection.requestStoredStateValue?.(this.options.stateKey);
+  }
+  handleStoredStateValue(message) {
+    if (!message || typeof message !== "object") {
+      return;
+    }
+    const nextMessage = message;
+    if (nextMessage.key !== this.options.stateKey) {
+      return;
+    }
+    if (nextMessage.value === void 0 && !this.options.applyDefaultRuntimeStateWhenMissing) {
+      return;
+    }
+    this.applyStoredValue(nextMessage.value);
+  }
+  getParameterListener(endpointID) {
+    const existingListener = this.parameterListeners.get(endpointID);
+    if (existingListener) {
+      return existingListener;
+    }
+    const listener = (value) => {
+      this.parameterValues.set(endpointID, value);
+      this.applyRuntimeStateIfReady();
+    };
+    this.parameterListeners.set(endpointID, listener);
+    return listener;
+  }
+  getRuntimeEndpointListener(dependency) {
+    const existingListener = this.runtimeEndpointListeners.get(dependency.endpointID);
+    if (existingListener) {
+      return existingListener;
+    }
+    const listener = (value) => {
+      const mappedValue = dependency.mapValue ? dependency.mapValue(value) : value;
+      this.runtimeEndpointValues.set(dependency.endpointID, mappedValue);
+      this.applyRuntimeStateIfReady();
+    };
+    this.runtimeEndpointListeners.set(dependency.endpointID, listener);
+    return listener;
+  }
+  applyStoredValue(value) {
+    this.state = this.options.deserializeStoredState(value);
+    this.hasState = true;
+    this.applyRuntimeStateIfReady();
+  }
+  applyRuntimeStateIfReady() {
+    if (!this.hasState) {
+      return;
+    }
+    const parameters = {};
+    for (const endpointID of this.parameterEndpointIDs) {
+      if (!this.parameterValues.has(endpointID)) {
+        return;
+      }
+      parameters[endpointID] = this.parameterValues.get(endpointID);
+    }
+    const runtimeEndpoints = {};
+    for (const dependency of this.runtimeEndpointDependencies) {
+      if (!this.runtimeEndpointValues.has(dependency.endpointID)) {
+        if (dependency.required) {
+          return;
+        }
+        continue;
+      }
+      runtimeEndpoints[dependency.endpointID] = this.runtimeEndpointValues.get(dependency.endpointID);
+    }
+    const snapshot = {
+      state: this.state,
+      parameters,
+      runtimeEndpoints
+    };
+    const nextAppliedToken = toStableToken(snapshot);
+    if (nextAppliedToken === this.lastAppliedToken) {
+      return;
+    }
+    const events = this.options.buildRuntimeEvents(snapshot);
+    for (const event of events) {
+      this.connection.sendEventOrValue?.(event.endpointID, event.value);
+    }
+    this.lastAppliedToken = nextAppliedToken;
+  }
+}
+function dedupeRuntimeEndpointDependencies(dependencies) {
+  const dependenciesByEndpointID = /* @__PURE__ */ new Map();
+  for (const dependency of dependencies) {
+    if (!dependenciesByEndpointID.has(dependency.endpointID)) {
+      dependenciesByEndpointID.set(dependency.endpointID, dependency);
+    }
+  }
+  return [...dependenciesByEndpointID.values()];
+}
+function createStoredStateRuntimeMirror(connection, options) {
+  return new StoredStateRuntimeMirror(connection, options);
+}
+const runtimeStateEndpointID$1 = "runtimeState";
+function getRuntimeDspSessionId(value) {
+  if (!value || typeof value !== "object") {
+    return 0;
+  }
+  return Math.trunc(Number(value.dspSessionId) || 0);
+}
+function createModulationWorkerService(connection) {
+  return createStoredStateRuntimeMirror(connection, {
+    stateKey: MODULATION_STATE_KEY,
+    runtimeEndpointDependencies: [{
+      endpointID: runtimeStateEndpointID$1,
+      required: true,
+      mapValue: getRuntimeDspSessionId
+    }],
+    applyDefaultRuntimeStateWhenMissing: true,
+    deserializeStoredState: deserializeModulationState,
+    buildRuntimeEvents: ({ state }) => buildModulationRuntimeEvents(state)
+  });
+}
 const runtimeSyncRequestEndpointID = "runtimeSyncRequest";
 const runtimeStateEndpointID = "runtimeState";
 const retryDesiredTableRequestEndpointID = "retryDesiredTableRequest";
@@ -1295,9 +2013,10 @@ function createWavetableWorkerController(connection, options = {}) {
   return new WavetableWorkerController(connection, options);
 }
 async function runWavetableWorker(connection, options = {}) {
-  const controller = createWavetableWorkerController(connection, options);
-  await controller.start();
-  return controller;
+  return startPatchWorkerServices(connection, [
+    createModulationWorkerService,
+    () => createWavetableWorkerController(connection, options)
+  ]);
 }
 export {
   FAILURE_PHASE_BUILD_MIP,

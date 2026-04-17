@@ -304,6 +304,7 @@ async function openBuiltDesktopBundlePage() {
         }
 
         const runtimeState = {
+            dspSessionId: 1,
             desiredTableIndex: 0,
             desiredIntentSerial: 1,
             serviceState: 2,
@@ -407,6 +408,26 @@ async function openBuiltDesktopBundlePage() {
         };
 
         const createPatchView = (await import("/patch_gui/desktop/index.js")).default;
+        const {
+            createStoredStateRuntimeMirror,
+        } = await import("/patch_gui/stored-state-runtime-mirror.js");
+        const {
+            MODULATION_STATE_KEY,
+            buildModulationRuntimeEvents,
+            deserializeModulationState,
+        } = await import("/patch_gui/modulation.js");
+        const modulationRuntimeMirror = createStoredStateRuntimeMirror(patchConnection, {
+            stateKey: MODULATION_STATE_KEY,
+            runtimeEndpointDependencies: [{
+                endpointID: "runtimeState",
+                required: true,
+                mapValue: (value) => Number(value?.dspSessionId) || 0,
+            }],
+            applyDefaultRuntimeStateWhenMissing: true,
+            deserializeStoredState: deserializeModulationState,
+            buildRuntimeEvents: ({ state }) => buildModulationRuntimeEvents(state),
+        });
+        modulationRuntimeMirror.start();
         const patchView = await createPatchView(patchConnection);
         const mountPoint = document.getElementById("mount");
 

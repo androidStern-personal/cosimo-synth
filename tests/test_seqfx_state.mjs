@@ -22,6 +22,9 @@ const {
     applySeqFxBlockMove,
     applySeqFxBlockParamEdit,
     applySeqFxBlockResize,
+    applySeqFxBlockSelectionDelete,
+    applySeqFxBlockSelectionMove,
+    applySeqFxBlockSelectionParamEdit,
     applySeqFxCellToggle,
     applySeqFxMixEdit,
     applySeqFxParamEdit,
@@ -475,4 +478,177 @@ test("copy_paint_fills_signed_delta_from_source_block_start", () => {
         upload.params[SEQFX_LANES.crusher].slice(2, 5).map((params) => params[0]),
         [6, 6, 6],
     );
+});
+
+test("block_selection_edits_deletes_and_moves_active_blocks_only", () => {
+    let state = createDefaultSeqFxState();
+    for (const startStep of [1, 3, 6, 10]) {
+        state = applySeqFxBlockCreate(state, {
+            patternIndex: 0,
+            lane: SEQFX_LANES.crusher,
+            startStep,
+            length: 1,
+        });
+    }
+
+    state = applySeqFxBlockSelectionParamEdit(state, {
+        patternIndex: 0,
+        lane: SEQFX_LANES.crusher,
+        blockStartSteps: [1, 3, 6],
+        paramIndex: 0,
+        value: 5,
+    });
+
+    let upload = buildSeqPatternUpload(state, {
+        patternIndex: 0,
+        authoritative: false,
+    });
+    assert.deepEqual(
+        [1, 3, 6, 10].map((step) => upload.params[SEQFX_LANES.crusher][step][0]),
+        [5, 5, 5, 8],
+    );
+
+    const moveResult = applySeqFxBlockSelectionMove(state, {
+        patternIndex: 0,
+        lane: SEQFX_LANES.crusher,
+        blockStartSteps: [1, 3, 6],
+        anchorStartStep: 3,
+        targetAnchorStartStep: 5,
+    });
+    state = moveResult.state;
+
+    assert.deepEqual(moveResult.movedStartSteps, [3, 5, 8]);
+    upload = buildSeqPatternUpload(state, {
+        patternIndex: 0,
+        authoritative: false,
+    });
+    assert.deepEqual(upload.activeSteps[SEQFX_LANES.crusher].slice(0, 12), [
+        false, false, false, true, false, true, false, false, true, false, true, false,
+    ]);
+    assert.deepEqual(
+        [3, 5, 8, 10].map((step) => upload.params[SEQFX_LANES.crusher][step][0]),
+        [5, 5, 5, 8],
+    );
+
+    const revisionBeforeNoOpMove = state.patterns[0].revision;
+    const noOpMoveResult = applySeqFxBlockSelectionMove(state, {
+        patternIndex: 0,
+        lane: SEQFX_LANES.crusher,
+        blockStartSteps: [3, 5, 8],
+        anchorStartStep: 5,
+        targetAnchorStartStep: 5,
+    });
+    assert.deepEqual(noOpMoveResult.movedStartSteps, [3, 5, 8]);
+    assert.equal(noOpMoveResult.state.patterns[0].revision, revisionBeforeNoOpMove);
+
+    assert.throws(
+        () => applySeqFxBlockSelectionMove(state, {
+            patternIndex: 0,
+            lane: SEQFX_LANES.crusher,
+            blockStartSteps: [3, 5, 8],
+            anchorStartStep: 5,
+            targetAnchorStartStep: 7,
+        }),
+        /overlap/i,
+    );
+
+    state = applySeqFxBlockSelectionDelete(state, {
+        patternIndex: 0,
+        lane: SEQFX_LANES.crusher,
+        blockStartSteps: [3, 5, 8],
+    });
+
+    upload = buildSeqPatternUpload(state, {
+        patternIndex: 0,
+        authoritative: false,
+    });
+    assert.deepEqual(upload.activeSteps[SEQFX_LANES.crusher].slice(0, 12), [
+        false, false, false, false, false, false, false, false, false, false, true, false,
+    ]);
+});
+
+test("block_selection_edits_moves_and_deletes_whole_multi_cell_blocks", () => {
+    let state = createDefaultSeqFxState();
+    state = applySeqFxBlockCreate(state, {
+        patternIndex: 0,
+        lane: SEQFX_LANES.filter,
+        startStep: 1,
+        length: 2,
+    });
+    state = applySeqFxBlockCreate(state, {
+        patternIndex: 0,
+        lane: SEQFX_LANES.filter,
+        startStep: 5,
+        length: 3,
+    });
+    state = applySeqFxBlockCreate(state, {
+        patternIndex: 0,
+        lane: SEQFX_LANES.filter,
+        startStep: 20,
+        length: 2,
+    });
+
+    state = applySeqFxBlockSelectionParamEdit(state, {
+        patternIndex: 0,
+        lane: SEQFX_LANES.filter,
+        blockStartSteps: [1, 5],
+        paramIndex: 1,
+        value: 2222,
+    });
+
+    let upload = buildSeqPatternUpload(state, {
+        patternIndex: 0,
+        authoritative: false,
+    });
+    assert.deepEqual(
+        [1, 2, 5, 6, 7].map((step) => upload.params[SEQFX_LANES.filter][step][1]),
+        [2222, 2222, 2222, 2222, 2222],
+    );
+    assert.deepEqual(
+        [20, 21].map((step) => upload.params[SEQFX_LANES.filter][step][1]),
+        [2000, 2000],
+    );
+
+    const moveResult = applySeqFxBlockSelectionMove(state, {
+        patternIndex: 0,
+        lane: SEQFX_LANES.filter,
+        blockStartSteps: [1, 5],
+        anchorStartStep: 1,
+        targetAnchorStartStep: 10,
+    });
+    state = moveResult.state;
+    assert.deepEqual(moveResult.movedStartSteps, [10, 14]);
+
+    upload = buildSeqPatternUpload(state, {
+        patternIndex: 0,
+        authoritative: false,
+    });
+    assert.deepEqual(upload.activeSteps[SEQFX_LANES.filter].slice(1, 8), [
+        false, false, false, false, false, false, false,
+    ]);
+    assert.deepEqual(upload.activeSteps[SEQFX_LANES.filter].slice(10, 17), [
+        true, true, false, false, true, true, true,
+    ]);
+    assert.deepEqual(upload.triggerSteps[SEQFX_LANES.filter].slice(10, 17), [
+        true, false, false, false, true, false, false,
+    ]);
+    assert.deepEqual(
+        [10, 11, 14, 15, 16].map((step) => upload.params[SEQFX_LANES.filter][step][1]),
+        [2222, 2222, 2222, 2222, 2222],
+    );
+
+    state = applySeqFxBlockSelectionDelete(state, {
+        patternIndex: 0,
+        lane: SEQFX_LANES.filter,
+        blockStartSteps: [10, 14],
+    });
+    upload = buildSeqPatternUpload(state, {
+        patternIndex: 0,
+        authoritative: false,
+    });
+    assert.deepEqual(upload.activeSteps[SEQFX_LANES.filter].slice(10, 17), [
+        false, false, false, false, false, false, false,
+    ]);
+    assert.deepEqual(upload.activeSteps[SEQFX_LANES.filter].slice(20, 22), [true, true]);
+    assert.deepEqual(upload.triggerSteps[SEQFX_LANES.filter].slice(20, 22), [true, false]);
 });

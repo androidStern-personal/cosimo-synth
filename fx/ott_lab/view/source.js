@@ -12,6 +12,7 @@ import {
 
 const SNAPSHOT_SLOT_IDS = ["A", "B", "C", "D", "E", "F", "G"];
 const SNAPSHOT_STORAGE_KEY = "cosimo.ottLab.snapshotSlots.v2";
+const ACTIVE_SNAPSHOT_SLOT_STATE_KEY = "cosimo.ottLab.activeSnapshotSlot";
 const LEGACY_SNAPSHOT_STORAGE_KEY = "cosimo.ottLab.snapshotSlots.v1";
 const SNAPSHOT_EXPORT_KIND = EFFECT_SNAPSHOT_KIND;
 const SNAPSHOT_PATCH_ID = "dev.cosimo.ott-lab";
@@ -32,6 +33,7 @@ class OttLabView extends HTMLElement {
     this.parameterInfoByID = new Map();
     this.snapshotContract = null;
     this.activeSnapshotSlot = undefined;
+    this.activeSnapshotSlotStateRevision = 0;
     this.snapshotMessageTimeoutID = undefined;
     this.snapshotStorageWarningShown = false;
     this.copyFallbackToken = 0;
@@ -62,6 +64,9 @@ class OttLabView extends HTMLElement {
   }
 
   connectedCallback() {
+    this.activeSnapshotSlotStateListener = message => this.handleActiveSnapshotSlotState(message);
+    this.patchConnection.addStoredStateValueListener?.(this.activeSnapshotSlotStateListener);
+    this.requestActiveSnapshotSlotState();
     this.presetController.attach();
     this.statusListener = status => this.renderFromStatus(status);
     this.patchConnection.addStatusListener(this.statusListener);
@@ -77,6 +82,73 @@ class OttLabView extends HTMLElement {
 
     if (this.statusListener)
       this.patchConnection.removeStatusListener(this.statusListener);
+
+    if (this.activeSnapshotSlotStateListener)
+      this.patchConnection.removeStoredStateValueListener?.(this.activeSnapshotSlotStateListener);
+  }
+
+  requestActiveSnapshotSlotState() {
+    if (typeof this.patchConnection.requestFullStoredState === "function") {
+      const requestRevision = this.activeSnapshotSlotStateRevision;
+
+      this.patchConnection.requestFullStoredState(storedState => {
+        if (requestRevision !== this.activeSnapshotSlotStateRevision)
+          return;
+
+        const value = storedState?.[ACTIVE_SNAPSHOT_SLOT_STATE_KEY];
+
+        if (value === undefined && typeof this.patchConnection.requestStoredStateValue === "function") {
+          this.patchConnection.requestStoredStateValue(ACTIVE_SNAPSHOT_SLOT_STATE_KEY);
+          return;
+        }
+
+        this.applyActiveSnapshotSlotState(value);
+      });
+      return;
+    }
+
+    this.patchConnection.requestStoredStateValue?.(ACTIVE_SNAPSHOT_SLOT_STATE_KEY);
+  }
+
+  handleActiveSnapshotSlotState(message) {
+    if (!message || typeof message !== "object" || message.key !== ACTIVE_SNAPSHOT_SLOT_STATE_KEY)
+      return;
+
+    const slotID = normalizeSnapshotSlotID(message.value);
+
+    if (this.activeSnapshotSlotStateRevision > 0 && slotID !== this.activeSnapshotSlot)
+      return;
+
+    this.applyActiveSnapshotSlotState(slotID);
+  }
+
+  applyActiveSnapshotSlotState(value) {
+    const slotID = normalizeSnapshotSlotID(value);
+
+    if (this.activeSnapshotSlot === slotID)
+      return;
+
+    this.activeSnapshotSlot = slotID;
+    this.renderSnapshotSlots();
+  }
+
+  setActiveSnapshotSlot(slotID, { persist = true, render = true } = {}) {
+    const normalizedSlotID = normalizeSnapshotSlotID(slotID);
+    this.activeSnapshotSlot = normalizedSlotID;
+
+    if (persist)
+      this.persistActiveSnapshotSlot();
+
+    if (render)
+      this.renderSnapshotSlots();
+  }
+
+  persistActiveSnapshotSlot() {
+    this.activeSnapshotSlotStateRevision += 1;
+    this.patchConnection.sendStoredStateValue?.(
+      ACTIVE_SNAPSHOT_SLOT_STATE_KEY,
+      this.activeSnapshotSlot ?? null,
+    );
   }
 
   renderFromStatus(status) {
@@ -335,7 +407,7 @@ class OttLabView extends HTMLElement {
     if (!this.ensureSnapshotSlot(slotID))
       return false;
 
-    this.activeSnapshotSlot = slotID;
+    this.setActiveSnapshotSlot(slotID, { render: false });
     this.persistSnapshotStore();
     this.renderSnapshotSlots();
     this.focusSnapshotSlot(slotID);
@@ -432,6 +504,9 @@ class OttLabView extends HTMLElement {
       return false;
     }
 
+    const previousActiveSlot = this.activeSnapshotSlot;
+    this.setActiveSnapshotSlot(slotID, { persist: false, render: false });
+
     try {
       const appliedSnapshot = applyEffectSnapshot({
         snapshot: slot,
@@ -443,11 +518,12 @@ class OttLabView extends HTMLElement {
         updatedAt: slot.updatedAt,
       };
     } catch (error) {
+      this.setActiveSnapshotSlot(previousActiveSlot, { persist: false, render: true });
       this.setSnapshotMessage(messageFromError(error), "error");
       return false;
     }
 
-    this.activeSnapshotSlot = slotID;
+    this.persistActiveSnapshotSlot();
     this.renderSnapshotSlots();
     this.focusSnapshotSlot(slotID);
     this.setSnapshotMessage(`Active ${slotID}.`, "success");
@@ -521,6 +597,9 @@ class OttLabView extends HTMLElement {
       return false;
     }
 
+    const previousActiveSlot = this.activeSnapshotSlot;
+    this.setActiveSnapshotSlot(slotID, { persist: false, render: false });
+
     try {
       applyEffectSnapshot({
         snapshot,
@@ -528,6 +607,7 @@ class OttLabView extends HTMLElement {
         patchConnection: this.patchConnection,
       });
     } catch (error) {
+      this.setActiveSnapshotSlot(previousActiveSlot, { persist: false, render: true });
       this.setSnapshotMessage(messageFromError(error), "error");
       return false;
     }
@@ -537,7 +617,7 @@ class OttLabView extends HTMLElement {
       updatedAt: new Date().toISOString(),
     };
     this.persistSnapshotStore();
-    this.activeSnapshotSlot = slotID;
+    this.persistActiveSnapshotSlot();
     this.renderSnapshotSlots();
     this.focusSnapshotSlot(slotID);
     this.setSnapshotMessage(`Pasted into ${slotID}.`, "success");
@@ -1026,6 +1106,10 @@ function createEmptySnapshotStore(loadError) {
   }
 
   return store;
+}
+
+function normalizeSnapshotSlotID(value) {
+  return SNAPSHOT_SLOT_IDS.includes(value) ? value : undefined;
 }
 
 function loadSnapshotStore() {

@@ -2125,6 +2125,9 @@ export async function installStandaloneEffectPresetHookOptionsHarness(target: HT
         },
         storedState: {},
     };
+    const factoryPresets = {
+        [effectID]: [factoryPreset],
+    };
     let migrationCallCount = 0;
     const presetMigrations: EffectPresetMigration[] = [{
         effectID,
@@ -2151,9 +2154,7 @@ export async function installStandaloneEffectPresetHookOptionsHarness(target: HT
     const mounted = mountHarness(target, (root) => {
         function Harness() {
             const { state, mutations } = useStandaloneEffectPresets(effectID, {
-                factoryPresets: {
-                    [effectID]: [factoryPreset],
-                },
+                factoryPresets,
                 storedStateAdapters,
                 presetMigrations,
             });

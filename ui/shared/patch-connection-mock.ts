@@ -1,4 +1,10 @@
 import type { PatchConnectionLike } from "./cmajor-react";
+import {
+    MODULATION_STATE_KEY,
+    buildModulationRuntimeEvents,
+    deserializeModulationState,
+} from "./modulation";
+import { createStoredStateRuntimeMirror } from "./stored-state-runtime-mirror";
 
 const midiInputEndpointID = "midiIn";
 const wavetablePositionEndpointID = "wavetablePosition";
@@ -176,6 +182,7 @@ class MockPianoKeyboard extends HTMLElement {
 
 function createDefaultRuntimeState() {
     return {
+        dspSessionId: 1,
         desiredTableIndex: 0,
         desiredIntentSerial: 1,
         serviceState: 0,
@@ -192,6 +199,14 @@ function createDefaultRuntimeState() {
         failurePhase: 0,
         failureReasonCode: 0,
     };
+}
+
+function getRuntimeDspSessionId(value: unknown) {
+    if (!value || typeof value !== "object") {
+        return 0;
+    }
+
+    return Math.trunc(Number((value as { dspSessionId?: unknown }).dspSessionId) || 0);
 }
 
 function buildHarnessStatus(manifest: unknown) {
@@ -506,10 +521,23 @@ export class MockPatchConnection implements PatchConnectionLike {
     private storedState = new Map<string, unknown>();
     private runtimeState = createDefaultRuntimeState();
     private status: unknown;
+    private readonly modulationRuntimeMirror;
 
     constructor(manifest: unknown) {
         this.manifest = manifest;
         this.status = buildHarnessStatus(manifest);
+        this.modulationRuntimeMirror = createStoredStateRuntimeMirror(this, {
+            stateKey: MODULATION_STATE_KEY,
+            runtimeEndpointDependencies: [{
+                endpointID: runtimeStateEndpointID,
+                required: true,
+                mapValue: getRuntimeDspSessionId,
+            }],
+            applyDefaultRuntimeStateWhenMissing: true,
+            deserializeStoredState: deserializeModulationState,
+            buildRuntimeEvents: ({ state }) => buildModulationRuntimeEvents(state),
+        });
+        this.modulationRuntimeMirror.start();
     }
 
     getResourceAddress(path: string) {

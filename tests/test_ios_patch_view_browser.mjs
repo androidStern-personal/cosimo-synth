@@ -1251,10 +1251,11 @@ test("mounted iPhone MSEG modal keeps the main view layout-stable while hidden, 
             const snapshot = await waitForSnapshot(
                 page,
                 `MSEG stored-state update after mounted edit at ${viewportSize.width}x${viewportSize.height}`,
-                (nextSnapshot) => typeof nextSnapshot.storedState["modulation.v1"] === "string"
-                    && nextSnapshot.sentMessages.some((message) => (
-                        message.endpointID === "modulationMsegBuffer" && Number(message.value?.slot) === 1
-                    )),
+                (nextSnapshot) => readStoredModulationState(nextSnapshot).msegSlots[0].shape.points.length === 3,
+            );
+            assert.equal(
+                snapshot.sentMessages.some((message) => message.endpointID === "modulationMsegBuffer"),
+                false,
             );
             const storedShape = readStoredModulationState(snapshot).msegSlots[0].shape;
             assert.equal(storedShape.format, "cosimo.mseg.shape");
@@ -1320,10 +1321,11 @@ test("mounted iPhone MSEG modal treats segment tap as add, immediate drag as cur
         let snapshot = await waitForSnapshot(
             page,
             "segment tap inserts a point",
-            (nextSnapshot) => typeof nextSnapshot.storedState["modulation.v1"] === "string"
-                && nextSnapshot.sentMessages.some((message) => (
-                    message.endpointID === "modulationMsegBuffer" && Number(message.value?.slot) === 1
-                )),
+            (nextSnapshot) => readStoredModulationState(nextSnapshot).msegSlots[0].shape.points.length === 3,
+        );
+        assert.equal(
+            snapshot.sentMessages.some((message) => message.endpointID === "modulationMsegBuffer"),
+            false,
         );
         let storedShape = readStoredModulationState(snapshot).msegSlots[0].shape;
         assert.equal(storedShape.points.length, 3);
@@ -1346,10 +1348,14 @@ test("mounted iPhone MSEG modal treats segment tap as add, immediate drag as cur
         snapshot = await waitForSnapshot(
             page,
             "segment drag edits curve without inserting a point",
-            (nextSnapshot) => typeof nextSnapshot.storedState["modulation.v1"] === "string"
-                && nextSnapshot.sentMessages.some((message) => (
-                    message.endpointID === "modulationMsegBuffer" && Number(message.value?.slot) === 1
-                )),
+            (nextSnapshot) => {
+                const shape = readStoredModulationState(nextSnapshot).msegSlots[0].shape;
+                return shape.points.length === 2 && Math.abs(Number(shape.points[0]?.curvePower)) > 0.1;
+            },
+        );
+        assert.equal(
+            snapshot.sentMessages.some((message) => message.endpointID === "modulationMsegBuffer"),
+            false,
         );
         storedShape = readStoredModulationState(snapshot).msegSlots[0].shape;
         assert.equal(storedShape.points.length, 2);
@@ -1373,10 +1379,14 @@ test("mounted iPhone MSEG modal treats segment tap as add, immediate drag as cur
         snapshot = await waitForSnapshot(
             page,
             "segment hold-drag edits curve and triggers haptic",
-            (nextSnapshot) => typeof nextSnapshot.storedState["modulation.v1"] === "string"
-                && nextSnapshot.sentMessages.some((message) => (
-                    message.endpointID === "modulationMsegBuffer" && Number(message.value?.slot) === 1
-                )),
+            (nextSnapshot) => {
+                const shape = readStoredModulationState(nextSnapshot).msegSlots[0].shape;
+                return shape.points.length === 2 && Math.abs(Number(shape.points[0]?.curvePower)) > 0.1;
+            },
+        );
+        assert.equal(
+            snapshot.sentMessages.some((message) => message.endpointID === "modulationMsegBuffer"),
+            false,
         );
         storedShape = readStoredModulationState(snapshot).msegSlots[0].shape;
         assert.equal(storedShape.points.length, 2);
@@ -1470,12 +1480,10 @@ test("mounted iPhone route rows use the compact depth control and preserve targe
             },
         );
 
-        assert.ok(snapshot.sentMessages.some((message) => (
-            message.endpointID === "modulationRoute"
-            && Number(message.value?.routeIndex) === 0
-            && Number(message.value?.polarityKind) === 1
-            && Math.abs(Number(message.value?.amount) - 0.5) <= 1e-9
-        )));
+        assert.equal(
+            snapshot.sentMessages.some((message) => message.endpointID === "modulationRoute"),
+            false,
+        );
         assert.deepEqual(routeSummary(readStoredModulationState(snapshot).routes[0]), {
             enabled: true,
             sourceKind: "mseg",

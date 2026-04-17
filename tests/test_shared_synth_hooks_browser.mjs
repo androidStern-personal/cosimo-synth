@@ -6,9 +6,7 @@ import {
     MSEG_EDITOR_HORIZONTAL_PADDING_PX,
     MSEG_EDITOR_VERTICAL_PADDING_PX,
     MSEG_POINT_RADIUS_PX,
-    renderMsegShape,
 } from "../patch_gui/mseg.js";
-import { deserializeModulationState } from "../patch_gui/modulation.js";
 
 import { startDesktopHarnessServer } from "./helpers/desktop_harness_browser.mjs";
 
@@ -360,14 +358,14 @@ test("useObservedDisplayPosition falls back to the parameter value and ignores o
     }
 });
 
-test("useMsegState attaches once, requests boot state, uploads the boot payload, and detaches on unmount", async () => {
+test("useMsegState attaches once, requests boot state for UI only, and detaches on unmount", async () => {
     const page = await openModulePage();
 
     try {
         await installHarness(page, "installMsegStateHookHarness");
         await page.waitForFunction(() => {
             const snapshot = window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.();
-            return snapshot?.requestFullStoredStateCount === 1 && snapshot?.sentEvents?.length >= 3;
+            return snapshot?.requestFullStoredStateCount === 1 && snapshot?.lastRender?.shape?.points?.length === 2;
         });
 
         let snapshot = await getHarnessSnapshot(page);
@@ -376,54 +374,7 @@ test("useMsegState attaches once, requests boot state, uploads the boot payload,
         assert.equal(snapshot.storedStateListenerCount, 1);
         assert.equal(snapshot.lastRender.shape.points.length, 2);
         assert.equal(snapshot.lastRender.playback.rate.seconds, 1);
-        assert.equal(snapshot.sentEvents.some(({ endpointID }) => endpointID === "modulationEnable"), true);
-        assert.equal(snapshot.sentEvents.some(({ endpointID }) => endpointID === "modulationClear"), true);
-        assert.equal(snapshot.sentEvents.some(({ endpointID }) => endpointID === "modulationMsegBuffer"), true);
-        assert.equal(snapshot.sentEvents.some(({ endpointID }) => endpointID === "modulationMsegPlayback"), true);
-        assert.equal(snapshot.sentEvents.some(({ endpointID }) => endpointID === "modulationRoute"), true);
-        const bootModulationState = deserializeModulationState(snapshot.bootState["modulation.v1"]);
-        assert.deepEqual(
-            snapshot.sentEvents.find(({ endpointID, value }) => endpointID === "modulationMsegBuffer" && value.slot === 1),
-            {
-                endpointID: "modulationMsegBuffer",
-                value: {
-                    slot: 1,
-                    buffer: Array.from(renderMsegShape(bootModulationState.msegSlots[0].shape)),
-                },
-            },
-        );
-        assert.deepEqual(
-            snapshot.sentEvents.find(({ endpointID, value }) => endpointID === "modulationMsegPlayback" && value.slot === 1),
-            {
-                endpointID: "modulationMsegPlayback",
-                value: {
-                    slot: 1,
-                    seconds: 1,
-                    holdFinalValue: true,
-                    rateKind: 0,
-                    loopEnabled: true,
-                    loopStart: 0,
-                    loopEnd: 1,
-                    noteOffPolicy: 0,
-                    legatoRestarts: false,
-                },
-            },
-        );
-        assert.deepEqual(
-            snapshot.sentEvents.find(({ endpointID, value }) => endpointID === "modulationRoute" && value.routeIndex === 0),
-            {
-                endpointID: "modulationRoute",
-                value: {
-                    routeIndex: 0,
-                    enabled: true,
-                    sourceKind: 1,
-                    sourceSlot: 1,
-                    polarityKind: 0,
-                    targetKind: 1,
-                    amount: 0.42,
-                },
-            },
-        );
+        assert.deepEqual(snapshot.sentEvents, []);
 
         await invokeHarness(page, "unmount");
         snapshot = await getHarnessSnapshot(page);

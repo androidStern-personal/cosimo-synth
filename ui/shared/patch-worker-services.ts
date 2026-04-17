@@ -1,0 +1,96 @@
+import type { PatchConnectionLike } from "./cmajor-react";
+
+export type PatchWorkerService = {
+    start: () => unknown | Promise<unknown>;
+    stop?: () => void | Promise<void>;
+};
+
+export type PatchWorkerServiceFactory =
+    | PatchWorkerService
+    | ((connection: PatchConnectionLike) => PatchWorkerService | Promise<PatchWorkerService>);
+
+export class PatchWorkerServiceHost {
+    private readonly connection: PatchConnectionLike;
+    private readonly serviceFactories: PatchWorkerServiceFactory[];
+    private readonly services: PatchWorkerService[] = [];
+    private started = false;
+
+    constructor(connection: PatchConnectionLike, serviceFactories: PatchWorkerServiceFactory[]) {
+        this.connection = connection;
+        this.serviceFactories = serviceFactories;
+    }
+
+    async start() {
+        if (this.started) {
+            return;
+        }
+
+        this.started = true;
+
+        try {
+            for (const serviceFactory of this.serviceFactories) {
+                const service = typeof serviceFactory === "function"
+                    ? await serviceFactory(this.connection)
+                    : serviceFactory;
+                this.services.push(service);
+                await service.start();
+            }
+        } catch (startError) {
+            const cleanupErrors: unknown[] = [];
+
+            for (const service of [...this.services].reverse()) {
+                try {
+                    await service.stop?.();
+                } catch (cleanupError) {
+                    cleanupErrors.push(cleanupError);
+                }
+            }
+
+            this.services.length = 0;
+            this.started = false;
+
+            if (cleanupErrors.length > 0) {
+                throw new AggregateError(
+                    [startError, ...cleanupErrors],
+                    "Patch worker service startup failed and cleanup also failed",
+                );
+            }
+
+            throw startError;
+        }
+    }
+
+    async stop() {
+        if (!this.started) {
+            return;
+        }
+
+        this.started = false;
+
+        for (const service of [...this.services].reverse()) {
+            await service.stop?.();
+        }
+
+        this.services.length = 0;
+    }
+
+    getServices() {
+        return [...this.services];
+    }
+}
+
+export function createPatchWorkerServiceHost(
+    connection: PatchConnectionLike,
+    serviceFactories: PatchWorkerServiceFactory[],
+) {
+    return new PatchWorkerServiceHost(connection, serviceFactories);
+}
+
+export async function startPatchWorkerServices(
+    connection: PatchConnectionLike,
+    serviceFactories: PatchWorkerServiceFactory[],
+) {
+    const host = createPatchWorkerServiceHost(connection, serviceFactories);
+    await host.start();
+    return host;
+}

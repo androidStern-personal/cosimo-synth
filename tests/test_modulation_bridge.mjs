@@ -15,8 +15,10 @@ import {
     MODULATION_ROUTE_ENDPOINT_ID,
     MODULATION_STATE_KEY,
     ModulationRuntimeBridge,
+    buildModulationRuntimeEvents,
     composeModulationAmount,
     createDefaultModulationState,
+    deserializeModulationState,
     formatModulationAmountEditingValue,
     getModulationAmountDepth,
     getModulationAmountSliderPosition,
@@ -98,7 +100,7 @@ async function flushMicrotasks(turns = 4) {
     }
 }
 
-test("boot_without_saved_modulation_state_uploads_default_slots_envelopes_and_disabled_routes", () => {
+test("boot_without_saved_modulation_state_reads_defaults_without_runtime_uploading", () => {
     const patchConnection = new FakePatchConnection();
     const bridge = new ModulationRuntimeBridge(patchConnection);
 
@@ -118,16 +120,22 @@ test("boot_without_saved_modulation_state_uploads_default_slots_envelopes_and_di
         amount: 0,
     });
 
+    assert.deepEqual(patchConnection.events, []);
+});
+
+test("modulation runtime event builder converts defaults into a complete Cmajor upload batch", () => {
+    const events = buildModulationRuntimeEvents(createDefaultModulationState());
+
     assert.deepEqual(
-        endpointEvents(patchConnection, MODULATION_ENABLE_ENDPOINT_ID).map(({ value }) => value),
+        endpointEvents({ events }, MODULATION_ENABLE_ENDPOINT_ID).map(({ value }) => value),
         [0, 1],
     );
-    assert.equal(endpointEvents(patchConnection, MODULATION_CLEAR_ENDPOINT_ID).length, 1);
-    assert.equal(endpointEvents(patchConnection, MODULATION_MSEG_BUFFER_ENDPOINT_ID).length, 3);
-    assert.equal(endpointEvents(patchConnection, MODULATION_MSEG_PLAYBACK_ENDPOINT_ID).length, 3);
-    assert.equal(endpointEvents(patchConnection, MODULATION_ENV_ENDPOINT_ID).length, 3);
-    assert.equal(endpointEvents(patchConnection, MODULATION_ROUTE_ENDPOINT_ID).length, MODULATION_MAX_ROUTES);
-    assert.deepEqual(endpointEvents(patchConnection, MODULATION_ROUTE_ENDPOINT_ID)[0].value, {
+    assert.equal(endpointEvents({ events }, MODULATION_CLEAR_ENDPOINT_ID).length, 1);
+    assert.equal(endpointEvents({ events }, MODULATION_MSEG_BUFFER_ENDPOINT_ID).length, 3);
+    assert.equal(endpointEvents({ events }, MODULATION_MSEG_PLAYBACK_ENDPOINT_ID).length, 3);
+    assert.equal(endpointEvents({ events }, MODULATION_ENV_ENDPOINT_ID).length, 3);
+    assert.equal(endpointEvents({ events }, MODULATION_ROUTE_ENDPOINT_ID).length, MODULATION_MAX_ROUTES);
+    assert.deepEqual(endpointEvents({ events }, MODULATION_ROUTE_ENDPOINT_ID)[0].value, {
         routeIndex: 0,
         enabled: true,
         sourceKind: 1,
@@ -136,10 +144,10 @@ test("boot_without_saved_modulation_state_uploads_default_slots_envelopes_and_di
         targetKind: 1,
         amount: 0,
     });
-    assert.equal(endpointEvents(patchConnection, MODULATION_ROUTE_ENDPOINT_ID)[1].value.enabled, false);
+    assert.equal(endpointEvents({ events }, MODULATION_ROUTE_ENDPOINT_ID)[1].value.enabled, false);
 });
 
-test("boot_with_saved_modulation_state_restores_slots_envelopes_and_routes", () => {
+test("boot_with_saved_modulation_state_restores_ui_state_without_runtime_uploading", () => {
     const customState = createDefaultModulationState();
     customState.msegSlots[1].shape = {
         ...createDefaultMsegShape("MSEG 2"),
@@ -178,11 +186,42 @@ test("boot_with_saved_modulation_state_restores_slots_envelopes_and_routes", () 
     assert.equal(state.msegSlots[1].shape.points.length, 3);
     assert.equal(state.envelopeSlots[2].attackSeconds, 0.25);
     assert.deepEqual(state.routes, customState.routes);
+    assert.deepEqual(patchConnection.events, []);
+});
 
-    const secondBufferUpload = endpointEvents(patchConnection, MODULATION_MSEG_BUFFER_ENDPOINT_ID)[1];
+test("modulation runtime event builder converts saved state into slot_envelope_and_route_uploads", () => {
+    const customState = createDefaultModulationState();
+    customState.msegSlots[1].shape = {
+        ...createDefaultMsegShape("MSEG 2"),
+        points: [
+            { x: 0.0, y: 0.2, curvePower: 0.0 },
+            { x: 0.5, y: 0.85, curvePower: 1.5 },
+            { x: 1.0, y: 0.1, curvePower: 0.0 },
+        ],
+    };
+    customState.envelopeSlots[2] = {
+        name: "Env 3",
+        attackSeconds: 0.25,
+        decaySeconds: 0.5,
+        sustain: 0.75,
+        releaseSeconds: 0.9,
+    };
+    customState.routes = [{
+        id: "boot-route-1",
+        enabled: true,
+        sourceKind: "env",
+        sourceSlot: 3,
+        polarity: "unipolar",
+        targetKind: "filterCutoffOctaves",
+        amount: 4.0,
+    }];
+
+    const events = buildModulationRuntimeEvents(customState);
+
+    const secondBufferUpload = endpointEvents({ events }, MODULATION_MSEG_BUFFER_ENDPOINT_ID)[1];
     assert.deepEqual(secondBufferUpload.value.buffer, Array.from(renderMsegShape(customState.msegSlots[1].shape)));
 
-    const firstRouteUpload = endpointEvents(patchConnection, MODULATION_ROUTE_ENDPOINT_ID)[0];
+    const firstRouteUpload = endpointEvents({ events }, MODULATION_ROUTE_ENDPOINT_ID)[0];
     assert.deepEqual(firstRouteUpload.value, {
         routeIndex: 0,
         enabled: true,
@@ -194,7 +233,7 @@ test("boot_with_saved_modulation_state_restores_slots_envelopes_and_routes", () 
     });
 });
 
-test("editing_one_mseg_slot_persists_modulation_v1_and_reuploads_only_that_slot_buffer", () => {
+test("editing_one_mseg_slot_persists_modulation_v1_without_runtime_uploading", () => {
     const patchConnection = new FakePatchConnection();
     const bridge = new ModulationRuntimeBridge(patchConnection);
 
@@ -213,9 +252,7 @@ test("editing_one_mseg_slot_persists_modulation_v1_and_reuploads_only_that_slot_
     });
 
     assert.equal(patchConnection.storedWrites.some(({ key }) => key === MODULATION_STATE_KEY), true);
-    assert.equal(endpointEvents(patchConnection, MODULATION_MSEG_BUFFER_ENDPOINT_ID).length, 1);
-    assert.equal(endpointEvents(patchConnection, MODULATION_MSEG_PLAYBACK_ENDPOINT_ID).length, 0);
-    assert.equal(endpointEvents(patchConnection, MODULATION_ROUTE_ENDPOINT_ID).length, 0);
+    assert.deepEqual(patchConnection.events, []);
 });
 
 test("replacing_routes_preserves_signed_amounts_and_disables_the_unused_tail", () => {
@@ -247,7 +284,28 @@ test("replacing_routes_preserves_signed_amounts_and_disables_the_unused_tail", (
         },
     ]);
 
-    const uploads = endpointEvents(patchConnection, MODULATION_ROUTE_ENDPOINT_ID);
+    assert.equal(patchConnection.storedWrites.length, 1);
+    const savedState = deserializeModulationState(patchConnection.storedWrites[0].value);
+    assert.deepEqual(savedState.routes.map(routeSummary), [
+        {
+            enabled: true,
+            sourceKind: "env",
+            sourceSlot: 2,
+            polarity: "unipolar",
+            targetKind: "filterCutoffOctaves",
+            amount: -2.5,
+        },
+        {
+            enabled: true,
+            sourceKind: "velocity",
+            sourceSlot: null,
+            polarity: "bipolar",
+            targetKind: "pan",
+            amount: 0.5,
+        },
+    ]);
+
+    const uploads = endpointEvents({ events: buildModulationRuntimeEvents(savedState) }, MODULATION_ROUTE_ENDPOINT_ID);
     assert.equal(uploads.length, MODULATION_MAX_ROUTES);
     assert.deepEqual(uploads[0].value, {
         routeIndex: 0,

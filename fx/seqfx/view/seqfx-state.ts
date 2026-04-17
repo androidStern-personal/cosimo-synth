@@ -97,6 +97,31 @@ export type SeqFxBlockCopyPaintResult = {
 
 export type SeqFxBlockDeleteEdit = SeqFxBlockEditTarget;
 
+export type SeqFxBlockSelectionEditTarget = {
+    patternIndex: number;
+    lane: number;
+    blockStartSteps: number[];
+};
+
+export type SeqFxBlockSelectionMoveEdit = SeqFxBlockSelectionEditTarget & {
+    anchorStartStep: number;
+    targetAnchorStartStep: number;
+};
+
+export type SeqFxBlockSelectionMoveResult = {
+    state: SeqFxState;
+    movedStartSteps: number[];
+};
+
+export type SeqFxBlockSelectionParamEdit = SeqFxBlockSelectionEditTarget & {
+    paramIndex: number;
+    value: number;
+};
+
+export type SeqFxBlockSelectionMixEdit = SeqFxBlockSelectionEditTarget & {
+    value: number;
+};
+
 export type SeqFxBlockParamEdit = SeqFxBlockEditTarget & {
     paramIndex: number;
     value: number;
@@ -495,6 +520,23 @@ function cloneBlockSteps(pattern: SeqFxPattern, lane: number, block: SeqFxBlock)
     });
 }
 
+function resolveBlockSelection(pattern: SeqFxPattern, lane: number, blockStartSteps: number[]): SeqFxBlock[] {
+    const blockByStart = new Map<number, SeqFxBlock>();
+
+    for (const rawStartStep of blockStartSteps) {
+        const requestedStart = clampIndex(rawStartStep, SEQFX_STEP_COUNT, "blockStartStep");
+        const block = getBlockForStep(pattern, lane, requestedStart);
+
+        if (!block) {
+            throw new Error("Cannot edit a missing SeqFX block selection.");
+        }
+
+        blockByStart.set(block.startStep, block);
+    }
+
+    return [...blockByStart.values()].sort((left, right) => left.startStep - right.startStep);
+}
+
 function writeBlockSteps(
     pattern: SeqFxPattern,
     lane: number,
@@ -667,6 +709,101 @@ export function applySeqFxBlockDelete(state: SeqFxState, edit: SeqFxBlockDeleteE
         }
 
         clearBlock(pattern, lane, block);
+    });
+}
+
+export function applySeqFxBlockSelectionDelete(state: SeqFxState, edit: SeqFxBlockSelectionEditTarget): SeqFxState {
+    return withEditedPattern(state, edit.patternIndex, (pattern) => {
+        const lane = clampIndex(edit.lane, SEQFX_LANE_COUNT, "lane");
+        const blocks = resolveBlockSelection(pattern, lane, edit.blockStartSteps);
+
+        for (const block of blocks) {
+            clearBlock(pattern, lane, block);
+        }
+    });
+}
+
+export function applySeqFxBlockSelectionMove(state: SeqFxState, edit: SeqFxBlockSelectionMoveEdit): SeqFxBlockSelectionMoveResult {
+    const normalizedState = normalizeSeqFxState(state);
+    const patternIndex = clampIndex(edit.patternIndex, SEQFX_PATTERN_COUNT, "patternIndex");
+    const lane = clampIndex(edit.lane, SEQFX_LANE_COUNT, "lane");
+    const anchorStartStep = clampIndex(edit.anchorStartStep, SEQFX_STEP_COUNT, "anchorStartStep");
+    const targetAnchorStartStep = clampIndex(edit.targetAnchorStartStep, SEQFX_STEP_COUNT, "targetAnchorStartStep");
+    const currentPattern = normalizedState.patterns[patternIndex];
+    const currentBlocks = resolveBlockSelection(currentPattern, lane, edit.blockStartSteps);
+    const currentAnchorBlock = getBlockForStep(currentPattern, lane, anchorStartStep);
+
+    if (!currentAnchorBlock || !currentBlocks.some((block) => block.startStep === currentAnchorBlock.startStep)) {
+        throw new Error("SeqFX block selection move anchor must be one of the selected blocks.");
+    }
+
+    if (targetAnchorStartStep === currentAnchorBlock.startStep) {
+        return {
+            state: normalizedState,
+            movedStartSteps: currentBlocks.map((block) => block.startStep),
+        };
+    }
+
+    let movedStartSteps: number[] = [];
+    const nextState = withEditedPattern(normalizedState, patternIndex, (pattern) => {
+        const blocks = resolveBlockSelection(pattern, lane, edit.blockStartSteps);
+        const anchorBlock = getBlockForStep(pattern, lane, anchorStartStep);
+
+        if (!anchorBlock || !blocks.some((block) => block.startStep === anchorBlock.startStep)) {
+            throw new Error("SeqFX block selection move anchor must be one of the selected blocks.");
+        }
+
+        const delta = targetAnchorStartStep - anchorBlock.startStep;
+        const clonedBlocks = blocks.map((block) => ({
+            block,
+            targetStartStep: block.startStep + delta,
+            steps: cloneBlockSteps(pattern, lane, block),
+        }));
+
+        for (const { block } of clonedBlocks) {
+            clearBlock(pattern, lane, block);
+        }
+
+        for (const cloned of clonedBlocks) {
+            assertBlockFits(cloned.targetStartStep, cloned.block.length);
+            assertBlockRangeAvailable(pattern, lane, cloned.targetStartStep, cloned.block.length);
+            writeBlockSteps(pattern, lane, cloned.targetStartStep, cloned.steps);
+            movedStartSteps.push(cloned.targetStartStep);
+        }
+    });
+
+    return {
+        state: nextState,
+        movedStartSteps,
+    };
+}
+
+export function applySeqFxBlockSelectionMixEdit(state: SeqFxState, edit: SeqFxBlockSelectionMixEdit): SeqFxState {
+    return withEditedPattern(state, edit.patternIndex, (pattern) => {
+        const lane = clampIndex(edit.lane, SEQFX_LANE_COUNT, "lane");
+        const mix = normalizeMix(edit.value);
+        const blocks = resolveBlockSelection(pattern, lane, edit.blockStartSteps);
+
+        for (const block of blocks) {
+            for (let step = block.startStep; step <= block.endStep; step += 1) {
+                pattern.lanes[lane].steps[step].mix = mix;
+            }
+        }
+    });
+}
+
+export function applySeqFxBlockSelectionParamEdit(state: SeqFxState, edit: SeqFxBlockSelectionParamEdit): SeqFxState {
+    return withEditedPattern(state, edit.patternIndex, (pattern) => {
+        const lane = clampIndex(edit.lane, SEQFX_LANE_COUNT, "lane");
+        const paramIndex = clampIndex(edit.paramIndex, SEQFX_PARAM_COUNT, "paramIndex");
+        const value = normalizeParam(lane, paramIndex, edit.value);
+        const blocks = resolveBlockSelection(pattern, lane, edit.blockStartSteps);
+
+        for (const block of blocks) {
+            for (let step = block.startStep; step <= block.endStep; step += 1) {
+                pattern.lanes[lane].steps[step].params[paramIndex] = value;
+            }
+        }
     });
 }
 
