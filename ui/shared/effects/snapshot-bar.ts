@@ -475,8 +475,8 @@ class SnapshotBar extends HTMLElement {
         messageHost.dataset.visible = message ? "true" : "false";
 
         if (message) {
-            if (shouldShowToast) {
-                this._showToast(message, tone === "error" ? "error" : "success");
+            if (shouldShowToast && tone === "error") {
+                this._showToast(message, "error");
             }
 
             this._messageTimeout = window.setTimeout(() => {

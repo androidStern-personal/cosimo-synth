@@ -273,6 +273,7 @@ export class EffectSnapshotBankController {
     private pendingStoredStateValueRevision: number | null = null;
     private readonly pendingStoredEchoes = new Map<string, number>();
     private suppressActiveSlotCaptureDepth = 0;
+    private pendingActiveSlotCapture = false;
 
     constructor(private readonly options: EffectSnapshotBankControllerOptions) {
         this.effectID = requireString(options.effectID, "Snapshot bank controller effectID");
@@ -313,6 +314,7 @@ export class EffectSnapshotBankController {
         this.patchConnection.removeStatusListener?.(this.handleStatusBound);
         this.attached = false;
         this.ready = false;
+        this.pendingActiveSlotCapture = false;
         this.notify();
     }
 
@@ -615,6 +617,11 @@ export class EffectSnapshotBankController {
         this.currentValues.set(endpointID, normalizedValue as EffectParameterValue);
 
         if (this.hydratingEndpointIDs.delete(endpointID)) {
+            if (this.pendingActiveSlotCapture && this.hasCompleteCurrentParameterValues()) {
+                this.updateActiveSlotFromCurrentState();
+                return;
+            }
+
             this.notify();
             return;
         }
@@ -658,6 +665,14 @@ export class EffectSnapshotBankController {
             return;
         }
 
+        if (!this.hasCompleteCurrentParameterValues()) {
+            this.pendingActiveSlotCapture = true;
+            this.notify();
+            return;
+        }
+
+        this.pendingActiveSlotCapture = false;
+
         try {
             const previous = this.bank.slots[slotID];
             const snapshot = this.captureCurrentSnapshot(slotID, previous?.label ?? "");
@@ -675,6 +690,13 @@ export class EffectSnapshotBankController {
         }
 
         this.notify();
+    }
+
+    private hasCompleteCurrentParameterValues() {
+        return Boolean(
+            this.currentContract
+            && this.currentContract.parameters.every((parameter) => this.currentValues.has(parameter.endpointID)),
+        );
     }
 
     private requestBootState() {

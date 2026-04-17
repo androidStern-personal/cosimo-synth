@@ -327,10 +327,18 @@ test("desktop and iPhone React UI tooling are wired for Vite dev and build loops
     assert.match(desktopDevLauncherScript, /open -na "\$app_path"/);
 });
 
-test("desktop patch entry loads React Grab and the official MCP client only in Vite dev mode", async () => {
+test("desktop and shared effect dev entries load React Grab only in Vite dev mode", async () => {
     const packageJson = JSON.parse(await fs.readFile(path.join(repoRoot, "package.json"), "utf8"));
     const desktopPatchEntry = await fs.readFile(
         path.join(repoRoot, "ui", "desktop", "patch-view-entry.tsx"),
+        "utf8",
+    );
+    const effectDevTools = await fs.readFile(
+        path.join(repoRoot, "ui", "shared", "effects", "effect-dev-tools.js"),
+        "utf8",
+    );
+    const effectViewLoader = await fs.readFile(
+        path.join(repoRoot, "ui", "shared", "effects", "effect-view-loader.js"),
         "utf8",
     );
 
@@ -339,6 +347,11 @@ test("desktop patch entry loads React Grab and the official MCP client only in V
     assert.match(desktopPatchEntry, /if \(import\.meta\.env\.DEV\) \{/);
     assert.match(desktopPatchEntry, /void import\("react-grab"\);/);
     assert.match(desktopPatchEntry, /void import\("@react-grab\/mcp\/client"\);/);
+    assert.match(effectDevTools, /if \(import\.meta\.env\.DEV\) \{/);
+    assert.match(effectDevTools, /await import\("react-grab"\);/);
+    assert.match(effectDevTools, /await import\("@react-grab\/mcp\/client"\);/);
+    assert.match(effectViewLoader, /EFFECT_DEV_TOOLS_MODULE_PATH = "\/ui\/shared\/effects\/effect-dev-tools\.js"/);
+    assert.match(effectViewLoader, /await loadEffectDevTools\(devOrigin\);/);
 });
 
 test("desktop standalone loader is emitted from source and stays host-configurable after repeated builds", async () => {

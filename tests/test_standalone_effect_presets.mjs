@@ -903,6 +903,34 @@ test("standalone import with apply rolls back imported preset when parameter wri
     assert.deepEqual(finalStoredState.activePresetByEffect, {});
 });
 
+test("standalone direct import rejects an existing user preset ID unless overwrite is requested", async () => {
+    const userPreset = await createV2Preset();
+    const patchConnection = new FakeStandalonePatchConnection({
+        storedState: {
+            "effects.presets.v2": storedPresetStateV2({
+                userPresets: {
+                    ott: [userPreset],
+                },
+            }),
+        },
+    });
+    const controller = await createPresetController({ patchConnection });
+
+    controller.attach();
+    patchConnection.storedWrites = [];
+
+    const importResult = controller.importPresetText(JSON.stringify(userPreset), { applyAfterImport: true });
+
+    assert.equal(importResult.ok, false);
+    assert.match(importResult.message, /user preset "user\.ott\.soft-smash" already exists/i);
+    assert.deepEqual(patchConnection.events, []);
+    assert.deepEqual(patchConnection.storedWrites, []);
+    assert.deepEqual(
+        controller.getState().userPresets.map((preset) => preset.presetID),
+        ["user.ott.soft-smash"],
+    );
+});
+
 test("standalone clipboard mutations export and import v2 preset json", async () => {
     const clipboard = createClipboardHarness();
     const userPreset = await createV2Preset({
@@ -951,4 +979,67 @@ test("standalone clipboard mutations export and import v2 preset json", async ()
         { endpointID: "ottTimePercent", value: 100 },
     ]);
     assert.deepEqual(parseStoredWrite(destinationPatchConnection.storedWrites.at(-1)).userPresets.ott[0].parameters, userPreset.parameters);
+});
+
+test("standalone clipboard paste creates a new user preset when the copied preset ID already exists", async () => {
+    const clipboard = createClipboardHarness();
+    const userPreset = await createV2Preset({
+        parameters: {
+            envelopeBoostClampDb: 10,
+            ottAmount: 91,
+            ottBandDrive: 14,
+            ottEnvelopeMatch: 63,
+            ottMix: 82,
+            ottTimePercent: 100,
+        },
+    });
+    const patchConnection = new FakeStandalonePatchConnection({
+        storedState: {
+            "effects.presets.v2": storedPresetStateV2({
+                userPresets: {
+                    ott: [userPreset],
+                },
+            }),
+        },
+    });
+    const controller = await createPresetController({
+        patchConnection,
+        clipboard,
+        createPresetID: ({ attempt }) => (
+            attempt === 0 ? "user.ott.soft-smash" : `user.ott.soft-smash-paste-${attempt}`
+        ),
+    });
+
+    controller.attach();
+    const copyResult = await controller.copyPresetToClipboard("user:user.ott.soft-smash");
+    patchConnection.events = [];
+    patchConnection.storedWrites = [];
+
+    const pasteResult = await controller.pastePresetFromClipboard({ applyAfterImport: true });
+
+    assert.equal(copyResult.ok, true);
+    assert.equal(pasteResult.ok, true);
+    assert.equal(pasteResult.value.presetID, "user.ott.soft-smash-paste-1");
+    assert.equal(pasteResult.value.label, "Soft Smash");
+    assert.equal(pasteResult.value.parameters.ottAmount, 91);
+    assert.equal(pasteResult.value.parameters.ottMix, 82);
+    assert.deepEqual(patchConnection.events, [
+        { endpointID: "envelopeBoostClampDb", value: 10 },
+        { endpointID: "ottAmount", value: 91 },
+        { endpointID: "ottBandDrive", value: 14 },
+        { endpointID: "ottEnvelopeMatch", value: 63 },
+        { endpointID: "ottMix", value: 82 },
+        { endpointID: "ottTimePercent", value: 100 },
+    ]);
+
+    const storedState = parseStoredWrite(patchConnection.storedWrites.at(-1));
+    assert.deepEqual(
+        storedState.userPresets.ott.map((preset) => preset.presetID),
+        ["user.ott.soft-smash", "user.ott.soft-smash-paste-1"],
+    );
+    assert.deepEqual(storedState.activePresetByEffect.ott, {
+        presetID: "user.ott.soft-smash-paste-1",
+        label: "Soft Smash",
+        dirty: false,
+    });
 });

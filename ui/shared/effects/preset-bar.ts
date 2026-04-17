@@ -10,6 +10,108 @@ import type {
 
 type SaveDialogMode = "new" | "rename" | "duplicate";
 
+// SVG markup copied from the lucide-static package.
+const ICON_SAVE = /* html */ `
+<svg
+  class="lucide lucide-save"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  aria-hidden="true"
+  focusable="false"
+>
+  <path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z" />
+  <path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7" />
+  <path d="M7 3v4a1 1 0 0 0 1 1h7" />
+</svg>`;
+
+const ICON_SAVE_AS = /* html */ `
+<svg
+  class="lucide lucide-file-plus-2"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  aria-hidden="true"
+  focusable="false"
+>
+  <path d="M11.35 22H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.706.706l3.588 3.588A2.4 2.4 0 0 1 20 8v5.35" />
+  <path d="M14 2v5a1 1 0 0 0 1 1h5" />
+  <path d="M14 19h6" />
+  <path d="M17 16v6" />
+</svg>`;
+
+const ICON_REVERT = /* html */ `
+<svg
+  class="lucide lucide-undo-2"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  aria-hidden="true"
+  focusable="false"
+>
+  <path d="M9 14 4 9l5-5" />
+  <path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11" />
+</svg>`;
+
+const ICON_COPY = /* html */ `
+<svg
+  class="lucide lucide-copy"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  aria-hidden="true"
+  focusable="false"
+>
+  <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+  <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+</svg>`;
+
+const ICON_PASTE = /* html */ `
+<svg
+  class="lucide lucide-clipboard-paste"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  aria-hidden="true"
+  focusable="false"
+>
+  <path d="M11 14h10" />
+  <path d="M16 4h2a2 2 0 0 1 2 2v1.344" />
+  <path d="m17 18 4-4-4-4" />
+  <path d="M8 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 1.793-1.113" />
+  <rect x="8" y="2" width="8" height="4" rx="1" />
+</svg>`;
+
 // ── Helpers ──────────────────────────────────────────────
 
 function escHTML(s: string): string {
@@ -155,17 +257,23 @@ const PRESET_BAR_CSS = /* css */ `
   .action-btn {
     appearance: none;
     border: none;
+    width: 32px;
     height: 100%;
-    padding: 0 12px;
+    padding: 0;
     background: transparent;
     color: rgba(239,247,238,0.4);
     font: inherit;
-    font-size: 9px;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
     cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     transition: all 80ms;
-    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .action-btn svg {
+    width: 15px;
+    height: 15px;
+    stroke-width: 2;
   }
   .action-btn:hover {
     color: var(--knob-track-value-color, #8ff0a4);
@@ -552,15 +660,15 @@ const PRESET_BAR_HTML = /* html */ `
     <button class="nav-btn" data-action="next" title="Next preset">&#8250;</button>
 
     <div class="action-group">
-      <button class="action-btn highlight" data-action="save" data-el="btn-save" disabled>Save</button>
+      <button class="action-btn highlight" data-action="save" data-el="btn-save" title="Save preset" aria-label="Save preset" disabled>${ICON_SAVE}</button>
       <span class="action-sep"></span>
-      <button class="action-btn" data-action="save-as">Save As</button>
+      <button class="action-btn" data-action="save-as" title="Save as new preset" aria-label="Save as new preset">${ICON_SAVE_AS}</button>
       <span class="action-sep"></span>
-      <button class="action-btn" data-action="revert" data-el="btn-revert" disabled>Revert</button>
+      <button class="action-btn" data-action="revert" data-el="btn-revert" title="Revert preset" aria-label="Revert preset" disabled>${ICON_REVERT}</button>
       <span class="action-sep"></span>
-      <button class="action-btn" data-action="copy">Copy</button>
+      <button class="action-btn" data-action="copy" title="Copy preset JSON" aria-label="Copy preset JSON">${ICON_COPY}</button>
       <span class="action-sep"></span>
-      <button class="action-btn" data-action="paste">Paste</button>
+      <button class="action-btn" data-action="paste" title="Paste preset JSON" aria-label="Paste preset JSON">${ICON_PASTE}</button>
     </div>
   </div>
 
@@ -893,7 +1001,7 @@ class PresetBar extends HTMLElement {
 
     private _applyPreset(presetKey: string) {
         const result = this._mutations?.applyPreset(presetKey);
-        if (result) handleMutationResult(result, this._els["toast-host"]);
+        if (result && !result.ok) showToast(this._els["toast-host"], result.message, "error");
         this._closeFlyout();
         this._closeCtxMenu();
     }

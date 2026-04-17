@@ -470,6 +470,17 @@ test("seqfx_shared_effect_loader_imports_react_dev_module_from_manifest", async 
     const snapshot = await page.evaluate(() => ({
         customElementDefined: Boolean(window.customElements.get("cosimo-seqfx-react-view")),
         refreshPreambleInstalled: Boolean(window.__vite_plugin_react_preamble_installed__),
+        reactGrab: (() => {
+            const reactGrab = window.__REACT_GRAB__;
+
+            return reactGrab && typeof reactGrab === "object"
+                ? {
+                    hasRegisterPlugin: typeof reactGrab.registerPlugin === "function",
+                    hasGetPlugins: typeof reactGrab.getPlugins === "function",
+                    plugins: typeof reactGrab.getPlugins === "function" ? reactGrab.getPlugins() : null,
+                }
+                : null;
+        })(),
         viewTagName: document.querySelector("cosimo-seqfx-react-view")?.tagName.toLowerCase(),
         uploads: window.__SEQFX_LOADER_HARNESS__?.getSnapshot().events
             .filter((entry) => entry.endpointID === "patternUpload"),
@@ -477,6 +488,10 @@ test("seqfx_shared_effect_loader_imports_react_dev_module_from_manifest", async 
 
     assert.equal(snapshot.customElementDefined, true);
     assert.equal(snapshot.refreshPreambleInstalled, true);
+    assert.equal(snapshot.reactGrab?.hasRegisterPlugin, true);
+    assert.equal(snapshot.reactGrab?.hasGetPlugins, true);
+    assert.equal(Array.isArray(snapshot.reactGrab?.plugins), true);
+    assert.equal(snapshot.reactGrab.plugins.includes("mcp"), true);
     assert.equal(snapshot.viewTagName, "cosimo-seqfx-react-view");
     assert.equal(snapshot.uploads.length >= 1, true);
     assert.equal(snapshot.uploads.at(-1).value.patternIndex, 0);

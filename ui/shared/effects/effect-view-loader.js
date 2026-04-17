@@ -2,6 +2,7 @@ export const DEFAULT_EFFECT_DEV_ORIGIN = "http://127.0.0.1:5175";
 export const DEFAULT_EFFECT_PRODUCTION_MODULE = "./app.js";
 export const EFFECT_DEV_STATUS_PATH = "/__fx-dev-status";
 export const EFFECT_DEV_STATUS_KIND = "fx-vite-dev-server";
+export const EFFECT_DEV_TOOLS_MODULE_PATH = "/ui/shared/effects/effect-dev-tools.js";
 
 function normalizeOrigin(origin) {
     const value = typeof origin === "string" ? origin.trim() : "";
@@ -94,6 +95,14 @@ async function loadReactRefreshPreamble(origin) {
     }
 }
 
+async function loadEffectDevTools(origin) {
+    try {
+        await import(/* @vite-ignore */ `${normalizeOrigin(origin)}${EFFECT_DEV_TOOLS_MODULE_PATH}`);
+    } catch (error) {
+        console.warn("Could not load effect dev tools.", error);
+    }
+}
+
 function createProductionLoadError({ productionModuleUrl, devOrigin, devModulePath, cause }) {
     const devHint = devModulePath
         ? `The effects dev server was not reachable at ${normalizeOrigin(devOrigin)}${EFFECT_DEV_STATUS_PATH}. Start the shared effects Vite dev server, or build a production runtime that contains ${DEFAULT_EFFECT_PRODUCTION_MODULE}.`
@@ -127,6 +136,7 @@ export function createEffectPatchView(options = {}) {
             const devModuleUrl = resolveDevModuleUrl(devOrigin, devModulePath);
             await loadViteClient(devOrigin);
             await loadReactRefreshPreamble(devOrigin);
+            await loadEffectDevTools(devOrigin);
             return await loadViewFromModule(devModuleUrl, patchConnection, `Dev module ${devModuleUrl}`);
         }
 

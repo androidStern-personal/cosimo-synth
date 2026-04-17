@@ -607,7 +607,7 @@ test("OTT lab snapshot slots are compact single-input tabs", async () => {
     }
 });
 
-test("OTT lab snapshot feedback renders as a fixed toast instead of inline toolbar text", async () => {
+test("OTT lab snapshot activation feedback stays out of visible document flow", async () => {
     const page = await openOttLabPage();
 
     try {
@@ -621,11 +621,10 @@ test("OTT lab snapshot feedback renders as a fixed toast instead of inline toolb
             width: 1,
             height: 1,
         });
-        assert.equal(snapshot.toastText, "Active C.");
-        assert.equal(snapshot.toastVisible, true);
+        assert.equal(snapshot.toastText, "");
+        assert.equal(snapshot.toastVisible, false);
         assert.equal(snapshot.toastHostPosition, "fixed");
-        assert.ok(snapshot.toastRect.width > 40, "snapshot toast should have visible width");
-        assert.ok(snapshot.toastRect.height > 20, "snapshot toast should have visible height");
+        assert.equal(snapshot.toastRect, null);
     } finally {
         await page.close();
     }
@@ -988,7 +987,7 @@ test("OTT lab copies and pastes v2 snapshot JSON through focused-slot clipboard 
         assert.equal(copiedSnapshot.label, "verse crush");
         assert.deepEqual(copiedSnapshot.parameters, INITIAL_SNAPSHOT_PARAMETERS);
         assert.match(snapshot.message, /Copied A/);
-        assert.equal(snapshot.toastVisible, true);
+        assert.equal(snapshot.toastVisible, false);
 
         await page.evaluate(() => {
             window.__OTT_LAB_VIEW_HARNESS__.setParameterValue("ottMix", 5);
@@ -1010,7 +1009,7 @@ test("OTT lab copies and pastes v2 snapshot JSON through focused-slot clipboard 
             value,
         })));
         assert.match(snapshot.message, /Pasted into B/);
-        assert.equal(snapshot.toastVisible, true);
+        assert.equal(snapshot.toastVisible, false);
         assert.equal(snapshot.activeElementSlot, "B");
     } finally {
         await page.close();

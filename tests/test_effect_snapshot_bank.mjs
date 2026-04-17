@@ -89,6 +89,7 @@ class FakePatchConnection {
         parameterValues = {},
         delayFullStoredState = false,
         delayStoredStateValue = false,
+        delayParameterValueEndpoints = [],
         throwOnStoredStateWrites = false,
         disableStoredStateWrites = false,
         throwOnParameterWriteEndpointOnce = null,
@@ -97,12 +98,14 @@ class FakePatchConnection {
         this.parameterValues = { mix: 20, tone: 5, hiddenGuard: 1, ...parameterValues };
         this.delayFullStoredState = delayFullStoredState;
         this.delayStoredStateValue = delayStoredStateValue;
+        this.delayParameterValueEndpoints = new Set(delayParameterValueEndpoints);
         this.throwOnStoredStateWrites = throwOnStoredStateWrites;
         this.throwOnParameterWriteEndpointOnce = throwOnParameterWriteEndpointOnce;
         this.events = [];
         this.storedWrites = [];
         this.pendingFullStoredStateCallbacks = [];
         this.pendingStoredStateValueRequests = [];
+        this.pendingParameterValueRequests = [];
         this.statusListeners = new Set();
         this.parameterListeners = new Map();
         this.storedStateListeners = new Set();
@@ -137,6 +140,11 @@ class FakePatchConnection {
     }
 
     requestParameterValue(endpointID) {
+        if (this.delayParameterValueEndpoints.has(endpointID)) {
+            this.pendingParameterValueRequests.push(endpointID);
+            return;
+        }
+
         for (const listener of this.parameterListeners.get(endpointID) ?? []) {
             listener(this.parameterValues[endpointID]);
         }
@@ -214,6 +222,21 @@ class FakePatchConnection {
     flushStoredStateValue() {
         for (const callback of this.pendingStoredStateValueRequests.splice(0)) {
             callback();
+        }
+    }
+
+    flushParameterValue(endpointID) {
+        const pending = this.pendingParameterValueRequests;
+        this.pendingParameterValueRequests = [];
+
+        for (const pendingEndpointID of pending) {
+            if (pendingEndpointID === endpointID) {
+                for (const listener of this.parameterListeners.get(endpointID) ?? []) {
+                    listener(this.parameterValues[endpointID]);
+                }
+            } else {
+                this.pendingParameterValueRequests.push(pendingEndpointID);
+            }
         }
     }
 }
@@ -371,6 +394,53 @@ test("snapshot_bank_updates_active_slot_on_parameter_and_adapter_edits", async (
 
     assert.equal(state.activeSlotID, "A");
     assert.deepEqual(state.slots.A.parameters, { mix: 64, tone: 5 });
+    assert.deepEqual(state.slots.A.storedState, { "grid.v1": { grid: "beta" } });
+    assert.deepEqual(patchConnection.storedWrites.at(-1).value.slots.A.storedState, {
+        "grid.v1": { grid: "beta" },
+    });
+
+    controller.detach();
+});
+
+test("snapshot_bank_defers_active_slot_adapter_capture_until_all_parameter_values_are_hydrated", async () => {
+    const adapterHarness = createAdapter({ grid: "alpha" });
+    const slotA = await createSnapshot({
+        slotID: "A",
+        parameters: { mix: 13, tone: 8 },
+        storedState: { "grid.v1": { grid: "alpha" } },
+    });
+    const bank = await createBankPayload({
+        activeSlotID: "A",
+        slots: { ...(await createBankPayload()).slots, A: slotA },
+    });
+    const { controller, patchConnection } = await createController({
+        storedStateAdapters: [adapterHarness.adapter],
+        patchOptions: {
+            storedState: { "cosimo.effectSnapshotBank.unit.v1": bank },
+            delayParameterValueEndpoints: ["tone"],
+        },
+    });
+
+    controller.attach();
+
+    assert.deepEqual(controller.getState().currentValues, { mix: 20 });
+    assert.equal(controller.getState().lastError, null);
+    assert.deepEqual(patchConnection.storedWrites, []);
+
+    adapterHarness.setValue({ grid: "beta" });
+    let state = controller.getState();
+
+    assert.equal(state.lastError, null);
+    assert.deepEqual(state.slots.A.parameters, { mix: 13, tone: 8 });
+    assert.deepEqual(state.slots.A.storedState, { "grid.v1": { grid: "alpha" } });
+    assert.deepEqual(patchConnection.storedWrites, []);
+
+    patchConnection.flushParameterValue("tone");
+    state = controller.getState();
+
+    assert.equal(state.lastError, null);
+    assert.deepEqual(state.currentValues, { mix: 20, tone: 5 });
+    assert.deepEqual(state.slots.A.parameters, { mix: 20, tone: 5 });
     assert.deepEqual(state.slots.A.storedState, { "grid.v1": { grid: "beta" } });
     assert.deepEqual(patchConnection.storedWrites.at(-1).value.slots.A.storedState, {
         "grid.v1": { grid: "beta" },

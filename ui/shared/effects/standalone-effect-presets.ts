@@ -107,6 +107,7 @@ export type StandaloneEffectPresetControllerOptions = {
 export type StandaloneEffectPresetImportOptions = {
     applyAfterImport?: boolean;
     overwriteExisting?: boolean;
+    copyOnIDConflict?: boolean;
 };
 
 type StandaloneEffectPresetStateListener = (state: StandaloneEffectPresetState) => void;
@@ -551,8 +552,11 @@ export class StandaloneEffectPresetController {
         return this.runMutation(() => {
             ensureStoredStateWriter(this.options.patchConnection, "import effect presets");
 
-            const preset = this.parseImportText(text);
-            this.assertUserPresetIDCanBeStored(preset.presetID, options.overwriteExisting === true);
+            const preset = this.prepareImportedPreset(
+                this.parseImportText(text),
+                options.overwriteExisting === true,
+                options.copyOnIDConflict === true,
+            );
 
             if (options.applyAfterImport) {
                 ensureParameterWriter(this.options.patchConnection, "import and apply effect presets");
@@ -604,7 +608,10 @@ export class StandaloneEffectPresetController {
             }
 
             const text = await readClipboardText();
-            return this.importPresetText(text, options);
+            return this.importPresetText(text, {
+                ...options,
+                copyOnIDConflict: options.copyOnIDConflict ?? true,
+            });
         } catch (error) {
             return this.fail(errorFromUnknown(error));
         }
@@ -926,6 +933,26 @@ export class StandaloneEffectPresetController {
         if (!overwriteExisting && this.getUserPresets().some((preset) => preset.presetID === presetID)) {
             throw new Error(`User preset "${presetID}" already exists.`);
         }
+    }
+
+    private prepareImportedPreset(preset: EffectPresetV2, overwriteExisting: boolean, copyOnIDConflict: boolean) {
+        if (overwriteExisting) {
+            this.assertUserPresetIDCanBeStored(preset.presetID, true);
+            return preset;
+        }
+
+        if (!this.findPresetByID(preset.presetID)) {
+            return preset;
+        }
+
+        if (!copyOnIDConflict) {
+            this.assertUserPresetIDCanBeStored(preset.presetID, false);
+        }
+
+        return this.normalizePresetForCurrentContract({
+            ...preset,
+            presetID: this.createUniqueUserPresetID(normalizeLabel(preset.label)),
+        });
     }
 
     private normalizePresetForCurrentContract(preset: unknown) {
