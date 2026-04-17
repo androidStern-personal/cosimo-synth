@@ -31,9 +31,23 @@ export const effectPlugins = {
     },
 };
 
+export function effectPluginNames() {
+    return Object.keys(effectPlugins);
+}
+
 export function usage() {
-    const names = Object.keys(effectPlugins).join(", ");
+    const names = ["all", ...effectPluginNames()].join(", ");
     return `Usage: npm run fx:build -- <plugin>\n\nAvailable plugins: ${names}`;
+}
+
+export function resolvePluginNames(pluginName) {
+    if (pluginName === "all")
+        return effectPluginNames();
+
+    if (effectPlugins[pluginName])
+        return [pluginName];
+
+    throw new Error(usage());
 }
 
 function asList(value) {
@@ -140,6 +154,12 @@ export async function buildPlugin(pluginName) {
     console.log(`Built ${pluginName} effect runtime at ${path.relative(repoRoot, runtimeRoot)}`);
 }
 
+export async function buildPlugins(pluginName) {
+    for (const nextPluginName of resolvePluginNames(pluginName)) {
+        await buildPlugin(nextPluginName);
+    }
+}
+
 async function main() {
     try {
         const pluginName = process.argv[2];
@@ -147,7 +167,7 @@ async function main() {
         if (!pluginName)
             throw new Error(usage());
 
-        await buildPlugin(pluginName);
+        await buildPlugins(pluginName);
     } catch (error) {
         console.error(error instanceof Error ? error.message : String(error));
         process.exitCode = 1;

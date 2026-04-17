@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent, type PointerEvent } from "react";
 
 import type { PatchConnectionLike } from "../../../ui/shared/cmajor-react";
-import { createPresetBar } from "../../../ui/shared/effects/preset-bar";
+import { createEffectHeader } from "../../../ui/shared/effects/effect-header";
+import { EffectSnapshotBankController } from "../../../ui/shared/effects/effect-snapshot-bank";
 import { createStandaloneEffectPresetController } from "../../../ui/shared/effects/standalone-effect-presets";
 import {
     SEQFX_LANES,
@@ -331,6 +332,11 @@ function SeqFxPresetBarHost({
         patchConnection,
         storedStateAdapters: [storedStateAdapter],
     }), [patchConnection, storedStateAdapter]);
+    const snapshotController = useMemo(() => new EffectSnapshotBankController({
+        effectID: "seqfx",
+        patchConnection,
+        storedStateAdapters: [storedStateAdapter],
+    }), [patchConnection, storedStateAdapter]);
 
     useEffect(() => {
         const host = hostRef.current;
@@ -339,17 +345,21 @@ function SeqFxPresetBarHost({
             return;
         }
 
-        const presetBar = createPresetBar();
-        presetBar.controller = presetController;
-        host.replaceChildren(presetBar);
+        const effectHeader = createEffectHeader();
+        effectHeader.presetController = presetController;
+        effectHeader.snapshotController = snapshotController;
+        host.replaceChildren(effectHeader);
+        snapshotController.attach();
         presetController.attach();
 
         return () => {
             presetController.detach();
-            presetBar.controller = null;
-            presetBar.remove();
+            snapshotController.detach();
+            effectHeader.presetController = null;
+            effectHeader.snapshotController = null;
+            effectHeader.remove();
         };
-    }, [presetController]);
+    }, [presetController, snapshotController]);
 
     return <div className="seqfx-preset-row" ref={hostRef} />;
 }

@@ -1,9 +1,12 @@
-import { access, cp, mkdir, readFile, rm } from "node:fs/promises";
+import { access, cp, mkdir, readFile, readdir, rm } from "node:fs/promises";
 import path from "node:path";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
+import os from "node:os";
 
 import {
     buildPlugin,
+    effectPluginNames,
     effectPlugins,
     repoRoot,
 } from "./build-effect.mjs";
@@ -11,6 +14,7 @@ import {
 const cacheRoot = process.env.COSIMO_DEV_CACHE
     ? path.resolve(process.env.COSIMO_DEV_CACHE)
     : path.join(process.env.HOME, "Library/Caches/cosimo-synth-dev");
+const scriptPath = fileURLToPath(import.meta.url);
 const patchedWebViewRequiredStrings = [
     "chocHostKeyboard",
     "__chocHostKeyboardBridgeInstalled",
@@ -25,13 +29,13 @@ const keyboardBridgeForbiddenStrings = [
 ];
 
 function availablePluginNames() {
-    return Object.keys(effectPlugins).join(", ");
+    return ["all", ...effectPluginNames()].join(", ");
 }
 
 function usage() {
     return [
         "Usage:",
-        "  npm run fx:prod:build -- <plugin>",
+        "  npm run fx:prod:build -- <plugin> [--clean]",
         "  npm run fx:prod:install -- <plugin> [--dry-run]",
         "",
         `Available plugins: ${availablePluginNames()}`,
@@ -40,6 +44,8 @@ function usage() {
         "  fx:prod:build creates a dedicated plugin bundle under build/.",
         "  fx:prod:install copies an already-built dedicated VST3 bundle.",
         "  fx:prod:install does not write CmajPlugin.json and does not touch AU plugins.",
+        "  COSIMO_PLUGIN_JOBS controls parallel plugin builds for 'all' (default: 3).",
+        "  COSIMO_CMAKE_JOBS controls CMake --parallel jobs per plugin (default: CPU budget / plugin jobs).",
     ].join("\n");
 }
 
@@ -56,6 +62,38 @@ function run(command, args, options = {}) {
     }
 
     return result.stdout?.trim() ?? "";
+}
+
+function availableParallelism() {
+    return typeof os.availableParallelism === "function"
+        ? os.availableParallelism()
+        : Math.max(1, os.cpus().length);
+}
+
+function parsePositiveInteger(value, label) {
+    if (value === undefined || value === null || value === "")
+        return null;
+
+    const parsed = Number(value);
+
+    if (!Number.isInteger(parsed) || parsed < 1)
+        throw new Error(`${label} must be a positive integer.`);
+
+    return parsed;
+}
+
+export function resolveProdBuildParallelism(pluginCount, env = process.env, availableJobs = availableParallelism()) {
+    const safeAvailableJobs = Math.max(1, Math.floor(availableJobs));
+    const requestedPluginJobs = parsePositiveInteger(env.COSIMO_PLUGIN_JOBS, "COSIMO_PLUGIN_JOBS");
+    const requestedCmakeJobs = parsePositiveInteger(env.COSIMO_CMAKE_JOBS, "COSIMO_CMAKE_JOBS");
+    const defaultPluginJobs = pluginCount > 1 ? Math.min(pluginCount, 3, safeAvailableJobs) : 1;
+    const pluginJobs = Math.max(1, Math.min(pluginCount, requestedPluginJobs ?? defaultPluginJobs));
+    const cmakeJobs = requestedCmakeJobs ?? Math.max(1, Math.floor(safeAvailableJobs / pluginJobs));
+
+    return {
+        pluginJobs,
+        cmakeJobs,
+    };
 }
 
 async function pathExists(nextPath) {
@@ -111,13 +149,30 @@ async function ensureCmajorSourcePath() {
     return cmajorSourcePath;
 }
 
-async function generateJuceProject(pluginName, plugin) {
+export async function prepareJuceProjectOutput(juceOut, { clean = false } = {}) {
+    if (clean) {
+        await rm(juceOut, { recursive: true, force: true });
+        await mkdir(juceOut, { recursive: true });
+        return;
+    }
+
+    await mkdir(juceOut, { recursive: true });
+
+    for (const entry of await readdir(juceOut, { withFileTypes: true })) {
+        if (entry.name === "_build")
+            continue;
+
+        await rm(path.join(juceOut, entry.name), { recursive: true, force: true });
+    }
+}
+
+async function generateJuceProject(pluginName, plugin, options = {}) {
     const jucePath = await ensureJucePath();
     const cmajorSourcePath = await ensureCmajorSourcePath();
     const runtimePatchPath = path.join(repoRoot, plugin.runtimeOut, path.basename(plugin.patch));
     const juceOut = path.join(repoRoot, plugin.juceOut);
 
-    await rm(juceOut, { recursive: true, force: true });
+    await prepareJuceProjectOutput(juceOut, { clean: options.clean });
 
     run("cmaj", [
         "generate",
@@ -131,7 +186,24 @@ async function generateJuceProject(pluginName, plugin) {
     console.log(`Generated ${pluginName} JUCE plugin project at ${path.relative(repoRoot, juceOut)}`);
 }
 
-async function buildJuceProject(pluginName, plugin) {
+export function createCmakeBuildArgs(cmakeBuildDir, target, cmakeJobs) {
+    const args = [
+        "--build",
+        cmakeBuildDir,
+        "--config",
+        "Release",
+        "--target",
+        target,
+    ];
+
+    if (cmakeJobs) {
+        args.push("--parallel", String(cmakeJobs));
+    }
+
+    return args;
+}
+
+async function buildJuceProject(pluginName, plugin, options = {}) {
     const juceOut = path.join(repoRoot, plugin.juceOut);
     const cmakeBuildDir = path.join(juceOut, "_build");
     const cmakeListsPath = path.join(juceOut, "CMakeLists.txt");
@@ -147,14 +219,7 @@ async function buildJuceProject(pluginName, plugin) {
         "-DCMAKE_BUILD_TYPE=Release",
     ]);
 
-    run("cmake", [
-        "--build",
-        cmakeBuildDir,
-        "--config",
-        "Release",
-        "--target",
-        `${plugin.cmakeTarget}_VST3`,
-    ]);
+    run("cmake", createCmakeBuildArgs(cmakeBuildDir, `${plugin.cmakeTarget}_VST3`, options.cmakeJobs));
 
     const builtVST3 = getBuiltVST3Path(plugin);
 
@@ -171,17 +236,112 @@ async function buildJuceProject(pluginName, plugin) {
     console.log(`Built ${pluginName} dedicated plugin project at ${path.relative(repoRoot, cmakeBuildDir)}`);
 }
 
-async function prodBuild(pluginName) {
+async function prodBuild(pluginName, options = {}) {
     const plugin = effectPlugins[pluginName];
 
     if (!plugin)
         throw new Error(usage());
 
     await buildPlugin(pluginName);
-    await generateJuceProject(pluginName, plugin);
-    await buildJuceProject(pluginName, plugin);
+    await generateJuceProject(pluginName, plugin, options);
+    await buildJuceProject(pluginName, plugin, options);
 
     return plugin;
+}
+
+export function resolveProdPluginNames(pluginName) {
+    if (pluginName === "all")
+        return effectPluginNames();
+
+    if (effectPlugins[pluginName])
+        return [pluginName];
+
+    throw new Error(usage());
+}
+
+export function createProdBuildChildArgs(pluginName, options = {}) {
+    const args = [scriptPath, "build", pluginName];
+
+    if (options.clean)
+        args.push("--clean");
+
+    return args;
+}
+
+function runChildProcess(args, env) {
+    return new Promise((resolve, reject) => {
+        const child = spawn(process.execPath, args, {
+            cwd: repoRoot,
+            env,
+            stdio: "inherit",
+        });
+
+        child.on("error", reject);
+        child.on("exit", (code, signal) => {
+            if (code === 0) {
+                resolve();
+                return;
+            }
+
+            reject(new Error(signal
+                ? `${process.execPath} ${args.join(" ")} exited via ${signal}.`
+                : `${process.execPath} ${args.join(" ")} exited with code ${code}.`));
+        });
+    });
+}
+
+async function runLimited(items, limit, task) {
+    const failures = [];
+    let nextIndex = 0;
+
+    async function worker() {
+        while (nextIndex < items.length) {
+            const item = items[nextIndex];
+            nextIndex += 1;
+
+            try {
+                await task(item);
+            } catch (error) {
+                failures.push({
+                    item,
+                    error,
+                });
+            }
+        }
+    }
+
+    const workerCount = Math.min(items.length, limit);
+    await Promise.all(Array.from({ length: workerCount }, worker));
+
+    if (failures.length > 0) {
+        throw new Error(failures.map(({ item, error }) => (
+            `${item}: ${error instanceof Error ? error.message : String(error)}`
+        )).join("\n"));
+    }
+}
+
+async function prodBuildAll(pluginNames, options) {
+    const { pluginJobs, cmakeJobs } = resolveProdBuildParallelism(pluginNames.length);
+
+    if (pluginNames.length === 1) {
+        await prodBuild(pluginNames[0], { ...options, cmakeJobs });
+        return;
+    }
+
+    const jucePath = await ensureJucePath();
+    const cmajorSourcePath = await ensureCmajorSourcePath();
+
+    console.log(`Building ${pluginNames.join(", ")} with ${pluginJobs} plugin job(s), ${cmakeJobs} CMake job(s) per plugin.`);
+
+    await runLimited(pluginNames, pluginJobs, (pluginName) => runChildProcess(
+        createProdBuildChildArgs(pluginName, options),
+        {
+            ...process.env,
+            JUCE_PATH: jucePath,
+            CMAJOR_SOURCE_PATH: cmajorSourcePath,
+            COSIMO_CMAKE_JOBS: String(cmakeJobs),
+        },
+    ));
 }
 
 function getBuiltVST3Path(plugin) {
@@ -278,19 +438,20 @@ async function installVST3(pluginName, plugin, options) {
     console.log(`Installed ${pluginName} VST3: ${installedVST3}`);
 }
 
-function parseArgs(argv) {
+export function parseArgs(argv) {
     const action = argv[2];
     const pluginName = argv[3];
     const flags = new Set(argv.slice(4));
 
     for (const flag of flags) {
-        if (!["--dry-run", "--help", "-h"].includes(flag))
+        if (!["--clean", "--dry-run", "--help", "-h"].includes(flag))
             throw new Error(`Unknown argument: ${flag}\n\n${usage()}`);
     }
 
     return {
         action,
         pluginName,
+        clean: flags.has("--clean"),
         dryRun: flags.has("--dry-run"),
         help: flags.has("--help") || flags.has("-h"),
     };
@@ -306,16 +467,20 @@ async function main() {
             return;
         }
 
-        if (!effectPlugins[options.pluginName])
-            throw new Error(usage());
+        const pluginNames = resolveProdPluginNames(options.pluginName);
 
         if (options.action === "build") {
-            await prodBuild(options.pluginName);
+            await prodBuildAll(pluginNames, options);
             return;
         }
 
         if (options.action === "install") {
-            await installVST3(options.pluginName, effectPlugins[options.pluginName], options);
+            if (options.clean)
+                throw new Error("--clean is only valid with fx:prod:build.");
+
+            for (const pluginName of pluginNames) {
+                await installVST3(pluginName, effectPlugins[pluginName], options);
+            }
             return;
         }
 
@@ -326,4 +491,5 @@ async function main() {
     }
 }
 
-await main();
+if (process.argv[1] && path.resolve(process.argv[1]) === scriptPath)
+    await main();

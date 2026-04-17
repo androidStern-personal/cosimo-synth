@@ -10,6 +10,7 @@ import { loadUIModule } from "./helpers/load_ui_module.mjs";
 const repoRoot = path.resolve(import.meta.dirname, "..");
 const SNAPSHOT_STORAGE_KEY = "cosimo.ottLab.snapshotSlots.v2";
 const ACTIVE_SNAPSHOT_SLOT_STATE_KEY = "cosimo.ottLab.activeSnapshotSlot";
+const SNAPSHOT_BANK_STATE_KEY = "cosimo.effectSnapshotBank.ott.v1";
 const SNAPSHOT_EXPORT_KIND = "cosimo.effectSnapshot";
 
 let server;
@@ -110,6 +111,19 @@ function createSnapshotStore(slots = {}) {
     });
 }
 
+function createSnapshotBank(slots = {}, activeSlotID = null) {
+    return {
+        kind: "cosimo.effectSnapshotBank",
+        version: 1,
+        effectID: "ott",
+        activeSlotID,
+        slots: Object.fromEntries(["A", "B", "C", "D", "E", "F", "G"].map((slotID) => [
+            slotID,
+            slots[slotID] ?? null,
+        ])),
+    };
+}
+
 async function openOttLabPage({
     clipboardText = "",
     initialSnapshotStore = null,
@@ -117,6 +131,7 @@ async function openOttLabPage({
     delayStoredStateRequests = false,
     delayStoredStateValueRequests = false,
     omitActiveSlotFromFullStoredState = false,
+    omitSnapshotBankFromFullStoredState = false,
 } = {}) {
     const page = await browser.newPage();
 
@@ -130,7 +145,9 @@ async function openOttLabPage({
         shouldDelayStoredStateRequests,
         shouldDelayStoredStateValueRequests,
         shouldOmitActiveSlotFromFullStoredState,
+        shouldOmitSnapshotBankFromFullStoredState,
         activeSlotStateKey,
+        snapshotBankStateKey,
         storageKey,
     }) => {
         window.localStorage.clear();
@@ -229,6 +246,9 @@ async function openOttLabPage({
                 if (shouldOmitActiveSlotFromFullStoredState)
                     delete snapshot[activeSlotStateKey];
 
+                if (shouldOmitSnapshotBankFromFullStoredState)
+                    delete snapshot[snapshotBankStateKey];
+
                 if (shouldDelayStoredStateRequests) {
                     pendingFullStoredStateResponses.push(() => callback(snapshot));
                     return;
@@ -326,32 +346,66 @@ async function openOttLabPage({
                 const rawStore = window.localStorage.getItem(storageKey);
                 const view = document.querySelector("cosimo-ott-lab-view");
                 const root = view?.shadowRoot;
+                const header = root?.querySelector("cosimo-effect-header");
+                const presetBar = header?.shadowRoot?.querySelector("cosimo-preset-bar");
+                const snapshotBar = header?.shadowRoot?.querySelector("cosimo-snapshot-bar");
+                const snapshotRoot = snapshotBar?.shadowRoot;
+                const snapshotMessage = snapshotRoot?.querySelector("[data-snapshot-message]");
+                const snapshotToast = snapshotRoot?.querySelector("[data-snapshot-toast]");
+                const snapshotToastHost = snapshotRoot?.querySelector("[data-snapshot-toast-host]");
+                const snapshotMessageRect = snapshotMessage?.getBoundingClientRect();
+                const snapshotToastRect = snapshotToast?.getBoundingClientRect();
+                const storedStateObject = Object.fromEntries(storedState.entries());
+                const bank = storedStateObject[snapshotBankStateKey] ?? null;
+                const legacyStore = rawStore ? JSON.parse(rawStore) : null;
 
                 return {
-                    activeElementSlot: root?.activeElement?.dataset?.slot ?? null,
-                    activeSlot: Array.from(root?.querySelectorAll(".snapshot-slot") ?? [])
+                    activeElementSlot: snapshotRoot?.activeElement?.dataset?.slot ?? null,
+                    activeSlot: Array.from(snapshotRoot?.querySelectorAll(".snapshot-slot") ?? [])
                         .find((slot) => slot.classList.contains("is-active"))?.dataset.slot ?? null,
                     sentMessages: sentMessages.map((message) => ({ ...message })),
                     storedWrites: storedWrites.map((write) => ({ ...write })),
-                    storedState: Object.fromEntries(storedState.entries()),
-                    store: rawStore ? JSON.parse(rawStore) : null,
+                    storedState: storedStateObject,
+                    bank,
+                    store: bank ? {
+                        schema: 2,
+                        patchID: "dev.cosimo.ott-lab",
+                        activeSlotID: bank.activeSlotID,
+                        slots: bank.slots,
+                    } : legacyStore,
+                    legacyStore,
                     clipboardText: window.__OTT_TEST_CLIPBOARD__.text,
-                    message: root?.querySelector("[data-snapshot-message]")?.textContent ?? "",
-                    toastVisible: root?.querySelector("[data-snapshot-message]")?.dataset?.visible === "true",
+                    message: snapshotMessage?.textContent ?? "",
+                    messageVisible: snapshotMessage?.dataset?.visible === "true",
+                    messagePosition: snapshotMessage ? getComputedStyle(snapshotMessage).position : null,
+                    messageRect: snapshotMessageRect ? {
+                        width: snapshotMessageRect.width,
+                        height: snapshotMessageRect.height,
+                    } : null,
+                    toastText: snapshotToast?.textContent ?? "",
+                    toastVisible: snapshotToast instanceof HTMLElement,
+                    toastHostPosition: snapshotToastHost ? getComputedStyle(snapshotToastHost).position : null,
+                    toastRect: snapshotToastRect ? {
+                        width: snapshotToastRect.width,
+                        height: snapshotToastRect.height,
+                    } : null,
                     labelInput: {
-                        value: root?.querySelector("[data-snapshot-label-input]")?.value ?? null,
-                        disabled: root?.querySelector("[data-snapshot-label-input]")?.disabled ?? null,
+                        value: snapshotRoot?.querySelector("[data-snapshot-label-input]")?.value ?? null,
+                        disabled: snapshotRoot?.querySelector("[data-snapshot-label-input]")?.disabled ?? null,
                     },
                     listenerCounts: Object.fromEntries(
                         Array.from(parameterListeners.entries()).map(([endpointID, listeners]) => [endpointID, listeners.size]),
                     ),
                     storedStateListenerCount: storedStateListeners.size,
-                    slotStates: Array.from(root?.querySelectorAll(".snapshot-slot") ?? []).map((slot) => ({
+                    slotStates: Array.from(snapshotRoot?.querySelectorAll(".snapshot-slot") ?? []).map((slot) => ({
                         slot: slot.dataset.slot,
                         className: slot.className,
                         value: slot.value,
                     })),
-                    pasteBoxOpen: Boolean(root?.querySelector("[data-snapshot-paste-text]")),
+                    pasteBoxOpen: Boolean(snapshotRoot?.querySelector("[data-snapshot-paste-text]")),
+                    headerPresent: header instanceof HTMLElement,
+                    presetBarPresent: presetBar instanceof HTMLElement,
+                    snapshotBarPresent: snapshotBar instanceof HTMLElement,
                 };
             },
         };
@@ -364,7 +418,9 @@ async function openOttLabPage({
         shouldDelayStoredStateRequests: delayStoredStateRequests,
         shouldDelayStoredStateValueRequests: delayStoredStateValueRequests,
         shouldOmitActiveSlotFromFullStoredState: omitActiveSlotFromFullStoredState,
+        shouldOmitSnapshotBankFromFullStoredState: omitSnapshotBankFromFullStoredState,
         activeSlotStateKey: ACTIVE_SNAPSHOT_SLOT_STATE_KEY,
+        snapshotBankStateKey: SNAPSHOT_BANK_STATE_KEY,
         storageKey: SNAPSHOT_STORAGE_KEY,
     });
     await page.evaluate(() => window.__OTT_LAB_VIEW_HARNESS__.mount());
@@ -382,9 +438,27 @@ async function waitForOttLabListeners(page) {
     });
 }
 
+async function reconnectSameOttElement(page) {
+    await page.evaluate(async () => {
+        const mountPoint = document.getElementById("mount");
+        const view = document.querySelector("cosimo-ott-lab-view");
+
+        if (!(mountPoint instanceof HTMLElement) || !(view instanceof HTMLElement))
+            throw new Error("OTT lab view is not mounted.");
+
+        mountPoint.replaceChildren();
+        await new Promise((resolve) => window.setTimeout(resolve, 0));
+        mountPoint.appendChild(view);
+        await new Promise((resolve) => window.setTimeout(resolve, 0));
+    });
+}
+
 async function clickSnapshotSlot(page, slotID) {
     await page.locator("cosimo-ott-lab-view").evaluate(({ shadowRoot }, nextSlotID) => {
-        const button = shadowRoot.querySelector(`.snapshot-slot[data-slot="${nextSlotID}"]`);
+        const button = shadowRoot
+            .querySelector("cosimo-effect-header")
+            ?.shadowRoot?.querySelector("cosimo-snapshot-bar")
+            ?.shadowRoot?.querySelector(`.snapshot-slot[data-slot="${nextSlotID}"]`);
 
         if (!(button instanceof HTMLInputElement))
             throw new Error(`Missing snapshot slot ${nextSlotID}.`);
@@ -395,7 +469,10 @@ async function clickSnapshotSlot(page, slotID) {
 
 async function pressSnapshotShortcut(page, slotID, key) {
     await page.locator("cosimo-ott-lab-view").evaluate(({ shadowRoot }, { nextSlotID, nextKey }) => {
-        const button = shadowRoot.querySelector(`.snapshot-slot[data-slot="${nextSlotID}"]`);
+        const button = shadowRoot
+            .querySelector("cosimo-effect-header")
+            ?.shadowRoot?.querySelector("cosimo-snapshot-bar")
+            ?.shadowRoot?.querySelector(`.snapshot-slot[data-slot="${nextSlotID}"]`);
 
         if (!(button instanceof HTMLInputElement))
             throw new Error(`Missing snapshot slot ${nextSlotID}.`);
@@ -412,7 +489,10 @@ async function pressSnapshotShortcut(page, slotID, key) {
 
 async function copySnapshotEvent(page, slotID) {
     return await page.locator("cosimo-ott-lab-view").evaluate(({ shadowRoot }, nextSlotID) => {
-        const input = shadowRoot.querySelector(`.snapshot-slot[data-slot="${nextSlotID}"]`);
+        const input = shadowRoot
+            .querySelector("cosimo-effect-header")
+            ?.shadowRoot?.querySelector("cosimo-snapshot-bar")
+            ?.shadowRoot?.querySelector(`.snapshot-slot[data-slot="${nextSlotID}"]`);
 
         if (!(input instanceof HTMLInputElement))
             throw new Error(`Missing snapshot slot ${nextSlotID}.`);
@@ -426,7 +506,10 @@ async function copySnapshotEvent(page, slotID) {
 
 async function pasteSnapshotEvent(page, slotID, snapshotText) {
     await page.locator("cosimo-ott-lab-view").evaluate(({ shadowRoot }, { nextSlotID, nextSnapshotText }) => {
-        const button = shadowRoot.querySelector(`.snapshot-slot[data-slot="${nextSlotID}"]`);
+        const button = shadowRoot
+            .querySelector("cosimo-effect-header")
+            ?.shadowRoot?.querySelector("cosimo-snapshot-bar")
+            ?.shadowRoot?.querySelector(`.snapshot-slot[data-slot="${nextSlotID}"]`);
 
         if (!(button instanceof HTMLInputElement))
             throw new Error(`Missing snapshot slot ${nextSlotID}.`);
@@ -440,7 +523,10 @@ async function pasteSnapshotEvent(page, slotID, snapshotText) {
 
 async function setSnapshotLabel(page, label) {
     await page.locator("cosimo-ott-lab-view").evaluate(({ shadowRoot }, nextLabel) => {
-        const input = shadowRoot.querySelector("[data-snapshot-label-input]");
+        const input = shadowRoot
+            .querySelector("cosimo-effect-header")
+            ?.shadowRoot?.querySelector("cosimo-snapshot-bar")
+            ?.shadowRoot?.querySelector("[data-snapshot-label-input]");
 
         if (!(input instanceof HTMLInputElement))
             throw new Error("Missing snapshot label input.");
@@ -452,7 +538,9 @@ async function setSnapshotLabel(page, label) {
 
 async function applyPresetFromBar(page, presetKey) {
     await page.locator("cosimo-ott-lab-view").evaluate(({ shadowRoot }) => {
-        const presetBar = shadowRoot.querySelector("cosimo-preset-bar");
+        const presetBar = shadowRoot
+            .querySelector("cosimo-effect-header")
+            ?.shadowRoot?.querySelector("cosimo-preset-bar");
         const nameRegion = presetBar?.shadowRoot?.querySelector("[data-action='toggle-flyout']");
 
         if (!(nameRegion instanceof HTMLElement))
@@ -461,11 +549,15 @@ async function applyPresetFromBar(page, presetKey) {
         nameRegion.click();
     });
     await page.waitForFunction((nextPresetKey) => {
-        const presetBar = document.querySelector("cosimo-ott-lab-view")?.shadowRoot?.querySelector("cosimo-preset-bar");
+        const presetBar = document.querySelector("cosimo-ott-lab-view")
+            ?.shadowRoot?.querySelector("cosimo-effect-header")
+            ?.shadowRoot?.querySelector("cosimo-preset-bar");
         return presetBar?.shadowRoot?.querySelector(`[data-preset-key="${nextPresetKey}"]`) instanceof HTMLElement;
     }, presetKey);
     await page.locator("cosimo-ott-lab-view").evaluate(({ shadowRoot }, nextPresetKey) => {
-        const presetBar = shadowRoot.querySelector("cosimo-preset-bar");
+        const presetBar = shadowRoot
+            .querySelector("cosimo-effect-header")
+            ?.shadowRoot?.querySelector("cosimo-preset-bar");
         const presetItem = presetBar.shadowRoot.querySelector(`[data-preset-key="${nextPresetKey}"]`);
 
         if (!(presetItem instanceof HTMLElement))
@@ -515,6 +607,30 @@ test("OTT lab snapshot slots are compact single-input tabs", async () => {
     }
 });
 
+test("OTT lab snapshot feedback renders as a fixed toast instead of inline toolbar text", async () => {
+    const page = await openOttLabPage();
+
+    try {
+        await clickSnapshotSlot(page, "C");
+        const snapshot = await waitForHarnessMessage(page, "Active C.");
+
+        assert.equal(snapshot.message, "Active C.");
+        assert.equal(snapshot.messageVisible, true);
+        assert.equal(snapshot.messagePosition, "absolute");
+        assert.deepEqual(snapshot.messageRect, {
+            width: 1,
+            height: 1,
+        });
+        assert.equal(snapshot.toastText, "Active C.");
+        assert.equal(snapshot.toastVisible, true);
+        assert.equal(snapshot.toastHostPosition, "fixed");
+        assert.ok(snapshot.toastRect.width > 40, "snapshot toast should have visible width");
+        assert.ok(snapshot.toastRect.height > 20, "snapshot toast should have visible height");
+    } finally {
+        await page.close();
+    }
+});
+
 test("OTT lab preset browser does not trap page wheel scrolling after the top bar scrolls away", async () => {
     const page = await openOttLabPage();
 
@@ -522,7 +638,9 @@ test("OTT lab preset browser does not trap page wheel scrolling after the top ba
         await page.setViewportSize({ width: 980, height: 360 });
         await page.evaluate(() => window.scrollTo(0, 0));
         await page.locator("cosimo-ott-lab-view").evaluate(({ shadowRoot }) => {
-            const presetBar = shadowRoot.querySelector("cosimo-preset-bar");
+            const presetBar = shadowRoot
+                .querySelector("cosimo-effect-header")
+                ?.shadowRoot?.querySelector("cosimo-preset-bar");
             const nameRegion = presetBar?.shadowRoot?.querySelector(".name-region");
 
             if (!(nameRegion instanceof HTMLElement)) {
@@ -532,7 +650,9 @@ test("OTT lab preset browser does not trap page wheel scrolling after the top ba
             nameRegion.click();
         });
         await page.waitForFunction(() => {
-            const presetBar = document.querySelector("cosimo-ott-lab-view")?.shadowRoot?.querySelector("cosimo-preset-bar");
+            const presetBar = document.querySelector("cosimo-ott-lab-view")
+                ?.shadowRoot?.querySelector("cosimo-effect-header")
+                ?.shadowRoot?.querySelector("cosimo-preset-bar");
             return presetBar?.shadowRoot?.querySelector(".flyout")?.classList.contains("open") === true;
         });
 
@@ -541,13 +661,17 @@ test("OTT lab preset browser does not trap page wheel scrolling after the top ba
         await page.mouse.move(520, 320);
         await page.mouse.wheel(0, -180);
         await page.waitForFunction(() => {
-            const presetBar = document.querySelector("cosimo-ott-lab-view")?.shadowRoot?.querySelector("cosimo-preset-bar");
+            const presetBar = document.querySelector("cosimo-ott-lab-view")
+                ?.shadowRoot?.querySelector("cosimo-effect-header")
+                ?.shadowRoot?.querySelector("cosimo-preset-bar");
             return window.scrollY < 260
                 && presetBar?.shadowRoot?.querySelector(".flyout")?.classList.contains("open") === false;
         });
 
         const metrics = await page.evaluate(() => {
-            const presetBar = document.querySelector("cosimo-ott-lab-view")?.shadowRoot?.querySelector("cosimo-preset-bar");
+            const presetBar = document.querySelector("cosimo-ott-lab-view")
+                ?.shadowRoot?.querySelector("cosimo-effect-header")
+                ?.shadowRoot?.querySelector("cosimo-preset-bar");
             return {
                 scrollY: window.scrollY,
                 flyoutOpen: presetBar?.shadowRoot?.querySelector(".flyout")?.classList.contains("open") ?? null,
@@ -624,7 +748,7 @@ test("OTT lab restores the active snapshot highlight after the UI remounts", asy
         let snapshot = await getHarnessSnapshot(page);
 
         assert.equal(snapshot.activeSlot, "A");
-        assert.equal(snapshot.storedState[ACTIVE_SNAPSHOT_SLOT_STATE_KEY], "A");
+        assert.equal(snapshot.storedState[SNAPSHOT_BANK_STATE_KEY].activeSlotID, "A");
         assert.deepEqual(snapshot.labelInput, {
             value: "",
             disabled: false,
@@ -637,7 +761,7 @@ test("OTT lab restores the active snapshot highlight after the UI remounts", asy
         snapshot = await getHarnessSnapshot(page);
 
         assert.equal(snapshot.activeSlot, "A");
-        assert.equal(snapshot.storedState[ACTIVE_SNAPSHOT_SLOT_STATE_KEY], "A");
+        assert.equal(snapshot.storedState[SNAPSHOT_BANK_STATE_KEY].activeSlotID, "A");
         assert.deepEqual(snapshot.store.slots.A.parameters, INITIAL_SNAPSHOT_PARAMETERS);
         assert.deepEqual(snapshot.labelInput, {
             value: "",
@@ -648,9 +772,35 @@ test("OTT lab restores the active snapshot highlight after the UI remounts", asy
     }
 });
 
-test("OTT lab ignores stale boot active-slot state after the user selects a new slot", async () => {
+test("OTT lab restores the shared header and listeners when the same element reconnects", async () => {
+    const page = await openOttLabPage();
+
+    try {
+        await clickSnapshotSlot(page, "A");
+        await reconnectSameOttElement(page);
+        await waitForOttLabListeners(page);
+        await page.waitForFunction(() => window.__OTT_LAB_VIEW_HARNESS__?.getSnapshot?.().activeSlot === "A");
+
+        await page.evaluate(() => window.__OTT_LAB_VIEW_HARNESS__.setParameterValue("ottMix", 42));
+        const snapshot = await getHarnessSnapshot(page);
+
+        assert.equal(snapshot.headerPresent, true);
+        assert.equal(snapshot.presetBarPresent, true);
+        assert.equal(snapshot.snapshotBarPresent, true);
+        assert.equal(snapshot.activeSlot, "A");
+        assert.equal(snapshot.labelInput.disabled, false);
+        assert.equal(snapshot.listenerCounts.ottMix >= 1, true);
+        assert.equal(snapshot.store.slots.A.parameters.ottMix, 42);
+    } finally {
+        await page.close();
+    }
+});
+
+test("OTT lab ignores stale boot snapshot-bank state after the user selects a new slot", async () => {
     const page = await openOttLabPage({
-        initialStoredState: { [ACTIVE_SNAPSHOT_SLOT_STATE_KEY]: "A" },
+        initialStoredState: {
+            [SNAPSHOT_BANK_STATE_KEY]: createSnapshotBank({ A: createSnapshotSlot("A") }, "A"),
+        },
         delayStoredStateRequests: true,
     });
 
@@ -659,24 +809,26 @@ test("OTT lab ignores stale boot active-slot state after the user selects a new 
         let snapshot = await getHarnessSnapshot(page);
 
         assert.equal(snapshot.activeSlot, "B");
-        assert.equal(snapshot.storedState[ACTIVE_SNAPSHOT_SLOT_STATE_KEY], "B");
+        assert.equal(snapshot.storedState[SNAPSHOT_BANK_STATE_KEY].activeSlotID, "B");
 
         await page.evaluate(() => window.__OTT_LAB_VIEW_HARNESS__.flushStoredStateRequests());
         snapshot = await getHarnessSnapshot(page);
 
         assert.equal(snapshot.activeSlot, "B");
-        assert.equal(snapshot.storedState[ACTIVE_SNAPSHOT_SLOT_STATE_KEY], "B");
+        assert.equal(snapshot.storedState[SNAPSHOT_BANK_STATE_KEY].activeSlotID, "B");
         assert.deepEqual(snapshot.store.slots.B.parameters, INITIAL_SNAPSHOT_PARAMETERS);
     } finally {
         await page.close();
     }
 });
 
-test("OTT lab ignores stale fallback active-slot state after the user selects a new slot", async () => {
+test("OTT lab ignores stale fallback snapshot-bank state after the user selects a new slot", async () => {
     const page = await openOttLabPage({
-        initialStoredState: { [ACTIVE_SNAPSHOT_SLOT_STATE_KEY]: "A" },
+        initialStoredState: {
+            [SNAPSHOT_BANK_STATE_KEY]: createSnapshotBank({ A: createSnapshotSlot("A") }, "A"),
+        },
         delayStoredStateValueRequests: true,
-        omitActiveSlotFromFullStoredState: true,
+        omitSnapshotBankFromFullStoredState: true,
     });
 
     try {
@@ -684,13 +836,13 @@ test("OTT lab ignores stale fallback active-slot state after the user selects a 
         let snapshot = await getHarnessSnapshot(page);
 
         assert.equal(snapshot.activeSlot, "B");
-        assert.equal(snapshot.storedState[ACTIVE_SNAPSHOT_SLOT_STATE_KEY], "B");
+        assert.equal(snapshot.storedState[SNAPSHOT_BANK_STATE_KEY].activeSlotID, "B");
 
         await page.evaluate(() => window.__OTT_LAB_VIEW_HARNESS__.flushStoredStateValueRequests());
         snapshot = await getHarnessSnapshot(page);
 
         assert.equal(snapshot.activeSlot, "B");
-        assert.equal(snapshot.storedState[ACTIVE_SNAPSHOT_SLOT_STATE_KEY], "B");
+        assert.equal(snapshot.storedState[SNAPSHOT_BANK_STATE_KEY].activeSlotID, "B");
         assert.deepEqual(snapshot.store.slots.B.parameters, INITIAL_SNAPSHOT_PARAMETERS);
     } finally {
         await page.close();
@@ -813,7 +965,7 @@ test("OTT lab writes loaded preset values into the active snapshot slot", async 
             value,
         })));
         assert.deepEqual(snapshot.store.slots.A.parameters, envelopeTamedParameters);
-        assert.equal(snapshot.storedState[ACTIVE_SNAPSHOT_SLOT_STATE_KEY], "A");
+        assert.equal(snapshot.storedState[SNAPSHOT_BANK_STATE_KEY].activeSlotID, "A");
     } finally {
         await page.close();
     }
@@ -936,8 +1088,12 @@ test("OTT lab paste shortcut opens a manual paste box when clipboard reads are u
         assert.match(snapshot.message, /Clipboard read was blocked/);
 
         await page.locator("cosimo-ott-lab-view").evaluate(({ shadowRoot }, snapshotText) => {
-            const textarea = shadowRoot.querySelector("[data-snapshot-paste-text]");
-            const form = shadowRoot.querySelector("[data-snapshot-paste-form]");
+            const snapshotRoot = shadowRoot
+                .querySelector("cosimo-effect-header")
+                ?.shadowRoot?.querySelector("cosimo-snapshot-bar")
+                ?.shadowRoot;
+            const textarea = snapshotRoot?.querySelector("[data-snapshot-paste-text]");
+            const form = snapshotRoot?.querySelector("[data-snapshot-paste-form]");
 
             if (!(textarea instanceof HTMLTextAreaElement) || !(form instanceof HTMLFormElement))
                 throw new Error("Manual paste form did not open.");
@@ -955,6 +1111,95 @@ test("OTT lab paste shortcut opens a manual paste box when clipboard reads are u
             value,
         })));
         assert.match(snapshot.message, /Pasted into E/);
+    } finally {
+        await page.close();
+    }
+});
+
+test("snapshot bar manual paste treats custom slot ids as text instead of markup", async () => {
+    const page = await openOttLabPage();
+    const unsafeSlotID = `"><img src=x onerror="window.__SNAPSHOT_SLOT_XSS__=true">`;
+
+    try {
+        const result = await page.evaluate(async (slotID) => {
+            const bar = document.createElement("cosimo-snapshot-bar");
+            const state = {
+                kind: "cosimo.effectSnapshotBank",
+                version: 1,
+                effectID: "unit",
+                activeSlotID: null,
+                slots: { [slotID]: null },
+                slotIDs: [slotID],
+                ready: true,
+                currentContract: null,
+                currentValues: {},
+                lastMessage: null,
+                lastError: null,
+            };
+            const mutations = {
+                selectSlot() {
+                    return { ok: true, value: null, message: "" };
+                },
+                updateActiveSlotLabel() {
+                    return { ok: true, value: null, message: "" };
+                },
+                updateActiveSlotFromPreset() {
+                    return { ok: true, value: null, message: "" };
+                },
+                exportSnapshotText() {
+                    return { ok: false, message: "empty" };
+                },
+                importSnapshotText() {
+                    return { ok: false, message: "invalid" };
+                },
+                async copySnapshotToClipboard() {
+                    return { ok: false, message: "empty" };
+                },
+                async pasteSnapshotFromClipboard() {
+                    return { ok: false, message: "Clipboard read API is unavailable." };
+                },
+                clearLastMessage() {},
+            };
+
+            bar.controller = {
+                getMutations() {
+                    return mutations;
+                },
+                getState() {
+                    return state;
+                },
+                subscribe(listener) {
+                    listener(state);
+                    return () => {};
+                },
+            };
+            document.body.appendChild(bar);
+            const input = bar.shadowRoot.querySelector("[data-slot]");
+
+            if (!(input instanceof HTMLInputElement))
+                throw new Error("Snapshot slot input was not rendered.");
+
+            input.focus();
+            input.dispatchEvent(new KeyboardEvent("keydown", {
+                key: "v",
+                metaKey: true,
+                bubbles: true,
+                composed: true,
+            }));
+
+            await new Promise((resolve) => window.setTimeout(resolve, 120));
+            const pasteLabel = bar.shadowRoot.querySelector("[data-snapshot-paste-form] label");
+
+            return {
+                imageCount: bar.shadowRoot.querySelectorAll("img").length,
+                scriptRan: window.__SNAPSHOT_SLOT_XSS__ === true,
+                labelText: pasteLabel?.textContent ?? "",
+            };
+        }, unsafeSlotID);
+
+        assert.equal(result.imageCount, 0);
+        assert.equal(result.scriptRan, false);
+        assert.equal(result.labelText.includes(unsafeSlotID), true);
     } finally {
         await page.close();
     }

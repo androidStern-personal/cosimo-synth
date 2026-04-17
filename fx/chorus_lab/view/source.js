@@ -1,4 +1,5 @@
-import { createPresetBar } from "../../../ui/shared/effects/preset-bar.ts";
+import { createEffectHeader } from "../../../ui/shared/effects/effect-header.ts";
+import { EffectSnapshotBankController } from "../../../ui/shared/effects/effect-snapshot-bank.ts";
 import { createStandaloneEffectPresetController } from "../../../ui/shared/effects/standalone-effect-presets.ts";
 
 class ChorusLabView extends HTMLElement {
@@ -14,16 +15,24 @@ class ChorusLabView extends HTMLElement {
       effectID: "chorus",
       patchConnection,
     });
-    this.presetBar = createPresetBar();
-    this.presetBar.controller = this.presetController;
+    this.snapshotController = new EffectSnapshotBankController({
+      effectID: "chorus",
+      patchConnection,
+    });
+    this.effectHeader = createEffectHeader();
+    this.effectHeader.presetController = this.presetController;
+    this.effectHeader.snapshotController = this.snapshotController;
 
     this.attachShadow({ mode: "open" });
     this.shadowRoot.innerHTML = this.getMarkup();
-    this.shadowRoot.querySelector(".frame").before(this.presetBar);
+    this.shadowRoot.querySelector(".frame").before(this.effectHeader);
     this.groupsHost = this.shadowRoot.querySelector("[data-groups]");
   }
 
   connectedCallback() {
+    this.effectHeader.presetController = this.presetController;
+    this.effectHeader.snapshotController = this.snapshotController;
+    this.snapshotController.attach();
     this.presetController.attach();
     this.statusListener = status => this.renderFromStatus(status);
     this.patchConnection.addStatusListener(this.statusListener);
@@ -31,8 +40,10 @@ class ChorusLabView extends HTMLElement {
   }
 
   disconnectedCallback() {
+    this.snapshotController.detach();
     this.presetController.detach();
-    this.presetBar.controller = null;
+    this.effectHeader.presetController = null;
+    this.effectHeader.snapshotController = null;
     this.cancelStartupSeedProbe();
 
     if (this.statusListener)

@@ -127,5 +127,8 @@ export function createSeqFxPresetStateAdapter({
             assertSeqFxStateValuesInRange(parsed);
             bridge.replaceStateFromPreset(normalizeSeqFxState(parsed));
         },
+        subscribe(listener: () => void) {
+            return bridge.subscribe(() => listener());
+        },
     };
 }

@@ -9,10 +9,30 @@ class SeqFxHarnessPatchConnection {
         patternSelect: 0,
         rate: 1,
     };
+    status = {
+        details: {
+            inputs: [],
+        },
+    };
 
+    private statusListeners = new Set<Listener>();
     private storedStateListeners = new Set<Listener>();
     private parameterListeners = new Map<string, Set<Listener>>();
     private endpointListeners = new Map<string, Set<Listener>>();
+
+    addStatusListener(listener: Listener) {
+        this.statusListeners.add(listener);
+    }
+
+    removeStatusListener(listener: Listener) {
+        this.statusListeners.delete(listener);
+    }
+
+    requestStatusUpdate() {
+        for (const listener of this.statusListeners) {
+            listener(this.status);
+        }
+    }
 
     addStoredStateValueListener(listener: Listener) {
         this.storedStateListeners.add(listener);

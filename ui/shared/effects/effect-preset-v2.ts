@@ -18,6 +18,7 @@ export type EffectStoredStateAdapter<TValue = unknown> = {
     serializeForPreset: (value: TValue) => unknown;
     apply?: (value: TValue) => void;
     getContract?: () => { key: string; schemaVersion: number; required: true };
+    subscribe?: (listener: () => void) => () => void;
 };
 
 export type EffectPresetV2 = {

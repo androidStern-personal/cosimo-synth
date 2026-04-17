@@ -10,6 +10,8 @@ import { chromium } from "playwright";
 const DEV_SERVER_ORIGIN = "http://127.0.0.1:5175";
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const SEQFX_STEP_COUNT = 32;
+const SEQFX_STATE_KEY = "seqfx.v1";
+const SEQFX_SNAPSHOT_BANK_STATE_KEY = "cosimo.effectSnapshotBank.seqfx.v1";
 const SEQFX_NORMAL_GAP_PX = 5;
 const SEQFX_BEAT_GAP_PX = 9;
 const SEQFX_MIN_CELL_SIZE_PX = 22;
@@ -49,8 +51,29 @@ async function getHarnessSnapshot(page) {
     return page.evaluate(() => window.__SEQFX_HARNESS__?.getSnapshot());
 }
 
+function parseSeqFxStoredState(value) {
+    assert.equal(typeof value, "string", "SeqFX stored state should be serialized JSON");
+    return JSON.parse(value);
+}
+
 function patternUploads(snapshot) {
     return snapshot.events.filter((entry) => entry.endpointID === "patternUpload");
+}
+
+function snapshotSlotLocator(page, slotID) {
+    return page.locator("cosimo-effect-header").evaluateHandle((header, nextSlotID) => (
+        header.shadowRoot
+            ?.querySelector("cosimo-snapshot-bar")
+            ?.shadowRoot
+            ?.querySelector(`.snapshot-slot[data-slot="${nextSlotID}"]`)
+    ), slotID);
+}
+
+async function clickSnapshotSlot(page, slotID) {
+    const handle = await snapshotSlotLocator(page, slotID);
+    const element = handle.asElement();
+    assert.ok(element, `expected snapshot slot ${slotID} to exist`);
+    await element.click();
 }
 
 function gapAfterStep(step, cellsPerBeat) {
@@ -318,9 +341,29 @@ async function createLoaderHarness(page) {
                     patternSelect: 0,
                     rate: 1,
                 };
+                this.status = {
+                    details: {
+                        inputs: [],
+                    },
+                };
+                this.statusListeners = new Set();
                 this.storedStateListeners = new Set();
                 this.parameterListeners = new Map();
                 this.endpointListeners = new Map();
+            }
+
+            addStatusListener(listener) {
+                this.statusListeners.add(listener);
+            }
+
+            removeStatusListener(listener) {
+                this.statusListeners.delete(listener);
+            }
+
+            requestStatusUpdate() {
+                for (const listener of this.statusListeners) {
+                    listener(this.status);
+                }
             }
 
             addStoredStateValueListener(listener) {
@@ -594,6 +637,57 @@ test("seqfx_grid_cell_and_inspector_edits_send_complete_pattern_uploads", async 
     assert.ok(uploads.length >= 2);
     assert.equal(uploads.at(-1).value.activeSteps[0][0], true);
     assert.equal(uploads.at(-1).value.params[0][0][1], 330);
+
+    await page.close();
+});
+
+test("seqfx_shared_snapshot_header_captures_updates_and_recalls_grid_state", async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
+    await loadSeqFxHarness(page);
+    await page.locator('[data-role="seqfx-root"]').waitFor();
+    await page.locator("cosimo-effect-header").waitFor();
+    await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
+
+    await clickSnapshotSlot(page, "A");
+    await page.getByRole("button", { name: "Filter step 1", exact: true }).click();
+    await page.getByRole("button", { name: "Filter block 1", exact: true }).waitFor();
+
+    let snapshot = await getHarnessSnapshot(page);
+    let bank = snapshot.storedState[SEQFX_SNAPSHOT_BANK_STATE_KEY];
+    assert.equal(bank.activeSlotID, "A");
+    assert.equal(
+        parseSeqFxStoredState(bank.slots.A.storedState[SEQFX_STATE_KEY]).patterns[0].lanes[0].steps[0].active,
+        true,
+    );
+
+    await clickSnapshotSlot(page, "B");
+    await page.getByRole("button", { name: "Filter block 1", exact: true }).dblclick();
+    await page.getByRole("button", { name: "Filter step 5", exact: true }).click();
+    await page.getByRole("button", { name: "Filter block 5", exact: true }).waitFor();
+    await assert.rejects(
+        page.getByRole("button", { name: "Filter block 1", exact: true }).waitFor({ timeout: 300 }),
+    );
+
+    snapshot = await getHarnessSnapshot(page);
+    bank = snapshot.storedState[SEQFX_SNAPSHOT_BANK_STATE_KEY];
+    const slotBState = parseSeqFxStoredState(bank.slots.B.storedState[SEQFX_STATE_KEY]);
+    assert.equal(bank.activeSlotID, "B");
+    assert.equal(slotBState.patterns[0].lanes[0].steps[0].active, false);
+    assert.equal(slotBState.patterns[0].lanes[0].steps[4].active, true);
+
+    await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
+    await clickSnapshotSlot(page, "A");
+    await page.getByRole("button", { name: "Filter block 1", exact: true }).waitFor();
+    await assert.rejects(
+        page.getByRole("button", { name: "Filter block 5", exact: true }).waitFor({ timeout: 300 }),
+    );
+
+    snapshot = await getHarnessSnapshot(page);
+    const recallUpload = patternUploads(snapshot).at(-1).value;
+    assert.equal(recallUpload.authoritative, true);
+    assert.equal(recallUpload.activeSteps[0][0], true);
+    assert.equal(recallUpload.activeSteps[0][4], false);
+    assert.equal(snapshot.storedState[SEQFX_SNAPSHOT_BANK_STATE_KEY].activeSlotID, "A");
 
     await page.close();
 });
