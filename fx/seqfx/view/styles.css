@@ -31,7 +31,7 @@ select {
 
 .seqfx-topbar {
     display: grid;
-    grid-template-columns: minmax(160px, 1fr) auto auto;
+    grid-template-columns: minmax(160px, 1fr) auto minmax(128px, auto) auto;
     align-items: end;
     gap: 18px;
     margin-bottom: 18px;
@@ -61,11 +61,35 @@ select {
 }
 
 .seqfx-patterns,
+.seqfx-draw-effect,
 .seqfx-transport {
     display: flex;
     flex-wrap: wrap;
     gap: 6px;
     justify-content: flex-end;
+}
+
+.seqfx-draw-effect {
+    display: grid;
+    gap: 5px;
+    justify-content: stretch;
+}
+
+.seqfx-draw-effect span {
+    color: #8bbf9a;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.seqfx-draw-effect select {
+    min-height: 34px;
+    border: 1px solid rgba(238, 242, 239, 0.14);
+    border-radius: 7px;
+    padding: 6px 9px;
+    color: #eef2ef;
+    background: rgba(21, 24, 22, 0.85);
 }
 
 .seqfx-pattern,
@@ -229,10 +253,37 @@ select {
 .seqfx-block-fill {
     position: absolute;
     inset: 1px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     border-radius: 3px;
     background: #8bbf9a;
     box-shadow: inset 0 0 0 1px rgba(21, 24, 22, 0.28);
     transition: background-color 120ms ease, box-shadow 120ms ease, filter 120ms ease;
+}
+
+.seqfx-block-fill span {
+    color: rgba(15, 21, 17, 0.76);
+    font-size: 9px;
+    font-weight: 800;
+    line-height: 1;
+    pointer-events: none;
+}
+
+.seqfx-block[data-effect="1"] .seqfx-block-fill {
+    background: #8bbf9a;
+}
+
+.seqfx-block[data-effect="2"] .seqfx-block-fill {
+    background: #f2d16b;
+}
+
+.seqfx-block[data-effect="3"] .seqfx-block-fill {
+    background: #7fc7d9;
+}
+
+.seqfx-block[data-effect="4"] .seqfx-block-fill {
+    background: #ef8f8a;
 }
 
 .seqfx-block:hover .seqfx-block-fill {
@@ -899,6 +950,7 @@ select {
     }
 
     .seqfx-patterns,
+    .seqfx-draw-effect,
     .seqfx-transport {
         justify-content: flex-start;
     }

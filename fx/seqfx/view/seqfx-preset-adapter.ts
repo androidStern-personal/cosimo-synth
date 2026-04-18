@@ -1,6 +1,7 @@
 import type { PatchConnectionLike } from "../../../ui/shared/cmajor-react";
 import type { EffectStoredStateAdapter } from "../../../ui/shared/effects/effect-preset-v2";
 import {
+    SEQFX_EFFECT_TYPES,
     SEQFX_LANE_COUNT,
     SEQFX_PARAM_COUNT,
     SEQFX_PATTERN_COUNT,
@@ -29,6 +30,13 @@ function assertFiniteNumber(value: unknown, label: string) {
     }
 }
 
+function assertEffectType(value: unknown, label: string) {
+    assertFiniteNumber(value, label);
+    if (!Number.isInteger(value) || value < SEQFX_EFFECT_TYPES.empty || value > SEQFX_EFFECT_TYPES.stutter) {
+        throw new Error(`${label} must be a known SeqFX effect type.`);
+    }
+}
+
 function parseStateCandidate(value: unknown): unknown {
     if (typeof value !== "string") {
         return value;
@@ -42,9 +50,11 @@ function parseStateCandidate(value: unknown): unknown {
 }
 
 function assertStrictSeqFxState(value: unknown): asserts value is SeqFxState {
-    if (!isPlainObject(value) || value.version !== 1 || !Array.isArray(value.patterns)) {
-        throw new Error("SeqFX preset state must contain version 1 patterns.");
+    if (!isPlainObject(value) || (value.version !== 1 && value.version !== 2) || !Array.isArray(value.patterns)) {
+        throw new Error("SeqFX preset state must contain version 1 or version 2 patterns.");
     }
+
+    const requiresEffectType = value.version === 2;
 
     if (value.patterns.length !== SEQFX_PATTERN_COUNT) {
         throw new Error(`SeqFX preset state patterns must contain ${SEQFX_PATTERN_COUNT} patterns.`);
@@ -77,6 +87,14 @@ function assertStrictSeqFxState(value: unknown): asserts value is SeqFxState {
                 assertBoolean(step.trigger, `SeqFX step ${stepIndex} trigger`);
                 assertFiniteNumber(step.mix, `SeqFX step ${stepIndex} mix`);
 
+                if (requiresEffectType) {
+                    if (!Object.prototype.hasOwnProperty.call(step, "effectType")) {
+                        throw new Error(`SeqFX pattern ${patternIndex} lane ${laneIndex} step ${stepIndex} must contain effectType.`);
+                    }
+
+                    assertEffectType(step.effectType, `SeqFX pattern ${patternIndex} lane ${laneIndex} step ${stepIndex} effectType`);
+                }
+
                 if (step.params.length !== SEQFX_PARAM_COUNT) {
                     throw new Error(`SeqFX step ${stepIndex} must contain ${SEQFX_PARAM_COUNT} params.`);
                 }
@@ -98,11 +116,11 @@ export function createSeqFxPresetStateAdapter({
 }): EffectStoredStateAdapter {
     return {
         key: SEQFX_STATE_KEY,
-        schemaVersion: 1,
+        schemaVersion: 2,
         getContract() {
             return {
                 key: SEQFX_STATE_KEY,
-                schemaVersion: 1,
+                schemaVersion: 2,
                 required: true,
             };
         },

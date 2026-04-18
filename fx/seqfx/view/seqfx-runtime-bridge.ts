@@ -1,6 +1,8 @@
 import type { PatchConnectionLike } from "../../../ui/shared/cmajor-react";
 import {
+    SEQFX_LEGACY_STATE_KEY,
     SEQFX_STATE_KEY,
+    applySeqFxBlockEffectEdit,
     applySeqFxBlockCreate,
     applySeqFxBlockCopy,
     applySeqFxBlockCopyPaint,
@@ -27,6 +29,7 @@ import {
     type SeqFxBlockCopyPaintEdit,
     type SeqFxBlockCopyPaintResult,
     type SeqFxBlockDeleteEdit,
+    type SeqFxBlockEffectEdit,
     type SeqFxBlockMixEdit,
     type SeqFxBlockMoveEdit,
     type SeqFxBlockParamEdit,
@@ -67,8 +70,17 @@ function hasOwnStoredStateKey(storedState: unknown): storedState is Record<strin
     return Boolean(
         storedState
         && typeof storedState === "object"
-        && Object.prototype.hasOwnProperty.call(storedState, SEQFX_STATE_KEY),
+        && (
+            Object.prototype.hasOwnProperty.call(storedState, SEQFX_STATE_KEY)
+            || Object.prototype.hasOwnProperty.call(storedState, SEQFX_LEGACY_STATE_KEY)
+        ),
     );
+}
+
+function preferredStoredStateKey(storedState: Record<string, unknown>): typeof SEQFX_STATE_KEY | typeof SEQFX_LEGACY_STATE_KEY {
+    return Object.prototype.hasOwnProperty.call(storedState, SEQFX_STATE_KEY)
+        ? SEQFX_STATE_KEY
+        : SEQFX_LEGACY_STATE_KEY;
 }
 
 function toEchoToken(value: unknown): string {
@@ -120,7 +132,7 @@ export class SeqFxRuntimeBridge {
     private readonly handleStoredStateValue = (message: unknown) => {
         const stored = message as StoredStateMessage;
 
-        if (stored?.key !== SEQFX_STATE_KEY) {
+        if (stored?.key !== SEQFX_STATE_KEY && stored?.key !== SEQFX_LEGACY_STATE_KEY) {
             return;
         }
 
@@ -129,6 +141,11 @@ export class SeqFxRuntimeBridge {
         }
 
         const isBootResponse = this.bootStoredStatePending;
+        if (isBootResponse && stored.key === SEQFX_STATE_KEY && stored.value === undefined && typeof this.patchConnection.requestStoredStateValue === "function") {
+            this.patchConnection.requestStoredStateValue(SEQFX_LEGACY_STATE_KEY);
+            return;
+        }
+
         this.bootStoredStatePending = false;
         this.applyStoredState(stored.value, !isBootResponse);
 
@@ -190,8 +207,9 @@ export class SeqFxRuntimeBridge {
         if (typeof this.patchConnection.requestFullStoredState === "function") {
             this.patchConnection.requestFullStoredState((storedState) => {
                 if (hasOwnStoredStateKey(storedState)) {
+                    const stateKey = preferredStoredStateKey(storedState);
                     this.bootStoredStatePending = false;
-                    this.applyStoredState(storedState[SEQFX_STATE_KEY], false);
+                    this.applyStoredState(storedState[stateKey], false);
                     this.requestRuntimeValuesAfterBootState();
                     return;
                 }
@@ -329,6 +347,10 @@ export class SeqFxRuntimeBridge {
 
     setBlockParam(edit: SeqFxBlockParamEdit) {
         this.commitState(applySeqFxBlockParamEdit(this.state, edit), edit.patternIndex);
+    }
+
+    setBlockEffect(edit: SeqFxBlockEffectEdit) {
+        this.commitState(applySeqFxBlockEffectEdit(this.state, edit), edit.patternIndex);
     }
 
     setBlockSelectionParam(edit: SeqFxBlockSelectionParamEdit) {

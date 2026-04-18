@@ -14,12 +14,14 @@ const {
     SEQFX_PARAM_COUNT,
     SEQFX_PATTERN_COUNT,
     SEQFX_STEP_COUNT,
+    SEQFX_EFFECT_TYPES,
     SEQFX_LANES,
     applySeqFxBlockCreate,
     applySeqFxBlockCopy,
     applySeqFxBlockCopyPaint,
     applySeqFxBlockDelete,
     applySeqFxBlockMove,
+    applySeqFxBlockEffectEdit,
     applySeqFxBlockParamEdit,
     applySeqFxBlockResize,
     applySeqFxBlockSelectionDelete,
@@ -29,6 +31,7 @@ const {
     applySeqFxMixEdit,
     applySeqFxParamEdit,
     applySeqFxStepValuePaste,
+    assertSeqFxStateValuesInRange,
     buildSeqPatternUpload,
     createDefaultSeqFxState,
     getSeqFxStepValueSnapshot,
@@ -36,10 +39,164 @@ const {
     normalizeSeqFxState,
 } = stateModule;
 
+test("default_seqfx_v2_state_contains_four_serial_chains_with_empty_effect_steps", () => {
+    const state = createDefaultSeqFxState();
+
+    assert.equal(stateModule.SEQFX_STATE_KEY, "seqfx.v2");
+    assert.equal(state.version, 2);
+    assert.equal(state.patterns.length, SEQFX_PATTERN_COUNT);
+
+    for (const pattern of state.patterns) {
+        assert.equal(pattern.lanes.length, SEQFX_LANE_COUNT);
+
+        for (const chain of pattern.lanes) {
+            assert.equal(chain.steps.length, SEQFX_STEP_COUNT);
+
+            for (const step of chain.steps) {
+                assert.equal(step.active, false);
+                assert.equal(step.trigger, false);
+                assert.equal(step.effectType, SEQFX_EFFECT_TYPES.empty);
+                assert.equal(step.mix, 1);
+                assert.equal(step.params.length, SEQFX_PARAM_COUNT);
+            }
+        }
+    }
+
+    const upload = buildSeqPatternUpload(state, {
+        patternIndex: 0,
+        authoritative: true,
+    });
+
+    assert.equal(upload.effectTypes.length, SEQFX_LANE_COUNT);
+    assert.equal(upload.effectTypes[0].length, SEQFX_STEP_COUNT);
+    assert.equal(upload.effectTypes[0][0], SEQFX_EFFECT_TYPES.empty);
+});
+
+test("chain_steps_clamp_parameters_by_selected_effect_type_not_chain_index", () => {
+    let state = createDefaultSeqFxState();
+    state = applySeqFxBlockCreate(state, {
+        patternIndex: 0,
+        lane: 1,
+        startStep: 4,
+        length: 2,
+        effectType: SEQFX_EFFECT_TYPES.tapeStop,
+    });
+    state = applySeqFxBlockParamEdit(state, {
+        patternIndex: 0,
+        lane: 1,
+        startStep: 4,
+        paramIndex: 0,
+        value: 0.01,
+    });
+    state = applySeqFxBlockCreate(state, {
+        patternIndex: 0,
+        lane: 2,
+        startStep: 8,
+        length: 1,
+        effectType: SEQFX_EFFECT_TYPES.filter,
+    });
+    state = applySeqFxBlockParamEdit(state, {
+        patternIndex: 0,
+        lane: 2,
+        startStep: 8,
+        paramIndex: 1,
+        value: 4,
+    });
+
+    const upload = buildSeqPatternUpload(state, {
+        patternIndex: 0,
+        authoritative: false,
+    });
+
+    assert.deepEqual(upload.effectTypes[1].slice(4, 6), [
+        SEQFX_EFFECT_TYPES.tapeStop,
+        SEQFX_EFFECT_TYPES.tapeStop,
+    ]);
+    assert.deepEqual(
+        upload.params[1].slice(4, 6).map((params) => params[0]),
+        [0.05, 0.05],
+    );
+    assert.equal(upload.effectTypes[2][8], SEQFX_EFFECT_TYPES.filter);
+    assert.equal(upload.params[2][8][1], 20);
+});
+
+test("changing_a_block_effect_updates_the_whole_block_and_resets_params_to_that_effect_defaults", () => {
+    let state = createDefaultSeqFxState();
+    state = applySeqFxBlockCreate(state, {
+        patternIndex: 0,
+        lane: 1,
+        startStep: 3,
+        length: 3,
+        effectType: SEQFX_EFFECT_TYPES.filter,
+    });
+    state = applySeqFxBlockParamEdit(state, {
+        patternIndex: 0,
+        lane: 1,
+        startStep: 3,
+        paramIndex: 1,
+        value: 320,
+    });
+    state = applySeqFxBlockEffectEdit(state, {
+        patternIndex: 0,
+        lane: 1,
+        startStep: 3,
+        effectType: SEQFX_EFFECT_TYPES.stutter,
+    });
+
+    const upload = buildSeqPatternUpload(state, {
+        patternIndex: 0,
+        authoritative: false,
+    });
+
+    assert.deepEqual(upload.activeSteps[1].slice(3, 6), [true, true, true]);
+    assert.deepEqual(upload.triggerSteps[1].slice(3, 6), [true, false, false]);
+    assert.deepEqual(upload.effectTypes[1].slice(3, 6), [
+        SEQFX_EFFECT_TYPES.stutter,
+        SEQFX_EFFECT_TYPES.stutter,
+        SEQFX_EFFECT_TYPES.stutter,
+    ]);
+    assert.deepEqual(
+        upload.params[1].slice(3, 6).map((params) => params.slice(0, 2)),
+        [[8, 1], [8, 1], [8, 1]],
+    );
+});
+
+test("adjacent_different_effect_steps_are_separate_blocks_even_without_a_second_trigger", () => {
+    const rawState = createDefaultSeqFxState();
+    rawState.patterns[0].lanes[0].steps[0] = {
+        active: true,
+        trigger: true,
+        effectType: SEQFX_EFFECT_TYPES.filter,
+        mix: 1,
+        params: [0, 2000, 500, 0.707, 1, 0, 0, 0],
+    };
+    rawState.patterns[0].lanes[0].steps[1] = {
+        active: true,
+        trigger: false,
+        effectType: SEQFX_EFFECT_TYPES.tapeStop,
+        mix: 1,
+        params: [1, 1, 1, 25, 0, 0, 0, 0],
+    };
+
+    const normalized = normalizeSeqFxState(rawState);
+    const firstBlock = stateModule.getSeqFxBlockAtStep(normalized.patterns[0], 0, 0);
+    const secondBlock = stateModule.getSeqFxBlockAtStep(normalized.patterns[0], 0, 1);
+
+    assert.deepEqual(
+        [firstBlock.startStep, firstBlock.length, firstBlock.effectType],
+        [0, 1, SEQFX_EFFECT_TYPES.filter],
+    );
+    assert.deepEqual(
+        [secondBlock.startStep, secondBlock.length, secondBlock.effectType],
+        [1, 1, SEQFX_EFFECT_TYPES.tapeStop],
+    );
+    assert.equal(normalized.patterns[0].lanes[0].steps[1].trigger, true);
+});
+
 test("default_seqfx_state_contains_twelve_complete_four_lane_patterns", () => {
     const state = createDefaultSeqFxState();
 
-    assert.equal(state.version, 1);
+    assert.equal(state.version, 2);
     assert.equal(state.patterns.length, SEQFX_PATTERN_COUNT);
 
     for (const pattern of state.patterns) {
@@ -676,15 +833,36 @@ test("cell_value_snapshots_paste_mix_and_params_without_changing_block_shape", (
         [2, 5, 8].map((step) => upload.params[SEQFX_LANES.crusher][step].slice(0, 3)),
         [[5, 7, 12], [5, 7, 12], [5, 7, 12]],
     );
-    assert.throws(
-        () => applySeqFxStepValuePaste(state, {
-            patternIndex: 0,
-            lane: SEQFX_LANES.filter,
-            steps: [1],
-            values: copiedValues,
-        }),
-        /same lane/i,
-    );
+    let crossChainState = applySeqFxBlockCreate(state, {
+        patternIndex: 0,
+        lane: SEQFX_LANES.filter,
+        startStep: 1,
+        length: 1,
+        effectType: SEQFX_EFFECT_TYPES.filter,
+    });
+    const crossChainPaste = applySeqFxStepValuePaste(crossChainState, {
+        patternIndex: 0,
+        lane: SEQFX_LANES.filter,
+        steps: [1],
+        values: copiedValues,
+    });
+    const crossChainUpload = buildSeqPatternUpload(crossChainPaste, {
+        patternIndex: 0,
+        authoritative: false,
+    });
+    assert.equal(crossChainUpload.effectTypes[SEQFX_LANES.filter][1], SEQFX_EFFECT_TYPES.crusher);
+    assert.deepEqual(crossChainUpload.params[SEQFX_LANES.filter][1].slice(0, 3), [5, 7, 12]);
+
+    const inactivePaste = applySeqFxStepValuePaste(createDefaultSeqFxState(), {
+        patternIndex: 0,
+        lane: SEQFX_LANES.filter,
+        steps: [3],
+        values: copiedValues,
+    });
+    const inactiveTarget = inactivePaste.patterns[0].lanes[SEQFX_LANES.filter].steps[3];
+    assert.equal(inactiveTarget.active, false);
+    assert.equal(inactiveTarget.effectType, SEQFX_EFFECT_TYPES.empty);
+    assert.doesNotThrow(() => assertSeqFxStateValuesInRange(inactivePaste));
 });
 
 test("block_selection_edits_deletes_and_moves_active_blocks_only", () => {

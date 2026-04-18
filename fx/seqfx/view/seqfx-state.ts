@@ -9,11 +9,20 @@ import {
     STUTTER_SPEED_MIN,
 } from "./stutter-envelope";
 
-export const SEQFX_STATE_KEY = "seqfx.v1";
+export const SEQFX_LEGACY_STATE_KEY = "seqfx.v1";
+export const SEQFX_STATE_KEY = "seqfx.v2";
 export const SEQFX_STEP_COUNT = 32;
 export const SEQFX_LANE_COUNT = 4;
 export const SEQFX_PATTERN_COUNT = 12;
 export const SEQFX_PARAM_COUNT = 8;
+
+export const SEQFX_EFFECT_TYPES = {
+    empty: 0,
+    filter: 1,
+    crusher: 2,
+    tapeStop: 3,
+    stutter: 4,
+} as const;
 
 export const SEQFX_LANES = {
     filter: 0,
@@ -23,17 +32,35 @@ export const SEQFX_LANES = {
 } as const;
 
 export const SEQFX_LANE_NAMES = [
-    "Filter",
-    "Crusher",
-    "Tape Stop",
-    "Stutter",
+    "Chain 1",
+    "Chain 2",
+    "Chain 3",
+    "Chain 4",
 ] as const;
 
+export const SEQFX_EFFECT_TYPE_NAMES = {
+    [SEQFX_EFFECT_TYPES.empty]: "Empty",
+    [SEQFX_EFFECT_TYPES.filter]: "Filter",
+    [SEQFX_EFFECT_TYPES.crusher]: "Crusher",
+    [SEQFX_EFFECT_TYPES.tapeStop]: "Tape Stop",
+    [SEQFX_EFFECT_TYPES.stutter]: "Stutter",
+} as const;
+
+export const SEQFX_EFFECT_TYPE_SHORT_NAMES = {
+    [SEQFX_EFFECT_TYPES.empty]: "",
+    [SEQFX_EFFECT_TYPES.filter]: "FLT",
+    [SEQFX_EFFECT_TYPES.crusher]: "CRSH",
+    [SEQFX_EFFECT_TYPES.tapeStop]: "TAPE",
+    [SEQFX_EFFECT_TYPES.stutter]: "STUT",
+} as const;
+
 export type SeqFxLaneIndex = typeof SEQFX_LANES[keyof typeof SEQFX_LANES];
+export type SeqFxEffectType = typeof SEQFX_EFFECT_TYPES[keyof typeof SEQFX_EFFECT_TYPES];
 
 export type SeqFxStep = {
     active: boolean;
     trigger: boolean;
+    effectType: SeqFxEffectType;
     mix: number;
     params: number[];
 };
@@ -48,7 +75,7 @@ export type SeqFxPattern = {
 };
 
 export type SeqFxState = {
-    version: 1;
+    version: 2;
     patterns: SeqFxPattern[];
 };
 
@@ -58,6 +85,7 @@ export type SeqPatternUpload = {
     authoritative: boolean;
     activeSteps: boolean[][];
     triggerSteps: boolean[][];
+    effectTypes: number[][];
     mix: number[][];
     params: number[][][];
 };
@@ -73,6 +101,7 @@ export type SeqFxBlock = {
     startStep: number;
     length: number;
     endStep: number;
+    effectType: SeqFxEffectType;
 };
 
 export type SeqFxBlockEditTarget = {
@@ -83,6 +112,7 @@ export type SeqFxBlockEditTarget = {
 
 export type SeqFxBlockCreateEdit = SeqFxBlockEditTarget & {
     length: number;
+    effectType?: number;
 };
 
 export type SeqFxBlockResizeEdit = SeqFxBlockEditTarget & {
@@ -138,6 +168,10 @@ export type SeqFxBlockParamEdit = SeqFxBlockEditTarget & {
     value: number;
 };
 
+export type SeqFxBlockEffectEdit = SeqFxBlockEditTarget & {
+    effectType: number;
+};
+
 export type SeqFxBlockMixEdit = SeqFxBlockEditTarget & {
     value: number;
 };
@@ -160,6 +194,7 @@ export type SeqFxMixEdit = SeqFxEditTarget & {
 
 export type SeqFxStepValueSnapshot = {
     lane: number;
+    effectType: SeqFxEffectType;
     mix: number;
     params: number[];
 };
@@ -174,7 +209,8 @@ export type SeqFxStepValuePasteEdit = SeqFxEditTarget & {
     values: SeqFxStepValueSnapshot;
 };
 
-const DEFAULT_LANE_PARAMS: number[][] = [
+const DEFAULT_EFFECT_PARAMS: number[][] = [
+    [0, 0, 0, 0, 0, 0, 0, 0],
     [0, 2_000, 500, 0.707, 1, 0, 0, 0],
     [8, 1, 0, 0, 0, 0, 0, 0],
     [1, 1, 1, 25, 0, 0, 0, 0],
@@ -182,6 +218,16 @@ const DEFAULT_LANE_PARAMS: number[][] = [
 ];
 
 const PARAM_LIMITS: Array<Array<[number, number]>> = [
+    [
+        [0, 0],
+        [0, 0],
+        [0, 0],
+        [0, 0],
+        [0, 0],
+        [0, 0],
+        [0, 0],
+        [0, 0],
+    ],
     [
         [0, 2],
         [20, 20_000],
@@ -225,17 +271,17 @@ const PARAM_LIMITS: Array<Array<[number, number]>> = [
 ];
 
 const INTEGER_PARAMS = new Set([
-    `${SEQFX_LANES.filter}:0`,
-    `${SEQFX_LANES.crusher}:0`,
-    `${SEQFX_LANES.crusher}:1`,
-    `${SEQFX_LANES.tapeStop}:4`,
-    `${SEQFX_LANES.stutter}:0`,
+    `${SEQFX_EFFECT_TYPES.filter}:0`,
+    `${SEQFX_EFFECT_TYPES.crusher}:0`,
+    `${SEQFX_EFFECT_TYPES.crusher}:1`,
+    `${SEQFX_EFFECT_TYPES.tapeStop}:4`,
+    `${SEQFX_EFFECT_TYPES.stutter}:0`,
 ]);
 
 const TRIGGER_LATCHED_PARAMS = new Set([
-    `${SEQFX_LANES.tapeStop}:0`,
-    `${SEQFX_LANES.tapeStop}:4`,
-    `${SEQFX_LANES.stutter}:0`,
+    `${SEQFX_EFFECT_TYPES.tapeStop}:0`,
+    `${SEQFX_EFFECT_TYPES.tapeStop}:4`,
+    `${SEQFX_EFFECT_TYPES.stutter}:0`,
 ]);
 
 function clamp(value: number, min: number, max: number): number {
@@ -255,15 +301,44 @@ function clampIndex(value: number, maxExclusive: number, label: string): number 
     return index;
 }
 
-function normalizeParam(lane: number, paramIndex: number, value: number): number {
-    if (lane === SEQFX_LANES.tapeStop && paramIndex === 2 && Number(value) === 0) {
+function defaultEffectTypeForLane(lane: number): SeqFxEffectType {
+    switch (lane) {
+        case SEQFX_LANES.filter:
+            return SEQFX_EFFECT_TYPES.filter;
+        case SEQFX_LANES.crusher:
+            return SEQFX_EFFECT_TYPES.crusher;
+        case SEQFX_LANES.tapeStop:
+            return SEQFX_EFFECT_TYPES.tapeStop;
+        case SEQFX_LANES.stutter:
+            return SEQFX_EFFECT_TYPES.stutter;
+        default:
+            return SEQFX_EFFECT_TYPES.filter;
+    }
+}
+
+function normalizeEffectType(value: number, fallback: SeqFxEffectType = SEQFX_EFFECT_TYPES.filter): SeqFxEffectType {
+    const rounded = Math.round(Number(value));
+    if (rounded >= SEQFX_EFFECT_TYPES.empty && rounded <= SEQFX_EFFECT_TYPES.stutter) {
+        return rounded as SeqFxEffectType;
+    }
+
+    return fallback;
+}
+
+function defaultParamsForEffect(effectType: number): number[] {
+    const resolved = normalizeEffectType(effectType, SEQFX_EFFECT_TYPES.empty);
+    return [...(DEFAULT_EFFECT_PARAMS[resolved] ?? DEFAULT_EFFECT_PARAMS[SEQFX_EFFECT_TYPES.empty])];
+}
+
+function normalizeParam(effectType: number, paramIndex: number, value: number): number {
+    if (effectType === SEQFX_EFFECT_TYPES.tapeStop && paramIndex === 2 && Number(value) === 0) {
         return 1;
     }
 
-    const limits = PARAM_LIMITS[lane]?.[paramIndex] ?? [0, 0];
+    const limits = PARAM_LIMITS[effectType]?.[paramIndex] ?? [0, 0];
     const clamped = clamp(Number(value), limits[0], limits[1]);
 
-    if (INTEGER_PARAMS.has(`${lane}:${paramIndex}`)) {
+    if (INTEGER_PARAMS.has(`${effectType}:${paramIndex}`)) {
         return Math.round(clamped);
     }
 
@@ -292,15 +367,34 @@ export function assertSeqFxStateValuesInRange(state: SeqFxState) {
 
         pattern.lanes.forEach((lane, laneIndex) => {
             lane.steps.forEach((step, stepIndex) => {
+                const hasEffectType = Object.prototype.hasOwnProperty.call(step, "effectType");
+                const fallbackEffectType = defaultEffectTypeForLane(laneIndex);
+                const activeEffectType = step.active
+                    ? normalizeEffectType(hasEffectType ? step.effectType : fallbackEffectType, fallbackEffectType)
+                    : SEQFX_EFFECT_TYPES.empty;
+
+                if (step.active && activeEffectType === SEQFX_EFFECT_TYPES.empty) {
+                    throw new Error(`SeqFX pattern ${patternIndex} lane ${laneIndex} step ${stepIndex} active step must have an effect type.`);
+                }
+
+                if (!step.active && hasEffectType && step.effectType !== SEQFX_EFFECT_TYPES.empty) {
+                    throw new Error(`SeqFX pattern ${patternIndex} lane ${laneIndex} step ${stepIndex} inactive step must be empty.`);
+                }
+
                 assertInRange(step.mix, 0, 1, `SeqFX pattern ${patternIndex} lane ${laneIndex} step ${stepIndex} mix`);
 
                 step.params.forEach((param, paramIndex) => {
-                    const [min, max] = PARAM_LIMITS[laneIndex]?.[paramIndex] ?? [0, 0];
+                    if (!step.active) {
+                        assertInRange(param, Number.NEGATIVE_INFINITY, Number.POSITIVE_INFINITY, `SeqFX pattern ${patternIndex} lane ${laneIndex} step ${stepIndex} param ${paramIndex}`);
+                        return;
+                    }
+
+                    const [min, max] = PARAM_LIMITS[activeEffectType]?.[paramIndex] ?? [0, 0];
                     const label = `SeqFX pattern ${patternIndex} lane ${laneIndex} step ${stepIndex} param ${paramIndex}`;
 
                     assertInRange(param, min, max, label);
 
-                    if (INTEGER_PARAMS.has(`${laneIndex}:${paramIndex}`) && !Number.isInteger(param)) {
+                    if (INTEGER_PARAMS.has(`${activeEffectType}:${paramIndex}`) && !Number.isInteger(param)) {
                         throw new Error(`${label} must be an integer.`);
                     }
                 });
@@ -310,15 +404,21 @@ export function assertSeqFxStateValuesInRange(state: SeqFxState) {
 }
 
 export function isSeqFxTriggerLatchedParam(lane: number, paramIndex: number): boolean {
-    return TRIGGER_LATCHED_PARAMS.has(`${lane}:${paramIndex}`);
+    return isSeqFxTriggerLatchedParamForEffect(defaultEffectTypeForLane(lane), paramIndex);
+}
+
+export function isSeqFxTriggerLatchedParamForEffect(effectType: number, paramIndex: number): boolean {
+    return TRIGGER_LATCHED_PARAMS.has(`${effectType}:${paramIndex}`);
 }
 
 function createDefaultStep(lane: number): SeqFxStep {
+    const defaultEffectType = defaultEffectTypeForLane(lane);
     return {
         active: false,
         trigger: false,
+        effectType: SEQFX_EFFECT_TYPES.empty,
         mix: 1,
-        params: [...(DEFAULT_LANE_PARAMS[lane] ?? new Array(SEQFX_PARAM_COUNT).fill(0))],
+        params: defaultParamsForEffect(defaultEffectType),
     };
 }
 
@@ -333,20 +433,21 @@ function createDefaultPattern(): SeqFxPattern {
 
 export function createDefaultSeqFxState(): SeqFxState {
     return {
-        version: 1,
+        version: 2,
         patterns: Array.from({ length: SEQFX_PATTERN_COUNT }, () => createDefaultPattern()),
     };
 }
 
 function cloneState(state: SeqFxState): SeqFxState {
     return {
-        version: 1,
+        version: 2,
         patterns: state.patterns.map((pattern) => ({
             revision: pattern.revision,
             lanes: pattern.lanes.map((lane) => ({
                 steps: lane.steps.map((step) => ({
                     active: step.active,
                     trigger: step.trigger,
+                    effectType: step.effectType,
                     mix: step.mix,
                     params: [...step.params],
                 })),
@@ -361,15 +462,57 @@ function normalizeStep(candidate: unknown, lane: number): SeqFxStep {
         ? candidate as Partial<SeqFxStep>
         : {};
     const rawParams = Array.isArray(step.params) ? step.params : [];
+    const rawActive = step.active === true;
+    const fallbackEffectType = defaultEffectTypeForLane(lane);
+    const rawEffectType = Object.prototype.hasOwnProperty.call(step, "effectType")
+        ? Number(step.effectType)
+        : fallbackEffectType;
+    const effectType = rawActive
+        ? normalizeEffectType(rawEffectType, fallbackEffectType)
+        : SEQFX_EFFECT_TYPES.empty;
+    const paramsEffectType = effectType === SEQFX_EFFECT_TYPES.empty
+        ? fallbackEffectType
+        : effectType;
+    const fallbackParams = defaultParamsForEffect(paramsEffectType);
 
     return {
-        active: step.active === true,
-        trigger: step.trigger === true,
+        active: rawActive && effectType !== SEQFX_EFFECT_TYPES.empty,
+        trigger: rawActive && effectType !== SEQFX_EFFECT_TYPES.empty && step.trigger === true,
+        effectType,
         mix: normalizeMix(Number(step.mix ?? fallback.mix)),
         params: Array.from({ length: SEQFX_PARAM_COUNT }, (_unused, paramIndex) => (
-            normalizeParam(lane, paramIndex, Number(rawParams[paramIndex] ?? fallback.params[paramIndex]))
+            normalizeParam(paramsEffectType, paramIndex, Number(rawParams[paramIndex] ?? fallbackParams[paramIndex]))
         )),
     };
+}
+
+function repairPatternBlocks(pattern: SeqFxPattern): SeqFxPattern {
+    for (let laneIndex = 0; laneIndex < pattern.lanes.length; laneIndex += 1) {
+        const lane = pattern.lanes[laneIndex];
+        let previousActive = false;
+        let previousEffectType: SeqFxEffectType = SEQFX_EFFECT_TYPES.empty;
+
+        for (let stepIndex = 0; stepIndex < lane.steps.length; stepIndex += 1) {
+            const step = lane.steps[stepIndex];
+            if (!step.active || step.effectType === SEQFX_EFFECT_TYPES.empty) {
+                step.active = false;
+                step.trigger = false;
+                step.effectType = SEQFX_EFFECT_TYPES.empty;
+                previousActive = false;
+                previousEffectType = SEQFX_EFFECT_TYPES.empty;
+                continue;
+            }
+
+            if (!previousActive || previousEffectType !== step.effectType) {
+                step.trigger = true;
+            }
+
+            previousActive = true;
+            previousEffectType = step.effectType;
+        }
+    }
+
+    return pattern;
 }
 
 function normalizePattern(candidate: unknown): SeqFxPattern {
@@ -378,7 +521,7 @@ function normalizePattern(candidate: unknown): SeqFxPattern {
         : {};
     const rawLanes = Array.isArray(pattern.lanes) ? pattern.lanes : [];
 
-    return {
+    return repairPatternBlocks({
         revision: Math.max(1, Math.trunc(Number(pattern.revision ?? 1)) || 1),
         lanes: Array.from({ length: SEQFX_LANE_COUNT }, (_unused, lane) => {
             const rawLane = rawLanes[lane];
@@ -392,7 +535,7 @@ function normalizePattern(candidate: unknown): SeqFxPattern {
                 )),
             };
         }),
-    };
+    });
 }
 
 export function normalizeSeqFxState(candidate: unknown): SeqFxState {
@@ -410,7 +553,7 @@ export function normalizeSeqFxState(candidate: unknown): SeqFxState {
     const rawPatterns = Array.isArray(rawState.patterns) ? rawState.patterns : [];
 
     return {
-        version: 1,
+        version: 2,
         patterns: Array.from({ length: SEQFX_PATTERN_COUNT }, (_unused, pattern) => (
             normalizePattern(rawPatterns[pattern])
         )),
@@ -457,12 +600,19 @@ function getBlockForStep(pattern: SeqFxPattern, lane: number, step: number): Seq
         return null;
     }
 
+    const effectType = laneSteps[step].effectType;
+    if (effectType === SEQFX_EFFECT_TYPES.empty) {
+        return null;
+    }
+
     let startStep = step;
     while (
         startStep > 0
         && laneSteps[startStep].active
+        && laneSteps[startStep].effectType === effectType
         && !laneSteps[startStep].trigger
         && laneSteps[startStep - 1].active
+        && laneSteps[startStep - 1].effectType === effectType
     ) {
         startStep -= 1;
     }
@@ -471,6 +621,7 @@ function getBlockForStep(pattern: SeqFxPattern, lane: number, step: number): Seq
     while (
         endStep + 1 < SEQFX_STEP_COUNT
         && laneSteps[endStep + 1].active
+        && laneSteps[endStep + 1].effectType === effectType
         && !laneSteps[endStep + 1].trigger
     ) {
         endStep += 1;
@@ -481,6 +632,7 @@ function getBlockForStep(pattern: SeqFxPattern, lane: number, step: number): Seq
         startStep,
         length: endStep - startStep + 1,
         endStep,
+        effectType,
     };
 }
 
@@ -524,14 +676,19 @@ function writeBlock(
     length: number,
     template: SeqFxStep,
 ): void {
+    const effectType = template.effectType === SEQFX_EFFECT_TYPES.empty
+        ? defaultEffectTypeForLane(lane)
+        : template.effectType;
+    const defaultParams = defaultParamsForEffect(effectType);
     for (let offset = 0; offset < length; offset += 1) {
         const step = startStep + offset;
         pattern.lanes[lane].steps[step] = {
             active: true,
             trigger: offset === 0,
+            effectType,
             mix: normalizeMix(template.mix),
             params: Array.from({ length: SEQFX_PARAM_COUNT }, (_unused, paramIndex) => (
-                normalizeParam(lane, paramIndex, template.params[paramIndex])
+                normalizeParam(effectType, paramIndex, template.params[paramIndex] ?? defaultParams[paramIndex])
             )),
         };
     }
@@ -543,9 +700,10 @@ function cloneBlockSteps(pattern: SeqFxPattern, lane: number, block: SeqFxBlock)
         return {
             active: true,
             trigger: offset === 0,
+            effectType: source.effectType,
             mix: normalizeMix(source.mix),
             params: Array.from({ length: SEQFX_PARAM_COUNT }, (_unusedParam, paramIndex) => (
-                normalizeParam(lane, paramIndex, source.params[paramIndex])
+                normalizeParam(source.effectType, paramIndex, source.params[paramIndex])
             )),
         };
     });
@@ -579,9 +737,10 @@ function writeBlockSteps(
         pattern.lanes[lane].steps[startStep + offset] = {
             active: true,
             trigger: offset === 0,
+            effectType: source.effectType,
             mix: normalizeMix(source.mix),
             params: Array.from({ length: SEQFX_PARAM_COUNT }, (_unusedParam, paramIndex) => (
-                normalizeParam(lane, paramIndex, source.params[paramIndex])
+                normalizeParam(source.effectType, paramIndex, source.params[paramIndex])
             )),
         };
     }
@@ -619,8 +778,15 @@ export function applySeqFxBlockCreate(state: SeqFxState, edit: SeqFxBlockCreateE
         const lane = clampIndex(edit.lane, SEQFX_LANE_COUNT, "lane");
         const startStep = clampIndex(edit.startStep, SEQFX_STEP_COUNT, "startStep");
         const length = normalizeBlockLength(startStep, edit.length);
+        const effectType = normalizeEffectType(edit.effectType ?? defaultEffectTypeForLane(lane), defaultEffectTypeForLane(lane));
         assertBlockRangeAvailable(pattern, lane, startStep, length);
-        writeBlock(pattern, lane, startStep, length, createDefaultStep(lane));
+        writeBlock(pattern, lane, startStep, length, {
+            ...createDefaultStep(lane),
+            active: true,
+            trigger: true,
+            effectType,
+            params: defaultParamsForEffect(effectType),
+        });
     });
 }
 
@@ -827,10 +993,10 @@ export function applySeqFxBlockSelectionParamEdit(state: SeqFxState, edit: SeqFx
     return withEditedPattern(state, edit.patternIndex, (pattern) => {
         const lane = clampIndex(edit.lane, SEQFX_LANE_COUNT, "lane");
         const paramIndex = clampIndex(edit.paramIndex, SEQFX_PARAM_COUNT, "paramIndex");
-        const value = normalizeParam(lane, paramIndex, edit.value);
         const blocks = resolveBlockSelection(pattern, lane, edit.blockStartSteps);
 
         for (const block of blocks) {
+            const value = normalizeParam(block.effectType, paramIndex, edit.value);
             for (let step = block.startStep; step <= block.endStep; step += 1) {
                 pattern.lanes[lane].steps[step].params[paramIndex] = value;
             }
@@ -864,9 +1030,32 @@ export function applySeqFxBlockParamEdit(state: SeqFxState, edit: SeqFxBlockPara
             throw new Error("Cannot edit parameter for a missing SeqFX block.");
         }
 
-        const value = normalizeParam(lane, paramIndex, edit.value);
+        const value = normalizeParam(block.effectType, paramIndex, edit.value);
         for (let step = block.startStep; step <= block.endStep; step += 1) {
             pattern.lanes[lane].steps[step].params[paramIndex] = value;
+        }
+    });
+}
+
+export function applySeqFxBlockEffectEdit(state: SeqFxState, edit: SeqFxBlockEffectEdit): SeqFxState {
+    return withEditedPattern(state, edit.patternIndex, (pattern) => {
+        const lane = clampIndex(edit.lane, SEQFX_LANE_COUNT, "lane");
+        const startStep = clampIndex(edit.startStep, SEQFX_STEP_COUNT, "startStep");
+        const effectType = normalizeEffectType(edit.effectType, defaultEffectTypeForLane(lane));
+        if (effectType === SEQFX_EFFECT_TYPES.empty) {
+            throw new Error("SeqFX block effect must not be empty.");
+        }
+
+        const block = getBlockForStep(pattern, lane, startStep);
+        if (!block) {
+            throw new Error("Cannot edit effect for a missing SeqFX block.");
+        }
+
+        const params = defaultParamsForEffect(effectType);
+        for (let step = block.startStep; step <= block.endStep; step += 1) {
+            pattern.lanes[lane].steps[step].effectType = effectType;
+            pattern.lanes[lane].steps[step].trigger = step === block.startStep;
+            pattern.lanes[lane].steps[step].params = [...params];
         }
     });
 }
@@ -912,17 +1101,29 @@ export function applySeqFxParamEdit(state: SeqFxState, edit: SeqFxParamEdit): Se
     const lane = clampIndex(edit.lane, SEQFX_LANE_COUNT, "lane");
     const paramIndex = clampIndex(edit.paramIndex, SEQFX_PARAM_COUNT, "paramIndex");
     const steps = normalizeSteps(edit.steps);
-    const triggerLatched = isSeqFxTriggerLatchedParam(lane, paramIndex);
+    const normalizedState = normalizeSeqFxState(state);
+    const patternIndex = clampIndex(edit.patternIndex, SEQFX_PATTERN_COUNT, "patternIndex");
+    const firstStep = normalizedState.patterns[patternIndex].lanes[lane].steps[steps[0]];
+    const editEffectType = firstStep.active && firstStep.effectType !== SEQFX_EFFECT_TYPES.empty
+        ? firstStep.effectType
+        : defaultEffectTypeForLane(lane);
+    const triggerLatched = isSeqFxTriggerLatchedParamForEffect(editEffectType, paramIndex);
 
     if (triggerLatched && steps.length > 1) {
         throw new Error("Trigger-latched SeqFX parameters can only be edited on one selected cell.");
     }
 
-    return withEditedPattern(state, edit.patternIndex, (pattern) => {
-        const value = normalizeParam(lane, paramIndex, edit.value);
-
+    return withEditedPattern(normalizedState, edit.patternIndex, (pattern) => {
         for (const step of steps) {
             const target = pattern.lanes[lane].steps[step];
+            const effectType = target.active && target.effectType !== SEQFX_EFFECT_TYPES.empty
+                ? target.effectType
+                : defaultEffectTypeForLane(lane);
+            const value = normalizeParam(effectType, paramIndex, edit.value);
+            if (!target.active && triggerLatched) {
+                target.effectType = effectType;
+                target.params = defaultParamsForEffect(effectType);
+            }
             target.params[paramIndex] = value;
             if (triggerLatched) {
                 target.active = true;
@@ -941,9 +1142,10 @@ export function getSeqFxStepValueSnapshot(state: SeqFxState, target: SeqFxStepVa
 
     return {
         lane,
+        effectType: source.effectType,
         mix: normalizeMix(source.mix),
         params: Array.from({ length: SEQFX_PARAM_COUNT }, (_unused, paramIndex) => (
-            normalizeParam(lane, paramIndex, source.params[paramIndex])
+            normalizeParam(source.effectType === SEQFX_EFFECT_TYPES.empty ? defaultEffectTypeForLane(lane) : source.effectType, paramIndex, source.params[paramIndex])
         )),
     };
 }
@@ -952,19 +1154,19 @@ export function applySeqFxStepValuePaste(state: SeqFxState, edit: SeqFxStepValue
     const lane = clampIndex(edit.lane, SEQFX_LANE_COUNT, "lane");
     const steps = normalizeSteps(edit.steps);
 
-    if (edit.values.lane !== lane) {
-        throw new Error("SeqFX cell values can only be pasted into the same lane.");
-    }
-
     return withEditedPattern(state, edit.patternIndex, (pattern) => {
+        const effectType = edit.values.effectType === SEQFX_EFFECT_TYPES.empty
+            ? defaultEffectTypeForLane(lane)
+            : normalizeEffectType(edit.values.effectType, defaultEffectTypeForLane(lane));
         const mix = normalizeMix(edit.values.mix);
         const params = Array.from({ length: SEQFX_PARAM_COUNT }, (_unused, paramIndex) => (
-            normalizeParam(lane, paramIndex, edit.values.params[paramIndex])
+            normalizeParam(effectType, paramIndex, edit.values.params[paramIndex])
         ));
 
         for (const step of steps) {
             const target = pattern.lanes[lane].steps[step];
             target.mix = mix;
+            target.effectType = target.active ? effectType : SEQFX_EFFECT_TYPES.empty;
             target.params = [...params];
         }
     });
@@ -984,6 +1186,7 @@ export function buildSeqPatternUpload(
         authoritative: options.authoritative,
         activeSteps: pattern.lanes.map((lane) => lane.steps.map((step) => step.active)),
         triggerSteps: pattern.lanes.map((lane) => lane.steps.map((step) => step.trigger)),
+        effectTypes: pattern.lanes.map((lane) => lane.steps.map((step) => step.active ? step.effectType : SEQFX_EFFECT_TYPES.empty)),
         mix: pattern.lanes.map((lane) => lane.steps.map((step) => step.mix)),
         params: pattern.lanes.map((lane) => lane.steps.map((step) => [...step.params])),
     };

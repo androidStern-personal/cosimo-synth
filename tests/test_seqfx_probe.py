@@ -18,6 +18,11 @@ LANE_FILTER = 0
 LANE_CRUSHER = 1
 LANE_TAPE = 2
 LANE_STUTTER = 3
+EFFECT_EMPTY = 0
+EFFECT_FILTER = 1
+EFFECT_CRUSHER = 2
+EFFECT_TAPE = 3
+EFFECT_STUTTER = 4
 STEP_COUNT = 32
 LANE_COUNT = 4
 PARAM_COUNT = 8
@@ -43,6 +48,7 @@ def _empty_upload(*, revision: int = 1, pattern_index: int = 0) -> dict[str, obj
         "authoritative": True,
         "activeSteps": [[False for _ in range(STEP_COUNT)] for _ in range(LANE_COUNT)],
         "triggerSteps": [[False for _ in range(STEP_COUNT)] for _ in range(LANE_COUNT)],
+        "effectTypes": [[EFFECT_EMPTY for _ in range(STEP_COUNT)] for _ in range(LANE_COUNT)],
         "mix": [[1.0 for _ in range(STEP_COUNT)] for _ in range(LANE_COUNT)],
         "params": [
             [[0.0 for _ in range(PARAM_COUNT)] for _ in range(STEP_COUNT)]
@@ -58,18 +64,22 @@ def _activate_step(
     step: int,
     trigger: bool = True,
     mix: float = 1.0,
+    effect_type: int | None = None,
     params: list[float] | None = None,
 ) -> None:
     active_steps = upload["activeSteps"]
     trigger_steps = upload["triggerSteps"]
+    effect_types = upload["effectTypes"]
     mixes = upload["mix"]
     param_grid = upload["params"]
     assert isinstance(active_steps, list)
     assert isinstance(trigger_steps, list)
+    assert isinstance(effect_types, list)
     assert isinstance(mixes, list)
     assert isinstance(param_grid, list)
     active_steps[lane][step] = True
     trigger_steps[lane][step] = trigger
+    effect_types[lane][step] = int(effect_type if effect_type is not None else lane + 1)
     mixes[lane][step] = float(mix)
     if params is not None:
         for index, value in enumerate(params):
@@ -479,6 +489,26 @@ def test_filter_lane_reduces_high_frequency_energy(
     assert output_rms < input_rms * 0.35
 
 
+def test_filter_effect_can_run_in_any_chain_not_only_the_old_filter_lane(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    upload = _empty_upload()
+    _activate_step(
+        upload,
+        lane=LANE_TAPE,
+        step=0,
+        effect_type=EFFECT_FILTER,
+        params=[0, 220.0, 220.0, 0.707, 1.0],
+    )
+    input_audio = _sine(STEP_FRAMES, 5_000.0)
+    output = _render(generated_runtime, tmp_path, input_audio, _base_schedule(upload))
+
+    input_rms = float(np.sqrt(np.mean(input_audio[800:, 0] ** 2)))
+    output_rms = float(np.sqrt(np.mean(output[800:, 0] ** 2)))
+    assert output_rms < input_rms * 0.35
+
+
 def test_filter_envelope_uses_the_full_stretched_block_duration(
     generated_runtime: GeneratedRuntime,
     tmp_path: Path,
@@ -779,6 +809,36 @@ def test_stutter_captures_first_slice_when_transport_starts_on_the_block(
     assert float(np.sqrt(np.mean(second_repeat**2))) > original_rms * 0.8
     assert float(np.sqrt(np.mean((first_repeat - original_window) ** 2))) < original_rms * 0.18
     assert float(np.sqrt(np.mean((second_repeat - original_window) ** 2))) < original_rms * 0.18
+
+
+def test_future_step_upload_does_not_restart_current_time_effect(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    upload = _empty_upload()
+    _activate_step(upload, lane=LANE_STUTTER, step=0, trigger=True, params=[8.0, 1.0, 0.0])
+
+    future_edit = json.loads(json.dumps(upload))
+    future_edit["revision"] = 2
+    future_edit["authoritative"] = False
+    _activate_step(
+        future_edit,
+        lane=LANE_FILTER,
+        step=12,
+        trigger=True,
+        effect_type=EFFECT_FILTER,
+        params=[0.0, 600.0, 600.0, 0.707, 1.0],
+    )
+
+    frames = STEP_FRAMES * 2
+    mono = np.linspace(-0.8, 0.8, frames, dtype=np.float32)
+    input_audio = np.column_stack([mono, mono]).astype(np.float32)
+    baseline = _render(generated_runtime, tmp_path, input_audio, _base_schedule(upload))
+    schedule = _base_schedule(upload)
+    schedule[1_000] = [["event", "patternUpload", future_edit]]
+    edited = _render(generated_runtime, tmp_path, input_audio, schedule)
+
+    assert float(np.max(np.abs(edited - baseline))) < 1.0e-6
 
 
 def test_stutter_captures_first_slice_even_when_block_start_mix_is_zero(

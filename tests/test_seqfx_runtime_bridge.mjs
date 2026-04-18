@@ -10,7 +10,9 @@ const stateModule = await loadUIModule(repoRoot, "fx/seqfx/view/seqfx-state.ts")
 const bridgeModule = await loadUIModule(repoRoot, "fx/seqfx/view/seqfx-runtime-bridge.ts");
 
 const {
+    SEQFX_EFFECT_TYPES,
     SEQFX_LANES,
+    SEQFX_LEGACY_STATE_KEY,
     SEQFX_STATE_KEY,
     applySeqFxBlockCreate,
     createDefaultSeqFxState,
@@ -125,6 +127,21 @@ function endpointEvents(connection, endpointID) {
     return connection.events.filter((entry) => entry.endpointID === endpointID);
 }
 
+function legacyV1StateFrom(state) {
+    return {
+        version: 1,
+        patterns: state.patterns.map((pattern) => ({
+            revision: pattern.revision,
+            lanes: pattern.lanes.map((lane) => ({
+                steps: lane.steps.map((step) => {
+                    const { effectType: _effectType, ...legacyStep } = step;
+                    return legacyStep;
+                }),
+            })),
+        })),
+    };
+}
+
 test("boot_without_saved_seqfx_state_persists_normalized_default_and_uploads_authoritative_pattern", () => {
     const connection = new FakePatchConnection();
     const bridge = new SeqFxRuntimeBridge(connection);
@@ -181,6 +198,38 @@ test("boot_waits_for_async_full_stored_state_before_uploading_or_persisting", ()
     assert.deepEqual(
         uploads[0].value.triggerSteps[SEQFX_LANES.stutter].slice(5, 7),
         [true, false],
+    );
+    assert.deepEqual(
+        uploads[0].value.effectTypes[SEQFX_LANES.stutter].slice(5, 7),
+        [SEQFX_EFFECT_TYPES.stutter, SEQFX_EFFECT_TYPES.stutter],
+    );
+});
+
+test("boot_migrates_legacy_seqfx_v1_state_to_seqfx_v2_and_preserves_old_lane_effects", () => {
+    let savedState = createDefaultSeqFxState();
+    savedState = applySeqFxBlockCreate(savedState, {
+        patternIndex: 0,
+        lane: SEQFX_LANES.tapeStop,
+        startStep: 10,
+        length: 2,
+    });
+    const connection = new FakePatchConnection({
+        [SEQFX_LEGACY_STATE_KEY]: JSON.stringify(legacyV1StateFrom(savedState)),
+    });
+    const bridge = new SeqFxRuntimeBridge(connection);
+
+    bridge.attach();
+    bridge.requestBootState();
+
+    assert.equal(connection.storedWrites.length, 1);
+    assert.equal(connection.storedWrites[0].key, SEQFX_STATE_KEY);
+    assert.equal(JSON.parse(connection.storedWrites[0].value).version, 2);
+
+    const uploads = endpointEvents(connection, SEQFX_ENDPOINTS.patternUpload);
+    assert.equal(uploads.length, 1);
+    assert.deepEqual(
+        uploads[0].value.effectTypes[SEQFX_LANES.tapeStop].slice(10, 12),
+        [SEQFX_EFFECT_TYPES.tapeStop, SEQFX_EFFECT_TYPES.tapeStop],
     );
 });
 
@@ -245,7 +294,43 @@ test("editing_selected_pattern_persists_state_and_uploads_one_complete_non_autho
     assert.equal(uploads.length, 2);
     assert.equal(uploads.at(-1).value.authoritative, false);
     assert.equal(uploads.at(-1).value.activeSteps[SEQFX_LANES.filter][6], true);
+    assert.equal(uploads.at(-1).value.effectTypes[SEQFX_LANES.filter][6], SEQFX_EFFECT_TYPES.filter);
     assert.equal(uploads.at(-1).value.params[SEQFX_LANES.filter][6][1], 330);
+});
+
+test("changing_selected_pattern_block_effect_persists_resets_effect_params_and_uploads_effect_types", () => {
+    const initialState = createDefaultSeqFxState();
+    const connection = new FakePatchConnection({
+        [SEQFX_STATE_KEY]: serializeSeqFxState(initialState),
+    });
+    const bridge = new SeqFxRuntimeBridge(connection);
+
+    bridge.attach();
+    bridge.requestBootState();
+    connection.events = [];
+    connection.storedWrites = [];
+
+    bridge.createBlock({
+        patternIndex: 0,
+        lane: 0,
+        startStep: 2,
+        length: 2,
+        effectType: SEQFX_EFFECT_TYPES.filter,
+    });
+    bridge.setBlockEffect({
+        patternIndex: 0,
+        lane: 0,
+        startStep: 2,
+        effectType: SEQFX_EFFECT_TYPES.crusher,
+    });
+
+    assert.equal(connection.storedWrites.length, 2);
+    const upload = endpointEvents(connection, SEQFX_ENDPOINTS.patternUpload).at(-1).value;
+    assert.deepEqual(upload.effectTypes[0].slice(2, 4), [
+        SEQFX_EFFECT_TYPES.crusher,
+        SEQFX_EFFECT_TYPES.crusher,
+    ]);
+    assert.deepEqual(upload.params[0][2].slice(0, 3), [8, 1, 0]);
 });
 
 test("resizing_selected_pattern_block_persists_and_uploads_continuation_cells_without_retriggers", () => {

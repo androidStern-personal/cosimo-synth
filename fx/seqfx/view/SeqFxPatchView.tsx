@@ -16,13 +16,15 @@ import {
 } from "../../../ui/shared/filter-range-editor";
 import { StutterEnvelopeEditor } from "./StutterEnvelopeEditor";
 import {
-    SEQFX_LANES,
+    SEQFX_EFFECT_TYPES,
+    SEQFX_EFFECT_TYPE_NAMES,
+    SEQFX_EFFECT_TYPE_SHORT_NAMES,
     SEQFX_LANE_NAMES,
     SEQFX_PATTERN_COUNT,
     SEQFX_STEP_COUNT,
     getSeqFxBlockAtStep,
     getSeqFxLaneBlocks,
-    isSeqFxTriggerLatchedParam,
+    isSeqFxTriggerLatchedParamForEffect,
     type SeqFxPattern,
     type SeqFxStep,
     type SeqFxStepValueSnapshot,
@@ -120,27 +122,38 @@ type ParamDefinition = {
     hint?: string;
 };
 
+const EFFECT_OPTIONS = [
+    SEQFX_EFFECT_TYPES.filter,
+    SEQFX_EFFECT_TYPES.crusher,
+    SEQFX_EFFECT_TYPES.tapeStop,
+    SEQFX_EFFECT_TYPES.stutter,
+] as const;
+
+function defaultEffectTypeForChain(chain: number) {
+    return EFFECT_OPTIONS[Math.min(EFFECT_OPTIONS.length - 1, Math.max(0, chain))] ?? SEQFX_EFFECT_TYPES.filter;
+}
+
 const PARAM_DEFINITIONS: Record<number, ParamDefinition[]> = {
-    [SEQFX_LANES.filter]: [
+    [SEQFX_EFFECT_TYPES.filter]: [
         { index: 0, label: "Mode", min: 0, max: 2, step: 1, kind: "select", options: ["Lowpass", "Highpass", "Bandpass"] },
         { index: 1, label: "Start cutoff", min: 20, max: 20000, step: 1 },
         { index: 2, label: "End cutoff", min: 20, max: 20000, step: 1 },
         { index: 3, label: "Resonance", min: 0.1, max: 20, step: 0.01 },
         { index: 4, label: "Curve", min: 0.25, max: 4, step: 0.01 },
     ],
-    [SEQFX_LANES.crusher]: [
+    [SEQFX_EFFECT_TYPES.crusher]: [
         { index: 0, label: "Bits", min: 4, max: 16, step: 1 },
         { index: 1, label: "Hold frames", min: 1, max: 64, step: 1 },
         { index: 2, label: "Drive", min: 0, max: 36, step: 0.1 },
     ],
-    [SEQFX_LANES.tapeStop]: [
+    [SEQFX_EFFECT_TYPES.tapeStop]: [
         { index: 0, label: "Start Length", min: 0.05, max: 4, step: 0.01 },
         { index: 1, label: "Start Curve", min: 0.25, max: 4, step: 0.01 },
         { index: 2, label: "Catchup Curve", min: 0.25, max: 4, step: 0.01 },
         { index: 3, label: "Catchup Length", min: 0, max: 100, step: 1 },
         { index: 4, label: "Mode", min: 0, max: 1, step: 1, kind: "select", options: ["Stop", "Spin-up"] },
     ],
-    [SEQFX_LANES.stutter]: [
+    [SEQFX_EFFECT_TYPES.stutter]: [
         { index: 0, label: "Slices", min: 2, max: 32, step: 1, hint: "Record slice 1; repeat the rest." },
         { index: 1, label: "Speed", min: 0.5, max: 2, step: 0.01, hint: "1.00 keeps the captured pitch." },
         { index: 2, label: "Shape", min: 0, max: 1, step: 0.01, hint: "Morphs the per-cut envelope." },
@@ -970,6 +983,7 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
     const [selection, setSelection] = useState<Selection | null>(null);
     const [playheadStep, setPlayheadStep] = useState<number | null>(null);
     const [observedStepDurationMs, setObservedStepDurationMs] = useState<number | null>(null);
+    const [drawEffectType, setDrawEffectType] = useState<number | null>(null);
     const [gestureState, setGestureState] = useState<BlockGesture | null>(null);
     const [copyPreview, setCopyPreview] = useState<CopyPreview | null>(null);
     const [cellSize, setCellSize] = useState(SEQFX_MIN_CELL_SIZE_PX);
@@ -1135,7 +1149,6 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
                 !activeSelection
                 || activeSelection.steps.length === 0
                 || !copiedValues
-                || copiedValues.lane !== activeSelection.lane
             ) {
                 return false;
             }
@@ -1515,6 +1528,11 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
     const inspectedCell = inspectedLane !== null && inspectedStep !== null
         ? selectedPatternState.lanes[inspectedLane].steps[inspectedStep]
         : null;
+    const inspectedEffectType = inspectedCell?.active
+        ? inspectedCell.effectType
+        : drawEffectType ?? defaultEffectTypeForChain(inspectedLane ?? 0);
+    const inspectedEffectName = SEQFX_EFFECT_TYPE_NAMES[inspectedEffectType] ?? "Filter";
+    const inspectedParamDefinitions = PARAM_DEFINITIONS[inspectedEffectType] ?? [];
     const inspectedBlock = inspectedLane !== null && inspectedStep !== null
         ? getSeqFxBlockAtStep(selectedPatternState, inspectedLane, inspectedStep)
         : null;
@@ -1551,6 +1569,7 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
             lane,
             startStep: step,
             length: 1,
+            effectType: drawEffectType ?? defaultEffectTypeForChain(lane),
         });
         setSelectedCell({ lane, step });
         setSelection({ lane, steps: [step], blockStartSteps: [step] });
@@ -1731,6 +1750,24 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
         }
     }
 
+    function setEffectType(value: number) {
+        const nextEffectType = EFFECT_OPTIONS.includes(value as typeof EFFECT_OPTIONS[number])
+            ? value
+            : SEQFX_EFFECT_TYPES.filter;
+        setDrawEffectType(nextEffectType);
+
+        if (!inspectedBlock || !activeSelection || activeSelection.blockStartSteps?.length !== 1) {
+            return;
+        }
+
+        bridge.setBlockEffect({
+            patternIndex: selectedPattern,
+            lane: inspectedBlock.lane,
+            startStep: inspectedBlock.startStep,
+            effectType: nextEffectType,
+        });
+    }
+
     function setFilterValue(nextValue: FilterRangeValue) {
         if (!inspectedCell) {
             return;
@@ -1880,6 +1917,25 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
                         </button>
                     ))}
                 </div>
+                <label className="seqfx-draw-effect">
+                    <span>Draw</span>
+                    <select
+                        aria-label="Effect to draw into chain steps"
+                        data-role="seqfx-draw-effect"
+                        onChange={(event) => {
+                            const nextValue = Number(event.currentTarget.value);
+                            setDrawEffectType(nextValue === 0 ? null : nextValue);
+                        }}
+                        value={drawEffectType ?? 0}
+                    >
+                        <option value={0}>Chain default</option>
+                        {EFFECT_OPTIONS.map((effectType) => (
+                            <option key={effectType} value={effectType}>
+                                {SEQFX_EFFECT_TYPE_NAMES[effectType]}
+                            </option>
+                        ))}
+                    </select>
+                </label>
                 <div className="seqfx-transport" role="group" aria-label="Internal clock">
                     <button type="button" onClick={() => bridge.playInternal()}>Play</button>
                     <button type="button" onClick={() => bridge.stopInternal()}>Stop</button>
@@ -1969,14 +2025,17 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
                                             selected ? "is-selected" : "",
                                             playheadStep !== null && playheadStep >= block.startStep && playheadStep <= block.endStep ? "is-playhead" : "",
                                         ].filter(Boolean).join(" ");
+                                        const effectName = SEQFX_EFFECT_TYPE_NAMES[block.effectType] ?? "Effect";
+                                        const effectShortName = SEQFX_EFFECT_TYPE_SHORT_NAMES[block.effectType] ?? "";
                                         const ariaLabel = block.length === 1
-                                            ? `${laneName} block ${block.startStep + 1}`
-                                            : `${laneName} block ${block.startStep + 1}-${block.endStep + 1}`;
+                                            ? `${laneName} ${effectName} block ${block.startStep + 1}`
+                                            : `${laneName} ${effectName} block ${block.startStep + 1}-${block.endStep + 1}`;
 
                                         return (
                                             <div
                                                 aria-label={ariaLabel}
                                                 className={className}
+                                                data-effect={block.effectType}
                                                 data-role="seqfx-block"
                                                 data-lane={lane}
                                                 data-preview={blockIsPreview ? "true" : undefined}
@@ -1989,7 +2048,9 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
                                                 style={gridGeometry.blockStyle(block.startStep, block.length)}
                                                 tabIndex={0}
                                             >
-                                                <span className="seqfx-block-fill" />
+                                                <span className="seqfx-block-fill">
+                                                    <span>{effectShortName}</span>
+                                                </span>
                                                 <span
                                                     aria-hidden="true"
                                                     className="seqfx-block-resize"
@@ -2016,7 +2077,27 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
                         <p className="seqfx-empty">Choose a lane cell to edit its mix and effect settings.</p>
                     ) : (
                         <>
-                            {inspectedLane === SEQFX_LANES.stutter ? null : (
+                            <label className="seqfx-field">
+                                <span>Effect</span>
+                                <select
+                                    data-role="seqfx-effect-type"
+                                    disabled={selectedBlockStartSteps.length > 1}
+                                    onChange={(event) => setEffectType(Number(event.currentTarget.value))}
+                                    value={inspectedEffectType}
+                                >
+                                    {EFFECT_OPTIONS.map((effectType) => (
+                                        <option key={effectType} value={effectType}>
+                                            {SEQFX_EFFECT_TYPE_NAMES[effectType]}
+                                        </option>
+                                    ))}
+                                </select>
+                                <small>
+                                    {selectedBlockStartSteps.length > 1
+                                        ? "Select one block to change its effect."
+                                        : `${inspectedEffectName} in ${SEQFX_LANE_NAMES[inspectedLane]}.`}
+                                </small>
+                            </label>
+                            {inspectedEffectType === SEQFX_EFFECT_TYPES.stutter ? null : (
                                 <label className="seqfx-field">
                                     <span>Mix</span>
                                     <input
@@ -2031,14 +2112,14 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
                                     <output>{formatValue(inspectedCell.mix)}</output>
                                 </label>
                             )}
-                            {inspectedLane === SEQFX_LANES.tapeStop ? (
+                            {inspectedEffectType === SEQFX_EFFECT_TYPES.tapeStop ? (
                                 <TapeStopEnvelopeEditor
                                     step={inspectedCell}
                                     blockLength={inspectedBlockLength}
                                     blockDurationMs={tapeGraphBlockDurationMs}
                                     onParamChange={setParam}
                                 />
-                            ) : inspectedLane === SEQFX_LANES.filter ? (
+                            ) : inspectedEffectType === SEQFX_EFFECT_TYPES.filter ? (
                                 <>
                                     <FilterRangeEditor
                                         ariaLabel="SeqFX filter range editor"
@@ -2051,7 +2132,7 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
                                         onRangeChange={setFilterRange}
                                         onValueChange={setFilterValue}
                                     />
-                                    {PARAM_DEFINITIONS[inspectedLane]
+                                    {inspectedParamDefinitions
                                         .filter((definition) => definition.index === FILTER_PARAM_CURVE)
                                         .map((definition) => {
                                             const value = inspectedCell.params[definition.index];
@@ -2074,7 +2155,7 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
                                             );
                                         })}
                                 </>
-                            ) : inspectedLane === SEQFX_LANES.stutter ? (
+                            ) : inspectedEffectType === SEQFX_EFFECT_TYPES.stutter ? (
                                 <StutterEnvelopeEditor
                                     blockLabel={getStutterBlockLabel()}
                                     value={stutterValueFromSeqFxStep(inspectedCell)}
@@ -2084,8 +2165,8 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
                                     onSlicesChange={(value) => setStutterParam(STUTTER_PARAM_SLICES, value)}
                                     onSpeedChange={(value) => setStutterParam(STUTTER_PARAM_SPEED, value)}
                                 />
-                            ) : PARAM_DEFINITIONS[inspectedLane].map((definition) => {
-                                const triggerLatched = isSeqFxTriggerLatchedParam(inspectedLane, definition.index);
+                            ) : inspectedParamDefinitions.map((definition) => {
+                                const triggerLatched = isSeqFxTriggerLatchedParamForEffect(inspectedEffectType, definition.index);
                                 const disabled = triggerLatched && !selectedBlockGroup && !selectedWholeBlock && (activeSelection?.steps.length ?? 0) > 1;
                                 const value = inspectedCell.params[definition.index];
 
@@ -2140,11 +2221,11 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
                             ) : null}
                         </>
                     )}
-                    <div className="seqfx-chain" aria-label="Fixed signal path">
-                        <span>Filter</span>
-                        <span>Crusher</span>
-                        <span>Tape</span>
-                        <span>Stutter</span>
+                    <div className="seqfx-chain" aria-label="Serial chain order">
+                        <span>Chain 1</span>
+                        <span>Chain 2</span>
+                        <span>Chain 3</span>
+                        <span>Chain 4</span>
                         <span>Mix</span>
                     </div>
                 </aside>
