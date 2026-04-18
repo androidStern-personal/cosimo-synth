@@ -54,6 +54,84 @@ async function getHarnessSnapshot(page) {
     });
 }
 
+async function dragLocatorBy(page, locator, deltaX, deltaY) {
+    const box = await locator.boundingBox();
+
+    if (!box) {
+        throw new Error("Expected locator bounding box.");
+    }
+
+    const startX = box.x + (box.width * 0.5);
+    const startY = box.y + (box.height * 0.5);
+
+    await page.mouse.move(startX, startY);
+    await page.mouse.down();
+    await page.mouse.move(startX + deltaX, startY + deltaY, { steps: 8 });
+    await page.mouse.up();
+}
+
+function assertAlmostEqual(actual, expected, epsilon = 1e-3) {
+    assert.ok(
+        Math.abs(actual - expected) <= epsilon,
+        `Expected ${actual} to be within ${epsilon} of ${expected}.`,
+    );
+}
+
+function clamp(value, min, max) {
+    return Math.min(max, Math.max(min, value));
+}
+
+function cutoffHzAtX(snapshot, x) {
+    const normalized = clamp(
+        (x - snapshot.plot.left) / Math.max(1, snapshot.plot.right - snapshot.plot.left),
+        0,
+        1,
+    );
+    return Math.exp(Math.log(20) + ((Math.log(20000) - Math.log(20)) * normalized));
+}
+
+function xForCutoffHz(snapshot, cutoffHz) {
+    const normalized = clamp(
+        (Math.log(cutoffHz) - Math.log(20)) / (Math.log(20000) - Math.log(20)),
+        0,
+        1,
+    );
+    return snapshot.plot.left + ((snapshot.plot.right - snapshot.plot.left) * normalized);
+}
+
+function bipolarRangeForDraggedHandle(baseCutoffHz, draggedCutoffHz) {
+    const amountOctaves = Math.abs(Math.log2(draggedCutoffHz / baseCutoffHz));
+    const ratio = 2 ** amountOctaves;
+    return {
+        startCutoffHz: Math.max(20, Math.min(20000, baseCutoffHz / ratio)),
+        endCutoffHz: Math.max(20, Math.min(20000, baseCutoffHz * ratio)),
+    };
+}
+
+function defaultResonanceCurve(normalizedInput) {
+    const x = clamp(normalizedInput, 0, 1);
+    const slope = 11.1;
+    const center = 0.84;
+    const logistic = (sample) => 1 / (1 + Math.exp(-slope * (sample - center)));
+    const low = logistic(0);
+    const high = logistic(1);
+    return clamp((logistic(x) - low) / Math.max(1e-9, high - low), 0, 1);
+}
+
+function qAtY(snapshot, y) {
+    const qSurface = clamp(
+        1 - ((y - snapshot.plot.top) / Math.max(1, snapshot.plot.bottom - snapshot.plot.top)),
+        0,
+        1,
+    );
+    return 0.1 + (19.9 * defaultResonanceCurve(qSurface));
+}
+
+function pathPointCount(path) {
+    const coordinates = path.match(/-?\d+(?:\.\d+)?/g) ?? [];
+    return coordinates.length / 2;
+}
+
 function inferCurveOrientation(points) {
     assert.ok(points.length >= 4, "Expected enough sampled curve points to infer orientation.");
 
@@ -287,6 +365,178 @@ test("shared keyboard shell owns octave chrome while keeping the keyboard and to
         assert.match(snapshot.railClassName, /self-start/);
         assert.match(snapshot.contentClassName, /gap-1/);
         assert.doesNotMatch(snapshot.className, /grid-cols-\[56px_minmax\(0,1fr\)\]/);
+    } finally {
+        await page.close();
+    }
+});
+
+test("shared filter range editor exposes the universal cutoff, resonance, range, and preview surface", async () => {
+    const page = await openModulePage();
+
+    try {
+        await installHarness(page, "installSharedFilterRangeEditorHarness");
+        await page.waitForFunction(() => {
+            const snapshot = window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.();
+            return (snapshot?.plot?.right - snapshot?.plot?.left) > 500
+                && (snapshot?.plot?.bottom - snapshot?.plot?.top) > 200;
+        });
+
+        let snapshot = await getHarnessSnapshot(page);
+        const expectedHandleX = xForCutoffHz(snapshot, 800);
+
+        assert.equal(Math.round(snapshot.value.cutoffHz), 800);
+        assert.deepEqual(snapshot.range, { startCutoffHz: 200, endCutoffHz: 3200 });
+        assertAlmostEqual(snapshot.valueHandle.x, expectedHandleX, 0.75);
+        assert.equal(snapshot.surfaceTouchAction, "none");
+        assert.equal(snapshot.valueHitTargetTabIndex, "0");
+        assert.equal(snapshot.rangeEndHitTargetTabIndex, "0");
+        assertAlmostEqual(snapshot.previewHandle.x, xForCutoffHz(snapshot, 3200), 0.75);
+        assert.equal(pathPointCount(snapshot.valuePath), 360);
+        assert.equal(pathPointCount(snapshot.previewPath), 360);
+        assert.deepEqual(snapshot.modeCycleButton, {
+            ariaLabel: "Cycle filter mode, currently LP",
+            modeLabel: "LP",
+            title: "Filter mode: LP",
+        });
+        assert.equal(snapshot.readoutCenter, "Center800 Hz");
+        assert.equal(snapshot.readoutRange, "Range200 Hz to 3.20 kHz");
+        assert.equal(snapshot.readoutWidth, "Width4.00 oct");
+        assert.equal(snapshot.readoutQ, "Q4.00");
+
+        await page.locator('[data-role="filter-range-mode-cycle-button"]').click();
+        await page.waitForFunction(() => {
+            const snapshotValue = window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.();
+            return snapshotValue?.value?.mode === "highpass";
+        });
+
+        snapshot = await getHarnessSnapshot(page);
+        assert.equal(snapshot.value.mode, "highpass");
+        assert.deepEqual(snapshot.modeCycleButton, {
+            ariaLabel: "Cycle filter mode, currently HP",
+            modeLabel: "HP",
+            title: "Filter mode: HP",
+        });
+
+        const beforeStartDrag = snapshot;
+        await dragLocatorBy(page, page.locator('[data-role="filter-range-start-hit-target"]'), 80, 0);
+        await page.waitForFunction(() => {
+            const snapshotValue = window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.();
+            return snapshotValue?.rangeLog?.length >= 1;
+        });
+
+        snapshot = await getHarnessSnapshot(page);
+        const expectedDraggedStartCutoff = cutoffHzAtX(beforeStartDrag, beforeStartDrag.rangeStartHandle.x + 80);
+        const expectedStartDragRange = bipolarRangeForDraggedHandle(beforeStartDrag.value.cutoffHz, expectedDraggedStartCutoff);
+        assertAlmostEqual(snapshot.range.startCutoffHz, expectedStartDragRange.startCutoffHz, 4);
+        assertAlmostEqual(snapshot.range.endCutoffHz, expectedStartDragRange.endCutoffHz, 4);
+        assertAlmostEqual(snapshot.value.cutoffHz, beforeStartDrag.value.cutoffHz, 1e-6);
+        assert.equal(snapshot.readoutCenter, "Center800 Hz");
+        assert.deepEqual(snapshot.editLog.slice(0, 2), ["start:range-start", "end:range-start"]);
+
+        const beforeEndDrag = snapshot;
+        await dragLocatorBy(page, page.locator('[data-role="filter-range-end-hit-target"]'), -72, 0);
+        await page.waitForFunction(() => {
+            const snapshotValue = window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.();
+            return snapshotValue?.rangeLog?.length >= 2;
+        });
+
+        snapshot = await getHarnessSnapshot(page);
+        const expectedDraggedEndCutoff = cutoffHzAtX(beforeEndDrag, beforeEndDrag.rangeEndHandle.x - 72);
+        const expectedEndDragRange = bipolarRangeForDraggedHandle(beforeEndDrag.value.cutoffHz, expectedDraggedEndCutoff);
+        assertAlmostEqual(snapshot.range.startCutoffHz, expectedEndDragRange.startCutoffHz, 5);
+        assertAlmostEqual(snapshot.range.endCutoffHz, expectedEndDragRange.endCutoffHz, 5);
+        assertAlmostEqual(snapshot.value.cutoffHz, beforeEndDrag.value.cutoffHz, 1e-6);
+        assert.equal(snapshot.readoutCenter, "Center800 Hz");
+        assert.deepEqual(snapshot.editLog.slice(-2), ["start:range-end", "end:range-end"]);
+
+        const beforeValueDrag = snapshot;
+        await dragLocatorBy(page, page.locator('[data-role="filter-range-value-hit-target"]'), 90, 44);
+        await page.waitForFunction(() => {
+            const snapshotValue = window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.();
+            return snapshotValue?.valueLog?.length >= 1;
+        });
+
+        snapshot = await getHarnessSnapshot(page);
+        assertAlmostEqual(snapshot.value.cutoffHz, cutoffHzAtX(beforeValueDrag, beforeValueDrag.valueHandle.x + 90), 8);
+        assertAlmostEqual(snapshot.value.q, qAtY(beforeValueDrag, beforeValueDrag.valueHandle.y + 44), 0.12);
+        assert.deepEqual(snapshot.editLog.slice(-2), ["start:value", "end:value"]);
+    } finally {
+        await page.close();
+    }
+});
+
+test("shared filter range editor can hide inactive preview state", async () => {
+    const page = await openModulePage();
+
+    try {
+        await installHarness(page, "installSharedFilterRangeEditorHarness");
+        await page.waitForSelector('[data-role="filter-range-preview-handle"]');
+
+        await page.evaluate(() => window.__COSIMO_DESKTOP_MODULE_HARNESS__.setPreviewActive(false));
+        await page.waitForFunction(() => {
+            const snapshot = window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.();
+            return snapshot?.previewHandle === null && snapshot?.previewPath === "";
+        });
+
+        const snapshot = await getHarnessSnapshot(page);
+        assert.equal(snapshot.previewActive, false);
+        assert.equal(snapshot.previewHandle, null);
+        assert.equal(snapshot.previewPath, "");
+    } finally {
+        await page.close();
+    }
+});
+
+test("shared filter range editor supports Cosimo unipolar cutoff ranges from the base cutoff", async () => {
+    const page = await openModulePage();
+
+    try {
+        await installHarness(page, "installSharedFilterRangeEditorHarness");
+        await page.waitForSelector('[data-role="filter-range-value-hit-target"]');
+        await page.evaluate(() => window.__COSIMO_DESKTOP_MODULE_HARNESS__.setRangePolarity("unipolar"));
+        await page.waitForFunction(() => {
+            const snapshot = window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.();
+            return snapshot?.rangePolarity === "unipolar"
+                && snapshot?.rangeStartHandle === null
+                && snapshot?.rangeStartHitTargetCount === 0;
+        });
+
+        let snapshot = await getHarnessSnapshot(page);
+        assert.equal(snapshot.rangePolarity, "unipolar");
+        assert.equal(snapshot.rangeStartHandle, null);
+        assert.equal(snapshot.rangeStartHitTargetCount, 0);
+        assertAlmostEqual(snapshot.range.startCutoffHz, snapshot.value.cutoffHz, 1e-6);
+        assertAlmostEqual(
+            snapshot.rangeBand.x,
+            Math.min(snapshot.valueHandle.x, snapshot.rangeEndHandle.x),
+            0.75,
+        );
+
+        const beforeEndDrag = snapshot;
+        await dragLocatorBy(page, page.locator('[data-role="filter-range-end-hit-target"]'), 72, 0);
+        await page.waitForFunction(() => {
+            const snapshotValue = window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.();
+            return snapshotValue?.rangeLog?.length >= 1;
+        });
+
+        snapshot = await getHarnessSnapshot(page);
+        assertAlmostEqual(snapshot.value.cutoffHz, beforeEndDrag.value.cutoffHz, 1e-6);
+        assertAlmostEqual(snapshot.range.startCutoffHz, snapshot.value.cutoffHz, 1e-6);
+        assertAlmostEqual(snapshot.range.endCutoffHz, cutoffHzAtX(beforeEndDrag, beforeEndDrag.rangeEndHandle.x + 72), 8);
+
+        const beforeValueDrag = snapshot;
+        const previousUnipolarOctaves = Math.log2(beforeValueDrag.range.endCutoffHz / beforeValueDrag.value.cutoffHz);
+        await dragLocatorBy(page, page.locator('[data-role="filter-range-value-hit-target"]'), 64, 0);
+        await page.waitForFunction(() => {
+            const snapshotValue = window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.();
+            return snapshotValue?.valueLog?.length >= 1;
+        });
+
+        snapshot = await getHarnessSnapshot(page);
+        const expectedBaseCutoff = cutoffHzAtX(beforeValueDrag, beforeValueDrag.valueHandle.x + 64);
+        assertAlmostEqual(snapshot.value.cutoffHz, expectedBaseCutoff, 8);
+        assertAlmostEqual(snapshot.range.startCutoffHz, expectedBaseCutoff, 8);
+        assertAlmostEqual(snapshot.range.endCutoffHz, expectedBaseCutoff * (2 ** previousUnipolarOctaves), 16);
     } finally {
         await page.close();
     }

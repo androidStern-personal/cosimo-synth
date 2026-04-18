@@ -14,6 +14,18 @@ import {
     WavetableStageSection,
 } from "../../ui/shared/synth-components";
 import {
+    FilterRangeEditor,
+    type FilterRangeEndpoints,
+    type FilterRangeMode,
+    type FilterRangePolarity,
+    type FilterRangeValue,
+    cutoffRangeOctaves,
+    cutoffsFromBaseModulationOctaves,
+    cutoffsFromCenterRangeOctaves,
+    geometricCenterCutoffHz,
+    modulationOctavesFromCutoffRange,
+} from "../../ui/shared/filter-range-editor";
+import {
     useFactoryBankCatalog,
     useFactoryTableFrames,
     useMsegEditorInteractions,
@@ -116,6 +128,33 @@ function readCurvePointsFromPath(pathElement: SVGPathElement | null, maxPoints =
     }
 
     return points;
+}
+
+function installFilterRangeEditorTestStyles() {
+    if (document.getElementById("filter-range-editor-test-styles")) {
+        return;
+    }
+
+    const styleElement = document.createElement("style");
+    styleElement.id = "filter-range-editor-test-styles";
+    styleElement.textContent = `
+        .filter-range-editor-test {
+            width: 640px;
+            height: 320px;
+        }
+        .filter-range-editor-test .filter-range-editor__viewport,
+        .filter-range-editor-test .filter-range-editor__surface {
+            display: block;
+            width: 100%;
+            height: 100%;
+            touch-action: none;
+        }
+        .filter-range-editor-test .filter-range-editor__range-hit-target,
+        .filter-range-editor-test .filter-range-editor__value-hit-target {
+            fill: transparent;
+        }
+    `;
+    document.head.appendChild(styleElement);
 }
 
 function cloneValue<TValue>(value: TValue): TValue {
@@ -1980,6 +2019,201 @@ export async function installSharedKeyboardSectionShellHarness(target: HTMLEleme
                     downDisabled: downButton instanceof HTMLButtonElement ? downButton.disabled : null,
                 },
             };
+        },
+        async unmount() {
+            mounted.unmount();
+            await waitForMicrotask();
+        },
+    };
+
+    await waitForMicrotask();
+}
+
+export async function installSharedFilterRangeEditorHarness(target: HTMLElement) {
+    installFilterRangeEditorTestStyles();
+
+    const state = {
+        value: {
+            mode: "lowpass" as FilterRangeMode,
+            cutoffHz: geometricCenterCutoffHz(200, 3200),
+            q: 4,
+        },
+        range: {
+            startCutoffHz: 200,
+            endCutoffHz: 3200,
+        },
+        valueLog: [] as FilterRangeValue[],
+        rangeLog: [] as FilterRangeEndpoints[],
+        editLog: [] as string[],
+        rangePolarity: "bipolar" as FilterRangePolarity,
+        previewActive: true,
+    };
+    let setHarnessRangePolarity: ((nextPolarity: FilterRangePolarity) => void) | null = null;
+    let setHarnessPreviewActive: ((nextPreviewActive: boolean) => void) | null = null;
+
+    const mounted = mountHarness(target, (root) => {
+        function Harness() {
+            const [value, setValue] = useState<FilterRangeValue>(state.value);
+            const [range, setRange] = useState<FilterRangeEndpoints>(state.range);
+            const [rangePolarity, setRangePolarity] = useState<FilterRangePolarity>(state.rangePolarity);
+            const [previewActive, setPreviewActive] = useState(state.previewActive);
+            const preview = useMemo(() => ({
+                active: previewActive,
+                mode: value.mode,
+                cutoffHz: range.endCutoffHz,
+                q: value.q,
+                label: "range end",
+            }), [previewActive, range.endCutoffHz, value.mode, value.q]);
+
+            useEffect(() => {
+                state.value = cloneValue(value);
+                state.range = cloneValue(range);
+                state.rangePolarity = rangePolarity;
+                state.previewActive = previewActive;
+            }, [previewActive, range, rangePolarity, value]);
+
+            useEffect(() => {
+                setHarnessRangePolarity = (nextPolarity) => {
+                    setRangePolarity(nextPolarity);
+                    setRange(nextPolarity === "unipolar"
+                        ? cutoffsFromBaseModulationOctaves({
+                            baseCutoffHz: value.cutoffHz,
+                            amountOctaves: 2,
+                            polarity: "unipolar",
+                        })
+                        : cutoffsFromCenterRangeOctaves({
+                            centerCutoffHz: value.cutoffHz,
+                            rangeOctaves: 4,
+                            direction: 1,
+                        }));
+                };
+                setHarnessPreviewActive = setPreviewActive;
+
+                return () => {
+                    setHarnessRangePolarity = null;
+                    setHarnessPreviewActive = null;
+                };
+            }, [value.cutoffHz]);
+
+            const updateValue = (nextValue: FilterRangeValue) => {
+                const modulationAmount = modulationOctavesFromCutoffRange({
+                    baseCutoffHz: value.cutoffHz,
+                    range,
+                    polarity: rangePolarity,
+                });
+                const nextRange = rangePolarity === "unipolar"
+                    ? cutoffsFromBaseModulationOctaves({
+                        baseCutoffHz: nextValue.cutoffHz,
+                        amountOctaves: modulationAmount,
+                        polarity: "unipolar",
+                    })
+                    : cutoffsFromCenterRangeOctaves({
+                        centerCutoffHz: nextValue.cutoffHz,
+                        rangeOctaves: cutoffRangeOctaves(range.startCutoffHz, range.endCutoffHz),
+                        direction: range.endCutoffHz >= range.startCutoffHz ? 1 : -1,
+                    });
+                state.valueLog.push(cloneValue(nextValue));
+                setValue(nextValue);
+                setRange(nextRange);
+            };
+
+            const updateRange = (nextRange: FilterRangeEndpoints) => {
+                state.rangeLog.push(cloneValue(nextRange));
+                setRange(nextRange);
+            };
+
+            return (
+                <FilterRangeEditor
+                    className="filter-range-editor-test"
+                    value={value}
+                    range={range}
+                    rangePolarity={rangePolarity}
+                    preview={preview}
+                    showModeControls
+                    showReadout
+                    onValueChange={updateValue}
+                    onRangeChange={updateRange}
+                    onEditStart={(targetName) => state.editLog.push(`start:${targetName}`)}
+                    onEditEnd={(targetName) => state.editLog.push(`end:${targetName}`)}
+                />
+            );
+        }
+
+        root.render(<Harness />);
+    });
+
+    window.__COSIMO_DESKTOP_MODULE_HARNESS__ = {
+        getSnapshot() {
+            const axes = Array.from(target.querySelectorAll('[data-role="filter-range-editor-axis"]'));
+            const xAxis = axes.find((axis) => axis.getAttribute("y1") === axis.getAttribute("y2"));
+            const yAxis = axes.find((axis) => axis.getAttribute("x1") === axis.getAttribute("x2"));
+            const surface = target.querySelector('[data-role="filter-range-editor-surface"]');
+            const valueHandle = target.querySelector('[data-role="filter-range-value-handle"]');
+            const valueHitTarget = target.querySelector('[data-role="filter-range-value-hit-target"]');
+            const rangeBand = target.querySelector('[data-role="filter-range-band"]');
+            const rangeStartHandle = target.querySelector('[data-role="filter-range-start-handle"]');
+            const rangeEndHandle = target.querySelector('[data-role="filter-range-end-handle"]');
+            const rangeEndHitTarget = target.querySelector('[data-role="filter-range-end-hit-target"]');
+            const previewHandle = target.querySelector('[data-role="filter-range-preview-handle"]');
+            const modeCycleButton = target.querySelector('[data-role="filter-range-mode-cycle-button"]');
+
+            const readCircle = (element: Element | null) => {
+                if (!element) {
+                    return null;
+                }
+
+                return {
+                    x: Number(element.getAttribute("cx") ?? 0),
+                    y: Number(element.getAttribute("cy") ?? 0),
+                };
+            };
+
+            return {
+                value: cloneValue(state.value),
+                range: cloneValue(state.range),
+                rangePolarity: state.rangePolarity,
+                previewActive: state.previewActive,
+                valueLog: cloneValue(state.valueLog),
+                rangeLog: cloneValue(state.rangeLog),
+                editLog: cloneValue(state.editLog),
+                surfaceTouchAction: surface instanceof SVGSVGElement
+                    ? getComputedStyle(surface).touchAction
+                    : null,
+                valueHitTargetTabIndex: valueHitTarget?.getAttribute("tabindex") ?? null,
+                rangeEndHitTargetTabIndex: rangeEndHitTarget?.getAttribute("tabindex") ?? null,
+                plot: {
+                    left: Number(yAxis?.getAttribute("x1") ?? 0),
+                    right: Number(xAxis?.getAttribute("x2") ?? 0),
+                    top: Number(yAxis?.getAttribute("y1") ?? 0),
+                    bottom: Number(xAxis?.getAttribute("y1") ?? 0),
+                },
+                valueHandle: readCircle(valueHandle),
+                rangeStartHandle: readCircle(rangeStartHandle),
+                rangeEndHandle: readCircle(rangeEndHandle),
+                previewHandle: readCircle(previewHandle),
+                rangeStartHitTargetCount: target.querySelectorAll('[data-role="filter-range-start-hit-target"]').length,
+                rangeBand: rangeBand ? {
+                    x: Number(rangeBand.getAttribute("x") ?? 0),
+                    width: Number(rangeBand.getAttribute("width") ?? 0),
+                } : null,
+                modeCycleButton: modeCycleButton ? {
+                    ariaLabel: modeCycleButton.getAttribute("aria-label") ?? "",
+                    modeLabel: modeCycleButton.getAttribute("data-mode-label") ?? "",
+                    title: modeCycleButton.getAttribute("title") ?? "",
+                } : null,
+                readoutCenter: target.querySelector('[data-role="filter-range-readout-center"]')?.textContent ?? "",
+                readoutRange: target.querySelector('[data-role="filter-range-readout-range"]')?.textContent ?? "",
+                readoutWidth: target.querySelector('[data-role="filter-range-readout-width"]')?.textContent ?? "",
+                readoutQ: target.querySelector('[data-role="filter-range-readout-q"]')?.textContent ?? "",
+                valuePath: target.querySelector('[data-role="filter-range-value-response"]')?.getAttribute("d") ?? "",
+                previewPath: target.querySelector('[data-role="filter-range-preview-response"]')?.getAttribute("d") ?? "",
+            };
+        },
+        setRangePolarity(nextPolarity: FilterRangePolarity) {
+            setHarnessRangePolarity?.(nextPolarity);
+        },
+        setPreviewActive(nextPreviewActive: boolean) {
+            setHarnessPreviewActive?.(nextPreviewActive);
         },
         async unmount() {
             mounted.unmount();

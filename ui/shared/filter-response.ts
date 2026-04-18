@@ -2,9 +2,7 @@ export const FILTER_CUTOFF_MIN_HZ = 20;
 export const FILTER_CUTOFF_MAX_HZ = 20_000;
 export const FILTER_Q_MIN = 0.1;
 export const FILTER_Q_MAX = 20;
-const FILTER_RESPONSE_POINT_COUNT = 80;
-const FILTER_RESPONSE_FFT_WARMUP_CYCLES = 10;
-const FILTER_RESPONSE_FFT_MEASURE_CYCLES = 6;
+const FILTER_RESPONSE_POINT_COUNT = 240;
 
 export const FILTER_MODE_OFF = 0;
 export const FILTER_MODE_LOWPASS = 1;
@@ -64,72 +62,50 @@ export function normalizedToFilterQ(value: unknown) {
     return FILTER_Q_MIN + ((FILTER_Q_MAX - FILTER_Q_MIN) * normalized);
 }
 
-class SimperFilter {
-    ic1eq = 0;
-    ic2eq = 0;
-    a1 = 0;
-    a2 = 0;
-    a3 = 0;
-    f0 = 0;
-    f1 = 0;
-    f2 = 1;
-    mode = FILTER_MODE_LOWPASS;
+type Complex = {
+    real: number;
+    imaginary: number;
+};
 
-    reset() {
-        this.ic1eq = 0;
-        this.ic2eq = 0;
+function complexAdd(left: Complex, right: Complex): Complex {
+    return {
+        real: left.real + right.real,
+        imaginary: left.imaginary + right.imaginary,
+    };
+}
+
+function complexSubtract(left: Complex, right: Complex): Complex {
+    return {
+        real: left.real - right.real,
+        imaginary: left.imaginary - right.imaginary,
+    };
+}
+
+function complexScale(value: Complex, scalar: number): Complex {
+    return {
+        real: value.real * scalar,
+        imaginary: value.imaginary * scalar,
+    };
+}
+
+function complexMultiply(left: Complex, right: Complex): Complex {
+    return {
+        real: (left.real * right.real) - (left.imaginary * right.imaginary),
+        imaginary: (left.real * right.imaginary) + (left.imaginary * right.real),
+    };
+}
+
+function complexDivide(numerator: Complex, denominator: Complex): Complex {
+    const denominatorMagnitude = (denominator.real * denominator.real) + (denominator.imaginary * denominator.imaginary);
+
+    if (denominatorMagnitude <= 1e-18) {
+        return { real: 0, imaginary: 0 };
     }
 
-    setMode(nextMode: number) {
-        this.mode = clampFilterMode(nextMode);
-    }
-
-    setFrequency(sampleRate: number, cutoffHz: number, q: number) {
-        const safeSampleRate = Math.max(1, Number(sampleRate) || 44_100);
-        const clampedCutoff = clampFilterCutoffHz(Math.min(Number(cutoffHz) || 0, safeSampleRate * 0.48));
-        const clampedQ = clampFilterQ(q);
-        const g = Math.tan(Math.PI * clampedCutoff / safeSampleRate);
-        const k = 1 / clampedQ;
-
-        if (this.mode === FILTER_MODE_LOWPASS) {
-            this.f0 = 0;
-            this.f1 = 0;
-            this.f2 = 1;
-        } else if (this.mode === FILTER_MODE_HIGHPASS) {
-            this.f0 = 1;
-            this.f1 = -k;
-            this.f2 = -1;
-        } else if (this.mode === FILTER_MODE_BANDPASS) {
-            this.f0 = 0;
-            this.f1 = 1;
-            this.f2 = 0;
-        } else if (this.mode === FILTER_MODE_NOTCH) {
-            this.f0 = 1;
-            this.f1 = -k;
-            this.f2 = 0;
-        } else if (this.mode === FILTER_MODE_PEAK) {
-            this.f0 = 1;
-            this.f1 = -k;
-            this.f2 = -2;
-        } else {
-            this.f0 = 1;
-            this.f1 = 0;
-            this.f2 = 0;
-        }
-
-        this.a1 = 1 / (1 + (g * (g + k)));
-        this.a2 = g * this.a1;
-        this.a3 = g * this.a2;
-    }
-
-    process(input: number) {
-        const v3 = input - this.ic2eq;
-        const v1 = (this.a1 * this.ic1eq) + (this.a2 * v3);
-        const v2 = this.ic2eq + (this.a2 * this.ic1eq) + (this.a3 * v3);
-        this.ic1eq = (2 * v1) - this.ic1eq;
-        this.ic2eq = (2 * v2) - this.ic2eq;
-        return (this.f0 * input) + (this.f1 * v1) + (this.f2 * v2);
-    }
+    return {
+        real: ((numerator.real * denominator.real) + (numerator.imaginary * denominator.imaginary)) / denominatorMagnitude,
+        imaginary: ((numerator.imaginary * denominator.real) - (numerator.real * denominator.imaginary)) / denominatorMagnitude,
+    };
 }
 
 function responseGainForFrequency({
@@ -149,39 +125,65 @@ function responseGainForFrequency({
         return 1;
     }
 
-    const filter = new SimperFilter();
-    filter.setMode(mode);
-    filter.setFrequency(sampleRate, cutoffHz, q);
-    const safeFrequency = clamp(frequencyHz, 10, (sampleRate * 0.49));
-    const cycleLength = Math.max(8, Math.round(sampleRate / safeFrequency));
-    const warmupSamples = cycleLength * FILTER_RESPONSE_FFT_WARMUP_CYCLES;
-    const measureSamples = cycleLength * FILTER_RESPONSE_FFT_MEASURE_CYCLES;
-    let inCos = 0;
-    let inSin = 0;
-    let outCos = 0;
-    let outSin = 0;
+    const resolvedMode = clampFilterMode(mode);
+    const safeSampleRate = Math.max(1, Number(sampleRate) || 44_100);
+    const clampedCutoff = clampFilterCutoffHz(Math.min(Number(cutoffHz) || 0, safeSampleRate * 0.48));
+    const clampedQ = clampFilterQ(q);
+    const safeFrequency = clamp(frequencyHz, 10, (safeSampleRate * 0.49));
+    const g = Math.tan(Math.PI * clampedCutoff / safeSampleRate);
+    const k = 1 / clampedQ;
+    let f0 = 1;
+    let f1 = 0;
+    let f2 = 0;
 
-    for (let sampleIndex = 0; sampleIndex < warmupSamples + measureSamples; sampleIndex += 1) {
-        const phase = (2 * Math.PI * safeFrequency * sampleIndex) / sampleRate;
-        const input = Math.sin(phase);
-        const output = filter.process(input);
-
-        if (sampleIndex < warmupSamples) {
-            continue;
-        }
-
-        inCos += input * Math.cos(phase);
-        inSin += input * Math.sin(phase);
-        outCos += output * Math.cos(phase);
-        outSin += output * Math.sin(phase);
+    if (resolvedMode === FILTER_MODE_LOWPASS) {
+        f0 = 0;
+        f1 = 0;
+        f2 = 1;
+    } else if (resolvedMode === FILTER_MODE_HIGHPASS) {
+        f0 = 1;
+        f1 = -k;
+        f2 = -1;
+    } else if (resolvedMode === FILTER_MODE_BANDPASS) {
+        f0 = 0;
+        f1 = 1;
+        f2 = 0;
+    } else if (resolvedMode === FILTER_MODE_NOTCH) {
+        f0 = 1;
+        f1 = -k;
+        f2 = 0;
+    } else if (resolvedMode === FILTER_MODE_PEAK) {
+        f0 = 1;
+        f1 = -k;
+        f2 = -2;
     }
 
-    const inputMagnitude = Math.hypot(inCos, inSin);
-    const outputMagnitude = Math.hypot(outCos, outSin);
-    if (inputMagnitude <= 1e-12) {
-        return 0;
-    }
-    return outputMagnitude / inputMagnitude;
+    const a1 = 1 / (1 + (g * (g + k)));
+    const a2 = g * a1;
+    const a3 = g * a2;
+
+    const z = {
+        real: Math.cos((2 * Math.PI * safeFrequency) / safeSampleRate),
+        imaginary: Math.sin((2 * Math.PI * safeFrequency) / safeSampleRate),
+    };
+    const m00 = complexSubtract(z, { real: (2 * a1) - 1, imaginary: 0 });
+    const m01 = { real: 2 * a2, imaginary: 0 };
+    const m10 = { real: -2 * a2, imaginary: 0 };
+    const m11 = complexSubtract(z, { real: 1 - (2 * a3), imaginary: 0 });
+    const det = complexSubtract(complexMultiply(m00, m11), complexMultiply(m01, m10));
+    const b0 = { real: 2 * a2, imaginary: 0 };
+    const b1 = { real: 2 * a3, imaginary: 0 };
+    const state1 = complexDivide(complexSubtract(complexMultiply(b0, m11), complexMultiply(m01, b1)), det);
+    const state2 = complexDivide(complexSubtract(complexMultiply(m00, b1), complexMultiply(b0, m10)), det);
+    const c0 = (f1 * a1) + (f2 * a2);
+    const c1 = (-f1 * a2) + (f2 * (1 - a3));
+    const d = f0 + (f1 * a2) + (f2 * a3);
+    const transfer = complexAdd(
+        { real: d, imaginary: 0 },
+        complexAdd(complexScale(state1, c0), complexScale(state2, c1)),
+    );
+
+    return Math.hypot(transfer.real, transfer.imaginary);
 }
 
 function buildFrequencies(pointCount: number) {

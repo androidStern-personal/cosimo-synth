@@ -22,6 +22,10 @@ async function loadFilterResponseModule() {
     return await loadUIModule(repoRoot, "ui/shared/filter-response.ts");
 }
 
+async function loadFilterRangeEditorModule() {
+    return await loadUIModule(repoRoot, "ui/shared/filter-range-editor.tsx");
+}
+
 async function loadFilterSpectrumModule() {
     return await loadUIModule(repoRoot, "ui/shared/filter-spectrum.ts");
 }
@@ -448,6 +452,191 @@ test("higher Q narrows and raises the bandpass response", async () => {
 
     assert.ok(lowQCenter < highQCenter);
     assert.ok((highQCenter - highQOffBand) > (lowQCenter - lowQOffBand));
+});
+
+test("high-Q lowpass response falls smoothly after its resonance peak", async () => {
+    const {
+        FILTER_MODE_LOWPASS,
+        createFilterResponseModel,
+    } = await loadFilterResponseModule();
+    const model = createFilterResponseModel({
+        mode: FILTER_MODE_LOWPASS,
+        cutoffHz: 6200,
+        q: 4.2,
+        sampleRate: 44100,
+        pointCount: 240,
+    });
+
+    for (let index = model.peakIndex + 1; index < model.magnitudesDb.length; index += 1) {
+        assert.ok(
+            model.magnitudesDb[index] <= model.magnitudesDb[index - 1] + 1e-9,
+            `Expected lowpass response to fall smoothly after the peak at point ${index}.`,
+        );
+    }
+});
+
+test("filter range helpers use geometric centers and preserve range direction", async () => {
+    const {
+        cutoffRangeOctaves,
+        cutoffsFromCenterRangeOctaves,
+        geometricCenterCutoffHz,
+    } = await loadFilterRangeEditorModule();
+
+    assert.equal(Math.round(geometricCenterCutoffHz(200, 3200)), 800);
+    assert.equal(cutoffRangeOctaves(200, 3200), 4);
+    assert.deepEqual(cutoffsFromCenterRangeOctaves({
+        centerCutoffHz: 800,
+        rangeOctaves: 4,
+        direction: 1,
+    }), {
+        startCutoffHz: 200,
+        endCutoffHz: 3200,
+    });
+    assert.deepEqual(cutoffsFromCenterRangeOctaves({
+        centerCutoffHz: 800,
+        rangeOctaves: 4,
+        direction: -1,
+    }), {
+        startCutoffHz: 3200,
+        endCutoffHz: 200,
+    });
+});
+
+test("filter range helpers model Cosimo unipolar and bipolar cutoff modulation in octaves", async () => {
+    const {
+        cutoffsFromBaseModulationOctaves,
+        cutoffsFromBipolarRangeHandleCutoff,
+        modulationOctavesFromCutoffRange,
+    } = await loadFilterRangeEditorModule();
+
+    assert.deepEqual(cutoffsFromBaseModulationOctaves({
+        baseCutoffHz: 1000,
+        amountOctaves: 2,
+        polarity: "unipolar",
+    }), {
+        startCutoffHz: 1000,
+        endCutoffHz: 4000,
+    });
+    assert.deepEqual(cutoffsFromBaseModulationOctaves({
+        baseCutoffHz: 1000,
+        amountOctaves: -1,
+        polarity: "unipolar",
+    }), {
+        startCutoffHz: 1000,
+        endCutoffHz: 500,
+    });
+    assert.deepEqual(cutoffsFromBaseModulationOctaves({
+        baseCutoffHz: 1000,
+        amountOctaves: 2,
+        polarity: "bipolar",
+    }), {
+        startCutoffHz: 250,
+        endCutoffHz: 4000,
+    });
+    assert.deepEqual(cutoffsFromBipolarRangeHandleCutoff({
+        baseCutoffHz: 1000,
+        handleCutoffHz: 4000,
+    }), {
+        startCutoffHz: 250,
+        endCutoffHz: 4000,
+    });
+    assert.deepEqual(cutoffsFromBipolarRangeHandleCutoff({
+        baseCutoffHz: 1000,
+        handleCutoffHz: 250,
+    }), {
+        startCutoffHz: 250,
+        endCutoffHz: 4000,
+    });
+    assert.equal(modulationOctavesFromCutoffRange({
+        baseCutoffHz: 1000,
+        range: { startCutoffHz: 1000, endCutoffHz: 4000 },
+        polarity: "unipolar",
+    }), 2);
+    assert.equal(modulationOctavesFromCutoffRange({
+        baseCutoffHz: 1000,
+        range: { startCutoffHz: 1000, endCutoffHz: 500 },
+        polarity: "unipolar",
+    }), -1);
+    assert.equal(modulationOctavesFromCutoffRange({
+        baseCutoffHz: 1000,
+        range: { startCutoffHz: 250, endCutoffHz: 4000 },
+        polarity: "bipolar",
+    }), 2);
+});
+
+test("filter range default resonance scale preserves Cosimo's tuned handle response", async () => {
+    const { createDefaultFilterRangeQScale } = await loadFilterRangeEditorModule();
+    const { filterQToNormalized } = await loadFilterResponseModule();
+    const qScale = createDefaultFilterRangeQScale();
+    const evaluateExpectedSigmoid = (input) => {
+        const x = Math.min(1, Math.max(0, input));
+        const slope = 11.1;
+        const center = 0.84;
+        const logistic = (sample) => 1 / (1 + Math.exp(-slope * (sample - center)));
+        const low = logistic(0);
+        const high = logistic(1);
+        return Math.min(1, Math.max(0, (logistic(x) - low) / Math.max(1e-9, high - low)));
+    };
+    const expectedQAtTunedCenter = 0.1 + (19.9 * evaluateExpectedSigmoid(0.84));
+
+    const halfQSurface = qScale.qToSurface(10.05);
+    const linearHalfQSurface = filterQToNormalized(10.05);
+
+    assert.ok(
+        halfQSurface > 0.75,
+        `Expected the tuned resonance response to place mid Q high on the drag surface, got ${halfQSurface}.`,
+    );
+    assert.ok(
+        halfQSurface > linearHalfQSurface + 0.25,
+        `Expected tuned Q response to differ materially from linear mapping ${linearHalfQSurface}.`,
+    );
+    assert.ok(
+        Math.abs(qScale.surfaceToQ(0.84) - expectedQAtTunedCenter) < 0.001,
+        `Expected surface 0.84 to follow the tuned sigmoid Q response, got ${qScale.surfaceToQ(0.84)}.`,
+    );
+});
+
+test("filter range value and endpoint clamps keep values in the filter domain", async () => {
+    const {
+        clampFilterRangeEndpoints,
+        clampFilterRangeValue,
+        filterRangeModeToResponseMode,
+        responseModeToFilterRangeMode,
+    } = await loadFilterRangeEditorModule();
+    const {
+        FILTER_MODE_HIGHPASS,
+        FILTER_Q_MAX,
+        FILTER_Q_MIN,
+    } = await loadFilterResponseModule();
+
+    assert.deepEqual(clampFilterRangeEndpoints({
+        startCutoffHz: -10,
+        endCutoffHz: 45_000,
+    }), {
+        startCutoffHz: 20,
+        endCutoffHz: 20_000,
+    });
+    assert.deepEqual(clampFilterRangeValue({
+        mode: "highpass",
+        cutoffHz: 0,
+        q: -20,
+    }), {
+        mode: "highpass",
+        cutoffHz: 20,
+        q: FILTER_Q_MIN,
+    });
+    assert.deepEqual(clampFilterRangeValue({
+        mode: "peak",
+        cutoffHz: 99_000,
+        q: 99,
+    }), {
+        mode: "peak",
+        cutoffHz: 20_000,
+        q: FILTER_Q_MAX,
+    });
+    assert.equal(filterRangeModeToResponseMode("highpass"), FILTER_MODE_HIGHPASS);
+    assert.equal(responseModeToFilterRangeMode(FILTER_MODE_HIGHPASS), "highpass");
+    assert.equal(responseModeToFilterRangeMode(999), "off");
 });
 
 test("filter spectrum normalization accepts wrapped payloads and rejects malformed messages", async () => {
