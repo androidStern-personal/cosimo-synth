@@ -4,7 +4,7 @@
     height: 100%;
     color: #eef2ef;
     background: #151816;
-    font-family: "Geist", "Avenir Next", "Helvetica Neue", Arial, sans-serif;
+    font-family: "Avenir Next", "Helvetica Neue", Arial, sans-serif;
 }
 
 * {
@@ -376,7 +376,7 @@ select {
 
 .seqfx-field output {
     color: #eef2ef;
-    font-family: "Geist Mono", Menlo, Monaco, monospace;
+    font-family: Menlo, Monaco, monospace;
     font-size: 12px;
 }
 
@@ -459,7 +459,7 @@ select {
 
 .seqfx-tape-graph-label {
     fill: rgba(238, 242, 239, 0.62);
-    font-family: "Geist Mono", Menlo, Monaco, monospace;
+    font-family: Menlo, Monaco, monospace;
     font-size: 9px;
 }
 
@@ -468,7 +468,7 @@ select {
     flex-wrap: wrap;
     gap: 6px;
     color: rgba(238, 242, 239, 0.64);
-    font-family: "Geist Mono", Menlo, Monaco, monospace;
+    font-family: Menlo, Monaco, monospace;
     font-size: 10px;
 }
 
@@ -488,7 +488,7 @@ select {
 
 .seqfx-tape-control output {
     color: #eef2ef;
-    font-family: "Geist Mono", Menlo, Monaco, monospace;
+    font-family: Menlo, Monaco, monospace;
     font-size: 12px;
     font-weight: 600;
 }

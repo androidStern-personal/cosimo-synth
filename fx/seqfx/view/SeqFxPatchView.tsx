@@ -5,6 +5,16 @@ import { createEffectHeader } from "../../../ui/shared/effects/effect-header";
 import { EffectSnapshotBankController } from "../../../ui/shared/effects/effect-snapshot-bank";
 import { createStandaloneEffectPresetController } from "../../../ui/shared/effects/standalone-effect-presets";
 import {
+    FilterRangeEditor,
+    type FilterRangeEndpoints,
+    type FilterRangeMode,
+    type FilterRangeModeOption,
+    type FilterRangeValue,
+    cutoffRangeOctaves,
+    cutoffsFromCenterRangeOctaves,
+    geometricCenterCutoffHz,
+} from "../../../ui/shared/filter-range-editor";
+import {
     SEQFX_LANES,
     SEQFX_LANE_NAMES,
     SEQFX_PATTERN_COUNT,
@@ -134,6 +144,49 @@ const PARAM_DEFINITIONS: Record<number, ParamDefinition[]> = {
         { index: 1, label: "Speed", min: 0.5, max: 2, step: 0.01, hint: "1.00 keeps the captured pitch." },
     ],
 };
+
+const FILTER_PARAM_MODE = 0;
+const FILTER_PARAM_START_CUTOFF = 1;
+const FILTER_PARAM_END_CUTOFF = 2;
+const FILTER_PARAM_RESONANCE = 3;
+const FILTER_PARAM_CURVE = 4;
+
+const SEQFX_FILTER_MODE_OPTIONS: FilterRangeModeOption[] = [
+    { label: "LP", value: "lowpass" },
+    { label: "HP", value: "highpass" },
+    { label: "BP", value: "bandpass" },
+];
+
+function seqFxFilterModeToRangeMode(mode: number): FilterRangeMode {
+    const roundedMode = Math.round(mode);
+    if (roundedMode === 1) return "highpass";
+    if (roundedMode === 2) return "bandpass";
+    return "lowpass";
+}
+
+function filterRangeModeToSeqFxMode(mode: FilterRangeMode) {
+    if (mode === "highpass") return 1;
+    if (mode === "bandpass") return 2;
+    return 0;
+}
+
+function filterRangeValueFromSeqFxStep(step: SeqFxStep): FilterRangeValue {
+    const startCutoffHz = step.params[FILTER_PARAM_START_CUTOFF] ?? 2_000;
+    const endCutoffHz = step.params[FILTER_PARAM_END_CUTOFF] ?? 500;
+
+    return {
+        mode: seqFxFilterModeToRangeMode(step.params[FILTER_PARAM_MODE] ?? 0),
+        cutoffHz: geometricCenterCutoffHz(startCutoffHz, endCutoffHz),
+        q: step.params[FILTER_PARAM_RESONANCE] ?? 0.707,
+    };
+}
+
+function filterRangeEndpointsFromSeqFxStep(step: SeqFxStep): FilterRangeEndpoints {
+    return {
+        startCutoffHz: step.params[FILTER_PARAM_START_CUTOFF] ?? 2_000,
+        endCutoffHz: step.params[FILTER_PARAM_END_CUTOFF] ?? 500,
+    };
+}
 
 function buildStepNumbers() {
     return Array.from({ length: SEQFX_STEP_COUNT }, (_unused, index) => index);
@@ -815,7 +868,7 @@ function isEditableElement(element: Element) {
             && inputType !== "submit";
     }
 
-    return element.isContentEditable
+    return (element instanceof HTMLElement && element.isContentEditable)
         || Boolean(element.closest('[contenteditable="true"], [role="textbox"]'));
 }
 
@@ -1661,6 +1714,44 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
         }
     }
 
+    function setFilterValue(nextValue: FilterRangeValue) {
+        if (!inspectedCell) {
+            return;
+        }
+
+        const currentValue = filterRangeValueFromSeqFxStep(inspectedCell);
+        const currentRange = filterRangeEndpointsFromSeqFxStep(inspectedCell);
+        const currentMode = filterRangeModeToSeqFxMode(currentValue.mode);
+        const nextMode = filterRangeModeToSeqFxMode(nextValue.mode);
+
+        if (nextMode !== currentMode) {
+            setParam(FILTER_PARAM_MODE, nextMode);
+        }
+
+        if (Math.abs(nextValue.q - currentValue.q) > 0.000001) {
+            setParam(FILTER_PARAM_RESONANCE, nextValue.q);
+        }
+
+        if (Math.abs(nextValue.cutoffHz - currentValue.cutoffHz) <= 0.000001) {
+            return;
+        }
+
+        const direction = currentRange.endCutoffHz >= currentRange.startCutoffHz ? 1 : -1;
+        const nextRange = cutoffsFromCenterRangeOctaves({
+            centerCutoffHz: nextValue.cutoffHz,
+            rangeOctaves: cutoffRangeOctaves(currentRange.startCutoffHz, currentRange.endCutoffHz),
+            direction,
+        });
+
+        setParam(FILTER_PARAM_START_CUTOFF, nextRange.startCutoffHz);
+        setParam(FILTER_PARAM_END_CUTOFF, nextRange.endCutoffHz);
+    }
+
+    function setFilterRange(nextRange: FilterRangeEndpoints) {
+        setParam(FILTER_PARAM_START_CUTOFF, nextRange.startCutoffHz);
+        setParam(FILTER_PARAM_END_CUTOFF, nextRange.endCutoffHz);
+    }
+
     function deleteSelectedBlock() {
         if (!activeSelection) {
             return;
@@ -1864,6 +1955,42 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
                                     blockDurationMs={tapeGraphBlockDurationMs}
                                     onParamChange={setParam}
                                 />
+                            ) : inspectedLane === SEQFX_LANES.filter ? (
+                                <>
+                                    <FilterRangeEditor
+                                        ariaLabel="SeqFX filter range editor"
+                                        modeOptions={SEQFX_FILTER_MODE_OPTIONS}
+                                        range={filterRangeEndpointsFromSeqFxStep(inspectedCell)}
+                                        rangePolarity="bipolar"
+                                        showModeControls
+                                        showReadout
+                                        value={filterRangeValueFromSeqFxStep(inspectedCell)}
+                                        onRangeChange={setFilterRange}
+                                        onValueChange={setFilterValue}
+                                    />
+                                    {PARAM_DEFINITIONS[inspectedLane]
+                                        .filter((definition) => definition.index === FILTER_PARAM_CURVE)
+                                        .map((definition) => {
+                                            const value = inspectedCell.params[definition.index];
+
+                                            return (
+                                                <label className="seqfx-field" key={definition.index}>
+                                                    <span>{definition.label}</span>
+                                                    <input
+                                                        data-role="seqfx-param"
+                                                        data-param={definition.index}
+                                                        max={definition.max}
+                                                        min={definition.min}
+                                                        onChange={(event) => setParam(definition.index, Number(event.currentTarget.value))}
+                                                        step={definition.step}
+                                                        type="number"
+                                                        value={formatValue(value)}
+                                                    />
+                                                    <small>{definition.hint ?? `${definition.min} to ${definition.max}`}</small>
+                                                </label>
+                                            );
+                                        })}
+                                </>
                             ) : PARAM_DEFINITIONS[inspectedLane].map((definition) => {
                                 const triggerLatched = isSeqFxTriggerLatchedParam(inspectedLane, definition.index);
                                 const disabled = triggerLatched && !selectedBlockGroup && !selectedWholeBlock && (activeSelection?.steps.length ?? 0) > 1;

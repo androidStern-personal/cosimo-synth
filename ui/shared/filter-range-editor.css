@@ -1,0 +1,206 @@
+.filter-range-editor {
+    container-type: inline-size;
+    display: grid;
+    grid-template-rows: minmax(190px, 1fr) auto;
+    width: 100%;
+    max-width: 100%;
+    min-height: 0;
+    border: 1px solid #1c1c1c;
+    background: #e4ded3;
+}
+
+.filter-range-editor__viewport {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    min-height: 190px;
+}
+
+.filter-range-editor__mode-cycle {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    z-index: 2;
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    border: 1px solid rgba(28, 28, 28, 0.42);
+    border-radius: 6px;
+    color: #1c1c1c;
+    background: rgba(240, 236, 230, 0.78);
+    box-shadow: 0 6px 16px rgba(28, 28, 28, 0.12);
+    cursor: pointer;
+}
+
+.filter-range-editor__mode-cycle:hover {
+    background: #f0ece6;
+}
+
+.filter-range-editor__mode-cycle:active {
+    transform: translateY(1px);
+}
+
+.filter-range-editor__mode-cycle svg {
+    width: 21px;
+    height: 21px;
+}
+
+.filter-range-editor__surface {
+    display: block;
+    width: 100%;
+    height: 100%;
+    min-height: 190px;
+    overflow: visible;
+    touch-action: none;
+}
+
+.filter-range-editor__grid-line {
+    stroke: rgba(28, 28, 28, 0.12);
+    stroke-width: 1;
+    shape-rendering: crispEdges;
+}
+
+.filter-range-editor__axis {
+    stroke: rgba(28, 28, 28, 0.44);
+    stroke-width: 1;
+    shape-rendering: crispEdges;
+}
+
+.filter-range-editor__range-band {
+    fill: rgba(0, 180, 216, 0.22);
+    stroke: #00b4d8;
+    stroke-width: 1.5;
+}
+
+.filter-range-editor__range-guide {
+    stroke: rgba(28, 28, 28, 0.28);
+    stroke-dasharray: 4 5;
+    stroke-width: 1.2;
+}
+
+.filter-range-editor__response-path {
+    fill: none;
+    stroke: #1c1c1c;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 3.2;
+}
+
+.filter-range-editor__preview-response-path {
+    fill: none;
+    stroke: #f4923a;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 2.2;
+    opacity: 0.95;
+}
+
+.filter-range-editor__preview-handle {
+    fill: #f4923a;
+    stroke: #1c1c1c;
+    stroke-width: 1.4;
+}
+
+.filter-range-editor__range-handle {
+    stroke: #1c1c1c;
+    stroke-width: 1.5;
+}
+
+.filter-range-editor__range-handle--start {
+    fill: #00b4d8;
+}
+
+.filter-range-editor__range-handle--end {
+    fill: #e8604c;
+}
+
+.filter-range-editor__range-hit-target,
+.filter-range-editor__value-hit-target {
+    fill: transparent;
+    cursor: grab;
+}
+
+.filter-range-editor__range-hit-target:active,
+.filter-range-editor__value-hit-target:active {
+    cursor: grabbing;
+}
+
+.filter-range-editor__value-guide {
+    stroke: rgba(28, 28, 28, 0.38);
+    stroke-width: 1;
+}
+
+.filter-range-editor__value-halo {
+    fill: rgba(240, 236, 230, 0.72);
+    stroke: #1c1c1c;
+    stroke-width: 1.2;
+}
+
+.filter-range-editor__value-handle {
+    fill: #1c1c1c;
+    stroke: #f0ece6;
+    stroke-width: 2;
+}
+
+.filter-range-editor__frequency-label {
+    fill: #6f716d;
+    font-size: 11px;
+    font-weight: 800;
+}
+
+.filter-range-editor__readout {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    border-top: 1px solid rgba(28, 28, 28, 0.22);
+}
+
+.filter-range-editor__readout div {
+    display: grid;
+    gap: 9px;
+    min-width: 0;
+    padding: 14px 12px;
+    border-right: 1px solid rgba(28, 28, 28, 0.18);
+}
+
+.filter-range-editor__readout div:last-child {
+    border-right: 0;
+}
+
+.filter-range-editor__readout span {
+    margin: 0;
+    color: #6f716d;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0;
+    text-transform: uppercase;
+}
+
+.filter-range-editor__readout strong {
+    min-width: 0;
+    color: #1c1c1c;
+    font-size: 17px;
+    font-weight: 800;
+    letter-spacing: 0;
+    overflow-wrap: anywhere;
+}
+
+@container (max-width: 420px) {
+    .filter-range-editor__readout {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .filter-range-editor__readout div {
+        gap: 6px;
+        padding: 10px 10px;
+    }
+
+    .filter-range-editor__readout div:nth-child(2n) {
+        border-right: 0;
+    }
+
+    .filter-range-editor__readout strong {
+        font-size: 15px;
+    }
+}

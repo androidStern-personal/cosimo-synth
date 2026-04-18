@@ -743,14 +743,6 @@ export function FilterRangeEditor(props: FilterRangeEditorProps) {
             return;
         }
 
-        if (rangePolarity === "bipolar") {
-            onRangeChange?.(cutoffsFromBipolarRangeHandleCutoff({
-                baseCutoffHz: safeValue.cutoffHz,
-                handleCutoffHz: nextCutoffHz,
-            }));
-            return;
-        }
-
         onRangeChange?.(
             dragState.target === "range-start"
                 ? { ...safeRange, startCutoffHz: nextCutoffHz }
@@ -796,14 +788,6 @@ export function FilterRangeEditor(props: FilterRangeEditorProps) {
         }
 
         event.preventDefault();
-        if (rangePolarity === "bipolar") {
-            onRangeChange?.(cutoffsFromBipolarRangeHandleCutoff({
-                baseCutoffHz: safeValue.cutoffHz,
-                handleCutoffHz: nextCutoffHz,
-            }));
-            return;
-        }
-
         onRangeChange?.(
             target === "range-start"
                 ? { ...safeRange, startCutoffHz: nextCutoffHz }

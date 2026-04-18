@@ -99,15 +99,6 @@ function xForCutoffHz(snapshot, cutoffHz) {
     return snapshot.plot.left + ((snapshot.plot.right - snapshot.plot.left) * normalized);
 }
 
-function bipolarRangeForDraggedHandle(baseCutoffHz, draggedCutoffHz) {
-    const amountOctaves = Math.abs(Math.log2(draggedCutoffHz / baseCutoffHz));
-    const ratio = 2 ** amountOctaves;
-    return {
-        startCutoffHz: Math.max(20, Math.min(20000, baseCutoffHz / ratio)),
-        endCutoffHz: Math.max(20, Math.min(20000, baseCutoffHz * ratio)),
-    };
-}
-
 function defaultResonanceCurve(normalizedInput) {
     const x = clamp(normalizedInput, 0, 1);
     const slope = 11.1;
@@ -426,9 +417,8 @@ test("shared filter range editor exposes the universal cutoff, resonance, range,
 
         snapshot = await getHarnessSnapshot(page);
         const expectedDraggedStartCutoff = cutoffHzAtX(beforeStartDrag, beforeStartDrag.rangeStartHandle.x + 80);
-        const expectedStartDragRange = bipolarRangeForDraggedHandle(beforeStartDrag.value.cutoffHz, expectedDraggedStartCutoff);
-        assertAlmostEqual(snapshot.range.startCutoffHz, expectedStartDragRange.startCutoffHz, 4);
-        assertAlmostEqual(snapshot.range.endCutoffHz, expectedStartDragRange.endCutoffHz, 4);
+        assertAlmostEqual(snapshot.range.startCutoffHz, expectedDraggedStartCutoff, 4);
+        assertAlmostEqual(snapshot.range.endCutoffHz, beforeStartDrag.range.endCutoffHz, 1e-6);
         assertAlmostEqual(snapshot.value.cutoffHz, beforeStartDrag.value.cutoffHz, 1e-6);
         assert.equal(snapshot.readoutCenter, "Center800 Hz");
         assert.deepEqual(snapshot.editLog.slice(0, 2), ["start:range-start", "end:range-start"]);
@@ -442,9 +432,8 @@ test("shared filter range editor exposes the universal cutoff, resonance, range,
 
         snapshot = await getHarnessSnapshot(page);
         const expectedDraggedEndCutoff = cutoffHzAtX(beforeEndDrag, beforeEndDrag.rangeEndHandle.x - 72);
-        const expectedEndDragRange = bipolarRangeForDraggedHandle(beforeEndDrag.value.cutoffHz, expectedDraggedEndCutoff);
-        assertAlmostEqual(snapshot.range.startCutoffHz, expectedEndDragRange.startCutoffHz, 5);
-        assertAlmostEqual(snapshot.range.endCutoffHz, expectedEndDragRange.endCutoffHz, 5);
+        assertAlmostEqual(snapshot.range.startCutoffHz, beforeEndDrag.range.startCutoffHz, 1e-6);
+        assertAlmostEqual(snapshot.range.endCutoffHz, expectedDraggedEndCutoff, 5);
         assertAlmostEqual(snapshot.value.cutoffHz, beforeEndDrag.value.cutoffHz, 1e-6);
         assert.equal(snapshot.readoutCenter, "Center800 Hz");
         assert.deepEqual(snapshot.editLog.slice(-2), ["start:range-end", "end:range-end"]);

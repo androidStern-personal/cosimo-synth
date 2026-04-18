@@ -161,6 +161,14 @@ async function dragLocatorTo(page, locator, point) {
     await page.mouse.up();
 }
 
+function geometricCenterHz(startHz, endHz) {
+    return Math.sqrt(Math.max(20, startHz) * Math.max(20, endHz));
+}
+
+function cutoffRangeOctaves(startHz, endHz) {
+    return Math.abs(Math.log2(Math.max(20, endHz) / Math.max(20, startHz)));
+}
+
 async function pressMetaShortcut(page, key) {
     await page.keyboard.down("Meta");
     await page.keyboard.press(key);
@@ -543,6 +551,7 @@ test("seqfx_shared_effect_loader_imports_react_dev_module_from_manifest", async 
                 : null;
         })(),
         viewTagName: document.querySelector("cosimo-seqfx-react-view")?.tagName.toLowerCase(),
+        styleText: document.getElementById("cosimo-seqfx-react-view-styles")?.textContent ?? "",
         uploads: window.__SEQFX_LOADER_HARNESS__?.getSnapshot().events
             .filter((entry) => entry.endpointID === "patternUpload"),
     }));
@@ -554,6 +563,9 @@ test("seqfx_shared_effect_loader_imports_react_dev_module_from_manifest", async 
     assert.equal(Array.isArray(snapshot.reactGrab?.plugins), true);
     assert.equal(snapshot.reactGrab.plugins.includes("mcp"), true);
     assert.equal(snapshot.viewTagName, "cosimo-seqfx-react-view");
+    assert.equal(snapshot.styleText.includes("@font-face"), false);
+    assert.equal(snapshot.styleText.includes('font-family: "Avenir Next", "Helvetica Neue", Arial, sans-serif'), true);
+    assert.equal(snapshot.styleText.includes("Geist"), false);
     assert.equal(snapshot.uploads.length >= 1, true);
     assert.equal(snapshot.uploads.at(-1).value.patternIndex, 0);
     assert.deepEqual(pageErrors, []);
@@ -567,6 +579,45 @@ test("seqfx_vite_dev_server_serves_a_stable_browser_harness_page", async () => {
 
     assert.equal(response?.status(), 200);
     await page.locator('[data-role="seqfx-root"]').waitFor();
+    await page.evaluate(() => document.fonts?.ready);
+    const renderedFont = await page.locator('[data-role="seqfx-root"]').evaluate((node) => getComputedStyle(node).fontFamily);
+    const measuredText = await page.evaluate(() => {
+        const samples = [
+            { label: "title", text: "SeqFX", size: 32, weight: 700, letterSpacing: 0, lineHeight: 32 },
+            { label: "inspectorTitle", text: "Select a cell", size: 18, weight: 700, letterSpacing: 0, lineHeight: null },
+            { label: "filterReadout", text: "1.00 kHz", size: 17, weight: 800, letterSpacing: 0, lineHeight: null },
+        ];
+
+        return samples.map((sample) => {
+            const node = document.createElement("span");
+            node.textContent = sample.text;
+            Object.assign(node.style, {
+                position: "absolute",
+                left: "-10000px",
+                top: "-10000px",
+                whiteSpace: "pre",
+                fontFamily: '"Avenir Next", "Helvetica Neue", Arial, sans-serif',
+                fontSize: `${sample.size}px`,
+                fontWeight: String(sample.weight),
+                letterSpacing: `${sample.letterSpacing}px`,
+                lineHeight: sample.lineHeight ? `${sample.lineHeight}px` : "normal",
+            });
+            document.body.appendChild(node);
+            const rect = node.getBoundingClientRect();
+            node.remove();
+            return {
+                label: sample.label,
+                width: rect.width,
+                height: rect.height,
+            };
+        });
+    });
+
+    assert.equal(renderedFont, '"Avenir Next", "Helvetica Neue", Arial, sans-serif');
+    assertClose(measuredText.find((entry) => entry.label === "title").width, 99.9375, 0.2, "Avenir Next title width");
+    assertClose(measuredText.find((entry) => entry.label === "title").height, 32, 0.2, "Avenir Next title height");
+    assertClose(measuredText.find((entry) => entry.label === "inspectorTitle").width, 102.9063, 0.2, "Avenir Next inspector title width");
+    assertClose(measuredText.find((entry) => entry.label === "filterReadout").width, 80.5781, 0.2, "Avenir Next filter readout width");
     await page.getByRole("button", { name: "Tape Stop step 1", exact: true }).click();
     await page.locator('[data-role="seqfx-tape-graph"]').waitFor();
 
@@ -716,15 +767,53 @@ test("seqfx_grid_cell_and_inspector_edits_send_complete_pattern_uploads", async 
         page.locator('[data-role="seqfx-inspector"]').getByText("Filter step 1").waitFor({ timeout: 400 }),
     );
 
-    const cutoffInput = page.locator('[data-role="seqfx-param"][data-param="1"]');
-    await cutoffInput.fill("330");
-    await cutoffInput.dispatchEvent("change");
+    const filterEditor = page.locator('[data-role="filter-range-editor"]');
+    await filterEditor.waitFor();
+    assert.equal(await page.locator('[data-role="seqfx-param"][data-param="1"]').count(), 0);
 
-    const snapshot = await getHarnessSnapshot(page);
-    const uploads = patternUploads(snapshot);
+    const sidebarFit = await filterEditor.evaluate((node) => {
+        const inspector = node.closest('[data-role="seqfx-inspector"]');
+        const style = getComputedStyle(node);
+
+        return {
+            backgroundColor: style.backgroundColor,
+            editorWidth: node.getBoundingClientRect().width,
+            editorScrollWidth: node.scrollWidth,
+            inspectorWidth: inspector?.getBoundingClientRect().width ?? 0,
+        };
+    });
+    assert.equal(sidebarFit.backgroundColor, "rgb(228, 222, 211)");
+    assert.ok(
+        sidebarFit.editorWidth <= sidebarFit.inspectorWidth,
+        `filter editor width ${sidebarFit.editorWidth} should fit inspector width ${sidebarFit.inspectorWidth}`,
+    );
+    assert.ok(
+        sidebarFit.editorScrollWidth <= Math.ceil(sidebarFit.editorWidth) + 1,
+        `filter editor scroll width ${sidebarFit.editorScrollWidth} should not overflow rendered width ${sidebarFit.editorWidth}`,
+    );
+
+    await page.locator('[data-role="filter-range-mode-cycle-button"]').click();
+
+    let snapshot = await getHarnessSnapshot(page);
+    let uploads = patternUploads(snapshot);
     assert.ok(uploads.length >= 2);
     assert.equal(uploads.at(-1).value.activeSteps[0][0], true);
-    assert.equal(uploads.at(-1).value.params[0][0][1], 330);
+    assert.equal(uploads.at(-1).value.params[0][0][0], 1);
+
+    await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
+    await page.locator('[data-role="filter-range-start-hit-target"]').focus();
+    await page.keyboard.press("End");
+
+    snapshot = await getHarnessSnapshot(page);
+    uploads = patternUploads(snapshot);
+    const uploadedStepParams = uploads.at(-1).value.params[0][0];
+    assert.equal(uploads.at(-1).value.activeSteps[0][0], true);
+    assertClose(uploadedStepParams[1], 20000, 0.001, "start handle edit should update the start cutoff");
+    assertClose(uploadedStepParams[2], 500, 0.001, "start handle edit should not rewrite the end cutoff");
+    assert.ok(
+        uploadedStepParams[1] > uploadedStepParams[2],
+        `filter range direction should remain start-to-end, got ${uploadedStepParams[1]} -> ${uploadedStepParams[2]}`,
+    );
 
     await page.close();
 });
@@ -1422,15 +1511,36 @@ test("seqfx_selected_multi_step_blocks_edit_and_drag_as_whole_blocks", async () 
             .join(",") === "1,7"
     ));
 
-    const cutoffInput = page.locator('[data-role="seqfx-param"][data-param="1"]');
-    await cutoffInput.fill("2222");
-    await cutoffInput.dispatchEvent("change");
+    const filterEditor = page.locator('[data-role="filter-range-editor"]');
+    await filterEditor.waitFor();
+    const beforeStart = 2000;
+    const beforeEnd = 500;
+    const beforeRangeOctaves = cutoffRangeOctaves(beforeStart, beforeEnd);
+
+    await page.locator('[data-role="filter-range-value-hit-target"]').focus();
+    await page.keyboard.press("ArrowRight");
 
     let snapshot = await getHarnessSnapshot(page);
     let upload = patternUploads(snapshot).at(-1).value;
+    const editedStart = upload.params[0][1][1];
+    const editedEnd = upload.params[0][1][2];
+    assert.ok(
+        editedStart > editedEnd,
+        `center handle edit should preserve downward filter sweep direction, got ${editedStart} -> ${editedEnd}`,
+    );
+    assert.ok(
+        geometricCenterHz(editedStart, editedEnd) > geometricCenterHz(beforeStart, beforeEnd),
+        "center handle edit should move the selected filter range upward",
+    );
+    assertClose(
+        cutoffRangeOctaves(editedStart, editedEnd),
+        beforeRangeOctaves,
+        0.02,
+        "center handle edit should preserve the selected filter range width",
+    );
     assert.deepEqual(
         [1, 2, 3, 7, 8].map((step) => upload.params[0][step][1]),
-        [2222, 2222, 2222, 2222, 2222],
+        [editedStart, editedStart, editedStart, editedStart, editedStart],
     );
     assert.equal(upload.params[0][21][1], 2000);
 
@@ -1454,7 +1564,7 @@ test("seqfx_selected_multi_step_blocks_edit_and_drag_as_whole_blocks", async () 
     assert.deepEqual(upload.triggerSteps[0].slice(16, 18), [true, false]);
     assert.deepEqual(
         [10, 11, 12, 16, 17].map((step) => upload.params[0][step][1]),
-        [2222, 2222, 2222, 2222, 2222],
+        [editedStart, editedStart, editedStart, editedStart, editedStart],
     );
     assert.equal(upload.activeSteps[0][21], true);
     assert.equal(upload.params[0][21][1], 2000);

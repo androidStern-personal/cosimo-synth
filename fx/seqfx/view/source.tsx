@@ -1,9 +1,13 @@
 import { Component, createElement, type ErrorInfo } from "react";
 import { createRoot, type Root } from "react-dom/client";
 
-import cssText from "./styles.css?inline";
+import filterRangeEditorCssText from "../../../ui/shared/filter-range-editor.css?inline";
+import seqFxCssText from "./styles.css?inline";
 import { SeqFxPatchView } from "./SeqFxPatchView";
 import type { PatchConnectionLike } from "../../../ui/shared/cmajor-react";
+
+const cssText = `${filterRangeEditorCssText}\n${seqFxCssText}`;
+const styleElementId = "cosimo-seqfx-react-view-styles";
 
 type ErrorBoundaryState = {
     errorMessage: string | null;
@@ -16,6 +20,14 @@ function formatErrorMessage(error: unknown) {
     }
 
     return String(error);
+}
+
+function createShadowCss() {
+    return cssText;
+}
+
+function createLightDomCss() {
+    return cssText.replaceAll(":host", getTagName());
 }
 
 class SeqFxErrorBoundary extends Component<
@@ -71,9 +83,11 @@ class SeqFxPatchViewElement extends HTMLElement {
     private patchConnection: PatchConnectionLike | null = null;
     private root: Root | null = null;
     private mountPoint: HTMLDivElement | null = null;
+    private shadowStyle: HTMLStyleElement | null = null;
 
     setPatchConnection(patchConnection: PatchConnectionLike) {
         this.patchConnection = patchConnection;
+        this.updateStyles();
         this.renderApp();
     }
 
@@ -97,14 +111,16 @@ class SeqFxPatchViewElement extends HTMLElement {
             if (!this.mountPoint || !this.root) {
                 const shadowRoot = this.shadowRoot!;
                 const style = document.createElement("style");
-                style.textContent = cssText;
                 const mountPoint = document.createElement("div");
                 mountPoint.style.width = "100%";
                 mountPoint.style.height = "100%";
                 shadowRoot.replaceChildren(style, mountPoint);
+                this.shadowStyle = style;
                 this.mountPoint = mountPoint;
                 this.root = createRoot(mountPoint);
             }
+
+            this.updateStyles();
         }
 
         this.style.display = "block";
@@ -119,16 +135,29 @@ class SeqFxPatchViewElement extends HTMLElement {
     }
 
     private ensureLightDomStyles() {
-        const styleId = "cosimo-seqfx-react-view-styles";
+        if (!document.getElementById(styleElementId)) {
+            const style = document.createElement("style");
+            style.id = styleElementId;
+            document.head.appendChild(style);
+        }
 
-        if (document.getElementById(styleId)) {
+        this.updateStyles();
+    }
+
+    private updateStyles() {
+        if (import.meta.env.DEV) {
+            const style = document.getElementById(styleElementId);
+
+            if (style) {
+                style.textContent = createLightDomCss();
+            }
+
             return;
         }
 
-        const style = document.createElement("style");
-        style.id = styleId;
-        style.textContent = cssText.replaceAll(":host", getTagName());
-        document.head.appendChild(style);
+        if (this.shadowStyle) {
+            this.shadowStyle.textContent = createShadowCss();
+        }
     }
 
     private renderApp() {
