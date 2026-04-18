@@ -63,6 +63,7 @@ export type SeqFxStep = {
     effectType: SeqFxEffectType;
     mix: number;
     params: number[];
+    effectParams?: Partial<Record<SeqFxEffectType, number[]>>;
 };
 
 export type SeqFxLane = {
@@ -197,6 +198,7 @@ export type SeqFxStepValueSnapshot = {
     effectType: SeqFxEffectType;
     mix: number;
     params: number[];
+    effectParams?: Partial<Record<SeqFxEffectType, number[]>>;
 };
 
 export type SeqFxStepValueSnapshotTarget = {
@@ -330,6 +332,67 @@ function defaultParamsForEffect(effectType: number): number[] {
     return [...(DEFAULT_EFFECT_PARAMS[resolved] ?? DEFAULT_EFFECT_PARAMS[SEQFX_EFFECT_TYPES.empty])];
 }
 
+function normalizeParamVector(effectType: number, params: unknown): number[] {
+    const rawParams = Array.isArray(params) ? params : [];
+    const defaults = defaultParamsForEffect(effectType);
+    return Array.from({ length: SEQFX_PARAM_COUNT }, (_unused, paramIndex) => (
+        normalizeParam(effectType, paramIndex, Number(rawParams[paramIndex] ?? defaults[paramIndex]))
+    ));
+}
+
+function normalizeEffectParamMemory(value: unknown): Partial<Record<SeqFxEffectType, number[]>> | undefined {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+        return undefined;
+    }
+
+    const rawMemory = value as Record<string, unknown>;
+    const memory: Partial<Record<SeqFxEffectType, number[]>> = {};
+
+    for (const effectType of [
+        SEQFX_EFFECT_TYPES.filter,
+        SEQFX_EFFECT_TYPES.crusher,
+        SEQFX_EFFECT_TYPES.tapeStop,
+        SEQFX_EFFECT_TYPES.stutter,
+    ] as const) {
+        const rawParams = rawMemory[String(effectType)];
+        if (Array.isArray(rawParams)) {
+            memory[effectType] = normalizeParamVector(effectType, rawParams);
+        }
+    }
+
+    return Object.keys(memory).length > 0 ? memory : undefined;
+}
+
+function cloneEffectParamMemory(memory?: Partial<Record<SeqFxEffectType, number[]>>): Partial<Record<SeqFxEffectType, number[]>> | undefined {
+    if (!memory) {
+        return undefined;
+    }
+
+    const cloned: Partial<Record<SeqFxEffectType, number[]>> = {};
+    for (const [effectType, params] of Object.entries(memory)) {
+        if (Array.isArray(params)) {
+            cloned[Number(effectType) as SeqFxEffectType] = [...params];
+        }
+    }
+
+    return Object.keys(cloned).length > 0 ? cloned : undefined;
+}
+
+function rememberCurrentEffectParams(step: SeqFxStep): Partial<Record<SeqFxEffectType, number[]>> | undefined {
+    const memory = cloneEffectParamMemory(step.effectParams) ?? {};
+    if (step.active && step.effectType !== SEQFX_EFFECT_TYPES.empty) {
+        memory[step.effectType] = normalizeParamVector(step.effectType, step.params);
+    }
+
+    return Object.keys(memory).length > 0 ? memory : undefined;
+}
+
+function rememberedParamsForEffect(step: SeqFxStep, effectType: SeqFxEffectType): number[] {
+    return step.effectParams?.[effectType]
+        ? [...step.effectParams[effectType]]
+        : defaultParamsForEffect(effectType);
+}
+
 function normalizeParam(effectType: number, paramIndex: number, value: number): number {
     if (effectType === SEQFX_EFFECT_TYPES.tapeStop && paramIndex === 2 && Number(value) === 0) {
         return 1;
@@ -450,6 +513,7 @@ function cloneState(state: SeqFxState): SeqFxState {
                     effectType: step.effectType,
                     mix: step.mix,
                     params: [...step.params],
+                    effectParams: cloneEffectParamMemory(step.effectParams),
                 })),
             })),
         })),
@@ -462,6 +526,7 @@ function normalizeStep(candidate: unknown, lane: number): SeqFxStep {
         ? candidate as Partial<SeqFxStep>
         : {};
     const rawParams = Array.isArray(step.params) ? step.params : [];
+    const effectParams = normalizeEffectParamMemory(step.effectParams);
     const rawActive = step.active === true;
     const fallbackEffectType = defaultEffectTypeForLane(lane);
     const rawEffectType = Object.prototype.hasOwnProperty.call(step, "effectType")
@@ -473,16 +538,14 @@ function normalizeStep(candidate: unknown, lane: number): SeqFxStep {
     const paramsEffectType = effectType === SEQFX_EFFECT_TYPES.empty
         ? fallbackEffectType
         : effectType;
-    const fallbackParams = defaultParamsForEffect(paramsEffectType);
 
     return {
         active: rawActive && effectType !== SEQFX_EFFECT_TYPES.empty,
         trigger: rawActive && effectType !== SEQFX_EFFECT_TYPES.empty && step.trigger === true,
         effectType,
         mix: normalizeMix(Number(step.mix ?? fallback.mix)),
-        params: Array.from({ length: SEQFX_PARAM_COUNT }, (_unused, paramIndex) => (
-            normalizeParam(paramsEffectType, paramIndex, Number(rawParams[paramIndex] ?? fallbackParams[paramIndex]))
-        )),
+        params: normalizeParamVector(paramsEffectType, rawParams),
+        effectParams,
     };
 }
 
@@ -680,6 +743,7 @@ function writeBlock(
         ? defaultEffectTypeForLane(lane)
         : template.effectType;
     const defaultParams = defaultParamsForEffect(effectType);
+    const effectParams = cloneEffectParamMemory(template.effectParams);
     for (let offset = 0; offset < length; offset += 1) {
         const step = startStep + offset;
         pattern.lanes[lane].steps[step] = {
@@ -690,6 +754,7 @@ function writeBlock(
             params: Array.from({ length: SEQFX_PARAM_COUNT }, (_unused, paramIndex) => (
                 normalizeParam(effectType, paramIndex, template.params[paramIndex] ?? defaultParams[paramIndex])
             )),
+            effectParams: cloneEffectParamMemory(effectParams),
         };
     }
 }
@@ -705,6 +770,7 @@ function cloneBlockSteps(pattern: SeqFxPattern, lane: number, block: SeqFxBlock)
             params: Array.from({ length: SEQFX_PARAM_COUNT }, (_unusedParam, paramIndex) => (
                 normalizeParam(source.effectType, paramIndex, source.params[paramIndex])
             )),
+            effectParams: cloneEffectParamMemory(source.effectParams),
         };
     });
 }
@@ -742,6 +808,7 @@ function writeBlockSteps(
             params: Array.from({ length: SEQFX_PARAM_COUNT }, (_unusedParam, paramIndex) => (
                 normalizeParam(source.effectType, paramIndex, source.params[paramIndex])
             )),
+            effectParams: cloneEffectParamMemory(source.effectParams),
         };
     }
 }
@@ -998,7 +1065,9 @@ export function applySeqFxBlockSelectionParamEdit(state: SeqFxState, edit: SeqFx
         for (const block of blocks) {
             const value = normalizeParam(block.effectType, paramIndex, edit.value);
             for (let step = block.startStep; step <= block.endStep; step += 1) {
-                pattern.lanes[lane].steps[step].params[paramIndex] = value;
+                const target = pattern.lanes[lane].steps[step];
+                target.params[paramIndex] = value;
+                target.effectParams = rememberCurrentEffectParams(target);
             }
         }
     });
@@ -1032,7 +1101,9 @@ export function applySeqFxBlockParamEdit(state: SeqFxState, edit: SeqFxBlockPara
 
         const value = normalizeParam(block.effectType, paramIndex, edit.value);
         for (let step = block.startStep; step <= block.endStep; step += 1) {
-            pattern.lanes[lane].steps[step].params[paramIndex] = value;
+            const target = pattern.lanes[lane].steps[step];
+            target.params[paramIndex] = value;
+            target.effectParams = rememberCurrentEffectParams(target);
         }
     });
 }
@@ -1051,11 +1122,14 @@ export function applySeqFxBlockEffectEdit(state: SeqFxState, edit: SeqFxBlockEff
             throw new Error("Cannot edit effect for a missing SeqFX block.");
         }
 
-        const params = defaultParamsForEffect(effectType);
         for (let step = block.startStep; step <= block.endStep; step += 1) {
-            pattern.lanes[lane].steps[step].effectType = effectType;
-            pattern.lanes[lane].steps[step].trigger = step === block.startStep;
-            pattern.lanes[lane].steps[step].params = [...params];
+            const target = pattern.lanes[lane].steps[step];
+            const effectParams = rememberCurrentEffectParams(target);
+            target.effectParams = effectParams;
+            target.effectType = effectType;
+            target.trigger = step === block.startStep;
+            target.params = rememberedParamsForEffect(target, effectType);
+            target.effectParams = rememberCurrentEffectParams(target);
         }
     });
 }
@@ -1129,6 +1203,7 @@ export function applySeqFxParamEdit(state: SeqFxState, edit: SeqFxParamEdit): Se
                 target.active = true;
                 target.trigger = true;
             }
+            target.effectParams = rememberCurrentEffectParams(target);
         }
     });
 }
@@ -1147,6 +1222,7 @@ export function getSeqFxStepValueSnapshot(state: SeqFxState, target: SeqFxStepVa
         params: Array.from({ length: SEQFX_PARAM_COUNT }, (_unused, paramIndex) => (
             normalizeParam(source.effectType === SEQFX_EFFECT_TYPES.empty ? defaultEffectTypeForLane(lane) : source.effectType, paramIndex, source.params[paramIndex])
         )),
+        effectParams: cloneEffectParamMemory(source.effectParams),
     };
 }
 
@@ -1162,12 +1238,14 @@ export function applySeqFxStepValuePaste(state: SeqFxState, edit: SeqFxStepValue
         const params = Array.from({ length: SEQFX_PARAM_COUNT }, (_unused, paramIndex) => (
             normalizeParam(effectType, paramIndex, edit.values.params[paramIndex])
         ));
+        const effectParams = cloneEffectParamMemory(edit.values.effectParams);
 
         for (const step of steps) {
             const target = pattern.lanes[lane].steps[step];
             target.mix = mix;
             target.effectType = target.active ? effectType : SEQFX_EFFECT_TYPES.empty;
             target.params = [...params];
+            target.effectParams = target.active ? cloneEffectParamMemory(effectParams) : undefined;
         }
     });
 }

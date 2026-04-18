@@ -15,6 +15,12 @@ const SEQFX_SNAPSHOT_BANK_STATE_KEY = "cosimo.effectSnapshotBank.seqfx.v1";
 const SEQFX_NORMAL_GAP_PX = 5;
 const SEQFX_BEAT_GAP_PX = 9;
 const SEQFX_MIN_CELL_SIZE_PX = 22;
+const SEQFX_EFFECT_TYPES = {
+    filter: 1,
+    crusher: 2,
+    tapeStop: 3,
+    stutter: 4,
+};
 const SEQFX_LANE_NAMES = ["Chain 1", "Chain 2", "Chain 3", "Chain 4"];
 const SEQFX_DEFAULT_EFFECT_NAMES = ["Filter", "Crusher", "Tape Stop", "Stutter"];
 const TAPE_GRAPH_VIEWBOX_WIDTH = 260;
@@ -1009,6 +1015,7 @@ test("seqfx_right_edge_drag_resizes_a_block_without_retriggering_continuation_st
     const first = page.getByRole("button", { name: "Chain 3 step 1", exact: true });
     const fifth = page.getByRole("button", { name: "Chain 3 step 5", exact: true });
     await first.click();
+    await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
 
     const resizeHandle = page.locator('[data-role="seqfx-block-resize"][data-lane="2"][data-start="0"]');
     await resizeHandle.waitFor();
@@ -1021,9 +1028,11 @@ test("seqfx_right_edge_drag_resizes_a_block_without_retriggering_continuation_st
     await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2);
     await page.mouse.down();
     await page.mouse.move(fifthBox.x + fifthBox.width - 2, fifthBox.y + fifthBox.height / 2, { steps: 8 });
+    assert.equal(patternUploads(await getHarnessSnapshot(page)).length, 0);
     await page.mouse.up();
 
     const snapshot = await getHarnessSnapshot(page);
+    assert.equal(patternUploads(snapshot).length, 1);
     const lastUpload = patternUploads(snapshot).at(-1).value;
     assert.deepEqual(lastUpload.activeSteps[2].slice(0, 5), [true, true, true, true, true]);
     assert.deepEqual(lastUpload.triggerSteps[2].slice(0, 5), [true, false, false, false, false]);
@@ -1136,6 +1145,33 @@ test("seqfx_single_cell_blocks_keep_the_same_square_geometry_as_grid_cells", asy
     await page.close();
 });
 
+test("seqfx_inspector_effect_selector_persists_selected_effect_type_and_uploads_pattern", async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
+    await loadSeqFxHarness(page);
+    await page.locator('[data-role="seqfx-root"]').waitFor();
+    await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
+
+    await page.getByRole("button", { name: "Chain 2 step 1", exact: true }).click();
+    await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
+    await page.locator('[data-role="seqfx-effect-type"]').selectOption(String(SEQFX_EFFECT_TYPES.tapeStop));
+
+    await page.getByRole("button", { name: "Chain 2 Tape Stop block 1", exact: true }).waitFor();
+    const snapshot = await getHarnessSnapshot(page);
+    const uploads = patternUploads(snapshot);
+    assert.equal(uploads.length, 1);
+    const upload = uploads.at(-1).value;
+    assert.equal(upload.effectTypes[1][0], SEQFX_EFFECT_TYPES.tapeStop);
+    assert.deepEqual(upload.params[1][0].slice(0, 5), [1, 1, 1, 25, 0]);
+
+    const storedState = parseSeqFxStoredState(snapshot.storedState[SEQFX_STATE_KEY]);
+    const storedStep = storedState.patterns[0].lanes[1].steps[0];
+    assert.equal(storedStep.active, true);
+    assert.equal(storedStep.effectType, SEQFX_EFFECT_TYPES.tapeStop);
+    assert.deepEqual(storedStep.params.slice(0, 5), [1, 1, 1, 25, 0]);
+
+    await page.close();
+});
+
 test("seqfx_blocks_use_a_single_clean_surface_with_hidden_resize_chrome", async () => {
     const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
     await loadSeqFxHarness(page);
@@ -1241,6 +1277,7 @@ test("seqfx_dragging_block_body_moves_the_block_without_resizing_it", async () =
 
     const movedBlock = page.getByRole("button", { name: "Chain 1 Filter block 2-4", exact: true });
     await movedBlock.waitFor();
+    await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
     const movedBlockBox = await movedBlock.boundingBox();
     const targetCellBox = await page.getByRole("button", { name: "Chain 1 step 7", exact: true }).boundingBox();
     assert.ok(movedBlockBox);
@@ -1249,9 +1286,11 @@ test("seqfx_dragging_block_body_moves_the_block_without_resizing_it", async () =
     await page.mouse.move(movedBlockBox.x + movedBlockBox.width * 0.15, movedBlockBox.y + movedBlockBox.height / 2);
     await page.mouse.down();
     await page.mouse.move(targetCellBox.x + targetCellBox.width * 0.15, targetCellBox.y + targetCellBox.height / 2, { steps: 10 });
+    assert.equal(patternUploads(await getHarnessSnapshot(page)).length, 0);
     await page.mouse.up();
 
     const snapshot = await getHarnessSnapshot(page);
+    assert.equal(patternUploads(snapshot).length, 1);
     const moveUpload = patternUploads(snapshot).at(-1).value;
     assert.deepEqual(moveUpload.activeSteps[0].slice(1, 4), [false, false, false]);
     assert.deepEqual(moveUpload.activeSteps[0].slice(6, 9), [true, true, true]);
@@ -1537,9 +1576,11 @@ test("seqfx_selected_active_blocks_drag_as_a_group", async () => {
     await page.mouse.move(anchorBox.x + anchorBox.width / 2, anchorBox.y + anchorBox.height / 2);
     await page.mouse.down();
     await page.mouse.move(targetBox.x + targetBox.width / 2, targetBox.y + targetBox.height / 2, { steps: 10 });
+    assert.equal(patternUploads(await getHarnessSnapshot(page)).length, 0);
     await page.mouse.up();
 
     const snapshot = await getHarnessSnapshot(page);
+    assert.equal(patternUploads(snapshot).length, 1);
     const upload = patternUploads(snapshot).at(-1).value;
     assert.deepEqual(upload.activeSteps[0].slice(0, 13), [
         false, false, false, true, false, true, false, false, true, false, true, false, false,
@@ -1640,6 +1681,7 @@ test("seqfx_selected_multi_step_blocks_edit_and_drag_as_whole_blocks", async () 
         [editedStart, editedStart, editedStart, editedStart, editedStart],
     );
     assert.equal(upload.params[0][21][1], 2000);
+    await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
 
     const anchorBox = await page.getByRole("button", { name: "Chain 1 Filter block 2-4", exact: true }).boundingBox();
     const targetBox = await page.getByRole("button", { name: "Chain 1 step 11", exact: true }).boundingBox();
@@ -1649,9 +1691,11 @@ test("seqfx_selected_multi_step_blocks_edit_and_drag_as_whole_blocks", async () 
     await page.mouse.move(anchorBox.x + anchorBox.width * 0.15, anchorBox.y + anchorBox.height / 2);
     await page.mouse.down();
     await page.mouse.move(targetBox.x + targetBox.width * 0.15, targetBox.y + targetBox.height / 2, { steps: 12 });
+    assert.equal(patternUploads(await getHarnessSnapshot(page)).length, 0);
     await page.mouse.up();
 
     snapshot = await getHarnessSnapshot(page);
+    assert.equal(patternUploads(snapshot).length, 1);
     upload = patternUploads(snapshot).at(-1).value;
     assert.deepEqual(upload.activeSteps[0].slice(1, 4), [false, false, false]);
     assert.deepEqual(upload.activeSteps[0].slice(7, 9), [false, false]);

@@ -120,7 +120,7 @@ test("chain_steps_clamp_parameters_by_selected_effect_type_not_chain_index", () 
     assert.equal(upload.params[2][8][1], 20);
 });
 
-test("changing_a_block_effect_updates_the_whole_block_and_resets_params_to_that_effect_defaults", () => {
+test("changing_a_block_effect_updates_the_whole_block_and_remembers_each_effects_params", () => {
     let state = createDefaultSeqFxState();
     state = applySeqFxBlockCreate(state, {
         patternIndex: 0,
@@ -158,6 +158,30 @@ test("changing_a_block_effect_updates_the_whole_block_and_resets_params_to_that_
     assert.deepEqual(
         upload.params[1].slice(3, 6).map((params) => params.slice(0, 2)),
         [[8, 1], [8, 1], [8, 1]],
+    );
+
+    state = applySeqFxBlockEffectEdit(state, {
+        patternIndex: 0,
+        lane: 1,
+        startStep: 3,
+        effectType: SEQFX_EFFECT_TYPES.filter,
+    });
+
+    const restoredUpload = buildSeqPatternUpload(state, {
+        patternIndex: 0,
+        authoritative: false,
+    });
+
+    assert.deepEqual(restoredUpload.activeSteps[1].slice(3, 6), [true, true, true]);
+    assert.deepEqual(restoredUpload.triggerSteps[1].slice(3, 6), [true, false, false]);
+    assert.deepEqual(restoredUpload.effectTypes[1].slice(3, 6), [
+        SEQFX_EFFECT_TYPES.filter,
+        SEQFX_EFFECT_TYPES.filter,
+        SEQFX_EFFECT_TYPES.filter,
+    ]);
+    assert.deepEqual(
+        restoredUpload.params[1].slice(3, 6).map((params) => params[1]),
+        [320, 320, 320],
     );
 });
 

@@ -303,14 +303,26 @@ export class SeqFxRuntimeBridge {
         this.commitState(applySeqFxBlockResize(this.state, edit), edit.patternIndex);
     }
 
+    previewBlockResize(edit: SeqFxBlockResizeEdit): SeqFxState {
+        return applySeqFxBlockResize(this.state, edit);
+    }
+
     moveBlock(edit: SeqFxBlockMoveEdit) {
         this.commitState(applySeqFxBlockMove(this.state, edit), edit.patternIndex);
+    }
+
+    previewBlockMove(edit: SeqFxBlockMoveEdit): SeqFxState {
+        return applySeqFxBlockMove(this.state, edit);
     }
 
     moveBlockSelection(edit: SeqFxBlockSelectionMoveEdit): SeqFxBlockSelectionMoveResult {
         const result = applySeqFxBlockSelectionMove(this.state, edit);
         this.commitState(result.state, edit.patternIndex);
         return result;
+    }
+
+    previewBlockSelectionMove(edit: SeqFxBlockSelectionMoveEdit): SeqFxBlockSelectionMoveResult {
+        return applySeqFxBlockSelectionMove(this.state, edit);
     }
 
     copyBlock(edit: SeqFxBlockCopyEdit) {

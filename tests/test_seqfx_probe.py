@@ -340,6 +340,28 @@ def _ramp(frames: int) -> np.ndarray:
     return np.column_stack([mono, mono]).astype(np.float32)
 
 
+def _complex_signal(frames: int) -> np.ndarray:
+    t = np.arange(frames, dtype=np.float64) / SAMPLE_RATE
+    sweep = np.sin(2.0 * np.pi * (120.0 + (860.0 * t)) * t)
+    mono = (
+        0.25 * np.sin(2.0 * np.pi * 190.0 * t)
+        + 0.22 * np.sin(2.0 * np.pi * 1_370.0 * t)
+        + 0.18 * sweep
+        + 0.08 * np.sign(np.sin(2.0 * np.pi * 73.0 * t))
+    ).astype(np.float32)
+    return np.column_stack([mono, mono]).astype(np.float32)
+
+
+def _rms(samples: np.ndarray) -> float:
+    return float(np.sqrt(np.mean(np.asarray(samples, dtype=np.float64) ** 2)))
+
+
+def _largest_boundary_jump(samples: np.ndarray, boundary_step: int) -> float:
+    boundary = STEP_FRAMES * boundary_step
+    window = samples[boundary - 16 : boundary + 16]
+    return float(np.max(np.abs(np.diff(window))))
+
+
 def _zero_crossing_rate(samples: np.ndarray) -> float:
     signs = np.signbit(samples)
     return float(np.count_nonzero(signs[1:] != signs[:-1]) / max(1, samples.size))
@@ -509,6 +531,138 @@ def test_filter_effect_can_run_in_any_chain_not_only_the_old_filter_lane(
     assert output_rms < input_rms * 0.35
 
 
+def test_serial_chain_order_is_chain_order_not_legacy_effect_order(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    serial_upload = _empty_upload()
+    _activate_step(
+        serial_upload,
+        lane=0,
+        step=0,
+        effect_type=EFFECT_STUTTER,
+        params=[5.0, 1.0, 0.0],
+    )
+    _activate_step(
+        serial_upload,
+        lane=1,
+        step=0,
+        effect_type=EFFECT_FILTER,
+        params=[0.0, 720.0, 720.0, 0.707, 1.0],
+    )
+    _activate_step(
+        serial_upload,
+        lane=2,
+        step=0,
+        effect_type=EFFECT_CRUSHER,
+        params=[5.0, 7.0, 8.0],
+    )
+
+    legacy_order_upload = _empty_upload()
+    _activate_step(
+        legacy_order_upload,
+        lane=0,
+        step=0,
+        effect_type=EFFECT_FILTER,
+        params=[0.0, 720.0, 720.0, 0.707, 1.0],
+    )
+    _activate_step(
+        legacy_order_upload,
+        lane=1,
+        step=0,
+        effect_type=EFFECT_CRUSHER,
+        params=[5.0, 7.0, 8.0],
+    )
+    _activate_step(
+        legacy_order_upload,
+        lane=2,
+        step=0,
+        effect_type=EFFECT_STUTTER,
+        params=[5.0, 1.0, 0.0],
+    )
+
+    input_audio = _complex_signal(STEP_FRAMES * 2)
+    serial_output = _render(
+        generated_runtime,
+        tmp_path,
+        input_audio,
+        _base_schedule(serial_upload),
+    )
+    legacy_order_output = _render(
+        generated_runtime,
+        tmp_path,
+        input_audio,
+        _base_schedule(legacy_order_upload),
+    )
+
+    comparison_window = slice(STEP_FRAMES // 2, STEP_FRAMES * 2)
+    assert _rms(serial_output[comparison_window] - input_audio[comparison_window]) > 0.02
+    assert _rms(serial_output[comparison_window] - legacy_order_output[comparison_window]) > 0.01
+
+
+@pytest.mark.parametrize(
+    ("effect_type", "params_a", "params_b"),
+    [
+        (EFFECT_FILTER, [0.0, 360.0, 360.0, 0.707, 1.0], [1.0, 4_500.0, 4_500.0, 0.707, 1.0]),
+        (EFFECT_TAPE, [0.7, 1.0, 1.0, 35.0, 0.0], [0.2, 1.8, 1.0, 50.0, 1.0]),
+        (EFFECT_STUTTER, [6.0, 1.0, 0.0], [3.0, 1.0, 0.0]),
+    ],
+)
+def test_time_based_and_stateful_effects_keep_state_per_chain(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+    effect_type: int,
+    params_a: list[float],
+    params_b: list[float],
+) -> None:
+    baseline_upload = _empty_upload()
+    dual_upload = _empty_upload()
+
+    for step in (0, 1, 2):
+        _activate_step(
+            baseline_upload,
+            lane=0,
+            step=step,
+            trigger=(step == 0),
+            effect_type=effect_type,
+            params=params_a,
+        )
+        _activate_step(
+            dual_upload,
+            lane=0,
+            step=step,
+            trigger=(step == 0),
+            effect_type=effect_type,
+            params=params_a,
+        )
+
+    _activate_step(
+        dual_upload,
+        lane=2,
+        step=1,
+        trigger=True,
+        effect_type=effect_type,
+        params=params_b,
+    )
+
+    input_audio = _complex_signal(STEP_FRAMES * 4)
+    baseline_output = _render(
+        generated_runtime,
+        tmp_path,
+        input_audio,
+        _base_schedule(baseline_upload),
+    )
+    dual_output = _render(
+        generated_runtime,
+        tmp_path,
+        input_audio,
+        _base_schedule(dual_upload),
+    )
+
+    unaffected_late_window = slice((STEP_FRAMES * 2) + 700, (STEP_FRAMES * 3) - 200)
+    assert _rms(dual_output[unaffected_late_window] - baseline_output[unaffected_late_window]) < 2.0e-5
+
+
 def test_filter_envelope_uses_the_full_stretched_block_duration(
     generated_runtime: GeneratedRuntime,
     tmp_path: Path,
@@ -592,6 +746,37 @@ def test_tape_stop_step_boundaries_do_not_click_on_exit_or_retrigger(
     assert largest_boundary_jump(spin_up_exit, 2) <= allowed_jump
     assert largest_boundary_jump(adjacent_retrigger, 2) <= allowed_jump
     assert largest_boundary_jump(adjacent_retrigger, 3) <= allowed_jump
+
+
+def test_adjacent_different_effects_in_one_chain_do_not_create_a_step_boundary_click(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    upload = _empty_upload()
+    _activate_step(
+        upload,
+        lane=0,
+        step=0,
+        trigger=True,
+        effect_type=EFFECT_FILTER,
+        params=[0.0, 850.0, 850.0, 0.707, 1.0],
+    )
+    _activate_step(
+        upload,
+        lane=0,
+        step=1,
+        trigger=False,
+        effect_type=EFFECT_TAPE,
+        params=[0.8, 1.0, 1.0, 25.0, 0.0],
+    )
+
+    input_audio = _sine(STEP_FRAMES * 3, 660.0)
+    output = _render(generated_runtime, tmp_path, input_audio, _base_schedule(upload))[:, 0]
+    dry = input_audio[:, 0]
+    allowed_jump = float(np.max(np.abs(np.diff(dry)))) * 1.75
+
+    assert _largest_boundary_jump(output, 1) <= allowed_jump
+    assert _largest_boundary_jump(output, 2) <= allowed_jump
 
 
 def test_tape_stop_catchup_does_not_play_faster_than_dry_timeline(

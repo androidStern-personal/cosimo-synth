@@ -298,7 +298,7 @@ test("editing_selected_pattern_persists_state_and_uploads_one_complete_non_autho
     assert.equal(uploads.at(-1).value.params[SEQFX_LANES.filter][6][1], 330);
 });
 
-test("changing_selected_pattern_block_effect_persists_resets_effect_params_and_uploads_effect_types", () => {
+test("changing_selected_pattern_block_effect_persists_uploads_effect_types_and_restores_previous_params", () => {
     const initialState = createDefaultSeqFxState();
     const connection = new FakePatchConnection({
         [SEQFX_STATE_KEY]: serializeSeqFxState(initialState),
@@ -317,6 +317,13 @@ test("changing_selected_pattern_block_effect_persists_resets_effect_params_and_u
         length: 2,
         effectType: SEQFX_EFFECT_TYPES.filter,
     });
+    bridge.setBlockParam({
+        patternIndex: 0,
+        lane: 0,
+        startStep: 2,
+        paramIndex: 1,
+        value: 420,
+    });
     bridge.setBlockEffect({
         patternIndex: 0,
         lane: 0,
@@ -324,13 +331,28 @@ test("changing_selected_pattern_block_effect_persists_resets_effect_params_and_u
         effectType: SEQFX_EFFECT_TYPES.crusher,
     });
 
-    assert.equal(connection.storedWrites.length, 2);
-    const upload = endpointEvents(connection, SEQFX_ENDPOINTS.patternUpload).at(-1).value;
+    assert.equal(connection.storedWrites.length, 3);
+    let upload = endpointEvents(connection, SEQFX_ENDPOINTS.patternUpload).at(-1).value;
     assert.deepEqual(upload.effectTypes[0].slice(2, 4), [
         SEQFX_EFFECT_TYPES.crusher,
         SEQFX_EFFECT_TYPES.crusher,
     ]);
     assert.deepEqual(upload.params[0][2].slice(0, 3), [8, 1, 0]);
+
+    bridge.setBlockEffect({
+        patternIndex: 0,
+        lane: 0,
+        startStep: 2,
+        effectType: SEQFX_EFFECT_TYPES.filter,
+    });
+
+    assert.equal(connection.storedWrites.length, 4);
+    upload = endpointEvents(connection, SEQFX_ENDPOINTS.patternUpload).at(-1).value;
+    assert.deepEqual(upload.effectTypes[0].slice(2, 4), [
+        SEQFX_EFFECT_TYPES.filter,
+        SEQFX_EFFECT_TYPES.filter,
+    ]);
+    assert.deepEqual(upload.params[0].slice(2, 4).map((params) => params[1]), [420, 420]);
 });
 
 test("resizing_selected_pattern_block_persists_and_uploads_continuation_cells_without_retriggers", () => {

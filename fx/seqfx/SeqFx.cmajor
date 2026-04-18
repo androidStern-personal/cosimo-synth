@@ -371,7 +371,7 @@ processor SeqFx [[ main ]]
     void init()
     {
         initialiseDefaultPattern();
-        for (int32 lane = 0; lane < seqfx::laneCount; ++lane)
+        for (wrap<seqfx::laneCount> lane)
         {
             filterStartHz[lane] = 2000.0f;
             filterEndHz[lane] = 500.0f;
@@ -406,21 +406,21 @@ processor SeqFx [[ main ]]
 
     void initialiseDefaultPattern()
     {
-        for (int32 lane = 0; lane < seqfx::laneCount; ++lane)
+        for (wrap<seqfx::laneCount> lane)
         {
-            for (int32 step = 0; step < seqfx::stepCount; ++step)
+            for (wrap<seqfx::stepCount> step)
             {
                 activeSteps[lane, step] = false;
                 triggerSteps[lane, step] = false;
                 stepEffectTypes[lane, step] = seqfx::effectEmpty;
                 stepMix[lane, step] = 1.0f;
 
-                for (int32 param = 0; param < seqfx::paramCount; ++param)
+                for (wrap<seqfx::paramCount> param)
                     stepParams[lane, step, param] = 0.0f;
             }
         }
 
-        for (int32 step = 0; step < seqfx::stepCount; ++step)
+        for (wrap<seqfx::stepCount> step)
         {
             stepParams[seqfx::laneFilter, step, 0] = 0.0f;
             stepParams[seqfx::laneFilter, step, 1] = 2000.0f;
@@ -448,21 +448,22 @@ processor SeqFx [[ main ]]
     event patternUpload (seqfx::SeqPatternUpload upload)
     {
         let uploadPatternIndex = seqfx::clampInt (upload.patternIndex, 0, seqfx::patternCount - 1);
-        let acceptedRevision = acceptedRevisions[uploadPatternIndex];
+        let uploadPatternSlot = wrap<seqfx::patternCount> (uploadPatternIndex);
+        let acceptedRevision = acceptedRevisions[uploadPatternSlot];
 
         if (! upload.authoritative && upload.revision < acceptedRevision)
             return;
 
-        acceptedRevisions[uploadPatternIndex] = upload.revision;
+        acceptedRevisions[uploadPatternSlot] = upload.revision;
 
         if (uploadPatternIndex != selectedPatternIndex)
             return;
 
         var currentCellChanged = upload.authoritative;
 
-        for (int32 lane = 0; lane < seqfx::laneCount; ++lane)
+        for (wrap<seqfx::laneCount> lane)
         {
-            for (int32 step = 0; step < seqfx::stepCount; ++step)
+            for (wrap<seqfx::stepCount> step)
             {
                 let nextActive = upload.activeSteps[lane, step];
                 let nextEffectType = nextActive
@@ -483,7 +484,7 @@ processor SeqFx [[ main ]]
                         currentCellChanged = true;
                     }
 
-                    for (int32 param = 0; param < seqfx::paramCount; ++param)
+                    for (wrap<seqfx::paramCount> param)
                     {
                         if (upload.params[lane, step, param] != stepParams[lane, step, param])
                             currentCellChanged = true;
@@ -495,7 +496,7 @@ processor SeqFx [[ main ]]
                 stepEffectTypes[lane, step] = nextEffectType;
                 stepMix[lane, step] = seqfx::clampFloat (upload.mix[lane, step], 0.0f, 1.0f);
 
-                for (int32 param = 0; param < seqfx::paramCount; ++param)
+                for (wrap<seqfx::paramCount> param)
                     stepParams[lane, step, param] = upload.params[lane, step, param];
             }
         }
@@ -687,7 +688,7 @@ processor SeqFx [[ main ]]
 
     void releaseTimeEffects()
     {
-        for (int32 lane = 0; lane < seqfx::laneCount; ++lane)
+        for (wrap<seqfx::laneCount> lane)
         {
             tapePlaying[lane] = false;
             stutterCapturing[lane] = false;
@@ -697,15 +698,17 @@ processor SeqFx [[ main ]]
         }
     }
 
-    int32 selectedEffectForStep (int32 lane, int32 step)
+    int32 selectedEffectForStep (wrap<seqfx::laneCount> lane, int32 step)
     {
-        if (! activeSteps[lane, step])
+        let stepIndex = wrap<seqfx::stepCount> (step);
+
+        if (! activeSteps[lane, stepIndex])
             return seqfx::effectEmpty;
 
-        return seqfx::clampInt (stepEffectTypes[lane, step], seqfx::effectEmpty, seqfx::effectStutter);
+        return seqfx::clampInt (stepEffectTypes[lane, stepIndex], seqfx::effectEmpty, seqfx::effectStutter);
     }
 
-    float32 segmentDurationFrames (int32 lane, int32 step)
+    float32 segmentDurationFrames (wrap<seqfx::laneCount> lane, int32 step)
     {
         var sum = 0.0;
         var cursor = step;
@@ -716,7 +719,9 @@ processor SeqFx [[ main ]]
             if (selectedEffectForStep (lane, cursor) != effectType || effectType == seqfx::effectEmpty)
                 break;
 
-            if (offset > 0 && triggerSteps[lane, cursor])
+            let cursorIndex = wrap<seqfx::stepCount> (cursor);
+
+            if (offset > 0 && triggerSteps[lane, cursorIndex])
                 break;
 
             sum += stepDurationFramesForStep (cursor);
@@ -729,14 +734,16 @@ processor SeqFx [[ main ]]
         return float32 (std::intrinsics::max (1.0, sum));
     }
 
-    int32 blockStartStep (int32 lane, int32 step)
+    int32 blockStartStep (wrap<seqfx::laneCount> lane, int32 step)
     {
         var cursor = step;
         let effectType = selectedEffectForStep (lane, step);
 
         for (int32 offset = 0; offset < seqfx::stepCount; ++offset)
         {
-            if (triggerSteps[lane, cursor])
+            let cursorIndex = wrap<seqfx::stepCount> (cursor);
+
+            if (triggerSteps[lane, cursorIndex])
                 return cursor;
 
             let previous = previousStepInLoop (cursor);
@@ -750,7 +757,7 @@ processor SeqFx [[ main ]]
         return cursor;
     }
 
-    float32 elapsedFramesFromBlockStart (int32 lane, int32 startStep, int32 targetStep)
+    float32 elapsedFramesFromBlockStart (wrap<seqfx::laneCount> lane, int32 startStep, int32 targetStep)
     {
         var sum = 0.0;
         var cursor = startStep;
@@ -764,7 +771,9 @@ processor SeqFx [[ main ]]
             if (selectedEffectForStep (lane, cursor) != effectType || effectType == seqfx::effectEmpty)
                 break;
 
-            if (offset > 0 && triggerSteps[lane, cursor])
+            let cursorIndex = wrap<seqfx::stepCount> (cursor);
+
+            if (offset > 0 && triggerSteps[lane, cursorIndex])
                 break;
 
             sum += stepDurationFramesForStep (cursor);
@@ -779,16 +788,17 @@ processor SeqFx [[ main ]]
 
     void latchStep()
     {
-        for (int32 lane = 0; lane < seqfx::laneCount; ++lane)
+        for (wrap<seqfx::laneCount> lane)
             latchChainStep (lane);
 
         emitMonitor();
     }
 
-    void latchChainStep (int32 lane)
+    void latchChainStep (wrap<seqfx::laneCount> lane)
     {
+        let currentStepIndex = wrap<seqfx::stepCount> (currentStep);
         let effectType = selectedEffectForStep (lane, currentStep);
-        let targetMix = effectType == seqfx::effectEmpty ? 0.0f : stepMix[lane, currentStep];
+        let targetMix = effectType == seqfx::effectEmpty ? 0.0f : stepMix[lane, currentStepIndex];
         let wasFilterActive = filterActive[lane];
         let wasCrusherActive = crusherActive[lane];
         let wasTapeActive = tapeLaneActive[lane];
@@ -829,20 +839,23 @@ processor SeqFx [[ main ]]
         return seqfx::clampFloat (value, 20.0f, maximum);
     }
 
-    void latchFilterStep (int32 lane, bool wasActive)
+    void latchFilterStep (wrap<seqfx::laneCount> lane, bool wasActive)
     {
-        if (wasActive && ! triggerSteps[lane, currentStep])
+        let currentStepIndex = wrap<seqfx::stepCount> (currentStep);
+
+        if (wasActive && ! triggerSteps[lane, currentStepIndex])
             return;
 
         let blockStart = blockStartStep (lane, currentStep);
+        let blockStartIndex = wrap<seqfx::stepCount> (blockStart);
         filterAgeFrames[lane] = elapsedFramesFromBlockStart (lane, blockStart, currentStep);
         filterDurationFrames[lane] = segmentDurationFrames (lane, blockStart);
         previousFilterMode[lane] = filterMode[lane];
-        filterMode[lane] = snapValue (stepParams[lane, blockStart, 0], 0, 2);
-        filterStartHz[lane] = clampCutoffHz (stepParams[lane, blockStart, 1]);
-        filterEndHz[lane] = clampCutoffHz (stepParams[lane, blockStart, 2]);
-        filterQ[lane] = seqfx::clampFloat (stepParams[lane, blockStart, 3], 0.1f, 20.0f);
-        filterCurve[lane] = seqfx::clampFloat (stepParams[lane, blockStart, 4], 0.25f, 4.0f);
+        filterMode[lane] = snapValue (stepParams[lane, blockStartIndex, 0], 0, 2);
+        filterStartHz[lane] = clampCutoffHz (stepParams[lane, blockStartIndex, 1]);
+        filterEndHz[lane] = clampCutoffHz (stepParams[lane, blockStartIndex, 2]);
+        filterQ[lane] = seqfx::clampFloat (stepParams[lane, blockStartIndex, 3], 0.1f, 20.0f);
+        filterCurve[lane] = seqfx::clampFloat (stepParams[lane, blockStartIndex, 4], 0.25f, 4.0f);
 
         if (filterMode[lane] != previousFilterMode[lane])
         {
@@ -852,38 +865,46 @@ processor SeqFx [[ main ]]
         }
     }
 
-    void latchCrusherStep (int32 lane, bool wasActive)
+    void latchCrusherStep (wrap<seqfx::laneCount> lane, bool wasActive)
     {
-        if (wasActive && ! triggerSteps[lane, currentStep])
+        let currentStepIndex = wrap<seqfx::stepCount> (currentStep);
+
+        if (wasActive && ! triggerSteps[lane, currentStepIndex])
             return;
 
         let blockStart = blockStartStep (lane, currentStep);
-        crusherBits[lane] = snapValue (stepParams[lane, blockStart, 0], 4, 16);
-        crusherHoldFrames[lane] = snapValue (stepParams[lane, blockStart, 1], 1, 64);
-        crusherDriveDb[lane] = seqfx::clampFloat (stepParams[lane, blockStart, 2], 0.0f, 36.0f);
+        let blockStartIndex = wrap<seqfx::stepCount> (blockStart);
+        crusherBits[lane] = snapValue (stepParams[lane, blockStartIndex, 0], 4, 16);
+        crusherHoldFrames[lane] = snapValue (stepParams[lane, blockStartIndex, 1], 1, 64);
+        crusherDriveDb[lane] = seqfx::clampFloat (stepParams[lane, blockStartIndex, 2], 0.0f, 36.0f);
         crusherHoldCounter[lane] = 0;
         crusherNeedsRecapture[lane] = true;
     }
 
-    void latchTapeStep (int32 lane, bool wasActive)
+    void latchTapeStep (wrap<seqfx::laneCount> lane, bool wasActive)
     {
-        if (! wasActive || triggerSteps[lane, currentStep])
+        let currentStepIndex = wrap<seqfx::stepCount> (currentStep);
+
+        if (! wasActive || triggerSteps[lane, currentStepIndex])
         {
             let blockStart = blockStartStep (lane, currentStep);
-            tapeDurationScale[lane] = seqfx::clampFloat (stepParams[lane, blockStart, 0], 0.05f, 4.0f);
-            tapeCurvePower[lane] = seqfx::clampFloat (stepParams[lane, blockStart, 1], 0.25f, 4.0f);
-            tapeReleaseCurvePower[lane] = seqfx::clampFloat (stepParams[lane, blockStart, 2], 0.25f, 4.0f);
-            tapeCatchupPercent[lane] = seqfx::clampFloat (stepParams[lane, blockStart, 3], 0.0f, 100.0f);
-            tapeMode[lane] = seqfx::roundToInt (seqfx::clampFloat (stepParams[lane, blockStart, 4], 0.0f, 1.0f));
+            let blockStartIndex = wrap<seqfx::stepCount> (blockStart);
+            tapeDurationScale[lane] = seqfx::clampFloat (stepParams[lane, blockStartIndex, 0], 0.05f, 4.0f);
+            tapeCurvePower[lane] = seqfx::clampFloat (stepParams[lane, blockStartIndex, 1], 0.25f, 4.0f);
+            tapeReleaseCurvePower[lane] = seqfx::clampFloat (stepParams[lane, blockStartIndex, 2], 0.25f, 4.0f);
+            tapeCatchupPercent[lane] = seqfx::clampFloat (stepParams[lane, blockStartIndex, 3], 0.0f, 100.0f);
+            tapeMode[lane] = seqfx::roundToInt (seqfx::clampFloat (stepParams[lane, blockStartIndex, 4], 0.0f, 1.0f));
             startTapeStop (lane, segmentDurationFrames (lane, blockStart));
             tapeElapsedFrames[lane] = elapsedFramesFromBlockStart (lane, blockStart, currentStep);
         }
     }
 
-    void latchStutterStep (int32 lane, bool wasActive)
+    void latchStutterStep (wrap<seqfx::laneCount> lane, bool wasActive)
     {
+        let currentStepIndex = wrap<seqfx::stepCount> (currentStep);
         let blockStart = blockStartStep (lane, currentStep);
-        let nextSliceCount = snapValue (stepParams[lane, blockStart, 0], 2, 32);
+        let blockStartIndex = wrap<seqfx::stepCount> (blockStart);
+        let nextSliceCount = snapValue (stepParams[lane, blockStartIndex, 0], 2, 32);
         let nextBlockFrames = segmentDurationFrames (lane, blockStart);
         let nextReadFrames = seqfx::clampInt (
             int32 (resolveSliceFramesForCount (nextBlockFrames, nextSliceCount)),
@@ -892,13 +913,13 @@ processor SeqFx [[ main ]]
         );
         let structureChanged = nextSliceCount != stutterSliceCount[lane] || nextReadFrames != stutterReadFrames[lane];
         let shouldRestart = ! wasActive
-            || (! relatchingFromPatternUpload && triggerSteps[lane, currentStep])
+            || (! relatchingFromPatternUpload && triggerSteps[lane, currentStepIndex])
             || (relatchingFromPatternUpload && structureChanged);
 
-        stutterPlaybackSpeed[lane] = seqfx::clampFloat (stepParams[lane, currentStep, 1], 0.5f, 2.0f);
+        stutterPlaybackSpeed[lane] = seqfx::clampFloat (stepParams[lane, currentStepIndex, 1], 0.5f, 2.0f);
         stutterSliceCount[lane] = nextSliceCount;
-        stutterShape[lane] = seqfx::clampFloat (stepParams[lane, blockStart, 2], 0.0f, 1.0f);
-        stutterGate[lane] = seqfx::clampFloat (stepParams[lane, blockStart, 3], 0.0f, 1.0f);
+        stutterShape[lane] = seqfx::clampFloat (stepParams[lane, blockStartIndex, 2], 0.0f, 1.0f);
+        stutterGate[lane] = seqfx::clampFloat (stepParams[lane, blockStartIndex, 3], 0.0f, 1.0f);
 
         if (shouldRestart)
             startStutter (lane, nextBlockFrames);
@@ -911,14 +932,14 @@ processor SeqFx [[ main ]]
         return float32 (frameCount);
     }
 
-    float32 resolveSliceFrames (int32 lane, float32 blockFrames)
+    float32 resolveSliceFrames (wrap<seqfx::laneCount> lane, float32 blockFrames)
     {
         let requestedFrames = blockFrames / float32 (std::intrinsics::max (1, stutterSliceCount[lane]));
         let frameCount = seqfx::clampInt (int32 (requestedFrames), 2, stutterBufferSize - 8);
         return float32 (frameCount);
     }
 
-    void startTapeStop (int32 lane, float32 blockDurationFrames)
+    void startTapeStop (wrap<seqfx::laneCount> lane, float32 blockDurationFrames)
     {
         if (validTapeFrames[lane] < 8)
         {
@@ -955,7 +976,7 @@ processor SeqFx [[ main ]]
         tapeReadPosition[lane] = std::intrinsics::wrap (float32 (int32 (tapeWriteIndex[lane])) - 4.0f, float32 (tapeBufferSize));
     }
 
-    void startStutter (int32 lane, float32 blockFrames)
+    void startStutter (wrap<seqfx::laneCount> lane, float32 blockFrames)
     {
         let sliceFrames = resolveSliceFrames (lane, blockFrames);
         stutterReadFrames[lane] = seqfx::clampInt (int32 (sliceFrames), 2, stutterBufferSize - 8);
@@ -966,7 +987,7 @@ processor SeqFx [[ main ]]
         stutterPlaying[lane] = false;
     }
 
-    void writeTapeHistory (int32 lane, float32<2> sample)
+    void writeTapeHistory (wrap<seqfx::laneCount> lane, float32<2> sample)
     {
         tapeHistory[lane, tapeWriteIndex[lane]] = sample;
         tapeWriteIndex[lane] = wrap<tapeBufferSize> (int32 (tapeWriteIndex[lane]) + 1);
@@ -975,7 +996,7 @@ processor SeqFx [[ main ]]
             validTapeFrames[lane] += 1;
     }
 
-    void captureStutterSample (int32 lane, float32<2> sample)
+    void captureStutterSample (wrap<seqfx::laneCount> lane, float32<2> sample)
     {
         stutterHistory[lane, wrap<stutterBufferSize> (int32 (stutterCaptureFrames[lane]))] = sample;
         stutterCaptureFrames[lane] += 1.0f;
@@ -988,7 +1009,7 @@ processor SeqFx [[ main ]]
         }
     }
 
-    float32<2> readTapeHistory (int32 lane, float32 position)
+    float32<2> readTapeHistory (wrap<seqfx::laneCount> lane, float32 position)
     {
         let wrapped = std::intrinsics::wrap (position, float32 (tapeBufferSize));
         let index0 = int32 (std::intrinsics::floor (wrapped));
@@ -998,7 +1019,7 @@ processor SeqFx [[ main ]]
         return tapeHistory[lane, i0] + ((tapeHistory[lane, i1] - tapeHistory[lane, i0]) * fraction);
     }
 
-    float32<2> readStutterCapture (int32 lane, float32 position)
+    float32<2> readStutterCapture (wrap<seqfx::laneCount> lane, float32 position)
     {
         let wrapped = std::intrinsics::wrap (position, stutterReadLength[lane]);
         let index0 = int32 (std::intrinsics::floor (wrapped));
@@ -1013,7 +1034,7 @@ processor SeqFx [[ main ]]
         return stutterHistory[lane, i0] + ((stutterHistory[lane, i1] - stutterHistory[lane, i0]) * fraction);
     }
 
-    float32<2> processFilter (int32 lane, float32<2> stage)
+    float32<2> processFilter (wrap<seqfx::laneCount> lane, float32<2> stage)
     {
         filterMixCurrent[lane] = seqfx::moveTowards (filterMixCurrent[lane], filterMixTarget[lane], 1.0f / 96.0f);
 
@@ -1044,7 +1065,7 @@ processor SeqFx [[ main ]]
         return stage + ((filtered - stage) * filterMixCurrent[lane]);
     }
 
-    float32<2> processCrusher (int32 lane, float32<2> stage)
+    float32<2> processCrusher (wrap<seqfx::laneCount> lane, float32<2> stage)
     {
         crusherMixCurrent[lane] = seqfx::moveTowards (crusherMixCurrent[lane], crusherMixTarget[lane], 1.0f / 64.0f);
 
@@ -1079,7 +1100,7 @@ processor SeqFx [[ main ]]
         return stage + ((crushed - stage) * crusherMixCurrent[lane]);
     }
 
-    float32<2> processTapeStop (int32 lane, float32<2> stage)
+    float32<2> processTapeStop (wrap<seqfx::laneCount> lane, float32<2> stage)
     {
         tapeMixCurrent[lane] = seqfx::moveTowards (tapeMixCurrent[lane], tapeMixTarget[lane], 1.0f / 96.0f);
 
@@ -1151,7 +1172,7 @@ processor SeqFx [[ main ]]
         return stage + ((tapeOut - stage) * tapeMixCurrent[lane] * returnWet);
     }
 
-    float32<2> processStutter (int32 lane, float32<2> stage)
+    float32<2> processStutter (wrap<seqfx::laneCount> lane, float32<2> stage)
     {
         stutterMixCurrent[lane] = seqfx::moveTowards (stutterMixCurrent[lane], stutterMixTarget[lane], 1.0f / 64.0f);
 
@@ -1194,7 +1215,7 @@ processor SeqFx [[ main ]]
         return stage + ((stutterOut - stage) * stutterMixCurrent[lane]);
     }
 
-    float32<2> processChain (int32 lane, float32<2> stage)
+    float32<2> processChain (wrap<seqfx::laneCount> lane, float32<2> stage)
     {
         stage = processFilter (lane, stage);
         stage = processCrusher (lane, stage);
@@ -1279,12 +1300,12 @@ processor SeqFx [[ main ]]
 
             if (isClockRunning())
             {
-                for (int32 lane = 0; lane < seqfx::laneCount; ++lane)
+                for (wrap<seqfx::laneCount> lane)
                     stage = processChain (lane, stage);
             }
             else
             {
-                for (int32 lane = 0; lane < seqfx::laneCount; ++lane)
+                for (wrap<seqfx::laneCount> lane)
                     writeTapeHistory (lane, stage);
             }
 
