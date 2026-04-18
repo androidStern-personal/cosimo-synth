@@ -1,0 +1,30 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>SeqFX Harness</title>
+        <style>
+            html,
+            body,
+            #root {
+                width: 100%;
+                height: 100%;
+                margin: 0;
+            }
+        </style>
+    </head>
+    <body>
+        <div id="root"></div>
+        <script type="module">
+            import "/ui/shared/effects/effect-dev-tools.js";
+            import RefreshRuntime from "/@react-refresh";
+
+            RefreshRuntime.injectIntoGlobalHook(window);
+            window.$RefreshReg$ = () => {};
+            window.$RefreshSig$ = () => (type) => type;
+            window.__vite_plugin_react_preamble_installed__ = true;
+        </script>
+        <script type="module" src="/fx/seqfx/view/harness-main.ts"></script>
+    </body>
+</html>

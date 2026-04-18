@@ -147,10 +147,26 @@ export type SeqFxMixEdit = SeqFxEditTarget & {
     value: number;
 };
 
+export type SeqFxStepValueSnapshot = {
+    lane: number;
+    mix: number;
+    params: number[];
+};
+
+export type SeqFxStepValueSnapshotTarget = {
+    patternIndex: number;
+    lane: number;
+    step: number;
+};
+
+export type SeqFxStepValuePasteEdit = SeqFxEditTarget & {
+    values: SeqFxStepValueSnapshot;
+};
+
 const DEFAULT_LANE_PARAMS: number[][] = [
     [0, 2_000, 500, 0.707, 1, 0, 0, 0],
     [8, 1, 0, 0, 0, 0, 0, 0],
-    [1, 1, 0, 30, 0, 0, 0, 0],
+    [1, 1, 1, 25, 0, 0, 0, 0],
     [8, 1, 0, 0, 0, 0, 0, 0],
 ];
 
@@ -178,9 +194,9 @@ const PARAM_LIMITS: Array<Array<[number, number]>> = [
     [
         [0.05, 4],
         [0.25, 4],
+        [0.25, 4],
+        [0, 100],
         [0, 1],
-        [1, 250],
-        [0, 0],
         [0, 0],
         [0, 0],
         [0, 0],
@@ -201,13 +217,14 @@ const INTEGER_PARAMS = new Set([
     `${SEQFX_LANES.filter}:0`,
     `${SEQFX_LANES.crusher}:0`,
     `${SEQFX_LANES.crusher}:1`,
-    `${SEQFX_LANES.tapeStop}:2`,
+    `${SEQFX_LANES.tapeStop}:4`,
     `${SEQFX_LANES.stutter}:0`,
     `${SEQFX_LANES.stutter}:2`,
 ]);
 
 const TRIGGER_LATCHED_PARAMS = new Set([
     `${SEQFX_LANES.tapeStop}:0`,
+    `${SEQFX_LANES.tapeStop}:4`,
     `${SEQFX_LANES.stutter}:0`,
 ]);
 
@@ -229,6 +246,10 @@ function clampIndex(value: number, maxExclusive: number, label: string): number 
 }
 
 function normalizeParam(lane: number, paramIndex: number, value: number): number {
+    if (lane === SEQFX_LANES.tapeStop && paramIndex === 2 && Number(value) === 0) {
+        return 1;
+    }
+
     const limits = PARAM_LIMITS[lane]?.[paramIndex] ?? [0, 0];
     const clamped = clamp(Number(value), limits[0], limits[1]);
 
@@ -897,6 +918,44 @@ export function applySeqFxParamEdit(state: SeqFxState, edit: SeqFxParamEdit): Se
                 target.active = true;
                 target.trigger = true;
             }
+        }
+    });
+}
+
+export function getSeqFxStepValueSnapshot(state: SeqFxState, target: SeqFxStepValueSnapshotTarget): SeqFxStepValueSnapshot {
+    const normalized = normalizeSeqFxState(state);
+    const patternIndex = clampIndex(target.patternIndex, SEQFX_PATTERN_COUNT, "patternIndex");
+    const lane = clampIndex(target.lane, SEQFX_LANE_COUNT, "lane");
+    const step = clampIndex(target.step, SEQFX_STEP_COUNT, "step");
+    const source = normalized.patterns[patternIndex].lanes[lane].steps[step];
+
+    return {
+        lane,
+        mix: normalizeMix(source.mix),
+        params: Array.from({ length: SEQFX_PARAM_COUNT }, (_unused, paramIndex) => (
+            normalizeParam(lane, paramIndex, source.params[paramIndex])
+        )),
+    };
+}
+
+export function applySeqFxStepValuePaste(state: SeqFxState, edit: SeqFxStepValuePasteEdit): SeqFxState {
+    const lane = clampIndex(edit.lane, SEQFX_LANE_COUNT, "lane");
+    const steps = normalizeSteps(edit.steps);
+
+    if (edit.values.lane !== lane) {
+        throw new Error("SeqFX cell values can only be pasted into the same lane.");
+    }
+
+    return withEditedPattern(state, edit.patternIndex, (pattern) => {
+        const mix = normalizeMix(edit.values.mix);
+        const params = Array.from({ length: SEQFX_PARAM_COUNT }, (_unused, paramIndex) => (
+            normalizeParam(lane, paramIndex, edit.values.params[paramIndex])
+        ));
+
+        for (const step of steps) {
+            const target = pattern.lanes[lane].steps[step];
+            target.mix = mix;
+            target.params = [...params];
         }
     });
 }

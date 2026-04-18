@@ -16,6 +16,12 @@ const SEQFX_NORMAL_GAP_PX = 5;
 const SEQFX_BEAT_GAP_PX = 9;
 const SEQFX_MIN_CELL_SIZE_PX = 22;
 const SEQFX_LANE_NAMES = ["Filter", "Crusher", "Tape Stop", "Stutter"];
+const TAPE_GRAPH_VIEWBOX_WIDTH = 260;
+const TAPE_GRAPH_VIEWBOX_HEIGHT = 150;
+const TAPE_GRAPH_LEFT = 28;
+const TAPE_GRAPH_TOP = 12;
+const TAPE_GRAPH_PLOT_WIDTH = 222;
+const TAPE_GRAPH_PLOT_HEIGHT = 114;
 
 let serverProcess;
 let browser;
@@ -134,6 +140,61 @@ function assertClose(actual, expected, tolerance, message) {
         Math.abs(actual - expected) <= tolerance,
         `${message}: expected ${actual} to be within ${tolerance} of ${expected}`,
     );
+}
+
+function tapeGraphPoint(graphBox, normalizedTime, normalizedSpeed) {
+    const svgX = TAPE_GRAPH_LEFT + (Math.min(1, Math.max(0, normalizedTime)) * TAPE_GRAPH_PLOT_WIDTH);
+    const svgY = TAPE_GRAPH_TOP + ((1 - Math.min(1, Math.max(0, normalizedSpeed))) * TAPE_GRAPH_PLOT_HEIGHT);
+
+    return {
+        x: graphBox.x + ((svgX / TAPE_GRAPH_VIEWBOX_WIDTH) * graphBox.width),
+        y: graphBox.y + ((svgY / TAPE_GRAPH_VIEWBOX_HEIGHT) * graphBox.height),
+    };
+}
+
+async function dragLocatorTo(page, locator, point) {
+    const box = await locator.boundingBox();
+    assert.ok(box, "expected draggable locator to have a bounding box");
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(point.x, point.y, { steps: 8 });
+    await page.mouse.up();
+}
+
+async function pressMetaShortcut(page, key) {
+    await page.keyboard.down("Meta");
+    await page.keyboard.press(key);
+    await page.keyboard.up("Meta");
+}
+
+async function dispatchClipboardEvent(page, selector, type) {
+    return page.evaluate(({ targetSelector, eventType }) => {
+        const target = document.querySelector(targetSelector);
+        if (!target) {
+            throw new Error(`Missing clipboard event target: ${targetSelector}`);
+        }
+
+        const event = new ClipboardEvent(eventType, {
+            bubbles: true,
+            cancelable: true,
+            composed: true,
+            clipboardData: new DataTransfer(),
+        });
+        const dispatchResult = target.dispatchEvent(event);
+        return {
+            defaultPrevented: event.defaultPrevented,
+            dispatchResult,
+        };
+    }, { targetSelector: selector, eventType: type });
+}
+
+async function setRangeInputValue(locator, value) {
+    await locator.evaluate((node, nextValue) => {
+        const valueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+        valueSetter?.call(node, String(nextValue));
+        node.dispatchEvent(new Event("input", { bubbles: true }));
+        node.dispatchEvent(new Event("change", { bubbles: true }));
+    }, value);
 }
 
 async function waitForGridGeometry(page, cellsPerBeat, step, message) {
@@ -500,6 +561,18 @@ test("seqfx_shared_effect_loader_imports_react_dev_module_from_manifest", async 
     await page.close();
 });
 
+test("seqfx_vite_dev_server_serves_a_stable_browser_harness_page", async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
+    const response = await page.goto(`${DEV_SERVER_ORIGIN}/fx/seqfx/view/harness.html`);
+
+    assert.equal(response?.status(), 200);
+    await page.locator('[data-role="seqfx-root"]').waitFor();
+    await page.getByRole("button", { name: "Tape Stop step 1", exact: true }).click();
+    await page.locator('[data-role="seqfx-tape-graph"]').waitFor();
+
+    await page.close();
+});
+
 test("seqfx_rate_one_grid_uses_beat_gutters_and_per_cell_bar_fill", async () => {
     const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
     await loadSeqFxHarness(page);
@@ -768,7 +841,8 @@ test("seqfx_right_edge_drag_resizes_a_block_without_retriggering_continuation_st
     const lastUpload = patternUploads(snapshot).at(-1).value;
     assert.deepEqual(lastUpload.activeSteps[2].slice(0, 5), [true, true, true, true, true]);
     assert.deepEqual(lastUpload.triggerSteps[2].slice(0, 5), [true, false, false, false, false]);
-    assert.equal(await page.locator('[data-role="seqfx-param"][data-param="0"]').isDisabled(), false);
+    await page.locator('[data-role="seqfx-tape-graph"]').waitFor();
+    assert.equal(await page.locator('[data-role="seqfx-tape-stop-point"]').isDisabled(), false);
 
     const resizedBlockBox = await page.getByRole("button", { name: "Tape Stop block 1-5", exact: true }).boundingBox();
     const firstCellBox = await first.boundingBox();
@@ -793,6 +867,66 @@ test("seqfx_right_edge_drag_resizes_a_block_without_retriggering_continuation_st
     await page.close();
 });
 
+test("seqfx_tape_stop_inspector_renders_graph_handles_and_writes_curve_parameters", async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
+    await loadSeqFxHarness(page);
+    await page.locator('[data-role="seqfx-root"]').waitFor();
+    await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
+
+    await page.getByRole("button", { name: "Tape Stop step 1", exact: true }).click();
+    await page.locator('[data-role="seqfx-tape-graph"]').waitFor();
+
+    const inspector = page.locator('[data-role="seqfx-inspector"]');
+    await inspector.getByText("Mode").waitFor();
+    assert.equal(await inspector.locator(".seqfx-tape-control").filter({ hasText: /^Start Length/ }).count(), 1);
+    assert.equal(await inspector.locator(".seqfx-tape-control").filter({ hasText: /^Start Curve/ }).count(), 1);
+    assert.equal(await inspector.locator(".seqfx-tape-control").filter({ hasText: /^Catchup Length/ }).count(), 1);
+    assert.equal(await inspector.locator(".seqfx-tape-control").filter({ hasText: /^Catchup Curve/ }).count(), 1);
+    await page.locator('[data-role="seqfx-tape-start-length-handle"]').waitFor();
+    await page.locator('[data-role="seqfx-tape-start-curve-handle"]').waitFor();
+    await page.locator('[data-role="seqfx-tape-catchup-length-handle"]').waitFor();
+    assert.equal(await inspector.getByText("Stop Point").count(), 0);
+    assert.equal(await inspector.getByText("Catch-up").count(), 0);
+    assert.equal(await inspector.getByText("Duration", { exact: true }).count(), 0);
+    assert.equal(await inspector.getByText("End", { exact: true }).count(), 0);
+
+    const initialGraphBox = await page.locator('[data-role="seqfx-tape-graph"]').boundingBox();
+    assert.ok(initialGraphBox);
+    await dragLocatorTo(
+        page,
+        page.locator('[data-role="seqfx-tape-start-length-handle"]'),
+        tapeGraphPoint(initialGraphBox, 0.5, 0.02),
+    );
+    await page.locator('[data-role="seqfx-tape-catchup-curve-handle"]').waitFor();
+
+    await dragLocatorTo(
+        page,
+        page.locator('[data-role="seqfx-tape-catchup-length-handle"]'),
+        tapeGraphPoint(initialGraphBox, 0.65, 0.02),
+    );
+    await dragLocatorTo(
+        page,
+        page.locator('[data-role="seqfx-tape-start-curve-handle"]'),
+        tapeGraphPoint(initialGraphBox, 0.25, 0.25),
+    );
+    await dragLocatorTo(
+        page,
+        page.locator('[data-role="seqfx-tape-catchup-curve-handle"]'),
+        tapeGraphPoint(initialGraphBox, 0.825, 0.25),
+    );
+    await page.locator('[data-role="seqfx-tape-mode"]').selectOption("1");
+
+    const snapshot = await getHarnessSnapshot(page);
+    const lastUpload = patternUploads(snapshot).at(-1).value;
+    assertClose(lastUpload.params[2][0][0], 0.5, 0.03, "start length handle should write a 50% first segment");
+    assertClose(lastUpload.params[2][0][1], 2, 0.25, "start curve handle should bend the first segment");
+    assertClose(lastUpload.params[2][0][2], 2, 0.25, "catchup curve handle should bend the return segment");
+    assertClose(lastUpload.params[2][0][3], 35, 2, "catchup length handle should write the reserved end percentage");
+    assert.equal(lastUpload.params[2][0][4], 1);
+
+    await page.close();
+});
+
 test("seqfx_single_cell_blocks_keep_the_same_square_geometry_as_grid_cells", async () => {
     const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
     await loadSeqFxHarness(page);
@@ -812,6 +946,72 @@ test("seqfx_single_cell_blocks_keep_the_same_square_geometry_as_grid_cells", asy
         Math.abs(blockBox.height - cellBox.height) <= 1,
         `expected block height ${blockBox.height} to match cell height ${cellBox.height}`,
     );
+
+    await page.close();
+});
+
+test("seqfx_blocks_use_a_single_clean_surface_with_hidden_resize_chrome", async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
+    await loadSeqFxHarness(page);
+    await page.locator('[data-role="seqfx-root"]').waitFor();
+
+    await page.getByRole("button", { name: "Crusher step 1", exact: true }).click();
+    const block = page.getByRole("button", { name: "Crusher block 1", exact: true });
+    const fill = block.locator(".seqfx-block-fill");
+    const resizeHandle = page.locator('[data-role="seqfx-block-resize"][data-lane="1"][data-start="0"]');
+    await block.waitFor();
+    await page.mouse.move(10, 10);
+    await page.waitForFunction(() => (
+        getComputedStyle(
+            document.querySelector('[data-role="seqfx-block-resize"][data-lane="1"][data-start="0"]'),
+            "::after",
+        ).opacity === "0"
+    ));
+
+    const initialStyles = await block.evaluate((node) => {
+        const fillNode = node.querySelector(".seqfx-block-fill");
+        const resizeNode = node.querySelector(".seqfx-block-resize");
+        return {
+            blockBackground: getComputedStyle(node).backgroundColor,
+            blockBorderWidth: getComputedStyle(node).borderTopWidth,
+            blockCursor: getComputedStyle(node).cursor,
+            fillInset: {
+                top: getComputedStyle(fillNode).top,
+                right: getComputedStyle(fillNode).right,
+                bottom: getComputedStyle(fillNode).bottom,
+                left: getComputedStyle(fillNode).left,
+            },
+            resizeCursor: getComputedStyle(resizeNode).cursor,
+            resizeGripOpacity: getComputedStyle(resizeNode, "::after").opacity,
+        };
+    });
+
+    assert.equal(initialStyles.blockBackground, "rgba(0, 0, 0, 0)");
+    assert.equal(initialStyles.blockBorderWidth, "0px");
+    assert.equal(initialStyles.blockCursor, "grab");
+    assert.deepEqual(initialStyles.fillInset, { top: "1px", right: "1px", bottom: "1px", left: "1px" });
+    assert.equal(initialStyles.resizeCursor, "col-resize");
+    assert.equal(initialStyles.resizeGripOpacity, "0");
+
+    const blockBox = await block.boundingBox();
+    const fillBox = await fill.boundingBox();
+    assert.ok(blockBox);
+    assert.ok(fillBox);
+    assertClose(fillBox.width, blockBox.width - 2, 1, "block fill should be the only near-full visible surface");
+    assertClose(fillBox.height, blockBox.height - 2, 1, "block fill should leave only a 1px inset");
+
+    await block.hover();
+    await page.waitForFunction(() => (
+        Number(getComputedStyle(
+            document.querySelector('[data-role="seqfx-block-resize"][data-lane="1"][data-start="0"]'),
+            "::after",
+        ).opacity) > 0.9
+    ));
+
+    const handleBox = await resizeHandle.boundingBox();
+    assert.ok(handleBox);
+    await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2);
+    assert.equal(await block.evaluate((node) => getComputedStyle(node).cursor), "col-resize");
 
     await page.close();
 });
@@ -978,6 +1178,148 @@ test("seqfx_shift_click_selects_active_blocks_and_edits_or_deletes_the_group", a
         page.getByRole("button", { name: "Crusher block 2", exact: true }).waitFor({ timeout: 300 }),
     );
     await page.getByRole("button", { name: "Crusher block 11", exact: true }).waitFor();
+
+    await page.close();
+});
+
+test("seqfx_cmd_c_and_cmd_v_copy_cell_values_to_single_or_group_selection", async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
+    await loadSeqFxHarness(page);
+    await page.locator('[data-role="seqfx-root"]').waitFor();
+
+    for (const step of [2, 5, 8]) {
+        await page.getByRole("button", { name: `Crusher step ${step}`, exact: true }).click();
+    }
+
+    await page.getByRole("button", { name: "Crusher block 2", exact: true }).click();
+    await setRangeInputValue(page.locator('[data-role="seqfx-mix"]'), 0.42);
+    await page.locator('[data-role="seqfx-param"][data-param="0"]').fill("5");
+    await page.locator('[data-role="seqfx-param"][data-param="0"]').dispatchEvent("change");
+    await page.locator('[data-role="seqfx-param"][data-param="1"]').fill("7");
+    await page.locator('[data-role="seqfx-param"][data-param="1"]').dispatchEvent("change");
+    await page.locator('[data-role="seqfx-param"][data-param="2"]').fill("12");
+    await page.locator('[data-role="seqfx-param"][data-param="2"]').dispatchEvent("change");
+
+    await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
+    await page.getByRole("button", { name: "Crusher block 2", exact: true }).click();
+    await pressMetaShortcut(page, "KeyC");
+
+    await page.getByRole("button", { name: "Crusher block 5", exact: true }).click();
+    await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
+    await page.locator('[data-role="seqfx-param"][data-param="0"]').focus();
+    await pressMetaShortcut(page, "KeyV");
+    let snapshot = await getHarnessSnapshot(page);
+    assert.equal(patternUploads(snapshot).length, 0);
+
+    await page.getByRole("button", { name: "Crusher block 5", exact: true }).click();
+    await pressMetaShortcut(page, "KeyV");
+
+    snapshot = await getHarnessSnapshot(page);
+    let upload = patternUploads(snapshot).at(-1).value;
+    assert.deepEqual(upload.params[1][4].slice(0, 3), [5, 7, 12]);
+    assert.equal(upload.mix[1][4], 0.42);
+    assert.deepEqual(upload.params[1][7].slice(0, 3), [8, 1, 0]);
+    assert.equal(upload.mix[1][7], 1);
+
+    await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
+    await page.getByRole("button", { name: "Crusher block 5", exact: true }).click();
+    await page.getByRole("button", { name: "Crusher block 8", exact: true }).click({ modifiers: ["Shift"] });
+    await page.waitForFunction(() => (
+        Array.from(document.querySelectorAll('[data-role="seqfx-block"].is-selected[data-lane="1"]'))
+            .map((node) => Number(node.getAttribute("data-start")))
+            .join(",") === "4,7"
+    ));
+    await pressMetaShortcut(page, "KeyV");
+
+    snapshot = await getHarnessSnapshot(page);
+    upload = patternUploads(snapshot).at(-1).value;
+    assert.deepEqual(
+        [4, 7].map((step) => upload.params[1][step].slice(0, 3)),
+        [[5, 7, 12], [5, 7, 12]],
+    );
+    assert.deepEqual(
+        [4, 7].map((step) => upload.mix[1][step]),
+        [0.42, 0.42],
+    );
+
+    await page.close();
+});
+
+test("seqfx_clipboard_events_copy_and_paste_cell_values_when_keydown_is_missing", async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
+    await loadSeqFxHarness(page);
+    await page.locator('[data-role="seqfx-root"]').waitFor();
+
+    for (const step of [2, 5, 8]) {
+        await page.getByRole("button", { name: `Crusher step ${step}`, exact: true }).click();
+    }
+
+    await page.getByRole("button", { name: "Crusher block 2", exact: true }).click();
+    await setRangeInputValue(page.locator('[data-role="seqfx-mix"]'), 0.37);
+    await page.locator('[data-role="seqfx-param"][data-param="0"]').fill("6");
+    await page.locator('[data-role="seqfx-param"][data-param="0"]').dispatchEvent("change");
+    await page.locator('[data-role="seqfx-param"][data-param="1"]').fill("9");
+    await page.locator('[data-role="seqfx-param"][data-param="1"]').dispatchEvent("change");
+    await page.locator('[data-role="seqfx-param"][data-param="2"]').fill("15");
+    await page.locator('[data-role="seqfx-param"][data-param="2"]').dispatchEvent("change");
+
+    const copyResult = await dispatchClipboardEvent(
+        page,
+        '[data-role="seqfx-block"][data-lane="1"][data-start="1"]',
+        "copy",
+    );
+    assert.deepEqual(copyResult, { defaultPrevented: true, dispatchResult: false });
+
+    await page.getByRole("button", { name: "Crusher block 5", exact: true }).click();
+    await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
+    const ignoredPasteResult = await dispatchClipboardEvent(
+        page,
+        '[data-role="seqfx-param"][data-param="0"]',
+        "paste",
+    );
+    assert.deepEqual(ignoredPasteResult, { defaultPrevented: false, dispatchResult: true });
+    let snapshot = await getHarnessSnapshot(page);
+    assert.equal(patternUploads(snapshot).length, 0);
+
+    const pasteResult = await dispatchClipboardEvent(
+        page,
+        '[data-role="seqfx-block"][data-lane="1"][data-start="4"]',
+        "paste",
+    );
+    assert.deepEqual(pasteResult, { defaultPrevented: true, dispatchResult: false });
+
+    snapshot = await getHarnessSnapshot(page);
+    let upload = patternUploads(snapshot).at(-1).value;
+    assert.deepEqual(upload.params[1][4].slice(0, 3), [6, 9, 15]);
+    assert.equal(upload.mix[1][4], 0.37);
+    assert.deepEqual(upload.params[1][7].slice(0, 3), [8, 1, 0]);
+    assert.equal(upload.mix[1][7], 1);
+
+    await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
+    await page.getByRole("button", { name: "Crusher block 5", exact: true }).click();
+    await page.getByRole("button", { name: "Crusher block 8", exact: true }).click({ modifiers: ["Shift"] });
+    await page.waitForFunction(() => (
+        Array.from(document.querySelectorAll('[data-role="seqfx-block"].is-selected[data-lane="1"]'))
+            .map((node) => Number(node.getAttribute("data-start")))
+            .join(",") === "4,7"
+    ));
+    const groupPasteResult = await dispatchClipboardEvent(
+        page,
+        '[data-role="seqfx-block"][data-lane="1"][data-start="7"]',
+        "paste",
+    );
+    assert.deepEqual(groupPasteResult, { defaultPrevented: true, dispatchResult: false });
+
+    snapshot = await getHarnessSnapshot(page);
+    upload = patternUploads(snapshot).at(-1).value;
+    assert.deepEqual(
+        [4, 7].map((step) => upload.params[1][step].slice(0, 3)),
+        [[6, 9, 15], [6, 9, 15]],
+    );
+    assert.deepEqual(
+        [4, 7].map((step) => upload.mix[1][step]),
+        [0.37, 0.37],
+    );
 
     await page.close();
 });

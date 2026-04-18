@@ -71,6 +71,41 @@ function serveEffectDevStatus() {
     };
 }
 
+function serveEffectHarnessHtml() {
+    return {
+        name: "fx-effect-harness-html",
+        configureServer(server) {
+            server.middlewares.use(async (request, response, next) => {
+                const requestPath = (request.url ?? "").split("?")[0];
+
+                if (!/^\/fx\/[^/]+\/view\/harness\.html$/.test(requestPath)) {
+                    next();
+                    return;
+                }
+
+                const harnessPath = path.join(repoRoot, requestPath.slice(1));
+
+                if (!fs.existsSync(harnessPath)) {
+                    next();
+                    return;
+                }
+
+                try {
+                    const source = fs.readFileSync(harnessPath, "utf8");
+                    const html = await server.transformIndexHtml(request.url ?? requestPath, source);
+
+                    response.statusCode = 200;
+                    response.setHeader("Access-Control-Allow-Origin", "*");
+                    response.setHeader("Content-Type", "text/html; charset=utf-8");
+                    response.end(html);
+                } catch (error) {
+                    next(error);
+                }
+            });
+        },
+    };
+}
+
 export default defineConfig(({ command }) => ({
     appType: "custom",
     root: repoRoot,
@@ -80,6 +115,7 @@ export default defineConfig(({ command }) => ({
     },
     plugins: [
         react(),
+        serveEffectHarnessHtml(),
         serveEffectDevStatus(),
     ],
     server: {

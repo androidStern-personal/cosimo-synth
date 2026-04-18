@@ -201,90 +201,87 @@ select {
 }
 
 .seqfx-block {
-    border-color: rgba(139, 191, 154, 0.62);
-    background: rgba(139, 191, 154, 0.22);
-}
-
-.seqfx-block-fill {
-    background: #8bbf9a;
-}
-
-.seqfx-block {
     position: absolute;
     top: 0;
     z-index: 2;
     display: block;
     min-width: 0;
     min-height: 0;
-    border: 1px solid rgba(139, 191, 154, 0.72);
+    border: 0;
     border-radius: 5px;
     margin: 0;
     padding: 0;
+    background: transparent;
     cursor: grab;
     touch-action: none;
     user-select: none;
-    transition: border-color 120ms ease, background-color 120ms ease, transform 120ms ease;
+    transition: transform 120ms ease;
 }
 
 .seqfx-block:active {
     cursor: grabbing;
 }
 
-.seqfx-block.is-copy-preview {
-    border-style: dashed;
-    border-color: rgba(242, 209, 107, 0.78);
-    background: rgba(242, 209, 107, 0.14);
-}
-
-.seqfx-block.is-copy-preview .seqfx-block-fill {
-    background: rgba(242, 209, 107, 0.62);
+.seqfx-block:has(.seqfx-block-resize:hover) {
+    cursor: col-resize;
 }
 
 .seqfx-block-fill {
     position: absolute;
-    inset: 5px;
+    inset: 1px;
     border-radius: 3px;
+    background: #8bbf9a;
+    box-shadow: inset 0 0 0 1px rgba(21, 24, 22, 0.28);
+    transition: background-color 120ms ease, box-shadow 120ms ease, filter 120ms ease;
 }
 
-.seqfx-block::before {
-    position: absolute;
-    top: 3px;
-    left: 3px;
-    width: 5px;
-    height: 5px;
-    border-radius: 999px;
-    background: #f2d16b;
-    content: "";
+.seqfx-block:hover .seqfx-block-fill {
+    filter: brightness(1.05);
+}
+
+.seqfx-block.is-copy-preview .seqfx-block-fill {
+    background: rgba(242, 209, 107, 0.66);
+    box-shadow: inset 0 0 0 1px rgba(242, 209, 107, 0.95);
 }
 
 .seqfx-block-resize {
     position: absolute;
-    top: 2px;
+    top: 0;
     right: 0;
-    bottom: 2px;
-    width: min(8px, 30%);
-    border-left: 1px solid rgba(21, 24, 22, 0.46);
-    border-radius: 0 4px 4px 0;
-    background: rgba(246, 250, 247, 0.26);
-    cursor: ew-resize;
+    bottom: 0;
+    width: 8px;
+    border-radius: 0 5px 5px 0;
+    background: transparent;
+    cursor: col-resize;
     touch-action: none;
 }
 
 .seqfx-block-resize::after {
     position: absolute;
-    top: 6px;
-    right: 3px;
-    bottom: 6px;
+    top: 5px;
+    right: 2px;
+    bottom: 5px;
     width: 2px;
     border-radius: 999px;
-    background: rgba(21, 24, 22, 0.5);
+    background: rgba(246, 250, 247, 0.84);
     content: "";
+    opacity: 0;
+    transition: opacity 100ms ease;
 }
 
-.seqfx-cell.is-selected,
-.seqfx-block.is-selected {
+.seqfx-block:hover .seqfx-block-resize::after,
+.seqfx-block:focus-visible .seqfx-block-resize::after {
+    opacity: 1;
+}
+
+.seqfx-cell.is-selected {
     outline: 2px solid #f6faf7;
     outline-offset: 1px;
+}
+
+.seqfx-block.is-selected .seqfx-block-fill {
+    box-shadow: inset 0 0 0 1px #f6faf7;
+    filter: brightness(1.07);
 }
 
 .seqfx-cell:focus-visible,
@@ -293,9 +290,12 @@ select {
     outline-offset: 2px;
 }
 
-.seqfx-cell.is-playhead,
-.seqfx-block.is-playhead {
+.seqfx-cell.is-playhead {
     box-shadow: inset 0 -3px 0 #8bbf9a;
+}
+
+.seqfx-block.is-playhead .seqfx-block-fill {
+    box-shadow: inset 0 -3px 0 #f6faf7, inset 0 0 0 1px rgba(21, 24, 22, 0.28);
 }
 
 .seqfx-inspector {
@@ -378,6 +378,131 @@ select {
     color: #eef2ef;
     font-family: "Geist Mono", Menlo, Monaco, monospace;
     font-size: 12px;
+}
+
+.seqfx-tape-editor {
+    display: grid;
+    gap: 10px;
+}
+
+.seqfx-tape-graph {
+    width: 100%;
+    min-height: 150px;
+    border: 1px solid rgba(238, 242, 239, 0.12);
+    border-radius: 7px;
+    background: rgba(21, 24, 22, 0.72);
+    touch-action: none;
+}
+
+.seqfx-tape-graph-bg {
+    fill: rgba(255, 255, 255, 0.035);
+    stroke: rgba(238, 242, 239, 0.1);
+}
+
+.seqfx-tape-catchup-region {
+    fill: rgba(242, 209, 107, 0.12);
+}
+
+.seqfx-tape-grid-line {
+    stroke: rgba(238, 242, 239, 0.16);
+    stroke-dasharray: 4 4;
+}
+
+.seqfx-tape-axis {
+    stroke: rgba(238, 242, 239, 0.2);
+}
+
+.seqfx-tape-marker-line {
+    stroke: rgba(242, 209, 107, 0.26);
+    stroke-dasharray: 3 3;
+}
+
+.seqfx-tape-graph-fill {
+    fill: rgba(139, 191, 154, 0.13);
+}
+
+.seqfx-tape-graph-line {
+    fill: none;
+    stroke: #8bbf9a;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 2.4px;
+}
+
+.seqfx-tape-handle {
+    fill: #f2d16b;
+    stroke: rgba(21, 24, 22, 0.86);
+    stroke-width: 1.4px;
+    cursor: grab;
+    pointer-events: all;
+}
+
+.seqfx-tape-handle:active {
+    cursor: grabbing;
+}
+
+.seqfx-tape-length-handle {
+    fill: #f2d16b;
+}
+
+.seqfx-tape-curve-handle {
+    fill: #eef2ef;
+}
+
+.seqfx-tape-offscreen-marker {
+    fill: none;
+    stroke: #f2d16b;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 2px;
+}
+
+.seqfx-tape-graph-label {
+    fill: rgba(238, 242, 239, 0.62);
+    font-family: "Geist Mono", Menlo, Monaco, monospace;
+    font-size: 9px;
+}
+
+.seqfx-tape-readout {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    color: rgba(238, 242, 239, 0.64);
+    font-family: "Geist Mono", Menlo, Monaco, monospace;
+    font-size: 10px;
+}
+
+.seqfx-tape-control {
+    display: grid;
+    gap: 6px;
+}
+
+.seqfx-tape-control span {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    color: #d9e2dc;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.seqfx-tape-control output {
+    color: #eef2ef;
+    font-family: "Geist Mono", Menlo, Monaco, monospace;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.seqfx-tape-control input[type="range"] {
+    width: 100%;
+    accent-color: #8bbf9a;
+}
+
+.seqfx-tape-control small {
+    margin: 0;
+    color: rgba(238, 242, 239, 0.62);
+    font-size: 12px;
+    line-height: 1.35;
 }
 
 .seqfx-delete-block {

@@ -10,6 +10,10 @@ namespace seqfx
     let laneStutter = 3;
     let maxTapeSeconds = 1.0f;
     let maxStutterSeconds = 1.0f;
+    let tapeSpeedFloor = 0.005f;
+    let tapeModeStop = 0;
+    let tapeModeSpinUp = 1;
+    let tapeRestartCrossfadeFrames = 32.0f;
     let pi = 3.14159265358979323846f;
 
     struct SeqPatternUpload
@@ -31,6 +35,7 @@ namespace seqfx
         int32 stepIndex;
         bool transportRunning;
         float32 stepProgress;
+        float32 stepDurationMs;
     }
 
     int32 roundToInt (float32 value)
@@ -67,6 +72,50 @@ namespace seqfx
             clampFloat (phase, 0.0f, 1.0f),
             clampFloat (curvePower, 0.25f, 4.0f)
         );
+    }
+
+    float32 tapeStopSpeedAt (float32 elapsedFrames, float32 stopPointFrames, float32 curvePower)
+    {
+        let safeStopPoint = std::intrinsics::max (1.0f, stopPointFrames);
+        let progress = clampFloat (elapsedFrames / safeStopPoint, 0.0f, 1.0f);
+
+        if (progress >= 1.0f)
+            return tapeSpeedFloor;
+
+        return tapeSpeedFloor + ((1.0f - tapeSpeedFloor) * std::intrinsics::pow (
+            std::intrinsics::max (0.0f, 1.0f - progress),
+            clampFloat (curvePower, 0.25f, 4.0f)
+        ));
+    }
+
+    float32 tapeSpinUpSpeedAt (float32 elapsedFrames, float32 rampEndFrames, float32 curvePower)
+    {
+        let safeRampEnd = std::intrinsics::max (1.0f, rampEndFrames);
+        let progress = clampFloat (elapsedFrames / safeRampEnd, 0.0f, 1.0f);
+
+        if (progress >= 1.0f)
+            return 1.0f;
+
+        return tapeSpeedFloor + ((1.0f - tapeSpeedFloor) * std::intrinsics::pow (
+            progress,
+            clampFloat (curvePower, 0.25f, 4.0f)
+        ));
+    }
+
+    float32 tapeReleaseBaseSpeed (float32 releasePhase, float32 releaseCurve)
+    {
+        return tapeSpeedFloor + ((1.0f - tapeSpeedFloor) * std::intrinsics::pow (
+            clampFloat (releasePhase, 0.0f, 1.0f),
+            clampFloat (releaseCurve, 0.25f, 4.0f)
+        ));
+    }
+
+    float32 tapeCatchupBaseSpeed (int32 mode, float32 releasePhase, float32 releaseCurve)
+    {
+        if (mode == tapeModeSpinUp)
+            return 1.0f;
+
+        return tapeReleaseBaseSpeed (releasePhase, releaseCurve);
     }
 
     float32 logLerpHz (float32 startHz, float32 endHz, float32 amount)
@@ -183,12 +232,23 @@ processor SeqFx [[ main ]]
     float32 tapeMixTarget;
     float32 tapeDurationScale = 1.0f;
     float32 tapeCurvePower = 1.0f;
-    int32 tapeEndBehavior;
-    float32 tapeReleaseMs = 30.0f;
+    float32 tapeReleaseCurvePower = 1.0f;
+    float32 tapeCatchupPercent = 25.0f;
+    int32 tapeMode = seqfx::tapeModeStop;
     float32 tapeElapsedFrames;
-    float32 tapeDurationFrames = 1.0f;
+    float32 tapeBlockDurationFrames = 1.0f;
+    float32 tapeStopPointFrames = 1.0f;
+    float32 tapeCatchupFrames;
+    float32 tapeCatchupStartFrames = 1.0f;
+    bool tapeCatchupJumped;
+    float32 tapeJumpBlendFrames;
+    float32 tapeJumpBlendAge;
     float32 tapeReadPosition;
     float32<2> tapeLastSample;
+    float32<2> tapeJumpFromSample;
+    float32 tapeRestartBlendAge;
+    float32 tapeRestartBlendFrames;
+    float32<2> tapeRestartFromSample;
 
     bool stutterLaneActive;
     bool stutterCapturing;
@@ -239,8 +299,9 @@ processor SeqFx [[ main ]]
 
             stepParams[seqfx::laneTapeStop, step, 0] = 1.0f;
             stepParams[seqfx::laneTapeStop, step, 1] = 1.0f;
-            stepParams[seqfx::laneTapeStop, step, 2] = 0.0f;
-            stepParams[seqfx::laneTapeStop, step, 3] = 30.0f;
+            stepParams[seqfx::laneTapeStop, step, 2] = 1.0f;
+            stepParams[seqfx::laneTapeStop, step, 3] = 25.0f;
+            stepParams[seqfx::laneTapeStop, step, 4] = 0.0f;
 
             stepParams[seqfx::laneStutter, step, 0] = 8.0f;
             stepParams[seqfx::laneStutter, step, 1] = 1.0f;
@@ -602,19 +663,19 @@ processor SeqFx [[ main ]]
 
         if (! tapeLaneActive)
         {
-            tapePlaying = false;
+            tapeMixTarget = 0.0f;
             return;
         }
-
-        tapeCurvePower = seqfx::clampFloat (stepParams[lane, currentStep, 1], 0.25f, 4.0f);
-        tapeEndBehavior = snapValue (stepParams[lane, currentStep, 2], 0, 1);
-        tapeReleaseMs = seqfx::clampFloat (stepParams[lane, currentStep, 3], 1.0f, 250.0f);
 
         if (! wasActive || triggerSteps[lane, currentStep])
         {
             let blockStart = blockStartStep (lane, currentStep);
             tapeDurationScale = seqfx::clampFloat (stepParams[lane, blockStart, 0], 0.05f, 4.0f);
-            startTapeStop (segmentDurationFrames (lane, blockStart) * tapeDurationScale);
+            tapeCurvePower = seqfx::clampFloat (stepParams[lane, blockStart, 1], 0.25f, 4.0f);
+            tapeReleaseCurvePower = seqfx::clampFloat (stepParams[lane, blockStart, 2], 0.25f, 4.0f);
+            tapeCatchupPercent = seqfx::clampFloat (stepParams[lane, blockStart, 3], 0.0f, 100.0f);
+            tapeMode = seqfx::roundToInt (seqfx::clampFloat (stepParams[lane, blockStart, 4], 0.0f, 1.0f));
+            startTapeStop (segmentDurationFrames (lane, blockStart));
             tapeElapsedFrames = elapsedFramesFromBlockStart (lane, blockStart, currentStep);
         }
     }
@@ -650,7 +711,7 @@ processor SeqFx [[ main ]]
         return float32 (frameCount);
     }
 
-    void startTapeStop (float32 durationFrames)
+    void startTapeStop (float32 blockDurationFrames)
     {
         if (validTapeFrames < 8)
         {
@@ -658,9 +719,32 @@ processor SeqFx [[ main ]]
             return;
         }
 
+        let restartBlendActive = tapePlaying && tapeMixCurrent > 0.00001f;
+        tapeRestartFromSample = tapeLastSample;
+        tapeRestartBlendAge = 0.0f;
+        tapeRestartBlendFrames = restartBlendActive ? seqfx::tapeRestartCrossfadeFrames : 0.0f;
+
         tapePlaying = true;
         tapeElapsedFrames = 0.0f;
-        tapeDurationFrames = std::intrinsics::max (1.0f, durationFrames);
+        tapeBlockDurationFrames = std::intrinsics::max (1.0f, blockDurationFrames);
+        tapeStopPointFrames = std::intrinsics::max (1.0f, tapeBlockDurationFrames * tapeDurationScale);
+        tapeCatchupFrames = 0.0f;
+        tapeCatchupStartFrames = tapeBlockDurationFrames;
+        tapeCatchupJumped = false;
+        tapeJumpBlendFrames = 0.0f;
+        tapeJumpBlendAge = 0.0f;
+
+        if (tapeStopPointFrames < tapeBlockDurationFrames)
+        {
+            let requestedCatchupFrames = tapeBlockDurationFrames * (tapeCatchupPercent / 100.0f);
+            let requestedCatchupStartFrames = tapeBlockDurationFrames - requestedCatchupFrames;
+            tapeCatchupStartFrames = std::intrinsics::min (
+                tapeBlockDurationFrames,
+                std::intrinsics::max (tapeStopPointFrames, requestedCatchupStartFrames)
+            );
+            tapeCatchupFrames = std::intrinsics::max (0.0f, tapeBlockDurationFrames - tapeCatchupStartFrames);
+        }
+
         tapeReadPosition = std::intrinsics::wrap (float32 (int32 (tapeWriteIndex)) - 4.0f, float32 (tapeBufferSize));
     }
 
@@ -792,39 +876,72 @@ processor SeqFx [[ main ]]
     {
         tapeMixCurrent = seqfx::moveTowards (tapeMixCurrent, tapeMixTarget, 1.0f / 96.0f);
 
-        if (tapeMixCurrent <= 0.00001f || ! tapePlaying)
+        if (tapeMixCurrent <= 0.00001f)
+        {
+            tapePlaying = false;
+            return stage;
+        }
+
+        if (! tapePlaying)
             return stage;
 
-        let progress = tapeElapsedFrames / std::intrinsics::max (1.0f, tapeDurationFrames);
-        let speed = std::intrinsics::pow (
-            std::intrinsics::max (0.0f, 1.0f - seqfx::clampFloat (progress, 0.0f, 1.0f)),
-            tapeCurvePower
-        );
-
-        if (progress >= 1.0f)
+        if (tapeElapsedFrames >= tapeBlockDurationFrames)
         {
-            if (tapeEndBehavior == 0)
+            tapeMixTarget = 0.0f;
+            if (tapeCatchupFrames > 0.0f)
             {
-                let releaseFrames = std::intrinsics::max (1.0f, (tapeReleaseMs * 0.001f) * float32 (processor.frequency));
-                let releaseAmount = seqfx::clampFloat ((tapeElapsedFrames - tapeDurationFrames) / releaseFrames, 0.0f, 1.0f);
-                let faded = tapeLastSample * (1.0f - releaseAmount);
-
-                if (releaseAmount >= 1.0f)
-                    tapePlaying = false;
-
-                tapeElapsedFrames += 1.0f;
-                return stage + ((faded - stage) * tapeMixCurrent);
+                tapePlaying = false;
+                return stage;
             }
 
-            tapeElapsedFrames += 1.0f;
             return stage + ((tapeLastSample - stage) * tapeMixCurrent);
         }
 
-        let tapeOut = readTapeHistory (tapeReadPosition);
+        var speed = tapeMode == seqfx::tapeModeSpinUp
+            ? seqfx::tapeSpinUpSpeedAt (tapeElapsedFrames, tapeStopPointFrames, tapeCurvePower)
+            : seqfx::tapeStopSpeedAt (tapeElapsedFrames, tapeStopPointFrames, tapeCurvePower);
+        var returnWet = 1.0f;
+
+        if (tapeCatchupFrames > 0.0f && tapeElapsedFrames >= tapeCatchupStartFrames)
+        {
+            let releasePhase = seqfx::clampFloat ((tapeElapsedFrames - tapeCatchupStartFrames) / tapeCatchupFrames, 0.0f, 1.0f);
+            if (! tapeCatchupJumped)
+            {
+                tapeJumpFromSample = readTapeHistory (tapeReadPosition);
+                tapeReadPosition = std::intrinsics::wrap (float32 (int32 (tapeWriteIndex)) - 4.0f, float32 (tapeBufferSize));
+                tapeCatchupJumped = true;
+                tapeJumpBlendAge = 0.0f;
+                tapeJumpBlendFrames = seqfx::clampFloat (
+                    std::intrinsics::min (float32 (processor.frequency) * 0.002f, tapeCatchupFrames * 0.25f),
+                    1.0f,
+                    std::intrinsics::max (1.0f, tapeCatchupFrames)
+                );
+            }
+
+            speed = seqfx::tapeCatchupBaseSpeed (tapeMode, releasePhase, tapeReleaseCurvePower);
+            returnWet = 1.0f - releasePhase;
+        }
+
+        var tapeOut = readTapeHistory (tapeReadPosition);
+
+        if (tapeCatchupJumped && tapeJumpBlendAge < tapeJumpBlendFrames)
+        {
+            let jumpBlend = seqfx::clampFloat (tapeJumpBlendAge / std::intrinsics::max (1.0f, tapeJumpBlendFrames), 0.0f, 1.0f);
+            tapeOut = tapeJumpFromSample + ((tapeOut - tapeJumpFromSample) * jumpBlend);
+            tapeJumpBlendAge += 1.0f;
+        }
+
+        if (tapeRestartBlendAge < tapeRestartBlendFrames)
+        {
+            let restartBlend = seqfx::clampFloat (tapeRestartBlendAge / std::intrinsics::max (1.0f, tapeRestartBlendFrames), 0.0f, 1.0f);
+            tapeOut = tapeRestartFromSample + ((tapeOut - tapeRestartFromSample) * restartBlend);
+            tapeRestartBlendAge += 1.0f;
+        }
+
         tapeLastSample = tapeOut;
         tapeReadPosition = std::intrinsics::wrap (tapeReadPosition + speed, float32 (tapeBufferSize));
         tapeElapsedFrames += 1.0f;
-        return stage + ((tapeOut - stage) * tapeMixCurrent);
+        return stage + ((tapeOut - stage) * tapeMixCurrent * returnWet);
     }
 
     float32<2> processStutter (float32<2> stage)
@@ -885,6 +1002,7 @@ processor SeqFx [[ main ]]
         monitor.stepIndex = currentStep;
         monitor.transportRunning = isClockRunning();
         monitor.stepProgress = float32 (stepProgressFrames / std::intrinsics::max (1.0, currentStepFrames));
+        monitor.stepDurationMs = float32 ((currentStepFrames / processor.frequency) * 1000.0);
         monitorOut <- monitor;
     }
 

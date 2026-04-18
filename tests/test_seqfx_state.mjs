@@ -28,8 +28,10 @@ const {
     applySeqFxCellToggle,
     applySeqFxMixEdit,
     applySeqFxParamEdit,
+    applySeqFxStepValuePaste,
     buildSeqPatternUpload,
     createDefaultSeqFxState,
+    getSeqFxStepValueSnapshot,
     serializeSeqFxState,
     normalizeSeqFxState,
 } = stateModule;
@@ -135,6 +137,76 @@ test("editing_trigger_latched_tape_and_stutter_parameters_marks_only_that_cell_a
     assert.equal(state.patterns[0].lanes[SEQFX_LANES.tapeStop].steps[11].trigger, false);
     assert.equal(state.patterns[0].lanes[SEQFX_LANES.tapeStop].steps[13].trigger, false);
     assert.equal(state.patterns[0].lanes[SEQFX_LANES.stutter].steps[20].trigger, true);
+});
+
+test("tape_stop_catchup_percent_and_mode_parameters_are_uploaded_to_the_whole_block", () => {
+    let state = createDefaultSeqFxState();
+    state = applySeqFxBlockCreate(state, {
+        patternIndex: 0,
+        lane: SEQFX_LANES.tapeStop,
+        startStep: 1,
+        length: 2,
+    });
+    state = applySeqFxBlockParamEdit(state, {
+        patternIndex: 0,
+        lane: SEQFX_LANES.tapeStop,
+        startStep: 1,
+        paramIndex: 2,
+        value: 2.5,
+    });
+    state = applySeqFxBlockParamEdit(state, {
+        patternIndex: 0,
+        lane: SEQFX_LANES.tapeStop,
+        startStep: 1,
+        paramIndex: 3,
+        value: 75,
+    });
+    state = applySeqFxBlockParamEdit(state, {
+        patternIndex: 0,
+        lane: SEQFX_LANES.tapeStop,
+        startStep: 1,
+        paramIndex: 4,
+        value: 1,
+    });
+
+    const upload = buildSeqPatternUpload(state, {
+        patternIndex: 0,
+        authoritative: false,
+    });
+
+    assert.deepEqual(
+        upload.params[SEQFX_LANES.tapeStop].slice(1, 3).map((params) => params[2]),
+        [2.5, 2.5],
+    );
+    assert.deepEqual(
+        upload.params[SEQFX_LANES.tapeStop].slice(1, 3).map((params) => params[3]),
+        [75, 75],
+    );
+    assert.deepEqual(
+        upload.params[SEQFX_LANES.tapeStop].slice(1, 3).map((params) => params[4]),
+        [1, 1],
+    );
+});
+
+test("legacy_tape_stop_end_mode_values_normalize_to_neutral_catchup_curve", () => {
+    const rawState = createDefaultSeqFxState();
+    rawState.patterns[0].lanes[SEQFX_LANES.tapeStop].steps[4] = {
+        active: true,
+        trigger: true,
+        mix: 1,
+        params: [0.5, 1.2, 0, 30, 0, 0, 0, 0],
+    };
+    rawState.patterns[0].lanes[SEQFX_LANES.tapeStop].steps[5] = {
+        active: true,
+        trigger: false,
+        mix: 1,
+        params: [0.5, 1.2, 1, 30, 0, 0, 0, 0],
+    };
+
+    const normalized = normalizeSeqFxState(rawState);
+
+    assert.equal(normalized.patterns[0].lanes[SEQFX_LANES.tapeStop].steps[4].params[2], 1);
+    assert.equal(normalized.patterns[0].lanes[SEQFX_LANES.tapeStop].steps[5].params[2], 1);
 });
 
 test("multi_step_edits_allow_step_latched_values_but_reject_trigger_latched_values", () => {
@@ -477,6 +549,87 @@ test("copy_paint_fills_signed_delta_from_source_block_start", () => {
     assert.deepEqual(
         upload.params[SEQFX_LANES.crusher].slice(2, 5).map((params) => params[0]),
         [6, 6, 6],
+    );
+});
+
+test("cell_value_snapshots_paste_mix_and_params_without_changing_block_shape", () => {
+    let state = createDefaultSeqFxState();
+    for (const startStep of [2, 5, 8]) {
+        state = applySeqFxBlockCreate(state, {
+            patternIndex: 0,
+            lane: SEQFX_LANES.crusher,
+            startStep,
+            length: 1,
+        });
+    }
+    state = applySeqFxMixEdit(state, {
+        patternIndex: 0,
+        lane: SEQFX_LANES.crusher,
+        steps: [2],
+        value: 0.42,
+    });
+    state = applySeqFxParamEdit(state, {
+        patternIndex: 0,
+        lane: SEQFX_LANES.crusher,
+        steps: [2],
+        paramIndex: 0,
+        value: 5,
+    });
+    state = applySeqFxParamEdit(state, {
+        patternIndex: 0,
+        lane: SEQFX_LANES.crusher,
+        steps: [2],
+        paramIndex: 1,
+        value: 7,
+    });
+    state = applySeqFxParamEdit(state, {
+        patternIndex: 0,
+        lane: SEQFX_LANES.crusher,
+        steps: [2],
+        paramIndex: 2,
+        value: 12,
+    });
+
+    const copiedValues = getSeqFxStepValueSnapshot(state, {
+        patternIndex: 0,
+        lane: SEQFX_LANES.crusher,
+        step: 2,
+    });
+
+    state = applySeqFxStepValuePaste(state, {
+        patternIndex: 0,
+        lane: SEQFX_LANES.crusher,
+        steps: [5, 8],
+        values: copiedValues,
+    });
+
+    const upload = buildSeqPatternUpload(state, {
+        patternIndex: 0,
+        authoritative: false,
+    });
+
+    assert.deepEqual(upload.activeSteps[SEQFX_LANES.crusher].slice(0, 10), [
+        false, false, true, false, false, true, false, false, true, false,
+    ]);
+    assert.deepEqual(upload.triggerSteps[SEQFX_LANES.crusher].slice(0, 10), [
+        false, false, true, false, false, true, false, false, true, false,
+    ]);
+    assert.deepEqual(
+        [2, 5, 8].map((step) => upload.mix[SEQFX_LANES.crusher][step]),
+        [0.42, 0.42, 0.42],
+    );
+    assert.deepEqual(
+        [2, 5, 8].map((step) => upload.params[SEQFX_LANES.crusher][step].slice(0, 3)),
+        [[5, 7, 12], [5, 7, 12], [5, 7, 12]],
+    );
+    assert.throws(
+        () => applySeqFxStepValuePaste(state, {
+            patternIndex: 0,
+            lane: SEQFX_LANES.filter,
+            steps: [1],
+            values: copiedValues,
+        }),
+        /same lane/i,
     );
 });
 

@@ -13,8 +13,26 @@ import {
     getSeqFxLaneBlocks,
     isSeqFxTriggerLatchedParam,
     type SeqFxPattern,
+    type SeqFxStep,
+    type SeqFxStepValueSnapshot,
     type SeqFxState,
 } from "./seqfx-state";
+import {
+    TAPE_STOP_MAX_CATCHUP_PERCENT,
+    TAPE_STOP_MAX_CURVE,
+    TAPE_STOP_MAX_STOP_POINT_PERCENT,
+    TAPE_STOP_MIN_CATCHUP_PERCENT,
+    TAPE_STOP_MIN_CURVE,
+    TAPE_STOP_MIN_STOP_POINT_PERCENT,
+    TAPE_STOP_MODE_SPIN_UP,
+    TAPE_STOP_MODE_STOP,
+    TAPE_STOP_SPEED_FLOOR,
+    evaluateTapeStopDisplaySpeed,
+    multiplierToStopPointPercent,
+    resolveTapeStopEnvelope,
+    sampleTapeStopDisplayEnvelope,
+    stopPointPercentToMultiplier,
+} from "./tape-stop-envelope";
 import { createSeqFxPresetStateAdapter } from "./seqfx-preset-adapter";
 import { SEQFX_ENDPOINTS, SeqFxRuntimeBridge } from "./seqfx-runtime-bridge";
 
@@ -105,10 +123,11 @@ const PARAM_DEFINITIONS: Record<number, ParamDefinition[]> = {
         { index: 2, label: "Drive", min: 0, max: 36, step: 0.1 },
     ],
     [SEQFX_LANES.tapeStop]: [
-        { index: 0, label: "Duration", min: 0.05, max: 4, step: 0.01 },
-        { index: 1, label: "Curve", min: 0.25, max: 4, step: 0.01 },
-        { index: 2, label: "End", min: 0, max: 1, step: 1, kind: "select", options: ["Fade", "Hold"] },
-        { index: 3, label: "Release", min: 1, max: 250, step: 1 },
+        { index: 0, label: "Start Length", min: 0.05, max: 4, step: 0.01 },
+        { index: 1, label: "Start Curve", min: 0.25, max: 4, step: 0.01 },
+        { index: 2, label: "Catchup Curve", min: 0.25, max: 4, step: 0.01 },
+        { index: 3, label: "Catchup Length", min: 0, max: 100, step: 1 },
+        { index: 4, label: "Mode", min: 0, max: 1, step: 1, kind: "select", options: ["Stop", "Spin-up"] },
     ],
     [SEQFX_LANES.stutter]: [
         { index: 0, label: "Slices", min: 2, max: 32, step: 1, hint: "Record slice 1; repeat the rest." },
@@ -126,7 +145,6 @@ const SEQFX_BEAT_GAP_PX = 9;
 const SEQFX_MIN_CELL_SIZE_PX = 22;
 const SEQFX_RATE_CELLS_PER_BEAT = [2, 4, 8] as const;
 const SEQFX_BEATS_PER_BAR = 4;
-
 function cellsPerBeatForRateIndex(rateIndex: number) {
     return SEQFX_RATE_CELLS_PER_BEAT[Math.min(2, Math.max(0, Math.round(rateIndex)))] ?? 4;
 }
@@ -243,6 +261,473 @@ function formatValue(value: number) {
     return Number(value.toFixed(3)).toString();
 }
 
+function clampNumber(value: number, min: number, max: number) {
+    if (!Number.isFinite(value)) {
+        return min;
+    }
+
+    return Math.min(max, Math.max(min, value));
+}
+
+function formatTapeStopPercent(value: number) {
+    return `${Math.round(value)}%`;
+}
+
+function formatTapeStopCurve(value: number) {
+    return `${Number(value.toFixed(2))}`;
+}
+
+function formatTapeStopSpeed(value: number) {
+    return `${Number(value.toFixed(value >= 2 ? 1 : 2))}x`;
+}
+
+function estimatedStepDurationMsForRateIndex(rateIndex: number) {
+    const quarterNoteMsAt120Bpm = 500;
+    const quarterNotesPerStep = rateIndex <= 0 ? 0.5 : rateIndex >= 2 ? 0.125 : 0.25;
+    return quarterNoteMsAt120Bpm * quarterNotesPerStep;
+}
+
+const TAPE_GRAPH_WIDTH = 260;
+const TAPE_GRAPH_HEIGHT = 150;
+const TAPE_GRAPH_LEFT = 28;
+const TAPE_GRAPH_RIGHT = 10;
+const TAPE_GRAPH_TOP = 12;
+const TAPE_GRAPH_BOTTOM = 24;
+const TAPE_GRAPH_PLOT_WIDTH = TAPE_GRAPH_WIDTH - TAPE_GRAPH_LEFT - TAPE_GRAPH_RIGHT;
+const TAPE_GRAPH_PLOT_HEIGHT = TAPE_GRAPH_HEIGHT - TAPE_GRAPH_TOP - TAPE_GRAPH_BOTTOM;
+
+function tapeGraphX(normalizedTime: number) {
+    return TAPE_GRAPH_LEFT + (clampNumber(normalizedTime, 0, 1) * TAPE_GRAPH_PLOT_WIDTH);
+}
+
+function tapeGraphY(speed: number, maxSpeed: number) {
+    const normalizedSpeed = clampNumber(speed / maxSpeed, 0, 1);
+    return TAPE_GRAPH_TOP + ((1 - normalizedSpeed) * TAPE_GRAPH_PLOT_HEIGHT);
+}
+
+function tapePathFromPoints(points: Array<{ x: number; y: number }>) {
+    if (points.length === 0) {
+        return "";
+    }
+
+    const [first, ...rest] = points;
+    return [
+        `M ${first.x.toFixed(2)} ${first.y.toFixed(2)}`,
+        ...rest.map((point) => `L ${point.x.toFixed(2)} ${point.y.toFixed(2)}`),
+    ].join(" ");
+}
+
+function curvePowerFromSpeedRatio(speedRatio: number, base: number) {
+    const safeRatio = clampNumber(speedRatio, 0.001, 0.999);
+    const safeBase = clampNumber(base, 0.001, 0.999);
+
+    return clampNumber(
+        Math.log(safeRatio) / Math.log(safeBase),
+        TAPE_STOP_MIN_CURVE,
+        TAPE_STOP_MAX_CURVE,
+    );
+}
+
+function TapeStopRangeControl({
+    label,
+    value,
+    valueLabel,
+    min,
+    max,
+    step,
+    dataRole,
+    hint,
+    disabled = false,
+    onChange,
+}: {
+    label: string;
+    value: number;
+    valueLabel: string;
+    min: number;
+    max: number;
+    step: number;
+    dataRole: string;
+    hint: string;
+    disabled?: boolean;
+    onChange: (value: number) => void;
+}) {
+    return (
+        <label className="seqfx-tape-control">
+            <span>
+                {label}
+                <output>{valueLabel}</output>
+            </span>
+            <input
+                data-role={dataRole}
+                disabled={disabled}
+                max={max}
+                min={min}
+                onChange={(event) => onChange(Number(event.currentTarget.value))}
+                onInput={(event) => onChange(Number(event.currentTarget.value))}
+                step={step}
+                type="range"
+                value={value}
+            />
+            <small>{hint}</small>
+        </label>
+    );
+}
+
+function TapeStopEnvelopeEditor({
+    step,
+    blockLength,
+    blockDurationMs,
+    onParamChange,
+}: {
+    step: SeqFxStep;
+    blockLength: number;
+    blockDurationMs: number;
+    onParamChange: (paramIndex: number, value: number) => void;
+}) {
+    const svgRef = useRef<SVGSVGElement | null>(null);
+    const dragModeRef = useRef<"startLength" | "startCurve" | "catchupLength" | "catchupCurve" | null>(null);
+    const mode = Math.round(step.params[4]) === TAPE_STOP_MODE_SPIN_UP
+        ? TAPE_STOP_MODE_SPIN_UP
+        : TAPE_STOP_MODE_STOP;
+    const stopPointPercent = multiplierToStopPointPercent(step.params[0]);
+    const curve = clampNumber(step.params[1], TAPE_STOP_MIN_CURVE, TAPE_STOP_MAX_CURVE);
+    const catchupCurve = clampNumber(step.params[2], TAPE_STOP_MIN_CURVE, TAPE_STOP_MAX_CURVE);
+    const catchupPercent = clampNumber(step.params[3], TAPE_STOP_MIN_CATCHUP_PERCENT, TAPE_STOP_MAX_CATCHUP_PERCENT);
+    const envelope = useMemo(() => resolveTapeStopEnvelope({
+        blockDurationMs,
+        mode,
+        stopPointPercent,
+        curve,
+        catchupPercent,
+        catchupCurve,
+    }), [blockDurationMs, catchupCurve, catchupPercent, curve, mode, stopPointPercent]);
+    const samples = useMemo(() => sampleTapeStopDisplayEnvelope(envelope, 96), [envelope]);
+    const maxGraphSpeed = 1;
+    const graphPoints = samples.map((sample) => ({
+        x: tapeGraphX(sample.normalizedTime),
+        y: tapeGraphY(sample.speed, maxGraphSpeed),
+    }));
+    const graphPath = tapePathFromPoints(graphPoints);
+    const fillPath = `${graphPath} L ${tapeGraphX(1).toFixed(2)} ${tapeGraphY(0, maxGraphSpeed).toFixed(2)} L ${tapeGraphX(0).toFixed(2)} ${tapeGraphY(0, maxGraphSpeed).toFixed(2)} Z`;
+    const oneXLineY = tapeGraphY(1, maxGraphSpeed);
+    const stopPointVisible = envelope.stopPointPercent <= 100;
+    const stopPointX = tapeGraphX(Math.min(1, envelope.stopPointPercent / 100));
+    const stopPointY = tapeGraphY(
+        evaluateTapeStopDisplaySpeed(envelope, Math.min(envelope.stopPointMs, envelope.blockDurationMs)),
+        maxGraphSpeed,
+    );
+    const catchupStartX = tapeGraphX(envelope.catchupStartMs / envelope.blockDurationMs);
+    const catchupStartY = tapeGraphY(evaluateTapeStopDisplaySpeed(envelope, envelope.catchupStartMs), maxGraphSpeed);
+    const catchupWidth = TAPE_GRAPH_LEFT + TAPE_GRAPH_PLOT_WIDTH - catchupStartX;
+    const curveHandleTimeMs = Math.max(1, Math.min(envelope.stopPointMs, envelope.blockDurationMs) * 0.5);
+    const curveHandleX = tapeGraphX(curveHandleTimeMs / envelope.blockDurationMs);
+    const curveHandleY = tapeGraphY(evaluateTapeStopDisplaySpeed(envelope, curveHandleTimeMs), maxGraphSpeed);
+    const catchupCurveHandleTimeMs = envelope.catchupDurationMs > 0
+        ? envelope.catchupStartMs + (envelope.catchupDurationMs * 0.5)
+        : envelope.blockDurationMs;
+    const catchupCurveHandleX = tapeGraphX(catchupCurveHandleTimeMs / envelope.blockDurationMs);
+    const catchupCurveHandleY = tapeGraphY(evaluateTapeStopDisplaySpeed(envelope, catchupCurveHandleTimeMs), maxGraphSpeed);
+    const requestedCatchupStartPercent = 100 - catchupPercent;
+    const realizedCatchupStartPercent = Math.round((envelope.catchupStartMs / envelope.blockDurationMs) * 100);
+    const catchupPushed = Math.round((envelope.catchupStartMs / envelope.blockDurationMs) * 100) > Math.round(requestedCatchupStartPercent);
+    const modeLabel = mode === TAPE_STOP_MODE_SPIN_UP ? "Spin-up" : "Stop";
+    const startLengthHint = mode === TAPE_STOP_MODE_SPIN_UP
+        ? "Where the sound reaches normal speed."
+        : "Where the slowdown reaches near-zero speed.";
+
+    const graphPointFromPointer = (event: PointerEvent<SVGSVGElement>) => {
+        const bounds = svgRef.current?.getBoundingClientRect();
+        if (!bounds || bounds.width <= 0 || bounds.height <= 0) {
+            return null;
+        }
+
+        return {
+            x: ((event.clientX - bounds.left) / bounds.width) * TAPE_GRAPH_WIDTH,
+            y: ((event.clientY - bounds.top) / bounds.height) * TAPE_GRAPH_HEIGHT,
+        };
+    };
+
+    const normalizedGraphXFromPointer = (event: PointerEvent<SVGSVGElement>) => {
+        const point = graphPointFromPointer(event);
+        if (!point) {
+            return null;
+        }
+
+        return clampNumber(
+            (point.x - TAPE_GRAPH_LEFT) / TAPE_GRAPH_PLOT_WIDTH,
+            0,
+            1,
+        );
+    };
+
+    const speedRatioFromPointer = (event: PointerEvent<SVGSVGElement>) => {
+        const point = graphPointFromPointer(event);
+        if (!point) {
+            return null;
+        }
+
+        const normalizedY = clampNumber(
+            1 - ((point.y - TAPE_GRAPH_TOP) / TAPE_GRAPH_PLOT_HEIGHT),
+            TAPE_STOP_SPEED_FLOOR + 0.001,
+            0.999,
+        );
+        const targetSpeed = normalizedY * maxGraphSpeed;
+
+        return clampNumber(
+            (targetSpeed - TAPE_STOP_SPEED_FLOOR) / (1 - TAPE_STOP_SPEED_FLOOR),
+            0.001,
+            0.999,
+        );
+    };
+
+    const updateStartLengthFromPointer = (event: PointerEvent<SVGSVGElement>) => {
+        const normalizedX = normalizedGraphXFromPointer(event);
+        if (normalizedX === null) {
+            return;
+        }
+
+        const nextStartPercent = clampNumber(
+            normalizedX * 100,
+            TAPE_STOP_MIN_STOP_POINT_PERCENT,
+            100,
+        );
+        onParamChange(0, stopPointPercentToMultiplier(nextStartPercent));
+    };
+
+    const updateCatchupLengthFromPointer = (event: PointerEvent<SVGSVGElement>) => {
+        const normalizedX = normalizedGraphXFromPointer(event);
+        if (normalizedX === null) {
+            return;
+        }
+
+        const nextCatchupPercent = clampNumber(
+            (1 - normalizedX) * 100,
+            TAPE_STOP_MIN_CATCHUP_PERCENT,
+            TAPE_STOP_MAX_CATCHUP_PERCENT,
+        );
+        const nextCatchupStartPercent = 100 - nextCatchupPercent;
+
+        onParamChange(3, nextCatchupPercent);
+
+        if (nextCatchupStartPercent < stopPointPercent && stopPointPercent <= 100) {
+            onParamChange(0, stopPointPercentToMultiplier(Math.max(
+                TAPE_STOP_MIN_STOP_POINT_PERCENT,
+                nextCatchupStartPercent,
+            )));
+        }
+    };
+
+    const updateStartCurveFromPointer = (event: PointerEvent<SVGSVGElement>) => {
+        if (envelope.stopPointMs <= 1) {
+            return;
+        }
+
+        const ratio = speedRatioFromPointer(event);
+        if (ratio === null) {
+            return;
+        }
+
+        const progress = clampNumber(curveHandleTimeMs / envelope.stopPointMs, 0.001, 0.999);
+        const base = mode === TAPE_STOP_MODE_SPIN_UP ? progress : 1 - progress;
+        onParamChange(1, curvePowerFromSpeedRatio(ratio, base));
+    };
+
+    const updateCatchupCurveFromPointer = (event: PointerEvent<SVGSVGElement>) => {
+        if (envelope.catchupDurationMs <= 1) {
+            return;
+        }
+
+        const ratio = speedRatioFromPointer(event);
+        if (ratio === null) {
+            return;
+        }
+
+        const progress = clampNumber(
+            (catchupCurveHandleTimeMs - envelope.catchupStartMs) / envelope.catchupDurationMs,
+            0.001,
+            0.999,
+        );
+        onParamChange(2, curvePowerFromSpeedRatio(ratio, progress));
+    };
+
+    const updateDragFromPointer = (mode: NonNullable<typeof dragModeRef.current>, event: PointerEvent<SVGSVGElement>) => {
+        if (mode === "startLength") {
+            updateStartLengthFromPointer(event);
+        } else if (mode === "startCurve") {
+            updateStartCurveFromPointer(event);
+        } else if (mode === "catchupLength") {
+            updateCatchupLengthFromPointer(event);
+        } else if (mode === "catchupCurve") {
+            updateCatchupCurveFromPointer(event);
+        }
+    };
+
+    const handleGraphPointerDown = (mode: NonNullable<typeof dragModeRef.current>) => (event: PointerEvent<SVGCircleElement>) => {
+        event.preventDefault();
+        event.stopPropagation();
+        dragModeRef.current = mode;
+        svgRef.current?.setPointerCapture(event.pointerId);
+        updateDragFromPointer(mode, event as unknown as PointerEvent<SVGSVGElement>);
+    };
+
+    const handleGraphPointerMove = (event: PointerEvent<SVGSVGElement>) => {
+        if (dragModeRef.current) {
+            updateDragFromPointer(dragModeRef.current, event);
+        }
+    };
+
+    const endGraphDrag = (event: PointerEvent<SVGSVGElement>) => {
+        if (!dragModeRef.current) {
+            return;
+        }
+
+        dragModeRef.current = null;
+        event.currentTarget.releasePointerCapture?.(event.pointerId);
+    };
+
+    return (
+        <section className="seqfx-tape-editor" aria-label="Tape stop speed envelope">
+            <svg
+                ref={svgRef}
+                className="seqfx-tape-graph"
+                data-role="seqfx-tape-graph"
+                viewBox={`0 0 ${TAPE_GRAPH_WIDTH} ${TAPE_GRAPH_HEIGHT}`}
+                role="img"
+                aria-label="Tape stop speed graph"
+                onPointerMove={handleGraphPointerMove}
+                onPointerUp={endGraphDrag}
+                onPointerCancel={endGraphDrag}
+            >
+                <rect className="seqfx-tape-graph-bg" x={TAPE_GRAPH_LEFT} y={TAPE_GRAPH_TOP} width={TAPE_GRAPH_PLOT_WIDTH} height={TAPE_GRAPH_PLOT_HEIGHT} rx="5" />
+                {envelope.catchupDurationMs > 0 ? (
+                    <rect
+                        className="seqfx-tape-catchup-region"
+                        x={catchupStartX}
+                        y={TAPE_GRAPH_TOP}
+                        width={Math.max(0, catchupWidth)}
+                        height={TAPE_GRAPH_PLOT_HEIGHT}
+                    />
+                ) : null}
+                <line className="seqfx-tape-grid-line" x1={TAPE_GRAPH_LEFT} x2={TAPE_GRAPH_LEFT + TAPE_GRAPH_PLOT_WIDTH} y1={oneXLineY} y2={oneXLineY} />
+                <line className="seqfx-tape-axis" x1={TAPE_GRAPH_LEFT} x2={TAPE_GRAPH_LEFT + TAPE_GRAPH_PLOT_WIDTH} y1={TAPE_GRAPH_TOP + TAPE_GRAPH_PLOT_HEIGHT} y2={TAPE_GRAPH_TOP + TAPE_GRAPH_PLOT_HEIGHT} />
+                <path className="seqfx-tape-graph-fill" d={fillPath} />
+                <path className="seqfx-tape-graph-line" d={graphPath} />
+                <line className="seqfx-tape-marker-line" x1={catchupStartX} x2={catchupStartX} y1={TAPE_GRAPH_TOP} y2={TAPE_GRAPH_TOP + TAPE_GRAPH_PLOT_HEIGHT} />
+                {stopPointVisible ? (
+                    <circle
+                        aria-label="Start length handle"
+                        className="seqfx-tape-handle seqfx-tape-length-handle"
+                        data-role="seqfx-tape-start-length-handle"
+                        cx={stopPointX}
+                        cy={stopPointY}
+                        r="5"
+                        onPointerDown={handleGraphPointerDown("startLength")}
+                    />
+                ) : (
+                    <>
+                        <path className="seqfx-tape-offscreen-marker" d={`M ${TAPE_GRAPH_LEFT + TAPE_GRAPH_PLOT_WIDTH - 7} ${TAPE_GRAPH_TOP + 8} L ${TAPE_GRAPH_LEFT + TAPE_GRAPH_PLOT_WIDTH} ${TAPE_GRAPH_TOP + 14} L ${TAPE_GRAPH_LEFT + TAPE_GRAPH_PLOT_WIDTH - 7} ${TAPE_GRAPH_TOP + 20}`} />
+                        <text className="seqfx-tape-graph-label" x={TAPE_GRAPH_LEFT + TAPE_GRAPH_PLOT_WIDTH - 54} y={TAPE_GRAPH_TOP + 19}>{formatTapeStopPercent(stopPointPercent)}</text>
+                    </>
+                )}
+                <circle
+                    className="seqfx-tape-handle seqfx-tape-curve-handle"
+                    data-role="seqfx-tape-start-curve-handle"
+                    aria-label="Start curve handle"
+                    cx={curveHandleX}
+                    cy={curveHandleY}
+                    r="5"
+                    onPointerDown={handleGraphPointerDown("startCurve")}
+                />
+                <circle
+                    aria-label="Catchup length handle"
+                    className="seqfx-tape-handle seqfx-tape-length-handle"
+                    data-role="seqfx-tape-catchup-length-handle"
+                    cx={catchupStartX}
+                    cy={catchupStartY}
+                    r="5"
+                    onPointerDown={handleGraphPointerDown("catchupLength")}
+                />
+                {envelope.catchupDurationMs > 0 ? (
+                    <circle
+                        aria-label="Catchup curve handle"
+                        className="seqfx-tape-handle seqfx-tape-curve-handle"
+                        data-role="seqfx-tape-catchup-curve-handle"
+                        cx={catchupCurveHandleX}
+                        cy={catchupCurveHandleY}
+                        r="5"
+                        onPointerDown={handleGraphPointerDown("catchupCurve")}
+                    />
+                ) : null}
+                <text className="seqfx-tape-graph-label" x="4" y={oneXLineY + 4}>1x</text>
+                <text className="seqfx-tape-graph-label" x="4" y={TAPE_GRAPH_TOP + TAPE_GRAPH_PLOT_HEIGHT - 2}>0x</text>
+                <text className="seqfx-tape-graph-label" x={TAPE_GRAPH_LEFT} y={TAPE_GRAPH_HEIGHT - 5}>0</text>
+                <text className="seqfx-tape-graph-label" x={TAPE_GRAPH_LEFT + TAPE_GRAPH_PLOT_WIDTH - 40} y={TAPE_GRAPH_HEIGHT - 5}>{blockLength} cell{blockLength === 1 ? "" : "s"}</text>
+            </svg>
+            <div className="seqfx-tape-readout">
+                <span>Speed floor {formatTapeStopSpeed(TAPE_STOP_SPEED_FLOOR)}</span>
+                <span>Start length {formatTapeStopPercent(stopPointPercent)}</span>
+                <span>{catchupPushed ? `Catchup starts at ${realizedCatchupStartPercent}%` : `Catchup length ${formatTapeStopPercent(catchupPercent)}`}</span>
+            </div>
+            <label className="seqfx-field">
+                <span>Mode</span>
+                <select
+                    data-role="seqfx-tape-mode"
+                    onChange={(event) => onParamChange(4, Number(event.currentTarget.value))}
+                    value={mode}
+                >
+                    <option value={TAPE_STOP_MODE_STOP}>Stop</option>
+                    <option value={TAPE_STOP_MODE_SPIN_UP}>Spin-up</option>
+                </select>
+                <small>{modeLabel === "Spin-up" ? "Starts nearly stopped, then rises." : "Starts normal, then slows down."}</small>
+            </label>
+            <TapeStopRangeControl
+                dataRole="seqfx-tape-stop-point"
+                label="Start Length"
+                min={TAPE_STOP_MIN_STOP_POINT_PERCENT}
+                max={TAPE_STOP_MAX_STOP_POINT_PERCENT}
+                step={1}
+                value={stopPointPercent}
+                valueLabel={formatTapeStopPercent(stopPointPercent)}
+                hint={startLengthHint}
+                onChange={(value) => onParamChange(0, stopPointPercentToMultiplier(value))}
+            />
+            <TapeStopRangeControl
+                dataRole="seqfx-tape-curve"
+                label="Start Curve"
+                min={TAPE_STOP_MIN_CURVE}
+                max={TAPE_STOP_MAX_CURVE}
+                step={0.01}
+                value={curve}
+                valueLabel={formatTapeStopCurve(curve)}
+                hint="Bends the first part of the curve."
+                onChange={(value) => onParamChange(1, value)}
+            />
+            <TapeStopRangeControl
+                dataRole="seqfx-tape-catchup"
+                label="Catchup Length"
+                min={TAPE_STOP_MIN_CATCHUP_PERCENT}
+                max={TAPE_STOP_MAX_CATCHUP_PERCENT}
+                step={1}
+                value={catchupPercent}
+                valueLabel={formatTapeStopPercent(catchupPercent)}
+                hint="How much of the block end is reserved for syncing back."
+                onChange={(value) => onParamChange(3, value)}
+            />
+            <TapeStopRangeControl
+                dataRole="seqfx-tape-catchup-curve"
+                label="Catchup Curve"
+                min={TAPE_STOP_MIN_CURVE}
+                max={TAPE_STOP_MAX_CURVE}
+                step={0.01}
+                value={catchupCurve}
+                valueLabel={formatTapeStopCurve(catchupCurve)}
+                hint="Bends the return ramp."
+                onChange={(value) => onParamChange(2, value)}
+            />
+        </section>
+    );
+}
+
 function selectionFromCell(cell: SelectedCell | null): Selection | null {
     return cell ? { lane: cell.lane, steps: [cell.step] } : null;
 }
@@ -315,6 +800,48 @@ function clampBlockStart(startStep: number, length: number) {
     return Math.min(SEQFX_STEP_COUNT - length, Math.max(0, startStep));
 }
 
+function isEditableElement(element: Element) {
+    if (element instanceof HTMLTextAreaElement || element instanceof HTMLSelectElement) {
+        return true;
+    }
+
+    if (element instanceof HTMLInputElement) {
+        const inputType = element.type.toLowerCase();
+        return inputType !== "button"
+            && inputType !== "checkbox"
+            && inputType !== "radio"
+            && inputType !== "range"
+            && inputType !== "reset"
+            && inputType !== "submit";
+    }
+
+    return element.isContentEditable
+        || Boolean(element.closest('[contenteditable="true"], [role="textbox"]'));
+}
+
+function isEditableKeyboardEvent(event: globalThis.KeyboardEvent) {
+    const path = typeof event.composedPath === "function" ? event.composedPath() : [event.target];
+    return path.some((target) => target instanceof Element && isEditableElement(target));
+}
+
+function isEditableClipboardEvent(event: ClipboardEvent) {
+    const path = typeof event.composedPath === "function" ? event.composedPath() : [event.target];
+    return path.some((target) => target instanceof Element && isEditableElement(target));
+}
+
+function describeEventTarget(event: Event) {
+    const target = event.target;
+    if (!(target instanceof Element)) {
+        return "non-element";
+    }
+
+    const tagName = target.tagName.toLowerCase();
+    const role = target.getAttribute("data-role") ?? target.getAttribute("role") ?? "";
+    const slot = target.getAttribute("data-slot") ?? "";
+    const suffix = [role ? `role=${role}` : "", slot ? `slot=${slot}` : ""].filter(Boolean).join(" ");
+    return suffix ? `${tagName} ${suffix}` : tagName;
+}
+
 function SeqFxPresetBarHost({
     bridge,
     patchConnection,
@@ -372,6 +899,7 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
     const [selectedCell, setSelectedCell] = useState<SelectedCell | null>(null);
     const [selection, setSelection] = useState<Selection | null>(null);
     const [playheadStep, setPlayheadStep] = useState<number | null>(null);
+    const [observedStepDurationMs, setObservedStepDurationMs] = useState<number | null>(null);
     const [gestureState, setGestureState] = useState<BlockGesture | null>(null);
     const [copyPreview, setCopyPreview] = useState<CopyPreview | null>(null);
     const [cellSize, setCellSize] = useState(SEQFX_MIN_CELL_SIZE_PX);
@@ -385,11 +913,15 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
     const rateIndexRef = useRef(rateIndex);
     const stateRef = useRef(state);
     const selectedPatternRef = useRef(selectedPattern);
+    const selectedCellRef = useRef<SelectedCell | null>(selectedCell);
+    const activeSelectionRef = useRef<Selection | null>(null);
+    const cellClipboardRef = useRef<SeqFxStepValueSnapshot | null>(null);
 
     gridGeometryRef.current = gridGeometry;
     rateIndexRef.current = rateIndex;
     stateRef.current = state;
     selectedPatternRef.current = selectedPattern;
+    selectedCellRef.current = selectedCell;
 
     const trackWidth = gridGeometry.trackWidth;
     const stepTrackStyle = useMemo<CSSProperties>(() => ({
@@ -409,7 +941,11 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
         });
         const unsubscribeMonitor = bridge.subscribeMonitor((monitor) => {
             const stepIndex = Number((monitor as { stepIndex?: unknown })?.stepIndex);
+            const stepDurationMs = Number((monitor as { stepDurationMs?: unknown })?.stepDurationMs);
             setPlayheadStep(Number.isFinite(stepIndex) ? stepIndex : null);
+            if (Number.isFinite(stepDurationMs) && stepDurationMs > 0) {
+                setObservedStepDurationMs(stepDurationMs);
+            }
         });
         const unsubscribeRate = bridge.subscribeRate((nextRateIndex) => {
             if (rateIndexRef.current !== nextRateIndex) {
@@ -499,6 +1035,106 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
             window.removeEventListener("blur", clearOptionKey);
         };
     }, []);
+
+    useEffect(() => {
+        const copySelectedCellValues = () => {
+            const activeSelection = activeSelectionRef.current;
+            if (!activeSelection || activeSelection.steps.length === 0) {
+                return null;
+            }
+
+            const selectedCell = selectedCellRef.current;
+            const sourceStep = selectedCell?.lane === activeSelection.lane
+                && activeSelection.steps.includes(selectedCell.step)
+                ? selectedCell.step
+                : activeSelection.steps[0];
+
+            const copiedValues = bridge.copyStepValues({
+                patternIndex: selectedPatternRef.current,
+                lane: activeSelection.lane,
+                step: sourceStep,
+            });
+            cellClipboardRef.current = copiedValues;
+            return copiedValues;
+        };
+
+        const pasteSelectedCellValues = () => {
+            const activeSelection = activeSelectionRef.current;
+            const copiedValues = cellClipboardRef.current;
+            if (
+                !activeSelection
+                || activeSelection.steps.length === 0
+                || !copiedValues
+                || copiedValues.lane !== activeSelection.lane
+            ) {
+                return false;
+            }
+
+            bridge.pasteStepValues({
+                patternIndex: selectedPatternRef.current,
+                lane: activeSelection.lane,
+                steps: activeSelection.steps,
+                values: copiedValues,
+            });
+            return true;
+        };
+
+        const handleClipboardKeyDown = (event: globalThis.KeyboardEvent) => {
+            if (!event.metaKey || event.altKey || event.ctrlKey) {
+                return;
+            }
+
+            const key = event.key.toLowerCase();
+            if (key !== "c" && key !== "v") {
+                return;
+            }
+
+            if (isEditableKeyboardEvent(event)) {
+                return;
+            }
+
+            if (key === "c") {
+                if (copySelectedCellValues()) {
+                    event.preventDefault();
+                }
+                return;
+            }
+
+            if (pasteSelectedCellValues()) {
+                event.preventDefault();
+            }
+        };
+
+        const handleCopyEvent = (event: ClipboardEvent) => {
+            if (isEditableClipboardEvent(event)) {
+                return;
+            }
+
+            if (copySelectedCellValues()) {
+                event.preventDefault();
+            }
+        };
+
+        const handlePasteEvent = (event: ClipboardEvent) => {
+            if (isEditableClipboardEvent(event)) {
+                return;
+            }
+
+            if (pasteSelectedCellValues()) {
+                event.preventDefault();
+            }
+        };
+
+        window.addEventListener("keydown", handleClipboardKeyDown);
+        window.addEventListener("copy", handleCopyEvent);
+        window.addEventListener("paste", handlePasteEvent);
+
+        return () => {
+            window.removeEventListener("keydown", handleClipboardKeyDown);
+            window.removeEventListener("copy", handleCopyEvent);
+            window.removeEventListener("paste", handlePasteEvent);
+        };
+    }, [bridge]);
 
     useEffect(() => {
         const pointerStepForLane = (lane: number, event: globalThis.PointerEvent) => {
@@ -803,6 +1439,7 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
             : new Set<number>()
     ), [copyPreview, selectedPattern]);
     const activeSelection = selection ?? selectionFromCell(selectedCell);
+    activeSelectionRef.current = activeSelection;
     const inspectedLane = activeSelection?.lane ?? selectedCell?.lane ?? null;
     const inspectedStep = activeSelection?.steps[0] ?? selectedCell?.step ?? null;
     const inspectedCell = inspectedLane !== null && inspectedStep !== null
@@ -821,6 +1458,9 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
         && activeSelection.steps.length === inspectedBlock.length
         && activeSelection.steps[0] === inspectedBlock.startStep,
     );
+    const inspectedBlockLength = inspectedBlock?.length ?? Math.max(1, activeSelection?.steps.length ?? 1);
+    const tapeGraphBlockDurationMs = (observedStepDurationMs ?? estimatedStepDurationMsForRateIndex(rateIndex))
+        * inspectedBlockLength;
 
     function selectPattern(patternIndex: number) {
         bridge.selectPattern(patternIndex);
@@ -1217,7 +1857,14 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
                                 />
                                 <output>{formatValue(inspectedCell.mix)}</output>
                             </label>
-                            {PARAM_DEFINITIONS[inspectedLane].map((definition) => {
+                            {inspectedLane === SEQFX_LANES.tapeStop ? (
+                                <TapeStopEnvelopeEditor
+                                    step={inspectedCell}
+                                    blockLength={inspectedBlockLength}
+                                    blockDurationMs={tapeGraphBlockDurationMs}
+                                    onParamChange={setParam}
+                                />
+                            ) : PARAM_DEFINITIONS[inspectedLane].map((definition) => {
                                 const triggerLatched = isSeqFxTriggerLatchedParam(inspectedLane, definition.index);
                                 const disabled = triggerLatched && !selectedBlockGroup && !selectedWholeBlock && (activeSelection?.steps.length ?? 0) > 1;
                                 const value = inspectedCell.params[definition.index];

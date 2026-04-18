@@ -454,7 +454,7 @@ def test_global_mix_zero_returns_dry_even_when_all_lanes_are_active(
 
     _activate_step(upload, lane=LANE_FILTER, step=0, params=[0, 160.0, 160.0, 0.707, 1.0])
     _activate_step(upload, lane=LANE_CRUSHER, step=0, params=[4, 12, 12.0])
-    _activate_step(upload, lane=LANE_TAPE, step=0, params=[1.0, 1.0, 0.0, 20.0])
+    _activate_step(upload, lane=LANE_TAPE, step=0, params=[1.0, 1.0, 1.0, 20.0])
     _activate_step(upload, lane=LANE_STUTTER, step=0, params=[1.0, 1.0, 0.0])
 
     input_audio = _sine(STEP_FRAMES * 3, 1_200.0)
@@ -510,7 +510,7 @@ def test_tape_stop_lowers_zero_crossing_rate_during_active_block(
 ) -> None:
     upload = _empty_upload()
     for step in (1, 2, 3):
-        _activate_step(upload, lane=LANE_TAPE, step=step, trigger=(step == 1), params=[1.0, 1.4, 0.0, 30.0])
+        _activate_step(upload, lane=LANE_TAPE, step=step, trigger=(step == 1), params=[1.0, 1.4, 1.0, 30.0])
 
     input_audio = _sine(STEP_FRAMES * 4, 660.0)
     output = _render(generated_runtime, tmp_path, input_audio, _base_schedule(upload))
@@ -518,6 +518,82 @@ def test_tape_stop_lowers_zero_crossing_rate_during_active_block(
     late = output[(STEP_FRAMES * 3) - 1_400 : STEP_FRAMES * 3, 0]
 
     assert _zero_crossing_rate(late) < _zero_crossing_rate(early) * 0.72
+
+
+def test_tape_stop_step_boundaries_do_not_click_on_exit_or_retrigger(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    def render_tape_steps(
+        tape_steps: list[tuple[int, bool, list[float]]],
+        case_name: str,
+    ) -> np.ndarray:
+        case_path = tmp_path / case_name
+        case_path.mkdir()
+        upload = _empty_upload()
+        for step, trigger, params in tape_steps:
+            _activate_step(upload, lane=LANE_TAPE, step=step, trigger=trigger, params=params)
+
+        return _render(
+            generated_runtime,
+            case_path,
+            _sine(STEP_FRAMES * 5, 660.0),
+            _base_schedule(upload),
+        )[:, 0]
+
+    def largest_boundary_jump(samples: np.ndarray, boundary_step: int) -> float:
+        boundary = STEP_FRAMES * boundary_step
+        window = samples[boundary - 16 : boundary + 16]
+        return float(np.max(np.abs(np.diff(window))))
+
+    dry = _sine(STEP_FRAMES * 5, 660.0)[:, 0]
+    allowed_jump = float(np.max(np.abs(np.diff(dry)))) * 1.5
+    stop_params = [1.0, 1.0, 1.0, 25.0, 0.0]
+    spin_up_params = [1.0, 1.0, 1.0, 25.0, 1.0]
+
+    stop_exit = render_tape_steps([(1, True, stop_params)], "stop_exit")
+    spin_up_exit = render_tape_steps([(1, True, spin_up_params)], "spin_up_exit")
+    adjacent_retrigger = render_tape_steps(
+        [(1, True, stop_params), (2, True, stop_params)],
+        "adjacent_retrigger",
+    )
+
+    assert largest_boundary_jump(stop_exit, 2) <= allowed_jump
+    assert largest_boundary_jump(spin_up_exit, 2) <= allowed_jump
+    assert largest_boundary_jump(adjacent_retrigger, 2) <= allowed_jump
+    assert largest_boundary_jump(adjacent_retrigger, 3) <= allowed_jump
+
+
+def test_tape_stop_catchup_does_not_play_faster_than_dry_timeline(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    upload = _empty_upload()
+    for step in (1, 2, 3, 4):
+        _activate_step(
+            upload,
+            lane=LANE_TAPE,
+            step=step,
+            trigger=(step == 1),
+            params=[0.25, 1.0, 1.0, 50.0, 0.0],
+        )
+
+    input_audio = _sine(STEP_FRAMES * 6, 660.0)
+    output = _render(generated_runtime, tmp_path, input_audio, _base_schedule(upload))
+
+    catchup_window = slice((STEP_FRAMES * 3) + 400, (STEP_FRAMES * 4) + 2_400)
+    output_zcr = _zero_crossing_rate(output[catchup_window, 0])
+    dry_zcr = _zero_crossing_rate(input_audio[catchup_window, 0])
+
+    assert output_zcr <= dry_zcr * 1.15
+
+    stop_window = slice((STEP_FRAMES * 2) + 300, (STEP_FRAMES * 2) + 1_200)
+    end_window = slice((STEP_FRAMES * 5) - 600, (STEP_FRAMES * 5) - 120)
+    stop_error = float(np.sqrt(np.mean((output[stop_window] - input_audio[stop_window]) ** 2)))
+    end_error = float(np.sqrt(np.mean((output[end_window] - input_audio[end_window]) ** 2)))
+
+    assert stop_error > 0.15
+    assert end_error < stop_error * 0.25
 
 
 def test_stutter_repeats_the_captured_slice(

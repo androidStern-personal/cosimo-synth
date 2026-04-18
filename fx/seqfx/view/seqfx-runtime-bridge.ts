@@ -16,8 +16,10 @@ import {
     applySeqFxCellToggle,
     applySeqFxMixEdit,
     applySeqFxParamEdit,
+    applySeqFxStepValuePaste,
     buildSeqPatternUpload,
     createDefaultSeqFxState,
+    getSeqFxStepValueSnapshot,
     normalizeSeqFxState,
     serializeSeqFxState,
     type SeqFxBlockCreateEdit,
@@ -38,6 +40,9 @@ import {
     type SeqFxMixEdit,
     type SeqFxParamEdit,
     type SeqFxState,
+    type SeqFxStepValuePasteEdit,
+    type SeqFxStepValueSnapshot,
+    type SeqFxStepValueSnapshotTarget,
 } from "./seqfx-state";
 
 export const SEQFX_ENDPOINTS = {
@@ -336,6 +341,14 @@ export class SeqFxRuntimeBridge {
 
     setStepParam(edit: SeqFxParamEdit) {
         this.commitState(applySeqFxParamEdit(this.state, edit), edit.patternIndex);
+    }
+
+    copyStepValues(target: SeqFxStepValueSnapshotTarget): SeqFxStepValueSnapshot {
+        return getSeqFxStepValueSnapshot(this.state, target);
+    }
+
+    pasteStepValues(edit: SeqFxStepValuePasteEdit) {
+        this.commitState(applySeqFxStepValuePaste(this.state, edit), edit.patternIndex);
     }
 
     playInternal() {
