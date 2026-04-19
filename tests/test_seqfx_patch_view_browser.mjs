@@ -1151,7 +1151,24 @@ test("seqfx_inspector_effect_selector_persists_selected_effect_type_and_uploads_
 
     await page.getByRole("button", { name: "Chain 2 step 1", exact: true }).click();
     await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
-    await page.locator('[data-role="seqfx-effect-type"]').selectOption(String(SEQFX_EFFECT_TYPES.tapeStop));
+    const effectPicker = page.locator('[data-role="seqfx-effect-type"]');
+    assert.equal(await effectPicker.evaluate((element) => element.tagName), "DIV");
+    assert.equal(await effectPicker.locator("select").count(), 0);
+    assert.equal(await effectPicker.getByRole("button").count(), 4);
+    assert.equal(await effectPicker.locator("button > svg").count(), 4);
+    assert.equal(await effectPicker.getByRole("button", { name: "Crusher", exact: true }).getAttribute("aria-pressed"), "true");
+
+    const tapeStopButton = effectPicker.getByRole("button", { name: "Tape Stop", exact: true });
+    const buttonChrome = await tapeStopButton.evaluate((button) => {
+        const styles = getComputedStyle(button);
+        return {
+            backgroundColor: styles.backgroundColor,
+            borderTopStyle: styles.borderTopStyle,
+        };
+    });
+    assert.deepEqual(buttonChrome, { backgroundColor: "rgba(0, 0, 0, 0)", borderTopStyle: "none" });
+    await tapeStopButton.click();
+    assert.equal(await tapeStopButton.getAttribute("aria-pressed"), "true");
 
     await page.getByRole("button", { name: "Chain 2 Tape Stop block 1", exact: true }).waitFor();
     const snapshot = await getHarnessSnapshot(page);

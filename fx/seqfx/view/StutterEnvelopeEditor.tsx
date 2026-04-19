@@ -34,7 +34,6 @@ export type StutterEnvelopeEditorValue = {
 
 export type StutterEnvelopeEditorProps = {
     value: Partial<StutterEnvelopeEditorValue>;
-    blockLabel: string;
     onSlicesChange: (value: number) => void;
     onSpeedChange: (value: number) => void;
     onShapeChange: (value: number) => void;
@@ -118,7 +117,6 @@ function resolveValue(value: Partial<StutterEnvelopeEditorValue>): StutterEnvelo
 
 export function StutterEnvelopeEditor({
     value,
-    blockLabel,
     onSlicesChange,
     onSpeedChange,
     onShapeChange,
@@ -225,12 +223,6 @@ export function StutterEnvelopeEditor({
 
     return (
         <section className="seqfx-stutter-editor" data-role="seqfx-stutter-editor" aria-label="Stutter cut envelope editor">
-            <span className="seqfx-stutter-editor__kicker">Stutter - {blockLabel}</span>
-            <div className="seqfx-stutter-editor__title">
-                <span>Cut envelope</span>
-                <em data-role="seqfx-stutter-slice-count">x{resolved.slices}</em>
-            </div>
-
             <div className="seqfx-stutter-editor__panel">
                 <div className="seqfx-stutter-editor__canvas-wrap">
                     <svg

@@ -366,19 +366,6 @@ select {
     padding: 16px;
 }
 
-.seqfx-inspector-heading {
-    display: grid;
-    gap: 4px;
-}
-
-.seqfx-inspector-heading span {
-    color: #8bbf9a;
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-}
-
 .seqfx-inspector-heading strong {
     color: #f6faf7;
     font-size: 18px;
@@ -440,6 +427,56 @@ select {
     color: #eef2ef;
     font-family: Menlo, Monaco, monospace;
     font-size: 12px;
+}
+
+.seqfx-effect-picker {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    min-height: 34px;
+}
+
+.seqfx-effect-picker button {
+    display: grid;
+    width: 34px;
+    height: 34px;
+    place-items: center;
+    border: 0;
+    border-radius: 6px;
+    padding: 0;
+    color: rgba(238, 242, 239, 0.58);
+    background: transparent;
+    cursor: pointer;
+    transition: color 140ms ease, opacity 140ms ease, transform 140ms ease;
+}
+
+.seqfx-effect-picker button:hover:not(:disabled),
+.seqfx-effect-picker button:focus-visible {
+    color: #f6faf7;
+}
+
+.seqfx-effect-picker button:focus-visible {
+    outline: 1px solid rgba(242, 209, 107, 0.75);
+    outline-offset: 3px;
+}
+
+.seqfx-effect-picker button:active:not(:disabled) {
+    transform: translateY(1px);
+}
+
+.seqfx-effect-picker button:disabled {
+    cursor: default;
+    opacity: 0.45;
+}
+
+.seqfx-effect-picker button.is-selected {
+    color: #f2d16b;
+}
+
+.seqfx-effect-picker svg {
+    display: block;
+    width: 24px;
+    height: 24px;
 }
 
 .seqfx-tape-editor {
@@ -570,34 +607,6 @@ select {
 .seqfx-stutter-editor {
     display: grid;
     gap: 12px;
-}
-
-.seqfx-stutter-editor__kicker {
-    color: #f2d16b;
-    font-size: 10px;
-    font-weight: 800;
-    letter-spacing: 0;
-    text-transform: uppercase;
-}
-
-.seqfx-stutter-editor__title {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: 8px;
-    color: #f6faf7;
-    font-size: 16px;
-    font-weight: 700;
-}
-
-.seqfx-stutter-editor__title em {
-    padding: 2px 6px;
-    border: 1px solid rgba(242, 209, 107, 0.4);
-    border-radius: 8px;
-    color: #f2d16b;
-    font-size: 10px;
-    font-style: normal;
-    font-weight: 700;
 }
 
 .seqfx-stutter-editor__panel {
@@ -927,23 +936,6 @@ select {
 
 .seqfx-delete-block:active {
     transform: translateY(1px);
-}
-
-.seqfx-chain {
-    display: grid;
-    grid-template-columns: repeat(5, 1fr);
-    gap: 5px;
-    border-top: 1px solid rgba(238, 242, 239, 0.12);
-    padding-top: 14px;
-}
-
-.seqfx-chain span {
-    border: 1px solid rgba(139, 191, 154, 0.22);
-    border-radius: 6px;
-    padding: 6px 4px;
-    color: #c5d5cb;
-    font-size: 11px;
-    text-align: center;
 }
 
 .seqfx-debug {
