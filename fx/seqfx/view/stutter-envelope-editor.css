@@ -18,51 +18,6 @@
     --editor-top-reserve: 14px;
 }
 
-/* Dense stepper button shared between the slices and speed controls.
-   Integrates visually with the strip/footer it's embedded in rather than
-   sitting in a floating pill. */
-.seqfx-stutter-editor__strip-button {
-    display: grid;
-    place-items: center;
-    width: 22px;
-    height: 22px;
-    border: 1px solid rgba(28, 28, 28, 0.38);
-    border-radius: 3px;
-    padding: 0;
-    color: var(--editor-surface-ink);
-    background: rgba(240, 236, 230, 0.85);
-    font-family: var(--editor-label-font);
-    font-size: 13px;
-    font-weight: var(--editor-label-weight);
-    cursor: pointer;
-    touch-action: manipulation;
-    flex: 0 0 auto;
-}
-
-.seqfx-stutter-editor__strip-button:hover:not(:disabled) {
-    background: rgba(240, 236, 230, 1);
-}
-
-.seqfx-stutter-editor__strip-button:active:not(:disabled) {
-    background: rgba(28, 28, 28, 0.12);
-}
-
-.seqfx-stutter-editor__strip-button:disabled {
-    cursor: not-allowed;
-    opacity: 0.3;
-}
-
-.seqfx-stutter-editor__strip-count {
-    min-width: 18px;
-    padding: 0 4px;
-    color: var(--editor-surface-ink);
-    font-family: var(--editor-label-font);
-    font-size: var(--editor-label-size-md);
-    font-weight: var(--editor-label-weight);
-    letter-spacing: var(--editor-label-letter-spacing);
-    text-align: right;
-}
-
 .seqfx-stutter-editor__canvas-wrap {
     position: relative;
 }
@@ -175,36 +130,6 @@
     user-select: none;
 }
 
-.seqfx-stutter-editor__repeat-strip {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 6px 8px;
-    border-top: 1px solid rgba(28, 28, 28, 0.18);
-    background: rgba(28, 28, 28, 0.04);
-}
-
-.seqfx-stutter-editor__repeat-ticks {
-    flex: 1 1 auto;
-    display: flex;
-    align-items: stretch;
-    gap: 3px;
-    min-width: 0;
-    height: 18px;
-}
-
-.seqfx-stutter-editor__repeat-tick {
-    flex: 1;
-    min-height: 13px;
-    min-width: 0;
-    border-radius: 2px;
-    background: rgba(28, 28, 28, 0.38);
-}
-
-.seqfx-stutter-editor__repeat-tick.is-source {
-    background: var(--editor-surface-ink);
-}
-
 .seqfx-stutter-editor__morph {
     display: grid;
     gap: 6px;
@@ -304,32 +229,6 @@
     color: var(--editor-surface-ink-muted);
     font-family: var(--editor-label-font);
     font-size: var(--editor-label-size-sm);
-    font-weight: var(--editor-label-weight);
-    letter-spacing: var(--editor-label-letter-spacing);
-    text-transform: uppercase;
-}
-
-.seqfx-stutter-editor__speed-control {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-}
-
-.seqfx-stutter-editor__speed-value {
-    min-width: 36px;
-    padding: 0 4px;
-    color: var(--editor-surface-ink);
-    font-family: var(--editor-label-font);
-    font-size: var(--editor-label-size-md);
-    font-weight: var(--editor-label-weight);
-    letter-spacing: var(--editor-label-letter-spacing);
-    text-align: center;
-}
-
-.seqfx-stutter-editor__speed-label {
-    color: var(--editor-surface-ink-muted);
-    font-family: var(--editor-label-font);
-    font-size: 9px;
     font-weight: var(--editor-label-weight);
     letter-spacing: var(--editor-label-letter-spacing);
     text-transform: uppercase;

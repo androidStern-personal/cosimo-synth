@@ -233,6 +233,12 @@ async function setRangeInputValue(locator, value) {
     }, value);
 }
 
+async function setCrusherEditorValues(page, { bits, holdFrames, driveDb }) {
+    await setRangeInputValue(page.locator('[data-role="seqfx-crusher-bits"]'), bits);
+    await setRangeInputValue(page.locator('[data-role="seqfx-crusher-hold-frames"]'), holdFrames);
+    await setRangeInputValue(page.locator('[data-role="seqfx-crusher-drive-db"]'), driveDb);
+}
+
 async function waitForGridGeometry(page, cellsPerBeat, step, message) {
     const deadline = Date.now() + 2_000;
     let last;
@@ -885,6 +891,67 @@ test("seqfx_grid_cell_and_inspector_edits_send_complete_pattern_uploads", async 
     await page.close();
 });
 
+test("seqfx_crusher_inspector_renders_waveform_editor_and_writes_params", async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
+    await loadSeqFxHarness(page);
+    await page.locator('[data-role="seqfx-root"]').waitFor();
+    await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
+
+    await page.getByRole("button", { name: "Chain 2 step 1", exact: true }).click();
+    await page.locator('[data-role="seqfx-crusher-editor"]').waitFor();
+    await page.locator('[data-role="seqfx-crusher-graph"]').waitFor();
+
+    assert.equal(await page.locator('[data-role="seqfx-param"][data-param="0"]').count(), 0);
+    assert.equal(await page.locator('[data-role="seqfx-param"][data-param="1"]').count(), 0);
+    assert.equal(await page.locator('[data-role="seqfx-param"][data-param="2"]').count(), 0);
+
+    const bitTicks = page.locator('[data-role="seqfx-crusher-bits-slider"] [data-role="editor-tick-slider-tick"]');
+    assert.equal(await bitTicks.count(), 13);
+    const bitTickBox = await bitTicks.first().boundingBox();
+    assert.ok(bitTickBox);
+    assert.ok(bitTickBox.height >= 12, `crusher bit ticks should match editor strip thickness, got ${bitTickBox.height}`);
+
+    const holdTicks = page.locator('[data-role="seqfx-crusher-hold-frames-slider"] [data-role="editor-tick-slider-tick"]');
+    assert.equal(await holdTicks.count(), 16);
+
+    const beforePath = await page.locator('[data-role="seqfx-crusher-wet-path"]').getAttribute("d");
+    assert.ok(beforePath && beforePath.length > 20, "crusher graph should render a non-empty wet waveform path");
+
+    await setCrusherEditorValues(page, { bits: 4, holdFrames: 32, driveDb: 30 });
+    let snapshot = await getHarnessSnapshot(page);
+    let upload = patternUploads(snapshot).at(-1).value;
+    assert.deepEqual(upload.params[1][0].slice(0, 3), [4, 32, 30]);
+
+    const afterParamPath = await page.locator('[data-role="seqfx-crusher-wet-path"]').getAttribute("d");
+    assert.notEqual(afterParamPath, beforePath, "crusher graph should redraw after bits/hold/drive changes");
+    assert.equal(await page.locator('[data-role="seqfx-crusher-bits-value"]').textContent(), "4");
+    assert.equal(await page.locator('[data-role="seqfx-crusher-hold-frames-value"]').textContent(), "32");
+    assert.equal(await page.locator('[data-role="seqfx-crusher-drive-db-value"]').textContent(), "30.0 dB");
+
+    await setRangeInputValue(page.locator('[data-role="seqfx-mix"]'), 0.25);
+    snapshot = await getHarnessSnapshot(page);
+    upload = patternUploads(snapshot).at(-1).value;
+    assertClose(upload.mix[1][0], 0.25, 0.001, "crusher mix row should still write block mix");
+    const afterMixPath = await page.locator('[data-role="seqfx-crusher-wet-path"]').getAttribute("d");
+    assert.notEqual(afterMixPath, afterParamPath, "crusher graph should redraw when shared mix changes");
+
+    const layout = await page.locator('[data-role="seqfx-inspector"]').evaluate((node) => {
+        const editorBounds = node.querySelector('[data-role="seqfx-crusher-editor"]')?.getBoundingClientRect();
+        const mixBounds = node.querySelector('[data-role="seqfx-mix-row"]')?.getBoundingClientRect();
+
+        return {
+            editorBottom: editorBounds?.bottom ?? 0,
+            mixTop: mixBounds?.top ?? 0,
+        };
+    });
+    assert.ok(
+        layout.mixTop >= layout.editorBottom,
+        `SeqFX crusher mix row should sit below the crusher editor, got mix top ${layout.mixTop} and editor bottom ${layout.editorBottom}`,
+    );
+
+    await page.close();
+});
+
 test("seqfx_shared_snapshot_header_captures_updates_and_recalls_grid_state", async () => {
     const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
     await loadSeqFxHarness(page);
@@ -947,20 +1014,22 @@ test("seqfx_stutter_inspector_renders_interactive_envelope_editor_and_writes_blo
     await page.locator('[data-role="seqfx-stutter-graph"]').waitFor();
 
     assert.equal(await page.locator('[data-role="seqfx-param"][data-param="0"]').count(), 0);
-    assert.equal(await page.locator('[data-role="seqfx-stutter-repeat-tick"]').count(), 8);
+    assert.equal(await page.locator('[data-role="seqfx-stutter-slices-slider"] [data-role="editor-tick-slider-tick"]').count(), 31);
+    assert.equal(await page.locator('[data-role="seqfx-stutter-speed-slider"] [data-role="editor-tick-slider-tick"]').count(), 16);
 
-    const tickBox = await page.locator('[data-role="seqfx-stutter-repeat-tick"]').first().boundingBox();
+    const tickBox = await page.locator('[data-role="seqfx-stutter-slices-slider"] [data-role="editor-tick-slider-tick"]').first().boundingBox();
     assert.ok(tickBox);
-    assert.ok(tickBox.height >= 12, `repeat strip ticks should be thick enough to read, got ${tickBox.height}`);
+    assert.ok(tickBox.height >= 12, `stutter slices ticks should be thick enough to read, got ${tickBox.height}`);
 
-    await page.locator('[data-role="seqfx-stutter-slices-increase"]').click();
-    await page.locator('[data-role="seqfx-stutter-speed-increase"]').click();
+    await setRangeInputValue(page.locator('[data-role="seqfx-stutter-slices"]'), 9);
+    await setRangeInputValue(page.locator('[data-role="seqfx-stutter-speed"]'), 1.05);
 
     let snapshot = await getHarnessSnapshot(page);
     let upload = patternUploads(snapshot).at(-1).value;
     assert.equal(upload.params[3][0][0], 9);
-    assertClose(upload.params[3][0][1], 1.05, 0.001, "speed stepper should write speed");
-    assert.equal(await page.locator('[data-role="seqfx-stutter-repeat-tick"]').count(), 9);
+    assertClose(upload.params[3][0][1], 1.05, 0.001, "speed tick slider should write speed");
+    assert.equal(await page.locator('[data-role="seqfx-stutter-slices-value"]').textContent(), "9");
+    assert.equal(await page.locator('[data-role="seqfx-stutter-speed-value"]').textContent(), "1.05x");
 
     const graphBox = await page.locator('[data-role="seqfx-stutter-graph"]').boundingBox();
     assert.ok(graphBox);
@@ -1705,9 +1774,7 @@ test("seqfx_shift_click_selects_active_blocks_and_edits_or_deletes_the_group", a
             .join(",") === "1,3,6"
     ));
 
-    const bitsInput = page.locator('[data-role="seqfx-param"][data-param="0"]');
-    await bitsInput.fill("5");
-    await bitsInput.dispatchEvent("change");
+    await setRangeInputValue(page.locator('[data-role="seqfx-crusher-bits"]'), 5);
 
     let snapshot = await getHarnessSnapshot(page);
     let upload = patternUploads(snapshot).at(-1).value;
@@ -1742,20 +1809,16 @@ test("seqfx_cmd_c_and_cmd_v_copy_cell_values_to_single_or_group_selection", asyn
 
     await page.getByRole("button", { name: "Chain 2 Crusher block 2", exact: true }).click();
     await setRangeInputValue(page.locator('[data-role="seqfx-mix"]'), 0.42);
-    await page.locator('[data-role="seqfx-param"][data-param="0"]').fill("5");
-    await page.locator('[data-role="seqfx-param"][data-param="0"]').dispatchEvent("change");
-    await page.locator('[data-role="seqfx-param"][data-param="1"]').fill("7");
-    await page.locator('[data-role="seqfx-param"][data-param="1"]').dispatchEvent("change");
-    await page.locator('[data-role="seqfx-param"][data-param="2"]').fill("12");
-    await page.locator('[data-role="seqfx-param"][data-param="2"]').dispatchEvent("change");
+    await setCrusherEditorValues(page, { bits: 5, holdFrames: 7, driveDb: 12 });
 
     await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
     await page.getByRole("button", { name: "Chain 2 Crusher block 2", exact: true }).click();
     await pressMetaShortcut(page, "KeyC");
 
-    await page.getByRole("button", { name: "Chain 2 Crusher block 5", exact: true }).click();
+    await page.getByRole("button", { name: "Chain 1 step 1", exact: true }).click();
+    await page.locator('[data-role="seqfx-param"][data-param="4"]').waitFor();
     await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
-    await page.locator('[data-role="seqfx-param"][data-param="0"]').focus();
+    await page.locator('[data-role="seqfx-param"][data-param="4"]').focus();
     await pressMetaShortcut(page, "KeyV");
     let snapshot = await getHarnessSnapshot(page);
     assert.equal(patternUploads(snapshot).length, 0);
@@ -1805,12 +1868,7 @@ test("seqfx_clipboard_events_copy_and_paste_cell_values_when_keydown_is_missing"
 
     await page.getByRole("button", { name: "Chain 2 Crusher block 2", exact: true }).click();
     await setRangeInputValue(page.locator('[data-role="seqfx-mix"]'), 0.37);
-    await page.locator('[data-role="seqfx-param"][data-param="0"]').fill("6");
-    await page.locator('[data-role="seqfx-param"][data-param="0"]').dispatchEvent("change");
-    await page.locator('[data-role="seqfx-param"][data-param="1"]').fill("9");
-    await page.locator('[data-role="seqfx-param"][data-param="1"]').dispatchEvent("change");
-    await page.locator('[data-role="seqfx-param"][data-param="2"]').fill("15");
-    await page.locator('[data-role="seqfx-param"][data-param="2"]').dispatchEvent("change");
+    await setCrusherEditorValues(page, { bits: 6, holdFrames: 9, driveDb: 15 });
 
     const copyResult = await dispatchClipboardEvent(
         page,
@@ -1819,17 +1877,20 @@ test("seqfx_clipboard_events_copy_and_paste_cell_values_when_keydown_is_missing"
     );
     assert.deepEqual(copyResult, { defaultPrevented: true, dispatchResult: false });
 
-    await page.getByRole("button", { name: "Chain 2 Crusher block 5", exact: true }).click();
+    await page.getByRole("button", { name: "Chain 1 step 1", exact: true }).click();
+    await page.locator('[data-role="seqfx-param"][data-param="4"]').waitFor();
     await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
     const ignoredPasteResult = await dispatchClipboardEvent(
         page,
-        '[data-role="seqfx-param"][data-param="0"]',
+        '[data-role="seqfx-param"][data-param="4"]',
         "paste",
     );
     assert.deepEqual(ignoredPasteResult, { defaultPrevented: false, dispatchResult: true });
     let snapshot = await getHarnessSnapshot(page);
     assert.equal(patternUploads(snapshot).length, 0);
 
+    await page.getByRole("button", { name: "Chain 2 Crusher block 5", exact: true }).click();
+    await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
     const pasteResult = await dispatchClipboardEvent(
         page,
         '[data-role="seqfx-block"][data-lane="1"][data-start="4"]',

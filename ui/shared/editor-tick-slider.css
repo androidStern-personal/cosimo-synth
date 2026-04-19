@@ -1,0 +1,81 @@
+.editor-tick-slider {
+    display: grid;
+    grid-template-columns: 44px minmax(0, 1fr) 42px;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    border-top: 1px solid rgba(28, 28, 28, 0.18);
+    color: var(--editor-surface-ink);
+    background: rgba(28, 28, 28, 0.04);
+}
+
+.editor-tick-slider__label {
+    color: var(--editor-surface-ink-muted);
+    font-family: var(--editor-label-font);
+    font-size: var(--editor-label-size-sm);
+    font-weight: var(--editor-label-weight);
+    letter-spacing: var(--editor-label-letter-spacing);
+    text-transform: uppercase;
+}
+
+.editor-tick-slider__value {
+    color: var(--editor-surface-ink);
+    font-family: var(--editor-label-font);
+    font-size: var(--editor-label-size-md);
+    font-weight: var(--editor-label-weight);
+    letter-spacing: var(--editor-label-letter-spacing);
+    text-align: right;
+}
+
+.editor-tick-slider__track {
+    position: relative;
+    min-width: 0;
+    height: 22px;
+}
+
+.editor-tick-slider__rail {
+    position: absolute;
+    top: 2px;
+    right: 0;
+    left: 0;
+    display: flex;
+    align-items: stretch;
+    gap: 3px;
+    height: 18px;
+    pointer-events: none;
+}
+
+.editor-tick-slider__tick {
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 13px;
+    border-radius: 2px;
+    background: rgba(28, 28, 28, 0.38);
+}
+
+.editor-tick-slider__tick.is-active {
+    background: var(--editor-surface-ink);
+}
+
+.editor-tick-slider--accent-start .editor-tick-slider__tick.is-current {
+    background: var(--editor-accent-start);
+}
+
+.editor-tick-slider--accent-end .editor-tick-slider__tick.is-active {
+    background: var(--editor-accent-end);
+}
+
+.editor-tick-slider__input {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 22px;
+    margin: 0;
+    cursor: ew-resize;
+    opacity: 0;
+}
+
+.editor-tick-slider__track:focus-within .editor-tick-slider__rail {
+    outline: 2px solid var(--editor-accent-start);
+    outline-offset: 2px;
+}

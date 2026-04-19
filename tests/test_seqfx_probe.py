@@ -475,6 +475,50 @@ def test_per_step_crusher_parameters_are_latched_at_step_boundaries(
     assert np.unique(second_step).size > np.unique(first_step).size * 6
 
 
+def test_live_crusher_hold_upload_changes_active_continuation_without_retrigger(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    upload = _empty_upload()
+    for step in (0, 1):
+        _activate_step(
+            upload,
+            lane=LANE_CRUSHER,
+            step=step,
+            trigger=(step == 0),
+            params=[16, 1, 0],
+        )
+
+    edited = json.loads(json.dumps(upload))
+    edited["revision"] = 2
+    edited["authoritative"] = False
+    for step in (0, 1):
+        _activate_step(
+            edited,
+            lane=LANE_CRUSHER,
+            step=step,
+            trigger=(step == 0),
+            params=[16, 64, 0],
+        )
+
+    input_audio = _ramp(STEP_FRAMES * 2)
+    schedule = _base_schedule(upload)
+    schedule[STEP_FRAMES + 600] = [["event", "patternUpload", edited]]
+    output = _render(generated_runtime, tmp_path, input_audio, schedule)
+
+    pre_upload = output[STEP_FRAMES + 120 : STEP_FRAMES + 520, 0]
+    post_upload = output[STEP_FRAMES + 900 : STEP_FRAMES + 1_700, 0]
+    pre_held_fraction = float(np.mean(np.abs(np.diff(pre_upload)) < 1.0e-8))
+    post_held_fraction = float(np.mean(np.abs(np.diff(post_upload)) < 1.0e-8))
+
+    assert pre_held_fraction < 0.05, (
+        f"Hold=1 should not create a staircase before the upload; held fraction was {pre_held_fraction:.3f}"
+    )
+    assert post_held_fraction > 0.80, (
+        f"Hold=64 should create a staircase immediately after the upload; held fraction was {post_held_fraction:.3f}"
+    )
+
+
 def test_global_mix_zero_returns_dry_even_when_all_lanes_are_active(
     generated_runtime: GeneratedRuntime,
     tmp_path: Path,

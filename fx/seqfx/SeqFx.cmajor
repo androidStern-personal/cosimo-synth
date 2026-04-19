@@ -866,16 +866,28 @@ processor SeqFx [[ main ]]
     {
         let currentStepIndex = wrap<seqfx::stepCount> (currentStep);
 
-        if (wasActive && ! triggerSteps[lane, currentStepIndex])
+        if (wasActive && ! triggerSteps[lane, currentStepIndex] && ! relatchingFromPatternUpload)
             return;
 
         let blockStart = blockStartStep (lane, currentStep);
         let blockStartIndex = wrap<seqfx::stepCount> (blockStart);
-        crusherBits[lane] = snapValue (stepParams[lane, blockStartIndex, 0], 4, 16);
-        crusherHoldFrames[lane] = snapValue (stepParams[lane, blockStartIndex, 1], 1, 64);
-        crusherDriveDb[lane] = seqfx::clampFloat (stepParams[lane, blockStartIndex, 2], 0.0f, 36.0f);
-        crusherHoldCounter[lane] = 0;
-        crusherNeedsRecapture[lane] = true;
+        let nextBits = snapValue (stepParams[lane, blockStartIndex, 0], 4, 16);
+        let nextHoldFrames = snapValue (stepParams[lane, blockStartIndex, 1], 1, 64);
+        let nextDriveDb = seqfx::clampFloat (stepParams[lane, blockStartIndex, 2], 0.0f, 36.0f);
+        let needsFreshHeldSample = ! wasActive
+            || triggerSteps[lane, currentStepIndex]
+            || nextHoldFrames != crusherHoldFrames[lane]
+            || nextDriveDb != crusherDriveDb[lane];
+
+        crusherBits[lane] = nextBits;
+        crusherHoldFrames[lane] = nextHoldFrames;
+        crusherDriveDb[lane] = nextDriveDb;
+
+        if (needsFreshHeldSample)
+        {
+            crusherHoldCounter[lane] = 0;
+            crusherNeedsRecapture[lane] = true;
+        }
     }
 
     void latchTapeStep (wrap<seqfx::laneCount> lane, bool wasActive)

@@ -15,6 +15,7 @@ import {
     editorPlotGutter,
     useEditorSurfaceSize,
 } from "../../../ui/shared/editor-tokens";
+import { EditorTickSlider } from "../../../ui/shared/editor-tick-slider";
 import {
     STUTTER_DEFAULT_GATE,
     STUTTER_DEFAULT_SHAPE,
@@ -206,10 +207,6 @@ export function StutterEnvelopeEditor({
     );
     const waveSilhouette = useMemo(() => waveSilhouettePath(plot), [plot]);
     const gateX = plot.plotLeft + (plot.plotWidth * resolved.gate);
-    const repeatTicks = useMemo(
-        () => Array.from({ length: resolved.slices }, (_unused, index) => index),
-        [resolved.slices],
-    );
     const gridXs = useMemo(() => (
         [0.25, 0.5, 0.75].map((t) => plot.plotLeft + (plot.plotWidth * t))
     ), [plot]);
@@ -422,43 +419,20 @@ export function StutterEnvelopeEditor({
                     </svg>
                 </div>
 
-                <div className="seqfx-stutter-editor__repeat-strip" aria-label="Repeats per block">
-                    <button
-                        aria-label="Fewer slices"
-                        className="seqfx-stutter-editor__strip-button"
-                        data-role="seqfx-stutter-slices-decrease"
-                        disabled={resolved.slices <= STUTTER_SLICES_MIN}
-                        onClick={() => onSlicesChange(clampStutterSlices(resolved.slices - 1))}
-                        type="button"
-                    >
-                        −
-                    </button>
-                    <div className="seqfx-stutter-editor__repeat-ticks" data-role="seqfx-stutter-repeat-ticks">
-                        {repeatTicks.map((tick) => (
-                            <span
-                                className={[
-                                    "seqfx-stutter-editor__repeat-tick",
-                                    tick === 0 ? "is-source" : "",
-                                ].filter(Boolean).join(" ")}
-                                data-role="seqfx-stutter-repeat-tick"
-                                key={tick}
-                            />
-                        ))}
-                    </div>
-                    <button
-                        aria-label="More slices"
-                        className="seqfx-stutter-editor__strip-button"
-                        data-role="seqfx-stutter-slices-increase"
-                        disabled={resolved.slices >= STUTTER_SLICES_MAX}
-                        onClick={() => onSlicesChange(clampStutterSlices(resolved.slices + 1))}
-                        type="button"
-                    >
-                        +
-                    </button>
-                    <span className="seqfx-stutter-editor__strip-count" data-role="seqfx-stutter-slices-count">
-                        {resolved.slices}
-                    </span>
-                </div>
+                <EditorTickSlider
+                    accent="start"
+                    dataRole="seqfx-stutter-slices-slider"
+                    formatValue={(value) => String(Math.round(value))}
+                    inputDataRole="seqfx-stutter-slices"
+                    label="Slices"
+                    max={STUTTER_SLICES_MAX}
+                    min={STUTTER_SLICES_MIN}
+                    onChange={(value) => onSlicesChange(clampStutterSlices(value))}
+                    step={1}
+                    tickCount={(STUTTER_SLICES_MAX - STUTTER_SLICES_MIN) + 1}
+                    value={resolved.slices}
+                    valueDataRole="seqfx-stutter-slices-value"
+                />
 
                 <div className="seqfx-stutter-editor__morph">
                     <div className="seqfx-stutter-editor__morph-labels">
@@ -500,32 +474,22 @@ export function StutterEnvelopeEditor({
                     </div>
                     <div className="seqfx-stutter-editor__morph-footer">
                         <output className="seqfx-stutter-editor__shape-readout">{formatStutterShapeLabel(resolved.shape)}</output>
-                        <div className="seqfx-stutter-editor__speed-control" data-role="seqfx-stutter-speed-control">
-                            <button
-                                aria-label="Slower"
-                                className="seqfx-stutter-editor__strip-button"
-                                data-role="seqfx-stutter-speed-decrease"
-                                disabled={resolved.speed <= STUTTER_SPEED_MIN}
-                                onClick={() => onSpeedChange(roundSpeed(clampStutterSpeed(resolved.speed - STUTTER_SPEED_STEP)))}
-                                type="button"
-                            >
-                                −
-                            </button>
-                            <span className="seqfx-stutter-editor__speed-value">{formatSpeed(resolved.speed)}</span>
-                            <button
-                                aria-label="Faster"
-                                className="seqfx-stutter-editor__strip-button"
-                                data-role="seqfx-stutter-speed-increase"
-                                disabled={resolved.speed >= STUTTER_SPEED_MAX}
-                                onClick={() => onSpeedChange(roundSpeed(clampStutterSpeed(resolved.speed + STUTTER_SPEED_STEP)))}
-                                type="button"
-                            >
-                                +
-                            </button>
-                            <span className="seqfx-stutter-editor__speed-label">SPEED</span>
-                        </div>
                     </div>
                 </div>
+                <EditorTickSlider
+                    accent="start"
+                    dataRole="seqfx-stutter-speed-slider"
+                    formatValue={formatSpeed}
+                    inputDataRole="seqfx-stutter-speed"
+                    label="Speed"
+                    max={STUTTER_SPEED_MAX}
+                    min={STUTTER_SPEED_MIN}
+                    onChange={(value) => onSpeedChange(roundSpeed(clampStutterSpeed(value)))}
+                    step={STUTTER_SPEED_STEP}
+                    tickCount={16}
+                    value={resolved.speed}
+                    valueDataRole="seqfx-stutter-speed-value"
+                />
             </div>
         </section>
     );

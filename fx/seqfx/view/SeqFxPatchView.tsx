@@ -14,6 +14,7 @@ import {
     cutoffsFromCenterRangeOctaves,
     geometricCenterCutoffHz,
 } from "../../../ui/shared/filter-range-editor";
+import { CrusherEditor } from "./CrusherEditor";
 import { StutterEnvelopeEditor } from "./StutterEnvelopeEditor";
 import {
     SEQFX_EFFECT_TYPES,
@@ -279,6 +280,9 @@ const FILTER_PARAM_START_CUTOFF = 1;
 const FILTER_PARAM_END_CUTOFF = 2;
 const FILTER_PARAM_RESONANCE = 3;
 const FILTER_PARAM_CURVE = 4;
+const CRUSHER_PARAM_BITS = 0;
+const CRUSHER_PARAM_HOLD_FRAMES = 1;
+const CRUSHER_PARAM_DRIVE_DB = 2;
 const STUTTER_PARAM_SLICES = 0;
 const STUTTER_PARAM_SPEED = 1;
 const STUTTER_PARAM_SHAPE = 2;
@@ -318,6 +322,15 @@ function filterRangeEndpointsFromSeqFxStep(step: SeqFxStep): FilterRangeEndpoint
     return {
         startCutoffHz: step.params[FILTER_PARAM_START_CUTOFF] ?? 2_000,
         endCutoffHz: step.params[FILTER_PARAM_END_CUTOFF] ?? 500,
+    };
+}
+
+function crusherValueFromSeqFxStep(step: SeqFxStep) {
+    return {
+        bits: step.params[CRUSHER_PARAM_BITS],
+        holdFrames: step.params[CRUSHER_PARAM_HOLD_FRAMES],
+        driveDb: step.params[CRUSHER_PARAM_DRIVE_DB],
+        mix: step.mix,
     };
 }
 
@@ -2632,6 +2645,13 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
                                             );
                                         })}
                                 </>
+                            ) : inspectedEffectType === SEQFX_EFFECT_TYPES.crusher ? (
+                                <CrusherEditor
+                                    value={crusherValueFromSeqFxStep(inspectedCell)}
+                                    onBitsChange={(value) => setParam(CRUSHER_PARAM_BITS, value)}
+                                    onHoldFramesChange={(value) => setParam(CRUSHER_PARAM_HOLD_FRAMES, value)}
+                                    onDriveDbChange={(value) => setParam(CRUSHER_PARAM_DRIVE_DB, value)}
+                                />
                             ) : inspectedEffectType === SEQFX_EFFECT_TYPES.stutter ? (
                                 <StutterEnvelopeEditor
                                     value={stutterValueFromSeqFxStep(inspectedCell)}
