@@ -1,76 +1,98 @@
 .filter-range-editor {
     container-type: inline-size;
     display: grid;
-    grid-template-rows: minmax(190px, 1fr) auto;
+    grid-template-rows: auto auto;
     width: 100%;
     max-width: 100%;
     min-height: 0;
-    border: 1px solid #1c1c1c;
-    background: #e4ded3;
+    border: 1px solid var(--editor-surface-border);
+    background: var(--editor-surface-bg);
+    /* Reserved vertical space below the plot for axis labels / handles.
+       Must stay in sync with FILTER_RANGE_PLOT_BOTTOM_PADDING_* in the TSX. */
+    --editor-bottom-reserve: 40px;
+    /* Reserved vertical space above the plot for handle chips when they are
+       shown (chips cap the dashed guide lines at the plot top). Must stay in
+       sync with FILTER_RANGE_PLOT_TOP_PADDING_WITH_CHIPS in the TSX. */
+    --editor-top-reserve: 0px;
+}
+
+.filter-range-editor[data-has-range="true"] {
+    --editor-bottom-reserve: 56px;
+}
+
+/* Top reserve only kicks in when range chips are actually rendered at the
+   top of the plot. The center chip is anchored to the bottom and doesn't
+   need any extra top room. */
+.filter-range-editor[data-show-chips="true"][data-has-range="true"] {
+    --editor-top-reserve: 14px;
 }
 
 .filter-range-editor__viewport {
     position: relative;
     width: 100%;
-    height: 100%;
-    min-height: 190px;
+    /* Height is plot-area + bottom reserve (axis labels, handles) + top reserve
+       (handle chips when shown). Plot area scales with container width but
+       clamps to a readable band so the plot never collapses in narrow contexts
+       (e.g. the 268px inspector panel). */
+    height: calc(clamp(140px, 50cqw, 300px) + var(--editor-bottom-reserve) + var(--editor-top-reserve));
 }
 
+/* Matches the stutter strip-button chrome so the stepper / mode-cycle controls
+   read as one consistent control vocabulary. */
 .filter-range-editor__mode-cycle {
     position: absolute;
-    top: 10px;
-    left: 10px;
+    top: 6px;
+    left: 6px;
     z-index: 2;
     display: grid;
     place-items: center;
-    width: 40px;
-    height: 40px;
+    width: 22px;
+    height: 22px;
     padding: 0;
-    border: 1px solid rgba(28, 28, 28, 0.42);
-    border-radius: 6px;
-    color: #1c1c1c;
-    background: rgba(240, 236, 230, 0.78);
-    box-shadow: 0 6px 16px rgba(28, 28, 28, 0.12);
+    border: 1px solid rgba(28, 28, 28, 0.38);
+    border-radius: 3px;
+    color: var(--editor-surface-ink);
+    background: rgba(240, 236, 230, 0.85);
     cursor: pointer;
+    touch-action: manipulation;
 }
 
 .filter-range-editor__mode-cycle:hover {
-    background: #f0ece6;
+    background: rgba(240, 236, 230, 1);
 }
 
 .filter-range-editor__mode-cycle:active {
-    transform: translateY(1px);
+    background: rgba(28, 28, 28, 0.12);
 }
 
 .filter-range-editor__mode-cycle svg {
-    width: 21px;
-    height: 21px;
+    width: 16px;
+    height: 16px;
 }
 
 .filter-range-editor__surface {
     display: block;
     width: 100%;
     height: 100%;
-    min-height: 190px;
     overflow: visible;
     touch-action: none;
 }
 
 .filter-range-editor__grid-line {
-    stroke: rgba(28, 28, 28, 0.12);
+    stroke: var(--editor-grid-stroke);
     stroke-width: 1;
     shape-rendering: crispEdges;
 }
 
 .filter-range-editor__axis {
-    stroke: rgba(28, 28, 28, 0.44);
+    stroke: var(--editor-axis-stroke);
     stroke-width: 1;
     shape-rendering: crispEdges;
 }
 
 .filter-range-editor__range-band {
     fill: rgba(0, 180, 216, 0.22);
-    stroke: #00b4d8;
+    stroke: var(--editor-accent-start);
     stroke-width: 1.5;
 }
 
@@ -82,38 +104,38 @@
 
 .filter-range-editor__response-path {
     fill: none;
-    stroke: #1c1c1c;
+    stroke: var(--editor-curve-stroke);
     stroke-linecap: round;
     stroke-linejoin: round;
-    stroke-width: 3.2;
+    stroke-width: var(--editor-curve-stroke-width);
 }
 
 .filter-range-editor__preview-response-path {
     fill: none;
-    stroke: #f4923a;
+    stroke: var(--editor-curve-preview-stroke);
     stroke-linecap: round;
     stroke-linejoin: round;
-    stroke-width: 2.2;
+    stroke-width: var(--editor-curve-preview-stroke-width);
     opacity: 0.95;
 }
 
 .filter-range-editor__preview-handle {
-    fill: #f4923a;
-    stroke: #1c1c1c;
+    fill: var(--editor-curve-preview-stroke);
+    stroke: var(--editor-surface-ink);
     stroke-width: 1.4;
 }
 
 .filter-range-editor__range-handle {
-    stroke: #1c1c1c;
+    stroke: var(--editor-surface-ink);
     stroke-width: 1.5;
 }
 
 .filter-range-editor__range-handle--start {
-    fill: #00b4d8;
+    fill: var(--editor-accent-start);
 }
 
 .filter-range-editor__range-handle--end {
-    fill: #e8604c;
+    fill: var(--editor-accent-end);
 }
 
 .filter-range-editor__range-hit-target,
@@ -133,23 +155,65 @@
 }
 
 .filter-range-editor__value-halo {
-    fill: rgba(240, 236, 230, 0.72);
-    stroke: #1c1c1c;
-    stroke-width: 1.2;
+    fill: var(--editor-handle-halo-fill);
+    stroke: var(--editor-handle-halo-stroke);
+    stroke-width: var(--editor-handle-halo-stroke-width);
 }
 
 .filter-range-editor__value-handle {
-    fill: #1c1c1c;
-    stroke: #f0ece6;
-    stroke-width: 2;
+    fill: var(--editor-handle-fill);
+    stroke: var(--editor-handle-stroke);
+    stroke-width: var(--editor-handle-stroke-width);
 }
 
 .filter-range-editor__frequency-label {
-    fill: #6f716d;
-    font-size: 11px;
-    font-weight: 800;
+    fill: var(--editor-surface-ink-muted);
+    font-family: var(--editor-label-font);
+    font-size: var(--editor-label-size-sm);
+    font-weight: var(--editor-label-weight);
+    letter-spacing: var(--editor-label-letter-spacing);
 }
 
+/* Handle chips rendered inside the SVG plot, capping the dashed guide lines. */
+.filter-range-editor__handle-chip {
+    stroke: none;
+}
+
+.filter-range-editor__handle-chip--center {
+    fill: var(--editor-chip-bg);
+}
+
+.filter-range-editor__handle-chip--start {
+    fill: var(--editor-accent-start);
+}
+
+.filter-range-editor__handle-chip--end {
+    fill: var(--editor-accent-end);
+}
+
+.filter-range-editor__handle-chip-text {
+    font-family: var(--editor-label-font);
+    font-size: var(--editor-label-size-sm);
+    font-weight: var(--editor-label-weight);
+    letter-spacing: var(--editor-label-letter-spacing);
+    pointer-events: none;
+    user-select: none;
+}
+
+.filter-range-editor__handle-chip-text--center {
+    fill: var(--editor-chip-ink);
+}
+
+.filter-range-editor__handle-chip-text--start {
+    fill: var(--editor-accent-start-ink);
+}
+
+.filter-range-editor__handle-chip-text--end {
+    fill: var(--editor-accent-end-ink);
+}
+
+/* Secondary chip layer — bottom-anchored chips (center Hz+Q and range span).
+   Per-handle start/end chips live inside the SVG and cap the guide lines. */
 .filter-range-editor__chips {
     position: absolute;
     inset: 0;
@@ -160,83 +224,43 @@
 
 .filter-range-editor__chip {
     position: absolute;
-    left: calc(24px + (100% - 48px) * var(--filter-range-chip-norm));
+    left: var(--filter-range-chip-x, 50%);
     display: flex;
     align-items: center;
-    gap: 4px;
-    border: 1px solid rgba(28, 28, 28, 0.28);
-    border-radius: 4px;
-    padding: 4px 7px;
-    color: #f0ece6;
-    background: #1c1c1c;
-    font-size: 11px;
-    font-weight: 800;
+    gap: 3px;
+    font-family: var(--editor-label-font);
+    font-size: var(--editor-label-size-sm);
+    font-weight: var(--editor-label-weight);
+    letter-spacing: var(--editor-label-letter-spacing);
     line-height: 1.15;
     white-space: nowrap;
     transform: translateX(-50%);
 }
 
 .filter-range-editor__chip--center {
-    bottom: 84px;
+    bottom: 64px;
     flex-direction: column;
-    gap: 2px;
+    gap: 1px;
+    padding: 3px 7px;
+    border-radius: var(--editor-chip-radius);
+    color: var(--editor-chip-ink);
+    background: var(--editor-chip-bg);
+    font-size: var(--editor-label-size-md);
 }
 
 .filter-range-editor__chip-q {
     font-size: 9px;
-    font-weight: 700;
-    letter-spacing: 0.02em;
+    font-weight: var(--editor-label-weight);
+    letter-spacing: 0;
     opacity: 0.62;
 }
 
-.filter-range-editor__chip--start,
-.filter-range-editor__chip--end {
-    bottom: 56px;
-}
-
-.filter-range-editor__chip--start {
-    color: #1c1c1c;
-    border-color: rgba(0, 100, 140, 0.35);
-    background: #00b4d8;
-}
-
-.filter-range-editor__chip--end {
-    color: #f0ece6;
-    border-color: rgba(200, 40, 20, 0.28);
-    background: #e8604c;
-}
-
-.filter-range-editor__chip--start::after,
-.filter-range-editor__chip--end::after {
-    position: absolute;
-    bottom: -6px;
-    left: 50%;
-    width: 0;
-    height: 0;
-    border-right: 5px solid transparent;
-    border-left: 5px solid transparent;
-    content: "";
-    transform: translateX(-50%);
-}
-
-.filter-range-editor__chip--start::after {
-    border-top: 6px solid #00b4d8;
-}
-
-.filter-range-editor__chip--end::after {
-    border-top: 6px solid #e8604c;
-}
-
 .filter-range-editor__chip--span {
-    bottom: 36px;
-    gap: 3px;
-    border: 0;
-    border-radius: 3px;
+    bottom: 34px;
     padding: 2px 6px;
+    border-radius: 3px;
     color: rgba(28, 28, 28, 0.58);
     background: rgba(240, 236, 230, 0.72);
-    font-size: 10px;
-    font-weight: 700;
 }
 
 .filter-range-editor__chip-direction {
@@ -245,7 +269,7 @@
 }
 
 .filter-range-editor__chip-octaves {
-    letter-spacing: 0.01em;
+    letter-spacing: 0;
 }
 
 .filter-range-editor__readout {
@@ -256,9 +280,9 @@
 
 .filter-range-editor__readout div {
     display: grid;
-    gap: 9px;
+    gap: 6px;
     min-width: 0;
-    padding: 14px 12px;
+    padding: 10px 10px;
     border-right: 1px solid rgba(28, 28, 28, 0.18);
 }
 
@@ -268,19 +292,21 @@
 
 .filter-range-editor__readout span {
     margin: 0;
-    color: #6f716d;
-    font-size: 11px;
-    font-weight: 800;
-    letter-spacing: 0;
+    color: var(--editor-surface-ink-muted);
+    font-family: var(--editor-label-font);
+    font-size: var(--editor-label-size-sm);
+    font-weight: var(--editor-label-weight);
+    letter-spacing: var(--editor-label-letter-spacing);
     text-transform: uppercase;
 }
 
 .filter-range-editor__readout strong {
     min-width: 0;
-    color: #1c1c1c;
-    font-size: 17px;
-    font-weight: 800;
-    letter-spacing: 0;
+    color: var(--editor-surface-ink);
+    font-family: var(--editor-label-font);
+    font-size: 13px;
+    font-weight: var(--editor-label-weight);
+    letter-spacing: var(--editor-label-letter-spacing);
     overflow-wrap: anywhere;
 }
 
@@ -290,8 +316,8 @@
     }
 
     .filter-range-editor__readout div {
-        gap: 6px;
-        padding: 10px 10px;
+        gap: 4px;
+        padding: 8px 10px;
     }
 
     .filter-range-editor__readout div:nth-child(2n) {
@@ -299,30 +325,13 @@
     }
 
     .filter-range-editor__readout strong {
-        font-size: 15px;
-    }
-
-    .filter-range-editor__chip {
-        padding: 3px 5px;
-        font-size: 9px;
-    }
-
-    .filter-range-editor__chip-q {
-        display: none;
-    }
-
-    .filter-range-editor__chip--center {
-        bottom: 76px;
-    }
-
-    .filter-range-editor__chip--start,
-    .filter-range-editor__chip--end {
-        bottom: 52px;
+        font-size: 12px;
     }
 
     .filter-range-editor__chip--span {
-        bottom: 32px;
+        bottom: 30px;
         font-size: 9px;
+        padding: 1px 5px;
     }
 
     .filter-range-editor__chip-octaves {

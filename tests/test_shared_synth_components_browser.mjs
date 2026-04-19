@@ -99,6 +99,10 @@ function xForCutoffHz(snapshot, cutoffHz) {
     return snapshot.plot.left + ((snapshot.plot.right - snapshot.plot.left) * normalized);
 }
 
+function geometricCenterHz(startHz, endHz) {
+    return Math.sqrt(Math.max(20, startHz) * Math.max(20, endHz));
+}
+
 function defaultResonanceCurve(normalizedInput) {
     const x = clamp(normalizedInput, 0, 1);
     const slope = 11.1;
@@ -400,6 +404,12 @@ test("shared filter range editor exposes the universal cutoff, resonance, range,
         assert.equal(snapshot.chipEnd, "3.20k");
         assert.equal(snapshot.chipSpanDirectionValue, "up");
         assert.equal(snapshot.chipSpanOctaves, "4.00 oct");
+        assertAlmostEqual(snapshot.chipCenterX, snapshot.valueHandle.x, 0.75);
+        assertAlmostEqual(
+            snapshot.chipSpanX,
+            xForCutoffHz(snapshot, geometricCenterHz(snapshot.range.startCutoffHz, snapshot.range.endCutoffHz)),
+            0.75,
+        );
         const labelHandleGap = await page.locator('[data-role="filter-range-editor"]').evaluate((node) => {
             const labels = Array.from(node.querySelectorAll('[data-role="filter-range-frequency-label"]'));
             const handles = Array.from(node.querySelectorAll(
@@ -471,6 +481,31 @@ test("shared filter range editor exposes the universal cutoff, resonance, range,
         assertAlmostEqual(snapshot.value.cutoffHz, cutoffHzAtX(beforeValueDrag, beforeValueDrag.valueHandle.x + 90), 8);
         assertAlmostEqual(snapshot.value.q, qAtY(beforeValueDrag, beforeValueDrag.valueHandle.y + 44), 0.12);
         assert.deepEqual(snapshot.editLog.slice(-2), ["start:value", "end:value"]);
+    } finally {
+        await page.close();
+    }
+});
+
+test("shared filter range editor keeps bottom chips aligned at compact widths", async () => {
+    const page = await openModulePage();
+
+    try {
+        await installHarness(page, "installSharedFilterRangeEditorHarness");
+        await page.waitForSelector('[data-role="filter-range-chip-center"]');
+        await page.locator('[data-role="filter-range-editor"]').evaluate((node) => {
+            node.style.width = "268px";
+        });
+        await page.evaluate(() => {
+            window.__COSIMO_DESKTOP_MODULE_HARNESS__.setValue({ cutoffHz: 10_000 });
+        });
+        await page.waitForFunction(() => {
+            const snapshot = window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.();
+            return snapshot?.value?.cutoffHz === 10_000
+                && (snapshot?.plot?.right - snapshot?.plot?.left) < 250;
+        });
+
+        const snapshot = await getHarnessSnapshot(page);
+        assertAlmostEqual(snapshot.chipCenterX, snapshot.valueHandle.x, 0.75);
     } finally {
         await page.close();
     }

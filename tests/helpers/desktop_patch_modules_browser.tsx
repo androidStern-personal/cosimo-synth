@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 
+import editorTokensCssText from "../../ui/shared/editor-tokens.css?inline";
+import filterRangeEditorCssText from "../../ui/shared/filter-range-editor.css?inline";
 import { PatchConnectionProvider, type PatchConnectionLike } from "../../ui/shared/cmajor-react";
 import { KeyboardDock, ensureKeyboardElement, type PianoKeyboardElement } from "../../ui/desktop/desktop-keyboard-adapter";
 import { NexusNumberField, setNexusNumberConstructorForTests, type NexusNumberWidgetLike } from "../../ui/desktop/desktop-nexus-number-field";
@@ -131,6 +133,9 @@ function readCurvePointsFromPath(pathElement: SVGPathElement | null, maxPoints =
 }
 
 function installFilterRangeEditorTestStyles() {
+    installInlineTestStyle("filter-range-editor-token-styles", editorTokensCssText);
+    installInlineTestStyle("filter-range-editor-component-styles", filterRangeEditorCssText);
+
     if (document.getElementById("filter-range-editor-test-styles")) {
         return;
     }
@@ -154,6 +159,17 @@ function installFilterRangeEditorTestStyles() {
             fill: transparent;
         }
     `;
+    document.head.appendChild(styleElement);
+}
+
+function installInlineTestStyle(id: string, cssText: string) {
+    if (document.getElementById(id)) {
+        return;
+    }
+
+    const styleElement = document.createElement("style");
+    styleElement.id = id;
+    styleElement.textContent = cssText;
     document.head.appendChild(styleElement);
 }
 
@@ -2050,6 +2066,7 @@ export async function installSharedFilterRangeEditorHarness(target: HTMLElement)
     };
     let setHarnessRangePolarity: ((nextPolarity: FilterRangePolarity) => void) | null = null;
     let setHarnessPreviewActive: ((nextPreviewActive: boolean) => void) | null = null;
+    let setHarnessValue: ((nextValue: Partial<FilterRangeValue>) => void) | null = null;
 
     const mounted = mountHarness(target, (root) => {
         function Harness() {
@@ -2088,10 +2105,17 @@ export async function installSharedFilterRangeEditorHarness(target: HTMLElement)
                         }));
                 };
                 setHarnessPreviewActive = setPreviewActive;
+                setHarnessValue = (nextValue) => {
+                    setValue((currentValue) => ({
+                        ...currentValue,
+                        ...nextValue,
+                    }));
+                };
 
                 return () => {
                     setHarnessRangePolarity = null;
                     setHarnessPreviewActive = null;
+                    setHarnessValue = null;
                 };
             }, [value.cutoffHz]);
 
@@ -2168,6 +2192,18 @@ export async function installSharedFilterRangeEditorHarness(target: HTMLElement)
                     y: Number(element.getAttribute("cy") ?? 0),
                 };
             };
+            const readElementCenterXInSurface = (element: Element | null) => {
+                if (!(surface instanceof SVGSVGElement) || !element) {
+                    return null;
+                }
+
+                const surfaceBounds = surface.getBoundingClientRect();
+                const elementBounds = element.getBoundingClientRect();
+                const viewBox = surface.viewBox.baseVal;
+                const scaleX = viewBox.width / Math.max(1, surfaceBounds.width);
+
+                return ((elementBounds.left + (elementBounds.width / 2)) - surfaceBounds.left) * scaleX;
+            };
 
             return {
                 value: cloneValue(state.value),
@@ -2206,7 +2242,9 @@ export async function installSharedFilterRangeEditorHarness(target: HTMLElement)
                 readoutRange: target.querySelector('[data-role="filter-range-readout-range"]')?.textContent ?? "",
                 readoutWidth: target.querySelector('[data-role="filter-range-readout-width"]')?.textContent ?? "",
                 readoutQ: target.querySelector('[data-role="filter-range-readout-q"]')?.textContent ?? "",
-                chipCount: target.querySelectorAll(".filter-range-editor__chip").length,
+                chipCount: target.querySelectorAll(
+                    '[data-role="filter-range-chip-center"], [data-role="filter-range-chip-start"], [data-role="filter-range-chip-end"], [data-role="filter-range-chip-span"]',
+                ).length,
                 chipCenterCutoff: target.querySelector('[data-role="filter-range-chip-center-cutoff"]')?.textContent ?? "",
                 chipCenterQ: target.querySelector('[data-role="filter-range-chip-center-q"]')?.textContent ?? "",
                 chipStart: target.querySelector('[data-role="filter-range-chip-start"]')?.textContent ?? "",
@@ -2214,6 +2252,8 @@ export async function installSharedFilterRangeEditorHarness(target: HTMLElement)
                 chipSpanDirection: target.querySelector('[data-role="filter-range-chip-span-direction"]')?.textContent ?? "",
                 chipSpanOctaves: target.querySelector('[data-role="filter-range-chip-span-octaves"]')?.textContent ?? "",
                 chipSpanDirectionValue: target.querySelector('[data-role="filter-range-chip-span"]')?.getAttribute("data-direction") ?? "",
+                chipCenterX: readElementCenterXInSurface(target.querySelector('[data-role="filter-range-chip-center"]')),
+                chipSpanX: readElementCenterXInSurface(target.querySelector('[data-role="filter-range-chip-span"]')),
                 valuePath: target.querySelector('[data-role="filter-range-value-response"]')?.getAttribute("d") ?? "",
                 previewPath: target.querySelector('[data-role="filter-range-preview-response"]')?.getAttribute("d") ?? "",
             };
@@ -2223,6 +2263,9 @@ export async function installSharedFilterRangeEditorHarness(target: HTMLElement)
         },
         setPreviewActive(nextPreviewActive: boolean) {
             setHarnessPreviewActive?.(nextPreviewActive);
+        },
+        setValue(nextValue: Partial<FilterRangeValue>) {
+            setHarnessValue?.(nextValue);
         },
         async unmount() {
             mounted.unmount();

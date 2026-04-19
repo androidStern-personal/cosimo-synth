@@ -2,8 +2,6 @@ import {
     type CSSProperties,
     type KeyboardEvent as ReactKeyboardEvent,
     type PointerEvent as ReactPointerEvent,
-    type RefObject,
-    useLayoutEffect,
     useMemo,
     useRef,
     useState,
@@ -31,6 +29,18 @@ import {
     evaluateCurveProfile,
     invertCurveProfile,
 } from "./curve-lab";
+import {
+    EDITOR_DRAG_START_THRESHOLD_PX,
+    EDITOR_HIT_RADIUS_PX,
+    EDITOR_PLOT_BOTTOM_PADDING_PX,
+    EDITOR_PLOT_TOP_PADDING_PX,
+    EDITOR_RANGE_HANDLE_RADIUS_PX,
+    EDITOR_VALUE_HANDLE_HALO_RADIUS_PX,
+    EDITOR_VALUE_HANDLE_RADIUS_PX,
+    editorPlotGutter,
+    useEditorSurfaceSize,
+    type EditorSurfaceSize,
+} from "./editor-tokens";
 
 export type FilterRangeMode = "off" | "lowpass" | "highpass" | "bandpass" | "notch" | "peak";
 export type FilterRangePolarity = "bipolar" | "unipolar";
@@ -92,10 +102,7 @@ export const FILTER_RANGE_MODE_OPTIONS: FilterRangeModeOption[] = [
     { label: "Peak", value: "peak" },
 ];
 
-type Size = {
-    width: number;
-    height: number;
-};
+type Size = EditorSurfaceSize;
 
 type PlotPath = {
     path: string;
@@ -119,14 +126,21 @@ type DragState = {
 
 const FILTER_RANGE_RESPONSE_POINT_COUNT = 360;
 const DEFAULT_SAMPLE_RATE_HZ = 44_100;
-const DRAG_START_THRESHOLD_PX = 1.5;
 const KEYBOARD_CUTOFF_STEP = 0.01;
 const KEYBOARD_Q_STEP = 0.025;
 const KEYBOARD_FAST_MULTIPLIER = 5;
 const MODULATION_RANGE_OCTAVE_LIMIT = 20;
-const FILTER_RANGE_PLOT_BOTTOM_PADDING = 76;
+/**
+ * Vertical space reserved below the plot for the range band handles + axis labels
+ * when a range is shown.
+ */
+const FILTER_RANGE_PLOT_BOTTOM_PADDING_WITH_RANGE = 56;
+/**
+ * Extra top padding when handle chips are shown — they cap the dashed guide
+ * lines at the top of the plot, so the plot floor must recede to make room.
+ */
+const FILTER_RANGE_PLOT_TOP_PADDING_WITH_CHIPS = 34;
 const FILTER_RANGE_MIN_HANDLE_PLOT_GAP = 14;
-const FILTER_RANGE_HIT_RADIUS = 16;
 const FILTER_RANGE_FREQUENCY_LABEL_BASELINE_INSET = 6;
 const FILTER_RANGE_FREQUENCY_LABEL_HEIGHT = 13;
 const FILTER_RANGE_HANDLE_LABEL_CLEARANCE = 4;
@@ -142,35 +156,6 @@ function finiteNumber(value: unknown, fallback: number) {
 
 function joinClasses(...classes: Array<string | null | undefined | false>) {
     return classes.filter(Boolean).join(" ");
-}
-
-function useResizeObserver<TElement extends Element>(ref: RefObject<TElement | null>) {
-    const [size, setSize] = useState<Size>({ width: 1, height: 1 });
-
-    useLayoutEffect(() => {
-        const element = ref.current;
-
-        if (!element) {
-            return;
-        }
-
-        const update = () => {
-            const bounds = element.getBoundingClientRect();
-            const host = element as unknown as HTMLElement;
-            setSize({
-                width: Math.max(1, bounds.width || host.clientWidth || 1),
-                height: Math.max(1, bounds.height || host.clientHeight || 1),
-            });
-        };
-
-        const observer = new ResizeObserver(update);
-        observer.observe(element);
-        update();
-
-        return () => observer.disconnect();
-    }, [ref]);
-
-    return size;
 }
 
 export function filterRangeModeToResponseMode(mode: FilterRangeMode) {
@@ -329,9 +314,9 @@ function buildMagnitudePath(
     width: number,
     height: number,
     {
-        horizontalPadding = 24,
-        topPadding = 18,
-        bottomPadding = FILTER_RANGE_PLOT_BOTTOM_PADDING,
+        horizontalPadding = editorPlotGutter(width),
+        topPadding = EDITOR_PLOT_TOP_PADDING_PX,
+        bottomPadding = EDITOR_PLOT_BOTTOM_PADDING_PX,
         minDb = -24,
         maxDb = 18,
     }: {
@@ -370,10 +355,14 @@ function createResponsePath({
     value,
     sampleRateHz,
     size,
+    topPadding,
+    bottomPadding,
 }: {
     value: FilterRangeValue;
     sampleRateHz: number;
     size: Size;
+    topPadding: number;
+    bottomPadding: number;
 }) {
     const model = createFilterResponseModel({
         mode: filterRangeModeToResponseMode(value.mode),
@@ -385,7 +374,7 @@ function createResponsePath({
 
     return {
         model,
-        path: buildMagnitudePath(model.magnitudesDb, size.width, size.height),
+        path: buildMagnitudePath(model.magnitudesDb, size.width, size.height, { topPadding, bottomPadding }),
     };
 }
 
@@ -499,9 +488,9 @@ function formatOctaves(value: number) {
     return `${value.toFixed(2)} oct`;
 }
 
-function filterRangeChipStyle(cutoffHz: number) {
+function filterRangeChipStyle(surfaceX: number) {
     return {
-        "--filter-range-chip-norm": filterCutoffHzToNormalized(cutoffHz),
+        "--filter-range-chip-x": `${surfaceX.toFixed(2)}px`,
     } as CSSProperties;
 }
 
@@ -529,6 +518,69 @@ function getNextFilterRangeMode(currentMode: FilterRangeMode, options: FilterRan
         : 0;
 
     return options[nextIndex]?.value ?? currentMode;
+}
+
+const FILTER_RANGE_CHIP_HEIGHT = 18;
+const FILTER_RANGE_CHIP_PADDING_X = 8;
+const FILTER_RANGE_CHIP_CHAR_WIDTH = 6.2;
+const FILTER_RANGE_CHIP_MIN_WIDTH = 34;
+const FILTER_RANGE_CHIP_BASELINE_OFFSET = 4;
+
+function chipRectWidth(label: string) {
+    return Math.max(FILTER_RANGE_CHIP_MIN_WIDTH, (label.length * FILTER_RANGE_CHIP_CHAR_WIDTH) + (FILTER_RANGE_CHIP_PADDING_X * 2));
+}
+
+function clampChipX(x: number, plot: PlotPath) {
+    // Chips stay anchored to handle X but never escape the plot interior, so
+    // nothing can drift outside the surface at extreme cutoff values.
+    return clamp(x, plot.plotLeft, plot.plotRight);
+}
+
+type FilterRangeHandleChipProps = {
+    clampX: (x: number) => number;
+    "data-role": string;
+    label: string;
+    plotTop: number;
+    variant: "center" | "start" | "end";
+    x: number;
+};
+
+function FilterRangeHandleChip({
+    clampX,
+    label,
+    plotTop,
+    variant,
+    x,
+    "data-role": dataRole,
+}: FilterRangeHandleChipProps) {
+    const width = chipRectWidth(label);
+    const halfWidth = width / 2;
+    const chipCenterY = plotTop - (FILTER_RANGE_CHIP_HEIGHT / 2) - 2;
+    const chipX = clampX(x);
+    return (
+        <g
+            className="filter-range-editor__handle-chip-group"
+            data-role={dataRole}
+            transform={`translate(${chipX.toFixed(2)}, ${chipCenterY.toFixed(2)})`}
+        >
+            <rect
+                className={`filter-range-editor__handle-chip filter-range-editor__handle-chip--${variant}`}
+                x={-halfWidth}
+                y={-(FILTER_RANGE_CHIP_HEIGHT / 2)}
+                width={width}
+                height={FILTER_RANGE_CHIP_HEIGHT}
+                rx="3"
+            />
+            <text
+                className={`filter-range-editor__handle-chip-text filter-range-editor__handle-chip-text--${variant}`}
+                x={0}
+                y={FILTER_RANGE_CHIP_BASELINE_OFFSET}
+                textAnchor="middle"
+            >
+                {label}
+            </text>
+        </g>
+    );
 }
 
 function FilterRangeModeGlyph({ mode }: { mode: FilterRangeMode }) {
@@ -638,8 +690,18 @@ export function FilterRangeEditor(props: FilterRangeEditorProps) {
     const surfaceRef = useRef<SVGSVGElement | null>(null);
     const dragStateRef = useRef<DragState | null>(null);
     const [activeDragTarget, setActiveDragTarget] = useState<FilterRangeEditTarget | null>(null);
-    const size = useResizeObserver(viewportRef);
+    const size = useEditorSurfaceSize(viewportRef);
     const safeSampleRateHz = Math.max(1, Math.round(finiteNumber(sampleRateHz, DEFAULT_SAMPLE_RATE_HZ)));
+    const hasRangeView = Boolean(range);
+    const plotBottomPadding = hasRangeView
+        ? FILTER_RANGE_PLOT_BOTTOM_PADDING_WITH_RANGE
+        : EDITOR_PLOT_BOTTOM_PADDING_PX;
+    // Top reserve is only needed when range chips are shown at the top of the
+    // plot. The center chip stays anchored to the bottom, so chips-without-range
+    // doesn't need extra top room.
+    const plotTopPadding = showHandleChips && hasRangeView
+        ? FILTER_RANGE_PLOT_TOP_PADDING_WITH_CHIPS
+        : EDITOR_PLOT_TOP_PADDING_PX;
     const safeValue = useMemo(() => clampFilterRangeValue(value), [value]);
     const safeRange = useMemo(() => {
         if (!range) {
@@ -672,17 +734,21 @@ export function FilterRangeEditor(props: FilterRangeEditorProps) {
             value: safeValue,
             sampleRateHz: safeSampleRateHz,
             size,
+            topPadding: plotTopPadding,
+            bottomPadding: plotBottomPadding,
         })
-    ), [safeSampleRateHz, safeValue, size]);
+    ), [plotBottomPadding, plotTopPadding, safeSampleRateHz, safeValue, size]);
     const previewResponse = useMemo(() => (
         previewValue
             ? createResponsePath({
                 value: previewValue,
                 sampleRateHz: safeSampleRateHz,
                 size,
+                topPadding: plotTopPadding,
+                bottomPadding: plotBottomPadding,
             })
             : null
-    ), [previewValue, safeSampleRateHz, size]);
+    ), [plotBottomPadding, plotTopPadding, previewValue, safeSampleRateHz, size]);
     const handlePoint = useMemo(() => (
         pointForCutoffAndQ({
             cutoffHz: safeValue.cutoffHz,
@@ -716,7 +782,7 @@ export function FilterRangeEditor(props: FilterRangeEditorProps) {
         const maxBandY = frequencyLabelY
             - FILTER_RANGE_FREQUENCY_LABEL_HEIGHT
             - FILTER_RANGE_HANDLE_LABEL_CLEARANCE
-            - FILTER_RANGE_HIT_RADIUS;
+            - EDITOR_HIT_RADIUS_PX;
         const preferredBandY = baseResponse.path.plotBottom
             + Math.max(FILTER_RANGE_MIN_HANDLE_PLOT_GAP, (size.height - baseResponse.path.plotBottom) * 0.42);
         const bandY = Math.min(preferredBandY, maxBandY);
@@ -747,6 +813,8 @@ export function FilterRangeEditor(props: FilterRangeEditorProps) {
     const rangeMidpointCutoffHz = safeRange
         ? geometricCenterCutoffHz(safeRange.startCutoffHz, safeRange.endCutoffHz)
         : safeValue.cutoffHz;
+    const rangeMidpointX = baseResponse.path.plotLeft
+        + (baseResponse.path.plotWidth * filterCutoffHzToNormalized(rangeMidpointCutoffHz));
     const modeLabel = getFilterRangeModeLabel(safeValue.mode, modeOptions);
     const modeCycleAriaLabel = `Cycle filter mode, currently ${modeLabel}`;
 
@@ -877,6 +945,8 @@ export function FilterRangeEditor(props: FilterRangeEditorProps) {
             data-filter-mode={safeValue.mode}
             data-range-polarity={rangePolarity}
             data-role="filter-range-editor"
+            data-show-chips={showHandleChips ? "true" : "false"}
+            data-has-range={hasRangeView ? "true" : "false"}
             style={style}
         >
             <div ref={viewportRef} className="filter-range-editor__viewport" data-role="filter-range-editor-viewport">
@@ -919,7 +989,7 @@ export function FilterRangeEditor(props: FilterRangeEditorProps) {
 
                         const deltaX = event.clientX - dragState.startClientX;
                         const deltaY = event.clientY - dragState.startClientY;
-                        if (!dragState.hasMoved && Math.abs(deltaX) < DRAG_START_THRESHOLD_PX && Math.abs(deltaY) < DRAG_START_THRESHOLD_PX) {
+                        if (!dragState.hasMoved && Math.abs(deltaX) < EDITOR_DRAG_START_THRESHOLD_PX && Math.abs(deltaY) < EDITOR_DRAG_START_THRESHOLD_PX) {
                             return;
                         }
 
@@ -987,7 +1057,7 @@ export function FilterRangeEditor(props: FilterRangeEditorProps) {
                                 data-role="filter-range-start-guide"
                                 x1={rangeGeometry.startX}
                                 x2={rangeGeometry.startX}
-                                y1={baseResponse.path.plotTop}
+                                y1={showHandleChips ? baseResponse.path.plotTop - 2 : baseResponse.path.plotTop}
                                 y2={rangeGeometry.bandY + 12}
                             />
                             <line
@@ -995,7 +1065,7 @@ export function FilterRangeEditor(props: FilterRangeEditorProps) {
                                 data-role="filter-range-end-guide"
                                 x1={rangeGeometry.endX}
                                 x2={rangeGeometry.endX}
-                                y1={baseResponse.path.plotTop}
+                                y1={showHandleChips ? baseResponse.path.plotTop - 2 : baseResponse.path.plotTop}
                                 y2={rangeGeometry.bandY + 12}
                             />
                         </>
@@ -1017,7 +1087,7 @@ export function FilterRangeEditor(props: FilterRangeEditorProps) {
                                 data-role="filter-range-preview-handle"
                                 cx={previewPoint.x}
                                 cy={previewPoint.y}
-                                r="6.5"
+                                r={EDITOR_RANGE_HANDLE_RADIUS_PX * 0.75}
                             />
                         </>
                     ) : null}
@@ -1030,7 +1100,7 @@ export function FilterRangeEditor(props: FilterRangeEditorProps) {
                                         data-role="filter-range-start-handle"
                                         cx={rangeGeometry.startX}
                                         cy={rangeGeometry.bandY}
-                                        r="8.5"
+                                        r={EDITOR_RANGE_HANDLE_RADIUS_PX}
                                     />
                                     <circle
                                         aria-label="Filter range start cutoff"
@@ -1043,7 +1113,7 @@ export function FilterRangeEditor(props: FilterRangeEditorProps) {
                                         tabIndex={isRangeEditable(props) ? 0 : undefined}
                                         cx={rangeGeometry.startX}
                                         cy={rangeGeometry.bandY}
-                                        r={FILTER_RANGE_HIT_RADIUS}
+                                        r={EDITOR_HIT_RADIUS_PX}
                                         onKeyDown={(event) => handleRangeKeyDown("range-start", event)}
                                         onPointerDown={(event) => {
                                             if (isRangeEditable(props)) {
@@ -1058,7 +1128,7 @@ export function FilterRangeEditor(props: FilterRangeEditorProps) {
                                 data-role="filter-range-end-handle"
                                 cx={rangeGeometry.endX}
                                 cy={rangeGeometry.bandY}
-                                r="8.5"
+                                r={EDITOR_RANGE_HANDLE_RADIUS_PX}
                             />
                             <circle
                                 aria-label="Filter range end cutoff"
@@ -1071,7 +1141,7 @@ export function FilterRangeEditor(props: FilterRangeEditorProps) {
                                 tabIndex={isRangeEditable(props) ? 0 : undefined}
                                 cx={rangeGeometry.endX}
                                 cy={rangeGeometry.bandY}
-                                r={FILTER_RANGE_HIT_RADIUS}
+                                r={EDITOR_HIT_RADIUS_PX}
                                 onKeyDown={(event) => handleRangeKeyDown("range-end", event)}
                                 onPointerDown={(event) => {
                                     if (isRangeEditable(props)) {
@@ -1094,14 +1164,14 @@ export function FilterRangeEditor(props: FilterRangeEditorProps) {
                         data-role="filter-range-value-halo"
                         cx={handlePoint.x}
                         cy={handlePoint.y}
-                        r="14"
+                        r={EDITOR_VALUE_HANDLE_HALO_RADIUS_PX}
                     />
                     <circle
                         className="filter-range-editor__value-handle"
                         data-role="filter-range-value-handle"
                         cx={handlePoint.x}
                         cy={handlePoint.y}
-                        r="9.5"
+                        r={EDITOR_VALUE_HANDLE_RADIUS_PX}
                     />
                     <circle
                         aria-label="Filter cutoff and resonance"
@@ -1115,7 +1185,7 @@ export function FilterRangeEditor(props: FilterRangeEditorProps) {
                         tabIndex={isValueEditable(props) ? 0 : undefined}
                         cx={handlePoint.x}
                         cy={handlePoint.y}
-                        r="18"
+                        r={EDITOR_HIT_RADIUS_PX}
                         onKeyDown={handleValueKeyDown}
                         onPointerDown={(event) => {
                             if (isValueEditable(props)) {
@@ -1135,17 +1205,39 @@ export function FilterRangeEditor(props: FilterRangeEditorProps) {
                             {formatHz(frequencyHz)}
                         </text>
                     ))}
+                    {showHandleChips && safeRange ? (
+                        <g data-role="filter-range-chip-layer" pointerEvents="none">
+                            {rangePolarity === "bipolar" ? (
+                                <FilterRangeHandleChip
+                                    clampX={(x) => clampChipX(x, baseResponse.path)}
+                                    data-role="filter-range-chip-start"
+                                    label={formatHzChip(safeRange.startCutoffHz)}
+                                    plotTop={baseResponse.path.plotTop}
+                                    variant="start"
+                                    x={rangeGeometry?.startX ?? 0}
+                                />
+                            ) : null}
+                            <FilterRangeHandleChip
+                                clampX={(x) => clampChipX(x, baseResponse.path)}
+                                data-role="filter-range-chip-end"
+                                label={formatHzChip(safeRange.endCutoffHz)}
+                                plotTop={baseResponse.path.plotTop}
+                                variant="end"
+                                x={rangeGeometry?.endX ?? 0}
+                            />
+                        </g>
+                    ) : null}
                 </svg>
-                {showHandleChips && safeRange ? (
+                {showHandleChips ? (
                     <div
                         className="filter-range-editor__chips"
-                        data-role="filter-range-chip-layer"
+                        data-role="filter-range-chip-layer-secondary"
                         aria-hidden="true"
                     >
                         <div
                             className="filter-range-editor__chip filter-range-editor__chip--center"
                             data-role="filter-range-chip-center"
-                            style={filterRangeChipStyle(safeValue.cutoffHz)}
+                            style={filterRangeChipStyle(handlePoint.x)}
                         >
                             <span
                                 className="filter-range-editor__chip-hz"
@@ -1160,41 +1252,27 @@ export function FilterRangeEditor(props: FilterRangeEditorProps) {
                                 Q {safeValue.q.toFixed(1)}
                             </span>
                         </div>
-                        {rangePolarity === "bipolar" ? (
+                        {safeRange ? (
                             <div
-                                className="filter-range-editor__chip filter-range-editor__chip--start"
-                                data-role="filter-range-chip-start"
-                                style={filterRangeChipStyle(safeRange.startCutoffHz)}
+                                className="filter-range-editor__chip filter-range-editor__chip--span"
+                                data-direction={rangeDirection}
+                                data-role="filter-range-chip-span"
+                                style={filterRangeChipStyle(rangeMidpointX)}
                             >
-                                {formatHzChip(safeRange.startCutoffHz)}
+                                <span
+                                    className="filter-range-editor__chip-direction"
+                                    data-role="filter-range-chip-span-direction"
+                                >
+                                    {rangeDirection === "down" ? "↙" : "↗"}
+                                </span>
+                                <span
+                                    className="filter-range-editor__chip-octaves"
+                                    data-role="filter-range-chip-span-octaves"
+                                >
+                                    {formatOctaves(Math.abs(rangeWidthOctaves))}
+                                </span>
                             </div>
                         ) : null}
-                        <div
-                            className="filter-range-editor__chip filter-range-editor__chip--end"
-                            data-role="filter-range-chip-end"
-                            style={filterRangeChipStyle(safeRange.endCutoffHz)}
-                        >
-                            {formatHzChip(safeRange.endCutoffHz)}
-                        </div>
-                        <div
-                            className="filter-range-editor__chip filter-range-editor__chip--span"
-                            data-direction={rangeDirection}
-                            data-role="filter-range-chip-span"
-                            style={filterRangeChipStyle(rangeMidpointCutoffHz)}
-                        >
-                            <span
-                                className="filter-range-editor__chip-direction"
-                                data-role="filter-range-chip-span-direction"
-                            >
-                                {rangeDirection === "down" ? "↙" : "↗"}
-                            </span>
-                            <span
-                                className="filter-range-editor__chip-octaves"
-                                data-role="filter-range-chip-span-octaves"
-                            >
-                                {formatOctaves(Math.abs(rangeWidthOctaves))}
-                            </span>
-                        </div>
                     </div>
                 ) : null}
             </div>

@@ -1,12 +1,19 @@
 import { Component, createElement, type ErrorInfo } from "react";
 import { createRoot, type Root } from "react-dom/client";
 
+import editorTokensCssText from "../../../ui/shared/editor-tokens.css?inline";
 import filterRangeEditorCssText from "../../../ui/shared/filter-range-editor.css?inline";
+import stutterEnvelopeEditorCssText from "./stutter-envelope-editor.css?inline";
 import seqFxCssText from "./styles.css?inline";
 import { SeqFxPatchView } from "./SeqFxPatchView";
 import type { PatchConnectionLike } from "../../../ui/shared/cmajor-react";
 
-const cssText = `${filterRangeEditorCssText}\n${seqFxCssText}`;
+const cssText = [
+    editorTokensCssText,
+    filterRangeEditorCssText,
+    stutterEnvelopeEditorCssText,
+    seqFxCssText,
+].join("\n");
 const styleElementId = "cosimo-seqfx-react-view-styles";
 
 type ErrorBoundaryState = {
