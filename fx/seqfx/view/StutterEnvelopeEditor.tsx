@@ -29,7 +29,6 @@ export type StutterEnvelopeEditorValue = {
     speed: number;
     shape: number;
     gate: number;
-    mix: number;
 };
 
 export type StutterEnvelopeEditorProps = {
@@ -38,7 +37,6 @@ export type StutterEnvelopeEditorProps = {
     onSpeedChange: (value: number) => void;
     onShapeChange: (value: number) => void;
     onGateChange: (value: number) => void;
-    onMixChange: (value: number) => void;
 };
 
 const GRAPH_WIDTH = 480;
@@ -63,10 +61,6 @@ function clamp(value: number, min: number, max: number) {
 
 function formatSpeed(value: number) {
     return `${clampStutterSpeed(value).toFixed(2)}x`;
-}
-
-function formatMix(value: number) {
-    return Number(clamp(value, 0, 1).toFixed(2)).toString();
 }
 
 function roundSpeed(value: number) {
@@ -111,7 +105,6 @@ function resolveValue(value: Partial<StutterEnvelopeEditorValue>): StutterEnvelo
         speed: clampStutterSpeed(value.speed ?? STUTTER_DEFAULT_SPEED),
         shape: clampStutterShape(value.shape ?? STUTTER_DEFAULT_SHAPE),
         gate: clampStutterGate(value.gate ?? STUTTER_DEFAULT_GATE),
-        mix: clamp(value.mix ?? 1, 0, 1),
     };
 }
 
@@ -121,7 +114,6 @@ export function StutterEnvelopeEditor({
     onSpeedChange,
     onShapeChange,
     onGateChange,
-    onMixChange,
 }: StutterEnvelopeEditorProps) {
     const resolved = resolveValue(value);
     const graphRef = useRef<SVGSVGElement | null>(null);
@@ -389,20 +381,6 @@ export function StutterEnvelopeEditor({
                     <output className="seqfx-stutter-editor__shape-readout">{formatStutterShapeLabel(resolved.shape)}</output>
                 </div>
             </div>
-
-            <label className="seqfx-stutter-editor__mix-row">
-                <span>Block mix</span>
-                <input
-                    data-role="seqfx-mix"
-                    max={1}
-                    min={0}
-                    onChange={(event) => onMixChange(Number(event.currentTarget.value))}
-                    step={0.01}
-                    type="range"
-                    value={resolved.mix}
-                />
-                <output>{formatMix(resolved.mix)}</output>
-            </label>
         </section>
     );
 }

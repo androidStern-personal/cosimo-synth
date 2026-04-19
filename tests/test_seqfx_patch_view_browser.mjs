@@ -822,6 +822,37 @@ test("seqfx_grid_cell_and_inspector_edits_send_complete_pattern_uploads", async 
         sidebarFit.editorScrollWidth <= Math.ceil(sidebarFit.editorWidth) + 1,
         `filter editor scroll width ${sidebarFit.editorScrollWidth} should not overflow rendered width ${sidebarFit.editorWidth}`,
     );
+    const filterLabelGap = await filterEditor.evaluate((node) => {
+        const labels = Array.from(node.querySelectorAll('[data-role="filter-range-frequency-label"]'));
+        const handles = Array.from(node.querySelectorAll(
+            '[data-role="filter-range-start-hit-target"], [data-role="filter-range-end-hit-target"]',
+        ));
+        const minLabelTop = Math.min(...labels.map((label) => label.getBoundingClientRect().top));
+        const maxHandleBottom = Math.max(...handles.map((handle) => handle.getBoundingClientRect().bottom));
+
+        return minLabelTop - maxHandleBottom;
+    });
+    assert.ok(
+        filterLabelGap > 0,
+        `filter frequency labels should stay below range handle hit targets, got ${filterLabelGap}px gap`,
+    );
+    const inspectorLayout = await page.locator('[data-role="seqfx-inspector"]').evaluate((node) => {
+        const filterBounds = node.querySelector('[data-role="filter-range-editor"]')?.getBoundingClientRect();
+        const mixBounds = node.querySelector('[data-role="seqfx-mix-row"]')?.getBoundingClientRect();
+        const exactMixLabelCount = Array.from(node.querySelectorAll("span"))
+            .filter((span) => span.textContent?.trim() === "Mix").length;
+
+        return {
+            exactMixLabelCount,
+            filterBottom: filterBounds?.bottom ?? 0,
+            mixTop: mixBounds?.top ?? 0,
+        };
+    });
+    assert.equal(inspectorLayout.exactMixLabelCount, 0);
+    assert.ok(
+        inspectorLayout.mixTop >= inspectorLayout.filterBottom,
+        `SeqFX mix row should sit below the active effect editor, got mix top ${inspectorLayout.mixTop} and filter bottom ${inspectorLayout.filterBottom}`,
+    );
 
     await page.locator('[data-role="filter-range-mode-cycle-button"]').click();
 
@@ -950,6 +981,23 @@ test("seqfx_stutter_inspector_renders_interactive_envelope_editor_and_writes_blo
     snapshot = await getHarnessSnapshot(page);
     upload = patternUploads(snapshot).at(-1).value;
     assert.equal(upload.params[3][0][2], 0);
+    const stutterLayout = await page.locator('[data-role="seqfx-inspector"]').evaluate((node) => {
+        const editorBounds = node.querySelector('[data-role="seqfx-stutter-editor"]')?.getBoundingClientRect();
+        const mixBounds = node.querySelector('[data-role="seqfx-mix-row"]')?.getBoundingClientRect();
+
+        return {
+            editorBottom: editorBounds?.bottom ?? 0,
+            mixTop: mixBounds?.top ?? 0,
+        };
+    });
+    assert.ok(
+        stutterLayout.mixTop >= stutterLayout.editorBottom,
+        `SeqFX stutter mix row should sit below the envelope editor, got mix top ${stutterLayout.mixTop} and editor bottom ${stutterLayout.editorBottom}`,
+    );
+    await setRangeInputValue(page.locator('[data-role="seqfx-mix"]'), 0.64);
+    snapshot = await getHarnessSnapshot(page);
+    upload = patternUploads(snapshot).at(-1).value;
+    assertClose(upload.mix[3][0], 0.64, 0.001, "shared mix row should write stutter block mix");
 
     await page.close();
 });

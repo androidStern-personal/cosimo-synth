@@ -400,6 +400,20 @@ test("shared filter range editor exposes the universal cutoff, resonance, range,
         assert.equal(snapshot.chipEnd, "3.20k");
         assert.equal(snapshot.chipSpanDirectionValue, "up");
         assert.equal(snapshot.chipSpanOctaves, "4.00 oct");
+        const labelHandleGap = await page.locator('[data-role="filter-range-editor"]').evaluate((node) => {
+            const labels = Array.from(node.querySelectorAll('[data-role="filter-range-frequency-label"]'));
+            const handles = Array.from(node.querySelectorAll(
+                '[data-role="filter-range-start-hit-target"], [data-role="filter-range-end-hit-target"]',
+            ));
+            const minLabelTop = Math.min(...labels.map((label) => label.getBoundingClientRect().top));
+            const maxHandleBottom = Math.max(...handles.map((handle) => handle.getBoundingClientRect().bottom));
+
+            return minLabelTop - maxHandleBottom;
+        });
+        assert.ok(
+            labelHandleGap > 0,
+            `frequency labels should stay below range handle hit targets, got ${labelHandleGap}px gap`,
+        );
 
         await page.locator('[data-role="filter-range-mode-cycle-button"]').click();
         await page.waitForFunction(() => {

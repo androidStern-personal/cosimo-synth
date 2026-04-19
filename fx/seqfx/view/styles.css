@@ -895,7 +895,7 @@ select {
     min-width: 32px;
 }
 
-.seqfx-stutter-editor__mix-row {
+.seqfx-mix-row {
     display: grid;
     grid-template-columns: auto 1fr auto;
     align-items: center;
@@ -907,13 +907,13 @@ select {
     font-weight: 700;
 }
 
-.seqfx-stutter-editor__mix-row input[type="range"] {
+.seqfx-mix-row input[type="range"] {
     width: 100%;
     margin: 0;
     accent-color: #8bbf9a;
 }
 
-.seqfx-stutter-editor__mix-row output {
+.seqfx-mix-row output {
     color: #eef2ef;
     font-family: Menlo, Monaco, monospace;
     font-weight: 700;

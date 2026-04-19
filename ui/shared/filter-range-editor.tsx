@@ -124,6 +124,12 @@ const KEYBOARD_CUTOFF_STEP = 0.01;
 const KEYBOARD_Q_STEP = 0.025;
 const KEYBOARD_FAST_MULTIPLIER = 5;
 const MODULATION_RANGE_OCTAVE_LIMIT = 20;
+const FILTER_RANGE_PLOT_BOTTOM_PADDING = 76;
+const FILTER_RANGE_MIN_HANDLE_PLOT_GAP = 14;
+const FILTER_RANGE_HIT_RADIUS = 16;
+const FILTER_RANGE_FREQUENCY_LABEL_BASELINE_INSET = 6;
+const FILTER_RANGE_FREQUENCY_LABEL_HEIGHT = 13;
+const FILTER_RANGE_HANDLE_LABEL_CLEARANCE = 4;
 
 function clamp(value: number, min: number, max: number) {
     return Math.min(max, Math.max(min, value));
@@ -325,7 +331,7 @@ function buildMagnitudePath(
     {
         horizontalPadding = 24,
         topPadding = 18,
-        bottomPadding = 46,
+        bottomPadding = FILTER_RANGE_PLOT_BOTTOM_PADDING,
         minDb = -24,
         maxDb = 18,
     }: {
@@ -706,10 +712,14 @@ export function FilterRangeEditor(props: FilterRangeEditorProps) {
             + (baseResponse.path.plotWidth * filterCutoffHzToNormalized(safeRange.endCutoffHz));
         const bandLeft = Math.min(startX, endX);
         const bandRight = Math.max(startX, endX);
-        const bandY = Math.min(
-            size.height - 24,
-            baseResponse.path.plotBottom + Math.max(14, (size.height - baseResponse.path.plotBottom) * 0.42),
-        );
+        const frequencyLabelY = size.height - FILTER_RANGE_FREQUENCY_LABEL_BASELINE_INSET;
+        const maxBandY = frequencyLabelY
+            - FILTER_RANGE_FREQUENCY_LABEL_HEIGHT
+            - FILTER_RANGE_HANDLE_LABEL_CLEARANCE
+            - FILTER_RANGE_HIT_RADIUS;
+        const preferredBandY = baseResponse.path.plotBottom
+            + Math.max(FILTER_RANGE_MIN_HANDLE_PLOT_GAP, (size.height - baseResponse.path.plotBottom) * 0.42);
+        const bandY = Math.min(preferredBandY, maxBandY);
 
         return {
             startX,
@@ -1033,7 +1043,7 @@ export function FilterRangeEditor(props: FilterRangeEditorProps) {
                                         tabIndex={isRangeEditable(props) ? 0 : undefined}
                                         cx={rangeGeometry.startX}
                                         cy={rangeGeometry.bandY}
-                                        r="16"
+                                        r={FILTER_RANGE_HIT_RADIUS}
                                         onKeyDown={(event) => handleRangeKeyDown("range-start", event)}
                                         onPointerDown={(event) => {
                                             if (isRangeEditable(props)) {
@@ -1061,7 +1071,7 @@ export function FilterRangeEditor(props: FilterRangeEditorProps) {
                                 tabIndex={isRangeEditable(props) ? 0 : undefined}
                                 cx={rangeGeometry.endX}
                                 cy={rangeGeometry.bandY}
-                                r="16"
+                                r={FILTER_RANGE_HIT_RADIUS}
                                 onKeyDown={(event) => handleRangeKeyDown("range-end", event)}
                                 onPointerDown={(event) => {
                                     if (isRangeEditable(props)) {
@@ -1119,7 +1129,7 @@ export function FilterRangeEditor(props: FilterRangeEditorProps) {
                             className="filter-range-editor__frequency-label"
                             data-role="filter-range-frequency-label"
                             x={baseResponse.path.plotLeft + (baseResponse.path.plotWidth * filterCutoffHzToNormalized(frequencyHz))}
-                            y={Math.min(size.height - 8, baseResponse.path.plotBottom + 28)}
+                            y={size.height - FILTER_RANGE_FREQUENCY_LABEL_BASELINE_INSET}
                             textAnchor="middle"
                         >
                             {formatHz(frequencyHz)}

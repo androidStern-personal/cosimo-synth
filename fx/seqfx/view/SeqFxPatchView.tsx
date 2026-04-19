@@ -221,6 +221,31 @@ function SeqFxEffectIcon({ effectType }: { effectType: SeqFxEffectType }) {
     }
 }
 
+function SeqFxMixRow({
+    value,
+    onChange,
+}: {
+    value: number;
+    onChange: (value: number) => void;
+}) {
+    return (
+        <label className="seqfx-mix-row" data-role="seqfx-mix-row">
+            <span>Block mix</span>
+            <input
+                aria-label="Block mix"
+                data-role="seqfx-mix"
+                max={1}
+                min={0}
+                onChange={(event) => onChange(Number(event.currentTarget.value))}
+                step={0.01}
+                type="range"
+                value={value}
+            />
+            <output>{formatValue(value)}</output>
+        </label>
+    );
+}
+
 const PARAM_DEFINITIONS: Record<number, ParamDefinition[]> = {
     [SEQFX_EFFECT_TYPES.filter]: [
         { index: 0, label: "Mode", min: 0, max: 2, step: 1, kind: "select", options: ["Lowpass", "Highpass", "Bandpass"] },
@@ -302,7 +327,6 @@ function stutterValueFromSeqFxStep(step: SeqFxStep) {
         speed: step.params[STUTTER_PARAM_SPEED],
         shape: step.params[STUTTER_PARAM_SHAPE],
         gate: step.params[STUTTER_PARAM_GATE],
-        mix: step.mix,
     };
 }
 
@@ -2565,21 +2589,6 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
                                     );
                                 })}
                             </div>
-                            {inspectedEffectType === SEQFX_EFFECT_TYPES.stutter ? null : (
-                                <label className="seqfx-field">
-                                    <span>Mix</span>
-                                    <input
-                                        data-role="seqfx-mix"
-                                        max={1}
-                                        min={0}
-                                        onChange={(event) => setMix(Number(event.currentTarget.value))}
-                                        step={0.01}
-                                        type="range"
-                                        value={inspectedCell.mix}
-                                    />
-                                    <output>{formatValue(inspectedCell.mix)}</output>
-                                </label>
-                            )}
                             {inspectedEffectType === SEQFX_EFFECT_TYPES.tapeStop ? (
                                 <TapeStopEnvelopeEditor
                                     step={inspectedCell}
@@ -2627,7 +2636,6 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
                                 <StutterEnvelopeEditor
                                     value={stutterValueFromSeqFxStep(inspectedCell)}
                                     onGateChange={(value) => setStutterParam(STUTTER_PARAM_GATE, value)}
-                                    onMixChange={setStutterMix}
                                     onShapeChange={(value) => setStutterParam(STUTTER_PARAM_SHAPE, value)}
                                     onSlicesChange={(value) => setStutterParam(STUTTER_PARAM_SLICES, value)}
                                     onSpeedChange={(value) => setStutterParam(STUTTER_PARAM_SPEED, value)}
@@ -2676,6 +2684,10 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
                                     </label>
                                 );
                             })}
+                            <SeqFxMixRow
+                                value={inspectedCell.mix}
+                                onChange={inspectedEffectType === SEQFX_EFFECT_TYPES.stutter ? setStutterMix : setMix}
+                            />
                             {selectedBlockGroup || (selectedWholeBlock && inspectedBlock) ? (
                                 <button
                                     className="seqfx-delete-block"
