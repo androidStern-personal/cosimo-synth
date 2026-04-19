@@ -50,7 +50,6 @@ button {
 }
 
 .eyebrow,
-.filter-range-editor__readout span,
 .meter-card span {
     margin: 0;
     color: #6f716d;
@@ -120,6 +119,136 @@ h1 {
     color: #f0ece6;
     background: #1c1c1c;
 }
+
+/* ── Editor overlay wrapper ─────────────────────────────────────── */
+
+.editor-overlay-root {
+    position: relative;
+    min-height: 0;
+}
+
+/* ── Handle chips overlay ───────────────────────────────────────── */
+
+/*
+ * Chips are absolutely positioned inside .editor-overlay-root.
+ * Horizontal positioning uses CSS custom property --chip-norm (0–1),
+ * offset by the SVG plot padding (24px) plus 1px border on each side.
+ * Vertical positions are calibrated to the SVG band/handle geometry:
+ *   - range handles sit at bottom ≈ 28px
+ *   - freq labels sit at bottom ≈ 18px
+ */
+
+.fre-chips {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    overflow: visible;
+    z-index: 3;
+}
+
+.fre-chip {
+    position: absolute;
+    /* horizontal: plot inset (24px) + 1px border, scaled by norm */
+    left: calc(25px + (100% - 50px) * var(--chip-norm));
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 7px;
+    border: 1px solid rgba(28, 28, 28, 0.28);
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 800;
+    line-height: 1.15;
+    white-space: nowrap;
+    color: #f0ece6;
+    background: #1c1c1c;
+}
+
+/* center handle: black pill, above the range chips */
+.fre-chip--center {
+    bottom: 84px;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.fre-chip__hz {
+    display: block;
+}
+
+.fre-chip__q {
+    display: block;
+    font-size: 9px;
+    font-weight: 700;
+    opacity: 0.62;
+    letter-spacing: 0.02em;
+}
+
+/* start handle: cyan pill */
+.fre-chip--start {
+    bottom: 56px;
+    color: #1c1c1c;
+    background: #00b4d8;
+    border-color: rgba(0, 100, 140, 0.35);
+}
+
+.fre-chip--start::after {
+    content: "";
+    position: absolute;
+    bottom: -6px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0;
+    height: 0;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-top: 6px solid #00b4d8;
+}
+
+/* end handle: coral pill */
+.fre-chip--end {
+    bottom: 56px;
+    color: #f0ece6;
+    background: #e8604c;
+    border-color: rgba(200, 40, 20, 0.28);
+}
+
+.fre-chip--end::after {
+    content: "";
+    position: absolute;
+    bottom: -6px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0;
+    height: 0;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-top: 6px solid #e8604c;
+}
+
+/* span/direction label: sits between range handles and freq labels */
+.fre-chip--span {
+    bottom: 36px;
+    gap: 3px;
+    padding: 2px 6px;
+    border: none;
+    border-radius: 3px;
+    font-size: 10px;
+    font-weight: 700;
+    color: rgba(28, 28, 28, 0.58);
+    background: rgba(240, 236, 230, 0.72);
+}
+
+.fre-chip__dir {
+    font-size: 11px;
+    line-height: 1;
+}
+
+.fre-chip__oct {
+    letter-spacing: 0.01em;
+}
+
+/* ── FilterRangeEditor component ────────────────────────────────── */
 
 .filter-range-editor {
     display: grid;
@@ -270,31 +399,7 @@ h1 {
     font-weight: 800;
 }
 
-.filter-range-editor__readout {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    border-top: 1px solid rgba(28, 28, 28, 0.22);
-}
-
-.filter-range-editor__readout div {
-    display: grid;
-    gap: 9px;
-    min-width: 0;
-    padding: 14px 12px;
-    border-right: 1px solid rgba(28, 28, 28, 0.18);
-}
-
-.filter-range-editor__readout div:last-child {
-    border-right: 0;
-}
-
-.filter-range-editor__readout strong,
-.meter-card strong {
-    color: #1c1c1c;
-    font-size: 17px;
-    font-weight: 800;
-    letter-spacing: 0;
-}
+/* ── Side panel ─────────────────────────────────────────────────── */
 
 .demo-side-panel {
     display: grid;
@@ -310,6 +415,13 @@ h1 {
     background: #ebe5da;
 }
 
+.meter-card strong {
+    color: #1c1c1c;
+    font-size: 17px;
+    font-weight: 800;
+    letter-spacing: 0;
+}
+
 .position-track {
     height: 10px;
     border: 1px solid #1c1c1c;
@@ -320,6 +432,8 @@ h1 {
     height: 100%;
     background: #00b4d8;
 }
+
+/* ── Responsive ─────────────────────────────────────────────────── */
 
 @media (max-width: 1080px) {
     .demo-shell {
@@ -337,6 +451,7 @@ h1 {
     }
 }
 
+/* Narrow plugin window / iPhone */
 @media (max-width: 640px) {
     .demo-page {
         padding: 12px;
@@ -347,11 +462,37 @@ h1 {
         padding: 12px;
     }
 
-    .filter-range-editor__readout {
-        grid-template-columns: 1fr 1fr;
+    /* compress chip sizes on narrow viewports */
+    .fre-chip {
+        font-size: 9px;
+        padding: 3px 5px;
     }
 
-    .filter-range-editor__readout div:nth-child(2n) {
-        border-right: 0;
+    .fre-chip__q {
+        display: none;
+    }
+
+    .fre-chip--span {
+        font-size: 9px;
+    }
+
+    .fre-chip__oct {
+        display: none;
+    }
+}
+
+/* Very narrow (plugin inspector pane, ~320px) */
+@media (max-width: 400px) {
+    .fre-chip--center {
+        bottom: 76px;
+    }
+
+    .fre-chip--start,
+    .fre-chip--end {
+        bottom: 52px;
+    }
+
+    .fre-chip--span {
+        bottom: 32px;
     }
 }

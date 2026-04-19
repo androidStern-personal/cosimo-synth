@@ -1962,8 +1962,8 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
                                         modeOptions={SEQFX_FILTER_MODE_OPTIONS}
                                         range={filterRangeEndpointsFromSeqFxStep(inspectedCell)}
                                         rangePolarity="bipolar"
+                                        showHandleChips
                                         showModeControls
-                                        showReadout
                                         value={filterRangeValueFromSeqFxStep(inspectedCell)}
                                         onRangeChange={setFilterRange}
                                         onValueChange={setFilterValue}

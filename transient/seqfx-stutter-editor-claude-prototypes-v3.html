@@ -1,0 +1,719 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>SeqFX Stutter Editor — Round 3</title>
+        <style>
+            :root {
+                color: #1c1c1c;
+                background: #d8d0c3;
+                font-family: "Geist", "Avenir Next", "Helvetica Neue", Arial, sans-serif;
+                font-synthesis: none;
+                text-rendering: geometricPrecision;
+            }
+
+            * { box-sizing: border-box; }
+            html, body { margin: 0; min-height: 100%; }
+
+            .page {
+                min-height: 100dvh;
+                padding: 28px;
+                background:
+                    linear-gradient(90deg, rgba(28,28,28,0.055) 1px, transparent 1px) 0 0 / 44px 44px,
+                    linear-gradient(0deg,  rgba(28,28,28,0.045) 1px, transparent 1px) 0 0 / 44px 44px,
+                    #d8d0c3;
+            }
+
+            .shell {
+                max-width: 1280px;
+                margin: 0 auto;
+                padding: 24px;
+                border: 1px solid #1c1c1c;
+                background: #f0ece6;
+            }
+
+            .eyebrow {
+                margin: 0 0 6px;
+                color: #6f716d;
+                font-size: 11px;
+                font-weight: 800;
+                letter-spacing: 0.02em;
+                text-transform: uppercase;
+            }
+
+            h1 {
+                margin: 0 0 10px;
+                font-size: clamp(30px, 3.1vw, 44px);
+                line-height: 0.98;
+                letter-spacing: 0;
+            }
+
+            .lede {
+                max-width: 72ch;
+                margin: 0 0 20px;
+                color: #42413d;
+                font-size: 14px;
+                line-height: 1.5;
+            }
+
+            .protos {
+                display: grid;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                gap: 20px;
+            }
+
+            @media (max-width: 960px) {
+                .protos { grid-template-columns: 1fr; }
+            }
+
+            .proto {
+                display: grid;
+                gap: 12px;
+                min-width: 0;
+                padding: 14px 14px 16px;
+                border: 1px solid #1c1c1c;
+                background: #ebe5da;
+            }
+
+            .proto header { display: grid; gap: 4px; }
+
+            .proto .tag {
+                display: inline-block;
+                padding: 2px 7px;
+                border: 1px solid #1c1c1c;
+                border-radius: 3px;
+                color: #f0ece6;
+                background: #1c1c1c;
+                font-size: 10px;
+                font-weight: 800;
+                letter-spacing: 0.04em;
+                text-transform: uppercase;
+            }
+
+            .proto .tag--prev {
+                color: #1c1c1c;
+                background: transparent;
+            }
+
+            .proto h3 {
+                margin: 0;
+                font-size: 20px;
+                letter-spacing: 0;
+            }
+
+            .proto .tagline {
+                margin: 0;
+                color: #42413d;
+                font-size: 13px;
+                line-height: 1.45;
+            }
+
+            .proto .notes {
+                display: grid;
+                gap: 6px;
+                margin: 0;
+                padding: 10px 12px;
+                border: 1px solid rgba(28,28,28,0.22);
+                background: #f0ece6;
+                font-size: 12px;
+                line-height: 1.5;
+                color: #1c1c1c;
+            }
+
+            .proto .notes strong {
+                color: #6f716d;
+                font-size: 10px;
+                font-weight: 800;
+                letter-spacing: 0.04em;
+                text-transform: uppercase;
+            }
+
+            /* ── Dark inspector frame ───────────────────────────────── */
+
+            .inspector {
+                display: grid;
+                gap: 12px;
+                padding: 14px;
+                border: 1px solid rgba(238, 242, 239, 0.12);
+                border-radius: 8px;
+                background: #151816;
+                color: #eef2ef;
+                font-family: "Avenir Next", "Helvetica Neue", Arial, sans-serif;
+            }
+
+            .inspector .kicker {
+                color: #f2d16b;
+                font-size: 10px;
+                font-weight: 800;
+                letter-spacing: 0.08em;
+                text-transform: uppercase;
+            }
+
+            .inspector .title {
+                display: flex;
+                align-items: baseline;
+                justify-content: space-between;
+                gap: 8px;
+                color: #f6faf7;
+                font-size: 16px;
+                font-weight: 700;
+            }
+
+            .inspector .title em {
+                padding: 2px 6px;
+                border: 1px solid rgba(242, 209, 107, 0.4);
+                border-radius: 999px;
+                color: #f2d16b;
+                font-size: 10px;
+                font-style: normal;
+                font-weight: 700;
+            }
+
+            /* ── Beige editor surface ───────────────────────────────── */
+
+            .editor {
+                position: relative;
+                border: 1px solid #1c1c1c;
+                background: #e4ded3;
+                font-family: "Geist", "Avenir Next", "Helvetica Neue", Arial, sans-serif;
+                color: #1c1c1c;
+            }
+
+            .editor__surface {
+                display: block;
+                width: 100%;
+                height: auto;
+                touch-action: none;
+            }
+
+            .canvas-wrap { position: relative; }
+
+            .grid-line { stroke: rgba(28,28,28,0.12); stroke-width: 1; shape-rendering: crispEdges; }
+            .axis      { stroke: rgba(28,28,28,0.44); stroke-width: 1; shape-rendering: crispEdges; }
+            .env-path  { fill: none; stroke: #1c1c1c; stroke-width: 3.0; stroke-linecap: round; stroke-linejoin: round; }
+            .env-fill  { fill: rgba(242, 209, 107, 0.35); }
+            .gate-region { fill: rgba(232, 96, 76, 0.14); stroke: rgba(232, 96, 76, 0.55); stroke-dasharray: 3 4; stroke-width: 1; }
+            .gate-handle { fill: #e8604c; stroke: #1c1c1c; stroke-width: 1.5; }
+            .axis-label  { fill: #6f716d; font-size: 10px; font-weight: 800; font-family: Menlo, Monaco, monospace; }
+            .gate-label  { fill: #e8604c; font-size: 10px; font-weight: 800; font-family: Menlo, Monaco, monospace; letter-spacing: 0.04em; text-transform: uppercase; }
+            .wave-silhouette { fill: rgba(28,28,28,0.16); }
+
+            /* ── Repeat strip (ambient reminder) ────────────────────── */
+
+            .repeat-strip {
+                display: flex;
+                gap: 2px;
+                align-items: stretch;
+                height: 10px;
+                padding: 4px 6px;
+                border-top: 1px solid rgba(28,28,28,0.18);
+                background: rgba(28,28,28,0.04);
+            }
+
+            .repeat-strip .tick {
+                flex: 1;
+                min-width: 0;
+                border-radius: 1px;
+                background: rgba(28,28,28,0.38);
+            }
+
+            .repeat-strip .tick.first   { background: #1c1c1c; }
+            .repeat-strip .tick.playing { background: #f2d16b; }
+
+            /* ── Morph slider ───────────────────────────────────────── */
+
+            .morph {
+                display: grid;
+                gap: 6px;
+                padding: 10px 12px 12px;
+                border-top: 1px solid rgba(28,28,28,0.18);
+            }
+
+            .morph__labels {
+                display: flex;
+                justify-content: space-between;
+                color: #6f716d;
+                font-size: 9px;
+                font-weight: 800;
+                letter-spacing: 0.02em;
+                text-transform: uppercase;
+            }
+
+            .morph__track {
+                position: relative;
+                height: 14px;
+                border: 1px solid #1c1c1c;
+                background:
+                    linear-gradient(90deg,
+                        rgba(28,28,28,0.08) 0 16.66%,
+                        rgba(28,28,28,0.16) 16.66% 33.33%,
+                        rgba(28,28,28,0.08) 33.33% 50%,
+                        rgba(28,28,28,0.16) 50% 66.66%,
+                        rgba(28,28,28,0.08) 66.66% 83.33%,
+                        rgba(28,28,28,0.16) 83.33% 100%);
+            }
+
+            .morph__track .notch {
+                position: absolute;
+                top: -3px;
+                bottom: -3px;
+                width: 1px;
+                background: rgba(28,28,28,0.55);
+            }
+
+            .morph__track .thumb {
+                position: absolute;
+                top: -4px;
+                width: 10px;
+                height: 22px;
+                border: 1.5px solid #1c1c1c;
+                background: #f2d16b;
+                box-shadow: 0 2px 0 rgba(28,28,28,0.15);
+                transform: translateX(-50%);
+            }
+
+            /* ── Inline stepper ─────────────────────────────────────── */
+
+            .stepper {
+                display: inline-flex;
+                align-items: stretch;
+                border: 1px solid rgba(28,28,28,0.38);
+                border-radius: 4px;
+                overflow: hidden;
+            }
+
+            .stepper button {
+                width: 22px;
+                padding: 0;
+                border: 0;
+                background: transparent;
+                font-family: inherit;
+                font-size: 13px;
+                font-weight: 800;
+                cursor: pointer;
+            }
+
+            .stepper button:hover { background: rgba(28,28,28,0.08); }
+
+            .stepper .val {
+                min-width: 38px;
+                padding: 4px 8px;
+                border-left: 1px solid rgba(28,28,28,0.22);
+                border-right: 1px solid rgba(28,28,28,0.22);
+                text-align: center;
+                font-family: Menlo, Monaco, monospace;
+                font-size: 12px;
+                font-weight: 800;
+                background: rgba(28,28,28,0.04);
+            }
+
+            /* ── F: header strip above canvas ───────────────────────── */
+
+            .header-strip {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 10px;
+                padding: 8px 12px;
+                border-bottom: 1px solid rgba(28,28,28,0.18);
+                background: rgba(28,28,28,0.025);
+            }
+
+            .header-strip .field {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 8px;
+                min-width: 0;
+            }
+
+            .header-strip label {
+                color: #6f716d;
+                font-size: 10px;
+                font-weight: 800;
+                letter-spacing: 0.02em;
+                text-transform: uppercase;
+            }
+
+            /* ── Corner overlay pill (used in H) ────────────────────── */
+
+            .overlay-pill {
+                position: absolute;
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                padding: 4px 6px;
+                border: 1px solid rgba(28,28,28,0.42);
+                border-radius: 6px;
+                background: rgba(240, 236, 230, 0.92);
+                box-shadow: 0 2px 6px rgba(28,28,28,0.1);
+            }
+
+            .overlay-pill--slices { top: 10px; left: 10px; }
+            .overlay-pill--speed  { top: 10px; right: 10px; }
+
+            .overlay-pill label {
+                color: #6f716d;
+                font-size: 9px;
+                font-weight: 800;
+                letter-spacing: 0.04em;
+                text-transform: uppercase;
+            }
+
+            .overlay-pill button {
+                width: 18px;
+                height: 18px;
+                padding: 0;
+                border: 1px solid rgba(28,28,28,0.38);
+                border-radius: 3px;
+                background: transparent;
+                font-family: inherit;
+                font-size: 11px;
+                font-weight: 800;
+                cursor: pointer;
+            }
+
+            .overlay-pill button:hover { background: rgba(28,28,28,0.08); }
+
+            .overlay-pill .val {
+                min-width: 30px;
+                text-align: center;
+                font-family: Menlo, Monaco, monospace;
+                font-size: 11px;
+                font-weight: 800;
+            }
+
+            .overlay-pill--speed .val { min-width: 40px; }
+
+            /* ── Mix row ────────────────────────────────────────────── */
+
+            .mix-row {
+                display: grid;
+                grid-template-columns: auto 1fr auto;
+                align-items: center;
+                gap: 10px;
+                padding: 8px 14px;
+                border-top: 1px solid rgba(238,242,239,0.14);
+                font-size: 11px;
+                color: #b7c5bc;
+                font-weight: 700;
+            }
+
+            .mix-row .bar {
+                position: relative;
+                height: 6px;
+                border-radius: 3px;
+                background: rgba(255,255,255,0.08);
+            }
+
+            .mix-row .bar .fill {
+                position: absolute;
+                top: 0;
+                left: 0;
+                bottom: 0;
+                width: 82%;
+                border-radius: 3px;
+                background: #8bbf9a;
+            }
+
+            .mix-row .val {
+                font-family: Menlo, Monaco, monospace;
+                color: #eef2ef;
+                font-weight: 700;
+            }
+
+            footer {
+                margin-top: 26px;
+                padding-top: 18px;
+                border-top: 1px solid rgba(28,28,28,0.22);
+                color: #6f716d;
+                font-size: 11px;
+                font-weight: 700;
+                letter-spacing: 0.02em;
+                text-transform: uppercase;
+            }
+        </style>
+    </head>
+    <body>
+        <main class="page">
+            <section class="shell">
+                <p class="eyebrow">SeqFX · Stutter Lane · Round 3</p>
+                <h1>F with both controls in the corners.</h1>
+                <p class="lede">
+                    F (the preferred direction) next to H, which moves both numeric
+                    controls onto the canvas as corner overlays: Slices top-left,
+                    Speed top-right. The header strip disappears. Everything in the
+                    editor is now either visualization or on top of the
+                    visualization.
+                </p>
+
+                <section class="protos">
+                    <!-- ─────────────────── F (reference) ─────────────────── -->
+                    <article class="proto" id="proto-f">
+                        <header>
+                            <span class="tag tag--prev">Round 2 · F</span>
+                            <h3>Header strip</h3>
+                            <p class="tagline">
+                                Reference: Slices + Speed as a toolbar row above
+                                the canvas, everything below is visualization only.
+                            </p>
+                        </header>
+
+                        <div class="inspector">
+                            <span class="kicker">Stutter · block 9 – 16</span>
+                            <div class="title">
+                                <span>Cut envelope</span>
+                                <em>×8</em>
+                            </div>
+                            <div class="editor">
+                                <div class="header-strip">
+                                    <div class="field">
+                                        <label>Slices</label>
+                                        <div class="stepper">
+                                            <button type="button" aria-label="Fewer slices">−</button>
+                                            <span class="val">8</span>
+                                            <button type="button" aria-label="More slices">+</button>
+                                        </div>
+                                    </div>
+                                    <div class="field">
+                                        <label>Speed</label>
+                                        <div class="stepper">
+                                            <button type="button" aria-label="Slower">−</button>
+                                            <span class="val">1.00×</span>
+                                            <button type="button" aria-label="Faster">+</button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="canvas-wrap">
+                                    <svg class="editor__surface" viewBox="0 0 480 220" aria-label="Cut envelope with captured audio">
+                                        <line class="grid-line" x1="24"  x2="24"  y1="20" y2="180"/>
+                                        <line class="grid-line" x1="132" x2="132" y1="20" y2="180"/>
+                                        <line class="grid-line" x1="240" x2="240" y1="20" y2="180"/>
+                                        <line class="grid-line" x1="348" x2="348" y1="20" y2="180"/>
+                                        <line class="grid-line" x1="456" x2="456" y1="20" y2="180"/>
+                                        <line class="axis"      x1="24"  x2="456" y1="100" y2="100"/>
+                                        <line class="axis"      x1="24"  x2="24"  y1="20"  y2="180"/>
+                                        <line class="axis"      x1="24"  x2="456" y1="180" y2="180"/>
+
+                                        <path class="wave-silhouette"
+                                              d="M 24 100
+                                                 L 34 84  L 44 110 L 54 88  L 64 114 L 74 74  L 84 122
+                                                 L 94 80  L 104 118 L 114 72 L 124 126 L 134 76 L 144 118
+                                                 L 154 62 L 164 138 L 174 70 L 184 124 L 194 78 L 204 114
+                                                 L 214 66 L 224 134 L 234 74 L 244 122 L 254 76 L 264 118
+                                                 L 274 82 L 284 112 L 294 76 L 304 120 L 314 80 L 324 116
+                                                 L 334 88 L 344 110 L 354 90 L 364 108 L 374 92 L 384 106
+                                                 L 394 94 L 404 104 L 414 96 L 424 102 L 434 98 L 444 100
+                                                 L 456 100
+                                                 L 444 100 L 434 102 L 424 98  L 414 104 L 404 96  L 394 106
+                                                 L 384 94  L 374 108 L 364 92  L 354 110 L 344 90  L 334 112
+                                                 L 324 124 L 314 120 L 304 128 L 294 124 L 284 128 L 274 122
+                                                 L 264 130 L 254 124 L 244 134 L 234 126 L 224 138 L 214 120
+                                                 L 204 130 L 194 118 L 184 134 L 174 108 L 164 144 L 154 100
+                                                 L 144 136 L 134 104 L 124 142 L 114 104 L 104 130 L 94 106
+                                                 L 84 126  L 74 108  L 64 124  L 54 108  L 44 120  L 34 108
+                                                 L 24 100 Z"/>
+
+                                        <path class="env-fill"
+                                              d="M 24 180
+                                                 C 72 180 130 28 176 28
+                                                 C 212 28 264 180 312 180
+                                                 L 24 180 Z"/>
+
+                                        <rect class="gate-region" x="312" y="20" width="144" height="160" rx="2"/>
+
+                                        <path class="env-path"
+                                              d="M 24 180
+                                                 C 72 180 130 28 176 28
+                                                 C 212 28 264 180 312 180
+                                                 L 456 180"/>
+
+                                        <line x1="312" x2="312" y1="180" y2="20"
+                                              stroke="rgba(232,96,76,0.7)" stroke-width="1" stroke-dasharray="3 4"/>
+                                        <text class="gate-label" x="312" y="16" text-anchor="middle">gate 68 %</text>
+                                        <circle class="gate-handle" cx="312" cy="180" r="8.5"/>
+
+                                        <text class="axis-label" x="24"  y="200" text-anchor="start">0</text>
+                                        <text class="axis-label" x="240" y="200" text-anchor="middle">½ cut</text>
+                                        <text class="axis-label" x="456" y="200" text-anchor="end">1 cut</text>
+                                    </svg>
+                                </div>
+                                <div class="repeat-strip" aria-label="Eight identical cuts in block">
+                                    <div class="tick first"></div>
+                                    <div class="tick playing"></div>
+                                    <div class="tick"></div><div class="tick"></div>
+                                    <div class="tick"></div><div class="tick"></div>
+                                    <div class="tick"></div><div class="tick"></div>
+                                </div>
+                                <div class="morph">
+                                    <div class="morph__labels">
+                                        <span>Gate</span><span>Eased</span><span>Tri</span>
+                                        <span>Bell</span><span>Ramp↑</span><span>Ramp↓</span>
+                                    </div>
+                                    <div class="morph__track" aria-label="Shape morph">
+                                        <span class="notch" style="left: 16.66%"></span>
+                                        <span class="notch" style="left: 33.33%"></span>
+                                        <span class="notch" style="left: 50%"></span>
+                                        <span class="notch" style="left: 66.66%"></span>
+                                        <span class="notch" style="left: 83.33%"></span>
+                                        <span class="thumb" style="left: 55%"></span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="mix-row">
+                                <span>Block mix</span>
+                                <div class="bar"><div class="fill"></div></div>
+                                <span class="val">0.82</span>
+                            </div>
+                        </div>
+
+                        <p class="notes">
+                            <strong>Recap</strong>
+                            Numeric controls sit as a toolbar above the graph.
+                            Readable and conservative. Adds one persistent row of
+                            vertical weight between the inspector title and the
+                            canvas.
+                        </p>
+                    </article>
+
+                    <!-- ─────────────────── H (new) ─────────────────── -->
+                    <article class="proto" id="proto-h">
+                        <header>
+                            <span class="tag">Round 3 · H</span>
+                            <h3>Both corners overlaid</h3>
+                            <p class="tagline">
+                                Slices top-left, Speed top-right — both sitting on
+                                the canvas as compact pills. The header strip is
+                                gone. The editor is now canvas → repeat strip →
+                                morph slider, with the two numbers floating over
+                                the graph.
+                            </p>
+                        </header>
+
+                        <div class="inspector">
+                            <span class="kicker">Stutter · block 9 – 16</span>
+                            <div class="title">
+                                <span>Cut envelope</span>
+                                <em>×8</em>
+                            </div>
+                            <div class="editor">
+                                <div class="canvas-wrap">
+                                    <svg class="editor__surface" viewBox="0 0 480 220" aria-label="Cut envelope with captured audio">
+                                        <line class="grid-line" x1="24"  x2="24"  y1="20" y2="180"/>
+                                        <line class="grid-line" x1="132" x2="132" y1="20" y2="180"/>
+                                        <line class="grid-line" x1="240" x2="240" y1="20" y2="180"/>
+                                        <line class="grid-line" x1="348" x2="348" y1="20" y2="180"/>
+                                        <line class="grid-line" x1="456" x2="456" y1="20" y2="180"/>
+                                        <line class="axis"      x1="24"  x2="456" y1="100" y2="100"/>
+                                        <line class="axis"      x1="24"  x2="24"  y1="20"  y2="180"/>
+                                        <line class="axis"      x1="24"  x2="456" y1="180" y2="180"/>
+
+                                        <path class="wave-silhouette"
+                                              d="M 24 100
+                                                 L 34 84  L 44 110 L 54 88  L 64 114 L 74 74  L 84 122
+                                                 L 94 80  L 104 118 L 114 72 L 124 126 L 134 76 L 144 118
+                                                 L 154 62 L 164 138 L 174 70 L 184 124 L 194 78 L 204 114
+                                                 L 214 66 L 224 134 L 234 74 L 244 122 L 254 76 L 264 118
+                                                 L 274 82 L 284 112 L 294 76 L 304 120 L 314 80 L 324 116
+                                                 L 334 88 L 344 110 L 354 90 L 364 108 L 374 92 L 384 106
+                                                 L 394 94 L 404 104 L 414 96 L 424 102 L 434 98 L 444 100
+                                                 L 456 100
+                                                 L 444 100 L 434 102 L 424 98  L 414 104 L 404 96  L 394 106
+                                                 L 384 94  L 374 108 L 364 92  L 354 110 L 344 90  L 334 112
+                                                 L 324 124 L 314 120 L 304 128 L 294 124 L 284 128 L 274 122
+                                                 L 264 130 L 254 124 L 244 134 L 234 126 L 224 138 L 214 120
+                                                 L 204 130 L 194 118 L 184 134 L 174 108 L 164 144 L 154 100
+                                                 L 144 136 L 134 104 L 124 142 L 114 104 L 104 130 L 94 106
+                                                 L 84 126  L 74 108  L 64 124  L 54 108  L 44 120  L 34 108
+                                                 L 24 100 Z"/>
+
+                                        <path class="env-fill"
+                                              d="M 24 180
+                                                 C 72 180 130 28 176 28
+                                                 C 212 28 264 180 312 180
+                                                 L 24 180 Z"/>
+
+                                        <rect class="gate-region" x="312" y="20" width="144" height="160" rx="2"/>
+
+                                        <path class="env-path"
+                                              d="M 24 180
+                                                 C 72 180 130 28 176 28
+                                                 C 212 28 264 180 312 180
+                                                 L 456 180"/>
+
+                                        <line x1="312" x2="312" y1="180" y2="20"
+                                              stroke="rgba(232,96,76,0.7)" stroke-width="1" stroke-dasharray="3 4"/>
+                                        <text class="gate-label" x="312" y="16" text-anchor="middle">gate 68 %</text>
+                                        <circle class="gate-handle" cx="312" cy="180" r="8.5"/>
+
+                                        <text class="axis-label" x="24"  y="200" text-anchor="start">0</text>
+                                        <text class="axis-label" x="240" y="200" text-anchor="middle">½ cut</text>
+                                        <text class="axis-label" x="456" y="200" text-anchor="end">1 cut</text>
+                                    </svg>
+                                    <div class="overlay-pill overlay-pill--slices">
+                                        <label>Slices</label>
+                                        <button type="button" aria-label="Fewer slices">−</button>
+                                        <span class="val">8</span>
+                                        <button type="button" aria-label="More slices">+</button>
+                                    </div>
+                                    <div class="overlay-pill overlay-pill--speed">
+                                        <label>Speed</label>
+                                        <button type="button" aria-label="Slower">−</button>
+                                        <span class="val">1.00×</span>
+                                        <button type="button" aria-label="Faster">+</button>
+                                    </div>
+                                </div>
+                                <div class="repeat-strip" aria-label="Eight identical cuts in block">
+                                    <div class="tick first"></div>
+                                    <div class="tick playing"></div>
+                                    <div class="tick"></div><div class="tick"></div>
+                                    <div class="tick"></div><div class="tick"></div>
+                                    <div class="tick"></div><div class="tick"></div>
+                                </div>
+                                <div class="morph">
+                                    <div class="morph__labels">
+                                        <span>Gate</span><span>Eased</span><span>Tri</span>
+                                        <span>Bell</span><span>Ramp↑</span><span>Ramp↓</span>
+                                    </div>
+                                    <div class="morph__track" aria-label="Shape morph">
+                                        <span class="notch" style="left: 16.66%"></span>
+                                        <span class="notch" style="left: 33.33%"></span>
+                                        <span class="notch" style="left: 50%"></span>
+                                        <span class="notch" style="left: 66.66%"></span>
+                                        <span class="notch" style="left: 83.33%"></span>
+                                        <span class="thumb" style="left: 55%"></span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="mix-row">
+                                <span>Block mix</span>
+                                <div class="bar"><div class="fill"></div></div>
+                                <span class="val">0.82</span>
+                            </div>
+                        </div>
+
+                        <p class="notes">
+                            <strong>Tradeoff</strong>
+                            The card gets taller up top (canvas absorbs what was
+                            the header) and shorter overall. Pills are
+                            semi-transparent so the grid stays faintly visible
+                            behind them; with Shape 55 % the envelope sits safely
+                            between them. Watch points: a Ramp↓ envelope rises at
+                            x = 0 and can reach the slices pill; a Ramp↑ rises at
+                            x = 1 and reaches the speed pill. Mitigation: the pills
+                            are narrow and the envelope fill is translucent amber,
+                            so overlap reads as "control on top of graph" rather
+                            than collision — but it'd be worth one pass where we
+                            nudge the pills down by 2 – 4 px only when the
+                            envelope value at that edge exceeds a threshold.
+                        </p>
+                    </article>
+                </section>
+
+                <footer>
+                    round 3 · static · no dependencies · open directly in a browser
+                </footer>
+            </section>
+        </main>
+    </body>
+</html>

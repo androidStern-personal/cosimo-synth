@@ -54,6 +54,60 @@ function useAnimatedRangePreview(range: FilterRangeEndpoints, q: number, mode: F
     };
 }
 
+function fmtHz(hz: number): string {
+    if (hz >= 10_000) return `${(hz / 1000).toFixed(1)}k`;
+    if (hz >= 1_000) return `${(hz / 1000).toFixed(2)}k`;
+    return `${Math.round(hz)}`;
+}
+
+type HandleChipsProps = {
+    value: FilterRangeValue;
+    range: FilterRangeEndpoints;
+    rangePolarity: FilterRangePolarity;
+};
+
+function HandleChips({ value, range, rangePolarity }: HandleChipsProps) {
+    const startNorm = filterCutoffHzToNormalized(range.startCutoffHz);
+    const endNorm = filterCutoffHzToNormalized(range.endCutoffHz);
+    const centerNorm = filterCutoffHzToNormalized(value.cutoffHz);
+    const midNorm = (startNorm + endNorm) / 2;
+    const isDownward = range.endCutoffHz < range.startCutoffHz;
+    const octaves = cutoffRangeOctaves(range.startCutoffHz, range.endCutoffHz);
+
+    return (
+        <div className="fre-chips" aria-hidden="true">
+            <div
+                className="fre-chip fre-chip--center"
+                style={{ "--chip-norm": centerNorm } as React.CSSProperties}
+            >
+                <span className="fre-chip__hz">{fmtHz(value.cutoffHz)}</span>
+                <span className="fre-chip__q">Q {value.q.toFixed(1)}</span>
+            </div>
+            {rangePolarity === "bipolar" ? (
+                <div
+                    className="fre-chip fre-chip--start"
+                    style={{ "--chip-norm": startNorm } as React.CSSProperties}
+                >
+                    {fmtHz(range.startCutoffHz)}
+                </div>
+            ) : null}
+            <div
+                className="fre-chip fre-chip--end"
+                style={{ "--chip-norm": endNorm } as React.CSSProperties}
+            >
+                {fmtHz(range.endCutoffHz)}
+            </div>
+            <div
+                className="fre-chip fre-chip--span"
+                style={{ "--chip-norm": midNorm } as React.CSSProperties}
+            >
+                <span className="fre-chip__dir">{isDownward ? "↙" : "↗"}</span>
+                <span className="fre-chip__oct">{octaves.toFixed(2)} oct</span>
+            </div>
+        </div>
+    );
+}
+
 function FilterRangeDemo() {
     const [value, setValue] = useState<FilterRangeValue>({
         mode: "lowpass",
@@ -151,17 +205,20 @@ function FilterRangeDemo() {
                         ))}
                     </div>
 
-                    <FilterRangeEditor
-                        value={value}
-                        range={range}
-                        rangePolarity={rangePolarity}
-                        preview={preview}
-                        showModeControls
-                        showReadout
-                        ariaLabel="Interactive filter range editor"
-                        onValueChange={updateValue}
-                        onRangeChange={updateRange}
-                    />
+                    <div className="editor-overlay-root">
+                        <FilterRangeEditor
+                            value={value}
+                            range={range}
+                            rangePolarity={rangePolarity}
+                            preview={preview}
+                            showModeControls
+                            showReadout={false}
+                            ariaLabel="Interactive filter range editor"
+                            onValueChange={updateValue}
+                            onRangeChange={updateRange}
+                        />
+                        <HandleChips value={value} range={range} rangePolarity={rangePolarity} />
+                    </div>
                 </div>
 
                 <aside className="demo-side-panel">

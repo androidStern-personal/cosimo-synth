@@ -393,6 +393,13 @@ test("shared filter range editor exposes the universal cutoff, resonance, range,
         assert.equal(snapshot.readoutRange, "Range200 Hz to 3.20 kHz");
         assert.equal(snapshot.readoutWidth, "Width4.00 oct");
         assert.equal(snapshot.readoutQ, "Q4.00");
+        assert.equal(snapshot.chipCount, 4);
+        assert.equal(snapshot.chipCenterCutoff, "800");
+        assert.equal(snapshot.chipCenterQ, "Q 4.0");
+        assert.equal(snapshot.chipStart, "200");
+        assert.equal(snapshot.chipEnd, "3.20k");
+        assert.equal(snapshot.chipSpanDirectionValue, "up");
+        assert.equal(snapshot.chipSpanOctaves, "4.00 oct");
 
         await page.locator('[data-role="filter-range-mode-cycle-button"]').click();
         await page.waitForFunction(() => {
@@ -436,6 +443,7 @@ test("shared filter range editor exposes the universal cutoff, resonance, range,
         assertAlmostEqual(snapshot.range.endCutoffHz, expectedDraggedEndCutoff, 5);
         assertAlmostEqual(snapshot.value.cutoffHz, beforeEndDrag.value.cutoffHz, 1e-6);
         assert.equal(snapshot.readoutCenter, "Center800 Hz");
+        assert.equal(snapshot.chipSpanDirectionValue, "up");
         assert.deepEqual(snapshot.editLog.slice(-2), ["start:range-end", "end:range-end"]);
 
         const beforeValueDrag = snapshot;

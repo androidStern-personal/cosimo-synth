@@ -150,6 +150,104 @@
     font-weight: 800;
 }
 
+.filter-range-editor__chips {
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    overflow: visible;
+    pointer-events: none;
+}
+
+.filter-range-editor__chip {
+    position: absolute;
+    left: calc(24px + (100% - 48px) * var(--filter-range-chip-norm));
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    border: 1px solid rgba(28, 28, 28, 0.28);
+    border-radius: 4px;
+    padding: 4px 7px;
+    color: #f0ece6;
+    background: #1c1c1c;
+    font-size: 11px;
+    font-weight: 800;
+    line-height: 1.15;
+    white-space: nowrap;
+    transform: translateX(-50%);
+}
+
+.filter-range-editor__chip--center {
+    bottom: 84px;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.filter-range-editor__chip-q {
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    opacity: 0.62;
+}
+
+.filter-range-editor__chip--start,
+.filter-range-editor__chip--end {
+    bottom: 56px;
+}
+
+.filter-range-editor__chip--start {
+    color: #1c1c1c;
+    border-color: rgba(0, 100, 140, 0.35);
+    background: #00b4d8;
+}
+
+.filter-range-editor__chip--end {
+    color: #f0ece6;
+    border-color: rgba(200, 40, 20, 0.28);
+    background: #e8604c;
+}
+
+.filter-range-editor__chip--start::after,
+.filter-range-editor__chip--end::after {
+    position: absolute;
+    bottom: -6px;
+    left: 50%;
+    width: 0;
+    height: 0;
+    border-right: 5px solid transparent;
+    border-left: 5px solid transparent;
+    content: "";
+    transform: translateX(-50%);
+}
+
+.filter-range-editor__chip--start::after {
+    border-top: 6px solid #00b4d8;
+}
+
+.filter-range-editor__chip--end::after {
+    border-top: 6px solid #e8604c;
+}
+
+.filter-range-editor__chip--span {
+    bottom: 36px;
+    gap: 3px;
+    border: 0;
+    border-radius: 3px;
+    padding: 2px 6px;
+    color: rgba(28, 28, 28, 0.58);
+    background: rgba(240, 236, 230, 0.72);
+    font-size: 10px;
+    font-weight: 700;
+}
+
+.filter-range-editor__chip-direction {
+    font-size: 11px;
+    line-height: 1;
+}
+
+.filter-range-editor__chip-octaves {
+    letter-spacing: 0.01em;
+}
+
 .filter-range-editor__readout {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -202,5 +300,32 @@
 
     .filter-range-editor__readout strong {
         font-size: 15px;
+    }
+
+    .filter-range-editor__chip {
+        padding: 3px 5px;
+        font-size: 9px;
+    }
+
+    .filter-range-editor__chip-q {
+        display: none;
+    }
+
+    .filter-range-editor__chip--center {
+        bottom: 76px;
+    }
+
+    .filter-range-editor__chip--start,
+    .filter-range-editor__chip--end {
+        bottom: 52px;
+    }
+
+    .filter-range-editor__chip--span {
+        bottom: 32px;
+        font-size: 9px;
+    }
+
+    .filter-range-editor__chip-octaves {
+        display: none;
     }
 }

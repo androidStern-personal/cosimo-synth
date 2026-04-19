@@ -770,6 +770,11 @@ test("seqfx_grid_cell_and_inspector_edits_send_complete_pattern_uploads", async 
     const filterEditor = page.locator('[data-role="filter-range-editor"]');
     await filterEditor.waitFor();
     assert.equal(await page.locator('[data-role="seqfx-param"][data-param="1"]').count(), 0);
+    assert.equal(await filterEditor.locator('[data-role="filter-range-readout"]').count(), 0);
+    assert.equal(await filterEditor.locator(".filter-range-editor__chip").count(), 4);
+    assert.equal(await filterEditor.locator('[data-role="filter-range-chip-start"]').count(), 1);
+    assert.equal(await filterEditor.locator('[data-role="filter-range-chip-end"]').count(), 1);
+    assert.equal(await filterEditor.locator('[data-role="filter-range-chip-span"]').getAttribute("data-direction"), "down");
 
     const sidebarFit = await filterEditor.evaluate((node) => {
         const inspector = node.closest('[data-role="seqfx-inspector"]');

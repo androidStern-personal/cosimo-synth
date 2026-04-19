@@ -1,0 +1,1054 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>SeqFX Stutter Editor — Interactive</title>
+        <style>
+            :root {
+                color: #1c1c1c;
+                background: #d8d0c3;
+                font-family: "Geist", "Avenir Next", "Helvetica Neue", Arial, sans-serif;
+                font-synthesis: none;
+                text-rendering: geometricPrecision;
+            }
+
+            * { box-sizing: border-box; }
+            html, body { margin: 0; min-height: 100%; }
+
+            .page {
+                min-height: 100dvh;
+                padding: 24px;
+                background:
+                    linear-gradient(90deg, rgba(28,28,28,0.055) 1px, transparent 1px) 0 0 / 44px 44px,
+                    linear-gradient(0deg,  rgba(28,28,28,0.045) 1px, transparent 1px) 0 0 / 44px 44px,
+                    #d8d0c3;
+            }
+
+            .shell {
+                max-width: 1200px;
+                margin: 0 auto;
+                padding: 22px;
+                border: 1px solid #1c1c1c;
+                background: #f0ece6;
+            }
+
+            .eyebrow {
+                margin: 0 0 6px;
+                color: #6f716d;
+                font-size: 11px;
+                font-weight: 800;
+                letter-spacing: 0.02em;
+                text-transform: uppercase;
+            }
+
+            h1 {
+                margin: 0 0 10px;
+                font-size: clamp(28px, 3.1vw, 40px);
+                line-height: 0.98;
+                letter-spacing: 0;
+            }
+
+            .lede {
+                max-width: 72ch;
+                margin: 0 0 20px;
+                color: #42413d;
+                font-size: 14px;
+                line-height: 1.5;
+            }
+
+            .tips {
+                margin: 0 0 22px;
+                padding: 14px 18px;
+                border: 1px solid #1c1c1c;
+                background: #e4ded3;
+            }
+
+            .tips h2 {
+                margin: 0 0 8px;
+                color: #6f716d;
+                font-size: 11px;
+                font-weight: 800;
+                letter-spacing: 0.02em;
+                text-transform: uppercase;
+            }
+
+            .tips ul {
+                margin: 0;
+                padding: 0 0 0 18px;
+                font-size: 13px;
+                line-height: 1.5;
+            }
+
+            .tips li + li { margin-top: 3px; }
+
+            .tips code {
+                padding: 1px 5px;
+                border-radius: 3px;
+                background: rgba(28,28,28,0.08);
+                font-family: Menlo, Monaco, monospace;
+                font-size: 12px;
+            }
+
+            .workbench {
+                display: grid;
+                grid-template-columns: minmax(0, 1.6fr) minmax(220px, 0.8fr);
+                gap: 20px;
+                align-items: start;
+            }
+
+            @media (max-width: 820px) {
+                .workbench { grid-template-columns: 1fr; }
+            }
+
+            /* ── Dark inspector frame ───────────────────────────────── */
+
+            .inspector {
+                display: grid;
+                gap: 12px;
+                padding: 14px;
+                border: 1px solid rgba(238, 242, 239, 0.12);
+                border-radius: 8px;
+                background: #151816;
+                color: #eef2ef;
+                font-family: "Avenir Next", "Helvetica Neue", Arial, sans-serif;
+            }
+
+            .inspector .kicker {
+                color: #f2d16b;
+                font-size: 10px;
+                font-weight: 800;
+                letter-spacing: 0.08em;
+                text-transform: uppercase;
+            }
+
+            .inspector .title {
+                display: flex;
+                align-items: baseline;
+                justify-content: space-between;
+                gap: 8px;
+                color: #f6faf7;
+                font-size: 16px;
+                font-weight: 700;
+            }
+
+            .inspector .title em {
+                padding: 2px 6px;
+                border: 1px solid rgba(242, 209, 107, 0.4);
+                border-radius: 999px;
+                color: #f2d16b;
+                font-size: 10px;
+                font-style: normal;
+                font-weight: 700;
+            }
+
+            /* ── Beige editor ───────────────────────────────────────── */
+
+            .editor {
+                position: relative;
+                border: 1px solid #1c1c1c;
+                background: #e4ded3;
+                font-family: "Geist", "Avenir Next", "Helvetica Neue", Arial, sans-serif;
+                color: #1c1c1c;
+                overflow: hidden;
+            }
+
+            .editor__surface {
+                display: block;
+                width: 100%;
+                height: auto;
+                touch-action: none;
+                cursor: crosshair;
+            }
+
+            .canvas-wrap { position: relative; }
+
+            .grid-line { stroke: rgba(28,28,28,0.12); stroke-width: 1; shape-rendering: crispEdges; }
+            .axis      { stroke: rgba(28,28,28,0.44); stroke-width: 1; shape-rendering: crispEdges; }
+            .env-path  { fill: none; stroke: #1c1c1c; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+            .env-fill  { fill: rgba(242, 209, 107, 0.38); }
+            .gate-region { fill: rgba(232, 96, 76, 0.14); stroke: rgba(232, 96, 76, 0.55); stroke-dasharray: 3 4; stroke-width: 1; }
+            .gate-line { stroke: rgba(232,96,76,0.7); stroke-width: 1; stroke-dasharray: 3 4; }
+            .gate-handle {
+                fill: #e8604c;
+                stroke: #1c1c1c;
+                stroke-width: 1.5;
+                cursor: grab;
+            }
+            .gate-handle:active { cursor: grabbing; }
+            .axis-label  { fill: #6f716d; font-size: 10px; font-weight: 800; font-family: Menlo, Monaco, monospace; }
+            .wave-silhouette { fill: rgba(28,28,28,0.16); pointer-events: none; }
+
+            .gate-chip-rect {
+                fill: #e8604c;
+                stroke: #1c1c1c;
+                stroke-width: 1;
+            }
+
+            .gate-chip-text {
+                fill: #f0ece6;
+                font-family: Menlo, Monaco, monospace;
+                font-size: 10px;
+                font-weight: 800;
+                letter-spacing: 0.04em;
+                pointer-events: none;
+                user-select: none;
+            }
+
+            /* ── Repeat strip ───────────────────────────────────────── */
+
+            .repeat-strip {
+                display: flex;
+                gap: 2px;
+                align-items: stretch;
+                height: 10px;
+                padding: 4px 6px;
+                border-top: 1px solid rgba(28,28,28,0.18);
+                background: rgba(28,28,28,0.04);
+            }
+
+            .repeat-strip .tick {
+                flex: 1;
+                min-width: 0;
+                border-radius: 1px;
+                background: rgba(28,28,28,0.38);
+            }
+
+            .repeat-strip .tick.first   { background: #1c1c1c; }
+            .repeat-strip .tick.playing { background: #f2d16b; }
+
+            /* ── Morph slider (enlarged hit target for mobile) ──────── */
+
+            .morph {
+                display: grid;
+                gap: 6px;
+                padding: 10px 12px 14px;
+                border-top: 1px solid rgba(28,28,28,0.18);
+            }
+
+            .morph__labels {
+                display: flex;
+                justify-content: space-between;
+                color: #6f716d;
+                font-size: 9px;
+                font-weight: 800;
+                letter-spacing: 0.02em;
+                text-transform: uppercase;
+            }
+
+            .morph__labels span {
+                padding: 2px 4px;
+                cursor: pointer;
+                user-select: none;
+                border-radius: 3px;
+            }
+
+            .morph__labels span:hover {
+                background: rgba(28,28,28,0.08);
+                color: #1c1c1c;
+            }
+
+            .morph__track {
+                position: relative;
+                height: 24px;
+                padding: 5px 0;
+                border: 0;
+                background: transparent;
+                cursor: ew-resize;
+                touch-action: none;
+                user-select: none;
+            }
+
+            .morph__track .rail {
+                position: absolute;
+                left: 0;
+                right: 0;
+                top: 5px;
+                bottom: 5px;
+                border: 1px solid #1c1c1c;
+                background:
+                    linear-gradient(90deg,
+                        rgba(28,28,28,0.08) 0 16.66%,
+                        rgba(28,28,28,0.16) 16.66% 33.33%,
+                        rgba(28,28,28,0.08) 33.33% 50%,
+                        rgba(28,28,28,0.16) 50% 66.66%,
+                        rgba(28,28,28,0.08) 66.66% 83.33%,
+                        rgba(28,28,28,0.16) 83.33% 100%);
+                pointer-events: none;
+            }
+
+            .morph__track .notch {
+                position: absolute;
+                top: 2px;
+                bottom: 2px;
+                width: 1px;
+                background: rgba(28,28,28,0.55);
+                pointer-events: none;
+            }
+
+            .morph__track .thumb {
+                position: absolute;
+                top: 1px;
+                width: 12px;
+                height: 22px;
+                border: 1.5px solid #1c1c1c;
+                background: #f2d16b;
+                box-shadow: 0 2px 0 rgba(28,28,28,0.15);
+                transform: translateX(-50%);
+                pointer-events: none;
+            }
+
+            /* ── Corner overlay pills ───────────────────────────────── */
+
+            .overlay-pill {
+                position: absolute;
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                padding: 4px 6px;
+                border: 1px solid rgba(28,28,28,0.42);
+                border-radius: 6px;
+                background: rgba(240, 236, 230, 0.92);
+                box-shadow: 0 2px 6px rgba(28,28,28,0.1);
+                touch-action: manipulation;
+                user-select: none;
+            }
+
+            .overlay-pill--slices { top: 10px; left: 10px; }
+            .overlay-pill--speed  { top: 10px; right: 10px; }
+
+            .overlay-pill label {
+                color: #6f716d;
+                font-size: 9px;
+                font-weight: 800;
+                letter-spacing: 0.04em;
+                text-transform: uppercase;
+            }
+
+            .overlay-pill button {
+                width: 22px;
+                height: 22px;
+                padding: 0;
+                border: 1px solid rgba(28,28,28,0.38);
+                border-radius: 3px;
+                background: transparent;
+                font-family: inherit;
+                font-size: 12px;
+                font-weight: 800;
+                cursor: pointer;
+                touch-action: manipulation;
+            }
+
+            .overlay-pill button:hover:not(:disabled) { background: rgba(28,28,28,0.08); }
+            .overlay-pill button:active:not(:disabled) { background: rgba(28,28,28,0.16); }
+            .overlay-pill button:disabled {
+                opacity: 0.3;
+                cursor: not-allowed;
+            }
+
+            .overlay-pill .val {
+                min-width: 28px;
+                padding: 0 2px;
+                text-align: center;
+                font-family: Menlo, Monaco, monospace;
+                font-size: 11px;
+                font-weight: 800;
+            }
+
+            .overlay-pill--speed .val { min-width: 40px; }
+
+            @media (max-width: 480px) {
+                .overlay-pill { padding: 3px 4px; gap: 4px; }
+                .overlay-pill label { font-size: 8px; }
+                .overlay-pill button { width: 20px; height: 20px; font-size: 11px; }
+                .overlay-pill .val { font-size: 10px; min-width: 24px; }
+                .overlay-pill--speed .val { min-width: 36px; }
+            }
+
+            @media (max-width: 360px) {
+                .overlay-pill label { display: none; }
+            }
+
+            /* ── Mix row ────────────────────────────────────────────── */
+
+            .mix-row {
+                display: grid;
+                grid-template-columns: auto 1fr auto;
+                align-items: center;
+                gap: 10px;
+                padding: 8px 14px;
+                border-top: 1px solid rgba(238,242,239,0.14);
+                font-size: 11px;
+                color: #b7c5bc;
+                font-weight: 700;
+            }
+
+            .mix-row .bar {
+                position: relative;
+                height: 6px;
+                border-radius: 3px;
+                background: rgba(255,255,255,0.08);
+            }
+
+            .mix-row .bar .fill {
+                position: absolute;
+                top: 0;
+                left: 0;
+                bottom: 0;
+                width: 82%;
+                border-radius: 3px;
+                background: #8bbf9a;
+            }
+
+            .mix-row .val {
+                font-family: Menlo, Monaco, monospace;
+                color: #eef2ef;
+                font-weight: 700;
+            }
+
+            /* ── State readout panel ────────────────────────────────── */
+
+            .state-panel {
+                display: grid;
+                gap: 10px;
+                padding: 14px;
+                border: 1px solid #1c1c1c;
+                background: #ebe5da;
+            }
+
+            .state-panel h2 {
+                margin: 0;
+                color: #6f716d;
+                font-size: 11px;
+                font-weight: 800;
+                letter-spacing: 0.02em;
+                text-transform: uppercase;
+            }
+
+            .state-panel .grid {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 1px;
+                background: rgba(28,28,28,0.18);
+                border: 1px solid rgba(28,28,28,0.18);
+            }
+
+            .state-panel .cell {
+                display: grid;
+                gap: 4px;
+                padding: 10px 12px;
+                background: #f0ece6;
+                min-width: 0;
+            }
+
+            .state-panel .cell span {
+                color: #6f716d;
+                font-size: 10px;
+                font-weight: 800;
+                letter-spacing: 0.02em;
+                text-transform: uppercase;
+            }
+
+            .state-panel .cell strong {
+                font-family: Menlo, Monaco, monospace;
+                font-size: 14px;
+                font-weight: 800;
+                color: #1c1c1c;
+                overflow-wrap: anywhere;
+            }
+
+            .state-panel .reset {
+                margin: 0;
+                padding: 8px 10px;
+                border: 1px solid rgba(28,28,28,0.42);
+                border-radius: 4px;
+                color: #1c1c1c;
+                background: transparent;
+                font-family: inherit;
+                font-size: 12px;
+                font-weight: 700;
+                cursor: pointer;
+            }
+
+            .state-panel .reset:hover { background: rgba(28,28,28,0.08); }
+
+            /* ── Edge cases note ────────────────────────────────────── */
+
+            .edges {
+                margin-top: 20px;
+                padding: 14px 18px;
+                border: 1px solid rgba(28,28,28,0.22);
+                background: #f0ece6;
+            }
+
+            .edges h2 {
+                margin: 0 0 8px;
+                color: #6f716d;
+                font-size: 11px;
+                font-weight: 800;
+                letter-spacing: 0.02em;
+                text-transform: uppercase;
+            }
+
+            .edges dl {
+                display: grid;
+                grid-template-columns: auto 1fr;
+                gap: 6px 14px;
+                margin: 0;
+                font-size: 13px;
+                line-height: 1.5;
+            }
+
+            .edges dt {
+                color: #1c1c1c;
+                font-weight: 800;
+            }
+
+            .edges dd {
+                margin: 0;
+                color: #42413d;
+            }
+
+            footer {
+                margin-top: 22px;
+                padding-top: 16px;
+                border-top: 1px solid rgba(28,28,28,0.22);
+                color: #6f716d;
+                font-size: 11px;
+                font-weight: 700;
+                letter-spacing: 0.02em;
+                text-transform: uppercase;
+            }
+        </style>
+    </head>
+    <body>
+        <main class="page">
+            <section class="shell">
+                <p class="eyebrow">SeqFX · Stutter Lane · Interactive</p>
+                <h1>H, live.</h1>
+                <p class="lede">
+                    Direction H with real drag, step, and morph. Gate label moved
+                    down into a chip that hugs the handle so it never collides with
+                    the corner pills, and clamps inside the plot at the edges.
+                    Tested on mouse and touch; responsive down to ~320 px wide.
+                </p>
+
+                <section class="tips">
+                    <h2>Try it</h2>
+                    <ul>
+                        <li>Drag the coral handle — or tap anywhere on the canvas — to set <strong>Gate</strong>.</li>
+                        <li>Drag the yellow thumb on the slider, or tap a family name, to change <strong>Shape</strong>.</li>
+                        <li>Tap <code>−</code> / <code>+</code> on the corner pills to step <strong>Slices</strong> (2–32) and <strong>Speed</strong> (0.50×–2.00×).</li>
+                        <li>Drag Gate all the way to each edge — the <strong>gate chip</strong> pins in place while the handle keeps moving.</li>
+                    </ul>
+                </section>
+
+                <section class="workbench">
+                    <div class="inspector" id="inspector">
+                        <span class="kicker">Stutter · block 9 – 16</span>
+                        <div class="title">
+                            <span>Cut envelope</span>
+                            <em id="slice-count-em">×8</em>
+                        </div>
+                        <div class="editor">
+                            <div class="canvas-wrap">
+                                <svg
+                                    class="editor__surface"
+                                    id="canvas"
+                                    viewBox="0 0 480 220"
+                                    preserveAspectRatio="none"
+                                    aria-label="Cut envelope editor"
+                                >
+                                    <!-- grid -->
+                                    <line class="grid-line" x1="24"  x2="24"  y1="20" y2="180"/>
+                                    <line class="grid-line" x1="132" x2="132" y1="20" y2="180"/>
+                                    <line class="grid-line" x1="240" x2="240" y1="20" y2="180"/>
+                                    <line class="grid-line" x1="348" x2="348" y1="20" y2="180"/>
+                                    <line class="grid-line" x1="456" x2="456" y1="20" y2="180"/>
+                                    <line class="axis"      x1="24"  x2="456" y1="100" y2="100"/>
+                                    <line class="axis"      x1="24"  x2="24"  y1="20"  y2="180"/>
+                                    <line class="axis"      x1="24"  x2="456" y1="180" y2="180"/>
+
+                                    <!-- captured-audio silhouette (static decoration) -->
+                                    <path class="wave-silhouette"
+                                          d="M 24 100
+                                             L 34 84  L 44 110 L 54 88  L 64 114 L 74 74  L 84 122
+                                             L 94 80  L 104 118 L 114 72 L 124 126 L 134 76 L 144 118
+                                             L 154 62 L 164 138 L 174 70 L 184 124 L 194 78 L 204 114
+                                             L 214 66 L 224 134 L 234 74 L 244 122 L 254 76 L 264 118
+                                             L 274 82 L 284 112 L 294 76 L 304 120 L 314 80 L 324 116
+                                             L 334 88 L 344 110 L 354 90 L 364 108 L 374 92 L 384 106
+                                             L 394 94 L 404 104 L 414 96 L 424 102 L 434 98 L 444 100
+                                             L 456 100
+                                             L 444 100 L 434 102 L 424 98  L 414 104 L 404 96  L 394 106
+                                             L 384 94  L 374 108 L 364 92  L 354 110 L 344 90  L 334 112
+                                             L 324 124 L 314 120 L 304 128 L 294 124 L 284 128 L 274 122
+                                             L 264 130 L 254 124 L 244 134 L 234 126 L 224 138 L 214 120
+                                             L 204 130 L 194 118 L 184 134 L 174 108 L 164 144 L 154 100
+                                             L 144 136 L 134 104 L 124 142 L 114 104 L 104 130 L 94 106
+                                             L 84 126  L 74 108  L 64 124  L 54 108  L 44 120  L 34 108
+                                             L 24 100 Z"/>
+
+                                    <!-- dynamic shapes -->
+                                    <rect class="gate-region" id="gate-region" x="312" y="20" width="144" height="160" rx="2"/>
+                                    <path class="env-fill" id="env-fill" d=""/>
+                                    <path class="env-path" id="env-line" d=""/>
+                                    <line class="gate-line" id="gate-line" x1="312" x2="312" y1="20" y2="180"/>
+                                    <circle class="gate-handle" id="gate-handle" cx="312" cy="180" r="8.5"/>
+
+                                    <!-- gate chip: follows handle, clamped inside the plot -->
+                                    <g id="gate-chip" transform="translate(312, 158)">
+                                        <rect class="gate-chip-rect" x="-34" y="-9" width="68" height="18" rx="3"/>
+                                        <text class="gate-chip-text" id="gate-chip-text" x="0" y="4" text-anchor="middle">GATE 68%</text>
+                                    </g>
+
+                                    <!-- axis labels -->
+                                    <text class="axis-label" x="24"  y="200" text-anchor="start">0</text>
+                                    <text class="axis-label" x="240" y="200" text-anchor="middle">½ cut</text>
+                                    <text class="axis-label" x="456" y="200" text-anchor="end">1 cut</text>
+                                </svg>
+
+                                <div class="overlay-pill overlay-pill--slices">
+                                    <label>Slices</label>
+                                    <button type="button" id="slices-minus" aria-label="Fewer slices">−</button>
+                                    <span class="val" id="slices-val">8</span>
+                                    <button type="button" id="slices-plus" aria-label="More slices">+</button>
+                                </div>
+                                <div class="overlay-pill overlay-pill--speed">
+                                    <label>Speed</label>
+                                    <button type="button" id="speed-minus" aria-label="Slower">−</button>
+                                    <span class="val" id="speed-val">1.00×</span>
+                                    <button type="button" id="speed-plus" aria-label="Faster">+</button>
+                                </div>
+                            </div>
+
+                            <div class="repeat-strip" id="repeat-strip" aria-label="Repeats per block"></div>
+
+                            <div class="morph">
+                                <div class="morph__labels" id="morph-labels">
+                                    <span data-stop="0">Gate</span>
+                                    <span data-stop="1">Eased</span>
+                                    <span data-stop="2">Triangle</span>
+                                    <span data-stop="3">Bell</span>
+                                    <span data-stop="4">Ramp↓</span>
+                                    <span data-stop="5">Ramp↑</span>
+                                </div>
+                                <div class="morph__track" id="morph-track" role="slider"
+                                     aria-label="Shape morph"
+                                     aria-valuemin="0" aria-valuemax="1" aria-valuenow="0.55">
+                                    <span class="rail"></span>
+                                    <span class="notch" style="left: 16.66%"></span>
+                                    <span class="notch" style="left: 33.33%"></span>
+                                    <span class="notch" style="left: 50%"></span>
+                                    <span class="notch" style="left: 66.66%"></span>
+                                    <span class="notch" style="left: 83.33%"></span>
+                                    <span class="thumb" id="morph-thumb" style="left: 55%"></span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mix-row">
+                            <span>Block mix</span>
+                            <div class="bar"><div class="fill"></div></div>
+                            <span class="val">0.82</span>
+                        </div>
+                    </div>
+
+                    <aside class="state-panel" aria-live="polite">
+                        <h2>Live state</h2>
+                        <div class="grid">
+                            <div class="cell">
+                                <span>Slices</span>
+                                <strong id="readout-slices">8</strong>
+                            </div>
+                            <div class="cell">
+                                <span>Speed</span>
+                                <strong id="readout-speed">1.00×</strong>
+                            </div>
+                            <div class="cell">
+                                <span>Shape</span>
+                                <strong id="readout-shape">Triangle → Bell (0.55)</strong>
+                            </div>
+                            <div class="cell">
+                                <span>Gate</span>
+                                <strong id="readout-gate">68%</strong>
+                            </div>
+                        </div>
+                        <button class="reset" id="reset-btn" type="button">Reset to defaults</button>
+                    </aside>
+                </section>
+
+                <section class="edges">
+                    <h2>Edge cases exercised</h2>
+                    <dl>
+                        <dt>Gate label collision</dt>
+                        <dd>Label moved down and pinned to the handle; it can never reach the top corners.</dd>
+                        <dt>Gate at x = 0 / x = 1</dt>
+                        <dd>Handle and dashed guide go all the way; chip clamps so it stays fully visible inside the plot.</dd>
+                        <dt>Gate = 0 %</dt>
+                        <dd>Envelope collapses to silence, fill and line disappear, gated region covers the plot.</dd>
+                        <dt>Shape = Hard Gate</dt>
+                        <dd>Envelope is a square pulse; fill has vertical sides at x = 0 and x = gate.</dd>
+                        <dt>Bell → Ramp↓ morph</dt>
+                        <dd>The bell's peak slides from center toward the left edge; as it pins, the Hann curvature flattens into a straight descending line. Every intermediate is a real, plausible envelope — no bell-plus-ramp hybrids.</dd>
+                        <dt>Ramp↓ → Ramp↑ morph</dt>
+                        <dd>Starts as a straight descending line, tightens into a plucky (1 − u)^k decay as the slider approaches the midpoint, flips direction exactly at 0.5 into a matching u^k plucky rise, then relaxes back to a straight ascending line at Ramp↑. Peak amplitude stays at 1 throughout — both sides of the flip share the same exponent k_max = 5.</dd>
+                        <dt>Shape = Ramp↓ / Ramp↑</dt>
+                        <dd>Envelope reaches max at one edge of the audible region and may visually brush the nearby corner pill — noted, not dodged.</dd>
+                        <dt>Narrow viewport (≈ 320 – 480 px)</dt>
+                        <dd>Pill buttons shrink to 20 px; below 360 px the “Slices / Speed” labels hide to keep tap targets honest.</dd>
+                        <dt>Touch input</dt>
+                        <dd>Pointer events + <code>setPointerCapture</code>, so drag continues even if the finger leaves the element.</dd>
+                    </dl>
+                </section>
+
+                <footer>
+                    interactive · static · no dependencies · open directly in a browser
+                </footer>
+            </section>
+        </main>
+
+        <script>
+            (function () {
+                "use strict";
+
+                const PLOT = {
+                    left: 24, right: 456, top: 20, bottom: 180,
+                    width: 432, height: 160,
+                };
+
+                const SLICES_MIN = 2;
+                const SLICES_MAX = 32;
+                const SPEED_MIN = 0.5;
+                const SPEED_MAX = 2.0;
+                const SPEED_STEP = 0.05;
+
+                const DEFAULTS = { slices: 8, speed: 1.0, shape: 0.55, gate: 0.68 };
+                const state = Object.assign({}, DEFAULTS);
+
+                // Envelope families, parameterized by u ∈ [0, 1] within the audible region.
+                const EASED_EDGE = 0.12;
+
+                function gateFn(u)      { return 1; }
+                function easedFn(u) {
+                    if (u < EASED_EDGE) return u / EASED_EDGE;
+                    if (u > 1 - EASED_EDGE) return (1 - u) / EASED_EDGE;
+                    return 1;
+                }
+                function triFn(u)       { return u < 0.5 ? 2 * u : 2 * (1 - u); }
+                function bellFn(u)      { const s = Math.sin(Math.PI * u); return s * s; }
+                function rampDownFn(u)  { return 1 - u; }
+                function rampUpFn(u)    { return u; }
+
+                const STATIC_SHAPES = [gateFn, easedFn, triFn, bellFn, rampDownFn, rampUpFn];
+                const SHAPE_NAMES = ["Gate", "Eased", "Triangle", "Bell", "Ramp↓", "Ramp↑"];
+
+                function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+                // Piecewise-linear "tent" with peak at p ∈ [0, 1].
+                // Degenerates to 1 − u at p = 0 (straight descending line) and u at p = 1.
+                function tent(u, p) {
+                    if (p <= 1e-6) return 1 - u;
+                    if (p >= 1 - 1e-6) return u;
+                    if (u <= p) return u / p;
+                    return (1 - u) / (1 - p);
+                }
+
+                // Smooth sin²/cos² bell with peak at p ∈ [0, 1].
+                // p = 0.5 is a symmetric Hann bell. As p → 0 or p → 1 the shoulder on
+                // the pinned side collapses and the other shoulder remains as a cosine tail.
+                function smoothBell(u, p) {
+                    if (p <= 1e-6) return Math.pow(Math.cos(Math.PI * u / 2), 2);
+                    if (p >= 1 - 1e-6) return Math.pow(Math.sin(Math.PI * u / 2), 2);
+                    if (u <= p) return Math.pow(Math.sin(Math.PI * u / (2 * p)), 2);
+                    return Math.pow(Math.cos(Math.PI * (u - p) / (2 * (1 - p))), 2);
+                }
+
+                function envelopeAt(phase, shape, gate) {
+                    if (gate <= 0 || phase >= gate) return 0;
+                    const u = phase / gate;
+                    const pos = shape * (STATIC_SHAPES.length - 1);
+                    const a = clamp(Math.floor(pos), 0, STATIC_SHAPES.length - 2);
+                    const t = pos - a;
+
+                    if (a < 2) {
+                        // Gate → Eased → Triangle: linear crossfade. These stops are
+                        // dissimilar enough that no geometric warp is obvious, and these
+                        // transitions didn't draw complaints.
+                        return (1 - t) * STATIC_SHAPES[a](u) + t * STATIC_SHAPES[a + 1](u);
+                    }
+                    if (a === 2) {
+                        // Triangle → Bell: same peak position (0.5), round out the shoulders.
+                        return (1 - t) * tent(u, 0.5) + t * smoothBell(u, 0.5);
+                    }
+                    if (a === 3) {
+                        // Bell → Ramp↓: slide the peak from 0.5 to 0 and smoothly flatten
+                        // the Hann curvature into a straight line as the peak pins to the edge.
+                        // Every intermediate frame is a real shape, not a bell/ramp hybrid.
+                        const p = 0.5 * (1 - t);
+                        const roundness = 1 - t;
+                        return roundness * smoothBell(u, p) + (1 - roundness) * tent(u, p);
+                    }
+                    // a === 4 — Ramp↓ → Ramp↑: plucky concave arc.
+                    // The line isn't a straight hypotenuse any more. It stays linear at
+                    // the endpoints and bows inward (concave-up) as the slider approaches
+                    // the midpoint, raising (1 − u) or u to a growing exponent. At exactly
+                    // t = 0.5 the direction flips: left-hugging (1 − u)^k_max becomes
+                    // right-hugging u^k_max, both at identical peak amplitude.
+                    const RAMP_MAX_EXTRA_CONCAVITY = 4;
+                    if (t <= 0.5) {
+                        const k = 1 + 2 * t * RAMP_MAX_EXTRA_CONCAVITY;
+                        return Math.pow(1 - u, k);
+                    }
+                    {
+                        const k = 1 + 2 * (1 - t) * RAMP_MAX_EXTRA_CONCAVITY;
+                        return Math.pow(u, k);
+                    }
+                }
+
+                function buildEnvelopePaths(s) {
+                    const samples = 200;
+                    const pts = [];
+                    for (let i = 0; i <= samples; i++) {
+                        const phase = i / samples;
+                        const y = envelopeAt(phase, s.shape, s.gate);
+                        const x = PLOT.left + PLOT.width * phase;
+                        const py = PLOT.bottom - PLOT.height * y;
+                        pts.push(x.toFixed(1) + " " + py.toFixed(1));
+                    }
+                    const line = "M " + pts.join(" L ");
+                    const fill = "M " + PLOT.left + " " + PLOT.bottom
+                               + " L " + pts.join(" L ")
+                               + " L " + PLOT.right + " " + PLOT.bottom + " Z";
+                    return { line, fill };
+                }
+
+                function shapeLabel(shape) {
+                    const pos = shape * (STATIC_SHAPES.length - 1);
+                    const a = clamp(Math.floor(pos), 0, STATIC_SHAPES.length - 1);
+                    const t = pos - a;
+                    if (t < 0.04) return SHAPE_NAMES[a] + " (" + shape.toFixed(2) + ")";
+                    if (t > 0.96 && a + 1 < SHAPE_NAMES.length) return SHAPE_NAMES[a + 1] + " (" + shape.toFixed(2) + ")";
+                    if (a + 1 >= SHAPE_NAMES.length) return SHAPE_NAMES[a] + " (" + shape.toFixed(2) + ")";
+                    return SHAPE_NAMES[a] + " → " + SHAPE_NAMES[a + 1] + " (" + shape.toFixed(2) + ")";
+                }
+
+                const els = {
+                    canvas: document.getElementById("canvas"),
+                    envLine: document.getElementById("env-line"),
+                    envFill: document.getElementById("env-fill"),
+                    gateLine: document.getElementById("gate-line"),
+                    gateRegion: document.getElementById("gate-region"),
+                    gateHandle: document.getElementById("gate-handle"),
+                    gateChip: document.getElementById("gate-chip"),
+                    gateChipText: document.getElementById("gate-chip-text"),
+
+                    slicesVal: document.getElementById("slices-val"),
+                    slicesMinus: document.getElementById("slices-minus"),
+                    slicesPlus: document.getElementById("slices-plus"),
+                    speedVal: document.getElementById("speed-val"),
+                    speedMinus: document.getElementById("speed-minus"),
+                    speedPlus: document.getElementById("speed-plus"),
+
+                    morphTrack: document.getElementById("morph-track"),
+                    morphThumb: document.getElementById("morph-thumb"),
+                    morphLabels: document.getElementById("morph-labels"),
+
+                    repeatStrip: document.getElementById("repeat-strip"),
+                    sliceCountEm: document.getElementById("slice-count-em"),
+
+                    readoutSlices: document.getElementById("readout-slices"),
+                    readoutSpeed: document.getElementById("readout-speed"),
+                    readoutShape: document.getElementById("readout-shape"),
+                    readoutGate: document.getElementById("readout-gate"),
+
+                    resetBtn: document.getElementById("reset-btn"),
+                };
+
+                function render() {
+                    const { line, fill } = buildEnvelopePaths(state);
+                    els.envLine.setAttribute("d", line);
+                    els.envFill.setAttribute("d", fill);
+
+                    const gateX = PLOT.left + PLOT.width * state.gate;
+                    els.gateLine.setAttribute("x1", gateX.toFixed(2));
+                    els.gateLine.setAttribute("x2", gateX.toFixed(2));
+                    els.gateRegion.setAttribute("x", gateX.toFixed(2));
+                    els.gateRegion.setAttribute("width", Math.max(0, PLOT.right - gateX).toFixed(2));
+                    els.gateHandle.setAttribute("cx", gateX.toFixed(2));
+
+                    const chipHalfWidth = 34;
+                    const chipX = clamp(gateX, PLOT.left + chipHalfWidth, PLOT.right - chipHalfWidth);
+                    els.gateChip.setAttribute("transform", "translate(" + chipX.toFixed(2) + ", 158)");
+                    els.gateChipText.textContent = "GATE " + Math.round(state.gate * 100) + "%";
+
+                    els.slicesVal.textContent = String(state.slices);
+                    els.slicesMinus.disabled = state.slices <= SLICES_MIN;
+                    els.slicesPlus.disabled = state.slices >= SLICES_MAX;
+                    els.speedVal.textContent = state.speed.toFixed(2) + "×";
+                    els.speedMinus.disabled = state.speed <= SPEED_MIN + 1e-6;
+                    els.speedPlus.disabled = state.speed >= SPEED_MAX - 1e-6;
+                    els.sliceCountEm.textContent = "×" + state.slices;
+
+                    els.morphThumb.style.left = (state.shape * 100).toFixed(2) + "%";
+                    els.morphTrack.setAttribute("aria-valuenow", state.shape.toFixed(2));
+
+                    renderRepeatStrip();
+                    renderReadout();
+                }
+
+                function renderRepeatStrip() {
+                    const strip = els.repeatStrip;
+                    if (strip.childElementCount === state.slices) {
+                        for (let i = 0; i < strip.children.length; i++) {
+                            const tick = strip.children[i];
+                            tick.className = "tick" + (i === 0 ? " first" : i === 1 ? " playing" : "");
+                        }
+                        return;
+                    }
+                    strip.innerHTML = "";
+                    const frag = document.createDocumentFragment();
+                    for (let i = 0; i < state.slices; i++) {
+                        const div = document.createElement("div");
+                        div.className = "tick" + (i === 0 ? " first" : i === 1 ? " playing" : "");
+                        frag.appendChild(div);
+                    }
+                    strip.appendChild(frag);
+                }
+
+                function renderReadout() {
+                    els.readoutSlices.textContent = String(state.slices);
+                    els.readoutSpeed.textContent = state.speed.toFixed(2) + "×";
+                    els.readoutShape.textContent = shapeLabel(state.shape);
+                    els.readoutGate.textContent = Math.round(state.gate * 100) + "%";
+                }
+
+                // ── Gate drag on canvas ────────────────────────────────
+                let gatePointerId = null;
+
+                function gateFromClient(clientX) {
+                    const rect = els.canvas.getBoundingClientRect();
+                    if (rect.width === 0) return state.gate;
+                    const vbX = ((clientX - rect.left) / rect.width) * 480;
+                    const plotX = clamp(vbX, PLOT.left, PLOT.right);
+                    return (plotX - PLOT.left) / PLOT.width;
+                }
+
+                els.canvas.addEventListener("pointerdown", (e) => {
+                    if (e.button !== undefined && e.button !== 0) return;
+                    e.preventDefault();
+                    els.canvas.setPointerCapture(e.pointerId);
+                    gatePointerId = e.pointerId;
+                    state.gate = gateFromClient(e.clientX);
+                    render();
+                });
+
+                els.canvas.addEventListener("pointermove", (e) => {
+                    if (gatePointerId !== e.pointerId) return;
+                    state.gate = gateFromClient(e.clientX);
+                    render();
+                });
+
+                const endGateDrag = (e) => {
+                    if (gatePointerId !== e.pointerId) return;
+                    gatePointerId = null;
+                };
+                els.canvas.addEventListener("pointerup", endGateDrag);
+                els.canvas.addEventListener("pointercancel", endGateDrag);
+
+                // ── Morph slider drag ──────────────────────────────────
+                let morphPointerId = null;
+
+                function morphFromClient(clientX) {
+                    const rect = els.morphTrack.getBoundingClientRect();
+                    if (rect.width === 0) return state.shape;
+                    return clamp((clientX - rect.left) / rect.width, 0, 1);
+                }
+
+                els.morphTrack.addEventListener("pointerdown", (e) => {
+                    if (e.button !== undefined && e.button !== 0) return;
+                    e.preventDefault();
+                    els.morphTrack.setPointerCapture(e.pointerId);
+                    morphPointerId = e.pointerId;
+                    state.shape = morphFromClient(e.clientX);
+                    render();
+                });
+
+                els.morphTrack.addEventListener("pointermove", (e) => {
+                    if (morphPointerId !== e.pointerId) return;
+                    state.shape = morphFromClient(e.clientX);
+                    render();
+                });
+
+                const endMorphDrag = (e) => {
+                    if (morphPointerId !== e.pointerId) return;
+                    morphPointerId = null;
+                };
+                els.morphTrack.addEventListener("pointerup", endMorphDrag);
+                els.morphTrack.addEventListener("pointercancel", endMorphDrag);
+
+                // Keyboard: left/right on the slider
+                els.morphTrack.tabIndex = 0;
+                els.morphTrack.addEventListener("keydown", (e) => {
+                    const step = e.shiftKey ? 0.1 : 0.02;
+                    if (e.key === "ArrowLeft") {
+                        state.shape = clamp(state.shape - step, 0, 1);
+                        render();
+                        e.preventDefault();
+                    } else if (e.key === "ArrowRight") {
+                        state.shape = clamp(state.shape + step, 0, 1);
+                        render();
+                        e.preventDefault();
+                    } else if (e.key === "Home") {
+                        state.shape = 0;
+                        render();
+                        e.preventDefault();
+                    } else if (e.key === "End") {
+                        state.shape = 1;
+                        render();
+                        e.preventDefault();
+                    }
+                });
+
+                // Morph labels snap to a notch
+                els.morphLabels.addEventListener("click", (e) => {
+                    const target = e.target.closest("span[data-stop]");
+                    if (!target) return;
+                    const idx = Number(target.getAttribute("data-stop"));
+                    if (!Number.isFinite(idx)) return;
+                    state.shape = idx / (SHAPES.length - 1);
+                    render();
+                });
+
+                // ── Slices / Speed steppers ────────────────────────────
+                function roundSpeed(v) { return Math.round(v * 100) / 100; }
+
+                els.slicesMinus.addEventListener("click", () => {
+                    state.slices = clamp(state.slices - 1, SLICES_MIN, SLICES_MAX);
+                    render();
+                });
+                els.slicesPlus.addEventListener("click", () => {
+                    state.slices = clamp(state.slices + 1, SLICES_MIN, SLICES_MAX);
+                    render();
+                });
+                els.speedMinus.addEventListener("click", () => {
+                    state.speed = roundSpeed(clamp(state.speed - SPEED_STEP, SPEED_MIN, SPEED_MAX));
+                    render();
+                });
+                els.speedPlus.addEventListener("click", () => {
+                    state.speed = roundSpeed(clamp(state.speed + SPEED_STEP, SPEED_MIN, SPEED_MAX));
+                    render();
+                });
+
+                // ── Reset ──────────────────────────────────────────────
+                els.resetBtn.addEventListener("click", () => {
+                    Object.assign(state, DEFAULTS);
+                    render();
+                });
+
+                // First paint
+                render();
+            }());
+        </script>
+    </body>
+</html>

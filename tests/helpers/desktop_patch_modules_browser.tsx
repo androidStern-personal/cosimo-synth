@@ -2129,6 +2129,7 @@ export async function installSharedFilterRangeEditorHarness(target: HTMLElement)
                     range={range}
                     rangePolarity={rangePolarity}
                     preview={preview}
+                    showHandleChips
                     showModeControls
                     showReadout
                     onValueChange={updateValue}
@@ -2205,6 +2206,14 @@ export async function installSharedFilterRangeEditorHarness(target: HTMLElement)
                 readoutRange: target.querySelector('[data-role="filter-range-readout-range"]')?.textContent ?? "",
                 readoutWidth: target.querySelector('[data-role="filter-range-readout-width"]')?.textContent ?? "",
                 readoutQ: target.querySelector('[data-role="filter-range-readout-q"]')?.textContent ?? "",
+                chipCount: target.querySelectorAll(".filter-range-editor__chip").length,
+                chipCenterCutoff: target.querySelector('[data-role="filter-range-chip-center-cutoff"]')?.textContent ?? "",
+                chipCenterQ: target.querySelector('[data-role="filter-range-chip-center-q"]')?.textContent ?? "",
+                chipStart: target.querySelector('[data-role="filter-range-chip-start"]')?.textContent ?? "",
+                chipEnd: target.querySelector('[data-role="filter-range-chip-end"]')?.textContent ?? "",
+                chipSpanDirection: target.querySelector('[data-role="filter-range-chip-span-direction"]')?.textContent ?? "",
+                chipSpanOctaves: target.querySelector('[data-role="filter-range-chip-span-octaves"]')?.textContent ?? "",
+                chipSpanDirectionValue: target.querySelector('[data-role="filter-range-chip-span"]')?.getAttribute("data-direction") ?? "",
                 valuePath: target.querySelector('[data-role="filter-range-value-response"]')?.getAttribute("d") ?? "",
                 previewPath: target.querySelector('[data-role="filter-range-preview-response"]')?.getAttribute("d") ?? "",
             };

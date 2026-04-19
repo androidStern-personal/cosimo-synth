@@ -70,6 +70,7 @@ export type FilterRangeEditorProps = {
     preview?: FilterRangePreview | null;
     modeOptions?: FilterRangeModeOption[];
     showModeControls?: boolean;
+    showHandleChips?: boolean;
     showReadout?: boolean;
     sampleRateHz?: number;
     qScale?: FilterRangeQScale;
@@ -466,6 +467,19 @@ function formatHz(value: number) {
     return String(Math.round(cutoff));
 }
 
+function formatHzChip(value: number) {
+    const cutoff = clampFilterCutoffHz(value);
+    if (cutoff >= 10_000) {
+        return `${(cutoff / 1000).toFixed(1)}k`;
+    }
+
+    if (cutoff >= 1000) {
+        return `${(cutoff / 1000).toFixed(2)}k`;
+    }
+
+    return String(Math.round(cutoff));
+}
+
 function formatHzLong(value: number) {
     const cutoff = clampFilterCutoffHz(value);
     if (cutoff >= 1000) {
@@ -477,6 +491,12 @@ function formatHzLong(value: number) {
 
 function formatOctaves(value: number) {
     return `${value.toFixed(2)} oct`;
+}
+
+function filterRangeChipStyle(cutoffHz: number) {
+    return {
+        "--filter-range-chip-norm": filterCutoffHzToNormalized(cutoffHz),
+    } as CSSProperties;
 }
 
 function isRangeEditable(props: FilterRangeEditorProps) {
@@ -596,6 +616,7 @@ export function FilterRangeEditor(props: FilterRangeEditorProps) {
         preview = null,
         modeOptions = FILTER_RANGE_MODE_OPTIONS,
         showModeControls = false,
+        showHandleChips = false,
         showReadout = false,
         sampleRateHz = DEFAULT_SAMPLE_RATE_HZ,
         qScale = DEFAULT_FILTER_RANGE_Q_SCALE,
@@ -712,6 +733,10 @@ export function FilterRangeEditor(props: FilterRangeEditorProps) {
             })
             : cutoffRangeOctaves(safeRange.startCutoffHz, safeRange.endCutoffHz);
     }, [rangePolarity, safeRange, safeValue.cutoffHz]);
+    const rangeDirection = safeRange && safeRange.endCutoffHz < safeRange.startCutoffHz ? "down" : "up";
+    const rangeMidpointCutoffHz = safeRange
+        ? geometricCenterCutoffHz(safeRange.startCutoffHz, safeRange.endCutoffHz)
+        : safeValue.cutoffHz;
     const modeLabel = getFilterRangeModeLabel(safeValue.mode, modeOptions);
     const modeCycleAriaLabel = `Cycle filter mode, currently ${modeLabel}`;
 
@@ -1101,6 +1126,67 @@ export function FilterRangeEditor(props: FilterRangeEditorProps) {
                         </text>
                     ))}
                 </svg>
+                {showHandleChips && safeRange ? (
+                    <div
+                        className="filter-range-editor__chips"
+                        data-role="filter-range-chip-layer"
+                        aria-hidden="true"
+                    >
+                        <div
+                            className="filter-range-editor__chip filter-range-editor__chip--center"
+                            data-role="filter-range-chip-center"
+                            style={filterRangeChipStyle(safeValue.cutoffHz)}
+                        >
+                            <span
+                                className="filter-range-editor__chip-hz"
+                                data-role="filter-range-chip-center-cutoff"
+                            >
+                                {formatHzChip(safeValue.cutoffHz)}
+                            </span>
+                            <span
+                                className="filter-range-editor__chip-q"
+                                data-role="filter-range-chip-center-q"
+                            >
+                                Q {safeValue.q.toFixed(1)}
+                            </span>
+                        </div>
+                        {rangePolarity === "bipolar" ? (
+                            <div
+                                className="filter-range-editor__chip filter-range-editor__chip--start"
+                                data-role="filter-range-chip-start"
+                                style={filterRangeChipStyle(safeRange.startCutoffHz)}
+                            >
+                                {formatHzChip(safeRange.startCutoffHz)}
+                            </div>
+                        ) : null}
+                        <div
+                            className="filter-range-editor__chip filter-range-editor__chip--end"
+                            data-role="filter-range-chip-end"
+                            style={filterRangeChipStyle(safeRange.endCutoffHz)}
+                        >
+                            {formatHzChip(safeRange.endCutoffHz)}
+                        </div>
+                        <div
+                            className="filter-range-editor__chip filter-range-editor__chip--span"
+                            data-direction={rangeDirection}
+                            data-role="filter-range-chip-span"
+                            style={filterRangeChipStyle(rangeMidpointCutoffHz)}
+                        >
+                            <span
+                                className="filter-range-editor__chip-direction"
+                                data-role="filter-range-chip-span-direction"
+                            >
+                                {rangeDirection === "down" ? "↙" : "↗"}
+                            </span>
+                            <span
+                                className="filter-range-editor__chip-octaves"
+                                data-role="filter-range-chip-span-octaves"
+                            >
+                                {formatOctaves(Math.abs(rangeWidthOctaves))}
+                            </span>
+                        </div>
+                    </div>
+                ) : null}
             </div>
             {showReadout ? (
                 <div className="filter-range-editor__readout" data-role="filter-range-readout" aria-label="Filter values">

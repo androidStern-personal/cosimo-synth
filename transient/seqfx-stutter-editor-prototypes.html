@@ -1,0 +1,578 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>SeqFX Stutter Editor Prototypes</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            color: #eef2ef;
+            background: #151816;
+            font-family: "Avenir Next", "Helvetica Neue", Arial, sans-serif;
+        }
+
+        .page {
+            display: grid;
+            gap: 22px;
+            padding: 24px;
+        }
+
+        .intro {
+            display: grid;
+            gap: 6px;
+            max-width: 980px;
+        }
+
+        .kicker {
+            color: #8bbf9a;
+            font-size: 11px;
+            font-weight: 800;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        h1,
+        h2,
+        p {
+            margin: 0;
+        }
+
+        h1 {
+            color: #f6faf7;
+            font-size: 30px;
+            line-height: 1;
+        }
+
+        h2 {
+            color: #1c1c1c;
+            font-size: 15px;
+            line-height: 1.1;
+        }
+
+        p {
+            color: rgba(238, 242, 239, 0.68);
+            font-size: 13px;
+            line-height: 1.45;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(330px, 1fr));
+            gap: 18px;
+        }
+
+        .shell {
+            display: grid;
+            gap: 12px;
+            min-width: 0;
+            border: 1px solid rgba(238, 242, 239, 0.12);
+            border-radius: 8px;
+            padding: 14px;
+            background: rgba(255, 255, 255, 0.035);
+        }
+
+        .shell-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        .shell-title {
+            display: grid;
+            gap: 3px;
+            min-width: 0;
+        }
+
+        .shell-title strong {
+            color: #f6faf7;
+            font-size: 18px;
+            line-height: 1.1;
+        }
+
+        .shell-title span {
+            color: rgba(238, 242, 239, 0.56);
+            font-size: 12px;
+        }
+
+        .meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            justify-content: flex-end;
+        }
+
+        .pill {
+            border: 1px solid rgba(139, 191, 154, 0.26);
+            border-radius: 6px;
+            padding: 5px 7px;
+            color: #c5d5cb;
+            background: rgba(139, 191, 154, 0.08);
+            font-size: 11px;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+
+        .editor {
+            display: grid;
+            gap: 12px;
+            border: 1px solid #1c1c1c;
+            background: #e4ded3;
+            color: #1c1c1c;
+        }
+
+        .panel-pad {
+            padding: 12px;
+        }
+
+        .strip {
+            display: grid;
+            grid-template-columns: repeat(8, minmax(0, 1fr));
+            gap: 5px;
+        }
+
+        .cut {
+            position: relative;
+            min-height: 76px;
+            border: 1px solid rgba(28, 28, 28, 0.26);
+            border-radius: 5px;
+            background: rgba(240, 236, 230, 0.72);
+            overflow: hidden;
+        }
+
+        .cut.source {
+            border-color: rgba(0, 180, 216, 0.72);
+            background: rgba(0, 180, 216, 0.13);
+        }
+
+        .cut.repeat {
+            background: rgba(240, 236, 230, 0.86);
+        }
+
+        .cut svg {
+            display: block;
+            width: 100%;
+            height: 100%;
+            min-height: 76px;
+        }
+
+        .cut path.wave {
+            fill: none;
+            stroke: rgba(28, 28, 28, 0.3);
+            stroke-width: 1.4;
+        }
+
+        .cut path.env {
+            fill: rgba(139, 191, 154, 0.18);
+            stroke: #1c1c1c;
+            stroke-width: 2.2;
+            stroke-linejoin: round;
+        }
+
+        .cut text {
+            fill: rgba(28, 28, 28, 0.58);
+            font-size: 8px;
+            font-weight: 800;
+        }
+
+        .controls {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            border-top: 1px solid rgba(28, 28, 28, 0.22);
+        }
+
+        .control {
+            display: grid;
+            gap: 8px;
+            min-width: 0;
+            border-right: 1px solid rgba(28, 28, 28, 0.16);
+            padding: 11px 10px;
+        }
+
+        .control:last-child {
+            border-right: 0;
+        }
+
+        .control span {
+            color: #6f716d;
+            font-size: 10px;
+            font-weight: 800;
+            text-transform: uppercase;
+        }
+
+        .control strong {
+            color: #1c1c1c;
+            font-size: 17px;
+        }
+
+        .mini-slider {
+            position: relative;
+            height: 6px;
+            border-radius: 999px;
+            background: rgba(28, 28, 28, 0.16);
+        }
+
+        .mini-slider::before {
+            position: absolute;
+            inset: 0 auto 0 0;
+            width: var(--value);
+            border-radius: inherit;
+            background: #00b4d8;
+            content: "";
+        }
+
+        .mini-slider::after {
+            position: absolute;
+            top: 50%;
+            left: var(--value);
+            width: 12px;
+            height: 12px;
+            border: 1px solid #1c1c1c;
+            border-radius: 50%;
+            background: #f4923a;
+            content: "";
+            transform: translate(-50%, -50%);
+        }
+
+        .large-curve {
+            display: grid;
+            gap: 8px;
+            padding: 12px;
+        }
+
+        .curve-frame {
+            position: relative;
+            min-height: 170px;
+            border: 1px solid rgba(28, 28, 28, 0.24);
+            border-radius: 6px;
+            background:
+                linear-gradient(rgba(28, 28, 28, 0.08) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(28, 28, 28, 0.08) 1px, transparent 1px),
+                rgba(240, 236, 230, 0.76);
+            background-size: 100% 42px, 52px 100%;
+        }
+
+        .curve-frame svg {
+            display: block;
+            width: 100%;
+            height: 170px;
+        }
+
+        .curve-frame path.fill {
+            fill: rgba(0, 180, 216, 0.19);
+        }
+
+        .curve-frame path.line {
+            fill: none;
+            stroke: #1c1c1c;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            stroke-width: 3.2;
+        }
+
+        .curve-frame path.preview {
+            fill: none;
+            stroke: #f4923a;
+            stroke-linecap: round;
+            stroke-width: 2.2;
+        }
+
+        .badges {
+            display: grid;
+            grid-template-columns: repeat(6, minmax(0, 1fr));
+            gap: 5px;
+        }
+
+        .badge {
+            border: 1px solid rgba(28, 28, 28, 0.22);
+            border-radius: 4px;
+            padding: 6px 4px;
+            color: rgba(28, 28, 28, 0.58);
+            background: rgba(240, 236, 230, 0.7);
+            font-size: 9px;
+            font-weight: 800;
+            text-align: center;
+        }
+
+        .badge.active {
+            color: #1c1c1c;
+            border-color: rgba(0, 180, 216, 0.62);
+            background: rgba(0, 180, 216, 0.2);
+        }
+
+        .two-up {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            padding: 12px;
+        }
+
+        .tile {
+            display: grid;
+            gap: 8px;
+            border: 1px solid rgba(28, 28, 28, 0.24);
+            border-radius: 6px;
+            padding: 10px;
+            background: rgba(240, 236, 230, 0.78);
+        }
+
+        .tile span {
+            color: #6f716d;
+            font-size: 10px;
+            font-weight: 800;
+            text-transform: uppercase;
+        }
+
+        .vertical-stack {
+            display: grid;
+            grid-template-columns: 82px 1fr;
+            gap: 10px;
+            padding: 12px;
+        }
+
+        .stack-cuts {
+            display: grid;
+            gap: 4px;
+        }
+
+        .stack-cuts .cut {
+            min-height: 30px;
+        }
+
+        .stack-cuts .cut svg {
+            min-height: 30px;
+        }
+
+        .readout-column {
+            display: grid;
+            align-content: start;
+            gap: 8px;
+        }
+
+        .big-number {
+            border: 1px solid rgba(28, 28, 28, 0.22);
+            border-radius: 6px;
+            padding: 10px;
+            background: rgba(240, 236, 230, 0.72);
+        }
+
+        .big-number span {
+            display: block;
+            color: #6f716d;
+            font-size: 10px;
+            font-weight: 800;
+            text-transform: uppercase;
+        }
+
+        .big-number strong {
+            display: block;
+            margin-top: 4px;
+            font-size: 23px;
+        }
+
+        .spark {
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            gap: 3px;
+            height: 32px;
+        }
+
+        .spark span {
+            align-self: end;
+            height: var(--h);
+            border-radius: 2px 2px 0 0;
+            background: rgba(28, 28, 28, 0.58);
+        }
+
+        .notes {
+            color: rgba(238, 242, 239, 0.62);
+            font-size: 12px;
+            line-height: 1.42;
+        }
+
+        @media (max-width: 760px) {
+            .controls,
+            .two-up,
+            .vertical-stack {
+                grid-template-columns: 1fr;
+            }
+
+            .badges {
+                grid-template-columns: repeat(3, 1fr);
+            }
+        }
+    </style>
+</head>
+<body>
+    <main class="page">
+        <section class="intro">
+            <span class="kicker">SeqFX Stutter</span>
+            <h1>Envelope And Slice Prototypes</h1>
+            <p>Static mockups for an 8-slice stutter block. The first slice is the captured source; the remaining slices repeat it. Shape morph is 55%, staccato is 68%, speed is 1.00x.</p>
+        </section>
+
+        <section class="grid">
+            <article class="shell">
+                <header class="shell-header">
+                    <div class="shell-title">
+                        <strong>Option 1: Horizontal Timeline</strong>
+                        <span>Best fit for the current inspector width.</span>
+                    </div>
+                    <div class="meta">
+                        <span class="pill">8 cuts</span>
+                        <span class="pill">1.00x</span>
+                    </div>
+                </header>
+                <div class="editor">
+                    <div class="panel-pad">
+                        <div class="strip" aria-label="8 stutter slices">
+                            <div class="cut source"><svg viewBox="0 0 70 76"><path class="wave" d="M6 40 C14 18 22 58 30 38 S48 20 64 42"/><path class="env" d="M7 66 L7 20 C18 16 28 16 37 20 L54 20 C57 36 58 49 58 66 Z"/><text x="7" y="13">SRC</text></svg></div>
+                            <div class="cut repeat"><svg viewBox="0 0 70 76"><path class="wave" d="M6 40 C14 18 22 58 30 38 S48 20 64 42"/><path class="env" d="M7 66 L7 20 C18 16 28 16 37 20 L54 20 C57 36 58 49 58 66 Z"/><text x="7" y="13">R1</text></svg></div>
+                            <div class="cut repeat"><svg viewBox="0 0 70 76"><path class="wave" d="M6 40 C14 18 22 58 30 38 S48 20 64 42"/><path class="env" d="M7 66 L7 20 C18 16 28 16 37 20 L54 20 C57 36 58 49 58 66 Z"/><text x="7" y="13">R2</text></svg></div>
+                            <div class="cut repeat"><svg viewBox="0 0 70 76"><path class="wave" d="M6 40 C14 18 22 58 30 38 S48 20 64 42"/><path class="env" d="M7 66 L7 20 C18 16 28 16 37 20 L54 20 C57 36 58 49 58 66 Z"/><text x="7" y="13">R3</text></svg></div>
+                            <div class="cut repeat"><svg viewBox="0 0 70 76"><path class="wave" d="M6 40 C14 18 22 58 30 38 S48 20 64 42"/><path class="env" d="M7 66 L7 20 C18 16 28 16 37 20 L54 20 C57 36 58 49 58 66 Z"/><text x="7" y="13">R4</text></svg></div>
+                            <div class="cut repeat"><svg viewBox="0 0 70 76"><path class="wave" d="M6 40 C14 18 22 58 30 38 S48 20 64 42"/><path class="env" d="M7 66 L7 20 C18 16 28 16 37 20 L54 20 C57 36 58 49 58 66 Z"/><text x="7" y="13">R5</text></svg></div>
+                            <div class="cut repeat"><svg viewBox="0 0 70 76"><path class="wave" d="M6 40 C14 18 22 58 30 38 S48 20 64 42"/><path class="env" d="M7 66 L7 20 C18 16 28 16 37 20 L54 20 C57 36 58 49 58 66 Z"/><text x="7" y="13">R6</text></svg></div>
+                            <div class="cut repeat"><svg viewBox="0 0 70 76"><path class="wave" d="M6 40 C14 18 22 58 30 38 S48 20 64 42"/><path class="env" d="M7 66 L7 20 C18 16 28 16 37 20 L54 20 C57 36 58 49 58 66 Z"/><text x="7" y="13">R7</text></svg></div>
+                        </div>
+                    </div>
+                    <div class="controls">
+                        <div class="control"><span>Slices</span><strong>8</strong><div class="mini-slider" style="--value: 23%"></div></div>
+                        <div class="control"><span>Speed</span><strong>1.00x</strong><div class="mini-slider" style="--value: 50%"></div></div>
+                        <div class="control"><span>Shape</span><strong>Bell 55%</strong><div class="mini-slider" style="--value: 55%"></div></div>
+                        <div class="control"><span>Staccato</span><strong>68%</strong><div class="mini-slider" style="--value: 68%"></div></div>
+                    </div>
+                </div>
+                <p class="notes">Most obvious mapping from time to sound. The downside is that per-cut detail gets small when the inspector is narrow.</p>
+            </article>
+
+            <article class="shell">
+                <header class="shell-header">
+                    <div class="shell-title">
+                        <strong>Option 2: Morph Focus</strong>
+                        <span>Graph-first editor with a compact repeat strip.</span>
+                    </div>
+                    <div class="meta">
+                        <span class="pill">Shape 55%</span>
+                        <span class="pill">Gate 68%</span>
+                    </div>
+                </header>
+                <div class="editor">
+                    <div class="large-curve">
+                        <div class="badges">
+                            <span class="badge">Hard</span>
+                            <span class="badge">Ease</span>
+                            <span class="badge">Tri</span>
+                            <span class="badge active">Bell</span>
+                            <span class="badge active">Ramp +</span>
+                            <span class="badge">Ramp -</span>
+                        </div>
+                        <div class="curve-frame">
+                            <svg viewBox="0 0 340 170">
+                                <path class="fill" d="M24 142 L24 88 C62 38 128 26 170 42 C214 58 238 84 254 88 L254 142 Z"/>
+                                <path class="line" d="M24 142 L24 88 C62 38 128 26 170 42 C214 58 238 84 254 88"/>
+                                <path class="preview" d="M24 142 L24 50 L232 50 L254 142"/>
+                                <line x1="254" x2="254" y1="24" y2="142" stroke="rgba(28,28,28,.26)" stroke-dasharray="4 5"/>
+                                <text x="24" y="24" fill="#6f716d" font-size="11" font-weight="800">one cut envelope</text>
+                                <text x="262" y="92" fill="#6f716d" font-size="10" font-weight="800">silence</text>
+                            </svg>
+                        </div>
+                        <div class="strip">
+                            <span class="cut source"></span><span class="cut repeat"></span><span class="cut repeat"></span><span class="cut repeat"></span>
+                            <span class="cut repeat"></span><span class="cut repeat"></span><span class="cut repeat"></span><span class="cut repeat"></span>
+                        </div>
+                    </div>
+                    <div class="controls">
+                        <div class="control"><span>Slices</span><strong>8</strong></div>
+                        <div class="control"><span>Speed</span><strong>1.00x</strong></div>
+                        <div class="control"><span>Shape</span><strong>55%</strong></div>
+                        <div class="control"><span>Staccato</span><strong>68%</strong></div>
+                    </div>
+                </div>
+                <p class="notes">Best for making the envelope understandable. It trades away the direct one-cell-per-repeat readability.</p>
+            </article>
+
+            <article class="shell">
+                <header class="shell-header">
+                    <div class="shell-title">
+                        <strong>Option 3: Vertical Slice Stack</strong>
+                        <span>Readable per-cut envelopes at small width.</span>
+                    </div>
+                    <div class="meta">
+                        <span class="pill">Source + repeats</span>
+                    </div>
+                </header>
+                <div class="editor vertical-stack">
+                    <div class="readout-column">
+                        <div class="big-number"><span>Slices</span><strong>8</strong></div>
+                        <div class="big-number"><span>Speed</span><strong>1.00x</strong></div>
+                        <div class="big-number"><span>Shape</span><strong>55%</strong></div>
+                        <div class="big-number"><span>Gate</span><strong>68%</strong></div>
+                    </div>
+                    <div class="stack-cuts">
+                        <div class="cut source"><svg viewBox="0 0 240 30"><path class="env" d="M6 24 L6 9 C32 3 74 4 104 9 L162 9 C174 15 178 20 178 24 Z"/><text x="8" y="18">captured slice</text></svg></div>
+                        <div class="cut repeat"><svg viewBox="0 0 240 30"><path class="env" d="M6 24 L6 9 C32 3 74 4 104 9 L162 9 C174 15 178 20 178 24 Z"/><text x="8" y="18">repeat 1</text></svg></div>
+                        <div class="cut repeat"><svg viewBox="0 0 240 30"><path class="env" d="M6 24 L6 9 C32 3 74 4 104 9 L162 9 C174 15 178 20 178 24 Z"/><text x="8" y="18">repeat 2</text></svg></div>
+                        <div class="cut repeat"><svg viewBox="0 0 240 30"><path class="env" d="M6 24 L6 9 C32 3 74 4 104 9 L162 9 C174 15 178 20 178 24 Z"/><text x="8" y="18">repeat 3</text></svg></div>
+                        <div class="cut repeat"><svg viewBox="0 0 240 30"><path class="env" d="M6 24 L6 9 C32 3 74 4 104 9 L162 9 C174 15 178 20 178 24 Z"/><text x="8" y="18">repeat 4</text></svg></div>
+                        <div class="cut repeat"><svg viewBox="0 0 240 30"><path class="env" d="M6 24 L6 9 C32 3 74 4 104 9 L162 9 C174 15 178 20 178 24 Z"/><text x="8" y="18">repeat 5</text></svg></div>
+                        <div class="cut repeat"><svg viewBox="0 0 240 30"><path class="env" d="M6 24 L6 9 C32 3 74 4 104 9 L162 9 C174 15 178 20 178 24 Z"/><text x="8" y="18">repeat 6</text></svg></div>
+                        <div class="cut repeat"><svg viewBox="0 0 240 30"><path class="env" d="M6 24 L6 9 C32 3 74 4 104 9 L162 9 C174 15 178 20 178 24 Z"/><text x="8" y="18">repeat 7</text></svg></div>
+                    </div>
+                </div>
+                <p class="notes">Readable and compact horizontally, but it breaks the left-to-right timeline convention used by the grid.</p>
+            </article>
+
+            <article class="shell">
+                <header class="shell-header">
+                    <div class="shell-title">
+                        <strong>Option 4: Source And Shape Pair</strong>
+                        <span>One detailed source tile plus one editing tile.</span>
+                    </div>
+                    <div class="meta">
+                        <span class="pill">Inspector dense</span>
+                    </div>
+                </header>
+                <div class="editor">
+                    <div class="two-up">
+                        <div class="tile">
+                            <span>Captured source</span>
+                            <div class="curve-frame">
+                                <svg viewBox="0 0 240 170">
+                                    <path class="preview" d="M18 92 C38 44 54 142 76 92 S128 44 150 92 S198 140 222 88"/>
+                                    <path class="line" d="M18 142 L18 44 L160 44 L172 142"/>
+                                </svg>
+                            </div>
+                        </div>
+                        <div class="tile">
+                            <span>Repeat shape</span>
+                            <div class="spark">
+                                <span style="--h: 80%"></span><span style="--h: 68%"></span><span style="--h: 68%"></span><span style="--h: 68%"></span>
+                                <span style="--h: 68%"></span><span style="--h: 68%"></span><span style="--h: 68%"></span><span style="--h: 68%"></span>
+                            </div>
+                            <div class="badges">
+                                <span class="badge">Hard</span><span class="badge">Ease</span><span class="badge">Tri</span>
+                                <span class="badge active">Bell</span><span class="badge active">Ramp +</span><span class="badge">Ramp -</span>
+                            </div>
+                            <div class="control"><span>Shape morph</span><strong>55%</strong><div class="mini-slider" style="--value: 55%"></div></div>
+                            <div class="control"><span>Staccato</span><strong>68%</strong><div class="mini-slider" style="--value: 68%"></div></div>
+                        </div>
+                    </div>
+                    <div class="controls">
+                        <div class="control"><span>Slices</span><strong>8</strong></div>
+                        <div class="control"><span>Speed</span><strong>1.00x</strong></div>
+                        <div class="control"><span>Mode</span><strong>First slice</strong></div>
+                        <div class="control"><span>Mix</span><strong>100%</strong></div>
+                    </div>
+                </div>
+                <p class="notes">Good for explaining source versus repeats. It is denser and less directly editable than the timeline option.</p>
+            </article>
+        </section>
+    </main>
+</body>
+</html>
