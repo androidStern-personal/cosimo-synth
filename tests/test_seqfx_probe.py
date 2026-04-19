@@ -555,6 +555,87 @@ def test_filter_lane_reduces_high_frequency_energy(
     assert output_rms < input_rms * 0.35
 
 
+def test_live_filter_cutoff_upload_changes_active_continuation_without_retrigger(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    upload = _empty_upload()
+    for step in (0, 1):
+        _activate_step(
+            upload,
+            lane=LANE_FILTER,
+            step=step,
+            trigger=(step == 0),
+            params=[0, 220.0, 220.0, 0.707, 1.0],
+        )
+
+    edited = json.loads(json.dumps(upload))
+    edited["revision"] = 2
+    edited["authoritative"] = False
+    for step in (0, 1):
+        _activate_step(
+            edited,
+            lane=LANE_FILTER,
+            step=step,
+            trigger=(step == 0),
+            params=[0, 10_000.0, 10_000.0, 0.707, 1.0],
+        )
+
+    input_audio = _sine(STEP_FRAMES * 2, 5_000.0)
+    schedule = _base_schedule(upload)
+    schedule[STEP_FRAMES + 600] = [["event", "patternUpload", edited]]
+    output = _render(generated_runtime, tmp_path, input_audio, schedule)
+
+    pre_upload = slice(STEP_FRAMES + 120, STEP_FRAMES + 520)
+    post_upload = slice(STEP_FRAMES + 1_800, STEP_FRAMES + 2_600)
+    pre_dry_rms = _rms(input_audio[pre_upload, 0])
+    post_dry_rms = _rms(input_audio[post_upload, 0])
+    pre_wet_rms = _rms(output[pre_upload, 0])
+    post_wet_rms = _rms(output[post_upload, 0])
+
+    assert pre_wet_rms < pre_dry_rms * 0.35, (
+        f"Low cutoff should suppress the 5 kHz input before upload; wet/dry RMS was {pre_wet_rms:.4f}/{pre_dry_rms:.4f}"
+    )
+    assert post_wet_rms > post_dry_rms * 0.65, (
+        f"High cutoff should pass the 5 kHz input after upload; wet/dry RMS was {post_wet_rms:.4f}/{post_dry_rms:.4f}"
+    )
+
+
+def test_future_filter_upload_does_not_change_active_filter_block(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    upload = _empty_upload()
+    for step in (0, 1):
+        _activate_step(
+            upload,
+            lane=LANE_FILTER,
+            step=step,
+            trigger=(step == 0),
+            params=[0, 220.0, 220.0, 0.707, 1.0],
+        )
+
+    future_edit = json.loads(json.dumps(upload))
+    future_edit["revision"] = 2
+    future_edit["authoritative"] = False
+    _activate_step(
+        future_edit,
+        lane=LANE_FILTER,
+        step=8,
+        trigger=True,
+        params=[0, 10_000.0, 10_000.0, 0.707, 1.0],
+    )
+
+    input_audio = _sine(STEP_FRAMES * 2, 5_000.0)
+    baseline = _render(generated_runtime, tmp_path, input_audio, _base_schedule(upload))
+    schedule = _base_schedule(upload)
+    schedule[STEP_FRAMES + 600] = [["event", "patternUpload", future_edit]]
+    edited = _render(generated_runtime, tmp_path, input_audio, schedule)
+
+    current_block_window = slice(STEP_FRAMES + 900, STEP_FRAMES + 2_600)
+    assert _rms(edited[current_block_window, 0] - baseline[current_block_window, 0]) < 1.0e-6
+
+
 def test_filter_effect_can_run_in_any_chain_not_only_the_old_filter_lane(
     generated_runtime: GeneratedRuntime,
     tmp_path: Path,

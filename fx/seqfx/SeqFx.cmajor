@@ -840,7 +840,7 @@ processor SeqFx [[ main ]]
     {
         let currentStepIndex = wrap<seqfx::stepCount> (currentStep);
 
-        if (wasActive && ! triggerSteps[lane, currentStepIndex])
+        if (wasActive && ! triggerSteps[lane, currentStepIndex] && ! relatchingFromPatternUpload)
             return;
 
         let blockStart = blockStartStep (lane, currentStep);
