@@ -12,6 +12,7 @@ import {
     applySeqFxBlockParamEdit,
     applySeqFxBlockResize,
     applySeqFxBlockSelectionDelete,
+    applySeqFxBlockSelectionCopy,
     applySeqFxBlockSelectionMixEdit,
     applySeqFxBlockSelectionMove,
     applySeqFxBlockSelectionParamEdit,
@@ -35,6 +36,8 @@ import {
     type SeqFxBlockParamEdit,
     type SeqFxBlockResizeEdit,
     type SeqFxBlockSelectionEditTarget,
+    type SeqFxBlockSelectionCopyEdit,
+    type SeqFxBlockSelectionCopyResult,
     type SeqFxBlockSelectionMixEdit,
     type SeqFxBlockSelectionMoveEdit,
     type SeqFxBlockSelectionMoveResult,
@@ -323,6 +326,18 @@ export class SeqFxRuntimeBridge {
 
     previewBlockSelectionMove(edit: SeqFxBlockSelectionMoveEdit): SeqFxBlockSelectionMoveResult {
         return applySeqFxBlockSelectionMove(this.state, edit);
+    }
+
+    copyBlockSelection(edit: SeqFxBlockSelectionCopyEdit): SeqFxBlockSelectionCopyResult {
+        const result = applySeqFxBlockSelectionCopy(this.state, edit);
+        if (result.copiedStartSteps.length > 0) {
+            this.commitState(result.state, edit.patternIndex);
+        }
+        return result;
+    }
+
+    previewBlockSelectionCopy(edit: SeqFxBlockSelectionCopyEdit): SeqFxBlockSelectionCopyResult {
+        return applySeqFxBlockSelectionCopy(this.state, edit);
     }
 
     copyBlock(edit: SeqFxBlockCopyEdit) {

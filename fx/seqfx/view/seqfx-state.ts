@@ -121,19 +121,23 @@ export type SeqFxBlockResizeEdit = SeqFxBlockEditTarget & {
 };
 
 export type SeqFxBlockMoveEdit = SeqFxBlockEditTarget & {
+    targetLane?: number;
     targetStartStep: number;
 };
 
 export type SeqFxBlockCopyEdit = SeqFxBlockEditTarget & {
+    targetLane?: number;
     targetStartStep: number;
 };
 
 export type SeqFxBlockCopyPaintEdit = SeqFxBlockEditTarget & {
+    targetLane?: number;
     targetStartStep: number;
 };
 
 export type SeqFxBlockCopyPaintResult = {
     state: SeqFxState;
+    copiedLane: number;
     copiedStartSteps: number[];
 };
 
@@ -147,12 +151,26 @@ export type SeqFxBlockSelectionEditTarget = {
 
 export type SeqFxBlockSelectionMoveEdit = SeqFxBlockSelectionEditTarget & {
     anchorStartStep: number;
+    targetLane?: number;
     targetAnchorStartStep: number;
 };
 
 export type SeqFxBlockSelectionMoveResult = {
     state: SeqFxState;
+    movedLane: number;
     movedStartSteps: number[];
+};
+
+export type SeqFxBlockSelectionCopyEdit = SeqFxBlockSelectionEditTarget & {
+    anchorStartStep: number;
+    targetLane?: number;
+    targetAnchorStartStep: number;
+};
+
+export type SeqFxBlockSelectionCopyResult = {
+    state: SeqFxState;
+    copiedLane: number;
+    copiedStartSteps: number[];
 };
 
 export type SeqFxBlockSelectionParamEdit = SeqFxBlockSelectionEditTarget & {
@@ -716,20 +734,29 @@ function assertBlockRangeAvailable(
     lane: number,
     startStep: number,
     length: number,
-    ignoreBlock: SeqFxBlock | null = null,
+    ignoreBlocks: SeqFxBlock | SeqFxBlock[] | null = null,
 ): void {
+    const ignoredBlocks = Array.isArray(ignoreBlocks)
+        ? ignoreBlocks
+        : ignoreBlocks
+            ? [ignoreBlocks]
+            : [];
     const laneSteps = pattern.lanes[lane].steps;
     for (let step = startStep; step < startStep + length; step += 1) {
         if (!laneSteps[step].active) {
             continue;
         }
 
-        if (ignoreBlock && stepIsInsideRange(step, ignoreBlock.startStep, ignoreBlock.length)) {
+        if (ignoredBlocks.some((block) => stepIsInsideRange(step, block.startStep, block.length))) {
             continue;
         }
 
         throw new Error("SeqFX blocks cannot overlap in the same lane.");
     }
+}
+
+function resolveTargetLane(sourceLane: number, targetLane: number | undefined): number {
+    return clampIndex(targetLane ?? sourceLane, SEQFX_LANE_COUNT, "targetLane");
 }
 
 function writeBlock(
@@ -877,51 +904,95 @@ export function applySeqFxBlockResize(state: SeqFxState, edit: SeqFxBlockResizeE
 
 export function applySeqFxBlockMove(state: SeqFxState, edit: SeqFxBlockMoveEdit): SeqFxState {
     return withEditedPattern(state, edit.patternIndex, (pattern) => {
-        const lane = clampIndex(edit.lane, SEQFX_LANE_COUNT, "lane");
+        const sourceLane = clampIndex(edit.lane, SEQFX_LANE_COUNT, "lane");
+        const targetLane = resolveTargetLane(sourceLane, edit.targetLane);
         const requestedStart = clampIndex(edit.startStep, SEQFX_STEP_COUNT, "startStep");
         const targetStartStep = clampIndex(edit.targetStartStep, SEQFX_STEP_COUNT, "targetStartStep");
-        const block = getBlockForStep(pattern, lane, requestedStart);
+        const block = getBlockForStep(pattern, sourceLane, requestedStart);
 
         if (!block) {
             throw new Error("Cannot move a missing SeqFX block.");
         }
 
-        if (targetStartStep === block.startStep) {
+        if (targetLane === sourceLane && targetStartStep === block.startStep) {
             return;
         }
 
         assertBlockFits(targetStartStep, block.length);
-        const clonedSteps = cloneBlockSteps(pattern, lane, block);
-        clearBlock(pattern, lane, block);
-        assertBlockRangeAvailable(pattern, lane, targetStartStep, block.length);
-        writeBlockSteps(pattern, lane, targetStartStep, clonedSteps);
+        assertBlockRangeAvailable(
+            pattern,
+            targetLane,
+            targetStartStep,
+            block.length,
+            targetLane === sourceLane ? block : null,
+        );
+        const clonedSteps = cloneBlockSteps(pattern, sourceLane, block);
+        clearBlock(pattern, sourceLane, block);
+        writeBlockSteps(pattern, targetLane, targetStartStep, clonedSteps);
     });
 }
 
 export function applySeqFxBlockCopy(state: SeqFxState, edit: SeqFxBlockCopyEdit): SeqFxState {
     return withEditedPattern(state, edit.patternIndex, (pattern) => {
-        const lane = clampIndex(edit.lane, SEQFX_LANE_COUNT, "lane");
+        const sourceLane = clampIndex(edit.lane, SEQFX_LANE_COUNT, "lane");
+        const targetLane = resolveTargetLane(sourceLane, edit.targetLane);
         const requestedStart = clampIndex(edit.startStep, SEQFX_STEP_COUNT, "startStep");
         const targetStartStep = clampIndex(edit.targetStartStep, SEQFX_STEP_COUNT, "targetStartStep");
-        const block = getBlockForStep(pattern, lane, requestedStart);
+        const block = getBlockForStep(pattern, sourceLane, requestedStart);
 
         if (!block) {
             throw new Error("Cannot copy a missing SeqFX block.");
         }
 
         assertBlockFits(targetStartStep, block.length);
-        assertBlockRangeAvailable(pattern, lane, targetStartStep, block.length);
-        writeBlockSteps(pattern, lane, targetStartStep, cloneBlockSteps(pattern, lane, block));
+        assertBlockRangeAvailable(pattern, targetLane, targetStartStep, block.length);
+        writeBlockSteps(pattern, targetLane, targetStartStep, cloneBlockSteps(pattern, sourceLane, block));
     });
 }
 
 export function applySeqFxBlockCopyPaint(state: SeqFxState, edit: SeqFxBlockCopyPaintEdit): SeqFxBlockCopyPaintResult {
+    const normalizedState = normalizeSeqFxState(state);
+    const patternIndex = clampIndex(edit.patternIndex, SEQFX_PATTERN_COUNT, "patternIndex");
+    const sourceLane = clampIndex(edit.lane, SEQFX_LANE_COUNT, "lane");
+    const targetLane = resolveTargetLane(sourceLane, edit.targetLane);
+    const requestedStart = clampIndex(edit.startStep, SEQFX_STEP_COUNT, "startStep");
+    const targetStartStep = clampIndex(edit.targetStartStep, SEQFX_STEP_COUNT, "targetStartStep");
+    const currentPattern = normalizedState.patterns[patternIndex];
+    const currentBlock = getBlockForStep(currentPattern, sourceLane, requestedStart);
+
+    if (!currentBlock) {
+        throw new Error("Cannot copy a missing SeqFX block.");
+    }
+
+    if (targetLane !== sourceLane) {
+        try {
+            assertBlockFits(targetStartStep, currentBlock.length);
+            assertBlockRangeAvailable(currentPattern, targetLane, targetStartStep, currentBlock.length);
+        } catch {
+            return {
+                state: normalizedState,
+                copiedLane: targetLane,
+                copiedStartSteps: [],
+            };
+        }
+
+        return {
+            state: withEditedPattern(normalizedState, patternIndex, (pattern) => {
+                const block = getBlockForStep(pattern, sourceLane, requestedStart);
+                if (!block) {
+                    throw new Error("Cannot copy a missing SeqFX block.");
+                }
+
+                writeBlockSteps(pattern, targetLane, targetStartStep, cloneBlockSteps(pattern, sourceLane, block));
+            }),
+            copiedLane: targetLane,
+            copiedStartSteps: [targetStartStep],
+        };
+    }
+
     let copiedStartSteps: number[] = [];
-    const nextState = withEditedPattern(state, edit.patternIndex, (pattern) => {
-        const lane = clampIndex(edit.lane, SEQFX_LANE_COUNT, "lane");
-        const requestedStart = clampIndex(edit.startStep, SEQFX_STEP_COUNT, "startStep");
-        const targetStartStep = clampIndex(edit.targetStartStep, SEQFX_STEP_COUNT, "targetStartStep");
-        const block = getBlockForStep(pattern, lane, requestedStart);
+    const nextState = withEditedPattern(normalizedState, patternIndex, (pattern) => {
+        const block = getBlockForStep(pattern, sourceLane, requestedStart);
 
         if (!block) {
             throw new Error("Cannot copy a missing SeqFX block.");
@@ -932,7 +1003,7 @@ export function applySeqFxBlockCopyPaint(state: SeqFxState, edit: SeqFxBlockCopy
         }
 
         const direction = targetStartStep > block.startStep ? 1 : -1;
-        const clonedSteps = cloneBlockSteps(pattern, lane, block);
+        const clonedSteps = cloneBlockSteps(pattern, sourceLane, block);
 
         for (
             let nextStartStep = block.startStep + direction;
@@ -941,8 +1012,8 @@ export function applySeqFxBlockCopyPaint(state: SeqFxState, edit: SeqFxBlockCopy
         ) {
             try {
                 assertBlockFits(nextStartStep, block.length);
-                assertBlockRangeAvailable(pattern, lane, nextStartStep, block.length);
-                writeBlockSteps(pattern, lane, nextStartStep, clonedSteps);
+                assertBlockRangeAvailable(pattern, sourceLane, nextStartStep, block.length);
+                writeBlockSteps(pattern, sourceLane, nextStartStep, clonedSteps);
                 copiedStartSteps.push(nextStartStep);
             } catch {
                 // Copy-paint skips occupied or out-of-range targets so dragging stays reversible and harmless.
@@ -952,13 +1023,15 @@ export function applySeqFxBlockCopyPaint(state: SeqFxState, edit: SeqFxBlockCopy
 
     if (copiedStartSteps.length === 0) {
         return {
-            state: normalizeSeqFxState(state),
+            state: normalizedState,
+            copiedLane: targetLane,
             copiedStartSteps,
         };
     }
 
     return {
         state: nextState,
+        copiedLane: targetLane,
         copiedStartSteps,
     };
 }
@@ -990,55 +1063,132 @@ export function applySeqFxBlockSelectionDelete(state: SeqFxState, edit: SeqFxBlo
 export function applySeqFxBlockSelectionMove(state: SeqFxState, edit: SeqFxBlockSelectionMoveEdit): SeqFxBlockSelectionMoveResult {
     const normalizedState = normalizeSeqFxState(state);
     const patternIndex = clampIndex(edit.patternIndex, SEQFX_PATTERN_COUNT, "patternIndex");
-    const lane = clampIndex(edit.lane, SEQFX_LANE_COUNT, "lane");
+    const sourceLane = clampIndex(edit.lane, SEQFX_LANE_COUNT, "lane");
+    const targetLane = resolveTargetLane(sourceLane, edit.targetLane);
     const anchorStartStep = clampIndex(edit.anchorStartStep, SEQFX_STEP_COUNT, "anchorStartStep");
     const targetAnchorStartStep = clampIndex(edit.targetAnchorStartStep, SEQFX_STEP_COUNT, "targetAnchorStartStep");
     const currentPattern = normalizedState.patterns[patternIndex];
-    const currentBlocks = resolveBlockSelection(currentPattern, lane, edit.blockStartSteps);
-    const currentAnchorBlock = getBlockForStep(currentPattern, lane, anchorStartStep);
+    const currentBlocks = resolveBlockSelection(currentPattern, sourceLane, edit.blockStartSteps);
+    const currentAnchorBlock = getBlockForStep(currentPattern, sourceLane, anchorStartStep);
 
     if (!currentAnchorBlock || !currentBlocks.some((block) => block.startStep === currentAnchorBlock.startStep)) {
         throw new Error("SeqFX block selection move anchor must be one of the selected blocks.");
     }
 
-    if (targetAnchorStartStep === currentAnchorBlock.startStep) {
+    if (targetLane === sourceLane && targetAnchorStartStep === currentAnchorBlock.startStep) {
         return {
             state: normalizedState,
+            movedLane: sourceLane,
             movedStartSteps: currentBlocks.map((block) => block.startStep),
         };
     }
 
+    const delta = targetAnchorStartStep - currentAnchorBlock.startStep;
     let movedStartSteps: number[] = [];
     const nextState = withEditedPattern(normalizedState, patternIndex, (pattern) => {
-        const blocks = resolveBlockSelection(pattern, lane, edit.blockStartSteps);
-        const anchorBlock = getBlockForStep(pattern, lane, anchorStartStep);
+        const blocks = resolveBlockSelection(pattern, sourceLane, edit.blockStartSteps);
+        const anchorBlock = getBlockForStep(pattern, sourceLane, anchorStartStep);
 
         if (!anchorBlock || !blocks.some((block) => block.startStep === anchorBlock.startStep)) {
             throw new Error("SeqFX block selection move anchor must be one of the selected blocks.");
         }
 
-        const delta = targetAnchorStartStep - anchorBlock.startStep;
         const clonedBlocks = blocks.map((block) => ({
             block,
             targetStartStep: block.startStep + delta,
-            steps: cloneBlockSteps(pattern, lane, block),
+            steps: cloneBlockSteps(pattern, sourceLane, block),
         }));
-
-        for (const { block } of clonedBlocks) {
-            clearBlock(pattern, lane, block);
-        }
 
         for (const cloned of clonedBlocks) {
             assertBlockFits(cloned.targetStartStep, cloned.block.length);
-            assertBlockRangeAvailable(pattern, lane, cloned.targetStartStep, cloned.block.length);
-            writeBlockSteps(pattern, lane, cloned.targetStartStep, cloned.steps);
+            assertBlockRangeAvailable(
+                pattern,
+                targetLane,
+                cloned.targetStartStep,
+                cloned.block.length,
+                targetLane === sourceLane ? blocks : null,
+            );
+        }
+
+        for (const { block } of clonedBlocks) {
+            clearBlock(pattern, sourceLane, block);
+        }
+
+        for (const cloned of clonedBlocks) {
+            writeBlockSteps(pattern, targetLane, cloned.targetStartStep, cloned.steps);
             movedStartSteps.push(cloned.targetStartStep);
         }
     });
 
     return {
         state: nextState,
+        movedLane: targetLane,
         movedStartSteps,
+    };
+}
+
+export function applySeqFxBlockSelectionCopy(state: SeqFxState, edit: SeqFxBlockSelectionCopyEdit): SeqFxBlockSelectionCopyResult {
+    const normalizedState = normalizeSeqFxState(state);
+    const patternIndex = clampIndex(edit.patternIndex, SEQFX_PATTERN_COUNT, "patternIndex");
+    const sourceLane = clampIndex(edit.lane, SEQFX_LANE_COUNT, "lane");
+    const targetLane = resolveTargetLane(sourceLane, edit.targetLane);
+    const anchorStartStep = clampIndex(edit.anchorStartStep, SEQFX_STEP_COUNT, "anchorStartStep");
+    const targetAnchorStartStep = clampIndex(edit.targetAnchorStartStep, SEQFX_STEP_COUNT, "targetAnchorStartStep");
+    const currentPattern = normalizedState.patterns[patternIndex];
+    const currentBlocks = resolveBlockSelection(currentPattern, sourceLane, edit.blockStartSteps);
+    const currentAnchorBlock = getBlockForStep(currentPattern, sourceLane, anchorStartStep);
+
+    if (!currentAnchorBlock || !currentBlocks.some((block) => block.startStep === currentAnchorBlock.startStep)) {
+        throw new Error("SeqFX block selection copy anchor must be one of the selected blocks.");
+    }
+
+    if (targetLane === sourceLane && targetAnchorStartStep === currentAnchorBlock.startStep) {
+        return {
+            state: normalizedState,
+            copiedLane: targetLane,
+            copiedStartSteps: [],
+        };
+    }
+
+    const delta = targetAnchorStartStep - currentAnchorBlock.startStep;
+    const plannedBlocks = currentBlocks.map((block) => ({
+        block,
+        targetStartStep: block.startStep + delta,
+    }));
+
+    try {
+        for (const planned of plannedBlocks) {
+            assertBlockFits(planned.targetStartStep, planned.block.length);
+            assertBlockRangeAvailable(currentPattern, targetLane, planned.targetStartStep, planned.block.length);
+        }
+    } catch {
+        return {
+            state: normalizedState,
+            copiedLane: targetLane,
+            copiedStartSteps: [],
+        };
+    }
+
+    const copiedStartSteps: number[] = [];
+    const nextState = withEditedPattern(normalizedState, patternIndex, (pattern) => {
+        const blocks = resolveBlockSelection(pattern, sourceLane, edit.blockStartSteps);
+        const anchorBlock = getBlockForStep(pattern, sourceLane, anchorStartStep);
+
+        if (!anchorBlock || !blocks.some((block) => block.startStep === anchorBlock.startStep)) {
+            throw new Error("SeqFX block selection copy anchor must be one of the selected blocks.");
+        }
+
+        for (const block of blocks) {
+            const targetStartStep = block.startStep + delta;
+            writeBlockSteps(pattern, targetLane, targetStartStep, cloneBlockSteps(pattern, sourceLane, block));
+            copiedStartSteps.push(targetStartStep);
+        }
+    });
+
+    return {
+        state: nextState,
+        copiedLane: targetLane,
+        copiedStartSteps,
     };
 }
 

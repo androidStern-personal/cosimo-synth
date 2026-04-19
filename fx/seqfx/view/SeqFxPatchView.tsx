@@ -25,6 +25,8 @@ import {
     getSeqFxBlockAtStep,
     getSeqFxLaneBlocks,
     isSeqFxTriggerLatchedParamForEffect,
+    type SeqFxBlock,
+    type SeqFxEffectType,
     type SeqFxPattern,
     type SeqFxStep,
     type SeqFxStepValueSnapshot,
@@ -77,6 +79,7 @@ type MoveGesture = {
     pointerStartX: number;
     pointerStartY: number;
     hasMoved: boolean;
+    previewTargetLane: number | null;
     previewTargetStartStep: number | null;
 };
 
@@ -89,6 +92,9 @@ type BlockSelectionMoveGesture = {
     pointerStartX: number;
     pointerStartY: number;
     hasMoved: boolean;
+    anchorMinStartStep: number;
+    anchorMaxStartStep: number;
+    previewTargetLane: number | null;
     previewTargetAnchorStartStep: number | null;
     previewMovedStartSteps: number[] | null;
 };
@@ -102,16 +108,42 @@ type CopyGesture = {
     pointerStartX: number;
     pointerStartY: number;
     hasMoved: boolean;
+    previewTargetLane: number | null;
     previewTargetStartStep: number | null;
 };
 
-type BlockGesture = ResizeGesture | MoveGesture | BlockSelectionMoveGesture | CopyGesture;
+type BlockSelectionCopyGesture = {
+    mode: "selectionCopy";
+    lane: number;
+    blockStartSteps: number[];
+    anchorStartStep: number;
+    grabOffset: number;
+    pointerStartX: number;
+    pointerStartY: number;
+    hasMoved: boolean;
+    anchorMinStartStep: number;
+    anchorMaxStartStep: number;
+    previewTargetLane: number | null;
+    previewTargetAnchorStartStep: number | null;
+    previewCopiedStartSteps: number[] | null;
+};
+
+type BlockGesture = ResizeGesture | MoveGesture | BlockSelectionMoveGesture | CopyGesture | BlockSelectionCopyGesture;
 
 type PatternPreview = {
     patternIndex: number;
     lane: number;
     copiedStartSteps?: number[];
     state: SeqFxState;
+};
+
+type InvalidDropTarget = {
+    patternIndex: number;
+    lane: number;
+    blocks: Array<{
+        startStep: number;
+        length: number;
+    }>;
 };
 
 type ParamDefinition = {
@@ -865,6 +897,27 @@ function blockStartsBetween(pattern: SeqFxPattern, lane: number, startStep: numb
         .map((block) => block.startStep);
 }
 
+function selectionAnchorDragBounds(pattern: SeqFxPattern, lane: number, blockStartSteps: number[], anchorStartStep: number) {
+    const blocks = blockStartSteps
+        .map((startStep) => getSeqFxBlockAtStep(pattern, lane, startStep))
+        .filter((block): block is SeqFxBlock => Boolean(block));
+
+    if (blocks.length === 0) {
+        return {
+            minStartStep: 0,
+            maxStartStep: SEQFX_STEP_COUNT - 1,
+        };
+    }
+
+    const minDelta = Math.min(...blocks.map((block) => block.startStep - anchorStartStep));
+    const maxEndDelta = Math.max(...blocks.map((block) => block.endStep - anchorStartStep));
+
+    return {
+        minStartStep: Math.max(0, -minDelta),
+        maxStartStep: Math.min(SEQFX_STEP_COUNT - 1, SEQFX_STEP_COUNT - 1 - maxEndDelta),
+    };
+}
+
 function getSelectionLabel(selection: Selection | null) {
     if (!selection) {
         return "Select a cell";
@@ -986,9 +1039,10 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
     const [selection, setSelection] = useState<Selection | null>(null);
     const [playheadStep, setPlayheadStep] = useState<number | null>(null);
     const [observedStepDurationMs, setObservedStepDurationMs] = useState<number | null>(null);
-    const [drawEffectType, setDrawEffectType] = useState<number | null>(null);
+    const [drawEffectType, setDrawEffectType] = useState<SeqFxEffectType | null>(null);
     const [gestureState, setGestureState] = useState<BlockGesture | null>(null);
     const [patternPreview, setPatternPreview] = useState<PatternPreview | null>(null);
+    const [invalidDropTarget, setInvalidDropTarget] = useState<InvalidDropTarget | null>(null);
     const [cellSize, setCellSize] = useState(SEQFX_MIN_CELL_SIZE_PX);
     const cellsPerBeat = useMemo(() => cellsPerBeatForRateIndex(rateIndex), [rateIndex]);
     const gridGeometry = useMemo(() => createGridGeometry(cellSize, cellsPerBeat), [cellSize, cellsPerBeat]);
@@ -1039,6 +1093,7 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
                 gestureRef.current = null;
                 setGestureState(null);
                 setPatternPreview(null);
+                setInvalidDropTarget(null);
             }
             rateIndexRef.current = nextRateIndex;
             setRateIndex(nextRateIndex);
@@ -1233,6 +1288,34 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
             return gridGeometryRef.current.stepAtClientX(bounds, event.clientX);
         };
 
+        const targetLaneForPointer = (event: globalThis.PointerEvent, fallbackLane: number) => {
+            const laneEntries = [...laneTrackRefs.current.entries()]
+                .sort(([leftLane], [rightLane]) => leftLane - rightLane);
+
+            if (laneEntries.length === 0) {
+                return fallbackLane;
+            }
+
+            let closestLane = fallbackLane;
+            let closestDistance = Number.POSITIVE_INFINITY;
+
+            for (const [lane, track] of laneEntries) {
+                const bounds = track.getBoundingClientRect();
+                if (event.clientY >= bounds.top && event.clientY <= bounds.bottom) {
+                    return lane;
+                }
+
+                const centerY = bounds.top + (bounds.height / 2);
+                const distance = Math.abs(event.clientY - centerY);
+                if (distance < closestDistance) {
+                    closestDistance = distance;
+                    closestLane = lane;
+                }
+            }
+
+            return closestLane;
+        };
+
         const selectBlockRange = (lane: number, startStep: number, length: number) => {
             setSelectedCell({ lane, step: startStep });
             setSelection({
@@ -1243,24 +1326,59 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
         };
 
         const targetStartFromPointer = (gesture: MoveGesture | CopyGesture, event: globalThis.PointerEvent) => {
-            const pointerStep = pointerStepForLane(gesture.lane, event);
+            const targetLane = targetLaneForPointer(event, gesture.previewTargetLane ?? gesture.lane);
+            const pointerStep = pointerStepForLane(targetLane, event);
             if (pointerStep === null) {
                 return null;
             }
 
-            return clampBlockStart(pointerStep - gesture.grabOffset, gesture.length);
+            return {
+                lane: targetLane,
+                startStep: clampBlockStart(pointerStep - gesture.grabOffset, gesture.length),
+            };
         };
 
-        const targetAnchorStartFromPointer = (gesture: BlockSelectionMoveGesture, event: globalThis.PointerEvent) => {
-            const pointerStep = pointerStepForLane(gesture.lane, event);
+        const targetAnchorStartFromPointer = (gesture: BlockSelectionMoveGesture | BlockSelectionCopyGesture, event: globalThis.PointerEvent) => {
+            const targetLane = targetLaneForPointer(event, gesture.previewTargetLane ?? gesture.lane);
+            const pointerStep = pointerStepForLane(targetLane, event);
             if (pointerStep === null) {
                 return null;
             }
 
-            return Math.min(SEQFX_STEP_COUNT - 1, Math.max(0, pointerStep - gesture.grabOffset));
+            return {
+                lane: targetLane,
+                startStep: Math.min(
+                    gesture.anchorMaxStartStep,
+                    Math.max(gesture.anchorMinStartStep, pointerStep - gesture.grabOffset),
+                ),
+            };
         };
 
-        const gestureMovedEnough = (gesture: MoveGesture | CopyGesture | BlockSelectionMoveGesture, event: globalThis.PointerEvent) => {
+        const setInvalidSingleDrop = (lane: number, startStep: number, length: number) => {
+            setInvalidDropTarget({
+                patternIndex: selectedPatternRef.current,
+                lane,
+                blocks: [{ startStep, length }],
+            });
+        };
+
+        const setInvalidSelectionDrop = (sourceLane: number, targetLane: number, blockStartSteps: number[], anchorStartStep: number, targetAnchorStartStep: number) => {
+            const pattern = stateRef.current.patterns[selectedPatternRef.current];
+            const delta = targetAnchorStartStep - anchorStartStep;
+            setInvalidDropTarget({
+                patternIndex: selectedPatternRef.current,
+                lane: targetLane,
+                blocks: blockStartSteps
+                    .map((sourceStartStep) => getSeqFxBlockAtStep(pattern, sourceLane, sourceStartStep))
+                    .filter((block): block is SeqFxBlock => Boolean(block))
+                    .map((block) => ({
+                        startStep: clampBlockStart(block.startStep + delta, block.length),
+                        length: block.length,
+                    })),
+            });
+        };
+
+        const gestureMovedEnough = (gesture: MoveGesture | CopyGesture | BlockSelectionMoveGesture | BlockSelectionCopyGesture, event: globalThis.PointerEvent) => {
             const deltaX = event.clientX - gesture.pointerStartX;
             const deltaY = event.clientY - gesture.pointerStartY;
             return (deltaX * deltaX) + (deltaY * deltaY) >= 16;
@@ -1313,12 +1431,16 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
             gesture.hasMoved = true;
 
             if (gesture.mode === "selectionMove") {
-                const targetAnchorStartStep = targetAnchorStartFromPointer(gesture, event);
+                const targetAnchor = targetAnchorStartFromPointer(gesture, event);
                 if (
-                    targetAnchorStartStep === null
-                    || targetAnchorStartStep === gesture.previewTargetAnchorStartStep
+                    targetAnchor === null
                     || (
-                        targetAnchorStartStep === gesture.anchorStartStep
+                        targetAnchor.lane === gesture.previewTargetLane
+                        && targetAnchor.startStep === gesture.previewTargetAnchorStartStep
+                    )
+                    || (
+                        targetAnchor.lane === gesture.lane
+                        && targetAnchor.startStep === gesture.anchorStartStep
                         && gesture.previewTargetAnchorStartStep === null
                     )
                 ) {
@@ -1331,37 +1453,124 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
                         lane: gesture.lane,
                         blockStartSteps: gesture.blockStartSteps,
                         anchorStartStep: gesture.anchorStartStep,
-                        targetAnchorStartStep,
+                        targetLane: targetAnchor.lane,
+                        targetAnchorStartStep: targetAnchor.startStep,
                     });
-                    gesture.previewTargetAnchorStartStep = targetAnchorStartStep;
+                    gesture.previewTargetLane = result.movedLane;
+                    gesture.previewTargetAnchorStartStep = targetAnchor.startStep;
                     gesture.previewMovedStartSteps = result.movedStartSteps;
+                    setInvalidDropTarget(null);
                     setPatternPreview({
                         patternIndex: selectedPatternRef.current,
-                        lane: gesture.lane,
+                        lane: result.movedLane,
                         state: result.state,
                     });
                     selectBlockStartsFromPattern(
                         result.state.patterns[selectedPatternRef.current],
-                        gesture.lane,
+                        result.movedLane,
                         result.movedStartSteps,
-                        targetAnchorStartStep,
+                        targetAnchor.startStep,
                     );
                 } catch {
+                    gesture.previewTargetLane = null;
+                    gesture.previewTargetAnchorStartStep = null;
+                    gesture.previewMovedStartSteps = null;
+                    setPatternPreview(null);
+                    selectBlockStartsFromPattern(
+                        bridge.getState().patterns[selectedPatternRef.current],
+                        gesture.lane,
+                        gesture.blockStartSteps,
+                        gesture.anchorStartStep,
+                    );
+                    setInvalidSelectionDrop(
+                        gesture.lane,
+                        targetAnchor.lane,
+                        gesture.blockStartSteps,
+                        gesture.anchorStartStep,
+                        targetAnchor.startStep,
+                    );
                     // Invalid group targets, such as collisions, keep the selection at its last valid position.
                 }
                 return;
             }
 
-            const targetStartStep = targetStartFromPointer(gesture, event);
-            if (targetStartStep === null) {
+            if (gesture.mode === "selectionCopy") {
+                const targetAnchor = targetAnchorStartFromPointer(gesture, event);
+                if (
+                    targetAnchor === null
+                    || (
+                        targetAnchor.lane === gesture.previewTargetLane
+                        && targetAnchor.startStep === gesture.previewTargetAnchorStartStep
+                    )
+                ) {
+                    return;
+                }
+
+                try {
+                    const result = bridge.previewBlockSelectionCopy({
+                        patternIndex: selectedPatternRef.current,
+                        lane: gesture.lane,
+                        blockStartSteps: gesture.blockStartSteps,
+                        anchorStartStep: gesture.anchorStartStep,
+                        targetLane: targetAnchor.lane,
+                        targetAnchorStartStep: targetAnchor.startStep,
+                    });
+                    gesture.previewTargetLane = result.copiedLane;
+                    gesture.previewTargetAnchorStartStep = targetAnchor.startStep;
+                    gesture.previewCopiedStartSteps = result.copiedStartSteps.length > 0
+                        ? result.copiedStartSteps
+                        : null;
+                    if (result.copiedStartSteps.length > 0) {
+                        setInvalidDropTarget(null);
+                        setPatternPreview({
+                            patternIndex: selectedPatternRef.current,
+                            lane: result.copiedLane,
+                            copiedStartSteps: result.copiedStartSteps,
+                            state: result.state,
+                        });
+                    } else {
+                        gesture.previewTargetLane = null;
+                        gesture.previewTargetAnchorStartStep = null;
+                        gesture.previewCopiedStartSteps = null;
+                        setPatternPreview(null);
+                        setInvalidSelectionDrop(
+                            gesture.lane,
+                            targetAnchor.lane,
+                            gesture.blockStartSteps,
+                            gesture.anchorStartStep,
+                            targetAnchor.startStep,
+                        );
+                    }
+                } catch {
+                    gesture.previewTargetLane = null;
+                    gesture.previewTargetAnchorStartStep = null;
+                    gesture.previewCopiedStartSteps = null;
+                    setPatternPreview(null);
+                    setInvalidSelectionDrop(
+                        gesture.lane,
+                        targetAnchor.lane,
+                        gesture.blockStartSteps,
+                        gesture.anchorStartStep,
+                        targetAnchor.startStep,
+                    );
+                }
+                return;
+            }
+
+            const target = targetStartFromPointer(gesture, event);
+            if (target === null) {
                 return;
             }
 
             if (gesture.mode === "move") {
                 if (
-                    targetStartStep === gesture.previewTargetStartStep
+                    (
+                        target.lane === gesture.previewTargetLane
+                        && target.startStep === gesture.previewTargetStartStep
+                    )
                     || (
-                        targetStartStep === gesture.sourceStartStep
+                        target.lane === gesture.lane
+                        && target.startStep === gesture.sourceStartStep
                         && gesture.previewTargetStartStep === null
                     )
                 ) {
@@ -1373,16 +1582,24 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
                         patternIndex: selectedPatternRef.current,
                         lane: gesture.lane,
                         startStep: gesture.sourceStartStep,
-                        targetStartStep,
+                        targetLane: target.lane,
+                        targetStartStep: target.startStep,
                     });
-                    gesture.previewTargetStartStep = targetStartStep;
+                    gesture.previewTargetLane = target.lane;
+                    gesture.previewTargetStartStep = target.startStep;
+                    setInvalidDropTarget(null);
                     setPatternPreview({
                         patternIndex: selectedPatternRef.current,
-                        lane: gesture.lane,
+                        lane: target.lane,
                         state: previewState,
                     });
-                    selectBlockRange(gesture.lane, targetStartStep, gesture.length);
+                    selectBlockRange(target.lane, target.startStep, gesture.length);
                 } catch {
+                    gesture.previewTargetLane = null;
+                    gesture.previewTargetStartStep = null;
+                    setPatternPreview(null);
+                    selectBlockRange(gesture.lane, gesture.sourceStartStep, gesture.length);
+                    setInvalidSingleDrop(target.lane, target.startStep, gesture.length);
                     // Invalid targets, such as overlaps, keep the block at its last valid start.
                 }
                 return;
@@ -1393,17 +1610,30 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
                     patternIndex: selectedPatternRef.current,
                     lane: gesture.lane,
                     startStep: gesture.sourceStartStep,
-                    targetStartStep,
+                    targetLane: target.lane,
+                    targetStartStep: target.startStep,
                 });
-                gesture.previewTargetStartStep = targetStartStep;
-                setPatternPreview(preview.copiedStartSteps.length > 0 ? {
-                    patternIndex: selectedPatternRef.current,
-                    lane: gesture.lane,
-                    copiedStartSteps: preview.copiedStartSteps,
-                    state: preview.state,
-                } : null);
+                gesture.previewTargetLane = preview.copiedLane;
+                gesture.previewTargetStartStep = target.startStep;
+                if (preview.copiedStartSteps.length > 0) {
+                    setInvalidDropTarget(null);
+                    setPatternPreview({
+                        patternIndex: selectedPatternRef.current,
+                        lane: preview.copiedLane,
+                        copiedStartSteps: preview.copiedStartSteps,
+                        state: preview.state,
+                    });
+                } else {
+                    gesture.previewTargetLane = null;
+                    gesture.previewTargetStartStep = null;
+                    setPatternPreview(null);
+                    setInvalidSingleDrop(target.lane, target.startStep, gesture.length);
+                }
             } catch {
+                gesture.previewTargetLane = null;
+                gesture.previewTargetStartStep = null;
                 setPatternPreview(null);
+                setInvalidSingleDrop(target.lane, target.startStep, gesture.length);
             }
         };
 
@@ -1430,16 +1660,21 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
             } else if (gesture.mode === "move" && gesture.hasMoved) {
                 if (
                     gesture.previewTargetStartStep !== null
-                    && gesture.previewTargetStartStep !== gesture.sourceStartStep
+                    && gesture.previewTargetLane !== null
+                    && (
+                        gesture.previewTargetLane !== gesture.lane
+                        || gesture.previewTargetStartStep !== gesture.sourceStartStep
+                    )
                 ) {
                     try {
                         bridge.moveBlock({
                             patternIndex: selectedPatternRef.current,
                             lane: gesture.lane,
                             startStep: gesture.sourceStartStep,
+                            targetLane: gesture.previewTargetLane,
                             targetStartStep: gesture.previewTargetStartStep,
                         });
-                        selectBlockRange(gesture.lane, gesture.previewTargetStartStep, gesture.length);
+                        selectBlockRange(gesture.previewTargetLane, gesture.previewTargetStartStep, gesture.length);
                     } catch {
                         // Invalid release targets leave the source block untouched.
                     }
@@ -1449,6 +1684,7 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
             } else if (gesture.mode === "selectionMove" && gesture.hasMoved) {
                 if (
                     gesture.previewTargetAnchorStartStep !== null
+                    && gesture.previewTargetLane !== null
                     && gesture.previewMovedStartSteps !== null
                 ) {
                     try {
@@ -1457,11 +1693,12 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
                             lane: gesture.lane,
                             blockStartSteps: gesture.blockStartSteps,
                             anchorStartStep: gesture.anchorStartStep,
+                            targetLane: gesture.previewTargetLane,
                             targetAnchorStartStep: gesture.previewTargetAnchorStartStep,
                         });
                         selectBlockStartsFromPattern(
                             result.state.patterns[selectedPatternRef.current],
-                            gesture.lane,
+                            result.movedLane,
                             result.movedStartSteps,
                             gesture.previewTargetAnchorStartStep,
                         );
@@ -1477,21 +1714,55 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
                     );
                 }
             } else if (gesture.mode === "copy" && gesture.hasMoved) {
-                const targetStartStep = targetStartFromPointer(gesture, event) ?? gesture.previewTargetStartStep;
-                if (targetStartStep !== null && targetStartStep !== gesture.sourceStartStep) {
+                if (
+                    gesture.previewTargetLane !== null
+                    && gesture.previewTargetStartStep !== null
+                    && (
+                        gesture.previewTargetLane !== gesture.lane
+                        || gesture.previewTargetStartStep !== gesture.sourceStartStep
+                    )
+                ) {
                     try {
                         const result = bridge.copyBlockPaint({
                             patternIndex: selectedPatternRef.current,
                             lane: gesture.lane,
                             startStep: gesture.sourceStartStep,
-                            targetStartStep,
+                            targetLane: gesture.previewTargetLane,
+                            targetStartStep: gesture.previewTargetStartStep,
                         });
                         const selectedStartStep = result.copiedStartSteps.at(-1);
                         if (selectedStartStep !== undefined) {
-                            selectBlockRange(gesture.lane, selectedStartStep, gesture.length);
+                            selectBlockRange(result.copiedLane, selectedStartStep, gesture.length);
                         }
                     } catch {
                         // Invalid release targets leave the source block untouched.
+                    }
+                }
+            } else if (gesture.mode === "selectionCopy" && gesture.hasMoved) {
+                if (
+                    gesture.previewTargetLane !== null
+                    && gesture.previewTargetAnchorStartStep !== null
+                    && gesture.previewCopiedStartSteps !== null
+                ) {
+                    try {
+                        const result = bridge.copyBlockSelection({
+                            patternIndex: selectedPatternRef.current,
+                            lane: gesture.lane,
+                            blockStartSteps: gesture.blockStartSteps,
+                            anchorStartStep: gesture.anchorStartStep,
+                            targetLane: gesture.previewTargetLane,
+                            targetAnchorStartStep: gesture.previewTargetAnchorStartStep,
+                        });
+                        if (result.copiedStartSteps.length > 0) {
+                            selectBlockStartsFromPattern(
+                                result.state.patterns[selectedPatternRef.current],
+                                result.copiedLane,
+                                result.copiedStartSteps,
+                                gesture.previewTargetAnchorStartStep,
+                            );
+                        }
+                    } catch {
+                        // Invalid release targets leave the selected blocks untouched.
                     }
                 }
             }
@@ -1499,6 +1770,7 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
             gestureRef.current = null;
             setGestureState(null);
             setPatternPreview(null);
+            setInvalidDropTarget(null);
         };
 
         const cancelGesture = () => {
@@ -1518,11 +1790,19 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
                     gesture.blockStartSteps,
                     gesture.anchorStartStep,
                 );
+            } else if (gesture.mode === "selectionCopy") {
+                selectBlockStartsFromPattern(
+                    bridge.getState().patterns[selectedPatternRef.current],
+                    gesture.lane,
+                    gesture.blockStartSteps,
+                    gesture.anchorStartStep,
+                );
             }
 
             gestureRef.current = null;
             setGestureState(null);
             setPatternPreview(null);
+            setInvalidDropTarget(null);
         };
 
         window.addEventListener("pointermove", handlePointerMove, { passive: false });
@@ -1541,6 +1821,7 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
     function beginGesture(gesture: BlockGesture) {
         gestureRef.current = gesture;
         setGestureState(gesture);
+        setInvalidDropTarget(null);
     }
 
     function selectBlockRange(lane: number, startStep: number, length: number) {
@@ -1598,6 +1879,7 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
             gestureRef.current = null;
             setGestureState(null);
             setPatternPreview(null);
+            setInvalidDropTarget(null);
             return;
         }
 
@@ -1611,6 +1893,7 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
         gestureRef.current = null;
         setGestureState(null);
         setPatternPreview(null);
+        setInvalidDropTarget(null);
     }
 
     const selectedPatternState = state.patterns[selectedPattern];
@@ -1654,11 +1937,14 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
     function selectPattern(patternIndex: number) {
         bridge.selectPattern(patternIndex);
         setPatternPreview(null);
+        setInvalidDropTarget(null);
         setSelectedCell(null);
         setSelection(null);
     }
 
     function activateCell(lane: number, step: number, shiftKey: boolean) {
+        setInvalidDropTarget(null);
+
         if (shiftKey && selectedCell && selectedCell.lane === lane) {
             const nextSelection = mergeRangeSelection(selectedCell, { lane, step });
             setSelection(nextSelection);
@@ -1721,6 +2007,26 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
         }
 
         if (event.altKey || event.getModifierState("Alt") || optionKeyRef.current) {
+            if (clickedSelectedBlock && activeBlockStarts.length > 1) {
+                const bounds = selectionAnchorDragBounds(pattern, lane, activeBlockStarts, startStep);
+                beginGesture({
+                    mode: "selectionCopy",
+                    lane,
+                    blockStartSteps: [...activeBlockStarts],
+                    anchorStartStep: startStep,
+                    grabOffset,
+                    pointerStartX: event.clientX,
+                    pointerStartY: event.clientY,
+                    hasMoved: false,
+                    anchorMinStartStep: bounds.minStartStep,
+                    anchorMaxStartStep: bounds.maxStartStep,
+                    previewTargetLane: null,
+                    previewTargetAnchorStartStep: null,
+                    previewCopiedStartSteps: null,
+                });
+                return;
+            }
+
             selectBlockRange(lane, startStep, length);
             beginGesture({
                 mode: "copy",
@@ -1731,12 +2037,14 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
                 pointerStartX: event.clientX,
                 pointerStartY: event.clientY,
                 hasMoved: false,
+                previewTargetLane: null,
                 previewTargetStartStep: null,
             });
             return;
         }
 
         if (clickedSelectedBlock && activeBlockStarts.length > 1) {
+            const bounds = selectionAnchorDragBounds(pattern, lane, activeBlockStarts, startStep);
             beginGesture({
                 mode: "selectionMove",
                 lane,
@@ -1746,6 +2054,9 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
                 pointerStartX: event.clientX,
                 pointerStartY: event.clientY,
                 hasMoved: false,
+                anchorMinStartStep: bounds.minStartStep,
+                anchorMaxStartStep: bounds.maxStartStep,
+                previewTargetLane: null,
                 previewTargetAnchorStartStep: null,
                 previewMovedStartSteps: null,
             });
@@ -1762,6 +2073,7 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
             pointerStartX: event.clientX,
             pointerStartY: event.clientY,
             hasMoved: false,
+            previewTargetLane: null,
             previewTargetStartStep: null,
         });
     }
@@ -1856,7 +2168,7 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
 
     function setEffectType(value: number) {
         const nextEffectType = EFFECT_OPTIONS.includes(value as typeof EFFECT_OPTIONS[number])
-            ? value
+            ? value as SeqFxEffectType
             : SEQFX_EFFECT_TYPES.filter;
         setDrawEffectType(nextEffectType);
 
@@ -1995,6 +2307,7 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
         setSelectedCell(null);
         setSelection(null);
         setPatternPreview(null);
+        setInvalidDropTarget(null);
     }
 
     return (
@@ -2028,7 +2341,7 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
                         data-role="seqfx-draw-effect"
                         onChange={(event) => {
                             const nextValue = Number(event.currentTarget.value);
-                            setDrawEffectType(nextValue === 0 ? null : nextValue);
+                            setDrawEffectType(nextValue === 0 ? null : nextValue as SeqFxEffectType);
                         }}
                         value={drawEffectType ?? 0}
                     >
@@ -2065,6 +2378,9 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
                     </div>
                     {SEQFX_LANE_NAMES.map((laneName, lane) => {
                         const laneBlocks = getSeqFxLaneBlocks(renderedPatternState, lane);
+                        const invalidBlocks = invalidDropTarget?.patternIndex === selectedPattern && invalidDropTarget.lane === lane
+                            ? invalidDropTarget.blocks
+                            : [];
 
                         return (
                             <div className="seqfx-lane-row" key={laneName}>
@@ -2111,6 +2427,17 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
                                             </div>
                                         );
                                     })}
+                                    {invalidBlocks.map((block) => (
+                                        <div
+                                            aria-hidden="true"
+                                            className="seqfx-invalid-drop"
+                                            data-role="seqfx-invalid-drop"
+                                            data-lane={lane}
+                                            data-start={block.startStep}
+                                            key={`invalid:${lane}:${block.startStep}`}
+                                            style={gridGeometry.blockStyle(block.startStep, block.length)}
+                                        />
+                                    ))}
                                     {laneBlocks.map((block) => {
                                         const blockIsPreview = patternPreview?.patternIndex === selectedPattern
                                             && patternPreview.lane === lane

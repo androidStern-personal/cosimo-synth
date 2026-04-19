@@ -24,7 +24,7 @@ function assertBoolean(value: unknown, label: string) {
     }
 }
 
-function assertFiniteNumber(value: unknown, label: string) {
+function assertFiniteNumber(value: unknown, label: string): asserts value is number {
     if (typeof value !== "number" || !Number.isFinite(value)) {
         throw new Error(`${label} must be finite number.`);
     }

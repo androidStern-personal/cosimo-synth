@@ -501,9 +501,6 @@ processor SeqFx [[ main ]]
             }
         }
 
-        if (upload.authoritative)
-            releaseTimeEffects();
-
         if (currentCellChanged)
         {
             relatchingFromPatternUpload = true;
