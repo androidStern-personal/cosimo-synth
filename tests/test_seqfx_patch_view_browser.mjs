@@ -22,6 +22,10 @@ const TAPE_GRAPH_LEFT = 28;
 const TAPE_GRAPH_TOP = 12;
 const TAPE_GRAPH_PLOT_WIDTH = 222;
 const TAPE_GRAPH_PLOT_HEIGHT = 114;
+const STUTTER_GRAPH_VIEWBOX_WIDTH = 480;
+const STUTTER_GRAPH_VIEWBOX_HEIGHT = 220;
+const STUTTER_GRAPH_LEFT = 24;
+const STUTTER_GRAPH_PLOT_WIDTH = 432;
 
 let serverProcess;
 let browser;
@@ -149,6 +153,15 @@ function tapeGraphPoint(graphBox, normalizedTime, normalizedSpeed) {
     return {
         x: graphBox.x + ((svgX / TAPE_GRAPH_VIEWBOX_WIDTH) * graphBox.width),
         y: graphBox.y + ((svgY / TAPE_GRAPH_VIEWBOX_HEIGHT) * graphBox.height),
+    };
+}
+
+function stutterGraphPoint(graphBox, normalizedGate) {
+    const svgX = STUTTER_GRAPH_LEFT + (Math.min(1, Math.max(0, normalizedGate)) * STUTTER_GRAPH_PLOT_WIDTH);
+
+    return {
+        x: graphBox.x + ((svgX / STUTTER_GRAPH_VIEWBOX_WIDTH) * graphBox.width),
+        y: graphBox.y + ((110 / STUTTER_GRAPH_VIEWBOX_HEIGHT) * graphBox.height),
     };
 }
 
@@ -874,20 +887,90 @@ test("seqfx_shared_snapshot_header_captures_updates_and_recalls_grid_state", asy
     await page.close();
 });
 
-test("seqfx_shift_selection_disables_trigger_latched_stutter_slices_edit", async () => {
+test("seqfx_stutter_inspector_renders_interactive_envelope_editor_and_writes_block_params", async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
+    await loadSeqFxHarness(page);
+    await page.locator('[data-role="seqfx-root"]').waitFor();
+    await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
+
+    await page.getByRole("button", { name: "Stutter step 1", exact: true }).click();
+    await page.locator('[data-role="seqfx-stutter-editor"]').waitFor();
+    await page.locator('[data-role="seqfx-stutter-graph"]').waitFor();
+
+    assert.equal(await page.locator('[data-role="seqfx-param"][data-param="0"]').count(), 0);
+    assert.equal(await page.locator('[data-role="seqfx-stutter-repeat-tick"]').count(), 8);
+
+    const tickBox = await page.locator('[data-role="seqfx-stutter-repeat-tick"]').first().boundingBox();
+    assert.ok(tickBox);
+    assert.ok(tickBox.height >= 12, `repeat strip ticks should be thick enough to read, got ${tickBox.height}`);
+
+    await page.locator('[data-role="seqfx-stutter-slices-increase"]').click();
+    await page.locator('[data-role="seqfx-stutter-speed-increase"]').click();
+
+    let snapshot = await getHarnessSnapshot(page);
+    let upload = patternUploads(snapshot).at(-1).value;
+    assert.equal(upload.params[3][0][0], 9);
+    assertClose(upload.params[3][0][1], 1.05, 0.001, "speed stepper should write speed");
+    assert.equal(await page.locator('[data-role="seqfx-stutter-repeat-tick"]').count(), 9);
+
+    const graphBox = await page.locator('[data-role="seqfx-stutter-graph"]').boundingBox();
+    assert.ok(graphBox);
+    await page.mouse.click(stutterGraphPoint(graphBox, 0.25).x, stutterGraphPoint(graphBox, 0.25).y);
+    snapshot = await getHarnessSnapshot(page);
+    upload = patternUploads(snapshot).at(-1).value;
+    assertClose(upload.params[3][0][3], 0.25, 0.03, "gate graph click should write gate");
+
+    const morphBox = await page.locator('[data-role="seqfx-stutter-morph-track"]').boundingBox();
+    assert.ok(morphBox);
+    await page.mouse.click(morphBox.x + morphBox.width * 0.8, morphBox.y + morphBox.height / 2);
+    snapshot = await getHarnessSnapshot(page);
+    upload = patternUploads(snapshot).at(-1).value;
+    assertClose(upload.params[3][0][2], 0.8, 0.03, "morph track click should write shape");
+
+    await page.locator('[data-role="seqfx-stutter-shape-stop"][data-stop="5"]').click();
+    snapshot = await getHarnessSnapshot(page);
+    upload = patternUploads(snapshot).at(-1).value;
+    assert.equal(upload.params[3][0][2], 1);
+
+    await page.locator('[data-role="seqfx-stutter-morph-track"]').focus();
+    await page.keyboard.press("Home");
+    snapshot = await getHarnessSnapshot(page);
+    upload = patternUploads(snapshot).at(-1).value;
+    assert.equal(upload.params[3][0][2], 0);
+
+    await page.close();
+});
+
+test("seqfx_stutter_editor_applies_shape_and_gate_to_selected_block_group", async () => {
     const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
     await loadSeqFxHarness(page);
     await page.locator('[data-role="seqfx-root"]').waitFor();
 
-    await page.getByRole("button", { name: "Stutter step 3", exact: true }).click();
-    await page.getByRole("button", { name: "Stutter step 4", exact: true }).click({ modifiers: ["Shift"] });
+    await page.getByRole("button", { name: "Stutter step 2", exact: true }).click();
+    await resizeBlockToStep(page, 3, 2, 3);
+    await page.getByRole("button", { name: "Stutter step 7", exact: true }).click();
+    await resizeBlockToStep(page, 3, 7, 8);
+    await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
 
-    await page.locator('[data-role="seqfx-inspector"]').getByText("Stutter steps 3-4").waitFor();
-    await page.locator('[data-role="seqfx-inspector"]').getByText("Slices").waitFor();
-    await assert.doesNotReject(
-        page.locator('[data-role="seqfx-param"][data-param="0"]').waitFor({ state: "attached" }),
+    await page.getByRole("button", { name: "Stutter block 2-3", exact: true }).click();
+    await page.getByRole("button", { name: "Stutter block 7-8", exact: true }).click({ modifiers: ["Shift"] });
+    await page.locator('[data-role="seqfx-stutter-editor"]').waitFor();
+
+    const graphBox = await page.locator('[data-role="seqfx-stutter-graph"]').boundingBox();
+    assert.ok(graphBox);
+    await page.mouse.click(stutterGraphPoint(graphBox, 0.4).x, stutterGraphPoint(graphBox, 0.4).y);
+    await page.locator('[data-role="seqfx-stutter-shape-stop"][data-stop="3"]').click();
+
+    const snapshot = await getHarnessSnapshot(page);
+    const upload = patternUploads(snapshot).at(-1).value;
+    assert.deepEqual(
+        [1, 2, 6, 7].map((step) => upload.params[3][step][2]),
+        [0.6, 0.6, 0.6, 0.6],
     );
-    assert.equal(await page.locator('[data-role="seqfx-param"][data-param="0"]').isDisabled(), true);
+    assert.deepEqual(
+        [1, 2, 6, 7].map((step) => Number(upload.params[3][step][3].toFixed(2))),
+        [0.4, 0.4, 0.4, 0.4],
+    );
 
     await page.close();
 });

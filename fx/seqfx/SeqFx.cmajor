@@ -74,6 +74,102 @@ namespace seqfx
         );
     }
 
+    float32 smoothStep01 (float32 value)
+    {
+        let x = clampFloat (value, 0.0f, 1.0f);
+        return x * x * (3.0f - (2.0f * x));
+    }
+
+    float32 stutterTentShape (float32 u, float32 peak)
+    {
+        if (peak <= 0.000001f)
+            return 1.0f - u;
+
+        if (peak >= 0.999999f)
+            return u;
+
+        if (u <= peak)
+            return u / peak;
+
+        return (1.0f - u) / (1.0f - peak);
+    }
+
+    float32 stutterSmoothBellShape (float32 u, float32 peak)
+    {
+        return smoothStep01 (stutterTentShape (u, peak));
+    }
+
+    float32 stutterBaseShape (int32 shapeIndex, float32 u)
+    {
+        if (shapeIndex == 0)
+            return 1.0f;
+
+        if (shapeIndex == 1)
+        {
+            let edge = 0.12f;
+            if (u < edge)
+                return smoothStep01 (u / edge);
+
+            if (u > 1.0f - edge)
+                return smoothStep01 ((1.0f - u) / edge);
+
+            return 1.0f;
+        }
+
+        if (shapeIndex == 2)
+            return u < 0.5f ? 2.0f * u : 2.0f * (1.0f - u);
+
+        if (shapeIndex == 3)
+            return stutterSmoothBellShape (u, 0.5f);
+
+        if (shapeIndex == 4)
+            return 1.0f - u;
+
+        return u;
+    }
+
+    float32 stutterEnvelopeAt (float32 phase, float32 shape, float32 gate)
+    {
+        let safeGate = clampFloat (gate, 0.0f, 1.0f);
+        let safePhase = clampFloat (phase, 0.0f, 1.0f);
+
+        if (safeGate <= 0.0f || safePhase >= safeGate)
+            return 0.0f;
+
+        let u = safePhase / safeGate;
+        let position = clampFloat (shape, 0.0f, 1.0f) * 5.0f;
+        var shapeIndex = int32 (std::intrinsics::floor (position));
+        if (shapeIndex > 4)
+            shapeIndex = 4;
+
+        let amount = position - float32 (shapeIndex);
+
+        if (shapeIndex < 2)
+            return (stutterBaseShape (shapeIndex, u) * (1.0f - amount))
+                + (stutterBaseShape (shapeIndex + 1, u) * amount);
+
+        if (shapeIndex == 2)
+            return (stutterTentShape (u, 0.5f) * (1.0f - amount))
+                + (stutterSmoothBellShape (u, 0.5f) * amount);
+
+        if (shapeIndex == 3)
+        {
+            let peak = 0.5f * (1.0f - amount);
+            let roundness = 1.0f - amount;
+            return (stutterSmoothBellShape (u, peak) * roundness)
+                + (stutterTentShape (u, peak) * (1.0f - roundness));
+        }
+
+        if (amount <= 0.5f)
+        {
+            let exponent = 1.0f + (8.0f * amount);
+            return std::intrinsics::pow (1.0f - u, exponent);
+        }
+
+        let exponent = 1.0f + (8.0f * (1.0f - amount));
+        return std::intrinsics::pow (u, exponent);
+    }
+
     float32 tapeStopSpeedAt (float32 elapsedFrames, float32 stopPointFrames, float32 curvePower)
     {
         let safeStopPoint = std::intrinsics::max (1.0f, stopPointFrames);
@@ -201,6 +297,7 @@ processor SeqFx [[ main ]]
     bool resetRequested;
     bool hostPositionPending;
     bool needsStepLatch = true;
+    bool relatchingFromPatternUpload;
     int32 monitorCountdown;
 
     bool filterActive;
@@ -257,6 +354,8 @@ processor SeqFx [[ main ]]
     float32 stutterMixTarget;
     int32 stutterSliceCount = 8;
     float32 stutterPlaybackSpeed = 1.0f;
+    float32 stutterShape = 0.55f;
+    float32 stutterGate = 0.68f;
     float32 stutterCaptureFrames;
     int32 stutterReadFrames = 2;
     float32 stutterReadLength = 2.0f;
@@ -305,7 +404,8 @@ processor SeqFx [[ main ]]
 
             stepParams[seqfx::laneStutter, step, 0] = 8.0f;
             stepParams[seqfx::laneStutter, step, 1] = 1.0f;
-            stepParams[seqfx::laneStutter, step, 2] = 0.0f;
+            stepParams[seqfx::laneStutter, step, 2] = 0.55f;
+            stepParams[seqfx::laneStutter, step, 3] = 0.68f;
         }
     }
 
@@ -335,7 +435,7 @@ processor SeqFx [[ main ]]
             }
         }
 
-        releaseTimeEffects();
+        relatchingFromPatternUpload = true;
         needsStepLatch = true;
     }
 
@@ -362,7 +462,10 @@ processor SeqFx [[ main ]]
     {
         hostRunning = state.isPlaying();
         if (! hostRunning)
+        {
             releaseTimeEffects();
+            relatchingFromPatternUpload = false;
+        }
     }
 
     event positionIn (std::timeline::Position position)
@@ -493,6 +596,7 @@ processor SeqFx [[ main ]]
             stepProgressFrames = 0.0;
             currentStepFrames = stepDurationFramesForStep (currentStep);
             releaseTimeEffects();
+            relatchingFromPatternUpload = false;
             needsStepLatch = true;
         }
     }
@@ -506,6 +610,7 @@ processor SeqFx [[ main ]]
 
         selectedPatternIndex = nextPattern;
         releaseTimeEffects();
+        relatchingFromPatternUpload = false;
         needsStepLatch = true;
     }
 
@@ -694,21 +799,34 @@ processor SeqFx [[ main ]]
             return;
         }
 
-        stutterPlaybackSpeed = seqfx::clampFloat (stepParams[lane, currentStep, 1], 0.5f, 2.0f);
+        let blockStart = blockStartStep (lane, currentStep);
+        let nextSliceCount = snapValue (stepParams[lane, blockStart, 0], 2, 32);
+        let nextBlockFrames = segmentDurationFrames (lane, blockStart);
+        let nextReadFrames = seqfx::clampInt (int32 (resolveSliceFramesForCount (nextBlockFrames, nextSliceCount)), 2, stutterBufferSize - 8);
+        let structureChanged = nextSliceCount != stutterSliceCount || nextReadFrames != stutterReadFrames;
+        let shouldRestart = ! wasActive
+            || (! relatchingFromPatternUpload && triggerSteps[lane, currentStep])
+            || (relatchingFromPatternUpload && structureChanged);
 
-        if (! wasActive || triggerSteps[lane, currentStep])
-        {
-            let blockStart = blockStartStep (lane, currentStep);
-            stutterSliceCount = snapValue (stepParams[lane, blockStart, 0], 2, 32);
-            startStutter (segmentDurationFrames (lane, blockStart));
-        }
+        stutterPlaybackSpeed = seqfx::clampFloat (stepParams[lane, currentStep, 1], 0.5f, 2.0f);
+        stutterSliceCount = nextSliceCount;
+        stutterShape = seqfx::clampFloat (stepParams[lane, blockStart, 2], 0.0f, 1.0f);
+        stutterGate = seqfx::clampFloat (stepParams[lane, blockStart, 3], 0.0f, 1.0f);
+
+        if (shouldRestart)
+            startStutter (nextBlockFrames);
+    }
+
+    float32 resolveSliceFramesForCount (float32 blockFrames, int32 sliceCount)
+    {
+        let requestedFrames = blockFrames / float32 (std::intrinsics::max (1, sliceCount));
+        let frameCount = seqfx::clampInt (int32 (requestedFrames), 2, stutterBufferSize - 8);
+        return float32 (frameCount);
     }
 
     float32 resolveSliceFrames (float32 blockFrames)
     {
-        let requestedFrames = blockFrames / float32 (std::intrinsics::max (1, stutterSliceCount));
-        let frameCount = seqfx::clampInt (int32 (requestedFrames), 2, stutterBufferSize - 8);
-        return float32 (frameCount);
+        return resolveSliceFramesForCount (blockFrames, stutterSliceCount);
     }
 
     void startTapeStop (float32 blockDurationFrames)
@@ -963,6 +1081,8 @@ processor SeqFx [[ main ]]
             std::intrinsics::max (1.0f, stutterReadLength * 0.5f)
         );
         var stutterOut = readStutterCapture (stutterPhaseFrames);
+        let stutterPhase = seqfx::clampFloat (stutterPhaseFrames / std::intrinsics::max (1.0f, stutterReadLength), 0.0f, 1.0f);
+        let stutterEnvelope = seqfx::stutterEnvelopeAt (stutterPhase, stutterShape, stutterGate);
 
         if (stutterPhaseFrames > stutterReadLength - crossfadeFrames)
         {
@@ -970,6 +1090,8 @@ processor SeqFx [[ main ]]
             let head = readStutterCapture (fade * crossfadeFrames);
             stutterOut = (stutterOut * (1.0f - fade)) + (head * fade);
         }
+
+        stutterOut *= stutterEnvelope;
 
         stutterPhaseFrames += stutterPlaybackSpeed;
 
@@ -1025,6 +1147,7 @@ processor SeqFx [[ main ]]
             {
                 resetClockToLoopStart();
                 releaseTimeEffects();
+                relatchingFromPatternUpload = false;
                 needsStepLatch = true;
                 resetRequested = false;
             }
@@ -1043,6 +1166,7 @@ processor SeqFx [[ main ]]
             {
                 currentStepFrames = stepDurationFramesForStep (currentStep);
                 latchStep();
+                relatchingFromPatternUpload = false;
                 needsStepLatch = false;
             }
 

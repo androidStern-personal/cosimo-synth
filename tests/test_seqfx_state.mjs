@@ -68,6 +68,60 @@ test("default_seqfx_state_contains_twelve_complete_four_lane_patterns", () => {
     assert.equal(upload.activeSteps[0].length, SEQFX_STEP_COUNT);
     assert.equal(upload.params[0][0].length, SEQFX_PARAM_COUNT);
     assert.equal(upload.params[SEQFX_LANES.stutter][0][0], 8);
+    assert.equal(upload.params[SEQFX_LANES.stutter][0][1], 1);
+    assert.equal(upload.params[SEQFX_LANES.stutter][0][2], 0.55);
+    assert.equal(upload.params[SEQFX_LANES.stutter][0][3], 0.68);
+});
+
+test("stutter_shape_and_gate_are_continuous_clamped_parameters", () => {
+    let state = createDefaultSeqFxState();
+    state = applySeqFxBlockCreate(state, {
+        patternIndex: 0,
+        lane: SEQFX_LANES.stutter,
+        startStep: 4,
+        length: 3,
+    });
+    state = applySeqFxBlockParamEdit(state, {
+        patternIndex: 0,
+        lane: SEQFX_LANES.stutter,
+        startStep: 4,
+        paramIndex: 2,
+        value: 0.375,
+    });
+    state = applySeqFxBlockParamEdit(state, {
+        patternIndex: 0,
+        lane: SEQFX_LANES.stutter,
+        startStep: 4,
+        paramIndex: 3,
+        value: 1.5,
+    });
+
+    const upload = buildSeqPatternUpload(state, {
+        patternIndex: 0,
+        authoritative: true,
+    });
+
+    assert.deepEqual(
+        upload.params[SEQFX_LANES.stutter].slice(4, 7).map((params) => params.slice(0, 4)),
+        [
+            [8, 1, 0.375, 1],
+            [8, 1, 0.375, 1],
+            [8, 1, 0.375, 1],
+        ],
+    );
+
+    state = applySeqFxBlockParamEdit(state, {
+        patternIndex: 0,
+        lane: SEQFX_LANES.stutter,
+        startStep: 4,
+        paramIndex: 3,
+        value: -1,
+    });
+
+    assert.equal(
+        buildSeqPatternUpload(state, { patternIndex: 0, authoritative: true }).params[SEQFX_LANES.stutter][4][3],
+        0,
+    );
 });
 
 test("serializing_and_normalizing_seqfx_state_preserves_per_step_parameters", () => {

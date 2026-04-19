@@ -1,3 +1,14 @@
+import {
+    STUTTER_DEFAULT_GATE,
+    STUTTER_DEFAULT_SHAPE,
+    STUTTER_DEFAULT_SLICES,
+    STUTTER_DEFAULT_SPEED,
+    STUTTER_SLICES_MAX,
+    STUTTER_SLICES_MIN,
+    STUTTER_SPEED_MAX,
+    STUTTER_SPEED_MIN,
+} from "./stutter-envelope";
+
 export const SEQFX_STATE_KEY = "seqfx.v1";
 export const SEQFX_STEP_COUNT = 32;
 export const SEQFX_LANE_COUNT = 4;
@@ -167,7 +178,7 @@ const DEFAULT_LANE_PARAMS: number[][] = [
     [0, 2_000, 500, 0.707, 1, 0, 0, 0],
     [8, 1, 0, 0, 0, 0, 0, 0],
     [1, 1, 1, 25, 0, 0, 0, 0],
-    [8, 1, 0, 0, 0, 0, 0, 0],
+    [STUTTER_DEFAULT_SLICES, STUTTER_DEFAULT_SPEED, STUTTER_DEFAULT_SHAPE, STUTTER_DEFAULT_GATE, 0, 0, 0, 0],
 ];
 
 const PARAM_LIMITS: Array<Array<[number, number]>> = [
@@ -202,10 +213,10 @@ const PARAM_LIMITS: Array<Array<[number, number]>> = [
         [0, 0],
     ],
     [
-        [2, 32],
-        [0.5, 2],
-        [0, 0],
-        [0, 0],
+        [STUTTER_SLICES_MIN, STUTTER_SLICES_MAX],
+        [STUTTER_SPEED_MIN, STUTTER_SPEED_MAX],
+        [0, 1],
+        [0, 1],
         [0, 0],
         [0, 0],
         [0, 0],
@@ -219,7 +230,6 @@ const INTEGER_PARAMS = new Set([
     `${SEQFX_LANES.crusher}:1`,
     `${SEQFX_LANES.tapeStop}:4`,
     `${SEQFX_LANES.stutter}:0`,
-    `${SEQFX_LANES.stutter}:2`,
 ]);
 
 const TRIGGER_LATCHED_PARAMS = new Set([

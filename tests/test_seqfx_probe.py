@@ -455,7 +455,7 @@ def test_global_mix_zero_returns_dry_even_when_all_lanes_are_active(
     _activate_step(upload, lane=LANE_FILTER, step=0, params=[0, 160.0, 160.0, 0.707, 1.0])
     _activate_step(upload, lane=LANE_CRUSHER, step=0, params=[4, 12, 12.0])
     _activate_step(upload, lane=LANE_TAPE, step=0, params=[1.0, 1.0, 1.0, 20.0])
-    _activate_step(upload, lane=LANE_STUTTER, step=0, params=[1.0, 1.0, 0.0])
+    _activate_step(upload, lane=LANE_STUTTER, step=0, params=[1.0, 1.0, 0.0, 1.0])
 
     input_audio = _sine(STEP_FRAMES * 3, 1_200.0)
     dry_output = _render(generated_runtime, tmp_path, input_audio, _base_schedule(upload, global_mix=0.0))
@@ -602,7 +602,7 @@ def test_stutter_repeats_the_captured_slice(
 ) -> None:
     upload = _empty_upload()
     for step in (2, 3):
-        _activate_step(upload, lane=LANE_STUTTER, step=step, trigger=(step == 2), params=[4.0, 1.0, 0.0])
+        _activate_step(upload, lane=LANE_STUTTER, step=step, trigger=(step == 2), params=[4.0, 1.0, 0.0, 1.0])
 
     frames = STEP_FRAMES * 4
     t = np.arange(frames, dtype=np.float64) / SAMPLE_RATE
@@ -620,12 +620,139 @@ def test_stutter_repeats_the_captured_slice(
     assert difference < reference * 0.12
 
 
+def test_stutter_gate_shortens_each_repeated_cut(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    upload = _empty_upload()
+    for step in (0, 1):
+        _activate_step(
+            upload,
+            lane=LANE_STUTTER,
+            step=step,
+            trigger=(step == 0),
+            params=[4.0, 1.0, 0.0, 0.35],
+        )
+
+    frames = STEP_FRAMES * 3
+    n = np.arange(frames, dtype=np.float64)
+    mono = (
+        0.45 * np.sin(2.0 * np.pi * 330.0 * n / SAMPLE_RATE)
+        + 0.16 * np.sin(2.0 * np.pi * 1_100.0 * n / SAMPLE_RATE)
+    ).astype(np.float32)
+    input_audio = np.column_stack([mono, mono]).astype(np.float32)
+    output = _render(generated_runtime, tmp_path, input_audio, _base_schedule(upload))
+
+    slice_frames = (STEP_FRAMES * 2) // 4
+    repeat_start = slice_frames
+    early_window = output[repeat_start + 80 : repeat_start + 420, 0]
+    gated_window = output[repeat_start + int(slice_frames * 0.55) : repeat_start + int(slice_frames * 0.75), 0]
+
+    early_rms = float(np.sqrt(np.mean(early_window**2)))
+    gated_rms = float(np.sqrt(np.mean(gated_window**2)))
+
+    assert early_rms > 0.15
+    assert gated_rms < early_rms * 0.18
+
+
+def test_stutter_shape_changes_the_rendered_repeat_envelope(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    def render_shape(shape: float) -> np.ndarray:
+        upload = _empty_upload()
+        for step in (0, 1):
+            _activate_step(
+                upload,
+                lane=LANE_STUTTER,
+                step=step,
+                trigger=(step == 0),
+                params=[4.0, 1.0, shape, 1.0],
+            )
+
+        return _render(generated_runtime, tmp_path, input_audio, _base_schedule(upload))
+
+    frames = STEP_FRAMES * 3
+    n = np.arange(frames, dtype=np.float64)
+    mono = (
+        0.42 * np.sin(2.0 * np.pi * 330.0 * n / SAMPLE_RATE)
+        + 0.18 * np.sin(2.0 * np.pi * 970.0 * n / SAMPLE_RATE)
+    ).astype(np.float32)
+    input_audio = np.column_stack([mono, mono]).astype(np.float32)
+
+    gate_output = render_shape(0.0)
+    triangle_output = render_shape(0.4)
+
+    slice_frames = (STEP_FRAMES * 2) // 4
+    repeat_start = slice_frames
+    attack_window = slice(repeat_start + 120, repeat_start + 480)
+    middle_window = slice(repeat_start + int(slice_frames * 0.42), repeat_start + int(slice_frames * 0.58))
+
+    gate_attack_rms = float(np.sqrt(np.mean(gate_output[attack_window, 0] ** 2)))
+    triangle_attack_rms = float(np.sqrt(np.mean(triangle_output[attack_window, 0] ** 2)))
+    gate_middle_rms = float(np.sqrt(np.mean(gate_output[middle_window, 0] ** 2)))
+    triangle_middle_rms = float(np.sqrt(np.mean(triangle_output[middle_window, 0] ** 2)))
+    envelope_delta = float(np.sqrt(np.mean((gate_output[attack_window, 0] - triangle_output[attack_window, 0]) ** 2)))
+
+    assert gate_attack_rms > 0.12
+    assert triangle_attack_rms < gate_attack_rms * 0.72
+    assert triangle_middle_rms > gate_middle_rms * 0.75
+    assert envelope_delta > gate_attack_rms * 0.25
+
+
+def test_stutter_live_upload_keeps_repeating_and_updates_envelope(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    def upload_with_envelope(*, revision: int, shape: float, gate: float) -> dict[str, object]:
+        upload = _empty_upload(revision=revision)
+        for step in (0, 1):
+            _activate_step(
+                upload,
+                lane=LANE_STUTTER,
+                step=step,
+                trigger=(step == 0),
+                params=[4.0, 1.0, shape, gate],
+            )
+        return upload
+
+    slice_frames = (STEP_FRAMES * 2) // 4
+    frames = STEP_FRAMES * 3
+    mono = np.zeros(frames, dtype=np.float32)
+    n = np.arange(slice_frames, dtype=np.float64)
+    captured_slice = (
+        0.42 * np.sin(2.0 * np.pi * 330.0 * n / SAMPLE_RATE)
+        + 0.18 * np.sin(2.0 * np.pi * 970.0 * n / SAMPLE_RATE)
+    ).astype(np.float32)
+    mono[:slice_frames] = captured_slice
+    input_audio = np.column_stack([mono, mono]).astype(np.float32)
+
+    schedule = _base_schedule(upload_with_envelope(revision=1, shape=0.0, gate=1.0))
+    schedule[STEP_FRAMES + 300] = [
+        ["event", "patternUpload", upload_with_envelope(revision=2, shape=0.4, gate=0.45)]
+    ]
+
+    output = _render(generated_runtime, tmp_path, input_audio, schedule)
+
+    live_attack_window = output[STEP_FRAMES + 420 : STEP_FRAMES + 620, 0]
+    live_gated_window = output[STEP_FRAMES + 850 : STEP_FRAMES + 1_100, 0]
+    dry_attack_window = input_audio[STEP_FRAMES + 420 : STEP_FRAMES + 620, 0]
+
+    live_attack_rms = float(np.sqrt(np.mean(live_attack_window**2)))
+    live_gated_rms = float(np.sqrt(np.mean(live_gated_window**2)))
+    dry_attack_rms = float(np.sqrt(np.mean(dry_attack_window**2)))
+
+    assert dry_attack_rms < 0.001
+    assert live_attack_rms > 0.08
+    assert live_gated_rms < live_attack_rms * 0.35
+
+
 def test_stutter_captures_first_slice_when_transport_starts_on_the_block(
     generated_runtime: GeneratedRuntime,
     tmp_path: Path,
 ) -> None:
     upload = _empty_upload()
-    _activate_step(upload, lane=LANE_STUTTER, step=0, trigger=True, params=[8.0, 1.0, 0.0])
+    _activate_step(upload, lane=LANE_STUTTER, step=0, trigger=True, params=[8.0, 1.0, 0.0, 1.0])
 
     slice_frames = STEP_FRAMES // 8
     frames = STEP_FRAMES * 2
@@ -659,8 +786,8 @@ def test_stutter_captures_first_slice_even_when_block_start_mix_is_zero(
     tmp_path: Path,
 ) -> None:
     upload = _empty_upload()
-    _activate_step(upload, lane=LANE_STUTTER, step=0, trigger=True, mix=0.0, params=[4.0, 1.0, 0.0])
-    _activate_step(upload, lane=LANE_STUTTER, step=1, trigger=False, mix=1.0, params=[4.0, 1.0, 0.0])
+    _activate_step(upload, lane=LANE_STUTTER, step=0, trigger=True, mix=0.0, params=[4.0, 1.0, 0.0, 1.0])
+    _activate_step(upload, lane=LANE_STUTTER, step=1, trigger=False, mix=1.0, params=[4.0, 1.0, 0.0, 1.0])
 
     slice_frames = (STEP_FRAMES * 2) // 4
     frames = STEP_FRAMES * 3

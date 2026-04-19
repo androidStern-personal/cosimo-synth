@@ -14,6 +14,7 @@ import {
     cutoffsFromCenterRangeOctaves,
     geometricCenterCutoffHz,
 } from "../../../ui/shared/filter-range-editor";
+import { StutterEnvelopeEditor } from "./StutterEnvelopeEditor";
 import {
     SEQFX_LANES,
     SEQFX_LANE_NAMES,
@@ -142,6 +143,8 @@ const PARAM_DEFINITIONS: Record<number, ParamDefinition[]> = {
     [SEQFX_LANES.stutter]: [
         { index: 0, label: "Slices", min: 2, max: 32, step: 1, hint: "Record slice 1; repeat the rest." },
         { index: 1, label: "Speed", min: 0.5, max: 2, step: 0.01, hint: "1.00 keeps the captured pitch." },
+        { index: 2, label: "Shape", min: 0, max: 1, step: 0.01, hint: "Morphs the per-cut envelope." },
+        { index: 3, label: "Gate", min: 0, max: 1, step: 0.01, hint: "Audible portion of each cut." },
     ],
 };
 
@@ -150,6 +153,10 @@ const FILTER_PARAM_START_CUTOFF = 1;
 const FILTER_PARAM_END_CUTOFF = 2;
 const FILTER_PARAM_RESONANCE = 3;
 const FILTER_PARAM_CURVE = 4;
+const STUTTER_PARAM_SLICES = 0;
+const STUTTER_PARAM_SPEED = 1;
+const STUTTER_PARAM_SHAPE = 2;
+const STUTTER_PARAM_GATE = 3;
 
 const SEQFX_FILTER_MODE_OPTIONS: FilterRangeModeOption[] = [
     { label: "LP", value: "lowpass" },
@@ -185,6 +192,16 @@ function filterRangeEndpointsFromSeqFxStep(step: SeqFxStep): FilterRangeEndpoint
     return {
         startCutoffHz: step.params[FILTER_PARAM_START_CUTOFF] ?? 2_000,
         endCutoffHz: step.params[FILTER_PARAM_END_CUTOFF] ?? 500,
+    };
+}
+
+function stutterValueFromSeqFxStep(step: SeqFxStep) {
+    return {
+        slices: step.params[STUTTER_PARAM_SLICES],
+        speed: step.params[STUTTER_PARAM_SPEED],
+        shape: step.params[STUTTER_PARAM_SHAPE],
+        gate: step.params[STUTTER_PARAM_GATE],
+        mix: step.mix,
     };
 }
 
@@ -1752,6 +1769,70 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
         setParam(FILTER_PARAM_END_CUTOFF, nextRange.endCutoffHz);
     }
 
+    function setStutterParam(paramIndex: number, value: number) {
+        if (!activeSelection) {
+            return;
+        }
+
+        if (selectedBlockGroup) {
+            bridge.setBlockSelectionParam({
+                patternIndex: selectedPattern,
+                lane: activeSelection.lane,
+                blockStartSteps: selectedBlockStartSteps,
+                paramIndex,
+                value,
+            });
+        } else if (inspectedBlock) {
+            bridge.setBlockParam({
+                patternIndex: selectedPattern,
+                lane: inspectedBlock.lane,
+                startStep: inspectedBlock.startStep,
+                paramIndex,
+                value,
+            });
+        } else {
+            setParam(paramIndex, value);
+        }
+    }
+
+    function setStutterMix(value: number) {
+        if (!activeSelection) {
+            return;
+        }
+
+        if (selectedBlockGroup) {
+            bridge.setBlockSelectionMix({
+                patternIndex: selectedPattern,
+                lane: activeSelection.lane,
+                blockStartSteps: selectedBlockStartSteps,
+                value,
+            });
+        } else if (inspectedBlock) {
+            bridge.setBlockMix({
+                patternIndex: selectedPattern,
+                lane: inspectedBlock.lane,
+                startStep: inspectedBlock.startStep,
+                value,
+            });
+        } else {
+            setMix(value);
+        }
+    }
+
+    function getStutterBlockLabel() {
+        if (selectedBlockStartSteps.length > 1) {
+            return `${selectedBlockStartSteps.length} blocks`;
+        }
+
+        if (!inspectedBlock) {
+            return getSelectionLabel(activeSelection).toLowerCase();
+        }
+
+        return inspectedBlock.length === 1
+            ? `block ${inspectedBlock.startStep + 1}`
+            : `block ${inspectedBlock.startStep + 1} - ${inspectedBlock.endStep + 1}`;
+    }
+
     function deleteSelectedBlock() {
         if (!activeSelection) {
             return;
@@ -1935,19 +2016,21 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
                         <p className="seqfx-empty">Choose a lane cell to edit its mix and effect settings.</p>
                     ) : (
                         <>
-                            <label className="seqfx-field">
-                                <span>Mix</span>
-                                <input
-                                    data-role="seqfx-mix"
-                                    max={1}
-                                    min={0}
-                                    onChange={(event) => setMix(Number(event.currentTarget.value))}
-                                    step={0.01}
-                                    type="range"
-                                    value={inspectedCell.mix}
-                                />
-                                <output>{formatValue(inspectedCell.mix)}</output>
-                            </label>
+                            {inspectedLane === SEQFX_LANES.stutter ? null : (
+                                <label className="seqfx-field">
+                                    <span>Mix</span>
+                                    <input
+                                        data-role="seqfx-mix"
+                                        max={1}
+                                        min={0}
+                                        onChange={(event) => setMix(Number(event.currentTarget.value))}
+                                        step={0.01}
+                                        type="range"
+                                        value={inspectedCell.mix}
+                                    />
+                                    <output>{formatValue(inspectedCell.mix)}</output>
+                                </label>
+                            )}
                             {inspectedLane === SEQFX_LANES.tapeStop ? (
                                 <TapeStopEnvelopeEditor
                                     step={inspectedCell}
@@ -1991,6 +2074,16 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
                                             );
                                         })}
                                 </>
+                            ) : inspectedLane === SEQFX_LANES.stutter ? (
+                                <StutterEnvelopeEditor
+                                    blockLabel={getStutterBlockLabel()}
+                                    value={stutterValueFromSeqFxStep(inspectedCell)}
+                                    onGateChange={(value) => setStutterParam(STUTTER_PARAM_GATE, value)}
+                                    onMixChange={setStutterMix}
+                                    onShapeChange={(value) => setStutterParam(STUTTER_PARAM_SHAPE, value)}
+                                    onSlicesChange={(value) => setStutterParam(STUTTER_PARAM_SLICES, value)}
+                                    onSpeedChange={(value) => setStutterParam(STUTTER_PARAM_SPEED, value)}
+                                />
                             ) : PARAM_DEFINITIONS[inspectedLane].map((definition) => {
                                 const triggerLatched = isSeqFxTriggerLatchedParam(inspectedLane, definition.index);
                                 const disabled = triggerLatched && !selectedBlockGroup && !selectedWholeBlock && (activeSelection?.steps.length ?? 0) > 1;
