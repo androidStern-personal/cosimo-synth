@@ -9,6 +9,7 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."
 const stateModule = await loadUIModule(repoRoot, "fx/seqfx/view/seqfx-state.ts");
 const bridgeModule = await loadUIModule(repoRoot, "fx/seqfx/view/seqfx-runtime-bridge.ts");
 const adapterModule = await loadUIModule(repoRoot, "fx/seqfx/view/seqfx-preset-adapter.ts");
+const workerModule = await loadUIModule(repoRoot, "fx/seqfx/worker/seqfx-worker-service.ts");
 
 const {
     SEQFX_EFFECT_TYPES,
@@ -28,6 +29,9 @@ const {
 const {
     createSeqFxPresetStateAdapter,
 } = adapterModule;
+const {
+    createSeqFxWorkerService,
+} = workerModule;
 
 class FakePatchConnection {
     constructor(storedState = {}, parameters = {}) {
@@ -44,8 +48,19 @@ class FakePatchConnection {
         this.storedStateListeners.add(listener);
     }
 
+    removeStoredStateValueListener(listener) {
+        this.storedStateListeners.delete(listener);
+    }
+
     requestFullStoredState(callback) {
-        callback({ ...this.storedState });
+        callback({
+            parameters: { ...this.parameters },
+            values: { ...this.storedState },
+        });
+    }
+
+    requestStoredStateValue(key) {
+        this.emitStoredState(key, this.storedState[key]);
     }
 
     requestParameterValue(endpointID) {
@@ -57,6 +72,7 @@ class FakePatchConnection {
     sendStoredStateValue(key, value) {
         this.storedWrites.push({ key, value });
         this.storedState[key] = value;
+        this.emitStoredState(key, value);
     }
 
     addParameterListener(endpointID, listener) {
@@ -65,10 +81,18 @@ class FakePatchConnection {
         this.parameterListeners.set(endpointID, listeners);
     }
 
+    removeParameterListener(endpointID, listener) {
+        this.parameterListeners.get(endpointID)?.delete(listener);
+    }
+
     addEndpointListener(endpointID, listener) {
         const listeners = this.endpointListeners.get(endpointID) ?? new Set();
         listeners.add(listener);
         this.endpointListeners.set(endpointID, listeners);
+    }
+
+    removeEndpointListener(endpointID, listener) {
+        this.endpointListeners.get(endpointID)?.delete(listener);
     }
 
     sendEventOrValue(endpointID, value) {
@@ -78,6 +102,16 @@ class FakePatchConnection {
             listener(value);
         }
     }
+
+    emitStoredState(key, value) {
+        for (const listener of this.storedStateListeners) {
+            listener({ key, value });
+        }
+    }
+}
+
+function patternUploads(connection) {
+    return connection.events.filter((event) => event.endpointID === SEQFX_ENDPOINTS.patternUpload);
 }
 
 test("seqfx_adapter_contract_registers_required_seqfx_v2_state", () => {
@@ -125,7 +159,7 @@ test("seqfx_adapter_capture_reads_bridge_state_not_dom_and_serializes_all_patter
     assert.equal(restored.patterns[7].lanes[SEQFX_LANES.filter].steps[5].params[1], 440);
 });
 
-test("seqfx_adapter_apply_writes_seqfx_v2_and_uploads_selected_pattern_authoritative", () => {
+test("seqfx_adapter_apply_writes_seqfx_v2_and_worker_uploads_selected_pattern", () => {
     let state = createDefaultSeqFxState();
     state = applySeqFxCellToggle(state, {
         patternIndex: 4,
@@ -135,9 +169,11 @@ test("seqfx_adapter_apply_writes_seqfx_v2_and_uploads_selected_pattern_authorita
     });
 
     const connection = new FakePatchConnection({}, { patternSelect: 4 });
+    const workerService = createSeqFxWorkerService(connection);
     const bridge = new SeqFxRuntimeBridge(connection);
     const adapter = createSeqFxPresetStateAdapter({ bridge, patchConnection: connection });
 
+    workerService.start();
     bridge.attach();
     bridge.requestBootState();
     connection.events = [];
@@ -146,14 +182,16 @@ test("seqfx_adapter_apply_writes_seqfx_v2_and_uploads_selected_pattern_authorita
     adapter.apply(serializeSeqFxState(state));
 
     assert.equal(connection.storedWrites.at(-1).key, "seqfx.v2");
-    const upload = connection.events.find((event) => event.endpointID === SEQFX_ENDPOINTS.patternUpload);
+    const uploads = patternUploads(connection);
+    assert.equal(uploads.length, 1);
+    const upload = uploads[0];
     assert.equal(upload.value.patternIndex, 4);
-    assert.equal(upload.value.authoritative, true);
+    assert.equal(upload.value.authoritative, false);
     assert.equal(upload.value.activeSteps[SEQFX_LANES.stutter][8], true);
     assert.equal(upload.value.effectTypes[SEQFX_LANES.stutter][8], SEQFX_EFFECT_TYPES.stutter);
 });
 
-test("seqfx_adapter_apply_accepts_legacy_v1_state_and_migrates_effect_type_from_old_lane", () => {
+test("seqfx_adapter_rejects_legacy_v1_state_instead_of_migrating", () => {
     let state = createDefaultSeqFxState();
     state = applySeqFxCellToggle(state, {
         patternIndex: 2,
@@ -174,15 +212,12 @@ test("seqfx_adapter_apply_accepts_legacy_v1_state_and_migrates_effect_type_from_
     connection.events = [];
     connection.storedWrites = [];
 
-    adapter.apply(JSON.stringify(legacyState));
-
-    assert.equal(connection.storedWrites.at(-1).key, SEQFX_STATE_KEY);
-    const written = JSON.parse(connection.storedWrites.at(-1).value);
-    assert.equal(written.version, 2);
-    assert.equal(
-        written.patterns[2].lanes[SEQFX_LANES.crusher].steps[9].effectType,
-        SEQFX_EFFECT_TYPES.crusher,
+    assert.throws(
+        () => adapter.apply(JSON.stringify(legacyState)),
+        /version 2 patterns/i,
     );
+    assert.deepEqual(connection.storedWrites, []);
+    assert.deepEqual(connection.events, []);
 });
 
 test("seqfx_adapter_rejects_invalid_matrix_shape_in_presets_instead_of_normalizing_to_default", () => {

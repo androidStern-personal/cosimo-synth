@@ -478,7 +478,10 @@ async function createLoaderHarness(page) {
             }
 
             requestFullStoredState(callback) {
-                callback({ ...this.storedState });
+                callback({
+                    parameters: { ...this.parameters },
+                    values: { ...this.storedState },
+                });
             }
 
             requestStoredStateValue(key) {
@@ -538,6 +541,9 @@ async function createLoaderHarness(page) {
         }
 
         const patchConnection = new SeqFxLoaderHarnessPatchConnection();
+        const workerModule = await import(`/fx/seqfx/worker/seqfx-worker-service.ts?seqfx-loader-worker-test=${Date.now()}`);
+        const workerService = workerModule.createSeqFxWorkerService(patchConnection);
+        workerService.start();
         const loaderModule = await import(`/fx/seqfx/view/index.js?seqfx-loader-test=${Date.now()}`);
         const view = await loaderModule.default(patchConnection);
         document.getElementById("root").appendChild(view);
@@ -995,7 +1001,7 @@ test("seqfx_shared_snapshot_header_captures_updates_and_recalls_grid_state", asy
 
     snapshot = await getHarnessSnapshot(page);
     const recallUpload = patternUploads(snapshot).at(-1).value;
-    assert.equal(recallUpload.authoritative, true);
+    assert.equal(recallUpload.authoritative, false);
     assert.equal(recallUpload.activeSteps[0][0], true);
     assert.equal(recallUpload.activeSteps[0][4], false);
     assert.equal(snapshot.storedState[SEQFX_SNAPSHOT_BANK_STATE_KEY].activeSlotID, "A");
@@ -1110,7 +1116,7 @@ test("seqfx_stutter_editor_applies_shape_and_gate_to_selected_block_group", asyn
     await page.close();
 });
 
-test("seqfx_pattern_buttons_send_pattern_select_and_authoritative_upload", async () => {
+test("seqfx_pattern_buttons_send_pattern_select_and_worker_upload", async () => {
     const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
     await loadSeqFxHarness(page);
     await page.locator('[data-role="seqfx-root"]').waitFor();
@@ -1121,7 +1127,7 @@ test("seqfx_pattern_buttons_send_pattern_select_and_authoritative_upload", async
     const snapshot = await getHarnessSnapshot(page);
     assert.equal(snapshot.events.some((entry) => entry.endpointID === "patternSelect" && entry.value === 4), true);
     assert.equal(patternUploads(snapshot).at(-1).value.patternIndex, 4);
-    assert.equal(patternUploads(snapshot).at(-1).value.authoritative, true);
+    assert.equal(patternUploads(snapshot).at(-1).value.authoritative, false);
 
     await page.close();
 });

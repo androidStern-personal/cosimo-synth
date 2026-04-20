@@ -1,4 +1,4 @@
-import { cp, mkdir, readFile, rm } from "node:fs/promises";
+import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import react from "@vitejs/plugin-react";
@@ -28,6 +28,8 @@ export const effectPlugins = {
         juceOut: "build/seqfx_juce",
         cmakeTarget: "CosimoSeqFX",
         productName: "CosimoSeqFX",
+        workerSource: "fx/seqfx/worker/source.ts",
+        workerOut: "worker.js",
     },
 };
 
@@ -78,6 +80,53 @@ async function copyRelativeEntries(entries, fromRoot, toRoot, label) {
     }
 }
 
+async function writeRuntimePatchManifest(manifest, plugin, runtimeRoot, patchPath) {
+    const runtimeManifest = { ...manifest };
+
+    if (plugin.workerSource) {
+        runtimeManifest.worker = plugin.workerOut ?? "worker.js";
+    }
+
+    await writeFile(
+        path.join(runtimeRoot, path.basename(patchPath)),
+        `${JSON.stringify(runtimeManifest, null, 2)}\n`,
+        "utf8",
+    );
+}
+
+async function buildWorker(plugin, runtimeRoot) {
+    if (!plugin.workerSource) {
+        return;
+    }
+
+    const workerEntry = path.join(repoRoot, plugin.workerSource);
+    const workerOut = plugin.workerOut ?? "worker.js";
+
+    await build({
+        configFile: false,
+        root: repoRoot,
+        define: {
+            "process.env.NODE_ENV": JSON.stringify("production"),
+        },
+        build: {
+            target: "esnext",
+            minify: false,
+            emptyOutDir: false,
+            lib: {
+                entry: workerEntry,
+                formats: ["es"],
+                fileName: () => workerOut,
+            },
+            outDir: runtimeRoot,
+            rollupOptions: {
+                output: {
+                    inlineDynamicImports: true,
+                },
+            },
+        },
+    });
+}
+
 export async function readPatchManifest(patchPath) {
     const manifestText = await readFile(patchPath, "utf8");
 
@@ -117,10 +166,12 @@ export async function buildPlugin(pluginName) {
     await rm(runtimeRoot, { recursive: true, force: true });
     await mkdir(runtimeViewRoot, { recursive: true });
 
-    await cp(patchPath, path.join(runtimeRoot, path.basename(patchPath)));
+    await writeRuntimePatchManifest(manifest, plugin, runtimeRoot, patchPath);
     await copyRelativeEntries(manifest.source, patchRoot, runtimeRoot, "source");
     await copyRelativeEntries(manifest.resources, patchRoot, runtimeRoot, "resources");
-    await copyRelativeEntries(manifest.worker, patchRoot, runtimeRoot, "worker");
+    if (!plugin.workerSource) {
+        await copyRelativeEntries(manifest.worker, patchRoot, runtimeRoot, "worker");
+    }
     await copyRelativeEntries(manifest.sourceTransformer, patchRoot, runtimeRoot, "sourceTransformer");
     await cp(sharedLoaderPath, path.join(runtimeViewRoot, "index.js"));
 
@@ -150,6 +201,8 @@ export async function buildPlugin(pluginName) {
             },
         },
     });
+
+    await buildWorker(plugin, runtimeRoot);
 
     console.log(`Built ${pluginName} effect runtime at ${path.relative(repoRoot, runtimeRoot)}`);
 }

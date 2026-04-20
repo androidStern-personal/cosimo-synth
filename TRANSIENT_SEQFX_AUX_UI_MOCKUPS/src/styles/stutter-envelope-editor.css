@@ -1,0 +1,280 @@
+.seqfx-stutter-editor {
+    display: grid;
+    gap: 12px;
+}
+
+.seqfx-stutter-editor__panel {
+    position: relative;
+    container-type: inline-size;
+    border: 1px solid var(--editor-surface-border);
+    color: var(--editor-surface-ink);
+    background: var(--editor-surface-bg);
+    overflow: hidden;
+    /* Matches EDITOR_PLOT_BOTTOM_PADDING_PX in editor-tokens.ts — axis labels
+       + gate handle + halo all live within this strip below the plot floor. */
+    --editor-bottom-reserve: 40px;
+    /* Matches STUTTER_GATE_CHIP_TOP_RESERVE_PX — gate chip caps the gate line
+       at the top of the plot, matching the filter's range-handle chip pattern. */
+    --editor-top-reserve: 14px;
+}
+
+.seqfx-stutter-editor__canvas-wrap {
+    position: relative;
+}
+
+.seqfx-stutter-editor__surface {
+    display: block;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+    touch-action: none;
+    cursor: crosshair;
+}
+
+.seqfx-stutter-editor__viewport {
+    position: relative;
+    width: 100%;
+    /* Plot area + bottom reserve (axis labels + handle halo) + top reserve
+       (gate chip capping the gate line). The plot height scales with container
+       width but is clamped to a readable band so the envelope never collapses
+       at narrow inspector widths. */
+    height: calc(clamp(140px, 50cqw, 300px) + var(--editor-bottom-reserve) + var(--editor-top-reserve));
+    overflow: hidden;
+}
+
+.seqfx-stutter-editor__grid-line {
+    stroke: var(--editor-grid-stroke);
+    stroke-width: 1;
+    shape-rendering: crispEdges;
+}
+
+.seqfx-stutter-editor__axis {
+    stroke: var(--editor-axis-stroke);
+    stroke-width: 1;
+    shape-rendering: crispEdges;
+}
+
+.seqfx-stutter-editor__env-path {
+    fill: none;
+    stroke: var(--editor-curve-stroke);
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: var(--editor-curve-stroke-width);
+}
+
+.seqfx-stutter-editor__env-fill {
+    fill: var(--editor-curve-fill);
+}
+
+.seqfx-stutter-editor__gate-region {
+    fill: rgba(232, 96, 76, 0.14);
+    stroke: var(--editor-accent-end);
+    stroke-dasharray: 3 4;
+    stroke-width: 1;
+    stroke-opacity: 0.55;
+}
+
+.seqfx-stutter-editor__gate-line {
+    stroke: var(--editor-accent-end);
+    stroke-dasharray: 3 4;
+    stroke-width: 1;
+    stroke-opacity: 0.7;
+}
+
+.seqfx-stutter-editor__value-halo {
+    fill: var(--editor-handle-halo-fill);
+    stroke: var(--editor-handle-halo-stroke);
+    stroke-width: var(--editor-handle-halo-stroke-width);
+}
+
+.seqfx-stutter-editor__gate-handle {
+    fill: var(--editor-handle-fill);
+    stroke: var(--editor-handle-stroke);
+    stroke-width: var(--editor-handle-stroke-width);
+}
+
+.seqfx-stutter-editor__gate-hit-target {
+    fill: transparent;
+    cursor: grab;
+}
+
+.seqfx-stutter-editor__gate-hit-target:active {
+    cursor: grabbing;
+}
+
+.seqfx-stutter-editor__axis-label {
+    fill: var(--editor-surface-ink-muted);
+    font-family: var(--editor-label-font);
+    font-size: var(--editor-label-size-sm);
+    font-weight: var(--editor-label-weight);
+    letter-spacing: var(--editor-label-letter-spacing);
+}
+
+.seqfx-stutter-editor__wave-silhouette {
+    fill: rgba(28, 28, 28, 0.16);
+    pointer-events: none;
+}
+
+.seqfx-stutter-editor__gate-chip-rect {
+    fill: var(--editor-accent-end);
+    stroke: none;
+}
+
+.seqfx-stutter-editor__gate-chip-text {
+    fill: var(--editor-accent-end-ink);
+    font-family: var(--editor-label-font);
+    font-size: var(--editor-label-size-sm);
+    font-weight: var(--editor-label-weight);
+    letter-spacing: var(--editor-label-letter-spacing);
+    pointer-events: none;
+    user-select: none;
+}
+
+.seqfx-stutter-editor__morph {
+    display: grid;
+    gap: 6px;
+    padding: 10px 12px 14px;
+    border-top: 1px solid rgba(28, 28, 28, 0.18);
+}
+
+.seqfx-stutter-editor__morph-labels {
+    display: flex;
+    justify-content: space-between;
+    gap: 1px;
+}
+
+.seqfx-stutter-editor__morph-labels button {
+    border: 0;
+    border-radius: 3px;
+    padding: 2px 4px;
+    color: var(--editor-surface-ink-muted);
+    background: transparent;
+    font-family: var(--editor-label-font);
+    font-size: 9px;
+    font-weight: var(--editor-label-weight);
+    letter-spacing: var(--editor-label-letter-spacing);
+    text-transform: uppercase;
+    cursor: pointer;
+    user-select: none;
+    touch-action: manipulation;
+}
+
+.seqfx-stutter-editor__morph-labels button:hover {
+    color: var(--editor-surface-ink);
+    background: rgba(28, 28, 28, 0.08);
+}
+
+.seqfx-stutter-editor__morph-track {
+    position: relative;
+    height: 28px;
+    padding: 5px 0;
+    cursor: ew-resize;
+    touch-action: none;
+    user-select: none;
+}
+
+.seqfx-stutter-editor__morph-rail {
+    position: absolute;
+    top: 5px;
+    right: 0;
+    bottom: 5px;
+    left: 0;
+    border: 1px solid var(--editor-surface-border);
+    background:
+        linear-gradient(90deg,
+            rgba(28, 28, 28, 0.08) 0 16.66%,
+            rgba(28, 28, 28, 0.16) 16.66% 33.33%,
+            rgba(28, 28, 28, 0.08) 33.33% 50%,
+            rgba(28, 28, 28, 0.16) 50% 66.66%,
+            rgba(28, 28, 28, 0.08) 66.66% 83.33%,
+            rgba(28, 28, 28, 0.16) 83.33% 100%);
+    pointer-events: none;
+}
+
+.seqfx-stutter-editor__morph-notch {
+    position: absolute;
+    top: 2px;
+    bottom: 2px;
+    width: 1px;
+    background: rgba(28, 28, 28, 0.55);
+    pointer-events: none;
+}
+
+.seqfx-stutter-editor__morph-thumb {
+    position: absolute;
+    top: 1px;
+    width: 14px;
+    height: 26px;
+    border: 1.5px solid var(--editor-surface-border);
+    background: var(--editor-accent-start);
+    box-shadow: 0 2px 0 rgba(28, 28, 28, 0.15);
+    pointer-events: none;
+    transform: translateX(-50%);
+}
+
+.seqfx-stutter-editor__morph-track:focus-visible {
+    outline: 2px solid var(--editor-accent-start);
+    outline-offset: 2px;
+}
+
+.seqfx-stutter-editor__morph-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-top: 4px;
+}
+
+.seqfx-stutter-editor__shape-readout {
+    color: var(--editor-surface-ink-muted);
+    font-family: var(--editor-label-font);
+    font-size: var(--editor-label-size-sm);
+    font-weight: var(--editor-label-weight);
+    letter-spacing: var(--editor-label-letter-spacing);
+    text-transform: uppercase;
+}
+
+/* ---- Aux modulation: twin gate handles + bridging region ---- */
+
+.seqfx-stutter-editor__gate-mod-region {
+    fill: rgba(28, 28, 28, 0.06);
+    stroke: var(--editor-surface-border);
+    stroke-dasharray: 2 3;
+    stroke-width: 1;
+    stroke-opacity: 0.38;
+}
+
+.seqfx-stutter-editor__gate-line--start {
+    stroke: var(--editor-accent-start);
+}
+
+.seqfx-stutter-editor__gate-line--end {
+    stroke: var(--editor-accent-end);
+}
+
+.seqfx-stutter-editor__gate-handle--start {
+    fill: var(--editor-accent-start);
+    stroke: var(--editor-handle-stroke);
+    stroke-width: var(--editor-handle-stroke-width);
+}
+
+.seqfx-stutter-editor__gate-handle--end {
+    fill: var(--editor-accent-end);
+    stroke: var(--editor-handle-stroke);
+    stroke-width: var(--editor-handle-stroke-width);
+}
+
+.seqfx-stutter-editor__gate-phase {
+    fill: var(--editor-surface-ink);
+    stroke: var(--editor-handle-stroke);
+    stroke-width: 1;
+    pointer-events: none;
+}
+
+.seqfx-stutter-editor__gate-chip-rect--modulated {
+    fill: var(--editor-surface-ink);
+}
+
+.seqfx-stutter-editor__gate-chip-text--modulated {
+    fill: var(--editor-chip-ink);
+}

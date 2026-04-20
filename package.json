@@ -12,6 +12,7 @@
     "fx:prod:build": "node fx/prod-effect.mjs build",
     "fx:prod:install": "node fx/prod-effect.mjs install",
     "fx:jit:install": "./scripts/install_fx_cmajplugin.sh",
+    "ableton:dummy2": "./scripts/relaunch_ableton_dummy2.sh",
     "cmajplugin:build": "./scripts/build_cmajplugin_vst3.sh",
     "cmajplugin:install": "./scripts/install_cmajplugin_vst3.sh",
     "test:ott:view": "npm run fx:build -- ott && node --test tests/test_ott_lab_view_browser.mjs",

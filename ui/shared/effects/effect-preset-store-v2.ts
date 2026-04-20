@@ -25,6 +25,11 @@ type StoredStateMessage = {
     value?: unknown;
 };
 
+type FullStoredStateLookup = {
+    found: boolean;
+    value?: unknown;
+};
+
 type ChocUserFiles = {
     list: (scope: string) => Promise<string[]>;
     read: (scope: string, fileName: string) => Promise<string>;
@@ -129,6 +134,34 @@ function cloneState(state: EffectPresetStateV2): EffectPresetStateV2 {
 
 function storedStateEchoToken(value: unknown) {
     return typeof value === "string" ? value : JSON.stringify(value);
+}
+
+function hasOwnValue(record: Record<string, unknown> | undefined, key: string) {
+    return !!record && Object.prototype.hasOwnProperty.call(record, key);
+}
+
+function getFullStoredStateValue(storedState: unknown, key: string): FullStoredStateLookup {
+    if (!isPlainObject(storedState)) {
+        return { found: false };
+    }
+
+    const values = isPlainObject(storedState.values) ? storedState.values : undefined;
+
+    if (values && hasOwnValue(values, key)) {
+        return {
+            found: true,
+            value: values[key],
+        };
+    }
+
+    if (hasOwnValue(storedState, key)) {
+        return {
+            found: true,
+            value: storedState[key],
+        };
+    }
+
+    return { found: false };
 }
 
 function errorFromUnknown(error: unknown) {
@@ -259,6 +292,8 @@ export class EffectPresetRuntimeBridgeV2 {
     private readonly pendingStoredStateEchoes = new Map<string, number>();
     private readonly handleStoredStateValueBound: (message: unknown) => void;
     private readonly userFiles: ChocUserFiles | null;
+    private localRevision = 0;
+    private pendingStoredStateValueRevision: number | null = null;
 
     constructor(
         private readonly patchConnection: PatchConnectionLike,
@@ -288,23 +323,41 @@ export class EffectPresetRuntimeBridgeV2 {
     }
 
     requestBootState() {
+        const requestRevision = this.localRevision;
+
         if (typeof this.patchConnection.requestFullStoredState === "function") {
             this.patchConnection.requestFullStoredState((storedState) => {
-                const value = storedState?.[EFFECT_PRESETS_V2_STATE_KEY];
+                if (requestRevision !== this.localRevision) {
+                    return;
+                }
 
-                if (value === undefined && typeof this.patchConnection.requestStoredStateValue === "function") {
+                const storedValue = getFullStoredStateValue(storedState, EFFECT_PRESETS_V2_STATE_KEY);
+
+                if (storedValue.found) {
+                    this.pendingStoredStateValueRevision = null;
+                    this.applyStoredState(storedValue.value);
+                    void this.loadUserPresetFiles();
+                    return;
+                }
+
+                if (typeof this.patchConnection.requestStoredStateValue === "function") {
+                    this.pendingStoredStateValueRevision = requestRevision;
                     this.patchConnection.requestStoredStateValue(EFFECT_PRESETS_V2_STATE_KEY);
                     void this.loadUserPresetFiles();
                     return;
                 }
 
-                this.applyStoredState(value);
+                this.applyStoredState(undefined);
                 void this.loadUserPresetFiles();
             });
             return;
         }
 
-        this.patchConnection.requestStoredStateValue?.(EFFECT_PRESETS_V2_STATE_KEY);
+        if (typeof this.patchConnection.requestStoredStateValue === "function") {
+            this.pendingStoredStateValueRevision = requestRevision;
+            this.patchConnection.requestStoredStateValue(EFFECT_PRESETS_V2_STATE_KEY);
+        }
+
         void this.loadUserPresetFiles();
     }
 
@@ -422,6 +475,15 @@ export class EffectPresetRuntimeBridgeV2 {
             return;
         }
 
+        if (this.pendingStoredStateValueRevision !== null) {
+            const pendingRevision = this.pendingStoredStateValueRevision;
+            this.pendingStoredStateValueRevision = null;
+
+            if (pendingRevision !== this.localRevision) {
+                return;
+            }
+        }
+
         this.applyStoredState(nextMessage.value);
     }
 
@@ -464,6 +526,7 @@ export class EffectPresetRuntimeBridgeV2 {
             }
         }
 
+        this.localRevision += 1;
         this.setState(normalizedState);
 
         return this.getState();

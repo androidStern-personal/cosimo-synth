@@ -136,6 +136,36 @@ test("stored-state runtime mirror uploads saved state without writing stored sta
     assert.deepEqual(patchConnection.storedWrites, []);
 });
 
+test("stored-state runtime mirror reads saved state from the Cmajor values bucket", () => {
+    const patchConnection = new FakePatchConnection({ "label.v1": "bucket label" });
+    patchConnection.requestFullStoredState = (callback) => {
+        patchConnection.fullStoredStateRequests += 1;
+        callback({
+            parameters: {
+                globalMix: 0.5,
+            },
+            values: {
+                "label.v1": "bucket label",
+            },
+        });
+    };
+    const mirror = createStoredStateRuntimeMirror(patchConnection, {
+        stateKey: "label.v1",
+        deserializeStoredState: deserializeLabel,
+        buildRuntimeEvents: buildLabelRuntimeEvents,
+    });
+
+    mirror.start();
+
+    assert.equal(patchConnection.fullStoredStateRequests, 1);
+    assert.deepEqual(patchConnection.requestedStoredKeys, []);
+    assert.deepEqual(patchConnection.events, [
+        { endpointID: "labelName", value: "bucket label" },
+        { endpointID: "labelLength", value: 12 },
+    ]);
+    assert.deepEqual(patchConnection.storedWrites, []);
+});
+
 test("stored-state runtime mirror can intentionally apply runtime defaults when state is missing", () => {
     const patchConnection = new FakePatchConnection();
     const mirror = createStoredStateRuntimeMirror(patchConnection, {
@@ -147,7 +177,7 @@ test("stored-state runtime mirror can intentionally apply runtime defaults when 
 
     mirror.start();
 
-    assert.deepEqual(patchConnection.requestedStoredKeys, []);
+    assert.deepEqual(patchConnection.requestedStoredKeys, ["label.v1"]);
     assert.deepEqual(patchConnection.events, [
         { endpointID: "labelName", value: "default-label" },
         { endpointID: "labelLength", value: 13 },

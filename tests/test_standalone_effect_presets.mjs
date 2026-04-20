@@ -306,6 +306,69 @@ class FakeStandalonePatchConnection {
     }
 }
 
+class ValuesBucketStoredStatePatchConnection extends FakeStandalonePatchConnection {
+    constructor({
+        valuesBucketState,
+        ...options
+    } = {}) {
+        super(options);
+        this.valuesBucketState = valuesBucketState;
+        this.requestedStoredStateKeys = [];
+    }
+
+    requestFullStoredState(callback) {
+        callback({
+            parameters: {},
+            values: {
+                "effects.presets.v2": this.valuesBucketState,
+            },
+        });
+    }
+
+    requestStoredStateValue(key) {
+        this.requestedStoredStateKeys.push(key);
+    }
+
+    emitRequestedStoredStateValue(key, value) {
+        if (!this.requestedStoredStateKeys.includes(key)) {
+            return false;
+        }
+
+        for (const listener of this.storedStateListeners) {
+            listener({ key, value });
+        }
+
+        return true;
+    }
+}
+
+class DelayedStoredStateFallbackPatchConnection extends FakeStandalonePatchConnection {
+    constructor(options = {}) {
+        super(options);
+        this.requestedStoredStateKeys = [];
+    }
+
+    requestFullStoredState(callback) {
+        callback({});
+    }
+
+    requestStoredStateValue(key) {
+        this.requestedStoredStateKeys.push(key);
+    }
+
+    emitRequestedStoredStateValue(key, value) {
+        if (!this.requestedStoredStateKeys.includes(key)) {
+            return false;
+        }
+
+        for (const listener of this.storedStateListeners) {
+            listener({ key, value });
+        }
+
+        return true;
+    }
+}
+
 class DelayedParameterPatchConnection extends FakeStandalonePatchConnection {
     requestParameterValue(endpointID) {
         this.requestedParameters.push(endpointID);
@@ -515,6 +578,87 @@ test("standalone controller loads user presets from CHOC files instead of Cmajor
             { operation: "list", scope: "ott", fileName: undefined },
             { operation: "read", scope: "ott", fileName: "user.ott.file-preset.json" },
         ]);
+    });
+});
+
+test("standalone controller ignores stale preset metadata fallback after values-bucket boot and local preset apply", async () => {
+    const patchConnection = new ValuesBucketStoredStatePatchConnection({
+        valuesBucketState: storedPresetStateV2({
+            activePresetByEffect: {
+                ott: {
+                    presetID: "ott.default-smash",
+                    label: "Default Smash",
+                    dirty: false,
+                },
+            },
+        }),
+    });
+    const controller = await createPresetController({ patchConnection });
+
+    controller.attach();
+    assert.deepEqual(controller.getState().activePreset, {
+        presetID: "ott.default-smash",
+        label: "Default Smash",
+        dirty: false,
+    });
+
+    const applyResult = controller.applyPreset("factory:ott.envelope-tamed");
+    assert.equal(applyResult.ok, true);
+    assert.deepEqual(controller.getState().activePreset, {
+        presetID: "ott.envelope-tamed",
+        label: "Envelope Tamed",
+        dirty: false,
+    });
+
+    const emitted = patchConnection.emitRequestedStoredStateValue("effects.presets.v2", storedPresetStateV2({
+        activePresetByEffect: {
+            ott: {
+                presetID: "ott.default-smash",
+                label: "Default Smash",
+                dirty: false,
+            },
+        },
+    }));
+
+    assert.equal(emitted, false);
+    assert.deepEqual(controller.getState().activePreset, {
+        presetID: "ott.envelope-tamed",
+        label: "Envelope Tamed",
+        dirty: false,
+    });
+    assert.deepEqual(patchConnection.requestedStoredStateKeys, []);
+});
+
+test("standalone controller ignores stale preset metadata fallback after local preset apply", async () => {
+    const patchConnection = new DelayedStoredStateFallbackPatchConnection();
+    const controller = await createPresetController({ patchConnection });
+
+    controller.attach();
+    assert.deepEqual(patchConnection.requestedStoredStateKeys, ["effects.presets.v2"]);
+
+    const applyResult = controller.applyPreset("factory:ott.envelope-tamed");
+    assert.equal(applyResult.ok, true);
+    assert.deepEqual(controller.getState().activePreset, {
+        presetID: "ott.envelope-tamed",
+        label: "Envelope Tamed",
+        dirty: false,
+    });
+
+    const emitted = patchConnection.emitRequestedStoredStateValue("effects.presets.v2", storedPresetStateV2({
+        activePresetByEffect: {
+            ott: {
+                presetID: "ott.default-smash",
+                label: "Default Smash",
+                dirty: false,
+            },
+        },
+    }));
+
+    assert.equal(emitted, true);
+    assert.deepEqual(controller.getState().activePreset, {
+        presetID: "ott.envelope-tamed",
+        label: "Envelope Tamed",
+        dirty: false,
     });
 });
 

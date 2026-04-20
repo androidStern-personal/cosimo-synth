@@ -1,0 +1,251 @@
+.seqfx-crusher-editor {
+    display: grid;
+    gap: 12px;
+}
+
+.seqfx-crusher-editor__panel {
+    position: relative;
+    container-type: inline-size;
+    border: 1px solid var(--editor-surface-border);
+    color: var(--editor-surface-ink);
+    background: var(--editor-surface-bg);
+    overflow: hidden;
+    --editor-bottom-reserve: 40px;
+    --editor-top-reserve: 14px;
+}
+
+.seqfx-crusher-editor__viewport {
+    position: relative;
+    width: 100%;
+    height: calc(clamp(140px, 50cqw, 300px) + var(--editor-bottom-reserve) + var(--editor-top-reserve));
+    overflow: hidden;
+}
+
+.seqfx-crusher-editor__surface {
+    display: block;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+}
+
+.seqfx-crusher-editor__grid-line {
+    stroke: var(--editor-grid-stroke);
+    stroke-width: 1;
+    shape-rendering: crispEdges;
+}
+
+.seqfx-crusher-editor__axis {
+    stroke: var(--editor-axis-stroke);
+    stroke-width: 1;
+    shape-rendering: crispEdges;
+}
+
+.seqfx-crusher-editor__axis--center {
+    opacity: 0.68;
+}
+
+.seqfx-crusher-editor__dry-path {
+    fill: none;
+    stroke: rgba(28, 28, 28, 0.55);
+    stroke-dasharray: 3 3;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: var(--editor-curve-preview-stroke-width);
+}
+
+.seqfx-crusher-editor__wet-fill {
+    fill: var(--editor-curve-fill);
+}
+
+.seqfx-crusher-editor__wet-path {
+    fill: none;
+    stroke: var(--editor-curve-stroke);
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: var(--editor-curve-stroke-width);
+}
+
+.seqfx-crusher-editor__hold-marker {
+    stroke: var(--editor-accent-end);
+    stroke-opacity: 0.74;
+    stroke-width: 1;
+    shape-rendering: crispEdges;
+}
+
+.seqfx-crusher-editor__axis-label,
+.seqfx-crusher-editor__drive-label,
+.seqfx-crusher-editor__drive-value {
+    fill: var(--editor-surface-ink-muted);
+    color: var(--editor-surface-ink-muted);
+    font-family: var(--editor-label-font);
+    font-size: var(--editor-label-size-sm);
+    font-weight: var(--editor-label-weight);
+    letter-spacing: var(--editor-label-letter-spacing);
+    text-transform: uppercase;
+}
+
+.seqfx-crusher-editor__drive {
+    display: grid;
+    gap: 6px;
+    padding: 10px 12px 14px;
+    border-top: 1px solid rgba(28, 28, 28, 0.18);
+}
+
+.seqfx-crusher-editor__drive-head {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 6px;
+    margin: 0;
+}
+
+.seqfx-crusher-editor__drive-value {
+    color: var(--editor-surface-ink);
+    text-align: right;
+}
+
+.seqfx-crusher-editor__drive-track {
+    position: relative;
+    grid-column: 1 / -1;
+    height: 28px;
+    padding: 5px 0;
+    cursor: ew-resize;
+}
+
+.seqfx-crusher-editor__drive-rail {
+    position: absolute;
+    top: 5px;
+    right: 0;
+    bottom: 5px;
+    left: 0;
+    border: 1px solid var(--editor-surface-border);
+    background:
+        linear-gradient(90deg,
+            rgba(28, 28, 28, 0.08) 0 25%,
+            rgba(28, 28, 28, 0.16) 25% 50%,
+            rgba(28, 28, 28, 0.08) 50% 75%,
+            rgba(28, 28, 28, 0.16) 75% 100%);
+    pointer-events: none;
+}
+
+.seqfx-crusher-editor__drive-notch {
+    position: absolute;
+    top: 2px;
+    bottom: 2px;
+    width: 1px;
+    background: rgba(28, 28, 28, 0.55);
+    pointer-events: none;
+}
+
+.seqfx-crusher-editor__drive-thumb {
+    position: absolute;
+    top: 1px;
+    width: 14px;
+    height: 26px;
+    border: 1.5px solid var(--editor-surface-border);
+    background: var(--editor-accent-start);
+    box-shadow: 0 2px 0 rgba(28, 28, 28, 0.15);
+    pointer-events: none;
+    transform: translateX(-50%);
+}
+
+.seqfx-crusher-editor__drive-track input {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 28px;
+    margin: 0;
+    cursor: ew-resize;
+    opacity: 0;
+}
+
+.seqfx-crusher-editor__drive-track:focus-within .seqfx-crusher-editor__drive-rail {
+    outline: 2px solid var(--editor-accent-start);
+    outline-offset: 2px;
+}
+
+/* ---- Aux modulation: Drive dual-thumb + dual value chip ---- */
+
+.seqfx-crusher-editor__drive--modulated {
+    background: rgba(0, 180, 216, 0.06);
+}
+
+.seqfx-crusher-editor__drive-value--modulated {
+    display: inline-grid !important;
+    grid-template-columns: auto auto auto;
+    gap: 3px;
+    align-items: center;
+    justify-content: end;
+}
+
+.seqfx-crusher-editor__drive-chip {
+    display: inline-block;
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-family: var(--editor-label-font);
+    font-size: var(--editor-label-size-sm);
+    font-weight: var(--editor-label-weight);
+    letter-spacing: var(--editor-label-letter-spacing);
+    text-transform: uppercase;
+}
+
+.seqfx-crusher-editor__drive-chip--start {
+    background: var(--editor-accent-start);
+    color: var(--editor-accent-start-ink);
+}
+
+.seqfx-crusher-editor__drive-chip--end {
+    background: var(--editor-accent-end);
+    color: var(--editor-accent-end-ink);
+}
+
+.seqfx-crusher-editor__drive-arrow {
+    color: var(--editor-surface-ink-muted);
+    font-family: var(--editor-label-font);
+    font-size: 9px;
+    font-weight: var(--editor-label-weight);
+}
+
+.seqfx-crusher-editor__drive-sweep {
+    position: absolute;
+    top: 12px;
+    height: 4px;
+    background: linear-gradient(90deg, var(--editor-accent-start), var(--editor-accent-end));
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+.seqfx-crusher-editor__drive-phase {
+    position: absolute;
+    top: 10px;
+    width: 2px;
+    height: 8px;
+    background: var(--editor-surface-ink);
+    transform: translateX(-50%);
+    opacity: 0.85;
+    pointer-events: none;
+}
+
+.seqfx-crusher-editor__drive-thumb--end {
+    background: var(--editor-accent-end);
+}
+
+.seqfx-crusher-editor__drive-input--end {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 28px;
+    margin: 0;
+    cursor: ew-resize;
+    opacity: 0;
+    z-index: 2;
+}
+
+.seqfx-crusher-editor__drive-drag-surface {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 28px;
+    cursor: ew-resize;
+    touch-action: none;
+    z-index: 3;
+}

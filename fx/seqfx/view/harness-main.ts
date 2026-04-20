@@ -1,4 +1,5 @@
 import { createSeqFxPatchView } from "./source";
+import { createSeqFxWorkerService } from "../worker/seqfx-worker-service";
 
 type Listener = (value: unknown) => void;
 
@@ -43,7 +44,10 @@ class SeqFxHarnessPatchConnection {
     }
 
     requestFullStoredState(callback: (state: Record<string, unknown>) => void) {
-        callback({ ...this.storedState });
+        callback({
+            parameters: { ...this.parameters },
+            values: { ...this.storedState },
+        });
     }
 
     requestStoredStateValue(key: string) {
@@ -131,6 +135,8 @@ if (!root) {
 }
 
 const patchConnection = new SeqFxHarnessPatchConnection();
+const workerService = createSeqFxWorkerService(patchConnection);
+workerService.start();
 const view = createSeqFxPatchView(patchConnection);
 root.appendChild(view);
 

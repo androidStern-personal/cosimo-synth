@@ -30,6 +30,34 @@ function hasOwnValue(record: Record<string, unknown>, key: string) {
     return Object.prototype.hasOwnProperty.call(record, key);
 }
 
+function getFullStoredStateValue(storedState: unknown, key: string) {
+    const fullState = storedState && typeof storedState === "object"
+        ? storedState as Record<string, unknown>
+        : {};
+    const values = fullState.values && typeof fullState.values === "object"
+        ? fullState.values as Record<string, unknown>
+        : {};
+
+    if (hasOwnValue(values, key)) {
+        return {
+            found: true,
+            value: values[key],
+        };
+    }
+
+    if (hasOwnValue(fullState, key)) {
+        return {
+            found: true,
+            value: fullState[key],
+        };
+    }
+
+    return {
+        found: false,
+        value: undefined,
+    };
+}
+
 function toStableToken(value: unknown) {
     try {
         return JSON.stringify(value);
@@ -100,12 +128,10 @@ export class StoredStateRuntimeMirror<TState> {
     private requestStoredState() {
         if (typeof this.connection.requestFullStoredState === "function") {
             this.connection.requestFullStoredState((storedState) => {
-                const fullState = storedState && typeof storedState === "object"
-                    ? storedState as Record<string, unknown>
-                    : {};
+                const storedValue = getFullStoredStateValue(storedState, this.options.stateKey);
 
-                if (hasOwnValue(fullState, this.options.stateKey)) {
-                    this.applyStoredValue(fullState[this.options.stateKey]);
+                if (storedValue.found) {
+                    this.applyStoredValue(storedValue.value);
                     return;
                 }
 
@@ -123,12 +149,14 @@ export class StoredStateRuntimeMirror<TState> {
     }
 
     private handleMissingStoredState() {
-        if (this.options.applyDefaultRuntimeStateWhenMissing) {
-            this.applyStoredValue(undefined);
+        if (typeof this.connection.requestStoredStateValue === "function") {
+            this.connection.requestStoredStateValue(this.options.stateKey);
             return;
         }
 
-        this.connection.requestStoredStateValue?.(this.options.stateKey);
+        if (this.options.applyDefaultRuntimeStateWhenMissing) {
+            this.applyStoredValue(undefined);
+        }
     }
 
     private handleStoredStateValue(message: unknown) {

@@ -1,0 +1,70 @@
+/*
+ * Shared design tokens for interactive editor components
+ * (FilterRangeEditor, StutterEnvelopeEditor, and future siblings).
+ *
+ * Every editor component reads these instead of hardcoding values, so
+ * stroke weights, fonts, paddings, and accent colors stay in sync.
+ *
+ * The numeric layout tokens that need to be read by geometry math
+ * (gutter ratios, padding, handle radii) live in editor-tokens.ts and
+ * the two files must be kept consistent with each other.
+ */
+
+:where(.editor-tokens),
+:root {
+    /* Surface */
+    --editor-surface-bg: #e4ded3;
+    --editor-surface-border: #1c1c1c;
+    --editor-surface-ink: #1c1c1c;
+    --editor-surface-ink-muted: #6f716d;
+
+    /* Plot structure */
+    --editor-grid-stroke: rgba(28, 28, 28, 0.12);
+    --editor-axis-stroke: rgba(28, 28, 28, 0.44);
+    --editor-zone-fill: rgba(28, 28, 28, 0.05);
+    --editor-zone-stroke: rgba(28, 28, 28, 0.32);
+
+    /* Primary curve / envelope */
+    --editor-curve-stroke: #1c1c1c;
+    --editor-curve-stroke-width: 2.6;
+    --editor-curve-fill: rgba(0, 180, 216, 0.22);
+    --editor-curve-preview-stroke: #f4923a;
+    --editor-curve-preview-stroke-width: 1.8;
+
+    /* Canonical accent pair (from filter range handles) */
+    --editor-accent-start: #00b4d8;
+    --editor-accent-start-ink: #1c1c1c;
+    --editor-accent-start-border: rgba(0, 100, 140, 0.35);
+    --editor-accent-end: #e8604c;
+    --editor-accent-end-ink: #f0ece6;
+    --editor-accent-end-border: rgba(200, 40, 20, 0.28);
+
+    /* Primary draggable handle (filter-style: halo + dark center + light stroke) */
+    --editor-handle-fill: #1c1c1c;
+    --editor-handle-stroke: #f0ece6;
+    --editor-handle-stroke-width: 2;
+    --editor-handle-halo-fill: rgba(240, 236, 230, 0.72);
+    --editor-handle-halo-stroke: #1c1c1c;
+    --editor-handle-halo-stroke-width: 1.2;
+
+    /* Typography
+       One font stack, one weight. Every label/chip/readout uses these. */
+    --editor-label-font: Menlo, Monaco, "Liberation Mono", monospace;
+    --editor-label-weight: 800;
+    --editor-label-letter-spacing: 0;
+    --editor-label-size-sm: 10px;
+    --editor-label-size-md: 11px;
+
+    /* Chips (value readouts that ride on the plot) */
+    --editor-chip-ink: #f0ece6;
+    --editor-chip-bg: #1c1c1c;
+    --editor-chip-border: rgba(28, 28, 28, 0.28);
+    --editor-chip-radius: 3px;
+    --editor-chip-padding: 3px 6px;
+
+    /* Overlay pills (auxiliary controls like slices/speed or Q readout) */
+    --editor-pill-bg: rgba(240, 236, 230, 0.92);
+    --editor-pill-border: rgba(28, 28, 28, 0.42);
+    --editor-pill-shadow: 0 2px 6px rgba(28, 28, 28, 0.1);
+    --editor-pill-radius: 6px;
+}

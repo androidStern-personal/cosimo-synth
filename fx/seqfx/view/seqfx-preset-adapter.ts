@@ -50,11 +50,9 @@ function parseStateCandidate(value: unknown): unknown {
 }
 
 function assertStrictSeqFxState(value: unknown): asserts value is SeqFxState {
-    if (!isPlainObject(value) || (value.version !== 1 && value.version !== 2) || !Array.isArray(value.patterns)) {
-        throw new Error("SeqFX preset state must contain version 1 or version 2 patterns.");
+    if (!isPlainObject(value) || value.version !== 2 || !Array.isArray(value.patterns)) {
+        throw new Error("SeqFX preset state must contain version 2 patterns.");
     }
-
-    const requiresEffectType = value.version === 2;
 
     if (value.patterns.length !== SEQFX_PATTERN_COUNT) {
         throw new Error(`SeqFX preset state patterns must contain ${SEQFX_PATTERN_COUNT} patterns.`);
@@ -87,13 +85,11 @@ function assertStrictSeqFxState(value: unknown): asserts value is SeqFxState {
                 assertBoolean(step.trigger, `SeqFX step ${stepIndex} trigger`);
                 assertFiniteNumber(step.mix, `SeqFX step ${stepIndex} mix`);
 
-                if (requiresEffectType) {
-                    if (!Object.prototype.hasOwnProperty.call(step, "effectType")) {
-                        throw new Error(`SeqFX pattern ${patternIndex} lane ${laneIndex} step ${stepIndex} must contain effectType.`);
-                    }
-
-                    assertEffectType(step.effectType, `SeqFX pattern ${patternIndex} lane ${laneIndex} step ${stepIndex} effectType`);
+                if (!Object.prototype.hasOwnProperty.call(step, "effectType")) {
+                    throw new Error(`SeqFX pattern ${patternIndex} lane ${laneIndex} step ${stepIndex} must contain effectType.`);
                 }
+
+                assertEffectType(step.effectType, `SeqFX pattern ${patternIndex} lane ${laneIndex} step ${stepIndex} effectType`);
 
                 if (step.params.length !== SEQFX_PARAM_COUNT) {
                     throw new Error(`SeqFX step ${stepIndex} must contain ${SEQFX_PARAM_COUNT} params.`);

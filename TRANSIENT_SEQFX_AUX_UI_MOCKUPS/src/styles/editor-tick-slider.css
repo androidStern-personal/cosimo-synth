@@ -1,0 +1,191 @@
+.editor-tick-slider {
+    display: grid;
+    grid-template-columns: 44px minmax(0, 1fr) 72px;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    border-top: 1px solid rgba(28, 28, 28, 0.18);
+    color: var(--editor-surface-ink);
+    background: rgba(28, 28, 28, 0.04);
+}
+
+.editor-tick-slider__label {
+    color: var(--editor-surface-ink-muted);
+    font-family: var(--editor-label-font);
+    font-size: var(--editor-label-size-sm);
+    font-weight: var(--editor-label-weight);
+    letter-spacing: var(--editor-label-letter-spacing);
+    text-transform: uppercase;
+}
+
+.editor-tick-slider__value {
+    color: var(--editor-surface-ink);
+    font-family: var(--editor-label-font);
+    font-size: var(--editor-label-size-md);
+    font-weight: var(--editor-label-weight);
+    letter-spacing: var(--editor-label-letter-spacing);
+    text-align: right;
+}
+
+.editor-tick-slider__track {
+    position: relative;
+    min-width: 0;
+    height: 22px;
+}
+
+.editor-tick-slider__rail {
+    position: absolute;
+    top: 2px;
+    right: 0;
+    left: 0;
+    display: flex;
+    align-items: stretch;
+    gap: 3px;
+    height: 18px;
+    pointer-events: none;
+}
+
+.editor-tick-slider__tick {
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 13px;
+    border-radius: 2px;
+    background: rgba(28, 28, 28, 0.38);
+}
+
+.editor-tick-slider__tick.is-active {
+    background: var(--editor-surface-ink);
+}
+
+.editor-tick-slider--accent-start .editor-tick-slider__tick.is-current {
+    background: var(--editor-accent-start);
+}
+
+.editor-tick-slider--accent-end .editor-tick-slider__tick.is-active {
+    background: var(--editor-accent-end);
+}
+
+.editor-tick-slider__input {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 22px;
+    margin: 0;
+    cursor: ew-resize;
+    opacity: 0;
+}
+
+.editor-tick-slider__track:focus-within .editor-tick-slider__rail {
+    outline: 2px solid var(--editor-accent-start);
+    outline-offset: 2px;
+}
+
+/* ---- Aux modulation: start + end markers and dual value readout ---- */
+
+.editor-tick-slider--modulated {
+    background: rgba(0, 180, 216, 0.08);
+    grid-template-columns: 44px minmax(0, 1fr) 108px;
+}
+
+.editor-tick-slider__track {
+    overflow: visible;
+}
+
+.editor-tick-slider__mod-sweep {
+    position: absolute;
+    top: 9px;
+    height: 4px;
+    background: linear-gradient(90deg, var(--editor-accent-start), var(--editor-accent-end));
+    opacity: 0.55;
+    pointer-events: none;
+}
+
+.editor-tick-slider__mod-phase {
+    position: absolute;
+    top: 7px;
+    width: 2px;
+    height: 8px;
+    background: var(--editor-surface-ink);
+    transform: translateX(-50%);
+    pointer-events: none;
+    opacity: 0.85;
+}
+
+.editor-tick-slider__mod-marker {
+    position: absolute;
+    top: -2px;
+    width: 2px;
+    height: 26px;
+    transform: translateX(-50%);
+    pointer-events: none;
+}
+
+.editor-tick-slider__mod-marker::after {
+    position: absolute;
+    top: -4px;
+    left: 50%;
+    width: 8px;
+    height: 8px;
+    border: 1px solid var(--editor-surface-border);
+    transform: translateX(-50%) rotate(45deg);
+    content: "";
+}
+
+.editor-tick-slider__mod-marker--start,
+.editor-tick-slider__mod-marker--start::after {
+    background: var(--editor-accent-start);
+}
+
+.editor-tick-slider__mod-marker--end,
+.editor-tick-slider__mod-marker--end::after {
+    background: var(--editor-accent-end);
+}
+
+.editor-tick-slider__input--end {
+    z-index: 2;
+}
+
+.editor-tick-slider__value--modulated {
+    display: inline-grid;
+    grid-template-columns: auto auto auto;
+    gap: 3px;
+    justify-content: end;
+    align-items: center;
+}
+
+.editor-tick-slider__value-chip {
+    display: inline-block;
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-family: var(--editor-label-font);
+    font-size: var(--editor-label-size-sm);
+    font-weight: var(--editor-label-weight);
+    letter-spacing: var(--editor-label-letter-spacing);
+}
+
+.editor-tick-slider__value-chip--start {
+    background: var(--editor-accent-start);
+    color: var(--editor-accent-start-ink);
+}
+
+.editor-tick-slider__value-chip--end {
+    background: var(--editor-accent-end);
+    color: var(--editor-accent-end-ink);
+}
+
+.editor-tick-slider__value-arrow {
+    color: var(--editor-surface-ink-muted);
+    font-family: var(--editor-label-font);
+    font-size: 9px;
+    font-weight: var(--editor-label-weight);
+}
+
+.editor-tick-slider__drag-surface {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 22px;
+    cursor: ew-resize;
+    touch-action: none;
+    z-index: 3;
+}

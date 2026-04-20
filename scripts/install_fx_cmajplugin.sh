@@ -139,10 +139,21 @@ if [[ ! -f "$repo_root/$dev_module_rel" ]]; then
   exit 1
 fi
 
+if [[ "$plugin" == "seqfx" ]]; then
+  node "$repo_root/fx/build-effect.mjs" seqfx >/dev/null
+  patch_rel="build/fx/seqfx_runtime/SeqFx.cmajorpatch"
+  patch_path="$repo_root/$patch_rel"
+
+  if [[ ! -f "$patch_path" ]]; then
+    printf 'Built SeqFX runtime patch was not found: %s\n' "$patch_path" >&2
+    exit 1
+  fi
+fi
+
 cmaj play --dry-run --stop-on-error "$patch_path" >/dev/null
 
 if [[ "$dry_run" == true ]]; then
-  printf 'Validated source patch: %s\n' "$patch_path"
+  printf 'Validated patch: %s\n' "$patch_path"
   printf 'Validated patched installed VST3: %s\n' "$vst3_bundle"
   printf 'Validated view.src: %s\n' "$view_src"
   printf 'Validated view.devModule: %s\n' "$dev_module"
@@ -154,7 +165,7 @@ fi
 mkdir -p "$vst3_dir"
 printf '{\n  "location": "%s"\n}\n' "$patch_path" > "$patch_json"
 
-printf 'Validated source patch: %s\n' "$patch_path"
+printf 'Validated patch: %s\n' "$patch_path"
 printf 'Validated patched installed VST3: %s\n' "$vst3_bundle"
 printf 'Wrote patch association: %s\n' "$patch_json"
 printf 'CmajPlugin.vst3 will load: %s\n' "$patch_path"
