@@ -1,6 +1,6 @@
 .editor-tick-slider {
     display: grid;
-    grid-template-columns: 44px minmax(0, 1fr) 42px;
+    grid-template-columns: 68px minmax(0, 1fr) 120px;
     align-items: center;
     gap: 8px;
     padding: 6px 8px;
@@ -10,12 +10,39 @@
 }
 
 .editor-tick-slider__label {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    justify-content: flex-start;
+    min-width: 0;
+    border: 0;
+    padding: 0;
+    text-align: left;
+    background: transparent;
     color: var(--editor-surface-ink-muted);
     font-family: var(--editor-label-font);
     font-size: var(--editor-label-size-sm);
     font-weight: var(--editor-label-weight);
     letter-spacing: var(--editor-label-letter-spacing);
     text-transform: uppercase;
+}
+
+.editor-tick-slider__label--toggle {
+    cursor: pointer;
+    border-radius: 6px;
+    padding: 3px 4px;
+}
+
+.editor-tick-slider__label--toggle:hover,
+.editor-tick-slider__label--toggle:focus-visible {
+    color: var(--editor-surface-ink);
+    background: rgba(28, 28, 28, 0.08);
+    outline: none;
+}
+
+.editor-tick-slider__label--toggle:focus-visible {
+    outline: 2px solid var(--editor-accent-start);
+    outline-offset: 2px;
 }
 
 .editor-tick-slider__value {
@@ -65,6 +92,18 @@
     background: var(--editor-accent-end);
 }
 
+.editor-tick-slider__tick.is-mod-start {
+    background: var(--editor-accent-start);
+}
+
+.editor-tick-slider__tick.is-mod-end {
+    background: var(--editor-accent-end);
+}
+
+.editor-tick-slider__tick.is-mod-between {
+    background: var(--editor-accent-range);
+}
+
 .editor-tick-slider__input {
     position: absolute;
     inset: 0;
@@ -78,4 +117,104 @@
 .editor-tick-slider__track:focus-within .editor-tick-slider__rail {
     outline: 2px solid var(--editor-accent-start);
     outline-offset: 2px;
+}
+
+.editor-tick-slider__mod-range {
+    position: absolute;
+    top: 5px;
+    z-index: 1;
+    height: 12px;
+    border-radius: 3px;
+    background: var(--editor-accent-range);
+    pointer-events: none;
+}
+
+.editor-tick-slider__mod-thumb {
+    position: absolute;
+    top: 1px;
+    z-index: 2;
+    width: 6px;
+    height: 20px;
+    border-radius: 4px;
+    transform: translateX(-50%);
+    pointer-events: none;
+}
+
+.editor-tick-slider__mod-thumb--start {
+    background: var(--editor-accent-start);
+}
+
+.editor-tick-slider__mod-thumb--end {
+    background: var(--editor-accent-end);
+}
+
+.editor-tick-slider__drag-surface {
+    position: absolute;
+    inset: -4px 0;
+    z-index: 3;
+    cursor: ew-resize;
+}
+
+.editor-tick-slider__sr-handle {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+}
+
+.editor-tick-slider__mod-values {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 10px minmax(0, 1fr);
+    align-items: center;
+    gap: 3px;
+}
+
+.editor-tick-slider__value-chip {
+    min-width: 0;
+    border-radius: 4px;
+    padding: 2px 4px;
+    color: var(--editor-surface-ink);
+    font-family: var(--editor-label-font);
+    font-size: 10px;
+    font-weight: var(--editor-label-weight);
+    text-align: center;
+}
+
+.editor-tick-slider__value-chip--start {
+    background: var(--editor-accent-start);
+}
+
+.editor-tick-slider__value-chip--end {
+    background: var(--editor-accent-end);
+}
+
+.editor-tick-slider__value-arrow {
+    color: var(--editor-surface-ink-muted);
+    font-family: Menlo, Consolas, monospace;
+    font-size: 9px;
+    text-align: center;
+}
+
+.mod-badge {
+    display: inline-grid;
+    place-items: center;
+    min-width: 14px;
+    height: 12px;
+    border: 1px dashed currentColor;
+    border-radius: 4px;
+    font-size: 8px;
+    line-height: 1;
+}
+
+.mod-badge--directional {
+    min-width: 22px;
+}
+
+.mod-badge.is-on {
+    border-style: solid;
+    border-color: var(--editor-accent-range);
+    background: var(--editor-accent-range);
+    box-shadow: 0 0 0 2px rgba(244, 146, 58, 0.18);
+    color: var(--editor-surface-ink);
 }

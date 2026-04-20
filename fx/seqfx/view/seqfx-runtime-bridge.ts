@@ -1,6 +1,9 @@
 import type { PatchConnectionLike } from "../../../ui/shared/cmajor-react";
 import {
     SEQFX_STATE_KEY,
+    applySeqFxBlockAuxCurveEdit,
+    applySeqFxBlockAuxTargetEndEdit,
+    applySeqFxBlockAuxTargetToggle,
     applySeqFxBlockEffectEdit,
     applySeqFxBlockCreate,
     applySeqFxBlockCopy,
@@ -22,7 +25,11 @@ import {
     createDefaultSeqFxState,
     getSeqFxStepValueSnapshot,
     normalizeSeqFxState,
+    parseStrictSeqFxStateV3,
     serializeSeqFxState,
+    type SeqFxBlockAuxCurveEdit,
+    type SeqFxBlockAuxTargetEndEdit,
+    type SeqFxBlockAuxTargetToggleEdit,
     type SeqFxBlockCreateEdit,
     type SeqFxBlockCopyEdit,
     type SeqFxBlockCopyPaintEdit,
@@ -286,7 +293,7 @@ export class SeqFxRuntimeBridge {
     }
 
     replaceStateFromPreset(nextState: SeqFxState) {
-        this.state = normalizeSeqFxState(nextState);
+        this.state = parseStrictSeqFxStateV3(nextState);
         this.persistState();
         this.notifyStateListeners();
     }
@@ -380,6 +387,18 @@ export class SeqFxRuntimeBridge {
         this.commitState(applySeqFxBlockParamEdit(this.state, edit), edit.patternIndex);
     }
 
+    setBlockAuxCurve(edit: SeqFxBlockAuxCurveEdit) {
+        this.commitState(applySeqFxBlockAuxCurveEdit(this.state, edit), edit.patternIndex);
+    }
+
+    setBlockAuxTargetEnabled(edit: SeqFxBlockAuxTargetToggleEdit) {
+        this.commitState(applySeqFxBlockAuxTargetToggle(this.state, edit), edit.patternIndex);
+    }
+
+    setBlockAuxTargetEnd(edit: SeqFxBlockAuxTargetEndEdit) {
+        this.commitState(applySeqFxBlockAuxTargetEndEdit(this.state, edit), edit.patternIndex);
+    }
+
     setBlockEffect(edit: SeqFxBlockEffectEdit) {
         this.commitState(applySeqFxBlockEffectEdit(this.state, edit), edit.patternIndex);
     }
@@ -423,7 +442,9 @@ export class SeqFxRuntimeBridge {
     }
 
     private applyStoredState(rawState: unknown) {
-        const nextState = normalizeSeqFxState(rawState ?? createDefaultSeqFxState());
+        const nextState = rawState === undefined
+            ? createDefaultSeqFxState()
+            : parseStrictSeqFxStateV3(rawState);
 
         this.state = nextState;
         this.notifyStateListeners();

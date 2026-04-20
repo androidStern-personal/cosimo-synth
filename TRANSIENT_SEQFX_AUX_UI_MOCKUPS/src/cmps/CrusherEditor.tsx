@@ -1,6 +1,6 @@
 import { useMemo, useRef, type PointerEvent as ReactPointerEvent } from "react";
 
-import { EditorTickSlider } from "./EditorTickSlider";
+import { EditorTickSlider, ModBadge, type ModulationDirection } from "./EditorTickSlider";
 import {
     EDITOR_PLOT_BOTTOM_PADDING_PX,
     EDITOR_PLOT_TOP_PADDING_PX,
@@ -28,11 +28,20 @@ export type CrusherEditorValue = {
     mix: number;
 };
 
+type CrusherModulatedParam = {
+    end: number;
+    onEndChange: (value: number) => void;
+    direction?: ModulationDirection;
+};
+
 export type CrusherModulation = {
-    bits?: { end: number; onEndChange: (value: number) => void } | null;
-    holdFrames?: { end: number; onEndChange: (value: number) => void } | null;
-    driveDb?: { end: number; onEndChange: (value: number) => void } | null;
+    bits?: CrusherModulatedParam | null;
+    holdFrames?: CrusherModulatedParam | null;
+    driveDb?: CrusherModulatedParam | null;
     phase?: number;
+    onToggleBits?: () => void;
+    onToggleHoldFrames?: () => void;
+    onToggleDriveDb?: () => void;
 };
 
 export type CrusherEditorProps = {
@@ -264,7 +273,9 @@ export function CrusherEditor({
                         end: modulation.bits.end,
                         onEndChange: (nextValue) => modulation.bits!.onEndChange(clampCrusherBits(nextValue)),
                         phase,
+                        direction: modulation.bits.direction,
                     } : null}
+                    onModulationToggle={modulation?.onToggleBits ?? null}
                 />
                 <EditorTickSlider
                     accent="end"
@@ -283,11 +294,34 @@ export function CrusherEditor({
                         end: modulation.holdFrames.end,
                         onEndChange: (nextValue) => modulation.holdFrames!.onEndChange(clampCrusherHoldFrames(nextValue)),
                         phase,
+                        direction: modulation.holdFrames.direction,
                     } : null}
+                    onModulationToggle={modulation?.onToggleHoldFrames ?? null}
                 />
                 <div className={`seqfx-crusher-editor__drive${isDriveModulated ? " seqfx-crusher-editor__drive--modulated" : ""}`}>
-                    <label className="seqfx-crusher-editor__drive-head">
-                        <span className="seqfx-crusher-editor__drive-label">Drive</span>
+                    <div className="seqfx-crusher-editor__drive-head">
+                        {modulation?.onToggleDriveDb ? (
+                            <button
+                                type="button"
+                                className="seqfx-crusher-editor__drive-label seqfx-crusher-editor__drive-label--toggle"
+                                onClick={(event) => {
+                                    event.preventDefault();
+                                    event.stopPropagation();
+                                    modulation.onToggleDriveDb!();
+                                }}
+                                aria-pressed={isDriveModulated}
+                                title={`Drive: click to ${isDriveModulated ? "disable" : "enable"} aux modulation${
+                                    modulation?.driveDb?.direction && modulation.driveDb.direction !== "both"
+                                        ? ` (${modulation.driveDb.direction}-only)`
+                                        : ""
+                                }`}
+                            >
+                                <span>Drive</span>
+                                <ModBadge isOn={isDriveModulated} direction={modulation?.driveDb?.direction} />
+                            </button>
+                        ) : (
+                            <span className="seqfx-crusher-editor__drive-label">Drive</span>
+                        )}
                         {isDriveModulated ? (
                             <output className="seqfx-crusher-editor__drive-value seqfx-crusher-editor__drive-value--modulated" data-role="seqfx-crusher-drive-db-value">
                                 <span className="seqfx-crusher-editor__drive-chip seqfx-crusher-editor__drive-chip--start">
@@ -328,6 +362,7 @@ export function CrusherEditor({
                                 <DriveModulationDragSurface
                                     startValue={resolved.driveDb}
                                     endValue={modulation!.driveDb!.end}
+                                    direction={modulation!.driveDb!.direction ?? "both"}
                                     onStartChange={(v) => onDriveDbChange(clampCrusherDriveDb(v))}
                                     onEndChange={(v) => modulation!.driveDb!.onEndChange(clampCrusherDriveDb(v))}
                                 />
@@ -344,7 +379,7 @@ export function CrusherEditor({
                                 />
                             )}
                         </span>
-                    </label>
+                    </div>
                 </div>
             </div>
         </section>
@@ -354,11 +389,12 @@ export function CrusherEditor({
 type DriveModulationDragSurfaceProps = {
     startValue: number;
     endValue: number;
+    direction: ModulationDirection;
     onStartChange: (value: number) => void;
     onEndChange: (value: number) => void;
 };
 
-function DriveModulationDragSurface({ startValue, endValue, onStartChange, onEndChange }: DriveModulationDragSurfaceProps) {
+function DriveModulationDragSurface({ startValue, endValue, direction, onStartChange, onEndChange }: DriveModulationDragSurfaceProps) {
     const activeRef = useRef<"start" | "end">("start");
     const pointerIdRef = useRef<number | null>(null);
 
@@ -376,12 +412,23 @@ function DriveModulationDragSurface({ startValue, endValue, onStartChange, onEnd
         }
 
         const ratio = clamp(pointerX / width, 0, 1);
-        const nextValue = ratio * CRUSHER_DRIVE_DB_MAX;
+        const raw = ratio * CRUSHER_DRIVE_DB_MAX;
 
         if (target === "start") {
-            onStartChange(nextValue);
+            onStartChange(raw);
+            if (direction === "up" && raw > endValue) {
+                onEndChange(raw);
+            } else if (direction === "down" && raw < endValue) {
+                onEndChange(raw);
+            }
         } else {
-            onEndChange(nextValue);
+            let next = raw;
+            if (direction === "up") {
+                next = Math.max(raw, startValue);
+            } else if (direction === "down") {
+                next = Math.min(raw, startValue);
+            }
+            onEndChange(next);
         }
     };
 

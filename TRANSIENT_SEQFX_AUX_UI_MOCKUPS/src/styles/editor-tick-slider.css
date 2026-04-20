@@ -1,8 +1,9 @@
 .editor-tick-slider {
     display: grid;
-    /* Reserve the wider modulated readout column for every row so toggling
+    /* First column widened to fit the label + M badge.
+       Third column reserves the wider modulated readout so toggling
        modulation on/off doesn't shrink the slider rail. */
-    grid-template-columns: 44px minmax(0, 1fr) 120px;
+    grid-template-columns: 68px minmax(0, 1fr) 120px;
     align-items: center;
     gap: 8px;
     padding: 6px 8px;
@@ -146,4 +147,83 @@
     cursor: ew-resize;
     touch-action: none;
     z-index: 3;
+}
+
+/* ---- Clickable label + modulation badge ---- */
+
+.editor-tick-slider__label--toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    border: 0;
+    padding: 2px 3px;
+    margin: -2px -3px;
+    color: var(--editor-surface-ink-muted);
+    background: transparent;
+    font-family: var(--editor-label-font);
+    font-size: var(--editor-label-size-sm);
+    font-weight: var(--editor-label-weight);
+    letter-spacing: var(--editor-label-letter-spacing);
+    text-transform: uppercase;
+    cursor: pointer;
+    user-select: none;
+    border-radius: 3px;
+    transition: background-color 100ms ease, color 100ms ease;
+}
+
+.editor-tick-slider__label--toggle:hover {
+    color: var(--editor-surface-ink);
+    background: rgba(28, 28, 28, 0.06);
+}
+
+.editor-tick-slider__label--toggle:focus-visible {
+    outline: 2px solid var(--editor-accent-start);
+    outline-offset: 1px;
+}
+
+/* Shared badge — used on tick rows, the Drive label, and the Gate pill. */
+.mod-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1px;
+    min-width: 14px;
+    height: 12px;
+    padding: 0 3px;
+    border: 1px dashed rgba(28, 28, 28, 0.42);
+    border-radius: 3px;
+    background: transparent;
+    color: rgba(28, 28, 28, 0.42);
+    font-family: var(--editor-label-font);
+    font-size: 8px;
+    font-weight: var(--editor-label-weight);
+    letter-spacing: 0.04em;
+    line-height: 1;
+    transition: background-color 120ms ease, color 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.editor-tick-slider__label--toggle:hover .mod-badge {
+    border-color: rgba(28, 28, 28, 0.75);
+    color: rgba(28, 28, 28, 0.75);
+}
+
+.mod-badge.is-on {
+    border-style: solid;
+    border-color: var(--editor-surface-border);
+    background: var(--editor-accent-range);
+    color: var(--editor-surface-ink);
+    box-shadow:
+        0 0 0 1px rgba(28, 28, 28, 0.14),
+        0 0 8px rgba(242, 209, 107, 0.55);
+}
+
+.mod-badge__arrow {
+    font-size: 9px;
+    line-height: 1;
+    letter-spacing: 0;
+    transform: translateY(-0.5px);
+}
+
+.mod-badge--directional {
+    min-width: 22px;
 }

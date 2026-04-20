@@ -238,3 +238,32 @@
     touch-action: none;
     z-index: 3;
 }
+
+/* Drive label as toggle button */
+.seqfx-crusher-editor__drive-label--toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    border: 0;
+    padding: 2px 4px;
+    margin: -2px -4px;
+    background: transparent;
+    cursor: pointer;
+    border-radius: 3px;
+    transition: background-color 100ms ease, color 100ms ease;
+}
+
+.seqfx-crusher-editor__drive-label--toggle:hover {
+    color: var(--editor-surface-ink);
+    background: rgba(28, 28, 28, 0.06);
+}
+
+.seqfx-crusher-editor__drive-label--toggle:focus-visible {
+    outline: 2px solid var(--editor-accent-start);
+    outline-offset: 1px;
+}
+
+.seqfx-crusher-editor__drive-label--toggle:hover .mod-badge {
+    border-color: rgba(28, 28, 28, 0.75);
+    color: rgba(28, 28, 28, 0.75);
+}

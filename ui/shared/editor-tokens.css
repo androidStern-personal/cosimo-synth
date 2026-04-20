@@ -38,6 +38,8 @@
     --editor-accent-end: #e8604c;
     --editor-accent-end-ink: #f0ece6;
     --editor-accent-end-border: rgba(200, 40, 20, 0.28);
+    --editor-accent-range: #f2d16b;
+    --editor-accent-range-ink: #1c1c1c;
 
     /* Primary draggable handle (filter-style: halo + dark center + light stroke) */
     --editor-handle-fill: #1c1c1c;

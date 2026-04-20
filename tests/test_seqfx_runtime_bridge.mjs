@@ -13,6 +13,7 @@ const {
     SEQFX_EFFECT_TYPES,
     SEQFX_LANES,
     SEQFX_STATE_KEY,
+    SEQFX_PARAM_COUNT,
     applySeqFxBlockCreate,
     createDefaultSeqFxState,
     serializeSeqFxState,
@@ -154,6 +155,42 @@ test("boot_without_saved_seqfx_state_hydrates_defaults_without_persisting_or_upl
     assert.equal(connection.requestedParameters.includes(SEQFX_ENDPOINTS.rate), true);
     assert.equal(endpointEvents(connection, SEQFX_ENDPOINTS.patternUpload).length, 0);
     assert.equal(bridge.getState().patterns[0].lanes.flatMap((lane) => lane.steps).some((step) => step.active), false);
+});
+
+test("boot_ignores_old_seqfx_v3_state_and_uses_defaults_when_current_key_is_missing", () => {
+    const oldKeyState = createDefaultSeqFxState();
+    oldKeyState.patterns[0].lanes[SEQFX_LANES.crusher].steps[0].active = true;
+    oldKeyState.patterns[0].lanes[SEQFX_LANES.crusher].steps[0].trigger = true;
+    const connection = new FakePatchConnection({
+        "seqfx.v3": serializeSeqFxState(oldKeyState),
+    });
+    const bridge = new SeqFxRuntimeBridge(connection);
+
+    bridge.attach();
+    bridge.requestBootState();
+
+    assert.equal(connection.storedWrites.length, 0);
+    assert.equal(endpointEvents(connection, SEQFX_ENDPOINTS.patternUpload).length, 0);
+    assert.equal(bridge.getState().patterns[0].lanes[SEQFX_LANES.crusher].steps[0].active, false);
+    assert.equal(bridge.getState().patterns[0].lanes[SEQFX_LANES.crusher].steps[0].trigger, false);
+});
+
+test("boot_rejects_old_shaped_current_seqfx_state_instead_of_filling_missing_aux", () => {
+    const savedState = createDefaultSeqFxState();
+    delete savedState.patterns[0].lanes[SEQFX_LANES.crusher].steps[0].aux;
+    const connection = new FakePatchConnection({
+        [SEQFX_STATE_KEY]: JSON.stringify(savedState),
+    });
+    const bridge = new SeqFxRuntimeBridge(connection);
+
+    bridge.attach();
+
+    assert.throws(
+        () => bridge.requestBootState(),
+        /aux/i,
+    );
+    assert.equal(connection.storedWrites.length, 0);
+    assert.equal(endpointEvents(connection, SEQFX_ENDPOINTS.patternUpload).length, 0);
 });
 
 test("boot_waits_for_async_full_stored_state_before_hydrating_or_requesting_runtime_values", () => {
@@ -317,6 +354,56 @@ test("changing_selected_pattern_block_effect_persists_effect_types_and_restores_
         SEQFX_EFFECT_TYPES.filter,
     ]);
     assert.deepEqual(storedState.patterns[0].lanes[0].steps.slice(2, 4).map((step) => step.params[1]), [420, 420]);
+    assert.equal(endpointEvents(connection, SEQFX_ENDPOINTS.patternUpload).length, 0);
+});
+
+test("changing_selected_pattern_block_aux_persists_curve_enabled_target_and_end_value", () => {
+    const initialState = createDefaultSeqFxState();
+    const connection = new FakePatchConnection({
+        [SEQFX_STATE_KEY]: serializeSeqFxState(initialState),
+    });
+    const bridge = new SeqFxRuntimeBridge(connection);
+
+    bridge.attach();
+    bridge.requestBootState();
+    connection.events = [];
+    connection.storedWrites = [];
+
+    bridge.createBlock({
+        patternIndex: 0,
+        lane: SEQFX_LANES.crusher,
+        startStep: 3,
+        length: 2,
+    });
+    bridge.setBlockAuxCurve({
+        patternIndex: 0,
+        lane: SEQFX_LANES.crusher,
+        startStep: 3,
+        curve: "log",
+    });
+    bridge.setBlockAuxTargetEnabled({
+        patternIndex: 0,
+        lane: SEQFX_LANES.crusher,
+        startStep: 3,
+        paramIndex: 0,
+        enabled: true,
+    });
+    bridge.setBlockAuxTargetEnd({
+        patternIndex: 0,
+        lane: SEQFX_LANES.crusher,
+        startStep: 3,
+        paramIndex: 0,
+        value: 13,
+    });
+
+    assert.equal(connection.storedWrites.length, 4);
+    const storedState = latestStoredSeqFxState(connection);
+    const auxStates = storedState.patterns[0].lanes[SEQFX_LANES.crusher].steps.slice(3, 5).map((step) => step.aux);
+
+    assert.deepEqual(auxStates.map((aux) => aux.curve), ["log", "log"]);
+    assert.deepEqual(auxStates.map((aux) => aux.targets.length), [SEQFX_PARAM_COUNT, SEQFX_PARAM_COUNT]);
+    assert.deepEqual(auxStates.map((aux) => aux.targets[0].enabled), [true, true]);
+    assert.deepEqual(auxStates.map((aux) => aux.targets[0].end), [13, 13]);
     assert.equal(endpointEvents(connection, SEQFX_ENDPOINTS.patternUpload).length, 0);
 });
 

@@ -25,6 +25,9 @@ type State = {
     driveDbMod: boolean;
 
     slices: number;
+    slicesEnd: number;
+    slicesMod: boolean;
+
     speed: number;
     shape: number;
     gate: number;
@@ -39,7 +42,8 @@ const BRIEF_SCENARIO: State = {
     bits: 8, bitsEnd: 12, bitsMod: true,
     holdFrames: 1, holdFramesEnd: 1, holdFramesMod: false,
     driveDb: 0, driveDbEnd: 24, driveDbMod: true,
-    slices: 8, speed: 1, shape: 0.55, gate: 1.0, gateEnd: 0.25, gateMod: true,
+    slices: 8, slicesEnd: 8, slicesMod: false,
+    speed: 1, shape: 0.55, gate: 1.0, gateEnd: 0.25, gateMod: true,
     speedEnd: 1, speedMod: false,
 };
 
@@ -47,7 +51,8 @@ const BLANK_SCENARIO: State = {
     bits: 8, bitsEnd: 8, bitsMod: false,
     holdFrames: 1, holdFramesEnd: 1, holdFramesMod: false,
     driveDb: 0, driveDbEnd: 0, driveDbMod: false,
-    slices: 8, speed: 1, shape: 0.55, gate: 0.68, gateEnd: 0.68, gateMod: false,
+    slices: 8, slicesEnd: 8, slicesMod: false,
+    speed: 1, shape: 0.55, gate: 0.68, gateEnd: 0.68, gateMod: false,
     speedEnd: 1, speedMod: false,
 };
 
@@ -55,7 +60,8 @@ const HEAVY_SCENARIO: State = {
     bits: 4, bitsEnd: 16, bitsMod: true,
     holdFrames: 1, holdFramesEnd: 32, holdFramesMod: true,
     driveDb: 6, driveDbEnd: 36, driveDbMod: true,
-    slices: 16, speed: 2, shape: 0.85, gate: 0.9, gateEnd: 0.1, gateMod: true,
+    slices: 4, slicesEnd: 16, slicesMod: true,
+    speed: 2, shape: 0.85, gate: 0.9, gateEnd: 0.1, gateMod: true,
     speedEnd: 0.5, speedMod: true,
 };
 
@@ -75,10 +81,11 @@ function App() {
                 <p>
                     The real <code>CrusherEditor</code> and <code>StutterEnvelopeEditor</code>
                     components, copied into this directory and extended with a
-                    <code>modulation</code> prop. Toggle per-param modulation on the
-                    left, scrub the aux phase in the block curve below, and the
-                    primary controls animate through their swept range (the wet
-                    waveform preview and the Stutter envelope re-render live).
+                    <code>modulation</code> prop. <b>Click any control's name</b> (Bits,
+                    Hold, Drive, Gate, Speed, Slices) to toggle modulation on/off —
+                    the little <span className="inline-m-hint">M</span> badge lights
+                    up yellow when active. Drag the cyan and coral cells to shape the
+                    sweep, then scrub Phase below to audition it.
                 </p>
             </header>
 
@@ -91,42 +98,32 @@ function App() {
                 </div>
 
                 <div className="control-card">
-                    <h2>Modulation Enables</h2>
-                    <div className="control-card__row">
-                        <button type="button" className={`mod-check${state.bitsMod ? " is-on" : ""}`} onClick={() => update({ bitsMod: !state.bitsMod })} aria-label="Bits mod" />
-                        <span>Bits</span>
-                        <span>{state.bits} → {state.bitsEnd}</span>
-                    </div>
-                    <div className="control-card__row">
-                        <button type="button" className={`mod-check${state.holdFramesMod ? " is-on" : ""}`} onClick={() => update({ holdFramesMod: !state.holdFramesMod })} aria-label="Hold mod" />
-                        <span>Hold</span>
-                        <span>{state.holdFrames} → {state.holdFramesEnd}</span>
-                    </div>
-                    <div className="control-card__row">
-                        <button type="button" className={`mod-check${state.driveDbMod ? " is-on" : ""}`} onClick={() => update({ driveDbMod: !state.driveDbMod })} aria-label="Drive mod" />
-                        <span>Drive</span>
-                        <span>{state.driveDb.toFixed(1)} → {state.driveDbEnd.toFixed(1)} dB</span>
-                    </div>
-                    <div className="control-card__row">
-                        <button type="button" className={`mod-check${state.gateMod ? " is-on" : ""}`} onClick={() => update({ gateMod: !state.gateMod })} aria-label="Gate mod" />
-                        <span>Gate</span>
-                        <span>{state.gate.toFixed(2)} → {state.gateEnd.toFixed(2)}</span>
-                    </div>
-                    <div className="control-card__row">
-                        <button type="button" className={`mod-check${state.speedMod ? " is-on" : ""}`} onClick={() => update({ speedMod: !state.speedMod })} aria-label="Speed mod" />
-                        <span>Speed</span>
-                        <span>{state.speed.toFixed(2)}x → {state.speedEnd.toFixed(2)}x</span>
-                    </div>
+                    <h2>How To Play</h2>
+                    <p style={{ margin: 0, color: "rgba(238,242,239,0.62)", fontSize: "11px", lineHeight: 1.5 }}>
+                        Click a control's <b>name</b> (Bits / Hold / Drive / Gate / Slices /
+                        Speed) to toggle modulation on or off — the M badge next to the
+                        name shows the state at a glance. When modulation is on, drag
+                        the <b>cyan cell</b> to move the start value and the <b>coral
+                        cell</b> to move the end value; cells between are filled yellow.
+                        Scrub <em>Phase</em> in the aux curve below to sweep the block
+                        — the Crusher waveform preview and the Stutter envelope animate
+                        through the swept range.
+                    </p>
                 </div>
 
                 <div className="control-card">
-                    <h2>How To Play</h2>
+                    <h2>Directional modulation</h2>
                     <p style={{ margin: 0, color: "rgba(238,242,239,0.62)", fontSize: "11px", lineHeight: 1.5 }}>
-                        Drag the cyan marker (or thumb) on any row to set the start value. Drag
-                        the coral marker for the end value. On the Stutter plot, the nearer of
-                        the two gate handles captures your drag. Scrub <em>Phase</em> on the
-                        aux curve below to sweep the block — the live sample dot follows the
-                        curve and the effect preview animates.
+                        <b>Slices</b> is the only one-way param in the current DSP.
+                        <code>startStutter</code> in <code>SeqFx.cmajor</code> pins
+                        <code>stutterReadLength = blockFrames / startSliceCount</code>,
+                        and playback wraps at that length. Mid-block we can only
+                        subdivide further (shorter slices, higher count); making each
+                        slice longer would read past the captured window. Its badge
+                        shows <span className="inline-m-hint">M↑</span> and the end
+                        cell clamps at or above the start cell as you drag. Bits,
+                        Hold, Drive, Speed, Shape and Gate are all pure playback-time
+                        params with no buffer constraint — they stay bidirectional.
                     </p>
                 </div>
             </aside>
@@ -149,6 +146,9 @@ function App() {
                         bits: state.bitsMod ? { end: state.bitsEnd, onEndChange: (v) => update({ bitsEnd: v }) } : null,
                         holdFrames: state.holdFramesMod ? { end: state.holdFramesEnd, onEndChange: (v) => update({ holdFramesEnd: v }) } : null,
                         driveDb: state.driveDbMod ? { end: state.driveDbEnd, onEndChange: (v) => update({ driveDbEnd: v }) } : null,
+                        onToggleBits: () => setState((prev) => ({ ...prev, bitsMod: !prev.bitsMod })),
+                        onToggleHoldFrames: () => setState((prev) => ({ ...prev, holdFramesMod: !prev.holdFramesMod })),
+                        onToggleDriveDb: () => setState((prev) => ({ ...prev, driveDbMod: !prev.driveDbMod })),
                     }}
                 />
 
@@ -162,7 +162,20 @@ function App() {
                     modulation={{
                         phase: curvePhase,
                         gate: state.gateMod ? { end: state.gateEnd, onEndChange: (v) => update({ gateEnd: v }) } : null,
+                        slices: state.slicesMod ? {
+                            end: state.slicesEnd,
+                            onEndChange: (v) => update({ slicesEnd: v }),
+                            direction: "up" as const,
+                        } : null,
                         speed: state.speedMod ? { end: state.speedEnd, onEndChange: (v) => update({ speedEnd: v }) } : null,
+                        onToggleGate: () => setState((prev) => ({ ...prev, gateMod: !prev.gateMod })),
+                        onToggleSlices: () => setState((prev) => ({
+                            ...prev,
+                            slicesMod: !prev.slicesMod,
+                            // When turning Slices mod on with no prior end, seed end = start (safe for up-only).
+                            slicesEnd: !prev.slicesMod && prev.slicesEnd < prev.slices ? prev.slices : prev.slicesEnd,
+                        })),
+                        onToggleSpeed: () => setState((prev) => ({ ...prev, speedMod: !prev.speedMod })),
                     }}
                 />
 

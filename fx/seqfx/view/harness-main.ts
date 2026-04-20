@@ -155,6 +155,8 @@ window.__SEQFX_HARNESS__ = {
             stepIndex,
             transportRunning: true,
             stepProgress: 0,
+            auxPhase: [0, 0, 0, 0],
+            auxDurationMs: [0, 0, 0, 0],
         });
     },
 };

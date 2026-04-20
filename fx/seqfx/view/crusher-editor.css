@@ -162,3 +162,92 @@
     outline: 2px solid var(--editor-accent-start);
     outline-offset: 2px;
 }
+
+.seqfx-crusher-editor__drive--modulated {
+    background: rgba(0, 180, 216, 0.06);
+}
+
+.seqfx-crusher-editor__drive-value--modulated {
+    display: inline-grid;
+    grid-template-columns: auto auto auto;
+    align-items: center;
+    justify-content: end;
+    gap: 3px;
+}
+
+.seqfx-crusher-editor__drive-chip {
+    display: inline-block;
+    border-radius: 3px;
+    padding: 1px 5px;
+    font-family: var(--editor-label-font);
+    font-size: var(--editor-label-size-sm);
+    font-weight: var(--editor-label-weight);
+    letter-spacing: var(--editor-label-letter-spacing);
+    text-transform: uppercase;
+}
+
+.seqfx-crusher-editor__drive-chip--start {
+    color: var(--editor-accent-start-ink);
+    background: var(--editor-accent-start);
+}
+
+.seqfx-crusher-editor__drive-chip--end {
+    color: var(--editor-accent-end-ink);
+    background: var(--editor-accent-end);
+}
+
+.seqfx-crusher-editor__drive-arrow {
+    color: var(--editor-surface-ink-muted);
+    font-family: var(--editor-label-font);
+    font-size: 9px;
+    font-weight: var(--editor-label-weight);
+}
+
+.seqfx-crusher-editor__drive-range {
+    position: absolute;
+    top: 5px;
+    right: 0;
+    bottom: 5px;
+    left: 0;
+    z-index: 0;
+    background: var(--editor-accent-range);
+    pointer-events: none;
+}
+
+.seqfx-crusher-editor__drive-thumb--end {
+    background: var(--editor-accent-end);
+}
+
+.seqfx-crusher-editor__drive-drag-surface {
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    width: 100%;
+    height: 28px;
+    cursor: ew-resize;
+    touch-action: none;
+}
+
+.seqfx-crusher-editor__drive-label--toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    border: 0;
+    border-radius: 3px;
+    margin: -2px -4px;
+    padding: 2px 4px;
+    background: transparent;
+    cursor: pointer;
+}
+
+.seqfx-crusher-editor__drive-label--toggle:hover,
+.seqfx-crusher-editor__drive-label--toggle:focus-visible {
+    color: var(--editor-surface-ink);
+    background: rgba(28, 28, 28, 0.06);
+    outline: none;
+}
+
+.seqfx-crusher-editor__drive-label--toggle:focus-visible {
+    outline: 2px solid var(--editor-accent-start);
+    outline-offset: 1px;
+}

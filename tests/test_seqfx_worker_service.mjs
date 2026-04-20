@@ -155,7 +155,7 @@ test("seqfx worker uploads the selected saved pattern from Cmajor stored-state v
     assert.deepEqual(connection.storedWrites, []);
 });
 
-test("seqfx worker ignores seqfx.v1 and applies a default empty pattern when seqfx.v2 is missing", () => {
+test("seqfx worker ignores old state keys and applies a default empty pattern when seqfx.v4 is missing", () => {
     const oldKeyState = createStateWithBlock({
         patternIndex: 0,
         lane: SEQFX_LANES.tapeStop,
@@ -165,6 +165,8 @@ test("seqfx worker ignores seqfx.v1 and applies a default empty pattern when seq
     const connection = new FakePatchConnection({
         values: {
             "seqfx.v1": serializeSeqFxState(oldKeyState),
+            "seqfx.v2": serializeSeqFxState(oldKeyState),
+            "seqfx.v3": serializeSeqFxState(oldKeyState),
         },
         parameters: {
             patternSelect: 0,
@@ -179,6 +181,27 @@ test("seqfx worker ignores seqfx.v1 and applies a default empty pattern when seq
     assert.equal(upload.authoritative, false);
     assert.equal(upload.activeSteps.flat().some(Boolean), false);
     assert.deepEqual(connection.requestedStoredKeys, [SEQFX_STATE_KEY]);
+    assert.deepEqual(connection.storedWrites, []);
+});
+
+test("seqfx worker rejects old-shaped current seqfx state instead of normalizing missing aux", () => {
+    const savedState = createDefaultSeqFxState();
+    delete savedState.patterns[0].lanes[SEQFX_LANES.crusher].steps[0].aux;
+    const connection = new FakePatchConnection({
+        values: {
+            [SEQFX_STATE_KEY]: JSON.stringify(savedState),
+        },
+        parameters: {
+            patternSelect: 0,
+        },
+    });
+    const service = createSeqFxWorkerService(connection);
+
+    assert.throws(
+        () => service.start(),
+        /aux/i,
+    );
+    assert.deepEqual(patternUploads(connection), []);
     assert.deepEqual(connection.storedWrites, []);
 });
 
@@ -222,7 +245,7 @@ test("seqfx worker reuploads when patternSelect changes", () => {
     );
 });
 
-test("seqfx worker reuploads the selected pattern when seqfx.v2 changes", () => {
+test("seqfx worker reuploads the selected pattern when seqfx.v4 changes", () => {
     const connection = new FakePatchConnection({
         values: {
             [SEQFX_STATE_KEY]: serializeSeqFxState(createDefaultSeqFxState()),

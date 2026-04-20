@@ -276,3 +276,47 @@
 .seqfx-stutter-editor__gate-chip-text--modulated {
     fill: var(--editor-chip-ink);
 }
+
+/* Gate name + M toggle pill, overlaid at top-left of the Stutter plot. */
+.seqfx-stutter-editor__gate-toggle {
+    position: absolute;
+    top: 8px;
+    left: 10px;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 6px;
+    border: 1px solid rgba(28, 28, 28, 0.18);
+    border-radius: 4px;
+    background: rgba(240, 236, 230, 0.74);
+    color: var(--editor-surface-ink-muted);
+    font-family: var(--editor-label-font);
+    font-size: var(--editor-label-size-sm);
+    font-weight: var(--editor-label-weight);
+    letter-spacing: var(--editor-label-letter-spacing);
+    text-transform: uppercase;
+    cursor: pointer;
+    user-select: none;
+    backdrop-filter: blur(3px);
+    transition: background-color 100ms ease, color 100ms ease, border-color 100ms ease;
+}
+
+.seqfx-stutter-editor__gate-toggle:hover {
+    color: var(--editor-surface-ink);
+    background: rgba(240, 236, 230, 0.92);
+    border-color: rgba(28, 28, 28, 0.42);
+}
+
+.seqfx-stutter-editor__gate-toggle:focus-visible {
+    outline: 2px solid var(--editor-accent-start);
+    outline-offset: 1px;
+}
+
+.seqfx-stutter-editor__gate-toggle:hover .mod-badge {
+    border-color: rgba(28, 28, 28, 0.75);
+    color: rgba(28, 28, 28, 0.75);
+}
+
+.seqfx-stutter-editor__gate-toggle[aria-pressed="true"] {
+    color: var(--editor-surface-ink);
+}

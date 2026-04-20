@@ -15,7 +15,7 @@ import {
     editorPlotGutter,
     useEditorSurfaceSize,
 } from "../../../ui/shared/editor-tokens";
-import { EditorTickSlider } from "../../../ui/shared/editor-tick-slider";
+import { EditorTickSlider, ModBadge, type ModulationDirection } from "../../../ui/shared/editor-tick-slider";
 import {
     STUTTER_DEFAULT_GATE,
     STUTTER_DEFAULT_SHAPE,
@@ -42,12 +42,31 @@ export type StutterEnvelopeEditorValue = {
     gate: number;
 };
 
+type StutterModulatedParam = {
+    end: number;
+    onEndChange: (value: number) => void;
+    direction?: ModulationDirection;
+};
+
+export type StutterModulation = {
+    slices?: StutterModulatedParam | null;
+    speed?: StutterModulatedParam | null;
+    shape?: StutterModulatedParam | null;
+    gate?: StutterModulatedParam | null;
+    phase?: number;
+    onToggleSlices?: () => void;
+    onToggleSpeed?: () => void;
+    onToggleShape?: () => void;
+    onToggleGate?: () => void;
+};
+
 export type StutterEnvelopeEditorProps = {
     value: Partial<StutterEnvelopeEditorValue>;
     onSlicesChange: (value: number) => void;
     onSpeedChange: (value: number) => void;
     onShapeChange: (value: number) => void;
     onGateChange: (value: number) => void;
+    modulation?: StutterModulation | null;
 };
 
 const ENVELOPE_POINT_COUNT = 200;
@@ -73,6 +92,11 @@ function formatSpeed(value: number) {
 
 function roundSpeed(value: number) {
     return Math.round(value * 100) / 100;
+}
+
+function lerp(start: number, end: number, phase: number) {
+    const t = clamp(phase, 0, 1);
+    return start + ((end - start) * t);
 }
 
 function pointerToNormalizedX(element: Element, clientX: number) {
@@ -187,12 +211,14 @@ export function StutterEnvelopeEditor({
     onSpeedChange,
     onShapeChange,
     onGateChange,
+    modulation = null,
 }: StutterEnvelopeEditorProps) {
     const resolved = resolveValue(value);
     const viewportRef = useRef<HTMLDivElement | null>(null);
     const surfaceRef = useRef<SVGSVGElement | null>(null);
     const morphTrackRef = useRef<HTMLDivElement | null>(null);
     const gatePointerIdRef = useRef<number | null>(null);
+    const gateDragTargetRef = useRef<"start" | "end">("start");
     const morphPointerIdRef = useRef<number | null>(null);
     const size = useEditorSurfaceSize(viewportRef);
     const effectiveWidth = size.width;
@@ -201,23 +227,93 @@ export function StutterEnvelopeEditor({
         () => resolvePlotRect(effectiveWidth, effectiveHeight),
         [effectiveHeight, effectiveWidth],
     );
+    const phase = modulation?.phase ?? 0;
+    const effectiveShape = modulation?.shape
+        ? clampStutterShape(lerp(resolved.shape, modulation.shape.end, phase))
+        : resolved.shape;
+    const effectiveGate = modulation?.gate
+        ? clampStutterGate(lerp(resolved.gate, modulation.gate.end, phase))
+        : resolved.gate;
     const paths = useMemo(
-        () => envelopePaths(resolved.shape, resolved.gate, plot),
-        [plot, resolved.gate, resolved.shape],
+        () => envelopePaths(effectiveShape, effectiveGate, plot),
+        [effectiveGate, effectiveShape, plot],
     );
     const waveSilhouette = useMemo(() => waveSilhouettePath(plot), [plot]);
-    const gateX = plot.plotLeft + (plot.plotWidth * resolved.gate);
+    const gateStartX = plot.plotLeft + (plot.plotWidth * resolved.gate);
+    const gateEndX = modulation?.gate
+        ? plot.plotLeft + (plot.plotWidth * clampStutterGate(modulation.gate.end))
+        : gateStartX;
+    const liveGateX = plot.plotLeft + (plot.plotWidth * effectiveGate);
     const gridXs = useMemo(() => (
         [0.25, 0.5, 0.75].map((t) => plot.plotLeft + (plot.plotWidth * t))
     ), [plot]);
+    const isGateModulated = Boolean(modulation?.gate);
 
-    const setGateFromClientX = (clientX: number) => {
+    const pickGateTarget = (clientX: number): "start" | "end" => {
+        if (!isGateModulated || !surfaceRef.current) {
+            return "start";
+        }
+
+        const bounds = surfaceRef.current.getBoundingClientRect();
+        if (bounds.width <= 0) {
+            return "start";
+        }
+
+        const surfaceX = ((clientX - bounds.left) / bounds.width) * effectiveWidth;
+        return Math.abs(surfaceX - gateStartX) <= Math.abs(surfaceX - gateEndX) ? "start" : "end";
+    };
+
+    const setGateValue = (target: "start" | "end", value: number) => {
+        const nextNormalized = clampStutterGate(value);
+        const direction = modulation?.gate?.direction ?? "both";
+
+        if (target === "end" && modulation?.gate) {
+            let nextEnd = nextNormalized;
+            if (direction === "up") {
+                nextEnd = Math.max(nextEnd, resolved.gate);
+            } else if (direction === "down") {
+                nextEnd = Math.min(nextEnd, resolved.gate);
+            }
+            modulation.gate.onEndChange(clampStutterGate(nextEnd));
+            return;
+        }
+
+        const nextStart = nextNormalized;
+        onGateChange(nextStart);
+        if (modulation?.gate) {
+            if (direction === "up" && modulation.gate.end < nextStart) {
+                modulation.gate.onEndChange(nextStart);
+            } else if (direction === "down" && modulation.gate.end > nextStart) {
+                modulation.gate.onEndChange(nextStart);
+            }
+        }
+    };
+
+    const setGateFromClientX = (clientX: number, target: "start" | "end") => {
         const surface = surfaceRef.current;
         if (!surface) {
             return;
         }
 
-        onGateChange(pointerToPlotNormalizedX(surface, clientX, plot, effectiveWidth));
+        setGateValue(target, pointerToPlotNormalizedX(surface, clientX, plot, effectiveWidth));
+    };
+
+    const handleGateKeyDown = (target: "start" | "end") => (event: ReactKeyboardEvent<SVGCircleElement>) => {
+        if (!["ArrowLeft", "ArrowRight", "ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
+            return;
+        }
+
+        const step = event.shiftKey ? 0.1 : 0.02;
+        const directionSign = event.key === "ArrowLeft" || event.key === "ArrowDown" ? -1 : 1;
+        const baseValue = target === "end" ? modulation?.gate?.end ?? resolved.gate : resolved.gate;
+        const nextValue = event.key === "Home"
+            ? 0
+            : event.key === "End"
+                ? 1
+                : baseValue + (step * directionSign);
+
+        setGateValue(target, nextValue);
+        event.preventDefault();
     };
 
     const handleGatePointerDown = (event: ReactPointerEvent<SVGSVGElement>) => {
@@ -228,7 +324,9 @@ export function StutterEnvelopeEditor({
         event.preventDefault();
         event.currentTarget.setPointerCapture(event.pointerId);
         gatePointerIdRef.current = event.pointerId;
-        setGateFromClientX(event.clientX);
+        const target = pickGateTarget(event.clientX);
+        gateDragTargetRef.current = target;
+        setGateFromClientX(event.clientX, target);
     };
 
     const handleGatePointerMove = (event: ReactPointerEvent<SVGSVGElement>) => {
@@ -236,7 +334,7 @@ export function StutterEnvelopeEditor({
             return;
         }
 
-        setGateFromClientX(event.clientX);
+        setGateFromClientX(event.clientX, gateDragTargetRef.current);
     };
 
     const endGateDrag = (event: ReactPointerEvent<SVGSVGElement>) => {
@@ -298,10 +396,13 @@ export function StutterEnvelopeEditor({
         }
     };
 
-    const gateChipLabel = `${Math.round(resolved.gate * 100)}%`;
+    const gateChipLabel = isGateModulated
+        ? `${resolved.gate.toFixed(2)} -> ${clampStutterGate(modulation!.gate!.end).toFixed(2)}`
+        : `${Math.round(resolved.gate * 100)}%`;
     const axisLabelY = effectiveHeight - 10;
     const gateHandleY = plot.plotBottom;
     const gateChipY = plot.plotTop - 11;
+    const gateChipX = computeChipX((gateStartX + gateEndX) / 2, plot, isGateModulated ? 52 : 24);
 
     return (
         <section className="seqfx-stutter-editor" data-role="seqfx-stutter-editor" aria-label="Stutter cut envelope editor">
@@ -348,36 +449,92 @@ export function StutterEnvelopeEditor({
                             d={waveSilhouette}
                         />
 
+                        {isGateModulated ? (
+                            <rect
+                                className="seqfx-stutter-editor__gate-mod-region"
+                                x={Math.min(gateStartX, gateEndX)}
+                                y={plot.plotTop}
+                                width={Math.max(1, Math.abs(gateEndX - gateStartX))}
+                                height={plot.plotHeight}
+                                rx="2"
+                            />
+                        ) : null}
                         <rect
                             className="seqfx-stutter-editor__gate-region"
-                            x={gateX}
+                            x={liveGateX}
                             y={plot.plotTop}
-                            width={Math.max(0, plot.plotRight - gateX)}
+                            width={Math.max(0, plot.plotRight - liveGateX)}
                             height={plot.plotHeight}
                             rx="2"
                         />
                         <path className="seqfx-stutter-editor__env-fill" d={paths.fill} />
                         <path className="seqfx-stutter-editor__env-path" d={paths.line} strokeWidth={EDITOR_CURVE_STROKE_WIDTH} />
-                        <line
-                            className="seqfx-stutter-editor__gate-line"
-                            x1={gateX}
-                            x2={gateX}
-                            y1={plot.plotTop}
-                            y2={plot.plotBottom}
-                        />
-                        <circle
-                            className="seqfx-stutter-editor__value-halo"
-                            cx={gateX}
-                            cy={gateHandleY}
-                            r={EDITOR_VALUE_HANDLE_HALO_RADIUS_PX}
-                        />
-                        <circle
-                            className="seqfx-stutter-editor__gate-handle"
-                            data-role="seqfx-stutter-gate-handle"
-                            cx={gateX}
-                            cy={gateHandleY}
-                            r={EDITOR_VALUE_HANDLE_RADIUS_PX}
-                        />
+                        {isGateModulated ? (
+                            <>
+                                <line
+                                    className="seqfx-stutter-editor__gate-line seqfx-stutter-editor__gate-line--start"
+                                    x1={gateStartX}
+                                    x2={gateStartX}
+                                    y1={plot.plotTop}
+                                    y2={plot.plotBottom}
+                                />
+                                <line
+                                    className="seqfx-stutter-editor__gate-line seqfx-stutter-editor__gate-line--end"
+                                    x1={gateEndX}
+                                    x2={gateEndX}
+                                    y1={plot.plotTop}
+                                    y2={plot.plotBottom}
+                                />
+                                <circle
+                                    className="seqfx-stutter-editor__value-halo"
+                                    cx={gateStartX}
+                                    cy={gateHandleY}
+                                    r={EDITOR_VALUE_HANDLE_HALO_RADIUS_PX}
+                                />
+                                <circle
+                                    className="seqfx-stutter-editor__gate-handle seqfx-stutter-editor__gate-handle--start"
+                                    data-role="seqfx-stutter-gate-handle"
+                                    cx={gateStartX}
+                                    cy={gateHandleY}
+                                    r={EDITOR_VALUE_HANDLE_RADIUS_PX}
+                                />
+                                <circle
+                                    className="seqfx-stutter-editor__value-halo"
+                                    cx={gateEndX}
+                                    cy={gateHandleY}
+                                    r={EDITOR_VALUE_HANDLE_HALO_RADIUS_PX}
+                                />
+                                <circle
+                                    className="seqfx-stutter-editor__gate-handle seqfx-stutter-editor__gate-handle--end"
+                                    cx={gateEndX}
+                                    cy={gateHandleY}
+                                    r={EDITOR_VALUE_HANDLE_RADIUS_PX}
+                                />
+                            </>
+                        ) : (
+                            <>
+                                <line
+                                    className="seqfx-stutter-editor__gate-line"
+                                    x1={liveGateX}
+                                    x2={liveGateX}
+                                    y1={plot.plotTop}
+                                    y2={plot.plotBottom}
+                                />
+                                <circle
+                                    className="seqfx-stutter-editor__value-halo"
+                                    cx={liveGateX}
+                                    cy={gateHandleY}
+                                    r={EDITOR_VALUE_HANDLE_HALO_RADIUS_PX}
+                                />
+                                <circle
+                                    className="seqfx-stutter-editor__gate-handle"
+                                    data-role="seqfx-stutter-gate-handle"
+                                    cx={liveGateX}
+                                    cy={gateHandleY}
+                                    r={EDITOR_VALUE_HANDLE_RADIUS_PX}
+                                />
+                            </>
+                        )}
                         <circle
                             aria-label="Gate position"
                             aria-valuemin={0}
@@ -385,11 +542,27 @@ export function StutterEnvelopeEditor({
                             aria-valuenow={Math.round(resolved.gate * 100)}
                             className="seqfx-stutter-editor__gate-hit-target"
                             role="slider"
-                            cx={gateX}
+                            cx={gateStartX}
                             cy={gateHandleY}
                             r={EDITOR_HIT_RADIUS_PX}
                             tabIndex={0}
+                            onKeyDown={handleGateKeyDown("start")}
                         />
+                        {isGateModulated ? (
+                            <circle
+                                aria-label="Gate end"
+                                aria-valuemin={0}
+                                aria-valuemax={100}
+                                aria-valuenow={Math.round(clampStutterGate(modulation!.gate!.end) * 100)}
+                                className="seqfx-stutter-editor__gate-hit-target seqfx-stutter-editor__gate-hit-target--end"
+                                role="slider"
+                                cx={gateEndX}
+                                cy={gateHandleY}
+                                r={EDITOR_HIT_RADIUS_PX}
+                                tabIndex={0}
+                                onKeyDown={handleGateKeyDown("end")}
+                            />
+                        ) : null}
                         <text className="seqfx-stutter-editor__axis-label" x={plot.plotLeft} y={axisLabelY} textAnchor="start">0</text>
                         <text
                             className="seqfx-stutter-editor__axis-label"
@@ -408,15 +581,43 @@ export function StutterEnvelopeEditor({
                             1 cut
                         </text>
                         <g
-                            transform={`translate(${computeChipX(gateX, plot).toFixed(2)}, ${gateChipY.toFixed(2)})`}
+                            transform={`translate(${gateChipX.toFixed(2)}, ${gateChipY.toFixed(2)})`}
                             pointerEvents="none"
                         >
-                            <rect className="seqfx-stutter-editor__gate-chip-rect" x="-22" y="-9" width="44" height="18" rx="3" />
-                            <text className="seqfx-stutter-editor__gate-chip-text" x="0" y="4" textAnchor="middle">
+                            <rect
+                                className={`seqfx-stutter-editor__gate-chip-rect${isGateModulated ? " seqfx-stutter-editor__gate-chip-rect--modulated" : ""}`}
+                                x={isGateModulated ? -52 : -22}
+                                y="-9"
+                                width={isGateModulated ? 104 : 44}
+                                height="18"
+                                rx="3"
+                            />
+                            <text
+                                className={`seqfx-stutter-editor__gate-chip-text${isGateModulated ? " seqfx-stutter-editor__gate-chip-text--modulated" : ""}`}
+                                x="0"
+                                y="4"
+                                textAnchor="middle"
+                            >
                                 {gateChipLabel}
                             </text>
                         </g>
                     </svg>
+                    {modulation?.onToggleGate ? (
+                        <button
+                            aria-pressed={isGateModulated}
+                            className="seqfx-stutter-editor__gate-toggle"
+                            data-role="seqfx-stutter-gate-mod-toggle"
+                            onClick={(event) => {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                modulation.onToggleGate!();
+                            }}
+                            type="button"
+                        >
+                            <span>Gate</span>
+                            <ModBadge isOn={isGateModulated} direction={modulation.gate?.direction} />
+                        </button>
+                    ) : null}
                 </div>
 
                 <EditorTickSlider
@@ -432,6 +633,13 @@ export function StutterEnvelopeEditor({
                     tickCount={(STUTTER_SLICES_MAX - STUTTER_SLICES_MIN) + 1}
                     value={resolved.slices}
                     valueDataRole="seqfx-stutter-slices-value"
+                    modulation={modulation?.slices ? {
+                        end: modulation.slices.end,
+                        onEndChange: (nextValue) => modulation.slices!.onEndChange(clampStutterSlices(nextValue)),
+                        phase,
+                        direction: modulation.slices.direction,
+                    } : null}
+                    onModulationToggle={modulation?.onToggleSlices ?? null}
                 />
 
                 <div className="seqfx-stutter-editor__morph">
@@ -478,6 +686,27 @@ export function StutterEnvelopeEditor({
                 </div>
                 <EditorTickSlider
                     accent="start"
+                    dataRole="seqfx-stutter-shape-slider"
+                    formatValue={formatStutterShapeLabel}
+                    inputDataRole="seqfx-stutter-shape"
+                    label="Shape"
+                    max={1}
+                    min={0}
+                    onChange={(value) => onShapeChange(clampStutterShape(value))}
+                    step={0.01}
+                    tickCount={6}
+                    value={resolved.shape}
+                    valueDataRole="seqfx-stutter-shape-value"
+                    modulation={modulation?.shape ? {
+                        end: modulation.shape.end,
+                        onEndChange: (nextValue) => modulation.shape!.onEndChange(clampStutterShape(nextValue)),
+                        phase,
+                        direction: modulation.shape.direction,
+                    } : null}
+                    onModulationToggle={modulation?.onToggleShape ?? null}
+                />
+                <EditorTickSlider
+                    accent="start"
                     dataRole="seqfx-stutter-speed-slider"
                     formatValue={formatSpeed}
                     inputDataRole="seqfx-stutter-speed"
@@ -489,13 +718,19 @@ export function StutterEnvelopeEditor({
                     tickCount={16}
                     value={resolved.speed}
                     valueDataRole="seqfx-stutter-speed-value"
+                    modulation={modulation?.speed ? {
+                        end: modulation.speed.end,
+                        onEndChange: (nextValue) => modulation.speed!.onEndChange(roundSpeed(clampStutterSpeed(nextValue))),
+                        phase,
+                        direction: modulation.speed.direction,
+                    } : null}
+                    onModulationToggle={modulation?.onToggleSpeed ?? null}
                 />
             </div>
         </section>
     );
 }
 
-function computeChipX(gateX: number, plot: PlotRect): number {
-    const chipHalfWidth = 24;
-    return clamp(gateX, plot.plotLeft + chipHalfWidth, plot.plotRight - chipHalfWidth);
+function computeChipX(centerX: number, plot: PlotRect, halfWidth: number): number {
+    return clamp(centerX, plot.plotLeft + halfWidth, plot.plotRight - halfWidth);
 }

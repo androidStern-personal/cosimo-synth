@@ -1,5 +1,6 @@
 export const DEFAULT_EFFECT_DEV_ORIGIN = "http://127.0.0.1:5175";
 export const DEFAULT_EFFECT_PRODUCTION_MODULE = "./app.js";
+export const DEFAULT_EFFECT_DEV_STATUS_TIMEOUT_MS = 500;
 export const EFFECT_DEV_STATUS_PATH = "/__fx-dev-status";
 export const EFFECT_DEV_STATUS_KIND = "fx-vite-dev-server";
 export const EFFECT_DEV_TOOLS_MODULE_PATH = "/ui/shared/effects/effect-dev-tools.js";
@@ -36,19 +37,51 @@ function resolveProductionModuleUrl(modulePath) {
     return new URL(modulePath || DEFAULT_EFFECT_PRODUCTION_MODULE, import.meta.url).href;
 }
 
-async function readDevServerStatus(origin) {
-    try {
-        const response = await fetch(`${normalizeOrigin(origin)}${EFFECT_DEV_STATUS_PATH}`, {
-            cache: "no-store",
-        });
+function normalizeTimeoutMs(timeoutMs) {
+    return Number.isFinite(timeoutMs) && timeoutMs > 0
+        ? timeoutMs
+        : DEFAULT_EFFECT_DEV_STATUS_TIMEOUT_MS;
+}
 
-        if (!response.ok) {
-            return undefined;
+async function readDevServerStatus(origin, timeoutMs = DEFAULT_EFFECT_DEV_STATUS_TIMEOUT_MS) {
+    const controller = typeof AbortController === "function" ? new AbortController() : undefined;
+    let timeoutID;
+
+    try {
+        const requestOptions = {
+            cache: "no-store",
+        };
+
+        if (controller) {
+            requestOptions.signal = controller.signal;
         }
 
-        return await response.json();
+        const statusRequest = Promise.resolve()
+            .then(async () => {
+                const response = await fetch(`${normalizeOrigin(origin)}${EFFECT_DEV_STATUS_PATH}`, requestOptions);
+
+                if (!response.ok) {
+                    return undefined;
+                }
+
+                return await response.json();
+            })
+            .catch(() => undefined);
+
+        const timeout = new Promise((resolve) => {
+            timeoutID = setTimeout(() => {
+                controller?.abort();
+                resolve(undefined);
+            }, normalizeTimeoutMs(timeoutMs));
+        });
+
+        return await Promise.race([statusRequest, timeout]);
     } catch {
         return undefined;
+    } finally {
+        if (timeoutID) {
+            clearTimeout(timeoutID);
+        }
     }
 }
 
@@ -69,7 +102,13 @@ function getViewFactory(module, label) {
 async function loadViewFromModule(moduleUrl, patchConnection, label) {
     const module = await import(/* @vite-ignore */ moduleUrl);
     const createView = getViewFactory(module, label);
-    return await createView(patchConnection);
+    const view = await createView(patchConnection);
+
+    if (!(view instanceof HTMLElement)) {
+        throw new Error(`${label} returned ${Object.prototype.toString.call(view)} instead of an HTMLElement.`);
+    }
+
+    return view;
 }
 
 async function loadViteClient(origin) {
@@ -120,24 +159,83 @@ function createProductionLoadError({ productionModuleUrl, devOrigin, devModulePa
     return error;
 }
 
-export async function canLoadEffectDevServer(origin = DEFAULT_EFFECT_DEV_ORIGIN) {
-    return isExpectedDevServer(await readDevServerStatus(origin));
+function createDevLoadError({ devModuleUrl, cause }) {
+    const error = new Error(
+        [
+            `Could not load the effect UI from the shared effects dev server at ${devModuleUrl}.`,
+            "Stop the stale effects dev server, restart it from this repo, or build and install a production runtime.",
+            cause?.message ? `Original error: ${cause.message}` : "",
+        ].filter(Boolean).join(" "),
+    );
+
+    error.cause = cause;
+    return error;
+}
+
+function formatLoadError(error) {
+    if (error && typeof error === "object") {
+        const maybeError = error;
+        const message = maybeError.stack || maybeError.message || String(maybeError);
+        const cause = maybeError.cause ? formatLoadError(maybeError.cause) : "";
+        return [message, cause ? `\nCause:\n${cause}` : ""].filter(Boolean).join("\n");
+    }
+
+    return String(error);
+}
+
+function createLoadErrorView(error) {
+    console.error(error);
+
+    const element = document.createElement("pre");
+    element.dataset.role = "effect-load-error";
+    element.setAttribute("role", "alert");
+    element.textContent = formatLoadError(error);
+    element.style.cssText = [
+        "display:block",
+        "box-sizing:border-box",
+        "width:100%",
+        "height:100%",
+        "margin:0",
+        "padding:16px",
+        "overflow:auto",
+        "background:#151816",
+        "color:#ffd7df",
+        "font:12px/1.45 Menlo, Monaco, monospace",
+        "white-space:pre-wrap",
+    ].join(";");
+    return element;
+}
+
+export async function canLoadEffectDevServer(
+    origin = DEFAULT_EFFECT_DEV_ORIGIN,
+    timeoutMs = DEFAULT_EFFECT_DEV_STATUS_TIMEOUT_MS,
+) {
+    return isExpectedDevServer(await readDevServerStatus(origin, timeoutMs));
 }
 
 export function createEffectPatchView(options = {}) {
     return async function createPatchView(patchConnection) {
         const devOrigin = normalizeOrigin(options.devOrigin);
+        const devStatusTimeoutMs = normalizeTimeoutMs(options.devStatusTimeoutMs);
         const devModulePath = getDevModulePath(patchConnection, options);
         const productionModuleUrl = resolveProductionModuleUrl(
             options.productionModule ?? DEFAULT_EFFECT_PRODUCTION_MODULE,
         );
 
-        if (devModulePath && await canLoadEffectDevServer(devOrigin)) {
+        if (devModulePath && await canLoadEffectDevServer(devOrigin, devStatusTimeoutMs)) {
             const devModuleUrl = resolveDevModuleUrl(devOrigin, devModulePath);
-            await loadViteClient(devOrigin);
-            await loadReactRefreshPreamble(devOrigin);
-            await loadEffectDevTools(devOrigin);
-            return await loadViewFromModule(devModuleUrl, patchConnection, `Dev module ${devModuleUrl}`);
+
+            try {
+                await loadViteClient(devOrigin);
+                await loadReactRefreshPreamble(devOrigin);
+                await loadEffectDevTools(devOrigin);
+                return await loadViewFromModule(devModuleUrl, patchConnection, `Dev module ${devModuleUrl}`);
+            } catch (error) {
+                return createLoadErrorView(createDevLoadError({
+                    devModuleUrl,
+                    cause: error,
+                }));
+            }
         }
 
         try {
@@ -147,12 +245,12 @@ export function createEffectPatchView(options = {}) {
                 `Production module ${productionModuleUrl}`,
             );
         } catch (error) {
-            throw createProductionLoadError({
+            return createLoadErrorView(createProductionLoadError({
                 productionModuleUrl,
                 devOrigin,
                 devModulePath,
                 cause: error,
-            });
+            }));
         }
     };
 }

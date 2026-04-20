@@ -10,7 +10,7 @@ import { chromium } from "playwright";
 const DEV_SERVER_ORIGIN = "http://127.0.0.1:5175";
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const SEQFX_STEP_COUNT = 32;
-const SEQFX_STATE_KEY = "seqfx.v2";
+const SEQFX_STATE_KEY = "seqfx.v4";
 const SEQFX_SNAPSHOT_BANK_STATE_KEY = "cosimo.effectSnapshotBank.seqfx.v1";
 const SEQFX_NORMAL_GAP_PX = 5;
 const SEQFX_BEAT_GAP_PX = 9;
@@ -237,6 +237,21 @@ async function setCrusherEditorValues(page, { bits, holdFrames, driveDb }) {
     await setRangeInputValue(page.locator('[data-role="seqfx-crusher-bits"]'), bits);
     await setRangeInputValue(page.locator('[data-role="seqfx-crusher-hold-frames"]'), holdFrames);
     await setRangeInputValue(page.locator('[data-role="seqfx-crusher-drive-db"]'), driveDb);
+}
+
+async function keyboardSetSliderTo(locator, key) {
+    await locator.focus();
+    await locator.press(key);
+}
+
+async function dragHorizontalControlTo(page, locator, startRatio, endRatio) {
+    const box = await locator.boundingBox();
+    assert.ok(box, "expected horizontal control to have a bounding box");
+    const y = box.y + (box.height / 2);
+    await page.mouse.move(box.x + (box.width * startRatio), y);
+    await page.mouse.down();
+    await page.mouse.move(box.x + (box.width * endRatio), y, { steps: 8 });
+    await page.mouse.up();
 }
 
 async function waitForGridGeometry(page, cellsPerBeat, step, message) {
@@ -893,6 +908,167 @@ test("seqfx_grid_cell_and_inspector_edits_send_complete_pattern_uploads", async 
         uploadedStepParams[1] > uploadedStepParams[2],
         `filter range direction should remain start-to-end, got ${uploadedStepParams[1]} -> ${uploadedStepParams[2]}`,
     );
+
+    await page.close();
+});
+
+test("seqfx_crusher_aux_controls_edit_curve_targets_and_v4_storage", async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
+    await loadSeqFxHarness(page);
+    await page.locator('[data-role="seqfx-root"]').waitFor();
+    await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
+
+    await page.getByRole("button", { name: "Chain 2 step 1", exact: true }).click();
+    await page.getByRole("button", { name: "Chain 2 Crusher block 1", exact: true }).waitFor();
+    await page.locator('[data-role="seqfx-aux-curve"]').waitFor();
+
+    await page.locator('[data-role="seqfx-aux-curve-shape"][data-shape="exp"]').click();
+    await page.locator('[data-role="seqfx-crusher-bits-slider"] .editor-tick-slider__label--toggle').click();
+    await keyboardSetSliderTo(page.getByRole("slider", { name: "Bits end", exact: true }), "End");
+    await dragHorizontalControlTo(page, page.locator('[data-role="seqfx-crusher-bits"]'), 0.33, 0);
+    await dragHorizontalControlTo(page, page.locator('[data-role="seqfx-crusher-bits"]'), 0.96, 0.67);
+    await page.locator('[data-role="seqfx-crusher-drive-db-mod-toggle"]').click();
+    await keyboardSetSliderTo(page.getByRole("slider", { name: "Drive start", exact: true }), "End");
+    await keyboardSetSliderTo(page.getByRole("slider", { name: "Drive end", exact: true }), "Home");
+
+    const snapshot = await getHarnessSnapshot(page);
+    const upload = patternUploads(snapshot).at(-1).value;
+    assert.equal(upload.auxCurve[1][0], 2);
+    assert.equal(upload.params[1][0][0], 4);
+    assert.equal(upload.params[1][0][2], 36);
+    assert.equal(upload.auxEnabled[1][0][0], true);
+    assert.equal(upload.auxEnabled[1][0][2], true);
+    assert.equal(upload.auxEnd[1][0][0], 12);
+    assert.equal(upload.auxEnd[1][0][2], 0);
+
+    const storedState = parseSeqFxStoredState(snapshot.storedState[SEQFX_STATE_KEY]);
+    const step = storedState.patterns[0].lanes[1].steps[0];
+    assert.equal(step.aux.curve, "exp");
+    assert.equal(step.params[0], 4);
+    assert.equal(step.params[2], 36);
+    assert.deepEqual(step.aux.targets[0], { enabled: true, end: 12 });
+    assert.deepEqual(step.aux.targets[2], { enabled: true, end: 0 });
+
+    await page.close();
+});
+
+test("seqfx_aux_curve_phase_dot_follows_monitor_phase", async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
+    await loadSeqFxHarness(page);
+    await page.locator('[data-role="seqfx-root"]').waitFor();
+
+    await page.getByRole("button", { name: "Chain 2 step 1", exact: true }).click();
+    await page.getByRole("button", { name: "Chain 2 Crusher block 1", exact: true }).waitFor();
+    const phaseInput = page.locator('[data-role="seqfx-aux-phase"]');
+    await phaseInput.waitFor();
+
+    await page.evaluate(() => {
+        window.__SEQFX_HARNESS__?.patchConnection.emitEndpoint("monitorOut", {
+            event: {
+                patternIndex: 0,
+                stepIndex: 0,
+                transportRunning: true,
+                stepProgress: 0.5,
+                stepDurationMs: 125,
+                auxPhase: [0, 0.5, 0, 0],
+                auxDurationMs: [0, 250, 0, 0],
+            },
+        });
+    });
+
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+        if (Math.abs(Number(await phaseInput.inputValue()) - 0.5) <= 0.01) {
+            break;
+        }
+        await page.waitForTimeout(25);
+    }
+    assertClose(Number(await phaseInput.inputValue()), 0.5, 0.01, "Aux curve phase input should follow monitor phase");
+    const phaseDotCx = await page.locator('[data-role="seqfx-aux-curve"] .aux-pv-dot').getAttribute("cx");
+    assertClose(Number(phaseDotCx), 100, 2, "Aux curve phase dot should move to half phase");
+
+    await page.close();
+});
+
+test("seqfx_stutter_aux_controls_edit_gate_slices_shape_and_speed_targets", async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
+    await loadSeqFxHarness(page);
+    await page.locator('[data-role="seqfx-root"]').waitFor();
+    await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
+
+    await page.getByRole("button", { name: "Chain 4 step 1", exact: true }).click();
+    await page.getByRole("button", { name: "Chain 4 Stutter block 1", exact: true }).waitFor();
+    await page.locator('[data-role="seqfx-aux-curve"]').waitFor();
+
+    await page.locator('[data-role="seqfx-stutter-gate-mod-toggle"]').click();
+    await page.locator('[data-role="seqfx-stutter-slices-slider"] .editor-tick-slider__label--toggle').click();
+    await page.locator('[data-role="seqfx-stutter-shape-slider"] .editor-tick-slider__label--toggle').click();
+    await page.locator('[data-role="seqfx-stutter-speed-slider"] .editor-tick-slider__label--toggle').click();
+    await keyboardSetSliderTo(page.getByRole("slider", { name: "Gate position", exact: true }), "Home");
+    await keyboardSetSliderTo(page.getByRole("slider", { name: "Gate end", exact: true }), "Home");
+    await keyboardSetSliderTo(page.getByRole("slider", { name: "Slices end", exact: true }), "End");
+    await keyboardSetSliderTo(page.getByRole("slider", { name: "Shape end", exact: true }), "Home");
+    await keyboardSetSliderTo(page.getByRole("slider", { name: "Speed end", exact: true }), "End");
+
+    const snapshot = await getHarnessSnapshot(page);
+    const upload = patternUploads(snapshot).at(-1).value;
+    assert.deepEqual(upload.auxEnabled[3][0].slice(0, 4), [true, true, true, true]);
+    assert.equal(upload.auxEnd[3][0][0], 32);
+    assert.equal(upload.auxEnd[3][0][1], 2);
+    assert.equal(upload.auxEnd[3][0][2], 0);
+    assert.equal(upload.auxEnd[3][0][3], 0);
+    assert.equal(upload.params[3][0][3], 0);
+
+    const storedState = parseSeqFxStoredState(snapshot.storedState[SEQFX_STATE_KEY]);
+    const step = storedState.patterns[0].lanes[3].steps[0];
+    assert.equal(step.aux.curve, "linear");
+    assert.deepEqual(step.aux.targets.slice(0, 4).map((target) => target.enabled), [true, true, true, true]);
+    assert.deepEqual(step.aux.targets.slice(0, 4).map((target) => target.end), [32, 2, 0, 0]);
+    assert.equal(step.params[3], 0);
+
+    await page.close();
+});
+
+test("seqfx_tape_stop_aux_controls_edit_all_tape_targets_including_mode", async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
+    await loadSeqFxHarness(page);
+    await page.locator('[data-role="seqfx-root"]').waitFor();
+    await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
+
+    await page.getByRole("button", { name: "Chain 3 step 1", exact: true }).click();
+    await page.getByRole("button", { name: "Chain 3 Tape Stop block 1", exact: true }).waitFor();
+    await page.locator('[data-role="seqfx-aux-curve"]').waitFor();
+
+    for (const dataRole of [
+        "seqfx-tape-stop-point",
+        "seqfx-tape-curve",
+        "seqfx-tape-catchup-curve",
+        "seqfx-tape-catchup",
+        "seqfx-tape-mode",
+    ]) {
+        await page.locator(`[data-role="${dataRole}-mod-toggle"]`).click();
+    }
+
+    await setRangeInputValue(page.locator('[data-role="seqfx-tape-stop-point-end"]'), 125);
+    await setRangeInputValue(page.locator('[data-role="seqfx-tape-curve-end"]'), 2.5);
+    await setRangeInputValue(page.locator('[data-role="seqfx-tape-catchup-curve-end"]'), 3);
+    await setRangeInputValue(page.locator('[data-role="seqfx-tape-catchup-end"]'), 75);
+    await page.locator('[data-role="seqfx-tape-mode-end"]').selectOption("1");
+
+    const snapshot = await getHarnessSnapshot(page);
+    const upload = patternUploads(snapshot).at(-1).value;
+    assert.deepEqual(upload.auxEnabled[2][0].slice(0, 5), [true, true, true, true, true]);
+    assertClose(upload.auxEnd[2][0][0], 1.25, 0.000001, "tape start length aux end");
+    assert.equal(upload.auxEnd[2][0][1], 2.5);
+    assert.equal(upload.auxEnd[2][0][2], 3);
+    assert.equal(upload.auxEnd[2][0][3], 75);
+    assert.equal(upload.auxEnd[2][0][4], 1);
+
+    const storedState = parseSeqFxStoredState(snapshot.storedState[SEQFX_STATE_KEY]);
+    const step = storedState.patterns[0].lanes[2].steps[0];
+    assert.equal(step.aux.curve, "linear");
+    assert.deepEqual(step.aux.targets.slice(0, 5).map((target) => target.enabled), [true, true, true, true, true]);
+    assertClose(step.aux.targets[0].end, 1.25, 0.000001, "persisted tape start length aux end");
+    assert.deepEqual(step.aux.targets.slice(1, 5).map((target) => target.end), [2.5, 3, 75, 1]);
 
     await page.close();
 });

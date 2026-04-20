@@ -310,3 +310,24 @@ body {
     font-weight: var(--editor-label-weight);
     text-align: right;
 }
+
+/* Inline "M" used in the header blurb to point at the badge style. */
+.inline-m-hint {
+    display: inline-grid;
+    place-items: center;
+    min-width: 14px;
+    height: 12px;
+    padding: 0 3px;
+    margin: 0 2px;
+    border: 1px solid rgba(28, 28, 28, 0.55);
+    border-radius: 3px;
+    background: #f2d16b;
+    color: #1c1c1c;
+    font-family: Menlo, Monaco, monospace;
+    font-size: 8px;
+    font-weight: 800;
+    line-height: 1;
+    vertical-align: baseline;
+    transform: translateY(1px);
+    box-shadow: 0 0 8px rgba(242, 209, 107, 0.55);
+}

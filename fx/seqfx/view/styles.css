@@ -429,6 +429,133 @@ select {
     font-size: 12px;
 }
 
+.aux-curve {
+    display: grid;
+    gap: 6px;
+    padding: 10px 12px 12px;
+    border: 1px solid var(--editor-surface-border);
+    background: var(--editor-surface-bg);
+    color: var(--editor-surface-ink);
+}
+
+.aux-curve__head {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: baseline;
+    gap: 8px;
+}
+
+.aux-curve__title {
+    font-family: var(--editor-label-font);
+    font-size: var(--editor-label-size-sm);
+    font-weight: var(--editor-label-weight);
+    letter-spacing: var(--editor-label-letter-spacing);
+    text-transform: uppercase;
+}
+
+.aux-curve__sub {
+    color: var(--editor-surface-ink-muted);
+    font-family: var(--editor-label-font);
+    font-size: 9px;
+    font-weight: var(--editor-label-weight);
+    text-transform: uppercase;
+}
+
+.aux-curve__shapes {
+    display: flex;
+    justify-content: space-between;
+    gap: 1px;
+}
+
+.aux-curve__shapes button {
+    border: 0;
+    border-radius: 3px;
+    padding: 2px 6px;
+    color: var(--editor-surface-ink-muted);
+    background: transparent;
+    font-family: var(--editor-label-font);
+    font-size: 9px;
+    font-weight: var(--editor-label-weight);
+    text-transform: uppercase;
+    cursor: pointer;
+}
+
+.aux-curve__shapes button:hover,
+.aux-curve__shapes button:focus-visible {
+    color: var(--editor-surface-ink);
+    background: rgba(28, 28, 28, 0.08);
+    outline: none;
+}
+
+.aux-curve__shapes button:focus-visible {
+    outline: 2px solid var(--editor-accent-start);
+    outline-offset: 1px;
+}
+
+.aux-curve__shapes button.is-selected {
+    color: var(--editor-surface-ink);
+    background: rgba(28, 28, 28, 0.12);
+}
+
+.aux-curve__preview {
+    height: 26px;
+    border: 1px solid rgba(28, 28, 28, 0.28);
+    background: rgba(28, 28, 28, 0.06);
+}
+
+.aux-curve__preview svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+.aux-curve__preview .aux-pv-line {
+    fill: none;
+    stroke: var(--editor-surface-ink);
+    stroke-width: 1.6;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.aux-curve__preview .aux-pv-dot {
+    fill: var(--editor-accent-end);
+    stroke: var(--editor-surface-ink);
+    stroke-width: 1;
+}
+
+.aux-curve__phase-row {
+    display: grid;
+    grid-template-columns: 52px 1fr 48px;
+    align-items: center;
+    gap: 8px;
+    padding-top: 4px;
+}
+
+.aux-curve__phase-label {
+    color: var(--editor-surface-ink-muted);
+    font-family: var(--editor-label-font);
+    font-size: var(--editor-label-size-sm);
+    font-weight: var(--editor-label-weight);
+    text-transform: uppercase;
+}
+
+.aux-curve__phase-row input[type="range"] {
+    width: 100%;
+    accent-color: var(--editor-accent-end);
+}
+
+.aux-curve__phase-row input[type="range"]:disabled {
+    opacity: 0.72;
+}
+
+.aux-curve__phase-value {
+    color: var(--editor-surface-ink);
+    font-family: var(--editor-label-font);
+    font-size: var(--editor-label-size-md);
+    font-weight: var(--editor-label-weight);
+    text-align: right;
+}
+
 .seqfx-effect-picker {
     display: flex;
     align-items: center;
@@ -576,6 +703,21 @@ select {
     gap: 6px;
 }
 
+.seqfx-tape-control--modulated,
+.seqfx-tape-mode-field--modulated {
+    border-left: 3px solid var(--editor-accent-range);
+    padding-left: 8px;
+}
+
+.seqfx-tape-control__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    color: #d9e2dc;
+    font-size: 12px;
+    font-weight: 700;
+}
+
 .seqfx-tape-control span {
     display: flex;
     align-items: center;
@@ -585,16 +727,73 @@ select {
     font-weight: 700;
 }
 
-.seqfx-tape-control output {
+.seqfx-tape-control__label {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.seqfx-tape-control__label--toggle {
+    border: 0;
+    border-radius: 4px;
+    padding: 2px 4px;
+    background: transparent;
+    cursor: pointer;
+}
+
+.seqfx-tape-control__label--toggle:hover,
+.seqfx-tape-control__label--toggle:focus-visible {
+    color: #eef2ef;
+    background: rgba(238, 242, 239, 0.08);
+    outline: none;
+}
+
+.seqfx-tape-control__label--toggle:focus-visible {
+    outline: 2px solid var(--editor-accent-start);
+    outline-offset: 1px;
+}
+
+.seqfx-tape-control output,
+.seqfx-tape-control__values {
     color: #eef2ef;
     font-family: Menlo, Monaco, monospace;
     font-size: 12px;
     font-weight: 600;
 }
 
+.seqfx-tape-control__values {
+    display: inline-grid;
+    grid-template-columns: auto auto auto;
+    align-items: center;
+    gap: 3px;
+}
+
+.seqfx-tape-control__chip {
+    border-radius: 3px;
+    padding: 1px 5px;
+    color: var(--editor-accent-start-ink);
+    background: var(--editor-accent-start);
+    font-size: 10px;
+    font-weight: 800;
+}
+
+.seqfx-tape-control__chip--end {
+    color: var(--editor-accent-end-ink);
+    background: var(--editor-accent-end);
+}
+
+.seqfx-tape-control__arrow {
+    color: rgba(238, 242, 239, 0.58);
+    font-size: 10px;
+}
+
 .seqfx-tape-control input[type="range"] {
     width: 100%;
     accent-color: #8bbf9a;
+}
+
+.seqfx-tape-control__end {
+    accent-color: var(--editor-accent-end) !important;
 }
 
 .seqfx-tape-control small {

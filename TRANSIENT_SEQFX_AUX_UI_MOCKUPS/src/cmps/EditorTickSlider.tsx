@@ -2,10 +2,19 @@ import { useMemo, useRef, type ChangeEvent, type PointerEvent as ReactPointerEve
 
 export type EditorTickSliderAccent = "start" | "end";
 
+export type ModulationDirection = "both" | "up" | "down";
+
 export type EditorTickSliderModulation = {
     end: number;
     onEndChange: (value: number) => void;
     phase?: number;
+    /**
+     * Restricts which side of the start value the end handle can live on.
+     * Used for parameters whose physics only allow one-way modulation
+     * (e.g. Stutter Slices can only increase mid-block because the capture
+     * buffer was sized for the starting slice length).
+     */
+    direction?: ModulationDirection;
 };
 
 export type EditorTickSliderProps = {
@@ -22,6 +31,7 @@ export type EditorTickSliderProps = {
     valueDataRole: string;
     formatValue?: (value: number) => string;
     modulation?: EditorTickSliderModulation | null;
+    onModulationToggle?: (() => void) | null;
 };
 
 function clamp(value: number, min: number, max: number) {
@@ -75,6 +85,7 @@ export function EditorTickSlider({
     valueDataRole,
     formatValue = (nextValue) => String(nextValue),
     modulation = null,
+    onModulationToggle = null,
 }: EditorTickSliderProps) {
     const safeTickCount = Math.max(1, Math.round(tickCount));
     const ticks = useMemo(
@@ -104,11 +115,32 @@ export function EditorTickSlider({
     const modHighIndex = Math.max(currentTickIndex, endTickIndex);
 
     return (
-        <label
+        <div
             className={`editor-tick-slider editor-tick-slider--accent-${accent}${isModulated ? " editor-tick-slider--modulated" : ""}`}
             data-role={dataRole}
         >
-            <span className="editor-tick-slider__label">{label}</span>
+            {onModulationToggle ? (
+                <button
+                    type="button"
+                    className="editor-tick-slider__label editor-tick-slider__label--toggle"
+                    onClick={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        onModulationToggle();
+                    }}
+                    aria-pressed={isModulated}
+                    title={`${label}: click to ${isModulated ? "disable" : "enable"} aux modulation${
+                        modulation?.direction && modulation.direction !== "both"
+                            ? ` (${modulation.direction}-only)`
+                            : ""
+                    }`}
+                >
+                    <span>{label}</span>
+                    <ModBadge isOn={isModulated} direction={modulation?.direction} />
+                </button>
+            ) : (
+                <span className="editor-tick-slider__label">{label}</span>
+            )}
             <span className="editor-tick-slider__track">
                 <span className="editor-tick-slider__rail" aria-hidden="true">
                     {ticks.map((tick) => {
@@ -147,6 +179,7 @@ export function EditorTickSlider({
                         step={step}
                         startValue={normalizedValue}
                         endValue={normalizeValue(modulation!.end, min, max, step)}
+                        direction={modulation!.direction ?? "both"}
                         onStartChange={onChange}
                         onEndChange={modulation!.onEndChange}
                     />
@@ -178,7 +211,7 @@ export function EditorTickSlider({
                     {formatValue(normalizedValue)}
                 </output>
             )}
-        </label>
+        </div>
     );
 }
 
@@ -188,13 +221,14 @@ type ModulatedDragSurfaceProps = {
     step: number;
     startValue: number;
     endValue: number;
+    direction: ModulationDirection;
     onStartChange: (value: number) => void;
     onEndChange: (value: number) => void;
 };
 
 type ModulatedDragTarget = "start" | "end";
 
-function ModulatedDragSurface({ min, max, step, startValue, endValue, onStartChange, onEndChange }: ModulatedDragSurfaceProps) {
+function ModulatedDragSurface({ min, max, step, startValue, endValue, direction, onStartChange, onEndChange }: ModulatedDragSurfaceProps) {
     const activeRef = useRef<ModulatedDragTarget>("start");
     const pointerIdRef = useRef<number | null>(null);
 
@@ -212,12 +246,25 @@ function ModulatedDragSurface({ min, max, step, startValue, endValue, onStartCha
         }
 
         const ratio = clamp(pointerX / width, 0, 1);
-        const nextValue = normalizeValue(min + (ratio * (max - min)), min, max, step);
+        const raw = normalizeValue(min + (ratio * (max - min)), min, max, step);
 
         if (target === "start") {
-            onStartChange(nextValue);
+            onStartChange(raw);
+            // Direction constraints: if the start handle crosses the end, push
+            // end along so the invariant is preserved.
+            if (direction === "up" && raw > endValue) {
+                onEndChange(raw);
+            } else if (direction === "down" && raw < endValue) {
+                onEndChange(raw);
+            }
         } else {
-            onEndChange(nextValue);
+            let next = raw;
+            if (direction === "up") {
+                next = Math.max(raw, startValue);
+            } else if (direction === "down") {
+                next = Math.min(raw, startValue);
+            }
+            onEndChange(normalizeValue(next, min, max, step));
         }
     };
 
@@ -263,5 +310,21 @@ function ModulatedDragSurface({ min, max, step, startValue, endValue, onStartCha
             onPointerCancel={handlePointerUp}
             role="presentation"
         />
+    );
+}
+
+export type ModBadgeProps = {
+    isOn: boolean;
+    direction?: ModulationDirection;
+};
+
+/** Shared badge used on tick-slider labels, Drive label, and Stutter gate pill. */
+export function ModBadge({ isOn, direction = "both" }: ModBadgeProps) {
+    const arrow = direction === "up" ? "\u2191" : direction === "down" ? "\u2193" : null;
+    return (
+        <span className={`mod-badge${isOn ? " is-on" : ""}${arrow ? " mod-badge--directional" : ""}`} aria-hidden="true">
+            <span className="mod-badge__m">M</span>
+            {arrow ? <span className="mod-badge__arrow">{arrow}</span> : null}
+        </span>
     );
 }

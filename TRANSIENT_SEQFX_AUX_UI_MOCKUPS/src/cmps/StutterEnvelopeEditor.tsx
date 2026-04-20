@@ -15,7 +15,7 @@ import {
     editorPlotGutter,
     useEditorSurfaceSize,
 } from "./editor-tokens";
-import { EditorTickSlider } from "./EditorTickSlider";
+import { EditorTickSlider, ModBadge, type ModulationDirection } from "./EditorTickSlider";
 import {
     STUTTER_DEFAULT_GATE,
     STUTTER_DEFAULT_SHAPE,
@@ -42,11 +42,20 @@ export type StutterEnvelopeEditorValue = {
     gate: number;
 };
 
+type StutterModulatedParam = {
+    end: number;
+    onEndChange: (value: number) => void;
+    direction?: ModulationDirection;
+};
+
 export type StutterModulation = {
-    gate?: { end: number; onEndChange: (value: number) => void } | null;
-    slices?: { end: number; onEndChange: (value: number) => void } | null;
-    speed?: { end: number; onEndChange: (value: number) => void } | null;
+    gate?: StutterModulatedParam | null;
+    slices?: StutterModulatedParam | null;
+    speed?: StutterModulatedParam | null;
     phase?: number;
+    onToggleGate?: () => void;
+    onToggleSlices?: () => void;
+    onToggleSpeed?: () => void;
 };
 
 export type StutterEnvelopeEditorProps = {
@@ -250,11 +259,26 @@ export function StutterEnvelopeEditor({
         }
 
         const nextNormalized = pointerToPlotNormalizedX(surface, clientX, plot, effectiveWidth);
+        const gateDirection = modulation?.gate?.direction ?? "both";
 
         if (target === "end" && modulation?.gate) {
-            modulation.gate.onEndChange(clampStutterGate(nextNormalized));
+            let next = nextNormalized;
+            if (gateDirection === "up") {
+                next = Math.max(next, resolved.gate);
+            } else if (gateDirection === "down") {
+                next = Math.min(next, resolved.gate);
+            }
+            modulation.gate.onEndChange(clampStutterGate(next));
         } else {
-            onGateChange(clampStutterGate(nextNormalized));
+            const nextStart = clampStutterGate(nextNormalized);
+            onGateChange(nextStart);
+            if (modulation?.gate) {
+                if (gateDirection === "up" && modulation.gate.end < nextStart) {
+                    modulation.gate.onEndChange(nextStart);
+                } else if (gateDirection === "down" && modulation.gate.end > nextStart) {
+                    modulation.gate.onEndChange(nextStart);
+                }
+            }
         }
     };
 
@@ -530,6 +554,26 @@ export function StutterEnvelopeEditor({
                             </text>
                         </g>
                     </svg>
+                    {modulation?.onToggleGate ? (
+                        <button
+                            type="button"
+                            className="seqfx-stutter-editor__gate-toggle"
+                            onClick={(event) => {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                modulation.onToggleGate!();
+                            }}
+                            aria-pressed={isGateModulated}
+                            title={`Gate: click to ${isGateModulated ? "disable" : "enable"} aux modulation${
+                                modulation?.gate?.direction && modulation.gate.direction !== "both"
+                                    ? ` (${modulation.gate.direction}-only)`
+                                    : ""
+                            }`}
+                        >
+                            <span>Gate</span>
+                            <ModBadge isOn={isGateModulated} direction={modulation?.gate?.direction} />
+                        </button>
+                    ) : null}
                 </div>
 
                 <EditorTickSlider
@@ -549,7 +593,9 @@ export function StutterEnvelopeEditor({
                         end: modulation.slices.end,
                         onEndChange: (v) => modulation.slices!.onEndChange(clampStutterSlices(v)),
                         phase,
+                        direction: modulation.slices.direction,
                     } : null}
+                    onModulationToggle={modulation?.onToggleSlices ?? null}
                 />
 
                 <div className="seqfx-stutter-editor__morph">
@@ -611,7 +657,9 @@ export function StutterEnvelopeEditor({
                         end: modulation.speed.end,
                         onEndChange: (v) => modulation.speed!.onEndChange(roundSpeed(clampStutterSpeed(v))),
                         phase,
+                        direction: modulation.speed.direction,
                     } : null}
+                    onModulationToggle={modulation?.onToggleSpeed ?? null}
                 />
             </div>
         </section>

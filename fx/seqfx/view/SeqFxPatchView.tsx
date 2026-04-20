@@ -14,8 +14,10 @@ import {
     cutoffsFromCenterRangeOctaves,
     geometricCenterCutoffHz,
 } from "../../../ui/shared/filter-range-editor";
-import { CrusherEditor } from "./CrusherEditor";
-import { StutterEnvelopeEditor } from "./StutterEnvelopeEditor";
+import { ModBadge, type ModulationDirection } from "../../../ui/shared/editor-tick-slider";
+import { AuxCurve } from "./AuxCurve";
+import { CrusherEditor, type CrusherModulation } from "./CrusherEditor";
+import { StutterEnvelopeEditor, type StutterModulation } from "./StutterEnvelopeEditor";
 import {
     SEQFX_EFFECT_TYPES,
     SEQFX_EFFECT_TYPE_NAMES,
@@ -26,6 +28,7 @@ import {
     getSeqFxBlockAtStep,
     getSeqFxLaneBlocks,
     isSeqFxTriggerLatchedParamForEffect,
+    type SeqFxAuxCurveShape,
     type SeqFxBlock,
     type SeqFxEffectType,
     type SeqFxPattern,
@@ -136,6 +139,17 @@ type PatternPreview = {
     lane: number;
     copiedStartSteps?: number[];
     state: SeqFxState;
+};
+
+type AuxMonitorState = {
+    phase: number[];
+    durationMs: number[];
+};
+
+type AuxModulatedParam = {
+    end: number;
+    onEndChange: (value: number) => void;
+    direction?: ModulationDirection;
 };
 
 type InvalidDropTarget = {
@@ -283,6 +297,11 @@ const FILTER_PARAM_CURVE = 4;
 const CRUSHER_PARAM_BITS = 0;
 const CRUSHER_PARAM_HOLD_FRAMES = 1;
 const CRUSHER_PARAM_DRIVE_DB = 2;
+const TAPE_STOP_PARAM_START_LENGTH = 0;
+const TAPE_STOP_PARAM_START_CURVE = 1;
+const TAPE_STOP_PARAM_CATCHUP_CURVE = 2;
+const TAPE_STOP_PARAM_CATCHUP_LENGTH = 3;
+const TAPE_STOP_PARAM_MODE = 4;
 const STUTTER_PARAM_SLICES = 0;
 const STUTTER_PARAM_SPEED = 1;
 const STUTTER_PARAM_SHAPE = 2;
@@ -547,6 +566,10 @@ function TapeStopRangeControl({
     hint,
     disabled = false,
     onChange,
+    modulation = null,
+    onModulationToggle = null,
+    formatEndValue = formatValue,
+    endDataRole,
 }: {
     label: string;
     value: number;
@@ -558,13 +581,44 @@ function TapeStopRangeControl({
     hint: string;
     disabled?: boolean;
     onChange: (value: number) => void;
+    modulation?: AuxModulatedParam | null;
+    onModulationToggle?: (() => void) | null;
+    formatEndValue?: (value: number) => string;
+    endDataRole?: string;
 }) {
+    const isModulated = Boolean(modulation);
+
     return (
-        <label className="seqfx-tape-control">
-            <span>
-                {label}
-                <output>{valueLabel}</output>
-            </span>
+        <div className={`seqfx-tape-control${isModulated ? " seqfx-tape-control--modulated" : ""}`}>
+            <div className="seqfx-tape-control__head">
+                {onModulationToggle ? (
+                    <button
+                        aria-pressed={isModulated}
+                        className="seqfx-tape-control__label seqfx-tape-control__label--toggle"
+                        data-role={`${dataRole}-mod-toggle`}
+                        onClick={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            onModulationToggle();
+                        }}
+                        type="button"
+                    >
+                        <span>{label}</span>
+                        <ModBadge isOn={isModulated} direction={modulation?.direction} />
+                    </button>
+                ) : (
+                    <span className="seqfx-tape-control__label">{label}</span>
+                )}
+                {isModulated ? (
+                    <output className="seqfx-tape-control__values">
+                        <span className="seqfx-tape-control__chip seqfx-tape-control__chip--start">{valueLabel}</span>
+                        <span className="seqfx-tape-control__arrow">-&gt;</span>
+                        <span className="seqfx-tape-control__chip seqfx-tape-control__chip--end">{formatEndValue(modulation!.end)}</span>
+                    </output>
+                ) : (
+                    <output>{valueLabel}</output>
+                )}
+            </div>
             <input
                 data-role={dataRole}
                 disabled={disabled}
@@ -576,21 +630,51 @@ function TapeStopRangeControl({
                 type="range"
                 value={value}
             />
+            {isModulated ? (
+                <input
+                    aria-label={`${label} end`}
+                    className="seqfx-tape-control__end"
+                    data-role={endDataRole ?? `${dataRole}-end`}
+                    disabled={disabled}
+                    max={max}
+                    min={min}
+                    onChange={(event) => modulation!.onEndChange(Number(event.currentTarget.value))}
+                    onInput={(event) => modulation!.onEndChange(Number(event.currentTarget.value))}
+                    step={step}
+                    type="range"
+                    value={modulation!.end}
+                />
+            ) : null}
             <small>{hint}</small>
-        </label>
+        </div>
     );
 }
+
+type TapeStopModulation = {
+    startLength?: AuxModulatedParam | null;
+    startCurve?: AuxModulatedParam | null;
+    catchupCurve?: AuxModulatedParam | null;
+    catchupLength?: AuxModulatedParam | null;
+    mode?: AuxModulatedParam | null;
+    onToggleStartLength?: () => void;
+    onToggleStartCurve?: () => void;
+    onToggleCatchupCurve?: () => void;
+    onToggleCatchupLength?: () => void;
+    onToggleMode?: () => void;
+};
 
 function TapeStopEnvelopeEditor({
     step,
     blockLength,
     blockDurationMs,
     onParamChange,
+    modulation = null,
 }: {
     step: SeqFxStep;
     blockLength: number;
     blockDurationMs: number;
     onParamChange: (paramIndex: number, value: number) => void;
+    modulation?: TapeStopModulation | null;
 }) {
     const svgRef = useRef<SVGSVGElement | null>(null);
     const dragModeRef = useRef<"startLength" | "startCurve" | "catchupLength" | "catchupCurve" | null>(null);
@@ -876,8 +960,36 @@ function TapeStopEnvelopeEditor({
                 <span>Start length {formatTapeStopPercent(stopPointPercent)}</span>
                 <span>{catchupPushed ? `Catchup starts at ${realizedCatchupStartPercent}%` : `Catchup length ${formatTapeStopPercent(catchupPercent)}`}</span>
             </div>
-            <label className="seqfx-field">
-                <span>Mode</span>
+            <div className={`seqfx-field seqfx-tape-mode-field${modulation?.mode ? " seqfx-tape-mode-field--modulated" : ""}`}>
+                <span>
+                    {modulation?.onToggleMode ? (
+                        <button
+                            aria-pressed={Boolean(modulation.mode)}
+                            className="seqfx-tape-control__label seqfx-tape-control__label--toggle"
+                            data-role="seqfx-tape-mode-mod-toggle"
+                            onClick={(event) => {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                modulation.onToggleMode!();
+                            }}
+                            type="button"
+                        >
+                            <span>Mode</span>
+                            <ModBadge isOn={Boolean(modulation.mode)} direction={modulation.mode?.direction} />
+                        </button>
+                    ) : (
+                        "Mode"
+                    )}
+                    {modulation?.mode ? (
+                        <output className="seqfx-tape-control__values">
+                            <span className="seqfx-tape-control__chip seqfx-tape-control__chip--start">{modeLabel}</span>
+                            <span className="seqfx-tape-control__arrow">-&gt;</span>
+                            <span className="seqfx-tape-control__chip seqfx-tape-control__chip--end">
+                                {Math.round(modulation.mode.end) === TAPE_STOP_MODE_SPIN_UP ? "Spin-up" : "Stop"}
+                            </span>
+                        </output>
+                    ) : null}
+                </span>
                 <select
                     data-role="seqfx-tape-mode"
                     onChange={(event) => onParamChange(4, Number(event.currentTarget.value))}
@@ -886,10 +998,22 @@ function TapeStopEnvelopeEditor({
                     <option value={TAPE_STOP_MODE_STOP}>Stop</option>
                     <option value={TAPE_STOP_MODE_SPIN_UP}>Spin-up</option>
                 </select>
+                {modulation?.mode ? (
+                    <select
+                        aria-label="Mode end"
+                        data-role="seqfx-tape-mode-end"
+                        onChange={(event) => modulation.mode!.onEndChange(Number(event.currentTarget.value))}
+                        value={Math.round(modulation.mode.end)}
+                    >
+                        <option value={TAPE_STOP_MODE_STOP}>Stop</option>
+                        <option value={TAPE_STOP_MODE_SPIN_UP}>Spin-up</option>
+                    </select>
+                ) : null}
                 <small>{modeLabel === "Spin-up" ? "Starts nearly stopped, then rises." : "Starts normal, then slows down."}</small>
-            </label>
+            </div>
             <TapeStopRangeControl
                 dataRole="seqfx-tape-stop-point"
+                endDataRole="seqfx-tape-stop-point-end"
                 label="Start Length"
                 min={TAPE_STOP_MIN_STOP_POINT_PERCENT}
                 max={TAPE_STOP_MAX_STOP_POINT_PERCENT}
@@ -897,10 +1021,18 @@ function TapeStopEnvelopeEditor({
                 value={stopPointPercent}
                 valueLabel={formatTapeStopPercent(stopPointPercent)}
                 hint={startLengthHint}
+                modulation={modulation?.startLength ? {
+                    ...modulation.startLength,
+                    end: multiplierToStopPointPercent(modulation.startLength.end),
+                    onEndChange: (value) => modulation.startLength!.onEndChange(stopPointPercentToMultiplier(value)),
+                } : null}
+                onModulationToggle={modulation?.onToggleStartLength ?? null}
+                formatEndValue={formatTapeStopPercent}
                 onChange={(value) => onParamChange(0, stopPointPercentToMultiplier(value))}
             />
             <TapeStopRangeControl
                 dataRole="seqfx-tape-curve"
+                endDataRole="seqfx-tape-curve-end"
                 label="Start Curve"
                 min={TAPE_STOP_MIN_CURVE}
                 max={TAPE_STOP_MAX_CURVE}
@@ -908,10 +1040,14 @@ function TapeStopEnvelopeEditor({
                 value={curve}
                 valueLabel={formatTapeStopCurve(curve)}
                 hint="Bends the first part of the curve."
+                modulation={modulation?.startCurve ?? null}
+                onModulationToggle={modulation?.onToggleStartCurve ?? null}
+                formatEndValue={formatTapeStopCurve}
                 onChange={(value) => onParamChange(1, value)}
             />
             <TapeStopRangeControl
                 dataRole="seqfx-tape-catchup"
+                endDataRole="seqfx-tape-catchup-end"
                 label="Catchup Length"
                 min={TAPE_STOP_MIN_CATCHUP_PERCENT}
                 max={TAPE_STOP_MAX_CATCHUP_PERCENT}
@@ -919,10 +1055,14 @@ function TapeStopEnvelopeEditor({
                 value={catchupPercent}
                 valueLabel={formatTapeStopPercent(catchupPercent)}
                 hint="How much of the block end is reserved for syncing back."
+                modulation={modulation?.catchupLength ?? null}
+                onModulationToggle={modulation?.onToggleCatchupLength ?? null}
+                formatEndValue={formatTapeStopPercent}
                 onChange={(value) => onParamChange(3, value)}
             />
             <TapeStopRangeControl
                 dataRole="seqfx-tape-catchup-curve"
+                endDataRole="seqfx-tape-catchup-curve-end"
                 label="Catchup Curve"
                 min={TAPE_STOP_MIN_CURVE}
                 max={TAPE_STOP_MAX_CURVE}
@@ -930,6 +1070,9 @@ function TapeStopEnvelopeEditor({
                 value={catchupCurve}
                 valueLabel={formatTapeStopCurve(catchupCurve)}
                 hint="Bends the return ramp."
+                modulation={modulation?.catchupCurve ?? null}
+                onModulationToggle={modulation?.onToggleCatchupCurve ?? null}
+                formatEndValue={formatTapeStopCurve}
                 onChange={(value) => onParamChange(2, value)}
             />
         </section>
@@ -1129,6 +1272,10 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
     const [selection, setSelection] = useState<Selection | null>(null);
     const [playheadStep, setPlayheadStep] = useState<number | null>(null);
     const [observedStepDurationMs, setObservedStepDurationMs] = useState<number | null>(null);
+    const [auxMonitor, setAuxMonitor] = useState<AuxMonitorState>(() => ({
+        phase: Array.from({ length: 4 }, () => 0),
+        durationMs: Array.from({ length: 4 }, () => 0),
+    }));
     const [drawEffectType, setDrawEffectType] = useState<SeqFxEffectType | null>(null);
     const [gestureState, setGestureState] = useState<BlockGesture | null>(null);
     const [patternPreview, setPatternPreview] = useState<PatternPreview | null>(null);
@@ -1171,11 +1318,26 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
             setSelectedPattern(bridge.getSelectedPatternIndex());
         });
         const unsubscribeMonitor = bridge.subscribeMonitor((monitor) => {
-            const stepIndex = Number((monitor as { stepIndex?: unknown })?.stepIndex);
-            const stepDurationMs = Number((monitor as { stepDurationMs?: unknown })?.stepDurationMs);
+            const event = (monitor as { event?: unknown })?.event ?? monitor;
+            const stepIndex = Number((event as { stepIndex?: unknown })?.stepIndex);
+            const stepDurationMs = Number((event as { stepDurationMs?: unknown })?.stepDurationMs);
+            const auxPhase = (event as { auxPhase?: unknown })?.auxPhase;
+            const auxDurationMs = (event as { auxDurationMs?: unknown })?.auxDurationMs;
             setPlayheadStep(Number.isFinite(stepIndex) ? stepIndex : null);
             if (Number.isFinite(stepDurationMs) && stepDurationMs > 0) {
                 setObservedStepDurationMs(stepDurationMs);
+            }
+            if (Array.isArray(auxPhase) || Array.isArray(auxDurationMs)) {
+                setAuxMonitor({
+                    phase: Array.from({ length: 4 }, (_unused, index) => {
+                        const value = Number(Array.isArray(auxPhase) ? auxPhase[index] : 0);
+                        return Number.isFinite(value) ? clampNumber(value, 0, 1) : 0;
+                    }),
+                    durationMs: Array.from({ length: 4 }, (_unused, index) => {
+                        const value = Number(Array.isArray(auxDurationMs) ? auxDurationMs[index] : 0);
+                        return Number.isFinite(value) ? Math.max(0, value) : 0;
+                    }),
+                });
             }
         });
         const unsubscribeRate = bridge.subscribeRate((nextRateIndex) => {
@@ -2022,6 +2184,120 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
     const inspectedBlockLength = inspectedBlock?.length ?? Math.max(1, activeSelection?.steps.length ?? 1);
     const tapeGraphBlockDurationMs = (observedStepDurationMs ?? estimatedStepDurationMsForRateIndex(rateIndex))
         * inspectedBlockLength;
+    const auxEditable = Boolean(
+        inspectedBlock
+        && inspectedCell?.active
+        && inspectedEffectType !== SEQFX_EFFECT_TYPES.filter
+        && inspectedEffectType !== SEQFX_EFFECT_TYPES.empty
+        && selectedBlockStartSteps.length <= 1,
+    );
+    const inspectedAux = auxEditable ? inspectedCell?.aux ?? null : null;
+    const inspectedAuxPhase = inspectedLane !== null ? auxMonitor.phase[inspectedLane] ?? 0 : 0;
+
+    function auxTarget(paramIndex: number, direction: ModulationDirection = "both"): AuxModulatedParam | null {
+        if (!inspectedAux || !inspectedBlock) {
+            return null;
+        }
+
+        const target = inspectedAux.targets[paramIndex];
+        if (!target?.enabled) {
+            return null;
+        }
+
+        return {
+            end: target.end,
+            direction,
+            onEndChange: (value) => {
+                bridge.setBlockAuxTargetEnd({
+                    patternIndex: selectedPattern,
+                    lane: inspectedBlock.lane,
+                    startStep: inspectedBlock.startStep,
+                    paramIndex,
+                    value,
+                });
+            },
+        };
+    }
+
+    function toggleAuxTarget(paramIndex: number) {
+        if (!inspectedAux || !inspectedBlock) {
+            return;
+        }
+
+        bridge.setBlockAuxTargetEnabled({
+            patternIndex: selectedPattern,
+            lane: inspectedBlock.lane,
+            startStep: inspectedBlock.startStep,
+            paramIndex,
+            enabled: !inspectedAux.targets[paramIndex]?.enabled,
+        });
+    }
+
+    function setAuxCurve(curve: SeqFxAuxCurveShape) {
+        if (!inspectedBlock) {
+            return;
+        }
+
+        bridge.setBlockAuxCurve({
+            patternIndex: selectedPattern,
+            lane: inspectedBlock.lane,
+            startStep: inspectedBlock.startStep,
+            curve,
+        });
+    }
+
+    function modulationForCrusher(): CrusherModulation | null {
+        if (!auxEditable) {
+            return null;
+        }
+
+        return {
+            phase: inspectedAuxPhase,
+            bits: auxTarget(CRUSHER_PARAM_BITS),
+            holdFrames: auxTarget(CRUSHER_PARAM_HOLD_FRAMES),
+            driveDb: auxTarget(CRUSHER_PARAM_DRIVE_DB),
+            onToggleBits: () => toggleAuxTarget(CRUSHER_PARAM_BITS),
+            onToggleHoldFrames: () => toggleAuxTarget(CRUSHER_PARAM_HOLD_FRAMES),
+            onToggleDriveDb: () => toggleAuxTarget(CRUSHER_PARAM_DRIVE_DB),
+        };
+    }
+
+    function modulationForStutter(): StutterModulation | null {
+        if (!auxEditable) {
+            return null;
+        }
+
+        return {
+            phase: inspectedAuxPhase,
+            slices: auxTarget(STUTTER_PARAM_SLICES),
+            speed: auxTarget(STUTTER_PARAM_SPEED),
+            shape: auxTarget(STUTTER_PARAM_SHAPE),
+            gate: auxTarget(STUTTER_PARAM_GATE),
+            onToggleSlices: () => toggleAuxTarget(STUTTER_PARAM_SLICES),
+            onToggleSpeed: () => toggleAuxTarget(STUTTER_PARAM_SPEED),
+            onToggleShape: () => toggleAuxTarget(STUTTER_PARAM_SHAPE),
+            onToggleGate: () => toggleAuxTarget(STUTTER_PARAM_GATE),
+        };
+    }
+
+    function modulationForTapeStop(): TapeStopModulation | null {
+        if (!auxEditable) {
+            return null;
+        }
+
+        return {
+            startLength: auxTarget(TAPE_STOP_PARAM_START_LENGTH),
+            startCurve: auxTarget(TAPE_STOP_PARAM_START_CURVE),
+            catchupCurve: auxTarget(TAPE_STOP_PARAM_CATCHUP_CURVE),
+            catchupLength: auxTarget(TAPE_STOP_PARAM_CATCHUP_LENGTH),
+            mode: auxTarget(TAPE_STOP_PARAM_MODE),
+            onToggleStartLength: () => toggleAuxTarget(TAPE_STOP_PARAM_START_LENGTH),
+            onToggleStartCurve: () => toggleAuxTarget(TAPE_STOP_PARAM_START_CURVE),
+            onToggleCatchupCurve: () => toggleAuxTarget(TAPE_STOP_PARAM_CATCHUP_CURVE),
+            onToggleCatchupLength: () => toggleAuxTarget(TAPE_STOP_PARAM_CATCHUP_LENGTH),
+            onToggleMode: () => toggleAuxTarget(TAPE_STOP_PARAM_MODE),
+        };
+    }
 
     function selectPattern(patternIndex: number) {
         bridge.selectPattern(patternIndex);
@@ -2602,12 +2878,20 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
                                     );
                                 })}
                             </div>
+                            {inspectedAux ? (
+                                <AuxCurve
+                                    shape={inspectedAux.curve}
+                                    onShapeChange={setAuxCurve}
+                                    phase={inspectedAuxPhase}
+                                />
+                            ) : null}
                             {inspectedEffectType === SEQFX_EFFECT_TYPES.tapeStop ? (
                                 <TapeStopEnvelopeEditor
                                     step={inspectedCell}
                                     blockLength={inspectedBlockLength}
                                     blockDurationMs={tapeGraphBlockDurationMs}
                                     onParamChange={setParam}
+                                    modulation={modulationForTapeStop()}
                                 />
                             ) : inspectedEffectType === SEQFX_EFFECT_TYPES.filter ? (
                                 <>
@@ -2651,6 +2935,7 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
                                     onBitsChange={(value) => setParam(CRUSHER_PARAM_BITS, value)}
                                     onHoldFramesChange={(value) => setParam(CRUSHER_PARAM_HOLD_FRAMES, value)}
                                     onDriveDbChange={(value) => setParam(CRUSHER_PARAM_DRIVE_DB, value)}
+                                    modulation={modulationForCrusher()}
                                 />
                             ) : inspectedEffectType === SEQFX_EFFECT_TYPES.stutter ? (
                                 <StutterEnvelopeEditor
@@ -2659,6 +2944,7 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
                                     onShapeChange={(value) => setStutterParam(STUTTER_PARAM_SHAPE, value)}
                                     onSlicesChange={(value) => setStutterParam(STUTTER_PARAM_SLICES, value)}
                                     onSpeedChange={(value) => setStutterParam(STUTTER_PARAM_SPEED, value)}
+                                    modulation={modulationForStutter()}
                                 />
                             ) : inspectedParamDefinitions.map((definition) => {
                                 const triggerLatched = isSeqFxTriggerLatchedParamForEffect(inspectedEffectType, definition.index);
