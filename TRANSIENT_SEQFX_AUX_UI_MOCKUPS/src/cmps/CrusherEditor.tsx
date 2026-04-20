@@ -309,16 +309,10 @@ export function CrusherEditor({
                             <span className="seqfx-crusher-editor__drive-notch" style={{ left: "50%" }} />
                             <span className="seqfx-crusher-editor__drive-notch" style={{ left: "75%" }} />
                             {isDriveModulated ? (
-                                <>
-                                    <span
-                                        className="seqfx-crusher-editor__drive-sweep"
-                                        style={{ left: `${driveSweepLeft}%`, right: `${driveSweepRight}%` }}
-                                    />
-                                    <span
-                                        className="seqfx-crusher-editor__drive-phase"
-                                        style={{ left: `${driveLivePct}%` }}
-                                    />
-                                </>
+                                <span
+                                    className="seqfx-crusher-editor__drive-range"
+                                    style={{ left: `${driveSweepLeft}%`, right: `${driveSweepRight}%` }}
+                                />
                             ) : null}
                             <span
                                 className="seqfx-crusher-editor__drive-thumb"

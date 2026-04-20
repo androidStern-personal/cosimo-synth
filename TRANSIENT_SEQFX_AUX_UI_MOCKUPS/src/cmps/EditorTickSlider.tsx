@@ -97,15 +97,11 @@ export function EditorTickSlider({
     };
 
     const isModulated = Boolean(modulation);
-    const startPct = valueToPercent(normalizedValue, min, max);
-    const endPct = modulation ? valueToPercent(normalizeValue(modulation.end, min, max, step), min, max) : startPct;
-    const sweepLeftPct = Math.min(startPct, endPct);
-    const sweepRightPct = 100 - Math.max(startPct, endPct);
-    const phase = modulation?.phase ?? 0;
-    const liveValue = modulation
-        ? normalizeValue(normalizedValue + (modulation.end - normalizedValue) * phase, min, max, step)
-        : normalizedValue;
-    const livePct = valueToPercent(liveValue, min, max);
+    const endTickIndex = modulation
+        ? activeTickIndex(normalizeValue(modulation.end, min, max, step), min, max, safeTickCount)
+        : currentTickIndex;
+    const modLowIndex = Math.min(currentTickIndex, endTickIndex);
+    const modHighIndex = Math.max(currentTickIndex, endTickIndex);
 
     return (
         <label
@@ -115,42 +111,35 @@ export function EditorTickSlider({
             <span className="editor-tick-slider__label">{label}</span>
             <span className="editor-tick-slider__track">
                 <span className="editor-tick-slider__rail" aria-hidden="true">
-                    {ticks.map((tick) => (
-                        <span
-                            className={[
-                                "editor-tick-slider__tick",
-                                tick <= currentTickIndex ? "is-active" : "",
-                                tick === currentTickIndex ? "is-current" : "",
-                            ].filter(Boolean).join(" ")}
-                            data-role="editor-tick-slider-tick"
-                            key={tick}
-                        />
-                    ))}
+                    {ticks.map((tick) => {
+                        const classes = ["editor-tick-slider__tick"];
+
+                        if (isModulated) {
+                            if (tick === currentTickIndex) {
+                                classes.push("is-mod-start");
+                            } else if (tick === endTickIndex) {
+                                classes.push("is-mod-end");
+                            } else if (tick > modLowIndex && tick < modHighIndex) {
+                                classes.push("is-mod-between");
+                            }
+                        } else {
+                            if (tick <= currentTickIndex) {
+                                classes.push("is-active");
+                            }
+                            if (tick === currentTickIndex) {
+                                classes.push("is-current");
+                            }
+                        }
+
+                        return (
+                            <span
+                                className={classes.join(" ")}
+                                data-role="editor-tick-slider-tick"
+                                key={tick}
+                            />
+                        );
+                    })}
                 </span>
-                {isModulated ? (
-                    <>
-                        <span
-                            className="editor-tick-slider__mod-sweep"
-                            style={{ left: `${sweepLeftPct}%`, right: `${sweepRightPct}%` }}
-                            aria-hidden="true"
-                        />
-                        <span
-                            className="editor-tick-slider__mod-phase"
-                            style={{ left: `${livePct}%` }}
-                            aria-hidden="true"
-                        />
-                        <span
-                            className="editor-tick-slider__mod-marker editor-tick-slider__mod-marker--start"
-                            style={{ left: `${startPct}%` }}
-                            aria-hidden="true"
-                        />
-                        <span
-                            className="editor-tick-slider__mod-marker editor-tick-slider__mod-marker--end"
-                            style={{ left: `${endPct}%` }}
-                            aria-hidden="true"
-                        />
-                    </>
-                ) : null}
                 {isModulated ? (
                     <ModulatedDragSurface
                         min={min}

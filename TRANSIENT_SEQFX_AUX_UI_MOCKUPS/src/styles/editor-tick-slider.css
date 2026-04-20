@@ -1,6 +1,8 @@
 .editor-tick-slider {
     display: grid;
-    grid-template-columns: 44px minmax(0, 1fr) 72px;
+    /* Reserve the wider modulated readout column for every row so toggling
+       modulation on/off doesn't shrink the slider rail. */
+    grid-template-columns: 44px minmax(0, 1fr) 120px;
     align-items: center;
     gap: 8px;
     padding: 6px 8px;
@@ -31,6 +33,7 @@
     position: relative;
     min-width: 0;
     height: 22px;
+    overflow: visible;
 }
 
 .editor-tick-slider__rail {
@@ -53,6 +56,7 @@
     background: rgba(28, 28, 28, 0.38);
 }
 
+/* Unmodulated behavior: fill cells up to the current value. */
 .editor-tick-slider__tick.is-active {
     background: var(--editor-surface-ink);
 }
@@ -63,6 +67,21 @@
 
 .editor-tick-slider--accent-end .editor-tick-slider__tick.is-active {
     background: var(--editor-accent-end);
+}
+
+/* Modulated behavior: ONE cell blue (start), ONE cell orange (end),
+   cells between them yellow. No "fill from zero". Those three coloured
+   cells are themselves the drag handles. */
+.editor-tick-slider__tick.is-mod-start {
+    background: var(--editor-accent-start);
+}
+
+.editor-tick-slider__tick.is-mod-end {
+    background: var(--editor-accent-end);
+}
+
+.editor-tick-slider__tick.is-mod-between {
+    background: var(--editor-accent-range);
 }
 
 .editor-tick-slider__input {
@@ -80,69 +99,8 @@
     outline-offset: 2px;
 }
 
-/* ---- Aux modulation: start + end markers and dual value readout ---- */
-
 .editor-tick-slider--modulated {
-    background: rgba(0, 180, 216, 0.08);
-    grid-template-columns: 44px minmax(0, 1fr) 108px;
-}
-
-.editor-tick-slider__track {
-    overflow: visible;
-}
-
-.editor-tick-slider__mod-sweep {
-    position: absolute;
-    top: 9px;
-    height: 4px;
-    background: linear-gradient(90deg, var(--editor-accent-start), var(--editor-accent-end));
-    opacity: 0.55;
-    pointer-events: none;
-}
-
-.editor-tick-slider__mod-phase {
-    position: absolute;
-    top: 7px;
-    width: 2px;
-    height: 8px;
-    background: var(--editor-surface-ink);
-    transform: translateX(-50%);
-    pointer-events: none;
-    opacity: 0.85;
-}
-
-.editor-tick-slider__mod-marker {
-    position: absolute;
-    top: -2px;
-    width: 2px;
-    height: 26px;
-    transform: translateX(-50%);
-    pointer-events: none;
-}
-
-.editor-tick-slider__mod-marker::after {
-    position: absolute;
-    top: -4px;
-    left: 50%;
-    width: 8px;
-    height: 8px;
-    border: 1px solid var(--editor-surface-border);
-    transform: translateX(-50%) rotate(45deg);
-    content: "";
-}
-
-.editor-tick-slider__mod-marker--start,
-.editor-tick-slider__mod-marker--start::after {
-    background: var(--editor-accent-start);
-}
-
-.editor-tick-slider__mod-marker--end,
-.editor-tick-slider__mod-marker--end::after {
-    background: var(--editor-accent-end);
-}
-
-.editor-tick-slider__input--end {
-    z-index: 2;
+    background: rgba(0, 180, 216, 0.06);
 }
 
 .editor-tick-slider__value--modulated {

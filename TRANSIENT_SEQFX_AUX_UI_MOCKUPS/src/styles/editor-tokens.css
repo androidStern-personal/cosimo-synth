@@ -39,6 +39,11 @@
     --editor-accent-end-ink: #f0ece6;
     --editor-accent-end-border: rgba(200, 40, 20, 0.28);
 
+    /* Aux modulation sweep — cells between the start and end handles.
+       Matches the existing SeqFX yellow at styles.css (#f2d16b). */
+    --editor-accent-range: #f2d16b;
+    --editor-accent-range-ink: #1c1c1c;
+
     /* Primary draggable handle (filter-style: halo + dark center + light stroke) */
     --editor-handle-fill: #1c1c1c;
     --editor-handle-stroke: #f0ece6;

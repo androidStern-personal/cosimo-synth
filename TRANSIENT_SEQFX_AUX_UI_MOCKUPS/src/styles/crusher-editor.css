@@ -205,24 +205,13 @@
     font-weight: var(--editor-label-weight);
 }
 
-.seqfx-crusher-editor__drive-sweep {
+.seqfx-crusher-editor__drive-range {
     position: absolute;
-    top: 12px;
-    height: 4px;
-    background: linear-gradient(90deg, var(--editor-accent-start), var(--editor-accent-end));
-    opacity: 0.5;
+    top: 5px;
+    bottom: 5px;
+    background: var(--editor-accent-range);
     pointer-events: none;
-}
-
-.seqfx-crusher-editor__drive-phase {
-    position: absolute;
-    top: 10px;
-    width: 2px;
-    height: 8px;
-    background: var(--editor-surface-ink);
-    transform: translateX(-50%);
-    opacity: 0.85;
-    pointer-events: none;
+    z-index: 0;
 }
 
 .seqfx-crusher-editor__drive-thumb--end {

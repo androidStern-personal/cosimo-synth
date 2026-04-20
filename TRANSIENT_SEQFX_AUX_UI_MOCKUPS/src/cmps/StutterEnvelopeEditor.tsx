@@ -453,12 +453,6 @@ export function StutterEnvelopeEditor({
                                     cy={gateHandleY}
                                     r={EDITOR_VALUE_HANDLE_RADIUS_PX}
                                 />
-                                <circle
-                                    className="seqfx-stutter-editor__gate-phase"
-                                    cx={liveGateX}
-                                    cy={gateHandleY}
-                                    r={3}
-                                />
                             </>
                         ) : (
                             <>

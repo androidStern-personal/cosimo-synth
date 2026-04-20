@@ -237,11 +237,9 @@
 /* ---- Aux modulation: twin gate handles + bridging region ---- */
 
 .seqfx-stutter-editor__gate-mod-region {
-    fill: rgba(28, 28, 28, 0.06);
-    stroke: var(--editor-surface-border);
-    stroke-dasharray: 2 3;
-    stroke-width: 1;
-    stroke-opacity: 0.38;
+    fill: var(--editor-accent-range);
+    fill-opacity: 0.45;
+    stroke: none;
 }
 
 .seqfx-stutter-editor__gate-line--start {

@@ -1,9 +1,20 @@
 # SeqFX Aux Envelope — Option 1 interactive prototype
 
 Real `CrusherEditor` and `StutterEnvelopeEditor` components, copied out of
-`fx/seqfx/view/` and extended with a `modulation` prop that adds per-param
-start/end markers to the existing EditorTickSlider rows and the Drive strip,
-plus twin gate handles on the Stutter plot.
+`fx/seqfx/view/` and extended with a `modulation` prop. When a parameter is
+modulated:
+
+- The **tick slider** stops drawing "fill from zero" and instead recolors
+  three existing tick cells: one **cyan** (start), one **coral** (end), and
+  the cells between them **yellow**. Those colored cells are the drag
+  handles — there are no extra markers or overlays.
+- The **Drive strip** keeps its cyan start thumb and adds a coral end thumb,
+  with a solid yellow fill between them.
+- The **Stutter plot** grows a twin coral gate handle and the bridging
+  region fills yellow.
+
+Every slider row reserves 120 px for the value readout whether modulation is
+on or off, so toggling modulation never shifts the rail width.
 
 ## Open it
 
