@@ -34,7 +34,7 @@ function resolveDevModuleUrl(origin, modulePath) {
 }
 
 function resolveProductionModuleUrl(modulePath) {
-    return new URL(modulePath || DEFAULT_EFFECT_PRODUCTION_MODULE, import.meta.url).href;
+    return modulePath || DEFAULT_EFFECT_PRODUCTION_MODULE;
 }
 
 function normalizeTimeoutMs(timeoutMs) {

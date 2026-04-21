@@ -9,6 +9,7 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."
 const envelopeModule = await loadUIModule(repoRoot, "fx/seqfx/view/stutter-envelope.ts");
 
 const {
+    STUTTER_DEFAULT_SHAPE,
     STUTTER_SHAPE_NAMES,
     clampStutterGate,
     clampStutterShape,
@@ -34,11 +35,13 @@ test("stutter_envelope_gate_controls_the_audible_portion_of_a_cut", () => {
 
 test("stutter_envelope_shape_stops_have_expected_anchor_values", () => {
     const gate = 1;
+    assert.deepEqual([...STUTTER_SHAPE_NAMES], ["Gate", "Triangle", "Bell", "Ramp Down", "Ramp Up"]);
+
     const gateShape = 0 / (STUTTER_SHAPE_NAMES.length - 1);
-    const triangleShape = 2 / (STUTTER_SHAPE_NAMES.length - 1);
-    const bellShape = 3 / (STUTTER_SHAPE_NAMES.length - 1);
-    const rampDownShape = 4 / (STUTTER_SHAPE_NAMES.length - 1);
-    const rampUpShape = 5 / (STUTTER_SHAPE_NAMES.length - 1);
+    const triangleShape = 1 / (STUTTER_SHAPE_NAMES.length - 1);
+    const bellShape = 2 / (STUTTER_SHAPE_NAMES.length - 1);
+    const rampDownShape = 3 / (STUTTER_SHAPE_NAMES.length - 1);
+    const rampUpShape = 4 / (STUTTER_SHAPE_NAMES.length - 1);
 
     assert.equal(evaluateStutterEnvelope(0.25, gateShape, gate), 1);
     assertClose(evaluateStutterEnvelope(0.25, triangleShape, gate), 0.5, 0.001, "triangle attack");
@@ -48,6 +51,15 @@ test("stutter_envelope_shape_stops_have_expected_anchor_values", () => {
     assertClose(evaluateStutterEnvelope(0.25, rampUpShape, gate), 0.25, 0.001, "ramp up");
 });
 
+test("stutter_envelope_gate_to_triangle_segment_forms_a_trapezoid_before_collapse", () => {
+    const midpointShape = 0.5 / (STUTTER_SHAPE_NAMES.length - 1);
+
+    assertClose(evaluateStutterEnvelope(0.1, midpointShape, 1), 0.4, 0.001, "left wall should lean inward");
+    assertClose(evaluateStutterEnvelope(0.3, midpointShape, 1), 1, 0.001, "mid-segment should keep a flat top");
+    assertClose(evaluateStutterEnvelope(0.7, midpointShape, 1), 1, 0.001, "flat top should remain until the right wall");
+    assertClose(evaluateStutterEnvelope(0.8, midpointShape, 1), 0.8, 0.001, "right wall should lean inward");
+});
+
 test("stutter_envelope_sampling_and_labels_match_the_editor_model", () => {
     assert.equal(clampStutterShape(-1), 0);
     assert.equal(clampStutterShape(2), 1);
@@ -55,7 +67,7 @@ test("stutter_envelope_sampling_and_labels_match_the_editor_model", () => {
     assert.equal(clampStutterGate(2), 1);
 
     assert.equal(formatStutterShapeLabel(0), "Gate (0.00)");
-    assert.equal(formatStutterShapeLabel(0.55), "Triangle -> Bell (0.55)");
+    assert.equal(formatStutterShapeLabel(STUTTER_DEFAULT_SHAPE), "Triangle -> Bell (0.44)");
     assert.equal(formatStutterShapeLabel(1), "Ramp Up (1.00)");
 
     const gateSamples = sampleStutterEnvelope(0, 0.5, 5);
@@ -68,7 +80,7 @@ test("stutter_envelope_sampling_and_labels_match_the_editor_model", () => {
         [1, 1, 0, 0, 0],
     );
 
-    const triangleShape = 2 / (STUTTER_SHAPE_NAMES.length - 1);
+    const triangleShape = 1 / (STUTTER_SHAPE_NAMES.length - 1);
     const triangleSamples = sampleStutterEnvelope(triangleShape, 1, 5);
     assert.deepEqual(
         triangleSamples.map((sample) => sample.phase),

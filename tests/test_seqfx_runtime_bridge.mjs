@@ -132,6 +132,14 @@ class MissingFullStatePatchConnection extends FakePatchConnection {
     }
 }
 
+class CmajorMissingStoredValuePatchConnection extends MissingFullStatePatchConnection {
+    requestStoredStateValue(key) {
+        for (const listener of this.storedStateListeners) {
+            listener({ key, value: null });
+        }
+    }
+}
+
 function endpointEvents(connection, endpointID) {
     return connection.events.filter((entry) => entry.endpointID === endpointID);
 }
@@ -155,6 +163,23 @@ test("boot_without_saved_seqfx_state_hydrates_defaults_without_persisting_or_upl
     assert.equal(connection.requestedParameters.includes(SEQFX_ENDPOINTS.rate), true);
     assert.equal(endpointEvents(connection, SEQFX_ENDPOINTS.patternUpload).length, 0);
     assert.equal(bridge.getState().patterns[0].lanes.flatMap((lane) => lane.steps).some((step) => step.active), false);
+});
+
+test("boot_treats_cmajor_null_stored_value_as_missing_current_state", () => {
+    const connection = new CmajorMissingStoredValuePatchConnection();
+    const bridge = new SeqFxRuntimeBridge(connection);
+
+    bridge.attach();
+    bridge.requestBootState();
+
+    assert.equal(connection.storedWrites.length, 0);
+    assert.equal(endpointEvents(connection, SEQFX_ENDPOINTS.patternUpload).length, 0);
+    assert.deepEqual(connection.requestedParameters, [
+        SEQFX_ENDPOINTS.patternSelect,
+        SEQFX_ENDPOINTS.rate,
+    ]);
+    assert.equal(bridge.getState().patterns.length, 12);
+    assert.equal(bridge.getState().patterns[0].lanes[SEQFX_LANES.filter].steps[0].active, false);
 });
 
 test("boot_ignores_old_seqfx_v3_state_and_uses_defaults_when_current_key_is_missing", () => {

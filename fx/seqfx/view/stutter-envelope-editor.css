@@ -212,9 +212,30 @@
     transform: translateX(-50%);
 }
 
-.seqfx-stutter-editor__morph-track:focus-visible {
+.seqfx-stutter-editor__morph-range {
+    position: absolute;
+    top: 5px;
+    bottom: 5px;
+    z-index: 0;
+    background: var(--editor-accent-range);
+    pointer-events: none;
+}
+
+.seqfx-stutter-editor__morph-thumb--end {
+    background: var(--editor-accent-end);
+}
+
+.seqfx-stutter-editor__morph-track:focus-within {
     outline: 2px solid var(--editor-accent-start);
     outline-offset: 2px;
+}
+
+.seqfx-stutter-editor__morph-sr-handle {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
 }
 
 .seqfx-stutter-editor__morph-footer {
@@ -223,6 +244,7 @@
     justify-content: space-between;
     gap: 8px;
     margin-top: 4px;
+    min-height: 22px;
 }
 
 .seqfx-stutter-editor__shape-readout {
@@ -232,6 +254,75 @@
     font-weight: var(--editor-label-weight);
     letter-spacing: var(--editor-label-letter-spacing);
     text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.seqfx-stutter-editor__shape-readout--modulated {
+    display: inline-grid;
+    grid-auto-flow: column;
+    grid-auto-columns: max-content;
+    align-items: center;
+    justify-content: end;
+    gap: 3px;
+}
+
+.seqfx-stutter-editor__shape-chip {
+    display: inline-block;
+    border-radius: 3px;
+    padding: 1px 5px;
+    font-family: var(--editor-label-font);
+    font-size: 9px;
+    font-weight: var(--editor-label-weight);
+    letter-spacing: var(--editor-label-letter-spacing);
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.seqfx-stutter-editor__shape-chip--start {
+    color: var(--editor-accent-start-ink);
+    background: var(--editor-accent-start);
+}
+
+.seqfx-stutter-editor__shape-chip--end {
+    color: var(--editor-accent-end-ink);
+    background: var(--editor-accent-end);
+}
+
+.seqfx-stutter-editor__shape-arrow {
+    color: var(--editor-surface-ink-muted);
+    font-family: var(--editor-label-font);
+    font-size: 9px;
+    font-weight: var(--editor-label-weight);
+}
+
+.seqfx-stutter-editor__shape-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    border: 0;
+    border-radius: 3px;
+    margin: -2px -4px;
+    padding: 2px 4px;
+    color: var(--editor-surface-ink-muted);
+    background: transparent;
+    font-family: var(--editor-label-font);
+    font-size: var(--editor-label-size-sm);
+    font-weight: var(--editor-label-weight);
+    letter-spacing: var(--editor-label-letter-spacing);
+    text-transform: uppercase;
+    cursor: pointer;
+}
+
+.seqfx-stutter-editor__shape-toggle:hover,
+.seqfx-stutter-editor__shape-toggle:focus-visible {
+    color: var(--editor-surface-ink);
+    background: rgba(28, 28, 28, 0.08);
+    outline: none;
+}
+
+.seqfx-stutter-editor__shape-toggle:focus-visible {
+    outline: 2px solid var(--editor-accent-start);
+    outline-offset: 1px;
 }
 
 .seqfx-stutter-editor__gate-mod-region {

@@ -26,7 +26,7 @@ export function createSeqFxWorkerService(connection: PatchConnectionLike) {
         stateKey: SEQFX_STATE_KEY,
         parameterEndpointIDs: [patternSelectEndpointID],
         applyDefaultRuntimeStateWhenMissing: true,
-        deserializeStoredState: (value) => value === undefined
+        deserializeStoredState: (value) => value == null
             ? createDefaultSeqFxState()
             : parseStrictSeqFxStateV3(value),
         buildRuntimeEvents: ({ state, parameters }) => [

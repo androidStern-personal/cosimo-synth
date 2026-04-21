@@ -21,7 +21,9 @@ import {
     STUTTER_DEFAULT_SHAPE,
     STUTTER_DEFAULT_SLICES,
     STUTTER_DEFAULT_SPEED,
+    STUTTER_SHAPE_CHIP_LABELS,
     STUTTER_SHAPE_NAMES,
+    STUTTER_SHAPE_STOP_LABELS,
     STUTTER_SLICES_MAX,
     STUTTER_SLICES_MIN,
     STUTTER_SPEED_MAX,
@@ -70,7 +72,6 @@ export type StutterEnvelopeEditorProps = {
 };
 
 const ENVELOPE_POINT_COUNT = 200;
-const SHAPE_LABELS = ["Gate", "Eased", "Triangle", "Bell", "Down", "Up"];
 /**
  * A stylized audio-wave silhouette rendered at unit scale (0..1 on each axis).
  * The component remaps these points into its live plot rectangle, so the
@@ -92,6 +93,23 @@ function formatSpeed(value: number) {
 
 function roundSpeed(value: number) {
     return Math.round(value * 100) / 100;
+}
+
+function formatCompactStutterShapeLabel(shape: number) {
+    const clampedShape = clampStutterShape(shape);
+    const shapePosition = clampedShape * (STUTTER_SHAPE_CHIP_LABELS.length - 1);
+    const index = Math.min(STUTTER_SHAPE_CHIP_LABELS.length - 1, Math.max(0, Math.floor(shapePosition)));
+    const amount = shapePosition - index;
+
+    if (amount < 0.04 || index >= STUTTER_SHAPE_CHIP_LABELS.length - 1) {
+        return STUTTER_SHAPE_CHIP_LABELS[index];
+    }
+
+    if (amount > 0.96) {
+        return STUTTER_SHAPE_CHIP_LABELS[index + 1];
+    }
+
+    return `${STUTTER_SHAPE_CHIP_LABELS[index]}→${STUTTER_SHAPE_CHIP_LABELS[index + 1]}`;
 }
 
 function lerp(start: number, end: number, phase: number) {
@@ -220,6 +238,7 @@ export function StutterEnvelopeEditor({
     const gatePointerIdRef = useRef<number | null>(null);
     const gateDragTargetRef = useRef<"start" | "end">("start");
     const morphPointerIdRef = useRef<number | null>(null);
+    const morphDragTargetRef = useRef<"start" | "end">("start");
     const size = useEditorSurfaceSize(viewportRef);
     const effectiveWidth = size.width;
     const effectiveHeight = size.height;
@@ -228,8 +247,11 @@ export function StutterEnvelopeEditor({
         [effectiveHeight, effectiveWidth],
     );
     const phase = modulation?.phase ?? 0;
+    const shapeEnd = modulation?.shape
+        ? clampStutterShape(modulation.shape.end)
+        : resolved.shape;
     const effectiveShape = modulation?.shape
-        ? clampStutterShape(lerp(resolved.shape, modulation.shape.end, phase))
+        ? clampStutterShape(lerp(resolved.shape, shapeEnd, phase))
         : resolved.shape;
     const effectiveGate = modulation?.gate
         ? clampStutterGate(lerp(resolved.gate, modulation.gate.end, phase))
@@ -248,6 +270,7 @@ export function StutterEnvelopeEditor({
         [0.25, 0.5, 0.75].map((t) => plot.plotLeft + (plot.plotWidth * t))
     ), [plot]);
     const isGateModulated = Boolean(modulation?.gate);
+    const isShapeModulated = Boolean(modulation?.shape);
 
     const pickGateTarget = (clientX: number): "start" | "end" => {
         if (!isGateModulated || !surfaceRef.current) {
@@ -346,8 +369,42 @@ export function StutterEnvelopeEditor({
         event.currentTarget.releasePointerCapture?.(event.pointerId);
     };
 
-    const setShapeFromPointer = (event: ReactPointerEvent<HTMLDivElement>) => {
-        onShapeChange(pointerToNormalizedX(event.currentTarget, event.clientX));
+    const setShapeValue = (target: "start" | "end", value: number) => {
+        const nextNormalized = clampStutterShape(value);
+        const direction = modulation?.shape?.direction ?? "both";
+
+        if (target === "end" && modulation?.shape) {
+            let nextEnd = nextNormalized;
+            if (direction === "up") {
+                nextEnd = Math.max(nextEnd, resolved.shape);
+            } else if (direction === "down") {
+                nextEnd = Math.min(nextEnd, resolved.shape);
+            }
+            modulation.shape.onEndChange(clampStutterShape(nextEnd));
+            return;
+        }
+
+        onShapeChange(nextNormalized);
+        if (modulation?.shape) {
+            if (direction === "up" && modulation.shape.end < nextNormalized) {
+                modulation.shape.onEndChange(nextNormalized);
+            } else if (direction === "down" && modulation.shape.end > nextNormalized) {
+                modulation.shape.onEndChange(nextNormalized);
+            }
+        }
+    };
+
+    const pickShapeTarget = (clientX: number): "start" | "end" => {
+        if (!isShapeModulated || !morphTrackRef.current) {
+            return "start";
+        }
+
+        const normalizedX = pointerToNormalizedX(morphTrackRef.current, clientX);
+        return Math.abs(normalizedX - resolved.shape) <= Math.abs(normalizedX - shapeEnd) ? "start" : "end";
+    };
+
+    const setShapeFromClientX = (element: HTMLDivElement, clientX: number, target: "start" | "end") => {
+        setShapeValue(target, pointerToNormalizedX(element, clientX));
     };
 
     const handleMorphPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -358,7 +415,8 @@ export function StutterEnvelopeEditor({
         event.preventDefault();
         event.currentTarget.setPointerCapture(event.pointerId);
         morphPointerIdRef.current = event.pointerId;
-        setShapeFromPointer(event);
+        morphDragTargetRef.current = pickShapeTarget(event.clientX);
+        setShapeFromClientX(event.currentTarget, event.clientX, morphDragTargetRef.current);
     };
 
     const handleMorphPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -366,7 +424,7 @@ export function StutterEnvelopeEditor({
             return;
         }
 
-        setShapeFromPointer(event);
+        setShapeFromClientX(event.currentTarget, event.clientX, morphDragTargetRef.current);
     };
 
     const endMorphDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -382,18 +440,74 @@ export function StutterEnvelopeEditor({
         const step = event.shiftKey ? 0.1 : 0.02;
 
         if (event.key === "ArrowLeft") {
-            onShapeChange(clampStutterShape(resolved.shape - step));
+            setShapeValue("start", resolved.shape - step);
             event.preventDefault();
         } else if (event.key === "ArrowRight") {
-            onShapeChange(clampStutterShape(resolved.shape + step));
+            setShapeValue("start", resolved.shape + step);
             event.preventDefault();
         } else if (event.key === "Home") {
-            onShapeChange(0);
+            setShapeValue("start", 0);
             event.preventDefault();
         } else if (event.key === "End") {
-            onShapeChange(1);
+            setShapeValue("start", 1);
             event.preventDefault();
         }
+    };
+
+    const handleShapeHandleKeyDown = (target: "start" | "end") => (event: ReactKeyboardEvent<HTMLSpanElement>) => {
+        if (!["ArrowLeft", "ArrowRight", "ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
+            return;
+        }
+
+        const step = event.shiftKey ? 0.1 : 0.02;
+        const direction = event.key === "ArrowLeft" || event.key === "ArrowDown" ? -1 : 1;
+        const baseValue = target === "end" ? shapeEnd : resolved.shape;
+        const nextValue = event.key === "Home"
+            ? 0
+            : event.key === "End"
+                ? 1
+                : baseValue + (step * direction);
+
+        setShapeValue(target, nextValue);
+        event.preventDefault();
+    };
+
+    const shapeFooterReadout = isShapeModulated ? (
+        <output
+            className="seqfx-stutter-editor__shape-readout seqfx-stutter-editor__shape-readout--modulated"
+            data-role="seqfx-stutter-shape-value"
+        >
+            <span
+                className="seqfx-stutter-editor__shape-chip seqfx-stutter-editor__shape-chip--start"
+                title={formatStutterShapeLabel(resolved.shape)}
+            >
+                {formatCompactStutterShapeLabel(resolved.shape)}
+            </span>
+            <span className="seqfx-stutter-editor__shape-arrow">-&gt;</span>
+            <span
+                className="seqfx-stutter-editor__shape-chip seqfx-stutter-editor__shape-chip--end"
+                title={formatStutterShapeLabel(shapeEnd)}
+            >
+                {formatCompactStutterShapeLabel(shapeEnd)}
+            </span>
+        </output>
+    ) : (
+        <output className="seqfx-stutter-editor__shape-readout" data-role="seqfx-stutter-shape-value">
+            {formatStutterShapeLabel(resolved.shape)}
+        </output>
+    );
+
+    const shapeStartPercent = resolved.shape * 100;
+    const shapeEndPercent = shapeEnd * 100;
+
+    const shapeA11yProps = isShapeModulated ? {} : {
+        role: "slider" as const,
+        "aria-label": "Shape morph",
+        "aria-valuemin": 0,
+        "aria-valuemax": 1,
+        "aria-valuenow": resolved.shape,
+        tabIndex: 0,
+        onKeyDown: handleMorphKeyDown,
     };
 
     const gateChipLabel = isGateModulated
@@ -468,7 +582,12 @@ export function StutterEnvelopeEditor({
                             rx="2"
                         />
                         <path className="seqfx-stutter-editor__env-fill" d={paths.fill} />
-                        <path className="seqfx-stutter-editor__env-path" d={paths.line} strokeWidth={EDITOR_CURVE_STROKE_WIDTH} />
+                        <path
+                            className="seqfx-stutter-editor__env-path"
+                            data-role="seqfx-stutter-env-path"
+                            d={paths.line}
+                            strokeWidth={EDITOR_CURVE_STROKE_WIDTH}
+                        />
                         {isGateModulated ? (
                             <>
                                 <line
@@ -644,7 +763,7 @@ export function StutterEnvelopeEditor({
 
                 <div className="seqfx-stutter-editor__morph">
                     <div className="seqfx-stutter-editor__morph-labels">
-                        {SHAPE_LABELS.map((label, index) => (
+                        {STUTTER_SHAPE_STOP_LABELS.map((label, index) => (
                             <button
                                 data-role="seqfx-stutter-shape-stop"
                                 data-stop={index}
@@ -660,51 +779,79 @@ export function StutterEnvelopeEditor({
                         ref={morphTrackRef}
                         className="seqfx-stutter-editor__morph-track"
                         data-role="seqfx-stutter-morph-track"
-                        role="slider"
-                        aria-label="Shape morph"
-                        aria-valuemin={0}
-                        aria-valuemax={1}
-                        aria-valuenow={resolved.shape}
-                        tabIndex={0}
-                        onKeyDown={handleMorphKeyDown}
+                        {...shapeA11yProps}
                         onPointerDown={handleMorphPointerDown}
                         onPointerMove={handleMorphPointerMove}
                         onPointerUp={endMorphDrag}
                         onPointerCancel={endMorphDrag}
                     >
                         <span className="seqfx-stutter-editor__morph-rail" />
-                        <span className="seqfx-stutter-editor__morph-notch" style={{ left: "16.66%" }} />
-                        <span className="seqfx-stutter-editor__morph-notch" style={{ left: "33.33%" }} />
-                        <span className="seqfx-stutter-editor__morph-notch" style={{ left: "50%" }} />
-                        <span className="seqfx-stutter-editor__morph-notch" style={{ left: "66.66%" }} />
-                        <span className="seqfx-stutter-editor__morph-notch" style={{ left: "83.33%" }} />
-                        <span className="seqfx-stutter-editor__morph-thumb" style={{ left: `${resolved.shape * 100}%` }} />
+                        {Array.from({ length: STUTTER_SHAPE_STOP_LABELS.length - 2 }, (_unused, index) => (
+                            <span
+                                className="seqfx-stutter-editor__morph-notch"
+                                key={index + 1}
+                                style={{ left: `${(((index + 1) / (STUTTER_SHAPE_STOP_LABELS.length - 1)) * 100).toFixed(2)}%` }}
+                            />
+                        ))}
+                        {isShapeModulated ? (
+                            <>
+                                <span
+                                    className="seqfx-stutter-editor__morph-range"
+                                    style={{
+                                        left: `${Math.min(shapeStartPercent, shapeEndPercent)}%`,
+                                        right: `${100 - Math.max(shapeStartPercent, shapeEndPercent)}%`,
+                                    }}
+                                />
+                                <span className="seqfx-stutter-editor__morph-thumb" style={{ left: `${shapeStartPercent}%` }} />
+                                <span
+                                    className="seqfx-stutter-editor__morph-thumb seqfx-stutter-editor__morph-thumb--end"
+                                    style={{ left: `${shapeEndPercent}%` }}
+                                />
+                                <span
+                                    aria-label="Shape start"
+                                    aria-valuemin={0}
+                                    aria-valuemax={1}
+                                    aria-valuenow={resolved.shape}
+                                    className="seqfx-stutter-editor__morph-sr-handle"
+                                    onKeyDown={handleShapeHandleKeyDown("start")}
+                                    role="slider"
+                                    tabIndex={0}
+                                />
+                                <span
+                                    aria-label="Shape end"
+                                    aria-valuemin={0}
+                                    aria-valuemax={1}
+                                    aria-valuenow={shapeEnd}
+                                    className="seqfx-stutter-editor__morph-sr-handle"
+                                    onKeyDown={handleShapeHandleKeyDown("end")}
+                                    role="slider"
+                                    tabIndex={0}
+                                />
+                            </>
+                        ) : (
+                            <span className="seqfx-stutter-editor__morph-thumb" style={{ left: `${shapeStartPercent}%` }} />
+                        )}
                     </div>
                     <div className="seqfx-stutter-editor__morph-footer">
-                        <output className="seqfx-stutter-editor__shape-readout">{formatStutterShapeLabel(resolved.shape)}</output>
+                        {modulation?.onToggleShape ? (
+                            <button
+                                aria-pressed={isShapeModulated}
+                                className="seqfx-stutter-editor__shape-toggle"
+                                data-role="seqfx-stutter-shape-mod-toggle"
+                                onClick={(event) => {
+                                    event.preventDefault();
+                                    event.stopPropagation();
+                                    modulation.onToggleShape!();
+                                }}
+                                type="button"
+                            >
+                                <span>Shape</span>
+                                <ModBadge isOn={isShapeModulated} direction={modulation.shape?.direction} />
+                            </button>
+                        ) : null}
+                        {shapeFooterReadout}
                     </div>
                 </div>
-                <EditorTickSlider
-                    accent="start"
-                    dataRole="seqfx-stutter-shape-slider"
-                    formatValue={formatStutterShapeLabel}
-                    inputDataRole="seqfx-stutter-shape"
-                    label="Shape"
-                    max={1}
-                    min={0}
-                    onChange={(value) => onShapeChange(clampStutterShape(value))}
-                    step={0.01}
-                    tickCount={6}
-                    value={resolved.shape}
-                    valueDataRole="seqfx-stutter-shape-value"
-                    modulation={modulation?.shape ? {
-                        end: modulation.shape.end,
-                        onEndChange: (nextValue) => modulation.shape!.onEndChange(clampStutterShape(nextValue)),
-                        phase,
-                        direction: modulation.shape.direction,
-                    } : null}
-                    onModulationToggle={modulation?.onToggleShape ?? null}
-                />
                 <EditorTickSlider
                     accent="start"
                     dataRole="seqfx-stutter-speed-slider"

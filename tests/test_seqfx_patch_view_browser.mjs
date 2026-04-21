@@ -180,6 +180,46 @@ function stutterGraphPoint(graphBox, normalizedGate) {
     };
 }
 
+async function readStutterEnvelopePathSamples(page, phases) {
+    return page.locator('[data-role="seqfx-stutter-editor"]').evaluate((node, targetPhases) => {
+        const path = node.querySelector('[data-role="seqfx-stutter-env-path"]');
+        const d = path?.getAttribute("d") ?? "";
+        const numbers = d.match(/-?\d+(?:\.\d+)?/g)?.map(Number) ?? [];
+        const points = [];
+
+        for (let index = 0; index + 1 < numbers.length; index += 2) {
+            points.push({ x: numbers[index], y: numbers[index + 1] });
+        }
+
+        if (points.length < 2) {
+            return null;
+        }
+
+        const left = points[0].x;
+        const right = points[points.length - 1].x;
+        const width = Math.max(1, right - left);
+
+        const sampleAtPhase = (phase) => {
+            let nearestPoint = points[0];
+            let nearestDistance = Number.POSITIVE_INFINITY;
+
+            for (const point of points) {
+                const pointPhase = (point.x - left) / width;
+                const distance = Math.abs(pointPhase - phase);
+
+                if (distance < nearestDistance) {
+                    nearestPoint = point;
+                    nearestDistance = distance;
+                }
+            }
+
+            return nearestPoint.y;
+        };
+
+        return Object.fromEntries(targetPhases.map((phase) => [phase.toFixed(2), sampleAtPhase(phase)]));
+    }, phases);
+}
+
 async function dragLocatorTo(page, locator, point) {
     const box = await locator.boundingBox();
     assert.ok(box, "expected draggable locator to have a bounding box");
@@ -1001,7 +1041,7 @@ test("seqfx_stutter_aux_controls_edit_gate_slices_shape_and_speed_targets", asyn
 
     await page.locator('[data-role="seqfx-stutter-gate-mod-toggle"]').click();
     await page.locator('[data-role="seqfx-stutter-slices-slider"] .editor-tick-slider__label--toggle').click();
-    await page.locator('[data-role="seqfx-stutter-shape-slider"] .editor-tick-slider__label--toggle').click();
+    await page.locator('[data-role="seqfx-stutter-shape-mod-toggle"]').click();
     await page.locator('[data-role="seqfx-stutter-speed-slider"] .editor-tick-slider__label--toggle').click();
     await keyboardSetSliderTo(page.getByRole("slider", { name: "Gate position", exact: true }), "Home");
     await keyboardSetSliderTo(page.getByRole("slider", { name: "Gate end", exact: true }), "Home");
@@ -1095,6 +1135,82 @@ test("seqfx_crusher_inspector_renders_waveform_editor_and_writes_params", async 
 
     const holdTicks = page.locator('[data-role="seqfx-crusher-hold-frames-slider"] [data-role="editor-tick-slider-tick"]');
     assert.equal(await holdTicks.count(), 16);
+    const narrowLayout = await page.locator('[data-role="seqfx-crusher-editor"]').evaluate((node) => {
+        const bitsRow = node.querySelector('[data-role="seqfx-crusher-bits-slider"]');
+        const bitsTrack = bitsRow?.querySelector(".editor-tick-slider__track");
+        const bitsValue = bitsRow?.querySelector('[data-role="seqfx-crusher-bits-value"]');
+        const holdRow = node.querySelector('[data-role="seqfx-crusher-hold-frames-slider"]');
+        const holdTrack = holdRow?.querySelector(".editor-tick-slider__track");
+        const holdTicks = holdRow?.querySelectorAll('[data-role="editor-tick-slider-tick"]') ?? [];
+        const firstHoldTick = holdTicks[0];
+        const lastHoldTick = holdTicks[holdTicks.length - 1];
+
+        return {
+            bitsRowWidth: bitsRow?.getBoundingClientRect().width ?? 0,
+            bitsTrackWidth: bitsTrack?.getBoundingClientRect().width ?? 0,
+            bitsValueWidth: bitsValue?.getBoundingClientRect().width ?? 0,
+            holdRowWidth: holdRow?.getBoundingClientRect().width ?? 0,
+            holdTrackWidth: holdTrack?.getBoundingClientRect().width ?? 0,
+            holdTickWidth: firstHoldTick?.getBoundingClientRect().width ?? 0,
+            holdActiveColor: firstHoldTick ? getComputedStyle(firstHoldTick).backgroundColor : "",
+            holdInactiveColor: lastHoldTick ? getComputedStyle(lastHoldTick).backgroundColor : "",
+        };
+    });
+    assert.ok(
+        narrowLayout.bitsTrackWidth > narrowLayout.bitsRowWidth * 0.45,
+        `crusher bits rail should keep most of the row, got ${narrowLayout.bitsTrackWidth}px of ${narrowLayout.bitsRowWidth}px`,
+    );
+    assert.ok(
+        narrowLayout.bitsValueWidth < narrowLayout.bitsRowWidth * 0.25,
+        `crusher bits readout should stay compact, got ${narrowLayout.bitsValueWidth}px of ${narrowLayout.bitsRowWidth}px`,
+    );
+    assert.ok(
+        narrowLayout.holdTrackWidth > narrowLayout.holdRowWidth * 0.45,
+        `crusher hold rail should keep most of the row, got ${narrowLayout.holdTrackWidth}px of ${narrowLayout.holdRowWidth}px`,
+    );
+    assert.ok(
+        narrowLayout.holdTickWidth >= 4,
+        `crusher hold ticks should remain visible in the narrow inspector, got ${narrowLayout.holdTickWidth}px`,
+    );
+    assert.notEqual(
+        narrowLayout.holdActiveColor,
+        narrowLayout.holdInactiveColor,
+        "crusher hold row should visibly distinguish active ticks from inactive ticks",
+    );
+
+    const driveLayoutBefore = await page.locator('[data-role="seqfx-inspector"]').evaluate((node) => {
+        const driveRow = node.querySelector(".seqfx-crusher-editor__drive");
+        const mixRow = node.querySelector('[data-role="seqfx-mix-row"]');
+
+        return {
+            driveHeight: driveRow?.getBoundingClientRect().height ?? 0,
+            mixTop: mixRow?.getBoundingClientRect().top ?? 0,
+        };
+    });
+    await page.locator('[data-role="seqfx-crusher-drive-db-mod-toggle"]').click();
+    const driveLayoutModulated = await page.locator('[data-role="seqfx-inspector"]').evaluate((node) => {
+        const driveRow = node.querySelector(".seqfx-crusher-editor__drive");
+        const mixRow = node.querySelector('[data-role="seqfx-mix-row"]');
+
+        return {
+            driveHeight: driveRow?.getBoundingClientRect().height ?? 0,
+            mixTop: mixRow?.getBoundingClientRect().top ?? 0,
+        };
+    });
+    await page.locator('[data-role="seqfx-crusher-drive-db-mod-toggle"]').click();
+    const driveLayoutReset = await page.locator('[data-role="seqfx-inspector"]').evaluate((node) => {
+        const driveRow = node.querySelector(".seqfx-crusher-editor__drive");
+        const mixRow = node.querySelector('[data-role="seqfx-mix-row"]');
+
+        return {
+            driveHeight: driveRow?.getBoundingClientRect().height ?? 0,
+            mixTop: mixRow?.getBoundingClientRect().top ?? 0,
+        };
+    });
+    assertClose(driveLayoutModulated.mixTop, driveLayoutBefore.mixTop, 1, "crusher drive modulation should not push the mix row");
+    assertClose(driveLayoutModulated.driveHeight, driveLayoutBefore.driveHeight, 1, "crusher drive row height should stay stable when modulation turns on");
+    assertClose(driveLayoutReset.mixTop, driveLayoutBefore.mixTop, 1, "crusher drive modulation should not leave the mix row shifted after turning back off");
+    assertClose(driveLayoutReset.driveHeight, driveLayoutBefore.driveHeight, 1, "crusher drive row height should return to its original size");
 
     const beforePath = await page.locator('[data-role="seqfx-crusher-wet-path"]').getAttribute("d");
     assert.ok(beforePath && beforePath.length > 20, "crusher graph should render a non-empty wet waveform path");
@@ -1195,9 +1311,15 @@ test("seqfx_stutter_inspector_renders_interactive_envelope_editor_and_writes_blo
     await page.locator('[data-role="seqfx-stutter-editor"]').waitFor();
     await page.locator('[data-role="seqfx-stutter-graph"]').waitFor();
 
+    assert.deepEqual(
+        await page.locator('[data-role="seqfx-stutter-shape-stop"]').evaluateAll((nodes) => nodes.map((node) => node.textContent?.trim() ?? "")),
+        ["Gate", "Triangle", "Bell", "Down", "Up"],
+    );
     assert.equal(await page.locator('[data-role="seqfx-param"][data-param="0"]').count(), 0);
     assert.equal(await page.locator('[data-role="seqfx-stutter-slices-slider"] [data-role="editor-tick-slider-tick"]').count(), 31);
     assert.equal(await page.locator('[data-role="seqfx-stutter-speed-slider"] [data-role="editor-tick-slider-tick"]').count(), 16);
+    assert.equal(await page.locator('[data-role="seqfx-stutter-shape-slider"]').count(), 0);
+    await page.locator('[data-role="seqfx-stutter-shape-mod-toggle"]').waitFor();
 
     const tickBox = await page.locator('[data-role="seqfx-stutter-slices-slider"] [data-role="editor-tick-slider-tick"]').first().boundingBox();
     assert.ok(tickBox);
@@ -1215,10 +1337,10 @@ test("seqfx_stutter_inspector_renders_interactive_envelope_editor_and_writes_blo
 
     const graphBox = await page.locator('[data-role="seqfx-stutter-graph"]').boundingBox();
     assert.ok(graphBox);
-    await page.mouse.click(stutterGraphPoint(graphBox, 0.25).x, stutterGraphPoint(graphBox, 0.25).y);
+    await page.mouse.click(stutterGraphPoint(graphBox, 1).x, stutterGraphPoint(graphBox, 1).y);
     snapshot = await getHarnessSnapshot(page);
     upload = patternUploads(snapshot).at(-1).value;
-    assertClose(upload.params[3][0][3], 0.25, 0.03, "gate graph click should write gate");
+    assertClose(upload.params[3][0][3], 1, 0.03, "gate graph click should open the cut fully before sampling the shape path");
 
     const morphBox = await page.locator('[data-role="seqfx-stutter-morph-track"]').boundingBox();
     assert.ok(morphBox);
@@ -1227,7 +1349,36 @@ test("seqfx_stutter_inspector_renders_interactive_envelope_editor_and_writes_blo
     upload = patternUploads(snapshot).at(-1).value;
     assertClose(upload.params[3][0][2], 0.8, 0.03, "morph track click should write shape");
 
-    await page.locator('[data-role="seqfx-stutter-shape-stop"][data-stop="5"]').click();
+    await page.mouse.click(morphBox.x + morphBox.width * 0.125, morphBox.y + morphBox.height / 2);
+    snapshot = await getHarnessSnapshot(page);
+    upload = patternUploads(snapshot).at(-1).value;
+    assertClose(upload.params[3][0][2], 0.125, 0.03, "morph track should land in the midpoint of the Gate -> Triangle segment");
+    const trapezoidSamples = await readStutterEnvelopePathSamples(page, [0.1, 0.3, 0.7, 0.8]);
+    assert.ok(trapezoidSamples, "expected the stutter graph path to produce readable points");
+    assertClose(trapezoidSamples["0.30"], trapezoidSamples["0.70"], 2, "Gate -> Triangle midpoint should keep a flat plateau");
+    assert.ok(
+        trapezoidSamples["0.10"] > trapezoidSamples["0.30"] + 15,
+        `Gate -> Triangle midpoint should slope up from the left wall, got y=${trapezoidSamples["0.10"]} at 0.10 and y=${trapezoidSamples["0.30"]} at 0.30`,
+    );
+    assert.ok(
+        trapezoidSamples["0.80"] > trapezoidSamples["0.70"] + 10,
+        `Gate -> Triangle midpoint should slope down along the right wall, got y=${trapezoidSamples["0.80"]} at 0.80 and y=${trapezoidSamples["0.70"]} at 0.70`,
+    );
+
+    await page.locator('[data-role="seqfx-stutter-shape-stop"][data-stop="1"]').click();
+    const triangleSamples = await readStutterEnvelopePathSamples(page, [0.3]);
+    assert.ok(triangleSamples, "expected the triangle stutter graph path to produce readable points");
+    assert.ok(
+        triangleSamples["0.30"] > trapezoidSamples["0.30"] + 15,
+        `Triangle should collapse the trapezoid plateau, got y=${triangleSamples["0.30"]} at 0.30 vs trapezoid y=${trapezoidSamples["0.30"]}`,
+    );
+
+    await page.mouse.click(stutterGraphPoint(graphBox, 0.25).x, stutterGraphPoint(graphBox, 0.25).y);
+    snapshot = await getHarnessSnapshot(page);
+    upload = patternUploads(snapshot).at(-1).value;
+    assertClose(upload.params[3][0][3], 0.25, 0.03, "gate graph click should write gate");
+
+    await page.locator('[data-role="seqfx-stutter-shape-stop"][data-stop="4"]').click();
     snapshot = await getHarnessSnapshot(page);
     upload = patternUploads(snapshot).at(-1).value;
     assert.equal(upload.params[3][0][2], 1);
@@ -1276,13 +1427,13 @@ test("seqfx_stutter_editor_applies_shape_and_gate_to_selected_block_group", asyn
     const graphBox = await page.locator('[data-role="seqfx-stutter-graph"]').boundingBox();
     assert.ok(graphBox);
     await page.mouse.click(stutterGraphPoint(graphBox, 0.4).x, stutterGraphPoint(graphBox, 0.4).y);
-    await page.locator('[data-role="seqfx-stutter-shape-stop"][data-stop="3"]').click();
+    await page.locator('[data-role="seqfx-stutter-shape-stop"][data-stop="2"]').click();
 
     const snapshot = await getHarnessSnapshot(page);
     const upload = patternUploads(snapshot).at(-1).value;
     assert.deepEqual(
         [1, 2, 6, 7].map((step) => upload.params[3][step][2]),
-        [0.6, 0.6, 0.6, 0.6],
+        [0.5, 0.5, 0.5, 0.5],
     );
     assert.deepEqual(
         [1, 2, 6, 7].map((step) => Number(upload.params[3][step][3].toFixed(2))),

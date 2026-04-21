@@ -605,6 +605,143 @@ def test_aux_envelope_sweeps_crusher_bits_across_the_full_block(
     assert np.unique(early).size > np.unique(late).size * 3
 
 
+def test_aux_curve_shapes_render_distinct_stutter_gate_signatures(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    curve_names = {
+        0: "linear",
+        1: "ease",
+        2: "exp",
+        3: "log",
+        4: "bell",
+        5: "hold",
+    }
+    expected_audibility = {
+        "linear": {"step1_65": True, "step1_70": False, "step1_95": False, "step2_60": False, "step3_45": False},
+        "ease": {"step1_65": True, "step1_70": True, "step1_95": False, "step2_60": False, "step3_45": False},
+        "exp": {"step1_65": True, "step1_70": True, "step1_95": False, "step2_60": True, "step3_45": False},
+        "log": {"step1_65": False, "step1_70": False, "step1_95": False, "step2_60": False, "step3_45": False},
+        "bell": {"step1_65": False, "step1_70": False, "step1_95": False, "step2_60": False, "step3_45": True},
+        "hold": {"step1_65": True, "step1_70": True, "step1_95": True, "step2_60": False, "step3_45": False},
+    }
+
+    upload = _empty_upload()
+    for step in range(4):
+        _activate_step(
+            upload,
+            lane=LANE_STUTTER,
+            step=step,
+            trigger=(step == 0),
+            params=[4.0, 1.0, 0.0, 1.0],
+        )
+
+    frames = STEP_FRAMES * 4
+    mono = np.zeros(frames, dtype=np.float32)
+    n = np.arange(STEP_FRAMES, dtype=np.float64)
+    captured_slice = (
+        0.32 * np.sin(2.0 * np.pi * 330.0 * n / SAMPLE_RATE)
+        + 0.21 * np.sin(2.0 * np.pi * 870.0 * n / SAMPLE_RATE)
+    ).astype(np.float32)
+    mono[:STEP_FRAMES] = captured_slice
+    input_audio = np.column_stack([mono, mono]).astype(np.float32)
+
+    probe_windows = {
+        "step1_65": (STEP_FRAMES, 0.65),
+        "step1_70": (STEP_FRAMES, 0.70),
+        "step1_95": (STEP_FRAMES, 0.95),
+        "step2_60": (STEP_FRAMES * 2, 0.60),
+        "step3_45": (STEP_FRAMES * 3, 0.45),
+    }
+
+    def rms_for_window(samples: np.ndarray, step_start: int, local_phase: float) -> float:
+        center = step_start + int(STEP_FRAMES * local_phase)
+        half_width = 16
+        window = samples[center - half_width : center + half_width, 0]
+        return _rms(window)
+
+    reference_rms = {
+        name: _rms(
+            captured_slice[
+                int(STEP_FRAMES * local_phase) - 16 : int(STEP_FRAMES * local_phase) + 16
+            ]
+        )
+        for name, (_step_start, local_phase) in probe_windows.items()
+    }
+
+    for curve_index, curve_name in curve_names.items():
+        for step in range(4):
+            _set_aux(upload, lane=LANE_STUTTER, step=step, param=3, end=0.25, curve=curve_index)
+
+        output = _render(generated_runtime, tmp_path, input_audio, _base_schedule(upload))
+
+        for window_name, (step_start, local_phase) in probe_windows.items():
+            ratio = rms_for_window(output, step_start, local_phase) / max(reference_rms[window_name], 1.0e-6)
+            if expected_audibility[curve_name][window_name]:
+                assert ratio > 0.35, f"{curve_name} should stay audible in {window_name}, got ratio {ratio:.3f}"
+            else:
+                assert ratio < 0.08, f"{curve_name} should mute {window_name}, got ratio {ratio:.3f}"
+
+
+def test_aux_envelope_sweeps_crusher_hold_frames_across_the_full_block(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    upload = _empty_upload()
+    for step in range(4):
+        _activate_step(
+            upload,
+            lane=LANE_CRUSHER,
+            step=step,
+            trigger=(step == 0),
+            params=[16, 1, 0],
+        )
+        _set_aux(upload, lane=LANE_CRUSHER, step=step, param=1, end=64, curve=0)
+
+    input_audio = _ramp(STEP_FRAMES * 4)
+    output = _render(generated_runtime, tmp_path, input_audio, _base_schedule(upload))
+
+    early = np.round(output[400:1_400, 0], 6)
+    late = np.round(output[(STEP_FRAMES * 3) + 1_000 : (STEP_FRAMES * 3) + 2_000, 0], 6)
+    early_change_rate = float(np.count_nonzero(np.diff(early)) / max(1, early.size - 1))
+    late_change_rate = float(np.count_nonzero(np.diff(late)) / max(1, late.size - 1))
+
+    assert early_change_rate > late_change_rate * 8
+
+
+def test_aux_envelope_sweeps_crusher_drive_into_clipping_late_in_the_block(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    baseline_upload = _empty_upload()
+    aux_upload = _empty_upload()
+    for step in range(4):
+        for upload in (baseline_upload, aux_upload):
+            _activate_step(
+                upload,
+                lane=LANE_CRUSHER,
+                step=step,
+                trigger=(step == 0),
+                params=[16, 1, 0],
+            )
+        _set_aux(aux_upload, lane=LANE_CRUSHER, step=step, param=2, end=36, curve=0)
+
+    input_audio = _sine(STEP_FRAMES * 4, 330.0, amplitude=0.05)
+    baseline = _render(generated_runtime, tmp_path, input_audio, _base_schedule(baseline_upload))
+    modulated = _render(generated_runtime, tmp_path, input_audio, _base_schedule(aux_upload))
+
+    early_window = slice(200, 1_000)
+    late_window = slice((STEP_FRAMES * 3) + 1_000, (STEP_FRAMES * 3) + 1_800)
+    early_delta = _rms(modulated[early_window, 0] - baseline[early_window, 0])
+    late_delta = _rms(modulated[late_window, 0] - baseline[late_window, 0])
+    early_clip_fraction = float(np.mean(np.abs(modulated[early_window, 0]) > 0.95))
+    late_clip_fraction = float(np.mean(np.abs(modulated[late_window, 0]) > 0.95))
+
+    assert early_clip_fraction < 0.01
+    assert late_clip_fraction > 0.2
+    assert late_delta > early_delta * 8
+
+
 def test_monitor_reports_aux_phase_for_the_active_block(
     generated_runtime: GeneratedRuntime,
     tmp_path: Path,
@@ -1212,7 +1349,7 @@ def test_stutter_shape_changes_the_rendered_repeat_envelope(
     input_audio = np.column_stack([mono, mono]).astype(np.float32)
 
     gate_output = render_shape(0.0)
-    triangle_output = render_shape(0.4)
+    triangle_output = render_shape(0.25)
 
     slice_frames = (STEP_FRAMES * 2) // 4
     repeat_start = slice_frames
@@ -1229,6 +1366,46 @@ def test_stutter_shape_changes_the_rendered_repeat_envelope(
     assert triangle_attack_rms < gate_attack_rms * 0.72
     assert triangle_middle_rms > gate_middle_rms * 0.75
     assert envelope_delta > gate_attack_rms * 0.25
+
+
+def test_stutter_gate_to_triangle_segment_forms_a_trapezoid_before_triangle(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    def render_shape(shape: float) -> np.ndarray:
+        upload = _empty_upload()
+        for step in (0, 1):
+            _activate_step(
+                upload,
+                lane=LANE_STUTTER,
+                step=step,
+                trigger=(step == 0),
+                params=[4.0, 1.0, shape, 1.0],
+            )
+
+        return _render(generated_runtime, tmp_path, input_audio, _base_schedule(upload))
+
+    slice_frames = (STEP_FRAMES * 2) // 4
+    frames = STEP_FRAMES * 3
+    mono = np.zeros(frames, dtype=np.float32)
+    mono[:slice_frames] = 0.5
+    input_audio = np.column_stack([mono, mono]).astype(np.float32)
+
+    trapezoid_output = render_shape(0.125)
+    triangle_output = render_shape(0.25)
+
+    repeat_start = slice_frames
+
+    def sample_mean(samples: np.ndarray, phase: float) -> float:
+        center = repeat_start + int(slice_frames * phase)
+        window = samples[center - 8 : center + 8, 0]
+        return float(np.mean(window))
+
+    assert abs(sample_mean(trapezoid_output, 0.1) - 0.2) <= 0.03
+    assert abs(sample_mean(trapezoid_output, 0.3) - 0.5) <= 0.03
+    assert abs(sample_mean(trapezoid_output, 0.7) - 0.5) <= 0.03
+    assert abs(sample_mean(trapezoid_output, 0.8) - 0.4) <= 0.03
+    assert sample_mean(triangle_output, 0.3) < sample_mean(trapezoid_output, 0.3) * 0.75
 
 
 def test_stutter_live_upload_keeps_repeating_and_updates_envelope(
@@ -1260,7 +1437,7 @@ def test_stutter_live_upload_keeps_repeating_and_updates_envelope(
 
     schedule = _base_schedule(upload_with_envelope(revision=1, shape=0.0, gate=1.0))
     schedule[STEP_FRAMES + 300] = [
-        ["event", "patternUpload", upload_with_envelope(revision=2, shape=0.4, gate=0.45)]
+        ["event", "patternUpload", upload_with_envelope(revision=2, shape=0.25, gate=0.45)]
     ]
 
     output = _render(generated_runtime, tmp_path, input_audio, schedule)

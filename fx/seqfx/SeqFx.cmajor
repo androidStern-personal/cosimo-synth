@@ -138,30 +138,35 @@ namespace seqfx
         return smoothStep01 (stutterTentShape (u, peak));
     }
 
+    float32 stutterGateToTriangleShape (float32 u, float32 amount)
+    {
+        let safeU = clampFloat (u, 0.0f, 1.0f);
+        let safeAmount = clampFloat (amount, 0.0f, 1.0f);
+        let plateauHalfWidth = 0.5f * (1.0f - safeAmount);
+        let slopeWidth = 0.5f - plateauHalfWidth;
+        let distance = safeU >= 0.5f ? safeU - 0.5f : 0.5f - safeU;
+
+        if (distance <= plateauHalfWidth)
+            return 1.0f;
+
+        if (slopeWidth <= 0.000001f)
+            return 1.0f;
+
+        return clampFloat (1.0f - ((distance - plateauHalfWidth) / slopeWidth), 0.0f, 1.0f);
+    }
+
     float32 stutterBaseShape (int32 shapeIndex, float32 u)
     {
         if (shapeIndex == 0)
             return 1.0f;
 
         if (shapeIndex == 1)
-        {
-            let edge = 0.12f;
-            if (u < edge)
-                return smoothStep01 (u / edge);
-
-            if (u > 1.0f - edge)
-                return smoothStep01 ((1.0f - u) / edge);
-
-            return 1.0f;
-        }
-
-        if (shapeIndex == 2)
             return u < 0.5f ? 2.0f * u : 2.0f * (1.0f - u);
 
-        if (shapeIndex == 3)
+        if (shapeIndex == 2)
             return stutterSmoothBellShape (u, 0.5f);
 
-        if (shapeIndex == 4)
+        if (shapeIndex == 3)
             return 1.0f - u;
 
         return u;
@@ -176,22 +181,21 @@ namespace seqfx
             return 0.0f;
 
         let u = safePhase / safeGate;
-        let position = clampFloat (shape, 0.0f, 1.0f) * 5.0f;
+        let position = clampFloat (shape, 0.0f, 1.0f) * 4.0f;
         var shapeIndex = int32 (std::intrinsics::floor (position));
-        if (shapeIndex > 4)
-            shapeIndex = 4;
+        if (shapeIndex > 3)
+            shapeIndex = 3;
 
         let amount = position - float32 (shapeIndex);
 
-        if (shapeIndex < 2)
-            return (stutterBaseShape (shapeIndex, u) * (1.0f - amount))
-                + (stutterBaseShape (shapeIndex + 1, u) * amount);
+        if (shapeIndex == 0)
+            return stutterGateToTriangleShape (u, amount);
 
-        if (shapeIndex == 2)
+        if (shapeIndex == 1)
             return (stutterTentShape (u, 0.5f) * (1.0f - amount))
                 + (stutterSmoothBellShape (u, 0.5f) * amount);
 
-        if (shapeIndex == 3)
+        if (shapeIndex == 2)
         {
             let peak = 0.5f * (1.0f - amount);
             let roundness = 1.0f - amount;

@@ -101,6 +101,13 @@ class FakePatchConnection {
     }
 }
 
+class CmajorMissingStoredValuePatchConnection extends FakePatchConnection {
+    requestStoredStateValue(key) {
+        this.requestedStoredKeys.push(key);
+        this.emitStoredState(key, null);
+    }
+}
+
 function patternUploads(connection) {
     return connection.events.filter((event) => event.endpointID === "patternUpload");
 }
@@ -182,6 +189,25 @@ test("seqfx worker ignores old state keys and applies a default empty pattern wh
     assert.equal(upload.activeSteps.flat().some(Boolean), false);
     assert.deepEqual(connection.requestedStoredKeys, [SEQFX_STATE_KEY]);
     assert.deepEqual(connection.storedWrites, []);
+});
+
+test("seqfx worker treats Cmajor null stored-state response as missing seqfx.v4", () => {
+    const connection = new CmajorMissingStoredValuePatchConnection({
+        parameters: {
+            patternSelect: 0,
+        },
+    });
+    const service = createSeqFxWorkerService(connection);
+
+    service.start();
+
+    const uploads = patternUploads(connection);
+    assert.deepEqual(connection.requestedStoredKeys, [SEQFX_STATE_KEY]);
+    assert.equal(connection.storedWrites.length, 0);
+    assert.equal(uploads.length, 1);
+    assert.equal(uploads[0].value.patternIndex, 0);
+    assert.equal(uploads[0].value.authoritative, false);
+    assert.equal(uploads[0].value.activeSteps.flat().some(Boolean), false);
 });
 
 test("seqfx worker rejects old-shaped current seqfx state instead of normalizing missing aux", () => {

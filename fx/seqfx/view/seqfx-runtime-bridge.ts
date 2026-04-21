@@ -442,7 +442,7 @@ export class SeqFxRuntimeBridge {
     }
 
     private applyStoredState(rawState: unknown) {
-        const nextState = rawState === undefined
+        const nextState = rawState == null
             ? createDefaultSeqFxState()
             : parseStrictSeqFxStateV3(rawState);
 

@@ -1,8 +1,9 @@
 .editor-tick-slider {
+    container-type: inline-size;
     display: grid;
-    grid-template-columns: 68px minmax(0, 1fr) 120px;
+    grid-template-columns: 60px minmax(0, 1fr) 84px;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     padding: 6px 8px;
     border-top: 1px solid rgba(28, 28, 28, 0.18);
     color: var(--editor-surface-ink);
@@ -46,12 +47,14 @@
 }
 
 .editor-tick-slider__value {
+    min-width: 0;
     color: var(--editor-surface-ink);
     font-family: var(--editor-label-font);
     font-size: var(--editor-label-size-md);
     font-weight: var(--editor-label-weight);
     letter-spacing: var(--editor-label-letter-spacing);
     text-align: right;
+    white-space: nowrap;
 }
 
 .editor-tick-slider__track {
@@ -67,7 +70,7 @@
     left: 0;
     display: flex;
     align-items: stretch;
-    gap: 3px;
+    gap: 2px;
     height: 18px;
     pointer-events: none;
 }
@@ -75,7 +78,7 @@
 .editor-tick-slider__tick {
     flex: 1 1 0;
     min-width: 0;
-    min-height: 13px;
+    min-height: 14px;
     border-radius: 2px;
     background: rgba(28, 28, 28, 0.38);
 }
@@ -165,20 +168,22 @@
 
 .editor-tick-slider__mod-values {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 10px minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) 8px minmax(0, 1fr);
     align-items: center;
-    gap: 3px;
+    gap: 2px;
+    min-width: 0;
 }
 
 .editor-tick-slider__value-chip {
     min-width: 0;
     border-radius: 4px;
-    padding: 2px 4px;
+    padding: 1px 3px;
     color: var(--editor-surface-ink);
     font-family: var(--editor-label-font);
-    font-size: 10px;
+    font-size: 9px;
     font-weight: var(--editor-label-weight);
     text-align: center;
+    white-space: nowrap;
 }
 
 .editor-tick-slider__value-chip--start {
@@ -217,4 +222,24 @@
     background: var(--editor-accent-range);
     box-shadow: 0 0 0 2px rgba(244, 146, 58, 0.18);
     color: var(--editor-surface-ink);
+}
+
+@container (max-width: 280px) {
+    .editor-tick-slider {
+        grid-template-columns: 52px minmax(0, 1fr) 62px;
+        gap: 4px;
+    }
+
+    .editor-tick-slider__rail {
+        gap: 1px;
+    }
+
+    .editor-tick-slider__value-chip {
+        padding: 1px 2px;
+        font-size: 8px;
+    }
+
+    .editor-tick-slider__label {
+        gap: 4px;
+    }
 }

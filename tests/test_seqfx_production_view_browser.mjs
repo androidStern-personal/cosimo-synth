@@ -15,6 +15,10 @@ const VIEWPORT = {
     width: 1120,
     height: 680,
 };
+const STUTTER_GRAPH_VIEWBOX_WIDTH = 480;
+const STUTTER_GRAPH_VIEWBOX_HEIGHT = 220;
+const STUTTER_GRAPH_LEFT = 24;
+const STUTTER_GRAPH_PLOT_WIDTH = 432;
 
 let browser;
 let staticServer;
@@ -153,6 +157,55 @@ async function ensureSeqFxProductionRuntime() {
     runtimeBuilt = true;
 }
 
+async function readStutterEnvelopePathSamples(page, phases) {
+    return page.locator('[data-role="seqfx-stutter-editor"]').evaluate((node, targetPhases) => {
+        const path = node.querySelector('[data-role="seqfx-stutter-env-path"]');
+        const d = path?.getAttribute("d") ?? "";
+        const numbers = d.match(/-?\d+(?:\.\d+)?/g)?.map(Number) ?? [];
+        const points = [];
+
+        for (let index = 0; index + 1 < numbers.length; index += 2) {
+            points.push({ x: numbers[index], y: numbers[index + 1] });
+        }
+
+        if (points.length < 2) {
+            return null;
+        }
+
+        const left = points[0].x;
+        const right = points[points.length - 1].x;
+        const width = Math.max(1, right - left);
+
+        const sampleAtPhase = (phase) => {
+            let nearestPoint = points[0];
+            let nearestDistance = Number.POSITIVE_INFINITY;
+
+            for (const point of points) {
+                const pointPhase = (point.x - left) / width;
+                const distance = Math.abs(pointPhase - phase);
+
+                if (distance < nearestDistance) {
+                    nearestPoint = point;
+                    nearestDistance = distance;
+                }
+            }
+
+            return nearestPoint.y;
+        };
+
+        return Object.fromEntries(targetPhases.map((phase) => [phase.toFixed(2), sampleAtPhase(phase)]));
+    }, phases);
+}
+
+function stutterGraphPoint(graphBox, normalizedGate) {
+    const svgX = STUTTER_GRAPH_LEFT + (Math.min(1, Math.max(0, normalizedGate)) * STUTTER_GRAPH_PLOT_WIDTH);
+
+    return {
+        x: graphBox.x + ((svgX / STUTTER_GRAPH_VIEWBOX_WIDTH) * graphBox.width),
+        y: graphBox.y + ((110 / STUTTER_GRAPH_VIEWBOX_HEIGHT) * graphBox.height),
+    };
+}
+
 function patchConnectionSource() {
     return `
         class SeqFxProductionSmokePatchConnection {
@@ -269,6 +322,7 @@ function patchConnectionSource() {
 async function mountProductionView(page, {
     disableAbortController = false,
     hangDevStatusFetch = false,
+    breakPackagedModuleUrlConstructor = false,
     timeoutMs = 2_000,
 } = {}) {
     await page.goto(staticServerOrigin);
@@ -299,6 +353,7 @@ async function mountProductionView(page, {
         patchConnectionClassSource,
         disableAbortController: shouldDisableAbortController,
         hangDevStatusFetch: shouldHangDevStatusFetch,
+        breakPackagedModuleUrlConstructor: shouldBreakPackagedModuleUrlConstructor,
         timeoutMs: hostTimeoutMs,
     }) => {
         // eslint-disable-next-line no-new-func
@@ -318,6 +373,20 @@ async function mountProductionView(page, {
                     ? new Promise(() => {})
                     : originalFetch(input, init)
             );
+        }
+
+        if (shouldBreakPackagedModuleUrlConstructor) {
+            const OriginalURL = window.URL;
+            function BrokenPackagedModuleURL(url, base) {
+                if (url === "./app.js") {
+                    throw new Error("test URL constructor failure for packaged app module");
+                }
+
+                return new OriginalURL(url, base);
+            }
+            Object.setPrototypeOf(BrokenPackagedModuleURL, OriginalURL);
+            BrokenPackagedModuleURL.prototype = OriginalURL.prototype;
+            window.URL = BrokenPackagedModuleURL;
         }
 
         async function createPatchView(connection, preferredType) {
@@ -400,6 +469,7 @@ async function mountProductionView(page, {
         patchConnectionClassSource: patchConnectionSource(),
         disableAbortController,
         hangDevStatusFetch,
+        breakPackagedModuleUrlConstructor,
         timeoutMs,
     });
 }
@@ -565,6 +635,187 @@ test("SeqFX Cmajor host-flow mounts a visible UI instead of a black viewport", a
     }
 });
 
+test("SeqFX production shadow-root host exposes the shared editor token palette", async () => {
+    const page = await browser.newPage();
+
+    try {
+        const result = await mountProductionView(page);
+        assert.equal(result.timedOut, false, "expected Cmajor host-flow view creation to finish");
+        assert.equal(result.error, undefined, `expected Cmajor host-flow view creation not to throw: ${result.error}`);
+        assert.equal(result.noView, undefined, "expected Cmajor host-flow view creation to return a view");
+
+        const editorTokens = await page.evaluate(() => {
+            const host = document.querySelector("cosimo-seqfx-react-view");
+            const styles = host ? getComputedStyle(host) : null;
+
+            return {
+                surfaceBg: styles?.getPropertyValue("--editor-surface-bg").trim() ?? null,
+                surfaceInk: styles?.getPropertyValue("--editor-surface-ink").trim() ?? null,
+                accentStart: styles?.getPropertyValue("--editor-accent-start").trim() ?? null,
+                accentEnd: styles?.getPropertyValue("--editor-accent-end").trim() ?? null,
+                accentRange: styles?.getPropertyValue("--editor-accent-range").trim() ?? null,
+            };
+        });
+
+        assert.deepEqual(editorTokens, {
+            surfaceBg: "#e4ded3",
+            surfaceInk: "#1c1c1c",
+            accentStart: "#00b4d8",
+            accentEnd: "#e8604c",
+            accentRange: "#f2d16b",
+        });
+    } finally {
+        await page.close();
+    }
+});
+
+test("SeqFX packaged shadow-root flow renders the selected crusher and stutter inspectors", async () => {
+    const page = await browser.newPage();
+    const pageErrors = [];
+    page.on("pageerror", (error) => pageErrors.push(error));
+
+    try {
+        const result = await mountProductionView(page);
+        assert.equal(result.timedOut, false, "expected Cmajor host-flow view creation to finish");
+        assert.equal(result.error, undefined, `expected Cmajor host-flow view creation not to throw: ${result.error}`);
+        assert.equal(result.noView, undefined, "expected Cmajor host-flow view creation to return a view");
+
+        await page.getByRole("button", { name: "Chain 2 step 1", exact: true }).click();
+        await page.locator('[data-role="seqfx-crusher-editor"]').waitFor();
+
+        const crusherLayout = await page.locator('[data-role="seqfx-inspector"]').evaluate((node) => {
+            const editor = node.querySelector('[data-role="seqfx-crusher-editor"]');
+            const panel = editor?.querySelector(".seqfx-crusher-editor__panel");
+            const bitsRow = editor?.querySelector('[data-role="seqfx-crusher-bits-slider"]');
+            const bitsTrack = bitsRow?.querySelector(".editor-tick-slider__track");
+            const bitsValue = bitsRow?.querySelector('[data-role="seqfx-crusher-bits-value"]');
+            const holdRow = editor?.querySelector('[data-role="seqfx-crusher-hold-frames-slider"]');
+            const holdTrack = holdRow?.querySelector(".editor-tick-slider__track");
+            const holdTicks = holdRow?.querySelectorAll('[data-role="editor-tick-slider-tick"]') ?? [];
+            const firstHoldTick = holdTicks[0];
+            const lastHoldTick = holdTicks[holdTicks.length - 1];
+            const driveRow = node.querySelector(".seqfx-crusher-editor__drive");
+            const mixRow = node.querySelector('[data-role="seqfx-mix-row"]');
+            const panelStyle = panel ? getComputedStyle(panel) : null;
+
+            return {
+                backgroundColor: panelStyle?.backgroundColor ?? "",
+                color: panelStyle?.color ?? "",
+                bitsRowWidth: bitsRow?.getBoundingClientRect().width ?? 0,
+                bitsTrackWidth: bitsTrack?.getBoundingClientRect().width ?? 0,
+                bitsValueWidth: bitsValue?.getBoundingClientRect().width ?? 0,
+                holdRowWidth: holdRow?.getBoundingClientRect().width ?? 0,
+                holdTrackWidth: holdTrack?.getBoundingClientRect().width ?? 0,
+                holdTickWidth: firstHoldTick?.getBoundingClientRect().width ?? 0,
+                holdActiveColor: firstHoldTick ? getComputedStyle(firstHoldTick).backgroundColor : "",
+                holdInactiveColor: lastHoldTick ? getComputedStyle(lastHoldTick).backgroundColor : "",
+                driveHeight: driveRow?.getBoundingClientRect().height ?? 0,
+                mixGap: mixRow && driveRow
+                    ? mixRow.getBoundingClientRect().top - driveRow.getBoundingClientRect().bottom
+                    : 0,
+            };
+        });
+
+        assert.equal(crusherLayout.backgroundColor, "rgb(228, 222, 211)");
+        assert.equal(crusherLayout.color, "rgb(28, 28, 28)");
+        assert.ok(
+            crusherLayout.bitsTrackWidth > crusherLayout.bitsRowWidth * 0.45,
+            `crusher bits rail should keep most of the row, got ${crusherLayout.bitsTrackWidth}px of ${crusherLayout.bitsRowWidth}px`,
+        );
+        assert.ok(
+            crusherLayout.bitsValueWidth < crusherLayout.bitsRowWidth * 0.25,
+            `crusher bits readout should stay compact, got ${crusherLayout.bitsValueWidth}px of ${crusherLayout.bitsRowWidth}px`,
+        );
+        assert.ok(
+            crusherLayout.holdTrackWidth > crusherLayout.holdRowWidth * 0.45,
+            `crusher hold rail should keep most of the row, got ${crusherLayout.holdTrackWidth}px of ${crusherLayout.holdRowWidth}px`,
+        );
+        assert.ok(
+            crusherLayout.holdTickWidth >= 4,
+            `crusher hold ticks should remain visible in the production inspector, got ${crusherLayout.holdTickWidth}px`,
+        );
+        assert.notEqual(
+            crusherLayout.holdActiveColor,
+            crusherLayout.holdInactiveColor,
+            "crusher hold row should visibly distinguish active ticks from inactive ticks",
+        );
+
+        await page.locator('[data-role="seqfx-crusher-drive-db-mod-toggle"]').click();
+        const crusherDriveAfterToggle = await page.locator('[data-role="seqfx-inspector"]').evaluate((node) => {
+            const driveRow = node.querySelector(".seqfx-crusher-editor__drive");
+            const mixRow = node.querySelector('[data-role="seqfx-mix-row"]');
+
+            return {
+                driveHeight: driveRow?.getBoundingClientRect().height ?? 0,
+                mixGap: mixRow && driveRow
+                    ? mixRow.getBoundingClientRect().top - driveRow.getBoundingClientRect().bottom
+                    : 0,
+            };
+        });
+
+        assert.ok(
+            Math.abs(crusherDriveAfterToggle.driveHeight - crusherLayout.driveHeight) <= 1,
+            `crusher drive row height should stay stable in production, got ${crusherDriveAfterToggle.driveHeight}px after toggle vs ${crusherLayout.driveHeight}px before`,
+        );
+        assert.ok(
+            Math.abs(crusherDriveAfterToggle.mixGap - crusherLayout.mixGap) <= 1,
+            `crusher drive modulation should not change the gap above the mix row in production, got ${crusherDriveAfterToggle.mixGap}px after toggle vs ${crusherLayout.mixGap}px before`,
+        );
+
+        await page.getByRole("button", { name: "Chain 4 step 1", exact: true }).click();
+        await page.locator('[data-role="seqfx-stutter-editor"]').waitFor();
+        assert.deepEqual(
+            await page.locator('[data-role="seqfx-stutter-shape-stop"]').evaluateAll((nodes) => nodes.map((node) => node.textContent?.trim() ?? "")),
+            ["Gate", "Triangle", "Bell", "Down", "Up"],
+        );
+        assert.equal(await page.locator('[data-role="seqfx-stutter-shape-slider"]').count(), 0);
+        await page.locator('[data-role="seqfx-stutter-shape-mod-toggle"]').waitFor();
+        const graphBox = await page.locator('[data-role="seqfx-stutter-graph"]').boundingBox();
+        assert.ok(graphBox);
+        await page.mouse.click(stutterGraphPoint(graphBox, 1).x, stutterGraphPoint(graphBox, 1).y);
+        const morphBox = await page.locator('[data-role="seqfx-stutter-morph-track"]').boundingBox();
+        assert.ok(morphBox);
+        await page.mouse.click(morphBox.x + morphBox.width * 0.125, morphBox.y + morphBox.height / 2);
+        const trapezoidSamples = await readStutterEnvelopePathSamples(page, [0.1, 0.3, 0.7, 0.8]);
+        assert.ok(trapezoidSamples, "expected the packaged stutter graph path to produce readable points");
+        assert.ok(
+            Math.abs(trapezoidSamples["0.30"] - trapezoidSamples["0.70"]) <= 2,
+            `packaged Gate -> Triangle midpoint should keep a flat plateau, got y=${trapezoidSamples["0.30"]} at 0.30 and y=${trapezoidSamples["0.70"]} at 0.70`,
+        );
+        assert.ok(
+            trapezoidSamples["0.10"] > trapezoidSamples["0.30"] + 15,
+            `packaged Gate -> Triangle midpoint should slope up from the left wall, got y=${trapezoidSamples["0.10"]} at 0.10 and y=${trapezoidSamples["0.30"]} at 0.30`,
+        );
+        assert.ok(
+            trapezoidSamples["0.80"] > trapezoidSamples["0.70"] + 10,
+            `packaged Gate -> Triangle midpoint should slope down along the right wall, got y=${trapezoidSamples["0.80"]} at 0.80 and y=${trapezoidSamples["0.70"]} at 0.70`,
+        );
+
+        await page.locator('[data-role="seqfx-stutter-shape-stop"][data-stop="1"]').click();
+        const triangleSamples = await readStutterEnvelopePathSamples(page, [0.3]);
+        assert.ok(triangleSamples, "expected the packaged triangle graph path to produce readable points");
+        assert.ok(
+            triangleSamples["0.30"] > trapezoidSamples["0.30"] + 15,
+            `packaged triangle should collapse the trapezoid plateau, got y=${triangleSamples["0.30"]} at 0.30 vs trapezoid y=${trapezoidSamples["0.30"]}`,
+        );
+
+        const stutterEditorStyle = await page.locator('[data-role="seqfx-stutter-editor"]').evaluate((node) => {
+            const panel = node.querySelector(".seqfx-stutter-editor__panel");
+            const styles = panel ? getComputedStyle(panel) : null;
+            return {
+                backgroundColor: styles?.backgroundColor ?? "",
+                color: styles?.color ?? "",
+            };
+        });
+        assert.equal(stutterEditorStyle.backgroundColor, "rgb(228, 222, 211)");
+        assert.equal(stutterEditorStyle.color, "rgb(28, 28, 28)");
+
+        assert.deepEqual(pageErrors.map((error) => error.message), []);
+    } finally {
+        await page.close();
+    }
+});
+
 test("SeqFX Cmajor host-flow falls back to packaged UI when dev probe fetch cannot abort", async () => {
     const page = await browser.newPage();
 
@@ -576,6 +827,30 @@ test("SeqFX Cmajor host-flow falls back to packaged UI when dev probe fetch cann
         });
 
         assert.equal(result.timedOut, false, "expected Cmajor host-flow view creation to finish without AbortController");
+        assert.equal(result.error, undefined, `expected Cmajor host-flow view creation not to throw: ${result.error}`);
+        assert.equal(result.noView, undefined, "expected Cmajor host-flow view creation to return a view");
+        await page.waitForFunction(() => (
+            Boolean(
+                document.querySelector("cosimo-seqfx-react-view")
+                    ?.shadowRoot
+                    ?.querySelector('[data-role="seqfx-root"]'),
+            )
+        ));
+    } finally {
+        await page.close();
+    }
+});
+
+test("SeqFX Cmajor host-flow imports the packaged UI without constructing an absolute module URL", async () => {
+    const page = await browser.newPage();
+
+    try {
+        const result = await mountProductionView(page, {
+            breakPackagedModuleUrlConstructor: true,
+            timeoutMs: 1_500,
+        });
+
+        assert.equal(result.timedOut, false, "expected Cmajor host-flow view creation to finish without URL construction");
         assert.equal(result.error, undefined, `expected Cmajor host-flow view creation not to throw: ${result.error}`);
         assert.equal(result.noView, undefined, "expected Cmajor host-flow view creation to return a view");
         await page.waitForFunction(() => (

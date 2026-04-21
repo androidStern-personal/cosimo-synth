@@ -93,14 +93,21 @@
 
 .seqfx-crusher-editor__drive-head {
     display: grid;
-    grid-template-columns: auto 1fr;
-    gap: 6px;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 6px 8px;
     margin: 0;
 }
 
 .seqfx-crusher-editor__drive-value {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    min-width: 0;
+    min-height: 20px;
     color: var(--editor-surface-ink);
     text-align: right;
+    white-space: nowrap;
 }
 
 .seqfx-crusher-editor__drive-track {
@@ -169,10 +176,12 @@
 
 .seqfx-crusher-editor__drive-value--modulated {
     display: inline-grid;
-    grid-template-columns: auto auto auto;
+    grid-auto-flow: column;
+    grid-auto-columns: max-content;
     align-items: center;
     justify-content: end;
     gap: 3px;
+    white-space: nowrap;
 }
 
 .seqfx-crusher-editor__drive-chip {
@@ -184,6 +193,7 @@
     font-weight: var(--editor-label-weight);
     letter-spacing: var(--editor-label-letter-spacing);
     text-transform: uppercase;
+    white-space: nowrap;
 }
 
 .seqfx-crusher-editor__drive-chip--start {

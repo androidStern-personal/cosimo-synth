@@ -452,7 +452,7 @@ test("default_seqfx_state_contains_twelve_complete_four_lane_patterns", () => {
     assert.equal(upload.params[0][0].length, SEQFX_PARAM_COUNT);
     assert.equal(upload.params[SEQFX_LANES.stutter][0][0], 8);
     assert.equal(upload.params[SEQFX_LANES.stutter][0][1], 1);
-    assert.equal(upload.params[SEQFX_LANES.stutter][0][2], 0.55);
+    assert.equal(upload.params[SEQFX_LANES.stutter][0][2], 0.4375);
     assert.equal(upload.params[SEQFX_LANES.stutter][0][3], 0.68);
 });
 

@@ -10,6 +10,7 @@
  * the two files must be kept consistent with each other.
  */
 
+:host,
 :where(.editor-tokens),
 :root {
     /* Surface */
