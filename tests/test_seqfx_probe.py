@@ -1408,6 +1408,135 @@ def test_stutter_gate_to_triangle_segment_forms_a_trapezoid_before_triangle(
     assert sample_mean(triangle_output, 0.3) < sample_mean(trapezoid_output, 0.3) * 0.75
 
 
+def test_stutter_capture_output_keeps_a_raw_attack_but_matches_the_repeat_release_tail(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    upload = _empty_upload()
+    for step in (0, 1):
+        _activate_step(
+            upload,
+            lane=LANE_STUTTER,
+            step=step,
+            trigger=(step == 0),
+            params=[4.0, 1.0, 0.25, 1.0],
+        )
+
+    slice_frames = (STEP_FRAMES * 2) // 4
+    frames = STEP_FRAMES * 3
+    mono = np.zeros(frames, dtype=np.float32)
+    mono[:slice_frames] = 0.5
+    input_audio = np.column_stack([mono, mono]).astype(np.float32)
+
+    output = _render(generated_runtime, tmp_path, input_audio, _base_schedule(upload))
+
+    capture_start = 0
+    repeat_start = slice_frames
+
+    def sample_mean(start_frame: int, phase: float) -> float:
+        center = start_frame + int(slice_frames * phase)
+        window = output[center - 8 : center + 8, 0]
+        return float(np.mean(window))
+
+    capture_attack = sample_mean(capture_start, 0.25)
+    capture_release = sample_mean(capture_start, 0.75)
+    repeat_attack = sample_mean(repeat_start, 0.25)
+    repeat_release = sample_mean(repeat_start, 0.75)
+
+    assert abs(capture_attack - 0.5) <= 0.03
+    assert abs(repeat_attack - 0.25) <= 0.03
+    assert abs(capture_release - 0.25) <= 0.03
+    assert abs(repeat_release - 0.25) <= 0.03
+    assert abs(capture_release - repeat_release) <= 0.02
+
+
+def test_stutter_capture_release_tail_respects_the_current_gate_length(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    upload = _empty_upload()
+    for step in (0, 1):
+        _activate_step(
+            upload,
+            lane=LANE_STUTTER,
+            step=step,
+            trigger=(step == 0),
+            params=[4.0, 1.0, 0.25, 0.6],
+        )
+
+    slice_frames = (STEP_FRAMES * 2) // 4
+    frames = STEP_FRAMES * 3
+    mono = np.zeros(frames, dtype=np.float32)
+    mono[:slice_frames] = 0.5
+    input_audio = np.column_stack([mono, mono]).astype(np.float32)
+
+    output = _render(generated_runtime, tmp_path, input_audio, _base_schedule(upload))
+
+    capture_start = 0
+    repeat_start = slice_frames
+
+    def sample_mean(start_frame: int, phase: float) -> float:
+        center = start_frame + int(slice_frames * phase)
+        window = output[center - 8 : center + 8, 0]
+        return float(np.mean(window))
+
+    capture_before_release = sample_mean(capture_start, 0.2)
+    capture_release = sample_mean(capture_start, 0.4)
+    capture_after_gate = sample_mean(capture_start, 0.7)
+    repeat_release = sample_mean(repeat_start, 0.4)
+
+    assert abs(capture_before_release - 0.5) <= 0.03
+    assert abs(capture_release - (1.0 / 3.0)) <= 0.04
+    assert abs(repeat_release - (1.0 / 3.0)) <= 0.04
+    assert abs(capture_release - repeat_release) <= 0.02
+    assert abs(capture_after_gate) <= 0.03
+
+
+def test_stutter_capture_release_tail_tracks_faster_repeat_timing(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    upload = _empty_upload()
+    for step in (0, 1):
+        _activate_step(
+            upload,
+            lane=LANE_STUTTER,
+            step=step,
+            trigger=(step == 0),
+            params=[4.0, 2.0, 0.25, 1.0],
+        )
+
+    slice_frames = (STEP_FRAMES * 2) // 4
+    frames = STEP_FRAMES * 3
+    mono = np.zeros(frames, dtype=np.float32)
+    mono[:slice_frames] = 0.5
+    input_audio = np.column_stack([mono, mono]).astype(np.float32)
+
+    output = _render(generated_runtime, tmp_path, input_audio, _base_schedule(upload))
+
+    capture_start = 0
+    repeat_start = slice_frames
+
+    def sample_mean(start_frame: int, phase: float) -> float:
+        center = start_frame + int(slice_frames * phase)
+        window = output[center - 8 : center + 8, 0]
+        return float(np.mean(window))
+
+    capture_attack = sample_mean(capture_start, 0.125)
+    capture_release = sample_mean(capture_start, 0.375)
+    capture_after_gate = sample_mean(capture_start, 0.48)
+    repeat_release = sample_mean(repeat_start, 0.375)
+    repeat_after_gate = sample_mean(repeat_start, 0.48)
+
+    assert abs(capture_attack - 0.5) <= 0.03
+    assert abs(capture_release - 0.25) <= 0.03
+    assert abs(repeat_release - 0.25) <= 0.03
+    assert abs(capture_release - repeat_release) <= 0.02
+    assert abs(capture_after_gate - repeat_after_gate) <= 0.02
+    assert abs(capture_after_gate) <= 0.06
+    assert abs(repeat_after_gate) <= 0.06
+
+
 def test_stutter_live_upload_keeps_repeating_and_updates_envelope(
     generated_runtime: GeneratedRuntime,
     tmp_path: Path,

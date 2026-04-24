@@ -213,6 +213,24 @@ namespace seqfx
         return std::intrinsics::pow (u, exponent);
     }
 
+    float32 stutterCaptureEnvelopeAt (float32 phase, float32 shape, float32 gate, float32 playbackSpeed)
+    {
+        let safeGate = clampFloat (gate, 0.0f, 1.0f);
+        let safePhase = clampFloat (phase, 0.0f, 1.0f);
+        let safePlaybackSpeed = clampFloat (playbackSpeed, 0.5f, 2.0f);
+
+        if (safeGate <= 0.0f)
+            return 0.0f;
+
+        let releaseStart = safeGate * 0.5f;
+        let repeatPhase = clampFloat (safePhase * safePlaybackSpeed, 0.0f, 1.0f);
+
+        if (repeatPhase < releaseStart)
+            return 1.0f;
+
+        return stutterEnvelopeAt (repeatPhase, shape, safeGate);
+    }
+
     float32 tapeStopSpeedAt (float32 elapsedFrames, float32 stopPointFrames, float32 curvePower)
     {
         let safeStopPoint = std::intrinsics::max (1.0f, stopPointFrames);
@@ -1350,10 +1368,26 @@ processor SeqFx [[ main ]]
     {
         stutterMixCurrent[lane] = seqfx::moveTowards (stutterMixCurrent[lane], stutterMixTarget[lane], 1.0f / 64.0f);
 
+        let currentPlaybackSpeed = seqfx::clampFloat (auxParamValue (lane, 1, stutterPlaybackSpeed[lane]), 0.5f, 2.0f);
+        let currentShape = seqfx::clampFloat (auxParamValue (lane, 2, stutterShape[lane]), 0.0f, 1.0f);
+        let currentGate = seqfx::clampFloat (auxParamValue (lane, 3, stutterGate[lane]), 0.0f, 1.0f);
+
         if (stutterCapturing[lane])
         {
+            let capturePhase = seqfx::clampFloat (
+                stutterCaptureFrames[lane] / std::intrinsics::max (1.0f, stutterReadLength[lane]),
+                0.0f,
+                1.0f
+            );
+            let captureEnvelope = seqfx::stutterCaptureEnvelopeAt (
+                capturePhase,
+                currentShape,
+                currentGate,
+                currentPlaybackSpeed
+            );
             captureStutterSample (lane, stage);
-            return stage;
+            let captureOut = stage * captureEnvelope;
+            return stage + ((captureOut - stage) * stutterMixCurrent[lane]);
         }
 
         if (stutterMixCurrent[lane] <= 0.00001f || ! stutterPlaying[lane])
@@ -1378,8 +1412,6 @@ processor SeqFx [[ main ]]
             0.0f,
             1.0f
         );
-        let currentShape = seqfx::clampFloat (auxParamValue (lane, 2, stutterShape[lane]), 0.0f, 1.0f);
-        let currentGate = seqfx::clampFloat (auxParamValue (lane, 3, stutterGate[lane]), 0.0f, 1.0f);
         let stutterEnvelope = seqfx::stutterEnvelopeAt (stutterPhase, currentShape, currentGate);
 
         if (stutterPhaseFrames[lane] > stutterReadLength[lane] - crossfadeFrames)
@@ -1391,7 +1423,6 @@ processor SeqFx [[ main ]]
 
         stutterOut *= stutterEnvelope;
 
-        let currentPlaybackSpeed = seqfx::clampFloat (auxParamValue (lane, 1, stutterPlaybackSpeed[lane]), 0.5f, 2.0f);
         stutterPhaseFrames[lane] += currentPlaybackSpeed;
 
         while (stutterPhaseFrames[lane] >= stutterReadLength[lane])
