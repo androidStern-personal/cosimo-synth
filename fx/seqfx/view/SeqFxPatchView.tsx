@@ -367,9 +367,9 @@ function buildStepNumbers() {
 }
 
 const STEP_NUMBERS = buildStepNumbers();
-const SEQFX_NORMAL_GAP_PX = 5;
-const SEQFX_BEAT_GAP_PX = 9;
-const SEQFX_MIN_CELL_SIZE_PX = 22;
+const SEQFX_NORMAL_GAP_PX = 3;
+const SEQFX_BEAT_GAP_PX = 5;
+const SEQFX_MIN_CELL_SIZE_PX = 12;
 const SEQFX_RATE_CELLS_PER_BEAT = [2, 4, 8] as const;
 const SEQFX_BEATS_PER_BAR = 4;
 function cellsPerBeatForRateIndex(rateIndex: number) {
@@ -2665,9 +2665,8 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
         <main className={gestureState ? "seqfx-root is-dragging" : "seqfx-root"} data-role="seqfx-root">
             <SeqFxPresetBarHost bridge={bridge} patchConnection={patchConnection} />
 
-            <section className="seqfx-topbar" aria-label="SeqFX transport and pattern controls">
+            <section className="seqfx-topbar" aria-label="SeqFX pattern controls">
                 <div className="seqfx-title">
-                    <span className="seqfx-kicker">Cosimo</span>
                     <h1>SeqFX</h1>
                 </div>
                 <div className="seqfx-patterns" role="group" aria-label="Patterns">
@@ -2684,30 +2683,6 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
                             {index + 1}
                         </button>
                     ))}
-                </div>
-                <label className="seqfx-draw-effect">
-                    <span>Draw</span>
-                    <select
-                        aria-label="Effect to draw into chain steps"
-                        data-role="seqfx-draw-effect"
-                        onChange={(event) => {
-                            const nextValue = Number(event.currentTarget.value);
-                            setDrawEffectType(nextValue === 0 ? null : nextValue as SeqFxEffectType);
-                        }}
-                        value={drawEffectType ?? 0}
-                    >
-                        <option value={0}>Chain default</option>
-                        {EFFECT_OPTIONS.map((effectType) => (
-                            <option key={effectType} value={effectType}>
-                                {SEQFX_EFFECT_TYPE_NAMES[effectType]}
-                            </option>
-                        ))}
-                    </select>
-                </label>
-                <div className="seqfx-transport" role="group" aria-label="Internal clock">
-                    <button type="button" onClick={() => bridge.playInternal()}>Play</button>
-                    <button type="button" onClick={() => bridge.stopInternal()}>Stop</button>
-                    <button type="button" onClick={() => bridge.resetInternal()}>Reset</button>
                 </div>
             </section>
 

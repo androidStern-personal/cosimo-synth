@@ -12,9 +12,9 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."
 const SEQFX_STEP_COUNT = 32;
 const SEQFX_STATE_KEY = "seqfx.v4";
 const SEQFX_SNAPSHOT_BANK_STATE_KEY = "cosimo.effectSnapshotBank.seqfx.v1";
-const SEQFX_NORMAL_GAP_PX = 5;
-const SEQFX_BEAT_GAP_PX = 9;
-const SEQFX_MIN_CELL_SIZE_PX = 22;
+const SEQFX_NORMAL_GAP_PX = 3;
+const SEQFX_BEAT_GAP_PX = 5;
+const SEQFX_MIN_CELL_SIZE_PX = 12;
 const SEQFX_EFFECT_TYPES = {
     filter: 1,
     crusher: 2,
@@ -715,6 +715,68 @@ test("seqfx_vite_dev_server_serves_a_stable_browser_harness_page", async () => {
     assertClose(measuredText.find((entry) => entry.label === "filterReadout").width, 80.5781, 0.2, "Avenir Next filter readout width");
     await page.getByRole("button", { name: "Chain 3 step 1", exact: true }).click();
     await page.locator('[data-role="seqfx-tape-graph"]').waitFor();
+
+    await page.close();
+});
+
+test("seqfx_topbar_keeps_patterns_on_one_row_without_duplicate_draw_or_transport_controls", async () => {
+    const page = await browser.newPage({ viewport: { width: 567, height: 776 } });
+    await loadSeqFxHarness(page);
+    await page.locator('[data-role="seqfx-root"]').waitFor();
+    await page.getByRole("button", { name: "Chain 1 step 1", exact: true }).click();
+
+    const layout = await page.evaluate(() => {
+        const rectFor = (selector) => {
+            const element = document.querySelector(selector);
+            if (!element) {
+                return null;
+            }
+
+            const rect = element.getBoundingClientRect();
+            return {
+                height: rect.height,
+                left: rect.left,
+                top: rect.top,
+                right: rect.right,
+            };
+        };
+        const topbar = document.querySelector(".seqfx-topbar");
+        const patternTops = Array.from(document.querySelectorAll('[data-role="seqfx-pattern"]'))
+            .map((button) => Math.round(button.getBoundingClientRect().top));
+        const patternRects = Array.from(document.querySelectorAll('[data-role="seqfx-pattern"]'))
+            .map((button) => button.getBoundingClientRect());
+        const inspectorHeading = document.querySelector(".seqfx-inspector-heading strong");
+
+        return {
+            drawControlCount: document.querySelectorAll('[data-role="seqfx-draw-effect"], .seqfx-draw-effect').length,
+            grid: rectFor(".seqfx-grid-shell"),
+            inspectorHeading: rectFor(".seqfx-inspector-heading strong"),
+            inspectorHeadingFontSize: inspectorHeading ? getComputedStyle(inspectorHeading).fontSize : null,
+            laneLabelDisplay: getComputedStyle(document.querySelector(".seqfx-lane-label")).display,
+            laneTrack: rectFor(".seqfx-lane-track"),
+            lastPatternRight: patternRects.at(-1)?.right ?? null,
+            patternButtonCount: patternTops.length,
+            patternRowCount: new Set(patternTops).size,
+            patterns: rectFor(".seqfx-patterns"),
+            title: rectFor(".seqfx-title"),
+            topbarText: topbar?.textContent ?? "",
+            topbar: rectFor(".seqfx-topbar"),
+            transportControlCount: document.querySelectorAll('.seqfx-transport, [aria-label="Internal clock"]').length,
+        };
+    });
+
+    assert.equal(layout.drawControlCount, 0);
+    assert.equal(layout.transportControlCount, 0);
+    assert.equal(layout.topbarText.includes("Cosimo"), false);
+    assert.equal(layout.patternButtonCount, 12);
+    assert.equal(layout.patternRowCount, 1);
+    assert.ok(layout.topbar.height <= 42, `expected compact topbar, got ${layout.topbar.height}px`);
+    assert.ok(layout.patterns.left >= layout.title.right, "pattern buttons should sit to the right of the title");
+    assert.ok(layout.lastPatternRight <= layout.patterns.right + 1, "all pattern buttons should be visible at 567px");
+    assert.equal(layout.laneLabelDisplay, "none");
+    assert.ok(layout.laneTrack.left - layout.grid.left <= 12, "grid cells should start near the shell's left edge");
+    assert.equal(layout.inspectorHeadingFontSize, "13px");
+    assert.ok(layout.inspectorHeading.height <= 18, `expected compact inspector heading, got ${layout.inspectorHeading.height}px`);
 
     await page.close();
 });
