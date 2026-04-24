@@ -746,6 +746,10 @@ test("seqfx_topbar_keeps_patterns_on_one_row_without_duplicate_draw_or_transport
         const patternRects = Array.from(document.querySelectorAll('[data-role="seqfx-pattern"]'))
             .map((button) => button.getBoundingClientRect());
         const inspectorHeading = document.querySelector(".seqfx-inspector-heading strong");
+        const presetRow = document.querySelector(".seqfx-preset-row");
+        const effectHeader = presetRow?.querySelector("cosimo-effect-header");
+        const snapshotBar = effectHeader?.shadowRoot?.querySelector("cosimo-snapshot-bar");
+        const snapshotLabel = snapshotBar?.shadowRoot?.querySelector(".snapshot-label");
 
         return {
             drawControlCount: document.querySelectorAll('[data-role="seqfx-draw-effect"], .seqfx-draw-effect').length,
@@ -758,15 +762,26 @@ test("seqfx_topbar_keeps_patterns_on_one_row_without_duplicate_draw_or_transport
             patternButtonCount: patternTops.length,
             patternRowCount: new Set(patternTops).size,
             patterns: rectFor(".seqfx-patterns"),
+            presetRow: rectFor(".seqfx-preset-row"),
+            rootPadding: getComputedStyle(document.querySelector('[data-role="seqfx-root"]')).padding,
+            snapshotCameraIconCount: snapshotLabel?.querySelectorAll(".snapshot-camera-icon").length ?? 0,
+            snapshotLabelText: snapshotLabel?.textContent?.trim() ?? null,
             title: rectFor(".seqfx-title"),
             topbarText: topbar?.textContent ?? "",
             topbar: rectFor(".seqfx-topbar"),
             transportControlCount: document.querySelectorAll('.seqfx-transport, [aria-label="Internal clock"]').length,
+            viewportWidth: window.innerWidth,
         };
     });
 
     assert.equal(layout.drawControlCount, 0);
     assert.equal(layout.transportControlCount, 0);
+    assert.equal(layout.rootPadding, "0px");
+    assert.ok(layout.presetRow.top <= 0.5, `preset row should touch the top edge, got ${layout.presetRow.top}px`);
+    assert.ok(layout.presetRow.left <= 0.5, `preset row should touch the left edge, got ${layout.presetRow.left}px`);
+    assert.ok(layout.presetRow.right >= layout.viewportWidth - 0.5, `preset row should touch the right edge, got ${layout.presetRow.right}px`);
+    assert.equal(layout.snapshotLabelText, "");
+    assert.equal(layout.snapshotCameraIconCount, 1);
     assert.equal(layout.topbarText.includes("Cosimo"), false);
     assert.equal(layout.patternButtonCount, 12);
     assert.equal(layout.patternRowCount, 1);
@@ -777,6 +792,58 @@ test("seqfx_topbar_keeps_patterns_on_one_row_without_duplicate_draw_or_transport
     assert.ok(layout.laneTrack.left - layout.grid.left <= 12, "grid cells should start near the shell's left edge");
     assert.equal(layout.inspectorHeadingFontSize, "13px");
     assert.ok(layout.inspectorHeading.height <= 18, `expected compact inspector heading, got ${layout.inspectorHeading.height}px`);
+
+    await page.close();
+});
+
+test("seqfx_grid_resizes_with_css_after_viewport_round_trip", async () => {
+    const page = await browser.newPage({ viewport: { width: 567, height: 776 } });
+    await loadSeqFxHarness(page);
+    await page.locator('[data-role="seqfx-root"]').waitFor();
+
+    const measureGrid = () => page.evaluate(() => {
+        const cell = document.querySelector('[data-role="seqfx-cell"][data-lane="0"][data-step="0"]');
+        const laneTrack = document.querySelector(".seqfx-lane-track");
+        const stepTrack = document.querySelector(".seqfx-step-track");
+        const shell = document.querySelector(".seqfx-grid-shell");
+        const cellRect = cell.getBoundingClientRect();
+        const laneRect = laneTrack.getBoundingClientRect();
+
+        return {
+            cellWidth: cellRect.width,
+            laneTrackDisplay: getComputedStyle(laneTrack).display,
+            laneTrackInlineStyle: laneTrack.getAttribute("style") ?? "",
+            laneTrackWidth: laneRect.width,
+            shellClientWidth: shell.clientWidth,
+            shellScrollWidth: shell.scrollWidth,
+            stepTrackDisplay: getComputedStyle(stepTrack).display,
+            stepTrackInlineStyle: stepTrack.getAttribute("style") ?? "",
+        };
+    });
+
+    const initial = await measureGrid();
+    await page.setViewportSize({ width: 1200, height: 776 });
+    await page.waitForFunction((initialCellWidth) => {
+        const cell = document.querySelector('[data-role="seqfx-cell"][data-lane="0"][data-step="0"]');
+        return cell && cell.getBoundingClientRect().width > initialCellWidth + 4;
+    }, initial.cellWidth);
+    const grown = await measureGrid();
+
+    await page.setViewportSize({ width: 567, height: 776 });
+    await page.waitForFunction((initialCellWidth) => {
+        const cell = document.querySelector('[data-role="seqfx-cell"][data-lane="0"][data-step="0"]');
+        return cell && Math.abs(cell.getBoundingClientRect().width - initialCellWidth) <= 1;
+    }, initial.cellWidth);
+    const shrunk = await measureGrid();
+
+    assert.equal(initial.laneTrackDisplay, "grid");
+    assert.equal(initial.stepTrackDisplay, "grid");
+    assert.equal(initial.laneTrackInlineStyle.includes("min-width"), false);
+    assert.equal(initial.stepTrackInlineStyle.includes("min-width"), false);
+    assert.ok(grown.cellWidth > initial.cellWidth + 4, "grid cells should grow with the viewport");
+    assertClose(shrunk.cellWidth, initial.cellWidth, 1, "grid cells should shrink back after viewport round trip");
+    assertClose(shrunk.laneTrackWidth, initial.laneTrackWidth, 1, "track width should shrink back after viewport round trip");
+    assert.ok(shrunk.shellScrollWidth <= shrunk.shellClientWidth + 1, "grid should not keep stale expanded scroll width");
 
     await page.close();
 });

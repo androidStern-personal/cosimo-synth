@@ -27,11 +27,19 @@ const SNAPSHOT_BAR_CSS = /* css */ `
   }
 
   .snapshot-label {
-    font-size: 9px;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
     color: rgba(239, 247, 238, 0.56);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     flex: 0 0 auto;
+    width: 18px;
+    height: 18px;
+  }
+
+  .snapshot-camera-icon {
+    display: block;
+    width: 15px;
+    height: 15px;
   }
 
   .snapshot-slots {
@@ -190,7 +198,12 @@ const SNAPSHOT_BAR_CSS = /* css */ `
 
 const SNAPSHOT_BAR_HTML = /* html */ `
   <div class="snapshot-panel" aria-label="A through G snapshots">
-    <strong class="snapshot-label">Snap</strong>
+    <span class="snapshot-label" aria-hidden="true">
+      <svg class="snapshot-camera-icon" viewBox="0 0 24 24" focusable="false">
+        <path d="M4 8.5h4l1.5-2h5l1.5 2h4v10H4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        <circle cx="12" cy="13.5" r="3" fill="none" stroke="currentColor" stroke-width="2"/>
+      </svg>
+    </span>
     <div class="snapshot-slots" data-el="slots"></div>
     <input class="snapshot-label-input" data-el="label-input" data-snapshot-label-input type="text" placeholder="select A-G" autocomplete="off" spellcheck="false" disabled>
     <span class="snapshot-message" data-el="message" data-snapshot-message data-tone="neutral" aria-live="polite"></span>
