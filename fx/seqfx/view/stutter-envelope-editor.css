@@ -6,7 +6,7 @@
 .seqfx-stutter-editor__panel {
     position: relative;
     container-type: inline-size;
-    border: 1px solid var(--editor-surface-border);
+    border: 0;
     color: var(--editor-surface-ink);
     background: var(--editor-surface-bg);
     overflow: hidden;

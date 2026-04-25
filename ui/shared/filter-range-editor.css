@@ -5,7 +5,7 @@
     width: 100%;
     max-width: 100%;
     min-height: 0;
-    border: 1px solid var(--editor-surface-border);
+    border: 0;
     background: var(--editor-surface-bg);
     /* Reserved vertical space below the plot for axis labels / handles.
        Must stay in sync with FILTER_RANGE_PLOT_BOTTOM_PADDING_* in the TSX. */

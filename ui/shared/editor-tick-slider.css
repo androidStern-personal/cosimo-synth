@@ -95,18 +95,6 @@
     background: var(--editor-accent-end);
 }
 
-.editor-tick-slider__tick.is-mod-start {
-    background: var(--editor-accent-start);
-}
-
-.editor-tick-slider__tick.is-mod-end {
-    background: var(--editor-accent-end);
-}
-
-.editor-tick-slider__tick.is-mod-between {
-    background: var(--editor-accent-range);
-}
-
 .editor-tick-slider__input {
     position: absolute;
     inset: 0;
@@ -122,14 +110,13 @@
     outline-offset: 2px;
 }
 
-.editor-tick-slider__mod-range {
-    position: absolute;
-    top: 5px;
+.editor-tick-slider__rail--mod-range {
     z-index: 1;
-    height: 12px;
-    border-radius: 3px;
+    overflow: hidden;
+}
+
+.editor-tick-slider__rail--mod-range .editor-tick-slider__tick {
     background: var(--editor-accent-range);
-    pointer-events: none;
 }
 
 .editor-tick-slider__mod-thumb {

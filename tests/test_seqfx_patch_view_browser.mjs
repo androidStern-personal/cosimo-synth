@@ -743,6 +743,11 @@ test("seqfx_topbar_keeps_patterns_on_one_row_without_duplicate_draw_or_transport
     await loadSeqFxHarness(page);
     await page.locator('[data-role="seqfx-root"]').waitFor();
     await page.getByRole("button", { name: "Chain 1 step 1", exact: true }).click();
+    const hoveredEffectOption = page.locator('[data-role="seqfx-effect-type-option"][data-effect-type="2"]');
+    await hoveredEffectOption.hover({ force: true });
+    await page.waitForFunction(() => (
+        document.querySelector('[data-role="seqfx-effect-type-option"][data-effect-type="2"]')?.matches(":hover") ?? false
+    ));
 
     const layout = await page.evaluate(() => {
         const rectFor = (selector) => {
@@ -766,23 +771,38 @@ test("seqfx_topbar_keeps_patterns_on_one_row_without_duplicate_draw_or_transport
             .map((button) => button.getBoundingClientRect());
         const inspectorHeading = document.querySelector(".seqfx-inspector-heading strong");
         const presetRow = document.querySelector(".seqfx-preset-row");
+        const gridShellStyle = getComputedStyle(document.querySelector(".seqfx-grid-shell"));
+        const inspectorStyle = getComputedStyle(document.querySelector('[data-role="seqfx-inspector"]'));
         const effectHeader = presetRow?.querySelector("cosimo-effect-header");
         const snapshotBar = effectHeader?.shadowRoot?.querySelector("cosimo-snapshot-bar");
         const snapshotLabel = snapshotBar?.shadowRoot?.querySelector(".snapshot-label");
+        const selectedEffectButton = document.querySelector(".seqfx-effect-picker__options button.is-selected");
+        const selectedEffectIcon = selectedEffectButton?.querySelector("svg");
+        const hoveredEffectButton = document.querySelector('[data-role="seqfx-effect-type-option"][data-effect-type="2"]');
+        const hoveredEffectIcon = hoveredEffectButton?.querySelector("svg");
 
         return {
             drawControlCount: document.querySelectorAll('[data-role="seqfx-draw-effect"], .seqfx-draw-effect').length,
             grid: rectFor(".seqfx-grid-shell"),
+            gridBackgroundColor: gridShellStyle.backgroundColor,
+            gridBorderTopStyle: gridShellStyle.borderTopStyle,
+            hoveredEffectIconColor: hoveredEffectIcon ? getComputedStyle(hoveredEffectIcon).color : "",
+            hoveredEffectIconFilter: hoveredEffectIcon ? getComputedStyle(hoveredEffectIcon).filter : "",
             inspectorHeading: rectFor(".seqfx-inspector-heading strong"),
             inspectorHeadingFontSize: inspectorHeading ? getComputedStyle(inspectorHeading).fontSize : null,
+            inspectorBorderTopStyle: inspectorStyle.borderTopStyle,
             laneLabelDisplay: getComputedStyle(document.querySelector(".seqfx-lane-label")).display,
             laneTrack: rectFor(".seqfx-lane-track"),
             lastPatternRight: patternRects.at(-1)?.right ?? null,
             patternButtonCount: patternTops.length,
             patternRowCount: new Set(patternTops).size,
             patterns: rectFor(".seqfx-patterns"),
+            presetRowBackgroundColor: getComputedStyle(presetRow).backgroundColor,
             presetRow: rectFor(".seqfx-preset-row"),
+            rootBackgroundColor: getComputedStyle(document.querySelector('[data-role="seqfx-root"]')).backgroundColor,
             rootPadding: getComputedStyle(document.querySelector('[data-role="seqfx-root"]')).padding,
+            selectedEffectIconColor: selectedEffectIcon ? getComputedStyle(selectedEffectIcon).color : "",
+            selectedEffectIconFilter: selectedEffectIcon ? getComputedStyle(selectedEffectIcon).filter : "",
             snapshotCameraIconCount: snapshotLabel?.querySelectorAll(".snapshot-camera-icon").length ?? 0,
             snapshotLabelText: snapshotLabel?.textContent?.trim() ?? null,
             title: rectFor(".seqfx-title"),
@@ -795,7 +815,16 @@ test("seqfx_topbar_keeps_patterns_on_one_row_without_duplicate_draw_or_transport
 
     assert.equal(layout.drawControlCount, 0);
     assert.equal(layout.transportControlCount, 0);
+    assert.equal(layout.rootBackgroundColor, "rgb(228, 222, 211)");
+    assert.equal(layout.presetRowBackgroundColor, "rgb(16, 25, 35)");
     assert.equal(layout.rootPadding, "0px");
+    assert.equal(layout.gridBackgroundColor, "rgba(0, 0, 0, 0)");
+    assert.equal(layout.gridBorderTopStyle, "none");
+    assert.equal(layout.inspectorBorderTopStyle, "none");
+    assert.equal(layout.selectedEffectIconColor, "rgb(242, 209, 107)");
+    assert.match(layout.selectedEffectIconFilter, /drop-shadow/);
+    assert.equal(layout.hoveredEffectIconColor, "rgb(0, 180, 216)");
+    assert.match(layout.hoveredEffectIconFilter, /drop-shadow/);
     assert.ok(layout.presetRow.top <= 0.5, `preset row should touch the top edge, got ${layout.presetRow.top}px`);
     assert.ok(layout.presetRow.left <= 0.5, `preset row should touch the left edge, got ${layout.presetRow.left}px`);
     assert.ok(layout.presetRow.right >= layout.viewportWidth - 0.5, `preset row should touch the right edge, got ${layout.presetRow.right}px`);
@@ -1031,12 +1060,14 @@ test("seqfx_grid_cell_and_inspector_edits_send_complete_pattern_uploads", async 
 
         return {
             backgroundColor: style.backgroundColor,
+            borderTopStyle: style.borderTopStyle,
             editorWidth: node.getBoundingClientRect().width,
             editorScrollWidth: node.scrollWidth,
             inspectorWidth: inspector?.getBoundingClientRect().width ?? 0,
         };
     });
     assert.equal(sidebarFit.backgroundColor, "rgb(228, 222, 211)");
+    assert.equal(sidebarFit.borderTopStyle, "none");
     assert.ok(
         sidebarFit.editorWidth <= sidebarFit.inspectorWidth,
         `filter editor width ${sidebarFit.editorWidth} should fit inspector width ${sidebarFit.inspectorWidth}`,
@@ -1202,6 +1233,10 @@ test("seqfx_crusher_aux_controls_edit_source_targets_and_v6_storage", async () =
     await page.getByRole("button", { name: "Chain 2 step 1", exact: true }).click();
     await page.getByRole("button", { name: "Chain 2 Crusher block 1", exact: true }).waitFor();
     await page.locator('[data-role="seqfx-crusher-editor"]').waitFor();
+    assert.equal(
+        await page.locator(".seqfx-crusher-editor__panel").evaluate((node) => getComputedStyle(node).borderTopStyle),
+        "none",
+    );
     assert.equal(await page.locator('[data-role="seqfx-aux-source"]').count(), 0);
 
     const modToggle = await openSeqFxModView(page);
@@ -1300,14 +1335,24 @@ test("seqfx_mod_panel_uses_responsive_inspector_width_without_overflowing", asyn
         const auxSource = rectFor('[data-role="seqfx-aux-source"]');
         const auxPreview = rectFor(".aux-source__preview");
         const modTargets = rectFor('[data-role="seqfx-mod-targets"]');
+        const modToggleStyle = getComputedStyle(document.querySelector('[data-role="seqfx-mod-toggle"]'));
+        const modToggleBadgeStyle = getComputedStyle(document.querySelector('[data-role="seqfx-mod-target-badge"]'));
+        const auxSourceStyle = getComputedStyle(document.querySelector('[data-role="seqfx-aux-source"]'));
+        const modTargetsStyle = getComputedStyle(document.querySelector('[data-role="seqfx-mod-targets"]'));
 
         return {
             auxPreview,
             auxSource,
+            auxSourceBorderTopStyle: auxSourceStyle.borderTopStyle,
             effectPicker,
             inspector,
             modTargets,
+            modTargetsBorderTopStyle: modTargetsStyle.borderTopStyle,
             modToggle,
+            modToggleBackgroundColor: modToggleStyle.backgroundColor,
+            modToggleBadgeBackgroundColor: modToggleBadgeStyle.backgroundColor,
+            modToggleBadgeColor: modToggleBadgeStyle.color,
+            modToggleColor: modToggleStyle.color,
             rootScrollWidth: document.documentElement.scrollWidth,
             viewportWidth: window.innerWidth,
         };
@@ -1318,9 +1363,15 @@ test("seqfx_mod_panel_uses_responsive_inspector_width_without_overflowing", asyn
     assert.ok(layout.inspector.width >= 380, `responsive inspector should be wider than the old 300px column, got ${layout.inspector.width}px`);
     assert.ok(layout.modToggle.left >= layout.effectPicker.left, "mod button should stay inside the effect header");
     assert.ok(layout.modToggle.right <= layout.effectPicker.right + 1, `mod button overflowed effect header: ${layout.modToggle.right} > ${layout.effectPicker.right}`);
+    assert.equal(layout.modToggleBackgroundColor, "rgb(139, 191, 154)");
+    assert.equal(layout.modToggleColor, "rgb(28, 28, 28)");
+    assert.equal(layout.modToggleBadgeBackgroundColor, "rgb(242, 209, 107)");
+    assert.equal(layout.modToggleBadgeColor, "rgb(28, 28, 28)");
     assert.ok(layout.auxSource.left >= layout.inspector.left, "aux source should stay inside the inspector");
     assert.ok(layout.auxSource.right <= layout.inspector.right + 1, `aux source overflowed inspector: ${layout.auxSource.right} > ${layout.inspector.right}`);
+    assert.equal(layout.auxSourceBorderTopStyle, "none");
     assert.ok(layout.modTargets.right <= layout.inspector.right + 1, `mod targets overflowed inspector: ${layout.modTargets.right} > ${layout.inspector.right}`);
+    assert.equal(layout.modTargetsBorderTopStyle, "none");
     assert.ok(layout.auxPreview.height >= 42, `aux preview should be tall enough to read the curve, got ${layout.auxPreview.height}px`);
     assert.ok(layout.auxPreview.width / layout.auxPreview.height <= 12, `aux preview should not collapse into a thin strip, got ratio ${layout.auxPreview.width / layout.auxPreview.height}`);
     assert.ok(layout.rootScrollWidth <= layout.viewportWidth + 1, `page should not gain horizontal overflow, got ${layout.rootScrollWidth}px for ${layout.viewportWidth}px viewport`);
@@ -1425,6 +1476,10 @@ test("seqfx_stutter_aux_controls_edit_gate_slices_shape_and_speed_targets", asyn
     await page.getByRole("button", { name: "Chain 4 step 1", exact: true }).click();
     await page.getByRole("button", { name: "Chain 4 Stutter block 1", exact: true }).waitFor();
     await page.locator('[data-role="seqfx-stutter-editor"]').waitFor();
+    assert.equal(
+        await page.locator(".seqfx-stutter-editor__panel").evaluate((node) => getComputedStyle(node).borderTopStyle),
+        "none",
+    );
     assert.equal(await page.locator('[data-role="seqfx-aux-source"]').count(), 0);
     await openSeqFxModView(page);
 
@@ -1634,6 +1689,58 @@ test("seqfx_crusher_inspector_renders_waveform_editor_and_writes_params", async 
     assert.equal(upload.auxEnabled[1][0][CRUSHER_PARAM_DRIVE_DB], true);
     assert.equal(upload.auxEnd[1][0][CRUSHER_PARAM_DRIVE_DB], 36);
     assert.equal(await page.locator('[data-role="seqfx-mod-target-badge"]').textContent(), "1");
+
+    await setRangeInputValue(page.locator('[data-role="seqfx-crusher-hold-frames"]'), 8);
+    await page.locator('[data-role="seqfx-crusher-hold-frames-slider"] .editor-tick-slider__label--toggle').click();
+    const holdEndSlider = page.getByRole("slider", { name: "Hold end", exact: true });
+    await pressSliderKey(holdEndSlider, "End");
+    await holdEndSlider.focus();
+    await page.keyboard.down("Shift");
+    await page.keyboard.press("ArrowLeft");
+    await page.keyboard.up("Shift");
+    const holdModRange = await page.locator('[data-role="seqfx-crusher-hold-frames-slider"]').evaluate((node) => {
+        const baseTicks = Array.from(node.querySelectorAll('[data-role="editor-tick-slider-tick"]'));
+        const rangeRail = node.querySelector('[data-role="editor-tick-slider-mod-range-rail"]');
+        const rangeTicks = Array.from(rangeRail?.querySelectorAll(".editor-tick-slider__tick") ?? []);
+        const trackBounds = node.querySelector(".editor-tick-slider__track")?.getBoundingClientRect();
+        const startThumbBounds = node.querySelector(".editor-tick-slider__mod-thumb--start")?.getBoundingClientRect();
+        const endThumbBounds = node.querySelector(".editor-tick-slider__mod-thumb--end")?.getBoundingClientRect();
+        const handleCenters = [startThumbBounds, endThumbBounds].filter(Boolean).map((rect) => ((rect.left + rect.right) / 2));
+        const rangeStart = Number(rangeRail?.getAttribute("data-range-start"));
+        const rangeEnd = Number(rangeRail?.getAttribute("data-range-end"));
+        const clipLeftX = trackBounds ? trackBounds.left + ((trackBounds.width * rangeStart) / 100) : Number.NaN;
+        const clipRightX = trackBounds ? trackBounds.left + ((trackBounds.width * rangeEnd) / 100) : Number.NaN;
+
+        return {
+            baseTickCount: baseTicks.length,
+            clipLeftX,
+            clipPathStyle: rangeRail instanceof HTMLElement ? rangeRail.style.clipPath : "",
+            clipRightX,
+            connectorCount: node.querySelectorAll(".editor-tick-slider__mod-range").length,
+            highHandleX: Math.max(...handleCenters),
+            isModRangeClassCount: baseTicks.filter((tick) => tick.classList.contains("is-mod-range")).length,
+            lowHandleX: Math.min(...handleCenters),
+            rangeEnd,
+            rangeRailCount: node.querySelectorAll('[data-role="editor-tick-slider-mod-range-rail"]').length,
+            rangeStart,
+            rangeTickColor: rangeTicks[0] ? getComputedStyle(rangeTicks[0]).backgroundColor : "",
+            rangeTickCount: rangeTicks.length,
+        };
+    });
+    assert.equal(holdModRange.connectorCount, 0, "modulated tick sliders should not render a continuous yellow range bar");
+    assert.equal(holdModRange.isModRangeClassCount, 0, "base rail should not choose range cells with rounded tick indexes");
+    assert.equal(holdModRange.rangeRailCount, 1);
+    assert.equal(holdModRange.rangeTickCount, holdModRange.baseTickCount);
+    assert.equal(holdModRange.rangeTickColor, "rgb(242, 209, 107)");
+    assert.match(holdModRange.clipPathStyle, /^inset\(/);
+    assert.ok(
+        Math.abs(holdModRange.clipLeftX - holdModRange.lowHandleX) <= 1,
+        `yellow range clip should start at lower handle center, got ${holdModRange.clipLeftX} vs ${holdModRange.lowHandleX}`,
+    );
+    assert.ok(
+        Math.abs(holdModRange.clipRightX - holdModRange.highHandleX) <= 1,
+        `yellow range clip should end at upper handle center, got ${holdModRange.clipRightX} vs ${holdModRange.highHandleX}`,
+    );
 
     await page.close();
 });

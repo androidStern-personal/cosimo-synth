@@ -2,12 +2,18 @@
     display: block;
     width: 100%;
     height: 100%;
-    color: #eef2ef;
-    background: #151816;
+    color: var(--editor-surface-ink);
+    background: var(--editor-surface-bg);
     font-family: "Avenir Next", "Helvetica Neue", Arial, sans-serif;
     --seqfx-step-min: 12px;
     --seqfx-normal-gap: 3px;
     --seqfx-beat-gap: 5px;
+    --seqfx-shell-border: rgba(28, 28, 28, 0.16);
+    --seqfx-shell-border-strong: rgba(28, 28, 28, 0.28);
+    --seqfx-shell-panel-bg: rgba(28, 28, 28, 0.035);
+    --seqfx-shell-panel-bg-strong: rgba(28, 28, 28, 0.08);
+    --seqfx-shell-ink: var(--editor-surface-ink);
+    --seqfx-shell-ink-muted: var(--editor-surface-ink-muted);
 }
 
 * {
@@ -22,13 +28,17 @@ select {
 
 .seqfx-root {
     min-height: 100%;
-    background:
-        linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0) 260px),
-        #151816;
+    background: var(--editor-surface-bg);
 }
 
 .seqfx-preset-row {
     margin: 0 0 10px;
+    background: #101923;
+}
+
+.seqfx-preset-row cosimo-effect-header {
+    display: block;
+    background: #101923;
 }
 
 .seqfx-topbar {
@@ -37,7 +47,7 @@ select {
     align-items: center;
     gap: 8px;
     margin: 0 18px 12px;
-    border-bottom: 1px solid rgba(238, 242, 239, 0.12);
+    border-bottom: 1px solid var(--seqfx-shell-border);
     padding-bottom: 10px;
 }
 
@@ -49,7 +59,7 @@ select {
 
 .seqfx-title h1 {
     margin: 0;
-    color: #f6faf7;
+    color: var(--seqfx-shell-ink);
     font-size: 18px;
     line-height: 1;
     letter-spacing: 0;
@@ -69,19 +79,19 @@ select {
     flex: 0 0 auto;
     min-width: 28px;
     height: 28px;
-    border: 1px solid rgba(238, 242, 239, 0.14);
+    border: 1px solid var(--seqfx-shell-border);
     border-radius: 6px;
-    color: #d9e2dc;
+    color: var(--seqfx-shell-ink);
     font-size: 13px;
     font-weight: 700;
     line-height: 1;
-    background: rgba(255, 255, 255, 0.045);
+    background: var(--seqfx-shell-panel-bg);
     cursor: pointer;
     transition: transform 140ms ease, background-color 140ms ease, border-color 140ms ease;
 }
 
 .seqfx-pattern:hover {
-    border-color: rgba(139, 191, 154, 0.62);
+    border-color: rgba(28, 28, 28, 0.34);
     background: rgba(139, 191, 154, 0.12);
 }
 
@@ -107,14 +117,15 @@ select {
 .seqfx-grid-shell,
 .seqfx-inspector {
     min-width: 0;
-    border: 1px solid rgba(238, 242, 239, 0.12);
+    border: 0;
     border-radius: 8px;
-    background: rgba(255, 255, 255, 0.035);
+    background: var(--seqfx-shell-panel-bg);
 }
 
 .seqfx-grid-shell {
     overflow: auto;
     padding: 8px;
+    background: transparent;
     --seqfx-step-columns:
         repeat(7,
             minmax(var(--seqfx-step-min), 1fr) var(--seqfx-normal-gap)
@@ -183,7 +194,7 @@ select {
 .seqfx-lane-label {
     align-items: center;
     min-height: 28px;
-    color: #b7c5bc;
+    color: var(--seqfx-shell-ink-muted);
     font-size: 12px;
     font-weight: 700;
 }
@@ -201,7 +212,7 @@ select {
 }
 
 .seqfx-step-number {
-    color: rgba(238, 242, 239, 0.45);
+    color: rgba(28, 28, 28, 0.48);
     font-size: 9px;
     line-height: 1;
     text-align: center;
@@ -216,11 +227,11 @@ select {
     display: block;
     width: 100%;
     aspect-ratio: 1;
-    border: 1px solid rgba(238, 242, 239, 0.12);
+    border: 1px solid var(--seqfx-shell-border);
     border-radius: 3px;
     margin: 0;
     padding: 0;
-    background: rgba(255, 255, 255, 0.04);
+    background: var(--seqfx-shell-panel-bg);
     cursor: pointer;
     touch-action: none;
     user-select: none;
@@ -228,7 +239,7 @@ select {
 }
 
 .seqfx-cell.is-alt-bar {
-    background: rgba(255, 255, 255, 0.085);
+    background: var(--seqfx-shell-panel-bg-strong);
 }
 
 .seqfx-cell.is-covered {
@@ -345,7 +356,7 @@ select {
     bottom: 5px;
     width: 2px;
     border-radius: 999px;
-    background: rgba(246, 250, 247, 0.84);
+    background: rgba(28, 28, 28, 0.55);
     content: "";
     opacity: 0;
     transition: opacity 100ms ease;
@@ -357,12 +368,12 @@ select {
 }
 
 .seqfx-cell.is-selected {
-    outline: 2px solid #f6faf7;
+    outline: 2px solid var(--seqfx-shell-ink);
     outline-offset: 1px;
 }
 
 .seqfx-block.is-selected .seqfx-block-fill {
-    box-shadow: inset 0 0 0 1px #f6faf7;
+    box-shadow: inset 0 0 0 1px var(--seqfx-shell-ink);
     filter: brightness(1.07);
 }
 
@@ -377,7 +388,7 @@ select {
 }
 
 .seqfx-block.is-playhead .seqfx-block-fill {
-    box-shadow: inset 0 -3px 0 #f6faf7, inset 0 0 0 1px rgba(21, 24, 22, 0.28);
+    box-shadow: inset 0 -3px 0 var(--seqfx-shell-ink), inset 0 0 0 1px rgba(21, 24, 22, 0.28);
 }
 
 .seqfx-inspector {
@@ -387,7 +398,7 @@ select {
 }
 
 .seqfx-inspector-heading strong {
-    color: #f6faf7;
+    color: var(--seqfx-shell-ink);
     font-size: 13px;
     line-height: 1.2;
 }
@@ -395,7 +406,7 @@ select {
 .seqfx-empty,
 .seqfx-field small {
     margin: 0;
-    color: rgba(238, 242, 239, 0.62);
+    color: var(--seqfx-shell-ink-muted);
     font-size: 12px;
     line-height: 1.45;
 }
@@ -409,7 +420,7 @@ select {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    color: #d9e2dc;
+    color: var(--seqfx-shell-ink);
     font-size: 12px;
     font-weight: 700;
 }
@@ -427,7 +438,7 @@ select {
 .seqfx-field select {
     width: 100%;
     min-height: 34px;
-    border: 1px solid rgba(238, 242, 239, 0.14);
+    border: 1px solid var(--seqfx-shell-border-strong);
     border-radius: 7px;
     padding: 6px 9px;
     color: #eef2ef;
@@ -445,7 +456,7 @@ select {
 }
 
 .seqfx-field output {
-    color: #eef2ef;
+    color: var(--seqfx-shell-ink);
     font-family: Menlo, Monaco, monospace;
     font-size: 12px;
 }
@@ -454,7 +465,7 @@ select {
     display: grid;
     gap: 6px;
     padding: 10px 12px 12px;
-    border: 1px solid var(--editor-surface-border);
+    border: 0;
     background: var(--editor-surface-bg);
     color: var(--editor-surface-ink);
 }
@@ -584,7 +595,7 @@ select {
     width: 100%;
     min-width: 0;
     padding: 10px 12px 12px;
-    border: 1px solid var(--editor-surface-border);
+    border: 0;
     background: var(--editor-surface-bg);
     color: var(--editor-surface-ink);
 }
@@ -731,15 +742,30 @@ select {
     border: 0;
     border-radius: 6px;
     padding: 0;
-    color: rgba(238, 242, 239, 0.58);
+    color: rgba(28, 28, 28, 0.52);
     background: transparent;
     cursor: pointer;
-    transition: color 140ms ease, opacity 140ms ease, transform 140ms ease;
+    transition: color 140ms ease, filter 140ms ease, opacity 140ms ease, transform 140ms ease;
 }
 
-.seqfx-effect-picker__options button:hover:not(:disabled),
+.seqfx-effect-picker__options button:hover,
 .seqfx-effect-picker__options button:focus-visible {
-    color: #f6faf7;
+    color: var(--editor-accent-start) !important;
+}
+
+.seqfx-effect-picker__options button:hover svg,
+.seqfx-effect-picker__options button:focus-visible svg {
+    color: var(--editor-accent-start);
+}
+
+.seqfx-effect-picker__options button:hover svg,
+.seqfx-effect-picker__options button:focus-visible svg,
+.seqfx-effect-picker__options button.is-selected svg {
+    filter:
+        drop-shadow(1px 0 0 var(--editor-surface-ink))
+        drop-shadow(-1px 0 0 var(--editor-surface-ink))
+        drop-shadow(0 1px 0 var(--editor-surface-ink))
+        drop-shadow(0 -1px 0 var(--editor-surface-ink));
 }
 
 .seqfx-effect-picker__options button:focus-visible {
@@ -777,11 +803,11 @@ select {
     width: 100%;
     min-width: 0;
     height: 34px;
-    border: 1px solid rgba(238, 242, 239, 0.24);
+    border: 1px solid var(--seqfx-shell-border-strong);
     border-radius: 6px;
     padding: 4px 7px;
-    color: rgba(238, 242, 239, 0.78);
-    background: rgba(238, 242, 239, 0.04);
+    color: var(--seqfx-shell-ink);
+    background: rgba(28, 28, 28, 0.035);
     font-family: var(--editor-label-font);
     font-size: 9px;
     font-weight: var(--editor-label-weight);
@@ -791,7 +817,7 @@ select {
 
 .seqfx-mod-toggle:hover,
 .seqfx-mod-toggle:focus-visible {
-    color: #f6faf7;
+    color: var(--seqfx-shell-ink);
     border-color: rgba(242, 209, 107, 0.45);
     outline: none;
 }
@@ -802,9 +828,9 @@ select {
 }
 
 .seqfx-mod-toggle.is-selected {
-    color: #f2d16b;
-    border-color: rgba(242, 209, 107, 0.62);
-    background: rgba(242, 209, 107, 0.08);
+    color: var(--editor-surface-ink);
+    border-color: rgba(87, 127, 98, 0.72);
+    background: #8bbf9a;
 }
 
 .seqfx-mod-toggle__thumb {
@@ -824,7 +850,7 @@ select {
 
 .seqfx-mod-toggle__thumb circle {
     fill: var(--editor-accent-end);
-    stroke: #151816;
+    stroke: var(--editor-surface-bg);
     stroke-width: 1.2;
 }
 
@@ -834,12 +860,13 @@ select {
     height: 18px;
     place-items: center;
     border-radius: 6px;
-    color: #111512;
-    background: rgba(238, 242, 239, 0.58);
+    color: var(--editor-surface-ink);
+    background: rgba(139, 191, 154, 0.28);
     font-size: 10px;
     line-height: 1;
 }
 
+.seqfx-mod-toggle.is-selected .seqfx-mod-toggle__badge,
 .seqfx-mod-toggle.has-targets .seqfx-mod-toggle__badge {
     background: #f2d16b;
 }
@@ -853,7 +880,7 @@ select {
 .seqfx-mod-targets {
     display: grid;
     min-width: 0;
-    border: 1px solid var(--editor-surface-border);
+    border: 0;
     background: var(--editor-surface-bg);
     color: var(--editor-surface-ink);
 }
@@ -1028,7 +1055,7 @@ select {
 .seqfx-tape-graph {
     width: 100%;
     min-height: 150px;
-    border: 1px solid rgba(238, 242, 239, 0.12);
+    border: 1px solid var(--seqfx-shell-border);
     border-radius: 7px;
     background: rgba(21, 24, 22, 0.72);
     touch-action: none;
@@ -1127,7 +1154,7 @@ select {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    color: #d9e2dc;
+    color: var(--seqfx-shell-ink);
     font-size: 12px;
     font-weight: 700;
 }
@@ -1136,7 +1163,7 @@ select {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    color: #d9e2dc;
+    color: var(--seqfx-shell-ink);
     font-size: 12px;
     font-weight: 700;
 }
@@ -1157,8 +1184,8 @@ select {
 
 .seqfx-tape-control__label--toggle:hover,
 .seqfx-tape-control__label--toggle:focus-visible {
-    color: #eef2ef;
-    background: rgba(238, 242, 239, 0.08);
+    color: var(--seqfx-shell-ink);
+    background: rgba(28, 28, 28, 0.08);
     outline: none;
 }
 
@@ -1169,7 +1196,7 @@ select {
 
 .seqfx-tape-control output,
 .seqfx-tape-control__values {
-    color: #eef2ef;
+    color: var(--seqfx-shell-ink);
     font-family: Menlo, Monaco, monospace;
     font-size: 12px;
     font-weight: 600;
@@ -1197,7 +1224,7 @@ select {
 }
 
 .seqfx-tape-control__arrow {
-    color: rgba(238, 242, 239, 0.58);
+    color: var(--seqfx-shell-ink-muted);
     font-size: 10px;
 }
 
@@ -1212,7 +1239,7 @@ select {
 
 .seqfx-tape-control small {
     margin: 0;
-    color: rgba(238, 242, 239, 0.62);
+    color: var(--seqfx-shell-ink-muted);
     font-size: 12px;
     line-height: 1.35;
 }
@@ -1224,8 +1251,8 @@ select {
     align-items: center;
     gap: 10px;
     padding: 8px 14px;
-    border-top: 1px solid rgba(238, 242, 239, 0.14);
-    color: #b7c5bc;
+    border-top: 1px solid var(--seqfx-shell-border);
+    color: var(--seqfx-shell-ink-muted);
     font-size: 11px;
     font-weight: 700;
 }
@@ -1237,17 +1264,17 @@ select {
 }
 
 .seqfx-mix-row output {
-    color: #eef2ef;
+    color: var(--seqfx-shell-ink);
     font-family: Menlo, Monaco, monospace;
     font-weight: 700;
 }
 
 .seqfx-delete-block {
     min-height: 34px;
-    border: 1px solid rgba(238, 242, 239, 0.16);
+    border: 1px solid var(--seqfx-shell-border);
     border-radius: 7px;
-    color: #eef2ef;
-    background: rgba(255, 255, 255, 0.045);
+    color: var(--seqfx-shell-ink);
+    background: rgba(28, 28, 28, 0.035);
     cursor: pointer;
     transition: transform 140ms ease, background-color 140ms ease, border-color 140ms ease;
 }

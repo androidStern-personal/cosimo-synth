@@ -118,11 +118,11 @@ export function EditorTickSlider({
     const modulationEnd = modulation ? normalizeValue(modulation.end, min, max, step) : normalizedValue;
     const isModulated = modulation !== null;
     const currentTickIndex = activeTickIndex(normalizedValue, min, max, safeTickCount);
-    const endTickIndex = activeTickIndex(modulationEnd, min, max, safeTickCount);
-    const lowModTickIndex = Math.min(currentTickIndex, endTickIndex);
-    const highModTickIndex = Math.max(currentTickIndex, endTickIndex);
     const startPercent = valueToPercent(normalizedValue, min, max);
     const endPercent = valueToPercent(modulationEnd, min, max);
+    const lowRangePercent = Math.min(startPercent, endPercent);
+    const highRangePercent = Math.max(startPercent, endPercent);
+    const hasModulationRange = highRangePercent > lowRangePercent;
 
     const handleChange = (event: ChangeEvent<HTMLInputElement>) => {
         onChange(normalizeValue(Number(event.currentTarget.value), min, max, step));
@@ -247,9 +247,6 @@ export function EditorTickSlider({
                                 "editor-tick-slider__tick",
                                 !isModulated && tick <= currentTickIndex ? "is-active" : "",
                                 !isModulated && tick === currentTickIndex ? "is-current" : "",
-                                isModulated && tick === currentTickIndex ? "is-mod-start" : "",
-                                isModulated && tick === endTickIndex ? "is-mod-end" : "",
-                                isModulated && tick > lowModTickIndex && tick < highModTickIndex ? "is-mod-between" : "",
                             ].filter(Boolean).join(" ")}
                             data-role="editor-tick-slider-tick"
                             key={tick}
@@ -258,13 +255,20 @@ export function EditorTickSlider({
                 </span>
                 {isModulated ? (
                     <>
-                        <span
-                            className="editor-tick-slider__mod-range"
-                            style={{
-                                left: `${Math.min(startPercent, endPercent)}%`,
-                                width: `${Math.abs(endPercent - startPercent)}%`,
-                            }}
-                        />
+                        {hasModulationRange ? (
+                            <span
+                                aria-hidden="true"
+                                className="editor-tick-slider__rail editor-tick-slider__rail--mod-range"
+                                data-range-end={highRangePercent}
+                                data-range-start={lowRangePercent}
+                                data-role="editor-tick-slider-mod-range-rail"
+                                style={{ clipPath: `inset(0 ${100 - highRangePercent}% 0 ${lowRangePercent}%)` }}
+                            >
+                                {ticks.map((tick) => (
+                                    <span className="editor-tick-slider__tick" key={tick} />
+                                ))}
+                            </span>
+                        ) : null}
                         <span
                             className="editor-tick-slider__mod-thumb editor-tick-slider__mod-thumb--start"
                             style={{ left: `${startPercent}%` }}
