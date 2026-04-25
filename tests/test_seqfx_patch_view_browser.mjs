@@ -15,6 +15,7 @@ const SEQFX_SNAPSHOT_BANK_STATE_KEY = "cosimo.effectSnapshotBank.seqfx.v1";
 const SEQFX_NORMAL_GAP_PX = 3;
 const SEQFX_BEAT_GAP_PX = 5;
 const SEQFX_MIN_CELL_SIZE_PX = 12;
+const SEQFX_GRID_STEPS_PER_ROW = 16;
 const SEQFX_EFFECT_TYPES = {
     filter: 1,
     crusher: 2,
@@ -96,33 +97,34 @@ async function clickSnapshotSlot(page, slotID) {
 }
 
 function gapAfterStep(step, cellsPerBeat) {
-    if (step >= SEQFX_STEP_COUNT - 1) {
+    const stepInRow = step % SEQFX_GRID_STEPS_PER_ROW;
+    if (stepInRow >= SEQFX_GRID_STEPS_PER_ROW - 1) {
         return 0;
     }
 
-    return (step + 1) % cellsPerBeat === 0 ? SEQFX_BEAT_GAP_PX : SEQFX_NORMAL_GAP_PX;
+    return (stepInRow + 1) % cellsPerBeat === 0 ? SEQFX_BEAT_GAP_PX : SEQFX_NORMAL_GAP_PX;
 }
 
 function expectedGridGeometry(trackWidth, cellsPerBeat) {
-    const totalGapWidth = Array.from({ length: SEQFX_STEP_COUNT - 1 }, (_unused, step) => (
+    const totalGapWidth = Array.from({ length: SEQFX_GRID_STEPS_PER_ROW - 1 }, (_unused, step) => (
         gapAfterStep(step, cellsPerBeat)
     )).reduce((sum, gap) => sum + gap, 0);
     const cellSize = Math.max(
         SEQFX_MIN_CELL_SIZE_PX,
-        Number(((trackWidth - totalGapWidth) / SEQFX_STEP_COUNT).toFixed(4)),
+        Number(((trackWidth - totalGapWidth) / SEQFX_GRID_STEPS_PER_ROW).toFixed(4)),
     );
     const lefts = [];
     let cursor = 0;
 
-    for (let step = 0; step < SEQFX_STEP_COUNT; step += 1) {
+    for (let step = 0; step < SEQFX_GRID_STEPS_PER_ROW; step += 1) {
         lefts.push(cursor);
         cursor += cellSize + gapAfterStep(step, cellsPerBeat);
     }
 
     return {
         cellSize,
-        lefts,
-        trackWidth: (cellSize * SEQFX_STEP_COUNT) + totalGapWidth,
+        lefts: Array.from({ length: SEQFX_STEP_COUNT }, (_unused, step) => lefts[step % SEQFX_GRID_STEPS_PER_ROW]),
+        trackWidth: (cellSize * SEQFX_GRID_STEPS_PER_ROW) + totalGapWidth,
     };
 }
 
@@ -905,19 +907,29 @@ test("seqfx_rate_one_grid_uses_beat_gutters_and_per_cell_bar_fill", async () => 
     assert.ok(trackBox);
     const expected = expectedGridGeometry(trackBox.width, 4);
 
-    for (const step of [0, 1, 3, 4, 16, 31]) {
+    for (const step of [0, 1, 3, 4, 15, 16, 17, 19, 20, 31]) {
         const box = await boundingBoxForCell(page, 0, step);
         assertClose(box.x - trackBox.x, expected.lefts[step], 1, `step ${step + 1} x position`);
         assertClose(box.width, expected.cellSize, 1, `step ${step + 1} width`);
         assertClose(box.height, expected.cellSize, 1, `step ${step + 1} height`);
     }
 
+    const step1 = await boundingBoxForCell(page, 0, 0);
     const step2 = await boundingBoxForCell(page, 0, 1);
     const step3 = await boundingBoxForCell(page, 0, 2);
     const step4 = await boundingBoxForCell(page, 0, 3);
     const step5 = await boundingBoxForCell(page, 0, 4);
+    const step16 = await boundingBoxForCell(page, 0, 15);
+    const step17 = await boundingBoxForCell(page, 0, 16);
+    const step20 = await boundingBoxForCell(page, 0, 19);
+    const step21 = await boundingBoxForCell(page, 0, 20);
+    const step32 = await boundingBoxForCell(page, 0, 31);
     assertClose(step3.x - (step2.x + step2.width), SEQFX_NORMAL_GAP_PX, 1, "ordinary within-beat gutter");
     assertClose(step5.x - (step4.x + step4.width), SEQFX_BEAT_GAP_PX, 1, "beat-boundary gutter");
+    assertClose(step21.x - (step20.x + step20.width), SEQFX_BEAT_GAP_PX, 1, "second-row beat-boundary gutter");
+    assertClose(step17.x, step1.x, 1, "step 17 should start the second row at the same x as step 1");
+    assertClose(step32.x, step16.x, 1, "step 32 should end the second row at the same x as step 16");
+    assert.ok(step17.y > step1.y + step1.height, "steps 17-32 should render on a second row");
 
     assert.equal(await page.locator('[data-role="seqfx-cell"][data-lane="0"][data-step="15"]').evaluate((node) => node.classList.contains("is-alt-bar")), false);
     assert.equal(await page.locator('[data-role="seqfx-cell"][data-lane="0"][data-step="16"]').evaluate((node) => node.classList.contains("is-alt-bar")), true);
@@ -938,16 +950,17 @@ test("seqfx_rate_one_grid_uses_beat_gutters_and_per_cell_bar_fill", async () => 
 
     const screenshot = parsePng(await page.screenshot({ type: "png" }));
     const sampleY = trackBox.y + (expected.cellSize / 2);
+    const secondRowSampleY = step17.y + (expected.cellSize / 2);
     const evenCell = pixelAt(screenshot, trackBox.x + expected.lefts[0] + (expected.cellSize / 2), sampleY);
-    const oddCell = pixelAt(screenshot, trackBox.x + expected.lefts[16] + (expected.cellSize / 2), sampleY);
-    const barBoundaryGutter = pixelAt(
+    const oddCell = pixelAt(screenshot, trackBox.x + expected.lefts[16] + (expected.cellSize / 2), secondRowSampleY);
+    const secondRowBeatGutter = pixelAt(
         screenshot,
-        trackBox.x + expected.lefts[15] + expected.cellSize + (SEQFX_BEAT_GAP_PX / 2),
-        sampleY,
+        trackBox.x + expected.lefts[19] + expected.cellSize + (SEQFX_BEAT_GAP_PX / 2),
+        secondRowSampleY,
     );
 
     assert.ok(colorDistance(evenCell, oddCell) >= 4, "alternate-bar cell fill should differ from ordinary cell fill");
-    assert.ok(colorDistance(barBoundaryGutter, oddCell) > colorDistance(evenCell, oddCell), "bar-boundary gutter should not use alternate-bar fill");
+    assert.ok(colorDistance(secondRowBeatGutter, oddCell) > colorDistance(evenCell, oddCell), "beat-boundary gutter should not use alternate-bar fill");
 
     await page.close();
 });
@@ -2034,6 +2047,39 @@ test("seqfx_right_edge_drag_resizes_a_block_without_retriggering_continuation_st
     await page.locator('[data-role="seqfx-delete-block"]').click();
     const deleteUpload = patternUploads(await getHarnessSnapshot(page)).at(-1).value;
     assert.deepEqual(deleteUpload.activeSteps[2].slice(0, 5), [false, false, false, false, false]);
+
+    await page.close();
+});
+
+test("seqfx_cross_row_blocks_render_as_one_logical_block_split_across_bar_rows", async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
+    await loadSeqFxHarness(page);
+    await page.locator('[data-role="seqfx-root"]').waitFor();
+
+    await page.getByRole("button", { name: "Chain 3 step 15", exact: true }).click();
+    await resizeBlockToStep(page, 2, 15, 18);
+
+    const segmentSelector = '.seqfx-block[data-lane="2"][data-start="14"]';
+    await page.waitForFunction((selector) => document.querySelectorAll(selector).length === 2, segmentSelector);
+    const segments = page.locator(segmentSelector);
+    assert.equal(await segments.count(), 2);
+    const firstSegment = await segments.nth(0).boundingBox();
+    const secondSegment = await segments.nth(1).boundingBox();
+    const step15 = await boundingBoxForCell(page, 2, 14);
+    const step17 = await boundingBoxForCell(page, 2, 16);
+    const resizeHandle = await page.locator('[data-role="seqfx-block-resize"][data-lane="2"][data-start="14"]').boundingBox();
+
+    assert.ok(firstSegment);
+    assert.ok(secondSegment);
+    assert.ok(resizeHandle);
+    assertClose(firstSegment.y, step15.y, 1, "first block segment should stay on the first bar row");
+    assertClose(secondSegment.y, step17.y, 1, "second block segment should continue on the second bar row");
+    assertClose(resizeHandle.y, secondSegment.y, 1, "resize handle should stay on the final visual segment");
+
+    const snapshot = await getHarnessSnapshot(page);
+    const lastUpload = patternUploads(snapshot).at(-1).value;
+    assert.deepEqual(lastUpload.activeSteps[2].slice(14, 18), [true, true, true, true]);
+    assert.deepEqual(lastUpload.triggerSteps[2].slice(14, 18), [true, false, false, false]);
 
     await page.close();
 });
