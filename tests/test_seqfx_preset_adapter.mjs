@@ -15,7 +15,7 @@ const {
     SEQFX_EFFECT_TYPES,
     SEQFX_LANES,
     SEQFX_STATE_KEY,
-    applySeqFxBlockAuxCurveEdit,
+    applySeqFxBlockAuxSourceEdit,
     applySeqFxBlockAuxTargetEndEdit,
     applySeqFxBlockAuxTargetToggle,
     applySeqFxBlockCreate,
@@ -118,14 +118,14 @@ function patternUploads(connection) {
     return connection.events.filter((event) => event.endpointID === SEQFX_ENDPOINTS.patternUpload);
 }
 
-test("seqfx_adapter_contract_registers_required_seqfx_v4_state", () => {
+test("seqfx_adapter_contract_registers_required_seqfx_v6_state", () => {
     const connection = new FakePatchConnection();
     const bridge = new SeqFxRuntimeBridge(connection);
     const adapter = createSeqFxPresetStateAdapter({ bridge, patchConnection: connection });
 
     assert.deepEqual(adapter.getContract(), {
-        key: "seqfx.v4",
-        schemaVersion: 3,
+        key: "seqfx.v6",
+        schemaVersion: 5,
         required: true,
     });
 });
@@ -163,7 +163,7 @@ test("seqfx_adapter_capture_reads_bridge_state_not_dom_and_serializes_all_patter
     assert.equal(restored.patterns[7].lanes[SEQFX_LANES.filter].steps[5].params[1], 440);
 });
 
-test("seqfx_adapter_apply_writes_seqfx_v4_and_worker_uploads_selected_pattern", () => {
+test("seqfx_adapter_apply_writes_seqfx_v6_and_worker_uploads_selected_pattern", () => {
     let state = createDefaultSeqFxState();
     state = applySeqFxCellToggle(state, {
         patternIndex: 4,
@@ -203,11 +203,18 @@ test("seqfx_adapter_apply_preserves_aux_state_and_worker_uploads_aux_arrays", ()
         startStep: 8,
         length: 1,
     });
-    state = applySeqFxBlockAuxCurveEdit(state, {
+    state = applySeqFxBlockAuxSourceEdit(state, {
         patternIndex: 4,
         lane: SEQFX_LANES.crusher,
         startStep: 8,
-        curve: "exp",
+        source: {
+            shape: -0.25,
+            sourceCurve: 0.5,
+            rateMode: "tempo",
+            tempoMultiplier: 3,
+            tempoTriplet: true,
+            sliceCount: 7,
+        },
     });
     state = applySeqFxBlockAuxTargetToggle(state, {
         patternIndex: 4,
@@ -240,7 +247,12 @@ test("seqfx_adapter_apply_preserves_aux_state_and_worker_uploads_aux_arrays", ()
     const upload = patternUploads(connection)[0].value;
     assert.equal(upload.auxEnabled[SEQFX_LANES.crusher][8][0], true);
     assert.equal(upload.auxEnd[SEQFX_LANES.crusher][8][0], 14);
-    assert.equal(upload.auxCurve[SEQFX_LANES.crusher][8], 2);
+    assert.equal(upload.auxShape[SEQFX_LANES.crusher][8], -0.25);
+    assert.equal(upload.auxSourceCurve[SEQFX_LANES.crusher][8], 0.5);
+    assert.equal(upload.auxRateMode[SEQFX_LANES.crusher][8], 0);
+    assert.equal(upload.auxTempoMultiplier[SEQFX_LANES.crusher][8], 3);
+    assert.equal(upload.auxTempoTriplet[SEQFX_LANES.crusher][8], true);
+    assert.equal(upload.auxSliceCount[SEQFX_LANES.crusher][8], 7);
 });
 
 test("seqfx_adapter_rejects_legacy_v1_state_instead_of_migrating", () => {
@@ -266,7 +278,7 @@ test("seqfx_adapter_rejects_legacy_v1_state_instead_of_migrating", () => {
 
     assert.throws(
         () => adapter.apply(JSON.stringify(legacyState)),
-        /version 3 patterns/i,
+        /version 5 patterns/i,
     );
     assert.deepEqual(connection.storedWrites, []);
     assert.deepEqual(connection.events, []);
@@ -278,21 +290,24 @@ test("seqfx_adapter_rejects_invalid_matrix_shape_in_presets_instead_of_normalizi
     const adapter = createSeqFxPresetStateAdapter({ bridge, patchConnection: connection });
 
     assert.throws(() => adapter.normalizeForPreset({
-        version: 3,
+        version: 5,
         patterns: [],
     }), /seqfx.*patterns/i);
 });
 
-test("seqfx_adapter_rejects_old_shaped_v3_state_without_aux", () => {
+test("seqfx_adapter_rejects_old_shaped_state_without_aux_source", () => {
     const connection = new FakePatchConnection();
     const bridge = new SeqFxRuntimeBridge(connection);
     const adapter = createSeqFxPresetStateAdapter({ bridge, patchConnection: connection });
     const presetState = createDefaultSeqFxState();
-    delete presetState.patterns[0].lanes[SEQFX_LANES.crusher].steps[0].aux;
+    presetState.patterns[0].lanes[SEQFX_LANES.crusher].steps[0].aux = {
+        curve: "linear",
+        targets: presetState.patterns[0].lanes[SEQFX_LANES.crusher].steps[0].aux.targets,
+    };
 
     assert.throws(
         () => adapter.normalizeForPreset(JSON.stringify(presetState)),
-        /aux/i,
+        /source/i,
     );
 });
 

@@ -10,7 +10,7 @@ import { chromium } from "playwright";
 const DEV_SERVER_ORIGIN = "http://127.0.0.1:5175";
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const SEQFX_STEP_COUNT = 32;
-const SEQFX_STATE_KEY = "seqfx.v4";
+const SEQFX_STATE_KEY = "seqfx.v6";
 const SEQFX_SNAPSHOT_BANK_STATE_KEY = "cosimo.effectSnapshotBank.seqfx.v1";
 const SEQFX_NORMAL_GAP_PX = 3;
 const SEQFX_BEAT_GAP_PX = 5;
@@ -21,6 +21,8 @@ const SEQFX_EFFECT_TYPES = {
     tapeStop: 3,
     stutter: 4,
 };
+const CRUSHER_PARAM_DRIVE_DB = 2;
+const STUTTER_PARAM_SLICES = 0;
 const SEQFX_LANE_NAMES = ["Chain 1", "Chain 2", "Chain 3", "Chain 4"];
 const SEQFX_DEFAULT_EFFECT_NAMES = ["Filter", "Crusher", "Tape Stop", "Stutter"];
 const TAPE_GRAPH_VIEWBOX_WIDTH = 260;
@@ -273,25 +275,42 @@ async function setRangeInputValue(locator, value) {
     }, value);
 }
 
+async function pressSliderKey(locator, key) {
+    await locator.focus();
+    await locator.press(key);
+}
+
 async function setCrusherEditorValues(page, { bits, holdFrames, driveDb }) {
     await setRangeInputValue(page.locator('[data-role="seqfx-crusher-bits"]'), bits);
     await setRangeInputValue(page.locator('[data-role="seqfx-crusher-hold-frames"]'), holdFrames);
     await setRangeInputValue(page.locator('[data-role="seqfx-crusher-drive-db"]'), driveDb);
 }
 
-async function keyboardSetSliderTo(locator, key) {
-    await locator.focus();
-    await locator.press(key);
+async function openSeqFxModView(page) {
+    const modToggle = page.locator('[data-role="seqfx-mod-toggle"]');
+    await modToggle.waitFor();
+    await modToggle.click();
+    await page.locator('[data-role="seqfx-mod-editor"]').waitFor();
+    return modToggle;
 }
 
-async function dragHorizontalControlTo(page, locator, startRatio, endRatio) {
-    const box = await locator.boundingBox();
-    assert.ok(box, "expected horizontal control to have a bounding box");
-    const y = box.y + (box.height / 2);
-    await page.mouse.move(box.x + (box.width * startRatio), y);
-    await page.mouse.down();
-    await page.mouse.move(box.x + (box.width * endRatio), y, { steps: 8 });
-    await page.mouse.up();
+async function toggleSeqFxModTarget(page, paramIndex) {
+    await page.locator(`[data-role="seqfx-mod-target-toggle"][data-param="${paramIndex}"]`).click();
+}
+
+async function setSeqFxModTargetAmount(page, paramIndex, amount) {
+    await page.locator(`[data-role="seqfx-mod-target-amount"][data-param="${paramIndex}"]`).evaluate((node, nextAmount) => {
+        const minAmount = Number(node.getAttribute("data-amount-min"));
+        const maxAmount = Number(node.getAttribute("data-amount-max"));
+        const normalized = nextAmount >= 0
+            ? (maxAmount > 0 ? nextAmount / maxAmount : 0)
+            : (minAmount < 0 ? nextAmount / Math.abs(minAmount) : 0);
+        const clamped = Math.min(1, Math.max(-1, normalized));
+        const valueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+        valueSetter?.call(node, String(clamped));
+        node.dispatchEvent(new Event("input", { bubbles: true }));
+        node.dispatchEvent(new Event("change", { bubbles: true }));
+    }, amount);
 }
 
 async function waitForGridGeometry(page, cellsPerBeat, step, message) {
@@ -992,6 +1011,9 @@ test("seqfx_grid_cell_and_inspector_edits_send_complete_pattern_uploads", async 
     const filterEditor = page.locator('[data-role="filter-range-editor"]');
     await filterEditor.waitFor();
     assert.equal(await page.locator('[data-role="seqfx-param"][data-param="1"]').count(), 0);
+    assert.equal(await page.locator('[data-role="seqfx-param"][data-param="4"]').count(), 0);
+    assert.equal(await page.locator('[data-role="seqfx-mod-toggle"]').count(), 1);
+    assert.equal(await page.locator('[data-role="seqfx-mod-target-badge"]').textContent(), "1");
     assert.equal(await filterEditor.locator('[data-role="filter-range-readout"]').count(), 0);
     assert.equal(
         await filterEditor.locator(
@@ -1073,15 +1095,105 @@ test("seqfx_grid_cell_and_inspector_edits_send_complete_pattern_uploads", async 
     assert.equal(uploads.at(-1).value.activeSteps[0][0], true);
     assertClose(uploadedStepParams[1], 20000, 0.001, "start handle edit should update the start cutoff");
     assertClose(uploadedStepParams[2], 500, 0.001, "start handle edit should not rewrite the end cutoff");
+    assert.equal(uploads.at(-1).value.auxEnabled[0][0][1], true);
+    assertClose(uploads.at(-1).value.auxEnd[0][0][1], 500, 0.001, "filter range end handle should be the cutoff aux target");
     assert.ok(
         uploadedStepParams[1] > uploadedStepParams[2],
         `filter range direction should remain start-to-end, got ${uploadedStepParams[1]} -> ${uploadedStepParams[2]}`,
     );
 
+    const modToggle = await openSeqFxModView(page);
+    assert.equal(await page.locator('[data-role="seqfx-mod-target-toggle"][data-param="1"]').count(), 1);
+    assert.equal(await page.locator('[data-role="seqfx-mod-target-toggle"][data-param="2"]').count(), 0);
+    assert.equal(await page.locator('[data-role="seqfx-mod-target-toggle"][data-param="4"]').count(), 0);
+    assert.equal(await page.locator('[data-role="seqfx-mod-target-toggle"][data-param="1"]').getAttribute("aria-pressed"), "true");
+    assert.equal(await page.locator('[data-role="seqfx-mod-target-badge"]').textContent(), "1");
+
+    await toggleSeqFxModTarget(page, 1);
+    assert.equal(await page.locator('[data-role="seqfx-mod-target-badge"]').textContent(), "0");
+    await modToggle.click();
+
+    snapshot = await getHarnessSnapshot(page);
+    uploads = patternUploads(snapshot);
+    assert.equal(uploads.at(-1).value.auxEnabled[0][0][1], false);
+
     await page.close();
 });
 
-test("seqfx_crusher_aux_controls_edit_curve_targets_and_v4_storage", async () => {
+test("seqfx_filter_mod_panel_edits_signed_amounts_without_hiding_inline_ranges", async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
+    await loadSeqFxHarness(page);
+    await page.locator('[data-role="seqfx-root"]').waitFor();
+    await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
+
+    await page.getByRole("button", { name: "Chain 1 step 1", exact: true }).click();
+    await page.getByRole("button", { name: "Chain 1 Filter block 1", exact: true }).waitFor();
+
+    const filterEditor = page.locator('[data-role="filter-range-editor"]');
+    await filterEditor.waitFor();
+    assert.equal(await filterEditor.locator('[data-role="filter-range-chip-start"]').textContent(), "2.00k");
+    assert.equal(await filterEditor.locator('[data-role="filter-range-chip-end"]').textContent(), "500");
+
+    const modToggle = await openSeqFxModView(page);
+    const cutoffAmount = page.locator('[data-role="seqfx-mod-target-amount"][data-param="1"]');
+    await cutoffAmount.waitFor();
+    assert.equal(await page.locator('[data-role="seqfx-mod-target-amount"][data-param="0"]').count(), 0);
+    assert.equal(await page.locator('[data-role="seqfx-mod-target-destination"][data-param="0"]').count(), 1);
+    assert.equal(await page.locator('[data-role="seqfx-mod-target-amount-value"][data-param="1"]').textContent(), "-2.00 oct");
+    assert.equal(await page.locator('[data-role="seqfx-mod-target-destination"][data-param="1"]').textContent(), "500");
+
+    await setSeqFxModTargetAmount(page, 1, -1);
+    let snapshot = await getHarnessSnapshot(page);
+    let upload = patternUploads(snapshot).at(-1).value;
+    assertClose(upload.params[0][0][1], 2000, 0.001, "cutoff Mod amount edit should not rewrite the filter start cutoff");
+    assertClose(upload.auxEnd[0][0][1], 1000, 0.001, "cutoff -1 oct amount should write a physical 1 kHz range end");
+    assert.equal(await page.locator('[data-role="seqfx-mod-target-amount-value"][data-param="1"]').textContent(), "-1.00 oct");
+    assert.equal(await page.locator('[data-role="seqfx-mod-target-destination"][data-param="1"]').textContent(), "1.00k");
+    const cutoffFill = await cutoffAmount.evaluate((node) => {
+        const style = getComputedStyle(node);
+        return {
+            start: Number.parseFloat(style.getPropertyValue("--mod-amount-fill-start")),
+            end: Number.parseFloat(style.getPropertyValue("--mod-amount-fill-end")),
+        };
+    });
+    assert.ok(cutoffFill.start < 50, `negative cutoff amount should fill left from center, got start ${cutoffFill.start}`);
+    assert.equal(cutoffFill.end, 50);
+
+    await modToggle.click();
+    await filterEditor.waitFor();
+    assert.equal(await filterEditor.locator('[data-role="filter-range-chip-start"]').textContent(), "2.00k");
+    assert.equal(await filterEditor.locator('[data-role="filter-range-chip-end"]').textContent(), "1.00k");
+
+    await openSeqFxModView(page);
+    await toggleSeqFxModTarget(page, 3);
+    await setSeqFxModTargetAmount(page, 3, 3);
+    snapshot = await getHarnessSnapshot(page);
+    upload = patternUploads(snapshot).at(-1).value;
+    assertClose(upload.params[0][0][3], 0.707, 0.000001, "resonance Mod amount edit should not rewrite base Q");
+    assertClose(upload.auxEnd[0][0][3], 3.71, 0.000001, "resonance +3 amount should write base Q plus amount rounded to the public Q step");
+    assert.equal(await page.locator('[data-role="seqfx-mod-target-amount-value"][data-param="3"]').textContent(), "+3.00");
+    assert.equal(await page.locator('[data-role="seqfx-mod-target-destination"][data-param="3"]').textContent(), "3.71");
+
+    await page.locator('[data-role="seqfx-mod-target-amount"][data-param="3"]').dblclick();
+    snapshot = await getHarnessSnapshot(page);
+    upload = patternUploads(snapshot).at(-1).value;
+    assert.equal(upload.auxEnabled[0][0][3], true);
+    assertClose(upload.auxEnd[0][0][3], 0.707, 0.000001, "double-click should reset bipolar resonance amount to zero");
+    assert.equal(await page.locator('[data-role="seqfx-mod-target-amount-value"][data-param="3"]').textContent(), "0.00");
+    const resonanceFill = await page.locator('[data-role="seqfx-mod-target-amount"][data-param="3"]').evaluate((node) => {
+        const style = getComputedStyle(node);
+        return {
+            start: Number.parseFloat(style.getPropertyValue("--mod-amount-fill-start")),
+            end: Number.parseFloat(style.getPropertyValue("--mod-amount-fill-end")),
+        };
+    });
+    assert.equal(resonanceFill.start, 50);
+    assert.equal(resonanceFill.end, 50);
+
+    await page.close();
+});
+
+test("seqfx_crusher_aux_controls_edit_source_targets_and_v6_storage", async () => {
     const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
     await loadSeqFxHarness(page);
     await page.locator('[data-role="seqfx-root"]').waitFor();
@@ -1089,47 +1201,159 @@ test("seqfx_crusher_aux_controls_edit_curve_targets_and_v4_storage", async () =>
 
     await page.getByRole("button", { name: "Chain 2 step 1", exact: true }).click();
     await page.getByRole("button", { name: "Chain 2 Crusher block 1", exact: true }).waitFor();
-    await page.locator('[data-role="seqfx-aux-curve"]').waitFor();
+    await page.locator('[data-role="seqfx-crusher-editor"]').waitFor();
+    assert.equal(await page.locator('[data-role="seqfx-aux-source"]').count(), 0);
 
-    await page.locator('[data-role="seqfx-aux-curve-shape"][data-shape="exp"]').click();
-    await page.locator('[data-role="seqfx-crusher-bits-slider"] .editor-tick-slider__label--toggle').click();
-    await keyboardSetSliderTo(page.getByRole("slider", { name: "Bits end", exact: true }), "End");
-    await dragHorizontalControlTo(page, page.locator('[data-role="seqfx-crusher-bits"]'), 0.33, 0);
-    await dragHorizontalControlTo(page, page.locator('[data-role="seqfx-crusher-bits"]'), 0.96, 0.67);
-    await page.locator('[data-role="seqfx-crusher-drive-db-mod-toggle"]').click();
-    await keyboardSetSliderTo(page.getByRole("slider", { name: "Drive start", exact: true }), "End");
-    await keyboardSetSliderTo(page.getByRole("slider", { name: "Drive end", exact: true }), "Home");
+    const modToggle = await openSeqFxModView(page);
+    assert.equal(await page.locator('[data-role="seqfx-crusher-editor"]').count(), 0);
+    assert.equal(await page.locator('[data-role="seqfx-mod-target-badge"]').textContent(), "0");
+    const thumbnailPathBefore = await page.locator('[data-role="seqfx-mod-thumbnail-path"]').getAttribute("d");
+    await setRangeInputValue(page.locator('[data-role="seqfx-aux-source-shape"]'), -0.5);
+    await setRangeInputValue(page.locator('[data-role="seqfx-aux-source-curve"]'), 0.65);
+    await page.locator('[data-role="seqfx-aux-rate-mode"][data-mode="tempo"]').click();
+    await setRangeInputValue(page.locator('[data-role="seqfx-aux-rate-value"]'), 3);
+    await page.locator('[data-role="seqfx-aux-tempo-triplet"]').check();
+    await page.locator('[data-role="seqfx-aux-rate-mode"][data-mode="slice"]').click();
+    await setRangeInputValue(page.locator('[data-role="seqfx-aux-rate-value"]'), 12);
+    await page.locator('[data-role="seqfx-aux-rate-mode"][data-mode="tempo"]').click();
+    assert.equal(await page.locator('[data-role="seqfx-aux-rate-value"]').inputValue(), "3");
+    assert.equal(await page.locator('[data-role="seqfx-aux-tempo-triplet"]').isChecked(), true);
+    const thumbnailPathAfter = await page.locator('[data-role="seqfx-mod-thumbnail-path"]').getAttribute("d");
+    assert.notEqual(thumbnailPathAfter, thumbnailPathBefore, "Mod thumbnail path should follow the selected aux source shape");
+    await toggleSeqFxModTarget(page, 0);
+    await setSeqFxModTargetAmount(page, 0, 4);
+    await toggleSeqFxModTarget(page, 2);
+    await setSeqFxModTargetAmount(page, 2, 6);
+    assert.equal(await page.locator('[data-role="seqfx-mod-target-badge"]').textContent(), "2");
+    assert.equal(await modToggle.getAttribute("aria-label"), "Edit modulation, shape -0.50, curve 0.65, 2 targets");
 
     const snapshot = await getHarnessSnapshot(page);
     const upload = patternUploads(snapshot).at(-1).value;
-    assert.equal(upload.auxCurve[1][0], 2);
-    assert.equal(upload.params[1][0][0], 4);
-    assert.equal(upload.params[1][0][2], 36);
+    assert.equal(upload.auxShape[1][0], -0.5);
+    assert.equal(upload.auxSourceCurve[1][0], 0.65);
+    assert.equal(upload.auxRateMode[1][0], 0);
+    assert.equal(upload.auxTempoMultiplier[1][0], 3);
+    assert.equal(upload.auxTempoTriplet[1][0], true);
+    assert.equal(upload.auxSliceCount[1][0], 12);
+    assert.equal(upload.params[1][0][0], 8);
+    assert.equal(upload.params[1][0][2], 0);
     assert.equal(upload.auxEnabled[1][0][0], true);
     assert.equal(upload.auxEnabled[1][0][2], true);
     assert.equal(upload.auxEnd[1][0][0], 12);
-    assert.equal(upload.auxEnd[1][0][2], 0);
+    assert.equal(upload.auxEnd[1][0][2], 6);
 
     const storedState = parseSeqFxStoredState(snapshot.storedState[SEQFX_STATE_KEY]);
     const step = storedState.patterns[0].lanes[1].steps[0];
-    assert.equal(step.aux.curve, "exp");
-    assert.equal(step.params[0], 4);
-    assert.equal(step.params[2], 36);
+    assert.deepEqual(step.aux.source, {
+        shape: -0.5,
+        sourceCurve: 0.65,
+        rateMode: "tempo",
+        tempoMultiplier: 3,
+        tempoTriplet: true,
+        sliceCount: 12,
+    });
+    assert.equal(step.params[0], 8);
+    assert.equal(step.params[2], 0);
     assert.deepEqual(step.aux.targets[0], { enabled: true, end: 12 });
-    assert.deepEqual(step.aux.targets[2], { enabled: true, end: 0 });
+    assert.deepEqual(step.aux.targets[2], { enabled: true, end: 6 });
+
+    await modToggle.click();
+    await page.locator('[data-role="seqfx-crusher-editor"]').waitFor();
+    assert.equal(await page.locator('[data-role="seqfx-aux-source"]').count(), 0);
+    assert.equal(await page.locator('[data-role="seqfx-mod-target-badge"]').textContent(), "2");
 
     await page.close();
 });
 
-test("seqfx_aux_curve_phase_dot_follows_monitor_phase", async () => {
+test("seqfx_mod_panel_uses_responsive_inspector_width_without_overflowing", async () => {
+    const page = await browser.newPage({ viewport: { width: 1168, height: 820 } });
+    await loadSeqFxHarness(page);
+    await page.locator('[data-role="seqfx-root"]').waitFor();
+
+    await page.getByRole("button", { name: "Chain 4 step 1", exact: true }).click();
+    await page.getByRole("button", { name: "Chain 4 Stutter block 1", exact: true }).waitFor();
+    await openSeqFxModView(page);
+    await setRangeInputValue(page.locator('[data-role="seqfx-aux-source-shape"]'), -1);
+    await setRangeInputValue(page.locator('[data-role="seqfx-aux-source-curve"]'), -0.52);
+    await toggleSeqFxModTarget(page, 3);
+
+    const measureLayout = () => page.evaluate(() => {
+        const rectFor = (selector) => {
+            const element = document.querySelector(selector);
+            if (!element) {
+                return null;
+            }
+
+            const rect = element.getBoundingClientRect();
+            return {
+                bottom: rect.bottom,
+                height: rect.height,
+                left: rect.left,
+                right: rect.right,
+                top: rect.top,
+                width: rect.width,
+            };
+        };
+        const inspector = rectFor(".seqfx-inspector");
+        const effectPicker = rectFor(".seqfx-effect-picker");
+        const modToggle = rectFor('[data-role="seqfx-mod-toggle"]');
+        const auxSource = rectFor('[data-role="seqfx-aux-source"]');
+        const auxPreview = rectFor(".aux-source__preview");
+        const modTargets = rectFor('[data-role="seqfx-mod-targets"]');
+
+        return {
+            auxPreview,
+            auxSource,
+            effectPicker,
+            inspector,
+            modTargets,
+            modToggle,
+            rootScrollWidth: document.documentElement.scrollWidth,
+            viewportWidth: window.innerWidth,
+        };
+    });
+
+    const layout = await measureLayout();
+
+    assert.ok(layout.inspector.width >= 380, `responsive inspector should be wider than the old 300px column, got ${layout.inspector.width}px`);
+    assert.ok(layout.modToggle.left >= layout.effectPicker.left, "mod button should stay inside the effect header");
+    assert.ok(layout.modToggle.right <= layout.effectPicker.right + 1, `mod button overflowed effect header: ${layout.modToggle.right} > ${layout.effectPicker.right}`);
+    assert.ok(layout.auxSource.left >= layout.inspector.left, "aux source should stay inside the inspector");
+    assert.ok(layout.auxSource.right <= layout.inspector.right + 1, `aux source overflowed inspector: ${layout.auxSource.right} > ${layout.inspector.right}`);
+    assert.ok(layout.modTargets.right <= layout.inspector.right + 1, `mod targets overflowed inspector: ${layout.modTargets.right} > ${layout.inspector.right}`);
+    assert.ok(layout.auxPreview.height >= 42, `aux preview should be tall enough to read the curve, got ${layout.auxPreview.height}px`);
+    assert.ok(layout.auxPreview.width / layout.auxPreview.height <= 12, `aux preview should not collapse into a thin strip, got ratio ${layout.auxPreview.width / layout.auxPreview.height}`);
+    assert.ok(layout.rootScrollWidth <= layout.viewportWidth + 1, `page should not gain horizontal overflow, got ${layout.rootScrollWidth}px for ${layout.viewportWidth}px viewport`);
+
+    await page.setViewportSize({ width: 982, height: 820 });
+    const nearBreakpointLayout = await measureLayout();
+    assert.ok(nearBreakpointLayout.inspector.width >= 338, `near-breakpoint inspector should keep the 340px floor, got ${nearBreakpointLayout.inspector.width}px`);
+    assert.ok(
+        nearBreakpointLayout.auxSource.right <= nearBreakpointLayout.inspector.right + 1,
+        `near-breakpoint aux source overflowed inspector: ${nearBreakpointLayout.auxSource.right} > ${nearBreakpointLayout.inspector.right}`,
+    );
+    assert.ok(
+        nearBreakpointLayout.modTargets.right <= nearBreakpointLayout.inspector.right + 1,
+        `near-breakpoint mod targets overflowed inspector: ${nearBreakpointLayout.modTargets.right} > ${nearBreakpointLayout.inspector.right}`,
+    );
+    assert.ok(
+        nearBreakpointLayout.rootScrollWidth <= nearBreakpointLayout.viewportWidth + 1,
+        `near-breakpoint page should not gain horizontal overflow, got ${nearBreakpointLayout.rootScrollWidth}px for ${nearBreakpointLayout.viewportWidth}px viewport`,
+    );
+
+    await page.close();
+});
+
+test("seqfx_aux_source_dot_uses_monitor_cycle_phase_and_amount", async () => {
     const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
     await loadSeqFxHarness(page);
     await page.locator('[data-role="seqfx-root"]').waitFor();
 
     await page.getByRole("button", { name: "Chain 2 step 1", exact: true }).click();
     await page.getByRole("button", { name: "Chain 2 Crusher block 1", exact: true }).waitFor();
-    const phaseInput = page.locator('[data-role="seqfx-aux-phase"]');
-    await phaseInput.waitFor();
+    await openSeqFxModView(page);
+    const phaseReadout = page.locator('[data-role="seqfx-aux-source-phase-readout"]');
+    await phaseReadout.waitFor();
 
     await page.evaluate(() => {
         window.__SEQFX_HARNESS__?.patchConnection.emitEndpoint("monitorOut", {
@@ -1139,21 +1363,55 @@ test("seqfx_aux_curve_phase_dot_follows_monitor_phase", async () => {
                 transportRunning: true,
                 stepProgress: 0.5,
                 stepDurationMs: 125,
-                auxPhase: [0, 0.5, 0, 0],
+                auxCyclePhase: [0, 0.5, 0, 0],
+                auxAmount: [0, 0.25, 0, 0],
                 auxDurationMs: [0, 250, 0, 0],
             },
         });
     });
 
     for (let attempt = 0; attempt < 20; attempt += 1) {
-        if (Math.abs(Number(await phaseInput.inputValue()) - 0.5) <= 0.01) {
+        if ((await phaseReadout.textContent()) === "0.50 / 0.25") {
             break;
         }
         await page.waitForTimeout(25);
     }
-    assertClose(Number(await phaseInput.inputValue()), 0.5, 0.01, "Aux curve phase input should follow monitor phase");
-    const phaseDotCx = await page.locator('[data-role="seqfx-aux-curve"] .aux-pv-dot').getAttribute("cx");
-    assertClose(Number(phaseDotCx), 100, 2, "Aux curve phase dot should move to half phase");
+    assert.equal(await phaseReadout.textContent(), "0.50 / 0.25");
+    const phaseDotCx = await page.locator('[data-role="seqfx-aux-source-preview-dot"]').getAttribute("cx");
+    const phaseDotCy = await page.locator('[data-role="seqfx-aux-source-preview-dot"]').getAttribute("cy");
+    assertClose(Number(phaseDotCx), 100, 2, "Aux source dot should move to half cycle phase");
+    assertClose(Number(phaseDotCy), 35, 2, "Aux source dot should use monitor amount for y position");
+    const thumbnailDotCx = await page.locator('[data-role="seqfx-mod-thumbnail-dot"]').getAttribute("cx");
+    const thumbnailDotCy = await page.locator('[data-role="seqfx-mod-thumbnail-dot"]').getAttribute("cy");
+    assertClose(Number(thumbnailDotCx), 100, 2, "Mod thumbnail phase dot should move to half cycle phase");
+    assertClose(Number(thumbnailDotCy), 15.5, 2, "Mod thumbnail dot should use monitor amount for y position");
+
+    await page.close();
+});
+
+test("seqfx_mod_view_resets_when_selection_cannot_edit_one_aux_block", async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
+    await loadSeqFxHarness(page);
+    await page.locator('[data-role="seqfx-root"]').waitFor();
+
+    await page.getByRole("button", { name: "Chain 2 step 1", exact: true }).click();
+    await page.getByRole("button", { name: "Chain 2 step 3", exact: true }).click();
+    await page.getByRole("button", { name: "Chain 2 Crusher block 1", exact: true }).click();
+    await openSeqFxModView(page);
+    await page.locator('[data-role="seqfx-aux-source"]').waitFor();
+
+    await page.getByRole("button", { name: "Chain 2 Crusher block 3", exact: true }).click({ modifiers: ["Shift"] });
+    await page.locator('[data-role="seqfx-crusher-editor"]').waitFor();
+    assert.equal(await page.locator('[data-role="seqfx-mod-toggle"]').count(), 0);
+    assert.equal(await page.locator('[data-role="seqfx-aux-source"]').count(), 0);
+
+    await page.getByRole("button", { name: "Chain 2 Crusher block 1", exact: true }).click();
+    await page.locator('[data-role="seqfx-crusher-editor"]').waitFor();
+    assert.equal(
+        await page.locator('[data-role="seqfx-aux-source"]').count(),
+        0,
+        "returning to an aux-editable block should reopen the compact effect view, not stale Mod view",
+    );
 
     await page.close();
 });
@@ -1166,17 +1424,18 @@ test("seqfx_stutter_aux_controls_edit_gate_slices_shape_and_speed_targets", asyn
 
     await page.getByRole("button", { name: "Chain 4 step 1", exact: true }).click();
     await page.getByRole("button", { name: "Chain 4 Stutter block 1", exact: true }).waitFor();
-    await page.locator('[data-role="seqfx-aux-curve"]').waitFor();
+    await page.locator('[data-role="seqfx-stutter-editor"]').waitFor();
+    assert.equal(await page.locator('[data-role="seqfx-aux-source"]').count(), 0);
+    await openSeqFxModView(page);
 
-    await page.locator('[data-role="seqfx-stutter-gate-mod-toggle"]').click();
-    await page.locator('[data-role="seqfx-stutter-slices-slider"] .editor-tick-slider__label--toggle').click();
-    await page.locator('[data-role="seqfx-stutter-shape-mod-toggle"]').click();
-    await page.locator('[data-role="seqfx-stutter-speed-slider"] .editor-tick-slider__label--toggle').click();
-    await keyboardSetSliderTo(page.getByRole("slider", { name: "Gate position", exact: true }), "Home");
-    await keyboardSetSliderTo(page.getByRole("slider", { name: "Gate end", exact: true }), "Home");
-    await keyboardSetSliderTo(page.getByRole("slider", { name: "Slices end", exact: true }), "End");
-    await keyboardSetSliderTo(page.getByRole("slider", { name: "Shape end", exact: true }), "Home");
-    await keyboardSetSliderTo(page.getByRole("slider", { name: "Speed end", exact: true }), "End");
+    await toggleSeqFxModTarget(page, 3);
+    await toggleSeqFxModTarget(page, 0);
+    await toggleSeqFxModTarget(page, 2);
+    await toggleSeqFxModTarget(page, 1);
+    await setSeqFxModTargetAmount(page, 3, -68);
+    await setSeqFxModTargetAmount(page, 0, 24);
+    await setSeqFxModTargetAmount(page, 2, -0.4375);
+    await setSeqFxModTargetAmount(page, 1, 1);
 
     const snapshot = await getHarnessSnapshot(page);
     const upload = patternUploads(snapshot).at(-1).value;
@@ -1185,14 +1444,21 @@ test("seqfx_stutter_aux_controls_edit_gate_slices_shape_and_speed_targets", asyn
     assert.equal(upload.auxEnd[3][0][1], 2);
     assert.equal(upload.auxEnd[3][0][2], 0);
     assert.equal(upload.auxEnd[3][0][3], 0);
-    assert.equal(upload.params[3][0][3], 0);
+    assertClose(upload.params[3][0][3], 0.68, 0.000001, "stutter gate aux edit should not rewrite the base gate");
 
     const storedState = parseSeqFxStoredState(snapshot.storedState[SEQFX_STATE_KEY]);
     const step = storedState.patterns[0].lanes[3].steps[0];
-    assert.equal(step.aux.curve, "linear");
+    assert.deepEqual(step.aux.source, {
+        shape: 0,
+        sourceCurve: 0,
+        rateMode: "slice",
+        tempoMultiplier: 4,
+        tempoTriplet: false,
+        sliceCount: 1,
+    });
     assert.deepEqual(step.aux.targets.slice(0, 4).map((target) => target.enabled), [true, true, true, true]);
     assert.deepEqual(step.aux.targets.slice(0, 4).map((target) => target.end), [32, 2, 0, 0]);
-    assert.equal(step.params[3], 0);
+    assertClose(step.params[3], 0.68, 0.000001, "persisted stutter gate should remain the base gate");
 
     await page.close();
 });
@@ -1205,23 +1471,19 @@ test("seqfx_tape_stop_aux_controls_edit_all_tape_targets_including_mode", async 
 
     await page.getByRole("button", { name: "Chain 3 step 1", exact: true }).click();
     await page.getByRole("button", { name: "Chain 3 Tape Stop block 1", exact: true }).waitFor();
-    await page.locator('[data-role="seqfx-aux-curve"]').waitFor();
+    await page.locator('[data-role="seqfx-tape-graph"]').waitFor();
+    assert.equal(await page.locator('[data-role="seqfx-aux-source"]').count(), 0);
+    await openSeqFxModView(page);
 
-    for (const dataRole of [
-        "seqfx-tape-stop-point",
-        "seqfx-tape-curve",
-        "seqfx-tape-catchup-curve",
-        "seqfx-tape-catchup",
-        "seqfx-tape-mode",
-    ]) {
-        await page.locator(`[data-role="${dataRole}-mod-toggle"]`).click();
+    for (const paramIndex of [0, 1, 2, 3, 4]) {
+        await toggleSeqFxModTarget(page, paramIndex);
     }
 
-    await setRangeInputValue(page.locator('[data-role="seqfx-tape-stop-point-end"]'), 125);
-    await setRangeInputValue(page.locator('[data-role="seqfx-tape-curve-end"]'), 2.5);
-    await setRangeInputValue(page.locator('[data-role="seqfx-tape-catchup-curve-end"]'), 3);
-    await setRangeInputValue(page.locator('[data-role="seqfx-tape-catchup-end"]'), 75);
-    await page.locator('[data-role="seqfx-tape-mode-end"]').selectOption("1");
+    await setSeqFxModTargetAmount(page, 0, 25);
+    await setSeqFxModTargetAmount(page, 1, 1.5);
+    await setSeqFxModTargetAmount(page, 2, 2);
+    await setSeqFxModTargetAmount(page, 3, 50);
+    await page.locator('[data-role="seqfx-mod-target-destination"][data-param="4"]').selectOption("1");
 
     const snapshot = await getHarnessSnapshot(page);
     const upload = patternUploads(snapshot).at(-1).value;
@@ -1234,7 +1496,14 @@ test("seqfx_tape_stop_aux_controls_edit_all_tape_targets_including_mode", async 
 
     const storedState = parseSeqFxStoredState(snapshot.storedState[SEQFX_STATE_KEY]);
     const step = storedState.patterns[0].lanes[2].steps[0];
-    assert.equal(step.aux.curve, "linear");
+    assert.deepEqual(step.aux.source, {
+        shape: 0,
+        sourceCurve: 0,
+        rateMode: "slice",
+        tempoMultiplier: 4,
+        tempoTriplet: false,
+        sliceCount: 1,
+    });
     assert.deepEqual(step.aux.targets.slice(0, 5).map((target) => target.enabled), [true, true, true, true, true]);
     assertClose(step.aux.targets[0].end, 1.25, 0.000001, "persisted tape start length aux end");
     assert.deepEqual(step.aux.targets.slice(1, 5).map((target) => target.end), [2.5, 3, 75, 1]);
@@ -1307,39 +1576,21 @@ test("seqfx_crusher_inspector_renders_waveform_editor_and_writes_params", async 
         "crusher hold row should visibly distinguish active ticks from inactive ticks",
     );
 
-    const driveLayoutBefore = await page.locator('[data-role="seqfx-inspector"]').evaluate((node) => {
-        const driveRow = node.querySelector(".seqfx-crusher-editor__drive");
-        const mixRow = node.querySelector('[data-role="seqfx-mix-row"]');
-
-        return {
-            driveHeight: driveRow?.getBoundingClientRect().height ?? 0,
-            mixTop: mixRow?.getBoundingClientRect().top ?? 0,
-        };
-    });
-    await page.locator('[data-role="seqfx-crusher-drive-db-mod-toggle"]').click();
-    const driveLayoutModulated = await page.locator('[data-role="seqfx-inspector"]').evaluate((node) => {
-        const driveRow = node.querySelector(".seqfx-crusher-editor__drive");
-        const mixRow = node.querySelector('[data-role="seqfx-mix-row"]');
-
-        return {
-            driveHeight: driveRow?.getBoundingClientRect().height ?? 0,
-            mixTop: mixRow?.getBoundingClientRect().top ?? 0,
-        };
-    });
-    await page.locator('[data-role="seqfx-crusher-drive-db-mod-toggle"]').click();
-    const driveLayoutReset = await page.locator('[data-role="seqfx-inspector"]').evaluate((node) => {
-        const driveRow = node.querySelector(".seqfx-crusher-editor__drive");
-        const mixRow = node.querySelector('[data-role="seqfx-mix-row"]');
-
-        return {
-            driveHeight: driveRow?.getBoundingClientRect().height ?? 0,
-            mixTop: mixRow?.getBoundingClientRect().top ?? 0,
-        };
-    });
-    assertClose(driveLayoutModulated.mixTop, driveLayoutBefore.mixTop, 1, "crusher drive modulation should not push the mix row");
-    assertClose(driveLayoutModulated.driveHeight, driveLayoutBefore.driveHeight, 1, "crusher drive row height should stay stable when modulation turns on");
-    assertClose(driveLayoutReset.mixTop, driveLayoutBefore.mixTop, 1, "crusher drive modulation should not leave the mix row shifted after turning back off");
-    assertClose(driveLayoutReset.driveHeight, driveLayoutBefore.driveHeight, 1, "crusher drive row height should return to its original size");
+    assert.equal(
+        await page.locator('[data-role="seqfx-crusher-bits-slider"] .editor-tick-slider__label--toggle').count(),
+        1,
+        "crusher bits should keep its inline modulation toggle in the effect editor",
+    );
+    assert.equal(
+        await page.locator('[data-role="seqfx-crusher-hold-frames-slider"] .editor-tick-slider__label--toggle').count(),
+        1,
+        "crusher hold should keep its inline modulation toggle in the effect editor",
+    );
+    assert.equal(
+        await page.locator('[data-role="seqfx-crusher-drive-db-mod-toggle"]').count(),
+        1,
+        "crusher drive should keep its inline modulation toggle in the effect editor",
+    );
 
     const beforePath = await page.locator('[data-role="seqfx-crusher-wet-path"]').getAttribute("d");
     assert.ok(beforePath && beforePath.length > 20, "crusher graph should render a non-empty wet waveform path");
@@ -1375,6 +1626,14 @@ test("seqfx_crusher_inspector_renders_waveform_editor_and_writes_params", async 
         layout.mixTop >= layout.editorBottom,
         `SeqFX crusher mix row should sit below the crusher editor, got mix top ${layout.mixTop} and editor bottom ${layout.editorBottom}`,
     );
+
+    await page.locator('[data-role="seqfx-crusher-drive-db-mod-toggle"]').click();
+    await pressSliderKey(page.getByRole("slider", { name: "Drive end", exact: true }), "End");
+    snapshot = await getHarnessSnapshot(page);
+    upload = patternUploads(snapshot).at(-1).value;
+    assert.equal(upload.auxEnabled[1][0][CRUSHER_PARAM_DRIVE_DB], true);
+    assert.equal(upload.auxEnd[1][0][CRUSHER_PARAM_DRIVE_DB], 36);
+    assert.equal(await page.locator('[data-role="seqfx-mod-target-badge"]').textContent(), "1");
 
     await page.close();
 });
@@ -1448,7 +1707,26 @@ test("seqfx_stutter_inspector_renders_interactive_envelope_editor_and_writes_blo
     assert.equal(await page.locator('[data-role="seqfx-stutter-slices-slider"] [data-role="editor-tick-slider-tick"]').count(), 31);
     assert.equal(await page.locator('[data-role="seqfx-stutter-speed-slider"] [data-role="editor-tick-slider-tick"]').count(), 16);
     assert.equal(await page.locator('[data-role="seqfx-stutter-shape-slider"]').count(), 0);
-    await page.locator('[data-role="seqfx-stutter-shape-mod-toggle"]').waitFor();
+    assert.equal(
+        await page.locator('[data-role="seqfx-stutter-slices-slider"] .editor-tick-slider__label--toggle').count(),
+        1,
+        "stutter slices should keep its inline modulation toggle in the effect editor",
+    );
+    assert.equal(
+        await page.locator('[data-role="seqfx-stutter-speed-slider"] .editor-tick-slider__label--toggle').count(),
+        1,
+        "stutter speed should keep its inline modulation toggle in the effect editor",
+    );
+    assert.equal(
+        await page.locator('[data-role="seqfx-stutter-shape-mod-toggle"]').count(),
+        1,
+        "stutter shape should keep its inline modulation toggle in the effect editor",
+    );
+    assert.equal(
+        await page.locator('[data-role="seqfx-stutter-gate-mod-toggle"]').count(),
+        1,
+        "stutter gate should keep its inline modulation toggle in the effect editor",
+    );
 
     const tickBox = await page.locator('[data-role="seqfx-stutter-slices-slider"] [data-role="editor-tick-slider-tick"]').first().boundingBox();
     assert.ok(tickBox);
@@ -1530,6 +1808,15 @@ test("seqfx_stutter_inspector_renders_interactive_envelope_editor_and_writes_blo
         stutterLayout.mixTop >= stutterLayout.editorBottom,
         `SeqFX stutter mix row should sit below the envelope editor, got mix top ${stutterLayout.mixTop} and editor bottom ${stutterLayout.editorBottom}`,
     );
+
+    await page.locator('[data-role="seqfx-stutter-slices-slider"] .editor-tick-slider__label--toggle').click();
+    await pressSliderKey(page.getByRole("slider", { name: "Slices end", exact: true }), "End");
+    snapshot = await getHarnessSnapshot(page);
+    upload = patternUploads(snapshot).at(-1).value;
+    assert.equal(upload.auxEnabled[3][0][STUTTER_PARAM_SLICES], true);
+    assert.equal(upload.auxEnd[3][0][STUTTER_PARAM_SLICES], 32);
+    assert.equal(await page.locator('[data-role="seqfx-mod-target-badge"]').textContent(), "1");
+
     await setRangeInputValue(page.locator('[data-role="seqfx-mix"]'), 0.64);
     snapshot = await getHarnessSnapshot(page);
     upload = patternUploads(snapshot).at(-1).value;
@@ -1738,8 +2025,8 @@ test("seqfx_inspector_effect_selector_persists_selected_effect_type_and_uploads_
     const effectPicker = page.locator('[data-role="seqfx-effect-type"]');
     assert.equal(await effectPicker.evaluate((element) => element.tagName), "DIV");
     assert.equal(await effectPicker.locator("select").count(), 0);
-    assert.equal(await effectPicker.getByRole("button").count(), 4);
-    assert.equal(await effectPicker.locator("button > svg").count(), 4);
+    assert.equal(await effectPicker.locator('[data-role="seqfx-effect-type-option"]').count(), 4);
+    assert.equal(await effectPicker.locator('[data-role="seqfx-effect-type-option"] > svg').count(), 4);
     assert.equal(await effectPicker.getByRole("button", { name: "Crusher", exact: true }).getAttribute("aria-pressed"), "true");
 
     const tapeStopButton = effectPicker.getByRole("button", { name: "Tape Stop", exact: true });
@@ -2278,9 +2565,11 @@ test("seqfx_cmd_c_and_cmd_v_copy_cell_values_to_single_or_group_selection", asyn
     await pressMetaShortcut(page, "KeyC");
 
     await page.getByRole("button", { name: "Chain 1 step 1", exact: true }).click();
-    await page.locator('[data-role="seqfx-param"][data-param="4"]').waitFor();
+    await openSeqFxModView(page);
+    await page.locator('[data-role="seqfx-mod-target-destination"][data-param="0"]').waitFor();
+    await toggleSeqFxModTarget(page, 0);
     await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
-    await page.locator('[data-role="seqfx-param"][data-param="4"]').focus();
+    await page.locator('[data-role="seqfx-mod-target-destination"][data-param="0"]').focus();
     await pressMetaShortcut(page, "KeyV");
     let snapshot = await getHarnessSnapshot(page);
     assert.equal(patternUploads(snapshot).length, 0);
@@ -2340,11 +2629,13 @@ test("seqfx_clipboard_events_copy_and_paste_cell_values_when_keydown_is_missing"
     assert.deepEqual(copyResult, { defaultPrevented: true, dispatchResult: false });
 
     await page.getByRole("button", { name: "Chain 1 step 1", exact: true }).click();
-    await page.locator('[data-role="seqfx-param"][data-param="4"]').waitFor();
+    await openSeqFxModView(page);
+    await page.locator('[data-role="seqfx-mod-target-destination"][data-param="0"]').waitFor();
+    await toggleSeqFxModTarget(page, 0);
     await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
     const ignoredPasteResult = await dispatchClipboardEvent(
         page,
-        '[data-role="seqfx-param"][data-param="4"]',
+        '[data-role="seqfx-mod-target-destination"][data-param="0"]',
         "paste",
     );
     assert.deepEqual(ignoredPasteResult, { defaultPrevented: false, dispatchResult: true });
@@ -2508,7 +2799,7 @@ test("seqfx_selected_multi_step_blocks_edit_and_drag_as_whole_blocks", async () 
     let snapshot = await getHarnessSnapshot(page);
     let upload = patternUploads(snapshot).at(-1).value;
     const editedStart = upload.params[0][1][1];
-    const editedEnd = upload.params[0][1][2];
+    const editedEnd = upload.auxEnd[0][1][1];
     assert.ok(
         editedStart > editedEnd,
         `center handle edit should preserve downward filter sweep direction, got ${editedStart} -> ${editedEnd}`,
@@ -2527,7 +2818,16 @@ test("seqfx_selected_multi_step_blocks_edit_and_drag_as_whole_blocks", async () 
         [1, 2, 3, 7, 8].map((step) => upload.params[0][step][1]),
         [editedStart, editedStart, editedStart, editedStart, editedStart],
     );
+    assert.deepEqual(
+        [1, 2, 3, 7, 8].map((step) => upload.auxEnabled[0][step][1]),
+        [true, true, true, true, true],
+    );
+    assert.deepEqual(
+        [1, 2, 3, 7, 8].map((step) => upload.auxEnd[0][step][1]),
+        [editedEnd, editedEnd, editedEnd, editedEnd, editedEnd],
+    );
     assert.equal(upload.params[0][21][1], 2000);
+    assert.equal(upload.auxEnd[0][21][1], 500);
     await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
 
     const anchorBox = await page.getByRole("button", { name: "Chain 1 Filter block 2-4", exact: true }).boundingBox();
@@ -2554,8 +2854,13 @@ test("seqfx_selected_multi_step_blocks_edit_and_drag_as_whole_blocks", async () 
         [10, 11, 12, 16, 17].map((step) => upload.params[0][step][1]),
         [editedStart, editedStart, editedStart, editedStart, editedStart],
     );
+    assert.deepEqual(
+        [10, 11, 12, 16, 17].map((step) => upload.auxEnd[0][step][1]),
+        [editedEnd, editedEnd, editedEnd, editedEnd, editedEnd],
+    );
     assert.equal(upload.activeSteps[0][21], true);
     assert.equal(upload.params[0][21][1], 2000);
+    assert.equal(upload.auxEnd[0][21][1], 500);
     await page.getByRole("button", { name: "Chain 1 Filter block 11-13", exact: true }).waitFor();
     await page.getByRole("button", { name: "Chain 1 Filter block 17-18", exact: true }).waitFor();
     await page.getByRole("button", { name: "Chain 1 Filter block 22", exact: true }).waitFor();

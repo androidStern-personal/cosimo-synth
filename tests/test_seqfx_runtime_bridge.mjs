@@ -188,6 +188,7 @@ test("boot_ignores_old_seqfx_v3_state_and_uses_defaults_when_current_key_is_miss
     oldKeyState.patterns[0].lanes[SEQFX_LANES.crusher].steps[0].trigger = true;
     const connection = new FakePatchConnection({
         "seqfx.v3": serializeSeqFxState(oldKeyState),
+        "seqfx.v5": serializeSeqFxState(oldKeyState),
     });
     const bridge = new SeqFxRuntimeBridge(connection);
 
@@ -382,7 +383,7 @@ test("changing_selected_pattern_block_effect_persists_effect_types_and_restores_
     assert.equal(endpointEvents(connection, SEQFX_ENDPOINTS.patternUpload).length, 0);
 });
 
-test("changing_selected_pattern_block_aux_persists_curve_enabled_target_and_end_value", () => {
+test("changing_selected_pattern_block_aux_persists_source_enabled_target_and_end_value", () => {
     const initialState = createDefaultSeqFxState();
     const connection = new FakePatchConnection({
         [SEQFX_STATE_KEY]: serializeSeqFxState(initialState),
@@ -400,11 +401,16 @@ test("changing_selected_pattern_block_aux_persists_curve_enabled_target_and_end_
         startStep: 3,
         length: 2,
     });
-    bridge.setBlockAuxCurve({
+    bridge.setBlockAuxSource({
         patternIndex: 0,
         lane: SEQFX_LANES.crusher,
         startStep: 3,
-        curve: "log",
+        source: {
+            shape: 0.25,
+            sourceCurve: -0.5,
+            rateMode: "slice",
+            sliceCount: 12,
+        },
     });
     bridge.setBlockAuxTargetEnabled({
         patternIndex: 0,
@@ -425,10 +431,73 @@ test("changing_selected_pattern_block_aux_persists_curve_enabled_target_and_end_
     const storedState = latestStoredSeqFxState(connection);
     const auxStates = storedState.patterns[0].lanes[SEQFX_LANES.crusher].steps.slice(3, 5).map((step) => step.aux);
 
-    assert.deepEqual(auxStates.map((aux) => aux.curve), ["log", "log"]);
+    assert.deepEqual(auxStates.map((aux) => aux.source.shape), [0.25, 0.25]);
+    assert.deepEqual(auxStates.map((aux) => aux.source.sourceCurve), [-0.5, -0.5]);
+    assert.deepEqual(auxStates.map((aux) => aux.source.sliceCount), [12, 12]);
     assert.deepEqual(auxStates.map((aux) => aux.targets.length), [SEQFX_PARAM_COUNT, SEQFX_PARAM_COUNT]);
     assert.deepEqual(auxStates.map((aux) => aux.targets[0].enabled), [true, true]);
     assert.deepEqual(auxStates.map((aux) => aux.targets[0].end), [13, 13]);
+    assert.equal(endpointEvents(connection, SEQFX_ENDPOINTS.patternUpload).length, 0);
+});
+
+test("changing_selected_pattern_block_group_aux_persists_enabled_target_and_end_value", () => {
+    const initialState = createDefaultSeqFxState();
+    const connection = new FakePatchConnection({
+        [SEQFX_STATE_KEY]: serializeSeqFxState(initialState),
+    });
+    const bridge = new SeqFxRuntimeBridge(connection);
+
+    bridge.attach();
+    bridge.requestBootState();
+    connection.events = [];
+    connection.storedWrites = [];
+
+    bridge.createBlock({
+        patternIndex: 0,
+        lane: SEQFX_LANES.filter,
+        startStep: 1,
+        length: 2,
+    });
+    bridge.createBlock({
+        patternIndex: 0,
+        lane: SEQFX_LANES.filter,
+        startStep: 6,
+        length: 3,
+    });
+    bridge.createBlock({
+        patternIndex: 0,
+        lane: SEQFX_LANES.filter,
+        startStep: 20,
+        length: 2,
+    });
+    bridge.setBlockSelectionAuxTargetEnabled({
+        patternIndex: 0,
+        lane: SEQFX_LANES.filter,
+        blockStartSteps: [1, 6],
+        paramIndex: 1,
+        enabled: true,
+    });
+    bridge.setBlockSelectionAuxTargetEnd({
+        patternIndex: 0,
+        lane: SEQFX_LANES.filter,
+        blockStartSteps: [1, 6],
+        paramIndex: 1,
+        value: 880,
+    });
+
+    assert.equal(connection.storedWrites.length, 5);
+    const storedState = latestStoredSeqFxState(connection);
+    const editedSteps = [1, 2, 6, 7, 8].map((step) => (
+        storedState.patterns[0].lanes[SEQFX_LANES.filter].steps[step].aux.targets[1]
+    ));
+    assert.deepEqual(
+        editedSteps,
+        Array.from({ length: 5 }, () => ({ enabled: true, end: 880 })),
+    );
+    assert.deepEqual(
+        [20, 21].map((step) => storedState.patterns[0].lanes[SEQFX_LANES.filter].steps[step].aux.targets[1]),
+        [{ enabled: true, end: 500 }, { enabled: true, end: 500 }],
+    );
     assert.equal(endpointEvents(connection, SEQFX_ENDPOINTS.patternUpload).length, 0);
 });
 

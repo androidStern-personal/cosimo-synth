@@ -5,7 +5,7 @@ import {
     SEQFX_STATE_KEY,
     buildSeqPatternUpload,
     createDefaultSeqFxState,
-    parseStrictSeqFxStateV3,
+    parseStrictSeqFxStateV5,
 } from "../view/seqfx-state";
 
 const patternSelectEndpointID = "patternSelect";
@@ -28,7 +28,7 @@ export function createSeqFxWorkerService(connection: PatchConnectionLike) {
         applyDefaultRuntimeStateWhenMissing: true,
         deserializeStoredState: (value) => value == null
             ? createDefaultSeqFxState()
-            : parseStrictSeqFxStateV3(value),
+            : parseStrictSeqFxStateV5(value),
         buildRuntimeEvents: ({ state, parameters }) => [
             {
                 endpointID: patternUploadEndpointID,

@@ -21,7 +21,7 @@ const {
     applySeqFxBlockCopyPaint,
     applySeqFxBlockDelete,
     applySeqFxBlockMove,
-    applySeqFxBlockAuxCurveEdit,
+    applySeqFxBlockAuxSourceEdit,
     applySeqFxBlockAuxTargetEndEdit,
     applySeqFxBlockAuxTargetToggle,
     applySeqFxBlockEffectEdit,
@@ -30,6 +30,7 @@ const {
     applySeqFxBlockSelectionDelete,
     applySeqFxBlockSelectionCopy,
     applySeqFxBlockSelectionAuxTargetEndEdit,
+    applySeqFxBlockSelectionAuxTargetToggle,
     applySeqFxBlockSelectionMove,
     applySeqFxBlockSelectionParamEdit,
     applySeqFxCellToggle,
@@ -40,31 +41,40 @@ const {
     buildSeqPatternUpload,
     createDefaultSeqFxState,
     getSeqFxStepValueSnapshot,
-    parseStrictSeqFxStateV3,
+    parseStrictSeqFxStateV5,
     serializeSeqFxState,
     normalizeSeqFxState,
 } = stateModule;
 
-function assertDefaultAuxMatchesParams(step) {
-    assert.equal(step.aux.curve, "linear");
+function assertDefaultAuxMatchesParams(step, laneIndex) {
+    const filterLaneDefault = laneIndex === SEQFX_LANES.filter;
+
+    assert.deepEqual(step.aux.source, {
+        shape: filterLaneDefault ? 1 : 0,
+        sourceCurve: 0,
+        rateMode: "slice",
+        tempoMultiplier: 4,
+        tempoTriplet: false,
+        sliceCount: 1,
+    });
     assert.equal(step.aux.targets.length, SEQFX_PARAM_COUNT);
     step.aux.targets.forEach((target, paramIndex) => {
-        assert.equal(target.enabled, false);
-        assert.equal(target.end, step.params[paramIndex]);
+        assert.equal(target.enabled, filterLaneDefault && paramIndex === 1);
+        assert.equal(target.end, filterLaneDefault && paramIndex === 1 ? step.params[2] : step.params[paramIndex]);
     });
 }
 
-test("default_seqfx_v4_storage_key_contains_four_serial_chains_with_empty_effect_steps_and_aux_defaults", () => {
+test("default_seqfx_v6_storage_key_contains_four_serial_chains_with_empty_effect_steps_and_aux_source_defaults", () => {
     const state = createDefaultSeqFxState();
 
-    assert.equal(stateModule.SEQFX_STATE_KEY, "seqfx.v4");
-    assert.equal(state.version, 3);
+    assert.equal(stateModule.SEQFX_STATE_KEY, "seqfx.v6");
+    assert.equal(state.version, 5);
     assert.equal(state.patterns.length, SEQFX_PATTERN_COUNT);
 
     for (const pattern of state.patterns) {
         assert.equal(pattern.lanes.length, SEQFX_LANE_COUNT);
 
-        for (const chain of pattern.lanes) {
+        for (const [laneIndex, chain] of pattern.lanes.entries()) {
             assert.equal(chain.steps.length, SEQFX_STEP_COUNT);
 
             for (const step of chain.steps) {
@@ -73,7 +83,7 @@ test("default_seqfx_v4_storage_key_contains_four_serial_chains_with_empty_effect
                 assert.equal(step.effectType, SEQFX_EFFECT_TYPES.empty);
                 assert.equal(step.mix, 1);
                 assert.equal(step.params.length, SEQFX_PARAM_COUNT);
-                assertDefaultAuxMatchesParams(step);
+                assertDefaultAuxMatchesParams(step, laneIndex);
             }
         }
     }
@@ -90,10 +100,16 @@ test("default_seqfx_v4_storage_key_contains_four_serial_chains_with_empty_effect
     assert.equal(upload.auxEnabled[0][0].length, SEQFX_PARAM_COUNT);
     assert.equal(upload.auxEnabled.flat(2).some(Boolean), false);
     assert.equal(upload.auxEnd[SEQFX_LANES.crusher][0][0], 8);
-    assert.equal(upload.auxCurve[SEQFX_LANES.crusher][0], 0);
+    assert.equal(Object.prototype.hasOwnProperty.call(upload, "auxCurve"), false);
+    assert.equal(upload.auxShape[SEQFX_LANES.crusher][0], 0);
+    assert.equal(upload.auxSourceCurve[SEQFX_LANES.crusher][0], 0);
+    assert.equal(upload.auxRateMode[SEQFX_LANES.crusher][0], 1);
+    assert.equal(upload.auxTempoMultiplier[SEQFX_LANES.crusher][0], 4);
+    assert.equal(upload.auxTempoTriplet[SEQFX_LANES.crusher][0], false);
+    assert.equal(upload.auxSliceCount[SEQFX_LANES.crusher][0], 1);
 });
 
-test("seqfx_block_aux_edits_write_the_whole_block_and_upload_aux_arrays", () => {
+test("seqfx_block_aux_source_and_target_edits_write_the_whole_block_and_upload_aux_arrays", () => {
     let state = createDefaultSeqFxState();
     state = applySeqFxBlockCreate(state, {
         patternIndex: 0,
@@ -101,11 +117,18 @@ test("seqfx_block_aux_edits_write_the_whole_block_and_upload_aux_arrays", () => 
         startStep: 4,
         length: 3,
     });
-    state = applySeqFxBlockAuxCurveEdit(state, {
+    state = applySeqFxBlockAuxSourceEdit(state, {
         patternIndex: 0,
         lane: SEQFX_LANES.crusher,
         startStep: 4,
-        curve: "bell",
+        source: {
+            shape: -0.5,
+            sourceCurve: 0.65,
+            rateMode: "tempo",
+            tempoMultiplier: 3,
+            tempoTriplet: true,
+            sliceCount: 8,
+        },
     });
     state = applySeqFxBlockAuxTargetToggle(state, {
         patternIndex: 0,
@@ -135,7 +158,57 @@ test("seqfx_block_aux_edits_write_the_whole_block_and_upload_aux_arrays", () => 
         upload.auxEnd[SEQFX_LANES.crusher].slice(4, 7).map((targets) => targets[0]),
         [13, 13, 13],
     );
-    assert.deepEqual(upload.auxCurve[SEQFX_LANES.crusher].slice(4, 7), [4, 4, 4]);
+    assert.deepEqual(upload.auxShape[SEQFX_LANES.crusher].slice(4, 7), [-0.5, -0.5, -0.5]);
+    assert.deepEqual(upload.auxSourceCurve[SEQFX_LANES.crusher].slice(4, 7), [0.65, 0.65, 0.65]);
+    assert.deepEqual(upload.auxRateMode[SEQFX_LANES.crusher].slice(4, 7), [0, 0, 0]);
+    assert.deepEqual(upload.auxTempoMultiplier[SEQFX_LANES.crusher].slice(4, 7), [3, 3, 3]);
+    assert.deepEqual(upload.auxTempoTriplet[SEQFX_LANES.crusher].slice(4, 7), [true, true, true]);
+    assert.deepEqual(upload.auxSliceCount[SEQFX_LANES.crusher].slice(4, 7), [8, 8, 8]);
+});
+
+test("seqfx_filter_blocks_store_the_old_sweep_as_a_default_cutoff_aux_target", () => {
+    let state = createDefaultSeqFxState();
+    state = applySeqFxBlockCreate(state, {
+        patternIndex: 0,
+        lane: SEQFX_LANES.filter,
+        startStep: 3,
+        length: 2,
+        effectType: SEQFX_EFFECT_TYPES.filter,
+    });
+
+    const upload = buildSeqPatternUpload(state, {
+        patternIndex: 0,
+        authoritative: false,
+    });
+    const step = state.patterns[0].lanes[SEQFX_LANES.filter].steps[3];
+
+    assert.deepEqual(step.aux.source, {
+        shape: 1,
+        sourceCurve: 0,
+        rateMode: "slice",
+        tempoMultiplier: 4,
+        tempoTriplet: false,
+        sliceCount: 1,
+    });
+    assert.deepEqual(step.aux.targets[1], { enabled: true, end: 500 });
+    assert.equal(upload.params[SEQFX_LANES.filter][3][1], 2000);
+    assert.equal(upload.auxEnabled[SEQFX_LANES.filter][3][1], true);
+    assert.equal(upload.auxEnd[SEQFX_LANES.filter][3][1], 500);
+    assert.equal(upload.auxShape[SEQFX_LANES.filter][3], 1);
+    assert.equal(upload.auxSliceCount[SEQFX_LANES.filter][3], 1);
+    assert.deepEqual(upload.auxEnabled[SEQFX_LANES.filter].slice(3, 5).map((targets) => targets[1]), [true, true]);
+    assert.deepEqual(upload.auxEnd[SEQFX_LANES.filter].slice(3, 5).map((targets) => targets[1]), [500, 500]);
+});
+
+test("seqfx_aux_target_enabled_normalization_falls_back_when_raw_enabled_is_not_boolean", () => {
+    const rawState = createDefaultSeqFxState();
+    rawState.patterns[0].lanes[SEQFX_LANES.filter].steps[0].aux.targets[1].enabled = "yes";
+    rawState.patterns[0].lanes[SEQFX_LANES.crusher].steps[0].aux.targets[0].enabled = "yes";
+
+    const normalized = normalizeSeqFxState(rawState);
+
+    assert.equal(normalized.patterns[0].lanes[SEQFX_LANES.filter].steps[0].aux.targets[1].enabled, true);
+    assert.equal(normalized.patterns[0].lanes[SEQFX_LANES.crusher].steps[0].aux.targets[0].enabled, false);
 });
 
 test("seqfx_aux_end_values_clamp_and_round_like_effect_parameters", () => {
@@ -184,14 +257,16 @@ test("seqfx_aux_end_values_clamp_and_round_like_effect_parameters", () => {
     assert.equal(upload.auxEnd[SEQFX_LANES.crusher][2][1], 7);
 });
 
-test("seqfx_strict_v3_parser_rejects_old_shaped_payloads_under_the_new_key", () => {
+test("seqfx_strict_v5_parser_rejects_old_aux_curve_payloads_under_the_new_key", () => {
     const oldShaped = createDefaultSeqFxState();
-    oldShaped.version = 3;
-    delete oldShaped.patterns[0].lanes[SEQFX_LANES.crusher].steps[0].aux;
+    oldShaped.patterns[0].lanes[SEQFX_LANES.crusher].steps[0].aux = {
+        curve: "linear",
+        targets: oldShaped.patterns[0].lanes[SEQFX_LANES.crusher].steps[0].aux.targets,
+    };
 
     assert.throws(
-        () => parseStrictSeqFxStateV3(JSON.stringify(oldShaped)),
-        /aux/i,
+        () => parseStrictSeqFxStateV5(JSON.stringify(oldShaped)),
+        /source/i,
     );
 });
 
@@ -317,11 +392,17 @@ test("changing_a_block_effect_remembers_each_effects_aux_settings", () => {
         length: 2,
         effectType: SEQFX_EFFECT_TYPES.crusher,
     });
-    state = applySeqFxBlockAuxCurveEdit(state, {
+    state = applySeqFxBlockAuxSourceEdit(state, {
         patternIndex: 0,
         lane: SEQFX_LANES.crusher,
         startStep: 3,
-        curve: "exp",
+        source: {
+            shape: -0.75,
+            sourceCurve: -0.25,
+            rateMode: "tempo",
+            tempoMultiplier: 6,
+            tempoTriplet: true,
+        },
     });
     state = applySeqFxBlockAuxTargetToggle(state, {
         patternIndex: 0,
@@ -343,11 +424,16 @@ test("changing_a_block_effect_remembers_each_effects_aux_settings", () => {
         startStep: 3,
         effectType: SEQFX_EFFECT_TYPES.stutter,
     });
-    state = applySeqFxBlockAuxCurveEdit(state, {
+    state = applySeqFxBlockAuxSourceEdit(state, {
         patternIndex: 0,
         lane: SEQFX_LANES.crusher,
         startStep: 3,
-        curve: "bell",
+        source: {
+            shape: 0.5,
+            sourceCurve: 0.4,
+            rateMode: "slice",
+            sliceCount: 5,
+        },
     });
     state = applySeqFxBlockAuxTargetToggle(state, {
         patternIndex: 0,
@@ -371,7 +457,14 @@ test("changing_a_block_effect_remembers_each_effects_aux_settings", () => {
     });
 
     let restoredStep = state.patterns[0].lanes[SEQFX_LANES.crusher].steps[3];
-    assert.equal(restoredStep.aux.curve, "exp");
+    assert.deepEqual(restoredStep.aux.source, {
+        shape: -0.75,
+        sourceCurve: -0.25,
+        rateMode: "tempo",
+        tempoMultiplier: 6,
+        tempoTriplet: true,
+        sliceCount: 1,
+    });
     assert.deepEqual(restoredStep.aux.targets[0], { enabled: true, end: 13 });
 
     state = applySeqFxBlockEffectEdit(state, {
@@ -382,7 +475,14 @@ test("changing_a_block_effect_remembers_each_effects_aux_settings", () => {
     });
 
     restoredStep = state.patterns[0].lanes[SEQFX_LANES.crusher].steps[3];
-    assert.equal(restoredStep.aux.curve, "bell");
+    assert.deepEqual(restoredStep.aux.source, {
+        shape: 0.5,
+        sourceCurve: 0.4,
+        rateMode: "slice",
+        tempoMultiplier: 4,
+        tempoTriplet: false,
+        sliceCount: 5,
+    });
     assert.deepEqual(restoredStep.aux.targets[2], { enabled: true, end: 0.2 });
 });
 
@@ -421,13 +521,13 @@ test("adjacent_different_effect_steps_are_separate_blocks_even_without_a_second_
 test("default_seqfx_state_contains_twelve_complete_four_lane_patterns", () => {
     const state = createDefaultSeqFxState();
 
-    assert.equal(state.version, 3);
+    assert.equal(state.version, 5);
     assert.equal(state.patterns.length, SEQFX_PATTERN_COUNT);
 
     for (const pattern of state.patterns) {
         assert.equal(pattern.lanes.length, SEQFX_LANE_COUNT);
 
-        for (const lane of pattern.lanes) {
+        for (const [laneIndex, lane] of pattern.lanes.entries()) {
             assert.equal(lane.steps.length, SEQFX_STEP_COUNT);
 
             for (const step of lane.steps) {
@@ -435,7 +535,7 @@ test("default_seqfx_state_contains_twelve_complete_four_lane_patterns", () => {
                 assert.equal(step.trigger, false);
                 assert.equal(step.mix, 1);
                 assert.equal(step.params.length, SEQFX_PARAM_COUNT);
-                assertDefaultAuxMatchesParams(step);
+                assertDefaultAuxMatchesParams(step, laneIndex);
             }
         }
     }
@@ -940,11 +1040,16 @@ test("block_resize_move_copy_copy_paint_and_step_paste_preserve_non_default_aux"
         startStep: 2,
         length: 2,
     });
-    state = applySeqFxBlockAuxCurveEdit(state, {
+    state = applySeqFxBlockAuxSourceEdit(state, {
         patternIndex: 0,
         lane: SEQFX_LANES.crusher,
         startStep: 2,
-        curve: "log",
+        source: {
+            shape: 0.25,
+            sourceCurve: 0.7,
+            rateMode: "slice",
+            sliceCount: 12,
+        },
     });
     state = applySeqFxBlockAuxTargetToggle(state, {
         patternIndex: 0,
@@ -1001,7 +1106,14 @@ test("block_resize_move_copy_copy_paint_and_step_paste_preserve_non_default_aux"
         [SEQFX_LANES.stutter, 1],
     ]) {
         const step = state.patterns[0].lanes[lane].steps[startStep];
-        assert.equal(step.aux.curve, "log");
+        assert.deepEqual(step.aux.source, {
+            shape: 0.25,
+            sourceCurve: 0.7,
+            rateMode: "slice",
+            tempoMultiplier: 4,
+            tempoTriplet: false,
+            sliceCount: 12,
+        });
         assert.deepEqual(step.aux.targets[0], { enabled: true, end: 13 });
     }
 
@@ -1024,7 +1136,14 @@ test("block_resize_move_copy_copy_paint_and_step_paste_preserve_non_default_aux"
     });
 
     const pastedStep = state.patterns[0].lanes[SEQFX_LANES.crusher].steps[20];
-    assert.equal(pastedStep.aux.curve, "log");
+    assert.deepEqual(pastedStep.aux.source, {
+        shape: 0.25,
+        sourceCurve: 0.7,
+        rateMode: "slice",
+        tempoMultiplier: 4,
+        tempoTriplet: false,
+        sliceCount: 12,
+    });
     assert.deepEqual(pastedStep.aux.targets[0], { enabled: true, end: 13 });
 });
 
@@ -1457,6 +1576,20 @@ test("block_selection_edits_moves_and_deletes_whole_multi_cell_blocks", () => {
         paramIndex: 1,
         value: 2222,
     });
+    state = applySeqFxBlockSelectionAuxTargetToggle(state, {
+        patternIndex: 0,
+        lane: SEQFX_LANES.filter,
+        blockStartSteps: [1, 5],
+        paramIndex: 1,
+        enabled: true,
+    });
+    state = applySeqFxBlockSelectionAuxTargetEndEdit(state, {
+        patternIndex: 0,
+        lane: SEQFX_LANES.filter,
+        blockStartSteps: [1, 5],
+        paramIndex: 1,
+        value: 444,
+    });
 
     let upload = buildSeqPatternUpload(state, {
         patternIndex: 0,
@@ -1469,6 +1602,22 @@ test("block_selection_edits_moves_and_deletes_whole_multi_cell_blocks", () => {
     assert.deepEqual(
         [20, 21].map((step) => upload.params[SEQFX_LANES.filter][step][1]),
         [2000, 2000],
+    );
+    assert.deepEqual(
+        [1, 2, 5, 6, 7].map((step) => upload.auxEnabled[SEQFX_LANES.filter][step][1]),
+        [true, true, true, true, true],
+    );
+    assert.deepEqual(
+        [1, 2, 5, 6, 7].map((step) => upload.auxEnd[SEQFX_LANES.filter][step][1]),
+        [444, 444, 444, 444, 444],
+    );
+    assert.deepEqual(
+        [20, 21].map((step) => upload.auxEnabled[SEQFX_LANES.filter][step][1]),
+        [true, true],
+    );
+    assert.deepEqual(
+        [20, 21].map((step) => upload.auxEnd[SEQFX_LANES.filter][step][1]),
+        [500, 500],
     );
 
     const moveResult = applySeqFxBlockSelectionMove(state, {
@@ -1497,6 +1646,10 @@ test("block_selection_edits_moves_and_deletes_whole_multi_cell_blocks", () => {
     assert.deepEqual(
         [10, 11, 14, 15, 16].map((step) => upload.params[SEQFX_LANES.filter][step][1]),
         [2222, 2222, 2222, 2222, 2222],
+    );
+    assert.deepEqual(
+        [10, 11, 14, 15, 16].map((step) => upload.auxEnd[SEQFX_LANES.filter][step][1]),
+        [444, 444, 444, 444, 444],
     );
 
     state = applySeqFxBlockSelectionDelete(state, {

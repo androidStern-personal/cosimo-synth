@@ -1,7 +1,7 @@
 import type { PatchConnectionLike } from "../../../ui/shared/cmajor-react";
 import {
     SEQFX_STATE_KEY,
-    applySeqFxBlockAuxCurveEdit,
+    applySeqFxBlockAuxSourceEdit,
     applySeqFxBlockAuxTargetEndEdit,
     applySeqFxBlockAuxTargetToggle,
     applySeqFxBlockEffectEdit,
@@ -15,6 +15,8 @@ import {
     applySeqFxBlockResize,
     applySeqFxBlockSelectionDelete,
     applySeqFxBlockSelectionCopy,
+    applySeqFxBlockSelectionAuxTargetEndEdit,
+    applySeqFxBlockSelectionAuxTargetToggle,
     applySeqFxBlockSelectionMixEdit,
     applySeqFxBlockSelectionMove,
     applySeqFxBlockSelectionParamEdit,
@@ -25,9 +27,9 @@ import {
     createDefaultSeqFxState,
     getSeqFxStepValueSnapshot,
     normalizeSeqFxState,
-    parseStrictSeqFxStateV3,
+    parseStrictSeqFxStateV5,
     serializeSeqFxState,
-    type SeqFxBlockAuxCurveEdit,
+    type SeqFxBlockAuxSourceEdit,
     type SeqFxBlockAuxTargetEndEdit,
     type SeqFxBlockAuxTargetToggleEdit,
     type SeqFxBlockCreateEdit,
@@ -41,6 +43,8 @@ import {
     type SeqFxBlockParamEdit,
     type SeqFxBlockResizeEdit,
     type SeqFxBlockSelectionEditTarget,
+    type SeqFxBlockSelectionAuxTargetEndEdit,
+    type SeqFxBlockSelectionAuxTargetToggleEdit,
     type SeqFxBlockSelectionCopyEdit,
     type SeqFxBlockSelectionCopyResult,
     type SeqFxBlockSelectionMixEdit,
@@ -293,7 +297,7 @@ export class SeqFxRuntimeBridge {
     }
 
     replaceStateFromPreset(nextState: SeqFxState) {
-        this.state = parseStrictSeqFxStateV3(nextState);
+        this.state = parseStrictSeqFxStateV5(nextState);
         this.persistState();
         this.notifyStateListeners();
     }
@@ -387,8 +391,8 @@ export class SeqFxRuntimeBridge {
         this.commitState(applySeqFxBlockParamEdit(this.state, edit), edit.patternIndex);
     }
 
-    setBlockAuxCurve(edit: SeqFxBlockAuxCurveEdit) {
-        this.commitState(applySeqFxBlockAuxCurveEdit(this.state, edit), edit.patternIndex);
+    setBlockAuxSource(edit: SeqFxBlockAuxSourceEdit) {
+        this.commitState(applySeqFxBlockAuxSourceEdit(this.state, edit), edit.patternIndex);
     }
 
     setBlockAuxTargetEnabled(edit: SeqFxBlockAuxTargetToggleEdit) {
@@ -397,6 +401,14 @@ export class SeqFxRuntimeBridge {
 
     setBlockAuxTargetEnd(edit: SeqFxBlockAuxTargetEndEdit) {
         this.commitState(applySeqFxBlockAuxTargetEndEdit(this.state, edit), edit.patternIndex);
+    }
+
+    setBlockSelectionAuxTargetEnabled(edit: SeqFxBlockSelectionAuxTargetToggleEdit) {
+        this.commitState(applySeqFxBlockSelectionAuxTargetToggle(this.state, edit), edit.patternIndex);
+    }
+
+    setBlockSelectionAuxTargetEnd(edit: SeqFxBlockSelectionAuxTargetEndEdit) {
+        this.commitState(applySeqFxBlockSelectionAuxTargetEndEdit(this.state, edit), edit.patternIndex);
     }
 
     setBlockEffect(edit: SeqFxBlockEffectEdit) {
@@ -444,7 +456,7 @@ export class SeqFxRuntimeBridge {
     private applyStoredState(rawState: unknown) {
         const nextState = rawState == null
             ? createDefaultSeqFxState()
-            : parseStrictSeqFxStateV3(rawState);
+            : parseStrictSeqFxStateV5(rawState);
 
         this.state = nextState;
         this.notifyStateListeners();

@@ -162,7 +162,7 @@ test("seqfx worker uploads the selected saved pattern from Cmajor stored-state v
     assert.deepEqual(connection.storedWrites, []);
 });
 
-test("seqfx worker ignores old state keys and applies a default empty pattern when seqfx.v4 is missing", () => {
+test("seqfx worker ignores old state keys and applies a default empty pattern when seqfx.v6 is missing", () => {
     const oldKeyState = createStateWithBlock({
         patternIndex: 0,
         lane: SEQFX_LANES.tapeStop,
@@ -174,6 +174,7 @@ test("seqfx worker ignores old state keys and applies a default empty pattern wh
             "seqfx.v1": serializeSeqFxState(oldKeyState),
             "seqfx.v2": serializeSeqFxState(oldKeyState),
             "seqfx.v3": serializeSeqFxState(oldKeyState),
+            "seqfx.v5": serializeSeqFxState(oldKeyState),
         },
         parameters: {
             patternSelect: 0,
@@ -191,7 +192,7 @@ test("seqfx worker ignores old state keys and applies a default empty pattern wh
     assert.deepEqual(connection.storedWrites, []);
 });
 
-test("seqfx worker treats Cmajor null stored-state response as missing seqfx.v4", () => {
+test("seqfx worker treats Cmajor null stored-state response as missing seqfx.v6", () => {
     const connection = new CmajorMissingStoredValuePatchConnection({
         parameters: {
             patternSelect: 0,
@@ -271,7 +272,7 @@ test("seqfx worker reuploads when patternSelect changes", () => {
     );
 });
 
-test("seqfx worker reuploads the selected pattern when seqfx.v4 changes", () => {
+test("seqfx worker reuploads the selected pattern when seqfx.v6 changes", () => {
     const connection = new FakePatchConnection({
         values: {
             [SEQFX_STATE_KEY]: serializeSeqFxState(createDefaultSeqFxState()),

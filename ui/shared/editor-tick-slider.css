@@ -1,7 +1,7 @@
 .editor-tick-slider {
     container-type: inline-size;
     display: grid;
-    grid-template-columns: 60px minmax(0, 1fr) 84px;
+    grid-template-columns: 54px minmax(0, 1fr) 58px;
     align-items: center;
     gap: 6px;
     padding: 6px 8px;

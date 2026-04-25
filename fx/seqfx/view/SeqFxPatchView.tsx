@@ -15,7 +15,7 @@ import {
     geometricCenterCutoffHz,
 } from "../../../ui/shared/filter-range-editor";
 import { ModBadge, type ModulationDirection } from "../../../ui/shared/editor-tick-slider";
-import { AuxCurve } from "./AuxCurve";
+import { AuxSource, auxSourceMonitorPoint, buildAuxSourcePreviewPath } from "./AuxSource";
 import { CrusherEditor, type CrusherModulation } from "./CrusherEditor";
 import { StutterEnvelopeEditor, type StutterModulation } from "./StutterEnvelopeEditor";
 import {
@@ -28,7 +28,8 @@ import {
     getSeqFxBlockAtStep,
     getSeqFxLaneBlocks,
     isSeqFxTriggerLatchedParamForEffect,
-    type SeqFxAuxCurveShape,
+    type SeqFxAuxSource,
+    type SeqFxAuxState,
     type SeqFxBlock,
     type SeqFxEffectType,
     type SeqFxPattern,
@@ -36,6 +37,7 @@ import {
     type SeqFxStepValueSnapshot,
     type SeqFxState,
 } from "./seqfx-state";
+import { formatStutterShapeLabel } from "./stutter-envelope";
 import {
     TAPE_STOP_MAX_CATCHUP_PERCENT,
     TAPE_STOP_MAX_CURVE,
@@ -65,6 +67,8 @@ type Selection = {
     steps: number[];
     blockStartSteps?: number[];
 };
+
+type InspectorMode = "effect" | "mod";
 
 type ResizeGesture = {
     mode: "resize";
@@ -142,7 +146,8 @@ type PatternPreview = {
 };
 
 type AuxMonitorState = {
-    phase: number[];
+    cyclePhase: number[];
+    amount: number[];
     durationMs: number[];
 };
 
@@ -168,9 +173,21 @@ type ParamDefinition = {
     max: number;
     step: number;
     kind?: "select";
+    amountKind?: ParamAmountKind;
     options?: string[];
     hint?: string;
 };
+
+type ParamAmountKind =
+    | "cutoffOctaves"
+    | "integer"
+    | "linear"
+    | "db"
+    | "speed"
+    | "percentPoints"
+    | "percentValue"
+    | "tapeStopPointPercent"
+    | "stutterShape";
 
 const EFFECT_OPTIONS = [
     SEQFX_EFFECT_TYPES.filter,
@@ -261,39 +278,420 @@ function SeqFxMixRow({
     );
 }
 
+function enabledAuxTargetCount(aux: SeqFxAuxState) {
+    return aux.targets.reduce((count, target) => count + (target.enabled ? 1 : 0), 0);
+}
+
+function modulationDirectionForValues(start: number, end: number): ModulationDirection {
+    if (end > start) {
+        return "up";
+    }
+
+    if (end < start) {
+        return "down";
+    }
+
+    return "both";
+}
+
+function formatFilterHzChip(value: number) {
+    const cutoff = clampNumber(value, 20, 20_000);
+    const roundedCutoff = Math.round(cutoff);
+    if (roundedCutoff >= 10_000) {
+        return `${(roundedCutoff / 1000).toFixed(1)}k`;
+    }
+
+    if (roundedCutoff >= 1000) {
+        return `${(roundedCutoff / 1000).toFixed(2)}k`;
+    }
+
+    return String(roundedCutoff);
+}
+
+function formatSignedFixed(value: number, decimals: number) {
+    const zeroThreshold = 1 / (10 ** (decimals + 1));
+    if (Math.abs(value) < zeroThreshold) {
+        return Number(0).toFixed(decimals);
+    }
+
+    return `${value > 0 ? "+" : ""}${value.toFixed(decimals)}`;
+}
+
+function quantizeToStep(value: number, min: number, step: number) {
+    if (!Number.isFinite(step) || step <= 0) {
+        return value;
+    }
+
+    return min + (Math.round((value - min) / step) * step);
+}
+
+function modDisplayValue(definition: ParamDefinition, rawValue: number) {
+    if (definition.amountKind === "tapeStopPointPercent") {
+        return multiplierToStopPointPercent(rawValue);
+    }
+
+    if (definition.amountKind === "percentPoints") {
+        return rawValue * 100;
+    }
+
+    return rawValue;
+}
+
+function rawValueFromModDisplay(definition: ParamDefinition, displayValue: number) {
+    if (definition.amountKind === "tapeStopPointPercent") {
+        return stopPointPercentToMultiplier(displayValue);
+    }
+
+    if (definition.amountKind === "percentPoints") {
+        return displayValue / 100;
+    }
+
+    return displayValue;
+}
+
+function modDisplayBounds(definition: ParamDefinition) {
+    if (definition.amountKind === "tapeStopPointPercent") {
+        return {
+            min: TAPE_STOP_MIN_STOP_POINT_PERCENT,
+            max: TAPE_STOP_MAX_STOP_POINT_PERCENT,
+        };
+    }
+
+    if (definition.amountKind === "percentPoints") {
+        return {
+            min: definition.min * 100,
+            max: definition.max * 100,
+        };
+    }
+
+    return {
+        min: definition.min,
+        max: definition.max,
+    };
+}
+
+function modAmountBounds(definition: ParamDefinition, baseValue: number) {
+    if (definition.amountKind === "cutoffOctaves") {
+        const safeBase = clampNumber(baseValue, definition.min, definition.max);
+        return {
+            min: Math.log2(definition.min / safeBase),
+            max: Math.log2(definition.max / safeBase),
+        };
+    }
+
+    const baseDisplayValue = modDisplayValue(definition, baseValue);
+    const bounds = modDisplayBounds(definition);
+    return {
+        min: bounds.min - baseDisplayValue,
+        max: bounds.max - baseDisplayValue,
+    };
+}
+
+function modAmountFromTarget(definition: ParamDefinition, baseValue: number, targetValue: number) {
+    if (definition.amountKind === "cutoffOctaves") {
+        const safeBase = clampNumber(baseValue, definition.min, definition.max);
+        const safeTarget = clampNumber(targetValue, definition.min, definition.max);
+        return Math.log2(safeTarget / safeBase);
+    }
+
+    return modDisplayValue(definition, targetValue) - modDisplayValue(definition, baseValue);
+}
+
+function targetFromModAmount(definition: ParamDefinition, baseValue: number, amount: number) {
+    if (Math.abs(amount) < 0.0000001) {
+        return clampNumber(baseValue, definition.min, definition.max);
+    }
+
+    if (definition.amountKind === "cutoffOctaves") {
+        const safeBase = clampNumber(baseValue, definition.min, definition.max);
+        return clampNumber(safeBase * (2 ** amount), definition.min, definition.max);
+    }
+
+    const baseDisplayValue = modDisplayValue(definition, baseValue);
+    const displayBounds = modDisplayBounds(definition);
+    const displayStep = definition.amountKind === "percentPoints"
+        ? definition.step * 100
+        : definition.amountKind === "tapeStopPointPercent"
+            ? 1
+            : definition.step;
+    const nextDisplayValue = quantizeToStep(
+        clampNumber(baseDisplayValue + amount, displayBounds.min, displayBounds.max),
+        displayBounds.min,
+        displayStep,
+    );
+    return clampNumber(rawValueFromModDisplay(definition, nextDisplayValue), definition.min, definition.max);
+}
+
+function normalizedAmountFromPhysical(amount: number, minAmount: number, maxAmount: number) {
+    if (Math.abs(amount) < 0.0000001) {
+        return 0;
+    }
+
+    if (amount > 0) {
+        return maxAmount > 0 ? clampNumber(amount / maxAmount, 0, 1) : 0;
+    }
+
+    return minAmount < 0 ? -clampNumber(Math.abs(amount) / Math.abs(minAmount), 0, 1) : 0;
+}
+
+function physicalAmountFromNormalized(normalized: number, minAmount: number, maxAmount: number) {
+    const clampedNormalized = clampNumber(normalized, -1, 1);
+    if (clampedNormalized >= 0) {
+        return clampedNormalized * Math.max(0, maxAmount);
+    }
+
+    return clampedNormalized * Math.max(0, Math.abs(minAmount));
+}
+
+function formatModAmountValue(definition: ParamDefinition, amount: number) {
+    switch (definition.amountKind) {
+        case "cutoffOctaves":
+            return `${formatSignedFixed(amount, 2)} oct`;
+        case "integer":
+            return formatSignedFixed(Math.round(amount), 0);
+        case "db":
+            return `${formatSignedFixed(amount, 1)} dB`;
+        case "speed":
+            return `${formatSignedFixed(amount, 2)}x`;
+        case "percentPoints":
+        case "percentValue":
+        case "tapeStopPointPercent":
+            return `${formatSignedFixed(Math.round(amount), 0)}%`;
+        case "stutterShape":
+        case "linear":
+        default:
+            return formatSignedFixed(amount, 2);
+    }
+}
+
+function formatModDestinationValue(definition: ParamDefinition, value: number) {
+    switch (definition.amountKind) {
+        case "cutoffOctaves":
+            return formatFilterHzChip(value);
+        case "integer":
+            return String(Math.round(value));
+        case "db":
+            return `${value.toFixed(1)} dB`;
+        case "speed":
+            return `${value.toFixed(2)}x`;
+        case "percentPoints":
+            return `${Math.round(value * 100)}%`;
+        case "percentValue":
+            return `${Math.round(value)}%`;
+        case "tapeStopPointPercent":
+            return `${Math.round(multiplierToStopPointPercent(value))}%`;
+        case "stutterShape":
+            return formatStutterShapeLabel(value);
+        case "linear":
+        default:
+            return formatValue(value);
+    }
+}
+
+function SeqFxModToggleButton({
+    aux,
+    cyclePhase,
+    amount,
+    active,
+    onClick,
+}: {
+    aux: SeqFxAuxState;
+    cyclePhase: number;
+    amount: number;
+    active: boolean;
+    onClick: () => void;
+}) {
+    const targetCount = enabledAuxTargetCount(aux);
+    const path = useMemo(() => buildAuxSourcePreviewPath(aux.source), [aux.source.shape, aux.source.sourceCurve]);
+    const phasePoint = auxSourceMonitorPoint(cyclePhase, amount);
+    const targetWord = targetCount === 1 ? "target" : "targets";
+
+    return (
+        <button
+            aria-label={`Edit modulation, shape ${aux.source.shape.toFixed(2)}, curve ${aux.source.sourceCurve.toFixed(2)}, ${targetCount} ${targetWord}`}
+            aria-pressed={active}
+            className={`seqfx-mod-toggle${active ? " is-selected" : ""}${targetCount > 0 ? " has-targets" : ""}`}
+            data-role="seqfx-mod-toggle"
+            onClick={onClick}
+            type="button"
+        >
+            <span className="seqfx-mod-toggle__label">Mod</span>
+            <svg className="seqfx-mod-toggle__thumb" viewBox="0 0 200 22" preserveAspectRatio="none" aria-hidden="true">
+                <path data-role="seqfx-mod-thumbnail-path" d={path} />
+                <circle
+                    data-role="seqfx-mod-thumbnail-dot"
+                    cx={phasePoint.x.toFixed(1)}
+                    cy={phasePoint.y.toFixed(1)}
+                    r="2.3"
+                />
+            </svg>
+            <span className="seqfx-mod-toggle__badge" data-role="seqfx-mod-target-badge">{targetCount}</span>
+        </button>
+    );
+}
+
+function SeqFxModEditor({
+    aux,
+    cyclePhase,
+    amount,
+    params,
+    definitions,
+    onSourceChange,
+    onTargetToggle,
+    onTargetEndChange,
+}: {
+    aux: SeqFxAuxState;
+    cyclePhase: number;
+    amount: number;
+    params: number[];
+    definitions: ParamDefinition[];
+    onSourceChange: (source: Partial<SeqFxAuxSource>) => void;
+    onTargetToggle: (paramIndex: number) => void;
+    onTargetEndChange: (paramIndex: number, value: number) => void;
+}) {
+    return (
+        <div className="seqfx-mod-editor" data-role="seqfx-mod-editor">
+            <AuxSource
+                source={aux.source}
+                cyclePhase={cyclePhase}
+                amount={amount}
+                onSourceChange={onSourceChange}
+            />
+            <div className="seqfx-mod-targets" data-role="seqfx-mod-targets">
+                {definitions.map((definition) => {
+                    const currentValue = clampNumber(Number(params[definition.index] ?? definition.min), definition.min, definition.max);
+                    const target = aux.targets[definition.index];
+                    const endValue = clampNumber(Number(target?.end ?? currentValue), definition.min, definition.max);
+                    const enabled = target?.enabled === true;
+                    const direction = enabled ? modulationDirectionForValues(currentValue, endValue) : "both";
+                    const amountBounds = modAmountBounds(definition, currentValue);
+                    const physicalAmount = modAmountFromTarget(definition, currentValue, endValue);
+                    const normalizedAmount = normalizedAmountFromPhysical(physicalAmount, amountBounds.min, amountBounds.max);
+                    const fillPosition = 50 + (normalizedAmount * 50);
+                    const amountTrackStyle = {
+                        "--mod-amount-fill-start": `${Math.min(50, fillPosition)}%`,
+                        "--mod-amount-fill-end": `${Math.max(50, fillPosition)}%`,
+                    } as CSSProperties;
+
+                    return (
+                        <div
+                            className={`seqfx-mod-target-row${enabled ? " is-enabled" : ""}`}
+                            data-param={definition.index}
+                            data-role="seqfx-mod-target-row"
+                            key={definition.index}
+                        >
+                            <span className="seqfx-mod-target-row__name">{definition.label}</span>
+                            <button
+                                aria-label={`Modulate ${definition.label}`}
+                                aria-pressed={enabled}
+                                className="seqfx-mod-target-row__toggle"
+                                data-param={definition.index}
+                                data-role="seqfx-mod-target-toggle"
+                                onClick={() => onTargetToggle(definition.index)}
+                                type="button"
+                            >
+                                <ModBadge isOn={enabled} direction={direction} />
+                            </button>
+                            {definition.kind === "select" ? (
+                                <select
+                                    aria-label={`${definition.label} modulation destination`}
+                                    className="seqfx-mod-target-row__select"
+                                    data-param={definition.index}
+                                    data-role="seqfx-mod-target-destination"
+                                    disabled={!enabled}
+                                    onChange={(event) => onTargetEndChange(definition.index, Number(event.currentTarget.value))}
+                                    value={Math.round(endValue)}
+                                >
+                                    {definition.options!.map((option, index) => (
+                                        <option key={option} value={index}>{option}</option>
+                                    ))}
+                                </select>
+                            ) : (
+                                <>
+                                    <span className="seqfx-mod-target-row__amount-control">
+                                        <span className="seqfx-mod-target-row__zero" aria-hidden="true" />
+                                        <input
+                                            aria-label={`${definition.label} modulation amount`}
+                                            aria-valuetext={`${formatModAmountValue(definition, physicalAmount)} to ${formatModDestinationValue(definition, endValue)}`}
+                                            data-amount-current={physicalAmount}
+                                            data-amount-max={amountBounds.max}
+                                            data-amount-min={amountBounds.min}
+                                            data-param={definition.index}
+                                            data-role="seqfx-mod-target-amount"
+                                            disabled={!enabled}
+                                            max={1}
+                                            min={-1}
+                                            onChange={(event) => {
+                                                const nextAmount = physicalAmountFromNormalized(Number(event.currentTarget.value), amountBounds.min, amountBounds.max);
+                                                onTargetEndChange(definition.index, targetFromModAmount(definition, currentValue, nextAmount));
+                                            }}
+                                            onDoubleClick={(event) => {
+                                                event.preventDefault();
+                                                onTargetEndChange(definition.index, targetFromModAmount(definition, currentValue, 0));
+                                            }}
+                                            onInput={(event) => {
+                                                const nextAmount = physicalAmountFromNormalized(Number(event.currentTarget.value), amountBounds.min, amountBounds.max);
+                                                onTargetEndChange(definition.index, targetFromModAmount(definition, currentValue, nextAmount));
+                                            }}
+                                            step={0.000001}
+                                            style={amountTrackStyle}
+                                            type="range"
+                                            value={normalizedAmount}
+                                        />
+                                    </span>
+                                    <output
+                                        className="seqfx-mod-target-row__amount-value"
+                                        data-param={definition.index}
+                                        data-role="seqfx-mod-target-amount-value"
+                                    >
+                                        {formatModAmountValue(definition, physicalAmount)}
+                                    </output>
+                                    <output
+                                        className="seqfx-mod-target-row__destination"
+                                        data-param={definition.index}
+                                        data-role="seqfx-mod-target-destination"
+                                    >
+                                        {formatModDestinationValue(definition, endValue)}
+                                    </output>
+                                </>
+                            )}
+                        </div>
+                    );
+                })}
+            </div>
+        </div>
+    );
+}
+
 const PARAM_DEFINITIONS: Record<number, ParamDefinition[]> = {
     [SEQFX_EFFECT_TYPES.filter]: [
         { index: 0, label: "Mode", min: 0, max: 2, step: 1, kind: "select", options: ["Lowpass", "Highpass", "Bandpass"] },
-        { index: 1, label: "Start cutoff", min: 20, max: 20000, step: 1 },
-        { index: 2, label: "End cutoff", min: 20, max: 20000, step: 1 },
-        { index: 3, label: "Resonance", min: 0.1, max: 20, step: 0.01 },
-        { index: 4, label: "Curve", min: 0.25, max: 4, step: 0.01 },
+        { index: 1, label: "Cutoff", min: 20, max: 20000, step: 1, amountKind: "cutoffOctaves" },
+        { index: 3, label: "Resonance", min: 0.1, max: 20, step: 0.01, amountKind: "linear" },
     ],
     [SEQFX_EFFECT_TYPES.crusher]: [
-        { index: 0, label: "Bits", min: 4, max: 16, step: 1 },
-        { index: 1, label: "Hold frames", min: 1, max: 64, step: 1 },
-        { index: 2, label: "Drive", min: 0, max: 36, step: 0.1 },
+        { index: 0, label: "Bits", min: 4, max: 16, step: 1, amountKind: "integer" },
+        { index: 1, label: "Hold frames", min: 1, max: 64, step: 1, amountKind: "integer" },
+        { index: 2, label: "Drive", min: 0, max: 36, step: 0.1, amountKind: "db" },
     ],
     [SEQFX_EFFECT_TYPES.tapeStop]: [
-        { index: 0, label: "Start Length", min: 0.05, max: 4, step: 0.01 },
-        { index: 1, label: "Start Curve", min: 0.25, max: 4, step: 0.01 },
-        { index: 2, label: "Catchup Curve", min: 0.25, max: 4, step: 0.01 },
-        { index: 3, label: "Catchup Length", min: 0, max: 100, step: 1 },
+        { index: 0, label: "Start Length", min: 0.05, max: 4, step: 0.01, amountKind: "tapeStopPointPercent" },
+        { index: 1, label: "Start Curve", min: 0.25, max: 4, step: 0.01, amountKind: "linear" },
+        { index: 2, label: "Catchup Curve", min: 0.25, max: 4, step: 0.01, amountKind: "linear" },
+        { index: 3, label: "Catchup Length", min: 0, max: 100, step: 1, amountKind: "percentValue" },
         { index: 4, label: "Mode", min: 0, max: 1, step: 1, kind: "select", options: ["Stop", "Spin-up"] },
     ],
     [SEQFX_EFFECT_TYPES.stutter]: [
-        { index: 0, label: "Slices", min: 2, max: 32, step: 1, hint: "Record slice 1; repeat the rest." },
-        { index: 1, label: "Speed", min: 0.5, max: 2, step: 0.01, hint: "1.00 keeps the captured pitch." },
-        { index: 2, label: "Shape", min: 0, max: 1, step: 0.01, hint: "Morphs the per-cut envelope." },
-        { index: 3, label: "Gate", min: 0, max: 1, step: 0.01, hint: "Audible portion of each cut." },
+        { index: 0, label: "Slices", min: 2, max: 32, step: 1, amountKind: "integer", hint: "Record slice 1; repeat the rest." },
+        { index: 1, label: "Speed", min: 0.5, max: 2, step: 0.01, amountKind: "speed", hint: "1.00 keeps the captured pitch." },
+        { index: 2, label: "Shape", min: 0, max: 1, step: 0.01, amountKind: "stutterShape", hint: "Morphs the per-cut envelope." },
+        { index: 3, label: "Gate", min: 0, max: 1, step: 0.01, amountKind: "percentPoints", hint: "Audible portion of each cut." },
     ],
 };
 
 const FILTER_PARAM_MODE = 0;
-const FILTER_PARAM_START_CUTOFF = 1;
-const FILTER_PARAM_END_CUTOFF = 2;
+const FILTER_PARAM_CUTOFF = 1;
 const FILTER_PARAM_RESONANCE = 3;
-const FILTER_PARAM_CURVE = 4;
 const CRUSHER_PARAM_BITS = 0;
 const CRUSHER_PARAM_HOLD_FRAMES = 1;
 const CRUSHER_PARAM_DRIVE_DB = 2;
@@ -327,8 +725,9 @@ function filterRangeModeToSeqFxMode(mode: FilterRangeMode) {
 }
 
 function filterRangeValueFromSeqFxStep(step: SeqFxStep): FilterRangeValue {
-    const startCutoffHz = step.params[FILTER_PARAM_START_CUTOFF] ?? 2_000;
-    const endCutoffHz = step.params[FILTER_PARAM_END_CUTOFF] ?? 500;
+    const startCutoffHz = step.params[FILTER_PARAM_CUTOFF] ?? 2_000;
+    const cutoffTarget = step.aux.targets[FILTER_PARAM_CUTOFF];
+    const endCutoffHz = cutoffTarget?.enabled ? cutoffTarget.end : startCutoffHz;
 
     return {
         mode: seqFxFilterModeToRangeMode(step.params[FILTER_PARAM_MODE] ?? 0),
@@ -338,9 +737,11 @@ function filterRangeValueFromSeqFxStep(step: SeqFxStep): FilterRangeValue {
 }
 
 function filterRangeEndpointsFromSeqFxStep(step: SeqFxStep): FilterRangeEndpoints {
+    const startCutoffHz = step.params[FILTER_PARAM_CUTOFF] ?? 2_000;
+    const cutoffTarget = step.aux.targets[FILTER_PARAM_CUTOFF];
     return {
-        startCutoffHz: step.params[FILTER_PARAM_START_CUTOFF] ?? 2_000,
-        endCutoffHz: step.params[FILTER_PARAM_END_CUTOFF] ?? 500,
+        startCutoffHz,
+        endCutoffHz: cutoffTarget?.enabled ? cutoffTarget.end : startCutoffHz,
     };
 }
 
@@ -1205,10 +1606,12 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
     const [playheadStep, setPlayheadStep] = useState<number | null>(null);
     const [observedStepDurationMs, setObservedStepDurationMs] = useState<number | null>(null);
     const [auxMonitor, setAuxMonitor] = useState<AuxMonitorState>(() => ({
-        phase: Array.from({ length: 4 }, () => 0),
+        cyclePhase: Array.from({ length: 4 }, () => 0),
+        amount: Array.from({ length: 4 }, () => 0),
         durationMs: Array.from({ length: 4 }, () => 0),
     }));
     const [drawEffectType, setDrawEffectType] = useState<SeqFxEffectType | null>(null);
+    const [inspectorMode, setInspectorMode] = useState<InspectorMode>("effect");
     const [gestureState, setGestureState] = useState<BlockGesture | null>(null);
     const [patternPreview, setPatternPreview] = useState<PatternPreview | null>(null);
     const [invalidDropTarget, setInvalidDropTarget] = useState<InvalidDropTarget | null>(null);
@@ -1241,16 +1644,21 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
             const event = (monitor as { event?: unknown })?.event ?? monitor;
             const stepIndex = Number((event as { stepIndex?: unknown })?.stepIndex);
             const stepDurationMs = Number((event as { stepDurationMs?: unknown })?.stepDurationMs);
-            const auxPhase = (event as { auxPhase?: unknown })?.auxPhase;
+            const auxCyclePhase = (event as { auxCyclePhase?: unknown })?.auxCyclePhase;
+            const auxAmount = (event as { auxAmount?: unknown })?.auxAmount;
             const auxDurationMs = (event as { auxDurationMs?: unknown })?.auxDurationMs;
             setPlayheadStep(Number.isFinite(stepIndex) ? stepIndex : null);
             if (Number.isFinite(stepDurationMs) && stepDurationMs > 0) {
                 setObservedStepDurationMs(stepDurationMs);
             }
-            if (Array.isArray(auxPhase) || Array.isArray(auxDurationMs)) {
+            if (Array.isArray(auxCyclePhase) || Array.isArray(auxAmount) || Array.isArray(auxDurationMs)) {
                 setAuxMonitor({
-                    phase: Array.from({ length: 4 }, (_unused, index) => {
-                        const value = Number(Array.isArray(auxPhase) ? auxPhase[index] : 0);
+                    cyclePhase: Array.from({ length: 4 }, (_unused, index) => {
+                        const value = Number(Array.isArray(auxCyclePhase) ? auxCyclePhase[index] : 0);
+                        return Number.isFinite(value) ? clampNumber(value, 0, 1) : 0;
+                    }),
+                    amount: Array.from({ length: 4 }, (_unused, index) => {
+                        const value = Number(Array.isArray(auxAmount) ? auxAmount[index] : 0);
                         return Number.isFinite(value) ? clampNumber(value, 0, 1) : 0;
                     }),
                     durationMs: Array.from({ length: 4 }, (_unused, index) => {
@@ -2091,12 +2499,69 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
     const auxEditable = Boolean(
         inspectedBlock
         && inspectedCell?.active
-        && inspectedEffectType !== SEQFX_EFFECT_TYPES.filter
         && inspectedEffectType !== SEQFX_EFFECT_TYPES.empty
         && selectedBlockStartSteps.length <= 1,
     );
     const inspectedAux = auxEditable ? inspectedCell?.aux ?? null : null;
-    const inspectedAuxPhase = inspectedLane !== null ? auxMonitor.phase[inspectedLane] ?? 0 : 0;
+    const inspectedAuxCyclePhase = inspectedLane !== null ? auxMonitor.cyclePhase[inspectedLane] ?? 0 : 0;
+    const inspectedAuxAmount = inspectedLane !== null ? auxMonitor.amount[inspectedLane] ?? 0 : 0;
+    const showModEditor = inspectorMode === "mod" && Boolean(inspectedAux);
+
+    useEffect(() => {
+        if (!auxEditable && inspectorMode !== "effect") {
+            setInspectorMode("effect");
+        }
+    }, [auxEditable, inspectorMode]);
+
+    function setAuxTargetEnd(paramIndex: number, value: number) {
+        if (!inspectedBlock) {
+            return;
+        }
+
+        if (activeSelection && selectedBlockGroup) {
+            bridge.setBlockSelectionAuxTargetEnd({
+                patternIndex: selectedPattern,
+                lane: activeSelection.lane,
+                blockStartSteps: selectedBlockStartSteps,
+                paramIndex,
+                value,
+            });
+            return;
+        }
+
+        bridge.setBlockAuxTargetEnd({
+            patternIndex: selectedPattern,
+            lane: inspectedBlock.lane,
+            startStep: inspectedBlock.startStep,
+            paramIndex,
+            value,
+        });
+    }
+
+    function setSelectedAuxTargetEnabled(paramIndex: number, enabled: boolean) {
+        if (!inspectedBlock) {
+            return;
+        }
+
+        if (activeSelection && selectedBlockGroup) {
+            bridge.setBlockSelectionAuxTargetEnabled({
+                patternIndex: selectedPattern,
+                lane: activeSelection.lane,
+                blockStartSteps: selectedBlockStartSteps,
+                paramIndex,
+                enabled,
+            });
+            return;
+        }
+
+        bridge.setBlockAuxTargetEnabled({
+            patternIndex: selectedPattern,
+            lane: inspectedBlock.lane,
+            startStep: inspectedBlock.startStep,
+            paramIndex,
+            enabled,
+        });
+    }
 
     function auxTarget(paramIndex: number, direction: ModulationDirection = "both"): AuxModulatedParam | null {
         if (!inspectedAux || !inspectedBlock) {
@@ -2111,15 +2576,7 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
         return {
             end: target.end,
             direction,
-            onEndChange: (value) => {
-                bridge.setBlockAuxTargetEnd({
-                    patternIndex: selectedPattern,
-                    lane: inspectedBlock.lane,
-                    startStep: inspectedBlock.startStep,
-                    paramIndex,
-                    value,
-                });
-            },
+            onEndChange: (value) => setAuxTargetEnd(paramIndex, value),
         };
     }
 
@@ -2137,51 +2594,17 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
         });
     }
 
-    function setAuxCurve(curve: SeqFxAuxCurveShape) {
+    function setAuxSource(source: Partial<SeqFxAuxSource>) {
         if (!inspectedBlock) {
             return;
         }
 
-        bridge.setBlockAuxCurve({
+        bridge.setBlockAuxSource({
             patternIndex: selectedPattern,
             lane: inspectedBlock.lane,
             startStep: inspectedBlock.startStep,
-            curve,
+            source,
         });
-    }
-
-    function modulationForCrusher(): CrusherModulation | null {
-        if (!auxEditable) {
-            return null;
-        }
-
-        return {
-            phase: inspectedAuxPhase,
-            bits: auxTarget(CRUSHER_PARAM_BITS),
-            holdFrames: auxTarget(CRUSHER_PARAM_HOLD_FRAMES),
-            driveDb: auxTarget(CRUSHER_PARAM_DRIVE_DB),
-            onToggleBits: () => toggleAuxTarget(CRUSHER_PARAM_BITS),
-            onToggleHoldFrames: () => toggleAuxTarget(CRUSHER_PARAM_HOLD_FRAMES),
-            onToggleDriveDb: () => toggleAuxTarget(CRUSHER_PARAM_DRIVE_DB),
-        };
-    }
-
-    function modulationForStutter(): StutterModulation | null {
-        if (!auxEditable) {
-            return null;
-        }
-
-        return {
-            phase: inspectedAuxPhase,
-            slices: auxTarget(STUTTER_PARAM_SLICES),
-            speed: auxTarget(STUTTER_PARAM_SPEED),
-            shape: auxTarget(STUTTER_PARAM_SHAPE),
-            gate: auxTarget(STUTTER_PARAM_GATE),
-            onToggleSlices: () => toggleAuxTarget(STUTTER_PARAM_SLICES),
-            onToggleSpeed: () => toggleAuxTarget(STUTTER_PARAM_SPEED),
-            onToggleShape: () => toggleAuxTarget(STUTTER_PARAM_SHAPE),
-            onToggleGate: () => toggleAuxTarget(STUTTER_PARAM_GATE),
-        };
     }
 
     function modulationForTapeStop(): TapeStopModulation | null {
@@ -2200,6 +2623,40 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
             onToggleCatchupCurve: () => toggleAuxTarget(TAPE_STOP_PARAM_CATCHUP_CURVE),
             onToggleCatchupLength: () => toggleAuxTarget(TAPE_STOP_PARAM_CATCHUP_LENGTH),
             onToggleMode: () => toggleAuxTarget(TAPE_STOP_PARAM_MODE),
+        };
+    }
+
+    function modulationForCrusher(): CrusherModulation | null {
+        if (!auxEditable) {
+            return null;
+        }
+
+        return {
+            phase: inspectedAuxAmount,
+            bits: auxTarget(CRUSHER_PARAM_BITS),
+            holdFrames: auxTarget(CRUSHER_PARAM_HOLD_FRAMES),
+            driveDb: auxTarget(CRUSHER_PARAM_DRIVE_DB),
+            onToggleBits: () => toggleAuxTarget(CRUSHER_PARAM_BITS),
+            onToggleHoldFrames: () => toggleAuxTarget(CRUSHER_PARAM_HOLD_FRAMES),
+            onToggleDriveDb: () => toggleAuxTarget(CRUSHER_PARAM_DRIVE_DB),
+        };
+    }
+
+    function modulationForStutter(): StutterModulation | null {
+        if (!auxEditable) {
+            return null;
+        }
+
+        return {
+            phase: inspectedAuxAmount,
+            slices: auxTarget(STUTTER_PARAM_SLICES),
+            speed: auxTarget(STUTTER_PARAM_SPEED),
+            shape: auxTarget(STUTTER_PARAM_SHAPE),
+            gate: auxTarget(STUTTER_PARAM_GATE),
+            onToggleSlices: () => toggleAuxTarget(STUTTER_PARAM_SLICES),
+            onToggleSpeed: () => toggleAuxTarget(STUTTER_PARAM_SPEED),
+            onToggleShape: () => toggleAuxTarget(STUTTER_PARAM_SHAPE),
+            onToggleGate: () => toggleAuxTarget(STUTTER_PARAM_GATE),
         };
     }
 
@@ -2482,13 +2939,22 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
             direction,
         });
 
-        setParam(FILTER_PARAM_START_CUTOFF, nextRange.startCutoffHz);
-        setParam(FILTER_PARAM_END_CUTOFF, nextRange.endCutoffHz);
+        setFilterRange(nextRange);
     }
 
     function setFilterRange(nextRange: FilterRangeEndpoints) {
-        setParam(FILTER_PARAM_START_CUTOFF, nextRange.startCutoffHz);
-        setParam(FILTER_PARAM_END_CUTOFF, nextRange.endCutoffHz);
+        setParam(FILTER_PARAM_CUTOFF, nextRange.startCutoffHz);
+
+        if (!inspectedBlock) {
+            return;
+        }
+
+        const shouldModulateCutoff = Math.abs(nextRange.endCutoffHz - nextRange.startCutoffHz) > 0.000001;
+        setAuxTargetEnd(FILTER_PARAM_CUTOFF, nextRange.endCutoffHz);
+
+        if (selectedBlockGroup || (inspectedCell?.aux.targets[FILTER_PARAM_CUTOFF]?.enabled === true) !== shouldModulateCutoff) {
+            setSelectedAuxTargetEnabled(FILTER_PARAM_CUTOFF, shouldModulateCutoff);
+        }
     }
 
     function setStutterParam(paramIndex: number, value: number) {
@@ -2745,64 +3211,114 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
                     ) : (
                         <>
                             <div className="seqfx-effect-picker" data-role="seqfx-effect-type" role="group" aria-label="Effect">
-                                {EFFECT_OPTIONS.map((effectType) => {
-                                    const selected = inspectedEffectType === effectType;
-                                    return (
-                                        <button
-                                            key={effectType}
-                                            type="button"
-                                            className={selected ? "is-selected" : undefined}
-                                            data-effect-type={effectType}
-                                            data-role="seqfx-effect-type-option"
-                                            disabled={selectedBlockStartSteps.length > 1}
-                                            aria-label={SEQFX_EFFECT_TYPE_NAMES[effectType]}
-                                            aria-pressed={selected}
-                                            onClick={() => setEffectType(effectType)}
-                                        >
-                                            <SeqFxEffectIcon effectType={effectType} />
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                            {inspectedAux ? (
-                                <AuxCurve
-                                    shape={inspectedAux.curve}
-                                    onShapeChange={setAuxCurve}
-                                    phase={inspectedAuxPhase}
-                                />
-                            ) : null}
-                            {inspectedEffectType === SEQFX_EFFECT_TYPES.tapeStop ? (
-                                <TapeStopEnvelopeEditor
-                                    step={inspectedCell}
-                                    blockLength={inspectedBlockLength}
-                                    blockDurationMs={tapeGraphBlockDurationMs}
-                                    onParamChange={setParam}
-                                    modulation={modulationForTapeStop()}
-                                />
-                            ) : inspectedEffectType === SEQFX_EFFECT_TYPES.filter ? (
-                                <>
-                                    <FilterRangeEditor
-                                        ariaLabel="SeqFX filter range editor"
-                                        modeOptions={SEQFX_FILTER_MODE_OPTIONS}
-                                        range={filterRangeEndpointsFromSeqFxStep(inspectedCell)}
-                                        rangePolarity="bipolar"
-                                        showHandleChips
-                                        showModeControls
-                                        value={filterRangeValueFromSeqFxStep(inspectedCell)}
-                                        onRangeChange={setFilterRange}
-                                        onValueChange={setFilterValue}
+                                <div className="seqfx-effect-picker__options">
+                                    {EFFECT_OPTIONS.map((effectType) => {
+                                        const selected = inspectedEffectType === effectType;
+                                        return (
+                                            <button
+                                                key={effectType}
+                                                type="button"
+                                                className={selected ? "is-selected" : undefined}
+                                                data-effect-type={effectType}
+                                                data-role="seqfx-effect-type-option"
+                                                disabled={selectedBlockStartSteps.length > 1}
+                                                aria-label={SEQFX_EFFECT_TYPE_NAMES[effectType]}
+                                                aria-pressed={selected}
+                                                onClick={() => setEffectType(effectType)}
+                                            >
+                                                <SeqFxEffectIcon effectType={effectType} />
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                                {inspectedAux ? (
+                                    <SeqFxModToggleButton
+                                        aux={inspectedAux}
+                                        cyclePhase={inspectedAuxCyclePhase}
+                                        amount={inspectedAuxAmount}
+                                        active={showModEditor}
+                                        onClick={() => setInspectorMode(showModEditor ? "effect" : "mod")}
                                     />
-                                    {inspectedParamDefinitions
-                                        .filter((definition) => definition.index === FILTER_PARAM_CURVE)
-                                        .map((definition) => {
-                                            const value = inspectedCell.params[definition.index];
+                                ) : null}
+                            </div>
+                            {showModEditor && inspectedAux ? (
+                                <SeqFxModEditor
+                                    aux={inspectedAux}
+                                    cyclePhase={inspectedAuxCyclePhase}
+                                    amount={inspectedAuxAmount}
+                                    params={inspectedCell.params}
+                                    definitions={inspectedParamDefinitions}
+                                    onSourceChange={setAuxSource}
+                                    onTargetToggle={toggleAuxTarget}
+                                    onTargetEndChange={setAuxTargetEnd}
+                                />
+                            ) : (
+                                <>
+                                    {inspectedEffectType === SEQFX_EFFECT_TYPES.tapeStop ? (
+                                        <TapeStopEnvelopeEditor
+                                            step={inspectedCell}
+                                            blockLength={inspectedBlockLength}
+                                            blockDurationMs={tapeGraphBlockDurationMs}
+                                            onParamChange={setParam}
+                                            modulation={modulationForTapeStop()}
+                                        />
+                                    ) : inspectedEffectType === SEQFX_EFFECT_TYPES.filter ? (
+                                        <FilterRangeEditor
+                                            ariaLabel="SeqFX filter range editor"
+                                            modeOptions={SEQFX_FILTER_MODE_OPTIONS}
+                                            range={filterRangeEndpointsFromSeqFxStep(inspectedCell)}
+                                            rangePolarity="bipolar"
+                                            showHandleChips
+                                            showModeControls
+                                            value={filterRangeValueFromSeqFxStep(inspectedCell)}
+                                            onRangeChange={setFilterRange}
+                                            onValueChange={setFilterValue}
+                                        />
+                                    ) : inspectedEffectType === SEQFX_EFFECT_TYPES.crusher ? (
+                                        <CrusherEditor
+                                            value={crusherValueFromSeqFxStep(inspectedCell)}
+                                            onBitsChange={(value) => setParam(CRUSHER_PARAM_BITS, value)}
+                                            onHoldFramesChange={(value) => setParam(CRUSHER_PARAM_HOLD_FRAMES, value)}
+                                            onDriveDbChange={(value) => setParam(CRUSHER_PARAM_DRIVE_DB, value)}
+                                            modulation={modulationForCrusher()}
+                                        />
+                                    ) : inspectedEffectType === SEQFX_EFFECT_TYPES.stutter ? (
+                                        <StutterEnvelopeEditor
+                                            value={stutterValueFromSeqFxStep(inspectedCell)}
+                                            onGateChange={(value) => setStutterParam(STUTTER_PARAM_GATE, value)}
+                                            onShapeChange={(value) => setStutterParam(STUTTER_PARAM_SHAPE, value)}
+                                            onSlicesChange={(value) => setStutterParam(STUTTER_PARAM_SLICES, value)}
+                                            onSpeedChange={(value) => setStutterParam(STUTTER_PARAM_SPEED, value)}
+                                            modulation={modulationForStutter()}
+                                        />
+                                    ) : inspectedParamDefinitions.map((definition) => {
+                                        const triggerLatched = isSeqFxTriggerLatchedParamForEffect(inspectedEffectType, definition.index);
+                                        const disabled = triggerLatched && !selectedBlockGroup && !selectedWholeBlock && (activeSelection?.steps.length ?? 0) > 1;
+                                        const value = inspectedCell.params[definition.index];
 
-                                            return (
-                                                <label className="seqfx-field" key={definition.index}>
-                                                    <span>{definition.label}</span>
+                                        return (
+                                            <label className="seqfx-field" key={definition.index}>
+                                                <span>
+                                                    {definition.label}
+                                                    {triggerLatched ? <em>Trigger</em> : null}
+                                                </span>
+                                                {definition.kind === "select" ? (
+                                                    <select
+                                                        data-role="seqfx-param"
+                                                        data-param={definition.index}
+                                                        disabled={disabled}
+                                                        onChange={(event) => setParam(definition.index, Number(event.currentTarget.value))}
+                                                        value={Math.round(value)}
+                                                    >
+                                                        {definition.options!.map((option, index) => (
+                                                            <option key={option} value={index}>{option}</option>
+                                                        ))}
+                                                    </select>
+                                                ) : (
                                                     <input
                                                         data-role="seqfx-param"
                                                         data-param={definition.index}
+                                                        disabled={disabled}
                                                         max={definition.max}
                                                         min={definition.min}
                                                         onChange={(event) => setParam(definition.index, Number(event.currentTarget.value))}
@@ -2810,76 +3326,21 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
                                                         type="number"
                                                         value={formatValue(value)}
                                                     />
-                                                    <small>{definition.hint ?? `${definition.min} to ${definition.max}`}</small>
-                                                </label>
-                                            );
-                                        })}
+                                                )}
+                                                <small>
+                                                    {disabled
+                                                        ? "Select one cell to edit this trigger."
+                                                        : definition.hint ?? `${definition.min} to ${definition.max}`}
+                                                </small>
+                                            </label>
+                                        );
+                                    })}
+                                    <SeqFxMixRow
+                                        value={inspectedCell.mix}
+                                        onChange={inspectedEffectType === SEQFX_EFFECT_TYPES.stutter ? setStutterMix : setMix}
+                                    />
                                 </>
-                            ) : inspectedEffectType === SEQFX_EFFECT_TYPES.crusher ? (
-                                <CrusherEditor
-                                    value={crusherValueFromSeqFxStep(inspectedCell)}
-                                    onBitsChange={(value) => setParam(CRUSHER_PARAM_BITS, value)}
-                                    onHoldFramesChange={(value) => setParam(CRUSHER_PARAM_HOLD_FRAMES, value)}
-                                    onDriveDbChange={(value) => setParam(CRUSHER_PARAM_DRIVE_DB, value)}
-                                    modulation={modulationForCrusher()}
-                                />
-                            ) : inspectedEffectType === SEQFX_EFFECT_TYPES.stutter ? (
-                                <StutterEnvelopeEditor
-                                    value={stutterValueFromSeqFxStep(inspectedCell)}
-                                    onGateChange={(value) => setStutterParam(STUTTER_PARAM_GATE, value)}
-                                    onShapeChange={(value) => setStutterParam(STUTTER_PARAM_SHAPE, value)}
-                                    onSlicesChange={(value) => setStutterParam(STUTTER_PARAM_SLICES, value)}
-                                    onSpeedChange={(value) => setStutterParam(STUTTER_PARAM_SPEED, value)}
-                                    modulation={modulationForStutter()}
-                                />
-                            ) : inspectedParamDefinitions.map((definition) => {
-                                const triggerLatched = isSeqFxTriggerLatchedParamForEffect(inspectedEffectType, definition.index);
-                                const disabled = triggerLatched && !selectedBlockGroup && !selectedWholeBlock && (activeSelection?.steps.length ?? 0) > 1;
-                                const value = inspectedCell.params[definition.index];
-
-                                return (
-                                    <label className="seqfx-field" key={definition.index}>
-                                        <span>
-                                            {definition.label}
-                                            {triggerLatched ? <em>Trigger</em> : null}
-                                        </span>
-                                        {definition.kind === "select" ? (
-                                            <select
-                                                data-role="seqfx-param"
-                                                data-param={definition.index}
-                                                disabled={disabled}
-                                                onChange={(event) => setParam(definition.index, Number(event.currentTarget.value))}
-                                                value={Math.round(value)}
-                                            >
-                                                {definition.options!.map((option, index) => (
-                                                    <option key={option} value={index}>{option}</option>
-                                                ))}
-                                            </select>
-                                        ) : (
-                                            <input
-                                                data-role="seqfx-param"
-                                                data-param={definition.index}
-                                                disabled={disabled}
-                                                max={definition.max}
-                                                min={definition.min}
-                                                onChange={(event) => setParam(definition.index, Number(event.currentTarget.value))}
-                                                step={definition.step}
-                                                type="number"
-                                                value={formatValue(value)}
-                                            />
-                                        )}
-                                        <small>
-                                            {disabled
-                                                ? "Select one cell to edit this trigger."
-                                                : definition.hint ?? `${definition.min} to ${definition.max}`}
-                                        </small>
-                                    </label>
-                                );
-                            })}
-                            <SeqFxMixRow
-                                value={inspectedCell.mix}
-                                onChange={inspectedEffectType === SEQFX_EFFECT_TYPES.stutter ? setStutterMix : setMix}
-                            />
+                            )}
                             {selectedBlockGroup || (selectedWholeBlock && inspectedBlock) ? (
                                 <button
                                     className="seqfx-delete-block"

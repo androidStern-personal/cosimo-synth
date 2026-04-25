@@ -1,0 +1,456 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>SeqFX Aux Bump Shape Prototype</title>
+    <style>
+        :root {
+            color-scheme: dark;
+            --bg: #111715;
+            --panel: #18201d;
+            --panel-2: #202720;
+            --text: #f2f4ee;
+            --muted: #a9b0aa;
+            --line: #3a423d;
+            --accent: #10b6d3;
+            --accent-2: #f15f4b;
+            --fill: rgba(16, 182, 211, 0.22);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            background: var(--bg);
+            color: var(--text);
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+        }
+
+        main {
+            width: min(1100px, calc(100vw - 32px));
+            margin: 0 auto;
+            padding: 24px 0 40px;
+        }
+
+        h1 {
+            margin: 0 0 6px;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            font-size: 32px;
+            line-height: 1.1;
+        }
+
+        p {
+            max-width: 820px;
+            margin: 0 0 20px;
+            color: var(--muted);
+            line-height: 1.5;
+        }
+
+        .prototype {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) 320px;
+            gap: 18px;
+            align-items: start;
+        }
+
+        .graph-card,
+        .controls {
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            background: var(--panel);
+        }
+
+        .graph-card {
+            padding: 16px;
+        }
+
+        svg {
+            display: block;
+            width: 100%;
+            height: auto;
+            background: #e3ddd1;
+            border-radius: 4px;
+        }
+
+        .grid {
+            stroke: rgba(32, 37, 35, 0.18);
+            stroke-width: 1;
+        }
+
+        .axis {
+            stroke: rgba(32, 37, 35, 0.5);
+            stroke-width: 2;
+        }
+
+        .base {
+            fill: none;
+            stroke: rgba(32, 37, 35, 0.45);
+            stroke-width: 3;
+            stroke-dasharray: 9 8;
+        }
+
+        .shape-fill {
+            fill: var(--fill);
+        }
+
+        .shape-line {
+            fill: none;
+            stroke: #151918;
+            stroke-width: 5;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+
+        .peak-line {
+            stroke: var(--accent-2);
+            stroke-width: 2;
+            stroke-dasharray: 6 6;
+        }
+
+        .peak-dot {
+            fill: var(--accent-2);
+            stroke: #151918;
+            stroke-width: 3;
+        }
+
+        .label {
+            fill: rgba(32, 37, 35, 0.68);
+            font-size: 18px;
+            font-weight: 800;
+        }
+
+        .controls {
+            padding: 16px;
+        }
+
+        .control {
+            display: grid;
+            gap: 10px;
+            padding: 12px 0;
+            border-bottom: 1px solid var(--line);
+        }
+
+        .control:first-child {
+            padding-top: 0;
+        }
+
+        .control:last-child {
+            border-bottom: 0;
+            padding-bottom: 0;
+        }
+
+        .control-head {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            align-items: baseline;
+        }
+
+        label {
+            font-size: 14px;
+            font-weight: 800;
+            letter-spacing: 0;
+            text-transform: uppercase;
+        }
+
+        output {
+            color: var(--accent);
+            font-size: 13px;
+            font-weight: 800;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            accent-color: var(--accent);
+        }
+
+        .hint {
+            color: var(--muted);
+            font-size: 12px;
+            line-height: 1.45;
+        }
+
+        .presets {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 8px;
+            margin-top: 14px;
+        }
+
+        button {
+            min-height: 34px;
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            background: var(--panel-2);
+            color: var(--text);
+            font: inherit;
+            font-size: 12px;
+            font-weight: 800;
+            cursor: pointer;
+        }
+
+        button:hover,
+        button:focus-visible {
+            border-color: var(--accent);
+            outline: none;
+        }
+
+        .readout {
+            margin-top: 14px;
+            padding: 12px;
+            border-radius: 8px;
+            background: #101412;
+            color: var(--muted);
+            font-size: 12px;
+            line-height: 1.6;
+        }
+
+        .readout strong {
+            color: var(--text);
+        }
+
+        @media (max-width: 820px) {
+            .prototype {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <main>
+        <h1>SeqFX Aux Bump Prototype</h1>
+        <p>
+            One cycle of the proposed aux source. Shape moves from a falling ramp through a centered bell to a rising ramp.
+            Curve deflates or inflates the generated shape after skew.
+        </p>
+
+        <section class="prototype">
+            <div class="graph-card">
+                <svg id="graph" viewBox="0 0 900 420" role="img" aria-label="One-cycle aux modulation shape">
+                    <g id="grid"></g>
+                    <path id="fill" class="shape-fill"></path>
+                    <path id="base" class="base"></path>
+                    <path id="shape" class="shape-line"></path>
+                    <line id="peakLine" class="peak-line" y1="40" y2="340"></line>
+                    <circle id="peakDot" class="peak-dot" r="8"></circle>
+                    <line class="axis" x1="70" x2="830" y1="340" y2="340"></line>
+                    <line class="axis" x1="70" x2="70" y1="40" y2="340"></line>
+                    <text class="label" x="70" y="382">0</text>
+                    <text class="label" x="438" y="382">1/2</text>
+                    <text class="label" x="802" y="382">1 cycle</text>
+                    <text class="label" x="22" y="50">1</text>
+                    <text class="label" x="22" y="345">0</text>
+                </svg>
+            </div>
+
+            <aside class="controls">
+                <div class="control">
+                    <div class="control-head">
+                        <label for="shapeControl">Shape</label>
+                        <output id="shapeOut">0.00</output>
+                    </div>
+                    <input id="shapeControl" type="range" min="-1" max="1" step="0.01" value="0">
+                    <div class="hint">-1 is an unrounded falling ramp. 0 is a fully rounded centered bell. +1 is an unrounded rising ramp.</div>
+                </div>
+
+                <div class="control">
+                    <div class="control-head">
+                        <label for="curve">Curve</label>
+                        <output id="curveOut">0.00</output>
+                    </div>
+                    <input id="curve" type="range" min="-1" max="1" step="0.01" value="0">
+                    <div class="hint">Negative deflates the shape. Positive inflates it, like a simple soft-clip style remap.</div>
+                </div>
+
+                <div class="presets" aria-label="Shape presets">
+                    <button type="button" data-shape="-1" data-curve="0">Down ramp</button>
+                    <button type="button" data-shape="0" data-curve="0">Bell</button>
+                    <button type="button" data-shape="1" data-curve="0">Up ramp</button>
+                    <button type="button" data-shape="0" data-curve="0.65">Puffed bell</button>
+                    <button type="button" data-shape="0" data-curve="-0.65">Pinched bell</button>
+                    <button type="button" data-shape="-0.75" data-curve="0.65">Curved down</button>
+                </div>
+
+                <div class="readout" id="readout"></div>
+            </aside>
+        </section>
+    </main>
+
+    <script>
+        const svgNS = "http://www.w3.org/2000/svg";
+        const shapeInput = document.getElementById("shapeControl");
+        const curveInput = document.getElementById("curve");
+        const shapeOut = document.getElementById("shapeOut");
+        const curveOut = document.getElementById("curveOut");
+        const readout = document.getElementById("readout");
+        const grid = document.getElementById("grid");
+        const shapePath = document.getElementById("shape");
+        const basePath = document.getElementById("base");
+        const fillPath = document.getElementById("fill");
+        const peakLine = document.getElementById("peakLine");
+        const peakDot = document.getElementById("peakDot");
+
+        const plot = {
+            left: 70,
+            right: 830,
+            top: 40,
+            bottom: 340,
+        };
+        plot.width = plot.right - plot.left;
+        plot.height = plot.bottom - plot.top;
+
+        function clamp(value, min, max) {
+            return Math.min(max, Math.max(min, value));
+        }
+
+        function xToPx(x) {
+            return plot.left + (clamp(x, 0, 1) * plot.width);
+        }
+
+        function yToPx(y) {
+            return plot.bottom - (clamp(y, 0, 1) * plot.height);
+        }
+
+        function peakFromSkew(skew) {
+            if (skew <= -0.995) {
+                return 0;
+            }
+
+            if (skew >= 0.995) {
+                return 1;
+            }
+
+            return 0.5 + (skew * 0.49);
+        }
+
+        function skewedBump(x, skew) {
+            const peak = peakFromSkew(skew);
+
+            if (peak <= 0) {
+                return 1 - x;
+            }
+
+            if (peak >= 1) {
+                return x;
+            }
+
+            if (x <= peak) {
+                return x / peak;
+            }
+
+            return (1 - x) / (1 - peak);
+        }
+
+        function curveRemap(y, curve) {
+            const safeY = clamp(y, 0, 1);
+            if (Math.abs(curve) < 0.001) {
+                return safeY;
+            }
+
+            if (curve > 0) {
+                const power = 1 + (curve * 14);
+                return 1 - Math.pow(1 - safeY, power);
+            }
+
+            const power = 1 + (Math.abs(curve) * 5);
+            return Math.pow(safeY, power);
+        }
+
+        function roundedBump(x, skew, roundAmount) {
+            const raw = skewedBump(x, skew);
+            const rounded = Math.sin(raw * Math.PI * 0.5);
+            return raw + ((rounded - raw) * roundAmount);
+        }
+
+        function sampleShape(x, skew, curve, roundAmount) {
+            return curveRemap(roundedBump(x, skew, roundAmount), curve);
+        }
+
+        function makePath(skew, curve, roundAmount, curved) {
+            const points = [];
+            for (let index = 0; index <= 240; index += 1) {
+                const x = index / 240;
+                const y = curved ? sampleShape(x, skew, curve, roundAmount) : roundedBump(x, skew, roundAmount);
+                points.push(`${index === 0 ? "M" : "L"} ${xToPx(x).toFixed(2)} ${yToPx(y).toFixed(2)}`);
+            }
+
+            return points.join(" ");
+        }
+
+        function drawGrid() {
+            grid.innerHTML = "";
+
+            for (let index = 0; index <= 4; index += 1) {
+                const x = plot.left + ((plot.width / 4) * index);
+                const line = document.createElementNS(svgNS, "line");
+                line.setAttribute("class", "grid");
+                line.setAttribute("x1", x);
+                line.setAttribute("x2", x);
+                line.setAttribute("y1", plot.top);
+                line.setAttribute("y2", plot.bottom);
+                grid.appendChild(line);
+            }
+
+            for (let index = 0; index <= 4; index += 1) {
+                const y = plot.top + ((plot.height / 4) * index);
+                const line = document.createElementNS(svgNS, "line");
+                line.setAttribute("class", "grid");
+                line.setAttribute("x1", plot.left);
+                line.setAttribute("x2", plot.right);
+                line.setAttribute("y1", y);
+                line.setAttribute("y2", y);
+                grid.appendChild(line);
+            }
+        }
+
+        function update() {
+            const shape = Number(shapeInput.value);
+            const skew = shape;
+            const curve = Number(curveInput.value);
+            const roundAmount = 1 - Math.abs(shape);
+            const peak = peakFromSkew(skew);
+            const peakY = sampleShape(peak, skew, curve, roundAmount);
+
+            shapeOut.textContent = shape.toFixed(2);
+            curveOut.textContent = curve.toFixed(2);
+
+            const path = makePath(skew, curve, roundAmount, true);
+            const base = makePath(skew, curve, roundAmount, false);
+            shapePath.setAttribute("d", path);
+            basePath.setAttribute("d", base);
+            fillPath.setAttribute("d", `${path} L ${plot.right} ${plot.bottom} L ${plot.left} ${plot.bottom} Z`);
+            peakLine.setAttribute("x1", xToPx(peak));
+            peakLine.setAttribute("x2", xToPx(peak));
+            peakDot.setAttribute("cx", xToPx(peak));
+            peakDot.setAttribute("cy", yToPx(peakY));
+
+            readout.innerHTML = [
+                `<strong>Peak:</strong> ${(peak * 100).toFixed(1)}% through cycle`,
+                `<strong>Internal skew:</strong> ${skew.toFixed(2)}`,
+                `<strong>Internal round:</strong> ${roundAmount.toFixed(2)}`,
+                `<strong>Start:</strong> ${sampleShape(0, skew, curve, roundAmount).toFixed(3)}`,
+                `<strong>Middle:</strong> ${sampleShape(0.5, skew, curve, roundAmount).toFixed(3)}`,
+                `<strong>End:</strong> ${sampleShape(1, skew, curve, roundAmount).toFixed(3)}`,
+            ].join("<br>");
+        }
+
+        drawGrid();
+        update();
+
+        shapeInput.addEventListener("input", update);
+        curveInput.addEventListener("input", update);
+
+        document.querySelectorAll("[data-shape]").forEach((button) => {
+            button.addEventListener("click", () => {
+                shapeInput.value = button.dataset.shape;
+                curveInput.value = button.dataset.curve;
+                update();
+            });
+        });
+    </script>
+</body>
+</html>

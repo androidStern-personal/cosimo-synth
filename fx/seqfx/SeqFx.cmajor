@@ -13,12 +13,8 @@ namespace seqfx
     let effectCrusher = 2;
     let effectTapeStop = 3;
     let effectStutter = 4;
-    let auxCurveLinear = 0;
-    let auxCurveEase = 1;
-    let auxCurveExp = 2;
-    let auxCurveLog = 3;
-    let auxCurveBell = 4;
-    let auxCurveHold = 5;
+    let auxRateModeTempo = 0;
+    let auxRateModeSlice = 1;
     let maxTapeSeconds = 1.0f;
     let maxStutterSeconds = 1.0f;
     let tapeSpeedFloor = 0.005f;
@@ -41,7 +37,12 @@ namespace seqfx
         float32[laneCount, stepCount, paramCount] params;
         bool[laneCount, stepCount, paramCount] auxEnabled;
         float32[laneCount, stepCount, paramCount] auxEnd;
-        int32[laneCount, stepCount] auxCurve;
+        float32[laneCount, stepCount] auxShape;
+        float32[laneCount, stepCount] auxSourceCurve;
+        int32[laneCount, stepCount] auxRateMode;
+        int32[laneCount, stepCount] auxTempoMultiplier;
+        bool[laneCount, stepCount] auxTempoTriplet;
+        int32[laneCount, stepCount] auxSliceCount;
     }
 
     struct SeqMonitor
@@ -51,7 +52,8 @@ namespace seqfx
         bool transportRunning;
         float32 stepProgress;
         float32 stepDurationMs;
-        float32[laneCount] auxPhase;
+        float32[laneCount] auxCyclePhase;
+        float32[laneCount] auxAmount;
         float32[laneCount] auxDurationMs;
     }
 
@@ -97,26 +99,50 @@ namespace seqfx
         return x * x * (3.0f - (2.0f * x));
     }
 
-    float32 auxCurve01 (float32 phase, int32 curve)
+    float32 unitWrap (float32 value)
+    {
+        let wrapped = value - std::intrinsics::floor (value);
+        return wrapped < 0.0f ? wrapped + 1.0f : wrapped;
+    }
+
+    float32 auxRawBump (float32 phase, float32 shape)
     {
         let x = clampFloat (phase, 0.0f, 1.0f);
+        let peak = 0.5f + (clampFloat (shape, -1.0f, 1.0f) * 0.5f);
 
-        if (curve == auxCurveEase)
-            return smoothStep01 (x);
+        if (peak <= 0.000001f)
+            return 1.0f - x;
 
-        if (curve == auxCurveExp)
-            return x * x;
+        if (peak >= 0.999999f)
+            return x;
 
-        if (curve == auxCurveLog)
-            return 1.0f - ((1.0f - x) * (1.0f - x));
+        if (x <= peak)
+            return x / peak;
 
-        if (curve == auxCurveBell)
-            return std::intrinsics::sin (pi * x);
+        return (1.0f - x) / (1.0f - peak);
+    }
 
-        if (curve == auxCurveHold)
-            return x < 0.5f ? 0.0f : 1.0f;
+    float32 auxSourceAt (float32 phase, float32 shape, float32 sourceCurve)
+    {
+        let safeShape = clampFloat (shape, -1.0f, 1.0f);
+        let raw = auxRawBump (phase, safeShape);
+        let roundAmount = 1.0f - std::intrinsics::abs (safeShape);
+        let rounded = raw + ((std::intrinsics::sin (raw * pi * 0.5f) - raw) * roundAmount);
+        let safeCurve = clampFloat (sourceCurve, -1.0f, 1.0f);
 
-        return x;
+        if (safeCurve > 0.0f)
+        {
+            let power = 1.0f + (safeCurve * 14.0f);
+            return clampFloat (1.0f - std::intrinsics::pow (1.0f - rounded, power), 0.0f, 1.0f);
+        }
+
+        if (safeCurve < 0.0f)
+        {
+            let power = 1.0f + (std::intrinsics::abs (safeCurve) * 5.0f);
+            return clampFloat (std::intrinsics::pow (rounded, power), 0.0f, 1.0f);
+        }
+
+        return clampFloat (rounded, 0.0f, 1.0f);
     }
 
     float32 stutterTentShape (float32 u, float32 peak)
@@ -341,7 +367,12 @@ processor SeqFx [[ main ]]
     float32[seqfx::laneCount, seqfx::stepCount, seqfx::paramCount] stepParams;
     bool[seqfx::laneCount, seqfx::stepCount, seqfx::paramCount] stepAuxEnabled;
     float32[seqfx::laneCount, seqfx::stepCount, seqfx::paramCount] stepAuxEnd;
-    int32[seqfx::laneCount, seqfx::stepCount] stepAuxCurve;
+    float32[seqfx::laneCount, seqfx::stepCount] stepAuxShape;
+    float32[seqfx::laneCount, seqfx::stepCount] stepAuxSourceCurve;
+    int32[seqfx::laneCount, seqfx::stepCount] stepAuxRateMode;
+    int32[seqfx::laneCount, seqfx::stepCount] stepAuxTempoMultiplier;
+    bool[seqfx::laneCount, seqfx::stepCount] stepAuxTempoTriplet;
+    int32[seqfx::laneCount, seqfx::stepCount] stepAuxSliceCount;
     int32[seqfx::patternCount] acceptedRevisions;
 
     std::filters::simper::Implementation[seqfx::laneCount, 2] filterStates;
@@ -372,11 +403,7 @@ processor SeqFx [[ main ]]
     int32[seqfx::laneCount] filterMode;
     int32[seqfx::laneCount] previousFilterMode;
     float32[seqfx::laneCount] filterStartHz;
-    float32[seqfx::laneCount] filterEndHz;
     float32[seqfx::laneCount] filterQ;
-    float32[seqfx::laneCount] filterCurve;
-    float32[seqfx::laneCount] filterAgeFrames;
-    float32[seqfx::laneCount] filterDurationFrames;
     float32[seqfx::laneCount] filterMixCurrent;
     float32[seqfx::laneCount] filterMixTarget;
     float32[seqfx::laneCount] filterModeFade;
@@ -436,10 +463,7 @@ processor SeqFx [[ main ]]
         for (wrap<seqfx::laneCount> lane)
         {
             filterStartHz[lane] = 2000.0f;
-            filterEndHz[lane] = 500.0f;
             filterQ[lane] = 0.707f;
-            filterCurve[lane] = 1.0f;
-            filterDurationFrames[lane] = 1.0f;
             filterModeFade[lane] = 1.0f;
 
             crusherBits[lane] = 8;
@@ -481,7 +505,12 @@ processor SeqFx [[ main ]]
                 triggerSteps[lane, step] = false;
                 stepEffectTypes[lane, step] = seqfx::effectEmpty;
                 stepMix[lane, step] = 1.0f;
-                stepAuxCurve[lane, step] = seqfx::auxCurveLinear;
+                stepAuxShape[lane, step] = 0.0f;
+                stepAuxSourceCurve[lane, step] = 0.0f;
+                stepAuxRateMode[lane, step] = seqfx::auxRateModeSlice;
+                stepAuxTempoMultiplier[lane, step] = 4;
+                stepAuxTempoTriplet[lane, step] = false;
+                stepAuxSliceCount[lane, step] = 1;
 
                 for (wrap<seqfx::paramCount> param)
                 {
@@ -566,7 +595,12 @@ processor SeqFx [[ main ]]
                         || upload.triggerSteps[lane, step] != triggerSteps[lane, step]
                         || nextEffectType != currentEffectType
                         || upload.mix[lane, step] != stepMix[lane, step]
-                        || upload.auxCurve[lane, step] != stepAuxCurve[lane, step])
+                        || upload.auxShape[lane, step] != stepAuxShape[lane, step]
+                        || upload.auxSourceCurve[lane, step] != stepAuxSourceCurve[lane, step]
+                        || upload.auxRateMode[lane, step] != stepAuxRateMode[lane, step]
+                        || upload.auxTempoMultiplier[lane, step] != stepAuxTempoMultiplier[lane, step]
+                        || upload.auxTempoTriplet[lane, step] != stepAuxTempoTriplet[lane, step]
+                        || upload.auxSliceCount[lane, step] != stepAuxSliceCount[lane, step])
                     {
                         currentCellChanged = true;
                     }
@@ -588,7 +622,12 @@ processor SeqFx [[ main ]]
                 triggerSteps[lane, step] = upload.triggerSteps[lane, step];
                 stepEffectTypes[lane, step] = nextEffectType;
                 stepMix[lane, step] = seqfx::clampFloat (upload.mix[lane, step], 0.0f, 1.0f);
-                stepAuxCurve[lane, step] = seqfx::clampInt (upload.auxCurve[lane, step], seqfx::auxCurveLinear, seqfx::auxCurveHold);
+                stepAuxShape[lane, step] = seqfx::clampFloat (upload.auxShape[lane, step], -1.0f, 1.0f);
+                stepAuxSourceCurve[lane, step] = seqfx::clampFloat (upload.auxSourceCurve[lane, step], -1.0f, 1.0f);
+                stepAuxRateMode[lane, step] = seqfx::clampInt (upload.auxRateMode[lane, step], seqfx::auxRateModeTempo, seqfx::auxRateModeSlice);
+                stepAuxTempoMultiplier[lane, step] = seqfx::clampInt (upload.auxTempoMultiplier[lane, step], 1, 64);
+                stepAuxTempoTriplet[lane, step] = upload.auxTempoTriplet[lane, step];
+                stepAuxSliceCount[lane, step] = seqfx::clampInt (upload.auxSliceCount[lane, step], 1, 32);
 
                 for (wrap<seqfx::paramCount> param)
                 {
@@ -881,7 +920,7 @@ processor SeqFx [[ main ]]
         return 0.0f;
     }
 
-    float32 auxRawPhaseForLane (wrap<seqfx::laneCount> lane)
+    float32 auxBlockPhaseForLane (wrap<seqfx::laneCount> lane)
     {
         return seqfx::clampFloat (
             auxAgeFrames[lane] / std::intrinsics::max (1.0f, auxDurationFrames[lane]),
@@ -890,10 +929,39 @@ processor SeqFx [[ main ]]
         );
     }
 
-    float32 auxPhaseForLane (wrap<seqfx::laneCount> lane)
+    float32 auxCycleDurationFramesForLane (wrap<seqfx::laneCount> lane)
     {
         let blockStartIndex = wrap<seqfx::stepCount> (auxBlockStartStep[lane]);
-        return seqfx::auxCurve01 (auxRawPhaseForLane (lane), stepAuxCurve[lane, blockStartIndex]);
+        let rateMode = stepAuxRateMode[lane, blockStartIndex];
+
+        if (rateMode == seqfx::auxRateModeTempo)
+        {
+            let multiplier = seqfx::clampInt (stepAuxTempoMultiplier[lane, blockStartIndex], 1, 64);
+            var duration = float32 (framesPerQuarter() * 0.25 * float64 (multiplier));
+
+            if (stepAuxTempoTriplet[lane, blockStartIndex])
+                duration *= 0.6666666667f;
+
+            return std::intrinsics::max (1.0f, duration);
+        }
+
+        let sliceCount = seqfx::clampInt (stepAuxSliceCount[lane, blockStartIndex], 1, 32);
+        return std::intrinsics::max (1.0f, auxDurationFrames[lane] / float32 (sliceCount));
+    }
+
+    float32 auxCyclePhaseForLane (wrap<seqfx::laneCount> lane)
+    {
+        return seqfx::unitWrap (auxAgeFrames[lane] / auxCycleDurationFramesForLane (lane));
+    }
+
+    float32 auxAmountForLane (wrap<seqfx::laneCount> lane)
+    {
+        let blockStartIndex = wrap<seqfx::stepCount> (auxBlockStartStep[lane]);
+        return seqfx::auxSourceAt (
+            auxCyclePhaseForLane (lane),
+            stepAuxShape[lane, blockStartIndex],
+            stepAuxSourceCurve[lane, blockStartIndex]
+        );
     }
 
     float32 auxParamValue (wrap<seqfx::laneCount> lane, int32 param, float32 startValue)
@@ -904,9 +972,22 @@ processor SeqFx [[ main ]]
         if (! stepAuxEnabled[lane, blockStartIndex, paramIndex])
             return startValue;
 
-        let amount = auxPhaseForLane (lane);
+        let amount = auxAmountForLane (lane);
         let endValue = stepAuxEnd[lane, blockStartIndex, paramIndex];
         return startValue + ((endValue - startValue) * amount);
+    }
+
+    float32 auxCutoffValue (wrap<seqfx::laneCount> lane, int32 param, float32 startValue)
+    {
+        let blockStartIndex = wrap<seqfx::stepCount> (auxBlockStartStep[lane]);
+        let paramIndex = wrap<seqfx::paramCount> (param);
+
+        if (! stepAuxEnabled[lane, blockStartIndex, paramIndex])
+            return clampCutoffHz (startValue);
+
+        let amount = auxAmountForLane (lane);
+        let endValue = clampCutoffHz (stepAuxEnd[lane, blockStartIndex, paramIndex]);
+        return clampCutoffHz (seqfx::logLerpHz (startValue, endValue, amount));
     }
 
     void latchAuxBlock (wrap<seqfx::laneCount> lane, int32 blockStart)
@@ -997,14 +1078,10 @@ processor SeqFx [[ main ]]
 
         let blockStart = blockStartStep (lane, currentStep);
         let blockStartIndex = wrap<seqfx::stepCount> (blockStart);
-        filterAgeFrames[lane] = elapsedFramesFromBlockStart (lane, blockStart, currentStep);
-        filterDurationFrames[lane] = segmentDurationFrames (lane, blockStart);
         previousFilterMode[lane] = filterMode[lane];
         filterMode[lane] = snapValue (stepParams[lane, blockStartIndex, 0], 0, 2);
         filterStartHz[lane] = clampCutoffHz (stepParams[lane, blockStartIndex, 1]);
-        filterEndHz[lane] = clampCutoffHz (stepParams[lane, blockStartIndex, 2]);
         filterQ[lane] = seqfx::clampFloat (stepParams[lane, blockStartIndex, 3], 0.1f, 20.0f);
-        filterCurve[lane] = seqfx::clampFloat (stepParams[lane, blockStartIndex, 4], 0.25f, 4.0f);
 
         if (filterMode[lane] != previousFilterMode[lane])
         {
@@ -1210,15 +1287,15 @@ processor SeqFx [[ main ]]
         if (filterMixCurrent[lane] <= 0.00001f)
             return stage;
 
-        let phase = filterAgeFrames[lane] / std::intrinsics::max (1.0f, filterDurationFrames[lane]);
-        let envelope = seqfx::curve01 (phase, filterCurve[lane]);
-        let cutoffHz = seqfx::logLerpHz (filterStartHz[lane], filterEndHz[lane], envelope);
-        let mode = seqfx::resolveFilterMode (filterMode[lane]);
+        let cutoffHz = auxCutoffValue (lane, 1, filterStartHz[lane]);
+        let currentQ = seqfx::clampFloat (auxParamValue (lane, 3, filterQ[lane]), 0.1f, 20.0f);
+        let currentMode = snapValue (auxParamValue (lane, 0, float32 (filterMode[lane])), 0, 2);
+        let mode = seqfx::resolveFilterMode (currentMode);
 
         filterStates[lane, 0].setMode (mode);
         filterStates[lane, 1].setMode (mode);
-        filterStates[lane, 0].setFrequency (processor.frequency, cutoffHz, filterQ[lane], 0.0f);
-        filterStates[lane, 1].setFrequency (processor.frequency, cutoffHz, filterQ[lane], 0.0f);
+        filterStates[lane, 0].setFrequency (processor.frequency, cutoffHz, currentQ, 0.0f);
+        filterStates[lane, 1].setFrequency (processor.frequency, cutoffHz, currentQ, 0.0f);
 
         var filtered = float32<2> (
             filterStates[lane, 0].process (stage[0]),
@@ -1227,9 +1304,6 @@ processor SeqFx [[ main ]]
 
         filterModeFade[lane] = seqfx::moveTowards (filterModeFade[lane], 1.0f, 1.0f / std::intrinsics::max (1.0f, float32 (processor.frequency) * 0.005f));
         filtered = stage + ((filtered - stage) * filterModeFade[lane]);
-
-        if (filterActive[lane])
-            filterAgeFrames[lane] += 1.0f;
 
         return stage + ((filtered - stage) * filterMixCurrent[lane]);
     }
@@ -1471,7 +1545,8 @@ processor SeqFx [[ main ]]
         for (wrap<seqfx::laneCount> lane)
         {
             let activeEffect = selectedEffectForStep (lane, currentStep) != seqfx::effectEmpty;
-            monitor.auxPhase[lane] = activeEffect ? auxPhaseForLane (lane) : 0.0f;
+            monitor.auxCyclePhase[lane] = activeEffect ? auxCyclePhaseForLane (lane) : 0.0f;
+            monitor.auxAmount[lane] = activeEffect ? auxAmountForLane (lane) : 0.0f;
             monitor.auxDurationMs[lane] = activeEffect
                 ? float32 ((auxDurationFrames[lane] / processor.frequency) * 1000.0)
                 : 0.0f;

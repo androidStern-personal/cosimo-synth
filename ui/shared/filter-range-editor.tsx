@@ -464,15 +464,16 @@ function formatHz(value: number) {
 
 function formatHzChip(value: number) {
     const cutoff = clampFilterCutoffHz(value);
-    if (cutoff >= 10_000) {
-        return `${(cutoff / 1000).toFixed(1)}k`;
+    const roundedCutoff = Math.round(cutoff);
+    if (roundedCutoff >= 10_000) {
+        return `${(roundedCutoff / 1000).toFixed(1)}k`;
     }
 
-    if (cutoff >= 1000) {
-        return `${(cutoff / 1000).toFixed(2)}k`;
+    if (roundedCutoff >= 1000) {
+        return `${(roundedCutoff / 1000).toFixed(2)}k`;
     }
 
-    return String(Math.round(cutoff));
+    return String(roundedCutoff);
 }
 
 function formatHzLong(value: number) {

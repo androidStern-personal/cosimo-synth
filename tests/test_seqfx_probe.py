@@ -62,7 +62,12 @@ def _empty_upload(*, revision: int = 1, pattern_index: int = 0) -> dict[str, obj
             [[0.0 for _ in range(PARAM_COUNT)] for _ in range(STEP_COUNT)]
             for _ in range(LANE_COUNT)
         ],
-        "auxCurve": [[0 for _ in range(STEP_COUNT)] for _ in range(LANE_COUNT)],
+        "auxShape": [[0.0 for _ in range(STEP_COUNT)] for _ in range(LANE_COUNT)],
+        "auxSourceCurve": [[0.0 for _ in range(STEP_COUNT)] for _ in range(LANE_COUNT)],
+        "auxRateMode": [[1 for _ in range(STEP_COUNT)] for _ in range(LANE_COUNT)],
+        "auxTempoMultiplier": [[4 for _ in range(STEP_COUNT)] for _ in range(LANE_COUNT)],
+        "auxTempoTriplet": [[False for _ in range(STEP_COUNT)] for _ in range(LANE_COUNT)],
+        "auxSliceCount": [[1 for _ in range(STEP_COUNT)] for _ in range(LANE_COUNT)],
     }
 
 
@@ -104,11 +109,21 @@ def _set_aux(
     param: int,
     end: float,
     enabled: bool = True,
-    curve: int = 0,
+    shape: float = 1.0,
+    source_curve: float = 0.0,
+    rate_mode: int = 1,
+    tempo_multiplier: int = 4,
+    tempo_triplet: bool = False,
+    slice_count: int = 1,
 ) -> None:
     upload["auxEnabled"][lane][step][param] = bool(enabled)
     upload["auxEnd"][lane][step][param] = float(end)
-    upload["auxCurve"][lane][step] = int(curve)
+    upload["auxShape"][lane][step] = float(shape)
+    upload["auxSourceCurve"][lane][step] = float(source_curve)
+    upload["auxRateMode"][lane][step] = int(rate_mode)
+    upload["auxTempoMultiplier"][lane][step] = int(tempo_multiplier)
+    upload["auxTempoTriplet"][lane][step] = bool(tempo_triplet)
+    upload["auxSliceCount"][lane][step] = int(slice_count)
 
 
 @pytest.fixture(scope="module")
@@ -404,6 +419,18 @@ def _first_monitor_frame_for_step(monitors: list[dict[str, object]], step_index:
     raise AssertionError(f"No monitor event reported step {step_index}; saw {monitors[:8]}")
 
 
+def _first_monitor_event_for_step(monitors: list[dict[str, object]], step_index: int) -> dict[str, object]:
+    for monitor in monitors:
+        value = monitor["value"]
+        assert isinstance(value, dict)
+        event = value["event"]
+        assert isinstance(event, dict)
+        if int(event["stepIndex"]) == step_index:
+            return event
+
+    raise AssertionError(f"No monitor event reported step {step_index}; saw {monitors[:8]}")
+
+
 @pytest.mark.parametrize(
     ("rate_index", "expected_step_frames"),
     [
@@ -594,7 +621,7 @@ def test_aux_envelope_sweeps_crusher_bits_across_the_full_block(
             trigger=(step == 0),
             params=[16, 1, 0],
         )
-        _set_aux(upload, lane=LANE_CRUSHER, step=step, param=0, end=4, curve=0)
+        _set_aux(upload, lane=LANE_CRUSHER, step=step, param=0, end=4)
 
     input_audio = _ramp(STEP_FRAMES * 2)
     output = _render(generated_runtime, tmp_path, input_audio, _base_schedule(upload))
@@ -605,25 +632,19 @@ def test_aux_envelope_sweeps_crusher_bits_across_the_full_block(
     assert np.unique(early).size > np.unique(late).size * 3
 
 
-def test_aux_curve_shapes_render_distinct_stutter_gate_signatures(
+def test_aux_source_shapes_render_distinct_stutter_gate_signatures(
     generated_runtime: GeneratedRuntime,
     tmp_path: Path,
 ) -> None:
-    curve_names = {
-        0: "linear",
-        1: "ease",
-        2: "exp",
-        3: "log",
-        4: "bell",
-        5: "hold",
+    shape_names = {
+        -1.0: "falling",
+        0.0: "bell",
+        1.0: "rising",
     }
     expected_audibility = {
-        "linear": {"step1_65": True, "step1_70": False, "step1_95": False, "step2_60": False, "step3_45": False},
-        "ease": {"step1_65": True, "step1_70": True, "step1_95": False, "step2_60": False, "step3_45": False},
-        "exp": {"step1_65": True, "step1_70": True, "step1_95": False, "step2_60": True, "step3_45": False},
-        "log": {"step1_65": False, "step1_70": False, "step1_95": False, "step2_60": False, "step3_45": False},
-        "bell": {"step1_65": False, "step1_70": False, "step1_95": False, "step2_60": False, "step3_45": True},
-        "hold": {"step1_65": True, "step1_70": True, "step1_95": True, "step2_60": False, "step3_45": False},
+        "falling": {"step1_10": True, "step1_45": False, "step1_85": False, "step2_45": True},
+        "bell": {"step1_10": True, "step1_45": False, "step1_85": False, "step2_45": False},
+        "rising": {"step1_10": True, "step1_45": True, "step1_85": False, "step2_45": False},
     }
 
     upload = _empty_upload()
@@ -647,11 +668,10 @@ def test_aux_curve_shapes_render_distinct_stutter_gate_signatures(
     input_audio = np.column_stack([mono, mono]).astype(np.float32)
 
     probe_windows = {
-        "step1_65": (STEP_FRAMES, 0.65),
-        "step1_70": (STEP_FRAMES, 0.70),
-        "step1_95": (STEP_FRAMES, 0.95),
-        "step2_60": (STEP_FRAMES * 2, 0.60),
-        "step3_45": (STEP_FRAMES * 3, 0.45),
+        "step1_10": (STEP_FRAMES, 0.10),
+        "step1_45": (STEP_FRAMES, 0.45),
+        "step1_85": (STEP_FRAMES, 0.85),
+        "step2_45": (STEP_FRAMES * 2, 0.45),
     }
 
     def rms_for_window(samples: np.ndarray, step_start: int, local_phase: float) -> float:
@@ -669,18 +689,18 @@ def test_aux_curve_shapes_render_distinct_stutter_gate_signatures(
         for name, (_step_start, local_phase) in probe_windows.items()
     }
 
-    for curve_index, curve_name in curve_names.items():
+    for shape, shape_name in shape_names.items():
         for step in range(4):
-            _set_aux(upload, lane=LANE_STUTTER, step=step, param=3, end=0.25, curve=curve_index)
+            _set_aux(upload, lane=LANE_STUTTER, step=step, param=3, end=0.0, shape=shape)
 
         output = _render(generated_runtime, tmp_path, input_audio, _base_schedule(upload))
 
         for window_name, (step_start, local_phase) in probe_windows.items():
             ratio = rms_for_window(output, step_start, local_phase) / max(reference_rms[window_name], 1.0e-6)
-            if expected_audibility[curve_name][window_name]:
-                assert ratio > 0.35, f"{curve_name} should stay audible in {window_name}, got ratio {ratio:.3f}"
+            if expected_audibility[shape_name][window_name]:
+                assert ratio > 0.35, f"{shape_name} should stay audible in {window_name}, got ratio {ratio:.3f}"
             else:
-                assert ratio < 0.08, f"{curve_name} should mute {window_name}, got ratio {ratio:.3f}"
+                assert ratio < 0.08, f"{shape_name} should mute {window_name}, got ratio {ratio:.3f}"
 
 
 def test_aux_envelope_sweeps_crusher_hold_frames_across_the_full_block(
@@ -696,7 +716,7 @@ def test_aux_envelope_sweeps_crusher_hold_frames_across_the_full_block(
             trigger=(step == 0),
             params=[16, 1, 0],
         )
-        _set_aux(upload, lane=LANE_CRUSHER, step=step, param=1, end=64, curve=0)
+        _set_aux(upload, lane=LANE_CRUSHER, step=step, param=1, end=64)
 
     input_audio = _ramp(STEP_FRAMES * 4)
     output = _render(generated_runtime, tmp_path, input_audio, _base_schedule(upload))
@@ -724,7 +744,7 @@ def test_aux_envelope_sweeps_crusher_drive_into_clipping_late_in_the_block(
                 trigger=(step == 0),
                 params=[16, 1, 0],
             )
-        _set_aux(aux_upload, lane=LANE_CRUSHER, step=step, param=2, end=36, curve=0)
+        _set_aux(aux_upload, lane=LANE_CRUSHER, step=step, param=2, end=36)
 
     input_audio = _sine(STEP_FRAMES * 4, 330.0, amplitude=0.05)
     baseline = _render(generated_runtime, tmp_path, input_audio, _base_schedule(baseline_upload))
@@ -742,7 +762,7 @@ def test_aux_envelope_sweeps_crusher_drive_into_clipping_late_in_the_block(
     assert late_delta > early_delta * 8
 
 
-def test_monitor_reports_aux_phase_for_the_active_block(
+def test_monitor_reports_raw_aux_cycle_phase_and_shaped_amount_for_the_active_block(
     generated_runtime: GeneratedRuntime,
     tmp_path: Path,
 ) -> None:
@@ -755,7 +775,7 @@ def test_monitor_reports_aux_phase_for_the_active_block(
             trigger=(step == 0),
             params=[16, 1, 0],
         )
-        _set_aux(upload, lane=LANE_CRUSHER, step=step, param=0, end=4, curve=0)
+        _set_aux(upload, lane=LANE_CRUSHER, step=step, param=0, end=4)
 
     input_audio = np.zeros((STEP_FRAMES * 2, 2), dtype=np.float32)
     _output, monitors = _render_with_monitor_events(
@@ -773,13 +793,15 @@ def test_monitor_reports_aux_phase_for_the_active_block(
 
     assert crusher_events, "expected at least one monitor event while step 1 was active"
     first = crusher_events[0]
-    assert len(first["auxPhase"]) == LANE_COUNT
+    assert len(first["auxCyclePhase"]) == LANE_COUNT
+    assert len(first["auxAmount"]) == LANE_COUNT
     assert len(first["auxDurationMs"]) == LANE_COUNT
-    assert 0.45 <= first["auxPhase"][LANE_CRUSHER] <= 0.75
+    assert 0.45 <= first["auxCyclePhase"][LANE_CRUSHER] <= 0.75
+    assert 0.45 <= first["auxAmount"][LANE_CRUSHER] <= 0.75
     assert 120.0 <= first["auxDurationMs"][LANE_CRUSHER] <= 130.0
 
 
-def test_monitor_reports_aux_phase_start_and_end_of_the_block(
+def test_monitor_reports_falling_shape_with_raw_phase_increasing_and_amount_falling(
     generated_runtime: GeneratedRuntime,
     tmp_path: Path,
 ) -> None:
@@ -792,7 +814,7 @@ def test_monitor_reports_aux_phase_start_and_end_of_the_block(
             trigger=(step == 0),
             params=[16, 1, 0],
         )
-        _set_aux(upload, lane=LANE_CRUSHER, step=step, param=0, end=4, curve=0)
+        _set_aux(upload, lane=LANE_CRUSHER, step=step, param=0, end=4, shape=-1.0)
 
     input_audio = np.zeros((STEP_FRAMES * 2, 2), dtype=np.float32)
     _output, monitors = _render_with_monitor_events(
@@ -809,9 +831,108 @@ def test_monitor_reports_aux_phase_start_and_end_of_the_block(
     ]
 
     assert crusher_events, "expected monitor events with crusher aux duration"
-    assert crusher_events[0]["auxPhase"][LANE_CRUSHER] < 0.2
-    assert crusher_events[-1]["auxPhase"][LANE_CRUSHER] > 0.8
+    assert crusher_events[0]["auxCyclePhase"][LANE_CRUSHER] < 0.2
+    assert crusher_events[-1]["auxCyclePhase"][LANE_CRUSHER] > 0.8
+    assert crusher_events[0]["auxAmount"][LANE_CRUSHER] > 0.8
+    assert crusher_events[-1]["auxAmount"][LANE_CRUSHER] < 0.2
     assert 120.0 <= crusher_events[-1]["auxDurationMs"][LANE_CRUSHER] <= 130.0
+
+
+@pytest.mark.parametrize(
+    ("tempo_multiplier", "tempo_triplet", "expected_min", "expected_max"),
+    [
+        (1, False, 0.45, 0.60),
+        (2, False, 0.20, 0.35),
+        (2, True, 0.32, 0.47),
+    ],
+)
+def test_tempo_synced_aux_rate_controls_raw_cycle_phase(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+    tempo_multiplier: int,
+    tempo_triplet: bool,
+    expected_min: float,
+    expected_max: float,
+) -> None:
+    upload = _empty_upload()
+    for step in (0, 1):
+        _activate_step(
+            upload,
+            lane=LANE_CRUSHER,
+            step=step,
+            trigger=(step == 0),
+            params=[16, 1, 0],
+        )
+        _set_aux(
+            upload,
+            lane=LANE_CRUSHER,
+            step=step,
+            param=0,
+            end=4,
+            rate_mode=0,
+            tempo_multiplier=tempo_multiplier,
+            tempo_triplet=tempo_triplet,
+        )
+
+    input_audio = np.zeros((STEP_FRAMES * 2, 2), dtype=np.float32)
+    _output, monitors = _render_with_monitor_events(
+        generated_runtime,
+        tmp_path,
+        input_audio,
+        _base_schedule(upload, manual_bpm=120.0, rate=2.0),
+    )
+
+    step_one = _first_monitor_event_for_step(monitors, 1)
+    phase = float(step_one["auxCyclePhase"][LANE_CRUSHER])
+
+    assert expected_min <= phase <= expected_max
+
+
+@pytest.mark.parametrize(
+    ("slice_count", "expected_min", "expected_max"),
+    [
+        (1, 0.45, 0.60),
+        (2, 0.0, 0.10),
+    ],
+)
+def test_slice_aux_rate_divides_the_active_block_duration(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+    slice_count: int,
+    expected_min: float,
+    expected_max: float,
+) -> None:
+    upload = _empty_upload()
+    for step in (0, 1):
+        _activate_step(
+            upload,
+            lane=LANE_CRUSHER,
+            step=step,
+            trigger=(step == 0),
+            params=[16, 1, 0],
+        )
+        _set_aux(
+            upload,
+            lane=LANE_CRUSHER,
+            step=step,
+            param=0,
+            end=4,
+            rate_mode=1,
+            slice_count=slice_count,
+        )
+
+    input_audio = np.zeros((STEP_FRAMES * 2, 2), dtype=np.float32)
+    _output, monitors = _render_with_monitor_events(
+        generated_runtime,
+        tmp_path,
+        input_audio,
+        _base_schedule(upload, rate=2.0),
+    )
+
+    step_one = _first_monitor_event_for_step(monitors, 1)
+    phase = float(step_one["auxCyclePhase"][LANE_CRUSHER])
+
+    assert expected_min <= phase <= expected_max
 
 
 def test_global_mix_zero_returns_dry_even_when_all_lanes_are_active(
@@ -848,6 +969,88 @@ def test_filter_lane_reduces_high_frequency_energy(
     input_rms = float(np.sqrt(np.mean(input_audio[800:, 0] ** 2)))
     output_rms = float(np.sqrt(np.mean(output[800:, 0] ** 2)))
     assert output_rms < input_rms * 0.35
+
+
+def test_filter_ignores_legacy_end_cutoff_without_cutoff_aux_target(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    upload = _empty_upload()
+    for step in range(4):
+        _activate_step(
+            upload,
+            lane=LANE_FILTER,
+            step=step,
+            trigger=(step == 0),
+            params=[0, 220.0, 20_000.0, 0.707, 1.0],
+        )
+
+    input_audio = _sine(STEP_FRAMES * 4, 3_000.0)
+    output = _render(generated_runtime, tmp_path, input_audio, _base_schedule(upload))
+
+    first_step_start = output[350:900, 0]
+    fourth_step_start = output[(STEP_FRAMES * 3) + 350 : (STEP_FRAMES * 3) + 900, 0]
+    first_rms = float(np.sqrt(np.mean(first_step_start**2)))
+    fourth_rms = float(np.sqrt(np.mean(fourth_step_start**2)))
+
+    assert fourth_rms < first_rms * 1.25
+
+
+def test_filter_mode_can_be_modulated_by_the_aux_source(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    upload = _empty_upload()
+    for step in range(4):
+        _activate_step(
+            upload,
+            lane=LANE_FILTER,
+            step=step,
+            trigger=(step == 0),
+            params=[0, 1_000.0, 1_000.0, 0.707, 1.0],
+        )
+        _set_aux(upload, lane=LANE_FILTER, step=step, param=0, end=1.0, shape=1.0)
+
+    input_audio = _sine(STEP_FRAMES * 4, 200.0)
+    output = _render(generated_runtime, tmp_path, input_audio, _base_schedule(upload))
+
+    early_lowpass_window = output[500:1_300, 0]
+    late_highpass_window = output[(STEP_FRAMES * 3) + 1_100 : (STEP_FRAMES * 3) + 1_900, 0]
+    early_rms = _rms(early_lowpass_window)
+    late_rms = _rms(late_highpass_window)
+
+    assert early_rms > 0.28
+    assert late_rms < early_rms * 0.35
+
+
+def test_filter_resonance_can_be_modulated_by_the_aux_source(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    baseline_upload = _empty_upload()
+    resonant_upload = _empty_upload()
+    for step in range(4):
+        for upload in (baseline_upload, resonant_upload):
+            _activate_step(
+                upload,
+                lane=LANE_FILTER,
+                step=step,
+                trigger=(step == 0),
+                params=[0, 1_000.0, 1_000.0, 0.3, 1.0],
+            )
+        _set_aux(resonant_upload, lane=LANE_FILTER, step=step, param=3, end=18.0, shape=1.0)
+
+    input_audio = _sine(STEP_FRAMES * 4, 1_000.0, amplitude=0.08)
+    baseline = _render(generated_runtime, tmp_path, input_audio, _base_schedule(baseline_upload))
+    resonant = _render(generated_runtime, tmp_path, input_audio, _base_schedule(resonant_upload))
+
+    late_window = slice((STEP_FRAMES * 3) + 1_100, (STEP_FRAMES * 3) + 1_900)
+    late_delta = _rms(resonant[late_window, 0] - baseline[late_window, 0])
+    late_resonant_rms = _rms(resonant[late_window, 0])
+    late_baseline_rms = _rms(baseline[late_window, 0])
+
+    assert late_delta > 0.035
+    assert late_resonant_rms > late_baseline_rms * 1.5
 
 
 def test_live_filter_cutoff_upload_changes_active_continuation_without_retrigger(
@@ -1094,8 +1297,9 @@ def test_filter_envelope_uses_the_full_stretched_block_duration(
             lane=LANE_FILTER,
             step=step,
             trigger=(step == 0),
-            params=[0, 220.0, 20_000.0, 0.707, 1.0],
+            params=[0, 220.0, 220.0, 0.707, 1.0],
         )
+        _set_aux(upload, lane=LANE_FILTER, step=step, param=1, end=20_000.0, shape=1.0)
 
     input_audio = _sine(STEP_FRAMES * 4, 3_000.0)
     output = _render(generated_runtime, tmp_path, input_audio, _base_schedule(upload))
@@ -1145,7 +1349,7 @@ def test_aux_envelope_modulates_tape_stop_start_length(
             trigger=(step == 1),
             params=[1.0, 1.0, 1.0, 0.0, 0.0],
         )
-        _set_aux(aux_upload, lane=LANE_TAPE, step=step, param=0, end=0.2, curve=0)
+        _set_aux(aux_upload, lane=LANE_TAPE, step=step, param=0, end=0.2)
 
     input_audio = _sine(STEP_FRAMES * 4, 660.0)
     baseline = _render(generated_runtime, tmp_path, input_audio, _base_schedule(upload))
@@ -1597,7 +1801,7 @@ def test_aux_envelope_sweeps_stutter_gate_without_restart(
             trigger=(step == 0),
             params=[4.0, 1.0, 0.0, 1.0],
         )
-        _set_aux(upload, lane=LANE_STUTTER, step=step, param=3, end=0.25, curve=0)
+        _set_aux(upload, lane=LANE_STUTTER, step=step, param=3, end=0.25)
 
     frames = STEP_FRAMES * 3
     n = np.arange(frames, dtype=np.float64)
@@ -1634,7 +1838,7 @@ def test_aux_envelope_stutter_slices_down_sweep_stays_inside_capture(
             trigger=(step == 0),
             params=[32.0, 1.0, 0.0, 1.0],
         )
-        _set_aux(upload, lane=LANE_STUTTER, step=step, param=0, end=2.0, curve=0)
+        _set_aux(upload, lane=LANE_STUTTER, step=step, param=0, end=2.0)
 
     frames = STEP_FRAMES * 3
     mono = np.zeros(frames, dtype=np.float32)
