@@ -490,11 +490,109 @@ select {
 }
 
 .seqfx-block-fill span {
+    position: relative;
+    z-index: 1;
     color: rgba(15, 21, 17, 0.76);
     font-size: 9px;
     font-weight: 800;
     line-height: 1;
     pointer-events: none;
+    text-shadow: 0 1px 0 rgba(255, 248, 232, 0.42);
+}
+
+.seqfx-block-glyph {
+    position: absolute;
+    inset: 3px 5px;
+    width: calc(100% - 10px);
+    height: calc(100% - 6px);
+    color: rgba(15, 21, 17, 0.32);
+    overflow: visible;
+    pointer-events: none;
+}
+
+.seqfx-block-glyph[data-glyph-effect="filter"] {
+    inset: 1px 3px;
+    width: calc(100% - 6px);
+    height: calc(100% - 2px);
+    color: rgba(91, 46, 59, 0.58);
+}
+
+.seqfx-block-glyph__curve {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    vector-effect: non-scaling-stroke;
+}
+
+.seqfx-block-glyph__area {
+    fill: rgba(214, 122, 134, 0.38);
+    stroke: none;
+}
+
+.seqfx-block-glyph__hairline {
+    stroke: currentColor;
+    stroke-width: 0.8;
+    stroke-dasharray: 1.4 1.6;
+    stroke-linecap: round;
+    opacity: 0.55;
+    vector-effect: non-scaling-stroke;
+}
+
+.seqfx-block-glyph__cassette {
+    fill: rgba(255, 248, 232, 0.14);
+    stroke: currentColor;
+    stroke-width: 0.9;
+    stroke-linejoin: round;
+    opacity: 0.82;
+    vector-effect: non-scaling-stroke;
+}
+
+.seqfx-block-glyph__cassette-window {
+    fill: currentColor;
+    opacity: 0.16;
+    stroke: none;
+}
+
+.seqfx-block-glyph__reel,
+.seqfx-block-glyph__tape-line {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 0.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    opacity: 0.72;
+    vector-effect: non-scaling-stroke;
+}
+
+.seqfx-block-glyph__slice {
+    fill: currentColor;
+    opacity: 0.58;
+}
+
+.seqfx-block:hover .seqfx-block-glyph {
+    color: rgba(15, 21, 17, 0.42);
+}
+
+.seqfx-block:hover .seqfx-block-glyph[data-glyph-effect="filter"] {
+    color: rgba(91, 46, 59, 0.66);
+}
+
+.seqfx-block.is-selected .seqfx-block-glyph {
+    color: rgba(15, 21, 17, 0.46);
+}
+
+.seqfx-block.is-selected .seqfx-block-glyph[data-glyph-effect="filter"] {
+    color: rgba(91, 46, 59, 0.72);
+}
+
+.seqfx-block.is-playhead .seqfx-block-glyph {
+    color: rgba(15, 21, 17, 0.5);
+}
+
+.seqfx-block.is-playhead .seqfx-block-glyph[data-glyph-effect="filter"] {
+    color: rgba(91, 46, 59, 0.78);
 }
 
 .seqfx-block[data-effect="1"] .seqfx-block-fill {

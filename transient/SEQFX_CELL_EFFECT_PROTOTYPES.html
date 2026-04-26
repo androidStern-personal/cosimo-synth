@@ -1,0 +1,1470 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>SeqFX cell effect prototypes</title>
+<style>
+  :root {
+    --page-bg: #f3f1ec;
+    --ink: #1a1815;
+    --muted: #6b6660;
+    --rule: #d8d3c8;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--page-bg);
+    color: var(--ink);
+    font-family: ui-sans-serif, system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+    font-size: 13px;
+    line-height: 1.45;
+    padding: 32px 32px 64px;
+  }
+
+  header.page {
+    max-width: 1100px;
+    margin: 0 auto 28px;
+    border-bottom: 1px solid var(--rule);
+    padding-bottom: 16px;
+  }
+  header.page h1 {
+    font-size: 18px;
+    font-weight: 600;
+    margin: 0 0 4px;
+    letter-spacing: 0.01em;
+  }
+  header.page p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 12px;
+  }
+
+  section.dir {
+    max-width: 1100px;
+    margin: 0 auto 40px;
+  }
+  section.dir > h2 {
+    font-size: 14px;
+    font-weight: 600;
+    margin: 0 0 2px;
+    letter-spacing: 0.02em;
+  }
+  section.dir > .blurb {
+    margin: 0 0 14px;
+    color: var(--muted);
+    font-size: 12px;
+  }
+  section.dir > .stage {
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  .row-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--muted);
+    padding: 6px 10px 0;
+  }
+
+  /* Generic grid: 4 effects across, 2-3 variations stacked vertically as a "sequence row" feel */
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    padding: 14px;
+  }
+  .col-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    color: var(--muted);
+    margin-bottom: 6px;
+    text-align: center;
+  }
+  .stack {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    align-items: center;
+  }
+
+  /* ============================================================ */
+  /* DIRECTION 1 — Specimen card                                   */
+  /* ============================================================ */
+  .d-specimen .stage { background: #fbf8f0; }
+  .d-specimen .cell {
+    width: 108px;
+    height: 130px;
+    background:
+      repeating-linear-gradient(0deg, rgba(0,0,0,0.018) 0 1px, transparent 1px 4px),
+      #fdfaf2;
+    border: 1px solid #2a2620;
+    border-radius: 2px;
+    box-shadow: 0 1px 0 #2a2620, 1px 2px 0 rgba(0,0,0,0.06);
+    color: #2a2620;
+    font-family: "Iowan Old Style", "Times New Roman", Georgia, serif;
+    display: flex;
+    flex-direction: column;
+    padding: 6px 7px 5px;
+    position: relative;
+  }
+  .d-specimen .cell::before {
+    content: "";
+    position: absolute;
+    inset: 3px;
+    border: 0.5px solid #2a2620;
+    pointer-events: none;
+  }
+  .d-specimen .head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    border-bottom: 0.5px solid #2a2620;
+    padding-bottom: 2px;
+    margin-bottom: 4px;
+  }
+  .d-specimen .ord {
+    font-size: 8px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: #6b5a3a;
+  }
+  .d-specimen .name {
+    font-style: italic;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .d-specimen .plate {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 4px;
+  }
+  .d-specimen .params {
+    font-family: "Courier New", ui-monospace, monospace;
+    font-size: 8.5px;
+    line-height: 1.35;
+    color: #2a2620;
+    border-top: 0.5px solid #2a2620;
+    padding-top: 3px;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 0 6px;
+  }
+  .d-specimen .params b { font-weight: 700; }
+
+  /* ============================================================ */
+  /* DIRECTION 2 — Risograph                                       */
+  /* ============================================================ */
+  .d-riso .stage {
+    background: #efe9d9;
+    background-image:
+      radial-gradient(rgba(0,0,0,0.05) 1px, transparent 1.2px);
+    background-size: 3px 3px;
+  }
+  .d-riso .cell {
+    width: 108px;
+    height: 108px;
+    border-radius: 4px;
+    position: relative;
+    overflow: hidden;
+    color: #1a1815;
+    font-family: "Helvetica Neue", Inter, system-ui, sans-serif;
+    box-shadow: 2px 2px 0 rgba(0,0,0,0.12);
+  }
+  .d-riso .cell::after {
+    content: "";
+    position: absolute; inset: 0;
+    background-image:
+      radial-gradient(rgba(0,0,0,0.10) 1px, transparent 1.2px);
+    background-size: 2.5px 2.5px;
+    mix-blend-mode: multiply;
+    pointer-events: none;
+  }
+  .d-riso .ribbon {
+    position: absolute;
+    top: 6px; left: 6px;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    background: #1a1815;
+    color: #fff8d8;
+    padding: 2px 6px;
+    border-radius: 1px;
+    z-index: 2;
+  }
+  .d-riso .meta {
+    position: absolute;
+    bottom: 6px; left: 6px; right: 6px;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    display: flex;
+    justify-content: space-between;
+    z-index: 2;
+  }
+  .d-riso svg.art {
+    position: absolute;
+    inset: 0;
+    width: 100%; height: 100%;
+    z-index: 1;
+  }
+  .d-riso .c-filter  { background: #f4d35e; }
+  .d-riso .c-crusher { background: #ee6c4d; }
+  .d-riso .c-tape    { background: #98c1d9; }
+  .d-riso .c-stutter { background: #b5d99c; }
+
+  /* ============================================================ */
+  /* DIRECTION 3 — CRT phosphor                                    */
+  /* ============================================================ */
+  .d-crt .stage {
+    background: #0a0d0a;
+    color: #c8ffd1;
+  }
+  .d-crt .col-label, .d-crt .row-label { color: #5a8a5e; }
+  .d-crt .cell {
+    width: 110px;
+    height: 110px;
+    background:
+      radial-gradient(120% 80% at 50% 0%, rgba(60,200,90,0.10), transparent 60%),
+      repeating-linear-gradient(0deg, rgba(0,0,0,0) 0 2px, rgba(0,0,0,0.35) 2px 3px),
+      #06180a;
+    border: 1px solid #1f4a26;
+    border-radius: 8px;
+    position: relative;
+    overflow: hidden;
+    color: #b8ffc4;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    box-shadow: inset 0 0 18px rgba(80,255,120,0.12);
+  }
+  .d-crt .cell .label {
+    position: absolute;
+    top: 6px; left: 8px;
+    font-size: 9px;
+    letter-spacing: 0.2em;
+    text-shadow: 0 0 6px rgba(120,255,150,0.65);
+  }
+  .d-crt .cell .readout {
+    position: absolute;
+    top: 6px; right: 8px;
+    font-size: 9px;
+    color: #ffd97a;
+    text-shadow: 0 0 6px rgba(255,200,80,0.6);
+  }
+  .d-crt .cell .footer {
+    position: absolute;
+    bottom: 5px; left: 8px; right: 8px;
+    font-size: 8.5px;
+    letter-spacing: 0.06em;
+    color: #7df09a;
+    display: flex; justify-content: space-between;
+    text-shadow: 0 0 4px rgba(125,240,154,0.4);
+  }
+  .d-crt svg.scope {
+    position: absolute;
+    inset: 22px 8px 22px;
+    width: calc(100% - 16px);
+    height: calc(100% - 44px);
+    overflow: visible;
+  }
+  .d-crt svg.scope .trace { fill: none; stroke: #6dff8d; stroke-width: 1.2; filter: drop-shadow(0 0 2px rgba(120,255,150,0.7)); }
+  .d-crt svg.scope .gridln { stroke: #1f4a26; stroke-width: 0.5; }
+  .d-crt svg.scope .accent { stroke: #ffd97a; stroke-width: 1; filter: drop-shadow(0 0 2px rgba(255,200,80,0.7)); fill: none; }
+
+  /* ============================================================ */
+  /* DIRECTION 4 — Brutalist mono                                  */
+  /* ============================================================ */
+  .d-brut .stage {
+    background: #ededea;
+  }
+  .d-brut .cell {
+    width: 110px;
+    height: 110px;
+    background: #f6f5f1;
+    border: 2px solid #111;
+    position: relative;
+    font-family: "JetBrains Mono", ui-monospace, Menlo, monospace;
+    color: #111;
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+    padding: 6px 7px;
+  }
+  .d-brut .cell.accent {
+    background: #ff5a36;
+    color: #111;
+  }
+  .d-brut .cell .top {
+    display: flex; justify-content: space-between; align-items: center;
+    font-size: 9px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    border-bottom: 2px solid #111;
+    padding-bottom: 3px;
+    font-weight: 700;
+  }
+  .d-brut .cell .mid {
+    display: flex; align-items: center; justify-content: center;
+    padding: 4px 0 2px;
+  }
+  .d-brut .cell .mid svg { width: 100%; height: 100%; max-height: 46px; }
+  .d-brut .cell .bot {
+    border-top: 2px solid #111;
+    padding-top: 3px;
+    font-size: 9px;
+    letter-spacing: 0.04em;
+    display: flex; justify-content: space-between;
+    font-weight: 600;
+  }
+  .d-brut .cell .corner {
+    position: absolute;
+    top: -2px; right: -2px;
+    background: #111;
+    color: #f6f5f1;
+    font-size: 8px;
+    padding: 1px 4px 2px;
+    letter-spacing: 0.14em;
+  }
+  .d-brut .cell.accent .corner { color: #ff5a36; }
+
+  /* ============================================================ */
+  /* DIRECTION 5 — Hardware module                                 */
+  /* ============================================================ */
+  .d-hw .stage {
+    background: #1d1e22;
+  }
+  .d-hw .col-label, .d-hw .row-label { color: #a4a8af; }
+  .d-hw .cell {
+    width: 108px;
+    height: 132px;
+    background:
+      linear-gradient(180deg, rgba(255,255,255,0.04), rgba(0,0,0,0.18)),
+      repeating-linear-gradient(90deg, rgba(255,255,255,0.025) 0 1px, transparent 1px 2px),
+      #2c2e34;
+    border: 1px solid #0c0d0f;
+    border-radius: 4px;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.07),
+      0 2px 4px rgba(0,0,0,0.5);
+    position: relative;
+    color: #e9e7df;
+    font-family: "Helvetica Neue", Inter, system-ui, sans-serif;
+    padding: 8px 8px 6px;
+  }
+  .d-hw .cell .screw {
+    position: absolute;
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background:
+      linear-gradient(135deg, #b9b9b9, #5b5b5b);
+    box-shadow: inset 0 0 0 0.5px #2a2a2a, 0 1px 0 rgba(0,0,0,0.6);
+  }
+  .d-hw .cell .screw::after {
+    content: "";
+    position: absolute; left: 1px; right: 1px; top: 2.5px; height: 1px;
+    background: #2a2a2a;
+    transform: rotate(35deg);
+    transform-origin: center;
+  }
+  .d-hw .cell .screw.tl { top: 4px; left: 4px; }
+  .d-hw .cell .screw.tr { top: 4px; right: 4px; }
+  .d-hw .cell .screw.bl { bottom: 4px; left: 4px; }
+  .d-hw .cell .screw.br { bottom: 4px; right: 4px; }
+  .d-hw .cell .module {
+    text-align: center;
+    margin-top: 2px;
+  }
+  .d-hw .cell .module .nm {
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: #f3efe2;
+  }
+  .d-hw .cell .module .sub {
+    font-size: 7.5px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: #8a8d96;
+    margin-top: 1px;
+  }
+  .d-hw .cell .face {
+    margin-top: 6px;
+    height: 70px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+  }
+  .d-hw .cell .strip {
+    position: absolute;
+    bottom: 4px; left: 8px; right: 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 7.5px;
+    color: #b6b9c1;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+  .d-hw .knob {
+    width: 38px; height: 38px;
+    border-radius: 50%;
+    background:
+      radial-gradient(circle at 35% 30%, #6a6c72 0 22%, #3a3c42 60%, #1a1b1f 100%);
+    border: 1px solid #0a0a0c;
+    box-shadow:
+      inset 0 0 0 2px #25272c,
+      inset 0 1px 1px rgba(255,255,255,0.15),
+      0 2px 2px rgba(0,0,0,0.6);
+    position: relative;
+  }
+  .d-hw .knob::after {
+    content: "";
+    position: absolute;
+    top: 3px; left: 50%;
+    width: 2px; height: 12px;
+    background: #f1ebd0;
+    transform-origin: 50% calc(100% + 7px);
+    border-radius: 1px;
+  }
+  .d-hw .led {
+    width: 5px; height: 5px;
+    border-radius: 50%;
+    background: #2a2a2a;
+    box-shadow: inset 0 0 0 0.5px #0a0a0a;
+  }
+  .d-hw .led.on.amber  { background: #ffb340; box-shadow: 0 0 5px #ffb340, inset 0 0 0 0.5px #6a4500; }
+  .d-hw .led.on.red    { background: #ff5040; box-shadow: 0 0 5px #ff5040, inset 0 0 0 0.5px #5a1a10; }
+  .d-hw .led.on.green  { background: #6dffa3; box-shadow: 0 0 5px #6dffa3, inset 0 0 0 0.5px #1a4a2a; }
+  .d-hw .led.on.cyan   { background: #61dffd; box-shadow: 0 0 5px #61dffd, inset 0 0 0 0.5px #14495a; }
+
+  /* ----- shared sub-elements ----- */
+  .panel-meta {
+    font-size: 7.5px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #8a8d96;
+  }
+
+</style>
+</head>
+<body>
+
+<header class="page">
+  <h1>SeqFX cell effect prototypes</h1>
+  <p>Five distinct visual directions for sequencer cells. Each row shows Filter / Crusher / Tape Stop / Stutter with 2–3 setting variations. Static, no priors.</p>
+</header>
+
+<!-- =========================================================== -->
+<!-- DIRECTION 1 — SPECIMEN CARD                                  -->
+<!-- =========================================================== -->
+<section class="dir d-specimen">
+  <h2>1 · Specimen</h2>
+  <p class="blurb">Each cell is a labelled specimen plate — small technical illustration, ordinal tag, parameter readout in monospace under a hairline rule.</p>
+  <div class="stage">
+    <div class="grid">
+      <!-- FILTER column -->
+      <div>
+        <div class="col-label">Filter</div>
+        <div class="stack">
+          <div class="cell">
+            <div class="head"><span class="name">Filter</span><span class="ord">FLT-α</span></div>
+            <div class="plate">
+              <svg viewBox="0 0 90 50" width="90" height="50">
+                <line x1="2" y1="40" x2="88" y2="40" stroke="#2a2620" stroke-width="0.5"/>
+                <line x1="2" y1="6" x2="2" y2="40" stroke="#2a2620" stroke-width="0.5"/>
+                <path d="M2 32 L40 32 Q55 32 60 18 L65 36 L88 38" fill="none" stroke="#2a2620" stroke-width="1"/>
+                <line x1="60" y1="6" x2="60" y2="44" stroke="#2a2620" stroke-width="0.5" stroke-dasharray="1.5 1.5"/>
+                <text x="60" y="49" font-family="Iowan Old Style, serif" font-style="italic" font-size="5" text-anchor="middle" fill="#6b5a3a">fc</text>
+              </svg>
+            </div>
+            <div class="params">
+              <span>mode</span><b>LP</b>
+              <span>cut</span><b>2.4 kHz</b>
+              <span>res</span><b>0.62</b>
+            </div>
+          </div>
+
+          <div class="cell">
+            <div class="head"><span class="name">Filter</span><span class="ord">FLT-β</span></div>
+            <div class="plate">
+              <svg viewBox="0 0 90 50" width="90" height="50">
+                <line x1="2" y1="40" x2="88" y2="40" stroke="#2a2620" stroke-width="0.5"/>
+                <path d="M2 38 L26 38 L30 8 L34 38 L88 38" fill="none" stroke="#2a2620" stroke-width="1"/>
+                <line x1="30" y1="6" x2="30" y2="44" stroke="#2a2620" stroke-width="0.5" stroke-dasharray="1.5 1.5"/>
+                <text x="30" y="49" font-family="Iowan Old Style, serif" font-style="italic" font-size="5" text-anchor="middle" fill="#6b5a3a">fc</text>
+              </svg>
+            </div>
+            <div class="params">
+              <span>mode</span><b>BP</b>
+              <span>cut</span><b>620 Hz</b>
+              <span>res</span><b>0.91</b>
+            </div>
+          </div>
+
+          <div class="cell">
+            <div class="head"><span class="name">Filter</span><span class="ord">FLT-γ</span></div>
+            <div class="plate">
+              <svg viewBox="0 0 90 50" width="90" height="50">
+                <line x1="2" y1="40" x2="88" y2="40" stroke="#2a2620" stroke-width="0.5"/>
+                <path d="M2 38 L40 38 Q55 38 62 24 L88 16" fill="none" stroke="#2a2620" stroke-width="1"/>
+                <line x1="62" y1="6" x2="62" y2="44" stroke="#2a2620" stroke-width="0.5" stroke-dasharray="1.5 1.5"/>
+                <text x="62" y="49" font-family="Iowan Old Style, serif" font-style="italic" font-size="5" text-anchor="middle" fill="#6b5a3a">fc</text>
+              </svg>
+            </div>
+            <div class="params">
+              <span>mode</span><b>HP</b>
+              <span>cut</span><b>4.8 kHz</b>
+              <span>res</span><b>0.30</b>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- CRUSHER column -->
+      <div>
+        <div class="col-label">Crusher</div>
+        <div class="stack">
+          <div class="cell">
+            <div class="head"><span class="name">Crusher</span><span class="ord">CRS-α</span></div>
+            <div class="plate">
+              <svg viewBox="0 0 90 50" width="90" height="50">
+                <line x1="2" y1="42" x2="88" y2="42" stroke="#2a2620" stroke-width="0.5"/>
+                <path d="M2 42 H8 V32 H14 V22 H22 V12 H32 V22 H40 V32 H48 V42 H58 V32 H66 V22 H74 V32 H82 V42 H88" fill="none" stroke="#2a2620" stroke-width="1"/>
+              </svg>
+            </div>
+            <div class="params">
+              <span>bits</span><b>12</b>
+              <span>drive</span><b>+3 dB</b>
+            </div>
+          </div>
+
+          <div class="cell">
+            <div class="head"><span class="name">Crusher</span><span class="ord">CRS-β</span></div>
+            <div class="plate">
+              <svg viewBox="0 0 90 50" width="90" height="50">
+                <line x1="2" y1="42" x2="88" y2="42" stroke="#2a2620" stroke-width="0.5"/>
+                <path d="M2 42 H14 V20 H30 V8 H46 V20 H62 V32 H78 V42 H88" fill="none" stroke="#2a2620" stroke-width="1.1"/>
+              </svg>
+            </div>
+            <div class="params">
+              <span>bits</span><b>6</b>
+              <span>drive</span><b>+9 dB</b>
+            </div>
+          </div>
+
+          <div class="cell">
+            <div class="head"><span class="name">Crusher</span><span class="ord">CRS-γ</span></div>
+            <div class="plate">
+              <svg viewBox="0 0 90 50" width="90" height="50">
+                <line x1="2" y1="42" x2="88" y2="42" stroke="#2a2620" stroke-width="0.5"/>
+                <path d="M2 42 H22 V8 H44 V42 H66 V8 H88" fill="none" stroke="#2a2620" stroke-width="1.4"/>
+              </svg>
+            </div>
+            <div class="params">
+              <span>bits</span><b>3</b>
+              <span>drive</span><b>+18 dB</b>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAPE STOP column -->
+      <div>
+        <div class="col-label">Tape Stop</div>
+        <div class="stack">
+          <div class="cell">
+            <div class="head"><span class="name">Tape Stop</span><span class="ord">TPS-α</span></div>
+            <div class="plate">
+              <svg viewBox="0 0 90 50" width="90" height="50">
+                <circle cx="22" cy="25" r="14" fill="none" stroke="#2a2620" stroke-width="0.7"/>
+                <circle cx="22" cy="25" r="3" fill="#2a2620"/>
+                <circle cx="68" cy="25" r="14" fill="none" stroke="#2a2620" stroke-width="0.7"/>
+                <circle cx="68" cy="25" r="3" fill="#2a2620"/>
+                <line x1="36" y1="25" x2="54" y2="25" stroke="#2a2620" stroke-width="0.7"/>
+                <path d="M48 22 L54 25 L48 28" fill="none" stroke="#2a2620" stroke-width="0.8"/>
+              </svg>
+            </div>
+            <div class="params">
+              <span>dir</span><b>fwd</b>
+              <span>curve</span><b>linear</b>
+            </div>
+          </div>
+
+          <div class="cell">
+            <div class="head"><span class="name">Tape Stop</span><span class="ord">TPS-β</span></div>
+            <div class="plate">
+              <svg viewBox="0 0 90 50" width="90" height="50">
+                <circle cx="22" cy="25" r="14" fill="none" stroke="#2a2620" stroke-width="0.7"/>
+                <circle cx="22" cy="25" r="3" fill="#2a2620"/>
+                <circle cx="68" cy="25" r="14" fill="none" stroke="#2a2620" stroke-width="0.7"/>
+                <circle cx="68" cy="25" r="3" fill="#2a2620"/>
+                <line x1="36" y1="25" x2="54" y2="25" stroke="#2a2620" stroke-width="0.7"/>
+                <path d="M42 22 L36 25 L42 28" fill="none" stroke="#2a2620" stroke-width="0.8"/>
+              </svg>
+            </div>
+            <div class="params">
+              <span>dir</span><b>rev</b>
+              <span>curve</span><b>expo</b>
+            </div>
+          </div>
+
+          <div class="cell">
+            <div class="head"><span class="name">Tape Stop</span><span class="ord">TPS-γ</span></div>
+            <div class="plate">
+              <svg viewBox="0 0 90 50" width="90" height="50">
+                <line x1="2" y1="42" x2="88" y2="42" stroke="#2a2620" stroke-width="0.5"/>
+                <line x1="2" y1="6" x2="2" y2="42" stroke="#2a2620" stroke-width="0.5"/>
+                <path d="M2 12 Q40 14 60 28 T88 42" fill="none" stroke="#2a2620" stroke-width="1"/>
+                <text x="86" y="11" font-family="Iowan Old Style, serif" font-style="italic" font-size="5" text-anchor="end" fill="#6b5a3a">v(t)</text>
+              </svg>
+            </div>
+            <div class="params">
+              <span>dir</span><b>fwd</b>
+              <span>curve</span><b>S-curve</b>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- STUTTER column -->
+      <div>
+        <div class="col-label">Stutter</div>
+        <div class="stack">
+          <div class="cell">
+            <div class="head"><span class="name">Stutter</span><span class="ord">STR-α</span></div>
+            <div class="plate">
+              <svg viewBox="0 0 90 50" width="90" height="50">
+                <g stroke="#2a2620" stroke-width="0.5" fill="none">
+                  <rect x="4"  y="14" width="20" height="22"/>
+                  <rect x="26" y="14" width="20" height="22"/>
+                  <rect x="48" y="14" width="20" height="22"/>
+                  <rect x="70" y="14" width="16" height="22"/>
+                </g>
+                <g stroke="#2a2620" stroke-width="0.9" fill="none">
+                  <path d="M6 30 L10 22 L14 30 L18 22 L22 30"/>
+                  <path d="M28 30 L32 22 L36 30 L40 22 L44 30"/>
+                  <path d="M50 30 L54 22 L58 30 L62 22 L66 30"/>
+                  <path d="M72 30 L76 22 L80 30 L84 22"/>
+                </g>
+              </svg>
+            </div>
+            <div class="params">
+              <span>slices</span><b>4</b>
+              <span>shape</span><b>gate</b>
+            </div>
+          </div>
+
+          <div class="cell">
+            <div class="head"><span class="name">Stutter</span><span class="ord">STR-β</span></div>
+            <div class="plate">
+              <svg viewBox="0 0 90 50" width="90" height="50">
+                <g stroke="#2a2620" stroke-width="0.4" fill="none">
+                  <path d="M4 14 V36 M14 14 V36 M24 14 V36 M34 14 V36 M44 14 V36 M54 14 V36 M64 14 V36 M74 14 V36 M84 14 V36"/>
+                  <path d="M4 14 H86 M4 36 H86"/>
+                </g>
+                <path d="M4 36 L9 18 L14 36 L19 18 L24 36 L29 22 L34 36 L39 22 L44 36 L49 26 L54 36 L59 26 L64 36 L69 30 L74 36 L79 30 L84 36" stroke="#2a2620" stroke-width="1" fill="none"/>
+              </svg>
+            </div>
+            <div class="params">
+              <span>slices</span><b>8</b>
+              <span>shape</span><b>decay</b>
+            </div>
+          </div>
+
+          <div class="cell">
+            <div class="head"><span class="name">Stutter</span><span class="ord">STR-γ</span></div>
+            <div class="plate">
+              <svg viewBox="0 0 90 50" width="90" height="50">
+                <g stroke="#2a2620" stroke-width="0.3" fill="none">
+                  <path d="M4 14 H86 M4 36 H86"/>
+                </g>
+                <g stroke="#2a2620" stroke-width="0.7" fill="none">
+                  <path d="M4 36 L8 30 L12 36 L16 26 L20 36 L24 22 L28 36 L32 18 L36 36 L40 18 L44 36 L48 22 L52 36 L56 26 L60 36 L64 30 L68 36 L72 32 L76 36 L80 34 L84 36"/>
+                </g>
+              </svg>
+            </div>
+            <div class="params">
+              <span>slices</span><b>16</b>
+              <span>shape</span><b>swell</b>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- =========================================================== -->
+<!-- DIRECTION 2 — RISOGRAPH                                      -->
+<!-- =========================================================== -->
+<section class="dir d-riso">
+  <h2>2 · Risograph</h2>
+  <p class="blurb">Flat process colours, halftone grain, bold geometric forms. Each effect family owns a colour; settings change the silhouette.</p>
+  <div class="stage">
+    <div class="grid">
+      <!-- FILTER -->
+      <div>
+        <div class="col-label">Filter</div>
+        <div class="stack">
+          <div class="cell c-filter">
+            <span class="ribbon">FLT</span>
+            <svg class="art" viewBox="0 0 108 108" preserveAspectRatio="none">
+              <path d="M6 78 L40 78 Q60 78 66 30 L72 86 L102 86 L102 100 L6 100 Z" fill="#1a1815"/>
+              <line x1="66" y1="14" x2="66" y2="100" stroke="#1a1815" stroke-width="2" stroke-dasharray="3 3"/>
+            </svg>
+            <div class="meta"><span>LP</span><span>2.4k · q62</span></div>
+          </div>
+          <div class="cell c-filter">
+            <span class="ribbon">FLT</span>
+            <svg class="art" viewBox="0 0 108 108" preserveAspectRatio="none">
+              <path d="M6 90 L36 90 L46 18 L56 90 L102 90 L102 100 L6 100 Z" fill="#1a1815"/>
+            </svg>
+            <div class="meta"><span>BP</span><span>620 · q91</span></div>
+          </div>
+          <div class="cell c-filter">
+            <span class="ribbon">FLT</span>
+            <svg class="art" viewBox="0 0 108 108" preserveAspectRatio="none">
+              <path d="M6 90 L40 90 Q60 90 70 50 L102 26 L102 100 L6 100 Z" fill="#1a1815"/>
+            </svg>
+            <div class="meta"><span>HP</span><span>4.8k · q30</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- CRUSHER -->
+      <div>
+        <div class="col-label">Crusher</div>
+        <div class="stack">
+          <div class="cell c-crusher">
+            <span class="ribbon">CRSH</span>
+            <svg class="art" viewBox="0 0 108 108">
+              <g fill="#1a1815">
+                <rect x="14" y="78" width="10" height="10"/>
+                <rect x="26" y="66" width="10" height="22"/>
+                <rect x="38" y="54" width="10" height="34"/>
+                <rect x="50" y="42" width="10" height="46"/>
+                <rect x="62" y="54" width="10" height="34"/>
+                <rect x="74" y="66" width="10" height="22"/>
+                <rect x="86" y="78" width="10" height="10"/>
+              </g>
+            </svg>
+            <div class="meta"><span>12 BIT</span><span>+3 dB</span></div>
+          </div>
+          <div class="cell c-crusher">
+            <span class="ribbon">CRSH</span>
+            <svg class="art" viewBox="0 0 108 108">
+              <g fill="#1a1815">
+                <rect x="12" y="74" width="20" height="14"/>
+                <rect x="34" y="46" width="20" height="42"/>
+                <rect x="56" y="28" width="20" height="60"/>
+                <rect x="78" y="56" width="20" height="32"/>
+              </g>
+            </svg>
+            <div class="meta"><span>6 BIT</span><span>+9 dB</span></div>
+          </div>
+          <div class="cell c-crusher">
+            <span class="ribbon">CRSH</span>
+            <svg class="art" viewBox="0 0 108 108">
+              <g fill="#1a1815">
+                <rect x="10" y="20" width="42" height="68"/>
+                <rect x="56" y="20" width="42" height="68"/>
+              </g>
+            </svg>
+            <div class="meta"><span>3 BIT</span><span>+18 dB</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAPE STOP -->
+      <div>
+        <div class="col-label">Tape Stop</div>
+        <div class="stack">
+          <div class="cell c-tape">
+            <span class="ribbon">TAPE</span>
+            <svg class="art" viewBox="0 0 108 108">
+              <g fill="#1a1815">
+                <path d="M14 70 Q54 50 94 80 L94 92 L14 92 Z"/>
+                <polygon points="94,76 100,80 94,84"/>
+              </g>
+            </svg>
+            <div class="meta"><span>FWD</span><span>LIN</span></div>
+          </div>
+          <div class="cell c-tape">
+            <span class="ribbon">TAPE</span>
+            <svg class="art" viewBox="0 0 108 108">
+              <g fill="#1a1815">
+                <path d="M14 86 Q34 86 64 60 T94 28 L94 92 L14 92 Z"/>
+                <polygon points="20,30 14,34 20,38"/>
+              </g>
+            </svg>
+            <div class="meta"><span>REV</span><span>EXP</span></div>
+          </div>
+          <div class="cell c-tape">
+            <span class="ribbon">TAPE</span>
+            <svg class="art" viewBox="0 0 108 108">
+              <g fill="#1a1815">
+                <path d="M14 30 Q54 30 54 60 T94 90 L94 92 L14 92 Z"/>
+                <polygon points="94,86 100,90 94,94"/>
+              </g>
+            </svg>
+            <div class="meta"><span>FWD</span><span>S-CURVE</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- STUTTER -->
+      <div>
+        <div class="col-label">Stutter</div>
+        <div class="stack">
+          <div class="cell c-stutter">
+            <span class="ribbon">STUT</span>
+            <svg class="art" viewBox="0 0 108 108">
+              <g fill="#1a1815">
+                <rect x="12" y="36" width="18" height="56"/>
+                <rect x="34" y="36" width="18" height="56"/>
+                <rect x="56" y="36" width="18" height="56"/>
+                <rect x="78" y="36" width="18" height="56"/>
+              </g>
+            </svg>
+            <div class="meta"><span>4 SLC</span><span>GATE</span></div>
+          </div>
+          <div class="cell c-stutter">
+            <span class="ribbon">STUT</span>
+            <svg class="art" viewBox="0 0 108 108">
+              <g fill="#1a1815">
+                <rect x="12" y="32" width="10" height="60"/>
+                <rect x="24" y="40" width="10" height="52"/>
+                <rect x="36" y="48" width="10" height="44"/>
+                <rect x="48" y="56" width="10" height="36"/>
+                <rect x="60" y="62" width="10" height="30"/>
+                <rect x="72" y="68" width="10" height="24"/>
+                <rect x="84" y="74" width="10" height="18"/>
+                <rect x="96" y="80" width="10" height="12"/>
+              </g>
+            </svg>
+            <div class="meta"><span>8 SLC</span><span>DECAY</span></div>
+          </div>
+          <div class="cell c-stutter">
+            <span class="ribbon">STUT</span>
+            <svg class="art" viewBox="0 0 108 108">
+              <g fill="#1a1815">
+                <rect x="8"  y="84" width="5" height="8"/>
+                <rect x="14" y="80" width="5" height="12"/>
+                <rect x="20" y="76" width="5" height="16"/>
+                <rect x="26" y="70" width="5" height="22"/>
+                <rect x="32" y="62" width="5" height="30"/>
+                <rect x="38" y="54" width="5" height="38"/>
+                <rect x="44" y="46" width="5" height="46"/>
+                <rect x="50" y="38" width="5" height="54"/>
+                <rect x="56" y="38" width="5" height="54"/>
+                <rect x="62" y="46" width="5" height="46"/>
+                <rect x="68" y="54" width="5" height="38"/>
+                <rect x="74" y="62" width="5" height="30"/>
+                <rect x="80" y="70" width="5" height="22"/>
+                <rect x="86" y="76" width="5" height="16"/>
+                <rect x="92" y="80" width="5" height="12"/>
+                <rect x="98" y="84" width="5" height="8"/>
+              </g>
+            </svg>
+            <div class="meta"><span>16 SLC</span><span>SWELL</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- =========================================================== -->
+<!-- DIRECTION 3 — CRT PHOSPHOR                                   -->
+<!-- =========================================================== -->
+<section class="dir d-crt">
+  <h2>3 · CRT phosphor</h2>
+  <p class="blurb">Vector traces on a green phosphor tube. The trace itself is the parameter readout — amber accents mark cutoff, drive, direction, slice gate.</p>
+  <div class="stage">
+    <div class="grid">
+      <!-- FILTER -->
+      <div>
+        <div class="col-label">Filter</div>
+        <div class="stack">
+          <div class="cell">
+            <span class="label">FLT · LP</span><span class="readout">2.4k</span>
+            <svg class="scope" viewBox="0 0 90 50">
+              <line class="gridln" x1="0" y1="40" x2="90" y2="40"/>
+              <line class="gridln" x1="0" y1="20" x2="90" y2="20"/>
+              <line class="gridln" x1="30" y1="0" x2="30" y2="50"/>
+              <line class="gridln" x1="60" y1="0" x2="60" y2="50"/>
+              <path class="trace" d="M2 32 L40 32 Q55 32 60 12 L65 36 L88 38"/>
+              <line class="accent" x1="60" y1="0" x2="60" y2="50" stroke-dasharray="2 2"/>
+            </svg>
+            <div class="footer"><span>q.62</span><span>LP24</span></div>
+          </div>
+          <div class="cell">
+            <span class="label">FLT · BP</span><span class="readout">620</span>
+            <svg class="scope" viewBox="0 0 90 50">
+              <line class="gridln" x1="0" y1="40" x2="90" y2="40"/>
+              <line class="gridln" x1="0" y1="20" x2="90" y2="20"/>
+              <path class="trace" d="M2 38 L26 38 L30 4 L34 38 L88 38"/>
+              <line class="accent" x1="30" y1="0" x2="30" y2="50" stroke-dasharray="2 2"/>
+            </svg>
+            <div class="footer"><span>q.91</span><span>BP12</span></div>
+          </div>
+          <div class="cell">
+            <span class="label">FLT · HP</span><span class="readout">4.8k</span>
+            <svg class="scope" viewBox="0 0 90 50">
+              <line class="gridln" x1="0" y1="40" x2="90" y2="40"/>
+              <line class="gridln" x1="0" y1="20" x2="90" y2="20"/>
+              <path class="trace" d="M2 38 L40 38 Q55 38 62 22 L88 14"/>
+              <line class="accent" x1="62" y1="0" x2="62" y2="50" stroke-dasharray="2 2"/>
+            </svg>
+            <div class="footer"><span>q.30</span><span>HP24</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- CRUSHER -->
+      <div>
+        <div class="col-label">Crusher</div>
+        <div class="stack">
+          <div class="cell">
+            <span class="label">CRSH</span><span class="readout">12b</span>
+            <svg class="scope" viewBox="0 0 90 50">
+              <line class="gridln" x1="0" y1="40" x2="90" y2="40"/>
+              <line class="gridln" x1="0" y1="20" x2="90" y2="20"/>
+              <path class="trace" d="M2 40 H8 V32 H14 V22 H22 V12 H32 V22 H40 V32 H48 V40 H58 V32 H66 V22 H74 V32 H82 V40 H88"/>
+            </svg>
+            <div class="footer"><span>+3 dB</span><span>SR 1.0</span></div>
+          </div>
+          <div class="cell">
+            <span class="label">CRSH</span><span class="readout">6b</span>
+            <svg class="scope" viewBox="0 0 90 50">
+              <line class="gridln" x1="0" y1="40" x2="90" y2="40"/>
+              <line class="gridln" x1="0" y1="20" x2="90" y2="20"/>
+              <path class="trace" d="M2 40 H14 V18 H30 V4 H46 V18 H62 V32 H78 V40 H88"/>
+              <line class="accent" x1="0" y1="40" x2="90" y2="40"/>
+            </svg>
+            <div class="footer"><span>+9 dB</span><span>SR 0.5</span></div>
+          </div>
+          <div class="cell">
+            <span class="label">CRSH</span><span class="readout">3b</span>
+            <svg class="scope" viewBox="0 0 90 50">
+              <line class="gridln" x1="0" y1="40" x2="90" y2="40"/>
+              <line class="gridln" x1="0" y1="20" x2="90" y2="20"/>
+              <path class="trace" d="M2 40 H22 V4 H44 V40 H66 V4 H88"/>
+              <line class="accent" x1="0" y1="4"  x2="90" y2="4"/>
+              <line class="accent" x1="0" y1="40" x2="90" y2="40"/>
+            </svg>
+            <div class="footer"><span>+18 dB</span><span>SR 0.25</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAPE STOP -->
+      <div>
+        <div class="col-label">Tape Stop</div>
+        <div class="stack">
+          <div class="cell">
+            <span class="label">TAPE ▶</span><span class="readout">LIN</span>
+            <svg class="scope" viewBox="0 0 90 50">
+              <line class="gridln" x1="0" y1="40" x2="90" y2="40"/>
+              <path class="trace" d="M2 10 L88 40"/>
+              <polyline class="accent" points="80,36 88,40 80,44"/>
+            </svg>
+            <div class="footer"><span>FWD</span><span>1.0×→0</span></div>
+          </div>
+          <div class="cell">
+            <span class="label">TAPE ◀</span><span class="readout">EXP</span>
+            <svg class="scope" viewBox="0 0 90 50">
+              <line class="gridln" x1="0" y1="40" x2="90" y2="40"/>
+              <path class="trace" d="M2 8 Q40 8 60 22 T88 40"/>
+              <polyline class="accent" points="10,36 2,40 10,44"/>
+            </svg>
+            <div class="footer"><span>REV</span><span>1.0×→-1</span></div>
+          </div>
+          <div class="cell">
+            <span class="label">TAPE ▶</span><span class="readout">S-CRV</span>
+            <svg class="scope" viewBox="0 0 90 50">
+              <line class="gridln" x1="0" y1="40" x2="90" y2="40"/>
+              <path class="trace" d="M2 10 Q22 10 44 25 T88 40"/>
+              <polyline class="accent" points="80,36 88,40 80,44"/>
+            </svg>
+            <div class="footer"><span>FWD</span><span>1.0×→0</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- STUTTER -->
+      <div>
+        <div class="col-label">Stutter</div>
+        <div class="stack">
+          <div class="cell">
+            <span class="label">STUT</span><span class="readout">×4</span>
+            <svg class="scope" viewBox="0 0 90 50">
+              <line class="gridln" x1="22.5" y1="0" x2="22.5" y2="50"/>
+              <line class="gridln" x1="45"   y1="0" x2="45"   y2="50"/>
+              <line class="gridln" x1="67.5" y1="0" x2="67.5" y2="50"/>
+              <path class="trace" d="M2 40 L22.5 40 L22.5 8 L45 8 L45 40 L67.5 40 L67.5 8 L88 8"/>
+              <line class="accent" x1="0" y1="40" x2="90" y2="40"/>
+            </svg>
+            <div class="footer"><span>GATE</span><span>1/4</span></div>
+          </div>
+          <div class="cell">
+            <span class="label">STUT</span><span class="readout">×8</span>
+            <svg class="scope" viewBox="0 0 90 50">
+              <line class="gridln" x1="13" y1="0" x2="13" y2="50"/>
+              <line class="gridln" x1="24" y1="0" x2="24" y2="50"/>
+              <line class="gridln" x1="35" y1="0" x2="35" y2="50"/>
+              <line class="gridln" x1="46" y1="0" x2="46" y2="50"/>
+              <line class="gridln" x1="57" y1="0" x2="57" y2="50"/>
+              <line class="gridln" x1="68" y1="0" x2="68" y2="50"/>
+              <line class="gridln" x1="79" y1="0" x2="79" y2="50"/>
+              <path class="trace" d="M2 8 L13 40 L13 12 L24 40 L24 16 L35 40 L35 20 L46 40 L46 24 L57 40 L57 28 L68 40 L68 32 L79 40 L79 36 L88 40"/>
+            </svg>
+            <div class="footer"><span>DECAY</span><span>1/8</span></div>
+          </div>
+          <div class="cell">
+            <span class="label">STUT</span><span class="readout">×16</span>
+            <svg class="scope" viewBox="0 0 90 50">
+              <path class="trace" d="M2 36 L7 30 L12 36 L17 26 L22 36 L27 22 L32 36 L37 18 L42 36 L47 18 L52 36 L57 22 L62 36 L67 26 L72 36 L77 30 L82 36 L88 36"/>
+            </svg>
+            <div class="footer"><span>SWELL</span><span>1/16</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- =========================================================== -->
+<!-- DIRECTION 4 — BRUTALIST                                      -->
+<!-- =========================================================== -->
+<section class="dir d-brut">
+  <h2>4 · Brutalist mono</h2>
+  <p class="blurb">Heavy 2px borders, mono type, no gradients. Most extreme variant per effect uses the orange accent fill so intensity reads at a glance.</p>
+  <div class="stage">
+    <div class="grid">
+      <!-- FILTER -->
+      <div>
+        <div class="col-label">Filter</div>
+        <div class="stack">
+          <div class="cell">
+            <span class="corner">FLT</span>
+            <div class="top"><span>LP</span><span>2.4k</span></div>
+            <div class="mid">
+              <svg viewBox="0 0 96 48">
+                <line x1="0" y1="40" x2="96" y2="40" stroke="#111" stroke-width="1"/>
+                <path d="M0 32 L40 32 Q56 32 62 12 L68 38 L96 38" fill="none" stroke="#111" stroke-width="2.4"/>
+                <line x1="62" y1="0" x2="62" y2="48" stroke="#111" stroke-width="1" stroke-dasharray="3 3"/>
+              </svg>
+            </div>
+            <div class="bot"><span>q62</span><span>LP24</span></div>
+          </div>
+          <div class="cell">
+            <span class="corner">FLT</span>
+            <div class="top"><span>BP</span><span>620</span></div>
+            <div class="mid">
+              <svg viewBox="0 0 96 48">
+                <line x1="0" y1="40" x2="96" y2="40" stroke="#111" stroke-width="1"/>
+                <path d="M0 38 L26 38 L32 4 L38 38 L96 38" fill="none" stroke="#111" stroke-width="2.4"/>
+                <line x1="32" y1="0" x2="32" y2="48" stroke="#111" stroke-width="1" stroke-dasharray="3 3"/>
+              </svg>
+            </div>
+            <div class="bot"><span>q91</span><span>BP12</span></div>
+          </div>
+          <div class="cell accent">
+            <span class="corner">FLT</span>
+            <div class="top"><span>HP</span><span>4.8k</span></div>
+            <div class="mid">
+              <svg viewBox="0 0 96 48">
+                <line x1="0" y1="40" x2="96" y2="40" stroke="#111" stroke-width="1"/>
+                <path d="M0 38 L42 38 Q60 38 70 22 L96 12" fill="none" stroke="#111" stroke-width="2.6"/>
+                <line x1="70" y1="0" x2="70" y2="48" stroke="#111" stroke-width="1" stroke-dasharray="3 3"/>
+              </svg>
+            </div>
+            <div class="bot"><span>q30</span><span>HP24</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- CRUSHER -->
+      <div>
+        <div class="col-label">Crusher</div>
+        <div class="stack">
+          <div class="cell">
+            <span class="corner">CRS</span>
+            <div class="top"><span>12 BIT</span><span>+3</span></div>
+            <div class="mid">
+              <svg viewBox="0 0 96 48">
+                <path d="M0 44 H8 V36 H16 V26 H24 V14 H36 V26 H44 V36 H52 V44 H62 V36 H72 V26 H80 V36 H88 V44 H96"
+                      fill="none" stroke="#111" stroke-width="2"/>
+              </svg>
+            </div>
+            <div class="bot"><span>SR 1.0</span><span>+3 dB</span></div>
+          </div>
+          <div class="cell">
+            <span class="corner">CRS</span>
+            <div class="top"><span>6 BIT</span><span>+9</span></div>
+            <div class="mid">
+              <svg viewBox="0 0 96 48">
+                <path d="M0 44 H16 V18 H32 V4 H50 V18 H66 V32 H82 V44 H96"
+                      fill="none" stroke="#111" stroke-width="2.4"/>
+              </svg>
+            </div>
+            <div class="bot"><span>SR 0.5</span><span>+9 dB</span></div>
+          </div>
+          <div class="cell accent">
+            <span class="corner">CRS</span>
+            <div class="top"><span>3 BIT</span><span>+18</span></div>
+            <div class="mid">
+              <svg viewBox="0 0 96 48">
+                <path d="M0 44 H24 V4 H48 V44 H72 V4 H96" fill="none" stroke="#111" stroke-width="3"/>
+              </svg>
+            </div>
+            <div class="bot"><span>SR 0.25</span><span>+18 dB</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAPE STOP -->
+      <div>
+        <div class="col-label">Tape Stop</div>
+        <div class="stack">
+          <div class="cell">
+            <span class="corner">TPS</span>
+            <div class="top"><span>FWD</span><span>LIN</span></div>
+            <div class="mid">
+              <svg viewBox="0 0 96 48">
+                <line x1="0" y1="44" x2="96" y2="44" stroke="#111" stroke-width="1"/>
+                <line x1="0" y1="6" x2="96" y2="44" stroke="#111" stroke-width="2.4"/>
+                <polygon points="86,38 96,44 86,50" fill="#111"/>
+              </svg>
+            </div>
+            <div class="bot"><span>1.0×</span><span>→ 0</span></div>
+          </div>
+          <div class="cell">
+            <span class="corner">TPS</span>
+            <div class="top"><span>FWD</span><span>EXP</span></div>
+            <div class="mid">
+              <svg viewBox="0 0 96 48">
+                <line x1="0" y1="44" x2="96" y2="44" stroke="#111" stroke-width="1"/>
+                <path d="M0 6 Q40 6 64 24 T96 44" fill="none" stroke="#111" stroke-width="2.4"/>
+                <polygon points="86,38 96,44 86,50" fill="#111"/>
+              </svg>
+            </div>
+            <div class="bot"><span>1.0×</span><span>→ 0</span></div>
+          </div>
+          <div class="cell accent">
+            <span class="corner">TPS</span>
+            <div class="top"><span>REV</span><span>EXP</span></div>
+            <div class="mid">
+              <svg viewBox="0 0 96 48">
+                <line x1="0" y1="44" x2="96" y2="44" stroke="#111" stroke-width="1"/>
+                <path d="M96 6 Q56 6 32 24 T0 44" fill="none" stroke="#111" stroke-width="2.6"/>
+                <polygon points="10,38 0,44 10,50" fill="#111"/>
+              </svg>
+            </div>
+            <div class="bot"><span>-1.0×</span><span>→ 0</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- STUTTER -->
+      <div>
+        <div class="col-label">Stutter</div>
+        <div class="stack">
+          <div class="cell">
+            <span class="corner">STR</span>
+            <div class="top"><span>×4</span><span>GATE</span></div>
+            <div class="mid">
+              <svg viewBox="0 0 96 48">
+                <g fill="#111">
+                  <rect x="2"  y="6" width="20" height="38"/>
+                  <rect x="26" y="6" width="20" height="38"/>
+                  <rect x="50" y="6" width="20" height="38"/>
+                  <rect x="74" y="6" width="20" height="38"/>
+                </g>
+              </svg>
+            </div>
+            <div class="bot"><span>1/4</span><span>SQR</span></div>
+          </div>
+          <div class="cell">
+            <span class="corner">STR</span>
+            <div class="top"><span>×8</span><span>DECAY</span></div>
+            <div class="mid">
+              <svg viewBox="0 0 96 48">
+                <g fill="#111">
+                  <rect x="2"  y="4"  width="10" height="40"/>
+                  <rect x="14" y="8"  width="10" height="36"/>
+                  <rect x="26" y="14" width="10" height="30"/>
+                  <rect x="38" y="20" width="10" height="24"/>
+                  <rect x="50" y="26" width="10" height="18"/>
+                  <rect x="62" y="32" width="10" height="12"/>
+                  <rect x="74" y="36" width="10" height="8"/>
+                  <rect x="86" y="40" width="10" height="4"/>
+                </g>
+              </svg>
+            </div>
+            <div class="bot"><span>1/8</span><span>EXP-</span></div>
+          </div>
+          <div class="cell accent">
+            <span class="corner">STR</span>
+            <div class="top"><span>×16</span><span>SWELL</span></div>
+            <div class="mid">
+              <svg viewBox="0 0 96 48">
+                <g fill="#111">
+                  <rect x="0"  y="40" width="5" height="4"/>
+                  <rect x="6"  y="36" width="5" height="8"/>
+                  <rect x="12" y="32" width="5" height="12"/>
+                  <rect x="18" y="28" width="5" height="16"/>
+                  <rect x="24" y="22" width="5" height="22"/>
+                  <rect x="30" y="16" width="5" height="28"/>
+                  <rect x="36" y="10" width="5" height="34"/>
+                  <rect x="42" y="4"  width="5" height="40"/>
+                  <rect x="48" y="4"  width="5" height="40"/>
+                  <rect x="54" y="10" width="5" height="34"/>
+                  <rect x="60" y="16" width="5" height="28"/>
+                  <rect x="66" y="22" width="5" height="22"/>
+                  <rect x="72" y="28" width="5" height="16"/>
+                  <rect x="78" y="32" width="5" height="12"/>
+                  <rect x="84" y="36" width="5" height="8"/>
+                  <rect x="90" y="40" width="5" height="4"/>
+                </g>
+              </svg>
+            </div>
+            <div class="bot"><span>1/16</span><span>TRI</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- =========================================================== -->
+<!-- DIRECTION 5 — HARDWARE MODULE                                -->
+<!-- =========================================================== -->
+<section class="dir d-hw">
+  <h2>5 · Hardware module</h2>
+  <p class="blurb">Each cell is a tiny faceplate — knobs, LEDs, screws, screened legends. The knob position and lit LEDs are the parameter readout.</p>
+  <div class="stage">
+    <div class="grid">
+      <!-- FILTER -->
+      <div>
+        <div class="col-label">Filter</div>
+        <div class="stack">
+          <div class="cell">
+            <span class="screw tl"></span><span class="screw tr"></span>
+            <span class="screw bl"></span><span class="screw br"></span>
+            <div class="module"><div class="nm">Filter</div><div class="sub">cutoff · mode</div></div>
+            <div class="face">
+              <div class="knob" style="transform:rotate(-110deg)"></div>
+            </div>
+            <div class="strip">
+              <span style="display:flex;gap:3px;align-items:center"><span class="led on amber"></span>LP</span>
+              <span style="display:flex;gap:3px;align-items:center"><span class="led"></span>BP</span>
+              <span style="display:flex;gap:3px;align-items:center"><span class="led"></span>HP</span>
+            </div>
+          </div>
+
+          <div class="cell">
+            <span class="screw tl"></span><span class="screw tr"></span>
+            <span class="screw bl"></span><span class="screw br"></span>
+            <div class="module"><div class="nm">Filter</div><div class="sub">cutoff · mode</div></div>
+            <div class="face">
+              <div class="knob" style="transform:rotate(-30deg)"></div>
+            </div>
+            <div class="strip">
+              <span style="display:flex;gap:3px;align-items:center"><span class="led"></span>LP</span>
+              <span style="display:flex;gap:3px;align-items:center"><span class="led on amber"></span>BP</span>
+              <span style="display:flex;gap:3px;align-items:center"><span class="led"></span>HP</span>
+            </div>
+          </div>
+
+          <div class="cell">
+            <span class="screw tl"></span><span class="screw tr"></span>
+            <span class="screw bl"></span><span class="screw br"></span>
+            <div class="module"><div class="nm">Filter</div><div class="sub">cutoff · mode</div></div>
+            <div class="face">
+              <div class="knob" style="transform:rotate(110deg)"></div>
+            </div>
+            <div class="strip">
+              <span style="display:flex;gap:3px;align-items:center"><span class="led"></span>LP</span>
+              <span style="display:flex;gap:3px;align-items:center"><span class="led"></span>BP</span>
+              <span style="display:flex;gap:3px;align-items:center"><span class="led on amber"></span>HP</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- CRUSHER -->
+      <div>
+        <div class="col-label">Crusher</div>
+        <div class="stack">
+          <div class="cell">
+            <span class="screw tl"></span><span class="screw tr"></span>
+            <span class="screw bl"></span><span class="screw br"></span>
+            <div class="module"><div class="nm">Crusher</div><div class="sub">bits · drive</div></div>
+            <div class="face" style="flex-direction:column;gap:6px">
+              <div style="display:flex;gap:3px">
+                <span class="led on green"></span><span class="led on green"></span><span class="led on green"></span>
+                <span class="led on green"></span><span class="led on green"></span><span class="led on green"></span>
+                <span class="led on green"></span><span class="led on green"></span>
+                <span class="led on green"></span><span class="led on green"></span><span class="led"></span><span class="led"></span>
+              </div>
+              <div class="knob" style="width:30px;height:30px;transform:rotate(-90deg)"></div>
+            </div>
+            <div class="strip"><span>12 BIT</span><span>+3 dB</span></div>
+          </div>
+
+          <div class="cell">
+            <span class="screw tl"></span><span class="screw tr"></span>
+            <span class="screw bl"></span><span class="screw br"></span>
+            <div class="module"><div class="nm">Crusher</div><div class="sub">bits · drive</div></div>
+            <div class="face" style="flex-direction:column;gap:6px">
+              <div style="display:flex;gap:3px">
+                <span class="led on amber"></span><span class="led on amber"></span><span class="led on amber"></span>
+                <span class="led on amber"></span><span class="led on amber"></span><span class="led on amber"></span>
+                <span class="led"></span><span class="led"></span>
+                <span class="led"></span><span class="led"></span><span class="led"></span><span class="led"></span>
+              </div>
+              <div class="knob" style="width:30px;height:30px;transform:rotate(20deg)"></div>
+            </div>
+            <div class="strip"><span>6 BIT</span><span>+9 dB</span></div>
+          </div>
+
+          <div class="cell">
+            <span class="screw tl"></span><span class="screw tr"></span>
+            <span class="screw bl"></span><span class="screw br"></span>
+            <div class="module"><div class="nm">Crusher</div><div class="sub">bits · drive</div></div>
+            <div class="face" style="flex-direction:column;gap:6px">
+              <div style="display:flex;gap:3px">
+                <span class="led on red"></span><span class="led on red"></span><span class="led on red"></span>
+                <span class="led"></span><span class="led"></span><span class="led"></span>
+                <span class="led"></span><span class="led"></span>
+                <span class="led"></span><span class="led"></span><span class="led"></span><span class="led"></span>
+              </div>
+              <div class="knob" style="width:30px;height:30px;transform:rotate(130deg)"></div>
+            </div>
+            <div class="strip"><span>3 BIT</span><span>+18 dB</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAPE STOP -->
+      <div>
+        <div class="col-label">Tape Stop</div>
+        <div class="stack">
+          <div class="cell">
+            <span class="screw tl"></span><span class="screw tr"></span>
+            <span class="screw bl"></span><span class="screw br"></span>
+            <div class="module"><div class="nm">Tape Stop</div><div class="sub">curve · dir</div></div>
+            <div class="face">
+              <svg viewBox="0 0 80 50" width="80" height="50">
+                <rect x="2" y="2" width="76" height="46" rx="2" fill="#0c0d0f" stroke="#0a0a0c"/>
+                <line x1="6" y1="42" x2="74" y2="42" stroke="#3a3c42"/>
+                <line x1="6" y1="6" x2="74" y2="42" stroke="#61dffd" stroke-width="1.4" filter="drop-shadow(0 0 2px #61dffd)"/>
+              </svg>
+            </div>
+            <div class="strip"><span>FWD</span><span>LIN</span></div>
+          </div>
+
+          <div class="cell">
+            <span class="screw tl"></span><span class="screw tr"></span>
+            <span class="screw bl"></span><span class="screw br"></span>
+            <div class="module"><div class="nm">Tape Stop</div><div class="sub">curve · dir</div></div>
+            <div class="face">
+              <svg viewBox="0 0 80 50" width="80" height="50">
+                <rect x="2" y="2" width="76" height="46" rx="2" fill="#0c0d0f" stroke="#0a0a0c"/>
+                <line x1="6" y1="42" x2="74" y2="42" stroke="#3a3c42"/>
+                <path d="M6 6 Q34 6 52 22 T74 42" fill="none" stroke="#61dffd" stroke-width="1.4" filter="drop-shadow(0 0 2px #61dffd)"/>
+              </svg>
+            </div>
+            <div class="strip"><span>FWD</span><span>EXP</span></div>
+          </div>
+
+          <div class="cell">
+            <span class="screw tl"></span><span class="screw tr"></span>
+            <span class="screw bl"></span><span class="screw br"></span>
+            <div class="module"><div class="nm">Tape Stop</div><div class="sub">curve · dir</div></div>
+            <div class="face">
+              <svg viewBox="0 0 80 50" width="80" height="50">
+                <rect x="2" y="2" width="76" height="46" rx="2" fill="#0c0d0f" stroke="#0a0a0c"/>
+                <line x1="6" y1="42" x2="74" y2="42" stroke="#3a3c42"/>
+                <path d="M74 6 Q46 6 28 22 T6 42" fill="none" stroke="#ff5040" stroke-width="1.4" filter="drop-shadow(0 0 2px #ff5040)"/>
+              </svg>
+            </div>
+            <div class="strip"><span>REV</span><span>EXP</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- STUTTER -->
+      <div>
+        <div class="col-label">Stutter</div>
+        <div class="stack">
+          <div class="cell">
+            <span class="screw tl"></span><span class="screw tr"></span>
+            <span class="screw bl"></span><span class="screw br"></span>
+            <div class="module"><div class="nm">Stutter</div><div class="sub">slices · shape</div></div>
+            <div class="face" style="flex-direction:column;gap:6px;justify-content:flex-start;padding-top:4px">
+              <div style="display:grid;grid-template-columns:repeat(4,7px);gap:3px">
+                <span class="led on cyan"></span><span class="led on cyan"></span><span class="led on cyan"></span><span class="led on cyan"></span>
+              </div>
+              <svg viewBox="0 0 70 26" width="70" height="26">
+                <path d="M2 22 H18 V6 H34 V22 H50 V6 H66 V22 H70" fill="none" stroke="#61dffd" stroke-width="1.2" filter="drop-shadow(0 0 2px #61dffd)"/>
+              </svg>
+            </div>
+            <div class="strip"><span>×4</span><span>GATE</span></div>
+          </div>
+
+          <div class="cell">
+            <span class="screw tl"></span><span class="screw tr"></span>
+            <span class="screw bl"></span><span class="screw br"></span>
+            <div class="module"><div class="nm">Stutter</div><div class="sub">slices · shape</div></div>
+            <div class="face" style="flex-direction:column;gap:6px;justify-content:flex-start;padding-top:4px">
+              <div style="display:grid;grid-template-columns:repeat(8,5px);gap:2px">
+                <span class="led on cyan"></span><span class="led on cyan"></span><span class="led on cyan"></span><span class="led on cyan"></span>
+                <span class="led on cyan"></span><span class="led on cyan"></span><span class="led on cyan"></span><span class="led on cyan"></span>
+              </div>
+              <svg viewBox="0 0 70 26" width="70" height="26">
+                <path d="M2 4 L10 22 L10 6 L18 22 L18 8 L26 22 L26 10 L34 22 L34 12 L42 22 L42 14 L50 22 L50 16 L58 22 L58 18 L66 22"
+                      fill="none" stroke="#61dffd" stroke-width="1.2" filter="drop-shadow(0 0 2px #61dffd)"/>
+              </svg>
+            </div>
+            <div class="strip"><span>×8</span><span>DECAY</span></div>
+          </div>
+
+          <div class="cell">
+            <span class="screw tl"></span><span class="screw tr"></span>
+            <span class="screw bl"></span><span class="screw br"></span>
+            <div class="module"><div class="nm">Stutter</div><div class="sub">slices · shape</div></div>
+            <div class="face" style="flex-direction:column;gap:6px;justify-content:flex-start;padding-top:4px">
+              <div style="display:grid;grid-template-columns:repeat(16,3px);gap:1.5px">
+                <span class="led on cyan"></span><span class="led on cyan"></span><span class="led on cyan"></span><span class="led on cyan"></span>
+                <span class="led on cyan"></span><span class="led on cyan"></span><span class="led on cyan"></span><span class="led on cyan"></span>
+                <span class="led on cyan"></span><span class="led on cyan"></span><span class="led on cyan"></span><span class="led on cyan"></span>
+                <span class="led on cyan"></span><span class="led on cyan"></span><span class="led on cyan"></span><span class="led on cyan"></span>
+              </div>
+              <svg viewBox="0 0 70 26" width="70" height="26">
+                <path d="M2 22 L6 18 L10 22 L14 14 L18 22 L22 10 L26 22 L30 6 L34 22 L38 6 L42 22 L46 10 L50 22 L54 14 L58 22 L62 18 L66 22"
+                      fill="none" stroke="#61dffd" stroke-width="1.2" filter="drop-shadow(0 0 2px #61dffd)"/>
+              </svg>
+            </div>
+            <div class="strip"><span>×16</span><span>SWELL</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer style="max-width:1100px;margin:0 auto;color:var(--muted);font-size:11px;border-top:1px solid var(--rule);padding-top:12px">
+  <span>Static prototype · no dependencies · open in any browser</span>
+</footer>
+
+</body>
+</html>
