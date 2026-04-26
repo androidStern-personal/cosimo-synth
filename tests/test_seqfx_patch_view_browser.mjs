@@ -1187,6 +1187,45 @@ test("seqfx_bar_frames_sit_behind_both_bars_with_arrow_only_on_first_bar", async
     await page.close();
 });
 
+test("seqfx_inspector_top_edge_aligns_with_the_grid_plate_top_edge", async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
+    await loadSeqFxHarness(page);
+    await page.locator('[data-role="seqfx-root"]').waitFor();
+    await page.getByRole("button", { name: "Chain 2 step 1", exact: true }).click();
+
+    for (const width of [900, 1280]) {
+        await page.setViewportSize({ width, height: 820 });
+        await page.waitForFunction(() => {
+            const frame = document.querySelector('[data-role="seqfx-bar-frame"][data-bar="0"]');
+            const lanes = document.querySelector('[data-role="seqfx-bar-lanes"][data-bar="0"]');
+            if (!frame || !lanes) return false;
+            return Math.abs(frame.getBoundingClientRect().width - (lanes.getBoundingClientRect().width + 32)) < 1;
+        });
+
+        const layout = await page.evaluate(() => {
+            const frame = document.querySelector('[data-role="seqfx-bar-frame"][data-bar="0"]');
+            const outerPath = frame.querySelector('[data-role="seqfx-bar-frame-outer-body"]');
+            const svg = frame.querySelector("svg");
+            const inspector = document.querySelector('[data-role="seqfx-inspector"]');
+            const frameRect = frame.getBoundingClientRect();
+            const inspectorRect = inspector.getBoundingClientRect();
+            const viewBoxHeight = Number(svg.getAttribute("viewBox").trim().split(/\s+/)[3]);
+            const pathValues = [...outerPath.getAttribute("d").matchAll(/-?\d+(?:\.\d+)?/g)].map((match) => Number(match[0]));
+            const outerTop = Math.min(...pathValues.filter((_value, index) => index % 2 === 1));
+            const gridPlateTop = frameRect.top + ((outerTop / viewBoxHeight) * frameRect.height);
+
+            return {
+                gridPlateTop,
+                inspectorTop: inspectorRect.top,
+            };
+        });
+
+        assertClose(layout.inspectorTop, layout.gridPlateTop, 0.75, `inspector plate should align with grid plate at ${width}px`);
+    }
+
+    await page.close();
+});
+
 test("seqfx_bar_one_inner_outline_tracks_cell_stack_without_intersections", async () => {
     const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
     await loadSeqFxHarness(page);
@@ -2773,6 +2812,66 @@ test("seqfx_blocks_use_a_single_clean_surface_with_hidden_resize_chrome", async 
     assert.ok(handleBox);
     await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2);
     assert.equal(await block.evaluate((node) => getComputedStyle(node).cursor), "col-resize");
+
+    await page.close();
+});
+
+test("seqfx_inspector_uses_a_beveled_material_plate_with_raised_control_islands", async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
+    await loadSeqFxHarness(page);
+    await page.locator('[data-role="seqfx-root"]').waitFor();
+
+    await page.getByRole("button", { name: "Chain 2 step 1", exact: true }).click();
+    await page.locator(".seqfx-crusher-editor__panel").waitFor();
+
+    const styles = await page.evaluate(() => {
+        const styleFor = (selector, pseudo = null) => {
+            const node = document.querySelector(selector);
+            const computed = getComputedStyle(node, pseudo);
+
+            return {
+                backgroundColor: computed.backgroundColor,
+                borderTopStyle: computed.borderTopStyle,
+                borderTopWidth: computed.borderTopWidth,
+                boxShadow: computed.boxShadow,
+                clipPath: computed.clipPath,
+                filter: computed.filter,
+                position: computed.position,
+                zIndex: computed.zIndex,
+            };
+        };
+
+        return {
+            deleteButton: styleFor('[data-role="seqfx-delete-block"]'),
+            heading: styleFor(".seqfx-inspector-heading"),
+            inspector: styleFor('[data-role="seqfx-inspector"]'),
+            inspectorPlate: styleFor('[data-role="seqfx-inspector"]', "::before"),
+            mixRow: styleFor('[data-role="seqfx-mix-row"]'),
+            panel: styleFor(".seqfx-crusher-editor__panel"),
+            tickSlider: styleFor(".editor-tick-slider"),
+        };
+    });
+
+    assert.equal(styles.inspector.backgroundColor, "rgba(0, 0, 0, 0)");
+    assert.equal(styles.inspector.borderTopWidth, "0px");
+    assert.equal(styles.inspector.position, "relative");
+    assert.match(styles.inspectorPlate.clipPath, /^polygon\(/);
+    assert.notEqual(styles.inspectorPlate.backgroundColor, "rgba(0, 0, 0, 0)");
+    assert.notEqual(styles.inspectorPlate.filter, "none");
+    assert.equal(styles.heading.position, "relative");
+    assert.equal(styles.heading.zIndex, "1");
+
+    for (const [name, style] of Object.entries({
+        deleteButton: styles.deleteButton,
+        mixRow: styles.mixRow,
+        panel: styles.panel,
+        tickSlider: styles.tickSlider,
+    })) {
+        assert.equal(style.borderTopWidth, "0px", `${name} should not draw a rectangular border`);
+        assert.equal(style.borderTopStyle, "none", `${name} should not draw a rectangular border`);
+        assert.match(style.backgroundColor, /rgba\(/, `${name} should use a material fill`);
+        assert.notEqual(style.boxShadow, "none", `${name} should read as a raised island`);
+    }
 
     await page.close();
 });

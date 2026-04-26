@@ -786,6 +786,20 @@ const SEQFX_BAR_FRAME_BEVEL_PX = 12;
 const SEQFX_BAR_FRAME_OUTER_BOTTOM_BEVEL_PX = SEQFX_BAR_FRAME_BEVEL_PX
     + (SEQFX_BAR_FRAME_GAP_PX * (2 - Math.SQRT2));
 const SEQFX_BAR_FRAME_STROKE_INSET_PX = 1;
+const SEQFX_GRID_SHELL_PADDING_TOP_PX = 24;
+const SEQFX_STEP_NUMBER_HEIGHT_PX = 9;
+const SEQFX_STEP_HEADER_GAP_PX = 12;
+const SEQFX_INSPECTOR_TOP_ALIGN_OFFSET_PX = SEQFX_GRID_SHELL_PADDING_TOP_PX
+    + SEQFX_STEP_NUMBER_HEIGHT_PX
+    + SEQFX_STEP_HEADER_GAP_PX
+    - (SEQFX_BAR_FRAME_NUMBER_BAND_PX + SEQFX_BAR_FRAME_GAP_PX + SEQFX_BAR_FRAME_INNER_GAP_PX)
+    + SEQFX_BAR_FRAME_STROKE_INSET_PX;
+const SEQFX_WORKSPACE_STYLE = {
+    "--seqfx-grid-shell-padding-top": `${SEQFX_GRID_SHELL_PADDING_TOP_PX}px`,
+    "--seqfx-inspector-top-align-offset": `${SEQFX_INSPECTOR_TOP_ALIGN_OFFSET_PX}px`,
+    "--seqfx-step-header-gap": `${SEQFX_STEP_HEADER_GAP_PX}px`,
+    "--seqfx-step-number-height": `${SEQFX_STEP_NUMBER_HEIGHT_PX}px`,
+} as CSSProperties;
 
 function cellsPerBeatForRateIndex(rateIndex: number) {
     return SEQFX_RATE_CELLS_PER_BEAT[Math.min(2, Math.max(0, Math.round(rateIndex)))] ?? 4;
@@ -3472,7 +3486,7 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
                 </div>
             </section>
 
-            <section className="seqfx-workspace">
+            <section className="seqfx-workspace" style={SEQFX_WORKSPACE_STYLE}>
                 <div className={gridShellClassName} aria-label="Effect sequence grid">
                     {STEP_BARS.map((barSteps, barIndex) => (
                         <div className="seqfx-bar-section" data-role="seqfx-bar-section" data-bar={barIndex} key={barIndex}>
