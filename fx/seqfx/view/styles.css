@@ -201,17 +201,20 @@ select {
     overflow: visible;
 }
 
+.seqfx-bar-frame__plate {
+    fill: rgba(239, 234, 224, 0.52);
+    stroke: none;
+}
+
 .seqfx-bar-frame__outer,
 .seqfx-bar-frame__inner {
     fill: none;
-    stroke: rgba(83, 99, 91, 0.48);
-    stroke-width: 2;
-    stroke-linejoin: miter;
-    vector-effect: non-scaling-stroke;
+    stroke: none;
+    stroke-width: 0;
 }
 
 .seqfx-bar-frame__inner {
-    opacity: 0.72;
+    opacity: 1;
 }
 
 .seqfx-bar-lanes {
@@ -272,18 +275,24 @@ select {
 .seqfx-cell {
     position: relative;
     --seqfx-frame-cell-bevel: 7px;
+    --seqfx-cell-shadow-raised:
+        1px 1.2px 2.1px rgba(126, 116, 101, 0.3),
+        -1px -1px 1.8px rgba(255, 248, 232, 0.72),
+        inset 0.5px 0.5px 0 rgba(255, 248, 232, 0.44),
+        inset -0.5px -0.5px 0 rgba(126, 116, 101, 0.16);
     display: block;
     width: 100%;
     aspect-ratio: 1;
-    border: 1px solid var(--seqfx-shell-border);
+    border: 0;
     border-radius: 3px;
     margin: 0;
     padding: 0;
-    background: var(--seqfx-shell-panel-bg);
+    background: rgba(222, 216, 204, 0.62);
+    box-shadow: var(--seqfx-cell-shadow-raised);
     cursor: pointer;
     touch-action: none;
     user-select: none;
-    transition: border-color 120ms ease, background-color 120ms ease, transform 120ms ease;
+    transition: background-color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
 }
 
 .seqfx-cell.has-frame-corner-tl,
@@ -294,7 +303,7 @@ select {
 }
 
 .seqfx-cell.is-alt-bar {
-    background: var(--seqfx-shell-panel-bg-strong);
+    background: rgba(211, 205, 194, 0.66);
 }
 
 .seqfx-cell.is-covered {
@@ -506,8 +515,9 @@ select {
 }
 
 .seqfx-cell.is-selected {
-    outline: 2px solid var(--seqfx-shell-ink);
-    outline-offset: 1px;
+    box-shadow:
+        0 0 0 1.5px rgba(28, 28, 28, 0.68),
+        var(--seqfx-cell-shadow-raised);
 }
 
 .seqfx-block.is-selected .seqfx-block-fill {
@@ -522,7 +532,16 @@ select {
 }
 
 .seqfx-cell.is-playhead {
-    box-shadow: inset 0 -3px 0 #8bbf9a;
+    box-shadow:
+        inset 0 -3px 0 #8bbf9a,
+        var(--seqfx-cell-shadow-raised);
+}
+
+.seqfx-cell.is-selected.is-playhead {
+    box-shadow:
+        0 0 0 1.5px rgba(28, 28, 28, 0.68),
+        inset 0 -3px 0 #8bbf9a,
+        var(--seqfx-cell-shadow-raised);
 }
 
 .seqfx-block.is-playhead .seqfx-block-fill {

@@ -900,6 +900,49 @@ function buildOuterFrameArrowPath(bottom: number, centerX: number) {
     ].join(" ");
 }
 
+function buildFramePlatePath(
+    outerLeft: number,
+    outerTop: number,
+    outerRight: number,
+    outerBottom: number,
+    outerTopBevel: number,
+    outerBottomBevel: number,
+    centerX: number,
+    innerLeft: number,
+    innerTop: number,
+    innerRight: number,
+    innerBottom: number,
+    innerBevel: number,
+) {
+    const shaftLeft = centerX - SEQFX_BAR_FRAME_ARROW_SHAFT_HALF_WIDTH_PX;
+    const shaftRight = centerX + SEQFX_BAR_FRAME_ARROW_SHAFT_HALF_WIDTH_PX;
+    const arrowLeft = centerX - SEQFX_BAR_FRAME_ARROW_HALF_WIDTH_PX;
+    const arrowRight = centerX + SEQFX_BAR_FRAME_ARROW_HALF_WIDTH_PX;
+    const shaftBottom = outerBottom + SEQFX_BAR_FRAME_ARROW_SHAFT_HEIGHT_PX;
+    const arrowTipY = outerBottom + SEQFX_BAR_FRAME_ARROW_HEIGHT_PX;
+
+    const outerSilhouette = [
+        `M ${shaftRight} ${outerBottom}`,
+        `L ${outerRight - outerBottomBevel} ${outerBottom}`,
+        `L ${outerRight} ${outerBottom - outerBottomBevel}`,
+        `L ${outerRight} ${outerTop + outerTopBevel}`,
+        `L ${outerRight - outerTopBevel} ${outerTop}`,
+        `L ${outerLeft + outerTopBevel} ${outerTop}`,
+        `L ${outerLeft} ${outerTop + outerTopBevel}`,
+        `L ${outerLeft} ${outerBottom - outerBottomBevel}`,
+        `L ${outerLeft + outerBottomBevel} ${outerBottom}`,
+        `L ${shaftLeft} ${outerBottom}`,
+        `L ${shaftLeft} ${shaftBottom}`,
+        `L ${arrowLeft} ${shaftBottom}`,
+        `L ${centerX} ${arrowTipY}`,
+        `L ${arrowRight} ${shaftBottom}`,
+        `L ${shaftRight} ${shaftBottom}`,
+        "Z",
+    ].join(" ");
+
+    return `${outerSilhouette} ${buildBeveledRectPath(innerLeft, innerTop, innerRight, innerBottom, innerBevel)}`;
+}
+
 function SeqFxBarFrame() {
     const frameRef = useRef<HTMLDivElement | null>(null);
     const [cellStackSize, setCellStackSize] = useState({ width: 1, height: 1 });
@@ -952,6 +995,20 @@ function SeqFxBarFrame() {
     const outerRight = innerRight + SEQFX_BAR_FRAME_GAP_PX;
     const visibleOuterBottom = innerBottom + SEQFX_BAR_FRAME_GAP_PX;
     const centerX = frameWidth * 0.5;
+    const platePath = buildFramePlatePath(
+        outerLeft,
+        outerTop,
+        outerRight,
+        visibleOuterBottom,
+        SEQFX_BAR_FRAME_BEVEL_PX,
+        SEQFX_BAR_FRAME_OUTER_BOTTOM_BEVEL_PX,
+        centerX,
+        innerLeft,
+        innerTop,
+        innerRight,
+        innerBottom,
+        SEQFX_BAR_FRAME_BEVEL_PX,
+    );
 
     return (
         <div
@@ -971,6 +1028,46 @@ function SeqFxBarFrame() {
                 focusable="false"
                 viewBox={`0 0 ${frameWidth} ${frameHeight}`}
             >
+                <defs>
+                    <filter
+                        id="seqfx-bar-frame-plate-material"
+                        colorInterpolationFilters="sRGB"
+                        filterUnits="userSpaceOnUse"
+                        height={frameHeight + 64}
+                        width={frameWidth + 64}
+                        x={-32}
+                        y={-32}
+                    >
+                        <feGaussianBlur in="SourceAlpha" stdDeviation="2.8" result="darkBlur" />
+                        <feOffset in="darkBlur" dx="2.4" dy="3" result="darkOffset" />
+                        <feFlood floodColor="#8f8577" floodOpacity="0.3" result="darkColor" />
+                        <feComposite in="darkColor" in2="darkOffset" operator="in" result="darkShadow" />
+
+                        <feGaussianBlur in="SourceAlpha" stdDeviation="2.2" result="lightBlur" />
+                        <feOffset in="lightBlur" dx="-2" dy="-2" result="lightOffset" />
+                        <feFlood floodColor="#fff7e8" floodOpacity="0.64" result="lightColor" />
+                        <feComposite in="lightColor" in2="lightOffset" operator="in" result="lightShadow" />
+
+                        <feGaussianBlur in="SourceAlpha" stdDeviation="0.8" result="edgeBlur" />
+                        <feOffset in="edgeBlur" dx="0" dy="1.1" result="edgeOffset" />
+                        <feFlood floodColor="#756c60" floodOpacity="0.18" result="edgeColor" />
+                        <feComposite in="edgeColor" in2="edgeOffset" operator="in" result="edgeShadow" />
+
+                        <feMerge>
+                            <feMergeNode in="darkShadow" />
+                            <feMergeNode in="lightShadow" />
+                            <feMergeNode in="edgeShadow" />
+                            <feMergeNode in="SourceGraphic" />
+                        </feMerge>
+                    </filter>
+                </defs>
+                <path
+                    className="seqfx-bar-frame__plate"
+                    data-role="seqfx-bar-frame-plate"
+                    d={platePath}
+                    filter="url(#seqfx-bar-frame-plate-material)"
+                    fillRule="evenodd"
+                />
                 <path
                     className="seqfx-bar-frame__outer seqfx-bar-frame__outer-body"
                     data-role="seqfx-bar-frame-outer-body"
