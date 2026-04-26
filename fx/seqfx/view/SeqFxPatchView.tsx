@@ -814,27 +814,30 @@ function cellRefKey(lane: number, step: number) {
 }
 
 function frameCornerClassNames(lane: number, barIndex: number, startStep: number, endStep: number) {
-    if (barIndex !== 0) {
+    if (barIndex < 0 || barIndex >= SEQFX_GRID_BAR_COUNT) {
         return [];
     }
 
     const classNames: string[] = [];
     const lastLane = SEQFX_LANE_NAMES.length - 1;
+    const firstStepInFrame = barIndex * SEQFX_GRID_STEPS_PER_ROW;
     const lastStepInFrame = SEQFX_GRID_STEPS_PER_ROW - 1;
+    const localStartStep = startStep - firstStepInFrame;
+    const localEndStep = endStep - firstStepInFrame;
 
-    if (lane === 0 && startStep === 0) {
+    if (lane === 0 && localStartStep === 0) {
         classNames.push("has-frame-corner-tl");
     }
 
-    if (lane === 0 && endStep === lastStepInFrame) {
+    if (lane === 0 && localEndStep === lastStepInFrame) {
         classNames.push("has-frame-corner-tr");
     }
 
-    if (lane === lastLane && startStep === 0) {
+    if (lane === lastLane && localStartStep === 0) {
         classNames.push("has-frame-corner-bl");
     }
 
-    if (lane === lastLane && endStep === lastStepInFrame) {
+    if (lane === lastLane && localEndStep === lastStepInFrame) {
         classNames.push("has-frame-corner-br");
     }
 
@@ -881,6 +884,27 @@ function buildOuterFrameBodyPath(
     ].join(" ");
 }
 
+function buildOuterFrameClosedPath(
+    left: number,
+    top: number,
+    right: number,
+    bottom: number,
+    topBevel: number,
+    bottomBevel: number,
+) {
+    return [
+        `M ${left + topBevel} ${top}`,
+        `L ${right - topBevel} ${top}`,
+        `L ${right} ${top + topBevel}`,
+        `L ${right} ${bottom - bottomBevel}`,
+        `L ${right - bottomBevel} ${bottom}`,
+        `L ${left + bottomBevel} ${bottom}`,
+        `L ${left} ${bottom - bottomBevel}`,
+        `L ${left} ${top + topBevel}`,
+        "Z",
+    ].join(" ");
+}
+
 function buildOuterFrameArrowPath(bottom: number, centerX: number) {
     const shaftLeft = centerX - SEQFX_BAR_FRAME_ARROW_SHAFT_HALF_WIDTH_PX;
     const shaftRight = centerX + SEQFX_BAR_FRAME_ARROW_SHAFT_HALF_WIDTH_PX;
@@ -913,6 +937,7 @@ function buildFramePlatePath(
     innerRight: number,
     innerBottom: number,
     innerBevel: number,
+    hasArrow: boolean,
 ) {
     const shaftLeft = centerX - SEQFX_BAR_FRAME_ARROW_SHAFT_HALF_WIDTH_PX;
     const shaftRight = centerX + SEQFX_BAR_FRAME_ARROW_SHAFT_HALF_WIDTH_PX;
@@ -921,29 +946,38 @@ function buildFramePlatePath(
     const shaftBottom = outerBottom + SEQFX_BAR_FRAME_ARROW_SHAFT_HEIGHT_PX;
     const arrowTipY = outerBottom + SEQFX_BAR_FRAME_ARROW_HEIGHT_PX;
 
-    const outerSilhouette = [
-        `M ${shaftRight} ${outerBottom}`,
-        `L ${outerRight - outerBottomBevel} ${outerBottom}`,
-        `L ${outerRight} ${outerBottom - outerBottomBevel}`,
-        `L ${outerRight} ${outerTop + outerTopBevel}`,
-        `L ${outerRight - outerTopBevel} ${outerTop}`,
-        `L ${outerLeft + outerTopBevel} ${outerTop}`,
-        `L ${outerLeft} ${outerTop + outerTopBevel}`,
-        `L ${outerLeft} ${outerBottom - outerBottomBevel}`,
-        `L ${outerLeft + outerBottomBevel} ${outerBottom}`,
-        `L ${shaftLeft} ${outerBottom}`,
-        `L ${shaftLeft} ${shaftBottom}`,
-        `L ${arrowLeft} ${shaftBottom}`,
-        `L ${centerX} ${arrowTipY}`,
-        `L ${arrowRight} ${shaftBottom}`,
-        `L ${shaftRight} ${shaftBottom}`,
-        "Z",
-    ].join(" ");
+    const outerSilhouette = hasArrow
+        ? [
+            `M ${shaftRight} ${outerBottom}`,
+            `L ${outerRight - outerBottomBevel} ${outerBottom}`,
+            `L ${outerRight} ${outerBottom - outerBottomBevel}`,
+            `L ${outerRight} ${outerTop + outerTopBevel}`,
+            `L ${outerRight - outerTopBevel} ${outerTop}`,
+            `L ${outerLeft + outerTopBevel} ${outerTop}`,
+            `L ${outerLeft} ${outerTop + outerTopBevel}`,
+            `L ${outerLeft} ${outerBottom - outerBottomBevel}`,
+            `L ${outerLeft + outerBottomBevel} ${outerBottom}`,
+            `L ${shaftLeft} ${outerBottom}`,
+            `L ${shaftLeft} ${shaftBottom}`,
+            `L ${arrowLeft} ${shaftBottom}`,
+            `L ${centerX} ${arrowTipY}`,
+            `L ${arrowRight} ${shaftBottom}`,
+            `L ${shaftRight} ${shaftBottom}`,
+            "Z",
+        ].join(" ")
+        : buildOuterFrameClosedPath(
+            outerLeft,
+            outerTop,
+            outerRight,
+            outerBottom,
+            outerTopBevel,
+            outerBottomBevel,
+        );
 
     return `${outerSilhouette} ${buildBeveledRectPath(innerLeft, innerTop, innerRight, innerBottom, innerBevel)}`;
 }
 
-function SeqFxBarFrame() {
+function SeqFxBarFrame({ barIndex, hasArrow }: { barIndex: number; hasArrow: boolean }) {
     const frameRef = useRef<HTMLDivElement | null>(null);
     const [cellStackSize, setCellStackSize] = useState({ width: 1, height: 1 });
 
@@ -985,7 +1019,7 @@ function SeqFxBarFrame() {
         + cellStackSize.height
         + SEQFX_BAR_FRAME_INNER_GAP_PX
         + SEQFX_BAR_FRAME_GAP_PX;
-    const frameHeight = outerBottom + SEQFX_BAR_FRAME_ARROW_HEIGHT_PX + SEQFX_BAR_FRAME_STROKE_INSET_PX;
+    const frameHeight = outerBottom + (hasArrow ? SEQFX_BAR_FRAME_ARROW_HEIGHT_PX : 0) + SEQFX_BAR_FRAME_STROKE_INSET_PX;
     const innerLeft = SEQFX_BAR_FRAME_GAP_PX;
     const innerTop = SEQFX_BAR_FRAME_NUMBER_BAND_PX + SEQFX_BAR_FRAME_GAP_PX;
     const innerRight = innerLeft + (2 * SEQFX_BAR_FRAME_INNER_GAP_PX) + cellStackSize.width;
@@ -1008,11 +1042,15 @@ function SeqFxBarFrame() {
         innerRight,
         innerBottom,
         SEQFX_BAR_FRAME_BEVEL_PX,
+        hasArrow,
     );
+    const plateFilterId = `seqfx-bar-frame-plate-material-${barIndex}`;
 
     return (
         <div
             className="seqfx-bar-frame"
+            data-bar={barIndex}
+            data-has-arrow={hasArrow ? "true" : "false"}
             data-role="seqfx-bar-frame"
             ref={frameRef}
             style={{
@@ -1030,7 +1068,7 @@ function SeqFxBarFrame() {
             >
                 <defs>
                     <filter
-                        id="seqfx-bar-frame-plate-material"
+                        id={plateFilterId}
                         colorInterpolationFilters="sRGB"
                         filterUnits="userSpaceOnUse"
                         height={frameHeight + 64}
@@ -1065,27 +1103,38 @@ function SeqFxBarFrame() {
                     className="seqfx-bar-frame__plate"
                     data-role="seqfx-bar-frame-plate"
                     d={platePath}
-                    filter="url(#seqfx-bar-frame-plate-material)"
+                    filter={`url(#${plateFilterId})`}
                     fillRule="evenodd"
                 />
                 <path
                     className="seqfx-bar-frame__outer seqfx-bar-frame__outer-body"
                     data-role="seqfx-bar-frame-outer-body"
-                    d={buildOuterFrameBodyPath(
-                        outerLeft,
-                        outerTop,
-                        outerRight,
-                        visibleOuterBottom,
-                        SEQFX_BAR_FRAME_BEVEL_PX,
-                        SEQFX_BAR_FRAME_OUTER_BOTTOM_BEVEL_PX,
-                        centerX,
-                    )}
+                    d={hasArrow
+                        ? buildOuterFrameBodyPath(
+                            outerLeft,
+                            outerTop,
+                            outerRight,
+                            visibleOuterBottom,
+                            SEQFX_BAR_FRAME_BEVEL_PX,
+                            SEQFX_BAR_FRAME_OUTER_BOTTOM_BEVEL_PX,
+                            centerX,
+                        )
+                        : buildOuterFrameClosedPath(
+                            outerLeft,
+                            outerTop,
+                            outerRight,
+                            visibleOuterBottom,
+                            SEQFX_BAR_FRAME_BEVEL_PX,
+                            SEQFX_BAR_FRAME_OUTER_BOTTOM_BEVEL_PX,
+                        )}
                 />
-                <path
-                    className="seqfx-bar-frame__outer seqfx-bar-frame__outer-arrow"
-                    data-role="seqfx-bar-frame-outer-arrow"
-                    d={buildOuterFrameArrowPath(visibleOuterBottom, centerX)}
-                />
+                {hasArrow ? (
+                    <path
+                        className="seqfx-bar-frame__outer seqfx-bar-frame__outer-arrow"
+                        data-role="seqfx-bar-frame-outer-arrow"
+                        d={buildOuterFrameArrowPath(visibleOuterBottom, centerX)}
+                    />
+                ) : null}
                 <path
                     className="seqfx-bar-frame__inner"
                     data-role="seqfx-bar-frame-inner"
@@ -3442,7 +3491,7 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
                                 </div>
                             </div>
                             <div className="seqfx-bar-lanes" data-role="seqfx-bar-lanes" data-bar={barIndex}>
-                                {barIndex === 0 ? <SeqFxBarFrame /> : null}
+                                <SeqFxBarFrame barIndex={barIndex} hasArrow={barIndex === 0} />
                                 {SEQFX_LANE_NAMES.map((laneName, lane) => {
                                     const laneBlocks = getSeqFxLaneBlocks(renderedPatternState, lane);
                                     const invalidBlocks = invalidDropTarget?.patternIndex === selectedPattern && invalidDropTarget.lane === lane

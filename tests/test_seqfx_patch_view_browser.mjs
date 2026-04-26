@@ -981,25 +981,34 @@ test("seqfx_rate_one_grid_uses_beat_gutters_and_per_cell_bar_fill", async () => 
     await page.close();
 });
 
-test("seqfx_bar_one_frame_sits_behind_the_first_bar_without_measured_overlay", async () => {
+test("seqfx_bar_frames_sit_behind_both_bars_with_arrow_only_on_first_bar", async () => {
     const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
     await loadSeqFxHarness(page);
     await page.locator('[data-role="seqfx-root"]').waitFor();
     await page.waitForFunction(() => {
-        const frame = document.querySelector('[data-role="seqfx-bar-frame"]');
+        const frame = document.querySelector('[data-role="seqfx-bar-frame"][data-bar="0"]');
         const lanes = document.querySelector('[data-role="seqfx-bar-lanes"][data-bar="0"]');
+        if (!frame || !lanes) return false;
+        return Math.abs(frame.getBoundingClientRect().width - (lanes.getBoundingClientRect().width + 32)) < 1;
+    });
+    await page.waitForFunction(() => {
+        const frame = document.querySelector('[data-role="seqfx-bar-frame"][data-bar="1"]');
+        const lanes = document.querySelector('[data-role="seqfx-bar-lanes"][data-bar="1"]');
         if (!frame || !lanes) return false;
         return Math.abs(frame.getBoundingClientRect().width - (lanes.getBoundingClientRect().width + 32)) < 1;
     });
 
     const frame = page.locator('[data-role="seqfx-bar-frame"]');
-    assert.equal(await frame.count(), 1, "bar frame should render only for the first bar");
+    assert.equal(await frame.count(), 2, "bar frames should render for both visible bars");
 
     const layout = await page.evaluate(() => {
-        const frameElement = document.querySelector('[data-role="seqfx-bar-frame"]');
+        const frameElement = document.querySelector('[data-role="seqfx-bar-frame"][data-bar="0"]');
+        const secondFrameElement = document.querySelector('[data-role="seqfx-bar-frame"][data-bar="1"]');
         const barOne = document.querySelector('[data-role="seqfx-bar-section"][data-bar="0"]');
         const barTwo = document.querySelector('[data-role="seqfx-bar-section"][data-bar="1"]');
+        const gridShell = document.querySelector(".seqfx-grid-shell");
         const barLanes = document.querySelector('[data-role="seqfx-bar-lanes"][data-bar="0"]');
+        const secondBarLanes = document.querySelector('[data-role="seqfx-bar-lanes"][data-bar="1"]');
         const firstCell = document.querySelector('[data-role="seqfx-cell"][data-lane="0"][data-step="0"]');
         const stepHeader = document.querySelector('[data-role="seqfx-bar-section"][data-bar="0"] .seqfx-step-header');
         const laneRow = document.querySelector('[data-role="seqfx-bar-section"][data-bar="0"] .seqfx-lane-row');
@@ -1008,7 +1017,11 @@ test("seqfx_bar_one_frame_sits_behind_the_first_bar_without_measured_overlay", a
         const outer = document.querySelector(".seqfx-bar-frame__outer");
         const arrow = document.querySelector('[data-role="seqfx-bar-frame-outer-arrow"]');
         const plate = document.querySelector('[data-role="seqfx-bar-frame-plate"]');
-        const plateFilter = document.querySelector("#seqfx-bar-frame-plate-material");
+        const plateFilter = document.querySelector("#seqfx-bar-frame-plate-material-0");
+        const secondInner = secondFrameElement.querySelector('[data-role="seqfx-bar-frame-inner"]');
+        const secondOuter = secondFrameElement.querySelector('[data-role="seqfx-bar-frame-outer-body"]');
+        const secondPlate = secondFrameElement.querySelector('[data-role="seqfx-bar-frame-plate"]');
+        const secondPlateFilter = document.querySelector("#seqfx-bar-frame-plate-material-1");
         const rectFor = (node) => {
             const rect = node.getBoundingClientRect();
             return {
@@ -1023,18 +1036,24 @@ test("seqfx_bar_one_frame_sits_behind_the_first_bar_without_measured_overlay", a
 
         const svgChildren = [...svg.children];
         const innerBox = inner.getBBox();
+        const secondInnerBox = secondInner.getBBox();
 
         return {
             barOne: rectFor(barOne),
-            barTwoHasFrame: Boolean(barTwo.querySelector('[data-role="seqfx-bar-frame"]')),
-            barTwoHasInnerFrame: Boolean(barTwo.querySelector('[data-role="seqfx-bar-frame-inner"]')),
+            barTwo: rectFor(barTwo),
+            barTwoHasArrow: Boolean(barTwo.querySelector('[data-role="seqfx-bar-frame-outer-arrow"]')),
+            barTwoHasFrame: Boolean(secondFrameElement),
+            barTwoHasInnerFrame: Boolean(secondInner),
             cellStack: rectFor(barLanes),
             firstCellBorderTopStyle: getComputedStyle(firstCell).borderTopStyle,
             firstCellBoxShadow: getComputedStyle(firstCell).boxShadow,
             frame: rectFor(frameElement),
+            frameHasArrow: frameElement.getAttribute("data-has-arrow") ?? "",
             framePointerEvents: getComputedStyle(frameElement).pointerEvents,
             frameTagName: frameElement.tagName,
             frameZIndex: Number(getComputedStyle(frameElement).zIndex),
+            gridShell: rectFor(gridShell),
+            gridShellPaddingBottom: parseFloat(getComputedStyle(gridShell).paddingBottom),
             innerPath: rectFor(inner),
             innerPathData: inner.getAttribute("d") ?? "",
             innerPathTagName: inner.tagName,
@@ -1055,14 +1074,27 @@ test("seqfx_bar_one_frame_sits_behind_the_first_bar_without_measured_overlay", a
             plateLayersSitBehindGeometryPaths: svgChildren.indexOf(plate) < svgChildren.indexOf(outer),
             plateCoversTopBand: plate.isPointInFill(new DOMPoint(innerBox.x + (innerBox.width * 0.5), innerBox.y - 4)),
             plateDoesNotCoverCellHole: plate.isPointInFill(new DOMPoint(innerBox.x + (innerBox.width * 0.5), innerBox.y + (innerBox.height * 0.5))),
+            secondCellStack: rectFor(secondBarLanes),
+            secondFrame: rectFor(secondFrameElement),
+            secondFrameHasArrow: secondFrameElement.getAttribute("data-has-arrow") ?? "",
+            secondInnerPath: rectFor(secondInner),
+            secondOuterPath: secondOuter.getAttribute("d") ?? "",
+            secondPlateFilterAttribute: secondPlate.getAttribute("filter") ?? "",
+            secondPlateFilterExists: Boolean(secondPlateFilter),
+            secondPlatePath: secondPlate.getAttribute("d") ?? "",
+            secondPlateCoversTopBand: secondPlate.isPointInFill(new DOMPoint(secondInnerBox.x + (secondInnerBox.width * 0.5), secondInnerBox.y - 4)),
+            secondPlateDoesNotCoverCellHole: secondPlate.isPointInFill(new DOMPoint(secondInnerBox.x + (secondInnerBox.width * 0.5), secondInnerBox.y + (secondInnerBox.height * 0.5))),
             svg: rectFor(svg),
             svgDisplay: getComputedStyle(svg).display,
             stepHeaderZIndex: Number(getComputedStyle(stepHeader).zIndex),
         };
     });
 
-    assert.equal(layout.barTwoHasFrame, false);
-    assert.equal(layout.barTwoHasInnerFrame, false);
+    assert.equal(layout.barTwoHasFrame, true);
+    assert.equal(layout.barTwoHasInnerFrame, true);
+    assert.equal(layout.frameHasArrow, "true");
+    assert.equal(layout.secondFrameHasArrow, "false");
+    assert.equal(layout.barTwoHasArrow, false);
     assert.equal(layout.firstCellBorderTopStyle, "none");
     assert.notEqual(layout.firstCellBoxShadow, "none");
     assert.equal(layout.frameTagName, "DIV");
@@ -1091,12 +1123,27 @@ test("seqfx_bar_one_frame_sits_behind_the_first_bar_without_measured_overlay", a
     assert.ok(layout.platePath.includes(" Z M "), "plate should combine the outer silhouette with an inner hole");
     assert.equal(layout.plateFillRule, "evenodd");
     assert.notEqual(layout.plateFill, "none");
-    assert.equal(layout.plateFilterAttribute, "url(#seqfx-bar-frame-plate-material)");
+    assert.equal(layout.plateFilterAttribute, "url(#seqfx-bar-frame-plate-material-0)");
     assert.equal(layout.plateFilterExists, true);
     assert.equal(layout.plateFilterUnits, "userSpaceOnUse");
     assert.equal(layout.plateLayersSitBehindGeometryPaths, true);
     assert.equal(layout.plateCoversTopBand, true);
     assert.equal(layout.plateDoesNotCoverCellHole, false);
+    assert.equal(layout.secondPlateFilterAttribute, "url(#seqfx-bar-frame-plate-material-1)");
+    assert.equal(layout.secondPlateFilterExists, true);
+    assert.match(layout.secondPlatePath, /^M /);
+    assert.ok(layout.secondPlatePath.includes(" Z M "), "second plate should combine the outer silhouette with an inner hole");
+    assert.ok(layout.secondOuterPath.endsWith("Z"), "second bar outer path should close instead of leaving room for an arrow");
+    assert.equal(layout.secondPlateCoversTopBand, true);
+    assert.equal(layout.secondPlateDoesNotCoverCellHole, false);
+    assert.ok(layout.secondFrame.left < layout.barTwo.left, "second frame should extend left of the second bar cells");
+    assert.ok(layout.secondFrame.right > layout.barTwo.right, "second frame should extend right of the second bar cells");
+    assert.ok(layout.gridShell.bottom - layout.secondFrame.bottom >= 20, "grid shell should leave room for the second bar material shadow");
+    assert.ok(layout.gridShellPaddingBottom >= 24, "grid shell bottom padding should protect the second bar material shadow from clipping");
+    assert.ok(layout.secondInnerPath.left < layout.secondCellStack.left, "second inner outline should derive from the second cell stack plus horizontal padding");
+    assert.ok(layout.secondInnerPath.right > layout.secondCellStack.right, "second inner outline should derive from the second cell stack plus horizontal padding");
+    assert.ok(layout.secondInnerPath.top < layout.secondCellStack.top, "second inner outline should derive from the second cell stack plus top padding");
+    assert.ok(layout.secondInnerPath.bottom > layout.secondCellStack.bottom, "second inner outline should derive from the second cell stack plus bottom padding");
     {
         const points = pathPointsFromD(layout.outerArrowPath);
         const shaftWidth = points[6].x - points[0].x;
@@ -1291,7 +1338,7 @@ test("seqfx_bar_one_frame_reserves_corner_clearance_at_plugin_width", async () =
     await page.close();
 });
 
-test("seqfx_bar_one_corner_cells_and_blocks_use_matching_beveled_shapes", async () => {
+test("seqfx_bar_corner_cells_and_blocks_use_matching_beveled_shapes", async () => {
     const page = await browser.newPage({ viewport: { width: 768, height: 1192 } });
     await loadSeqFxHarness(page);
     await page.locator('[data-role="seqfx-root"]').waitFor();
@@ -1301,6 +1348,10 @@ test("seqfx_bar_one_corner_cells_and_blocks_use_matching_beveled_shapes", async 
         { className: "has-frame-corner-tr", lane: 0, step: 15 },
         { className: "has-frame-corner-bl", lane: 3, step: 0 },
         { className: "has-frame-corner-br", lane: 3, step: 15 },
+        { className: "has-frame-corner-tl", lane: 0, step: 16 },
+        { className: "has-frame-corner-tr", lane: 0, step: 31 },
+        { className: "has-frame-corner-bl", lane: 3, step: 16 },
+        { className: "has-frame-corner-br", lane: 3, step: 31 },
     ];
 
     const cornerCellStyles = await page.evaluate((expectations) => (
@@ -2677,6 +2728,9 @@ test("seqfx_blocks_use_a_single_clean_surface_with_hidden_resize_chrome", async 
             blockBackground: getComputedStyle(node).backgroundColor,
             blockBorderWidth: getComputedStyle(node).borderTopWidth,
             blockCursor: getComputedStyle(node).cursor,
+            fillBackground: getComputedStyle(fillNode).backgroundColor,
+            fillBorderWidth: getComputedStyle(fillNode).borderTopWidth,
+            fillBoxShadow: getComputedStyle(fillNode).boxShadow,
             fillInset: {
                 top: getComputedStyle(fillNode).top,
                 right: getComputedStyle(fillNode).right,
@@ -2691,6 +2745,11 @@ test("seqfx_blocks_use_a_single_clean_surface_with_hidden_resize_chrome", async 
     assert.equal(initialStyles.blockBackground, "rgba(0, 0, 0, 0)");
     assert.equal(initialStyles.blockBorderWidth, "0px");
     assert.equal(initialStyles.blockCursor, "grab");
+    assert.equal(initialStyles.fillBorderWidth, "0px");
+    assert.match(initialStyles.fillBackground, /rgba\(/);
+    assert.ok(Number(initialStyles.fillBackground.match(/,\s*([0-9.]+)\)$/)?.[1] ?? 1) < 1, "block fill should be translucent over the material plate");
+    assert.notEqual(initialStyles.fillBoxShadow, "none");
+    assert.equal(initialStyles.fillBoxShadow.includes("0px 0px 0px 1px"), false, "block fill should not use an inset 1px border");
     assert.deepEqual(initialStyles.fillInset, { top: "1px", right: "1px", bottom: "1px", left: "1px" });
     assert.equal(initialStyles.resizeCursor, "col-resize");
     assert.equal(initialStyles.resizeGripOpacity, "0");
