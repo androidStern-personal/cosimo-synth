@@ -200,6 +200,96 @@ function defaultEffectTypeForChain(chain: number) {
     return EFFECT_OPTIONS[Math.min(EFFECT_OPTIONS.length - 1, Math.max(0, chain))] ?? SEQFX_EFFECT_TYPES.filter;
 }
 
+function SeqFxTitleSigil() {
+    return (
+        <svg
+            aria-hidden="true"
+            className="seqfx-title__sigil"
+            data-role="seqfx-title-sigil"
+            focusable="false"
+            viewBox="0 0 24 24"
+        >
+            <g fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="2">
+                <path d="M3.5 18 L3.5 14" />
+                <path d="M9 18 L9 9" />
+                <path d="M14.5 18 L14.5 6" />
+                <path d="M20 18 L20 11" />
+            </g>
+            <g fill="currentColor">
+                <circle cx="3.5" cy="14" r="1.5" />
+                <circle cx="9" cy="9" r="1.5" />
+                <circle cx="14.5" cy="6" r="1.5" />
+                <circle cx="20" cy="11" r="1.5" />
+            </g>
+        </svg>
+    );
+}
+
+function SeqFxEmptyStateIcon() {
+    return (
+        <svg
+            aria-hidden="true"
+            className="seqfx-empty__icon"
+            data-role="seqfx-empty-icon"
+            focusable="false"
+            viewBox="0 0 24 24"
+        >
+            <path
+                d="M5 3.6 L5 18 L9.2 14.1 L11.7 19.4 L13.7 18.4 L11.2 13.2 L17 13 Z"
+                fill="none"
+                stroke="currentColor"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="1.5"
+            />
+        </svg>
+    );
+}
+
+function SeqFxMixGlyph() {
+    return (
+        <svg
+            aria-hidden="true"
+            className="seqfx-mix-row__glyph"
+            data-role="seqfx-mix-glyph"
+            focusable="false"
+            viewBox="0 0 16 16"
+        >
+            <line
+                x1="2.4"
+                y1="8"
+                x2="13.6"
+                y2="8"
+                stroke="currentColor"
+                strokeLinecap="round"
+                strokeWidth="1.4"
+            />
+            <circle cx="10" cy="8" r="2.4" fill="currentColor" />
+        </svg>
+    );
+}
+
+function SeqFxDeleteGlyph() {
+    return (
+        <svg
+            aria-hidden="true"
+            className="seqfx-delete-block__glyph"
+            data-role="seqfx-delete-glyph"
+            focusable="false"
+            viewBox="0 0 12 12"
+        >
+            <path
+                d="M3.2 3.2 L8.8 8.8 M8.8 3.2 L3.2 8.8"
+                fill="none"
+                stroke="currentColor"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="1.5"
+            />
+        </svg>
+    );
+}
+
 // Effect picker SVGs copied from Iconify API: FontAudio filter-lowpass/repeat (CC BY 4.0, @fefanto),
 // Iconoir square-wave (MIT), and Lucide cassette-tape (ISC).
 function SeqFxEffectIcon({ effectType }: { effectType: SeqFxEffectType }) {
@@ -262,7 +352,10 @@ function SeqFxMixRow({
 }) {
     return (
         <label className="seqfx-mix-row" data-role="seqfx-mix-row">
-            <span>Block mix</span>
+            <span className="seqfx-mix-row__label">
+                <SeqFxMixGlyph />
+                Block mix
+            </span>
             <input
                 aria-label="Block mix"
                 data-role="seqfx-mix"
@@ -1043,6 +1136,37 @@ function SeqFxBarFrame({ barIndex, hasArrow }: { barIndex: number; hasArrow: boo
     const outerRight = innerRight + SEQFX_BAR_FRAME_GAP_PX;
     const visibleOuterBottom = innerBottom + SEQFX_BAR_FRAME_GAP_PX;
     const centerX = frameWidth * 0.5;
+    const cornerGlyphs = [
+        {
+            key: "tl",
+            x: outerLeft + 14,
+            y: outerTop + 14,
+            rotate: -45,
+            paths: ["M -5 -2.5 L 0 -2.5 L 0 2.5 L 5 2.5", "M -5 2.5 L -2.5 2.5", "M 2.5 -2.5 L 5 -2.5"],
+        },
+        {
+            key: "tr",
+            accent: true,
+            x: outerRight - 14,
+            y: outerTop + 14,
+            rotate: 45,
+            paths: ["M -5 0 L -1.5 0 L 0 -2.5 L 1.5 0 L 5 0", "M -3 3 L 3 3"],
+        },
+        {
+            key: "br",
+            x: outerRight - 14,
+            y: visibleOuterBottom - 14,
+            rotate: 135,
+            paths: ["M -5 -3 L 5 -3", "M -5 0 L 5 0", "M -5 3 L 5 3"],
+        },
+        {
+            key: "bl",
+            x: outerLeft + 14,
+            y: visibleOuterBottom - 14,
+            rotate: -135,
+            paths: ["M -5 -2.5 L -1.5 -2.5 L 1.5 2.5 L 5 2.5", "M -5 2.5 L -2.5 2.5", "M 2.5 -2.5 L 5 -2.5"],
+        },
+    ];
     const platePath = buildFramePlatePath(
         outerLeft,
         outerTop,
@@ -1120,6 +1244,21 @@ function SeqFxBarFrame({ barIndex, hasArrow }: { barIndex: number; hasArrow: boo
                     filter={`url(#${plateFilterId})`}
                     fillRule="evenodd"
                 />
+                <g className="seqfx-bar-frame__corner-glyphs" data-role="seqfx-bar-frame-corner-glyphs">
+                    {cornerGlyphs.map((glyph) => (
+                        <g
+                            className={glyph.accent ? "seqfx-bar-frame__corner-glyph is-accent" : "seqfx-bar-frame__corner-glyph"}
+                            data-role="seqfx-bar-frame-corner-glyph"
+                            data-corner={glyph.key}
+                            key={glyph.key}
+                            transform={`translate(${glyph.x} ${glyph.y}) rotate(${glyph.rotate})`}
+                        >
+                            {glyph.paths.map((pathData) => (
+                                <path d={pathData} key={pathData} />
+                            ))}
+                        </g>
+                    ))}
+                </g>
                 <path
                     className="seqfx-bar-frame__outer seqfx-bar-frame__outer-body"
                     data-role="seqfx-bar-frame-outer-body"
@@ -3467,6 +3606,7 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
 
             <section className="seqfx-topbar" aria-label="SeqFX pattern controls">
                 <div className="seqfx-title">
+                    <SeqFxTitleSigil />
                     <h1>SeqFX</h1>
                 </div>
                 <div className="seqfx-patterns" role="group" aria-label="Patterns">
@@ -3667,10 +3807,15 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
 
                 <aside className="seqfx-inspector" data-role="seqfx-inspector">
                     <div className="seqfx-inspector-heading">
+                        <span aria-hidden="true" className="seqfx-inspector-heading__bullet" data-role="seqfx-inspector-bullet" />
                         <strong>{getSelectionLabel(activeSelection)}</strong>
+                        <span aria-hidden="true" className="seqfx-inspector-heading__rule" data-role="seqfx-inspector-rule" />
                     </div>
                     {!inspectedCell || inspectedLane === null ? (
-                        <p className="seqfx-empty">Choose a lane cell to edit its mix and effect settings.</p>
+                        <p className="seqfx-empty" data-role="seqfx-empty">
+                            <SeqFxEmptyStateIcon />
+                            <span>Choose a lane cell to edit its mix and effect settings.</span>
+                        </p>
                     ) : (
                         <>
                             <div className="seqfx-effect-picker" data-role="seqfx-effect-type" role="group" aria-label="Effect">
@@ -3811,7 +3956,8 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
                                     onClick={deleteSelectedBlock}
                                     type="button"
                                 >
-                                    {selectedBlockStartSteps.length > 1 ? "Delete Selection" : "Delete Block"}
+                                    <SeqFxDeleteGlyph />
+                                    <span>{selectedBlockStartSteps.length > 1 ? "Delete Selection" : "Delete Block"}</span>
                                 </button>
                             ) : null}
                         </>

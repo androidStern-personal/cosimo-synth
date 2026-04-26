@@ -862,6 +862,160 @@ test("seqfx_topbar_keeps_patterns_on_one_row_without_duplicate_draw_or_transport
     await page.close();
 });
 
+test("seqfx_renders_tasteful_decorative_accents_in_title_inspector_and_empty_state", async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
+    await loadSeqFxHarness(page);
+    await page.locator('[data-role="seqfx-root"]').waitFor();
+
+    const decor = await page.evaluate(() => {
+        const titleSigil = document.querySelector('[data-role="seqfx-title-sigil"]');
+        const titleSigilStyle = titleSigil ? getComputedStyle(titleSigil) : null;
+        const inspectorBullet = document.querySelector('[data-role="seqfx-inspector-bullet"]');
+        const inspectorBulletStyle = inspectorBullet ? getComputedStyle(inspectorBullet) : null;
+        const emptyIcon = document.querySelector('[data-role="seqfx-empty-icon"]');
+        const empty = document.querySelector('[data-role="seqfx-empty"]');
+        const emptyStyle = empty ? getComputedStyle(empty) : null;
+        const heading = document.querySelector(".seqfx-inspector-heading strong");
+        const headingContainer = document.querySelector(".seqfx-inspector-heading");
+        const inspectorRule = document.querySelector('[data-role="seqfx-inspector-rule"]');
+        const inspectorRuleStyle = inspectorRule ? getComputedStyle(inspectorRule) : null;
+        const topbar = document.querySelector(".seqfx-topbar");
+        return {
+            titleSigilTag: titleSigil?.tagName?.toLowerCase() ?? null,
+            titleSigilWidth: titleSigil ? Math.round(titleSigil.getBoundingClientRect().width) : 0,
+            titleSigilHeight: titleSigil ? Math.round(titleSigil.getBoundingClientRect().height) : 0,
+            titleSigilStrokes: titleSigil?.querySelectorAll("path").length ?? 0,
+            titleSigilColor: titleSigilStyle?.color ?? "",
+            inspectorBulletCssWidth: inspectorBulletStyle ? parseFloat(inspectorBulletStyle.width) : 0,
+            inspectorBulletCssHeight: inspectorBulletStyle ? parseFloat(inspectorBulletStyle.height) : 0,
+            inspectorBulletVisualWidth: inspectorBullet ? Math.round(inspectorBullet.getBoundingClientRect().width) : 0,
+            inspectorBulletTransform: inspectorBulletStyle?.transform ?? "",
+            inspectorHeadingHeight: heading ? heading.getBoundingClientRect().height : null,
+            inspectorHeadingFontSize: heading ? getComputedStyle(heading).fontSize : null,
+            inspectorRuleExists: Boolean(inspectorRule),
+            inspectorRuleHeight: inspectorRule ? Math.round(inspectorRule.getBoundingClientRect().height) : null,
+            inspectorRuleWidth: inspectorRule ? Math.round(inspectorRule.getBoundingClientRect().width) : 0,
+            inspectorRuleBackground: inspectorRuleStyle?.backgroundImage ?? "",
+            inspectorRuleStartsAfterStrong: inspectorRule && heading
+                ? Math.round(inspectorRule.getBoundingClientRect().left) >= Math.round(heading.getBoundingClientRect().right)
+                : false,
+            inspectorRuleEndsAtHeading: inspectorRule && headingContainer
+                ? Math.abs(inspectorRule.getBoundingClientRect().right - headingContainer.getBoundingClientRect().right) <= 1
+                : false,
+            emptyHasIcon: Boolean(emptyIcon),
+            emptyIconTag: emptyIcon?.tagName?.toLowerCase() ?? null,
+            emptyText: empty?.textContent?.trim() ?? "",
+            emptyDisplay: emptyStyle?.display ?? "",
+            topbarHeight: topbar ? topbar.getBoundingClientRect().height : null,
+        };
+    });
+
+    assert.equal(decor.titleSigilTag, "svg", "title sigil should render as an svg");
+    assert.ok(decor.titleSigilWidth >= 12 && decor.titleSigilWidth <= 24, `sigil width should be small, got ${decor.titleSigilWidth}px`);
+    assert.equal(decor.titleSigilHeight, decor.titleSigilWidth, "sigil should be square");
+    assert.equal(decor.titleSigilStrokes, 4, "step-sequencer sigil should have four bars");
+    assert.match(decor.titleSigilColor, /^rgba?\(/, "sigil color should resolve to a real color");
+    assert.equal(decor.inspectorBulletCssWidth, 6, "inspector bullet should be sized from a 6px square");
+    assert.equal(decor.inspectorBulletCssHeight, 6, "inspector bullet should be sized from a 6px square");
+    assert.ok(decor.inspectorBulletVisualWidth <= 9, `rotated inspector bullet should stay compact, got ${decor.inspectorBulletVisualWidth}px`);
+    assert.match(decor.inspectorBulletTransform, /matrix/, "inspector bullet should be rotated");
+    assert.equal(decor.inspectorHeadingFontSize, "13px", "inspector heading font size must remain compact");
+    assert.ok(decor.inspectorHeadingHeight <= 18, `inspector heading should remain compact, got ${decor.inspectorHeadingHeight}px`);
+    assert.equal(decor.inspectorRuleExists, true, "inspector heading should carry a trailing hairline rule");
+    assert.equal(decor.inspectorRuleHeight, 1, `inspector hairline rule should be a single pixel tall, got ${decor.inspectorRuleHeight}px`);
+    assert.ok(decor.inspectorRuleWidth >= 24, `inspector hairline rule should expand to fill the heading, got ${decor.inspectorRuleWidth}px`);
+    assert.match(decor.inspectorRuleBackground, /linear-gradient/, "inspector hairline should use a fading gradient");
+    assert.equal(decor.inspectorRuleStartsAfterStrong, true, "inspector hairline should sit after the heading text");
+    assert.equal(decor.inspectorRuleEndsAtHeading, true, "inspector hairline should reach the heading container's right edge");
+    assert.equal(decor.emptyHasIcon, true, "empty state should pair text with an icon");
+    assert.equal(decor.emptyIconTag, "svg", "empty state icon should render as an svg");
+    assert.equal(decor.emptyDisplay, "flex", "empty state should lay out icon and text on a row");
+    assert.equal(decor.emptyText, "Choose a lane cell to edit its mix and effect settings.");
+    assert.ok(decor.topbarHeight !== null && decor.topbarHeight <= 42, `topbar should remain compact, got ${decor.topbarHeight}px`);
+
+    await page.close();
+});
+
+test("seqfx_renders_mix_row_glyph_and_delete_block_glyph_with_compact_layout", async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
+    await loadSeqFxHarness(page);
+    await page.locator('[data-role="seqfx-root"]').waitFor();
+
+    await page.getByRole("button", { name: "Chain 4 step 5", exact: true }).click();
+    await page.locator('[data-role="seqfx-mix-row"]').waitFor();
+    await page.locator('[data-role="seqfx-delete-block"]').waitFor();
+
+    const decor = await page.evaluate(() => {
+        const mixRow = document.querySelector('[data-role="seqfx-mix-row"]');
+        const mixRowLabel = mixRow?.querySelector(".seqfx-mix-row__label");
+        const mixGlyph = document.querySelector('[data-role="seqfx-mix-glyph"]');
+        const mixGlyphStyle = mixGlyph ? getComputedStyle(mixGlyph) : null;
+        const deleteButton = document.querySelector('[data-role="seqfx-delete-block"]');
+        const deleteButtonStyle = deleteButton ? getComputedStyle(deleteButton) : null;
+        const deleteGlyph = document.querySelector('[data-role="seqfx-delete-glyph"]');
+        const deleteGlyphStyle = deleteGlyph ? getComputedStyle(deleteGlyph) : null;
+        const mixRowHeight = mixRow?.getBoundingClientRect().height ?? null;
+        const mixRowText = mixRowLabel?.textContent?.trim() ?? "";
+        const deleteText = deleteButton?.textContent?.trim() ?? "";
+
+        return {
+            mixGlyphTag: mixGlyph?.tagName?.toLowerCase() ?? null,
+            mixGlyphWidth: mixGlyph ? Math.round(mixGlyph.getBoundingClientRect().width) : 0,
+            mixGlyphHeight: mixGlyph ? Math.round(mixGlyph.getBoundingClientRect().height) : 0,
+            mixGlyphHasLine: Boolean(mixGlyph?.querySelector("line")),
+            mixGlyphHasThumb: Boolean(mixGlyph?.querySelector("circle")),
+            mixGlyphInsideLabel: Boolean(mixRowLabel?.contains(mixGlyph)),
+            mixGlyphLabelDisplay: mixRowLabel ? getComputedStyle(mixRowLabel).display : "",
+            mixGlyphSitsBeforeText: mixGlyph && mixRowLabel
+                ? mixGlyph.getBoundingClientRect().right <= mixRowLabel.getBoundingClientRect().right
+                : false,
+            mixGlyphColor: mixGlyphStyle?.color ?? "",
+            mixRowHeight,
+            mixRowText,
+            deleteGlyphTag: deleteGlyph?.tagName?.toLowerCase() ?? null,
+            deleteGlyphWidth: deleteGlyph ? Math.round(deleteGlyph.getBoundingClientRect().width) : 0,
+            deleteGlyphHeight: deleteGlyph ? Math.round(deleteGlyph.getBoundingClientRect().height) : 0,
+            deleteGlyphPathCount: deleteGlyph?.querySelectorAll("path").length ?? 0,
+            deleteGlyphInsideButton: Boolean(deleteButton?.contains(deleteGlyph)),
+            deleteGlyphSitsBeforeText: deleteGlyph && deleteButton
+                ? deleteGlyph.getBoundingClientRect().left < deleteButton.getBoundingClientRect().left + (deleteButton.getBoundingClientRect().width / 2)
+                : false,
+            deleteGlyphColor: deleteGlyphStyle?.color ?? "",
+            deleteButtonDisplay: deleteButtonStyle?.display ?? "",
+            deleteButtonHeight: deleteButton?.getBoundingClientRect().height ?? null,
+            deleteText,
+        };
+    });
+
+    assert.equal(decor.mixGlyphTag, "svg", "mix-row glyph should render as an svg");
+    assert.ok(decor.mixGlyphWidth >= 10 && decor.mixGlyphWidth <= 16, `mix glyph width should stay compact, got ${decor.mixGlyphWidth}px`);
+    assert.equal(decor.mixGlyphHeight, decor.mixGlyphWidth, "mix glyph should be square");
+    assert.equal(decor.mixGlyphHasLine, true, "mix glyph should include a slider track line");
+    assert.equal(decor.mixGlyphHasThumb, true, "mix glyph should include a slider thumb circle");
+    assert.equal(decor.mixGlyphInsideLabel, true, "mix glyph should sit inside the label container");
+    assert.ok(
+        ["flex", "inline-flex"].includes(decor.mixGlyphLabelDisplay),
+        `mix-row label should align icon and text with flex, got ${decor.mixGlyphLabelDisplay}`,
+    );
+    assert.equal(decor.mixGlyphSitsBeforeText, true, "mix glyph should sit alongside the label text");
+    assert.match(decor.mixGlyphColor, /^rgba?\(/, "mix glyph color should resolve to a real color");
+    assert.equal(decor.mixRowText, "Block mix", "mix-row label text should remain unchanged");
+    assert.ok(decor.mixRowHeight !== null && decor.mixRowHeight <= 36, `mix row should stay compact, got ${decor.mixRowHeight}px`);
+
+    assert.equal(decor.deleteGlyphTag, "svg", "delete glyph should render as an svg");
+    assert.ok(decor.deleteGlyphWidth >= 10 && decor.deleteGlyphWidth <= 14, `delete glyph width should stay compact, got ${decor.deleteGlyphWidth}px`);
+    assert.equal(decor.deleteGlyphHeight, decor.deleteGlyphWidth, "delete glyph should be square");
+    assert.equal(decor.deleteGlyphPathCount, 1, "delete glyph should be a single combined path");
+    assert.equal(decor.deleteGlyphInsideButton, true, "delete glyph should sit inside the delete button");
+    assert.equal(decor.deleteGlyphSitsBeforeText, true, "delete glyph should sit before the label text");
+    assert.match(decor.deleteGlyphColor, /^rgba?\(/, "delete glyph color should resolve to a real color");
+    assert.equal(decor.deleteButtonDisplay, "flex", "delete button should align glyph and text via flex");
+    assert.ok(decor.deleteButtonHeight !== null && decor.deleteButtonHeight <= 40, `delete button should stay compact, got ${decor.deleteButtonHeight}px`);
+    assert.equal(decor.deleteText, "Delete Block", "delete button label should remain readable");
+
+    await page.close();
+});
+
 test("seqfx_grid_resizes_with_css_after_viewport_round_trip", async () => {
     const page = await browser.newPage({ viewport: { width: 567, height: 776 } });
     await loadSeqFxHarness(page);
@@ -1022,6 +1176,7 @@ test("seqfx_bar_frames_sit_behind_both_bars_with_arrow_only_on_first_bar", async
         const secondOuter = secondFrameElement.querySelector('[data-role="seqfx-bar-frame-outer-body"]');
         const secondPlate = secondFrameElement.querySelector('[data-role="seqfx-bar-frame-plate"]');
         const secondPlateFilter = document.querySelector("#seqfx-bar-frame-plate-material-1");
+        const cornerGlyph = frameElement.querySelector('[data-role="seqfx-bar-frame-corner-glyph"]');
         const rectFor = (node) => {
             const rect = node.getBoundingClientRect();
             return {
@@ -1045,8 +1200,14 @@ test("seqfx_bar_frames_sit_behind_both_bars_with_arrow_only_on_first_bar", async
             barTwoHasFrame: Boolean(secondFrameElement),
             barTwoHasInnerFrame: Boolean(secondInner),
             cellStack: rectFor(barLanes),
+            accentCornerGlyphCount: frameElement.querySelectorAll('[data-role="seqfx-bar-frame-corner-glyph"].is-accent').length,
+            cornerGlyphCount: frameElement.querySelectorAll('[data-role="seqfx-bar-frame-corner-glyph"]').length,
+            cornerGlyphStroke: getComputedStyle(cornerGlyph).stroke,
+            cornerGlyphPathSignatures: [...frameElement.querySelectorAll('[data-role="seqfx-bar-frame-corner-glyph"]')]
+                .map((glyph) => [...glyph.querySelectorAll("path")].map((path) => path.getAttribute("d")).join("|")),
             firstCellBorderTopStyle: getComputedStyle(firstCell).borderTopStyle,
             firstCellBoxShadow: getComputedStyle(firstCell).boxShadow,
+            flowGlyphCount: frameElement.querySelectorAll('[data-role="seqfx-bar-frame-flow-glyph"]').length,
             frame: rectFor(frameElement),
             frameHasArrow: frameElement.getAttribute("data-has-arrow") ?? "",
             framePointerEvents: getComputedStyle(frameElement).pointerEvents,
@@ -1075,6 +1236,9 @@ test("seqfx_bar_frames_sit_behind_both_bars_with_arrow_only_on_first_bar", async
             plateCoversTopBand: plate.isPointInFill(new DOMPoint(innerBox.x + (innerBox.width * 0.5), innerBox.y - 4)),
             plateDoesNotCoverCellHole: plate.isPointInFill(new DOMPoint(innerBox.x + (innerBox.width * 0.5), innerBox.y + (innerBox.height * 0.5))),
             secondCellStack: rectFor(secondBarLanes),
+            secondAccentCornerGlyphCount: secondFrameElement.querySelectorAll('[data-role="seqfx-bar-frame-corner-glyph"].is-accent').length,
+            secondCornerGlyphCount: secondFrameElement.querySelectorAll('[data-role="seqfx-bar-frame-corner-glyph"]').length,
+            secondFlowGlyphCount: secondFrameElement.querySelectorAll('[data-role="seqfx-bar-frame-flow-glyph"]').length,
             secondFrame: rectFor(secondFrameElement),
             secondFrameHasArrow: secondFrameElement.getAttribute("data-has-arrow") ?? "",
             secondInnerPath: rectFor(secondInner),
@@ -1095,6 +1259,14 @@ test("seqfx_bar_frames_sit_behind_both_bars_with_arrow_only_on_first_bar", async
     assert.equal(layout.frameHasArrow, "true");
     assert.equal(layout.secondFrameHasArrow, "false");
     assert.equal(layout.barTwoHasArrow, false);
+    assert.equal(layout.cornerGlyphCount, 4);
+    assert.equal(layout.flowGlyphCount, 0);
+    assert.equal(layout.secondCornerGlyphCount, 4);
+    assert.equal(layout.secondFlowGlyphCount, 0);
+    assert.equal(layout.accentCornerGlyphCount, 1);
+    assert.equal(layout.secondAccentCornerGlyphCount, 1);
+    assert.equal(new Set(layout.cornerGlyphPathSignatures).size, 4);
+    assert.match(layout.cornerGlyphStroke, /rgba\(28,\s*28,\s*28,/);
     assert.equal(layout.firstCellBorderTopStyle, "none");
     assert.notEqual(layout.firstCellBoxShadow, "none");
     assert.equal(layout.frameTagName, "DIV");
@@ -1602,7 +1774,7 @@ test("seqfx_grid_cell_and_inspector_edits_send_complete_pattern_uploads", async 
             inspectorWidth: inspector?.getBoundingClientRect().width ?? 0,
         };
     });
-    assert.equal(sidebarFit.backgroundColor, "rgb(228, 222, 211)");
+    assert.match(sidebarFit.backgroundColor, /rgba\(/, "filter editor should use the translucent material island fill");
     assert.equal(sidebarFit.borderTopStyle, "none");
     assert.ok(
         sidebarFit.editorWidth <= sidebarFit.inspectorWidth,
