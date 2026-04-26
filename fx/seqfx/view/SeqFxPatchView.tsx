@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent, type PointerEvent } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent, type PointerEvent } from "react";
 
 import type { PatchConnectionLike } from "../../../ui/shared/cmajor-react";
 import { createEffectHeader } from "../../../ui/shared/effects/effect-header";
@@ -771,6 +771,23 @@ const STEP_NUMBERS = buildStepNumbers();
 const SEQFX_RATE_CELLS_PER_BEAT = [2, 4, 8] as const;
 const SEQFX_BEATS_PER_BAR = 4;
 const SEQFX_GRID_STEPS_PER_ROW = 16;
+const SEQFX_GRID_BAR_COUNT = Math.ceil(SEQFX_STEP_COUNT / SEQFX_GRID_STEPS_PER_ROW);
+const STEP_BARS = Array.from({ length: SEQFX_GRID_BAR_COUNT }, (_unused, barIndex) => (
+    STEP_NUMBERS.slice(barIndex * SEQFX_GRID_STEPS_PER_ROW, (barIndex + 1) * SEQFX_GRID_STEPS_PER_ROW)
+));
+const SEQFX_BAR_FRAME_INNER_X_PX = 8;
+const SEQFX_BAR_FRAME_INNER_Y_PX = 4;
+const SEQFX_BAR_FRAME_GAP_PX = 8;
+const SEQFX_BAR_FRAME_NUMBER_BAND_PX = 20;
+const SEQFX_BAR_FRAME_ARROW_HEIGHT_PX = 25;
+const SEQFX_BAR_FRAME_ARROW_HALF_WIDTH_PX = 12;
+const SEQFX_BAR_FRAME_ARROW_SHAFT_HALF_WIDTH_PX = 4;
+const SEQFX_BAR_FRAME_ARROW_SHAFT_HEIGHT_PX = 4;
+const SEQFX_BAR_FRAME_BEVEL_PX = 12;
+const SEQFX_BAR_FRAME_OUTER_BOTTOM_BEVEL_PX = SEQFX_BAR_FRAME_BEVEL_PX
+    + (SEQFX_BAR_FRAME_GAP_PX * (2 - Math.SQRT2));
+const SEQFX_BAR_FRAME_STROKE_INSET_PX = 1;
+
 function cellsPerBeatForRateIndex(rateIndex: number) {
     return SEQFX_RATE_CELLS_PER_BEAT[Math.min(2, Math.max(0, Math.round(rateIndex)))] ?? 4;
 }
@@ -781,12 +798,184 @@ function gridColumnForStep(step: number) {
 }
 
 function gridRowForStep(step: number) {
+    return 1;
+}
+
+function barIndexForStep(step: number) {
     const clampedStep = Math.min(SEQFX_STEP_COUNT - 1, Math.max(0, step));
-    return Math.floor(clampedStep / SEQFX_GRID_STEPS_PER_ROW) + 1;
+    return Math.floor(clampedStep / SEQFX_GRID_STEPS_PER_ROW);
+}
+
+function laneTrackRefKey(lane: number, barIndex: number) {
+    return `${lane}:${barIndex}`;
 }
 
 function cellRefKey(lane: number, step: number) {
     return `${lane}:${step}`;
+}
+
+function buildBeveledRectPath(left: number, top: number, right: number, bottom: number, bevel: number) {
+    return [
+        `M ${left + bevel} ${top}`,
+        `L ${right - bevel} ${top}`,
+        `L ${right} ${top + bevel}`,
+        `L ${right} ${bottom - bevel}`,
+        `L ${right - bevel} ${bottom}`,
+        `L ${left + bevel} ${bottom}`,
+        `L ${left} ${bottom - bevel}`,
+        `L ${left} ${top + bevel}`,
+        "Z",
+    ].join(" ");
+}
+
+function buildOuterFrameBodyPath(
+    left: number,
+    top: number,
+    right: number,
+    bottom: number,
+    topBevel: number,
+    bottomBevel: number,
+    centerX: number,
+) {
+    const shaftLeft = centerX - SEQFX_BAR_FRAME_ARROW_SHAFT_HALF_WIDTH_PX;
+    const shaftRight = centerX + SEQFX_BAR_FRAME_ARROW_SHAFT_HALF_WIDTH_PX;
+
+    return [
+        `M ${shaftRight} ${bottom}`,
+        `L ${right - bottomBevel} ${bottom}`,
+        `L ${right} ${bottom - bottomBevel}`,
+        `L ${right} ${top + topBevel}`,
+        `L ${right - topBevel} ${top}`,
+        `L ${left + topBevel} ${top}`,
+        `L ${left} ${top + topBevel}`,
+        `L ${left} ${bottom - bottomBevel}`,
+        `L ${left + bottomBevel} ${bottom}`,
+        `L ${shaftLeft} ${bottom}`,
+    ].join(" ");
+}
+
+function buildOuterFrameArrowPath(bottom: number, centerX: number) {
+    const shaftLeft = centerX - SEQFX_BAR_FRAME_ARROW_SHAFT_HALF_WIDTH_PX;
+    const shaftRight = centerX + SEQFX_BAR_FRAME_ARROW_SHAFT_HALF_WIDTH_PX;
+    const arrowLeft = centerX - SEQFX_BAR_FRAME_ARROW_HALF_WIDTH_PX;
+    const arrowRight = centerX + SEQFX_BAR_FRAME_ARROW_HALF_WIDTH_PX;
+    const shaftBottom = bottom + SEQFX_BAR_FRAME_ARROW_SHAFT_HEIGHT_PX;
+    const arrowTipY = bottom + SEQFX_BAR_FRAME_ARROW_HEIGHT_PX;
+
+    return [
+        `M ${shaftLeft} ${bottom}`,
+        `L ${shaftLeft} ${shaftBottom}`,
+        `L ${arrowLeft} ${shaftBottom}`,
+        `L ${centerX} ${arrowTipY}`,
+        `L ${arrowRight} ${shaftBottom}`,
+        `L ${shaftRight} ${shaftBottom}`,
+        `L ${shaftRight} ${bottom}`,
+    ].join(" ");
+}
+
+function SeqFxBarFrame() {
+    const frameRef = useRef<HTMLDivElement | null>(null);
+    const [cellStackSize, setCellStackSize] = useState({ width: 1, height: 1 });
+
+    useLayoutEffect(() => {
+        const cellStack = frameRef.current?.parentElement;
+        if (!cellStack) {
+            return;
+        }
+
+        const update = () => {
+            const bounds = cellStack.getBoundingClientRect();
+            setCellStackSize({
+                width: Math.max(1, bounds.width || 1),
+                height: Math.max(1, bounds.height || 1),
+            });
+        };
+
+        const observer = new ResizeObserver(update);
+        observer.observe(cellStack);
+        const updateOnResize = () => {
+            update();
+            requestAnimationFrame(update);
+        };
+        window.addEventListener("resize", updateOnResize);
+        update();
+
+        return () => {
+            observer.disconnect();
+            window.removeEventListener("resize", updateOnResize);
+        };
+    }, []);
+
+    const frameLeft = -(SEQFX_BAR_FRAME_INNER_X_PX + SEQFX_BAR_FRAME_GAP_PX);
+    const frameTop = -(SEQFX_BAR_FRAME_NUMBER_BAND_PX + SEQFX_BAR_FRAME_GAP_PX + SEQFX_BAR_FRAME_INNER_Y_PX);
+    const frameWidth = cellStackSize.width + (2 * (SEQFX_BAR_FRAME_INNER_X_PX + SEQFX_BAR_FRAME_GAP_PX));
+    const outerBottom = SEQFX_BAR_FRAME_NUMBER_BAND_PX
+        + SEQFX_BAR_FRAME_GAP_PX
+        + SEQFX_BAR_FRAME_INNER_Y_PX
+        + cellStackSize.height
+        + SEQFX_BAR_FRAME_INNER_Y_PX
+        + SEQFX_BAR_FRAME_GAP_PX;
+    const frameHeight = outerBottom + SEQFX_BAR_FRAME_ARROW_HEIGHT_PX + SEQFX_BAR_FRAME_STROKE_INSET_PX;
+    const innerLeft = SEQFX_BAR_FRAME_GAP_PX;
+    const innerTop = SEQFX_BAR_FRAME_NUMBER_BAND_PX + SEQFX_BAR_FRAME_GAP_PX;
+    const innerRight = innerLeft + (2 * SEQFX_BAR_FRAME_INNER_X_PX) + cellStackSize.width;
+    const innerBottom = innerTop + (2 * SEQFX_BAR_FRAME_INNER_Y_PX) + cellStackSize.height;
+    const outerLeft = innerLeft - SEQFX_BAR_FRAME_GAP_PX;
+    const outerTop = SEQFX_BAR_FRAME_STROKE_INSET_PX;
+    const outerRight = innerRight + SEQFX_BAR_FRAME_GAP_PX;
+    const visibleOuterBottom = innerBottom + SEQFX_BAR_FRAME_GAP_PX;
+    const centerX = frameWidth * 0.5;
+
+    return (
+        <div
+            className="seqfx-bar-frame"
+            data-role="seqfx-bar-frame"
+            ref={frameRef}
+            style={{
+                height: frameHeight,
+                left: frameLeft,
+                top: frameTop,
+                width: `calc(100% + ${2 * (SEQFX_BAR_FRAME_INNER_X_PX + SEQFX_BAR_FRAME_GAP_PX)}px)`,
+            }}
+        >
+            <svg
+                aria-hidden="true"
+                className="seqfx-bar-frame__svg"
+                focusable="false"
+                viewBox={`0 0 ${frameWidth} ${frameHeight}`}
+            >
+                <path
+                    className="seqfx-bar-frame__outer seqfx-bar-frame__outer-body"
+                    data-role="seqfx-bar-frame-outer-body"
+                    d={buildOuterFrameBodyPath(
+                        outerLeft,
+                        outerTop,
+                        outerRight,
+                        visibleOuterBottom,
+                        SEQFX_BAR_FRAME_BEVEL_PX,
+                        SEQFX_BAR_FRAME_OUTER_BOTTOM_BEVEL_PX,
+                        centerX,
+                    )}
+                />
+                <path
+                    className="seqfx-bar-frame__outer seqfx-bar-frame__outer-arrow"
+                    data-role="seqfx-bar-frame-outer-arrow"
+                    d={buildOuterFrameArrowPath(visibleOuterBottom, centerX)}
+                />
+                <path
+                    className="seqfx-bar-frame__inner"
+                    data-role="seqfx-bar-frame-inner"
+                    d={buildBeveledRectPath(
+                        innerLeft,
+                        innerTop,
+                        innerRight,
+                        innerBottom,
+                        SEQFX_BAR_FRAME_BEVEL_PX,
+                    )}
+                />
+            </svg>
+        </div>
+    );
 }
 
 function createGridGeometry(cellsPerBeat: number) {
@@ -800,6 +989,7 @@ function createGridGeometry(cellsPerBeat: number) {
     const blockSegments = (startStep: number, length: number) => {
         const lastStep = Math.min(SEQFX_STEP_COUNT - 1, startStep + length - 1);
         const segments: Array<{
+            barIndex: number;
             endStep: number;
             isEndSegment: boolean;
             startStep: number;
@@ -808,15 +998,16 @@ function createGridGeometry(cellsPerBeat: number) {
         let segmentStart = Math.min(SEQFX_STEP_COUNT - 1, Math.max(0, startStep));
 
         while (segmentStart <= lastStep) {
-            const row = gridRowForStep(segmentStart);
-            const rowEndStep = Math.min(lastStep, (row * SEQFX_GRID_STEPS_PER_ROW) - 1);
+            const barIndex = barIndexForStep(segmentStart);
+            const rowEndStep = Math.min(lastStep, ((barIndex + 1) * SEQFX_GRID_STEPS_PER_ROW) - 1);
             segments.push({
+                barIndex,
                 endStep: rowEndStep,
                 isEndSegment: rowEndStep === lastStep,
                 startStep: segmentStart,
                 style: {
                     gridColumn: `${gridColumnForStep(segmentStart)} / ${gridColumnForStep(rowEndStep) + 1}`,
-                    gridRow: `${row}`,
+                    gridRow: "1",
                 },
             });
             segmentStart = rowEndStep + 1;
@@ -1644,7 +1835,7 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
     const cellsPerBeat = useMemo(() => cellsPerBeatForRateIndex(rateIndex), [rateIndex]);
     const gridGeometry = useMemo(() => createGridGeometry(cellsPerBeat), [cellsPerBeat]);
     const gridShellClassName = `seqfx-grid-shell seqfx-grid--beat-${cellsPerBeat}`;
-    const laneTrackRefs = useRef(new Map<number, HTMLDivElement>());
+    const laneTrackRefs = useRef(new Map<string, { lane: number; node: HTMLDivElement }>());
     const cellRefs = useRef(new Map<string, HTMLDivElement>());
     const gestureRef = useRef<BlockGesture | null>(null);
     const optionKeyRef = useRef(false);
@@ -1904,8 +2095,12 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
         };
 
         const targetLaneForPointer = (event: globalThis.PointerEvent, fallbackLane: number) => {
-            const laneEntries = [...laneTrackRefs.current.entries()]
-                .sort(([leftLane], [rightLane]) => leftLane - rightLane);
+            const laneEntries = [...laneTrackRefs.current.values()]
+                .sort((left, right) => {
+                    const leftBounds = left.node.getBoundingClientRect();
+                    const rightBounds = right.node.getBoundingClientRect();
+                    return leftBounds.top - rightBounds.top || left.lane - right.lane;
+                });
 
             if (laneEntries.length === 0) {
                 return fallbackLane;
@@ -1914,8 +2109,8 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
             let closestLane = fallbackLane;
             let closestDistance = Number.POSITIVE_INFINITY;
 
-            for (const [lane, track] of laneEntries) {
-                const bounds = track.getBoundingClientRect();
+            for (const { lane, node } of laneEntries) {
+                const bounds = node.getBoundingClientRect();
                 if (event.clientY >= bounds.top && event.clientY <= bounds.bottom) {
                     return lane;
                 }
@@ -3106,159 +3301,174 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
 
             <section className="seqfx-workspace">
                 <div className={gridShellClassName} aria-label="Effect sequence grid">
-                    <div className="seqfx-step-header">
-                        <div className="seqfx-lane-spacer" />
-                        <div className="seqfx-step-track">
-                            {STEP_NUMBERS.map((step) => (
-                                <div
-                                    className={playheadStep === step ? "seqfx-step-number is-playhead" : "seqfx-step-number"}
-                                    key={step}
-                                    style={gridGeometry.stepNumberStyle(step)}
-                                >
-                                    {step + 1}
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                    {SEQFX_LANE_NAMES.map((laneName, lane) => {
-                        const laneBlocks = getSeqFxLaneBlocks(renderedPatternState, lane);
-                        const invalidBlocks = invalidDropTarget?.patternIndex === selectedPattern && invalidDropTarget.lane === lane
-                            ? invalidDropTarget.blocks
-                            : [];
-
-                        return (
-                            <div className="seqfx-lane-row" key={laneName}>
-                                <div className="seqfx-lane-label">{laneName}</div>
-                                <div
-                                    className="seqfx-lane-track"
-                                    ref={(node) => {
-                                        if (node) {
-                                            laneTrackRefs.current.set(lane, node);
-                                        } else {
-                                            laneTrackRefs.current.delete(lane);
-                                        }
-                                    }}
-                                >
-                                    {STEP_NUMBERS.map((step) => {
-                                        const cell = renderedPatternState.lanes[lane].steps[step];
-                                        const selected = activeSelection?.lane === lane && activeSelection.steps.includes(step);
-                                        const className = [
-                                            "seqfx-cell",
-                                            gridGeometry.isAltBar(step) ? "is-alt-bar" : "",
-                                            cell.active ? "is-covered" : "",
-                                            selected ? "is-selected" : "",
-                                            playheadStep === step ? "is-playhead" : "",
-                                        ].filter(Boolean).join(" ");
-
-                                        return (
-                                            <div
-                                                aria-label={`${laneName} step ${step + 1}`}
-                                                aria-pressed={cell.active}
-                                                className={className}
-                                                data-role="seqfx-cell"
-                                                data-lane={lane}
-                                                data-step={step}
-                                                key={step}
-                                                onDoubleClick={(event) => handleCellDoubleClick(event, lane, step)}
-                                                onKeyDown={(event) => handleCellKeyDown(event, lane, step)}
-                                                onPointerDown={(event) => handleCellPointerDown(event, lane, step)}
-                                                ref={(node) => {
-                                                    const key = cellRefKey(lane, step);
-                                                    if (node) {
-                                                        cellRefs.current.set(key, node);
-                                                    } else {
-                                                        cellRefs.current.delete(key);
-                                                    }
-                                                }}
-                                                role="button"
-                                                style={gridGeometry.cellStyle(step)}
-                                                tabIndex={0}
-                                            >
-                                                <span />
-                                            </div>
-                                        );
-                                    })}
-                                    {invalidBlocks.flatMap((block) => (
-                                        gridGeometry.blockSegments(block.startStep, block.length).map((segment) => (
-                                            <div
-                                                aria-hidden="true"
-                                                className="seqfx-invalid-drop"
-                                                data-role="seqfx-invalid-drop"
-                                                data-lane={lane}
-                                                data-start={block.startStep}
-                                                data-segment-start={segment.startStep}
-                                                key={`invalid:${lane}:${block.startStep}:${segment.startStep}`}
-                                                style={segment.style}
-                                            />
-                                        ))
+                    {STEP_BARS.map((barSteps, barIndex) => (
+                        <div className="seqfx-bar-section" data-role="seqfx-bar-section" data-bar={barIndex} key={barIndex}>
+                            <div className="seqfx-step-header">
+                                <div className="seqfx-lane-spacer" />
+                                <div className="seqfx-step-track">
+                                    {barSteps.map((step) => (
+                                        <div
+                                            className={playheadStep === step ? "seqfx-step-number is-playhead" : "seqfx-step-number"}
+                                            key={step}
+                                            style={gridGeometry.stepNumberStyle(step)}
+                                        >
+                                            {step + 1}
+                                        </div>
                                     ))}
-                                    {laneBlocks.map((block) => {
-                                        const blockIsPreview = patternPreview?.patternIndex === selectedPattern
-                                            && patternPreview.lane === lane
-                                            && copyPreviewStartSteps.has(block.startStep);
-                                        const selected = activeSelection?.lane === lane
-                                            && (
-                                                activeSelection.blockStartSteps?.includes(block.startStep)
-                                                || (
-                                                    activeSelection.steps[0] === block.startStep
-                                                    && activeSelection.steps.length === block.length
-                                                )
-                                            );
-                                        const className = [
-                                            "seqfx-block",
-                                            blockIsPreview ? "is-copy-preview" : "",
-                                            selected ? "is-selected" : "",
-                                            playheadStep !== null && playheadStep >= block.startStep && playheadStep <= block.endStep ? "is-playhead" : "",
-                                        ].filter(Boolean).join(" ");
-                                        const effectName = SEQFX_EFFECT_TYPE_NAMES[block.effectType] ?? "Effect";
-                                        const effectShortName = SEQFX_EFFECT_TYPE_SHORT_NAMES[block.effectType] ?? "";
-                                        const ariaLabel = block.length === 1
-                                            ? `${laneName} ${effectName} block ${block.startStep + 1}`
-                                            : `${laneName} ${effectName} block ${block.startStep + 1}-${block.endStep + 1}`;
-
-                                        return gridGeometry.blockSegments(block.startStep, block.length).map((segment) => {
-                                            const primarySegment = segment.startStep === block.startStep;
-                                            return (
-                                                <div
-                                                    aria-label={primarySegment ? ariaLabel : undefined}
-                                                    className={className}
-                                                    data-effect={block.effectType}
-                                                    data-role={primarySegment ? "seqfx-block" : "seqfx-block-segment"}
-                                                    data-lane={lane}
-                                                    data-preview={blockIsPreview ? "true" : undefined}
-                                                    data-start={block.startStep}
-                                                    data-segment-start={segment.startStep}
-                                                    key={`${lane}:${block.startStep}:${segment.startStep}`}
-                                                    onDoubleClick={(event) => handleBlockDoubleClick(event, lane, block.startStep)}
-                                                    onKeyDown={primarySegment
-                                                        ? (event) => handleBlockKeyDown(event, lane, block.startStep, block.length)
-                                                        : undefined}
-                                                    onPointerDown={(event) => handleBlockPointerDown(event, lane, block.startStep, block.length)}
-                                                    role={primarySegment ? "button" : undefined}
-                                                    style={segment.style}
-                                                    tabIndex={primarySegment ? 0 : undefined}
-                                                >
-                                                    <span className="seqfx-block-fill">
-                                                        <span>{effectShortName}</span>
-                                                    </span>
-                                                    {segment.isEndSegment ? (
-                                                        <span
-                                                            aria-hidden="true"
-                                                            className="seqfx-block-resize"
-                                                            data-role="seqfx-block-resize"
-                                                            data-lane={lane}
-                                                            data-start={block.startStep}
-                                                            onPointerDown={(event) => handleResizePointerDown(event, lane, block.startStep, block.length)}
-                                                        />
-                                                    ) : null}
-                                                </div>
-                                            );
-                                        });
-                                    })}
                                 </div>
                             </div>
-                        );
-                    })}
+                            <div className="seqfx-bar-lanes" data-role="seqfx-bar-lanes" data-bar={barIndex}>
+                                {barIndex === 0 ? <SeqFxBarFrame /> : null}
+                                {SEQFX_LANE_NAMES.map((laneName, lane) => {
+                                    const laneBlocks = getSeqFxLaneBlocks(renderedPatternState, lane);
+                                    const invalidBlocks = invalidDropTarget?.patternIndex === selectedPattern && invalidDropTarget.lane === lane
+                                        ? invalidDropTarget.blocks
+                                        : [];
+
+                                    return (
+                                        <div className="seqfx-lane-row" key={`${barIndex}:${laneName}`}>
+                                            <div className="seqfx-lane-label">{laneName}</div>
+                                            <div
+                                                className="seqfx-lane-track"
+                                                data-role="seqfx-lane-track"
+                                                data-bar={barIndex}
+                                                data-lane={lane}
+                                                ref={(node) => {
+                                                    const key = laneTrackRefKey(lane, barIndex);
+                                                    if (node) {
+                                                        laneTrackRefs.current.set(key, { lane, node });
+                                                    } else {
+                                                        laneTrackRefs.current.delete(key);
+                                                    }
+                                                }}
+                                            >
+                                                {barSteps.map((step) => {
+                                                    const cell = renderedPatternState.lanes[lane].steps[step];
+                                                    const selected = activeSelection?.lane === lane && activeSelection.steps.includes(step);
+                                                    const className = [
+                                                        "seqfx-cell",
+                                                        gridGeometry.isAltBar(step) ? "is-alt-bar" : "",
+                                                        cell.active ? "is-covered" : "",
+                                                        selected ? "is-selected" : "",
+                                                        playheadStep === step ? "is-playhead" : "",
+                                                    ].filter(Boolean).join(" ");
+
+                                                    return (
+                                                        <div
+                                                            aria-label={`${laneName} step ${step + 1}`}
+                                                            aria-pressed={cell.active}
+                                                            className={className}
+                                                            data-role="seqfx-cell"
+                                                            data-lane={lane}
+                                                            data-step={step}
+                                                            key={step}
+                                                            onDoubleClick={(event) => handleCellDoubleClick(event, lane, step)}
+                                                            onKeyDown={(event) => handleCellKeyDown(event, lane, step)}
+                                                            onPointerDown={(event) => handleCellPointerDown(event, lane, step)}
+                                                            ref={(node) => {
+                                                                const key = cellRefKey(lane, step);
+                                                                if (node) {
+                                                                    cellRefs.current.set(key, node);
+                                                                } else {
+                                                                    cellRefs.current.delete(key);
+                                                                }
+                                                            }}
+                                                            role="button"
+                                                            style={gridGeometry.cellStyle(step)}
+                                                            tabIndex={0}
+                                                        >
+                                                            <span />
+                                                        </div>
+                                                    );
+                                                })}
+                                                {invalidBlocks.flatMap((block) => (
+                                                    gridGeometry.blockSegments(block.startStep, block.length)
+                                                        .filter((segment) => segment.barIndex === barIndex)
+                                                        .map((segment) => (
+                                                            <div
+                                                                aria-hidden="true"
+                                                                className="seqfx-invalid-drop"
+                                                                data-role="seqfx-invalid-drop"
+                                                                data-lane={lane}
+                                                                data-start={block.startStep}
+                                                                data-segment-start={segment.startStep}
+                                                                key={`invalid:${lane}:${block.startStep}:${segment.startStep}`}
+                                                                style={segment.style}
+                                                            />
+                                                        ))
+                                                ))}
+                                                {laneBlocks.map((block) => {
+                                                    const blockIsPreview = patternPreview?.patternIndex === selectedPattern
+                                                        && patternPreview.lane === lane
+                                                        && copyPreviewStartSteps.has(block.startStep);
+                                                    const selected = activeSelection?.lane === lane
+                                                        && (
+                                                            activeSelection.blockStartSteps?.includes(block.startStep)
+                                                            || (
+                                                                activeSelection.steps[0] === block.startStep
+                                                                && activeSelection.steps.length === block.length
+                                                            )
+                                                        );
+                                                    const className = [
+                                                        "seqfx-block",
+                                                        blockIsPreview ? "is-copy-preview" : "",
+                                                        selected ? "is-selected" : "",
+                                                        playheadStep !== null && playheadStep >= block.startStep && playheadStep <= block.endStep ? "is-playhead" : "",
+                                                    ].filter(Boolean).join(" ");
+                                                    const effectName = SEQFX_EFFECT_TYPE_NAMES[block.effectType] ?? "Effect";
+                                                    const effectShortName = SEQFX_EFFECT_TYPE_SHORT_NAMES[block.effectType] ?? "";
+                                                    const ariaLabel = block.length === 1
+                                                        ? `${laneName} ${effectName} block ${block.startStep + 1}`
+                                                        : `${laneName} ${effectName} block ${block.startStep + 1}-${block.endStep + 1}`;
+
+                                                    return gridGeometry.blockSegments(block.startStep, block.length)
+                                                        .filter((segment) => segment.barIndex === barIndex)
+                                                        .map((segment) => {
+                                                            const primarySegment = segment.startStep === block.startStep;
+                                                            return (
+                                                                <div
+                                                                    aria-label={primarySegment ? ariaLabel : undefined}
+                                                                    className={className}
+                                                                    data-effect={block.effectType}
+                                                                    data-role={primarySegment ? "seqfx-block" : "seqfx-block-segment"}
+                                                                    data-lane={lane}
+                                                                    data-preview={blockIsPreview ? "true" : undefined}
+                                                                    data-start={block.startStep}
+                                                                    data-segment-start={segment.startStep}
+                                                                    key={`${lane}:${block.startStep}:${segment.startStep}`}
+                                                                    onDoubleClick={(event) => handleBlockDoubleClick(event, lane, block.startStep)}
+                                                                    onKeyDown={primarySegment
+                                                                        ? (event) => handleBlockKeyDown(event, lane, block.startStep, block.length)
+                                                                        : undefined}
+                                                                    onPointerDown={(event) => handleBlockPointerDown(event, lane, block.startStep, block.length)}
+                                                                    role={primarySegment ? "button" : undefined}
+                                                                    style={segment.style}
+                                                                    tabIndex={primarySegment ? 0 : undefined}
+                                                                >
+                                                                    <span className="seqfx-block-fill">
+                                                                        <span>{effectShortName}</span>
+                                                                    </span>
+                                                                    {segment.isEndSegment ? (
+                                                                        <span
+                                                                            aria-hidden="true"
+                                                                            className="seqfx-block-resize"
+                                                                            data-role="seqfx-block-resize"
+                                                                            data-lane={lane}
+                                                                            data-start={block.startStep}
+                                                                            onPointerDown={(event) => handleResizePointerDown(event, lane, block.startStep, block.length)}
+                                                                        />
+                                                                    ) : null}
+                                                                </div>
+                                                            );
+                                                        });
+                                                })}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    ))}
                 </div>
 
                 <aside className="seqfx-inspector" data-role="seqfx-inspector">

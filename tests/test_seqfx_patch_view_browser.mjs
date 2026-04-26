@@ -128,6 +128,17 @@ function expectedGridGeometry(trackWidth, cellsPerBeat) {
     };
 }
 
+function pathPointsFromD(pathData) {
+    const values = [...pathData.matchAll(/-?\d+(?:\.\d+)?/g)].map((match) => Number(match[0]));
+    const points = [];
+
+    for (let index = 0; index < values.length; index += 2) {
+        points.push({ x: values[index], y: values[index + 1] });
+    }
+
+    return points;
+}
+
 async function boundingBoxForCell(page, lane, step) {
     const box = await page.locator(`[data-role="seqfx-cell"][data-lane="${lane}"][data-step="${step}"]`).boundingBox();
     assert.ok(box, `expected lane ${lane} step ${step} to have a bounding box`);
@@ -788,6 +799,8 @@ test("seqfx_topbar_keeps_patterns_on_one_row_without_duplicate_draw_or_transport
             grid: rectFor(".seqfx-grid-shell"),
             gridBackgroundColor: gridShellStyle.backgroundColor,
             gridBorderTopStyle: gridShellStyle.borderTopStyle,
+            gridPaddingLeft: parseFloat(gridShellStyle.paddingLeft),
+            gridPaddingRight: parseFloat(gridShellStyle.paddingRight),
             hoveredEffectIconColor: hoveredEffectIcon ? getComputedStyle(hoveredEffectIcon).color : "",
             hoveredEffectIconFilter: hoveredEffectIcon ? getComputedStyle(hoveredEffectIcon).filter : "",
             inspectorHeading: rectFor(".seqfx-inspector-heading strong"),
@@ -803,6 +816,7 @@ test("seqfx_topbar_keeps_patterns_on_one_row_without_duplicate_draw_or_transport
             presetRow: rectFor(".seqfx-preset-row"),
             rootBackgroundColor: getComputedStyle(document.querySelector('[data-role="seqfx-root"]')).backgroundColor,
             rootPadding: getComputedStyle(document.querySelector('[data-role="seqfx-root"]')).padding,
+            rootScrollWidth: document.documentElement.scrollWidth,
             selectedEffectIconColor: selectedEffectIcon ? getComputedStyle(selectedEffectIcon).color : "",
             selectedEffectIconFilter: selectedEffectIcon ? getComputedStyle(selectedEffectIcon).filter : "",
             snapshotCameraIconCount: snapshotLabel?.querySelectorAll(".snapshot-camera-icon").length ?? 0,
@@ -839,7 +853,9 @@ test("seqfx_topbar_keeps_patterns_on_one_row_without_duplicate_draw_or_transport
     assert.ok(layout.patterns.left >= layout.title.right, "pattern buttons should sit to the right of the title");
     assert.ok(layout.lastPatternRight <= layout.patterns.right + 1, "all pattern buttons should be visible at 567px");
     assert.equal(layout.laneLabelDisplay, "none");
-    assert.ok(layout.laneTrack.left - layout.grid.left <= 12, "grid cells should start near the shell's left edge");
+    assertClose(layout.laneTrack.left - layout.grid.left, layout.gridPaddingLeft, 1, "grid cells should start after the reserved frame padding");
+    assertClose(layout.grid.right - layout.laneTrack.right, layout.gridPaddingRight, 1, "grid cells should end before the reserved frame padding");
+    assert.ok(layout.rootScrollWidth <= layout.viewportWidth + 1, `page should not gain horizontal overflow, got ${layout.rootScrollWidth}px for ${layout.viewportWidth}px viewport`);
     assert.equal(layout.inspectorHeadingFontSize, "13px");
     assert.ok(layout.inspectorHeading.height <= 18, `expected compact inspector heading, got ${layout.inspectorHeading.height}px`);
 
@@ -872,7 +888,7 @@ test("seqfx_grid_resizes_with_css_after_viewport_round_trip", async () => {
     });
 
     const initial = await measureGrid();
-    await page.setViewportSize({ width: 1200, height: 776 });
+    await page.setViewportSize({ width: 840, height: 776 });
     await page.waitForFunction((initialCellWidth) => {
         const cell = document.querySelector('[data-role="seqfx-cell"][data-lane="0"][data-step="0"]');
         return cell && cell.getBoundingClientRect().width > initialCellWidth + 4;
@@ -950,17 +966,286 @@ test("seqfx_rate_one_grid_uses_beat_gutters_and_per_cell_bar_fill", async () => 
 
     const screenshot = parsePng(await page.screenshot({ type: "png" }));
     const sampleY = trackBox.y + (expected.cellSize / 2);
-    const secondRowSampleY = step17.y + (expected.cellSize / 2);
+    const alternateBarSample = await boundingBoxForCell(page, 1, 16);
     const evenCell = pixelAt(screenshot, trackBox.x + expected.lefts[0] + (expected.cellSize / 2), sampleY);
-    const oddCell = pixelAt(screenshot, trackBox.x + expected.lefts[16] + (expected.cellSize / 2), secondRowSampleY);
-    const secondRowBeatGutter = pixelAt(
+    const oddCell = pixelAt(screenshot, alternateBarSample.x + (alternateBarSample.width / 2), alternateBarSample.y + (alternateBarSample.height / 2));
+    const rowOneBeatGutter = pixelAt(
         screenshot,
-        trackBox.x + expected.lefts[19] + expected.cellSize + (SEQFX_BEAT_GAP_PX / 2),
-        secondRowSampleY,
+        trackBox.x + expected.lefts[3] + expected.cellSize + (SEQFX_BEAT_GAP_PX / 2),
+        sampleY,
     );
 
     assert.ok(colorDistance(evenCell, oddCell) >= 4, "alternate-bar cell fill should differ from ordinary cell fill");
-    assert.ok(colorDistance(secondRowBeatGutter, oddCell) > colorDistance(evenCell, oddCell), "beat-boundary gutter should not use alternate-bar fill");
+    assert.ok(colorDistance(rowOneBeatGutter, evenCell) >= 2, "beat-boundary gutter should not use ordinary cell fill");
+
+    await page.close();
+});
+
+test("seqfx_bar_one_frame_sits_behind_the_first_bar_without_measured_overlay", async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
+    await loadSeqFxHarness(page);
+    await page.locator('[data-role="seqfx-root"]').waitFor();
+    await page.waitForFunction(() => {
+        const frame = document.querySelector('[data-role="seqfx-bar-frame"]');
+        const lanes = document.querySelector('[data-role="seqfx-bar-lanes"][data-bar="0"]');
+        if (!frame || !lanes) return false;
+        return Math.abs(frame.getBoundingClientRect().width - (lanes.getBoundingClientRect().width + 32)) < 1;
+    });
+
+    const frame = page.locator('[data-role="seqfx-bar-frame"]');
+    assert.equal(await frame.count(), 1, "bar frame should render only for the first bar");
+
+    const layout = await page.evaluate(() => {
+        const frameElement = document.querySelector('[data-role="seqfx-bar-frame"]');
+        const barOne = document.querySelector('[data-role="seqfx-bar-section"][data-bar="0"]');
+        const barTwo = document.querySelector('[data-role="seqfx-bar-section"][data-bar="1"]');
+        const barLanes = document.querySelector('[data-role="seqfx-bar-lanes"][data-bar="0"]');
+        const stepHeader = document.querySelector('[data-role="seqfx-bar-section"][data-bar="0"] .seqfx-step-header');
+        const laneRow = document.querySelector('[data-role="seqfx-bar-section"][data-bar="0"] .seqfx-lane-row');
+        const svg = frameElement.querySelector(".seqfx-bar-frame__svg");
+        const inner = document.querySelector('[data-role="seqfx-bar-frame-inner"]');
+        const outer = document.querySelector(".seqfx-bar-frame__outer");
+        const arrow = document.querySelector('[data-role="seqfx-bar-frame-outer-arrow"]');
+        const rectFor = (node) => {
+            const rect = node.getBoundingClientRect();
+            return {
+                bottom: rect.bottom,
+                height: rect.height,
+                left: rect.left,
+                right: rect.right,
+                top: rect.top,
+                width: rect.width,
+            };
+        };
+
+        return {
+            barOne: rectFor(barOne),
+            barTwoHasFrame: Boolean(barTwo.querySelector('[data-role="seqfx-bar-frame"]')),
+            barTwoHasInnerFrame: Boolean(barTwo.querySelector('[data-role="seqfx-bar-frame-inner"]')),
+            cellStack: rectFor(barLanes),
+            frame: rectFor(frameElement),
+            framePointerEvents: getComputedStyle(frameElement).pointerEvents,
+            frameTagName: frameElement.tagName,
+            frameZIndex: Number(getComputedStyle(frameElement).zIndex),
+            innerPath: rectFor(inner),
+            innerPathData: inner.getAttribute("d") ?? "",
+            innerPathTagName: inner.tagName,
+            innerStrokeWidth: getComputedStyle(inner).strokeWidth,
+            laneRowZIndex: Number(getComputedStyle(laneRow).zIndex),
+            outerArrowPath: arrow.getAttribute("d") ?? "",
+            outerPath: outer.getAttribute("d") ?? "",
+            outerStrokeWidth: getComputedStyle(outer).strokeWidth,
+            svg: rectFor(svg),
+            svgDisplay: getComputedStyle(svg).display,
+            stepHeaderZIndex: Number(getComputedStyle(stepHeader).zIndex),
+        };
+    });
+
+    assert.equal(layout.barTwoHasFrame, false);
+    assert.equal(layout.barTwoHasInnerFrame, false);
+    assert.equal(layout.frameTagName, "DIV");
+    assert.equal(layout.innerPathTagName, "path");
+    assert.equal(layout.framePointerEvents, "none");
+    assert.equal(layout.svgDisplay, "block");
+    assertClose(layout.svg.width, layout.frame.width, 1, "inner SVG should fill the positioned frame wrapper");
+    assertClose(layout.svg.height, layout.frame.height, 1, "inner SVG should fill the positioned frame wrapper");
+    assert.ok(layout.frameZIndex < layout.stepHeaderZIndex, "frame should sit behind step numbers");
+    assert.ok(layout.frameZIndex < layout.laneRowZIndex, "frame should sit behind cells and blocks");
+    assert.ok(layout.frame.left < layout.barOne.left, "frame should extend left of the first bar cells");
+    assert.ok(layout.frame.right > layout.barOne.right, "frame should extend right of the first bar cells");
+    assert.ok(layout.frame.top < layout.barOne.top, "frame should extend above the first bar to make room for step numbers");
+    assert.ok(layout.frame.bottom > layout.barOne.bottom, "frame arrow should protrude below the first bar into the bar gap");
+    assert.ok(layout.innerPath.left < layout.cellStack.left, "inner outline should derive from the cell stack plus horizontal padding");
+    assert.ok(layout.innerPath.right > layout.cellStack.right, "inner outline should derive from the cell stack plus horizontal padding");
+    assert.ok(layout.innerPath.top < layout.cellStack.top, "inner outline should derive from the cell stack plus top padding");
+    assert.ok(layout.innerPath.bottom > layout.cellStack.bottom, "inner outline should derive from the cell stack plus bottom padding");
+    assert.equal(layout.outerStrokeWidth, layout.innerStrokeWidth);
+    assert.match(layout.outerPath, /^M /);
+    assert.match(layout.outerArrowPath, /^M /);
+    {
+        const points = pathPointsFromD(layout.outerArrowPath);
+        const shaftWidth = points[6].x - points[0].x;
+        const headBaseWidth = points[4].x - points[2].x;
+        const headHeight = points[3].y - points[2].y;
+
+        assert.ok(shaftWidth <= 10, `expected a narrow arrow shaft, got ${shaftWidth}px`);
+        assert.ok(headBaseWidth <= 30, `expected a narrow arrow head, got ${headBaseWidth}px`);
+        assertClose(headHeight / headBaseWidth, Math.sqrt(3) / 2, 0.05, "arrow head should be close to equilateral");
+    }
+    {
+        const outerPoints = pathPointsFromD(layout.outerPath);
+        const innerPoints = pathPointsFromD(layout.innerPathData);
+        const innerLeft = innerPoints[6].x;
+        const innerRight = innerPoints[2].x;
+        const innerBottom = innerPoints[5].y;
+        const outerLeft = outerPoints[6].x;
+        const outerRight = outerPoints[2].x;
+        const outerBottom = outerPoints[1].y;
+        const bottomGap = outerBottom - innerBottom;
+        const leftGap = innerLeft - outerLeft;
+        const rightGap = outerRight - innerRight;
+        const leftInnerBevelDistance = innerPoints[5].x - innerLeft;
+        const leftOuterBevelDistance = outerPoints[8].x - outerLeft;
+        const rightInnerBevelDistance = innerRight - innerPoints[4].x;
+        const rightOuterBevelDistance = outerRight - outerPoints[1].x;
+        const expectedOuterBevelExpansion = bottomGap * (2 - Math.sqrt(2));
+        const leftInnerDiagonal = innerPoints[5].y - innerPoints[5].x;
+        const leftOuterDiagonal = outerPoints[8].y - outerPoints[8].x;
+        const rightInnerDiagonal = innerPoints[4].y + innerPoints[4].x;
+        const rightOuterDiagonal = outerPoints[1].y + outerPoints[1].x;
+
+        assertClose(leftGap, bottomGap, 0.01, "left wall centerline gap should match bottom gap");
+        assertClose(rightGap, bottomGap, 0.01, "right wall centerline gap should match bottom gap");
+        assertClose(leftOuterBevelDistance - leftInnerBevelDistance, expectedOuterBevelExpansion, 0.01, "lower-left outer bevel should be the true offset of the inner bevel");
+        assertClose(rightOuterBevelDistance - rightInnerBevelDistance, expectedOuterBevelExpansion, 0.01, "lower-right outer bevel should be the true offset of the inner bevel");
+        assertClose((leftOuterDiagonal - leftInnerDiagonal) / Math.SQRT2, bottomGap, 0.01, "lower-left bevel diagonal gap should match bottom gap");
+        assertClose((rightOuterDiagonal - rightInnerDiagonal) / Math.SQRT2, bottomGap, 0.01, "lower-right bevel diagonal gap should match bottom gap");
+    }
+
+    await page.close();
+});
+
+test("seqfx_bar_one_inner_outline_tracks_cell_stack_without_intersections", async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
+    await loadSeqFxHarness(page);
+    await page.locator('[data-role="seqfx-root"]').waitFor();
+    await page.waitForFunction(() => {
+        const frame = document.querySelector('[data-role="seqfx-bar-frame"]');
+        const lanes = document.querySelector('[data-role="seqfx-bar-lanes"][data-bar="0"]');
+        if (!frame || !lanes) return false;
+        return Math.abs(frame.getBoundingClientRect().width - (lanes.getBoundingClientRect().width + 32)) < 1;
+    });
+
+    const viewportWidths = [567, 640, 768, 900, 1024, 1229, 1280];
+    for (const width of viewportWidths) {
+        await page.setViewportSize({ width, height: 820 });
+        await page.waitForFunction(() => {
+            const frame = document.querySelector('[data-role="seqfx-bar-frame"]');
+            const lanes = document.querySelector('[data-role="seqfx-bar-lanes"][data-bar="0"]');
+            if (!frame || !lanes) return false;
+            return Math.abs(frame.getBoundingClientRect().width - (lanes.getBoundingClientRect().width + 32)) < 1;
+        });
+        await page.waitForFunction(() => {
+            const inner = document.querySelector('[data-role="seqfx-bar-frame-inner"]');
+            const cells = [...document.querySelectorAll('[data-role="seqfx-bar-section"][data-bar="0"] [data-role="seqfx-cell"]')];
+            if (!inner || cells.length === 0) return false;
+            const innerRect = inner.getBoundingClientRect();
+            const cellRects = cells.map((cell) => cell.getBoundingClientRect());
+            return innerRect.top <= Math.min(...cellRects.map((rect) => rect.top)) - 1
+                && innerRect.bottom >= Math.max(...cellRects.map((rect) => rect.bottom)) + 1;
+        });
+        const layout = await page.evaluate(() => {
+            const rectFor = (selector) => {
+                const element = document.querySelector(selector);
+                const rect = element.getBoundingClientRect();
+                return {
+                    bottom: rect.bottom,
+                    left: rect.left,
+                    right: rect.right,
+                    top: rect.top,
+                };
+            };
+            const rectsFor = (selector) => [...document.querySelectorAll(selector)].map((element) => {
+                const rect = element.getBoundingClientRect();
+                return {
+                    bottom: rect.bottom,
+                    left: rect.left,
+                    right: rect.right,
+                    top: rect.top,
+                };
+            });
+            const cellRects = rectsFor('[data-role="seqfx-bar-section"][data-bar="0"] [data-role="seqfx-cell"]');
+            const numberRects = rectsFor('[data-role="seqfx-bar-section"][data-bar="0"] .seqfx-step-number');
+
+            return {
+                bottomCellBottom: Math.max(...cellRects.map((rect) => rect.bottom)),
+                firstCellLeft: Math.min(...cellRects.map((rect) => rect.left)),
+                firstCellTop: Math.min(...cellRects.map((rect) => rect.top)),
+                gridShell: rectFor(".seqfx-grid-shell"),
+                innerPath: rectFor(".seqfx-bar-frame__inner"),
+                lastCellRight: Math.max(...cellRects.map((rect) => rect.right)),
+                numberBottom: Math.max(...numberRects.map((rect) => rect.bottom)),
+                outerBodyPath: rectFor('[data-role="seqfx-bar-frame-outer-body"]'),
+                viewportWidth: window.innerWidth,
+            };
+        });
+
+        assert.ok(
+            layout.innerPath.top >= layout.numberBottom + 1,
+            `inner outline should not intersect step numbers at ${layout.viewportWidth}px`,
+        );
+        assert.ok(
+            layout.innerPath.top <= layout.firstCellTop - 1,
+            `inner outline should sit above the first cell row at ${layout.viewportWidth}px`,
+        );
+        assert.ok(
+            layout.innerPath.bottom >= layout.bottomCellBottom + 1,
+            `inner outline should sit below the bottom cell row at ${layout.viewportWidth}px`,
+        );
+        assert.ok(
+            layout.innerPath.left <= layout.firstCellLeft - 1,
+            `inner outline should sit left of the first cell column at ${layout.viewportWidth}px`,
+        );
+        assert.ok(
+            layout.innerPath.right >= layout.lastCellRight + 1,
+            `inner outline should sit right of the last cell column at ${layout.viewportWidth}px`,
+        );
+        assert.ok(
+            layout.outerBodyPath.top <= layout.numberBottom - 1,
+            `outer outline should wrap the step-number band at ${layout.viewportWidth}px`,
+        );
+        assert.ok(
+            layout.outerBodyPath.top >= layout.gridShell.top + 1,
+            `outer outline should not be clipped by the grid shell top edge at ${layout.viewportWidth}px`,
+        );
+        assertClose(layout.innerPath.left - layout.outerBodyPath.left, 8, 1, `left outer-to-inner gap at ${layout.viewportWidth}px`);
+        assertClose(layout.outerBodyPath.right - layout.innerPath.right, 8, 1, `right outer-to-inner gap at ${layout.viewportWidth}px`);
+        assertClose(layout.outerBodyPath.bottom - layout.innerPath.bottom, 8, 1, `bottom outer-to-inner gap at ${layout.viewportWidth}px`);
+    }
+
+    await page.close();
+});
+
+test("seqfx_bar_one_frame_reserves_corner_clearance_at_plugin_width", async () => {
+    const page = await browser.newPage({ viewport: { width: 768, height: 1192 } });
+    await loadSeqFxHarness(page);
+    await page.locator('[data-role="seqfx-root"]').waitFor();
+    await page.waitForFunction(() => {
+        const frame = document.querySelector('[data-role="seqfx-bar-frame"]');
+        const lanes = document.querySelector('[data-role="seqfx-bar-lanes"][data-bar="0"]');
+        if (!frame || !lanes) return false;
+        return Math.abs(frame.getBoundingClientRect().width - (lanes.getBoundingClientRect().width + 32)) < 1;
+    });
+
+    const layout = await page.evaluate(() => {
+        const rectFor = (selector) => {
+            const element = document.querySelector(selector);
+            const rect = element.getBoundingClientRect();
+            return {
+                left: rect.left,
+                right: rect.right,
+            };
+        };
+        const gridShell = document.querySelector(".seqfx-grid-shell");
+        const frame = document.querySelector('[data-role="seqfx-bar-frame"]');
+        const frameStyle = getComputedStyle(frame);
+
+        return {
+            firstCell: rectFor('[data-role="seqfx-cell"][data-lane="0"][data-step="0"]'),
+            frame: rectFor('[data-role="seqfx-bar-frame"]'),
+            framePadding: parseFloat(getComputedStyle(gridShell).getPropertyValue("--seqfx-bar-frame-x")),
+            framePointerEvents: frameStyle.pointerEvents,
+            lastCell: rectFor('[data-role="seqfx-cell"][data-lane="0"][data-step="15"]'),
+            rootScrollWidth: document.documentElement.scrollWidth,
+            viewportWidth: window.innerWidth,
+        };
+    });
+
+    assert.ok(layout.framePadding >= 30, `frame side padding must fit the beveled corners at plugin width, got ${layout.framePadding}px`);
+    assert.ok(layout.firstCell.left - layout.frame.left >= 14, `left frame bevel clearance is too small: ${layout.firstCell.left - layout.frame.left}px`);
+    assert.ok(layout.frame.right - layout.lastCell.right >= 14, `right frame bevel clearance is too small: ${layout.frame.right - layout.lastCell.right}px`);
+    assert.equal(layout.framePointerEvents, "none");
+    assert.ok(layout.rootScrollWidth <= layout.viewportWidth + 1, `page should not gain horizontal overflow, got ${layout.rootScrollWidth}px for ${layout.viewportWidth}px viewport`);
 
     await page.close();
 });
@@ -1342,6 +1627,7 @@ test("seqfx_mod_panel_uses_responsive_inspector_width_without_overflowing", asyn
                 width: rect.width,
             };
         };
+        const gridShell = rectFor(".seqfx-grid-shell");
         const inspector = rectFor(".seqfx-inspector");
         const effectPicker = rectFor(".seqfx-effect-picker");
         const modToggle = rectFor('[data-role="seqfx-mod-toggle"]');
@@ -1358,6 +1644,7 @@ test("seqfx_mod_panel_uses_responsive_inspector_width_without_overflowing", asyn
             auxSource,
             auxSourceBorderTopStyle: auxSourceStyle.borderTopStyle,
             effectPicker,
+            gridShell,
             inspector,
             modTargets,
             modTargetsBorderTopStyle: modTargetsStyle.borderTopStyle,
@@ -1373,7 +1660,8 @@ test("seqfx_mod_panel_uses_responsive_inspector_width_without_overflowing", asyn
 
     const layout = await measureLayout();
 
-    assert.ok(layout.inspector.width >= 380, `responsive inspector should be wider than the old 300px column, got ${layout.inspector.width}px`);
+    assert.ok(layout.inspector.width >= 520, `50/50 inspector should be materially wider than the old 300px column, got ${layout.inspector.width}px`);
+    assertClose(layout.inspector.width, layout.gridShell.width, 1, "grid and inspector should split the workspace evenly above the breakpoint");
     assert.ok(layout.modToggle.left >= layout.effectPicker.left, "mod button should stay inside the effect header");
     assert.ok(layout.modToggle.right <= layout.effectPicker.right + 1, `mod button overflowed effect header: ${layout.modToggle.right} > ${layout.effectPicker.right}`);
     assert.equal(layout.modToggleBackgroundColor, "rgb(139, 191, 154)");
@@ -1389,9 +1677,10 @@ test("seqfx_mod_panel_uses_responsive_inspector_width_without_overflowing", asyn
     assert.ok(layout.auxPreview.width / layout.auxPreview.height <= 12, `aux preview should not collapse into a thin strip, got ratio ${layout.auxPreview.width / layout.auxPreview.height}`);
     assert.ok(layout.rootScrollWidth <= layout.viewportWidth + 1, `page should not gain horizontal overflow, got ${layout.rootScrollWidth}px for ${layout.viewportWidth}px viewport`);
 
-    await page.setViewportSize({ width: 982, height: 820 });
+    await page.setViewportSize({ width: 900, height: 820 });
     const nearBreakpointLayout = await measureLayout();
-    assert.ok(nearBreakpointLayout.inspector.width >= 338, `near-breakpoint inspector should keep the 340px floor, got ${nearBreakpointLayout.inspector.width}px`);
+    assert.ok(nearBreakpointLayout.inspector.width >= 420, `near-breakpoint 50/50 inspector should stay wide, got ${nearBreakpointLayout.inspector.width}px`);
+    assertClose(nearBreakpointLayout.inspector.width, nearBreakpointLayout.gridShell.width, 1, "near-breakpoint grid and inspector should still split evenly");
     assert.ok(
         nearBreakpointLayout.auxSource.right <= nearBreakpointLayout.inspector.right + 1,
         `near-breakpoint aux source overflowed inspector: ${nearBreakpointLayout.auxSource.right} > ${nearBreakpointLayout.inspector.right}`,
@@ -1404,6 +1693,10 @@ test("seqfx_mod_panel_uses_responsive_inspector_width_without_overflowing", asyn
         nearBreakpointLayout.rootScrollWidth <= nearBreakpointLayout.viewportWidth + 1,
         `near-breakpoint page should not gain horizontal overflow, got ${nearBreakpointLayout.rootScrollWidth}px for ${nearBreakpointLayout.viewportWidth}px viewport`,
     );
+
+    await page.setViewportSize({ width: 840, height: 820 });
+    const stackedLayout = await measureLayout();
+    assert.ok(stackedLayout.inspector.top > stackedLayout.gridShell.bottom, "workspace should stack below the reduced breakpoint");
 
     await page.close();
 });
