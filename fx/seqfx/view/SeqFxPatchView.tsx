@@ -775,8 +775,7 @@ const SEQFX_GRID_BAR_COUNT = Math.ceil(SEQFX_STEP_COUNT / SEQFX_GRID_STEPS_PER_R
 const STEP_BARS = Array.from({ length: SEQFX_GRID_BAR_COUNT }, (_unused, barIndex) => (
     STEP_NUMBERS.slice(barIndex * SEQFX_GRID_STEPS_PER_ROW, (barIndex + 1) * SEQFX_GRID_STEPS_PER_ROW)
 ));
-const SEQFX_BAR_FRAME_INNER_X_PX = 8;
-const SEQFX_BAR_FRAME_INNER_Y_PX = 4;
+const SEQFX_BAR_FRAME_INNER_GAP_PX = 8;
 const SEQFX_BAR_FRAME_GAP_PX = 8;
 const SEQFX_BAR_FRAME_NUMBER_BAND_PX = 20;
 const SEQFX_BAR_FRAME_ARROW_HEIGHT_PX = 25;
@@ -812,6 +811,34 @@ function laneTrackRefKey(lane: number, barIndex: number) {
 
 function cellRefKey(lane: number, step: number) {
     return `${lane}:${step}`;
+}
+
+function frameCornerClassNames(lane: number, barIndex: number, startStep: number, endStep: number) {
+    if (barIndex !== 0) {
+        return [];
+    }
+
+    const classNames: string[] = [];
+    const lastLane = SEQFX_LANE_NAMES.length - 1;
+    const lastStepInFrame = SEQFX_GRID_STEPS_PER_ROW - 1;
+
+    if (lane === 0 && startStep === 0) {
+        classNames.push("has-frame-corner-tl");
+    }
+
+    if (lane === 0 && endStep === lastStepInFrame) {
+        classNames.push("has-frame-corner-tr");
+    }
+
+    if (lane === lastLane && startStep === 0) {
+        classNames.push("has-frame-corner-bl");
+    }
+
+    if (lane === lastLane && endStep === lastStepInFrame) {
+        classNames.push("has-frame-corner-br");
+    }
+
+    return classNames;
 }
 
 function buildBeveledRectPath(left: number, top: number, right: number, bottom: number, bevel: number) {
@@ -906,20 +933,20 @@ function SeqFxBarFrame() {
         };
     }, []);
 
-    const frameLeft = -(SEQFX_BAR_FRAME_INNER_X_PX + SEQFX_BAR_FRAME_GAP_PX);
-    const frameTop = -(SEQFX_BAR_FRAME_NUMBER_BAND_PX + SEQFX_BAR_FRAME_GAP_PX + SEQFX_BAR_FRAME_INNER_Y_PX);
-    const frameWidth = cellStackSize.width + (2 * (SEQFX_BAR_FRAME_INNER_X_PX + SEQFX_BAR_FRAME_GAP_PX));
+    const frameLeft = -(SEQFX_BAR_FRAME_INNER_GAP_PX + SEQFX_BAR_FRAME_GAP_PX);
+    const frameTop = -(SEQFX_BAR_FRAME_NUMBER_BAND_PX + SEQFX_BAR_FRAME_GAP_PX + SEQFX_BAR_FRAME_INNER_GAP_PX);
+    const frameWidth = cellStackSize.width + (2 * (SEQFX_BAR_FRAME_INNER_GAP_PX + SEQFX_BAR_FRAME_GAP_PX));
     const outerBottom = SEQFX_BAR_FRAME_NUMBER_BAND_PX
         + SEQFX_BAR_FRAME_GAP_PX
-        + SEQFX_BAR_FRAME_INNER_Y_PX
+        + SEQFX_BAR_FRAME_INNER_GAP_PX
         + cellStackSize.height
-        + SEQFX_BAR_FRAME_INNER_Y_PX
+        + SEQFX_BAR_FRAME_INNER_GAP_PX
         + SEQFX_BAR_FRAME_GAP_PX;
     const frameHeight = outerBottom + SEQFX_BAR_FRAME_ARROW_HEIGHT_PX + SEQFX_BAR_FRAME_STROKE_INSET_PX;
     const innerLeft = SEQFX_BAR_FRAME_GAP_PX;
     const innerTop = SEQFX_BAR_FRAME_NUMBER_BAND_PX + SEQFX_BAR_FRAME_GAP_PX;
-    const innerRight = innerLeft + (2 * SEQFX_BAR_FRAME_INNER_X_PX) + cellStackSize.width;
-    const innerBottom = innerTop + (2 * SEQFX_BAR_FRAME_INNER_Y_PX) + cellStackSize.height;
+    const innerRight = innerLeft + (2 * SEQFX_BAR_FRAME_INNER_GAP_PX) + cellStackSize.width;
+    const innerBottom = innerTop + (2 * SEQFX_BAR_FRAME_INNER_GAP_PX) + cellStackSize.height;
     const outerLeft = innerLeft - SEQFX_BAR_FRAME_GAP_PX;
     const outerTop = SEQFX_BAR_FRAME_STROKE_INSET_PX;
     const outerRight = innerRight + SEQFX_BAR_FRAME_GAP_PX;
@@ -935,7 +962,7 @@ function SeqFxBarFrame() {
                 height: frameHeight,
                 left: frameLeft,
                 top: frameTop,
-                width: `calc(100% + ${2 * (SEQFX_BAR_FRAME_INNER_X_PX + SEQFX_BAR_FRAME_GAP_PX)}px)`,
+                width: `calc(100% + ${2 * (SEQFX_BAR_FRAME_INNER_GAP_PX + SEQFX_BAR_FRAME_GAP_PX)}px)`,
             }}
         >
             <svg
@@ -3347,6 +3374,7 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
                                                     const selected = activeSelection?.lane === lane && activeSelection.steps.includes(step);
                                                     const className = [
                                                         "seqfx-cell",
+                                                        ...frameCornerClassNames(lane, barIndex, step, step),
                                                         gridGeometry.isAltBar(step) ? "is-alt-bar" : "",
                                                         cell.active ? "is-covered" : "",
                                                         selected ? "is-selected" : "",
@@ -3387,7 +3415,10 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
                                                         .map((segment) => (
                                                             <div
                                                                 aria-hidden="true"
-                                                                className="seqfx-invalid-drop"
+                                                                className={[
+                                                                    "seqfx-invalid-drop",
+                                                                    ...frameCornerClassNames(lane, barIndex, segment.startStep, segment.endStep),
+                                                                ].join(" ")}
                                                                 data-role="seqfx-invalid-drop"
                                                                 data-lane={lane}
                                                                 data-start={block.startStep}
@@ -3409,7 +3440,7 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
                                                                 && activeSelection.steps.length === block.length
                                                             )
                                                         );
-                                                    const className = [
+                                                    const baseClassName = [
                                                         "seqfx-block",
                                                         blockIsPreview ? "is-copy-preview" : "",
                                                         selected ? "is-selected" : "",
@@ -3426,9 +3457,12 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
                                                         .map((segment) => {
                                                             const primarySegment = segment.startStep === block.startStep;
                                                             return (
-                                                                <div
-                                                                    aria-label={primarySegment ? ariaLabel : undefined}
-                                                                    className={className}
+                                                                        <div
+                                                                            aria-label={primarySegment ? ariaLabel : undefined}
+                                                                            className={[
+                                                                                baseClassName,
+                                                                                ...frameCornerClassNames(lane, barIndex, segment.startStep, segment.endStep),
+                                                                            ].join(" ")}
                                                                     data-effect={block.effectType}
                                                                     data-role={primarySegment ? "seqfx-block" : "seqfx-block-segment"}
                                                                     data-lane={lane}

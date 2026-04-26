@@ -225,7 +225,7 @@ select {
 }
 
 .seqfx-step-header {
-    margin-bottom: 6px;
+    margin-bottom: 12px;
 }
 
 .seqfx-lane-row + .seqfx-lane-row {
@@ -271,6 +271,7 @@ select {
 
 .seqfx-cell {
     position: relative;
+    --seqfx-frame-cell-bevel: 7px;
     display: block;
     width: 100%;
     aspect-ratio: 1;
@@ -283,6 +284,13 @@ select {
     touch-action: none;
     user-select: none;
     transition: border-color 120ms ease, background-color 120ms ease, transform 120ms ease;
+}
+
+.seqfx-cell.has-frame-corner-tl,
+.seqfx-cell.has-frame-corner-tr,
+.seqfx-cell.has-frame-corner-bl,
+.seqfx-cell.has-frame-corner-br {
+    border-radius: 0;
 }
 
 .seqfx-cell.is-alt-bar {
@@ -330,6 +338,7 @@ select {
 .seqfx-block-fill {
     position: absolute;
     inset: 1px;
+    --seqfx-frame-cell-bevel: 7px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -337,6 +346,87 @@ select {
     background: #8bbf9a;
     box-shadow: inset 0 0 0 1px rgba(21, 24, 22, 0.28);
     transition: background-color 120ms ease, box-shadow 120ms ease, filter 120ms ease;
+}
+
+.seqfx-block.has-frame-corner-tl .seqfx-block-fill,
+.seqfx-block.has-frame-corner-tr .seqfx-block-fill,
+.seqfx-block.has-frame-corner-bl .seqfx-block-fill,
+.seqfx-block.has-frame-corner-br .seqfx-block-fill {
+    border-radius: 0;
+}
+
+.seqfx-cell.has-frame-corner-tl,
+.seqfx-block.has-frame-corner-tl .seqfx-block-fill,
+.seqfx-invalid-drop.has-frame-corner-tl {
+    clip-path: polygon(
+        var(--seqfx-frame-cell-bevel) 0,
+        100% 0,
+        100% 100%,
+        0 100%,
+        0 var(--seqfx-frame-cell-bevel)
+    );
+}
+
+.seqfx-cell.has-frame-corner-tr,
+.seqfx-block.has-frame-corner-tr .seqfx-block-fill,
+.seqfx-invalid-drop.has-frame-corner-tr {
+    clip-path: polygon(
+        0 0,
+        calc(100% - var(--seqfx-frame-cell-bevel)) 0,
+        100% var(--seqfx-frame-cell-bevel),
+        100% 100%,
+        0 100%
+    );
+}
+
+.seqfx-cell.has-frame-corner-bl,
+.seqfx-block.has-frame-corner-bl .seqfx-block-fill,
+.seqfx-invalid-drop.has-frame-corner-bl {
+    clip-path: polygon(
+        0 0,
+        100% 0,
+        100% 100%,
+        var(--seqfx-frame-cell-bevel) 100%,
+        0 calc(100% - var(--seqfx-frame-cell-bevel))
+    );
+}
+
+.seqfx-cell.has-frame-corner-br,
+.seqfx-block.has-frame-corner-br .seqfx-block-fill,
+.seqfx-invalid-drop.has-frame-corner-br {
+    clip-path: polygon(
+        0 0,
+        100% 0,
+        100% calc(100% - var(--seqfx-frame-cell-bevel)),
+        calc(100% - var(--seqfx-frame-cell-bevel)) 100%,
+        0 100%
+    );
+}
+
+.seqfx-cell.has-frame-corner-tl.has-frame-corner-tr,
+.seqfx-block.has-frame-corner-tl.has-frame-corner-tr .seqfx-block-fill,
+.seqfx-invalid-drop.has-frame-corner-tl.has-frame-corner-tr {
+    clip-path: polygon(
+        var(--seqfx-frame-cell-bevel) 0,
+        calc(100% - var(--seqfx-frame-cell-bevel)) 0,
+        100% var(--seqfx-frame-cell-bevel),
+        100% 100%,
+        0 100%,
+        0 var(--seqfx-frame-cell-bevel)
+    );
+}
+
+.seqfx-cell.has-frame-corner-bl.has-frame-corner-br,
+.seqfx-block.has-frame-corner-bl.has-frame-corner-br .seqfx-block-fill,
+.seqfx-invalid-drop.has-frame-corner-bl.has-frame-corner-br {
+    clip-path: polygon(
+        0 0,
+        100% 0,
+        100% calc(100% - var(--seqfx-frame-cell-bevel)),
+        calc(100% - var(--seqfx-frame-cell-bevel)) 100%,
+        var(--seqfx-frame-cell-bevel) 100%,
+        0 calc(100% - var(--seqfx-frame-cell-bevel))
+    );
 }
 
 .seqfx-block-fill span {
@@ -375,6 +465,7 @@ select {
 .seqfx-invalid-drop {
     position: relative;
     z-index: 1;
+    --seqfx-frame-cell-bevel: 7px;
     box-sizing: border-box;
     height: 100%;
     align-self: stretch;

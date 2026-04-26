@@ -1132,7 +1132,9 @@ test("seqfx_bar_one_inner_outline_tracks_cell_stack_without_intersections", asyn
             const innerRect = inner.getBoundingClientRect();
             const cellRects = cells.map((cell) => cell.getBoundingClientRect());
             return innerRect.top <= Math.min(...cellRects.map((rect) => rect.top)) - 1
-                && innerRect.bottom >= Math.max(...cellRects.map((rect) => rect.bottom)) + 1;
+                && innerRect.bottom >= Math.max(...cellRects.map((rect) => rect.bottom)) + 1
+                && innerRect.left <= Math.min(...cellRects.map((rect) => rect.left)) - 1
+                && innerRect.right >= Math.max(...cellRects.map((rect) => rect.right)) + 1;
         });
         const layout = await page.evaluate(() => {
             const rectFor = (selector) => {
@@ -1190,6 +1192,10 @@ test("seqfx_bar_one_inner_outline_tracks_cell_stack_without_intersections", asyn
             layout.innerPath.right >= layout.lastCellRight + 1,
             `inner outline should sit right of the last cell column at ${layout.viewportWidth}px`,
         );
+        assertClose(layout.firstCellLeft - layout.innerPath.left, 8, 1, `left cell-to-inner gap at ${layout.viewportWidth}px`);
+        assertClose(layout.innerPath.right - layout.lastCellRight, 8, 1, `right cell-to-inner gap at ${layout.viewportWidth}px`);
+        assertClose(layout.firstCellTop - layout.innerPath.top, 8, 1, `top cell-to-inner gap at ${layout.viewportWidth}px`);
+        assertClose(layout.innerPath.bottom - layout.bottomCellBottom, 8, 1, `bottom cell-to-inner gap at ${layout.viewportWidth}px`);
         assert.ok(
             layout.outerBodyPath.top <= layout.numberBottom - 1,
             `outer outline should wrap the step-number band at ${layout.viewportWidth}px`,
@@ -1246,6 +1252,113 @@ test("seqfx_bar_one_frame_reserves_corner_clearance_at_plugin_width", async () =
     assert.ok(layout.frame.right - layout.lastCell.right >= 14, `right frame bevel clearance is too small: ${layout.frame.right - layout.lastCell.right}px`);
     assert.equal(layout.framePointerEvents, "none");
     assert.ok(layout.rootScrollWidth <= layout.viewportWidth + 1, `page should not gain horizontal overflow, got ${layout.rootScrollWidth}px for ${layout.viewportWidth}px viewport`);
+
+    await page.close();
+});
+
+test("seqfx_bar_one_corner_cells_and_blocks_use_matching_beveled_shapes", async () => {
+    const page = await browser.newPage({ viewport: { width: 768, height: 1192 } });
+    await loadSeqFxHarness(page);
+    await page.locator('[data-role="seqfx-root"]').waitFor();
+
+    const cornerExpectations = [
+        { className: "has-frame-corner-tl", lane: 0, step: 0 },
+        { className: "has-frame-corner-tr", lane: 0, step: 15 },
+        { className: "has-frame-corner-bl", lane: 3, step: 0 },
+        { className: "has-frame-corner-br", lane: 3, step: 15 },
+    ];
+
+    const cornerCellStyles = await page.evaluate((expectations) => (
+        expectations.map(({ className, lane, step }) => {
+            const cell = document.querySelector(`[data-role="seqfx-cell"][data-lane="${lane}"][data-step="${step}"]`);
+            const styles = getComputedStyle(cell);
+
+            return {
+                className,
+                classPresent: cell.classList.contains(className),
+                clipPath: styles.clipPath,
+            };
+        })
+    ), cornerExpectations);
+
+    for (const style of cornerCellStyles) {
+        assert.equal(style.classPresent, true, `corner cell should include ${style.className}`);
+        assert.match(style.clipPath, /^polygon\(/, `corner cell should be visibly clipped for ${style.className}`);
+    }
+
+    const nonCornerCellStyles = await page.evaluate(() => {
+        const cell = document.querySelector('[data-role="seqfx-cell"][data-lane="1"][data-step="1"]');
+        return {
+            className: cell.className,
+            clipPath: getComputedStyle(cell).clipPath,
+        };
+    });
+    assert.equal(nonCornerCellStyles.className.includes("has-frame-corner"), false);
+    assert.equal(nonCornerCellStyles.clipPath, "none");
+
+    for (const { lane, step } of cornerExpectations) {
+        await page.getByRole("button", { name: `${SEQFX_LANE_NAMES[lane]} step ${step + 1}`, exact: true }).click();
+    }
+
+    const cornerBlockStyles = await page.evaluate((expectations) => (
+        expectations.map(({ className, lane, step }) => {
+            const block = document.querySelector(`[data-role="seqfx-block"][data-lane="${lane}"][data-start="${step}"]`);
+            const fill = block?.querySelector(".seqfx-block-fill");
+
+            return {
+                className,
+                classPresent: block?.classList.contains(className) ?? false,
+                fillClipPath: fill ? getComputedStyle(fill).clipPath : "",
+            };
+        })
+    ), cornerExpectations);
+
+    for (const style of cornerBlockStyles) {
+        assert.equal(style.classPresent, true, `corner block should include ${style.className}`);
+        assert.match(style.fillClipPath, /^polygon\(/, `corner block fill should be visibly clipped for ${style.className}`);
+    }
+
+    await page.close();
+});
+
+test("seqfx_bar_one_full_width_edge_blocks_combine_corner_bevels", async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
+    await loadSeqFxHarness(page);
+    await page.locator('[data-role="seqfx-root"]').waitFor();
+
+    await page.getByRole("button", { name: "Chain 1 step 1", exact: true }).click();
+    await resizeBlockToStep(page, 0, 1, 16);
+
+    const topBlockStyles = await page.evaluate(() => {
+        const block = document.querySelector('[data-role="seqfx-block"][data-lane="0"][data-start="0"]');
+        const fill = block?.querySelector(".seqfx-block-fill");
+
+        return {
+            blockClassName: block?.className ?? "",
+            fillClipPath: fill ? getComputedStyle(fill).clipPath : "",
+        };
+    });
+
+    assert.match(topBlockStyles.blockClassName, /has-frame-corner-tl/);
+    assert.match(topBlockStyles.blockClassName, /has-frame-corner-tr/);
+    assert.match(topBlockStyles.fillClipPath, /^polygon\(/);
+
+    await page.getByRole("button", { name: "Chain 4 step 1", exact: true }).click();
+    await resizeBlockToStep(page, 3, 1, 16);
+
+    const bottomBlockStyles = await page.evaluate(() => {
+        const block = document.querySelector('[data-role="seqfx-block"][data-lane="3"][data-start="0"]');
+        const fill = block?.querySelector(".seqfx-block-fill");
+
+        return {
+            blockClassName: block?.className ?? "",
+            fillClipPath: fill ? getComputedStyle(fill).clipPath : "",
+        };
+    });
+
+    assert.match(bottomBlockStyles.blockClassName, /has-frame-corner-bl/);
+    assert.match(bottomBlockStyles.blockClassName, /has-frame-corner-br/);
+    assert.match(bottomBlockStyles.fillClipPath, /^polygon\(/);
 
     await page.close();
 });
