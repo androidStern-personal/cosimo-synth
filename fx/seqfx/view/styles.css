@@ -395,17 +395,25 @@ select {
     position: absolute;
     inset: 1px;
     --seqfx-frame-cell-bevel: 7px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    display: block;
+    overflow: hidden;
     border-radius: 3px;
-    background: #8bbf9a;
-    box-shadow:
-        1px 1.2px 2px rgba(126, 116, 101, 0.28),
-        -0.8px -0.8px 1.5px rgba(255, 248, 232, 0.56),
-        inset 0 1px 0 rgba(255, 248, 232, 0.28),
-        inset 0 -1px 0 rgba(126, 116, 101, 0.12);
+    background: #f4d35e;
+    box-shadow: 1px 1px 0 rgba(0, 0, 0, 0.10);
+    color: #1a1815;
+    isolation: isolate;
     transition: background-color 120ms ease, box-shadow 120ms ease, filter 120ms ease;
+}
+
+.seqfx-block-fill::after {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    background-image: radial-gradient(rgba(0, 0, 0, 0.10) 1px, transparent 1.2px);
+    background-size: 2.5px 2.5px;
+    content: "";
+    mix-blend-mode: multiply;
+    pointer-events: none;
 }
 
 .seqfx-block.has-frame-corner-tl .seqfx-block-fill,
@@ -489,126 +497,20 @@ select {
     );
 }
 
-.seqfx-block-fill span {
-    position: relative;
-    z-index: 1;
-    color: rgba(15, 21, 17, 0.76);
-    font-size: 9px;
-    font-weight: 800;
-    line-height: 1;
-    pointer-events: none;
-    text-shadow: 0 1px 0 rgba(255, 248, 232, 0.42);
-}
-
-.seqfx-block-glyph {
-    position: absolute;
-    inset: 3px 5px;
-    width: calc(100% - 10px);
-    height: calc(100% - 6px);
-    color: rgba(15, 21, 17, 0.32);
-    overflow: visible;
-    pointer-events: none;
-}
-
-.seqfx-block-glyph[data-glyph-effect="filter"] {
-    inset: 1px 3px;
-    width: calc(100% - 6px);
-    height: calc(100% - 2px);
-    color: rgba(91, 46, 59, 0.58);
-}
-
-.seqfx-block-glyph__curve {
-    fill: none;
-    stroke: currentColor;
-    stroke-width: 1;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-    vector-effect: non-scaling-stroke;
-}
-
-.seqfx-block-glyph__area {
-    fill: rgba(214, 122, 134, 0.38);
-    stroke: none;
-}
-
-.seqfx-block-glyph__hairline {
-    stroke: currentColor;
-    stroke-width: 0.8;
-    stroke-dasharray: 1.4 1.6;
-    stroke-linecap: round;
-    opacity: 0.55;
-    vector-effect: non-scaling-stroke;
-}
-
-.seqfx-block-glyph__cassette {
-    fill: rgba(255, 248, 232, 0.14);
-    stroke: currentColor;
-    stroke-width: 0.9;
-    stroke-linejoin: round;
-    opacity: 0.82;
-    vector-effect: non-scaling-stroke;
-}
-
-.seqfx-block-glyph__cassette-window {
-    fill: currentColor;
-    opacity: 0.16;
-    stroke: none;
-}
-
-.seqfx-block-glyph__reel,
-.seqfx-block-glyph__tape-line {
-    fill: none;
-    stroke: currentColor;
-    stroke-width: 0.8;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-    opacity: 0.72;
-    vector-effect: non-scaling-stroke;
-}
-
-.seqfx-block-glyph__slice {
-    fill: currentColor;
-    opacity: 0.58;
-}
-
-.seqfx-block:hover .seqfx-block-glyph {
-    color: rgba(15, 21, 17, 0.42);
-}
-
-.seqfx-block:hover .seqfx-block-glyph[data-glyph-effect="filter"] {
-    color: rgba(91, 46, 59, 0.66);
-}
-
-.seqfx-block.is-selected .seqfx-block-glyph {
-    color: rgba(15, 21, 17, 0.46);
-}
-
-.seqfx-block.is-selected .seqfx-block-glyph[data-glyph-effect="filter"] {
-    color: rgba(91, 46, 59, 0.72);
-}
-
-.seqfx-block.is-playhead .seqfx-block-glyph {
-    color: rgba(15, 21, 17, 0.5);
-}
-
-.seqfx-block.is-playhead .seqfx-block-glyph[data-glyph-effect="filter"] {
-    color: rgba(91, 46, 59, 0.78);
-}
-
 .seqfx-block[data-effect="1"] .seqfx-block-fill {
-    background: rgba(139, 191, 154, 0.82);
+    background: #f4d35e;
 }
 
 .seqfx-block[data-effect="2"] .seqfx-block-fill {
-    background: rgba(242, 209, 107, 0.84);
+    background: #ee6c4d;
 }
 
 .seqfx-block[data-effect="3"] .seqfx-block-fill {
-    background: rgba(127, 199, 217, 0.82);
+    background: #98c1d9;
 }
 
 .seqfx-block[data-effect="4"] .seqfx-block-fill {
-    background: rgba(239, 143, 138, 0.82);
+    background: #b5d99c;
 }
 
 .seqfx-block:hover .seqfx-block-fill {
@@ -616,11 +518,64 @@ select {
 }
 
 .seqfx-block.is-copy-preview .seqfx-block-fill {
-    background: rgba(242, 209, 107, 0.66);
-    box-shadow:
-        1px 1.2px 2px rgba(126, 116, 101, 0.24),
-        -0.8px -0.8px 1.5px rgba(255, 248, 232, 0.46),
-        inset 0 1px 0 rgba(255, 248, 232, 0.22);
+    opacity: 0.72;
+    box-shadow: 1px 1px 0 rgba(0, 0, 0, 0.08);
+}
+
+.seqfx-block-glyph {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    display: block;
+    width: 100%;
+    height: 100%;
+    color: #1a1815;
+    pointer-events: none;
+}
+
+.seqfx-block-glyph__ink {
+    fill: currentColor;
+}
+
+.seqfx-block-glyph__marker {
+    fill: none;
+    stroke: rgba(26, 24, 21, 0.55);
+    stroke-dasharray: 1.2 1.2;
+    stroke-width: 0.6;
+}
+
+.seqfx-block-glyph-label,
+.seqfx-block-glyph-readout {
+    position: absolute;
+    z-index: 3;
+    color: #1a1815;
+    font-family: "Helvetica Neue", Inter, system-ui, sans-serif;
+    font-weight: 800;
+    line-height: 1;
+    pointer-events: none;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.seqfx-block-glyph-label {
+    top: 3px;
+    left: 4px;
+    padding: 0;
+    font-size: 6px;
+    letter-spacing: 0.10em;
+}
+
+.seqfx-block-glyph-readout {
+    right: 4px;
+    bottom: 3px;
+    font-size: 7px;
+    letter-spacing: 0.04em;
+}
+
+.seqfx-block-glyph[data-size="medium"] ~ .seqfx-block-glyph-label {
+    top: 2px;
+    left: 3px;
+    font-size: 5.5px;
 }
 
 .seqfx-invalid-drop {

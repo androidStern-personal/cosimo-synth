@@ -1,4 +1,4 @@
-import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent, type PointerEvent } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent, type PointerEvent } from "react";
 
 import type { PatchConnectionLike } from "../../../ui/shared/cmajor-react";
 import { createEffectHeader } from "../../../ui/shared/effects/effect-header";
@@ -798,6 +798,392 @@ const STUTTER_PARAM_SPEED = 1;
 const STUTTER_PARAM_SHAPE = 2;
 const STUTTER_PARAM_GATE = 3;
 
+type SeqFxBlockVisualSize = "single" | "medium" | "wide";
+
+const RISO_BLOCK_CELL_VIEWBOX = 28;
+const RISO_BLOCK_GAP_VIEWBOX = 3;
+
+function risoBlockViewBoxWidth(segmentLength: number) {
+    const cellCount = Math.max(1, Math.trunc(segmentLength));
+    return (cellCount * RISO_BLOCK_CELL_VIEWBOX) + ((cellCount - 1) * RISO_BLOCK_GAP_VIEWBOX);
+}
+
+function risoBlockVisualSize(segmentLength: number): SeqFxBlockVisualSize {
+    if (segmentLength <= 1) {
+        return "single";
+    }
+
+    if (segmentLength <= 3) {
+        return "medium";
+    }
+
+    return "wide";
+}
+
+function clampUnit(value: number) {
+    if (!Number.isFinite(value)) {
+        return 0;
+    }
+
+    return Math.min(1, Math.max(0, value));
+}
+
+function cutoffToRisoX(cutoffHz: number, width: number) {
+    const safeCutoff = Math.min(20_000, Math.max(20, Number(cutoffHz) || 2_000));
+    const normalized = (Math.log10(safeCutoff) - Math.log10(20)) / (Math.log10(20_000) - Math.log10(20));
+    const margin = width <= 28 ? 7 : Math.min(18, Math.max(9, width * 0.12));
+    return margin + (clampUnit(normalized) * Math.max(1, width - (margin * 2)));
+}
+
+function roundedPathValue(value: number) {
+    return Number(value.toFixed(2));
+}
+
+function filterGlyphLabel(mode: number) {
+    const roundedMode = Math.round(Number(mode));
+    if (roundedMode === 1) return "HP";
+    if (roundedMode === 2) return "BP";
+    return "LP";
+}
+
+function filterRisoPath(mode: number, cutoffHz: number, resonance: number, width: number) {
+    const x = cutoffToRisoX(cutoffHz, width);
+    const qNormalized = clampUnit((Number(resonance) - 0.1) / 5.5);
+    const peakY = 2 + ((1 - qNormalized) * 4);
+    const passY = width <= 28 ? 12 : 10;
+    const shoulder = Math.min(Math.max(width * 0.12, 4), width <= 28 ? 7 : 18);
+    const modeLabel = filterGlyphLabel(mode);
+
+    if (modeLabel === "BP") {
+        const halfWidth = Math.min(Math.max(width * (0.22 - (qNormalized * 0.11)), 5), width * 0.28);
+        const left = Math.max(0, x - halfWidth);
+        const right = Math.min(width, x + halfWidth);
+        return `M${roundedPathValue(left)} 28 Q${roundedPathValue(x - halfWidth * 0.55)} 27 ${roundedPathValue(x - halfWidth * 0.35)} 22 Q${roundedPathValue(x - halfWidth * 0.16)} 14 ${roundedPathValue(x)} ${roundedPathValue(peakY)} Q${roundedPathValue(x + halfWidth * 0.16)} 14 ${roundedPathValue(x + halfWidth * 0.35)} 22 Q${roundedPathValue(x + halfWidth * 0.55)} 27 ${roundedPathValue(right)} 28 Z`;
+    }
+
+    if (modeLabel === "HP") {
+        return `M0 28 Q${roundedPathValue(Math.max(1, x - shoulder * 2.2))} 27 ${roundedPathValue(Math.max(2, x - shoulder))} 22 Q${roundedPathValue(x - shoulder * 0.45)} 12 ${roundedPathValue(x)} ${roundedPathValue(peakY)} Q${roundedPathValue(x + shoulder * 0.38)} ${roundedPathValue(passY + 2)} ${roundedPathValue(x + shoulder)} ${roundedPathValue(passY)} Q${roundedPathValue(width - 6)} ${roundedPathValue(passY)} ${roundedPathValue(width)} ${roundedPathValue(passY)} L${roundedPathValue(width)} 28 Z`;
+    }
+
+    return `M0 28 L0 ${roundedPathValue(passY)} Q${roundedPathValue(Math.max(1, x - shoulder * 2.2))} ${roundedPathValue(passY)} ${roundedPathValue(Math.max(2, x - shoulder))} ${roundedPathValue(passY - 1)} Q${roundedPathValue(x - shoulder * 0.38)} ${roundedPathValue(passY - 2)} ${roundedPathValue(x)} ${roundedPathValue(peakY)} Q${roundedPathValue(x + shoulder * 0.45)} 12 ${roundedPathValue(x + shoulder)} 22 Q${roundedPathValue(width - 2)} 27 ${roundedPathValue(width)} 28 Z`;
+}
+
+function formatRisoCutoff(cutoffHz: number) {
+    const cutoff = Math.min(20_000, Math.max(20, Math.round(Number(cutoffHz) || 2_000)));
+    if (cutoff >= 1000) {
+        return `${Number((cutoff / 1000).toFixed(cutoff >= 10_000 ? 1 : 2))}k`;
+    }
+
+    return String(cutoff);
+}
+
+function formatRisoResonance(resonance: number) {
+    return `q${Number(Number(resonance || 0).toFixed(2))}`;
+}
+
+function SeqFxFilterBlockGlyph({
+    params,
+    size,
+    width,
+}: {
+    params: number[];
+    size: SeqFxBlockVisualSize;
+    width: number;
+}) {
+    const mode = params[FILTER_PARAM_MODE] ?? 0;
+    const cutoffHz = params[FILTER_PARAM_CUTOFF] ?? 2_000;
+    const resonance = params[FILTER_PARAM_RESONANCE] ?? 0.707;
+    const modeLabel = filterGlyphLabel(mode);
+    const markerX = roundedPathValue(cutoffToRisoX(cutoffHz, width));
+
+    return (
+        <>
+            <svg
+                aria-hidden="true"
+                className="seqfx-block-glyph"
+                data-effect="filter"
+                data-role="seqfx-block-glyph"
+                data-size={size}
+                focusable="false"
+                preserveAspectRatio="none"
+                viewBox={`0 0 ${width} 28`}
+            >
+                <path
+                    className="seqfx-block-glyph__ink"
+                    d={filterRisoPath(mode, cutoffHz, resonance, width)}
+                    data-role="seqfx-block-glyph-ink"
+                />
+                <path
+                    className="seqfx-block-glyph__marker"
+                    d={`M${markerX} 0 V28`}
+                    data-role="seqfx-block-glyph-marker"
+                />
+            </svg>
+            {size !== "single" ? (
+                <span className="seqfx-block-glyph-label" data-role="seqfx-block-glyph-label">
+                    {modeLabel}
+                </span>
+            ) : null}
+            {size === "wide" ? (
+                <span className="seqfx-block-glyph-readout" data-role="seqfx-block-glyph-readout">
+                    {formatRisoCutoff(cutoffHz)} · {formatRisoResonance(resonance)}
+                </span>
+            ) : null}
+        </>
+    );
+}
+
+function crusherStepCount(bits: number, holdFrames: number) {
+    const safeBits = Math.min(16, Math.max(4, Math.round(Number(bits) || 8)));
+    const holdNormalized = clampUnit((Number(holdFrames) - 1) / 63);
+    return Math.max(2, Math.min(12, Math.round(safeBits + 2 - (holdNormalized * 4))));
+}
+
+function crusherRisoPath(bits: number, holdFrames: number, driveDb: number, width: number) {
+    const stepCount = crusherStepCount(bits, holdFrames);
+    const levelCount = Math.max(2, Math.round(Number(bits)));
+    const driveLift = clampUnit(Number(driveDb) / 36) * 5;
+    const stepWidth = width / stepCount;
+    const tops = Array.from({ length: stepCount }, (_unused, index) => {
+        const position = stepCount <= 1 ? 0 : index / (stepCount - 1);
+        const wave = Math.sin(Math.PI * position);
+        const quantized = Math.round(wave * (levelCount - 1)) / Math.max(1, levelCount - 1);
+        return Math.max(3, 24 - (quantized * 18) - driveLift);
+    });
+    const commands = [`M0 28`, `L0 ${roundedPathValue(tops[0] ?? 22)}`];
+
+    tops.forEach((top, index) => {
+        const nextX = index === tops.length - 1 ? width : (index + 1) * stepWidth;
+        commands.push(`L${roundedPathValue(nextX)} ${roundedPathValue(top)}`);
+        if (index < tops.length - 1) {
+            commands.push(`L${roundedPathValue(nextX)} ${roundedPathValue(tops[index + 1] ?? top)}`);
+        }
+    });
+
+    commands.push(`L${roundedPathValue(width)} 28 Z`);
+    return commands.join(" ");
+}
+
+function SeqFxCrusherBlockGlyph({
+    params,
+    size,
+    width,
+}: {
+    params: number[];
+    size: SeqFxBlockVisualSize;
+    width: number;
+}) {
+    const bits = Math.round(Number(params[CRUSHER_PARAM_BITS] ?? 8));
+    const holdFrames = Math.max(1, Number(params[CRUSHER_PARAM_HOLD_FRAMES] ?? 1));
+    const driveDb = Number(params[CRUSHER_PARAM_DRIVE_DB] ?? 0);
+
+    return (
+        <>
+            <svg
+                aria-hidden="true"
+                className="seqfx-block-glyph"
+                data-effect="crusher"
+                data-role="seqfx-block-glyph"
+                data-size={size}
+                focusable="false"
+                preserveAspectRatio="none"
+                viewBox={`0 0 ${width} 28`}
+            >
+                <path
+                    className="seqfx-block-glyph__ink"
+                    d={crusherRisoPath(bits, holdFrames, driveDb, width)}
+                    data-role="seqfx-block-glyph-ink"
+                />
+            </svg>
+            {size !== "single" ? (
+                <span className="seqfx-block-glyph-label" data-role="seqfx-block-glyph-label">
+                    {bits} BIT
+                </span>
+            ) : null}
+            {size === "wide" ? (
+                <span className="seqfx-block-glyph-readout" data-role="seqfx-block-glyph-readout">
+                    H{Math.round(holdFrames)} · {formatSignedFixed(driveDb, 0)} dB
+                </span>
+            ) : null}
+        </>
+    );
+}
+
+function tapeStopRisoPath(mode: number, curve: number, width: number) {
+    const curved = Number(curve) > 1.25;
+    if (Math.round(Number(mode)) === TAPE_STOP_MODE_SPIN_UP) {
+        return curved
+            ? `M0 28 L0 24 Q${roundedPathValue(width * 0.68)} 24 ${roundedPathValue(width)} 4 L${roundedPathValue(width)} 28 Z`
+            : `M0 28 L0 24 L${roundedPathValue(width)} 4 L${roundedPathValue(width)} 28 Z`;
+    }
+
+    return curved
+        ? `M0 5 Q${roundedPathValue(width * 0.72)} 5 ${roundedPathValue(width)} 28 L0 28 Z`
+        : `M0 4 L${roundedPathValue(width)} 28 L0 28 Z`;
+}
+
+function tapeStopRisoLabel(mode: number) {
+    return Math.round(Number(mode)) === TAPE_STOP_MODE_SPIN_UP ? "UP" : "STOP";
+}
+
+function SeqFxTapeStopBlockGlyph({
+    params,
+    size,
+    width,
+}: {
+    params: number[];
+    size: SeqFxBlockVisualSize;
+    width: number;
+}) {
+    const mode = params[TAPE_STOP_PARAM_MODE] ?? TAPE_STOP_MODE_STOP;
+    const curve = params[TAPE_STOP_PARAM_START_CURVE] ?? 1;
+    const label = tapeStopRisoLabel(mode);
+
+    return (
+        <>
+            <svg
+                aria-hidden="true"
+                className="seqfx-block-glyph"
+                data-effect="tape"
+                data-role="seqfx-block-glyph"
+                data-size={size}
+                focusable="false"
+                preserveAspectRatio="none"
+                viewBox={`0 0 ${width} 28`}
+            >
+                <path
+                    className="seqfx-block-glyph__ink"
+                    d={tapeStopRisoPath(mode, curve, width)}
+                    data-role="seqfx-block-glyph-ink"
+                />
+            </svg>
+            {size !== "single" ? (
+                <span className="seqfx-block-glyph-label" data-role="seqfx-block-glyph-label">
+                    {label}
+                </span>
+            ) : null}
+            {size === "wide" ? (
+                <span className="seqfx-block-glyph-readout" data-role="seqfx-block-glyph-readout">
+                    C{Number(curve).toFixed(1)}
+                </span>
+            ) : null}
+        </>
+    );
+}
+
+function stutterEnvelopeHeight(shape: number, index: number, count: number) {
+    const position = count <= 1 ? 0 : index / (count - 1);
+    const normalizedShape = clampUnit(Number(shape));
+    if (normalizedShape < 0.25) {
+        return 0.86;
+    }
+
+    if (normalizedShape < 0.5) {
+        return 1 - (Math.abs(position - 0.5) * 1.4);
+    }
+
+    if (normalizedShape < 0.75) {
+        return Math.sin(Math.PI * position);
+    }
+
+    return 1 - (position * 0.8);
+}
+
+function shortStutterShapeLabel(shape: number) {
+    const label = formatStutterShapeLabel(shape).split(" -> ")[0]?.split(" (")[0] ?? "Gate";
+    if (label === "Ramp Down") return "DECAY";
+    if (label === "Ramp Up") return "SWELL";
+    return label.toUpperCase();
+}
+
+function SeqFxStutterBlockGlyph({
+    params,
+    size,
+    width,
+}: {
+    params: number[];
+    size: SeqFxBlockVisualSize;
+    width: number;
+}) {
+    const slices = Math.min(32, Math.max(2, Math.round(Number(params[STUTTER_PARAM_SLICES] ?? 8))));
+    const shape = Number(params[STUTTER_PARAM_SHAPE] ?? 0);
+    const gap = slices > 20 ? 0.8 : slices > 12 ? 1.2 : 2;
+    const barWidth = Math.max(0.7, (width - ((slices + 1) * gap)) / slices);
+    const bars = Array.from({ length: slices }, (_unused, index) => {
+        const height = Math.max(3, stutterEnvelopeHeight(shape, index, slices) * 22);
+        return {
+            height,
+            x: gap + (index * (barWidth + gap)),
+            y: 26 - height,
+        };
+    });
+    const shapeLabel = shortStutterShapeLabel(shape);
+
+    return (
+        <>
+            <svg
+                aria-hidden="true"
+                className="seqfx-block-glyph"
+                data-effect="stutter"
+                data-role="seqfx-block-glyph"
+                data-size={size}
+                focusable="false"
+                preserveAspectRatio="none"
+                viewBox={`0 0 ${width} 28`}
+            >
+                <g className="seqfx-block-glyph__ink">
+                    {bars.map((bar, index) => (
+                        <rect
+                            data-role="seqfx-block-glyph-rect"
+                            height={roundedPathValue(bar.height)}
+                            key={index}
+                            width={roundedPathValue(barWidth)}
+                            x={roundedPathValue(bar.x)}
+                            y={roundedPathValue(bar.y)}
+                        />
+                    ))}
+                </g>
+            </svg>
+            {size !== "single" ? (
+                <span className="seqfx-block-glyph-label" data-role="seqfx-block-glyph-label">
+                    x{slices}
+                </span>
+            ) : null}
+            {size === "wide" ? (
+                <span className="seqfx-block-glyph-readout" data-role="seqfx-block-glyph-readout">
+                    x{slices} {shapeLabel}
+                </span>
+            ) : null}
+        </>
+    );
+}
+
+function SeqFxBlockGlyph({
+    effectType,
+    params,
+    segmentLength,
+}: {
+    effectType: SeqFxEffectType;
+    params: number[];
+    segmentLength: number;
+}) {
+    const size = risoBlockVisualSize(segmentLength);
+    const width = risoBlockViewBoxWidth(segmentLength);
+
+    switch (effectType) {
+        case SEQFX_EFFECT_TYPES.filter:
+            return <SeqFxFilterBlockGlyph params={params} size={size} width={width} />;
+        case SEQFX_EFFECT_TYPES.crusher:
+            return <SeqFxCrusherBlockGlyph params={params} size={size} width={width} />;
+        case SEQFX_EFFECT_TYPES.tapeStop:
+            return <SeqFxTapeStopBlockGlyph params={params} size={size} width={width} />;
+        case SEQFX_EFFECT_TYPES.stutter:
+            return <SeqFxStutterBlockGlyph params={params} size={size} width={width} />;
+        default:
+            return null;
+    }
+}
+
 const SEQFX_FILTER_MODE_OPTIONS: FilterRangeModeOption[] = [
     { label: "LP", value: "lowpass" },
     { label: "HP", value: "highpass" },
@@ -854,255 +1240,6 @@ function stutterValueFromSeqFxStep(step: SeqFxStep) {
         shape: step.params[STUTTER_PARAM_SHAPE],
         gate: step.params[STUTTER_PARAM_GATE],
     };
-}
-
-const BLOCK_GLYPH_VIEWBOX_WIDTH = 100;
-const BLOCK_GLYPH_VIEWBOX_HEIGHT = 40;
-const BLOCK_GLYPH_TOP_Y = 8;
-const BLOCK_GLYPH_BOTTOM_Y = 32;
-
-function filterCutoffNorm(cutoffHz: number) {
-    const safe = clampNumber(cutoffHz, 20, 20_000);
-    const logMin = Math.log10(20);
-    const logMax = Math.log10(20_000);
-    return (Math.log10(safe) - logMin) / (logMax - logMin);
-}
-
-const FILTER_GLYPH_TOP_Y = 4;
-const FILTER_GLYPH_BOTTOM_Y = 36;
-const FILTER_GLYPH_AREA_GRADIENT_ID_PREFIX = "seqfx-glyph-filter-area";
-
-function buildFilterGlyphShape(mode: number, cutoffNorm: number) {
-    const x = 8 + clampNumber(cutoffNorm, 0, 1) * 84;
-    const top = FILTER_GLYPH_TOP_Y;
-    const bottom = FILTER_GLYPH_BOTTOM_Y;
-    const leftKnee = clampNumber(x - 16, 0, 100);
-    const rightKnee = clampNumber(x + 16, 0, 100);
-    if (mode === 1) {
-        const curvePath = [
-            `M${leftKnee.toFixed(2)} ${bottom}`,
-            `C${(x - 8).toFixed(2)} ${bottom} ${(x + 8).toFixed(2)} ${top} ${rightKnee.toFixed(2)} ${top}`,
-            `L100 ${top}`,
-        ].join(" ");
-        return {
-            areaPath: `${curvePath} L100 ${bottom} Z`,
-            curvePath,
-        };
-    }
-    if (mode === 2) {
-        const curvePath = [
-            `M${leftKnee.toFixed(2)} ${bottom}`,
-            `C${(leftKnee + 6).toFixed(2)} ${bottom} ${(x - 9).toFixed(2)} ${top} ${x.toFixed(2)} ${top}`,
-            `C${(x + 9).toFixed(2)} ${top} ${(rightKnee - 6).toFixed(2)} ${bottom} ${rightKnee.toFixed(2)} ${bottom}`,
-        ].join(" ");
-        return {
-            areaPath: `${curvePath} Z`,
-            curvePath,
-        };
-    }
-    const curvePath = [
-        `M0 ${top}`,
-        `L${leftKnee.toFixed(2)} ${top}`,
-        `C${(x - 8).toFixed(2)} ${top} ${(x + 8).toFixed(2)} ${bottom} ${rightKnee.toFixed(2)} ${bottom}`,
-    ].join(" ");
-    return {
-        areaPath: `${curvePath} L0 ${bottom} Z`,
-        curvePath,
-    };
-}
-
-function crusherStaircaseStepCount(bits: number) {
-    const safe = clampNumber(bits, 4, 16);
-    return Math.max(2, Math.min(8, Math.round((safe - 4) / 2) + 2));
-}
-
-function buildCrusherStaircasePath(stepCount: number) {
-    const top = BLOCK_GLYPH_TOP_Y;
-    const bottom = BLOCK_GLYPH_BOTTOM_Y;
-    const stepWidth = 100 / stepCount;
-    const stepHeight = (bottom - top) / stepCount;
-    let path = `M0 ${top.toFixed(2)}`;
-    for (let i = 1; i <= stepCount; i += 1) {
-        const xRight = i * stepWidth;
-        const yTop = top + ((i - 1) * stepHeight);
-        const yBottom = top + (i * stepHeight);
-        path += ` L${xRight.toFixed(2)} ${yTop.toFixed(2)} L${xRight.toFixed(2)} ${yBottom.toFixed(2)}`;
-    }
-    return path;
-}
-
-function buildTapeStopGlyphPath(mode: number, curve: number) {
-    const top = BLOCK_GLYPH_TOP_Y;
-    const bottom = BLOCK_GLYPH_BOTTOM_Y;
-    const safeCurve = clampNumber(curve, 0.25, 4);
-    const curveDelta = clampNumber(Math.log2(safeCurve) / 2, -1, 1);
-    const mid = (top + bottom) / 2;
-    const left = 64;
-    const right = 96;
-    const offset = 8;
-    const isSpinUp = Math.round(mode) === 1;
-    const startY = isSpinUp ? bottom : top;
-    const endY = isSpinUp ? top : bottom;
-    const midY = isSpinUp ? mid + (curveDelta * offset) : mid - (curveDelta * offset);
-    return `M${left} ${startY} C${(left + 10).toFixed(2)} ${startY} ${(right - 12).toFixed(2)} ${midY.toFixed(2)} ${right} ${endY}`;
-}
-
-type StutterGlyphSlice = {
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-};
-
-function buildStutterGlyphSlices(slices: number) {
-    const safe = Math.max(2, Math.min(32, Math.round(slices)));
-    const visible = Math.max(2, Math.min(8, safe - 1));
-    const left = 8;
-    const available = 84;
-    const gap = 3;
-    const width = (available - ((visible - 1) * gap)) / visible;
-    const maxHeight = BLOCK_GLYPH_BOTTOM_Y - BLOCK_GLYPH_TOP_Y;
-    const minHeight = 6;
-    const blocks: StutterGlyphSlice[] = [];
-    for (let i = 0; i < visible; i += 1) {
-        const progress = visible === 1 ? 0 : i / (visible - 1);
-        const height = maxHeight - (progress * (maxHeight - minHeight));
-        blocks.push({
-            x: left + (i * (width + gap)),
-            y: (BLOCK_GLYPH_VIEWBOX_HEIGHT - height) / 2,
-            width,
-            height,
-        });
-    }
-    return blocks;
-}
-
-function SeqFxBlockGlyph({ effectType, step }: { effectType: SeqFxEffectType; step: SeqFxStep }) {
-    const generatedId = useId().replace(/[^A-Za-z0-9_-]/g, "");
-    const filterAreaGradientId = `${FILTER_GLYPH_AREA_GRADIENT_ID_PREFIX}-${generatedId}`;
-
-    if (effectType === SEQFX_EFFECT_TYPES.empty) {
-        return null;
-    }
-
-    const viewBox = `0 0 ${BLOCK_GLYPH_VIEWBOX_WIDTH} ${BLOCK_GLYPH_VIEWBOX_HEIGHT}`;
-    const params = step.params;
-
-    if (effectType === SEQFX_EFFECT_TYPES.filter) {
-        const mode = Math.round(params[FILTER_PARAM_MODE] ?? 0);
-        const cutoff = params[FILTER_PARAM_CUTOFF] ?? 2_000;
-        const cutoffNorm = filterCutoffNorm(cutoff);
-        const x = (8 + (cutoffNorm * 84)).toFixed(2);
-        const shape = buildFilterGlyphShape(mode, cutoffNorm);
-        return (
-            <svg
-                aria-hidden="true"
-                className="seqfx-block-glyph"
-                data-role="seqfx-block-glyph"
-                data-glyph-effect="filter"
-                data-glyph-detail={String(mode)}
-                focusable="false"
-                preserveAspectRatio="none"
-                viewBox={viewBox}
-            >
-                <defs>
-                    <linearGradient
-                        id={filterAreaGradientId}
-                        x1="0"
-                        y1="0"
-                        x2="0"
-                        y2="1"
-                    >
-                        <stop offset="0" stopColor="#d67a86" stopOpacity="0.66" />
-                        <stop offset="1" stopColor="#d67a86" stopOpacity="0.12" />
-                    </linearGradient>
-                </defs>
-                <path className="seqfx-block-glyph__area" d={shape.areaPath} fill={`url(#${filterAreaGradientId})`} />
-                <path className="seqfx-block-glyph__curve" d={shape.curvePath} />
-                <line
-                    className="seqfx-block-glyph__hairline"
-                    x1={x}
-                    x2={x}
-                    y1="2"
-                    y2={String(BLOCK_GLYPH_VIEWBOX_HEIGHT - 2)}
-                />
-            </svg>
-        );
-    }
-
-    if (effectType === SEQFX_EFFECT_TYPES.crusher) {
-        const bits = params[CRUSHER_PARAM_BITS] ?? 16;
-        const stepCount = crusherStaircaseStepCount(bits);
-        return (
-            <svg
-                aria-hidden="true"
-                className="seqfx-block-glyph"
-                data-role="seqfx-block-glyph"
-                data-glyph-effect="crusher"
-                data-glyph-detail={String(stepCount)}
-                focusable="false"
-                preserveAspectRatio="none"
-                viewBox={viewBox}
-            >
-                <path className="seqfx-block-glyph__curve" d={buildCrusherStaircasePath(stepCount)} />
-            </svg>
-        );
-    }
-
-    if (effectType === SEQFX_EFFECT_TYPES.tapeStop) {
-        const mode = Math.round(params[TAPE_STOP_PARAM_MODE] ?? 0);
-        const curve = params[TAPE_STOP_PARAM_START_CURVE] ?? 1;
-        return (
-            <svg
-                aria-hidden="true"
-                className="seqfx-block-glyph"
-                data-role="seqfx-block-glyph"
-                data-glyph-effect="tapeStop"
-                data-glyph-detail={String(mode)}
-                focusable="false"
-                preserveAspectRatio="none"
-                viewBox={viewBox}
-            >
-                <rect className="seqfx-block-glyph__cassette" x="8" y="10" width="48" height="20" rx="3" />
-                <path className="seqfx-block-glyph__cassette-window" d="M17 24 L47 24 L43 28 L21 28 Z" />
-                <circle className="seqfx-block-glyph__reel" cx="23" cy="20" r="4" />
-                <circle className="seqfx-block-glyph__reel" cx="41" cy="20" r="4" />
-                <path className="seqfx-block-glyph__tape-line" d="M23 20 C28 17.5 36 17.5 41 20" />
-                <path className="seqfx-block-glyph__curve" d={buildTapeStopGlyphPath(mode, curve)} />
-            </svg>
-        );
-    }
-
-    if (effectType === SEQFX_EFFECT_TYPES.stutter) {
-        const slices = Math.round(params[STUTTER_PARAM_SLICES] ?? 4);
-        const stutterSlices = buildStutterGlyphSlices(slices);
-        return (
-            <svg
-                aria-hidden="true"
-                className="seqfx-block-glyph"
-                data-role="seqfx-block-glyph"
-                data-glyph-effect="stutter"
-                data-glyph-detail={String(stutterSlices.length)}
-                focusable="false"
-                preserveAspectRatio="none"
-                viewBox={viewBox}
-            >
-                {stutterSlices.map((slice, index) => (
-                    <rect
-                        className="seqfx-block-glyph__slice"
-                        key={index}
-                        x={slice.x.toFixed(2)}
-                        y={slice.y.toFixed(2)}
-                        width={slice.width.toFixed(2)}
-                        height={slice.height.toFixed(2)}
-                        rx="1.5"
-                    />
-                ))}
-            </svg>
-        );
-    }
-
-    return null;
 }
 
 function buildStepNumbers() {
@@ -3996,8 +4133,6 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
                                                         playheadStep !== null && playheadStep >= block.startStep && playheadStep <= block.endStep ? "is-playhead" : "",
                                                     ].filter(Boolean).join(" ");
                                                     const effectName = SEQFX_EFFECT_TYPE_NAMES[block.effectType] ?? "Effect";
-                                                    const effectShortName = SEQFX_EFFECT_TYPE_SHORT_NAMES[block.effectType] ?? "";
-                                                    const blockStep = renderedPatternState.lanes[lane].steps[block.startStep];
                                                     const ariaLabel = block.length === 1
                                                         ? `${laneName} ${effectName} block ${block.startStep + 1}`
                                                         : `${laneName} ${effectName} block ${block.startStep + 1}-${block.endStep + 1}`;
@@ -4006,6 +4141,8 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
                                                         .filter((segment) => segment.barIndex === barIndex)
                                                         .map((segment) => {
                                                             const primarySegment = segment.startStep === block.startStep;
+                                                            const segmentLength = segment.endStep - segment.startStep + 1;
+                                                            const stepParams = renderedPatternState.lanes[lane].steps[block.startStep]?.params ?? [];
                                                             return (
                                                                         <div
                                                                             aria-label={primarySegment ? ariaLabel : undefined}
@@ -4030,8 +4167,11 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
                                                                     tabIndex={primarySegment ? 0 : undefined}
                                                                 >
                                                                     <span className="seqfx-block-fill">
-                                                                        <SeqFxBlockGlyph effectType={block.effectType} step={blockStep} />
-                                                                        <span className="seqfx-block-label">{effectShortName}</span>
+                                                                        <SeqFxBlockGlyph
+                                                                            effectType={block.effectType}
+                                                                            params={stepParams}
+                                                                            segmentLength={segmentLength}
+                                                                        />
                                                                     </span>
                                                                     {segment.isEndSegment ? (
                                                                         <span

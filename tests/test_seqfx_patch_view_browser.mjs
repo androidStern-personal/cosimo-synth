@@ -22,8 +22,16 @@ const SEQFX_EFFECT_TYPES = {
     tapeStop: 3,
     stutter: 4,
 };
+const FILTER_PARAM_MODE = 0;
+const FILTER_PARAM_CUTOFF = 1;
+const FILTER_PARAM_RESONANCE = 3;
+const CRUSHER_PARAM_BITS = 0;
+const CRUSHER_PARAM_HOLD_FRAMES = 1;
 const CRUSHER_PARAM_DRIVE_DB = 2;
+const TAPE_STOP_PARAM_START_CURVE = 1;
+const TAPE_STOP_PARAM_MODE = 4;
 const STUTTER_PARAM_SLICES = 0;
+const STUTTER_PARAM_SHAPE = 2;
 const SEQFX_LANE_NAMES = ["Chain 1", "Chain 2", "Chain 3", "Chain 4"];
 const SEQFX_DEFAULT_EFFECT_NAMES = ["Filter", "Crusher", "Tape Stop", "Stutter"];
 const TAPE_GRAPH_VIEWBOX_WIDTH = 260;
@@ -2957,8 +2965,7 @@ test("seqfx_blocks_use_a_single_clean_surface_with_hidden_resize_chrome", async 
     assert.equal(initialStyles.blockBorderWidth, "0px");
     assert.equal(initialStyles.blockCursor, "grab");
     assert.equal(initialStyles.fillBorderWidth, "0px");
-    assert.match(initialStyles.fillBackground, /rgba\(/);
-    assert.ok(Number(initialStyles.fillBackground.match(/,\s*([0-9.]+)\)$/)?.[1] ?? 1) < 1, "block fill should be translucent over the material plate");
+    assert.equal(initialStyles.fillBackground, "rgb(238, 108, 77)");
     assert.notEqual(initialStyles.fillBoxShadow, "none");
     assert.equal(initialStyles.fillBoxShadow.includes("0px 0px 0px 1px"), false, "block fill should not use an inset 1px border");
     assert.deepEqual(initialStyles.fillInset, { top: "1px", right: "1px", bottom: "1px", left: "1px" });
@@ -2984,6 +2991,126 @@ test("seqfx_blocks_use_a_single_clean_surface_with_hidden_resize_chrome", async 
     assert.ok(handleBox);
     await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2);
     assert.equal(await block.evaluate((node) => getComputedStyle(node).cursor), "col-resize");
+
+    await page.close();
+});
+
+test("seqfx_blocks_render_risograph_glyphs_from_effect_parameters", async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
+    await loadSeqFxHarness(page);
+    await page.locator('[data-role="seqfx-root"]').waitFor();
+
+    await page.evaluate(async ({ stateKey, params }) => {
+        const module = await import(`/fx/seqfx/view/seqfx-state.ts?risograph-block-test=${Date.now()}`);
+        let state = module.createDefaultSeqFxState();
+        const createBlock = (lane, startStep, length, effectType) => {
+            state = module.applySeqFxBlockCreate(state, { patternIndex: 0, lane, startStep, length, effectType });
+        };
+        const setParam = (lane, startStep, paramIndex, value) => {
+            state = module.applySeqFxBlockParamEdit(state, { patternIndex: 0, lane, startStep, paramIndex, value });
+        };
+
+        createBlock(0, 0, 1, module.SEQFX_EFFECT_TYPES.filter);
+        setParam(0, 0, params.filterMode, 0);
+        setParam(0, 0, params.filterCutoff, 2_400);
+        setParam(0, 0, params.filterResonance, 0.62);
+
+        createBlock(0, 2, 2, module.SEQFX_EFFECT_TYPES.filter);
+        setParam(0, 2, params.filterMode, 2);
+        setParam(0, 2, params.filterCutoff, 620);
+        setParam(0, 2, params.filterResonance, 0.91);
+
+        createBlock(1, 0, 3, module.SEQFX_EFFECT_TYPES.crusher);
+        setParam(1, 0, params.crusherBits, 6);
+        setParam(1, 0, params.crusherHoldFrames, 8);
+        setParam(1, 0, params.crusherDriveDb, 9);
+
+        createBlock(2, 0, 4, module.SEQFX_EFFECT_TYPES.tapeStop);
+        setParam(2, 0, params.tapeStartCurve, 3.2);
+        setParam(2, 0, params.tapeMode, 1);
+
+        createBlock(3, 0, 5, module.SEQFX_EFFECT_TYPES.stutter);
+        setParam(3, 0, params.stutterSlices, 16);
+        setParam(3, 0, params.stutterShape, 0.5);
+
+        window.__SEQFX_HARNESS__?.patchConnection.sendStoredStateValue(stateKey, JSON.stringify(state));
+    }, {
+        stateKey: SEQFX_STATE_KEY,
+        params: {
+            filterMode: FILTER_PARAM_MODE,
+            filterCutoff: FILTER_PARAM_CUTOFF,
+            filterResonance: FILTER_PARAM_RESONANCE,
+            crusherBits: CRUSHER_PARAM_BITS,
+            crusherHoldFrames: CRUSHER_PARAM_HOLD_FRAMES,
+            crusherDriveDb: CRUSHER_PARAM_DRIVE_DB,
+            tapeStartCurve: TAPE_STOP_PARAM_START_CURVE,
+            tapeMode: TAPE_STOP_PARAM_MODE,
+            stutterSlices: STUTTER_PARAM_SLICES,
+            stutterShape: STUTTER_PARAM_SHAPE,
+        },
+    });
+
+    await page.locator('[data-role="seqfx-block-glyph"]').first().waitFor();
+
+    const glyphs = await page.evaluate(() => {
+        const read = (selector) => {
+            const block = document.querySelector(selector);
+            const fill = block?.querySelector(".seqfx-block-fill");
+            const glyph = block?.querySelector('[data-role="seqfx-block-glyph"]');
+            const labels = [...(block?.querySelectorAll('[data-role="seqfx-block-glyph-label"]') ?? [])].map((node) => node.textContent?.trim());
+            const readouts = [...(block?.querySelectorAll('[data-role="seqfx-block-glyph-readout"]') ?? [])].map((node) => node.textContent?.trim());
+
+            return {
+                blockBackground: fill ? getComputedStyle(fill).backgroundColor : "",
+                effect: glyph?.getAttribute("data-effect"),
+                filterMarker: glyph?.querySelector('[data-role="seqfx-block-glyph-marker"]')?.getAttribute("d"),
+                inkPath: glyph?.querySelector('[data-role="seqfx-block-glyph-ink"]')?.getAttribute("d"),
+                labels,
+                readouts,
+                rectCount: glyph?.querySelectorAll('[data-role="seqfx-block-glyph-rect"]').length ?? 0,
+                size: glyph?.getAttribute("data-size"),
+                viewBox: glyph?.getAttribute("viewBox"),
+            };
+        };
+
+        return {
+            singleFilter: read('[data-role="seqfx-block"][data-lane="0"][data-start="0"]'),
+            midFilter: read('[data-role="seqfx-block"][data-lane="0"][data-start="2"]'),
+            crusher: read('[data-role="seqfx-block"][data-lane="1"][data-start="0"]'),
+            tape: read('[data-role="seqfx-block"][data-lane="2"][data-start="0"]'),
+            stutter: read('[data-role="seqfx-block"][data-lane="3"][data-start="0"]'),
+        };
+    });
+
+    assert.equal(glyphs.singleFilter.effect, "filter");
+    assert.equal(glyphs.singleFilter.size, "single");
+    assert.equal(glyphs.singleFilter.viewBox, "0 0 28 28");
+    assert.deepEqual(glyphs.singleFilter.labels, [], "single-cell blocks should stay silhouette-only");
+    assert.match(glyphs.singleFilter.inkPath, /Q/, "filter glyph should use smooth continuous curves, not stepped blocks");
+    assert.match(glyphs.singleFilter.filterMarker, /^M\d+(\.\d+)? 0 V28$/);
+
+    assert.equal(glyphs.midFilter.effect, "filter");
+    assert.equal(glyphs.midFilter.size, "medium");
+    assert.equal(glyphs.midFilter.viewBox, "0 0 59 28");
+    assert.deepEqual(glyphs.midFilter.labels, ["BP"], "medium filter blocks should keep the tiny prototype-style mode label");
+    assert.match(glyphs.midFilter.inkPath, /Q/, "bandpass filter glyph should be a smooth bell shape");
+
+    assert.equal(glyphs.crusher.effect, "crusher");
+    assert.equal(glyphs.crusher.viewBox, "0 0 90 28");
+    assert.deepEqual(glyphs.crusher.labels, ["6 BIT"]);
+    assert.match(glyphs.crusher.inkPath, /^M0 28 L0 \d+(\.\d+)? L/, "crusher glyph should use the prototype's stepped filled silhouette");
+    assert.match(glyphs.crusher.blockBackground, /^rgb\(238, 108, 77\)$/);
+
+    assert.equal(glyphs.tape.effect, "tape");
+    assert.equal(glyphs.tape.size, "wide");
+    assert.deepEqual(glyphs.tape.labels, ["UP"]);
+    assert.match(glyphs.tape.inkPath, /Q/, "curved tape modes should draw a curved filled envelope");
+    assert.match(glyphs.tape.blockBackground, /^rgb\(152, 193, 217\)$/);
+
+    assert.equal(glyphs.stutter.effect, "stutter");
+    assert.equal(glyphs.stutter.rectCount, 16, "stutter glyph bar count should follow the slice count");
+    assert.deepEqual(glyphs.stutter.readouts, ["x16 BELL"]);
+    assert.match(glyphs.stutter.blockBackground, /^rgb\(181, 217, 156\)$/);
 
     await page.close();
 });
@@ -3813,199 +3940,6 @@ test("seqfx_keyboard_activation_creates_and_selects_grid_blocks", async () => {
     snapshot = await getHarnessSnapshot(page);
     assert.equal(patternUploads(snapshot).at(-1).value.activeSteps[0][8], true);
     await page.locator('[data-role="seqfx-inspector"]').getByText("Chain 1 step 9").waitFor();
-
-    await page.close();
-});
-
-test("seqfx_active_blocks_render_per_effect_glyph_layer_inside_block_fill", async () => {
-    const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
-    await loadSeqFxHarness(page);
-    await page.locator('[data-role="seqfx-root"]').waitFor();
-
-    await page.getByRole("button", { name: "Chain 1 step 1", exact: true }).click();
-    await page.getByRole("button", { name: "Chain 2 step 1", exact: true }).click();
-    await page.getByRole("button", { name: "Chain 3 step 1", exact: true }).click();
-    await page.getByRole("button", { name: "Chain 4 step 1", exact: true }).click();
-    await page.getByRole("button", { name: "Chain 1 Filter block 1", exact: true }).waitFor();
-    await page.getByRole("button", { name: "Chain 2 Crusher block 1", exact: true }).waitFor();
-    await page.getByRole("button", { name: "Chain 3 Tape Stop block 1", exact: true }).waitFor();
-    await page.getByRole("button", { name: "Chain 4 Stutter block 1", exact: true }).waitFor();
-
-    const expectations = [
-        { lane: 0, effect: "filter", label: "FLT", paths: 2, hasHairline: true, hasArea: true, cassetteReels: 0, slices: 0 },
-        { lane: 1, effect: "crusher", label: "CRSH", paths: 1, hasHairline: false, hasArea: false, cassetteReels: 0, slices: 0 },
-        { lane: 2, effect: "tapeStop", label: "TAPE", paths: 3, hasHairline: false, hasArea: false, cassetteReels: 2, slices: 0 },
-        { lane: 3, effect: "stutter", label: "STUT", paths: 0, hasHairline: false, hasArea: false, cassetteReels: 0, slices: 1 },
-    ];
-
-    const summaries = await page.evaluate((expectedLanes) => {
-        const extractAlpha = (color) => {
-            const inner = color.match(/rgba?\(([^)]+)\)/)?.[1];
-            if (!inner) return 1;
-            const slashed = inner.split("/");
-            if (slashed.length === 2) {
-                return Number(slashed[1].trim());
-            }
-            const parts = inner.split(",").map((part) => part.trim());
-            return parts.length >= 4 ? Number(parts[3]) : 1;
-        };
-
-        return expectedLanes.map(({ lane }) => {
-            const block = document.querySelector(`[data-role="seqfx-block"][data-lane="${lane}"][data-start="0"]`);
-            const fill = block?.querySelector(".seqfx-block-fill");
-            const glyph = fill?.querySelector(".seqfx-block-glyph");
-            const label = fill?.querySelector(".seqfx-block-label");
-            const glyphStyle = glyph ? getComputedStyle(glyph) : null;
-            const labelStyle = label ? getComputedStyle(label) : null;
-            const glyphRect = glyph?.getBoundingClientRect();
-            const glyphAlpha = glyphStyle?.color ? extractAlpha(glyphStyle.color) : 1;
-            const areaPath = glyph?.querySelector(".seqfx-block-glyph__area");
-            const areaFill = areaPath?.getAttribute("fill") ?? (areaPath ? getComputedStyle(areaPath).fill : "");
-            const gradient = glyph?.querySelector("defs linearGradient");
-            const gradientId = gradient?.getAttribute("id") ?? "";
-            const gradientStopCount = gradient?.querySelectorAll("stop").length ?? 0;
-
-            return {
-                lane,
-                glyphTag: glyph?.tagName?.toLowerCase() ?? null,
-                glyphEffect: glyph?.getAttribute("data-glyph-effect") ?? null,
-                glyphDetail: glyph?.getAttribute("data-glyph-detail") ?? null,
-                glyphPathCount: glyph?.querySelectorAll("path").length ?? 0,
-                glyphHasHairline: Boolean(glyph?.querySelector(".seqfx-block-glyph__hairline")),
-                glyphHasArea: Boolean(areaPath),
-                cassetteReelCount: glyph?.querySelectorAll(".seqfx-block-glyph__reel").length ?? 0,
-                sliceCount: glyph?.querySelectorAll(".seqfx-block-glyph__slice").length ?? 0,
-                glyphPointerEvents: glyphStyle?.pointerEvents ?? "",
-                glyphAlpha,
-                glyphFillsBlock: glyphRect && fill
-                    ? Math.abs(glyphRect.width - fill.getBoundingClientRect().width) < 14
-                    : false,
-                labelText: label?.textContent?.trim() ?? "",
-                labelOnTop: labelStyle?.zIndex ?? "",
-                pathDataNonEmpty: Array.from(glyph?.querySelectorAll("path") ?? [])
-                    .every((path) => (path.getAttribute("d") ?? "").length > 0),
-                areaFill,
-                gradientId,
-                gradientStopCount,
-            };
-        });
-    }, expectations);
-
-    for (const expectation of expectations) {
-        const summary = summaries.find((entry) => entry.lane === expectation.lane);
-        assert.ok(summary, `expected glyph summary for lane ${expectation.lane}`);
-        assert.equal(summary.glyphTag, "svg", `lane ${expectation.lane} glyph should render as <svg>`);
-        assert.equal(summary.glyphEffect, expectation.effect, `lane ${expectation.lane} glyph effect mismatch`);
-        assert.ok(summary.glyphDetail && summary.glyphDetail.length > 0, `lane ${expectation.lane} glyph should expose a detail attr`);
-        assert.equal(summary.glyphPointerEvents, "none", `lane ${expectation.lane} glyph must not capture pointer events`);
-        assert.ok(summary.glyphAlpha > 0 && summary.glyphAlpha <= 0.6, `lane ${expectation.lane} glyph stroke should stay subtle, got alpha ${summary.glyphAlpha}`);
-        assert.equal(summary.glyphFillsBlock, true, `lane ${expectation.lane} glyph should stretch across the block fill`);
-        assert.equal(summary.pathDataNonEmpty, true, `lane ${expectation.lane} glyph paths must have non-empty d attributes`);
-        assert.equal(summary.labelText, expectation.label, `lane ${expectation.lane} should keep its readable block label`);
-        assert.equal(summary.labelOnTop, "1", `lane ${expectation.lane} block label should sit above the glyph (z-index)`);
-
-        if (expectation.paths > 0) {
-            assert.ok(summary.glyphPathCount >= expectation.paths, `lane ${expectation.lane} glyph should include >= ${expectation.paths} path(s), got ${summary.glyphPathCount}`);
-        }
-        if (expectation.hasHairline) {
-            assert.equal(summary.glyphHasHairline, true, `lane ${expectation.lane} filter glyph should expose a cutoff hairline`);
-        }
-        if (expectation.hasArea) {
-            assert.equal(summary.glyphHasArea, true, `lane ${expectation.lane} filter glyph should shade the response area`);
-            assert.match(summary.gradientId, /^seqfx-glyph-filter-area-/, `lane ${expectation.lane} filter gradient id should be scoped, got ${summary.gradientId}`);
-            assert.equal(summary.gradientStopCount, 2, `lane ${expectation.lane} filter glyph should define a two-stop response-area gradient`);
-            assert.equal(summary.areaFill, `url(#${summary.gradientId})`, `lane ${expectation.lane} filter response area should fill from its own gradient`);
-        }
-        if (expectation.cassetteReels > 0) {
-            assert.equal(summary.cassetteReelCount, expectation.cassetteReels, `lane ${expectation.lane} tape glyph should render cassette reels`);
-        }
-        if (expectation.slices > 0) {
-            assert.ok(summary.sliceCount >= expectation.slices, `lane ${expectation.lane} stutter glyph should expose filled slice blocks`);
-        }
-    }
-
-    await page.close();
-});
-
-test("seqfx_block_glyph_reflects_key_param_changes_for_each_effect", async () => {
-    const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
-    await loadSeqFxHarness(page);
-    await page.locator('[data-role="seqfx-root"]').waitFor();
-
-    const readGlyph = async (lane) => page.evaluate((targetLane) => {
-        const block = document.querySelector(`[data-role="seqfx-block"][data-lane="${targetLane}"][data-start="0"]`);
-        const glyph = block?.querySelector(".seqfx-block-glyph");
-        const path = glyph?.querySelector("path.seqfx-block-glyph__curve") ?? glyph?.querySelector("path");
-        const hairline = glyph?.querySelector(".seqfx-block-glyph__hairline");
-        return {
-            detail: glyph?.getAttribute("data-glyph-detail") ?? null,
-            d: path?.getAttribute("d") ?? null,
-            hairlineX: Number(hairline?.getAttribute("x1") ?? Number.NaN),
-            sliceCount: glyph?.querySelectorAll(".seqfx-block-glyph__slice").length ?? 0,
-        };
-    }, lane);
-
-    await page.getByRole("button", { name: "Chain 1 step 1", exact: true }).click();
-    await page.getByRole("button", { name: "Chain 1 Filter block 1", exact: true }).waitFor();
-    const filterBefore = await readGlyph(0);
-    await page.locator('[data-role="filter-range-mode-cycle-button"]').click();
-    await page.waitForFunction(() => {
-        const block = document.querySelector('[data-role="seqfx-block"][data-lane="0"][data-start="0"]');
-        return block?.querySelector(".seqfx-block-glyph")?.getAttribute("data-glyph-detail") === "1";
-    });
-    const filterModeAfter = await readGlyph(0);
-    assert.notEqual(filterBefore.detail, filterModeAfter.detail, "cycling filter mode should change the glyph mode detail");
-    assert.notEqual(filterBefore.d, filterModeAfter.d, "cycling filter mode should redraw the response curve");
-    await page.locator('[data-role="filter-range-start-hit-target"]').focus();
-    await page.keyboard.press("End");
-    await page.waitForFunction(() => {
-        const hairline = document
-            .querySelector('[data-role="seqfx-block"][data-lane="0"][data-start="0"]')
-            ?.querySelector(".seqfx-block-glyph__hairline");
-        return Number(hairline?.getAttribute("x1") ?? 0) > 90;
-    });
-    const filterCutoffAfter = await readGlyph(0);
-    assert.ok(
-        filterCutoffAfter.hairlineX > filterModeAfter.hairlineX,
-        `raising filter cutoff should move the block glyph hairline right, got ${filterModeAfter.hairlineX} -> ${filterCutoffAfter.hairlineX}`,
-    );
-
-    await page.getByRole("button", { name: "Chain 2 step 1", exact: true }).click();
-    await page.getByRole("button", { name: "Chain 2 Crusher block 1", exact: true }).waitFor();
-    const crusherBefore = await readGlyph(1);
-    await setRangeInputValue(page.locator('[data-role="seqfx-crusher-bits"]'), 4);
-    await page.waitForFunction(() => {
-        const block = document.querySelector('[data-role="seqfx-block"][data-lane="1"][data-start="0"]');
-        return block?.querySelector(".seqfx-block-glyph")?.getAttribute("data-glyph-detail") === "2";
-    });
-    const crusherAfter = await readGlyph(1);
-    assert.notEqual(crusherBefore.detail, crusherAfter.detail, "lowering crusher bits should change the staircase step count");
-    assert.notEqual(crusherBefore.d, crusherAfter.d, "lowering crusher bits should redraw the staircase path");
-
-    await page.getByRole("button", { name: "Chain 3 step 1", exact: true }).click();
-    await page.getByRole("button", { name: "Chain 3 Tape Stop block 1", exact: true }).waitFor();
-    await page.locator('[data-role="seqfx-tape-graph"]').waitFor();
-    const tapeBefore = await readGlyph(2);
-    await page.locator('[data-role="seqfx-tape-mode"]').selectOption("1");
-    await page.waitForFunction(() => {
-        const block = document.querySelector('[data-role="seqfx-block"][data-lane="2"][data-start="0"]');
-        return block?.querySelector(".seqfx-block-glyph")?.getAttribute("data-glyph-detail") === "1";
-    });
-    const tapeAfter = await readGlyph(2);
-    assert.notEqual(tapeBefore.detail, tapeAfter.detail, "changing tape mode should change the glyph mode detail");
-    assert.notEqual(tapeBefore.d, tapeAfter.d, "changing tape mode should flip the tape glyph direction");
-
-    await page.getByRole("button", { name: "Chain 4 step 1", exact: true }).click();
-    await page.getByRole("button", { name: "Chain 4 Stutter block 1", exact: true }).waitFor();
-    const stutterBefore = await readGlyph(3);
-    await setRangeInputValue(page.locator('[data-role="seqfx-stutter-slices"]'), 4);
-    await page.waitForFunction(() => {
-        const block = document.querySelector('[data-role="seqfx-block"][data-lane="3"][data-start="0"]');
-        return block?.querySelector(".seqfx-block-glyph")?.getAttribute("data-glyph-detail") === "3";
-    });
-    const stutterAfter = await readGlyph(3);
-    assert.ok(stutterAfter.sliceCount < stutterBefore.sliceCount, `fewer slices should drop stutter blocks, got ${stutterBefore.sliceCount} → ${stutterAfter.sliceCount}`);
-    assert.ok(stutterAfter.sliceCount >= 2, "stutter glyph should keep at least two taper blocks visible");
 
     await page.close();
 });
