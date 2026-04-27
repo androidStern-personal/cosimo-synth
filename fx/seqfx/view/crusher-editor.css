@@ -28,41 +28,12 @@
     overflow: visible;
 }
 
-.seqfx-crusher-editor__grid-line {
-    stroke: var(--editor-grid-stroke);
-    stroke-width: 1;
-    shape-rendering: crispEdges;
-}
-
-.seqfx-crusher-editor__axis {
-    stroke: var(--editor-axis-stroke);
-    stroke-width: 1;
-    shape-rendering: crispEdges;
-}
-
 .seqfx-crusher-editor__axis--center {
     opacity: 0.68;
 }
 
 .seqfx-crusher-editor__dry-path {
-    fill: none;
-    stroke: rgba(28, 28, 28, 0.55);
     stroke-dasharray: 3 3;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-    stroke-width: var(--editor-curve-preview-stroke-width);
-}
-
-.seqfx-crusher-editor__wet-fill {
-    fill: var(--editor-curve-fill);
-}
-
-.seqfx-crusher-editor__wet-path {
-    fill: none;
-    stroke: var(--editor-curve-stroke);
-    stroke-linecap: round;
-    stroke-linejoin: round;
-    stroke-width: var(--editor-curve-stroke-width);
 }
 
 .seqfx-crusher-editor__hold-marker {

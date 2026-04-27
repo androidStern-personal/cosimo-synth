@@ -1,0 +1,95 @@
+.editor-curve-surface {
+    display: block;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+    color: var(--editor-surface-ink);
+}
+
+.editor-curve-plot-area {
+    fill: var(--editor-zone-fill);
+    stroke: var(--editor-zone-stroke);
+    stroke-width: 1;
+}
+
+.editor-curve-grid-line {
+    stroke: var(--editor-grid-stroke);
+    stroke-width: 1;
+    shape-rendering: crispEdges;
+}
+
+.editor-curve-axis {
+    stroke: var(--editor-axis-stroke);
+    stroke-width: 1;
+    shape-rendering: crispEdges;
+}
+
+.editor-curve-path {
+    fill: none;
+    stroke: var(--editor-curve-stroke);
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: var(--editor-curve-stroke-width);
+}
+
+.editor-curve-path--preview {
+    stroke: var(--editor-curve-preview-stroke);
+    stroke-width: var(--editor-curve-preview-stroke-width);
+    opacity: 0.95;
+}
+
+.editor-curve-path--muted {
+    opacity: 0.34;
+}
+
+.editor-curve-path--highlight {
+    stroke: var(--editor-accent-range);
+}
+
+.editor-curve-fill {
+    fill: var(--editor-curve-fill);
+}
+
+.editor-curve-handle-halo {
+    fill: var(--editor-handle-halo-fill);
+    stroke: var(--editor-handle-halo-stroke);
+    stroke-width: var(--editor-handle-halo-stroke-width);
+}
+
+.editor-curve-handle {
+    fill: var(--editor-handle-fill);
+    stroke: var(--editor-handle-stroke);
+    stroke-width: var(--editor-handle-stroke-width);
+    cursor: grab;
+}
+
+.editor-curve-handle:active {
+    cursor: grabbing;
+}
+
+.editor-curve-handle--range-start {
+    fill: var(--editor-accent-start);
+    stroke: var(--editor-surface-ink);
+    stroke-width: 1.5;
+}
+
+.editor-curve-handle--range-end {
+    fill: var(--editor-accent-end);
+    stroke: var(--editor-surface-ink);
+    stroke-width: 1.5;
+}
+
+.editor-curve-handle--secondary {
+    fill: var(--editor-accent-range);
+    stroke: var(--editor-surface-ink);
+    stroke-width: 1.5;
+}
+
+.editor-curve-hit-target {
+    fill: transparent;
+    cursor: grab;
+}
+
+.editor-curve-hit-target:active {
+    cursor: grabbing;
+}

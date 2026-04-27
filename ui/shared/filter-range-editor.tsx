@@ -35,12 +35,22 @@ import {
     EDITOR_PLOT_BOTTOM_PADDING_PX,
     EDITOR_PLOT_TOP_PADDING_PX,
     EDITOR_RANGE_HANDLE_RADIUS_PX,
-    EDITOR_VALUE_HANDLE_HALO_RADIUS_PX,
-    EDITOR_VALUE_HANDLE_RADIUS_PX,
     editorPlotGutter,
     useEditorSurfaceSize,
     type EditorSurfaceSize,
 } from "./editor-tokens";
+import {
+    createEditorCurvePlotRect,
+    polylineToSvgPath,
+} from "./editor-curve-geometry";
+import {
+    EditorCurveHandle,
+    EditorCurveHandleHalo,
+    EditorCurveHitTarget,
+    EditorCurvePath,
+    EditorCurvePlotArea,
+    EditorCurveSurface,
+} from "./editor-curve-surface";
 
 export type FilterRangeMode = "off" | "lowpass" | "highpass" | "bandpass" | "notch" | "peak";
 export type FilterRangePolarity = "bipolar" | "unipolar";
@@ -327,27 +337,21 @@ function buildMagnitudePath(
         maxDb?: number;
     } = {},
 ): PlotPath {
-    const plotLeft = horizontalPadding;
-    const plotRight = Math.max(horizontalPadding + 1, width - horizontalPadding);
-    const plotTop = topPadding;
-    const plotBottom = Math.max(topPadding + 1, height - bottomPadding);
-    const plotWidth = Math.max(1, plotRight - plotLeft);
-    const plotHeight = Math.max(1, plotBottom - plotTop);
-    const path = magnitudesDb.map((magnitudeDb, index) => {
-        const x = plotLeft + (plotWidth * (index / Math.max(1, magnitudesDb.length - 1)));
+    const plot = createEditorCurvePlotRect(width, height, {
+        horizontalPaddingPx: horizontalPadding,
+        topPaddingPx: topPadding,
+        bottomPaddingPx: bottomPadding,
+    });
+    const points = magnitudesDb.map((magnitudeDb, index) => {
+        const x = plot.plotLeft + (plot.plotWidth * (index / Math.max(1, magnitudesDb.length - 1)));
         const normalized = clamp((clamp(magnitudeDb, minDb, maxDb) - minDb) / (maxDb - minDb), 0, 1);
-        const y = plotBottom - (plotHeight * normalized);
-        return `${index === 0 ? "M" : "L"} ${x.toFixed(3)} ${y.toFixed(3)}`;
-    }).join(" ");
+        const y = plot.plotBottom - (plot.plotHeight * normalized);
+        return { x, y };
+    });
 
     return {
-        path,
-        plotLeft,
-        plotRight,
-        plotTop,
-        plotBottom,
-        plotWidth,
-        plotHeight,
+        path: polylineToSvgPath(points),
+        ...plot,
     };
 }
 
@@ -969,18 +973,19 @@ export function FilterRangeEditor(props: FilterRangeEditorProps) {
                         <FilterRangeModeGlyph mode={safeValue.mode} />
                     </button>
                 ) : null}
-                <svg
+                <EditorCurveSurface
                     ref={surfaceRef}
-                    aria-label={ariaLabel}
+                    ariaLabel={ariaLabel}
                     className="filter-range-editor__surface"
-                    data-role="filter-range-editor-surface"
+                    dataRole="filter-range-editor-surface"
+                    heightPx={size.height}
                     role="group"
                     style={{
                         touchAction: "none",
                         userSelect: "none",
                         WebkitUserSelect: "none",
                     }}
-                    viewBox={`0 0 ${size.width} ${size.height}`}
+                    widthPx={size.width}
                     onPointerMove={(event) => {
                         const dragState = dragStateRef.current;
 
@@ -1004,10 +1009,11 @@ export function FilterRangeEditor(props: FilterRangeEditorProps) {
                     onPointerUp={(event) => endDrag(event.pointerId)}
                     onPointerCancel={(event) => endDrag(event.pointerId)}
                 >
+                    <EditorCurvePlotArea plot={baseResponse.path} />
                     {[0.2, 0.4, 0.6, 0.8].map((tick) => (
                         <line
                             key={`v-${tick}`}
-                            className="filter-range-editor__grid-line"
+                            className="editor-curve-grid-line filter-range-editor__grid-line"
                             data-role="filter-range-editor-grid-line"
                             x1={baseResponse.path.plotLeft + (baseResponse.path.plotWidth * tick)}
                             x2={baseResponse.path.plotLeft + (baseResponse.path.plotWidth * tick)}
@@ -1018,7 +1024,7 @@ export function FilterRangeEditor(props: FilterRangeEditorProps) {
                     {[0.25, 0.5, 0.75].map((tick) => (
                         <line
                             key={`h-${tick}`}
-                            className="filter-range-editor__grid-line"
+                            className="editor-curve-grid-line filter-range-editor__grid-line"
                             data-role="filter-range-editor-grid-line"
                             x1={baseResponse.path.plotLeft}
                             x2={baseResponse.path.plotRight}
@@ -1027,7 +1033,7 @@ export function FilterRangeEditor(props: FilterRangeEditorProps) {
                         />
                     ))}
                     <line
-                        className="filter-range-editor__axis"
+                        className="editor-curve-axis filter-range-editor__axis"
                         data-role="filter-range-editor-axis"
                         x1={baseResponse.path.plotLeft}
                         x2={baseResponse.path.plotRight}
@@ -1035,7 +1041,7 @@ export function FilterRangeEditor(props: FilterRangeEditorProps) {
                         y2={baseResponse.path.plotBottom}
                     />
                     <line
-                        className="filter-range-editor__axis"
+                        className="editor-curve-axis filter-range-editor__axis"
                         data-role="filter-range-editor-axis"
                         x1={baseResponse.path.plotLeft}
                         x2={baseResponse.path.plotLeft}
@@ -1071,17 +1077,18 @@ export function FilterRangeEditor(props: FilterRangeEditorProps) {
                             />
                         </>
                     ) : null}
-                    <path
+                    <EditorCurvePath
                         className="filter-range-editor__response-path"
                         data-role="filter-range-value-response"
                         d={baseResponse.path.path}
                     />
                     {previewResponse && previewPoint ? (
                         <>
-                            <path
+                            <EditorCurvePath
                                 className="filter-range-editor__preview-response-path"
                                 data-role="filter-range-preview-response"
                                 d={previewResponse.path.path}
+                                variant="preview"
                             />
                             <circle
                                 className="filter-range-editor__preview-handle"
@@ -1096,14 +1103,14 @@ export function FilterRangeEditor(props: FilterRangeEditorProps) {
                         <>
                             {rangePolarity === "bipolar" ? (
                                 <>
-                                    <circle
+                                    <EditorCurveHandle
                                         className="filter-range-editor__range-handle filter-range-editor__range-handle--start"
                                         data-role="filter-range-start-handle"
                                         cx={rangeGeometry.startX}
                                         cy={rangeGeometry.bandY}
-                                        r={EDITOR_RANGE_HANDLE_RADIUS_PX}
+                                        variant="range-start"
                                     />
-                                    <circle
+                                    <EditorCurveHitTarget
                                         aria-label="Filter range start cutoff"
                                         aria-valuemax={FILTER_CUTOFF_MAX_HZ}
                                         aria-valuemin={FILTER_CUTOFF_MIN_HZ}
@@ -1114,7 +1121,6 @@ export function FilterRangeEditor(props: FilterRangeEditorProps) {
                                         tabIndex={isRangeEditable(props) ? 0 : undefined}
                                         cx={rangeGeometry.startX}
                                         cy={rangeGeometry.bandY}
-                                        r={EDITOR_HIT_RADIUS_PX}
                                         onKeyDown={(event) => handleRangeKeyDown("range-start", event)}
                                         onPointerDown={(event) => {
                                             if (isRangeEditable(props)) {
@@ -1124,14 +1130,14 @@ export function FilterRangeEditor(props: FilterRangeEditorProps) {
                                     />
                                 </>
                             ) : null}
-                            <circle
+                            <EditorCurveHandle
                                 className="filter-range-editor__range-handle filter-range-editor__range-handle--end"
                                 data-role="filter-range-end-handle"
                                 cx={rangeGeometry.endX}
                                 cy={rangeGeometry.bandY}
-                                r={EDITOR_RANGE_HANDLE_RADIUS_PX}
+                                variant="range-end"
                             />
-                            <circle
+                            <EditorCurveHitTarget
                                 aria-label="Filter range end cutoff"
                                 aria-valuemax={FILTER_CUTOFF_MAX_HZ}
                                 aria-valuemin={FILTER_CUTOFF_MIN_HZ}
@@ -1142,7 +1148,6 @@ export function FilterRangeEditor(props: FilterRangeEditorProps) {
                                 tabIndex={isRangeEditable(props) ? 0 : undefined}
                                 cx={rangeGeometry.endX}
                                 cy={rangeGeometry.bandY}
-                                r={EDITOR_HIT_RADIUS_PX}
                                 onKeyDown={(event) => handleRangeKeyDown("range-end", event)}
                                 onPointerDown={(event) => {
                                     if (isRangeEditable(props)) {
@@ -1160,21 +1165,19 @@ export function FilterRangeEditor(props: FilterRangeEditorProps) {
                         y1={baseResponse.path.plotBottom}
                         y2={handlePoint.y}
                     />
-                    <circle
+                    <EditorCurveHandleHalo
                         className="filter-range-editor__value-halo"
                         data-role="filter-range-value-halo"
                         cx={handlePoint.x}
                         cy={handlePoint.y}
-                        r={EDITOR_VALUE_HANDLE_HALO_RADIUS_PX}
                     />
-                    <circle
+                    <EditorCurveHandle
                         className="filter-range-editor__value-handle"
                         data-role="filter-range-value-handle"
                         cx={handlePoint.x}
                         cy={handlePoint.y}
-                        r={EDITOR_VALUE_HANDLE_RADIUS_PX}
                     />
-                    <circle
+                    <EditorCurveHitTarget
                         aria-label="Filter cutoff and resonance"
                         aria-valuemax={FILTER_CUTOFF_MAX_HZ}
                         aria-valuemin={FILTER_CUTOFF_MIN_HZ}
@@ -1186,7 +1189,6 @@ export function FilterRangeEditor(props: FilterRangeEditorProps) {
                         tabIndex={isValueEditable(props) ? 0 : undefined}
                         cx={handlePoint.x}
                         cy={handlePoint.y}
-                        r={EDITOR_HIT_RADIUS_PX}
                         onKeyDown={handleValueKeyDown}
                         onPointerDown={(event) => {
                             if (isValueEditable(props)) {
@@ -1228,7 +1230,7 @@ export function FilterRangeEditor(props: FilterRangeEditorProps) {
                             />
                         </g>
                     ) : null}
-                </svg>
+                </EditorCurveSurface>
                 {showHandleChips ? (
                     <div
                         className="filter-range-editor__chips"

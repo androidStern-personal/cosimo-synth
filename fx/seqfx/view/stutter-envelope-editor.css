@@ -42,30 +42,6 @@
     overflow: hidden;
 }
 
-.seqfx-stutter-editor__grid-line {
-    stroke: var(--editor-grid-stroke);
-    stroke-width: 1;
-    shape-rendering: crispEdges;
-}
-
-.seqfx-stutter-editor__axis {
-    stroke: var(--editor-axis-stroke);
-    stroke-width: 1;
-    shape-rendering: crispEdges;
-}
-
-.seqfx-stutter-editor__env-path {
-    fill: none;
-    stroke: var(--editor-curve-stroke);
-    stroke-linecap: round;
-    stroke-linejoin: round;
-    stroke-width: var(--editor-curve-stroke-width);
-}
-
-.seqfx-stutter-editor__env-fill {
-    fill: var(--editor-curve-fill);
-}
-
 .seqfx-stutter-editor__gate-region {
     fill: rgba(232, 96, 76, 0.14);
     stroke: var(--editor-accent-end);
@@ -79,27 +55,6 @@
     stroke-dasharray: 3 4;
     stroke-width: 1;
     stroke-opacity: 0.7;
-}
-
-.seqfx-stutter-editor__value-halo {
-    fill: var(--editor-handle-halo-fill);
-    stroke: var(--editor-handle-halo-stroke);
-    stroke-width: var(--editor-handle-halo-stroke-width);
-}
-
-.seqfx-stutter-editor__gate-handle {
-    fill: var(--editor-handle-fill);
-    stroke: var(--editor-handle-stroke);
-    stroke-width: var(--editor-handle-stroke-width);
-}
-
-.seqfx-stutter-editor__gate-hit-target {
-    fill: transparent;
-    cursor: grab;
-}
-
-.seqfx-stutter-editor__gate-hit-target:active {
-    cursor: grabbing;
 }
 
 .seqfx-stutter-editor__axis-label {
@@ -337,22 +292,6 @@
 
 .seqfx-stutter-editor__gate-line--end {
     stroke: var(--editor-accent-end);
-}
-
-.seqfx-stutter-editor__gate-handle--start {
-    fill: var(--editor-accent-start);
-    stroke: var(--editor-handle-stroke);
-    stroke-width: var(--editor-handle-stroke-width);
-}
-
-.seqfx-stutter-editor__gate-handle--end {
-    fill: var(--editor-accent-end);
-    stroke: var(--editor-handle-stroke);
-    stroke-width: var(--editor-handle-stroke-width);
-}
-
-.seqfx-stutter-editor__gate-hit-target--end {
-    cursor: grab;
 }
 
 .seqfx-stutter-editor__gate-chip-rect--modulated {

@@ -34,16 +34,6 @@ const STUTTER_PARAM_SLICES = 0;
 const STUTTER_PARAM_SHAPE = 2;
 const SEQFX_LANE_NAMES = ["Chain 1", "Chain 2", "Chain 3", "Chain 4"];
 const SEQFX_DEFAULT_EFFECT_NAMES = ["Filter", "Crusher", "Tape Stop", "Stutter"];
-const TAPE_GRAPH_VIEWBOX_WIDTH = 260;
-const TAPE_GRAPH_VIEWBOX_HEIGHT = 150;
-const TAPE_GRAPH_LEFT = 28;
-const TAPE_GRAPH_TOP = 12;
-const TAPE_GRAPH_PLOT_WIDTH = 222;
-const TAPE_GRAPH_PLOT_HEIGHT = 114;
-const STUTTER_GRAPH_VIEWBOX_WIDTH = 480;
-const STUTTER_GRAPH_VIEWBOX_HEIGHT = 220;
-const STUTTER_GRAPH_LEFT = 24;
-const STUTTER_GRAPH_PLOT_WIDTH = 432;
 
 let serverProcess;
 let browser;
@@ -184,23 +174,35 @@ function assertClose(actual, expected, tolerance, message) {
     );
 }
 
-function tapeGraphPoint(graphBox, normalizedTime, normalizedSpeed) {
-    const svgX = TAPE_GRAPH_LEFT + (Math.min(1, Math.max(0, normalizedTime)) * TAPE_GRAPH_PLOT_WIDTH);
-    const svgY = TAPE_GRAPH_TOP + ((1 - Math.min(1, Math.max(0, normalizedSpeed))) * TAPE_GRAPH_PLOT_HEIGHT);
+async function editorCurvePlotPoint(page, graphRole, graphBox, normalizedX, normalizedYFromTop) {
+    const plot = await page.locator(`[data-role="${graphRole}"] [data-role="editor-curve-plot-area"]`).evaluate((plotNode) => {
+        const svg = plotNode.ownerSVGElement;
+        const viewBox = svg?.viewBox.baseVal;
+
+        return {
+            height: Number(plotNode.getAttribute("height")),
+            viewBoxHeight: viewBox?.height ?? 1,
+            viewBoxWidth: viewBox?.width ?? 1,
+            width: Number(plotNode.getAttribute("width")),
+            x: Number(plotNode.getAttribute("x")),
+            y: Number(plotNode.getAttribute("y")),
+        };
+    });
+    const svgX = plot.x + (Math.min(1, Math.max(0, normalizedX)) * plot.width);
+    const svgY = plot.y + (Math.min(1, Math.max(0, normalizedYFromTop)) * plot.height);
 
     return {
-        x: graphBox.x + ((svgX / TAPE_GRAPH_VIEWBOX_WIDTH) * graphBox.width),
-        y: graphBox.y + ((svgY / TAPE_GRAPH_VIEWBOX_HEIGHT) * graphBox.height),
+        x: graphBox.x + ((svgX / plot.viewBoxWidth) * graphBox.width),
+        y: graphBox.y + ((svgY / plot.viewBoxHeight) * graphBox.height),
     };
 }
 
-function stutterGraphPoint(graphBox, normalizedGate) {
-    const svgX = STUTTER_GRAPH_LEFT + (Math.min(1, Math.max(0, normalizedGate)) * STUTTER_GRAPH_PLOT_WIDTH);
+async function tapeGraphPoint(page, graphBox, normalizedTime, normalizedSpeed) {
+    return editorCurvePlotPoint(page, "seqfx-tape-graph", graphBox, normalizedTime, 1 - normalizedSpeed);
+}
 
-    return {
-        x: graphBox.x + ((svgX / STUTTER_GRAPH_VIEWBOX_WIDTH) * graphBox.width),
-        y: graphBox.y + ((110 / STUTTER_GRAPH_VIEWBOX_HEIGHT) * graphBox.height),
-    };
+async function stutterGraphPoint(page, graphBox, normalizedGate) {
+    return editorCurvePlotPoint(page, "seqfx-stutter-graph", graphBox, normalizedGate, 0.5);
 }
 
 async function readStutterEnvelopePathSamples(page, phases) {
@@ -223,20 +225,24 @@ async function readStutterEnvelopePathSamples(page, phases) {
         const width = Math.max(1, right - left);
 
         const sampleAtPhase = (phase) => {
-            let nearestPoint = points[0];
-            let nearestDistance = Number.POSITIVE_INFINITY;
+            const targetX = left + (width * phase);
 
-            for (const point of points) {
-                const pointPhase = (point.x - left) / width;
-                const distance = Math.abs(pointPhase - phase);
+            if (targetX <= points[0].x) {
+                return points[0].y;
+            }
 
-                if (distance < nearestDistance) {
-                    nearestPoint = point;
-                    nearestDistance = distance;
+            for (let index = 0; index + 1 < points.length; index += 1) {
+                const from = points[index];
+                const to = points[index + 1];
+
+                if (targetX >= from.x && targetX <= to.x) {
+                    const segmentWidth = to.x - from.x;
+                    const segmentPhase = segmentWidth === 0 ? 0 : (targetX - from.x) / segmentWidth;
+                    return from.y + ((to.y - from.y) * segmentPhase);
                 }
             }
 
-            return nearestPoint.y;
+            return points[points.length - 1].y;
         };
 
         return Object.fromEntries(targetPhases.map((phase) => [phase.toFixed(2), sampleAtPhase(phase)]));
@@ -305,6 +311,45 @@ async function setCrusherEditorValues(page, { bits, holdFrames, driveDb }) {
     await setRangeInputValue(page.locator('[data-role="seqfx-crusher-bits"]'), bits);
     await setRangeInputValue(page.locator('[data-role="seqfx-crusher-hold-frames"]'), holdFrames);
     await setRangeInputValue(page.locator('[data-role="seqfx-crusher-drive-db"]'), driveDb);
+}
+
+async function assertSharedCurveContract(page, { graphRole, pathRole, fillRole = null, handleRole = null }) {
+    await page.locator(`[data-role="${graphRole}"]`).waitFor();
+    const contract = await page.locator(`[data-role="${graphRole}"]`).evaluate((graph, roles) => {
+        const path = graph.querySelector(`[data-role="${roles.pathRole}"]`);
+        const fill = roles.fillRole ? graph.querySelector(`[data-role="${roles.fillRole}"]`) : null;
+        const handle = roles.handleRole ? graph.querySelector(`[data-role="${roles.handleRole}"]`) : null;
+
+        return {
+            handleClasses: handle ? Array.from(handle.classList) : [],
+            surfaceClasses: Array.from(graph.classList),
+            plotAreaCount: graph.querySelectorAll('[data-role="editor-curve-plot-area"]').length,
+            pathClasses: path ? Array.from(path.classList) : [],
+            fillClasses: fill ? Array.from(fill.classList) : [],
+        };
+    }, { pathRole, fillRole, handleRole });
+
+    assert.ok(
+        contract.surfaceClasses.includes("editor-curve-surface"),
+        `${graphRole} should render through the shared editor curve surface`,
+    );
+    assert.equal(contract.plotAreaCount, 1, `${graphRole} should expose the shared plot-area rect`);
+    assert.ok(
+        contract.pathClasses.includes("editor-curve-path"),
+        `${pathRole} should inherit the shared editor curve path class`,
+    );
+    if (fillRole) {
+        assert.ok(
+            contract.fillClasses.includes("editor-curve-fill"),
+            `${fillRole} should inherit the shared editor curve fill class`,
+        );
+    }
+    if (handleRole) {
+        assert.ok(
+            contract.handleClasses.includes("editor-curve-handle"),
+            `${handleRole} should inherit the shared editor curve handle class`,
+        );
+    }
 }
 
 async function openSeqFxModView(page) {
@@ -704,6 +749,44 @@ test("seqfx_shared_effect_loader_imports_react_dev_module_from_manifest", async 
     assert.equal(snapshot.uploads.length >= 1, true);
     assert.equal(snapshot.uploads.at(-1).value.patternIndex, 0);
     assert.deepEqual(pageErrors, []);
+
+    await page.close();
+});
+
+test("seqfx_effect_graphs_render_through_shared_editor_curve_primitives", async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
+    await loadSeqFxHarness(page);
+    await page.locator('[data-role="seqfx-root"]').waitFor();
+
+    await page.getByRole("button", { name: "Chain 1 step 1", exact: true }).click();
+    await assertSharedCurveContract(page, {
+        graphRole: "filter-range-editor-surface",
+        handleRole: "filter-range-value-handle",
+        pathRole: "filter-range-value-response",
+    });
+
+    await page.getByRole("button", { name: "Chain 2 step 1", exact: true }).click();
+    await assertSharedCurveContract(page, {
+        graphRole: "seqfx-crusher-graph",
+        pathRole: "seqfx-crusher-wet-path",
+        fillRole: "seqfx-crusher-wet-fill",
+    });
+
+    await page.getByRole("button", { name: "Chain 3 step 1", exact: true }).click();
+    await assertSharedCurveContract(page, {
+        graphRole: "seqfx-tape-graph",
+        handleRole: "seqfx-tape-start-length-handle",
+        pathRole: "seqfx-tape-graph-line",
+        fillRole: "seqfx-tape-graph-fill",
+    });
+
+    await page.getByRole("button", { name: "Chain 4 step 1", exact: true }).click();
+    await assertSharedCurveContract(page, {
+        graphRole: "seqfx-stutter-graph",
+        handleRole: "seqfx-stutter-gate-handle",
+        pathRole: "seqfx-stutter-env-path",
+        fillRole: "seqfx-stutter-env-fill",
+    });
 
     await page.close();
 });
@@ -2681,7 +2764,8 @@ test("seqfx_stutter_inspector_renders_interactive_envelope_editor_and_writes_blo
 
     const graphBox = await page.locator('[data-role="seqfx-stutter-graph"]').boundingBox();
     assert.ok(graphBox);
-    await page.mouse.click(stutterGraphPoint(graphBox, 1).x, stutterGraphPoint(graphBox, 1).y);
+    const fullGatePoint = await stutterGraphPoint(page, graphBox, 1);
+    await page.mouse.click(fullGatePoint.x, fullGatePoint.y);
     snapshot = await getHarnessSnapshot(page);
     upload = patternUploads(snapshot).at(-1).value;
     assertClose(upload.params[3][0][3], 1, 0.03, "gate graph click should open the cut fully before sampling the shape path");
@@ -2717,10 +2801,17 @@ test("seqfx_stutter_inspector_renders_interactive_envelope_editor_and_writes_blo
         `Triangle should collapse the trapezoid plateau, got y=${triangleSamples["0.30"]} at 0.30 vs trapezoid y=${trapezoidSamples["0.30"]}`,
     );
 
-    await page.mouse.click(stutterGraphPoint(graphBox, 0.25).x, stutterGraphPoint(graphBox, 0.25).y);
+    const quarterGatePoint = await stutterGraphPoint(page, graphBox, 0.25);
+    await page.mouse.click(quarterGatePoint.x, quarterGatePoint.y);
     snapshot = await getHarnessSnapshot(page);
     upload = patternUploads(snapshot).at(-1).value;
     assertClose(upload.params[3][0][3], 0.25, 0.03, "gate graph click should write gate");
+    const narrowGateTriangleSamples = await readStutterEnvelopePathSamples(page, [0.125, 0.4]);
+    assert.ok(narrowGateTriangleSamples, "expected the narrow stutter gate graph path to produce readable points");
+    assert.ok(
+        narrowGateTriangleSamples["0.13"] < narrowGateTriangleSamples["0.40"] - 40,
+        `Triangle stutter shape should remain visible below a 50% gate, got peak y=${narrowGateTriangleSamples["0.13"]} and post-gate y=${narrowGateTriangleSamples["0.40"]}`,
+    );
 
     await page.locator('[data-role="seqfx-stutter-shape-stop"][data-stop="4"]').click();
     snapshot = await getHarnessSnapshot(page);
@@ -2779,7 +2870,8 @@ test("seqfx_stutter_editor_applies_shape_and_gate_to_selected_block_group", asyn
 
     const graphBox = await page.locator('[data-role="seqfx-stutter-graph"]').boundingBox();
     assert.ok(graphBox);
-    await page.mouse.click(stutterGraphPoint(graphBox, 0.4).x, stutterGraphPoint(graphBox, 0.4).y);
+    const gatePoint = await stutterGraphPoint(page, graphBox, 0.4);
+    await page.mouse.click(gatePoint.x, gatePoint.y);
     await page.locator('[data-role="seqfx-stutter-shape-stop"][data-stop="2"]').click();
 
     const snapshot = await getHarnessSnapshot(page);
@@ -2929,24 +3021,24 @@ test("seqfx_tape_stop_inspector_renders_graph_handles_and_writes_curve_parameter
     await dragLocatorTo(
         page,
         page.locator('[data-role="seqfx-tape-start-length-handle"]'),
-        tapeGraphPoint(initialGraphBox, 0.5, 0.02),
+        await tapeGraphPoint(page, initialGraphBox, 0.5, 0.02),
     );
     await page.locator('[data-role="seqfx-tape-catchup-curve-handle"]').waitFor();
 
     await dragLocatorTo(
         page,
         page.locator('[data-role="seqfx-tape-catchup-length-handle"]'),
-        tapeGraphPoint(initialGraphBox, 0.65, 0.02),
+        await tapeGraphPoint(page, initialGraphBox, 0.65, 0.02),
     );
     await dragLocatorTo(
         page,
         page.locator('[data-role="seqfx-tape-start-curve-handle"]'),
-        tapeGraphPoint(initialGraphBox, 0.25, 0.25),
+        await tapeGraphPoint(page, initialGraphBox, 0.25, 0.25),
     );
     await dragLocatorTo(
         page,
         page.locator('[data-role="seqfx-tape-catchup-curve-handle"]'),
-        tapeGraphPoint(initialGraphBox, 0.825, 0.25),
+        await tapeGraphPoint(page, initialGraphBox, 0.825, 0.25),
     );
     await page.locator('[data-role="seqfx-tape-mode"]').selectOption("1");
 

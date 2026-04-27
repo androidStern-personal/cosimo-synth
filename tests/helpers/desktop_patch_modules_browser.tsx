@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 
 import editorTokensCssText from "../../ui/shared/editor-tokens.css?inline";
+import editorCurveSurfaceCssText from "../../ui/shared/editor-curve-surface.css?inline";
 import filterRangeEditorCssText from "../../ui/shared/filter-range-editor.css?inline";
 import { PatchConnectionProvider, type PatchConnectionLike } from "../../ui/shared/cmajor-react";
 import { KeyboardDock, ensureKeyboardElement, type PianoKeyboardElement } from "../../ui/desktop/desktop-keyboard-adapter";
@@ -134,6 +135,7 @@ function readCurvePointsFromPath(pathElement: SVGPathElement | null, maxPoints =
 
 function installFilterRangeEditorTestStyles() {
     installInlineTestStyle("filter-range-editor-token-styles", editorTokensCssText);
+    installInlineTestStyle("filter-range-editor-curve-styles", editorCurveSurfaceCssText);
     installInlineTestStyle("filter-range-editor-component-styles", filterRangeEditorCssText);
 
     if (document.getElementById("filter-range-editor-test-styles")) {

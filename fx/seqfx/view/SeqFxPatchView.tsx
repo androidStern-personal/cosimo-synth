@@ -15,6 +15,28 @@ import {
     geometricCenterCutoffHz,
 } from "../../../ui/shared/filter-range-editor";
 import { ModBadge, type ModulationDirection } from "../../../ui/shared/editor-tick-slider";
+import {
+    EDITOR_PLOT_BOTTOM_PADDING_PX,
+    EDITOR_PLOT_TOP_PADDING_PX,
+    EDITOR_RANGE_HANDLE_RADIUS_PX,
+    useEditorSurfaceSize,
+} from "../../../ui/shared/editor-tokens";
+import {
+    adaptiveSampleEditorCurve,
+    createEditorCurvePlotRect,
+    editorCurveFillPathToBaseline,
+    normalizedCurvePointToPlotPoint,
+    polylineToSvgPath,
+    type EditorCurvePlotRect,
+} from "../../../ui/shared/editor-curve-geometry";
+import {
+    EditorCurveAxis,
+    EditorCurveFill,
+    EditorCurveHandle,
+    EditorCurvePath,
+    EditorCurvePlotArea,
+    EditorCurveSurface,
+} from "../../../ui/shared/editor-curve-surface";
 import { AuxSource, auxSourceMonitorPoint, buildAuxSourcePreviewPath } from "./AuxSource";
 import { CrusherEditor, type CrusherModulation } from "./CrusherEditor";
 import { StutterEnvelopeEditor, type StutterModulation } from "./StutterEnvelopeEditor";
@@ -51,7 +73,6 @@ import {
     evaluateTapeStopDisplaySpeed,
     multiplierToStopPointPercent,
     resolveTapeStopEnvelope,
-    sampleTapeStopDisplayEnvelope,
     stopPointPercentToMultiplier,
 } from "./tape-stop-envelope";
 import { createSeqFxPresetStateAdapter } from "./seqfx-preset-adapter";
@@ -1826,34 +1847,13 @@ function estimatedStepDurationMsForRateIndex(rateIndex: number) {
     return quarterNoteMsAt120Bpm * quarterNotesPerStep;
 }
 
-const TAPE_GRAPH_WIDTH = 260;
-const TAPE_GRAPH_HEIGHT = 150;
-const TAPE_GRAPH_LEFT = 28;
-const TAPE_GRAPH_RIGHT = 10;
-const TAPE_GRAPH_TOP = 12;
-const TAPE_GRAPH_BOTTOM = 24;
-const TAPE_GRAPH_PLOT_WIDTH = TAPE_GRAPH_WIDTH - TAPE_GRAPH_LEFT - TAPE_GRAPH_RIGHT;
-const TAPE_GRAPH_PLOT_HEIGHT = TAPE_GRAPH_HEIGHT - TAPE_GRAPH_TOP - TAPE_GRAPH_BOTTOM;
-
-function tapeGraphX(normalizedTime: number) {
-    return TAPE_GRAPH_LEFT + (clampNumber(normalizedTime, 0, 1) * TAPE_GRAPH_PLOT_WIDTH);
+function tapeGraphX(normalizedTime: number, plot: EditorCurvePlotRect) {
+    return plot.plotLeft + (clampNumber(normalizedTime, 0, 1) * plot.plotWidth);
 }
 
-function tapeGraphY(speed: number, maxSpeed: number) {
+function tapeGraphY(speed: number, maxSpeed: number, plot: EditorCurvePlotRect) {
     const normalizedSpeed = clampNumber(speed / maxSpeed, 0, 1);
-    return TAPE_GRAPH_TOP + ((1 - normalizedSpeed) * TAPE_GRAPH_PLOT_HEIGHT);
-}
-
-function tapePathFromPoints(points: Array<{ x: number; y: number }>) {
-    if (points.length === 0) {
-        return "";
-    }
-
-    const [first, ...rest] = points;
-    return [
-        `M ${first.x.toFixed(2)} ${first.y.toFixed(2)}`,
-        ...rest.map((point) => `L ${point.x.toFixed(2)} ${point.y.toFixed(2)}`),
-    ].join(" ");
+    return plot.plotBottom - (normalizedSpeed * plot.plotHeight);
 }
 
 function curvePowerFromSpeedRatio(speedRatio: number, base: number) {
@@ -1989,7 +1989,13 @@ function TapeStopEnvelopeEditor({
     modulation?: TapeStopModulation | null;
 }) {
     const svgRef = useRef<SVGSVGElement | null>(null);
+    const viewportRef = useRef<HTMLDivElement | null>(null);
     const dragModeRef = useRef<"startLength" | "startCurve" | "catchupLength" | "catchupCurve" | null>(null);
+    const size = useEditorSurfaceSize(viewportRef);
+    const plot = useMemo(() => createEditorCurvePlotRect(size.width, size.height, {
+        topPaddingPx: EDITOR_PLOT_TOP_PADDING_PX,
+        bottomPaddingPx: EDITOR_PLOT_BOTTOM_PADDING_PX,
+    }), [size.height, size.width]);
     const mode = Math.round(step.params[4]) === TAPE_STOP_MODE_SPIN_UP
         ? TAPE_STOP_MODE_SPIN_UP
         : TAPE_STOP_MODE_STOP;
@@ -2005,32 +2011,37 @@ function TapeStopEnvelopeEditor({
         catchupPercent,
         catchupCurve,
     }), [blockDurationMs, catchupCurve, catchupPercent, curve, mode, stopPointPercent]);
-    const samples = useMemo(() => sampleTapeStopDisplayEnvelope(envelope, 96), [envelope]);
     const maxGraphSpeed = 1;
-    const graphPoints = samples.map((sample) => ({
-        x: tapeGraphX(sample.normalizedTime),
-        y: tapeGraphY(sample.speed, maxGraphSpeed),
-    }));
-    const graphPath = tapePathFromPoints(graphPoints);
-    const fillPath = `${graphPath} L ${tapeGraphX(1).toFixed(2)} ${tapeGraphY(0, maxGraphSpeed).toFixed(2)} L ${tapeGraphX(0).toFixed(2)} ${tapeGraphY(0, maxGraphSpeed).toFixed(2)} Z`;
-    const oneXLineY = tapeGraphY(1, maxGraphSpeed);
+    const graphPoints = useMemo(() => adaptiveSampleEditorCurve({
+        evaluate: (normalizedTime) => ({
+            x: normalizedTime,
+            y: evaluateTapeStopDisplaySpeed(envelope, normalizedTime * envelope.blockDurationMs) / maxGraphSpeed,
+        }),
+        plot,
+        tolerancePx: 0.5,
+        maxDepth: 12,
+    }), [envelope, plot]);
+    const graphPath = polylineToSvgPath(graphPoints, 2);
+    const fillPath = editorCurveFillPathToBaseline(graphPoints, plot, 2);
+    const oneXLineY = normalizedCurvePointToPlotPoint({ x: 0, y: 1 }, plot).y;
     const stopPointVisible = envelope.stopPointPercent <= 100;
-    const stopPointX = tapeGraphX(Math.min(1, envelope.stopPointPercent / 100));
+    const stopPointX = tapeGraphX(Math.min(1, envelope.stopPointPercent / 100), plot);
     const stopPointY = tapeGraphY(
         evaluateTapeStopDisplaySpeed(envelope, Math.min(envelope.stopPointMs, envelope.blockDurationMs)),
         maxGraphSpeed,
+        plot,
     );
-    const catchupStartX = tapeGraphX(envelope.catchupStartMs / envelope.blockDurationMs);
-    const catchupStartY = tapeGraphY(evaluateTapeStopDisplaySpeed(envelope, envelope.catchupStartMs), maxGraphSpeed);
-    const catchupWidth = TAPE_GRAPH_LEFT + TAPE_GRAPH_PLOT_WIDTH - catchupStartX;
+    const catchupStartX = tapeGraphX(envelope.catchupStartMs / envelope.blockDurationMs, plot);
+    const catchupStartY = tapeGraphY(evaluateTapeStopDisplaySpeed(envelope, envelope.catchupStartMs), maxGraphSpeed, plot);
+    const catchupWidth = plot.plotRight - catchupStartX;
     const curveHandleTimeMs = Math.max(1, Math.min(envelope.stopPointMs, envelope.blockDurationMs) * 0.5);
-    const curveHandleX = tapeGraphX(curveHandleTimeMs / envelope.blockDurationMs);
-    const curveHandleY = tapeGraphY(evaluateTapeStopDisplaySpeed(envelope, curveHandleTimeMs), maxGraphSpeed);
+    const curveHandleX = tapeGraphX(curveHandleTimeMs / envelope.blockDurationMs, plot);
+    const curveHandleY = tapeGraphY(evaluateTapeStopDisplaySpeed(envelope, curveHandleTimeMs), maxGraphSpeed, plot);
     const catchupCurveHandleTimeMs = envelope.catchupDurationMs > 0
         ? envelope.catchupStartMs + (envelope.catchupDurationMs * 0.5)
         : envelope.blockDurationMs;
-    const catchupCurveHandleX = tapeGraphX(catchupCurveHandleTimeMs / envelope.blockDurationMs);
-    const catchupCurveHandleY = tapeGraphY(evaluateTapeStopDisplaySpeed(envelope, catchupCurveHandleTimeMs), maxGraphSpeed);
+    const catchupCurveHandleX = tapeGraphX(catchupCurveHandleTimeMs / envelope.blockDurationMs, plot);
+    const catchupCurveHandleY = tapeGraphY(evaluateTapeStopDisplaySpeed(envelope, catchupCurveHandleTimeMs), maxGraphSpeed, plot);
     const requestedCatchupStartPercent = 100 - catchupPercent;
     const realizedCatchupStartPercent = Math.round((envelope.catchupStartMs / envelope.blockDurationMs) * 100);
     const catchupPushed = Math.round((envelope.catchupStartMs / envelope.blockDurationMs) * 100) > Math.round(requestedCatchupStartPercent);
@@ -2046,8 +2057,8 @@ function TapeStopEnvelopeEditor({
         }
 
         return {
-            x: ((event.clientX - bounds.left) / bounds.width) * TAPE_GRAPH_WIDTH,
-            y: ((event.clientY - bounds.top) / bounds.height) * TAPE_GRAPH_HEIGHT,
+            x: ((event.clientX - bounds.left) / bounds.width) * size.width,
+            y: ((event.clientY - bounds.top) / bounds.height) * size.height,
         };
     };
 
@@ -2058,7 +2069,7 @@ function TapeStopEnvelopeEditor({
         }
 
         return clampNumber(
-            (point.x - TAPE_GRAPH_LEFT) / TAPE_GRAPH_PLOT_WIDTH,
+            (point.x - plot.plotLeft) / plot.plotWidth,
             0,
             1,
         );
@@ -2071,7 +2082,7 @@ function TapeStopEnvelopeEditor({
         }
 
         const normalizedY = clampNumber(
-            1 - ((point.y - TAPE_GRAPH_TOP) / TAPE_GRAPH_PLOT_HEIGHT),
+            1 - ((point.y - plot.plotTop) / plot.plotHeight),
             TAPE_STOP_SPEED_FLOOR + 0.001,
             0.999,
         );
@@ -2191,82 +2202,89 @@ function TapeStopEnvelopeEditor({
 
     return (
         <section className="seqfx-tape-editor" aria-label="Tape stop speed envelope">
-            <svg
-                ref={svgRef}
-                className="seqfx-tape-graph"
-                data-role="seqfx-tape-graph"
-                viewBox={`0 0 ${TAPE_GRAPH_WIDTH} ${TAPE_GRAPH_HEIGHT}`}
-                role="img"
-                aria-label="Tape stop speed graph"
-                onPointerMove={handleGraphPointerMove}
-                onPointerUp={endGraphDrag}
-                onPointerCancel={endGraphDrag}
-            >
-                <rect className="seqfx-tape-graph-bg" x={TAPE_GRAPH_LEFT} y={TAPE_GRAPH_TOP} width={TAPE_GRAPH_PLOT_WIDTH} height={TAPE_GRAPH_PLOT_HEIGHT} rx="5" />
-                {envelope.catchupDurationMs > 0 ? (
-                    <rect
-                        className="seqfx-tape-catchup-region"
-                        x={catchupStartX}
-                        y={TAPE_GRAPH_TOP}
-                        width={Math.max(0, catchupWidth)}
-                        height={TAPE_GRAPH_PLOT_HEIGHT}
-                    />
-                ) : null}
-                <line className="seqfx-tape-grid-line" x1={TAPE_GRAPH_LEFT} x2={TAPE_GRAPH_LEFT + TAPE_GRAPH_PLOT_WIDTH} y1={oneXLineY} y2={oneXLineY} />
-                <line className="seqfx-tape-axis" x1={TAPE_GRAPH_LEFT} x2={TAPE_GRAPH_LEFT + TAPE_GRAPH_PLOT_WIDTH} y1={TAPE_GRAPH_TOP + TAPE_GRAPH_PLOT_HEIGHT} y2={TAPE_GRAPH_TOP + TAPE_GRAPH_PLOT_HEIGHT} />
-                <path className="seqfx-tape-graph-fill" d={fillPath} />
-                <path className="seqfx-tape-graph-line" d={graphPath} />
-                <line className="seqfx-tape-marker-line" x1={catchupStartX} x2={catchupStartX} y1={TAPE_GRAPH_TOP} y2={TAPE_GRAPH_TOP + TAPE_GRAPH_PLOT_HEIGHT} />
-                {stopPointVisible ? (
-                    <circle
-                        aria-label="Start length handle"
-                        className="seqfx-tape-handle seqfx-tape-length-handle"
-                        data-role="seqfx-tape-start-length-handle"
-                        cx={stopPointX}
-                        cy={stopPointY}
-                        r="5"
-                        onPointerDown={handleGraphPointerDown("startLength")}
-                    />
-                ) : (
-                    <>
-                        <path className="seqfx-tape-offscreen-marker" d={`M ${TAPE_GRAPH_LEFT + TAPE_GRAPH_PLOT_WIDTH - 7} ${TAPE_GRAPH_TOP + 8} L ${TAPE_GRAPH_LEFT + TAPE_GRAPH_PLOT_WIDTH} ${TAPE_GRAPH_TOP + 14} L ${TAPE_GRAPH_LEFT + TAPE_GRAPH_PLOT_WIDTH - 7} ${TAPE_GRAPH_TOP + 20}`} />
-                        <text className="seqfx-tape-graph-label" x={TAPE_GRAPH_LEFT + TAPE_GRAPH_PLOT_WIDTH - 54} y={TAPE_GRAPH_TOP + 19}>{formatTapeStopPercent(stopPointPercent)}</text>
-                    </>
-                )}
-                <circle
-                    className="seqfx-tape-handle seqfx-tape-curve-handle"
-                    data-role="seqfx-tape-start-curve-handle"
-                    aria-label="Start curve handle"
-                    cx={curveHandleX}
-                    cy={curveHandleY}
-                    r="5"
-                    onPointerDown={handleGraphPointerDown("startCurve")}
-                />
-                <circle
-                    aria-label="Catchup length handle"
-                    className="seqfx-tape-handle seqfx-tape-length-handle"
-                    data-role="seqfx-tape-catchup-length-handle"
-                    cx={catchupStartX}
-                    cy={catchupStartY}
-                    r="5"
-                    onPointerDown={handleGraphPointerDown("catchupLength")}
-                />
-                {envelope.catchupDurationMs > 0 ? (
-                    <circle
-                        aria-label="Catchup curve handle"
-                        className="seqfx-tape-handle seqfx-tape-curve-handle"
-                        data-role="seqfx-tape-catchup-curve-handle"
-                        cx={catchupCurveHandleX}
-                        cy={catchupCurveHandleY}
-                        r="5"
-                        onPointerDown={handleGraphPointerDown("catchupCurve")}
-                    />
-                ) : null}
-                <text className="seqfx-tape-graph-label" x="4" y={oneXLineY + 4}>1x</text>
-                <text className="seqfx-tape-graph-label" x="4" y={TAPE_GRAPH_TOP + TAPE_GRAPH_PLOT_HEIGHT - 2}>0x</text>
-                <text className="seqfx-tape-graph-label" x={TAPE_GRAPH_LEFT} y={TAPE_GRAPH_HEIGHT - 5}>0</text>
-                <text className="seqfx-tape-graph-label" x={TAPE_GRAPH_LEFT + TAPE_GRAPH_PLOT_WIDTH - 40} y={TAPE_GRAPH_HEIGHT - 5}>{blockLength} cell{blockLength === 1 ? "" : "s"}</text>
-            </svg>
+            <div className="seqfx-tape-editor__panel">
+                <div ref={viewportRef} className="seqfx-tape-editor__viewport">
+                    <EditorCurveSurface
+                        ref={svgRef}
+                        className="seqfx-tape-graph"
+                        dataRole="seqfx-tape-graph"
+                        heightPx={size.height}
+                        widthPx={size.width}
+                        role="img"
+                        ariaLabel="Tape stop speed graph"
+                        onPointerMove={handleGraphPointerMove}
+                        onPointerUp={endGraphDrag}
+                        onPointerCancel={endGraphDrag}
+                    >
+                        <EditorCurvePlotArea className="seqfx-tape-graph-bg" plot={plot} />
+                        {envelope.catchupDurationMs > 0 ? (
+                            <rect
+                                className="seqfx-tape-catchup-region"
+                                x={catchupStartX}
+                                y={plot.plotTop}
+                                width={Math.max(0, catchupWidth)}
+                                height={plot.plotHeight}
+                            />
+                        ) : null}
+                        <line className="editor-curve-grid-line seqfx-tape-grid-line" x1={plot.plotLeft} x2={plot.plotRight} y1={oneXLineY} y2={oneXLineY} />
+                        <EditorCurveAxis className="seqfx-tape-axis" x1={plot.plotLeft} x2={plot.plotRight} y1={plot.plotBottom} y2={plot.plotBottom} />
+                        <EditorCurveFill className="seqfx-tape-graph-fill" data-role="seqfx-tape-graph-fill" d={fillPath} />
+                        <EditorCurvePath className="seqfx-tape-graph-line" data-role="seqfx-tape-graph-line" d={graphPath} />
+                        <line className="seqfx-tape-marker-line" x1={catchupStartX} x2={catchupStartX} y1={plot.plotTop} y2={plot.plotBottom} />
+                        {stopPointVisible ? (
+                            <EditorCurveHandle
+                                aria-label="Start length handle"
+                                className="seqfx-tape-handle seqfx-tape-length-handle"
+                                data-role="seqfx-tape-start-length-handle"
+                                cx={stopPointX}
+                                cy={stopPointY}
+                                r={EDITOR_RANGE_HANDLE_RADIUS_PX}
+                                variant="secondary"
+                                onPointerDown={handleGraphPointerDown("startLength")}
+                            />
+                        ) : (
+                            <>
+                                <path className="seqfx-tape-offscreen-marker" d={`M ${plot.plotRight - 7} ${plot.plotTop + 8} L ${plot.plotRight} ${plot.plotTop + 14} L ${plot.plotRight - 7} ${plot.plotTop + 20}`} />
+                                <text className="seqfx-tape-graph-label" x={plot.plotRight - 54} y={plot.plotTop + 19}>{formatTapeStopPercent(stopPointPercent)}</text>
+                            </>
+                        )}
+                        <EditorCurveHandle
+                            className="seqfx-tape-handle seqfx-tape-curve-handle"
+                            data-role="seqfx-tape-start-curve-handle"
+                            aria-label="Start curve handle"
+                            cx={curveHandleX}
+                            cy={curveHandleY}
+                            r={EDITOR_RANGE_HANDLE_RADIUS_PX}
+                            onPointerDown={handleGraphPointerDown("startCurve")}
+                        />
+                        <EditorCurveHandle
+                            aria-label="Catchup length handle"
+                            className="seqfx-tape-handle seqfx-tape-length-handle"
+                            data-role="seqfx-tape-catchup-length-handle"
+                            cx={catchupStartX}
+                            cy={catchupStartY}
+                            r={EDITOR_RANGE_HANDLE_RADIUS_PX}
+                            variant="secondary"
+                            onPointerDown={handleGraphPointerDown("catchupLength")}
+                        />
+                        {envelope.catchupDurationMs > 0 ? (
+                            <EditorCurveHandle
+                                aria-label="Catchup curve handle"
+                                className="seqfx-tape-handle seqfx-tape-curve-handle"
+                                data-role="seqfx-tape-catchup-curve-handle"
+                                cx={catchupCurveHandleX}
+                                cy={catchupCurveHandleY}
+                                r={EDITOR_RANGE_HANDLE_RADIUS_PX}
+                                onPointerDown={handleGraphPointerDown("catchupCurve")}
+                            />
+                        ) : null}
+                        <text className="seqfx-tape-graph-label" x={Math.max(4, plot.plotLeft - 24)} y={oneXLineY + 4}>1x</text>
+                        <text className="seqfx-tape-graph-label" x={Math.max(4, plot.plotLeft - 24)} y={plot.plotBottom - 2}>0x</text>
+                        <text className="seqfx-tape-graph-label" x={plot.plotLeft} y={size.height - 10}>0</text>
+                        <text className="seqfx-tape-graph-label" x={plot.plotRight} y={size.height - 10} textAnchor="end">{blockLength} cell{blockLength === 1 ? "" : "s"}</text>
+                    </EditorCurveSurface>
+                </div>
+            </div>
             <div className="seqfx-tape-readout">
                 <span>Speed floor {formatTapeStopSpeed(TAPE_STOP_SPEED_FLOOR)}</span>
                 <span>Start length {formatTapeStopPercent(stopPointPercent)}</span>

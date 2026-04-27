@@ -12,9 +12,25 @@ import {
     EDITOR_PLOT_TOP_PADDING_PX,
     EDITOR_VALUE_HANDLE_HALO_RADIUS_PX,
     EDITOR_VALUE_HANDLE_RADIUS_PX,
-    editorPlotGutter,
     useEditorSurfaceSize,
 } from "../../../ui/shared/editor-tokens";
+import {
+    adaptiveSampleEditorCurve,
+    createEditorCurvePlotRect,
+    editorCurveFillPathToBaseline,
+    polylineToSvgPath,
+    type EditorCurvePlotRect,
+} from "../../../ui/shared/editor-curve-geometry";
+import {
+    EditorCurveAxis,
+    EditorCurveFill,
+    EditorCurveHandle,
+    EditorCurveHandleHalo,
+    EditorCurveHitTarget,
+    EditorCurvePath,
+    EditorCurvePlotArea,
+    EditorCurveSurface,
+} from "../../../ui/shared/editor-curve-surface";
 import { EditorTickSlider, ModBadge, type ModulationDirection } from "../../../ui/shared/editor-tick-slider";
 import {
     STUTTER_DEFAULT_GATE,
@@ -33,8 +49,8 @@ import {
     clampStutterShape,
     clampStutterSlices,
     clampStutterSpeed,
+    evaluateStutterEnvelope,
     formatStutterShapeLabel,
-    sampleStutterEnvelope,
 } from "./stutter-envelope";
 
 export type StutterEnvelopeEditorValue = {
@@ -71,7 +87,6 @@ export type StutterEnvelopeEditorProps = {
     modulation?: StutterModulation | null;
 };
 
-const ENVELOPE_POINT_COUNT = 200;
 /**
  * A stylized audio-wave silhouette rendered at unit scale (0..1 on each axis).
  * The component remaps these points into its live plot rectangle, so the
@@ -126,7 +141,7 @@ function pointerToNormalizedX(element: Element, clientX: number) {
     return clamp((clientX - bounds.left) / bounds.width, 0, 1);
 }
 
-function pointerToPlotNormalizedX(element: Element, clientX: number, plot: PlotRect, surfaceWidth: number) {
+function pointerToPlotNormalizedX(element: Element, clientX: number, plot: EditorCurvePlotRect, surfaceWidth: number) {
     const bounds = element.getBoundingClientRect();
     if (bounds.width <= 0 || surfaceWidth <= 0) {
         return 0;
@@ -146,48 +161,36 @@ function resolveValue(value: Partial<StutterEnvelopeEditorValue>): StutterEnvelo
     };
 }
 
-type PlotRect = {
-    plotLeft: number;
-    plotRight: number;
-    plotTop: number;
-    plotBottom: number;
-    plotWidth: number;
-    plotHeight: number;
-};
-
 /** Extra top padding to make room for the gate chip that caps the gate line. */
 const STUTTER_GATE_CHIP_TOP_RESERVE_PX = 14;
 
-function resolvePlotRect(width: number, height: number): PlotRect {
-    const horizontalPadding = editorPlotGutter(width);
-    const plotLeft = horizontalPadding;
-    const plotRight = Math.max(horizontalPadding + 1, width - horizontalPadding);
-    const plotTop = EDITOR_PLOT_TOP_PADDING_PX + STUTTER_GATE_CHIP_TOP_RESERVE_PX;
-    const plotBottom = Math.max(plotTop + 1, height - EDITOR_PLOT_BOTTOM_PADDING_PX);
-    return {
-        plotLeft,
-        plotRight,
-        plotTop,
-        plotBottom,
-        plotWidth: plotRight - plotLeft,
-        plotHeight: plotBottom - plotTop,
-    };
+function resolvePlotRect(width: number, height: number): EditorCurvePlotRect {
+    return createEditorCurvePlotRect(width, height, {
+        topPaddingPx: EDITOR_PLOT_TOP_PADDING_PX,
+        topReservePx: STUTTER_GATE_CHIP_TOP_RESERVE_PX,
+        bottomPaddingPx: EDITOR_PLOT_BOTTOM_PADDING_PX,
+    });
 }
 
-function envelopePaths(shape: number, gate: number, plot: PlotRect) {
-    const points = sampleStutterEnvelope(shape, gate, ENVELOPE_POINT_COUNT).map((sample) => {
-        const x = plot.plotLeft + (plot.plotWidth * sample.phase);
-        const y = plot.plotBottom - (plot.plotHeight * sample.value);
-        return `${x.toFixed(1)} ${y.toFixed(1)}`;
+function envelopePaths(shape: number, gate: number, plot: EditorCurvePlotRect) {
+    const points = adaptiveSampleEditorCurve({
+        breakpoints: gate > 0 && gate < 1 ? [gate] : [],
+        evaluate: (phase) => ({
+            x: phase,
+            y: evaluateStutterEnvelope(phase, shape, gate),
+        }),
+        plot,
+        tolerancePx: 0.5,
+        maxDepth: 12,
     });
 
     return {
-        line: `M ${points.join(" L ")}`,
-        fill: `M ${plot.plotLeft.toFixed(1)} ${plot.plotBottom.toFixed(1)} L ${points.join(" L ")} L ${plot.plotRight.toFixed(1)} ${plot.plotBottom.toFixed(1)} Z`,
+        line: polylineToSvgPath(points, 1),
+        fill: editorCurveFillPathToBaseline(points, plot, 1),
     };
 }
 
-function waveSilhouettePath(plot: PlotRect): string {
+function waveSilhouettePath(plot: EditorCurvePlotRect): string {
     return WAVE_SILHOUETTE_UNIT.map((point, index) => {
         const x = plot.plotLeft + (plot.plotWidth * point.x);
         const y = plot.plotTop + (plot.plotHeight * point.y);
@@ -522,35 +525,37 @@ export function StutterEnvelopeEditor({
         <section className="seqfx-stutter-editor" data-role="seqfx-stutter-editor" aria-label="Stutter cut envelope editor">
             <div className="seqfx-stutter-editor__panel">
                 <div ref={viewportRef} className="seqfx-stutter-editor__viewport" data-role="seqfx-stutter-viewport">
-                    <svg
+                    <EditorCurveSurface
                         ref={surfaceRef}
                         className="seqfx-stutter-editor__surface"
-                        data-role="seqfx-stutter-graph"
-                        viewBox={`0 0 ${effectiveWidth} ${effectiveHeight}`}
-                        aria-label="Cut envelope"
+                        dataRole="seqfx-stutter-graph"
+                        heightPx={effectiveHeight}
+                        widthPx={effectiveWidth}
+                        ariaLabel="Cut envelope"
                         onPointerDown={handleGatePointerDown}
                         onPointerMove={handleGatePointerMove}
                         onPointerUp={endGateDrag}
                         onPointerCancel={endGateDrag}
                     >
+                        <EditorCurvePlotArea plot={plot} />
                         {gridXs.map((x, index) => (
                             <line
                                 key={`g-${index}`}
-                                className="seqfx-stutter-editor__grid-line"
+                                className="editor-curve-grid-line seqfx-stutter-editor__grid-line"
                                 x1={x}
                                 x2={x}
                                 y1={plot.plotTop}
                                 y2={plot.plotBottom}
                             />
                         ))}
-                        <line
+                        <EditorCurveAxis
                             className="seqfx-stutter-editor__axis"
                             x1={plot.plotLeft}
                             x2={plot.plotRight}
                             y1={plot.plotBottom}
                             y2={plot.plotBottom}
                         />
-                        <line
+                        <EditorCurveAxis
                             className="seqfx-stutter-editor__axis"
                             x1={plot.plotLeft}
                             x2={plot.plotLeft}
@@ -581,8 +586,8 @@ export function StutterEnvelopeEditor({
                             height={plot.plotHeight}
                             rx="2"
                         />
-                        <path className="seqfx-stutter-editor__env-fill" d={paths.fill} />
-                        <path
+                        <EditorCurveFill className="seqfx-stutter-editor__env-fill" data-role="seqfx-stutter-env-fill" d={paths.fill} />
+                        <EditorCurvePath
                             className="seqfx-stutter-editor__env-path"
                             data-role="seqfx-stutter-env-path"
                             d={paths.line}
@@ -604,30 +609,32 @@ export function StutterEnvelopeEditor({
                                     y1={plot.plotTop}
                                     y2={plot.plotBottom}
                                 />
-                                <circle
+                                <EditorCurveHandleHalo
                                     className="seqfx-stutter-editor__value-halo"
                                     cx={gateStartX}
                                     cy={gateHandleY}
                                     r={EDITOR_VALUE_HANDLE_HALO_RADIUS_PX}
                                 />
-                                <circle
+                                <EditorCurveHandle
                                     className="seqfx-stutter-editor__gate-handle seqfx-stutter-editor__gate-handle--start"
                                     data-role="seqfx-stutter-gate-handle"
                                     cx={gateStartX}
                                     cy={gateHandleY}
                                     r={EDITOR_VALUE_HANDLE_RADIUS_PX}
+                                    variant="range-start"
                                 />
-                                <circle
+                                <EditorCurveHandleHalo
                                     className="seqfx-stutter-editor__value-halo"
                                     cx={gateEndX}
                                     cy={gateHandleY}
                                     r={EDITOR_VALUE_HANDLE_HALO_RADIUS_PX}
                                 />
-                                <circle
+                                <EditorCurveHandle
                                     className="seqfx-stutter-editor__gate-handle seqfx-stutter-editor__gate-handle--end"
                                     cx={gateEndX}
                                     cy={gateHandleY}
                                     r={EDITOR_VALUE_HANDLE_RADIUS_PX}
+                                    variant="range-end"
                                 />
                             </>
                         ) : (
@@ -639,13 +646,13 @@ export function StutterEnvelopeEditor({
                                     y1={plot.plotTop}
                                     y2={plot.plotBottom}
                                 />
-                                <circle
+                                <EditorCurveHandleHalo
                                     className="seqfx-stutter-editor__value-halo"
                                     cx={liveGateX}
                                     cy={gateHandleY}
                                     r={EDITOR_VALUE_HANDLE_HALO_RADIUS_PX}
                                 />
-                                <circle
+                                <EditorCurveHandle
                                     className="seqfx-stutter-editor__gate-handle"
                                     data-role="seqfx-stutter-gate-handle"
                                     cx={liveGateX}
@@ -654,7 +661,7 @@ export function StutterEnvelopeEditor({
                                 />
                             </>
                         )}
-                        <circle
+                        <EditorCurveHitTarget
                             aria-label="Gate position"
                             aria-valuemin={0}
                             aria-valuemax={100}
@@ -668,7 +675,7 @@ export function StutterEnvelopeEditor({
                             onKeyDown={handleGateKeyDown("start")}
                         />
                         {isGateModulated ? (
-                            <circle
+                            <EditorCurveHitTarget
                                 aria-label="Gate end"
                                 aria-valuemin={0}
                                 aria-valuemax={100}
@@ -720,7 +727,7 @@ export function StutterEnvelopeEditor({
                                 {gateChipLabel}
                             </text>
                         </g>
-                    </svg>
+                    </EditorCurveSurface>
                     {modulation?.onToggleGate ? (
                         <button
                             aria-pressed={isGateModulated}
@@ -878,6 +885,6 @@ export function StutterEnvelopeEditor({
     );
 }
 
-function computeChipX(centerX: number, plot: PlotRect, halfWidth: number): number {
+function computeChipX(centerX: number, plot: EditorCurvePlotRect, halfWidth: number): number {
     return clamp(centerX, plot.plotLeft + halfWidth, plot.plotRight - halfWidth);
 }

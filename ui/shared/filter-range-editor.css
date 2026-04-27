@@ -78,18 +78,6 @@
     touch-action: none;
 }
 
-.filter-range-editor__grid-line {
-    stroke: var(--editor-grid-stroke);
-    stroke-width: 1;
-    shape-rendering: crispEdges;
-}
-
-.filter-range-editor__axis {
-    stroke: var(--editor-axis-stroke);
-    stroke-width: 1;
-    shape-rendering: crispEdges;
-}
-
 .filter-range-editor__range-band {
     fill: rgba(0, 180, 216, 0.22);
     stroke: var(--editor-accent-start);
@@ -102,68 +90,15 @@
     stroke-width: 1.2;
 }
 
-.filter-range-editor__response-path {
-    fill: none;
-    stroke: var(--editor-curve-stroke);
-    stroke-linecap: round;
-    stroke-linejoin: round;
-    stroke-width: var(--editor-curve-stroke-width);
-}
-
-.filter-range-editor__preview-response-path {
-    fill: none;
-    stroke: var(--editor-curve-preview-stroke);
-    stroke-linecap: round;
-    stroke-linejoin: round;
-    stroke-width: var(--editor-curve-preview-stroke-width);
-    opacity: 0.95;
-}
-
 .filter-range-editor__preview-handle {
     fill: var(--editor-curve-preview-stroke);
     stroke: var(--editor-surface-ink);
     stroke-width: 1.4;
 }
 
-.filter-range-editor__range-handle {
-    stroke: var(--editor-surface-ink);
-    stroke-width: 1.5;
-}
-
-.filter-range-editor__range-handle--start {
-    fill: var(--editor-accent-start);
-}
-
-.filter-range-editor__range-handle--end {
-    fill: var(--editor-accent-end);
-}
-
-.filter-range-editor__range-hit-target,
-.filter-range-editor__value-hit-target {
-    fill: transparent;
-    cursor: grab;
-}
-
-.filter-range-editor__range-hit-target:active,
-.filter-range-editor__value-hit-target:active {
-    cursor: grabbing;
-}
-
 .filter-range-editor__value-guide {
     stroke: rgba(28, 28, 28, 0.38);
     stroke-width: 1;
-}
-
-.filter-range-editor__value-halo {
-    fill: var(--editor-handle-halo-fill);
-    stroke: var(--editor-handle-halo-stroke);
-    stroke-width: var(--editor-handle-halo-stroke-width);
-}
-
-.filter-range-editor__value-handle {
-    fill: var(--editor-handle-fill);
-    stroke: var(--editor-handle-stroke);
-    stroke-width: var(--editor-handle-stroke-width);
 }
 
 .filter-range-editor__frequency-label {

@@ -9,9 +9,21 @@ import { EditorTickSlider, ModBadge, type ModulationDirection } from "../../../u
 import {
     EDITOR_PLOT_BOTTOM_PADDING_PX,
     EDITOR_PLOT_TOP_PADDING_PX,
-    editorPlotGutter,
     useEditorSurfaceSize,
 } from "../../../ui/shared/editor-tokens";
+import {
+    createEditorCurvePlotRect,
+    editorCurveFillPathToBaseline,
+    polylineToSvgPath,
+    type EditorCurvePlotRect,
+} from "../../../ui/shared/editor-curve-geometry";
+import {
+    EditorCurveAxis,
+    EditorCurveFill,
+    EditorCurvePath,
+    EditorCurvePlotArea,
+    EditorCurveSurface,
+} from "../../../ui/shared/editor-curve-surface";
 import {
     CRUSHER_BITS_MAX,
     CRUSHER_BITS_MIN,
@@ -57,15 +69,6 @@ export type CrusherEditorProps = {
     modulation?: CrusherModulation | null;
 };
 
-type PlotRect = {
-    plotLeft: number;
-    plotRight: number;
-    plotTop: number;
-    plotBottom: number;
-    plotWidth: number;
-    plotHeight: number;
-};
-
 const CRUSHER_POINT_COUNT = 240;
 const CRUSHER_TOP_RESERVE_PX = 14;
 
@@ -86,44 +89,36 @@ function resolveValue(value: Partial<CrusherEditorValue>): CrusherEditorValue {
     };
 }
 
-function resolvePlotRect(width: number, height: number): PlotRect {
-    const horizontalPadding = editorPlotGutter(width);
-    const plotLeft = horizontalPadding;
-    const plotRight = Math.max(horizontalPadding + 1, width - horizontalPadding);
-    const plotTop = EDITOR_PLOT_TOP_PADDING_PX + CRUSHER_TOP_RESERVE_PX;
-    const plotBottom = Math.max(plotTop + 1, height - EDITOR_PLOT_BOTTOM_PADDING_PX);
-
-    return {
-        plotLeft,
-        plotRight,
-        plotTop,
-        plotBottom,
-        plotWidth: plotRight - plotLeft,
-        plotHeight: plotBottom - plotTop,
-    };
+function resolvePlotRect(width: number, height: number): EditorCurvePlotRect {
+    return createEditorCurvePlotRect(width, height, {
+        topPaddingPx: EDITOR_PLOT_TOP_PADDING_PX,
+        topReservePx: CRUSHER_TOP_RESERVE_PX,
+        bottomPaddingPx: EDITOR_PLOT_BOTTOM_PADDING_PX,
+    });
 }
 
-function sampleToPoint(sample: CrusherPreviewSample, plot: PlotRect, value: number) {
+function sampleToPoint(sample: CrusherPreviewSample, plot: EditorCurvePlotRect, value: number) {
     const x = plot.plotLeft + (plot.plotWidth * sample.phase);
     const y = plot.plotTop + (plot.plotHeight * 0.5) - (value * plot.plotHeight * 0.43);
-    return `${x.toFixed(1)} ${y.toFixed(1)}`;
+    return { x, y };
 }
 
-function samplePath(samples: CrusherPreviewSample[], plot: PlotRect, key: "dry" | "wet") {
-    return samples.map((sample, index) => (
-        `${index === 0 ? "M" : "L"} ${sampleToPoint(sample, plot, sample[key])}`
-    )).join(" ");
+function samplePath(samples: CrusherPreviewSample[], plot: EditorCurvePlotRect, key: "dry" | "wet") {
+    return polylineToSvgPath(samples.map((sample) => sampleToPoint(sample, plot, sample[key])), 1);
 }
 
-function wetFillPath(samples: CrusherPreviewSample[], plot: PlotRect) {
+function wetFillPath(samples: CrusherPreviewSample[], plot: EditorCurvePlotRect) {
     if (samples.length === 0) {
         return "";
     }
 
     const midY = plot.plotTop + (plot.plotHeight * 0.5);
-    const firstX = plot.plotLeft + (plot.plotWidth * samples[0].phase);
-    const lastX = plot.plotLeft + (plot.plotWidth * samples[samples.length - 1].phase);
-    return `M ${firstX.toFixed(1)} ${midY.toFixed(1)} ${samplePath(samples, plot, "wet")} L ${lastX.toFixed(1)} ${midY.toFixed(1)} Z`;
+    return editorCurveFillPathToBaseline(
+        samples.map((sample) => sampleToPoint(sample, plot, sample.wet)),
+        plot,
+        1,
+        midY,
+    );
 }
 
 function formatDriveDb(value: number) {
@@ -194,46 +189,48 @@ export function CrusherEditor({
         <section className="seqfx-crusher-editor" data-role="seqfx-crusher-editor" aria-label="Crusher editor">
             <div className="seqfx-crusher-editor__panel">
                 <div ref={viewportRef} className="seqfx-crusher-editor__viewport">
-                    <svg
+                    <EditorCurveSurface
                         className="seqfx-crusher-editor__surface"
-                        data-role="seqfx-crusher-graph"
-                        viewBox={`0 0 ${effectiveWidth} ${effectiveHeight}`}
-                        aria-label="Crusher waveform preview"
+                        dataRole="seqfx-crusher-graph"
+                        heightPx={effectiveHeight}
+                        widthPx={effectiveWidth}
+                        ariaLabel="Crusher waveform preview"
                     >
+                        <EditorCurvePlotArea plot={plot} />
                         {gridXs.map((x, index) => (
                             <line
                                 key={`grid-${index}`}
-                                className="seqfx-crusher-editor__grid-line"
+                                className="editor-curve-grid-line seqfx-crusher-editor__grid-line"
                                 x1={x}
                                 x2={x}
                                 y1={plot.plotTop}
                                 y2={plot.plotBottom}
                             />
                         ))}
-                        <line
+                        <EditorCurveAxis
                             className="seqfx-crusher-editor__axis"
                             x1={plot.plotLeft}
                             x2={plot.plotRight}
                             y1={plot.plotBottom}
                             y2={plot.plotBottom}
                         />
-                        <line
+                        <EditorCurveAxis
                             className="seqfx-crusher-editor__axis"
                             x1={plot.plotLeft}
                             x2={plot.plotLeft}
                             y1={plot.plotTop}
                             y2={plot.plotBottom}
                         />
-                        <line
+                        <EditorCurveAxis
                             className="seqfx-crusher-editor__axis seqfx-crusher-editor__axis--center"
                             x1={plot.plotLeft}
                             x2={plot.plotRight}
                             y1={midY}
                             y2={midY}
                         />
-                        <path className="seqfx-crusher-editor__wet-fill" d={wetFill} />
-                        <path className="seqfx-crusher-editor__dry-path" d={dryPath} />
-                        <path className="seqfx-crusher-editor__wet-path" data-role="seqfx-crusher-wet-path" d={wetPath} />
+                        <EditorCurveFill className="seqfx-crusher-editor__wet-fill" data-role="seqfx-crusher-wet-fill" d={wetFill} />
+                        <EditorCurvePath className="seqfx-crusher-editor__dry-path" d={dryPath} variant="muted" />
+                        <EditorCurvePath className="seqfx-crusher-editor__wet-path" data-role="seqfx-crusher-wet-path" d={wetPath} />
                         {preview.holdMarkerPhases.map((phase) => {
                             const x = plot.plotLeft + (plot.plotWidth * phase);
                             return (
@@ -257,7 +254,7 @@ export function CrusherEditor({
                             1/2
                         </text>
                         <text className="seqfx-crusher-editor__axis-label" x={plot.plotRight} y={axisLabelY} textAnchor="end">1 cycle</text>
-                    </svg>
+                    </EditorCurveSurface>
                 </div>
                 <EditorTickSlider
                     accent="start"

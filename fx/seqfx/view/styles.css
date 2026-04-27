@@ -1429,21 +1429,34 @@ select {
 
 .seqfx-tape-editor {
     display: grid;
-    gap: 10px;
+    gap: 12px;
+}
+
+.seqfx-tape-editor__panel {
+    position: relative;
+    container-type: inline-size;
+    border: 0;
+    color: var(--editor-surface-ink);
+    background: var(--editor-surface-bg);
+    overflow: hidden;
+    --editor-bottom-reserve: 40px;
+    --editor-top-reserve: 0px;
+}
+
+.seqfx-tape-editor__viewport {
+    position: relative;
+    width: 100%;
+    height: calc(clamp(140px, 50cqw, 300px) + var(--editor-bottom-reserve) + var(--editor-top-reserve));
+    overflow: hidden;
 }
 
 .seqfx-tape-graph {
+    display: block;
     width: 100%;
-    min-height: 150px;
-    border: 1px solid var(--seqfx-shell-border);
-    border-radius: 7px;
-    background: rgba(21, 24, 22, 0.72);
+    height: 100%;
+    overflow: visible;
     touch-action: none;
-}
-
-.seqfx-tape-graph-bg {
-    fill: rgba(255, 255, 255, 0.035);
-    stroke: rgba(238, 242, 239, 0.1);
+    cursor: crosshair;
 }
 
 .seqfx-tape-catchup-region {
@@ -1451,12 +1464,7 @@ select {
 }
 
 .seqfx-tape-grid-line {
-    stroke: rgba(238, 242, 239, 0.16);
     stroke-dasharray: 4 4;
-}
-
-.seqfx-tape-axis {
-    stroke: rgba(238, 242, 239, 0.2);
 }
 
 .seqfx-tape-marker-line {
@@ -1464,36 +1472,8 @@ select {
     stroke-dasharray: 3 3;
 }
 
-.seqfx-tape-graph-fill {
-    fill: rgba(139, 191, 154, 0.13);
-}
-
-.seqfx-tape-graph-line {
-    fill: none;
-    stroke: #8bbf9a;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-    stroke-width: 2.4px;
-}
-
 .seqfx-tape-handle {
-    fill: #f2d16b;
-    stroke: rgba(21, 24, 22, 0.86);
-    stroke-width: 1.4px;
-    cursor: grab;
     pointer-events: all;
-}
-
-.seqfx-tape-handle:active {
-    cursor: grabbing;
-}
-
-.seqfx-tape-length-handle {
-    fill: #f2d16b;
-}
-
-.seqfx-tape-curve-handle {
-    fill: #eef2ef;
 }
 
 .seqfx-tape-offscreen-marker {
@@ -1505,9 +1485,11 @@ select {
 }
 
 .seqfx-tape-graph-label {
-    fill: rgba(238, 242, 239, 0.62);
-    font-family: Menlo, Monaco, monospace;
-    font-size: 9px;
+    fill: var(--editor-surface-ink-muted);
+    font-family: var(--editor-label-font);
+    font-size: var(--editor-label-size-sm);
+    font-weight: var(--editor-label-weight);
+    letter-spacing: var(--editor-label-letter-spacing);
 }
 
 .seqfx-tape-readout {
@@ -1703,7 +1685,7 @@ select {
     .filter-range-editor,
     .seqfx-crusher-editor__panel,
     .seqfx-stutter-editor__panel,
-    .seqfx-tape-graph,
+    .seqfx-tape-editor__panel,
     .aux-source,
     .aux-curve,
     .seqfx-mod-targets

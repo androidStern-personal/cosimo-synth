@@ -2,6 +2,7 @@ import { Component, createElement, type ErrorInfo } from "react";
 import { createRoot, type Root } from "react-dom/client";
 
 import editorTokensCssText from "../../../ui/shared/editor-tokens.css?inline";
+import editorCurveSurfaceCssText from "../../../ui/shared/editor-curve-surface.css?inline";
 import editorTickSliderCssText from "../../../ui/shared/editor-tick-slider.css?inline";
 import filterRangeEditorCssText from "../../../ui/shared/filter-range-editor.css?inline";
 import crusherEditorCssText from "./crusher-editor.css?inline";
@@ -12,6 +13,7 @@ import type { PatchConnectionLike } from "../../../ui/shared/cmajor-react";
 
 const cssText = [
     editorTokensCssText,
+    editorCurveSurfaceCssText,
     editorTickSliderCssText,
     filterRangeEditorCssText,
     crusherEditorCssText,
