@@ -219,7 +219,7 @@ class SnapshotBar extends HTMLElement {
     private _mutations: SnapshotBankMutations | null = null;
     private _unsubscribe: (() => void) | null = null;
     private _state: EffectSnapshotBankState | null = null;
-    private _messageTimeout: ReturnType<typeof setTimeout> | null = null;
+    private _messageTimeout: number | null = null;
     private _activeMessageKey = "";
     private _copyFallbackToken = 0;
     private _pasteFallbackToken = 0;

@@ -1158,7 +1158,7 @@ function SeqFxStutterBlockGlyph({
     );
 }
 
-function SeqFxBlockGlyph({
+export function SeqFxBlockGlyph({
     effectType,
     params,
     segmentLength,
@@ -2525,25 +2525,58 @@ function SeqFxPresetBarHost({
     return <div className="seqfx-preset-row" ref={hostRef} />;
 }
 
-export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConnectionLike }) {
+export type SeqFxPromoControls = {
+    state?: SeqFxState;
+    selectedPattern?: number;
+    rateIndex?: number;
+    selectedCell?: SelectedCell | null;
+    selection?: Selection | null;
+    playheadStep?: number | null;
+    inspectorMode?: InspectorMode;
+    auxMonitor?: AuxMonitorState;
+    hidePresetBar?: boolean;
+};
+
+export function SeqFxPatchView({
+    patchConnection,
+    promoControls,
+}: {
+    patchConnection: PatchConnectionLike;
+    promoControls?: SeqFxPromoControls;
+}) {
     const bridge = useMemo(() => new SeqFxRuntimeBridge(patchConnection), [patchConnection]);
-    const [state, setState] = useState<SeqFxState>(() => bridge.getState());
-    const [selectedPattern, setSelectedPattern] = useState(() => bridge.getSelectedPatternIndex());
-    const [rateIndex, setRateIndex] = useState(() => bridge.getRateIndex());
-    const [selectedCell, setSelectedCell] = useState<SelectedCell | null>(null);
-    const [selection, setSelection] = useState<Selection | null>(null);
-    const [playheadStep, setPlayheadStep] = useState<number | null>(null);
+    const [runtimeState, setState] = useState<SeqFxState>(() => bridge.getState());
+    const [runtimeSelectedPattern, setSelectedPattern] = useState(() => bridge.getSelectedPatternIndex());
+    const [runtimeRateIndex, setRateIndex] = useState(() => bridge.getRateIndex());
+    const [runtimeSelectedCell, setSelectedCell] = useState<SelectedCell | null>(null);
+    const [runtimeSelection, setSelection] = useState<Selection | null>(null);
+    const [runtimePlayheadStep, setPlayheadStep] = useState<number | null>(null);
     const [observedStepDurationMs, setObservedStepDurationMs] = useState<number | null>(null);
-    const [auxMonitor, setAuxMonitor] = useState<AuxMonitorState>(() => ({
+    const [runtimeAuxMonitor, setAuxMonitor] = useState<AuxMonitorState>(() => ({
         cyclePhase: Array.from({ length: 4 }, () => 0),
         amount: Array.from({ length: 4 }, () => 0),
         durationMs: Array.from({ length: 4 }, () => 0),
     }));
     const [drawEffectType, setDrawEffectType] = useState<SeqFxEffectType | null>(null);
-    const [inspectorMode, setInspectorMode] = useState<InspectorMode>("effect");
+    const [runtimeInspectorMode, setInspectorMode] = useState<InspectorMode>("effect");
     const [gestureState, setGestureState] = useState<BlockGesture | null>(null);
     const [patternPreview, setPatternPreview] = useState<PatternPreview | null>(null);
     const [invalidDropTarget, setInvalidDropTarget] = useState<InvalidDropTarget | null>(null);
+    const isPromoControlled = Boolean(promoControls);
+    const state = isPromoControlled ? promoControls?.state ?? runtimeState : runtimeState;
+    const selectedPattern = isPromoControlled ? promoControls?.selectedPattern ?? runtimeSelectedPattern : runtimeSelectedPattern;
+    const rateIndex = isPromoControlled ? promoControls?.rateIndex ?? runtimeRateIndex : runtimeRateIndex;
+    const selectedCell = isPromoControlled && promoControls && Object.prototype.hasOwnProperty.call(promoControls, "selectedCell")
+        ? promoControls.selectedCell ?? null
+        : runtimeSelectedCell;
+    const selection = isPromoControlled && promoControls && Object.prototype.hasOwnProperty.call(promoControls, "selection")
+        ? promoControls.selection ?? null
+        : runtimeSelection;
+    const playheadStep = isPromoControlled && promoControls && Object.prototype.hasOwnProperty.call(promoControls, "playheadStep")
+        ? promoControls.playheadStep ?? null
+        : runtimePlayheadStep;
+    const auxMonitor = isPromoControlled ? promoControls?.auxMonitor ?? runtimeAuxMonitor : runtimeAuxMonitor;
+    const inspectorMode = isPromoControlled ? promoControls?.inspectorMode ?? runtimeInspectorMode : runtimeInspectorMode;
     const cellsPerBeat = useMemo(() => cellsPerBeatForRateIndex(rateIndex), [rateIndex]);
     const gridGeometry = useMemo(() => createGridGeometry(cellsPerBeat), [cellsPerBeat]);
     const gridShellClassName = `seqfx-grid-shell seqfx-grid--beat-${cellsPerBeat}`;
@@ -2564,6 +2597,10 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
     selectedCellRef.current = selectedCell;
 
     useEffect(() => {
+        if (isPromoControlled) {
+            return;
+        }
+
         bridge.attach();
         const unsubscribeState = bridge.subscribe((nextState) => {
             setState(nextState);
@@ -2615,9 +2652,13 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
             unsubscribeRate();
             bridge.detach();
         };
-    }, [bridge]);
+    }, [bridge, isPromoControlled]);
 
     useEffect(() => {
+        if (isPromoControlled) {
+            return;
+        }
+
         const handleKeyDown = (event: globalThis.KeyboardEvent) => {
             if (event.key === "Alt") {
                 optionKeyRef.current = true;
@@ -2641,9 +2682,13 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
             window.removeEventListener("keyup", handleKeyUp);
             window.removeEventListener("blur", clearOptionKey);
         };
-    }, []);
+    }, [isPromoControlled]);
 
     useEffect(() => {
+        if (isPromoControlled) {
+            return;
+        }
+
         const copySelectedCellValues = () => {
             const activeSelection = activeSelectionRef.current;
             if (!activeSelection || activeSelection.steps.length === 0) {
@@ -2740,7 +2785,7 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
             window.removeEventListener("copy", handleCopyEvent);
             window.removeEventListener("paste", handlePasteEvent);
         };
-    }, [bridge]);
+    }, [bridge, isPromoControlled]);
 
     function stepAtClientPointForLane(lane: number, clientX: number, clientY: number) {
         const rects = STEP_NUMBERS
@@ -3988,7 +4033,9 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
 
     return (
         <main className={gestureState ? "seqfx-root is-dragging" : "seqfx-root"} data-role="seqfx-root">
-            <SeqFxPresetBarHost bridge={bridge} patchConnection={patchConnection} />
+            {promoControls?.hidePresetBar ? null : (
+                <SeqFxPresetBarHost bridge={bridge} patchConnection={patchConnection} />
+            )}
 
             <section className="seqfx-topbar" aria-label="SeqFX pattern controls">
                 <div className="seqfx-title">
@@ -4356,15 +4403,6 @@ export function SeqFxPatchView({ patchConnection }: { patchConnection: PatchConn
                 </aside>
             </section>
 
-            <pre className="seqfx-debug" data-role="seqfx-debug">
-                {JSON.stringify({
-                    selectedPattern,
-                    rateIndex,
-                    selectedCell,
-                    selection,
-                    lastUploadEndpoint: SEQFX_ENDPOINTS.patternUpload,
-                })}
-            </pre>
         </main>
     );
 }

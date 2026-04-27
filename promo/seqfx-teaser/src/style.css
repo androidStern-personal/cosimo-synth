@@ -1,0 +1,172 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: #080b10;
+  font-family: "Avenir Next", "Helvetica Neue", Arial, sans-serif;
+}
+
+.mono {
+  font-family: Menlo, Monaco, "SFMono-Regular", Consolas, monospace;
+}
+
+.seqfx-ui {
+  position: relative;
+  width: 1500px;
+  height: 820px;
+  border: 1px solid rgba(239, 234, 224, 0.18);
+  border-radius: 8px;
+  overflow: hidden;
+  color: #151515;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0) 32%),
+    #efeae0;
+  box-shadow:
+    0 38px 120px rgba(0, 0, 0, 0.56),
+    0 0 0 1px rgba(239, 234, 224, 0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  transform-style: preserve-3d;
+}
+
+.caption {
+  color: #efeae0;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  text-shadow:
+    0 0 22px rgba(0, 179, 204, 0.22),
+    0 3px 28px rgba(0, 0, 0, 0.85);
+}
+
+.seqfx-real-stage {
+  background:
+    radial-gradient(circle at 12% 0%, rgba(0, 179, 204, 0.12), transparent 28%),
+    radial-gradient(circle at 92% 100%, rgba(242, 209, 107, 0.14), transparent 28%),
+    #e4ded3;
+}
+
+.seqfx-real-backing {
+  position: absolute;
+  inset: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0) 34%),
+    #e4ded3;
+  box-shadow:
+    inset 0 0 0 1px rgba(28, 28, 28, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.74);
+}
+
+.seqfx-real-layer {
+  position: absolute;
+  overflow: hidden;
+  transform-style: preserve-3d;
+  will-change: transform, opacity;
+}
+
+.seqfx-real-layer__source {
+  position: absolute;
+  width: 1260px;
+  height: 760px;
+}
+
+.seqfx-real-scope {
+  width: 1260px;
+  height: 760px;
+  color: var(--editor-surface-ink);
+  background: var(--editor-surface-bg);
+  font-family: "Avenir Next", "Helvetica Neue", Arial, sans-serif;
+  --seqfx-step-min: 14px;
+  --seqfx-normal-gap: 3px;
+  --seqfx-beat-gap: 9px;
+  --seqfx-shell-border: rgba(28, 28, 28, 0.16);
+  --seqfx-shell-border-strong: rgba(28, 28, 28, 0.28);
+  --seqfx-shell-panel-bg: rgba(28, 28, 28, 0.035);
+  --seqfx-shell-panel-bg-strong: rgba(28, 28, 28, 0.08);
+  --seqfx-shell-ink: var(--editor-surface-ink);
+  --seqfx-shell-ink-muted: var(--editor-surface-ink-muted);
+}
+
+.seqfx-real-scope *,
+.seqfx-real-scope *::before,
+.seqfx-real-scope *::after {
+  animation: none !important;
+  transition: none !important;
+}
+
+.seqfx-real-scope .seqfx-root {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.seqfx-real-scope .seqfx-workspace {
+  grid-template-columns: minmax(0, 1.22fr) minmax(0, 0.9fr);
+  gap: 16px;
+}
+
+.seqfx-real-hide-inspector .seqfx-workspace {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.seqfx-real-hide-inspector .seqfx-inspector {
+  display: none;
+}
+
+.seqfx-real-hide-inspector .seqfx-grid-shell {
+  padding-right: 44px;
+}
+
+.seqfx-real-playhead {
+  position: absolute;
+  width: 5px;
+  border-radius: 999px;
+  background: #f2d16b;
+  mix-blend-mode: multiply;
+  pointer-events: none;
+  z-index: 30;
+}
+
+.seqfx-real-pill {
+  position: relative;
+  display: block;
+  border: 0;
+  background: transparent;
+  transform-style: preserve-3d;
+}
+
+.seqfx-real-pill .seqfx-block-fill {
+  inset: 0;
+  border-radius: 8px;
+  box-shadow:
+    0 0 22px rgba(255, 255, 255, 0.18),
+    0 18px 34px rgba(0, 0, 0, 0.24),
+    inset 0 -18px 26px rgba(0, 0, 0, 0.14);
+}
+
+.seqfx-real-pill .seqfx-block-glyph-label {
+  top: 9px;
+  left: 14px;
+  font-size: 14px;
+}
+
+.seqfx-real-pill .seqfx-block-glyph-readout {
+  right: 14px;
+  bottom: 10px;
+  font-size: 15px;
+}
+
+.seqfx-real-pill__name {
+  position: absolute;
+  right: 14px;
+  top: 9px;
+  z-index: 4;
+  color: rgba(26, 24, 21, 0.62);
+  font-family: Menlo, Monaco, "SFMono-Regular", Consolas, monospace;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}

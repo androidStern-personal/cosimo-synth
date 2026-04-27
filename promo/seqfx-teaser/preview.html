@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>SeqFX Teaser Preview</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        color: #efeae0;
+        background:
+          radial-gradient(circle at 18% 12%, rgba(0, 179, 204, 0.18), transparent 30%),
+          radial-gradient(circle at 82% 82%, rgba(242, 209, 107, 0.12), transparent 30%),
+          #080b10;
+        font-family: Avenir Next, Helvetica Neue, Arial, sans-serif;
+      }
+
+      main {
+        width: min(1180px, calc(100vw - 48px));
+        margin: 0 auto;
+        padding: 42px 0 56px;
+      }
+
+      header {
+        display: flex;
+        justify-content: space-between;
+        gap: 24px;
+        align-items: end;
+        margin-bottom: 18px;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: clamp(28px, 4vw, 56px);
+        line-height: 0.9;
+        letter-spacing: 0;
+        text-transform: uppercase;
+      }
+
+      .meta {
+        color: rgba(239, 234, 224, 0.62);
+        font-family: Menlo, Monaco, SFMono-Regular, Consolas, monospace;
+        font-size: 12px;
+        text-align: right;
+        text-transform: uppercase;
+      }
+
+      video,
+      img {
+        display: block;
+        width: 100%;
+        border: 1px solid rgba(239, 234, 224, 0.18);
+        border-radius: 8px;
+        background: #05070a;
+        box-shadow: 0 32px 100px rgba(0, 0, 0, 0.5);
+      }
+
+      .sheet {
+        margin-top: 28px;
+      }
+
+      @media (max-width: 760px) {
+        header {
+          display: block;
+        }
+
+        .meta {
+          margin-top: 12px;
+          text-align: left;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>SeqFX</h1>
+        <div class="meta">1920x1080 · 30 fps · 20s</div>
+      </header>
+      <video src="./out/seqfx-teaser.mp4" controls autoplay muted loop playsinline></video>
+      <img
+        class="sheet"
+        src="./out/stills/seqfx-teaser-rendered-contact-sheet.png"
+        alt="Contact sheet of the encoded SeqFX teaser video"
+      />
+    </main>
+  </body>
+</html>

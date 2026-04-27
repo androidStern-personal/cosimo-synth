@@ -1748,10 +1748,6 @@ select {
     border-color: rgba(126, 116, 101, 0.24);
 }
 
-.seqfx-debug {
-    display: none;
-}
-
 @media (max-width: 860px) {
     .seqfx-topbar {
         margin-right: 12px;
