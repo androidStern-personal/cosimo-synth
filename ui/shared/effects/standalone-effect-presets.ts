@@ -1,6 +1,7 @@
 import type { PatchConnectionLike } from "../cmajor-react";
 import {
     buildPluginStateContract,
+    canonicalJSONStringify,
     clonePluginStateContract,
     type EffectParameterContract,
     type EffectParameterValue,
@@ -145,6 +146,10 @@ function valuesEqual(left: EffectParameterValue | undefined, right: EffectParame
     return Object.is(left, right);
 }
 
+function storedStateValuesEqual(left: unknown, right: unknown) {
+    return canonicalJSONStringify(left) === canonicalJSONStringify(right);
+}
+
 function presetKeyFor(source: StandaloneEffectPresetSource, presetID: string) {
     return `${source}:${presetID}`;
 }
@@ -269,6 +274,7 @@ export class StandaloneEffectPresetController {
     private readonly hydratingEndpointIDs = new Set<string>();
     private readonly suppressedParameterValues = new Map<string, EffectParameterValue[]>();
     private readonly parameterListenerCleanups: Array<() => void> = [];
+    private readonly storedStateListenerCleanups: Array<() => void> = [];
     private readonly handleBridgeStateBound: (state: EffectPresetStateV2) => void;
     private readonly handleBridgeErrorBound: (error: Error) => void;
     private readonly handleStatusBound: (status: unknown) => void;
@@ -278,6 +284,7 @@ export class StandaloneEffectPresetController {
     private filter: StandaloneEffectPresetFilter = { ...defaultFilter };
     private attached = false;
     private ready = false;
+    private applyingPresetValuesDepth = 0;
     private lastError: string | null = null;
 
     constructor(private readonly options: StandaloneEffectPresetControllerOptions) {
@@ -310,6 +317,7 @@ export class StandaloneEffectPresetController {
         this.bridge.subscribeErrors(this.handleBridgeErrorBound);
         this.bridge.attach();
         this.bridge.requestBootState();
+        this.attachStoredStateListeners();
         this.options.patchConnection.addStatusListener?.(this.handleStatusBound);
         this.options.patchConnection.requestStatusUpdate?.();
         this.notify();
@@ -321,6 +329,7 @@ export class StandaloneEffectPresetController {
         }
 
         this.detachParameterListeners();
+        this.detachStoredStateListeners();
         this.bridge.unsubscribe(this.handleBridgeStateBound);
         this.bridge.unsubscribeErrors(this.handleBridgeErrorBound);
         this.bridge.detach();
@@ -673,6 +682,25 @@ export class StandaloneEffectPresetController {
         this.suppressedParameterValues.clear();
     }
 
+    private attachStoredStateListeners() {
+        for (const adapter of this.storedStateAdapters) {
+            if (typeof adapter.subscribe !== "function") {
+                continue;
+            }
+
+            const cleanup = adapter.subscribe(() => this.handleStoredStateAdapterChange(adapter));
+            this.storedStateListenerCleanups.push(cleanup);
+        }
+    }
+
+    private detachStoredStateListeners() {
+        for (const cleanup of this.storedStateListenerCleanups) {
+            cleanup();
+        }
+
+        this.storedStateListenerCleanups.length = 0;
+    }
+
     private requestCurrentParameterValues() {
         for (const parameter of this.currentContract?.parameters ?? []) {
             this.options.patchConnection.requestParameterValue?.(parameter.endpointID);
@@ -726,6 +754,44 @@ export class StandaloneEffectPresetController {
         const activePresetPayload = this.findPresetByID(activePreset.presetID);
 
         if (activePresetPayload && valuesEqual(activePresetPayload.parameters[endpointID], value)) {
+            return;
+        }
+
+        this.bridge.setActivePresetMetadata(this.options.effectID, {
+            ...activePreset,
+            dirty: true,
+        });
+    }
+
+    private handleStoredStateAdapterChange(adapter: EffectStoredStateAdapter) {
+        if (this.applyingPresetValuesDepth > 0) {
+            return;
+        }
+
+        try {
+            this.markActivePresetDirtyForStoredStateIfNeeded(adapter);
+        } catch (error) {
+            this.lastError = errorFromUnknown(error).message;
+        }
+
+        this.notify();
+    }
+
+    private markActivePresetDirtyForStoredStateIfNeeded(adapter: EffectStoredStateAdapter) {
+        if (typeof adapter.capture !== "function") {
+            return;
+        }
+
+        const activePreset = this.bridgeState.activePresetByEffect[this.options.effectID];
+
+        if (!activePreset || activePreset.dirty) {
+            return;
+        }
+
+        const activePresetPayload = this.findPresetByID(activePreset.presetID);
+        const currentStoredState = adapter.serializeForPreset(adapter.normalizeForPreset(adapter.capture()));
+
+        if (activePresetPayload && storedStateValuesEqual(activePresetPayload.storedState[adapter.key], currentStoredState)) {
             return;
         }
 
@@ -1008,6 +1074,8 @@ export class StandaloneEffectPresetController {
 
         this.queueSuppressedPresetValues(preset);
 
+        this.applyingPresetValuesDepth += 1;
+
         try {
             applyEffectPresetV2({
                 patchConnection: {
@@ -1024,6 +1092,8 @@ export class StandaloneEffectPresetController {
         } catch (error) {
             this.suppressedParameterValues.clear();
             throw error;
+        } finally {
+            this.applyingPresetValuesDepth -= 1;
         }
     }
 

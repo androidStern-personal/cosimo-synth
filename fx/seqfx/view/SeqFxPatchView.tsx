@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent, type PointerEvent } from "react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent, type PointerEvent } from "react";
 
 import type { PatchConnectionLike } from "../../../ui/shared/cmajor-react";
 import { createEffectHeader } from "../../../ui/shared/effects/effect-header";
@@ -290,15 +290,57 @@ function SeqFxDeleteGlyph() {
     );
 }
 
-// Effect picker SVGs copied from Iconify API: FontAudio filter-lowpass/repeat (CC BY 4.0, @fefanto),
-// Iconoir square-wave (MIT), and Lucide cassette-tape (ISC).
+function effectIconTextureId(effectType: SeqFxEffectType, reactId: string) {
+    return `seqfx-effect-icon-texture-${effectType}-${reactId.replace(/[^a-zA-Z0-9_-]/g, "")}`;
+}
+
+function SeqFxEffectIconTexture({ id, viewBoxSize }: { id: string; viewBoxSize: number }) {
+    const scale = viewBoxSize / 24;
+    const tile = 2.5 * scale;
+    const solidRadius = 1 * scale;
+    const fadeRadius = 1.2 * scale;
+    const dotId = `${id}-dot`;
+    return (
+        <defs>
+            <radialGradient data-role="seqfx-effect-icon-texture-gradient" id={dotId}>
+                <stop offset="0%" stopColor="#000" stopOpacity="0.10" />
+                <stop offset={`${(solidRadius / fadeRadius) * 100}%`} stopColor="#000" stopOpacity="0.10" />
+                <stop offset="100%" stopColor="#000" stopOpacity="0" />
+            </radialGradient>
+            <pattern
+                data-role="seqfx-effect-icon-texture"
+                height={tile}
+                id={id}
+                patternUnits="userSpaceOnUse"
+                width={tile}
+            >
+                <circle cx={tile / 2} cy={tile / 2} fill={`url(#${dotId})`} r={fadeRadius} />
+            </pattern>
+        </defs>
+    );
+}
+
+const TAPE_STOP_ICON_PATH =
+    "M3 5h18a1.5 1.5 0 0 1 1.5 1.5v11a1.5 1.5 0 0 1-1.5 1.5h-3.5l-.55-2.45A1.4 1.4 0 0 0 15.59 15.5H8.41a1.4 1.4 0 0 0-1.36 1.05L6.5 19H3a1.5 1.5 0 0 1-1.5-1.5v-11A1.5 1.5 0 0 1 3 5Zm5 3a2 2 0 1 0 0 4 2 2 0 0 0 0-4Zm8 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4Z";
+
+// Effect picker SVGs are local silhouettes matched to the riso cell palette.
 function SeqFxEffectIcon({ effectType }: { effectType: SeqFxEffectType }) {
+    const textureId = effectIconTextureId(effectType, useId());
+    const textureFill = `url(#${textureId})`;
+
     switch (effectType) {
         case SEQFX_EFFECT_TYPES.filter:
             return (
-                <svg aria-hidden="true" focusable="false" viewBox="0 0 256 256">
+                <svg aria-hidden="true" className="seqfx-effect-icon" focusable="false" viewBox="0 0 256 256">
+                    <SeqFxEffectIconTexture id={textureId} viewBoxSize={256} />
                     <path
+                        data-role="seqfx-effect-icon-fill"
                         fill="currentColor"
+                        fillRule="evenodd"
+                        d="M24.22 67.796a3.995 3.995 0 0 1 4.008-3.991h85.498c8.834 0 19.732 6.112 24.345 13.657l53.76 87.936c3.46 5.66 11.628 10.247 18.256 10.247h16.718a3.996 3.996 0 0 1 3.994 4.007v8.985a4.007 4.007 0 0 1-4.007 4.008h-24.7c-8.835 0-19.709-6.13-24.283-13.683l-52.324-86.4c-3.43-5.665-11.577-10.257-18.202-10.257H28.214a3.995 3.995 0 0 1-3.993-3.992V67.796z"
+                    />
+                    <path
+                        fill={textureFill}
                         fillRule="evenodd"
                         d="M24.22 67.796a3.995 3.995 0 0 1 4.008-3.991h85.498c8.834 0 19.732 6.112 24.345 13.657l53.76 87.936c3.46 5.66 11.628 10.247 18.256 10.247h16.718a3.996 3.996 0 0 1 3.994 4.007v8.985a4.007 4.007 0 0 1-4.007 4.008h-24.7c-8.835 0-19.709-6.13-24.283-13.683l-52.324-86.4c-3.43-5.665-11.577-10.257-18.202-10.257H28.214a3.995 3.995 0 0 1-3.993-3.992V67.796z"
                     />
@@ -306,33 +348,41 @@ function SeqFxEffectIcon({ effectType }: { effectType: SeqFxEffectType }) {
             );
         case SEQFX_EFFECT_TYPES.crusher:
             return (
-                <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24">
+                <svg aria-hidden="true" className="seqfx-effect-icon" focusable="false" viewBox="0 0 24 24">
+                    <SeqFxEffectIconTexture id={textureId} viewBoxSize={24} />
                     <path
-                        d="M3 12h3V4h6v16h6v-8h3m-6.5 0h1m-7 0h1"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth="1.5"
+                        d="M3 20 V12 H6 V5 H12 V20 H18 V12 H21 V16 H20 V22 H10 V7 H8 V14 H5 V22 H3 Z"
+                        data-role="seqfx-effect-icon-fill"
+                        fill="currentColor"
+                    />
+                    <path
+                        d="M3 20 V12 H6 V5 H12 V20 H18 V12 H21 V16 H20 V22 H10 V7 H8 V14 H5 V22 H3 Z"
+                        fill={textureFill}
                     />
                 </svg>
             );
         case SEQFX_EFFECT_TYPES.tapeStop:
             return (
-                <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24">
-                    <g fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2">
-                        <rect width="20" height="16" x="2" y="4" rx="2" />
-                        <circle cx="8" cy="10" r="2" />
-                        <path d="M8 12h8" />
-                        <circle cx="16" cy="10" r="2" />
-                        <path d="m6 20l.7-2.9A1.4 1.4 0 0 1 8.1 16h7.8a1.4 1.4 0 0 1 1.4 1l.7 3" />
-                    </g>
+                <svg aria-hidden="true" className="seqfx-effect-icon" focusable="false" viewBox="0 0 24 24">
+                    <SeqFxEffectIconTexture id={textureId} viewBoxSize={24} />
+                    <path
+                        data-role="seqfx-effect-icon-fill"
+                        fill="currentColor"
+                        fillRule="evenodd"
+                        d={TAPE_STOP_ICON_PATH}
+                    />
+                    <path fill={textureFill} fillRule="evenodd" d={TAPE_STOP_ICON_PATH} />
                 </svg>
             );
         case SEQFX_EFFECT_TYPES.stutter:
             return (
-                <svg aria-hidden="true" focusable="false" viewBox="0 0 256 256">
-                    <g fill="currentColor" fillRule="evenodd">
+                <svg aria-hidden="true" className="seqfx-effect-icon" focusable="false" viewBox="0 0 256 256">
+                    <SeqFxEffectIconTexture id={textureId} viewBoxSize={256} />
+                    <g data-role="seqfx-effect-icon-fill" fill="currentColor" fillRule="evenodd">
+                        <path d="M109.533 197.602a1.887 1.887 0 0 1-.034 2.76l-7.583 7.066a4.095 4.095 0 0 1-5.714-.152l-32.918-34.095c-1.537-1.592-1.54-4.162-.002-5.746l33.1-34.092c1.536-1.581 4.11-1.658 5.74-.18l7.655 6.94c.82.743.833 1.952.02 2.708l-21.11 19.659s53.036.129 71.708.064c18.672-.064 33.437-16.973 33.437-34.7c0-7.214-5.578-17.64-5.578-17.64c-.498-.99-.273-2.444.483-3.229l8.61-8.94c.764-.794 1.772-.632 2.242.364c0 0 9.212 18.651 9.212 28.562c0 28.035-21.765 50.882-48.533 50.882s-70.921.201-70.921.201z" />
+                        <path d="M144.398 58.435a1.887 1.887 0 0 1 .034-2.76l7.583-7.066a4.095 4.095 0 0 1 5.714.152l32.918 34.095c1.537 1.592 1.54 4.162.002 5.746l-33.1 34.092c-1.536 1.581-4.11 1.658-5.74.18l-7.656-6.94c-.819-.743-.832-1.952-.02-2.708l21.111-19.659s-53.036-.129-71.708-.064c-18.672.064-33.437 16.973-33.437 34.7c0 7.214 5.578 17.64 5.578 17.64c.498.99.273 2.444-.483 3.229l-8.61 8.94c-.764.794-1.772.632-2.242-.364c0 0-9.212-18.65-9.212-28.562c0-28.035 21.765-50.882 48.533-50.882s70.921-.201 70.921-.201z" />
+                    </g>
+                    <g fill={textureFill} fillRule="evenodd">
                         <path d="M109.533 197.602a1.887 1.887 0 0 1-.034 2.76l-7.583 7.066a4.095 4.095 0 0 1-5.714-.152l-32.918-34.095c-1.537-1.592-1.54-4.162-.002-5.746l33.1-34.092c1.536-1.581 4.11-1.658 5.74-.18l7.655 6.94c.82.743.833 1.952.02 2.708l-21.11 19.659s53.036.129 71.708.064c18.672-.064 33.437-16.973 33.437-34.7c0-7.214-5.578-17.64-5.578-17.64c-.498-.99-.273-2.444.483-3.229l8.61-8.94c.764-.794 1.772-.632 2.242.364c0 0 9.212 18.651 9.212 28.562c0 28.035-21.765 50.882-48.533 50.882s-70.921.201-70.921.201z" />
                         <path d="M144.398 58.435a1.887 1.887 0 0 1 .034-2.76l7.583-7.066a4.095 4.095 0 0 1 5.714.152l32.918 34.095c1.537 1.592 1.54 4.162.002 5.746l-33.1 34.092c-1.536 1.581-4.11 1.658-5.74.18l-7.656-6.94c-.819-.743-.832-1.952-.02-2.708l21.111-19.659s-53.036-.129-71.708-.064c-18.672.064-33.437 16.973-33.437 34.7c0 7.214 5.578 17.64 5.578 17.64c.498.99.273 2.444-.483 3.229l-8.61 8.94c-.764.794-1.772.632-2.242-.364c0 0-9.212-18.65-9.212-28.562c0-28.035 21.765-50.882 48.533-50.882s70.921-.201 70.921-.201z" />
                     </g>

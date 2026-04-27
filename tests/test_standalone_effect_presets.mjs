@@ -76,10 +76,28 @@ async function createV2Preset({
     label = "Soft Smash",
     status = ottStatus,
     parameters = {},
+    storedStateAdapters = [],
+    storedState = {},
 } = {}) {
     const { buildPluginStateContract } = await loadContractModule();
-    const contract = buildPluginStateContract({ effectID: "ott", status });
+    const contract = buildPluginStateContract({
+        effectID: "ott",
+        status,
+        storedState: storedStateAdapters,
+    });
     const defaults = Object.fromEntries(contract.parameters.map((param) => [param.endpointID, param.defaultValue]));
+    const serializedStoredState = {};
+
+    for (const entry of contract.storedState) {
+        const adapter = storedStateAdapters.find((candidate) => candidate.key === entry.key);
+        const rawValue = Object.prototype.hasOwnProperty.call(storedState, entry.key)
+            ? storedState[entry.key]
+            : adapter?.capture?.();
+
+        serializedStoredState[entry.key] = adapter
+            ? adapter.serializeForPreset(adapter.normalizeForPreset(rawValue))
+            : rawValue;
+    }
 
     return {
         kind: "cosimo.effectPreset",
@@ -92,7 +110,62 @@ async function createV2Preset({
             ...defaults,
             ...parameters,
         },
-        storedState: {},
+        storedState: serializedStoredState,
+    };
+}
+
+function createStoredMatrixAdapter(initialPattern = "saved") {
+    let state = { pattern: initialPattern };
+    const listeners = new Set();
+    const cloneState = (value) => {
+        if (!value || typeof value !== "object" || Array.isArray(value) || typeof value.pattern !== "string") {
+            throw new Error("Matrix stored state must contain a string pattern.");
+        }
+
+        return { pattern: value.pattern };
+    };
+    const notify = () => {
+        for (const listener of listeners) {
+            listener();
+        }
+    };
+
+    return {
+        adapter: {
+            key: "matrix.v1",
+            schemaVersion: 1,
+            getContract() {
+                return {
+                    key: "matrix.v1",
+                    schemaVersion: 1,
+                    required: true,
+                };
+            },
+            capture() {
+                return cloneState(state);
+            },
+            normalizeForPreset(value) {
+                return cloneState(value);
+            },
+            serializeForPreset(value) {
+                return cloneState(value);
+            },
+            apply(value) {
+                state = cloneState(value);
+                notify();
+            },
+            subscribe(listener) {
+                listeners.add(listener);
+                return () => listeners.delete(listener);
+            },
+        },
+        setPattern(pattern) {
+            state = { pattern };
+            notify();
+        },
+        get pattern() {
+            return state.pattern;
+        },
     };
 }
 
@@ -190,15 +263,18 @@ async function flushMicrotasks(turns = 8) {
 
 async function createPresetController({
     patchConnection = new FakeStandalonePatchConnection(),
+    factoryPresetRegistry = factoryPresets(),
     createPresetID = () => "user.ott.generated",
     clipboard = createClipboardHarness(),
+    storedStateAdapters = [],
 } = {}) {
     const { StandaloneEffectPresetController } = await loadStandaloneModule();
 
     return new StandaloneEffectPresetController({
         effectID: "ott",
         patchConnection,
-        factoryPresets: factoryPresets(),
+        factoryPresets: factoryPresetRegistry,
+        storedStateAdapters,
         createPresetID,
         readClipboardText: clipboard.read,
         writeClipboardText: clipboard.write,
@@ -927,6 +1003,138 @@ test("standalone dirty tracking ignores apply writes and persists the first late
     patchConnection.emitParameterValue("ottAmount", 52);
     assert.equal(patchConnection.storedWrites.length, 2);
     assert.deepEqual(controller.getState().currentValues.ottAmount, 52);
+});
+
+test("standalone dirty tracking marks an active user preset dirty when subscribed stored state changes", async () => {
+    const matrix = createStoredMatrixAdapter("saved");
+    const userPreset = await createV2Preset({
+        presetID: "user.ott.matrix",
+        label: "Matrix",
+        storedStateAdapters: [matrix.adapter],
+        storedState: {
+            "matrix.v1": { pattern: "saved" },
+        },
+    });
+    const patchConnection = new FakeStandalonePatchConnection({
+        storedState: {
+            "effects.presets.v2": storedPresetStateV2({
+                userPresets: {
+                    ott: [userPreset],
+                },
+                activePresetByEffect: {
+                    ott: {
+                        presetID: "user.ott.matrix",
+                        label: "Matrix",
+                        dirty: false,
+                    },
+                },
+            }),
+        },
+    });
+    const controller = await createPresetController({
+        patchConnection,
+        factoryPresetRegistry: { ott: [] },
+        storedStateAdapters: [matrix.adapter],
+    });
+
+    controller.attach();
+    patchConnection.storedWrites = [];
+
+    matrix.setPattern("edited");
+    await flushMicrotasks();
+
+    const state = controller.getState();
+    const activeItem = state.presets.find((preset) => preset.isActive);
+
+    assert.deepEqual(state.activePreset, {
+        presetID: "user.ott.matrix",
+        label: "Matrix",
+        dirty: true,
+    });
+    assert.equal(state.dirty, true);
+    assert.deepEqual(activeItem && {
+        presetID: activeItem.presetID,
+        source: activeItem.source,
+        canOverwrite: activeItem.canOverwrite,
+        dirty: activeItem.dirty,
+    }, {
+        presetID: "user.ott.matrix",
+        source: "user",
+        canOverwrite: true,
+        dirty: true,
+    });
+    assert.equal(patchConnection.storedWrites.length, 1);
+    assert.deepEqual(parseStoredWrite(patchConnection.storedWrites.at(-1)).activePresetByEffect.ott, {
+        presetID: "user.ott.matrix",
+        label: "Matrix",
+        dirty: true,
+    });
+});
+
+test("standalone dirty tracking marks a newly saved user preset dirty after a later stored-state edit", async () => {
+    const matrix = createStoredMatrixAdapter("captured");
+    const patchConnection = new FakeStandalonePatchConnection({
+        parameterValues: {
+            envelopeBoostClampDb: 6,
+            ottAmount: 100,
+            ottBandDrive: 0,
+            ottEnvelopeMatch: 0,
+            ottMix: 100,
+            ottTimePercent: 100,
+        },
+    });
+    const controller = await createPresetController({
+        patchConnection,
+        factoryPresetRegistry: { ott: [] },
+        createPresetID: () => "user.ott.saved-matrix",
+        storedStateAdapters: [matrix.adapter],
+    });
+
+    controller.attach();
+    patchConnection.storedWrites = [];
+
+    const saveResult = controller.saveCurrentAsNewPreset("Saved Matrix");
+
+    assert.equal(saveResult.ok, true);
+    assert.deepEqual(saveResult.value.storedState, {
+        "matrix.v1": { pattern: "captured" },
+    });
+    assert.deepEqual(controller.getState().activePreset, {
+        presetID: "user.ott.saved-matrix",
+        label: "Saved Matrix",
+        dirty: false,
+    });
+
+    patchConnection.storedWrites = [];
+    matrix.setPattern("edited-after-save");
+    await flushMicrotasks();
+
+    const state = controller.getState();
+    const activeItem = state.presets.find((preset) => preset.isActive);
+
+    assert.deepEqual(state.activePreset, {
+        presetID: "user.ott.saved-matrix",
+        label: "Saved Matrix",
+        dirty: true,
+    });
+    assert.equal(state.dirty, true);
+    assert.deepEqual(activeItem && {
+        presetID: activeItem.presetID,
+        source: activeItem.source,
+        canOverwrite: activeItem.canOverwrite,
+        dirty: activeItem.dirty,
+    }, {
+        presetID: "user.ott.saved-matrix",
+        source: "user",
+        canOverwrite: true,
+        dirty: true,
+    });
+    assert.equal(patchConnection.storedWrites.length, 1);
+    assert.deepEqual(parseStoredWrite(patchConnection.storedWrites.at(-1)).activePresetByEffect.ott, {
+        presetID: "user.ott.saved-matrix",
+        label: "Saved Matrix",
+        dirty: true,
+    });
 });
 
 test("standalone persistent mutations fail before sound writes when stored state cannot be saved", async () => {

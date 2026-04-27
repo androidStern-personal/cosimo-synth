@@ -769,6 +769,10 @@ test("seqfx_topbar_keeps_patterns_on_one_row_without_duplicate_draw_or_transport
     await page.waitForFunction(() => (
         document.querySelector('[data-role="seqfx-effect-type-option"][data-effect-type="2"]')?.matches(":hover") ?? false
     ));
+    await page.waitForFunction(() => (
+        getComputedStyle(document.querySelector('[data-role="seqfx-effect-type-option"][data-effect-type="2"] svg')).color
+        === "rgb(238, 108, 77)"
+    ));
 
     const layout = await page.evaluate(() => {
         const rectFor = (selector) => {
@@ -801,9 +805,17 @@ test("seqfx_topbar_keeps_patterns_on_one_row_without_duplicate_draw_or_transport
         const selectedEffectIcon = selectedEffectButton?.querySelector("svg");
         const hoveredEffectButton = document.querySelector('[data-role="seqfx-effect-type-option"][data-effect-type="2"]');
         const hoveredEffectIcon = hoveredEffectButton?.querySelector("svg");
+        const effectIconDetails = Array.from(document.querySelectorAll('[data-role="seqfx-effect-type-option"]')).map((button) => {
+            const svg = button.querySelector("svg");
+            return {
+                effectType: button.getAttribute("data-effect-type"),
+                patternCount: svg?.querySelectorAll('[data-role="seqfx-effect-icon-texture"]').length ?? 0,
+            };
+        });
 
         return {
             drawControlCount: document.querySelectorAll('[data-role="seqfx-draw-effect"], .seqfx-draw-effect').length,
+            effectIconDetails,
             grid: rectFor(".seqfx-grid-shell"),
             gridBackgroundColor: gridShellStyle.backgroundColor,
             gridBorderTopStyle: gridShellStyle.borderTopStyle,
@@ -845,10 +857,20 @@ test("seqfx_topbar_keeps_patterns_on_one_row_without_duplicate_draw_or_transport
     assert.equal(layout.gridBackgroundColor, "rgba(0, 0, 0, 0)");
     assert.equal(layout.gridBorderTopStyle, "none");
     assert.equal(layout.inspectorBorderTopStyle, "none");
-    assert.equal(layout.selectedEffectIconColor, "rgb(242, 209, 107)");
-    assert.match(layout.selectedEffectIconFilter, /drop-shadow/);
-    assert.equal(layout.hoveredEffectIconColor, "rgb(0, 180, 216)");
-    assert.match(layout.hoveredEffectIconFilter, /drop-shadow/);
+    assert.equal(layout.selectedEffectIconColor, "rgb(244, 211, 94)");
+    assert.equal(layout.selectedEffectIconFilter, "none");
+    assert.equal(layout.hoveredEffectIconColor, "rgb(238, 108, 77)");
+    assert.equal(layout.hoveredEffectIconFilter, "none");
+    assert.deepEqual(
+        layout.effectIconDetails,
+        [
+            { effectType: "1", patternCount: 1 },
+            { effectType: "2", patternCount: 1 },
+            { effectType: "3", patternCount: 1 },
+            { effectType: "4", patternCount: 1 },
+        ],
+        "every effect tab icon should carry the same internal halftone texture technique as the cells",
+    );
     assert.ok(layout.presetRow.top <= 0.5, `preset row should touch the top edge, got ${layout.presetRow.top}px`);
     assert.ok(layout.presetRow.left <= 0.5, `preset row should touch the left edge, got ${layout.presetRow.left}px`);
     assert.ok(layout.presetRow.right >= layout.viewportWidth - 0.5, `preset row should touch the right edge, got ${layout.presetRow.right}px`);
@@ -866,6 +888,90 @@ test("seqfx_topbar_keeps_patterns_on_one_row_without_duplicate_draw_or_transport
     assert.ok(layout.rootScrollWidth <= layout.viewportWidth + 1, `page should not gain horizontal overflow, got ${layout.rootScrollWidth}px for ${layout.viewportWidth}px viewport`);
     assert.equal(layout.inspectorHeadingFontSize, "13px");
     assert.ok(layout.inspectorHeading.height <= 18, `expected compact inspector heading, got ${layout.inspectorHeading.height}px`);
+
+    await page.close();
+});
+
+test("seqfx_effect_tab_icons_use_their_cell_palette_when_selected", async () => {
+    const page = await browser.newPage({ viewport: { width: 900, height: 720 } });
+    await loadSeqFxHarness(page);
+    await page.locator('[data-role="seqfx-root"]').waitFor();
+    await page.getByRole("button", { name: "Chain 1 step 1", exact: true }).click();
+
+    const expectedSelectedColors = {
+        1: "rgb(244, 211, 94)",
+        2: "rgb(238, 108, 77)",
+        3: "rgb(152, 193, 217)",
+        4: "rgb(181, 217, 156)",
+    };
+
+    for (const [effectType, expectedColor] of Object.entries(expectedSelectedColors)) {
+        await page.locator(`[data-role="seqfx-effect-type-option"][data-effect-type="${effectType}"]`).click();
+        await page.waitForFunction(
+            ({ type, color }) => {
+                const button = document.querySelector(`[data-role="seqfx-effect-type-option"][data-effect-type="${type}"]`);
+                const svg = button?.querySelector("svg");
+                return button?.getAttribute("aria-pressed") === "true"
+                    && svg
+                    && getComputedStyle(svg).color === color;
+            },
+            { type: effectType, color: expectedColor },
+        );
+        const actual = await page.evaluate((type) => {
+            const button = document.querySelector(`[data-role="seqfx-effect-type-option"][data-effect-type="${type}"]`);
+            const svg = button?.querySelector("svg");
+            const filledShape = svg?.querySelector('[data-role="seqfx-effect-icon-fill"]');
+            const viewBoxSize = Number(svg?.getAttribute("viewBox")?.split(/\s+/)[2] ?? 24);
+            const viewBoxScale = viewBoxSize / 24;
+            const pattern = svg?.querySelector('[data-role="seqfx-effect-icon-texture"]');
+            const textureDot = pattern?.querySelector("circle");
+            const textureGradient = svg?.querySelector('[data-role="seqfx-effect-icon-texture-gradient"]');
+            const textureStops = Array.from(textureGradient?.querySelectorAll("stop") ?? []).map((stop) => ({
+                offset: stop.getAttribute("offset"),
+                opacity: stop.getAttribute("stop-opacity"),
+            }));
+            return {
+                bodyBox: filledShape ? {
+                    height: filledShape.getBBox().height / viewBoxScale,
+                    width: filledShape.getBBox().width / viewBoxScale,
+                } : null,
+                color: svg ? getComputedStyle(svg).color : "",
+                fill: filledShape?.getAttribute("fill") ?? "",
+                filter: svg ? getComputedStyle(svg).filter : "",
+                patternHeight: Number(pattern?.getAttribute("height") ?? 0) / viewBoxScale,
+                patternWidth: Number(pattern?.getAttribute("width") ?? 0) / viewBoxScale,
+                pressed: button?.getAttribute("aria-pressed") ?? "",
+                strokeCount: svg?.querySelectorAll("[stroke]").length ?? 0,
+                textureDotFill: textureDot?.getAttribute("fill") ?? "",
+                textureDotRadius: Number(textureDot?.getAttribute("r") ?? 0) / viewBoxScale,
+                textureCount: svg?.querySelectorAll('[data-role="seqfx-effect-icon-texture"]').length ?? 0,
+                textureFillCount: Array.from(svg?.querySelectorAll("[fill]") ?? [])
+                    .filter((node) => node.getAttribute("fill")?.startsWith("url(#seqfx-effect-icon-texture-"))
+                    .length,
+                textureStops,
+            };
+        }, effectType);
+
+        assert.equal(actual.pressed, "true", `effect ${effectType} should be selected before checking color`);
+        assert.equal(actual.color, expectedColor);
+        assert.equal(actual.fill, "currentColor", "icon should use the effect color directly, not a black outline");
+        assert.equal(actual.filter, "none");
+        assert.equal(actual.strokeCount, 0, "effect tab icons should be filled silhouettes, not thin stroked outlines");
+        assert.equal(actual.textureCount, 1);
+        assert.ok(actual.bodyBox, "effect tab icon should expose its filled silhouette for visual checks");
+        assert.ok(actual.bodyBox.width >= 14, `effect ${effectType} icon silhouette should be wide enough to read, got ${actual.bodyBox.width}`);
+        assert.ok(actual.bodyBox.height >= 12, `effect ${effectType} icon silhouette should be tall enough to read, got ${actual.bodyBox.height}`);
+        assert.equal(actual.patternWidth, 2.5);
+        assert.equal(actual.patternHeight, 2.5);
+        assert.equal(actual.textureDotRadius, 1.2);
+        assert.match(actual.textureDotFill, /^url\(#seqfx-effect-icon-texture-.*-dot\)$/);
+        assert.ok(actual.textureFillCount > 0, "halftone texture must be clipped into the icon shape");
+        assert.deepEqual(actual.textureStops, [
+            { offset: "0%", opacity: "0.10" },
+            { offset: "83.33333333333334%", opacity: "0.10" },
+            { offset: "100%", opacity: "0" },
+        ]);
+    }
 
     await page.close();
 });

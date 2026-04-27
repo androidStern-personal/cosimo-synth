@@ -14,6 +14,10 @@
     --seqfx-shell-panel-bg-strong: rgba(28, 28, 28, 0.08);
     --seqfx-shell-ink: var(--editor-surface-ink);
     --seqfx-shell-ink-muted: var(--editor-surface-ink-muted);
+    --seqfx-effect-filter: #f4d35e;
+    --seqfx-effect-crusher: #ee6c4d;
+    --seqfx-effect-tape-stop: #98c1d9;
+    --seqfx-effect-stutter: #b5d99c;
 }
 
 * {
@@ -498,19 +502,19 @@ select {
 }
 
 .seqfx-block[data-effect="1"] .seqfx-block-fill {
-    background: #f4d35e;
+    background: var(--seqfx-effect-filter);
 }
 
 .seqfx-block[data-effect="2"] .seqfx-block-fill {
-    background: #ee6c4d;
+    background: var(--seqfx-effect-crusher);
 }
 
 .seqfx-block[data-effect="3"] .seqfx-block-fill {
-    background: #98c1d9;
+    background: var(--seqfx-effect-tape-stop);
 }
 
 .seqfx-block[data-effect="4"] .seqfx-block-fill {
-    background: #b5d99c;
+    background: var(--seqfx-effect-stutter);
 }
 
 .seqfx-block:hover .seqfx-block-fill {
@@ -1108,6 +1112,7 @@ select {
 }
 
 .seqfx-effect-picker__options button {
+    --seqfx-effect-icon-active: var(--seqfx-effect-filter);
     display: grid;
     width: 34px;
     height: 34px;
@@ -1121,24 +1126,25 @@ select {
     transition: color 140ms ease, filter 140ms ease, opacity 140ms ease, transform 140ms ease;
 }
 
+.seqfx-effect-picker__options button[data-effect-type="1"] {
+    --seqfx-effect-icon-active: var(--seqfx-effect-filter);
+}
+
+.seqfx-effect-picker__options button[data-effect-type="2"] {
+    --seqfx-effect-icon-active: var(--seqfx-effect-crusher);
+}
+
+.seqfx-effect-picker__options button[data-effect-type="3"] {
+    --seqfx-effect-icon-active: var(--seqfx-effect-tape-stop);
+}
+
+.seqfx-effect-picker__options button[data-effect-type="4"] {
+    --seqfx-effect-icon-active: var(--seqfx-effect-stutter);
+}
+
 .seqfx-effect-picker__options button:hover,
 .seqfx-effect-picker__options button:focus-visible {
-    color: var(--editor-accent-start) !important;
-}
-
-.seqfx-effect-picker__options button:hover svg,
-.seqfx-effect-picker__options button:focus-visible svg {
-    color: var(--editor-accent-start);
-}
-
-.seqfx-effect-picker__options button:hover svg,
-.seqfx-effect-picker__options button:focus-visible svg,
-.seqfx-effect-picker__options button.is-selected svg {
-    filter:
-        drop-shadow(1px 0 0 var(--editor-surface-ink))
-        drop-shadow(-1px 0 0 var(--editor-surface-ink))
-        drop-shadow(0 1px 0 var(--editor-surface-ink))
-        drop-shadow(0 -1px 0 var(--editor-surface-ink));
+    color: var(--seqfx-effect-icon-active);
 }
 
 .seqfx-effect-picker__options button:focus-visible {
@@ -1156,13 +1162,14 @@ select {
 }
 
 .seqfx-effect-picker__options button.is-selected {
-    color: #f2d16b;
+    color: var(--seqfx-effect-icon-active);
 }
 
 .seqfx-effect-picker__options svg {
     display: block;
     width: 24px;
     height: 24px;
+    color: currentColor;
 }
 
 .seqfx-mod-toggle {
