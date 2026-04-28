@@ -325,6 +325,49 @@ test("editing_selected_pattern_persists_state_without_direct_runtime_uploads", (
     assert.equal(editedStep.params[1], 330);
 });
 
+test("live_selected_pattern_param_edit_uploads_runtime_pattern_without_persisting_until_commit", () => {
+    let initialState = createDefaultSeqFxState();
+    initialState = applySeqFxBlockCreate(initialState, {
+        patternIndex: 0,
+        lane: SEQFX_LANES.filter,
+        startStep: 6,
+        length: 1,
+    });
+    const connection = new FakePatchConnection({
+        [SEQFX_STATE_KEY]: serializeSeqFxState(initialState),
+    });
+    const bridge = new SeqFxRuntimeBridge(connection);
+
+    bridge.attach();
+    bridge.requestBootState();
+    connection.events = [];
+    connection.storedWrites = [];
+
+    bridge.beginLiveEdit();
+    bridge.setStepParam({
+        patternIndex: 0,
+        lane: SEQFX_LANES.filter,
+        steps: [6],
+        paramIndex: 1,
+        value: 330,
+    });
+
+    assert.equal(connection.storedWrites.length, 0);
+
+    const uploads = endpointEvents(connection, SEQFX_ENDPOINTS.patternUpload);
+    assert.equal(uploads.length, 1);
+    assert.equal(uploads[0].value.patternIndex, 0);
+    assert.equal(uploads[0].value.params[SEQFX_LANES.filter][6][1], 330);
+    assert.equal(uploads[0].value.revision, bridge.getState().patterns[0].revision);
+
+    bridge.commitLiveEdit();
+
+    assert.equal(connection.storedWrites.length, 1);
+    const storedState = latestStoredSeqFxState(connection);
+    assert.equal(storedState.patterns[0].lanes[SEQFX_LANES.filter].steps[6].params[1], 330);
+    assert.equal(storedState.patterns[0].revision, uploads[0].value.revision);
+});
+
 test("changing_selected_pattern_block_effect_persists_effect_types_and_restores_previous_params", () => {
     const initialState = createDefaultSeqFxState();
     const connection = new FakePatchConnection({

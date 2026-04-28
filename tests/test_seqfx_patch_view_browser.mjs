@@ -2853,6 +2853,77 @@ test("seqfx_stutter_inspector_renders_interactive_envelope_editor_and_writes_blo
     await page.close();
 });
 
+test("seqfx_stutter_graph_drag_uploads_live_pattern_before_persisting_final_state", async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
+    await loadSeqFxHarness(page);
+    await page.locator('[data-role="seqfx-root"]').waitFor();
+
+    await page.getByRole("button", { name: "Chain 4 step 1", exact: true }).click();
+    await page.locator('[data-role="seqfx-stutter-editor"]').waitFor();
+    await page.locator('[data-role="seqfx-stutter-graph"]').waitFor();
+    await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
+
+    const initialSnapshot = await getHarnessSnapshot(page);
+    const initialStoredState = parseSeqFxStoredState(initialSnapshot.storedState[SEQFX_STATE_KEY]);
+    assertClose(initialStoredState.patterns[0].lanes[3].steps[0].params[3], 0.68, 0.000001, "initial stored stutter gate");
+
+    const graphBox = await page.locator('[data-role="seqfx-stutter-graph"]').boundingBox();
+    const handleBox = await page.locator('[data-role="seqfx-stutter-gate-handle"]').boundingBox();
+    assert.ok(graphBox);
+    assert.ok(handleBox);
+    const quarterGatePoint = await stutterGraphPoint(page, graphBox, 0.25);
+
+    await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(quarterGatePoint.x, quarterGatePoint.y, { steps: 8 });
+    await page.waitForFunction(({ expectedStoredGate, expectedUploadGate, tolerance }) => {
+        const snapshot = window.__SEQFX_HARNESS__?.getSnapshot();
+        const upload = snapshot?.events.filter((entry) => entry.endpointID === "patternUpload").at(-1)?.value;
+        const storedValue = snapshot?.storedState?.["seqfx.v6"];
+        const storedState = typeof storedValue === "string" ? JSON.parse(storedValue) : null;
+        const uploadGate = upload?.params?.[3]?.[0]?.[3];
+        const storedGate = storedState?.patterns?.[0]?.lanes?.[3]?.steps?.[0]?.params?.[3];
+
+        return Math.abs(uploadGate - expectedUploadGate) <= tolerance
+            && Math.abs(storedGate - expectedStoredGate) <= 0.000001;
+    }, {
+        expectedStoredGate: 0.68,
+        expectedUploadGate: 0.25,
+        tolerance: 0.03,
+    });
+
+    let snapshot = await getHarnessSnapshot(page);
+    let upload = patternUploads(snapshot).at(-1).value;
+    assertClose(upload.params[3][0][3], 0.25, 0.03, "live stutter gate upload while pointer is down");
+
+    let storedState = parseSeqFxStoredState(snapshot.storedState[SEQFX_STATE_KEY]);
+    assertClose(storedState.patterns[0].lanes[3].steps[0].params[3], 0.68, 0.000001, "stored stutter gate should not change until pointerup");
+
+    await page.mouse.up();
+    await page.waitForFunction(({ expectedGate, tolerance }) => {
+        const snapshot = window.__SEQFX_HARNESS__?.getSnapshot();
+        const upload = snapshot?.events.filter((entry) => entry.endpointID === "patternUpload").at(-1)?.value;
+        const storedValue = snapshot?.storedState?.["seqfx.v6"];
+        const storedState = typeof storedValue === "string" ? JSON.parse(storedValue) : null;
+        const uploadGate = upload?.params?.[3]?.[0]?.[3];
+        const storedGate = storedState?.patterns?.[0]?.lanes?.[3]?.steps?.[0]?.params?.[3];
+
+        return Math.abs(uploadGate - expectedGate) <= tolerance
+            && Math.abs(storedGate - expectedGate) <= tolerance;
+    }, {
+        expectedGate: 0.25,
+        tolerance: 0.03,
+    });
+
+    snapshot = await getHarnessSnapshot(page);
+    upload = patternUploads(snapshot).at(-1).value;
+    assertClose(upload.params[3][0][3], 0.25, 0.03, "final stutter gate upload after pointerup");
+    storedState = parseSeqFxStoredState(snapshot.storedState[SEQFX_STATE_KEY]);
+    assertClose(storedState.patterns[0].lanes[3].steps[0].params[3], 0.25, 0.03, "stored stutter gate after pointerup");
+
+    await page.close();
+});
+
 test("seqfx_stutter_editor_applies_shape_and_gate_to_selected_block_group", async () => {
     const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
     await loadSeqFxHarness(page);

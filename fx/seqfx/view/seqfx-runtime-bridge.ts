@@ -24,6 +24,7 @@ import {
     applySeqFxMixEdit,
     applySeqFxParamEdit,
     applySeqFxStepValuePaste,
+    buildSeqPatternUpload,
     createDefaultSeqFxState,
     getSeqFxStepValueSnapshot,
     normalizeSeqFxState,
@@ -154,6 +155,11 @@ export class SeqFxRuntimeBridge {
     private readonly pendingStoredEchoes = new Map<string, number>();
     private attached = false;
     private bootStoredStatePending = false;
+    private liveEditActive = false;
+    private liveEditDirty = false;
+    private pendingLiveNotify = false;
+    private pendingLivePatternUpload: number | null = null;
+    private pendingLiveFrame: number | null = null;
 
     private readonly handleStoredStateValue = (message: unknown) => {
         const stored = message as StoredStateMessage;
@@ -215,6 +221,7 @@ export class SeqFxRuntimeBridge {
             return;
         }
 
+        this.commitLiveEdit();
         this.attached = false;
         this.patchConnection.removeStoredStateValueListener?.(this.handleStoredStateValue);
         this.patchConnection.removeParameterListener?.(SEQFX_ENDPOINTS.patternSelect, this.handlePatternSelect);
@@ -297,6 +304,7 @@ export class SeqFxRuntimeBridge {
     }
 
     replaceStateFromPreset(nextState: SeqFxState) {
+        this.cancelLiveEdit();
         this.state = parseStrictSeqFxStateV5(nextState);
         this.persistState();
         this.notifyStateListeners();
@@ -447,18 +455,107 @@ export class SeqFxRuntimeBridge {
         this.patchConnection.sendEventOrValue?.(SEQFX_ENDPOINTS.internalReset, 1);
     }
 
-    private commitState(nextState: SeqFxState, _editedPatternIndex: number) {
+    beginLiveEdit() {
+        if (this.liveEditActive) {
+            return;
+        }
+
+        this.liveEditActive = true;
+        this.liveEditDirty = false;
+    }
+
+    commitLiveEdit() {
+        if (!this.liveEditActive) {
+            return;
+        }
+
+        this.flushLiveRuntimeUpdate();
+        const shouldPersist = this.liveEditDirty;
+        this.liveEditActive = false;
+        this.liveEditDirty = false;
+
+        if (shouldPersist) {
+            this.persistState();
+        }
+    }
+
+    cancelLiveEdit() {
+        if (this.pendingLiveFrame !== null && typeof globalThis.cancelAnimationFrame === "function") {
+            globalThis.cancelAnimationFrame(this.pendingLiveFrame);
+        }
+
+        this.liveEditActive = false;
+        this.liveEditDirty = false;
+        this.pendingLiveNotify = false;
+        this.pendingLivePatternUpload = null;
+        this.pendingLiveFrame = null;
+    }
+
+    private commitState(nextState: SeqFxState, editedPatternIndex: number) {
         this.state = normalizeSeqFxState(nextState);
+        if (this.liveEditActive) {
+            this.liveEditDirty = true;
+            this.scheduleLiveRuntimeUpdate(editedPatternIndex);
+            return;
+        }
+
         this.persistState();
         this.notifyStateListeners();
     }
 
     private applyStoredState(rawState: unknown) {
+        this.cancelLiveEdit();
         const nextState = rawState == null
             ? createDefaultSeqFxState()
             : parseStrictSeqFxStateV5(rawState);
 
         this.state = nextState;
+        this.notifyStateListeners();
+    }
+
+    private scheduleLiveRuntimeUpdate(editedPatternIndex: number) {
+        this.pendingLiveNotify = true;
+        const resolvedPatternIndex = resolvePatternIndex(editedPatternIndex);
+        if (resolvedPatternIndex === this.selectedPatternIndex) {
+            this.pendingLivePatternUpload = resolvedPatternIndex;
+        }
+
+        if (this.pendingLiveFrame !== null) {
+            return;
+        }
+
+        if (typeof globalThis.requestAnimationFrame !== "function") {
+            this.flushLiveRuntimeUpdate();
+            return;
+        }
+
+        this.pendingLiveFrame = globalThis.requestAnimationFrame(() => {
+            this.pendingLiveFrame = null;
+            this.flushLiveRuntimeUpdate();
+        });
+    }
+
+    private flushLiveRuntimeUpdate() {
+        if (!this.pendingLiveNotify) {
+            return;
+        }
+
+        if (this.pendingLiveFrame !== null && typeof globalThis.cancelAnimationFrame === "function") {
+            globalThis.cancelAnimationFrame(this.pendingLiveFrame);
+        }
+
+        const patternIndex = this.pendingLivePatternUpload;
+        this.pendingLiveNotify = false;
+        this.pendingLivePatternUpload = null;
+        this.pendingLiveFrame = null;
+
+        if (patternIndex !== null) {
+            this.patchConnection.sendEventOrValue?.(SEQFX_ENDPOINTS.patternUpload, buildSeqPatternUpload(this.state, {
+                patternIndex,
+                authoritative: false,
+            }));
+        }
+
         this.notifyStateListeners();
     }
 

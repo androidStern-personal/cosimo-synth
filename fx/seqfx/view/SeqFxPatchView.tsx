@@ -2658,6 +2658,7 @@ export function SeqFxPatchView({
     const selectedCellRef = useRef<SelectedCell | null>(selectedCell);
     const activeSelectionRef = useRef<Selection | null>(null);
     const cellClipboardRef = useRef<SeqFxStepValueSnapshot | null>(null);
+    const liveEditPointerIdRef = useRef<number | null>(null);
 
     rateIndexRef.current = rateIndex;
     stateRef.current = state;
@@ -2751,6 +2752,40 @@ export function SeqFxPatchView({
             window.removeEventListener("blur", clearOptionKey);
         };
     }, [isPromoControlled]);
+
+    useEffect(() => {
+        if (isPromoControlled) {
+            return;
+        }
+
+        const commitLiveEditForPointer = (event: globalThis.PointerEvent) => {
+            if (liveEditPointerIdRef.current !== event.pointerId) {
+                return;
+            }
+
+            liveEditPointerIdRef.current = null;
+            bridge.commitLiveEdit();
+        };
+        const commitLiveEditForWindow = () => {
+            if (liveEditPointerIdRef.current === null) {
+                return;
+            }
+
+            liveEditPointerIdRef.current = null;
+            bridge.commitLiveEdit();
+        };
+
+        window.addEventListener("pointerup", commitLiveEditForPointer);
+        window.addEventListener("pointercancel", commitLiveEditForPointer);
+        window.addEventListener("blur", commitLiveEditForWindow);
+
+        return () => {
+            window.removeEventListener("pointerup", commitLiveEditForPointer);
+            window.removeEventListener("pointercancel", commitLiveEditForPointer);
+            window.removeEventListener("blur", commitLiveEditForWindow);
+            commitLiveEditForWindow();
+        };
+    }, [bridge, isPromoControlled]);
 
     useEffect(() => {
         if (isPromoControlled) {
@@ -3899,6 +3934,15 @@ export function SeqFxPatchView({
         beginGesture({ mode: "resize", lane, startStep, length, previewLength: null });
     }
 
+    function handleInspectorPointerDownCapture(event: PointerEvent<HTMLElement>) {
+        if (isPromoControlled || (event.pointerType === "mouse" && event.button !== 0)) {
+            return;
+        }
+
+        liveEditPointerIdRef.current = event.pointerId;
+        bridge.beginLiveEdit();
+    }
+
     function setMix(value: number) {
         if (!activeSelection) {
             return;
@@ -4311,7 +4355,11 @@ export function SeqFxPatchView({
                     ))}
                 </div>
 
-                <aside className="seqfx-inspector" data-role="seqfx-inspector">
+                <aside
+                    className="seqfx-inspector"
+                    data-role="seqfx-inspector"
+                    onPointerDownCapture={handleInspectorPointerDownCapture}
+                >
                     <div className="seqfx-inspector-heading">
                         <span aria-hidden="true" className="seqfx-inspector-heading__bullet" data-role="seqfx-inspector-bullet" />
                         <strong>{getSelectionLabel(activeSelection)}</strong>

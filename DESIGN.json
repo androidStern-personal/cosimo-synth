@@ -1,0 +1,262 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-04-28T00:12:25Z",
+  "title": "Design System: Cosimo Music Software",
+  "extensions": {
+    "colorMeta": {
+      "synth-bg-deep": {
+        "role": "neutral",
+        "displayName": "Deep Stage Black",
+        "canonical": "#04070f",
+        "tonalRamp": ["#04070f", "#081020", "#101a31", "#1a2845", "#2b3a5f", "#4a5d86", "#7c8db5", "#c9d2ea"]
+      },
+      "synth-accent-cyan": {
+        "role": "primary",
+        "displayName": "Oscillator Cyan",
+        "canonical": "#87d7f5",
+        "tonalRamp": ["#06202a", "#0d3a4c", "#155a74", "#217b9c", "#37a2c9", "#87d7f5", "#bdeafb", "#e7f8ff"]
+      },
+      "synth-accent-pink": {
+        "role": "secondary",
+        "displayName": "Highlight Pink",
+        "canonical": "#f56cb6",
+        "tonalRamp": ["#2b071b", "#4d1231", "#79204f", "#a83270", "#d84c96", "#f56cb6", "#f9abd5", "#fde5f2"]
+      },
+      "synth-text-warm": {
+        "role": "tertiary",
+        "displayName": "Warm Text Amber",
+        "canonical": "#ffd8a6",
+        "tonalRamp": ["#2d1c08", "#573814", "#835825", "#ad7839", "#d79d5d", "#ffd8a6", "#ffe8c9", "#fff6e8"]
+      },
+      "editor-surface": {
+        "role": "neutral",
+        "displayName": "Warm Editor Surface",
+        "canonical": "#e4ded3",
+        "tonalRamp": ["#211f1b", "#39352d", "#585145", "#7b7162", "#a69b8a", "#c9c0b2", "#e4ded3", "#f4efe7"]
+      },
+      "editor-ink": {
+        "role": "primary",
+        "displayName": "Editor Ink",
+        "canonical": "#1c1c1c",
+        "tonalRamp": ["#111111", "#1c1c1c", "#333333", "#555555", "#777777", "#9b9b9b", "#c4c4c4", "#eeeeee"]
+      },
+      "editor-cyan": {
+        "role": "secondary",
+        "displayName": "Workbench Cyan",
+        "canonical": "#00b4d8",
+        "tonalRamp": ["#04232b", "#063b48", "#075b70", "#087d9b", "#00a2c4", "#00b4d8", "#72d9ec", "#d9f7fc"]
+      },
+      "editor-coral": {
+        "role": "tertiary",
+        "displayName": "Editor Coral",
+        "canonical": "#e8604c",
+        "tonalRamp": ["#2b0b07", "#4b1710", "#762719", "#a63b29", "#cf503d", "#e8604c", "#f2a093", "#fce2dd"]
+      },
+      "editor-gold": {
+        "role": "tertiary",
+        "displayName": "Editor Gold",
+        "canonical": "#f2d16b",
+        "tonalRamp": ["#2b2308", "#4c3c10", "#765e1d", "#a0802e", "#caa54a", "#f2d16b", "#f7e4a7", "#fff7df"]
+      },
+      "seqfx-playhead": {
+        "role": "secondary",
+        "displayName": "SeqFX Playhead Green",
+        "canonical": "#8bbf9a",
+        "tonalRamp": ["#102016", "#1f3a28", "#355943", "#50765d", "#6c9776", "#8bbf9a", "#bfdbc6", "#e7f3ea"]
+      }
+    },
+    "typographyMeta": {
+      "headline": {
+        "displayName": "Compact Headline",
+        "purpose": "Product titles and larger editor headings."
+      },
+      "title": {
+        "displayName": "Panel Title",
+        "purpose": "Section titles, active inspector names, and compact panel labels."
+      },
+      "body": {
+        "displayName": "Product Body",
+        "purpose": "Dense helper copy and ordinary control labels."
+      },
+      "label": {
+        "displayName": "Synth Micro Label",
+        "purpose": "Short uppercase state labels and value-adjacent controls."
+      },
+      "editor-label": {
+        "displayName": "Editor Plot Label",
+        "purpose": "Graph labels, chips, tick sliders, and editor annotations."
+      }
+    },
+    "shadows": [
+      {
+        "name": "synth-shell-shadow",
+        "value": "0 26px 80px rgba(0,0,0,0.48)",
+        "purpose": "Outer desktop synth frame only."
+      },
+      {
+        "name": "synth-panel-inset",
+        "value": "inset 0 1px 0 rgba(255,255,255,0.08), inset 0 -64px 80px rgba(0,0,0,0.34)",
+        "purpose": "Dark graph and filter panels."
+      },
+      {
+        "name": "seqfx-cell-raised",
+        "value": "1px 1.2px 2.1px rgba(126,116,101,0.3), -1px -1px 1.8px rgba(255,248,232,0.72), inset 0.5px 0.5px 0 rgba(255,248,232,0.44), inset -0.5px -0.5px 0 rgba(126,116,101,0.16)",
+        "purpose": "Sequencer cells and tactile grid controls."
+      },
+      {
+        "name": "editor-pill-shadow",
+        "value": "0 2px 6px rgba(28,28,28,0.1)",
+        "purpose": "Small readout pills on editor surfaces."
+      }
+    ],
+    "motion": [
+      {
+        "name": "state-fast",
+        "value": "120ms cubic-bezier(0.25, 1, 0.5, 1)",
+        "purpose": "Hover, active, cell, and block feedback."
+      },
+      {
+        "name": "state-standard",
+        "value": "180ms cubic-bezier(0.25, 1, 0.5, 1)",
+        "purpose": "Buttons, overlays, and compact panel transitions."
+      },
+      {
+        "name": "toast-fade",
+        "value": "250ms cubic-bezier(0.25, 1, 0.5, 1)",
+        "purpose": "Short-lived status feedback."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "seqfx-header-collapse",
+        "value": "780px"
+      },
+      {
+        "name": "desktop-compact-control",
+        "value": "480px"
+      },
+      {
+        "name": "ios-compact",
+        "value": "760px"
+      }
+    ],
+    "narrative": {
+      "northStar": "The Sorayama Workbench",
+      "overview": "Cosimo's current interface language is an observed baseline, not a finished doctrine. It contains two active skins: Cosimo Synth uses a dark, instrument-like surface with cyan, pink, warm amber, and compact technical overlays; SeqFX and the shared editor controls use a warmer ink-on-material surface with tactile sequencer cells and graph-editor details. Future work should treat these as product-specific evidence, then tighten them into a clearer family.",
+      "keyCharacteristics": [
+        "Dense expert controls with readable hierarchy, not onboarding-first softness.",
+        "Product-specific skins under one disciplined maker, not one templated line.",
+        "Technical visual proof: waveforms, filter response, modulation curves, sequencer blocks, and state readouts.",
+        "Retrofuturist accent details used sparingly, never as full cosplay.",
+        "Current tokens are descriptive baseline tokens. Promote them to doctrine only after a deliberate cleanup pass."
+      ],
+      "rules": [
+        {
+          "name": "The Baseline Is Not Gospel Rule",
+          "body": "Documented colors describe what exists now. New work should normalize future tokens to OKLCH and reduce one-off hex and inline rgba values instead of copying the current sprawl.",
+          "section": "colors"
+        },
+        {
+          "name": "The Accent Has a Job Rule",
+          "body": "Cyan, pink, amber, coral, and green must signal sound, interaction, selection, focus, or timing. They are not decorative confetti.",
+          "section": "colors"
+        },
+        {
+          "name": "The Product Skin Rule",
+          "body": "Cosimo Synth may stay dark and spectral; SeqFX may stay warm and gridded. Do not blend both palettes into one screen unless the workflow explicitly crosses both instruments.",
+          "section": "colors"
+        },
+        {
+          "name": "The No Display Font Rule",
+          "body": "Product surfaces do not use decorative display fonts in labels, buttons, controls, data, or graph text.",
+          "section": "typography"
+        },
+        {
+          "name": "The Mono Means Measurement Rule",
+          "body": "Use mono type for values, timing, table positions, rates, MIDI notes, and technical labels. Do not use mono as a personality blanket.",
+          "section": "typography"
+        },
+        {
+          "name": "The Depth Proves Interaction Rule",
+          "body": "Use elevation for draggable cells, floating controls, active overlays, and panel layering. Do not use shadows to make empty decoration feel expensive.",
+          "section": "elevation"
+        }
+      ],
+      "dos": [
+        "Do treat this file as documentation of the current visual baseline, with explicit permission to improve it.",
+        "Do make product visuals prove the product: waveform canvases, filter curves, modulation shapes, sequencer blocks, and real state readouts.",
+        "Do normalize future color work into OKLCH tokens before promoting it to a stable design system."
+      ],
+      "donts": [
+        "Don't follow Ableton's website by replacing product proof with conceptual editorial art direction.",
+        "Don't follow Soundtoys by declaring attitude through cartoon names, red/orange maximalism, knobs with faces, or performed irreverence.",
+        "Don't use skeuomorphic plugin costume: no photoreal wood, brushed aluminum, decorative screws, or VU meters as decoration.",
+        "Don't merge the dark synth palette and the warm SeqFX palette into one generic \"Cosimo look\" without a concrete workflow reason."
+      ]
+    }
+  },
+  "components": [
+    {
+      "name": "Synth Button",
+      "kind": "button",
+      "refersTo": "synth-button",
+      "description": "Compact pill control for synth actions and mode changes.",
+      "html": "<button class=\"ds-synth-button\">Import Table</button>",
+      "css": ".ds-synth-button { min-height: 34px; border: 1px solid rgba(255,255,255,0.08); border-radius: 999px; padding: 8px 16px; background: rgba(255,255,255,0.04); color: #eef2f5; font: 700 10px/1 \"SF Mono\", \"IBM Plex Mono\", Menlo, monospace; letter-spacing: 0.18em; text-transform: uppercase; transition: background-color 180ms cubic-bezier(0.25,1,0.5,1), border-color 180ms cubic-bezier(0.25,1,0.5,1), color 180ms cubic-bezier(0.25,1,0.5,1); } .ds-synth-button:hover { border-color: rgba(135,215,245,0.35); background: rgba(135,215,245,0.10); color: #cffafe; } .ds-synth-button:focus-visible { outline: 2px solid #87d7f5; outline-offset: 2px; } .ds-synth-button:active { background: rgba(245,108,182,0.14); }"
+    },
+    {
+      "name": "Synth Icon Button",
+      "kind": "button",
+      "refersTo": "synth-icon-button",
+      "description": "Square icon control for graph modes and compact commands.",
+      "html": "<button class=\"ds-synth-icon\" aria-label=\"Cycle mode\"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M4 16c4-8 8-8 16 0\"/><path d=\"M4 8c4 8 8 8 16 0\"/></svg></button>",
+      "css": ".ds-synth-icon { width: 40px; height: 40px; display: grid; place-items: center; border: 1px solid rgba(255,255,255,0.10); border-radius: 14px; background: rgba(0,0,0,0.45); color: #eef2f5; box-shadow: 0 12px 28px rgba(0,0,0,0.32); transition: border-color 180ms cubic-bezier(0.25,1,0.5,1), color 180ms cubic-bezier(0.25,1,0.5,1); } .ds-synth-icon svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; } .ds-synth-icon:hover { border-color: rgba(135,215,245,0.3); color: #cffafe; } .ds-synth-icon:focus-visible { outline: 2px solid #87d7f5; outline-offset: 2px; }"
+    },
+    {
+      "name": "Synth Range",
+      "kind": "input",
+      "refersTo": "synth-range",
+      "description": "Horizontal musical range control used for depth, rate, and compact parameters.",
+      "html": "<label class=\"ds-synth-range\"><span>Depth</span><input type=\"range\" value=\"64\" min=\"0\" max=\"100\"></label>",
+      "css": ".ds-synth-range { display: grid; gap: 8px; color: rgba(226,232,240,0.72); font: 700 10px/1 \"SF Mono\", \"IBM Plex Mono\", Menlo, monospace; letter-spacing: 0.18em; text-transform: uppercase; } .ds-synth-range input { appearance: none; width: 240px; height: 10px; border-radius: 999px; background: linear-gradient(90deg, rgba(84,99,201,0.45), rgba(245,108,182,0.45)); outline: none; } .ds-synth-range input::-webkit-slider-thumb { appearance: none; width: 22px; height: 22px; border: 0; border-radius: 999px; background: linear-gradient(180deg, #ffd8a6 0%, #f56cb6 100%); box-shadow: 0 6px 18px rgba(245,108,182,0.35); } .ds-synth-range input:focus-visible { outline: 2px solid #87d7f5; outline-offset: 6px; }"
+    },
+    {
+      "name": "Modulation Amount Knob",
+      "kind": "custom",
+      "description": "Compact circular modulation depth control with numeric readout.",
+      "html": "<div class=\"ds-mod-knob\" role=\"img\" aria-label=\"Modulation amount 37 percent\"><svg viewBox=\"0 0 72 72\"><circle cx=\"36\" cy=\"36\" r=\"29\"/><path d=\"M17 51 A29 29 0 0 1 55 21\"/></svg><span>37%</span><i></i></div>",
+      "css": ".ds-mod-knob { position: relative; width: 72px; height: 72px; display: grid; place-items: center; border-radius: 999px; border: 1px solid rgba(255,255,255,0.06); background: linear-gradient(180deg, rgba(12,18,34,0.98), rgba(6,9,20,0.98)); box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 10px 24px rgba(0,0,0,0.28); color: #cffafe; } .ds-mod-knob svg { position: absolute; inset: 0; width: 100%; height: 100%; fill: none; } .ds-mod-knob circle { stroke: rgba(255,255,255,0.08); stroke-width: 4; } .ds-mod-knob path { stroke: rgba(103,232,249,0.92); stroke-width: 4; stroke-linecap: round; filter: drop-shadow(0 0 8px rgba(103,232,249,0.3)); } .ds-mod-knob span { font: 700 11px/1 \"SF Mono\", Menlo, monospace; letter-spacing: 0.12em; text-transform: uppercase; } .ds-mod-knob i { position: absolute; top: 7px; left: 50%; width: 3px; height: 21px; border-radius: 999px; background: linear-gradient(180deg, #fef3c7 0%, #f472b6 100%); transform: translateX(-50%) rotate(42deg); transform-origin: 50% 29px; }"
+    },
+    {
+      "name": "Editor Chip",
+      "kind": "chip",
+      "refersTo": "editor-chip",
+      "description": "Small value chip that rides on graph and editor surfaces.",
+      "html": "<span class=\"ds-editor-chip\">1/16</span>",
+      "css": ".ds-editor-chip { display: inline-flex; align-items: center; min-height: 18px; border: 1px solid rgba(28,28,28,0.28); border-radius: 3px; padding: 3px 6px; background: #1c1c1c; color: #f0ece6; font: 800 10px/1 Menlo, Monaco, \"Liberation Mono\", monospace; letter-spacing: 0; text-transform: uppercase; box-shadow: 0 2px 6px rgba(28,28,28,0.1); }"
+    },
+    {
+      "name": "SeqFX Pattern Button",
+      "kind": "button",
+      "refersTo": "seqfx-pattern",
+      "description": "Numbered pattern selector for the SeqFX top bar.",
+      "html": "<button class=\"ds-seqfx-pattern is-selected\">3</button>",
+      "css": ".ds-seqfx-pattern { min-width: 28px; height: 28px; border: 1px solid rgba(28,28,28,0.16); border-radius: 6px; background: rgba(28,28,28,0.035); color: #1c1c1c; font: 700 13px/1 \"Avenir Next\", \"Helvetica Neue\", Arial, sans-serif; cursor: pointer; transition: transform 120ms cubic-bezier(0.25,1,0.5,1), background-color 120ms cubic-bezier(0.25,1,0.5,1), border-color 120ms cubic-bezier(0.25,1,0.5,1); } .ds-seqfx-pattern:hover { border-color: rgba(28,28,28,0.34); background: rgba(139,191,154,0.12); } .ds-seqfx-pattern.is-selected { border-color: rgba(139,191,154,0.9); background: #8bbf9a; color: #0f1511; } .ds-seqfx-pattern:focus-visible { outline: 2px solid #f2d16b; outline-offset: 2px; } .ds-seqfx-pattern:active { transform: translateY(1px); }"
+    },
+    {
+      "name": "SeqFX Block",
+      "kind": "custom",
+      "description": "Draggable step block with lane identity, tactile fill, and resize affordance.",
+      "html": "<button class=\"ds-seqfx-block\"><span class=\"ds-seqfx-block-fill\"><b>FLT</b><small>4</small></span><i></i></button>",
+      "css": ".ds-seqfx-block { position: relative; width: 112px; height: 28px; border: 0; border-radius: 3px; background: transparent; cursor: grab; transition: transform 120ms cubic-bezier(0.25,1,0.5,1); } .ds-seqfx-block-fill { position: absolute; inset: 1px; overflow: hidden; border-radius: 3px; background: #f4d35e; color: #1a1815; box-shadow: 1px 1px 0 rgba(0,0,0,0.10); } .ds-seqfx-block-fill::after { position: absolute; inset: 0; background-image: radial-gradient(rgba(0,0,0,0.10) 1px, transparent 1.2px); background-size: 2.5px 2.5px; content: \"\"; mix-blend-mode: multiply; } .ds-seqfx-block b, .ds-seqfx-block small { position: absolute; z-index: 1; font-family: \"Helvetica Neue\", Inter, system-ui, sans-serif; font-weight: 800; line-height: 1; text-transform: uppercase; } .ds-seqfx-block b { top: 4px; left: 5px; font-size: 7px; letter-spacing: 0.10em; } .ds-seqfx-block small { right: 5px; bottom: 4px; font-size: 8px; } .ds-seqfx-block i { position: absolute; top: 5px; right: 3px; bottom: 5px; width: 2px; border-radius: 999px; background: rgba(28,28,28,0.55); opacity: 0; transition: opacity 100ms cubic-bezier(0.25,1,0.5,1); } .ds-seqfx-block:hover .ds-seqfx-block-fill { filter: brightness(1.05); } .ds-seqfx-block:hover i, .ds-seqfx-block:focus-visible i { opacity: 1; } .ds-seqfx-block:focus-visible { outline: 2px solid #f2d16b; outline-offset: 2px; }"
+    },
+    {
+      "name": "SeqFX Field",
+      "kind": "input",
+      "refersTo": "seqfx-field",
+      "description": "Raised warm input field for inspector controls.",
+      "html": "<label class=\"ds-seqfx-field\"><span>Mix <em>72%</em></span><input type=\"range\" value=\"72\" min=\"0\" max=\"100\"></label>",
+      "css": ".ds-seqfx-field { display: grid; gap: 7px; width: 260px; color: #1c1c1c; font-family: \"Avenir Next\", \"Helvetica Neue\", Arial, sans-serif; } .ds-seqfx-field span { display: flex; align-items: center; justify-content: space-between; font-size: 12px; font-weight: 700; } .ds-seqfx-field em { border: 1px solid rgba(242,209,107,0.4); border-radius: 999px; padding: 2px 6px; color: #8b6d18; font-size: 10px; font-style: normal; } .ds-seqfx-field input { width: 100%; min-height: 34px; border: 0; border-radius: 7px; padding: 6px 9px; background: rgba(222,216,204,0.68); accent-color: #8bbf9a; box-shadow: 1px 1.3px 2.2px rgba(126,116,101,0.26), -0.8px -0.8px 1.6px rgba(255,248,232,0.58), inset 0.5px 0.5px 0 rgba(255,248,232,0.38), inset -0.5px -0.5px 0 rgba(126,116,101,0.12); } .ds-seqfx-field input:focus-visible { outline: 2px solid #f2d16b; outline-offset: 2px; }"
+    }
+  ]
+}
