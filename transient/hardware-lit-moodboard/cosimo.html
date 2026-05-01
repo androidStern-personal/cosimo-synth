@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>COSIMO · cuts</title>
+<style>
+  @font-face {
+    font-family: 'Outward Block';
+    src: url('fonts/outward-block-webfont.woff2') format('woff2');
+    font-display: block;
+  }
+  @font-face {
+    font-family: 'Outward Round';
+    src: url('fonts/outward-round-webfont.woff2') format('woff2');
+    font-display: block;
+  }
+  @font-face {
+    font-family: 'Outward Borders';
+    src: url('fonts/outward-borders-webfont.woff2') format('woff2');
+    font-display: block;
+  }
+  @font-face {
+    font-family: 'Format 1452';
+    src: url('fonts/Format_1452.woff2') format('woff2');
+    font-display: block;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body {
+    background: #1d061a;
+    min-height: 100vh;
+  }
+
+  body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 40px;
+    padding: 80px 0;
+  }
+
+  .row {
+    width: 1600px;
+    max-width: 100vw;
+  }
+
+  .row svg {
+    width: 100%;
+    height: auto;
+    display: block;
+  }
+
+  .row__label {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 13px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.55);
+    padding: 0 6vw;
+    margin-bottom: 8px;
+  }
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <!-- THREE gradients. Each <text> that references one will get its
+         own gradient instance scaled to that text's bounding box. -->
+    <linearGradient id="g1" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#ffbc00"/>
+      <stop offset="100%" stop-color="#ff0058"/>
+    </linearGradient>
+    <linearGradient id="g2" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#03a9f4"/>
+      <stop offset="100%" stop-color="#ff0058"/>
+    </linearGradient>
+    <linearGradient id="g3" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#4dff03"/>
+      <stop offset="100%" stop-color="#00d0ff"/>
+    </linearGradient>
+
+    <filter id="glow" x="-100%" y="-100%" width="300%" height="300%">
+      <feGaussianBlur stdDeviation="18"/>
+    </filter>
+  </defs>
+</svg>
+
+<div class="row" data-cut="block" data-font="Outward Block">
+  <div class="row__label">cut 01 · block</div>
+  <svg viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid meet"></svg>
+</div>
+
+<div class="row" data-cut="round" data-font="Outward Round">
+  <div class="row__label">cut 02 · round</div>
+  <svg viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid meet"></svg>
+</div>
+
+<div class="row" data-cut="borders" data-font="Outward Borders">
+  <div class="row__label">cut 03 · borders</div>
+  <svg viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid meet"></svg>
+</div>
+
+<div class="row" data-cut="format-1452" data-font="Format 1452">
+  <div class="row__label">cut 04 · format 1452</div>
+  <svg viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid meet"></svg>
+</div>
+
+<script>
+  const NS = 'http://www.w3.org/2000/svg';
+  const WORD = 'COSIMO';
+  const GRADIENTS = ['g1', 'g1', 'g2', 'g2', 'g3', 'g3']; // CO / SI / MO
+  const FONT_SIZE = 800;
+  const LETTER_SPACING = 40;
+  const BASE_Y = 700;
+  const VIEW_H = 900;
+  const GLOW_OFFSET_X = -30;
+  const X_PADDING = 100;   // breathing room either side of the widest wordmark
+
+  // PASS 1 — measure the natural wordmark width for each row, using
+  // a hidden reference <text> in that row's font.
+  function measureRow(row) {
+    const svg = row.querySelector('svg');
+    const fontFamily = row.dataset.font;
+
+    const ref = document.createElementNS(NS, 'text');
+    ref.setAttribute('x', 0);
+    ref.setAttribute('y', BASE_Y);
+    ref.setAttribute('font-family', `'${fontFamily}', sans-serif`);
+    ref.setAttribute('font-size', FONT_SIZE);
+    ref.setAttribute('letter-spacing', LETTER_SPACING);
+    ref.setAttribute('visibility', 'hidden');
+    ref.textContent = WORD;
+    svg.appendChild(ref);
+
+    const extents = [];
+    for (let i = 0; i < WORD.length; i++) {
+      const e = ref.getExtentOfChar(i);
+      extents.push({ char: WORD[i], x: e.x, width: e.width });
+    }
+
+    ref.remove();
+
+    const wordStart = extents[0].x;
+    const wordEnd = extents[extents.length - 1].x + extents[extents.length - 1].width;
+    return { row, svg, fontFamily, extents, wordStart, wordEnd, wordWidth: wordEnd - wordStart };
+  }
+
+  // PASS 2 — using a viewBox wide enough for the widest wordmark, lay
+  // out each row's letters as individual <text> elements (so each gets
+  // its own gradient instance scaled to its own bounding box).
+  function layoutRow(measurement, viewBoxWidth) {
+    const { svg, fontFamily, extents, wordStart, wordWidth } = measurement;
+
+    // Set the viewBox so all rows share scale → same letter size on screen
+    svg.setAttribute('viewBox', `0 0 ${viewBoxWidth} ${VIEW_H}`);
+
+    const centerOffset = (viewBoxWidth - wordWidth) / 2 - wordStart;
+
+    extents.forEach((ext, i) => {
+      const gradId = GRADIENTS[i];
+      const cx = ext.x + ext.width / 2 + centerOffset;
+
+      const glow = document.createElementNS(NS, 'text');
+      glow.setAttribute('x', cx);
+      glow.setAttribute('y', BASE_Y);
+      glow.setAttribute('font-family', `'${fontFamily}', sans-serif`);
+      glow.setAttribute('font-size', FONT_SIZE);
+      glow.setAttribute('text-anchor', 'middle');
+      glow.setAttribute('fill', `url(#${gradId})`);
+      glow.setAttribute('filter', 'url(#glow)');
+      glow.setAttribute('transform', `translate(${GLOW_OFFSET_X} 0)`);
+      glow.textContent = ext.char;
+      svg.appendChild(glow);
+
+      const sharp = document.createElementNS(NS, 'text');
+      sharp.setAttribute('x', cx);
+      sharp.setAttribute('y', BASE_Y);
+      sharp.setAttribute('font-family', `'${fontFamily}', sans-serif`);
+      sharp.setAttribute('font-size', FONT_SIZE);
+      sharp.setAttribute('text-anchor', 'middle');
+      sharp.setAttribute('fill', `url(#${gradId})`);
+      sharp.textContent = ext.char;
+      svg.appendChild(sharp);
+    });
+  }
+
+  // Wait for all four fonts to load before measuring, otherwise the
+  // measurements come from fallback metrics.
+  Promise.all([
+    document.fonts.load(`${FONT_SIZE}px "Outward Block"`),
+    document.fonts.load(`${FONT_SIZE}px "Outward Round"`),
+    document.fonts.load(`${FONT_SIZE}px "Outward Borders"`),
+    document.fonts.load(`${FONT_SIZE}px "Format 1452"`),
+  ]).then(() => {
+    const rows = [...document.querySelectorAll('.row')];
+    const measurements = rows.map(measureRow);
+
+    // Pick a viewBox width that fits the widest wordmark (+ padding).
+    // Using the same width on every SVG keeps letter PIXEL size constant
+    // across rows while still letting each wordmark center naturally.
+    const maxWidth = Math.max(...measurements.map(m => m.wordWidth));
+    const viewBoxWidth = Math.ceil(maxWidth + X_PADDING * 2);
+
+    measurements.forEach(m => layoutRow(m, viewBoxWidth));
+  });
+</script>
+
+</body>
+</html>
