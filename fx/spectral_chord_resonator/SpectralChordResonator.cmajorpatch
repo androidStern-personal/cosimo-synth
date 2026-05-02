@@ -1,0 +1,24 @@
+{
+  "CmajorVersion": 1,
+  "ID": "dev.cosimo.spectral-chord-resonator",
+  "version": "0.1.0",
+  "name": "Spectral Chord Resonator",
+  "description": "FFT-bin feedback resonator keyed by held MIDI chord pitches and driven by a sidechain audio input.",
+  "category": "effect",
+  "manufacturer": "Cosimo",
+  "isInstrument": false,
+  "source": "SpectralChordResonator.cmajor",
+  "view": {
+    "src": "view/index.js",
+    "devModule": "/fx/spectral_chord_resonator/view/source.js",
+    "width": 920,
+    "height": 680,
+    "resizable": true
+  },
+  "plugin": {
+    "name": "Spectral Chord Resonator",
+    "manufacturer": "Cosimo",
+    "manufacturerCode": "Cosi",
+    "pluginCode": "CsSR"
+  }
+}
