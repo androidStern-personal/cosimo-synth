@@ -31,6 +31,13 @@ export const effectPlugins = {
         workerSource: "fx/seqfx/worker/source.ts",
         workerOut: "worker.js",
     },
+    spectral: {
+        patch: "fx/spectral_chord_resonator/SpectralChordResonator.cmajorpatch",
+        runtimeOut: "build/fx/spectral_chord_resonator_runtime",
+        juceOut: "build/spectral_chord_resonator_juce",
+        cmakeTarget: "SpectralChordResonator",
+        productName: "SpectralChordResonator",
+    },
 };
 
 export function effectPluginNames() {

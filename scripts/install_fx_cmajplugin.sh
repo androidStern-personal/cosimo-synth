@@ -15,6 +15,7 @@ Available plugins:
   chorus
   ott
   seqfx
+  spectral
 USAGE
 }
 
@@ -88,6 +89,9 @@ case "$plugin" in
     ;;
   seqfx)
     patch_rel="fx/seqfx/SeqFx.cmajorpatch"
+    ;;
+  spectral)
+    patch_rel="fx/spectral_chord_resonator/SpectralChordResonator.cmajorpatch"
     ;;
   *)
     printf 'Unknown effect plugin: %s\n\n' "$plugin" >&2

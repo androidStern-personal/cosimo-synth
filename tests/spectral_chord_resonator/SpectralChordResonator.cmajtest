@@ -1,0 +1,21 @@
+// Native Cmajor runner coverage for the patch wrapper's sidechain stream.
+// The broader spectral assertions are in tests/test_spectral_chord_resonator_probe.py,
+// where the generated JavaScript runtime lets us schedule MIDI and stream data
+// into the sidechain endpoint explicitly.
+
+const patchPath = "../../fx/spectral_chord_resonator/SpectralChordResonator.cmajorpatch";
+
+function patchRun (subDir, blockSize, samplesToRender)
+{
+    return {
+        patch: patchPath,
+        subDir,
+        frequency: 48000,
+        blockSize,
+        samplesToRender,
+        sessionID: 1,
+        maxDiffDb: -120.0
+    };
+}
+
+## runScript (patchRun ("fixtures/depth_zero_passthrough", 512, 16384))

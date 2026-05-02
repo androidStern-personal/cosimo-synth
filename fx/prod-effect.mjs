@@ -27,6 +27,7 @@ const keyboardBridgeForbiddenStrings = [
     "cosimo-keyboard-probe-panel",
     "forwarded-buffered-flags-changed",
 ];
+const sidechainBusRequiredString = "COSIMO_CMAJOR_JUCE_PLUGIN_SPLIT_INPUT_BUSES";
 
 function availablePluginNames() {
     return ["all", ...effectPluginNames()].join(", ");
@@ -118,12 +119,20 @@ async function ensureJucePath() {
 
 async function verifyPatchedCmajorRuntime(cmajorSourcePath) {
     const webViewHeaderPath = path.join(cmajorSourcePath, "include/choc/choc/gui/choc_WebView.h");
+    const jucePluginHeaderPath = path.join(cmajorSourcePath, "include/cmajor/helpers/cmaj_JUCEPlugin.h");
     let webViewHeader = "";
+    let jucePluginHeader = "";
 
     try {
         webViewHeader = await readFile(webViewHeaderPath, "utf8");
     } catch {
         throw new Error(`Cmajor runtime is missing CHOC WebView header: ${webViewHeaderPath}`);
+    }
+
+    try {
+        jucePluginHeader = await readFile(jucePluginHeaderPath, "utf8");
+    } catch {
+        throw new Error(`Cmajor runtime is missing JUCE plugin helper: ${jucePluginHeaderPath}`);
     }
 
     const missingMarkers = patchedWebViewRequiredStrings.filter((marker) => !webViewHeader.includes(marker));
@@ -134,6 +143,16 @@ async function verifyPatchedCmajorRuntime(cmajorSourcePath) {
                 `Cmajor runtime does not include the required patched CHOC WebView features: ${cmajorSourcePath}`,
                 `Missing marker(s): ${missingMarkers.join(", ")}`,
                 "Use scripts/ensure_cmajor_runtime.py --path or set CMAJOR_SOURCE_PATH to a patched Cmajor checkout.",
+            ].join("\n"),
+        );
+    }
+
+    if (!jucePluginHeader.includes(sidechainBusRequiredString)) {
+        throw new Error(
+            [
+                `Cmajor runtime does not include the required split-input sidechain bus patch: ${cmajorSourcePath}`,
+                `Missing marker: ${sidechainBusRequiredString}`,
+                "Use scripts/ensure_cmajor_runtime.py --path or set CMAJOR_SOURCE_PATH to the repo-patched Cmajor checkout.",
             ].join("\n"),
         );
     }

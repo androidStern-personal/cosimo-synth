@@ -1,0 +1,679 @@
+namespace spectral_chord_resonator
+{
+    let twoPi = 6.28318530717958647692f;
+    let fftSize = 2048;
+    let hopSize = fftSize / 4;
+    let nyquistBin = fftSize / 2;
+    let spectralBinCount = nyquistBin + 1;
+    let maxChordPitches = 16;
+    let olaGainCompensation = 2.0f / 3.0f;
+    let smoothingTimeSeconds = 0.05f;
+
+    let defaultMagFeedback = 0.92f;
+    let defaultPhaseFeedback = 1.0f;
+    let defaultDamping = 0.995f;
+    let defaultMaskWidthCents = 40.0f;
+    let defaultMaskFloor = 0.08f;
+    let defaultHarmonicCount = 8.0f;
+    let defaultHarmonicRolloffDb = 6.0f;
+    let defaultMagCeiling = 1000.0f;
+    let defaultDepth = 0.0f;
+    let defaultLowCutHz = 60.0f;
+
+    struct ChordUpdate
+    {
+        float32[16] frequencies;
+        int32 count;
+    }
+
+    float32 clampFloat (float32 value, float32 lo, float32 hi)
+    {
+        return std::intrinsics::clamp (value, lo, hi);
+    }
+
+    float32 midiNoteToFrequency (int32 noteNumber)
+    {
+        return std::notes::noteToFrequency (noteNumber);
+    }
+
+    float32 wrapToPi (float32 angle)
+    {
+        while (angle <= -3.14159265358979323846f)
+            angle += twoPi;
+
+        while (angle > 3.14159265358979323846f)
+            angle -= twoPi;
+
+        return angle;
+    }
+
+    float32 lerpAngle (float32 a, float32 b, float32 t)
+    {
+        return a + (t * wrapToPi (b - a));
+    }
+
+    struct BinUpdate
+    {
+        float64 stateRe;
+        float64 stateIm;
+        float32 outRe;
+        float32 outIm;
+    }
+}
+
+processor SpectralChordResonator
+{
+    input  stream float32 sidechainIn;
+    output stream float32 audioOut;
+
+    input  event spectral_chord_resonator::ChordUpdate chordIn;
+
+    input  event float32 magFeedbackIn;
+    input  event float32 phaseFeedbackIn;
+    input  event float32 dampingIn;
+    input  event float32 maskWidthCentsIn;
+    input  event float32 maskFloorIn;
+    input  event float32 harmonicCountIn;
+    input  event float32 harmonicRolloffDbIn;
+    input  event float32 magCeilingIn;
+    input  event float32 depthIn;
+    input  event float32 lowCutHzIn;
+
+    float32[spectral_chord_resonator::fftSize] inputRing;
+    float32[spectral_chord_resonator::fftSize] outputRing;
+    float32[spectral_chord_resonator::fftSize] dryDelay;
+    float32[spectral_chord_resonator::fftSize] fftInput;
+    float32[spectral_chord_resonator::fftSize] fftSpectrum;
+    float32[spectral_chord_resonator::fftSize] synthesisBuffer;
+    float32[spectral_chord_resonator::fftSize] analysisWindow;
+    float32[spectral_chord_resonator::fftSize] synthesisWindow;
+
+    float64[spectral_chord_resonator::spectralBinCount] spectrumStateRe;
+    float64[spectral_chord_resonator::spectralBinCount] spectrumStateIm;
+    float32[spectral_chord_resonator::spectralBinCount] chordMask;
+    float32[spectral_chord_resonator::spectralBinCount] basePhaseAdvanceTable;
+    float32[spectral_chord_resonator::spectralBinCount] phaseAdvanceTable;
+
+    spectral_chord_resonator::ChordUpdate activeChord;
+
+    std::smoothing::SmoothedValue magFeedbackSmooth;
+    std::smoothing::SmoothedValue phaseFeedbackSmooth;
+    std::smoothing::SmoothedValue dampingSmooth;
+    std::smoothing::SmoothedValue maskWidthCentsSmooth;
+    std::smoothing::SmoothedValue maskFloorSmooth;
+    std::smoothing::SmoothedValue harmonicCountSmooth;
+    std::smoothing::SmoothedValue harmonicRolloffDbSmooth;
+    std::smoothing::SmoothedValue magCeilingSmooth;
+    std::smoothing::SmoothedValue depthSmooth;
+    std::smoothing::SmoothedValue lowCutHzSmooth;
+
+    wrap<spectral_chord_resonator::fftSize> ringPosition;
+    int32 hopCounter;
+    int32 smoothingFrameCount;
+    bool maskDirty;
+
+    float32 currentMagFeedback = spectral_chord_resonator::defaultMagFeedback;
+    float32 currentPhaseFeedback = spectral_chord_resonator::defaultPhaseFeedback;
+    float32 currentDamping = spectral_chord_resonator::defaultDamping;
+    float32 currentMaskWidthCents = spectral_chord_resonator::defaultMaskWidthCents;
+    float32 currentMaskFloor = spectral_chord_resonator::defaultMaskFloor;
+    float32 currentHarmonicCount = spectral_chord_resonator::defaultHarmonicCount;
+    float32 currentHarmonicRolloffDb = spectral_chord_resonator::defaultHarmonicRolloffDb;
+    float32 currentMagCeiling = spectral_chord_resonator::defaultMagCeiling;
+    float32 currentDepth = spectral_chord_resonator::defaultDepth;
+    float32 currentLowCutHz = spectral_chord_resonator::defaultLowCutHz;
+
+    void init()
+    {
+        smoothingFrameCount = int32 (std::intrinsics::max (
+            1.0f,
+            (spectral_chord_resonator::smoothingTimeSeconds * float32 (processor.frequency))
+                / float32 (spectral_chord_resonator::hopSize)
+        ));
+
+        magFeedbackSmooth.reset (currentMagFeedback);
+        phaseFeedbackSmooth.reset (currentPhaseFeedback);
+        dampingSmooth.reset (currentDamping);
+        maskWidthCentsSmooth.reset (currentMaskWidthCents);
+        maskFloorSmooth.reset (currentMaskFloor);
+        harmonicCountSmooth.reset (currentHarmonicCount);
+        harmonicRolloffDbSmooth.reset (currentHarmonicRolloffDb);
+        magCeilingSmooth.reset (currentMagCeiling);
+        depthSmooth.reset (currentDepth);
+        lowCutHzSmooth.reset (currentLowCutHz);
+
+        for (wrap<spectral_chord_resonator::fftSize> index)
+        {
+            let phase = spectral_chord_resonator::twoPi * float32 (int32 (index))
+                      / float32 (spectral_chord_resonator::fftSize - 1);
+            let window = 0.5f * (1.0f - std::intrinsics::cos (phase));
+            analysisWindow[index] = window;
+            synthesisWindow[index] = window;
+        }
+
+        for (wrap<spectral_chord_resonator::spectralBinCount> bin)
+        {
+            basePhaseAdvanceTable[bin] = spectral_chord_resonator::twoPi
+                                       * float32 (int32 (bin))
+                                       * float32 (spectral_chord_resonator::hopSize)
+                                       / float32 (spectral_chord_resonator::fftSize);
+            phaseAdvanceTable[bin] = basePhaseAdvanceTable[bin];
+        }
+
+        rebuildChordMask();
+    }
+
+    // === SEAM: chord mask shape ===
+    //
+    // Rebuilds the FFT-bin mask from the current held chord and mask-shaping
+    // parameters. This is intentionally readable and isolated because it is one
+    // of the algorithm's main experiment points.
+    void rebuildChordMask()
+    {
+        for (wrap<spectral_chord_resonator::spectralBinCount> bin)
+        {
+            chordMask[bin] = currentMaskFloor;
+            phaseAdvanceTable[bin] = basePhaseAdvanceTable[bin];
+        }
+
+        let binHz = float32 (processor.frequency) / float32 (spectral_chord_resonator::fftSize);
+        let widthSemitoneFraction = (currentMaskWidthCents / 100.0f) * (1.0f / 12.0f);
+        var harmonicLimit = int32 (std::intrinsics::floor (currentHarmonicCount + 0.5f));
+
+        if (harmonicLimit < 1)
+            harmonicLimit = 1;
+
+        if (harmonicLimit > 16)
+            harmonicLimit = 16;
+
+        var chordCount = activeChord.count;
+
+        if (chordCount < 0)
+            chordCount = 0;
+
+        if (chordCount > spectral_chord_resonator::maxChordPitches)
+            chordCount = spectral_chord_resonator::maxChordPitches;
+
+        for (int32 noteIndex = 0; noteIndex < chordCount; ++noteIndex)
+        {
+            let f0 = activeChord.frequencies.at (noteIndex);
+
+            if (f0 <= 0.0f)
+                continue;
+
+            for (int32 harmonic = 1; harmonic <= harmonicLimit; ++harmonic)
+            {
+                let harmonicFrequency = f0 * float32 (harmonic);
+
+                if (harmonicFrequency >= float32 (processor.frequency) * 0.5f)
+                    break;
+
+                let centerBin = harmonicFrequency / binHz;
+                let octaveIndex = std::intrinsics::log10 (float32 (harmonic)) * 3.32192809489f;
+                let harmonicGain = std::intrinsics::pow (
+                    10.0f,
+                    (-currentHarmonicRolloffDb * octaveIndex) / 20.0f
+                );
+                let halfWidthBins = std::intrinsics::max (0.25f, widthSemitoneFraction * centerBin);
+
+                var lo = int32 (centerBin - (3.0f * halfWidthBins));
+                var hi = int32 (centerBin + (3.0f * halfWidthBins));
+
+                if (lo < 0)
+                    lo = 0;
+
+                if (hi > spectral_chord_resonator::nyquistBin)
+                    hi = spectral_chord_resonator::nyquistBin;
+
+                for (int32 bin = lo; bin <= hi; ++bin)
+                {
+                    let dist = (float32 (bin) - centerBin) / halfWidthBins;
+                    let bump = std::intrinsics::exp (-0.5f * dist * dist) * harmonicGain;
+
+                    if (bump > chordMask.at (bin))
+                    {
+                        chordMask.at (bin) = bump;
+                        phaseAdvanceTable.at (bin) = spectral_chord_resonator::twoPi
+                                                   * harmonicFrequency
+                                                   * float32 (spectral_chord_resonator::hopSize)
+                                                   / float32 (processor.frequency);
+                    }
+                }
+            }
+        }
+
+        maskDirty = false;
+    }
+
+    // === SEAM: per-bin update rule ===
+    //
+    // This is the recursive spectral feedback rule. Keep it isolated so the
+    // algorithm can be rewritten without touching the STFT scaffolding.
+    spectral_chord_resonator::BinUpdate updateBin (float32 inputRe,
+                                                   float32 inputIm,
+                                                   float64 stateRe,
+                                                   float64 stateIm,
+                                                   float32 mask,
+                                                   float32 phaseAdvance,
+                                                   float32 magFeedback,
+                                                   float32 phaseFeedback,
+                                                   float32 damping,
+                                                   float32 ceiling)
+    {
+        let xRe = float64 (inputRe);
+        let xIm = float64 (inputIm);
+        let magIn = std::intrinsics::sqrt ((xRe * xRe) + (xIm * xIm));
+        let phaseIn = std::intrinsics::atan2 (xIm, xRe);
+        let magState = std::intrinsics::sqrt ((stateRe * stateRe) + (stateIm * stateIm));
+        let phaseState = std::intrinsics::atan2 (stateIm, stateRe);
+
+        var magNew = magIn
+                   + float64 (magFeedback)
+                   * float64 (mask)
+                   * magState
+                   * float64 (damping);
+
+        if (magNew > float64 (ceiling))
+            magNew = float64 (ceiling);
+
+        let phaseLocked = phaseState + float64 (phaseAdvance);
+        let maskForPhase = spectral_chord_resonator::clampFloat (mask, 0.0f, 1.0f);
+        let phaseBlend = phaseFeedback * maskForPhase;
+        let phaseNew = float64 (spectral_chord_resonator::lerpAngle (
+            float32 (phaseIn),
+            float32 (phaseLocked),
+            phaseBlend
+        ));
+
+        let newRe = magNew * std::intrinsics::cos (phaseNew);
+        let newIm = magNew * std::intrinsics::sin (phaseNew);
+
+        spectral_chord_resonator::BinUpdate result;
+        result.stateRe = newRe;
+        result.stateIm = newIm;
+        result.outRe = float32 (newRe);
+        result.outIm = float32 (newIm);
+        return result;
+    }
+
+    float32 readSpectrumImag (int32 bin)
+    {
+        if (bin <= 0 || bin >= spectral_chord_resonator::nyquistBin)
+            return 0.0f;
+
+        return fftSpectrum.at (spectral_chord_resonator::nyquistBin + bin);
+    }
+
+    void writeSpectrumBin (int32 bin, float32 real, float32 imag)
+    {
+        fftSpectrum.at (bin) = real;
+
+        if (bin > 0 && bin < spectral_chord_resonator::nyquistBin)
+            fftSpectrum.at (spectral_chord_resonator::nyquistBin + bin) = imag;
+    }
+
+    bool updateMaskValue (float32 nextValue, float32 previousValue)
+    {
+        return std::intrinsics::abs (nextValue - previousValue) > 0.00001f;
+    }
+
+    void updateFrameParameters()
+    {
+        currentMagFeedback = magFeedbackSmooth.getNext();
+        currentPhaseFeedback = phaseFeedbackSmooth.getNext();
+        currentDamping = dampingSmooth.getNext();
+        currentMagCeiling = magCeilingSmooth.getNext();
+        currentDepth = depthSmooth.getNext();
+        currentLowCutHz = lowCutHzSmooth.getNext();
+
+        let nextMaskWidthCents = maskWidthCentsSmooth.getNext();
+        let nextMaskFloor = maskFloorSmooth.getNext();
+        let nextHarmonicCount = harmonicCountSmooth.getNext();
+        let nextHarmonicRolloffDb = harmonicRolloffDbSmooth.getNext();
+
+        if (updateMaskValue (nextMaskWidthCents, currentMaskWidthCents)
+            || updateMaskValue (nextMaskFloor, currentMaskFloor)
+            || updateMaskValue (nextHarmonicCount, currentHarmonicCount)
+            || updateMaskValue (nextHarmonicRolloffDb, currentHarmonicRolloffDb))
+        {
+            maskDirty = true;
+        }
+
+        currentMaskWidthCents = nextMaskWidthCents;
+        currentMaskFloor = nextMaskFloor;
+        currentHarmonicCount = nextHarmonicCount;
+        currentHarmonicRolloffDb = nextHarmonicRolloffDb;
+
+        if (maskDirty)
+            rebuildChordMask();
+    }
+
+    void processFrame()
+    {
+        updateFrameParameters();
+
+        for (wrap<spectral_chord_resonator::fftSize> index)
+        {
+            let sourceIndex = wrap<spectral_chord_resonator::fftSize> (
+                int32 (ringPosition) + int32 (index)
+            );
+            fftInput[index] = inputRing[sourceIndex] * analysisWindow[index];
+        }
+
+        std::frequency::realOnlyForwardFFT (fftInput, fftSpectrum);
+
+        let binHz = float32 (processor.frequency) / float32 (spectral_chord_resonator::fftSize);
+
+        for (wrap<spectral_chord_resonator::spectralBinCount> wrappedBin)
+        {
+            let bin = int32 (wrappedBin);
+            let real = fftSpectrum[wrappedBin];
+            let imag = readSpectrumImag (bin);
+
+            if (float32 (bin) * binHz < currentLowCutHz)
+            {
+                spectrumStateRe[wrappedBin] = 0.0;
+                spectrumStateIm[wrappedBin] = 0.0;
+                writeSpectrumBin (bin, real, imag);
+                continue;
+            }
+
+            let updated = updateBin (
+                real,
+                imag,
+                spectrumStateRe[wrappedBin],
+                spectrumStateIm[wrappedBin],
+                chordMask[wrappedBin],
+                phaseAdvanceTable[wrappedBin],
+                currentMagFeedback,
+                currentPhaseFeedback,
+                currentDamping,
+                currentMagCeiling
+            );
+
+            spectrumStateRe[wrappedBin] = updated.stateRe;
+            spectrumStateIm[wrappedBin] = updated.stateIm;
+            writeSpectrumBin (bin, updated.outRe, updated.outIm);
+        }
+
+        std::frequency::realOnlyInverseFFT (fftSpectrum, synthesisBuffer);
+
+        for (wrap<spectral_chord_resonator::fftSize> index)
+        {
+            let targetIndex = wrap<spectral_chord_resonator::fftSize> (
+                int32 (ringPosition) + int32 (index)
+            );
+            outputRing[targetIndex] += synthesisBuffer[index] * synthesisWindow[index];
+        }
+    }
+
+    event chordIn (spectral_chord_resonator::ChordUpdate chord)
+    {
+        activeChord.count = chord.count;
+
+        if (activeChord.count < 0)
+            activeChord.count = 0;
+
+        if (activeChord.count > spectral_chord_resonator::maxChordPitches)
+            activeChord.count = spectral_chord_resonator::maxChordPitches;
+
+        for (int32 index = 0; index < spectral_chord_resonator::maxChordPitches; ++index)
+            activeChord.frequencies.at (index) = index < activeChord.count ? chord.frequencies.at (index) : 0.0f;
+
+        rebuildChordMask();
+    }
+
+    event magFeedbackIn (float32 value)
+    {
+        magFeedbackSmooth.setTarget (spectral_chord_resonator::clampFloat (value, 0.0f, 0.999f), smoothingFrameCount);
+    }
+
+    event phaseFeedbackIn (float32 value)
+    {
+        phaseFeedbackSmooth.setTarget (spectral_chord_resonator::clampFloat (value, 0.0f, 1.0f), smoothingFrameCount);
+    }
+
+    event dampingIn (float32 value)
+    {
+        dampingSmooth.setTarget (spectral_chord_resonator::clampFloat (value, 0.95f, 1.0f), smoothingFrameCount);
+    }
+
+    event maskWidthCentsIn (float32 value)
+    {
+        maskWidthCentsSmooth.setTarget (spectral_chord_resonator::clampFloat (value, 5.0f, 200.0f), smoothingFrameCount);
+        maskDirty = true;
+    }
+
+    event maskFloorIn (float32 value)
+    {
+        maskFloorSmooth.setTarget (spectral_chord_resonator::clampFloat (value, 0.0f, 1.0f), smoothingFrameCount);
+        maskDirty = true;
+    }
+
+    event harmonicCountIn (float32 value)
+    {
+        harmonicCountSmooth.setTarget (spectral_chord_resonator::clampFloat (value, 1.0f, 16.0f), smoothingFrameCount);
+        maskDirty = true;
+    }
+
+    event harmonicRolloffDbIn (float32 value)
+    {
+        harmonicRolloffDbSmooth.setTarget (spectral_chord_resonator::clampFloat (value, 0.0f, 24.0f), smoothingFrameCount);
+        maskDirty = true;
+    }
+
+    event magCeilingIn (float32 value)
+    {
+        magCeilingSmooth.setTarget (spectral_chord_resonator::clampFloat (value, 1.0f, 1000.0f), smoothingFrameCount);
+    }
+
+    event depthIn (float32 value)
+    {
+        let clamped = spectral_chord_resonator::clampFloat (value, 0.0f, 1.0f);
+        depthSmooth.setTarget (clamped, smoothingFrameCount);
+
+        if (clamped == 0.0f)
+            currentDepth = 0.0f;
+    }
+
+    event lowCutHzIn (float32 value)
+    {
+        lowCutHzSmooth.setTarget (spectral_chord_resonator::clampFloat (value, 20.0f, 500.0f), smoothingFrameCount);
+    }
+
+    void main()
+    {
+        loop
+        {
+            let dry = sidechainIn;
+            let delayedDry = dryDelay[ringPosition];
+            let wet = outputRing[ringPosition] * spectral_chord_resonator::olaGainCompensation;
+            let wetLimit = currentMagCeiling / float32 (spectral_chord_resonator::fftSize);
+            let limitedWet = spectral_chord_resonator::clampFloat (wet, -wetLimit, wetLimit);
+
+            inputRing[ringPosition] = dry;
+            dryDelay[ringPosition] = dry;
+            outputRing[ringPosition] = 0.0f;
+
+            audioOut <- currentDepth <= 0.000001f
+                ? dry
+                : delayedDry + ((limitedWet - delayedDry) * currentDepth);
+
+            ringPosition = wrap<spectral_chord_resonator::fftSize> (int32 (ringPosition) + 1);
+            hopCounter += 1;
+
+            if (hopCounter >= spectral_chord_resonator::hopSize)
+            {
+                hopCounter = 0;
+                processFrame();
+            }
+
+            advance();
+        }
+    }
+}
+
+processor SpectralMidiChordTracker
+{
+    input event std::midi::Message midiIn;
+    output event spectral_chord_resonator::ChordUpdate chordOut;
+
+    int32 heldNoteCount;
+    int32[spectral_chord_resonator::maxChordPitches] heldNotes;
+
+    void emitChord()
+    {
+        spectral_chord_resonator::ChordUpdate chord;
+        chord.count = heldNoteCount;
+
+        for (int32 index = 0; index < spectral_chord_resonator::maxChordPitches; ++index)
+        {
+            chord.frequencies.at (index) = index < heldNoteCount
+                ? spectral_chord_resonator::midiNoteToFrequency (heldNotes.at (index))
+                : 0.0f;
+        }
+
+        chordOut <- chord;
+    }
+
+    void clearHeldNotes()
+    {
+        heldNoteCount = 0;
+        emitChord();
+    }
+
+    void removeHeldNote (int32 noteNumber)
+    {
+        var removed = false;
+
+        for (int32 index = 0; index < heldNoteCount; ++index)
+        {
+            if (heldNotes.at (index) == noteNumber)
+                removed = true;
+
+            if (removed && index < heldNoteCount - 1)
+                heldNotes.at (index) = heldNotes.at (index + 1);
+        }
+
+        if (removed)
+        {
+            heldNoteCount -= 1;
+            emitChord();
+        }
+    }
+
+    void addHeldNote (int32 noteNumber)
+    {
+        removeHeldNote (noteNumber);
+
+        if (heldNoteCount < spectral_chord_resonator::maxChordPitches)
+        {
+            heldNotes.at (heldNoteCount) = noteNumber;
+            heldNoteCount += 1;
+        }
+        else
+        {
+            for (int32 index = 1; index < spectral_chord_resonator::maxChordPitches; ++index)
+                heldNotes.at (index - 1) = heldNotes.at (index);
+
+            heldNotes.at (spectral_chord_resonator::maxChordPitches - 1) = noteNumber;
+        }
+
+        emitChord();
+    }
+
+    event midiIn (std::midi::Message message)
+    {
+        if (message.isAllNotesOff() || message.isAllSoundOff())
+        {
+            clearHeldNotes();
+            return;
+        }
+
+        if (message.isNoteOn())
+            addHeldNote (message.getNoteNumber());
+        else if (message.isNoteOff())
+            removeHeldNote (message.getNoteNumber());
+    }
+
+    void main()
+    {
+        advance();
+    }
+}
+
+processor SpectralStereoToMono
+{
+    input stream float32<2> in;
+    output stream float32 out;
+
+    void main()
+    {
+        loop
+        {
+            out <- (in[0] + in[1]) * 0.5f;
+            advance();
+        }
+    }
+}
+
+processor SpectralMonoToStereo
+{
+    input stream float32 in;
+    output stream float32<2> out;
+
+    void main()
+    {
+        loop
+        {
+            out <- float32<2> (in, in);
+            advance();
+        }
+    }
+}
+
+graph SpectralChordResonatorPlugin [[ main ]]
+{
+    input stream float32<2> audioIn [[ name: "Input" ]];
+    input stream float32<2> sidechainIn [[ name: "Sidechain" ]];
+    input event std::midi::Message midiIn [[ name: "MIDI input" ]];
+    output stream float32<2> audioOut [[ name: "Output" ]];
+
+    input event float32 magFeedbackIn       [[ name: "Magnitude Feedback", group: "Feedback", min: 0.0f, max: 0.999f, init: 0.92f, rampFrames: 0 ]];
+    input event float32 phaseFeedbackIn     [[ name: "Phase Feedback",     group: "Feedback", min: 0.0f, max: 1.0f,   init: 1.0f,  rampFrames: 0 ]];
+    input event float32 dampingIn           [[ name: "Damping",            group: "Feedback", min: 0.95f, max: 1.0f,   init: 0.995f, rampFrames: 0 ]];
+    input event float32 magCeilingIn        [[ name: "Magnitude Ceiling",  group: "Feedback", min: 1.0f,  max: 1000.0f, init: 1000.0f, unit: "", rampFrames: 0 ]];
+    input event float32 depthIn             [[ name: "Depth",              group: "Output",   min: 0.0f,  max: 1.0f,    init: 0.0f,  rampFrames: 0 ]];
+    input event float32 lowCutHzIn          [[ name: "Low Cut",            group: "Output",   min: 20.0f, max: 500.0f,  init: 60.0f, unit: "Hz", rampFrames: 0 ]];
+    input event float32 maskWidthCentsIn    [[ name: "Mask Width",         group: "Mask",     min: 5.0f,  max: 200.0f,  init: 40.0f, unit: "cents", rampFrames: 0 ]];
+    input event float32 maskFloorIn         [[ name: "Mask Floor",         group: "Mask",     min: 0.0f,  max: 1.0f,    init: 0.08f, rampFrames: 0 ]];
+    input event float32 harmonicCountIn     [[ name: "Harmonics",          group: "Mask",     min: 1.0f,  max: 16.0f,   init: 8.0f, discrete: true, step: 1.0f, rampFrames: 0 ]];
+    input event float32 harmonicRolloffDbIn [[ name: "Harmonic Rolloff",   group: "Mask",     min: 0.0f,  max: 24.0f,   init: 6.0f, unit: "dB/oct", rampFrames: 0 ]];
+
+    node sidechainToMono = SpectralStereoToMono;
+    node resonator = SpectralChordResonator;
+    node chordTracker = SpectralMidiChordTracker;
+    node monoToStereo = SpectralMonoToStereo;
+
+    connection
+    {
+        sidechainIn -> sidechainToMono.in;
+        sidechainToMono.out -> resonator.sidechainIn;
+        resonator.audioOut -> monoToStereo.in;
+        monoToStereo.out -> audioOut;
+
+        midiIn -> chordTracker.midiIn;
+        chordTracker.chordOut -> resonator.chordIn;
+
+        magFeedbackIn -> resonator.magFeedbackIn;
+        phaseFeedbackIn -> resonator.phaseFeedbackIn;
+        dampingIn -> resonator.dampingIn;
+        maskWidthCentsIn -> resonator.maskWidthCentsIn;
+        maskFloorIn -> resonator.maskFloorIn;
+        harmonicCountIn -> resonator.harmonicCountIn;
+        harmonicRolloffDbIn -> resonator.harmonicRolloffDbIn;
+        magCeilingIn -> resonator.magCeilingIn;
+        depthIn -> resonator.depthIn;
+        lowCutHzIn -> resonator.lowCutHzIn;
+    }
+}

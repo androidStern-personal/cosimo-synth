@@ -85,8 +85,26 @@ async function readDevServerStatus(origin, timeoutMs = DEFAULT_EFFECT_DEV_STATUS
     }
 }
 
-function isExpectedDevServer(status) {
-    return status?.kind === EFFECT_DEV_STATUS_KIND;
+function modulePathsMatch(left, right) {
+    return normalizeModulePath(left) === normalizeModulePath(right);
+}
+
+function isExpectedDevServer(status, devModulePath = "") {
+    if (status?.kind !== EFFECT_DEV_STATUS_KIND) {
+        return false;
+    }
+
+    const expectedDevModulePath = normalizeModulePath(devModulePath);
+
+    if (!expectedDevModulePath) {
+        return true;
+    }
+
+    if (!Array.isArray(status.plugins)) {
+        return false;
+    }
+
+    return status.plugins.some((plugin) => modulePathsMatch(plugin?.sourceModule, expectedDevModulePath));
 }
 
 function getViewFactory(module, label) {
@@ -144,7 +162,7 @@ async function loadEffectDevTools(origin) {
 
 function createProductionLoadError({ productionModuleUrl, devOrigin, devModulePath, cause }) {
     const devHint = devModulePath
-        ? `The effects dev server was not reachable at ${normalizeOrigin(devOrigin)}${EFFECT_DEV_STATUS_PATH}. Start the shared effects Vite dev server, or build a production runtime that contains ${DEFAULT_EFFECT_PRODUCTION_MODULE}.`
+        ? `The effects dev server at ${normalizeOrigin(devOrigin)}${EFFECT_DEV_STATUS_PATH} was not reachable or was not serving ${normalizeModulePath(devModulePath)}. Start the shared effects Vite dev server from this repo, or build a production runtime that contains ${DEFAULT_EFFECT_PRODUCTION_MODULE}.`
         : "The patch manifest is missing view.devModule, and the production UI module could not be loaded.";
 
     const error = new Error(
@@ -209,8 +227,9 @@ function createLoadErrorView(error) {
 export async function canLoadEffectDevServer(
     origin = DEFAULT_EFFECT_DEV_ORIGIN,
     timeoutMs = DEFAULT_EFFECT_DEV_STATUS_TIMEOUT_MS,
+    devModulePath = "",
 ) {
-    return isExpectedDevServer(await readDevServerStatus(origin, timeoutMs));
+    return isExpectedDevServer(await readDevServerStatus(origin, timeoutMs), devModulePath);
 }
 
 export function createEffectPatchView(options = {}) {
@@ -222,7 +241,7 @@ export function createEffectPatchView(options = {}) {
             options.productionModule ?? DEFAULT_EFFECT_PRODUCTION_MODULE,
         );
 
-        if (devModulePath && await canLoadEffectDevServer(devOrigin, devStatusTimeoutMs)) {
+        if (devModulePath && await canLoadEffectDevServer(devOrigin, devStatusTimeoutMs, devModulePath)) {
             const devModuleUrl = resolveDevModuleUrl(devOrigin, devModulePath);
 
             try {
