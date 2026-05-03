@@ -723,4 +723,43 @@ What was verified for OTT Lab and Chorus Lab after the SeqFX migration
 - `npm run fx:prod:install -- ott --dry-run`
 - `npm run fx:prod:install -- chorus --dry-run`
 - `npx tsc --noEmit`
+
+Spectral Chord Resonator partial-shape editor refactor on 2026-05-02
+- Added `docs/spectral-partial-shape-refactor-plan.md` with the final architecture, task acceptance criteria, and TDD matrix.
+- Replaced the old scalar `harmonicCountIn` and `harmonicRolloffDbIn` ownership model with a single shaped event:
+  - `PartialShapeUpload { int32 count; float32[64] strengths; }`
+  - `partialShapeUpload` now owns both active partial count and partial strengths.
+- The DSP stores `partialStrengths[64]`, clamps uploaded values, rebuilds the chord mask from the uploaded strengths, and initializes to the Saw 1/h shape.
+- Added Spectral-specific state/bridge/adapter modules while continuing to use the shared effect preset, snapshot, stored-state, and worker infrastructure.
+- Added a production worker that mirrors stored partial-shape state into DSP when the view is absent.
+- Reworked the Spectral view so the partial editor is controlled by `SpectralPartialShapeRuntimeBridge`; the view renders and calls bridge methods but does not own stored state or DSP upload.
+- Wired Spectral into the shared effect build as a worker-backed effect target.
+
+What was verified for the Spectral partial-shape editor refactor
+- `cmaj play --dry-run --stop-on-error fx/spectral_chord_resonator/SpectralChordResonator.cmajorpatch`
+- `cmaj test --singleThread --sessionID=1 tests/spectral_chord_resonator`
+- `node --test tests/test_spectral_partial_state.mjs tests/test_spectral_partial_runtime_bridge.mjs tests/test_spectral_partial_preset_adapter.mjs tests/test_spectral_worker_service.mjs tests/test_fx_build_args.mjs tests/test_effect_view_loader.mjs`
+- `PYTHONPATH=. uv run pytest tests/test_spectral_chord_resonator_probe.py -q`
+- `npm run fx:build -- spectral`
+- Browser smoke-loaded `build/fx/spectral_chord_resonator_runtime/view/index.js` with Playwright and confirmed no load error, partial canvas present, default Saw 1/h state, and one `partialShapeUpload`.
+- `git diff --check`
+
+Spectral production UI viewport fix on 2026-05-02
+- The first dedicated VST3 install showed the partial editor canvas extending below Ableton's fixed 980 by 740 plugin view. The cause was the Spectral view root declaring `min-height: 740px` while the shared preset header was inserted above a `.frame` that also used `min-height: 100%`.
+- Fixed `fx/spectral_chord_resonator/view/source.js` so the Spectral view root owns the actual plugin viewport with a bounded layout: shared preset header first, plugin frame second.
+- Removed the nested full-height behavior that made the canvas push past the bottom of the WebView, compacted the partial toolbar buttons, and made the canvas fill only the remaining editor area.
+- Added `tests/test_spectral_production_view_browser.mjs`, which mounts the production Spectral view at 980 by 740 and asserts there is no page scroll, the partial canvas is visible, the readout row is visible, and the canvas remains large enough to edit.
+- Rebuilt and installed the dedicated testing VST3 at `~/Library/Audio/Plug-Ins/VST3/SpectralChordResonator.vst3`.
+- Follow-up after Ableton still clipped the bottom: the manifest height is only Cmajor's requested/default editor size, not the guaranteed usable content height inside the host. Cmajor also applies inline `width: 980px` and `height: 740px` to the returned custom view.
+- Updated the layout again so the Spectral custom element overrides Cmajor's inline fixed height with `height: 100% !important` and fills the real host slot. The top-level layout is now a flex column: shared preset/snapshot header first, then a `flex: 1 1 0` plugin frame.
+- Removed forced `height: 100%` from nested grid children and reduced only the frame's vertical padding, so the canvas and readouts fit inside both the requested 980 by 740 view and a constrained 980 by 680 host slot.
+- Strengthened `tests/test_spectral_production_view_browser.mjs` to simulate Cmajor's inline sizing and a shorter host slot. The constrained test measured the corrected layout at host 680px, view 680px, frame bottom 680px, canvas 407px high, and readouts bottom 667px.
+
+What was verified for the Spectral production UI viewport fix
+- `node --test tests/test_spectral_production_view_browser.mjs tests/test_spectral_partial_state.mjs tests/test_spectral_partial_runtime_bridge.mjs tests/test_spectral_partial_preset_adapter.mjs tests/test_spectral_worker_service.mjs`
+- `npm run fx:prod:build -- spectral`
+- `npm run fx:prod:install -- spectral`
+- `codesign --verify --deep --strict --verbose=4 ~/Library/Audio/Plug-Ins/VST3/SpectralChordResonator.vst3`
+- `lipo -archs ~/Library/Audio/Plug-Ins/VST3/SpectralChordResonator.vst3/Contents/MacOS/SpectralChordResonator`
+- Verified the installed VST3 binary contains the host-slot sizing marker `height: 100% !important`.
 - `git diff --check`

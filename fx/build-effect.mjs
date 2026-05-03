@@ -37,6 +37,8 @@ export const effectPlugins = {
         juceOut: "build/spectral_chord_resonator_juce",
         cmakeTarget: "SpectralChordResonator",
         productName: "SpectralChordResonator",
+        workerSource: "fx/spectral_chord_resonator/worker/source.ts",
+        workerOut: "worker.js",
     },
 };
 

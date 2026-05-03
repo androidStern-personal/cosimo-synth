@@ -6,6 +6,7 @@ namespace spectral_chord_resonator
     let nyquistBin = fftSize / 2;
     let spectralBinCount = nyquistBin + 1;
     let maxChordPitches = 16;
+    let maxPartialCount = 64;
     let olaGainCompensation = 2.0f / 3.0f;
     let smoothingTimeSeconds = 0.05f;
 
@@ -14,8 +15,7 @@ namespace spectral_chord_resonator
     let defaultDamping = 0.995f;
     let defaultMaskWidthCents = 40.0f;
     let defaultMaskFloor = 0.08f;
-    let defaultHarmonicCount = 8.0f;
-    let defaultHarmonicRolloffDb = 6.0f;
+    let defaultPartialCount = 32;
     let defaultMagCeiling = 1000.0f;
     let defaultDepth = 0.0f;
     let defaultLowCutHz = 60.0f;
@@ -24,6 +24,12 @@ namespace spectral_chord_resonator
     {
         float32[16] frequencies;
         int32 count;
+    }
+
+    struct PartialShapeUpload
+    {
+        int32 count;
+        float32[64] strengths;
     }
 
     float32 clampFloat (float32 value, float32 lo, float32 hi)
@@ -67,14 +73,13 @@ processor SpectralChordResonator
     output stream float32 audioOut;
 
     input  event spectral_chord_resonator::ChordUpdate chordIn;
+    input  event spectral_chord_resonator::PartialShapeUpload partialShapeUpload;
 
     input  event float32 magFeedbackIn;
     input  event float32 phaseFeedbackIn;
     input  event float32 dampingIn;
     input  event float32 maskWidthCentsIn;
     input  event float32 maskFloorIn;
-    input  event float32 harmonicCountIn;
-    input  event float32 harmonicRolloffDbIn;
     input  event float32 magCeilingIn;
     input  event float32 depthIn;
     input  event float32 lowCutHzIn;
@@ -93,6 +98,7 @@ processor SpectralChordResonator
     float32[spectral_chord_resonator::spectralBinCount] chordMask;
     float32[spectral_chord_resonator::spectralBinCount] basePhaseAdvanceTable;
     float32[spectral_chord_resonator::spectralBinCount] phaseAdvanceTable;
+    float32[spectral_chord_resonator::maxPartialCount] partialStrengths;
 
     spectral_chord_resonator::ChordUpdate activeChord;
 
@@ -101,8 +107,6 @@ processor SpectralChordResonator
     std::smoothing::SmoothedValue dampingSmooth;
     std::smoothing::SmoothedValue maskWidthCentsSmooth;
     std::smoothing::SmoothedValue maskFloorSmooth;
-    std::smoothing::SmoothedValue harmonicCountSmooth;
-    std::smoothing::SmoothedValue harmonicRolloffDbSmooth;
     std::smoothing::SmoothedValue magCeilingSmooth;
     std::smoothing::SmoothedValue depthSmooth;
     std::smoothing::SmoothedValue lowCutHzSmooth;
@@ -117,8 +121,7 @@ processor SpectralChordResonator
     float32 currentDamping = spectral_chord_resonator::defaultDamping;
     float32 currentMaskWidthCents = spectral_chord_resonator::defaultMaskWidthCents;
     float32 currentMaskFloor = spectral_chord_resonator::defaultMaskFloor;
-    float32 currentHarmonicCount = spectral_chord_resonator::defaultHarmonicCount;
-    float32 currentHarmonicRolloffDb = spectral_chord_resonator::defaultHarmonicRolloffDb;
+    int32 currentPartialCount = spectral_chord_resonator::defaultPartialCount;
     float32 currentMagCeiling = spectral_chord_resonator::defaultMagCeiling;
     float32 currentDepth = spectral_chord_resonator::defaultDepth;
     float32 currentLowCutHz = spectral_chord_resonator::defaultLowCutHz;
@@ -136,8 +139,6 @@ processor SpectralChordResonator
         dampingSmooth.reset (currentDamping);
         maskWidthCentsSmooth.reset (currentMaskWidthCents);
         maskFloorSmooth.reset (currentMaskFloor);
-        harmonicCountSmooth.reset (currentHarmonicCount);
-        harmonicRolloffDbSmooth.reset (currentHarmonicRolloffDb);
         magCeilingSmooth.reset (currentMagCeiling);
         depthSmooth.reset (currentDepth);
         lowCutHzSmooth.reset (currentLowCutHz);
@@ -160,6 +161,9 @@ processor SpectralChordResonator
             phaseAdvanceTable[bin] = basePhaseAdvanceTable[bin];
         }
 
+        for (wrap<spectral_chord_resonator::maxPartialCount> partial)
+            partialStrengths[partial] = 1.0f / float32 (int32 (partial) + 1);
+
         rebuildChordMask();
     }
 
@@ -178,13 +182,13 @@ processor SpectralChordResonator
 
         let binHz = float32 (processor.frequency) / float32 (spectral_chord_resonator::fftSize);
         let widthSemitoneFraction = (currentMaskWidthCents / 100.0f) * (1.0f / 12.0f);
-        var harmonicLimit = int32 (std::intrinsics::floor (currentHarmonicCount + 0.5f));
+        var harmonicLimit = currentPartialCount;
 
         if (harmonicLimit < 1)
             harmonicLimit = 1;
 
-        if (harmonicLimit > 16)
-            harmonicLimit = 16;
+        if (harmonicLimit > spectral_chord_resonator::maxPartialCount)
+            harmonicLimit = spectral_chord_resonator::maxPartialCount;
 
         var chordCount = activeChord.count;
 
@@ -209,11 +213,7 @@ processor SpectralChordResonator
                     break;
 
                 let centerBin = harmonicFrequency / binHz;
-                let octaveIndex = std::intrinsics::log10 (float32 (harmonic)) * 3.32192809489f;
-                let harmonicGain = std::intrinsics::pow (
-                    10.0f,
-                    (-currentHarmonicRolloffDb * octaveIndex) / 20.0f
-                );
+                let harmonicGain = partialStrengths.at (harmonic - 1);
                 let halfWidthBins = std::intrinsics::max (0.25f, widthSemitoneFraction * centerBin);
 
                 var lo = int32 (centerBin - (3.0f * halfWidthBins));
@@ -328,21 +328,15 @@ processor SpectralChordResonator
 
         let nextMaskWidthCents = maskWidthCentsSmooth.getNext();
         let nextMaskFloor = maskFloorSmooth.getNext();
-        let nextHarmonicCount = harmonicCountSmooth.getNext();
-        let nextHarmonicRolloffDb = harmonicRolloffDbSmooth.getNext();
 
         if (updateMaskValue (nextMaskWidthCents, currentMaskWidthCents)
-            || updateMaskValue (nextMaskFloor, currentMaskFloor)
-            || updateMaskValue (nextHarmonicCount, currentHarmonicCount)
-            || updateMaskValue (nextHarmonicRolloffDb, currentHarmonicRolloffDb))
+            || updateMaskValue (nextMaskFloor, currentMaskFloor))
         {
             maskDirty = true;
         }
 
         currentMaskWidthCents = nextMaskWidthCents;
         currentMaskFloor = nextMaskFloor;
-        currentHarmonicCount = nextHarmonicCount;
-        currentHarmonicRolloffDb = nextHarmonicRolloffDb;
 
         if (maskDirty)
             rebuildChordMask();
@@ -423,6 +417,28 @@ processor SpectralChordResonator
         rebuildChordMask();
     }
 
+    event partialShapeUpload (spectral_chord_resonator::PartialShapeUpload shape)
+    {
+        currentPartialCount = shape.count;
+
+        if (currentPartialCount < 1)
+            currentPartialCount = 1;
+
+        if (currentPartialCount > spectral_chord_resonator::maxPartialCount)
+            currentPartialCount = spectral_chord_resonator::maxPartialCount;
+
+        for (int32 index = 0; index < spectral_chord_resonator::maxPartialCount; ++index)
+        {
+            partialStrengths.at (index) = spectral_chord_resonator::clampFloat (
+                shape.strengths.at (index),
+                0.0f,
+                1.0f
+            );
+        }
+
+        rebuildChordMask();
+    }
+
     event magFeedbackIn (float32 value)
     {
         magFeedbackSmooth.setTarget (spectral_chord_resonator::clampFloat (value, 0.0f, 0.999f), smoothingFrameCount);
@@ -447,18 +463,6 @@ processor SpectralChordResonator
     event maskFloorIn (float32 value)
     {
         maskFloorSmooth.setTarget (spectral_chord_resonator::clampFloat (value, 0.0f, 1.0f), smoothingFrameCount);
-        maskDirty = true;
-    }
-
-    event harmonicCountIn (float32 value)
-    {
-        harmonicCountSmooth.setTarget (spectral_chord_resonator::clampFloat (value, 1.0f, 16.0f), smoothingFrameCount);
-        maskDirty = true;
-    }
-
-    event harmonicRolloffDbIn (float32 value)
-    {
-        harmonicRolloffDbSmooth.setTarget (spectral_chord_resonator::clampFloat (value, 0.0f, 24.0f), smoothingFrameCount);
         maskDirty = true;
     }
 
@@ -637,6 +641,7 @@ graph SpectralChordResonatorPlugin [[ main ]]
     input stream float32<2> audioIn [[ name: "Input" ]];
     input stream float32<2> sidechainIn [[ name: "Sidechain" ]];
     input event std::midi::Message midiIn [[ name: "MIDI input" ]];
+    input event spectral_chord_resonator::PartialShapeUpload partialShapeUpload [[ name: "Partial Shape", hidden: true ]];
     output stream float32<2> audioOut [[ name: "Output" ]];
 
     input event float32 magFeedbackIn       [[ name: "Magnitude Feedback", group: "Feedback", min: 0.0f, max: 0.999f, init: 0.92f, rampFrames: 0 ]];
@@ -647,8 +652,6 @@ graph SpectralChordResonatorPlugin [[ main ]]
     input event float32 lowCutHzIn          [[ name: "Low Cut",            group: "Output",   min: 20.0f, max: 500.0f,  init: 60.0f, unit: "Hz", rampFrames: 0 ]];
     input event float32 maskWidthCentsIn    [[ name: "Mask Width",         group: "Mask",     min: 5.0f,  max: 200.0f,  init: 40.0f, unit: "cents", rampFrames: 0 ]];
     input event float32 maskFloorIn         [[ name: "Mask Floor",         group: "Mask",     min: 0.0f,  max: 1.0f,    init: 0.08f, rampFrames: 0 ]];
-    input event float32 harmonicCountIn     [[ name: "Harmonics",          group: "Mask",     min: 1.0f,  max: 16.0f,   init: 8.0f, discrete: true, step: 1.0f, rampFrames: 0 ]];
-    input event float32 harmonicRolloffDbIn [[ name: "Harmonic Rolloff",   group: "Mask",     min: 0.0f,  max: 24.0f,   init: 6.0f, unit: "dB/oct", rampFrames: 0 ]];
 
     node sidechainToMono = SpectralStereoToMono;
     node resonator = SpectralChordResonator;
@@ -664,14 +667,13 @@ graph SpectralChordResonatorPlugin [[ main ]]
 
         midiIn -> chordTracker.midiIn;
         chordTracker.chordOut -> resonator.chordIn;
+        partialShapeUpload -> resonator.partialShapeUpload;
 
         magFeedbackIn -> resonator.magFeedbackIn;
         phaseFeedbackIn -> resonator.phaseFeedbackIn;
         dampingIn -> resonator.dampingIn;
         maskWidthCentsIn -> resonator.maskWidthCentsIn;
         maskFloorIn -> resonator.maskFloorIn;
-        harmonicCountIn -> resonator.harmonicCountIn;
-        harmonicRolloffDbIn -> resonator.harmonicRolloffDbIn;
         magCeilingIn -> resonator.magCeilingIn;
         depthIn -> resonator.depthIn;
         lowCutHzIn -> resonator.lowCutHzIn;
