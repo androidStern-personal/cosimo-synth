@@ -622,31 +622,34 @@ processor SpectralMidiChordTracker
     }
 }
 
-processor SpectralStereoToMono
+processor SpectralStereoSplitter
 {
     input stream float32<2> in;
-    output stream float32 out;
+    output stream float32 left;
+    output stream float32 right;
 
     void main()
     {
         loop
         {
-            out <- (in[0] + in[1]) * 0.5f;
+            left <- in[0];
+            right <- in[1];
             advance();
         }
     }
 }
 
-processor SpectralMonoToStereo
+processor SpectralStereoJoiner
 {
-    input stream float32 in;
+    input stream float32 left;
+    input stream float32 right;
     output stream float32<2> out;
 
     void main()
     {
         loop
         {
-            out <- float32<2> (in, in);
+            out <- float32<2> (left, right);
             advance();
         }
     }
@@ -669,29 +672,42 @@ graph SpectralChordResonatorPlugin [[ main ]]
     input event float32 maskWidthCentsIn    [[ name: "Mask Width",         group: "Mask",     min: 5.0f,  max: 200.0f,  init: 40.0f, unit: "cents", rampFrames: 0 ]];
     input event float32 maskFloorIn         [[ name: "Mask Floor",         group: "Mask",     min: 0.0f,  max: 1.0f,    init: 0.08f, rampFrames: 0 ]];
 
-    node sidechainToMono = SpectralStereoToMono;
-    node resonator = SpectralChordResonator;
+    node sidechainSplitter = SpectralStereoSplitter;
+    node resonatorLeft = SpectralChordResonator;
+    node resonatorRight = SpectralChordResonator;
     node chordTracker = SpectralMidiChordTracker;
-    node monoToStereo = SpectralMonoToStereo;
+    node stereoJoiner = SpectralStereoJoiner;
 
     connection
     {
-        sidechainIn -> sidechainToMono.in;
-        sidechainToMono.out -> resonator.sidechainIn;
-        resonator.audioOut -> monoToStereo.in;
-        monoToStereo.out -> audioOut;
+        sidechainIn -> sidechainSplitter.in;
+        sidechainSplitter.left -> resonatorLeft.sidechainIn;
+        sidechainSplitter.right -> resonatorRight.sidechainIn;
+        resonatorLeft.audioOut -> stereoJoiner.left;
+        resonatorRight.audioOut -> stereoJoiner.right;
+        stereoJoiner.out -> audioOut;
 
         midiIn -> chordTracker.midiIn;
-        chordTracker.chordOut -> resonator.chordIn;
-        partialShapeUpload -> resonator.partialShapeUpload;
+        chordTracker.chordOut -> resonatorLeft.chordIn;
+        chordTracker.chordOut -> resonatorRight.chordIn;
+        partialShapeUpload -> resonatorLeft.partialShapeUpload;
+        partialShapeUpload -> resonatorRight.partialShapeUpload;
 
-        magFeedbackIn -> resonator.magFeedbackIn;
-        phaseFeedbackIn -> resonator.phaseFeedbackIn;
-        dampingIn -> resonator.dampingIn;
-        maskWidthCentsIn -> resonator.maskWidthCentsIn;
-        maskFloorIn -> resonator.maskFloorIn;
-        magCeilingIn -> resonator.magCeilingIn;
-        depthIn -> resonator.depthIn;
-        lowCutHzIn -> resonator.lowCutHzIn;
+        magFeedbackIn -> resonatorLeft.magFeedbackIn;
+        magFeedbackIn -> resonatorRight.magFeedbackIn;
+        phaseFeedbackIn -> resonatorLeft.phaseFeedbackIn;
+        phaseFeedbackIn -> resonatorRight.phaseFeedbackIn;
+        dampingIn -> resonatorLeft.dampingIn;
+        dampingIn -> resonatorRight.dampingIn;
+        maskWidthCentsIn -> resonatorLeft.maskWidthCentsIn;
+        maskWidthCentsIn -> resonatorRight.maskWidthCentsIn;
+        maskFloorIn -> resonatorLeft.maskFloorIn;
+        maskFloorIn -> resonatorRight.maskFloorIn;
+        magCeilingIn -> resonatorLeft.magCeilingIn;
+        magCeilingIn -> resonatorRight.magCeilingIn;
+        depthIn -> resonatorLeft.depthIn;
+        depthIn -> resonatorRight.depthIn;
+        lowCutHzIn -> resonatorLeft.lowCutHzIn;
+        lowCutHzIn -> resonatorRight.lowCutHzIn;
     }
 }
