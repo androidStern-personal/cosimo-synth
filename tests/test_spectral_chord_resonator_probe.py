@@ -70,6 +70,21 @@ def _write_f32(path: Path, audio: np.ndarray) -> None:
     np.asarray(audio, dtype=np.float32).tofile(path)
 
 
+def _as_stereo_sidechain(sidechain: np.ndarray) -> np.ndarray:
+    audio = np.asarray(sidechain, dtype=np.float32)
+
+    if audio.ndim == 1:
+        return np.stack([audio, audio])
+
+    if audio.ndim == 2 and audio.shape[0] == 2:
+        return audio
+
+    if audio.ndim == 2 and audio.shape[1] == 2:
+        return audio.T
+
+    raise AssertionError(f"Expected mono or stereo sidechain audio, got shape {audio.shape}")
+
+
 def _deterministic_probe_signal(num_samples: int, *, amplitude: float = 0.24) -> np.ndarray:
     t = np.arange(num_samples, dtype=np.float64) / SAMPLE_RATE
     signal = (
@@ -131,6 +146,7 @@ const schedulePath = process.argv[4];
 const outputPath = process.argv[5];
 const numFrames = Number(process.argv[6]);
 const sampleRate = Number(process.argv[7]);
+const sidechainChannelCount = Number(process.argv[8] || "1");
 
 const sidechainBuffer = fs.readFileSync(sidechainPath);
 const sidechain = new Float32Array(
@@ -144,7 +160,8 @@ const schedule = JSON.parse(fs.readFileSync(schedulePath, "utf8"));
     const patch = new RuntimeClass();
     await patch.initialise(4, sampleRate);
 
-    const output = new Float32Array(numFrames);
+    const outputLeft = new Float32Array(numFrames);
+    const outputRight = new Float32Array(numFrames);
     const offsets = Object.keys(schedule).map((value) => Number(value)).sort((a, b) => a - b);
     let nextOffsetIndex = 0;
     let cursor = 0;
@@ -181,9 +198,12 @@ const schedule = JSON.parse(fs.readFileSync(schedulePath, "utf8"));
             const sidechainRight = new Float32Array(framesThisBlock);
 
             for (let index = 0; index < framesThisBlock; index += 1) {
-                const sample = sidechain[cursor + index] ?? 0;
-                sidechainLeft[index] = sample;
-                sidechainRight[index] = sample;
+                const left = sidechain[cursor + index] ?? 0;
+                const right = sidechainChannelCount > 1
+                    ? sidechain[numFrames + cursor + index] ?? 0
+                    : left;
+                sidechainLeft[index] = left;
+                sidechainRight[index] = right;
             }
 
             patch.setInputStreamFrames_audioIn([audioZeroLeft, audioZeroRight], framesThisBlock, 0);
@@ -193,7 +213,8 @@ const schedule = JSON.parse(fs.readFileSync(schedulePath, "utf8"));
             const outLeft = new Float32Array(framesThisBlock);
             const outRight = new Float32Array(framesThisBlock);
             patch.getOutputFrames_audioOut([outLeft, outRight], framesThisBlock, 0);
-            output.set(outLeft, cursor);
+            outputLeft.set(outLeft, cursor);
+            outputRight.set(outRight, cursor);
             cursor += framesThisBlock;
         } else {
             applyScheduledInputs(nextOffset);
@@ -201,6 +222,9 @@ const schedule = JSON.parse(fs.readFileSync(schedulePath, "utf8"));
         }
     }
 
+    const output = new Float32Array(numFrames * 2);
+    output.set(outputLeft, 0);
+    output.set(outputRight, numFrames);
     fs.writeFileSync(outputPath, Buffer.from(output.buffer, output.byteOffset, output.byteLength));
 })().catch((error) => {
     console.error(error?.stack || String(error));
@@ -213,19 +237,20 @@ const schedule = JSON.parse(fs.readFileSync(schedulePath, "utf8"));
     return GeneratedRuntime(runtime_path=runtime_path, render_script_path=render_script_path)
 
 
-def _render(
+def _render_stereo(
     generated_runtime: GeneratedRuntime,
     tmp_path: Path,
     sidechain: np.ndarray,
     schedule: dict[int, list[list[object]]],
 ) -> np.ndarray:
     node = _require_tool("node")
-    sidechain = np.asarray(sidechain, dtype=np.float32)
+    sidechain_channels = _as_stereo_sidechain(sidechain)
+    num_frames = sidechain_channels.shape[1]
     sidechain_path = tmp_path / "sidechain.f32"
     schedule_path = tmp_path / "schedule.json"
     output_path = tmp_path / "output.f32"
 
-    _write_f32(sidechain_path, sidechain)
+    _write_f32(sidechain_path, sidechain_channels)
     schedule_path.write_text(
         json.dumps({str(int(offset)): entries for offset, entries in schedule.items()}, indent=2) + "\n",
         encoding="utf-8",
@@ -239,8 +264,9 @@ def _render(
             str(sidechain_path),
             str(schedule_path),
             str(output_path),
-            str(int(sidechain.size)),
+            str(int(num_frames)),
             str(SAMPLE_RATE),
+            str(int(sidechain_channels.shape[0])),
         ],
         cwd=ROOT,
         capture_output=True,
@@ -251,9 +277,23 @@ def _render(
         details = "\n".join(part for part in (result.stdout.strip(), result.stderr.strip()) if part)
         raise AssertionError(f"node runtime render failed:\n{details}")
 
-    rendered = np.fromfile(output_path, dtype=np.float32)
-    assert rendered.shape == sidechain.shape
+    rendered = np.fromfile(output_path, dtype=np.float32).reshape(2, num_frames)
+    assert rendered.shape == sidechain_channels.shape
     return rendered
+
+
+def _render(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+    sidechain: np.ndarray,
+    schedule: dict[int, list[list[object]]],
+) -> np.ndarray:
+    rendered = _render_stereo(generated_runtime, tmp_path, sidechain, schedule)
+
+    if np.asarray(sidechain).ndim == 1:
+        assert np.max(np.abs(rendered[0] - rendered[1])) <= 1.0e-7
+
+    return rendered[0]
 
 
 def test_depth_zero_is_sample_accurate_sidechain_passthrough(
@@ -272,6 +312,26 @@ def test_depth_zero_is_sample_accurate_sidechain_passthrough(
     assert np.isfinite(rendered).all()
     assert np.max(np.abs(sidechain)) > 0.7
     assert np.max(np.abs(error)) <= 1.0e-7
+
+
+def test_depth_zero_preserves_different_stereo_sidechain_channels(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    left = _deterministic_probe_signal(16_384, amplitude=0.73)
+    right = np.roll(_deterministic_probe_signal(16_384, amplitude=0.41), 37)
+    sidechain = np.stack([left, right])
+    rendered = _render_stereo(
+        generated_runtime,
+        tmp_path,
+        sidechain,
+        {0: _base_events(depthIn=0.0, magFeedbackIn=0.999, phaseFeedbackIn=1.0)},
+    )
+
+    assert np.isfinite(rendered).all()
+    assert np.max(np.abs(rendered[0] - left)) <= 1.0e-7
+    assert np.max(np.abs(rendered[1] - right)) <= 1.0e-7
+    assert np.max(np.abs(rendered[0] - rendered[1])) > 0.1
 
 
 def test_feedback_zero_reconstructs_sidechain_after_fft_latency(
@@ -342,6 +402,43 @@ def test_single_click_resonates_at_held_midi_pitch(
     assert np.isfinite(rendered).all()
     assert float(np.sqrt(np.mean(np.square(tail, dtype=np.float64)))) > 1.0e-4
     assert abs(cents_error) <= 5.0
+
+
+def test_stereo_resonator_state_is_independent_per_channel(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    left = np.zeros(SAMPLE_RATE * 3, dtype=np.float32)
+    right = np.zeros(SAMPLE_RATE * 3, dtype=np.float32)
+    left[0] = 1.0
+    rendered = _render_stereo(
+        generated_runtime,
+        tmp_path,
+        np.stack([left, right]),
+        {
+            0: _base_events(
+                depthIn=1.0,
+                magFeedbackIn=0.95,
+                phaseFeedbackIn=1.0,
+                dampingIn=0.999,
+                maskFloorIn=0.0,
+                maskWidthCentsIn=200.0,
+                lowCutHzIn=20.0,
+                magCeilingIn=1000.0,
+            )
+            + [
+                _event("partialShapeUpload", _partial_shape_upload(1, [1.0])),
+                _event("midiIn", _midi_note_on(57)),
+            ],
+        },
+    )
+
+    left_tail = rendered[0, int(0.2 * SAMPLE_RATE): SAMPLE_RATE]
+    right_tail = rendered[1, int(0.2 * SAMPLE_RATE): SAMPLE_RATE]
+
+    assert np.isfinite(rendered).all()
+    assert _rms(left_tail) > 1.0e-4
+    assert float(np.max(np.abs(right_tail))) <= 1.0e-8
 
 
 def test_maximum_parameters_stay_finite_and_bounded(
