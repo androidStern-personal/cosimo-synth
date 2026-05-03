@@ -413,10 +413,11 @@ class SpectralChordResonatorView extends HTMLElement {
           --line: rgba(255, 255, 255, 0.1);
           --gold: #efb95d;
           --green: #78d29c;
-          display: flex;
-          flex-direction: column;
+          display: grid !important;
+          grid-template-rows: auto minmax(0, 1fr);
           width: 100% !important;
           height: 100% !important;
+          box-sizing: border-box;
           max-width: 100vw;
           max-height: 100vh;
           min-width: 0;
@@ -456,7 +457,6 @@ class SpectralChordResonatorView extends HTMLElement {
           display: grid;
           grid-template-columns: minmax(0, 1fr) 300px;
           gap: 14px;
-          flex: 1 1 0;
           width: 100%;
           min-height: 0;
           overflow: hidden;
@@ -475,15 +475,14 @@ class SpectralChordResonatorView extends HTMLElement {
 
         .partial-editor {
           display: grid;
-          grid-template-rows: auto auto minmax(0, 1fr) auto;
+          grid-template-rows: auto auto minmax(0, 1fr);
           min-width: 0;
           min-height: 0;
           overflow: hidden;
         }
 
         .partial-head,
-        .partial-toolbar,
-        .partial-readouts {
+        .partial-toolbar {
           display: flex;
           align-items: center;
           gap: 6px;
@@ -494,6 +493,7 @@ class SpectralChordResonatorView extends HTMLElement {
 
         .partial-head {
           justify-content: space-between;
+          align-items: stretch;
         }
 
         .partial-head h1 {
@@ -501,6 +501,13 @@ class SpectralChordResonatorView extends HTMLElement {
           font-size: 16px;
           letter-spacing: 0.04em;
           text-transform: uppercase;
+        }
+
+        .partial-title {
+          display: grid;
+          align-content: center;
+          gap: 5px;
+          min-width: 0;
         }
 
         .shape-name,
@@ -542,12 +549,15 @@ class SpectralChordResonatorView extends HTMLElement {
           gap: 1px;
           padding: 0;
           background: rgba(255,255,255,0.08);
-          border-bottom: 0;
+          border: 1px solid rgba(255,255,255,0.08);
+          border-radius: 8px;
+          min-width: 300px;
+          overflow: hidden;
         }
 
         .metric {
           min-width: 0;
-          padding: 11px 12px;
+          padding: 8px 10px;
           background: rgba(13,14,19,0.94);
         }
 
@@ -624,10 +634,15 @@ class SpectralChordResonatorView extends HTMLElement {
       <div class="frame">
         <section class="partial-editor">
           <header class="partial-head">
-            <h1>Spectral Chord Resonator</h1>
-            <div>
+            <div class="partial-title">
+              <h1>Spectral Chord Resonator</h1>
               <span class="shape-name" data-shape-name>Initializing</span>
               <span class="pill" data-count-pill></span>
+            </div>
+            <div class="partial-readouts">
+              <div class="metric"><div class="k">Selected</div><div class="v" data-selected-readout></div></div>
+              <div class="metric"><div class="k">Active</div><div class="v" data-active-readout></div></div>
+              <div class="metric"><div class="k">Centroid</div><div class="v" data-centroid-readout></div></div>
             </div>
           </header>
           <div class="partial-toolbar">
@@ -647,11 +662,6 @@ class SpectralChordResonatorView extends HTMLElement {
             </div>
           </div>
           <canvas data-partial-canvas width="1200" height="520" aria-label="Partial strength editor"></canvas>
-          <div class="partial-readouts">
-            <div class="metric"><div class="k">Selected</div><div class="v" data-selected-readout></div></div>
-            <div class="metric"><div class="k">Active</div><div class="v" data-active-readout></div></div>
-            <div class="metric"><div class="k">Centroid</div><div class="v" data-centroid-readout></div></div>
-          </div>
         </section>
         <div data-groups class="frame-groups"></div>
       </div>

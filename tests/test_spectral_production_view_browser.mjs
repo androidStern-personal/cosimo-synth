@@ -13,7 +13,7 @@ const DEFAULT_VIEWPORT = {
 
 const CONSTRAINED_HOST = {
     width: 980,
-    height: 680,
+    height: 600,
 };
 
 let browser;
@@ -240,6 +240,9 @@ test("spectral production view keeps the partial editor inside the requested 980
                 frame: roundedRect(frame.getBoundingClientRect(), ["top", "bottom", "height"]),
                 canvas: roundedRect(canvas.getBoundingClientRect(), ["top", "bottom", "height"]),
                 readouts: roundedRect(readouts.getBoundingClientRect(), ["top", "bottom", "height"]),
+                selectedReadout: root.querySelector("[data-selected-readout]")?.textContent ?? "",
+                activeReadout: root.querySelector("[data-active-readout]")?.textContent ?? "",
+                centroidReadout: root.querySelector("[data-centroid-readout]")?.textContent ?? "",
                 loadError: error?.textContent ?? null,
             };
         });
@@ -266,6 +269,9 @@ test("spectral production view keeps the partial editor inside the requested 980
             metrics.readouts.bottom <= DEFAULT_VIEWPORT.height,
             `partial editor readouts should fit inside the plugin viewport: ${JSON.stringify(metrics)}`,
         );
+        assert.equal(metrics.selectedReadout, "H1 1.000");
+        assert.equal(metrics.activeReadout, "32 / 32");
+        assert.equal(metrics.centroidReadout, "7.88");
         assert.ok(
             metrics.canvas.height >= 220,
             `partial editor canvas should remain usable after fitting: ${JSON.stringify(metrics)}`,
@@ -307,10 +313,14 @@ test("spectral production view ignores Cmajor fixed inline height when the host 
                 documentScrollHeight: document.documentElement.scrollHeight,
                 host: roundedRect(host.getBoundingClientRect(), ["top", "bottom", "height"]),
                 view: roundedRect(view.getBoundingClientRect(), ["top", "bottom", "height"]),
+                viewDisplay: getComputedStyle(view).display,
                 frame: roundedRect(frame.getBoundingClientRect(), ["top", "bottom", "height"]),
                 canvas: roundedRect(canvas.getBoundingClientRect(), ["top", "bottom", "height"]),
                 readouts: roundedRect(readouts.getBoundingClientRect(), ["top", "bottom", "height"]),
                 sidebar: roundedRect(sidebar.getBoundingClientRect(), ["top", "bottom", "height"]),
+                selectedReadout: root.querySelector("[data-selected-readout]")?.textContent ?? "",
+                activeReadout: root.querySelector("[data-active-readout]")?.textContent ?? "",
+                centroidReadout: root.querySelector("[data-centroid-readout]")?.textContent ?? "",
                 loadError: error?.textContent ?? null,
             };
         });
@@ -320,6 +330,11 @@ test("spectral production view ignores Cmajor fixed inline height when the host 
             metrics.view.height,
             CONSTRAINED_HOST.height,
             `view should use the real host height instead of Cmajor's fixed inline height: ${JSON.stringify(metrics)}`,
+        );
+        assert.equal(
+            metrics.viewDisplay,
+            "grid",
+            `view should override Cmajor's inline display:block so the header/editor rows can shrink: ${JSON.stringify(metrics)}`,
         );
         assert.ok(
             metrics.frame.bottom <= metrics.host.bottom,
@@ -333,6 +348,9 @@ test("spectral production view ignores Cmajor fixed inline height when the host 
             metrics.readouts.bottom <= metrics.host.bottom,
             `partial editor readouts should not be clipped by the host slot: ${JSON.stringify(metrics)}`,
         );
+        assert.equal(metrics.selectedReadout, "H1 1.000");
+        assert.equal(metrics.activeReadout, "32 / 32");
+        assert.equal(metrics.centroidReadout, "7.88");
         assert.ok(
             metrics.sidebar.bottom <= metrics.host.bottom,
             `right-side controls should fit inside the host slot: ${JSON.stringify(metrics)}`,

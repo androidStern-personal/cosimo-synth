@@ -81,6 +81,10 @@ def _deterministic_probe_signal(num_samples: int, *, amplitude: float = 0.24) ->
     return (amplitude * signal / np.max(np.abs(signal))).astype(np.float32)
 
 
+def _rms(signal: np.ndarray) -> float:
+    return float(np.sqrt(np.mean(np.square(signal, dtype=np.float64))))
+
+
 @pytest.fixture(scope="module")
 def generated_runtime(tmp_path_factory: pytest.TempPathFactory) -> GeneratedRuntime:
     cmaj = _require_tool("cmaj")
@@ -376,7 +380,7 @@ def test_maximum_parameters_stay_finite_and_bounded(
     assert np.isfinite(rendered).all()
     assert float(np.max(np.abs(rendered))) <= 1.0
     assert float(np.max(np.abs(settled))) <= wet_limit + 1.0e-6
-    assert float(np.sqrt(np.mean(np.square(settled, dtype=np.float64)))) > 1.0e-5
+    assert _rms(settled) > 1.0e-5
 
 
 def test_partial_shape_upload_changes_resonating_harmonic_energy(
@@ -431,6 +435,57 @@ def test_partial_shape_upload_changes_resonating_harmonic_energy(
     assert np.isfinite(fundamental_only).all()
     assert np.isfinite(flat_two_partials).all()
     assert second_harmonic_enabled > second_harmonic_suppressed * 3.0
+
+
+def test_many_partial_shape_is_not_a_linear_gain_multiplier(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    sidechain = np.zeros(SAMPLE_RATE * 3, dtype=np.float32)
+    sidechain[0] = 1.0
+    common_events = _base_events(
+        depthIn=1.0,
+        magFeedbackIn=0.97,
+        phaseFeedbackIn=1.0,
+        dampingIn=0.999,
+        maskFloorIn=0.0,
+        maskWidthCentsIn=120.0,
+        lowCutHzIn=20.0,
+        magCeilingIn=1000.0,
+    ) + [_event("midiIn", _midi_note_on(57))]
+    fundamental_dir = tmp_path / "fundamental"
+    flat_dir = tmp_path / "flat_32"
+    fundamental_dir.mkdir()
+    flat_dir.mkdir()
+
+    fundamental_only = _render(
+        generated_runtime,
+        fundamental_dir,
+        sidechain,
+        {
+            0: common_events + [_event("partialShapeUpload", _partial_shape_upload(1, [1.0]))],
+        },
+    )
+    flat_32_partials = _render(
+        generated_runtime,
+        flat_dir,
+        sidechain,
+        {
+            0: common_events + [_event("partialShapeUpload", _partial_shape_upload(32, [1.0] * 32))],
+        },
+    )
+
+    tail = slice(int(0.25 * SAMPLE_RATE), int(1.4 * SAMPLE_RATE))
+    fundamental_rms = _rms(fundamental_only[tail])
+    flat_rms = _rms(flat_32_partials[tail])
+    wet_limit = 1000.0 / FFT_SIZE
+
+    assert np.isfinite(fundamental_only).all()
+    assert np.isfinite(flat_32_partials).all()
+    assert fundamental_rms > 1.0e-5
+    assert flat_rms > fundamental_rms * 0.25
+    assert flat_rms <= fundamental_rms * 4.0
+    assert float(np.max(np.abs(flat_32_partials[tail]))) < wet_limit * 0.98
 
 
 def test_pinned_cmajor_runtime_splits_audio_inputs_into_host_buses() -> None:
