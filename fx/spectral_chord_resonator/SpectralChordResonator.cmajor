@@ -122,6 +122,7 @@ processor SpectralChordResonator
     float32 currentMaskWidthCents = spectral_chord_resonator::defaultMaskWidthCents;
     float32 currentMaskFloor = spectral_chord_resonator::defaultMaskFloor;
     int32 currentPartialCount = spectral_chord_resonator::defaultPartialCount;
+    float32 currentPartialOutputGain = 1.0f;
     float32 currentMagCeiling = spectral_chord_resonator::defaultMagCeiling;
     float32 currentDepth = spectral_chord_resonator::defaultDepth;
     float32 currentLowCutHz = spectral_chord_resonator::defaultLowCutHz;
@@ -189,6 +190,19 @@ processor SpectralChordResonator
 
         if (harmonicLimit > spectral_chord_resonator::maxPartialCount)
             harmonicLimit = spectral_chord_resonator::maxPartialCount;
+
+        var partialPower = 0.0f;
+
+        for (int32 harmonic = 1; harmonic <= harmonicLimit; ++harmonic)
+        {
+            let strength = partialStrengths.at (harmonic - 1);
+            partialPower += strength * strength;
+        }
+
+        currentPartialOutputGain = 1.0f;
+
+        if (partialPower > 1.0f)
+            currentPartialOutputGain = 1.0f / std::intrinsics::sqrt (partialPower);
 
         var chordCount = activeChord.count;
 
@@ -258,7 +272,8 @@ processor SpectralChordResonator
                                                    float32 magFeedback,
                                                    float32 phaseFeedback,
                                                    float32 damping,
-                                                   float32 ceiling)
+                                                   float32 ceiling,
+                                                   float32 resonanceOutputGain)
     {
         let xRe = float64 (inputRe);
         let xIm = float64 (inputIm);
@@ -291,8 +306,8 @@ processor SpectralChordResonator
         spectral_chord_resonator::BinUpdate result;
         result.stateRe = newRe;
         result.stateIm = newIm;
-        result.outRe = float32 (newRe);
-        result.outIm = float32 (newIm);
+        result.outRe = inputRe + ((float32 (newRe) - inputRe) * resonanceOutputGain);
+        result.outIm = inputIm + ((float32 (newIm) - inputIm) * resonanceOutputGain);
         return result;
     }
 
@@ -382,7 +397,8 @@ processor SpectralChordResonator
                 currentMagFeedback,
                 currentPhaseFeedback,
                 currentDamping,
-                currentMagCeiling
+                currentMagCeiling,
+                currentPartialOutputGain
             );
 
             spectrumStateRe[wrappedBin] = updated.stateRe;
