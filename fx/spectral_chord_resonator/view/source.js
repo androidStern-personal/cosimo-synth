@@ -1,23 +1,58 @@
 import { createEffectHeader } from "../../../ui/shared/effects/effect-header.ts";
 import { EffectSnapshotBankController } from "../../../ui/shared/effects/effect-snapshot-bank.ts";
 import { createStandaloneEffectPresetController } from "../../../ui/shared/effects/standalone-effect-presets.ts";
+import {
+  SPECTRAL_PARTIAL_PRESETS,
+  applySpectralPartialPreset,
+  clearSpectralPartialState,
+  invertSpectralPartialState,
+  normalizeSpectralPartialMagnitudes,
+  setSpectralPartialCount,
+  setSpectralPartialValue,
+  smoothSpectralPartialState,
+} from "./spectral-partial-state.ts";
+import { SpectralPartialShapeRuntimeBridge } from "./spectral-partial-runtime-bridge.ts";
+import { createSpectralPartialPresetStateAdapter } from "./spectral-partial-preset-adapter.ts";
+
+const presetLabels = {
+  flat: "Flat",
+  saw: "Saw 1/h",
+  square: "Square odd",
+  triangle: "Triangle odd",
+  organ: "Organ",
+  nasal: "Nasal",
+  air: "Air",
+  pluck: "Pluck",
+  custom: "Custom",
+};
 
 class SpectralChordResonatorView extends HTMLElement {
   constructor(patchConnection) {
     super();
     this.patchConnection = patchConnection;
     this.Controls = this.patchConnection.utilities.ParameterControls;
+    this.bridge = new SpectralPartialShapeRuntimeBridge(patchConnection);
+    this.partialState = this.bridge.getState();
+    this.selectedPartial = 0;
+    this.draggingPointerId = null;
     this.startupSeedCleanups = [];
     this.startupSeedInFlight = false;
     this.startupSeedComplete = false;
     this.startupSeedToken = 0;
+
+    this.partialStateAdapter = createSpectralPartialPresetStateAdapter({
+      bridge: this.bridge,
+      patchConnection,
+    });
     this.presetController = createStandaloneEffectPresetController({
       effectID: "spectral-chord-resonator",
       patchConnection,
+      storedStateAdapters: [this.partialStateAdapter],
     });
     this.snapshotController = new EffectSnapshotBankController({
       effectID: "spectral-chord-resonator",
       patchConnection,
+      storedStateAdapters: [this.partialStateAdapter],
     });
     this.effectHeader = createEffectHeader();
     this.effectHeader.presetController = this.presetController;
@@ -27,6 +62,13 @@ class SpectralChordResonatorView extends HTMLElement {
     this.shadowRoot.innerHTML = this.getMarkup();
     this.shadowRoot.querySelector(".frame").before(this.effectHeader);
     this.groupsHost = this.shadowRoot.querySelector("[data-groups]");
+    this.canvas = this.shadowRoot.querySelector("[data-partial-canvas]");
+    this.canvasContext = this.canvas.getContext("2d");
+    this.shapeName = this.shadowRoot.querySelector("[data-shape-name]");
+    this.countPill = this.shadowRoot.querySelector("[data-count-pill]");
+    this.selectedReadout = this.shadowRoot.querySelector("[data-selected-readout]");
+    this.activeReadout = this.shadowRoot.querySelector("[data-active-readout]");
+    this.centroidReadout = this.shadowRoot.querySelector("[data-centroid-readout]");
   }
 
   connectedCallback() {
@@ -34,9 +76,20 @@ class SpectralChordResonatorView extends HTMLElement {
     this.effectHeader.snapshotController = this.snapshotController;
     this.snapshotController.attach();
     this.presetController.attach();
+    this.bridge.attach();
+    this.unsubscribeBridge = this.bridge.subscribe(state => {
+      this.partialState = state;
+      this.selectedPartial = Math.min(this.selectedPartial, state.count - 1);
+      this.renderPartialEditor();
+    });
+    this.bridge.requestBootState();
+
     this.statusListener = status => this.renderFromStatus(status);
     this.patchConnection.addStatusListener(this.statusListener);
     this.patchConnection.requestStatusUpdate();
+
+    this.installPartialEditorListeners();
+    this.renderPartialEditor();
   }
 
   disconnectedCallback() {
@@ -45,9 +98,176 @@ class SpectralChordResonatorView extends HTMLElement {
     this.effectHeader.presetController = null;
     this.effectHeader.snapshotController = null;
     this.cancelStartupSeedProbe();
+    this.unsubscribeBridge?.();
+    this.bridge.detach();
 
     if (this.statusListener)
       this.patchConnection.removeStatusListener(this.statusListener);
+  }
+
+  installPartialEditorListeners() {
+    this.canvas.addEventListener("pointerdown", event => {
+      if (event.button !== undefined && event.button !== 0)
+        return;
+
+      event.preventDefault();
+      this.draggingPointerId = event.pointerId;
+      this.canvas.setPointerCapture(event.pointerId);
+      this.bridge.beginLiveEdit();
+      this.paintFromPointer(event);
+    });
+
+    this.canvas.addEventListener("pointermove", event => {
+      if (this.draggingPointerId !== event.pointerId)
+        return;
+
+      event.preventDefault();
+      this.paintFromPointer(event);
+    });
+
+    const commitDrag = event => {
+      if (this.draggingPointerId !== event.pointerId)
+        return;
+
+      this.draggingPointerId = null;
+      this.canvas.releasePointerCapture(event.pointerId);
+      this.bridge.commitLiveEdit();
+    };
+    this.canvas.addEventListener("pointerup", commitDrag);
+    this.canvas.addEventListener("pointercancel", commitDrag);
+
+    this.shadowRoot.querySelector("[data-preset-buttons]").addEventListener("click", event => {
+      const button = event.target.closest("[data-preset]");
+      if (!button)
+        return;
+
+      this.bridge.setState(applySpectralPartialPreset(this.partialState, button.dataset.preset));
+    });
+
+    this.shadowRoot.querySelector("[data-count-buttons]").addEventListener("click", event => {
+      const button = event.target.closest("[data-count]");
+      if (!button)
+        return;
+
+      this.bridge.setState(setSpectralPartialCount(this.partialState, Number(button.dataset.count)));
+    });
+
+    this.shadowRoot.querySelector("[data-smooth]").addEventListener("click", () => {
+      this.bridge.setState(smoothSpectralPartialState(this.partialState));
+    });
+    this.shadowRoot.querySelector("[data-normalize]").addEventListener("click", () => {
+      this.bridge.setState(normalizeSpectralPartialMagnitudes(this.partialState));
+    });
+    this.shadowRoot.querySelector("[data-invert]").addEventListener("click", () => {
+      this.bridge.setState(invertSpectralPartialState(this.partialState));
+    });
+    this.shadowRoot.querySelector("[data-clear]").addEventListener("click", () => {
+      this.bridge.setState(clearSpectralPartialState(this.partialState));
+    });
+  }
+
+  paintFromPointer(event) {
+    const point = this.pointerToPartial(event);
+    this.selectedPartial = point.index;
+    this.bridge.setState(setSpectralPartialValue(this.partialState, point.index, point.value));
+  }
+
+  pointerToPartial(event) {
+    const rect = this.canvas.getBoundingClientRect();
+    const x = clamp((event.clientX - rect.left) / Math.max(1, rect.width), 0, 1);
+    const y = clamp((event.clientY - rect.top) / Math.max(1, rect.height), 0, 1);
+    const index = Math.min(this.partialState.count - 1, Math.floor(x * this.partialState.count));
+    return {
+      index,
+      value: clamp(1 - y, 0, 1),
+    };
+  }
+
+  renderPartialEditor() {
+    this.shapeName.textContent = presetLabels[this.partialState.preset] || "Custom";
+    this.countPill.textContent = `${this.partialState.count} partials`;
+    this.shadowRoot.querySelectorAll("[data-preset]").forEach(button => {
+      button.classList.toggle("active", button.dataset.preset === this.partialState.preset);
+    });
+    this.shadowRoot.querySelectorAll("[data-count]").forEach(button => {
+      button.classList.toggle("active", Number(button.dataset.count) === this.partialState.count);
+    });
+    this.renderReadouts();
+    this.drawPartials();
+  }
+
+  renderReadouts() {
+    const activeValues = this.partialState.values.slice(0, this.partialState.count);
+    const selectedValue = activeValues[this.selectedPartial] ?? 0;
+    const active = activeValues.filter(value => value > 0.001).length;
+    const total = activeValues.reduce((sum, value) => sum + value, 0);
+    const centroid = total > 0
+      ? activeValues.reduce((sum, value, index) => sum + value * (index + 1), 0) / total
+      : 0;
+
+    this.selectedReadout.textContent = `H${this.selectedPartial + 1} ${selectedValue.toFixed(3)}`;
+    this.activeReadout.textContent = `${active} / ${this.partialState.count}`;
+    this.centroidReadout.textContent = centroid.toFixed(2);
+  }
+
+  drawPartials() {
+    const rect = this.canvas.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    const width = Math.max(1, Math.floor(rect.width * dpr));
+    const height = Math.max(1, Math.floor(rect.height * dpr));
+    if (this.canvas.width !== width || this.canvas.height !== height) {
+      this.canvas.width = width;
+      this.canvas.height = height;
+    }
+
+    const ctx = this.canvasContext;
+    const w = width / dpr;
+    const h = height / dpr;
+    const topPad = 28;
+    const bottomPad = 34;
+    const leftPad = 14;
+    const rightPad = 14;
+    const plotW = Math.max(1, w - leftPad - rightPad);
+    const plotH = Math.max(1, h - topPad - bottomPad);
+    const slot = plotW / this.partialState.count;
+    const gap = this.partialState.count > 48 ? 2 : 4;
+    const barW = Math.max(3, slot - gap);
+
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+    ctx.fillStyle = "#12151b";
+    ctx.fillRect(0, 0, w, h);
+
+    ctx.strokeStyle = "#2b3039";
+    ctx.lineWidth = 1;
+    for (let line = 0; line <= 4; line += 1) {
+      const y = topPad + plotH * (line / 4);
+      ctx.beginPath();
+      ctx.moveTo(leftPad, y);
+      ctx.lineTo(w - rightPad, y);
+      ctx.stroke();
+    }
+
+    for (let index = 0; index < this.partialState.count; index += 1) {
+      const value = this.partialState.values[index] ?? 0;
+      const x = leftPad + index * slot + gap / 2;
+      const barH = value * plotH;
+      const y = topPad + plotH - barH;
+      const color = value > 0.82 ? "#efb95d" : value > 0.1 ? "#78d29c" : "#556070";
+
+      ctx.fillStyle = index === this.selectedPartial ? "#303745" : "#1d222b";
+      ctx.fillRect(x - 1, topPad, barW + 2, plotH);
+      ctx.fillStyle = color;
+      ctx.fillRect(x, y, barW, barH);
+
+      const harmonic = index + 1;
+      if (this.partialState.count <= 32 || harmonic === 1 || harmonic % 4 === 0) {
+        ctx.fillStyle = harmonic % 8 === 0 || harmonic === 1 ? "#a8aeb8" : "#747b88";
+        ctx.font = "10px ui-monospace, SFMono-Regular, Menlo, monospace";
+        ctx.textAlign = "center";
+        ctx.fillText(String(harmonic), x + barW / 2, h - 14);
+      }
+    }
   }
 
   renderFromStatus(status) {
@@ -173,9 +393,6 @@ class SpectralChordResonatorView extends HTMLElement {
       return undefined;
 
     const innerControl = control.childControl || control;
-
-    // Ableton was crashing when the stock AU view sent gesture start/end messages.
-    // Keep the standard Cmajor controls, but silence DAW gesture notifications here.
     innerControl.beginGesture = () => {};
     innerControl.endGesture = () => {};
 
@@ -183,27 +400,32 @@ class SpectralChordResonatorView extends HTMLElement {
   }
 
   getMarkup() {
+    const presetButtons = SPECTRAL_PARTIAL_PRESETS
+      .filter(preset => preset !== "custom")
+      .map(preset => `<button type="button" data-preset="${preset}">${presetLabels[preset]}</button>`)
+      .join("");
+
     return `
       <style>
         :host {
           --foreground: #f4efe6;
           --background: rgba(13, 14, 19, 0.88);
-          --knob-track-background-color: rgba(255, 255, 255, 0.14);
-          --knob-track-value-color: #f0b867;
-          --knob-dial-border-color: rgba(255, 255, 255, 0.88);
-          --knob-dial-background-color: rgba(255, 255, 255, 0.05);
-          --knob-dial-tick-color: #f4efe6;
-          --switch-outline-color: rgba(255, 255, 255, 0.82);
-          --switch-thumb-color: #f0b867;
-          --switch-on-background-color: rgba(255, 255, 255, 0.04);
-          --switch-off-background-color: rgba(255, 255, 255, 0.04);
-          display: block;
-          width: 920px;
-          min-height: 680px;
+          --line: rgba(255, 255, 255, 0.1);
+          --gold: #efb95d;
+          --green: #78d29c;
+          display: flex;
+          flex-direction: column;
+          width: 100% !important;
+          height: 100% !important;
+          max-width: 100vw;
+          max-height: 100vh;
+          min-width: 0;
+          min-height: 0;
+          overflow: hidden;
           color: var(--foreground);
           background:
-            radial-gradient(circle at top left, rgba(255, 214, 120, 0.18), transparent 34%),
-            radial-gradient(circle at top right, rgba(108, 145, 255, 0.15), transparent 26%),
+            radial-gradient(circle at top left, rgba(255, 214, 120, 0.16), transparent 32%),
+            radial-gradient(circle at top right, rgba(108, 145, 255, 0.12), transparent 28%),
             linear-gradient(180deg, #17171d 0%, #0d0e13 100%);
           font-family: "SF Mono", Menlo, Monaco, Consolas, monospace;
         }
@@ -214,68 +436,157 @@ class SpectralChordResonatorView extends HTMLElement {
           -webkit-user-select: none;
         }
 
-        .frame {
-          display: grid;
-          grid-template-columns: repeat(2, minmax(0, 1fr));
-          gap: 18px;
-          width: 100%;
-          min-height: 100%;
-          padding: 18px;
+        button {
+          min-height: 26px;
+          border: 1px solid rgba(255,255,255,0.12);
+          border-radius: 6px;
+          padding: 0 8px;
+          color: var(--foreground);
+          background: rgba(255,255,255,0.06);
+          font: 12px/1 "SF Mono", Menlo, Monaco, Consolas, monospace;
+          cursor: pointer;
         }
 
-        .title,
+        button.active {
+          border-color: rgba(239, 185, 93, 0.9);
+          background: rgba(239, 185, 93, 0.22);
+        }
+
+        .frame {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) 300px;
+          gap: 14px;
+          flex: 1 1 0;
+          width: 100%;
+          min-height: 0;
+          overflow: hidden;
+          padding: 10px 14px 12px;
+        }
+
+        .partial-editor,
         .group,
         .empty {
           border: 1px solid rgba(255, 255, 255, 0.08);
-          border-radius: 18px;
+          border-radius: 14px;
           background: rgba(255, 255, 255, 0.04);
           box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
           backdrop-filter: blur(16px);
         }
 
-        .title {
+        .partial-editor {
+          display: grid;
+          grid-template-rows: auto auto minmax(0, 1fr) auto;
+          min-width: 0;
+          min-height: 0;
+          overflow: hidden;
+        }
+
+        .partial-head,
+        .partial-toolbar,
+        .partial-readouts {
           display: flex;
-          flex-direction: column;
+          align-items: center;
           gap: 6px;
-          padding: 18px;
-          grid-column: 1 / -1;
+          flex-wrap: wrap;
+          padding: 10px;
+          border-bottom: 1px solid rgba(255,255,255,0.08);
         }
 
-        .title h1,
-        .title p,
-        .group h2 {
+        .partial-head {
+          justify-content: space-between;
+        }
+
+        .partial-head h1 {
           margin: 0;
-        }
-
-        .title h1 {
-          font-size: 22px;
-          letter-spacing: 0.06em;
+          font-size: 16px;
+          letter-spacing: 0.04em;
           text-transform: uppercase;
         }
 
-        .title p {
+        .shape-name,
+        .pill {
           color: rgba(244, 239, 230, 0.72);
           font-size: 12px;
-          line-height: 1.5;
+        }
+
+        .partial-toolbar {
+          align-items: flex-start;
+          row-gap: 8px;
+        }
+
+        .button-group {
+          display: flex;
+          gap: 5px;
+          flex-wrap: wrap;
+          padding-right: 8px;
+          border-right: 1px solid rgba(255,255,255,0.08);
+        }
+
+        .button-group:last-child {
+          border-right: 0;
+        }
+
+        canvas {
+          display: block;
+          width: 100%;
+          height: 100%;
+          min-height: 0;
+          background: #12151b;
+          cursor: crosshair;
+          touch-action: none;
+        }
+
+        .partial-readouts {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 1px;
+          padding: 0;
+          background: rgba(255,255,255,0.08);
+          border-bottom: 0;
+        }
+
+        .metric {
+          min-width: 0;
+          padding: 11px 12px;
+          background: rgba(13,14,19,0.94);
+        }
+
+        .metric .k {
+          color: rgba(244, 239, 230, 0.54);
+          font-size: 10px;
+          text-transform: uppercase;
+        }
+
+        .metric .v {
+          margin-top: 4px;
+          overflow: hidden;
+          font-size: 15px;
+          text-overflow: ellipsis;
+          white-space: nowrap;
         }
 
         .frame-groups {
-          display: contents;
+          display: grid;
+          align-content: start;
+          gap: 12px;
+          min-height: 0;
+          overflow: hidden;
         }
 
         .group {
-          padding: 16px;
+          padding: 14px;
         }
 
         .group-header {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          margin-bottom: 14px;
+          margin-bottom: 12px;
         }
 
         h2 {
-          font-size: 13px;
+          margin: 0;
+          font-size: 12px;
           letter-spacing: 0.08em;
           text-transform: uppercase;
           color: rgba(244, 239, 230, 0.74);
@@ -302,13 +613,7 @@ class SpectralChordResonatorView extends HTMLElement {
           font-size: 11px;
         }
 
-        .controls .labelled-control-name,
-        .controls .labelled-control-value {
-          letter-spacing: 0.04em;
-        }
-
         .empty {
-          grid-column: 1 / -1;
           padding: 18px;
           color: rgba(244, 239, 230, 0.74);
         }
@@ -317,13 +622,45 @@ class SpectralChordResonatorView extends HTMLElement {
       </style>
 
       <div class="frame">
-        <section class="title">
-          <h1>Spectral Chord Resonator</h1>
+        <section class="partial-editor">
+          <header class="partial-head">
+            <h1>Spectral Chord Resonator</h1>
+            <div>
+              <span class="shape-name" data-shape-name>Initializing</span>
+              <span class="pill" data-count-pill></span>
+            </div>
+          </header>
+          <div class="partial-toolbar">
+            <div class="button-group" data-count-buttons>
+              <button type="button" data-count="16">16</button>
+              <button type="button" data-count="32">32</button>
+              <button type="button" data-count="64">64</button>
+            </div>
+            <div class="button-group" data-preset-buttons>
+              ${presetButtons}
+            </div>
+            <div class="button-group">
+              <button type="button" data-smooth>Smooth</button>
+              <button type="button" data-normalize>Normalize</button>
+              <button type="button" data-invert>Invert</button>
+              <button type="button" data-clear>Clear</button>
+            </div>
+          </div>
+          <canvas data-partial-canvas width="1200" height="520" aria-label="Partial strength editor"></canvas>
+          <div class="partial-readouts">
+            <div class="metric"><div class="k">Selected</div><div class="v" data-selected-readout></div></div>
+            <div class="metric"><div class="k">Active</div><div class="v" data-active-readout></div></div>
+            <div class="metric"><div class="k">Centroid</div><div class="v" data-centroid-readout></div></div>
+          </div>
         </section>
         <div data-groups class="frame-groups"></div>
       </div>
     `;
   }
+}
+
+function clamp(value, lo, hi) {
+  return Math.min(hi, Math.max(lo, value));
 }
 
 function isOutOfRangeStartupValue(endpointInfo, value) {

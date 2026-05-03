@@ -11,8 +11,8 @@
   "view": {
     "src": "view/index.js",
     "devModule": "/fx/spectral_chord_resonator/view/source.js",
-    "width": 920,
-    "height": 680,
+    "width": 980,
+    "height": 740,
     "resizable": true
   },
   "plugin": {

@@ -40,6 +40,17 @@ def _event(endpoint_id: str, payload: float | dict[str, int]) -> list[object]:
     return ["event", endpoint_id, payload]
 
 
+def _partial_shape_upload(count: int, strengths: list[float]) -> dict[str, object]:
+    values = [0.0] * 64
+    for index, value in enumerate(strengths[:64]):
+        values[index] = float(value)
+
+    return {
+        "count": int(count),
+        "strengths": values,
+    }
+
+
 def _base_events(**overrides: float) -> list[list[object]]:
     values = {
         "magFeedbackIn": 0.0,
@@ -47,8 +58,6 @@ def _base_events(**overrides: float) -> list[list[object]]:
         "dampingIn": 0.995,
         "maskWidthCentsIn": 40.0,
         "maskFloorIn": 1.0,
-        "harmonicCountIn": 1.0,
-        "harmonicRolloffDbIn": 0.0,
         "magCeilingIn": 1000.0,
         "depthIn": 1.0,
         "lowCutHzIn": 20.0,
@@ -307,13 +316,14 @@ def test_single_click_resonates_at_held_midi_pitch(
                 phaseFeedbackIn=1.0,
                 dampingIn=0.999,
                 maskFloorIn=0.0,
-                harmonicCountIn=1.0,
-                harmonicRolloffDbIn=0.0,
                 maskWidthCentsIn=200.0,
                 lowCutHzIn=20.0,
                 magCeilingIn=1000.0,
             )
-            + [_event("midiIn", _midi_note_on(57))],
+            + [
+                _event("partialShapeUpload", _partial_shape_upload(1, [1.0])),
+                _event("midiIn", _midi_note_on(57)),
+            ],
         },
     )
 
@@ -347,13 +357,16 @@ def test_maximum_parameters_stay_finite_and_bounded(
                 phaseFeedbackIn=1.0,
                 dampingIn=1.0,
                 maskFloorIn=1.0,
-                harmonicCountIn=16.0,
-                harmonicRolloffDbIn=0.0,
                 maskWidthCentsIn=200.0,
                 lowCutHzIn=20.0,
                 magCeilingIn=1000.0,
             )
-            + [_event("midiIn", _midi_note_on(48)), _event("midiIn", _midi_note_on(52)), _event("midiIn", _midi_note_on(55))],
+            + [
+                _event("partialShapeUpload", _partial_shape_upload(64, [1.0] * 64)),
+                _event("midiIn", _midi_note_on(48)),
+                _event("midiIn", _midi_note_on(52)),
+                _event("midiIn", _midi_note_on(55)),
+            ],
         },
     )
 
@@ -364,6 +377,60 @@ def test_maximum_parameters_stay_finite_and_bounded(
     assert float(np.max(np.abs(rendered))) <= 1.0
     assert float(np.max(np.abs(settled))) <= wet_limit + 1.0e-6
     assert float(np.sqrt(np.mean(np.square(settled, dtype=np.float64)))) > 1.0e-5
+
+
+def test_partial_shape_upload_changes_resonating_harmonic_energy(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    sidechain = np.zeros(SAMPLE_RATE * 3, dtype=np.float32)
+    sidechain[0] = 1.0
+    common_events = _base_events(
+        depthIn=1.0,
+        magFeedbackIn=0.97,
+        phaseFeedbackIn=1.0,
+        dampingIn=0.999,
+        maskFloorIn=0.0,
+        maskWidthCentsIn=120.0,
+        lowCutHzIn=20.0,
+        magCeilingIn=1000.0,
+    ) + [_event("midiIn", _midi_note_on(57))]
+    fundamental_dir = tmp_path / "fundamental"
+    flat_dir = tmp_path / "flat"
+    fundamental_dir.mkdir()
+    flat_dir.mkdir()
+
+    fundamental_only = _render(
+        generated_runtime,
+        fundamental_dir,
+        sidechain,
+        {
+            0: common_events + [_event("partialShapeUpload", _partial_shape_upload(2, [1.0, 0.0]))],
+        },
+    )
+    flat_two_partials = _render(
+        generated_runtime,
+        flat_dir,
+        sidechain,
+        {
+            0: common_events + [_event("partialShapeUpload", _partial_shape_upload(2, [1.0, 1.0]))],
+        },
+    )
+
+    def band_energy(signal: np.ndarray, center_hz: float) -> float:
+        tail = signal[int(0.25 * SAMPLE_RATE): int(1.4 * SAMPLE_RATE)]
+        window = np.hanning(tail.size)
+        spectrum = np.fft.rfft(tail * window)
+        frequencies = np.fft.rfftfreq(tail.size, 1.0 / SAMPLE_RATE)
+        band = (frequencies >= center_hz - 8.0) & (frequencies <= center_hz + 8.0)
+        return float(np.sum(np.abs(spectrum[band]) ** 2))
+
+    second_harmonic_suppressed = band_energy(fundamental_only, 440.0)
+    second_harmonic_enabled = band_energy(flat_two_partials, 440.0)
+
+    assert np.isfinite(fundamental_only).all()
+    assert np.isfinite(flat_two_partials).all()
+    assert second_harmonic_enabled > second_harmonic_suppressed * 3.0
 
 
 def test_pinned_cmajor_runtime_splits_audio_inputs_into_host_buses() -> None:
