@@ -1,0 +1,4 @@
+interface:
+  display_name: "Cosimo Plugin Release"
+  short_description: "Ship signed Cosimo audio plugin betas"
+  default_prompt: "Use $cosimo-plugin-release to prepare a signed, notarized Cosimo plugin beta release."
