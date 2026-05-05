@@ -31,8 +31,19 @@ def midi_note_on(note: int, velocity: int = 100) -> dict[str, int]:
     return {"message": (0x90 << 16) | (int(note) << 8) | int(velocity)}
 
 
-def event(endpoint_id: str, payload: float | dict[str, int]) -> list[object]:
+def event(endpoint_id: str, payload: float | dict[str, object]) -> list[object]:
     return ["event", endpoint_id, payload]
+
+
+def partial_shape_upload(count: int, strengths: list[float]) -> dict[str, object]:
+    values = [0.0] * 64
+    for index, value in enumerate(strengths[:64]):
+        values[index] = float(value)
+
+    return {
+        "count": int(count),
+        "strengths": values,
+    }
 
 
 def base_events(**overrides: float) -> list[list[object]]:
@@ -42,14 +53,27 @@ def base_events(**overrides: float) -> list[list[object]]:
         "dampingIn": 0.995,
         "maskWidthCentsIn": 40.0,
         "maskFloorIn": 1.0,
-        "harmonicCountIn": 1.0,
-        "harmonicRolloffDbIn": 0.0,
         "magCeilingIn": 1000.0,
         "depthIn": 1.0,
         "lowCutHzIn": 20.0,
     }
     values.update(overrides)
     return [event(endpoint_id, value) for endpoint_id, value in values.items()]
+
+
+def as_stereo_sidechain(sidechain: np.ndarray) -> np.ndarray:
+    audio = np.asarray(sidechain, dtype=np.float32)
+
+    if audio.ndim == 1:
+        return np.stack([audio, audio])
+
+    if audio.ndim == 2 and audio.shape[0] == 2:
+        return audio
+
+    if audio.ndim == 2 and audio.shape[1] == 2:
+        return audio.T
+
+    raise RuntimeError(f"Expected mono or stereo sidechain audio, got shape {audio.shape}")
 
 
 def deterministic_probe_signal(num_samples: int, *, amplitude: float = 0.24) -> np.ndarray:
@@ -101,6 +125,7 @@ const schedulePath = process.argv[4];
 const outputPath = process.argv[5];
 const numFrames = Number(process.argv[6]);
 const sampleRate = Number(process.argv[7]);
+const sidechainChannelCount = Number(process.argv[8] || "1");
 const sidechainBuffer = fs.readFileSync(sidechainPath);
 const sidechain = new Float32Array(
     sidechainBuffer.buffer,
@@ -112,7 +137,8 @@ const schedule = JSON.parse(fs.readFileSync(schedulePath, "utf8"));
 (async () => {
     const patch = new RuntimeClass();
     await patch.initialise(4, sampleRate);
-    const output = new Float32Array(numFrames);
+    const outputLeft = new Float32Array(numFrames);
+    const outputRight = new Float32Array(numFrames);
     const offsets = Object.keys(schedule).map((value) => Number(value)).sort((a, b) => a - b);
     let nextOffsetIndex = 0;
     let cursor = 0;
@@ -122,7 +148,12 @@ const schedule = JSON.parse(fs.readFileSync(schedulePath, "utf8"));
         for (const [kind, endpointID, payload] of entries) {
             if (kind !== "event")
                 throw new Error(`Unsupported input kind ${kind}`);
-            patch[`sendInputEvent_${endpointID}`](payload);
+
+            const methodName = `sendInputEvent_${endpointID}`;
+            if (typeof patch[methodName] !== "function")
+                throw new Error(`Generated runtime is missing event endpoint ${methodName}`);
+
+            patch[methodName](payload);
         }
     }
 
@@ -146,9 +177,12 @@ const schedule = JSON.parse(fs.readFileSync(schedulePath, "utf8"));
             const sidechainLeft = new Float32Array(framesThisBlock);
             const sidechainRight = new Float32Array(framesThisBlock);
             for (let index = 0; index < framesThisBlock; index += 1) {
-                const sample = sidechain[cursor + index] ?? 0;
-                sidechainLeft[index] = sample;
-                sidechainRight[index] = sample;
+                const left = sidechain[cursor + index] ?? 0;
+                const right = sidechainChannelCount > 1
+                    ? sidechain[numFrames + cursor + index] ?? 0
+                    : left;
+                sidechainLeft[index] = left;
+                sidechainRight[index] = right;
             }
             patch.setInputStreamFrames_audioIn([audioZeroLeft, audioZeroRight], framesThisBlock, 0);
             patch.setInputStreamFrames_sidechainIn([sidechainLeft, sidechainRight], framesThisBlock, 0);
@@ -156,7 +190,8 @@ const schedule = JSON.parse(fs.readFileSync(schedulePath, "utf8"));
             const outLeft = new Float32Array(framesThisBlock);
             const outRight = new Float32Array(framesThisBlock);
             patch.getOutputFrames_audioOut([outLeft, outRight], framesThisBlock, 0);
-            output.set(outLeft, cursor);
+            outputLeft.set(outLeft, cursor);
+            outputRight.set(outRight, cursor);
             cursor += framesThisBlock;
         } else {
             applyScheduledInputs(nextOffset);
@@ -164,6 +199,9 @@ const schedule = JSON.parse(fs.readFileSync(schedulePath, "utf8"));
         }
     }
 
+    const output = new Float32Array(numFrames * 2);
+    output.set(outputLeft, 0);
+    output.set(outputRight, numFrames);
     fs.writeFileSync(outputPath, Buffer.from(output.buffer, output.byteOffset, output.byteLength));
 })().catch((error) => {
     console.error(error?.stack || String(error));
@@ -175,13 +213,14 @@ const schedule = JSON.parse(fs.readFileSync(schedulePath, "utf8"));
     return render_script_path
 
 
-def render(runtime_path: Path, render_script_path: Path, temp_dir: Path, sidechain: np.ndarray, schedule: dict[int, list[list[object]]]) -> np.ndarray:
+def render_stereo(runtime_path: Path, render_script_path: Path, temp_dir: Path, sidechain: np.ndarray, schedule: dict[int, list[list[object]]]) -> np.ndarray:
     node = require_tool("node")
-    sidechain = np.asarray(sidechain, dtype=np.float32)
+    sidechain_channels = as_stereo_sidechain(sidechain)
+    num_frames = sidechain_channels.shape[1]
     sidechain_path = temp_dir / "sidechain.f32"
     schedule_path = temp_dir / "schedule.json"
     output_path = temp_dir / "output.f32"
-    sidechain.tofile(sidechain_path)
+    sidechain_channels.tofile(sidechain_path)
     schedule_path.write_text(json.dumps({str(k): v for k, v in schedule.items()}, indent=2) + "\n", encoding="utf-8")
     result = subprocess.run(
         [
@@ -191,8 +230,9 @@ def render(runtime_path: Path, render_script_path: Path, temp_dir: Path, sidecha
             str(sidechain_path),
             str(schedule_path),
             str(output_path),
-            str(sidechain.size),
+            str(num_frames),
             str(SAMPLE_RATE),
+            str(sidechain_channels.shape[0]),
         ],
         cwd=REPO_ROOT,
         capture_output=True,
@@ -202,7 +242,19 @@ def render(runtime_path: Path, render_script_path: Path, temp_dir: Path, sidecha
     if result.returncode != 0:
         details = "\n".join(part for part in (result.stdout.strip(), result.stderr.strip()) if part)
         raise RuntimeError(f"node render failed:\n{details}")
-    return np.fromfile(output_path, dtype=np.float32).copy()
+    rendered = np.fromfile(output_path, dtype=np.float32).reshape(2, num_frames).copy()
+    return rendered
+
+
+def render(runtime_path: Path, render_script_path: Path, temp_dir: Path, sidechain: np.ndarray, schedule: dict[int, list[list[object]]]) -> np.ndarray:
+    rendered = render_stereo(runtime_path, render_script_path, temp_dir, sidechain, schedule)
+
+    if np.asarray(sidechain).ndim == 1:
+        stereo_error = float(np.max(np.abs(rendered[0] - rendered[1])))
+        if stereo_error > 1.0e-7:
+            raise RuntimeError(f"Mono sidechain render produced mismatched stereo output: {stereo_error}")
+
+    return rendered[0]
 
 
 def rms(audio: np.ndarray) -> float:
@@ -210,7 +262,17 @@ def rms(audio: np.ndarray) -> float:
 
 
 def write_wav(path: Path, audio: np.ndarray) -> None:
-    stereo = np.column_stack([audio, audio]).astype(np.float32)
+    audio = np.asarray(audio, dtype=np.float32)
+
+    if audio.ndim == 1:
+        stereo = np.column_stack([audio, audio]).astype(np.float32)
+    elif audio.ndim == 2 and audio.shape[0] == 2:
+        stereo = audio.T.astype(np.float32)
+    elif audio.ndim == 2 and audio.shape[1] == 2:
+        stereo = audio.astype(np.float32)
+    else:
+        raise RuntimeError(f"Expected mono or stereo audio for wav writing, got shape {audio.shape}")
+
     wavfile.write(path, SAMPLE_RATE, stereo)
 
 
@@ -235,6 +297,23 @@ def main() -> int:
         metrics["depth_zero_passthrough"] = {
             "max_abs_error": float(np.max(np.abs(passthrough - passthrough_sidechain))),
             "peak": float(np.max(np.abs(passthrough))),
+        }
+
+        stereo_left = deterministic_probe_signal(16_384, amplitude=0.67)
+        stereo_right = np.roll(deterministic_probe_signal(16_384, amplitude=0.31), 113)
+        stereo_sidechain = np.stack([stereo_left, stereo_right])
+        stereo_passthrough = render_stereo(
+            runtime_path,
+            render_script_path,
+            temp_dir,
+            stereo_sidechain,
+            {0: base_events(depthIn=0.0, magFeedbackIn=0.999, phaseFeedbackIn=1.0)},
+        )
+        write_wav(OUTPUT_DIR / "depth_zero_stereo_passthrough.wav", stereo_passthrough)
+        metrics["depth_zero_stereo_passthrough"] = {
+            "left_max_abs_error": float(np.max(np.abs(stereo_passthrough[0] - stereo_left))),
+            "right_max_abs_error": float(np.max(np.abs(stereo_passthrough[1] - stereo_right))),
+            "left_right_difference_peak": float(np.max(np.abs(stereo_passthrough[0] - stereo_passthrough[1]))),
         }
 
         reconstruction_sidechain = deterministic_probe_signal(65_536, amplitude=0.18)
@@ -267,13 +346,14 @@ def main() -> int:
                     phaseFeedbackIn=1.0,
                     dampingIn=0.999,
                     maskFloorIn=0.0,
-                    harmonicCountIn=1.0,
-                    harmonicRolloffDbIn=0.0,
                     maskWidthCentsIn=200.0,
                     lowCutHzIn=20.0,
                     magCeilingIn=1000.0,
                 )
-                + [event("midiIn", midi_note_on(57))],
+                + [
+                    event("partialShapeUpload", partial_shape_upload(1, [1.0])),
+                    event("midiIn", midi_note_on(57)),
+                ],
             },
         )
         write_wav(OUTPUT_DIR / "click_220hz_resonance.wav", resonance)
