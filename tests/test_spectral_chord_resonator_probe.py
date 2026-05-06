@@ -14,6 +14,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 PATCH_PATH = ROOT / "fx" / "spectral_chord_resonator" / "SpectralChordResonator.cmajorpatch"
+SPECTRAL_SOURCE_PATH = ROOT / "fx" / "spectral_chord_resonator" / "SpectralChordResonator.cmajor"
 ENSURE_CMAJOR_RUNTIME = ROOT / "scripts" / "ensure_cmajor_runtime.py"
 SAMPLE_RATE = 48_000
 FFT_SIZE = 2048
@@ -70,8 +71,8 @@ def _write_f32(path: Path, audio: np.ndarray) -> None:
     np.asarray(audio, dtype=np.float32).tofile(path)
 
 
-def _as_stereo_sidechain(sidechain: np.ndarray) -> np.ndarray:
-    audio = np.asarray(sidechain, dtype=np.float32)
+def _as_stereo_source(source: np.ndarray) -> np.ndarray:
+    audio = np.asarray(source, dtype=np.float32)
 
     if audio.ndim == 1:
         return np.stack([audio, audio])
@@ -82,7 +83,7 @@ def _as_stereo_sidechain(sidechain: np.ndarray) -> np.ndarray:
     if audio.ndim == 2 and audio.shape[1] == 2:
         return audio.T
 
-    raise AssertionError(f"Expected mono or stereo sidechain audio, got shape {audio.shape}")
+    raise AssertionError(f"Expected mono or stereo source audio, got shape {audio.shape}")
 
 
 def _deterministic_probe_signal(num_samples: int, *, amplitude: float = 0.24) -> np.ndarray:
@@ -98,6 +99,14 @@ def _deterministic_probe_signal(num_samples: int, *, amplitude: float = 0.24) ->
 
 def _rms(signal: np.ndarray) -> float:
     return float(np.sqrt(np.mean(np.square(signal, dtype=np.float64))))
+
+
+def _spectral_band_energy(signal: np.ndarray, center_hz: float, *, radius_hz: float = 8.0) -> float:
+    window = np.hanning(signal.size)
+    spectrum = np.fft.rfft(signal * window)
+    frequencies = np.fft.rfftfreq(signal.size, 1.0 / SAMPLE_RATE)
+    band = (frequencies >= center_hz - radius_hz) & (frequencies <= center_hz + radius_hz)
+    return float(np.sum(np.abs(spectrum[band]) ** 2))
 
 
 @pytest.fixture(scope="module")
@@ -141,18 +150,18 @@ def generated_runtime(tmp_path_factory: pytest.TempPathFactory) -> GeneratedRunt
 const fs = require("fs");
 
 const RuntimeClass = require(process.argv[2]);
-const sidechainPath = process.argv[3];
+const sourcePath = process.argv[3];
 const schedulePath = process.argv[4];
 const outputPath = process.argv[5];
 const numFrames = Number(process.argv[6]);
 const sampleRate = Number(process.argv[7]);
-const sidechainChannelCount = Number(process.argv[8] || "1");
+const sourceChannelCount = Number(process.argv[8] || "1");
 
-const sidechainBuffer = fs.readFileSync(sidechainPath);
-const sidechain = new Float32Array(
-    sidechainBuffer.buffer,
-    sidechainBuffer.byteOffset,
-    sidechainBuffer.byteLength / Float32Array.BYTES_PER_ELEMENT
+const sourceBuffer = fs.readFileSync(sourcePath);
+const source = new Float32Array(
+    sourceBuffer.buffer,
+    sourceBuffer.byteOffset,
+    sourceBuffer.byteLength / Float32Array.BYTES_PER_ELEMENT
 );
 const schedule = JSON.parse(fs.readFileSync(schedulePath, "utf8"));
 
@@ -183,6 +192,17 @@ const schedule = JSON.parse(fs.readFileSync(schedulePath, "utf8"));
     }
 
     while (cursor < numFrames) {
+        if (nextOffsetIndex < offsets.length && offsets[nextOffsetIndex] <= cursor) {
+            const eventOffset = offsets[nextOffsetIndex];
+
+            if (eventOffset < cursor)
+                throw new Error(`Scheduled input at frame ${eventOffset} was passed at cursor ${cursor}`);
+
+            applyScheduledInputs(eventOffset);
+            nextOffsetIndex += 1;
+            continue;
+        }
+
         const nextOffset = nextOffsetIndex < offsets.length ? offsets[nextOffsetIndex] : numFrames;
         const framesUntilNextOffset = nextOffset > cursor ? nextOffset - cursor : 0;
         const framesThisBlock = Math.min(
@@ -192,22 +212,19 @@ const schedule = JSON.parse(fs.readFileSync(schedulePath, "utf8"));
         );
 
         if (framesThisBlock > 0) {
-            const audioZeroLeft = new Float32Array(framesThisBlock);
-            const audioZeroRight = new Float32Array(framesThisBlock);
-            const sidechainLeft = new Float32Array(framesThisBlock);
-            const sidechainRight = new Float32Array(framesThisBlock);
+            const sourceLeft = new Float32Array(framesThisBlock);
+            const sourceRight = new Float32Array(framesThisBlock);
 
             for (let index = 0; index < framesThisBlock; index += 1) {
-                const left = sidechain[cursor + index] ?? 0;
-                const right = sidechainChannelCount > 1
-                    ? sidechain[numFrames + cursor + index] ?? 0
+                const left = source[cursor + index] ?? 0;
+                const right = sourceChannelCount > 1
+                    ? source[numFrames + cursor + index] ?? 0
                     : left;
-                sidechainLeft[index] = left;
-                sidechainRight[index] = right;
+                sourceLeft[index] = left;
+                sourceRight[index] = right;
             }
 
-            patch.setInputStreamFrames_audioIn([audioZeroLeft, audioZeroRight], framesThisBlock, 0);
-            patch.setInputStreamFrames_sidechainIn([sidechainLeft, sidechainRight], framesThisBlock, 0);
+            patch.setInputStreamFrames_audioIn([sourceLeft, sourceRight], framesThisBlock, 0);
             patch.advance(framesThisBlock);
 
             const outLeft = new Float32Array(framesThisBlock);
@@ -240,17 +257,17 @@ const schedule = JSON.parse(fs.readFileSync(schedulePath, "utf8"));
 def _render_stereo(
     generated_runtime: GeneratedRuntime,
     tmp_path: Path,
-    sidechain: np.ndarray,
+    source: np.ndarray,
     schedule: dict[int, list[list[object]]],
 ) -> np.ndarray:
     node = _require_tool("node")
-    sidechain_channels = _as_stereo_sidechain(sidechain)
-    num_frames = sidechain_channels.shape[1]
-    sidechain_path = tmp_path / "sidechain.f32"
+    source_channels = _as_stereo_source(source)
+    num_frames = source_channels.shape[1]
+    source_path = tmp_path / "source.f32"
     schedule_path = tmp_path / "schedule.json"
     output_path = tmp_path / "output.f32"
 
-    _write_f32(sidechain_path, sidechain_channels)
+    _write_f32(source_path, source_channels)
     schedule_path.write_text(
         json.dumps({str(int(offset)): entries for offset, entries in schedule.items()}, indent=2) + "\n",
         encoding="utf-8",
@@ -261,12 +278,12 @@ def _render_stereo(
             node,
             str(generated_runtime.render_script_path),
             str(generated_runtime.runtime_path),
-            str(sidechain_path),
+            str(source_path),
             str(schedule_path),
             str(output_path),
             str(int(num_frames)),
             str(SAMPLE_RATE),
-            str(int(sidechain_channels.shape[0])),
+            str(int(source_channels.shape[0])),
         ],
         cwd=ROOT,
         capture_output=True,
@@ -278,25 +295,25 @@ def _render_stereo(
         raise AssertionError(f"node runtime render failed:\n{details}")
 
     rendered = np.fromfile(output_path, dtype=np.float32).reshape(2, num_frames)
-    assert rendered.shape == sidechain_channels.shape
+    assert rendered.shape == source_channels.shape
     return rendered
 
 
 def _render(
     generated_runtime: GeneratedRuntime,
     tmp_path: Path,
-    sidechain: np.ndarray,
+    source: np.ndarray,
     schedule: dict[int, list[list[object]]],
 ) -> np.ndarray:
-    rendered = _render_stereo(generated_runtime, tmp_path, sidechain, schedule)
+    rendered = _render_stereo(generated_runtime, tmp_path, source, schedule)
 
-    if np.asarray(sidechain).ndim == 1:
+    if np.asarray(source).ndim == 1:
         assert np.max(np.abs(rendered[0] - rendered[1])) <= 1.0e-7
 
     return rendered[0]
 
 
-def test_depth_zero_is_sample_accurate_sidechain_passthrough(
+def test_depth_zero_is_sample_accurate_audio_input_passthrough(
     generated_runtime: GeneratedRuntime,
     tmp_path: Path,
 ) -> None:
@@ -314,7 +331,7 @@ def test_depth_zero_is_sample_accurate_sidechain_passthrough(
     assert np.max(np.abs(error)) <= 1.0e-7
 
 
-def test_depth_zero_preserves_different_stereo_sidechain_channels(
+def test_depth_zero_preserves_different_stereo_audio_input_channels(
     generated_runtime: GeneratedRuntime,
     tmp_path: Path,
 ) -> None:
@@ -334,7 +351,7 @@ def test_depth_zero_preserves_different_stereo_sidechain_channels(
     assert np.max(np.abs(rendered[0] - rendered[1])) > 0.1
 
 
-def test_feedback_zero_reconstructs_sidechain_after_fft_latency(
+def test_feedback_zero_reconstructs_audio_input_after_fft_latency(
     generated_runtime: GeneratedRuntime,
     tmp_path: Path,
 ) -> None:
@@ -402,6 +419,145 @@ def test_single_click_resonates_at_held_midi_pitch(
     assert np.isfinite(rendered).all()
     assert float(np.sqrt(np.mean(np.square(tail, dtype=np.float64)))) > 1.0e-4
     assert abs(cents_error) <= 5.0
+
+
+def test_mono_voice_mode_retunes_existing_resonator_state_for_fast_arps(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    sidechain = np.zeros(SAMPLE_RATE * 2, dtype=np.float32)
+    sidechain[0] = 1.0
+    note_offsets = {
+        0: 57,
+        int(0.125 * SAMPLE_RATE): 60,
+        int(0.250 * SAMPLE_RATE): 64,
+        int(0.375 * SAMPLE_RATE): 69,
+    }
+
+    def render_for_mode(name: str, voice_mode: float) -> np.ndarray:
+        render_dir = tmp_path / name
+        render_dir.mkdir()
+        schedule: dict[int, list[list[object]]] = {
+            0: _base_events(
+                depthIn=1.0,
+                magFeedbackIn=0.97,
+                phaseFeedbackIn=1.0,
+                dampingIn=0.999,
+                maskFloorIn=0.0,
+                maskWidthCentsIn=200.0,
+                lowCutHzIn=20.0,
+                magCeilingIn=1000.0,
+                voiceModeIn=voice_mode,
+            )
+            + [_event("partialShapeUpload", _partial_shape_upload(1, [1.0]))],
+        }
+
+        for offset, note in note_offsets.items():
+            schedule.setdefault(offset, []).append(_event("midiIn", _midi_note_on(note)))
+
+        return _render(generated_runtime, render_dir, sidechain, schedule)
+
+    poly = render_for_mode("poly", 0.0)
+    mono = render_for_mode("mono", 1.0)
+    tail = slice(int(0.7 * SAMPLE_RATE), int(1.5 * SAMPLE_RATE))
+    poly_old_pitch = _spectral_band_energy(poly[tail], 220.0)
+    poly_final_pitch = _spectral_band_energy(poly[tail], 440.0)
+    mono_old_pitch = _spectral_band_energy(mono[tail], 220.0)
+    mono_final_pitch = _spectral_band_energy(mono[tail], 440.0)
+
+    assert np.isfinite(poly).all()
+    assert np.isfinite(mono).all()
+    assert poly_old_pitch > poly_final_pitch * 4.0
+    assert mono_final_pitch > mono_old_pitch * 4.0
+    assert mono_final_pitch > poly_final_pitch * 4.0
+
+
+def test_switching_to_mono_preserves_a_held_note_after_feedback_changes(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    source = np.zeros(SAMPLE_RATE * 3, dtype=np.float32)
+    source[0] = 1.0
+    source[int(0.8 * SAMPLE_RATE)] = 1.0
+    rendered = _render(
+        generated_runtime,
+        tmp_path,
+        source,
+        {
+            0: _base_events(
+                depthIn=1.0,
+                magFeedbackIn=0.97,
+                phaseFeedbackIn=1.0,
+                dampingIn=0.999,
+                maskFloorIn=0.0,
+                maskWidthCentsIn=200.0,
+                lowCutHzIn=20.0,
+                magCeilingIn=1000.0,
+            )
+            + [
+                _event("partialShapeUpload", _partial_shape_upload(1, [1.0])),
+                _event("midiIn", _midi_note_on(57)),
+            ],
+            int(0.2 * SAMPLE_RATE): [
+                _event("midiIn", _midi_note_on(64)),
+            ],
+            int(0.6 * SAMPLE_RATE): [
+                _event("voiceModeIn", 1.0),
+            ],
+            int(0.65 * SAMPLE_RATE): [
+                _event("magFeedbackIn", 0.965),
+            ],
+        },
+    )
+
+    tail = rendered[int(1.0 * SAMPLE_RATE): int(1.8 * SAMPLE_RATE)]
+    retained_note_energy = _spectral_band_energy(tail, 329.6276)
+    old_note_energy = _spectral_band_energy(tail, 220.0)
+
+    assert np.isfinite(rendered).all()
+    assert _rms(tail) > 1.0e-4
+    assert retained_note_energy > old_note_energy * 2.0
+    assert retained_note_energy > 1.0e-5
+
+
+def test_feedback_change_keeps_existing_held_note_resonating(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    source = np.zeros(SAMPLE_RATE * 3, dtype=np.float32)
+    source[0] = 1.0
+    source[int(0.8 * SAMPLE_RATE)] = 1.0
+    rendered = _render(
+        generated_runtime,
+        tmp_path,
+        source,
+        {
+            0: _base_events(
+                depthIn=1.0,
+                magFeedbackIn=0.97,
+                phaseFeedbackIn=1.0,
+                dampingIn=0.999,
+                maskFloorIn=0.0,
+                maskWidthCentsIn=200.0,
+                lowCutHzIn=20.0,
+                magCeilingIn=1000.0,
+            )
+            + [
+                _event("partialShapeUpload", _partial_shape_upload(1, [1.0])),
+                _event("midiIn", _midi_note_on(57)),
+            ],
+            int(0.65 * SAMPLE_RATE): [
+                _event("magFeedbackIn", 0.965),
+            ],
+        },
+    )
+
+    tail = rendered[int(1.0 * SAMPLE_RATE): int(1.8 * SAMPLE_RATE)]
+    held_note_energy = _spectral_band_energy(tail, 220.0)
+
+    assert np.isfinite(rendered).all()
+    assert _rms(tail) > 1.0e-4
+    assert held_note_energy > 1.0e-5
 
 
 def test_stereo_resonator_state_is_independent_per_channel(
@@ -518,16 +674,9 @@ def test_partial_shape_upload_changes_resonating_harmonic_energy(
         },
     )
 
-    def band_energy(signal: np.ndarray, center_hz: float) -> float:
-        tail = signal[int(0.25 * SAMPLE_RATE): int(1.4 * SAMPLE_RATE)]
-        window = np.hanning(tail.size)
-        spectrum = np.fft.rfft(tail * window)
-        frequencies = np.fft.rfftfreq(tail.size, 1.0 / SAMPLE_RATE)
-        band = (frequencies >= center_hz - 8.0) & (frequencies <= center_hz + 8.0)
-        return float(np.sum(np.abs(spectrum[band]) ** 2))
-
-    second_harmonic_suppressed = band_energy(fundamental_only, 440.0)
-    second_harmonic_enabled = band_energy(flat_two_partials, 440.0)
+    tail = slice(int(0.25 * SAMPLE_RATE), int(1.4 * SAMPLE_RATE))
+    second_harmonic_suppressed = _spectral_band_energy(fundamental_only[tail], 440.0)
+    second_harmonic_enabled = _spectral_band_energy(flat_two_partials[tail], 440.0)
 
     assert np.isfinite(fundamental_only).all()
     assert np.isfinite(flat_two_partials).all()
@@ -606,3 +755,25 @@ def test_pinned_cmajor_runtime_splits_audio_inputs_into_host_buses() -> None:
     assert 'audioBusIndex == 0 ? "Input" : "Sidechain"' in header_text
     assert "countAudioChannels (layout.inputBuses)" in header_text
     assert "layout.getMainInputChannels()" not in header_text
+
+
+def test_spectral_reserves_host_parameter_slot_zero_away_from_magnitude_feedback() -> None:
+    source = SPECTRAL_SOURCE_PATH.read_text(encoding="utf-8")
+    graph_start = source.index("graph SpectralChordResonatorPlugin")
+    graph_source = source[graph_start:]
+    parameter_pattern = re.compile(
+        r"^\s*input\s+(?:value|event)\s+(?:float32|int32|bool)\b(?:<[^>]+>)?\s+"
+        r"(?P<identifier>[A-Za-z_][A-Za-z0-9_]*)\s+\[\[(?P<annotation>[^\]]*)\]\];",
+        re.MULTILINE,
+    )
+    parameters = [
+        match.groupdict()
+        for match in parameter_pattern.finditer(graph_source)
+        if "name:" in match.group("annotation")
+    ]
+
+    assert parameters[0]["identifier"] == "hostSlot0Guard"
+    assert re.search(r'name:\s*"Host Slot 0 Guard"', parameters[0]["annotation"])
+    assert re.search(r"hidden:\s*true", parameters[0]["annotation"])
+    assert re.search(r"automatable:\s*false", parameters[0]["annotation"])
+    assert parameters[1]["identifier"] == "magFeedbackIn"

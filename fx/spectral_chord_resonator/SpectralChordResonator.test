@@ -5,13 +5,13 @@
 // in the implementation brief. The executable acceptance tests for this patch
 // are therefore in tests/test_spectral_chord_resonator_probe.py, where the
 // generated Cmajor JavaScript runtime is rendered and measured. A native
-// cmaj-runner sidechain passthrough fixture also lives at
+// cmaj-runner audio input passthrough fixture also lives at
 // tests/spectral_chord_resonator/SpectralChordResonator.cmajtest.
 //
 // Listening checks:
-// - Resonance: send a click into sidechainIn, hold MIDI note 57, set feedback
+// - Resonance: send a click into audioIn, hold MIDI note 57, set feedback
 //   high and phase feedback to 1.0. The rendered tail should ring at 220 Hz.
-// - Chord change: move held MIDI notes while the sidechain is active. The old
+// - Chord change: move held MIDI notes while the source audio is active. The old
 //   bins should decay through damping; spectrumState is not cleared.
 // - Parameter sweep: sweep magFeedbackIn while noise and a held chord are active.
 //   The 50 ms SmoothedValue ramp should avoid zipper noise.

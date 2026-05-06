@@ -28,7 +28,7 @@ async function ensureSpectralProductionRuntime() {
     runtimeBuilt = true;
 }
 
-function spectralEndpoint(endpointID, name, group) {
+function spectralEndpoint(endpointID, name, group, annotation = {}) {
     return {
         endpointID,
         purpose: "parameter",
@@ -38,12 +38,21 @@ function spectralEndpoint(endpointID, name, group) {
             min: 0,
             max: 1,
             init: 0.5,
+            ...annotation,
         },
     };
 }
 
-function patchConnectionSource() {
+function patchConnectionSource(options = {}) {
+    const config = {
+        missingParameterValues: [],
+        parameterValues: {},
+        ...options,
+    };
+
     return `
+        const spectralTestConfig = ${JSON.stringify(config)};
+
         class SpectralProductionViewPatchConnection {
             constructor() {
                 this.manifest = {
@@ -57,15 +66,19 @@ function patchConnectionSource() {
                 this.statusListeners = new Set();
                 this.parameterListeners = new Map();
                 this.storedStateListeners = new Set();
+                this.sentEvents = [];
                 this.endpoints = [
-                    ${JSON.stringify(spectralEndpoint("magFeedbackIn", "Magnitude Feedback", "Feedback"))},
-                    ${JSON.stringify(spectralEndpoint("phaseFeedbackIn", "Phase Feedback", "Feedback"))},
-                    ${JSON.stringify(spectralEndpoint("dampingIn", "Damping", "Feedback"))},
-                    ${JSON.stringify(spectralEndpoint("magCeilingIn", "Magnitude Ceiling", "Feedback"))},
-                    ${JSON.stringify(spectralEndpoint("depthIn", "Depth", "Output"))},
-                    ${JSON.stringify(spectralEndpoint("lowCutHzIn", "Low Cut", "Output"))},
-                    ${JSON.stringify(spectralEndpoint("maskWidthCentsIn", "Mask Width", "Mask"))},
-                    ${JSON.stringify(spectralEndpoint("maskFloorIn", "Mask Floor", "Mask"))},
+                    ${JSON.stringify(spectralEndpoint("magFeedbackIn", "Magnitude Feedback", "Feedback", { min: 0, max: 0.999, init: 0.92 }))},
+                    ${JSON.stringify(spectralEndpoint("phaseFeedbackIn", "Phase Feedback", "Feedback", { min: 0, max: 1, init: 1 }))},
+                    ${JSON.stringify(spectralEndpoint("dampingIn", "Damping", "Feedback", { min: 0.95, max: 1, init: 0.995 }))},
+                    ${JSON.stringify(spectralEndpoint("magCeilingIn", "Magnitude Ceiling", "Feedback", { min: 1, max: 1000, init: 1000 }))},
+                    ${JSON.stringify(spectralEndpoint("depthIn", "Depth", "Output", { min: 0, max: 1, init: 0 }))},
+                    ${JSON.stringify(spectralEndpoint("lowCutHzIn", "Low Cut", "Output", { min: 20, max: 500, init: 60 }))},
+                    ${JSON.stringify(spectralEndpoint("maskWidthCentsIn", "Mask Width", "Mask", { min: 5, max: 200, init: 40 }))},
+                    ${JSON.stringify(spectralEndpoint("maskFloorIn", "Mask Floor", "Mask", { min: 0, max: 1, init: 0.08 }))},
+                    ${JSON.stringify(spectralEndpoint("voiceModeIn", "Voice Mode", "Voices", { min: 0, max: 1, init: 0 }))},
+                    ${JSON.stringify(spectralEndpoint("polyphonyIn", "Polyphony", "Voices", { min: 1, max: 16, init: 8 }))},
+                    ${JSON.stringify(spectralEndpoint("voiceReleaseSecondsIn", "Voice Release", "Voices", { min: 0.01, max: 3, init: 0.35 }))},
                 ];
                 this.utilities = {
                     ParameterControls: {
@@ -118,13 +131,23 @@ function patchConnectionSource() {
             }
 
             requestParameterValue(endpointID) {
+                if (spectralTestConfig.missingParameterValues.includes(endpointID))
+                    return;
+
+                const endpoint = this.endpoints.find((candidate) => candidate.endpointID === endpointID);
+                const value = Object.prototype.hasOwnProperty.call(spectralTestConfig.parameterValues, endpointID)
+                    ? spectralTestConfig.parameterValues[endpointID]
+                    : endpoint?.annotation?.init;
+
                 queueMicrotask(() => {
                     for (const listener of this.parameterListeners.get(endpointID) ?? [])
-                        listener(0.5);
+                        listener(value);
                 });
             }
 
-            sendEventOrValue() {}
+            sendEventOrValue(endpointID, value) {
+                this.sentEvents.push({ endpointID, value });
+            }
 
             addStoredStateValueListener(listener) {
                 this.storedStateListeners.add(listener);
@@ -148,7 +171,11 @@ function patchConnectionSource() {
             sendStoredStateValue() {}
         }
 
-        window.__createSpectralProductionPatchConnection = () => new SpectralProductionViewPatchConnection();
+        window.__createSpectralProductionPatchConnection = () => {
+            const connection = new SpectralProductionViewPatchConnection();
+            window.__spectralPatchConnection = connection;
+            return connection;
+        };
     `;
 }
 
@@ -156,6 +183,7 @@ async function openSpectralProductionView({
     viewport = DEFAULT_VIEWPORT,
     hostSize = DEFAULT_VIEWPORT,
     applyCmajorInlineSize = true,
+    patchConnectionOptions = {},
 } = {}) {
     await ensureSpectralProductionRuntime();
 
@@ -181,7 +209,7 @@ async function openSpectralProductionView({
         host.style.overflow = "hidden";
         document.body.appendChild(host);
     }, hostSize);
-    await page.addScriptTag({ content: patchConnectionSource() });
+    await page.addScriptTag({ content: patchConnectionSource(patchConnectionOptions) });
     await page.evaluate(async ({ shouldApplyCmajorInlineSize }) => {
         const module = await import("/build/fx/spectral_chord_resonator_runtime/view/app.js");
         const view = await module.default(window.__createSpectralProductionPatchConnection());
@@ -228,9 +256,25 @@ test("spectral production view keeps the partial editor inside the requested 980
                 throw new Error("Spectral production view did not mount.");
 
             const canvas = root.querySelector("[data-partial-canvas]");
+            const partialEditor = root.querySelector(".partial-editor");
+            const partialPlot = root.querySelector(".partial-plot");
             const frame = root.querySelector(".frame");
             const readouts = root.querySelector(".partial-readouts");
             const error = root.querySelector('[data-role="effect-load-error"]');
+            const bottomRow = canvas.getContext("2d").getImageData(
+                0,
+                Math.max(0, canvas.height - 5),
+                canvas.width,
+                1,
+            ).data;
+            let goldPixelsAtBottom = 0;
+            for (let index = 0; index < bottomRow.length; index += 4) {
+                const red = bottomRow[index];
+                const green = bottomRow[index + 1];
+                const blue = bottomRow[index + 2];
+                if (red > 190 && green > 130 && green < 210 && blue < 130)
+                    goldPixelsAtBottom += 1;
+            }
 
             return {
                 documentScrollHeight: document.documentElement.scrollHeight,
@@ -238,7 +282,24 @@ test("spectral production view keeps the partial editor inside the requested 980
                 host: roundedRect(host.getBoundingClientRect(), ["top", "bottom", "width", "height"]),
                 view: roundedRect(view.getBoundingClientRect(), ["top", "bottom", "width", "height"]),
                 frame: roundedRect(frame.getBoundingClientRect(), ["top", "bottom", "height"]),
+                partialEditor: {
+                    ...roundedRect(partialEditor.getBoundingClientRect(), ["top", "bottom", "height"]),
+                    clientHeight: Math.round(partialEditor.clientHeight),
+                    scrollHeight: Math.round(partialEditor.scrollHeight),
+                    overflowY: getComputedStyle(partialEditor).overflowY,
+                },
+                partialPlot: {
+                    ...roundedRect(partialPlot.getBoundingClientRect(), ["top", "bottom", "height"]),
+                    clientHeight: Math.round(partialPlot.clientHeight),
+                    scrollHeight: Math.round(partialPlot.scrollHeight),
+                    overflowY: getComputedStyle(partialPlot).overflowY,
+                },
                 canvas: roundedRect(canvas.getBoundingClientRect(), ["top", "bottom", "height"]),
+                canvasBacking: {
+                    width: canvas.width,
+                    height: canvas.height,
+                    goldPixelsAtBottom,
+                },
                 readouts: roundedRect(readouts.getBoundingClientRect(), ["top", "bottom", "height"]),
                 selectedReadout: root.querySelector("[data-selected-readout]")?.textContent ?? "",
                 activeReadout: root.querySelector("[data-active-readout]")?.textContent ?? "",
@@ -266,6 +327,15 @@ test("spectral production view keeps the partial editor inside the requested 980
             `partial editor canvas should fit inside the plugin viewport: ${JSON.stringify(metrics)}`,
         );
         assert.ok(
+            metrics.partialEditor.scrollHeight <= metrics.partialEditor.clientHeight + 1,
+            `partial editor must fit its own contents without an internal scrollbar: ${JSON.stringify(metrics)}`,
+        );
+        assert.equal(metrics.partialEditor.overflowY, "hidden");
+        assert.ok(
+            metrics.partialPlot.scrollHeight <= metrics.partialPlot.clientHeight + 1,
+            `partial plot must fit the visible canvas without table scrolling: ${JSON.stringify(metrics)}`,
+        );
+        assert.ok(
             metrics.readouts.bottom <= DEFAULT_VIEWPORT.height,
             `partial editor readouts should fit inside the plugin viewport: ${JSON.stringify(metrics)}`,
         );
@@ -275,6 +345,10 @@ test("spectral production view keeps the partial editor inside the requested 980
         assert.ok(
             metrics.canvas.height >= 220,
             `partial editor canvas should remain usable after fitting: ${JSON.stringify(metrics)}`,
+        );
+        assert.ok(
+            metrics.canvasBacking.goldPixelsAtBottom > 6,
+            `partial bars must reach the bottom zero baseline of the visible canvas: ${JSON.stringify(metrics)}`,
         );
     } finally {
         await page.close();
@@ -304,9 +378,13 @@ test("spectral production view ignores Cmajor fixed inline height when the host 
                 throw new Error("Spectral production view did not mount in the constrained host.");
 
             const canvas = root.querySelector("[data-partial-canvas]");
+            const partialEditor = root.querySelector(".partial-editor");
+            const partialPlot = root.querySelector(".partial-plot");
             const frame = root.querySelector(".frame");
             const readouts = root.querySelector(".partial-readouts");
             const sidebar = root.querySelector(".frame-groups");
+            const voicesGroup = Array.from(root.querySelectorAll(".group"))
+                .find((group) => group.querySelector("h2")?.textContent === "Voices");
             const error = root.querySelector('[data-role="effect-load-error"]');
 
             return {
@@ -315,9 +393,30 @@ test("spectral production view ignores Cmajor fixed inline height when the host 
                 view: roundedRect(view.getBoundingClientRect(), ["top", "bottom", "height"]),
                 viewDisplay: getComputedStyle(view).display,
                 frame: roundedRect(frame.getBoundingClientRect(), ["top", "bottom", "height"]),
+                frameOverflowY: getComputedStyle(frame).overflowY,
+                partialEditor: {
+                    ...roundedRect(partialEditor.getBoundingClientRect(), ["top", "bottom", "height"]),
+                    clientHeight: Math.round(partialEditor.clientHeight),
+                    scrollHeight: Math.round(partialEditor.scrollHeight),
+                    overflowY: getComputedStyle(partialEditor).overflowY,
+                },
+                partialPlot: {
+                    ...roundedRect(partialPlot.getBoundingClientRect(), ["top", "bottom", "height"]),
+                    clientHeight: Math.round(partialPlot.clientHeight),
+                    scrollHeight: Math.round(partialPlot.scrollHeight),
+                    overflowY: getComputedStyle(partialPlot).overflowY,
+                },
                 canvas: roundedRect(canvas.getBoundingClientRect(), ["top", "bottom", "height"]),
                 readouts: roundedRect(readouts.getBoundingClientRect(), ["top", "bottom", "height"]),
-                sidebar: roundedRect(sidebar.getBoundingClientRect(), ["top", "bottom", "height"]),
+                sidebar: {
+                    ...roundedRect(sidebar.getBoundingClientRect(), ["top", "bottom", "height"]),
+                    clientHeight: Math.round(sidebar.clientHeight),
+                    scrollHeight: Math.round(sidebar.scrollHeight),
+                    overflowY: getComputedStyle(sidebar).overflowY,
+                },
+                voicesBeforeScroll: voicesGroup
+                    ? roundedRect(voicesGroup.getBoundingClientRect(), ["top", "bottom", "height"])
+                    : null,
                 selectedReadout: root.querySelector("[data-selected-readout]")?.textContent ?? "",
                 activeReadout: root.querySelector("[data-active-readout]")?.textContent ?? "",
                 centroidReadout: root.querySelector("[data-centroid-readout]")?.textContent ?? "",
@@ -345,6 +444,15 @@ test("spectral production view ignores Cmajor fixed inline height when the host 
             `partial editor canvas should not be clipped by the host slot: ${JSON.stringify(metrics)}`,
         );
         assert.ok(
+            metrics.partialEditor.scrollHeight <= metrics.partialEditor.clientHeight + 1,
+            `partial editor must not create its own scroll area: ${JSON.stringify(metrics)}`,
+        );
+        assert.equal(metrics.partialEditor.overflowY, "hidden");
+        assert.ok(
+            metrics.partialPlot.scrollHeight <= metrics.partialPlot.clientHeight + 1,
+            `partial plot must fit its canvas instead of scrolling internally: ${JSON.stringify(metrics)}`,
+        );
+        assert.ok(
             metrics.readouts.bottom <= metrics.host.bottom,
             `partial editor readouts should not be clipped by the host slot: ${JSON.stringify(metrics)}`,
         );
@@ -353,11 +461,119 @@ test("spectral production view ignores Cmajor fixed inline height when the host 
         assert.equal(metrics.centroidReadout, "7.88");
         assert.ok(
             metrics.sidebar.bottom <= metrics.host.bottom,
-            `right-side controls should fit inside the host slot: ${JSON.stringify(metrics)}`,
+            `right-side scroll container should fit inside the host slot: ${JSON.stringify(metrics)}`,
+        );
+        assert.equal(metrics.sidebar.overflowY, "auto");
+        assert.ok(
+            metrics.sidebar.scrollHeight > metrics.sidebar.clientHeight,
+            `right-side controls should overflow inside their own reachable scroll container: ${JSON.stringify(metrics)}`,
         );
         assert.ok(
             metrics.canvas.height >= 300,
             `partial editor should keep a usable drawing surface in the constrained host: ${JSON.stringify(metrics)}`,
+        );
+
+        const voicesAfterScroll = await page.evaluate(async () => {
+            const view = document.querySelector("cosimo-spectral-chord-resonator-view");
+            const root = view?.shadowRoot;
+            const sidebar = root.querySelector(".frame-groups");
+            const voicesGroup = Array.from(root.querySelectorAll(".group"))
+                .find((group) => group.querySelector("h2")?.textContent === "Voices");
+            const roundedRect = (rect, keys) => (
+                Object.fromEntries(keys.map((key) => [key, Math.round(rect[key])]))
+            );
+
+            sidebar.scrollTop = sidebar.scrollHeight;
+            await new Promise((resolve) => requestAnimationFrame(resolve));
+
+            const sidebarRect = sidebar.getBoundingClientRect();
+            const voicesRect = voicesGroup.getBoundingClientRect();
+
+            return {
+                sidebar: roundedRect(sidebarRect, ["top", "bottom", "height"]),
+                voices: roundedRect(voicesRect, ["top", "bottom", "height"]),
+                voicesVisible: voicesRect.bottom <= sidebarRect.bottom + 1
+                    && voicesRect.top >= sidebarRect.top - 1,
+            };
+        });
+
+        assert.equal(
+            voicesAfterScroll.voicesVisible,
+            true,
+            `Voices controls must be reachable by scrolling the right control column: ${JSON.stringify({ metrics, voicesAfterScroll })}`,
+        );
+    } finally {
+        await page.close();
+    }
+});
+
+test("spectral partial canvas resizes its backing store when the host height changes", async () => {
+    const page = await openSpectralProductionView();
+
+    try {
+        const metrics = await page.evaluate(async () => {
+            const host = document.querySelector('[data-role="spectral-host-slot"]');
+            const view = document.querySelector("cosimo-spectral-chord-resonator-view");
+            const root = view?.shadowRoot;
+            const canvas = root.querySelector("[data-partial-canvas]");
+            const roundedRect = (rect, keys) => (
+                Object.fromEntries(keys.map((key) => [key, Math.round(rect[key])]))
+            );
+
+            const before = {
+                host: roundedRect(host.getBoundingClientRect(), ["height"]),
+                canvas: roundedRect(canvas.getBoundingClientRect(), ["height"]),
+                backingHeight: canvas.height,
+            };
+
+            host.style.height = "520px";
+            await new Promise((resolve) => setTimeout(resolve, 50));
+            await new Promise((resolve) => requestAnimationFrame(resolve));
+
+            const after = {
+                host: roundedRect(host.getBoundingClientRect(), ["height"]),
+                canvas: roundedRect(canvas.getBoundingClientRect(), ["height"]),
+                backingHeight: canvas.height,
+                devicePixelRatio: window.devicePixelRatio || 1,
+            };
+
+            return { before, after };
+        });
+
+        assert.equal(metrics.after.host.height, 520);
+        assert.ok(
+            metrics.after.canvas.height < metrics.before.canvas.height,
+            `canvas CSS height should shrink when the plugin host shrinks: ${JSON.stringify(metrics)}`,
+        );
+        assert.equal(
+            metrics.after.backingHeight,
+            Math.max(1, Math.floor(metrics.after.canvas.height * metrics.after.devicePixelRatio)),
+            `canvas backing height should track the visible plot height after resize: ${JSON.stringify(metrics)}`,
+        );
+    } finally {
+        await page.close();
+    }
+});
+
+test("spectral production view does not reset depth when one startup parameter value is missing", async () => {
+    const page = await openSpectralProductionView({
+        patchConnectionOptions: {
+            missingParameterValues: ["voiceReleaseSecondsIn"],
+            parameterValues: {
+                depthIn: 0.82,
+                magFeedbackIn: 0.94,
+            },
+        },
+    });
+
+    try {
+        await page.waitForTimeout(350);
+        const sentEvents = await page.evaluate(() => window.__spectralPatchConnection.sentEvents);
+
+        assert.deepEqual(
+            sentEvents,
+            [],
+            `missing a startup parameter value must not reseed every parameter to its manifest init: ${JSON.stringify(sentEvents)}`,
         );
     } finally {
         await page.close();

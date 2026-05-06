@@ -1,0 +1,1 @@
+../../../ui/shared/effects/effect-view-loader.js

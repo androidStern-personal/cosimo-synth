@@ -89,3 +89,11 @@
 - Do not install or recommend the official generic AU loader `~/Library/Audio/Plug-Ins/Components/CmajPlugin.component` for Ableton WebView knob testing unless the task is specifically to reproduce the AU crash.
 - `scripts/install_fx_cmajplugin.sh` validates migrated effect patches such as OTT Lab and Chorus Lab, verifies that the installed generic `CmajPlugin.vst3` contains the patched CHOC keyboard bridge, and writes only the VST3 `CmajPlugin.json`. It does not install `CmajPlugin.vst3` and does not touch any AU loader.
 - `scripts/ensure_cmajor_runtime.py` is the default Cmajor source provider for effect production builds, the desktop native wrapper build, and the repo-built generic `CmajPlugin.vst3`. It creates `build/deps/cmajor-1.0.3066-choc-1e79d904`, where Cmajor is pinned to `172db53232337154d5a1c0f9a448318129dfacd9` and `include/choc` is pinned to the patched CHOC commit `1e79d904209abd842d688433358f9e0df7d55454`.
+
+## Spectral Chord Resonator I/O
+
+- `fx/spectral_chord_resonator/SpectralChordResonator.cmajor` must expose one stereo audio input, `audioIn`, named `Input`. That audio track input is the source material for the resonator.
+- `midiIn` is the sidechain control input for held notes, arps, pitch bend, and voice allocation. Do not add a public audio `sidechainIn` bus to Spectral Chord Resonator unless the product behavior explicitly changes.
+- Fast-note behavior depends on `SpectralMidiVoiceDispatcher` plus per-voice spectral state inside `SpectralChordResonator`. `voiceModeIn` set to Poly keeps independent resonating voices; `voiceModeIn` set to Mono steals voice 0 and retunes its existing spectral state so 16th-note arps are audible.
+- Changing `voiceModeIn` must preserve the currently held MIDI note state. Do not reset the voice dispatcher on a Mono/Poly mode change and wait for the host to resend held notes; Ableton and other hosts generally will not send fresh note-ons just because an effect parameter changed.
+- Keep `hostSlot0Guard` as the first Spectral host parameter. Ableton plus the Cmajor JUCE wrapper can treat host parameter slot 0 specially; visible/effective Spectral controls such as `magFeedbackIn` must start after that hidden no-op guard.

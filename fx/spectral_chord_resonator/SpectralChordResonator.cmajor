@@ -5,10 +5,13 @@ namespace spectral_chord_resonator
     let hopSize = fftSize / 4;
     let nyquistBin = fftSize / 2;
     let spectralBinCount = nyquistBin + 1;
-    let maxChordPitches = 16;
+    let maxVoiceCount = 16;
     let maxPartialCount = 64;
     let olaGainCompensation = 2.0f / 3.0f;
     let smoothingTimeSeconds = 0.05f;
+    let voiceModePoly = 0;
+    let voiceModeMono = 1;
+    let defaultPolyphony = 8;
 
     let defaultMagFeedback = 0.92f;
     let defaultPhaseFeedback = 1.0f;
@@ -19,12 +22,8 @@ namespace spectral_chord_resonator
     let defaultMagCeiling = 1000.0f;
     let defaultDepth = 0.0f;
     let defaultLowCutHz = 60.0f;
-
-    struct ChordUpdate
-    {
-        float32[16] frequencies;
-        int32 count;
-    }
+    let defaultVoiceReleaseSeconds = 0.35f;
+    let voiceSilenceThreshold = 0.0001f;
 
     struct PartialShapeUpload
     {
@@ -32,14 +31,54 @@ namespace spectral_chord_resonator
         float32[64] strengths;
     }
 
+    struct VoiceState
+    {
+        bool assigned, held, releasing;
+        int32 channel, age;
+        float32 pitch, velocity;
+
+        void clear (int32 nextAge)
+        {
+            this.assigned = false;
+            this.held = false;
+            this.releasing = false;
+            this.channel = -1;
+            this.pitch = 0.0f;
+            this.velocity = 0.0f;
+            this.age = nextAge;
+        }
+
+        void start (int32 nextAge, int32 nextChannel, float32 nextPitch, float32 nextVelocity)
+        {
+            this.assigned = true;
+            this.held = true;
+            this.releasing = false;
+            this.channel = nextChannel;
+            this.pitch = nextPitch;
+            this.velocity = nextVelocity;
+            this.age = nextAge;
+        }
+
+        void release()
+        {
+            this.held = false;
+            this.releasing = true;
+        }
+    }
+
     float32 clampFloat (float32 value, float32 lo, float32 hi)
     {
         return std::intrinsics::clamp (value, lo, hi);
     }
 
-    float32 midiNoteToFrequency (int32 noteNumber)
+    float32 pitchToFrequency (float32 pitch)
     {
-        return std::notes::noteToFrequency (noteNumber);
+        return std::notes::noteToFrequency (pitch);
+    }
+
+    int32 roundToNearestBin (float32 value)
+    {
+        return int32 (std::intrinsics::floor (value + 0.5f));
     }
 
     float32 wrapToPi (float32 angle)
@@ -69,10 +108,15 @@ namespace spectral_chord_resonator
 
 processor SpectralChordResonator
 {
-    input  stream float32 sidechainIn;
+    input  stream float32 sourceIn;
     output stream float32 audioOut;
 
-    input  event spectral_chord_resonator::ChordUpdate chordIn;
+    input  event (std::notes::NoteOn,
+                  std::notes::NoteOff,
+                  std::notes::PitchBend,
+                  std::notes::Slide,
+                  std::notes::Pressure,
+                  std::notes::Control) voiceEventIn[spectral_chord_resonator::maxVoiceCount];
     input  event spectral_chord_resonator::PartialShapeUpload partialShapeUpload;
 
     input  event float32 magFeedbackIn;
@@ -83,6 +127,7 @@ processor SpectralChordResonator
     input  event float32 magCeilingIn;
     input  event float32 depthIn;
     input  event float32 lowCutHzIn;
+    input  event float32 voiceReleaseSecondsIn;
 
     float32[spectral_chord_resonator::fftSize] inputRing;
     float32[spectral_chord_resonator::fftSize] outputRing;
@@ -93,14 +138,25 @@ processor SpectralChordResonator
     float32[spectral_chord_resonator::fftSize] analysisWindow;
     float32[spectral_chord_resonator::fftSize] synthesisWindow;
 
-    float64[spectral_chord_resonator::spectralBinCount] spectrumStateRe;
-    float64[spectral_chord_resonator::spectralBinCount] spectrumStateIm;
-    float32[spectral_chord_resonator::spectralBinCount] chordMask;
+    float64[spectral_chord_resonator::spectralBinCount] floorStateRe;
+    float64[spectral_chord_resonator::spectralBinCount] floorStateIm;
+    float64[spectral_chord_resonator::maxVoiceCount, spectral_chord_resonator::spectralBinCount] voiceSpectrumStateRe;
+    float64[spectral_chord_resonator::maxVoiceCount, spectral_chord_resonator::spectralBinCount] voiceSpectrumStateIm;
+    float64[spectral_chord_resonator::spectralBinCount] retuneScratchRe;
+    float64[spectral_chord_resonator::spectralBinCount] retuneScratchIm;
+    float32[spectral_chord_resonator::maxVoiceCount, spectral_chord_resonator::spectralBinCount] voiceMask;
     float32[spectral_chord_resonator::spectralBinCount] basePhaseAdvanceTable;
-    float32[spectral_chord_resonator::spectralBinCount] phaseAdvanceTable;
+    float32[spectral_chord_resonator::maxVoiceCount, spectral_chord_resonator::spectralBinCount] voicePhaseAdvanceTable;
     float32[spectral_chord_resonator::maxPartialCount] partialStrengths;
 
-    spectral_chord_resonator::ChordUpdate activeChord;
+    int32[spectral_chord_resonator::maxVoiceCount] voiceAssigned;
+    int32[spectral_chord_resonator::maxVoiceCount] voiceHeld;
+    int32[spectral_chord_resonator::maxVoiceCount] voiceChannel;
+    float32[spectral_chord_resonator::maxVoiceCount] voicePitch;
+    float32[spectral_chord_resonator::maxVoiceCount] voiceBendSemitones;
+    float32[spectral_chord_resonator::maxVoiceCount] voiceVelocity;
+    float32[spectral_chord_resonator::maxVoiceCount] voiceLevel;
+    float32[spectral_chord_resonator::maxVoiceCount] voiceFrequencyHz;
 
     std::smoothing::SmoothedValue magFeedbackSmooth;
     std::smoothing::SmoothedValue phaseFeedbackSmooth;
@@ -126,6 +182,7 @@ processor SpectralChordResonator
     float32 currentMagCeiling = spectral_chord_resonator::defaultMagCeiling;
     float32 currentDepth = spectral_chord_resonator::defaultDepth;
     float32 currentLowCutHz = spectral_chord_resonator::defaultLowCutHz;
+    float32 currentVoiceReleaseSeconds = spectral_chord_resonator::defaultVoiceReleaseSeconds;
 
     void init()
     {
@@ -159,30 +216,19 @@ processor SpectralChordResonator
                                        * float32 (int32 (bin))
                                        * float32 (spectral_chord_resonator::hopSize)
                                        / float32 (spectral_chord_resonator::fftSize);
-            phaseAdvanceTable[bin] = basePhaseAdvanceTable[bin];
+
+            for (wrap<spectral_chord_resonator::maxVoiceCount> voice)
+                voicePhaseAdvanceTable[voice, bin] = basePhaseAdvanceTable[bin];
         }
 
         for (wrap<spectral_chord_resonator::maxPartialCount> partial)
             partialStrengths[partial] = 1.0f / float32 (int32 (partial) + 1);
 
-        rebuildChordMask();
+        refreshPartialOutputGain();
     }
 
-    // === SEAM: chord mask shape ===
-    //
-    // Rebuilds the FFT-bin mask from the current held chord and mask-shaping
-    // parameters. This is intentionally readable and isolated because it is one
-    // of the algorithm's main experiment points.
-    void rebuildChordMask()
+    void refreshPartialOutputGain()
     {
-        for (wrap<spectral_chord_resonator::spectralBinCount> bin)
-        {
-            chordMask[bin] = currentMaskFloor;
-            phaseAdvanceTable[bin] = basePhaseAdvanceTable[bin];
-        }
-
-        let binHz = float32 (processor.frequency) / float32 (spectral_chord_resonator::fftSize);
-        let widthSemitoneFraction = (currentMaskWidthCents / 100.0f) * (1.0f / 12.0f);
         var harmonicLimit = currentPartialCount;
 
         if (harmonicLimit < 1)
@@ -203,55 +249,98 @@ processor SpectralChordResonator
 
         if (partialPower > 1.0f)
             currentPartialOutputGain = 1.0f / std::intrinsics::sqrt (partialPower);
+    }
 
-        var chordCount = activeChord.count;
+    void clearVoiceMask (int32 voiceIndex)
+    {
+        let voice = wrap<spectral_chord_resonator::maxVoiceCount> (voiceIndex);
 
-        if (chordCount < 0)
-            chordCount = 0;
-
-        if (chordCount > spectral_chord_resonator::maxChordPitches)
-            chordCount = spectral_chord_resonator::maxChordPitches;
-
-        for (int32 noteIndex = 0; noteIndex < chordCount; ++noteIndex)
+        for (wrap<spectral_chord_resonator::spectralBinCount> bin)
         {
-            let f0 = activeChord.frequencies.at (noteIndex);
+            voiceMask[voice, bin] = 0.0f;
+            voicePhaseAdvanceTable[voice, bin] = basePhaseAdvanceTable[bin];
+        }
+    }
 
-            if (f0 <= 0.0f)
-                continue;
+    void clearVoiceBinState (int32 voiceIndex)
+    {
+        let voice = wrap<spectral_chord_resonator::maxVoiceCount> (voiceIndex);
 
-            for (int32 harmonic = 1; harmonic <= harmonicLimit; ++harmonic)
+        for (wrap<spectral_chord_resonator::spectralBinCount> bin)
+        {
+            voiceSpectrumStateRe[voice, bin] = 0.0;
+            voiceSpectrumStateIm[voice, bin] = 0.0;
+        }
+    }
+
+    void clearVoiceState (int32 voiceIndex)
+    {
+        let voice = wrap<spectral_chord_resonator::maxVoiceCount> (voiceIndex);
+        voiceAssigned[voice] = 0;
+        voiceHeld[voice] = 0;
+        voiceChannel[voice] = -1;
+        voicePitch[voice] = 0.0f;
+        voiceBendSemitones[voice] = 0.0f;
+        voiceVelocity[voice] = 0.0f;
+        voiceLevel[voice] = 0.0f;
+        voiceFrequencyHz[voice] = 0.0f;
+        clearVoiceMask (voiceIndex);
+        clearVoiceBinState (voiceIndex);
+    }
+
+    void rebuildVoiceMask (int32 voiceIndex)
+    {
+        let voice = wrap<spectral_chord_resonator::maxVoiceCount> (voiceIndex);
+        clearVoiceMask (voiceIndex);
+
+        if (voiceAssigned[voice] == 0 || voiceFrequencyHz[voice] <= 0.0f)
+            return;
+
+        refreshPartialOutputGain();
+
+        let binHz = float32 (processor.frequency) / float32 (spectral_chord_resonator::fftSize);
+        let widthSemitoneFraction = (currentMaskWidthCents / 100.0f) * (1.0f / 12.0f);
+        var harmonicLimit = currentPartialCount;
+
+        if (harmonicLimit < 1)
+            harmonicLimit = 1;
+
+        if (harmonicLimit > spectral_chord_resonator::maxPartialCount)
+            harmonicLimit = spectral_chord_resonator::maxPartialCount;
+
+        for (int32 harmonic = 1; harmonic <= harmonicLimit; ++harmonic)
+        {
+            let harmonicFrequency = voiceFrequencyHz[voice] * float32 (harmonic);
+
+            if (harmonicFrequency >= float32 (processor.frequency) * 0.5f)
+                break;
+
+            let centerBin = harmonicFrequency / binHz;
+            let harmonicGain = partialStrengths.at (harmonic - 1);
+            let halfWidthBins = std::intrinsics::max (0.25f, widthSemitoneFraction * centerBin);
+
+            var lo = int32 (centerBin - (3.0f * halfWidthBins));
+            var hi = int32 (centerBin + (3.0f * halfWidthBins));
+
+            if (lo < 0)
+                lo = 0;
+
+            if (hi > spectral_chord_resonator::nyquistBin)
+                hi = spectral_chord_resonator::nyquistBin;
+
+            for (int32 bin = lo; bin <= hi; ++bin)
             {
-                let harmonicFrequency = f0 * float32 (harmonic);
+                let wrappedBin = wrap<spectral_chord_resonator::spectralBinCount> (bin);
+                let dist = (float32 (bin) - centerBin) / halfWidthBins;
+                let bump = std::intrinsics::exp (-0.5f * dist * dist) * harmonicGain;
 
-                if (harmonicFrequency >= float32 (processor.frequency) * 0.5f)
-                    break;
-
-                let centerBin = harmonicFrequency / binHz;
-                let harmonicGain = partialStrengths.at (harmonic - 1);
-                let halfWidthBins = std::intrinsics::max (0.25f, widthSemitoneFraction * centerBin);
-
-                var lo = int32 (centerBin - (3.0f * halfWidthBins));
-                var hi = int32 (centerBin + (3.0f * halfWidthBins));
-
-                if (lo < 0)
-                    lo = 0;
-
-                if (hi > spectral_chord_resonator::nyquistBin)
-                    hi = spectral_chord_resonator::nyquistBin;
-
-                for (int32 bin = lo; bin <= hi; ++bin)
+                if (bump > voiceMask[voice, wrappedBin])
                 {
-                    let dist = (float32 (bin) - centerBin) / halfWidthBins;
-                    let bump = std::intrinsics::exp (-0.5f * dist * dist) * harmonicGain;
-
-                    if (bump > chordMask.at (bin))
-                    {
-                        chordMask.at (bin) = bump;
-                        phaseAdvanceTable.at (bin) = spectral_chord_resonator::twoPi
-                                                   * harmonicFrequency
-                                                   * float32 (spectral_chord_resonator::hopSize)
-                                                   / float32 (processor.frequency);
-                    }
+                    voiceMask[voice, wrappedBin] = bump;
+                    voicePhaseAdvanceTable[voice, wrappedBin] = spectral_chord_resonator::twoPi
+                                                              * harmonicFrequency
+                                                              * float32 (spectral_chord_resonator::hopSize)
+                                                              / float32 (processor.frequency);
                 }
             }
         }
@@ -259,10 +348,85 @@ processor SpectralChordResonator
         maskDirty = false;
     }
 
-    // === SEAM: per-bin update rule ===
-    //
-    // This is the recursive spectral feedback rule. Keep it isolated so the
-    // algorithm can be rewritten without touching the STFT scaffolding.
+    void rebuildAllVoiceMasks()
+    {
+        refreshPartialOutputGain();
+
+        for (int32 voiceIndex = 0; voiceIndex < spectral_chord_resonator::maxVoiceCount; ++voiceIndex)
+            rebuildVoiceMask (voiceIndex);
+
+        maskDirty = false;
+    }
+
+    void clearRetuneScratch()
+    {
+        for (wrap<spectral_chord_resonator::spectralBinCount> bin)
+        {
+            retuneScratchRe[bin] = 0.0;
+            retuneScratchIm[bin] = 0.0;
+        }
+    }
+
+    void retuneVoiceState (int32 voiceIndex, float32 oldFrequencyHz, float32 newFrequencyHz)
+    {
+        if (oldFrequencyHz <= 0.0f || newFrequencyHz <= 0.0f)
+        {
+            clearVoiceBinState (voiceIndex);
+            return;
+        }
+
+        if (std::intrinsics::abs (oldFrequencyHz - newFrequencyHz) <= 0.0001f)
+            return;
+
+        clearRetuneScratch();
+
+        let voice = wrap<spectral_chord_resonator::maxVoiceCount> (voiceIndex);
+        let binHz = float32 (processor.frequency) / float32 (spectral_chord_resonator::fftSize);
+        var harmonicLimit = currentPartialCount;
+
+        if (harmonicLimit < 1)
+            harmonicLimit = 1;
+
+        if (harmonicLimit > spectral_chord_resonator::maxPartialCount)
+            harmonicLimit = spectral_chord_resonator::maxPartialCount;
+
+        for (int32 harmonic = 1; harmonic <= harmonicLimit; ++harmonic)
+        {
+            let oldHarmonicHz = oldFrequencyHz * float32 (harmonic);
+            let newHarmonicHz = newFrequencyHz * float32 (harmonic);
+
+            if (oldHarmonicHz >= float32 (processor.frequency) * 0.5f
+                || newHarmonicHz >= float32 (processor.frequency) * 0.5f)
+                break;
+
+            let oldCenterBin = oldHarmonicHz / binHz;
+            let newCenterBin = newHarmonicHz / binHz;
+            let oldRoundedBin = spectral_chord_resonator::roundToNearestBin (oldCenterBin);
+            let newRoundedBin = spectral_chord_resonator::roundToNearestBin (newCenterBin);
+
+            for (int32 offsetIndex = 0; offsetIndex <= 6; ++offsetIndex)
+            {
+                let offset = offsetIndex - 3;
+                let oldBin = oldRoundedBin + offset;
+                let newBin = newRoundedBin + offset;
+
+                if (oldBin < 0 || oldBin > spectral_chord_resonator::nyquistBin
+                    || newBin < 0 || newBin > spectral_chord_resonator::nyquistBin)
+                    continue;
+
+                let oldWrappedBin = wrap<spectral_chord_resonator::spectralBinCount> (oldBin);
+                retuneScratchRe.at (newBin) += voiceSpectrumStateRe[voice, oldWrappedBin];
+                retuneScratchIm.at (newBin) += voiceSpectrumStateIm[voice, oldWrappedBin];
+            }
+        }
+
+        for (wrap<spectral_chord_resonator::spectralBinCount> bin)
+        {
+            voiceSpectrumStateRe[voice, bin] = retuneScratchRe[bin];
+            voiceSpectrumStateIm[voice, bin] = retuneScratchIm[bin];
+        }
+    }
+
     spectral_chord_resonator::BinUpdate updateBin (float32 inputRe,
                                                    float32 inputIm,
                                                    float64 stateRe,
@@ -354,12 +518,44 @@ processor SpectralChordResonator
         currentMaskFloor = nextMaskFloor;
 
         if (maskDirty)
-            rebuildChordMask();
+            rebuildAllVoiceMasks();
+    }
+
+    void advanceVoiceLevels()
+    {
+        let frameSeconds = float32 (spectral_chord_resonator::hopSize) / float32 (processor.frequency);
+        let releaseSeconds = std::intrinsics::max (0.001f, currentVoiceReleaseSeconds);
+        let releaseMultiplier = std::intrinsics::pow (
+            spectral_chord_resonator::voiceSilenceThreshold,
+            frameSeconds / releaseSeconds
+        );
+
+        for (int32 voiceIndex = 0; voiceIndex < spectral_chord_resonator::maxVoiceCount; ++voiceIndex)
+        {
+            let voice = wrap<spectral_chord_resonator::maxVoiceCount> (voiceIndex);
+
+            if (voiceAssigned[voice] == 0)
+                continue;
+
+            if (voiceHeld[voice] != 0)
+            {
+                if (voiceLevel[voice] < voiceVelocity[voice])
+                    voiceLevel[voice] = voiceVelocity[voice];
+
+                continue;
+            }
+
+            voiceLevel[voice] *= releaseMultiplier;
+
+            if (voiceLevel[voice] <= spectral_chord_resonator::voiceSilenceThreshold)
+                clearVoiceState (voiceIndex);
+        }
     }
 
     void processFrame()
     {
         updateFrameParameters();
+        advanceVoiceLevels();
 
         for (wrap<spectral_chord_resonator::fftSize> index)
         {
@@ -381,29 +577,77 @@ processor SpectralChordResonator
 
             if (float32 (bin) * binHz < currentLowCutHz)
             {
-                spectrumStateRe[wrappedBin] = 0.0;
-                spectrumStateIm[wrappedBin] = 0.0;
+                floorStateRe[wrappedBin] = 0.0;
+                floorStateIm[wrappedBin] = 0.0;
+
+                for (wrap<spectral_chord_resonator::maxVoiceCount> voice)
+                {
+                    voiceSpectrumStateRe[voice, wrappedBin] = 0.0;
+                    voiceSpectrumStateIm[voice, wrappedBin] = 0.0;
+                }
+
                 writeSpectrumBin (bin, real, imag);
                 continue;
             }
 
-            let updated = updateBin (
-                real,
-                imag,
-                spectrumStateRe[wrappedBin],
-                spectrumStateIm[wrappedBin],
-                chordMask[wrappedBin],
-                phaseAdvanceTable[wrappedBin],
-                currentMagFeedback,
-                currentPhaseFeedback,
-                currentDamping,
-                currentMagCeiling,
-                currentPartialOutputGain
-            );
+            var outRe = real;
+            var outIm = imag;
 
-            spectrumStateRe[wrappedBin] = updated.stateRe;
-            spectrumStateIm[wrappedBin] = updated.stateIm;
-            writeSpectrumBin (bin, updated.outRe, updated.outIm);
+            if (currentMaskFloor > 0.000001f)
+            {
+                let floorUpdated = updateBin (
+                    real,
+                    imag,
+                    floorStateRe[wrappedBin],
+                    floorStateIm[wrappedBin],
+                    currentMaskFloor,
+                    basePhaseAdvanceTable[wrappedBin],
+                    currentMagFeedback,
+                    currentPhaseFeedback,
+                    currentDamping,
+                    currentMagCeiling,
+                    1.0f
+                );
+
+                floorStateRe[wrappedBin] = floorUpdated.stateRe;
+                floorStateIm[wrappedBin] = floorUpdated.stateIm;
+                outRe += floorUpdated.outRe - real;
+                outIm += floorUpdated.outIm - imag;
+            }
+
+            for (int32 voiceIndex = 0; voiceIndex < spectral_chord_resonator::maxVoiceCount; ++voiceIndex)
+            {
+                let voice = wrap<spectral_chord_resonator::maxVoiceCount> (voiceIndex);
+
+                if (voiceAssigned[voice] == 0 || voiceLevel[voice] <= spectral_chord_resonator::voiceSilenceThreshold)
+                    continue;
+
+                let mask = voiceMask[voice, wrappedBin];
+
+                if (mask <= 0.000001f)
+                    continue;
+
+                let voiceUpdated = updateBin (
+                    real,
+                    imag,
+                    voiceSpectrumStateRe[voice, wrappedBin],
+                    voiceSpectrumStateIm[voice, wrappedBin],
+                    mask,
+                    voicePhaseAdvanceTable[voice, wrappedBin],
+                    currentMagFeedback,
+                    currentPhaseFeedback,
+                    currentDamping,
+                    currentMagCeiling,
+                    currentPartialOutputGain
+                );
+
+                voiceSpectrumStateRe[voice, wrappedBin] = voiceUpdated.stateRe;
+                voiceSpectrumStateIm[voice, wrappedBin] = voiceUpdated.stateIm;
+                outRe += (voiceUpdated.outRe - real) * voiceLevel[voice];
+                outIm += (voiceUpdated.outIm - imag) * voiceLevel[voice];
+            }
+
+            writeSpectrumBin (bin, outRe, outIm);
         }
 
         std::frequency::realOnlyInverseFFT (fftSpectrum, synthesisBuffer);
@@ -417,21 +661,61 @@ processor SpectralChordResonator
         }
     }
 
-    event chordIn (spectral_chord_resonator::ChordUpdate chord)
+    event voiceEventIn (int index, std::notes::NoteOn note)
     {
-        activeChord.count = chord.count;
+        let voice = wrap<spectral_chord_resonator::maxVoiceCount> (index);
+        let nextFrequencyHz = spectral_chord_resonator::pitchToFrequency (note.pitch);
 
-        if (activeChord.count < 0)
-            activeChord.count = 0;
+        if (voiceAssigned[voice] != 0)
+            retuneVoiceState (index, voiceFrequencyHz[voice], nextFrequencyHz);
+        else
+            clearVoiceBinState (index);
 
-        if (activeChord.count > spectral_chord_resonator::maxChordPitches)
-            activeChord.count = spectral_chord_resonator::maxChordPitches;
+        voiceAssigned[voice] = 1;
+        voiceHeld[voice] = 1;
+        voiceChannel[voice] = note.channel;
+        voicePitch[voice] = note.pitch;
+        voiceBendSemitones[voice] = 0.0f;
+        voiceVelocity[voice] = spectral_chord_resonator::clampFloat (note.velocity, 0.0f, 1.0f);
+        voiceFrequencyHz[voice] = nextFrequencyHz;
 
-        for (int32 index = 0; index < spectral_chord_resonator::maxChordPitches; ++index)
-            activeChord.frequencies.at (index) = index < activeChord.count ? chord.frequencies.at (index) : 0.0f;
+        if (voiceLevel[voice] < voiceVelocity[voice])
+            voiceLevel[voice] = voiceVelocity[voice];
 
-        rebuildChordMask();
+        rebuildVoiceMask (index);
     }
+
+    event voiceEventIn (int index, std::notes::NoteOff note)
+    {
+        let voice = wrap<spectral_chord_resonator::maxVoiceCount> (index);
+
+        if (voiceAssigned[voice] == 0)
+            return;
+
+        voiceHeld[voice] = 0;
+        voiceVelocity[voice] = 0.0f;
+    }
+
+    event voiceEventIn (int index, std::notes::PitchBend bend)
+    {
+        let voice = wrap<spectral_chord_resonator::maxVoiceCount> (index);
+
+        if (voiceAssigned[voice] == 0)
+            return;
+
+        let nextFrequencyHz = spectral_chord_resonator::pitchToFrequency (
+            voicePitch[voice] + bend.bendSemitones
+        );
+
+        retuneVoiceState (index, voiceFrequencyHz[voice], nextFrequencyHz);
+        voiceBendSemitones[voice] = bend.bendSemitones;
+        voiceFrequencyHz[voice] = nextFrequencyHz;
+        rebuildVoiceMask (index);
+    }
+
+    event voiceEventIn (int index, std::notes::Slide slide) {}
+    event voiceEventIn (int index, std::notes::Pressure pressure) {}
+    event voiceEventIn (int index, std::notes::Control control) {}
 
     event partialShapeUpload (spectral_chord_resonator::PartialShapeUpload shape)
     {
@@ -452,7 +736,7 @@ processor SpectralChordResonator
             );
         }
 
-        rebuildChordMask();
+        rebuildAllVoiceMasks();
     }
 
     event magFeedbackIn (float32 value)
@@ -501,11 +785,16 @@ processor SpectralChordResonator
         lowCutHzSmooth.setTarget (spectral_chord_resonator::clampFloat (value, 20.0f, 500.0f), smoothingFrameCount);
     }
 
+    event voiceReleaseSecondsIn (float32 value)
+    {
+        currentVoiceReleaseSeconds = spectral_chord_resonator::clampFloat (value, 0.01f, 3.0f);
+    }
+
     void main()
     {
         loop
         {
-            let dry = sidechainIn;
+            let dry = sourceIn;
             let delayedDry = dryDelay[ringPosition];
             let wet = outputRing[ringPosition] * spectral_chord_resonator::olaGainCompensation;
             let wetLimit = currentMagCeiling / float32 (spectral_chord_resonator::fftSize);
@@ -533,92 +822,506 @@ processor SpectralChordResonator
     }
 }
 
-processor SpectralMidiChordTracker
+processor SpectralMidiVoiceDispatcher (int voiceCount)
 {
-    input event std::midi::Message midiIn;
-    output event spectral_chord_resonator::ChordUpdate chordOut;
+    input event (std::notes::NoteOn,
+                 std::notes::NoteOff,
+                 std::notes::PitchBend,
+                 std::notes::Slide,
+                 std::notes::Pressure,
+                 std::notes::Control) eventIn;
+    input event float32 voiceModeIn;
+    input event float32 polyphonyIn;
 
-    int32 heldNoteCount;
-    int32[spectral_chord_resonator::maxChordPitches] heldNotes;
+    output event (std::notes::NoteOn,
+                  std::notes::NoteOff,
+                  std::notes::PitchBend,
+                  std::notes::Slide,
+                  std::notes::Pressure,
+                  std::notes::Control) voiceEventOut[voiceCount];
 
-    void emitChord()
+    static_assert (voiceCount > 0);
+
+    spectral_chord_resonator::VoiceState[voiceCount] voiceStates;
+    float32[16] channelPitchBendSemitones;
+    float32[16] channelPressure;
+    float32[16] channelSlide;
+
+    int32 currentVoiceMode = spectral_chord_resonator::voiceModePoly;
+    int32 currentPolyphony = spectral_chord_resonator::defaultPolyphony;
+    int32 nextAge = 1;
+
+    bool pitchesMatch (float32 left, float32 right)
     {
-        spectral_chord_resonator::ChordUpdate chord;
-        chord.count = heldNoteCount;
-
-        for (int32 index = 0; index < spectral_chord_resonator::maxChordPitches; ++index)
-        {
-            chord.frequencies.at (index) = index < heldNoteCount
-                ? spectral_chord_resonator::midiNoteToFrequency (heldNotes.at (index))
-                : 0.0f;
-        }
-
-        chordOut <- chord;
+        return std::intrinsics::abs (left - right) <= 0.0001f;
     }
 
-    void clearHeldNotes()
+    int32 roundedInt (float32 value)
     {
-        heldNoteCount = 0;
-        emitChord();
+        return int32 (std::intrinsics::floor (value + 0.5f));
     }
 
-    void removeHeldNote (int32 noteNumber)
+    int32 activeVoiceLimit()
     {
-        var removed = false;
+        var limit = currentPolyphony;
 
-        for (int32 index = 0; index < heldNoteCount; ++index)
+        if (currentVoiceMode == spectral_chord_resonator::voiceModeMono)
+            return 1;
+
+        if (limit < 1)
+            limit = 1;
+
+        if (limit > voiceCount)
+            limit = voiceCount;
+
+        return limit;
+    }
+
+    bool isMonoMode()
+    {
+        return currentVoiceMode == spectral_chord_resonator::voiceModeMono;
+    }
+
+    void emitExpressionSnapshotForVoice (wrap<voiceCount> voice, int32 channel)
+    {
+        if (channel < 0 || channel >= 16)
+            return;
+
+        std::notes::PitchBend bend;
+        bend.channel = channel;
+        bend.bendSemitones = channelPitchBendSemitones.at (channel);
+        voiceEventOut[voice] <- bend;
+
+        std::notes::Pressure pressure;
+        pressure.channel = channel;
+        pressure.pressure = channelPressure.at (channel);
+        voiceEventOut[voice] <- pressure;
+
+        std::notes::Slide slide;
+        slide.channel = channel;
+        slide.slide = channelSlide.at (channel);
+        voiceEventOut[voice] <- slide;
+    }
+
+    int32 findMatchingVoice (int32 limit, int32 channel, float32 pitch)
+    {
+        for (int32 voiceIndex = 0; voiceIndex < limit; ++voiceIndex)
         {
-            if (heldNotes.at (index) == noteNumber)
-                removed = true;
+            let voice = wrap<voiceCount> (voiceIndex);
+            let state = voiceStates[voice];
 
-            if (removed && index < heldNoteCount - 1)
-                heldNotes.at (index) = heldNotes.at (index + 1);
+            if (state.assigned && state.channel == channel && pitchesMatch (state.pitch, pitch))
+                return voiceIndex;
         }
 
-        if (removed)
+        return -1;
+    }
+
+    int32 findFreeVoice (int32 limit)
+    {
+        for (int32 voiceIndex = 0; voiceIndex < limit; ++voiceIndex)
         {
-            heldNoteCount -= 1;
-            emitChord();
+            let voice = wrap<voiceCount> (voiceIndex);
+
+            if (! voiceStates[voice].assigned)
+                return voiceIndex;
+        }
+
+        return -1;
+    }
+
+    int32 findReleasingVoice (int32 limit)
+    {
+        int32 selected = -1;
+        int32 oldestAge = 0x7fffffff;
+
+        for (int32 voiceIndex = 0; voiceIndex < limit; ++voiceIndex)
+        {
+            let voice = wrap<voiceCount> (voiceIndex);
+            let state = voiceStates[voice];
+
+            if (! state.assigned || state.held)
+                continue;
+
+            if (state.age < oldestAge)
+            {
+                selected = voiceIndex;
+                oldestAge = state.age;
+            }
+        }
+
+        return selected;
+    }
+
+    int32 findOldestVoice (int32 limit)
+    {
+        int32 selected = 0;
+        int32 oldestAge = voiceStates[0].age;
+
+        for (int32 voiceIndex = 1; voiceIndex < limit; ++voiceIndex)
+        {
+            let voice = wrap<voiceCount> (voiceIndex);
+
+            if (voiceStates[voice].age < oldestAge)
+            {
+                selected = voiceIndex;
+                oldestAge = voiceStates[voice].age;
+            }
+        }
+
+        return selected;
+    }
+
+    int32 findNewestHeldVoice()
+    {
+        int32 selected = -1;
+        int32 newestAge = -1;
+
+        for (int32 voiceIndex = 0; voiceIndex < voiceCount; ++voiceIndex)
+        {
+            let voice = wrap<voiceCount> (voiceIndex);
+            let state = voiceStates[voice];
+
+            if (! state.assigned || ! state.held)
+                continue;
+
+            if (state.age > newestAge)
+            {
+                selected = voiceIndex;
+                newestAge = state.age;
+            }
+        }
+
+        return selected;
+    }
+
+    int32 findNewestAssignedVoice()
+    {
+        int32 selected = -1;
+        int32 newestAge = -1;
+
+        for (int32 voiceIndex = 0; voiceIndex < voiceCount; ++voiceIndex)
+        {
+            let voice = wrap<voiceCount> (voiceIndex);
+            let state = voiceStates[voice];
+
+            if (! state.assigned)
+                continue;
+
+            if (state.age > newestAge)
+            {
+                selected = voiceIndex;
+                newestAge = state.age;
+            }
+        }
+
+        return selected;
+    }
+
+    void emitNoteOnForState (wrap<voiceCount> voice, spectral_chord_resonator::VoiceState state)
+    {
+        std::notes::NoteOn note;
+        note.channel = state.channel;
+        note.pitch = state.pitch;
+        note.velocity = state.velocity;
+        voiceEventOut[voice] <- note;
+        emitExpressionSnapshotForVoice (voice, state.channel);
+    }
+
+    void emitNoteOffForState (wrap<voiceCount> voice, spectral_chord_resonator::VoiceState state)
+    {
+        voiceEventOut[voice] <- std::notes::NoteOff (state.channel, state.pitch, 0.0f);
+    }
+
+    int32 choosePolyVoice (std::notes::NoteOn note)
+    {
+        let limit = activeVoiceLimit();
+
+        var voiceIndex = findMatchingVoice (limit, note.channel, note.pitch);
+
+        if (voiceIndex >= 0)
+            return voiceIndex;
+
+        voiceIndex = findFreeVoice (limit);
+
+        if (voiceIndex >= 0)
+            return voiceIndex;
+
+        voiceIndex = findReleasingVoice (limit);
+
+        if (voiceIndex >= 0)
+            return voiceIndex;
+
+        return findOldestVoice (limit);
+    }
+
+    void handlePolyNoteOn (std::notes::NoteOn note)
+    {
+        let voiceIndex = choosePolyVoice (note);
+        let voice = wrap<voiceCount> (voiceIndex);
+        voiceStates[voice].start (++nextAge, note.channel, note.pitch, note.velocity);
+        voiceEventOut[voice] <- note;
+        emitExpressionSnapshotForVoice (voice, note.channel);
+    }
+
+    void handlePolyNoteOff (std::notes::NoteOff note)
+    {
+        let limit = activeVoiceLimit();
+
+        for (int32 voiceIndex = 0; voiceIndex < limit; ++voiceIndex)
+        {
+            let voice = wrap<voiceCount> (voiceIndex);
+            let state = voiceStates[voice];
+
+            if (state.assigned
+                && state.held
+                && state.channel == note.channel
+                && pitchesMatch (state.pitch, note.pitch))
+            {
+                voiceStates[voice].release();
+                voiceStates[voice].age = ++nextAge;
+                voiceEventOut[voice] <- note;
+                return;
+            }
         }
     }
 
-    void addHeldNote (int32 noteNumber)
+    void handleMonoNoteOn (std::notes::NoteOn note)
     {
-        removeHeldNote (noteNumber);
-
-        if (heldNoteCount < spectral_chord_resonator::maxChordPitches)
-        {
-            heldNotes.at (heldNoteCount) = noteNumber;
-            heldNoteCount += 1;
-        }
-        else
-        {
-            for (int32 index = 1; index < spectral_chord_resonator::maxChordPitches; ++index)
-                heldNotes.at (index - 1) = heldNotes.at (index);
-
-            heldNotes.at (spectral_chord_resonator::maxChordPitches - 1) = noteNumber;
-        }
-
-        emitChord();
+        voiceStates[0].start (++nextAge, note.channel, note.pitch, note.velocity);
+        voiceEventOut[0] <- note;
+        emitExpressionSnapshotForVoice (0, note.channel);
     }
 
-    event midiIn (std::midi::Message message)
+    void handleMonoNoteOff (std::notes::NoteOff note)
     {
-        if (message.isAllNotesOff() || message.isAllSoundOff())
+        let state = voiceStates[0];
+
+        if (! state.assigned
+            || ! state.held
+            || state.channel != note.channel
+            || ! pitchesMatch (state.pitch, note.pitch))
+            return;
+
+        voiceStates[0].release();
+        voiceStates[0].age = ++nextAge;
+        voiceEventOut[0] <- note;
+    }
+
+    void releaseAllVoices()
+    {
+        for (wrap<voiceCount> voice)
         {
-            clearHeldNotes();
+            let state = voiceStates[voice];
+
+            if (state.assigned)
+            {
+                emitNoteOffForState (voice, state);
+                voiceStates[voice].release();
+                voiceStates[voice].age = ++nextAge;
+            }
+        }
+    }
+
+    void collapseToMonoVoice()
+    {
+        var primaryVoiceIndex = findNewestHeldVoice();
+
+        if (primaryVoiceIndex < 0)
+            primaryVoiceIndex = findNewestAssignedVoice();
+
+        if (primaryVoiceIndex < 0)
+        {
+            clearDispatcherState();
             return;
         }
 
-        if (message.isNoteOn())
-            addHeldNote (message.getNoteNumber());
-        else if (message.isNoteOff())
-            removeHeldNote (message.getNoteNumber());
+        let primaryVoice = wrap<voiceCount> (primaryVoiceIndex);
+        let primaryState = voiceStates[primaryVoice];
+        let primaryWasHeld = primaryState.held;
+
+        for (int32 voiceIndex = 0; voiceIndex < voiceCount; ++voiceIndex)
+        {
+            let voice = wrap<voiceCount> (voiceIndex);
+            let state = voiceStates[voice];
+
+            if (! state.assigned)
+            {
+                voiceStates[voice].clear (++nextAge);
+                continue;
+            }
+
+            if (voiceIndex == 0 && primaryVoiceIndex == 0)
+                continue;
+
+            emitNoteOffForState (voice, state);
+            voiceStates[voice].clear (++nextAge);
+        }
+
+        if (primaryVoiceIndex != 0)
+        {
+            voiceStates[0].start (
+                ++nextAge,
+                primaryState.channel,
+                primaryState.pitch,
+                primaryState.velocity
+            );
+            emitNoteOnForState (0, primaryState);
+
+            if (! primaryWasHeld)
+            {
+                voiceStates[0].release();
+                voiceStates[0].age = ++nextAge;
+                emitNoteOffForState (0, primaryState);
+            }
+        }
+    }
+
+    void clearDispatcherState()
+    {
+        for (wrap<voiceCount> voice)
+            voiceStates[voice].clear (++nextAge);
+    }
+
+    void resetDispatcherState()
+    {
+        releaseAllVoices();
+        clearDispatcherState();
+    }
+
+    void enforcePolyphonyLimit()
+    {
+        let limit = activeVoiceLimit();
+
+        for (int32 voiceIndex = limit; voiceIndex < voiceCount; ++voiceIndex)
+        {
+            let voice = wrap<voiceCount> (voiceIndex);
+            let state = voiceStates[voice];
+
+            if (! state.assigned)
+                continue;
+
+                emitNoteOffForState (voice, state);
+                voiceStates[voice].clear (++nextAge);
+            }
+        }
+
+    event eventIn (std::notes::NoteOn note)
+    {
+        if (isMonoMode())
+            handleMonoNoteOn (note);
+        else
+            handlePolyNoteOn (note);
+    }
+
+    event eventIn (std::notes::NoteOff note)
+    {
+        if (isMonoMode())
+            handleMonoNoteOff (note);
+        else
+            handlePolyNoteOff (note);
+    }
+
+    event eventIn (std::notes::PitchBend bend)
+    {
+        if (bend.channel >= 0 && bend.channel < 16)
+            channelPitchBendSemitones.at (bend.channel) = bend.bendSemitones;
+
+        if (isMonoMode())
+        {
+            if (voiceStates[0].assigned && voiceStates[0].channel == bend.channel)
+                voiceEventOut[0] <- bend;
+
+            return;
+        }
+
+        for (wrap<voiceCount> voice)
+            if (voiceStates[voice].assigned && voiceStates[voice].channel == bend.channel)
+                voiceEventOut[voice] <- bend;
+    }
+
+    event eventIn (std::notes::Pressure pressure)
+    {
+        if (pressure.channel >= 0 && pressure.channel < 16)
+            channelPressure.at (pressure.channel) = pressure.pressure;
+
+        if (isMonoMode())
+        {
+            if (voiceStates[0].assigned && voiceStates[0].channel == pressure.channel)
+                voiceEventOut[0] <- pressure;
+
+            return;
+        }
+
+        for (wrap<voiceCount> voice)
+            if (voiceStates[voice].assigned && voiceStates[voice].channel == pressure.channel)
+                voiceEventOut[voice] <- pressure;
+    }
+
+    event eventIn (std::notes::Slide slide)
+    {
+        if (slide.channel >= 0 && slide.channel < 16)
+            channelSlide.at (slide.channel) = slide.slide;
+
+        if (isMonoMode())
+        {
+            if (voiceStates[0].assigned && voiceStates[0].channel == slide.channel)
+                voiceEventOut[0] <- slide;
+
+            return;
+        }
+
+        for (wrap<voiceCount> voice)
+            if (voiceStates[voice].assigned && voiceStates[voice].channel == slide.channel)
+                voiceEventOut[voice] <- slide;
+    }
+
+    event eventIn (std::notes::Control control)
+    {
+        if (control.control == 120 || control.control == 123)
+        {
+            resetDispatcherState();
+            return;
+        }
+
+        if (isMonoMode())
+        {
+            if (voiceStates[0].assigned && voiceStates[0].channel == control.channel)
+                voiceEventOut[0] <- control;
+
+            return;
+        }
+
+        for (wrap<voiceCount> voice)
+            if (voiceStates[voice].assigned && voiceStates[voice].channel == control.channel)
+                voiceEventOut[voice] <- control;
+    }
+
+    event voiceModeIn (float32 value)
+    {
+        let nextMode = roundedInt (spectral_chord_resonator::clampFloat (value, 0.0f, 1.0f));
+
+        if (nextMode == currentVoiceMode)
+            return;
+
+        currentVoiceMode = nextMode;
+
+        if (isMonoMode())
+            collapseToMonoVoice();
+    }
+
+    event polyphonyIn (float32 value)
+    {
+        currentPolyphony = roundedInt (
+            spectral_chord_resonator::clampFloat (value, 1.0f, float32 (voiceCount))
+        );
+        enforcePolyphonyLimit();
     }
 
     void main()
     {
-        advance();
+        loop
+            advance();
     }
 }
 
@@ -658,11 +1361,14 @@ processor SpectralStereoJoiner
 graph SpectralChordResonatorPlugin [[ main ]]
 {
     input stream float32<2> audioIn [[ name: "Input" ]];
-    input stream float32<2> sidechainIn [[ name: "Sidechain" ]];
     input event std::midi::Message midiIn [[ name: "MIDI input" ]];
     input event spectral_chord_resonator::PartialShapeUpload partialShapeUpload [[ name: "Partial Shape", hidden: true ]];
     output stream float32<2> audioOut [[ name: "Output" ]];
 
+    // Keep a hidden no-op parameter in host slot 0. Ableton plus the Cmajor
+    // JUCE wrapper can treat parameter slot 0 specially, so visible effect
+    // parameters must start at slot 1.
+    input value float32 hostSlot0Guard [[ name: "Host Slot 0 Guard", group: "Internal", min: 0.0f, max: 1.0f, init: 0.0f, discrete: true, step: 1.0f, hidden: true, automatable: false, rampFrames: 0 ]];
     input event float32 magFeedbackIn       [[ name: "Magnitude Feedback", group: "Feedback", min: 0.0f, max: 0.999f, init: 0.92f, rampFrames: 0 ]];
     input event float32 phaseFeedbackIn     [[ name: "Phase Feedback",     group: "Feedback", min: 0.0f, max: 1.0f,   init: 1.0f,  rampFrames: 0 ]];
     input event float32 dampingIn           [[ name: "Damping",            group: "Feedback", min: 0.95f, max: 1.0f,   init: 0.995f, rampFrames: 0 ]];
@@ -671,25 +1377,32 @@ graph SpectralChordResonatorPlugin [[ main ]]
     input event float32 lowCutHzIn          [[ name: "Low Cut",            group: "Output",   min: 20.0f, max: 500.0f,  init: 60.0f, unit: "Hz", rampFrames: 0 ]];
     input event float32 maskWidthCentsIn    [[ name: "Mask Width",         group: "Mask",     min: 5.0f,  max: 200.0f,  init: 40.0f, unit: "cents", rampFrames: 0 ]];
     input event float32 maskFloorIn         [[ name: "Mask Floor",         group: "Mask",     min: 0.0f,  max: 1.0f,    init: 0.08f, rampFrames: 0 ]];
+    input event float32 voiceModeIn         [[ name: "Voice Mode",         group: "Voices",   min: 0.0f,  max: 1.0f,    init: 0.0f, discrete: true, step: 1.0f, text: "Poly|Mono", rampFrames: 0 ]];
+    input event float32 polyphonyIn         [[ name: "Polyphony",          group: "Voices",   min: 1.0f,  max: 16.0f,   init: 8.0f, discrete: true, step: 1.0f, rampFrames: 0 ]];
+    input event float32 voiceReleaseSecondsIn [[ name: "Voice Release",    group: "Voices",   min: 0.01f, max: 3.0f,    init: 0.35f, unit: "s", rampFrames: 0 ]];
 
-    node sidechainSplitter = SpectralStereoSplitter;
+    node sourceSplitter = SpectralStereoSplitter;
     node resonatorLeft = SpectralChordResonator;
     node resonatorRight = SpectralChordResonator;
-    node chordTracker = SpectralMidiChordTracker;
+    node mpe = std::midi::MPEConverter;
+    node voiceDispatcher = SpectralMidiVoiceDispatcher (spectral_chord_resonator::maxVoiceCount);
     node stereoJoiner = SpectralStereoJoiner;
 
     connection
     {
-        sidechainIn -> sidechainSplitter.in;
-        sidechainSplitter.left -> resonatorLeft.sidechainIn;
-        sidechainSplitter.right -> resonatorRight.sidechainIn;
+        audioIn -> sourceSplitter.in;
+        sourceSplitter.left -> resonatorLeft.sourceIn;
+        sourceSplitter.right -> resonatorRight.sourceIn;
         resonatorLeft.audioOut -> stereoJoiner.left;
         resonatorRight.audioOut -> stereoJoiner.right;
         stereoJoiner.out -> audioOut;
 
-        midiIn -> chordTracker.midiIn;
-        chordTracker.chordOut -> resonatorLeft.chordIn;
-        chordTracker.chordOut -> resonatorRight.chordIn;
+        midiIn -> mpe.parseMIDI;
+        mpe.eventOut -> voiceDispatcher.eventIn;
+        voiceModeIn -> voiceDispatcher.voiceModeIn;
+        polyphonyIn -> voiceDispatcher.polyphonyIn;
+        voiceDispatcher.voiceEventOut -> resonatorLeft.voiceEventIn;
+        voiceDispatcher.voiceEventOut -> resonatorRight.voiceEventIn;
         partialShapeUpload -> resonatorLeft.partialShapeUpload;
         partialShapeUpload -> resonatorRight.partialShapeUpload;
 
@@ -709,5 +1422,7 @@ graph SpectralChordResonatorPlugin [[ main ]]
         depthIn -> resonatorRight.depthIn;
         lowCutHzIn -> resonatorLeft.lowCutHzIn;
         lowCutHzIn -> resonatorRight.lowCutHzIn;
+        voiceReleaseSecondsIn -> resonatorLeft.voiceReleaseSecondsIn;
+        voiceReleaseSecondsIn -> resonatorRight.voiceReleaseSecondsIn;
     }
 }

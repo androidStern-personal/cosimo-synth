@@ -62,6 +62,7 @@ class SpectralChordResonatorView extends HTMLElement {
     this.shadowRoot.innerHTML = this.getMarkup();
     this.shadowRoot.querySelector(".frame").before(this.effectHeader);
     this.groupsHost = this.shadowRoot.querySelector("[data-groups]");
+    this.partialPlot = this.shadowRoot.querySelector("[data-partial-plot]");
     this.canvas = this.shadowRoot.querySelector("[data-partial-canvas]");
     this.canvasContext = this.canvas.getContext("2d");
     this.shapeName = this.shadowRoot.querySelector("[data-shape-name]");
@@ -69,6 +70,7 @@ class SpectralChordResonatorView extends HTMLElement {
     this.selectedReadout = this.shadowRoot.querySelector("[data-selected-readout]");
     this.activeReadout = this.shadowRoot.querySelector("[data-active-readout]");
     this.centroidReadout = this.shadowRoot.querySelector("[data-centroid-readout]");
+    this.resizeAnimationFrame = 0;
   }
 
   connectedCallback() {
@@ -89,10 +91,17 @@ class SpectralChordResonatorView extends HTMLElement {
     this.patchConnection.requestStatusUpdate();
 
     this.installPartialEditorListeners();
+    this.installPartialResizeObserver();
     this.renderPartialEditor();
   }
 
   disconnectedCallback() {
+    this.partialResizeObserver?.disconnect();
+    this.partialResizeObserver = undefined;
+    if (this.resizeAnimationFrame) {
+      window.cancelAnimationFrame(this.resizeAnimationFrame);
+      this.resizeAnimationFrame = 0;
+    }
     this.snapshotController.detach();
     this.presetController.detach();
     this.effectHeader.presetController = null;
@@ -174,12 +183,54 @@ class SpectralChordResonatorView extends HTMLElement {
 
   pointerToPartial(event) {
     const rect = this.canvas.getBoundingClientRect();
-    const x = clamp((event.clientX - rect.left) / Math.max(1, rect.width), 0, 1);
-    const y = clamp((event.clientY - rect.top) / Math.max(1, rect.height), 0, 1);
+    const geometry = this.getPartialPlotGeometry(rect.width, rect.height);
+    const x = clamp((event.clientX - rect.left - geometry.leftPad) / Math.max(1, geometry.plotW), 0, 1);
+    const y = clamp((event.clientY - rect.top - geometry.topPad) / Math.max(1, geometry.plotH), 0, 1);
     const index = Math.min(this.partialState.count - 1, Math.floor(x * this.partialState.count));
     return {
       index,
       value: clamp(1 - y, 0, 1),
+    };
+  }
+
+  installPartialResizeObserver() {
+    if (!("ResizeObserver" in window) || !this.partialPlot)
+      return;
+
+    this.partialResizeObserver = new ResizeObserver(() => this.schedulePartialRedraw());
+    this.partialResizeObserver.observe(this);
+    this.partialResizeObserver.observe(this.partialPlot);
+  }
+
+  schedulePartialRedraw() {
+    if (this.resizeAnimationFrame)
+      return;
+
+    this.resizeAnimationFrame = window.requestAnimationFrame(() => {
+      this.resizeAnimationFrame = 0;
+      this.drawPartials();
+    });
+  }
+
+  getPartialPlotGeometry(width, height) {
+    const showLabels = height >= 150;
+    const topPad = showLabels ? 24 : 6;
+    const bottomPad = 2;
+    const leftPad = 14;
+    const rightPad = 14;
+    const plotBottom = Math.max(topPad + 1, height - bottomPad);
+    const plotH = Math.max(1, plotBottom - topPad);
+    const plotW = Math.max(1, width - leftPad - rightPad);
+
+    return {
+      showLabels,
+      topPad,
+      bottomPad,
+      leftPad,
+      rightPad,
+      plotBottom,
+      plotH,
+      plotW,
     };
   }
 
@@ -193,7 +244,7 @@ class SpectralChordResonatorView extends HTMLElement {
       button.classList.toggle("active", Number(button.dataset.count) === this.partialState.count);
     });
     this.renderReadouts();
-    this.drawPartials();
+    this.schedulePartialRedraw();
   }
 
   renderReadouts() {
@@ -223,12 +274,15 @@ class SpectralChordResonatorView extends HTMLElement {
     const ctx = this.canvasContext;
     const w = width / dpr;
     const h = height / dpr;
-    const topPad = 28;
-    const bottomPad = 34;
-    const leftPad = 14;
-    const rightPad = 14;
-    const plotW = Math.max(1, w - leftPad - rightPad);
-    const plotH = Math.max(1, h - topPad - bottomPad);
+    const {
+      showLabels,
+      topPad,
+      leftPad,
+      rightPad,
+      plotBottom,
+      plotH,
+      plotW,
+    } = this.getPartialPlotGeometry(w, h);
     const slot = plotW / this.partialState.count;
     const gap = this.partialState.count > 48 ? 2 : 4;
     const barW = Math.max(3, slot - gap);
@@ -252,22 +306,30 @@ class SpectralChordResonatorView extends HTMLElement {
       const value = this.partialState.values[index] ?? 0;
       const x = leftPad + index * slot + gap / 2;
       const barH = value * plotH;
-      const y = topPad + plotH - barH;
+      const y = plotBottom - barH;
       const color = value > 0.82 ? "#efb95d" : value > 0.1 ? "#78d29c" : "#556070";
 
       ctx.fillStyle = index === this.selectedPartial ? "#303745" : "#1d222b";
       ctx.fillRect(x - 1, topPad, barW + 2, plotH);
       ctx.fillStyle = color;
-      ctx.fillRect(x, y, barW, barH);
+      ctx.fillRect(x, y, barW, Math.max(value > 0 ? 1 : 0, barH));
 
       const harmonic = index + 1;
-      if (this.partialState.count <= 32 || harmonic === 1 || harmonic % 4 === 0) {
+      if (showLabels && (this.partialState.count <= 32 || harmonic === 1 || harmonic % 4 === 0)) {
         ctx.fillStyle = harmonic % 8 === 0 || harmonic === 1 ? "#a8aeb8" : "#747b88";
         ctx.font = "10px ui-monospace, SFMono-Regular, Menlo, monospace";
         ctx.textAlign = "center";
-        ctx.fillText(String(harmonic), x + barW / 2, h - 14);
+        ctx.textBaseline = "top";
+        ctx.fillText(String(harmonic), x + barW / 2, 7);
       }
     }
+
+    ctx.strokeStyle = "#efb95d";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(leftPad, plotBottom - 0.5);
+    ctx.lineTo(w - rightPad, plotBottom - 0.5);
+    ctx.stroke();
   }
 
   renderFromStatus(status) {
@@ -348,14 +410,15 @@ class SpectralChordResonatorView extends HTMLElement {
       this.startupSeedInFlight = false;
       this.startupSeedComplete = true;
 
-      const hasOutOfRangeValue = parameters.some(parameter => (
-        isOutOfRangeStartupValue(parameter, receivedValues.get(parameter.endpointID))
+      const outOfRangeParameters = parameters.filter(parameter => (
+        receivedValues.has(parameter.endpointID)
+          && isOutOfRangeStartupValue(parameter, receivedValues.get(parameter.endpointID))
       ));
 
-      if (!hasOutOfRangeValue)
+      if (outOfRangeParameters.length === 0)
         return;
 
-      for (const parameter of parameters) {
+      for (const parameter of outOfRangeParameters) {
         const initValue = parameter.annotation?.init;
 
         if (initValue === undefined)
@@ -455,9 +518,12 @@ class SpectralChordResonatorView extends HTMLElement {
 
         .frame {
           display: grid;
-          grid-template-columns: minmax(0, 1fr) 300px;
+          grid-template-columns: minmax(0, 1fr) minmax(260px, 300px);
+          grid-template-rows: minmax(0, 1fr);
           gap: 14px;
           width: 100%;
+          height: 100%;
+          max-height: 100%;
           min-height: 0;
           overflow: hidden;
           padding: 10px 14px 12px;
@@ -478,6 +544,8 @@ class SpectralChordResonatorView extends HTMLElement {
           grid-template-rows: auto auto minmax(0, 1fr);
           min-width: 0;
           min-height: 0;
+          height: 100%;
+          max-height: 100%;
           overflow: hidden;
         }
 
@@ -533,7 +601,17 @@ class SpectralChordResonatorView extends HTMLElement {
           border-right: 0;
         }
 
+        .partial-plot {
+          position: relative;
+          min-width: 0;
+          min-height: 0;
+          overflow: hidden;
+          background: #12151b;
+        }
+
         canvas {
+          position: absolute;
+          inset: 0;
           display: block;
           width: 100%;
           height: 100%;
@@ -580,7 +658,11 @@ class SpectralChordResonatorView extends HTMLElement {
           align-content: start;
           gap: 12px;
           min-height: 0;
-          overflow: hidden;
+          height: 100%;
+          overflow-x: hidden;
+          overflow-y: auto;
+          padding-right: 2px;
+          scrollbar-gutter: stable;
         }
 
         .group {
@@ -623,6 +705,20 @@ class SpectralChordResonatorView extends HTMLElement {
           font-size: 11px;
         }
 
+        @media (max-width: 760px) {
+          .frame {
+            grid-template-columns: minmax(0, 1fr);
+            grid-template-rows: minmax(260px, 62vh) auto;
+            overflow-x: hidden;
+            overflow-y: auto;
+          }
+
+          .frame-groups {
+            height: auto;
+            overflow: visible;
+          }
+        }
+
         .empty {
           padding: 18px;
           color: rgba(244, 239, 230, 0.74);
@@ -661,7 +757,9 @@ class SpectralChordResonatorView extends HTMLElement {
               <button type="button" data-clear>Clear</button>
             </div>
           </div>
-          <canvas data-partial-canvas width="1200" height="520" aria-label="Partial strength editor"></canvas>
+          <div class="partial-plot" data-partial-plot>
+            <canvas data-partial-canvas width="1200" height="520" aria-label="Partial strength editor"></canvas>
+          </div>
         </section>
         <div data-groups class="frame-groups"></div>
       </div>
