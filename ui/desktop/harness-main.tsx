@@ -18,6 +18,7 @@ declare global {
                     height: number;
                     playhead: { x1: number; y1: number; x2: number; y2: number } | null;
                     progressClip: { x: number; y: number; width: number; height: number } | null;
+                    morphCurvePath: string | null;
                 } | null;
                 stageLabel: string | null;
                 stageDebug: unknown | null;
@@ -140,6 +141,7 @@ function readMsegPreviewState() {
 
     const playhead = svg.querySelector('[data-role="mseg-preview-playhead"]');
     const progressClip = svg.querySelector('[data-role="mseg-preview-progress-clip"]');
+    const morphCurve = svg.querySelector('[data-role="mseg-preview-morph-curve"]');
     const [, , width, height] = (svg.getAttribute("viewBox") ?? "0 0 0 0")
         .split(/\s+/)
         .map((value) => Number(value) || 0);
@@ -162,6 +164,9 @@ function readMsegPreviewState() {
                 width: Number(progressClip.getAttribute("width")) || 0,
                 height: Number(progressClip.getAttribute("height")) || 0,
             }
+            : null,
+        morphCurvePath: morphCurve instanceof SVGPathElement
+            ? morphCurve.getAttribute("d") || null
             : null,
     };
 }

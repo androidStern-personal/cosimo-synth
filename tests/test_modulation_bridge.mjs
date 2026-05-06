@@ -109,6 +109,8 @@ test("boot_without_saved_modulation_state_reads_defaults_without_runtime_uploadi
 
     const state = bridge.getState();
     assert.equal(state.msegSlots.length, 3);
+    assert.equal(state.msegSlots[0].morph, 0);
+    assert.deepEqual(state.msegSlots[0].shapeA, state.msegSlots[0].shapeB);
     assert.equal(state.envelopeSlots.length, 3);
     assert.equal(state.routes.length, 1);
     assert.deepEqual(routeSummary(state.routes[0]), {
@@ -131,7 +133,7 @@ test("modulation runtime event builder converts defaults into a complete Cmajor 
         [0, 1],
     );
     assert.equal(endpointEvents({ events }, MODULATION_CLEAR_ENDPOINT_ID).length, 1);
-    assert.equal(endpointEvents({ events }, MODULATION_MSEG_BUFFER_ENDPOINT_ID).length, 3);
+    assert.equal(endpointEvents({ events }, MODULATION_MSEG_BUFFER_ENDPOINT_ID).length, 6);
     assert.equal(endpointEvents({ events }, MODULATION_MSEG_PLAYBACK_ENDPOINT_ID).length, 3);
     assert.equal(endpointEvents({ events }, MODULATION_ENV_ENDPOINT_ID).length, 3);
     assert.equal(endpointEvents({ events }, MODULATION_ROUTE_ENDPOINT_ID).length, MODULATION_MAX_ROUTES);
@@ -149,7 +151,7 @@ test("modulation runtime event builder converts defaults into a complete Cmajor 
 
 test("boot_with_saved_modulation_state_restores_ui_state_without_runtime_uploading", () => {
     const customState = createDefaultModulationState();
-    customState.msegSlots[1].shape = {
+    customState.msegSlots[1].shapeA = {
         ...createDefaultMsegShape("MSEG 2"),
         points: [
             { x: 0.0, y: 0.2, curvePower: 0.0 },
@@ -157,6 +159,14 @@ test("boot_with_saved_modulation_state_restores_ui_state_without_runtime_uploadi
             { x: 1.0, y: 0.1, curvePower: 0.0 },
         ],
     };
+    customState.msegSlots[1].shapeB = {
+        ...createDefaultMsegShape("MSEG 2 B"),
+        points: [
+            { x: 0.0, y: 0.8, curvePower: 0.0 },
+            { x: 1.0, y: 0.2, curvePower: 0.0 },
+        ],
+    };
+    customState.msegSlots[1].morph = 0.375;
     customState.envelopeSlots[2] = {
         name: "Env 3",
         attackSeconds: 0.25,
@@ -183,7 +193,9 @@ test("boot_with_saved_modulation_state_restores_ui_state_without_runtime_uploadi
     bridge.requestBootState();
 
     const state = bridge.getState();
-    assert.equal(state.msegSlots[1].shape.points.length, 3);
+    assert.equal(state.msegSlots[1].shapeA.points.length, 3);
+    assert.equal(state.msegSlots[1].shapeB.points.length, 2);
+    assert.equal(state.msegSlots[1].morph, 0.375);
     assert.equal(state.envelopeSlots[2].attackSeconds, 0.25);
     assert.deepEqual(state.routes, customState.routes);
     assert.deepEqual(patchConnection.events, []);
@@ -191,12 +203,19 @@ test("boot_with_saved_modulation_state_restores_ui_state_without_runtime_uploadi
 
 test("modulation runtime event builder converts saved state into slot_envelope_and_route_uploads", () => {
     const customState = createDefaultModulationState();
-    customState.msegSlots[1].shape = {
+    customState.msegSlots[1].shapeA = {
         ...createDefaultMsegShape("MSEG 2"),
         points: [
             { x: 0.0, y: 0.2, curvePower: 0.0 },
             { x: 0.5, y: 0.85, curvePower: 1.5 },
             { x: 1.0, y: 0.1, curvePower: 0.0 },
+        ],
+    };
+    customState.msegSlots[1].shapeB = {
+        ...createDefaultMsegShape("MSEG 2 B"),
+        points: [
+            { x: 0.0, y: 0.9, curvePower: 0.0 },
+            { x: 1.0, y: 0.4, curvePower: 0.0 },
         ],
     };
     customState.envelopeSlots[2] = {
@@ -218,8 +237,11 @@ test("modulation runtime event builder converts saved state into slot_envelope_a
 
     const events = buildModulationRuntimeEvents(customState);
 
-    const secondBufferUpload = endpointEvents({ events }, MODULATION_MSEG_BUFFER_ENDPOINT_ID)[1];
-    assert.deepEqual(secondBufferUpload.value.buffer, Array.from(renderMsegShape(customState.msegSlots[1].shape)));
+    const bufferUploads = endpointEvents({ events }, MODULATION_MSEG_BUFFER_ENDPOINT_ID);
+    const secondSlotShapeAUpload = bufferUploads.find(({ value }) => value.slot === 2 && value.shapeIndex === 0);
+    const secondSlotShapeBUpload = bufferUploads.find(({ value }) => value.slot === 2 && value.shapeIndex === 1);
+    assert.deepEqual(secondSlotShapeAUpload.value.buffer, Array.from(renderMsegShape(customState.msegSlots[1].shapeA)));
+    assert.deepEqual(secondSlotShapeBUpload.value.buffer, Array.from(renderMsegShape(customState.msegSlots[1].shapeB)));
 
     const firstRouteUpload = endpointEvents({ events }, MODULATION_ROUTE_ENDPOINT_ID)[0];
     assert.deepEqual(firstRouteUpload.value, {
@@ -233,7 +255,7 @@ test("modulation runtime event builder converts saved state into slot_envelope_a
     });
 });
 
-test("editing_one_mseg_slot_persists_modulation_v1_without_runtime_uploading", () => {
+test("editing_one_mseg_slot_persists_modulation_v2_without_runtime_uploading", () => {
     const patchConnection = new FakePatchConnection();
     const bridge = new ModulationRuntimeBridge(patchConnection);
 
@@ -242,7 +264,7 @@ test("editing_one_mseg_slot_persists_modulation_v1_without_runtime_uploading", (
     patchConnection.events = [];
     patchConnection.storedWrites = [];
 
-    bridge.setMsegSlotShape(0, {
+    bridge.setMsegSlotShape(0, 0, {
         ...createDefaultMsegShape(),
         points: [
             { x: 0.0, y: 0.15, curvePower: 0.0 },
@@ -252,6 +274,57 @@ test("editing_one_mseg_slot_persists_modulation_v1_without_runtime_uploading", (
     });
 
     assert.equal(patchConnection.storedWrites.some(({ key }) => key === MODULATION_STATE_KEY), true);
+    const savedState = deserializeModulationState(patchConnection.storedWrites.at(-1).value);
+    assert.equal(savedState.version, 2);
+    assert.equal(savedState.msegSlots[0].shapeA.points.length, 3);
+    assert.equal(savedState.msegSlots[0].shapeB.points.length, 2);
+    assert.deepEqual(patchConnection.events, []);
+});
+
+test("editing_shape_b_only_changes_shape_b_and_edit_focus_does_not_change_morph", () => {
+    const patchConnection = new FakePatchConnection();
+    const bridge = new ModulationRuntimeBridge(patchConnection);
+
+    bridge.attach();
+    bridge.requestBootState();
+    patchConnection.events = [];
+    patchConnection.storedWrites = [];
+
+    const controller = bridge.getMsegSlotController(0);
+    controller.setEditShapeIndex(1);
+    assert.equal(controller.getState().editShapeIndex, 1);
+    assert.equal(bridge.getState().msegSlots[0].morph, 0);
+    assert.equal(patchConnection.storedWrites.length, 0);
+
+    controller.setShape({
+        ...createDefaultMsegShape("MSEG 1 B"),
+        points: [
+            { x: 0.0, y: 0.95, curvePower: 0.0 },
+            { x: 1.0, y: 0.05, curvePower: 0.0 },
+        ],
+    });
+
+    const savedState = deserializeModulationState(patchConnection.storedWrites.at(-1).value);
+    assert.equal(savedState.msegSlots[0].shapeA.points[0].y, 0);
+    assert.equal(savedState.msegSlots[0].shapeB.points[0].y, 0.95);
+    assert.equal(savedState.msegSlots[0].morph, 0);
+    assert.deepEqual(patchConnection.events, []);
+});
+
+test("editing_morph_persists_without_uploading_mseg_buffers_or_retriggering", () => {
+    const patchConnection = new FakePatchConnection();
+    const bridge = new ModulationRuntimeBridge(patchConnection);
+
+    bridge.attach();
+    bridge.requestBootState();
+    patchConnection.events = [];
+    patchConnection.storedWrites = [];
+
+    bridge.setMsegSlotMorph(0, 0.625);
+
+    assert.equal(patchConnection.storedWrites.length, 1);
+    const savedState = deserializeModulationState(patchConnection.storedWrites[0].value);
+    assert.equal(savedState.msegSlots[0].morph, 0.625);
     assert.deepEqual(patchConnection.events, []);
 });
 

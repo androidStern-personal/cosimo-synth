@@ -23,6 +23,8 @@ import {
     clampMsegRateSeconds,
     createMsegEditorMetrics,
     pointToMsegEditorCoordinates,
+    renderMsegShape,
+    sampleRenderedMsegBuffer,
     sampleMsegEditorPolyline,
     sampleMsegSegmentEditorPolyline,
     type MsegSurfaceOrientation,
@@ -300,6 +302,47 @@ function buildMsegSurfacePaths(
     return { curvePath, fillPath, metrics };
 }
 
+function buildMsegMorphCurvePath(
+    shapeAPoints: Array<{ x: number; y: number; curvePower: number }> | null | undefined,
+    shapeBPoints: Array<{ x: number; y: number; curvePower: number }> | null | undefined,
+    morphValue: number | null | undefined,
+    width: number,
+    height: number,
+    options: {
+        orientation?: MsegSurfaceOrientation;
+        pointRadius?: number;
+        horizontalPadding?: number;
+        verticalPadding?: number;
+    } = {},
+) {
+    if (!shapeAPoints || !shapeBPoints || width <= 1 || height <= 1) {
+        return "";
+    }
+
+    try {
+        const bufferA = renderMsegShape({ points: shapeAPoints });
+        const bufferB = renderMsegShape({ points: shapeBPoints });
+        const morph = clamp(Number(morphValue) || 0, 0, 1);
+        const metrics = createMsegEditorMetrics(width, height, {
+            pointRadius: options.pointRadius,
+            horizontalPadding: options.horizontalPadding ?? MSEG_EDITOR_HORIZONTAL_PADDING_PX,
+            verticalPadding: options.verticalPadding ?? MSEG_EDITOR_VERTICAL_PADDING_PX,
+        });
+        const sampleCount = Math.max(48, Math.min(192, Math.round(metrics.plotWidth / 3)));
+        const polyline = Array.from({ length: sampleCount }, (_, sampleIndex) => {
+            const x = sampleIndex / Math.max(1, sampleCount - 1);
+            const valueA = sampleRenderedMsegBuffer(bufferA, x);
+            const valueB = sampleRenderedMsegBuffer(bufferB, x);
+            const y = clamp(valueA + ((valueB - valueA) * morph), 0, 1);
+            return pointToMsegEditorCoordinates({ x, y }, width, height, options);
+        });
+
+        return polylineToSvgPath(polyline);
+    } catch {
+        return "";
+    }
+}
+
 function polylineToSvgPath(polyline: Array<{ x: number; y: number }>) {
     if (polyline.length === 0) {
         return "";
@@ -372,11 +415,21 @@ function OctaveShiftGlyph({
 
 export function MsegPreview({
     points,
+    referencePoints = null,
+    morphShapeAPoints = null,
+    morphShapeBPoints = null,
+    morphValue = null,
+    showMorphCurve = false,
     orientation = "horizontal",
     className,
     progressFillEnd = null,
 }: {
     points: Array<{ x: number; y: number; curvePower: number }>;
+    referencePoints?: Array<{ x: number; y: number; curvePower: number }> | null;
+    morphShapeAPoints?: Array<{ x: number; y: number; curvePower: number }> | null;
+    morphShapeBPoints?: Array<{ x: number; y: number; curvePower: number }> | null;
+    morphValue?: number | null;
+    showMorphCurve?: boolean;
     orientation?: MsegSurfaceOrientation;
     className?: string;
     progressFillEnd?: number | null;
@@ -385,14 +438,37 @@ export function MsegPreview({
     const size = useResizeObserver(viewportRef);
     const clipPathId = useId().replace(/:/g, "_");
 
-    const { curvePath, fillPath, metrics } = useMemo(() => {
-        return buildMsegSurfacePaths(points, size.width, size.height, {
+    const { curvePath, fillPath, referenceCurvePath, referenceFillPath, morphCurvePath, metrics } = useMemo(() => {
+        const basePaths = buildMsegSurfacePaths(points, size.width, size.height, {
             orientation,
             pointRadius: 0,
             horizontalPadding: MSEG_PREVIEW_HORIZONTAL_PADDING_PX,
             verticalPadding: MSEG_PREVIEW_VERTICAL_PADDING_PX,
         });
-    }, [orientation, points, size.height, size.width]);
+        const referencePaths = referencePoints
+            ? buildMsegSurfacePaths(referencePoints, size.width, size.height, {
+                orientation,
+                pointRadius: 0,
+                horizontalPadding: MSEG_PREVIEW_HORIZONTAL_PADDING_PX,
+                verticalPadding: MSEG_PREVIEW_VERTICAL_PADDING_PX,
+            })
+            : null;
+        const nextMorphCurvePath = showMorphCurve
+            ? buildMsegMorphCurvePath(morphShapeAPoints, morphShapeBPoints, morphValue, size.width, size.height, {
+                orientation,
+                pointRadius: 0,
+                horizontalPadding: MSEG_PREVIEW_HORIZONTAL_PADDING_PX,
+                verticalPadding: MSEG_PREVIEW_VERTICAL_PADDING_PX,
+            })
+            : "";
+
+        return {
+            ...basePaths,
+            referenceCurvePath: referencePaths?.curvePath ?? "",
+            referenceFillPath: referencePaths?.fillPath ?? "",
+            morphCurvePath: nextMorphCurvePath,
+        };
+    }, [morphShapeAPoints, morphShapeBPoints, morphValue, orientation, points, referencePoints, showMorphCurve, size.height, size.width]);
     const clampedProgressFillEnd = progressFillEnd !== null
         && progressFillEnd !== undefined
         && Number.isFinite(Number(progressFillEnd))
@@ -462,6 +538,12 @@ export function MsegPreview({
                     />
                 ))}
             </g>
+            {referenceFillPath ? (
+                <path className="cosimo-reference-curve-fill" d={referenceFillPath} />
+            ) : null}
+            {referenceCurvePath ? (
+                <path className="cosimo-reference-curve-line" d={referenceCurvePath} />
+            ) : null}
             <path className="cosimo-curve-fill" d={fillPath} />
             {progressClipRect ? (
                 <g clipPath={`url(#${clipPathId})`}>
@@ -473,6 +555,13 @@ export function MsegPreview({
                 </g>
             ) : null}
             <path className="cosimo-curve-line" d={curvePath} />
+            {morphCurvePath ? (
+                <path
+                    data-role="mseg-preview-morph-curve"
+                    className="cosimo-mseg-effective-curve-line"
+                    d={morphCurvePath}
+                />
+            ) : null}
         </svg>
     );
 }
@@ -571,6 +660,11 @@ export function WavetableCanvas({
 export function EditableMsegSurface({
     surfaceRef,
     points,
+    referencePoints = null,
+    morphShapeAPoints = null,
+    morphShapeBPoints = null,
+    morphValue = null,
+    showMorphCurve = false,
     selectedPointIndex,
     hoveredSegmentIndex = -1,
     activeSegmentIndex = -1,
@@ -584,6 +678,11 @@ export function EditableMsegSurface({
 }: {
     surfaceRef: RefObject<SVGSVGElement | null>;
     points: Array<{ x: number; y: number; curvePower: number }>;
+    referencePoints?: Array<{ x: number; y: number; curvePower: number }> | null;
+    morphShapeAPoints?: Array<{ x: number; y: number; curvePower: number }> | null;
+    morphShapeBPoints?: Array<{ x: number; y: number; curvePower: number }> | null;
+    morphValue?: number | null;
+    showMorphCurve?: boolean;
     selectedPointIndex: number;
     hoveredSegmentIndex?: number;
     activeSegmentIndex?: number;
@@ -599,19 +698,28 @@ export function EditableMsegSurface({
     const emphasizedSegmentIndex = activeSegmentIndex >= 0 ? activeSegmentIndex : hoveredSegmentIndex;
     const hasEmphasizedSegment = emphasizedSegmentIndex >= 0;
 
-    const { curvePath, fillPath, highlightedSegmentPath, metrics } = useMemo(() => {
+    const { curvePath, fillPath, referenceCurvePath, referenceFillPath, morphCurvePath, highlightedSegmentPath, metrics } = useMemo(() => {
         const basePaths = buildMsegSurfacePaths(points, size.width, size.height, {
             orientation,
         });
+        const referencePaths = referencePoints
+            ? buildMsegSurfacePaths(referencePoints, size.width, size.height, { orientation })
+            : null;
+        const nextMorphCurvePath = showMorphCurve
+            ? buildMsegMorphCurvePath(morphShapeAPoints, morphShapeBPoints, morphValue, size.width, size.height, { orientation })
+            : "";
         const nextHighlightedSegmentPath = emphasizedSegmentIndex >= 0
             ? buildMsegSegmentPath(points, emphasizedSegmentIndex, size.width, size.height, { orientation })
             : "";
 
         return {
             ...basePaths,
+            referenceCurvePath: referencePaths?.curvePath ?? "",
+            referenceFillPath: referencePaths?.fillPath ?? "",
+            morphCurvePath: nextMorphCurvePath,
             highlightedSegmentPath: nextHighlightedSegmentPath,
         };
-    }, [emphasizedSegmentIndex, orientation, points, size.height, size.width]);
+    }, [emphasizedSegmentIndex, morphShapeAPoints, morphShapeBPoints, morphValue, orientation, points, referencePoints, showMorphCurve, size.height, size.width]);
 
     return (
         <svg
@@ -650,6 +758,20 @@ export function EditableMsegSurface({
                     />
                 ))}
             </g>
+            {referenceFillPath ? (
+                <path
+                    data-role="mseg-reference-fill"
+                    className="cosimo-reference-curve-fill"
+                    d={referenceFillPath}
+                />
+            ) : null}
+            {referenceCurvePath ? (
+                <path
+                    data-role="mseg-reference-curve"
+                    className="cosimo-reference-curve-line"
+                    d={referenceCurvePath}
+                />
+            ) : null}
             <path
                 data-role="mseg-base-fill"
                 className={joinClasses("cosimo-curve-fill", hasEmphasizedSegment && "cosimo-curve-fill-muted")}
@@ -660,6 +782,13 @@ export function EditableMsegSurface({
                 className={joinClasses("cosimo-curve-line", hasEmphasizedSegment && "cosimo-curve-line-muted")}
                 d={curvePath}
             />
+            {morphCurvePath ? (
+                <path
+                    data-role="mseg-effective-curve"
+                    className="cosimo-mseg-effective-curve-line"
+                    d={morphCurvePath}
+                />
+            ) : null}
             {highlightedSegmentPath ? (
                 <path
                     data-role="mseg-highlight-segment"

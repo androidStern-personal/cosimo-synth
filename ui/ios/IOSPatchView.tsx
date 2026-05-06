@@ -275,9 +275,12 @@ const IOSMsegLauncher = memo(function IOSMsegLauncher({
     msegState,
     observedMsegPlayhead,
     selectedMsegSlot,
+    selectedMsegMorph,
     previewOrientation,
     onOpenEditor,
     onToggleLoop,
+    onSelectMsegShape,
+    onMsegMorphChange,
     panValue,
     onPanChange,
     onSelectMsegSlot,
@@ -285,9 +288,12 @@ const IOSMsegLauncher = memo(function IOSMsegLauncher({
     msegState: ReturnType<typeof useSynthPatchViewModel>["msegState"];
     observedMsegPlayhead: ReturnType<typeof useSynthPatchViewModel>["observedMsegPlayhead"];
     selectedMsegSlot: number;
+    selectedMsegMorph: ReturnType<typeof useSynthPatchViewModel>["selectedMsegMorph"];
     previewOrientation: MsegSurfaceOrientation;
     onOpenEditor: () => void;
     onToggleLoop: () => void;
+    onSelectMsegShape: (shapeIndex: number) => void;
+    onMsegMorphChange: (nextValue: number) => void;
     panValue: number;
     onPanChange: (nextValue: number) => void;
     onSelectMsegSlot: (slotIndex: number) => void;
@@ -323,6 +329,45 @@ const IOSMsegLauncher = memo(function IOSMsegLauncher({
                             {slotIndex + 1}
                         </button>
                     ))}
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "auto minmax(0, 1fr)", gap: "0.75rem", alignItems: "center", marginBottom: "0.75rem" }}>
+                    <div style={{ display: "flex", gap: "0.35rem" }}>
+                        {[0, 1].map((shapeIndex) => (
+                            <button
+                                key={`ios-mseg-shape-${shapeIndex}`}
+                                type="button"
+                                aria-label={`Edit MSEG shape ${shapeIndex === 0 ? "A" : "B"}`}
+                                aria-pressed={msegState?.editShapeIndex === shapeIndex}
+                                onClick={() => onSelectMsegShape(shapeIndex)}
+                                style={{
+                                    borderRadius: "0.55rem",
+                                    border: "1px solid rgba(255,255,255,0.1)",
+                                    padding: "0.35rem 0.6rem",
+                                    background: msegState?.editShapeIndex === shapeIndex ? "rgba(88, 234, 208, 0.18)" : "rgba(255,255,255,0.04)",
+                                    color: "rgba(240,248,255,0.92)",
+                                    fontSize: "0.7rem",
+                                    fontWeight: 700,
+                                }}
+                            >
+                                {shapeIndex === 0 ? "A" : "B"}
+                            </button>
+                        ))}
+                    </div>
+                    <label className="mseg-rate">
+                        <span className="mseg-depth-label">Morph</span>
+                        <input
+                            className="mseg-rate-slider"
+                            type="range"
+                            aria-label="MSEG morph"
+                            data-role="mseg-morph-slider"
+                            min="0"
+                            max="1"
+                            step="0.001"
+                            value={selectedMsegMorph.value.toFixed(3)}
+                            onChange={(event) => onMsegMorphChange(Number(event.currentTarget.value))}
+                        />
+                    </label>
                 </div>
 
                 <button
@@ -858,6 +903,7 @@ const IOSMsegModal = memo(function IOSMsegModal({
     onClose,
     slotLabel,
     msegState,
+    selectedMsegMorph,
     surfaceRef,
     orientation,
     selectedPointIndex,
@@ -868,6 +914,8 @@ const IOSMsegModal = memo(function IOSMsegModal({
     onPointerLeave,
     onPointerUp,
     rateSeconds,
+    onSelectShape,
+    onMorphChange,
     onRateChange,
     onToggleLoop,
     rateFocusBindings,
@@ -876,6 +924,7 @@ const IOSMsegModal = memo(function IOSMsegModal({
     onClose: () => void;
     slotLabel: string;
     msegState: ReturnType<typeof useSynthPatchViewModel>["msegState"];
+    selectedMsegMorph: ReturnType<typeof useSynthPatchViewModel>["selectedMsegMorph"];
     surfaceRef: RefObject<SVGSVGElement | null>;
     orientation: MsegSurfaceOrientation;
     selectedPointIndex: number;
@@ -886,6 +935,8 @@ const IOSMsegModal = memo(function IOSMsegModal({
     onPointerLeave: (event: ReactPointerEvent<SVGSVGElement>) => void;
     onPointerUp: (event: ReactPointerEvent<SVGSVGElement>) => void;
     rateSeconds: number;
+    onSelectShape: (shapeIndex: number) => void;
+    onMorphChange: (nextValue: number) => void;
     onRateChange: (nextValue: number) => void;
     onToggleLoop: () => void;
     rateFocusBindings: ReturnType<typeof useSynthPatchViewModel>["keyboardRouting"]["msegRateFocusBindings"];
@@ -922,6 +973,7 @@ const IOSMsegModal = memo(function IOSMsegModal({
                                 className="mseg-surface mseg-modal-surface"
                                 orientation={orientation}
                                 points={msegState.shape.points}
+                                referencePoints={msegState.referenceShape?.points ?? null}
                                 selectedPointIndex={selectedPointIndex}
                                 hoveredSegmentIndex={hoveredSegmentIndex}
                                 activeSegmentIndex={activeSegmentIndex}
@@ -934,6 +986,20 @@ const IOSMsegModal = memo(function IOSMsegModal({
                     </div>
 
                     <div className="mseg-modal-footer">
+                        <label className="mseg-rate">
+                            <span className="mseg-depth-label">Morph</span>
+                            <input
+                                className="mseg-rate-slider"
+                                type="range"
+                                aria-label="MSEG morph"
+                                data-role="mseg-morph-slider"
+                                min="0"
+                                max="1"
+                                step="0.001"
+                                value={selectedMsegMorph.value.toFixed(3)}
+                                onChange={(event) => onMorphChange(Number(event.currentTarget.value))}
+                            />
+                        </label>
                         <label className="mseg-rate">
                             <span className="mseg-depth-label">Time In Seconds</span>
                             <input
@@ -949,6 +1015,22 @@ const IOSMsegModal = memo(function IOSMsegModal({
                             />
                         </label>
                         <div className="mseg-modal-footer-actions">
+                            {msegState ? (
+                                <div style={{ display: "flex", gap: "0.35rem" }}>
+                                    {[0, 1].map((shapeIndex) => (
+                                        <button
+                                            key={`ios-modal-mseg-shape-${shapeIndex}`}
+                                            className="mseg-loop-button"
+                                            type="button"
+                                            aria-label={`Edit MSEG shape ${shapeIndex === 0 ? "A" : "B"}`}
+                                            aria-pressed={msegState.editShapeIndex === shapeIndex}
+                                            onClick={() => onSelectShape(shapeIndex)}
+                                        >
+                                            {shapeIndex === 0 ? "A" : "B"}
+                                        </button>
+                                    ))}
+                                </div>
+                            ) : null}
                             <div className="mseg-rate-readout" data-role="mseg-rate-readout">
                                 {formatSeconds(rateSeconds)}
                             </div>
@@ -1357,9 +1439,12 @@ function IOSPatchViewBody() {
                                 msegState={synthView.msegState}
                                 observedMsegPlayhead={synthView.observedMsegPlayhead}
                                 selectedMsegSlot={synthView.selectedMsegSlot}
+                                selectedMsegMorph={synthView.selectedMsegMorph}
                                 previewOrientation={msegPreviewOrientation}
                                 onOpenEditor={openMsegModal}
                                 onToggleLoop={synthView.handleToggleMsegLoop}
+                                onSelectMsegShape={synthView.handleSelectMsegShape}
+                                onMsegMorphChange={synthView.handleMsegMorphChange}
                                 panValue={synthView.pan.value}
                                 onPanChange={synthView.pan.commitValue}
                                 onSelectMsegSlot={synthView.handleSelectMsegSlot}
@@ -1392,6 +1477,7 @@ function IOSPatchViewBody() {
                     onClose={closeMsegModal}
                     slotLabel={`MSEG ${synthView.selectedMsegSlot + 1}`}
                     msegState={synthView.msegState}
+                    selectedMsegMorph={synthView.selectedMsegMorph}
                     surfaceRef={msegEditorSurfaceRef}
                     orientation={msegEditorOrientation}
                     selectedPointIndex={synthView.msegEditor.selectedPointIndex}
@@ -1402,6 +1488,8 @@ function IOSPatchViewBody() {
                     onPointerLeave={synthView.msegEditor.handlePointerLeave}
                     onPointerUp={synthView.msegEditor.handlePointerUp}
                     rateSeconds={synthView.msegState?.playback.rate.seconds ?? 1}
+                    onSelectShape={synthView.handleSelectMsegShape}
+                    onMorphChange={synthView.handleMsegMorphChange}
                     onRateChange={synthView.handleMsegRateChange}
                     onToggleLoop={synthView.handleToggleMsegLoop}
                     rateFocusBindings={synthView.keyboardRouting.msegRateFocusBindings}

@@ -124,7 +124,7 @@ function buildDistortionHistoryFixture({ amplitude = 1.56, binCount = 160 } = {}
 }
 
 function readStoredModulationState(snapshot) {
-    return deserializeModulationState(snapshot.storedState["modulation.v1"]);
+    return deserializeModulationState(snapshot.storedState["modulation.v2"]);
 }
 
 function routeSummary(route) {
@@ -139,7 +139,7 @@ function routeSummary(route) {
 }
 
 async function setIOSStoredModulationState(page, nextState) {
-    await setIOSStoredStateValue(page, "modulation.v1", serializeModulationState(nextState));
+    await setIOSStoredStateValue(page, "modulation.v2", serializeModulationState(nextState));
 }
 
 async function waitForSnapshot(page, description, predicate, { attempts = 80, delayMs = 50 } = {}) {
@@ -1007,7 +1007,7 @@ test("mounted iPhone keeps the main-panel MSEG preview horizontal in portrait wh
         try {
             await waitForIOSHarnessReady(page);
             const modulationState = createDefaultModulationState();
-            modulationState.msegSlots[0].shape = cloneJson(IOS_MSEG_ORIENTATION_SHAPE);
+            modulationState.msegSlots[0].shapeA = cloneJson(IOS_MSEG_ORIENTATION_SHAPE);
             await setIOSStoredModulationState(page, modulationState);
 
             await waitForRenderedState(
@@ -1251,13 +1251,13 @@ test("mounted iPhone MSEG modal keeps the main view layout-stable while hidden, 
             const snapshot = await waitForSnapshot(
                 page,
                 `MSEG stored-state update after mounted edit at ${viewportSize.width}x${viewportSize.height}`,
-                (nextSnapshot) => readStoredModulationState(nextSnapshot).msegSlots[0].shape.points.length === 3,
+                (nextSnapshot) => readStoredModulationState(nextSnapshot).msegSlots[0].shapeA.points.length === 3,
             );
             assert.equal(
                 snapshot.sentMessages.some((message) => message.endpointID === "modulationMsegBuffer"),
                 false,
             );
-            const storedShape = readStoredModulationState(snapshot).msegSlots[0].shape;
+            const storedShape = readStoredModulationState(snapshot).msegSlots[0].shapeA;
             assert.equal(storedShape.format, "cosimo.mseg.shape");
             assert.equal(storedShape.points.length, 3);
             const insertedPoint = storedShape.points[1];
@@ -1321,13 +1321,13 @@ test("mounted iPhone MSEG modal treats segment tap as add, immediate drag as cur
         let snapshot = await waitForSnapshot(
             page,
             "segment tap inserts a point",
-            (nextSnapshot) => readStoredModulationState(nextSnapshot).msegSlots[0].shape.points.length === 3,
+            (nextSnapshot) => readStoredModulationState(nextSnapshot).msegSlots[0].shapeA.points.length === 3,
         );
         assert.equal(
             snapshot.sentMessages.some((message) => message.endpointID === "modulationMsegBuffer"),
             false,
         );
-        let storedShape = readStoredModulationState(snapshot).msegSlots[0].shape;
+        let storedShape = readStoredModulationState(snapshot).msegSlots[0].shapeA;
         assert.equal(storedShape.points.length, 3);
         assert.deepEqual(snapshot.hapticEvents, []);
 
@@ -1349,7 +1349,7 @@ test("mounted iPhone MSEG modal treats segment tap as add, immediate drag as cur
             page,
             "segment drag edits curve without inserting a point",
             (nextSnapshot) => {
-                const shape = readStoredModulationState(nextSnapshot).msegSlots[0].shape;
+                const shape = readStoredModulationState(nextSnapshot).msegSlots[0].shapeA;
                 return shape.points.length === 2 && Math.abs(Number(shape.points[0]?.curvePower)) > 0.1;
             },
         );
@@ -1357,7 +1357,7 @@ test("mounted iPhone MSEG modal treats segment tap as add, immediate drag as cur
             snapshot.sentMessages.some((message) => message.endpointID === "modulationMsegBuffer"),
             false,
         );
-        storedShape = readStoredModulationState(snapshot).msegSlots[0].shape;
+        storedShape = readStoredModulationState(snapshot).msegSlots[0].shapeA;
         assert.equal(storedShape.points.length, 2);
         assert.ok(Math.abs(storedShape.points[0].curvePower) > 0.1);
         assert.deepEqual(snapshot.hapticEvents, []);
@@ -1380,7 +1380,7 @@ test("mounted iPhone MSEG modal treats segment tap as add, immediate drag as cur
             page,
             "segment hold-drag edits curve and triggers haptic",
             (nextSnapshot) => {
-                const shape = readStoredModulationState(nextSnapshot).msegSlots[0].shape;
+                const shape = readStoredModulationState(nextSnapshot).msegSlots[0].shapeA;
                 return shape.points.length === 2 && Math.abs(Number(shape.points[0]?.curvePower)) > 0.1;
             },
         );
@@ -1388,7 +1388,7 @@ test("mounted iPhone MSEG modal treats segment tap as add, immediate drag as cur
             snapshot.sentMessages.some((message) => message.endpointID === "modulationMsegBuffer"),
             false,
         );
-        storedShape = readStoredModulationState(snapshot).msegSlots[0].shape;
+        storedShape = readStoredModulationState(snapshot).msegSlots[0].shapeA;
         assert.equal(storedShape.points.length, 2);
         assert.ok(Math.abs(storedShape.points[0].curvePower) > 0.1);
         assert.deepEqual(snapshot.hapticEvents, ["light"]);

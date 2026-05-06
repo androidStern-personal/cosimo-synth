@@ -19,7 +19,7 @@ import {
     type MsegState,
 } from "./mseg";
 
-export const MODULATION_STATE_KEY = "modulation.v1";
+export const MODULATION_STATE_KEY = "modulation.v2";
 export const MODULATION_MAX_ROUTES = 12;
 export const MODULATION_MSEG_SLOT_COUNT = 3;
 export const MODULATION_ENV_SLOT_COUNT = 3;
@@ -95,7 +95,9 @@ export type ModulationTargetOption = {
 };
 
 export type ModulationMsegSlot = {
-    shape: MsegShape;
+    shapeA: MsegShape;
+    shapeB: MsegShape;
+    morph: number;
     playback: MsegPlayback;
 };
 
@@ -119,7 +121,7 @@ export type ModulationRoute = {
 
 export type ModulationState = {
     format: "cosimo.modulation";
-    version: 1;
+    version: 2;
     msegSlots: ModulationMsegSlot[];
     envelopeSlots: ModulationEnvelope[];
     routes: ModulationRoute[];
@@ -127,6 +129,7 @@ export type ModulationState = {
 
 export type ModulationMsegBufferUpload = {
     slot: number;
+    shapeIndex: number;
     buffer: number[];
 };
 
@@ -197,6 +200,7 @@ let generatedRouteIdCounter = 1;
 export type MsegEditorControllerLike = {
     getState: () => MsegState;
     setShape: (nextShape: unknown) => void;
+    setEditShapeIndex?: (shapeIndex: number) => void;
     setPlayback: (nextPlayback: unknown) => void;
     addPoint: (x: number, y: number) => void;
     movePoint: (pointIndex: number, x: number, y: number) => void;
@@ -569,9 +573,12 @@ export function normalizeRoute(value: unknown, routeIndex = 0): ModulationRoute 
 function normalizeMsegSlot(value: unknown, slotIndex: number): ModulationMsegSlot {
     const nextValue = value && typeof value === "object" ? value as Partial<ModulationMsegSlot> : {};
     const defaultShape = createDefaultMsegShape(MSEG_SLOT_NAMES[slotIndex] ?? `MSEG ${slotIndex + 1}`);
+    const shapeA = normalizeMsegShape(nextValue.shapeA ?? defaultShape);
 
     return {
-        shape: normalizeMsegShape(nextValue.shape ?? defaultShape),
+        shapeA,
+        shapeB: normalizeMsegShape(nextValue.shapeB ?? shapeA),
+        morph: clamp01(nextValue.morph ?? 0),
         playback: normalizeMsegPlayback(nextValue.playback ?? createDefaultMsegPlayback()),
     };
 }
@@ -579,7 +586,7 @@ function normalizeMsegSlot(value: unknown, slotIndex: number): ModulationMsegSlo
 export function createDefaultModulationState(): ModulationState {
     return {
         format: "cosimo.modulation",
-        version: 1,
+        version: 2,
         msegSlots: Array.from({ length: MODULATION_MSEG_SLOT_COUNT }, (_, slotIndex) => normalizeMsegSlot({}, slotIndex)),
         envelopeSlots: Array.from({ length: MODULATION_ENV_SLOT_COUNT }, (_, slotIndex) => createDefaultEnvelope(slotIndex)),
         routes: [createDefaultRoute({ id: "mod-route-1" })],
@@ -594,7 +601,7 @@ export function normalizeModulationState(value: unknown = createDefaultModulatio
 
     return {
         format: "cosimo.modulation",
-        version: 1,
+        version: 2,
         msegSlots: Array.from({ length: MODULATION_MSEG_SLOT_COUNT }, (_, slotIndex) => normalizeMsegSlot(inputMsegSlots[slotIndex], slotIndex)),
         envelopeSlots: Array.from({ length: MODULATION_ENV_SLOT_COUNT }, (_, slotIndex) => normalizeEnvelope(inputEnvelopeSlots[slotIndex], slotIndex)),
         routes: inputRoutes.slice(0, MODULATION_MAX_ROUTES).map((route, routeIndex) => normalizeRoute(route, routeIndex)),
@@ -666,9 +673,10 @@ function toMsegPlaybackUpload(slotIndex: number, playback: MsegPlayback): Modula
     };
 }
 
-function toMsegBufferUpload(slotIndex: number, shape: MsegShape): ModulationMsegBufferUpload {
+function toMsegBufferUpload(slotIndex: number, shapeIndex: number, shape: MsegShape): ModulationMsegBufferUpload {
     return {
         slot: slotIndex + 1,
+        shapeIndex,
         buffer: Array.from(renderMsegShape(shape)),
     };
 }
@@ -709,7 +717,11 @@ export function buildModulationRuntimeEvents(stateValue: unknown): ModulationRun
         const slot = state.msegSlots[slotIndex];
         events.push({
             endpointID: MODULATION_MSEG_BUFFER_ENDPOINT_ID,
-            value: toMsegBufferUpload(slotIndex, slot.shape),
+            value: toMsegBufferUpload(slotIndex, 0, slot.shapeA),
+        });
+        events.push({
+            endpointID: MODULATION_MSEG_BUFFER_ENDPOINT_ID,
+            value: toMsegBufferUpload(slotIndex, 1, slot.shapeB),
         });
         events.push({
             endpointID: MODULATION_MSEG_PLAYBACK_ENDPOINT_ID,
@@ -769,16 +781,28 @@ class ModulationMsegSlotController implements MsegEditorControllerLike {
 
     getState(): MsegState {
         const slot = this.bridge.getState().msegSlots[this.slotIndex];
+        const editShapeIndex = this.bridge.getMsegSlotEditShapeIndex(this.slotIndex);
+        const shape = editShapeIndex === 1 ? slot.shapeB : slot.shapeA;
+        const referenceShape = editShapeIndex === 1 ? slot.shapeA : slot.shapeB;
 
         return {
-            shape: slot.shape,
+            shape,
+            shapeA: slot.shapeA,
+            shapeB: slot.shapeB,
+            referenceShape,
+            editShapeIndex,
+            morph: slot.morph,
             playback: slot.playback,
             depth: MSEG_DEFAULT_DEPTH,
         };
     }
 
     setShape(nextShape: unknown) {
-        this.bridge.setMsegSlotShape(this.slotIndex, nextShape);
+        this.bridge.setMsegSlotShape(this.slotIndex, this.bridge.getMsegSlotEditShapeIndex(this.slotIndex), nextShape);
+    }
+
+    setEditShapeIndex(shapeIndex: number) {
+        this.bridge.setMsegSlotEditShapeIndex(this.slotIndex, shapeIndex);
     }
 
     setPlayback(nextPlayback: unknown) {
@@ -808,6 +832,7 @@ export class ModulationRuntimeBridge {
     private suppressStoredStateEvents = 0;
     private readonly pendingStoredStateEchoes = new Map<string, Map<string, number>>();
     private readonly stateListeners = new Set<(state: ModulationState) => void>();
+    private readonly msegSlotEditShapeIndexes = Array.from({ length: MODULATION_MSEG_SLOT_COUNT }, () => 0 as 0 | 1);
     private readonly slotControllers = Array.from(
         { length: MODULATION_MSEG_SLOT_COUNT },
         (_, slotIndex) => new ModulationMsegSlotController(this, slotIndex),
@@ -861,6 +886,22 @@ export class ModulationRuntimeBridge {
         return this.slotControllers[clamp(Math.round(slotIndex), 0, MODULATION_MSEG_SLOT_COUNT - 1)];
     }
 
+    getMsegSlotEditShapeIndex(slotIndex: number) {
+        return this.msegSlotEditShapeIndexes[clamp(Math.round(slotIndex), 0, MODULATION_MSEG_SLOT_COUNT - 1)];
+    }
+
+    setMsegSlotEditShapeIndex(slotIndex: number, shapeIndex: number) {
+        const normalizedSlotIndex = clamp(Math.round(slotIndex), 0, MODULATION_MSEG_SLOT_COUNT - 1);
+        const normalizedShapeIndex = Math.round(Number(shapeIndex)) === 1 ? 1 : 0;
+
+        if (this.msegSlotEditShapeIndexes[normalizedSlotIndex] === normalizedShapeIndex) {
+            return;
+        }
+
+        this.msegSlotEditShapeIndexes[normalizedSlotIndex] = normalizedShapeIndex;
+        this.emitStateChange();
+    }
+
     setState(nextState: unknown) {
         const normalizedState = normalizeModulationState(nextState);
 
@@ -873,18 +914,21 @@ export class ModulationRuntimeBridge {
         this.emitStateChange();
     }
 
-    setMsegSlotShape(slotIndex: number, nextShape: unknown) {
+    setMsegSlotShape(slotIndex: number, shapeIndex: number, nextShape: unknown) {
         const normalizedShape = normalizeMsegShape(nextShape);
         const currentSlot = this.state.msegSlots[slotIndex];
+        const currentShape = Math.round(Number(shapeIndex)) === 1 ? currentSlot.shapeB : currentSlot.shapeA;
 
-        if (msegShapesEqual(currentSlot.shape, normalizedShape)) {
+        if (msegShapesEqual(currentShape, normalizedShape)) {
             return;
         }
 
         this.updateState((previousState) => {
             const nextMsegSlots = previousState.msegSlots.map((slot, index) => (
                 index === slotIndex
-                    ? { ...slot, shape: normalizedShape }
+                    ? Math.round(Number(shapeIndex)) === 1
+                        ? { ...slot, shapeB: normalizedShape }
+                        : { ...slot, shapeA: normalizedShape }
                     : slot
             ));
 
@@ -893,6 +937,22 @@ export class ModulationRuntimeBridge {
                 msegSlots: nextMsegSlots,
             };
         });
+    }
+
+    setMsegSlotMorph(slotIndex: number, nextMorph: number) {
+        const normalizedMorph = clamp01(nextMorph);
+        const currentSlot = this.state.msegSlots[slotIndex];
+
+        if (currentSlot.morph === normalizedMorph) {
+            return;
+        }
+
+        this.updateState((previousState) => ({
+            ...previousState,
+            msegSlots: previousState.msegSlots.map((slot, index) => (
+                index === slotIndex ? { ...slot, morph: normalizedMorph } : slot
+            )),
+        }));
     }
 
     setMsegSlotPlayback(slotIndex: number, nextPlayback: unknown) {
@@ -1035,7 +1095,13 @@ export class ModulationRuntimeBridge {
     }
 
     private emitStateChange() {
-        this.stateListeners.forEach((listener) => listener(this.state));
+        const stateSnapshot = {
+            ...this.state,
+            msegSlots: [...this.state.msegSlots],
+            envelopeSlots: [...this.state.envelopeSlots],
+            routes: [...this.state.routes],
+        };
+        this.stateListeners.forEach((listener) => listener(stateSnapshot));
     }
 
     private rememberPendingStoredStateEcho(key: string, value: unknown) {

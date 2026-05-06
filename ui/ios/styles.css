@@ -780,6 +780,27 @@ select {
     stroke: rgba(225, 231, 240, 0.38);
 }
 
+.cosimo-reference-curve-fill {
+    fill: rgba(225, 231, 240, 0.04);
+}
+
+.cosimo-reference-curve-line {
+    fill: none;
+    stroke: rgba(225, 231, 240, 0.38);
+    stroke-width: 3;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.cosimo-mseg-effective-curve-line {
+    fill: none;
+    stroke: #fbbf24;
+    stroke-width: 3.25;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    filter: drop-shadow(0 0 8px rgba(251, 191, 36, 0.32));
+}
+
 .cosimo-curve-line-highlight {
     stroke: #32f0bc;
 }

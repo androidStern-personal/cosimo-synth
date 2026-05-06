@@ -68,6 +68,11 @@ export type MsegPlayback = {
 
 export type MsegState = {
     shape: MsegShape;
+    shapeA?: MsegShape;
+    shapeB?: MsegShape;
+    referenceShape?: MsegShape;
+    editShapeIndex?: 0 | 1;
+    morph?: number;
     playback: MsegPlayback;
     depth: number;
 };

@@ -12,7 +12,7 @@
 namespace cosimo::modulation
 {
 
-constexpr auto modulationStateKey = "modulation.v1";
+constexpr auto modulationStateKey = "modulation.v2";
 constexpr auto modulationClearEndpointID = "modulationClear";
 constexpr auto modulationEnableEndpointID = "modulationEnable";
 constexpr auto modulationMsegBufferEndpointID = "modulationMsegBuffer";
@@ -56,11 +56,17 @@ struct MsegPoint
 
 struct MsegSlot
 {
-    std::vector<MsegPoint> points
+    std::vector<MsegPoint> pointsA
     {
         { 0.0f, 0.0f, 0.0f },
         { 1.0f, 1.0f, 0.0f },
     };
+    std::vector<MsegPoint> pointsB
+    {
+        { 0.0f, 0.0f, 0.0f },
+        { 1.0f, 1.0f, 0.0f },
+    };
+    float morph = 0.0f;
     double seconds = 1.0;
     bool holdFinalValue = true;
     bool loopEnabled = true;
@@ -209,14 +215,14 @@ inline float evaluateShape (const std::vector<MsegPoint>& points, float x)
     return points.back().y;
 }
 
-inline std::vector<float> renderMsegBuffer (const MsegSlot& slot)
+inline std::vector<float> renderMsegBuffer (const std::vector<MsegPoint>& points)
 {
     std::vector<float> rendered (msegPaddedSamples, 0.0f);
 
     for (int sampleIndex = 0; sampleIndex < msegBodySamples; ++sampleIndex)
     {
         const auto x = static_cast<float> (sampleIndex) / static_cast<float> (msegBodySamples - 1);
-        rendered[static_cast<size_t> (sampleIndex + 1)] = evaluateShape (slot.points, x);
+        rendered[static_cast<size_t> (sampleIndex + 1)] = evaluateShape (points, x);
     }
 
     rendered[0] = rendered[1];
@@ -237,12 +243,12 @@ inline MsegPoint parsePoint (const choc::value::ValueView& value, size_t pointIn
 inline std::vector<MsegPoint> parsePoints (const choc::value::ValueView& shapeValue)
 {
     if (! shapeValue.isObject() || ! shapeValue.hasObjectMember ("points"))
-        return MsegSlot {}.points;
+        return MsegSlot {}.pointsA;
 
     const auto pointsValue = shapeValue["points"];
 
     if (! pointsValue.isArray() || pointsValue.size() < 2)
-        return MsegSlot {}.points;
+        return MsegSlot {}.pointsA;
 
     std::vector<MsegPoint> points;
     points.reserve (pointsValue.size());
@@ -251,11 +257,11 @@ inline std::vector<MsegPoint> parsePoints (const choc::value::ValueView& shapeVa
         points.push_back (parsePoint (pointsValue[index], static_cast<size_t> (index), static_cast<size_t> (pointsValue.size())));
 
     if (! almostEqual (points.front().x, 0.0f) || ! almostEqual (points.back().x, 1.0f))
-        return MsegSlot {}.points;
+        return MsegSlot {}.pointsA;
 
     for (size_t index = 1; index < points.size(); ++index)
         if (points[index].x < points[index - 1].x)
-            return MsegSlot {}.points;
+            return MsegSlot {}.pointsA;
 
     return points;
 }
@@ -267,8 +273,15 @@ inline MsegSlot parseMsegSlot (const choc::value::ValueView& value)
     if (! value.isObject())
         return slot;
 
-    if (value.hasObjectMember ("shape"))
-        slot.points = parsePoints (value["shape"]);
+    if (value.hasObjectMember ("shapeA"))
+        slot.pointsA = parsePoints (value["shapeA"]);
+
+    if (value.hasObjectMember ("shapeB"))
+        slot.pointsB = parsePoints (value["shapeB"]);
+    else
+        slot.pointsB = slot.pointsA;
+
+    slot.morph = clamp01 (value["morph"].getWithDefault (0.0f));
 
     if (value.hasObjectMember ("playback") && value["playback"].isObject())
     {
@@ -383,6 +396,12 @@ inline bool sendValue (cmaj::Patch& patch, std::string_view endpointID, int32_t 
     return patch.sendEventOrValueToPatch (cmaj::EndpointID::create (endpointID), wrappedValue, rampFrames, timeoutMilliseconds);
 }
 
+inline bool sendValue (cmaj::Patch& patch, std::string_view endpointID, float value, int32_t rampFrames = 0, uint32_t timeoutMilliseconds = 2000)
+{
+    auto wrappedValue = choc::value::createFloat32 (clamp01 (value));
+    return patch.sendEventOrValueToPatch (cmaj::EndpointID::create (endpointID), wrappedValue, rampFrames, timeoutMilliseconds);
+}
+
 inline bool uploadStateToPatch (cmaj::Patch& patch, const State& state)
 {
     auto ok = true;
@@ -392,11 +411,21 @@ inline bool uploadStateToPatch (cmaj::Patch& patch, const State& state)
     for (int slotIndex = 0; slotIndex < modulationMsegSlotCount; ++slotIndex)
     {
         const auto& slot = state.msegSlots[static_cast<size_t> (slotIndex)];
-        auto bufferUpload = choc::json::create (
+        auto bufferUploadA = choc::json::create (
             "slot", slotIndex + 1,
-            "buffer", choc::value::createArray (renderMsegBuffer (slot))
+            "shapeIndex", 0,
+            "buffer", choc::value::createArray (renderMsegBuffer (slot.pointsA))
         );
-        ok = ok && sendValue (patch, modulationMsegBufferEndpointID, bufferUpload);
+        ok = ok && sendValue (patch, modulationMsegBufferEndpointID, bufferUploadA);
+
+        auto bufferUploadB = choc::json::create (
+            "slot", slotIndex + 1,
+            "shapeIndex", 1,
+            "buffer", choc::value::createArray (renderMsegBuffer (slot.pointsB))
+        );
+        ok = ok && sendValue (patch, modulationMsegBufferEndpointID, bufferUploadB);
+
+        ok = ok && sendValue (patch, "mseg" + std::to_string (slotIndex + 1) + "Morph", slot.morph);
 
         auto playbackUpload = choc::json::create (
             "slot", slotIndex + 1,

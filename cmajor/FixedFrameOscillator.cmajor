@@ -115,6 +115,7 @@ namespace wt
     struct ModulationMsegBufferUpload
     {
         int32 slot;
+        int32 shapeIndex;
         float32[msegPaddedSamples] buffer;
     }
 
@@ -1138,6 +1139,9 @@ namespace wt
         input value float32 filterCutoffIn [[ name: "Filter Cutoff", min: 20.0f, max: 20000.0f, init: 1000.0f, unit: "Hz", rampFrames: 64 ]];
         input value float32 filterQIn [[ name: "Filter Q", min: 0.1f, max: 20.0f, init: 0.707107f, rampFrames: 64 ]];
         input value float32 panIn [[ name: "Pan", min: -1.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
+        input value float32 mseg1MorphIn [[ name: "MSEG 1 Morph", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 0 ]];
+        input value float32 mseg2MorphIn [[ name: "MSEG 2 Morph", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 0 ]];
+        input value float32 mseg3MorphIn [[ name: "MSEG 3 Morph", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 0 ]];
         output event WavetableUploadAck wavetableUploadAckOut;
         output event WavetableMipRequest wavetableMipRequestOut;
         output event RuntimeServiceState runtimeServiceStateOut;
@@ -1289,26 +1293,32 @@ namespace wt
             }
         }
 
-        void uploadMsegBufferToSlot (int32 slot, const float32[msegPaddedSamples] buffer)
+        void uploadMsegBufferToSlot (int32 slot, int32 shapeIndex, const float32[msegPaddedSamples] buffer)
         {
+            wt::MsegBufferUpload shapeUpload;
+            shapeUpload.shapeIndex = shapeIndex == 1 ? 1 : 0;
+
+            for (int32 sampleIndex = 0; sampleIndex < msegPaddedSamples; ++sampleIndex)
+                shapeUpload.buffer.at (sampleIndex) = buffer.at (sampleIndex);
+
             if (slot == 1)
             {
                 for (wrap<voiceCount> voice)
-                    mseg1[voice].bufferUpload <- buffer;
+                    mseg1[voice].bufferUpload <- shapeUpload;
                 return;
             }
 
             if (slot == 2)
             {
                 for (wrap<voiceCount> voice)
-                    mseg2[voice].bufferUpload <- buffer;
+                    mseg2[voice].bufferUpload <- shapeUpload;
                 return;
             }
 
             if (slot == 3)
             {
                 for (wrap<voiceCount> voice)
-                    mseg3[voice].bufferUpload <- buffer;
+                    mseg3[voice].bufferUpload <- shapeUpload;
             }
         }
 
@@ -1389,9 +1399,23 @@ namespace wt
         {
             let voice = wrap<voiceCount> (voiceIndex);
 
-            if (slot == 1) return mseg1[voice].out;
-            if (slot == 2) return mseg2[voice].out;
-            if (slot == 3) return mseg3[voice].out;
+            if (slot == 1)
+            {
+                let morph = std::intrinsics::clamp (mseg1MorphIn, 0.0f, 1.0f);
+                return mseg1[voice].outA + ((mseg1[voice].outB - mseg1[voice].outA) * morph);
+            }
+
+            if (slot == 2)
+            {
+                let morph = std::intrinsics::clamp (mseg2MorphIn, 0.0f, 1.0f);
+                return mseg2[voice].outA + ((mseg2[voice].outB - mseg2[voice].outA) * morph);
+            }
+
+            if (slot == 3)
+            {
+                let morph = std::intrinsics::clamp (mseg3MorphIn, 0.0f, 1.0f);
+                return mseg3[voice].outA + ((mseg3[voice].outB - mseg3[voice].outA) * morph);
+            }
 
             return 0.0f;
         }
@@ -2162,7 +2186,7 @@ namespace wt
 
         event modulationMsegBufferIn (ModulationMsegBufferUpload upload)
         {
-            uploadMsegBufferToSlot (upload.slot, upload.buffer);
+            uploadMsegBufferToSlot (upload.slot, upload.shapeIndex, upload.buffer);
         }
 
         event modulationMsegPlaybackIn (ModulationMsegPlaybackUpload upload)

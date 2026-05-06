@@ -794,7 +794,7 @@ function renderMsegShape(shape) {
   padded[MSEG_BODY_SAMPLES + 2] = body[MSEG_BODY_SAMPLES - 1];
   return padded;
 }
-const MODULATION_STATE_KEY = "modulation.v1";
+const MODULATION_STATE_KEY = "modulation.v2";
 const MODULATION_MAX_ROUTES = 12;
 const MODULATION_MSEG_SLOT_COUNT = 3;
 const MODULATION_ENV_SLOT_COUNT = 3;
@@ -933,15 +933,18 @@ function normalizeRoute(value, routeIndex = 0) {
 function normalizeMsegSlot(value, slotIndex) {
   const nextValue = value && typeof value === "object" ? value : {};
   const defaultShape = createDefaultMsegShape(MSEG_SLOT_NAMES[slotIndex] ?? `MSEG ${slotIndex + 1}`);
+  const shapeA = normalizeMsegShape(nextValue.shapeA ?? defaultShape);
   return {
-    shape: normalizeMsegShape(nextValue.shape ?? defaultShape),
+    shapeA,
+    shapeB: normalizeMsegShape(nextValue.shapeB ?? shapeA),
+    morph: clamp01(nextValue.morph ?? 0),
     playback: normalizeMsegPlayback(nextValue.playback ?? createDefaultMsegPlayback())
   };
 }
 function createDefaultModulationState() {
   return {
     format: "cosimo.modulation",
-    version: 1,
+    version: 2,
     msegSlots: Array.from({ length: MODULATION_MSEG_SLOT_COUNT }, (_, slotIndex) => normalizeMsegSlot({}, slotIndex)),
     envelopeSlots: Array.from({ length: MODULATION_ENV_SLOT_COUNT }, (_, slotIndex) => createDefaultEnvelope(slotIndex)),
     routes: [createDefaultRoute({ id: "mod-route-1" })]
@@ -954,7 +957,7 @@ function normalizeModulationState(value = createDefaultModulationState()) {
   const inputRoutes = Array.isArray(nextValue.routes) ? nextValue.routes : [];
   return {
     format: "cosimo.modulation",
-    version: 1,
+    version: 2,
     msegSlots: Array.from({ length: MODULATION_MSEG_SLOT_COUNT }, (_, slotIndex) => normalizeMsegSlot(inputMsegSlots[slotIndex], slotIndex)),
     envelopeSlots: Array.from({ length: MODULATION_ENV_SLOT_COUNT }, (_, slotIndex) => normalizeEnvelope(inputEnvelopeSlots[slotIndex], slotIndex)),
     routes: inputRoutes.slice(0, MODULATION_MAX_ROUTES).map((route, routeIndex) => normalizeRoute(route, routeIndex))
@@ -999,9 +1002,10 @@ function toMsegPlaybackUpload(slotIndex, playback) {
     legatoRestarts: Boolean(playback.legatoRestarts)
   };
 }
-function toMsegBufferUpload(slotIndex, shape) {
+function toMsegBufferUpload(slotIndex, shapeIndex, shape) {
   return {
     slot: slotIndex + 1,
+    shapeIndex,
     buffer: Array.from(renderMsegShape(shape))
   };
 }
@@ -1037,7 +1041,11 @@ function buildModulationRuntimeEvents(stateValue) {
     const slot = state.msegSlots[slotIndex];
     events.push({
       endpointID: MODULATION_MSEG_BUFFER_ENDPOINT_ID,
-      value: toMsegBufferUpload(slotIndex, slot.shape)
+      value: toMsegBufferUpload(slotIndex, 0, slot.shapeA)
+    });
+    events.push({
+      endpointID: MODULATION_MSEG_BUFFER_ENDPOINT_ID,
+      value: toMsegBufferUpload(slotIndex, 1, slot.shapeB)
     });
     events.push({
       endpointID: MODULATION_MSEG_PLAYBACK_ENDPOINT_ID,
@@ -1061,6 +1069,26 @@ function buildModulationRuntimeEvents(stateValue) {
 }
 function hasOwnValue(record, key) {
   return Object.prototype.hasOwnProperty.call(record, key);
+}
+function getFullStoredStateValue(storedState, key) {
+  const fullState = storedState && typeof storedState === "object" ? storedState : {};
+  const values = fullState.values && typeof fullState.values === "object" ? fullState.values : {};
+  if (hasOwnValue(values, key)) {
+    return {
+      found: true,
+      value: values[key]
+    };
+  }
+  if (hasOwnValue(fullState, key)) {
+    return {
+      found: true,
+      value: fullState[key]
+    };
+  }
+  return {
+    found: false,
+    value: void 0
+  };
 }
 function toStableToken(value) {
   try {
@@ -1120,9 +1148,9 @@ class StoredStateRuntimeMirror {
   requestStoredState() {
     if (typeof this.connection.requestFullStoredState === "function") {
       this.connection.requestFullStoredState((storedState) => {
-        const fullState = storedState && typeof storedState === "object" ? storedState : {};
-        if (hasOwnValue(fullState, this.options.stateKey)) {
-          this.applyStoredValue(fullState[this.options.stateKey]);
+        const storedValue = getFullStoredStateValue(storedState, this.options.stateKey);
+        if (storedValue.found) {
+          this.applyStoredValue(storedValue.value);
           return;
         }
         this.handleMissingStoredState();
@@ -1136,11 +1164,13 @@ class StoredStateRuntimeMirror {
     this.handleMissingStoredState();
   }
   handleMissingStoredState() {
-    if (this.options.applyDefaultRuntimeStateWhenMissing) {
-      this.applyStoredValue(void 0);
+    if (typeof this.connection.requestStoredStateValue === "function") {
+      this.connection.requestStoredStateValue(this.options.stateKey);
       return;
     }
-    this.connection.requestStoredStateValue?.(this.options.stateKey);
+    if (this.options.applyDefaultRuntimeStateWhenMissing) {
+      this.applyStoredValue(void 0);
+    }
   }
   handleStoredStateValue(message) {
     if (!message || typeof message !== "object") {
@@ -1211,11 +1241,14 @@ class StoredStateRuntimeMirror {
       parameters,
       runtimeEndpoints
     };
-    const nextAppliedToken = toStableToken(snapshot);
+    const events = this.options.buildRuntimeEvents(snapshot);
+    const nextAppliedToken = toStableToken({
+      runtimeEndpoints,
+      events
+    });
     if (nextAppliedToken === this.lastAppliedToken) {
       return;
     }
-    const events = this.options.buildRuntimeEvents(snapshot);
     for (const event of events) {
       this.connection.sendEventOrValue?.(event.endpointID, event.value);
     }
