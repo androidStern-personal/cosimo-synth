@@ -3,7 +3,7 @@
   "ID": "dev.cosimo.spectral-chord-resonator",
   "version": "0.1.0",
   "name": "Spectral Chord Resonator",
-  "description": "FFT-bin feedback resonator keyed by held MIDI chord pitches and driven by a sidechain audio input.",
+  "description": "FFT-bin feedback resonator keyed by held MIDI notes and driven by the audio track input.",
   "category": "effect",
   "manufacturer": "Cosimo",
   "isInstrument": false,

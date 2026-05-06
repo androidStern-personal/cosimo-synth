@@ -61,8 +61,8 @@ def base_events(**overrides: float) -> list[list[object]]:
     return [event(endpoint_id, value) for endpoint_id, value in values.items()]
 
 
-def as_stereo_sidechain(sidechain: np.ndarray) -> np.ndarray:
-    audio = np.asarray(sidechain, dtype=np.float32)
+def as_stereo_source(source: np.ndarray) -> np.ndarray:
+    audio = np.asarray(source, dtype=np.float32)
 
     if audio.ndim == 1:
         return np.stack([audio, audio])
@@ -73,7 +73,7 @@ def as_stereo_sidechain(sidechain: np.ndarray) -> np.ndarray:
     if audio.ndim == 2 and audio.shape[1] == 2:
         return audio.T
 
-    raise RuntimeError(f"Expected mono or stereo sidechain audio, got shape {audio.shape}")
+    raise RuntimeError(f"Expected mono or stereo source audio, got shape {audio.shape}")
 
 
 def deterministic_probe_signal(num_samples: int, *, amplitude: float = 0.24) -> np.ndarray:
@@ -120,17 +120,17 @@ def write_render_script(temp_dir: Path) -> Path:
 const fs = require("fs");
 
 const RuntimeClass = require(process.argv[2]);
-const sidechainPath = process.argv[3];
+const sourcePath = process.argv[3];
 const schedulePath = process.argv[4];
 const outputPath = process.argv[5];
 const numFrames = Number(process.argv[6]);
 const sampleRate = Number(process.argv[7]);
-const sidechainChannelCount = Number(process.argv[8] || "1");
-const sidechainBuffer = fs.readFileSync(sidechainPath);
-const sidechain = new Float32Array(
-    sidechainBuffer.buffer,
-    sidechainBuffer.byteOffset,
-    sidechainBuffer.byteLength / Float32Array.BYTES_PER_ELEMENT
+const sourceChannelCount = Number(process.argv[8] || "1");
+const sourceBuffer = fs.readFileSync(sourcePath);
+const source = new Float32Array(
+    sourceBuffer.buffer,
+    sourceBuffer.byteOffset,
+    sourceBuffer.byteLength / Float32Array.BYTES_PER_ELEMENT
 );
 const schedule = JSON.parse(fs.readFileSync(schedulePath, "utf8"));
 
@@ -172,20 +172,17 @@ const schedule = JSON.parse(fs.readFileSync(schedulePath, "utf8"));
         );
 
         if (framesThisBlock > 0) {
-            const audioZeroLeft = new Float32Array(framesThisBlock);
-            const audioZeroRight = new Float32Array(framesThisBlock);
-            const sidechainLeft = new Float32Array(framesThisBlock);
-            const sidechainRight = new Float32Array(framesThisBlock);
+            const sourceLeft = new Float32Array(framesThisBlock);
+            const sourceRight = new Float32Array(framesThisBlock);
             for (let index = 0; index < framesThisBlock; index += 1) {
-                const left = sidechain[cursor + index] ?? 0;
-                const right = sidechainChannelCount > 1
-                    ? sidechain[numFrames + cursor + index] ?? 0
+                const left = source[cursor + index] ?? 0;
+                const right = sourceChannelCount > 1
+                    ? source[numFrames + cursor + index] ?? 0
                     : left;
-                sidechainLeft[index] = left;
-                sidechainRight[index] = right;
+                sourceLeft[index] = left;
+                sourceRight[index] = right;
             }
-            patch.setInputStreamFrames_audioIn([audioZeroLeft, audioZeroRight], framesThisBlock, 0);
-            patch.setInputStreamFrames_sidechainIn([sidechainLeft, sidechainRight], framesThisBlock, 0);
+            patch.setInputStreamFrames_audioIn([sourceLeft, sourceRight], framesThisBlock, 0);
             patch.advance(framesThisBlock);
             const outLeft = new Float32Array(framesThisBlock);
             const outRight = new Float32Array(framesThisBlock);
@@ -213,26 +210,26 @@ const schedule = JSON.parse(fs.readFileSync(schedulePath, "utf8"));
     return render_script_path
 
 
-def render_stereo(runtime_path: Path, render_script_path: Path, temp_dir: Path, sidechain: np.ndarray, schedule: dict[int, list[list[object]]]) -> np.ndarray:
+def render_stereo(runtime_path: Path, render_script_path: Path, temp_dir: Path, source: np.ndarray, schedule: dict[int, list[list[object]]]) -> np.ndarray:
     node = require_tool("node")
-    sidechain_channels = as_stereo_sidechain(sidechain)
-    num_frames = sidechain_channels.shape[1]
-    sidechain_path = temp_dir / "sidechain.f32"
+    source_channels = as_stereo_source(source)
+    num_frames = source_channels.shape[1]
+    source_path = temp_dir / "source.f32"
     schedule_path = temp_dir / "schedule.json"
     output_path = temp_dir / "output.f32"
-    sidechain_channels.tofile(sidechain_path)
+    source_channels.tofile(source_path)
     schedule_path.write_text(json.dumps({str(k): v for k, v in schedule.items()}, indent=2) + "\n", encoding="utf-8")
     result = subprocess.run(
         [
             node,
             str(render_script_path),
             str(runtime_path),
-            str(sidechain_path),
+            str(source_path),
             str(schedule_path),
             str(output_path),
             str(num_frames),
             str(SAMPLE_RATE),
-            str(sidechain_channels.shape[0]),
+            str(source_channels.shape[0]),
         ],
         cwd=REPO_ROOT,
         capture_output=True,
@@ -246,13 +243,13 @@ def render_stereo(runtime_path: Path, render_script_path: Path, temp_dir: Path, 
     return rendered
 
 
-def render(runtime_path: Path, render_script_path: Path, temp_dir: Path, sidechain: np.ndarray, schedule: dict[int, list[list[object]]]) -> np.ndarray:
-    rendered = render_stereo(runtime_path, render_script_path, temp_dir, sidechain, schedule)
+def render(runtime_path: Path, render_script_path: Path, temp_dir: Path, source: np.ndarray, schedule: dict[int, list[list[object]]]) -> np.ndarray:
+    rendered = render_stereo(runtime_path, render_script_path, temp_dir, source, schedule)
 
-    if np.asarray(sidechain).ndim == 1:
+    if np.asarray(source).ndim == 1:
         stereo_error = float(np.max(np.abs(rendered[0] - rendered[1])))
         if stereo_error > 1.0e-7:
-            raise RuntimeError(f"Mono sidechain render produced mismatched stereo output: {stereo_error}")
+            raise RuntimeError(f"Mono source render produced mismatched stereo output: {stereo_error}")
 
     return rendered[0]
 
