@@ -178,11 +178,14 @@ export class StoredStateRuntimeMirror {
             parameters,
             runtimeEndpoints,
         };
-        const nextAppliedToken = toStableToken(snapshot);
+        const events = this.options.buildRuntimeEvents(snapshot);
+        const nextAppliedToken = toStableToken({
+            runtimeEndpoints,
+            events,
+        });
         if (nextAppliedToken === this.lastAppliedToken) {
             return;
         }
-        const events = this.options.buildRuntimeEvents(snapshot);
         for (const event of events) {
             this.connection.sendEventOrValue?.(event.endpointID, event.value);
         }

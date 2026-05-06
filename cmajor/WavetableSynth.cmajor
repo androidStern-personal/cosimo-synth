@@ -829,7 +829,7 @@ namespace wt
         input event wt::WavetableLoadBegin wavetableLoadBeginIn;
         input event wt::WavetableMipFrame wavetableMipFrameIn;
         input event wt::ServiceLoadAbort serviceLoadAbortIn;
-        input event float32[wt::msegPaddedSamples] msegBufferIn;
+        input event wt::MsegBufferUpload msegBufferIn;
         input event wt::MsegPlaybackConfig msegPlaybackIn;
         input value float32 framePositionIn;
         input value float32 msegDepthIn;
@@ -872,7 +872,7 @@ namespace wt
         event wavetableLoadBeginIn (wt::WavetableLoadBegin load) { osc.wavetableLoadBeginIn <- load; }
         event wavetableMipFrameIn (wt::WavetableMipFrame frame) { osc.wavetableMipFrameIn <- frame; }
         event serviceLoadAbortIn (wt::ServiceLoadAbort abort) { osc.serviceLoadAbortIn <- abort; }
-        event msegBufferIn (float32[wt::msegPaddedSamples] buffer) { msegReader.bufferUpload <- buffer; }
+        event msegBufferIn (wt::MsegBufferUpload buffer) { msegReader.bufferUpload <- buffer; }
         event msegPlaybackIn (wt::MsegPlaybackConfig config) { msegReader.playbackUpload <- config; }
 
         connection
@@ -883,7 +883,7 @@ namespace wt
             osc.wavetableUploadAckOut -> wavetableUploadAckOut;
             osc.wavetableMipRequestOut -> wavetableMipRequestOut;
             osc.runtimeServiceStateOut -> runtimeServiceStateOut;
-            msegReader.out -> frameRouter.modulationIn;
+            msegReader.outA -> frameRouter.modulationIn;
             msegDepthIn -> frameRouter.depthIn;
             frameRouter.out -> frameMonitor.effectivePositionIn;
             noteTracker.activeOut -> frameMonitor.voiceActiveIn;
@@ -958,6 +958,9 @@ graph WavetableSynth [[ main ]]
     input value float32 filterMode [[ name: "Filter Mode", min: 0.0f, max: 5.0f, init: 0.0f, discrete: true, step: 1.0f, rampFrames: 0 ]];
     input value float32 filterCutoff [[ name: "Filter Cutoff", min: 20.0f, max: 20000.0f, init: 1000.0f, unit: "Hz", rampFrames: 64 ]];
     input value float32 filterQ [[ name: "Filter Q", min: 0.1f, max: 20.0f, init: 0.707107f, rampFrames: 64 ]];
+    input value float32 mseg1Morph [[ name: "MSEG 1 Morph", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 0 ]];
+    input value float32 mseg2Morph [[ name: "MSEG 2 Morph", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 0 ]];
+    input value float32 mseg3Morph [[ name: "MSEG 3 Morph", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 0 ]];
     input value float32 distortionMode [[ name: "Distortion Mode", min: 0.0f, max: 1.0f, init: 0.0f, discrete: true, step: 1.0f, text: "Classic|Harmonics", rampFrames: 0 ]];
     input value float32 distortionDriveDb [[ name: "Distortion Drive", min: 0.0f, max: 36.0f, init: 12.0f, unit: "dB", rampFrames: 64 ]];
     input value float32 distortionKnee [[ name: "Distortion Knee", min: 0.0f, max: 1.0f, init: 0.35f, rampFrames: 64 ]];
@@ -1030,6 +1033,9 @@ graph WavetableSynth [[ main ]]
         filterMode -> sharedEngine.filterModeIn;
         filterCutoff -> sharedEngine.filterCutoffIn;
         filterQ -> sharedEngine.filterQIn;
+        mseg1Morph -> sharedEngine.mseg1MorphIn;
+        mseg2Morph -> sharedEngine.mseg2MorphIn;
+        mseg3Morph -> sharedEngine.mseg3MorphIn;
         distortionMode -> distortion.modeIn;
         distortionDriveDb -> distortion.driveDbIn;
         distortionKnee -> distortion.kneeIn;

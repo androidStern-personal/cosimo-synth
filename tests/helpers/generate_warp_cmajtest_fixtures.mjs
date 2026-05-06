@@ -181,6 +181,7 @@ function modulationMsegBufferEvent(slot, buffer) {
             frameOffset: 0,
             event: {
                 slot,
+                shapeIndex: 0,
                 buffer,
             },
         },

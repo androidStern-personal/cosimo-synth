@@ -99,6 +99,9 @@ const WARP_AMOUNT_ENDPOINT_ID = "warpAmount";
 const FILTER_MODE_ENDPOINT_ID = "filterMode";
 const FILTER_CUTOFF_ENDPOINT_ID = "filterCutoff";
 const FILTER_Q_ENDPOINT_ID = "filterQ";
+const MSEG_1_MORPH_ENDPOINT_ID = "mseg1Morph";
+const MSEG_2_MORPH_ENDPOINT_ID = "mseg2Morph";
+const MSEG_3_MORPH_ENDPOINT_ID = "mseg3Morph";
 const DISTORTION_MODE_ENDPOINT_ID = "distortionMode";
 const DISTORTION_DRIVE_DB_ENDPOINT_ID = "distortionDriveDb";
 const DISTORTION_KNEE_ENDPOINT_ID = "distortionKnee";
@@ -198,6 +201,7 @@ export type SynthPatchViewModel = {
     filterMode: PatchControlBinding<number>;
     filterCutoff: PatchControlBinding<number>;
     filterQ: PatchControlBinding<number>;
+    selectedMsegMorph: PatchControlBinding<number>;
     distortionMode: PatchControlBinding<number>;
     distortionDriveDb: PatchControlBinding<number>;
     distortionKnee: PatchControlBinding<number>;
@@ -226,6 +230,7 @@ export type SynthPatchViewModel = {
     routes: ModulationRoute[];
     msegState: MsegState | null;
     handleSelectMsegSlot: (slotIndex: number) => void;
+    handleSelectMsegShape: (shapeIndex: number) => void;
     handleSelectEnvelopeSlot: (slotIndex: number) => void;
     handleEnvelopeChange: (field: "attackSeconds" | "decaySeconds" | "sustain" | "releaseSeconds", nextValue: number) => void;
     handleAddRoute: () => void;
@@ -233,6 +238,7 @@ export type SynthPatchViewModel = {
     handleRouteChange: (routeIndex: number, nextRoute: ModulationRoute) => void;
     handleSelectWavetable: (nextValue: number) => void;
     handleRetryLoad: () => void;
+    handleMsegMorphChange: (nextValue: number) => void;
     handleMsegRateChange: (nextValue: number) => void;
     handleToggleMsegLoop: () => void;
     stageBindings: {
@@ -1183,6 +1189,21 @@ export function useSynthPatchViewModel({
         initialValue: 0.707107,
         coerce: (value) => clamp(Number(value) || 0, 0.1, 20),
     });
+    const mseg1Morph = usePatchParameterBinding<number>({
+        endpointID: MSEG_1_MORPH_ENDPOINT_ID,
+        initialValue: 0,
+        coerce: (value) => clamp(Number(value) || 0, 0, 1),
+    });
+    const mseg2Morph = usePatchParameterBinding<number>({
+        endpointID: MSEG_2_MORPH_ENDPOINT_ID,
+        initialValue: 0,
+        coerce: (value) => clamp(Number(value) || 0, 0, 1),
+    });
+    const mseg3Morph = usePatchParameterBinding<number>({
+        endpointID: MSEG_3_MORPH_ENDPOINT_ID,
+        initialValue: 0,
+        coerce: (value) => clamp(Number(value) || 0, 0, 1),
+    });
     const distortionMode = usePatchParameterBinding<number>({
         endpointID: DISTORTION_MODE_ENDPOINT_ID,
         initialValue: 0,
@@ -1348,6 +1369,16 @@ export function useSynthPatchViewModel({
         setSelectedMsegSlot(clamp(Math.round(slotIndex), 0, 2));
     }, []);
 
+    const msegMorphBindings = useMemo(
+        () => [mseg1Morph, mseg2Morph, mseg3Morph] as const,
+        [mseg1Morph, mseg2Morph, mseg3Morph],
+    );
+    const selectedMsegMorph = msegMorphBindings[selectedMsegSlot] ?? mseg1Morph;
+
+    const handleSelectMsegShape = useCallback((shapeIndex: number) => {
+        displayedMsegControllerRef.current?.setEditShapeIndex?.(shapeIndex);
+    }, []);
+
     const handleSelectEnvelopeSlot = useCallback((slotIndex: number) => {
         setSelectedEnvelopeSlot(clamp(Math.round(slotIndex), 0, 2));
     }, []);
@@ -1392,6 +1423,13 @@ export function useSynthPatchViewModel({
             noteOffPolicy: "finish_loop",
         });
     }, [msegState]);
+
+    const handleMsegMorphChange = useCallback((nextValue: number) => {
+        const nextMorph = clamp(Number(nextValue) || 0, 0, 1);
+        const targetBinding = msegMorphBindings[selectedMsegSlot] ?? mseg1Morph;
+        targetBinding.setValue(nextMorph);
+        modulationBridge.current?.setMsegSlotMorph(selectedMsegSlot, nextMorph);
+    }, [modulationBridge, mseg1Morph, msegMorphBindings, selectedMsegSlot]);
 
     const handleEnvelopeChange = useCallback((
         field: "attackSeconds" | "decaySeconds" | "sustain" | "releaseSeconds",
@@ -1470,6 +1508,7 @@ export function useSynthPatchViewModel({
         filterMode,
         filterCutoff,
         filterQ,
+        selectedMsegMorph,
         distortionMode,
         distortionDriveDb,
         distortionKnee,
@@ -1498,6 +1537,7 @@ export function useSynthPatchViewModel({
         routes,
         msegState,
         handleSelectMsegSlot,
+        handleSelectMsegShape,
         handleSelectEnvelopeSlot,
         handleEnvelopeChange,
         handleAddRoute,
@@ -1505,6 +1545,7 @@ export function useSynthPatchViewModel({
         handleRouteChange,
         handleSelectWavetable,
         handleRetryLoad,
+        handleMsegMorphChange,
         handleMsegRateChange,
         handleToggleMsegLoop,
         stageBindings,

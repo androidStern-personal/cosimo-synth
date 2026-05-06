@@ -178,11 +178,14 @@ type MsegEditorModalProps = {
     isOpen: boolean;
     slotLabel: string;
     msegState: MsegState | null;
+    morphBinding: PatchControlBinding<number>;
     surfaceRef: RefObject<SVGSVGElement | null>;
     selectedPointIndex: number;
     hoveredSegmentIndex: number;
     activeSegmentIndex: number;
     onClose: () => void;
+    onSelectShape: (shapeIndex: number) => void;
+    onMorphChange: (nextValue: number) => void;
     onRateChange: (nextValue: number) => void;
     onToggleLoop: () => void;
     onPointerDown: (event: ReactPointerEvent<SVGSVGElement>) => void;
@@ -195,6 +198,7 @@ type MsegEditorModalProps = {
 type ModulationMatrixSectionProps = {
     selectedMsegSlot: number;
     msegState: MsegState | null;
+    selectedMsegMorph: PatchControlBinding<number>;
     observedMsegPlayhead: ReturnType<typeof useSynthPatchViewModel>["observedMsegPlayhead"];
     selectedEnvelopeSlot: number;
     selectedEnvelope: {
@@ -205,7 +209,9 @@ type ModulationMatrixSectionProps = {
     } | null;
     routes: ModulationRoute[];
     onSelectMsegSlot: (slotIndex: number) => void;
+    onSelectMsegShape: (shapeIndex: number) => void;
     onOpenMsegEditor: () => void;
+    onMsegMorphChange: (nextValue: number) => void;
     onMsegRateChange: (nextValue: number) => void;
     onToggleMsegLoop: () => void;
     onSelectEnvelopeSlot: (slotIndex: number) => void;
@@ -663,6 +669,147 @@ function OverlayIconChip({
         >
             {children}
         </button>
+    );
+}
+
+function MsegMorphRail({
+    binding,
+    onChange,
+    onAdjustingChange,
+    className,
+}: {
+    binding: PatchControlBinding<number>;
+    onChange: (nextValue: number) => void;
+    onAdjustingChange?: (isAdjusting: boolean) => void;
+    className?: string;
+}) {
+    const railRef = useRef<HTMLDivElement | null>(null);
+    const activePointerRef = useRef<number | null>(null);
+    const value = clamp(Number(binding.value) || 0, 0, 1);
+
+    const updateFromClientX = useCallback((clientX: number) => {
+        const rail = railRef.current;
+        if (!rail) {
+            return;
+        }
+
+        const bounds = rail.getBoundingClientRect();
+        const nextValue = clamp((clientX - bounds.left) / Math.max(1, bounds.width), 0, 1);
+        onChange(nextValue);
+    }, [onChange]);
+
+    const endDrag = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+        if (activePointerRef.current !== event.pointerId) {
+            return;
+        }
+
+        activePointerRef.current = null;
+        event.currentTarget.releasePointerCapture?.(event.pointerId);
+        binding.endGesture();
+        onAdjustingChange?.(false);
+        event.preventDefault();
+        event.stopPropagation();
+    }, [binding, onAdjustingChange]);
+
+    return (
+        <div
+            className={`flex items-center gap-2 rounded-[8px] border border-white/[0.07] bg-[rgba(3,7,15,0.72)] px-2.5 py-2 shadow-[0_10px_26px_rgba(0,0,0,0.28)] ${className ?? ""}`}
+            data-role="mseg-morph-control"
+        >
+            <span className="shrink-0 text-[9px] font-bold uppercase tracking-[0.14em] text-slate-300/55">Morph</span>
+            <div
+                ref={railRef}
+                role="slider"
+                aria-label="MSEG morph"
+                aria-valuemin={0}
+                aria-valuemax={1}
+                aria-valuenow={Number(value.toFixed(3))}
+                aria-valuetext={`${Math.round(value * 100)}%`}
+                data-role="mseg-morph-slider"
+                className="relative h-5 min-w-[132px] flex-1 cursor-ew-resize touch-none rounded-full outline-none"
+                onPointerDown={(event) => {
+                    if (event.button !== 0) {
+                        return;
+                    }
+
+                    activePointerRef.current = event.pointerId;
+                    event.currentTarget.setPointerCapture(event.pointerId);
+                    binding.beginGesture();
+                    onAdjustingChange?.(true);
+                    updateFromClientX(event.clientX);
+                    event.preventDefault();
+                    event.stopPropagation();
+                }}
+                onPointerMove={(event) => {
+                    if (activePointerRef.current !== event.pointerId) {
+                        return;
+                    }
+
+                    updateFromClientX(event.clientX);
+                    event.preventDefault();
+                    event.stopPropagation();
+                }}
+                onPointerUp={endDrag}
+                onPointerCancel={endDrag}
+            >
+                <div className="absolute left-0 right-0 top-1/2 h-[7px] -translate-y-1/2 rounded-full bg-white/[0.06]" />
+                <div
+                    className="absolute left-0 top-1/2 h-[7px] -translate-y-1/2 rounded-full bg-[linear-gradient(90deg,rgba(135,215,245,0.58),rgba(251,191,36,0.78))]"
+                    style={{ width: `${value * 100}%` }}
+                />
+                <div
+                    className="absolute top-1/2 size-[18px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-amber-100/70 bg-[linear-gradient(180deg,#f8d88a,#fbbf24)] shadow-[0_0_18px_rgba(251,191,36,0.34)]"
+                    style={{ left: `${value * 100}%` }}
+                />
+            </div>
+            <span className="w-10 shrink-0 text-right font-mono text-[10px] tracking-[0.08em] text-amber-200/85">
+                {value.toFixed(3)}
+            </span>
+        </div>
+    );
+}
+
+function WarpControlCluster({
+    warpMode,
+    warpAmount,
+}: {
+    warpMode: PatchControlBinding<number>;
+    warpAmount: PatchControlBinding<number>;
+}) {
+    const modeLabel = getWarpModeLabel(warpMode.value);
+
+    return (
+        <div className="flex min-w-0 items-center gap-2 rounded-full border border-white/10 bg-black/45 px-2 py-1.5 shadow-[0_12px_28px_rgba(0,0,0,0.32)] backdrop-blur-md">
+            <button
+                type="button"
+                aria-label={`Cycle warp mode (currently ${modeLabel})`}
+                title={`Warp mode: ${modeLabel}`}
+                className="flex h-8 min-w-[112px] items-center gap-2 rounded-full px-2.5 text-left transition hover:bg-white/[0.06]"
+                onClick={() => warpMode.commitValue(cycleWarpMode(warpMode.value))}
+            >
+                <span className="text-[9px] font-bold uppercase tracking-[0.14em] text-slate-300/45">Warp</span>
+                <span className="grid size-5 shrink-0 place-items-center rounded-full border border-cyan-200/18 bg-cyan-300/8 text-cyan-100/85">
+                    <WarpModeGlyph mode={warpMode.value} />
+                </span>
+                <span className="min-w-0 truncate text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-100/78">
+                    {modeLabel}
+                </span>
+            </button>
+            <div className="h-7 w-px shrink-0 bg-white/[0.08]" />
+            <NexusNumberField
+                label="Warp amount"
+                binding={warpAmount}
+                min={0}
+                max={1}
+                step={0.001}
+                decimalPlaces={3}
+                suffix={null}
+                variant="overlay"
+                showLabel={false}
+                width={92}
+                height={32}
+            />
+        </div>
     );
 }
 
@@ -1551,11 +1698,14 @@ function MsegEditorModal({
     isOpen,
     slotLabel,
     msegState,
+    morphBinding,
     surfaceRef,
     selectedPointIndex,
     hoveredSegmentIndex,
     activeSegmentIndex,
     onClose,
+    onSelectShape,
+    onMorphChange,
     onRateChange,
     onToggleLoop,
     onPointerDown,
@@ -1564,6 +1714,14 @@ function MsegEditorModal({
     onPointerUp,
     rateFocusBindings,
 }: MsegEditorModalProps) {
+    const [isMorphAdjusting, setIsMorphAdjusting] = useState(false);
+
+    useEffect(() => {
+        if (!isOpen) {
+            setIsMorphAdjusting(false);
+        }
+    }, [isOpen]);
+
     if (!isOpen || !msegState) {
         return null;
     }
@@ -1577,6 +1735,24 @@ function MsegEditorModal({
                         <div className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-amber-100">Modulation Shape Editor</div>
                         <div className="mt-2 text-sm text-slate-300/70">Drag a point to move it. Click and drag a segment up or down to bend it. Click an empty spot to add a point. Click an interior point without dragging to delete it.</div>
                     </div>
+                    <div className="flex items-center gap-2 rounded-[14px] border border-white/8 bg-white/[0.03] p-1">
+                        {[0, 1].map((shapeIndex) => (
+                            <button
+                                key={`mseg-editor-shape-${shapeIndex}`}
+                                type="button"
+                                aria-label={`Edit shape ${shapeIndex === 0 ? "A" : "B"}`}
+                                aria-pressed={msegState.editShapeIndex === shapeIndex}
+                                className={`h-9 min-w-10 rounded-[10px] px-3 text-[11px] font-semibold uppercase tracking-[0.16em] transition ${
+                                    msegState.editShapeIndex === shapeIndex
+                                        ? "bg-cyan-300/18 text-cyan-50"
+                                        : "text-slate-300/55 hover:bg-white/[0.05] hover:text-slate-100"
+                                }`}
+                                onClick={() => onSelectShape(shapeIndex)}
+                            >
+                                {shapeIndex === 0 ? "A" : "B"}
+                            </button>
+                        ))}
+                    </div>
                     <button
                         type="button"
                         className="cosimo-button h-11 rounded-2xl px-4 text-[11px] uppercase tracking-[0.18em]"
@@ -1589,6 +1765,11 @@ function MsegEditorModal({
                 <EditableMsegSurface
                     surfaceRef={surfaceRef}
                     points={msegState.shape.points}
+                    referencePoints={msegState.referenceShape?.points ?? null}
+                    morphShapeAPoints={msegState.shapeA?.points ?? null}
+                    morphShapeBPoints={msegState.shapeB?.points ?? null}
+                    morphValue={morphBinding.value}
+                    showMorphCurve={isMorphAdjusting}
                     selectedPointIndex={selectedPointIndex}
                     hoveredSegmentIndex={hoveredSegmentIndex}
                     activeSegmentIndex={activeSegmentIndex}
@@ -1601,17 +1782,33 @@ function MsegEditorModal({
                 />
 
                 <div className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-5 rounded-[22px] border border-white/8 bg-white/[0.03] p-5">
-                    <RangeField
-                        label="Time In Seconds"
-                        min={MSEG_RATE_MIN_SECONDS}
-                        max={MSEG_RATE_MAX_SECONDS}
-                        step={0.001}
-                        value={clampMsegRateSeconds(msegState.playback.rate.seconds)}
-                        displayValue={formatSeconds(clampMsegRateSeconds(msegState.playback.rate.seconds))}
-                        onChange={onRateChange}
-                        ariaLabel="MSEG rate"
-                        focusBindings={rateFocusBindings}
-                    />
+                    <div className="grid gap-4">
+                        <RangeField
+                            label="Morph"
+                            min={0}
+                            max={1}
+                            step={0.001}
+                            value={morphBinding.value}
+                            displayValue={formatPercent(morphBinding.value)}
+                            onChange={onMorphChange}
+                            onPointerDown={() => setIsMorphAdjusting(true)}
+                            onPointerUp={() => setIsMorphAdjusting(false)}
+                            onPointerCancel={() => setIsMorphAdjusting(false)}
+                            ariaLabel="MSEG morph"
+                            dataRole="mseg-morph-slider"
+                        />
+                        <RangeField
+                            label="Time In Seconds"
+                            min={MSEG_RATE_MIN_SECONDS}
+                            max={MSEG_RATE_MAX_SECONDS}
+                            step={0.001}
+                            value={clampMsegRateSeconds(msegState.playback.rate.seconds)}
+                            displayValue={formatSeconds(clampMsegRateSeconds(msegState.playback.rate.seconds))}
+                            onChange={onRateChange}
+                            ariaLabel="MSEG rate"
+                            focusBindings={rateFocusBindings}
+                        />
+                    </div>
 
                     <div className="flex items-center gap-3">
                         <div className="font-mono text-sm tracking-[0.16em] text-cyan-200">
@@ -1634,12 +1831,15 @@ function MsegEditorModal({
 function ModulationMatrixSection({
     selectedMsegSlot,
     msegState,
+    selectedMsegMorph,
     observedMsegPlayhead,
     selectedEnvelopeSlot,
     selectedEnvelope,
     routes,
     onSelectMsegSlot,
+    onSelectMsegShape,
     onOpenMsegEditor,
+    onMsegMorphChange,
     onMsegRateChange,
     onToggleMsegLoop,
     onSelectEnvelopeSlot,
@@ -1671,6 +1871,7 @@ function ModulationMatrixSection({
     } | null>(null);
     const [isEditingMsegRate, setIsEditingMsegRate] = useState(false);
     const [draftMsegRate, setDraftMsegRate] = useState("");
+    const [isMsegMorphAdjusting, setIsMsegMorphAdjusting] = useState(false);
 
     const currentMsegRate = clampMsegRateSeconds(Number(msegState?.playback.rate.seconds ?? 1));
 
@@ -1819,9 +2020,28 @@ function ModulationMatrixSection({
                 <span className="ml-0.5 text-[10px] leading-none font-semibold uppercase tracking-[0.12em] text-emerald-200/50">Env</span>
 
                 {/* Right-aligned controls — fixed-height container, both layers always rendered */}
-                <div className="relative ml-auto h-[22px] shrink-0 max-[480px]:h-7">
+                <div className="relative ml-auto h-[24px] shrink-0 max-[480px]:h-7">
                     {/* MSEG controls */}
                     <div className={`absolute inset-0 flex items-center justify-end gap-2 ${activeEditorTab.kind === "mseg" ? "visible" : "invisible"}`}>
+                        <div className="flex items-center gap-1 rounded-[7px] border border-white/[0.05] bg-white/[0.025] p-[2px]">
+                            {[0, 1].map((shapeIndex) => (
+                                <button
+                                    key={`mseg-shape-${shapeIndex}`}
+                                    type="button"
+                                    aria-label={`Edit MSEG shape ${shapeIndex === 0 ? "A" : "B"}`}
+                                    aria-pressed={msegState?.editShapeIndex === shapeIndex}
+                                    className={`grid size-[18px] place-items-center rounded-[5px] p-0 text-[8px] font-bold leading-none transition max-[480px]:size-6 max-[480px]:text-[10px] ${
+                                        msegState?.editShapeIndex === shapeIndex
+                                            ? "bg-cyan-300/18 text-cyan-50"
+                                            : "text-slate-300/45 hover:bg-white/[0.06] hover:text-slate-200/80"
+                                    }`}
+                                    onClick={() => onSelectMsegShape(shapeIndex)}
+                                    tabIndex={activeEditorTab.kind === "mseg" ? 0 : -1}
+                                >
+                                    {shapeIndex === 0 ? "A" : "B"}
+                                </button>
+                            ))}
+                        </div>
                         <button
                             type="button"
                             aria-label={msegState?.playback.loop ? "Looping" : "One Shot"}
@@ -1980,27 +2200,41 @@ function ModulationMatrixSection({
             {/* ── Body: MSEG preview or envelope editor ── */}
             <div className="min-h-0 flex-1">
                 {activeEditorTab.kind === "mseg" ? (
-                    <button
-                        type="button"
-                        className="group relative h-full w-full cursor-pointer transition hover:bg-white/[0.01]"
-                        onClick={onOpenMsegEditor}
-                        aria-label="Open MSEG editor"
-                    >
-                        {msegState ? (
-                            <MsegPreview
-                                points={msegState.shape.points}
-                                className="h-full w-full"
-                                progressFillEnd={observedMsegPlayhead.progressFillEnd}
+                    <div className="relative h-full w-full">
+                        <button
+                            type="button"
+                            className="group absolute inset-x-0 top-0 bottom-[48px] cursor-pointer transition hover:bg-white/[0.01]"
+                            onClick={onOpenMsegEditor}
+                            aria-label="Open MSEG editor"
+                        >
+                            {msegState ? (
+                                <MsegPreview
+                                    points={msegState.shape.points}
+                                    referencePoints={msegState.referenceShape?.points ?? null}
+                                    morphShapeAPoints={msegState.shapeA?.points ?? null}
+                                    morphShapeBPoints={msegState.shapeB?.points ?? null}
+                                    morphValue={selectedMsegMorph.value}
+                                    showMorphCurve={isMsegMorphAdjusting}
+                                    className="h-full w-full"
+                                    progressFillEnd={observedMsegPlayhead.progressFillEnd}
+                                />
+                            ) : (
+                                <div className="h-full w-full bg-white/[0.02]" />
+                            )}
+                            <div className="pointer-events-none absolute inset-0 grid place-items-center opacity-0 transition-opacity group-hover:opacity-100">
+                                <span className="rounded-[6px] bg-[rgba(3,5,12,0.6)] px-2.5 py-1 text-[10px] uppercase tracking-[0.15em] text-cyan-300/40">
+                                    Edit Shape
+                                </span>
+                            </div>
+                        </button>
+                        <div className="absolute inset-x-3 bottom-2">
+                            <MsegMorphRail
+                                binding={selectedMsegMorph}
+                                onChange={onMsegMorphChange}
+                                onAdjustingChange={setIsMsegMorphAdjusting}
                             />
-                        ) : (
-                            <div className="h-full w-full bg-white/[0.02]" />
-                        )}
-                        <div className="pointer-events-none absolute inset-0 grid place-items-center opacity-0 transition-opacity group-hover:opacity-100">
-                            <span className="rounded-[6px] bg-[rgba(3,5,12,0.6)] px-2.5 py-1 text-[10px] uppercase tracking-[0.15em] text-cyan-300/40">
-                                Edit Shape
-                            </span>
                         </div>
-                    </button>
+                    </div>
                 ) : selectedEnvelope ? (
                     <DesktopEnvelopeEditor
                         selectedEnvelope={selectedEnvelope}
@@ -2060,31 +2294,12 @@ function DesktopPatchViewBody() {
         shiftKeyboardRootNote(1);
     }, [shiftKeyboardRootNote]);
 
-    const warpModeChip = useMemo(() => (
-        <OverlayIconChip
-            ariaLabel={`Cycle warp mode (currently ${getWarpModeLabel(synthView.warpMode.value)})`}
-            title={`Warp mode: ${getWarpModeLabel(synthView.warpMode.value)}`}
-            onClick={() => synthView.warpMode.commitValue(cycleWarpMode(synthView.warpMode.value))}
-        >
-            <WarpModeGlyph mode={synthView.warpMode.value} />
-        </OverlayIconChip>
-    ), [synthView.warpMode]);
-
-    const warpAmountField = useMemo(() => (
-        <NexusNumberField
-            label="Warp amount"
-            binding={synthView.warpAmount}
-            min={0}
-            max={1}
-            step={0.001}
-            decimalPlaces={3}
-            suffix={null}
-            variant="overlay"
-            showLabel={false}
-            width={116}
-            height={40}
+    const warpControlCluster = useMemo(() => (
+        <WarpControlCluster
+            warpMode={synthView.warpMode}
+            warpAmount={synthView.warpAmount}
         />
-    ), [synthView.warpAmount]);
+    ), [synthView.warpAmount, synthView.warpMode]);
 
     const panField = useMemo(() => (
         <PrecisionNumberField
@@ -2129,11 +2344,10 @@ function DesktopPatchViewBody() {
                         onPointerDown={synthView.stageBindings.handleStagePointerDown}
                         onPointerMove={synthView.stageBindings.handleStagePointerMove}
                         onPointerUp={synthView.stageBindings.handleStagePointerUp}
-                        bottomLeftAccessory={warpModeChip}
+                        bottomLeftAccessory={warpControlCluster}
                         bottomRightAccessory={
                             <>
                                 {panField}
-                                {warpAmountField}
                             </>
                         }
                         className={DESKTOP_GRID_CARD_CLASS}
@@ -2188,12 +2402,15 @@ function DesktopPatchViewBody() {
                     <ModulationMatrixSection
                         selectedMsegSlot={synthView.selectedMsegSlot}
                         msegState={synthView.msegState}
+                        selectedMsegMorph={synthView.selectedMsegMorph}
                         observedMsegPlayhead={synthView.observedMsegPlayhead}
                         selectedEnvelopeSlot={synthView.selectedEnvelopeSlot}
                         selectedEnvelope={synthView.selectedEnvelope}
                         routes={synthView.routes}
                         onSelectMsegSlot={synthView.handleSelectMsegSlot}
+                        onSelectMsegShape={synthView.handleSelectMsegShape}
                         onOpenMsegEditor={synthView.msegEditor.openEditor}
+                        onMsegMorphChange={synthView.handleMsegMorphChange}
                         onMsegRateChange={synthView.handleMsegRateChange}
                         onToggleMsegLoop={synthView.handleToggleMsegLoop}
                         onSelectEnvelopeSlot={synthView.handleSelectEnvelopeSlot}
@@ -2230,11 +2447,14 @@ function DesktopPatchViewBody() {
                 isOpen={synthView.msegEditor.isOpen}
                 slotLabel={`MSEG ${synthView.selectedMsegSlot + 1}`}
                 msegState={synthView.msegState}
+                morphBinding={synthView.selectedMsegMorph}
                 surfaceRef={msegEditorSurfaceRef}
                 selectedPointIndex={synthView.msegEditor.selectedPointIndex}
                 hoveredSegmentIndex={synthView.msegEditor.hoveredSegmentIndex}
                 activeSegmentIndex={synthView.msegEditor.activeSegmentIndex}
                 onClose={synthView.msegEditor.closeEditor}
+                onSelectShape={synthView.handleSelectMsegShape}
+                onMorphChange={synthView.handleMsegMorphChange}
                 onRateChange={synthView.handleMsegRateChange}
                 onToggleLoop={synthView.handleToggleMsegLoop}
                 onPointerDown={synthView.msegEditor.handlePointerDown}

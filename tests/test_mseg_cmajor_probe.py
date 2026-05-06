@@ -21,6 +21,7 @@ from bench import (
     render_cmajor_mseg_probe,
     render_cmajor_scan_position_monitor_probe,
     render_mseg_reference,
+    render_mseg_morph_reference,
     render_mseg_shape_reference,
     rms,
 )
@@ -190,6 +191,56 @@ def test_cmajor_mseg_probe_ramp_buffer_matches_reference() -> None:
 
     _assert_with_artifacts(
         "test_cmajor_mseg_probe_ramp_buffer_matches_reference",
+        recipe.sample_rate,
+        {"actual": actual, "expected": expected},
+        lambda: assert_allclose(actual, expected, atol=1e-6, rtol=0.0),
+    )
+
+
+@pytest.mark.cmajor
+def test_cmajor_mseg_probe_interpolates_shape_a_and_shape_b_without_retriggering() -> None:
+    recipe = make_static_tone_recipe(
+        name="mseg_ab_morph",
+        sample_rate=200,
+        duration_seconds=0.05,
+        frame_position=0.0,
+    )
+    shape_a = MsegShape(points=(MsegPoint(0.0, 0.0), MsegPoint(1.0, 1.0)))
+    shape_b = MsegShape(points=(MsegPoint(0.0, 1.0), MsegPoint(1.0, 0.0)))
+    rendered_a = render_mseg_shape_reference(shape_a)
+    rendered_b = render_mseg_shape_reference(shape_b)
+    playback = MsegPlayback(seconds=0.05)
+    mseg_values = render_mseg_morph_reference(
+        rendered_a,
+        rendered_b,
+        morph=0.25,
+        sample_rate=recipe.sample_rate,
+        num_samples=recipe.num_samples,
+        playback=playback,
+    )
+    expected = render_cmajor_fixed_frame_tables(
+        [make_sweep4_bank()],
+        recipe.__class__(
+            name=recipe.name,
+            sample_rate=recipe.sample_rate,
+            num_samples=recipe.num_samples,
+            freq_hz_curve=recipe.freq_hz_curve,
+            frame_pos_curve=apply_mseg_route(recipe.frame_pos_curve, mseg_values, 0.5),
+            start_phase=recipe.start_phase,
+        ),
+    )
+    actual = render_cmajor_mseg_probe(
+        [make_sweep4_bank()],
+        recipe,
+        mseg_buffer=rendered_a,
+        mseg_buffer_b=rendered_b,
+        morph=0.25,
+        playback=playback,
+        depth=0.5,
+    )
+
+    _assert_with_artifacts(
+        "test_cmajor_mseg_probe_interpolates_shape_a_and_shape_b_without_retriggering",
         recipe.sample_rate,
         {"actual": actual, "expected": expected},
         lambda: assert_allclose(actual, expected, atol=1e-6, rtol=0.0),

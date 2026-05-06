@@ -32,11 +32,11 @@ function buildShortMidi(status, noteNumber, velocity = 0) {
 }
 
 function readStoredModulationState(snapshot) {
-    return deserializeModulationState(snapshot.storedState["modulation.v1"]);
+    return deserializeModulationState(snapshot.storedState["modulation.v2"]);
 }
 
 function readStoredMsegShape(snapshot, slotIndex = 0) {
-    return readStoredModulationState(snapshot).msegSlots[slotIndex].shape;
+    return readStoredModulationState(snapshot).msegSlots[slotIndex].shapeA;
 }
 
 function readStoredMsegPlayback(snapshot, slotIndex = 0) {
@@ -668,11 +668,16 @@ function assertLatestMsegBufferMatchesStoredShape(snapshot) {
     const expectedBuffer = Array.from(renderMsegShape(storedShape));
     const lastBufferMessage = [...snapshot.sentMessages]
         .reverse()
-        .find(({ endpointID, value }) => endpointID === "modulationMsegBuffer" && Number(value?.slot) === 1);
+        .find(({ endpointID, value }) => (
+            endpointID === "modulationMsegBuffer"
+            && Number(value?.slot) === 1
+            && Number(value?.shapeIndex ?? 0) === 0
+        ));
 
     assert.ok(lastBufferMessage, "Expected a modulationMsegBuffer upload for slot 1.");
     assert.deepEqual(lastBufferMessage.value, {
         slot: 1,
+        shapeIndex: 0,
         buffer: expectedBuffer,
     });
 }
@@ -2919,6 +2924,81 @@ test("MSEG preview progress fill follows the selected DSP slot and clears when t
     }
 });
 
+test("main MSEG morph control updates morph without taking keyboard focus and previews the effective curve while dragged", async () => {
+    const page = await openHarnessPage();
+
+    try {
+        const morphSlider = page.locator('[data-role="mseg-morph-slider"]').first();
+        await morphSlider.scrollIntoViewIfNeeded();
+        const sliderBox = await morphSlider.boundingBox();
+        assert.ok(sliderBox, "Expected the main MSEG morph control to be visible.");
+
+        await waitForHarnessSnapshot(
+            page,
+            "initial MSEG boot sync before morph drag",
+            (snapshot) => snapshot.sentMessages.some(({ endpointID, value }) => endpointID === "modulationMsegBuffer" && Number(value?.slot) === 1),
+        );
+        await clearHarnessDebugLog(page);
+        await page.mouse.move(sliderBox.x + 2, sliderBox.y + (sliderBox.height * 0.5));
+        await page.mouse.down();
+        await page.mouse.move(sliderBox.x + (sliderBox.width * 0.72), sliderBox.y + (sliderBox.height * 0.5), { steps: 6 });
+
+        await page.waitForFunction(() => Boolean(window.__COSIMO_DESKTOP_HARNESS__.getRenderedState().msegPreviewState?.morphCurvePath));
+        let renderedState = await getHarnessRenderedState(page);
+        assert.match(renderedState.msegPreviewState?.morphCurvePath ?? "", /^M /);
+
+        const focusedElement = await page.evaluate(() => {
+            const host = document.querySelector("cosimo-desktop-react-view");
+            const viewRoot = host?.shadowRoot ?? host;
+            const activeElement = viewRoot?.activeElement;
+
+            return {
+                tagName: activeElement?.tagName?.toLowerCase() ?? null,
+                dataRole: activeElement?.getAttribute("data-role") ?? null,
+                ariaLabel: activeElement?.getAttribute("aria-label") ?? null,
+            };
+        });
+        assert.notEqual(focusedElement.dataRole, "mseg-morph-slider");
+        assert.notEqual(focusedElement.tagName, "input");
+
+        await page.keyboard.press("a");
+        await page.waitForFunction(() => {
+            const keys = window.__COSIMO_DESKTOP_HARNESS__.getRenderedState().keyboardDebug?.handledKeys ?? [];
+            return keys.some((entry) => entry.key === "a" && entry.isDown === true)
+                && keys.some((entry) => entry.key === "a" && entry.isDown === false);
+        });
+
+        await page.mouse.up();
+        await page.waitForFunction(() => !window.__COSIMO_DESKTOP_HARNESS__.getRenderedState().msegPreviewState?.morphCurvePath);
+
+        const snapshot = await waitForHarnessSnapshot(
+            page,
+            "main MSEG morph changed",
+            (nextSnapshot) => {
+                const rawState = nextSnapshot.storedState["modulation.v2"];
+                if (typeof rawState !== "string") {
+                    return false;
+                }
+
+                const modulationState = JSON.parse(rawState);
+                return Math.abs(Number(nextSnapshot.parameterValues.mseg1Morph) - 0.72) <= 0.04
+                    && Math.abs(Number(modulationState.msegSlots?.[0]?.morph) - 0.72) <= 0.04;
+            },
+        );
+        const modulationState = JSON.parse(String(snapshot.storedState["modulation.v2"]));
+        assert.equal(
+            snapshot.sentMessages.some(({ endpointID }) => endpointID === "modulationMsegBuffer"),
+            false,
+        );
+        assert.equal(
+            Math.abs(Number(modulationState.msegSlots[0].morph) - Number(snapshot.parameterValues.mseg1Morph)) <= 1e-9,
+            true,
+        );
+    } finally {
+        await page.close();
+    }
+});
+
 test("MSEG overview playback controls update the canonical modulation state on the real desktop page", { timeout: 60_000 }, async () => {
     const isolatedServer = await startDesktopHarnessServer();
     const isolatedBrowser = await chromium.launch({ headless: true });
@@ -2958,7 +3038,7 @@ test("MSEG overview playback controls update the canonical modulation state on t
 
             for (let attempt = 0; attempt < 80; attempt += 1) {
                 const snapshot = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot();
-                const rawState = snapshot.storedState["modulation.v1"];
+                const rawState = snapshot.storedState["modulation.v2"];
                 if (typeof rawState !== "string") {
                     await new Promise((resolve) => setTimeout(resolve, 50));
                     continue;
@@ -2974,7 +3054,7 @@ test("MSEG overview playback controls update the canonical modulation state on t
             }
 
             const snapshot = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot();
-            return JSON.parse(String(snapshot.storedState["modulation.v1"])).msegSlots?.[0]?.playback;
+            return JSON.parse(String(snapshot.storedState["modulation.v2"])).msegSlots?.[0]?.playback;
         });
         assert.equal(playbackAfterRateChange.rate.seconds, 0.5);
         let snapshot = await getHarnessSnapshot(page);
@@ -2996,7 +3076,7 @@ test("MSEG overview playback controls update the canonical modulation state on t
 
             for (let attempt = 0; attempt < 80; attempt += 1) {
                 const snapshot = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot();
-                const rawState = snapshot.storedState["modulation.v1"];
+                const rawState = snapshot.storedState["modulation.v2"];
                 if (typeof rawState !== "string") {
                     await new Promise((resolve) => setTimeout(resolve, 50));
                     continue;
@@ -3012,7 +3092,7 @@ test("MSEG overview playback controls update the canonical modulation state on t
             }
 
             const snapshot = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot();
-            return JSON.parse(String(snapshot.storedState["modulation.v1"])).msegSlots?.[0]?.playback;
+            return JSON.parse(String(snapshot.storedState["modulation.v2"])).msegSlots?.[0]?.playback;
         });
         assert.equal(playbackAfterLoopToggle.loop, null);
         snapshot = await getHarnessSnapshot(page);

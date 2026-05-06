@@ -11,6 +11,7 @@ from bench import (
     MsegShape,
     apply_mseg_route,
     render_mseg_reference,
+    render_mseg_morph_reference,
     render_mseg_shape_reference,
     sample_rendered_mseg_buffer,
 )
@@ -82,6 +83,28 @@ def test_reference_reader_advances_over_configured_seconds() -> None:
     assert np.allclose(
         values,
         np.asarray([0.0, 0.25, 0.5, 0.75, 1.0], dtype=np.float32),
+        atol=1e-6,
+        rtol=0.0,
+    )
+
+
+def test_reference_reader_interpolates_shape_a_and_shape_b_at_same_playhead() -> None:
+    shape_a = MsegShape(points=(MsegPoint(0.0, 0.0), MsegPoint(1.0, 1.0)))
+    shape_b = MsegShape(points=(MsegPoint(0.0, 1.0), MsegPoint(1.0, 0.0)))
+    rendered_a = render_mseg_shape_reference(shape_a)
+    rendered_b = render_mseg_shape_reference(shape_b)
+    values = render_mseg_morph_reference(
+        rendered_a,
+        rendered_b,
+        morph=0.25,
+        sample_rate=4,
+        num_samples=5,
+        playback=MsegPlayback(seconds=1.0),
+    )
+
+    assert np.allclose(
+        values,
+        np.asarray([0.25, 0.375, 0.5, 0.625, 0.75], dtype=np.float32),
         atol=1e-6,
         rtol=0.0,
     )

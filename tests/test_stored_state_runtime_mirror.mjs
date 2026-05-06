@@ -117,6 +117,16 @@ function buildLabelRuntimeEvents({ state }) {
     ];
 }
 
+function deserializeLabelWithUiFlag(value) {
+    const nextValue = value && typeof value === "object" ? value : {};
+    return {
+        label: typeof nextValue.label === "string" && nextValue.label.trim()
+            ? nextValue.label.trim()
+            : "default-label",
+        uiFlag: Boolean(nextValue.uiFlag),
+    };
+}
+
 test("stored-state runtime mirror uploads saved state without writing stored state", () => {
     const patchConnection = new FakePatchConnection({ "label.v1": "saved label" });
     const mirror = createStoredStateRuntimeMirror(patchConnection, {
@@ -132,6 +142,37 @@ test("stored-state runtime mirror uploads saved state without writing stored sta
     assert.deepEqual(patchConnection.events, [
         { endpointID: "labelName", value: "saved label" },
         { endpointID: "labelLength", value: 11 },
+    ]);
+    assert.deepEqual(patchConnection.storedWrites, []);
+});
+
+test("stored-state runtime mirror skips state changes that build identical runtime events", () => {
+    const patchConnection = new FakePatchConnection({
+        "label.v1": { label: "saved label", uiFlag: false },
+    });
+    const mirror = createStoredStateRuntimeMirror(patchConnection, {
+        stateKey: "label.v1",
+        deserializeStoredState: deserializeLabelWithUiFlag,
+        buildRuntimeEvents: ({ state }) => [
+            { endpointID: "labelName", value: state.label },
+            { endpointID: "labelLength", value: state.label.length },
+        ],
+    });
+
+    mirror.start();
+    assert.deepEqual(patchConnection.events, [
+        { endpointID: "labelName", value: "saved label" },
+        { endpointID: "labelLength", value: 11 },
+    ]);
+
+    patchConnection.events = [];
+    patchConnection.emitStoredState("label.v1", { label: "saved label", uiFlag: true });
+    assert.deepEqual(patchConnection.events, []);
+
+    patchConnection.emitStoredState("label.v1", { label: "changed label", uiFlag: true });
+    assert.deepEqual(patchConnection.events, [
+        { endpointID: "labelName", value: "changed label" },
+        { endpointID: "labelLength", value: 13 },
     ]);
     assert.deepEqual(patchConnection.storedWrites, []);
 });

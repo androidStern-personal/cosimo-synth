@@ -1082,7 +1082,9 @@ export async function installMsegStateHookHarness(target: HTMLElement) {
 
     const bootModulationState = createDefaultModulationState();
     bootModulationState.msegSlots[0] = {
-        shape: createDefaultMsegShape("Test MSEG"),
+        shapeA: createDefaultMsegShape("Test MSEG A"),
+        shapeB: createDefaultMsegShape("Test MSEG B"),
+        morph: 0,
         playback: createDefaultMsegPlayback(),
     };
     bootModulationState.routes = [{
@@ -1094,7 +1096,7 @@ export async function installMsegStateHookHarness(target: HTMLElement) {
         amount: 0.42,
     }];
     const bootState = {
-        "modulation.v1": serializeModulationState(bootModulationState),
+        "modulation.v2": serializeModulationState(bootModulationState),
     };
     const patchConnection: PatchConnectionLike = {
         addStoredStateValueListener(listener) {

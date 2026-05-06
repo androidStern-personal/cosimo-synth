@@ -22,6 +22,12 @@ namespace wt
         bool legatoRestarts;
     }
 
+    struct MsegBufferUpload
+    {
+        int32 shapeIndex;
+        float32[msegPaddedSamples] buffer;
+    }
+
     struct EffectiveWavetablePositionMonitor
     {
         int32 voiceGeneration;
@@ -180,20 +186,24 @@ namespace wt
 
     processor MsegReader
     {
-        input event float32[msegPaddedSamples] bufferUpload;
+        input event MsegBufferUpload bufferUpload;
         input event MsegPlaybackConfig playbackUpload;
         input event int32 triggerIn;
         input event int32 noteOffIn;
-        output stream float32 out;
+        output stream float32 outA;
+        output stream float32 outB;
         output stream float32 progressOut;
 
-        float32[msegPaddedSamples] buffer;
-        float32 currentValue = 0.5f;
+        float32[msegPaddedSamples] bufferA;
+        float32[msegPaddedSamples] bufferB;
+        float32 currentValueA = 0.5f;
+        float32 currentValueB = 0.5f;
         float32 progress = 1.0f;
         float32 progressIncrement = 1.0f;
         bool active = false;
         bool holdFinalValue = true;
-        bool hasUploadedBuffer = false;
+        bool hasUploadedBufferA = false;
+        bool hasUploadedBufferB = false;
         bool hasUploadedPlayback = false;
         bool loopEnabled = false;
         float32 loopStart = 0.0f;
@@ -201,10 +211,16 @@ namespace wt
         int32 noteOffPolicy = msegNoteOffPolicyFinishLoop;
         bool stopFutureWraps = false;
 
-        void initialiseBuffer()
+        void initialiseBufferA()
         {
             for (int32 i = 0; i < msegPaddedSamples; ++i)
-                buffer.at (i) = 0.5f;
+                bufferA.at (i) = 0.5f;
+        }
+
+        void initialiseBufferB()
+        {
+            for (int32 i = 0; i < msegPaddedSamples; ++i)
+                bufferB.at (i) = 0.5f;
         }
 
         void setDurationSeconds (float32 seconds)
@@ -252,7 +268,7 @@ namespace wt
             return loopEnabled && ! stopFutureWraps;
         }
 
-        float32 sampleAt (float32 normalizedX)
+        float32 sampleBufferAt (const float32[msegPaddedSamples] sourceBuffer, float32 normalizedX)
         {
             let clampedX = std::intrinsics::clamp (normalizedX, 0.0f, 1.0f);
             let scaled = clampedX * float32 (msegBodySamples - 1);
@@ -260,10 +276,10 @@ namespace wt
             let fractional = scaled - float32 (sampleIndex);
 
             return msegCatmullRom (
-                buffer.at (sampleIndex),
-                buffer.at (sampleIndex + 1),
-                buffer.at (sampleIndex + 2),
-                buffer.at (sampleIndex + 3),
+                sourceBuffer.at (sampleIndex),
+                sourceBuffer.at (sampleIndex + 1),
+                sourceBuffer.at (sampleIndex + 2),
+                sourceBuffer.at (sampleIndex + 3),
                 fractional
             );
         }
@@ -287,13 +303,23 @@ namespace wt
             return loopStart + (remainder - (completedLoopCount * loopWidth));
         }
 
-        event bufferUpload (float32[msegPaddedSamples] newBuffer)
+        event bufferUpload (MsegBufferUpload upload)
         {
-            for (int32 i = 0; i < msegPaddedSamples; ++i)
-                buffer.at (i) = newBuffer.at (i);
+            if (upload.shapeIndex == 1)
+            {
+                for (int32 i = 0; i < msegPaddedSamples; ++i)
+                    bufferB.at (i) = upload.buffer.at (i);
 
-            hasUploadedBuffer = true;
-            currentValue = buffer.at (1);
+                hasUploadedBufferB = true;
+                currentValueB = bufferB.at (1);
+                return;
+            }
+
+            for (int32 i = 0; i < msegPaddedSamples; ++i)
+                bufferA.at (i) = upload.buffer.at (i);
+
+            hasUploadedBufferA = true;
+            currentValueA = bufferA.at (1);
         }
 
         event playbackUpload (MsegPlaybackConfig config)
@@ -309,7 +335,8 @@ namespace wt
         {
             active = true;
             progress = 0.0f;
-            currentValue = sampleAt (0.0f);
+            currentValueA = sampleBufferAt (bufferA, 0.0f);
+            currentValueB = sampleBufferAt (bufferB, 0.0f);
             stopFutureWraps = false;
         }
 
@@ -326,8 +353,11 @@ namespace wt
 
         void main()
         {
-            if (! hasUploadedBuffer)
-                initialiseBuffer();
+            if (! hasUploadedBufferA)
+                initialiseBufferA();
+
+            if (! hasUploadedBufferB)
+                initialiseBufferB();
 
             if (! hasUploadedPlayback)
                 setDurationSeconds (1.0f);
@@ -338,7 +368,8 @@ namespace wt
 
                 if (active)
                 {
-                    currentValue = sampleAt (progress);
+                    currentValueA = sampleBufferAt (bufferA, progress);
+                    currentValueB = sampleBufferAt (bufferB, progress);
 
                     if (! wrapsAreActive() && progress >= 1.0f)
                     {
@@ -350,7 +381,8 @@ namespace wt
                     }
                 }
 
-                out <- holdFinalValue || active ? currentValue : 0.0f;
+                outA <- holdFinalValue || active ? currentValueA : 0.0f;
+                outB <- holdFinalValue || active ? currentValueB : 0.0f;
                 progressOut <- displayedProgress;
                 advance();
             }

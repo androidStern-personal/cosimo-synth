@@ -188,6 +188,9 @@ def _build_modulation_probe_source(scheduled_events: list[tuple[int, str]]) -> s
         + "    input value float32 filterMode [[ init: 0.0f ]];\n"
         + "    input value float32 filterCutoff [[ init: 1000.0f ]];\n"
         + "    input value float32 filterQ [[ init: 0.707107f ]];\n"
+        + "    input value float32 mseg1Morph [[ init: 0.0f ]];\n"
+        + "    input value float32 mseg2Morph [[ init: 0.0f ]];\n"
+        + "    input value float32 mseg3Morph [[ init: 0.0f ]];\n"
         + "    output stream float leftOut;\n"
         + "    output stream float rightOut;\n"
         + "    output event wt::EffectiveFilterStateMonitor effectiveFilterState;\n"
@@ -218,6 +221,9 @@ def _build_modulation_probe_source(scheduled_events: list[tuple[int, str]]) -> s
         + "        filterMode -> engine.filterModeIn;\n"
         + "        filterCutoff -> engine.filterCutoffIn;\n"
         + "        filterQ -> engine.filterQIn;\n"
+        + "        mseg1Morph -> engine.mseg1MorphIn;\n"
+        + "        mseg2Morph -> engine.mseg2MorphIn;\n"
+        + "        mseg3Morph -> engine.mseg3MorphIn;\n"
         + "        engine.out -> splitter.in;\n"
         + "        splitter.leftOut -> leftOut;\n"
         + "        splitter.rightOut -> rightOut;\n"
@@ -261,6 +267,9 @@ def _build_setup_js(
         f"patch.setInputValue_filterMode({float(filter_mode):.6f}, 0);",
         f"patch.setInputValue_filterCutoff({float(filter_cutoff):.6f}, 0);",
         f"patch.setInputValue_filterQ({float(filter_q):.6f}, 0);",
+        "patch.setInputValue_mseg1Morph(0.0, 0);",
+        "patch.setInputValue_mseg2Morph(0.0, 0);",
+        "patch.setInputValue_mseg3Morph(0.0, 0);",
         f"patch.sendInputEvent_wavetableLoadBegin({json.dumps(_build_load_begin_event(generation=9, table_index=0, frame_count=bank.num_frames))});",
     ]
 
@@ -398,6 +407,7 @@ def test_mseg_pitch_route_adds_on_top_of_pitch_bend() -> None:
             "modulationMsegBuffer",
             {
                 "slot": 1,
+                "shapeIndex": 0,
                 "buffer": mseg_buffer,
             },
         ),

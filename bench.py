@@ -1085,10 +1085,27 @@ def _build_mseg_probe_wrapper_source(
         + "        }\n"
         + "    }\n"
         + "}\n"
+        + "processor MsegMorphMixer\n"
+        + "{\n"
+        + "    input stream float32 inA;\n"
+        + "    input stream float32 inB;\n"
+        + "    input value float32 morphIn [[ init: 0.0f ]];\n"
+        + "    output stream float32 out;\n"
+        + "    void main()\n"
+        + "    {\n"
+        + "        loop\n"
+        + "        {\n"
+        + "            let morph = std::intrinsics::clamp (morphIn, 0.0f, 1.0f);\n"
+        + "            out <- inA + ((inB - inA) * morph);\n"
+        + "            advance();\n"
+        + "        }\n"
+        + "    }\n"
+        + "}\n"
         + "graph MsegProbe [[ main ]]\n"
         + "{\n"
-        + "    input event float32[wt::msegPaddedSamples] msegBuffer;\n"
+        + "    input event wt::MsegBufferUpload msegBuffer;\n"
         + "    input event wt::MsegPlaybackConfig msegPlayback;\n"
+        + "    input value float32 msegMorph [[ init: 0.0f ]];\n"
         + "    output stream float out;\n"
         + "    node control = MsegProbeControl;\n"
         + "    node osc = wt::BankBackedFixedFrameOscillator ("
@@ -1097,6 +1114,7 @@ def _build_mseg_probe_wrapper_source(
         + _cmajor_float_literal(start_phase)
         + ");\n"
         + "    node mseg = wt::MsegReader;\n"
+        + "    node morph = MsegMorphMixer;\n"
         + "    node route = wt::FramePositionModulator;\n"
         + "    connection\n"
         + "    {\n"
@@ -1106,7 +1124,10 @@ def _build_mseg_probe_wrapper_source(
         + "        control.triggerOut -> mseg.triggerIn;\n"
         + "        control.noteOffOut -> mseg.noteOffIn;\n"
         + "        control.framePositionOut -> route.basePositionIn;\n"
-        + "        mseg.out -> route.modulationIn;\n"
+        + "        mseg.outA -> morph.inA;\n"
+        + "        mseg.outB -> morph.inB;\n"
+        + "        msegMorph -> morph.morphIn;\n"
+        + "        morph.out -> route.modulationIn;\n"
         + "        control.depthOut -> route.depthIn;\n"
         + "        route.out -> osc.framePositionIn;\n"
         + "        control.tableSelectOut -> osc.tableSelectIn;\n"
@@ -1142,6 +1163,8 @@ def render_cmajor_mseg_probe(
     mseg_buffer: Float32Array,
     playback: MsegPlayback,
     depth: float,
+    mseg_buffer_b: Float32Array | None = None,
+    morph: float = 0.0,
     trigger_offsets: Sequence[int] = (0,),
     note_off_offsets: Sequence[int] = (),
     table_index: int = 0,
@@ -1154,6 +1177,8 @@ def render_cmajor_mseg_probe(
         raise ValueError("table_index must address a table inside source_tables")
     if mseg_buffer.shape != (MSEG_PADDED_SAMPLES,):
         raise ValueError(f"mseg_buffer must have shape {(MSEG_PADDED_SAMPLES,)}")
+    if mseg_buffer_b is not None and mseg_buffer_b.shape != (MSEG_PADDED_SAMPLES,):
+        raise ValueError(f"mseg_buffer_b must have shape {(MSEG_PADDED_SAMPLES,)}")
     if not CMAJOR_MSEG_SOURCE.exists():
         raise RuntimeError(
             f"Checked-in MSEG source is missing: {CMAJOR_MSEG_SOURCE}"
@@ -1215,13 +1240,20 @@ def render_cmajor_mseg_probe(
         )
 
         playback_event = _build_mseg_playback_event(playback)
+        buffer_a_event = {"shapeIndex": 0, "buffer": mseg_buffer.tolist()}
+        buffer_b_event = {
+            "shapeIndex": 1,
+            "buffer": (mseg_buffer if mseg_buffer_b is None else mseg_buffer_b).tolist(),
+        }
 
         return _render_cmajor_patch_via_generated_javascript(
             patch_path=patch_path,
             sample_rate=recipe.sample_rate,
             num_samples=recipe.num_samples,
             setup_js=(
-                f"patch.sendInputEvent_msegBuffer({json.dumps(mseg_buffer.tolist())});\n"
+                f"patch.sendInputEvent_msegBuffer({json.dumps(buffer_a_event)});\n"
+                f"patch.sendInputEvent_msegBuffer({json.dumps(buffer_b_event)});\n"
+                f"patch.setInputValue_msegMorph({float(morph):.6f}, 0);\n"
                 f"patch.sendInputEvent_msegPlayback({json.dumps(playback_event)});"
             ),
         )
@@ -1298,7 +1330,7 @@ def _build_scan_position_monitor_probe_wrapper_source(
         + "}\n"
         + "graph ScanPositionMonitorProbe [[ main ]]\n"
         + "{\n"
-        + "    input event float32[wt::msegPaddedSamples] msegBuffer;\n"
+        + "    input event wt::MsegBufferUpload msegBuffer;\n"
         + "    input event wt::MsegPlaybackConfig msegPlayback;\n"
         + "    output event wt::EffectiveWavetablePositionMonitor effectiveWavetablePosition;\n"
         + "    node control = ScanPositionMonitorProbeControl;\n"
@@ -1312,7 +1344,7 @@ def _build_scan_position_monitor_probe_wrapper_source(
         + "        control.triggerOut -> mseg.triggerIn;\n"
         + "        control.framePositionOut -> route.basePositionIn;\n"
         + "        control.framePositionOut -> reporter.basePositionIn;\n"
-        + "        mseg.out -> route.modulationIn;\n"
+        + "        mseg.outA -> route.modulationIn;\n"
         + "        control.depthOut -> route.depthIn;\n"
         + "        route.out -> reporter.effectivePositionIn;\n"
         + "        control.voiceActiveOut -> reporter.voiceActiveIn;\n"
@@ -1388,6 +1420,7 @@ def render_cmajor_scan_position_monitor_probe(
         )
 
         playback_event = _build_mseg_playback_event(playback)
+        buffer_event = {"shapeIndex": 0, "buffer": mseg_buffer.tolist()}
 
         return _collect_cmajor_output_events_via_generated_javascript(
             patch_path=patch_path,
@@ -1395,7 +1428,7 @@ def render_cmajor_scan_position_monitor_probe(
             num_samples=recipe.num_samples,
             output_endpoint_id="effectiveWavetablePosition",
             setup_js=(
-                f"patch.sendInputEvent_msegBuffer({json.dumps(mseg_buffer.tolist())});\n"
+                f"patch.sendInputEvent_msegBuffer({json.dumps(buffer_event)});\n"
                 f"patch.sendInputEvent_msegPlayback({json.dumps(playback_event)});"
             ),
         )
@@ -1455,7 +1488,7 @@ def _build_mseg_progress_probe_wrapper_source(
         + "}\n"
         + "graph MsegProgressProbe [[ main ]]\n"
         + "{\n"
-        + "    input event float32[wt::msegPaddedSamples] msegBuffer;\n"
+        + "    input event wt::MsegBufferUpload msegBuffer;\n"
         + "    input event wt::MsegPlaybackConfig msegPlayback;\n"
         + "    output stream float32 progressOut;\n"
         + "    node control = MsegProgressProbeControl;\n"
@@ -1533,6 +1566,7 @@ def render_cmajor_mseg_progress_probe(
         )
 
         playback_event = _build_mseg_playback_event(playback)
+        buffer_event = {"shapeIndex": 0, "buffer": mseg_buffer.tolist()}
 
         return _render_cmajor_patch_via_generated_javascript(
             patch_path,
@@ -1540,7 +1574,7 @@ def render_cmajor_mseg_progress_probe(
             num_samples=recipe.num_samples,
             output_endpoint_id="progressOut",
             setup_js=(
-                f"patch.sendInputEvent_msegBuffer({json.dumps(mseg_buffer.tolist())});\n"
+                f"patch.sendInputEvent_msegBuffer({json.dumps(buffer_event)});\n"
                 f"patch.sendInputEvent_msegPlayback({json.dumps(playback_event)});"
             ),
         )
@@ -2120,6 +2154,37 @@ def render_mseg_reference(
         output[sample_offset] = np.float32(current_value if playback.hold_final_value or active else np.float32(0.0))
 
     return output
+
+
+def render_mseg_morph_reference(
+    buffer_a: Float32Array,
+    buffer_b: Float32Array,
+    *,
+    morph: float,
+    sample_rate: int,
+    num_samples: int,
+    playback: MsegPlayback,
+    trigger_offsets: Sequence[int] = (0,),
+    note_off_offsets: Sequence[int] = (),
+) -> Float32Array:
+    values_a = render_mseg_reference(
+        buffer_a,
+        sample_rate=sample_rate,
+        num_samples=num_samples,
+        playback=playback,
+        trigger_offsets=trigger_offsets,
+        note_off_offsets=note_off_offsets,
+    )
+    values_b = render_mseg_reference(
+        buffer_b,
+        sample_rate=sample_rate,
+        num_samples=num_samples,
+        playback=playback,
+        trigger_offsets=trigger_offsets,
+        note_off_offsets=note_off_offsets,
+    )
+    clamped_morph = np.float32(np.clip(np.float32(morph), np.float32(0.0), np.float32(1.0)))
+    return np.asarray(values_a + ((values_b - values_a) * clamped_morph), dtype=np.float32)
 
 
 def apply_mseg_route(base_curve: Float64Array, modulation_curve: Float32Array, depth: float) -> Float64Array:
