@@ -50,6 +50,8 @@ namespace wt
                      std::notes::Slide,
                      std::notes::Pressure,
                      std::notes::Control) eventIn;
+        input event wt::ArticulationNoteMeta noteMetaIn;
+        input event wt::ArticulatedNoteOn articulatedNoteOnIn;
         input value float32 playModeIn [[ name: "Play Mode", min: 0.0f, max: 2.0f, init: 0.0f, discrete: true, step: 1.0f, rampFrames: 0 ]];
 
         output event (std::notes::NoteOn,
@@ -57,7 +59,8 @@ namespace wt
                       std::notes::PitchBend,
                       std::notes::Slide,
                       std::notes::Pressure,
-                      std::notes::Control) voiceEventOut[voiceCount];
+                      std::notes::Control,
+                      wt::ArticulatedNoteOn) voiceEventOut[voiceCount];
         output event wt::VoiceRetune voiceRetuneOut[voiceCount];
 
         struct VoiceState
@@ -88,7 +91,9 @@ namespace wt
         struct HeldMonoNote
         {
             bool occupied, held, sustained;
+            bool hasArticulation;
             int32 channel, order;
+            int32 selectorA, selectorB, durationSamples, ageSamples;
             float32 pitch, velocity;
         }
 
@@ -100,6 +105,11 @@ namespace wt
         float32[16] channelPitchBendSemitones;
         float32[16] channelPressure;
         float32[16] channelSlide;
+        bool[16 * 128] pendingNoteMetaValid;
+        int32[16 * 128] pendingNoteMetaSelectorA;
+        int32[16 * 128] pendingNoteMetaSelectorB;
+        int32[16 * 128] pendingNoteMetaDurationSamples;
+        int32[16 * 128] pendingNoteMetaAgeSamples;
 
         int32 nextActiveTime = 0x70000000;
         int32 nextInactiveTime = 1;
@@ -139,6 +149,44 @@ namespace wt
             return std::intrinsics::abs (left - right) <= 0.0001f;
         }
 
+        int32 noteMetaIndex (int32 channel, int32 noteNumber)
+        {
+            return (channel * 128) + noteNumber;
+        }
+
+        int32 noteNumberFromPitch (float32 pitch)
+        {
+            return int32 (std::intrinsics::floor (pitch + 0.5f));
+        }
+
+        bool hasPendingNoteMeta (std::notes::NoteOn noteOn)
+        {
+            let noteNumber = noteNumberFromPitch (noteOn.pitch);
+
+            if (noteOn.channel < 0 || noteOn.channel >= 16 || noteNumber < 0 || noteNumber >= 128)
+                return false;
+
+            return pendingNoteMetaValid.at (noteMetaIndex (noteOn.channel, noteNumber));
+        }
+
+        wt::ArticulatedNoteOn consumePendingNoteMeta (std::notes::NoteOn noteOn)
+        {
+            let noteNumber = noteNumberFromPitch (noteOn.pitch);
+            let index = noteMetaIndex (noteOn.channel, noteNumber);
+
+            wt::ArticulatedNoteOn articulatedNote;
+            articulatedNote.channel = noteOn.channel;
+            articulatedNote.pitch = noteOn.pitch;
+            articulatedNote.velocity = noteOn.velocity;
+            articulatedNote.hasArticulation = true;
+            articulatedNote.selectorA = pendingNoteMetaSelectorA.at (index);
+            articulatedNote.selectorB = pendingNoteMetaSelectorB.at (index);
+            articulatedNote.durationSamples = pendingNoteMetaDurationSamples.at (index);
+            articulatedNote.ageSamples = pendingNoteMetaAgeSamples.at (index);
+            pendingNoteMetaValid.at (index) = false;
+            return articulatedNote;
+        }
+
         bool isSustainActive (int32 channel)
         {
             if (channel < 0 || channel >= 64)
@@ -165,8 +213,13 @@ namespace wt
                 monoHeldNotes.at (slot).occupied = false;
                 monoHeldNotes.at (slot).held = false;
                 monoHeldNotes.at (slot).sustained = false;
+                monoHeldNotes.at (slot).hasArticulation = false;
                 monoHeldNotes.at (slot).channel = -1;
                 monoHeldNotes.at (slot).order = 0;
+                monoHeldNotes.at (slot).selectorA = wt::articulationSelectorNone;
+                monoHeldNotes.at (slot).selectorB = 0;
+                monoHeldNotes.at (slot).durationSamples = 0;
+                monoHeldNotes.at (slot).ageSamples = 0;
                 monoHeldNotes.at (slot).pitch = 0.0f;
                 monoHeldNotes.at (slot).velocity = 0.0f;
             }
@@ -296,6 +349,22 @@ namespace wt
             emitExpressionSnapshotForVoice (oldest, noteOn.channel);
         }
 
+        void handlePolyArticulatedNoteOn (wt::ArticulatedNoteOn noteOn)
+        {
+            let oldest = findOldestIndex();
+
+            if (polyVoiceState[oldest].isActive)
+            {
+                voiceEventOut[oldest] <- std::notes::NoteOff (polyVoiceState[oldest].channel,
+                                                              polyVoiceState[oldest].pitch,
+                                                              0.0f);
+            }
+
+            polyVoiceState[oldest].start (++nextActiveTime, noteOn.channel, noteOn.pitch);
+            voiceEventOut[oldest] <- noteOn;
+            emitExpressionSnapshotForVoice (oldest, noteOn.channel);
+        }
+
         void handlePolyNoteOff (std::notes::NoteOff noteOff)
         {
             for (wrap<voiceCount> voice)
@@ -316,6 +385,29 @@ namespace wt
             }
         }
 
+        void assignMonoHeldNote (int32 slot,
+                                 std::notes::NoteOn noteOn,
+                                 bool hasArticulation,
+                                 int32 selectorA,
+                                 int32 selectorB,
+                                 int32 durationSamples,
+                                 int32 ageSamples)
+        {
+            monoHeldNotes.at (slot).occupied = true;
+            monoHeldNotes.at (slot).held = true;
+            monoHeldNotes.at (slot).sustained = false;
+            monoHeldNotes.at (slot).hasArticulation = hasArticulation;
+            monoHeldNotes.at (slot).channel = noteOn.channel;
+            monoHeldNotes.at (slot).pitch = noteOn.pitch;
+            monoHeldNotes.at (slot).velocity = noteOn.velocity;
+            monoHeldNotes.at (slot).order = nextMonoOrder;
+            monoHeldNotes.at (slot).selectorA = selectorA;
+            monoHeldNotes.at (slot).selectorB = selectorB;
+            monoHeldNotes.at (slot).durationSamples = durationSamples;
+            monoHeldNotes.at (slot).ageSamples = ageSamples;
+            nextMonoOrder += 1;
+        }
+
         void addOrRefreshMonoHeldNote (std::notes::NoteOn noteOn)
         {
             int32 slot = findHeldMonoSlot (noteOn.channel, noteOn.pitch);
@@ -326,14 +418,30 @@ namespace wt
             if (slot < 0)
                 return;
 
-            monoHeldNotes.at (slot).occupied = true;
-            monoHeldNotes.at (slot).held = true;
-            monoHeldNotes.at (slot).sustained = false;
-            monoHeldNotes.at (slot).channel = noteOn.channel;
-            monoHeldNotes.at (slot).pitch = noteOn.pitch;
-            monoHeldNotes.at (slot).velocity = noteOn.velocity;
-            monoHeldNotes.at (slot).order = nextMonoOrder;
-            nextMonoOrder += 1;
+            assignMonoHeldNote (slot, noteOn, false, wt::articulationSelectorNone, 0, 0, 0);
+        }
+
+        void addOrRefreshMonoHeldArticulatedNote (wt::ArticulatedNoteOn articulatedNote)
+        {
+            int32 slot = findHeldMonoSlot (articulatedNote.channel, articulatedNote.pitch);
+
+            if (slot < 0)
+                slot = findFreeHeldMonoSlot();
+
+            if (slot < 0)
+                return;
+
+            std::notes::NoteOn noteOn;
+            noteOn.channel = articulatedNote.channel;
+            noteOn.pitch = articulatedNote.pitch;
+            noteOn.velocity = articulatedNote.velocity;
+            assignMonoHeldNote (slot,
+                                noteOn,
+                                articulatedNote.hasArticulation,
+                                articulatedNote.selectorA,
+                                articulatedNote.selectorB,
+                                articulatedNote.durationSamples,
+                                articulatedNote.ageSamples);
         }
 
         void releaseMonoHeldNote (std::notes::NoteOff noteOff)
@@ -395,6 +503,11 @@ namespace wt
             change.slide = heldNote.channel >= 0 && heldNote.channel < 16 ? channelSlide.at (heldNote.channel) : 0.0f;
             change.retrigger = retrigger;
             change.glide = glide;
+            change.hasArticulation = heldNote.hasArticulation;
+            change.selectorA = heldNote.selectorA;
+            change.selectorB = heldNote.selectorB;
+            change.durationSamples = heldNote.durationSamples;
+            change.ageSamples = heldNote.ageSamples;
             voiceRetuneOut[0] <- change;
 
             monoVoiceActive = true;
@@ -469,10 +582,28 @@ namespace wt
             clearMonoHeldNotes();
             mpeMasterSustainActive = false;
             perChannelSustainActive = 0;
+
+            for (int32 index = 0; index < 16 * 128; ++index)
+                pendingNoteMetaValid.at (index) = false;
         }
 
         event eventIn (std::notes::NoteOn noteOn)
         {
+            if (hasPendingNoteMeta (noteOn))
+            {
+                let articulatedNote = consumePendingNoteMeta (noteOn);
+
+                if (! isMonoMode())
+                {
+                    handlePolyArticulatedNoteOn (articulatedNote);
+                    return;
+                }
+
+                addOrRefreshMonoHeldArticulatedNote (articulatedNote);
+                applyMonoSelectionAfterNoteOn();
+                return;
+            }
+
             if (! isMonoMode())
             {
                 handlePolyNoteOn (noteOn);
@@ -480,6 +611,31 @@ namespace wt
             }
 
             addOrRefreshMonoHeldNote (noteOn);
+            applyMonoSelectionAfterNoteOn();
+        }
+
+        event noteMetaIn (wt::ArticulationNoteMeta meta)
+        {
+            if (meta.channel < 0 || meta.channel >= 16 || meta.noteNumber < 0 || meta.noteNumber >= 128)
+                return;
+
+            let index = noteMetaIndex (meta.channel, meta.noteNumber);
+            pendingNoteMetaValid.at (index) = true;
+            pendingNoteMetaSelectorA.at (index) = meta.selectorA;
+            pendingNoteMetaSelectorB.at (index) = meta.selectorB;
+            pendingNoteMetaDurationSamples.at (index) = meta.durationSamples;
+            pendingNoteMetaAgeSamples.at (index) = meta.ageSamples;
+        }
+
+        event articulatedNoteOnIn (wt::ArticulatedNoteOn noteOn)
+        {
+            if (! isMonoMode())
+            {
+                handlePolyArticulatedNoteOn (noteOn);
+                return;
+            }
+
+            addOrRefreshMonoHeldArticulatedNote (noteOn);
             applyMonoSelectionAfterNoteOn();
         }
 
@@ -611,6 +767,8 @@ namespace wt
         void main()
         {
             clearMonoHeldNotes();
+            for (int32 index = 0; index < 16 * 128; ++index)
+                pendingNoteMetaValid.at (index) = false;
             playModeState = readPlayModeInput();
             lastObservedPlayMode = playModeState;
 
@@ -944,6 +1102,9 @@ graph WavetableSynth [[ main ]]
     input event wt::ModulationMsegPlaybackUpload modulationMsegPlayback;
     input event wt::ModulationEnvelopeUpload modulationEnvelope;
     input event wt::ModulationRouteUpload modulationRoute;
+    input event wt::ArticulationNoteMeta articulationNoteMeta;
+    input event wt::ArticulatedNoteOn articulatedNoteOn;
+    input event wt::ArticulationSnapshotUpload articulationSnapshot;
     // Keep a hidden no-op parameter in host slot 0. Ableton plus the Cmajor
     // JUCE wrapper can treat parameter slot 0 specially, so visible synth
     // parameters must start at slot 1.
@@ -988,6 +1149,7 @@ graph WavetableSynth [[ main ]]
     output event wt::EffectiveWarpStateMonitor effectiveWarpState;
     output event wt::EffectiveFilterStateMonitor effectiveFilterState;
     output event wt::EffectiveMsegStateMonitor effectiveMsegState;
+    output event wt::VoiceArticulationMonitor voiceArticulationStart;
     output stream float32<2> audioOut;
     output filterSpectrumAnalyzer.filterSpectrum;
     output distortionScopeAnalyzer.distortionScope;
@@ -1012,12 +1174,15 @@ graph WavetableSynth [[ main ]]
     {
         midiIn -> mpe.parseMIDI;
         mpe.eventOut -> noteDispatcher.eventIn;
+        articulationNoteMeta -> noteDispatcher.noteMetaIn;
+        articulatedNoteOn -> noteDispatcher.articulatedNoteOnIn;
         playMode -> noteDispatcher.playModeIn;
         noteDispatcher.voiceEventOut -> sharedEngine.voiceEventIn;
         noteDispatcher.voiceRetuneOut -> sharedEngine.voiceRetuneIn;
         wavetableLoadBegin -> sharedEngine.wavetableLoadBeginIn;
         wavetableMipFrame -> sharedEngine.wavetableMipFrameIn;
         serviceLoadAbort -> sharedEngine.serviceLoadAbortIn;
+        articulationSnapshot -> sharedEngine.articulationSnapshotIn;
         modulationClear -> sharedEngine.modulationClearIn;
         modulationEnable -> sharedEngine.modulationEnableIn;
         modulationMsegBuffer -> sharedEngine.modulationMsegBufferIn;
@@ -1063,6 +1228,7 @@ graph WavetableSynth [[ main ]]
         sharedEngine.effectiveWarpStateOut -> effectiveWarpState;
         sharedEngine.effectiveFilterStateOut -> effectiveFilterState;
         sharedEngine.effectiveMsegStateOut -> effectiveMsegState;
+        sharedEngine.voiceArticulationStartOut -> voiceArticulationStart;
         sharedEngine.out -> trim.in;
         trim.out -> analyzerDownmix.in, distortion.in;
         analyzerDownmix.out -> filterSpectrumAnalyzer.in;

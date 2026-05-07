@@ -9,6 +9,8 @@
 #include "cmajor/helpers/cmaj_JUCEPluginFormat.h"
 #include "choc/javascript/choc_javascript_QuickJS.h"
 
+#include "../../../native/CosimoCmajorMidiBridge.h"
+
 #ifndef COSIMO_PATCH_PATH
  #error COSIMO_PATCH_PATH must be defined
 #endif
@@ -486,6 +488,36 @@ public:
         return new Editor (*this);
     }
 
+    void processBlock (juce::AudioBuffer<float>& audio, juce::MidiBuffer& midi) override
+    {
+        if (! patch->isPlayable() || isSuspended())
+        {
+            audio.clear();
+            midi.clear();
+            return;
+        }
+
+        juce::ScopedNoDenormals noDenormals;
+
+        if (auto* playHead = getPlayHead())
+            updateTimelineFromPlayhead (*playHead);
+
+        cosimo::cmajor_bridge::processBlockWithFutureDawNoteMeta (
+            *patch,
+            audio,
+            midi,
+            noteMetaBridge,
+            [&midi] (uint32_t frame, choc::midi::ShortMessage message)
+            {
+                midi.addEvent (message.data(), static_cast<int> (message.length()), static_cast<int> (frame));
+            });
+    }
+
+    void processBlock (juce::AudioBuffer<double>&, juce::MidiBuffer&) override
+    {
+        jassertfalse;
+    }
+
     void setStateInformation (const void* data, int size) override
     {
         auto restoredState = juce::ValueTree::readFromData (data, static_cast<size_t> (size));
@@ -601,6 +633,7 @@ private:
     }
 
     std::filesystem::path manifestLocation;
+    cosimo::future_daw::NoteMetaBridge noteMetaBridge { cosimo::future_daw::KeyswitchMap::defaultLowNoteRange() };
 };
 
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()

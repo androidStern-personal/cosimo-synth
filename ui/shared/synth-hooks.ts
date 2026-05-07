@@ -30,6 +30,7 @@ import {
 import {
     acquireModulationRuntimeBridge,
     buildDisplayedMsegState,
+    clampModulationRouteAmount,
     createDefaultEnvelope,
     createDefaultRoute,
     releaseModulationRuntimeBridge,
@@ -38,6 +39,19 @@ import {
     type ModulationState,
     type MsegEditorControllerLike,
 } from "./modulation";
+import {
+    ARTICULATION_STATE_KEY,
+    articulationBanksEqual,
+    articulationSnapshotsEqual,
+    createArticulationSlotFromSnapshot,
+    createDefaultArticulationBank,
+    normalizeArticulationBank,
+    normalizeArticulationSnapshot,
+    serializeArticulationBank,
+    type ArticulationBank,
+    type ArticulationSlot,
+    type ArticulationSnapshot,
+} from "./articulations";
 import {
     clampDisplayPosition,
     describeRuntimeTableFailureDetails,
@@ -224,6 +238,10 @@ export type SynthPatchViewModel = {
     observedMsegPlayhead: MsegPreviewPlayheadState;
     observedWarpState: EffectiveWarpState;
     modulationState: ModulationState | null;
+    articulationBank: ArticulationBank;
+    articulationSlots: ArticulationSlot[];
+    selectedArticulationSlot: ArticulationSlot | null;
+    hasHydratedArticulations: boolean;
     selectedMsegSlot: number;
     selectedEnvelopeSlot: number;
     selectedEnvelope: ModulationEnvelope | null;
@@ -236,6 +254,8 @@ export type SynthPatchViewModel = {
     handleAddRoute: () => void;
     handleRemoveRoute: (routeIndex: number) => void;
     handleRouteChange: (routeIndex: number, nextRoute: ModulationRoute) => void;
+    handleAddArticulationSlot: () => void;
+    handleSelectArticulationSlot: (slotId: string) => void;
     handleSelectWavetable: (nextValue: number) => void;
     handleRetryLoad: () => void;
     handleMsegMorphChange: (nextValue: number) => void;
@@ -554,6 +574,142 @@ export function useModulationState() {
         state,
         bridge: bridgeRef,
     };
+}
+
+function toStableToken(value: unknown) {
+    try {
+        return JSON.stringify(value);
+    } catch {
+        return String(value);
+    }
+}
+
+function readFullStoredStateValue(storedState: unknown, key: string) {
+    const fullState = storedState && typeof storedState === "object"
+        ? storedState as Record<string, unknown>
+        : {};
+    const values = fullState.values && typeof fullState.values === "object"
+        ? fullState.values as Record<string, unknown>
+        : {};
+
+    if (Object.prototype.hasOwnProperty.call(values, key)) {
+        return values[key];
+    }
+
+    if (Object.prototype.hasOwnProperty.call(fullState, key)) {
+        return fullState[key];
+    }
+
+    return undefined;
+}
+
+function useStoredArticulationBank() {
+    const patchConnection = usePatchConnection();
+    const [bank, setBank] = useState<ArticulationBank>(() => createDefaultArticulationBank());
+    const [hasHydrated, setHasHydrated] = useState(false);
+    const bankRef = useRef(bank);
+    const pendingEchoTokensRef = useRef(new Map<string, number>());
+
+    useEffect(() => {
+        bankRef.current = bank;
+    }, [bank]);
+
+    const rememberPendingEcho = useCallback((serializedBank: string) => {
+        const pendingEchoTokens = pendingEchoTokensRef.current;
+        pendingEchoTokens.set(serializedBank, (pendingEchoTokens.get(serializedBank) ?? 0) + 1);
+    }, []);
+
+    const consumePendingEcho = useCallback((serializedBank: string) => {
+        const pendingEchoTokens = pendingEchoTokensRef.current;
+        const pendingCount = pendingEchoTokens.get(serializedBank) ?? 0;
+
+        if (pendingCount <= 0) {
+            return false;
+        }
+
+        if (pendingCount === 1) {
+            pendingEchoTokens.delete(serializedBank);
+        } else {
+            pendingEchoTokens.set(serializedBank, pendingCount - 1);
+        }
+
+        return true;
+    }, []);
+
+    const applyIncomingBank = useCallback((rawValue: unknown) => {
+        const nextBank = normalizeArticulationBank(rawValue);
+        setHasHydrated(true);
+        bankRef.current = nextBank;
+        setBank((previousBank) => (
+            articulationBanksEqual(previousBank, nextBank) ? previousBank : nextBank
+        ));
+    }, []);
+
+    useEffect(() => {
+        const handleStoredStateValue = (message: unknown) => {
+            if (!message || typeof message !== "object") {
+                return;
+            }
+
+            const nextMessage = message as { key?: unknown; value?: unknown };
+
+            if (nextMessage.key !== ARTICULATION_STATE_KEY) {
+                return;
+            }
+
+            const serializedBank = serializeArticulationBank(nextMessage.value);
+
+            if (consumePendingEcho(serializedBank)) {
+                return;
+            }
+
+            applyIncomingBank(nextMessage.value);
+        };
+
+        patchConnection.addStoredStateValueListener?.(handleStoredStateValue);
+
+        if (typeof patchConnection.requestFullStoredState === "function") {
+            patchConnection.requestFullStoredState((storedState) => {
+                applyIncomingBank(readFullStoredStateValue(storedState, ARTICULATION_STATE_KEY));
+            });
+        } else if (typeof patchConnection.requestStoredStateValue === "function") {
+            patchConnection.requestStoredStateValue(ARTICULATION_STATE_KEY);
+        } else {
+            applyIncomingBank(undefined);
+        }
+
+        return () => {
+            patchConnection.removeStoredStateValueListener?.(handleStoredStateValue);
+        };
+    }, [applyIncomingBank, consumePendingEcho, patchConnection]);
+
+    const setAndPersistBank = useCallback((nextBankValue: ArticulationBank | ((previousBank: ArticulationBank) => ArticulationBank)) => {
+        const previousBank = bankRef.current;
+        const nextBank = normalizeArticulationBank(
+            typeof nextBankValue === "function" ? nextBankValue(previousBank) : nextBankValue,
+        );
+
+        if (articulationBanksEqual(previousBank, nextBank)) {
+            return;
+        }
+
+        bankRef.current = nextBank;
+        setHasHydrated(true);
+        setBank(nextBank);
+
+        if (typeof patchConnection.sendStoredStateValue === "function") {
+            const serializedBank = serializeArticulationBank(nextBank);
+            rememberPendingEcho(serializedBank);
+            patchConnection.sendStoredStateValue(ARTICULATION_STATE_KEY, serializedBank);
+        }
+    }, [patchConnection, rememberPendingEcho]);
+
+    return useMemo(() => ({
+        bank,
+        bankRef,
+        hasHydrated,
+        setAndPersistBank,
+    }), [bank, hasHydrated, setAndPersistBank]);
 }
 
 export function useMsegState() {
@@ -1295,6 +1451,7 @@ export function useSynthPatchViewModel({
     const observedDistortionHistory = useObservedDistortionHistory();
     const observedDistortionScope = useObservedDistortionScope();
     const observedMsegState = useObservedMsegState();
+    const articulationBankState = useStoredArticulationBank();
     const runtimePresentation = useMemo(
         () => resolveRuntimeTablePresentation(runtimeStateMessage, Number(wavetableSelect.value) || 0),
         [runtimeStateMessage, wavetableSelect.value],
@@ -1303,11 +1460,21 @@ export function useSynthPatchViewModel({
     const desiredTableIndex = runtimePresentation.desiredTableIndex ?? 0;
     const { frames, error: frameError } = useFactoryTableFrames(presentedTableIndex);
     const { state: modulationState, bridge: modulationBridge } = useModulationState();
+    const articulationBank = articulationBankState.bank;
+    const articulationSlots = articulationBank.slots;
+    const selectedArticulationSlot = useMemo(() => (
+        articulationSlots.find((slot) => slot.id === articulationBank.selectedSlotId) ?? null
+    ), [articulationBank.selectedSlotId, articulationSlots]);
+    const isApplyingArticulationRef = useRef(false);
+    const lastObservedArticulationEditRef = useRef<{
+        selectionToken: string;
+        currentSnapshotToken: string;
+    } | null>(null);
     const [selectedMsegSlot, setSelectedMsegSlot] = useState(0);
     const [selectedEnvelopeSlot, setSelectedEnvelopeSlot] = useState(0);
     const displayedMsegControllerRef = useRef<MsegEditorControllerLike | null>(null);
     displayedMsegControllerRef.current = modulationBridge.current?.getMsegSlotController(selectedMsegSlot) ?? null;
-    const routes = modulationState?.routes ?? [];
+    const routes = useMemo(() => modulationState?.routes ?? [], [modulationState?.routes]);
     const msegState = useMemo(() => {
         if (!modulationState || !modulationBridge.current) {
             return null;
@@ -1460,6 +1627,276 @@ export function useSynthPatchViewModel({
         modulationBridge.current?.setRoute(routeIndex, nextRoute);
     }, [modulationBridge]);
 
+    const captureCurrentArticulationSnapshot = useCallback((): ArticulationSnapshot => {
+        const currentModulationState = modulationBridge.current?.getState() ?? modulationState;
+
+        return normalizeArticulationSnapshot({
+            parameters: {
+                wavetablePosition: wavetablePosition.value,
+                playMode: playMode.value,
+                glideTime: glideTime.value,
+                pan: pan.value,
+                warpMode: warpMode.value,
+                warpAmount: warpAmount.value,
+                filterMode: filterMode.value,
+                filterCutoff: filterCutoff.value,
+                filterQ: filterQ.value,
+                msegMorphs: [mseg1Morph.value, mseg2Morph.value, mseg3Morph.value],
+                distortionMode: distortionMode.value,
+                distortionDriveDb: distortionDriveDb.value,
+                distortionKnee: distortionKnee.value,
+                distortionWet: distortionWet.value,
+                distortionWetHPHz: distortionWetHPHz.value,
+                distortionWetLPHz: distortionWetLPHz.value,
+                chorusEnabled: chorusEnabled.value,
+                chorusMix: chorusMix.value,
+                chorusMotionMode: chorusMotionMode.value,
+                chorusBloomMode: chorusBloomMode.value,
+                chorusTone: chorusTone.value,
+                chorusFeedback: chorusFeedback.value,
+                chorusRingAmount: chorusRingAmount.value,
+                chorusRingOffsetMode: chorusRingOffsetMode.value,
+                chorusRingFineSemitones: chorusRingFineSemitones.value,
+            },
+            envelopes: currentModulationState?.envelopeSlots ?? [0, 1, 2].map((slotIndex) => createDefaultEnvelope(slotIndex)),
+            modRouteAmounts: (currentModulationState?.routes ?? []).map((route) => ({
+                routeId: route.id,
+                amount: route.amount,
+            })),
+        });
+    }, [
+        chorusBloomMode.value,
+        chorusEnabled.value,
+        chorusFeedback.value,
+        chorusMix.value,
+        chorusMotionMode.value,
+        chorusRingAmount.value,
+        chorusRingFineSemitones.value,
+        chorusRingOffsetMode.value,
+        chorusTone.value,
+        distortionDriveDb.value,
+        distortionKnee.value,
+        distortionMode.value,
+        distortionWet.value,
+        distortionWetHPHz.value,
+        distortionWetLPHz.value,
+        filterCutoff.value,
+        filterMode.value,
+        filterQ.value,
+        glideTime.value,
+        modulationBridge,
+        modulationState,
+        mseg1Morph.value,
+        mseg2Morph.value,
+        mseg3Morph.value,
+        pan.value,
+        playMode.value,
+        warpAmount.value,
+        warpMode.value,
+        wavetablePosition.value,
+    ]);
+
+    const applyArticulationSnapshot = useCallback((snapshotValue: unknown) => {
+        const snapshot = normalizeArticulationSnapshot(snapshotValue);
+        const parameters = snapshot.parameters;
+
+        wavetablePosition.setValue(parameters.wavetablePosition);
+        playMode.setValue(parameters.playMode);
+        glideTime.setValue(parameters.glideTime);
+        pan.setValue(parameters.pan);
+        warpMode.setValue(parameters.warpMode);
+        warpAmount.setValue(parameters.warpAmount);
+        filterMode.setValue(parameters.filterMode);
+        filterCutoff.setValue(parameters.filterCutoff);
+        filterQ.setValue(parameters.filterQ);
+        mseg1Morph.setValue(parameters.msegMorphs[0]);
+        mseg2Morph.setValue(parameters.msegMorphs[1]);
+        mseg3Morph.setValue(parameters.msegMorphs[2]);
+        distortionMode.setValue(parameters.distortionMode);
+        distortionDriveDb.setValue(parameters.distortionDriveDb);
+        distortionKnee.setValue(parameters.distortionKnee);
+        distortionWet.setValue(parameters.distortionWet);
+        distortionWetHPHz.setValue(parameters.distortionWetHPHz);
+        distortionWetLPHz.setValue(parameters.distortionWetLPHz);
+        chorusEnabled.setValue(parameters.chorusEnabled);
+        chorusMix.setValue(parameters.chorusMix);
+        chorusMotionMode.setValue(parameters.chorusMotionMode);
+        chorusBloomMode.setValue(parameters.chorusBloomMode);
+        chorusTone.setValue(parameters.chorusTone);
+        chorusFeedback.setValue(parameters.chorusFeedback);
+        chorusRingAmount.setValue(parameters.chorusRingAmount);
+        chorusRingOffsetMode.setValue(parameters.chorusRingOffsetMode);
+        chorusRingFineSemitones.setValue(parameters.chorusRingFineSemitones);
+
+        const bridge = modulationBridge.current;
+        bridge?.setMsegSlotMorph(0, parameters.msegMorphs[0]);
+        bridge?.setMsegSlotMorph(1, parameters.msegMorphs[1]);
+        bridge?.setMsegSlotMorph(2, parameters.msegMorphs[2]);
+        snapshot.envelopes.forEach((envelope, envelopeIndex) => {
+            bridge?.setEnvelope(envelopeIndex, envelope);
+        });
+
+        const currentRoutes = bridge?.getState().routes ?? modulationState?.routes ?? [];
+        const routeAmountById = new Map(snapshot.modRouteAmounts.map((routeAmount) => [
+            routeAmount.routeId,
+            routeAmount.amount,
+        ]));
+        let hasRouteAmountChange = false;
+        const nextRoutes = currentRoutes.map((route) => {
+            if (!routeAmountById.has(route.id)) {
+                return route;
+            }
+
+            const nextAmount = clampModulationRouteAmount(route.targetKind, routeAmountById.get(route.id) ?? route.amount);
+
+            if (route.amount === nextAmount) {
+                return route;
+            }
+
+            hasRouteAmountChange = true;
+            return {
+                ...route,
+                amount: nextAmount,
+            };
+        });
+
+        if (hasRouteAmountChange) {
+            bridge?.replaceRoutes(nextRoutes);
+        }
+    }, [
+        chorusBloomMode,
+        chorusEnabled,
+        chorusFeedback,
+        chorusMix,
+        chorusMotionMode,
+        chorusRingAmount,
+        chorusRingFineSemitones,
+        chorusRingOffsetMode,
+        chorusTone,
+        distortionDriveDb,
+        distortionKnee,
+        distortionMode,
+        distortionWet,
+        distortionWetHPHz,
+        distortionWetLPHz,
+        filterCutoff,
+        filterMode,
+        filterQ,
+        glideTime,
+        modulationBridge,
+        modulationState?.routes,
+        mseg1Morph,
+        mseg2Morph,
+        mseg3Morph,
+        pan,
+        playMode,
+        warpAmount,
+        warpMode,
+        wavetablePosition,
+    ]);
+
+    const handleAddArticulationSlot = useCallback(() => {
+        const snapshot = captureCurrentArticulationSnapshot();
+
+        articulationBankState.setAndPersistBank((previousBank) => {
+            const nextSlot = createArticulationSlotFromSnapshot(previousBank, snapshot);
+
+            if (!nextSlot) {
+                return previousBank;
+            }
+
+            const nextSelectionToken = `${nextSlot.id}:${toStableToken(nextSlot.snapshot)}`;
+            lastObservedArticulationEditRef.current = {
+                selectionToken: nextSelectionToken,
+                currentSnapshotToken: nextSelectionToken,
+            };
+
+            return normalizeArticulationBank({
+                ...previousBank,
+                selectedSlotId: nextSlot.id,
+                slots: [...previousBank.slots, nextSlot],
+            });
+        });
+    }, [articulationBankState, captureCurrentArticulationSnapshot]);
+
+    const handleSelectArticulationSlot = useCallback((slotId: string) => {
+        const bank = articulationBankState.bankRef.current;
+        const slot = bank.slots.find((candidate) => candidate.id === slotId);
+
+        if (!slot) {
+            return;
+        }
+
+        const nextApplyToken = `${slot.id}:${toStableToken(slot.snapshot)}`;
+        isApplyingArticulationRef.current = true;
+        lastObservedArticulationEditRef.current = {
+            selectionToken: nextApplyToken,
+            currentSnapshotToken: nextApplyToken,
+        };
+        applyArticulationSnapshot(slot.snapshot);
+        setTimeout(() => {
+            isApplyingArticulationRef.current = false;
+        }, 0);
+
+        articulationBankState.setAndPersistBank((previousBank) => normalizeArticulationBank({
+            ...previousBank,
+            selectedSlotId: slotId,
+        }));
+    }, [applyArticulationSnapshot, articulationBankState]);
+
+    useEffect(() => {
+        if (
+            !articulationBankState.hasHydrated
+            || !selectedArticulationSlot
+        ) {
+            lastObservedArticulationEditRef.current = null;
+            return;
+        }
+
+        if (isApplyingArticulationRef.current) {
+            return;
+        }
+
+        const selectionToken = `${selectedArticulationSlot.id}:${toStableToken(selectedArticulationSlot.snapshot)}`;
+        const currentSnapshot = captureCurrentArticulationSnapshot();
+        const currentSnapshotToken = `${selectedArticulationSlot.id}:${toStableToken(currentSnapshot)}`;
+        const lastObservedEdit = lastObservedArticulationEditRef.current;
+
+        if (!lastObservedEdit || lastObservedEdit.selectionToken !== selectionToken) {
+            lastObservedArticulationEditRef.current = {
+                selectionToken,
+                currentSnapshotToken,
+            };
+            return;
+        }
+
+        if (lastObservedEdit.currentSnapshotToken === currentSnapshotToken) {
+            return;
+        }
+
+        lastObservedArticulationEditRef.current = {
+            selectionToken: currentSnapshotToken,
+            currentSnapshotToken,
+        };
+
+        if (articulationSnapshotsEqual(selectedArticulationSlot.snapshot, currentSnapshot)) {
+            return;
+        }
+
+        articulationBankState.setAndPersistBank((previousBank) => normalizeArticulationBank({
+            ...previousBank,
+            slots: previousBank.slots.map((slot) => (
+                slot.id === selectedArticulationSlot.id
+                    ? { ...slot, snapshot: currentSnapshot }
+                    : slot
+            )),
+        }));
+    }, [
+        articulationBankState,
+        captureCurrentArticulationSnapshot,
+        selectedArticulationSlot,
+    ]);
+
     const handleStepPlayMode = useCallback((direction: ArrowStepDirection) => {
         playMode.commitValue(
             clamp(playMode.value + direction, 0, Math.max(0, voiceModeCount - 1)),
@@ -1531,6 +1968,10 @@ export function useSynthPatchViewModel({
         observedMsegPlayhead,
         observedWarpState,
         modulationState,
+        articulationBank,
+        articulationSlots,
+        selectedArticulationSlot,
+        hasHydratedArticulations: articulationBankState.hasHydrated,
         selectedMsegSlot,
         selectedEnvelopeSlot,
         selectedEnvelope,
@@ -1543,6 +1984,8 @@ export function useSynthPatchViewModel({
         handleAddRoute,
         handleRemoveRoute,
         handleRouteChange,
+        handleAddArticulationSlot,
+        handleSelectArticulationSlot,
         handleSelectWavetable,
         handleRetryLoad,
         handleMsegMorphChange,

@@ -69,6 +69,24 @@ export const MODULATION_TARGET_OPTIONS = [
     { value: "pan", label: "PAN" },
 ];
 let generatedRouteIdCounter = 1;
+function hasOwnValue(record, key) {
+    return Object.prototype.hasOwnProperty.call(record, key);
+}
+function readFullStoredStateValue(storedState, key) {
+    const fullState = storedState && typeof storedState === "object"
+        ? storedState
+        : {};
+    const values = fullState.values && typeof fullState.values === "object"
+        ? fullState.values
+        : {};
+    if (hasOwnValue(values, key)) {
+        return values[key];
+    }
+    if (hasOwnValue(fullState, key)) {
+        return fullState[key];
+    }
+    return undefined;
+}
 function clamp(value, min, max) {
     return Math.min(Math.max(value, min), max);
 }
@@ -608,10 +626,7 @@ export class ModulationRuntimeBridge {
     requestBootState() {
         if (typeof this.patchConnection.requestFullStoredState === "function") {
             this.patchConnection.requestFullStoredState((storedState) => {
-                const fullState = storedState && typeof storedState === "object"
-                    ? storedState
-                    : {};
-                this.applyStoredState(fullState[MODULATION_STATE_KEY]);
+                this.applyStoredState(readFullStoredStateValue(storedState, MODULATION_STATE_KEY));
             });
             return;
         }

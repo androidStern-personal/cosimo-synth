@@ -609,17 +609,17 @@ const MSEG_NOTE_OFF_POLICY_VALUES = /* @__PURE__ */ new Set([
   "immediate",
   "ignore"
 ]);
-function clamp$2(value, min, max) {
+function clamp$3(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 function almostEqual(left, right, epsilon = 1e-12) {
   return Math.abs(left - right) <= epsilon;
 }
 function clampCurvePower(value) {
-  return clamp$2(Number.isFinite(value) ? value : 0, -MSEG_CURVE_POWER_LIMIT, MSEG_CURVE_POWER_LIMIT);
+  return clamp$3(Number.isFinite(value) ? value : 0, -MSEG_CURVE_POWER_LIMIT, MSEG_CURVE_POWER_LIMIT);
 }
-function clamp01(value) {
-  return clamp$2(Number.isFinite(value) ? value : 0, 0, 1);
+function clamp01$1(value) {
+  return clamp$3(Number.isFinite(value) ? value : 0, 0, 1);
 }
 function createDefaultMsegShape(name = MSEG_DEFAULT_NAME) {
   return {
@@ -649,7 +649,7 @@ function createDefaultMsegPlayback() {
 }
 function clampMsegRateSeconds(value) {
   const numericValue = Number(value);
-  return clamp$2(
+  return clamp$3(
     Number.isFinite(numericValue) ? numericValue : 1,
     MSEG_RATE_MIN_SECONDS,
     MSEG_RATE_MAX_SECONDS
@@ -660,8 +660,8 @@ function normalizeMsegLoop(loop) {
     return null;
   }
   const nextLoop = loop;
-  const startX = clamp01(Number(nextLoop.startX));
-  const endX = clamp01(Number(nextLoop.endX));
+  const startX = clamp01$1(Number(nextLoop.startX));
+  const endX = clamp01$1(Number(nextLoop.endX));
   if (almostEqual(startX, endX)) {
     return null;
   }
@@ -699,11 +699,11 @@ function normalizePoint(point, pointIndex, pointCount) {
     x = pointIndex === 0 ? 0 : pointIndex === pointCount - 1 ? 1 : 0;
   }
   if (pointIndex !== 0 && pointIndex !== pointCount - 1) {
-    x = clamp01(x);
+    x = clamp01$1(x);
   }
   return {
     x,
-    y: clamp01(Number(nextPoint.y)),
+    y: clamp01$1(Number(nextPoint.y)),
     curvePower: clampCurvePower(Number(nextPoint.curvePower))
   };
 }
@@ -767,14 +767,14 @@ function findEvaluationSegment(points, x) {
   };
 }
 function evaluateNormalizedMsegShape(points, x) {
-  const clampedX = clamp01(Number(x));
+  const clampedX = clamp01$1(Number(x));
   const segment = findEvaluationSegment(points, clampedX);
   if (segment.laterPointWins || almostEqual(segment.from.x, segment.to.x)) {
     return segment.to.y;
   }
   const width = segment.to.x - segment.from.x;
   const t = width <= 0 ? 1 : (clampedX - segment.from.x) / width;
-  const curvedT = clamp01(powerScale(t, segment.from.curvePower));
+  const curvedT = clamp01$1(powerScale(t, segment.from.curvePower));
   return segment.from.y + (segment.to.y - segment.from.y) * curvedT;
 }
 function evaluateMsegShape(shape, x) {
@@ -834,12 +834,12 @@ const ROUTE_AMOUNT_LIMITS = {
   pan: { min: -1, max: 1 }
 };
 let generatedRouteIdCounter = 1;
-function clamp$1(value, min, max) {
+function clamp$2(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 function clampEnvSeconds(value, fallback) {
   const numeric = Number(value);
-  return clamp$1(Number.isFinite(numeric) ? numeric : fallback, ENV_MIN_SECONDS, ENV_MAX_SECONDS);
+  return clamp$2(Number.isFinite(numeric) ? numeric : fallback, ENV_MIN_SECONDS, ENV_MAX_SECONDS);
 }
 function createGeneratedRouteId() {
   const routeId = `mod-route-auto-${generatedRouteIdCounter}`;
@@ -861,7 +861,7 @@ function polarityToCode(polarity) {
 function clampModulationRouteAmount(targetKind, value) {
   const limits = ROUTE_AMOUNT_LIMITS[targetKind];
   const numeric = Number(value);
-  return clamp$1(Number.isFinite(numeric) ? numeric : 0, limits.min, limits.max);
+  return clamp$2(Number.isFinite(numeric) ? numeric : 0, limits.min, limits.max);
 }
 function normalizeSourceKind(value) {
   if (value === "mseg" || value === "env" || value === "velocity" || value === "pressure" || value === "slide") {
@@ -881,7 +881,7 @@ function normalizeSourceSlot(sourceKind, rawSlot) {
     return null;
   }
   const maxSlot = sourceKind === "mseg" ? MODULATION_MSEG_SLOT_COUNT : MODULATION_ENV_SLOT_COUNT;
-  return clamp$1(Number.isFinite(numericSlot) ? numericSlot : 1, 1, maxSlot);
+  return clamp$2(Number.isFinite(numericSlot) ? numericSlot : 1, 1, maxSlot);
 }
 function createDefaultEnvelope(slotIndex) {
   return {
@@ -899,7 +899,7 @@ function normalizeEnvelope(value, slotIndex = 0) {
     name: typeof nextValue.name === "string" && nextValue.name.trim() ? nextValue.name : fallback.name,
     attackSeconds: clampEnvSeconds(nextValue.attackSeconds ?? fallback.attackSeconds, fallback.attackSeconds),
     decaySeconds: clampEnvSeconds(nextValue.decaySeconds ?? fallback.decaySeconds, fallback.decaySeconds),
-    sustain: clamp01(nextValue.sustain ?? fallback.sustain),
+    sustain: clamp01$1(nextValue.sustain ?? fallback.sustain),
     releaseSeconds: clampEnvSeconds(nextValue.releaseSeconds ?? fallback.releaseSeconds, fallback.releaseSeconds)
   };
 }
@@ -937,7 +937,7 @@ function normalizeMsegSlot(value, slotIndex) {
   return {
     shapeA,
     shapeB: normalizeMsegShape(nextValue.shapeB ?? shapeA),
-    morph: clamp01(nextValue.morph ?? 0),
+    morph: clamp01$1(nextValue.morph ?? 0),
     playback: normalizeMsegPlayback(nextValue.playback ?? createDefaultMsegPlayback())
   };
 }
@@ -1066,6 +1066,357 @@ function buildModulationRuntimeEvents(stateValue) {
   }
   events.push({ endpointID: MODULATION_ENABLE_ENDPOINT_ID, value: 1 });
   return events;
+}
+const ARTICULATION_STATE_KEY = "articulations.v1";
+const ARTICULATION_SNAPSHOT_ENDPOINT_ID = "articulationSnapshot";
+const ARTICULATION_MAX_SLOTS = 128;
+function clamp$1(value, min, max) {
+  return Math.min(Math.max(value, min), max);
+}
+function clamp01(value) {
+  return clamp$1(Number.isFinite(value) ? value : 0, 0, 1);
+}
+function normalizeNumber(value, fallback, min = -Number.MAX_VALUE, max = Number.MAX_VALUE) {
+  const numericValue = Number(value);
+  return clamp$1(Number.isFinite(numericValue) ? numericValue : fallback, min, max);
+}
+function normalizeInteger(value, fallback, min, max) {
+  return clamp$1(Math.round(normalizeNumber(value, fallback)), min, max);
+}
+function createDefaultArticulationParameterSnapshot() {
+  return {
+    wavetablePosition: 0,
+    playMode: 0,
+    glideTime: 0,
+    pan: 0,
+    warpMode: 0,
+    warpAmount: 0,
+    filterMode: 0,
+    filterCutoff: 1e3,
+    filterQ: 0.707107,
+    msegMorphs: [0, 0, 0],
+    distortionMode: 0,
+    distortionDriveDb: 12,
+    distortionKnee: 0.35,
+    distortionWet: 0,
+    distortionWetHPHz: 40,
+    distortionWetLPHz: 18e3,
+    chorusEnabled: 0,
+    chorusMix: 0,
+    chorusMotionMode: 1,
+    chorusBloomMode: 0,
+    chorusTone: 0.5,
+    chorusFeedback: 0.42,
+    chorusRingAmount: 0,
+    chorusRingOffsetMode: 0,
+    chorusRingFineSemitones: 0
+  };
+}
+function normalizeArticulationParameterSnapshot(value) {
+  const defaults = createDefaultArticulationParameterSnapshot();
+  const nextValue = value && typeof value === "object" ? value : {};
+  const msegMorphs = Array.isArray(nextValue.msegMorphs) ? nextValue.msegMorphs : [];
+  return {
+    wavetablePosition: normalizeNumber(nextValue.wavetablePosition, defaults.wavetablePosition, 0, 1),
+    playMode: normalizeInteger(nextValue.playMode, defaults.playMode, 0, 2),
+    glideTime: normalizeNumber(nextValue.glideTime, defaults.glideTime, 0, 2),
+    pan: normalizeNumber(nextValue.pan, defaults.pan, -1, 1),
+    warpMode: normalizeInteger(nextValue.warpMode, defaults.warpMode, 0, 4),
+    warpAmount: normalizeNumber(nextValue.warpAmount, defaults.warpAmount, 0, 1),
+    filterMode: normalizeInteger(nextValue.filterMode, defaults.filterMode, 0, 5),
+    filterCutoff: normalizeNumber(nextValue.filterCutoff, defaults.filterCutoff, 20, 2e4),
+    filterQ: normalizeNumber(nextValue.filterQ, defaults.filterQ, 0.1, 20),
+    msegMorphs: [
+      clamp01(Number(msegMorphs[0])),
+      clamp01(Number(msegMorphs[1])),
+      clamp01(Number(msegMorphs[2]))
+    ],
+    distortionMode: normalizeInteger(nextValue.distortionMode, defaults.distortionMode, 0, 1),
+    distortionDriveDb: normalizeNumber(nextValue.distortionDriveDb, defaults.distortionDriveDb, 0, 36),
+    distortionKnee: normalizeNumber(nextValue.distortionKnee, defaults.distortionKnee, 0, 1),
+    distortionWet: normalizeNumber(nextValue.distortionWet, defaults.distortionWet, 0, 1),
+    distortionWetHPHz: normalizeNumber(nextValue.distortionWetHPHz, defaults.distortionWetHPHz, 20, 4e3),
+    distortionWetLPHz: normalizeNumber(nextValue.distortionWetLPHz, defaults.distortionWetLPHz, 20, 2e4),
+    chorusEnabled: normalizeInteger(nextValue.chorusEnabled, defaults.chorusEnabled, 0, 1),
+    chorusMix: normalizeNumber(nextValue.chorusMix, defaults.chorusMix, 0, 1),
+    chorusMotionMode: normalizeInteger(nextValue.chorusMotionMode, defaults.chorusMotionMode, 0, 3),
+    chorusBloomMode: normalizeInteger(nextValue.chorusBloomMode, defaults.chorusBloomMode, 0, 4),
+    chorusTone: normalizeNumber(nextValue.chorusTone, defaults.chorusTone, 0, 1),
+    chorusFeedback: normalizeNumber(nextValue.chorusFeedback, defaults.chorusFeedback, 0, 0.95),
+    chorusRingAmount: normalizeNumber(nextValue.chorusRingAmount, defaults.chorusRingAmount, 0, 1),
+    chorusRingOffsetMode: normalizeInteger(nextValue.chorusRingOffsetMode, defaults.chorusRingOffsetMode, 0, 3),
+    chorusRingFineSemitones: normalizeNumber(nextValue.chorusRingFineSemitones, defaults.chorusRingFineSemitones, -2, 2)
+  };
+}
+function normalizeArticulationRouteAmountSnapshot(value) {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+  const nextValue = value;
+  const routeId = typeof nextValue.routeId === "string" ? nextValue.routeId.trim() : "";
+  if (!routeId) {
+    return null;
+  }
+  return {
+    routeId,
+    amount: normalizeNumber(nextValue.amount, 0, -48, 48)
+  };
+}
+function normalizeArticulationSnapshot(value) {
+  const nextValue = value && typeof value === "object" ? value : {};
+  const routeAmounts = Array.isArray(nextValue.modRouteAmounts) ? nextValue.modRouteAmounts.map(normalizeArticulationRouteAmountSnapshot).filter((entry) => entry !== null) : [];
+  const routeAmountById = /* @__PURE__ */ new Map();
+  for (const routeAmount of routeAmounts) {
+    routeAmountById.set(routeAmount.routeId, routeAmount);
+  }
+  return {
+    format: "cosimo.articulation.snapshot",
+    version: 1,
+    parameters: normalizeArticulationParameterSnapshot(nextValue.parameters),
+    envelopes: [0, 1, 2].map((slotIndex) => normalizeEnvelope(
+      Array.isArray(nextValue.envelopes) ? nextValue.envelopes[slotIndex] : void 0,
+      slotIndex
+    )),
+    modRouteAmounts: [...routeAmountById.values()]
+  };
+}
+function normalizeArticulationSlot(value, fallbackSelectorA) {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+  const nextValue = value;
+  const selectorA = normalizeInteger(nextValue.selectorA, fallbackSelectorA, 0, ARTICULATION_MAX_SLOTS - 1);
+  const id = typeof nextValue.id === "string" && nextValue.id.trim() ? nextValue.id.trim() : `articulation-${selectorA}`;
+  const name = typeof nextValue.name === "string" && nextValue.name.trim() ? nextValue.name.trim() : `Art ${selectorA + 1}`;
+  return {
+    id,
+    selectorA,
+    name,
+    snapshot: normalizeArticulationSnapshot(nextValue.snapshot)
+  };
+}
+function normalizeArticulationBank(value) {
+  let parsedValue = value;
+  if (typeof parsedValue === "string" && parsedValue.trim()) {
+    try {
+      parsedValue = JSON.parse(parsedValue);
+    } catch {
+      parsedValue = null;
+    }
+  }
+  const nextValue = parsedValue && typeof parsedValue === "object" ? parsedValue : {};
+  const inputSlots = Array.isArray(nextValue.slots) ? nextValue.slots : [];
+  const usedSelectors = /* @__PURE__ */ new Set();
+  const usedIds = /* @__PURE__ */ new Set();
+  const slots = [];
+  for (let slotIndex = 0; slotIndex < inputSlots.length && slots.length < ARTICULATION_MAX_SLOTS; slotIndex += 1) {
+    const slot = normalizeArticulationSlot(inputSlots[slotIndex], slotIndex);
+    if (!slot || usedSelectors.has(slot.selectorA) || usedIds.has(slot.id)) {
+      continue;
+    }
+    usedSelectors.add(slot.selectorA);
+    usedIds.add(slot.id);
+    slots.push(slot);
+  }
+  const selectedSlotId = typeof nextValue.selectedSlotId === "string" && slots.some((slot) => slot.id === nextValue.selectedSlotId) ? nextValue.selectedSlotId : null;
+  return {
+    format: "cosimo.articulations",
+    version: 1,
+    selectedSlotId,
+    slots
+  };
+}
+function createDisabledRuntimeUpload(selectorA) {
+  return {
+    selectorA,
+    enabled: false,
+    framePosition: 0,
+    pan: 0,
+    warpMode: 0,
+    warpAmount: 0,
+    filterMode: 0,
+    filterCutoffHz: 1e3,
+    filterQ: 0.707107,
+    msegMorphs: Array.from({ length: MODULATION_MSEG_SLOT_COUNT }, () => 0),
+    routeAmounts: Array.from({ length: MODULATION_MAX_ROUTES }, () => 0),
+    envelopeAttackSeconds: Array.from({ length: MODULATION_ENV_SLOT_COUNT }, (_, slotIndex) => createDefaultEnvelope(slotIndex).attackSeconds),
+    envelopeDecaySeconds: Array.from({ length: MODULATION_ENV_SLOT_COUNT }, (_, slotIndex) => createDefaultEnvelope(slotIndex).decaySeconds),
+    envelopeSustain: Array.from({ length: MODULATION_ENV_SLOT_COUNT }, (_, slotIndex) => createDefaultEnvelope(slotIndex).sustain),
+    envelopeReleaseSeconds: Array.from({ length: MODULATION_ENV_SLOT_COUNT }, (_, slotIndex) => createDefaultEnvelope(slotIndex).releaseSeconds)
+  };
+}
+function normalizeRuntimeRoutes(routesValue) {
+  return Array.isArray(routesValue) ? routesValue.slice(0, MODULATION_MAX_ROUTES).map((route, routeIndex) => normalizeRoute(route, routeIndex)) : [];
+}
+function buildArticulationRuntimeUploads(bankValue, currentRoutesValue = []) {
+  const bank = normalizeArticulationBank(bankValue);
+  const currentRoutes = normalizeRuntimeRoutes(currentRoutesValue);
+  const slotBySelectorA = new Map(bank.slots.map((slot) => [slot.selectorA, slot]));
+  return Array.from({ length: ARTICULATION_MAX_SLOTS }, (_, selectorA) => {
+    const slot = slotBySelectorA.get(selectorA);
+    if (!slot) {
+      return createDisabledRuntimeUpload(selectorA);
+    }
+    const snapshot = normalizeArticulationSnapshot(slot.snapshot);
+    const parameters = snapshot.parameters;
+    const routeAmountById = new Map(snapshot.modRouteAmounts.map((routeAmount) => [
+      routeAmount.routeId,
+      routeAmount.amount
+    ]));
+    return {
+      selectorA,
+      enabled: true,
+      framePosition: parameters.wavetablePosition,
+      pan: parameters.pan,
+      warpMode: parameters.warpMode,
+      warpAmount: parameters.warpAmount,
+      filterMode: parameters.filterMode,
+      filterCutoffHz: parameters.filterCutoff,
+      filterQ: parameters.filterQ,
+      msegMorphs: Array.from({ length: MODULATION_MSEG_SLOT_COUNT }, (_2, slotIndex) => parameters.msegMorphs[slotIndex] ?? 0),
+      routeAmounts: Array.from({ length: MODULATION_MAX_ROUTES }, (_2, routeIndex) => {
+        const route = currentRoutes[routeIndex];
+        if (!route) {
+          return 0;
+        }
+        if (!routeAmountById.has(route.id)) {
+          return route.amount;
+        }
+        return clampModulationRouteAmount(
+          route.targetKind,
+          Number(routeAmountById.get(route.id))
+        );
+      }),
+      envelopeAttackSeconds: Array.from({ length: MODULATION_ENV_SLOT_COUNT }, (_2, slotIndex) => snapshot.envelopes[slotIndex]?.attackSeconds ?? createDefaultEnvelope(slotIndex).attackSeconds),
+      envelopeDecaySeconds: Array.from({ length: MODULATION_ENV_SLOT_COUNT }, (_2, slotIndex) => snapshot.envelopes[slotIndex]?.decaySeconds ?? createDefaultEnvelope(slotIndex).decaySeconds),
+      envelopeSustain: Array.from({ length: MODULATION_ENV_SLOT_COUNT }, (_2, slotIndex) => snapshot.envelopes[slotIndex]?.sustain ?? createDefaultEnvelope(slotIndex).sustain),
+      envelopeReleaseSeconds: Array.from({ length: MODULATION_ENV_SLOT_COUNT }, (_2, slotIndex) => snapshot.envelopes[slotIndex]?.releaseSeconds ?? createDefaultEnvelope(slotIndex).releaseSeconds)
+    };
+  });
+}
+const runtimeStateEndpointID$2 = "runtimeState";
+function hasOwnValue$1(record, key) {
+  return Object.prototype.hasOwnProperty.call(record, key);
+}
+function getFullStoredStateValue$1(storedState, key) {
+  const fullState = storedState && typeof storedState === "object" ? storedState : {};
+  const values = fullState.values && typeof fullState.values === "object" ? fullState.values : {};
+  if (hasOwnValue$1(values, key)) {
+    return values[key];
+  }
+  if (hasOwnValue$1(fullState, key)) {
+    return fullState[key];
+  }
+  return void 0;
+}
+function getRuntimeDspSessionId$1(value) {
+  if (!value || typeof value !== "object") {
+    return 0;
+  }
+  return Math.trunc(Number(value.dspSessionId) || 0);
+}
+function toStableToken$1(value) {
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+class ArticulationWorkerService {
+  constructor(connection) {
+    this.connection = connection;
+  }
+  articulationBank = normalizeArticulationBank(void 0);
+  modulationState = deserializeModulationState(void 0);
+  hasArticulationState = false;
+  hasModulationState = false;
+  hasRuntimeState = false;
+  runtimeDspSessionId = 0;
+  started = false;
+  lastAppliedToken = null;
+  handleStoredStateValueBound = this.handleStoredStateValue.bind(this);
+  handleRuntimeStateBound = this.handleRuntimeState.bind(this);
+  start() {
+    if (this.started) {
+      return;
+    }
+    this.started = true;
+    this.connection.addStoredStateValueListener?.(this.handleStoredStateValueBound);
+    this.connection.addEndpointListener?.(runtimeStateEndpointID$2, this.handleRuntimeStateBound);
+    this.requestBootState();
+  }
+  stop() {
+    if (!this.started) {
+      return;
+    }
+    this.started = false;
+    this.connection.removeStoredStateValueListener?.(this.handleStoredStateValueBound);
+    this.connection.removeEndpointListener?.(runtimeStateEndpointID$2, this.handleRuntimeStateBound);
+  }
+  requestBootState() {
+    if (typeof this.connection.requestFullStoredState === "function") {
+      this.connection.requestFullStoredState((storedState) => {
+        this.applyArticulationState(getFullStoredStateValue$1(storedState, ARTICULATION_STATE_KEY));
+        this.applyModulationState(getFullStoredStateValue$1(storedState, MODULATION_STATE_KEY));
+      });
+      return;
+    }
+    if (typeof this.connection.requestStoredStateValue === "function") {
+      this.connection.requestStoredStateValue(ARTICULATION_STATE_KEY);
+      this.connection.requestStoredStateValue(MODULATION_STATE_KEY);
+      return;
+    }
+    this.applyArticulationState(void 0);
+    this.applyModulationState(void 0);
+  }
+  handleStoredStateValue(message) {
+    if (!message || typeof message !== "object") {
+      return;
+    }
+    const nextMessage = message;
+    if (nextMessage.key === ARTICULATION_STATE_KEY) {
+      this.applyArticulationState(nextMessage.value);
+      return;
+    }
+    if (nextMessage.key === MODULATION_STATE_KEY) {
+      this.applyModulationState(nextMessage.value);
+    }
+  }
+  handleRuntimeState(value) {
+    this.runtimeDspSessionId = getRuntimeDspSessionId$1(value);
+    this.hasRuntimeState = true;
+    this.applyRuntimeStateIfReady();
+  }
+  applyArticulationState(value) {
+    this.articulationBank = normalizeArticulationBank(value);
+    this.hasArticulationState = true;
+    this.applyRuntimeStateIfReady();
+  }
+  applyModulationState(value) {
+    this.modulationState = deserializeModulationState(value);
+    this.hasModulationState = true;
+    this.applyRuntimeStateIfReady();
+  }
+  applyRuntimeStateIfReady() {
+    if (!this.hasArticulationState || !this.hasModulationState || !this.hasRuntimeState) {
+      return;
+    }
+    const uploads = buildArticulationRuntimeUploads(this.articulationBank, this.modulationState.routes);
+    const nextAppliedToken = toStableToken$1({
+      runtimeDspSessionId: this.runtimeDspSessionId,
+      uploads
+    });
+    if (nextAppliedToken === this.lastAppliedToken) {
+      return;
+    }
+    for (const upload of uploads) {
+      this.connection.sendEventOrValue?.(ARTICULATION_SNAPSHOT_ENDPOINT_ID, upload);
+    }
+    this.lastAppliedToken = nextAppliedToken;
+  }
+}
+function createArticulationWorkerService(connection) {
+  return new ArticulationWorkerService(connection);
 }
 function hasOwnValue(record, key) {
   return Object.prototype.hasOwnProperty.call(record, key);
@@ -2048,6 +2399,7 @@ function createWavetableWorkerController(connection, options = {}) {
 async function runWavetableWorker(connection, options = {}) {
   return startPatchWorkerServices(connection, [
     createModulationWorkerService,
+    createArticulationWorkerService,
     () => createWavetableWorkerController(connection, options)
   ]);
 }

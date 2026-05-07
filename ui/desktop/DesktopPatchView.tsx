@@ -1694,6 +1694,67 @@ function KeyboardSection({
     );
 }
 
+function ArticulationSlotBar({
+    slots,
+    selectedSlotId,
+    hasHydrated,
+    onAdd,
+    onSelect,
+}: {
+    slots: ReturnType<typeof useSynthPatchViewModel>["articulationSlots"];
+    selectedSlotId: string | null;
+    hasHydrated: boolean;
+    onAdd: () => void;
+    onSelect: (slotId: string) => void;
+}) {
+    return (
+        <div
+            data-role="articulation-slot-bar"
+            className="flex min-h-[34px] shrink-0 items-center gap-2 rounded-[12px] border border-white/[0.05] bg-white/[0.018] px-2.5 py-1.5"
+        >
+            <span className="shrink-0 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-300/45">
+                Art
+            </span>
+            <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto">
+                {slots.map((slot) => {
+                    const isSelected = slot.id === selectedSlotId;
+
+                    return (
+                        <button
+                            key={slot.id}
+                            type="button"
+                            aria-label={`Select articulation ${slot.name}`}
+                            aria-pressed={isSelected}
+                            data-role="articulation-slot-button"
+                            data-selector-a={String(slot.selectorA)}
+                            className={`flex h-7 shrink-0 items-center gap-2 rounded-[8px] border px-2.5 text-[10px] font-semibold uppercase tracking-[0.08em] transition ${
+                                isSelected
+                                    ? "border-amber-200/24 bg-amber-300/12 text-amber-100"
+                                    : "border-white/[0.06] bg-white/[0.025] text-slate-300/52 hover:border-white/12 hover:text-slate-100/75"
+                            }`}
+                            onClick={() => onSelect(slot.id)}
+                        >
+                            <span className="font-mono text-[9px] text-cyan-200/55">
+                                {slot.selectorA}
+                            </span>
+                            <span>{slot.name}</span>
+                        </button>
+                    );
+                })}
+            </div>
+            <button
+                type="button"
+                aria-label="Add articulation"
+                className="h-7 shrink-0 rounded-[8px] border border-cyan-300/16 bg-cyan-300/8 px-2.5 text-[10px] font-bold uppercase tracking-[0.1em] text-cyan-100/80 transition hover:border-cyan-200/28 hover:bg-cyan-300/12 disabled:opacity-45"
+                onClick={onAdd}
+                disabled={!hasHydrated}
+            >
+                + Add
+            </button>
+        </div>
+    );
+}
+
 function MsegEditorModal({
     isOpen,
     slotLabel,
@@ -2321,6 +2382,13 @@ function DesktopPatchViewBody() {
     return (
         <div className="cosimo-surface relative flex h-full w-full flex-col gap-3 overflow-hidden rounded-[28px] border border-white/[0.05] px-4 pb-4 pt-2.5 text-slate-100 shadow-[0_26px_80px_rgba(0,0,0,0.48)]">
             <StatusHeader statusText={synthView.topStatus} />
+            <ArticulationSlotBar
+                slots={synthView.articulationSlots}
+                selectedSlotId={synthView.selectedArticulationSlot?.id ?? null}
+                hasHydrated={synthView.hasHydratedArticulations}
+                onAdd={synthView.handleAddArticulationSlot}
+                onSelect={synthView.handleSelectArticulationSlot}
+            />
 
             <main
                 data-role="desktop-scroll-region"

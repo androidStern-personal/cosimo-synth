@@ -128,7 +128,68 @@ def _extract_wavetable_synth_prelude(source: str) -> str:
     return _strip_main_annotation(source).split("    graph Voice", maxsplit=1)[0] + "\n}\n"
 
 
-def _build_scheduler_source(scheduled_events: list[tuple[int, str]]) -> str:
+def _articulated_note_on_statement(
+    frame_index: int,
+    *,
+    channel: int,
+    pitch: float,
+    velocity: float,
+    selector_a: int,
+    selector_b: int = 0,
+    duration_samples: int = 0,
+    age_samples: int = 0,
+) -> str:
+    return (
+        "            if (frameCounter == "
+        + str(int(frame_index))
+        + ")\n"
+        + "            {\n"
+        + "                wt::ArticulatedNoteOn note;\n"
+        + f"                note.channel = {int(channel)};\n"
+        + f"                note.pitch = {float(pitch):.1f}f;\n"
+        + f"                note.velocity = {float(velocity):.3f}f;\n"
+        + "                note.hasArticulation = true;\n"
+        + f"                note.selectorA = {int(selector_a)};\n"
+        + f"                note.selectorB = {int(selector_b)};\n"
+        + f"                note.durationSamples = {int(duration_samples)};\n"
+        + f"                note.ageSamples = {int(age_samples)};\n"
+        + "                articulatedNoteOut <- note;\n"
+        + "            }"
+    )
+
+
+def _note_meta_statement(
+    frame_index: int,
+    *,
+    channel: int,
+    note_number: int,
+    selector_a: int,
+    selector_b: int = 0,
+    duration_samples: int = 0,
+    age_samples: int = 0,
+) -> str:
+    return (
+        "            if (frameCounter == "
+        + str(int(frame_index))
+        + ")\n"
+        + "            {\n"
+        + "                wt::ArticulationNoteMeta meta;\n"
+        + f"                meta.channel = {int(channel)};\n"
+        + f"                meta.noteNumber = {int(note_number)};\n"
+        + f"                meta.selectorA = {int(selector_a)};\n"
+        + f"                meta.selectorB = {int(selector_b)};\n"
+        + f"                meta.durationSamples = {int(duration_samples)};\n"
+        + f"                meta.ageSamples = {int(age_samples)};\n"
+        + "                noteMetaOut <- meta;\n"
+        + "            }"
+    )
+
+
+def _build_scheduler_source(
+    scheduled_events: list[tuple[int, str]],
+    scheduled_note_meta_events: list[str] | None = None,
+    scheduled_articulated_note_ons: list[str] | None = None,
+) -> str:
     statements = [
         "            if (frameCounter == "
         + str(int(frame_index))
@@ -140,6 +201,8 @@ def _build_scheduler_source(scheduled_events: list[tuple[int, str]]) -> str:
     ]
 
     schedule_logic = "\n".join(statements)
+    note_meta_schedule_logic = "\n".join(scheduled_note_meta_events or [])
+    articulated_schedule_logic = "\n".join(scheduled_articulated_note_ons or [])
 
     return (
         "processor ScheduledEvents\n"
@@ -150,12 +213,18 @@ def _build_scheduler_source(scheduled_events: list[tuple[int, str]]) -> str:
         + "                  std::notes::Slide,\n"
         + "                  std::notes::Pressure,\n"
         + "                  std::notes::Control) noteEventOut;\n"
+        + "    output event wt::ArticulationNoteMeta noteMetaOut;\n"
+        + "    output event wt::ArticulatedNoteOn articulatedNoteOut;\n"
         + "    int32 frameCounter = 0;\n"
         + "    void main()\n"
         + "    {\n"
         + "        loop\n"
         + "        {\n"
+        + note_meta_schedule_logic
+        + "\n"
         + schedule_logic
+        + "\n"
+        + articulated_schedule_logic
         + "\n"
         + "            frameCounter += 1;\n"
         + "            advance();\n"
@@ -214,7 +283,11 @@ def _build_stereo_to_mono_probe_source() -> str:
     )
 
 
-def _build_dispatcher_probe_source(scheduled_events: list[tuple[int, str]]) -> str:
+def _build_dispatcher_probe_source(
+    scheduled_events: list[tuple[int, str]],
+    scheduled_note_meta_events: list[str] | None = None,
+    scheduled_articulated_note_ons: list[str] | None = None,
+) -> str:
     return (
         MSEG_SOURCE.read_text(encoding="utf-8")
         + "\n"
@@ -222,7 +295,7 @@ def _build_dispatcher_probe_source(scheduled_events: list[tuple[int, str]]) -> s
         + "\n"
         + _extract_wavetable_synth_prelude(WAVETABLE_SYNTH_SOURCE.read_text(encoding="utf-8"))
         + "\n"
-        + _build_scheduler_source(scheduled_events)
+        + _build_scheduler_source(scheduled_events, scheduled_note_meta_events, scheduled_articulated_note_ons)
         + "graph NoteDispatcherProbe [[ main ]]\n"
         + "{\n"
         + "    input value float32 playMode [[ init: 0.0f ]];\n"
@@ -233,7 +306,9 @@ def _build_dispatcher_probe_source(scheduled_events: list[tuple[int, str]]) -> s
         + "    node dispatcher = wt::NoteDispatcher (4);\n"
         + "    connection\n"
         + "    {\n"
+        + "        scheduler.noteMetaOut -> dispatcher.noteMetaIn;\n"
         + "        scheduler.noteEventOut -> dispatcher.eventIn;\n"
+        + "        scheduler.articulatedNoteOut -> dispatcher.articulatedNoteOnIn;\n"
         + "        playMode -> dispatcher.playModeIn;\n"
         + "        dispatcher.voiceRetuneOut[0] -> monoRetune;\n"
         + "    }\n"
@@ -241,7 +316,11 @@ def _build_dispatcher_probe_source(scheduled_events: list[tuple[int, str]]) -> s
     )
 
 
-def _build_audio_probe_source(scheduled_events: list[tuple[int, str]]) -> str:
+def _build_audio_probe_source(
+    scheduled_events: list[tuple[int, str]],
+    scheduled_note_meta_events: list[str] | None = None,
+    scheduled_articulated_note_ons: list[str] | None = None,
+) -> str:
     return (
         MSEG_SOURCE.read_text(encoding="utf-8")
         + "\n"
@@ -251,14 +330,16 @@ def _build_audio_probe_source(scheduled_events: list[tuple[int, str]]) -> str:
         + "\n"
         + _build_runtime_session_adapter_source()
         + _build_stereo_to_mono_probe_source()
-        + _build_scheduler_source(scheduled_events)
+        + _build_scheduler_source(scheduled_events, scheduled_note_meta_events, scheduled_articulated_note_ons)
         + "graph NoteDispatcherAudioProbe [[ main ]]\n"
         + "{\n"
         + "    input event wt::WavetableLoadBegin wavetableLoadBegin;\n"
         + "    input event wt::WavetableMipFrame wavetableMipFrame;\n"
+        + "    input event wt::ArticulationSnapshotUpload articulationSnapshot;\n"
         + "    input value float32 playMode [[ init: 0.0f ]];\n"
         + "    input value float32 glideTime [[ init: 0.0f ]];\n"
         + "    input value float32 framePosition [[ init: 0.0f ]];\n"
+        + "    output event wt::VoiceArticulationMonitor articulationStart;\n"
         + "    output stream float out;\n"
         + "    node scheduler = ScheduledEvents;\n"
         + "    node adapter = RuntimeSessionAdapter;\n"
@@ -267,9 +348,12 @@ def _build_audio_probe_source(scheduled_events: list[tuple[int, str]]) -> str:
         + "    node downmix = StereoToMonoProbe;\n"
         + "    event wavetableLoadBegin (wt::WavetableLoadBegin load) { adapter.loadBeginIn <- load; }\n"
         + "    event wavetableMipFrame (wt::WavetableMipFrame frame) { adapter.mipFrameIn <- frame; }\n"
+        + "    event articulationSnapshot (wt::ArticulationSnapshotUpload upload) { engine.articulationSnapshotIn <- upload; }\n"
         + "    connection\n"
         + "    {\n"
+        + "        scheduler.noteMetaOut -> dispatcher.noteMetaIn;\n"
         + "        scheduler.noteEventOut -> dispatcher.eventIn;\n"
+        + "        scheduler.articulatedNoteOut -> dispatcher.articulatedNoteOnIn;\n"
         + "        playMode -> dispatcher.playModeIn;\n"
         + "        dispatcher.voiceEventOut -> engine.voiceEventIn;\n"
         + "        dispatcher.voiceRetuneOut -> engine.voiceRetuneIn;\n"
@@ -277,6 +361,7 @@ def _build_audio_probe_source(scheduled_events: list[tuple[int, str]]) -> str:
         + "        framePosition -> engine.framePositionIn;\n"
         + "        adapter.loadBeginOut -> engine.wavetableLoadBeginIn;\n"
         + "        adapter.mipFrameOut -> engine.wavetableMipFrameIn;\n"
+        + "        engine.voiceArticulationStartOut -> articulationStart;\n"
         + "        engine.out -> downmix.in;\n"
         + "        downmix.out -> out;\n"
         + "    }\n"
@@ -377,6 +462,85 @@ def _render_audio_probe(
                 glide_time=glide_time,
                 include_bank=True,
             ),
+        )
+
+
+def _build_articulation_snapshot_upload(
+    *,
+    selector_a: int,
+    frame_position: float,
+    mseg1_morph: float,
+    route1_amount: float,
+    enabled: bool = True,
+    pan: float = 0.0,
+    warp_mode: int = 0,
+    warp_amount: float = 0.0,
+    filter_mode: int = 0,
+    filter_cutoff_hz: float = 1000.0,
+    filter_q: float = 0.707107,
+) -> dict[str, object]:
+    return {
+        "selectorA": int(selector_a),
+        "enabled": bool(enabled),
+        "framePosition": float(frame_position),
+        "pan": float(pan),
+        "warpMode": int(warp_mode),
+        "warpAmount": float(warp_amount),
+        "filterMode": int(filter_mode),
+        "filterCutoffHz": float(filter_cutoff_hz),
+        "filterQ": float(filter_q),
+        "msegMorphs": [float(mseg1_morph), 0.0, 0.0],
+        "routeAmounts": [float(route1_amount), *([0.0] * 11)],
+        "envelopeAttackSeconds": [0.01, 0.02, 0.03],
+        "envelopeDecaySeconds": [0.10, 0.20, 0.30],
+        "envelopeSustain": [0.7, 0.6, 0.5],
+        "envelopeReleaseSeconds": [0.40, 0.50, 0.60],
+    }
+
+
+def _collect_audio_probe_articulation_starts(
+    scheduled_events: list[tuple[int, str]],
+    *,
+    scheduled_note_meta_events: list[str] | None = None,
+    scheduled_articulated_note_ons: list[str] | None = None,
+    articulation_snapshots: list[dict[str, object]] | None = None,
+    play_mode: int = PLAY_MODE_POLY,
+    num_samples: int = 4096,
+) -> list[dict[str, object]]:
+    with tempfile.TemporaryDirectory(prefix="note_dispatcher_articulation_probe_") as temp_dir_name:
+        temp_dir = Path(temp_dir_name)
+        probe_source_path = temp_dir / "NoteDispatcherAudioProbe.cmajor"
+        patch_path = temp_dir / "NoteDispatcherAudioProbe.cmajorpatch"
+
+        probe_source_path.write_text(
+            _build_audio_probe_source(scheduled_events, scheduled_note_meta_events, scheduled_articulated_note_ons),
+            encoding="utf-8",
+        )
+        patch_path.write_text(
+            json.dumps(
+                _build_manifest(
+                    probe_source_path.name,
+                    "dev.cosimo.note-dispatcher-articulation-probe",
+                    "Note Dispatcher Articulation Probe",
+                ),
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        setup_statements = [_build_setup_js(play_mode=play_mode, include_bank=False)]
+        for snapshot in articulation_snapshots or []:
+            setup_statements.append(
+                f"patch.sendInputEvent_articulationSnapshot({json.dumps(snapshot)});"
+            )
+
+        return _collect_cmajor_output_events_via_generated_javascript(
+            patch_path=patch_path,
+            sample_rate=DEFAULT_SAMPLE_RATE,
+            num_samples=num_samples,
+            output_endpoint_id="articulationStart",
+            setup_js="\n".join(setup_statements),
         )
 
 
@@ -502,3 +666,159 @@ def test_shared_voice_engine_pitch_bend_changes_output_pitch_after_note_on() -> 
 
     assert pre_bend_hz == pytest.approx(_note_to_frequency(60.0), abs=6.0)
     assert post_bend_hz == pytest.approx(_note_to_frequency(72.0), abs=6.0)
+
+
+@pytest.mark.cmajor
+def test_articulated_note_on_latches_selector_snapshot_at_voice_start() -> None:
+    events = _collect_audio_probe_articulation_starts(
+        [],
+        scheduled_articulated_note_ons=[
+            _articulated_note_on_statement(
+                1024,
+                channel=2,
+                pitch=64.0,
+                velocity=0.75,
+                selector_a=5,
+                selector_b=9,
+                duration_samples=4800,
+                age_samples=120,
+            ),
+        ],
+        articulation_snapshots=[
+            _build_articulation_snapshot_upload(
+                selector_a=5,
+                frame_position=0.625,
+                mseg1_morph=0.375,
+                route1_amount=-0.25,
+            ),
+        ],
+    )
+
+    assert len(events) == 1
+    event = events[0]["event"]
+    assert event == {
+        "voiceIndex": 0,
+        "hasArticulation": 1,
+        "selectorA": 5,
+        "selectorB": 9,
+        "durationSamples": 4800,
+        "ageSamples": 120,
+        "framePosition": pytest.approx(0.625, abs=1e-6),
+        "mseg1Morph": pytest.approx(0.375, abs=1e-6),
+        "route1Amount": pytest.approx(-0.25, abs=1e-6),
+    }
+
+
+@pytest.mark.cmajor
+def test_note_meta_event_attaches_to_matching_midi_note_on() -> None:
+    events = _collect_audio_probe_articulation_starts(
+        [
+            (1024, _note_on_expr(3, 71.0, 0.65)),
+        ],
+        scheduled_note_meta_events=[
+            _note_meta_statement(
+                1024,
+                channel=3,
+                note_number=71,
+                selector_a=11,
+                selector_b=2,
+                duration_samples=22050,
+                age_samples=512,
+            ),
+        ],
+        articulation_snapshots=[
+            _build_articulation_snapshot_upload(
+                selector_a=11,
+                frame_position=0.5,
+                mseg1_morph=0.2,
+                route1_amount=0.125,
+            ),
+        ],
+    )
+
+    assert len(events) == 1
+    event = events[0]["event"]
+    assert event["hasArticulation"] == 1
+    assert event["selectorA"] == 11
+    assert event["selectorB"] == 2
+    assert event["durationSamples"] == 22050
+    assert event["ageSamples"] == 512
+    assert event["framePosition"] == pytest.approx(0.5, abs=1e-6)
+    assert event["mseg1Morph"] == pytest.approx(0.2, abs=1e-6)
+    assert event["route1Amount"] == pytest.approx(0.125, abs=1e-6)
+
+
+@pytest.mark.cmajor
+def test_unknown_selector_does_not_apply_an_articulation_snapshot() -> None:
+    events = _collect_audio_probe_articulation_starts(
+        [],
+        scheduled_articulated_note_ons=[
+            _articulated_note_on_statement(
+                1024,
+                channel=2,
+                pitch=64.0,
+                velocity=0.75,
+                selector_a=12,
+                duration_samples=4800,
+                age_samples=120,
+            ),
+        ],
+        articulation_snapshots=[
+            _build_articulation_snapshot_upload(
+                selector_a=5,
+                frame_position=0.625,
+                mseg1_morph=0.375,
+                route1_amount=-0.25,
+            ),
+        ],
+    )
+
+    assert len(events) == 1
+    event = events[0]["event"]
+    assert event["hasArticulation"] == 0
+    assert event["selectorA"] == -1
+    assert event["selectorB"] == 0
+    assert event["durationSamples"] == 0
+    assert event["ageSamples"] == 0
+    assert event["framePosition"] == pytest.approx(0.0, abs=1e-6)
+
+
+@pytest.mark.cmajor
+def test_mono_retune_carries_the_new_notes_articulation_selector() -> None:
+    events = _collect_audio_probe_articulation_starts(
+        [
+            (1024, _note_on_expr(1, 60.0)),
+        ],
+        scheduled_articulated_note_ons=[
+            _articulated_note_on_statement(
+                2048,
+                channel=1,
+                pitch=67.0,
+                velocity=0.9,
+                selector_a=7,
+                selector_b=0,
+                duration_samples=9600,
+                age_samples=0,
+            ),
+        ],
+        articulation_snapshots=[
+            _build_articulation_snapshot_upload(
+                selector_a=7,
+                frame_position=0.25,
+                mseg1_morph=0.8,
+                route1_amount=0.5,
+            ),
+        ],
+        play_mode=PLAY_MODE_LEGATO,
+        num_samples=4096,
+    )
+
+    assert len(events) >= 2
+    plain_start = events[0]["event"]
+    articulated_retune = events[-1]["event"]
+    assert plain_start["hasArticulation"] == 0
+    assert articulated_retune["hasArticulation"] == 1
+    assert articulated_retune["selectorA"] == 7
+    assert articulated_retune["durationSamples"] == 9600
+    assert articulated_retune["mseg1Morph"] == pytest.approx(0.8, abs=1e-6)
+    assert articulated_retune["route1Amount"] == pytest.approx(0.5, abs=1e-6)

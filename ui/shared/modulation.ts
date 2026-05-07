@@ -197,6 +197,29 @@ type StoredStateMessage = {
 
 let generatedRouteIdCounter = 1;
 
+function hasOwnValue(record: Record<string, unknown>, key: string) {
+    return Object.prototype.hasOwnProperty.call(record, key);
+}
+
+function readFullStoredStateValue(storedState: unknown, key: string) {
+    const fullState = storedState && typeof storedState === "object"
+        ? storedState as Record<string, unknown>
+        : {};
+    const values = fullState.values && typeof fullState.values === "object"
+        ? fullState.values as Record<string, unknown>
+        : {};
+
+    if (hasOwnValue(values, key)) {
+        return values[key];
+    }
+
+    if (hasOwnValue(fullState, key)) {
+        return fullState[key];
+    }
+
+    return undefined;
+}
+
 export type MsegEditorControllerLike = {
     getState: () => MsegState;
     setShape: (nextShape: unknown) => void;
@@ -854,10 +877,7 @@ export class ModulationRuntimeBridge {
     requestBootState() {
         if (typeof this.patchConnection.requestFullStoredState === "function") {
             this.patchConnection.requestFullStoredState((storedState) => {
-                const fullState = storedState && typeof storedState === "object"
-                    ? storedState as Record<string, unknown>
-                    : {};
-                this.applyStoredState(fullState[MODULATION_STATE_KEY]);
+                this.applyStoredState(readFullStoredStateValue(storedState, MODULATION_STATE_KEY));
             });
             return;
         }

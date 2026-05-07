@@ -40,6 +40,8 @@ namespace wt
     let modulationTargetPitchSemitones = 5;
     let modulationTargetAmpGainDb = 6;
     let modulationTargetPan = 7;
+    let articulationSlotCount = 128;
+    let articulationSelectorNone = -1;
     let warpOversampleFactor = 8;
     let warpDecimatorTapCount = 257;
     let warpDecimatorCutoffNyquist = 0.125f;
@@ -110,6 +112,65 @@ namespace wt
         float32 pressure;
         float32 slide;
         bool retrigger, glide;
+        bool hasArticulation;
+        int32 selectorA;
+        int32 selectorB;
+        int32 durationSamples;
+        int32 ageSamples;
+    }
+
+    struct ArticulatedNoteOn
+    {
+        int32 channel;
+        float32 pitch;
+        float32 velocity;
+        bool hasArticulation;
+        int32 selectorA;
+        int32 selectorB;
+        int32 durationSamples;
+        int32 ageSamples;
+    }
+
+    struct ArticulationNoteMeta
+    {
+        int32 channel;
+        int32 noteNumber;
+        int32 selectorA;
+        int32 selectorB;
+        int32 durationSamples;
+        int32 ageSamples;
+    }
+
+    struct ArticulationSnapshotUpload
+    {
+        int32 selectorA;
+        bool enabled;
+        float32 framePosition;
+        float32 pan;
+        int32 warpMode;
+        float32 warpAmount;
+        int32 filterMode;
+        float32 filterCutoffHz;
+        float32 filterQ;
+        float32[modulationMsegSlotCount] msegMorphs;
+        float32[modulationRouteCount] routeAmounts;
+        float32[modulationEnvSlotCount] envelopeAttackSeconds;
+        float32[modulationEnvSlotCount] envelopeDecaySeconds;
+        float32[modulationEnvSlotCount] envelopeSustain;
+        float32[modulationEnvSlotCount] envelopeReleaseSeconds;
+    }
+
+    struct VoiceArticulationMonitor
+    {
+        int32 voiceIndex;
+        int32 hasArticulation;
+        int32 selectorA;
+        int32 selectorB;
+        int32 durationSamples;
+        int32 ageSamples;
+        float32 framePosition;
+        float32 mseg1Morph;
+        float32 route1Amount;
     }
 
     struct ModulationMsegBufferUpload
@@ -1120,11 +1181,13 @@ namespace wt
                      std::notes::PitchBend,
                      std::notes::Slide,
                      std::notes::Pressure,
-                     std::notes::Control) voiceEventIn[voiceCount];
+                     std::notes::Control,
+                     wt::ArticulatedNoteOn) voiceEventIn[voiceCount];
         input event VoiceRetune voiceRetuneIn[voiceCount];
         input event WavetableLoadBegin wavetableLoadBeginIn;
         input event WavetableMipFrame wavetableMipFrameIn;
         input event ServiceLoadAbort serviceLoadAbortIn;
+        input event ArticulationSnapshotUpload articulationSnapshotIn;
         input event int32 modulationClearIn;
         input event int32 modulationEnableIn;
         input event ModulationMsegBufferUpload modulationMsegBufferIn;
@@ -1149,6 +1212,7 @@ namespace wt
         output event wt::EffectiveWarpStateMonitor effectiveWarpStateOut;
         output event wt::EffectiveFilterStateMonitor effectiveFilterStateOut;
         output event wt::EffectiveMsegStateMonitor effectiveMsegStateOut;
+        output event wt::VoiceArticulationMonitor voiceArticulationStartOut;
         output stream float32<2> out;
         output stream float32 trackingPitchHzOut;
 
@@ -1186,6 +1250,38 @@ namespace wt
         float32[voiceCount] voiceMsegProgress1;
         float32[voiceCount] voiceMsegProgress2;
         float32[voiceCount] voiceMsegProgress3;
+        bool[articulationSlotCount] articulationSlotDefined;
+        float32[articulationSlotCount] articulationFramePosition;
+        float32[articulationSlotCount] articulationPan;
+        int32[articulationSlotCount] articulationWarpMode;
+        float32[articulationSlotCount] articulationWarpAmount;
+        int32[articulationSlotCount] articulationFilterMode;
+        float32[articulationSlotCount] articulationFilterCutoffHz;
+        float32[articulationSlotCount] articulationFilterQ;
+        float32[articulationSlotCount * modulationMsegSlotCount] articulationMsegMorphs;
+        float32[articulationSlotCount * modulationRouteCount] articulationRouteAmounts;
+        float32[articulationSlotCount * modulationEnvSlotCount] articulationEnvelopeAttackSeconds;
+        float32[articulationSlotCount * modulationEnvSlotCount] articulationEnvelopeDecaySeconds;
+        float32[articulationSlotCount * modulationEnvSlotCount] articulationEnvelopeSustain;
+        float32[articulationSlotCount * modulationEnvSlotCount] articulationEnvelopeReleaseSeconds;
+        bool[voiceCount] voiceUsesArticulation;
+        int32[voiceCount] voiceSelectorA;
+        int32[voiceCount] voiceSelectorB;
+        int32[voiceCount] voiceArticulationDurationSamples;
+        int32[voiceCount] voiceArticulationAgeSamples;
+        float32[voiceCount] voiceArticulationFramePosition;
+        float32[voiceCount] voiceArticulationPan;
+        int32[voiceCount] voiceArticulationWarpMode;
+        float32[voiceCount] voiceArticulationWarpAmount;
+        int32[voiceCount] voiceArticulationFilterMode;
+        float32[voiceCount] voiceArticulationFilterCutoffHz;
+        float32[voiceCount] voiceArticulationFilterQ;
+        float32[voiceCount * modulationMsegSlotCount] voiceArticulationMsegMorphs;
+        float32[voiceCount * modulationRouteCount] voiceArticulationRouteAmounts;
+        float32[voiceCount * modulationEnvSlotCount] voiceArticulationEnvelopeAttackSeconds;
+        float32[voiceCount * modulationEnvSlotCount] voiceArticulationEnvelopeDecaySeconds;
+        float32[voiceCount * modulationEnvSlotCount] voiceArticulationEnvelopeSustain;
+        float32[voiceCount * modulationEnvSlotCount] voiceArticulationEnvelopeReleaseSeconds;
         float32[warpDecimatorTapCount] warpDecimatorTapsState;
         float32[voiceCount * warpDecimatorTapCount] voiceWarpHistory;
         int32[voiceCount] voiceWarpHistoryWriteIndex;
@@ -1293,6 +1389,147 @@ namespace wt
             }
         }
 
+        int32 articulationMsegIndex (int32 selectorA, int32 slotIndex)
+        {
+            return (selectorA * modulationMsegSlotCount) + slotIndex;
+        }
+
+        int32 articulationRouteIndex (int32 selectorA, int32 routeIndex)
+        {
+            return (selectorA * modulationRouteCount) + routeIndex;
+        }
+
+        int32 articulationEnvelopeIndex (int32 selectorA, int32 slotIndex)
+        {
+            return (selectorA * modulationEnvSlotCount) + slotIndex;
+        }
+
+        int32 voiceArticulationMsegIndex (int32 voiceIndex, int32 slotIndex)
+        {
+            return (voiceIndex * modulationMsegSlotCount) + slotIndex;
+        }
+
+        int32 voiceArticulationRouteIndex (int32 voiceIndex, int32 routeIndex)
+        {
+            return (voiceIndex * modulationRouteCount) + routeIndex;
+        }
+
+        int32 voiceArticulationEnvelopeIndex (int32 voiceIndex, int32 slotIndex)
+        {
+            return (voiceIndex * modulationEnvSlotCount) + slotIndex;
+        }
+
+        void clearVoiceArticulation (int32 voiceIndex)
+        {
+            let voice = wrap<voiceCount> (voiceIndex);
+            voiceUsesArticulation.at (voice) = false;
+            voiceSelectorA.at (voice) = wt::articulationSelectorNone;
+            voiceSelectorB.at (voice) = 0;
+            voiceArticulationDurationSamples.at (voice) = 0;
+            voiceArticulationAgeSamples.at (voice) = 0;
+        }
+
+        void emitVoiceArticulationMonitor (int32 voiceIndex)
+        {
+            let voice = wrap<voiceCount> (voiceIndex);
+
+            wt::VoiceArticulationMonitor monitor;
+            monitor.voiceIndex = int32 (voice);
+            monitor.hasArticulation = voiceUsesArticulation.at (voice) ? 1 : 0;
+            monitor.selectorA = voiceSelectorA.at (voice);
+            monitor.selectorB = voiceSelectorB.at (voice);
+            monitor.durationSamples = voiceArticulationDurationSamples.at (voice);
+            monitor.ageSamples = voiceArticulationAgeSamples.at (voice);
+            monitor.framePosition = voiceUsesArticulation.at (voice) ? voiceArticulationFramePosition.at (voice) : 0.0f;
+            monitor.mseg1Morph = voiceUsesArticulation.at (voice) ? voiceArticulationMsegMorphs.at (voiceArticulationMsegIndex (int32 (voice), 0)) : 0.0f;
+            monitor.route1Amount = voiceUsesArticulation.at (voice) ? voiceArticulationRouteAmounts.at (voiceArticulationRouteIndex (int32 (voice), 0)) : 0.0f;
+            voiceArticulationStartOut <- monitor;
+        }
+
+        void latchVoiceArticulation (int32 voiceIndex,
+                                     bool hasArticulation,
+                                     int32 selectorA,
+                                     int32 selectorB,
+                                     int32 durationSamples,
+                                     int32 ageSamples)
+        {
+            let voice = wrap<voiceCount> (voiceIndex);
+
+            if (! hasArticulation
+                || selectorA < 0
+                || selectorA >= articulationSlotCount
+                || ! articulationSlotDefined.at (selectorA))
+            {
+                clearVoiceArticulation (voiceIndex);
+                emitVoiceArticulationMonitor (voiceIndex);
+                return;
+            }
+
+            voiceUsesArticulation.at (voice) = true;
+            voiceSelectorA.at (voice) = selectorA;
+            voiceSelectorB.at (voice) = selectorB;
+            voiceArticulationDurationSamples.at (voice) = std::intrinsics::max (0, durationSamples);
+            voiceArticulationAgeSamples.at (voice) = std::intrinsics::max (0, ageSamples);
+            voiceArticulationFramePosition.at (voice) = articulationFramePosition.at (selectorA);
+            voiceArticulationPan.at (voice) = articulationPan.at (selectorA);
+            voiceArticulationWarpMode.at (voice) = articulationWarpMode.at (selectorA);
+            voiceArticulationWarpAmount.at (voice) = articulationWarpAmount.at (selectorA);
+            voiceArticulationFilterMode.at (voice) = articulationFilterMode.at (selectorA);
+            voiceArticulationFilterCutoffHz.at (voice) = articulationFilterCutoffHz.at (selectorA);
+            voiceArticulationFilterQ.at (voice) = articulationFilterQ.at (selectorA);
+
+            for (int32 slotIndex = 0; slotIndex < modulationMsegSlotCount; ++slotIndex)
+            {
+                voiceArticulationMsegMorphs.at (voiceArticulationMsegIndex (int32 (voice), slotIndex))
+                    = articulationMsegMorphs.at (articulationMsegIndex (selectorA, slotIndex));
+            }
+
+            for (int32 routeIndex = 0; routeIndex < modulationRouteCount; ++routeIndex)
+            {
+                voiceArticulationRouteAmounts.at (voiceArticulationRouteIndex (int32 (voice), routeIndex))
+                    = articulationRouteAmounts.at (articulationRouteIndex (selectorA, routeIndex));
+            }
+
+            for (int32 slotIndex = 0; slotIndex < modulationEnvSlotCount; ++slotIndex)
+            {
+                voiceArticulationEnvelopeAttackSeconds.at (voiceArticulationEnvelopeIndex (int32 (voice), slotIndex))
+                    = articulationEnvelopeAttackSeconds.at (articulationEnvelopeIndex (selectorA, slotIndex));
+                voiceArticulationEnvelopeDecaySeconds.at (voiceArticulationEnvelopeIndex (int32 (voice), slotIndex))
+                    = articulationEnvelopeDecaySeconds.at (articulationEnvelopeIndex (selectorA, slotIndex));
+                voiceArticulationEnvelopeSustain.at (voiceArticulationEnvelopeIndex (int32 (voice), slotIndex))
+                    = articulationEnvelopeSustain.at (articulationEnvelopeIndex (selectorA, slotIndex));
+                voiceArticulationEnvelopeReleaseSeconds.at (voiceArticulationEnvelopeIndex (int32 (voice), slotIndex))
+                    = articulationEnvelopeReleaseSeconds.at (articulationEnvelopeIndex (selectorA, slotIndex));
+            }
+
+            emitVoiceArticulationMonitor (voiceIndex);
+        }
+
+        void uploadVoiceArticulationEnvelopeConfig (int32 voiceIndex)
+        {
+            let voice = wrap<voiceCount> (voiceIndex);
+
+            if (! voiceUsesArticulation.at (voice))
+                return;
+
+            for (int32 slotIndex = 0; slotIndex < modulationEnvSlotCount; ++slotIndex)
+            {
+                ModulationEnvelopeUpload config;
+                config.slot = slotIndex + 1;
+                config.attackSeconds = voiceArticulationEnvelopeAttackSeconds.at (voiceArticulationEnvelopeIndex (int32 (voice), slotIndex));
+                config.decaySeconds = voiceArticulationEnvelopeDecaySeconds.at (voiceArticulationEnvelopeIndex (int32 (voice), slotIndex));
+                config.sustain = voiceArticulationEnvelopeSustain.at (voiceArticulationEnvelopeIndex (int32 (voice), slotIndex));
+                config.releaseSeconds = voiceArticulationEnvelopeReleaseSeconds.at (voiceArticulationEnvelopeIndex (int32 (voice), slotIndex));
+
+                if (slotIndex == 0)
+                    modEnv1[voice].configUpload <- config;
+                else if (slotIndex == 1)
+                    modEnv2[voice].configUpload <- config;
+                else
+                    modEnv3[voice].configUpload <- config;
+            }
+        }
+
         void uploadMsegBufferToSlot (int32 slot, int32 shapeIndex, const float32[msegPaddedSamples] buffer)
         {
             wt::MsegBufferUpload shapeUpload;
@@ -1374,6 +1611,7 @@ namespace wt
             mseg1[voice].triggerIn <- 1;
             mseg2[voice].triggerIn <- 1;
             mseg3[voice].triggerIn <- 1;
+            uploadVoiceArticulationEnvelopeConfig (voiceIndex);
 
             std::notes::NoteOn note;
             note.channel = voiceChannel.at (voice);
@@ -1395,25 +1633,47 @@ namespace wt
             modEnv3[voice].eventIn <- note;
         }
 
-        float32 resolveMsegValue (int32 voiceIndex, int32 slot)
+        float32 resolveVoiceMsegMorph (int32 voiceIndex, int32 slot)
         {
             let voice = wrap<voiceCount> (voiceIndex);
 
+            if (voiceUsesArticulation.at (voice))
+            {
+                if (slot >= 1 && slot <= modulationMsegSlotCount)
+                    return std::intrinsics::clamp (voiceArticulationMsegMorphs.at (voiceArticulationMsegIndex (int32 (voice), slot - 1)), 0.0f, 1.0f);
+
+                return 0.0f;
+            }
+
+            if (slot == 1)
+                return std::intrinsics::clamp (mseg1MorphIn, 0.0f, 1.0f);
+
+            if (slot == 2)
+                return std::intrinsics::clamp (mseg2MorphIn, 0.0f, 1.0f);
+
+            if (slot == 3)
+                return std::intrinsics::clamp (mseg3MorphIn, 0.0f, 1.0f);
+
+            return 0.0f;
+        }
+
+        float32 resolveMsegValue (int32 voiceIndex, int32 slot)
+        {
+            let voice = wrap<voiceCount> (voiceIndex);
+            let morph = resolveVoiceMsegMorph (voiceIndex, slot);
+
             if (slot == 1)
             {
-                let morph = std::intrinsics::clamp (mseg1MorphIn, 0.0f, 1.0f);
                 return mseg1[voice].outA + ((mseg1[voice].outB - mseg1[voice].outA) * morph);
             }
 
             if (slot == 2)
             {
-                let morph = std::intrinsics::clamp (mseg2MorphIn, 0.0f, 1.0f);
                 return mseg2[voice].outA + ((mseg2[voice].outB - mseg2[voice].outA) * morph);
             }
 
             if (slot == 3)
             {
-                let morph = std::intrinsics::clamp (mseg3MorphIn, 0.0f, 1.0f);
                 return mseg3[voice].outA + ((mseg3[voice].outB - mseg3[voice].outA) * morph);
             }
 
@@ -2088,7 +2348,13 @@ namespace wt
             updateVoiceFrequencyHz (voiceIndex);
         }
 
-        event voiceEventIn (int index, std::notes::NoteOn note)
+        void startVoiceFromNote (int32 index,
+                                 std::notes::NoteOn note,
+                                 bool hasArticulation,
+                                 int32 selectorA,
+                                 int32 selectorB,
+                                 int32 durationSamples,
+                                 int32 ageSamples)
         {
             let voice = wrap<voiceCount> (index);
             voiceChannel.at (voice) = note.channel;
@@ -2096,6 +2362,7 @@ namespace wt
             voiceBendSemitones.at (voice) = 0.0f;
             voicePressure.at (voice) = 0.0f;
             voiceSlide.at (voice) = 0.0f;
+            latchVoiceArticulation (index, hasArticulation, selectorA, selectorB, durationSamples, ageSamples);
             setVoicePitchImmediate (index, note.pitch);
             voiceActive.at (voice) = 1;
             voiceGeneration.at (voice) = nextVoiceGeneration;
@@ -2107,6 +2374,26 @@ namespace wt
 
             envelopes[voice].eventIn <- note;
             triggerVoiceModulators (index);
+        }
+
+        event voiceEventIn (int index, std::notes::NoteOn note)
+        {
+            startVoiceFromNote (int32 (index), note, false, wt::articulationSelectorNone, 0, 0, 0);
+        }
+
+        event voiceEventIn (int index, wt::ArticulatedNoteOn articulatedNote)
+        {
+            std::notes::NoteOn note;
+            note.channel = articulatedNote.channel;
+            note.pitch = articulatedNote.pitch;
+            note.velocity = articulatedNote.velocity;
+            startVoiceFromNote (int32 (index),
+                                note,
+                                articulatedNote.hasArticulation,
+                                articulatedNote.selectorA,
+                                articulatedNote.selectorB,
+                                articulatedNote.durationSamples,
+                                articulatedNote.ageSamples);
         }
 
         event voiceEventIn (int index, std::notes::NoteOff note)
@@ -2149,6 +2436,12 @@ namespace wt
             voiceBendSemitones.at (voice) = change.bendSemitones;
             voicePressure.at (voice) = change.pressure;
             voiceSlide.at (voice) = change.slide;
+            latchVoiceArticulation (index,
+                                    change.hasArticulation,
+                                    change.selectorA,
+                                    change.selectorB,
+                                    change.durationSamples,
+                                    change.ageSamples);
 
             if (shouldGlide)
                 startVoiceGlideToPitch (index, change.pitch);
@@ -2182,6 +2475,40 @@ namespace wt
         event modulationEnableIn (int32 enabled)
         {
             modulationEnabled = enabled != 0;
+        }
+
+        event articulationSnapshotIn (ArticulationSnapshotUpload upload)
+        {
+            if (upload.selectorA < 0 || upload.selectorA >= articulationSlotCount)
+                return;
+
+            let selectorA = upload.selectorA;
+            articulationSlotDefined.at (selectorA) = upload.enabled;
+
+            if (! upload.enabled)
+                return;
+
+            articulationFramePosition.at (selectorA) = std::intrinsics::clamp (upload.framePosition, 0.0f, 1.0f);
+            articulationPan.at (selectorA) = clampPan (upload.pan);
+            articulationWarpMode.at (selectorA) = resolveWarpMode (float32 (upload.warpMode));
+            articulationWarpAmount.at (selectorA) = std::intrinsics::clamp (upload.warpAmount, 0.0f, 1.0f);
+            articulationFilterMode.at (selectorA) = resolveFilterMode (float32 (upload.filterMode));
+            articulationFilterCutoffHz.at (selectorA) = clampFilterCutoffHz (upload.filterCutoffHz, float32 (processor.frequency));
+            articulationFilterQ.at (selectorA) = clampFilterQ (upload.filterQ);
+
+            for (int32 slotIndex = 0; slotIndex < modulationMsegSlotCount; ++slotIndex)
+                articulationMsegMorphs.at (articulationMsegIndex (selectorA, slotIndex)) = std::intrinsics::clamp (upload.msegMorphs.at (slotIndex), 0.0f, 1.0f);
+
+            for (int32 routeIndex = 0; routeIndex < modulationRouteCount; ++routeIndex)
+                articulationRouteAmounts.at (articulationRouteIndex (selectorA, routeIndex)) = upload.routeAmounts.at (routeIndex);
+
+            for (int32 slotIndex = 0; slotIndex < modulationEnvSlotCount; ++slotIndex)
+            {
+                articulationEnvelopeAttackSeconds.at (articulationEnvelopeIndex (selectorA, slotIndex)) = std::intrinsics::max (0.001f, upload.envelopeAttackSeconds.at (slotIndex));
+                articulationEnvelopeDecaySeconds.at (articulationEnvelopeIndex (selectorA, slotIndex)) = std::intrinsics::max (0.001f, upload.envelopeDecaySeconds.at (slotIndex));
+                articulationEnvelopeSustain.at (articulationEnvelopeIndex (selectorA, slotIndex)) = std::intrinsics::clamp (upload.envelopeSustain.at (slotIndex), 0.0f, 1.0f);
+                articulationEnvelopeReleaseSeconds.at (articulationEnvelopeIndex (selectorA, slotIndex)) = std::intrinsics::max (0.001f, upload.envelopeReleaseSeconds.at (slotIndex));
+            }
         }
 
         event modulationMsegBufferIn (ModulationMsegBufferUpload upload)
@@ -2322,6 +2649,8 @@ namespace wt
             msegMonitorUpdateIntervalFrames = std::intrinsics::max (1, requestedMsegInterval);
             framesUntilNextMsegMonitorUpdate = 0;
             resetAllFilterState();
+            for (wrap<voiceCount> voice)
+                clearVoiceArticulation (int32 (voice));
 
             loop
             {
@@ -2373,7 +2702,10 @@ namespace wt
                                 continue;
 
                             let sourceValue = applyRoutePolarity (resolveRouteSourceValue (int32 (voice), route), route);
-                            let routedValue = sourceValue * route.amount;
+                            let routeAmount = voiceUsesArticulation.at (voice)
+                                ? voiceArticulationRouteAmounts.at (voiceArticulationRouteIndex (int32 (voice), routeIndex))
+                                : route.amount;
+                            let routedValue = sourceValue * routeAmount;
 
                             if (route.targetKind == modulationTargetWavetablePosition)
                                 routePosition += routedValue;
@@ -2392,25 +2724,45 @@ namespace wt
                         }
                     }
 
+                    let baseFramePosition = voiceUsesArticulation.at (voice)
+                        ? voiceArticulationFramePosition.at (voice)
+                        : framePositionIn;
+                    let baseWarpMode = voiceUsesArticulation.at (voice)
+                        ? voiceArticulationWarpMode.at (voice)
+                        : resolveWarpMode (warpModeIn);
+                    let baseWarpAmount = voiceUsesArticulation.at (voice)
+                        ? voiceArticulationWarpAmount.at (voice)
+                        : warpAmountIn;
+                    let baseFilterMode = voiceUsesArticulation.at (voice)
+                        ? voiceArticulationFilterMode.at (voice)
+                        : resolveFilterMode (filterModeIn);
+                    let baseFilterCutoffHz = voiceUsesArticulation.at (voice)
+                        ? voiceArticulationFilterCutoffHz.at (voice)
+                        : clampFilterCutoffHz (filterCutoffIn, processorFrequency);
+                    let baseFilterQ = voiceUsesArticulation.at (voice)
+                        ? voiceArticulationFilterQ.at (voice)
+                        : filterQIn;
+                    let basePan = voiceUsesArticulation.at (voice)
+                        ? voiceArticulationPan.at (voice)
+                        : panIn;
                     let effectivePosition = std::intrinsics::clamp (
-                        framePositionIn + routePosition,
+                        baseFramePosition + routePosition,
                         0.0f,
                         1.0f
                     );
-                    let warpMode = resolveWarpMode (warpModeIn);
+                    let warpMode = baseWarpMode;
                     let effectiveWarpAmount = std::intrinsics::clamp (
-                        warpAmountIn + routeWarpAmount,
+                        baseWarpAmount + routeWarpAmount,
                         0.0f,
                         1.0f
                     );
-                    let filterMode = resolveFilterMode (filterModeIn);
-                    let baseFilterCutoffHz = clampFilterCutoffHz (filterCutoffIn, processorFrequency);
+                    let filterMode = baseFilterMode;
                     let effectiveFilterCutoffHz = clampFilterCutoffHz (
                         baseFilterCutoffHz * std::intrinsics::pow (2.0f, routeFilterCutoffOctaves),
                         processorFrequency
                     );
-                    let effectiveFilterQ = clampFilterQ (filterQIn + routeFilterQ);
-                    let effectivePan = clampPan (panIn + routePan);
+                    let effectiveFilterQ = clampFilterQ (baseFilterQ + routeFilterQ);
+                    let effectivePan = clampPan (basePan + routePan);
                     let effectivePitchSemitones = voiceCurrentPitch.at (voice) + voiceBendSemitones.at (voice) + routePitchSemitones;
                     let effectiveFrequencyHz = std::notes::noteToFrequency (effectivePitchSemitones);
                     let voiceSerial = voiceTrackingSerial.at (voice);

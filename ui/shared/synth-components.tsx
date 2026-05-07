@@ -1835,7 +1835,7 @@ export function WavetableStageSection({
             <div className="absolute inset-x-0 top-0 flex items-start justify-between gap-3 p-5 text-[11px] uppercase tracking-[0.16em] text-slate-300/70">
                 <label className="relative inline-flex max-w-[280px] cursor-pointer items-center">
                     <div className="inline-flex min-w-0 items-center rounded-full border border-white/10 bg-black/40 px-4 py-2.5 pr-10 text-left text-[11px] uppercase tracking-[0.18em] text-amber-100 shadow-[0_10px_28px_rgba(0,0,0,0.28)] backdrop-blur-md">
-                        <span className="truncate">{tableName}</span>
+                        <span data-role="wavetable-stage-title" className="truncate">{tableName}</span>
                     </div>
                     <SelectChevron className="pointer-events-none absolute right-4 top-1/2 h-3 w-3 -translate-y-1/2 text-slate-300/75" />
                     <select
