@@ -1,3 +1,50 @@
+Cosimo GUI-open articulation state fix completed on 2026-05-07
+- Fixed the Ableton bug where opening the synth GUI could recall a stored selected articulation and overwrite live parameter state.
+- Articulation runtime mirroring now runs from `patch_gui/wavetable-worker.js` through `ui/shared/articulation-worker-service.ts`, so the UI is no longer the owner of realtime articulation table uploads.
+- The desktop GUI now treats a stored selected articulation as an edit baseline on open. It no longer applies that slot to the running synth until the user manually selects a slot.
+- Manual articulation slot selection still recalls the slot immediately, preserving the previously approved editing behavior.
+- The modulation GUI boot reader now understands Cmajor full stored state shaped as `{ values: ... }`, matching the worker-side stored-state path.
+- Verified:
+  - `npm run ui:build`
+  - `node --test tests/test_articulations.mjs`
+  - `node --test tests/test_desktop_patch_view_browser.mjs`
+  - `node --test tests/test_wavetable_worker.mjs`
+  - `node --test tests/test_stored_state_runtime_mirror.mjs`
+  - `git diff --check`
+  - `npm run desktop:native:build`
+  - `codesign --verify --deep --strict --verbose=2` for the installed AU and VST3
+  - Ableton Live reopened `dummy Project/dumm-2.als`, loaded `CosimoDesktopNative` on track `CosimoSynth__GuiStateFix`, and opened the plugin GUI window.
+
+Cosimo articulation SysEx implementation baseline completed on 2026-05-07
+- Implemented a shared native FutureDaw NoteMeta bridge in `native/FutureDawNoteMetaBridge.h` and `native/CosimoCmajorMidiBridge.h`.
+- FutureDaw NoteMeta is decoded from the existing 16-byte private SysEx contract. The bridge rejects malformed messages, invalid duration/age, wrong sample, wrong note/channel, and stale block-boundary metadata.
+- Desktop native and iOS AUv3 shells now both route MIDI through the shared bridge before Cmajor. Valid NoteMeta emits a typed `articulationNoteMeta` event and preserves the original short MIDI note-on so MPE expression stays on the existing converter path.
+- Keyswitches are enabled in the native shells with MIDI notes `0..23` mapping to `selectorA` values `0..23`; the selected keyswitch articulation remains active until changed. Direct NoteMeta overrides the active keyswitch for its matching note.
+- Cmajor now has a resident 128-slot `selectorA` articulation table and per-voice latched articulation values for wavetable position, pan, warp, filter, MSEG morphs, modulation envelopes, and resolved modulation route amounts.
+- The desktop UI now uploads all 128 selector slots to the realtime table. Undefined slots are explicitly disabled. Route amounts are resolved from browser route IDs to fixed DSP route indexes before upload.
+- Bus/global fields remain part of UI slot recall but are not claimed as per-note voice articulation.
+- Verified:
+  - `node --test tests/test_articulations.mjs`
+  - `node --test tests/test_future_daw_note_meta_bridge.mjs`
+  - `PYTHONPATH=. uv run pytest -q tests/test_note_dispatcher_probe.py`
+  - `npm run desktop:native:build`
+  - `node --test tests/test_desktop_patch_view_browser.mjs`
+  - `COSIMO_IOS_SYSROOT=iphonesimulator npm run ios:project`
+  - `xcodebuild -project build/ios_device_run/CosimoSynthAUv3.xcodeproj -scheme CosimoSynth_Standalone -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build`
+
+Articulation slot first slice recorded on 2026-05-06
+- Implemented the standalone selectorA articulation slot model for the desktop synth UI.
+- Current behavior:
+  - the articulation bank is stored under `articulations.v1`
+  - visible slot buttons show only defined slots plus an Add button
+  - Add clones the current audible/edit state into the next free selectorA slot
+  - selecting a slot applies it immediately and makes it the current edit slot
+  - editing while a slot is selected updates that slot snapshot
+- Snapshot scope in this slice:
+  - includes synth parameters, MSEG morph values, envelopes, distortion parameters, chorus parameters, and modulation route amounts by route id
+  - does not include wavetable selection, MSEG shape data, or modulation route topology such as source, target, enabled, polarity, or row order
+- MIDI keyswitch, SysEx, future-daw manifest integration, UI-follows-playback, slot naming, delete, and reorder are not implemented yet.
+
 Cross-platform roadmap pointer recorded on 2026-04-02
 - The durable roadmap for frontend and host unification plus upcoming warp sequencing now lives in `PLATFORM_UNIFICATION_AND_WARP_SPRINT_PLAN.md`.
 - Use that file for the cross-platform order of operations:
@@ -799,3 +846,7 @@ Cosimo synth MSEG morph UI correction on 2026-05-06
 - While morph is actively being adjusted, the main MSEG graph and full MSEG editor can draw the DSP-effective interpolated curve in yellow. Shape A/B edit focus still controls only which shape is edited.
 - The wavetable warp controls are now grouped as one explicit `Warp` control with the current mode label and amount field, replacing the unlabeled icon-only mode chip plus detached amount field.
 - Stored-state runtime mirroring now compares the runtime events it would send, plus required runtime endpoint epochs, instead of the whole stored-state snapshot. This prevents morph-only stored-state changes from re-uploading MSEG buffers while still re-uploading when the DSP runtime epoch changes.
+
+Cosimo articulation SysEx architecture plan written on 2026-05-07
+- Added `ARTICULATION_SYSEX_ARCHITECTURE_PLAN.md` as the durable architecture proposal for FutureDaw NoteMeta SysEx, native bridge pairing, sample-ordered Cmajor note start, realtime `selectorA` articulation tables, voice latching, keyswitch behavior, and acceptance criteria.
+- The review pass corrected the undefined-selector behavior to match the earlier product decision: unknown `selectorA` values are ignored and leave the current audible articulation selector unchanged, rather than forcing a default fallback.

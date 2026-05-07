@@ -17,6 +17,7 @@ import {
     type ResourceClientInput,
 } from "../shared/resource-client";
 import { startPatchWorkerServices } from "../shared/patch-worker-services";
+import { createArticulationWorkerService } from "../shared/articulation-worker-service";
 import { createModulationWorkerService } from "./modulation-worker-service";
 
 const runtimeSyncRequestEndpointID = "runtimeSyncRequest";
@@ -1146,6 +1147,7 @@ export function createWavetableWorkerController(connection: PatchConnectionLike,
 export default async function runWavetableWorker(connection: PatchConnectionLike, options: WorkerOptions = {}) {
     return startPatchWorkerServices(connection, [
         createModulationWorkerService,
+        createArticulationWorkerService,
         () => createWavetableWorkerController(connection, options),
     ]);
 }

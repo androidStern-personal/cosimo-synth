@@ -2,6 +2,10 @@ import test, { after, before } from "node:test";
 import assert from "node:assert/strict";
 
 import { chromium } from "playwright";
+import {
+    ARTICULATION_STATE_KEY,
+    normalizeArticulationBank,
+} from "../patch_gui/articulations.js";
 import { deserializeMsegShape, renderMsegShape } from "../patch_gui/mseg.js";
 import { deserializeModulationState } from "../patch_gui/modulation.js";
 
@@ -33,6 +37,10 @@ function buildShortMidi(status, noteNumber, velocity = 0) {
 
 function readStoredModulationState(snapshot) {
     return deserializeModulationState(snapshot.storedState["modulation.v2"]);
+}
+
+function readStoredArticulationBank(snapshot) {
+    return normalizeArticulationBank(snapshot.storedState[ARTICULATION_STATE_KEY]);
 }
 
 function readStoredMsegShape(snapshot, slotIndex = 0) {
@@ -250,6 +258,12 @@ async function waitForPageValue(page, description, readValue, predicate, {
     }
 
     throw new Error(`Timed out waiting for ${description}. Last value: ${JSON.stringify(lastValue)}`);
+}
+
+async function waitForReactFrames(page, frameCount = 2) {
+    for (let frameIndex = 0; frameIndex < frameCount; frameIndex += 1) {
+        await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(resolve)));
+    }
 }
 
 async function openHarnessPage({
@@ -1189,7 +1203,7 @@ test("wavetable selection commits the desired table and retry uses the runtime r
     try {
         await page.locator('select[aria-label="Select wavetable"] option').nth(1).waitFor({ state: "attached" });
 
-        const audibleTableName = (await page.locator(".cosimo-stage .truncate").textContent())?.trim();
+        const audibleTableName = (await getHarnessRenderedState(page)).stageLabel;
         const desiredTableName = (await page.locator('select[aria-label="Select wavetable"] option').nth(1).textContent())?.trim();
 
         assert.ok(audibleTableName);
@@ -1282,7 +1296,7 @@ test("runtime loading state keeps the audible table visible while naming the des
     try {
         await page.locator('select[aria-label="Select wavetable"] option').nth(1).waitFor({ state: "attached" });
 
-        const audibleTableName = (await page.locator(".cosimo-stage .truncate").textContent())?.trim();
+        const audibleTableName = (await getHarnessRenderedState(page)).stageLabel;
         const desiredTableName = (await page.locator('select[aria-label="Select wavetable"] option').nth(1).textContent())?.trim();
 
         assert.ok(audibleTableName);
@@ -1715,6 +1729,343 @@ test("warp controls commit mode and amount, and the matrix can route MSEG 1 into
             amount: readStoredModulationState(snapshot).routes[0].amount,
         });
         assert.equal((await page.locator('[data-role="route-row-1"] >> text=/±(35|34|36)%/').count()) >= 1, true);
+    } finally {
+        await page.close();
+    }
+});
+
+test("articulation slots clone current state and recall parameters plus route amounts without replacing routing", async () => {
+    const page = await openHarnessPage();
+
+    try {
+        await page.waitForFunction(() => {
+            const addButton = document.querySelector('button[aria-label="Add articulation"]');
+            return addButton instanceof HTMLButtonElement && !addButton.disabled;
+        });
+        await page.evaluate(() => {
+            const harness = window.__COSIMO_DESKTOP_HARNESS__;
+            harness.setParameterValue("wavetablePosition", 0.66);
+            harness.setParameterValue("playMode", 1);
+            harness.setParameterValue("glideTime", 0.27);
+            harness.setParameterValue("pan", -0.18);
+            harness.setParameterValue("warpMode", 3);
+            harness.setParameterValue("warpAmount", 0.61);
+            harness.setParameterValue("filterMode", 2);
+            harness.setParameterValue("filterCutoff", 2475);
+            harness.setParameterValue("filterQ", 3.6);
+            harness.setParameterValue("mseg1Morph", 0.33);
+
+            const rawModulationState = harness.getSnapshot().storedState["modulation.v2"];
+            const modulationState = rawModulationState
+                ? JSON.parse(String(rawModulationState))
+                : { format: "cosimo.modulation", version: 2 };
+            modulationState.envelopeSlots = Array.isArray(modulationState.envelopeSlots)
+                ? modulationState.envelopeSlots
+                : [];
+            modulationState.envelopeSlots[0] = {
+                ...(modulationState.envelopeSlots[0] ?? {}),
+                attackSeconds: 0.17,
+                decaySeconds: 0.31,
+                sustain: 0.44,
+                releaseSeconds: 0.58,
+            };
+            modulationState.routes = [{
+                id: "articulation-route-1",
+                enabled: true,
+                sourceKind: "mseg",
+                sourceSlot: 1,
+                polarity: "bipolar",
+                targetKind: "warpAmount",
+                amount: 0.42,
+            }];
+            harness.setStoredStateValue("modulation.v2", JSON.stringify(modulationState));
+        });
+        await waitForReactFrames(page);
+
+        await page.getByRole("button", { name: "Add articulation" }).click();
+
+        let snapshot = await waitForHarnessSnapshot(
+            page,
+            "articulation slot capturing the current synth state",
+            (nextSnapshot) => {
+                const bank = readStoredArticulationBank(nextSnapshot);
+                const slot = bank.slots[0];
+                const routeAmount = slot?.snapshot.modRouteAmounts.find((entry) => entry.routeId === "articulation-route-1");
+
+                return bank.selectedSlotId === "articulation-0"
+                    && bank.slots.length === 1
+                    && slot?.selectorA === 0
+                    && Math.abs(Number(slot?.snapshot.parameters.wavetablePosition) - 0.66) <= 1e-9
+                    && Math.abs(Number(slot?.snapshot.parameters.warpAmount) - 0.61) <= 1e-9
+                    && Math.abs(Number(slot?.snapshot.parameters.filterCutoff) - 2475) <= 1e-9
+                    && Math.abs(Number(slot?.snapshot.parameters.msegMorphs?.[0]) - 0.33) <= 1e-9
+                    && Math.abs(Number(slot?.snapshot.envelopes?.[0]?.attackSeconds) - 0.17) <= 1e-9
+                    && Math.abs(Number(routeAmount?.amount) - 0.42) <= 1e-9;
+            },
+        );
+        assert.equal(await page.locator('[data-role="articulation-slot-button"][data-selector-a="0"]').count(), 1);
+        assert.equal(
+            await page.locator('[data-role="articulation-slot-button"][data-selector-a="0"]').getAttribute("aria-pressed"),
+            "true",
+        );
+        assert.deepEqual(
+            snapshot.sentMessages
+                .filter(({ endpointID, value }) => (
+                    endpointID === "articulationSnapshot"
+                    && [0, 1].includes(Number(value?.selectorA))
+                ))
+                .slice(-2)
+                .map(({ value }) => ({
+                    selectorA: value.selectorA,
+                    enabled: value.enabled,
+                    framePosition: value.framePosition,
+                    warpAmount: value.warpAmount,
+                    filterCutoffHz: value.filterCutoffHz,
+                    msegMorphs: value.msegMorphs,
+                    routeAmount0: value.routeAmounts?.[0],
+                    envelopeAttack0: value.envelopeAttackSeconds?.[0],
+                })),
+            [
+                {
+                    selectorA: 0,
+                    enabled: true,
+                    framePosition: 0.66,
+                    warpAmount: 0.61,
+                    filterCutoffHz: 2475,
+                    msegMorphs: [0.33, 0, 0],
+                    routeAmount0: 0.42,
+                    envelopeAttack0: 0.17,
+                },
+                {
+                    selectorA: 1,
+                    enabled: false,
+                    framePosition: 0,
+                    warpAmount: 0,
+                    filterCutoffHz: 1000,
+                    msegMorphs: [0, 0, 0],
+                    routeAmount0: 0,
+                    envelopeAttack0: 0.01,
+                },
+            ],
+        );
+
+        const capturedBank = readStoredArticulationBank(snapshot);
+        await page.evaluate(({ stateKey, bank }) => {
+            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue(stateKey, JSON.stringify({
+                ...bank,
+                selectedSlotId: null,
+            }));
+        }, {
+            stateKey: ARTICULATION_STATE_KEY,
+            bank: capturedBank,
+        });
+        await waitForHarnessSnapshot(
+            page,
+            "articulation editing deselected",
+            (nextSnapshot) => readStoredArticulationBank(nextSnapshot).selectedSlotId === null,
+        );
+
+        await page.evaluate(() => {
+            const harness = window.__COSIMO_DESKTOP_HARNESS__;
+            harness.setParameterValue("wavetablePosition", 0.12);
+            harness.setParameterValue("playMode", 2);
+            harness.setParameterValue("glideTime", 0.05);
+            harness.setParameterValue("pan", 0.41);
+            harness.setParameterValue("warpMode", 4);
+            harness.setParameterValue("warpAmount", 0.08);
+            harness.setParameterValue("filterMode", 5);
+            harness.setParameterValue("filterCutoff", 8200);
+            harness.setParameterValue("filterQ", 9.5);
+            harness.setParameterValue("mseg1Morph", 0.91);
+
+            const rawModulationState = harness.getSnapshot().storedState["modulation.v2"];
+            const modulationState = rawModulationState
+                ? JSON.parse(String(rawModulationState))
+                : { format: "cosimo.modulation", version: 2 };
+            modulationState.envelopeSlots = Array.isArray(modulationState.envelopeSlots)
+                ? modulationState.envelopeSlots
+                : [];
+            modulationState.envelopeSlots[0] = {
+                ...(modulationState.envelopeSlots[0] ?? {}),
+                attackSeconds: 0.92,
+                decaySeconds: 0.83,
+                sustain: 0.72,
+                releaseSeconds: 0.61,
+            };
+            modulationState.routes = [{
+                id: "articulation-route-1",
+                enabled: false,
+                sourceKind: "env",
+                sourceSlot: 2,
+                polarity: "unipolar",
+                targetKind: "filterQ",
+                amount: 0.03,
+            }];
+            harness.setStoredStateValue("modulation.v2", JSON.stringify(modulationState));
+        });
+        await waitForReactFrames(page);
+        await clearHarnessDebugLog(page);
+
+        await page.getByRole("button", { name: "Select articulation Art 1" }).click();
+
+        snapshot = await waitForHarnessSnapshot(
+            page,
+            "articulation recall applying parameters and route amount only",
+            (nextSnapshot) => {
+                const bank = readStoredArticulationBank(nextSnapshot);
+                const modulationState = readStoredModulationState(nextSnapshot);
+                const route = modulationState.routes[0];
+
+                return bank.selectedSlotId === "articulation-0"
+                    && Math.abs(Number(nextSnapshot.parameterValues.wavetablePosition) - 0.66) <= 1e-9
+                    && Number(nextSnapshot.parameterValues.playMode) === 1
+                    && Math.abs(Number(nextSnapshot.parameterValues.glideTime) - 0.27) <= 1e-9
+                    && Math.abs(Number(nextSnapshot.parameterValues.pan) - -0.18) <= 1e-9
+                    && Number(nextSnapshot.parameterValues.warpMode) === 3
+                    && Math.abs(Number(nextSnapshot.parameterValues.warpAmount) - 0.61) <= 1e-9
+                    && Number(nextSnapshot.parameterValues.filterMode) === 2
+                    && Math.abs(Number(nextSnapshot.parameterValues.filterCutoff) - 2475) <= 1e-9
+                    && Math.abs(Number(nextSnapshot.parameterValues.filterQ) - 3.6) <= 1e-9
+                    && Math.abs(Number(nextSnapshot.parameterValues.mseg1Morph) - 0.33) <= 1e-9
+                    && Math.abs(Number(modulationState.msegSlots[0].morph) - 0.33) <= 1e-9
+                    && Math.abs(Number(modulationState.envelopeSlots[0].attackSeconds) - 0.17) <= 1e-9
+                    && route?.id === "articulation-route-1"
+                    && route?.enabled === false
+                    && route?.sourceKind === "env"
+                    && route?.sourceSlot === 2
+                    && route?.polarity === "unipolar"
+                    && route?.targetKind === "filterQ"
+                    && Math.abs(Number(route?.amount) - 0.42) <= 1e-9;
+            },
+        );
+
+        assert.deepEqual(
+            snapshot.sentMessages
+                .filter(({ endpointID }) => ["wavetablePosition", "warpAmount", "filterCutoff", "mseg1Morph"].includes(endpointID))
+                .map(({ endpointID, value }) => ({ endpointID, value })),
+            [
+                { endpointID: "wavetablePosition", value: 0.66 },
+                { endpointID: "warpAmount", value: 0.61 },
+                { endpointID: "filterCutoff", value: 2475 },
+                { endpointID: "mseg1Morph", value: 0.33 },
+            ],
+        );
+        assert.deepEqual(routeSummary(readStoredModulationState(snapshot).routes[0]), {
+            enabled: false,
+            sourceKind: "env",
+            sourceSlot: 2,
+            polarity: "unipolar",
+            targetKind: "filterQ",
+            amount: 0.42,
+        });
+    } finally {
+        await page.close();
+    }
+});
+
+test("opening the synth GUI does not recall or overwrite a stored selected articulation", async () => {
+    const parameterEndpoints = [
+        "wavetablePosition",
+        "playMode",
+        "glideTime",
+        "pan",
+        "warpMode",
+        "warpAmount",
+        "filterMode",
+        "filterCutoff",
+        "filterQ",
+        "mseg1Morph",
+        "distortionMode",
+        "distortionWet",
+        "chorusEnabled",
+        "chorusMix",
+    ];
+    const liveParameters = {
+        wavetablePosition: 0.11,
+        playMode: 2,
+        glideTime: 0.04,
+        pan: -0.31,
+        warpMode: 1,
+        warpAmount: 0.18,
+        filterMode: 4,
+        filterCutoff: 8765,
+        filterQ: 7.25,
+        mseg1Morph: 0.22,
+        distortionMode: 1,
+        distortionWet: 0.37,
+        chorusEnabled: 1,
+        chorusMix: 0.48,
+    };
+    const storedBank = normalizeArticulationBank({
+        selectedSlotId: "articulation-0",
+        slots: [{
+            id: "articulation-0",
+            selectorA: 0,
+            name: "Art 1",
+            snapshot: {
+                parameters: {
+                    wavetablePosition: 0.88,
+                    playMode: 1,
+                    glideTime: 0.33,
+                    pan: 0.42,
+                    warpMode: 3,
+                    warpAmount: 0.77,
+                    filterMode: 2,
+                    filterCutoff: 2345,
+                    filterQ: 2.5,
+                    msegMorphs: [0.91, 0, 0],
+                    distortionMode: 0,
+                    distortionWet: 0.12,
+                    chorusEnabled: 0,
+                    chorusMix: 0.16,
+                },
+            },
+        }],
+    });
+    const page = await openHarnessPage({
+        beforeGoto: async (nextPage) => {
+            await nextPage.addInitScript(({ stateKey, bank, parameters }) => {
+                window.__COSIMO_DESKTOP_HARNESS_INITIAL__ = {
+                    parameterValues: parameters,
+                    storedState: {
+                        [stateKey]: JSON.stringify(bank),
+                    },
+                };
+            }, {
+                stateKey: ARTICULATION_STATE_KEY,
+                bank: storedBank,
+                parameters: liveParameters,
+            });
+        },
+    });
+
+    try {
+        await page.waitForFunction(() => (
+            document.querySelector('[data-role="articulation-slot-button"][data-selector-a="0"]') instanceof HTMLButtonElement
+        ));
+        await waitForReactFrames(page, 4);
+
+        const snapshot = await getHarnessSnapshot(page);
+        for (const [endpointID, expectedValue] of Object.entries(liveParameters)) {
+            assert.equal(
+                Number(snapshot.parameterValues[endpointID]),
+                expectedValue,
+                `${endpointID} should keep the host/current value when the GUI opens`,
+            );
+        }
+
+        const hydratedBank = readStoredArticulationBank(snapshot);
+        assert.equal(hydratedBank.selectedSlotId, "articulation-0");
+        assert.equal(hydratedBank.slots[0].snapshot.parameters.wavetablePosition, 0.88);
+        assert.equal(hydratedBank.slots[0].snapshot.parameters.warpAmount, 0.77);
+        assert.equal(hydratedBank.slots[0].snapshot.parameters.filterCutoff, 2345);
+        assert.equal(hydratedBank.slots[0].snapshot.parameters.msegMorphs[0], 0.91);
+        assert.deepEqual(
+            snapshot.sentMessages
+                .filter(({ endpointID }) => parameterEndpoints.includes(endpointID))
+                .map(({ endpointID, value }) => ({ endpointID, value })),
+            [],
+        );
     } finally {
         await page.close();
     }

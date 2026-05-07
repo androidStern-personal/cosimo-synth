@@ -4,6 +4,10 @@ import { createDesktopPatchView } from "./patch-view-entry";
 
 declare global {
     interface Window {
+        __COSIMO_DESKTOP_HARNESS_INITIAL__?: {
+            parameterValues?: Record<string, unknown>;
+            storedState?: Record<string, unknown>;
+        };
         __COSIMO_DESKTOP_HARNESS__?: {
             patchConnection: MockPatchConnection;
             getSnapshot: () => ReturnType<MockPatchConnection["getDebugSnapshot"]>;
@@ -205,6 +209,17 @@ try {
     const manifest = await loadHarnessManifest();
     document.body.dataset.bootStage = "manifest-loaded";
     const patchConnection = new MockPatchConnection(manifest);
+    const initialHarnessState = window.__COSIMO_DESKTOP_HARNESS_INITIAL__;
+    if (initialHarnessState?.parameterValues && typeof initialHarnessState.parameterValues === "object") {
+        for (const [endpointID, value] of Object.entries(initialHarnessState.parameterValues)) {
+            patchConnection.setParameterValue(endpointID, value);
+        }
+    }
+    if (initialHarnessState?.storedState && typeof initialHarnessState.storedState === "object") {
+        for (const [key, value] of Object.entries(initialHarnessState.storedState)) {
+            patchConnection.setStoredStateValue(key, value);
+        }
+    }
     window.__COSIMO_DESKTOP_HARNESS__ = {
         patchConnection,
         getSnapshot: () => patchConnection.getDebugSnapshot(),
@@ -217,7 +232,7 @@ try {
                 keyboardNoteCount: readKeyboardAttribute("note-count"),
                 keyboardRootNote: readKeyboardAttribute("root-note"),
                 msegPreviewState: readMsegPreviewState(),
-                stageLabel: viewRoot?.querySelector(".cosimo-stage .truncate")?.textContent?.trim() ?? null,
+                stageLabel: viewRoot?.querySelector('[data-role="wavetable-stage-title"]')?.textContent?.trim() ?? null,
                 stageDebug: readWavetableStageDebugState(),
                 filterGraphState: readFilterGraphState(),
                 distortionGraphState: readDistortionGraphState(),

@@ -4,6 +4,7 @@ import {
     buildModulationRuntimeEvents,
     deserializeModulationState,
 } from "./modulation";
+import { createArticulationWorkerService } from "./articulation-worker-service";
 import { createStoredStateRuntimeMirror } from "./stored-state-runtime-mirror";
 
 const midiInputEndpointID = "midiIn";
@@ -17,6 +18,9 @@ const warpAmountEndpointID = "warpAmount";
 const filterModeEndpointID = "filterMode";
 const filterCutoffEndpointID = "filterCutoff";
 const filterQEndpointID = "filterQ";
+const mseg1MorphEndpointID = "mseg1Morph";
+const mseg2MorphEndpointID = "mseg2Morph";
+const mseg3MorphEndpointID = "mseg3Morph";
 const distortionModeEndpointID = "distortionMode";
 const distortionDriveDbEndpointID = "distortionDriveDb";
 const distortionKneeEndpointID = "distortionKnee";
@@ -319,6 +323,36 @@ function buildHarnessStatus(manifest: unknown) {
                     },
                 },
                 {
+                    endpointID: mseg1MorphEndpointID,
+                    purpose: "parameter",
+                    annotation: {
+                        name: "MSEG 1 Morph",
+                        min: 0,
+                        max: 1,
+                        init: 0,
+                    },
+                },
+                {
+                    endpointID: mseg2MorphEndpointID,
+                    purpose: "parameter",
+                    annotation: {
+                        name: "MSEG 2 Morph",
+                        min: 0,
+                        max: 1,
+                        init: 0,
+                    },
+                },
+                {
+                    endpointID: mseg3MorphEndpointID,
+                    purpose: "parameter",
+                    annotation: {
+                        name: "MSEG 3 Morph",
+                        min: 0,
+                        max: 1,
+                        init: 0,
+                    },
+                },
+                {
                     endpointID: distortionModeEndpointID,
                     purpose: "parameter",
                     annotation: {
@@ -498,6 +532,9 @@ export class MockPatchConnection implements PatchConnectionLike {
         [filterModeEndpointID, 0],
         [filterCutoffEndpointID, 1000],
         [filterQEndpointID, 0.707107],
+        [mseg1MorphEndpointID, 0],
+        [mseg2MorphEndpointID, 0],
+        [mseg3MorphEndpointID, 0],
         [distortionModeEndpointID, 0],
         [distortionDriveDbEndpointID, 12],
         [distortionKneeEndpointID, 0.35],
@@ -522,6 +559,7 @@ export class MockPatchConnection implements PatchConnectionLike {
     private runtimeState = createDefaultRuntimeState();
     private status: unknown;
     private readonly modulationRuntimeMirror;
+    private readonly articulationWorkerService;
 
     constructor(manifest: unknown) {
         this.manifest = manifest;
@@ -538,6 +576,8 @@ export class MockPatchConnection implements PatchConnectionLike {
             buildRuntimeEvents: ({ state }) => buildModulationRuntimeEvents(state),
         });
         this.modulationRuntimeMirror.start();
+        this.articulationWorkerService = createArticulationWorkerService(this);
+        this.articulationWorkerService.start();
     }
 
     getResourceAddress(path: string) {
@@ -676,8 +716,7 @@ export class MockPatchConnection implements PatchConnectionLike {
     }
 
     requestFullStoredState(callback: (state: Record<string, unknown>) => void) {
-        const snapshot = Object.fromEntries(this.storedState.entries());
-        queueMicrotask(() => callback(snapshot));
+        queueMicrotask(() => callback(Object.fromEntries(this.storedState.entries())));
     }
 
     requestStoredStateValue(key: string) {

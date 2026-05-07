@@ -23,6 +23,8 @@
 #include "choc/memory/choc_xxHash.h"
 #include "choc/network/choc_MIMETypes.h"
 
+#include "../../native/CosimoCmajorMidiBridge.h"
+
 #if CMAJ_USE_QUICKJS_WORKER
  #include "cmajor/helpers/cmaj_PatchWorker_QuickJS.h"
 #else
@@ -731,19 +733,15 @@ public:
         if (auto* playHead = getPlayHead())
             updateTimelineFromPlayhead (*playHead);
 
-        auto* audioChannels = audio.getArrayOfWritePointers();
-        const auto numFrames = static_cast<choc::buffer::FrameCount> (audio.getNumSamples());
-
-        for (auto metadata : midi)
-            patch->addMIDIMessage (metadata.samplePosition, metadata.data, static_cast<uint32_t> (metadata.numBytes));
-
-        midi.clear();
-
-        patch->process (audioChannels, numFrames,
-                        [&] (uint32_t frame, choc::midi::ShortMessage message)
-                        {
-                            midi.addEvent (message.data(), static_cast<int> (message.length()), static_cast<int> (frame));
-                        });
+        cosimo::cmajor_bridge::processBlockWithFutureDawNoteMeta (
+            *patch,
+            audio,
+            midi,
+            noteMetaBridge,
+            [&midi] (uint32_t frame, choc::midi::ShortMessage message)
+            {
+                midi.addEvent (message.data(), static_cast<int> (message.length()), static_cast<int> (frame));
+            });
     }
 
     void processBlock (juce::AudioBuffer<double>&, juce::MidiBuffer&) override
@@ -1745,6 +1743,7 @@ private:
     }
 
     std::shared_ptr<cmaj::Patch> patch;
+    cosimo::future_daw::NoteMetaBridge noteMetaBridge { cosimo::future_daw::KeyswitchMap::defaultLowNoteRange() };
     std::vector<Parameter*> parameters;
     std::string statusMessage;
     bool isStatusMessageError = false;

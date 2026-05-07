@@ -102,6 +102,8 @@ if (shouldBuild("--desktop") || shouldBuild("--desktop-runtime") || shouldBuild(
     await emitGeneratedPatchGuiModule("ui/shared/mseg.ts", "patch_gui/mseg.js");
     await emitGeneratedPatchGuiModule("ui/shared/mseg-controller.ts", "patch_gui/mseg-controller.js");
     await emitGeneratedPatchGuiModule("ui/shared/modulation.ts", "patch_gui/modulation.js");
+    await emitGeneratedPatchGuiModule("ui/shared/articulations.ts", "patch_gui/articulations.js");
+    await emitGeneratedPatchGuiModule("ui/shared/articulation-worker-service.ts", "patch_gui/articulation-worker-service.js");
 }
 
 if (shouldBuild("--ios")) {
