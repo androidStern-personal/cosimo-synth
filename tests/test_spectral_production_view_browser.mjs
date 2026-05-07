@@ -67,6 +67,7 @@ function patchConnectionSource(options = {}) {
                 this.parameterListeners = new Map();
                 this.storedStateListeners = new Set();
                 this.sentEvents = [];
+                this.requestedParameterValues = [];
                 this.endpoints = [
                     ${JSON.stringify(spectralEndpoint("magFeedbackIn", "Magnitude Feedback", "Feedback", { min: 0, max: 0.999, init: 0.92 }))},
                     ${JSON.stringify(spectralEndpoint("phaseFeedbackIn", "Phase Feedback", "Feedback", { min: 0, max: 1, init: 1 }))},
@@ -79,6 +80,7 @@ function patchConnectionSource(options = {}) {
                     ${JSON.stringify(spectralEndpoint("voiceModeIn", "Voice Mode", "Voices", { min: 0, max: 1, init: 0 }))},
                     ${JSON.stringify(spectralEndpoint("polyphonyIn", "Polyphony", "Voices", { min: 1, max: 16, init: 8 }))},
                     ${JSON.stringify(spectralEndpoint("voiceReleaseSecondsIn", "Voice Release", "Voices", { min: 0.01, max: 3, init: 0.35 }))},
+                    ${JSON.stringify(spectralEndpoint("spectralModeIn", "Mode", "Algorithm", { min: 0, max: 1, init: 0, discrete: true, step: 1, text: "Resonator|Imprint" }))},
                 ];
                 this.utilities = {
                     ParameterControls: {
@@ -131,6 +133,8 @@ function patchConnectionSource(options = {}) {
             }
 
             requestParameterValue(endpointID) {
+                this.requestedParameterValues.push(endpointID);
+
                 if (spectralTestConfig.missingParameterValues.includes(endpointID))
                     return;
 
@@ -511,7 +515,7 @@ test("spectral partial canvas resizes its backing store when the host height cha
     const page = await openSpectralProductionView();
 
     try {
-        const metrics = await page.evaluate(async () => {
+        const before = await page.evaluate(() => {
             const host = document.querySelector('[data-role="spectral-host-slot"]');
             const view = document.querySelector("cosimo-spectral-chord-resonator-view");
             const root = view?.shadowRoot;
@@ -520,25 +524,52 @@ test("spectral partial canvas resizes its backing store when the host height cha
                 Object.fromEntries(keys.map((key) => [key, Math.round(rect[key])]))
             );
 
-            const before = {
+            return {
                 host: roundedRect(host.getBoundingClientRect(), ["height"]),
                 canvas: roundedRect(canvas.getBoundingClientRect(), ["height"]),
                 backingHeight: canvas.height,
             };
+        });
 
+        await page.evaluate(() => {
+            const host = document.querySelector('[data-role="spectral-host-slot"]');
             host.style.height = "520px";
-            await new Promise((resolve) => setTimeout(resolve, 50));
-            await new Promise((resolve) => requestAnimationFrame(resolve));
+        });
 
-            const after = {
+        await page.waitForFunction((previousCanvasHeight) => {
+            const host = document.querySelector('[data-role="spectral-host-slot"]');
+            const view = document.querySelector("cosimo-spectral-chord-resonator-view");
+            const canvas = view?.shadowRoot?.querySelector("[data-partial-canvas]");
+
+            if (!host || !canvas)
+                return false;
+
+            const canvasHeight = Math.round(canvas.getBoundingClientRect().height);
+            const devicePixelRatio = window.devicePixelRatio || 1;
+            const expectedBackingHeight = Math.max(1, Math.floor(canvasHeight * devicePixelRatio));
+
+            return Math.round(host.getBoundingClientRect().height) === 520
+                && canvasHeight < previousCanvasHeight
+                && canvas.height === expectedBackingHeight;
+        }, before.canvas.height);
+
+        const after = await page.evaluate(() => {
+            const host = document.querySelector('[data-role="spectral-host-slot"]');
+            const view = document.querySelector("cosimo-spectral-chord-resonator-view");
+            const root = view?.shadowRoot;
+            const canvas = root.querySelector("[data-partial-canvas]");
+            const roundedRect = (rect, keys) => (
+                Object.fromEntries(keys.map((key) => [key, Math.round(rect[key])]))
+            );
+
+            return {
                 host: roundedRect(host.getBoundingClientRect(), ["height"]),
                 canvas: roundedRect(canvas.getBoundingClientRect(), ["height"]),
                 backingHeight: canvas.height,
                 devicePixelRatio: window.devicePixelRatio || 1,
             };
-
-            return { before, after };
         });
+        const metrics = { before, after };
 
         assert.equal(metrics.after.host.height, 520);
         assert.ok(
@@ -567,13 +598,32 @@ test("spectral production view does not reset depth when one startup parameter v
     });
 
     try {
-        await page.waitForTimeout(350);
-        const sentEvents = await page.evaluate(() => window.__spectralPatchConnection.sentEvents);
+        await page.waitForFunction(() => {
+            const connection = window.__spectralPatchConnection;
+            const expectedEndpointIDs = connection.endpoints.map((endpoint) => endpoint.endpointID);
+            return expectedEndpointIDs.every((endpointID) => (
+                connection.requestedParameterValues.includes(endpointID)
+            ));
+        });
+        await page.waitForTimeout(275);
+        const probe = await page.evaluate(() => ({
+            requestedParameterValues: window.__spectralPatchConnection.requestedParameterValues,
+            sentEvents: window.__spectralPatchConnection.sentEvents,
+        }));
+
+        assert.ok(
+            probe.requestedParameterValues.includes("voiceReleaseSecondsIn"),
+            `startup probe must request the missing parameter before the no-reseed assertion: ${JSON.stringify(probe)}`,
+        );
+        assert.ok(
+            probe.requestedParameterValues.includes("depthIn"),
+            `startup probe must request existing parameters before the no-reseed assertion: ${JSON.stringify(probe)}`,
+        );
 
         assert.deepEqual(
-            sentEvents,
+            probe.sentEvents,
             [],
-            `missing a startup parameter value must not reseed every parameter to its manifest init: ${JSON.stringify(sentEvents)}`,
+            `missing a startup parameter value must not reseed every parameter to its manifest init: ${JSON.stringify(probe)}`,
         );
     } finally {
         await page.close();

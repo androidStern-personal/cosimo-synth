@@ -11,6 +11,8 @@ namespace spectral_chord_resonator
     let smoothingTimeSeconds = 0.05f;
     let voiceModePoly = 0;
     let voiceModeMono = 1;
+    let spectralModeResonator = 0;
+    let spectralModeImprint = 1;
     let defaultPolyphony = 8;
 
     let defaultMagFeedback = 0.92f;
@@ -128,6 +130,7 @@ processor SpectralChordResonator
     input  event float32 depthIn;
     input  event float32 lowCutHzIn;
     input  event float32 voiceReleaseSecondsIn;
+    input  event float32 spectralModeIn;
 
     float32[spectral_chord_resonator::fftSize] inputRing;
     float32[spectral_chord_resonator::fftSize] outputRing;
@@ -183,6 +186,7 @@ processor SpectralChordResonator
     float32 currentDepth = spectral_chord_resonator::defaultDepth;
     float32 currentLowCutHz = spectral_chord_resonator::defaultLowCutHz;
     float32 currentVoiceReleaseSeconds = spectral_chord_resonator::defaultVoiceReleaseSeconds;
+    int32 currentSpectralMode = spectral_chord_resonator::spectralModeResonator;
 
     void init()
     {
@@ -552,6 +556,15 @@ processor SpectralChordResonator
         }
     }
 
+    bool hasAudibleVoice()
+    {
+        for (wrap<spectral_chord_resonator::maxVoiceCount> voice)
+            if (voiceAssigned[voice] != 0 && voiceLevel[voice] > spectral_chord_resonator::voiceSilenceThreshold)
+                return true;
+
+        return false;
+    }
+
     void processFrame()
     {
         updateFrameParameters();
@@ -568,6 +581,7 @@ processor SpectralChordResonator
         std::frequency::realOnlyForwardFFT (fftInput, fftSpectrum);
 
         let binHz = float32 (processor.frequency) / float32 (spectral_chord_resonator::fftSize);
+        let imprintHasVoice = hasAudibleVoice();
 
         for (wrap<spectral_chord_resonator::spectralBinCount> wrappedBin)
         {
@@ -592,6 +606,79 @@ processor SpectralChordResonator
 
             var outRe = real;
             var outIm = imag;
+
+            if (currentSpectralMode == spectral_chord_resonator::spectralModeImprint)
+            {
+                if (! imprintHasVoice && currentMaskFloor <= 0.000001f)
+                {
+                    writeSpectrumBin (bin, real, imag);
+                    continue;
+                }
+
+                outRe = 0.0f;
+                outIm = 0.0f;
+
+                if (currentMaskFloor > 0.000001f)
+                {
+                    let floorInputRe = real * currentMaskFloor;
+                    let floorInputIm = imag * currentMaskFloor;
+                    let floorUpdated = updateBin (
+                        floorInputRe,
+                        floorInputIm,
+                        floorStateRe[wrappedBin],
+                        floorStateIm[wrappedBin],
+                        currentMaskFloor,
+                        basePhaseAdvanceTable[wrappedBin],
+                        currentMagFeedback,
+                        currentPhaseFeedback,
+                        currentDamping,
+                        currentMagCeiling,
+                        1.0f
+                    );
+
+                    floorStateRe[wrappedBin] = floorUpdated.stateRe;
+                    floorStateIm[wrappedBin] = floorUpdated.stateIm;
+                    outRe += floorUpdated.outRe;
+                    outIm += floorUpdated.outIm;
+                }
+
+                for (int32 voiceIndex = 0; voiceIndex < spectral_chord_resonator::maxVoiceCount; ++voiceIndex)
+                {
+                    let voice = wrap<spectral_chord_resonator::maxVoiceCount> (voiceIndex);
+
+                    if (voiceAssigned[voice] == 0 || voiceLevel[voice] <= spectral_chord_resonator::voiceSilenceThreshold)
+                        continue;
+
+                    let mask = voiceMask[voice, wrappedBin];
+
+                    if (mask <= 0.000001f)
+                        continue;
+
+                    let voiceInputRe = real * mask;
+                    let voiceInputIm = imag * mask;
+                    let voiceUpdated = updateBin (
+                        voiceInputRe,
+                        voiceInputIm,
+                        voiceSpectrumStateRe[voice, wrappedBin],
+                        voiceSpectrumStateIm[voice, wrappedBin],
+                        mask,
+                        voicePhaseAdvanceTable[voice, wrappedBin],
+                        currentMagFeedback,
+                        currentPhaseFeedback,
+                        currentDamping,
+                        currentMagCeiling,
+                        currentPartialOutputGain
+                    );
+
+                    voiceSpectrumStateRe[voice, wrappedBin] = voiceUpdated.stateRe;
+                    voiceSpectrumStateIm[voice, wrappedBin] = voiceUpdated.stateIm;
+                    outRe += voiceUpdated.outRe * voiceLevel[voice];
+                    outIm += voiceUpdated.outIm * voiceLevel[voice];
+                }
+
+                writeSpectrumBin (bin, outRe, outIm);
+                continue;
+            }
 
             if (currentMaskFloor > 0.000001f)
             {
@@ -788,6 +875,13 @@ processor SpectralChordResonator
     event voiceReleaseSecondsIn (float32 value)
     {
         currentVoiceReleaseSeconds = spectral_chord_resonator::clampFloat (value, 0.01f, 3.0f);
+    }
+
+    event spectralModeIn (float32 value)
+    {
+        currentSpectralMode = int32 (std::intrinsics::floor (
+            spectral_chord_resonator::clampFloat (value, 0.0f, 1.0f) + 0.5f
+        ));
     }
 
     void main()
@@ -1380,6 +1474,7 @@ graph SpectralChordResonatorPlugin [[ main ]]
     input event float32 voiceModeIn         [[ name: "Voice Mode",         group: "Voices",   min: 0.0f,  max: 1.0f,    init: 0.0f, discrete: true, step: 1.0f, text: "Poly|Mono", rampFrames: 0 ]];
     input event float32 polyphonyIn         [[ name: "Polyphony",          group: "Voices",   min: 1.0f,  max: 16.0f,   init: 8.0f, discrete: true, step: 1.0f, rampFrames: 0 ]];
     input event float32 voiceReleaseSecondsIn [[ name: "Voice Release",    group: "Voices",   min: 0.01f, max: 3.0f,    init: 0.35f, unit: "s", rampFrames: 0 ]];
+    input event float32 spectralModeIn      [[ name: "Mode",               group: "Algorithm", min: 0.0f, max: 1.0f,    init: 0.0f, discrete: true, step: 1.0f, text: "Resonator|Imprint", rampFrames: 0 ]];
 
     node sourceSplitter = SpectralStereoSplitter;
     node resonatorLeft = SpectralChordResonator;
@@ -1424,5 +1519,7 @@ graph SpectralChordResonatorPlugin [[ main ]]
         lowCutHzIn -> resonatorRight.lowCutHzIn;
         voiceReleaseSecondsIn -> resonatorLeft.voiceReleaseSecondsIn;
         voiceReleaseSecondsIn -> resonatorRight.voiceReleaseSecondsIn;
+        spectralModeIn -> resonatorLeft.spectralModeIn;
+        spectralModeIn -> resonatorRight.spectralModeIn;
     }
 }
