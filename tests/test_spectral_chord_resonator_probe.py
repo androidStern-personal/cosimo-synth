@@ -62,6 +62,7 @@ def _base_events(**overrides: float) -> list[list[object]]:
         "magCeilingIn": 1000.0,
         "depthIn": 1.0,
         "lowCutHzIn": 20.0,
+        "spectralModeIn": 0.0,
     }
     values.update(overrides)
     return [_event(endpoint_id, value) for endpoint_id, value in values.items()]
@@ -380,6 +381,39 @@ def test_feedback_zero_reconstructs_audio_input_after_fft_latency(
     assert error_rms / signal_rms <= 0.08
 
 
+def test_imprint_mode_without_held_notes_preserves_audio_input(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    source = _deterministic_probe_signal(65_536, amplitude=0.18)
+    rendered = _render(
+        generated_runtime,
+        tmp_path,
+        source,
+        {
+            0: _base_events(
+                depthIn=1.0,
+                spectralModeIn=1.0,
+                magFeedbackIn=0.0,
+                phaseFeedbackIn=0.0,
+                maskFloorIn=0.0,
+            ),
+        },
+    )
+
+    dry = source[:-FFT_SIZE]
+    wet = rendered[FFT_SIZE:]
+    settled = slice(FFT_SIZE * 3, None)
+    dry_settled = dry[settled]
+    wet_settled = wet[settled]
+    error = wet_settled - dry_settled
+    signal_rms = _rms(dry_settled)
+    error_rms = _rms(error)
+
+    assert np.isfinite(rendered).all()
+    assert error_rms / signal_rms <= 0.08
+
+
 def test_single_click_resonates_at_held_midi_pitch(
     generated_runtime: GeneratedRuntime,
     tmp_path: Path,
@@ -419,6 +453,57 @@ def test_single_click_resonates_at_held_midi_pitch(
     assert np.isfinite(rendered).all()
     assert float(np.sqrt(np.mean(np.square(tail, dtype=np.float64)))) > 1.0e-4
     assert abs(cents_error) <= 5.0
+
+
+def test_imprint_mode_tonalizes_plucky_source_without_feedback_buildup(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    source = np.zeros(SAMPLE_RATE * 2, dtype=np.float32)
+    second_pluck_offset = int(0.5 * SAMPLE_RATE)
+    source[0] = 1.0
+    source[second_pluck_offset] = 0.5
+
+    rendered = _render(
+        generated_runtime,
+        tmp_path,
+        source,
+        {
+            0: _base_events(
+                depthIn=1.0,
+                spectralModeIn=1.0,
+                magFeedbackIn=0.0,
+                phaseFeedbackIn=0.0,
+                dampingIn=0.995,
+                maskFloorIn=0.0,
+                maskWidthCentsIn=200.0,
+                lowCutHzIn=20.0,
+                magCeilingIn=1000.0,
+            )
+            + [
+                _event("partialShapeUpload", _partial_shape_upload(1, [1.0])),
+                _event("midiIn", _midi_note_on(57)),
+            ],
+        },
+    )
+
+    latency = FFT_SIZE
+    first_window = rendered[latency: latency + int(0.18 * SAMPLE_RATE)]
+    quiet_gap = rendered[latency + int(0.25 * SAMPLE_RATE): latency + int(0.45 * SAMPLE_RATE)]
+    second_window = rendered[
+        latency + second_pluck_offset: latency + second_pluck_offset + int(0.18 * SAMPLE_RATE)
+    ]
+    first_rms = _rms(first_window)
+    second_rms = _rms(second_window)
+    quiet_rms = _rms(quiet_gap)
+    note_energy = _spectral_band_energy(first_window, 220.0, radius_hz=12.0)
+    off_note_energy = _spectral_band_energy(first_window, 300.0, radius_hz=12.0)
+
+    assert np.isfinite(rendered).all()
+    assert first_rms > 1.0e-4
+    assert note_energy > off_note_energy * 6.0
+    assert quiet_rms < first_rms * 0.08
+    assert first_rms * 0.20 < second_rms < first_rms * 0.60
 
 
 def test_mono_voice_mode_retunes_existing_resonator_state_for_fast_arps(

@@ -56,6 +56,7 @@ def base_events(**overrides: float) -> list[list[object]]:
         "magCeilingIn": 1000.0,
         "depthIn": 1.0,
         "lowCutHzIn": 20.0,
+        "spectralModeIn": 0.0,
     }
     values.update(overrides)
     return [event(endpoint_id, value) for endpoint_id, value in values.items()]
