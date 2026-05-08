@@ -280,6 +280,11 @@ async function openHarnessPage({
     return page;
 }
 
+async function showVoiceControls(page) {
+    await page.getByRole("button", { name: "Voice" }).click();
+    await page.locator('[aria-label="Glide"]').waitFor({ state: "visible" });
+}
+
 async function openBuiltDesktopBundlePage() {
     const page = await browser.newPage();
 
@@ -1425,6 +1430,7 @@ test("stage drag preserves the gesture contract and ignores tiny drags", async (
         assert.equal(snapshot.gestureStarts.includes("wavetablePosition"), false);
 
         await clearHarnessDebugLog(page);
+        await showVoiceControls(page);
         await page.click('[aria-label="Glide"]');
         snapshot = await getHarnessSnapshot(page);
         assert.equal(snapshot.gestureStarts.includes("wavetablePosition"), false);
@@ -1489,6 +1495,7 @@ test("keyboard routing lets focused controls claim arrows and still routes note 
         const initialKeyboardDebug = await getKeyboardDebug(page);
         assert.ok(initialKeyboardDebug);
         assert.deepEqual(initialKeyboardDebug.attachCalls, [{ endpointID: "midiIn" }]);
+        await showVoiceControls(page);
 
         await clearHarnessDebugLog(page);
         await page.focus('button:has-text("Poly")');
@@ -1577,6 +1584,7 @@ test("glide widget commits direct edits and blocks note routing while text entry
     const page = await openHarnessPage();
 
     try {
+        await showVoiceControls(page);
         const glideInput = page.locator('[aria-label="Glide"]');
         await glideInput.waitFor();
 
@@ -1613,6 +1621,7 @@ test("voice mode buttons commit the exact discrete playMode values", async () =>
     const page = await openHarnessPage();
 
     try {
+        await showVoiceControls(page);
         await clearHarnessDebugLog(page);
 
         await page.click('button:has-text("Mono")');
@@ -1769,9 +1778,23 @@ test("articulation slots clone current state and recall parameters plus route am
 
     try {
         await page.waitForFunction(() => {
-            const addButton = document.querySelector('button[aria-label="Add articulation"]');
+            const addButton = document.querySelector('button[aria-label="Capture current parameters as a new articulation"]');
             return addButton instanceof HTMLButtonElement && !addButton.disabled;
         });
+        assert.equal(await page.locator('[data-role="articulation-slot-bar"]').count(), 0);
+        assert.equal(await page.locator('[data-role="articulation-control-surface"][data-state="collapsed"]').count(), 1);
+        await page.getByRole("button", { name: "Expand articulation editor" }).click();
+        assert.equal(await page.locator('[data-role="articulation-control-surface"][data-state="expanded"]').count(), 1);
+        await page.getByRole("tab", { name: "Key" }).click();
+        let modeSnapshot = await waitForHarnessSnapshot(
+            page,
+            "articulation trigger mode set to Key",
+            (nextSnapshot) => readStoredArticulationBank(nextSnapshot).activeTriggerMode === "key",
+        );
+        assert.equal(readStoredArticulationBank(modeSnapshot).activeTriggerMode, "key");
+        await page.getByRole("tab", { name: "Chain" }).click();
+        await page.getByRole("button", { name: "Collapse articulation editor" }).click();
+        assert.equal(await page.locator('[data-role="articulation-control-surface"][data-state="collapsed"]').count(), 1);
         await page.evaluate(() => {
             const harness = window.__COSIMO_DESKTOP_HARNESS__;
             harness.setParameterValue("wavetablePosition", 0.66);
@@ -1812,7 +1835,7 @@ test("articulation slots clone current state and recall parameters plus route am
         });
         await waitForReactFrames(page);
 
-        await page.getByRole("button", { name: "Add articulation" }).click();
+        await page.getByRole("button", { name: "Capture current parameters as a new articulation" }).click();
 
         let snapshot = await waitForHarnessSnapshot(
             page,
@@ -1833,9 +1856,9 @@ test("articulation slots clone current state and recall parameters plus route am
                     && Math.abs(Number(routeAmount?.amount) - 0.42) <= 1e-9;
             },
         );
-        assert.equal(await page.locator('[data-role="articulation-slot-button"][data-selector-a="0"]').count(), 1);
+        assert.equal(await page.locator('[data-role="articulation-card"][data-runtime-slot="0"]').count(), 1);
         assert.equal(
-            await page.locator('[data-role="articulation-slot-button"][data-selector-a="0"]').getAttribute("aria-pressed"),
+            await page.locator('[data-role="articulation-card"][data-runtime-slot="0"]').getAttribute("aria-pressed"),
             "true",
         );
         assert.deepEqual(
@@ -1936,7 +1959,7 @@ test("articulation slots clone current state and recall parameters plus route am
         await waitForReactFrames(page);
         await clearHarnessDebugLog(page);
 
-        await page.getByRole("button", { name: "Select articulation Art 1" }).click();
+        await page.locator('[data-role="articulation-card"][data-runtime-slot="0"]').click();
 
         snapshot = await waitForHarnessSnapshot(
             page,
@@ -1988,6 +2011,145 @@ test("articulation slots clone current state and recall parameters plus route am
             targetKind: "filterQ",
             amount: 0.42,
         });
+    } finally {
+        await page.close();
+    }
+});
+
+test("articulation editor exposes insert resize move clear and expanded capture placement", async () => {
+    const page = await openHarnessPage();
+
+    try {
+        await page.waitForFunction(() => {
+            const addButton = document.querySelector('button[aria-label="Capture current parameters as a new articulation"]');
+            return addButton instanceof HTMLButtonElement && !addButton.disabled;
+        });
+
+        const bank = normalizeArticulationBank({
+            selectedSlotId: "bow",
+            activeTriggerMode: "chain",
+            slots: [
+                { id: "bow", runtimeSlot: 0, name: "Bow" },
+                { id: "pluck", runtimeSlot: 1, name: "Pluck" },
+            ],
+            chainAssignments: [
+                { id: "chain-bow-full", articulationId: "bow", min: 0, max: 127 },
+            ],
+        });
+
+        await page.evaluate(({ stateKey, nextBank }) => {
+            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue(stateKey, JSON.stringify(nextBank));
+        }, {
+            stateKey: ARTICULATION_STATE_KEY,
+            nextBank: bank,
+        });
+        await waitForHarnessSnapshot(
+            page,
+            "seeded articulation bank",
+            (nextSnapshot) => readStoredArticulationBank(nextSnapshot).chainAssignments.length === 1,
+        );
+
+        await page.getByRole("button", { name: "Expand articulation editor" }).click();
+        await page.locator('[data-role="articulation-card"][data-articulation-id="pluck"]').click();
+        await page.getByRole("button", { name: "Insert" }).click();
+
+        const lane = page.locator('[data-role="articulation-range-lane"]').first();
+        const laneBox = await lane.boundingBox();
+        assert.notEqual(laneBox, null);
+        await page.mouse.click(laneBox.x + laneBox.width * 0.5, laneBox.y + laneBox.height * 0.5);
+
+        let snapshot = await waitForHarnessSnapshot(
+            page,
+            "range insert split without dead-ending full lane",
+            (nextSnapshot) => {
+                const assignments = readStoredArticulationBank(nextSnapshot).chainAssignments;
+                return assignments.some((assignment) => (
+                    assignment.articulationId === "bow"
+                    && assignment.min === 0
+                    && assignment.max === 63
+                )) && assignments.some((assignment) => (
+                    assignment.articulationId === "pluck"
+                    && assignment.min === 64
+                    && assignment.max === 64
+                ));
+            },
+        );
+        assert.deepEqual(readStoredArticulationBank(snapshot).chainAssignments, [
+            { id: "chain-bow-full", articulationId: "bow", min: 0, max: 63 },
+            { id: "chain-pluck-64", articulationId: "pluck", min: 64, max: 64 },
+        ]);
+
+        const resizeMaxHandle = page
+            .locator('[data-role="articulation-range-segment"][data-articulation-id="pluck"] [data-role="articulation-range-resize-max"]')
+            .first();
+        const resizeBox = await resizeMaxHandle.boundingBox();
+        assert.notEqual(resizeBox, null);
+        await page.mouse.move(resizeBox.x + resizeBox.width * 0.5, resizeBox.y + resizeBox.height * 0.5);
+        await page.mouse.down();
+        await page.mouse.move(laneBox.x + laneBox.width * 0.62, laneBox.y + laneBox.height * 0.5, { steps: 8 });
+        await page.mouse.up();
+
+        snapshot = await waitForHarnessSnapshot(
+            page,
+            "range edge resize",
+            (nextSnapshot) => {
+                const pluck = readStoredArticulationBank(nextSnapshot).chainAssignments
+                    .find((assignment) => assignment.articulationId === "pluck");
+                return pluck?.min === 64 && Number(pluck?.max) > 64;
+            },
+        );
+        const resizedPluck = readStoredArticulationBank(snapshot).chainAssignments
+            .find((assignment) => assignment.articulationId === "pluck");
+        assert.equal(resizedPluck.min, 64);
+        assert.equal(resizedPluck.max > 64, true);
+
+        const pluckSegment = page.locator('[data-role="articulation-range-segment"][data-articulation-id="pluck"]').first();
+        const segmentBox = await pluckSegment.boundingBox();
+        assert.notEqual(segmentBox, null);
+        await page.mouse.move(segmentBox.x + segmentBox.width * 0.5, segmentBox.y + segmentBox.height * 0.5);
+        await page.mouse.down();
+        await page.mouse.move(laneBox.x + laneBox.width * 0.76, laneBox.y + laneBox.height * 0.5, { steps: 10 });
+        await page.mouse.up();
+
+        snapshot = await waitForHarnessSnapshot(
+            page,
+            "range body move",
+            (nextSnapshot) => {
+                const pluck = readStoredArticulationBank(nextSnapshot).chainAssignments
+                    .find((assignment) => assignment.articulationId === "pluck");
+                return Number(pluck?.min) > 64 && Number(pluck?.max) > Number(pluck?.min);
+            },
+        );
+        const movedPluck = readStoredArticulationBank(snapshot).chainAssignments
+            .find((assignment) => assignment.articulationId === "pluck");
+        assert.equal(movedPluck.min > 64, true);
+        assert.equal(movedPluck.max > movedPluck.min, true);
+
+        await page.locator('[data-role="articulation-clear-segment"]').click();
+        snapshot = await waitForHarnessSnapshot(
+            page,
+            "range segment clear",
+            (nextSnapshot) => (
+                !readStoredArticulationBank(nextSnapshot).chainAssignments
+                    .some((assignment) => assignment.articulationId === "pluck")
+            ),
+        );
+        assert.deepEqual(readStoredArticulationBank(snapshot).chainAssignments, [
+            { id: "chain-bow-full", articulationId: "bow", min: 0, max: 63 },
+        ]);
+
+        await page.getByRole("button", { name: "Capture current parameters as a new articulation" }).click();
+        snapshot = await waitForHarnessSnapshot(
+            page,
+            "expanded capture creates without assigning",
+            (nextSnapshot) => {
+                const nextBank = readStoredArticulationBank(nextSnapshot);
+                return nextBank.slots.length === 3
+                    && nextBank.selectedSlotId === "articulation-2"
+                    && !nextBank.chainAssignments.some((assignment) => assignment.articulationId === "articulation-2");
+            },
+        );
+        assert.equal(readStoredArticulationBank(snapshot).slots.length, 3);
     } finally {
         await page.close();
     }
@@ -2071,7 +2233,7 @@ test("opening the synth GUI does not recall or overwrite a stored selected artic
 
     try {
         await page.waitForFunction(() => (
-            document.querySelector('[data-role="articulation-slot-button"][data-selector-a="0"]') instanceof HTMLButtonElement
+            document.querySelector('[data-role="articulation-card"][data-runtime-slot="0"]') instanceof HTMLElement
         ));
         await waitForReactFrames(page, 4);
 

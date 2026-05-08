@@ -43,18 +43,33 @@ import {
     ARTICULATION_STATE_KEY,
     ARTICULATION_TRIGGER_CONFIG_STATE_KEY,
     addCapturedArticulationToBank,
+    assignArticulationToRangePosition,
     articulationBanksEqual,
     articulationSnapshotsEqual,
     buildArticulationTriggerConfig,
+    clearArticulationRangeAssignment,
+    clearArticulationTriggerAssignments,
     createDefaultArticulationBank,
+    deleteArticulationSlot,
+    distributeArticulationRanges,
+    duplicateArticulationSlot,
+    insertArticulationRangeAtPosition,
+    moveArticulationRangeAssignment,
     normalizeArticulationBank,
     normalizeArticulationSnapshot,
+    renameArticulationSlot,
+    resizeArticulationRangeAssignment,
     sendNativeArticulationTriggerConfig,
     serializeArticulationBank,
     serializeArticulationTriggerConfig,
+    setArticulationTriggerMode,
+    upsertSelectedArticulationSnapshot,
     type ArticulationBank,
+    type ArticulationRangeAssignment,
+    type ArticulationRangeEditEdge,
     type ArticulationSlot,
     type ArticulationSnapshot,
+    type ArticulationTriggerMode,
 } from "./articulations";
 import {
     clampDisplayPosition,
@@ -140,6 +155,8 @@ const RUNTIME_SYNC_REQUEST_ENDPOINT_ID = "runtimeSyncRequest";
 const RUNTIME_STATE_ENDPOINT_ID = "runtimeState";
 const RETRY_DESIRED_TABLE_REQUEST_ENDPOINT_ID = "retryDesiredTableRequest";
 const WAVETABLE_PREWARM_REQUEST_ENDPOINT_ID = "wavetablePrewarmRequest";
+const MIDI_INPUT_ENDPOINT_ID = "midiIn";
+const ARTICULATION_AUDITION_NOTES = [36, 48, 60] as const;
 const GLIDE_TIME_MIN_SECONDS = 0;
 const GLIDE_TIME_MAX_SECONDS = 2;
 const GLIDE_TIME_STEP_SECONDS = 0.001;
@@ -247,6 +264,11 @@ export type SynthPatchViewModel = {
     articulationBank: ArticulationBank;
     articulationSlots: ArticulationSlot[];
     selectedArticulationSlot: ArticulationSlot | null;
+    selectedArticulationIsDirty: boolean;
+    discardedArticulationEdit: {
+        slotId: string;
+        slotName: string;
+    } | null;
     hasHydratedArticulations: boolean;
     selectedMsegSlot: number;
     selectedEnvelopeSlot: number;
@@ -261,7 +283,31 @@ export type SynthPatchViewModel = {
     handleRemoveRoute: (routeIndex: number) => void;
     handleRouteChange: (routeIndex: number, nextRoute: ModulationRoute) => void;
     handleAddArticulationSlot: () => void;
+    handleCaptureArticulationSlot: (options?: { autoAssign?: boolean }) => void;
     handleSelectArticulationSlot: (slotId: string) => void;
+    handleUpdateSelectedArticulationSlot: () => void;
+    handleRevertSelectedArticulationSlot: () => void;
+    handleUndoDiscardedArticulationEdit: () => void;
+    handleSetArticulationTriggerMode: (mode: ArticulationTriggerMode) => void;
+    handleAssignArticulationRangePosition: (mode: ArticulationTriggerMode, position: number, articulationId: string) => boolean;
+    handleInsertArticulationRangeAtPosition: (mode: ArticulationTriggerMode, position: number, articulationId: string) => boolean;
+    handleDuplicateAndAssignArticulationRangePosition: (
+        mode: ArticulationTriggerMode,
+        position: number,
+        articulationId: string,
+        operation: "assign" | "insert",
+    ) => boolean;
+    handleMoveArticulationRangeAssignment: (mode: ArticulationTriggerMode, segment: ArticulationRangeAssignment, targetPosition: number) => boolean;
+    handleResizeArticulationRangeAssignment: (mode: ArticulationTriggerMode, segment: ArticulationRangeAssignment, edge: ArticulationRangeEditEdge, position: number) => boolean;
+    handleClearArticulationRangeAssignment: (mode: ArticulationTriggerMode, segment: ArticulationRangeAssignment) => boolean;
+    handleClearArticulationTriggerAssignments: (mode: ArticulationTriggerMode) => void;
+    handleDistributeArticulationRanges: (mode: ArticulationTriggerMode) => void;
+    handleRenameArticulationSlot: (slotId: string, nextName: string) => void;
+    handleDuplicateArticulationSlot: (slotId: string) => void;
+    handleDeleteArticulationSlot: (slotId: string) => void;
+    handleReplaceArticulationSlotWithCurrent: (slotId: string) => void;
+    handleStartArticulationAudition: (slotId: string) => void;
+    handleStopArticulationAudition: (slotId?: string) => void;
     handleSelectWavetable: (nextValue: number) => void;
     handlePrewarmWavetablePicker: () => void;
     handleRetryLoad: () => void;
@@ -583,12 +629,8 @@ export function useModulationState() {
     };
 }
 
-function toStableToken(value: unknown) {
-    try {
-        return JSON.stringify(value);
-    } catch {
-        return String(value);
-    }
+function buildShortMidi(status: number, noteNumber: number, velocity = 0) {
+    return ((status & 0xff) << 16) | ((noteNumber & 0x7f) << 8) | (velocity & 0x7f);
 }
 
 function readFullStoredStateValue(storedState: unknown, key: string) {
@@ -1487,10 +1529,14 @@ export function useSynthPatchViewModel({
         articulationSlots.find((slot) => slot.id === articulationBank.selectedSlotId) ?? null
     ), [articulationBank.selectedSlotId, articulationSlots]);
     const isApplyingArticulationRef = useRef(false);
-    const lastObservedArticulationEditRef = useRef<{
-        selectionToken: string;
-        currentSnapshotToken: string;
+    const [selectedArticulationIsDirty, setSelectedArticulationIsDirty] = useState(false);
+    const [discardedArticulationEdit, setDiscardedArticulationEdit] = useState<{
+        slotId: string;
+        slotName: string;
+        snapshot: ArticulationSnapshot;
     } | null>(null);
+    const activeAuditionRef = useRef<{ slotId: string; note: number } | null>(null);
+    const auditionCycleIndexRef = useRef(0);
     const [selectedMsegSlot, setSelectedMsegSlot] = useState(0);
     const [selectedEnvelopeSlot, setSelectedEnvelopeSlot] = useState(0);
     const displayedMsegControllerRef = useRef<MsegEditorControllerLike | null>(null);
@@ -1844,28 +1890,29 @@ export function useSynthPatchViewModel({
         wavetablePosition,
     ]);
 
-    const handleAddArticulationSlot = useCallback(() => {
+    const handleCaptureArticulationSlot = useCallback((options: { autoAssign?: boolean } = {}) => {
         const snapshot = captureCurrentArticulationSnapshot();
 
         articulationBankState.setAndPersistBank((previousBank) => {
-            const nextBank = addCapturedArticulationToBank(previousBank, snapshot);
-            const nextSlot = nextBank.slots.find((slot) => slot.id === nextBank.selectedSlotId);
+            const nextBank = addCapturedArticulationToBank(previousBank, snapshot, {
+                autoAssign: options.autoAssign ?? true,
+            });
 
-            if (!nextSlot || nextBank.slots.length === previousBank.slots.length) {
+            if (nextBank.slots.length === previousBank.slots.length) {
                 return previousBank;
             }
 
-            const nextSelectionToken = `${nextSlot.id}:${toStableToken(nextSlot.snapshot)}`;
-            lastObservedArticulationEditRef.current = {
-                selectionToken: nextSelectionToken,
-                currentSnapshotToken: nextSelectionToken,
-            };
-
             return nextBank;
         });
+        setSelectedArticulationIsDirty(false);
+        setDiscardedArticulationEdit(null);
     }, [articulationBankState, captureCurrentArticulationSnapshot]);
 
-    const handleSelectArticulationSlot = useCallback((slotId: string) => {
+    const handleAddArticulationSlot = useCallback(() => {
+        handleCaptureArticulationSlot({ autoAssign: true });
+    }, [handleCaptureArticulationSlot]);
+
+    const selectArticulationSlot = useCallback((slotId: string, options: { recordDirtyDiscard?: boolean } = {}) => {
         const bank = articulationBankState.bankRef.current;
         const slot = bank.slots.find((candidate) => candidate.id === slotId);
 
@@ -1873,12 +1920,22 @@ export function useSynthPatchViewModel({
             return;
         }
 
-        const nextApplyToken = `${slot.id}:${toStableToken(slot.snapshot)}`;
+        const previousSlot = bank.slots.find((candidate) => candidate.id === bank.selectedSlotId) ?? null;
+        const shouldRecordDirtyDiscard = options.recordDirtyDiscard !== false
+            && selectedArticulationIsDirty
+            && previousSlot
+            && previousSlot.id !== slot.id;
+
+        if (shouldRecordDirtyDiscard) {
+            setDiscardedArticulationEdit({
+                slotId: previousSlot.id,
+                slotName: previousSlot.name,
+                snapshot: captureCurrentArticulationSnapshot(),
+            });
+        }
+
         isApplyingArticulationRef.current = true;
-        lastObservedArticulationEditRef.current = {
-            selectionToken: nextApplyToken,
-            currentSnapshotToken: nextApplyToken,
-        };
+        setSelectedArticulationIsDirty(false);
         applyArticulationSnapshot(slot.snapshot);
         setTimeout(() => {
             isApplyingArticulationRef.current = false;
@@ -1888,14 +1945,310 @@ export function useSynthPatchViewModel({
             ...previousBank,
             selectedSlotId: slotId,
         }));
+    }, [
+        applyArticulationSnapshot,
+        articulationBankState,
+        captureCurrentArticulationSnapshot,
+        selectedArticulationIsDirty,
+    ]);
+
+    const handleSelectArticulationSlot = useCallback((slotId: string) => {
+        selectArticulationSlot(slotId);
+    }, [selectArticulationSlot]);
+
+    const handleUpdateSelectedArticulationSlot = useCallback(() => {
+        const bank = articulationBankState.bankRef.current;
+        const slotId = bank.selectedSlotId;
+
+        if (!slotId) {
+            return;
+        }
+
+        const snapshot = captureCurrentArticulationSnapshot();
+        articulationBankState.setAndPersistBank((previousBank) => (
+            upsertSelectedArticulationSnapshot(previousBank, slotId, snapshot)
+        ));
+        setSelectedArticulationIsDirty(false);
+        setDiscardedArticulationEdit(null);
+    }, [articulationBankState, captureCurrentArticulationSnapshot]);
+
+    const handleRevertSelectedArticulationSlot = useCallback(() => {
+        const bank = articulationBankState.bankRef.current;
+        const slot = bank.slots.find((candidate) => candidate.id === bank.selectedSlotId);
+
+        if (!slot) {
+            return;
+        }
+
+        if (selectedArticulationIsDirty) {
+            setDiscardedArticulationEdit({
+                slotId: slot.id,
+                slotName: slot.name,
+                snapshot: captureCurrentArticulationSnapshot(),
+            });
+        }
+
+        isApplyingArticulationRef.current = true;
+        setSelectedArticulationIsDirty(false);
+        applyArticulationSnapshot(slot.snapshot);
+        setTimeout(() => {
+            isApplyingArticulationRef.current = false;
+        }, 0);
+    }, [
+        applyArticulationSnapshot,
+        articulationBankState,
+        captureCurrentArticulationSnapshot,
+        selectedArticulationIsDirty,
+    ]);
+
+    const handleUndoDiscardedArticulationEdit = useCallback(() => {
+        const edit = discardedArticulationEdit;
+
+        if (!edit) {
+            return;
+        }
+
+        isApplyingArticulationRef.current = true;
+        setDiscardedArticulationEdit(null);
+        applyArticulationSnapshot(edit.snapshot);
+        articulationBankState.setAndPersistBank((previousBank) => normalizeArticulationBank({
+            ...previousBank,
+            selectedSlotId: edit.slotId,
+        }));
+        setTimeout(() => {
+            isApplyingArticulationRef.current = false;
+            setSelectedArticulationIsDirty(true);
+        }, 0);
+    }, [applyArticulationSnapshot, articulationBankState, discardedArticulationEdit]);
+
+    const handleSetArticulationTriggerMode = useCallback((mode: ArticulationTriggerMode) => {
+        articulationBankState.setAndPersistBank((previousBank) => setArticulationTriggerMode(previousBank, mode));
+    }, [articulationBankState]);
+
+    const updateArticulationBankIfChanged = useCallback((
+        update: (previousBank: ArticulationBank) => ArticulationBank,
+    ) => {
+        const previousBank = articulationBankState.bankRef.current;
+        const nextBank = update(previousBank);
+
+        if (articulationBanksEqual(previousBank, nextBank)) {
+            return false;
+        }
+
+        articulationBankState.setAndPersistBank(nextBank);
+        return true;
+    }, [articulationBankState]);
+
+    const handleAssignArticulationRangePosition = useCallback((
+        mode: ArticulationTriggerMode,
+        position: number,
+        articulationId: string,
+    ) => {
+        return updateArticulationBankIfChanged((previousBank) => (
+            assignArticulationToRangePosition(previousBank, mode, position, articulationId)
+        ));
+    }, [updateArticulationBankIfChanged]);
+
+    const handleInsertArticulationRangeAtPosition = useCallback((
+        mode: ArticulationTriggerMode,
+        position: number,
+        articulationId: string,
+    ) => {
+        return updateArticulationBankIfChanged((previousBank) => (
+            insertArticulationRangeAtPosition(previousBank, mode, position, articulationId)
+        ));
+    }, [updateArticulationBankIfChanged]);
+
+    const handleDuplicateAndAssignArticulationRangePosition = useCallback((
+        mode: ArticulationTriggerMode,
+        position: number,
+        articulationId: string,
+        operation: "assign" | "insert",
+    ) => {
+        const previousBank = articulationBankState.bankRef.current;
+        const duplicatedBank = duplicateArticulationSlot(previousBank, articulationId);
+        const nextSlotId = duplicatedBank.selectedSlotId;
+
+        if (
+            articulationBanksEqual(previousBank, duplicatedBank)
+            || !nextSlotId
+        ) {
+            return false;
+        }
+
+        const assignedBank = operation === "insert"
+            ? insertArticulationRangeAtPosition(duplicatedBank, mode, position, nextSlotId)
+            : assignArticulationToRangePosition(duplicatedBank, mode, position, nextSlotId);
+
+        if (articulationBanksEqual(duplicatedBank, assignedBank)) {
+            return false;
+        }
+
+        const nextSlot = assignedBank.slots.find((slot) => slot.id === nextSlotId);
+        articulationBankState.setAndPersistBank(assignedBank);
+
+        if (nextSlot) {
+            isApplyingArticulationRef.current = true;
+            setSelectedArticulationIsDirty(false);
+            applyArticulationSnapshot(nextSlot.snapshot);
+            setTimeout(() => {
+                isApplyingArticulationRef.current = false;
+            }, 0);
+        }
+
+        return true;
     }, [applyArticulationSnapshot, articulationBankState]);
+
+    const handleMoveArticulationRangeAssignment = useCallback((
+        mode: ArticulationTriggerMode,
+        segment: ArticulationRangeAssignment,
+        targetPosition: number,
+    ) => {
+        return updateArticulationBankIfChanged((previousBank) => (
+            moveArticulationRangeAssignment(previousBank, mode, segment, targetPosition)
+        ));
+    }, [updateArticulationBankIfChanged]);
+
+    const handleResizeArticulationRangeAssignment = useCallback((
+        mode: ArticulationTriggerMode,
+        segment: ArticulationRangeAssignment,
+        edge: ArticulationRangeEditEdge,
+        position: number,
+    ) => {
+        return updateArticulationBankIfChanged((previousBank) => (
+            resizeArticulationRangeAssignment(previousBank, mode, segment, edge, position)
+        ));
+    }, [updateArticulationBankIfChanged]);
+
+    const handleClearArticulationRangeAssignment = useCallback((
+        mode: ArticulationTriggerMode,
+        segment: ArticulationRangeAssignment,
+    ) => {
+        return updateArticulationBankIfChanged((previousBank) => (
+            clearArticulationRangeAssignment(previousBank, mode, segment)
+        ));
+    }, [updateArticulationBankIfChanged]);
+
+    const handleClearArticulationTriggerAssignments = useCallback((mode: ArticulationTriggerMode) => {
+        articulationBankState.setAndPersistBank((previousBank) => clearArticulationTriggerAssignments(previousBank, mode));
+    }, [articulationBankState]);
+
+    const handleDistributeArticulationRanges = useCallback((mode: ArticulationTriggerMode) => {
+        articulationBankState.setAndPersistBank((previousBank) => distributeArticulationRanges(previousBank, mode));
+    }, [articulationBankState]);
+
+    const handleRenameArticulationSlot = useCallback((slotId: string, nextName: string) => {
+        articulationBankState.setAndPersistBank((previousBank) => (
+            renameArticulationSlot(previousBank, slotId, nextName)
+        ));
+    }, [articulationBankState]);
+
+    const handleReplaceArticulationSlotWithCurrent = useCallback((slotId: string) => {
+        const snapshot = captureCurrentArticulationSnapshot();
+        articulationBankState.setAndPersistBank((previousBank) => (
+            upsertSelectedArticulationSnapshot(previousBank, slotId, snapshot)
+        ));
+
+        if (articulationBankState.bankRef.current.selectedSlotId === slotId) {
+            setSelectedArticulationIsDirty(false);
+        }
+    }, [articulationBankState, captureCurrentArticulationSnapshot]);
+
+    const handleDuplicateArticulationSlot = useCallback((slotId: string) => {
+        const nextBank = duplicateArticulationSlot(articulationBankState.bankRef.current, slotId);
+        const nextSlot = nextBank.slots.find((slot) => slot.id === nextBank.selectedSlotId);
+
+        articulationBankState.setAndPersistBank(nextBank);
+
+        if (nextSlot) {
+            isApplyingArticulationRef.current = true;
+            setSelectedArticulationIsDirty(false);
+            applyArticulationSnapshot(nextSlot.snapshot);
+            setTimeout(() => {
+                isApplyingArticulationRef.current = false;
+            }, 0);
+        }
+    }, [applyArticulationSnapshot, articulationBankState]);
+
+    const handleDeleteArticulationSlot = useCallback((slotId: string) => {
+        const previousBank = articulationBankState.bankRef.current;
+        const nextBank = deleteArticulationSlot(previousBank, slotId);
+        const selectedChanged = nextBank.selectedSlotId !== previousBank.selectedSlotId;
+        const nextSlot = nextBank.slots.find((slot) => slot.id === nextBank.selectedSlotId);
+
+        articulationBankState.setAndPersistBank(nextBank);
+
+        if (selectedChanged && nextSlot) {
+            isApplyingArticulationRef.current = true;
+            setSelectedArticulationIsDirty(false);
+            applyArticulationSnapshot(nextSlot.snapshot);
+            setTimeout(() => {
+                isApplyingArticulationRef.current = false;
+            }, 0);
+        }
+    }, [applyArticulationSnapshot, articulationBankState]);
+
+    const sendMidiInputEvent = useCallback((status: number, note: number, velocity = 0) => {
+        patchConnection.sendMIDIInputEvent?.(MIDI_INPUT_ENDPOINT_ID, buildShortMidi(status, note, velocity));
+    }, [patchConnection]);
+
+    const handleStopArticulationAudition = useCallback((slotId?: string) => {
+        const activeAudition = activeAuditionRef.current;
+
+        if (!activeAudition || (slotId && activeAudition.slotId !== slotId)) {
+            return;
+        }
+
+        sendMidiInputEvent(0x80, activeAudition.note, 0);
+        activeAuditionRef.current = null;
+    }, [sendMidiInputEvent]);
+
+    const handleStartArticulationAudition = useCallback((slotId: string) => {
+        handleStopArticulationAudition();
+        selectArticulationSlot(slotId);
+
+        const note = ARTICULATION_AUDITION_NOTES[
+            auditionCycleIndexRef.current % ARTICULATION_AUDITION_NOTES.length
+        ];
+        auditionCycleIndexRef.current += 1;
+        activeAuditionRef.current = { slotId, note };
+        sendMidiInputEvent(0x90, note, 100);
+    }, [handleStopArticulationAudition, selectArticulationSlot, sendMidiInputEvent]);
+
+    useEffect(() => {
+        const handleWindowBlur = () => handleStopArticulationAudition();
+        const handleKeyDown = (event: KeyboardEvent) => {
+            if (event.key === "Escape") {
+                handleStopArticulationAudition();
+            }
+        };
+
+        window.addEventListener("blur", handleWindowBlur);
+        window.addEventListener("keydown", handleKeyDown);
+        return () => {
+            window.removeEventListener("blur", handleWindowBlur);
+            window.removeEventListener("keydown", handleKeyDown);
+        };
+    }, [handleStopArticulationAudition]);
+
+    useEffect(() => () => {
+        const activeAudition = activeAuditionRef.current;
+
+        if (activeAudition) {
+            patchConnection.sendMIDIInputEvent?.(
+                MIDI_INPUT_ENDPOINT_ID,
+                buildShortMidi(0x80, activeAudition.note, 0),
+            );
+            activeAuditionRef.current = null;
+        }
+    }, [patchConnection]);
 
     useEffect(() => {
         if (
             !articulationBankState.hasHydrated
             || !selectedArticulationSlot
         ) {
-            lastObservedArticulationEditRef.current = null;
+            setSelectedArticulationIsDirty(false);
             return;
         }
 
@@ -1903,40 +2256,11 @@ export function useSynthPatchViewModel({
             return;
         }
 
-        const selectionToken = `${selectedArticulationSlot.id}:${toStableToken(selectedArticulationSlot.snapshot)}`;
         const currentSnapshot = captureCurrentArticulationSnapshot();
-        const currentSnapshotToken = `${selectedArticulationSlot.id}:${toStableToken(currentSnapshot)}`;
-        const lastObservedEdit = lastObservedArticulationEditRef.current;
-
-        if (!lastObservedEdit || lastObservedEdit.selectionToken !== selectionToken) {
-            lastObservedArticulationEditRef.current = {
-                selectionToken,
-                currentSnapshotToken,
-            };
-            return;
-        }
-
-        if (lastObservedEdit.currentSnapshotToken === currentSnapshotToken) {
-            return;
-        }
-
-        lastObservedArticulationEditRef.current = {
-            selectionToken: currentSnapshotToken,
-            currentSnapshotToken,
-        };
-
-        if (articulationSnapshotsEqual(selectedArticulationSlot.snapshot, currentSnapshot)) {
-            return;
-        }
-
-        articulationBankState.setAndPersistBank((previousBank) => normalizeArticulationBank({
-            ...previousBank,
-            slots: previousBank.slots.map((slot) => (
-                slot.id === selectedArticulationSlot.id
-                    ? { ...slot, snapshot: currentSnapshot }
-                    : slot
-            )),
-        }));
+        const isDirty = !articulationSnapshotsEqual(selectedArticulationSlot.snapshot, currentSnapshot);
+        setSelectedArticulationIsDirty((previousValue) => (
+            previousValue === isDirty ? previousValue : isDirty
+        ));
     }, [
         articulationBankState,
         captureCurrentArticulationSnapshot,
@@ -2019,6 +2343,13 @@ export function useSynthPatchViewModel({
         articulationBank,
         articulationSlots,
         selectedArticulationSlot,
+        selectedArticulationIsDirty,
+        discardedArticulationEdit: discardedArticulationEdit
+            ? {
+                slotId: discardedArticulationEdit.slotId,
+                slotName: discardedArticulationEdit.slotName,
+            }
+            : null,
         hasHydratedArticulations: articulationBankState.hasHydrated,
         selectedMsegSlot,
         selectedEnvelopeSlot,
@@ -2033,7 +2364,26 @@ export function useSynthPatchViewModel({
         handleRemoveRoute,
         handleRouteChange,
         handleAddArticulationSlot,
+        handleCaptureArticulationSlot,
         handleSelectArticulationSlot,
+        handleUpdateSelectedArticulationSlot,
+        handleRevertSelectedArticulationSlot,
+        handleUndoDiscardedArticulationEdit,
+        handleSetArticulationTriggerMode,
+        handleAssignArticulationRangePosition,
+        handleInsertArticulationRangeAtPosition,
+        handleDuplicateAndAssignArticulationRangePosition,
+        handleMoveArticulationRangeAssignment,
+        handleResizeArticulationRangeAssignment,
+        handleClearArticulationRangeAssignment,
+        handleClearArticulationTriggerAssignments,
+        handleDistributeArticulationRanges,
+        handleRenameArticulationSlot,
+        handleDuplicateArticulationSlot,
+        handleDeleteArticulationSlot,
+        handleReplaceArticulationSlotWithCurrent,
+        handleStartArticulationAudition,
+        handleStopArticulationAudition,
         handleSelectWavetable,
         handlePrewarmWavetablePicker,
         handleRetryLoad,

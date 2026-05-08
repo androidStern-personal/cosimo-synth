@@ -1070,6 +1070,24 @@ function buildModulationRuntimeEvents(stateValue) {
 const ARTICULATION_STATE_KEY = "articulations.v2";
 const ARTICULATION_SNAPSHOT_ENDPOINT_ID = "articulationSnapshot";
 const ARTICULATION_MAX_SLOTS = 128;
+const ARTICULATION_DEFAULT_NAMES = [
+  "Bow Forte",
+  "Bow Pianissimo",
+  "Pluck Round",
+  "Pluck Snap",
+  "Hammer",
+  "Air Pad",
+  "Bell Strike",
+  "Choke",
+  "Tape Hum",
+  "Curl Lift",
+  "Chatter",
+  "Tug Sustain",
+  "Velvet Pop",
+  "Chrome Bloom",
+  "Tin Halo",
+  "Sugar Gate"
+];
 function clamp$1(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
@@ -1085,6 +1103,12 @@ function normalizeInteger(value, fallback, min, max) {
 }
 function normalizeTriggerMode(value) {
   return value === "key" || value === "vel" || value === "chain" ? value : "chain";
+}
+function createDefaultArticulationName(runtimeSlot) {
+  const safeRuntimeSlot = normalizeInteger(runtimeSlot, 0, 0, ARTICULATION_MAX_SLOTS - 1);
+  const baseName = ARTICULATION_DEFAULT_NAMES[safeRuntimeSlot % ARTICULATION_DEFAULT_NAMES.length];
+  const cycleIndex = Math.floor(safeRuntimeSlot / ARTICULATION_DEFAULT_NAMES.length);
+  return cycleIndex === 0 ? baseName : `${baseName} ${cycleIndex + 1}`;
 }
 function createDefaultArticulationParameterSnapshot() {
   return {
@@ -1190,7 +1214,7 @@ function normalizeArticulationSlot(value, fallbackRuntimeSlot) {
   const nextValue = value;
   const runtimeSlot = normalizeInteger(nextValue.runtimeSlot, fallbackRuntimeSlot, 0, ARTICULATION_MAX_SLOTS - 1);
   const id = typeof nextValue.id === "string" && nextValue.id.trim() ? nextValue.id.trim() : `articulation-${runtimeSlot}`;
-  const name = typeof nextValue.name === "string" && nextValue.name.trim() ? nextValue.name.trim() : `Art ${runtimeSlot + 1}`;
+  const name = typeof nextValue.name === "string" && nextValue.name.trim() ? nextValue.name.trim() : createDefaultArticulationName(runtimeSlot);
   return {
     id,
     runtimeSlot,
