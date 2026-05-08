@@ -11,10 +11,14 @@ from bench import render_mseg_reference
 from tests.helpers.generate_warp_reference_assets import (
     DEFAULT_SAMPLE_RATE,
     FIXTURE_ROOT as _WARP_FIXTURE_ROOT,
+    MIP_LEVEL_COUNT,
     FixedASREnvelope,
     TRIM_GAIN,
     _decode_note_segments,
+    _build_mip_frame,
+    _expand_fixture_uploaded_mips,
     _expand_value_curve,
+    _formula_mip_index_for_frequency,
     _frame_position_to_indices,
     _load_mseg_buffer,
     _load_mseg_playback,
@@ -44,6 +48,14 @@ FILTER_CASE_OUTPUT_SAMPLES = {
     "fast_mseg_cutoff_motion_lowpass": 4096,
     "fast_mseg_cutoff_motion_bandpass": 4096,
     "fast_mseg_cutoff_motion_peak_high_q": 4096,
+}
+
+NATIVE_PRODUCTION_GOLDEN_CASES = {
+    "mseg_lowpass_pluck",
+    "two_voice_staggered_mseg",
+    "fast_mseg_cutoff_motion_lowpass",
+    "fast_mseg_cutoff_motion_bandpass",
+    "fast_mseg_cutoff_motion_peak_high_q",
 }
 
 FILTER_MODE_OFF = 0
@@ -132,8 +144,13 @@ def _clamp_filter_q(q: float) -> float:
 
 def _load_bank_from_fixture(fixture_dir: Path) -> SingleMipBank:
     raw_frames = _load_raw_frames_from_fixture(fixture_dir)
-    padded = np.stack([_pad_frame(frame) for frame in raw_frames], axis=0).astype(np.float32, copy=False)
-    padded_mips = np.expand_dims(padded, axis=0)
+    padded_mips = np.stack(
+        [
+            np.stack([_pad_frame(_build_mip_frame(frame, mip_index)) for frame in raw_frames], axis=0)
+            for mip_index in range(MIP_LEVEL_COUNT)
+        ],
+        axis=0,
+    ).astype(np.float32, copy=False)
     return SingleMipBank(padded_mips=padded_mips, num_frames=int(raw_frames.shape[0]))
 
 
@@ -199,15 +216,17 @@ def _read_oscillator_sample(
     bank: SingleMipBank,
     *,
     frame_position: float,
+    frequency_hz: float,
     phase: float,
 ) -> float:
+    mip_index = _formula_mip_index_for_frequency(frequency_hz, DEFAULT_SAMPLE_RATE)
     frame_lo, frame_hi, frame_t = _frame_position_to_indices(frame_position, bank.num_frames)
-    lo = _read_bank_frame_sample32(bank, frame_index=frame_lo, mip_index=0, phase=phase)
+    lo = _read_bank_frame_sample32(bank, frame_index=frame_lo, mip_index=mip_index, phase=phase)
 
     if frame_hi == frame_lo:
         return float(np.float32(lo))
 
-    hi = _read_bank_frame_sample32(bank, frame_index=frame_hi, mip_index=0, phase=phase)
+    hi = _read_bank_frame_sample32(bank, frame_index=frame_hi, mip_index=mip_index, phase=phase)
     return float(np.float32(lo + np.float32((hi - lo) * np.float32(frame_t))))
 
 
@@ -254,7 +273,12 @@ def render_filter_reference_audio(fixture_dir: Path, *, num_samples: int) -> np.
                 np.float32(0.0),
                 np.float32(1.0),
             ))
-            sample = np.float32(_read_oscillator_sample(bank, frame_position=frame_position, phase=float(phase)))
+            sample = np.float32(_read_oscillator_sample(
+                bank,
+                frame_position=frame_position,
+                frequency_hz=float(frequency_hz),
+                phase=float(phase),
+            ))
 
             filter_mode = _resolve_filter_mode(float(filter_mode_curve[sample_index]))
             base_cutoff_hz = _clamp_filter_cutoff_hz(float(filter_cutoff_curve[sample_index]), DEFAULT_SAMPLE_RATE)
@@ -282,12 +306,31 @@ def render_filter_reference_audio(fixture_dir: Path, *, num_samples: int) -> np.
 def main() -> None:
     parser = argparse.ArgumentParser(description="Generate checked-in filter reference WAVs.")
     parser.add_argument("--fixture", action="append", default=[], help="Specific fixture name(s) to refresh.")
+    parser.add_argument(
+        "--expand-only",
+        action="store_true",
+        help="rewrite wavetableMipFrame.json fixtures to contain the full uploaded mip pyramid, then exit",
+    )
     args = parser.parse_args()
 
     fixture_names = args.fixture or sorted(FILTER_CASE_OUTPUT_SAMPLES.keys())
 
     for fixture_name in fixture_names:
         fixture_dir = FIXTURE_ROOT / fixture_name
+        if (fixture_dir / "wavetableMipFrame.json").exists() and (fixture_dir / "wavetableLoadBegin.json").exists():
+            _expand_fixture_uploaded_mips(fixture_dir)
+
+    if args.expand_only:
+        return
+
+    for fixture_name in fixture_names:
+        fixture_dir = FIXTURE_ROOT / fixture_name
+        if fixture_name in NATIVE_PRODUCTION_GOLDEN_CASES:
+            audio_path = fixture_dir / "expectedOutput-audioOut.wav"
+            if not audio_path.exists():
+                raise FileNotFoundError(f"Missing native production golden audio for filter case: {audio_path}")
+            continue
+
         num_samples = FILTER_CASE_OUTPUT_SAMPLES[fixture_name]
         audio = render_filter_reference_audio(fixture_dir, num_samples=num_samples)
         _write_reference_wav(fixture_dir / "expectedOutput-audioOut.wav", audio)

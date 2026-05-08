@@ -62,6 +62,10 @@ NEUTRAL_BASELINE_CASES = {
     "neutral_equals_off_pwm": "identity_sine",
 }
 
+NATIVE_PRODUCTION_GOLDEN_CASES = {
+    "poly_warp_mseg_staggered",
+}
+
 
 @dataclass(frozen=True, slots=True)
 class MidiEvent:
@@ -1239,6 +1243,10 @@ def main() -> None:
             if not baseline_audio.exists():
                 raise FileNotFoundError(f"Missing baseline audio for neutral warp case: {baseline_audio}")
             (fixture_dir / "expectedOutput-audioOut.wav").write_bytes(baseline_audio.read_bytes())
+        elif case_name in NATIVE_PRODUCTION_GOLDEN_CASES:
+            production_audio = fixture_dir / "expectedOutput-audioOut.wav"
+            if not production_audio.exists():
+                raise FileNotFoundError(f"Missing native production golden audio for warp case: {production_audio}")
         else:
             alias_num_samples = ALIAS_REFERENCE_SAMPLES.get(case_name, output_num_samples)
             production_audio = _render_production_warp_reference(fixture_dir, num_samples=output_num_samples)

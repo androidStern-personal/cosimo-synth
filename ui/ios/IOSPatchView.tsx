@@ -1070,6 +1070,7 @@ const IOSWavetablePanel = memo(function IOSWavetablePanel({
     wavetableFocusBindings,
     wavetablePosition,
     onSelectWavetable,
+    onPrewarmWavetablePicker,
     onRetryLoad,
 }: {
     stageRef: RefObject<HTMLDivElement | null>;
@@ -1089,6 +1090,7 @@ const IOSWavetablePanel = memo(function IOSWavetablePanel({
     wavetableFocusBindings: ReturnType<typeof useSynthPatchViewModel>["keyboardRouting"]["wavetableFocusBindings"];
     wavetablePosition: ReturnType<typeof useSynthPatchViewModel>["wavetablePosition"];
     onSelectWavetable: (nextValue: number) => void;
+    onPrewarmWavetablePicker: () => void;
     onRetryLoad: () => void;
 }) {
     const activeStageGestureRef = useRef<ActiveStageGesture | null>(null);
@@ -1230,7 +1232,11 @@ const IOSWavetablePanel = memo(function IOSWavetablePanel({
                     </div>
                     <div />
                     <div className="stage-copy-row">
-                        <label className="bank-picker-trigger">
+                        <label
+                            className="bank-picker-trigger"
+                            onFocus={onPrewarmWavetablePicker}
+                            onPointerEnter={onPrewarmWavetablePicker}
+                        >
                             <div className="bank-readout">{bankReadout}</div>
                             <select
                                 className="table-select table-select-overlay"
@@ -1406,6 +1412,7 @@ function IOSPatchViewBody() {
                                 wavetableFocusBindings={synthView.keyboardRouting.wavetableFocusBindings}
                                 wavetablePosition={synthView.wavetablePosition}
                                 onSelectWavetable={handleSelectWavetable}
+                                onPrewarmWavetablePicker={synthView.handlePrewarmWavetablePicker}
                                 onRetryLoad={synthView.handleRetryLoad}
                             />
 
