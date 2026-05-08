@@ -107,12 +107,16 @@ const MODE_OPTIONS: ReadonlyArray<{ mode: ArticulationTriggerMode; label: string
     { mode: "vel", label: "Vel" },
 ];
 
-const PILL_BASE = "inline-flex h-7 shrink-0 items-center gap-1.5 rounded-[8px] border px-2.5 text-[10px] font-bold uppercase tracking-[0.12em] transition";
-const PILL_NEUTRAL = "border-white/[0.06] bg-white/[0.025] text-slate-300/72 hover:border-white/15 hover:text-slate-100";
-const PILL_AMBER_ACTIVE = "border-amber-200/30 bg-amber-300/12 text-amber-100";
-const PILL_CYAN = "border-cyan-300/18 bg-cyan-300/8 text-cyan-100/85 hover:border-cyan-200/30 hover:bg-cyan-300/14";
-const PILL_PINK = "border-pink-300/22 bg-pink-300/10 text-pink-100/85 hover:border-pink-200/35 hover:bg-pink-300/16";
-const FRAME_CLASS = "rounded-[14px] border border-white/[0.06] bg-white/[0.022]";
+const PILL_BASE = "inline-flex h-7 shrink-0 items-center gap-1.5 rounded-[8px] border px-2.5 text-[10px] font-bold uppercase tracking-[0.12em] transition focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-200/45 focus-visible:ring-offset-0";
+const PILL_NEUTRAL = "border-white/[0.06] bg-white/[0.025] text-slate-300/72 hover:border-white/15 hover:bg-white/[0.04] hover:text-slate-100 active:bg-white/[0.06]";
+const PILL_AMBER_ACTIVE = "border-amber-200/35 bg-amber-300/12 text-amber-100 shadow-[inset_0_-1px_0_rgba(251,191,36,0.22)]";
+const PILL_CYAN = "border-cyan-300/20 bg-cyan-300/8 text-cyan-100/90 hover:border-cyan-200/32 hover:bg-cyan-300/14 active:bg-cyan-300/20";
+const PILL_PINK = "border-pink-300/24 bg-pink-300/10 text-pink-100/90 hover:border-pink-200/38 hover:bg-pink-300/16 active:bg-pink-300/22";
+const FRAME_CLASS = "rounded-[14px] border border-white/[0.06] bg-white/[0.022] shadow-[inset_0_1px_0_rgba(255,255,255,0.025)]";
+const SEGMENTED_GROUP_CLASS = "inline-flex h-7 shrink-0 items-center gap-0.5 rounded-[8px] border border-white/[0.06] bg-white/[0.022] p-0.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.02)]";
+const SEGMENTED_BUTTON_BASE = "h-6 rounded-[6px] px-2.5 text-[10px] font-bold uppercase tracking-[0.14em] transition focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-200/45";
+const SEGMENTED_BUTTON_ACTIVE = "bg-amber-300/14 text-amber-100 shadow-[inset_0_-1px_0_rgba(251,191,36,0.24)]";
+const SEGMENTED_BUTTON_INACTIVE = "text-slate-300/65 hover:text-slate-100";
 
 function joinClasses(...classes: Array<string | false | null | undefined>) {
     return classes.filter(Boolean).join(" ");
@@ -481,11 +485,17 @@ function ArticulationCard({
     }, [card.id, clearLongPressTimer, onOpenMenu]);
 
     const containerClass = joinClasses(
-        "group relative flex w-[148px] shrink-0 flex-col gap-1.5 rounded-[10px] border px-2 py-1.5 transition cursor-grab active:cursor-grabbing",
+        "group relative flex w-[152px] shrink-0 flex-col gap-1.5 rounded-[10px] border py-1.5 pl-2.5 pr-2 transition cursor-grab active:cursor-grabbing focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-200/45",
         card.isSelected
-            ? "border-amber-200/35 bg-amber-300/[0.06]"
-            : "border-white/[0.06] bg-white/[0.025] hover:border-white/15 hover:bg-white/[0.04]",
+            ? "border-amber-200/40 bg-amber-300/[0.05]"
+            : "border-white/[0.07] bg-white/[0.022] hover:border-white/15 hover:bg-white/[0.038]",
     );
+
+    const containerStyle: CSSProperties = {
+        boxShadow: card.isSelected
+            ? `inset 2px 0 0 ${card.color}, inset 0 1px 0 rgba(251,191,36,0.16), 0 1px 0 rgba(0,0,0,0.2)`
+            : `inset 2px 0 0 ${card.color}, inset 0 1px 0 rgba(255,255,255,0.03)`,
+    };
 
     return (
         <div
@@ -516,13 +526,14 @@ function ArticulationCard({
                 }
             }}
             className={containerClass}
+            style={containerStyle}
         >
             <div className="flex items-center gap-1.5">
                 <ColorDot color={card.color} />
                 <span className="min-w-0 flex-1 truncate text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-100/90">
                     {card.name}
                 </span>
-                <span className="font-mono text-[9px] text-slate-300/40">
+                <span className="font-mono text-[9px] tabular-nums text-slate-300/45">
                     {formatRuntimeSlot(card.runtimeSlot)}
                 </span>
                 <button
@@ -535,16 +546,16 @@ function ArticulationCard({
                     onPointerCancel={handlePlayUp}
                     onPointerLeave={handlePlayUp}
                     onClick={(event) => event.stopPropagation()}
-                    className="flex h-5 w-5 shrink-0 items-center justify-center rounded-[5px] border border-cyan-300/16 bg-cyan-300/8 text-cyan-100/85 transition hover:border-cyan-200/30 hover:bg-cyan-300/16 active:bg-cyan-300/26"
+                    className="flex h-5 w-5 shrink-0 items-center justify-center rounded-[5px] border border-cyan-300/20 bg-cyan-300/8 text-cyan-100/90 transition hover:border-cyan-200/35 hover:bg-cyan-300/18 active:scale-[0.94] active:bg-cyan-300/26 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-200/45"
                 >
                     <PlayGlyph />
                 </button>
             </div>
             <div className="grid grid-cols-2 gap-1">
-                <div className="h-9 overflow-hidden rounded-[5px] border border-white/[0.05]">
+                <div className="h-9 overflow-hidden rounded-[5px] border border-white/[0.05] bg-black/20 shadow-[inset_0_1px_2px_rgba(0,0,0,0.4)]">
                     <MsegThumbnail points={card.msegPoints} color={card.color} />
                 </div>
-                <div className="h-9 overflow-hidden rounded-[5px] border border-white/[0.05]">
+                <div className="h-9 overflow-hidden rounded-[5px] border border-white/[0.05] bg-black/20 shadow-[inset_0_1px_2px_rgba(0,0,0,0.4)]">
                     <GainEnvelopeThumbnail envelope={card.gainEnvelope} color={card.color} />
                 </div>
             </div>
@@ -556,7 +567,7 @@ function ArticulationCard({
                     <span
                         aria-label="Modified"
                         title="Modified"
-                        className="h-1.5 w-1.5 shrink-0 rounded-full bg-pink-300/85"
+                        className="h-1.5 w-1.5 shrink-0 rounded-full bg-pink-300/90 shadow-[0_0_4px_rgba(244,114,182,0.55)]"
                     />
                 ) : null}
             </div>
@@ -584,10 +595,10 @@ function ArticulationCardCarousel({
     return (
         <div
             data-role="articulation-card-carousel"
-            className="flex min-w-0 flex-1 items-stretch gap-1.5 overflow-x-auto overflow-y-hidden py-0.5 [scrollbar-width:thin]"
+            className="flex min-w-0 flex-1 items-stretch gap-1.5 overflow-x-auto overflow-y-hidden py-0.5 [scrollbar-color:rgba(255,255,255,0.12)_transparent] [scrollbar-width:thin]"
         >
             {cards.length === 0 ? (
-                <div className="flex h-[88px] items-center justify-center px-2 text-[10px] uppercase tracking-[0.18em] text-slate-300/40">
+                <div className="flex h-[88px] flex-1 items-center justify-center rounded-[10px] border border-dashed border-white/[0.07] bg-white/[0.012] px-3 text-[10px] uppercase tracking-[0.2em] text-slate-300/40">
                     No Articulations
                 </div>
             ) : null}
@@ -617,7 +628,7 @@ function ModeSegmentedControl({
         <div
             role="tablist"
             aria-label="Articulation trigger mode"
-            className="inline-flex h-7 items-center gap-1 rounded-[8px] border border-white/[0.06] bg-white/[0.022] p-0.5"
+            className={SEGMENTED_GROUP_CLASS}
         >
             {MODE_OPTIONS.map((option) => {
                 const isActive = option.mode === activeMode;
@@ -631,10 +642,8 @@ function ModeSegmentedControl({
                         data-mode={option.mode}
                         onClick={() => onSelectMode(option.mode)}
                         className={joinClasses(
-                            "h-6 rounded-[6px] px-2.5 text-[10px] font-bold uppercase tracking-[0.14em] transition",
-                            isActive
-                                ? "bg-amber-300/14 text-amber-100"
-                                : "text-slate-300/65 hover:text-slate-100",
+                            SEGMENTED_BUTTON_BASE,
+                            isActive ? SEGMENTED_BUTTON_ACTIVE : SEGMENTED_BUTTON_INACTIVE,
                         )}
                     >
                         {option.label}
@@ -964,63 +973,74 @@ function ArticulationRangeLane({
     }, [maxValue, minValue, visibleSegments]);
 
     return (
-        <div className={joinClasses(FRAME_CLASS, "flex flex-col gap-2 px-3 py-2")}>
-            <div className="flex items-center justify-between gap-3">
+        <div className={joinClasses(FRAME_CLASS, "flex flex-col gap-2 px-3 py-2.5")}>
+            <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
-                    <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-300/55">
+                    <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-100/75">
                         {label}
                     </span>
-                    <span className="font-mono text-[9px] uppercase tracking-[0.16em] text-slate-300/35">
+                    <span className="rounded-[5px] border border-white/[0.05] bg-black/20 px-1.5 py-px font-mono text-[9px] tabular-nums uppercase tracking-[0.14em] text-slate-300/55 shadow-[inset_0_1px_2px_rgba(0,0,0,0.35)]">
                         {`${segments.length} / ${totalSlots}`}
                     </span>
                 </div>
-                <div className="flex items-center gap-1.5">
-                    <button
-                        type="button"
-                        aria-pressed={editMode === "assign"}
-                        onClick={() => setEditMode("assign")}
-                        className={joinClasses(PILL_BASE, editMode === "assign" ? PILL_AMBER_ACTIVE : PILL_NEUTRAL)}
-                        data-role="articulation-lane-assign-mode"
-                    >
-                        Assign
-                    </button>
-                    <button
-                        type="button"
-                        aria-pressed={editMode === "insert"}
-                        onClick={() => setEditMode("insert")}
-                        className={joinClasses(PILL_BASE, editMode === "insert" ? PILL_AMBER_ACTIVE : PILL_NEUTRAL)}
-                        data-role="articulation-lane-insert-mode"
-                    >
-                        Insert
-                    </button>
-                    {selectedSegment ? (
+                <div className="flex items-center gap-2">
+                    <div role="group" aria-label="Range edit mode" className={SEGMENTED_GROUP_CLASS}>
                         <button
                             type="button"
-                            onClick={() => runEdit(onClearSegment(mode, selectedSegment))}
-                            className={joinClasses(PILL_BASE, PILL_PINK)}
-                            data-role="articulation-clear-segment"
+                            aria-pressed={editMode === "assign"}
+                            onClick={() => setEditMode("assign")}
+                            className={joinClasses(
+                                SEGMENTED_BUTTON_BASE,
+                                editMode === "assign" ? SEGMENTED_BUTTON_ACTIVE : SEGMENTED_BUTTON_INACTIVE,
+                            )}
+                            data-role="articulation-lane-assign-mode"
                         >
-                            Clear
+                            Assign
                         </button>
-                    ) : null}
-                    <button
-                        type="button"
-                        onClick={() => onClearAll(mode)}
-                        className={joinClasses(PILL_BASE, PILL_NEUTRAL)}
-                        data-role="articulation-clear-all"
-                    >
-                        Clear All
-                    </button>
-                    {onDistribute ? (
                         <button
                             type="button"
-                            onClick={() => onDistribute(mode)}
+                            aria-pressed={editMode === "insert"}
+                            onClick={() => setEditMode("insert")}
+                            className={joinClasses(
+                                SEGMENTED_BUTTON_BASE,
+                                editMode === "insert" ? SEGMENTED_BUTTON_ACTIVE : SEGMENTED_BUTTON_INACTIVE,
+                            )}
+                            data-role="articulation-lane-insert-mode"
+                        >
+                            Insert
+                        </button>
+                    </div>
+                    <span aria-hidden="true" className="h-5 w-px shrink-0 bg-white/[0.06]" />
+                    <div className="flex items-center gap-1.5">
+                        {selectedSegment ? (
+                            <button
+                                type="button"
+                                onClick={() => runEdit(onClearSegment(mode, selectedSegment))}
+                                className={joinClasses(PILL_BASE, PILL_PINK)}
+                                data-role="articulation-clear-segment"
+                            >
+                                Clear
+                            </button>
+                        ) : null}
+                        <button
+                            type="button"
+                            onClick={() => onClearAll(mode)}
                             className={joinClasses(PILL_BASE, PILL_NEUTRAL)}
-                            data-role="articulation-distribute"
+                            data-role="articulation-clear-all"
                         >
-                            Distribute Equally
+                            Clear All
                         </button>
-                    ) : null}
+                        {onDistribute ? (
+                            <button
+                                type="button"
+                                onClick={() => onDistribute(mode)}
+                                className={joinClasses(PILL_BASE, PILL_NEUTRAL)}
+                                data-role="articulation-distribute"
+                            >
+                                Distribute Equally
+                            </button>
+                        ) : null}
+                    </div>
                 </div>
             </div>
             <div
@@ -1032,12 +1052,32 @@ function ArticulationRangeLane({
                 onDragLeave={handleDragLeave}
                 onDrop={handleDrop}
                 onKeyDown={handleLaneKeyDown}
-                className="relative hidden h-10 w-full overflow-hidden rounded-[6px] border border-white/[0.05] bg-[repeating-linear-gradient(135deg,rgba(255,255,255,0.018)_0px,rgba(255,255,255,0.018)_4px,transparent_4px,transparent_8px)] outline-none focus:border-cyan-200/35 sm:block"
+                className="relative hidden h-11 w-full overflow-hidden rounded-[7px] border border-white/[0.06] bg-black/25 shadow-[inset_0_1px_2px_rgba(0,0,0,0.4)] outline-none transition focus:border-cyan-200/45 focus:shadow-[inset_0_1px_2px_rgba(0,0,0,0.4),0_0_0_1px_rgba(103,232,249,0.18)] sm:block"
             >
+                <svg
+                    aria-hidden="true"
+                    className="pointer-events-none absolute inset-0 h-full w-full"
+                    preserveAspectRatio="none"
+                    viewBox="0 0 100 36"
+                >
+                    {[1, 2, 3, 4, 5, 6, 7].map((index) => (
+                        <line
+                            key={index}
+                            x1={index * 12.5}
+                            x2={index * 12.5}
+                            y1={4}
+                            y2={32}
+                            stroke="rgba(255,255,255,0.05)"
+                            strokeWidth={0.4}
+                        />
+                    ))}
+                    <line x1={50} x2={50} y1={2} y2={34} stroke="rgba(255,255,255,0.08)" strokeWidth={0.5} />
+                </svg>
                 <div className="pointer-events-none absolute inset-y-0 left-0 right-0">
                     {visibleSegments.map((segment) => {
                         const left = ((segment.visibleMin - minValue) / totalSlots) * 100;
                         const width = ((segment.visibleMax - segment.visibleMin + 1) / totalSlots) * 100;
+                        const isHighlighted = segment.isSelected || focusedSegmentId === segment.id;
                         const positionStyle: CSSProperties = {
                             left: `${left}%`,
                             width: `${width}%`,
@@ -1056,10 +1096,10 @@ function ArticulationRangeLane({
                                 onPointerUp={handleSegmentPointerUp}
                                 onPointerCancel={handleSegmentPointerCancel}
                                 className={joinClasses(
-                                    "pointer-events-auto absolute inset-y-0 flex cursor-grab items-center overflow-hidden border font-mono text-[9px] uppercase tracking-[0.14em] text-[#0a0d18] transition active:cursor-grabbing",
-                                    segment.isSelected || focusedSegmentId === segment.id
-                                        ? "border-amber-100/80 ring-1 ring-amber-100/40"
-                                        : "border-white/15 hover:border-white/35",
+                                    "group pointer-events-auto absolute inset-y-0.5 flex cursor-grab items-center overflow-hidden rounded-[3px] border font-mono text-[9px] uppercase tracking-[0.14em] text-[#0a0d18] transition active:cursor-grabbing focus-visible:outline-none",
+                                    isHighlighted
+                                        ? "z-[1] border-amber-100/90 shadow-[0_0_0_1px_rgba(252,211,77,0.6),0_2px_10px_rgba(0,0,0,0.45),inset_0_1px_0_rgba(255,255,255,0.25)]"
+                                        : "border-white/15 shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_1px_2px_rgba(0,0,0,0.3)] hover:border-white/35",
                                 )}
                                 style={positionStyle}
                             >
@@ -1067,11 +1107,11 @@ function ArticulationRangeLane({
                                     aria-hidden="true"
                                     className="absolute inset-0"
                                     style={{
-                                        backgroundColor: segment.color,
-                                        opacity: segment.isSelected ? 0.82 : 0.6,
+                                        background: `linear-gradient(180deg, ${segment.color} 0%, ${segment.color} 60%, rgba(0,0,0,0.18) 100%)`,
+                                        opacity: isHighlighted ? 0.92 : 0.7,
                                     }}
                                 />
-                                <span className="relative truncate px-1.5">
+                                <span className="relative truncate px-1.5 drop-shadow-[0_1px_0_rgba(255,255,255,0.18)]">
                                     {segment.label}
                                 </span>
                                 <span
@@ -1083,7 +1123,10 @@ function ArticulationRangeLane({
                                     onPointerMove={handleSegmentPointerMove}
                                     onPointerUp={handleSegmentPointerUp}
                                     onPointerCancel={handleSegmentPointerCancel}
-                                    className="absolute inset-y-0 left-0 z-10 w-2 cursor-ew-resize bg-white/0 hover:bg-white/25"
+                                    className={joinClasses(
+                                        "absolute inset-y-0 left-0 z-10 flex w-2.5 cursor-ew-resize items-center justify-center bg-black/0 transition before:block before:h-3 before:w-px before:rounded-full before:bg-black/45 before:opacity-0 before:transition before:content-[''] hover:bg-black/15 hover:before:opacity-90 group-hover:before:opacity-60",
+                                        isHighlighted ? "before:opacity-90" : "",
+                                    )}
                                 />
                                 <span
                                     role="button"
@@ -1094,7 +1137,10 @@ function ArticulationRangeLane({
                                     onPointerMove={handleSegmentPointerMove}
                                     onPointerUp={handleSegmentPointerUp}
                                     onPointerCancel={handleSegmentPointerCancel}
-                                    className="absolute inset-y-0 right-0 z-10 w-2 cursor-ew-resize bg-white/0 hover:bg-white/25"
+                                    className={joinClasses(
+                                        "absolute inset-y-0 right-0 z-10 flex w-2.5 cursor-ew-resize items-center justify-center bg-black/0 transition before:block before:h-3 before:w-px before:rounded-full before:bg-black/45 before:opacity-0 before:transition before:content-[''] hover:bg-black/15 hover:before:opacity-90 group-hover:before:opacity-60",
+                                        isHighlighted ? "before:opacity-90" : "",
+                                    )}
                                 />
                             </button>
                         );
@@ -1103,7 +1149,7 @@ function ArticulationRangeLane({
                 {dropIndicator !== null ? (
                     <div
                         aria-hidden="true"
-                        className="pointer-events-none absolute inset-y-0 w-px bg-cyan-200/80 shadow-[0_0_8px_rgba(103,232,249,0.6)]"
+                        className="pointer-events-none absolute inset-y-0 w-px bg-cyan-200 shadow-[0_0_10px_2px_rgba(103,232,249,0.6)]"
                         style={{ left: `${((dropIndicator - minValue) / Math.max(1, maxValue - minValue)) * 100}%` }}
                     />
                 ) : null}
@@ -1120,10 +1166,10 @@ function ArticulationRangeLane({
                                 type="button"
                                 data-role="articulation-range-gap-row"
                                 onClick={() => assignSelectedAtPosition(row.min)}
-                                className="flex min-h-8 items-center justify-between rounded-[7px] border border-dashed border-white/[0.08] bg-white/[0.015] px-2 text-[10px] uppercase tracking-[0.12em] text-slate-300/45"
+                                className="flex min-h-8 items-center justify-between rounded-[7px] border border-dashed border-white/[0.08] bg-white/[0.012] px-2.5 font-mono text-[10px] tabular-nums uppercase tracking-[0.14em] text-slate-300/50 transition hover:border-white/15 hover:bg-white/[0.025] hover:text-slate-200"
                             >
                                 <span>{labelText}</span>
-                                <span>{editMode === "insert" ? "Insert" : "Fill"}</span>
+                                <span className="text-slate-300/35">{editMode === "insert" ? "Insert" : "Fill"}</span>
                             </button>
                         );
                     }
@@ -1134,16 +1180,21 @@ function ArticulationRangeLane({
                         return null;
                     }
 
+                    const rowStyle: CSSProperties = focusedSegmentId === segment.id
+                        ? { boxShadow: `inset 2px 0 0 ${segment.color}, inset 0 1px 0 rgba(251,191,36,0.14)` }
+                        : { boxShadow: `inset 2px 0 0 ${segment.color}` };
+
                     return (
                         <div
                             key={key}
                             data-role="articulation-range-segment-row"
                             className={joinClasses(
-                                "flex min-h-9 items-center gap-2 rounded-[7px] border px-2",
+                                "flex min-h-9 items-center gap-2 rounded-[7px] border pl-2.5 pr-2 transition",
                                 focusedSegmentId === segment.id
-                                    ? "border-amber-100/55 bg-amber-300/10"
-                                    : "border-white/[0.06] bg-white/[0.025]",
+                                    ? "border-amber-100/55 bg-amber-300/[0.08]"
+                                    : "border-white/[0.06] bg-white/[0.022] hover:border-white/15",
                             )}
+                            style={rowStyle}
                         >
                             <ColorDot color={segment.color} />
                             <button
@@ -1152,15 +1203,15 @@ function ArticulationRangeLane({
                                     setFocusedSegmentId(segment.id);
                                     onSelectSegment(mode, segment);
                                 }}
-                                className="min-w-0 flex-1 truncate text-left text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-100/85"
+                                className="min-w-0 flex-1 truncate text-left text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-100/85 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-200/40"
                             >
                                 {segment.label}
                             </button>
-                            <span className="font-mono text-[10px] text-slate-300/55">{labelText}</span>
+                            <span className="font-mono text-[10px] tabular-nums text-slate-300/60">{labelText}</span>
                             <button
                                 type="button"
                                 onClick={() => runEdit(onClearSegment(mode, segment))}
-                                className="rounded-[6px] border border-pink-300/18 px-2 py-1 text-[9px] font-bold uppercase tracking-[0.12em] text-pink-100/80"
+                                className="rounded-[6px] border border-pink-300/22 bg-pink-300/[0.06] px-2 py-1 text-[9px] font-bold uppercase tracking-[0.12em] text-pink-100/85 transition hover:border-pink-200/35 hover:bg-pink-300/14"
                             >
                                 Clear
                             </button>
@@ -1172,14 +1223,20 @@ function ArticulationRangeLane({
                 <div
                     role="status"
                     data-role="articulation-lane-toast"
-                    className="rounded-[7px] border border-pink-300/16 bg-pink-300/[0.07] px-2 py-1 text-[9px] uppercase tracking-[0.12em] text-pink-100/80"
+                    className="rounded-[7px] border border-pink-300/22 bg-pink-300/[0.08] px-2.5 py-1.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-pink-100/90 shadow-[inset_0_1px_0_rgba(244,114,182,0.12)]"
                 >
                     {toast}
                 </div>
             ) : null}
-            <div className="flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.18em] text-slate-300/40">
-                <span>{minLabel}</span>
-                <span>{maxLabel}</span>
+            <div className="flex items-center justify-between font-mono text-[9px] tabular-nums uppercase tracking-[0.18em] text-slate-300/45">
+                <span className="flex items-center gap-1">
+                    <span className="text-slate-300/30">MIN</span>
+                    <span>{minLabel}</span>
+                </span>
+                <span className="flex items-center gap-1">
+                    <span>{maxLabel}</span>
+                    <span className="text-slate-300/30">MAX</span>
+                </span>
             </div>
         </div>
     );
@@ -1319,9 +1376,9 @@ function HeaderActions({
 
 function ActiveModeReadout({ activeMode }: { activeMode: ArticulationTriggerMode }) {
     return (
-        <div className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-[8px] border border-white/[0.06] bg-white/[0.018] px-2.5">
-            <span className="text-[9px] uppercase tracking-[0.18em] text-slate-300/45">Mode</span>
-            <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-cyan-200/85">
+        <div className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-[8px] border border-white/[0.06] bg-black/30 px-2.5 shadow-[inset_0_1px_2px_rgba(0,0,0,0.45)]">
+            <span className="text-[9px] uppercase tracking-[0.18em] text-slate-300/40">Mode</span>
+            <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-cyan-200/95">
                 {formatModeLabel(activeMode)}
             </span>
         </div>
@@ -1487,10 +1544,11 @@ export function ArticulationControlSurface(props: ArticulationControlSurfaceProp
                 data-state="collapsed"
                 aria-label="Articulations"
                 onKeyDown={handleSurfaceKeyDown}
-                className="flex min-h-[108px] shrink-0 items-stretch gap-2 rounded-[14px] border border-white/[0.05] bg-white/[0.022] px-2.5 py-2"
+                className="flex min-h-[108px] shrink-0 items-stretch gap-2.5 rounded-[14px] border border-white/[0.06] bg-white/[0.022] px-2.5 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.025)]"
             >
                 {carousel}
-                <div className="flex shrink-0 flex-col items-end justify-between gap-1.5 pl-1">
+                <div aria-hidden="true" className="w-px shrink-0 self-stretch bg-white/[0.05]" />
+                <div className="flex shrink-0 flex-col items-end justify-between gap-1.5">
                     <HeaderActions
                         selectedIsDirty={selectedIsDirty}
                         canCapture={canCapture}
@@ -1514,12 +1572,10 @@ export function ArticulationControlSurface(props: ArticulationControlSurfaceProp
             data-state="expanded"
             aria-label="Articulations"
             onKeyDown={handleSurfaceKeyDown}
-            className="flex shrink-0 flex-col gap-2 rounded-[14px] border border-white/[0.05] bg-white/[0.022] px-2.5 py-2"
+            className="flex shrink-0 flex-col gap-2.5 rounded-[14px] border border-white/[0.06] bg-white/[0.022] px-2.5 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.025)]"
         >
-            <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                    <ModeSegmentedControl activeMode={activeMode} onSelectMode={onSelectMode} />
-                </div>
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/[0.04] pb-2">
+                <ModeSegmentedControl activeMode={activeMode} onSelectMode={onSelectMode} />
                 <div className="flex items-center gap-1.5">
                     <HeaderActions
                         selectedIsDirty={selectedIsDirty}

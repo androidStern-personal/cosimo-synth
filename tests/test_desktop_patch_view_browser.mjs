@@ -1792,6 +1792,8 @@ test("articulation slots clone current state and recall parameters plus route am
             (nextSnapshot) => readStoredArticulationBank(nextSnapshot).activeTriggerMode === "key",
         );
         assert.equal(readStoredArticulationBank(modeSnapshot).activeTriggerMode, "key");
+        assert.equal(await page.locator('[data-role="articulation-range-lane"]').count(), 1);
+        assert.equal(await page.locator('[data-role="articulation-distribute"]').count(), 0);
         await page.getByRole("tab", { name: "Chain" }).click();
         await page.getByRole("button", { name: "Collapse articulation editor" }).click();
         assert.equal(await page.locator('[data-role="articulation-control-surface"][data-state="collapsed"]').count(), 1);
@@ -2101,7 +2103,7 @@ test("articulation editor exposes insert resize move clear and expanded capture 
         const resizedPluck = readStoredArticulationBank(snapshot).chainAssignments
             .find((assignment) => assignment.articulationId === "pluck");
         assert.equal(resizedPluck.min, 64);
-        assert.equal(resizedPluck.max > 64, true);
+        assert.equal(resizedPluck.max, 79);
 
         const pluckSegment = page.locator('[data-role="articulation-range-segment"][data-articulation-id="pluck"]').first();
         const segmentBox = await pluckSegment.boundingBox();
@@ -2122,8 +2124,7 @@ test("articulation editor exposes insert resize move clear and expanded capture 
         );
         const movedPluck = readStoredArticulationBank(snapshot).chainAssignments
             .find((assignment) => assignment.articulationId === "pluck");
-        assert.equal(movedPluck.min > 64, true);
-        assert.equal(movedPluck.max > movedPluck.min, true);
+        assert.deepEqual(movedPluck, { id: "chain-pluck-64", articulationId: "pluck", min: 89, max: 104 });
 
         await page.locator('[data-role="articulation-clear-segment"]').click();
         snapshot = await waitForHarnessSnapshot(
@@ -2150,6 +2151,65 @@ test("articulation editor exposes insert resize move clear and expanded capture 
             },
         );
         assert.equal(readStoredArticulationBank(snapshot).slots.length, 3);
+    } finally {
+        await page.close();
+    }
+});
+
+test("articulation card audition is press-hold and cycles C1 C2 C3", async () => {
+    const page = await openHarnessPage();
+
+    async function pressAuditionAndExpect(note) {
+        await clearHarnessDebugLog(page);
+
+        const playButton = page.locator('[data-role="articulation-card-play"]').first();
+        const box = await playButton.boundingBox();
+        assert.notEqual(box, null);
+
+        const clickPromise = playButton.click({ delay: 200 });
+        await page.waitForFunction(() => window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().midiInputEvents.length === 1);
+
+        let snapshot = await getHarnessSnapshot(page);
+        assert.deepEqual(snapshot.midiInputEvents, [
+            { endpointID: "midiIn", value: buildShortMidi(0x90, note, 100) },
+        ]);
+
+        await clickPromise;
+        await page.waitForFunction(() => window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().midiInputEvents.length === 2);
+
+        snapshot = await getHarnessSnapshot(page);
+        assert.deepEqual(snapshot.midiInputEvents, [
+            { endpointID: "midiIn", value: buildShortMidi(0x90, note, 100) },
+            { endpointID: "midiIn", value: buildShortMidi(0x80, note) },
+        ]);
+    }
+
+    try {
+        await page.waitForFunction(() => {
+            const addButton = document.querySelector('button[aria-label="Capture current parameters as a new articulation"]');
+            return addButton instanceof HTMLButtonElement && !addButton.disabled;
+        });
+
+        const bank = normalizeArticulationBank({
+            selectedSlotId: "bow",
+            activeTriggerMode: "chain",
+            slots: [
+                { id: "bow", runtimeSlot: 0, name: "Bow" },
+            ],
+        });
+
+        await page.evaluate(({ stateKey, nextBank }) => {
+            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue(stateKey, JSON.stringify(nextBank));
+        }, {
+            stateKey: ARTICULATION_STATE_KEY,
+            nextBank: bank,
+        });
+        await page.locator('[data-role="articulation-card"][data-articulation-id="bow"]').waitFor();
+
+        await pressAuditionAndExpect(36);
+        await pressAuditionAndExpect(48);
+        await pressAuditionAndExpect(60);
+        await pressAuditionAndExpect(36);
     } finally {
         await page.close();
     }
