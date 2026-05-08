@@ -13783,10 +13783,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     width: 56px;
   }
 
-  .w-\\[148px\\] {
-    width: 148px;
-  }
-
   .w-\\[152px\\] {
     width: 152px;
   }
@@ -14488,16 +14484,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     }
   }
 
-  .border-amber-100\\/80 {
-    border-color: #fef3c6cc;
-  }
-
-  @supports (color: color-mix(in lab, red, red)) {
-    .border-amber-100\\/80 {
-      border-color: color-mix(in oklab, var(--color-amber-100) 80%, transparent);
-    }
-  }
-
   .border-amber-100\\/90 {
     border-color: #fef3c6e6;
   }
@@ -14519,16 +14505,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
   @supports (color: color-mix(in lab, red, red)) {
     .border-amber-200\\/18 {
       border-color: color-mix(in oklab, var(--color-amber-200) 18%, transparent);
-    }
-  }
-
-  .border-amber-200\\/30 {
-    border-color: #fee6854d;
-  }
-
-  @supports (color: color-mix(in lab, red, red)) {
-    .border-amber-200\\/30 {
-      border-color: color-mix(in oklab, var(--color-amber-200) 30%, transparent);
     }
   }
 
@@ -14620,26 +14596,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     border-color: var(--color-cyan-300);
   }
 
-  .border-cyan-300\\/16 {
-    border-color: #53eafd29;
-  }
-
-  @supports (color: color-mix(in lab, red, red)) {
-    .border-cyan-300\\/16 {
-      border-color: color-mix(in oklab, var(--color-cyan-300) 16%, transparent);
-    }
-  }
-
-  .border-cyan-300\\/18 {
-    border-color: #53eafd2e;
-  }
-
-  @supports (color: color-mix(in lab, red, red)) {
-    .border-cyan-300\\/18 {
-      border-color: color-mix(in oklab, var(--color-cyan-300) 18%, transparent);
-    }
-  }
-
   .border-cyan-300\\/20 {
     border-color: #53eafd33;
   }
@@ -14708,16 +14664,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .border-pink-300 {
     border-color: var(--color-pink-300);
-  }
-
-  .border-pink-300\\/16 {
-    border-color: #fda5d529;
-  }
-
-  @supports (color: color-mix(in lab, red, red)) {
-    .border-pink-300\\/16 {
-      border-color: color-mix(in oklab, var(--color-pink-300) 16%, transparent);
-    }
   }
 
   .border-pink-300\\/18 {
@@ -14912,16 +14858,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     background-color: var(--color-amber-300);
   }
 
-  .bg-amber-300\\/10 {
-    background-color: #ffd2361a;
-  }
-
-  @supports (color: color-mix(in lab, red, red)) {
-    .bg-amber-300\\/10 {
-      background-color: color-mix(in oklab, var(--color-amber-300) 10%, transparent);
-    }
-  }
-
   .bg-amber-300\\/12 {
     background-color: #ffd2361f;
   }
@@ -14949,16 +14885,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
   @supports (color: color-mix(in lab, red, red)) {
     .bg-amber-300\\/\\[0\\.05\\] {
       background-color: color-mix(in oklab, var(--color-amber-300) 5%, transparent);
-    }
-  }
-
-  .bg-amber-300\\/\\[0\\.06\\] {
-    background-color: #ffd2360f;
-  }
-
-  @supports (color: color-mix(in lab, red, red)) {
-    .bg-amber-300\\/\\[0\\.06\\] {
-      background-color: color-mix(in oklab, var(--color-amber-300) 6%, transparent);
     }
   }
 
@@ -15106,16 +15032,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .bg-cyan-200 {
     background-color: var(--color-cyan-200);
-  }
-
-  .bg-cyan-200\\/80 {
-    background-color: #a2f4fdcc;
-  }
-
-  @supports (color: color-mix(in lab, red, red)) {
-    .bg-cyan-200\\/80 {
-      background-color: color-mix(in oklab, var(--color-cyan-200) 80%, transparent);
-    }
   }
 
   .bg-cyan-300 {
@@ -15280,16 +15196,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     }
   }
 
-  .bg-pink-300\\/85 {
-    background-color: #fda5d5d9;
-  }
-
-  @supports (color: color-mix(in lab, red, red)) {
-    .bg-pink-300\\/85 {
-      background-color: color-mix(in oklab, var(--color-pink-300) 85%, transparent);
-    }
-  }
-
   .bg-pink-300\\/90 {
     background-color: #fda5d5e6;
   }
@@ -15384,16 +15290,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     background-color: var(--color-white);
   }
 
-  .bg-white\\/0 {
-    background-color: #0000;
-  }
-
-  @supports (color: color-mix(in lab, red, red)) {
-    .bg-white\\/0 {
-      background-color: color-mix(in oklab, var(--color-white) 0%, transparent);
-    }
-  }
-
   .bg-white\\/\\[0\\.02\\] {
     background-color: #ffffff05;
   }
@@ -15471,16 +15367,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
   @supports (color: color-mix(in lab, red, red)) {
     .bg-white\\/\\[0\\.12\\] {
       background-color: color-mix(in oklab, var(--color-white) 12%, transparent);
-    }
-  }
-
-  .bg-white\\/\\[0\\.015\\] {
-    background-color: #ffffff04;
-  }
-
-  @supports (color: color-mix(in lab, red, red)) {
-    .bg-white\\/\\[0\\.015\\] {
-      background-color: color-mix(in oklab, var(--color-white) 1.5%, transparent);
     }
   }
 
@@ -15583,10 +15469,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .bg-\\[radial-gradient\\(circle_at_top_left\\,rgba\\(248\\,113\\,113\\,0\\.10\\)\\,transparent_34\\%\\)\\,linear-gradient\\(180deg\\,rgba\\(9\\,8\\,15\\,0\\.98\\)\\,rgba\\(2\\,4\\,11\\,1\\)\\)\\] {
     background-image: radial-gradient(circle at 0 0, #f871711a, #0000 34%), linear-gradient(#09080ffa, #02040b);
-  }
-
-  .bg-\\[repeating-linear-gradient\\(135deg\\,rgba\\(255\\,255\\,255\\,0\\.018\\)_0px\\,rgba\\(255\\,255\\,255\\,0\\.018\\)_4px\\,transparent_4px\\,transparent_8px\\)\\] {
-    background-image: repeating-linear-gradient(135deg, #ffffff05 0 4px, #0000 4px 8px);
   }
 
   .from-amber-400 {
@@ -16321,16 +16203,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     }
   }
 
-  .text-cyan-200\\/85 {
-    color: #a2f4fdd9;
-  }
-
-  @supports (color: color-mix(in lab, red, red)) {
-    .text-cyan-200\\/85 {
-      color: color-mix(in oklab, var(--color-cyan-200) 85%, transparent);
-    }
-  }
-
   .text-cyan-200\\/95 {
     color: #a2f4fdf2;
   }
@@ -16523,16 +16395,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .text-pink-100 {
     color: var(--color-pink-100);
-  }
-
-  .text-pink-100\\/80 {
-    color: #fce7f3cc;
-  }
-
-  @supports (color: color-mix(in lab, red, red)) {
-    .text-pink-100\\/80 {
-      color: color-mix(in oklab, var(--color-pink-100) 80%, transparent);
-    }
   }
 
   .text-pink-100\\/82 {
@@ -17011,11 +16873,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
   }
 
-  .shadow-\\[0_0_8px_rgba\\(103\\,232\\,249\\,0\\.6\\)\\] {
-    --tw-shadow: 0 0 8px var(--tw-shadow-color, #67e8f999);
-    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
-  }
-
   .shadow-\\[0_0_10px_2px_rgba\\(103\\,232\\,249\\,0\\.6\\)\\] {
     --tw-shadow: 0 0 10px 2px var(--tw-shadow-color, #67e8f999);
     box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
@@ -17198,16 +17055,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .ring-amber-100 {
     --tw-ring-color: var(--color-amber-100);
-  }
-
-  .ring-amber-100\\/40 {
-    --tw-ring-color: #fef3c666;
-  }
-
-  @supports (color: color-mix(in lab, red, red)) {
-    .ring-amber-100\\/40 {
-      --tw-ring-color: color-mix(in oklab, var(--color-amber-100) 40%, transparent);
-    }
   }
 
   .ring-offset-background {
@@ -17627,16 +17474,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
       }
     }
 
-    .hover\\:bg-cyan-300\\/16:hover {
-      background-color: #53eafd29;
-    }
-
-    @supports (color: color-mix(in lab, red, red)) {
-      .hover\\:bg-cyan-300\\/16:hover {
-        background-color: color-mix(in oklab, var(--color-cyan-300) 16%, transparent);
-      }
-    }
-
     .hover\\:bg-cyan-300\\/18:hover {
       background-color: #53eafd2e;
     }
@@ -17704,16 +17541,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     @supports (color: color-mix(in lab, red, red)) {
       .hover\\:bg-primary\\/10:hover {
         background-color: color-mix(in oklab, var(--cosimo-mod-primary) 10%, transparent);
-      }
-    }
-
-    .hover\\:bg-white\\/25:hover {
-      background-color: #ffffff40;
-    }
-
-    @supports (color: color-mix(in lab, red, red)) {
-      .hover\\:bg-white\\/25:hover {
-        background-color: color-mix(in oklab, var(--color-white) 25%, transparent);
       }
     }
 
@@ -17834,16 +17661,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     .hover\\:before\\:opacity-90:hover:before {
       content: var(--tw-content);
       opacity: .9;
-    }
-  }
-
-  .focus\\:border-cyan-200\\/35:focus {
-    border-color: #a2f4fd59;
-  }
-
-  @supports (color: color-mix(in lab, red, red)) {
-    .focus\\:border-cyan-200\\/35:focus {
-      border-color: color-mix(in oklab, var(--color-cyan-200) 35%, transparent);
     }
   }
 
