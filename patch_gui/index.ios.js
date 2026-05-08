@@ -16960,8 +16960,10 @@ function usePatchEventTrigger(endpointID) {
     patchConnection.sendEventOrValue?.(endpointID, value);
   }, [endpointID, patchConnection]);
 }
-const ARTICULATION_STATE_KEY = "articulations.v1";
+const ARTICULATION_STATE_KEY = "articulations.v2";
+const ARTICULATION_TRIGGER_CONFIG_STATE_KEY = "articulationTriggerConfig.v1";
 const ARTICULATION_MAX_SLOTS = 128;
+const ARTICULATION_UNASSIGNED_RUNTIME_SLOT = -1;
 function clamp$2(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
@@ -16977,6 +16979,12 @@ function normalizeInteger(value, fallback, min, max) {
 }
 function cloneJson(value) {
   return JSON.parse(JSON.stringify(value));
+}
+function normalizeTriggerMode(value) {
+  return value === "key" || value === "vel" || value === "chain" ? value : "chain";
+}
+function createUnassignedRuntimeMap() {
+  return Array.from({ length: ARTICULATION_MAX_SLOTS }, () => ARTICULATION_UNASSIGNED_RUNTIME_SLOT);
 }
 function createDefaultArticulationParameterSnapshot() {
   return {
@@ -17075,27 +17083,101 @@ function normalizeArticulationSnapshot(value) {
     modRouteAmounts: [...routeAmountById.values()]
   };
 }
-function normalizeArticulationSlot(value, fallbackSelectorA) {
+function normalizeArticulationSlot(value, fallbackRuntimeSlot) {
   if (!value || typeof value !== "object") {
     return null;
   }
   const nextValue = value;
-  const selectorA = normalizeInteger(nextValue.selectorA, fallbackSelectorA, 0, ARTICULATION_MAX_SLOTS - 1);
-  const id = typeof nextValue.id === "string" && nextValue.id.trim() ? nextValue.id.trim() : `articulation-${selectorA}`;
-  const name = typeof nextValue.name === "string" && nextValue.name.trim() ? nextValue.name.trim() : `Art ${selectorA + 1}`;
+  const runtimeSlot = normalizeInteger(nextValue.runtimeSlot, fallbackRuntimeSlot, 0, ARTICULATION_MAX_SLOTS - 1);
+  const id = typeof nextValue.id === "string" && nextValue.id.trim() ? nextValue.id.trim() : `articulation-${runtimeSlot}`;
+  const name = typeof nextValue.name === "string" && nextValue.name.trim() ? nextValue.name.trim() : `Art ${runtimeSlot + 1}`;
   return {
     id,
-    selectorA,
+    runtimeSlot,
     name,
     snapshot: normalizeArticulationSnapshot(nextValue.snapshot)
   };
 }
+function normalizeKeyAssignment(value, validArticulationIds) {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+  const nextValue = value;
+  const articulationId = typeof nextValue.articulationId === "string" ? nextValue.articulationId.trim() : "";
+  if (!validArticulationIds.has(articulationId)) {
+    return null;
+  }
+  return {
+    note: normalizeInteger(nextValue.note, 0, 0, ARTICULATION_MAX_SLOTS - 1),
+    articulationId
+  };
+}
+function normalizeRangeAssignment(value, validArticulationIds, assignmentIndex, idPrefix, minAllowed) {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+  const nextValue = value;
+  const articulationId = typeof nextValue.articulationId === "string" ? nextValue.articulationId.trim() : "";
+  if (!validArticulationIds.has(articulationId)) {
+    return null;
+  }
+  let min = normalizeInteger(nextValue.min, minAllowed, minAllowed, ARTICULATION_MAX_SLOTS - 1);
+  let max = normalizeInteger(nextValue.max, min, minAllowed, ARTICULATION_MAX_SLOTS - 1);
+  if (max < min) {
+    [min, max] = [max, min];
+  }
+  const id = typeof nextValue.id === "string" && nextValue.id.trim() ? nextValue.id.trim() : `${idPrefix}-${assignmentIndex}`;
+  return {
+    id,
+    articulationId,
+    min,
+    max
+  };
+}
+function normalizeRangeAssignments(value, validArticulationIds, idPrefix, minAllowed) {
+  const inputAssignments = Array.isArray(value) ? value : [];
+  const usedIds = /* @__PURE__ */ new Set();
+  const assignments = [];
+  for (let assignmentIndex = 0; assignmentIndex < inputAssignments.length; assignmentIndex += 1) {
+    const assignment = normalizeRangeAssignment(
+      inputAssignments[assignmentIndex],
+      validArticulationIds,
+      assignmentIndex,
+      idPrefix,
+      minAllowed
+    );
+    if (!assignment || usedIds.has(assignment.id)) {
+      continue;
+    }
+    usedIds.add(assignment.id);
+    assignments.push(assignment);
+  }
+  return assignments;
+}
+function normalizeKeyAssignments(value, validArticulationIds) {
+  const inputAssignments = Array.isArray(value) ? value : [];
+  const usedNotes = /* @__PURE__ */ new Set();
+  const assignments = [];
+  for (const inputAssignment of inputAssignments) {
+    const assignment = normalizeKeyAssignment(inputAssignment, validArticulationIds);
+    if (!assignment || usedNotes.has(assignment.note)) {
+      continue;
+    }
+    usedNotes.add(assignment.note);
+    assignments.push(assignment);
+  }
+  return assignments;
+}
 function createDefaultArticulationBank() {
   return {
     format: "cosimo.articulations",
-    version: 1,
+    version: 2,
     selectedSlotId: null,
-    slots: []
+    activeTriggerMode: "chain",
+    slots: [],
+    chainAssignments: [],
+    keyAssignments: [],
+    velocityAssignments: []
   };
 }
 function normalizeArticulationBank(value) {
@@ -17109,24 +17191,29 @@ function normalizeArticulationBank(value) {
   }
   const nextValue = parsedValue && typeof parsedValue === "object" ? parsedValue : {};
   const inputSlots = Array.isArray(nextValue.slots) ? nextValue.slots : [];
-  const usedSelectors = /* @__PURE__ */ new Set();
+  const usedRuntimeSlots = /* @__PURE__ */ new Set();
   const usedIds = /* @__PURE__ */ new Set();
   const slots = [];
   for (let slotIndex = 0; slotIndex < inputSlots.length && slots.length < ARTICULATION_MAX_SLOTS; slotIndex += 1) {
     const slot = normalizeArticulationSlot(inputSlots[slotIndex], slotIndex);
-    if (!slot || usedSelectors.has(slot.selectorA) || usedIds.has(slot.id)) {
+    if (!slot || usedRuntimeSlots.has(slot.runtimeSlot) || usedIds.has(slot.id)) {
       continue;
     }
-    usedSelectors.add(slot.selectorA);
+    usedRuntimeSlots.add(slot.runtimeSlot);
     usedIds.add(slot.id);
     slots.push(slot);
   }
   const selectedSlotId = typeof nextValue.selectedSlotId === "string" && slots.some((slot) => slot.id === nextValue.selectedSlotId) ? nextValue.selectedSlotId : null;
+  const validArticulationIds = new Set(slots.map((slot) => slot.id));
   return {
     format: "cosimo.articulations",
-    version: 1,
+    version: 2,
     selectedSlotId,
-    slots
+    activeTriggerMode: normalizeTriggerMode(nextValue.activeTriggerMode),
+    slots,
+    chainAssignments: normalizeRangeAssignments(nextValue.chainAssignments, validArticulationIds, "chain", 0),
+    keyAssignments: normalizeKeyAssignments(nextValue.keyAssignments, validArticulationIds),
+    velocityAssignments: normalizeRangeAssignments(nextValue.velocityAssignments, validArticulationIds, "velocity", 1)
   };
 }
 function serializeArticulationBank(value) {
@@ -17140,23 +17227,167 @@ function articulationSnapshotsEqual(left, right) {
 }
 function createArticulationSlotFromSnapshot(bankValue, snapshotValue) {
   const bank = normalizeArticulationBank(bankValue);
-  const usedSelectors = new Set(bank.slots.map((slot) => slot.selectorA));
-  let selectorA = -1;
+  const usedRuntimeSlots = new Set(bank.slots.map((slot) => slot.runtimeSlot));
+  let runtimeSlot = -1;
   for (let candidate = 0; candidate < ARTICULATION_MAX_SLOTS; candidate += 1) {
-    if (!usedSelectors.has(candidate)) {
-      selectorA = candidate;
+    if (!usedRuntimeSlots.has(candidate)) {
+      runtimeSlot = candidate;
       break;
     }
   }
-  if (selectorA < 0) {
+  if (runtimeSlot < 0) {
     return null;
   }
   return {
-    id: `articulation-${selectorA}`,
-    selectorA,
-    name: `Art ${selectorA + 1}`,
+    id: `articulation-${runtimeSlot}`,
+    runtimeSlot,
+    name: `Art ${runtimeSlot + 1}`,
     snapshot: cloneJson(normalizeArticulationSnapshot(snapshotValue))
   };
+}
+function findFirstUnassignedIndex(assignedValues, minAllowed) {
+  for (let candidate = minAllowed; candidate < ARTICULATION_MAX_SLOTS; candidate += 1) {
+    if (!assignedValues.has(candidate)) {
+      return candidate;
+    }
+  }
+  return null;
+}
+function collectRangeAssignedValues(assignments) {
+  const assignedValues = /* @__PURE__ */ new Set();
+  for (const assignment of assignments) {
+    for (let value = assignment.min; value <= assignment.max; value += 1) {
+      assignedValues.add(value);
+    }
+  }
+  return assignedValues;
+}
+function assignArticulationToNextAvailableTrigger(bankValue, articulationId, modeValue) {
+  const bank = normalizeArticulationBank(bankValue);
+  const mode = normalizeTriggerMode(modeValue ?? bank.activeTriggerMode);
+  if (!bank.slots.some((slot) => slot.id === articulationId)) {
+    return bank;
+  }
+  if (mode === "chain") {
+    const nextSelector = findFirstUnassignedIndex(collectRangeAssignedValues(bank.chainAssignments), 0);
+    if (nextSelector === null) {
+      return bank;
+    }
+    return normalizeArticulationBank({
+      ...bank,
+      chainAssignments: [
+        ...bank.chainAssignments,
+        {
+          id: `chain-${articulationId}-${nextSelector}`,
+          articulationId,
+          min: nextSelector,
+          max: nextSelector
+        }
+      ]
+    });
+  }
+  if (mode === "key") {
+    const usedNotes = new Set(bank.keyAssignments.map((assignment) => assignment.note));
+    const nextNote = findFirstUnassignedIndex(usedNotes, 0);
+    if (nextNote === null) {
+      return bank;
+    }
+    return normalizeArticulationBank({
+      ...bank,
+      keyAssignments: [
+        ...bank.keyAssignments,
+        {
+          note: nextNote,
+          articulationId
+        }
+      ]
+    });
+  }
+  const nextVelocity = findFirstUnassignedIndex(collectRangeAssignedValues(bank.velocityAssignments), 1);
+  if (nextVelocity === null) {
+    return bank;
+  }
+  return normalizeArticulationBank({
+    ...bank,
+    velocityAssignments: [
+      ...bank.velocityAssignments,
+      {
+        id: `velocity-${articulationId}-${nextVelocity}`,
+        articulationId,
+        min: nextVelocity,
+        max: nextVelocity
+      }
+    ]
+  });
+}
+function addCapturedArticulationToBank(bankValue, snapshotValue) {
+  const bank = normalizeArticulationBank(bankValue);
+  const nextSlot = createArticulationSlotFromSnapshot(bank, snapshotValue);
+  if (!nextSlot) {
+    return bank;
+  }
+  return assignArticulationToNextAvailableTrigger({
+    ...bank,
+    selectedSlotId: nextSlot.id,
+    slots: [...bank.slots, nextSlot]
+  }, nextSlot.id, bank.activeTriggerMode);
+}
+function fillRangeTriggerMap(target, assignments, runtimeSlotByArticulationId) {
+  for (const assignment of assignments) {
+    const runtimeSlot = runtimeSlotByArticulationId.get(assignment.articulationId);
+    if (runtimeSlot === void 0) {
+      continue;
+    }
+    for (let value = assignment.min; value <= assignment.max; value += 1) {
+      if (target[value] === ARTICULATION_UNASSIGNED_RUNTIME_SLOT) {
+        target[value] = runtimeSlot;
+      }
+    }
+  }
+}
+function buildArticulationTriggerConfig(bankValue) {
+  const bank = normalizeArticulationBank(bankValue);
+  const runtimeSlotByArticulationId = new Map(bank.slots.map((slot) => [slot.id, slot.runtimeSlot]));
+  const chain = createUnassignedRuntimeMap();
+  const key = createUnassignedRuntimeMap();
+  const velocity = createUnassignedRuntimeMap();
+  fillRangeTriggerMap(chain, bank.chainAssignments, runtimeSlotByArticulationId);
+  fillRangeTriggerMap(velocity, bank.velocityAssignments, runtimeSlotByArticulationId);
+  for (const assignment of bank.keyAssignments) {
+    const runtimeSlot = runtimeSlotByArticulationId.get(assignment.articulationId);
+    if (runtimeSlot === void 0 || key[assignment.note] !== ARTICULATION_UNASSIGNED_RUNTIME_SLOT) {
+      continue;
+    }
+    key[assignment.note] = runtimeSlot;
+  }
+  velocity[0] = ARTICULATION_UNASSIGNED_RUNTIME_SLOT;
+  return {
+    format: "cosimo.articulation.triggerConfig",
+    version: 1,
+    activeMode: bank.activeTriggerMode,
+    chain,
+    key,
+    velocity
+  };
+}
+function serializeArticulationTriggerConfig(value) {
+  const config = value && typeof value === "object" && value.format === "cosimo.articulation.triggerConfig" ? value : buildArticulationTriggerConfig(value);
+  return JSON.stringify({
+    format: "cosimo.articulation.triggerConfig",
+    version: 1,
+    activeMode: normalizeTriggerMode(config.activeMode),
+    chain: Array.from({ length: ARTICULATION_MAX_SLOTS }, (_, index) => normalizeInteger(config.chain?.[index], ARTICULATION_UNASSIGNED_RUNTIME_SLOT, ARTICULATION_UNASSIGNED_RUNTIME_SLOT, ARTICULATION_MAX_SLOTS - 1)),
+    key: Array.from({ length: ARTICULATION_MAX_SLOTS }, (_, index) => normalizeInteger(config.key?.[index], ARTICULATION_UNASSIGNED_RUNTIME_SLOT, ARTICULATION_UNASSIGNED_RUNTIME_SLOT, ARTICULATION_MAX_SLOTS - 1)),
+    velocity: Array.from({ length: ARTICULATION_MAX_SLOTS }, (_, index) => index === 0 ? ARTICULATION_UNASSIGNED_RUNTIME_SLOT : normalizeInteger(config.velocity?.[index], ARTICULATION_UNASSIGNED_RUNTIME_SLOT, ARTICULATION_UNASSIGNED_RUNTIME_SLOT, ARTICULATION_MAX_SLOTS - 1))
+  });
+}
+function sendNativeArticulationTriggerConfig(configValue, patchConnection) {
+  const serializedConfig = serializeArticulationTriggerConfig(configValue);
+  patchConnection?.sendNativeArticulationTriggerConfig?.(serializedConfig);
+  const globalObject = globalThis;
+  if (typeof globalObject.cosimo_set_articulation_trigger_config === "function") {
+    globalObject.cosimo_set_articulation_trigger_config(serializedConfig);
+  }
 }
 const EFFECTIVE_MSEG_STATE_ENDPOINT_ID = "effectiveMsegState";
 const EFFECTIVE_MSEG_SLOT_COUNT = 3;
@@ -17243,31 +17474,134 @@ function resolveMsegPreviewPlayheadState({
     progressFillEnd: shouldFillProgress ? progress : null
   };
 }
+const DEFAULT_MIDI_INPUT_ENDPOINT_ID = "midiIn";
+const KEYBOARD_ROOT_NOTE_DEFAULT$1 = 36;
+const NOTE_ON_VELOCITY = 100;
+const STANDALONE_KEYBOARD_RELAY_SOURCE = "cosimo-standalone-keyboard";
+const previewKeyOffsetsByCode = /* @__PURE__ */ new Map([
+  ["KeyA", 0],
+  ["KeyW", 1],
+  ["KeyS", 2],
+  ["KeyE", 3],
+  ["KeyD", 4],
+  ["KeyF", 5],
+  ["KeyT", 6],
+  ["KeyG", 7],
+  ["KeyY", 8],
+  ["KeyH", 9],
+  ["KeyU", 10],
+  ["KeyJ", 11],
+  ["KeyK", 12],
+  ["KeyO", 13],
+  ["KeyL", 14],
+  ["KeyP", 15],
+  ["Semicolon", 16],
+  ["Quote", 17]
+]);
 function hasCommandModifier(event) {
   return event.metaKey || event.ctrlKey || event.altKey;
 }
+function buildShortMidi(status, noteNumber, velocity = 0) {
+  return (status & 255) << 16 | (noteNumber & 127) << 8 | velocity & 127;
+}
+function readKeyboardRootNote(keyboard) {
+  const keyboardElement = keyboard;
+  const rootNote = Number(keyboardElement?.getAttribute?.("root-note"));
+  return Number.isFinite(rootNote) ? Math.max(0, Math.min(127, Math.round(rootNote))) : KEYBOARD_ROOT_NOTE_DEFAULT$1;
+}
+function resolveStandalonePreviewNoteFromCode(code, keyboard) {
+  const offset = previewKeyOffsetsByCode.get(code);
+  if (offset === void 0) {
+    return null;
+  }
+  return Math.max(0, Math.min(127, readKeyboardRootNote(keyboard) + offset));
+}
+function isTextEntryElement(element) {
+  if (!(element instanceof Element)) {
+    return false;
+  }
+  if (element instanceof HTMLElement && element.isContentEditable) {
+    return true;
+  }
+  const tagName = element.tagName.toLowerCase();
+  if (tagName === "textarea" || tagName === "select") {
+    return true;
+  }
+  if (element instanceof HTMLInputElement) {
+    return !["button", "checkbox", "radio", "range", "reset", "submit"].includes(element.type.toLowerCase());
+  }
+  if (element.getAttribute("role") === "textbox") {
+    return true;
+  }
+  return Boolean(element.closest('textarea, select, input:not([type="button"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="reset"]):not([type="submit"]), [contenteditable="true"], [role="textbox"]'));
+}
+function eventIsInsideTextEntry(event) {
+  const path = typeof event.composedPath === "function" ? event.composedPath() : [];
+  return path.some(isTextEntryElement) || isTextEntryElement(document.activeElement);
+}
+function documentHasTextEntryActive() {
+  return isTextEntryElement(document.activeElement);
+}
+function isStandaloneKeyboardRelayMessage(data) {
+  if (!data || typeof data !== "object") {
+    return false;
+  }
+  const message = data;
+  return message.source === STANDALONE_KEYBOARD_RELAY_SOURCE && (message.eventType === "keydown" || message.eventType === "keyup") && typeof message.code === "string" && typeof message.repeat === "boolean" && typeof message.shiftKey === "boolean" && typeof message.metaKey === "boolean" && typeof message.ctrlKey === "boolean" && typeof message.altKey === "boolean";
+}
 function useSynthInputRouter(keyboardRef, {
   handleKeyboardOctaveDown,
-  handleKeyboardOctaveUp
+  handleKeyboardOctaveUp,
+  keyboardInputMode = "hosted",
+  midiInputEndpointID = DEFAULT_MIDI_INPUT_ENDPOINT_ID,
+  sendMIDIInputEvent
 } = {}) {
   const activeArrowTargetRef = reactExports.useRef(null);
   const textEntryDepthRef = reactExports.useRef(0);
+  const heldPreviewNotesRef = reactExports.useRef(/* @__PURE__ */ new Map());
   const handleKeyboardOctaveDownRef = reactExports.useRef(handleKeyboardOctaveDown);
   const handleKeyboardOctaveUpRef = reactExports.useRef(handleKeyboardOctaveUp);
+  const keyboardInputModeRef = reactExports.useRef(keyboardInputMode);
+  const midiInputEndpointIDRef = reactExports.useRef(midiInputEndpointID);
+  const sendMIDIInputEventRef = reactExports.useRef(sendMIDIInputEvent);
   reactExports.useEffect(() => {
     handleKeyboardOctaveDownRef.current = handleKeyboardOctaveDown;
   }, [handleKeyboardOctaveDown]);
   reactExports.useEffect(() => {
     handleKeyboardOctaveUpRef.current = handleKeyboardOctaveUp;
   }, [handleKeyboardOctaveUp]);
+  reactExports.useEffect(() => {
+    keyboardInputModeRef.current = keyboardInputMode;
+  }, [keyboardInputMode]);
+  reactExports.useEffect(() => {
+    midiInputEndpointIDRef.current = midiInputEndpointID;
+  }, [midiInputEndpointID]);
+  reactExports.useEffect(() => {
+    sendMIDIInputEventRef.current = sendMIDIInputEvent;
+  }, [sendMIDIInputEvent]);
+  const sendStandalonePreviewMIDI = reactExports.useCallback((status, noteNumber, velocity = 0) => {
+    const message = buildShortMidi(status, noteNumber, velocity);
+    sendMIDIInputEventRef.current?.(midiInputEndpointIDRef.current, message);
+    keyboardRef.current?.handleExternalMIDI?.(message);
+  }, [keyboardRef]);
+  const releaseStandalonePreviewNotes = reactExports.useCallback(() => {
+    if (heldPreviewNotesRef.current.size === 0) {
+      return;
+    }
+    for (const noteNumber of heldPreviewNotesRef.current.values()) {
+      sendStandalonePreviewMIDI(128, noteNumber);
+    }
+    heldPreviewNotesRef.current.clear();
+  }, [sendStandalonePreviewMIDI]);
   const activateArrowTarget = reactExports.useCallback((target) => {
     activeArrowTargetRef.current = target;
   }, []);
   const beginTextEntry = reactExports.useCallback((target) => {
     activeArrowTargetRef.current = target;
     textEntryDepthRef.current += 1;
+    releaseStandalonePreviewNotes();
     keyboardRef.current?.allNotesOff?.();
-  }, [keyboardRef]);
+  }, [keyboardRef, releaseStandalonePreviewNotes]);
   const endTextEntry = reactExports.useCallback(() => {
     textEntryDepthRef.current = Math.max(0, textEntryDepthRef.current - 1);
   }, []);
@@ -17285,52 +17619,134 @@ function useSynthInputRouter(keyboardRef, {
       if (textEntryDepthRef.current > 0) {
         return;
       }
-      const normalizedKey = event.key.toLowerCase();
-      if (normalizedKey === "z" && handleKeyboardOctaveDownRef.current) {
-        if (!event.repeat) {
-          const didShiftKeyboardOctave = handleKeyboardOctaveDownRef.current();
-          if (didShiftKeyboardOctave) {
-            keyboardRef.current?.allNotesOff?.();
-          }
-        }
-        event.preventDefault();
+      if (eventIsInsideTextEntry(event)) {
         return;
       }
-      if (normalizedKey === "x" && handleKeyboardOctaveUpRef.current) {
-        if (!event.repeat) {
-          const didShiftKeyboardOctave = handleKeyboardOctaveUpRef.current();
-          if (didShiftKeyboardOctave) {
-            keyboardRef.current?.allNotesOff?.();
+      if (keyboardInputModeRef.current === "standalone-preview") {
+        if (event.code === "KeyZ" && handleKeyboardOctaveDownRef.current) {
+          if (!event.repeat) {
+            releaseStandalonePreviewNotes();
+            const didShiftKeyboardOctave = handleKeyboardOctaveDownRef.current();
+            if (didShiftKeyboardOctave) {
+              keyboardRef.current?.allNotesOff?.();
+            }
           }
+          event.preventDefault();
+          return;
         }
-        event.preventDefault();
+        if (event.code === "KeyX" && handleKeyboardOctaveUpRef.current) {
+          if (!event.repeat) {
+            releaseStandalonePreviewNotes();
+            const didShiftKeyboardOctave = handleKeyboardOctaveUpRef.current();
+            if (didShiftKeyboardOctave) {
+              keyboardRef.current?.allNotesOff?.();
+            }
+          }
+          event.preventDefault();
+          return;
+        }
+        const noteNumber = resolveStandalonePreviewNoteFromCode(event.code, keyboardRef.current);
+        if (noteNumber !== null) {
+          event.preventDefault();
+          if (!event.repeat && !heldPreviewNotesRef.current.has(event.code)) {
+            heldPreviewNotesRef.current.set(event.code, noteNumber);
+            sendStandalonePreviewMIDI(144, noteNumber, NOTE_ON_VELOCITY);
+          }
+          return;
+        }
         return;
       }
-      keyboardRef.current?.handleKey?.(event, true);
     };
     const handleKeyUp = (event) => {
-      if (hasCommandModifier(event) || textEntryDepthRef.current > 0) {
+      if (hasCommandModifier(event)) {
         return;
       }
-      const normalizedKey = event.key.toLowerCase();
-      if (normalizedKey === "z" && handleKeyboardOctaveDownRef.current || normalizedKey === "x" && handleKeyboardOctaveUpRef.current) {
-        event.preventDefault();
+      if (keyboardInputModeRef.current === "standalone-preview") {
+        const heldNoteNumber = heldPreviewNotesRef.current.get(event.code);
+        if (heldNoteNumber !== void 0) {
+          event.preventDefault();
+          heldPreviewNotesRef.current.delete(event.code);
+          sendStandalonePreviewMIDI(128, heldNoteNumber);
+          return;
+        }
+      }
+      if (textEntryDepthRef.current > 0 || eventIsInsideTextEntry(event)) {
         return;
       }
-      keyboardRef.current?.handleKey?.(event, false);
+      if (keyboardInputModeRef.current === "standalone-preview") {
+        if (event.code === "KeyZ" && handleKeyboardOctaveDownRef.current || event.code === "KeyX" && handleKeyboardOctaveUpRef.current) {
+          event.preventDefault();
+          return;
+        }
+        if (resolveStandalonePreviewNoteFromCode(event.code, keyboardRef.current) !== null) {
+          event.preventDefault();
+          return;
+        }
+        return;
+      }
     };
     const handleWindowBlur = () => {
+      releaseStandalonePreviewNotes();
       keyboardRef.current?.allNotesOff?.();
+    };
+    const handleRelayedKeyboardMessage = (messageEvent) => {
+      if (keyboardInputModeRef.current !== "standalone-preview" || !isStandaloneKeyboardRelayMessage(messageEvent.data)) {
+        return;
+      }
+      const message = messageEvent.data;
+      if (message.metaKey || message.ctrlKey || message.altKey || textEntryDepthRef.current > 0 || documentHasTextEntryActive()) {
+        return;
+      }
+      if (message.eventType === "keydown") {
+        if (message.code === "KeyZ" && handleKeyboardOctaveDownRef.current) {
+          if (!message.repeat) {
+            releaseStandalonePreviewNotes();
+            const didShiftKeyboardOctave = handleKeyboardOctaveDownRef.current();
+            if (didShiftKeyboardOctave) {
+              keyboardRef.current?.allNotesOff?.();
+            }
+          }
+          return;
+        }
+        if (message.code === "KeyX" && handleKeyboardOctaveUpRef.current) {
+          if (!message.repeat) {
+            releaseStandalonePreviewNotes();
+            const didShiftKeyboardOctave = handleKeyboardOctaveUpRef.current();
+            if (didShiftKeyboardOctave) {
+              keyboardRef.current?.allNotesOff?.();
+            }
+          }
+          return;
+        }
+        const noteNumber = resolveStandalonePreviewNoteFromCode(message.code, keyboardRef.current);
+        if (noteNumber !== null && !message.repeat && !heldPreviewNotesRef.current.has(message.code)) {
+          heldPreviewNotesRef.current.set(message.code, noteNumber);
+          sendStandalonePreviewMIDI(144, noteNumber, NOTE_ON_VELOCITY);
+        }
+        return;
+      }
+      if (message.code === "KeyZ" && handleKeyboardOctaveDownRef.current || message.code === "KeyX" && handleKeyboardOctaveUpRef.current) {
+        return;
+      }
+      if (resolveStandalonePreviewNoteFromCode(message.code, keyboardRef.current) !== null) {
+        const noteNumber = heldPreviewNotesRef.current.get(message.code);
+        if (noteNumber !== void 0) {
+          heldPreviewNotesRef.current.delete(message.code);
+          sendStandalonePreviewMIDI(128, noteNumber);
+        }
+      }
     };
     window.addEventListener("keydown", handleKeyDown, true);
     window.addEventListener("keyup", handleKeyUp, true);
+    window.addEventListener("message", handleRelayedKeyboardMessage);
     window.addEventListener("blur", handleWindowBlur);
     return () => {
       window.removeEventListener("keydown", handleKeyDown, true);
       window.removeEventListener("keyup", handleKeyUp, true);
+      window.removeEventListener("message", handleRelayedKeyboardMessage);
       window.removeEventListener("blur", handleWindowBlur);
     };
-  }, [keyboardRef]);
+  }, [keyboardRef, releaseStandalonePreviewNotes, sendStandalonePreviewMIDI]);
   const bindArrowTarget = reactExports.useCallback((target) => ({
     onPointerDownCapture: () => activateArrowTarget(target),
     onFocusCapture: () => activateArrowTarget(target)
@@ -17785,7 +18201,8 @@ function useStoredArticulationBank() {
     setHasHydrated(true);
     bankRef.current = nextBank;
     setBank((previousBank) => articulationBanksEqual(previousBank, nextBank) ? previousBank : nextBank);
-  }, []);
+    sendNativeArticulationTriggerConfig(buildArticulationTriggerConfig(nextBank), patchConnection);
+  }, [patchConnection]);
   reactExports.useEffect(() => {
     const handleStoredStateValue = (message) => {
       if (!message || typeof message !== "object") {
@@ -17828,9 +18245,12 @@ function useStoredArticulationBank() {
     setBank(nextBank);
     if (typeof patchConnection.sendStoredStateValue === "function") {
       const serializedBank = serializeArticulationBank(nextBank);
+      const serializedTriggerConfig = serializeArticulationTriggerConfig(buildArticulationTriggerConfig(nextBank));
       rememberPendingEcho(serializedBank);
       patchConnection.sendStoredStateValue(ARTICULATION_STATE_KEY, serializedBank);
+      patchConnection.sendStoredStateValue(ARTICULATION_TRIGGER_CONFIG_STATE_KEY, serializedTriggerConfig);
     }
+    sendNativeArticulationTriggerConfig(buildArticulationTriggerConfig(nextBank), patchConnection);
   }, [patchConnection, rememberPendingEcho]);
   return reactExports.useMemo(() => ({
     bank,
@@ -18257,11 +18677,15 @@ function useSynthKeyboardRouting({
   onStepMsegRate,
   onStepGlideTime,
   onKeyboardOctaveDown,
-  onKeyboardOctaveUp
+  onKeyboardOctaveUp,
+  keyboardInputMode = "hosted",
+  sendMIDIInputEvent
 }) {
   const synthInputRouter = useSynthInputRouter(keyboardRef, {
     handleKeyboardOctaveDown: onKeyboardOctaveDown,
-    handleKeyboardOctaveUp: onKeyboardOctaveUp
+    handleKeyboardOctaveUp: onKeyboardOctaveUp,
+    keyboardInputMode,
+    sendMIDIInputEvent
   });
   const wavetableTarget = useStableArrowTarget("wavetable-select", onStepWavetable);
   const playModeTarget = useStableArrowTarget("play-mode", onStepPlayMode);
@@ -18293,8 +18717,10 @@ function useSynthPatchViewModel({
   msegCurveEditActivationMode = "immediate",
   onMsegCurveEditHoldActivated = null,
   onKeyboardOctaveDown,
-  onKeyboardOctaveUp
+  onKeyboardOctaveUp,
+  keyboardInputMode = "hosted"
 }) {
+  const patchConnection = usePatchConnection();
   const runtimeStateMessage = usePatchEndpoint(RUNTIME_STATE_ENDPOINT_ID, null);
   const normalizedRuntimeState = reactExports.useMemo(
     () => normalizeRuntimeTableState(runtimeStateMessage),
@@ -18782,8 +19208,9 @@ function useSynthPatchViewModel({
   const handleAddArticulationSlot = reactExports.useCallback(() => {
     const snapshot = captureCurrentArticulationSnapshot();
     articulationBankState.setAndPersistBank((previousBank) => {
-      const nextSlot = createArticulationSlotFromSnapshot(previousBank, snapshot);
-      if (!nextSlot) {
+      const nextBank = addCapturedArticulationToBank(previousBank, snapshot);
+      const nextSlot = nextBank.slots.find((slot) => slot.id === nextBank.selectedSlotId);
+      if (!nextSlot || nextBank.slots.length === previousBank.slots.length) {
         return previousBank;
       }
       const nextSelectionToken = `${nextSlot.id}:${toStableToken(nextSlot.snapshot)}`;
@@ -18791,11 +19218,7 @@ function useSynthPatchViewModel({
         selectionToken: nextSelectionToken,
         currentSnapshotToken: nextSelectionToken
       };
-      return normalizeArticulationBank({
-        ...previousBank,
-        selectedSlotId: nextSlot.id,
-        slots: [...previousBank.slots, nextSlot]
-      });
+      return nextBank;
     });
   }, [articulationBankState, captureCurrentArticulationSnapshot]);
   const handleSelectArticulationSlot = reactExports.useCallback((slotId) => {
@@ -18876,7 +19299,9 @@ function useSynthPatchViewModel({
     onStepMsegRate: handleStepMsegRate,
     onStepGlideTime: handleStepGlideTime,
     onKeyboardOctaveDown,
-    onKeyboardOctaveUp
+    onKeyboardOctaveUp,
+    keyboardInputMode,
+    sendMIDIInputEvent: patchConnection.sendMIDIInputEvent?.bind(patchConnection)
   });
   return {
     frames,

@@ -1067,7 +1067,7 @@ function buildModulationRuntimeEvents(stateValue) {
   events.push({ endpointID: MODULATION_ENABLE_ENDPOINT_ID, value: 1 });
   return events;
 }
-const ARTICULATION_STATE_KEY = "articulations.v1";
+const ARTICULATION_STATE_KEY = "articulations.v2";
 const ARTICULATION_SNAPSHOT_ENDPOINT_ID = "articulationSnapshot";
 const ARTICULATION_MAX_SLOTS = 128;
 function clamp$1(value, min, max) {
@@ -1082,6 +1082,9 @@ function normalizeNumber(value, fallback, min = -Number.MAX_VALUE, max = Number.
 }
 function normalizeInteger(value, fallback, min, max) {
   return clamp$1(Math.round(normalizeNumber(value, fallback)), min, max);
+}
+function normalizeTriggerMode(value) {
+  return value === "key" || value === "vel" || value === "chain" ? value : "chain";
 }
 function createDefaultArticulationParameterSnapshot() {
   return {
@@ -1180,20 +1183,90 @@ function normalizeArticulationSnapshot(value) {
     modRouteAmounts: [...routeAmountById.values()]
   };
 }
-function normalizeArticulationSlot(value, fallbackSelectorA) {
+function normalizeArticulationSlot(value, fallbackRuntimeSlot) {
   if (!value || typeof value !== "object") {
     return null;
   }
   const nextValue = value;
-  const selectorA = normalizeInteger(nextValue.selectorA, fallbackSelectorA, 0, ARTICULATION_MAX_SLOTS - 1);
-  const id = typeof nextValue.id === "string" && nextValue.id.trim() ? nextValue.id.trim() : `articulation-${selectorA}`;
-  const name = typeof nextValue.name === "string" && nextValue.name.trim() ? nextValue.name.trim() : `Art ${selectorA + 1}`;
+  const runtimeSlot = normalizeInteger(nextValue.runtimeSlot, fallbackRuntimeSlot, 0, ARTICULATION_MAX_SLOTS - 1);
+  const id = typeof nextValue.id === "string" && nextValue.id.trim() ? nextValue.id.trim() : `articulation-${runtimeSlot}`;
+  const name = typeof nextValue.name === "string" && nextValue.name.trim() ? nextValue.name.trim() : `Art ${runtimeSlot + 1}`;
   return {
     id,
-    selectorA,
+    runtimeSlot,
     name,
     snapshot: normalizeArticulationSnapshot(nextValue.snapshot)
   };
+}
+function normalizeKeyAssignment(value, validArticulationIds) {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+  const nextValue = value;
+  const articulationId = typeof nextValue.articulationId === "string" ? nextValue.articulationId.trim() : "";
+  if (!validArticulationIds.has(articulationId)) {
+    return null;
+  }
+  return {
+    note: normalizeInteger(nextValue.note, 0, 0, ARTICULATION_MAX_SLOTS - 1),
+    articulationId
+  };
+}
+function normalizeRangeAssignment(value, validArticulationIds, assignmentIndex, idPrefix, minAllowed) {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+  const nextValue = value;
+  const articulationId = typeof nextValue.articulationId === "string" ? nextValue.articulationId.trim() : "";
+  if (!validArticulationIds.has(articulationId)) {
+    return null;
+  }
+  let min = normalizeInteger(nextValue.min, minAllowed, minAllowed, ARTICULATION_MAX_SLOTS - 1);
+  let max = normalizeInteger(nextValue.max, min, minAllowed, ARTICULATION_MAX_SLOTS - 1);
+  if (max < min) {
+    [min, max] = [max, min];
+  }
+  const id = typeof nextValue.id === "string" && nextValue.id.trim() ? nextValue.id.trim() : `${idPrefix}-${assignmentIndex}`;
+  return {
+    id,
+    articulationId,
+    min,
+    max
+  };
+}
+function normalizeRangeAssignments(value, validArticulationIds, idPrefix, minAllowed) {
+  const inputAssignments = Array.isArray(value) ? value : [];
+  const usedIds = /* @__PURE__ */ new Set();
+  const assignments = [];
+  for (let assignmentIndex = 0; assignmentIndex < inputAssignments.length; assignmentIndex += 1) {
+    const assignment = normalizeRangeAssignment(
+      inputAssignments[assignmentIndex],
+      validArticulationIds,
+      assignmentIndex,
+      idPrefix,
+      minAllowed
+    );
+    if (!assignment || usedIds.has(assignment.id)) {
+      continue;
+    }
+    usedIds.add(assignment.id);
+    assignments.push(assignment);
+  }
+  return assignments;
+}
+function normalizeKeyAssignments(value, validArticulationIds) {
+  const inputAssignments = Array.isArray(value) ? value : [];
+  const usedNotes = /* @__PURE__ */ new Set();
+  const assignments = [];
+  for (const inputAssignment of inputAssignments) {
+    const assignment = normalizeKeyAssignment(inputAssignment, validArticulationIds);
+    if (!assignment || usedNotes.has(assignment.note)) {
+      continue;
+    }
+    usedNotes.add(assignment.note);
+    assignments.push(assignment);
+  }
+  return assignments;
 }
 function normalizeArticulationBank(value) {
   let parsedValue = value;
@@ -1206,24 +1279,29 @@ function normalizeArticulationBank(value) {
   }
   const nextValue = parsedValue && typeof parsedValue === "object" ? parsedValue : {};
   const inputSlots = Array.isArray(nextValue.slots) ? nextValue.slots : [];
-  const usedSelectors = /* @__PURE__ */ new Set();
+  const usedRuntimeSlots = /* @__PURE__ */ new Set();
   const usedIds = /* @__PURE__ */ new Set();
   const slots = [];
   for (let slotIndex = 0; slotIndex < inputSlots.length && slots.length < ARTICULATION_MAX_SLOTS; slotIndex += 1) {
     const slot = normalizeArticulationSlot(inputSlots[slotIndex], slotIndex);
-    if (!slot || usedSelectors.has(slot.selectorA) || usedIds.has(slot.id)) {
+    if (!slot || usedRuntimeSlots.has(slot.runtimeSlot) || usedIds.has(slot.id)) {
       continue;
     }
-    usedSelectors.add(slot.selectorA);
+    usedRuntimeSlots.add(slot.runtimeSlot);
     usedIds.add(slot.id);
     slots.push(slot);
   }
   const selectedSlotId = typeof nextValue.selectedSlotId === "string" && slots.some((slot) => slot.id === nextValue.selectedSlotId) ? nextValue.selectedSlotId : null;
+  const validArticulationIds = new Set(slots.map((slot) => slot.id));
   return {
     format: "cosimo.articulations",
-    version: 1,
+    version: 2,
     selectedSlotId,
-    slots
+    activeTriggerMode: normalizeTriggerMode(nextValue.activeTriggerMode),
+    slots,
+    chainAssignments: normalizeRangeAssignments(nextValue.chainAssignments, validArticulationIds, "chain", 0),
+    keyAssignments: normalizeKeyAssignments(nextValue.keyAssignments, validArticulationIds),
+    velocityAssignments: normalizeRangeAssignments(nextValue.velocityAssignments, validArticulationIds, "velocity", 1)
   };
 }
 function createDisabledRuntimeUpload(selectorA) {
@@ -1251,9 +1329,9 @@ function normalizeRuntimeRoutes(routesValue) {
 function buildArticulationRuntimeUploads(bankValue, currentRoutesValue = []) {
   const bank = normalizeArticulationBank(bankValue);
   const currentRoutes = normalizeRuntimeRoutes(currentRoutesValue);
-  const slotBySelectorA = new Map(bank.slots.map((slot) => [slot.selectorA, slot]));
+  const slotByRuntimeSlot = new Map(bank.slots.map((slot) => [slot.runtimeSlot, slot]));
   return Array.from({ length: ARTICULATION_MAX_SLOTS }, (_, selectorA) => {
-    const slot = slotBySelectorA.get(selectorA);
+    const slot = slotByRuntimeSlot.get(selectorA);
     if (!slot) {
       return createDisabledRuntimeUpload(selectorA);
     }

@@ -41,13 +41,17 @@ import {
 } from "./modulation";
 import {
     ARTICULATION_STATE_KEY,
+    ARTICULATION_TRIGGER_CONFIG_STATE_KEY,
+    addCapturedArticulationToBank,
     articulationBanksEqual,
     articulationSnapshotsEqual,
-    createArticulationSlotFromSnapshot,
+    buildArticulationTriggerConfig,
     createDefaultArticulationBank,
     normalizeArticulationBank,
     normalizeArticulationSnapshot,
+    sendNativeArticulationTriggerConfig,
     serializeArticulationBank,
+    serializeArticulationTriggerConfig,
     type ArticulationBank,
     type ArticulationSlot,
     type ArticulationSnapshot,
@@ -89,6 +93,7 @@ import {
     useSynthInputRouter,
     type ArrowStepDirection,
     type SynthFocusBindings,
+    type SynthKeyboardInputMode,
     type SynthKeyboardLike,
 } from "./synth-input-router";
 import {
@@ -645,7 +650,8 @@ function useStoredArticulationBank() {
         setBank((previousBank) => (
             articulationBanksEqual(previousBank, nextBank) ? previousBank : nextBank
         ));
-    }, []);
+        sendNativeArticulationTriggerConfig(buildArticulationTriggerConfig(nextBank), patchConnection);
+    }, [patchConnection]);
 
     useEffect(() => {
         const handleStoredStateValue = (message: unknown) => {
@@ -701,9 +707,12 @@ function useStoredArticulationBank() {
 
         if (typeof patchConnection.sendStoredStateValue === "function") {
             const serializedBank = serializeArticulationBank(nextBank);
+            const serializedTriggerConfig = serializeArticulationTriggerConfig(buildArticulationTriggerConfig(nextBank));
             rememberPendingEcho(serializedBank);
             patchConnection.sendStoredStateValue(ARTICULATION_STATE_KEY, serializedBank);
+            patchConnection.sendStoredStateValue(ARTICULATION_TRIGGER_CONFIG_STATE_KEY, serializedTriggerConfig);
         }
+        sendNativeArticulationTriggerConfig(buildArticulationTriggerConfig(nextBank), patchConnection);
     }, [patchConnection, rememberPendingEcho]);
 
     return useMemo(() => ({
@@ -1234,6 +1243,8 @@ export function useSynthKeyboardRouting({
     onStepGlideTime,
     onKeyboardOctaveDown,
     onKeyboardOctaveUp,
+    keyboardInputMode = "hosted",
+    sendMIDIInputEvent,
 }: {
     keyboardRef: RefObject<SynthKeyboardLike | null>;
     onStepWavetable: (direction: ArrowStepDirection) => void;
@@ -1242,10 +1253,14 @@ export function useSynthKeyboardRouting({
     onStepGlideTime: (direction: ArrowStepDirection) => void;
     onKeyboardOctaveDown?: () => boolean;
     onKeyboardOctaveUp?: () => boolean;
+    keyboardInputMode?: SynthKeyboardInputMode;
+    sendMIDIInputEvent?: (endpointID: string, shortMIDICode: number) => void;
 }): SynthKeyboardRoutingBindings {
     const synthInputRouter = useSynthInputRouter(keyboardRef, {
         handleKeyboardOctaveDown: onKeyboardOctaveDown,
         handleKeyboardOctaveUp: onKeyboardOctaveUp,
+        keyboardInputMode,
+        sendMIDIInputEvent,
     });
     const wavetableTarget = useStableArrowTarget("wavetable-select", onStepWavetable);
     const playModeTarget = useStableArrowTarget("play-mode", onStepPlayMode);
@@ -1280,6 +1295,7 @@ export function useSynthPatchViewModel({
     onMsegCurveEditHoldActivated = null,
     onKeyboardOctaveDown,
     onKeyboardOctaveUp,
+    keyboardInputMode = "hosted",
 }: {
     stageRef: RefObject<HTMLDivElement | null>;
     msegEditorSurfaceRef: RefObject<SVGSVGElement | null>;
@@ -1290,7 +1306,9 @@ export function useSynthPatchViewModel({
     onMsegCurveEditHoldActivated?: (() => void) | null;
     onKeyboardOctaveDown?: () => boolean;
     onKeyboardOctaveUp?: () => boolean;
+    keyboardInputMode?: SynthKeyboardInputMode;
 }): SynthPatchViewModel {
+    const patchConnection = usePatchConnection();
     const runtimeStateMessage = usePatchEndpoint<unknown | null>(RUNTIME_STATE_ENDPOINT_ID, null);
     const normalizedRuntimeState = useMemo(
         () => normalizeRuntimeTableState(runtimeStateMessage),
@@ -1830,9 +1848,10 @@ export function useSynthPatchViewModel({
         const snapshot = captureCurrentArticulationSnapshot();
 
         articulationBankState.setAndPersistBank((previousBank) => {
-            const nextSlot = createArticulationSlotFromSnapshot(previousBank, snapshot);
+            const nextBank = addCapturedArticulationToBank(previousBank, snapshot);
+            const nextSlot = nextBank.slots.find((slot) => slot.id === nextBank.selectedSlotId);
 
-            if (!nextSlot) {
+            if (!nextSlot || nextBank.slots.length === previousBank.slots.length) {
                 return previousBank;
             }
 
@@ -1842,11 +1861,7 @@ export function useSynthPatchViewModel({
                 currentSnapshotToken: nextSelectionToken,
             };
 
-            return normalizeArticulationBank({
-                ...previousBank,
-                selectedSlotId: nextSlot.id,
-                slots: [...previousBank.slots, nextSlot],
-            });
+            return nextBank;
         });
     }, [articulationBankState, captureCurrentArticulationSnapshot]);
 
@@ -1950,6 +1965,8 @@ export function useSynthPatchViewModel({
         onStepGlideTime: handleStepGlideTime,
         onKeyboardOctaveDown,
         onKeyboardOctaveUp,
+        keyboardInputMode,
+        sendMIDIInputEvent: patchConnection.sendMIDIInputEvent?.bind(patchConnection),
     });
 
     return {

@@ -2,6 +2,7 @@
 
 #include <JuceHeader.h>
 
+#include <atomic>
 #include <cctype>
 #include <cstdlib>
 #include <filesystem>
@@ -15,6 +16,7 @@
 #include <vector>
 
 #include "../../native/ModulationRuntimeRestore.h"
+#include "../../native/ArticulationTriggerConfigState.h"
 #include "CosimoSharedWavetableLibrary.h"
 #include "cmajor/helpers/cmaj_GeneratedCppEngine.h"
 #include "cmajor/helpers/cmaj_Patch.h"
@@ -293,10 +295,14 @@ inline choc::value::Value createPatchBootConfig (const cmaj::Patch& patch, const
 class PatchWebViewHost final : public cmaj::PatchView
 {
 public:
-    PatchWebViewHost (cmaj::Patch& patchToUse, const cmaj::PatchManifest::View& preferredView, bool shouldLoadBootPageHTML)
+    PatchWebViewHost (cmaj::Patch& patchToUse,
+                      const cmaj::PatchManifest::View& preferredView,
+                      bool shouldLoadBootPageHTML,
+                      std::function<void (std::string)> articulationTriggerConfigHandlerToUse = {})
         : cmaj::PatchView (patchToUse, preferredView),
           currentView (preferredView),
-          loadBootPageHTML (shouldLoadBootPageHTML)
+          loadBootPageHTML (shouldLoadBootPageHTML),
+          articulationTriggerConfigHandler (std::move (articulationTriggerConfigHandlerToUse))
     {
         choc::ui::WebView::Options options;
         options.enableDebugMode = false;
@@ -500,6 +506,14 @@ private:
             return {};
         });
 
+        boundOK = boundOK && view.bind ("cosimo_set_articulation_trigger_config", [this] (const choc::value::ValueView& args) -> choc::value::Value
+        {
+            if (args.isArray() && args.size() > 0 && articulationTriggerConfigHandler)
+                articulationTriggerConfigHandler (args[0].toString());
+
+            return {};
+        });
+
         (void) boundOK;
         jassert (boundOK);
     }
@@ -549,6 +563,7 @@ private:
     cmaj::PatchManifest::View currentView;
     bool loadBootPageHTML = false;
     bool bridgeInitialised = false;
+    std::function<void (std::string)> articulationTriggerConfigHandler;
 };
 
 inline cmaj::PatchManifest::View derivePatchViewSize (const cmaj::Patch& patch,
@@ -733,6 +748,8 @@ public:
         if (auto* playHead = getPlayHead())
             updateTimelineFromPlayhead (*playHead);
 
+        applyPendingArticulationTriggerConfig();
+
         cosimo::cmajor_bridge::processBlockWithFutureDawNoteMeta (
             *patch,
             audio,
@@ -747,6 +764,12 @@ public:
     void processBlock (juce::AudioBuffer<double>&, juce::MidiBuffer&) override
     {
         jassertfalse;
+    }
+
+    void setPendingArticulationTriggerConfigFromJSONString (const std::string& serializedConfig)
+    {
+        setPendingArticulationTriggerConfig (
+            cosimo::future_daw::createTriggerConfigFromJSONString (serializedConfig));
     }
 
     void getStateInformation (juce::MemoryBlock& destinationData) override
@@ -805,6 +828,23 @@ public:
     }
 
 private:
+    void setPendingArticulationTriggerConfig (cosimo::future_daw::ArticulationTriggerConfig config)
+    {
+        std::atomic_store (&pendingArticulationTriggerConfig,
+                           std::make_shared<const cosimo::future_daw::ArticulationTriggerConfig> (std::move (config)));
+    }
+
+    void applyPendingArticulationTriggerConfig()
+    {
+        auto pendingConfig = std::atomic_load (&pendingArticulationTriggerConfig);
+
+        if (pendingConfig == activeArticulationTriggerConfig || pendingConfig == nullptr)
+            return;
+
+        noteMetaBridge.setTriggerConfig (*pendingConfig);
+        activeArticulationTriggerConfig = std::move (pendingConfig);
+    }
+
     static bool isLayoutOK (const juce::Array<BusProperties>& patchLayouts,
                             const juce::Array<juce::AudioChannelSet>& suggestedLayouts)
     {
@@ -968,7 +1008,11 @@ private:
                                                                         detail::derivePatchViewSize (*owner.patch,
                                                                                                     owner.lastEditorWidth,
                                                                                                     owner.lastEditorHeight),
-                                                                        owner.wrapperType == juce::AudioProcessor::wrapperType_Standalone))
+                                                                        owner.wrapperType == juce::AudioProcessor::wrapperType_Standalone,
+                                                                        [&ownerToUse] (std::string serializedConfig)
+                                                                        {
+                                                                            ownerToUse.setPendingArticulationTriggerConfigFromJSONString (std::move (serializedConfig));
+                                                                        }))
         {
             patchWebViewHolder = choc::ui::createJUCEWebViewHolder (patchWebView->getWebView());
             patchWebViewHolder->setSize (static_cast<int> (patchWebView->width), static_cast<int> (patchWebView->height));
@@ -1444,6 +1488,8 @@ private:
             lastEditorHeight = 0;
         }
 
+        bool restoredArticulationTriggerConfig = false;
+
         if (auto storedState = newState.getChildWithName (ids.state); storedState.isValid())
         {
             for (const auto& valueTree : storedState)
@@ -1456,11 +1502,25 @@ private:
                     if (auto* value = valueTree.getPropertyPointer (ids.binaryValue))
                     {
                         if (key->isString() && key->toString().isNotEmpty() && ! value->isVoid())
-                            patch->setStoredStateValue (key->toString().toStdString(), convertVarToValue (*value));
+                        {
+                            const auto keyString = key->toString().toStdString();
+                            const auto convertedValue = convertVarToValue (*value);
+                            patch->setStoredStateValue (keyString, convertedValue);
+
+                            if (keyString == cosimo::future_daw::articulationTriggerConfigStateKey)
+                            {
+                                restoredArticulationTriggerConfig = true;
+                                setPendingArticulationTriggerConfig (
+                                    cosimo::future_daw::createTriggerConfigFromStoredValue (convertedValue));
+                            }
+                        }
                     }
                 }
             }
         }
+
+        if (! restoredArticulationTriggerConfig)
+            setPendingArticulationTriggerConfig ({});
 
         if (getSampleRate() > 0.0)
             applyCurrentRateAndBlockSize();
@@ -1743,7 +1803,11 @@ private:
     }
 
     std::shared_ptr<cmaj::Patch> patch;
-    cosimo::future_daw::NoteMetaBridge noteMetaBridge { cosimo::future_daw::KeyswitchMap::defaultLowNoteRange() };
+    cosimo::future_daw::NoteMetaBridge noteMetaBridge;
+    std::shared_ptr<const cosimo::future_daw::ArticulationTriggerConfig> pendingArticulationTriggerConfig {
+        std::make_shared<const cosimo::future_daw::ArticulationTriggerConfig>()
+    };
+    std::shared_ptr<const cosimo::future_daw::ArticulationTriggerConfig> activeArticulationTriggerConfig;
     std::vector<Parameter*> parameters;
     std::string statusMessage;
     bool isStatusMessageError = false;

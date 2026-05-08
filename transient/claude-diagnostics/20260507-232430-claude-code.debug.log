@@ -1,0 +1,120 @@
+2026-05-08T04:24:31.036Z [DEBUG] MDM settings load completed in 0ms
+2026-05-08T04:24:31.087Z [DEBUG] Broken symlink or missing file encountered for settings.json at path: /Users/winterfell/.codex/worktrees/ea13/cosimo-synth/.claude/settings.json
+2026-05-08T04:24:31.087Z [DEBUG] Broken symlink or missing file encountered for settings.json at path: /Library/Application Support/ClaudeCode/managed-settings.json
+2026-05-08T04:24:31.087Z [DEBUG] CA certs: Config fallback - globalEnv keys: , settingsEnv keys: none
+2026-05-08T04:24:31.088Z [DEBUG] [init] configureGlobalMTLS starting
+2026-05-08T04:24:31.088Z [DEBUG] [init] configureGlobalMTLS complete
+2026-05-08T04:24:31.088Z [DEBUG] [init] configureGlobalAgents starting
+2026-05-08T04:24:31.088Z [DEBUG] CA certs: stores=bundled,system, extraCertsPath=undefined
+2026-05-08T04:24:31.088Z [DEBUG] [init] configureGlobalAgents complete
+2026-05-08T04:24:31.116Z [DEBUG] Error log sink initialized
+2026-05-08T04:24:31.120Z [DEBUG] [ToolSearch:optimistic] mode=tst-auto, ENABLE_TOOL_SEARCH=auto:1, result=true
+2026-05-08T04:24:31.122Z [DEBUG] [STARTUP] Loading MCP configs...
+2026-05-08T04:24:31.127Z [DEBUG] [STARTUP] Running setup()...
+2026-05-08T04:24:31.129Z [DEBUG] Loading skills from: managed=/Library/Application Support/ClaudeCode/.claude/skills, user=/Users/winterfell/.claude/skills, project=[]
+2026-05-08T04:24:31.136Z [DEBUG] [TeammateModeSnapshot] Captured from config: auto
+2026-05-08T04:24:31.158Z [DEBUG] Error log sink initialized
+2026-05-08T04:24:31.161Z [DEBUG] Ripgrep first use test: PASSED (mode=builtin, path=/Users/winterfell/.local/share/fnm/node-versions/v22.16.0/installation/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/arm64-darwin/rg)
+2026-05-08T04:24:31.164Z [DEBUG] rg error (signal=null, code=2, stderr: rg: /Users/winterfell/src/cosimo-synth/.claude/agents: IO error for operation on /Users/winterfell/src/cosimo-synth/.claude/agents: No such file or directory (os error 2)
+), 0 results
+2026-05-08T04:24:31.164Z [DEBUG] rg error (signal=null, code=2, stderr: rg: /Library/Application Support/ClaudeCode/.claude/agents: IO error for operation on /Library/Application Support/ClaudeCode/.claude/agents: No such file or directory (os error 2)
+), 0 results
+2026-05-08T04:24:31.164Z [DEBUG] rg error (signal=null, code=2, stderr: rg: /Users/winterfell/src/cosimo-synth/.claude/commands: IO error for operation on /Users/winterfell/src/cosimo-synth/.claude/commands: No such file or directory (os error 2)
+), 0 results
+2026-05-08T04:24:31.169Z [DEBUG] Loaded 7 installed plugins from /Users/winterfell/.claude/plugins/installed_plugins.json
+2026-05-08T04:24:31.169Z [DEBUG] Found 0 plugins (0 enabled, 0 disabled)
+2026-05-08T04:24:31.169Z [DEBUG] getPluginSkills: Processing 0 enabled plugins
+2026-05-08T04:24:31.169Z [DEBUG] Registered 0 hooks from 0 plugins
+2026-05-08T04:24:31.169Z [DEBUG] Total plugin skills loaded: 0
+2026-05-08T04:24:31.169Z [DEBUG] Total plugin commands loaded: 0
+2026-05-08T04:24:31.169Z [DEBUG] Total plugin agents loaded: 0
+2026-05-08T04:24:31.174Z [DEBUG] [STARTUP] setup() completed in 47ms
+2026-05-08T04:24:31.174Z [DEBUG] Cleared CA certificates cache
+2026-05-08T04:24:31.174Z [DEBUG] Cleared mTLS configuration cache
+2026-05-08T04:24:31.174Z [DEBUG] Cleared proxy agent cache
+2026-05-08T04:24:31.174Z [DEBUG] CA certs: stores=bundled,system, extraCertsPath=undefined
+2026-05-08T04:24:31.174Z [DEBUG] [STARTUP] Loading commands and agents...
+2026-05-08T04:24:31.181Z [DEBUG] rg error (signal=null, code=2, stderr: rg: /Library/Application Support/ClaudeCode/.claude/commands: IO error for operation on /Library/Application Support/ClaudeCode/.claude/commands: No such file or directory (os error 2)
+), 0 results
+2026-05-08T04:24:31.182Z [DEBUG] Loaded 0 unique skills (0 unconditional, 0 conditional, managed: 0, user: 0, project: 0, additional: 0, legacy commands: 0)
+2026-05-08T04:24:31.182Z [DEBUG] getSkills returning: 0 skill dir commands, 0 plugin skills, 10 bundled skills, 0 builtin plugin skills
+2026-05-08T04:24:31.183Z [DEBUG] [STARTUP] Commands and agents loaded in 8ms
+2026-05-08T04:24:31.183Z [DEBUG] [LSP MANAGER] initializeLspServerManager() called
+2026-05-08T04:24:31.183Z [DEBUG] [LSP MANAGER] Created manager instance, state=pending
+2026-05-08T04:24:31.183Z [DEBUG] [LSP MANAGER] Starting async initialization (generation 1)
+2026-05-08T04:24:31.183Z [DEBUG] Starting background startup prefetches
+2026-05-08T04:24:31.183Z [DEBUG] [Bootstrap] Fetching
+2026-05-08T04:24:31.187Z [DEBUG] Passes: Using fresh cached eligibility data
+2026-05-08T04:24:31.188Z [DEBUG] [STARTUP] MCP configs resolved in 1ms (awaited at +66ms)
+2026-05-08T04:24:31.200Z [DEBUG] Broken symlink or missing file encountered for settings.json at path: /Users/winterfell/.codex/worktrees/ea13/cosimo-synth/.claude/settings.local.json
+2026-05-08T04:24:31.201Z [DEBUG] All plugins already exist, skipping migration
+2026-05-08T04:24:31.201Z [DEBUG] Total LSP servers loaded: 0
+2026-05-08T04:24:31.201Z [DEBUG] Initialized versioned plugins system with 7 plugins
+2026-05-08T04:24:31.201Z [DEBUG] [LSP SERVER MANAGER] getAllLspServers returned 0 server(s)
+2026-05-08T04:24:31.201Z [DEBUG] LSP manager initialized with 0 servers
+2026-05-08T04:24:31.201Z [DEBUG] Cleared CA certificates cache
+2026-05-08T04:24:31.201Z [DEBUG] Cleared mTLS configuration cache
+2026-05-08T04:24:31.201Z [DEBUG] Cleared proxy agent cache
+2026-05-08T04:24:31.202Z [DEBUG] CA certs: stores=bundled,system, extraCertsPath=undefined
+2026-05-08T04:24:31.202Z [DEBUG] LSP server manager initialized successfully
+2026-05-08T04:24:31.202Z [DEBUG] LSP notification handlers registered successfully for all 0 server(s)
+2026-05-08T04:24:31.205Z [DEBUG] Fast mode unavailable: Fast mode is not available in the Agent SDK
+2026-05-08T04:24:31.206Z [DEBUG] [Perfetto] initializePerfettoTracing called, env value: undefined
+2026-05-08T04:24:31.206Z [DEBUG] [3P telemetry] isTelemetryEnabled=false (CLAUDE_CODE_ENABLE_TELEMETRY=undefined)
+2026-05-08T04:24:31.212Z [DEBUG] Plugin autoupdate: skipped (auto-updater disabled)
+2026-05-08T04:24:31.212Z [DEBUG] Grove: Using fresh cached config
+2026-05-08T04:24:31.228Z [DEBUG] Watching for changes in skill/command directories: /Users/winterfell/.claude/skills, /Users/winterfell/.claude/commands...
+2026-05-08T04:24:31.229Z [DEBUG] Watching for changes in setting files /Users/winterfell/.claude/settings.json...
+2026-05-08T04:24:31.273Z [DEBUG] Git remote URL: git@github.com:androidStern-personal/cosimo-synth.git
+2026-05-08T04:24:31.274Z [DEBUG] Parsed repository: github.com/androidStern-personal/cosimo-synth from URL: git@github.com:androidStern-personal/cosimo-synth.git
+2026-05-08T04:24:31.412Z [DEBUG] [auto-mode] verifyAutoModeGateAccess: enabledState=enabled disabledBySettings=false model=claude-opus-4-7[1m] modelSupported=true disableFastModeBreakerFires=false carouselAvailable=true canEnterAuto=true
+2026-05-08T04:24:31.582Z [ERROR] "AxiosError: [url=https://platform.claude.com/v1/oauth/token,status=400] AxiosError: Request failed with status code 400\n    at jU (file:///Users/winterfell/.local/share/fnm/node-versions/v22.16.0/installation/lib/node_modules/@anthropic-ai/claude-code/cli.js:113:1188)\n    at Unzip.<anonymous> (file:///Users/winterfell/.local/share/fnm/node-versions/v22.16.0/installation/lib/node_modules/@anthropic-ai/claude-code/cli.js:118:12476)\n    at Unzip.emit (node:events:518:28)\n    at endReadableNT (node:internal/streams/readable:1698:12)\n    at process.processTicksAndRejections (node:internal/process/task_queues:90:21)\n    at IU6.request (file:///Users/winterfell/.local/share/fnm/node-versions/v22.16.0/installation/lib/node_modules/@anthropic-ai/claude-code/cli.js:120:2450)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async ll6 (file:///Users/winterfell/.local/share/fnm/node-versions/v22.16.0/installation/lib/node_modules/@anthropic-ai/claude-code/cli.js:301:264352)\n    at async QR1 (file:///Users/winterfell/.local/share/fnm/node-versions/v22.16.0/installation/lib/node_modules/@anthropic-ai/claude-code/cli.js:480:3858)\n    at async cf1 (file:///Users/winterfell/.local/share/fnm/node-versions/v22.16.0/installation/lib/node_modules/@anthropic-ai/claude-code/cli.js:301:268067)"
+2026-05-08T04:24:31.623Z [DEBUG] [mcp-registry] Loaded 197 official MCP URLs (legacy)
+2026-05-08T04:24:33.450Z [ERROR] "AxiosError: [url=https://platform.claude.com/v1/oauth/token,status=400] AxiosError: Request failed with status code 400\n    at jU (file:///Users/winterfell/.local/share/fnm/node-versions/v22.16.0/installation/lib/node_modules/@anthropic-ai/claude-code/cli.js:113:1188)\n    at Unzip.<anonymous> (file:///Users/winterfell/.local/share/fnm/node-versions/v22.16.0/installation/lib/node_modules/@anthropic-ai/claude-code/cli.js:118:12476)\n    at Unzip.emit (node:events:518:28)\n    at endReadableNT (node:internal/streams/readable:1698:12)\n    at process.processTicksAndRejections (node:internal/process/task_queues:90:21)\n    at IU6.request (file:///Users/winterfell/.local/share/fnm/node-versions/v22.16.0/installation/lib/node_modules/@anthropic-ai/claude-code/cli.js:120:2450)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async ll6 (file:///Users/winterfell/.local/share/fnm/node-versions/v22.16.0/installation/lib/node_modules/@anthropic-ai/claude-code/cli.js:301:264352)\n    at async QR1 (file:///Users/winterfell/.local/share/fnm/node-versions/v22.16.0/installation/lib/node_modules/@anthropic-ai/claude-code/cli.js:480:3858)"
+2026-05-08T04:24:33.469Z [DEBUG] [Bootstrap] Fetching
+2026-05-08T04:24:33.545Z [DEBUG] Failed to fetch Grove notice config: AxiosError: Request failed with status code 401
+2026-05-08T04:24:33.546Z [ERROR] Failed to fetch org fast mode status, defaulting to enabled (cached): AxiosError: Request failed with status code 401
+2026-05-08T04:24:33.549Z [ERROR] "AxiosError: [url=https://api.anthropic.com/api/oauth/account/settings,status=401,body=Invalid authentication credentials] AxiosError: Request failed with status code 401\n    at jU (file:///Users/winterfell/.local/share/fnm/node-versions/v22.16.0/installation/lib/node_modules/@anthropic-ai/claude-code/cli.js:113:1188)\n    at Unzip.<anonymous> (file:///Users/winterfell/.local/share/fnm/node-versions/v22.16.0/installation/lib/node_modules/@anthropic-ai/claude-code/cli.js:118:12476)\n    at Unzip.emit (node:events:518:28)\n    at endReadableNT (node:internal/streams/readable:1698:12)\n    at process.processTicksAndRejections (node:internal/process/task_queues:90:21)\n    at IU6.request (file:///Users/winterfell/.local/share/fnm/node-versions/v22.16.0/installation/lib/node_modules/@anthropic-ai/claude-code/cli.js:120:2450)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async Wa (file:///Users/winterfell/.local/share/fnm/node-versions/v22.16.0/installation/lib/node_modules/@anthropic-ai/claude-code/cli.js:495:4048)\n    at async file:///Users/winterfell/.local/share/fnm/node-versions/v22.16.0/installation/lib/node_modules/@anthropic-ai/claude-code/cli.js:2897:182\n    at async Promise.all (index 0)\n    at async cd4 (file:///Users/winterfell/.local/share/fnm/node-versions/v22.16.0/installation/lib/node_modules/@anthropic-ai/claude-code/cli.js:2891:4593)\n    at async SXA (file:///Users/winterfell/.local/share/fnm/node-versions/v22.16.0/installation/lib/node_modules/@anthropic-ai/claude-code/cli.js:18193:749)"
+2026-05-08T04:24:33.554Z [DEBUG] [ScheduledTasks] scheduler start() — enabled=false, hasTasks=false
+2026-05-08T04:24:33.555Z [DEBUG] installPluginsForHeadless: starting
+2026-05-08T04:24:33.555Z [DEBUG] installPluginsForHeadless: no marketplaces declared
+2026-05-08T04:24:33.556Z [DEBUG] Tool search disabled for model 'claude-haiku-4-5-20251001': model does not support tool_reference blocks. This feature is only available on Claude Sonnet 4+, Opus 4+, and newer models.
+2026-05-08T04:24:33.557Z [DEBUG] attribution header x-anthropic-billing-header: cc_version=2.1.112.b2f; cc_entrypoint=sdk-cli; cch=00000;
+2026-05-08T04:24:33.557Z [DEBUG] Fast mode unavailable: Fast mode is not available in the Agent SDK
+2026-05-08T04:24:33.558Z [DEBUG] Fast mode unavailable: Fast mode is not available in the Agent SDK
+2026-05-08T04:24:33.558Z [DEBUG] [API:request] Creating client, ANTHROPIC_CUSTOM_HEADERS present: false, has Authorization header: false
+2026-05-08T04:24:33.558Z [DEBUG] [API:auth] OAuth token check starting
+2026-05-08T04:24:33.564Z [DEBUG] [Bootstrap] Fetch failed: 401
+2026-05-08T04:24:33.564Z [ERROR] "AxiosError: [url=https://api.anthropic.com/api/claude_cli/bootstrap,status=401,body=Invalid authentication credentials] AxiosError: Request failed with status code 401\n    at jU (file:///Users/winterfell/.local/share/fnm/node-versions/v22.16.0/installation/lib/node_modules/@anthropic-ai/claude-code/cli.js:113:1188)\n    at Unzip.<anonymous> (file:///Users/winterfell/.local/share/fnm/node-versions/v22.16.0/installation/lib/node_modules/@anthropic-ai/claude-code/cli.js:118:12476)\n    at Unzip.emit (node:events:518:28)\n    at endReadableNT (node:internal/streams/readable:1698:12)\n    at process.processTicksAndRejections (node:internal/process/task_queues:90:21)\n    at IU6.request (file:///Users/winterfell/.local/share/fnm/node-versions/v22.16.0/installation/lib/node_modules/@anthropic-ai/claude-code/cli.js:120:2450)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async file:///Users/winterfell/.local/share/fnm/node-versions/v22.16.0/installation/lib/node_modules/@anthropic-ai/claude-code/cli.js:8664:18955\n    at async Wa (file:///Users/winterfell/.local/share/fnm/node-versions/v22.16.0/installation/lib/node_modules/@anthropic-ai/claude-code/cli.js:495:4048)\n    at async F2A (file:///Users/winterfell/.local/share/fnm/node-versions/v22.16.0/installation/lib/node_modules/@anthropic-ai/claude-code/cli.js:8664:18716)\n    at async eO5 (file:///Users/winterfell/.local/share/fnm/node-versions/v22.16.0/installation/lib/node_modules/@anthropic-ai/claude-code/cli.js:8664:19350)"
+2026-05-08T04:24:33.565Z [DEBUG] "rg error (signal=null, code=2, stderr: rg: /Library/Application Support/ClaudeCode/.claude/output-styles: IO error for operation on /Library/Application Support/ClaudeCode/.claude/output-styles: No such file or directory (os error 2)\n), 0 results"
+2026-05-08T04:24:33.566Z [DEBUG] "rg error (signal=null, code=2, stderr: rg: /Users/winterfell/src/cosimo-synth/.claude/output-styles: IO error for operation on /Users/winterfell/src/cosimo-synth/.claude/output-styles: No such file or directory (os error 2)\n), 0 results"
+2026-05-08T04:24:33.585Z [DEBUG] Total plugin output styles loaded: 0
+2026-05-08T04:24:33.588Z [DEBUG] Hooks: Found 0 total hooks in registry
+2026-05-08T04:24:33.588Z [DEBUG] Hooks: checkForNewResponses returning 0 responses
+2026-05-08T04:24:33.589Z [WARN] [3P telemetry] Event dropped (no event logger initialized): user_prompt
+2026-05-08T04:24:33.595Z [DEBUG] Fast mode unavailable: Fast mode is not available in the Agent SDK
+2026-05-08T04:24:33.597Z [DEBUG] autocompact: tokens=370 threshold=967000 effectiveWindow=980000
+2026-05-08T04:24:33.597Z [DEBUG] Tool search disabled: ToolSearchTool is not available (may have been disallowed via disallowedTools).
+2026-05-08T04:24:33.598Z [DEBUG] attribution header x-anthropic-billing-header: cc_version=2.1.112.b2f; cc_entrypoint=sdk-cli; cch=00000;
+2026-05-08T04:24:33.598Z [DEBUG] Fast mode unavailable: Fast mode is not available in the Agent SDK
+2026-05-08T04:24:33.598Z [DEBUG] Fast mode unavailable: Fast mode is not available in the Agent SDK
+2026-05-08T04:24:33.598Z [DEBUG] [API:request] Creating client, ANTHROPIC_CUSTOM_HEADERS present: false, has Authorization header: false
+2026-05-08T04:24:33.598Z [DEBUG] [API:auth] OAuth token check starting
+2026-05-08T04:24:33.733Z [ERROR] "AxiosError: [url=https://platform.claude.com/v1/oauth/token,status=400] AxiosError: Request failed with status code 400\n    at jU (file:///Users/winterfell/.local/share/fnm/node-versions/v22.16.0/installation/lib/node_modules/@anthropic-ai/claude-code/cli.js:113:1188)\n    at Unzip.<anonymous> (file:///Users/winterfell/.local/share/fnm/node-versions/v22.16.0/installation/lib/node_modules/@anthropic-ai/claude-code/cli.js:118:12476)\n    at Unzip.emit (node:events:518:28)\n    at endReadableNT (node:internal/streams/readable:1698:12)\n    at process.processTicksAndRejections (node:internal/process/task_queues:90:21)\n    at IU6.request (file:///Users/winterfell/.local/share/fnm/node-versions/v22.16.0/installation/lib/node_modules/@anthropic-ai/claude-code/cli.js:120:2450)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async ll6 (file:///Users/winterfell/.local/share/fnm/node-versions/v22.16.0/installation/lib/node_modules/@anthropic-ai/claude-code/cli.js:301:264352)\n    at async QR1 (file:///Users/winterfell/.local/share/fnm/node-versions/v22.16.0/installation/lib/node_modules/@anthropic-ai/claude-code/cli.js:480:3858)"
+2026-05-08T04:24:33.754Z [DEBUG] [API:auth] OAuth token check complete
+2026-05-08T04:24:33.754Z [DEBUG] [API:auth] OAuth token check complete
+2026-05-08T04:24:33.755Z [DEBUG] Fast mode unavailable: Fast mode is not available in the Agent SDK
+2026-05-08T04:24:33.756Z [DEBUG] Fast mode unavailable: Fast mode is not available in the Agent SDK
+2026-05-08T04:24:33.758Z [DEBUG] [API REQUEST] /v1/messages x-client-request-id=8b9fa601-88dc-40b6-9f6c-6a76e24fc0b2 source=generate_session_title
+2026-05-08T04:24:33.759Z [DEBUG] [API REQUEST] /v1/messages x-client-request-id=f7c48bb0-6f01-40ef-95c3-45d4aec0ea74 source=sdk
+2026-05-08T04:24:33.929Z [ERROR] API error (attempt 1/11): 401 401 {"type":"error","error":{"type":"authentication_error","message":"Invalid authentication credentials"},"request_id":"req_011CapTxa2s72d78K9n9oij5"}
+2026-05-08T04:24:33.929Z [ERROR] Error in API request: 401 {"type":"error","error":{"type":"authentication_error","message":"Invalid authentication credentials"},"request_id":"req_011CapTxa2s72d78K9n9oij5"}
+2026-05-08T04:24:33.929Z [ERROR] API error x-client-request-id=f7c48bb0-6f01-40ef-95c3-45d4aec0ea74 (give this to the API team for server-log lookup)
+2026-05-08T04:24:33.929Z [ERROR] "Error: Error: 401 {\"type\":\"error\",\"error\":{\"type\":\"authentication_error\",\"message\":\"Invalid authentication credentials\"},\"request_id\":\"req_011CapTxa2s72d78K9n9oij5\"}\n    at vq.generate (file:///Users/winterfell/.local/share/fnm/node-versions/v22.16.0/installation/lib/node_modules/@anthropic-ai/claude-code/cli.js:8:52352)\n    at qh.makeStatusError (file:///Users/winterfell/.local/share/fnm/node-versions/v22.16.0/installation/lib/node_modules/@anthropic-ai/claude-code/cli.js:47:1652)\n    at qh.makeRequest (file:///Users/winterfell/.local/share/fnm/node-versions/v22.16.0/installation/lib/node_modules/@anthropic-ai/claude-code/cli.js:47:4928)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)"
+2026-05-08T04:24:33.942Z [DEBUG] Fast mode unavailable: Fast mode is not available in the Agent SDK
+2026-05-08T04:24:33.949Z [DEBUG] LSP server manager shut down successfully
+2026-05-08T04:24:33.966Z [ERROR] API error (attempt 1/11): 401 401 {"type":"error","error":{"type":"authentication_error","message":"Invalid authentication credentials"},"request_id":"req_011CapTxaBYU1DaQuwVgTmpb"}
+2026-05-08T04:24:33.966Z [ERROR] Error in API request: 401 {"type":"error","error":{"type":"authentication_error","message":"Invalid authentication credentials"},"request_id":"req_011CapTxaBYU1DaQuwVgTmpb"}
+2026-05-08T04:24:33.966Z [ERROR] API error x-client-request-id=8b9fa601-88dc-40b6-9f6c-6a76e24fc0b2 (give this to the API team for server-log lookup)
+2026-05-08T04:24:33.966Z [ERROR] "Error: Error: 401 {\"type\":\"error\",\"error\":{\"type\":\"authentication_error\",\"message\":\"Invalid authentication credentials\"},\"request_id\":\"req_011CapTxaBYU1DaQuwVgTmpb\"}\n    at vq.generate (file:///Users/winterfell/.local/share/fnm/node-versions/v22.16.0/installation/lib/node_modules/@anthropic-ai/claude-code/cli.js:8:52352)\n    at qh.makeStatusError (file:///Users/winterfell/.local/share/fnm/node-versions/v22.16.0/installation/lib/node_modules/@anthropic-ai/claude-code/cli.js:47:1652)\n    at qh.makeRequest (file:///Users/winterfell/.local/share/fnm/node-versions/v22.16.0/installation/lib/node_modules/@anthropic-ai/claude-code/cli.js:47:4928)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)"
+2026-05-08T04:24:33.967Z [ERROR] "SyntaxError: SyntaxError: Unexpected token 'F', \"Failed to \"... is not valid JSON\n    at JSON.parse (<anonymous>)\n    at xF7 (file:///Users/winterfell/.local/share/fnm/node-versions/v22.16.0/installation/lib/node_modules/@anthropic-ai/claude-code/cli.js:172:10090)\n    at Y (file:///Users/winterfell/.local/share/fnm/node-versions/v22.16.0/installation/lib/node_modules/@anthropic-ai/claude-code/cli.js:134:18338)\n    at Object.assign.cache (file:///Users/winterfell/.local/share/fnm/node-versions/v22.16.0/installation/lib/node_modules/@anthropic-ai/claude-code/cli.js:174:1133)\n    at oe (file:///Users/winterfell/.local/share/fnm/node-versions/v22.16.0/installation/lib/node_modules/@anthropic-ai/claude-code/cli.js:6498:473)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)"

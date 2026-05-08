@@ -1,8 +1,10 @@
 #include <JuceHeader.h>
 #include <assert.h>
+#include <atomic>
 #include <mutex>
 
 #include "../../../native/ModulationRuntimeRestore.h"
+#include "../../../native/ArticulationTriggerConfigState.h"
 
 #define CHOC_ASSERT(x) assert(x)
 #include "cmajor/COM/cmaj_Library.h"
@@ -59,7 +61,20 @@ static std::string getDesktopDevServerOrigin()
     return COSIMO_DESKTOP_DEV_SERVER_ORIGIN;
 }
 
-static std::string createDesktopUILoaderSetupCode (std::string_view windowKind = "patch")
+static std::string getDesktopRuntimeKind (juce::AudioProcessor::WrapperType wrapperType)
+{
+    const auto currentExecutableName = juce::File::getSpecialLocation (juce::File::currentExecutableFile)
+        .getFileNameWithoutExtension();
+
+    return wrapperType == juce::AudioProcessor::wrapperType_Standalone
+        || juce::JUCEApplicationBase::isStandaloneApp()
+        || currentExecutableName == ProjectInfo::projectName
+        ? "standalone"
+        : "hosted-plugin";
+}
+
+static std::string createDesktopUILoaderSetupCode (std::string_view windowKind = "patch",
+                                                   std::string_view runtimeKind = "hosted-plugin")
 {
     auto setupCode = "window.__COSIMO_DESKTOP_UI_SOURCE_MODE__ = "
                    + choc::json::getEscapedQuotedString (getDesktopUISourceMode())
@@ -68,6 +83,14 @@ static std::string createDesktopUILoaderSetupCode (std::string_view windowKind =
     setupCode += "\nwindow.__COSIMO_DESKTOP_WINDOW_KIND__ = "
               + choc::json::getEscapedQuotedString (windowKind)
               + ";";
+
+    setupCode += "\nwindow.__COSIMO_DESKTOP_RUNTIME_KIND__ = "
+              + choc::json::getEscapedQuotedString (runtimeKind)
+              + ";";
+
+#ifdef CHOC_HOST_KEYBOARD_BRIDGE_DEBUG_LOG
+    setupCode += "\nwindow.__COSIMO_DESKTOP_KEYBOARD_PROBE__ = true;";
+#endif
 
     if (getDesktopUISourceMode() == "dev-server")
     {
@@ -160,7 +183,9 @@ public:
                                               "height", windowHeight)
                       }))
             {
-                patchWebView->extraSetupCode = createDesktopUILoaderSetupCode ("curve-lab");
+                patchWebView->extraSetupCode = createDesktopUILoaderSetupCode (
+                    "curve-lab",
+                    getDesktopRuntimeKind (owner.owner.wrapperType));
                 owner.bindCurveLabBridge (*patchWebView);
 
                 patchWebViewHolder = choc::ui::createJUCEWebViewHolder (patchWebView->getWebView());
@@ -229,7 +254,9 @@ public:
               owner (ownerToUse),
               patchWebView (std::make_unique<cmaj::PatchWebView> (*owner.patch, derivePatchViewSize (owner)))
         {
-            patchWebView->extraSetupCode = createDesktopUILoaderSetupCode ("patch");
+            patchWebView->extraSetupCode = createDesktopUILoaderSetupCode (
+                "patch",
+                getDesktopRuntimeKind (owner.wrapperType));
             bindCurveLabBridge (*patchWebView);
             patchWebViewHolder = choc::ui::createJUCEWebViewHolder (patchWebView->getWebView());
             patchWebViewHolder->setSize ((int) patchWebView->width, (int) patchWebView->height);
@@ -300,11 +327,21 @@ public:
                 return {};
             });
 
+            auto setArticulationTriggerConfigBindingOK = webView.bind ("cosimo_set_articulation_trigger_config",
+                                                                       [this] (const choc::value::ValueView& args) -> choc::value::Value
+            {
+                if (args.isArray() && args.size() > 0)
+                    owner.setPendingArticulationTriggerConfigFromJSONString (args[0].toString());
+
+                return {};
+            });
+
             (void) openBindingOK;
             (void) closeBindingOK;
             (void) getStateBindingOK;
             (void) setStateBindingOK;
-            jassert (openBindingOK && closeBindingOK && getStateBindingOK && setStateBindingOK);
+            (void) setArticulationTriggerConfigBindingOK;
+            jassert (openBindingOK && closeBindingOK && getStateBindingOK && setStateBindingOK && setArticulationTriggerConfigBindingOK);
         }
 
         void openOrFocusCurveLabWindow()
@@ -502,6 +539,8 @@ public:
         if (auto* playHead = getPlayHead())
             updateTimelineFromPlayhead (*playHead);
 
+        applyPendingArticulationTriggerConfig();
+
         cosimo::cmajor_bridge::processBlockWithFutureDawNoteMeta (
             *patch,
             audio,
@@ -516,6 +555,12 @@ public:
     void processBlock (juce::AudioBuffer<double>&, juce::MidiBuffer&) override
     {
         jassertfalse;
+    }
+
+    void setPendingArticulationTriggerConfigFromJSONString (const std::string& serializedConfig)
+    {
+        setPendingArticulationTriggerConfig (
+            cosimo::future_daw::createTriggerConfigFromJSONString (serializedConfig));
     }
 
     void setStateInformation (const void* data, int size) override
@@ -566,6 +611,23 @@ public:
     void refreshExtraComp (juce::Component*) {}
 
 private:
+    void setPendingArticulationTriggerConfig (cosimo::future_daw::ArticulationTriggerConfig config)
+    {
+        std::atomic_store (&pendingArticulationTriggerConfig,
+                           std::make_shared<const cosimo::future_daw::ArticulationTriggerConfig> (std::move (config)));
+    }
+
+    void applyPendingArticulationTriggerConfig()
+    {
+        auto pendingConfig = std::atomic_load (&pendingArticulationTriggerConfig);
+
+        if (pendingConfig == activeArticulationTriggerConfig || pendingConfig == nullptr)
+            return;
+
+        noteMetaBridge.setTriggerConfig (*pendingConfig);
+        activeArticulationTriggerConfig = std::move (pendingConfig);
+    }
+
     void setFixedStateSynchronously (const juce::ValueTree& newState)
     {
         if (! dllLoadedSuccessfully)
@@ -607,6 +669,8 @@ private:
             lastEditorHeight = 0;
         }
 
+        bool restoredArticulationTriggerConfig = false;
+
         if (auto state = newState.getChildWithName (ids.STATE); state.isValid())
         {
             for (const auto& valueTree : state)
@@ -621,9 +685,23 @@ private:
                     continue;
 
                 if (key->isString() && key->toString().isNotEmpty() && ! value->isVoid())
-                    patch->setStoredStateValue (key->toString().toStdString(), convertVarToValue (*value));
+                {
+                    const auto keyString = key->toString().toStdString();
+                    const auto convertedValue = convertVarToValue (*value);
+                    patch->setStoredStateValue (keyString, convertedValue);
+
+                    if (keyString == cosimo::future_daw::articulationTriggerConfigStateKey)
+                    {
+                        restoredArticulationTriggerConfig = true;
+                        setPendingArticulationTriggerConfig (
+                            cosimo::future_daw::createTriggerConfigFromStoredValue (convertedValue));
+                    }
+                }
             }
         }
+
+        if (! restoredArticulationTriggerConfig)
+            setPendingArticulationTriggerConfig ({});
 
         if (getSampleRate() > 0)
             applyCurrentRateAndBlockSize();
@@ -633,7 +711,11 @@ private:
     }
 
     std::filesystem::path manifestLocation;
-    cosimo::future_daw::NoteMetaBridge noteMetaBridge { cosimo::future_daw::KeyswitchMap::defaultLowNoteRange() };
+    cosimo::future_daw::NoteMetaBridge noteMetaBridge;
+    std::shared_ptr<const cosimo::future_daw::ArticulationTriggerConfig> pendingArticulationTriggerConfig {
+        std::make_shared<const cosimo::future_daw::ArticulationTriggerConfig>()
+    };
+    std::shared_ptr<const cosimo::future_daw::ArticulationTriggerConfig> activeArticulationTriggerConfig;
 };
 
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()

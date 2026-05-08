@@ -13,6 +13,9 @@ import { startDesktopHarnessServer } from "./helpers/desktop_harness_browser.mjs
 let server;
 let browser;
 
+const NOTE_A_36_ON = 9_446_500;
+const NOTE_A_36_OFF = 8_397_824;
+
 async function openModulePage() {
     const page = await browser.newPage();
     await page.goto(new URL("tests/helpers/module_test_shell.html", server.baseUrl).toString(), { waitUntil: "load" });
@@ -27,8 +30,8 @@ async function openModulePage() {
     return page;
 }
 
-async function installHarness(page, exportName) {
-    await page.evaluate(async (nextExportName) => {
+async function installHarness(page, exportName, ...args) {
+    await page.evaluate(async ([nextExportName, nextArgs]) => {
         const helpers = await import("/tests/helpers/desktop_patch_modules_browser.tsx");
         const mountPoint = document.getElementById("mount");
 
@@ -42,8 +45,8 @@ async function installHarness(page, exportName) {
             throw new Error(`Unknown desktop module harness export: ${nextExportName}`);
         }
 
-        await install(mountPoint);
-    }, exportName);
+        await install(mountPoint, ...nextArgs);
+    }, [exportName, args]);
 }
 
 async function invokeHarness(page, methodName, ...args) {
@@ -499,9 +502,20 @@ test("useSynthKeyboardRouting keeps arrow ownership, blocks note entry during te
         });
         assert.equal(snapshot.rootNote, 36);
         assert.equal(snapshot.keyboardLog.allNotesOffCount, 3);
-        assert.deepEqual(snapshot.keyboardLog.handledKeys, [
-            { key: "a", isDown: true },
-            { key: "a", isDown: false },
+        assert.deepEqual(snapshot.keyboardLog.handledKeys, []);
+        assert.deepEqual(snapshot.midiInputEvents, [
+            { endpointID: "midiIn", value: NOTE_A_36_ON },
+            { endpointID: "midiIn", value: NOTE_A_36_OFF },
+        ]);
+        assert.deepEqual(snapshot.keyboardLog.externalMidi, [
+            NOTE_A_36_ON,
+            NOTE_A_36_OFF,
+        ]);
+        assert.deepEqual(snapshot.keyEventLog.slice(-4).map(({ key, isDown, defaultPrevented }) => ({ key, isDown, defaultPrevented })), [
+            { key: "x", isDown: true, defaultPrevented: true },
+            { key: "x", isDown: false, defaultPrevented: true },
+            { key: "a", isDown: true, defaultPrevented: true },
+            { key: "a", isDown: false, defaultPrevented: true },
         ]);
 
         await invokeHarness(page, "pressKey", "z");
@@ -511,6 +525,88 @@ test("useSynthKeyboardRouting keeps arrow ownership, blocks note entry during te
         snapshot = await getHarnessSnapshot(page);
         assert.equal(snapshot.rootNote, 12);
         assert.equal(snapshot.keyboardLog.allNotesOffCount, 5);
+    } finally {
+        await page.close();
+    }
+});
+
+test("useSynthKeyboardRouting leaves musical typing unclaimed in hosted mode", async () => {
+    const page = await openModulePage();
+
+    try {
+        await installHarness(page, "installSynthKeyboardRoutingHookHarness", { keyboardInputMode: "hosted" });
+
+        await invokeHarness(page, "pressKey", "a");
+        await invokeHarness(page, "pressKey", "a", false);
+        await invokeHarness(page, "pressKey", "z");
+        await invokeHarness(page, "pressKey", "z", false);
+
+        const snapshot = await getHarnessSnapshot(page);
+        assert.equal(snapshot.rootNote, 36);
+        assert.deepEqual(snapshot.midiInputEvents, []);
+        assert.deepEqual(snapshot.keyboardLog.handledKeys, []);
+        assert.deepEqual(snapshot.keyEventLog.map(({ key, isDown, defaultPrevented }) => ({ key, isDown, defaultPrevented })), [
+            { key: "a", isDown: true, defaultPrevented: false },
+            { key: "a", isDown: false, defaultPrevented: false },
+            { key: "z", isDown: true, defaultPrevented: false },
+            { key: "z", isDown: false, defaultPrevented: false },
+        ]);
+    } finally {
+        await page.close();
+    }
+});
+
+test("useSynthKeyboardRouting plays standalone notes from the native CHOC keyboard relay", async () => {
+    const page = await openModulePage();
+
+    try {
+        await installHarness(page, "installSynthKeyboardRoutingHookHarness");
+
+        await invokeHarness(page, "postRelayedKey", "a");
+        await invokeHarness(page, "postRelayedKey", "a", false);
+
+        const snapshot = await getHarnessSnapshot(page);
+        assert.deepEqual(snapshot.keyEventLog, []);
+        assert.deepEqual(snapshot.keyboardLog.handledKeys, []);
+        assert.deepEqual(snapshot.midiInputEvents, [
+            { endpointID: "midiIn", value: NOTE_A_36_ON },
+            { endpointID: "midiIn", value: NOTE_A_36_OFF },
+        ]);
+        assert.deepEqual(snapshot.keyboardLog.externalMidi, [
+            NOTE_A_36_ON,
+            NOTE_A_36_OFF,
+        ]);
+    } finally {
+        await page.close();
+    }
+});
+
+test("useSynthKeyboardRouting ignores malformed native CHOC keyboard relay messages", async () => {
+    const page = await openModulePage();
+
+    try {
+        await installHarness(page, "installSynthKeyboardRoutingHookHarness");
+
+        await invokeHarness(page, "postWindowMessage", {
+            source: "cosimo-standalone-keyboard",
+            eventType: "keydown",
+            code: "KeyA",
+        });
+        await invokeHarness(page, "postWindowMessage", {
+            source: "cosimo-standalone-keyboard",
+            eventType: "keydown",
+            code: "KeyA",
+            repeat: false,
+            shiftKey: false,
+            ctrlKey: true,
+            altKey: false,
+            metaKey: false,
+        });
+
+        const snapshot = await getHarnessSnapshot(page);
+        assert.deepEqual(snapshot.midiInputEvents, []);
+        assert.deepEqual(snapshot.keyboardLog.externalMidi, []);
+        assert.deepEqual(snapshot.keyboardLog.handledKeys, []);
     } finally {
         await page.close();
     }

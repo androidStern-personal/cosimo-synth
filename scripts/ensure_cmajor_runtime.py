@@ -22,8 +22,88 @@ PATCHED_CHOC_MARKERS = (
     "__chocHostKeyboardBridgeInstalled",
     "__chocUserFiles",
     "chocUserFiles",
+    "COSIMO_HOST_KEYBOARD_RELAY_PROCESS_NAME",
+    "cosimo-standalone-keyboard",
+    "hostKeyboardShouldRelayToPlugin",
 )
 CMAJOR_JUCE_SIDECHAIN_PATCH_MARKER = "COSIMO_CMAJOR_JUCE_PLUGIN_SPLIT_INPUT_BUSES"
+
+HOST_KEYBOARD_RELAY_HELPERS = r'''
+    static bool hostKeyboardShouldRelayToPlugin (const choc::value::ValueView& payload)
+    {
+#ifdef COSIMO_HOST_KEYBOARD_RELAY_PROCESS_NAME
+        auto reason = hostKeyboardGetStringMember (payload, "reason");
+
+        if (reason != "ableton-musical-typing-key" && reason != "matching-forwarded-keyup")
+            return false;
+
+        auto processInfo = objc::callClass<id> ("NSProcessInfo", "processInfo");
+        auto processName = objc::getString (objc::call<id> (processInfo, "processName"));
+        return processName == COSIMO_HOST_KEYBOARD_RELAY_PROCESS_NAME;
+#else
+        (void) payload;
+        return false;
+#endif
+    }
+
+    static std::string hostKeyboardBoolLiteral (bool value)
+    {
+        return value ? "true" : "false";
+    }
+
+    void relayBufferedKeyboardEventToPlugin (const choc::value::ValueView& payload)
+    {
+        auto script = std::string (R"CHOCRELAYJS(
+(() => {
+  const payload = {
+    source: "cosimo-standalone-keyboard",
+    eventType: )CHOCRELAYJS")
+            + choc::json::getEscapedQuotedString (hostKeyboardGetStringMember (payload, "eventType")) + R"CHOCRELAYJS(,
+    key: )CHOCRELAYJS"
+            + choc::json::getEscapedQuotedString (hostKeyboardGetStringMember (payload, "key")) + R"CHOCRELAYJS(,
+    code: )CHOCRELAYJS"
+            + choc::json::getEscapedQuotedString (hostKeyboardGetStringMember (payload, "code")) + R"CHOCRELAYJS(,
+    repeat: )CHOCRELAYJS"
+            + hostKeyboardBoolLiteral (hostKeyboardGetBoolMember (payload, "repeat")) + R"CHOCRELAYJS(,
+    shiftKey: )CHOCRELAYJS"
+            + hostKeyboardBoolLiteral (hostKeyboardGetBoolMember (payload, "shiftKey")) + R"CHOCRELAYJS(,
+    ctrlKey: )CHOCRELAYJS"
+            + hostKeyboardBoolLiteral (hostKeyboardGetBoolMember (payload, "ctrlKey")) + R"CHOCRELAYJS(,
+    altKey: )CHOCRELAYJS"
+            + hostKeyboardBoolLiteral (hostKeyboardGetBoolMember (payload, "altKey")) + R"CHOCRELAYJS(,
+    metaKey: )CHOCRELAYJS"
+            + hostKeyboardBoolLiteral (hostKeyboardGetBoolMember (payload, "metaKey")) + R"CHOCRELAYJS(
+  };
+
+  window.postMessage(payload, "*");
+
+  for (const frame of Array.from(window.frames)) {
+    try {
+      frame.postMessage(payload, "*");
+    } catch {}
+  }
+})();
+)CHOCRELAYJS";
+
+        evaluateJavascript (script, {});
+    }
+'''
+
+HOST_KEYBOARD_RELAY_FORWARD_BLOCK = r'''                if (hostKeyboardShouldRelayToPlugin (payload))
+                {
+                    auto result = discardBufferedKeyboardEvent (payload);
+                    relayBufferedKeyboardEventToPlugin (payload);
+                    logHostKeyboard ("forward-request result=relayed"
+                                     + std::string (" stage=") + result.stage
+                                     + " detail=" + result.detail
+                                     + " eventType=" + hostKeyboardGetStringMember (payload, "eventType")
+                                     + " key=" + hostKeyboardGetStringMember (payload, "key")
+                                     + " code=" + hostKeyboardGetStringMember (payload, "code")
+                                     + " reason=" + hostKeyboardGetStringMember (payload, "reason"));
+                    return;
+                }
+
+'''
 
 
 def _run(command: list[str], *, cwd: Path | None = None, capture: bool = False) -> subprocess.CompletedProcess[str]:
@@ -264,6 +344,35 @@ def _apply_cmajor_sidechain_bus_patch(runtime_root: Path) -> None:
         raise RuntimeError(f"Cmajor sidechain bus patch marker was not written to {juce_plugin_header}.")
 
 
+def _apply_cosimo_choc_keyboard_relay_patch(runtime_root: Path) -> None:
+    webview_header = runtime_root / "include" / "choc" / "choc" / "gui" / "choc_WebView.h"
+
+    if not webview_header.exists():
+        return
+
+    header_text = webview_header.read_text(encoding="utf-8")
+
+    if "hostKeyboardShouldRelayToPlugin" in header_text:
+        return
+
+    age_function = """    static int64_t hostKeyboardAgeMs (std::chrono::steady_clock::time_point capturedAt)
+    {
+        return std::chrono::duration_cast<std::chrono::milliseconds> (std::chrono::steady_clock::now() - capturedAt).count();
+    }
+"""
+    if age_function not in header_text:
+        raise RuntimeError("Could not find CHOC host keyboard age helper while applying Cosimo keyboard relay patch.")
+
+    header_text = header_text.replace(age_function, age_function + HOST_KEYBOARD_RELAY_HELPERS, 1)
+
+    forward_call = "                auto result = forwardBufferedKeyboardEventToHost (payload);\n"
+    if forward_call not in header_text:
+        raise RuntimeError("Could not find CHOC host keyboard forward call while applying Cosimo keyboard relay patch.")
+
+    header_text = header_text.replace(forward_call, HOST_KEYBOARD_RELAY_FORWARD_BLOCK + forward_call, 1)
+    webview_header.write_text(header_text, encoding="utf-8")
+
+
 def _runtime_head(runtime_root: Path) -> str | None:
     if not (runtime_root / ".git").exists():
         return None
@@ -294,6 +403,7 @@ def _prepare_runtime_submodules(runtime_root: Path) -> None:
     _run(["git", "remote", "set-url", "origin", PATCHED_CHOC_GIT_URL], cwd=choc_root)
     _run(["git", "fetch", "--depth", "1", "origin", PATCHED_CHOC_BRANCH], cwd=choc_root)
     _run(["git", "checkout", "--detach", PATCHED_CHOC_COMMIT], cwd=choc_root)
+    _apply_cosimo_choc_keyboard_relay_patch(runtime_root)
 
 
 def _clone_runtime(destination: Path) -> None:
@@ -351,11 +461,16 @@ def ensure_runtime() -> Path:
     if (
         current_head == RUNTIME_COMMIT
         and current_choc_head == PATCHED_CHOC_COMMIT
-        and _runtime_contains_required_choc_patches(RUNTIME_DESTINATION)
         and _runtime_looks_complete(RUNTIME_DESTINATION)
     ):
+        _apply_cosimo_choc_keyboard_relay_patch(RUNTIME_DESTINATION)
         _apply_cmajor_sidechain_bus_patch(RUNTIME_DESTINATION)
-        return RUNTIME_DESTINATION
+
+        if (
+            _runtime_contains_required_choc_patches(RUNTIME_DESTINATION)
+            and _runtime_contains_required_cmajor_sidechain_patch(RUNTIME_DESTINATION)
+        ):
+            return RUNTIME_DESTINATION
 
     if current_head == RUNTIME_COMMIT:
         _prepare_runtime_submodules(RUNTIME_DESTINATION)
@@ -369,6 +484,7 @@ def ensure_runtime() -> Path:
             and _runtime_contains_required_choc_patches(RUNTIME_DESTINATION)
             and _runtime_looks_complete(RUNTIME_DESTINATION)
         ):
+            _apply_cosimo_choc_keyboard_relay_patch(RUNTIME_DESTINATION)
             _apply_cmajor_sidechain_bus_patch(RUNTIME_DESTINATION)
             return RUNTIME_DESTINATION
 

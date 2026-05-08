@@ -37,6 +37,7 @@ import {
     useStagePositionDrag,
     useSynthKeyboardRouting,
 } from "../../ui/shared/synth-hooks";
+import type { SynthKeyboardInputMode } from "../../ui/shared/synth-input-router";
 import {
     addMsegPoint,
     createDefaultMsegPlayback,
@@ -1467,7 +1468,26 @@ export async function installMsegEditorInteractionsHookHarness(target: HTMLEleme
     await waitForMicrotask();
 }
 
-export async function installSynthKeyboardRoutingHookHarness(target: HTMLElement) {
+function keyboardCodeForTestKey(key: string) {
+    if (/^[a-z]$/i.test(key)) {
+        return `Key${key.toUpperCase()}`;
+    }
+
+    if (key === ";") {
+        return "Semicolon";
+    }
+
+    if (key === "'") {
+        return "Quote";
+    }
+
+    return key;
+}
+
+export async function installSynthKeyboardRoutingHookHarness(
+    target: HTMLElement,
+    options: { keyboardInputMode?: SynthKeyboardInputMode } = {},
+) {
     const stepLog = {
         wavetable: [] as number[],
         playMode: [] as number[],
@@ -1476,8 +1496,11 @@ export async function installSynthKeyboardRoutingHookHarness(target: HTMLElement
     };
     const keyboardLog = {
         handledKeys: [] as Array<{ key: string; isDown: boolean }>,
+        externalMidi: [] as number[],
         allNotesOffCount: 0,
     };
+    const midiInputEvents: Array<{ endpointID: string; value: number }> = [];
+    const keyEventLog: Array<{ key: string; code: string; isDown: boolean; defaultPrevented: boolean }> = [];
     const keyboardRootNoteBounds = {
         min: 12,
         max: 72,
@@ -1491,6 +1514,12 @@ export async function installSynthKeyboardRoutingHookHarness(target: HTMLElement
             const keyboardRef = useRef({
                 handleKey(event: KeyboardEvent, isDown: boolean) {
                     keyboardLog.handledKeys.push({ key: event.key, isDown });
+                },
+                getAttribute(name: string) {
+                    return name === "root-note" ? String(currentRootNote) : null;
+                },
+                handleExternalMIDI(message: number) {
+                    keyboardLog.externalMidi.push(message);
                 },
                 allNotesOff() {
                     keyboardLog.allNotesOffCount += 1;
@@ -1522,6 +1551,10 @@ export async function installSynthKeyboardRoutingHookHarness(target: HTMLElement
 
                     setRootNote((previousRootNote) => Math.min(previousRootNote + 12, keyboardRootNoteBounds.max));
                     return true;
+                },
+                keyboardInputMode: options.keyboardInputMode ?? "standalone-preview",
+                sendMIDIInputEvent: (endpointID, value) => {
+                    midiInputEvents.push({ endpointID, value });
                 },
             });
 
@@ -1572,16 +1605,47 @@ export async function installSynthKeyboardRoutingHookHarness(target: HTMLElement
             await waitForMicrotask();
         },
         async pressKey(key: string, isDown = true) {
-            window.dispatchEvent(new KeyboardEvent(isDown ? "keydown" : "keyup", {
+            const event = new KeyboardEvent(isDown ? "keydown" : "keyup", {
                 bubbles: true,
+                cancelable: true,
                 key,
-            }));
+                code: keyboardCodeForTestKey(key),
+            });
+            window.dispatchEvent(event);
+            keyEventLog.push({
+                key,
+                code: event.code,
+                isDown,
+                defaultPrevented: event.defaultPrevented,
+            });
+            await waitForMicrotask();
+        },
+        async postRelayedKey(key: string, isDown = true) {
+            window.postMessage({
+                source: "cosimo-standalone-keyboard",
+                eventType: isDown ? "keydown" : "keyup",
+                key,
+                code: keyboardCodeForTestKey(key),
+                repeat: false,
+                shiftKey: false,
+                ctrlKey: false,
+                altKey: false,
+                metaKey: false,
+            }, "*");
+            await waitForMicrotask();
+            await waitForMicrotask();
+        },
+        async postWindowMessage(message: unknown) {
+            window.postMessage(message, "*");
+            await waitForMicrotask();
             await waitForMicrotask();
         },
         getSnapshot() {
             return {
                 stepLog: cloneValue(stepLog),
                 keyboardLog: cloneValue(keyboardLog),
+                keyEventLog: cloneValue(keyEventLog),
+                midiInputEvents: cloneValue(midiInputEvents),
                 activeElementID: (document.activeElement as HTMLElement | null)?.id ?? null,
                 rootNote: currentRootNote,
             };

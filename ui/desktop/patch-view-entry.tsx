@@ -9,6 +9,7 @@ import {
     createDesktopResourceClient,
     type ResourceClient,
 } from "../shared/resource-client";
+import type { SynthKeyboardInputMode } from "../shared/synth-input-router";
 import {
     acquireModulationRuntimeBridge,
     releaseModulationRuntimeBridge,
@@ -86,11 +87,16 @@ class DesktopPatchErrorBoundary extends Component<
 class CosimoDesktopReactViewElement extends HTMLElement {
     private patchConnection: PatchConnectionLike | null = null;
     private resourceClient: ResourceClient | null = null;
+    private keyboardInputMode: SynthKeyboardInputMode = "hosted";
     private root: Root | null = null;
     private mountPoint: HTMLDivElement | null = null;
     private modulationRuntimePatchConnection: PatchConnectionLike | null = null;
 
-    setPatchConnection(patchConnection: PatchConnectionLike, resourceClient?: ResourceClient) {
+    setPatchConnection(
+        patchConnection: PatchConnectionLike,
+        resourceClient?: ResourceClient,
+        keyboardInputMode: SynthKeyboardInputMode = "hosted",
+    ) {
         if (this.modulationRuntimePatchConnection && this.modulationRuntimePatchConnection !== patchConnection) {
             releaseModulationRuntimeBridge(this.modulationRuntimePatchConnection);
             this.modulationRuntimePatchConnection = null;
@@ -98,6 +104,7 @@ class CosimoDesktopReactViewElement extends HTMLElement {
 
         this.patchConnection = patchConnection;
         this.resourceClient = resourceClient ?? null;
+        this.keyboardInputMode = keyboardInputMode;
         if (!this.modulationRuntimePatchConnection) {
             acquireModulationRuntimeBridge(patchConnection);
             this.modulationRuntimePatchConnection = patchConnection;
@@ -174,6 +181,7 @@ class CosimoDesktopReactViewElement extends HTMLElement {
                 <DesktopPatchView
                     patchConnection={this.patchConnection}
                     resourceClient={this.resourceClient ?? createDesktopResourceClient(this.patchConnection)}
+                    keyboardInputMode={this.keyboardInputMode}
                 />
             </DesktopPatchErrorBoundary>
         );
@@ -261,9 +269,19 @@ function getDesktopWindowKind(globalObject: typeof globalThis = globalThis) {
         : "";
 }
 
+function getDesktopKeyboardInputMode(globalObject: typeof globalThis = globalThis): SynthKeyboardInputMode {
+    const desktopWindow = globalObject as typeof globalThis & {
+        __COSIMO_DESKTOP_RUNTIME_KIND__?: string;
+    };
+
+    return desktopWindow.__COSIMO_DESKTOP_RUNTIME_KIND__ === "standalone"
+        ? "standalone-preview"
+        : "hosted";
+}
+
 export function createDesktopPatchView(
     patchConnection: PatchConnectionLike,
-    options: { resourceClient?: ResourceClient } = {},
+    options: { resourceClient?: ResourceClient; keyboardInputMode?: SynthKeyboardInputMode } = {},
 ) {
     const tagName = getTagName();
 
@@ -272,7 +290,12 @@ export function createDesktopPatchView(
     }
 
     const element = document.createElement(tagName) as CosimoDesktopReactViewElement;
-    element.setPatchConnection(patchConnection, options.resourceClient);
+    const keyboardInputMode = options.keyboardInputMode ?? getDesktopKeyboardInputMode();
+    element.setPatchConnection(
+        patchConnection,
+        options.resourceClient,
+        keyboardInputMode,
+    );
     return element;
 }
 

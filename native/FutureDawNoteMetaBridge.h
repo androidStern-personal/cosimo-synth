@@ -13,9 +13,6 @@ constexpr std::uint8_t noteMetaVendorID = 0x7d;
 constexpr std::uint8_t noteMetaMessageID = 0x01;
 constexpr int noteMetaMaxPackedValue = 0x0fffffff;
 constexpr int selectorUnset = -1;
-constexpr int defaultKeyswitchFirstNote = 0;
-constexpr int defaultKeyswitchCount = 24;
-constexpr int defaultKeyswitchFirstSelectorA = 0;
 
 struct NoteMeta
 {
@@ -50,54 +47,36 @@ struct BridgeOutputEvent
     NoteMeta noteMeta {};
 };
 
-class KeyswitchMap
+enum class ArticulationTriggerMode
 {
-public:
-    KeyswitchMap()
-    {
-        selectorByNote.fill (selectorUnset);
-    }
-
-    static KeyswitchMap disabled()
-    {
-        return {};
-    }
-
-    static KeyswitchMap contiguousRange (int firstNote, int noteCount, int firstSelectorA)
-    {
-        KeyswitchMap map;
-
-        for (int offset = 0; offset < noteCount; ++offset)
-        {
-            const auto note = firstNote + offset;
-            const auto selectorA = firstSelectorA + offset;
-
-            if (note >= 0 && note < 128 && selectorA >= 0 && selectorA < 128)
-                map.selectorByNote[static_cast<std::size_t> (note)] = selectorA;
-        }
-
-        return map;
-    }
-
-    static KeyswitchMap defaultLowNoteRange()
-    {
-        return contiguousRange (defaultKeyswitchFirstNote,
-                                defaultKeyswitchCount,
-                                defaultKeyswitchFirstSelectorA);
-    }
-
-    [[nodiscard]] std::optional<int> selectorForNote (int noteNumber) const
-    {
-        if (noteNumber < 0 || noteNumber >= 128)
-            return std::nullopt;
-
-        const auto selector = selectorByNote[static_cast<std::size_t> (noteNumber)];
-        return selector >= 0 ? std::optional<int> { selector } : std::nullopt;
-    }
-
-private:
-    std::array<int, 128> selectorByNote {};
+    chain,
+    key,
+    velocity
 };
+
+struct ArticulationTriggerConfig
+{
+    ArticulationTriggerConfig()
+    {
+        chainSelectorToRuntimeSlot.fill (selectorUnset);
+        keyNoteToRuntimeSlot.fill (selectorUnset);
+        velocityToRuntimeSlot.fill (selectorUnset);
+    }
+
+    ArticulationTriggerMode activeMode = ArticulationTriggerMode::chain;
+    std::array<int, 128> chainSelectorToRuntimeSlot {};
+    std::array<int, 128> keyNoteToRuntimeSlot {};
+    std::array<int, 128> velocityToRuntimeSlot {};
+};
+
+[[nodiscard]] inline std::optional<int> lookupTriggerMap (const std::array<int, 128>& map, int value)
+{
+    if (value < 0 || value >= 128)
+        return std::nullopt;
+
+    const auto runtimeSlot = map[static_cast<std::size_t> (value)];
+    return runtimeSlot >= 0 && runtimeSlot < 128 ? std::optional<int> { runtimeSlot } : std::nullopt;
+}
 
 [[nodiscard]] inline bool is7BitDataByte (std::uint8_t value)
 {
@@ -222,15 +201,18 @@ private:
 class NoteMetaBridge
 {
 public:
-    explicit NoteMetaBridge (KeyswitchMap keyswitchMapToUse = KeyswitchMap::disabled())
-        : keyswitchMap (keyswitchMapToUse)
+    explicit NoteMetaBridge (ArticulationTriggerConfig triggerConfigToUse = {})
+        : triggerConfig (triggerConfigToUse)
     {
+        swallowedKeysHeld.fill (false);
     }
 
-    void setKeyswitchMap (KeyswitchMap nextMap)
+    void setTriggerConfig (ArticulationTriggerConfig nextConfig)
     {
-        keyswitchMap = nextMap;
-        activeKeyswitchSelectorA = selectorUnset;
+        triggerConfig = nextConfig;
+        activeKeyswitchRuntimeSlot = selectorUnset;
+        swallowedKeysHeld.fill (false);
+        clearPendingNoteMeta();
     }
 
     void reset()
@@ -238,7 +220,8 @@ public:
         pendingNoteMeta.reset();
         previousEventWasPendingNoteMeta = false;
         pendingNoteMetaSampleOffset = -1;
-        activeKeyswitchSelectorA = selectorUnset;
+        activeKeyswitchRuntimeSlot = selectorUnset;
+        swallowedKeysHeld.fill (false);
         nextSequence = 0;
     }
 
@@ -254,7 +237,22 @@ public:
     {
         if (auto meta = decodeNoteMetaMessage (data, size))
         {
+            if (triggerConfig.activeMode != ArticulationTriggerMode::chain)
+            {
+                clearPendingNoteMeta();
+                return;
+            }
+
+            auto runtimeSlot = lookupTriggerMap (triggerConfig.chainSelectorToRuntimeSlot, meta->selectorA);
+
+            if (! runtimeSlot.has_value())
+            {
+                clearPendingNoteMeta();
+                return;
+            }
+
             pendingNoteMeta = *meta;
+            pendingNoteMeta->selectorA = *runtimeSlot;
             previousEventWasPendingNoteMeta = true;
             pendingNoteMetaSampleOffset = sampleOffset;
             return;
@@ -273,22 +271,34 @@ public:
         }
 
         const auto noteNumber = size >= 2 ? static_cast<int> (data[1]) : -1;
-        const auto keyswitchSelector = keyswitchMap.selectorForNote (noteNumber);
+        const auto channel = isShortMidi (data, size) ? midiChannelOneBased (data[0]) : 1;
 
-        if ((isNoteOn (data, size) || isNoteOffLike (data, size)) && keyswitchSelector.has_value())
+        if (triggerConfig.activeMode == ArticulationTriggerMode::key
+            && isNoteOn (data, size))
+        {
+            const auto keyswitchRuntimeSlot = lookupTriggerMap (triggerConfig.keyNoteToRuntimeSlot, noteNumber);
+
+            if (keyswitchRuntimeSlot.has_value())
+            {
+                clearPendingNoteMeta();
+                activeKeyswitchRuntimeSlot = *keyswitchRuntimeSlot;
+                setSwallowedKeyHeld (channel, noteNumber, true);
+                return;
+            }
+        }
+
+        if (triggerConfig.activeMode == ArticulationTriggerMode::key
+            && isNoteOffLike (data, size)
+            && (isSwallowedKeyHeld (channel, noteNumber)
+                || lookupTriggerMap (triggerConfig.keyNoteToRuntimeSlot, noteNumber).has_value()))
         {
             clearPendingNoteMeta();
-
-            if (isNoteOn (data, size))
-                activeKeyswitchSelectorA = *keyswitchSelector;
-
+            setSwallowedKeyHeld (channel, noteNumber, false);
             return;
         }
 
         if (isNoteOn (data, size))
         {
-            const auto channel = midiChannelOneBased (data[0]);
-
             if (previousEventWasPendingNoteMeta
                 && pendingNoteMeta.has_value()
                 && pendingNoteMetaSampleOffset == sampleOffset
@@ -303,13 +313,28 @@ public:
 
             clearPendingNoteMeta();
 
-            if (activeKeyswitchSelectorA >= 0)
+            if (triggerConfig.activeMode == ArticulationTriggerMode::key
+                && activeKeyswitchRuntimeSlot >= 0)
             {
                 appendNoteMeta (sampleOffset,
-                                NoteMeta { channel, noteNumber, activeKeyswitchSelectorA, 0, 0, 0 },
+                                NoteMeta { channel, noteNumber, activeKeyswitchRuntimeSlot, 0, 0, 0 },
                                 output);
                 appendShortMidi (sampleOffset, data, size, output);
                 return;
+            }
+
+            if (triggerConfig.activeMode == ArticulationTriggerMode::velocity)
+            {
+                const auto velocityRuntimeSlot = lookupTriggerMap (triggerConfig.velocityToRuntimeSlot, static_cast<int> (data[2]));
+
+                if (velocityRuntimeSlot.has_value())
+                {
+                    appendNoteMeta (sampleOffset,
+                                    NoteMeta { channel, noteNumber, *velocityRuntimeSlot, 0, 0, 0 },
+                                    output);
+                    appendShortMidi (sampleOffset, data, size, output);
+                    return;
+                }
             }
         }
         else
@@ -321,6 +346,29 @@ public:
     }
 
 private:
+    [[nodiscard]] static std::size_t swallowedKeyIndex (int channelOneBased, int noteNumber)
+    {
+        const auto channel = channelOneBased >= 1 && channelOneBased <= 16 ? channelOneBased - 1 : 0;
+        const auto note = noteNumber >= 0 && noteNumber < 128 ? noteNumber : 0;
+        return static_cast<std::size_t> ((channel * 128) + note);
+    }
+
+    [[nodiscard]] bool isSwallowedKeyHeld (int channelOneBased, int noteNumber) const
+    {
+        if (noteNumber < 0 || noteNumber >= 128)
+            return false;
+
+        return swallowedKeysHeld[swallowedKeyIndex (channelOneBased, noteNumber)];
+    }
+
+    void setSwallowedKeyHeld (int channelOneBased, int noteNumber, bool isHeld)
+    {
+        if (noteNumber < 0 || noteNumber >= 128)
+            return;
+
+        swallowedKeysHeld[swallowedKeyIndex (channelOneBased, noteNumber)] = isHeld;
+    }
+
     void clearPendingNoteMeta()
     {
         pendingNoteMeta.reset();
@@ -355,11 +403,12 @@ private:
         output.push_back (event);
     }
 
-    KeyswitchMap keyswitchMap;
+    ArticulationTriggerConfig triggerConfig;
     std::optional<NoteMeta> pendingNoteMeta;
     bool previousEventWasPendingNoteMeta = false;
     int pendingNoteMetaSampleOffset = -1;
-    int activeKeyswitchSelectorA = selectorUnset;
+    int activeKeyswitchRuntimeSlot = selectorUnset;
     std::uint64_t nextSequence = 0;
+    std::array<bool, 16 * 128> swallowedKeysHeld {};
 };
 } // namespace cosimo::future_daw

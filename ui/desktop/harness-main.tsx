@@ -270,7 +270,7 @@ try {
         setStoredStateValue: (key, value) => patchConnection.setStoredStateValue(key, value),
     };
     document.body.dataset.bootStage = "rendering";
-    const patchView = createDesktopPatchView(patchConnection);
+    const patchView = createDesktopPatchView(patchConnection, { keyboardInputMode: "standalone-preview" });
     patchView.style.width = "100%";
     patchView.style.height = "100%";
     harnessRoot.replaceChildren(patchView);
