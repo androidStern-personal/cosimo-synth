@@ -811,3 +811,7 @@ Cosimo synth MSEG morph UI correction on 2026-05-06
 Cosimo articulation SysEx architecture plan written on 2026-05-07
 - Added `ARTICULATION_SYSEX_ARCHITECTURE_PLAN.md` as the durable architecture proposal for FutureDaw NoteMeta SysEx, native bridge pairing, sample-ordered Cmajor note start, realtime `selectorA` articulation tables, voice latching, keyswitch behavior, and acceptance criteria.
 - The review pass corrected the undefined-selector behavior to match the earlier product decision: unknown `selectorA` values are ignored and leave the current audible articulation selector unchanged, rather than forcing a default fallback.
+
+Claude articulation keyboard prototype retry on 2026-05-08
+- First Claude Code attempt to create `transient/articulation-keyboard-assignment-prototype.html` stalled before writing the file. Command used the wrapper with `--edit --timeout 1800`; elapsed time was about 7 minutes; last observed debug event was `Streaming stall detected`; debug log was `transient/claude-diagnostics/20260508-004720-claude-code.debug.log`.
+- The stalled Claude process was terminated so the same prototype request could be retried with a streaming Claude invocation.

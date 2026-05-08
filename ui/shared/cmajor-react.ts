@@ -40,6 +40,7 @@ export type PatchConnectionLike = {
     requestFullStoredState?: (callback: (state: Record<string, unknown>) => void) => void;
     requestStoredStateValue?: (key: string) => void;
     sendStoredStateValue?: (key: string, value: unknown) => void;
+    sendNativeArticulationTriggerConfig?: (serializedConfig: string) => void;
     sendMIDIInputEvent?: (endpointID: string, shortMIDICode: number) => void;
 };
 

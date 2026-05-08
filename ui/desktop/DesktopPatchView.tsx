@@ -17,6 +17,7 @@ import type { ResourceClient } from "../shared/resource-client";
 import type { PatchControlBinding } from "../shared/patch-controls";
 import {
     type SynthFocusBindings,
+    type SynthKeyboardInputMode,
 } from "../shared/synth-input-router";
 import {
     MSEG_RATE_MAX_SECONDS,
@@ -115,6 +116,36 @@ const DISTORTION_WET_LP_MAX_HZ = 20_000;
 const CHORUS_MOTION_MODE_OPTIONS = ["Subtle", "Wide", "Classic", "Fast"] as const;
 const CHORUS_BLOOM_MODE_OPTIONS = ["Clean", "Small", "Large", "Sm+Sh", "Lg+Sh"] as const;
 const CHORUS_RING_OFFSET_MODE_OPTIONS = ["+5th", "Low 5th", "+Oct", "-Oct"] as const;
+
+function postNativeKeyboardProbeStatus(reason: string) {
+    const desktopWindow = globalThis as typeof globalThis & {
+        __COSIMO_DESKTOP_KEYBOARD_PROBE__?: boolean;
+        webkit?: {
+            messageHandlers?: {
+                chocHostKeyboard?: {
+                    postMessage?: (message: string) => void;
+                };
+            };
+        };
+    };
+
+    if (!desktopWindow.__COSIMO_DESKTOP_KEYBOARD_PROBE__) {
+        return;
+    }
+
+    try {
+        desktopWindow.webkit?.messageHandlers?.chocHostKeyboard?.postMessage?.(JSON.stringify({
+            action: "discardBufferedEvent",
+            eventType: "cosimo-debug",
+            key: "",
+            code: "",
+            reason,
+        }));
+    } catch {
+        // The probe bridge only exists in the native keyboard regression app.
+    }
+}
+
 type HeaderProps = {
     statusText: string;
 };
@@ -1726,7 +1757,8 @@ function ArticulationSlotBar({
                             aria-label={`Select articulation ${slot.name}`}
                             aria-pressed={isSelected}
                             data-role="articulation-slot-button"
-                            data-selector-a={String(slot.selectorA)}
+                            data-selector-a={String(slot.runtimeSlot)}
+                            data-runtime-slot={String(slot.runtimeSlot)}
                             className={`flex h-7 shrink-0 items-center gap-2 rounded-[8px] border px-2.5 text-[10px] font-semibold uppercase tracking-[0.08em] transition ${
                                 isSelected
                                     ? "border-amber-200/24 bg-amber-300/12 text-amber-100"
@@ -1735,7 +1767,7 @@ function ArticulationSlotBar({
                             onClick={() => onSelect(slot.id)}
                         >
                             <span className="font-mono text-[9px] text-cyan-200/55">
-                                {slot.selectorA}
+                                {slot.runtimeSlot}
                             </span>
                             <span>{slot.name}</span>
                         </button>
@@ -2307,7 +2339,11 @@ function ModulationMatrixSection({
     );
 }
 
-function DesktopPatchViewBody() {
+function DesktopPatchViewBody({
+    keyboardInputMode,
+}: {
+    keyboardInputMode: SynthKeyboardInputMode;
+}) {
     const stageRef = useRef<HTMLDivElement | null>(null);
     const msegEditorSurfaceRef = useRef<SVGSVGElement | null>(null);
     const keyboardElementRef = useRef<PianoKeyboardElement | null>(null);
@@ -2336,9 +2372,13 @@ function DesktopPatchViewBody() {
         msegEditorSurfaceRef,
         keyboardRef: keyboardElementRef,
         voiceModeCount: VOICE_MODE_OPTIONS.length,
+        keyboardInputMode,
         onKeyboardOctaveDown: () => shiftKeyboardRootNote(-1, { releaseHeldNotes: false }),
         onKeyboardOctaveUp: () => shiftKeyboardRootNote(1, { releaseHeldNotes: false }),
     });
+    useEffect(() => {
+        postNativeKeyboardProbeStatus(`cosimo-keyboard-router-ready:${keyboardInputMode}`);
+    }, [keyboardInputMode]);
     const filterResonanceCurveProfile = curveLab.getProfile("filter-resonance-handle");
     const resonanceNormalizedFromQ = useCallback((qValue: number) => (
         curveLab.invertTarget("filter-resonance-handle", filterQToNormalized(qValue))
@@ -2541,13 +2581,15 @@ function DesktopPatchViewBody() {
 export function DesktopPatchView({
     patchConnection,
     resourceClient,
+    keyboardInputMode = "hosted",
 }: {
     patchConnection: PatchConnectionLike;
     resourceClient?: ResourceClient;
+    keyboardInputMode?: SynthKeyboardInputMode;
 }) {
     return (
         <PatchConnectionProvider patchConnection={patchConnection} resourceClient={resourceClient}>
-            <DesktopPatchViewBody />
+            <DesktopPatchViewBody keyboardInputMode={keyboardInputMode} />
         </PatchConnectionProvider>
     );
 }

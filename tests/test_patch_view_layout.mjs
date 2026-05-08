@@ -518,12 +518,14 @@ test("desktop dev plug-in build enables the webview dev server and regenerates t
         path.join(repoRoot, "tools", "desktop_native", "Source", "cmaj_PatchLoaderPlugin.cpp"),
         "utf8",
     );
+    const ensureRuntimeScript = await fs.readFile(path.join(repoRoot, "scripts", "ensure_cmajor_runtime.py"), "utf8");
     const buildAssets = await fs.readFile(path.join(repoRoot, "build_assets.py"), "utf8");
 
     assert.match(cmakeSource, /CMAJ_ENABLE_WEBVIEW_DEV_TOOLS=1/);
     assert.match(cmakeSource, /COSIMO_ENABLE_WEBVIEW_DEV_SERVER=1/);
     assert.match(cmakeSource, /COSIMO_DESKTOP_UI_SOURCE_MODE="\$\{COSIMO_DESKTOP_UI_SOURCE_MODE\}"/);
     assert.match(cmakeSource, /COSIMO_DESKTOP_DEV_SERVER_ORIGIN="\$\{COSIMO_DESKTOP_DEV_SERVER_ORIGIN\}"/);
+    assert.match(cmakeSource, /COSIMO_HOST_KEYBOARD_RELAY_PROCESS_NAME="CosimoDesktopNative"/);
     assert.match(buildScript, /desktop_ui_source_mode="\$\{COSIMO_DESKTOP_UI_SOURCE_MODE:-compiled\}"/);
     assert.match(buildScript, /desktop_dev_server_origin="\$\{COSIMO_DESKTOP_DEV_SERVER_ORIGIN:-http:\/\/127\.0\.0\.1:5174\}"/);
     assert.match(buildScript, /if \[\[ "\$desktop_ui_source_mode" == "compiled" \]\]; then\s+npm run ui:build\s+else\s+node ui\/build\.mjs --desktop-runtime/s);
@@ -550,6 +552,14 @@ test("desktop dev plug-in build enables the webview dev server and regenerates t
     assert.match(desktopDevLauncherScript, /COSIMO_DESKTOP_UI_SOURCE_MODE=dev-server/);
     assert.match(desktopDevLauncherScript, /pkill -x "CosimoDesktopNative"/);
     assert.match(patchLoaderPluginSource, /if \(getDesktopUISourceMode\(\) == "dev-server"\)/);
+    assert.match(patchLoaderPluginSource, /window\.__COSIMO_DESKTOP_RUNTIME_KIND__/);
+    assert.match(patchLoaderPluginSource, /wrapperType_Standalone/);
+    assert.match(patchLoaderPluginSource, /JUCEApplicationBase::isStandaloneApp/);
+    assert.match(patchLoaderPluginSource, /currentExecutableFile/);
+    assert.match(patchLoaderPluginSource, /ProjectInfo::projectName/);
+    assert.match(ensureRuntimeScript, /COSIMO_HOST_KEYBOARD_RELAY_PROCESS_NAME/);
+    assert.match(ensureRuntimeScript, /cosimo-standalone-keyboard/);
+    assert.match(ensureRuntimeScript, /hostKeyboardShouldRelayToPlugin/);
     assert.match(patchLoaderPluginSource, /rule\.selectorText !== "\*"/);
     assert.match(patchLoaderPluginSource, /rule\.style\.removeProperty\("padding"\)/);
     assert.match(patchLoaderPluginSource, /rule\.style\.removeProperty\("margin"\)/);

@@ -1,0 +1,2699 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Cosimo · Articulation Map · Prototype Set</title>
+<style>
+  :root {
+    --bg:           #04070f;
+    --bg-soft:      #070b15;
+    --shell:        #0a0f1c;
+    --panel:        #0f1526;
+    --panel-2:      #141b30;
+    --panel-3:      #1b2440;
+    --line:         rgba(255,255,255,0.07);
+    --line-2:       rgba(255,255,255,0.13);
+    --line-3:       rgba(255,255,255,0.22);
+    --line-soft:    rgba(255,255,255,0.04);
+
+    --ink:          #eef2f5;
+    --ink-2:        #c4ccda;
+    --muted:        rgba(238,242,245,0.55);
+    --faint:        rgba(238,242,245,0.34);
+    --ghost:        rgba(238,242,245,0.18);
+
+    --cyan:         #87d7f5;
+    --cyan-deep:    #1e8fbd;
+    --cyan-haze:    rgba(135,215,245,0.16);
+    --cyan-line:    rgba(135,215,245,0.45);
+
+    --pink:         #f56cb6;
+    --pink-haze:    rgba(245,108,182,0.14);
+    --pink-line:    rgba(245,108,182,0.42);
+
+    --amber:        #ffd8a6;
+    --amber-deep:   #b87f24;
+    --amber-haze:   rgba(255,216,166,0.13);
+    --amber-line:   rgba(255,216,166,0.42);
+
+    --green:        #32f0bc;
+    --green-haze:   rgba(50,240,188,0.12);
+
+    --red:          #f87171;
+    --red-haze:     rgba(248,113,113,0.14);
+
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", "IBM Plex Mono", Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Inter", "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+
+    --r-1: 4px;
+    --r-2: 6px;
+    --r-3: 10px;
+    --r-4: 14px;
+
+    --t-fast: 110ms cubic-bezier(.4,.2,.2,1);
+    --t-med:  180ms cubic-bezier(.4,.2,.2,1);
+
+    --tile-h: 56px;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin:0; padding:0; }
+  html { background: var(--bg); }
+  body {
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 13px;
+    line-height: 1.4;
+    -webkit-font-smoothing: antialiased;
+    -webkit-text-size-adjust: 100%;
+    background:
+      radial-gradient(1200px 800px at 80% -10%, rgba(135,215,245,0.05), transparent 60%),
+      radial-gradient(900px 600px at -10% 110%, rgba(245,108,182,0.04), transparent 60%),
+      linear-gradient(180deg, #04070f 0%, #03050b 100%);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  ::selection { background: rgba(135,215,245,0.35); color: #fff; }
+
+  button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+  input, select { font: inherit; color: inherit; }
+
+  :focus { outline: none; }
+  :focus-visible {
+    outline: 2px solid var(--cyan);
+    outline-offset: 1px;
+    border-radius: var(--r-2);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+  }
+
+  /* ── Shell ─────────────────────────────────────────────── */
+
+  .shell {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 14px;
+  }
+  @media (min-width: 720px) { .shell { padding: 22px; } }
+
+  .topbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 12px;
+    padding: 8px 12px;
+    border: 1px solid var(--line-2);
+    background: linear-gradient(180deg, var(--panel-2), var(--panel));
+    border-radius: var(--r-3);
+    margin-bottom: 12px;
+  }
+  @media (max-width: 540px) {
+    .topbar .title { display: none; }
+  }
+  .topbar .brand {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    color: var(--muted);
+    text-transform: uppercase;
+    padding-right: 10px;
+    border-right: 1px solid var(--line-2);
+  }
+  .topbar .brand b { color: var(--ink); font-weight: 700; letter-spacing: 0.18em; }
+  .topbar .title {
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+  }
+  .topbar .grow { flex: 1; }
+  .topbar .status {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+    padding: 4px 8px;
+    border: 1px solid var(--line);
+    border-radius: var(--r-2);
+    white-space: nowrap;
+  }
+  .topbar .status.ok    { color: var(--cyan); border-color: var(--cyan-line); }
+  .topbar .status.warn  { color: var(--amber); border-color: var(--amber-line); }
+  .topbar .status.err   { color: var(--red); border-color: rgba(248,113,113,0.42); }
+
+  /* ── Tabs ──────────────────────────────────────────────── */
+
+  .tabs {
+    display: flex;
+    gap: 4px;
+    padding: 4px;
+    border: 1px solid var(--line-2);
+    background: var(--panel);
+    border-radius: var(--r-3);
+    margin-bottom: 14px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tab {
+    flex: 1 1 auto;
+    min-width: max-content;
+    padding: 8px 14px;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--muted);
+    background: transparent;
+    border-radius: var(--r-2);
+    transition: color var(--t-fast), background var(--t-fast);
+    text-align: center;
+  }
+  .tab:hover { color: var(--ink-2); background: rgba(255,255,255,0.03); }
+  .tab.active {
+    color: var(--ink);
+    background: linear-gradient(180deg, var(--panel-3), var(--panel-2));
+    box-shadow: inset 0 0 0 1px var(--line-2);
+  }
+  .tab .tab-tag {
+    display: inline-block;
+    font-size: 9px;
+    margin-left: 6px;
+    padding: 1px 5px;
+    border: 1px solid var(--line-2);
+    border-radius: 3px;
+    color: var(--faint);
+    letter-spacing: 0.12em;
+  }
+  .tab.active .tab-tag { color: var(--cyan); border-color: var(--cyan-line); }
+
+  /* ── Variation surface ────────────────────────────────── */
+
+  .surface {
+    border: 1px solid var(--line-2);
+    background:
+      linear-gradient(180deg, rgba(255,255,255,0.012), transparent 30%),
+      var(--shell);
+    border-radius: var(--r-4);
+    overflow: hidden;
+    position: relative;
+  }
+  .variation { display: none; }
+  .variation.active { display: block; }
+
+  /* ── Toolbar (shared) ─────────────────────────────────── */
+
+  .toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--line);
+    background: linear-gradient(180deg, var(--panel-2), var(--panel));
+  }
+  .toolbar .group { display: flex; align-items: center; gap: 4px; }
+  .toolbar .sep { width: 1px; height: 20px; background: var(--line-2); margin: 0 4px; }
+  .toolbar .grow { flex: 1; }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 30px;
+    padding: 0 10px;
+    border: 1px solid var(--line-2);
+    background: rgba(255,255,255,0.03);
+    color: var(--ink-2);
+    border-radius: var(--r-2);
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    transition: background var(--t-fast), color var(--t-fast), border-color var(--t-fast);
+    white-space: nowrap;
+  }
+  .btn:hover { background: rgba(255,255,255,0.06); color: var(--ink); border-color: var(--line-3); }
+  .btn:active { background: rgba(255,255,255,0.09); }
+  .btn:disabled { opacity: 0.36; cursor: not-allowed; }
+  .btn:disabled:hover { background: rgba(255,255,255,0.03); color: var(--ink-2); border-color: var(--line-2); }
+  .btn .kbd {
+    font-size: 9px;
+    color: var(--faint);
+    border: 1px solid var(--line);
+    padding: 1px 4px;
+    border-radius: 3px;
+    margin-left: 4px;
+  }
+  .btn.primary { color: var(--cyan); border-color: var(--cyan-line); background: var(--cyan-haze); }
+  .btn.primary:hover { background: rgba(135,215,245,0.22); }
+  .btn.danger { color: var(--red); border-color: rgba(248,113,113,0.4); background: rgba(248,113,113,0.08); }
+  .btn.danger:hover { background: rgba(248,113,113,0.16); }
+  .btn.ghost { background: transparent; border-color: var(--line); }
+
+  .icon-btn {
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    justify-content: center;
+  }
+
+  .toolbar-meta {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+    padding: 0 8px;
+  }
+  .toolbar-meta b { color: var(--ink); font-weight: 600; }
+
+  /* ── Articulation tile (shared visual identity) ───────── */
+
+  .tile {
+    position: relative;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: 10px;
+    height: var(--tile-h);
+    padding: 6px 10px;
+    background: linear-gradient(180deg, var(--panel-2), var(--panel));
+    border: 1px solid var(--line);
+    border-radius: var(--r-3);
+    cursor: pointer;
+    user-select: none;
+    transition: border-color var(--t-fast), background var(--t-fast), transform var(--t-fast);
+    -webkit-tap-highlight-color: transparent;
+  }
+  .tile:hover { border-color: var(--line-3); }
+  .tile.empty {
+    background: repeating-linear-gradient(
+      135deg,
+      rgba(255,255,255,0.018) 0 6px,
+      transparent 6px 12px
+    ), var(--bg-soft);
+    border: 1px dashed var(--line-2);
+  }
+  .tile.empty:hover { border-color: var(--cyan-line); background: var(--cyan-haze); }
+  .tile.active {
+    border-color: var(--cyan-line);
+    box-shadow: 0 0 0 1px var(--cyan-line) inset, 0 6px 24px rgba(0,0,0,0.4);
+    background: linear-gradient(180deg, rgba(135,215,245,0.06), var(--panel));
+  }
+  .tile.editing {
+    border-color: var(--pink-line);
+    box-shadow: 0 0 0 1px var(--pink-line) inset;
+  }
+  .tile.queued-target {
+    border-color: var(--cyan-line);
+    background: var(--cyan-haze);
+    animation: pulse 1.4s ease-in-out infinite;
+  }
+  .tile.drop-move    { border-color: var(--cyan); box-shadow: 0 0 0 2px var(--cyan-line); }
+  .tile.drop-swap    { border-color: var(--amber); box-shadow: 0 0 0 2px var(--amber-line); }
+  .tile.drop-dup     { border-color: var(--green); box-shadow: 0 0 0 2px rgba(50,240,188,0.4); }
+  .tile.dragging     { opacity: 0.4; }
+  @keyframes pulse {
+    0%, 100% { box-shadow: 0 0 0 1px var(--cyan-line) inset, 0 0 0 0 var(--cyan-line); }
+    50%      { box-shadow: 0 0 0 1px var(--cyan-line) inset, 0 0 0 4px rgba(135,215,245,0.18); }
+  }
+
+  .tile .note {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    min-width: 38px;
+    padding-right: 8px;
+    border-right: 1px solid var(--line);
+  }
+  .tile .note .name {
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    color: var(--ink);
+  }
+  .tile .note .num {
+    font-family: var(--mono);
+    font-size: 9px;
+    color: var(--faint);
+    letter-spacing: 0.05em;
+  }
+  .tile.empty .note .name { color: var(--ink-2); }
+  .tile.black .note .name { color: var(--amber); }
+
+  .tile .body {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+  }
+  .tile .body .row1 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+  }
+  .tile .body .name-line {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ink);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+  }
+  .tile .body .selA {
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    padding: 1px 5px;
+    border: 1px solid var(--line-2);
+    border-radius: 3px;
+    white-space: nowrap;
+  }
+  .tile .body .row2 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .tile .body .accent-bar {
+    width: 4px;
+    height: 24px;
+    border-radius: 2px;
+    background: var(--cyan);
+  }
+  .tile.accent-pink .body .accent-bar { background: var(--pink); }
+  .tile.accent-amber .body .accent-bar { background: var(--amber); }
+  .tile.empty .body .placeholder {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    color: var(--faint);
+    text-transform: uppercase;
+  }
+
+  .thumbs {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .thumb {
+    width: 56px;
+    height: 24px;
+    background: var(--bg-soft);
+    border: 1px solid var(--line);
+    border-radius: var(--r-1);
+    overflow: hidden;
+    position: relative;
+  }
+  .thumb svg { width: 100%; height: 100%; display: block; }
+  .thumb .lbl {
+    position: absolute;
+    top: 1px; left: 3px;
+    font-family: var(--mono);
+    font-size: 7px;
+    letter-spacing: 0.14em;
+    color: var(--faint);
+    text-transform: uppercase;
+  }
+
+  .tile .right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .state-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--ghost);
+  }
+  .tile.active   .state-dot { background: var(--cyan);  box-shadow: 0 0 6px var(--cyan); }
+  .tile.editing  .state-dot { background: var(--pink);  box-shadow: 0 0 6px var(--pink); }
+  .tile:not(.empty):not(.active):not(.editing) .state-dot { background: var(--green); }
+
+  .grip {
+    width: 10px;
+    height: 22px;
+    background-image: radial-gradient(var(--ghost) 1px, transparent 1px);
+    background-size: 4px 4px;
+    background-position: 0 0;
+    opacity: 0.7;
+    cursor: grab;
+  }
+  .tile.dragging .grip { cursor: grabbing; }
+
+  /* ── Console (V1) ─────────────────────────────────────── */
+
+  .v1 .console {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+    padding: 12px;
+  }
+  .v1 .console .row-head {
+    display: none;
+  }
+  .v1 .console .rows {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+  /* desktop dense grid table */
+  @media (min-width: 880px) {
+    .v1 .console .row-head {
+      display: grid;
+      grid-template-columns: 92px 1fr 70px 64px 64px 110px 28px;
+      gap: 10px;
+      align-items: center;
+      padding: 0 14px;
+      font-family: var(--mono);
+      font-size: 9px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--muted);
+      height: 24px;
+    }
+    .v1 .console .rows { gap: 4px; }
+    .v1 .row {
+      display: grid;
+      grid-template-columns: 92px 1fr 70px 64px 64px 110px 28px;
+      gap: 10px;
+      align-items: center;
+      padding: 0 12px;
+      height: 44px;
+      background: linear-gradient(180deg, var(--panel-2), var(--panel));
+      border: 1px solid var(--line);
+      border-radius: var(--r-2);
+      cursor: pointer;
+      user-select: none;
+      transition: border-color var(--t-fast), background var(--t-fast);
+      -webkit-tap-highlight-color: transparent;
+    }
+    .v1 .row:hover { border-color: var(--line-3); }
+    .v1 .row.active {
+      border-color: var(--cyan-line);
+      background: linear-gradient(180deg, rgba(135,215,245,0.06), var(--panel));
+      box-shadow: 0 0 0 1px var(--cyan-line) inset;
+    }
+    .v1 .row.empty {
+      background: repeating-linear-gradient(135deg, rgba(255,255,255,0.018) 0 6px, transparent 6px 12px), var(--bg-soft);
+      border: 1px dashed var(--line-2);
+    }
+    .v1 .row.queued-target { border-color: var(--cyan-line); background: var(--cyan-haze); animation: pulse 1.4s ease-in-out infinite; }
+    .v1 .row.drop-move    { box-shadow: 0 0 0 2px var(--cyan-line); }
+    .v1 .row.drop-swap    { box-shadow: 0 0 0 2px var(--amber-line); }
+    .v1 .row.drop-dup     { box-shadow: 0 0 0 2px rgba(50,240,188,0.4); }
+    .v1 .row.dragging     { opacity: 0.4; }
+    .v1 .row .c-note {
+      display: flex; align-items: center; gap: 6px;
+    }
+    .v1 .row .c-note .key {
+      width: 14px; height: 22px; border-radius: 2px; background: #f6f8fb;
+    }
+    .v1 .row.black .c-note .key { background: #1a1d28; border: 1px solid #2a2e3a; }
+    .v1 .row .c-note .name {
+      font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--ink);
+    }
+    .v1 .row .c-note .num { font-family: var(--mono); font-size: 9px; color: var(--faint); margin-left: auto; padding-right: 6px; }
+    .v1 .row .c-name {
+      font-size: 13px; font-weight: 500; color: var(--ink);
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .v1 .row.empty .c-name {
+      font-family: var(--mono); font-size: 10px; letter-spacing: 0.16em; color: var(--faint); text-transform: uppercase;
+    }
+    .v1 .row .c-selA {
+      font-family: var(--mono); font-size: 11px; color: var(--ink-2);
+      text-align: right;
+    }
+    .v1 .row.empty .c-selA { color: var(--faint); }
+    .v1 .row .c-state {
+      width: 28px; display: flex; justify-content: flex-end;
+    }
+    .v1 .row .grip {
+      cursor: grab; opacity: 0.6;
+    }
+  }
+
+  /* mobile cards (V1 mobile) */
+  .v1 .mobile-cards {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+    padding: 12px;
+  }
+  @media (min-width: 880px) {
+    .v1 .mobile-cards { display: none; }
+  }
+  @media (max-width: 879px) {
+    .v1 .console { display: none; }
+  }
+  .v1 .card {
+    background: linear-gradient(180deg, var(--panel-2), var(--panel));
+    border: 1px solid var(--line);
+    border-radius: var(--r-3);
+    overflow: hidden;
+    transition: border-color var(--t-fast);
+  }
+  .v1 .card.empty {
+    background: repeating-linear-gradient(135deg, rgba(255,255,255,0.018) 0 6px, transparent 6px 12px), var(--bg-soft);
+    border: 1px dashed var(--line-2);
+  }
+  .v1 .card.active {
+    border-color: var(--cyan-line);
+    box-shadow: 0 0 0 1px var(--cyan-line) inset;
+  }
+  .v1 .card.queued-target { border-color: var(--cyan-line); animation: pulse 1.4s ease-in-out infinite; }
+  .v1 .card.move-source { border-color: var(--pink-line); box-shadow: 0 0 0 1px var(--pink-line) inset; }
+  .v1 .card-head {
+    display: grid;
+    grid-template-columns: 56px 1fr auto;
+    gap: 10px;
+    align-items: center;
+    padding: 10px 12px;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .v1 .card-note {
+    display: flex; flex-direction: column; gap: 2px;
+  }
+  .v1 .card-note .name { font-family: var(--mono); font-size: 14px; font-weight: 700; }
+  .v1 .card-note.black .name { color: var(--amber); }
+  .v1 .card-note .num { font-family: var(--mono); font-size: 10px; color: var(--faint); }
+  .v1 .card-mid { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .v1 .card-mid .name-line { font-size: 13px; font-weight: 600; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .v1 .card-mid .meta-line { display: flex; gap: 6px; align-items: center; }
+  .v1 .card-mid .selA { font-family: var(--mono); font-size: 10px; color: var(--muted); padding: 1px 5px; border: 1px solid var(--line-2); border-radius: 3px; }
+  .v1 .card.empty .name-line { font-family: var(--mono); font-size: 11px; letter-spacing: 0.16em; color: var(--faint); text-transform: uppercase; }
+  .v1 .card-thumbs { display: flex; gap: 6px; align-items: center; }
+  .v1 .card-actions {
+    display: none;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+    padding: 0 12px 12px;
+    border-top: 1px solid var(--line);
+    margin-top: 4px;
+    padding-top: 10px;
+  }
+  .v1 .card.active .card-actions { display: grid; }
+  .v1 .card-actions .btn { height: 36px; }
+
+  /* ── Bin/Lane (V2) ────────────────────────────────────── */
+
+  .v2 .lane-wrap { padding: 12px; }
+
+  /* desktop: library on left + horizontal piano lane on right */
+  .v2 .desktop-bin {
+    display: grid;
+    grid-template-columns: 240px 1fr;
+    gap: 12px;
+    align-items: stretch;
+  }
+  .v2 .library {
+    border: 1px solid var(--line-2);
+    background: var(--panel);
+    border-radius: var(--r-3);
+    padding: 10px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .v2 .library h3 {
+    margin: 0; padding: 4px 6px;
+    font-family: var(--mono); font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); font-weight: 700;
+  }
+  .v2 .library-items {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    overflow-y: auto;
+    max-height: 540px;
+  }
+  .v2 .lib-card {
+    padding: 8px;
+    background: linear-gradient(180deg, var(--panel-2), var(--panel));
+    border: 1px solid var(--line);
+    border-radius: var(--r-2);
+    cursor: grab;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+    transition: border-color var(--t-fast), background var(--t-fast);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .v2 .lib-card:hover { border-color: var(--line-3); background: var(--panel-2); }
+  .v2 .lib-card.dragging { opacity: 0.4; }
+  .v2 .lib-card.queued { border-color: var(--cyan); background: var(--cyan-haze); }
+  .v2 .lib-card .name { font-size: 12px; font-weight: 600; line-height: 1.2; }
+  .v2 .lib-card .meta { display: flex; gap: 6px; align-items: center; }
+  .v2 .lib-card .selA { font-family: var(--mono); font-size: 9px; padding: 1px 4px; border: 1px solid var(--line-2); border-radius: 3px; color: var(--muted); }
+  .v2 .lib-card .accent-tag {
+    width: 6px; height: 6px; border-radius: 50%; background: var(--cyan);
+  }
+  .v2 .lib-card.accent-pink .accent-tag { background: var(--pink); }
+  .v2 .lib-card.accent-amber .accent-tag { background: var(--amber); }
+  .v2 .lib-card .thumbs { gap: 4px; }
+  .v2 .lib-card .thumb { width: 100%; height: 18px; }
+
+  .v2 .piano-lane {
+    border: 1px solid var(--line-2);
+    background: var(--panel);
+    border-radius: var(--r-3);
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+  .v2 .piano-lane .lane-inner {
+    display: grid;
+    grid-template-columns: repeat(24, 92px);
+    gap: 4px;
+    padding: 12px;
+    min-width: max-content;
+  }
+  .v2 .lane-key {
+    height: 360px;
+    display: flex;
+    flex-direction: column;
+    background: linear-gradient(180deg, var(--panel-2), var(--panel));
+    border: 1px solid var(--line);
+    border-radius: var(--r-2);
+    overflow: hidden;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: border-color var(--t-fast), background var(--t-fast);
+  }
+  .v2 .lane-key.empty {
+    background: repeating-linear-gradient(135deg, rgba(255,255,255,0.018) 0 6px, transparent 6px 12px), var(--bg-soft);
+    border: 1px dashed var(--line-2);
+  }
+  .v2 .lane-key.active { border-color: var(--cyan-line); box-shadow: 0 0 0 1px var(--cyan-line) inset; }
+  .v2 .lane-key.queued-target { border-color: var(--cyan-line); background: var(--cyan-haze); animation: pulse 1.4s ease-in-out infinite; }
+  .v2 .lane-key.drop-move { border-color: var(--cyan); box-shadow: 0 0 0 2px var(--cyan-line); }
+  .v2 .lane-key.drop-swap { border-color: var(--amber); box-shadow: 0 0 0 2px var(--amber-line); }
+  .v2 .lane-key.drop-dup  { border-color: var(--green); box-shadow: 0 0 0 2px rgba(50,240,188,0.4); }
+  .v2 .lane-key.dragging  { opacity: 0.4; }
+  .v2 .lane-key .head {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--line);
+    background: rgba(0,0,0,0.2);
+  }
+  .v2 .lane-key.black .head { background: rgba(255,216,166,0.06); }
+  .v2 .lane-key .head .name { font-family: var(--mono); font-size: 11px; font-weight: 700; }
+  .v2 .lane-key.black .head .name { color: var(--amber); }
+  .v2 .lane-key .head .num { font-family: var(--mono); font-size: 9px; color: var(--faint); }
+  .v2 .lane-key .body {
+    display: flex; flex-direction: column; gap: 6px; padding: 8px;
+    flex: 1; min-height: 0;
+  }
+  .v2 .lane-key .name-line { font-size: 11px; font-weight: 600; line-height: 1.2; }
+  .v2 .lane-key.empty .name-line { font-family: var(--mono); font-size: 10px; letter-spacing: 0.14em; color: var(--faint); text-transform: uppercase; }
+  .v2 .lane-key .selA { font-family: var(--mono); font-size: 9px; color: var(--muted); padding: 1px 5px; border: 1px solid var(--line-2); border-radius: 3px; align-self: flex-start; }
+  .v2 .lane-key .thumbs { flex-direction: column; align-items: stretch; gap: 4px; margin-top: auto; }
+  .v2 .lane-key .thumb { width: 100%; height: 22px; }
+
+  /* mobile bin layout */
+  .v2 .mobile-bin {
+    display: none;
+  }
+  @media (max-width: 879px) {
+    .v2 .desktop-bin { display: none; }
+    .v2 .mobile-bin { display: block; }
+  }
+
+  .v2 .mobile-bin .lib-strip {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    padding: 12px;
+    border-bottom: 1px solid var(--line);
+    margin: -12px -12px 10px;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .v2 .mobile-bin .lib-strip::-webkit-scrollbar { display: none; }
+  .v2 .mobile-bin .lib-strip-card {
+    flex: 0 0 auto;
+    min-width: 130px;
+    padding: 8px 10px;
+    background: linear-gradient(180deg, var(--panel-2), var(--panel));
+    border: 1px solid var(--line-2);
+    border-radius: var(--r-2);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+  }
+  .v2 .mobile-bin .lib-strip-card.queued { border-color: var(--cyan); background: var(--cyan-haze); }
+  .v2 .mobile-bin .lib-strip-card .name { font-size: 12px; font-weight: 600; }
+  .v2 .mobile-bin .lib-strip-card .meta { display: flex; gap: 6px; align-items: center; }
+  .v2 .mobile-bin .lib-strip-card .selA { font-family: var(--mono); font-size: 9px; color: var(--muted); }
+
+  .v2 .mobile-bin .note-list {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 5px;
+  }
+  .v2 .mobile-bin .note-row {
+    display: grid;
+    grid-template-columns: 56px 1fr auto;
+    gap: 8px;
+    align-items: center;
+    padding: 6px 10px;
+    background: linear-gradient(180deg, var(--panel-2), var(--panel));
+    border: 1px solid var(--line);
+    border-radius: var(--r-2);
+    min-height: 52px;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .v2 .mobile-bin .note-row.empty {
+    background: repeating-linear-gradient(135deg, rgba(255,255,255,0.018) 0 6px, transparent 6px 12px), var(--bg-soft);
+    border: 1px dashed var(--line-2);
+  }
+  .v2 .mobile-bin .note-row.active { border-color: var(--cyan-line); box-shadow: 0 0 0 1px var(--cyan-line) inset; }
+  .v2 .mobile-bin .note-row.queued-target { border-color: var(--cyan-line); background: var(--cyan-haze); animation: pulse 1.4s ease-in-out infinite; }
+  .v2 .mobile-bin .note-row.move-source { border-color: var(--pink-line); box-shadow: 0 0 0 1px var(--pink-line) inset; }
+  .v2 .mobile-bin .note-row .nm { display: flex; flex-direction: column; }
+  .v2 .mobile-bin .note-row .nm .name { font-family: var(--mono); font-size: 13px; font-weight: 700; }
+  .v2 .mobile-bin .note-row.black .nm .name { color: var(--amber); }
+  .v2 .mobile-bin .note-row .nm .num  { font-family: var(--mono); font-size: 9px; color: var(--faint); }
+  .v2 .mobile-bin .note-row .body { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+  .v2 .mobile-bin .note-row .body .name-line { font-size: 12px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .v2 .mobile-bin .note-row.empty .body .name-line { font-family: var(--mono); font-size: 10px; letter-spacing: 0.14em; color: var(--faint); text-transform: uppercase; }
+  .v2 .mobile-bin .note-row .body .meta { display: flex; gap: 6px; align-items: center; }
+  .v2 .mobile-bin .note-row .body .selA { font-family: var(--mono); font-size: 9px; color: var(--muted); padding: 1px 4px; border: 1px solid var(--line-2); border-radius: 3px; }
+  .v2 .mobile-bin .note-row .thumbs { flex-direction: column; gap: 3px; }
+  .v2 .mobile-bin .note-row .thumb { width: 48px; height: 16px; }
+
+  /* mobile pending banner */
+  .v2 .pending-banner {
+    display: none;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    background: var(--cyan-haze);
+    border: 1px solid var(--cyan-line);
+    border-radius: var(--r-2);
+    margin-bottom: 10px;
+    color: var(--ink);
+  }
+  .v2 .pending-banner.show { display: flex; }
+  .v2 .pending-banner .label {
+    font-family: var(--mono); font-size: 9px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--cyan);
+  }
+  .v2 .pending-banner .name { font-size: 13px; font-weight: 600; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .v2 .pending-banner .cancel {
+    font-family: var(--mono); font-size: 10px; color: var(--ink-2);
+    padding: 4px 8px; border: 1px solid var(--line-2); border-radius: 3px;
+  }
+
+  /* ── Inspector (V3) ───────────────────────────────────── */
+
+  .v3 .inspector-wrap {
+    padding: 12px;
+  }
+  .v3 .inspector-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  @media (min-width: 880px) {
+    .v3 .inspector-grid {
+      grid-template-columns: 1fr 360px;
+      align-items: start;
+    }
+  }
+  .v3 .insp-list {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 5px;
+  }
+  @media (min-width: 880px) {
+    .v3 .insp-list {
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+    }
+  }
+  .v3 .insp-row {
+    display: grid;
+    grid-template-columns: 50px 1fr auto;
+    gap: 8px;
+    align-items: center;
+    padding: 6px 10px;
+    background: linear-gradient(180deg, var(--panel-2), var(--panel));
+    border: 1px solid var(--line);
+    border-radius: var(--r-2);
+    min-height: 48px;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .v3 .insp-row.empty {
+    background: repeating-linear-gradient(135deg, rgba(255,255,255,0.018) 0 6px, transparent 6px 12px), var(--bg-soft);
+    border: 1px dashed var(--line-2);
+  }
+  .v3 .insp-row.active { border-color: var(--cyan-line); box-shadow: 0 0 0 1px var(--cyan-line) inset; }
+  .v3 .insp-row.queued-target { border-color: var(--cyan-line); background: var(--cyan-haze); animation: pulse 1.4s ease-in-out infinite; }
+  .v3 .insp-row.move-source { border-color: var(--pink-line); box-shadow: 0 0 0 1px var(--pink-line) inset; }
+  .v3 .insp-row.drop-move { box-shadow: 0 0 0 2px var(--cyan-line); }
+  .v3 .insp-row.drop-swap { box-shadow: 0 0 0 2px var(--amber-line); }
+  .v3 .insp-row.drop-dup  { box-shadow: 0 0 0 2px rgba(50,240,188,0.4); }
+  .v3 .insp-row.dragging  { opacity: 0.4; }
+  .v3 .insp-row .nm .name { font-family: var(--mono); font-size: 12px; font-weight: 700; }
+  .v3 .insp-row.black .nm .name { color: var(--amber); }
+  .v3 .insp-row .nm .num { font-family: var(--mono); font-size: 9px; color: var(--faint); }
+  .v3 .insp-row .body .name-line { font-size: 12px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .v3 .insp-row.empty .body .name-line { font-family: var(--mono); font-size: 10px; letter-spacing: 0.14em; color: var(--faint); text-transform: uppercase; }
+  .v3 .insp-row .body .meta { display: flex; gap: 6px; align-items: center; }
+  .v3 .insp-row .body .selA { font-family: var(--mono); font-size: 9px; color: var(--muted); padding: 1px 4px; border: 1px solid var(--line-2); border-radius: 3px; }
+  .v3 .insp-row .thumbs .thumb { width: 44px; height: 18px; }
+
+  /* desktop inspector panel */
+  .v3 .insp-panel {
+    border: 1px solid var(--line-2);
+    background: var(--panel);
+    border-radius: var(--r-3);
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    position: sticky;
+    top: 12px;
+  }
+  /* mobile sticky inspector at top */
+  @media (max-width: 879px) {
+    .v3 .inspector-grid {
+      display: flex;
+      flex-direction: column;
+    }
+    .v3 .insp-panel {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      margin: -12px -12px 10px;
+      border-radius: 0;
+      border: 0;
+      border-bottom: 1px solid var(--line-2);
+      background: linear-gradient(180deg, var(--panel-2), var(--panel));
+      padding: 10px 12px;
+      gap: 8px;
+    }
+  }
+  .v3 .insp-head {
+    display: flex; align-items: center; gap: 10px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--line);
+  }
+  .v3 .insp-head .key {
+    font-family: var(--mono); font-size: 18px; font-weight: 700;
+  }
+  .v3 .insp-head.black .key { color: var(--amber); }
+  .v3 .insp-head .num { font-family: var(--mono); font-size: 10px; color: var(--faint); }
+  .v3 .insp-head .grow { flex: 1; }
+  .v3 .insp-head .state {
+    font-family: var(--mono); font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted);
+    padding: 2px 6px; border: 1px solid var(--line-2); border-radius: 3px;
+  }
+  .v3 .insp-head .state.assigned { color: var(--green); border-color: rgba(50,240,188,0.34); }
+  .v3 .insp-head .state.empty    { color: var(--faint); }
+  .v3 .insp-head .state.active   { color: var(--cyan); border-color: var(--cyan-line); }
+  .v3 .insp-name-row {
+    display: flex; align-items: center; gap: 8px;
+  }
+  .v3 .insp-name-row .name {
+    font-size: 15px; font-weight: 600; flex: 1; min-width: 0;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .v3 .insp-name-row .name.empty { color: var(--faint); font-family: var(--mono); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; }
+  .v3 .insp-meta { display: flex; gap: 8px; flex-wrap: wrap; }
+  .v3 .insp-meta .pill {
+    font-family: var(--mono); font-size: 10px; letter-spacing: 0.04em; color: var(--ink-2);
+    padding: 3px 7px; border: 1px solid var(--line-2); border-radius: 3px;
+  }
+  .v3 .insp-thumbs {
+    display: flex; gap: 8px;
+  }
+  .v3 .insp-thumbs .thumb { width: 100%; height: 44px; flex: 1; }
+  .v3 .insp-actions {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+  }
+  .v3 .insp-actions .btn { height: 34px; }
+  @media (max-width: 879px) {
+    .v3 .insp-thumbs .thumb { height: 28px; }
+    .v3 .insp-actions { grid-template-columns: repeat(5, 1fr); }
+    .v3 .insp-actions .btn { height: 36px; }
+    .v3 .insp-head { padding-bottom: 6px; }
+  }
+
+  .v3 .insp-selA-row {
+    display: flex; align-items: center; gap: 8px;
+  }
+  .v3 .insp-selA-row .label {
+    font-family: var(--mono); font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted);
+    min-width: 56px;
+  }
+  .v3 .insp-selA-row input[type="number"] {
+    width: 72px; height: 30px;
+    background: var(--bg-soft);
+    border: 1px solid var(--line-2);
+    border-radius: var(--r-2);
+    font-family: var(--mono);
+    text-align: center;
+    color: var(--ink);
+    padding: 0 6px;
+  }
+  .v3 .insp-selA-row input[type="number"]:focus {
+    outline: none; border-color: var(--cyan-line);
+    box-shadow: 0 0 0 2px var(--cyan-haze);
+  }
+  .v3 .insp-selA-row .warn {
+    font-family: var(--mono); font-size: 10px; color: var(--amber); text-transform: uppercase; letter-spacing: 0.12em;
+  }
+
+  /* ── Pad Grid (V4 mobile-first) ───────────────────────── */
+
+  .v4 .pad-wrap { padding: 12px; }
+  .v4 .pad-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+  }
+  @media (min-width: 720px) {
+    .v4 .pad-grid { grid-template-columns: repeat(6, 1fr); }
+  }
+  @media (min-width: 1080px) {
+    .v4 .pad-grid { grid-template-columns: repeat(8, 1fr); }
+  }
+  .v4 .pad {
+    aspect-ratio: 1 / 1;
+    padding: 8px;
+    background: linear-gradient(180deg, var(--panel-2), var(--panel));
+    border: 1px solid var(--line);
+    border-radius: var(--r-2);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: border-color var(--t-fast), background var(--t-fast);
+    user-select: none;
+    position: relative;
+    min-height: 84px;
+  }
+  .v4 .pad.empty {
+    background: repeating-linear-gradient(135deg, rgba(255,255,255,0.018) 0 6px, transparent 6px 12px), var(--bg-soft);
+    border: 1px dashed var(--line-2);
+  }
+  .v4 .pad.active { border-color: var(--cyan-line); box-shadow: 0 0 0 1px var(--cyan-line) inset; }
+  .v4 .pad.queued-target { border-color: var(--cyan-line); background: var(--cyan-haze); animation: pulse 1.4s ease-in-out infinite; }
+  .v4 .pad.move-source { border-color: var(--pink-line); box-shadow: 0 0 0 1px var(--pink-line) inset; }
+  .v4 .pad.drop-move { border-color: var(--cyan); box-shadow: 0 0 0 2px var(--cyan-line); }
+  .v4 .pad.drop-swap { border-color: var(--amber); box-shadow: 0 0 0 2px var(--amber-line); }
+  .v4 .pad.dragging { opacity: 0.4; }
+  .v4 .pad .head {
+    display: flex; justify-content: space-between; align-items: flex-start;
+  }
+  .v4 .pad .key { font-family: var(--mono); font-size: 13px; font-weight: 700; }
+  .v4 .pad.black .key { color: var(--amber); }
+  .v4 .pad .num { font-family: var(--mono); font-size: 9px; color: var(--faint); }
+  .v4 .pad .accent {
+    width: 6px; height: 6px; border-radius: 50%; background: var(--cyan); align-self: center;
+  }
+  .v4 .pad.accent-pink .accent { background: var(--pink); }
+  .v4 .pad.accent-amber .accent { background: var(--amber); }
+  .v4 .pad .name {
+    font-size: 11px; font-weight: 600; line-height: 1.2;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
+  .v4 .pad.empty .name { font-family: var(--mono); font-size: 9px; letter-spacing: 0.14em; color: var(--faint); text-transform: uppercase; }
+  .v4 .pad .selA { font-family: var(--mono); font-size: 9px; color: var(--muted); }
+  .v4 .pad .micro {
+    height: 12px; width: 100%;
+    background: var(--bg-soft);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .v4 .pad.empty .micro { display: none; }
+
+  .v4 .pad-header {
+    display: flex; align-items: center; gap: 8px;
+    margin-bottom: 10px;
+  }
+  .v4 .pad-summary {
+    flex: 1;
+    padding: 8px 10px;
+    border: 1px solid var(--line-2);
+    border-radius: var(--r-2);
+    background: var(--panel);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+  }
+  .v4 .pad-summary .key { font-family: var(--mono); font-size: 14px; font-weight: 700; }
+  .v4 .pad-summary.black .key { color: var(--amber); }
+  .v4 .pad-summary .name {
+    font-size: 13px; font-weight: 600; flex: 1; min-width: 0;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .v4 .pad-summary .name.empty { color: var(--faint); font-family: var(--mono); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; }
+  .v4 .pad-summary .selA { font-family: var(--mono); font-size: 10px; color: var(--ink-2); padding: 2px 6px; border: 1px solid var(--line-2); border-radius: 3px; }
+
+  .v4 .pad-actions {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 6px;
+    padding: 10px 0 0;
+  }
+  .v4 .pad-actions .btn { height: 36px; }
+  @media (min-width: 720px) {
+    .v4 .pad-actions { grid-template-columns: repeat(8, 1fr); }
+  }
+
+  .v4 .pad-lib-strip {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    padding: 8px 0;
+    margin-top: 10px;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .v4 .pad-lib-strip::-webkit-scrollbar { display: none; }
+  .v4 .pad-lib-strip-card {
+    flex: 0 0 auto;
+    min-width: 130px;
+    padding: 8px 10px;
+    background: linear-gradient(180deg, var(--panel-2), var(--panel));
+    border: 1px solid var(--line-2);
+    border-radius: var(--r-2);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+  }
+  .v4 .pad-lib-strip-card.queued { border-color: var(--cyan); background: var(--cyan-haze); }
+  .v4 .pad-lib-strip-card .name { font-size: 12px; font-weight: 600; }
+  .v4 .pad-lib-strip-card .meta { display: flex; gap: 6px; align-items: center; font-family: var(--mono); font-size: 9px; color: var(--muted); }
+
+  /* ── Drag ghost ──────────────────────────────────────── */
+
+  .drag-ghost {
+    position: fixed;
+    pointer-events: none;
+    z-index: 9999;
+    width: 220px;
+    padding: 8px 10px;
+    background: linear-gradient(180deg, var(--panel-3), var(--panel-2));
+    border: 1px solid var(--cyan-line);
+    border-radius: var(--r-2);
+    box-shadow: 0 14px 40px rgba(0,0,0,0.6);
+    transform: translate(-50%, -100%) translate(0, -8px);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .drag-ghost .head {
+    display: flex; align-items: center; gap: 6px;
+  }
+  .drag-ghost .badge {
+    font-family: var(--mono); font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--cyan);
+    padding: 1px 5px; border: 1px solid var(--cyan-line); border-radius: 3px;
+  }
+  .drag-ghost .badge.swap { color: var(--amber); border-color: var(--amber-line); }
+  .drag-ghost .badge.dup  { color: var(--green); border-color: rgba(50,240,188,0.4); }
+  .drag-ghost .name { font-size: 12px; font-weight: 600; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .drag-ghost .arrow { color: var(--muted); font-family: var(--mono); font-size: 10px; }
+  .drag-ghost .target { font-family: var(--mono); font-size: 11px; font-weight: 700; color: var(--cyan); }
+  .drag-ghost .target.swap { color: var(--amber); }
+  .drag-ghost .target.dup { color: var(--green); }
+  .drag-ghost .target.none { color: var(--faint); }
+
+  /* ── Rename modal ────────────────────────────────────── */
+
+  .modal-backdrop {
+    position: fixed; inset: 0;
+    background: rgba(4,7,15,0.7);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 20px;
+  }
+  .modal-backdrop.show { display: flex; }
+  .modal {
+    width: 360px;
+    max-width: 100%;
+    background: linear-gradient(180deg, var(--panel-2), var(--panel));
+    border: 1px solid var(--line-2);
+    border-radius: var(--r-3);
+    padding: 16px;
+  }
+  .modal h2 {
+    margin: 0 0 4px;
+    font-family: var(--mono); font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase;
+    color: var(--muted); font-weight: 700;
+  }
+  .modal .target-line {
+    font-family: var(--mono); font-size: 11px; color: var(--faint); margin-bottom: 12px;
+  }
+  .modal input[type="text"] {
+    width: 100%;
+    height: 38px;
+    padding: 0 12px;
+    background: var(--bg-soft);
+    border: 1px solid var(--line-2);
+    border-radius: var(--r-2);
+    font-size: 14px;
+    color: var(--ink);
+  }
+  .modal input[type="text"]:focus {
+    outline: none; border-color: var(--cyan-line);
+    box-shadow: 0 0 0 2px var(--cyan-haze);
+  }
+  .modal .actions {
+    display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px;
+  }
+
+  /* ── Footer hint bar ─────────────────────────────────── */
+
+  .hint-bar {
+    margin-top: 10px;
+    padding: 8px 12px;
+    border: 1px solid var(--line);
+    background: var(--panel);
+    border-radius: var(--r-2);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 14px;
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .hint-bar .k {
+    color: var(--ink-2);
+    border: 1px solid var(--line-2);
+    padding: 1px 5px;
+    border-radius: 3px;
+    margin-right: 4px;
+    font-weight: 600;
+  }
+  @media (max-width: 879px) {
+    .hint-bar { display: none; }
+  }
+
+  /* ── Misc ────────────────────────────────────────────── */
+
+  [hidden] { display: none !important; }
+  .sr-only {
+    position: absolute; width:1px; height:1px; padding:0; margin:-1px;
+    overflow:hidden; clip: rect(0,0,0,0); white-space:nowrap; border:0;
+  }
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <div class="topbar" role="banner">
+    <span class="brand"><b>COSIMO</b> · ARTICULATION MAP</span>
+    <span class="title">Prototype set</span>
+    <span class="grow"></span>
+    <span class="status ok" id="status">Ready</span>
+  </div>
+
+  <div class="tabs" role="tablist" id="tabs">
+    <button class="tab active" data-variation="v1" role="tab" aria-selected="true">Console <span class="tab-tag">A</span></button>
+    <button class="tab" data-variation="v2" role="tab" aria-selected="false">Bin · Lane <span class="tab-tag">B</span></button>
+    <button class="tab" data-variation="v3" role="tab" aria-selected="false">Inspector <span class="tab-tag">C</span></button>
+    <button class="tab" data-variation="v4" role="tab" aria-selected="false">Pad Grid <span class="tab-tag">D</span></button>
+  </div>
+
+  <!-- ─────────── Variation 1 · CONSOLE ─────────── -->
+  <section class="surface variation v1 active" id="v1" role="tabpanel">
+    <div class="toolbar">
+      <span class="toolbar-meta">A · CONSOLE</span>
+      <span class="sep"></span>
+      <div class="group">
+        <button class="btn primary" data-action="capture">Capture<span class="kbd">⏎</span></button>
+        <button class="btn" data-action="rename">Rename<span class="kbd">R</span></button>
+      </div>
+      <span class="sep"></span>
+      <div class="group">
+        <button class="btn" data-action="copy">Copy<span class="kbd">⌘C</span></button>
+        <button class="btn" data-action="paste">Paste<span class="kbd">⌘V</span></button>
+        <button class="btn" data-action="duplicate">Dup<span class="kbd">D</span></button>
+        <button class="btn danger" data-action="clear">Clear<span class="kbd">⌫</span></button>
+      </div>
+      <span class="grow"></span>
+      <span class="toolbar-meta"><span id="v1-count"></span></span>
+    </div>
+
+    <!-- desktop console (table) -->
+    <div class="console" id="v1-console">
+      <div class="row-head">
+        <span>Note</span>
+        <span>Articulation</span>
+        <span style="text-align:right">SelA</span>
+        <span style="text-align:center">MSEG</span>
+        <span style="text-align:center">Gain</span>
+        <span></span>
+        <span></span>
+      </div>
+      <div class="rows" id="v1-rows"></div>
+    </div>
+
+    <!-- mobile cards -->
+    <div class="mobile-cards" id="v1-cards"></div>
+  </section>
+
+  <!-- ─────────── Variation 2 · BIN · LANE ─────────── -->
+  <section class="surface variation v2" id="v2" role="tabpanel">
+    <div class="toolbar">
+      <span class="toolbar-meta">B · BIN · LANE</span>
+      <span class="sep"></span>
+      <div class="group">
+        <button class="btn primary" data-action="capture">Capture<span class="kbd">⏎</span></button>
+      </div>
+      <span class="sep"></span>
+      <div class="group">
+        <button class="btn" data-action="copy">Copy</button>
+        <button class="btn" data-action="paste">Paste</button>
+        <button class="btn" data-action="duplicate">Dup</button>
+        <button class="btn danger" data-action="clear">Clear</button>
+      </div>
+      <span class="grow"></span>
+      <span class="toolbar-meta"><span id="v2-count"></span></span>
+    </div>
+
+    <div class="lane-wrap">
+      <div class="pending-banner" id="v2-pending">
+        <span class="label">Place</span>
+        <span class="name" id="v2-pending-name"></span>
+        <span class="selA" id="v2-pending-selA"></span>
+        <button class="cancel" data-action="cancel-queue">Cancel</button>
+      </div>
+
+      <!-- desktop bin -->
+      <div class="desktop-bin">
+        <aside class="library" aria-label="Library">
+          <h3>Library</h3>
+          <div class="library-items" id="v2-lib"></div>
+        </aside>
+        <div class="piano-lane">
+          <div class="lane-inner" id="v2-lane"></div>
+        </div>
+      </div>
+
+      <!-- mobile bin -->
+      <div class="mobile-bin">
+        <div class="lib-strip" id="v2-lib-mobile" aria-label="Library"></div>
+        <div class="note-list" id="v2-list"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────── Variation 3 · INSPECTOR ─────────── -->
+  <section class="surface variation v3" id="v3" role="tabpanel">
+    <div class="toolbar">
+      <span class="toolbar-meta">C · INSPECTOR</span>
+      <span class="grow"></span>
+      <span class="toolbar-meta"><span id="v3-count"></span></span>
+    </div>
+    <div class="inspector-wrap">
+      <div class="inspector-grid">
+
+        <!-- Inspector panel (top on mobile, side on desktop) -->
+        <aside class="insp-panel" id="v3-panel" aria-label="Selected slot"></aside>
+
+        <div class="insp-list" id="v3-list"></div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────── Variation 4 · PAD GRID (mobile-first) ─────────── -->
+  <section class="surface variation v4" id="v4" role="tabpanel">
+    <div class="toolbar">
+      <span class="toolbar-meta">D · PAD GRID</span>
+      <span class="grow"></span>
+      <span class="toolbar-meta"><span id="v4-count"></span></span>
+    </div>
+    <div class="pad-wrap">
+      <div class="pad-header">
+        <div class="pad-summary" id="v4-summary"></div>
+      </div>
+
+      <div class="pad-grid" id="v4-grid"></div>
+
+      <div class="pad-actions">
+        <button class="btn primary" data-action="capture">Capture</button>
+        <button class="btn" data-action="copy">Copy</button>
+        <button class="btn" data-action="paste">Paste</button>
+        <button class="btn" data-action="duplicate">Dup</button>
+        <button class="btn" data-action="rename">Rename</button>
+        <button class="btn" data-action="move-mode">Move</button>
+        <button class="btn" data-action="lib-toggle">Library</button>
+        <button class="btn danger" data-action="clear">Clear</button>
+      </div>
+
+      <div class="pad-lib-strip" id="v4-lib" hidden></div>
+    </div>
+  </section>
+
+  <div class="hint-bar" aria-label="Keyboard shortcuts">
+    <span><span class="k">↑↓←→</span> Navigate</span>
+    <span><span class="k">⏎</span> Capture · Rename when active</span>
+    <span><span class="k">⌘C</span> Copy</span>
+    <span><span class="k">⌘V</span> Paste</span>
+    <span><span class="k">D</span> Duplicate to empty</span>
+    <span><span class="k">⌫</span> Clear</span>
+    <span><span class="k">Alt+Drag</span> Duplicate</span>
+  </div>
+
+</div>
+
+<!-- Drag ghost -->
+<div class="drag-ghost" id="drag-ghost" hidden></div>
+
+<!-- Rename modal -->
+<div class="modal-backdrop" id="rename-modal" role="dialog" aria-modal="true" aria-label="Rename articulation">
+  <div class="modal">
+    <h2>Rename</h2>
+    <div class="target-line" id="rename-target"></div>
+    <input type="text" id="rename-input" autocomplete="off" />
+    <div class="actions">
+      <button class="btn ghost" data-action="rename-cancel">Cancel</button>
+      <button class="btn primary" data-action="rename-confirm">Save<span class="kbd">⏎</span></button>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+// ── State model ───────────────────────────────────────────
+
+const FIRST_MIDI = 36;   // C2
+const LAST_MIDI  = 59;   // B3
+const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+
+function midiToName(n) {
+  const pc = n % 12;
+  const oct = Math.floor(n / 12) - 1;
+  return NOTE_NAMES[pc] + oct;
+}
+function isBlackKey(n) {
+  const pc = n % 12;
+  return pc === 1 || pc === 3 || pc === 6 || pc === 8 || pc === 10;
+}
+
+const MSEG_SHAPES = ['spike','wave','bloom','ramp','chatter','ping','bell','drift','tug','hold','snap','curl','hum','pluck'];
+const ACCENTS = ['cyan','pink','amber'];
+
+let _idCounter = 1;
+function newId() { return 'a' + (_idCounter++); }
+
+function makeArt({ name, selA, msegShape, adsr, accent }) {
+  return {
+    id: newId(),
+    name,
+    selA,
+    msegShape: msegShape || 'wave',
+    adsr: adsr || { a: 0.05, d: 0.18, s: 0.6, r: 0.4 },
+    accent: accent || 'cyan',
+  };
+}
+
+function makeSlots() {
+  const slots = [];
+  for (let m = FIRST_MIDI; m <= LAST_MIDI; m++) {
+    slots.push({ midi: m, articulation: null });
+  }
+  return slots;
+}
+
+const state = {
+  slots: makeSlots(),
+  selectedMidi: 38,
+  editingMidi: null,
+  clipboard: null,
+  variation: 'v1',
+  // Mobile flow state
+  queuedLib: null,   // articulation snapshot from library, awaits target
+  queuedSlot: null,  // midi of selected source slot for tap-to-move
+  moveMode: false,   // V4 long-press toggle
+  // Desktop drag state
+  drag: null,        // { kind, fromMidi, libArt, alt, hoverMidi, mode }
+};
+
+// ── Library (curated demo entries) ────────────────────────
+
+function libraryItems() {
+  // mix of accents, msegs, selA values
+  return [
+    makeArt({ name: 'Bow Forte',     selA: 4,  msegShape: 'bell',     accent: 'cyan',
+              adsr: { a: 0.10, d: 0.30, s: 0.85, r: 0.55 } }),
+    makeArt({ name: 'Bow Pianissimo', selA: 12, msegShape: 'drift',   accent: 'cyan',
+              adsr: { a: 0.45, d: 0.20, s: 0.62, r: 0.90 } }),
+    makeArt({ name: 'Pluck Round',    selA: 24, msegShape: 'pluck',   accent: 'pink',
+              adsr: { a: 0.005, d: 0.40, s: 0.10, r: 0.30 } }),
+    makeArt({ name: 'Pluck Snap',     selA: 32, msegShape: 'snap',    accent: 'pink',
+              adsr: { a: 0.002, d: 0.18, s: 0.04, r: 0.16 } }),
+    makeArt({ name: 'Hammer',         selA: 48, msegShape: 'spike',   accent: 'amber',
+              adsr: { a: 0.001, d: 0.25, s: 0.05, r: 0.22 } }),
+    makeArt({ name: 'Air Pad',        selA: 56, msegShape: 'wave',    accent: 'cyan',
+              adsr: { a: 0.65, d: 0.25, s: 0.75, r: 1.20 } }),
+    makeArt({ name: 'Bell Strike',    selA: 64, msegShape: 'bell',    accent: 'amber',
+              adsr: { a: 0.001, d: 0.50, s: 0.18, r: 1.10 } }),
+    makeArt({ name: 'Choke',          selA: 72, msegShape: 'snap',    accent: 'pink',
+              adsr: { a: 0.001, d: 0.06, s: 0.0,  r: 0.04 } }),
+    makeArt({ name: 'Tape Hum',       selA: 80, msegShape: 'hum',     accent: 'amber',
+              adsr: { a: 0.30, d: 0.30, s: 0.55, r: 0.80 } }),
+    makeArt({ name: 'Curl Lift',      selA: 88, msegShape: 'curl',    accent: 'cyan',
+              adsr: { a: 0.18, d: 0.32, s: 0.50, r: 0.60 } }),
+    makeArt({ name: 'Chatter',        selA: 96, msegShape: 'chatter', accent: 'pink',
+              adsr: { a: 0.005, d: 0.10, s: 0.30, r: 0.20 } }),
+    makeArt({ name: 'Tug Sustain',    selA: 104, msegShape: 'tug',    accent: 'cyan',
+              adsr: { a: 0.20, d: 0.22, s: 0.78, r: 0.55 } }),
+  ];
+}
+const LIBRARY = libraryItems();
+
+// ── Seed map ──────────────────────────────────────────────
+
+(function seed() {
+  const seedMap = [
+    { midi: 36, libIdx: 0  }, // C2  Bow Forte
+    { midi: 38, libIdx: 1  }, // D2  Bow Pianissimo
+    { midi: 40, libIdx: 2  }, // E2  Pluck Round
+    { midi: 41, libIdx: 4  }, // F2  Hammer
+    { midi: 43, libIdx: 5  }, // G2  Air Pad
+    { midi: 45, libIdx: 6  }, // A2  Bell Strike
+    { midi: 48, libIdx: 8  }, // C3  Tape Hum
+    { midi: 50, libIdx: 11 }, // D3  Tug Sustain
+    { midi: 52, libIdx: 9  }, // E3  Curl Lift
+    { midi: 55, libIdx: 3  }, // G3  Pluck Snap
+  ];
+  seedMap.forEach(({ midi, libIdx }) => {
+    const slot = state.slots.find(s => s.midi === midi);
+    if (slot) slot.articulation = cloneArt(LIBRARY[libIdx]);
+  });
+})();
+
+// ── Helpers ───────────────────────────────────────────────
+
+function cloneArt(a) {
+  if (!a) return null;
+  return {
+    id: newId(),
+    name: a.name,
+    selA: a.selA,
+    msegShape: a.msegShape,
+    adsr: { ...a.adsr },
+    accent: a.accent,
+  };
+}
+function snapshotArt(a) {
+  if (!a) return null;
+  return {
+    name: a.name, selA: a.selA, msegShape: a.msegShape,
+    adsr: { ...a.adsr }, accent: a.accent,
+  };
+}
+function inflateSnapshot(snap) {
+  if (!snap) return null;
+  return makeArt({ ...snap });
+}
+function findSlot(midi) { return state.slots.find(s => s.midi === midi); }
+function selectedSlot() { return findSlot(state.selectedMidi); }
+function selAInUse(value, exceptMidi) {
+  return state.slots.some(s =>
+    s.midi !== exceptMidi && s.articulation && s.articulation.selA === value
+  );
+}
+function nextFreeSelA(start) {
+  for (let v = start; v <= 127; v++) if (!selAInUse(v)) return v;
+  for (let v = start - 1; v >= 0; v--) if (!selAInUse(v)) return v;
+  return null;
+}
+function autoCapturedArt() {
+  // synth-state capture: fixed-ish demo content varying by selected midi
+  const base = LIBRARY[(state.selectedMidi * 7) % LIBRARY.length];
+  const a = cloneArt(base);
+  a.name = 'Captured ' + midiToName(state.selectedMidi);
+  const free = nextFreeSelA((state.selectedMidi * 5) % 128);
+  if (free !== null) a.selA = free;
+  return a;
+}
+
+// ── Status ────────────────────────────────────────────────
+
+const $status = document.getElementById('status');
+function setStatus(msg, tone = 'ok') {
+  $status.textContent = msg;
+  $status.classList.remove('ok','warn','err');
+  $status.classList.add(tone);
+  clearTimeout(setStatus._t);
+  setStatus._t = setTimeout(refreshIdleStatus, 2400);
+}
+function refreshIdleStatus() {
+  const filled = state.slots.filter(s => s.articulation).length;
+  $status.textContent = `${filled} of ${state.slots.length} assigned`;
+  $status.classList.remove('warn','err');
+  $status.classList.add('ok');
+}
+
+// ── Thumbnails ────────────────────────────────────────────
+
+function msegPath(shape, w, h) {
+  const pad = 2;
+  const x0 = pad, x1 = w - pad;
+  const y0 = h - pad, y1 = pad;
+  const mid = (y0 + y1) / 2;
+  const lerp = t => x0 + (x1 - x0) * t;
+  switch (shape) {
+    case 'spike':
+      return `M${x0},${y0} L${lerp(0.18)},${y0} L${lerp(0.22)},${y1} L${lerp(0.34)},${mid} L${lerp(0.5)},${mid + (y0-y1)*0.18} L${lerp(0.7)},${mid + (y0-y1)*0.06} L${x1},${y0}`;
+    case 'wave':
+      return `M${x0},${mid} Q${lerp(0.2)},${y1} ${lerp(0.4)},${mid} T${lerp(0.8)},${mid} T${x1},${mid}`;
+    case 'bloom':
+      return `M${x0},${y0} C${lerp(0.25)},${y0} ${lerp(0.3)},${y1} ${lerp(0.5)},${y1} C${lerp(0.7)},${y1} ${lerp(0.78)},${y0} ${x1},${y0}`;
+    case 'ramp':
+      return `M${x0},${y0} L${lerp(0.55)},${y1} L${x1},${y0}`;
+    case 'chatter':
+      return `M${x0},${mid} L${lerp(0.12)},${y1} L${lerp(0.20)},${y0} L${lerp(0.30)},${y1} L${lerp(0.40)},${y0} L${lerp(0.50)},${y1} L${lerp(0.60)},${y0} L${lerp(0.72)},${mid} L${x1},${mid}`;
+    case 'ping':
+      return `M${x0},${y0} L${lerp(0.15)},${y0} L${lerp(0.18)},${y1} L${lerp(0.5)},${y0} L${x1},${y0}`;
+    case 'bell':
+      return `M${x0},${y0} Q${lerp(0.10)},${y1} ${lerp(0.25)},${y1+(y0-y1)*0.18} Q${lerp(0.45)},${y1+(y0-y1)*0.40} ${lerp(0.65)},${y1+(y0-y1)*0.62} Q${lerp(0.82)},${y1+(y0-y1)*0.85} ${x1},${y0}`;
+    case 'drift':
+      return `M${x0},${mid + (y0-y1)*0.18} Q${lerp(0.3)},${y1+(y0-y1)*0.32} ${lerp(0.55)},${mid - (y0-y1)*0.12} Q${lerp(0.8)},${y1+(y0-y1)*0.20} ${x1},${mid - (y0-y1)*0.04}`;
+    case 'tug':
+      return `M${x0},${y0} L${lerp(0.18)},${y1+(y0-y1)*0.30} L${lerp(0.32)},${y1+(y0-y1)*0.55} L${lerp(0.58)},${y1+(y0-y1)*0.20} L${lerp(0.78)},${y1+(y0-y1)*0.45} L${x1},${y0}`;
+    case 'hold':
+      return `M${x0},${y0} L${lerp(0.10)},${y1+(y0-y1)*0.4} L${lerp(0.85)},${y1+(y0-y1)*0.4} L${x1},${y0}`;
+    case 'snap':
+      return `M${x0},${y0} L${lerp(0.04)},${y1} L${lerp(0.06)},${y0} L${x1},${y0}`;
+    case 'curl':
+      return `M${x0},${y0} Q${lerp(0.2)},${y0} ${lerp(0.35)},${mid} T${lerp(0.8)},${y1+(y0-y1)*0.15} L${x1},${y1+(y0-y1)*0.10}`;
+    case 'hum':
+      return `M${x0},${mid} L${lerp(0.2)},${mid - 1} L${lerp(0.4)},${mid + 1} L${lerp(0.6)},${mid - 1} L${lerp(0.8)},${mid + 1} L${x1},${mid}`;
+    case 'pluck':
+      return `M${x0},${y0} L${lerp(0.06)},${y1} L${lerp(0.10)},${y0} L${x1},${y0}`;
+    default:
+      return `M${x0},${mid} L${x1},${mid}`;
+  }
+}
+function thumbColor(accent) {
+  if (accent === 'pink') return 'var(--pink)';
+  if (accent === 'amber') return 'var(--amber)';
+  return 'var(--cyan)';
+}
+function renderMsegThumb(art, w = 56, h = 24) {
+  if (!art) return '';
+  const path = msegPath(art.msegShape, w, h);
+  const color = thumbColor(art.accent);
+  return `<div class="thumb" title="MSEG · ${art.msegShape}">
+      <span class="lbl">MSEG</span>
+      <svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
+        <path d="${path}" fill="none" stroke="${color}" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/>
+      </svg>
+    </div>`;
+}
+function renderAdsrThumb(art, w = 56, h = 24) {
+  if (!art) return '';
+  const { a, d, s, r } = art.adsr;
+  const pad = 2;
+  const total = a + d + 0.4 + r;
+  const wA = (a / total) * (w - pad*2);
+  const wD = (d / total) * (w - pad*2);
+  const wS = (0.4 / total) * (w - pad*2);
+  const wR = (r / total) * (w - pad*2);
+  const x0 = pad, y0 = h - pad, y1 = pad;
+  const sustainY = y1 + (1 - s) * (y0 - y1);
+  const path = `M${x0},${y0} L${x0 + wA},${y1} L${x0 + wA + wD},${sustainY} L${x0 + wA + wD + wS},${sustainY} L${x0 + wA + wD + wS + wR},${y0}`;
+  const color = 'var(--green)';
+  return `<div class="thumb" title="Gain ADSR">
+      <span class="lbl">GAIN</span>
+      <svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
+        <path d="${path}" fill="none" stroke="${color}" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" opacity="0.85"/>
+      </svg>
+    </div>`;
+}
+function renderMicroThumb(art, w = 60, h = 12) {
+  if (!art) return '';
+  const path = msegPath(art.msegShape, w, h);
+  const color = thumbColor(art.accent);
+  return `<svg class="micro-svg" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" style="width:100%;height:100%;display:block;">
+      <path d="${path}" fill="none" stroke="${color}" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" opacity="0.85"/>
+    </svg>`;
+}
+
+// ── Render: counts and toolbar buttons ────────────────────
+
+function renderMeta() {
+  const filled = state.slots.filter(s => s.articulation).length;
+  const txt = `${filled}/${state.slots.length} ASSIGNED`;
+  ['v1-count','v2-count','v3-count','v4-count'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = txt;
+  });
+}
+
+// ── Render: Console (V1) ──────────────────────────────────
+
+function renderV1() {
+  renderV1Desktop();
+  renderV1Mobile();
+}
+function rowClassesV1(s) {
+  const cls = ['row'];
+  if (!s.articulation) cls.push('empty');
+  if (state.selectedMidi === s.midi) cls.push('active');
+  if (isBlackKey(s.midi)) cls.push('black');
+  if (queuedTargetable(s)) cls.push('queued-target');
+  if (state.queuedSlot === s.midi) cls.push('move-source');
+  return cls.join(' ');
+}
+function queuedTargetable(s) {
+  if (state.queuedLib && !s.articulation) return true;
+  if (typeof state.queuedSlot === 'number' && state.queuedSlot !== s.midi && !s.articulation) return true;
+  return false;
+}
+function renderV1Desktop() {
+  const $rows = document.getElementById('v1-rows');
+  $rows.innerHTML = state.slots.map(s => {
+    const a = s.articulation;
+    return `<div class="${rowClassesV1(s)}" data-midi="${s.midi}" data-row="1" tabindex="0" role="button" ${a ? 'draggable="true"' : ''}>
+      <div class="c-note">
+        <span class="key"></span>
+        <span class="name">${midiToName(s.midi)}</span>
+        <span class="num">${s.midi}</span>
+      </div>
+      <div class="c-name">${a ? escapeHtml(a.name) : 'Empty slot'}</div>
+      <div class="c-selA">${a ? a.selA : '—'}</div>
+      <div>${a ? renderMsegThumb(a, 56, 22) : '<div class="thumb"></div>'}</div>
+      <div>${a ? renderAdsrThumb(a, 56, 22) : '<div class="thumb"></div>'}</div>
+      <div></div>
+      <div class="c-state">${a ? '<span class="grip" data-grip="1"></span>' : ''}</div>
+    </div>`;
+  }).join('');
+}
+function renderV1Mobile() {
+  const $cards = document.getElementById('v1-cards');
+  $cards.innerHTML = state.slots.map(s => {
+    const a = s.articulation;
+    const cls = ['card'];
+    if (!a) cls.push('empty');
+    if (state.selectedMidi === s.midi) cls.push('active');
+    if (queuedTargetable(s)) cls.push('queued-target');
+    if (state.queuedSlot === s.midi) cls.push('move-source');
+    if (a) cls.push('accent-' + a.accent);
+    const noteCls = isBlackKey(s.midi) ? 'card-note black' : 'card-note';
+    return `<div class="${cls.join(' ')}" data-midi="${s.midi}" data-card="1">
+      <div class="card-head">
+        <div class="${noteCls}">
+          <div class="name">${midiToName(s.midi)}</div>
+          <div class="num">M${s.midi}</div>
+        </div>
+        <div class="card-mid">
+          <div class="name-line">${a ? escapeHtml(a.name) : 'Empty slot'}</div>
+          <div class="meta-line">
+            ${a ? `<span class="selA">SelA ${a.selA}</span>` : ''}
+            <span class="state-dot"></span>
+          </div>
+        </div>
+        <div class="card-thumbs">
+          ${a ? renderMsegThumb(a, 48, 20) : ''}
+          ${a ? renderAdsrThumb(a, 48, 20) : ''}
+        </div>
+      </div>
+      <div class="card-actions">
+        <button class="btn primary" data-act="capture">Capture</button>
+        <button class="btn" data-act="rename" ${a ? '' : 'disabled'}>Rename</button>
+        <button class="btn" data-act="duplicate" ${a ? '' : 'disabled'}>Dup</button>
+        <button class="btn danger" data-act="clear" ${a ? '' : 'disabled'}>Clear</button>
+        <button class="btn" data-act="copy" ${a ? '' : 'disabled'}>Copy</button>
+        <button class="btn" data-act="paste" ${state.clipboard ? '' : 'disabled'}>Paste</button>
+        <button class="btn" data-act="move" ${a ? '' : 'disabled'}>Move</button>
+        <button class="btn" data-act="selA-down" ${a ? '' : 'disabled'}>SelA −</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── Render: Bin/Lane (V2) ─────────────────────────────────
+
+function renderV2() {
+  renderV2Library();
+  renderV2Lane();
+  renderV2MobileLib();
+  renderV2MobileList();
+  renderV2Pending();
+}
+function renderV2Library() {
+  const $lib = document.getElementById('v2-lib');
+  $lib.innerHTML = LIBRARY.map((a, i) => `
+    <div class="lib-card accent-${a.accent}" data-lib="${i}" draggable="true">
+      <div class="meta">
+        <span class="accent-tag"></span>
+        <span class="name">${escapeHtml(a.name)}</span>
+      </div>
+      <div class="meta">
+        <span class="selA">${a.selA}</span>
+      </div>
+      <div class="thumbs">
+        ${renderMsegThumb(a)}
+        ${renderAdsrThumb(a)}
+      </div>
+    </div>`).join('');
+}
+function renderV2Lane() {
+  const $lane = document.getElementById('v2-lane');
+  $lane.innerHTML = state.slots.map(s => {
+    const a = s.articulation;
+    const cls = ['lane-key'];
+    if (!a) cls.push('empty');
+    if (isBlackKey(s.midi)) cls.push('black');
+    if (state.selectedMidi === s.midi) cls.push('active');
+    if (queuedTargetable(s)) cls.push('queued-target');
+    if (state.queuedSlot === s.midi) cls.push('move-source');
+    if (a) cls.push('accent-' + a.accent);
+    return `<div class="${cls.join(' ')}" data-midi="${s.midi}" data-lane="1" ${a ? 'draggable="true"' : ''}>
+      <div class="head">
+        <span class="name">${midiToName(s.midi)}</span>
+        <span class="num">${s.midi}</span>
+      </div>
+      <div class="body">
+        <div class="name-line">${a ? escapeHtml(a.name) : 'Empty'}</div>
+        ${a ? `<span class="selA">SelA ${a.selA}</span>` : ''}
+        <div class="thumbs">
+          ${a ? renderMsegThumb(a, 80, 22) : ''}
+          ${a ? renderAdsrThumb(a, 80, 22) : ''}
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+function renderV2MobileLib() {
+  const $libM = document.getElementById('v2-lib-mobile');
+  $libM.innerHTML = LIBRARY.map((a, i) => {
+    const queued = state.queuedLib && state.queuedLib._libIdx === i ? ' queued' : '';
+    return `<div class="lib-strip-card${queued}" data-lib-mobile="${i}">
+      <div class="name">${escapeHtml(a.name)}</div>
+      <div class="meta">
+        <span class="selA">SelA ${a.selA}</span>
+        <span style="margin-left:auto;color:var(--faint);">${a.msegShape}</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+function renderV2MobileList() {
+  const $list = document.getElementById('v2-list');
+  $list.innerHTML = state.slots.map(s => {
+    const a = s.articulation;
+    const cls = ['note-row'];
+    if (!a) cls.push('empty');
+    if (isBlackKey(s.midi)) cls.push('black');
+    if (state.selectedMidi === s.midi) cls.push('active');
+    if (queuedTargetable(s)) cls.push('queued-target');
+    if (state.queuedSlot === s.midi) cls.push('move-source');
+    return `<div class="${cls.join(' ')}" data-midi="${s.midi}" data-mobrow="1">
+      <div class="nm">
+        <span class="name">${midiToName(s.midi)}</span>
+        <span class="num">M${s.midi}</span>
+      </div>
+      <div class="body">
+        <div class="name-line">${a ? escapeHtml(a.name) : 'Empty'}</div>
+        <div class="meta">
+          ${a ? `<span class="selA">SelA ${a.selA}</span>` : ''}
+          <span class="state-dot"></span>
+        </div>
+      </div>
+      <div class="thumbs">
+        ${a ? renderMsegThumb(a, 48, 16) : ''}
+        ${a ? renderAdsrThumb(a, 48, 16) : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+function renderV2Pending() {
+  const $b = document.getElementById('v2-pending');
+  if (state.queuedLib) {
+    $b.classList.add('show');
+    document.getElementById('v2-pending-name').textContent = state.queuedLib.name;
+    document.getElementById('v2-pending-selA').textContent = 'SelA ' + state.queuedLib.selA;
+  } else {
+    $b.classList.remove('show');
+  }
+}
+
+// ── Render: Inspector (V3) ────────────────────────────────
+
+function renderV3() {
+  renderV3Panel();
+  renderV3List();
+}
+function renderV3List() {
+  const $list = document.getElementById('v3-list');
+  $list.innerHTML = state.slots.map(s => {
+    const a = s.articulation;
+    const cls = ['insp-row'];
+    if (!a) cls.push('empty');
+    if (isBlackKey(s.midi)) cls.push('black');
+    if (state.selectedMidi === s.midi) cls.push('active');
+    if (queuedTargetable(s)) cls.push('queued-target');
+    if (state.queuedSlot === s.midi) cls.push('move-source');
+    if (a) cls.push('accent-' + a.accent);
+    return `<div class="${cls.join(' ')}" data-midi="${s.midi}" data-insprow="1" ${a ? 'draggable="true"' : ''}>
+      <div class="nm">
+        <div class="name">${midiToName(s.midi)}</div>
+        <div class="num">M${s.midi}</div>
+      </div>
+      <div class="body">
+        <div class="name-line">${a ? escapeHtml(a.name) : 'Empty'}</div>
+        <div class="meta">
+          ${a ? `<span class="selA">SelA ${a.selA}</span>` : ''}
+        </div>
+      </div>
+      <div class="thumbs">
+        ${a ? renderMsegThumb(a, 44, 18) : ''}
+        ${a ? renderAdsrThumb(a, 44, 18) : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+function renderV3Panel() {
+  const $p = document.getElementById('v3-panel');
+  const s = selectedSlot();
+  const a = s ? s.articulation : null;
+  const black = s && isBlackKey(s.midi);
+  const stateLabel = !s ? '' : (a ? (state.selectedMidi === s.midi ? 'ACTIVE' : 'ASSIGNED') : 'EMPTY');
+  const stateCls = !a ? 'empty' : (state.selectedMidi === s.midi ? 'active' : 'assigned');
+  $p.innerHTML = `
+    <div class="insp-head ${black ? 'black' : ''}">
+      <span class="key">${s ? midiToName(s.midi) : '—'}</span>
+      <span class="num">MIDI ${s ? s.midi : '—'}</span>
+      <span class="grow"></span>
+      <span class="state ${stateCls}">${stateLabel}</span>
+    </div>
+    <div class="insp-name-row">
+      <span class="name ${a ? '' : 'empty'}">${a ? escapeHtml(a.name) : 'No articulation'}</span>
+    </div>
+    ${a ? `
+      <div class="insp-meta">
+        <span class="pill">${a.msegShape}</span>
+        <span class="pill">A ${a.adsr.a.toFixed(2)}s</span>
+        <span class="pill">D ${a.adsr.d.toFixed(2)}s</span>
+        <span class="pill">S ${a.adsr.s.toFixed(2)}</span>
+        <span class="pill">R ${a.adsr.r.toFixed(2)}s</span>
+      </div>
+      <div class="insp-thumbs">
+        ${renderMsegThumb(a, 140, 44)}
+        ${renderAdsrThumb(a, 140, 44)}
+      </div>
+      <div class="insp-selA-row">
+        <span class="label">SelA</span>
+        <input type="number" min="0" max="127" value="${a.selA}" id="insp-selA"/>
+        <span class="warn" id="insp-selA-warn"></span>
+      </div>
+    ` : ''}
+    <div class="insp-actions">
+      <button class="btn primary" data-act="capture">Capture</button>
+      <button class="btn" data-act="rename" ${a ? '' : 'disabled'}>Rename</button>
+      <button class="btn" data-act="copy" ${a ? '' : 'disabled'}>Copy</button>
+      <button class="btn" data-act="paste" ${state.clipboard ? '' : 'disabled'}>Paste</button>
+      <button class="btn" data-act="duplicate" ${a ? '' : 'disabled'}>Dup</button>
+      <button class="btn" data-act="move" ${a ? '' : 'disabled'}>Move</button>
+      <button class="btn danger" data-act="clear" ${a ? '' : 'disabled'}>Clear</button>
+    </div>
+  `;
+  // wire selA input
+  const $selA = document.getElementById('insp-selA');
+  if ($selA) {
+    $selA.addEventListener('change', e => {
+      const v = clamp(parseInt(e.target.value || '0', 10), 0, 127);
+      setSelA(state.selectedMidi, v);
+    });
+  }
+}
+
+// ── Render: Pad Grid (V4) ─────────────────────────────────
+
+function renderV4() {
+  const $g = document.getElementById('v4-grid');
+  $g.innerHTML = state.slots.map(s => {
+    const a = s.articulation;
+    const cls = ['pad'];
+    if (!a) cls.push('empty');
+    if (isBlackKey(s.midi)) cls.push('black');
+    if (state.selectedMidi === s.midi) cls.push('active');
+    if (queuedTargetable(s)) cls.push('queued-target');
+    if (state.queuedSlot === s.midi) cls.push('move-source');
+    if (a) cls.push('accent-' + a.accent);
+    return `<div class="${cls.join(' ')}" data-midi="${s.midi}" data-pad="1" ${a ? 'draggable="true"' : ''}>
+      <div class="head">
+        <span class="key">${midiToName(s.midi)}</span>
+        <span class="num">${s.midi}</span>
+      </div>
+      <div class="name">${a ? escapeHtml(a.name) : 'Empty'}</div>
+      ${a ? `<div class="micro">${renderMicroThumb(a)}</div>` : ''}
+    </div>`;
+  }).join('');
+  renderV4Summary();
+  renderV4Lib();
+  // mark move button as active in toolbar
+  const moveBtn = document.querySelector('#v4 [data-action="move-mode"]');
+  if (moveBtn) {
+    if (state.moveMode) moveBtn.classList.add('primary');
+    else moveBtn.classList.remove('primary');
+  }
+}
+function renderV4Summary() {
+  const $s = document.getElementById('v4-summary');
+  const s = selectedSlot();
+  const a = s ? s.articulation : null;
+  const black = s && isBlackKey(s.midi);
+  $s.className = 'pad-summary' + (black ? ' black' : '');
+  $s.innerHTML = `
+    <span class="key">${s ? midiToName(s.midi) : '—'}</span>
+    <span class="name ${a ? '' : 'empty'}">${a ? escapeHtml(a.name) : 'Empty slot'}</span>
+    ${a ? `<span class="selA">SelA ${a.selA}</span>` : ''}
+  `;
+}
+function renderV4Lib() {
+  const $lib = document.getElementById('v4-lib');
+  $lib.innerHTML = LIBRARY.map((a, i) => {
+    const queued = state.queuedLib && state.queuedLib._libIdx === i ? ' queued' : '';
+    return `<div class="pad-lib-strip-card${queued}" data-lib-pad="${i}">
+      <div class="name">${escapeHtml(a.name)}</div>
+      <div class="meta">SelA ${a.selA} · ${a.msegShape}</div>
+    </div>`;
+  }).join('');
+}
+
+// ── Master render ─────────────────────────────────────────
+
+function render() {
+  renderMeta();
+  if (state.variation === 'v1') renderV1();
+  else if (state.variation === 'v2') renderV2();
+  else if (state.variation === 'v3') renderV3();
+  else if (state.variation === 'v4') renderV4();
+}
+
+// ── Actions ───────────────────────────────────────────────
+
+function selectMidi(midi) {
+  if (midi < FIRST_MIDI || midi > LAST_MIDI) return;
+  state.selectedMidi = midi;
+  render();
+}
+function captureToSelected() {
+  const slot = selectedSlot();
+  const newArt = autoCapturedArt();
+  slot.articulation = newArt;
+  setStatus(`Captured to ${midiToName(slot.midi)}`);
+  render();
+}
+function clearSelected() {
+  const slot = selectedSlot();
+  if (!slot.articulation) return;
+  slot.articulation = null;
+  setStatus(`Cleared ${midiToName(slot.midi)}`, 'warn');
+  render();
+}
+function copySelected() {
+  const slot = selectedSlot();
+  if (!slot.articulation) { setStatus('Nothing to copy', 'warn'); return; }
+  state.clipboard = snapshotArt(slot.articulation);
+  setStatus(`Copied ${slot.articulation.name}`);
+  render();
+}
+function pasteToSelected() {
+  if (!state.clipboard) { setStatus('Clipboard empty', 'warn'); return; }
+  const slot = selectedSlot();
+  const a = inflateSnapshot(state.clipboard);
+  if (selAInUse(a.selA, slot.midi)) {
+    const free = nextFreeSelA(a.selA);
+    if (free === null) { setStatus('No free SelA available', 'err'); return; }
+    a.selA = free;
+    setStatus(`Pasted · SelA bumped to ${free}`, 'warn');
+  } else {
+    setStatus(`Pasted to ${midiToName(slot.midi)}`);
+  }
+  slot.articulation = a;
+  render();
+}
+function duplicateSelectedToFirstEmpty() {
+  const slot = selectedSlot();
+  if (!slot.articulation) { setStatus('Nothing to duplicate', 'warn'); return; }
+  const empty = state.slots.find(s => !s.articulation);
+  if (!empty) { setStatus('No empty slot available', 'err'); return; }
+  const a = cloneArt(slot.articulation);
+  if (selAInUse(a.selA, empty.midi)) {
+    const free = nextFreeSelA(a.selA);
+    if (free === null) { setStatus('No free SelA available', 'err'); return; }
+    a.selA = free;
+  }
+  empty.articulation = a;
+  state.selectedMidi = empty.midi;
+  setStatus(`Duplicated to ${midiToName(empty.midi)}`);
+  render();
+}
+function setSelA(midi, value) {
+  const slot = findSlot(midi);
+  if (!slot || !slot.articulation) return;
+  if (selAInUse(value, midi)) {
+    setStatus(`SelA ${value} already in use`, 'err');
+    const $w = document.getElementById('insp-selA-warn');
+    if ($w) $w.textContent = `In use`;
+    return;
+  }
+  slot.articulation.selA = value;
+  setStatus(`${midiToName(midi)} · SelA ${value}`);
+  render();
+}
+function assignFromLib(libIdx, midi) {
+  const slot = findSlot(midi);
+  const src = LIBRARY[libIdx];
+  if (!slot || !src) return;
+  const a = cloneArt(src);
+  if (selAInUse(a.selA, midi)) {
+    const free = nextFreeSelA(a.selA);
+    if (free === null) { setStatus('No free SelA available', 'err'); return; }
+    a.selA = free;
+    setStatus(`Assigned · SelA bumped to ${free}`, 'warn');
+  } else {
+    setStatus(`Assigned ${src.name} → ${midiToName(midi)}`);
+  }
+  slot.articulation = a;
+  state.selectedMidi = midi;
+  render();
+}
+function moveSlot(fromMidi, toMidi, mode) {
+  if (fromMidi === toMidi) return;
+  const a = findSlot(fromMidi);
+  const b = findSlot(toMidi);
+  if (!a || !b || !a.articulation) return;
+
+  if (mode === 'duplicate') {
+    const dup = cloneArt(a.articulation);
+    if (selAInUse(dup.selA, b.midi)) {
+      const free = nextFreeSelA(dup.selA);
+      if (free === null) { setStatus('No free SelA', 'err'); return; }
+      dup.selA = free;
+    }
+    b.articulation = dup;
+    state.selectedMidi = b.midi;
+    setStatus(`Duplicated ${midiToName(fromMidi)} → ${midiToName(toMidi)}`);
+  } else if (b.articulation && mode === 'swap') {
+    const t = a.articulation;
+    a.articulation = b.articulation;
+    b.articulation = t;
+    state.selectedMidi = b.midi;
+    setStatus(`Swapped ${midiToName(fromMidi)} ↔ ${midiToName(toMidi)}`);
+  } else {
+    // move into empty
+    b.articulation = a.articulation;
+    a.articulation = null;
+    state.selectedMidi = b.midi;
+    setStatus(`Moved ${midiToName(fromMidi)} → ${midiToName(toMidi)}`);
+  }
+  render();
+}
+function renameSelected() {
+  const slot = selectedSlot();
+  if (!slot.articulation) { setStatus('Nothing to rename', 'warn'); return; }
+  openRenameModal(slot);
+}
+
+// ── Mobile queue ──────────────────────────────────────────
+
+function queueLib(libIdx) {
+  const a = LIBRARY[libIdx];
+  if (!a) return;
+  if (state.queuedLib && state.queuedLib._libIdx === libIdx) {
+    state.queuedLib = null;
+    setStatus('Cancelled', 'warn');
+  } else {
+    const snap = snapshotArt(a);
+    snap._libIdx = libIdx;
+    state.queuedLib = snap;
+    state.queuedSlot = null;
+    setStatus(`Tap target for ${a.name}`);
+  }
+  render();
+}
+function cancelQueue() {
+  state.queuedLib = null;
+  state.queuedSlot = null;
+  state.moveMode = false;
+  setStatus('Cancelled', 'warn');
+  render();
+}
+function tapTargetWithQueue(midi) {
+  if (state.queuedLib) {
+    const idx = state.queuedLib._libIdx;
+    state.queuedLib = null;
+    assignFromLib(idx, midi);
+    return true;
+  }
+  if (state.queuedSlot !== null && state.queuedSlot !== undefined) {
+    const from = state.queuedSlot;
+    state.queuedSlot = null;
+    state.moveMode = false;
+    const target = findSlot(midi);
+    const mode = (target && target.articulation) ? 'swap' : 'move';
+    moveSlot(from, midi, mode);
+    return true;
+  }
+  return false;
+}
+
+// ── Rename modal ──────────────────────────────────────────
+
+const $renameModal = document.getElementById('rename-modal');
+const $renameInput = document.getElementById('rename-input');
+const $renameTarget = document.getElementById('rename-target');
+let _renameMidi = null;
+
+function openRenameModal(slot) {
+  _renameMidi = slot.midi;
+  $renameTarget.textContent = `${midiToName(slot.midi)} · MIDI ${slot.midi}`;
+  $renameInput.value = slot.articulation.name;
+  $renameModal.classList.add('show');
+  setTimeout(() => { $renameInput.focus(); $renameInput.select(); }, 30);
+}
+function closeRenameModal() {
+  $renameModal.classList.remove('show');
+  _renameMidi = null;
+}
+function commitRename() {
+  if (_renameMidi === null) return;
+  const slot = findSlot(_renameMidi);
+  const v = $renameInput.value.trim();
+  if (slot && slot.articulation && v) {
+    slot.articulation.name = v;
+    setStatus(`Renamed ${midiToName(slot.midi)}`);
+    render();
+  }
+  closeRenameModal();
+}
+
+$renameModal.addEventListener('click', e => {
+  if (e.target === $renameModal) closeRenameModal();
+  const act = e.target.closest('[data-action]')?.dataset.action;
+  if (act === 'rename-cancel') closeRenameModal();
+  if (act === 'rename-confirm') commitRename();
+});
+$renameInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); commitRename(); }
+  if (e.key === 'Escape') { e.preventDefault(); closeRenameModal(); }
+});
+
+// ── Tabs ──────────────────────────────────────────────────
+
+document.getElementById('tabs').addEventListener('click', e => {
+  const t = e.target.closest('.tab');
+  if (!t) return;
+  setVariation(t.dataset.variation);
+});
+function setVariation(v) {
+  state.variation = v;
+  document.querySelectorAll('.tab').forEach(t => {
+    const on = t.dataset.variation === v;
+    t.classList.toggle('active', on);
+    t.setAttribute('aria-selected', on ? 'true' : 'false');
+  });
+  document.querySelectorAll('.variation').forEach(s => {
+    s.classList.toggle('active', s.id === v);
+  });
+  render();
+}
+
+// ── Toolbar action wiring (delegated) ─────────────────────
+
+function handleAction(action) {
+  switch (action) {
+    case 'capture':   captureToSelected(); break;
+    case 'rename':    renameSelected(); break;
+    case 'copy':      copySelected(); break;
+    case 'paste':     pasteToSelected(); break;
+    case 'duplicate': duplicateSelectedToFirstEmpty(); break;
+    case 'clear':     clearSelected(); break;
+    case 'cancel-queue': cancelQueue(); break;
+    case 'move': {
+      const slot = selectedSlot();
+      if (state.queuedSlot === slot?.midi) {
+        cancelQueue();
+        break;
+      }
+      if (slot && slot.articulation) {
+        state.queuedSlot = slot.midi;
+        state.queuedLib = null;
+        setStatus(`Move ${midiToName(slot.midi)} · tap target`);
+      } else {
+        setStatus('Select an assigned slot first', 'warn');
+      }
+      render();
+      break;
+    }
+    case 'move-mode':
+      if (state.queuedSlot !== null) {
+        cancelQueue();
+      } else {
+        const slot = selectedSlot();
+        if (slot && slot.articulation) {
+          state.queuedSlot = slot.midi;
+          state.moveMode = true;
+          setStatus('Tap target to move');
+        } else {
+          setStatus('Select an assigned slot first', 'warn');
+        }
+      }
+      render();
+      break;
+    case 'lib-toggle': {
+      const $lib = document.getElementById('v4-lib');
+      $lib.hidden = !$lib.hidden;
+      break;
+    }
+    case 'selA-down': {
+      const slot = selectedSlot();
+      if (slot && slot.articulation) {
+        const newV = clamp(slot.articulation.selA - 1, 0, 127);
+        if (!selAInUse(newV, slot.midi)) {
+          slot.articulation.selA = newV;
+          render();
+        } else setStatus('SelA in use below', 'warn');
+      }
+      break;
+    }
+  }
+}
+document.body.addEventListener('click', e => {
+  // Tabs handled separately. Generic toolbar / button actions:
+  const btn = e.target.closest('[data-action], [data-act]');
+  if (!btn) return;
+  // Avoid hijacking tabs:
+  if (btn.classList.contains('tab')) return;
+  // Card actions inside V1 mobile cards: select that midi first
+  const card = btn.closest('[data-card]');
+  if (card) {
+    selectMidi(parseInt(card.dataset.midi, 10));
+  }
+  const action = btn.dataset.action || btn.dataset.act;
+  if (action) {
+    e.stopPropagation();
+    handleAction(action);
+  }
+});
+
+// ── Slot selection wiring (V1 desktop rows, V1 cards, V2, V3, V4) ──
+
+document.body.addEventListener('click', e => {
+  // Skip if click was on a button (handled above)
+  if (e.target.closest('button')) return;
+  // V1 desktop row
+  const row = e.target.closest('[data-row="1"]');
+  if (row && state.variation === 'v1') {
+    const midi = parseInt(row.dataset.midi, 10);
+    if (tapTargetWithQueue(midi)) return;
+    selectMidi(midi);
+    return;
+  }
+  // V1 mobile card head
+  const card = e.target.closest('[data-card]');
+  if (card && state.variation === 'v1') {
+    const midi = parseInt(card.dataset.midi, 10);
+    if (tapTargetWithQueue(midi)) return;
+    selectMidi(midi);
+    return;
+  }
+  // V2 desktop lane key
+  const lane = e.target.closest('[data-lane]');
+  if (lane && state.variation === 'v2') {
+    const midi = parseInt(lane.dataset.midi, 10);
+    if (tapTargetWithQueue(midi)) return;
+    selectMidi(midi);
+    return;
+  }
+  // V2 mobile note row
+  const mobrow = e.target.closest('[data-mobrow]');
+  if (mobrow && state.variation === 'v2') {
+    const midi = parseInt(mobrow.dataset.midi, 10);
+    if (tapTargetWithQueue(midi)) return;
+    selectMidi(midi);
+    return;
+  }
+  // V2 lib desktop card
+  const libC = e.target.closest('[data-lib]');
+  if (libC && state.variation === 'v2') {
+    queueLib(parseInt(libC.dataset.lib, 10));
+    return;
+  }
+  // V2 lib mobile chip
+  const libM = e.target.closest('[data-lib-mobile]');
+  if (libM && state.variation === 'v2') {
+    queueLib(parseInt(libM.dataset.libMobile, 10));
+    return;
+  }
+  // V3 inspector list row
+  const insp = e.target.closest('[data-insprow]');
+  if (insp && state.variation === 'v3') {
+    const midi = parseInt(insp.dataset.midi, 10);
+    if (tapTargetWithQueue(midi)) return;
+    selectMidi(midi);
+    return;
+  }
+  // V4 pad
+  const pad = e.target.closest('[data-pad]');
+  if (pad && state.variation === 'v4') {
+    const midi = parseInt(pad.dataset.midi, 10);
+    if (tapTargetWithQueue(midi)) return;
+    selectMidi(midi);
+    return;
+  }
+  // V4 lib chip
+  const libP = e.target.closest('[data-lib-pad]');
+  if (libP && state.variation === 'v4') {
+    queueLib(parseInt(libP.dataset.libPad, 10));
+    return;
+  }
+});
+
+// ── Long-press (mobile) for move-mode ─────────────────────
+
+let _lpTimer = null;
+let _lpStart = null;
+function attachLongPress() {
+  document.body.addEventListener('pointerdown', e => {
+    if (e.pointerType !== 'touch') return;
+    const moveable = e.target.closest('[data-mobrow], [data-pad], [data-card]');
+    if (!moveable) return;
+    const midi = parseInt(moveable.dataset.midi, 10);
+    const slot = findSlot(midi);
+    if (!slot || !slot.articulation) return;
+    _lpStart = { x: e.clientX, y: e.clientY };
+    clearTimeout(_lpTimer);
+    _lpTimer = setTimeout(() => {
+      if (_lpStart === null) return;
+      state.queuedSlot = midi;
+      state.queuedLib = null;
+      state.selectedMidi = midi;
+      setStatus(`Move ${midiToName(midi)} · tap target`);
+      render();
+      // haptic-ish flash via short pulse: rely on CSS class
+    }, 480);
+  });
+  const cancel = () => {
+    clearTimeout(_lpTimer);
+    _lpStart = null;
+  };
+  document.body.addEventListener('pointermove', e => {
+    if (!_lpStart) return;
+    const dx = e.clientX - _lpStart.x;
+    const dy = e.clientY - _lpStart.y;
+    if (Math.hypot(dx, dy) > 8) cancel();
+  });
+  document.body.addEventListener('pointerup', cancel);
+  document.body.addEventListener('pointercancel', cancel);
+}
+attachLongPress();
+
+// ── Desktop drag & drop ───────────────────────────────────
+
+const $ghost = document.getElementById('drag-ghost');
+
+function showGhost(label, name, target, mode) {
+  $ghost.hidden = false;
+  $ghost.innerHTML = `
+    <div class="head">
+      <span class="badge ${mode === 'swap' ? 'swap' : (mode === 'duplicate' ? 'dup' : '')}">${label}</span>
+      <span class="name">${escapeHtml(name)}</span>
+    </div>
+    <div class="head">
+      <span class="arrow">→</span>
+      <span class="target ${mode === 'swap' ? 'swap' : (mode === 'duplicate' ? 'dup' : '')} ${target ? '' : 'none'}">${target || 'no target'}</span>
+    </div>
+  `;
+}
+function moveGhost(x, y) {
+  $ghost.style.left = x + 'px';
+  $ghost.style.top = y + 'px';
+}
+function hideGhost() {
+  $ghost.hidden = true;
+  $ghost.innerHTML = '';
+}
+
+function clearDropClasses() {
+  document.querySelectorAll('.drop-move, .drop-swap, .drop-dup').forEach(el => {
+    el.classList.remove('drop-move','drop-swap','drop-dup');
+  });
+}
+
+function onDragStart(e) {
+  const lane = e.target.closest('[data-lane], [data-row], [data-insprow], [data-pad]');
+  const lib  = e.target.closest('[data-lib]');
+  if (lane) {
+    const midi = parseInt(lane.dataset.midi, 10);
+    const slot = findSlot(midi);
+    if (!slot.articulation) { e.preventDefault(); return; }
+    state.drag = { kind: 'slot', fromMidi: midi, alt: e.altKey, mode: e.altKey ? 'duplicate' : 'move', srcEl: lane };
+    lane.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'copyMove';
+    e.dataTransfer.setData('text/plain', midiToName(midi));
+    // hide native ghost
+    const empty = document.createElement('canvas');
+    empty.width = empty.height = 1;
+    e.dataTransfer.setDragImage(empty, 0, 0);
+    return;
+  }
+  if (lib) {
+    const i = parseInt(lib.dataset.lib, 10);
+    state.drag = { kind: 'lib', libIdx: i, alt: false, mode: 'assign', srcEl: lib };
+    lib.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'copy';
+    e.dataTransfer.setData('text/plain', LIBRARY[i].name);
+    const empty = document.createElement('canvas');
+    empty.width = empty.height = 1;
+    e.dataTransfer.setDragImage(empty, 0, 0);
+    return;
+  }
+}
+
+function onDrag(e) {
+  if (!state.drag) return;
+  if (e.clientX === 0 && e.clientY === 0) return;
+  state.drag.alt = e.altKey;
+  // allow alt-toggling during drag for slot moves
+  if (state.drag.kind === 'slot') {
+    state.drag.mode = e.altKey ? 'duplicate' : 'move';
+  }
+  // position ghost
+  positionAndDescribeGhost(e.clientX, e.clientY);
+}
+
+function positionAndDescribeGhost(x, y) {
+  if (!state.drag) return;
+  // find underlying drop target
+  const el = document.elementFromPoint(x, y);
+  const target = el ? el.closest('[data-lane], [data-row], [data-insprow], [data-pad]') : null;
+  clearDropClasses();
+  let label, name, targetText, mode;
+  if (state.drag.kind === 'lib') {
+    name = LIBRARY[state.drag.libIdx].name;
+    label = 'ASSIGN';
+    mode = 'duplicate';
+  } else {
+    const fromSlot = findSlot(state.drag.fromMidi);
+    name = fromSlot.articulation ? fromSlot.articulation.name : '';
+    if (state.drag.mode === 'duplicate') { label = 'DUPLICATE'; mode = 'duplicate'; }
+    else label = 'MOVE';
+  }
+  if (target) {
+    const tMidi = parseInt(target.dataset.midi, 10);
+    const tSlot = findSlot(tMidi);
+    targetText = midiToName(tMidi);
+    if (state.drag.kind === 'slot') {
+      if (tMidi === state.drag.fromMidi) {
+        targetText += ' (source)';
+        target.classList.remove('drop-move','drop-swap','drop-dup');
+      } else if (state.drag.mode === 'duplicate') {
+        if (tSlot.articulation) {
+          // can't duplicate over filled slot — show no-op
+          target.classList.add('drop-swap');
+          label = 'DUP→SWAP'; mode = 'swap';
+          state.drag._effective = 'swap';
+        } else {
+          target.classList.add('drop-dup');
+          state.drag._effective = 'duplicate';
+        }
+      } else {
+        if (tSlot.articulation) {
+          target.classList.add('drop-swap');
+          label = 'SWAP'; mode = 'swap';
+          state.drag._effective = 'swap';
+        } else {
+          target.classList.add('drop-move');
+          state.drag._effective = 'move';
+        }
+      }
+    } else {
+      // lib drag
+      if (tSlot.articulation) {
+        target.classList.add('drop-swap');
+        label = 'REPLACE'; mode = 'swap';
+        state.drag._effective = 'replace';
+      } else {
+        target.classList.add('drop-dup');
+        state.drag._effective = 'assign';
+      }
+    }
+  } else {
+    targetText = '';
+    state.drag._effective = null;
+  }
+  showGhost(label, name, targetText, mode);
+  moveGhost(x, y);
+}
+
+function onDragOver(e) {
+  if (!state.drag) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = state.drag.kind === 'lib' ? 'copy' : (e.altKey ? 'copy' : 'move');
+}
+
+function onDrop(e) {
+  if (!state.drag) return;
+  e.preventDefault();
+  const target = e.target.closest('[data-lane], [data-row], [data-insprow], [data-pad]');
+  if (!target) { endDrag(); return; }
+  const tMidi = parseInt(target.dataset.midi, 10);
+  if (state.drag.kind === 'lib') {
+    assignFromLib(state.drag.libIdx, tMidi);
+  } else {
+    if (tMidi === state.drag.fromMidi) { endDrag(); return; }
+    const tSlot = findSlot(tMidi);
+    if (state.drag.mode === 'duplicate') {
+      if (tSlot.articulation) {
+        // duplicate over filled = swap (visual contract above said DUP→SWAP)
+        moveSlot(state.drag.fromMidi, tMidi, 'swap');
+      } else {
+        moveSlot(state.drag.fromMidi, tMidi, 'duplicate');
+      }
+    } else {
+      moveSlot(state.drag.fromMidi, tMidi, tSlot.articulation ? 'swap' : 'move');
+    }
+  }
+  endDrag();
+}
+function endDrag() {
+  if (state.drag && state.drag.srcEl) {
+    state.drag.srcEl.classList.remove('dragging');
+  }
+  state.drag = null;
+  hideGhost();
+  clearDropClasses();
+}
+
+document.body.addEventListener('dragstart', onDragStart);
+document.body.addEventListener('drag', onDrag);
+document.body.addEventListener('dragover', onDragOver);
+document.body.addEventListener('drop', onDrop);
+document.body.addEventListener('dragend', endDrag);
+
+// ── Keyboard ──────────────────────────────────────────────
+
+document.addEventListener('keydown', e => {
+  // ignore typing in fields (but Esc/Enter for modal handled elsewhere)
+  const tag = (e.target.tagName || '').toLowerCase();
+  if (tag === 'input' || tag === 'textarea' || e.target.isContentEditable) return;
+
+  const meta = e.metaKey || e.ctrlKey;
+
+  if (meta && e.key.toLowerCase() === 'c') { e.preventDefault(); copySelected(); return; }
+  if (meta && e.key.toLowerCase() === 'v') { e.preventDefault(); pasteToSelected(); return; }
+  if (e.key === 'Backspace' || e.key === 'Delete') { e.preventDefault(); clearSelected(); return; }
+  if (e.key.toLowerCase() === 'd' && !meta) { e.preventDefault(); duplicateSelectedToFirstEmpty(); return; }
+  if (e.key === 'Enter') {
+    const slot = selectedSlot();
+    if (slot && slot.articulation) { e.preventDefault(); renameSelected(); }
+    else { e.preventDefault(); captureToSelected(); }
+    return;
+  }
+  if (e.key === 'Escape') {
+    if (state.queuedLib || state.queuedSlot !== null) { cancelQueue(); }
+    return;
+  }
+  if (e.key === 'r' || e.key === 'R') { e.preventDefault(); renameSelected(); return; }
+
+  let stride = 1;
+  if (state.variation === 'v4') {
+    // pad grid arrow uses column count derived from rendered grid
+    const grid = document.getElementById('v4-grid');
+    const cs = grid ? getComputedStyle(grid).gridTemplateColumns.split(' ').length : 4;
+    stride = cs || 4;
+  }
+  if (e.key === 'ArrowRight') { e.preventDefault(); selectMidi(clampMidi(state.selectedMidi + 1)); return; }
+  if (e.key === 'ArrowLeft')  { e.preventDefault(); selectMidi(clampMidi(state.selectedMidi - 1)); return; }
+  if (e.key === 'ArrowDown')  {
+    e.preventDefault();
+    if (state.variation === 'v4') selectMidi(clampMidi(state.selectedMidi + stride));
+    else selectMidi(clampMidi(state.selectedMidi + 1));
+    return;
+  }
+  if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    if (state.variation === 'v4') selectMidi(clampMidi(state.selectedMidi - stride));
+    else selectMidi(clampMidi(state.selectedMidi - 1));
+    return;
+  }
+});
+
+// ── Utils ────────────────────────────────────────────────
+
+function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+function clampMidi(v)     { return clamp(v, FIRST_MIDI, LAST_MIDI); }
+function escapeHtml(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+// ── Init ─────────────────────────────────────────────────
+
+render();
+refreshIdleStatus();
+
+</script>
+</body>
+</html>

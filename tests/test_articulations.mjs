@@ -5,7 +5,10 @@ import {
     ARTICULATION_MAX_SLOTS,
     ARTICULATION_SNAPSHOT_ENDPOINT_ID,
     ARTICULATION_STATE_KEY,
+    ARTICULATION_TRIGGER_CONFIG_STATE_KEY,
+    addCapturedArticulationToBank,
     buildArticulationRuntimeUploads,
+    buildArticulationTriggerConfig,
     createArticulationSlotFromSnapshot,
     normalizeArticulationBank,
     normalizeArticulationSnapshot,
@@ -141,36 +144,64 @@ test("articulation snapshots normalize parameter bounds and dedupe route amounts
     ]);
 });
 
-test("articulation bank normalization keeps selectorA slots unique and drops invalid selections", () => {
+test("articulation bank normalization keeps runtime slots unique and trigger maps separate", () => {
     const bank = normalizeArticulationBank(JSON.stringify({
-        selectedSlotId: "duplicate-selector",
+        selectedSlotId: "duplicate-runtime-slot",
+        activeTriggerMode: "vel",
         slots: [
-            { id: "slot-a", selectorA: 4, name: " Slot A " },
-            { id: "duplicate-selector", selectorA: 4, name: "Duplicate selector" },
-            { id: "slot-b", selectorA: 6, name: "" },
-            { id: "slot-b", selectorA: 7, name: "Duplicate id" },
+            { id: "slot-a", runtimeSlot: 4, name: " Slot A " },
+            { id: "duplicate-runtime-slot", runtimeSlot: 4, name: "Duplicate runtime slot" },
+            { id: "slot-b", runtimeSlot: 6, name: "" },
+            { id: "slot-b", runtimeSlot: 7, name: "Duplicate id" },
             null,
+        ],
+        chainAssignments: [
+            { id: "chain-a", articulationId: "slot-a", min: 12, max: 12 },
+            { id: "chain-missing", articulationId: "missing", min: 13, max: 13 },
+        ],
+        keyAssignments: [
+            { articulationId: "slot-a", note: 0 },
+            { articulationId: "slot-b", note: 0 },
+            { articulationId: "slot-b", note: 1 },
+        ],
+        velocityAssignments: [
+            { id: "vel-b", articulationId: "slot-b", min: 4, max: 2 },
         ],
     }));
 
     assert.equal(bank.format, "cosimo.articulations");
-    assert.equal(bank.version, 1);
+    assert.equal(bank.version, 2);
     assert.equal(bank.selectedSlotId, null);
+    assert.equal(bank.activeTriggerMode, "vel");
     assert.deepEqual(bank.slots.map((slot) => ({
         id: slot.id,
-        selectorA: slot.selectorA,
+        runtimeSlot: slot.runtimeSlot,
         name: slot.name,
     })), [
-        { id: "slot-a", selectorA: 4, name: "Slot A" },
-        { id: "slot-b", selectorA: 6, name: "Art 7" },
+        { id: "slot-a", runtimeSlot: 4, name: "Slot A" },
+        { id: "slot-b", runtimeSlot: 6, name: "Art 7" },
+    ]);
+    assert.deepEqual(bank.chainAssignments, [
+        { id: "chain-a", articulationId: "slot-a", min: 12, max: 12 },
+    ]);
+    assert.deepEqual(bank.keyAssignments, [
+        { articulationId: "slot-a", note: 0 },
+        { articulationId: "slot-b", note: 1 },
+    ]);
+    assert.deepEqual(bank.velocityAssignments, [
+        { id: "vel-b", articulationId: "slot-b", min: 2, max: 4 },
     ]);
 });
 
-test("new articulation slots choose the first free selectorA and respect the slot cap", () => {
+test("new articulation slots choose the first free runtime slot and add can auto-assign the active trigger mode", () => {
     const existingBank = normalizeArticulationBank({
+        activeTriggerMode: "key",
         slots: [
-            { id: "slot-0", selectorA: 0 },
-            { id: "slot-2", selectorA: 2 },
+            { id: "slot-0", runtimeSlot: 0 },
+            { id: "slot-2", runtimeSlot: 2 },
+        ],
+        keyAssignments: [
+            { articulationId: "slot-0", note: 0 },
         ],
     });
     const snapshot = normalizeArticulationSnapshot({
@@ -185,35 +216,42 @@ test("new articulation slots choose the first free selectorA and respect the slo
 
     assert.deepEqual({
         id: slot?.id,
-        selectorA: slot?.selectorA,
+        runtimeSlot: slot?.runtimeSlot,
         name: slot?.name,
         warpAmount: slot?.snapshot.parameters.warpAmount,
         msegMorphs: slot?.snapshot.parameters.msegMorphs,
         routeAmounts: slot?.snapshot.modRouteAmounts,
     }, {
         id: "articulation-1",
-        selectorA: 1,
+        runtimeSlot: 1,
         name: "Art 2",
         warpAmount: 0.44,
         msegMorphs: [0.1, 0.2, 0.3],
         routeAmounts: [{ routeId: "route-a", amount: 0.5 }],
     });
 
+    const capturedBank = addCapturedArticulationToBank(existingBank, snapshot);
+    assert.equal(capturedBank.selectedSlotId, "articulation-1");
+    assert.deepEqual(capturedBank.keyAssignments, [
+        { articulationId: "slot-0", note: 0 },
+        { articulationId: "articulation-1", note: 1 },
+    ]);
+
     const fullBank = normalizeArticulationBank({
-        slots: Array.from({ length: ARTICULATION_MAX_SLOTS }, (_, selectorA) => ({
-            id: `slot-${selectorA}`,
-            selectorA,
+        slots: Array.from({ length: ARTICULATION_MAX_SLOTS }, (_, runtimeSlot) => ({
+            id: `slot-${runtimeSlot}`,
+            runtimeSlot,
         })),
     });
 
     assert.equal(createArticulationSlotFromSnapshot(fullBank, snapshot), null);
 });
 
-test("articulation runtime uploads resolve selectorA slots and route-id amounts to fixed DSP route slots", () => {
+test("articulation runtime uploads resolve runtime slots and route-id amounts to fixed DSP route slots", () => {
     const bank = normalizeArticulationBank({
         slots: [{
             id: "bright",
-            selectorA: 5,
+            runtimeSlot: 5,
             snapshot: normalizeArticulationSnapshot({
                 parameters: {
                     wavetablePosition: 0.42,
@@ -315,11 +353,48 @@ test("articulation runtime uploads resolve selectorA slots and route-id amounts 
     });
 });
 
+test("articulation trigger compiler emits the active mode and separate Chain Key Vel maps", () => {
+    const bank = normalizeArticulationBank({
+        activeTriggerMode: "vel",
+        slots: [
+            { id: "bow", runtimeSlot: 3 },
+            { id: "pluck", runtimeSlot: 9 },
+        ],
+        chainAssignments: [
+            { id: "chain-bow", articulationId: "bow", min: 12, max: 12 },
+            { id: "chain-pluck", articulationId: "pluck", min: 20, max: 22 },
+        ],
+        keyAssignments: [
+            { articulationId: "bow", note: 0 },
+            { articulationId: "pluck", note: 1 },
+        ],
+        velocityAssignments: [
+            { id: "vel-bow", articulationId: "bow", min: 1, max: 32 },
+            { id: "vel-pluck", articulationId: "pluck", min: 64, max: 64 },
+        ],
+    });
+
+    const config = buildArticulationTriggerConfig(bank);
+
+    assert.equal(config.activeMode, "vel");
+    assert.equal(config.chain[12], 3);
+    assert.equal(config.chain[20], 9);
+    assert.equal(config.chain[22], 9);
+    assert.equal(config.chain[23], -1);
+    assert.equal(config.key[0], 3);
+    assert.equal(config.key[1], 9);
+    assert.equal(config.velocity[0], -1);
+    assert.equal(config.velocity[1], 3);
+    assert.equal(config.velocity[32], 3);
+    assert.equal(config.velocity[64], 9);
+    assert.equal(config.velocity[65], -1);
+});
+
 test("articulation worker mirrors stored articulations to runtime without GUI ownership", () => {
     const bank = normalizeArticulationBank({
         slots: [{
             id: "slot-3",
-            selectorA: 3,
+            runtimeSlot: 3,
             snapshot: normalizeArticulationSnapshot({
                 parameters: {
                     wavetablePosition: 0.72,

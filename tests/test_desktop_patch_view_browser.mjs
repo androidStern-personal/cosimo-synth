@@ -32,7 +32,7 @@ function expectedMsegPreviewProgressClipWidth(previewState, progress) {
 }
 
 function buildShortMidi(status, noteNumber, velocity = 0) {
-    return status | (noteNumber << 8) | (velocity << 16);
+    return ((status & 0xff) << 16) | ((noteNumber & 0x7f) << 8) | (velocity & 0x7f);
 }
 
 function readStoredModulationState(snapshot) {
@@ -1553,18 +1553,12 @@ test("keyboard routing lets focused controls claim arrows and still routes note 
         await page.keyboard.up("a");
 
         await page.waitForFunction(() => {
-            const keyboardDebug = window.__COSIMO_DESKTOP_HARNESS__.getRenderedState().keyboardDebug;
-            return (keyboardDebug?.handledKeys?.length ?? 0) === 2;
+            const snapshot = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot();
+            return snapshot.midiInputEvents.length === 2;
         });
 
         keyboardDebug = await getKeyboardDebug(page);
-        assert.deepEqual(
-            keyboardDebug.handledKeys.slice(-2).map(({ key, isDown }) => ({ key, isDown })),
-            [
-                { key: "a", isDown: true },
-                { key: "a", isDown: false },
-            ],
-        );
+        assert.deepEqual(keyboardDebug.handledKeys, []);
 
         snapshot = await getHarnessSnapshot(page);
         assert.deepEqual(
@@ -1830,7 +1824,7 @@ test("articulation slots clone current state and recall parameters plus route am
 
                 return bank.selectedSlotId === "articulation-0"
                     && bank.slots.length === 1
-                    && slot?.selectorA === 0
+                    && slot?.runtimeSlot === 0
                     && Math.abs(Number(slot?.snapshot.parameters.wavetablePosition) - 0.66) <= 1e-9
                     && Math.abs(Number(slot?.snapshot.parameters.warpAmount) - 0.61) <= 1e-9
                     && Math.abs(Number(slot?.snapshot.parameters.filterCutoff) - 2475) <= 1e-9
@@ -2036,7 +2030,7 @@ test("opening the synth GUI does not recall or overwrite a stored selected artic
         selectedSlotId: "articulation-0",
         slots: [{
             id: "articulation-0",
-            selectorA: 0,
+            runtimeSlot: 0,
             name: "Art 1",
             snapshot: {
                 parameters: {
@@ -3350,10 +3344,17 @@ test("main MSEG morph control updates morph without taking keyboard focus and pr
 
         await page.keyboard.press("a");
         await page.waitForFunction(() => {
-            const keys = window.__COSIMO_DESKTOP_HARNESS__.getRenderedState().keyboardDebug?.handledKeys ?? [];
-            return keys.some((entry) => entry.key === "a" && entry.isDown === true)
-                && keys.some((entry) => entry.key === "a" && entry.isDown === false);
+            const snapshot = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot();
+            return snapshot.midiInputEvents.length === 2;
         });
+        const morphMidiSnapshot = await getHarnessSnapshot(page);
+        assert.deepEqual(
+            morphMidiSnapshot.midiInputEvents,
+            [
+                { endpointID: "midiIn", value: buildShortMidi(0x90, 36, 100) },
+                { endpointID: "midiIn", value: buildShortMidi(0x80, 36) },
+            ],
+        );
 
         await page.mouse.up();
         await page.waitForFunction(() => !window.__COSIMO_DESKTOP_HARNESS__.getRenderedState().msegPreviewState?.morphCurvePath);

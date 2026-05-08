@@ -61,6 +61,17 @@ void expectMeta(const BridgeOutputEvent& event, int sample, int channel, int not
     expect(event.noteMeta.ageSamples == age, "note-meta age mismatch");
 }
 
+ArticulationTriggerConfig identityChainConfig()
+{
+    ArticulationTriggerConfig config;
+    config.activeMode = ArticulationTriggerMode::chain;
+
+    for (int selector = 0; selector < 128; ++selector)
+        config.chainSelectorToRuntimeSlot[static_cast<std::size_t>(selector)] = selector;
+
+    return config;
+}
+
 int main()
 {
     const NoteMeta valid {2, 60, 50, 60, 44100, 11025};
@@ -96,7 +107,7 @@ int main()
     expect(!decodeNoteMetaMessage(invalidAge.data(), invalidAge.size()).has_value(),
            "age equal to duration must be rejected");
 
-    NoteMetaBridge bridge;
+    NoteMetaBridge bridge(identityChainConfig());
     std::vector<BridgeOutputEvent> output;
     const std::array<std::uint8_t, 3> channel2NoteOn {0x91, 60, 100};
     bridge.processMidiEvent(64, encoded.data(), encoded.size(), output);
@@ -156,7 +167,10 @@ int main()
     expect(output.size() == 1, "unmatched SysEx must be cleared at the block boundary");
     expectShort(output[0], 4, 0x91, 60, 100);
 
-    NoteMetaBridge keyswitchBridge(KeyswitchMap::contiguousRange(0, 4, 20));
+    ArticulationTriggerConfig keyConfig;
+    keyConfig.activeMode = ArticulationTriggerMode::key;
+    keyConfig.keyNoteToRuntimeSlot[2] = 22;
+    NoteMetaBridge keyswitchBridge(keyConfig);
     output.clear();
     const std::array<std::uint8_t, 3> keyswitchOn {0x90, 2, 127};
     const std::array<std::uint8_t, 3> keyswitchOff {0x80, 2, 0};
@@ -173,9 +187,38 @@ int main()
     const std::array<std::uint8_t, 3> overrideNote {0x90, 65, 91};
     keyswitchBridge.processMidiEvent(24, directOverride.data(), directOverride.size(), output);
     keyswitchBridge.processMidiEvent(24, overrideNote.data(), overrideNote.size(), output);
-    expect(output.size() == 2, "direct note-meta must override the active keyswitch selector for its note");
-    expectMeta(output[0], 24, 1, 65, 7, 3, 3000, 4);
+    expect(output.size() == 2, "inactive Chain SysEx must be swallowed without overriding active Key mode");
+    expectMeta(output[0], 24, 1, 65, 22, 0, 0, 0);
     expectShort(output[1], 24, 0x90, 65, 91);
+
+    ArticulationTriggerConfig translatedChainConfig;
+    translatedChainConfig.activeMode = ArticulationTriggerMode::chain;
+    translatedChainConfig.chainSelectorToRuntimeSlot[50] = 9;
+    NoteMetaBridge translatedChainBridge(translatedChainConfig);
+    output.clear();
+    translatedChainBridge.processMidiEvent(30, encoded.data(), encoded.size(), output);
+    translatedChainBridge.processMidiEvent(30, channel2NoteOn.data(), channel2NoteOn.size(), output);
+    expect(output.size() == 2, "active Chain mode must translate selectorA before sending note meta");
+    expectMeta(output[0], 30, 2, 60, 9, 60, 44100, 11025);
+    expectShort(output[1], 30, 0x91, 60, 100);
+
+    translatedChainConfig.chainSelectorToRuntimeSlot[50] = selectorUnset;
+    translatedChainBridge.setTriggerConfig(translatedChainConfig);
+    output.clear();
+    translatedChainBridge.processMidiEvent(31, encoded.data(), encoded.size(), output);
+    translatedChainBridge.processMidiEvent(31, channel2NoteOn.data(), channel2NoteOn.size(), output);
+    expect(output.size() == 1, "unmapped Chain selectorA must leave the note unarticulated");
+    expectShort(output[0], 31, 0x91, 60, 100);
+
+    ArticulationTriggerConfig velocityConfig;
+    velocityConfig.activeMode = ArticulationTriggerMode::velocity;
+    velocityConfig.velocityToRuntimeSlot[90] = 44;
+    NoteMetaBridge velocityBridge(velocityConfig);
+    output.clear();
+    velocityBridge.processMidiEvent(40, musicalNote.data(), musicalNote.size(), output);
+    expect(output.size() == 2, "active Vel mode must attach articulation from note-on velocity");
+    expectMeta(output[0], 40, 1, 64, 44, 0, 0, 0);
+    expectShort(output[1], 40, 0x90, 64, 90);
 
     return 0;
 }

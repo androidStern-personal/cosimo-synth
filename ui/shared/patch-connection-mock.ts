@@ -147,7 +147,7 @@ class MockPianoKeyboard extends HTMLElement {
         const rootNote = Math.max(0, Math.round(Number(this.getAttribute("root-note")) || 0));
         const noteNumber = rootNote + noteOffset;
         const velocity = isDown ? 100 : 0;
-        const shortMIDICode = midiStatus | (noteNumber << 8) | (velocity << 16);
+        const shortMIDICode = (midiStatus << 16) | (noteNumber << 8) | velocity;
 
         this.attachedPatchConnection.sendMIDIInputEvent?.(this.attachedEndpointID, shortMIDICode);
     }
