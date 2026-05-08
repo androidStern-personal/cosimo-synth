@@ -5,6 +5,24 @@ export const ARTICULATION_TRIGGER_CONFIG_STATE_KEY = "articulationTriggerConfig.
 export const ARTICULATION_SNAPSHOT_ENDPOINT_ID = "articulationSnapshot";
 export const ARTICULATION_MAX_SLOTS = 128;
 export const ARTICULATION_UNASSIGNED_RUNTIME_SLOT = -1;
+const ARTICULATION_DEFAULT_NAMES = [
+    "Bow Forte",
+    "Bow Pianissimo",
+    "Pluck Round",
+    "Pluck Snap",
+    "Hammer",
+    "Air Pad",
+    "Bell Strike",
+    "Choke",
+    "Tape Hum",
+    "Curl Lift",
+    "Chatter",
+    "Tug Sustain",
+    "Velvet Pop",
+    "Chrome Bloom",
+    "Tin Halo",
+    "Sugar Gate",
+];
 function clamp(value, min, max) {
     return Math.min(Math.max(value, min), max);
 }
@@ -26,6 +44,53 @@ function normalizeTriggerMode(value) {
 }
 function createUnassignedRuntimeMap() {
     return Array.from({ length: ARTICULATION_MAX_SLOTS }, () => ARTICULATION_UNASSIGNED_RUNTIME_SLOT);
+}
+export function createDefaultArticulationName(runtimeSlot) {
+    const safeRuntimeSlot = normalizeInteger(runtimeSlot, 0, 0, ARTICULATION_MAX_SLOTS - 1);
+    const baseName = ARTICULATION_DEFAULT_NAMES[safeRuntimeSlot % ARTICULATION_DEFAULT_NAMES.length];
+    const cycleIndex = Math.floor(safeRuntimeSlot / ARTICULATION_DEFAULT_NAMES.length);
+    return cycleIndex === 0 ? baseName : `${baseName} ${cycleIndex + 1}`;
+}
+function createUniqueArticulationId(usedIds, runtimeSlot) {
+    const baseId = `articulation-${runtimeSlot}`;
+    if (!usedIds.has(baseId)) {
+        return baseId;
+    }
+    for (let suffix = 2; suffix <= ARTICULATION_MAX_SLOTS; suffix += 1) {
+        const candidate = `${baseId}-${suffix}`;
+        if (!usedIds.has(candidate)) {
+            return candidate;
+        }
+    }
+    return `${baseId}-${Date.now().toString(36)}`;
+}
+function createUniqueAssignmentId(assignments, prefix, articulationId, position) {
+    const usedIds = new Set(assignments.map((assignment) => assignment.id));
+    const baseId = `${prefix}-${articulationId}-${position}`;
+    if (!usedIds.has(baseId)) {
+        return baseId;
+    }
+    for (let suffix = 2; suffix <= ARTICULATION_MAX_SLOTS; suffix += 1) {
+        const candidate = `${baseId}-${suffix}`;
+        if (!usedIds.has(candidate)) {
+            return candidate;
+        }
+    }
+    return `${baseId}-${Date.now().toString(36)}`;
+}
+function createUniqueCopiedName(slots, sourceName) {
+    const usedNames = new Set(slots.map((slot) => slot.name));
+    const baseName = `${sourceName} Copy`;
+    if (!usedNames.has(baseName)) {
+        return baseName;
+    }
+    for (let suffix = 2; suffix <= ARTICULATION_MAX_SLOTS; suffix += 1) {
+        const candidate = `${baseName} ${suffix}`;
+        if (!usedNames.has(candidate)) {
+            return candidate;
+        }
+    }
+    return baseName;
 }
 export function createDefaultArticulationParameterSnapshot() {
     return {
@@ -149,7 +214,7 @@ export function normalizeArticulationSlot(value, fallbackRuntimeSlot) {
         : `articulation-${runtimeSlot}`;
     const name = typeof nextValue.name === "string" && nextValue.name.trim()
         ? nextValue.name.trim()
-        : `Art ${runtimeSlot + 1}`;
+        : createDefaultArticulationName(runtimeSlot);
     return {
         id,
         runtimeSlot,
@@ -289,6 +354,7 @@ export function articulationSnapshotsEqual(left, right) {
 export function createArticulationSlotFromSnapshot(bankValue, snapshotValue) {
     const bank = normalizeArticulationBank(bankValue);
     const usedRuntimeSlots = new Set(bank.slots.map((slot) => slot.runtimeSlot));
+    const usedIds = new Set(bank.slots.map((slot) => slot.id));
     let runtimeSlot = -1;
     for (let candidate = 0; candidate < ARTICULATION_MAX_SLOTS; candidate += 1) {
         if (!usedRuntimeSlots.has(candidate)) {
@@ -300,9 +366,9 @@ export function createArticulationSlotFromSnapshot(bankValue, snapshotValue) {
         return null;
     }
     return {
-        id: `articulation-${runtimeSlot}`,
+        id: createUniqueArticulationId(usedIds, runtimeSlot),
         runtimeSlot,
-        name: `Art ${runtimeSlot + 1}`,
+        name: createDefaultArticulationName(runtimeSlot),
         snapshot: cloneJson(normalizeArticulationSnapshot(snapshotValue)),
     };
 }
@@ -381,17 +447,21 @@ export function assignArticulationToNextAvailableTrigger(bankValue, articulation
         ],
     });
 }
-export function addCapturedArticulationToBank(bankValue, snapshotValue) {
+export function addCapturedArticulationToBank(bankValue, snapshotValue, options = {}) {
     const bank = normalizeArticulationBank(bankValue);
     const nextSlot = createArticulationSlotFromSnapshot(bank, snapshotValue);
     if (!nextSlot) {
         return bank;
     }
-    return assignArticulationToNextAvailableTrigger({
+    const nextBank = normalizeArticulationBank({
         ...bank,
         selectedSlotId: nextSlot.id,
         slots: [...bank.slots, nextSlot],
-    }, nextSlot.id, bank.activeTriggerMode);
+    });
+    if (options.autoAssign === false) {
+        return nextBank;
+    }
+    return assignArticulationToNextAvailableTrigger(nextBank, nextSlot.id, bank.activeTriggerMode);
 }
 export function upsertSelectedArticulationSnapshot(bankValue, slotId, snapshotValue) {
     const bank = normalizeArticulationBank(bankValue);
@@ -403,6 +473,376 @@ export function upsertSelectedArticulationSnapshot(bankValue, slotId, snapshotVa
         ...bank,
         slots,
     });
+}
+export function setArticulationTriggerMode(bankValue, modeValue) {
+    const bank = normalizeArticulationBank(bankValue);
+    return normalizeArticulationBank({
+        ...bank,
+        activeTriggerMode: normalizeTriggerMode(modeValue),
+    });
+}
+export function renameArticulationSlot(bankValue, slotId, nextNameValue) {
+    const bank = normalizeArticulationBank(bankValue);
+    const nextName = typeof nextNameValue === "string" ? nextNameValue.trim() : "";
+    if (!nextName) {
+        return bank;
+    }
+    return normalizeArticulationBank({
+        ...bank,
+        slots: bank.slots.map((slot) => (slot.id === slotId
+            ? { ...slot, name: nextName }
+            : slot)),
+    });
+}
+export function duplicateArticulationSlot(bankValue, slotId) {
+    const bank = normalizeArticulationBank(bankValue);
+    const sourceSlot = bank.slots.find((slot) => slot.id === slotId);
+    if (!sourceSlot) {
+        return bank;
+    }
+    const nextSlot = createArticulationSlotFromSnapshot(bank, sourceSlot.snapshot);
+    if (!nextSlot) {
+        return bank;
+    }
+    return normalizeArticulationBank({
+        ...bank,
+        selectedSlotId: nextSlot.id,
+        slots: [
+            ...bank.slots,
+            {
+                ...nextSlot,
+                name: createUniqueCopiedName(bank.slots, sourceSlot.name),
+            },
+        ],
+    });
+}
+export function deleteArticulationSlot(bankValue, slotId) {
+    const bank = normalizeArticulationBank(bankValue);
+    if (bank.slots.length <= 1 || !bank.slots.some((slot) => slot.id === slotId)) {
+        return bank;
+    }
+    const slots = bank.slots.filter((slot) => slot.id !== slotId);
+    return normalizeArticulationBank({
+        ...bank,
+        selectedSlotId: bank.selectedSlotId === slotId ? (slots[0]?.id ?? null) : bank.selectedSlotId,
+        slots,
+        chainAssignments: bank.chainAssignments.filter((assignment) => assignment.articulationId !== slotId),
+        keyAssignments: bank.keyAssignments.filter((assignment) => assignment.articulationId !== slotId),
+        velocityAssignments: bank.velocityAssignments.filter((assignment) => assignment.articulationId !== slotId),
+    });
+}
+export function assignArticulationToKey(bankValue, noteValue, articulationId) {
+    const bank = normalizeArticulationBank(bankValue);
+    if (!bank.slots.some((slot) => slot.id === articulationId)) {
+        return bank;
+    }
+    const note = normalizeInteger(noteValue, 0, 0, ARTICULATION_MAX_SLOTS - 1);
+    return normalizeArticulationBank({
+        ...bank,
+        keyAssignments: [
+            ...bank.keyAssignments.filter((assignment) => assignment.note !== note),
+            { note, articulationId },
+        ].sort((left, right) => left.note - right.note),
+    });
+}
+function getRangeAssignmentField(mode) {
+    if (mode === "vel") {
+        return {
+            field: "velocityAssignments",
+            minAllowed: 1,
+            prefix: "velocity",
+        };
+    }
+    return {
+        field: "chainAssignments",
+        minAllowed: 0,
+        prefix: "chain",
+    };
+}
+function sortRangeAssignments(assignments) {
+    return [...assignments].sort((left, right) => left.min - right.min || left.max - right.max);
+}
+function keyAssignmentsToRangeAssignments(assignments) {
+    const sortedAssignments = [...assignments].sort((left, right) => left.note - right.note);
+    const ranges = [];
+    for (const assignment of sortedAssignments) {
+        const previous = ranges[ranges.length - 1];
+        if (previous
+            && previous.articulationId === assignment.articulationId
+            && previous.max + 1 === assignment.note) {
+            previous.max = assignment.note;
+            previous.id = `key-${previous.articulationId}-${previous.min}-${previous.max}`;
+            continue;
+        }
+        ranges.push({
+            id: `key-${assignment.articulationId}-${assignment.note}-${assignment.note}`,
+            articulationId: assignment.articulationId,
+            min: assignment.note,
+            max: assignment.note,
+        });
+    }
+    return ranges;
+}
+function rangeAssignmentsToKeyAssignments(assignments) {
+    const usedNotes = new Set();
+    const keyAssignments = [];
+    for (const assignment of sortRangeAssignments(assignments)) {
+        for (let note = assignment.min; note <= assignment.max; note += 1) {
+            if (usedNotes.has(note)) {
+                continue;
+            }
+            usedNotes.add(note);
+            keyAssignments.push({ note, articulationId: assignment.articulationId });
+        }
+    }
+    return keyAssignments;
+}
+function getTriggerLaneInfo(bank, modeValue) {
+    const mode = normalizeTriggerMode(modeValue);
+    if (mode === "key") {
+        return {
+            mode,
+            minAllowed: 0,
+            maxAllowed: ARTICULATION_MAX_SLOTS - 1,
+            prefix: "key",
+            assignments: keyAssignmentsToRangeAssignments(bank.keyAssignments),
+        };
+    }
+    const { field, minAllowed, prefix } = getRangeAssignmentField(mode);
+    return {
+        mode,
+        minAllowed,
+        maxAllowed: ARTICULATION_MAX_SLOTS - 1,
+        prefix,
+        assignments: bank[field],
+    };
+}
+function setTriggerLaneAssignments(bank, mode, assignments) {
+    const sortedAssignments = sortRangeAssignments(assignments);
+    if (mode === "key") {
+        return normalizeArticulationBank({
+            ...bank,
+            keyAssignments: rangeAssignmentsToKeyAssignments(sortedAssignments),
+        });
+    }
+    const { field } = getRangeAssignmentField(mode);
+    return normalizeArticulationBank({
+        ...bank,
+        [field]: sortedAssignments,
+    });
+}
+function findRangeAssignmentAt(assignments, position) {
+    return assignments.find((assignment) => position >= assignment.min && position <= assignment.max) ?? null;
+}
+function findEmptyRangeGap(assignments, position, minAllowed, maxAllowed) {
+    let gapMin = minAllowed;
+    for (const assignment of sortRangeAssignments(assignments)) {
+        if (position < assignment.min) {
+            return {
+                min: gapMin,
+                max: Math.min(maxAllowed, assignment.min - 1),
+            };
+        }
+        gapMin = Math.max(gapMin, assignment.max + 1);
+    }
+    return {
+        min: gapMin,
+        max: maxAllowed,
+    };
+}
+function findMatchingRangeAssignment(assignments, segmentValue) {
+    if (!segmentValue || typeof segmentValue !== "object") {
+        return null;
+    }
+    const segment = segmentValue;
+    const id = typeof segment.id === "string" ? segment.id : "";
+    const articulationId = typeof segment.articulationId === "string" ? segment.articulationId : "";
+    const min = Number(segment.min);
+    const max = Number(segment.max);
+    return assignments.find((assignment) => ((id && assignment.id === id)
+        || (assignment.articulationId === articulationId
+            && assignment.min === min
+            && assignment.max === max))) ?? null;
+}
+function findMoveDestination(assignments, desiredMin, width, minAllowed, maxAllowed) {
+    const sortedAssignments = sortRangeAssignments(assignments);
+    const candidates = [];
+    let gapMin = minAllowed;
+    const addGapCandidate = (gapStart, gapEnd) => {
+        const maxStart = gapEnd - width + 1;
+        if (maxStart < gapStart) {
+            return;
+        }
+        const min = clamp(desiredMin, gapStart, maxStart);
+        candidates.push({
+            min,
+            max: min + width - 1,
+            distance: Math.abs(min - desiredMin),
+        });
+    };
+    for (const assignment of sortedAssignments) {
+        addGapCandidate(gapMin, assignment.min - 1);
+        gapMin = Math.max(gapMin, assignment.max + 1);
+    }
+    addGapCandidate(gapMin, maxAllowed);
+    candidates.sort((left, right) => left.distance - right.distance || left.min - right.min);
+    return candidates[0] ?? null;
+}
+export function assignArticulationToRangePosition(bankValue, modeValue, positionValue, articulationId) {
+    const bank = normalizeArticulationBank(bankValue);
+    if (!bank.slots.some((slot) => slot.id === articulationId)) {
+        return bank;
+    }
+    const { mode, minAllowed, maxAllowed, prefix, assignments } = getTriggerLaneInfo(bank, modeValue);
+    const position = normalizeInteger(positionValue, minAllowed, minAllowed, maxAllowed);
+    const occupiedAssignment = assignments.find((assignment) => (position >= assignment.min && position <= assignment.max));
+    const nextAssignments = occupiedAssignment
+        ? assignments.map((assignment) => (assignment.id === occupiedAssignment.id
+            ? { ...assignment, articulationId }
+            : assignment))
+        : (() => {
+            const gap = findEmptyRangeGap(assignments, position, minAllowed, maxAllowed);
+            if (gap.max < gap.min) {
+                return assignments;
+            }
+            return [
+                ...assignments,
+                {
+                    id: createUniqueAssignmentId(assignments, prefix, articulationId, gap.min),
+                    articulationId,
+                    min: gap.min,
+                    max: gap.max,
+                },
+            ];
+        })();
+    return setTriggerLaneAssignments(bank, mode, nextAssignments);
+}
+export function insertArticulationRangeAtPosition(bankValue, modeValue, positionValue, articulationId) {
+    const bank = normalizeArticulationBank(bankValue);
+    if (!bank.slots.some((slot) => slot.id === articulationId)) {
+        return bank;
+    }
+    const { mode, minAllowed, maxAllowed, prefix, assignments } = getTriggerLaneInfo(bank, modeValue);
+    const position = normalizeInteger(positionValue, minAllowed, minAllowed, maxAllowed);
+    const occupiedAssignment = findRangeAssignmentAt(assignments, position);
+    let nextAssignments = assignments;
+    if (occupiedAssignment) {
+        if (occupiedAssignment.min === occupiedAssignment.max) {
+            return bank;
+        }
+        const trimFromMin = position - occupiedAssignment.min <= occupiedAssignment.max - position;
+        nextAssignments = assignments.flatMap((assignment) => {
+            if (assignment.id !== occupiedAssignment.id) {
+                return [assignment];
+            }
+            if (trimFromMin) {
+                const min = position + 1;
+                return min <= assignment.max ? [{ ...assignment, min }] : [];
+            }
+            const max = position - 1;
+            return max >= assignment.min ? [{ ...assignment, max }] : [];
+        });
+    }
+    if (findRangeAssignmentAt(nextAssignments, position)) {
+        return bank;
+    }
+    return setTriggerLaneAssignments(bank, mode, [
+        ...nextAssignments,
+        {
+            id: createUniqueAssignmentId(nextAssignments, prefix, articulationId, position),
+            articulationId,
+            min: position,
+            max: position,
+        },
+    ]);
+}
+export function moveArticulationRangeAssignment(bankValue, modeValue, segmentValue, targetPositionValue) {
+    const bank = normalizeArticulationBank(bankValue);
+    const { mode, minAllowed, maxAllowed, assignments } = getTriggerLaneInfo(bank, modeValue);
+    const target = findMatchingRangeAssignment(assignments, segmentValue);
+    if (!target) {
+        return bank;
+    }
+    const width = target.max - target.min + 1;
+    const desiredMin = normalizeInteger(Number(targetPositionValue) - Math.floor(width / 2), target.min, minAllowed, Math.max(minAllowed, maxAllowed - width + 1));
+    const otherAssignments = assignments.filter((assignment) => assignment.id !== target.id);
+    const destination = findMoveDestination(otherAssignments, desiredMin, width, minAllowed, maxAllowed);
+    if (!destination || (destination.min === target.min && destination.max === target.max)) {
+        return bank;
+    }
+    return setTriggerLaneAssignments(bank, mode, [
+        ...otherAssignments,
+        {
+            ...target,
+            min: destination.min,
+            max: destination.max,
+        },
+    ]);
+}
+export function resizeArticulationRangeAssignment(bankValue, modeValue, segmentValue, edge, positionValue) {
+    const bank = normalizeArticulationBank(bankValue);
+    const { mode, minAllowed, maxAllowed, assignments } = getTriggerLaneInfo(bank, modeValue);
+    const target = findMatchingRangeAssignment(assignments, segmentValue);
+    if (!target) {
+        return bank;
+    }
+    const otherAssignments = sortRangeAssignments(assignments.filter((assignment) => assignment.id !== target.id));
+    const previousLimit = otherAssignments
+        .filter((assignment) => assignment.max < target.max)
+        .reduce((maxValue, assignment) => Math.max(maxValue, assignment.max + 1), minAllowed);
+    const nextLimit = otherAssignments
+        .filter((assignment) => assignment.min > target.min)
+        .reduce((minValue, assignment) => Math.min(minValue, assignment.min - 1), maxAllowed);
+    const position = normalizeInteger(positionValue, edge === "min" ? target.min : target.max, minAllowed, maxAllowed);
+    const nextTarget = edge === "min"
+        ? { ...target, min: clamp(position, previousLimit, target.max) }
+        : { ...target, max: clamp(position, target.min, nextLimit) };
+    if (nextTarget.min === target.min && nextTarget.max === target.max) {
+        return bank;
+    }
+    return setTriggerLaneAssignments(bank, mode, [...otherAssignments, nextTarget]);
+}
+export function clearArticulationRangeAssignment(bankValue, modeValue, segmentValue) {
+    const bank = normalizeArticulationBank(bankValue);
+    const { mode, assignments } = getTriggerLaneInfo(bank, modeValue);
+    const target = findMatchingRangeAssignment(assignments, segmentValue);
+    if (!target) {
+        return bank;
+    }
+    return setTriggerLaneAssignments(bank, mode, assignments.filter((assignment) => assignment.id !== target.id));
+}
+export function clearArticulationTriggerAssignments(bankValue, modeValue) {
+    const bank = normalizeArticulationBank(bankValue);
+    const mode = normalizeTriggerMode(modeValue);
+    return setTriggerLaneAssignments(bank, mode, []);
+}
+export function distributeArticulationRanges(bankValue, modeValue) {
+    const bank = normalizeArticulationBank(bankValue);
+    const { mode, minAllowed, maxAllowed, prefix, assignments } = getTriggerLaneInfo(bank, modeValue);
+    const firstAssignmentByArticulation = new Map();
+    for (const assignment of [...assignments].sort((left, right) => left.min - right.min)) {
+        if (!firstAssignmentByArticulation.has(assignment.articulationId)) {
+            firstAssignmentByArticulation.set(assignment.articulationId, assignment);
+        }
+    }
+    const uniqueAssignments = [...firstAssignmentByArticulation.values()];
+    if (uniqueAssignments.length === 0) {
+        return bank;
+    }
+    const rangeLength = maxAllowed - minAllowed + 1;
+    const nextAssignments = uniqueAssignments.map((assignment, assignmentIndex) => {
+        const min = minAllowed + Math.floor((assignmentIndex * rangeLength) / uniqueAssignments.length);
+        const max = assignmentIndex === uniqueAssignments.length - 1
+            ? maxAllowed
+            : minAllowed + Math.floor(((assignmentIndex + 1) * rangeLength) / uniqueAssignments.length) - 1;
+        return {
+            id: `${prefix}-${assignment.articulationId}-${min}`,
+            articulationId: assignment.articulationId,
+            min,
+            max: Math.max(min, max),
+        };
+    });
+    return setTriggerLaneAssignments(bank, mode, nextAssignments);
 }
 function createDisabledRuntimeUpload(selectorA) {
     return {

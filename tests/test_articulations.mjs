@@ -7,11 +7,24 @@ import {
     ARTICULATION_STATE_KEY,
     ARTICULATION_TRIGGER_CONFIG_STATE_KEY,
     addCapturedArticulationToBank,
+    assignArticulationToKey,
+    assignArticulationToRangePosition,
     buildArticulationRuntimeUploads,
     buildArticulationTriggerConfig,
+    clearArticulationRangeAssignment,
+    clearArticulationTriggerAssignments,
     createArticulationSlotFromSnapshot,
+    deleteArticulationSlot,
+    distributeArticulationRanges,
+    duplicateArticulationSlot,
+    insertArticulationRangeAtPosition,
+    moveArticulationRangeAssignment,
     normalizeArticulationBank,
     normalizeArticulationSnapshot,
+    renameArticulationSlot,
+    resizeArticulationRangeAssignment,
+    setArticulationTriggerMode,
+    upsertSelectedArticulationSnapshot,
 } from "../patch_gui/articulations.js";
 import { createArticulationWorkerService } from "../patch_gui/articulation-worker-service.js";
 
@@ -179,7 +192,7 @@ test("articulation bank normalization keeps runtime slots unique and trigger map
         name: slot.name,
     })), [
         { id: "slot-a", runtimeSlot: 4, name: "Slot A" },
-        { id: "slot-b", runtimeSlot: 6, name: "Art 7" },
+        { id: "slot-b", runtimeSlot: 6, name: "Bell Strike" },
     ]);
     assert.deepEqual(bank.chainAssignments, [
         { id: "chain-a", articulationId: "slot-a", min: 12, max: 12 },
@@ -224,7 +237,7 @@ test("new articulation slots choose the first free runtime slot and add can auto
     }, {
         id: "articulation-1",
         runtimeSlot: 1,
-        name: "Art 2",
+        name: "Bow Pianissimo",
         warpAmount: 0.44,
         msegMorphs: [0.1, 0.2, 0.3],
         routeAmounts: [{ routeId: "route-a", amount: 0.5 }],
@@ -245,6 +258,175 @@ test("new articulation slots choose the first free runtime slot and add can auto
     });
 
     assert.equal(createArticulationSlotFromSnapshot(fullBank, snapshot), null);
+});
+
+test("articulation editing helpers keep sound snapshots separate from trigger mappings", () => {
+    const bank = normalizeArticulationBank({
+        selectedSlotId: "bow",
+        activeTriggerMode: "chain",
+        slots: [
+            {
+                id: "bow",
+                runtimeSlot: 0,
+                name: "Bow Forte",
+                snapshot: normalizeArticulationSnapshot({
+                    parameters: { warpAmount: 0.11 },
+                    modRouteAmounts: [{ routeId: "route-a", amount: 0.25 }],
+                }),
+            },
+            {
+                id: "pluck",
+                runtimeSlot: 1,
+                name: "Pluck Snap",
+                snapshot: normalizeArticulationSnapshot({
+                    parameters: { warpAmount: 0.44 },
+                    modRouteAmounts: [{ routeId: "route-a", amount: 0.5 }],
+                }),
+            },
+        ],
+        chainAssignments: [{ id: "chain-bow", articulationId: "bow", min: 10, max: 12 }],
+        keyAssignments: [{ articulationId: "bow", note: 0 }],
+        velocityAssignments: [{ id: "vel-bow", articulationId: "bow", min: 1, max: 16 }],
+    });
+    const updatedSnapshot = normalizeArticulationSnapshot({
+        parameters: { warpAmount: 0.73, msegMorphs: [0.2, 0.4, 0.6] },
+        modRouteAmounts: [{ routeId: "route-a", amount: 0.9 }],
+    });
+
+    const updatedBank = upsertSelectedArticulationSnapshot(bank, "bow", updatedSnapshot);
+    assert.equal(updatedBank.slots.find((slot) => slot.id === "bow")?.snapshot.parameters.warpAmount, 0.73);
+    assert.deepEqual(updatedBank.chainAssignments, bank.chainAssignments);
+    assert.deepEqual(updatedBank.keyAssignments, bank.keyAssignments);
+    assert.deepEqual(updatedBank.velocityAssignments, bank.velocityAssignments);
+
+    const renamedBank = renameArticulationSlot(updatedBank, "bow", "  Col Legno-ish  ");
+    assert.equal(renamedBank.slots.find((slot) => slot.id === "bow")?.name, "Col Legno-ish");
+
+    const duplicatedBank = duplicateArticulationSlot(renamedBank, "pluck");
+    const duplicatedSlot = duplicatedBank.slots.find((slot) => slot.id === duplicatedBank.selectedSlotId);
+    assert.equal(duplicatedBank.slots.length, 3);
+    assert.equal(duplicatedSlot?.runtimeSlot, 2);
+    assert.equal(duplicatedSlot?.name, "Pluck Snap Copy");
+    assert.equal(duplicatedSlot?.snapshot.parameters.warpAmount, 0.44);
+    assert.equal(
+        duplicatedBank.chainAssignments.some((assignment) => assignment.articulationId === duplicatedSlot?.id),
+        false,
+    );
+    assert.equal(
+        duplicatedBank.keyAssignments.some((assignment) => assignment.articulationId === duplicatedSlot?.id),
+        false,
+    );
+    assert.equal(
+        duplicatedBank.velocityAssignments.some((assignment) => assignment.articulationId === duplicatedSlot?.id),
+        false,
+    );
+
+    const chainReplacedBank = assignArticulationToRangePosition(duplicatedBank, "chain", 11, "pluck");
+    assert.deepEqual(chainReplacedBank.chainAssignments, [
+        { id: "chain-bow", articulationId: "pluck", min: 10, max: 12 },
+    ]);
+
+    const chainInsertedBank = assignArticulationToRangePosition(chainReplacedBank, "chain", 20, duplicatedSlot.id);
+    assert.deepEqual(chainInsertedBank.chainAssignments, [
+        { id: "chain-bow", articulationId: "pluck", min: 10, max: 12 },
+        { id: `chain-${duplicatedSlot.id}-13`, articulationId: duplicatedSlot.id, min: 13, max: 127 },
+    ]);
+
+    const distributedBank = distributeArticulationRanges(chainInsertedBank, "chain");
+    assert.deepEqual(distributedBank.chainAssignments, [
+        { id: "chain-pluck-0", articulationId: "pluck", min: 0, max: 63 },
+        { id: `chain-${duplicatedSlot.id}-64`, articulationId: duplicatedSlot.id, min: 64, max: 127 },
+    ]);
+
+    const keyedBank = assignArticulationToKey(distributedBank, 0, duplicatedSlot.id);
+    assert.deepEqual(keyedBank.keyAssignments, [
+        { note: 0, articulationId: duplicatedSlot.id },
+    ]);
+
+    const modeBank = setArticulationTriggerMode(keyedBank, "vel");
+    assert.equal(modeBank.activeTriggerMode, "vel");
+
+    const deletedBank = deleteArticulationSlot(modeBank, "pluck");
+    assert.equal(deletedBank.slots.some((slot) => slot.id === "pluck"), false);
+    assert.equal(deletedBank.chainAssignments.some((assignment) => assignment.articulationId === "pluck"), false);
+    assert.equal(deletedBank.keyAssignments.some((assignment) => assignment.articulationId === "pluck"), false);
+    assert.equal(deletedBank.velocityAssignments.some((assignment) => assignment.articulationId === "pluck"), false);
+
+    const lastRemainingBank = normalizeArticulationBank({
+        selectedSlotId: "only",
+        slots: [{ id: "only", runtimeSlot: 0 }],
+        keyAssignments: [{ articulationId: "only", note: 5 }],
+    });
+    assert.deepEqual(deleteArticulationSlot(lastRemainingBank, "only"), lastRemainingBank);
+});
+
+test("articulation range editor operations separate replace fill insert move resize and clear", () => {
+    const bank = normalizeArticulationBank({
+        selectedSlotId: "bow",
+        slots: [
+            { id: "bow", runtimeSlot: 0 },
+            { id: "pluck", runtimeSlot: 1 },
+            { id: "air", runtimeSlot: 2 },
+        ],
+        chainAssignments: [
+            { id: "chain-bow-full", articulationId: "bow", min: 0, max: 127 },
+        ],
+    });
+
+    const insertedBank = insertArticulationRangeAtPosition(bank, "chain", 64, "pluck");
+    assert.deepEqual(insertedBank.chainAssignments, [
+        { id: "chain-bow-full", articulationId: "bow", min: 0, max: 63 },
+        { id: "chain-pluck-64", articulationId: "pluck", min: 64, max: 64 },
+    ]);
+
+    const resizedBank = resizeArticulationRangeAssignment(
+        insertedBank,
+        "chain",
+        { id: "chain-pluck-64", articulationId: "pluck", min: 64, max: 64 },
+        "max",
+        70,
+    );
+    assert.deepEqual(resizedBank.chainAssignments, [
+        { id: "chain-bow-full", articulationId: "bow", min: 0, max: 63 },
+        { id: "chain-pluck-64", articulationId: "pluck", min: 64, max: 70 },
+    ]);
+
+    const movedBank = moveArticulationRangeAssignment(
+        resizedBank,
+        "chain",
+        { id: "chain-pluck-64", articulationId: "pluck", min: 64, max: 70 },
+        90,
+    );
+    assert.deepEqual(movedBank.chainAssignments, [
+        { id: "chain-bow-full", articulationId: "bow", min: 0, max: 63 },
+        { id: "chain-pluck-64", articulationId: "pluck", min: 87, max: 93 },
+    ]);
+
+    const filledGapBank = assignArticulationToRangePosition(movedBank, "chain", 100, "air");
+    assert.deepEqual(filledGapBank.chainAssignments, [
+        { id: "chain-bow-full", articulationId: "bow", min: 0, max: 63 },
+        { id: "chain-pluck-64", articulationId: "pluck", min: 87, max: 93 },
+        { id: "chain-air-94", articulationId: "air", min: 94, max: 127 },
+    ]);
+
+    const replacedBank = assignArticulationToRangePosition(filledGapBank, "chain", 100, "pluck");
+    assert.deepEqual(replacedBank.chainAssignments, [
+        { id: "chain-bow-full", articulationId: "bow", min: 0, max: 63 },
+        { id: "chain-pluck-64", articulationId: "pluck", min: 87, max: 93 },
+        { id: "chain-air-94", articulationId: "pluck", min: 94, max: 127 },
+    ]);
+
+    const clearedBank = clearArticulationRangeAssignment(
+        replacedBank,
+        "chain",
+        { id: "chain-pluck-64", articulationId: "pluck", min: 87, max: 93 },
+    );
+    assert.deepEqual(clearedBank.chainAssignments, [
+        { id: "chain-bow-full", articulationId: "bow", min: 0, max: 63 },
+        { id: "chain-air-94", articulationId: "pluck", min: 94, max: 127 },
+    ]);
+
+    assert.deepEqual(clearArticulationTriggerAssignments(clearedBank, "chain").chainAssignments, []);
 });
 
 test("articulation runtime uploads resolve runtime slots and route-id amounts to fixed DSP route slots", () => {

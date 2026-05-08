@@ -40,6 +40,7 @@ import { useSliderDrag } from "../shared/use-slider-drag";
 import { DistortionVisualizer } from "../shared/distortion-visualizer";
 import type { DistortionHistoryFrame, DistortionScopeFrame } from "../shared/distortion-visualization";
 import {
+    DEFAULT_KEYBOARD_NOTE_COUNT,
     KeyboardDock,
     type PianoKeyboardElement,
 } from "./desktop-keyboard-adapter";
@@ -50,6 +51,14 @@ import { DesktopModMatrix } from "./desktop-mod-matrix";
 import {
     useSynthPatchViewModel,
 } from "../shared/synth-hooks";
+import {
+    ArticulationControlSurface,
+    type ArticulationCardView,
+    type ArticulationRangeSegmentView,
+    type ArticulationTriggerMode as ArticulationUiTriggerMode,
+    type GainEnvelopeView,
+    type MsegThumbnailPoint,
+} from "./articulation-ui";
 import {
     FILTER_SPECTRUM_RENDER_MODE_OPTIONS,
     cycleFilterSpectrumRenderMode,
@@ -116,6 +125,85 @@ const DISTORTION_WET_LP_MAX_HZ = 20_000;
 const CHORUS_MOTION_MODE_OPTIONS = ["Subtle", "Wide", "Classic", "Fast"] as const;
 const CHORUS_BLOOM_MODE_OPTIONS = ["Clean", "Small", "Large", "Sm+Sh", "Lg+Sh"] as const;
 const CHORUS_RING_OFFSET_MODE_OPTIONS = ["+5th", "Low 5th", "+Oct", "-Oct"] as const;
+const ARTICULATION_CARD_COLORS = [
+    "#87d7f5",
+    "#f472b6",
+    "#fbbf24",
+    "#32f0bc",
+    "#a78bfa",
+    "#fb7185",
+    "#93c5fd",
+    "#fcd34d",
+] as const;
+const MIDI_NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"] as const;
+
+function getArticulationColor(runtimeSlot: number) {
+    return ARTICULATION_CARD_COLORS[Math.abs(runtimeSlot) % ARTICULATION_CARD_COLORS.length];
+}
+
+function formatMidiNoteName(note: number) {
+    const safeNote = Math.max(0, Math.min(127, Math.round(note)));
+    const name = MIDI_NOTE_NAMES[safeNote % 12];
+    const octave = Math.floor(safeNote / 12) - 2;
+
+    return `${name}${octave}`;
+}
+
+function formatRangeLabel(prefix: string, min: number, max: number) {
+    return min === max ? `${prefix} ${min}` : `${prefix} ${min}-${max}`;
+}
+
+function formatKeyRangeLabel(min: number, max: number) {
+    return min === max
+        ? `Key ${formatMidiNoteName(min)}`
+        : `Key ${formatMidiNoteName(min)}-${formatMidiNoteName(max)}`;
+}
+
+function getFirstKeyRangeForArticulation(
+    assignments: Array<{ note: number; articulationId: string }>,
+    articulationId: string,
+) {
+    const notes = assignments
+        .filter((assignment) => assignment.articulationId === articulationId)
+        .map((assignment) => assignment.note)
+        .sort((left, right) => left - right);
+
+    if (notes.length === 0) {
+        return null;
+    }
+
+    let max = notes[0];
+    for (let index = 1; index < notes.length && notes[index] === max + 1; index += 1) {
+        max = notes[index];
+    }
+
+    return { min: notes[0], max };
+}
+
+function makeMsegThumbnailPoints(morph: number): MsegThumbnailPoint[] {
+    const amount = Math.max(0, Math.min(1, Number.isFinite(morph) ? morph : 0));
+
+    return [
+        { x: 0, y: 0.08 + amount * 0.14, curvePower: 0.85 },
+        { x: 0.18, y: 0.84 - amount * 0.22, curvePower: 0.7 + amount * 0.8 },
+        { x: 0.55, y: 0.44 + amount * 0.22, curvePower: 1.2 },
+        { x: 1, y: 0.18 + amount * 0.08, curvePower: 1 },
+    ];
+}
+
+function makeGainEnvelopeView(envelope: {
+    attackSeconds?: number;
+    decaySeconds?: number;
+    sustain?: number;
+    releaseSeconds?: number;
+} | null | undefined): GainEnvelopeView {
+    return {
+        attackSeconds: envelope?.attackSeconds ?? 0.01,
+        decaySeconds: envelope?.decaySeconds ?? 0.25,
+        sustain: envelope?.sustain ?? 0.5,
+        releaseSeconds: envelope?.releaseSeconds ?? 0.2,
+    };
+}
 
 function postNativeKeyboardProbeStatus(reason: string) {
     const desktopWindow = globalThis as typeof globalThis & {
@@ -1691,6 +1779,7 @@ function KeyboardSection({
     playModeFocusBindings,
     glideFocusTarget,
     keyboardRef,
+    toolbarOverride,
 }: VoiceGlideSectionProps & {
     keyboardRootNote: number;
     onOctaveDown: () => void;
@@ -1702,6 +1791,7 @@ function KeyboardSection({
         onEndTextEntry: () => void;
     };
     keyboardRef: RefObject<PianoKeyboardElement | null>;
+    toolbarOverride?: ReactNode;
 }) {
     return (
         <KeyboardSectionShell
@@ -1712,7 +1802,7 @@ function KeyboardSection({
             onOctaveDown={onOctaveDown}
             className="grid-cols-[56px_minmax(0,1fr)]"
             railClassName="px-2 py-3"
-            toolbar={(
+            toolbar={toolbarOverride ?? (
                 <KeyboardToolbar
                     playMode={playMode}
                     glideTime={glideTime}
@@ -1722,68 +1812,6 @@ function KeyboardSection({
             )}
             keyboard={<KeyboardDock rootNote={keyboardRootNote} keyboardRef={keyboardRef} />}
         />
-    );
-}
-
-function ArticulationSlotBar({
-    slots,
-    selectedSlotId,
-    hasHydrated,
-    onAdd,
-    onSelect,
-}: {
-    slots: ReturnType<typeof useSynthPatchViewModel>["articulationSlots"];
-    selectedSlotId: string | null;
-    hasHydrated: boolean;
-    onAdd: () => void;
-    onSelect: (slotId: string) => void;
-}) {
-    return (
-        <div
-            data-role="articulation-slot-bar"
-            className="flex min-h-[34px] shrink-0 items-center gap-2 rounded-[12px] border border-white/[0.05] bg-white/[0.018] px-2.5 py-1.5"
-        >
-            <span className="shrink-0 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-300/45">
-                Art
-            </span>
-            <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto">
-                {slots.map((slot) => {
-                    const isSelected = slot.id === selectedSlotId;
-
-                    return (
-                        <button
-                            key={slot.id}
-                            type="button"
-                            aria-label={`Select articulation ${slot.name}`}
-                            aria-pressed={isSelected}
-                            data-role="articulation-slot-button"
-                            data-selector-a={String(slot.runtimeSlot)}
-                            data-runtime-slot={String(slot.runtimeSlot)}
-                            className={`flex h-7 shrink-0 items-center gap-2 rounded-[8px] border px-2.5 text-[10px] font-semibold uppercase tracking-[0.08em] transition ${
-                                isSelected
-                                    ? "border-amber-200/24 bg-amber-300/12 text-amber-100"
-                                    : "border-white/[0.06] bg-white/[0.025] text-slate-300/52 hover:border-white/12 hover:text-slate-100/75"
-                            }`}
-                            onClick={() => onSelect(slot.id)}
-                        >
-                            <span className="font-mono text-[9px] text-cyan-200/55">
-                                {slot.runtimeSlot}
-                            </span>
-                            <span>{slot.name}</span>
-                        </button>
-                    );
-                })}
-            </div>
-            <button
-                type="button"
-                aria-label="Add articulation"
-                className="h-7 shrink-0 rounded-[8px] border border-cyan-300/16 bg-cyan-300/8 px-2.5 text-[10px] font-bold uppercase tracking-[0.1em] text-cyan-100/80 transition hover:border-cyan-200/28 hover:bg-cyan-300/12 disabled:opacity-45"
-                onClick={onAdd}
-                disabled={!hasHydrated}
-            >
-                + Add
-            </button>
-        </div>
     );
 }
 
@@ -2379,6 +2407,124 @@ function DesktopPatchViewBody({
     useEffect(() => {
         postNativeKeyboardProbeStatus(`cosimo-keyboard-router-ready:${keyboardInputMode}`);
     }, [keyboardInputMode]);
+    const [keyboardControlMode, setKeyboardControlMode] = useState<"articulation" | "voice">("articulation");
+    const [isArticulationEditorExpanded, setIsArticulationEditorExpanded] = useState(false);
+    const selectedArticulationId = synthView.selectedArticulationSlot?.id ?? null;
+    const articulationMode = synthView.articulationBank.activeTriggerMode as ArticulationUiTriggerMode;
+    const articulationCards = useMemo<ArticulationCardView[]>(() => {
+        const bank = synthView.articulationBank;
+
+        return synthView.articulationSlots.map((slot) => {
+            const color = getArticulationColor(slot.runtimeSlot);
+            const chainAssignment = bank.chainAssignments.find((assignment) => assignment.articulationId === slot.id);
+            const keyRange = getFirstKeyRangeForArticulation(bank.keyAssignments, slot.id);
+            const velocityAssignment = bank.velocityAssignments.find((assignment) => assignment.articulationId === slot.id);
+            const assignmentLabel = articulationMode === "key"
+                ? (keyRange ? formatKeyRangeLabel(keyRange.min, keyRange.max) : "Key -")
+                : articulationMode === "vel"
+                    ? (velocityAssignment ? formatRangeLabel("Vel", velocityAssignment.min, velocityAssignment.max) : "Vel -")
+                    : (chainAssignment ? formatRangeLabel("Chain", chainAssignment.min, chainAssignment.max) : "Chain -");
+
+            return {
+                id: slot.id,
+                name: slot.name,
+                color,
+                runtimeSlot: slot.runtimeSlot,
+                assignmentLabel,
+                isSelected: slot.id === selectedArticulationId,
+                isDirty: slot.id === selectedArticulationId && synthView.selectedArticulationIsDirty,
+                canDelete: synthView.articulationSlots.length > 1,
+                msegPoints: makeMsegThumbnailPoints(slot.snapshot.parameters.msegMorphs[0] ?? 0),
+                gainEnvelope: makeGainEnvelopeView(slot.snapshot.envelopes[0]),
+            };
+        });
+    }, [
+        articulationMode,
+        selectedArticulationId,
+        synthView.articulationBank,
+        synthView.articulationSlots,
+        synthView.selectedArticulationIsDirty,
+    ]);
+    const articulationCardById = useMemo(() => (
+        new Map(articulationCards.map((card) => [card.id, card]))
+    ), [articulationCards]);
+    const chainSegments = useMemo<ArticulationRangeSegmentView[]>(() => (
+        synthView.articulationBank.chainAssignments.map((assignment) => {
+            const card = articulationCardById.get(assignment.articulationId);
+
+            return {
+                id: assignment.id,
+                articulationId: assignment.articulationId,
+                label: card?.name ?? "Missing",
+                color: card?.color ?? "#87d7f5",
+                min: assignment.min,
+                max: assignment.max,
+                isSelected: assignment.articulationId === selectedArticulationId,
+            };
+        })
+    ), [articulationCardById, selectedArticulationId, synthView.articulationBank.chainAssignments]);
+    const velocitySegments = useMemo<ArticulationRangeSegmentView[]>(() => (
+        synthView.articulationBank.velocityAssignments.map((assignment) => {
+            const card = articulationCardById.get(assignment.articulationId);
+
+            return {
+                id: assignment.id,
+                articulationId: assignment.articulationId,
+                label: card?.name ?? "Missing",
+                color: card?.color ?? "#87d7f5",
+                min: assignment.min,
+                max: assignment.max,
+                isSelected: assignment.articulationId === selectedArticulationId,
+            };
+        })
+    ), [articulationCardById, selectedArticulationId, synthView.articulationBank.velocityAssignments]);
+    const keySegments = useMemo<ArticulationRangeSegmentView[]>(() => {
+        const sortedAssignments = [...synthView.articulationBank.keyAssignments]
+            .sort((left, right) => left.note - right.note);
+        const segments: ArticulationRangeSegmentView[] = [];
+
+        for (const assignment of sortedAssignments) {
+            const previous = segments[segments.length - 1];
+            const card = articulationCardById.get(assignment.articulationId);
+
+            if (
+                previous
+                && previous.articulationId === assignment.articulationId
+                && previous.max + 1 === assignment.note
+            ) {
+                previous.max = assignment.note;
+                previous.id = `key-${assignment.articulationId}-${previous.min}-${previous.max}`;
+                previous.label = card?.name ?? "Missing";
+                continue;
+            }
+
+            segments.push({
+                id: `key-${assignment.articulationId}-${assignment.note}-${assignment.note}`,
+                articulationId: assignment.articulationId,
+                label: card?.name ?? "Missing",
+                color: card?.color ?? "#87d7f5",
+                min: assignment.note,
+                max: assignment.note,
+                isSelected: assignment.articulationId === selectedArticulationId,
+            });
+        }
+
+        return segments;
+    }, [articulationCardById, selectedArticulationId, synthView.articulationBank.keyAssignments]);
+    const handleSelectRangeSegment = useCallback((
+        _mode: ArticulationUiTriggerMode,
+        segment: ArticulationRangeSegmentView,
+    ) => {
+        synthView.handleSelectArticulationSlot(segment.articulationId);
+    }, [synthView]);
+    const handleRenameArticulation = useCallback((slotId: string) => {
+        const slot = synthView.articulationSlots.find((candidate) => candidate.id === slotId);
+        const nextName = window.prompt("Rename articulation", slot?.name ?? "");
+
+        if (nextName !== null) {
+            synthView.handleRenameArticulationSlot(slotId, nextName);
+        }
+    }, [synthView]);
     const filterResonanceCurveProfile = curveLab.getProfile("filter-resonance-handle");
     const resonanceNormalizedFromQ = useCallback((qValue: number) => (
         curveLab.invertTarget("filter-resonance-handle", filterQToNormalized(qValue))
@@ -2418,17 +2564,115 @@ function DesktopPatchViewBody({
             height={40}
         />
     ), [synthView.pan]);
+    const keyboardToolbarOverride = useMemo(() => (
+        <div data-role="keyboard-control-row" className="grid min-h-[158px] gap-2">
+            <div className="flex items-center justify-between gap-2 rounded-[12px] border border-white/[0.05] bg-white/[0.018] px-2 py-1.5">
+                <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-300/45">
+                    Controls
+                </span>
+                <div className="inline-flex h-7 items-center gap-1 rounded-[8px] border border-white/[0.06] bg-white/[0.022] p-0.5">
+                    {([
+                        ["articulation", "Articulations"],
+                        ["voice", "Voice"],
+                    ] as const).map(([mode, label]) => (
+                        <button
+                            key={mode}
+                            type="button"
+                            aria-pressed={keyboardControlMode === mode}
+                            data-role={`keyboard-control-mode-${mode}`}
+                            className={`h-6 rounded-[6px] px-2.5 text-[10px] font-bold uppercase tracking-[0.14em] transition ${
+                                keyboardControlMode === mode
+                                    ? "bg-amber-300/14 text-amber-100"
+                                    : "text-slate-300/65 hover:text-slate-100"
+                            }`}
+                            onClick={() => setKeyboardControlMode(mode)}
+                        >
+                            {label}
+                        </button>
+                    ))}
+                </div>
+            </div>
+
+            {keyboardControlMode === "articulation" ? (
+                <ArticulationControlSurface
+                    cards={articulationCards}
+                    activeMode={articulationMode}
+                    isExpanded={isArticulationEditorExpanded}
+                    selectedArticulationId={selectedArticulationId}
+                    selectedIsDirty={synthView.selectedArticulationIsDirty}
+                    canCapture={synthView.hasHydratedArticulations}
+                    chainSegments={chainSegments}
+                    keySegments={keySegments}
+                    velocitySegments={velocitySegments}
+                    keyboardMinNote={keyboardRootNote}
+                    keyboardMaxNote={keyboardRootNote + DEFAULT_KEYBOARD_NOTE_COUNT - 1}
+                    onToggleExpanded={() => setIsArticulationEditorExpanded((previousValue) => !previousValue)}
+                    onSelectMode={(mode) => synthView.handleSetArticulationTriggerMode(mode)}
+                    onSelectCard={synthView.handleSelectArticulationSlot}
+                    onCardPlayPressStart={synthView.handleStartArticulationAudition}
+                    onCardPlayPressEnd={synthView.handleStopArticulationAudition}
+                    onCapture={() => synthView.handleCaptureArticulationSlot({ autoAssign: !isArticulationEditorExpanded })}
+                    onUpdate={synthView.handleUpdateSelectedArticulationSlot}
+                    onRevert={synthView.handleRevertSelectedArticulationSlot}
+                    onSelectRangeSegment={handleSelectRangeSegment}
+                    onAssignRangePosition={synthView.handleAssignArticulationRangePosition}
+                    onInsertRangePosition={synthView.handleInsertArticulationRangeAtPosition}
+                    onDuplicateAndAssignRangePosition={synthView.handleDuplicateAndAssignArticulationRangePosition}
+                    onMoveRangeSegment={synthView.handleMoveArticulationRangeAssignment}
+                    onResizeRangeSegment={synthView.handleResizeArticulationRangeAssignment}
+                    onClearRangeSegment={synthView.handleClearArticulationRangeAssignment}
+                    onClearRangeMode={synthView.handleClearArticulationTriggerAssignments}
+                    onDistributeRange={synthView.handleDistributeArticulationRanges}
+                    onRequestRename={handleRenameArticulation}
+                    onRequestDuplicate={synthView.handleDuplicateArticulationSlot}
+                    onRequestReplace={synthView.handleReplaceArticulationSlotWithCurrent}
+                    onRequestDelete={synthView.handleDeleteArticulationSlot}
+                />
+            ) : (
+                <KeyboardToolbar
+                    playMode={synthView.playMode}
+                    glideTime={synthView.glideTime}
+                    playModeFocusBindings={synthView.keyboardRouting.playModeFocusBindings}
+                    glideFocusTarget={synthView.keyboardRouting.glideFocusTarget}
+                />
+            )}
+
+            {synthView.discardedArticulationEdit ? (
+                <div
+                    data-role="articulation-undo-toast"
+                    className="flex items-center justify-between gap-2 rounded-[12px] border border-pink-300/18 bg-pink-300/[0.07] px-3 py-2 text-[10px] uppercase tracking-[0.12em] text-pink-100/82"
+                >
+                    <span className="truncate">
+                        Discarded edits to {synthView.discardedArticulationEdit.slotName}
+                    </span>
+                    <button
+                        type="button"
+                        className="rounded-[7px] border border-pink-200/22 bg-pink-200/10 px-2 py-1 font-bold text-pink-50/90"
+                        onClick={synthView.handleUndoDiscardedArticulationEdit}
+                    >
+                        Undo
+                    </button>
+                </div>
+            ) : null}
+        </div>
+    ), [
+        articulationCards,
+        articulationMode,
+        chainSegments,
+        handleRenameArticulation,
+        handleSelectRangeSegment,
+        isArticulationEditorExpanded,
+        keySegments,
+        keyboardControlMode,
+        keyboardRootNote,
+        selectedArticulationId,
+        synthView,
+        velocitySegments,
+    ]);
 
     return (
         <div className="cosimo-surface relative flex h-full w-full flex-col gap-3 overflow-hidden rounded-[28px] border border-white/[0.05] px-4 pb-4 pt-2.5 text-slate-100 shadow-[0_26px_80px_rgba(0,0,0,0.48)]">
             <StatusHeader statusText={synthView.topStatus} />
-            <ArticulationSlotBar
-                slots={synthView.articulationSlots}
-                selectedSlotId={synthView.selectedArticulationSlot?.id ?? null}
-                hasHydrated={synthView.hasHydratedArticulations}
-                onAdd={synthView.handleAddArticulationSlot}
-                onSelect={synthView.handleSelectArticulationSlot}
-            />
 
             <main
                 data-role="desktop-scroll-region"
@@ -2549,6 +2793,7 @@ function DesktopPatchViewBody({
                     playModeFocusBindings={synthView.keyboardRouting.playModeFocusBindings}
                     glideFocusTarget={synthView.keyboardRouting.glideFocusTarget}
                     keyboardRef={keyboardElementRef}
+                    toolbarOverride={keyboardToolbarOverride}
                 />
             </main>
 

@@ -12497,7 +12497,7 @@ function requireClient() {
   return client.exports;
 }
 var clientExports = requireClient();
-const cssText = '/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com */\n@layer properties {\n  @supports (((-webkit-hyphens: none)) and (not (margin-trim: inline))) or ((-moz-orient: inline) and (not (color: rgb(from red r g b)))) {\n    *, :before, :after, ::backdrop {\n      --tw-translate-x: 0;\n      --tw-translate-y: 0;\n      --tw-translate-z: 0;\n      --tw-rotate-x: initial;\n      --tw-rotate-y: initial;\n      --tw-rotate-z: initial;\n      --tw-skew-x: initial;\n      --tw-skew-y: initial;\n      --tw-space-y-reverse: 0;\n      --tw-space-x-reverse: 0;\n      --tw-border-style: solid;\n      --tw-gradient-position: initial;\n      --tw-gradient-from: #0000;\n      --tw-gradient-via: #0000;\n      --tw-gradient-to: #0000;\n      --tw-gradient-stops: initial;\n      --tw-gradient-via-stops: initial;\n      --tw-gradient-from-position: 0%;\n      --tw-gradient-via-position: 50%;\n      --tw-gradient-to-position: 100%;\n      --tw-leading: initial;\n      --tw-font-weight: initial;\n      --tw-tracking: initial;\n      --tw-ordinal: initial;\n      --tw-slashed-zero: initial;\n      --tw-numeric-figure: initial;\n      --tw-numeric-spacing: initial;\n      --tw-numeric-fraction: initial;\n      --tw-shadow: 0 0 #0000;\n      --tw-shadow-color: initial;\n      --tw-shadow-alpha: 100%;\n      --tw-inset-shadow: 0 0 #0000;\n      --tw-inset-shadow-color: initial;\n      --tw-inset-shadow-alpha: 100%;\n      --tw-ring-color: initial;\n      --tw-ring-shadow: 0 0 #0000;\n      --tw-inset-ring-color: initial;\n      --tw-inset-ring-shadow: 0 0 #0000;\n      --tw-ring-inset: initial;\n      --tw-ring-offset-width: 0px;\n      --tw-ring-offset-color: #fff;\n      --tw-ring-offset-shadow: 0 0 #0000;\n      --tw-outline-style: solid;\n      --tw-blur: initial;\n      --tw-brightness: initial;\n      --tw-contrast: initial;\n      --tw-grayscale: initial;\n      --tw-hue-rotate: initial;\n      --tw-invert: initial;\n      --tw-opacity: initial;\n      --tw-saturate: initial;\n      --tw-sepia: initial;\n      --tw-drop-shadow: initial;\n      --tw-drop-shadow-color: initial;\n      --tw-drop-shadow-alpha: 100%;\n      --tw-drop-shadow-size: initial;\n      --tw-backdrop-blur: initial;\n      --tw-backdrop-brightness: initial;\n      --tw-backdrop-contrast: initial;\n      --tw-backdrop-grayscale: initial;\n      --tw-backdrop-hue-rotate: initial;\n      --tw-backdrop-invert: initial;\n      --tw-backdrop-opacity: initial;\n      --tw-backdrop-saturate: initial;\n      --tw-backdrop-sepia: initial;\n      --tw-duration: initial;\n      --tw-ease: initial;\n    }\n  }\n}\n\n@layer theme {\n  :root, :host {\n    --font-sans: ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji",\n      "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";\n    --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",\n      "Courier New", monospace;\n    --color-red-50: oklch(97.1% .013 17.38);\n    --color-red-300: oklch(80.8% .114 19.571);\n    --color-red-400: oklch(70.4% .191 22.216);\n    --color-red-600: oklch(57.7% .245 27.325);\n    --color-amber-100: oklch(96.2% .059 95.617);\n    --color-amber-200: oklch(92.4% .12 95.746);\n    --color-amber-300: oklch(87.9% .169 91.605);\n    --color-amber-400: oklch(82.8% .189 84.429);\n    --color-emerald-100: oklch(95% .052 163.051);\n    --color-emerald-200: oklch(90.5% .093 164.15);\n    --color-emerald-300: oklch(84.5% .143 164.978);\n    --color-cyan-50: oklch(98.4% .019 200.873);\n    --color-cyan-100: oklch(95.6% .045 203.388);\n    --color-cyan-200: oklch(91.7% .08 205.041);\n    --color-cyan-300: oklch(86.5% .127 207.078);\n    --color-cyan-400: oklch(78.9% .154 211.53);\n    --color-sky-100: oklch(95.1% .026 236.824);\n    --color-sky-300: oklch(82.8% .111 230.318);\n    --color-blue-300: oklch(80.9% .105 251.813);\n    --color-fuchsia-100: oklch(95.2% .037 318.852);\n    --color-fuchsia-200: oklch(90.3% .076 319.62);\n    --color-fuchsia-300: oklch(83.3% .145 321.434);\n    --color-rose-200: oklch(89.2% .058 10.001);\n    --color-rose-300: oklch(81% .117 11.638);\n    --color-rose-400: oklch(71.2% .194 13.428);\n    --color-slate-50: oklch(98.4% .003 247.858);\n    --color-slate-100: oklch(96.8% .007 247.896);\n    --color-slate-200: oklch(92.9% .013 255.508);\n    --color-slate-300: oklch(86.9% .022 252.894);\n    --color-slate-400: oklch(70.4% .04 256.788);\n    --color-slate-500: oklch(55.4% .046 257.417);\n    --color-black: #000;\n    --color-white: #fff;\n    --spacing: .25rem;\n    --container-sm: 24rem;\n    --container-lg: 32rem;\n    --container-2xl: 42rem;\n    --text-xs: .75rem;\n    --text-xs--line-height: calc(1 / .75);\n    --text-sm: .875rem;\n    --text-sm--line-height: calc(1.25 / .875);\n    --text-base: 1rem;\n    --text-base--line-height: calc(1.5 / 1);\n    --text-lg: 1.125rem;\n    --text-lg--line-height: calc(1.75 / 1.125);\n    --text-2xl: 1.5rem;\n    --text-2xl--line-height: calc(2 / 1.5);\n    --text-3xl: 1.875rem;\n    --text-3xl--line-height: calc(2.25 / 1.875);\n    --font-weight-normal: 400;\n    --font-weight-medium: 500;\n    --font-weight-semibold: 600;\n    --font-weight-bold: 700;\n    --font-weight-black: 900;\n    --tracking-tight: -.025em;\n    --tracking-wide: .025em;\n    --tracking-widest: .1em;\n    --leading-snug: 1.375;\n    --leading-normal: 1.5;\n    --leading-relaxed: 1.625;\n    --radius-xs: .125rem;\n    --radius-sm: .25rem;\n    --radius-md: .375rem;\n    --radius-lg: .5rem;\n    --radius-xl: .75rem;\n    --radius-2xl: 1rem;\n    --ease-in-out: cubic-bezier(.4, 0, .2, 1);\n    --animate-spin: spin 1s linear infinite;\n    --animate-pulse: pulse 2s cubic-bezier(.4, 0, .6, 1) infinite;\n    --blur-md: 12px;\n    --blur-xl: 24px;\n    --aspect-video: 16 / 9;\n    --default-transition-duration: .15s;\n    --default-transition-timing-function: cubic-bezier(.4, 0, .2, 1);\n    --default-font-family: var(--font-sans);\n    --default-mono-font-family: var(--font-mono);\n    --color-border: var(--cosimo-mod-border);\n  }\n}\n\n@layer base {\n  *, :after, :before, ::backdrop {\n    box-sizing: border-box;\n    border: 0 solid;\n    margin: 0;\n    padding: 0;\n  }\n\n  ::file-selector-button {\n    box-sizing: border-box;\n    border: 0 solid;\n    margin: 0;\n    padding: 0;\n  }\n\n  html, :host {\n    -webkit-text-size-adjust: 100%;\n    tab-size: 4;\n    line-height: 1.5;\n    font-family: var(--default-font-family, ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji");\n    font-feature-settings: var(--default-font-feature-settings, normal);\n    font-variation-settings: var(--default-font-variation-settings, normal);\n    -webkit-tap-highlight-color: transparent;\n  }\n\n  hr {\n    height: 0;\n    color: inherit;\n    border-top-width: 1px;\n  }\n\n  abbr:where([title]) {\n    -webkit-text-decoration: underline dotted;\n    text-decoration: underline dotted;\n  }\n\n  h1, h2, h3, h4, h5, h6 {\n    font-size: inherit;\n    font-weight: inherit;\n  }\n\n  a {\n    color: inherit;\n    -webkit-text-decoration: inherit;\n    -webkit-text-decoration: inherit;\n    -webkit-text-decoration: inherit;\n    text-decoration: inherit;\n  }\n\n  b, strong {\n    font-weight: bolder;\n  }\n\n  code, kbd, samp, pre {\n    font-family: var(--default-mono-font-family, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace);\n    font-feature-settings: var(--default-mono-font-feature-settings, normal);\n    font-variation-settings: var(--default-mono-font-variation-settings, normal);\n    font-size: 1em;\n  }\n\n  small {\n    font-size: 80%;\n  }\n\n  sub, sup {\n    vertical-align: baseline;\n    font-size: 75%;\n    line-height: 0;\n    position: relative;\n  }\n\n  sub {\n    bottom: -.25em;\n  }\n\n  sup {\n    top: -.5em;\n  }\n\n  table {\n    text-indent: 0;\n    border-color: inherit;\n    border-collapse: collapse;\n  }\n\n  :-moz-focusring {\n    outline: auto;\n  }\n\n  progress {\n    vertical-align: baseline;\n  }\n\n  summary {\n    display: list-item;\n  }\n\n  ol, ul, menu {\n    list-style: none;\n  }\n\n  img, svg, video, canvas, audio, iframe, embed, object {\n    vertical-align: middle;\n    display: block;\n  }\n\n  img, video {\n    max-width: 100%;\n    height: auto;\n  }\n\n  button, input, select, optgroup, textarea {\n    font: inherit;\n    font-feature-settings: inherit;\n    font-variation-settings: inherit;\n    letter-spacing: inherit;\n    color: inherit;\n    opacity: 1;\n    background-color: #0000;\n    border-radius: 0;\n  }\n\n  ::file-selector-button {\n    font: inherit;\n    font-feature-settings: inherit;\n    font-variation-settings: inherit;\n    letter-spacing: inherit;\n    color: inherit;\n    opacity: 1;\n    background-color: #0000;\n    border-radius: 0;\n  }\n\n  :where(select:is([multiple], [size])) optgroup {\n    font-weight: bolder;\n  }\n\n  :where(select:is([multiple], [size])) optgroup option {\n    padding-inline-start: 20px;\n  }\n\n  ::file-selector-button {\n    margin-inline-end: 4px;\n  }\n\n  ::placeholder {\n    opacity: 1;\n  }\n\n  @supports (not ((-webkit-appearance: -apple-pay-button))) or (contain-intrinsic-size: 1px) {\n    ::placeholder {\n      color: currentColor;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      ::placeholder {\n        color: color-mix(in oklab, currentcolor 50%, transparent);\n      }\n    }\n  }\n\n  textarea {\n    resize: vertical;\n  }\n\n  ::-webkit-search-decoration {\n    -webkit-appearance: none;\n  }\n\n  ::-webkit-date-and-time-value {\n    min-height: 1lh;\n    text-align: inherit;\n  }\n\n  ::-webkit-datetime-edit {\n    display: inline-flex;\n  }\n\n  ::-webkit-datetime-edit-fields-wrapper {\n    padding: 0;\n  }\n\n  ::-webkit-datetime-edit {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-year-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-month-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-day-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-hour-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-minute-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-second-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-millisecond-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-meridiem-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-calendar-picker-indicator {\n    line-height: 1;\n  }\n\n  :-moz-ui-invalid {\n    box-shadow: none;\n  }\n\n  button, input:where([type="button"], [type="reset"], [type="submit"]) {\n    appearance: button;\n  }\n\n  ::file-selector-button {\n    appearance: button;\n  }\n\n  ::-webkit-inner-spin-button {\n    height: auto;\n  }\n\n  ::-webkit-outer-spin-button {\n    height: auto;\n  }\n\n  [hidden]:where(:not([hidden="until-found"])) {\n    display: none !important;\n  }\n\n  button, input, select {\n    font: inherit;\n  }\n}\n\n@layer components;\n\n@layer utilities {\n  .pointer-events-auto {\n    pointer-events: auto;\n  }\n\n  .pointer-events-none {\n    pointer-events: none;\n  }\n\n  .collapse {\n    visibility: collapse;\n  }\n\n  .invisible {\n    visibility: hidden;\n  }\n\n  .visible {\n    visibility: visible;\n  }\n\n  .sr-only {\n    clip-path: inset(50%);\n    white-space: nowrap;\n    border-width: 0;\n    width: 1px;\n    height: 1px;\n    margin: -1px;\n    padding: 0;\n    position: absolute;\n    overflow: hidden;\n  }\n\n  .absolute {\n    position: absolute;\n  }\n\n  .fixed {\n    position: fixed;\n  }\n\n  .relative {\n    position: relative;\n  }\n\n  .static {\n    position: static;\n  }\n\n  .sticky {\n    position: sticky;\n  }\n\n  .inset-0 {\n    inset: calc(var(--spacing) * 0);\n  }\n\n  .inset-1 {\n    inset: calc(var(--spacing) * 1);\n  }\n\n  .inset-x-0 {\n    inset-inline: calc(var(--spacing) * 0);\n  }\n\n  .inset-x-2 {\n    inset-inline: calc(var(--spacing) * 2);\n  }\n\n  .inset-x-3 {\n    inset-inline: calc(var(--spacing) * 3);\n  }\n\n  .inset-y-0 {\n    inset-block: calc(var(--spacing) * 0);\n  }\n\n  .inset-y-4 {\n    inset-block: calc(var(--spacing) * 4);\n  }\n\n  .start {\n    inset-inline-start: var(--spacing);\n  }\n\n  .-end {\n    inset-inline-end: calc(var(--spacing) * -1);\n  }\n\n  .end {\n    inset-inline-end: var(--spacing);\n  }\n\n  .-top-3 {\n    top: calc(var(--spacing) * -3);\n  }\n\n  .-top-12 {\n    top: calc(var(--spacing) * -12);\n  }\n\n  .top-0 {\n    top: calc(var(--spacing) * 0);\n  }\n\n  .top-0\\.5 {\n    top: calc(var(--spacing) * .5);\n  }\n\n  .top-1 {\n    top: calc(var(--spacing) * 1);\n  }\n\n  .top-1\\/2 {\n    top: 50%;\n  }\n\n  .top-2 {\n    top: calc(var(--spacing) * 2);\n  }\n\n  .top-3 {\n    top: calc(var(--spacing) * 3);\n  }\n\n  .top-4 {\n    top: calc(var(--spacing) * 4);\n  }\n\n  .top-full {\n    top: 100%;\n  }\n\n  .-right-12 {\n    right: calc(var(--spacing) * -12);\n  }\n\n  .right-0 {\n    right: calc(var(--spacing) * 0);\n  }\n\n  .right-1 {\n    right: calc(var(--spacing) * 1);\n  }\n\n  .right-2 {\n    right: calc(var(--spacing) * 2);\n  }\n\n  .right-3 {\n    right: calc(var(--spacing) * 3);\n  }\n\n  .right-4 {\n    right: calc(var(--spacing) * 4);\n  }\n\n  .-bottom-12 {\n    bottom: calc(var(--spacing) * -12);\n  }\n\n  .bottom-0 {\n    bottom: calc(var(--spacing) * 0);\n  }\n\n  .bottom-1 {\n    bottom: calc(var(--spacing) * 1);\n  }\n\n  .bottom-2 {\n    bottom: calc(var(--spacing) * 2);\n  }\n\n  .bottom-4 {\n    bottom: calc(var(--spacing) * 4);\n  }\n\n  .bottom-5 {\n    bottom: calc(var(--spacing) * 5);\n  }\n\n  .bottom-\\[48px\\] {\n    bottom: 48px;\n  }\n\n  .-left-12 {\n    left: calc(var(--spacing) * -12);\n  }\n\n  .left-0 {\n    left: calc(var(--spacing) * 0);\n  }\n\n  .left-1 {\n    left: calc(var(--spacing) * 1);\n  }\n\n  .left-1\\/2 {\n    left: 50%;\n  }\n\n  .left-2 {\n    left: calc(var(--spacing) * 2);\n  }\n\n  .left-3 {\n    left: calc(var(--spacing) * 3);\n  }\n\n  .isolate {\n    isolation: isolate;\n  }\n\n  .z-10 {\n    z-index: 10;\n  }\n\n  .z-20 {\n    z-index: 20;\n  }\n\n  .z-40 {\n    z-index: 40;\n  }\n\n  .z-50 {\n    z-index: 50;\n  }\n\n  .order-1 {\n    order: 1;\n  }\n\n  .order-first {\n    order: -9999;\n  }\n\n  .order-last {\n    order: 9999;\n  }\n\n  .col-start-2 {\n    grid-column-start: 2;\n  }\n\n  .row-span-2 {\n    grid-row: span 2 / span 2;\n  }\n\n  .row-start-1 {\n    grid-row-start: 1;\n  }\n\n  .\\!container {\n    width: 100% !important;\n  }\n\n  @media (min-width: 40rem) {\n    .\\!container {\n      max-width: 40rem !important;\n    }\n  }\n\n  @media (min-width: 48rem) {\n    .\\!container {\n      max-width: 48rem !important;\n    }\n  }\n\n  @media (min-width: 64rem) {\n    .\\!container {\n      max-width: 64rem !important;\n    }\n  }\n\n  @media (min-width: 80rem) {\n    .\\!container {\n      max-width: 80rem !important;\n    }\n  }\n\n  @media (min-width: 96rem) {\n    .\\!container {\n      max-width: 96rem !important;\n    }\n  }\n\n  .container {\n    width: 100%;\n  }\n\n  @media (min-width: 40rem) {\n    .container {\n      max-width: 40rem;\n    }\n  }\n\n  @media (min-width: 48rem) {\n    .container {\n      max-width: 48rem;\n    }\n  }\n\n  @media (min-width: 64rem) {\n    .container {\n      max-width: 64rem;\n    }\n  }\n\n  @media (min-width: 80rem) {\n    .container {\n      max-width: 80rem;\n    }\n  }\n\n  @media (min-width: 96rem) {\n    .container {\n      max-width: 96rem;\n    }\n  }\n\n  .m-1 {\n    margin: calc(var(--spacing) * 1);\n  }\n\n  .-mx-1 {\n    margin-inline: calc(var(--spacing) * -1);\n  }\n\n  .mx-0 {\n    margin-inline: calc(var(--spacing) * 0);\n  }\n\n  .mx-0\\.5 {\n    margin-inline: calc(var(--spacing) * .5);\n  }\n\n  .mx-2 {\n    margin-inline: calc(var(--spacing) * 2);\n  }\n\n  .mx-3 {\n    margin-inline: calc(var(--spacing) * 3);\n  }\n\n  .mx-auto {\n    margin-inline: auto;\n  }\n\n  .-my-2 {\n    margin-block: calc(var(--spacing) * -2);\n  }\n\n  .my-0 {\n    margin-block: calc(var(--spacing) * 0);\n  }\n\n  .my-1 {\n    margin-block: calc(var(--spacing) * 1);\n  }\n\n  .-mt-4 {\n    margin-top: calc(var(--spacing) * -4);\n  }\n\n  .mt-1 {\n    margin-top: calc(var(--spacing) * 1);\n  }\n\n  .mt-2 {\n    margin-top: calc(var(--spacing) * 2);\n  }\n\n  .mt-4 {\n    margin-top: calc(var(--spacing) * 4);\n  }\n\n  .mt-auto {\n    margin-top: auto;\n  }\n\n  .mb-2 {\n    margin-bottom: calc(var(--spacing) * 2);\n  }\n\n  .mb-3 {\n    margin-bottom: calc(var(--spacing) * 3);\n  }\n\n  .mb-4 {\n    margin-bottom: calc(var(--spacing) * 4);\n  }\n\n  .-ml-4 {\n    margin-left: calc(var(--spacing) * -4);\n  }\n\n  .ml-0 {\n    margin-left: calc(var(--spacing) * 0);\n  }\n\n  .ml-0\\.5 {\n    margin-left: calc(var(--spacing) * .5);\n  }\n\n  .ml-1 {\n    margin-left: calc(var(--spacing) * 1);\n  }\n\n  .ml-4 {\n    margin-left: calc(var(--spacing) * 4);\n  }\n\n  .ml-auto {\n    margin-left: auto;\n  }\n\n  .line-clamp-1 {\n    -webkit-line-clamp: 1;\n    -webkit-box-orient: vertical;\n    display: -webkit-box;\n    overflow: hidden;\n  }\n\n  .line-clamp-2 {\n    -webkit-line-clamp: 2;\n    -webkit-box-orient: vertical;\n    display: -webkit-box;\n    overflow: hidden;\n  }\n\n  .block {\n    display: block;\n  }\n\n  .contents {\n    display: contents;\n  }\n\n  .flex {\n    display: flex;\n  }\n\n  .grid {\n    display: grid;\n  }\n\n  .hidden {\n    display: none;\n  }\n\n  .inline {\n    display: inline;\n  }\n\n  .inline-block {\n    display: inline-block;\n  }\n\n  .inline-flex {\n    display: inline-flex;\n  }\n\n  .inline-grid {\n    display: inline-grid;\n  }\n\n  .table {\n    display: table;\n  }\n\n  .table-caption {\n    display: table-caption;\n  }\n\n  .table-cell {\n    display: table-cell;\n  }\n\n  .table-row {\n    display: table-row;\n  }\n\n  .field-sizing-content {\n    field-sizing: content;\n  }\n\n  .aspect-\\[50\\/27\\] {\n    aspect-ratio: 50 / 27;\n  }\n\n  .aspect-square {\n    aspect-ratio: 1;\n  }\n\n  .aspect-video {\n    aspect-ratio: var(--aspect-video);\n  }\n\n  .size-2 {\n    width: calc(var(--spacing) * 2);\n    height: calc(var(--spacing) * 2);\n  }\n\n  .size-3 {\n    width: calc(var(--spacing) * 3);\n    height: calc(var(--spacing) * 3);\n  }\n\n  .size-3\\.5 {\n    width: calc(var(--spacing) * 3.5);\n    height: calc(var(--spacing) * 3.5);\n  }\n\n  .size-4 {\n    width: calc(var(--spacing) * 4);\n    height: calc(var(--spacing) * 4);\n  }\n\n  .size-5 {\n    width: calc(var(--spacing) * 5);\n    height: calc(var(--spacing) * 5);\n  }\n\n  .size-6 {\n    width: calc(var(--spacing) * 6);\n    height: calc(var(--spacing) * 6);\n  }\n\n  .size-7 {\n    width: calc(var(--spacing) * 7);\n    height: calc(var(--spacing) * 7);\n  }\n\n  .size-8 {\n    width: calc(var(--spacing) * 8);\n    height: calc(var(--spacing) * 8);\n  }\n\n  .size-9 {\n    width: calc(var(--spacing) * 9);\n    height: calc(var(--spacing) * 9);\n  }\n\n  .size-10 {\n    width: calc(var(--spacing) * 10);\n    height: calc(var(--spacing) * 10);\n  }\n\n  .size-\\[11px\\] {\n    width: 11px;\n    height: 11px;\n  }\n\n  .size-\\[18px\\] {\n    width: 18px;\n    height: 18px;\n  }\n\n  .size-\\[22px\\] {\n    width: 22px;\n    height: 22px;\n  }\n\n  .size-auto {\n    width: auto;\n    height: auto;\n  }\n\n  .size-full {\n    width: 100%;\n    height: 100%;\n  }\n\n  .h-1 {\n    height: calc(var(--spacing) * 1);\n  }\n\n  .h-1\\.5 {\n    height: calc(var(--spacing) * 1.5);\n  }\n\n  .h-2 {\n    height: calc(var(--spacing) * 2);\n  }\n\n  .h-3 {\n    height: calc(var(--spacing) * 3);\n  }\n\n  .h-3\\.5 {\n    height: calc(var(--spacing) * 3.5);\n  }\n\n  .h-4 {\n    height: calc(var(--spacing) * 4);\n  }\n\n  .h-5 {\n    height: calc(var(--spacing) * 5);\n  }\n\n  .h-6 {\n    height: calc(var(--spacing) * 6);\n  }\n\n  .h-7 {\n    height: calc(var(--spacing) * 7);\n  }\n\n  .h-8 {\n    height: calc(var(--spacing) * 8);\n  }\n\n  .h-9 {\n    height: calc(var(--spacing) * 9);\n  }\n\n  .h-10 {\n    height: calc(var(--spacing) * 10);\n  }\n\n  .h-11 {\n    height: calc(var(--spacing) * 11);\n  }\n\n  .h-12 {\n    height: calc(var(--spacing) * 12);\n  }\n\n  .h-24 {\n    height: calc(var(--spacing) * 24);\n  }\n\n  .h-32 {\n    height: calc(var(--spacing) * 32);\n  }\n\n  .h-44 {\n    height: calc(var(--spacing) * 44);\n  }\n\n  .h-\\[7px\\] {\n    height: 7px;\n  }\n\n  .h-\\[18px\\] {\n    height: 18px;\n  }\n\n  .h-\\[24px\\] {\n    height: 24px;\n  }\n\n  .h-\\[118px\\] {\n    height: 118px;\n  }\n\n  .h-\\[180px\\] {\n    height: 180px;\n  }\n\n  .h-\\[190px\\] {\n    height: 190px;\n  }\n\n  .h-\\[320px\\] {\n    height: 320px;\n  }\n\n  .h-auto {\n    height: auto;\n  }\n\n  .h-full {\n    height: 100%;\n  }\n\n  .h-px {\n    height: 1px;\n  }\n\n  .h-svh {\n    height: 100svh;\n  }\n\n  .max-h-40 {\n    max-height: calc(var(--spacing) * 40);\n  }\n\n  .max-h-screen {\n    max-height: 100vh;\n  }\n\n  .min-h-0 {\n    min-height: calc(var(--spacing) * 0);\n  }\n\n  .min-h-4 {\n    min-height: calc(var(--spacing) * 4);\n  }\n\n  .min-h-16 {\n    min-height: calc(var(--spacing) * 16);\n  }\n\n  .min-h-\\[34px\\] {\n    min-height: 34px;\n  }\n\n  .min-h-\\[100dvh\\] {\n    min-height: 100dvh;\n  }\n\n  .min-h-\\[198px\\] {\n    min-height: 198px;\n  }\n\n  .min-h-\\[220px\\] {\n    min-height: 220px;\n  }\n\n  .min-h-\\[calc\\(100dvh-2rem\\)\\] {\n    min-height: calc(100dvh - 2rem);\n  }\n\n  .min-h-full {\n    min-height: 100%;\n  }\n\n  .min-h-screen {\n    min-height: 100vh;\n  }\n\n  .min-h-svh {\n    min-height: 100svh;\n  }\n\n  .w-0 {\n    width: calc(var(--spacing) * 0);\n  }\n\n  .w-0\\.5 {\n    width: calc(var(--spacing) * .5);\n  }\n\n  .w-1 {\n    width: calc(var(--spacing) * 1);\n  }\n\n  .w-1\\.5 {\n    width: calc(var(--spacing) * 1.5);\n  }\n\n  .w-2 {\n    width: calc(var(--spacing) * 2);\n  }\n\n  .w-3 {\n    width: calc(var(--spacing) * 3);\n  }\n\n  .w-3\\.5 {\n    width: calc(var(--spacing) * 3.5);\n  }\n\n  .w-4 {\n    width: calc(var(--spacing) * 4);\n  }\n\n  .w-5 {\n    width: calc(var(--spacing) * 5);\n  }\n\n  .w-6 {\n    width: calc(var(--spacing) * 6);\n  }\n\n  .w-7 {\n    width: calc(var(--spacing) * 7);\n  }\n\n  .w-8 {\n    width: calc(var(--spacing) * 8);\n  }\n\n  .w-9 {\n    width: calc(var(--spacing) * 9);\n  }\n\n  .w-10 {\n    width: calc(var(--spacing) * 10);\n  }\n\n  .w-11 {\n    width: calc(var(--spacing) * 11);\n  }\n\n  .w-12 {\n    width: calc(var(--spacing) * 12);\n  }\n\n  .w-16 {\n    width: calc(var(--spacing) * 16);\n  }\n\n  .w-24 {\n    width: calc(var(--spacing) * 24);\n  }\n\n  .w-64 {\n    width: calc(var(--spacing) * 64);\n  }\n\n  .w-72 {\n    width: calc(var(--spacing) * 72);\n  }\n\n  .w-\\[18px\\] {\n    width: 18px;\n  }\n\n  .w-\\[38px\\] {\n    width: 38px;\n  }\n\n  .w-\\[56px\\] {\n    width: 56px;\n  }\n\n  .w-auto {\n    width: auto;\n  }\n\n  .w-fit {\n    width: fit-content;\n  }\n\n  .w-full {\n    width: 100%;\n  }\n\n  .w-max {\n    width: max-content;\n  }\n\n  .w-px {\n    width: 1px;\n  }\n\n  .max-w-2xl {\n    max-width: var(--container-2xl);\n  }\n\n  .max-w-\\[34ch\\] {\n    max-width: 34ch;\n  }\n\n  .max-w-\\[280px\\] {\n    max-width: 280px;\n  }\n\n  .max-w-\\[1080px\\] {\n    max-width: 1080px;\n  }\n\n  .max-w-full {\n    max-width: 100%;\n  }\n\n  .max-w-max {\n    max-width: max-content;\n  }\n\n  .max-w-sm {\n    max-width: var(--container-sm);\n  }\n\n  .min-w-0 {\n    min-width: calc(var(--spacing) * 0);\n  }\n\n  .min-w-5 {\n    min-width: calc(var(--spacing) * 5);\n  }\n\n  .min-w-8 {\n    min-width: calc(var(--spacing) * 8);\n  }\n\n  .min-w-9 {\n    min-width: calc(var(--spacing) * 9);\n  }\n\n  .min-w-10 {\n    min-width: calc(var(--spacing) * 10);\n  }\n\n  .min-w-12 {\n    min-width: calc(var(--spacing) * 12);\n  }\n\n  .min-w-\\[112px\\] {\n    min-width: 112px;\n  }\n\n  .min-w-\\[132px\\] {\n    min-width: 132px;\n  }\n\n  .min-w-full {\n    min-width: 100%;\n  }\n\n  .flex-1 {\n    flex: 1;\n  }\n\n  .flex-shrink, .shrink {\n    flex-shrink: 1;\n  }\n\n  .shrink-0 {\n    flex-shrink: 0;\n  }\n\n  .flex-grow, .grow {\n    flex-grow: 1;\n  }\n\n  .grow-0 {\n    flex-grow: 0;\n  }\n\n  .basis-full {\n    flex-basis: 100%;\n  }\n\n  .caption-bottom {\n    caption-side: bottom;\n  }\n\n  .border-collapse {\n    border-collapse: collapse;\n  }\n\n  .-translate-x-1 {\n    --tw-translate-x: calc(var(--spacing) * -1);\n    translate: var(--tw-translate-x) var(--tw-translate-y);\n  }\n\n  .-translate-x-1\\/2 {\n    --tw-translate-x: calc(calc(1 / 2 * 100%) * -1);\n    translate: var(--tw-translate-x) var(--tw-translate-y);\n  }\n\n  .-translate-x-px {\n    --tw-translate-x: -1px;\n    translate: var(--tw-translate-x) var(--tw-translate-y);\n  }\n\n  .translate-x-px {\n    --tw-translate-x: 1px;\n    translate: var(--tw-translate-x) var(--tw-translate-y);\n  }\n\n  .-translate-y-1 {\n    --tw-translate-y: calc(var(--spacing) * -1);\n    translate: var(--tw-translate-x) var(--tw-translate-y);\n  }\n\n  .-translate-y-1\\/2 {\n    --tw-translate-y: calc(calc(1 / 2 * 100%) * -1);\n    translate: var(--tw-translate-x) var(--tw-translate-y);\n  }\n\n  .-translate-y-px {\n    --tw-translate-y: -1px;\n    translate: var(--tw-translate-x) var(--tw-translate-y);\n  }\n\n  .translate-y-0 {\n    --tw-translate-y: calc(var(--spacing) * 0);\n    translate: var(--tw-translate-x) var(--tw-translate-y);\n  }\n\n  .translate-y-1 {\n    --tw-translate-y: calc(var(--spacing) * 1);\n    translate: var(--tw-translate-x) var(--tw-translate-y);\n  }\n\n  .translate-y-1\\/2 {\n    --tw-translate-y: calc(1 / 2 * 100%);\n    translate: var(--tw-translate-x) var(--tw-translate-y);\n  }\n\n  .rotate-45 {\n    rotate: 45deg;\n  }\n\n  .rotate-90 {\n    rotate: 90deg;\n  }\n\n  .rotate-180 {\n    rotate: 180deg;\n  }\n\n  .transform {\n    transform: var(--tw-rotate-x, ) var(--tw-rotate-y, ) var(--tw-rotate-z, ) var(--tw-skew-x, ) var(--tw-skew-y, );\n  }\n\n  .animate-pulse {\n    animation: var(--animate-pulse);\n  }\n\n  .animate-spin {\n    animation: var(--animate-spin);\n  }\n\n  .cursor-default {\n    cursor: default;\n  }\n\n  .cursor-ew-resize {\n    cursor: ew-resize;\n  }\n\n  .cursor-grab {\n    cursor: grab;\n  }\n\n  .cursor-move {\n    cursor: move;\n  }\n\n  .cursor-ns-resize {\n    cursor: ns-resize;\n  }\n\n  .cursor-pointer {\n    cursor: pointer;\n  }\n\n  .cursor-text {\n    cursor: text;\n  }\n\n  .touch-none {\n    touch-action: none;\n  }\n\n  .resize {\n    resize: both;\n  }\n\n  .resize-none {\n    resize: none;\n  }\n\n  .scroll-my-1 {\n    scroll-margin-block: calc(var(--spacing) * 1);\n  }\n\n  .scroll-py-1 {\n    scroll-padding-block: calc(var(--spacing) * 1);\n  }\n\n  .list-disc {\n    list-style-type: disc;\n  }\n\n  .list-none {\n    list-style-type: none;\n  }\n\n  .appearance-none {\n    appearance: none;\n  }\n\n  .auto-rows-max {\n    grid-auto-rows: max-content;\n  }\n\n  .auto-rows-min {\n    grid-auto-rows: min-content;\n  }\n\n  .grid-cols-1 {\n    grid-template-columns: repeat(1, minmax(0, 1fr));\n  }\n\n  .grid-cols-2 {\n    grid-template-columns: repeat(2, minmax(0, 1fr));\n  }\n\n  .grid-cols-3 {\n    grid-template-columns: repeat(3, minmax(0, 1fr));\n  }\n\n  .grid-cols-4 {\n    grid-template-columns: repeat(4, minmax(0, 1fr));\n  }\n\n  .grid-cols-5 {\n    grid-template-columns: repeat(5, minmax(0, 1fr));\n  }\n\n  .grid-cols-\\[56px_minmax\\(0\\,1fr\\)\\] {\n    grid-template-columns: 56px minmax(0, 1fr);\n  }\n\n  .grid-cols-\\[minmax\\(0\\,1fr\\)_88px\\] {\n    grid-template-columns: minmax(0, 1fr) 88px;\n  }\n\n  .grid-cols-\\[minmax\\(0\\,1fr\\)_92px\\] {\n    grid-template-columns: minmax(0, 1fr) 92px;\n  }\n\n  .grid-cols-\\[minmax\\(0\\,1fr\\)_92px_auto\\] {\n    grid-template-columns: minmax(0, 1fr) 92px auto;\n  }\n\n  .grid-cols-\\[minmax\\(0\\,1fr\\)_auto\\] {\n    grid-template-columns: minmax(0, 1fr) auto;\n  }\n\n  .grid-rows-\\[auto_minmax\\(0\\,1fr\\)_auto\\] {\n    grid-template-rows: auto minmax(0, 1fr) auto;\n  }\n\n  .flex-col {\n    flex-direction: column;\n  }\n\n  .flex-col-reverse {\n    flex-direction: column-reverse;\n  }\n\n  .flex-row {\n    flex-direction: row;\n  }\n\n  .flex-wrap {\n    flex-wrap: wrap;\n  }\n\n  .place-items-center {\n    place-items: center;\n  }\n\n  .content-start {\n    align-content: flex-start;\n  }\n\n  .items-center {\n    align-items: center;\n  }\n\n  .items-end {\n    align-items: flex-end;\n  }\n\n  .items-start {\n    align-items: flex-start;\n  }\n\n  .items-stretch {\n    align-items: stretch;\n  }\n\n  .justify-between {\n    justify-content: space-between;\n  }\n\n  .justify-center {\n    justify-content: center;\n  }\n\n  .justify-end {\n    justify-content: flex-end;\n  }\n\n  .justify-start {\n    justify-content: flex-start;\n  }\n\n  .justify-items-start {\n    justify-items: start;\n  }\n\n  .gap-0 {\n    gap: calc(var(--spacing) * 0);\n  }\n\n  .gap-0\\.5 {\n    gap: calc(var(--spacing) * .5);\n  }\n\n  .gap-1 {\n    gap: calc(var(--spacing) * 1);\n  }\n\n  .gap-1\\.5 {\n    gap: calc(var(--spacing) * 1.5);\n  }\n\n  .gap-2 {\n    gap: calc(var(--spacing) * 2);\n  }\n\n  .gap-3 {\n    gap: calc(var(--spacing) * 3);\n  }\n\n  .gap-4 {\n    gap: calc(var(--spacing) * 4);\n  }\n\n  .gap-5 {\n    gap: calc(var(--spacing) * 5);\n  }\n\n  .gap-6 {\n    gap: calc(var(--spacing) * 6);\n  }\n\n  .gap-7 {\n    gap: calc(var(--spacing) * 7);\n  }\n\n  .gap-\\[3px\\] {\n    gap: 3px;\n  }\n\n  :where(.space-y-1 > :not(:last-child)) {\n    --tw-space-y-reverse: 0;\n    margin-block-start: calc(calc(var(--spacing) * 1) * var(--tw-space-y-reverse));\n    margin-block-end: calc(calc(var(--spacing) * 1) * calc(1 - var(--tw-space-y-reverse)));\n  }\n\n  :where(.space-y-1\\.5 > :not(:last-child)) {\n    --tw-space-y-reverse: 0;\n    margin-block-start: calc(calc(var(--spacing) * 1.5) * var(--tw-space-y-reverse));\n    margin-block-end: calc(calc(var(--spacing) * 1.5) * calc(1 - var(--tw-space-y-reverse)));\n  }\n\n  :where(.space-y-3 > :not(:last-child)) {\n    --tw-space-y-reverse: 0;\n    margin-block-start: calc(calc(var(--spacing) * 3) * var(--tw-space-y-reverse));\n    margin-block-end: calc(calc(var(--spacing) * 3) * calc(1 - var(--tw-space-y-reverse)));\n  }\n\n  :where(.space-x-4 > :not(:last-child)) {\n    --tw-space-x-reverse: 0;\n    margin-inline-start: calc(calc(var(--spacing) * 4) * var(--tw-space-x-reverse));\n    margin-inline-end: calc(calc(var(--spacing) * 4) * calc(1 - var(--tw-space-x-reverse)));\n  }\n\n  .gap-y-0 {\n    row-gap: calc(var(--spacing) * 0);\n  }\n\n  .self-center {\n    align-self: center;\n  }\n\n  .self-end {\n    align-self: flex-end;\n  }\n\n  .self-start {\n    align-self: flex-start;\n  }\n\n  .self-stretch {\n    align-self: stretch;\n  }\n\n  .justify-self-end {\n    justify-self: flex-end;\n  }\n\n  .truncate {\n    text-overflow: ellipsis;\n    white-space: nowrap;\n    overflow: hidden;\n  }\n\n  .overflow-auto {\n    overflow: auto;\n  }\n\n  .overflow-hidden {\n    overflow: hidden;\n  }\n\n  .overflow-visible {\n    overflow: visible;\n  }\n\n  .overflow-x-auto {\n    overflow-x: auto;\n  }\n\n  .overflow-x-hidden {\n    overflow-x: hidden;\n  }\n\n  .overflow-y-auto {\n    overflow-y: auto;\n  }\n\n  .rounded {\n    border-radius: .25rem;\n  }\n\n  .rounded-2xl {\n    border-radius: var(--radius-2xl);\n  }\n\n  .rounded-\\[5px\\] {\n    border-radius: 5px;\n  }\n\n  .rounded-\\[6px\\] {\n    border-radius: 6px;\n  }\n\n  .rounded-\\[7px\\] {\n    border-radius: 7px;\n  }\n\n  .rounded-\\[8px\\] {\n    border-radius: 8px;\n  }\n\n  .rounded-\\[10px\\] {\n    border-radius: 10px;\n  }\n\n  .rounded-\\[12px\\] {\n    border-radius: 12px;\n  }\n\n  .rounded-\\[14px\\] {\n    border-radius: 14px;\n  }\n\n  .rounded-\\[16px\\] {\n    border-radius: 16px;\n  }\n\n  .rounded-\\[18px\\] {\n    border-radius: 18px;\n  }\n\n  .rounded-\\[20px\\] {\n    border-radius: 20px;\n  }\n\n  .rounded-\\[22px\\] {\n    border-radius: 22px;\n  }\n\n  .rounded-\\[24px\\] {\n    border-radius: 24px;\n  }\n\n  .rounded-\\[28px\\] {\n    border-radius: 28px;\n  }\n\n  .rounded-\\[30px\\] {\n    border-radius: 30px;\n  }\n\n  .rounded-full {\n    border-radius: 3.40282e38px;\n  }\n\n  .rounded-lg {\n    border-radius: var(--radius-lg);\n  }\n\n  .rounded-md {\n    border-radius: var(--radius-md);\n  }\n\n  .rounded-none {\n    border-radius: 0;\n  }\n\n  .rounded-sm {\n    border-radius: var(--radius-sm);\n  }\n\n  .rounded-xl {\n    border-radius: var(--radius-xl);\n  }\n\n  .rounded-xs {\n    border-radius: var(--radius-xs);\n  }\n\n  .rounded-l {\n    border-top-left-radius: .25rem;\n    border-bottom-left-radius: .25rem;\n  }\n\n  .rounded-l-md {\n    border-top-left-radius: var(--radius-md);\n    border-bottom-left-radius: var(--radius-md);\n  }\n\n  .rounded-tl-sm {\n    border-top-left-radius: var(--radius-sm);\n  }\n\n  .rounded-r {\n    border-top-right-radius: .25rem;\n    border-bottom-right-radius: .25rem;\n  }\n\n  .rounded-r-md {\n    border-top-right-radius: var(--radius-md);\n    border-bottom-right-radius: var(--radius-md);\n  }\n\n  .border {\n    border-style: var(--tw-border-style);\n    border-width: 1px;\n  }\n\n  .border-0 {\n    border-style: var(--tw-border-style);\n    border-width: 0;\n  }\n\n  .border-2 {\n    border-style: var(--tw-border-style);\n    border-width: 2px;\n  }\n\n  .border-y {\n    border-block-style: var(--tw-border-style);\n    border-block-width: 1px;\n  }\n\n  .border-t {\n    border-top-style: var(--tw-border-style);\n    border-top-width: 1px;\n  }\n\n  .border-r {\n    border-right-style: var(--tw-border-style);\n    border-right-width: 1px;\n  }\n\n  .border-b {\n    border-bottom-style: var(--tw-border-style);\n    border-bottom-width: 1px;\n  }\n\n  .border-l {\n    border-left-style: var(--tw-border-style);\n    border-left-width: 1px;\n  }\n\n  .border-dashed {\n    --tw-border-style: dashed;\n    border-style: dashed;\n  }\n\n  .border-\\[\\#020611\\] {\n    border-color: #020611;\n  }\n\n  .border-\\[rgba\\(3\\,5\\,12\\,0\\.7\\)\\] {\n    border-color: #03050cb3;\n  }\n\n  .border-amber-100 {\n    border-color: var(--color-amber-100);\n  }\n\n  .border-amber-100\\/70 {\n    border-color: #fef3c6b3;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-amber-100\\/70 {\n      border-color: color-mix(in oklab, var(--color-amber-100) 70%, transparent);\n    }\n  }\n\n  .border-amber-200 {\n    border-color: var(--color-amber-200);\n  }\n\n  .border-amber-200\\/18 {\n    border-color: #fee6852e;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-amber-200\\/18 {\n      border-color: color-mix(in oklab, var(--color-amber-200) 18%, transparent);\n    }\n  }\n\n  .border-amber-200\\/24 {\n    border-color: #fee6853d;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-amber-200\\/24 {\n      border-color: color-mix(in oklab, var(--color-amber-200) 24%, transparent);\n    }\n  }\n\n  .border-border, .border-border\\/20 {\n    border-color: var(--cosimo-mod-border);\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-border\\/20 {\n      border-color: color-mix(in oklab, var(--cosimo-mod-border) 20%, transparent);\n    }\n  }\n\n  .border-border\\/40 {\n    border-color: var(--cosimo-mod-border);\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-border\\/40 {\n      border-color: color-mix(in oklab, var(--cosimo-mod-border) 40%, transparent);\n    }\n  }\n\n  .border-border\\/60 {\n    border-color: var(--cosimo-mod-border);\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-border\\/60 {\n      border-color: color-mix(in oklab, var(--cosimo-mod-border) 60%, transparent);\n    }\n  }\n\n  .border-border\\/70 {\n    border-color: var(--cosimo-mod-border);\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-border\\/70 {\n      border-color: color-mix(in oklab, var(--cosimo-mod-border) 70%, transparent);\n    }\n  }\n\n  .border-cyan-200 {\n    border-color: var(--color-cyan-200);\n  }\n\n  .border-cyan-200\\/18 {\n    border-color: #a2f4fd2e;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-cyan-200\\/18 {\n      border-color: color-mix(in oklab, var(--color-cyan-200) 18%, transparent);\n    }\n  }\n\n  .border-cyan-200\\/28 {\n    border-color: #a2f4fd47;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-cyan-200\\/28 {\n      border-color: color-mix(in oklab, var(--color-cyan-200) 28%, transparent);\n    }\n  }\n\n  .border-cyan-300 {\n    border-color: var(--color-cyan-300);\n  }\n\n  .border-cyan-300\\/16 {\n    border-color: #53eafd29;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-cyan-300\\/16 {\n      border-color: color-mix(in oklab, var(--color-cyan-300) 16%, transparent);\n    }\n  }\n\n  .border-cyan-300\\/20 {\n    border-color: #53eafd33;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-cyan-300\\/20 {\n      border-color: color-mix(in oklab, var(--color-cyan-300) 20%, transparent);\n    }\n  }\n\n  .border-cyan-300\\/25 {\n    border-color: #53eafd40;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-cyan-300\\/25 {\n      border-color: color-mix(in oklab, var(--color-cyan-300) 25%, transparent);\n    }\n  }\n\n  .border-destructive {\n    border-color: var(--cosimo-mod-destructive);\n  }\n\n  .border-emerald-300 {\n    border-color: var(--color-emerald-300);\n  }\n\n  .border-emerald-300\\/25 {\n    border-color: #5ee9b540;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-emerald-300\\/25 {\n      border-color: color-mix(in oklab, var(--color-emerald-300) 25%, transparent);\n    }\n  }\n\n  .border-fuchsia-300 {\n    border-color: var(--color-fuchsia-300);\n  }\n\n  .border-fuchsia-300\\/15 {\n    border-color: #f2a9ff26;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-fuchsia-300\\/15 {\n      border-color: color-mix(in oklab, var(--color-fuchsia-300) 15%, transparent);\n    }\n  }\n\n  .border-primary, .border-primary\\/40 {\n    border-color: var(--cosimo-mod-primary);\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-primary\\/40 {\n      border-color: color-mix(in oklab, var(--cosimo-mod-primary) 40%, transparent);\n    }\n  }\n\n  .border-rose-300 {\n    border-color: var(--color-rose-300);\n  }\n\n  .border-sky-300 {\n    border-color: var(--color-sky-300);\n  }\n\n  .border-transparent {\n    border-color: #0000;\n  }\n\n  .border-white {\n    border-color: var(--color-white);\n  }\n\n  .border-white\\/6 {\n    border-color: #ffffff0f;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-white\\/6 {\n      border-color: color-mix(in oklab, var(--color-white) 6%, transparent);\n    }\n  }\n\n  .border-white\\/8 {\n    border-color: #ffffff14;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-white\\/8 {\n      border-color: color-mix(in oklab, var(--color-white) 8%, transparent);\n    }\n  }\n\n  .border-white\\/10 {\n    border-color: #ffffff1a;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-white\\/10 {\n      border-color: color-mix(in oklab, var(--color-white) 10%, transparent);\n    }\n  }\n\n  .border-white\\/\\[0\\.04\\] {\n    border-color: #ffffff0a;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-white\\/\\[0\\.04\\] {\n      border-color: color-mix(in oklab, var(--color-white) 4%, transparent);\n    }\n  }\n\n  .border-white\\/\\[0\\.05\\] {\n    border-color: #ffffff0d;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-white\\/\\[0\\.05\\] {\n      border-color: color-mix(in oklab, var(--color-white) 5%, transparent);\n    }\n  }\n\n  .border-white\\/\\[0\\.06\\] {\n    border-color: #ffffff0f;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-white\\/\\[0\\.06\\] {\n      border-color: color-mix(in oklab, var(--color-white) 6%, transparent);\n    }\n  }\n\n  .border-white\\/\\[0\\.07\\] {\n    border-color: #ffffff12;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-white\\/\\[0\\.07\\] {\n      border-color: color-mix(in oklab, var(--color-white) 7.0%, transparent);\n    }\n  }\n\n  .border-white\\/\\[0\\.08\\] {\n    border-color: #ffffff14;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-white\\/\\[0\\.08\\] {\n      border-color: color-mix(in oklab, var(--color-white) 8%, transparent);\n    }\n  }\n\n  .border-white\\/\\[0\\.10\\] {\n    border-color: #ffffff1a;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-white\\/\\[0\\.10\\] {\n      border-color: color-mix(in oklab, var(--color-white) 10%, transparent);\n    }\n  }\n\n  .border-t-transparent {\n    border-top-color: #0000;\n  }\n\n  .border-l-transparent {\n    border-left-color: #0000;\n  }\n\n  .bg-\\[\\#070b16\\] {\n    background-color: #070b16;\n  }\n\n  .bg-\\[\\#09101d\\]\\/95 {\n    background-color: oklab(17.3432% -.0040513 -.029082 / .95);\n  }\n\n  .bg-\\[\\#030711\\]\\/85 {\n    background-color: oklab(12.8817% -.00430492 -.0249884 / .85);\n  }\n\n  .bg-\\[rgba\\(3\\,5\\,12\\,0\\.6\\)\\] {\n    background-color: #03050c99;\n  }\n\n  .bg-\\[rgba\\(3\\,7\\,15\\,0\\.72\\)\\] {\n    background-color: #03070fb8;\n  }\n\n  .bg-amber-300 {\n    background-color: var(--color-amber-300);\n  }\n\n  .bg-amber-300\\/12 {\n    background-color: #ffd2361f;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-amber-300\\/12 {\n      background-color: color-mix(in oklab, var(--color-amber-300) 12%, transparent);\n    }\n  }\n\n  .bg-background {\n    background-color: var(--cosimo-mod-background);\n  }\n\n  .bg-black {\n    background-color: var(--color-black);\n  }\n\n  .bg-black\\/18 {\n    background-color: #0000002e;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-black\\/18 {\n      background-color: color-mix(in oklab, var(--color-black) 18%, transparent);\n    }\n  }\n\n  .bg-black\\/20 {\n    background-color: #0003;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-black\\/20 {\n      background-color: color-mix(in oklab, var(--color-black) 20%, transparent);\n    }\n  }\n\n  .bg-black\\/25 {\n    background-color: #00000040;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-black\\/25 {\n      background-color: color-mix(in oklab, var(--color-black) 25%, transparent);\n    }\n  }\n\n  .bg-black\\/30 {\n    background-color: #0000004d;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-black\\/30 {\n      background-color: color-mix(in oklab, var(--color-black) 30%, transparent);\n    }\n  }\n\n  .bg-black\\/35 {\n    background-color: #00000059;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-black\\/35 {\n      background-color: color-mix(in oklab, var(--color-black) 35%, transparent);\n    }\n  }\n\n  .bg-black\\/40 {\n    background-color: #0006;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-black\\/40 {\n      background-color: color-mix(in oklab, var(--color-black) 40%, transparent);\n    }\n  }\n\n  .bg-black\\/42 {\n    background-color: #0000006b;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-black\\/42 {\n      background-color: color-mix(in oklab, var(--color-black) 42%, transparent);\n    }\n  }\n\n  .bg-black\\/45 {\n    background-color: #00000073;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-black\\/45 {\n      background-color: color-mix(in oklab, var(--color-black) 45%, transparent);\n    }\n  }\n\n  .bg-black\\/48 {\n    background-color: #0000007a;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-black\\/48 {\n      background-color: color-mix(in oklab, var(--color-black) 48%, transparent);\n    }\n  }\n\n  .bg-black\\/50 {\n    background-color: #00000080;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-black\\/50 {\n      background-color: color-mix(in oklab, var(--color-black) 50%, transparent);\n    }\n  }\n\n  .bg-border {\n    background-color: var(--cosimo-mod-border);\n  }\n\n  .bg-card, .bg-card\\/40 {\n    background-color: var(--cosimo-mod-card);\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-card\\/40 {\n      background-color: color-mix(in oklab, var(--cosimo-mod-card) 40%, transparent);\n    }\n  }\n\n  .bg-cyan-300 {\n    background-color: var(--color-cyan-300);\n  }\n\n  .bg-cyan-300\\/8 {\n    background-color: #53eafd14;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-cyan-300\\/8 {\n      background-color: color-mix(in oklab, var(--color-cyan-300) 8%, transparent);\n    }\n  }\n\n  .bg-cyan-300\\/10 {\n    background-color: #53eafd1a;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-cyan-300\\/10 {\n      background-color: color-mix(in oklab, var(--color-cyan-300) 10%, transparent);\n    }\n  }\n\n  .bg-cyan-300\\/15 {\n    background-color: #53eafd26;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-cyan-300\\/15 {\n      background-color: color-mix(in oklab, var(--color-cyan-300) 15%, transparent);\n    }\n  }\n\n  .bg-cyan-300\\/18 {\n    background-color: #53eafd2e;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-cyan-300\\/18 {\n      background-color: color-mix(in oklab, var(--color-cyan-300) 18%, transparent);\n    }\n  }\n\n  .bg-cyan-300\\/\\[0\\.08\\] {\n    background-color: #53eafd14;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-cyan-300\\/\\[0\\.08\\] {\n      background-color: color-mix(in oklab, var(--color-cyan-300) 8%, transparent);\n    }\n  }\n\n  .bg-cyan-400 {\n    background-color: var(--color-cyan-400);\n  }\n\n  .bg-cyan-400\\/10 {\n    background-color: #00d2ef1a;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-cyan-400\\/10 {\n      background-color: color-mix(in oklab, var(--color-cyan-400) 10%, transparent);\n    }\n  }\n\n  .bg-cyan-400\\/60 {\n    background-color: #00d2ef99;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-cyan-400\\/60 {\n      background-color: color-mix(in oklab, var(--color-cyan-400) 60%, transparent);\n    }\n  }\n\n  .bg-cyan-400\\/\\[0\\.08\\] {\n    background-color: #00d2ef14;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-cyan-400\\/\\[0\\.08\\] {\n      background-color: color-mix(in oklab, var(--color-cyan-400) 8%, transparent);\n    }\n  }\n\n  .bg-destructive {\n    background-color: var(--cosimo-mod-destructive);\n  }\n\n  .bg-emerald-300 {\n    background-color: var(--color-emerald-300);\n  }\n\n  .bg-emerald-300\\/12 {\n    background-color: #5ee9b51f;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-emerald-300\\/12 {\n      background-color: color-mix(in oklab, var(--color-emerald-300) 12%, transparent);\n    }\n  }\n\n  .bg-foreground {\n    background-color: var(--cosimo-mod-foreground);\n  }\n\n  .bg-fuchsia-300 {\n    background-color: var(--color-fuchsia-300);\n  }\n\n  .bg-fuchsia-300\\/8 {\n    background-color: #f2a9ff14;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-fuchsia-300\\/8 {\n      background-color: color-mix(in oklab, var(--color-fuchsia-300) 8%, transparent);\n    }\n  }\n\n  .bg-muted, .bg-muted\\/60 {\n    background-color: var(--cosimo-mod-muted);\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-muted\\/60 {\n      background-color: color-mix(in oklab, var(--cosimo-mod-muted) 60%, transparent);\n    }\n  }\n\n  .bg-popover {\n    background-color: var(--cosimo-mod-popover);\n  }\n\n  .bg-primary, .bg-primary\\/10 {\n    background-color: var(--cosimo-mod-primary);\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-primary\\/10 {\n      background-color: color-mix(in oklab, var(--cosimo-mod-primary) 10%, transparent);\n    }\n  }\n\n  .bg-primary\\/20 {\n    background-color: var(--cosimo-mod-primary);\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-primary\\/20 {\n      background-color: color-mix(in oklab, var(--cosimo-mod-primary) 20%, transparent);\n    }\n  }\n\n  .bg-rose-400 {\n    background-color: var(--color-rose-400);\n  }\n\n  .bg-rose-400\\/\\[0\\.035\\] {\n    background-color: #ff667f09;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-rose-400\\/\\[0\\.035\\] {\n      background-color: color-mix(in oklab, var(--color-rose-400) 3.5%, transparent);\n    }\n  }\n\n  .bg-secondary {\n    background-color: var(--cosimo-mod-secondary);\n  }\n\n  .bg-sky-300 {\n    background-color: var(--color-sky-300);\n  }\n\n  .bg-transparent {\n    background-color: #0000;\n  }\n\n  .bg-white {\n    background-color: var(--color-white);\n  }\n\n  .bg-white\\/\\[0\\.02\\] {\n    background-color: #ffffff05;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-white\\/\\[0\\.02\\] {\n      background-color: color-mix(in oklab, var(--color-white) 2%, transparent);\n    }\n  }\n\n  .bg-white\\/\\[0\\.03\\] {\n    background-color: #ffffff08;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-white\\/\\[0\\.03\\] {\n      background-color: color-mix(in oklab, var(--color-white) 3%, transparent);\n    }\n  }\n\n  .bg-white\\/\\[0\\.04\\] {\n    background-color: #ffffff0a;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-white\\/\\[0\\.04\\] {\n      background-color: color-mix(in oklab, var(--color-white) 4%, transparent);\n    }\n  }\n\n  .bg-white\\/\\[0\\.06\\] {\n    background-color: #ffffff0f;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-white\\/\\[0\\.06\\] {\n      background-color: color-mix(in oklab, var(--color-white) 6%, transparent);\n    }\n  }\n\n  .bg-white\\/\\[0\\.08\\] {\n    background-color: #ffffff14;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-white\\/\\[0\\.08\\] {\n      background-color: color-mix(in oklab, var(--color-white) 8%, transparent);\n    }\n  }\n\n  .bg-white\\/\\[0\\.012\\] {\n    background-color: #ffffff03;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-white\\/\\[0\\.012\\] {\n      background-color: color-mix(in oklab, var(--color-white) 1.2%, transparent);\n    }\n  }\n\n  .bg-white\\/\\[0\\.12\\] {\n    background-color: #ffffff1f;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-white\\/\\[0\\.12\\] {\n      background-color: color-mix(in oklab, var(--color-white) 12%, transparent);\n    }\n  }\n\n  .bg-white\\/\\[0\\.018\\] {\n    background-color: #ffffff05;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-white\\/\\[0\\.018\\] {\n      background-color: color-mix(in oklab, var(--color-white) 1.8%, transparent);\n    }\n  }\n\n  .bg-white\\/\\[0\\.025\\] {\n    background-color: #ffffff06;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-white\\/\\[0\\.025\\] {\n      background-color: color-mix(in oklab, var(--color-white) 2.5%, transparent);\n    }\n  }\n\n  .bg-gradient-to-b {\n    --tw-gradient-position: to bottom in oklab;\n    background-image: linear-gradient(var(--tw-gradient-stops));\n  }\n\n  .bg-gradient-to-r {\n    --tw-gradient-position: to right in oklab;\n    background-image: linear-gradient(var(--tw-gradient-stops));\n  }\n\n  .bg-gradient-to-t {\n    --tw-gradient-position: to top in oklab;\n    background-image: linear-gradient(var(--tw-gradient-stops));\n  }\n\n  .bg-\\[linear-gradient\\(\\.\\.\\.\\)\\] {\n    background-image: linear-gradient(...);\n  }\n\n  .bg-\\[linear-gradient\\(90deg\\,rgba\\(135\\,215\\,245\\,0\\.58\\)\\,rgba\\(251\\,191\\,36\\,0\\.78\\)\\)\\] {\n    background-image: linear-gradient(90deg, #87d7f594, #fbbf24c7);\n  }\n\n  .bg-\\[linear-gradient\\(135deg\\,rgba\\(8\\,16\\,30\\,0\\.96\\)\\,rgba\\(4\\,6\\,14\\,1\\)\\)\\] {\n    background-image: linear-gradient(135deg, #08101ef5, #04060e);\n  }\n\n  .bg-\\[linear-gradient\\(180deg\\,\\#f8d88a\\,\\#fbbf24\\)\\] {\n    background-image: linear-gradient(#f8d88a, #fbbf24);\n  }\n\n  .bg-\\[linear-gradient\\(180deg\\,rgba\\(2\\,6\\,18\\,0\\.95\\)\\,rgba\\(1\\,3\\,9\\,1\\)\\)\\] {\n    background-image: linear-gradient(#020612f2, #010309);\n  }\n\n  .bg-\\[linear-gradient\\(180deg\\,rgba\\(9\\,13\\,24\\,0\\.98\\)\\,rgba\\(3\\,5\\,12\\,0\\.98\\)\\)\\] {\n    background-image: linear-gradient(#090d18fa, #03050cfa);\n  }\n\n  .bg-\\[linear-gradient\\(180deg\\,rgba\\(17\\,22\\,33\\,0\\.94\\)\\,rgba\\(5\\,8\\,16\\,0\\.98\\)\\)\\] {\n    background-image: linear-gradient(#111621f0, #050810fa);\n  }\n\n  .bg-\\[linear-gradient\\(180deg\\,rgba\\(18\\,25\\,40\\,0\\.94\\)\\,rgba\\(4\\,7\\,16\\,0\\.98\\)\\)\\] {\n    background-image: linear-gradient(#121928f0, #040710fa);\n  }\n\n  .bg-\\[linear-gradient\\(180deg\\,rgba\\(255\\,255\\,255\\,0\\.02\\)\\,rgba\\(255\\,255\\,255\\,0\\.01\\)\\)\\,linear-gradient\\(180deg\\,rgba\\(5\\,9\\,19\\,0\\.92\\)\\,rgba\\(7\\,13\\,24\\,0\\.96\\)\\)\\] {\n    background-image: linear-gradient(#ffffff05, #ffffff03), linear-gradient(#050913eb, #070d18f5);\n  }\n\n  .bg-\\[radial-gradient\\(circle_at_18\\%_22\\%\\,rgba\\(109\\,216\\,255\\,0\\.10\\)\\,transparent_26\\%\\)\\,radial-gradient\\(circle_at_82\\%_78\\%\\,rgba\\(248\\,184\\,77\\,0\\.10\\)\\,transparent_20\\%\\)\\] {\n    background-image: radial-gradient(circle at 18% 22%, #6dd8ff1a, #0000 26%), radial-gradient(circle at 82% 78%, #f8b84d1a, #0000 20%);\n  }\n\n  .bg-\\[radial-gradient\\(circle_at_top\\,rgba\\(93\\,173\\,255\\,0\\.14\\)\\,transparent_34\\%\\)\\,linear-gradient\\(180deg\\,rgba\\(6\\,10\\,22\\,0\\.98\\)\\,rgba\\(2\\,4\\,11\\,1\\)\\)\\] {\n    background-image: radial-gradient(circle at top, #5dadff24, #0000 34%), linear-gradient(#060a16fa, #02040b);\n  }\n\n  .bg-\\[radial-gradient\\(circle_at_top\\,rgba\\(120\\,112\\,255\\,0\\.10\\)\\,transparent_38\\%\\)\\,linear-gradient\\(180deg\\,rgba\\(5\\,8\\,18\\,1\\)\\,rgba\\(2\\,3\\,10\\,1\\)\\)\\] {\n    background-image: radial-gradient(circle at top, #7870ff1a, #0000 38%), linear-gradient(#050812, #02030a);\n  }\n\n  .bg-\\[radial-gradient\\(circle_at_top_left\\,rgba\\(103\\,232\\,249\\,0\\.13\\)\\,transparent_38\\%\\)\\,linear-gradient\\(180deg\\,rgba\\(6\\,12\\,24\\,0\\.95\\)\\,rgba\\(2\\,5\\,12\\,0\\.98\\)\\)\\] {\n    background-image: radial-gradient(circle at 0 0, #67e8f921, #0000 38%), linear-gradient(#060c18f2, #02050cfa);\n  }\n\n  .bg-\\[radial-gradient\\(circle_at_top_left\\,rgba\\(248\\,113\\,113\\,0\\.10\\)\\,transparent_34\\%\\)\\,linear-gradient\\(180deg\\,rgba\\(9\\,8\\,15\\,0\\.98\\)\\,rgba\\(2\\,4\\,11\\,1\\)\\)\\] {\n    background-image: radial-gradient(circle at 0 0, #f871711a, #0000 34%), linear-gradient(#09080ffa, #02040b);\n  }\n\n  .from-amber-400 {\n    --tw-gradient-from: var(--color-amber-400);\n    --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));\n  }\n\n  .from-cyan-400 {\n    --tw-gradient-from: var(--color-cyan-400);\n    --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));\n  }\n\n  .from-rose-400 {\n    --tw-gradient-from: var(--color-rose-400);\n    --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));\n  }\n\n  .from-transparent {\n    --tw-gradient-from: transparent;\n    --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));\n  }\n\n  .via-cyan-200 {\n    --tw-gradient-via: var(--color-cyan-200);\n    --tw-gradient-via-stops: var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-via) var(--tw-gradient-via-position), var(--tw-gradient-to) var(--tw-gradient-to-position);\n    --tw-gradient-stops: var(--tw-gradient-via-stops);\n  }\n\n  .to-amber-400 {\n    --tw-gradient-to: var(--color-amber-400);\n    --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));\n  }\n\n  .to-cyan-400 {\n    --tw-gradient-to: var(--color-cyan-400);\n    --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));\n  }\n\n  .to-rose-400 {\n    --tw-gradient-to: var(--color-rose-400);\n    --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));\n  }\n\n  .to-transparent {\n    --tw-gradient-to: transparent;\n    --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));\n  }\n\n  .mask-repeat {\n    -webkit-mask-repeat: repeat;\n    mask-repeat: repeat;\n  }\n\n  .fill-current {\n    fill: currentColor;\n  }\n\n  .fill-cyan-200 {\n    fill: var(--color-cyan-200);\n  }\n\n  .fill-foreground {\n    fill: var(--cosimo-mod-foreground);\n  }\n\n  .fill-fuchsia-200 {\n    fill: var(--color-fuchsia-200);\n  }\n\n  .fill-none {\n    fill: none;\n  }\n\n  .fill-primary {\n    fill: var(--cosimo-mod-primary);\n  }\n\n  .stroke-current {\n    stroke: currentColor;\n  }\n\n  .stroke-\\[1\\.5\\] {\n    stroke-width: 1.5px;\n  }\n\n  .p-0 {\n    padding: calc(var(--spacing) * 0);\n  }\n\n  .p-1 {\n    padding: calc(var(--spacing) * 1);\n  }\n\n  .p-1\\.5 {\n    padding: calc(var(--spacing) * 1.5);\n  }\n\n  .p-2 {\n    padding: calc(var(--spacing) * 2);\n  }\n\n  .p-3 {\n    padding: calc(var(--spacing) * 3);\n  }\n\n  .p-4 {\n    padding: calc(var(--spacing) * 4);\n  }\n\n  .p-5 {\n    padding: calc(var(--spacing) * 5);\n  }\n\n  .p-6 {\n    padding: calc(var(--spacing) * 6);\n  }\n\n  .p-8 {\n    padding: calc(var(--spacing) * 8);\n  }\n\n  .p-\\[2px\\] {\n    padding: 2px;\n  }\n\n  .p-px {\n    padding: 1px;\n  }\n\n  .px-0 {\n    padding-inline: calc(var(--spacing) * 0);\n  }\n\n  .px-1 {\n    padding-inline: calc(var(--spacing) * 1);\n  }\n\n  .px-1\\.5 {\n    padding-inline: calc(var(--spacing) * 1.5);\n  }\n\n  .px-2 {\n    padding-inline: calc(var(--spacing) * 2);\n  }\n\n  .px-2\\.5 {\n    padding-inline: calc(var(--spacing) * 2.5);\n  }\n\n  .px-3 {\n    padding-inline: calc(var(--spacing) * 3);\n  }\n\n  .px-4 {\n    padding-inline: calc(var(--spacing) * 4);\n  }\n\n  .px-5 {\n    padding-inline: calc(var(--spacing) * 5);\n  }\n\n  .px-6 {\n    padding-inline: calc(var(--spacing) * 6);\n  }\n\n  .py-0 {\n    padding-block: calc(var(--spacing) * 0);\n  }\n\n  .py-0\\.5 {\n    padding-block: calc(var(--spacing) * .5);\n  }\n\n  .py-1 {\n    padding-block: calc(var(--spacing) * 1);\n  }\n\n  .py-1\\.5 {\n    padding-block: calc(var(--spacing) * 1.5);\n  }\n\n  .py-2 {\n    padding-block: calc(var(--spacing) * 2);\n  }\n\n  .py-2\\.5 {\n    padding-block: calc(var(--spacing) * 2.5);\n  }\n\n  .py-3 {\n    padding-block: calc(var(--spacing) * 3);\n  }\n\n  .py-4 {\n    padding-block: calc(var(--spacing) * 4);\n  }\n\n  .py-5 {\n    padding-block: calc(var(--spacing) * 5);\n  }\n\n  .py-6 {\n    padding-block: calc(var(--spacing) * 6);\n  }\n\n  .py-8 {\n    padding-block: calc(var(--spacing) * 8);\n  }\n\n  .py-\\[2px\\] {\n    padding-block: 2px;\n  }\n\n  .py-\\[3px\\] {\n    padding-block: 3px;\n  }\n\n  .pt-0 {\n    padding-top: calc(var(--spacing) * 0);\n  }\n\n  .pt-1 {\n    padding-top: calc(var(--spacing) * 1);\n  }\n\n  .pt-2 {\n    padding-top: calc(var(--spacing) * 2);\n  }\n\n  .pt-2\\.5 {\n    padding-top: calc(var(--spacing) * 2.5);\n  }\n\n  .pt-3 {\n    padding-top: calc(var(--spacing) * 3);\n  }\n\n  .pt-4 {\n    padding-top: calc(var(--spacing) * 4);\n  }\n\n  .pr-1 {\n    padding-right: calc(var(--spacing) * 1);\n  }\n\n  .pr-2 {\n    padding-right: calc(var(--spacing) * 2);\n  }\n\n  .pr-3 {\n    padding-right: calc(var(--spacing) * 3);\n  }\n\n  .pr-4 {\n    padding-right: calc(var(--spacing) * 4);\n  }\n\n  .pr-8 {\n    padding-right: calc(var(--spacing) * 8);\n  }\n\n  .pr-10 {\n    padding-right: calc(var(--spacing) * 10);\n  }\n\n  .pr-11 {\n    padding-right: calc(var(--spacing) * 11);\n  }\n\n  .pb-1 {\n    padding-bottom: calc(var(--spacing) * 1);\n  }\n\n  .pb-3 {\n    padding-bottom: calc(var(--spacing) * 3);\n  }\n\n  .pb-4 {\n    padding-bottom: calc(var(--spacing) * 4);\n  }\n\n  .pb-5 {\n    padding-bottom: calc(var(--spacing) * 5);\n  }\n\n  .pl-2 {\n    padding-left: calc(var(--spacing) * 2);\n  }\n\n  .pl-3 {\n    padding-left: calc(var(--spacing) * 3);\n  }\n\n  .pl-4 {\n    padding-left: calc(var(--spacing) * 4);\n  }\n\n  .pl-8 {\n    padding-left: calc(var(--spacing) * 8);\n  }\n\n  .text-center {\n    text-align: center;\n  }\n\n  .text-left {\n    text-align: left;\n  }\n\n  .text-right {\n    text-align: right;\n  }\n\n  .align-middle {\n    vertical-align: middle;\n  }\n\n  .font-mono {\n    font-family: var(--font-mono);\n  }\n\n  .font-sans {\n    font-family: var(--font-sans);\n  }\n\n  .text-2xl {\n    font-size: var(--text-2xl);\n    line-height: var(--tw-leading, var(--text-2xl--line-height));\n  }\n\n  .text-3xl {\n    font-size: var(--text-3xl);\n    line-height: var(--tw-leading, var(--text-3xl--line-height));\n  }\n\n  .text-base {\n    font-size: var(--text-base);\n    line-height: var(--tw-leading, var(--text-base--line-height));\n  }\n\n  .text-lg {\n    font-size: var(--text-lg);\n    line-height: var(--tw-leading, var(--text-lg--line-height));\n  }\n\n  .text-sm {\n    font-size: var(--text-sm);\n    line-height: var(--tw-leading, var(--text-sm--line-height));\n  }\n\n  .text-xs {\n    font-size: var(--text-xs);\n    line-height: var(--tw-leading, var(--text-xs--line-height));\n  }\n\n  .text-\\[7px\\] {\n    font-size: 7px;\n  }\n\n  .text-\\[8px\\] {\n    font-size: 8px;\n  }\n\n  .text-\\[9px\\] {\n    font-size: 9px;\n  }\n\n  .text-\\[10px\\] {\n    font-size: 10px;\n  }\n\n  .text-\\[11px\\] {\n    font-size: 11px;\n  }\n\n  .text-\\[12px\\] {\n    font-size: 12px;\n  }\n\n  .text-\\[13px\\] {\n    font-size: 13px;\n  }\n\n  .text-\\[20px\\] {\n    font-size: 20px;\n  }\n\n  .leading-4 {\n    --tw-leading: calc(var(--spacing) * 4);\n    line-height: calc(var(--spacing) * 4);\n  }\n\n  .leading-none {\n    --tw-leading: 1;\n    line-height: 1;\n  }\n\n  .leading-normal {\n    --tw-leading: var(--leading-normal);\n    line-height: var(--leading-normal);\n  }\n\n  .leading-relaxed {\n    --tw-leading: var(--leading-relaxed);\n    line-height: var(--leading-relaxed);\n  }\n\n  .leading-snug {\n    --tw-leading: var(--leading-snug);\n    line-height: var(--leading-snug);\n  }\n\n  .font-black {\n    --tw-font-weight: var(--font-weight-black);\n    font-weight: var(--font-weight-black);\n  }\n\n  .font-bold {\n    --tw-font-weight: var(--font-weight-bold);\n    font-weight: var(--font-weight-bold);\n  }\n\n  .font-medium {\n    --tw-font-weight: var(--font-weight-medium);\n    font-weight: var(--font-weight-medium);\n  }\n\n  .font-normal {\n    --tw-font-weight: var(--font-weight-normal);\n    font-weight: var(--font-weight-normal);\n  }\n\n  .font-semibold {\n    --tw-font-weight: var(--font-weight-semibold);\n    font-weight: var(--font-weight-semibold);\n  }\n\n  .tracking-\\[-0\\.03em\\] {\n    --tw-tracking: -.03em;\n    letter-spacing: -.03em;\n  }\n\n  .tracking-\\[-0\\.04em\\] {\n    --tw-tracking: -.04em;\n    letter-spacing: -.04em;\n  }\n\n  .tracking-\\[0\\.1em\\] {\n    --tw-tracking: .1em;\n    letter-spacing: .1em;\n  }\n\n  .tracking-\\[0\\.2em\\] {\n    --tw-tracking: .2em;\n    letter-spacing: .2em;\n  }\n\n  .tracking-\\[0\\.03em\\] {\n    --tw-tracking: .03em;\n    letter-spacing: .03em;\n  }\n\n  .tracking-\\[0\\.04em\\] {\n    --tw-tracking: .04em;\n    letter-spacing: .04em;\n  }\n\n  .tracking-\\[0\\.06em\\] {\n    --tw-tracking: .06em;\n    letter-spacing: .06em;\n  }\n\n  .tracking-\\[0\\.08em\\] {\n    --tw-tracking: .08em;\n    letter-spacing: .08em;\n  }\n\n  .tracking-\\[0\\.10em\\] {\n    --tw-tracking: .1em;\n    letter-spacing: .1em;\n  }\n\n  .tracking-\\[0\\.12em\\] {\n    --tw-tracking: .12em;\n    letter-spacing: .12em;\n  }\n\n  .tracking-\\[0\\.14em\\] {\n    --tw-tracking: .14em;\n    letter-spacing: .14em;\n  }\n\n  .tracking-\\[0\\.15em\\] {\n    --tw-tracking: .15em;\n    letter-spacing: .15em;\n  }\n\n  .tracking-\\[0\\.16em\\] {\n    --tw-tracking: .16em;\n    letter-spacing: .16em;\n  }\n\n  .tracking-\\[0\\.18em\\] {\n    --tw-tracking: .18em;\n    letter-spacing: .18em;\n  }\n\n  .tracking-\\[0\\.22em\\] {\n    --tw-tracking: .22em;\n    letter-spacing: .22em;\n  }\n\n  .tracking-\\[0\\.24em\\] {\n    --tw-tracking: .24em;\n    letter-spacing: .24em;\n  }\n\n  .tracking-tight {\n    --tw-tracking: var(--tracking-tight);\n    letter-spacing: var(--tracking-tight);\n  }\n\n  .tracking-wide {\n    --tw-tracking: var(--tracking-wide);\n    letter-spacing: var(--tracking-wide);\n  }\n\n  .tracking-widest {\n    --tw-tracking: var(--tracking-widest);\n    letter-spacing: var(--tracking-widest);\n  }\n\n  .text-balance {\n    text-wrap: balance;\n  }\n\n  .text-wrap {\n    text-wrap: wrap;\n  }\n\n  .break-words {\n    overflow-wrap: break-word;\n  }\n\n  .whitespace-nowrap {\n    white-space: nowrap;\n  }\n\n  .text-amber-100 {\n    color: var(--color-amber-100);\n  }\n\n  .text-amber-200 {\n    color: var(--color-amber-200);\n  }\n\n  .text-amber-200\\/78 {\n    color: #fee685c7;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-amber-200\\/78 {\n      color: color-mix(in oklab, var(--color-amber-200) 78%, transparent);\n    }\n  }\n\n  .text-amber-200\\/85 {\n    color: #fee685d9;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-amber-200\\/85 {\n      color: color-mix(in oklab, var(--color-amber-200) 85%, transparent);\n    }\n  }\n\n  .text-background {\n    color: var(--cosimo-mod-background);\n  }\n\n  .text-blue-300 {\n    color: var(--color-blue-300);\n  }\n\n  .text-blue-300\\/55 {\n    color: #90c5ff8c;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-blue-300\\/55 {\n      color: color-mix(in oklab, var(--color-blue-300) 55%, transparent);\n    }\n  }\n\n  .text-blue-300\\/70 {\n    color: #90c5ffb3;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-blue-300\\/70 {\n      color: color-mix(in oklab, var(--color-blue-300) 70%, transparent);\n    }\n  }\n\n  .text-current {\n    color: currentColor;\n  }\n\n  .text-cyan-50 {\n    color: var(--color-cyan-50);\n  }\n\n  .text-cyan-50\\/80 {\n    color: #ecfeffcc;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-cyan-50\\/80 {\n      color: color-mix(in oklab, var(--color-cyan-50) 80%, transparent);\n    }\n  }\n\n  .text-cyan-50\\/90 {\n    color: #ecfeffe6;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-cyan-50\\/90 {\n      color: color-mix(in oklab, var(--color-cyan-50) 90%, transparent);\n    }\n  }\n\n  .text-cyan-100 {\n    color: var(--color-cyan-100);\n  }\n\n  .text-cyan-100\\/58 {\n    color: #cefafe94;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-cyan-100\\/58 {\n      color: color-mix(in oklab, var(--color-cyan-100) 58%, transparent);\n    }\n  }\n\n  .text-cyan-100\\/60 {\n    color: #cefafe99;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-cyan-100\\/60 {\n      color: color-mix(in oklab, var(--color-cyan-100) 60%, transparent);\n    }\n  }\n\n  .text-cyan-100\\/75 {\n    color: #cefafebf;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-cyan-100\\/75 {\n      color: color-mix(in oklab, var(--color-cyan-100) 75%, transparent);\n    }\n  }\n\n  .text-cyan-100\\/80 {\n    color: #cefafecc;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-cyan-100\\/80 {\n      color: color-mix(in oklab, var(--color-cyan-100) 80%, transparent);\n    }\n  }\n\n  .text-cyan-100\\/85 {\n    color: #cefafed9;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-cyan-100\\/85 {\n      color: color-mix(in oklab, var(--color-cyan-100) 85%, transparent);\n    }\n  }\n\n  .text-cyan-200 {\n    color: var(--color-cyan-200);\n  }\n\n  .text-cyan-200\\/55 {\n    color: #a2f4fd8c;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-cyan-200\\/55 {\n      color: color-mix(in oklab, var(--color-cyan-200) 55%, transparent);\n    }\n  }\n\n  .text-cyan-200\\/70 {\n    color: #a2f4fdb3;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-cyan-200\\/70 {\n      color: color-mix(in oklab, var(--color-cyan-200) 70%, transparent);\n    }\n  }\n\n  .text-cyan-200\\/80 {\n    color: #a2f4fdcc;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-cyan-200\\/80 {\n      color: color-mix(in oklab, var(--color-cyan-200) 80%, transparent);\n    }\n  }\n\n  .text-cyan-300 {\n    color: var(--color-cyan-300);\n  }\n\n  .text-cyan-300\\/40 {\n    color: #53eafd66;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-cyan-300\\/40 {\n      color: color-mix(in oklab, var(--color-cyan-300) 40%, transparent);\n    }\n  }\n\n  .text-cyan-300\\/70 {\n    color: #53eafdb3;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-cyan-300\\/70 {\n      color: color-mix(in oklab, var(--color-cyan-300) 70%, transparent);\n    }\n  }\n\n  .text-cyan-300\\/85 {\n    color: #53eafdd9;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-cyan-300\\/85 {\n      color: color-mix(in oklab, var(--color-cyan-300) 85%, transparent);\n    }\n  }\n\n  .text-cyan-400 {\n    color: var(--color-cyan-400);\n  }\n\n  .text-cyan-400\\/45 {\n    color: #00d2ef73;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-cyan-400\\/45 {\n      color: color-mix(in oklab, var(--color-cyan-400) 45%, transparent);\n    }\n  }\n\n  .text-cyan-400\\/80 {\n    color: #00d2efcc;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-cyan-400\\/80 {\n      color: color-mix(in oklab, var(--color-cyan-400) 80%, transparent);\n    }\n  }\n\n  .text-destructive {\n    color: var(--cosimo-mod-destructive);\n  }\n\n  .text-emerald-100 {\n    color: var(--color-emerald-100);\n  }\n\n  .text-emerald-100\\/90 {\n    color: #d0fae5e6;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-emerald-100\\/90 {\n      color: color-mix(in oklab, var(--color-emerald-100) 90%, transparent);\n    }\n  }\n\n  .text-emerald-200 {\n    color: var(--color-emerald-200);\n  }\n\n  .text-emerald-200\\/50 {\n    color: #a4f4cf80;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-emerald-200\\/50 {\n      color: color-mix(in oklab, var(--color-emerald-200) 50%, transparent);\n    }\n  }\n\n  .text-emerald-300 {\n    color: var(--color-emerald-300);\n  }\n\n  .text-foreground, .text-foreground\\/80 {\n    color: var(--cosimo-mod-foreground);\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-foreground\\/80 {\n      color: color-mix(in oklab, var(--cosimo-mod-foreground) 80%, transparent);\n    }\n  }\n\n  .text-fuchsia-100 {\n    color: var(--color-fuchsia-100);\n  }\n\n  .text-fuchsia-100\\/90 {\n    color: #fae8ffe6;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-fuchsia-100\\/90 {\n      color: color-mix(in oklab, var(--color-fuchsia-100) 90%, transparent);\n    }\n  }\n\n  .text-fuchsia-200 {\n    color: var(--color-fuchsia-200);\n  }\n\n  .text-fuchsia-200\\/60 {\n    color: #f6cfff99;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-fuchsia-200\\/60 {\n      color: color-mix(in oklab, var(--color-fuchsia-200) 60%, transparent);\n    }\n  }\n\n  .text-muted {\n    color: var(--cosimo-mod-muted);\n  }\n\n  .text-muted-foreground, .text-muted-foreground\\/40 {\n    color: var(--cosimo-mod-muted-foreground);\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-muted-foreground\\/40 {\n      color: color-mix(in oklab, var(--cosimo-mod-muted-foreground) 40%, transparent);\n    }\n  }\n\n  .text-muted-foreground\\/60 {\n    color: var(--cosimo-mod-muted-foreground);\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-muted-foreground\\/60 {\n      color: color-mix(in oklab, var(--cosimo-mod-muted-foreground) 60%, transparent);\n    }\n  }\n\n  .text-muted\\/60 {\n    color: var(--cosimo-mod-muted);\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-muted\\/60 {\n      color: color-mix(in oklab, var(--cosimo-mod-muted) 60%, transparent);\n    }\n  }\n\n  .text-primary {\n    color: var(--cosimo-mod-primary);\n  }\n\n  .text-rose-200 {\n    color: var(--color-rose-200);\n  }\n\n  .text-rose-400 {\n    color: var(--color-rose-400);\n  }\n\n  .text-rose-400\\/40 {\n    color: #ff667f66;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-rose-400\\/40 {\n      color: color-mix(in oklab, var(--color-rose-400) 40%, transparent);\n    }\n  }\n\n  .text-rose-400\\/45 {\n    color: #ff667f73;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-rose-400\\/45 {\n      color: color-mix(in oklab, var(--color-rose-400) 45%, transparent);\n    }\n  }\n\n  .text-rose-400\\/80 {\n    color: #ff667fcc;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-rose-400\\/80 {\n      color: color-mix(in oklab, var(--color-rose-400) 80%, transparent);\n    }\n  }\n\n  .text-sky-100 {\n    color: var(--color-sky-100);\n  }\n\n  .text-sky-300 {\n    color: var(--color-sky-300);\n  }\n\n  .text-slate-50 {\n    color: var(--color-slate-50);\n  }\n\n  .text-slate-100 {\n    color: var(--color-slate-100);\n  }\n\n  .text-slate-100\\/78 {\n    color: #f1f5f9c7;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-100\\/78 {\n      color: color-mix(in oklab, var(--color-slate-100) 78%, transparent);\n    }\n  }\n\n  .text-slate-200 {\n    color: var(--color-slate-200);\n  }\n\n  .text-slate-200\\/55 {\n    color: #e2e8f08c;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-200\\/55 {\n      color: color-mix(in oklab, var(--color-slate-200) 55%, transparent);\n    }\n  }\n\n  .text-slate-200\\/80 {\n    color: #e2e8f0cc;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-200\\/80 {\n      color: color-mix(in oklab, var(--color-slate-200) 80%, transparent);\n    }\n  }\n\n  .text-slate-200\\/85 {\n    color: #e2e8f0d9;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-200\\/85 {\n      color: color-mix(in oklab, var(--color-slate-200) 85%, transparent);\n    }\n  }\n\n  .text-slate-300 {\n    color: var(--color-slate-300);\n  }\n\n  .text-slate-300\\/40 {\n    color: #cad5e266;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-300\\/40 {\n      color: color-mix(in oklab, var(--color-slate-300) 40%, transparent);\n    }\n  }\n\n  .text-slate-300\\/45 {\n    color: #cad5e273;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-300\\/45 {\n      color: color-mix(in oklab, var(--color-slate-300) 45%, transparent);\n    }\n  }\n\n  .text-slate-300\\/52 {\n    color: #cad5e285;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-300\\/52 {\n      color: color-mix(in oklab, var(--color-slate-300) 52%, transparent);\n    }\n  }\n\n  .text-slate-300\\/55 {\n    color: #cad5e28c;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-300\\/55 {\n      color: color-mix(in oklab, var(--color-slate-300) 55%, transparent);\n    }\n  }\n\n  .text-slate-300\\/60 {\n    color: #cad5e299;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-300\\/60 {\n      color: color-mix(in oklab, var(--color-slate-300) 60%, transparent);\n    }\n  }\n\n  .text-slate-300\\/62 {\n    color: #cad5e29e;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-300\\/62 {\n      color: color-mix(in oklab, var(--color-slate-300) 62%, transparent);\n    }\n  }\n\n  .text-slate-300\\/70 {\n    color: #cad5e2b3;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-300\\/70 {\n      color: color-mix(in oklab, var(--color-slate-300) 70%, transparent);\n    }\n  }\n\n  .text-slate-300\\/72 {\n    color: #cad5e2b8;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-300\\/72 {\n      color: color-mix(in oklab, var(--color-slate-300) 72%, transparent);\n    }\n  }\n\n  .text-slate-300\\/75 {\n    color: #cad5e2bf;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-300\\/75 {\n      color: color-mix(in oklab, var(--color-slate-300) 75%, transparent);\n    }\n  }\n\n  .text-slate-400 {\n    color: var(--color-slate-400);\n  }\n\n  .text-slate-400\\/45 {\n    color: #90a1b973;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-400\\/45 {\n      color: color-mix(in oklab, var(--color-slate-400) 45%, transparent);\n    }\n  }\n\n  .text-slate-400\\/50 {\n    color: #90a1b980;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-400\\/50 {\n      color: color-mix(in oklab, var(--color-slate-400) 50%, transparent);\n    }\n  }\n\n  .text-slate-400\\/60 {\n    color: #90a1b999;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-400\\/60 {\n      color: color-mix(in oklab, var(--color-slate-400) 60%, transparent);\n    }\n  }\n\n  .text-slate-400\\/70 {\n    color: #90a1b9b3;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-400\\/70 {\n      color: color-mix(in oklab, var(--color-slate-400) 70%, transparent);\n    }\n  }\n\n  .text-slate-400\\/74 {\n    color: #90a1b9bd;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-400\\/74 {\n      color: color-mix(in oklab, var(--color-slate-400) 74%, transparent);\n    }\n  }\n\n  .text-slate-400\\/80 {\n    color: #90a1b9cc;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-400\\/80 {\n      color: color-mix(in oklab, var(--color-slate-400) 80%, transparent);\n    }\n  }\n\n  .text-slate-400\\/85 {\n    color: #90a1b9d9;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-400\\/85 {\n      color: color-mix(in oklab, var(--color-slate-400) 85%, transparent);\n    }\n  }\n\n  .text-slate-500 {\n    color: var(--color-slate-500);\n  }\n\n  .text-slate-500\\/35 {\n    color: #62748e59;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-500\\/35 {\n      color: color-mix(in oklab, var(--color-slate-500) 35%, transparent);\n    }\n  }\n\n  .text-white {\n    color: var(--color-white);\n  }\n\n  .lowercase {\n    text-transform: lowercase;\n  }\n\n  .uppercase {\n    text-transform: uppercase;\n  }\n\n  .italic {\n    font-style: italic;\n  }\n\n  .ordinal {\n    --tw-ordinal: ordinal;\n    font-variant-numeric: var(--tw-ordinal, ) var(--tw-slashed-zero, ) var(--tw-numeric-figure, ) var(--tw-numeric-spacing, ) var(--tw-numeric-fraction, );\n  }\n\n  .tabular-nums {\n    --tw-numeric-spacing: tabular-nums;\n    font-variant-numeric: var(--tw-ordinal, ) var(--tw-slashed-zero, ) var(--tw-numeric-figure, ) var(--tw-numeric-spacing, ) var(--tw-numeric-fraction, );\n  }\n\n  .underline {\n    text-decoration-line: underline;\n  }\n\n  .underline-offset-4 {\n    text-underline-offset: 4px;\n  }\n\n  .antialiased {\n    -webkit-font-smoothing: antialiased;\n    -moz-osx-font-smoothing: grayscale;\n  }\n\n  .accent-cyan-300 {\n    accent-color: var(--color-cyan-300);\n  }\n\n  .opacity-0 {\n    opacity: 0;\n  }\n\n  .opacity-40 {\n    opacity: .4;\n  }\n\n  .opacity-50 {\n    opacity: .5;\n  }\n\n  .opacity-70 {\n    opacity: .7;\n  }\n\n  .opacity-90 {\n    opacity: .9;\n  }\n\n  .shadow {\n    --tw-shadow: 0 1px 3px 0 var(--tw-shadow-color, #0000001a), 0 1px 2px -1px var(--tw-shadow-color, #0000001a);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[0_0_18px_rgba\\(251\\,191\\,36\\,0\\.34\\)\\] {\n    --tw-shadow: 0 0 18px var(--tw-shadow-color, #fbbf2457);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[0_10px_26px_rgba\\(0\\,0\\,0\\,0\\.28\\)\\] {\n    --tw-shadow: 0 10px 26px var(--tw-shadow-color, #00000047);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[0_10px_28px_rgba\\(0\\,0\\,0\\,0\\.22\\)\\] {\n    --tw-shadow: 0 10px 28px var(--tw-shadow-color, #00000038);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[0_10px_28px_rgba\\(0\\,0\\,0\\,0\\.26\\)\\,inset_0_1px_0_rgba\\(255\\,255\\,255\\,0\\.05\\)\\] {\n    --tw-shadow: 0 10px 28px var(--tw-shadow-color, #00000042), inset 0 1px 0 var(--tw-shadow-color, #ffffff0d);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[0_10px_28px_rgba\\(0\\,0\\,0\\,0\\.28\\)\\] {\n    --tw-shadow: 0 10px 28px var(--tw-shadow-color, #00000047);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[0_12px_28px_rgba\\(0\\,0\\,0\\,0\\.32\\)\\] {\n    --tw-shadow: 0 12px 28px var(--tw-shadow-color, #00000052);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[0_18px_40px_rgba\\(0\\,0\\,0\\,0\\.45\\)\\] {\n    --tw-shadow: 0 18px 40px var(--tw-shadow-color, #00000073);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[0_18px_42px_rgba\\(3\\,6\\,18\\,0\\.45\\)\\] {\n    --tw-shadow: 0 18px 42px var(--tw-shadow-color, #03061273);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[0_22px_40px_rgba\\(0\\,0\\,0\\,0\\.32\\)\\] {\n    --tw-shadow: 0 22px 40px var(--tw-shadow-color, #00000052);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[0_26px_80px_rgba\\(0\\,0\\,0\\,0\\.48\\)\\] {\n    --tw-shadow: 0 26px 80px var(--tw-shadow-color, #0000007a);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[0_28px_80px_rgba\\(0\\,0\\,0\\,0\\.56\\)\\] {\n    --tw-shadow: 0 28px 80px var(--tw-shadow-color, #0000008f);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[0_36px_80px_rgba\\(0\\,0\\,0\\,0\\.5\\)\\] {\n    --tw-shadow: 0 36px 80px var(--tw-shadow-color, #00000080);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[inset_0_0_0_1px_rgba\\(143\\,232\\,255\\,0\\.18\\)\\] {\n    --tw-shadow: inset 0 0 0 1px var(--tw-shadow-color, #8fe8ff2e);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[inset_0_1px_0_rgba\\(255\\,255\\,255\\,0\\.04\\)\\] {\n    --tw-shadow: inset 0 1px 0 var(--tw-shadow-color, #ffffff0a);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[inset_0_1px_0_rgba\\(255\\,255\\,255\\,0\\.06\\)\\] {\n    --tw-shadow: inset 0 1px 0 var(--tw-shadow-color, #ffffff0f);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[inset_0_1px_0_rgba\\(255\\,255\\,255\\,0\\.08\\)\\,inset_0_-64px_80px_rgba\\(0\\,0\\,0\\,0\\.34\\)\\] {\n    --tw-shadow: inset 0 1px 0 var(--tw-shadow-color, #ffffff14), inset 0 -64px 80px var(--tw-shadow-color, #00000057);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-lg {\n    --tw-shadow: 0 10px 15px -3px var(--tw-shadow-color, #0000001a), 0 4px 6px -4px var(--tw-shadow-color, #0000001a);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-md {\n    --tw-shadow: 0 4px 6px -1px var(--tw-shadow-color, #0000001a), 0 2px 4px -2px var(--tw-shadow-color, #0000001a);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-none {\n    --tw-shadow: 0 0 #0000;\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-sm {\n    --tw-shadow: 0 1px 3px 0 var(--tw-shadow-color, #0000001a), 0 1px 2px -1px var(--tw-shadow-color, #0000001a);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-xl {\n    --tw-shadow: 0 20px 25px -5px var(--tw-shadow-color, #0000001a), 0 8px 10px -6px var(--tw-shadow-color, #0000001a);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-xs {\n    --tw-shadow: 0 1px 2px 0 var(--tw-shadow-color, #0000000d);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .ring {\n    --tw-ring-shadow: var(--tw-ring-inset, ) 0 0 0 calc(1px + var(--tw-ring-offset-width)) var(--tw-ring-color, currentcolor);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .ring-0 {\n    --tw-ring-shadow: var(--tw-ring-inset, ) 0 0 0 calc(0px + var(--tw-ring-offset-width)) var(--tw-ring-color, currentcolor);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .ring-offset-background {\n    --tw-ring-offset-color: var(--cosimo-mod-background);\n  }\n\n  .outline-hidden {\n    --tw-outline-style: none;\n    outline-style: none;\n  }\n\n  @media (forced-colors: active) {\n    .outline-hidden {\n      outline-offset: 2px;\n      outline: 2px solid #0000;\n    }\n  }\n\n  .outline {\n    outline-style: var(--tw-outline-style);\n    outline-width: 1px;\n  }\n\n  .blur {\n    --tw-blur: blur(8px);\n    filter: var(--tw-blur, ) var(--tw-brightness, ) var(--tw-contrast, ) var(--tw-grayscale, ) var(--tw-hue-rotate, ) var(--tw-invert, ) var(--tw-saturate, ) var(--tw-sepia, ) var(--tw-drop-shadow, );\n  }\n\n  .invert {\n    --tw-invert: invert(100%);\n    filter: var(--tw-blur, ) var(--tw-brightness, ) var(--tw-contrast, ) var(--tw-grayscale, ) var(--tw-hue-rotate, ) var(--tw-invert, ) var(--tw-saturate, ) var(--tw-sepia, ) var(--tw-drop-shadow, );\n  }\n\n  .filter {\n    filter: var(--tw-blur, ) var(--tw-brightness, ) var(--tw-contrast, ) var(--tw-grayscale, ) var(--tw-hue-rotate, ) var(--tw-invert, ) var(--tw-saturate, ) var(--tw-sepia, ) var(--tw-drop-shadow, );\n  }\n\n  .backdrop-blur-md {\n    --tw-backdrop-blur: blur(var(--blur-md));\n    -webkit-backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );\n    backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );\n  }\n\n  .backdrop-blur-xl {\n    --tw-backdrop-blur: blur(var(--blur-xl));\n    -webkit-backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );\n    backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );\n  }\n\n  .backdrop-filter {\n    -webkit-backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );\n    backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );\n  }\n\n  .transition {\n    transition-property: color, background-color, border-color, outline-color, text-decoration-color, fill, stroke, --tw-gradient-from, --tw-gradient-via, --tw-gradient-to, opacity, box-shadow, transform, translate, scale, rotate, filter, -webkit-backdrop-filter, backdrop-filter, display, content-visibility, overlay, pointer-events;\n    transition-timing-function: var(--tw-ease, var(--default-transition-timing-function));\n    transition-duration: var(--tw-duration, var(--default-transition-duration));\n  }\n\n  .transition-all {\n    transition-property: all;\n    transition-timing-function: var(--tw-ease, var(--default-transition-timing-function));\n    transition-duration: var(--tw-duration, var(--default-transition-duration));\n  }\n\n  .transition-colors {\n    transition-property: color, background-color, border-color, outline-color, text-decoration-color, fill, stroke, --tw-gradient-from, --tw-gradient-via, --tw-gradient-to;\n    transition-timing-function: var(--tw-ease, var(--default-transition-timing-function));\n    transition-duration: var(--tw-duration, var(--default-transition-duration));\n  }\n\n  .transition-opacity {\n    transition-property: opacity;\n    transition-timing-function: var(--tw-ease, var(--default-transition-timing-function));\n    transition-duration: var(--tw-duration, var(--default-transition-duration));\n  }\n\n  .transition-shadow {\n    transition-property: box-shadow;\n    transition-timing-function: var(--tw-ease, var(--default-transition-timing-function));\n    transition-duration: var(--tw-duration, var(--default-transition-duration));\n  }\n\n  .transition-transform {\n    transition-property: transform, translate, scale, rotate;\n    transition-timing-function: var(--tw-ease, var(--default-transition-timing-function));\n    transition-duration: var(--tw-duration, var(--default-transition-duration));\n  }\n\n  .transition-none {\n    transition-property: none;\n  }\n\n  .duration-100 {\n    --tw-duration: .1s;\n    transition-duration: .1s;\n  }\n\n  .duration-200 {\n    --tw-duration: .2s;\n    transition-duration: .2s;\n  }\n\n  .duration-300 {\n    --tw-duration: .3s;\n    transition-duration: .3s;\n  }\n\n  .duration-1000 {\n    --tw-duration: 1s;\n    transition-duration: 1s;\n  }\n\n  .ease-in-out {\n    --tw-ease: var(--ease-in-out);\n    transition-timing-function: var(--ease-in-out);\n  }\n\n  .ease-linear {\n    --tw-ease: linear;\n    transition-timing-function: linear;\n  }\n\n  .outline-none {\n    --tw-outline-style: none;\n    outline-style: none;\n  }\n\n  .select-none {\n    -webkit-user-select: none;\n    user-select: none;\n  }\n\n  @media (hover: hover) {\n    .group-hover\\:opacity-100:is(:where(.group):hover *) {\n      opacity: 1;\n    }\n  }\n\n  .selection\\:bg-cyan-300\\/25 ::selection {\n    background-color: #53eafd40;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .selection\\:bg-cyan-300\\/25 ::selection {\n      background-color: color-mix(in oklab, var(--color-cyan-300) 25%, transparent);\n    }\n  }\n\n  .selection\\:bg-cyan-300\\/25::selection {\n    background-color: #53eafd40;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .selection\\:bg-cyan-300\\/25::selection {\n      background-color: color-mix(in oklab, var(--color-cyan-300) 25%, transparent);\n    }\n  }\n\n  @media (hover: hover) {\n    .hover\\:border-amber-200\\/30:hover {\n      border-color: #fee6854d;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:border-amber-200\\/30:hover {\n        border-color: color-mix(in oklab, var(--color-amber-200) 30%, transparent);\n      }\n    }\n\n    .hover\\:border-border:hover, .hover\\:border-border\\/50:hover {\n      border-color: var(--cosimo-mod-border);\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:border-border\\/50:hover {\n        border-color: color-mix(in oklab, var(--cosimo-mod-border) 50%, transparent);\n      }\n    }\n\n    .hover\\:border-cyan-200\\/25:hover {\n      border-color: #a2f4fd40;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:border-cyan-200\\/25:hover {\n        border-color: color-mix(in oklab, var(--color-cyan-200) 25%, transparent);\n      }\n    }\n\n    .hover\\:border-cyan-200\\/28:hover {\n      border-color: #a2f4fd47;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:border-cyan-200\\/28:hover {\n        border-color: color-mix(in oklab, var(--color-cyan-200) 28%, transparent);\n      }\n    }\n\n    .hover\\:border-cyan-200\\/30:hover {\n      border-color: #a2f4fd4d;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:border-cyan-200\\/30:hover {\n        border-color: color-mix(in oklab, var(--color-cyan-200) 30%, transparent);\n      }\n    }\n\n    .hover\\:border-white\\/10:hover {\n      border-color: #ffffff1a;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:border-white\\/10:hover {\n        border-color: color-mix(in oklab, var(--color-white) 10%, transparent);\n      }\n    }\n\n    .hover\\:border-white\\/12:hover {\n      border-color: #ffffff1f;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:border-white\\/12:hover {\n        border-color: color-mix(in oklab, var(--color-white) 12%, transparent);\n      }\n    }\n\n    .hover\\:border-white\\/18:hover {\n      border-color: #ffffff2e;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:border-white\\/18:hover {\n        border-color: color-mix(in oklab, var(--color-white) 18%, transparent);\n      }\n    }\n\n    .hover\\:bg-black\\/24:hover {\n      background-color: #0000003d;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:bg-black\\/24:hover {\n        background-color: color-mix(in oklab, var(--color-black) 24%, transparent);\n      }\n    }\n\n    .hover\\:bg-card\\/70:hover {\n      background-color: var(--cosimo-mod-card);\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:bg-card\\/70:hover {\n        background-color: color-mix(in oklab, var(--cosimo-mod-card) 70%, transparent);\n      }\n    }\n\n    .hover\\:bg-cyan-300\\/12:hover {\n      background-color: #53eafd1f;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:bg-cyan-300\\/12:hover {\n        background-color: color-mix(in oklab, var(--color-cyan-300) 12%, transparent);\n      }\n    }\n\n    .hover\\:bg-destructive\\/10:hover {\n      background-color: var(--cosimo-mod-destructive);\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:bg-destructive\\/10:hover {\n        background-color: color-mix(in oklab, var(--cosimo-mod-destructive) 10%, transparent);\n      }\n    }\n\n    .hover\\:bg-muted:hover, .hover\\:bg-muted\\/80:hover {\n      background-color: var(--cosimo-mod-muted);\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:bg-muted\\/80:hover {\n        background-color: color-mix(in oklab, var(--cosimo-mod-muted) 80%, transparent);\n      }\n    }\n\n    .hover\\:bg-primary\\/10:hover {\n      background-color: var(--cosimo-mod-primary);\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:bg-primary\\/10:hover {\n        background-color: color-mix(in oklab, var(--cosimo-mod-primary) 10%, transparent);\n      }\n    }\n\n    .hover\\:bg-white\\/\\[0\\.01\\]:hover {\n      background-color: #ffffff03;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:bg-white\\/\\[0\\.01\\]:hover {\n        background-color: color-mix(in oklab, var(--color-white) 1%, transparent);\n      }\n    }\n\n    .hover\\:bg-white\\/\\[0\\.04\\]:hover {\n      background-color: #ffffff0a;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:bg-white\\/\\[0\\.04\\]:hover {\n        background-color: color-mix(in oklab, var(--color-white) 4%, transparent);\n      }\n    }\n\n    .hover\\:bg-white\\/\\[0\\.05\\]:hover {\n      background-color: #ffffff0d;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:bg-white\\/\\[0\\.05\\]:hover {\n        background-color: color-mix(in oklab, var(--color-white) 5%, transparent);\n      }\n    }\n\n    .hover\\:bg-white\\/\\[0\\.06\\]:hover {\n      background-color: #ffffff0f;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:bg-white\\/\\[0\\.06\\]:hover {\n        background-color: color-mix(in oklab, var(--color-white) 6%, transparent);\n      }\n    }\n\n    .hover\\:text-cyan-100:hover {\n      color: var(--color-cyan-100);\n    }\n\n    .hover\\:text-destructive:hover {\n      color: var(--cosimo-mod-destructive);\n    }\n\n    .hover\\:text-foreground:hover {\n      color: var(--cosimo-mod-foreground);\n    }\n\n    .hover\\:text-primary\\/80:hover {\n      color: var(--cosimo-mod-primary);\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:text-primary\\/80:hover {\n        color: color-mix(in oklab, var(--cosimo-mod-primary) 80%, transparent);\n      }\n    }\n\n    .hover\\:text-slate-100:hover {\n      color: var(--color-slate-100);\n    }\n\n    .hover\\:text-slate-100\\/75:hover {\n      color: #f1f5f9bf;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:text-slate-100\\/75:hover {\n        color: color-mix(in oklab, var(--color-slate-100) 75%, transparent);\n      }\n    }\n\n    .hover\\:text-slate-200\\/80:hover {\n      color: #e2e8f0cc;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:text-slate-200\\/80:hover {\n        color: color-mix(in oklab, var(--color-slate-200) 80%, transparent);\n      }\n    }\n\n    .hover\\:text-slate-300\\/65:hover {\n      color: #cad5e2a6;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:text-slate-300\\/65:hover {\n        color: color-mix(in oklab, var(--color-slate-300) 65%, transparent);\n      }\n    }\n  }\n\n  .focus\\:border-emerald-300\\/30:focus {\n    border-color: #5ee9b54d;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .focus\\:border-emerald-300\\/30:focus {\n      border-color: color-mix(in oklab, var(--color-emerald-300) 30%, transparent);\n    }\n  }\n\n  .focus-visible\\:opacity-100:focus-visible {\n    opacity: 1;\n  }\n\n  .active\\:cursor-grabbing:active {\n    cursor: grabbing;\n  }\n\n  .disabled\\:opacity-35:disabled {\n    opacity: .35;\n  }\n\n  .disabled\\:opacity-40:disabled {\n    opacity: .4;\n  }\n\n  .disabled\\:opacity-45:disabled {\n    opacity: .45;\n  }\n\n  @media not all and (min-width: 480px) {\n    .max-\\[480px\\]\\:size-3\\.5 {\n      width: calc(var(--spacing) * 3.5);\n      height: calc(var(--spacing) * 3.5);\n    }\n\n    .max-\\[480px\\]\\:size-6 {\n      width: calc(var(--spacing) * 6);\n      height: calc(var(--spacing) * 6);\n    }\n\n    .max-\\[480px\\]\\:size-7 {\n      width: calc(var(--spacing) * 7);\n      height: calc(var(--spacing) * 7);\n    }\n\n    .max-\\[480px\\]\\:h-7 {\n      height: calc(var(--spacing) * 7);\n    }\n\n    .max-\\[480px\\]\\:w-\\[44px\\] {\n      width: 44px;\n    }\n\n    .max-\\[480px\\]\\:w-\\[64px\\] {\n      width: 64px;\n    }\n\n    .max-\\[480px\\]\\:rounded-\\[6px\\] {\n      border-radius: 6px;\n    }\n\n    .max-\\[480px\\]\\:px-2 {\n      padding-inline: calc(var(--spacing) * 2);\n    }\n\n    .max-\\[480px\\]\\:py-1 {\n      padding-block: calc(var(--spacing) * 1);\n    }\n\n    .max-\\[480px\\]\\:text-\\[10px\\] {\n      font-size: 10px;\n    }\n\n    .max-\\[480px\\]\\:text-\\[11px\\] {\n      font-size: 11px;\n    }\n  }\n\n  @media not all and (min-width: 360px) {\n    .max-\\[360px\\]\\:size-\\[26px\\] {\n      width: 26px;\n      height: 26px;\n    }\n  }\n\n  @media (min-width: 40rem) {\n    .sm\\:block {\n      display: block;\n    }\n\n    .sm\\:inline {\n      display: inline;\n    }\n  }\n\n  @media (min-width: 48rem) {\n    .md\\:grid-cols-2 {\n      grid-template-columns: repeat(2, minmax(0, 1fr));\n    }\n  }\n}\n\n:host {\n  color-scheme: dark;\n  width: 100%;\n  height: 100%;\n  display: block;\n}\n\n* {\n  box-sizing: border-box;\n}\n\n.cosimo-surface {\n  background: radial-gradient(circle at top, #7a8eff2e, #0000 34%), linear-gradient(#060a16fa, #03050c);\n}\n\n.cosimo-mod-prototype-theme {\n  --cosimo-mod-background: oklch(12% .01 250);\n  --cosimo-mod-foreground: oklch(95% 0 0);\n  --cosimo-mod-card: oklch(15% .01 250);\n  --cosimo-mod-popover: oklch(13% .01 250);\n  --cosimo-mod-primary: oklch(70% .15 180);\n  --cosimo-mod-secondary: oklch(20% .01 250);\n  --cosimo-mod-muted: oklch(22% .01 250);\n  --cosimo-mod-muted-foreground: oklch(60% .02 250);\n  --cosimo-mod-border: oklch(25% .02 250);\n  --cosimo-mod-destructive: oklch(55% .2 25);\n}\n\n.cosimo-stage {\n  background: linear-gradient(#ffffff05 1px, #0000 1px) 0 0 / 24px 24px, linear-gradient(90deg, #ffffff05 1px, #0000 1px) 0 0 / 24px 24px, radial-gradient(circle at top, #7a8eff33, #0000 38%), linear-gradient(#050915fa, #02040b);\n}\n\n.cosimo-stage:after {\n  content: "";\n  pointer-events: none;\n  position: absolute;\n  inset: 0;\n  box-shadow: inset 0 1px #ffffff14, inset 0 -48px 64px #00000059;\n}\n\n.cosimo-range {\n  appearance: none;\n  background: linear-gradient(90deg, #87d7f56b, #fbbf246b);\n  border-radius: 999px;\n  outline: none;\n  width: 100%;\n  height: 10px;\n}\n\n.cosimo-range::-webkit-slider-thumb {\n  appearance: none;\n  background: linear-gradient(#ffe9b6 0%, #fbbf24 100%);\n  border: 0;\n  border-radius: 999px;\n  width: 22px;\n  height: 22px;\n  box-shadow: 0 6px 18px #fbbf2452;\n}\n\n.cosimo-range::-moz-range-thumb {\n  background: linear-gradient(#ffe9b6 0%, #fbbf24 100%);\n  border: 0;\n  border-radius: 999px;\n  width: 22px;\n  height: 22px;\n  box-shadow: 0 6px 18px #fbbf2452;\n}\n\n.cosimo-distortion-drive-fill {\n  background: linear-gradient(0deg, #f8717180, #f8717133);\n}\n\n.cosimo-distortion-knee-fill {\n  background: linear-gradient(0deg, #fbbf2473, #fbbf2426);\n}\n\n.cosimo-distortion-mix-fill {\n  background: linear-gradient(0deg, #22d3ee66, #22d3ee26);\n}\n\n.cosimo-distortion-drive-handle {\n  background: linear-gradient(#ffdcc8e6, #f87171b3);\n  box-shadow: 0 2px 8px #f871714d;\n}\n\n.cosimo-distortion-knee-handle {\n  background: linear-gradient(#fff0c8e6, #fbbf24b3);\n  box-shadow: 0 2px 8px #fbbf244d;\n}\n\n.cosimo-distortion-mix-handle {\n  background: linear-gradient(#c8f0ffe6, #67e8f9b3);\n  box-shadow: 0 2px 8px #67e8f94d;\n}\n\n.cosimo-chorus-mix-fill {\n  background: linear-gradient(0deg, #22d3ee80, #22d3ee33);\n}\n\n.cosimo-chorus-tone-fill {\n  background: linear-gradient(0deg, #2dd4bf80, #2dd4bf33);\n}\n\n.cosimo-chorus-feedback-fill {\n  background: linear-gradient(0deg, #a78bfa80, #a78bfa33);\n}\n\n.cosimo-chorus-ring-fill {\n  background: linear-gradient(0deg, #fbbf2480, #fbbf2433);\n}\n\n.cosimo-chorus-fine-fill {\n  background: linear-gradient(0deg, #22d3ee80, #22d3ee33);\n}\n\n.cosimo-chorus-mix-handle {\n  background: linear-gradient(#c8f0ffe6, #22d3eeb3);\n  box-shadow: 0 2px 8px #22d3ee4d;\n}\n\n.cosimo-chorus-tone-handle {\n  background: linear-gradient(#c8f5f0e6, #2dd4bfb3);\n  box-shadow: 0 2px 8px #2dd4bf4d;\n}\n\n.cosimo-chorus-feedback-handle {\n  background: linear-gradient(#e6d7ffe6, #a78bfab3);\n  box-shadow: 0 2px 8px #a78bfa4d;\n}\n\n.cosimo-chorus-ring-handle {\n  background: linear-gradient(#fff0c8e6, #fbbf24b3);\n  box-shadow: 0 2px 8px #fbbf244d;\n}\n\n.cosimo-chorus-fine-handle {\n  background: linear-gradient(#c8f0ffe6, #22d3eeb3);\n  box-shadow: 0 2px 8px #22d3ee4d;\n}\n\n.cosimo-select, .cosimo-button {\n  color: #eef2f5;\n  background: #ffffff0a;\n  border: 1px solid #ffffff14;\n}\n\n.cosimo-mod-amount-field {\n  justify-content: flex-end;\n  align-items: center;\n  gap: 12px;\n  min-width: 0;\n  display: flex;\n}\n\n.cosimo-mod-direction-toggle {\n  background: #ffffff0a;\n  border: 1px solid #ffffff14;\n  border-radius: 18px;\n  gap: 4px;\n  padding: 4px;\n  display: grid;\n}\n\n.cosimo-mod-direction-button {\n  color: #e2e8f0b8;\n  background: none;\n  border: 0;\n  border-radius: 12px;\n  width: 28px;\n  height: 28px;\n  font-size: 15px;\n  font-weight: 700;\n  line-height: 1;\n}\n\n.cosimo-mod-direction-button[data-active="true"] {\n  color: #cffafe;\n  background: #67e8f929;\n}\n\n.cosimo-mod-knob {\n  flex: none;\n  width: 72px;\n  height: 72px;\n  position: relative;\n}\n\n.cosimo-mod-knob-stack {\n  align-items: center;\n  gap: 12px;\n  min-width: 0;\n  display: flex;\n}\n\n.cosimo-mod-knob-track {\n  border: 1px solid #ffffff0f;\n  border-radius: 999px;\n  width: 100%;\n  height: 100%;\n  position: relative;\n  box-shadow: inset 0 1px #ffffff14, 0 10px 24px #00000047;\n}\n\n.cosimo-mod-knob-arc {\n  pointer-events: none;\n  width: 100%;\n  height: 100%;\n  position: absolute;\n  inset: 0;\n  overflow: visible;\n}\n\n.cosimo-mod-knob-arc-track {\n  fill: none;\n  stroke: #ffffff14;\n  stroke-width: 4px;\n  stroke-linecap: round;\n}\n\n.cosimo-mod-knob-arc-fill {\n  fill: none;\n  stroke: #67e8f9eb;\n  stroke-width: 4px;\n  stroke-linecap: round;\n  filter: drop-shadow(0 0 8px #67e8f94d);\n}\n\n.cosimo-mod-knob-core {\n  color: #cffafe;\n  background: radial-gradient(circle at 35% 28%, #ffffff1a, #0000 38%), linear-gradient(#0c1222fa, #060914fa);\n  border-radius: 999px;\n  place-items: center;\n  display: grid;\n  position: absolute;\n  inset: 9px;\n}\n\n.cosimo-mod-knob-percent {\n  letter-spacing: .12em;\n  text-transform: uppercase;\n  font-size: 11px;\n  font-weight: 700;\n}\n\n.cosimo-mod-knob-indicator {\n  transform-origin: 50% 29px;\n  pointer-events: none;\n  background: linear-gradient(#fef3c7 0%, #f472b6 100%);\n  border-radius: 999px;\n  width: 3px;\n  height: 21px;\n  position: absolute;\n  top: 7px;\n  left: 50%;\n  box-shadow: 0 0 12px #f472b65c;\n}\n\n.cosimo-mod-knob-center-marker {\n  pointer-events: none;\n  background: #ffffff61;\n  border-radius: 999px;\n  width: 2px;\n  height: 10px;\n  position: absolute;\n  top: 3px;\n  left: 50%;\n  transform: translateX(-50%);\n}\n\n.cosimo-mod-knob[data-polarity="bipolar"] .cosimo-mod-knob-center-marker {\n  background: #e2e8f0d1;\n  box-shadow: 0 0 8px #e2e8f047;\n}\n\n.cosimo-mod-knob-input {\n  opacity: 0;\n  cursor: ew-resize;\n  width: 100%;\n  height: 100%;\n  margin: 0;\n  position: absolute;\n  inset: 0;\n}\n\n.cosimo-mod-amount-copy {\n  gap: 2px;\n  min-width: 0;\n  display: grid;\n}\n\n.cosimo-mod-amount-readout {\n  letter-spacing: .06em;\n  color: #e2e8f0;\n  white-space: nowrap;\n  font-size: 12px;\n  font-weight: 600;\n}\n\n.cosimo-mod-amount-caption {\n  letter-spacing: .18em;\n  text-transform: uppercase;\n  color: #94a3b8bd;\n  font-size: 10px;\n}\n\n.cosimo-grid-line {\n  stroke: #ffffff14;\n  stroke-width: 1px;\n}\n\n.cosimo-curve-fill {\n  fill: #87d7f514;\n}\n\n.cosimo-curve-fill-progress {\n  fill: #87d7f538;\n}\n\n.cosimo-curve-line {\n  fill: none;\n  stroke: #87d7f5;\n  stroke-width: 3px;\n  stroke-linecap: round;\n  stroke-linejoin: round;\n}\n\n.cosimo-curve-fill-muted {\n  fill: #e1e7f00a;\n}\n\n.cosimo-curve-line-muted {\n  stroke: #e1e7f061;\n}\n\n.cosimo-reference-curve-fill {\n  fill: #e1e7f00a;\n}\n\n.cosimo-reference-curve-line {\n  fill: none;\n  stroke: #e1e7f061;\n  stroke-width: 3px;\n  stroke-linecap: round;\n  stroke-linejoin: round;\n}\n\n.cosimo-mseg-effective-curve-line {\n  fill: none;\n  stroke: #fbbf24;\n  stroke-width: 3.25px;\n  stroke-linecap: round;\n  stroke-linejoin: round;\n  filter: drop-shadow(0 0 8px #fbbf2452);\n}\n\n.cosimo-curve-line-highlight {\n  stroke: #32f0bc;\n}\n\n.cosimo-mseg-playhead {\n  stroke: #f4fbfff5;\n  stroke-width: 2px;\n  stroke-linecap: round;\n}\n\n.cosimo-mseg-point-default {\n  fill: #87d7f5;\n  stroke: #050913;\n  stroke-width: 2px;\n}\n\n.cosimo-mseg-point-selected {\n  fill: #f5d0fe;\n  stroke: #050913;\n  stroke-width: 3px;\n}\n\n.cosimo-mseg-point-highlight {\n  fill: #32f0bc;\n  stroke: #050913;\n  stroke-width: 2px;\n}\n\n.cosimo-mseg-point-muted {\n  fill: #e1e7f0c7;\n  stroke: #050913;\n  stroke-width: 2px;\n  opacity: .62;\n}\n\n@property --tw-translate-x {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0;\n}\n\n@property --tw-translate-y {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0;\n}\n\n@property --tw-translate-z {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0;\n}\n\n@property --tw-rotate-x {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-rotate-y {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-rotate-z {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-skew-x {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-skew-y {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-space-y-reverse {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0;\n}\n\n@property --tw-space-x-reverse {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0;\n}\n\n@property --tw-border-style {\n  syntax: "*";\n  inherits: false;\n  initial-value: solid;\n}\n\n@property --tw-gradient-position {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-gradient-from {\n  syntax: "<color>";\n  inherits: false;\n  initial-value: #0000;\n}\n\n@property --tw-gradient-via {\n  syntax: "<color>";\n  inherits: false;\n  initial-value: #0000;\n}\n\n@property --tw-gradient-to {\n  syntax: "<color>";\n  inherits: false;\n  initial-value: #0000;\n}\n\n@property --tw-gradient-stops {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-gradient-via-stops {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-gradient-from-position {\n  syntax: "<length-percentage>";\n  inherits: false;\n  initial-value: 0%;\n}\n\n@property --tw-gradient-via-position {\n  syntax: "<length-percentage>";\n  inherits: false;\n  initial-value: 50%;\n}\n\n@property --tw-gradient-to-position {\n  syntax: "<length-percentage>";\n  inherits: false;\n  initial-value: 100%;\n}\n\n@property --tw-leading {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-font-weight {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-tracking {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-ordinal {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-slashed-zero {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-numeric-figure {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-numeric-spacing {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-numeric-fraction {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-shadow {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0 0 #0000;\n}\n\n@property --tw-shadow-color {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-shadow-alpha {\n  syntax: "<percentage>";\n  inherits: false;\n  initial-value: 100%;\n}\n\n@property --tw-inset-shadow {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0 0 #0000;\n}\n\n@property --tw-inset-shadow-color {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-inset-shadow-alpha {\n  syntax: "<percentage>";\n  inherits: false;\n  initial-value: 100%;\n}\n\n@property --tw-ring-color {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-ring-shadow {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0 0 #0000;\n}\n\n@property --tw-inset-ring-color {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-inset-ring-shadow {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0 0 #0000;\n}\n\n@property --tw-ring-inset {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-ring-offset-width {\n  syntax: "<length>";\n  inherits: false;\n  initial-value: 0;\n}\n\n@property --tw-ring-offset-color {\n  syntax: "*";\n  inherits: false;\n  initial-value: #fff;\n}\n\n@property --tw-ring-offset-shadow {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0 0 #0000;\n}\n\n@property --tw-outline-style {\n  syntax: "*";\n  inherits: false;\n  initial-value: solid;\n}\n\n@property --tw-blur {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-brightness {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-contrast {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-grayscale {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-hue-rotate {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-invert {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-opacity {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-saturate {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-sepia {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-drop-shadow {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-drop-shadow-color {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-drop-shadow-alpha {\n  syntax: "<percentage>";\n  inherits: false;\n  initial-value: 100%;\n}\n\n@property --tw-drop-shadow-size {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-blur {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-brightness {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-contrast {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-grayscale {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-hue-rotate {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-invert {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-opacity {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-saturate {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-sepia {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-duration {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-ease {\n  syntax: "*";\n  inherits: false\n}\n\n@keyframes spin {\n  to {\n    transform: rotate(360deg);\n  }\n}\n\n@keyframes pulse {\n  50% {\n    opacity: .5;\n  }\n}\n';
+const cssText = '/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com */\n@layer properties {\n  @supports (((-webkit-hyphens: none)) and (not (margin-trim: inline))) or ((-moz-orient: inline) and (not (color: rgb(from red r g b)))) {\n    *, :before, :after, ::backdrop {\n      --tw-translate-x: 0;\n      --tw-translate-y: 0;\n      --tw-translate-z: 0;\n      --tw-rotate-x: initial;\n      --tw-rotate-y: initial;\n      --tw-rotate-z: initial;\n      --tw-skew-x: initial;\n      --tw-skew-y: initial;\n      --tw-space-y-reverse: 0;\n      --tw-space-x-reverse: 0;\n      --tw-border-style: solid;\n      --tw-gradient-position: initial;\n      --tw-gradient-from: #0000;\n      --tw-gradient-via: #0000;\n      --tw-gradient-to: #0000;\n      --tw-gradient-stops: initial;\n      --tw-gradient-via-stops: initial;\n      --tw-gradient-from-position: 0%;\n      --tw-gradient-via-position: 50%;\n      --tw-gradient-to-position: 100%;\n      --tw-leading: initial;\n      --tw-font-weight: initial;\n      --tw-tracking: initial;\n      --tw-ordinal: initial;\n      --tw-slashed-zero: initial;\n      --tw-numeric-figure: initial;\n      --tw-numeric-spacing: initial;\n      --tw-numeric-fraction: initial;\n      --tw-shadow: 0 0 #0000;\n      --tw-shadow-color: initial;\n      --tw-shadow-alpha: 100%;\n      --tw-inset-shadow: 0 0 #0000;\n      --tw-inset-shadow-color: initial;\n      --tw-inset-shadow-alpha: 100%;\n      --tw-ring-color: initial;\n      --tw-ring-shadow: 0 0 #0000;\n      --tw-inset-ring-color: initial;\n      --tw-inset-ring-shadow: 0 0 #0000;\n      --tw-ring-inset: initial;\n      --tw-ring-offset-width: 0px;\n      --tw-ring-offset-color: #fff;\n      --tw-ring-offset-shadow: 0 0 #0000;\n      --tw-outline-style: solid;\n      --tw-blur: initial;\n      --tw-brightness: initial;\n      --tw-contrast: initial;\n      --tw-grayscale: initial;\n      --tw-hue-rotate: initial;\n      --tw-invert: initial;\n      --tw-opacity: initial;\n      --tw-saturate: initial;\n      --tw-sepia: initial;\n      --tw-drop-shadow: initial;\n      --tw-drop-shadow-color: initial;\n      --tw-drop-shadow-alpha: 100%;\n      --tw-drop-shadow-size: initial;\n      --tw-backdrop-blur: initial;\n      --tw-backdrop-brightness: initial;\n      --tw-backdrop-contrast: initial;\n      --tw-backdrop-grayscale: initial;\n      --tw-backdrop-hue-rotate: initial;\n      --tw-backdrop-invert: initial;\n      --tw-backdrop-opacity: initial;\n      --tw-backdrop-saturate: initial;\n      --tw-backdrop-sepia: initial;\n      --tw-duration: initial;\n      --tw-ease: initial;\n    }\n  }\n}\n\n@layer theme {\n  :root, :host {\n    --font-sans: ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji",\n      "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";\n    --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",\n      "Courier New", monospace;\n    --color-red-50: oklch(97.1% .013 17.38);\n    --color-red-300: oklch(80.8% .114 19.571);\n    --color-red-400: oklch(70.4% .191 22.216);\n    --color-red-600: oklch(57.7% .245 27.325);\n    --color-amber-100: oklch(96.2% .059 95.617);\n    --color-amber-200: oklch(92.4% .12 95.746);\n    --color-amber-300: oklch(87.9% .169 91.605);\n    --color-amber-400: oklch(82.8% .189 84.429);\n    --color-emerald-100: oklch(95% .052 163.051);\n    --color-emerald-200: oklch(90.5% .093 164.15);\n    --color-emerald-300: oklch(84.5% .143 164.978);\n    --color-cyan-50: oklch(98.4% .019 200.873);\n    --color-cyan-100: oklch(95.6% .045 203.388);\n    --color-cyan-200: oklch(91.7% .08 205.041);\n    --color-cyan-300: oklch(86.5% .127 207.078);\n    --color-cyan-400: oklch(78.9% .154 211.53);\n    --color-sky-100: oklch(95.1% .026 236.824);\n    --color-sky-300: oklch(82.8% .111 230.318);\n    --color-blue-300: oklch(80.9% .105 251.813);\n    --color-fuchsia-100: oklch(95.2% .037 318.852);\n    --color-fuchsia-200: oklch(90.3% .076 319.62);\n    --color-fuchsia-300: oklch(83.3% .145 321.434);\n    --color-pink-50: oklch(97.1% .014 343.198);\n    --color-pink-100: oklch(94.8% .028 342.258);\n    --color-pink-200: oklch(89.9% .061 343.231);\n    --color-pink-300: oklch(82.3% .12 346.018);\n    --color-rose-200: oklch(89.2% .058 10.001);\n    --color-rose-300: oklch(81% .117 11.638);\n    --color-rose-400: oklch(71.2% .194 13.428);\n    --color-slate-50: oklch(98.4% .003 247.858);\n    --color-slate-100: oklch(96.8% .007 247.896);\n    --color-slate-200: oklch(92.9% .013 255.508);\n    --color-slate-300: oklch(86.9% .022 252.894);\n    --color-slate-400: oklch(70.4% .04 256.788);\n    --color-slate-500: oklch(55.4% .046 257.417);\n    --color-black: #000;\n    --color-white: #fff;\n    --spacing: .25rem;\n    --container-sm: 24rem;\n    --container-lg: 32rem;\n    --container-2xl: 42rem;\n    --text-xs: .75rem;\n    --text-xs--line-height: calc(1 / .75);\n    --text-sm: .875rem;\n    --text-sm--line-height: calc(1.25 / .875);\n    --text-base: 1rem;\n    --text-base--line-height: calc(1.5 / 1);\n    --text-lg: 1.125rem;\n    --text-lg--line-height: calc(1.75 / 1.125);\n    --text-2xl: 1.5rem;\n    --text-2xl--line-height: calc(2 / 1.5);\n    --text-3xl: 1.875rem;\n    --text-3xl--line-height: calc(2.25 / 1.875);\n    --font-weight-normal: 400;\n    --font-weight-medium: 500;\n    --font-weight-semibold: 600;\n    --font-weight-bold: 700;\n    --font-weight-black: 900;\n    --tracking-tight: -.025em;\n    --tracking-wide: .025em;\n    --tracking-widest: .1em;\n    --leading-snug: 1.375;\n    --leading-normal: 1.5;\n    --leading-relaxed: 1.625;\n    --radius-xs: .125rem;\n    --radius-sm: .25rem;\n    --radius-md: .375rem;\n    --radius-lg: .5rem;\n    --radius-xl: .75rem;\n    --radius-2xl: 1rem;\n    --ease-in-out: cubic-bezier(.4, 0, .2, 1);\n    --animate-spin: spin 1s linear infinite;\n    --animate-pulse: pulse 2s cubic-bezier(.4, 0, .6, 1) infinite;\n    --blur-sm: 8px;\n    --blur-md: 12px;\n    --blur-xl: 24px;\n    --aspect-video: 16 / 9;\n    --default-transition-duration: .15s;\n    --default-transition-timing-function: cubic-bezier(.4, 0, .2, 1);\n    --default-font-family: var(--font-sans);\n    --default-mono-font-family: var(--font-mono);\n    --color-border: var(--cosimo-mod-border);\n  }\n}\n\n@layer base {\n  *, :after, :before, ::backdrop {\n    box-sizing: border-box;\n    border: 0 solid;\n    margin: 0;\n    padding: 0;\n  }\n\n  ::file-selector-button {\n    box-sizing: border-box;\n    border: 0 solid;\n    margin: 0;\n    padding: 0;\n  }\n\n  html, :host {\n    -webkit-text-size-adjust: 100%;\n    tab-size: 4;\n    line-height: 1.5;\n    font-family: var(--default-font-family, ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji");\n    font-feature-settings: var(--default-font-feature-settings, normal);\n    font-variation-settings: var(--default-font-variation-settings, normal);\n    -webkit-tap-highlight-color: transparent;\n  }\n\n  hr {\n    height: 0;\n    color: inherit;\n    border-top-width: 1px;\n  }\n\n  abbr:where([title]) {\n    -webkit-text-decoration: underline dotted;\n    text-decoration: underline dotted;\n  }\n\n  h1, h2, h3, h4, h5, h6 {\n    font-size: inherit;\n    font-weight: inherit;\n  }\n\n  a {\n    color: inherit;\n    -webkit-text-decoration: inherit;\n    -webkit-text-decoration: inherit;\n    -webkit-text-decoration: inherit;\n    text-decoration: inherit;\n  }\n\n  b, strong {\n    font-weight: bolder;\n  }\n\n  code, kbd, samp, pre {\n    font-family: var(--default-mono-font-family, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace);\n    font-feature-settings: var(--default-mono-font-feature-settings, normal);\n    font-variation-settings: var(--default-mono-font-variation-settings, normal);\n    font-size: 1em;\n  }\n\n  small {\n    font-size: 80%;\n  }\n\n  sub, sup {\n    vertical-align: baseline;\n    font-size: 75%;\n    line-height: 0;\n    position: relative;\n  }\n\n  sub {\n    bottom: -.25em;\n  }\n\n  sup {\n    top: -.5em;\n  }\n\n  table {\n    text-indent: 0;\n    border-color: inherit;\n    border-collapse: collapse;\n  }\n\n  :-moz-focusring {\n    outline: auto;\n  }\n\n  progress {\n    vertical-align: baseline;\n  }\n\n  summary {\n    display: list-item;\n  }\n\n  ol, ul, menu {\n    list-style: none;\n  }\n\n  img, svg, video, canvas, audio, iframe, embed, object {\n    vertical-align: middle;\n    display: block;\n  }\n\n  img, video {\n    max-width: 100%;\n    height: auto;\n  }\n\n  button, input, select, optgroup, textarea {\n    font: inherit;\n    font-feature-settings: inherit;\n    font-variation-settings: inherit;\n    letter-spacing: inherit;\n    color: inherit;\n    opacity: 1;\n    background-color: #0000;\n    border-radius: 0;\n  }\n\n  ::file-selector-button {\n    font: inherit;\n    font-feature-settings: inherit;\n    font-variation-settings: inherit;\n    letter-spacing: inherit;\n    color: inherit;\n    opacity: 1;\n    background-color: #0000;\n    border-radius: 0;\n  }\n\n  :where(select:is([multiple], [size])) optgroup {\n    font-weight: bolder;\n  }\n\n  :where(select:is([multiple], [size])) optgroup option {\n    padding-inline-start: 20px;\n  }\n\n  ::file-selector-button {\n    margin-inline-end: 4px;\n  }\n\n  ::placeholder {\n    opacity: 1;\n  }\n\n  @supports (not ((-webkit-appearance: -apple-pay-button))) or (contain-intrinsic-size: 1px) {\n    ::placeholder {\n      color: currentColor;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      ::placeholder {\n        color: color-mix(in oklab, currentcolor 50%, transparent);\n      }\n    }\n  }\n\n  textarea {\n    resize: vertical;\n  }\n\n  ::-webkit-search-decoration {\n    -webkit-appearance: none;\n  }\n\n  ::-webkit-date-and-time-value {\n    min-height: 1lh;\n    text-align: inherit;\n  }\n\n  ::-webkit-datetime-edit {\n    display: inline-flex;\n  }\n\n  ::-webkit-datetime-edit-fields-wrapper {\n    padding: 0;\n  }\n\n  ::-webkit-datetime-edit {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-year-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-month-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-day-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-hour-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-minute-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-second-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-millisecond-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-meridiem-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-calendar-picker-indicator {\n    line-height: 1;\n  }\n\n  :-moz-ui-invalid {\n    box-shadow: none;\n  }\n\n  button, input:where([type="button"], [type="reset"], [type="submit"]) {\n    appearance: button;\n  }\n\n  ::file-selector-button {\n    appearance: button;\n  }\n\n  ::-webkit-inner-spin-button {\n    height: auto;\n  }\n\n  ::-webkit-outer-spin-button {\n    height: auto;\n  }\n\n  [hidden]:where(:not([hidden="until-found"])) {\n    display: none !important;\n  }\n\n  button, input, select {\n    font: inherit;\n  }\n}\n\n@layer components;\n\n@layer utilities {\n  .pointer-events-auto {\n    pointer-events: auto;\n  }\n\n  .pointer-events-none {\n    pointer-events: none;\n  }\n\n  .collapse {\n    visibility: collapse;\n  }\n\n  .invisible {\n    visibility: hidden;\n  }\n\n  .visible {\n    visibility: visible;\n  }\n\n  .sr-only {\n    clip-path: inset(50%);\n    white-space: nowrap;\n    border-width: 0;\n    width: 1px;\n    height: 1px;\n    margin: -1px;\n    padding: 0;\n    position: absolute;\n    overflow: hidden;\n  }\n\n  .absolute {\n    position: absolute;\n  }\n\n  .fixed {\n    position: fixed;\n  }\n\n  .relative {\n    position: relative;\n  }\n\n  .static {\n    position: static;\n  }\n\n  .sticky {\n    position: sticky;\n  }\n\n  .inset-0 {\n    inset: calc(var(--spacing) * 0);\n  }\n\n  .inset-1 {\n    inset: calc(var(--spacing) * 1);\n  }\n\n  .inset-x-0 {\n    inset-inline: calc(var(--spacing) * 0);\n  }\n\n  .inset-x-2 {\n    inset-inline: calc(var(--spacing) * 2);\n  }\n\n  .inset-x-3 {\n    inset-inline: calc(var(--spacing) * 3);\n  }\n\n  .inset-y-0 {\n    inset-block: calc(var(--spacing) * 0);\n  }\n\n  .inset-y-4 {\n    inset-block: calc(var(--spacing) * 4);\n  }\n\n  .start {\n    inset-inline-start: var(--spacing);\n  }\n\n  .-end {\n    inset-inline-end: calc(var(--spacing) * -1);\n  }\n\n  .end {\n    inset-inline-end: var(--spacing);\n  }\n\n  .-top-3 {\n    top: calc(var(--spacing) * -3);\n  }\n\n  .-top-12 {\n    top: calc(var(--spacing) * -12);\n  }\n\n  .top-0 {\n    top: calc(var(--spacing) * 0);\n  }\n\n  .top-0\\.5 {\n    top: calc(var(--spacing) * .5);\n  }\n\n  .top-1 {\n    top: calc(var(--spacing) * 1);\n  }\n\n  .top-1\\/2 {\n    top: 50%;\n  }\n\n  .top-2 {\n    top: calc(var(--spacing) * 2);\n  }\n\n  .top-3 {\n    top: calc(var(--spacing) * 3);\n  }\n\n  .top-4 {\n    top: calc(var(--spacing) * 4);\n  }\n\n  .top-full {\n    top: 100%;\n  }\n\n  .-right-12 {\n    right: calc(var(--spacing) * -12);\n  }\n\n  .right-0 {\n    right: calc(var(--spacing) * 0);\n  }\n\n  .right-1 {\n    right: calc(var(--spacing) * 1);\n  }\n\n  .right-2 {\n    right: calc(var(--spacing) * 2);\n  }\n\n  .right-3 {\n    right: calc(var(--spacing) * 3);\n  }\n\n  .right-4 {\n    right: calc(var(--spacing) * 4);\n  }\n\n  .-bottom-12 {\n    bottom: calc(var(--spacing) * -12);\n  }\n\n  .bottom-0 {\n    bottom: calc(var(--spacing) * 0);\n  }\n\n  .bottom-1 {\n    bottom: calc(var(--spacing) * 1);\n  }\n\n  .bottom-2 {\n    bottom: calc(var(--spacing) * 2);\n  }\n\n  .bottom-4 {\n    bottom: calc(var(--spacing) * 4);\n  }\n\n  .bottom-5 {\n    bottom: calc(var(--spacing) * 5);\n  }\n\n  .bottom-\\[48px\\] {\n    bottom: 48px;\n  }\n\n  .-left-12 {\n    left: calc(var(--spacing) * -12);\n  }\n\n  .left-0 {\n    left: calc(var(--spacing) * 0);\n  }\n\n  .left-1 {\n    left: calc(var(--spacing) * 1);\n  }\n\n  .left-1\\/2 {\n    left: 50%;\n  }\n\n  .left-2 {\n    left: calc(var(--spacing) * 2);\n  }\n\n  .left-3 {\n    left: calc(var(--spacing) * 3);\n  }\n\n  .isolate {\n    isolation: isolate;\n  }\n\n  .z-10 {\n    z-index: 10;\n  }\n\n  .z-20 {\n    z-index: 20;\n  }\n\n  .z-40 {\n    z-index: 40;\n  }\n\n  .z-50 {\n    z-index: 50;\n  }\n\n  .order-1 {\n    order: 1;\n  }\n\n  .order-first {\n    order: -9999;\n  }\n\n  .order-last {\n    order: 9999;\n  }\n\n  .col-start-2 {\n    grid-column-start: 2;\n  }\n\n  .row-span-2 {\n    grid-row: span 2 / span 2;\n  }\n\n  .row-start-1 {\n    grid-row-start: 1;\n  }\n\n  .\\!container {\n    width: 100% !important;\n  }\n\n  @media (min-width: 40rem) {\n    .\\!container {\n      max-width: 40rem !important;\n    }\n  }\n\n  @media (min-width: 48rem) {\n    .\\!container {\n      max-width: 48rem !important;\n    }\n  }\n\n  @media (min-width: 64rem) {\n    .\\!container {\n      max-width: 64rem !important;\n    }\n  }\n\n  @media (min-width: 80rem) {\n    .\\!container {\n      max-width: 80rem !important;\n    }\n  }\n\n  @media (min-width: 96rem) {\n    .\\!container {\n      max-width: 96rem !important;\n    }\n  }\n\n  .container {\n    width: 100%;\n  }\n\n  @media (min-width: 40rem) {\n    .container {\n      max-width: 40rem;\n    }\n  }\n\n  @media (min-width: 48rem) {\n    .container {\n      max-width: 48rem;\n    }\n  }\n\n  @media (min-width: 64rem) {\n    .container {\n      max-width: 64rem;\n    }\n  }\n\n  @media (min-width: 80rem) {\n    .container {\n      max-width: 80rem;\n    }\n  }\n\n  @media (min-width: 96rem) {\n    .container {\n      max-width: 96rem;\n    }\n  }\n\n  .m-1 {\n    margin: calc(var(--spacing) * 1);\n  }\n\n  .-mx-1 {\n    margin-inline: calc(var(--spacing) * -1);\n  }\n\n  .mx-0 {\n    margin-inline: calc(var(--spacing) * 0);\n  }\n\n  .mx-0\\.5 {\n    margin-inline: calc(var(--spacing) * .5);\n  }\n\n  .mx-2 {\n    margin-inline: calc(var(--spacing) * 2);\n  }\n\n  .mx-3 {\n    margin-inline: calc(var(--spacing) * 3);\n  }\n\n  .mx-auto {\n    margin-inline: auto;\n  }\n\n  .-my-2 {\n    margin-block: calc(var(--spacing) * -2);\n  }\n\n  .my-0 {\n    margin-block: calc(var(--spacing) * 0);\n  }\n\n  .my-1 {\n    margin-block: calc(var(--spacing) * 1);\n  }\n\n  .-mt-4 {\n    margin-top: calc(var(--spacing) * -4);\n  }\n\n  .mt-0 {\n    margin-top: calc(var(--spacing) * 0);\n  }\n\n  .mt-1 {\n    margin-top: calc(var(--spacing) * 1);\n  }\n\n  .mt-2 {\n    margin-top: calc(var(--spacing) * 2);\n  }\n\n  .mt-4 {\n    margin-top: calc(var(--spacing) * 4);\n  }\n\n  .mt-auto {\n    margin-top: auto;\n  }\n\n  .mb-2 {\n    margin-bottom: calc(var(--spacing) * 2);\n  }\n\n  .mb-3 {\n    margin-bottom: calc(var(--spacing) * 3);\n  }\n\n  .mb-4 {\n    margin-bottom: calc(var(--spacing) * 4);\n  }\n\n  .-ml-4 {\n    margin-left: calc(var(--spacing) * -4);\n  }\n\n  .ml-0 {\n    margin-left: calc(var(--spacing) * 0);\n  }\n\n  .ml-0\\.5 {\n    margin-left: calc(var(--spacing) * .5);\n  }\n\n  .ml-1 {\n    margin-left: calc(var(--spacing) * 1);\n  }\n\n  .ml-4 {\n    margin-left: calc(var(--spacing) * 4);\n  }\n\n  .ml-auto {\n    margin-left: auto;\n  }\n\n  .line-clamp-1 {\n    -webkit-line-clamp: 1;\n    -webkit-box-orient: vertical;\n    display: -webkit-box;\n    overflow: hidden;\n  }\n\n  .line-clamp-2 {\n    -webkit-line-clamp: 2;\n    -webkit-box-orient: vertical;\n    display: -webkit-box;\n    overflow: hidden;\n  }\n\n  .block {\n    display: block;\n  }\n\n  .contents {\n    display: contents;\n  }\n\n  .flex {\n    display: flex;\n  }\n\n  .grid {\n    display: grid;\n  }\n\n  .hidden {\n    display: none;\n  }\n\n  .inline {\n    display: inline;\n  }\n\n  .inline-block {\n    display: inline-block;\n  }\n\n  .inline-flex {\n    display: inline-flex;\n  }\n\n  .inline-grid {\n    display: inline-grid;\n  }\n\n  .table {\n    display: table;\n  }\n\n  .table-caption {\n    display: table-caption;\n  }\n\n  .table-cell {\n    display: table-cell;\n  }\n\n  .table-row {\n    display: table-row;\n  }\n\n  .field-sizing-content {\n    field-sizing: content;\n  }\n\n  .aspect-\\[50\\/27\\] {\n    aspect-ratio: 50 / 27;\n  }\n\n  .aspect-square {\n    aspect-ratio: 1;\n  }\n\n  .aspect-video {\n    aspect-ratio: var(--aspect-video);\n  }\n\n  .size-2 {\n    width: calc(var(--spacing) * 2);\n    height: calc(var(--spacing) * 2);\n  }\n\n  .size-3 {\n    width: calc(var(--spacing) * 3);\n    height: calc(var(--spacing) * 3);\n  }\n\n  .size-3\\.5 {\n    width: calc(var(--spacing) * 3.5);\n    height: calc(var(--spacing) * 3.5);\n  }\n\n  .size-4 {\n    width: calc(var(--spacing) * 4);\n    height: calc(var(--spacing) * 4);\n  }\n\n  .size-5 {\n    width: calc(var(--spacing) * 5);\n    height: calc(var(--spacing) * 5);\n  }\n\n  .size-6 {\n    width: calc(var(--spacing) * 6);\n    height: calc(var(--spacing) * 6);\n  }\n\n  .size-7 {\n    width: calc(var(--spacing) * 7);\n    height: calc(var(--spacing) * 7);\n  }\n\n  .size-8 {\n    width: calc(var(--spacing) * 8);\n    height: calc(var(--spacing) * 8);\n  }\n\n  .size-9 {\n    width: calc(var(--spacing) * 9);\n    height: calc(var(--spacing) * 9);\n  }\n\n  .size-10 {\n    width: calc(var(--spacing) * 10);\n    height: calc(var(--spacing) * 10);\n  }\n\n  .size-\\[11px\\] {\n    width: 11px;\n    height: 11px;\n  }\n\n  .size-\\[18px\\] {\n    width: 18px;\n    height: 18px;\n  }\n\n  .size-\\[22px\\] {\n    width: 22px;\n    height: 22px;\n  }\n\n  .size-auto {\n    width: auto;\n    height: auto;\n  }\n\n  .size-full {\n    width: 100%;\n    height: 100%;\n  }\n\n  .h-1 {\n    height: calc(var(--spacing) * 1);\n  }\n\n  .h-1\\.5 {\n    height: calc(var(--spacing) * 1.5);\n  }\n\n  .h-2 {\n    height: calc(var(--spacing) * 2);\n  }\n\n  .h-2\\.5 {\n    height: calc(var(--spacing) * 2.5);\n  }\n\n  .h-3 {\n    height: calc(var(--spacing) * 3);\n  }\n\n  .h-3\\.5 {\n    height: calc(var(--spacing) * 3.5);\n  }\n\n  .h-4 {\n    height: calc(var(--spacing) * 4);\n  }\n\n  .h-5 {\n    height: calc(var(--spacing) * 5);\n  }\n\n  .h-6 {\n    height: calc(var(--spacing) * 6);\n  }\n\n  .h-7 {\n    height: calc(var(--spacing) * 7);\n  }\n\n  .h-8 {\n    height: calc(var(--spacing) * 8);\n  }\n\n  .h-9 {\n    height: calc(var(--spacing) * 9);\n  }\n\n  .h-10 {\n    height: calc(var(--spacing) * 10);\n  }\n\n  .h-11 {\n    height: calc(var(--spacing) * 11);\n  }\n\n  .h-12 {\n    height: calc(var(--spacing) * 12);\n  }\n\n  .h-24 {\n    height: calc(var(--spacing) * 24);\n  }\n\n  .h-32 {\n    height: calc(var(--spacing) * 32);\n  }\n\n  .h-44 {\n    height: calc(var(--spacing) * 44);\n  }\n\n  .h-\\[7px\\] {\n    height: 7px;\n  }\n\n  .h-\\[18px\\] {\n    height: 18px;\n  }\n\n  .h-\\[24px\\] {\n    height: 24px;\n  }\n\n  .h-\\[88px\\] {\n    height: 88px;\n  }\n\n  .h-\\[118px\\] {\n    height: 118px;\n  }\n\n  .h-\\[180px\\] {\n    height: 180px;\n  }\n\n  .h-\\[190px\\] {\n    height: 190px;\n  }\n\n  .h-\\[320px\\] {\n    height: 320px;\n  }\n\n  .h-auto {\n    height: auto;\n  }\n\n  .h-full {\n    height: 100%;\n  }\n\n  .h-px {\n    height: 1px;\n  }\n\n  .h-svh {\n    height: 100svh;\n  }\n\n  .max-h-40 {\n    max-height: calc(var(--spacing) * 40);\n  }\n\n  .max-h-screen {\n    max-height: 100vh;\n  }\n\n  .min-h-0 {\n    min-height: calc(var(--spacing) * 0);\n  }\n\n  .min-h-4 {\n    min-height: calc(var(--spacing) * 4);\n  }\n\n  .min-h-8 {\n    min-height: calc(var(--spacing) * 8);\n  }\n\n  .min-h-9 {\n    min-height: calc(var(--spacing) * 9);\n  }\n\n  .min-h-16 {\n    min-height: calc(var(--spacing) * 16);\n  }\n\n  .min-h-\\[100dvh\\] {\n    min-height: 100dvh;\n  }\n\n  .min-h-\\[108px\\] {\n    min-height: 108px;\n  }\n\n  .min-h-\\[158px\\] {\n    min-height: 158px;\n  }\n\n  .min-h-\\[198px\\] {\n    min-height: 198px;\n  }\n\n  .min-h-\\[220px\\] {\n    min-height: 220px;\n  }\n\n  .min-h-\\[calc\\(100dvh-2rem\\)\\] {\n    min-height: calc(100dvh - 2rem);\n  }\n\n  .min-h-full {\n    min-height: 100%;\n  }\n\n  .min-h-screen {\n    min-height: 100vh;\n  }\n\n  .min-h-svh {\n    min-height: 100svh;\n  }\n\n  .w-0 {\n    width: calc(var(--spacing) * 0);\n  }\n\n  .w-0\\.5 {\n    width: calc(var(--spacing) * .5);\n  }\n\n  .w-1 {\n    width: calc(var(--spacing) * 1);\n  }\n\n  .w-1\\.5 {\n    width: calc(var(--spacing) * 1.5);\n  }\n\n  .w-2 {\n    width: calc(var(--spacing) * 2);\n  }\n\n  .w-2\\.5 {\n    width: calc(var(--spacing) * 2.5);\n  }\n\n  .w-3 {\n    width: calc(var(--spacing) * 3);\n  }\n\n  .w-3\\.5 {\n    width: calc(var(--spacing) * 3.5);\n  }\n\n  .w-4 {\n    width: calc(var(--spacing) * 4);\n  }\n\n  .w-5 {\n    width: calc(var(--spacing) * 5);\n  }\n\n  .w-6 {\n    width: calc(var(--spacing) * 6);\n  }\n\n  .w-7 {\n    width: calc(var(--spacing) * 7);\n  }\n\n  .w-8 {\n    width: calc(var(--spacing) * 8);\n  }\n\n  .w-9 {\n    width: calc(var(--spacing) * 9);\n  }\n\n  .w-10 {\n    width: calc(var(--spacing) * 10);\n  }\n\n  .w-11 {\n    width: calc(var(--spacing) * 11);\n  }\n\n  .w-12 {\n    width: calc(var(--spacing) * 12);\n  }\n\n  .w-16 {\n    width: calc(var(--spacing) * 16);\n  }\n\n  .w-24 {\n    width: calc(var(--spacing) * 24);\n  }\n\n  .w-64 {\n    width: calc(var(--spacing) * 64);\n  }\n\n  .w-72 {\n    width: calc(var(--spacing) * 72);\n  }\n\n  .w-\\[18px\\] {\n    width: 18px;\n  }\n\n  .w-\\[38px\\] {\n    width: 38px;\n  }\n\n  .w-\\[56px\\] {\n    width: 56px;\n  }\n\n  .w-\\[148px\\] {\n    width: 148px;\n  }\n\n  .w-auto {\n    width: auto;\n  }\n\n  .w-fit {\n    width: fit-content;\n  }\n\n  .w-full {\n    width: 100%;\n  }\n\n  .w-max {\n    width: max-content;\n  }\n\n  .w-px {\n    width: 1px;\n  }\n\n  .max-w-2xl {\n    max-width: var(--container-2xl);\n  }\n\n  .max-w-\\[34ch\\] {\n    max-width: 34ch;\n  }\n\n  .max-w-\\[280px\\] {\n    max-width: 280px;\n  }\n\n  .max-w-\\[1080px\\] {\n    max-width: 1080px;\n  }\n\n  .max-w-full {\n    max-width: 100%;\n  }\n\n  .max-w-max {\n    max-width: max-content;\n  }\n\n  .max-w-sm {\n    max-width: var(--container-sm);\n  }\n\n  .min-w-0 {\n    min-width: calc(var(--spacing) * 0);\n  }\n\n  .min-w-5 {\n    min-width: calc(var(--spacing) * 5);\n  }\n\n  .min-w-8 {\n    min-width: calc(var(--spacing) * 8);\n  }\n\n  .min-w-9 {\n    min-width: calc(var(--spacing) * 9);\n  }\n\n  .min-w-10 {\n    min-width: calc(var(--spacing) * 10);\n  }\n\n  .min-w-12 {\n    min-width: calc(var(--spacing) * 12);\n  }\n\n  .min-w-\\[112px\\] {\n    min-width: 112px;\n  }\n\n  .min-w-\\[132px\\] {\n    min-width: 132px;\n  }\n\n  .min-w-\\[168px\\] {\n    min-width: 168px;\n  }\n\n  .min-w-full {\n    min-width: 100%;\n  }\n\n  .flex-1 {\n    flex: 1;\n  }\n\n  .flex-shrink, .shrink {\n    flex-shrink: 1;\n  }\n\n  .shrink-0 {\n    flex-shrink: 0;\n  }\n\n  .flex-grow, .grow {\n    flex-grow: 1;\n  }\n\n  .grow-0 {\n    flex-grow: 0;\n  }\n\n  .basis-full {\n    flex-basis: 100%;\n  }\n\n  .caption-bottom {\n    caption-side: bottom;\n  }\n\n  .border-collapse {\n    border-collapse: collapse;\n  }\n\n  .-translate-x-1 {\n    --tw-translate-x: calc(var(--spacing) * -1);\n    translate: var(--tw-translate-x) var(--tw-translate-y);\n  }\n\n  .-translate-x-1\\/2 {\n    --tw-translate-x: calc(calc(1 / 2 * 100%) * -1);\n    translate: var(--tw-translate-x) var(--tw-translate-y);\n  }\n\n  .-translate-x-px {\n    --tw-translate-x: -1px;\n    translate: var(--tw-translate-x) var(--tw-translate-y);\n  }\n\n  .translate-x-px {\n    --tw-translate-x: 1px;\n    translate: var(--tw-translate-x) var(--tw-translate-y);\n  }\n\n  .-translate-y-1 {\n    --tw-translate-y: calc(var(--spacing) * -1);\n    translate: var(--tw-translate-x) var(--tw-translate-y);\n  }\n\n  .-translate-y-1\\/2 {\n    --tw-translate-y: calc(calc(1 / 2 * 100%) * -1);\n    translate: var(--tw-translate-x) var(--tw-translate-y);\n  }\n\n  .-translate-y-px {\n    --tw-translate-y: -1px;\n    translate: var(--tw-translate-x) var(--tw-translate-y);\n  }\n\n  .translate-y-0 {\n    --tw-translate-y: calc(var(--spacing) * 0);\n    translate: var(--tw-translate-x) var(--tw-translate-y);\n  }\n\n  .translate-y-1 {\n    --tw-translate-y: calc(var(--spacing) * 1);\n    translate: var(--tw-translate-x) var(--tw-translate-y);\n  }\n\n  .translate-y-1\\/2 {\n    --tw-translate-y: calc(1 / 2 * 100%);\n    translate: var(--tw-translate-x) var(--tw-translate-y);\n  }\n\n  .rotate-45 {\n    rotate: 45deg;\n  }\n\n  .rotate-90 {\n    rotate: 90deg;\n  }\n\n  .rotate-180 {\n    rotate: 180deg;\n  }\n\n  .transform {\n    transform: var(--tw-rotate-x, ) var(--tw-rotate-y, ) var(--tw-rotate-z, ) var(--tw-skew-x, ) var(--tw-skew-y, );\n  }\n\n  .animate-pulse {\n    animation: var(--animate-pulse);\n  }\n\n  .animate-spin {\n    animation: var(--animate-spin);\n  }\n\n  .cursor-default {\n    cursor: default;\n  }\n\n  .cursor-ew-resize {\n    cursor: ew-resize;\n  }\n\n  .cursor-grab {\n    cursor: grab;\n  }\n\n  .cursor-move {\n    cursor: move;\n  }\n\n  .cursor-not-allowed {\n    cursor: not-allowed;\n  }\n\n  .cursor-ns-resize {\n    cursor: ns-resize;\n  }\n\n  .cursor-pointer {\n    cursor: pointer;\n  }\n\n  .cursor-text {\n    cursor: text;\n  }\n\n  .touch-none {\n    touch-action: none;\n  }\n\n  .resize {\n    resize: both;\n  }\n\n  .resize-none {\n    resize: none;\n  }\n\n  .scroll-my-1 {\n    scroll-margin-block: calc(var(--spacing) * 1);\n  }\n\n  .scroll-py-1 {\n    scroll-padding-block: calc(var(--spacing) * 1);\n  }\n\n  .list-disc {\n    list-style-type: disc;\n  }\n\n  .list-none {\n    list-style-type: none;\n  }\n\n  .appearance-none {\n    appearance: none;\n  }\n\n  .auto-rows-max {\n    grid-auto-rows: max-content;\n  }\n\n  .auto-rows-min {\n    grid-auto-rows: min-content;\n  }\n\n  .grid-cols-1 {\n    grid-template-columns: repeat(1, minmax(0, 1fr));\n  }\n\n  .grid-cols-2 {\n    grid-template-columns: repeat(2, minmax(0, 1fr));\n  }\n\n  .grid-cols-3 {\n    grid-template-columns: repeat(3, minmax(0, 1fr));\n  }\n\n  .grid-cols-4 {\n    grid-template-columns: repeat(4, minmax(0, 1fr));\n  }\n\n  .grid-cols-5 {\n    grid-template-columns: repeat(5, minmax(0, 1fr));\n  }\n\n  .grid-cols-\\[56px_minmax\\(0\\,1fr\\)\\] {\n    grid-template-columns: 56px minmax(0, 1fr);\n  }\n\n  .grid-cols-\\[minmax\\(0\\,1fr\\)_88px\\] {\n    grid-template-columns: minmax(0, 1fr) 88px;\n  }\n\n  .grid-cols-\\[minmax\\(0\\,1fr\\)_92px\\] {\n    grid-template-columns: minmax(0, 1fr) 92px;\n  }\n\n  .grid-cols-\\[minmax\\(0\\,1fr\\)_92px_auto\\] {\n    grid-template-columns: minmax(0, 1fr) 92px auto;\n  }\n\n  .grid-cols-\\[minmax\\(0\\,1fr\\)_auto\\] {\n    grid-template-columns: minmax(0, 1fr) auto;\n  }\n\n  .grid-rows-\\[auto_minmax\\(0\\,1fr\\)_auto\\] {\n    grid-template-rows: auto minmax(0, 1fr) auto;\n  }\n\n  .flex-col {\n    flex-direction: column;\n  }\n\n  .flex-col-reverse {\n    flex-direction: column-reverse;\n  }\n\n  .flex-row {\n    flex-direction: row;\n  }\n\n  .flex-wrap {\n    flex-wrap: wrap;\n  }\n\n  .place-items-center {\n    place-items: center;\n  }\n\n  .content-start {\n    align-content: flex-start;\n  }\n\n  .items-center {\n    align-items: center;\n  }\n\n  .items-end {\n    align-items: flex-end;\n  }\n\n  .items-start {\n    align-items: flex-start;\n  }\n\n  .items-stretch {\n    align-items: stretch;\n  }\n\n  .justify-between {\n    justify-content: space-between;\n  }\n\n  .justify-center {\n    justify-content: center;\n  }\n\n  .justify-end {\n    justify-content: flex-end;\n  }\n\n  .justify-start {\n    justify-content: flex-start;\n  }\n\n  .justify-items-start {\n    justify-items: start;\n  }\n\n  .gap-0 {\n    gap: calc(var(--spacing) * 0);\n  }\n\n  .gap-0\\.5 {\n    gap: calc(var(--spacing) * .5);\n  }\n\n  .gap-1 {\n    gap: calc(var(--spacing) * 1);\n  }\n\n  .gap-1\\.5 {\n    gap: calc(var(--spacing) * 1.5);\n  }\n\n  .gap-2 {\n    gap: calc(var(--spacing) * 2);\n  }\n\n  .gap-3 {\n    gap: calc(var(--spacing) * 3);\n  }\n\n  .gap-4 {\n    gap: calc(var(--spacing) * 4);\n  }\n\n  .gap-5 {\n    gap: calc(var(--spacing) * 5);\n  }\n\n  .gap-6 {\n    gap: calc(var(--spacing) * 6);\n  }\n\n  .gap-7 {\n    gap: calc(var(--spacing) * 7);\n  }\n\n  .gap-\\[3px\\] {\n    gap: 3px;\n  }\n\n  :where(.space-y-1 > :not(:last-child)) {\n    --tw-space-y-reverse: 0;\n    margin-block-start: calc(calc(var(--spacing) * 1) * var(--tw-space-y-reverse));\n    margin-block-end: calc(calc(var(--spacing) * 1) * calc(1 - var(--tw-space-y-reverse)));\n  }\n\n  :where(.space-y-1\\.5 > :not(:last-child)) {\n    --tw-space-y-reverse: 0;\n    margin-block-start: calc(calc(var(--spacing) * 1.5) * var(--tw-space-y-reverse));\n    margin-block-end: calc(calc(var(--spacing) * 1.5) * calc(1 - var(--tw-space-y-reverse)));\n  }\n\n  :where(.space-y-3 > :not(:last-child)) {\n    --tw-space-y-reverse: 0;\n    margin-block-start: calc(calc(var(--spacing) * 3) * var(--tw-space-y-reverse));\n    margin-block-end: calc(calc(var(--spacing) * 3) * calc(1 - var(--tw-space-y-reverse)));\n  }\n\n  :where(.space-x-4 > :not(:last-child)) {\n    --tw-space-x-reverse: 0;\n    margin-inline-start: calc(calc(var(--spacing) * 4) * var(--tw-space-x-reverse));\n    margin-inline-end: calc(calc(var(--spacing) * 4) * calc(1 - var(--tw-space-x-reverse)));\n  }\n\n  .gap-y-0 {\n    row-gap: calc(var(--spacing) * 0);\n  }\n\n  .self-center {\n    align-self: center;\n  }\n\n  .self-end {\n    align-self: flex-end;\n  }\n\n  .self-start {\n    align-self: flex-start;\n  }\n\n  .self-stretch {\n    align-self: stretch;\n  }\n\n  .justify-self-end {\n    justify-self: flex-end;\n  }\n\n  .truncate {\n    text-overflow: ellipsis;\n    white-space: nowrap;\n    overflow: hidden;\n  }\n\n  .overflow-auto {\n    overflow: auto;\n  }\n\n  .overflow-hidden {\n    overflow: hidden;\n  }\n\n  .overflow-visible {\n    overflow: visible;\n  }\n\n  .overflow-x-auto {\n    overflow-x: auto;\n  }\n\n  .overflow-x-hidden {\n    overflow-x: hidden;\n  }\n\n  .overflow-y-auto {\n    overflow-y: auto;\n  }\n\n  .overflow-y-hidden {\n    overflow-y: hidden;\n  }\n\n  .rounded {\n    border-radius: .25rem;\n  }\n\n  .rounded-2xl {\n    border-radius: var(--radius-2xl);\n  }\n\n  .rounded-\\[5px\\] {\n    border-radius: 5px;\n  }\n\n  .rounded-\\[6px\\] {\n    border-radius: 6px;\n  }\n\n  .rounded-\\[7px\\] {\n    border-radius: 7px;\n  }\n\n  .rounded-\\[8px\\] {\n    border-radius: 8px;\n  }\n\n  .rounded-\\[10px\\] {\n    border-radius: 10px;\n  }\n\n  .rounded-\\[12px\\] {\n    border-radius: 12px;\n  }\n\n  .rounded-\\[14px\\] {\n    border-radius: 14px;\n  }\n\n  .rounded-\\[16px\\] {\n    border-radius: 16px;\n  }\n\n  .rounded-\\[18px\\] {\n    border-radius: 18px;\n  }\n\n  .rounded-\\[20px\\] {\n    border-radius: 20px;\n  }\n\n  .rounded-\\[22px\\] {\n    border-radius: 22px;\n  }\n\n  .rounded-\\[24px\\] {\n    border-radius: 24px;\n  }\n\n  .rounded-\\[28px\\] {\n    border-radius: 28px;\n  }\n\n  .rounded-\\[30px\\] {\n    border-radius: 30px;\n  }\n\n  .rounded-full {\n    border-radius: 3.40282e38px;\n  }\n\n  .rounded-lg {\n    border-radius: var(--radius-lg);\n  }\n\n  .rounded-md {\n    border-radius: var(--radius-md);\n  }\n\n  .rounded-none {\n    border-radius: 0;\n  }\n\n  .rounded-sm {\n    border-radius: var(--radius-sm);\n  }\n\n  .rounded-xl {\n    border-radius: var(--radius-xl);\n  }\n\n  .rounded-xs {\n    border-radius: var(--radius-xs);\n  }\n\n  .rounded-l {\n    border-top-left-radius: .25rem;\n    border-bottom-left-radius: .25rem;\n  }\n\n  .rounded-l-md {\n    border-top-left-radius: var(--radius-md);\n    border-bottom-left-radius: var(--radius-md);\n  }\n\n  .rounded-tl-sm {\n    border-top-left-radius: var(--radius-sm);\n  }\n\n  .rounded-r {\n    border-top-right-radius: .25rem;\n    border-bottom-right-radius: .25rem;\n  }\n\n  .rounded-r-md {\n    border-top-right-radius: var(--radius-md);\n    border-bottom-right-radius: var(--radius-md);\n  }\n\n  .border {\n    border-style: var(--tw-border-style);\n    border-width: 1px;\n  }\n\n  .border-0 {\n    border-style: var(--tw-border-style);\n    border-width: 0;\n  }\n\n  .border-2 {\n    border-style: var(--tw-border-style);\n    border-width: 2px;\n  }\n\n  .border-y {\n    border-block-style: var(--tw-border-style);\n    border-block-width: 1px;\n  }\n\n  .border-t {\n    border-top-style: var(--tw-border-style);\n    border-top-width: 1px;\n  }\n\n  .border-r {\n    border-right-style: var(--tw-border-style);\n    border-right-width: 1px;\n  }\n\n  .border-b {\n    border-bottom-style: var(--tw-border-style);\n    border-bottom-width: 1px;\n  }\n\n  .border-l {\n    border-left-style: var(--tw-border-style);\n    border-left-width: 1px;\n  }\n\n  .border-dashed {\n    --tw-border-style: dashed;\n    border-style: dashed;\n  }\n\n  .border-\\[\\#020611\\] {\n    border-color: #020611;\n  }\n\n  .border-\\[rgba\\(3\\,5\\,12\\,0\\.7\\)\\] {\n    border-color: #03050cb3;\n  }\n\n  .border-amber-100 {\n    border-color: var(--color-amber-100);\n  }\n\n  .border-amber-100\\/55 {\n    border-color: #fef3c68c;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-amber-100\\/55 {\n      border-color: color-mix(in oklab, var(--color-amber-100) 55%, transparent);\n    }\n  }\n\n  .border-amber-100\\/70 {\n    border-color: #fef3c6b3;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-amber-100\\/70 {\n      border-color: color-mix(in oklab, var(--color-amber-100) 70%, transparent);\n    }\n  }\n\n  .border-amber-100\\/80 {\n    border-color: #fef3c6cc;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-amber-100\\/80 {\n      border-color: color-mix(in oklab, var(--color-amber-100) 80%, transparent);\n    }\n  }\n\n  .border-amber-200 {\n    border-color: var(--color-amber-200);\n  }\n\n  .border-amber-200\\/18 {\n    border-color: #fee6852e;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-amber-200\\/18 {\n      border-color: color-mix(in oklab, var(--color-amber-200) 18%, transparent);\n    }\n  }\n\n  .border-amber-200\\/30 {\n    border-color: #fee6854d;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-amber-200\\/30 {\n      border-color: color-mix(in oklab, var(--color-amber-200) 30%, transparent);\n    }\n  }\n\n  .border-amber-200\\/35 {\n    border-color: #fee68559;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-amber-200\\/35 {\n      border-color: color-mix(in oklab, var(--color-amber-200) 35%, transparent);\n    }\n  }\n\n  .border-amber-200\\/40 {\n    border-color: #fee68566;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-amber-200\\/40 {\n      border-color: color-mix(in oklab, var(--color-amber-200) 40%, transparent);\n    }\n  }\n\n  .border-border, .border-border\\/20 {\n    border-color: var(--cosimo-mod-border);\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-border\\/20 {\n      border-color: color-mix(in oklab, var(--cosimo-mod-border) 20%, transparent);\n    }\n  }\n\n  .border-border\\/40 {\n    border-color: var(--cosimo-mod-border);\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-border\\/40 {\n      border-color: color-mix(in oklab, var(--cosimo-mod-border) 40%, transparent);\n    }\n  }\n\n  .border-border\\/60 {\n    border-color: var(--cosimo-mod-border);\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-border\\/60 {\n      border-color: color-mix(in oklab, var(--cosimo-mod-border) 60%, transparent);\n    }\n  }\n\n  .border-border\\/70 {\n    border-color: var(--cosimo-mod-border);\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-border\\/70 {\n      border-color: color-mix(in oklab, var(--cosimo-mod-border) 70%, transparent);\n    }\n  }\n\n  .border-cyan-200 {\n    border-color: var(--color-cyan-200);\n  }\n\n  .border-cyan-200\\/18 {\n    border-color: #a2f4fd2e;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-cyan-200\\/18 {\n      border-color: color-mix(in oklab, var(--color-cyan-200) 18%, transparent);\n    }\n  }\n\n  .border-cyan-200\\/28 {\n    border-color: #a2f4fd47;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-cyan-200\\/28 {\n      border-color: color-mix(in oklab, var(--color-cyan-200) 28%, transparent);\n    }\n  }\n\n  .border-cyan-300 {\n    border-color: var(--color-cyan-300);\n  }\n\n  .border-cyan-300\\/16 {\n    border-color: #53eafd29;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-cyan-300\\/16 {\n      border-color: color-mix(in oklab, var(--color-cyan-300) 16%, transparent);\n    }\n  }\n\n  .border-cyan-300\\/18 {\n    border-color: #53eafd2e;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-cyan-300\\/18 {\n      border-color: color-mix(in oklab, var(--color-cyan-300) 18%, transparent);\n    }\n  }\n\n  .border-cyan-300\\/20 {\n    border-color: #53eafd33;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-cyan-300\\/20 {\n      border-color: color-mix(in oklab, var(--color-cyan-300) 20%, transparent);\n    }\n  }\n\n  .border-cyan-300\\/25 {\n    border-color: #53eafd40;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-cyan-300\\/25 {\n      border-color: color-mix(in oklab, var(--color-cyan-300) 25%, transparent);\n    }\n  }\n\n  .border-destructive {\n    border-color: var(--cosimo-mod-destructive);\n  }\n\n  .border-emerald-300 {\n    border-color: var(--color-emerald-300);\n  }\n\n  .border-emerald-300\\/25 {\n    border-color: #5ee9b540;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-emerald-300\\/25 {\n      border-color: color-mix(in oklab, var(--color-emerald-300) 25%, transparent);\n    }\n  }\n\n  .border-fuchsia-300 {\n    border-color: var(--color-fuchsia-300);\n  }\n\n  .border-fuchsia-300\\/15 {\n    border-color: #f2a9ff26;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-fuchsia-300\\/15 {\n      border-color: color-mix(in oklab, var(--color-fuchsia-300) 15%, transparent);\n    }\n  }\n\n  .border-pink-200 {\n    border-color: var(--color-pink-200);\n  }\n\n  .border-pink-200\\/22 {\n    border-color: #fccee838;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-pink-200\\/22 {\n      border-color: color-mix(in oklab, var(--color-pink-200) 22%, transparent);\n    }\n  }\n\n  .border-pink-300 {\n    border-color: var(--color-pink-300);\n  }\n\n  .border-pink-300\\/16 {\n    border-color: #fda5d529;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-pink-300\\/16 {\n      border-color: color-mix(in oklab, var(--color-pink-300) 16%, transparent);\n    }\n  }\n\n  .border-pink-300\\/18 {\n    border-color: #fda5d52e;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-pink-300\\/18 {\n      border-color: color-mix(in oklab, var(--color-pink-300) 18%, transparent);\n    }\n  }\n\n  .border-pink-300\\/22 {\n    border-color: #fda5d538;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-pink-300\\/22 {\n      border-color: color-mix(in oklab, var(--color-pink-300) 22%, transparent);\n    }\n  }\n\n  .border-primary, .border-primary\\/40 {\n    border-color: var(--cosimo-mod-primary);\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-primary\\/40 {\n      border-color: color-mix(in oklab, var(--cosimo-mod-primary) 40%, transparent);\n    }\n  }\n\n  .border-rose-300 {\n    border-color: var(--color-rose-300);\n  }\n\n  .border-sky-300 {\n    border-color: var(--color-sky-300);\n  }\n\n  .border-transparent {\n    border-color: #0000;\n  }\n\n  .border-white {\n    border-color: var(--color-white);\n  }\n\n  .border-white\\/6 {\n    border-color: #ffffff0f;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-white\\/6 {\n      border-color: color-mix(in oklab, var(--color-white) 6%, transparent);\n    }\n  }\n\n  .border-white\\/8 {\n    border-color: #ffffff14;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-white\\/8 {\n      border-color: color-mix(in oklab, var(--color-white) 8%, transparent);\n    }\n  }\n\n  .border-white\\/10 {\n    border-color: #ffffff1a;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-white\\/10 {\n      border-color: color-mix(in oklab, var(--color-white) 10%, transparent);\n    }\n  }\n\n  .border-white\\/15 {\n    border-color: #ffffff26;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-white\\/15 {\n      border-color: color-mix(in oklab, var(--color-white) 15%, transparent);\n    }\n  }\n\n  .border-white\\/\\[0\\.04\\] {\n    border-color: #ffffff0a;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-white\\/\\[0\\.04\\] {\n      border-color: color-mix(in oklab, var(--color-white) 4%, transparent);\n    }\n  }\n\n  .border-white\\/\\[0\\.05\\] {\n    border-color: #ffffff0d;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-white\\/\\[0\\.05\\] {\n      border-color: color-mix(in oklab, var(--color-white) 5%, transparent);\n    }\n  }\n\n  .border-white\\/\\[0\\.06\\] {\n    border-color: #ffffff0f;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-white\\/\\[0\\.06\\] {\n      border-color: color-mix(in oklab, var(--color-white) 6%, transparent);\n    }\n  }\n\n  .border-white\\/\\[0\\.07\\] {\n    border-color: #ffffff12;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-white\\/\\[0\\.07\\] {\n      border-color: color-mix(in oklab, var(--color-white) 7.0%, transparent);\n    }\n  }\n\n  .border-white\\/\\[0\\.08\\] {\n    border-color: #ffffff14;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-white\\/\\[0\\.08\\] {\n      border-color: color-mix(in oklab, var(--color-white) 8%, transparent);\n    }\n  }\n\n  .border-white\\/\\[0\\.10\\] {\n    border-color: #ffffff1a;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-white\\/\\[0\\.10\\] {\n      border-color: color-mix(in oklab, var(--color-white) 10%, transparent);\n    }\n  }\n\n  .border-t-transparent {\n    border-top-color: #0000;\n  }\n\n  .border-l-transparent {\n    border-left-color: #0000;\n  }\n\n  .bg-\\[\\#0a0d18\\]\\/95 {\n    background-color: oklab(16.1972% .000775084 -.02385 / .95);\n  }\n\n  .bg-\\[\\#070b16\\] {\n    background-color: #070b16;\n  }\n\n  .bg-\\[\\#09101d\\]\\/95 {\n    background-color: oklab(17.3432% -.0040513 -.029082 / .95);\n  }\n\n  .bg-\\[\\#030711\\]\\/85 {\n    background-color: oklab(12.8817% -.00430492 -.0249884 / .85);\n  }\n\n  .bg-\\[rgba\\(3\\,5\\,12\\,0\\.6\\)\\] {\n    background-color: #03050c99;\n  }\n\n  .bg-\\[rgba\\(3\\,7\\,15\\,0\\.72\\)\\] {\n    background-color: #03070fb8;\n  }\n\n  .bg-amber-300 {\n    background-color: var(--color-amber-300);\n  }\n\n  .bg-amber-300\\/10 {\n    background-color: #ffd2361a;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-amber-300\\/10 {\n      background-color: color-mix(in oklab, var(--color-amber-300) 10%, transparent);\n    }\n  }\n\n  .bg-amber-300\\/12 {\n    background-color: #ffd2361f;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-amber-300\\/12 {\n      background-color: color-mix(in oklab, var(--color-amber-300) 12%, transparent);\n    }\n  }\n\n  .bg-amber-300\\/14 {\n    background-color: #ffd23624;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-amber-300\\/14 {\n      background-color: color-mix(in oklab, var(--color-amber-300) 14%, transparent);\n    }\n  }\n\n  .bg-amber-300\\/\\[0\\.06\\] {\n    background-color: #ffd2360f;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-amber-300\\/\\[0\\.06\\] {\n      background-color: color-mix(in oklab, var(--color-amber-300) 6%, transparent);\n    }\n  }\n\n  .bg-background {\n    background-color: var(--cosimo-mod-background);\n  }\n\n  .bg-black {\n    background-color: var(--color-black);\n  }\n\n  .bg-black\\/18 {\n    background-color: #0000002e;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-black\\/18 {\n      background-color: color-mix(in oklab, var(--color-black) 18%, transparent);\n    }\n  }\n\n  .bg-black\\/20 {\n    background-color: #0003;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-black\\/20 {\n      background-color: color-mix(in oklab, var(--color-black) 20%, transparent);\n    }\n  }\n\n  .bg-black\\/25 {\n    background-color: #00000040;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-black\\/25 {\n      background-color: color-mix(in oklab, var(--color-black) 25%, transparent);\n    }\n  }\n\n  .bg-black\\/30 {\n    background-color: #0000004d;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-black\\/30 {\n      background-color: color-mix(in oklab, var(--color-black) 30%, transparent);\n    }\n  }\n\n  .bg-black\\/35 {\n    background-color: #00000059;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-black\\/35 {\n      background-color: color-mix(in oklab, var(--color-black) 35%, transparent);\n    }\n  }\n\n  .bg-black\\/40 {\n    background-color: #0006;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-black\\/40 {\n      background-color: color-mix(in oklab, var(--color-black) 40%, transparent);\n    }\n  }\n\n  .bg-black\\/42 {\n    background-color: #0000006b;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-black\\/42 {\n      background-color: color-mix(in oklab, var(--color-black) 42%, transparent);\n    }\n  }\n\n  .bg-black\\/45 {\n    background-color: #00000073;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-black\\/45 {\n      background-color: color-mix(in oklab, var(--color-black) 45%, transparent);\n    }\n  }\n\n  .bg-black\\/48 {\n    background-color: #0000007a;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-black\\/48 {\n      background-color: color-mix(in oklab, var(--color-black) 48%, transparent);\n    }\n  }\n\n  .bg-black\\/50 {\n    background-color: #00000080;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-black\\/50 {\n      background-color: color-mix(in oklab, var(--color-black) 50%, transparent);\n    }\n  }\n\n  .bg-border {\n    background-color: var(--cosimo-mod-border);\n  }\n\n  .bg-card, .bg-card\\/40 {\n    background-color: var(--cosimo-mod-card);\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-card\\/40 {\n      background-color: color-mix(in oklab, var(--cosimo-mod-card) 40%, transparent);\n    }\n  }\n\n  .bg-cyan-200 {\n    background-color: var(--color-cyan-200);\n  }\n\n  .bg-cyan-200\\/80 {\n    background-color: #a2f4fdcc;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-cyan-200\\/80 {\n      background-color: color-mix(in oklab, var(--color-cyan-200) 80%, transparent);\n    }\n  }\n\n  .bg-cyan-300 {\n    background-color: var(--color-cyan-300);\n  }\n\n  .bg-cyan-300\\/8 {\n    background-color: #53eafd14;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-cyan-300\\/8 {\n      background-color: color-mix(in oklab, var(--color-cyan-300) 8%, transparent);\n    }\n  }\n\n  .bg-cyan-300\\/10 {\n    background-color: #53eafd1a;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-cyan-300\\/10 {\n      background-color: color-mix(in oklab, var(--color-cyan-300) 10%, transparent);\n    }\n  }\n\n  .bg-cyan-300\\/15 {\n    background-color: #53eafd26;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-cyan-300\\/15 {\n      background-color: color-mix(in oklab, var(--color-cyan-300) 15%, transparent);\n    }\n  }\n\n  .bg-cyan-300\\/18 {\n    background-color: #53eafd2e;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-cyan-300\\/18 {\n      background-color: color-mix(in oklab, var(--color-cyan-300) 18%, transparent);\n    }\n  }\n\n  .bg-cyan-300\\/\\[0\\.08\\] {\n    background-color: #53eafd14;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-cyan-300\\/\\[0\\.08\\] {\n      background-color: color-mix(in oklab, var(--color-cyan-300) 8%, transparent);\n    }\n  }\n\n  .bg-cyan-400 {\n    background-color: var(--color-cyan-400);\n  }\n\n  .bg-cyan-400\\/10 {\n    background-color: #00d2ef1a;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-cyan-400\\/10 {\n      background-color: color-mix(in oklab, var(--color-cyan-400) 10%, transparent);\n    }\n  }\n\n  .bg-cyan-400\\/60 {\n    background-color: #00d2ef99;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-cyan-400\\/60 {\n      background-color: color-mix(in oklab, var(--color-cyan-400) 60%, transparent);\n    }\n  }\n\n  .bg-cyan-400\\/\\[0\\.08\\] {\n    background-color: #00d2ef14;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-cyan-400\\/\\[0\\.08\\] {\n      background-color: color-mix(in oklab, var(--color-cyan-400) 8%, transparent);\n    }\n  }\n\n  .bg-destructive {\n    background-color: var(--cosimo-mod-destructive);\n  }\n\n  .bg-emerald-300 {\n    background-color: var(--color-emerald-300);\n  }\n\n  .bg-emerald-300\\/12 {\n    background-color: #5ee9b51f;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-emerald-300\\/12 {\n      background-color: color-mix(in oklab, var(--color-emerald-300) 12%, transparent);\n    }\n  }\n\n  .bg-foreground {\n    background-color: var(--cosimo-mod-foreground);\n  }\n\n  .bg-fuchsia-300 {\n    background-color: var(--color-fuchsia-300);\n  }\n\n  .bg-fuchsia-300\\/8 {\n    background-color: #f2a9ff14;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-fuchsia-300\\/8 {\n      background-color: color-mix(in oklab, var(--color-fuchsia-300) 8%, transparent);\n    }\n  }\n\n  .bg-muted, .bg-muted\\/60 {\n    background-color: var(--cosimo-mod-muted);\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-muted\\/60 {\n      background-color: color-mix(in oklab, var(--cosimo-mod-muted) 60%, transparent);\n    }\n  }\n\n  .bg-pink-200 {\n    background-color: var(--color-pink-200);\n  }\n\n  .bg-pink-200\\/10 {\n    background-color: #fccee81a;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-pink-200\\/10 {\n      background-color: color-mix(in oklab, var(--color-pink-200) 10%, transparent);\n    }\n  }\n\n  .bg-pink-300 {\n    background-color: var(--color-pink-300);\n  }\n\n  .bg-pink-300\\/10 {\n    background-color: #fda5d51a;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-pink-300\\/10 {\n      background-color: color-mix(in oklab, var(--color-pink-300) 10%, transparent);\n    }\n  }\n\n  .bg-pink-300\\/85 {\n    background-color: #fda5d5d9;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-pink-300\\/85 {\n      background-color: color-mix(in oklab, var(--color-pink-300) 85%, transparent);\n    }\n  }\n\n  .bg-pink-300\\/\\[0\\.07\\] {\n    background-color: #fda5d512;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-pink-300\\/\\[0\\.07\\] {\n      background-color: color-mix(in oklab, var(--color-pink-300) 7.0%, transparent);\n    }\n  }\n\n  .bg-popover {\n    background-color: var(--cosimo-mod-popover);\n  }\n\n  .bg-primary, .bg-primary\\/10 {\n    background-color: var(--cosimo-mod-primary);\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-primary\\/10 {\n      background-color: color-mix(in oklab, var(--cosimo-mod-primary) 10%, transparent);\n    }\n  }\n\n  .bg-primary\\/20 {\n    background-color: var(--cosimo-mod-primary);\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-primary\\/20 {\n      background-color: color-mix(in oklab, var(--cosimo-mod-primary) 20%, transparent);\n    }\n  }\n\n  .bg-rose-400 {\n    background-color: var(--color-rose-400);\n  }\n\n  .bg-rose-400\\/\\[0\\.035\\] {\n    background-color: #ff667f09;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-rose-400\\/\\[0\\.035\\] {\n      background-color: color-mix(in oklab, var(--color-rose-400) 3.5%, transparent);\n    }\n  }\n\n  .bg-secondary {\n    background-color: var(--cosimo-mod-secondary);\n  }\n\n  .bg-sky-300 {\n    background-color: var(--color-sky-300);\n  }\n\n  .bg-transparent {\n    background-color: #0000;\n  }\n\n  .bg-white {\n    background-color: var(--color-white);\n  }\n\n  .bg-white\\/0 {\n    background-color: #0000;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-white\\/0 {\n      background-color: color-mix(in oklab, var(--color-white) 0%, transparent);\n    }\n  }\n\n  .bg-white\\/\\[0\\.02\\] {\n    background-color: #ffffff05;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-white\\/\\[0\\.02\\] {\n      background-color: color-mix(in oklab, var(--color-white) 2%, transparent);\n    }\n  }\n\n  .bg-white\\/\\[0\\.03\\] {\n    background-color: #ffffff08;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-white\\/\\[0\\.03\\] {\n      background-color: color-mix(in oklab, var(--color-white) 3%, transparent);\n    }\n  }\n\n  .bg-white\\/\\[0\\.04\\] {\n    background-color: #ffffff0a;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-white\\/\\[0\\.04\\] {\n      background-color: color-mix(in oklab, var(--color-white) 4%, transparent);\n    }\n  }\n\n  .bg-white\\/\\[0\\.06\\] {\n    background-color: #ffffff0f;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-white\\/\\[0\\.06\\] {\n      background-color: color-mix(in oklab, var(--color-white) 6%, transparent);\n    }\n  }\n\n  .bg-white\\/\\[0\\.08\\] {\n    background-color: #ffffff14;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-white\\/\\[0\\.08\\] {\n      background-color: color-mix(in oklab, var(--color-white) 8%, transparent);\n    }\n  }\n\n  .bg-white\\/\\[0\\.012\\] {\n    background-color: #ffffff03;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-white\\/\\[0\\.012\\] {\n      background-color: color-mix(in oklab, var(--color-white) 1.2%, transparent);\n    }\n  }\n\n  .bg-white\\/\\[0\\.12\\] {\n    background-color: #ffffff1f;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-white\\/\\[0\\.12\\] {\n      background-color: color-mix(in oklab, var(--color-white) 12%, transparent);\n    }\n  }\n\n  .bg-white\\/\\[0\\.015\\] {\n    background-color: #ffffff04;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-white\\/\\[0\\.015\\] {\n      background-color: color-mix(in oklab, var(--color-white) 1.5%, transparent);\n    }\n  }\n\n  .bg-white\\/\\[0\\.018\\] {\n    background-color: #ffffff05;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-white\\/\\[0\\.018\\] {\n      background-color: color-mix(in oklab, var(--color-white) 1.8%, transparent);\n    }\n  }\n\n  .bg-white\\/\\[0\\.022\\] {\n    background-color: #ffffff06;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-white\\/\\[0\\.022\\] {\n      background-color: color-mix(in oklab, var(--color-white) 2.2%, transparent);\n    }\n  }\n\n  .bg-white\\/\\[0\\.025\\] {\n    background-color: #ffffff06;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-white\\/\\[0\\.025\\] {\n      background-color: color-mix(in oklab, var(--color-white) 2.5%, transparent);\n    }\n  }\n\n  .bg-gradient-to-b {\n    --tw-gradient-position: to bottom in oklab;\n    background-image: linear-gradient(var(--tw-gradient-stops));\n  }\n\n  .bg-gradient-to-r {\n    --tw-gradient-position: to right in oklab;\n    background-image: linear-gradient(var(--tw-gradient-stops));\n  }\n\n  .bg-gradient-to-t {\n    --tw-gradient-position: to top in oklab;\n    background-image: linear-gradient(var(--tw-gradient-stops));\n  }\n\n  .bg-\\[linear-gradient\\(\\.\\.\\.\\)\\] {\n    background-image: linear-gradient(...);\n  }\n\n  .bg-\\[linear-gradient\\(90deg\\,rgba\\(135\\,215\\,245\\,0\\.58\\)\\,rgba\\(251\\,191\\,36\\,0\\.78\\)\\)\\] {\n    background-image: linear-gradient(90deg, #87d7f594, #fbbf24c7);\n  }\n\n  .bg-\\[linear-gradient\\(135deg\\,rgba\\(8\\,16\\,30\\,0\\.96\\)\\,rgba\\(4\\,6\\,14\\,1\\)\\)\\] {\n    background-image: linear-gradient(135deg, #08101ef5, #04060e);\n  }\n\n  .bg-\\[linear-gradient\\(180deg\\,\\#f8d88a\\,\\#fbbf24\\)\\] {\n    background-image: linear-gradient(#f8d88a, #fbbf24);\n  }\n\n  .bg-\\[linear-gradient\\(180deg\\,rgba\\(2\\,6\\,18\\,0\\.95\\)\\,rgba\\(1\\,3\\,9\\,1\\)\\)\\] {\n    background-image: linear-gradient(#020612f2, #010309);\n  }\n\n  .bg-\\[linear-gradient\\(180deg\\,rgba\\(9\\,13\\,24\\,0\\.98\\)\\,rgba\\(3\\,5\\,12\\,0\\.98\\)\\)\\] {\n    background-image: linear-gradient(#090d18fa, #03050cfa);\n  }\n\n  .bg-\\[linear-gradient\\(180deg\\,rgba\\(17\\,22\\,33\\,0\\.94\\)\\,rgba\\(5\\,8\\,16\\,0\\.98\\)\\)\\] {\n    background-image: linear-gradient(#111621f0, #050810fa);\n  }\n\n  .bg-\\[linear-gradient\\(180deg\\,rgba\\(18\\,25\\,40\\,0\\.94\\)\\,rgba\\(4\\,7\\,16\\,0\\.98\\)\\)\\] {\n    background-image: linear-gradient(#121928f0, #040710fa);\n  }\n\n  .bg-\\[linear-gradient\\(180deg\\,rgba\\(255\\,255\\,255\\,0\\.02\\)\\,rgba\\(255\\,255\\,255\\,0\\.01\\)\\)\\,linear-gradient\\(180deg\\,rgba\\(5\\,9\\,19\\,0\\.92\\)\\,rgba\\(7\\,13\\,24\\,0\\.96\\)\\)\\] {\n    background-image: linear-gradient(#ffffff05, #ffffff03), linear-gradient(#050913eb, #070d18f5);\n  }\n\n  .bg-\\[radial-gradient\\(circle_at_18\\%_22\\%\\,rgba\\(109\\,216\\,255\\,0\\.10\\)\\,transparent_26\\%\\)\\,radial-gradient\\(circle_at_82\\%_78\\%\\,rgba\\(248\\,184\\,77\\,0\\.10\\)\\,transparent_20\\%\\)\\] {\n    background-image: radial-gradient(circle at 18% 22%, #6dd8ff1a, #0000 26%), radial-gradient(circle at 82% 78%, #f8b84d1a, #0000 20%);\n  }\n\n  .bg-\\[radial-gradient\\(circle_at_top\\,rgba\\(93\\,173\\,255\\,0\\.14\\)\\,transparent_34\\%\\)\\,linear-gradient\\(180deg\\,rgba\\(6\\,10\\,22\\,0\\.98\\)\\,rgba\\(2\\,4\\,11\\,1\\)\\)\\] {\n    background-image: radial-gradient(circle at top, #5dadff24, #0000 34%), linear-gradient(#060a16fa, #02040b);\n  }\n\n  .bg-\\[radial-gradient\\(circle_at_top\\,rgba\\(120\\,112\\,255\\,0\\.10\\)\\,transparent_38\\%\\)\\,linear-gradient\\(180deg\\,rgba\\(5\\,8\\,18\\,1\\)\\,rgba\\(2\\,3\\,10\\,1\\)\\)\\] {\n    background-image: radial-gradient(circle at top, #7870ff1a, #0000 38%), linear-gradient(#050812, #02030a);\n  }\n\n  .bg-\\[radial-gradient\\(circle_at_top_left\\,rgba\\(103\\,232\\,249\\,0\\.13\\)\\,transparent_38\\%\\)\\,linear-gradient\\(180deg\\,rgba\\(6\\,12\\,24\\,0\\.95\\)\\,rgba\\(2\\,5\\,12\\,0\\.98\\)\\)\\] {\n    background-image: radial-gradient(circle at 0 0, #67e8f921, #0000 38%), linear-gradient(#060c18f2, #02050cfa);\n  }\n\n  .bg-\\[radial-gradient\\(circle_at_top_left\\,rgba\\(248\\,113\\,113\\,0\\.10\\)\\,transparent_34\\%\\)\\,linear-gradient\\(180deg\\,rgba\\(9\\,8\\,15\\,0\\.98\\)\\,rgba\\(2\\,4\\,11\\,1\\)\\)\\] {\n    background-image: radial-gradient(circle at 0 0, #f871711a, #0000 34%), linear-gradient(#09080ffa, #02040b);\n  }\n\n  .bg-\\[repeating-linear-gradient\\(135deg\\,rgba\\(255\\,255\\,255\\,0\\.018\\)_0px\\,rgba\\(255\\,255\\,255\\,0\\.018\\)_4px\\,transparent_4px\\,transparent_8px\\)\\] {\n    background-image: repeating-linear-gradient(135deg, #ffffff05 0 4px, #0000 4px 8px);\n  }\n\n  .from-amber-400 {\n    --tw-gradient-from: var(--color-amber-400);\n    --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));\n  }\n\n  .from-cyan-400 {\n    --tw-gradient-from: var(--color-cyan-400);\n    --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));\n  }\n\n  .from-rose-400 {\n    --tw-gradient-from: var(--color-rose-400);\n    --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));\n  }\n\n  .from-transparent {\n    --tw-gradient-from: transparent;\n    --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));\n  }\n\n  .via-cyan-200 {\n    --tw-gradient-via: var(--color-cyan-200);\n    --tw-gradient-via-stops: var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-via) var(--tw-gradient-via-position), var(--tw-gradient-to) var(--tw-gradient-to-position);\n    --tw-gradient-stops: var(--tw-gradient-via-stops);\n  }\n\n  .to-amber-400 {\n    --tw-gradient-to: var(--color-amber-400);\n    --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));\n  }\n\n  .to-cyan-400 {\n    --tw-gradient-to: var(--color-cyan-400);\n    --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));\n  }\n\n  .to-rose-400 {\n    --tw-gradient-to: var(--color-rose-400);\n    --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));\n  }\n\n  .to-transparent {\n    --tw-gradient-to: transparent;\n    --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));\n  }\n\n  .mask-repeat {\n    -webkit-mask-repeat: repeat;\n    mask-repeat: repeat;\n  }\n\n  .fill-current {\n    fill: currentColor;\n  }\n\n  .fill-cyan-200 {\n    fill: var(--color-cyan-200);\n  }\n\n  .fill-foreground {\n    fill: var(--cosimo-mod-foreground);\n  }\n\n  .fill-fuchsia-200 {\n    fill: var(--color-fuchsia-200);\n  }\n\n  .fill-none {\n    fill: none;\n  }\n\n  .fill-primary {\n    fill: var(--cosimo-mod-primary);\n  }\n\n  .stroke-current {\n    stroke: currentColor;\n  }\n\n  .stroke-\\[1\\.5\\] {\n    stroke-width: 1.5px;\n  }\n\n  .p-0 {\n    padding: calc(var(--spacing) * 0);\n  }\n\n  .p-0\\.5 {\n    padding: calc(var(--spacing) * .5);\n  }\n\n  .p-1 {\n    padding: calc(var(--spacing) * 1);\n  }\n\n  .p-1\\.5 {\n    padding: calc(var(--spacing) * 1.5);\n  }\n\n  .p-2 {\n    padding: calc(var(--spacing) * 2);\n  }\n\n  .p-3 {\n    padding: calc(var(--spacing) * 3);\n  }\n\n  .p-4 {\n    padding: calc(var(--spacing) * 4);\n  }\n\n  .p-5 {\n    padding: calc(var(--spacing) * 5);\n  }\n\n  .p-6 {\n    padding: calc(var(--spacing) * 6);\n  }\n\n  .p-8 {\n    padding: calc(var(--spacing) * 8);\n  }\n\n  .p-\\[2px\\] {\n    padding: 2px;\n  }\n\n  .p-px {\n    padding: 1px;\n  }\n\n  .px-0 {\n    padding-inline: calc(var(--spacing) * 0);\n  }\n\n  .px-1 {\n    padding-inline: calc(var(--spacing) * 1);\n  }\n\n  .px-1\\.5 {\n    padding-inline: calc(var(--spacing) * 1.5);\n  }\n\n  .px-2 {\n    padding-inline: calc(var(--spacing) * 2);\n  }\n\n  .px-2\\.5 {\n    padding-inline: calc(var(--spacing) * 2.5);\n  }\n\n  .px-3 {\n    padding-inline: calc(var(--spacing) * 3);\n  }\n\n  .px-4 {\n    padding-inline: calc(var(--spacing) * 4);\n  }\n\n  .px-5 {\n    padding-inline: calc(var(--spacing) * 5);\n  }\n\n  .px-6 {\n    padding-inline: calc(var(--spacing) * 6);\n  }\n\n  .py-0 {\n    padding-block: calc(var(--spacing) * 0);\n  }\n\n  .py-0\\.5 {\n    padding-block: calc(var(--spacing) * .5);\n  }\n\n  .py-1 {\n    padding-block: calc(var(--spacing) * 1);\n  }\n\n  .py-1\\.5 {\n    padding-block: calc(var(--spacing) * 1.5);\n  }\n\n  .py-2 {\n    padding-block: calc(var(--spacing) * 2);\n  }\n\n  .py-2\\.5 {\n    padding-block: calc(var(--spacing) * 2.5);\n  }\n\n  .py-3 {\n    padding-block: calc(var(--spacing) * 3);\n  }\n\n  .py-4 {\n    padding-block: calc(var(--spacing) * 4);\n  }\n\n  .py-5 {\n    padding-block: calc(var(--spacing) * 5);\n  }\n\n  .py-6 {\n    padding-block: calc(var(--spacing) * 6);\n  }\n\n  .py-8 {\n    padding-block: calc(var(--spacing) * 8);\n  }\n\n  .py-\\[2px\\] {\n    padding-block: 2px;\n  }\n\n  .py-\\[3px\\] {\n    padding-block: 3px;\n  }\n\n  .pt-0 {\n    padding-top: calc(var(--spacing) * 0);\n  }\n\n  .pt-1 {\n    padding-top: calc(var(--spacing) * 1);\n  }\n\n  .pt-2 {\n    padding-top: calc(var(--spacing) * 2);\n  }\n\n  .pt-2\\.5 {\n    padding-top: calc(var(--spacing) * 2.5);\n  }\n\n  .pt-3 {\n    padding-top: calc(var(--spacing) * 3);\n  }\n\n  .pt-4 {\n    padding-top: calc(var(--spacing) * 4);\n  }\n\n  .pr-1 {\n    padding-right: calc(var(--spacing) * 1);\n  }\n\n  .pr-2 {\n    padding-right: calc(var(--spacing) * 2);\n  }\n\n  .pr-3 {\n    padding-right: calc(var(--spacing) * 3);\n  }\n\n  .pr-4 {\n    padding-right: calc(var(--spacing) * 4);\n  }\n\n  .pr-8 {\n    padding-right: calc(var(--spacing) * 8);\n  }\n\n  .pr-10 {\n    padding-right: calc(var(--spacing) * 10);\n  }\n\n  .pr-11 {\n    padding-right: calc(var(--spacing) * 11);\n  }\n\n  .pb-1 {\n    padding-bottom: calc(var(--spacing) * 1);\n  }\n\n  .pb-3 {\n    padding-bottom: calc(var(--spacing) * 3);\n  }\n\n  .pb-4 {\n    padding-bottom: calc(var(--spacing) * 4);\n  }\n\n  .pb-5 {\n    padding-bottom: calc(var(--spacing) * 5);\n  }\n\n  .pl-1 {\n    padding-left: calc(var(--spacing) * 1);\n  }\n\n  .pl-2 {\n    padding-left: calc(var(--spacing) * 2);\n  }\n\n  .pl-3 {\n    padding-left: calc(var(--spacing) * 3);\n  }\n\n  .pl-4 {\n    padding-left: calc(var(--spacing) * 4);\n  }\n\n  .pl-8 {\n    padding-left: calc(var(--spacing) * 8);\n  }\n\n  .text-center {\n    text-align: center;\n  }\n\n  .text-left {\n    text-align: left;\n  }\n\n  .text-right {\n    text-align: right;\n  }\n\n  .align-middle {\n    vertical-align: middle;\n  }\n\n  .font-mono {\n    font-family: var(--font-mono);\n  }\n\n  .font-sans {\n    font-family: var(--font-sans);\n  }\n\n  .text-2xl {\n    font-size: var(--text-2xl);\n    line-height: var(--tw-leading, var(--text-2xl--line-height));\n  }\n\n  .text-3xl {\n    font-size: var(--text-3xl);\n    line-height: var(--tw-leading, var(--text-3xl--line-height));\n  }\n\n  .text-base {\n    font-size: var(--text-base);\n    line-height: var(--tw-leading, var(--text-base--line-height));\n  }\n\n  .text-lg {\n    font-size: var(--text-lg);\n    line-height: var(--tw-leading, var(--text-lg--line-height));\n  }\n\n  .text-sm {\n    font-size: var(--text-sm);\n    line-height: var(--tw-leading, var(--text-sm--line-height));\n  }\n\n  .text-xs {\n    font-size: var(--text-xs);\n    line-height: var(--tw-leading, var(--text-xs--line-height));\n  }\n\n  .text-\\[7px\\] {\n    font-size: 7px;\n  }\n\n  .text-\\[8px\\] {\n    font-size: 8px;\n  }\n\n  .text-\\[9px\\] {\n    font-size: 9px;\n  }\n\n  .text-\\[10px\\] {\n    font-size: 10px;\n  }\n\n  .text-\\[11px\\] {\n    font-size: 11px;\n  }\n\n  .text-\\[12px\\] {\n    font-size: 12px;\n  }\n\n  .text-\\[13px\\] {\n    font-size: 13px;\n  }\n\n  .text-\\[20px\\] {\n    font-size: 20px;\n  }\n\n  .leading-4 {\n    --tw-leading: calc(var(--spacing) * 4);\n    line-height: calc(var(--spacing) * 4);\n  }\n\n  .leading-none {\n    --tw-leading: 1;\n    line-height: 1;\n  }\n\n  .leading-normal {\n    --tw-leading: var(--leading-normal);\n    line-height: var(--leading-normal);\n  }\n\n  .leading-relaxed {\n    --tw-leading: var(--leading-relaxed);\n    line-height: var(--leading-relaxed);\n  }\n\n  .leading-snug {\n    --tw-leading: var(--leading-snug);\n    line-height: var(--leading-snug);\n  }\n\n  .font-black {\n    --tw-font-weight: var(--font-weight-black);\n    font-weight: var(--font-weight-black);\n  }\n\n  .font-bold {\n    --tw-font-weight: var(--font-weight-bold);\n    font-weight: var(--font-weight-bold);\n  }\n\n  .font-medium {\n    --tw-font-weight: var(--font-weight-medium);\n    font-weight: var(--font-weight-medium);\n  }\n\n  .font-normal {\n    --tw-font-weight: var(--font-weight-normal);\n    font-weight: var(--font-weight-normal);\n  }\n\n  .font-semibold {\n    --tw-font-weight: var(--font-weight-semibold);\n    font-weight: var(--font-weight-semibold);\n  }\n\n  .tracking-\\[-0\\.03em\\] {\n    --tw-tracking: -.03em;\n    letter-spacing: -.03em;\n  }\n\n  .tracking-\\[-0\\.04em\\] {\n    --tw-tracking: -.04em;\n    letter-spacing: -.04em;\n  }\n\n  .tracking-\\[0\\.1em\\] {\n    --tw-tracking: .1em;\n    letter-spacing: .1em;\n  }\n\n  .tracking-\\[0\\.2em\\] {\n    --tw-tracking: .2em;\n    letter-spacing: .2em;\n  }\n\n  .tracking-\\[0\\.03em\\] {\n    --tw-tracking: .03em;\n    letter-spacing: .03em;\n  }\n\n  .tracking-\\[0\\.04em\\] {\n    --tw-tracking: .04em;\n    letter-spacing: .04em;\n  }\n\n  .tracking-\\[0\\.06em\\] {\n    --tw-tracking: .06em;\n    letter-spacing: .06em;\n  }\n\n  .tracking-\\[0\\.08em\\] {\n    --tw-tracking: .08em;\n    letter-spacing: .08em;\n  }\n\n  .tracking-\\[0\\.10em\\] {\n    --tw-tracking: .1em;\n    letter-spacing: .1em;\n  }\n\n  .tracking-\\[0\\.12em\\] {\n    --tw-tracking: .12em;\n    letter-spacing: .12em;\n  }\n\n  .tracking-\\[0\\.14em\\] {\n    --tw-tracking: .14em;\n    letter-spacing: .14em;\n  }\n\n  .tracking-\\[0\\.15em\\] {\n    --tw-tracking: .15em;\n    letter-spacing: .15em;\n  }\n\n  .tracking-\\[0\\.16em\\] {\n    --tw-tracking: .16em;\n    letter-spacing: .16em;\n  }\n\n  .tracking-\\[0\\.18em\\] {\n    --tw-tracking: .18em;\n    letter-spacing: .18em;\n  }\n\n  .tracking-\\[0\\.22em\\] {\n    --tw-tracking: .22em;\n    letter-spacing: .22em;\n  }\n\n  .tracking-\\[0\\.24em\\] {\n    --tw-tracking: .24em;\n    letter-spacing: .24em;\n  }\n\n  .tracking-tight {\n    --tw-tracking: var(--tracking-tight);\n    letter-spacing: var(--tracking-tight);\n  }\n\n  .tracking-wide {\n    --tw-tracking: var(--tracking-wide);\n    letter-spacing: var(--tracking-wide);\n  }\n\n  .tracking-widest {\n    --tw-tracking: var(--tracking-widest);\n    letter-spacing: var(--tracking-widest);\n  }\n\n  .text-balance {\n    text-wrap: balance;\n  }\n\n  .text-wrap {\n    text-wrap: wrap;\n  }\n\n  .break-words {\n    overflow-wrap: break-word;\n  }\n\n  .whitespace-nowrap {\n    white-space: nowrap;\n  }\n\n  .text-\\[\\#0a0d18\\] {\n    color: #0a0d18;\n  }\n\n  .text-amber-100 {\n    color: var(--color-amber-100);\n  }\n\n  .text-amber-200 {\n    color: var(--color-amber-200);\n  }\n\n  .text-amber-200\\/78 {\n    color: #fee685c7;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-amber-200\\/78 {\n      color: color-mix(in oklab, var(--color-amber-200) 78%, transparent);\n    }\n  }\n\n  .text-amber-200\\/85 {\n    color: #fee685d9;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-amber-200\\/85 {\n      color: color-mix(in oklab, var(--color-amber-200) 85%, transparent);\n    }\n  }\n\n  .text-background {\n    color: var(--cosimo-mod-background);\n  }\n\n  .text-blue-300 {\n    color: var(--color-blue-300);\n  }\n\n  .text-blue-300\\/55 {\n    color: #90c5ff8c;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-blue-300\\/55 {\n      color: color-mix(in oklab, var(--color-blue-300) 55%, transparent);\n    }\n  }\n\n  .text-blue-300\\/70 {\n    color: #90c5ffb3;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-blue-300\\/70 {\n      color: color-mix(in oklab, var(--color-blue-300) 70%, transparent);\n    }\n  }\n\n  .text-current {\n    color: currentColor;\n  }\n\n  .text-cyan-50 {\n    color: var(--color-cyan-50);\n  }\n\n  .text-cyan-50\\/80 {\n    color: #ecfeffcc;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-cyan-50\\/80 {\n      color: color-mix(in oklab, var(--color-cyan-50) 80%, transparent);\n    }\n  }\n\n  .text-cyan-50\\/90 {\n    color: #ecfeffe6;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-cyan-50\\/90 {\n      color: color-mix(in oklab, var(--color-cyan-50) 90%, transparent);\n    }\n  }\n\n  .text-cyan-100 {\n    color: var(--color-cyan-100);\n  }\n\n  .text-cyan-100\\/58 {\n    color: #cefafe94;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-cyan-100\\/58 {\n      color: color-mix(in oklab, var(--color-cyan-100) 58%, transparent);\n    }\n  }\n\n  .text-cyan-100\\/60 {\n    color: #cefafe99;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-cyan-100\\/60 {\n      color: color-mix(in oklab, var(--color-cyan-100) 60%, transparent);\n    }\n  }\n\n  .text-cyan-100\\/75 {\n    color: #cefafebf;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-cyan-100\\/75 {\n      color: color-mix(in oklab, var(--color-cyan-100) 75%, transparent);\n    }\n  }\n\n  .text-cyan-100\\/85 {\n    color: #cefafed9;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-cyan-100\\/85 {\n      color: color-mix(in oklab, var(--color-cyan-100) 85%, transparent);\n    }\n  }\n\n  .text-cyan-200 {\n    color: var(--color-cyan-200);\n  }\n\n  .text-cyan-200\\/70 {\n    color: #a2f4fdb3;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-cyan-200\\/70 {\n      color: color-mix(in oklab, var(--color-cyan-200) 70%, transparent);\n    }\n  }\n\n  .text-cyan-200\\/80 {\n    color: #a2f4fdcc;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-cyan-200\\/80 {\n      color: color-mix(in oklab, var(--color-cyan-200) 80%, transparent);\n    }\n  }\n\n  .text-cyan-200\\/85 {\n    color: #a2f4fdd9;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-cyan-200\\/85 {\n      color: color-mix(in oklab, var(--color-cyan-200) 85%, transparent);\n    }\n  }\n\n  .text-cyan-300 {\n    color: var(--color-cyan-300);\n  }\n\n  .text-cyan-300\\/40 {\n    color: #53eafd66;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-cyan-300\\/40 {\n      color: color-mix(in oklab, var(--color-cyan-300) 40%, transparent);\n    }\n  }\n\n  .text-cyan-300\\/70 {\n    color: #53eafdb3;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-cyan-300\\/70 {\n      color: color-mix(in oklab, var(--color-cyan-300) 70%, transparent);\n    }\n  }\n\n  .text-cyan-300\\/85 {\n    color: #53eafdd9;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-cyan-300\\/85 {\n      color: color-mix(in oklab, var(--color-cyan-300) 85%, transparent);\n    }\n  }\n\n  .text-cyan-400 {\n    color: var(--color-cyan-400);\n  }\n\n  .text-cyan-400\\/45 {\n    color: #00d2ef73;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-cyan-400\\/45 {\n      color: color-mix(in oklab, var(--color-cyan-400) 45%, transparent);\n    }\n  }\n\n  .text-cyan-400\\/80 {\n    color: #00d2efcc;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-cyan-400\\/80 {\n      color: color-mix(in oklab, var(--color-cyan-400) 80%, transparent);\n    }\n  }\n\n  .text-destructive {\n    color: var(--cosimo-mod-destructive);\n  }\n\n  .text-emerald-100 {\n    color: var(--color-emerald-100);\n  }\n\n  .text-emerald-100\\/90 {\n    color: #d0fae5e6;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-emerald-100\\/90 {\n      color: color-mix(in oklab, var(--color-emerald-100) 90%, transparent);\n    }\n  }\n\n  .text-emerald-200 {\n    color: var(--color-emerald-200);\n  }\n\n  .text-emerald-200\\/50 {\n    color: #a4f4cf80;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-emerald-200\\/50 {\n      color: color-mix(in oklab, var(--color-emerald-200) 50%, transparent);\n    }\n  }\n\n  .text-emerald-300 {\n    color: var(--color-emerald-300);\n  }\n\n  .text-foreground, .text-foreground\\/80 {\n    color: var(--cosimo-mod-foreground);\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-foreground\\/80 {\n      color: color-mix(in oklab, var(--cosimo-mod-foreground) 80%, transparent);\n    }\n  }\n\n  .text-fuchsia-100 {\n    color: var(--color-fuchsia-100);\n  }\n\n  .text-fuchsia-100\\/90 {\n    color: #fae8ffe6;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-fuchsia-100\\/90 {\n      color: color-mix(in oklab, var(--color-fuchsia-100) 90%, transparent);\n    }\n  }\n\n  .text-fuchsia-200 {\n    color: var(--color-fuchsia-200);\n  }\n\n  .text-fuchsia-200\\/60 {\n    color: #f6cfff99;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-fuchsia-200\\/60 {\n      color: color-mix(in oklab, var(--color-fuchsia-200) 60%, transparent);\n    }\n  }\n\n  .text-muted {\n    color: var(--cosimo-mod-muted);\n  }\n\n  .text-muted-foreground, .text-muted-foreground\\/40 {\n    color: var(--cosimo-mod-muted-foreground);\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-muted-foreground\\/40 {\n      color: color-mix(in oklab, var(--cosimo-mod-muted-foreground) 40%, transparent);\n    }\n  }\n\n  .text-muted-foreground\\/60 {\n    color: var(--cosimo-mod-muted-foreground);\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-muted-foreground\\/60 {\n      color: color-mix(in oklab, var(--cosimo-mod-muted-foreground) 60%, transparent);\n    }\n  }\n\n  .text-muted\\/60 {\n    color: var(--cosimo-mod-muted);\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-muted\\/60 {\n      color: color-mix(in oklab, var(--cosimo-mod-muted) 60%, transparent);\n    }\n  }\n\n  .text-pink-50 {\n    color: var(--color-pink-50);\n  }\n\n  .text-pink-50\\/90 {\n    color: #fdf2f8e6;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-pink-50\\/90 {\n      color: color-mix(in oklab, var(--color-pink-50) 90%, transparent);\n    }\n  }\n\n  .text-pink-100 {\n    color: var(--color-pink-100);\n  }\n\n  .text-pink-100\\/80 {\n    color: #fce7f3cc;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-pink-100\\/80 {\n      color: color-mix(in oklab, var(--color-pink-100) 80%, transparent);\n    }\n  }\n\n  .text-pink-100\\/82 {\n    color: #fce7f3d1;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-pink-100\\/82 {\n      color: color-mix(in oklab, var(--color-pink-100) 82%, transparent);\n    }\n  }\n\n  .text-pink-100\\/85 {\n    color: #fce7f3d9;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-pink-100\\/85 {\n      color: color-mix(in oklab, var(--color-pink-100) 85%, transparent);\n    }\n  }\n\n  .text-pink-200 {\n    color: var(--color-pink-200);\n  }\n\n  .text-pink-200\\/85 {\n    color: #fccee8d9;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-pink-200\\/85 {\n      color: color-mix(in oklab, var(--color-pink-200) 85%, transparent);\n    }\n  }\n\n  .text-primary {\n    color: var(--cosimo-mod-primary);\n  }\n\n  .text-rose-200 {\n    color: var(--color-rose-200);\n  }\n\n  .text-rose-400 {\n    color: var(--color-rose-400);\n  }\n\n  .text-rose-400\\/40 {\n    color: #ff667f66;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-rose-400\\/40 {\n      color: color-mix(in oklab, var(--color-rose-400) 40%, transparent);\n    }\n  }\n\n  .text-rose-400\\/45 {\n    color: #ff667f73;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-rose-400\\/45 {\n      color: color-mix(in oklab, var(--color-rose-400) 45%, transparent);\n    }\n  }\n\n  .text-rose-400\\/80 {\n    color: #ff667fcc;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-rose-400\\/80 {\n      color: color-mix(in oklab, var(--color-rose-400) 80%, transparent);\n    }\n  }\n\n  .text-sky-100 {\n    color: var(--color-sky-100);\n  }\n\n  .text-sky-300 {\n    color: var(--color-sky-300);\n  }\n\n  .text-slate-50 {\n    color: var(--color-slate-50);\n  }\n\n  .text-slate-100 {\n    color: var(--color-slate-100);\n  }\n\n  .text-slate-100\\/78 {\n    color: #f1f5f9c7;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-100\\/78 {\n      color: color-mix(in oklab, var(--color-slate-100) 78%, transparent);\n    }\n  }\n\n  .text-slate-100\\/85 {\n    color: #f1f5f9d9;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-100\\/85 {\n      color: color-mix(in oklab, var(--color-slate-100) 85%, transparent);\n    }\n  }\n\n  .text-slate-100\\/90 {\n    color: #f1f5f9e6;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-100\\/90 {\n      color: color-mix(in oklab, var(--color-slate-100) 90%, transparent);\n    }\n  }\n\n  .text-slate-200 {\n    color: var(--color-slate-200);\n  }\n\n  .text-slate-200\\/55 {\n    color: #e2e8f08c;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-200\\/55 {\n      color: color-mix(in oklab, var(--color-slate-200) 55%, transparent);\n    }\n  }\n\n  .text-slate-200\\/80 {\n    color: #e2e8f0cc;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-200\\/80 {\n      color: color-mix(in oklab, var(--color-slate-200) 80%, transparent);\n    }\n  }\n\n  .text-slate-200\\/85 {\n    color: #e2e8f0d9;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-200\\/85 {\n      color: color-mix(in oklab, var(--color-slate-200) 85%, transparent);\n    }\n  }\n\n  .text-slate-300 {\n    color: var(--color-slate-300);\n  }\n\n  .text-slate-300\\/25 {\n    color: #cad5e240;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-300\\/25 {\n      color: color-mix(in oklab, var(--color-slate-300) 25%, transparent);\n    }\n  }\n\n  .text-slate-300\\/35 {\n    color: #cad5e259;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-300\\/35 {\n      color: color-mix(in oklab, var(--color-slate-300) 35%, transparent);\n    }\n  }\n\n  .text-slate-300\\/40 {\n    color: #cad5e266;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-300\\/40 {\n      color: color-mix(in oklab, var(--color-slate-300) 40%, transparent);\n    }\n  }\n\n  .text-slate-300\\/45 {\n    color: #cad5e273;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-300\\/45 {\n      color: color-mix(in oklab, var(--color-slate-300) 45%, transparent);\n    }\n  }\n\n  .text-slate-300\\/55 {\n    color: #cad5e28c;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-300\\/55 {\n      color: color-mix(in oklab, var(--color-slate-300) 55%, transparent);\n    }\n  }\n\n  .text-slate-300\\/60 {\n    color: #cad5e299;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-300\\/60 {\n      color: color-mix(in oklab, var(--color-slate-300) 60%, transparent);\n    }\n  }\n\n  .text-slate-300\\/62 {\n    color: #cad5e29e;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-300\\/62 {\n      color: color-mix(in oklab, var(--color-slate-300) 62%, transparent);\n    }\n  }\n\n  .text-slate-300\\/65 {\n    color: #cad5e2a6;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-300\\/65 {\n      color: color-mix(in oklab, var(--color-slate-300) 65%, transparent);\n    }\n  }\n\n  .text-slate-300\\/70 {\n    color: #cad5e2b3;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-300\\/70 {\n      color: color-mix(in oklab, var(--color-slate-300) 70%, transparent);\n    }\n  }\n\n  .text-slate-300\\/72 {\n    color: #cad5e2b8;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-300\\/72 {\n      color: color-mix(in oklab, var(--color-slate-300) 72%, transparent);\n    }\n  }\n\n  .text-slate-300\\/75 {\n    color: #cad5e2bf;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-300\\/75 {\n      color: color-mix(in oklab, var(--color-slate-300) 75%, transparent);\n    }\n  }\n\n  .text-slate-400 {\n    color: var(--color-slate-400);\n  }\n\n  .text-slate-400\\/45 {\n    color: #90a1b973;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-400\\/45 {\n      color: color-mix(in oklab, var(--color-slate-400) 45%, transparent);\n    }\n  }\n\n  .text-slate-400\\/50 {\n    color: #90a1b980;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-400\\/50 {\n      color: color-mix(in oklab, var(--color-slate-400) 50%, transparent);\n    }\n  }\n\n  .text-slate-400\\/60 {\n    color: #90a1b999;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-400\\/60 {\n      color: color-mix(in oklab, var(--color-slate-400) 60%, transparent);\n    }\n  }\n\n  .text-slate-400\\/70 {\n    color: #90a1b9b3;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-400\\/70 {\n      color: color-mix(in oklab, var(--color-slate-400) 70%, transparent);\n    }\n  }\n\n  .text-slate-400\\/74 {\n    color: #90a1b9bd;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-400\\/74 {\n      color: color-mix(in oklab, var(--color-slate-400) 74%, transparent);\n    }\n  }\n\n  .text-slate-400\\/80 {\n    color: #90a1b9cc;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-400\\/80 {\n      color: color-mix(in oklab, var(--color-slate-400) 80%, transparent);\n    }\n  }\n\n  .text-slate-400\\/85 {\n    color: #90a1b9d9;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-400\\/85 {\n      color: color-mix(in oklab, var(--color-slate-400) 85%, transparent);\n    }\n  }\n\n  .text-slate-500 {\n    color: var(--color-slate-500);\n  }\n\n  .text-slate-500\\/35 {\n    color: #62748e59;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-500\\/35 {\n      color: color-mix(in oklab, var(--color-slate-500) 35%, transparent);\n    }\n  }\n\n  .text-white {\n    color: var(--color-white);\n  }\n\n  .lowercase {\n    text-transform: lowercase;\n  }\n\n  .uppercase {\n    text-transform: uppercase;\n  }\n\n  .italic {\n    font-style: italic;\n  }\n\n  .ordinal {\n    --tw-ordinal: ordinal;\n    font-variant-numeric: var(--tw-ordinal, ) var(--tw-slashed-zero, ) var(--tw-numeric-figure, ) var(--tw-numeric-spacing, ) var(--tw-numeric-fraction, );\n  }\n\n  .tabular-nums {\n    --tw-numeric-spacing: tabular-nums;\n    font-variant-numeric: var(--tw-ordinal, ) var(--tw-slashed-zero, ) var(--tw-numeric-figure, ) var(--tw-numeric-spacing, ) var(--tw-numeric-fraction, );\n  }\n\n  .underline {\n    text-decoration-line: underline;\n  }\n\n  .underline-offset-4 {\n    text-underline-offset: 4px;\n  }\n\n  .antialiased {\n    -webkit-font-smoothing: antialiased;\n    -moz-osx-font-smoothing: grayscale;\n  }\n\n  .accent-cyan-300 {\n    accent-color: var(--color-cyan-300);\n  }\n\n  .opacity-0 {\n    opacity: 0;\n  }\n\n  .opacity-40 {\n    opacity: .4;\n  }\n\n  .opacity-50 {\n    opacity: .5;\n  }\n\n  .opacity-70 {\n    opacity: .7;\n  }\n\n  .opacity-90 {\n    opacity: .9;\n  }\n\n  .shadow {\n    --tw-shadow: 0 1px 3px 0 var(--tw-shadow-color, #0000001a), 0 1px 2px -1px var(--tw-shadow-color, #0000001a);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[0_0_8px_rgba\\(103\\,232\\,249\\,0\\.6\\)\\] {\n    --tw-shadow: 0 0 8px var(--tw-shadow-color, #67e8f999);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[0_0_18px_rgba\\(251\\,191\\,36\\,0\\.34\\)\\] {\n    --tw-shadow: 0 0 18px var(--tw-shadow-color, #fbbf2457);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[0_10px_26px_rgba\\(0\\,0\\,0\\,0\\.28\\)\\] {\n    --tw-shadow: 0 10px 26px var(--tw-shadow-color, #00000047);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[0_10px_28px_rgba\\(0\\,0\\,0\\,0\\.22\\)\\] {\n    --tw-shadow: 0 10px 28px var(--tw-shadow-color, #00000038);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[0_10px_28px_rgba\\(0\\,0\\,0\\,0\\.26\\)\\,inset_0_1px_0_rgba\\(255\\,255\\,255\\,0\\.05\\)\\] {\n    --tw-shadow: 0 10px 28px var(--tw-shadow-color, #00000042), inset 0 1px 0 var(--tw-shadow-color, #ffffff0d);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[0_10px_28px_rgba\\(0\\,0\\,0\\,0\\.28\\)\\] {\n    --tw-shadow: 0 10px 28px var(--tw-shadow-color, #00000047);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[0_12px_28px_rgba\\(0\\,0\\,0\\,0\\.32\\)\\] {\n    --tw-shadow: 0 12px 28px var(--tw-shadow-color, #00000052);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[0_14px_36px_rgba\\(0\\,0\\,0\\,0\\.55\\)\\] {\n    --tw-shadow: 0 14px 36px var(--tw-shadow-color, #0000008c);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[0_18px_40px_rgba\\(0\\,0\\,0\\,0\\.45\\)\\] {\n    --tw-shadow: 0 18px 40px var(--tw-shadow-color, #00000073);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[0_18px_42px_rgba\\(3\\,6\\,18\\,0\\.45\\)\\] {\n    --tw-shadow: 0 18px 42px var(--tw-shadow-color, #03061273);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[0_22px_40px_rgba\\(0\\,0\\,0\\,0\\.32\\)\\] {\n    --tw-shadow: 0 22px 40px var(--tw-shadow-color, #00000052);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[0_26px_80px_rgba\\(0\\,0\\,0\\,0\\.48\\)\\] {\n    --tw-shadow: 0 26px 80px var(--tw-shadow-color, #0000007a);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[0_28px_80px_rgba\\(0\\,0\\,0\\,0\\.56\\)\\] {\n    --tw-shadow: 0 28px 80px var(--tw-shadow-color, #0000008f);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[0_36px_80px_rgba\\(0\\,0\\,0\\,0\\.5\\)\\] {\n    --tw-shadow: 0 36px 80px var(--tw-shadow-color, #00000080);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[inset_0_0_0_1px_rgba\\(143\\,232\\,255\\,0\\.18\\)\\] {\n    --tw-shadow: inset 0 0 0 1px var(--tw-shadow-color, #8fe8ff2e);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[inset_0_1px_0_rgba\\(255\\,255\\,255\\,0\\.04\\)\\] {\n    --tw-shadow: inset 0 1px 0 var(--tw-shadow-color, #ffffff0a);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[inset_0_1px_0_rgba\\(255\\,255\\,255\\,0\\.06\\)\\] {\n    --tw-shadow: inset 0 1px 0 var(--tw-shadow-color, #ffffff0f);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[inset_0_1px_0_rgba\\(255\\,255\\,255\\,0\\.08\\)\\,inset_0_-64px_80px_rgba\\(0\\,0\\,0\\,0\\.34\\)\\] {\n    --tw-shadow: inset 0 1px 0 var(--tw-shadow-color, #ffffff14), inset 0 -64px 80px var(--tw-shadow-color, #00000057);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-lg {\n    --tw-shadow: 0 10px 15px -3px var(--tw-shadow-color, #0000001a), 0 4px 6px -4px var(--tw-shadow-color, #0000001a);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-md {\n    --tw-shadow: 0 4px 6px -1px var(--tw-shadow-color, #0000001a), 0 2px 4px -2px var(--tw-shadow-color, #0000001a);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-none {\n    --tw-shadow: 0 0 #0000;\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-sm {\n    --tw-shadow: 0 1px 3px 0 var(--tw-shadow-color, #0000001a), 0 1px 2px -1px var(--tw-shadow-color, #0000001a);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-xl {\n    --tw-shadow: 0 20px 25px -5px var(--tw-shadow-color, #0000001a), 0 8px 10px -6px var(--tw-shadow-color, #0000001a);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-xs {\n    --tw-shadow: 0 1px 2px 0 var(--tw-shadow-color, #0000000d);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .ring {\n    --tw-ring-shadow: var(--tw-ring-inset, ) 0 0 0 calc(1px + var(--tw-ring-offset-width)) var(--tw-ring-color, currentcolor);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .ring-0 {\n    --tw-ring-shadow: var(--tw-ring-inset, ) 0 0 0 calc(0px + var(--tw-ring-offset-width)) var(--tw-ring-color, currentcolor);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .ring-1 {\n    --tw-ring-shadow: var(--tw-ring-inset, ) 0 0 0 calc(1px + var(--tw-ring-offset-width)) var(--tw-ring-color, currentcolor);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .ring-amber-100 {\n    --tw-ring-color: var(--color-amber-100);\n  }\n\n  .ring-amber-100\\/40 {\n    --tw-ring-color: #fef3c666;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .ring-amber-100\\/40 {\n      --tw-ring-color: color-mix(in oklab, var(--color-amber-100) 40%, transparent);\n    }\n  }\n\n  .ring-offset-background {\n    --tw-ring-offset-color: var(--cosimo-mod-background);\n  }\n\n  .outline-hidden {\n    --tw-outline-style: none;\n    outline-style: none;\n  }\n\n  @media (forced-colors: active) {\n    .outline-hidden {\n      outline-offset: 2px;\n      outline: 2px solid #0000;\n    }\n  }\n\n  .outline {\n    outline-style: var(--tw-outline-style);\n    outline-width: 1px;\n  }\n\n  .blur {\n    --tw-blur: blur(8px);\n    filter: var(--tw-blur, ) var(--tw-brightness, ) var(--tw-contrast, ) var(--tw-grayscale, ) var(--tw-hue-rotate, ) var(--tw-invert, ) var(--tw-saturate, ) var(--tw-sepia, ) var(--tw-drop-shadow, );\n  }\n\n  .invert {\n    --tw-invert: invert(100%);\n    filter: var(--tw-blur, ) var(--tw-brightness, ) var(--tw-contrast, ) var(--tw-grayscale, ) var(--tw-hue-rotate, ) var(--tw-invert, ) var(--tw-saturate, ) var(--tw-sepia, ) var(--tw-drop-shadow, );\n  }\n\n  .filter {\n    filter: var(--tw-blur, ) var(--tw-brightness, ) var(--tw-contrast, ) var(--tw-grayscale, ) var(--tw-hue-rotate, ) var(--tw-invert, ) var(--tw-saturate, ) var(--tw-sepia, ) var(--tw-drop-shadow, );\n  }\n\n  .backdrop-blur-md {\n    --tw-backdrop-blur: blur(var(--blur-md));\n    -webkit-backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );\n    backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );\n  }\n\n  .backdrop-blur-sm {\n    --tw-backdrop-blur: blur(var(--blur-sm));\n    -webkit-backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );\n    backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );\n  }\n\n  .backdrop-blur-xl {\n    --tw-backdrop-blur: blur(var(--blur-xl));\n    -webkit-backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );\n    backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );\n  }\n\n  .backdrop-filter {\n    -webkit-backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );\n    backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );\n  }\n\n  .transition {\n    transition-property: color, background-color, border-color, outline-color, text-decoration-color, fill, stroke, --tw-gradient-from, --tw-gradient-via, --tw-gradient-to, opacity, box-shadow, transform, translate, scale, rotate, filter, -webkit-backdrop-filter, backdrop-filter, display, content-visibility, overlay, pointer-events;\n    transition-timing-function: var(--tw-ease, var(--default-transition-timing-function));\n    transition-duration: var(--tw-duration, var(--default-transition-duration));\n  }\n\n  .transition-all {\n    transition-property: all;\n    transition-timing-function: var(--tw-ease, var(--default-transition-timing-function));\n    transition-duration: var(--tw-duration, var(--default-transition-duration));\n  }\n\n  .transition-colors {\n    transition-property: color, background-color, border-color, outline-color, text-decoration-color, fill, stroke, --tw-gradient-from, --tw-gradient-via, --tw-gradient-to;\n    transition-timing-function: var(--tw-ease, var(--default-transition-timing-function));\n    transition-duration: var(--tw-duration, var(--default-transition-duration));\n  }\n\n  .transition-opacity {\n    transition-property: opacity;\n    transition-timing-function: var(--tw-ease, var(--default-transition-timing-function));\n    transition-duration: var(--tw-duration, var(--default-transition-duration));\n  }\n\n  .transition-shadow {\n    transition-property: box-shadow;\n    transition-timing-function: var(--tw-ease, var(--default-transition-timing-function));\n    transition-duration: var(--tw-duration, var(--default-transition-duration));\n  }\n\n  .transition-transform {\n    transition-property: transform, translate, scale, rotate;\n    transition-timing-function: var(--tw-ease, var(--default-transition-timing-function));\n    transition-duration: var(--tw-duration, var(--default-transition-duration));\n  }\n\n  .transition-none {\n    transition-property: none;\n  }\n\n  .duration-100 {\n    --tw-duration: .1s;\n    transition-duration: .1s;\n  }\n\n  .duration-200 {\n    --tw-duration: .2s;\n    transition-duration: .2s;\n  }\n\n  .duration-300 {\n    --tw-duration: .3s;\n    transition-duration: .3s;\n  }\n\n  .duration-1000 {\n    --tw-duration: 1s;\n    transition-duration: 1s;\n  }\n\n  .ease-in-out {\n    --tw-ease: var(--ease-in-out);\n    transition-timing-function: var(--ease-in-out);\n  }\n\n  .ease-linear {\n    --tw-ease: linear;\n    transition-timing-function: linear;\n  }\n\n  .outline-none {\n    --tw-outline-style: none;\n    outline-style: none;\n  }\n\n  .select-none {\n    -webkit-user-select: none;\n    user-select: none;\n  }\n\n  .\\[scrollbar-width\\:thin\\] {\n    scrollbar-width: thin;\n  }\n\n  @media (hover: hover) {\n    .group-hover\\:opacity-100:is(:where(.group):hover *) {\n      opacity: 1;\n    }\n  }\n\n  .selection\\:bg-cyan-300\\/25 ::selection {\n    background-color: #53eafd40;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .selection\\:bg-cyan-300\\/25 ::selection {\n      background-color: color-mix(in oklab, var(--color-cyan-300) 25%, transparent);\n    }\n  }\n\n  .selection\\:bg-cyan-300\\/25::selection {\n    background-color: #53eafd40;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .selection\\:bg-cyan-300\\/25::selection {\n      background-color: color-mix(in oklab, var(--color-cyan-300) 25%, transparent);\n    }\n  }\n\n  @media (hover: hover) {\n    .hover\\:border-amber-200\\/30:hover {\n      border-color: #fee6854d;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:border-amber-200\\/30:hover {\n        border-color: color-mix(in oklab, var(--color-amber-200) 30%, transparent);\n      }\n    }\n\n    .hover\\:border-border:hover, .hover\\:border-border\\/50:hover {\n      border-color: var(--cosimo-mod-border);\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:border-border\\/50:hover {\n        border-color: color-mix(in oklab, var(--cosimo-mod-border) 50%, transparent);\n      }\n    }\n\n    .hover\\:border-cyan-200\\/25:hover {\n      border-color: #a2f4fd40;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:border-cyan-200\\/25:hover {\n        border-color: color-mix(in oklab, var(--color-cyan-200) 25%, transparent);\n      }\n    }\n\n    .hover\\:border-cyan-200\\/30:hover {\n      border-color: #a2f4fd4d;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:border-cyan-200\\/30:hover {\n        border-color: color-mix(in oklab, var(--color-cyan-200) 30%, transparent);\n      }\n    }\n\n    .hover\\:border-pink-200\\/35:hover {\n      border-color: #fccee859;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:border-pink-200\\/35:hover {\n        border-color: color-mix(in oklab, var(--color-pink-200) 35%, transparent);\n      }\n    }\n\n    .hover\\:border-white\\/10:hover {\n      border-color: #ffffff1a;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:border-white\\/10:hover {\n        border-color: color-mix(in oklab, var(--color-white) 10%, transparent);\n      }\n    }\n\n    .hover\\:border-white\\/12:hover {\n      border-color: #ffffff1f;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:border-white\\/12:hover {\n        border-color: color-mix(in oklab, var(--color-white) 12%, transparent);\n      }\n    }\n\n    .hover\\:border-white\\/15:hover {\n      border-color: #ffffff26;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:border-white\\/15:hover {\n        border-color: color-mix(in oklab, var(--color-white) 15%, transparent);\n      }\n    }\n\n    .hover\\:border-white\\/18:hover {\n      border-color: #ffffff2e;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:border-white\\/18:hover {\n        border-color: color-mix(in oklab, var(--color-white) 18%, transparent);\n      }\n    }\n\n    .hover\\:border-white\\/35:hover {\n      border-color: #ffffff59;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:border-white\\/35:hover {\n        border-color: color-mix(in oklab, var(--color-white) 35%, transparent);\n      }\n    }\n\n    .hover\\:bg-amber-300\\/16:hover {\n      background-color: #ffd23629;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:bg-amber-300\\/16:hover {\n        background-color: color-mix(in oklab, var(--color-amber-300) 16%, transparent);\n      }\n    }\n\n    .hover\\:bg-black\\/24:hover {\n      background-color: #0000003d;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:bg-black\\/24:hover {\n        background-color: color-mix(in oklab, var(--color-black) 24%, transparent);\n      }\n    }\n\n    .hover\\:bg-card\\/70:hover {\n      background-color: var(--cosimo-mod-card);\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:bg-card\\/70:hover {\n        background-color: color-mix(in oklab, var(--cosimo-mod-card) 70%, transparent);\n      }\n    }\n\n    .hover\\:bg-cyan-300\\/14:hover {\n      background-color: #53eafd24;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:bg-cyan-300\\/14:hover {\n        background-color: color-mix(in oklab, var(--color-cyan-300) 14%, transparent);\n      }\n    }\n\n    .hover\\:bg-cyan-300\\/16:hover {\n      background-color: #53eafd29;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:bg-cyan-300\\/16:hover {\n        background-color: color-mix(in oklab, var(--color-cyan-300) 16%, transparent);\n      }\n    }\n\n    .hover\\:bg-destructive\\/10:hover {\n      background-color: var(--cosimo-mod-destructive);\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:bg-destructive\\/10:hover {\n        background-color: color-mix(in oklab, var(--cosimo-mod-destructive) 10%, transparent);\n      }\n    }\n\n    .hover\\:bg-muted:hover, .hover\\:bg-muted\\/80:hover {\n      background-color: var(--cosimo-mod-muted);\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:bg-muted\\/80:hover {\n        background-color: color-mix(in oklab, var(--cosimo-mod-muted) 80%, transparent);\n      }\n    }\n\n    .hover\\:bg-pink-300\\/10:hover {\n      background-color: #fda5d51a;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:bg-pink-300\\/10:hover {\n        background-color: color-mix(in oklab, var(--color-pink-300) 10%, transparent);\n      }\n    }\n\n    .hover\\:bg-pink-300\\/16:hover {\n      background-color: #fda5d529;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:bg-pink-300\\/16:hover {\n        background-color: color-mix(in oklab, var(--color-pink-300) 16%, transparent);\n      }\n    }\n\n    .hover\\:bg-primary\\/10:hover {\n      background-color: var(--cosimo-mod-primary);\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:bg-primary\\/10:hover {\n        background-color: color-mix(in oklab, var(--cosimo-mod-primary) 10%, transparent);\n      }\n    }\n\n    .hover\\:bg-white\\/25:hover {\n      background-color: #ffffff40;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:bg-white\\/25:hover {\n        background-color: color-mix(in oklab, var(--color-white) 25%, transparent);\n      }\n    }\n\n    .hover\\:bg-white\\/\\[0\\.01\\]:hover {\n      background-color: #ffffff03;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:bg-white\\/\\[0\\.01\\]:hover {\n        background-color: color-mix(in oklab, var(--color-white) 1%, transparent);\n      }\n    }\n\n    .hover\\:bg-white\\/\\[0\\.04\\]:hover {\n      background-color: #ffffff0a;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:bg-white\\/\\[0\\.04\\]:hover {\n        background-color: color-mix(in oklab, var(--color-white) 4%, transparent);\n      }\n    }\n\n    .hover\\:bg-white\\/\\[0\\.05\\]:hover {\n      background-color: #ffffff0d;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:bg-white\\/\\[0\\.05\\]:hover {\n        background-color: color-mix(in oklab, var(--color-white) 5%, transparent);\n      }\n    }\n\n    .hover\\:bg-white\\/\\[0\\.06\\]:hover {\n      background-color: #ffffff0f;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:bg-white\\/\\[0\\.06\\]:hover {\n        background-color: color-mix(in oklab, var(--color-white) 6%, transparent);\n      }\n    }\n\n    .hover\\:text-cyan-100:hover {\n      color: var(--color-cyan-100);\n    }\n\n    .hover\\:text-destructive:hover {\n      color: var(--cosimo-mod-destructive);\n    }\n\n    .hover\\:text-foreground:hover {\n      color: var(--cosimo-mod-foreground);\n    }\n\n    .hover\\:text-pink-100:hover {\n      color: var(--color-pink-100);\n    }\n\n    .hover\\:text-primary\\/80:hover {\n      color: var(--cosimo-mod-primary);\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:text-primary\\/80:hover {\n        color: color-mix(in oklab, var(--cosimo-mod-primary) 80%, transparent);\n      }\n    }\n\n    .hover\\:text-slate-100:hover {\n      color: var(--color-slate-100);\n    }\n\n    .hover\\:text-slate-200\\/80:hover {\n      color: #e2e8f0cc;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:text-slate-200\\/80:hover {\n        color: color-mix(in oklab, var(--color-slate-200) 80%, transparent);\n      }\n    }\n\n    .hover\\:text-slate-300\\/65:hover {\n      color: #cad5e2a6;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:text-slate-300\\/65:hover {\n        color: color-mix(in oklab, var(--color-slate-300) 65%, transparent);\n      }\n    }\n  }\n\n  .focus\\:border-cyan-200\\/35:focus {\n    border-color: #a2f4fd59;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .focus\\:border-cyan-200\\/35:focus {\n      border-color: color-mix(in oklab, var(--color-cyan-200) 35%, transparent);\n    }\n  }\n\n  .focus\\:border-emerald-300\\/30:focus {\n    border-color: #5ee9b54d;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .focus\\:border-emerald-300\\/30:focus {\n      border-color: color-mix(in oklab, var(--color-emerald-300) 30%, transparent);\n    }\n  }\n\n  .focus-visible\\:opacity-100:focus-visible {\n    opacity: 1;\n  }\n\n  .active\\:cursor-grabbing:active {\n    cursor: grabbing;\n  }\n\n  .active\\:bg-cyan-300\\/26:active {\n    background-color: #53eafd42;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .active\\:bg-cyan-300\\/26:active {\n      background-color: color-mix(in oklab, var(--color-cyan-300) 26%, transparent);\n    }\n  }\n\n  .disabled\\:opacity-35:disabled {\n    opacity: .35;\n  }\n\n  .disabled\\:opacity-40:disabled {\n    opacity: .4;\n  }\n\n  @media not all and (min-width: 480px) {\n    .max-\\[480px\\]\\:size-3\\.5 {\n      width: calc(var(--spacing) * 3.5);\n      height: calc(var(--spacing) * 3.5);\n    }\n\n    .max-\\[480px\\]\\:size-6 {\n      width: calc(var(--spacing) * 6);\n      height: calc(var(--spacing) * 6);\n    }\n\n    .max-\\[480px\\]\\:size-7 {\n      width: calc(var(--spacing) * 7);\n      height: calc(var(--spacing) * 7);\n    }\n\n    .max-\\[480px\\]\\:h-7 {\n      height: calc(var(--spacing) * 7);\n    }\n\n    .max-\\[480px\\]\\:w-\\[44px\\] {\n      width: 44px;\n    }\n\n    .max-\\[480px\\]\\:w-\\[64px\\] {\n      width: 64px;\n    }\n\n    .max-\\[480px\\]\\:rounded-\\[6px\\] {\n      border-radius: 6px;\n    }\n\n    .max-\\[480px\\]\\:px-2 {\n      padding-inline: calc(var(--spacing) * 2);\n    }\n\n    .max-\\[480px\\]\\:py-1 {\n      padding-block: calc(var(--spacing) * 1);\n    }\n\n    .max-\\[480px\\]\\:text-\\[10px\\] {\n      font-size: 10px;\n    }\n\n    .max-\\[480px\\]\\:text-\\[11px\\] {\n      font-size: 11px;\n    }\n  }\n\n  @media not all and (min-width: 360px) {\n    .max-\\[360px\\]\\:size-\\[26px\\] {\n      width: 26px;\n      height: 26px;\n    }\n  }\n\n  @media (min-width: 40rem) {\n    .sm\\:block {\n      display: block;\n    }\n\n    .sm\\:hidden {\n      display: none;\n    }\n\n    .sm\\:inline {\n      display: inline;\n    }\n  }\n\n  @media (min-width: 48rem) {\n    .md\\:grid-cols-2 {\n      grid-template-columns: repeat(2, minmax(0, 1fr));\n    }\n  }\n}\n\n:host {\n  color-scheme: dark;\n  width: 100%;\n  height: 100%;\n  display: block;\n}\n\n* {\n  box-sizing: border-box;\n}\n\n.cosimo-surface {\n  background: radial-gradient(circle at top, #7a8eff2e, #0000 34%), linear-gradient(#060a16fa, #03050c);\n}\n\n.cosimo-mod-prototype-theme {\n  --cosimo-mod-background: oklch(12% .01 250);\n  --cosimo-mod-foreground: oklch(95% 0 0);\n  --cosimo-mod-card: oklch(15% .01 250);\n  --cosimo-mod-popover: oklch(13% .01 250);\n  --cosimo-mod-primary: oklch(70% .15 180);\n  --cosimo-mod-secondary: oklch(20% .01 250);\n  --cosimo-mod-muted: oklch(22% .01 250);\n  --cosimo-mod-muted-foreground: oklch(60% .02 250);\n  --cosimo-mod-border: oklch(25% .02 250);\n  --cosimo-mod-destructive: oklch(55% .2 25);\n}\n\n.cosimo-stage {\n  background: linear-gradient(#ffffff05 1px, #0000 1px) 0 0 / 24px 24px, linear-gradient(90deg, #ffffff05 1px, #0000 1px) 0 0 / 24px 24px, radial-gradient(circle at top, #7a8eff33, #0000 38%), linear-gradient(#050915fa, #02040b);\n}\n\n.cosimo-stage:after {\n  content: "";\n  pointer-events: none;\n  position: absolute;\n  inset: 0;\n  box-shadow: inset 0 1px #ffffff14, inset 0 -48px 64px #00000059;\n}\n\n.cosimo-range {\n  appearance: none;\n  background: linear-gradient(90deg, #87d7f56b, #fbbf246b);\n  border-radius: 999px;\n  outline: none;\n  width: 100%;\n  height: 10px;\n}\n\n.cosimo-range::-webkit-slider-thumb {\n  appearance: none;\n  background: linear-gradient(#ffe9b6 0%, #fbbf24 100%);\n  border: 0;\n  border-radius: 999px;\n  width: 22px;\n  height: 22px;\n  box-shadow: 0 6px 18px #fbbf2452;\n}\n\n.cosimo-range::-moz-range-thumb {\n  background: linear-gradient(#ffe9b6 0%, #fbbf24 100%);\n  border: 0;\n  border-radius: 999px;\n  width: 22px;\n  height: 22px;\n  box-shadow: 0 6px 18px #fbbf2452;\n}\n\n.cosimo-distortion-drive-fill {\n  background: linear-gradient(0deg, #f8717180, #f8717133);\n}\n\n.cosimo-distortion-knee-fill {\n  background: linear-gradient(0deg, #fbbf2473, #fbbf2426);\n}\n\n.cosimo-distortion-mix-fill {\n  background: linear-gradient(0deg, #22d3ee66, #22d3ee26);\n}\n\n.cosimo-distortion-drive-handle {\n  background: linear-gradient(#ffdcc8e6, #f87171b3);\n  box-shadow: 0 2px 8px #f871714d;\n}\n\n.cosimo-distortion-knee-handle {\n  background: linear-gradient(#fff0c8e6, #fbbf24b3);\n  box-shadow: 0 2px 8px #fbbf244d;\n}\n\n.cosimo-distortion-mix-handle {\n  background: linear-gradient(#c8f0ffe6, #67e8f9b3);\n  box-shadow: 0 2px 8px #67e8f94d;\n}\n\n.cosimo-chorus-mix-fill {\n  background: linear-gradient(0deg, #22d3ee80, #22d3ee33);\n}\n\n.cosimo-chorus-tone-fill {\n  background: linear-gradient(0deg, #2dd4bf80, #2dd4bf33);\n}\n\n.cosimo-chorus-feedback-fill {\n  background: linear-gradient(0deg, #a78bfa80, #a78bfa33);\n}\n\n.cosimo-chorus-ring-fill {\n  background: linear-gradient(0deg, #fbbf2480, #fbbf2433);\n}\n\n.cosimo-chorus-fine-fill {\n  background: linear-gradient(0deg, #22d3ee80, #22d3ee33);\n}\n\n.cosimo-chorus-mix-handle {\n  background: linear-gradient(#c8f0ffe6, #22d3eeb3);\n  box-shadow: 0 2px 8px #22d3ee4d;\n}\n\n.cosimo-chorus-tone-handle {\n  background: linear-gradient(#c8f5f0e6, #2dd4bfb3);\n  box-shadow: 0 2px 8px #2dd4bf4d;\n}\n\n.cosimo-chorus-feedback-handle {\n  background: linear-gradient(#e6d7ffe6, #a78bfab3);\n  box-shadow: 0 2px 8px #a78bfa4d;\n}\n\n.cosimo-chorus-ring-handle {\n  background: linear-gradient(#fff0c8e6, #fbbf24b3);\n  box-shadow: 0 2px 8px #fbbf244d;\n}\n\n.cosimo-chorus-fine-handle {\n  background: linear-gradient(#c8f0ffe6, #22d3eeb3);\n  box-shadow: 0 2px 8px #22d3ee4d;\n}\n\n.cosimo-select, .cosimo-button {\n  color: #eef2f5;\n  background: #ffffff0a;\n  border: 1px solid #ffffff14;\n}\n\n.cosimo-mod-amount-field {\n  justify-content: flex-end;\n  align-items: center;\n  gap: 12px;\n  min-width: 0;\n  display: flex;\n}\n\n.cosimo-mod-direction-toggle {\n  background: #ffffff0a;\n  border: 1px solid #ffffff14;\n  border-radius: 18px;\n  gap: 4px;\n  padding: 4px;\n  display: grid;\n}\n\n.cosimo-mod-direction-button {\n  color: #e2e8f0b8;\n  background: none;\n  border: 0;\n  border-radius: 12px;\n  width: 28px;\n  height: 28px;\n  font-size: 15px;\n  font-weight: 700;\n  line-height: 1;\n}\n\n.cosimo-mod-direction-button[data-active="true"] {\n  color: #cffafe;\n  background: #67e8f929;\n}\n\n.cosimo-mod-knob {\n  flex: none;\n  width: 72px;\n  height: 72px;\n  position: relative;\n}\n\n.cosimo-mod-knob-stack {\n  align-items: center;\n  gap: 12px;\n  min-width: 0;\n  display: flex;\n}\n\n.cosimo-mod-knob-track {\n  border: 1px solid #ffffff0f;\n  border-radius: 999px;\n  width: 100%;\n  height: 100%;\n  position: relative;\n  box-shadow: inset 0 1px #ffffff14, 0 10px 24px #00000047;\n}\n\n.cosimo-mod-knob-arc {\n  pointer-events: none;\n  width: 100%;\n  height: 100%;\n  position: absolute;\n  inset: 0;\n  overflow: visible;\n}\n\n.cosimo-mod-knob-arc-track {\n  fill: none;\n  stroke: #ffffff14;\n  stroke-width: 4px;\n  stroke-linecap: round;\n}\n\n.cosimo-mod-knob-arc-fill {\n  fill: none;\n  stroke: #67e8f9eb;\n  stroke-width: 4px;\n  stroke-linecap: round;\n  filter: drop-shadow(0 0 8px #67e8f94d);\n}\n\n.cosimo-mod-knob-core {\n  color: #cffafe;\n  background: radial-gradient(circle at 35% 28%, #ffffff1a, #0000 38%), linear-gradient(#0c1222fa, #060914fa);\n  border-radius: 999px;\n  place-items: center;\n  display: grid;\n  position: absolute;\n  inset: 9px;\n}\n\n.cosimo-mod-knob-percent {\n  letter-spacing: .12em;\n  text-transform: uppercase;\n  font-size: 11px;\n  font-weight: 700;\n}\n\n.cosimo-mod-knob-indicator {\n  transform-origin: 50% 29px;\n  pointer-events: none;\n  background: linear-gradient(#fef3c7 0%, #f472b6 100%);\n  border-radius: 999px;\n  width: 3px;\n  height: 21px;\n  position: absolute;\n  top: 7px;\n  left: 50%;\n  box-shadow: 0 0 12px #f472b65c;\n}\n\n.cosimo-mod-knob-center-marker {\n  pointer-events: none;\n  background: #ffffff61;\n  border-radius: 999px;\n  width: 2px;\n  height: 10px;\n  position: absolute;\n  top: 3px;\n  left: 50%;\n  transform: translateX(-50%);\n}\n\n.cosimo-mod-knob[data-polarity="bipolar"] .cosimo-mod-knob-center-marker {\n  background: #e2e8f0d1;\n  box-shadow: 0 0 8px #e2e8f047;\n}\n\n.cosimo-mod-knob-input {\n  opacity: 0;\n  cursor: ew-resize;\n  width: 100%;\n  height: 100%;\n  margin: 0;\n  position: absolute;\n  inset: 0;\n}\n\n.cosimo-mod-amount-copy {\n  gap: 2px;\n  min-width: 0;\n  display: grid;\n}\n\n.cosimo-mod-amount-readout {\n  letter-spacing: .06em;\n  color: #e2e8f0;\n  white-space: nowrap;\n  font-size: 12px;\n  font-weight: 600;\n}\n\n.cosimo-mod-amount-caption {\n  letter-spacing: .18em;\n  text-transform: uppercase;\n  color: #94a3b8bd;\n  font-size: 10px;\n}\n\n.cosimo-grid-line {\n  stroke: #ffffff14;\n  stroke-width: 1px;\n}\n\n.cosimo-curve-fill {\n  fill: #87d7f514;\n}\n\n.cosimo-curve-fill-progress {\n  fill: #87d7f538;\n}\n\n.cosimo-curve-line {\n  fill: none;\n  stroke: #87d7f5;\n  stroke-width: 3px;\n  stroke-linecap: round;\n  stroke-linejoin: round;\n}\n\n.cosimo-curve-fill-muted {\n  fill: #e1e7f00a;\n}\n\n.cosimo-curve-line-muted {\n  stroke: #e1e7f061;\n}\n\n.cosimo-reference-curve-fill {\n  fill: #e1e7f00a;\n}\n\n.cosimo-reference-curve-line {\n  fill: none;\n  stroke: #e1e7f061;\n  stroke-width: 3px;\n  stroke-linecap: round;\n  stroke-linejoin: round;\n}\n\n.cosimo-mseg-effective-curve-line {\n  fill: none;\n  stroke: #fbbf24;\n  stroke-width: 3.25px;\n  stroke-linecap: round;\n  stroke-linejoin: round;\n  filter: drop-shadow(0 0 8px #fbbf2452);\n}\n\n.cosimo-curve-line-highlight {\n  stroke: #32f0bc;\n}\n\n.cosimo-mseg-playhead {\n  stroke: #f4fbfff5;\n  stroke-width: 2px;\n  stroke-linecap: round;\n}\n\n.cosimo-mseg-point-default {\n  fill: #87d7f5;\n  stroke: #050913;\n  stroke-width: 2px;\n}\n\n.cosimo-mseg-point-selected {\n  fill: #f5d0fe;\n  stroke: #050913;\n  stroke-width: 3px;\n}\n\n.cosimo-mseg-point-highlight {\n  fill: #32f0bc;\n  stroke: #050913;\n  stroke-width: 2px;\n}\n\n.cosimo-mseg-point-muted {\n  fill: #e1e7f0c7;\n  stroke: #050913;\n  stroke-width: 2px;\n  opacity: .62;\n}\n\n@property --tw-translate-x {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0;\n}\n\n@property --tw-translate-y {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0;\n}\n\n@property --tw-translate-z {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0;\n}\n\n@property --tw-rotate-x {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-rotate-y {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-rotate-z {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-skew-x {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-skew-y {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-space-y-reverse {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0;\n}\n\n@property --tw-space-x-reverse {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0;\n}\n\n@property --tw-border-style {\n  syntax: "*";\n  inherits: false;\n  initial-value: solid;\n}\n\n@property --tw-gradient-position {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-gradient-from {\n  syntax: "<color>";\n  inherits: false;\n  initial-value: #0000;\n}\n\n@property --tw-gradient-via {\n  syntax: "<color>";\n  inherits: false;\n  initial-value: #0000;\n}\n\n@property --tw-gradient-to {\n  syntax: "<color>";\n  inherits: false;\n  initial-value: #0000;\n}\n\n@property --tw-gradient-stops {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-gradient-via-stops {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-gradient-from-position {\n  syntax: "<length-percentage>";\n  inherits: false;\n  initial-value: 0%;\n}\n\n@property --tw-gradient-via-position {\n  syntax: "<length-percentage>";\n  inherits: false;\n  initial-value: 50%;\n}\n\n@property --tw-gradient-to-position {\n  syntax: "<length-percentage>";\n  inherits: false;\n  initial-value: 100%;\n}\n\n@property --tw-leading {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-font-weight {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-tracking {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-ordinal {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-slashed-zero {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-numeric-figure {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-numeric-spacing {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-numeric-fraction {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-shadow {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0 0 #0000;\n}\n\n@property --tw-shadow-color {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-shadow-alpha {\n  syntax: "<percentage>";\n  inherits: false;\n  initial-value: 100%;\n}\n\n@property --tw-inset-shadow {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0 0 #0000;\n}\n\n@property --tw-inset-shadow-color {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-inset-shadow-alpha {\n  syntax: "<percentage>";\n  inherits: false;\n  initial-value: 100%;\n}\n\n@property --tw-ring-color {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-ring-shadow {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0 0 #0000;\n}\n\n@property --tw-inset-ring-color {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-inset-ring-shadow {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0 0 #0000;\n}\n\n@property --tw-ring-inset {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-ring-offset-width {\n  syntax: "<length>";\n  inherits: false;\n  initial-value: 0;\n}\n\n@property --tw-ring-offset-color {\n  syntax: "*";\n  inherits: false;\n  initial-value: #fff;\n}\n\n@property --tw-ring-offset-shadow {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0 0 #0000;\n}\n\n@property --tw-outline-style {\n  syntax: "*";\n  inherits: false;\n  initial-value: solid;\n}\n\n@property --tw-blur {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-brightness {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-contrast {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-grayscale {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-hue-rotate {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-invert {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-opacity {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-saturate {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-sepia {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-drop-shadow {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-drop-shadow-color {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-drop-shadow-alpha {\n  syntax: "<percentage>";\n  inherits: false;\n  initial-value: 100%;\n}\n\n@property --tw-drop-shadow-size {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-blur {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-brightness {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-contrast {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-grayscale {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-hue-rotate {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-invert {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-opacity {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-saturate {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-sepia {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-duration {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-ease {\n  syntax: "*";\n  inherits: false\n}\n\n@keyframes spin {\n  to {\n    transform: rotate(360deg);\n  }\n}\n\n@keyframes pulse {\n  50% {\n    opacity: .5;\n  }\n}\n';
 function assert$1(condition, message) {
   if (!condition) {
     throw new Error(message);
@@ -12942,17 +12942,17 @@ const MSEG_NOTE_OFF_POLICY_VALUES = /* @__PURE__ */ new Set([
   "immediate",
   "ignore"
 ]);
-function clamp$d(value, min, max) {
+function clamp$e(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 function almostEqual(left, right, epsilon = 1e-12) {
   return Math.abs(left - right) <= epsilon;
 }
 function clampCurvePower(value) {
-  return clamp$d(Number.isFinite(value) ? value : 0, -MSEG_CURVE_POWER_LIMIT, MSEG_CURVE_POWER_LIMIT);
+  return clamp$e(Number.isFinite(value) ? value : 0, -MSEG_CURVE_POWER_LIMIT, MSEG_CURVE_POWER_LIMIT);
 }
 function clamp01$1(value) {
-  return clamp$d(Number.isFinite(value) ? value : 0, 0, 1);
+  return clamp$e(Number.isFinite(value) ? value : 0, 0, 1);
 }
 function createDefaultMsegShape(name = MSEG_DEFAULT_NAME) {
   return {
@@ -12982,7 +12982,7 @@ function createDefaultMsegPlayback() {
 }
 function clampMsegRateSeconds(value) {
   const numericValue = Number(value);
-  return clamp$d(
+  return clamp$e(
     Number.isFinite(numericValue) ? numericValue : 1,
     MSEG_RATE_MIN_SECONDS,
     MSEG_RATE_MAX_SECONDS
@@ -13155,7 +13155,7 @@ function distanceSquaredToLineSegment(targetX, targetY, fromX, fromY, toX, toY) 
     const pointDeltaY2 = targetY - fromY;
     return pointDeltaX2 * pointDeltaX2 + pointDeltaY2 * pointDeltaY2;
   }
-  const projection = clamp$d(
+  const projection = clamp$e(
     ((targetX - fromX) * deltaX + (targetY - fromY) * deltaY) / segmentLengthSquared,
     0,
     1
@@ -13374,9 +13374,9 @@ function deriveMsegSegmentCurvePower(shape, segmentIndex, x, y) {
   if (width <= 1e-12 || Math.abs(deltaY) <= 1e-12) {
     return 0;
   }
-  const localX = clamp$d(clamp01$1(Number(x)), from.x, to.x);
-  const t = clamp$d((localX - from.x) / width, 1e-4, 1 - 1e-4);
-  const targetCurvedT = clamp$d((Number(y) - from.y) / deltaY, 1e-4, 1 - 1e-4);
+  const localX = clamp$e(clamp01$1(Number(x)), from.x, to.x);
+  const t = clamp$e((localX - from.x) / width, 1e-4, 1 - 1e-4);
+  const targetCurvedT = clamp$e((Number(y) - from.y) / deltaY, 1e-4, 1 - 1e-4);
   if (!Number.isFinite(targetCurvedT) || almostEqual(targetCurvedT, t, 1e-4)) {
     return 0;
   }
@@ -13384,7 +13384,7 @@ function deriveMsegSegmentCurvePower(shape, segmentIndex, x, y) {
   let high = MSEG_CURVE_POWER_LIMIT;
   let lowValue = powerScale(t, low);
   let highValue = powerScale(t, high);
-  const target = clamp$d(targetCurvedT, Math.min(lowValue, highValue), Math.max(lowValue, highValue));
+  const target = clamp$e(targetCurvedT, Math.min(lowValue, highValue), Math.max(lowValue, highValue));
   const ascending = lowValue <= highValue;
   for (let iteration = 0; iteration < 32; iteration += 1) {
     const middle = (low + high) * 0.5;
@@ -13441,7 +13441,7 @@ function moveMsegPoint(shape, pointIndex, x, y) {
   } else if (pointIndex === points.length - 1) {
     moved.x = 1;
   } else {
-    moved.x = clamp$d(clamp01$1(Number(x)), previousX, nextX);
+    moved.x = clamp$e(clamp01$1(Number(x)), previousX, nextX);
   }
   points[pointIndex] = moved;
   return normalizeMsegShape({
@@ -13475,7 +13475,7 @@ function setMsegSegmentCurvePower(shape, segmentIndex, curvePower) {
     points
   });
 }
-function clamp$c(value, min, max) {
+function clamp$d(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 function useSliderDrag() {
@@ -13518,10 +13518,10 @@ function useSliderDrag() {
     if (drag.axis === "vertical") {
       const deltaY = drag.startClientY - event.clientY;
       const trackHeight = rect.height;
-      nextNormalized = clamp$c(drag.startNormalized + deltaY / trackHeight, 0, 1);
+      nextNormalized = clamp$d(drag.startNormalized + deltaY / trackHeight, 0, 1);
     } else {
       const deltaX = event.clientX - rect.left;
-      nextNormalized = clamp$c(deltaX / rect.width, 0, 1);
+      nextNormalized = clamp$d(deltaX / rect.width, 0, 1);
     }
     if (drag.onChange) {
       drag.onChange(nextNormalized);
@@ -13555,26 +13555,26 @@ const FILTER_CUTOFF_MIN_HZ$1 = 20;
 const FILTER_CUTOFF_MAX_HZ$1 = 2e4;
 const FILTER_Q_MIN$2 = 0.1;
 const FILTER_Q_MAX$2 = 20;
-function clamp$b(value, min, max) {
+function clamp$c(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 function clampFilterCutoffHz$1(value) {
-  return clamp$b(Number(value) || 0, FILTER_CUTOFF_MIN_HZ$1, FILTER_CUTOFF_MAX_HZ$1);
+  return clamp$c(Number(value) || 0, FILTER_CUTOFF_MIN_HZ$1, FILTER_CUTOFF_MAX_HZ$1);
 }
 function clampFilterQ$1(value) {
-  return clamp$b(Number(value) || 0, FILTER_Q_MIN$2, FILTER_Q_MAX$2);
+  return clamp$c(Number(value) || 0, FILTER_Q_MIN$2, FILTER_Q_MAX$2);
 }
 function clampFilterMode$1(value) {
-  return clamp$b(Math.round(Number(value) || 0), FILTER_MODE_OFF$1, FILTER_MODE_PEAK$1);
+  return clamp$c(Math.round(Number(value) || 0), FILTER_MODE_OFF$1, FILTER_MODE_PEAK$1);
 }
 function clampWarpMode(value) {
-  return clamp$b(Math.round(Number(value) || 0), WARP_MODE_OFF$1, WARP_MODE_MIRROR$1);
+  return clamp$c(Math.round(Number(value) || 0), WARP_MODE_OFF$1, WARP_MODE_MIRROR$1);
 }
 function clampWarpAmount(value) {
-  return clamp$b(Number(value) || 0, 0, 1);
+  return clamp$c(Number(value) || 0, 0, 1);
 }
 function clampDisplayPosition(value) {
-  return clamp$b(Number(value) || 0, 0, 1);
+  return clamp$c(Number(value) || 0, 0, 1);
 }
 function mapDisplayDragToPosition(startValue, startClientY, nextClientY, dragSpan) {
   const safeSpan = Math.max(1, Number(dragSpan) || 0);
@@ -13832,7 +13832,7 @@ const WARP_MODE_PWM = 2;
 const WARP_MODE_ASYM = 3;
 const WARP_MODE_MIRROR = 4;
 const DEFAULT_WAVETABLE_THEME = createDefaultWavetableTheme();
-function clamp$a(value, min, max) {
+function clamp$b(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 function requestNextAnimationFrame(callback) {
@@ -13876,10 +13876,10 @@ function assertFrames(frames) {
   }
 }
 function resolveWarpMode(rawMode) {
-  return clamp$a(Math.round(Number(rawMode) || 0), WARP_MODE_OFF, WARP_MODE_MIRROR);
+  return clamp$b(Math.round(Number(rawMode) || 0), WARP_MODE_OFF, WARP_MODE_MIRROR);
 }
 function isIdentityWarp(warpMode, warpAmount) {
-  const clampedAmount = clamp$a(Number(warpAmount) || 0, 0, 1);
+  const clampedAmount = clamp$b(Number(warpAmount) || 0, 0, 1);
   if (warpMode <= WARP_MODE_OFF) {
     return true;
   }
@@ -13898,46 +13898,46 @@ function isIdentityWarp(warpMode, warpAmount) {
   return true;
 }
 function curvedWarpRight(phase, amount) {
-  const clampedPhase = clamp$a(Number(phase) || 0, 0, 1);
-  const clampedAmount = clamp$a(Number(amount) || 0, 0, 1);
+  const clampedPhase = clamp$b(Number(phase) || 0, 0, 1);
+  const clampedAmount = clamp$b(Number(amount) || 0, 0, 1);
   const exponent = Math.pow(2, 4 * clampedAmount);
   return Math.pow(clampedPhase, exponent);
 }
 function curvedWarpLeft(phase, amount) {
-  const clampedPhase = clamp$a(Number(phase) || 0, 0, 1);
-  const clampedAmount = clamp$a(Number(amount) || 0, 0, 1);
+  const clampedPhase = clamp$b(Number(phase) || 0, 0, 1);
+  const clampedAmount = clamp$b(Number(amount) || 0, 0, 1);
   const exponent = Math.pow(2, 4 * clampedAmount);
   return 1 - Math.pow(1 - clampedPhase, exponent);
 }
 function curvedAsymSigned(phase, dial) {
-  const clampedDial = clamp$a(Number(dial) || 0, 0, 1);
+  const clampedDial = clamp$b(Number(dial) || 0, 0, 1);
   const signedAmount = 2 * clampedDial - 1;
   const magnitude = Math.abs(signedAmount);
   return signedAmount >= 0 ? curvedWarpRight(phase, magnitude) : curvedWarpLeft(phase, magnitude);
 }
 function linearSkewSigned(phase, dial) {
-  const clampedPhase = clamp$a(Number(phase) || 0, 0, 1);
-  const clampedDial = clamp$a(Number(dial) || 0, 0, 1);
+  const clampedPhase = clamp$b(Number(phase) || 0, 0, 1);
+  const clampedDial = clamp$b(Number(dial) || 0, 0, 1);
   const signedAmount = 2 * clampedDial - 1;
-  const split = clamp$a(0.5 + 0.48 * signedAmount, 0.02, 0.98);
+  const split = clamp$b(0.5 + 0.48 * signedAmount, 0.02, 0.98);
   if (clampedPhase < split) {
     return 0.5 * (clampedPhase / split);
   }
   return 0.5 + 0.5 * ((clampedPhase - split) / (1 - split));
 }
 function mirrorBasePhase(phase) {
-  const clampedPhase = clamp$a(Number(phase) || 0, 0, 1);
+  const clampedPhase = clamp$b(Number(phase) || 0, 0, 1);
   if (clampedPhase < 0.5) {
     return clampedPhase * 2;
   }
   return 2 - 2 * clampedPhase;
 }
 function pwmActivePortion(amount) {
-  const clampedAmount = clamp$a(Number(amount) || 0, 0, 1);
+  const clampedAmount = clamp$b(Number(amount) || 0, 0, 1);
   return 1 - (1 - 0.02) * clampedAmount;
 }
 function resolveDisplayWarpPhase(warpMode, warpAmount, phase) {
-  const clampedPhase = clamp$a(Number(phase) || 0, 0, 1);
+  const clampedPhase = clamp$b(Number(phase) || 0, 0, 1);
   const result = {
     shouldLookup: true,
     phase: clampedPhase
@@ -13945,7 +13945,7 @@ function resolveDisplayWarpPhase(warpMode, warpAmount, phase) {
   if (warpMode <= WARP_MODE_OFF || clampedPhase >= 1) {
     return result;
   }
-  const clampedAmount = clamp$a(Number(warpAmount) || 0, 0, 1);
+  const clampedAmount = clamp$b(Number(warpAmount) || 0, 0, 1);
   if (warpMode === WARP_MODE_BEND) {
     const invertedDial = 1 - clampedAmount;
     if (clampedPhase < 0.5) {
@@ -13975,7 +13975,7 @@ function resolveDisplayWarpPhase(warpMode, warpAmount, phase) {
   return result;
 }
 function sampleDisplayFrame(frame, phase) {
-  const safePhase = clamp$a(Number(phase) || 0, 0, 1);
+  const safePhase = clamp$b(Number(phase) || 0, 0, 1);
   const frameLength = frame.length;
   if (frameLength === 0) {
     return 0;
@@ -14086,10 +14086,10 @@ function createCamera() {
 }
 function createViewportPadding(width, height) {
   return {
-    left: clamp$a(width * 0.06, 22, 48),
-    right: clamp$a(width * 0.06, 22, 48),
-    top: clamp$a(height * 0.1, 20, 56),
-    bottom: clamp$a(height * 0.09, 20, 52)
+    left: clamp$b(width * 0.06, 22, 48),
+    right: clamp$b(width * 0.06, 22, 48),
+    top: clamp$b(height * 0.1, 20, 56),
+    bottom: clamp$b(height * 0.09, 20, 52)
   };
 }
 function projectWorldPoint(point, camera) {
@@ -14143,10 +14143,10 @@ function createProjection(points, width, height) {
   };
 }
 function getSurfacePointCount(width, sampleCount) {
-  return clamp$a(Math.round(width / 10), 64, Math.min(128, sampleCount));
+  return clamp$b(Math.round(width / 10), 64, Math.min(128, sampleCount));
 }
 function getContourPointCount(width, sampleCount) {
-  return clamp$a(Math.round(width / 4), 128, Math.min(256, sampleCount));
+  return clamp$b(Math.round(width / 4), 128, Math.min(256, sampleCount));
 }
 function createObjectPoints(samples, depth) {
   const points = new Array(samples.length);
@@ -14321,8 +14321,8 @@ function createSurfaceBands(projectedFrames) {
       const lightDirection = normaliseVector({ x: -0.2, y: 0.95, z: -0.5 });
       const averageCameraDepth = quad.reduce((total, point) => total + point.cameraDepth, 0) / quad.length;
       const depthNormalized = (frontFrame.depthNormalized + backFrame.depthNormalized) * 0.5;
-      const slopeLight = clamp$a((dotProduct(surfaceNormal, lightDirection) + 1) * 0.5, 0, 1);
-      const ridgeAmount = clamp$a(
+      const slopeLight = clamp$b((dotProduct(surfaceNormal, lightDirection) + 1) * 0.5, 0, 1);
+      const ridgeAmount = clamp$b(
         Math.abs(frontFrame.samples[sampleIndex + 1] - frontFrame.samples[sampleIndex]) * 0.95 + Math.abs(backFrame.samples[sampleIndex + 1] - backFrame.samples[sampleIndex]) * 0.95,
         0,
         1
@@ -14347,7 +14347,7 @@ function createSurfaceRibs(projectedFrames) {
   if (sampleCount < 3) {
     return [];
   }
-  const desiredRibCount = clamp$a(Math.round(sampleCount / 10), 8, 14);
+  const desiredRibCount = clamp$b(Math.round(sampleCount / 10), 8, 14);
   const selectedColumns = /* @__PURE__ */ new Set([0, sampleCount - 1]);
   for (let ribIndex = 1; ribIndex < desiredRibCount - 1; ribIndex += 1) {
     selectedColumns.add(
@@ -14390,7 +14390,7 @@ function createInterpolatedSurfaceSlices(sourceFrames, camera, projection) {
   if (frameCount === 0) {
     return [];
   }
-  const sliceCount = clamp$a(frameCount * 3 - 2, 17, 41);
+  const sliceCount = clamp$b(frameCount * 3 - 2, 17, 41);
   const slices = [];
   for (let sliceIndex = 0; sliceIndex < sliceCount; sliceIndex += 1) {
     const framePosition = sliceIndex * (frameCount - 1) / Math.max(1, sliceCount - 1);
@@ -14431,7 +14431,7 @@ function createCurrentSlice(staticScene, frameState) {
   const lowFrame = staticScene.contourFrames[frameState.frameLo];
   const highFrame = staticScene.contourFrames[frameState.frameHi];
   const warpMode = resolveWarpMode(frameState.warpMode);
-  const warpAmount = clamp$a(Number(frameState.warpAmount) || 0, 0, 1);
+  const warpAmount = clamp$b(Number(frameState.warpAmount) || 0, 0, 1);
   const blendedSamples = isIdentityWarp(warpMode, warpAmount) ? buildInterpolatedFrame(lowFrame.samples, highFrame.samples, frameState.frameT) : buildWarpedFrame(lowFrame.samples, highFrame.samples, frameState.frameT, warpMode, warpAmount);
   const depth = getSceneDepth(frameState.frameIndex, staticScene.frameCount);
   const objectPoints = createObjectPoints(blendedSamples, depth);
@@ -14445,8 +14445,8 @@ function createCurrentSlice(staticScene, frameState) {
   const labelAnchor = points[Math.floor(points.length * 0.78)] ?? points[points.length - 1];
   const label = {
     text: buildCurrentSliceLabel(frameState, staticScene.frameCount),
-    x: clamp$a(labelAnchor.x + 14, 18, staticScene.width - 236),
-    y: clamp$a(labelAnchor.y - 18, 24, staticScene.height - 24)
+    x: clamp$b(labelAnchor.x + 14, 18, staticScene.width - 236),
+    y: clamp$b(labelAnchor.y - 18, 24, staticScene.height - 24)
   };
   return {
     frameState,
@@ -14461,7 +14461,7 @@ function createCurrentSlice(staticScene, frameState) {
 }
 function buildCurrentSliceLabel(frameState, frameCount) {
   const warpMode = resolveWarpMode(frameState.warpMode);
-  const warpAmount = clamp$a(Number(frameState.warpAmount) || 0, 0, 1);
+  const warpAmount = clamp$b(Number(frameState.warpAmount) || 0, 0, 1);
   const baseLabel = `Frame ${frameState.frameIndex.toFixed(2)} / ${frameCount - 1}`;
   if (isIdentityWarp(warpMode, warpAmount)) {
     return baseLabel;
@@ -14485,7 +14485,7 @@ function buildCurrentSliceLabel(frameState, frameCount) {
 }
 function createFrameState(frameCount, position, warpMode = 0, warpAmount = 0) {
   const safeFrameCount = Math.max(1, Number(frameCount) || 0);
-  const clampedPosition = clamp$a(Number(position) || 0, 0, 1);
+  const clampedPosition = clamp$b(Number(position) || 0, 0, 1);
   const frameIndex = clampedPosition * (safeFrameCount - 1);
   const frameLo = Math.floor(frameIndex);
   const frameHi = Math.min(frameLo + 1, safeFrameCount - 1);
@@ -14498,7 +14498,7 @@ function createFrameState(frameCount, position, warpMode = 0, warpAmount = 0) {
     frameHi,
     frameT,
     warpMode: resolveWarpMode(warpMode),
-    warpAmount: clamp$a(Number(warpAmount) || 0, 0, 1)
+    warpAmount: clamp$b(Number(warpAmount) || 0, 0, 1)
   };
 }
 function decimateFrame(frame, targetPointCount) {
@@ -14660,7 +14660,7 @@ function drawWavetableModel(context, model, theme = DEFAULT_WAVETABLE_THEME) {
     context.restore();
   }
   for (const contour of model.contours) {
-    const strokeColour = mixRGB(theme.frameColor, theme.backgroundRGB, clamp$a(contour.colourMix, 0, 0.92));
+    const strokeColour = mixRGB(theme.frameColor, theme.backgroundRGB, clamp$b(contour.colourMix, 0, 0.92));
     context.save();
     context.strokeStyle = toRGBA(strokeColour, contour.alpha);
     context.lineWidth = contour.lineWidth;
@@ -14718,12 +14718,12 @@ class CanvasWavetableDisplay {
     this.queueRender();
   }
   setPosition(position) {
-    this.position = clamp$a(Number(position) || 0, 0, 1);
+    this.position = clamp$b(Number(position) || 0, 0, 1);
     this.queueRender();
   }
   setWarp(mode, amount) {
     this.warpMode = resolveWarpMode(mode);
-    this.warpAmount = clamp$a(Number(amount) || 0, 0, 1);
+    this.warpAmount = clamp$b(Number(amount) || 0, 0, 1);
     this.queueRender();
   }
   resize(width, height, devicePixelRatio = 1) {
@@ -14804,26 +14804,26 @@ const FILTER_MODE_HIGHPASS = 2;
 const FILTER_MODE_BANDPASS = 3;
 const FILTER_MODE_NOTCH = 4;
 const FILTER_MODE_PEAK = 5;
-function clamp$9(value, min, max) {
+function clamp$a(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 function clampFilterMode(value) {
-  return clamp$9(Math.round(Number(value) || 0), FILTER_MODE_OFF, FILTER_MODE_PEAK);
+  return clamp$a(Math.round(Number(value) || 0), FILTER_MODE_OFF, FILTER_MODE_PEAK);
 }
 function clampFilterCutoffHz(value) {
-  return clamp$9(Number(value) || FILTER_CUTOFF_MIN_HZ, FILTER_CUTOFF_MIN_HZ, FILTER_CUTOFF_MAX_HZ);
+  return clamp$a(Number(value) || FILTER_CUTOFF_MIN_HZ, FILTER_CUTOFF_MIN_HZ, FILTER_CUTOFF_MAX_HZ);
 }
 function clampFilterQ(value) {
-  return clamp$9(Number(value) || 0, FILTER_Q_MIN$1, FILTER_Q_MAX$1);
+  return clamp$a(Number(value) || 0, FILTER_Q_MIN$1, FILTER_Q_MAX$1);
 }
 function filterCutoffHzToNormalized(value) {
   const clampedHz = clampFilterCutoffHz(value);
   const minLog = Math.log(FILTER_CUTOFF_MIN_HZ);
   const maxLog = Math.log(FILTER_CUTOFF_MAX_HZ);
-  return clamp$9((Math.log(clampedHz) - minLog) / (maxLog - minLog), 0, 1);
+  return clamp$a((Math.log(clampedHz) - minLog) / (maxLog - minLog), 0, 1);
 }
 function normalizedToFilterCutoffHz(value) {
-  const normalized = clamp$9(Number(value) || 0, 0, 1);
+  const normalized = clamp$a(Number(value) || 0, 0, 1);
   const minLog = Math.log(FILTER_CUTOFF_MIN_HZ);
   const maxLog = Math.log(FILTER_CUTOFF_MAX_HZ);
   return Math.exp(minLog + (maxLog - minLog) * normalized);
@@ -14833,7 +14833,7 @@ function filterQToNormalized(value) {
   return (clampedQ - FILTER_Q_MIN$1) / (FILTER_Q_MAX$1 - FILTER_Q_MIN$1);
 }
 function normalizedToFilterQ(value) {
-  const normalized = clamp$9(Number(value) || 0, 0, 1);
+  const normalized = clamp$a(Number(value) || 0, 0, 1);
   return FILTER_Q_MIN$1 + (FILTER_Q_MAX$1 - FILTER_Q_MIN$1) * normalized;
 }
 function complexAdd(left, right) {
@@ -14884,7 +14884,7 @@ function responseGainForFrequency({
   const safeSampleRate = Math.max(1, Number(sampleRate) || 44100);
   const clampedCutoff = clampFilterCutoffHz(Math.min(Number(cutoffHz) || 0, safeSampleRate * 0.48));
   const clampedQ = clampFilterQ(q);
-  const safeFrequency = clamp$9(frequencyHz, 10, safeSampleRate * 0.49);
+  const safeFrequency = clamp$a(frequencyHz, 10, safeSampleRate * 0.49);
   const g = Math.tan(Math.PI * clampedCutoff / safeSampleRate);
   const k = 1 / clampedQ;
   let f0 = 1;
@@ -14997,7 +14997,7 @@ const FILTER_SPECTRUM_RENDER_MODE_OPTIONS = [
   { value: "bars", label: "Bars" },
   { value: "round-bars", label: "Round Bars" }
 ];
-function clamp$8(value, min, max) {
+function clamp$9(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 function coerceFiniteNumber$1(value) {
@@ -15005,13 +15005,13 @@ function coerceFiniteNumber$1(value) {
   return Number.isFinite(coerced) ? coerced : null;
 }
 function frequencyHzToNormalized(value) {
-  const clampedHz = clamp$8(value, FILTER_CUTOFF_MIN_HZ, FILTER_CUTOFF_MAX_HZ);
+  const clampedHz = clamp$9(value, FILTER_CUTOFF_MIN_HZ, FILTER_CUTOFF_MAX_HZ);
   const minLog = Math.log(FILTER_CUTOFF_MIN_HZ);
   const maxLog = Math.log(FILTER_CUTOFF_MAX_HZ);
-  return clamp$8((Math.log(clampedHz) - minLog) / (maxLog - minLog), 0, 1);
+  return clamp$9((Math.log(clampedHz) - minLog) / (maxLog - minLog), 0, 1);
 }
 function dbToNormalizedY(value) {
-  return clamp$8((value - FILTER_SPECTRUM_MAX_DB) / (FILTER_SPECTRUM_MIN_DB - FILTER_SPECTRUM_MAX_DB), 0, 1);
+  return clamp$9((value - FILTER_SPECTRUM_MAX_DB) / (FILTER_SPECTRUM_MIN_DB - FILTER_SPECTRUM_MAX_DB), 0, 1);
 }
 function formatFrequencyLabel(frequencyHz) {
   if (frequencyHz >= 1e3) {
@@ -15021,7 +15021,7 @@ function formatFrequencyLabel(frequencyHz) {
   return String(Math.round(frequencyHz));
 }
 function magnitudeToDb(magnitude) {
-  return clamp$8(20 * Math.log10(Math.max(1e-9, magnitude)), FILTER_SPECTRUM_MIN_DB, FILTER_SPECTRUM_MAX_DB);
+  return clamp$9(20 * Math.log10(Math.max(1e-9, magnitude)), FILTER_SPECTRUM_MIN_DB, FILTER_SPECTRUM_MAX_DB);
 }
 function findPeakIndex(values) {
   let peakIndex = 0;
@@ -15123,8 +15123,8 @@ function createPlotMetrics(width, height, {
   };
 }
 function createPlotPoint(normalizedX, magnitudeDb, plot) {
-  const x = plot.plotLeft + plot.plotWidth * clamp$8(normalizedX, 0, 1);
-  const normalizedY = clamp$8((clamp$8(magnitudeDb, FILTER_SPECTRUM_MIN_DB, FILTER_SPECTRUM_MAX_DB) - FILTER_SPECTRUM_MIN_DB) / (FILTER_SPECTRUM_MAX_DB - FILTER_SPECTRUM_MIN_DB), 0, 1);
+  const x = plot.plotLeft + plot.plotWidth * clamp$9(normalizedX, 0, 1);
+  const normalizedY = clamp$9((clamp$9(magnitudeDb, FILTER_SPECTRUM_MIN_DB, FILTER_SPECTRUM_MAX_DB) - FILTER_SPECTRUM_MIN_DB) / (FILTER_SPECTRUM_MAX_DB - FILTER_SPECTRUM_MIN_DB), 0, 1);
   const y = plot.plotBottom - plot.plotHeight * normalizedY;
   return { x, y };
 }
@@ -15203,8 +15203,8 @@ function createFilterSpectrumDisplayFrame({
   const maxBinIndex = Math.max(0, sourceBinCount - 1);
   const nyquistHz = Math.max(1, frame.sampleRateHz * 0.5);
   const sampleDisplayRange = (range) => {
-    const startIndex = clamp$8(Math.floor(clamp$8(range.lowHz, 0, nyquistHz) / nyquistHz * maxBinIndex), 0, maxBinIndex);
-    const endIndex = clamp$8(Math.ceil(clamp$8(range.highHz, 0, nyquistHz) / nyquistHz * maxBinIndex), startIndex, maxBinIndex);
+    const startIndex = clamp$9(Math.floor(clamp$9(range.lowHz, 0, nyquistHz) / nyquistHz * maxBinIndex), 0, maxBinIndex);
+    const endIndex = clamp$9(Math.ceil(clamp$9(range.highHz, 0, nyquistHz) / nyquistHz * maxBinIndex), startIndex, maxBinIndex);
     return magnitudeToDb(sampleMagnitudeAtIndexRange(frame.magnitudes, startIndex, endIndex));
   };
   const bandMagnitudesDb = bands.map(sampleDisplayRange);
@@ -15368,12 +15368,12 @@ function readFullStoredStateValue$1(storedState, key) {
   }
   return void 0;
 }
-function clamp$7(value, min, max) {
+function clamp$8(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 function clampEnvSeconds(value, fallback) {
   const numeric = Number(value);
-  return clamp$7(Number.isFinite(numeric) ? numeric : fallback, ENV_MIN_SECONDS, ENV_MAX_SECONDS);
+  return clamp$8(Number.isFinite(numeric) ? numeric : fallback, ENV_MIN_SECONDS, ENV_MAX_SECONDS);
 }
 function formatMagnitude(value, digits) {
   const numeric = Number.isFinite(value) ? value : 0;
@@ -15414,11 +15414,11 @@ function getModulationAmountBounds(targetKind) {
 function clampModulationRouteAmount(targetKind, value) {
   const limits = ROUTE_AMOUNT_LIMITS[targetKind];
   const numeric = Number(value);
-  return clamp$7(Number.isFinite(numeric) ? numeric : 0, limits.min, limits.max);
+  return clamp$8(Number.isFinite(numeric) ? numeric : 0, limits.min, limits.max);
 }
 function composeModulationAmount(targetKind, depth) {
   const limits = getRouteAmountLimit(targetKind);
-  const clampedDepth = clamp$7(Number.isFinite(depth) ? depth : 0, 0, 1);
+  const clampedDepth = clamp$8(Number.isFinite(depth) ? depth : 0, 0, 1);
   if (Math.abs(clampedDepth - 0.5) <= 1e-9) {
     return 0;
   }
@@ -15445,12 +15445,12 @@ function getModulationAmountSliderPosition(targetKind, amount) {
     if (Math.abs(limits.min) <= 1e-9) {
       return 0.5;
     }
-    return clamp$7(0.5 * (1 - Math.abs(clampedAmount) / Math.abs(limits.min)), 0, 0.5);
+    return clamp$8(0.5 * (1 - Math.abs(clampedAmount) / Math.abs(limits.min)), 0, 0.5);
   }
   if (Math.abs(limits.max) <= 1e-9) {
     return 0.5;
   }
-  return clamp$7(0.5 + 0.5 * (clampedAmount / limits.max), 0.5, 1);
+  return clamp$8(0.5 + 0.5 * (clampedAmount / limits.max), 0.5, 1);
 }
 function formatModulationAmountReadout(targetKind, amount, polarity = "unipolar") {
   const clampedAmount = clampModulationRouteAmount(targetKind, amount);
@@ -15549,7 +15549,7 @@ function normalizeSourceSlot(sourceKind, rawSlot) {
     return null;
   }
   const maxSlot = sourceKind === "mseg" ? MODULATION_MSEG_SLOT_COUNT : MODULATION_ENV_SLOT_COUNT;
-  return clamp$7(Number.isFinite(numericSlot) ? numericSlot : 1, 1, maxSlot);
+  return clamp$8(Number.isFinite(numericSlot) ? numericSlot : 1, 1, maxSlot);
 }
 function createDefaultEnvelope(slotIndex) {
   return {
@@ -15755,13 +15755,13 @@ class ModulationRuntimeBridge {
     this.stateListeners.delete(listener);
   }
   getMsegSlotController(slotIndex) {
-    return this.slotControllers[clamp$7(Math.round(slotIndex), 0, MODULATION_MSEG_SLOT_COUNT - 1)];
+    return this.slotControllers[clamp$8(Math.round(slotIndex), 0, MODULATION_MSEG_SLOT_COUNT - 1)];
   }
   getMsegSlotEditShapeIndex(slotIndex) {
-    return this.msegSlotEditShapeIndexes[clamp$7(Math.round(slotIndex), 0, MODULATION_MSEG_SLOT_COUNT - 1)];
+    return this.msegSlotEditShapeIndexes[clamp$8(Math.round(slotIndex), 0, MODULATION_MSEG_SLOT_COUNT - 1)];
   }
   setMsegSlotEditShapeIndex(slotIndex, shapeIndex) {
-    const normalizedSlotIndex = clamp$7(Math.round(slotIndex), 0, MODULATION_MSEG_SLOT_COUNT - 1);
+    const normalizedSlotIndex = clamp$8(Math.round(slotIndex), 0, MODULATION_MSEG_SLOT_COUNT - 1);
     const normalizedShapeIndex = Math.round(Number(shapeIndex)) === 1 ? 1 : 0;
     if (this.msegSlotEditShapeIndexes[normalizedSlotIndex] === normalizedShapeIndex) {
       return;
@@ -15981,7 +15981,7 @@ const VOICE_MODE_OPTIONS = [
 const MSEG_GRID_STEPS = [0.25, 0.5, 0.75];
 const MSEG_PREVIEW_HORIZONTAL_PADDING_PX = 24;
 const MSEG_PREVIEW_VERTICAL_PADDING_PX = 22;
-function joinClasses$1(...classes) {
+function joinClasses$2(...classes) {
   return classes.filter(Boolean).join(" ");
 }
 function useResizeObserver$1(ref) {
@@ -16011,7 +16011,7 @@ function formatFrameIndex(position, frameCount) {
   const frameIndex = Math.round(position * Math.max(0, safeFrameCount - 1)) + 1;
   return `${String(frameIndex).padStart(2, "0")}/${String(safeFrameCount).padStart(2, "0")}`;
 }
-function clamp$6(value, min, max) {
+function clamp$7(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 function buildMsegSurfacePaths(points, width, height, options = {}) {
@@ -16041,7 +16041,7 @@ function buildMsegMorphCurvePath(shapeAPoints, shapeBPoints, morphValue, width, 
   try {
     const bufferA = renderMsegShape({ points: shapeAPoints });
     const bufferB = renderMsegShape({ points: shapeBPoints });
-    const morph = clamp$6(Number(morphValue) || 0, 0, 1);
+    const morph = clamp$7(Number(morphValue) || 0, 0, 1);
     const metrics = createMsegEditorMetrics(width, height, {
       pointRadius: options.pointRadius,
       horizontalPadding: options.horizontalPadding ?? MSEG_EDITOR_HORIZONTAL_PADDING_PX,
@@ -16052,7 +16052,7 @@ function buildMsegMorphCurvePath(shapeAPoints, shapeBPoints, morphValue, width, 
       const x = sampleIndex / Math.max(1, sampleCount - 1);
       const valueA = sampleRenderedMsegBuffer(bufferA, x);
       const valueB = sampleRenderedMsegBuffer(bufferB, x);
-      const y = clamp$6(valueA + (valueB - valueA) * morph, 0, 1);
+      const y = clamp$7(valueA + (valueB - valueA) * morph, 0, 1);
       return pointToMsegEditorCoordinates({ x, y }, width, height, options);
     });
     return polylineToSvgPath(polyline);
@@ -16152,7 +16152,7 @@ function MsegPreview({
       morphCurvePath: nextMorphCurvePath
     };
   }, [morphShapeAPoints, morphShapeBPoints, morphValue, orientation, points, referencePoints, showMorphCurve, size.height, size.width]);
-  const clampedProgressFillEnd = progressFillEnd !== null && progressFillEnd !== void 0 && Number.isFinite(Number(progressFillEnd)) ? clamp$6(Number(progressFillEnd), 0, 1) : null;
+  const clampedProgressFillEnd = progressFillEnd !== null && progressFillEnd !== void 0 && Number.isFinite(Number(progressFillEnd)) ? clamp$7(Number(progressFillEnd), 0, 1) : null;
   const progressClipRect = reactExports.useMemo(() => {
     if (clampedProgressFillEnd === null) {
       return null;
@@ -16338,7 +16338,7 @@ function EditableMsegSurface({
     {
       ref: surfaceRef,
       "data-role": dataRole,
-      className: joinClasses$1(
+      className: joinClasses$2(
         "h-full w-full touch-none overflow-hidden rounded-[20px] bg-white/[0.03]",
         className
       ),
@@ -16393,7 +16393,7 @@ function EditableMsegSurface({
           "path",
           {
             "data-role": "mseg-base-fill",
-            className: joinClasses$1("cosimo-curve-fill", hasEmphasizedSegment && "cosimo-curve-fill-muted"),
+            className: joinClasses$2("cosimo-curve-fill", hasEmphasizedSegment && "cosimo-curve-fill-muted"),
             d: fillPath
           }
         ),
@@ -16401,7 +16401,7 @@ function EditableMsegSurface({
           "path",
           {
             "data-role": "mseg-base-curve",
-            className: joinClasses$1("cosimo-curve-line", hasEmphasizedSegment && "cosimo-curve-line-muted"),
+            className: joinClasses$2("cosimo-curve-line", hasEmphasizedSegment && "cosimo-curve-line-muted"),
             d: curvePath
           }
         ),
@@ -16505,7 +16505,7 @@ function buildMagnitudePlotPoints(magnitudesDb, width, height, {
   const points = [];
   for (let index = 0; index < magnitudesDb.length; index += 1) {
     const x = plotLeft + plotWidth * (index / Math.max(1, magnitudesDb.length - 1));
-    const normalized = clamp$6((clamp$6(magnitudesDb[index], minDb, maxDb) - minDb) / (maxDb - minDb), 0, 1);
+    const normalized = clamp$7((clamp$7(magnitudesDb[index], minDb, maxDb) - minDb) / (maxDb - minDb), 0, 1);
     const y = plotBottom - plotHeight * normalized;
     points.push({ x, y });
   }
@@ -16731,7 +16731,7 @@ function FilterResponseGraph({
   }, [size.height, size.width, spectrumGeometry]);
   const baseHandle = reactExports.useMemo(() => {
     const cutoffNormalized = filterCutoffHzToNormalized(baseModel.cutoffHz);
-    const qNormalized = clamp$6(resonanceNormalizedFromQ(baseModel.q), 0, 1);
+    const qNormalized = clamp$7(resonanceNormalizedFromQ(baseModel.q), 0, 1);
     return {
       cutoffNormalized,
       qNormalized,
@@ -16748,20 +16748,20 @@ function FilterResponseGraph({
     const bounds = surface.getBoundingClientRect();
     const handleClientX = clientX - dragState.pointerOffsetX;
     const handleClientY = clientY - dragState.pointerOffsetY;
-    const plotX = clamp$6(handleClientX - bounds.left, basePath.plotLeft, basePath.plotRight);
-    const plotY = clamp$6(handleClientY - bounds.top, basePath.plotTop, basePath.plotBottom);
-    const nextCutoffNormalized = clamp$6(
+    const plotX = clamp$7(handleClientX - bounds.left, basePath.plotLeft, basePath.plotRight);
+    const plotY = clamp$7(handleClientY - bounds.top, basePath.plotTop, basePath.plotBottom);
+    const nextCutoffNormalized = clamp$7(
       (plotX - basePath.plotLeft) / Math.max(1, basePath.plotWidth),
       0,
       1
     );
-    const nextQNormalized = clamp$6(
+    const nextQNormalized = clamp$7(
       1 - (plotY - basePath.plotTop) / Math.max(1, basePath.plotHeight),
       0,
       1
     );
-    onCutoffSet(clamp$6(normalizedToFilterCutoffHz(nextCutoffNormalized), FILTER_CUTOFF_MIN_HZ, FILTER_CUTOFF_MAX_HZ));
-    onQSet(clamp$6(resonanceQFromSurface(nextQNormalized), FILTER_Q_MIN$1, FILTER_Q_MAX$1));
+    onCutoffSet(clamp$7(normalizedToFilterCutoffHz(nextCutoffNormalized), FILTER_CUTOFF_MIN_HZ, FILTER_CUTOFF_MAX_HZ));
+    onQSet(clamp$7(resonanceQFromSurface(nextQNormalized), FILTER_Q_MIN$1, FILTER_Q_MAX$1));
   };
   const endDrag = (pointerId) => {
     const dragState = dragStateRef.current;
@@ -16882,7 +16882,7 @@ function FilterResponseGraph({
     }
     return spectrumDbTicks;
   }, [size.width, spectrumDbTicks]);
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: joinClasses$1("relative h-full w-full", className), children: [
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: joinClasses$2("relative h-full w-full", className), children: [
     /* @__PURE__ */ jsxRuntimeExports.jsxs(
       "div",
       {
@@ -17075,12 +17075,12 @@ function VoiceModeToolbar({
   surfaceClassName
 }) {
   const columnCount = Math.max(1, options.length);
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: joinClasses$1("grid gap-2", className), children: [
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: joinClasses$2("grid gap-2", className), children: [
     /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[10px] uppercase tracking-[0.18em] text-slate-300/60", children: "Voice" }),
     /* @__PURE__ */ jsxRuntimeExports.jsx(
       "div",
       {
-        className: joinClasses$1(
+        className: joinClasses$2(
           "inline-grid gap-1 rounded-[18px] border border-white/8 bg-black/25 p-1",
           surfaceClassName
         ),
@@ -17114,7 +17114,7 @@ function VoiceGlideControlSurface({
   glideControl,
   className
 }) {
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: joinClasses$1(
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: joinClasses$2(
     "grid gap-3 rounded-[22px] border border-white/[0.05] bg-white/[0.025] px-4 py-3",
     className
   ), children: [
@@ -17141,8 +17141,8 @@ function KeyboardSectionShell({
   railClassName,
   contentClassName
 }) {
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: joinClasses$1("grid gap-3", className), children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: joinClasses$1(
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: joinClasses$2("grid gap-3", className), children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: joinClasses$2(
       "flex flex-col items-center justify-end gap-2 rounded-[22px] border border-white/[0.05] bg-white/[0.025] px-2 py-3",
       railClassName
     ), children: [
@@ -17171,7 +17171,7 @@ function KeyboardSectionShell({
       ),
       /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "font-mono text-[10px] tracking-[0.18em] text-cyan-200/70", children: keyboardRootLabel })
     ] }),
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: joinClasses$1("grid gap-3", contentClassName), children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: joinClasses$2("grid gap-3", contentClassName), children: [
       toolbar,
       keyboard
     ] })
@@ -17202,13 +17202,13 @@ function WavetableStageSection({
   const debugState = reactExports.useMemo(() => ({
     position: clampDisplayPosition(position),
     warpMode: Math.round(Number(warpMode) || 0),
-    warpAmount: clamp$6(Number(warpAmount) || 0, 0, 1)
+    warpAmount: clamp$7(Number(warpAmount) || 0, 0, 1)
   }), [position, warpAmount, warpMode]);
   return /* @__PURE__ */ jsxRuntimeExports.jsxs(
     "section",
     {
       ref: stageRef,
-      className: joinClasses$1(
+      className: joinClasses$2(
         "cosimo-stage relative overflow-hidden rounded-[28px] border border-white/[0.05]",
         className
       ),
@@ -17284,7 +17284,7 @@ function WavetableStageSection({
 }
 function defaultFormatValue(value, min, max) {
   if (max <= 1 && min >= -1) {
-    return `${Math.round(clamp$6(value, min, max) * 100)}`;
+    return `${Math.round(clamp$7(value, min, max) * 100)}`;
   }
   return value.toFixed(1);
 }
@@ -17306,7 +17306,7 @@ function VerticalSlider({
 }) {
   const trackRef = reactExports.useRef(null);
   const { handlePointerDown, handlePointerMove, handlePointerUp, handlePointerCancel } = useSliderDrag();
-  const normalized = clamp$6((binding.value - min) / (max - min), 0, 1);
+  const normalized = clamp$7((binding.value - min) / (max - min), 0, 1);
   const displayValue = formatValue ? formatValue(binding.value) : defaultFormatValue(binding.value, min, max);
   const fillStyle = bipolar ? normalized >= 0.5 ? { bottom: "50%", height: `${(normalized - 0.5) * 100}%` } : { bottom: `${normalized * 100}%`, height: `${(0.5 - normalized) * 100}%` } : { height: `${normalized * 100}%` };
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: `flex shrink-0 flex-col items-center gap-1 py-2 ${className ?? ""}`, children: [
@@ -17367,7 +17367,7 @@ const DISTORTION_FIXED_DISPLAY_RANGE = 2;
 const DISTORTION_CURVE_POINT_COUNT = 241;
 const DISTORTION_TRANSFER_OCCUPANCY_BIN_COUNT = 81;
 const DISTORTION_TRANSFER_OCCUPANCY_ACTIVITY_EPSILON = 0.035;
-function clamp$5(value, min, max) {
+function clamp$6(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 function coerceFiniteNumber(value) {
@@ -17421,7 +17421,7 @@ function normalizeDistortionScopeMessage(message) {
   const computedRemovedPeak = findPeak(normalizedInput.map((inputSample, index) => inputSample - normalizedOutput[index]));
   return {
     sampleRateHz: Math.max(1, coerceFiniteNumber(record.sampleRateHz) ?? 44100),
-    dominantChannel: clamp$5(Math.round(coerceFiniteNumber(record.dominantChannel) ?? 0), 0, 1),
+    dominantChannel: clamp$6(Math.round(coerceFiniteNumber(record.dominantChannel) ?? 0), 0, 1),
     inputPeak: Math.max(0, coerceFiniteNumber(record.inputPeak) ?? computedInputPeak),
     outputPeak: Math.max(0, coerceFiniteNumber(record.outputPeak) ?? computedOutputPeak),
     removedPeak: Math.max(0, coerceFiniteNumber(record.removedPeak) ?? computedRemovedPeak),
@@ -17451,12 +17451,12 @@ function normalizeDistortionHistoryMessage(message) {
   if (availableBinCount <= 0) {
     return null;
   }
-  const binCount = clamp$5(
+  const binCount = clamp$6(
     Math.round(coerceFiniteNumber(record.binCount) ?? availableBinCount),
     1,
     availableBinCount
   );
-  const validBinCount = clamp$5(
+  const validBinCount = clamp$6(
     Math.round(coerceFiniteNumber(record.validBinCount) ?? binCount),
     0,
     binCount
@@ -17482,7 +17482,7 @@ function normalizeDistortionHistoryMessage(message) {
   };
 }
 function shapeDistortionSample(inputSample, knee) {
-  const clampedKnee = clamp$5(Number(knee) || 0, 0, 1);
+  const clampedKnee = clamp$6(Number(knee) || 0, 0, 1);
   const exponent = 2 + 14 * clampedKnee * clampedKnee;
   const magnitude = Math.abs(Number(inputSample) || 0);
   const denominator = Math.pow(1 + Math.pow(magnitude, exponent), 1 / exponent);
@@ -17512,7 +17512,7 @@ function buildDistortionHistoryBins(frame) {
     frame.outputMins.length,
     frame.outputMaxs.length
   );
-  const safeValidBinCount = clamp$5(frame.validBinCount, 0, activeBinCount);
+  const safeValidBinCount = clamp$6(frame.validBinCount, 0, activeBinCount);
   const leadingPaddingCount = Math.max(0, activeBinCount - safeValidBinCount);
   const bins = [];
   for (let index = 0; index < leadingPaddingCount; index += 1) {
@@ -17622,7 +17622,7 @@ function buildDistortionTransferOccupancy({
       continue;
     }
     const normalized = (point.input + safeInputRange) / (safeInputRange * 2);
-    const binIndex = clamp$5(
+    const binIndex = clamp$6(
       Math.round(normalized * (safeBinCount - 1)),
       0,
       safeBinCount - 1
@@ -17635,7 +17635,7 @@ function buildDistortionTransferOccupancy({
   const smoothedRemoved = normalizeSeries(smoothSeries(removedBins));
   const smoothedClipped = smoothSeries(clippedBins).map((value, index) => {
     const density = densityBins[index] ?? 0;
-    return density > 0 ? clamp$5(value / density, 0, 1) : 0;
+    return density > 0 ? clamp$6(value / density, 0, 1) : 0;
   });
   const rawPoints = Array.from({ length: safeBinCount }, (_, index) => {
     const normalized = safeBinCount <= 1 ? 0 : index / (safeBinCount - 1);
@@ -17645,7 +17645,7 @@ function buildDistortionTransferOccupancy({
       output: shapeDistortionSample(input, knee),
       density: smoothedDensity[index] ?? 0,
       removed: smoothedRemoved[index] ?? 0,
-      clipped: clamp$5(smoothedClipped[index] ?? 0, 0, 1)
+      clipped: clamp$6(smoothedClipped[index] ?? 0, 0, 1)
     };
   });
   const segments = [];
@@ -17716,18 +17716,18 @@ const COMPACT_PLOT = {
   width: 576,
   height: 300
 };
-function joinClasses(...classes) {
+function joinClasses$1(...classes) {
   return classes.filter(Boolean).join(" ");
 }
-function clamp$4(value, min, max) {
+function clamp$5(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 function mapPlotX(sampleValue, plot, range) {
-  const normalized = clamp$4((sampleValue + range) / (Math.max(range, 1e-6) * 2), 0, 1);
+  const normalized = clamp$5((sampleValue + range) / (Math.max(range, 1e-6) * 2), 0, 1);
   return plot.left + plot.width * normalized;
 }
 function mapPlotY(sampleValue, plot, range) {
-  const normalized = clamp$4((range - sampleValue) / (Math.max(range, 1e-6) * 2), 0, 1);
+  const normalized = clamp$5((range - sampleValue) / (Math.max(range, 1e-6) * 2), 0, 1);
   return plot.top + plot.height * normalized;
 }
 function buildPolylinePath(points) {
@@ -17865,8 +17865,8 @@ function DistortionVisualizer({
     return {
       occupancyPath,
       clippedPath,
-      occupancyOpacity: clamp$4(0.14 + peakDensity * 0.34, 0.14, 0.48),
-      clippedOpacity: clamp$4(peakRemoved * 0.62 + peakClipped * 0.24, 0, 0.72)
+      occupancyOpacity: clamp$5(0.14 + peakDensity * 0.34, 0.14, 0.48),
+      clippedOpacity: clamp$5(peakRemoved * 0.62 + peakClipped * 0.24, 0, 0.72)
     };
   }).filter((segment) => segment.occupancyPath), [displayRange, transferOccupancy, transferPlotRect]);
   const historyColumns = reactExports.useMemo(() => {
@@ -17972,7 +17972,7 @@ function DistortionVisualizer({
   const zeroXTransfer = buildAxisLabelX(0, transferPlotRect, displayRange);
   const zeroYHistory = buildAxisLabelY(0, historyPlotRect, displayRange);
   if (compact) {
-    return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: joinClasses("h-full w-full", className), children: [
+    return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: joinClasses$1("h-full w-full", className), children: [
       /* @__PURE__ */ jsxRuntimeExports.jsxs(
         "svg",
         {
@@ -18117,7 +18117,7 @@ function DistortionVisualizer({
       /* @__PURE__ */ jsxRuntimeExports.jsx("pre", { "data-role": "distortion-graph-debug", className: "hidden", children: JSON.stringify(debugState) })
     ] });
   }
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: joinClasses("grid gap-3", className), children: [
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: joinClasses$1("grid gap-3", className), children: [
     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between gap-3 text-[11px] uppercase tracking-[0.18em] text-slate-300/62", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx("div", { children: "Driven Transfer" }),
       /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "font-mono text-[10px] tracking-[0.18em] text-cyan-100/75", children: overshoot > 0 ? `Overshoot +${overshoot.toFixed(2)}` : `Headroom ${(headroom * 100).toFixed(0)}%` })
@@ -26789,7 +26789,7 @@ function PrecisionNumberField({
     )
   ] });
 }
-function clamp$3(value, min, max) {
+function clamp$4(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 function formatPercent$1(value) {
@@ -26800,37 +26800,37 @@ function formatQValue(value) {
   return `${qValue >= 10 ? qValue.toFixed(1) : qValue.toFixed(2)} Q`;
 }
 function smoothstep(value) {
-  const clampedValue = clamp$3(value, 0, 1);
+  const clampedValue = clamp$4(value, 0, 1);
   return clampedValue * clampedValue * (3 - 2 * clampedValue);
 }
 function smootherstep(value) {
-  const clampedValue = clamp$3(value, 0, 1);
+  const clampedValue = clamp$4(value, 0, 1);
   return clampedValue * clampedValue * clampedValue * (clampedValue * (clampedValue * 6 - 15) + 10);
 }
 function evaluateBalancedPower(normalizedInput, coefficients) {
-  const x = clamp$3(normalizedInput, 0, 1);
-  const power = clamp$3(Number(coefficients.power) || 2.25, 0.35, 6);
+  const x = clamp$4(normalizedInput, 0, 1);
+  const power = clamp$4(Number(coefficients.power) || 2.25, 0.35, 6);
   if (x <= 0.5) {
     return 0.5 * Math.pow(x * 2, power);
   }
   return 1 - 0.5 * Math.pow((1 - x) * 2, power);
 }
 function evaluateSmoothstepBlend(normalizedInput, coefficients) {
-  const x = clamp$3(normalizedInput, 0, 1);
-  const blend = clamp$3(Number(coefficients.blend) || 0.65, 0, 1);
-  const shaping = clamp$3(Number(coefficients.shaping) || 0.6, 0, 1);
+  const x = clamp$4(normalizedInput, 0, 1);
+  const blend = clamp$4(Number(coefficients.blend) || 0.65, 0, 1);
+  const shaping = clamp$4(Number(coefficients.shaping) || 0.6, 0, 1);
   const curved = smoothstep(x) * (1 - shaping) + smootherstep(x) * shaping;
-  return clamp$3(x * (1 - blend) + curved * blend, 0, 1);
+  return clamp$4(x * (1 - blend) + curved * blend, 0, 1);
 }
 function evaluateSigmoid(normalizedInput, coefficients) {
-  const x = clamp$3(normalizedInput, 0, 1);
-  const slope = clamp$3(Number(coefficients.slope) || 7, 0.5, 20);
-  const center = clamp$3(Number(coefficients.center) || 0.5, 0.08, 0.92);
+  const x = clamp$4(normalizedInput, 0, 1);
+  const slope = clamp$4(Number(coefficients.slope) || 7, 0.5, 20);
+  const center = clamp$4(Number(coefficients.center) || 0.5, 0.08, 0.92);
   const logistic = (sample) => 1 / (1 + Math.exp(-slope * (sample - center)));
   const low = logistic(0);
   const high = logistic(1);
   const span = Math.max(1e-9, high - low);
-  return clamp$3((logistic(x) - low) / span, 0, 1);
+  return clamp$4((logistic(x) - low) / span, 0, 1);
 }
 const CURVE_FAMILY_DEFINITIONS = [
   {
@@ -26839,7 +26839,7 @@ const CURVE_FAMILY_DEFINITIONS = [
     equation: "y = x",
     description: "Direct 1:1 motion with no shaping.",
     coefficients: [],
-    evaluate: (normalizedInput) => clamp$3(normalizedInput, 0, 1)
+    evaluate: (normalizedInput) => clamp$4(normalizedInput, 0, 1)
   },
   {
     id: "balanced-power",
@@ -26955,7 +26955,7 @@ function createDefaultCurveProfile(targetId) {
         const resolvedValue = Number.isFinite(Number(requestedValue)) ? Number(requestedValue) : coefficient.defaultValue;
         return [
           coefficient.key,
-          clamp$3(resolvedValue, coefficient.min, coefficient.max)
+          clamp$4(resolvedValue, coefficient.min, coefficient.max)
         ];
       })
     )
@@ -26982,7 +26982,7 @@ function sanitizeCurveProfile(targetId, profile) {
       const resolvedValue = Number.isFinite(Number(rawValue)) ? Number(rawValue) : definition.defaultValue;
       return [
         definition.key,
-        clamp$3(resolvedValue, definition.min, definition.max)
+        clamp$4(resolvedValue, definition.min, definition.max)
       ];
     })
   );
@@ -26995,12 +26995,12 @@ function evaluateCurveProfile(targetId, profile, normalizedInput) {
   const target = getTargetDefinitionInternal(targetId);
   const sanitizedProfile = sanitizeCurveProfile(target.id, profile);
   const family = getFamilyDefinitionInternal(sanitizedProfile.familyId);
-  return clamp$3(family.evaluate(normalizedInput, sanitizedProfile.coefficients), 0, 1);
+  return clamp$4(family.evaluate(normalizedInput, sanitizedProfile.coefficients), 0, 1);
 }
 function invertCurveProfile(targetId, profile, normalizedOutput) {
   const target = getTargetDefinitionInternal(targetId);
   const sanitizedProfile = sanitizeCurveProfile(target.id, profile);
-  const desiredOutput = clamp$3(normalizedOutput, 0, 1);
+  const desiredOutput = clamp$4(normalizedOutput, 0, 1);
   if (desiredOutput <= 0) {
     return 0;
   }
@@ -27646,18 +27646,36 @@ const ARTICULATION_STATE_KEY = "articulations.v2";
 const ARTICULATION_TRIGGER_CONFIG_STATE_KEY = "articulationTriggerConfig.v1";
 const ARTICULATION_MAX_SLOTS = 128;
 const ARTICULATION_UNASSIGNED_RUNTIME_SLOT = -1;
-function clamp$2(value, min, max) {
+const ARTICULATION_DEFAULT_NAMES = [
+  "Bow Forte",
+  "Bow Pianissimo",
+  "Pluck Round",
+  "Pluck Snap",
+  "Hammer",
+  "Air Pad",
+  "Bell Strike",
+  "Choke",
+  "Tape Hum",
+  "Curl Lift",
+  "Chatter",
+  "Tug Sustain",
+  "Velvet Pop",
+  "Chrome Bloom",
+  "Tin Halo",
+  "Sugar Gate"
+];
+function clamp$3(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 function clamp01(value) {
-  return clamp$2(Number.isFinite(value) ? value : 0, 0, 1);
+  return clamp$3(Number.isFinite(value) ? value : 0, 0, 1);
 }
 function normalizeNumber(value, fallback, min = -Number.MAX_VALUE, max = Number.MAX_VALUE) {
   const numericValue = Number(value);
-  return clamp$2(Number.isFinite(numericValue) ? numericValue : fallback, min, max);
+  return clamp$3(Number.isFinite(numericValue) ? numericValue : fallback, min, max);
 }
 function normalizeInteger(value, fallback, min, max) {
-  return clamp$2(Math.round(normalizeNumber(value, fallback)), min, max);
+  return clamp$3(Math.round(normalizeNumber(value, fallback)), min, max);
 }
 function cloneJson(value) {
   return JSON.parse(JSON.stringify(value));
@@ -27667,6 +27685,53 @@ function normalizeTriggerMode(value) {
 }
 function createUnassignedRuntimeMap() {
   return Array.from({ length: ARTICULATION_MAX_SLOTS }, () => ARTICULATION_UNASSIGNED_RUNTIME_SLOT);
+}
+function createDefaultArticulationName(runtimeSlot) {
+  const safeRuntimeSlot = normalizeInteger(runtimeSlot, 0, 0, ARTICULATION_MAX_SLOTS - 1);
+  const baseName = ARTICULATION_DEFAULT_NAMES[safeRuntimeSlot % ARTICULATION_DEFAULT_NAMES.length];
+  const cycleIndex = Math.floor(safeRuntimeSlot / ARTICULATION_DEFAULT_NAMES.length);
+  return cycleIndex === 0 ? baseName : `${baseName} ${cycleIndex + 1}`;
+}
+function createUniqueArticulationId(usedIds, runtimeSlot) {
+  const baseId = `articulation-${runtimeSlot}`;
+  if (!usedIds.has(baseId)) {
+    return baseId;
+  }
+  for (let suffix = 2; suffix <= ARTICULATION_MAX_SLOTS; suffix += 1) {
+    const candidate = `${baseId}-${suffix}`;
+    if (!usedIds.has(candidate)) {
+      return candidate;
+    }
+  }
+  return `${baseId}-${Date.now().toString(36)}`;
+}
+function createUniqueAssignmentId(assignments, prefix, articulationId, position) {
+  const usedIds = new Set(assignments.map((assignment) => assignment.id));
+  const baseId = `${prefix}-${articulationId}-${position}`;
+  if (!usedIds.has(baseId)) {
+    return baseId;
+  }
+  for (let suffix = 2; suffix <= ARTICULATION_MAX_SLOTS; suffix += 1) {
+    const candidate = `${baseId}-${suffix}`;
+    if (!usedIds.has(candidate)) {
+      return candidate;
+    }
+  }
+  return `${baseId}-${Date.now().toString(36)}`;
+}
+function createUniqueCopiedName(slots, sourceName) {
+  const usedNames = new Set(slots.map((slot) => slot.name));
+  const baseName = `${sourceName} Copy`;
+  if (!usedNames.has(baseName)) {
+    return baseName;
+  }
+  for (let suffix = 2; suffix <= ARTICULATION_MAX_SLOTS; suffix += 1) {
+    const candidate = `${baseName} ${suffix}`;
+    if (!usedNames.has(candidate)) {
+      return candidate;
+    }
+  }
+  return baseName;
 }
 function createDefaultArticulationParameterSnapshot() {
   return {
@@ -27772,7 +27837,7 @@ function normalizeArticulationSlot(value, fallbackRuntimeSlot) {
   const nextValue = value;
   const runtimeSlot = normalizeInteger(nextValue.runtimeSlot, fallbackRuntimeSlot, 0, ARTICULATION_MAX_SLOTS - 1);
   const id = typeof nextValue.id === "string" && nextValue.id.trim() ? nextValue.id.trim() : `articulation-${runtimeSlot}`;
-  const name = typeof nextValue.name === "string" && nextValue.name.trim() ? nextValue.name.trim() : `Art ${runtimeSlot + 1}`;
+  const name = typeof nextValue.name === "string" && nextValue.name.trim() ? nextValue.name.trim() : createDefaultArticulationName(runtimeSlot);
   return {
     id,
     runtimeSlot,
@@ -27910,6 +27975,7 @@ function articulationSnapshotsEqual(left, right) {
 function createArticulationSlotFromSnapshot(bankValue, snapshotValue) {
   const bank = normalizeArticulationBank(bankValue);
   const usedRuntimeSlots = new Set(bank.slots.map((slot) => slot.runtimeSlot));
+  const usedIds = new Set(bank.slots.map((slot) => slot.id));
   let runtimeSlot = -1;
   for (let candidate = 0; candidate < ARTICULATION_MAX_SLOTS; candidate += 1) {
     if (!usedRuntimeSlots.has(candidate)) {
@@ -27921,9 +27987,9 @@ function createArticulationSlotFromSnapshot(bankValue, snapshotValue) {
     return null;
   }
   return {
-    id: `articulation-${runtimeSlot}`,
+    id: createUniqueArticulationId(usedIds, runtimeSlot),
     runtimeSlot,
-    name: `Art ${runtimeSlot + 1}`,
+    name: createDefaultArticulationName(runtimeSlot),
     snapshot: cloneJson(normalizeArticulationSnapshot(snapshotValue))
   };
 }
@@ -28002,17 +28068,376 @@ function assignArticulationToNextAvailableTrigger(bankValue, articulationId, mod
     ]
   });
 }
-function addCapturedArticulationToBank(bankValue, snapshotValue) {
+function addCapturedArticulationToBank(bankValue, snapshotValue, options = {}) {
   const bank = normalizeArticulationBank(bankValue);
   const nextSlot = createArticulationSlotFromSnapshot(bank, snapshotValue);
   if (!nextSlot) {
     return bank;
   }
-  return assignArticulationToNextAvailableTrigger({
+  const nextBank = normalizeArticulationBank({
     ...bank,
     selectedSlotId: nextSlot.id,
     slots: [...bank.slots, nextSlot]
-  }, nextSlot.id, bank.activeTriggerMode);
+  });
+  if (options.autoAssign === false) {
+    return nextBank;
+  }
+  return assignArticulationToNextAvailableTrigger(nextBank, nextSlot.id, bank.activeTriggerMode);
+}
+function upsertSelectedArticulationSnapshot(bankValue, slotId, snapshotValue) {
+  const bank = normalizeArticulationBank(bankValue);
+  const snapshot = normalizeArticulationSnapshot(snapshotValue);
+  const slots = bank.slots.map((slot) => slot.id === slotId ? { ...slot, snapshot } : slot);
+  return normalizeArticulationBank({
+    ...bank,
+    slots
+  });
+}
+function setArticulationTriggerMode(bankValue, modeValue) {
+  const bank = normalizeArticulationBank(bankValue);
+  return normalizeArticulationBank({
+    ...bank,
+    activeTriggerMode: normalizeTriggerMode(modeValue)
+  });
+}
+function renameArticulationSlot(bankValue, slotId, nextNameValue) {
+  const bank = normalizeArticulationBank(bankValue);
+  const nextName = typeof nextNameValue === "string" ? nextNameValue.trim() : "";
+  if (!nextName) {
+    return bank;
+  }
+  return normalizeArticulationBank({
+    ...bank,
+    slots: bank.slots.map((slot) => slot.id === slotId ? { ...slot, name: nextName } : slot)
+  });
+}
+function duplicateArticulationSlot(bankValue, slotId) {
+  const bank = normalizeArticulationBank(bankValue);
+  const sourceSlot = bank.slots.find((slot) => slot.id === slotId);
+  if (!sourceSlot) {
+    return bank;
+  }
+  const nextSlot = createArticulationSlotFromSnapshot(bank, sourceSlot.snapshot);
+  if (!nextSlot) {
+    return bank;
+  }
+  return normalizeArticulationBank({
+    ...bank,
+    selectedSlotId: nextSlot.id,
+    slots: [
+      ...bank.slots,
+      {
+        ...nextSlot,
+        name: createUniqueCopiedName(bank.slots, sourceSlot.name)
+      }
+    ]
+  });
+}
+function deleteArticulationSlot(bankValue, slotId) {
+  const bank = normalizeArticulationBank(bankValue);
+  if (bank.slots.length <= 1 || !bank.slots.some((slot) => slot.id === slotId)) {
+    return bank;
+  }
+  const slots = bank.slots.filter((slot) => slot.id !== slotId);
+  return normalizeArticulationBank({
+    ...bank,
+    selectedSlotId: bank.selectedSlotId === slotId ? slots[0]?.id ?? null : bank.selectedSlotId,
+    slots,
+    chainAssignments: bank.chainAssignments.filter((assignment) => assignment.articulationId !== slotId),
+    keyAssignments: bank.keyAssignments.filter((assignment) => assignment.articulationId !== slotId),
+    velocityAssignments: bank.velocityAssignments.filter((assignment) => assignment.articulationId !== slotId)
+  });
+}
+function getRangeAssignmentField(mode) {
+  if (mode === "vel") {
+    return {
+      field: "velocityAssignments",
+      minAllowed: 1,
+      prefix: "velocity"
+    };
+  }
+  return {
+    field: "chainAssignments",
+    minAllowed: 0,
+    prefix: "chain"
+  };
+}
+function sortRangeAssignments(assignments) {
+  return [...assignments].sort((left, right) => left.min - right.min || left.max - right.max);
+}
+function keyAssignmentsToRangeAssignments(assignments) {
+  const sortedAssignments = [...assignments].sort((left, right) => left.note - right.note);
+  const ranges = [];
+  for (const assignment of sortedAssignments) {
+    const previous = ranges[ranges.length - 1];
+    if (previous && previous.articulationId === assignment.articulationId && previous.max + 1 === assignment.note) {
+      previous.max = assignment.note;
+      previous.id = `key-${previous.articulationId}-${previous.min}-${previous.max}`;
+      continue;
+    }
+    ranges.push({
+      id: `key-${assignment.articulationId}-${assignment.note}-${assignment.note}`,
+      articulationId: assignment.articulationId,
+      min: assignment.note,
+      max: assignment.note
+    });
+  }
+  return ranges;
+}
+function rangeAssignmentsToKeyAssignments(assignments) {
+  const usedNotes = /* @__PURE__ */ new Set();
+  const keyAssignments = [];
+  for (const assignment of sortRangeAssignments(assignments)) {
+    for (let note = assignment.min; note <= assignment.max; note += 1) {
+      if (usedNotes.has(note)) {
+        continue;
+      }
+      usedNotes.add(note);
+      keyAssignments.push({ note, articulationId: assignment.articulationId });
+    }
+  }
+  return keyAssignments;
+}
+function getTriggerLaneInfo(bank, modeValue) {
+  const mode = normalizeTriggerMode(modeValue);
+  if (mode === "key") {
+    return {
+      mode,
+      minAllowed: 0,
+      maxAllowed: ARTICULATION_MAX_SLOTS - 1,
+      prefix: "key",
+      assignments: keyAssignmentsToRangeAssignments(bank.keyAssignments)
+    };
+  }
+  const { field, minAllowed, prefix } = getRangeAssignmentField(mode);
+  return {
+    mode,
+    minAllowed,
+    maxAllowed: ARTICULATION_MAX_SLOTS - 1,
+    prefix,
+    assignments: bank[field]
+  };
+}
+function setTriggerLaneAssignments(bank, mode, assignments) {
+  const sortedAssignments = sortRangeAssignments(assignments);
+  if (mode === "key") {
+    return normalizeArticulationBank({
+      ...bank,
+      keyAssignments: rangeAssignmentsToKeyAssignments(sortedAssignments)
+    });
+  }
+  const { field } = getRangeAssignmentField(mode);
+  return normalizeArticulationBank({
+    ...bank,
+    [field]: sortedAssignments
+  });
+}
+function findRangeAssignmentAt(assignments, position) {
+  return assignments.find((assignment) => position >= assignment.min && position <= assignment.max) ?? null;
+}
+function findEmptyRangeGap(assignments, position, minAllowed, maxAllowed) {
+  let gapMin = minAllowed;
+  for (const assignment of sortRangeAssignments(assignments)) {
+    if (position < assignment.min) {
+      return {
+        min: gapMin,
+        max: Math.min(maxAllowed, assignment.min - 1)
+      };
+    }
+    gapMin = Math.max(gapMin, assignment.max + 1);
+  }
+  return {
+    min: gapMin,
+    max: maxAllowed
+  };
+}
+function findMatchingRangeAssignment(assignments, segmentValue) {
+  if (!segmentValue || typeof segmentValue !== "object") {
+    return null;
+  }
+  const segment = segmentValue;
+  const id = typeof segment.id === "string" ? segment.id : "";
+  const articulationId = typeof segment.articulationId === "string" ? segment.articulationId : "";
+  const min = Number(segment.min);
+  const max = Number(segment.max);
+  return assignments.find((assignment) => id && assignment.id === id || assignment.articulationId === articulationId && assignment.min === min && assignment.max === max) ?? null;
+}
+function findMoveDestination(assignments, desiredMin, width, minAllowed, maxAllowed) {
+  const sortedAssignments = sortRangeAssignments(assignments);
+  const candidates = [];
+  let gapMin = minAllowed;
+  const addGapCandidate = (gapStart, gapEnd) => {
+    const maxStart = gapEnd - width + 1;
+    if (maxStart < gapStart) {
+      return;
+    }
+    const min = clamp$3(desiredMin, gapStart, maxStart);
+    candidates.push({
+      min,
+      max: min + width - 1,
+      distance: Math.abs(min - desiredMin)
+    });
+  };
+  for (const assignment of sortedAssignments) {
+    addGapCandidate(gapMin, assignment.min - 1);
+    gapMin = Math.max(gapMin, assignment.max + 1);
+  }
+  addGapCandidate(gapMin, maxAllowed);
+  candidates.sort((left, right) => left.distance - right.distance || left.min - right.min);
+  return candidates[0] ?? null;
+}
+function assignArticulationToRangePosition(bankValue, modeValue, positionValue, articulationId) {
+  const bank = normalizeArticulationBank(bankValue);
+  if (!bank.slots.some((slot) => slot.id === articulationId)) {
+    return bank;
+  }
+  const { mode, minAllowed, maxAllowed, prefix, assignments } = getTriggerLaneInfo(bank, modeValue);
+  const position = normalizeInteger(positionValue, minAllowed, minAllowed, maxAllowed);
+  const occupiedAssignment = assignments.find((assignment) => position >= assignment.min && position <= assignment.max);
+  const nextAssignments = occupiedAssignment ? assignments.map((assignment) => assignment.id === occupiedAssignment.id ? { ...assignment, articulationId } : assignment) : (() => {
+    const gap = findEmptyRangeGap(assignments, position, minAllowed, maxAllowed);
+    if (gap.max < gap.min) {
+      return assignments;
+    }
+    return [
+      ...assignments,
+      {
+        id: createUniqueAssignmentId(assignments, prefix, articulationId, gap.min),
+        articulationId,
+        min: gap.min,
+        max: gap.max
+      }
+    ];
+  })();
+  return setTriggerLaneAssignments(bank, mode, nextAssignments);
+}
+function insertArticulationRangeAtPosition(bankValue, modeValue, positionValue, articulationId) {
+  const bank = normalizeArticulationBank(bankValue);
+  if (!bank.slots.some((slot) => slot.id === articulationId)) {
+    return bank;
+  }
+  const { mode, minAllowed, maxAllowed, prefix, assignments } = getTriggerLaneInfo(bank, modeValue);
+  const position = normalizeInteger(positionValue, minAllowed, minAllowed, maxAllowed);
+  const occupiedAssignment = findRangeAssignmentAt(assignments, position);
+  let nextAssignments = assignments;
+  if (occupiedAssignment) {
+    if (occupiedAssignment.min === occupiedAssignment.max) {
+      return bank;
+    }
+    const trimFromMin = position - occupiedAssignment.min <= occupiedAssignment.max - position;
+    nextAssignments = assignments.flatMap((assignment) => {
+      if (assignment.id !== occupiedAssignment.id) {
+        return [assignment];
+      }
+      if (trimFromMin) {
+        const min = position + 1;
+        return min <= assignment.max ? [{ ...assignment, min }] : [];
+      }
+      const max = position - 1;
+      return max >= assignment.min ? [{ ...assignment, max }] : [];
+    });
+  }
+  if (findRangeAssignmentAt(nextAssignments, position)) {
+    return bank;
+  }
+  return setTriggerLaneAssignments(bank, mode, [
+    ...nextAssignments,
+    {
+      id: createUniqueAssignmentId(nextAssignments, prefix, articulationId, position),
+      articulationId,
+      min: position,
+      max: position
+    }
+  ]);
+}
+function moveArticulationRangeAssignment(bankValue, modeValue, segmentValue, targetPositionValue) {
+  const bank = normalizeArticulationBank(bankValue);
+  const { mode, minAllowed, maxAllowed, assignments } = getTriggerLaneInfo(bank, modeValue);
+  const target = findMatchingRangeAssignment(assignments, segmentValue);
+  if (!target) {
+    return bank;
+  }
+  const width = target.max - target.min + 1;
+  const desiredMin = normalizeInteger(
+    Number(targetPositionValue) - Math.floor(width / 2),
+    target.min,
+    minAllowed,
+    Math.max(minAllowed, maxAllowed - width + 1)
+  );
+  const otherAssignments = assignments.filter((assignment) => assignment.id !== target.id);
+  const destination = findMoveDestination(otherAssignments, desiredMin, width, minAllowed, maxAllowed);
+  if (!destination || destination.min === target.min && destination.max === target.max) {
+    return bank;
+  }
+  return setTriggerLaneAssignments(bank, mode, [
+    ...otherAssignments,
+    {
+      ...target,
+      min: destination.min,
+      max: destination.max
+    }
+  ]);
+}
+function resizeArticulationRangeAssignment(bankValue, modeValue, segmentValue, edge, positionValue) {
+  const bank = normalizeArticulationBank(bankValue);
+  const { mode, minAllowed, maxAllowed, assignments } = getTriggerLaneInfo(bank, modeValue);
+  const target = findMatchingRangeAssignment(assignments, segmentValue);
+  if (!target) {
+    return bank;
+  }
+  const otherAssignments = sortRangeAssignments(assignments.filter((assignment) => assignment.id !== target.id));
+  const previousLimit = otherAssignments.filter((assignment) => assignment.max < target.max).reduce((maxValue, assignment) => Math.max(maxValue, assignment.max + 1), minAllowed);
+  const nextLimit = otherAssignments.filter((assignment) => assignment.min > target.min).reduce((minValue, assignment) => Math.min(minValue, assignment.min - 1), maxAllowed);
+  const position = normalizeInteger(positionValue, edge === "min" ? target.min : target.max, minAllowed, maxAllowed);
+  const nextTarget = edge === "min" ? { ...target, min: clamp$3(position, previousLimit, target.max) } : { ...target, max: clamp$3(position, target.min, nextLimit) };
+  if (nextTarget.min === target.min && nextTarget.max === target.max) {
+    return bank;
+  }
+  return setTriggerLaneAssignments(bank, mode, [...otherAssignments, nextTarget]);
+}
+function clearArticulationRangeAssignment(bankValue, modeValue, segmentValue) {
+  const bank = normalizeArticulationBank(bankValue);
+  const { mode, assignments } = getTriggerLaneInfo(bank, modeValue);
+  const target = findMatchingRangeAssignment(assignments, segmentValue);
+  if (!target) {
+    return bank;
+  }
+  return setTriggerLaneAssignments(
+    bank,
+    mode,
+    assignments.filter((assignment) => assignment.id !== target.id)
+  );
+}
+function clearArticulationTriggerAssignments(bankValue, modeValue) {
+  const bank = normalizeArticulationBank(bankValue);
+  const mode = normalizeTriggerMode(modeValue);
+  return setTriggerLaneAssignments(bank, mode, []);
+}
+function distributeArticulationRanges(bankValue, modeValue) {
+  const bank = normalizeArticulationBank(bankValue);
+  const { mode, minAllowed, maxAllowed, prefix, assignments } = getTriggerLaneInfo(bank, modeValue);
+  const firstAssignmentByArticulation = /* @__PURE__ */ new Map();
+  for (const assignment of [...assignments].sort((left, right) => left.min - right.min)) {
+    if (!firstAssignmentByArticulation.has(assignment.articulationId)) {
+      firstAssignmentByArticulation.set(assignment.articulationId, assignment);
+    }
+  }
+  const uniqueAssignments = [...firstAssignmentByArticulation.values()];
+  if (uniqueAssignments.length === 0) {
+    return bank;
+  }
+  const rangeLength = maxAllowed - minAllowed + 1;
+  const nextAssignments = uniqueAssignments.map((assignment, assignmentIndex) => {
+    const min = minAllowed + Math.floor(assignmentIndex * rangeLength / uniqueAssignments.length);
+    const max = assignmentIndex === uniqueAssignments.length - 1 ? maxAllowed : minAllowed + Math.floor((assignmentIndex + 1) * rangeLength / uniqueAssignments.length) - 1;
+    return {
+      id: `${prefix}-${assignment.articulationId}-${min}`,
+      articulationId: assignment.articulationId,
+      min,
+      max: Math.max(min, max)
+    };
+  });
+  return setTriggerLaneAssignments(bank, mode, nextAssignments);
 }
 function fillRangeTriggerMap(target, assignments, runtimeSlotByArticulationId) {
   for (const assignment of assignments) {
@@ -28183,7 +28608,7 @@ const previewKeyOffsetsByCode = /* @__PURE__ */ new Map([
 function hasCommandModifier(event) {
   return event.metaKey || event.ctrlKey || event.altKey;
 }
-function buildShortMidi(status, noteNumber, velocity = 0) {
+function buildShortMidi$1(status, noteNumber, velocity = 0) {
   return (status & 255) << 16 | (noteNumber & 127) << 8 | velocity & 127;
 }
 function readKeyboardRootNote(keyboard) {
@@ -28262,7 +28687,7 @@ function useSynthInputRouter(keyboardRef, {
     sendMIDIInputEventRef.current = sendMIDIInputEvent;
   }, [sendMIDIInputEvent]);
   const sendStandalonePreviewMIDI = reactExports.useCallback((status, noteNumber, velocity = 0) => {
-    const message = buildShortMidi(status, noteNumber, velocity);
+    const message = buildShortMidi$1(status, noteNumber, velocity);
     sendMIDIInputEventRef.current?.(midiInputEndpointIDRef.current, message);
     keyboardRef.current?.handleExternalMIDI?.(message);
   }, [keyboardRef]);
@@ -28588,6 +29013,8 @@ const RUNTIME_SYNC_REQUEST_ENDPOINT_ID = "runtimeSyncRequest";
 const RUNTIME_STATE_ENDPOINT_ID = "runtimeState";
 const RETRY_DESIRED_TABLE_REQUEST_ENDPOINT_ID = "retryDesiredTableRequest";
 const WAVETABLE_PREWARM_REQUEST_ENDPOINT_ID = "wavetablePrewarmRequest";
+const MIDI_INPUT_ENDPOINT_ID = "midiIn";
+const ARTICULATION_AUDITION_NOTES = [36, 48, 60];
 const GLIDE_TIME_MIN_SECONDS$1 = 0;
 const GLIDE_TIME_MAX_SECONDS$1 = 2;
 const GLIDE_TIME_STEP_SECONDS$1 = 1e-3;
@@ -28598,7 +29025,7 @@ function describeErrorMessage(error) {
   }
   return String(error);
 }
-function clamp$1(value, min, max) {
+function clamp$2(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 function useFactoryBankCatalog() {
@@ -28834,12 +29261,8 @@ function useModulationState() {
     bridge: bridgeRef
   };
 }
-function toStableToken(value) {
-  try {
-    return JSON.stringify(value);
-  } catch {
-    return String(value);
-  }
+function buildShortMidi(status, noteNumber, velocity = 0) {
+  return (status & 255) << 16 | (noteNumber & 127) << 8 | velocity & 127;
 }
 function readFullStoredStateValue(storedState, key) {
   const fullState = storedState && typeof storedState === "object" ? storedState : {};
@@ -29022,7 +29445,7 @@ function useMsegEditorInteractions({
     if (!msegState) {
       return;
     }
-    setSelectedPointIndex((previousIndex) => clamp$1(
+    setSelectedPointIndex((previousIndex) => clamp$2(
       previousIndex,
       0,
       Math.max(0, msegState.shape.points.length - 1)
@@ -29316,7 +29739,7 @@ function useMsegEditorInteractions({
     if (!pointerState.moved && pointerState.deleteOnRelease && msegController.current) {
       msegController.current.deletePoint(pointerState.pointIndex);
       const pointCount = msegController.current.getState().shape.points.length;
-      setSelectedPointIndex(clamp$1(pointerState.pointIndex - 1, 0, Math.max(0, pointCount - 1)));
+      setSelectedPointIndex(clamp$2(pointerState.pointIndex - 1, 0, Math.max(0, pointCount - 1)));
     }
     setHoveredSegmentIndex(resolvePointerLocation(event.clientX, event.clientY)?.segmentIndex ?? -1);
     event.preventDefault();
@@ -29422,132 +29845,132 @@ function useSynthPatchViewModel({
   const playMode = usePatchParameterBinding({
     endpointID: PLAY_MODE_ENDPOINT_ID,
     initialValue: 0,
-    coerce: (value) => clamp$1(Math.round(Number(value) || 0), 0, Math.max(0, voiceModeCount - 1))
+    coerce: (value) => clamp$2(Math.round(Number(value) || 0), 0, Math.max(0, voiceModeCount - 1))
   });
   const glideTime = usePatchParameterBinding({
     endpointID: GLIDE_TIME_ENDPOINT_ID,
     initialValue: 0,
-    coerce: (value) => clamp$1(Number(value) || 0, GLIDE_TIME_MIN_SECONDS$1, GLIDE_TIME_MAX_SECONDS$1)
+    coerce: (value) => clamp$2(Number(value) || 0, GLIDE_TIME_MIN_SECONDS$1, GLIDE_TIME_MAX_SECONDS$1)
   });
   const pan = usePatchParameterBinding({
     endpointID: PAN_ENDPOINT_ID,
     initialValue: 0,
-    coerce: (value) => clamp$1(Number(value) || 0, -1, 1)
+    coerce: (value) => clamp$2(Number(value) || 0, -1, 1)
   });
   const warpMode = usePatchParameterBinding({
     endpointID: WARP_MODE_ENDPOINT_ID,
     initialValue: 0,
-    coerce: (value) => clamp$1(Math.round(Number(value) || 0), 0, 4)
+    coerce: (value) => clamp$2(Math.round(Number(value) || 0), 0, 4)
   });
   const warpAmount = usePatchParameterBinding({
     endpointID: WARP_AMOUNT_ENDPOINT_ID,
     initialValue: 0,
-    coerce: (value) => clamp$1(Number(value) || 0, 0, 1)
+    coerce: (value) => clamp$2(Number(value) || 0, 0, 1)
   });
   const filterMode = usePatchParameterBinding({
     endpointID: FILTER_MODE_ENDPOINT_ID,
     initialValue: 0,
-    coerce: (value) => clamp$1(Math.round(Number(value) || 0), 0, 5)
+    coerce: (value) => clamp$2(Math.round(Number(value) || 0), 0, 5)
   });
   const filterCutoff = usePatchParameterBinding({
     endpointID: FILTER_CUTOFF_ENDPOINT_ID,
     initialValue: 1e3,
-    coerce: (value) => clamp$1(Number(value) || 0, 20, 2e4)
+    coerce: (value) => clamp$2(Number(value) || 0, 20, 2e4)
   });
   const filterQ = usePatchParameterBinding({
     endpointID: FILTER_Q_ENDPOINT_ID,
     initialValue: 0.707107,
-    coerce: (value) => clamp$1(Number(value) || 0, 0.1, 20)
+    coerce: (value) => clamp$2(Number(value) || 0, 0.1, 20)
   });
   const mseg1Morph = usePatchParameterBinding({
     endpointID: MSEG_1_MORPH_ENDPOINT_ID,
     initialValue: 0,
-    coerce: (value) => clamp$1(Number(value) || 0, 0, 1)
+    coerce: (value) => clamp$2(Number(value) || 0, 0, 1)
   });
   const mseg2Morph = usePatchParameterBinding({
     endpointID: MSEG_2_MORPH_ENDPOINT_ID,
     initialValue: 0,
-    coerce: (value) => clamp$1(Number(value) || 0, 0, 1)
+    coerce: (value) => clamp$2(Number(value) || 0, 0, 1)
   });
   const mseg3Morph = usePatchParameterBinding({
     endpointID: MSEG_3_MORPH_ENDPOINT_ID,
     initialValue: 0,
-    coerce: (value) => clamp$1(Number(value) || 0, 0, 1)
+    coerce: (value) => clamp$2(Number(value) || 0, 0, 1)
   });
   const distortionMode = usePatchParameterBinding({
     endpointID: DISTORTION_MODE_ENDPOINT_ID,
     initialValue: 0,
-    coerce: (value) => clamp$1(Math.round(Number(value) || 0), 0, 1)
+    coerce: (value) => clamp$2(Math.round(Number(value) || 0), 0, 1)
   });
   const distortionDriveDb = usePatchParameterBinding({
     endpointID: DISTORTION_DRIVE_DB_ENDPOINT_ID,
     initialValue: 12,
-    coerce: (value) => clamp$1(Number(value) || 0, 0, 36)
+    coerce: (value) => clamp$2(Number(value) || 0, 0, 36)
   });
   const distortionKnee = usePatchParameterBinding({
     endpointID: DISTORTION_KNEE_ENDPOINT_ID,
     initialValue: 0.35,
-    coerce: (value) => clamp$1(Number(value) || 0, 0, 1)
+    coerce: (value) => clamp$2(Number(value) || 0, 0, 1)
   });
   const distortionWet = usePatchParameterBinding({
     endpointID: DISTORTION_WET_ENDPOINT_ID,
     initialValue: 0,
-    coerce: (value) => clamp$1(Number(value) || 0, 0, 1)
+    coerce: (value) => clamp$2(Number(value) || 0, 0, 1)
   });
   const distortionWetHPHz = usePatchParameterBinding({
     endpointID: DISTORTION_WET_HP_HZ_ENDPOINT_ID,
     initialValue: 40,
-    coerce: (value) => clamp$1(Number(value) || 0, 20, 4e3)
+    coerce: (value) => clamp$2(Number(value) || 0, 20, 4e3)
   });
   const distortionWetLPHz = usePatchParameterBinding({
     endpointID: DISTORTION_WET_LP_HZ_ENDPOINT_ID,
     initialValue: 18e3,
-    coerce: (value) => clamp$1(Number(value) || 0, 20, 2e4)
+    coerce: (value) => clamp$2(Number(value) || 0, 20, 2e4)
   });
   const chorusEnabled = usePatchParameterBinding({
     endpointID: CHORUS_ENABLED_ENDPOINT_ID,
     initialValue: 0,
-    coerce: (value) => clamp$1(Math.round(Number(value) || 0), 0, 1)
+    coerce: (value) => clamp$2(Math.round(Number(value) || 0), 0, 1)
   });
   const chorusMix = usePatchParameterBinding({
     endpointID: CHORUS_MIX_ENDPOINT_ID,
     initialValue: 0,
-    coerce: (value) => clamp$1(Number(value) || 0, 0, 1)
+    coerce: (value) => clamp$2(Number(value) || 0, 0, 1)
   });
   const chorusMotionMode = usePatchParameterBinding({
     endpointID: CHORUS_MOTION_MODE_ENDPOINT_ID,
     initialValue: 1,
-    coerce: (value) => clamp$1(Math.round(Number(value) || 0), 0, 3)
+    coerce: (value) => clamp$2(Math.round(Number(value) || 0), 0, 3)
   });
   const chorusBloomMode = usePatchParameterBinding({
     endpointID: CHORUS_BLOOM_MODE_ENDPOINT_ID,
     initialValue: 0,
-    coerce: (value) => clamp$1(Math.round(Number(value) || 0), 0, 4)
+    coerce: (value) => clamp$2(Math.round(Number(value) || 0), 0, 4)
   });
   const chorusTone = usePatchParameterBinding({
     endpointID: CHORUS_TONE_ENDPOINT_ID,
     initialValue: 0.5,
-    coerce: (value) => clamp$1(Number(value) || 0, 0, 1)
+    coerce: (value) => clamp$2(Number(value) || 0, 0, 1)
   });
   const chorusFeedback = usePatchParameterBinding({
     endpointID: CHORUS_FEEDBACK_ENDPOINT_ID,
     initialValue: 0.42,
-    coerce: (value) => clamp$1(Number(value) || 0, 0, 0.95)
+    coerce: (value) => clamp$2(Number(value) || 0, 0, 0.95)
   });
   const chorusRingAmount = usePatchParameterBinding({
     endpointID: CHORUS_RING_AMOUNT_ENDPOINT_ID,
     initialValue: 0,
-    coerce: (value) => clamp$1(Number(value) || 0, 0, 1)
+    coerce: (value) => clamp$2(Number(value) || 0, 0, 1)
   });
   const chorusRingOffsetMode = usePatchParameterBinding({
     endpointID: CHORUS_RING_OFFSET_MODE_ENDPOINT_ID,
     initialValue: 0,
-    coerce: (value) => clamp$1(Math.round(Number(value) || 0), 0, 3)
+    coerce: (value) => clamp$2(Math.round(Number(value) || 0), 0, 3)
   });
   const chorusRingFineSemitones = usePatchParameterBinding({
     endpointID: CHORUS_RING_FINE_SEMITONES_ENDPOINT_ID,
     initialValue: 0,
-    coerce: (value) => clamp$1(Number(value) || 0, -2, 2)
+    coerce: (value) => clamp$2(Number(value) || 0, -2, 2)
   });
   const requestRuntimeSync = usePatchEventTrigger(RUNTIME_SYNC_REQUEST_ENDPOINT_ID);
   const retryDesiredTableLoad = usePatchEventTrigger(RETRY_DESIRED_TABLE_REQUEST_ENDPOINT_ID);
@@ -29579,7 +30002,10 @@ function useSynthPatchViewModel({
   const articulationSlots = articulationBank.slots;
   const selectedArticulationSlot = reactExports.useMemo(() => articulationSlots.find((slot) => slot.id === articulationBank.selectedSlotId) ?? null, [articulationBank.selectedSlotId, articulationSlots]);
   const isApplyingArticulationRef = reactExports.useRef(false);
-  const lastObservedArticulationEditRef = reactExports.useRef(null);
+  const [selectedArticulationIsDirty, setSelectedArticulationIsDirty] = reactExports.useState(false);
+  const [discardedArticulationEdit, setDiscardedArticulationEdit] = reactExports.useState(null);
+  const activeAuditionRef = reactExports.useRef(null);
+  const auditionCycleIndexRef = reactExports.useRef(0);
   const [selectedMsegSlot, setSelectedMsegSlot] = reactExports.useState(0);
   const [selectedEnvelopeSlot, setSelectedEnvelopeSlot] = reactExports.useState(0);
   const displayedMsegControllerRef = reactExports.useRef(null);
@@ -29629,7 +30055,7 @@ function useSynthPatchViewModel({
       return;
     }
     const maxTableIndex = tableCount - 1;
-    const centerIndex = clamp$1(Math.round(Number(centerTableIndex) || 0), 0, maxTableIndex);
+    const centerIndex = clamp$2(Math.round(Number(centerTableIndex) || 0), 0, maxTableIndex);
     const seenTableIndices = /* @__PURE__ */ new Set();
     for (const tableIndex of [centerIndex, centerIndex - 1, centerIndex + 1]) {
       if (tableIndex < 0 || tableIndex > maxTableIndex || seenTableIndices.has(tableIndex)) {
@@ -29645,7 +30071,7 @@ function useSynthPatchViewModel({
   }, [prewarmWavetableNeighborhood, wavetableSelect]);
   const handleStepWavetable = reactExports.useCallback((direction) => {
     const maxTableIndex = Math.max(0, (catalog?.tables?.length ?? 1) - 1);
-    const nextTableIndex = clamp$1(desiredTableIndex + direction, 0, maxTableIndex);
+    const nextTableIndex = clamp$2(desiredTableIndex + direction, 0, maxTableIndex);
     wavetableSelect.commitValue(nextTableIndex);
     prewarmWavetableNeighborhood(nextTableIndex);
   }, [catalog?.tables?.length, desiredTableIndex, prewarmWavetableNeighborhood, wavetableSelect]);
@@ -29656,7 +30082,7 @@ function useSynthPatchViewModel({
     retryDesiredTableLoad(1);
   }, [retryDesiredTableLoad]);
   const handleSelectMsegSlot = reactExports.useCallback((slotIndex) => {
-    setSelectedMsegSlot(clamp$1(Math.round(slotIndex), 0, 2));
+    setSelectedMsegSlot(clamp$2(Math.round(slotIndex), 0, 2));
   }, []);
   const msegMorphBindings = reactExports.useMemo(
     () => [mseg1Morph, mseg2Morph, mseg3Morph],
@@ -29667,7 +30093,7 @@ function useSynthPatchViewModel({
     displayedMsegControllerRef.current?.setEditShapeIndex?.(shapeIndex);
   }, []);
   const handleSelectEnvelopeSlot = reactExports.useCallback((slotIndex) => {
-    setSelectedEnvelopeSlot(clamp$1(Math.round(slotIndex), 0, 2));
+    setSelectedEnvelopeSlot(clamp$2(Math.round(slotIndex), 0, 2));
   }, []);
   const handleMsegRateChange = reactExports.useCallback((nextValue) => {
     if (!msegState) {
@@ -29705,7 +30131,7 @@ function useSynthPatchViewModel({
     });
   }, [msegState]);
   const handleMsegMorphChange = reactExports.useCallback((nextValue) => {
-    const nextMorph = clamp$1(Number(nextValue) || 0, 0, 1);
+    const nextMorph = clamp$2(Number(nextValue) || 0, 0, 1);
     const targetBinding = msegMorphBindings[selectedMsegSlot] ?? mseg1Morph;
     targetBinding.setValue(nextMorph);
     modulationBridge.current?.setMsegSlotMorph(selectedMsegSlot, nextMorph);
@@ -29887,34 +30313,40 @@ function useSynthPatchViewModel({
     warpMode,
     wavetablePosition
   ]);
-  const handleAddArticulationSlot = reactExports.useCallback(() => {
+  const handleCaptureArticulationSlot = reactExports.useCallback((options = {}) => {
     const snapshot = captureCurrentArticulationSnapshot();
     articulationBankState.setAndPersistBank((previousBank) => {
-      const nextBank = addCapturedArticulationToBank(previousBank, snapshot);
-      const nextSlot = nextBank.slots.find((slot) => slot.id === nextBank.selectedSlotId);
-      if (!nextSlot || nextBank.slots.length === previousBank.slots.length) {
+      const nextBank = addCapturedArticulationToBank(previousBank, snapshot, {
+        autoAssign: options.autoAssign ?? true
+      });
+      if (nextBank.slots.length === previousBank.slots.length) {
         return previousBank;
       }
-      const nextSelectionToken = `${nextSlot.id}:${toStableToken(nextSlot.snapshot)}`;
-      lastObservedArticulationEditRef.current = {
-        selectionToken: nextSelectionToken,
-        currentSnapshotToken: nextSelectionToken
-      };
       return nextBank;
     });
+    setSelectedArticulationIsDirty(false);
+    setDiscardedArticulationEdit(null);
   }, [articulationBankState, captureCurrentArticulationSnapshot]);
-  const handleSelectArticulationSlot = reactExports.useCallback((slotId) => {
+  const handleAddArticulationSlot = reactExports.useCallback(() => {
+    handleCaptureArticulationSlot({ autoAssign: true });
+  }, [handleCaptureArticulationSlot]);
+  const selectArticulationSlot = reactExports.useCallback((slotId, options = {}) => {
     const bank = articulationBankState.bankRef.current;
     const slot = bank.slots.find((candidate) => candidate.id === slotId);
     if (!slot) {
       return;
     }
-    const nextApplyToken = `${slot.id}:${toStableToken(slot.snapshot)}`;
+    const previousSlot = bank.slots.find((candidate) => candidate.id === bank.selectedSlotId) ?? null;
+    const shouldRecordDirtyDiscard = options.recordDirtyDiscard !== false && selectedArticulationIsDirty && previousSlot && previousSlot.id !== slot.id;
+    if (shouldRecordDirtyDiscard) {
+      setDiscardedArticulationEdit({
+        slotId: previousSlot.id,
+        slotName: previousSlot.name,
+        snapshot: captureCurrentArticulationSnapshot()
+      });
+    }
     isApplyingArticulationRef.current = true;
-    lastObservedArticulationEditRef.current = {
-      selectionToken: nextApplyToken,
-      currentSnapshotToken: nextApplyToken
-    };
+    setSelectedArticulationIsDirty(false);
     applyArticulationSnapshot(slot.snapshot);
     setTimeout(() => {
       isApplyingArticulationRef.current = false;
@@ -29923,40 +30355,216 @@ function useSynthPatchViewModel({
       ...previousBank,
       selectedSlotId: slotId
     }));
+  }, [
+    applyArticulationSnapshot,
+    articulationBankState,
+    captureCurrentArticulationSnapshot,
+    selectedArticulationIsDirty
+  ]);
+  const handleSelectArticulationSlot = reactExports.useCallback((slotId) => {
+    selectArticulationSlot(slotId);
+  }, [selectArticulationSlot]);
+  const handleUpdateSelectedArticulationSlot = reactExports.useCallback(() => {
+    const bank = articulationBankState.bankRef.current;
+    const slotId = bank.selectedSlotId;
+    if (!slotId) {
+      return;
+    }
+    const snapshot = captureCurrentArticulationSnapshot();
+    articulationBankState.setAndPersistBank((previousBank) => upsertSelectedArticulationSnapshot(previousBank, slotId, snapshot));
+    setSelectedArticulationIsDirty(false);
+    setDiscardedArticulationEdit(null);
+  }, [articulationBankState, captureCurrentArticulationSnapshot]);
+  const handleRevertSelectedArticulationSlot = reactExports.useCallback(() => {
+    const bank = articulationBankState.bankRef.current;
+    const slot = bank.slots.find((candidate) => candidate.id === bank.selectedSlotId);
+    if (!slot) {
+      return;
+    }
+    if (selectedArticulationIsDirty) {
+      setDiscardedArticulationEdit({
+        slotId: slot.id,
+        slotName: slot.name,
+        snapshot: captureCurrentArticulationSnapshot()
+      });
+    }
+    isApplyingArticulationRef.current = true;
+    setSelectedArticulationIsDirty(false);
+    applyArticulationSnapshot(slot.snapshot);
+    setTimeout(() => {
+      isApplyingArticulationRef.current = false;
+    }, 0);
+  }, [
+    applyArticulationSnapshot,
+    articulationBankState,
+    captureCurrentArticulationSnapshot,
+    selectedArticulationIsDirty
+  ]);
+  const handleUndoDiscardedArticulationEdit = reactExports.useCallback(() => {
+    const edit = discardedArticulationEdit;
+    if (!edit) {
+      return;
+    }
+    isApplyingArticulationRef.current = true;
+    setDiscardedArticulationEdit(null);
+    applyArticulationSnapshot(edit.snapshot);
+    articulationBankState.setAndPersistBank((previousBank) => normalizeArticulationBank({
+      ...previousBank,
+      selectedSlotId: edit.slotId
+    }));
+    setTimeout(() => {
+      isApplyingArticulationRef.current = false;
+      setSelectedArticulationIsDirty(true);
+    }, 0);
+  }, [applyArticulationSnapshot, articulationBankState, discardedArticulationEdit]);
+  const handleSetArticulationTriggerMode = reactExports.useCallback((mode) => {
+    articulationBankState.setAndPersistBank((previousBank) => setArticulationTriggerMode(previousBank, mode));
+  }, [articulationBankState]);
+  const updateArticulationBankIfChanged = reactExports.useCallback((update) => {
+    const previousBank = articulationBankState.bankRef.current;
+    const nextBank = update(previousBank);
+    if (articulationBanksEqual(previousBank, nextBank)) {
+      return false;
+    }
+    articulationBankState.setAndPersistBank(nextBank);
+    return true;
+  }, [articulationBankState]);
+  const handleAssignArticulationRangePosition = reactExports.useCallback((mode, position, articulationId) => {
+    return updateArticulationBankIfChanged((previousBank) => assignArticulationToRangePosition(previousBank, mode, position, articulationId));
+  }, [updateArticulationBankIfChanged]);
+  const handleInsertArticulationRangeAtPosition = reactExports.useCallback((mode, position, articulationId) => {
+    return updateArticulationBankIfChanged((previousBank) => insertArticulationRangeAtPosition(previousBank, mode, position, articulationId));
+  }, [updateArticulationBankIfChanged]);
+  const handleDuplicateAndAssignArticulationRangePosition = reactExports.useCallback((mode, position, articulationId, operation) => {
+    const previousBank = articulationBankState.bankRef.current;
+    const duplicatedBank = duplicateArticulationSlot(previousBank, articulationId);
+    const nextSlotId = duplicatedBank.selectedSlotId;
+    if (articulationBanksEqual(previousBank, duplicatedBank) || !nextSlotId) {
+      return false;
+    }
+    const assignedBank = operation === "insert" ? insertArticulationRangeAtPosition(duplicatedBank, mode, position, nextSlotId) : assignArticulationToRangePosition(duplicatedBank, mode, position, nextSlotId);
+    if (articulationBanksEqual(duplicatedBank, assignedBank)) {
+      return false;
+    }
+    const nextSlot = assignedBank.slots.find((slot) => slot.id === nextSlotId);
+    articulationBankState.setAndPersistBank(assignedBank);
+    if (nextSlot) {
+      isApplyingArticulationRef.current = true;
+      setSelectedArticulationIsDirty(false);
+      applyArticulationSnapshot(nextSlot.snapshot);
+      setTimeout(() => {
+        isApplyingArticulationRef.current = false;
+      }, 0);
+    }
+    return true;
   }, [applyArticulationSnapshot, articulationBankState]);
+  const handleMoveArticulationRangeAssignment = reactExports.useCallback((mode, segment, targetPosition) => {
+    return updateArticulationBankIfChanged((previousBank) => moveArticulationRangeAssignment(previousBank, mode, segment, targetPosition));
+  }, [updateArticulationBankIfChanged]);
+  const handleResizeArticulationRangeAssignment = reactExports.useCallback((mode, segment, edge, position) => {
+    return updateArticulationBankIfChanged((previousBank) => resizeArticulationRangeAssignment(previousBank, mode, segment, edge, position));
+  }, [updateArticulationBankIfChanged]);
+  const handleClearArticulationRangeAssignment = reactExports.useCallback((mode, segment) => {
+    return updateArticulationBankIfChanged((previousBank) => clearArticulationRangeAssignment(previousBank, mode, segment));
+  }, [updateArticulationBankIfChanged]);
+  const handleClearArticulationTriggerAssignments = reactExports.useCallback((mode) => {
+    articulationBankState.setAndPersistBank((previousBank) => clearArticulationTriggerAssignments(previousBank, mode));
+  }, [articulationBankState]);
+  const handleDistributeArticulationRanges = reactExports.useCallback((mode) => {
+    articulationBankState.setAndPersistBank((previousBank) => distributeArticulationRanges(previousBank, mode));
+  }, [articulationBankState]);
+  const handleRenameArticulationSlot = reactExports.useCallback((slotId, nextName) => {
+    articulationBankState.setAndPersistBank((previousBank) => renameArticulationSlot(previousBank, slotId, nextName));
+  }, [articulationBankState]);
+  const handleReplaceArticulationSlotWithCurrent = reactExports.useCallback((slotId) => {
+    const snapshot = captureCurrentArticulationSnapshot();
+    articulationBankState.setAndPersistBank((previousBank) => upsertSelectedArticulationSnapshot(previousBank, slotId, snapshot));
+    if (articulationBankState.bankRef.current.selectedSlotId === slotId) {
+      setSelectedArticulationIsDirty(false);
+    }
+  }, [articulationBankState, captureCurrentArticulationSnapshot]);
+  const handleDuplicateArticulationSlot = reactExports.useCallback((slotId) => {
+    const nextBank = duplicateArticulationSlot(articulationBankState.bankRef.current, slotId);
+    const nextSlot = nextBank.slots.find((slot) => slot.id === nextBank.selectedSlotId);
+    articulationBankState.setAndPersistBank(nextBank);
+    if (nextSlot) {
+      isApplyingArticulationRef.current = true;
+      setSelectedArticulationIsDirty(false);
+      applyArticulationSnapshot(nextSlot.snapshot);
+      setTimeout(() => {
+        isApplyingArticulationRef.current = false;
+      }, 0);
+    }
+  }, [applyArticulationSnapshot, articulationBankState]);
+  const handleDeleteArticulationSlot = reactExports.useCallback((slotId) => {
+    const previousBank = articulationBankState.bankRef.current;
+    const nextBank = deleteArticulationSlot(previousBank, slotId);
+    const selectedChanged = nextBank.selectedSlotId !== previousBank.selectedSlotId;
+    const nextSlot = nextBank.slots.find((slot) => slot.id === nextBank.selectedSlotId);
+    articulationBankState.setAndPersistBank(nextBank);
+    if (selectedChanged && nextSlot) {
+      isApplyingArticulationRef.current = true;
+      setSelectedArticulationIsDirty(false);
+      applyArticulationSnapshot(nextSlot.snapshot);
+      setTimeout(() => {
+        isApplyingArticulationRef.current = false;
+      }, 0);
+    }
+  }, [applyArticulationSnapshot, articulationBankState]);
+  const sendMidiInputEvent = reactExports.useCallback((status, note, velocity = 0) => {
+    patchConnection.sendMIDIInputEvent?.(MIDI_INPUT_ENDPOINT_ID, buildShortMidi(status, note, velocity));
+  }, [patchConnection]);
+  const handleStopArticulationAudition = reactExports.useCallback((slotId) => {
+    const activeAudition = activeAuditionRef.current;
+    if (!activeAudition || slotId && activeAudition.slotId !== slotId) {
+      return;
+    }
+    sendMidiInputEvent(128, activeAudition.note, 0);
+    activeAuditionRef.current = null;
+  }, [sendMidiInputEvent]);
+  const handleStartArticulationAudition = reactExports.useCallback((slotId) => {
+    handleStopArticulationAudition();
+    selectArticulationSlot(slotId);
+    const note = ARTICULATION_AUDITION_NOTES[auditionCycleIndexRef.current % ARTICULATION_AUDITION_NOTES.length];
+    auditionCycleIndexRef.current += 1;
+    activeAuditionRef.current = { slotId, note };
+    sendMidiInputEvent(144, note, 100);
+  }, [handleStopArticulationAudition, selectArticulationSlot, sendMidiInputEvent]);
+  reactExports.useEffect(() => {
+    const handleWindowBlur = () => handleStopArticulationAudition();
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        handleStopArticulationAudition();
+      }
+    };
+    window.addEventListener("blur", handleWindowBlur);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("blur", handleWindowBlur);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [handleStopArticulationAudition]);
+  reactExports.useEffect(() => () => {
+    const activeAudition = activeAuditionRef.current;
+    if (activeAudition) {
+      patchConnection.sendMIDIInputEvent?.(
+        MIDI_INPUT_ENDPOINT_ID,
+        buildShortMidi(128, activeAudition.note, 0)
+      );
+      activeAuditionRef.current = null;
+    }
+  }, [patchConnection]);
   reactExports.useEffect(() => {
     if (!articulationBankState.hasHydrated || !selectedArticulationSlot) {
-      lastObservedArticulationEditRef.current = null;
+      setSelectedArticulationIsDirty(false);
       return;
     }
     if (isApplyingArticulationRef.current) {
       return;
     }
-    const selectionToken = `${selectedArticulationSlot.id}:${toStableToken(selectedArticulationSlot.snapshot)}`;
     const currentSnapshot = captureCurrentArticulationSnapshot();
-    const currentSnapshotToken = `${selectedArticulationSlot.id}:${toStableToken(currentSnapshot)}`;
-    const lastObservedEdit = lastObservedArticulationEditRef.current;
-    if (!lastObservedEdit || lastObservedEdit.selectionToken !== selectionToken) {
-      lastObservedArticulationEditRef.current = {
-        selectionToken,
-        currentSnapshotToken
-      };
-      return;
-    }
-    if (lastObservedEdit.currentSnapshotToken === currentSnapshotToken) {
-      return;
-    }
-    lastObservedArticulationEditRef.current = {
-      selectionToken: currentSnapshotToken,
-      currentSnapshotToken
-    };
-    if (articulationSnapshotsEqual(selectedArticulationSlot.snapshot, currentSnapshot)) {
-      return;
-    }
-    articulationBankState.setAndPersistBank((previousBank) => normalizeArticulationBank({
-      ...previousBank,
-      slots: previousBank.slots.map((slot) => slot.id === selectedArticulationSlot.id ? { ...slot, snapshot: currentSnapshot } : slot)
-    }));
+    const isDirty = !articulationSnapshotsEqual(selectedArticulationSlot.snapshot, currentSnapshot);
+    setSelectedArticulationIsDirty((previousValue) => previousValue === isDirty ? previousValue : isDirty);
   }, [
     articulationBankState,
     captureCurrentArticulationSnapshot,
@@ -29964,11 +30572,11 @@ function useSynthPatchViewModel({
   ]);
   const handleStepPlayMode = reactExports.useCallback((direction) => {
     playMode.commitValue(
-      clamp$1(playMode.value + direction, 0, Math.max(0, voiceModeCount - 1))
+      clamp$2(playMode.value + direction, 0, Math.max(0, voiceModeCount - 1))
     );
   }, [playMode, voiceModeCount]);
   const handleStepGlideTime = reactExports.useCallback((direction) => {
-    glideTime.commitValue(clamp$1(
+    glideTime.commitValue(clamp$2(
       glideTime.value + direction * GLIDE_TIME_STEP_SECONDS$1,
       GLIDE_TIME_MIN_SECONDS$1,
       GLIDE_TIME_MAX_SECONDS$1
@@ -30035,6 +30643,11 @@ function useSynthPatchViewModel({
     articulationBank,
     articulationSlots,
     selectedArticulationSlot,
+    selectedArticulationIsDirty,
+    discardedArticulationEdit: discardedArticulationEdit ? {
+      slotId: discardedArticulationEdit.slotId,
+      slotName: discardedArticulationEdit.slotName
+    } : null,
     hasHydratedArticulations: articulationBankState.hasHydrated,
     selectedMsegSlot,
     selectedEnvelopeSlot,
@@ -30049,7 +30662,26 @@ function useSynthPatchViewModel({
     handleRemoveRoute,
     handleRouteChange,
     handleAddArticulationSlot,
+    handleCaptureArticulationSlot,
     handleSelectArticulationSlot,
+    handleUpdateSelectedArticulationSlot,
+    handleRevertSelectedArticulationSlot,
+    handleUndoDiscardedArticulationEdit,
+    handleSetArticulationTriggerMode,
+    handleAssignArticulationRangePosition,
+    handleInsertArticulationRangeAtPosition,
+    handleDuplicateAndAssignArticulationRangePosition,
+    handleMoveArticulationRangeAssignment,
+    handleResizeArticulationRangeAssignment,
+    handleClearArticulationRangeAssignment,
+    handleClearArticulationTriggerAssignments,
+    handleDistributeArticulationRanges,
+    handleRenameArticulationSlot,
+    handleDuplicateArticulationSlot,
+    handleDeleteArticulationSlot,
+    handleReplaceArticulationSlotWithCurrent,
+    handleStartArticulationAudition,
+    handleStopArticulationAudition,
     handleSelectWavetable,
     handlePrewarmWavetablePicker,
     handleRetryLoad,
@@ -30060,6 +30692,1227 @@ function useSynthPatchViewModel({
     msegEditor,
     keyboardRouting
   };
+}
+const ARTICULATION_DRAG_MIME = "application/x-cosimo-articulation-id";
+const ARTICULATION_RANGE_MAX = 127;
+const MODE_OPTIONS = [
+  { mode: "chain", label: "Chain" },
+  { mode: "key", label: "Key" },
+  { mode: "vel", label: "Vel" }
+];
+const PILL_BASE = "inline-flex h-7 shrink-0 items-center gap-1.5 rounded-[8px] border px-2.5 text-[10px] font-bold uppercase tracking-[0.12em] transition";
+const PILL_NEUTRAL = "border-white/[0.06] bg-white/[0.025] text-slate-300/72 hover:border-white/15 hover:text-slate-100";
+const PILL_AMBER_ACTIVE = "border-amber-200/30 bg-amber-300/12 text-amber-100";
+const PILL_CYAN = "border-cyan-300/18 bg-cyan-300/8 text-cyan-100/85 hover:border-cyan-200/30 hover:bg-cyan-300/14";
+const PILL_PINK = "border-pink-300/22 bg-pink-300/10 text-pink-100/85 hover:border-pink-200/35 hover:bg-pink-300/16";
+const FRAME_CLASS = "rounded-[14px] border border-white/[0.06] bg-white/[0.022]";
+function joinClasses(...classes) {
+  return classes.filter(Boolean).join(" ");
+}
+function clamp$1(value, min, max) {
+  return Math.min(Math.max(value, min), max);
+}
+function formatModeLabel(mode) {
+  return mode === "vel" ? "Vel" : mode === "key" ? "Key" : "Chain";
+}
+function formatRuntimeSlot(slot) {
+  return slot.toString().padStart(2, "0");
+}
+const ARTICULATION_CARD_MENU_ITEMS = [
+  { action: "rename", label: "Rename" },
+  { action: "duplicate", label: "Duplicate" },
+  { action: "replace", label: "Replace With Current" },
+  { action: "delete", label: "Delete" }
+];
+function ArticulationCardContextMenu({
+  state,
+  onClose,
+  onSelectAction
+}) {
+  const containerRef = reactExports.useRef(null);
+  const [position, setPosition] = reactExports.useState({ x: state.x, y: state.y });
+  reactExports.useLayoutEffect(() => {
+    const el = containerRef.current;
+    if (!el) {
+      return;
+    }
+    const rect = el.getBoundingClientRect();
+    const margin = 8;
+    const viewportW = typeof window !== "undefined" ? window.innerWidth : rect.right;
+    const viewportH = typeof window !== "undefined" ? window.innerHeight : rect.bottom;
+    let x = state.x;
+    let y = state.y;
+    if (x + rect.width + margin > viewportW) {
+      x = Math.max(margin, viewportW - rect.width - margin);
+    }
+    if (y + rect.height + margin > viewportH) {
+      y = Math.max(margin, viewportH - rect.height - margin);
+    }
+    setPosition({ x, y });
+  }, [state.x, state.y]);
+  reactExports.useEffect(() => {
+    const handlePointerDown = (event) => {
+      const el = containerRef.current;
+      if (el && !el.contains(event.target)) {
+        onClose();
+      }
+    };
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
+        onClose();
+      }
+    };
+    document.addEventListener("pointerdown", handlePointerDown, true);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown, true);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [onClose]);
+  const containerStyle = {
+    position: "fixed",
+    top: position.y,
+    left: position.x
+  };
+  return /* @__PURE__ */ jsxRuntimeExports.jsx(
+    "div",
+    {
+      ref: containerRef,
+      role: "menu",
+      "aria-label": "Articulation card actions",
+      "data-role": "articulation-card-menu",
+      "data-articulation-id": state.articulationId,
+      style: containerStyle,
+      className: "z-50 min-w-[168px] rounded-[8px] border border-white/[0.08] bg-[#0a0d18]/95 p-1 shadow-[0_14px_36px_rgba(0,0,0,0.55)] backdrop-blur-sm",
+      children: ARTICULATION_CARD_MENU_ITEMS.map((item) => {
+        const isDelete = item.action === "delete";
+        const isDisabled = isDelete && !state.canDelete;
+        return /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "button",
+          {
+            type: "button",
+            role: "menuitem",
+            disabled: isDisabled,
+            "aria-disabled": isDisabled,
+            "data-role": "articulation-card-menu-item",
+            "data-action": item.action,
+            onClick: () => {
+              if (isDisabled) {
+                return;
+              }
+              onSelectAction(item.action);
+            },
+            className: joinClasses(
+              "flex w-full items-center justify-between rounded-[5px] px-2.5 py-1.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] transition",
+              isDisabled ? "cursor-not-allowed text-slate-300/25" : isDelete ? "text-pink-200/85 hover:bg-pink-300/10 hover:text-pink-100" : "text-slate-200/80 hover:bg-white/[0.06] hover:text-slate-100"
+            ),
+            children: item.label
+          },
+          item.action
+        );
+      })
+    }
+  );
+}
+function ChevronGlyph({ direction }) {
+  return /* @__PURE__ */ jsxRuntimeExports.jsx("svg", { viewBox: "0 0 16 16", className: "h-3 w-3", "aria-hidden": "true", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+    "path",
+    {
+      d: direction === "up" ? "M4 10 8 6l4 4" : "M4 6l4 4 4-4",
+      fill: "none",
+      stroke: "currentColor",
+      strokeLinecap: "round",
+      strokeLinejoin: "round",
+      strokeWidth: "1.6"
+    }
+  ) });
+}
+function PlayGlyph() {
+  return /* @__PURE__ */ jsxRuntimeExports.jsx("svg", { viewBox: "0 0 12 12", className: "h-2.5 w-2.5", "aria-hidden": "true", children: /* @__PURE__ */ jsxRuntimeExports.jsx("path", { d: "M3 2.4 9.4 6 3 9.6Z", fill: "currentColor" }) });
+}
+function ColorDot({ color, dim = false }) {
+  return /* @__PURE__ */ jsxRuntimeExports.jsx(
+    "span",
+    {
+      className: "inline-block h-2 w-2 shrink-0 rounded-full",
+      style: { backgroundColor: color, opacity: dim ? 0.55 : 1 },
+      "aria-hidden": "true"
+    }
+  );
+}
+function MsegThumbnail({ points, color }) {
+  const pathData = reactExports.useMemo(() => {
+    if (!points || points.length < 2) {
+      return null;
+    }
+    const samples = [];
+    for (let segmentIndex = 0; segmentIndex < points.length - 1; segmentIndex += 1) {
+      const a = points[segmentIndex];
+      const b = points[segmentIndex + 1];
+      const power = Math.max(0.05, Number.isFinite(a.curvePower) ? a.curvePower : 1);
+      const stepCount = 8;
+      for (let stepIndex = 0; stepIndex <= stepCount; stepIndex += 1) {
+        const t = stepIndex / stepCount;
+        const curveT = power >= 1 ? Math.pow(t, power) : 1 - Math.pow(1 - t, 1 / power);
+        samples.push({
+          x: a.x + (b.x - a.x) * t,
+          y: a.y + (b.y - a.y) * curveT
+        });
+      }
+    }
+    if (samples.length < 2) {
+      return null;
+    }
+    const W = 100;
+    const H = 36;
+    const padX = 2;
+    const padY = 3;
+    const project = (px, py) => ({
+      x: padX + clamp$1(px, 0, 1) * (W - padX * 2),
+      y: padY + (1 - clamp$1(py, 0, 1)) * (H - padY * 2)
+    });
+    const projected = samples.map((s) => project(s.x, s.y));
+    const stroke = projected.map((p, index) => `${index === 0 ? "M" : "L"}${p.x.toFixed(2)} ${p.y.toFixed(2)}`).join(" ");
+    const fill = `${stroke} L${projected[projected.length - 1].x.toFixed(2)} ${(H - padY).toFixed(2)} L${projected[0].x.toFixed(2)} ${(H - padY).toFixed(2)} Z`;
+    return { stroke, fill };
+  }, [points]);
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("svg", { viewBox: "0 0 100 36", className: "block h-full w-full", preserveAspectRatio: "none", "aria-hidden": "true", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx("rect", { x: 0, y: 0, width: 100, height: 36, rx: 4, fill: "rgba(255,255,255,0.018)" }),
+    pathData ? /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("path", { d: pathData.fill, fill: color, fillOpacity: 0.12 }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "path",
+        {
+          d: pathData.stroke,
+          fill: "none",
+          stroke: color,
+          strokeOpacity: 0.92,
+          strokeWidth: 1.4,
+          strokeLinecap: "round",
+          strokeLinejoin: "round"
+        }
+      )
+    ] }) : null
+  ] });
+}
+function GainEnvelopeThumbnail({ envelope, color }) {
+  const pathData = reactExports.useMemo(() => {
+    const a = Math.max(0, envelope.attackSeconds);
+    const d = Math.max(0, envelope.decaySeconds);
+    const r = Math.max(0, envelope.releaseSeconds);
+    const sustainBlock = 0.6;
+    const totalDuration = a + d + sustainBlock + r;
+    const safeTotal = totalDuration > 0 ? totalDuration : 1;
+    const sustainLevel = clamp$1(envelope.sustain, 0, 1);
+    const W = 100;
+    const H = 36;
+    const padX = 3;
+    const padY = 3;
+    const innerW = W - padX * 2;
+    const innerH = H - padY * 2;
+    const xAtTime = (time) => padX + time / safeTotal * innerW;
+    const yAtLevel = (level) => padY + (1 - level) * innerH;
+    const xStart = xAtTime(0);
+    const xPeak = xAtTime(a);
+    const xSustainStart = xAtTime(a + d);
+    const xSustainEnd = xAtTime(a + d + sustainBlock);
+    const xEnd = xAtTime(a + d + sustainBlock + r);
+    const yFloor = yAtLevel(0);
+    const yPeak = yAtLevel(1);
+    const ySustain = yAtLevel(sustainLevel);
+    const stroke = [
+      `M${xStart.toFixed(2)} ${yFloor.toFixed(2)}`,
+      `L${xPeak.toFixed(2)} ${yPeak.toFixed(2)}`,
+      `L${xSustainStart.toFixed(2)} ${ySustain.toFixed(2)}`,
+      `L${xSustainEnd.toFixed(2)} ${ySustain.toFixed(2)}`,
+      `L${xEnd.toFixed(2)} ${yFloor.toFixed(2)}`
+    ].join(" ");
+    const fill = `${stroke} Z`;
+    return { stroke, fill, xSustainStart, xSustainEnd, yFloor };
+  }, [envelope]);
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("svg", { viewBox: "0 0 100 36", className: "block h-full w-full", preserveAspectRatio: "none", "aria-hidden": "true", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx("rect", { x: 0, y: 0, width: 100, height: 36, rx: 4, fill: "rgba(255,255,255,0.018)" }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx(
+      "line",
+      {
+        x1: pathData.xSustainStart,
+        x2: pathData.xSustainEnd,
+        y1: pathData.yFloor + 0.5,
+        y2: pathData.yFloor + 0.5,
+        stroke: color,
+        strokeOpacity: 0.18,
+        strokeDasharray: "2 2",
+        strokeWidth: 0.8
+      }
+    ),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("path", { d: pathData.fill, fill: color, fillOpacity: 0.12 }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx(
+      "path",
+      {
+        d: pathData.stroke,
+        fill: "none",
+        stroke: color,
+        strokeOpacity: 0.92,
+        strokeWidth: 1.4,
+        strokeLinecap: "round",
+        strokeLinejoin: "round"
+      }
+    )
+  ] });
+}
+function ArticulationCard({
+  card,
+  activeMode,
+  onSelect,
+  onPlayPressStart,
+  onPlayPressEnd,
+  onOpenMenu
+}) {
+  const longPressTimerRef = reactExports.useRef(null);
+  const handleDragStart = reactExports.useCallback((event) => {
+    event.dataTransfer.setData(ARTICULATION_DRAG_MIME, card.id);
+    event.dataTransfer.setData("text/plain", card.id);
+    event.dataTransfer.effectAllowed = "copyMove";
+  }, [card.id]);
+  const clearLongPressTimer = reactExports.useCallback(() => {
+    if (longPressTimerRef.current !== null) {
+      window.clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  }, []);
+  reactExports.useEffect(() => clearLongPressTimer, [clearLongPressTimer]);
+  const handlePlayDown = reactExports.useCallback((event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    clearLongPressTimer();
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    onPlayPressStart(card.id);
+  }, [card.id, clearLongPressTimer, onPlayPressStart]);
+  const handlePlayUp = reactExports.useCallback((event) => {
+    event.stopPropagation();
+    if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    onPlayPressEnd(card.id);
+  }, [card.id, onPlayPressEnd]);
+  const handleCardPointerDown = reactExports.useCallback((event) => {
+    const target = event.target;
+    if (event.pointerType === "mouse" || target?.closest('[data-role="articulation-card-play"]')) {
+      return;
+    }
+    const { clientX, clientY } = event;
+    clearLongPressTimer();
+    longPressTimerRef.current = window.setTimeout(() => {
+      onOpenMenu(card.id, clientX, clientY);
+    }, 520);
+  }, [card.id, clearLongPressTimer, onOpenMenu]);
+  const containerClass = joinClasses(
+    "group relative flex w-[148px] shrink-0 flex-col gap-1.5 rounded-[10px] border px-2 py-1.5 transition cursor-grab active:cursor-grabbing",
+    card.isSelected ? "border-amber-200/35 bg-amber-300/[0.06]" : "border-white/[0.06] bg-white/[0.025] hover:border-white/15 hover:bg-white/[0.04]"
+  );
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+    "div",
+    {
+      role: "button",
+      tabIndex: 0,
+      "aria-pressed": card.isSelected,
+      "aria-label": `Articulation ${card.name}`,
+      "data-role": "articulation-card",
+      "data-articulation-id": card.id,
+      "data-runtime-slot": String(card.runtimeSlot),
+      "data-selected": card.isSelected ? "true" : "false",
+      "data-dirty": card.isDirty ? "true" : "false",
+      draggable: true,
+      onDragStart: handleDragStart,
+      onPointerDown: handleCardPointerDown,
+      onPointerMove: clearLongPressTimer,
+      onPointerUp: clearLongPressTimer,
+      onPointerCancel: clearLongPressTimer,
+      onClick: () => onSelect(card.id),
+      onContextMenu: (event) => {
+        event.preventDefault();
+        onOpenMenu(card.id, event.clientX, event.clientY);
+      },
+      onKeyDown: (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onSelect(card.id);
+        }
+      },
+      className: containerClass,
+      children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-1.5", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx(ColorDot, { color: card.color }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "min-w-0 flex-1 truncate text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-100/90", children: card.name }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono text-[9px] text-slate-300/40", children: formatRuntimeSlot(card.runtimeSlot) }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "button",
+            {
+              type: "button",
+              "aria-label": `Audition ${card.name}`,
+              "data-role": "articulation-card-play",
+              draggable: false,
+              onPointerDown: handlePlayDown,
+              onPointerUp: handlePlayUp,
+              onPointerCancel: handlePlayUp,
+              onPointerLeave: handlePlayUp,
+              onClick: (event) => event.stopPropagation(),
+              className: "flex h-5 w-5 shrink-0 items-center justify-center rounded-[5px] border border-cyan-300/16 bg-cyan-300/8 text-cyan-100/85 transition hover:border-cyan-200/30 hover:bg-cyan-300/16 active:bg-cyan-300/26",
+              children: /* @__PURE__ */ jsxRuntimeExports.jsx(PlayGlyph, {})
+            }
+          )
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid grid-cols-2 gap-1", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "h-9 overflow-hidden rounded-[5px] border border-white/[0.05]", children: /* @__PURE__ */ jsxRuntimeExports.jsx(MsegThumbnail, { points: card.msegPoints, color: card.color }) }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "h-9 overflow-hidden rounded-[5px] border border-white/[0.05]", children: /* @__PURE__ */ jsxRuntimeExports.jsx(GainEnvelopeThumbnail, { envelope: card.gainEnvelope, color: card.color }) })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between gap-1.5", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "truncate font-mono text-[9px] uppercase tracking-[0.14em] text-slate-300/55", children: card.assignmentLabel || `${formatModeLabel(activeMode).toUpperCase()} -` }),
+          card.isDirty ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "span",
+            {
+              "aria-label": "Modified",
+              title: "Modified",
+              className: "h-1.5 w-1.5 shrink-0 rounded-full bg-pink-300/85"
+            }
+          ) : null
+        ] })
+      ]
+    }
+  );
+}
+function ArticulationCardCarousel({
+  cards,
+  activeMode,
+  onSelectCard,
+  onPlayPressStart,
+  onPlayPressEnd,
+  onOpenMenu
+}) {
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+    "div",
+    {
+      "data-role": "articulation-card-carousel",
+      className: "flex min-w-0 flex-1 items-stretch gap-1.5 overflow-x-auto overflow-y-hidden py-0.5 [scrollbar-width:thin]",
+      children: [
+        cards.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex h-[88px] items-center justify-center px-2 text-[10px] uppercase tracking-[0.18em] text-slate-300/40", children: "No Articulations" }) : null,
+        cards.map((card) => /* @__PURE__ */ jsxRuntimeExports.jsx(
+          ArticulationCard,
+          {
+            card,
+            activeMode,
+            onSelect: onSelectCard,
+            onPlayPressStart,
+            onPlayPressEnd,
+            onOpenMenu
+          },
+          card.id
+        ))
+      ]
+    }
+  );
+}
+function ModeSegmentedControl({
+  activeMode,
+  onSelectMode
+}) {
+  return /* @__PURE__ */ jsxRuntimeExports.jsx(
+    "div",
+    {
+      role: "tablist",
+      "aria-label": "Articulation trigger mode",
+      className: "inline-flex h-7 items-center gap-1 rounded-[8px] border border-white/[0.06] bg-white/[0.022] p-0.5",
+      children: MODE_OPTIONS.map((option) => {
+        const isActive = option.mode === activeMode;
+        return /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "button",
+          {
+            type: "button",
+            role: "tab",
+            "aria-selected": isActive,
+            "data-role": "articulation-mode-tab",
+            "data-mode": option.mode,
+            onClick: () => onSelectMode(option.mode),
+            className: joinClasses(
+              "h-6 rounded-[6px] px-2.5 text-[10px] font-bold uppercase tracking-[0.14em] transition",
+              isActive ? "bg-amber-300/14 text-amber-100" : "text-slate-300/65 hover:text-slate-100"
+            ),
+            children: option.label
+          },
+          option.mode
+        );
+      })
+    }
+  );
+}
+function readDraggedArticulationId(event) {
+  const fromMime = event.dataTransfer.getData(ARTICULATION_DRAG_MIME);
+  if (fromMime) {
+    return fromMime;
+  }
+  const fromText = event.dataTransfer.getData("text/plain");
+  return fromText ? fromText : null;
+}
+function ArticulationRangeLane({
+  mode,
+  label,
+  segments,
+  selectedArticulationId,
+  onSelectSegment,
+  onAssignAtPosition,
+  onInsertAtPosition,
+  onDuplicateAndAssignAtPosition,
+  onMoveSegment,
+  onResizeSegment,
+  onClearSegment,
+  onClearAll,
+  onDistribute,
+  minValue,
+  maxValue,
+  minLabel,
+  maxLabel
+}) {
+  const laneRef = reactExports.useRef(null);
+  const [dropIndicator, setDropIndicator] = reactExports.useState(null);
+  const [editMode, setEditMode] = reactExports.useState("assign");
+  const [focusedSegmentId, setFocusedSegmentId] = reactExports.useState(null);
+  const [toast, setToast] = reactExports.useState(null);
+  const dragStateRef = reactExports.useRef(null);
+  const totalSlots = Math.max(1, maxValue - minValue + 1);
+  const visibleSegments = reactExports.useMemo(() => segments.map((segment) => ({
+    ...segment,
+    visibleMin: clamp$1(segment.min, minValue, maxValue),
+    visibleMax: clamp$1(segment.max, minValue, maxValue)
+  })).filter((segment) => segment.visibleMax >= segment.visibleMin), [maxValue, minValue, segments]);
+  const selectedSegment = reactExports.useMemo(() => focusedSegmentId ? visibleSegments.find((segment) => segment.id === focusedSegmentId) ?? null : null, [focusedSegmentId, visibleSegments]);
+  const showToast = reactExports.useCallback((message) => {
+    setToast(message);
+    window.setTimeout(() => {
+      setToast((currentMessage) => currentMessage === message ? null : currentMessage);
+    }, 1800);
+  }, []);
+  const positionFromClientX = reactExports.useCallback((clientX) => {
+    const rect = laneRef.current?.getBoundingClientRect();
+    if (!rect) {
+      return minValue;
+    }
+    const ratio = clamp$1((clientX - rect.left) / Math.max(rect.width, 1), 0, 1);
+    return Math.round(minValue + ratio * (maxValue - minValue));
+  }, [maxValue, minValue]);
+  const positionFromDragEvent = reactExports.useCallback((event) => positionFromClientX(event.clientX), [positionFromClientX]);
+  const runEdit = reactExports.useCallback((didChange) => {
+    if (!didChange) {
+      showToast("No room for that mapping");
+    }
+  }, [showToast]);
+  const assignSelectedAtPosition = reactExports.useCallback((position) => {
+    if (!selectedArticulationId) {
+      showToast("Select an articulation first");
+      return;
+    }
+    runEdit(
+      editMode === "insert" ? onInsertAtPosition(mode, position, selectedArticulationId) : onAssignAtPosition(mode, position, selectedArticulationId)
+    );
+  }, [
+    editMode,
+    mode,
+    onAssignAtPosition,
+    onInsertAtPosition,
+    runEdit,
+    selectedArticulationId,
+    showToast
+  ]);
+  const handleDragOver = reactExports.useCallback((event) => {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = editMode === "insert" ? "link" : "copy";
+    setDropIndicator(positionFromDragEvent(event));
+  }, [editMode, positionFromDragEvent]);
+  const handleDragLeave = reactExports.useCallback(() => {
+    setDropIndicator(null);
+  }, []);
+  const handleDrop = reactExports.useCallback((event) => {
+    event.preventDefault();
+    const articulationId = readDraggedArticulationId(event);
+    const position = positionFromDragEvent(event);
+    setDropIndicator(null);
+    if (!articulationId) {
+      return;
+    }
+    const operation = editMode === "insert" ? "insert" : "assign";
+    runEdit(
+      event.altKey ? onDuplicateAndAssignAtPosition(mode, position, articulationId, operation) : operation === "insert" ? onInsertAtPosition(mode, position, articulationId) : onAssignAtPosition(mode, position, articulationId)
+    );
+  }, [
+    editMode,
+    mode,
+    onAssignAtPosition,
+    onDuplicateAndAssignAtPosition,
+    onInsertAtPosition,
+    positionFromDragEvent,
+    runEdit
+  ]);
+  const handleLaneClick = reactExports.useCallback((event) => {
+    if (event.target !== event.currentTarget) {
+      return;
+    }
+    assignSelectedAtPosition(positionFromClientX(event.clientX));
+  }, [assignSelectedAtPosition, positionFromClientX]);
+  const finishPointerEdit = reactExports.useCallback((clientX, cancelled = false) => {
+    const dragState = dragStateRef.current;
+    dragStateRef.current = null;
+    setDropIndicator(null);
+    if (!dragState || cancelled) {
+      return;
+    }
+    const position = positionFromClientX(clientX);
+    if (!dragState.moved && dragState.kind === "move") {
+      if (selectedArticulationId && (editMode === "insert" || selectedArticulationId !== dragState.segment.articulationId)) {
+        runEdit(
+          editMode === "insert" ? onInsertAtPosition(mode, position, selectedArticulationId) : onAssignAtPosition(mode, position, selectedArticulationId)
+        );
+        return;
+      }
+      setFocusedSegmentId(dragState.segment.id);
+      onSelectSegment(mode, dragState.segment);
+      return;
+    }
+    runEdit(
+      dragState.kind === "resize" ? onResizeSegment(mode, dragState.segment, dragState.edge ?? "max", position) : onMoveSegment(mode, dragState.segment, position)
+    );
+  }, [
+    editMode,
+    mode,
+    onAssignAtPosition,
+    onInsertAtPosition,
+    onMoveSegment,
+    onResizeSegment,
+    onSelectSegment,
+    positionFromClientX,
+    runEdit,
+    selectedArticulationId
+  ]);
+  const handleSegmentPointerDown = reactExports.useCallback((event, segment) => {
+    event.preventDefault();
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    dragStateRef.current = {
+      kind: "move",
+      segment,
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      moved: false
+    };
+  }, []);
+  const handleResizePointerDown = reactExports.useCallback((event, segment, edge) => {
+    event.preventDefault();
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    setFocusedSegmentId(segment.id);
+    dragStateRef.current = {
+      kind: "resize",
+      segment,
+      edge,
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      moved: false
+    };
+  }, []);
+  const handleSegmentPointerMove = reactExports.useCallback((event) => {
+    const dragState = dragStateRef.current;
+    if (!dragState || dragState.pointerId !== event.pointerId) {
+      return;
+    }
+    if (Math.abs(event.clientX - dragState.startX) > 3) {
+      dragState.moved = true;
+    }
+    setDropIndicator(positionFromClientX(event.clientX));
+  }, [positionFromClientX]);
+  const handleSegmentPointerUp = reactExports.useCallback((event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    finishPointerEdit(event.clientX);
+  }, [finishPointerEdit]);
+  const handleSegmentPointerCancel = reactExports.useCallback((event) => {
+    if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    finishPointerEdit(event.clientX, true);
+  }, [finishPointerEdit]);
+  const handleLaneKeyDown = reactExports.useCallback((event) => {
+    if ((event.key === "Delete" || event.key === "Backspace") && selectedSegment) {
+      event.preventDefault();
+      event.stopPropagation();
+      runEdit(onClearSegment(mode, selectedSegment));
+    }
+  }, [mode, onClearSegment, runEdit, selectedSegment]);
+  const mobileRows = reactExports.useMemo(() => {
+    const rows = [];
+    let cursor = minValue;
+    for (const segment of visibleSegments) {
+      if (cursor < segment.visibleMin) {
+        rows.push({ kind: "gap", min: cursor, max: segment.visibleMin - 1 });
+      }
+      rows.push({ kind: "segment", min: segment.visibleMin, max: segment.visibleMax, segment });
+      cursor = segment.visibleMax + 1;
+    }
+    if (cursor <= maxValue) {
+      rows.push({ kind: "gap", min: cursor, max: maxValue });
+    }
+    return rows;
+  }, [maxValue, minValue, visibleSegments]);
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: joinClasses(FRAME_CLASS, "flex flex-col gap-2 px-3 py-2"), children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between gap-3", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[10px] font-bold uppercase tracking-[0.18em] text-slate-300/55", children: label }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono text-[9px] uppercase tracking-[0.16em] text-slate-300/35", children: `${segments.length} / ${totalSlots}` })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-1.5", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "button",
+          {
+            type: "button",
+            "aria-pressed": editMode === "assign",
+            onClick: () => setEditMode("assign"),
+            className: joinClasses(PILL_BASE, editMode === "assign" ? PILL_AMBER_ACTIVE : PILL_NEUTRAL),
+            "data-role": "articulation-lane-assign-mode",
+            children: "Assign"
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "button",
+          {
+            type: "button",
+            "aria-pressed": editMode === "insert",
+            onClick: () => setEditMode("insert"),
+            className: joinClasses(PILL_BASE, editMode === "insert" ? PILL_AMBER_ACTIVE : PILL_NEUTRAL),
+            "data-role": "articulation-lane-insert-mode",
+            children: "Insert"
+          }
+        ),
+        selectedSegment ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "button",
+          {
+            type: "button",
+            onClick: () => runEdit(onClearSegment(mode, selectedSegment)),
+            className: joinClasses(PILL_BASE, PILL_PINK),
+            "data-role": "articulation-clear-segment",
+            children: "Clear"
+          }
+        ) : null,
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "button",
+          {
+            type: "button",
+            onClick: () => onClearAll(mode),
+            className: joinClasses(PILL_BASE, PILL_NEUTRAL),
+            "data-role": "articulation-clear-all",
+            children: "Clear All"
+          }
+        ),
+        onDistribute ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "button",
+          {
+            type: "button",
+            onClick: () => onDistribute(mode),
+            className: joinClasses(PILL_BASE, PILL_NEUTRAL),
+            "data-role": "articulation-distribute",
+            children: "Distribute Equally"
+          }
+        ) : null
+      ] })
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs(
+      "div",
+      {
+        ref: laneRef,
+        "data-role": "articulation-range-lane",
+        tabIndex: 0,
+        onClick: handleLaneClick,
+        onDragOver: handleDragOver,
+        onDragLeave: handleDragLeave,
+        onDrop: handleDrop,
+        onKeyDown: handleLaneKeyDown,
+        className: "relative hidden h-10 w-full overflow-hidden rounded-[6px] border border-white/[0.05] bg-[repeating-linear-gradient(135deg,rgba(255,255,255,0.018)_0px,rgba(255,255,255,0.018)_4px,transparent_4px,transparent_8px)] outline-none focus:border-cyan-200/35 sm:block",
+        children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "pointer-events-none absolute inset-y-0 left-0 right-0", children: visibleSegments.map((segment) => {
+            const left = (segment.visibleMin - minValue) / totalSlots * 100;
+            const width = (segment.visibleMax - segment.visibleMin + 1) / totalSlots * 100;
+            const positionStyle = {
+              left: `${left}%`,
+              width: `${width}%`
+            };
+            return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+              "button",
+              {
+                type: "button",
+                "aria-label": `Edit ${label} segment ${segment.label}`,
+                "data-role": "articulation-range-segment",
+                "data-segment-id": segment.id,
+                "data-articulation-id": segment.articulationId,
+                "data-selected": segment.isSelected ? "true" : "false",
+                onPointerDown: (event) => handleSegmentPointerDown(event, segment),
+                onPointerMove: handleSegmentPointerMove,
+                onPointerUp: handleSegmentPointerUp,
+                onPointerCancel: handleSegmentPointerCancel,
+                className: joinClasses(
+                  "pointer-events-auto absolute inset-y-0 flex cursor-grab items-center overflow-hidden border font-mono text-[9px] uppercase tracking-[0.14em] text-[#0a0d18] transition active:cursor-grabbing",
+                  segment.isSelected || focusedSegmentId === segment.id ? "border-amber-100/80 ring-1 ring-amber-100/40" : "border-white/15 hover:border-white/35"
+                ),
+                style: positionStyle,
+                children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "span",
+                    {
+                      "aria-hidden": "true",
+                      className: "absolute inset-0",
+                      style: {
+                        backgroundColor: segment.color,
+                        opacity: segment.isSelected ? 0.82 : 0.6
+                      }
+                    }
+                  ),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "relative truncate px-1.5", children: segment.label }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "span",
+                    {
+                      role: "button",
+                      tabIndex: -1,
+                      "aria-label": `Resize ${segment.label} start`,
+                      "data-role": "articulation-range-resize-min",
+                      onPointerDown: (event) => handleResizePointerDown(event, segment, "min"),
+                      onPointerMove: handleSegmentPointerMove,
+                      onPointerUp: handleSegmentPointerUp,
+                      onPointerCancel: handleSegmentPointerCancel,
+                      className: "absolute inset-y-0 left-0 z-10 w-2 cursor-ew-resize bg-white/0 hover:bg-white/25"
+                    }
+                  ),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "span",
+                    {
+                      role: "button",
+                      tabIndex: -1,
+                      "aria-label": `Resize ${segment.label} end`,
+                      "data-role": "articulation-range-resize-max",
+                      onPointerDown: (event) => handleResizePointerDown(event, segment, "max"),
+                      onPointerMove: handleSegmentPointerMove,
+                      onPointerUp: handleSegmentPointerUp,
+                      onPointerCancel: handleSegmentPointerCancel,
+                      className: "absolute inset-y-0 right-0 z-10 w-2 cursor-ew-resize bg-white/0 hover:bg-white/25"
+                    }
+                  )
+                ]
+              },
+              segment.id
+            );
+          }) }),
+          dropIndicator !== null ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "div",
+            {
+              "aria-hidden": "true",
+              className: "pointer-events-none absolute inset-y-0 w-px bg-cyan-200/80 shadow-[0_0_8px_rgba(103,232,249,0.6)]",
+              style: { left: `${(dropIndicator - minValue) / Math.max(1, maxValue - minValue) * 100}%` }
+            }
+          ) : null
+        ]
+      }
+    ),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "grid gap-1.5 sm:hidden", "data-role": "articulation-range-list", children: mobileRows.map((row) => {
+      const key = `${row.kind}-${row.min}-${row.max}-${row.segment?.id ?? "gap"}`;
+      const labelText = `${row.min === row.max ? row.min : `${row.min}-${row.max}`}`;
+      if (row.kind === "gap") {
+        return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          "button",
+          {
+            type: "button",
+            "data-role": "articulation-range-gap-row",
+            onClick: () => assignSelectedAtPosition(row.min),
+            className: "flex min-h-8 items-center justify-between rounded-[7px] border border-dashed border-white/[0.08] bg-white/[0.015] px-2 text-[10px] uppercase tracking-[0.12em] text-slate-300/45",
+            children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: labelText }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: editMode === "insert" ? "Insert" : "Fill" })
+            ]
+          },
+          key
+        );
+      }
+      const segment = row.segment;
+      if (!segment) {
+        return null;
+      }
+      return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+        "div",
+        {
+          "data-role": "articulation-range-segment-row",
+          className: joinClasses(
+            "flex min-h-9 items-center gap-2 rounded-[7px] border px-2",
+            focusedSegmentId === segment.id ? "border-amber-100/55 bg-amber-300/10" : "border-white/[0.06] bg-white/[0.025]"
+          ),
+          children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx(ColorDot, { color: segment.color }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "button",
+              {
+                type: "button",
+                onClick: () => {
+                  setFocusedSegmentId(segment.id);
+                  onSelectSegment(mode, segment);
+                },
+                className: "min-w-0 flex-1 truncate text-left text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-100/85",
+                children: segment.label
+              }
+            ),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono text-[10px] text-slate-300/55", children: labelText }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "button",
+              {
+                type: "button",
+                onClick: () => runEdit(onClearSegment(mode, segment)),
+                className: "rounded-[6px] border border-pink-300/18 px-2 py-1 text-[9px] font-bold uppercase tracking-[0.12em] text-pink-100/80",
+                children: "Clear"
+              }
+            )
+          ]
+        },
+        key
+      );
+    }) }),
+    toast ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+      "div",
+      {
+        role: "status",
+        "data-role": "articulation-lane-toast",
+        className: "rounded-[7px] border border-pink-300/16 bg-pink-300/[0.07] px-2 py-1 text-[9px] uppercase tracking-[0.12em] text-pink-100/80",
+        children: toast
+      }
+    ) : null,
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.18em] text-slate-300/40", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: minLabel }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: maxLabel })
+    ] })
+  ] });
+}
+function MappingEditor(props) {
+  const config = props.activeMode === "vel" ? {
+    label: "Velocity",
+    segments: props.velocitySegments,
+    minValue: 1,
+    maxValue: ARTICULATION_RANGE_MAX,
+    minLabel: "1",
+    maxLabel: "127",
+    canDistribute: true
+  } : props.activeMode === "key" ? {
+    label: "Key",
+    segments: props.keySegments,
+    minValue: props.keyboardMinNote,
+    maxValue: props.keyboardMaxNote,
+    minLabel: String(props.keyboardMinNote),
+    maxLabel: String(props.keyboardMaxNote),
+    canDistribute: false
+  } : {
+    label: "Chain",
+    segments: props.chainSegments,
+    minValue: 0,
+    maxValue: ARTICULATION_RANGE_MAX,
+    minLabel: "0",
+    maxLabel: "127",
+    canDistribute: true
+  };
+  return /* @__PURE__ */ jsxRuntimeExports.jsx(
+    ArticulationRangeLane,
+    {
+      mode: props.activeMode,
+      label: config.label,
+      segments: config.segments,
+      selectedArticulationId: props.selectedArticulationId,
+      onSelectSegment: props.onSelectRangeSegment,
+      onAssignAtPosition: props.onAssignRangePosition,
+      onInsertAtPosition: props.onInsertRangePosition,
+      onDuplicateAndAssignAtPosition: props.onDuplicateAndAssignRangePosition,
+      onMoveSegment: props.onMoveRangeSegment,
+      onResizeSegment: props.onResizeRangeSegment,
+      onClearSegment: props.onClearRangeSegment,
+      onClearAll: props.onClearRangeMode,
+      onDistribute: config.canDistribute ? props.onDistributeRange : void 0,
+      minValue: config.minValue,
+      maxValue: config.maxValue,
+      minLabel: config.minLabel,
+      maxLabel: config.maxLabel
+    }
+  );
+}
+function HeaderActions({
+  selectedIsDirty,
+  canCapture,
+  onCapture,
+  onUpdate,
+  onRevert
+}) {
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex shrink-0 items-center gap-1.5", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx(
+      "button",
+      {
+        type: "button",
+        "aria-label": "Capture current parameters as a new articulation",
+        "data-role": "articulation-capture",
+        onClick: onCapture,
+        disabled: !canCapture,
+        className: joinClasses(PILL_BASE, PILL_CYAN, "disabled:opacity-40"),
+        children: "Capture"
+      }
+    ),
+    selectedIsDirty ? /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "button",
+        {
+          type: "button",
+          "aria-label": "Update selected articulation from current parameters",
+          "data-role": "articulation-update",
+          onClick: onUpdate,
+          className: joinClasses(PILL_BASE, PILL_AMBER_ACTIVE, "border-amber-200/40 hover:bg-amber-300/16"),
+          children: "Update"
+        }
+      ),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "button",
+        {
+          type: "button",
+          "aria-label": "Revert current parameters to selected articulation",
+          "data-role": "articulation-revert",
+          onClick: onRevert,
+          className: joinClasses(PILL_BASE, PILL_PINK),
+          children: "Revert"
+        }
+      )
+    ] }) : null
+  ] });
+}
+function ActiveModeReadout({ activeMode }) {
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "inline-flex h-7 shrink-0 items-center gap-1.5 rounded-[8px] border border-white/[0.06] bg-white/[0.018] px-2.5", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[9px] uppercase tracking-[0.18em] text-slate-300/45", children: "Mode" }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono text-[10px] uppercase tracking-[0.14em] text-cyan-200/85", children: formatModeLabel(activeMode) })
+  ] });
+}
+function ExpandToggle({
+  isExpanded,
+  onToggle
+}) {
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+    "button",
+    {
+      type: "button",
+      "aria-label": isExpanded ? "Collapse articulation editor" : "Expand articulation editor",
+      "aria-expanded": isExpanded,
+      "data-role": "articulation-toggle",
+      onClick: onToggle,
+      className: joinClasses(PILL_BASE, PILL_NEUTRAL, "px-2"),
+      children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx(ChevronGlyph, { direction: isExpanded ? "down" : "up" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: isExpanded ? "Collapse" : "Expand" })
+      ]
+    }
+  );
+}
+function ArticulationControlSurface(props) {
+  const {
+    cards,
+    activeMode,
+    isExpanded,
+    selectedArticulationId,
+    selectedIsDirty,
+    canCapture,
+    chainSegments,
+    keySegments,
+    velocitySegments,
+    keyboardMinNote,
+    keyboardMaxNote,
+    onToggleExpanded,
+    onSelectMode,
+    onSelectCard,
+    onCardPlayPressStart,
+    onCardPlayPressEnd,
+    onCapture,
+    onUpdate,
+    onRevert,
+    onSelectRangeSegment,
+    onAssignRangePosition,
+    onInsertRangePosition,
+    onDuplicateAndAssignRangePosition,
+    onMoveRangeSegment,
+    onResizeRangeSegment,
+    onClearRangeSegment,
+    onClearRangeMode,
+    onDistributeRange,
+    onRequestRename,
+    onRequestDuplicate,
+    onRequestReplace,
+    onRequestDelete
+  } = props;
+  const [cardMenu, setCardMenu] = reactExports.useState(null);
+  const [copiedArticulationId, setCopiedArticulationId] = reactExports.useState(null);
+  const selectedCard = reactExports.useMemo(() => selectedArticulationId ? cards.find((card) => card.id === selectedArticulationId) ?? null : null, [cards, selectedArticulationId]);
+  const handleCardContextMenu = reactExports.useCallback(
+    (articulationId, x, y) => {
+      const card = cards.find((entry) => entry.id === articulationId);
+      setCardMenu({
+        articulationId,
+        canDelete: card?.canDelete ?? false,
+        x,
+        y
+      });
+    },
+    [cards]
+  );
+  const closeCardMenu = reactExports.useCallback(() => {
+    setCardMenu(null);
+  }, []);
+  const handleMenuAction = reactExports.useCallback(
+    (action) => {
+      if (!cardMenu) {
+        return;
+      }
+      const id = cardMenu.articulationId;
+      setCardMenu(null);
+      switch (action) {
+        case "rename":
+          onRequestRename(id);
+          return;
+        case "duplicate":
+          onRequestDuplicate(id);
+          return;
+        case "replace":
+          onRequestReplace(id);
+          return;
+        case "delete":
+          onRequestDelete(id);
+          return;
+      }
+    },
+    [cardMenu, onRequestRename, onRequestDuplicate, onRequestReplace, onRequestDelete]
+  );
+  const handleSurfaceKeyDown = reactExports.useCallback((event) => {
+    const usesCommandModifier = event.metaKey || event.ctrlKey;
+    if (usesCommandModifier && event.key.toLowerCase() === "c" && selectedCard) {
+      event.preventDefault();
+      setCopiedArticulationId(selectedCard.id);
+      return;
+    }
+    if (usesCommandModifier && event.key.toLowerCase() === "v" && copiedArticulationId) {
+      event.preventDefault();
+      onRequestDuplicate(copiedArticulationId);
+      return;
+    }
+    if ((event.key === "Delete" || event.key === "Backspace") && selectedCard && selectedCard.canDelete) {
+      event.preventDefault();
+      onRequestDelete(selectedCard.id);
+    }
+  }, [copiedArticulationId, onRequestDelete, onRequestDuplicate, selectedCard]);
+  const cardMenuOverlay = cardMenu ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+    ArticulationCardContextMenu,
+    {
+      state: cardMenu,
+      onClose: closeCardMenu,
+      onSelectAction: handleMenuAction
+    }
+  ) : null;
+  const carousel = /* @__PURE__ */ jsxRuntimeExports.jsx(
+    ArticulationCardCarousel,
+    {
+      cards,
+      activeMode,
+      onSelectCard,
+      onPlayPressStart: onCardPlayPressStart,
+      onPlayPressEnd: onCardPlayPressEnd,
+      onOpenMenu: handleCardContextMenu
+    }
+  );
+  if (!isExpanded) {
+    return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+      "section",
+      {
+        "data-role": "articulation-control-surface",
+        "data-state": "collapsed",
+        "aria-label": "Articulations",
+        onKeyDown: handleSurfaceKeyDown,
+        className: "flex min-h-[108px] shrink-0 items-stretch gap-2 rounded-[14px] border border-white/[0.05] bg-white/[0.022] px-2.5 py-2",
+        children: [
+          carousel,
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex shrink-0 flex-col items-end justify-between gap-1.5 pl-1", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              HeaderActions,
+              {
+                selectedIsDirty,
+                canCapture,
+                onCapture,
+                onUpdate,
+                onRevert
+              }
+            ),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-1.5", children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx(ActiveModeReadout, { activeMode }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx(ExpandToggle, { isExpanded: false, onToggle: onToggleExpanded })
+            ] })
+          ] }),
+          cardMenuOverlay
+        ]
+      }
+    );
+  }
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+    "section",
+    {
+      "data-role": "articulation-control-surface",
+      "data-state": "expanded",
+      "aria-label": "Articulations",
+      onKeyDown: handleSurfaceKeyDown,
+      className: "flex shrink-0 flex-col gap-2 rounded-[14px] border border-white/[0.05] bg-white/[0.022] px-2.5 py-2",
+      children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between gap-2", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex items-center gap-2", children: /* @__PURE__ */ jsxRuntimeExports.jsx(ModeSegmentedControl, { activeMode, onSelectMode }) }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-1.5", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              HeaderActions,
+              {
+                selectedIsDirty,
+                canCapture,
+                onCapture,
+                onUpdate,
+                onRevert
+              }
+            ),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(ExpandToggle, { isExpanded: true, onToggle: onToggleExpanded })
+          ] })
+        ] }),
+        carousel,
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          MappingEditor,
+          {
+            activeMode,
+            selectedArticulationId,
+            chainSegments,
+            keySegments,
+            velocitySegments,
+            keyboardMinNote,
+            keyboardMaxNote,
+            onSelectRangeSegment,
+            onAssignRangePosition,
+            onInsertRangePosition,
+            onDuplicateAndAssignRangePosition,
+            onMoveRangeSegment,
+            onResizeRangeSegment,
+            onClearRangeSegment,
+            onClearRangeMode,
+            onDistributeRange
+          }
+        ),
+        cardMenuOverlay
+      ]
+    }
+  );
 }
 const KEYBOARD_ROOT_NOTE_DEFAULT = 36;
 const KEYBOARD_ROOT_NOTE_MIN = 12;
@@ -30106,6 +31959,60 @@ const DISTORTION_WET_LP_MAX_HZ = 2e4;
 const CHORUS_MOTION_MODE_OPTIONS = ["Subtle", "Wide", "Classic", "Fast"];
 const CHORUS_BLOOM_MODE_OPTIONS = ["Clean", "Small", "Large", "Sm+Sh", "Lg+Sh"];
 const CHORUS_RING_OFFSET_MODE_OPTIONS = ["+5th", "Low 5th", "+Oct", "-Oct"];
+const ARTICULATION_CARD_COLORS = [
+  "#87d7f5",
+  "#f472b6",
+  "#fbbf24",
+  "#32f0bc",
+  "#a78bfa",
+  "#fb7185",
+  "#93c5fd",
+  "#fcd34d"
+];
+const MIDI_NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+function getArticulationColor(runtimeSlot) {
+  return ARTICULATION_CARD_COLORS[Math.abs(runtimeSlot) % ARTICULATION_CARD_COLORS.length];
+}
+function formatMidiNoteName(note) {
+  const safeNote = Math.max(0, Math.min(127, Math.round(note)));
+  const name = MIDI_NOTE_NAMES[safeNote % 12];
+  const octave = Math.floor(safeNote / 12) - 2;
+  return `${name}${octave}`;
+}
+function formatRangeLabel(prefix, min, max) {
+  return min === max ? `${prefix} ${min}` : `${prefix} ${min}-${max}`;
+}
+function formatKeyRangeLabel(min, max) {
+  return min === max ? `Key ${formatMidiNoteName(min)}` : `Key ${formatMidiNoteName(min)}-${formatMidiNoteName(max)}`;
+}
+function getFirstKeyRangeForArticulation(assignments, articulationId) {
+  const notes = assignments.filter((assignment) => assignment.articulationId === articulationId).map((assignment) => assignment.note).sort((left, right) => left - right);
+  if (notes.length === 0) {
+    return null;
+  }
+  let max = notes[0];
+  for (let index = 1; index < notes.length && notes[index] === max + 1; index += 1) {
+    max = notes[index];
+  }
+  return { min: notes[0], max };
+}
+function makeMsegThumbnailPoints(morph) {
+  const amount = Math.max(0, Math.min(1, Number.isFinite(morph) ? morph : 0));
+  return [
+    { x: 0, y: 0.08 + amount * 0.14, curvePower: 0.85 },
+    { x: 0.18, y: 0.84 - amount * 0.22, curvePower: 0.7 + amount * 0.8 },
+    { x: 0.55, y: 0.44 + amount * 0.22, curvePower: 1.2 },
+    { x: 1, y: 0.18 + amount * 0.08, curvePower: 1 }
+  ];
+}
+function makeGainEnvelopeView(envelope) {
+  return {
+    attackSeconds: envelope?.attackSeconds ?? 0.01,
+    decaySeconds: envelope?.decaySeconds ?? 0.25,
+    sustain: envelope?.sustain ?? 0.5,
+    releaseSeconds: envelope?.releaseSeconds ?? 0.2
+  };
+}
 function postNativeKeyboardProbeStatus(reason) {
   const desktopWindow = globalThis;
   if (!desktopWindow.__COSIMO_DESKTOP_KEYBOARD_PROBE__) {
@@ -31463,7 +33370,8 @@ function KeyboardSection({
   onOctaveUp,
   playModeFocusBindings,
   glideFocusTarget,
-  keyboardRef
+  keyboardRef,
+  toolbarOverride
 }) {
   return /* @__PURE__ */ jsxRuntimeExports.jsx(
     KeyboardSectionShell,
@@ -31475,7 +33383,7 @@ function KeyboardSection({
       onOctaveDown,
       className: "grid-cols-[56px_minmax(0,1fr)]",
       railClassName: "px-2 py-3",
-      toolbar: /* @__PURE__ */ jsxRuntimeExports.jsx(
+      toolbar: toolbarOverride ?? /* @__PURE__ */ jsxRuntimeExports.jsx(
         KeyboardToolbar,
         {
           playMode,
@@ -31485,56 +33393,6 @@ function KeyboardSection({
         }
       ),
       keyboard: /* @__PURE__ */ jsxRuntimeExports.jsx(KeyboardDock, { rootNote: keyboardRootNote, keyboardRef })
-    }
-  );
-}
-function ArticulationSlotBar({
-  slots,
-  selectedSlotId,
-  hasHydrated,
-  onAdd,
-  onSelect
-}) {
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs(
-    "div",
-    {
-      "data-role": "articulation-slot-bar",
-      className: "flex min-h-[34px] shrink-0 items-center gap-2 rounded-[12px] border border-white/[0.05] bg-white/[0.018] px-2.5 py-1.5",
-      children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "shrink-0 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-300/45", children: "Art" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto", children: slots.map((slot) => {
-          const isSelected = slot.id === selectedSlotId;
-          return /* @__PURE__ */ jsxRuntimeExports.jsxs(
-            "button",
-            {
-              type: "button",
-              "aria-label": `Select articulation ${slot.name}`,
-              "aria-pressed": isSelected,
-              "data-role": "articulation-slot-button",
-              "data-selector-a": String(slot.runtimeSlot),
-              "data-runtime-slot": String(slot.runtimeSlot),
-              className: `flex h-7 shrink-0 items-center gap-2 rounded-[8px] border px-2.5 text-[10px] font-semibold uppercase tracking-[0.08em] transition ${isSelected ? "border-amber-200/24 bg-amber-300/12 text-amber-100" : "border-white/[0.06] bg-white/[0.025] text-slate-300/52 hover:border-white/12 hover:text-slate-100/75"}`,
-              onClick: () => onSelect(slot.id),
-              children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono text-[9px] text-cyan-200/55", children: slot.runtimeSlot }),
-                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: slot.name })
-              ]
-            },
-            slot.id
-          );
-        }) }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx(
-          "button",
-          {
-            type: "button",
-            "aria-label": "Add articulation",
-            className: "h-7 shrink-0 rounded-[8px] border border-cyan-300/16 bg-cyan-300/8 px-2.5 text-[10px] font-bold uppercase tracking-[0.1em] text-cyan-100/80 transition hover:border-cyan-200/28 hover:bg-cyan-300/12 disabled:opacity-45",
-            onClick: onAdd,
-            disabled: !hasHydrated,
-            children: "+ Add"
-          }
-        )
-      ]
     }
   );
 }
@@ -32063,6 +33921,97 @@ function DesktopPatchViewBody({
   reactExports.useEffect(() => {
     postNativeKeyboardProbeStatus(`cosimo-keyboard-router-ready:${keyboardInputMode}`);
   }, [keyboardInputMode]);
+  const [keyboardControlMode, setKeyboardControlMode] = reactExports.useState("articulation");
+  const [isArticulationEditorExpanded, setIsArticulationEditorExpanded] = reactExports.useState(false);
+  const selectedArticulationId = synthView.selectedArticulationSlot?.id ?? null;
+  const articulationMode = synthView.articulationBank.activeTriggerMode;
+  const articulationCards = reactExports.useMemo(() => {
+    const bank = synthView.articulationBank;
+    return synthView.articulationSlots.map((slot) => {
+      const color = getArticulationColor(slot.runtimeSlot);
+      const chainAssignment = bank.chainAssignments.find((assignment) => assignment.articulationId === slot.id);
+      const keyRange = getFirstKeyRangeForArticulation(bank.keyAssignments, slot.id);
+      const velocityAssignment = bank.velocityAssignments.find((assignment) => assignment.articulationId === slot.id);
+      const assignmentLabel = articulationMode === "key" ? keyRange ? formatKeyRangeLabel(keyRange.min, keyRange.max) : "Key -" : articulationMode === "vel" ? velocityAssignment ? formatRangeLabel("Vel", velocityAssignment.min, velocityAssignment.max) : "Vel -" : chainAssignment ? formatRangeLabel("Chain", chainAssignment.min, chainAssignment.max) : "Chain -";
+      return {
+        id: slot.id,
+        name: slot.name,
+        color,
+        runtimeSlot: slot.runtimeSlot,
+        assignmentLabel,
+        isSelected: slot.id === selectedArticulationId,
+        isDirty: slot.id === selectedArticulationId && synthView.selectedArticulationIsDirty,
+        canDelete: synthView.articulationSlots.length > 1,
+        msegPoints: makeMsegThumbnailPoints(slot.snapshot.parameters.msegMorphs[0] ?? 0),
+        gainEnvelope: makeGainEnvelopeView(slot.snapshot.envelopes[0])
+      };
+    });
+  }, [
+    articulationMode,
+    selectedArticulationId,
+    synthView.articulationBank,
+    synthView.articulationSlots,
+    synthView.selectedArticulationIsDirty
+  ]);
+  const articulationCardById = reactExports.useMemo(() => new Map(articulationCards.map((card) => [card.id, card])), [articulationCards]);
+  const chainSegments = reactExports.useMemo(() => synthView.articulationBank.chainAssignments.map((assignment) => {
+    const card = articulationCardById.get(assignment.articulationId);
+    return {
+      id: assignment.id,
+      articulationId: assignment.articulationId,
+      label: card?.name ?? "Missing",
+      color: card?.color ?? "#87d7f5",
+      min: assignment.min,
+      max: assignment.max,
+      isSelected: assignment.articulationId === selectedArticulationId
+    };
+  }), [articulationCardById, selectedArticulationId, synthView.articulationBank.chainAssignments]);
+  const velocitySegments = reactExports.useMemo(() => synthView.articulationBank.velocityAssignments.map((assignment) => {
+    const card = articulationCardById.get(assignment.articulationId);
+    return {
+      id: assignment.id,
+      articulationId: assignment.articulationId,
+      label: card?.name ?? "Missing",
+      color: card?.color ?? "#87d7f5",
+      min: assignment.min,
+      max: assignment.max,
+      isSelected: assignment.articulationId === selectedArticulationId
+    };
+  }), [articulationCardById, selectedArticulationId, synthView.articulationBank.velocityAssignments]);
+  const keySegments = reactExports.useMemo(() => {
+    const sortedAssignments = [...synthView.articulationBank.keyAssignments].sort((left, right) => left.note - right.note);
+    const segments = [];
+    for (const assignment of sortedAssignments) {
+      const previous = segments[segments.length - 1];
+      const card = articulationCardById.get(assignment.articulationId);
+      if (previous && previous.articulationId === assignment.articulationId && previous.max + 1 === assignment.note) {
+        previous.max = assignment.note;
+        previous.id = `key-${assignment.articulationId}-${previous.min}-${previous.max}`;
+        previous.label = card?.name ?? "Missing";
+        continue;
+      }
+      segments.push({
+        id: `key-${assignment.articulationId}-${assignment.note}-${assignment.note}`,
+        articulationId: assignment.articulationId,
+        label: card?.name ?? "Missing",
+        color: card?.color ?? "#87d7f5",
+        min: assignment.note,
+        max: assignment.note,
+        isSelected: assignment.articulationId === selectedArticulationId
+      });
+    }
+    return segments;
+  }, [articulationCardById, selectedArticulationId, synthView.articulationBank.keyAssignments]);
+  const handleSelectRangeSegment = reactExports.useCallback((_mode, segment) => {
+    synthView.handleSelectArticulationSlot(segment.articulationId);
+  }, [synthView]);
+  const handleRenameArticulation = reactExports.useCallback((slotId) => {
+    const slot = synthView.articulationSlots.find((candidate) => candidate.id === slotId);
+    const nextName = window.prompt("Rename articulation", slot?.name ?? "");
+    if (nextName !== null) {
+      synthView.handleRenameArticulationSlot(slotId, nextName);
+    }
+  }, [synthView]);
   const filterResonanceCurveProfile = curveLab.getProfile("filter-resonance-handle");
   const resonanceNormalizedFromQ = reactExports.useCallback((qValue) => curveLab.invertTarget("filter-resonance-handle", filterQToNormalized(qValue)), [curveLab]);
   const resonanceQFromSurface = reactExports.useCallback((surfaceValue) => normalizedToFilterQ(curveLab.evaluateTarget("filter-resonance-handle", surfaceValue)), [curveLab]);
@@ -32096,18 +34045,108 @@ function DesktopPatchViewBody({
       height: 40
     }
   ), [synthView.pan]);
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "cosimo-surface relative flex h-full w-full flex-col gap-3 overflow-hidden rounded-[28px] border border-white/[0.05] px-4 pb-4 pt-2.5 text-slate-100 shadow-[0_26px_80px_rgba(0,0,0,0.48)]", children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsx(StatusHeader, { statusText: synthView.topStatus }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx(
-      ArticulationSlotBar,
+  const keyboardToolbarOverride = reactExports.useMemo(() => /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { "data-role": "keyboard-control-row", className: "grid min-h-[158px] gap-2", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between gap-2 rounded-[12px] border border-white/[0.05] bg-white/[0.018] px-2 py-1.5", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[10px] font-bold uppercase tracking-[0.18em] text-slate-300/45", children: "Controls" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "inline-flex h-7 items-center gap-1 rounded-[8px] border border-white/[0.06] bg-white/[0.022] p-0.5", children: [
+        ["articulation", "Articulations"],
+        ["voice", "Voice"]
+      ].map(([mode, label]) => /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "button",
+        {
+          type: "button",
+          "aria-pressed": keyboardControlMode === mode,
+          "data-role": `keyboard-control-mode-${mode}`,
+          className: `h-6 rounded-[6px] px-2.5 text-[10px] font-bold uppercase tracking-[0.14em] transition ${keyboardControlMode === mode ? "bg-amber-300/14 text-amber-100" : "text-slate-300/65 hover:text-slate-100"}`,
+          onClick: () => setKeyboardControlMode(mode),
+          children: label
+        },
+        mode
+      )) })
+    ] }),
+    keyboardControlMode === "articulation" ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+      ArticulationControlSurface,
       {
-        slots: synthView.articulationSlots,
-        selectedSlotId: synthView.selectedArticulationSlot?.id ?? null,
-        hasHydrated: synthView.hasHydratedArticulations,
-        onAdd: synthView.handleAddArticulationSlot,
-        onSelect: synthView.handleSelectArticulationSlot
+        cards: articulationCards,
+        activeMode: articulationMode,
+        isExpanded: isArticulationEditorExpanded,
+        selectedArticulationId,
+        selectedIsDirty: synthView.selectedArticulationIsDirty,
+        canCapture: synthView.hasHydratedArticulations,
+        chainSegments,
+        keySegments,
+        velocitySegments,
+        keyboardMinNote: keyboardRootNote,
+        keyboardMaxNote: keyboardRootNote + DEFAULT_KEYBOARD_NOTE_COUNT - 1,
+        onToggleExpanded: () => setIsArticulationEditorExpanded((previousValue) => !previousValue),
+        onSelectMode: (mode) => synthView.handleSetArticulationTriggerMode(mode),
+        onSelectCard: synthView.handleSelectArticulationSlot,
+        onCardPlayPressStart: synthView.handleStartArticulationAudition,
+        onCardPlayPressEnd: synthView.handleStopArticulationAudition,
+        onCapture: () => synthView.handleCaptureArticulationSlot({ autoAssign: !isArticulationEditorExpanded }),
+        onUpdate: synthView.handleUpdateSelectedArticulationSlot,
+        onRevert: synthView.handleRevertSelectedArticulationSlot,
+        onSelectRangeSegment: handleSelectRangeSegment,
+        onAssignRangePosition: synthView.handleAssignArticulationRangePosition,
+        onInsertRangePosition: synthView.handleInsertArticulationRangeAtPosition,
+        onDuplicateAndAssignRangePosition: synthView.handleDuplicateAndAssignArticulationRangePosition,
+        onMoveRangeSegment: synthView.handleMoveArticulationRangeAssignment,
+        onResizeRangeSegment: synthView.handleResizeArticulationRangeAssignment,
+        onClearRangeSegment: synthView.handleClearArticulationRangeAssignment,
+        onClearRangeMode: synthView.handleClearArticulationTriggerAssignments,
+        onDistributeRange: synthView.handleDistributeArticulationRanges,
+        onRequestRename: handleRenameArticulation,
+        onRequestDuplicate: synthView.handleDuplicateArticulationSlot,
+        onRequestReplace: synthView.handleReplaceArticulationSlotWithCurrent,
+        onRequestDelete: synthView.handleDeleteArticulationSlot
+      }
+    ) : /* @__PURE__ */ jsxRuntimeExports.jsx(
+      KeyboardToolbar,
+      {
+        playMode: synthView.playMode,
+        glideTime: synthView.glideTime,
+        playModeFocusBindings: synthView.keyboardRouting.playModeFocusBindings,
+        glideFocusTarget: synthView.keyboardRouting.glideFocusTarget
       }
     ),
+    synthView.discardedArticulationEdit ? /* @__PURE__ */ jsxRuntimeExports.jsxs(
+      "div",
+      {
+        "data-role": "articulation-undo-toast",
+        className: "flex items-center justify-between gap-2 rounded-[12px] border border-pink-300/18 bg-pink-300/[0.07] px-3 py-2 text-[10px] uppercase tracking-[0.12em] text-pink-100/82",
+        children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "truncate", children: [
+            "Discarded edits to ",
+            synthView.discardedArticulationEdit.slotName
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "button",
+            {
+              type: "button",
+              className: "rounded-[7px] border border-pink-200/22 bg-pink-200/10 px-2 py-1 font-bold text-pink-50/90",
+              onClick: synthView.handleUndoDiscardedArticulationEdit,
+              children: "Undo"
+            }
+          )
+        ]
+      }
+    ) : null
+  ] }), [
+    articulationCards,
+    articulationMode,
+    chainSegments,
+    handleRenameArticulation,
+    handleSelectRangeSegment,
+    isArticulationEditorExpanded,
+    keySegments,
+    keyboardControlMode,
+    keyboardRootNote,
+    selectedArticulationId,
+    synthView,
+    velocitySegments
+  ]);
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "cosimo-surface relative flex h-full w-full flex-col gap-3 overflow-hidden rounded-[28px] border border-white/[0.05] px-4 pb-4 pt-2.5 text-slate-100 shadow-[0_26px_80px_rgba(0,0,0,0.48)]", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx(StatusHeader, { statusText: synthView.topStatus }),
     /* @__PURE__ */ jsxRuntimeExports.jsxs(
       "main",
       {
@@ -32232,7 +34271,8 @@ function DesktopPatchViewBody({
               onOctaveUp: handleKeyboardOctaveUp,
               playModeFocusBindings: synthView.keyboardRouting.playModeFocusBindings,
               glideFocusTarget: synthView.keyboardRouting.glideFocusTarget,
-              keyboardRef: keyboardElementRef
+              keyboardRef: keyboardElementRef,
+              toolbarOverride: keyboardToolbarOverride
             }
           )
         ]
