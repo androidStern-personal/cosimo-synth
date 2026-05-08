@@ -29,6 +29,8 @@ const loadBeginEndpointID = "wavetableLoadBegin";
 const mipFrameEndpointID = "wavetableMipFrame";
 const uploadAckEndpointID = "wavetableUploadAck";
 const mipRequestEndpointID = "wavetableMipRequest";
+const prewarmRequestEndpointID = "wavetablePrewarmRequest";
+const prewarmNotificationEndpointID = "wavetablePrewarmNotification";
 const defaultCatalogPath = "assets/factory-bank-catalog.json";
 export const FAILURE_PHASE_LOAD_SOURCE = 1;
 export const FAILURE_PHASE_BUILD_MIP = 2;
@@ -42,6 +44,7 @@ const failurePhaseBuildMip = FAILURE_PHASE_BUILD_MIP;
 const failurePhaseTransferMip = FAILURE_PHASE_TRANSFER_MIP;
 const failureReasonGeneric = FAILURE_REASON_GENERIC;
 const failureReasonTimeout = FAILURE_REASON_TIMEOUT;
+const defaultCacheBudgetBytes = 48 * 1024 * 1024;
 
 type NormalizedRuntimeState = ReturnType<typeof normalizeRuntimeState>;
 type Spectrum = ReturnType<typeof buildFrameSpectrum>;
@@ -52,6 +55,7 @@ type WorkerOptions = {
     catalogPath?: string;
     maxFramesInFlight?: number;
     mipLevelCount?: number;
+    cacheBudgetBytes?: number;
     serviceLoadTimeoutMs?: number;
     resourceClient?: ResourceClientInput;
     setTimeoutFn?: ((callback: () => void, delay: number) => TimerHandle) | null;
@@ -73,6 +77,7 @@ type CandidateValidation = {
 };
 
 type LoadedTable = {
+    cacheKey: string;
     tableIndex: number;
     tableMeta: FactoryTableMeta;
     frameCount: number;
@@ -99,6 +104,11 @@ type MipJob = {
     ackedFrameCount: number;
     inFlightFrames: Set<number>;
     completed: boolean;
+};
+
+type CachedTable = LoadedTable & {
+    byteCount: number;
+    lastUsedSerial: number;
 };
 
 type WorkerFailureDetail = {
@@ -148,6 +158,11 @@ type MipRequestLike = {
     tableIndex?: unknown;
     mipIndex?: unknown;
     urgencyLevel?: unknown;
+};
+
+type PrewarmRequestLike = {
+    tableIndex?: unknown;
+    reason?: unknown;
 };
 
 type UploadAckLike = {
@@ -301,6 +316,31 @@ function createMipJobKey(dspSessionId: number, generation: number, mipIndex: num
     return `${dspSessionId}:${generation}:${mipIndex}`;
 }
 
+function createTableCacheKey(tableMeta: FactoryTableMeta, samplesPerFrame: number, mipLevelCount: number) {
+    return [
+        tableMeta.tableId,
+        tableMeta.sourceWav,
+        samplesPerFrame,
+        mipLevelCount,
+    ].join("|");
+}
+
+function estimateLoadedTableBytes(table: LoadedTable) {
+    let bytes = 0;
+
+    for (const frame of table.frames) {
+        bytes += frame.byteLength;
+    }
+
+    for (const spectrum of table.spectra) {
+        if (spectrum) {
+            bytes += spectrum.real.byteLength + spectrum.imaginary.byteLength;
+        }
+    }
+
+    return bytes;
+}
+
 function createEmptyMipJobFrameState(frameCount: number) {
     return {
         nextFrameIndex: 0,
@@ -322,6 +362,7 @@ export class WavetableWorkerController {
     private readonly catalogPath: string;
     private readonly maxFramesInFlight: number;
     private readonly mipLevelCount: number;
+    private readonly cacheBudgetBytes: number;
     private readonly serviceLoadTimeoutMs: number;
     private readonly setTimeoutFn: ((callback: () => void, delay: number) => TimerHandle) | null;
     private readonly clearTimeoutFn: ((handle: TimerHandle) => void) | null;
@@ -337,6 +378,9 @@ export class WavetableWorkerController {
     private activeUploadKey: string | null = null;
     private serviceLoadWatchdogHandle: TimerHandle | null = null;
     private autoRetryConsumedKey: string | null = null;
+    private tableCache = new Map<string, CachedTable>();
+    private tableCacheBytes = 0;
+    private cacheUseSerial = 1;
 
     constructor(connection: PatchConnectionLike, options: WorkerOptions = {}) {
         this.connection = connection;
@@ -344,12 +388,14 @@ export class WavetableWorkerController {
         this.catalogPath = options.catalogPath ?? defaultCatalogPath;
         this.maxFramesInFlight = resolvePositiveIntegerOption(options.maxFramesInFlight, 1);
         this.mipLevelCount = options.mipLevelCount ?? DEFAULT_MIP_LEVEL_COUNT;
+        this.cacheBudgetBytes = Math.max(0, Math.round(Number(options.cacheBudgetBytes ?? defaultCacheBudgetBytes) || 0));
         this.serviceLoadTimeoutMs = resolvePositiveIntegerOption(options.serviceLoadTimeoutMs, defaultServiceLoadTimeoutMs);
         this.setTimeoutFn = typeof options.setTimeoutFn === "function" ? options.setTimeoutFn : globalThis.setTimeout?.bind(globalThis) ?? null;
         this.clearTimeoutFn = typeof options.clearTimeoutFn === "function" ? options.clearTimeoutFn : globalThis.clearTimeout?.bind(globalThis) ?? null;
         this.handleRuntimeState = this.handleRuntimeState.bind(this);
         this.handleUploadAck = this.handleUploadAck.bind(this);
         this.handleMipRequest = this.handleMipRequest.bind(this);
+        this.handlePrewarmRequest = this.handlePrewarmRequest.bind(this);
     }
 
     async start() {
@@ -362,11 +408,14 @@ export class WavetableWorkerController {
             catalogPath: this.catalogPath,
             maxFramesInFlight: this.maxFramesInFlight,
             mipLevelCount: this.mipLevelCount,
+            cacheBudgetBytes: this.cacheBudgetBytes,
             serviceLoadTimeoutMs: this.serviceLoadTimeoutMs,
         });
         this.connection.addEndpointListener?.(runtimeStateEndpointID, this.handleRuntimeState);
         this.connection.addEndpointListener?.(uploadAckEndpointID, this.handleUploadAck);
         this.connection.addEndpointListener?.(mipRequestEndpointID, this.handleMipRequest);
+        this.connection.addEndpointListener?.(prewarmRequestEndpointID, this.handlePrewarmRequest);
+        this.connection.addEndpointListener?.(prewarmNotificationEndpointID, this.handlePrewarmRequest);
         this.connection.sendEventOrValue?.(runtimeSyncRequestEndpointID, 1);
         return this;
     }
@@ -397,6 +446,103 @@ export class WavetableWorkerController {
         this.cancelServiceLoadWatchdog();
         this.mipJobs.clear();
         this.activeUploadKey = null;
+    }
+
+    private refreshCacheEntryByteCount(entry: CachedTable) {
+        this.tableCacheBytes -= entry.byteCount;
+        entry.byteCount = estimateLoadedTableBytes(entry);
+        entry.lastUsedSerial = this.cacheUseSerial++;
+        this.tableCacheBytes += entry.byteCount;
+        this.evictCacheIfNeeded();
+    }
+
+    private getPinnedCacheKeys() {
+        const pinned = new Set<string>();
+
+        if (this.serviceTable?.cacheKey) {
+            pinned.add(this.serviceTable.cacheKey);
+        }
+
+        return pinned;
+    }
+
+    private evictCacheIfNeeded() {
+        if (this.cacheBudgetBytes <= 0) {
+            return;
+        }
+
+        const pinned = this.getPinnedCacheKeys();
+
+        while (this.tableCacheBytes > this.cacheBudgetBytes) {
+            let evictKey: string | null = null;
+            let evictEntry: CachedTable | null = null;
+
+            for (const [key, entry] of this.tableCache) {
+                if (pinned.has(key)) {
+                    continue;
+                }
+
+                if (!evictEntry || entry.lastUsedSerial < evictEntry.lastUsedSerial) {
+                    evictKey = key;
+                    evictEntry = entry;
+                }
+            }
+
+            if (!evictKey || !evictEntry) {
+                return;
+            }
+
+            this.tableCache.delete(evictKey);
+            this.tableCacheBytes -= evictEntry.byteCount;
+        }
+    }
+
+    private rememberLoadedTable(table: LoadedTable) {
+        const existing = this.tableCache.get(table.cacheKey);
+
+        if (existing) {
+            existing.lastUsedSerial = this.cacheUseSerial++;
+            return existing;
+        }
+
+        const entry: CachedTable = {
+            ...table,
+            byteCount: estimateLoadedTableBytes(table),
+            lastUsedSerial: this.cacheUseSerial++,
+        };
+        this.tableCache.set(entry.cacheKey, entry);
+        this.tableCacheBytes += entry.byteCount;
+        this.evictCacheIfNeeded();
+        return entry;
+    }
+
+    private createFullMipJobsForServiceTable(urgencyLevel = 2) {
+        if (!this.serviceTable || this.serviceTable.mode !== "loading") {
+            return;
+        }
+
+        for (let mipIndex = 0; mipIndex < this.mipLevelCount; mipIndex += 1) {
+            const key = createMipJobKey(
+                this.serviceTable.dspSessionId,
+                this.serviceTable.generation,
+                mipIndex,
+            );
+
+            if (this.mipJobs.has(key)) {
+                continue;
+            }
+
+            this.mipJobs.set(key, {
+                key,
+                dspSessionId: this.serviceTable.dspSessionId,
+                generation: this.serviceTable.generation,
+                tableIndex: this.serviceTable.tableIndex,
+                mipIndex,
+                urgencyLevel,
+                ...createEmptyMipJobFrameState(this.serviceTable.frameCount),
+                completed: false,
+            });
+        }
     }
 
     private cancelServiceLoadWatchdog() {
@@ -472,6 +618,9 @@ export class WavetableWorkerController {
             this.serviceTable = null;
             this.clearMipTransferState();
         }, this.serviceLoadTimeoutMs);
+
+        const maybeNodeTimer = this.serviceLoadWatchdogHandle as { unref?: () => void } | null;
+        maybeNodeTimer?.unref?.();
     }
 
     private resolveServiceTarget(runtimeState: NormalizedRuntimeState): ServiceTarget | null {
@@ -570,6 +719,22 @@ export class WavetableWorkerController {
         const normalizedIndex = normalizeRequestedTableIndex(tableIndex, catalog.tables.length);
         const tableMeta = catalog.tables[normalizedIndex];
         assert(tableMeta, `Could not resolve table ${normalizedIndex}`);
+        const cacheKey = createTableCacheKey(tableMeta, DEFAULT_SAMPLES_PER_FRAME, this.mipLevelCount);
+        const cachedTable = this.tableCache.get(cacheKey);
+
+        if (cachedTable) {
+            cachedTable.lastUsedSerial = this.cacheUseSerial++;
+            emitWorkerLog("info", "Using cached wavetable source table", {
+                tableIndex: normalizedIndex,
+                tableId: tableMeta.tableId,
+                tableName: tableMeta.name,
+                sourceWav: tableMeta.sourceWav,
+                frameCount: cachedTable.frameCount,
+                cacheBytes: this.tableCacheBytes,
+            });
+            return cachedTable;
+        }
+
         const startTime = getNow();
         emitWorkerLog("info", "Reading wavetable source", {
             tableIndex: normalizedIndex,
@@ -599,13 +764,14 @@ export class WavetableWorkerController {
             loadDurationMs: Math.round(getNow() - startTime),
         });
 
-        return {
+        return this.rememberLoadedTable({
+            cacheKey,
             tableIndex: normalizedIndex,
             tableMeta,
             frameCount: sourceTable.frameCount,
             frames: sourceTable.frames,
             spectra: new Array(sourceTable.frameCount),
-        };
+        });
     }
 
     private isMatchingServiceTable(serviceTarget: ServiceTarget) {
@@ -647,6 +813,8 @@ export class WavetableWorkerController {
             tableIndex: runtimeState.desiredTableIndex,
             frameCount: loadedTable.frameCount,
         });
+        this.createFullMipJobsForServiceTable(2);
+        this.pumpUploads();
     }
 
     private handleCandidateLoadFailure(runtimeState: NormalizedRuntimeState) {
@@ -746,6 +914,10 @@ export class WavetableWorkerController {
             desiredIntentSerial: runtimeState.desiredIntentSerial,
         };
         this.clearMipTransferState();
+        if (serviceTarget.kind === "loading") {
+            this.createFullMipJobsForServiceTable(2);
+            this.pumpUploads();
+        }
         if (
             this.candidateValidation &&
             this.candidateValidation.dspSessionId === serviceTarget.dspSessionId &&
@@ -909,6 +1081,56 @@ export class WavetableWorkerController {
         }
     }
 
+    async handlePrewarmRequest(request: unknown) {
+        const prewarm = (
+            request !== null
+            && typeof request === "object"
+            && !Array.isArray(request)
+        )
+            ? request as PrewarmRequestLike
+            : null;
+        const tableIndex = Math.trunc(Number(prewarm?.tableIndex ?? request));
+
+        if (!Number.isFinite(tableIndex)) {
+            return;
+        }
+
+        const token = this.asyncStateToken;
+        try {
+            const loadedTable = await this.loadTableSource(tableIndex, undefined, token);
+
+            if (!loadedTable || token !== this.asyncStateToken) {
+                return;
+            }
+
+            for (let frameIndex = 0; frameIndex < loadedTable.frameCount; frameIndex += 1) {
+                if (!loadedTable.spectra[frameIndex]) {
+                    loadedTable.spectra[frameIndex] = buildFrameSpectrum(loadedTable.frames[frameIndex]);
+                }
+            }
+
+            const cacheEntry = this.tableCache.get(loadedTable.cacheKey);
+
+            if (cacheEntry) {
+                this.refreshCacheEntryByteCount(cacheEntry);
+            }
+
+            emitWorkerLog("info", "Prewarmed wavetable source table", {
+                tableIndex: loadedTable.tableIndex,
+                tableId: loadedTable.tableMeta.tableId,
+                tableName: loadedTable.tableMeta.name,
+                reason: typeof prewarm?.reason === "string" ? prewarm.reason : null,
+                cacheBytes: this.tableCacheBytes,
+            });
+        } catch (error) {
+            emitWorkerLog("warn", "Ignoring wavetable prewarm failure", {
+                tableIndex,
+                reason: typeof prewarm?.reason === "string" ? prewarm.reason : null,
+                detail: describeErrorDetail(error),
+            });
+        }
+    }
+
     private getOrCreateMipJob(request: MipRequestLike) {
         const dspSessionId = Math.trunc(Number(request?.dspSessionId));
         const generation = Math.trunc(Number(request?.generation));
@@ -1028,6 +1250,11 @@ export class WavetableWorkerController {
 
         if (!this.serviceTable.spectra[frameIndex]) {
             this.serviceTable.spectra[frameIndex] = buildFrameSpectrum(this.serviceTable.frames[frameIndex]);
+            const cacheEntry = this.tableCache.get(this.serviceTable.cacheKey);
+
+            if (cacheEntry) {
+                this.refreshCacheEntryByteCount(cacheEntry);
+            }
         }
 
         return this.serviceTable.spectra[frameIndex]!;

@@ -13,6 +13,7 @@ from scipy.io import wavfile
 from bench import _require_cmaj_cli
 from tests.helpers.generate_filter_reference_assets import (
     FILTER_CASE_OUTPUT_SAMPLES,
+    NATIVE_PRODUCTION_GOLDEN_CASES,
     render_filter_reference_audio,
 )
 
@@ -21,12 +22,11 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 FIXTURE_ROOT = REPO_ROOT / "tests" / "cmajor_filter" / "fixtures"
 PATCH_PATH = REPO_ROOT / "WavetableSynth.cmajorpatch"
 REFERENCE_SAMPLE_RATE = 44100
-FAST_MOD_FIXTURES = (
-    "fast_mseg_cutoff_motion_lowpass",
-    "fast_mseg_cutoff_motion_bandpass",
-    "fast_mseg_cutoff_motion_peak_high_q",
-)
 ALL_FILTER_FIXTURES = tuple(sorted(FILTER_CASE_OUTPUT_SAMPLES.keys()))
+INDEPENDENT_REFERENCE_FILTER_FIXTURES = tuple(
+    sorted(set(ALL_FILTER_FIXTURES) - set(NATIVE_PRODUCTION_GOLDEN_CASES))
+)
+NATIVE_PRODUCTION_FILTER_FIXTURES = tuple(sorted(NATIVE_PRODUCTION_GOLDEN_CASES))
 REQUIRED_FILTER_FIXTURE_FILES = (
     "midiIn.json",
     "filterMode.json",
@@ -239,8 +239,8 @@ def test_real_patch_note_on_emits_audible_audio(tmp_path: Path) -> None:
 
 
 @pytest.mark.cmajor
-@pytest.mark.parametrize("fixture_name", FAST_MOD_FIXTURES)
-def test_real_patch_filter_modulation_stays_close_to_reference(
+@pytest.mark.parametrize("fixture_name", INDEPENDENT_REFERENCE_FILTER_FIXTURES)
+def test_real_patch_filter_output_stays_close_to_independent_reference(
     fixture_name: str,
     tmp_path: Path,
 ) -> None:
@@ -262,4 +262,28 @@ def test_real_patch_filter_modulation_stays_close_to_reference(
         f"{fixture_name} produced {high_frequency_residual_db:.2f} dB of high-frequency residual energy above "
         f"{HIGH_FREQUENCY_RESIDUAL_START_HZ:.0f} Hz relative to the independent filter reference. "
         f"The cutoff is {MAX_HIGH_FREQUENCY_RESIDUAL_DB:.2f} dB."
+    )
+
+
+@pytest.mark.cmajor
+@pytest.mark.parametrize("fixture_name", NATIVE_PRODUCTION_FILTER_FIXTURES)
+def test_mseg_routed_filter_fixture_matches_native_production_golden(
+    fixture_name: str,
+    tmp_path: Path,
+) -> None:
+    real_audio = _render_real_patch_audio(
+        fixture_name=fixture_name,
+        num_samples=FILTER_CASE_OUTPUT_SAMPLES[fixture_name],
+        tmp_path=tmp_path,
+    )
+    sample_rate, expected_audio = wavfile.read(FIXTURE_ROOT / fixture_name / "expectedOutput-audioOut.wav")
+
+    assert sample_rate == REFERENCE_SAMPLE_RATE
+
+    expected_left = np.asarray(expected_audio, dtype=np.float32)[:, 0]
+    residual_rms_db = _measure_residual_rms_db(real_audio, expected_left)
+
+    assert residual_rms_db <= MAX_RESIDUAL_RMS_DB, (
+        f"{fixture_name} produced {residual_rms_db:.2f} dB residual RMS relative to the checked-in native "
+        f"production golden. The cutoff is {MAX_RESIDUAL_RMS_DB:.2f} dB."
     )

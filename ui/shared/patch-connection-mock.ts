@@ -46,6 +46,8 @@ const filterSpectrumEndpointID = "filterSpectrum";
 const distortionHistoryEndpointID = "distortionHistory";
 const distortionScopeEndpointID = "distortionScope";
 const retryDesiredTableRequestEndpointID = "retryDesiredTableRequest";
+const wavetablePrewarmRequestEndpointID = "wavetablePrewarmRequest";
+const wavetablePrewarmNotificationEndpointID = "wavetablePrewarmNotification";
 
 type ParameterListener = (value: unknown) => void;
 type EndpointListener = (value: unknown) => void;
@@ -625,6 +627,11 @@ export class MockPatchConnection implements PatchConnectionLike {
                 loadingGeneration: retryGeneration,
             };
             this.emitEndpoint(runtimeStateEndpointID, this.runtimeState);
+            return;
+        }
+
+        if (endpointID === wavetablePrewarmRequestEndpointID) {
+            this.emitEndpoint(wavetablePrewarmNotificationEndpointID, Math.max(0, Math.trunc(Number(value) || 0)));
             return;
         }
 

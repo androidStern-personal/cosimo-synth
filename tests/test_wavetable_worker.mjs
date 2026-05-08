@@ -393,7 +393,7 @@ test("worker bootstraps from runtimeState instead of requesting wavetableSelect 
             serviceState: 0,
         })
     );
-    await flushMicrotasks(16);
+    await flushMicrotasks(128);
 
     assert.deepEqual(connection.readResourcePaths, ["assets/factory-bank-catalog.json"]);
     assert.deepEqual(connection.readAudioPaths, ["assets/factory_sources/table-1.wav"]);
@@ -409,6 +409,172 @@ test("worker bootstraps from runtimeState instead of requesting wavetableSelect 
                 frameCount: 2,
             },
         ]
+    );
+});
+
+test("worker stages every mip frame for a selected table without waiting for lazy mip requests", async () => {
+    const connection = new FakePatchConnection({
+        catalog: createDefaultCatalog(),
+        audioFiles: createDefaultAudioFiles(),
+        maxAutoAckFrames: Infinity,
+    });
+
+    const controller = createWavetableWorkerController(connection, {
+        maxFramesInFlight: 1,
+        mipLevelCount: 3,
+    });
+    await controller.start();
+    await flushMicrotasks();
+
+    connection.emitEndpoint(
+        "runtimeState",
+        createRuntimeState({
+            desiredIntentSerial: 5,
+            desiredTableIndex: 1,
+            generationFrontier: 10,
+            serviceState: 0,
+        })
+    );
+    await flushMicrotasks(64);
+
+    assert.equal(
+        connection.sentEvents.some(({ endpointID }) => endpointID === "wavetableMipRequest"),
+        false
+    );
+
+    const mipFrames = connection.sentEvents
+        .filter(({ endpointID }) => endpointID === "wavetableMipFrame")
+        .map(({ value }) => ({
+            generation: value.generation,
+            tableIndex: value.tableIndex,
+            mipIndex: value.mipIndex,
+            frameIndex: value.frameIndex,
+        }))
+        .sort((left, right) => (
+            (left.mipIndex - right.mipIndex)
+            || (left.frameIndex - right.frameIndex)
+        ));
+
+    assert.deepEqual(mipFrames, [
+        { generation: 11, tableIndex: 1, mipIndex: 0, frameIndex: 0 },
+        { generation: 11, tableIndex: 1, mipIndex: 0, frameIndex: 1 },
+        { generation: 11, tableIndex: 1, mipIndex: 1, frameIndex: 0 },
+        { generation: 11, tableIndex: 1, mipIndex: 1, frameIndex: 1 },
+        { generation: 11, tableIndex: 1, mipIndex: 2, frameIndex: 0 },
+        { generation: 11, tableIndex: 1, mipIndex: 2, frameIndex: 1 },
+    ]);
+});
+
+test("worker prewarms source and spectrum cache without committing a DSP load", async () => {
+    const connection = new FakePatchConnection({
+        catalog: createDefaultCatalog(),
+        audioFiles: createDefaultAudioFiles(),
+        maxAutoAckFrames: Infinity,
+    });
+
+    const controller = createWavetableWorkerController(connection, {
+        maxFramesInFlight: 1,
+        mipLevelCount: 3,
+        cacheBudgetBytes: 8 * 1024 * 1024,
+    });
+    await controller.start();
+    await flushMicrotasks();
+
+    connection.emitEndpoint("wavetablePrewarmNotification", 1);
+    await flushMicrotasks(64);
+
+    assert.deepEqual(connection.readAudioPaths, ["assets/factory_sources/table-1.wav"]);
+    assert.equal(
+        connection.sentEvents.some(({ endpointID }) => endpointID === "wavetableLoadBegin"),
+        false
+    );
+    assert.equal(
+        connection.sentEvents.some(({ endpointID }) => endpointID === "wavetableMipFrame"),
+        false
+    );
+
+    connection.emitEndpoint(
+        "runtimeState",
+        createRuntimeState({
+            desiredIntentSerial: 6,
+            desiredTableIndex: 1,
+            generationFrontier: 20,
+            serviceState: 0,
+        })
+    );
+    await flushMicrotasks(64);
+
+    assert.deepEqual(connection.readAudioPaths, ["assets/factory_sources/table-1.wav"]);
+    assert.equal(
+        connection.sentEvents.filter(({ endpointID }) => endpointID === "wavetableLoadBegin").length,
+        1
+    );
+    assert.equal(
+        connection.sentEvents.filter(({ endpointID }) => endpointID === "wavetableMipFrame").length,
+        6
+    );
+});
+
+test("worker lets rapid adjacent prewarms complete instead of cancelling the earlier table", async () => {
+    const connection = new FakePatchConnection({
+        catalog: createDefaultCatalog(),
+        audioFiles: createDefaultAudioFiles(),
+        maxAutoAckFrames: Infinity,
+    });
+
+    const controller = createWavetableWorkerController(connection, {
+        maxFramesInFlight: 1,
+        mipLevelCount: 3,
+        cacheBudgetBytes: 8 * 1024 * 1024,
+    });
+    await controller.start();
+    await flushMicrotasks();
+
+    connection.emitEndpoint("wavetablePrewarmNotification", 1);
+    connection.emitEndpoint("wavetablePrewarmNotification", 2);
+    await flushMicrotasks(128);
+
+    assert.deepEqual(connection.readAudioPaths, [
+        "assets/factory_sources/table-1.wav",
+        "assets/factory_sources/table-2.wav",
+    ]);
+    assert.equal(
+        connection.sentEvents.some(({ endpointID }) => endpointID === "wavetableLoadBegin"),
+        false
+    );
+    assert.equal(
+        connection.sentEvents.some(({ endpointID }) => endpointID === "wavetableMipFrame"),
+        false
+    );
+
+    const originalGetSpectrumForFrame = controller.getSpectrumForFrame.bind(controller);
+    let spectrumMissesForPrewarmedTable = 0;
+    controller.getSpectrumForFrame = (frameIndex) => {
+        if (!controller.serviceTable?.spectra?.[frameIndex]) {
+            spectrumMissesForPrewarmedTable += 1;
+        }
+        return originalGetSpectrumForFrame(frameIndex);
+    };
+
+    connection.emitEndpoint(
+        "runtimeState",
+        createRuntimeState({
+            desiredIntentSerial: 7,
+            desiredTableIndex: 1,
+            generationFrontier: 30,
+            serviceState: 0,
+        })
+    );
+    await flushMicrotasks(128);
+
+    assert.deepEqual(connection.readAudioPaths, [
+        "assets/factory_sources/table-1.wav",
+        "assets/factory_sources/table-2.wav",
+    ]);
+    assert.equal(spectrumMissesForPrewarmedTable, 0);
+    assert.equal(
+        connection.sentEvents.filter(({ endpointID }) => endpointID === "wavetableMipFrame").length,
+        6
     );
 });
 
@@ -459,7 +625,7 @@ test("worker can load wavetable resources through an injected resource client ev
             serviceState: 0,
         })
     );
-    await flushMicrotasks(16);
+    await flushMicrotasks(128);
 
     assert.deepEqual(resourceClientReadJSONPaths, ["assets/factory-bank-catalog.json"]);
     assert.deepEqual(resourceClientReadAudioPaths, ["assets/factory_sources/table-1.wav"]);
@@ -610,7 +776,7 @@ test("worker falls back to the resolved resource URL for spaced wavetable paths 
     ]);
 });
 
-test("worker reconstructs the current loading generation when it still matches the desired table", async () => {
+test("worker reconstructs the current loading generation and continues full staging upload", async () => {
     const connection = new FakePatchConnection({
         catalog: createDefaultCatalog(),
         audioFiles: createDefaultAudioFiles(),
@@ -633,7 +799,7 @@ test("worker reconstructs the current loading generation when it still matches t
             loadingGeneration: 12,
         })
     );
-    await flushMicrotasks(16);
+    await flushMicrotasks(128);
 
     assert.deepEqual(connection.readAudioPaths, ["assets/factory_sources/table-1.wav"]);
     assert.equal(
@@ -641,33 +807,31 @@ test("worker reconstructs the current loading generation when it still matches t
         0
     );
 
-    connection.emitEndpoint("wavetableMipRequest", {
-        dspSessionId: 7,
-        generation: 12,
-        tableIndex: 1,
-        mipIndex: 0,
-        urgencyLevel: 2,
-    });
-    await flushMicrotasks(16);
-
-    const mipFrames = connection.sentEvents.filter(({ endpointID }) => endpointID === "wavetableMipFrame");
-    assert.equal(mipFrames.length, 2);
-    assert.deepEqual(
-        mipFrames.map(({ value }) => ({
+    const mipFrames = connection.sentEvents
+        .filter(({ endpointID }) => endpointID === "wavetableMipFrame")
+        .map(({ value }) => ({
             dspSessionId: value.dspSessionId,
             generation: value.generation,
             tableIndex: value.tableIndex,
             mipIndex: value.mipIndex,
             frameIndex: value.frameIndex,
-        })),
-        [
-            { dspSessionId: 7, generation: 12, tableIndex: 1, mipIndex: 0, frameIndex: 0 },
-            { dspSessionId: 7, generation: 12, tableIndex: 1, mipIndex: 0, frameIndex: 1 },
-        ]
+        }))
+        .sort((left, right) => (
+            (left.mipIndex - right.mipIndex)
+            || (left.frameIndex - right.frameIndex)
+        ));
+
+    assert.equal(mipFrames.length, 22);
+    assert.deepEqual(
+        mipFrames,
+        Array.from({ length: 11 }, (_, mipIndex) => ([
+            { dspSessionId: 7, generation: 12, tableIndex: 1, mipIndex, frameIndex: 0 },
+            { dspSessionId: 7, generation: 12, tableIndex: 1, mipIndex, frameIndex: 1 },
+        ])).flat()
     );
 });
 
-test("worker reconstructs the current active generation and serves later mip requests after restart", async () => {
+test("worker reconstructs the current active generation without re-uploading loaded mips", async () => {
     const connection = new FakePatchConnection({
         catalog: createDefaultCatalog(),
         audioFiles: createDefaultAudioFiles(),
@@ -698,29 +862,8 @@ test("worker reconstructs the current active generation and serves later mip req
         0
     );
 
-    connection.emitEndpoint("wavetableMipRequest", {
-        dspSessionId: 7,
-        generation: 14,
-        tableIndex: 1,
-        mipIndex: 0,
-        urgencyLevel: 2,
-    });
-    await flushMicrotasks(16);
-
     const mipFrames = connection.sentEvents.filter(({ endpointID }) => endpointID === "wavetableMipFrame");
-    assert.deepEqual(
-        mipFrames.map(({ value }) => ({
-            dspSessionId: value.dspSessionId,
-            generation: value.generation,
-            tableIndex: value.tableIndex,
-            mipIndex: value.mipIndex,
-            frameIndex: value.frameIndex,
-        })),
-        [
-            { dspSessionId: 7, generation: 14, tableIndex: 1, mipIndex: 0, frameIndex: 0 },
-            { dspSessionId: 7, generation: 14, tableIndex: 1, mipIndex: 0, frameIndex: 1 },
-        ]
-    );
+    assert.deepEqual(mipFrames, []);
 });
 
 test("worker does not auto-retry an unchanged failed desired table until runtimeState advances the desired attempt", async () => {
@@ -748,7 +891,7 @@ test("worker does not auto-retry an unchanged failed desired table until runtime
             failureReasonCode: 99,
         })
     );
-    await flushMicrotasks(16);
+    await flushMicrotasks(64);
 
     assert.deepEqual(connection.readAudioPaths, []);
     assert.equal(
@@ -766,7 +909,7 @@ test("worker does not auto-retry an unchanged failed desired table until runtime
             hasFailure: false,
         })
     );
-    await flushMicrotasks(16);
+    await flushMicrotasks(64);
 
     assert.deepEqual(connection.readAudioPaths, ["assets/factory_sources/table-2.wav"]);
     const loadBeginEvents = connection.sentEvents.filter(({ endpointID }) => endpointID === "wavetableLoadBegin");
@@ -801,7 +944,7 @@ test("worker aborts an obsolete loading generation when the desired table change
             loadingGeneration: 12,
         })
     );
-    await flushMicrotasks(16);
+    await flushMicrotasks(64);
 
     connection.emitEndpoint(
         "runtimeState",
@@ -851,7 +994,7 @@ test("worker validates and commits a newer desired table while another table is 
             activeGeneration: 9,
         })
     );
-    await flushMicrotasks(16);
+    await flushMicrotasks(64);
 
     connection.emitEndpoint(
         "runtimeState",
@@ -988,6 +1131,10 @@ test("worker classifies mip-build failures separately from source-load failures"
     await controller.start();
     await flushMicrotasks();
 
+    controller.getSpectrumForFrame = () => {
+        throw new Error("boom");
+    };
+
     connection.emitEndpoint(
         "runtimeState",
         createRuntimeState({
@@ -1000,20 +1147,7 @@ test("worker classifies mip-build failures separately from source-load failures"
             loadingGeneration: 12,
         })
     );
-    await flushMicrotasks(16);
-
-    controller.getSpectrumForFrame = () => {
-        throw new Error("boom");
-    };
-
-    connection.emitEndpoint("wavetableMipRequest", {
-        dspSessionId: 7,
-        generation: 12,
-        tableIndex: 1,
-        mipIndex: 0,
-        urgencyLevel: 2,
-    });
-    await flushMicrotasks(16);
+    await flushMicrotasks(64);
 
     const failureEvents = connection.sentEvents.filter(({ endpointID }) => endpointID === "workerLoadFailure");
     const abortEvents = connection.sentEvents.filter(({ endpointID }) => endpointID === "serviceLoadAbort");

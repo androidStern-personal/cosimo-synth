@@ -2407,6 +2407,7 @@ function DesktopPatchViewBody() {
                         tableOptions={synthView.tableOptions}
                         canRetry={synthView.canRetryDesiredTableLoad}
                         onTableChange={synthView.handleSelectWavetable}
+                        onTablePrewarm={synthView.handlePrewarmWavetablePicker}
                         onRetry={synthView.handleRetryLoad}
                         tableFocusBindings={synthView.keyboardRouting.wavetableFocusBindings}
                         onPointerDown={synthView.stageBindings.handleStagePointerDown}

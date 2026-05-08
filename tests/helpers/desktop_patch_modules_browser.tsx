@@ -1631,6 +1631,7 @@ export async function installSharedWavetableStageHarness(target: HTMLElement) {
                     onTableChange={(nextValue) => {
                         changeLog.push(nextValue);
                     }}
+                    onTablePrewarm={() => {}}
                     onRetry={() => {
                         retryCount += 1;
                     }}

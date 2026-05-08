@@ -1094,6 +1094,7 @@ graph WavetableSynth [[ main ]]
     input event wt::WavetableMipFrame wavetableMipFrame;
     input event wt::ServiceLoadAbort serviceLoadAbort;
     input event wt::WorkerLoadFailure workerLoadFailure;
+    input event int32 wavetablePrewarmRequest;
     input event int32 runtimeSyncRequest;
     input event int32 retryDesiredTableRequest;
     input event int32 modulationClear;
@@ -1144,6 +1145,7 @@ graph WavetableSynth [[ main ]]
     input value float32 ottEnvelopeMatch [[ name: "OTT Envelope Match", min: 0.0f, max: 100.0f, init: 0.0f, unit: "%", rampFrames: 128 ]];
     output event wt::WavetableUploadAck wavetableUploadAck;
     output event wt::WavetableMipRequest wavetableMipRequest;
+    output event int32 wavetablePrewarmNotification;
     output event wt::RuntimeState runtimeState;
     output event wt::EffectiveWavetablePositionMonitor effectiveWavetablePosition;
     output event wt::EffectiveWarpStateMonitor effectiveWarpState;
@@ -1221,6 +1223,7 @@ graph WavetableSynth [[ main ]]
         sharedEngine.runtimeServiceStateOut -> runtimeStateCoordinator.runtimeServiceStateIn;
         desiredTableMonitor.desiredTableChangeOut -> runtimeStateCoordinator.desiredTableChangeIn;
         workerLoadFailure -> runtimeStateCoordinator.workerLoadFailureIn;
+        wavetablePrewarmRequest -> wavetablePrewarmNotification;
         runtimeSyncRequest -> runtimeStateCoordinator.runtimeSyncRequestIn;
         retryDesiredTableRequest -> runtimeStateCoordinator.retryDesiredTableRequestIn;
         runtimeStateCoordinator.runtimeStateOut -> runtimeState;

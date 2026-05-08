@@ -134,6 +134,7 @@ const CHORUS_RING_FINE_SEMITONES_ENDPOINT_ID = "chorusRingFineSemitones";
 const RUNTIME_SYNC_REQUEST_ENDPOINT_ID = "runtimeSyncRequest";
 const RUNTIME_STATE_ENDPOINT_ID = "runtimeState";
 const RETRY_DESIRED_TABLE_REQUEST_ENDPOINT_ID = "retryDesiredTableRequest";
+const WAVETABLE_PREWARM_REQUEST_ENDPOINT_ID = "wavetablePrewarmRequest";
 const GLIDE_TIME_MIN_SECONDS = 0;
 const GLIDE_TIME_MAX_SECONDS = 2;
 const GLIDE_TIME_STEP_SECONDS = 0.001;
@@ -257,6 +258,7 @@ export type SynthPatchViewModel = {
     handleAddArticulationSlot: () => void;
     handleSelectArticulationSlot: (slotId: string) => void;
     handleSelectWavetable: (nextValue: number) => void;
+    handlePrewarmWavetablePicker: () => void;
     handleRetryLoad: () => void;
     handleMsegMorphChange: (nextValue: number) => void;
     handleMsegRateChange: (nextValue: number) => void;
@@ -1437,6 +1439,7 @@ export function useSynthPatchViewModel({
     });
     const requestRuntimeSync = usePatchEventTrigger<number>(RUNTIME_SYNC_REQUEST_ENDPOINT_ID);
     const retryDesiredTableLoad = usePatchEventTrigger<number>(RETRY_DESIRED_TABLE_REQUEST_ENDPOINT_ID);
+    const prewarmWavetable = usePatchEventTrigger<number>(WAVETABLE_PREWARM_REQUEST_ENDPOINT_ID);
     const observedPosition = useObservedDisplayPosition(Number(wavetablePosition.value) || 0);
     const observedWarpState = useObservedWarpState({
         warpMode: warpMode.value,
@@ -1519,14 +1522,42 @@ export function useSynthPatchViewModel({
         requestRuntimeSync(1);
     }, [requestRuntimeSync]);
 
+    const prewarmWavetableNeighborhood = useCallback((centerTableIndex: number) => {
+        const tableCount = catalog?.tables?.length ?? 0;
+
+        if (tableCount <= 0) {
+            return;
+        }
+
+        const maxTableIndex = tableCount - 1;
+        const centerIndex = clamp(Math.round(Number(centerTableIndex) || 0), 0, maxTableIndex);
+        const seenTableIndices = new Set<number>();
+
+        for (const tableIndex of [centerIndex, centerIndex - 1, centerIndex + 1]) {
+            if (tableIndex < 0 || tableIndex > maxTableIndex || seenTableIndices.has(tableIndex)) {
+                continue;
+            }
+
+            seenTableIndices.add(tableIndex);
+            prewarmWavetable(tableIndex);
+        }
+    }, [catalog?.tables?.length, prewarmWavetable]);
+
     const handleSelectWavetable = useCallback((nextValue: number) => {
         wavetableSelect.commitValue(nextValue);
-    }, [wavetableSelect]);
+        prewarmWavetableNeighborhood(nextValue);
+    }, [prewarmWavetableNeighborhood, wavetableSelect]);
 
     const handleStepWavetable = useCallback((direction: ArrowStepDirection) => {
         const maxTableIndex = Math.max(0, (catalog?.tables?.length ?? 1) - 1);
-        wavetableSelect.commitValue(clamp(desiredTableIndex + direction, 0, maxTableIndex));
-    }, [catalog?.tables?.length, desiredTableIndex, wavetableSelect]);
+        const nextTableIndex = clamp(desiredTableIndex + direction, 0, maxTableIndex);
+        wavetableSelect.commitValue(nextTableIndex);
+        prewarmWavetableNeighborhood(nextTableIndex);
+    }, [catalog?.tables?.length, desiredTableIndex, prewarmWavetableNeighborhood, wavetableSelect]);
+
+    const handlePrewarmWavetablePicker = useCallback(() => {
+        prewarmWavetableNeighborhood(desiredTableIndex);
+    }, [desiredTableIndex, prewarmWavetableNeighborhood]);
 
     const handleRetryLoad = useCallback(() => {
         retryDesiredTableLoad(1);
@@ -1987,6 +2018,7 @@ export function useSynthPatchViewModel({
         handleAddArticulationSlot,
         handleSelectArticulationSlot,
         handleSelectWavetable,
+        handlePrewarmWavetablePicker,
         handleRetryLoad,
         handleMsegMorphChange,
         handleMsegRateChange,

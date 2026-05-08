@@ -1197,6 +1197,42 @@ test("desktop harness surfaces frame load failures instead of blanking the stage
     }
 });
 
+test("wavetable picker prewarms the current and adjacent tables without selecting a new table", async () => {
+    const page = await openHarnessPage();
+
+    try {
+        await page.locator('select[aria-label="Select wavetable"] option').nth(1).waitFor({ state: "attached" });
+
+        await clearHarnessDebugLog(page);
+        await page.locator('label:has(select[aria-label="Select wavetable"])').hover();
+
+        await page.waitForFunction(() => {
+            const snapshot = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot();
+            return snapshot.sentMessages.filter(({ endpointID }) => endpointID === "wavetablePrewarmRequest").length >= 2;
+        });
+
+        const snapshot = await getHarnessSnapshot(page);
+        assert.deepEqual(
+            snapshot.sentMessages.filter(({ endpointID }) => endpointID === "wavetablePrewarmRequest"),
+            [
+                { endpointID: "wavetablePrewarmRequest", value: 0 },
+                { endpointID: "wavetablePrewarmRequest", value: 1 },
+            ],
+        );
+        assert.deepEqual(
+            snapshot.endpointMessages.filter(({ endpointID }) => endpointID === "wavetablePrewarmNotification"),
+            [
+                { endpointID: "wavetablePrewarmNotification", value: 0 },
+                { endpointID: "wavetablePrewarmNotification", value: 1 },
+            ],
+        );
+        assert.equal(Number(snapshot.parameterValues.wavetableSelect), 0);
+        assert.deepEqual(snapshot.gestureStarts.filter((value) => value === "wavetableSelect"), []);
+    } finally {
+        await page.close();
+    }
+});
+
 test("wavetable selection commits the desired table and retry uses the runtime retry event", async () => {
     const page = await openHarnessPage();
 

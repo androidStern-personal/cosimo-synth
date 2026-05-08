@@ -16,6 +16,7 @@ from bench import (
     formula_mip_index_for_frequency,
     make_blend2_bank,
     make_sine_bank,
+    make_square_bank,
     make_static_tone_recipe,
     render_bank_reference,
 )
@@ -340,7 +341,7 @@ def _build_mip_frame_events(
     return events
 
 
-def _build_setup_js(events: list[tuple[str, dict[str, object]]]) -> str:
+def _build_setup_js(events: list[tuple[str, dict[str, object] | int]]) -> str:
     return "\n".join(
         f"patch.sendInputEvent_{endpoint_id}({json.dumps(payload)});"
         for endpoint_id, payload in events
@@ -352,9 +353,23 @@ def _unwrap_event_payloads(events: list[dict[str, object]]) -> list[dict[str, ob
 
 
 @pytest.mark.cmajor
-def test_runtime_oscillator_requests_the_demanded_mip_after_load_begin() -> None:
+def test_synth_forwards_wavetable_prewarm_requests_to_the_worker_notification_endpoint() -> None:
+    events = _collect_cmajor_output_events_via_generated_javascript(
+        patch_path=REPO_ROOT / "WavetableSynth.cmajorpatch",
+        sample_rate=DEFAULT_SAMPLE_RATE,
+        num_samples=8,
+        output_endpoint_id="wavetablePrewarmNotification",
+        setup_js=_build_setup_js([
+            ("wavetablePrewarmRequest", 3),
+        ]),
+    )
+
+    assert _unwrap_event_payloads(events) == [3]
+
+
+@pytest.mark.cmajor
+def test_runtime_oscillator_does_not_request_lazy_mips_after_load_begin() -> None:
     frequency_hz = 440.0
-    expected_mip_index = formula_mip_index_for_frequency(frequency_hz, DEFAULT_SAMPLE_RATE)
 
     def run_probe(patch_path: Path) -> list[dict[str, object]]:
         return _collect_cmajor_output_events_via_generated_javascript(
@@ -380,18 +395,12 @@ def test_runtime_oscillator_requests_the_demanded_mip_after_load_begin() -> None
 
     payloads = _unwrap_event_payloads(events)
 
-    assert payloads
-    assert payloads[0]["generation"] == 3
-    assert payloads[0]["tableIndex"] == 9
-    assert payloads[0]["mipIndex"] == expected_mip_index
-    assert payloads[0]["dspSessionId"] > 0
-    assert payloads[0]["urgencyLevel"] == 2
+    assert payloads == []
 
 
 @pytest.mark.cmajor
-def test_runtime_oscillator_emits_session_scoped_mip_requests_with_urgency() -> None:
+def test_runtime_oscillator_emits_no_session_scoped_lazy_mip_requests() -> None:
     frequency_hz = 440.0
-    expected_mip_index = formula_mip_index_for_frequency(frequency_hz, DEFAULT_SAMPLE_RATE)
 
     def run_probe(patch_path: Path) -> list[dict[str, object]]:
         return _collect_cmajor_output_events_via_generated_javascript(
@@ -416,58 +425,108 @@ def test_runtime_oscillator_emits_session_scoped_mip_requests_with_urgency() -> 
 
     payloads = _unwrap_event_payloads(events)
 
-    assert payloads
-    assert payloads[0]["generation"] == 3
-    assert payloads[0]["tableIndex"] == 9
-    assert payloads[0]["mipIndex"] == expected_mip_index
-    assert payloads[0]["requestSessionId"] == payloads[0]["controlSessionId"]
-    assert payloads[0]["requestSessionId"] > 0
-    assert payloads[0]["urgencyLevel"] == 2
+    assert payloads == []
 
 
 @pytest.mark.cmajor
-def test_runtime_oscillator_escalates_to_urgency_one_when_a_darker_mip_is_playable() -> None:
+def test_runtime_oscillator_keeps_active_table_during_partial_candidate_upload() -> None:
     bank = make_sine_bank()
+    candidate_bank = make_square_bank()
     frequency_hz = 4000.0
     requested_mip_index = formula_mip_index_for_frequency(frequency_hz, DEFAULT_SAMPLE_RATE)
-    darker_playable_mip_index = max(0, requested_mip_index - 2)
-    darker_events = _build_mip_frame_events(
+    recipe = make_static_tone_recipe(
+        name="runtime_atomic_partial_candidate",
+        duration_seconds=128 / DEFAULT_SAMPLE_RATE,
+        frequency_hz=frequency_hz,
+        frame_position=0.0,
+    )
+    active_events = _build_mip_frame_events(
         bank,
         generation=6,
-        table_index=4,
-        mip_indices=(darker_playable_mip_index,),
+        table_index=0,
+        mip_indices=tuple(range(OSCILLATOR_MIP_COUNT)),
     )
+    partial_candidate_events = _build_mip_frame_events(
+        candidate_bank,
+        generation=7,
+        table_index=1,
+        mip_indices=(requested_mip_index,),
+    )[:1]
 
-    def run_probe(patch_path: Path) -> list[dict[str, object]]:
-        return _collect_cmajor_output_events_via_generated_javascript(
+    def render_probe(patch_path: Path) -> np.ndarray:
+        setup_events = [
+            ("wavetableLoadBegin", _build_load_begin_event(generation=6, table_index=0, frame_count=bank.num_frames)),
+        ]
+        setup_events.extend(("wavetableMipFrame", event) for event in active_events)
+        setup_events.append(
+            ("wavetableLoadBegin", _build_load_begin_event(generation=7, table_index=1, frame_count=candidate_bank.num_frames))
+        )
+        setup_events.extend(("wavetableMipFrame", event) for event in partial_candidate_events)
+        return _render_cmajor_patch_via_generated_javascript(
             patch_path=patch_path,
-            sample_rate=DEFAULT_SAMPLE_RATE,
-            num_samples=8,
-            output_endpoint_id="wavetableMipRequest",
-            setup_js=_build_setup_js(
-                [
-                    (
-                        "wavetableLoadBegin",
-                        _build_load_begin_event(generation=6, table_index=4, frame_count=1),
-                    ),
-                    ("wavetableMipFrame", darker_events[0]),
-                ]
-            ),
+            sample_rate=recipe.sample_rate,
+            num_samples=recipe.num_samples,
+            setup_js=_build_setup_js(list(setup_events)),
         )
 
-    events = _with_runtime_protocol_probe(
-        initial_frequency_hz=frequency_hz,
-        callback=run_probe,
+    actual = _with_runtime_probe(
+        initial_frequency_hz=recipe.freq_hz_curve[0],
+        frame_position=recipe.frame_pos_curve[0],
+        callback=render_probe,
+    )
+    expected = render_bank_reference([bank], recipe)
+
+    assert_allclose(actual, expected, atol=1e-5, rtol=0.0)
+
+
+@pytest.mark.cmajor
+def test_runtime_oscillator_commits_candidate_after_full_mip_pack_arrives() -> None:
+    active_bank = make_sine_bank()
+    candidate_bank = make_square_bank()
+    frequency_hz = 4000.0
+    recipe = make_static_tone_recipe(
+        name="runtime_atomic_full_candidate",
+        duration_seconds=128 / DEFAULT_SAMPLE_RATE,
+        frequency_hz=frequency_hz,
+        frame_position=0.0,
+    )
+    active_events = _build_mip_frame_events(
+        active_bank,
+        generation=6,
+        table_index=0,
+        mip_indices=tuple(range(OSCILLATOR_MIP_COUNT)),
+    )
+    candidate_events = _build_mip_frame_events(
+        candidate_bank,
+        generation=7,
+        table_index=1,
+        mip_indices=tuple(range(OSCILLATOR_MIP_COUNT)),
     )
 
-    payloads = _unwrap_event_payloads(events)
+    def render_probe(patch_path: Path) -> np.ndarray:
+        setup_events = [
+            ("wavetableLoadBegin", _build_load_begin_event(generation=6, table_index=0, frame_count=active_bank.num_frames)),
+        ]
+        setup_events.extend(("wavetableMipFrame", event) for event in active_events)
+        setup_events.append(
+            ("wavetableLoadBegin", _build_load_begin_event(generation=7, table_index=1, frame_count=candidate_bank.num_frames))
+        )
+        setup_events.extend(("wavetableMipFrame", event) for event in candidate_events)
+        return _render_cmajor_patch_via_generated_javascript(
+            patch_path=patch_path,
+            sample_rate=recipe.sample_rate,
+            num_samples=recipe.num_samples,
+            setup_js=_build_setup_js(list(setup_events)),
+        )
 
-    assert payloads
-    assert payloads[-1]["generation"] == 6
-    assert payloads[-1]["tableIndex"] == 4
-    assert payloads[-1]["mipIndex"] == requested_mip_index
-    assert payloads[-1]["dspSessionId"] > 0
-    assert payloads[-1]["urgencyLevel"] == 1
+    actual = _with_runtime_probe(
+        initial_frequency_hz=recipe.freq_hz_curve[0],
+        frame_position=recipe.frame_pos_curve[0],
+        callback=render_probe,
+    )
+    expected = render_bank_reference([candidate_bank], recipe)
+
+    assert_allclose(actual, expected, atol=1e-5, rtol=0.0)
 
 
 @pytest.mark.cmajor
@@ -568,10 +627,6 @@ def test_runtime_oscillator_matches_reference_after_loading_all_mips() -> None:
         frequency_hz=4000.0,
         frame_position=0.35,
     )
-    demanded_mip_index = formula_mip_index_for_frequency(
-        float(recipe.freq_hz_curve[0]),
-        recipe.sample_rate,
-    )
     setup_events = [
         ("wavetableLoadBegin", _build_load_begin_event(generation=7, table_index=0, frame_count=bank.num_frames)),
     ]
@@ -581,7 +636,7 @@ def test_runtime_oscillator_matches_reference_after_loading_all_mips() -> None:
             bank,
             generation=7,
             table_index=0,
-            mip_indices=(demanded_mip_index,),
+            mip_indices=tuple(range(OSCILLATOR_MIP_COUNT)),
         )
     )
 

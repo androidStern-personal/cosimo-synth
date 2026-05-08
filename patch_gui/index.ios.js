@@ -17489,6 +17489,7 @@ const CHORUS_RING_FINE_SEMITONES_ENDPOINT_ID = "chorusRingFineSemitones";
 const RUNTIME_SYNC_REQUEST_ENDPOINT_ID = "runtimeSyncRequest";
 const RUNTIME_STATE_ENDPOINT_ID = "runtimeState";
 const RETRY_DESIRED_TABLE_REQUEST_ENDPOINT_ID = "retryDesiredTableRequest";
+const WAVETABLE_PREWARM_REQUEST_ENDPOINT_ID = "wavetablePrewarmRequest";
 const GLIDE_TIME_MIN_SECONDS = 0;
 const GLIDE_TIME_MAX_SECONDS = 2;
 const GLIDE_TIME_STEP_SECONDS = 1e-3;
@@ -18442,6 +18443,7 @@ function useSynthPatchViewModel({
   });
   const requestRuntimeSync = usePatchEventTrigger(RUNTIME_SYNC_REQUEST_ENDPOINT_ID);
   const retryDesiredTableLoad = usePatchEventTrigger(RETRY_DESIRED_TABLE_REQUEST_ENDPOINT_ID);
+  const prewarmWavetable = usePatchEventTrigger(WAVETABLE_PREWARM_REQUEST_ENDPOINT_ID);
   const observedPosition = useObservedDisplayPosition(Number(wavetablePosition.value) || 0);
   const observedWarpState = useObservedWarpState({
     warpMode: warpMode.value,
@@ -18513,13 +18515,35 @@ function useSynthPatchViewModel({
   reactExports.useEffect(() => {
     requestRuntimeSync(1);
   }, [requestRuntimeSync]);
+  const prewarmWavetableNeighborhood = reactExports.useCallback((centerTableIndex) => {
+    const tableCount = catalog?.tables?.length ?? 0;
+    if (tableCount <= 0) {
+      return;
+    }
+    const maxTableIndex = tableCount - 1;
+    const centerIndex = clamp$1(Math.round(Number(centerTableIndex) || 0), 0, maxTableIndex);
+    const seenTableIndices = /* @__PURE__ */ new Set();
+    for (const tableIndex of [centerIndex, centerIndex - 1, centerIndex + 1]) {
+      if (tableIndex < 0 || tableIndex > maxTableIndex || seenTableIndices.has(tableIndex)) {
+        continue;
+      }
+      seenTableIndices.add(tableIndex);
+      prewarmWavetable(tableIndex);
+    }
+  }, [catalog?.tables?.length, prewarmWavetable]);
   const handleSelectWavetable = reactExports.useCallback((nextValue) => {
     wavetableSelect.commitValue(nextValue);
-  }, [wavetableSelect]);
+    prewarmWavetableNeighborhood(nextValue);
+  }, [prewarmWavetableNeighborhood, wavetableSelect]);
   const handleStepWavetable = reactExports.useCallback((direction) => {
     const maxTableIndex = Math.max(0, (catalog?.tables?.length ?? 1) - 1);
-    wavetableSelect.commitValue(clamp$1(desiredTableIndex + direction, 0, maxTableIndex));
-  }, [catalog?.tables?.length, desiredTableIndex, wavetableSelect]);
+    const nextTableIndex = clamp$1(desiredTableIndex + direction, 0, maxTableIndex);
+    wavetableSelect.commitValue(nextTableIndex);
+    prewarmWavetableNeighborhood(nextTableIndex);
+  }, [catalog?.tables?.length, desiredTableIndex, prewarmWavetableNeighborhood, wavetableSelect]);
+  const handlePrewarmWavetablePicker = reactExports.useCallback(() => {
+    prewarmWavetableNeighborhood(desiredTableIndex);
+  }, [desiredTableIndex, prewarmWavetableNeighborhood]);
   const handleRetryLoad = reactExports.useCallback(() => {
     retryDesiredTableLoad(1);
   }, [retryDesiredTableLoad]);
@@ -18920,6 +18944,7 @@ function useSynthPatchViewModel({
     handleAddArticulationSlot,
     handleSelectArticulationSlot,
     handleSelectWavetable,
+    handlePrewarmWavetablePicker,
     handleRetryLoad,
     handleMsegMorphChange,
     handleMsegRateChange,
@@ -19999,6 +20024,7 @@ const IOSWavetablePanel = reactExports.memo(function IOSWavetablePanel2({
   wavetableFocusBindings,
   wavetablePosition,
   onSelectWavetable,
+  onPrewarmWavetablePicker,
   onRetryLoad
 }) {
   const activeStageGestureRef = reactExports.useRef(null);
@@ -20118,20 +20144,28 @@ const IOSWavetablePanel = reactExports.memo(function IOSWavetablePanel2({
           ),
           /* @__PURE__ */ jsxRuntimeExports.jsx("div", {}),
           /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "stage-copy-row", children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "bank-picker-trigger", children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "bank-readout", children: bankReadout }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx(
-                "select",
-                {
-                  className: "table-select table-select-overlay",
-                  "aria-label": "Select wavetable",
-                  value: String(desiredTableIndex),
-                  onChange: (event) => onSelectWavetable(Number(event.target.value)),
-                  ...wavetableFocusBindings,
-                  children: tableOptions.map((table, tableIndex) => /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: tableIndex, children: table.name }, `${table.tableId}-${tableIndex}`))
-                }
-              )
-            ] }),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs(
+              "label",
+              {
+                className: "bank-picker-trigger",
+                onFocus: onPrewarmWavetablePicker,
+                onPointerEnter: onPrewarmWavetablePicker,
+                children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "bank-readout", children: bankReadout }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "select",
+                    {
+                      className: "table-select table-select-overlay",
+                      "aria-label": "Select wavetable",
+                      value: String(desiredTableIndex),
+                      onChange: (event) => onSelectWavetable(Number(event.target.value)),
+                      ...wavetableFocusBindings,
+                      children: tableOptions.map((table, tableIndex) => /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: tableIndex, children: table.name }, `${table.tableId}-${tableIndex}`))
+                    }
+                  )
+                ]
+              }
+            ),
             /* @__PURE__ */ jsxRuntimeExports.jsx(
               "button",
               {
@@ -20269,6 +20303,7 @@ function IOSPatchViewBody() {
                 wavetableFocusBindings: synthView.keyboardRouting.wavetableFocusBindings,
                 wavetablePosition: synthView.wavetablePosition,
                 onSelectWavetable: handleSelectWavetable,
+                onPrewarmWavetablePicker: synthView.handlePrewarmWavetablePicker,
                 onRetryLoad: synthView.handleRetryLoad
               }
             ),

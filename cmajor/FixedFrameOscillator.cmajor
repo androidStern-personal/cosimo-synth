@@ -8,6 +8,9 @@ namespace wt
     let maxFramesPerTable = 256;
     let maxMipSampleCount = paddedFrameSize * maxFramesPerTable;
     let maxMipFrameSlots = mipLevelCount * maxFramesPerTable;
+    let tableBankCount = 2;
+    let maxBankedMipFrameSlots = maxMipFrameSlots * tableBankCount;
+    let maxBankedMipLevelSlots = mipLevelCount * tableBankCount;
     let warpModeOff = 0;
     let warpModeBend = 1;
     let warpModePWM = 2;
@@ -272,20 +275,42 @@ namespace wt
         return (mipIndex * maxFramesPerTable) + frameIndex;
     }
 
-    float32 readFixedFrameSample (const float[] tableSamples,
-                                  int32 frameIndex,
-                                  float32 phase)
+    int32 normalizeTableBankIndex (int32 bankIndex)
+    {
+        return bankIndex == 0 ? 0 : 1;
+    }
+
+    int32 bankedReadinessIndex (int32 bankIndex, int32 mipIndex, int32 frameIndex)
+    {
+        return (normalizeTableBankIndex (bankIndex) * maxMipFrameSlots) + readinessIndex (mipIndex, frameIndex);
+    }
+
+    int32 bankedMipLevelIndex (int32 bankIndex, int32 mipIndex)
+    {
+        return (normalizeTableBankIndex (bankIndex) * mipLevelCount) + mipIndex;
+    }
+
+    float32 readFixedFrameSampleFromBase (const float[] tableSamples,
+                                          int32 base,
+                                          float32 phase)
     {
         let wrappedPhase = std::intrinsics::wrap (phase, 1.0f);
         let x = wrappedPhase * float32 (samplesPerFrame);
         let sampleIndex = int32 (std::intrinsics::floor (x));
         let fractional = x - float32 (sampleIndex);
-        let base = frameBase (frameIndex) + sampleIndex;
-        let p0 = tableSamples.at (base + 0);
-        let p1 = tableSamples.at (base + 1);
-        let p2 = tableSamples.at (base + 2);
-        let p3 = tableSamples.at (base + 3);
+        let sampleBase = base + sampleIndex;
+        let p0 = tableSamples.at (sampleBase + 0);
+        let p1 = tableSamples.at (sampleBase + 1);
+        let p2 = tableSamples.at (sampleBase + 2);
+        let p3 = tableSamples.at (sampleBase + 3);
         return catmullRom (p0, p1, p2, p3, fractional);
+    }
+
+    float32 readFixedFrameSample (const float[] tableSamples,
+                                  int32 frameIndex,
+                                  float32 phase)
+    {
+        return readFixedFrameSampleFromBase (tableSamples, frameBase (frameIndex), phase);
     }
 
     float32 readFrameBlendSample (const float[] tableSamples,
@@ -739,19 +764,30 @@ namespace wt
         output stream float out;
 
         std::oscillators::PhasorState phasor;
-        float32[maxMipSampleCount] mip0Samples;
-        float32[maxMipSampleCount] mip1Samples;
-        float32[maxMipSampleCount] mip2Samples;
-        float32[maxMipSampleCount] mip3Samples;
-        float32[maxMipSampleCount] mip4Samples;
-        float32[maxMipSampleCount] mip5Samples;
-        float32[maxMipSampleCount] mip6Samples;
-        float32[maxMipSampleCount] mip7Samples;
-        float32[maxMipSampleCount] mip8Samples;
-        float32[maxMipSampleCount] mip9Samples;
-        float32[maxMipSampleCount] mip10Samples;
-        int32[maxMipFrameSlots] readyFrameFlags;
-        int32[mipLevelCount] loadedFrameCounts;
+        float32[maxMipSampleCount] mip0Bank0Samples;
+        float32[maxMipSampleCount] mip0Bank1Samples;
+        float32[maxMipSampleCount] mip1Bank0Samples;
+        float32[maxMipSampleCount] mip1Bank1Samples;
+        float32[maxMipSampleCount] mip2Bank0Samples;
+        float32[maxMipSampleCount] mip2Bank1Samples;
+        float32[maxMipSampleCount] mip3Bank0Samples;
+        float32[maxMipSampleCount] mip3Bank1Samples;
+        float32[maxMipSampleCount] mip4Bank0Samples;
+        float32[maxMipSampleCount] mip4Bank1Samples;
+        float32[maxMipSampleCount] mip5Bank0Samples;
+        float32[maxMipSampleCount] mip5Bank1Samples;
+        float32[maxMipSampleCount] mip6Bank0Samples;
+        float32[maxMipSampleCount] mip6Bank1Samples;
+        float32[maxMipSampleCount] mip7Bank0Samples;
+        float32[maxMipSampleCount] mip7Bank1Samples;
+        float32[maxMipSampleCount] mip8Bank0Samples;
+        float32[maxMipSampleCount] mip8Bank1Samples;
+        float32[maxMipSampleCount] mip9Bank0Samples;
+        float32[maxMipSampleCount] mip9Bank1Samples;
+        float32[maxMipSampleCount] mip10Bank0Samples;
+        float32[maxMipSampleCount] mip10Bank1Samples;
+        int32[maxBankedMipFrameSlots] readyFrameFlags;
+        int32[maxBankedMipLevelSlots] loadedFrameCounts;
         int32[mipLevelCount] requestedGenerationByMip;
         int32[mipLevelCount] requestedUrgencyByMip;
         float32 currentFrequencyHz = initialFrequencyHz;
@@ -762,22 +798,34 @@ namespace wt
         int32 frameCount = 0;
         int32 lastFrameIndex = 0;
         float32 lastFrameIndexF = 0.0f;
+        int32 activeBankIndex = 0;
+        int32 stagingBankIndex = 1;
+        int32 stagingGeneration = 0;
+        int32 stagingTableIndex = 0;
+        int32 stagingFrameCount = 0;
+        int32 stagingLastFrameIndex = 0;
+        float32 stagingLastFrameIndexF = 0.0f;
         int32 isPlayable = 0;
         bool hasEmittedInitialRuntimeState = false;
 
-        void clearPendingTableState()
+        void clearTableBankState (int32 bankIndex)
         {
             for (int32 index = 0; index < maxMipFrameSlots; ++index)
-                readyFrameFlags.at (index) = 0;
+                readyFrameFlags.at ((normalizeTableBankIndex (bankIndex) * maxMipFrameSlots) + index) = 0;
+
+            for (int32 mipIndex = 0; mipIndex < mipLevelCount; ++mipIndex)
+                loadedFrameCounts.at (bankedMipLevelIndex (bankIndex, mipIndex)) = 0;
+        }
+
+        void clearPendingTableState()
+        {
+            clearTableBankState (stagingBankIndex);
 
             for (int32 mipIndex = 0; mipIndex < mipLevelCount; ++mipIndex)
             {
-                loadedFrameCounts.at (mipIndex) = 0;
                 requestedGenerationByMip.at (mipIndex) = 0;
                 requestedUrgencyByMip.at (mipIndex) = -1;
             }
-
-            isPlayable = 0;
         }
 
         bool isMipReady (int32 mipIndex)
@@ -785,7 +833,7 @@ namespace wt
             if (mipIndex < 0 || mipIndex >= mipLevelCount || frameCount <= 0)
                 return false;
 
-            return loadedFrameCounts.at (mipIndex) >= frameCount;
+            return loadedFrameCounts.at (bankedMipLevelIndex (activeBankIndex, mipIndex)) >= frameCount;
         }
 
         int32 findPlayableMipIndex (int32 requestedMipIndex)
@@ -802,134 +850,307 @@ namespace wt
             return -1;
         }
 
-        void writeMipFrame (int32 mipIndex, int32 frameIndex, const float32[] sourceSamples)
+        bool isStagingComplete()
         {
+            if (stagingGeneration <= 0 || stagingFrameCount <= 0)
+                return false;
+
+            for (int32 mipIndex = 0; mipIndex < mipLevelCount; ++mipIndex)
+                if (loadedFrameCounts.at (bankedMipLevelIndex (stagingBankIndex, mipIndex)) < stagingFrameCount)
+                    return false;
+
+            return true;
+        }
+
+        void commitStagingTable()
+        {
+            let hadActiveTable = isPlayable != 0;
+
+            currentGeneration = stagingGeneration;
+            currentTableIndex = stagingTableIndex;
+            frameCount = stagingFrameCount;
+            lastFrameIndex = stagingLastFrameIndex;
+            lastFrameIndexF = stagingLastFrameIndexF;
+            activeBankIndex = stagingBankIndex;
+            stagingBankIndex = activeBankIndex == 0 ? 1 : 0;
+            stagingGeneration = 0;
+            stagingTableIndex = 0;
+            stagingFrameCount = 0;
+            stagingLastFrameIndex = 0;
+            stagingLastFrameIndexF = 0.0f;
+
+            if (! hadActiveTable)
+                phasor.phase = 0.0f;
+
+            isPlayable = 1;
+            emitRuntimeServiceState();
+        }
+
+        void writeMipFrame (int32 bankIndex, int32 mipIndex, int32 frameIndex, const float32[] sourceSamples)
+        {
+            let bank = normalizeTableBankIndex (bankIndex);
             let base = frameBase (frameIndex);
 
             if (mipIndex == 0)
             {
-                mip0Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
-                for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
-                    mip0Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
-                mip0Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
-                mip0Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
+                if (bank == 0)
+                {
+                    mip0Bank0Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
+                    for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
+                        mip0Bank0Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
+                    mip0Bank0Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
+                    mip0Bank0Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
+                }
+                else
+                {
+                    mip0Bank1Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
+                    for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
+                        mip0Bank1Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
+                    mip0Bank1Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
+                    mip0Bank1Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
+                }
+
                 return;
             }
 
             if (mipIndex == 1)
             {
-                mip1Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
-                for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
-                    mip1Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
-                mip1Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
-                mip1Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
+                if (bank == 0)
+                {
+                    mip1Bank0Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
+                    for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
+                        mip1Bank0Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
+                    mip1Bank0Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
+                    mip1Bank0Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
+                }
+                else
+                {
+                    mip1Bank1Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
+                    for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
+                        mip1Bank1Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
+                    mip1Bank1Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
+                    mip1Bank1Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
+                }
+
                 return;
             }
 
             if (mipIndex == 2)
             {
-                mip2Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
-                for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
-                    mip2Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
-                mip2Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
-                mip2Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
+                if (bank == 0)
+                {
+                    mip2Bank0Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
+                    for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
+                        mip2Bank0Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
+                    mip2Bank0Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
+                    mip2Bank0Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
+                }
+                else
+                {
+                    mip2Bank1Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
+                    for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
+                        mip2Bank1Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
+                    mip2Bank1Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
+                    mip2Bank1Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
+                }
+
                 return;
             }
 
             if (mipIndex == 3)
             {
-                mip3Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
-                for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
-                    mip3Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
-                mip3Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
-                mip3Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
+                if (bank == 0)
+                {
+                    mip3Bank0Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
+                    for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
+                        mip3Bank0Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
+                    mip3Bank0Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
+                    mip3Bank0Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
+                }
+                else
+                {
+                    mip3Bank1Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
+                    for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
+                        mip3Bank1Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
+                    mip3Bank1Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
+                    mip3Bank1Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
+                }
+
                 return;
             }
 
             if (mipIndex == 4)
             {
-                mip4Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
-                for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
-                    mip4Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
-                mip4Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
-                mip4Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
+                if (bank == 0)
+                {
+                    mip4Bank0Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
+                    for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
+                        mip4Bank0Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
+                    mip4Bank0Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
+                    mip4Bank0Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
+                }
+                else
+                {
+                    mip4Bank1Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
+                    for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
+                        mip4Bank1Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
+                    mip4Bank1Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
+                    mip4Bank1Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
+                }
+
                 return;
             }
 
             if (mipIndex == 5)
             {
-                mip5Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
-                for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
-                    mip5Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
-                mip5Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
-                mip5Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
+                if (bank == 0)
+                {
+                    mip5Bank0Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
+                    for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
+                        mip5Bank0Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
+                    mip5Bank0Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
+                    mip5Bank0Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
+                }
+                else
+                {
+                    mip5Bank1Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
+                    for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
+                        mip5Bank1Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
+                    mip5Bank1Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
+                    mip5Bank1Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
+                }
+
                 return;
             }
 
             if (mipIndex == 6)
             {
-                mip6Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
-                for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
-                    mip6Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
-                mip6Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
-                mip6Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
+                if (bank == 0)
+                {
+                    mip6Bank0Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
+                    for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
+                        mip6Bank0Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
+                    mip6Bank0Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
+                    mip6Bank0Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
+                }
+                else
+                {
+                    mip6Bank1Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
+                    for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
+                        mip6Bank1Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
+                    mip6Bank1Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
+                    mip6Bank1Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
+                }
+
                 return;
             }
 
             if (mipIndex == 7)
             {
-                mip7Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
-                for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
-                    mip7Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
-                mip7Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
-                mip7Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
+                if (bank == 0)
+                {
+                    mip7Bank0Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
+                    for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
+                        mip7Bank0Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
+                    mip7Bank0Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
+                    mip7Bank0Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
+                }
+                else
+                {
+                    mip7Bank1Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
+                    for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
+                        mip7Bank1Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
+                    mip7Bank1Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
+                    mip7Bank1Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
+                }
+
                 return;
             }
 
             if (mipIndex == 8)
             {
-                mip8Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
-                for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
-                    mip8Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
-                mip8Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
-                mip8Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
+                if (bank == 0)
+                {
+                    mip8Bank0Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
+                    for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
+                        mip8Bank0Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
+                    mip8Bank0Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
+                    mip8Bank0Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
+                }
+                else
+                {
+                    mip8Bank1Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
+                    for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
+                        mip8Bank1Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
+                    mip8Bank1Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
+                    mip8Bank1Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
+                }
+
                 return;
             }
 
             if (mipIndex == 9)
             {
-                mip9Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
-                for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
-                    mip9Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
-                mip9Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
-                mip9Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
+                if (bank == 0)
+                {
+                    mip9Bank0Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
+                    for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
+                        mip9Bank0Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
+                    mip9Bank0Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
+                    mip9Bank0Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
+                }
+                else
+                {
+                    mip9Bank1Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
+                    for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
+                        mip9Bank1Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
+                    mip9Bank1Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
+                    mip9Bank1Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
+                }
+
                 return;
             }
 
             if (mipIndex == 10)
             {
-                mip10Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
-                for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
-                    mip10Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
-                mip10Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
-                mip10Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
+                if (bank == 0)
+                {
+                    mip10Bank0Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
+                    for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
+                        mip10Bank0Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
+                    mip10Bank0Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
+                    mip10Bank0Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
+                }
+                else
+                {
+                    mip10Bank1Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
+                    for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
+                        mip10Bank1Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
+                    mip10Bank1Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
+                    mip10Bank1Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
+                }
+
                 return;
             }
+
         }
 
         float32 readFixedFrameSampleForMip (int32 mipIndex, int32 frameIndex, float32 phase)
         {
-            if (mipIndex == 0) return readFixedFrameSample (mip0Samples, frameIndex, phase);
-            if (mipIndex == 1) return readFixedFrameSample (mip1Samples, frameIndex, phase);
-            if (mipIndex == 2) return readFixedFrameSample (mip2Samples, frameIndex, phase);
-            if (mipIndex == 3) return readFixedFrameSample (mip3Samples, frameIndex, phase);
-            if (mipIndex == 4) return readFixedFrameSample (mip4Samples, frameIndex, phase);
-            if (mipIndex == 5) return readFixedFrameSample (mip5Samples, frameIndex, phase);
-            if (mipIndex == 6) return readFixedFrameSample (mip6Samples, frameIndex, phase);
-            if (mipIndex == 7) return readFixedFrameSample (mip7Samples, frameIndex, phase);
-            if (mipIndex == 8) return readFixedFrameSample (mip8Samples, frameIndex, phase);
-            if (mipIndex == 9) return readFixedFrameSample (mip9Samples, frameIndex, phase);
-            if (mipIndex == 10) return readFixedFrameSample (mip10Samples, frameIndex, phase);
+            let bank = normalizeTableBankIndex (activeBankIndex);
+            let base = frameBase (frameIndex);
+
+            if (mipIndex == 0) return bank == 0 ? readFixedFrameSampleFromBase (mip0Bank0Samples, base, phase) : readFixedFrameSampleFromBase (mip0Bank1Samples, base, phase);
+            if (mipIndex == 1) return bank == 0 ? readFixedFrameSampleFromBase (mip1Bank0Samples, base, phase) : readFixedFrameSampleFromBase (mip1Bank1Samples, base, phase);
+            if (mipIndex == 2) return bank == 0 ? readFixedFrameSampleFromBase (mip2Bank0Samples, base, phase) : readFixedFrameSampleFromBase (mip2Bank1Samples, base, phase);
+            if (mipIndex == 3) return bank == 0 ? readFixedFrameSampleFromBase (mip3Bank0Samples, base, phase) : readFixedFrameSampleFromBase (mip3Bank1Samples, base, phase);
+            if (mipIndex == 4) return bank == 0 ? readFixedFrameSampleFromBase (mip4Bank0Samples, base, phase) : readFixedFrameSampleFromBase (mip4Bank1Samples, base, phase);
+            if (mipIndex == 5) return bank == 0 ? readFixedFrameSampleFromBase (mip5Bank0Samples, base, phase) : readFixedFrameSampleFromBase (mip5Bank1Samples, base, phase);
+            if (mipIndex == 6) return bank == 0 ? readFixedFrameSampleFromBase (mip6Bank0Samples, base, phase) : readFixedFrameSampleFromBase (mip6Bank1Samples, base, phase);
+            if (mipIndex == 7) return bank == 0 ? readFixedFrameSampleFromBase (mip7Bank0Samples, base, phase) : readFixedFrameSampleFromBase (mip7Bank1Samples, base, phase);
+            if (mipIndex == 8) return bank == 0 ? readFixedFrameSampleFromBase (mip8Bank0Samples, base, phase) : readFixedFrameSampleFromBase (mip8Bank1Samples, base, phase);
+            if (mipIndex == 9) return bank == 0 ? readFixedFrameSampleFromBase (mip9Bank0Samples, base, phase) : readFixedFrameSampleFromBase (mip9Bank1Samples, base, phase);
+            if (mipIndex == 10) return bank == 0 ? readFixedFrameSampleFromBase (mip10Bank0Samples, base, phase) : readFixedFrameSampleFromBase (mip10Bank1Samples, base, phase);
             return 0.0f;
         }
 
@@ -939,35 +1160,31 @@ namespace wt
                                             float32 phase,
                                             float32 frameT)
         {
-            if (mipIndex == 0) return readFrameBlendSample (mip0Samples, frameLo, frameHi, phase, frameT);
-            if (mipIndex == 1) return readFrameBlendSample (mip1Samples, frameLo, frameHi, phase, frameT);
-            if (mipIndex == 2) return readFrameBlendSample (mip2Samples, frameLo, frameHi, phase, frameT);
-            if (mipIndex == 3) return readFrameBlendSample (mip3Samples, frameLo, frameHi, phase, frameT);
-            if (mipIndex == 4) return readFrameBlendSample (mip4Samples, frameLo, frameHi, phase, frameT);
-            if (mipIndex == 5) return readFrameBlendSample (mip5Samples, frameLo, frameHi, phase, frameT);
-            if (mipIndex == 6) return readFrameBlendSample (mip6Samples, frameLo, frameHi, phase, frameT);
-            if (mipIndex == 7) return readFrameBlendSample (mip7Samples, frameLo, frameHi, phase, frameT);
-            if (mipIndex == 8) return readFrameBlendSample (mip8Samples, frameLo, frameHi, phase, frameT);
-            if (mipIndex == 9) return readFrameBlendSample (mip9Samples, frameLo, frameHi, phase, frameT);
-            if (mipIndex == 10) return readFrameBlendSample (mip10Samples, frameLo, frameHi, phase, frameT);
-            return 0.0f;
+            let lo = readFixedFrameSampleForMip (mipIndex, frameLo, phase);
+
+            if (frameHi == frameLo)
+                return lo;
+
+            let hi = readFixedFrameSampleForMip (mipIndex, frameHi, phase);
+            return lo + (hi - lo) * frameT;
         }
 
         float32 readFixedFrameEndpointSampleForMip (int32 mipIndex, int32 frameIndex)
         {
+            let bank = normalizeTableBankIndex (activeBankIndex);
             let endpointIndex = frameBase (frameIndex) + samplesPerFrame;
 
-            if (mipIndex == 0) return mip0Samples.at (endpointIndex);
-            if (mipIndex == 1) return mip1Samples.at (endpointIndex);
-            if (mipIndex == 2) return mip2Samples.at (endpointIndex);
-            if (mipIndex == 3) return mip3Samples.at (endpointIndex);
-            if (mipIndex == 4) return mip4Samples.at (endpointIndex);
-            if (mipIndex == 5) return mip5Samples.at (endpointIndex);
-            if (mipIndex == 6) return mip6Samples.at (endpointIndex);
-            if (mipIndex == 7) return mip7Samples.at (endpointIndex);
-            if (mipIndex == 8) return mip8Samples.at (endpointIndex);
-            if (mipIndex == 9) return mip9Samples.at (endpointIndex);
-            if (mipIndex == 10) return mip10Samples.at (endpointIndex);
+            if (mipIndex == 0) return bank == 0 ? mip0Bank0Samples.at (endpointIndex) : mip0Bank1Samples.at (endpointIndex);
+            if (mipIndex == 1) return bank == 0 ? mip1Bank0Samples.at (endpointIndex) : mip1Bank1Samples.at (endpointIndex);
+            if (mipIndex == 2) return bank == 0 ? mip2Bank0Samples.at (endpointIndex) : mip2Bank1Samples.at (endpointIndex);
+            if (mipIndex == 3) return bank == 0 ? mip3Bank0Samples.at (endpointIndex) : mip3Bank1Samples.at (endpointIndex);
+            if (mipIndex == 4) return bank == 0 ? mip4Bank0Samples.at (endpointIndex) : mip4Bank1Samples.at (endpointIndex);
+            if (mipIndex == 5) return bank == 0 ? mip5Bank0Samples.at (endpointIndex) : mip5Bank1Samples.at (endpointIndex);
+            if (mipIndex == 6) return bank == 0 ? mip6Bank0Samples.at (endpointIndex) : mip6Bank1Samples.at (endpointIndex);
+            if (mipIndex == 7) return bank == 0 ? mip7Bank0Samples.at (endpointIndex) : mip7Bank1Samples.at (endpointIndex);
+            if (mipIndex == 8) return bank == 0 ? mip8Bank0Samples.at (endpointIndex) : mip8Bank1Samples.at (endpointIndex);
+            if (mipIndex == 9) return bank == 0 ? mip9Bank0Samples.at (endpointIndex) : mip9Bank1Samples.at (endpointIndex);
+            if (mipIndex == 10) return bank == 0 ? mip10Bank0Samples.at (endpointIndex) : mip10Bank1Samples.at (endpointIndex);
             return 0.0f;
         }
 
@@ -1021,13 +1238,13 @@ namespace wt
             RuntimeServiceState state;
             state.dspSessionId = currentDspSessionId;
             state.generationFrontier = generationFrontier;
-            state.serviceState = isPlayable != 0 ? 2 : (currentGeneration > 0 && frameCount > 0 ? 1 : 0);
+            state.serviceState = isPlayable != 0 ? 2 : (stagingGeneration > 0 && stagingFrameCount > 0 ? 1 : 0);
             state.hasActive = isPlayable != 0 ? 1 : 0;
             state.activeTableIndex = isPlayable != 0 ? currentTableIndex : 0;
             state.activeGeneration = isPlayable != 0 ? currentGeneration : 0;
-            state.hasLoading = isPlayable == 0 && currentGeneration > 0 && frameCount > 0 ? 1 : 0;
-            state.loadingTableIndex = state.hasLoading != 0 ? currentTableIndex : 0;
-            state.loadingGeneration = state.hasLoading != 0 ? currentGeneration : 0;
+            state.hasLoading = stagingGeneration > 0 && stagingFrameCount > 0 ? 1 : 0;
+            state.loadingTableIndex = state.hasLoading != 0 ? stagingTableIndex : 0;
+            state.loadingGeneration = state.hasLoading != 0 ? stagingGeneration : 0;
             runtimeServiceStateOut <- state;
         }
 
@@ -1048,12 +1265,12 @@ namespace wt
                 || resolvedFrameCount == 0)
                 return;
 
-            currentGeneration = request.generation;
-            currentTableIndex = request.tableIndex;
             generationFrontier = std::intrinsics::max (generationFrontier, request.generation);
-            frameCount = resolvedFrameCount;
-            lastFrameIndex = frameCount > 0 ? frameCount - 1 : 0;
-            lastFrameIndexF = float32 (lastFrameIndex);
+            stagingGeneration = request.generation;
+            stagingTableIndex = request.tableIndex;
+            stagingFrameCount = resolvedFrameCount;
+            stagingLastFrameIndex = stagingFrameCount > 0 ? stagingFrameCount - 1 : 0;
+            stagingLastFrameIndexF = float32 (stagingLastFrameIndex);
             clearPendingTableState();
             emitRuntimeServiceState();
         }
@@ -1062,18 +1279,18 @@ namespace wt
         {
             let resolvedMipIndex = resolveMipIndex (newFrame.mipIndex);
 
-            if (resolvedMipIndex < 0 || frameCount <= 0)
+            if (resolvedMipIndex < 0 || stagingFrameCount <= 0)
                 return;
 
             if (newFrame.dspSessionId != currentDspSessionId
-                || newFrame.generation != currentGeneration
-                || newFrame.tableIndex != currentTableIndex)
+                || newFrame.generation != stagingGeneration
+                || newFrame.tableIndex != stagingTableIndex)
                 return;
 
-            if (newFrame.frameIndex < 0 || newFrame.frameIndex >= frameCount)
+            if (newFrame.frameIndex < 0 || newFrame.frameIndex >= stagingFrameCount)
                 return;
 
-            let readyIndex = readinessIndex (resolvedMipIndex, newFrame.frameIndex);
+            let readyIndex = bankedReadinessIndex (stagingBankIndex, resolvedMipIndex, newFrame.frameIndex);
 
             if (readyFrameFlags.at (readyIndex) != 0)
             {
@@ -1086,9 +1303,9 @@ namespace wt
                 return;
             }
 
-            writeMipFrame (resolvedMipIndex, newFrame.frameIndex, newFrame.samples);
+            writeMipFrame (stagingBankIndex, resolvedMipIndex, newFrame.frameIndex, newFrame.samples);
             readyFrameFlags.at (readyIndex) = 1;
-            loadedFrameCounts.at (resolvedMipIndex) += 1;
+            loadedFrameCounts.at (bankedMipLevelIndex (stagingBankIndex, resolvedMipIndex)) += 1;
 
             emitUploadAck (
                 newFrame.generation,
@@ -1096,21 +1313,23 @@ namespace wt
                 resolvedMipIndex,
                 newFrame.frameIndex
             );
+
+            if (isStagingComplete())
+                commitStagingTable();
         }
 
         event serviceLoadAbortIn (ServiceLoadAbort abort)
         {
             if (abort.dspSessionId != currentDspSessionId
-                || abort.generation != currentGeneration
-                || abort.tableIndex != currentTableIndex
-                || isPlayable != 0)
+                || abort.generation != stagingGeneration
+                || abort.tableIndex != stagingTableIndex)
                 return;
 
-            currentGeneration = 0;
-            currentTableIndex = 0;
-            frameCount = 0;
-            lastFrameIndex = 0;
-            lastFrameIndexF = 0.0f;
+            stagingGeneration = 0;
+            stagingTableIndex = 0;
+            stagingFrameCount = 0;
+            stagingLastFrameIndex = 0;
+            stagingLastFrameIndexF = 0.0f;
             clearPendingTableState();
             emitRuntimeServiceState();
         }
@@ -1131,26 +1350,13 @@ namespace wt
                 let currentPhaseIncrement = currentFrequencyHz / float32 (processor.frequency);
                 let requestedMipIndex = selectMipIndexFromPhaseIncrement (currentPhaseIncrement);
                 let playableMipIndex = findPlayableMipIndex (requestedMipIndex);
-                if (! isMipReady (requestedMipIndex))
-                {
-                    let requestUrgency = playableMipIndex < 0 ? 2 : (playableMipIndex < requestedMipIndex ? 1 : 0);
-                    emitMipRequest (requestedMipIndex, requestUrgency);
-                }
 
                 if (playableMipIndex < 0)
                 {
-                    isPlayable = 0;
                     out <- 0.0f;
                 }
                 else
                 {
-                    if (isPlayable == 0)
-                    {
-                        phasor.phase = 0.0f;
-                        isPlayable = 1;
-                        emitRuntimeServiceState();
-                    }
-
                     let phase = phasor.next();
 
                     if (frameCount <= 1)
@@ -1288,19 +1494,30 @@ namespace wt
         ModulationRouteUpload[modulationRouteCount] modulationRoutes;
         bool modulationEnabled = true;
 
-        float32[maxMipSampleCount] mip0Samples;
-        float32[maxMipSampleCount] mip1Samples;
-        float32[maxMipSampleCount] mip2Samples;
-        float32[maxMipSampleCount] mip3Samples;
-        float32[maxMipSampleCount] mip4Samples;
-        float32[maxMipSampleCount] mip5Samples;
-        float32[maxMipSampleCount] mip6Samples;
-        float32[maxMipSampleCount] mip7Samples;
-        float32[maxMipSampleCount] mip8Samples;
-        float32[maxMipSampleCount] mip9Samples;
-        float32[maxMipSampleCount] mip10Samples;
-        int32[maxMipFrameSlots] readyFrameFlags;
-        int32[mipLevelCount] loadedFrameCounts;
+        float32[maxMipSampleCount] mip0Bank0Samples;
+        float32[maxMipSampleCount] mip0Bank1Samples;
+        float32[maxMipSampleCount] mip1Bank0Samples;
+        float32[maxMipSampleCount] mip1Bank1Samples;
+        float32[maxMipSampleCount] mip2Bank0Samples;
+        float32[maxMipSampleCount] mip2Bank1Samples;
+        float32[maxMipSampleCount] mip3Bank0Samples;
+        float32[maxMipSampleCount] mip3Bank1Samples;
+        float32[maxMipSampleCount] mip4Bank0Samples;
+        float32[maxMipSampleCount] mip4Bank1Samples;
+        float32[maxMipSampleCount] mip5Bank0Samples;
+        float32[maxMipSampleCount] mip5Bank1Samples;
+        float32[maxMipSampleCount] mip6Bank0Samples;
+        float32[maxMipSampleCount] mip6Bank1Samples;
+        float32[maxMipSampleCount] mip7Bank0Samples;
+        float32[maxMipSampleCount] mip7Bank1Samples;
+        float32[maxMipSampleCount] mip8Bank0Samples;
+        float32[maxMipSampleCount] mip8Bank1Samples;
+        float32[maxMipSampleCount] mip9Bank0Samples;
+        float32[maxMipSampleCount] mip9Bank1Samples;
+        float32[maxMipSampleCount] mip10Bank0Samples;
+        float32[maxMipSampleCount] mip10Bank1Samples;
+        int32[maxBankedMipFrameSlots] readyFrameFlags;
+        int32[maxBankedMipLevelSlots] loadedFrameCounts;
         int32[mipLevelCount] requestedGenerationByMip;
         int32[mipLevelCount] requestedUrgencyByMip;
 
@@ -1311,6 +1528,13 @@ namespace wt
         int32 frameCount = 0;
         int32 lastFrameIndex = 0;
         float32 lastFrameIndexF = 0.0f;
+        int32 activeBankIndex = 0;
+        int32 stagingBankIndex = 1;
+        int32 stagingGeneration = 0;
+        int32 stagingTableIndex = 0;
+        int32 stagingFrameCount = 0;
+        int32 stagingLastFrameIndex = 0;
+        float32 stagingLastFrameIndexF = 0.0f;
         int32 isPlayable = 0;
         bool hasEmittedInitialRuntimeState = false;
 
@@ -1327,19 +1551,24 @@ namespace wt
         float32 previewFrequencyHzState = previewFrequencyHz;
         float32 glideTimeSecondsState = 0.0f;
 
-        void clearPendingTableState()
+        void clearTableBankState (int32 bankIndex)
         {
             for (int32 index = 0; index < maxMipFrameSlots; ++index)
-                readyFrameFlags.at (index) = 0;
+                readyFrameFlags.at ((normalizeTableBankIndex (bankIndex) * maxMipFrameSlots) + index) = 0;
+
+            for (int32 mipIndex = 0; mipIndex < mipLevelCount; ++mipIndex)
+                loadedFrameCounts.at (bankedMipLevelIndex (bankIndex, mipIndex)) = 0;
+        }
+
+        void clearPendingTableState()
+        {
+            clearTableBankState (stagingBankIndex);
 
             for (int32 mipIndex = 0; mipIndex < mipLevelCount; ++mipIndex)
             {
-                loadedFrameCounts.at (mipIndex) = 0;
                 requestedGenerationByMip.at (mipIndex) = 0;
                 requestedUrgencyByMip.at (mipIndex) = -1;
             }
-
-            isPlayable = 0;
         }
 
         int32 warpHistoryIndex (int32 voiceIndex, int32 tapIndex)
@@ -1756,7 +1985,7 @@ namespace wt
             if (mipIndex < 0 || mipIndex >= mipLevelCount || frameCount <= 0)
                 return false;
 
-            return loadedFrameCounts.at (mipIndex) >= frameCount;
+            return loadedFrameCounts.at (bankedMipLevelIndex (activeBankIndex, mipIndex)) >= frameCount;
         }
 
         int32 findPlayableMipIndex (int32 requestedMipIndex)
@@ -1773,134 +2002,313 @@ namespace wt
             return -1;
         }
 
-        void writeMipFrame (int32 mipIndex, int32 frameIndex, const float32[] sourceSamples)
+        bool isStagingComplete()
         {
+            if (stagingGeneration <= 0 || stagingFrameCount <= 0)
+                return false;
+
+            for (int32 mipIndex = 0; mipIndex < mipLevelCount; ++mipIndex)
+                if (loadedFrameCounts.at (bankedMipLevelIndex (stagingBankIndex, mipIndex)) < stagingFrameCount)
+                    return false;
+
+            return true;
+        }
+
+        void commitStagingTable()
+        {
+            let hadActiveTable = isPlayable != 0;
+
+            currentGeneration = stagingGeneration;
+            currentTableIndex = stagingTableIndex;
+            frameCount = stagingFrameCount;
+            lastFrameIndex = stagingLastFrameIndex;
+            lastFrameIndexF = stagingLastFrameIndexF;
+            activeBankIndex = stagingBankIndex;
+            stagingBankIndex = activeBankIndex == 0 ? 1 : 0;
+            stagingGeneration = 0;
+            stagingTableIndex = 0;
+            stagingFrameCount = 0;
+            stagingLastFrameIndex = 0;
+            stagingLastFrameIndexF = 0.0f;
+
+            if (! hadActiveTable)
+            {
+                for (wrap<voiceCount> voice)
+                {
+                    phasors.at (voice).phase = 0.0f;
+                    resetWarpRenderState (int32 (voice));
+                }
+            }
+
+            isPlayable = 1;
+            emitRuntimeServiceState();
+        }
+
+        void writeMipFrame (int32 bankIndex, int32 mipIndex, int32 frameIndex, const float32[] sourceSamples)
+        {
+            let bank = normalizeTableBankIndex (bankIndex);
             let base = frameBase (frameIndex);
 
             if (mipIndex == 0)
             {
-                mip0Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
-                for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
-                    mip0Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
-                mip0Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
-                mip0Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
+                if (bank == 0)
+                {
+                    mip0Bank0Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
+                    for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
+                        mip0Bank0Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
+                    mip0Bank0Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
+                    mip0Bank0Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
+                }
+                else
+                {
+                    mip0Bank1Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
+                    for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
+                        mip0Bank1Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
+                    mip0Bank1Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
+                    mip0Bank1Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
+                }
+
                 return;
             }
 
             if (mipIndex == 1)
             {
-                mip1Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
-                for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
-                    mip1Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
-                mip1Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
-                mip1Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
+                if (bank == 0)
+                {
+                    mip1Bank0Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
+                    for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
+                        mip1Bank0Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
+                    mip1Bank0Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
+                    mip1Bank0Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
+                }
+                else
+                {
+                    mip1Bank1Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
+                    for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
+                        mip1Bank1Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
+                    mip1Bank1Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
+                    mip1Bank1Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
+                }
+
                 return;
             }
 
             if (mipIndex == 2)
             {
-                mip2Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
-                for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
-                    mip2Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
-                mip2Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
-                mip2Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
+                if (bank == 0)
+                {
+                    mip2Bank0Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
+                    for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
+                        mip2Bank0Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
+                    mip2Bank0Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
+                    mip2Bank0Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
+                }
+                else
+                {
+                    mip2Bank1Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
+                    for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
+                        mip2Bank1Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
+                    mip2Bank1Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
+                    mip2Bank1Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
+                }
+
                 return;
             }
 
             if (mipIndex == 3)
             {
-                mip3Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
-                for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
-                    mip3Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
-                mip3Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
-                mip3Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
+                if (bank == 0)
+                {
+                    mip3Bank0Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
+                    for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
+                        mip3Bank0Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
+                    mip3Bank0Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
+                    mip3Bank0Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
+                }
+                else
+                {
+                    mip3Bank1Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
+                    for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
+                        mip3Bank1Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
+                    mip3Bank1Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
+                    mip3Bank1Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
+                }
+
                 return;
             }
 
             if (mipIndex == 4)
             {
-                mip4Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
-                for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
-                    mip4Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
-                mip4Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
-                mip4Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
+                if (bank == 0)
+                {
+                    mip4Bank0Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
+                    for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
+                        mip4Bank0Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
+                    mip4Bank0Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
+                    mip4Bank0Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
+                }
+                else
+                {
+                    mip4Bank1Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
+                    for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
+                        mip4Bank1Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
+                    mip4Bank1Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
+                    mip4Bank1Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
+                }
+
                 return;
             }
 
             if (mipIndex == 5)
             {
-                mip5Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
-                for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
-                    mip5Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
-                mip5Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
-                mip5Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
+                if (bank == 0)
+                {
+                    mip5Bank0Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
+                    for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
+                        mip5Bank0Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
+                    mip5Bank0Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
+                    mip5Bank0Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
+                }
+                else
+                {
+                    mip5Bank1Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
+                    for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
+                        mip5Bank1Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
+                    mip5Bank1Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
+                    mip5Bank1Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
+                }
+
                 return;
             }
 
             if (mipIndex == 6)
             {
-                mip6Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
-                for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
-                    mip6Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
-                mip6Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
-                mip6Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
+                if (bank == 0)
+                {
+                    mip6Bank0Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
+                    for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
+                        mip6Bank0Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
+                    mip6Bank0Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
+                    mip6Bank0Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
+                }
+                else
+                {
+                    mip6Bank1Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
+                    for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
+                        mip6Bank1Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
+                    mip6Bank1Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
+                    mip6Bank1Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
+                }
+
                 return;
             }
 
             if (mipIndex == 7)
             {
-                mip7Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
-                for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
-                    mip7Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
-                mip7Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
-                mip7Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
+                if (bank == 0)
+                {
+                    mip7Bank0Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
+                    for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
+                        mip7Bank0Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
+                    mip7Bank0Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
+                    mip7Bank0Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
+                }
+                else
+                {
+                    mip7Bank1Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
+                    for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
+                        mip7Bank1Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
+                    mip7Bank1Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
+                    mip7Bank1Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
+                }
+
                 return;
             }
 
             if (mipIndex == 8)
             {
-                mip8Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
-                for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
-                    mip8Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
-                mip8Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
-                mip8Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
+                if (bank == 0)
+                {
+                    mip8Bank0Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
+                    for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
+                        mip8Bank0Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
+                    mip8Bank0Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
+                    mip8Bank0Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
+                }
+                else
+                {
+                    mip8Bank1Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
+                    for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
+                        mip8Bank1Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
+                    mip8Bank1Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
+                    mip8Bank1Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
+                }
+
                 return;
             }
 
             if (mipIndex == 9)
             {
-                mip9Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
-                for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
-                    mip9Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
-                mip9Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
-                mip9Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
+                if (bank == 0)
+                {
+                    mip9Bank0Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
+                    for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
+                        mip9Bank0Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
+                    mip9Bank0Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
+                    mip9Bank0Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
+                }
+                else
+                {
+                    mip9Bank1Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
+                    for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
+                        mip9Bank1Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
+                    mip9Bank1Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
+                    mip9Bank1Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
+                }
+
                 return;
             }
 
             if (mipIndex == 10)
             {
-                mip10Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
-                for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
-                    mip10Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
-                mip10Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
-                mip10Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
+                if (bank == 0)
+                {
+                    mip10Bank0Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
+                    for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
+                        mip10Bank0Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
+                    mip10Bank0Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
+                    mip10Bank0Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
+                }
+                else
+                {
+                    mip10Bank1Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
+                    for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
+                        mip10Bank1Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
+                    mip10Bank1Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
+                    mip10Bank1Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
+                }
+
                 return;
             }
+
         }
 
         float32 readFixedFrameSampleForMip (int32 mipIndex, int32 frameIndex, float32 phase)
         {
-            if (mipIndex == 0) return readFixedFrameSample (mip0Samples, frameIndex, phase);
-            if (mipIndex == 1) return readFixedFrameSample (mip1Samples, frameIndex, phase);
-            if (mipIndex == 2) return readFixedFrameSample (mip2Samples, frameIndex, phase);
-            if (mipIndex == 3) return readFixedFrameSample (mip3Samples, frameIndex, phase);
-            if (mipIndex == 4) return readFixedFrameSample (mip4Samples, frameIndex, phase);
-            if (mipIndex == 5) return readFixedFrameSample (mip5Samples, frameIndex, phase);
-            if (mipIndex == 6) return readFixedFrameSample (mip6Samples, frameIndex, phase);
-            if (mipIndex == 7) return readFixedFrameSample (mip7Samples, frameIndex, phase);
-            if (mipIndex == 8) return readFixedFrameSample (mip8Samples, frameIndex, phase);
-            if (mipIndex == 9) return readFixedFrameSample (mip9Samples, frameIndex, phase);
-            if (mipIndex == 10) return readFixedFrameSample (mip10Samples, frameIndex, phase);
+            let bank = normalizeTableBankIndex (activeBankIndex);
+            let base = frameBase (frameIndex);
+
+            if (mipIndex == 0) return bank == 0 ? readFixedFrameSampleFromBase (mip0Bank0Samples, base, phase) : readFixedFrameSampleFromBase (mip0Bank1Samples, base, phase);
+            if (mipIndex == 1) return bank == 0 ? readFixedFrameSampleFromBase (mip1Bank0Samples, base, phase) : readFixedFrameSampleFromBase (mip1Bank1Samples, base, phase);
+            if (mipIndex == 2) return bank == 0 ? readFixedFrameSampleFromBase (mip2Bank0Samples, base, phase) : readFixedFrameSampleFromBase (mip2Bank1Samples, base, phase);
+            if (mipIndex == 3) return bank == 0 ? readFixedFrameSampleFromBase (mip3Bank0Samples, base, phase) : readFixedFrameSampleFromBase (mip3Bank1Samples, base, phase);
+            if (mipIndex == 4) return bank == 0 ? readFixedFrameSampleFromBase (mip4Bank0Samples, base, phase) : readFixedFrameSampleFromBase (mip4Bank1Samples, base, phase);
+            if (mipIndex == 5) return bank == 0 ? readFixedFrameSampleFromBase (mip5Bank0Samples, base, phase) : readFixedFrameSampleFromBase (mip5Bank1Samples, base, phase);
+            if (mipIndex == 6) return bank == 0 ? readFixedFrameSampleFromBase (mip6Bank0Samples, base, phase) : readFixedFrameSampleFromBase (mip6Bank1Samples, base, phase);
+            if (mipIndex == 7) return bank == 0 ? readFixedFrameSampleFromBase (mip7Bank0Samples, base, phase) : readFixedFrameSampleFromBase (mip7Bank1Samples, base, phase);
+            if (mipIndex == 8) return bank == 0 ? readFixedFrameSampleFromBase (mip8Bank0Samples, base, phase) : readFixedFrameSampleFromBase (mip8Bank1Samples, base, phase);
+            if (mipIndex == 9) return bank == 0 ? readFixedFrameSampleFromBase (mip9Bank0Samples, base, phase) : readFixedFrameSampleFromBase (mip9Bank1Samples, base, phase);
+            if (mipIndex == 10) return bank == 0 ? readFixedFrameSampleFromBase (mip10Bank0Samples, base, phase) : readFixedFrameSampleFromBase (mip10Bank1Samples, base, phase);
             return 0.0f;
         }
 
@@ -1910,35 +2318,31 @@ namespace wt
                                             float32 phase,
                                             float32 frameT)
         {
-            if (mipIndex == 0) return readFrameBlendSample (mip0Samples, frameLo, frameHi, phase, frameT);
-            if (mipIndex == 1) return readFrameBlendSample (mip1Samples, frameLo, frameHi, phase, frameT);
-            if (mipIndex == 2) return readFrameBlendSample (mip2Samples, frameLo, frameHi, phase, frameT);
-            if (mipIndex == 3) return readFrameBlendSample (mip3Samples, frameLo, frameHi, phase, frameT);
-            if (mipIndex == 4) return readFrameBlendSample (mip4Samples, frameLo, frameHi, phase, frameT);
-            if (mipIndex == 5) return readFrameBlendSample (mip5Samples, frameLo, frameHi, phase, frameT);
-            if (mipIndex == 6) return readFrameBlendSample (mip6Samples, frameLo, frameHi, phase, frameT);
-            if (mipIndex == 7) return readFrameBlendSample (mip7Samples, frameLo, frameHi, phase, frameT);
-            if (mipIndex == 8) return readFrameBlendSample (mip8Samples, frameLo, frameHi, phase, frameT);
-            if (mipIndex == 9) return readFrameBlendSample (mip9Samples, frameLo, frameHi, phase, frameT);
-            if (mipIndex == 10) return readFrameBlendSample (mip10Samples, frameLo, frameHi, phase, frameT);
-            return 0.0f;
+            let lo = readFixedFrameSampleForMip (mipIndex, frameLo, phase);
+
+            if (frameHi == frameLo)
+                return lo;
+
+            let hi = readFixedFrameSampleForMip (mipIndex, frameHi, phase);
+            return lo + (hi - lo) * frameT;
         }
 
         float32 readFixedFrameEndpointSampleForMip (int32 mipIndex, int32 frameIndex)
         {
+            let bank = normalizeTableBankIndex (activeBankIndex);
             let endpointIndex = frameBase (frameIndex) + samplesPerFrame;
 
-            if (mipIndex == 0) return mip0Samples.at (endpointIndex);
-            if (mipIndex == 1) return mip1Samples.at (endpointIndex);
-            if (mipIndex == 2) return mip2Samples.at (endpointIndex);
-            if (mipIndex == 3) return mip3Samples.at (endpointIndex);
-            if (mipIndex == 4) return mip4Samples.at (endpointIndex);
-            if (mipIndex == 5) return mip5Samples.at (endpointIndex);
-            if (mipIndex == 6) return mip6Samples.at (endpointIndex);
-            if (mipIndex == 7) return mip7Samples.at (endpointIndex);
-            if (mipIndex == 8) return mip8Samples.at (endpointIndex);
-            if (mipIndex == 9) return mip9Samples.at (endpointIndex);
-            if (mipIndex == 10) return mip10Samples.at (endpointIndex);
+            if (mipIndex == 0) return bank == 0 ? mip0Bank0Samples.at (endpointIndex) : mip0Bank1Samples.at (endpointIndex);
+            if (mipIndex == 1) return bank == 0 ? mip1Bank0Samples.at (endpointIndex) : mip1Bank1Samples.at (endpointIndex);
+            if (mipIndex == 2) return bank == 0 ? mip2Bank0Samples.at (endpointIndex) : mip2Bank1Samples.at (endpointIndex);
+            if (mipIndex == 3) return bank == 0 ? mip3Bank0Samples.at (endpointIndex) : mip3Bank1Samples.at (endpointIndex);
+            if (mipIndex == 4) return bank == 0 ? mip4Bank0Samples.at (endpointIndex) : mip4Bank1Samples.at (endpointIndex);
+            if (mipIndex == 5) return bank == 0 ? mip5Bank0Samples.at (endpointIndex) : mip5Bank1Samples.at (endpointIndex);
+            if (mipIndex == 6) return bank == 0 ? mip6Bank0Samples.at (endpointIndex) : mip6Bank1Samples.at (endpointIndex);
+            if (mipIndex == 7) return bank == 0 ? mip7Bank0Samples.at (endpointIndex) : mip7Bank1Samples.at (endpointIndex);
+            if (mipIndex == 8) return bank == 0 ? mip8Bank0Samples.at (endpointIndex) : mip8Bank1Samples.at (endpointIndex);
+            if (mipIndex == 9) return bank == 0 ? mip9Bank0Samples.at (endpointIndex) : mip9Bank1Samples.at (endpointIndex);
+            if (mipIndex == 10) return bank == 0 ? mip10Bank0Samples.at (endpointIndex) : mip10Bank1Samples.at (endpointIndex);
             return 0.0f;
         }
 
@@ -1992,13 +2396,13 @@ namespace wt
             RuntimeServiceState state;
             state.dspSessionId = currentDspSessionId;
             state.generationFrontier = generationFrontier;
-            state.serviceState = isPlayable != 0 ? 2 : (currentGeneration > 0 && frameCount > 0 ? 1 : 0);
+            state.serviceState = isPlayable != 0 ? 2 : (stagingGeneration > 0 && stagingFrameCount > 0 ? 1 : 0);
             state.hasActive = isPlayable != 0 ? 1 : 0;
             state.activeTableIndex = isPlayable != 0 ? currentTableIndex : 0;
             state.activeGeneration = isPlayable != 0 ? currentGeneration : 0;
-            state.hasLoading = isPlayable == 0 && currentGeneration > 0 && frameCount > 0 ? 1 : 0;
-            state.loadingTableIndex = state.hasLoading != 0 ? currentTableIndex : 0;
-            state.loadingGeneration = state.hasLoading != 0 ? currentGeneration : 0;
+            state.hasLoading = stagingGeneration > 0 && stagingFrameCount > 0 ? 1 : 0;
+            state.loadingTableIndex = state.hasLoading != 0 ? stagingTableIndex : 0;
+            state.loadingGeneration = state.hasLoading != 0 ? stagingGeneration : 0;
             runtimeServiceStateOut <- state;
         }
 
@@ -2169,26 +2573,6 @@ namespace wt
 
         void maybeTransitionServiceToPlayable()
         {
-            let previewWarpMode = resolveWarpMode (warpModeIn);
-            let previewOversampleFactor = previewWarpMode > warpModeOff ? warpOversampleFactor : 1;
-            let previewPhaseIncrement = previewFrequencyHzState / (float32 (processor.frequency) * float32 (previewOversampleFactor));
-            let previewRequestedMip = selectMipIndexFromPhaseIncrement (previewPhaseIncrement);
-            let previewPlayableMip = findPlayableMipIndex (previewRequestedMip);
-
-            if (! isMipReady (previewRequestedMip))
-                emitMipRequest (previewRequestedMip, previewPlayableMip < 0 ? 2 : (previewPlayableMip < previewRequestedMip ? 1 : 0));
-
-            if (previewPlayableMip >= 0 && isPlayable == 0)
-            {
-                for (wrap<voiceCount> voice)
-                {
-                    phasors.at (voice).phase = 0.0f;
-                    resetWarpRenderState (int32 (voice));
-                }
-
-                isPlayable = 1;
-                emitRuntimeServiceState();
-            }
         }
 
         float32 readVoiceSampleForMip (int32 playableMipIndex,
@@ -2554,12 +2938,12 @@ namespace wt
                 || resolvedFrameCount == 0)
                 return;
 
-            currentGeneration = request.generation;
-            currentTableIndex = request.tableIndex;
             generationFrontier = std::intrinsics::max (generationFrontier, request.generation);
-            frameCount = resolvedFrameCount;
-            lastFrameIndex = frameCount > 0 ? frameCount - 1 : 0;
-            lastFrameIndexF = float32 (lastFrameIndex);
+            stagingGeneration = request.generation;
+            stagingTableIndex = request.tableIndex;
+            stagingFrameCount = resolvedFrameCount;
+            stagingLastFrameIndex = stagingFrameCount > 0 ? stagingFrameCount - 1 : 0;
+            stagingLastFrameIndexF = float32 (stagingLastFrameIndex);
             clearPendingTableState();
             emitRuntimeServiceState();
         }
@@ -2568,18 +2952,18 @@ namespace wt
         {
             let resolvedMipIndex = resolveMipIndex (newFrame.mipIndex);
 
-            if (resolvedMipIndex < 0 || frameCount <= 0)
+            if (resolvedMipIndex < 0 || stagingFrameCount <= 0)
                 return;
 
             if (newFrame.dspSessionId != currentDspSessionId
-                || newFrame.generation != currentGeneration
-                || newFrame.tableIndex != currentTableIndex)
+                || newFrame.generation != stagingGeneration
+                || newFrame.tableIndex != stagingTableIndex)
                 return;
 
-            if (newFrame.frameIndex < 0 || newFrame.frameIndex >= frameCount)
+            if (newFrame.frameIndex < 0 || newFrame.frameIndex >= stagingFrameCount)
                 return;
 
-            let readyIndex = readinessIndex (resolvedMipIndex, newFrame.frameIndex);
+            let readyIndex = bankedReadinessIndex (stagingBankIndex, resolvedMipIndex, newFrame.frameIndex);
 
             if (readyFrameFlags.at (readyIndex) != 0)
             {
@@ -2592,9 +2976,9 @@ namespace wt
                 return;
             }
 
-            writeMipFrame (resolvedMipIndex, newFrame.frameIndex, newFrame.samples);
+            writeMipFrame (stagingBankIndex, resolvedMipIndex, newFrame.frameIndex, newFrame.samples);
             readyFrameFlags.at (readyIndex) = 1;
-            loadedFrameCounts.at (resolvedMipIndex) += 1;
+            loadedFrameCounts.at (bankedMipLevelIndex (stagingBankIndex, resolvedMipIndex)) += 1;
 
             emitUploadAck (
                 newFrame.generation,
@@ -2602,21 +2986,23 @@ namespace wt
                 resolvedMipIndex,
                 newFrame.frameIndex
             );
+
+            if (isStagingComplete())
+                commitStagingTable();
         }
 
         event serviceLoadAbortIn (ServiceLoadAbort abort)
         {
             if (abort.dspSessionId != currentDspSessionId
-                || abort.generation != currentGeneration
-                || abort.tableIndex != currentTableIndex
-                || isPlayable != 0)
+                || abort.generation != stagingGeneration
+                || abort.tableIndex != stagingTableIndex)
                 return;
 
-            currentGeneration = 0;
-            currentTableIndex = 0;
-            frameCount = 0;
-            lastFrameIndex = 0;
-            lastFrameIndexF = 0.0f;
+            stagingGeneration = 0;
+            stagingTableIndex = 0;
+            stagingFrameCount = 0;
+            stagingLastFrameIndex = 0;
+            stagingLastFrameIndexF = 0.0f;
             clearPendingTableState();
             emitRuntimeServiceState();
         }
@@ -2793,23 +3179,11 @@ namespace wt
                     int32 warpRequestedMipIndex = requestedMipIndex;
                     int32 warpPlayableMipIndex = playableMipIndex;
 
-                    if (! isMipReady (requestedMipIndex))
-                    {
-                        let requestUrgency = playableMipIndex < 0 ? 2 : (playableMipIndex < requestedMipIndex ? 1 : 0);
-                        emitMipRequest (requestedMipIndex, requestUrgency);
-                    }
-
                     if (shouldRenderWarpBackground)
                     {
                         let warpPhaseIncrement = currentPhaseIncrement / float32 (warpOversampleFactor);
                         warpRequestedMipIndex = selectMipIndexFromPhaseIncrement (warpPhaseIncrement);
                         warpPlayableMipIndex = findPlayableMipIndex (warpRequestedMipIndex);
-
-                        if (! isMipReady (warpRequestedMipIndex))
-                        {
-                            let warpRequestUrgency = warpPlayableMipIndex < 0 ? 2 : (warpPlayableMipIndex < warpRequestedMipIndex ? 1 : 0);
-                            emitMipRequest (warpRequestedMipIndex, warpRequestUrgency);
-                        }
                     }
 
                     if (playableMipIndex < 0 && warpPlayableMipIndex < 0)

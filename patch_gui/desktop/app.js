@@ -17189,6 +17189,7 @@ function WavetableStageSection({
   tableOptions,
   canRetry,
   onTableChange,
+  onTablePrewarm,
   onRetry,
   tableFocusBindings,
   onPointerDown,
@@ -17226,21 +17227,29 @@ function WavetableStageSection({
           }
         ),
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "absolute inset-x-0 top-0 flex items-start justify-between gap-3 p-5 text-[11px] uppercase tracking-[0.16em] text-slate-300/70", children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "relative inline-flex max-w-[280px] cursor-pointer items-center", children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "inline-flex min-w-0 items-center rounded-full border border-white/10 bg-black/40 px-4 py-2.5 pr-10 text-left text-[11px] uppercase tracking-[0.18em] text-amber-100 shadow-[0_10px_28px_rgba(0,0,0,0.28)] backdrop-blur-md", children: /* @__PURE__ */ jsxRuntimeExports.jsx("span", { "data-role": "wavetable-stage-title", className: "truncate", children: tableName }) }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx(SelectChevron, { className: "pointer-events-none absolute right-4 top-1/2 h-3 w-3 -translate-y-1/2 text-slate-300/75" }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx(
-              "select",
-              {
-                className: "absolute inset-0 cursor-pointer opacity-0",
-                value: String(desiredTableIndex),
-                onChange: (event) => onTableChange(Number(event.target.value)),
-                "aria-label": "Select wavetable",
-                ...tableFocusBindings,
-                children: tableOptions.map((table, tableIndex) => /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: tableIndex, children: table.name }, `${table.name}-${tableIndex}`))
-              }
-            )
-          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            "label",
+            {
+              className: "relative inline-flex max-w-[280px] cursor-pointer items-center",
+              onFocus: onTablePrewarm,
+              onPointerEnter: onTablePrewarm,
+              children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "inline-flex min-w-0 items-center rounded-full border border-white/10 bg-black/40 px-4 py-2.5 pr-10 text-left text-[11px] uppercase tracking-[0.18em] text-amber-100 shadow-[0_10px_28px_rgba(0,0,0,0.28)] backdrop-blur-md", children: /* @__PURE__ */ jsxRuntimeExports.jsx("span", { "data-role": "wavetable-stage-title", className: "truncate", children: tableName }) }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx(SelectChevron, { className: "pointer-events-none absolute right-4 top-1/2 h-3 w-3 -translate-y-1/2 text-slate-300/75" }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "select",
+                  {
+                    className: "absolute inset-0 cursor-pointer opacity-0",
+                    value: String(desiredTableIndex),
+                    onChange: (event) => onTableChange(Number(event.target.value)),
+                    "aria-label": "Select wavetable",
+                    ...tableFocusBindings,
+                    children: tableOptions.map((table, tableIndex) => /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: tableIndex, children: table.name }, `${table.name}-${tableIndex}`))
+                  }
+                )
+              ]
+            }
+          ),
           /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2", children: [
             /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "rounded-full border border-white/10 bg-black/35 px-3 py-2 text-cyan-200/80 shadow-[0_10px_28px_rgba(0,0,0,0.22)] backdrop-blur-md", children: [
               "Frame ",
@@ -28162,6 +28171,7 @@ const CHORUS_RING_FINE_SEMITONES_ENDPOINT_ID = "chorusRingFineSemitones";
 const RUNTIME_SYNC_REQUEST_ENDPOINT_ID = "runtimeSyncRequest";
 const RUNTIME_STATE_ENDPOINT_ID = "runtimeState";
 const RETRY_DESIRED_TABLE_REQUEST_ENDPOINT_ID = "retryDesiredTableRequest";
+const WAVETABLE_PREWARM_REQUEST_ENDPOINT_ID = "wavetablePrewarmRequest";
 const GLIDE_TIME_MIN_SECONDS$1 = 0;
 const GLIDE_TIME_MAX_SECONDS$1 = 2;
 const GLIDE_TIME_STEP_SECONDS$1 = 1e-3;
@@ -29115,6 +29125,7 @@ function useSynthPatchViewModel({
   });
   const requestRuntimeSync = usePatchEventTrigger(RUNTIME_SYNC_REQUEST_ENDPOINT_ID);
   const retryDesiredTableLoad = usePatchEventTrigger(RETRY_DESIRED_TABLE_REQUEST_ENDPOINT_ID);
+  const prewarmWavetable = usePatchEventTrigger(WAVETABLE_PREWARM_REQUEST_ENDPOINT_ID);
   const observedPosition = useObservedDisplayPosition(Number(wavetablePosition.value) || 0);
   const observedWarpState = useObservedWarpState({
     warpMode: warpMode.value,
@@ -29186,13 +29197,35 @@ function useSynthPatchViewModel({
   reactExports.useEffect(() => {
     requestRuntimeSync(1);
   }, [requestRuntimeSync]);
+  const prewarmWavetableNeighborhood = reactExports.useCallback((centerTableIndex) => {
+    const tableCount = catalog?.tables?.length ?? 0;
+    if (tableCount <= 0) {
+      return;
+    }
+    const maxTableIndex = tableCount - 1;
+    const centerIndex = clamp$1(Math.round(Number(centerTableIndex) || 0), 0, maxTableIndex);
+    const seenTableIndices = /* @__PURE__ */ new Set();
+    for (const tableIndex of [centerIndex, centerIndex - 1, centerIndex + 1]) {
+      if (tableIndex < 0 || tableIndex > maxTableIndex || seenTableIndices.has(tableIndex)) {
+        continue;
+      }
+      seenTableIndices.add(tableIndex);
+      prewarmWavetable(tableIndex);
+    }
+  }, [catalog?.tables?.length, prewarmWavetable]);
   const handleSelectWavetable = reactExports.useCallback((nextValue) => {
     wavetableSelect.commitValue(nextValue);
-  }, [wavetableSelect]);
+    prewarmWavetableNeighborhood(nextValue);
+  }, [prewarmWavetableNeighborhood, wavetableSelect]);
   const handleStepWavetable = reactExports.useCallback((direction) => {
     const maxTableIndex = Math.max(0, (catalog?.tables?.length ?? 1) - 1);
-    wavetableSelect.commitValue(clamp$1(desiredTableIndex + direction, 0, maxTableIndex));
-  }, [catalog?.tables?.length, desiredTableIndex, wavetableSelect]);
+    const nextTableIndex = clamp$1(desiredTableIndex + direction, 0, maxTableIndex);
+    wavetableSelect.commitValue(nextTableIndex);
+    prewarmWavetableNeighborhood(nextTableIndex);
+  }, [catalog?.tables?.length, desiredTableIndex, prewarmWavetableNeighborhood, wavetableSelect]);
+  const handlePrewarmWavetablePicker = reactExports.useCallback(() => {
+    prewarmWavetableNeighborhood(desiredTableIndex);
+  }, [desiredTableIndex, prewarmWavetableNeighborhood]);
   const handleRetryLoad = reactExports.useCallback(() => {
     retryDesiredTableLoad(1);
   }, [retryDesiredTableLoad]);
@@ -29593,6 +29626,7 @@ function useSynthPatchViewModel({
     handleAddArticulationSlot,
     handleSelectArticulationSlot,
     handleSelectWavetable,
+    handlePrewarmWavetablePicker,
     handleRetryLoad,
     handleMsegMorphChange,
     handleMsegRateChange,
@@ -31647,6 +31681,7 @@ function DesktopPatchViewBody() {
                 tableOptions: synthView.tableOptions,
                 canRetry: synthView.canRetryDesiredTableLoad,
                 onTableChange: synthView.handleSelectWavetable,
+                onTablePrewarm: synthView.handlePrewarmWavetablePicker,
                 onRetry: synthView.handleRetryLoad,
                 tableFocusBindings: synthView.keyboardRouting.wavetableFocusBindings,
                 onPointerDown: synthView.stageBindings.handleStagePointerDown,
