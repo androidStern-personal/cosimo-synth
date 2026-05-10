@@ -11,7 +11,7 @@ export type NexusNumberFieldProps = {
     step: number;
     decimalPlaces?: number;
     suffix?: string | null;
-    variant?: "default" | "overlay";
+    variant?: "default" | "overlay" | "compactOverlay";
     showLabel?: boolean;
     width?: number;
     height?: number;
@@ -68,30 +68,33 @@ export function styleNexusNumberInput(
         width,
         height,
     }: {
-        variant: "default" | "overlay";
+        variant: "default" | "overlay" | "compactOverlay";
         width: number;
         height: number;
     },
 ) {
-    element.style.borderRadius = variant === "overlay" ? "999px" : "16px";
-    element.style.border = variant === "overlay"
+    const isOverlay = variant === "overlay" || variant === "compactOverlay";
+    const isCompactOverlay = variant === "compactOverlay";
+
+    element.style.borderRadius = isOverlay ? (isCompactOverlay ? "5px" : "999px") : "16px";
+    element.style.border = isOverlay
         ? "1px solid rgba(255,255,255,0.10)"
         : "1px solid rgba(255,255,255,0.08)";
-    element.style.boxShadow = variant === "overlay"
-        ? "0 10px 28px rgba(0,0,0,0.26), inset 0 1px 0 rgba(255,255,255,0.05)"
+    element.style.boxShadow = isOverlay
+        ? (isCompactOverlay ? "0 4px 12px rgba(0,0,0,0.20), inset 0 1px 0 rgba(255,255,255,0.04)" : "0 10px 28px rgba(0,0,0,0.26), inset 0 1px 0 rgba(255,255,255,0.05)")
         : "inset 0 1px 0 rgba(255,255,255,0.04)";
     element.style.fontFamily = "\"SF Mono\", \"JetBrains Mono\", ui-monospace, monospace";
-    element.style.letterSpacing = "0.12em";
-    element.style.fontSize = variant === "overlay" ? "13px" : "14px";
-    element.style.padding = variant === "overlay" ? "10px 16px" : "10px 14px";
-    element.style.backgroundColor = variant === "overlay" ? "rgba(0,0,0,0.45)" : "rgba(255,255,255,0.06)";
+    element.style.letterSpacing = isCompactOverlay ? "0.06em" : "0.12em";
+    element.style.fontSize = isOverlay ? (isCompactOverlay ? "9px" : "13px") : "14px";
+    element.style.padding = isOverlay ? (isCompactOverlay ? "0 6px" : "10px 16px") : "10px 14px";
+    element.style.backgroundColor = isOverlay ? "rgba(0,0,0,0.45)" : "rgba(255,255,255,0.06)";
     element.style.color = "#d6f4ff";
     element.style.display = "block";
     element.style.width = `${width}px`;
     element.style.height = `${height}px`;
     host.style.width = `${width}px`;
     host.style.height = `${height}px`;
-    host.style.cursor = variant === "overlay" ? "ew-resize" : "ns-resize";
+    host.style.cursor = isOverlay ? "ew-resize" : "ns-resize";
 }
 
 export function NexusNumberField({

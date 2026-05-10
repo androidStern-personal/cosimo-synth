@@ -31,6 +31,11 @@ import {
     KeyboardSectionShell,
     MsegPreview,
     RangeField,
+    SYNTH_COMPACT_CONTROL_CHROME_CLASS,
+    SYNTH_COMPACT_CONTROL_TEXT_CLASS,
+    SYNTH_GRID_CARD_INSET_SHADOW_CLASS,
+    SYNTH_GRID_CARD_SHELL_CLASS,
+    SYNTH_GRID_CARD_SIZE_CLASS,
     VerticalSlider,
     VOICE_MODE_OPTIONS,
     VoiceGlideControlSurface,
@@ -98,7 +103,7 @@ const ENVELOPE_VIEWBOX = {
     top: 42,
     bottom: 118,
 } as const;
-const DESKTOP_GRID_CARD_CLASS = "aspect-[50/27] min-h-[198px]";
+const DESKTOP_GRID_CARD_CLASS = SYNTH_GRID_CARD_SIZE_CLASS;
 const WARP_MODE_OPTIONS = [
     { value: 0, label: "Off" },
     { value: 1, label: "Bend +/-" },
@@ -617,32 +622,32 @@ function WarpModeGlyph({ mode }: { mode: number }) {
     switch (mode) {
         case 1:
             return (
-                <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" aria-hidden="true">
+                <svg viewBox="0 0 24 24" className="h-[12px] w-[12px]" aria-hidden="true">
                     <path d="M4 17.5 8.5 7 12 17.5 15.5 7 20 17.5" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" />
                 </svg>
             );
         case 2:
             return (
-                <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" aria-hidden="true">
+                <svg viewBox="0 0 24 24" className="h-[12px] w-[12px]" aria-hidden="true">
                     <path d="M4 16V8L8 8V16L12 16V8L16 8V16L20 16V8" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" />
                 </svg>
             );
         case 3:
             return (
-                <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" aria-hidden="true">
+                <svg viewBox="0 0 24 24" className="h-[12px] w-[12px]" aria-hidden="true">
                     <path d="M4 16.5C7 16.5 8 6.5 11 6.5C14 6.5 15 17.5 18 17.5C19.5 17.5 20.3 14.5 20 8.5" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" />
                 </svg>
             );
         case 4:
             return (
-                <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" aria-hidden="true">
+                <svg viewBox="0 0 24 24" className="h-[12px] w-[12px]" aria-hidden="true">
                     <path d="M4 17L10.5 7L13.5 12L20 7" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" />
                     <path d="M4 7L10.5 17L13.5 12L20 17" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.2" opacity="0.8" />
                 </svg>
             );
         default:
             return (
-                <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" aria-hidden="true">
+                <svg viewBox="0 0 24 24" className="h-[12px] w-[12px]" aria-hidden="true">
                     <path d="M3 12H21" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" />
                 </svg>
             );
@@ -653,7 +658,7 @@ function FilterModeGlyph({ mode }: { mode: number }) {
     switch (mode) {
         case 1:
             return (
-                <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" aria-hidden="true">
+                <svg viewBox="0 0 24 24" className="h-[12px] w-[12px]" aria-hidden="true">
                     <path
                         d="M3 7.5H9.5C12.5 7.5 15.5 9 16.5 12.5L18.5 19"
                         fill="none"
@@ -666,7 +671,7 @@ function FilterModeGlyph({ mode }: { mode: number }) {
             );
         case 2:
             return (
-                <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" aria-hidden="true">
+                <svg viewBox="0 0 24 24" className="h-[12px] w-[12px]" aria-hidden="true">
                     <path
                         d="M3 18.5L5.5 15.5C7.5 12.5 9.5 8.5 13 7.5H21"
                         fill="none"
@@ -679,7 +684,7 @@ function FilterModeGlyph({ mode }: { mode: number }) {
             );
         case 3:
             return (
-                <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" aria-hidden="true">
+                <svg viewBox="0 0 24 24" className="h-[12px] w-[12px]" aria-hidden="true">
                     <path
                         d="M3 18.5C6.5 18.5 8 18 9.5 14.5C11 11 11.5 8 12 8C12.5 8 13 11 14.5 14.5C16 18 17.5 18.5 21 18.5"
                         fill="none"
@@ -692,7 +697,7 @@ function FilterModeGlyph({ mode }: { mode: number }) {
             );
         case 4:
             return (
-                <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" aria-hidden="true">
+                <svg viewBox="0 0 24 24" className="h-[12px] w-[12px]" aria-hidden="true">
                     <path
                         d="M3 8.5C8 8.5 9 8.5 10.5 13.5C11.25 16 11.75 17.5 12 17.5C12.25 17.5 12.75 16 13.5 13.5C15 8.5 16 8.5 21 8.5"
                         fill="none"
@@ -705,7 +710,7 @@ function FilterModeGlyph({ mode }: { mode: number }) {
             );
         case 5:
             return (
-                <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" aria-hidden="true">
+                <svg viewBox="0 0 24 24" className="h-[12px] w-[12px]" aria-hidden="true">
                     <path
                         d="M3 18.5C8 18.5 9 18 10.5 12C11.3 8 11.8 5.5 12 5.5C12.2 5.5 12.7 8 13.5 12C15 18 16 18.5 21 18.5"
                         fill="none"
@@ -718,7 +723,7 @@ function FilterModeGlyph({ mode }: { mode: number }) {
             );
         default:
             return (
-                <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" aria-hidden="true">
+                <svg viewBox="0 0 24 24" className="h-[12px] w-[12px]" aria-hidden="true">
                     <path
                         d="M3 12H21"
                         fill="none"
@@ -735,7 +740,7 @@ function FilterModeGlyph({ mode }: { mode: number }) {
 function FilterSpectrumModeGlyph({ mode }: { mode: FilterSpectrumRenderMode }) {
     if (mode === "bars") {
         return (
-            <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" aria-hidden="true">
+            <svg viewBox="0 0 24 24" className="h-[12px] w-[12px]" aria-hidden="true">
                 <rect x="4" y="12" width="3" height="7" fill="currentColor" />
                 <rect x="10.5" y="8" width="3" height="11" fill="currentColor" />
                 <rect x="17" y="5" width="3" height="14" fill="currentColor" />
@@ -745,7 +750,7 @@ function FilterSpectrumModeGlyph({ mode }: { mode: FilterSpectrumRenderMode }) {
 
     if (mode === "round-bars") {
         return (
-            <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" aria-hidden="true">
+            <svg viewBox="0 0 24 24" className="h-[12px] w-[12px]" aria-hidden="true">
                 <rect x="4" y="12" width="3.2" height="7" rx="1.6" fill="currentColor" />
                 <rect x="10.4" y="8" width="3.2" height="11" rx="1.6" fill="currentColor" />
                 <rect x="16.8" y="5" width="3.2" height="14" rx="1.6" fill="currentColor" />
@@ -754,7 +759,7 @@ function FilterSpectrumModeGlyph({ mode }: { mode: FilterSpectrumRenderMode }) {
     }
 
     return (
-        <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" aria-hidden="true">
+        <svg viewBox="0 0 24 24" className="h-[12px] w-[12px]" aria-hidden="true">
             <path
                 d="M4 16.5L8.5 13L12 9.5L15 11.5L20 6.5"
                 fill="none"
@@ -770,20 +775,23 @@ function FilterSpectrumModeGlyph({ mode }: { mode: FilterSpectrumRenderMode }) {
 function OverlayIconChip({
     ariaLabel,
     title,
+    dataRole,
     onClick,
     children,
 }: {
     ariaLabel: string;
     title: string;
+    dataRole?: string;
     onClick: () => void;
     children: ReactNode;
 }) {
     return (
         <button
+            data-role={dataRole}
             type="button"
             aria-label={ariaLabel}
             title={title}
-            className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-black/45 text-slate-100 shadow-[0_12px_28px_rgba(0,0,0,0.32)] backdrop-blur-md transition hover:border-cyan-200/30 hover:text-cyan-100"
+            className={`flex h-5 w-5 items-center justify-center ${SYNTH_COMPACT_CONTROL_CHROME_CLASS} text-slate-100 transition hover:border-cyan-200/30 hover:text-cyan-100`}
             onClick={onClick}
         >
             {children}
@@ -898,23 +906,24 @@ function WarpControlCluster({
     const modeLabel = getWarpModeLabel(warpMode.value);
 
     return (
-        <div className="flex min-w-0 items-center gap-2 rounded-full border border-white/10 bg-black/45 px-2 py-1.5 shadow-[0_12px_28px_rgba(0,0,0,0.32)] backdrop-blur-md">
+        <div data-role="warp-control-cluster" className={`flex h-6 min-w-0 items-center gap-1 ${SYNTH_COMPACT_CONTROL_CHROME_CLASS} px-1`}>
             <button
+                data-role="warp-mode-control"
                 type="button"
                 aria-label={`Cycle warp mode (currently ${modeLabel})`}
                 title={`Warp mode: ${modeLabel}`}
-                className="flex h-8 min-w-[112px] items-center gap-2 rounded-full px-2.5 text-left transition hover:bg-white/[0.06]"
+                className="flex h-5 min-w-[72px] items-center gap-1 rounded-[4px] px-1 text-left transition hover:bg-white/[0.06]"
                 onClick={() => warpMode.commitValue(cycleWarpMode(warpMode.value))}
             >
-                <span className="text-[9px] font-bold uppercase tracking-[0.14em] text-slate-300/45">Warp</span>
-                <span className="grid size-5 shrink-0 place-items-center rounded-full border border-cyan-200/18 bg-cyan-300/8 text-cyan-100/85">
+                <span className="text-[7px] font-bold uppercase tracking-[0.10em] text-slate-300/45">Warp</span>
+                <span className="grid size-4 shrink-0 place-items-center rounded-full border border-cyan-200/18 bg-cyan-300/8 text-cyan-100/85">
                     <WarpModeGlyph mode={warpMode.value} />
                 </span>
-                <span className="min-w-0 truncate text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-100/78">
+                <span className="min-w-0 truncate text-[8px] font-semibold uppercase tracking-[0.06em] text-slate-100/78">
                     {modeLabel}
                 </span>
             </button>
-            <div className="h-7 w-px shrink-0 bg-white/[0.08]" />
+            <div className="h-4 w-px shrink-0 bg-white/[0.08]" />
             <NexusNumberField
                 label="Warp amount"
                 binding={warpAmount}
@@ -923,10 +932,10 @@ function WarpControlCluster({
                 step={0.001}
                 decimalPlaces={3}
                 suffix={null}
-                variant="overlay"
+                variant="compactOverlay"
                 showLabel={false}
-                width={92}
-                height={32}
+                width={62}
+                height={20}
             />
         </div>
     );
@@ -1226,11 +1235,12 @@ function FilterSection({
     return (
         <section
             data-role="filter-card"
-            className={`relative min-h-0 overflow-hidden rounded-[28px] border border-white/[0.04] bg-[radial-gradient(circle_at_top,rgba(93,173,255,0.14),transparent_34%),linear-gradient(180deg,rgba(6,10,22,0.98),rgba(2,4,11,1))] ${className ?? ""}`}
+            data-layout-card="desktop-grid-card"
+            className={`${SYNTH_GRID_CARD_SHELL_CLASS} border border-white/[0.04] bg-[radial-gradient(circle_at_top,rgba(93,173,255,0.14),transparent_34%),linear-gradient(180deg,rgba(6,10,22,0.98),rgba(2,4,11,1))] ${className ?? ""}`}
         >
-            <div className="absolute inset-0 rounded-[28px] shadow-[inset_0_1px_0_rgba(255,255,255,0.08),inset_0_-64px_80px_rgba(0,0,0,0.34)]" />
+            <div className={SYNTH_GRID_CARD_INSET_SHADOW_CLASS} />
 
-            <div className="absolute inset-0 p-3">
+            <div className="absolute inset-0 p-1.5">
                 <FilterResponseGraph
                     baseMode={filterMode.value}
                     baseCutoffHz={filterCutoff.value}
@@ -1258,8 +1268,9 @@ function FilterSection({
                 />
             </div>
 
-            <div className="absolute inset-x-0 top-0 z-10 flex items-start justify-between p-3">
+            <div className="absolute inset-x-0 top-0 z-10 flex items-start justify-between p-1.5">
                 <OverlayIconChip
+                    dataRole="filter-mode-chip"
                     ariaLabel={`Cycle filter mode (currently ${getFilterModeLabel(filterMode.value)})`}
                     title={`Filter mode: ${getFilterModeLabel(filterMode.value)}`}
                     onClick={() => filterMode.commitValue(cycleFilterMode(filterMode.value))}
@@ -1268,6 +1279,7 @@ function FilterSection({
                 </OverlayIconChip>
 
                 <OverlayIconChip
+                    dataRole="filter-analyzer-chip"
                     ariaLabel={`Cycle analyzer view (currently ${getFilterSpectrumRenderModeLabel(spectrumRenderMode)})`}
                     title={`Analyzer view: ${getFilterSpectrumRenderModeLabel(spectrumRenderMode)}`}
                     onClick={() => setSpectrumRenderMode((previousMode) => cycleFilterSpectrumRenderMode(previousMode))}
@@ -1276,7 +1288,7 @@ function FilterSection({
                 </OverlayIconChip>
             </div>
 
-            <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex items-end justify-between gap-3 p-3">
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex items-end justify-between gap-1.5 p-1.5">
                 <div className="pointer-events-auto">
                     <PrecisionNumberField
                         ariaLabel="Filter cutoff"
@@ -1291,8 +1303,9 @@ function FilterSection({
                         valueFromNormalized={normalizedToFilterCutoffHz}
                         pixelsPerFullRange={220}
                         dataRole="filter-cutoff-field"
-                        width={122}
-                        height={40}
+                        variant="compactOverlay"
+                        width={72}
+                        height={22}
                     />
                 </div>
                 <div className="pointer-events-auto">
@@ -1308,8 +1321,9 @@ function FilterSection({
                         valueFromNormalized={resonanceQFromSurface}
                         pixelsPerFullRange={180}
                         dataRole="filter-resonance-field"
-                        width={92}
-                        height={40}
+                        variant="compactOverlay"
+                        width={44}
+                        height={22}
                     />
                 </div>
             </div>
@@ -1387,7 +1401,8 @@ function DistortionSection({
     return (
         <section
             data-role="distortion-card"
-            className={`flex h-full flex-col overflow-hidden rounded-[14px] bg-[radial-gradient(circle_at_top_left,rgba(248,113,113,0.10),transparent_34%),linear-gradient(180deg,rgba(9,8,15,0.98),rgba(2,4,11,1))] ${className ?? ""}`}
+            data-layout-card="desktop-grid-card"
+            className={`flex h-full flex-col ${SYNTH_GRID_CARD_SHELL_CLASS} bg-[radial-gradient(circle_at_top_left,rgba(248,113,113,0.10),transparent_34%),linear-gradient(180deg,rgba(9,8,15,0.98),rgba(2,4,11,1))] ${className ?? ""}`}
         >
             <input
                 data-role="distortion-wet-lp-field"
@@ -1713,7 +1728,8 @@ function EffectsRackSection({
     return (
         <section
             data-role="effects-rack-card"
-            className={`grid h-full grid-cols-4 gap-2 rounded-[14px] border border-white/[0.04] bg-[linear-gradient(135deg,rgba(8,16,30,0.96),rgba(4,6,14,1))] p-2 ${className ?? ""}`}
+            data-layout-card="desktop-grid-card"
+            className={`grid h-full grid-cols-4 gap-2 ${SYNTH_GRID_CARD_SHELL_CLASS} border border-white/[0.04] bg-[linear-gradient(135deg,rgba(8,16,30,0.96),rgba(4,6,14,1))] p-2 ${className ?? ""}`}
         >
             <div data-role="effect-rack-column" className="min-h-0 min-w-0">
                 <ChorusEffectColumn
@@ -2088,7 +2104,7 @@ function ModulationMatrixSection({
     }, [commitEnvelopeDurationField, selectedEnvelope]);
 
     return (
-        <section className={`flex h-full flex-col overflow-hidden rounded-[14px] bg-white/[0.02] ${DESKTOP_GRID_CARD_CLASS}`}>
+        <section data-role="mseg-card" data-layout-card="desktop-grid-card" className={`flex h-full flex-col ${SYNTH_GRID_CARD_SHELL_CLASS} bg-white/[0.02] ${DESKTOP_GRID_CARD_CLASS}`}>
             {/* ── Pip selector top-bar ── */}
             <div className="flex shrink-0 items-center gap-1.5 px-2.5 py-1.5">
                 {/* MSEG pips */}
@@ -2560,8 +2576,9 @@ function DesktopPatchViewBody({
             parseText={parsePanInput}
             pixelsPerFullRange={180}
             dataRole="wavetable-pan-field"
-            width={92}
-            height={40}
+            variant="compactOverlay"
+            width={46}
+            height={22}
         />
     ), [synthView.pan]);
     const keyboardToolbarOverride = useMemo(() => (
@@ -2760,7 +2777,7 @@ function DesktopPatchViewBody({
                         msegRateFocusBindings={synthView.keyboardRouting.msegRateFocusBindings}
                     />
 
-                    <section className={`flex flex-col rounded-[22px] border border-white/[0.05] bg-white/[0.025] p-4 ${DESKTOP_GRID_CARD_CLASS}`}>
+                    <section data-role="mod-matrix-card" data-layout-card="desktop-grid-card" className={`flex flex-col ${SYNTH_GRID_CARD_SHELL_CLASS} border border-white/[0.05] bg-white/[0.025] p-4 ${DESKTOP_GRID_CARD_CLASS}`}>
                         <DesktopModMatrix
                             routes={synthView.routes}
                             onAddRoute={synthView.handleAddRoute}

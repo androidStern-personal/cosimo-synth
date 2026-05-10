@@ -327,7 +327,7 @@ async function openHarnessPage({
         await beforeGoto(page);
     }
 
-    await page.goto(server.baseUrl, { waitUntil: "load" });
+    await page.goto(server.baseUrl, { waitUntil: "commit" });
     await waitForHarnessReady(page);
     return page;
 }
@@ -1147,6 +1147,167 @@ test("desktop patch view scrolls vertically when the window is shorter than the 
         );
     } finally {
         await page.close();
+    }
+});
+
+test("desktop grid cards share the compact panel shell at narrow and standalone widths", async () => {
+    const viewportCases = [
+        { label: "narrow two-column", width: 775, height: 700 },
+        { label: "standalone desktop", width: 976, height: 768 },
+    ];
+
+    for (const viewportCase of viewportCases) {
+        const page = await openHarnessPage({
+            beforeGoto: async (nextPage) => {
+                await nextPage.setViewportSize({ width: viewportCase.width, height: viewportCase.height });
+            },
+        });
+
+        try {
+            await page.waitForSelector("text=Ready");
+
+            const metrics = await page.evaluate(() => {
+            const host = document.querySelector("cosimo-desktop-react-view");
+            const root = host?.shadowRoot ?? document;
+            const rectOf = (selector) => {
+                const element = root.querySelector(selector);
+
+                if (!(element instanceof Element)) {
+                    throw new Error(`Missing element: ${selector}`);
+                }
+
+                const rect = element.getBoundingClientRect();
+                const style = getComputedStyle(element);
+
+                return {
+                    width: rect.width,
+                    height: rect.height,
+                    borderRadius: style.borderRadius,
+                    padding: style.padding,
+                };
+            };
+
+            const gridCardSelectors = [
+                '[data-role="wavetable-card"]',
+                '[data-role="filter-card"]',
+                '[data-role="distortion-card"]',
+                '[data-role="effects-rack-card"]',
+                '[data-role="mseg-card"]',
+                '[data-role="mod-matrix-card"]',
+            ];
+            const cards = gridCardSelectors.map((selector) => {
+                const element = root.querySelector(selector);
+
+                if (!(element instanceof Element)) {
+                    throw new Error(`Missing grid card: ${selector}`);
+                }
+
+                const rect = element.getBoundingClientRect();
+                const style = getComputedStyle(element);
+
+                return {
+                    role: element.getAttribute("data-role") ?? selector,
+                    width: rect.width,
+                    height: rect.height,
+                    borderRadius: style.borderRadius,
+                    hasSharedShell: element.getAttribute("data-layout-card") === "desktop-grid-card",
+                };
+            });
+
+            return {
+                cards,
+                wavetable: rectOf(".cosimo-stage"),
+                wavetableCanvas: rectOf(".cosimo-stage canvas"),
+                wavetableTopControls: rectOf('[data-role="wavetable-stage-top-controls"]'),
+                wavetableBottomControls: rectOf('[data-role="wavetable-stage-bottom-controls"]'),
+                wavetableSelectChip: rectOf('[data-role="wavetable-select-chip"]'),
+                wavetableFrameChip: rectOf('[data-role="wavetable-frame-chip"]'),
+                wavetablePositionChip: rectOf('[data-role="wavetable-position-chip"]'),
+                warpControlCluster: rectOf('[data-role="warp-control-cluster"]'),
+                warpModeControl: rectOf('[data-role="warp-mode-control"]'),
+                wavetablePanField: rectOf('[data-role="wavetable-pan-field"]'),
+                filterModeChip: rectOf('[data-role="filter-mode-chip"]'),
+                filterAnalyzerChip: rectOf('[data-role="filter-analyzer-chip"]'),
+                filterCutoffField: rectOf('[data-role="filter-cutoff-field"]'),
+                filterResonanceField: rectOf('[data-role="filter-resonance-field"]'),
+                distortionModeButton: rectOf('[data-role="distortion-mode-option-1"]'),
+                filter: rectOf('[data-role="filter-card"]'),
+                filterGraph: rectOf('[data-role="filter-response-graph"]'),
+            };
+            });
+
+            assert.equal(metrics.cards.length, 6, `Expected the six main desktop panels to be measured by name at ${viewportCase.label}.`);
+            assert.deepEqual(
+                metrics.cards.map((card) => card.hasSharedShell),
+                Array.from({ length: metrics.cards.length }, () => true),
+                `Expected the six main desktop panels to opt into the shared grid-card shell at ${viewportCase.label}.`,
+            );
+            assert.deepEqual(
+                metrics.cards.map((card) => card.borderRadius),
+                Array.from({ length: metrics.cards.length }, () => "14px"),
+                `desktop grid panels should share the same compact shell radius instead of per-panel hero shells at ${viewportCase.label}`,
+            );
+
+            for (const card of metrics.cards) {
+                assert.equal(
+                    Math.abs(card.width - metrics.wavetable.width) <= 1,
+                    true,
+                    `Expected ${card.role || "grid card"} width to match the wavetable shell at ${viewportCase.label}: ${JSON.stringify({ card, wavetable: metrics.wavetable })}`,
+                );
+                assert.equal(
+                    Math.abs(card.height - metrics.wavetable.height) <= 1,
+                    true,
+                    `Expected ${card.role || "grid card"} height to match the wavetable shell at ${viewportCase.label}: ${JSON.stringify({ card, wavetable: metrics.wavetable })}`,
+                );
+            }
+
+            assert.equal(
+                metrics.wavetableTopControls.height <= 36,
+                true,
+                `Wavetable top controls should use compact card spacing, not the old stage band at ${viewportCase.label}: ${JSON.stringify(metrics.wavetableTopControls)}`,
+            );
+            assert.equal(
+                metrics.wavetableBottomControls.height <= 34,
+                true,
+                `Wavetable bottom controls should use compact card spacing, not the old stage band at ${viewportCase.label}: ${JSON.stringify(metrics.wavetableBottomControls)}`,
+            );
+            for (const compactControl of [
+                metrics.wavetableSelectChip,
+                metrics.wavetableFrameChip,
+                metrics.wavetablePositionChip,
+                metrics.warpModeControl,
+                metrics.filterModeChip,
+                metrics.filterAnalyzerChip,
+            ]) {
+                assert.equal(
+                    compactControl.height <= metrics.distortionModeButton.height + 6,
+                    true,
+                    `Expected top-row chip/control height to stay close to the compact distortion mode button at ${viewportCase.label}: ${JSON.stringify({ compactControl, distortionModeButton: metrics.distortionModeButton })}`,
+                );
+            }
+            for (const compactField of [
+                metrics.wavetablePanField,
+                metrics.filterCutoffField,
+                metrics.filterResonanceField,
+            ]) {
+                assert.equal(
+                    compactField.height <= metrics.distortionModeButton.height + 8,
+                    true,
+                    `Expected top-row number fields to use compact overlay sizing at ${viewportCase.label}: ${JSON.stringify({ compactField, distortionModeButton: metrics.distortionModeButton })}`,
+                );
+            }
+            assert.equal(
+                metrics.warpControlCluster.height <= metrics.distortionModeButton.height + 8,
+                true,
+                `Expected the warp cluster to use compact overlay sizing at ${viewportCase.label}: ${JSON.stringify({ warpControlCluster: metrics.warpControlCluster, distortionModeButton: metrics.distortionModeButton })}`,
+            );
+            assert.equal(metrics.wavetableCanvas.width / metrics.wavetable.width >= 0.98, true);
+            assert.equal(metrics.wavetableCanvas.height / metrics.wavetable.height >= 0.98, true);
+            assert.equal(metrics.filterGraph.width / metrics.filter.width >= 0.94, true);
+            assert.equal(metrics.filterGraph.height / metrics.filter.height >= 0.9, true);
+        } finally {
+            await page.close();
+        }
     }
 });
 

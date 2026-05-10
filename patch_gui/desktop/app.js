@@ -13080,6 +13080,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     right: calc(var(--spacing) * 1);
   }
 
+  .right-1\\.5 {
+    right: calc(var(--spacing) * 1.5);
+  }
+
   .right-2 {
     right: calc(var(--spacing) * 2);
   }
@@ -13621,10 +13625,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     height: 12px;
   }
 
-  .h-\\[18px\\] {
-    height: 18px;
-  }
-
   .h-\\[24px\\] {
     height: 24px;
   }
@@ -13833,8 +13833,8 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     width: 3px;
   }
 
-  .w-\\[18px\\] {
-    width: 18px;
+  .w-\\[12px\\] {
+    width: 12px;
   }
 
   .w-\\[38px\\] {
@@ -13881,12 +13881,12 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     max-width: 74px;
   }
 
-  .max-w-\\[140px\\] {
-    max-width: 140px;
+  .max-w-\\[128px\\] {
+    max-width: 128px;
   }
 
-  .max-w-\\[280px\\] {
-    max-width: 280px;
+  .max-w-\\[140px\\] {
+    max-width: 140px;
   }
 
   .max-w-\\[1080px\\] {
@@ -13937,8 +13937,8 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     min-width: 44px;
   }
 
-  .min-w-\\[112px\\] {
-    min-width: 112px;
+  .min-w-\\[72px\\] {
+    min-width: 72px;
   }
 
   .min-w-\\[132px\\] {
@@ -14443,6 +14443,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .rounded-\\[30px\\] {
     border-radius: 30px;
+  }
+
+  .rounded-\\[inherit\\] {
+    border-radius: inherit;
   }
 
   .rounded-full {
@@ -15096,26 +15100,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     }
   }
 
-  .bg-black\\/35 {
-    background-color: #00000059;
-  }
-
-  @supports (color: color-mix(in lab, red, red)) {
-    .bg-black\\/35 {
-      background-color: color-mix(in oklab, var(--color-black) 35%, transparent);
-    }
-  }
-
-  .bg-black\\/40 {
-    background-color: #0006;
-  }
-
-  @supports (color: color-mix(in lab, red, red)) {
-    .bg-black\\/40 {
-      background-color: color-mix(in oklab, var(--color-black) 40%, transparent);
-    }
-  }
-
   .bg-black\\/42 {
     background-color: #0000006b;
   }
@@ -15123,16 +15107,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
   @supports (color: color-mix(in lab, red, red)) {
     .bg-black\\/42 {
       background-color: color-mix(in oklab, var(--color-black) 42%, transparent);
-    }
-  }
-
-  .bg-black\\/45 {
-    background-color: #00000073;
-  }
-
-  @supports (color: color-mix(in lab, red, red)) {
-    .bg-black\\/45 {
-      background-color: color-mix(in oklab, var(--color-black) 45%, transparent);
     }
   }
 
@@ -15904,6 +15878,14 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .pr-4 {
     padding-right: calc(var(--spacing) * 4);
+  }
+
+  .pr-5 {
+    padding-right: calc(var(--spacing) * 5);
+  }
+
+  .pr-7 {
+    padding-right: calc(var(--spacing) * 7);
   }
 
   .pr-8 {
@@ -17133,6 +17115,16 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
   }
 
+  .shadow-\\[0_4px_12px_rgba\\(0\\,0\\,0\\,0\\.20\\)\\,inset_0_1px_0_rgba\\(255\\,255\\,255\\,0\\.04\\)\\] {
+    --tw-shadow: 0 4px 12px var(--tw-shadow-color, #0003), inset 0 1px 0 var(--tw-shadow-color, #ffffff0a);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
+  .shadow-\\[0_4px_12px_rgba\\(0\\,0\\,0\\,0\\.22\\)\\] {
+    --tw-shadow: 0 4px 12px var(--tw-shadow-color, #00000038);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
   .shadow-\\[0_4px_12px_rgba\\(0\\,0\\,0\\,0\\.45\\)\\,0_0_0_1px_rgba\\(103\\,232\\,249\\,0\\.28\\)\\] {
     --tw-shadow: 0 4px 12px var(--tw-shadow-color, #00000073), 0 0 0 1px var(--tw-shadow-color, #67e8f947);
     box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
@@ -17148,28 +17140,13 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
   }
 
-  .shadow-\\[0_10px_28px_rgba\\(0\\,0\\,0\\,0\\.22\\)\\] {
-    --tw-shadow: 0 10px 28px var(--tw-shadow-color, #00000038);
-    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
-  }
-
   .shadow-\\[0_10px_28px_rgba\\(0\\,0\\,0\\,0\\.26\\)\\,inset_0_1px_0_rgba\\(255\\,255\\,255\\,0\\.05\\)\\] {
     --tw-shadow: 0 10px 28px var(--tw-shadow-color, #00000042), inset 0 1px 0 var(--tw-shadow-color, #ffffff0d);
     box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
   }
 
-  .shadow-\\[0_10px_28px_rgba\\(0\\,0\\,0\\,0\\.28\\)\\] {
-    --tw-shadow: 0 10px 28px var(--tw-shadow-color, #00000047);
-    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
-  }
-
   .shadow-\\[0_10px_28px_rgba\\(0\\,0\\,0\\,0\\.55\\)\\] {
     --tw-shadow: 0 10px 28px var(--tw-shadow-color, #0000008c);
-    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
-  }
-
-  .shadow-\\[0_12px_28px_rgba\\(0\\,0\\,0\\,0\\.32\\)\\] {
-    --tw-shadow: 0 12px 28px var(--tw-shadow-color, #00000052);
     box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
   }
 
@@ -17258,13 +17235,13 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
   }
 
-  .shadow-\\[inset_0_1px_0_rgba\\(255\\,255\\,255\\,0\\.06\\)\\] {
-    --tw-shadow: inset 0 1px 0 var(--tw-shadow-color, #ffffff0f);
+  .shadow-\\[inset_0_1px_0_rgba\\(255\\,255\\,255\\,0\\.06\\)\\,inset_0_-40px_64px_rgba\\(0\\,0\\,0\\,0\\.28\\)\\] {
+    --tw-shadow: inset 0 1px 0 var(--tw-shadow-color, #ffffff0f), inset 0 -40px 64px var(--tw-shadow-color, #00000047);
     box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
   }
 
-  .shadow-\\[inset_0_1px_0_rgba\\(255\\,255\\,255\\,0\\.08\\)\\,inset_0_-64px_80px_rgba\\(0\\,0\\,0\\,0\\.34\\)\\] {
-    --tw-shadow: inset 0 1px 0 var(--tw-shadow-color, #ffffff14), inset 0 -64px 80px var(--tw-shadow-color, #00000057);
+  .shadow-\\[inset_0_1px_0_rgba\\(255\\,255\\,255\\,0\\.06\\)\\] {
+    --tw-shadow: inset 0 1px 0 var(--tw-shadow-color, #ffffff0f);
     box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
   }
 
@@ -18288,10 +18265,11 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
 .cosimo-stage:after {
   content: "";
+  border-radius: inherit;
   pointer-events: none;
   position: absolute;
   inset: 0;
-  box-shadow: inset 0 1px #ffffff14, inset 0 -48px 64px #00000059;
+  box-shadow: inset 0 1px #ffffff0f, inset 0 -40px 64px #00000047;
 }
 
 .cosimo-range {
@@ -22500,6 +22478,11 @@ const VOICE_MODE_OPTIONS = [
   { value: 1, label: "Mono" },
   { value: 2, label: "Legato" }
 ];
+const SYNTH_GRID_CARD_SIZE_CLASS = "aspect-[50/27] min-h-[198px]";
+const SYNTH_GRID_CARD_SHELL_CLASS = "relative min-h-0 overflow-hidden rounded-[14px]";
+const SYNTH_GRID_CARD_INSET_SHADOW_CLASS = "pointer-events-none absolute inset-0 rounded-[inherit] shadow-[inset_0_1px_0_rgba(255,255,255,0.06),inset_0_-40px_64px_rgba(0,0,0,0.28)]";
+const SYNTH_COMPACT_CONTROL_CHROME_CLASS = "rounded-[5px] border border-white/[0.07] bg-black/42 shadow-[0_4px_12px_rgba(0,0,0,0.22)]";
+const SYNTH_COMPACT_CONTROL_TEXT_CLASS = "text-[8px] uppercase tracking-[0.10em]";
 const MSEG_GRID_STEPS = [0.25, 0.5, 0.75];
 const MSEG_PREVIEW_HORIZONTAL_PADDING_PX = 24;
 const MSEG_PREVIEW_VERTICAL_PADDING_PX = 22;
@@ -23730,8 +23713,11 @@ function WavetableStageSection({
     "section",
     {
       ref: stageRef,
+      "data-role": "wavetable-card",
+      "data-layout-card": "desktop-grid-card",
       className: joinClasses$2(
-        "cosimo-stage relative overflow-hidden rounded-[28px] border border-white/[0.05]",
+        "cosimo-stage border border-white/[0.04]",
+        SYNTH_GRID_CARD_SHELL_CLASS,
         className
       ),
       onPointerDown,
@@ -23748,57 +23734,71 @@ function WavetableStageSection({
             warpAmount
           }
         ),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "absolute inset-x-0 top-0 flex items-start justify-between gap-3 p-5 text-[11px] uppercase tracking-[0.16em] text-slate-300/70", children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsxs(
-            "label",
-            {
-              className: "relative inline-flex max-w-[280px] cursor-pointer items-center",
-              onFocus: onTablePrewarm,
-              onPointerEnter: onTablePrewarm,
-              children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "inline-flex min-w-0 items-center rounded-full border border-white/10 bg-black/40 px-4 py-2.5 pr-10 text-left text-[11px] uppercase tracking-[0.18em] text-amber-100 shadow-[0_10px_28px_rgba(0,0,0,0.28)] backdrop-blur-md", children: /* @__PURE__ */ jsxRuntimeExports.jsx("span", { "data-role": "wavetable-stage-title", className: "truncate", children: tableName }) }),
-                /* @__PURE__ */ jsxRuntimeExports.jsx(SelectChevron, { className: "pointer-events-none absolute right-4 top-1/2 h-3 w-3 -translate-y-1/2 text-slate-300/75" }),
-                /* @__PURE__ */ jsxRuntimeExports.jsx(
-                  "select",
+        /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          "div",
+          {
+            "data-role": "wavetable-stage-top-controls",
+            className: "absolute inset-x-0 top-0 flex items-start justify-between gap-1.5 p-1.5 text-[8px] uppercase tracking-[0.10em] text-slate-300/70",
+            children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                "label",
+                {
+                  className: "relative inline-flex max-w-[128px] cursor-pointer items-center",
+                  onFocus: onTablePrewarm,
+                  onPointerEnter: onTablePrewarm,
+                  children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { "data-role": "wavetable-select-chip", className: `inline-flex h-5 min-w-0 items-center ${SYNTH_COMPACT_CONTROL_CHROME_CLASS} px-1.5 pr-5 text-left ${SYNTH_COMPACT_CONTROL_TEXT_CLASS} text-amber-100`, children: /* @__PURE__ */ jsxRuntimeExports.jsx("span", { "data-role": "wavetable-stage-title", className: "truncate", children: tableName }) }),
+                    /* @__PURE__ */ jsxRuntimeExports.jsx(SelectChevron, { className: "pointer-events-none absolute right-1.5 top-1/2 h-2.5 w-2.5 -translate-y-1/2 text-slate-300/65" }),
+                    /* @__PURE__ */ jsxRuntimeExports.jsx(
+                      "select",
+                      {
+                        className: "absolute inset-0 cursor-pointer opacity-0",
+                        value: String(desiredTableIndex),
+                        onChange: (event) => onTableChange(Number(event.target.value)),
+                        "aria-label": "Select wavetable",
+                        ...tableFocusBindings,
+                        children: tableOptions.map((table, tableIndex) => /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: tableIndex, children: table.name }, `${table.name}-${tableIndex}`))
+                      }
+                    )
+                  ]
+                }
+              ),
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex min-w-0 items-center gap-1", children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { "data-role": "wavetable-frame-chip", className: `flex h-5 items-center ${SYNTH_COMPACT_CONTROL_CHROME_CLASS} px-1.5 ${SYNTH_COMPACT_CONTROL_TEXT_CLASS} text-cyan-200/80`, children: [
+                  "Frame ",
+                  formatFrameIndex(position, frameCount)
+                ] }),
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { "data-role": "wavetable-position-chip", className: `flex h-5 items-center ${SYNTH_COMPACT_CONTROL_CHROME_CLASS} px-1.5 ${SYNTH_COMPACT_CONTROL_TEXT_CLASS} text-slate-200/80`, children: [
+                  "Pos ",
+                  clampDisplayPosition(position).toFixed(3)
+                ] })
+              ] })
+            ]
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          "div",
+          {
+            "data-role": "wavetable-stage-bottom-controls",
+            className: "absolute inset-x-0 bottom-0 flex items-end justify-between gap-1 p-1",
+            children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex min-w-0 items-end gap-1", children: [
+                bottomLeftAccessory,
+                canRetry ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "button",
                   {
-                    className: "absolute inset-0 cursor-pointer opacity-0",
-                    value: String(desiredTableIndex),
-                    onChange: (event) => onTableChange(Number(event.target.value)),
-                    "aria-label": "Select wavetable",
-                    ...tableFocusBindings,
-                    children: tableOptions.map((table, tableIndex) => /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: tableIndex, children: table.name }, `${table.name}-${tableIndex}`))
+                    type: "button",
+                    className: "cosimo-button h-5 rounded-[5px] px-1.5 text-[8px] uppercase tracking-[0.10em] disabled:opacity-40",
+                    disabled: !canRetry,
+                    onClick: onRetry,
+                    children: "Retry Load"
                   }
-                )
-              ]
-            }
-          ),
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2", children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "rounded-full border border-white/10 bg-black/35 px-3 py-2 text-cyan-200/80 shadow-[0_10px_28px_rgba(0,0,0,0.22)] backdrop-blur-md", children: [
-              "Frame ",
-              formatFrameIndex(position, frameCount)
-            ] }),
-            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "rounded-full border border-white/10 bg-black/35 px-3 py-2 text-slate-200/80 shadow-[0_10px_28px_rgba(0,0,0,0.22)] backdrop-blur-md", children: [
-              "Pos ",
-              clampDisplayPosition(position).toFixed(3)
-            ] })
-          ] })
-        ] }),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "absolute inset-x-0 bottom-0 flex items-end justify-between gap-3 p-5", children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex min-w-0 items-end gap-3", children: [
-            bottomLeftAccessory,
-            canRetry ? /* @__PURE__ */ jsxRuntimeExports.jsx(
-              "button",
-              {
-                type: "button",
-                className: "cosimo-button rounded-full px-4 py-2 text-[11px] uppercase tracking-[0.18em] disabled:opacity-40",
-                disabled: !canRetry,
-                onClick: onRetry,
-                children: "Retry Load"
-              }
-            ) : null
-          ] }),
-          bottomRightAccessory ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex min-w-0 items-end justify-end gap-3", children: bottomRightAccessory }) : null
-        ] }),
+                ) : null
+              ] }),
+              bottomRightAccessory ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex min-w-0 items-end justify-end gap-1", children: bottomRightAccessory }) : null
+            ]
+          }
+        ),
         /* @__PURE__ */ jsxRuntimeExports.jsx("pre", { "data-role": "wavetable-stage-debug", className: "hidden", children: JSON.stringify(debugState) })
       ]
     }
@@ -32956,21 +32956,23 @@ function styleNexusNumberInput(element, host, {
   width,
   height
 }) {
-  element.style.borderRadius = variant === "overlay" ? "999px" : "16px";
-  element.style.border = variant === "overlay" ? "1px solid rgba(255,255,255,0.10)" : "1px solid rgba(255,255,255,0.08)";
-  element.style.boxShadow = variant === "overlay" ? "0 10px 28px rgba(0,0,0,0.26), inset 0 1px 0 rgba(255,255,255,0.05)" : "inset 0 1px 0 rgba(255,255,255,0.04)";
+  const isOverlay = variant === "overlay" || variant === "compactOverlay";
+  const isCompactOverlay = variant === "compactOverlay";
+  element.style.borderRadius = isOverlay ? isCompactOverlay ? "5px" : "999px" : "16px";
+  element.style.border = isOverlay ? "1px solid rgba(255,255,255,0.10)" : "1px solid rgba(255,255,255,0.08)";
+  element.style.boxShadow = isOverlay ? isCompactOverlay ? "0 4px 12px rgba(0,0,0,0.20), inset 0 1px 0 rgba(255,255,255,0.04)" : "0 10px 28px rgba(0,0,0,0.26), inset 0 1px 0 rgba(255,255,255,0.05)" : "inset 0 1px 0 rgba(255,255,255,0.04)";
   element.style.fontFamily = '"SF Mono", "JetBrains Mono", ui-monospace, monospace';
-  element.style.letterSpacing = "0.12em";
-  element.style.fontSize = variant === "overlay" ? "13px" : "14px";
-  element.style.padding = variant === "overlay" ? "10px 16px" : "10px 14px";
-  element.style.backgroundColor = variant === "overlay" ? "rgba(0,0,0,0.45)" : "rgba(255,255,255,0.06)";
+  element.style.letterSpacing = isCompactOverlay ? "0.06em" : "0.12em";
+  element.style.fontSize = isOverlay ? isCompactOverlay ? "9px" : "13px" : "14px";
+  element.style.padding = isOverlay ? isCompactOverlay ? "0 6px" : "10px 16px" : "10px 14px";
+  element.style.backgroundColor = isOverlay ? "rgba(0,0,0,0.45)" : "rgba(255,255,255,0.06)";
   element.style.color = "#d6f4ff";
   element.style.display = "block";
   element.style.width = `${width}px`;
   element.style.height = `${height}px`;
   host.style.width = `${width}px`;
   host.style.height = `${height}px`;
-  host.style.cursor = variant === "overlay" ? "ew-resize" : "ns-resize";
+  host.style.cursor = isOverlay ? "ew-resize" : "ns-resize";
 }
 function NexusNumberField({
   label,
@@ -33118,6 +33120,7 @@ function PrecisionNumberField({
   step = 0,
   width = 128,
   height = 40,
+  variant = "default",
   suffix = null,
   normalizedFromValue = (value) => value,
   valueFromNormalized = (value) => value,
@@ -33143,6 +33146,7 @@ function PrecisionNumberField({
     [max, min, normalizedFromValue]
   );
   const displayValue = reactExports.useMemo(() => isEditing ? draftValue : formatDisplay(binding.value), [binding.value, draftValue, formatDisplay, isEditing]);
+  const isCompactOverlay = variant === "compactOverlay";
   reactExports.useEffect(() => {
     draftValueRef.current = draftValue;
   }, [draftValue]);
@@ -33191,7 +33195,7 @@ function PrecisionNumberField({
       "div",
       {
         "data-role": dataRole,
-        className: "relative rounded-full border border-white/[0.10] bg-black/48 shadow-[0_10px_28px_rgba(0,0,0,0.26),inset_0_1px_0_rgba(255,255,255,0.05)]",
+        className: `relative border border-white/[0.10] bg-black/48 ${isCompactOverlay ? "rounded-[5px] shadow-[0_4px_12px_rgba(0,0,0,0.20),inset_0_1px_0_rgba(255,255,255,0.04)]" : "rounded-full shadow-[0_10px_28px_rgba(0,0,0,0.26),inset_0_1px_0_rgba(255,255,255,0.05)]"}`,
         style: { width: `${width}px`, height: `${height}px` },
         children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -33205,7 +33209,7 @@ function PrecisionNumberField({
               spellCheck: false,
               readOnly: !isEditing,
               value: displayValue,
-              className: `h-full w-full bg-transparent font-mono text-[13px] tracking-[0.12em] text-cyan-100 outline-none ${suffix && !isEditing ? "pr-11" : "pr-4"} pl-4 ${isEditing ? "cursor-text selection:bg-cyan-300/25" : "cursor-ew-resize select-none"}`,
+              className: `h-full w-full bg-transparent font-mono text-cyan-100 outline-none ${isCompactOverlay ? "px-1.5 text-[9px] tracking-[0.06em]" : `text-[13px] tracking-[0.12em] ${suffix && !isEditing ? "pr-11" : "pr-4"} pl-4`} ${isEditing ? "cursor-text selection:bg-cyan-300/25" : "cursor-ew-resize select-none"}`,
               onPointerDown: (event) => {
                 if (event.button !== 0 || isEditing) {
                   return;
@@ -33305,7 +33309,7 @@ function PrecisionNumberField({
               }
             }
           ),
-          suffix && !isEditing ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 font-mono text-[10px] tracking-[0.16em] text-cyan-100/58", children: suffix }) : null
+          suffix && !isEditing ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: `pointer-events-none absolute top-1/2 -translate-y-1/2 font-mono text-cyan-100/58 ${isCompactOverlay ? "right-1.5 text-[7px] tracking-[0.08em]" : "right-4 text-[10px] tracking-[0.16em]"}`, children: suffix }) : null
         ]
       }
     )
@@ -39526,7 +39530,7 @@ const ENVELOPE_VIEWBOX = {
   top: 42,
   bottom: 118
 };
-const DESKTOP_GRID_CARD_CLASS = "aspect-[50/27] min-h-[198px]";
+const DESKTOP_GRID_CARD_CLASS = SYNTH_GRID_CARD_SIZE_CLASS;
 const WARP_MODE_OPTIONS = [
   { value: 0, label: "Off" },
   { value: 1, label: "Bend +/-" },
@@ -39815,24 +39819,24 @@ function parseResonanceInput(text) {
 function WarpModeGlyph({ mode }) {
   switch (mode) {
     case 1:
-      return /* @__PURE__ */ jsxRuntimeExports.jsx("svg", { viewBox: "0 0 24 24", className: "h-[18px] w-[18px]", "aria-hidden": "true", children: /* @__PURE__ */ jsxRuntimeExports.jsx("path", { d: "M4 17.5 8.5 7 12 17.5 15.5 7 20 17.5", fill: "none", stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: "1.8" }) });
+      return /* @__PURE__ */ jsxRuntimeExports.jsx("svg", { viewBox: "0 0 24 24", className: "h-[12px] w-[12px]", "aria-hidden": "true", children: /* @__PURE__ */ jsxRuntimeExports.jsx("path", { d: "M4 17.5 8.5 7 12 17.5 15.5 7 20 17.5", fill: "none", stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: "1.8" }) });
     case 2:
-      return /* @__PURE__ */ jsxRuntimeExports.jsx("svg", { viewBox: "0 0 24 24", className: "h-[18px] w-[18px]", "aria-hidden": "true", children: /* @__PURE__ */ jsxRuntimeExports.jsx("path", { d: "M4 16V8L8 8V16L12 16V8L16 8V16L20 16V8", fill: "none", stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: "1.8" }) });
+      return /* @__PURE__ */ jsxRuntimeExports.jsx("svg", { viewBox: "0 0 24 24", className: "h-[12px] w-[12px]", "aria-hidden": "true", children: /* @__PURE__ */ jsxRuntimeExports.jsx("path", { d: "M4 16V8L8 8V16L12 16V8L16 8V16L20 16V8", fill: "none", stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: "1.8" }) });
     case 3:
-      return /* @__PURE__ */ jsxRuntimeExports.jsx("svg", { viewBox: "0 0 24 24", className: "h-[18px] w-[18px]", "aria-hidden": "true", children: /* @__PURE__ */ jsxRuntimeExports.jsx("path", { d: "M4 16.5C7 16.5 8 6.5 11 6.5C14 6.5 15 17.5 18 17.5C19.5 17.5 20.3 14.5 20 8.5", fill: "none", stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: "1.8" }) });
+      return /* @__PURE__ */ jsxRuntimeExports.jsx("svg", { viewBox: "0 0 24 24", className: "h-[12px] w-[12px]", "aria-hidden": "true", children: /* @__PURE__ */ jsxRuntimeExports.jsx("path", { d: "M4 16.5C7 16.5 8 6.5 11 6.5C14 6.5 15 17.5 18 17.5C19.5 17.5 20.3 14.5 20 8.5", fill: "none", stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: "1.8" }) });
     case 4:
-      return /* @__PURE__ */ jsxRuntimeExports.jsxs("svg", { viewBox: "0 0 24 24", className: "h-[18px] w-[18px]", "aria-hidden": "true", children: [
+      return /* @__PURE__ */ jsxRuntimeExports.jsxs("svg", { viewBox: "0 0 24 24", className: "h-[12px] w-[12px]", "aria-hidden": "true", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx("path", { d: "M4 17L10.5 7L13.5 12L20 7", fill: "none", stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: "1.8" }),
         /* @__PURE__ */ jsxRuntimeExports.jsx("path", { d: "M4 7L10.5 17L13.5 12L20 17", fill: "none", stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: "1.2", opacity: "0.8" })
       ] });
     default:
-      return /* @__PURE__ */ jsxRuntimeExports.jsx("svg", { viewBox: "0 0 24 24", className: "h-[18px] w-[18px]", "aria-hidden": "true", children: /* @__PURE__ */ jsxRuntimeExports.jsx("path", { d: "M3 12H21", fill: "none", stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: "1.8" }) });
+      return /* @__PURE__ */ jsxRuntimeExports.jsx("svg", { viewBox: "0 0 24 24", className: "h-[12px] w-[12px]", "aria-hidden": "true", children: /* @__PURE__ */ jsxRuntimeExports.jsx("path", { d: "M3 12H21", fill: "none", stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: "1.8" }) });
   }
 }
 function FilterModeGlyph({ mode }) {
   switch (mode) {
     case 1:
-      return /* @__PURE__ */ jsxRuntimeExports.jsx("svg", { viewBox: "0 0 24 24", className: "h-[18px] w-[18px]", "aria-hidden": "true", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+      return /* @__PURE__ */ jsxRuntimeExports.jsx("svg", { viewBox: "0 0 24 24", className: "h-[12px] w-[12px]", "aria-hidden": "true", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
         "path",
         {
           d: "M3 7.5H9.5C12.5 7.5 15.5 9 16.5 12.5L18.5 19",
@@ -39844,7 +39848,7 @@ function FilterModeGlyph({ mode }) {
         }
       ) });
     case 2:
-      return /* @__PURE__ */ jsxRuntimeExports.jsx("svg", { viewBox: "0 0 24 24", className: "h-[18px] w-[18px]", "aria-hidden": "true", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+      return /* @__PURE__ */ jsxRuntimeExports.jsx("svg", { viewBox: "0 0 24 24", className: "h-[12px] w-[12px]", "aria-hidden": "true", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
         "path",
         {
           d: "M3 18.5L5.5 15.5C7.5 12.5 9.5 8.5 13 7.5H21",
@@ -39856,7 +39860,7 @@ function FilterModeGlyph({ mode }) {
         }
       ) });
     case 3:
-      return /* @__PURE__ */ jsxRuntimeExports.jsx("svg", { viewBox: "0 0 24 24", className: "h-[18px] w-[18px]", "aria-hidden": "true", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+      return /* @__PURE__ */ jsxRuntimeExports.jsx("svg", { viewBox: "0 0 24 24", className: "h-[12px] w-[12px]", "aria-hidden": "true", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
         "path",
         {
           d: "M3 18.5C6.5 18.5 8 18 9.5 14.5C11 11 11.5 8 12 8C12.5 8 13 11 14.5 14.5C16 18 17.5 18.5 21 18.5",
@@ -39868,7 +39872,7 @@ function FilterModeGlyph({ mode }) {
         }
       ) });
     case 4:
-      return /* @__PURE__ */ jsxRuntimeExports.jsx("svg", { viewBox: "0 0 24 24", className: "h-[18px] w-[18px]", "aria-hidden": "true", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+      return /* @__PURE__ */ jsxRuntimeExports.jsx("svg", { viewBox: "0 0 24 24", className: "h-[12px] w-[12px]", "aria-hidden": "true", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
         "path",
         {
           d: "M3 8.5C8 8.5 9 8.5 10.5 13.5C11.25 16 11.75 17.5 12 17.5C12.25 17.5 12.75 16 13.5 13.5C15 8.5 16 8.5 21 8.5",
@@ -39880,7 +39884,7 @@ function FilterModeGlyph({ mode }) {
         }
       ) });
     case 5:
-      return /* @__PURE__ */ jsxRuntimeExports.jsx("svg", { viewBox: "0 0 24 24", className: "h-[18px] w-[18px]", "aria-hidden": "true", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+      return /* @__PURE__ */ jsxRuntimeExports.jsx("svg", { viewBox: "0 0 24 24", className: "h-[12px] w-[12px]", "aria-hidden": "true", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
         "path",
         {
           d: "M3 18.5C8 18.5 9 18 10.5 12C11.3 8 11.8 5.5 12 5.5C12.2 5.5 12.7 8 13.5 12C15 18 16 18.5 21 18.5",
@@ -39892,7 +39896,7 @@ function FilterModeGlyph({ mode }) {
         }
       ) });
     default:
-      return /* @__PURE__ */ jsxRuntimeExports.jsx("svg", { viewBox: "0 0 24 24", className: "h-[18px] w-[18px]", "aria-hidden": "true", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+      return /* @__PURE__ */ jsxRuntimeExports.jsx("svg", { viewBox: "0 0 24 24", className: "h-[12px] w-[12px]", "aria-hidden": "true", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
         "path",
         {
           d: "M3 12H21",
@@ -39907,20 +39911,20 @@ function FilterModeGlyph({ mode }) {
 }
 function FilterSpectrumModeGlyph({ mode }) {
   if (mode === "bars") {
-    return /* @__PURE__ */ jsxRuntimeExports.jsxs("svg", { viewBox: "0 0 24 24", className: "h-[18px] w-[18px]", "aria-hidden": "true", children: [
+    return /* @__PURE__ */ jsxRuntimeExports.jsxs("svg", { viewBox: "0 0 24 24", className: "h-[12px] w-[12px]", "aria-hidden": "true", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx("rect", { x: "4", y: "12", width: "3", height: "7", fill: "currentColor" }),
       /* @__PURE__ */ jsxRuntimeExports.jsx("rect", { x: "10.5", y: "8", width: "3", height: "11", fill: "currentColor" }),
       /* @__PURE__ */ jsxRuntimeExports.jsx("rect", { x: "17", y: "5", width: "3", height: "14", fill: "currentColor" })
     ] });
   }
   if (mode === "round-bars") {
-    return /* @__PURE__ */ jsxRuntimeExports.jsxs("svg", { viewBox: "0 0 24 24", className: "h-[18px] w-[18px]", "aria-hidden": "true", children: [
+    return /* @__PURE__ */ jsxRuntimeExports.jsxs("svg", { viewBox: "0 0 24 24", className: "h-[12px] w-[12px]", "aria-hidden": "true", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx("rect", { x: "4", y: "12", width: "3.2", height: "7", rx: "1.6", fill: "currentColor" }),
       /* @__PURE__ */ jsxRuntimeExports.jsx("rect", { x: "10.4", y: "8", width: "3.2", height: "11", rx: "1.6", fill: "currentColor" }),
       /* @__PURE__ */ jsxRuntimeExports.jsx("rect", { x: "16.8", y: "5", width: "3.2", height: "14", rx: "1.6", fill: "currentColor" })
     ] });
   }
-  return /* @__PURE__ */ jsxRuntimeExports.jsx("svg", { viewBox: "0 0 24 24", className: "h-[18px] w-[18px]", "aria-hidden": "true", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+  return /* @__PURE__ */ jsxRuntimeExports.jsx("svg", { viewBox: "0 0 24 24", className: "h-[12px] w-[12px]", "aria-hidden": "true", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
     "path",
     {
       d: "M4 16.5L8.5 13L12 9.5L15 11.5L20 6.5",
@@ -39935,16 +39939,18 @@ function FilterSpectrumModeGlyph({ mode }) {
 function OverlayIconChip({
   ariaLabel,
   title,
+  dataRole,
   onClick,
   children
 }) {
   return /* @__PURE__ */ jsxRuntimeExports.jsx(
     "button",
     {
+      "data-role": dataRole,
       type: "button",
       "aria-label": ariaLabel,
       title,
-      className: "flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-black/45 text-slate-100 shadow-[0_12px_28px_rgba(0,0,0,0.32)] backdrop-blur-md transition hover:border-cyan-200/30 hover:text-cyan-100",
+      className: `flex h-5 w-5 items-center justify-center ${SYNTH_COMPACT_CONTROL_CHROME_CLASS} text-slate-100 transition hover:border-cyan-200/30 hover:text-cyan-100`,
       onClick,
       children
     }
@@ -40049,23 +40055,24 @@ function WarpControlCluster({
   warpAmount
 }) {
   const modeLabel = getWarpModeLabel(warpMode.value);
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex min-w-0 items-center gap-2 rounded-full border border-white/10 bg-black/45 px-2 py-1.5 shadow-[0_12px_28px_rgba(0,0,0,0.32)] backdrop-blur-md", children: [
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { "data-role": "warp-control-cluster", className: `flex h-6 min-w-0 items-center gap-1 ${SYNTH_COMPACT_CONTROL_CHROME_CLASS} px-1`, children: [
     /* @__PURE__ */ jsxRuntimeExports.jsxs(
       "button",
       {
+        "data-role": "warp-mode-control",
         type: "button",
         "aria-label": `Cycle warp mode (currently ${modeLabel})`,
         title: `Warp mode: ${modeLabel}`,
-        className: "flex h-8 min-w-[112px] items-center gap-2 rounded-full px-2.5 text-left transition hover:bg-white/[0.06]",
+        className: "flex h-5 min-w-[72px] items-center gap-1 rounded-[4px] px-1 text-left transition hover:bg-white/[0.06]",
         onClick: () => warpMode.commitValue(cycleWarpMode(warpMode.value)),
         children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[9px] font-bold uppercase tracking-[0.14em] text-slate-300/45", children: "Warp" }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "grid size-5 shrink-0 place-items-center rounded-full border border-cyan-200/18 bg-cyan-300/8 text-cyan-100/85", children: /* @__PURE__ */ jsxRuntimeExports.jsx(WarpModeGlyph, { mode: warpMode.value }) }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "min-w-0 truncate text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-100/78", children: modeLabel })
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[7px] font-bold uppercase tracking-[0.10em] text-slate-300/45", children: "Warp" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "grid size-4 shrink-0 place-items-center rounded-full border border-cyan-200/18 bg-cyan-300/8 text-cyan-100/85", children: /* @__PURE__ */ jsxRuntimeExports.jsx(WarpModeGlyph, { mode: warpMode.value }) }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "min-w-0 truncate text-[8px] font-semibold uppercase tracking-[0.06em] text-slate-100/78", children: modeLabel })
         ]
       }
     ),
-    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "h-7 w-px shrink-0 bg-white/[0.08]" }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "h-4 w-px shrink-0 bg-white/[0.08]" }),
     /* @__PURE__ */ jsxRuntimeExports.jsx(
       NexusNumberField,
       {
@@ -40076,10 +40083,10 @@ function WarpControlCluster({
         step: 1e-3,
         decimalPlaces: 3,
         suffix: null,
-        variant: "overlay",
+        variant: "compactOverlay",
         showLabel: false,
-        width: 92,
-        height: 32
+        width: 62,
+        height: 20
       }
     )
   ] });
@@ -40378,10 +40385,11 @@ function FilterSection({
     "section",
     {
       "data-role": "filter-card",
-      className: `relative min-h-0 overflow-hidden rounded-[28px] border border-white/[0.04] bg-[radial-gradient(circle_at_top,rgba(93,173,255,0.14),transparent_34%),linear-gradient(180deg,rgba(6,10,22,0.98),rgba(2,4,11,1))] ${className ?? ""}`,
+      "data-layout-card": "desktop-grid-card",
+      className: `${SYNTH_GRID_CARD_SHELL_CLASS} border border-white/[0.04] bg-[radial-gradient(circle_at_top,rgba(93,173,255,0.14),transparent_34%),linear-gradient(180deg,rgba(6,10,22,0.98),rgba(2,4,11,1))] ${className ?? ""}`,
       children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "absolute inset-0 rounded-[28px] shadow-[inset_0_1px_0_rgba(255,255,255,0.08),inset_0_-64px_80px_rgba(0,0,0,0.34)]" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "absolute inset-0 p-3", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: SYNTH_GRID_CARD_INSET_SHADOW_CLASS }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "absolute inset-0 p-1.5", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
           FilterResponseGraph,
           {
             baseMode: filterMode.value,
@@ -40409,10 +40417,11 @@ function FilterSection({
             className: "h-full w-full"
           }
         ) }),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "absolute inset-x-0 top-0 z-10 flex items-start justify-between p-3", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "absolute inset-x-0 top-0 z-10 flex items-start justify-between p-1.5", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx(
             OverlayIconChip,
             {
+              dataRole: "filter-mode-chip",
               ariaLabel: `Cycle filter mode (currently ${getFilterModeLabel(filterMode.value)})`,
               title: `Filter mode: ${getFilterModeLabel(filterMode.value)}`,
               onClick: () => filterMode.commitValue(cycleFilterMode(filterMode.value)),
@@ -40422,6 +40431,7 @@ function FilterSection({
           /* @__PURE__ */ jsxRuntimeExports.jsx(
             OverlayIconChip,
             {
+              dataRole: "filter-analyzer-chip",
               ariaLabel: `Cycle analyzer view (currently ${getFilterSpectrumRenderModeLabel(spectrumRenderMode)})`,
               title: `Analyzer view: ${getFilterSpectrumRenderModeLabel(spectrumRenderMode)}`,
               onClick: () => setSpectrumRenderMode((previousMode) => cycleFilterSpectrumRenderMode(previousMode)),
@@ -40429,7 +40439,7 @@ function FilterSection({
             }
           )
         ] }),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "pointer-events-none absolute inset-x-0 bottom-0 z-10 flex items-end justify-between gap-3 p-3", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "pointer-events-none absolute inset-x-0 bottom-0 z-10 flex items-end justify-between gap-1.5 p-1.5", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "pointer-events-auto", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
             PrecisionNumberField,
             {
@@ -40445,8 +40455,9 @@ function FilterSection({
               valueFromNormalized: normalizedToFilterCutoffHz,
               pixelsPerFullRange: 220,
               dataRole: "filter-cutoff-field",
-              width: 122,
-              height: 40
+              variant: "compactOverlay",
+              width: 72,
+              height: 22
             }
           ) }),
           /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "pointer-events-auto", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -40463,8 +40474,9 @@ function FilterSection({
               valueFromNormalized: resonanceQFromSurface,
               pixelsPerFullRange: 180,
               dataRole: "filter-resonance-field",
-              width: 92,
-              height: 40
+              variant: "compactOverlay",
+              width: 44,
+              height: 22
             }
           ) })
         ] }),
@@ -40531,7 +40543,8 @@ function DistortionSection({
     "section",
     {
       "data-role": "distortion-card",
-      className: `flex h-full flex-col overflow-hidden rounded-[14px] bg-[radial-gradient(circle_at_top_left,rgba(248,113,113,0.10),transparent_34%),linear-gradient(180deg,rgba(9,8,15,0.98),rgba(2,4,11,1))] ${className ?? ""}`,
+      "data-layout-card": "desktop-grid-card",
+      className: `flex h-full flex-col ${SYNTH_GRID_CARD_SHELL_CLASS} bg-[radial-gradient(circle_at_top_left,rgba(248,113,113,0.10),transparent_34%),linear-gradient(180deg,rgba(9,8,15,0.98),rgba(2,4,11,1))] ${className ?? ""}`,
       children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           "input",
@@ -40904,7 +40917,8 @@ function EffectsRackSection({
     "section",
     {
       "data-role": "effects-rack-card",
-      className: `grid h-full grid-cols-4 gap-2 rounded-[14px] border border-white/[0.04] bg-[linear-gradient(135deg,rgba(8,16,30,0.96),rgba(4,6,14,1))] p-2 ${className ?? ""}`,
+      "data-layout-card": "desktop-grid-card",
+      className: `grid h-full grid-cols-4 gap-2 ${SYNTH_GRID_CARD_SHELL_CLASS} border border-white/[0.04] bg-[linear-gradient(135deg,rgba(8,16,30,0.96),rgba(4,6,14,1))] p-2 ${className ?? ""}`,
       children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx("div", { "data-role": "effect-rack-column", className: "min-h-0 min-w-0", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
           ChorusEffectColumn,
@@ -41229,7 +41243,7 @@ function ModulationMatrixSection({
       event.currentTarget.blur();
     }
   }, [commitEnvelopeDurationField, selectedEnvelope]);
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: `flex h-full flex-col overflow-hidden rounded-[14px] bg-white/[0.02] ${DESKTOP_GRID_CARD_CLASS}`, children: [
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { "data-role": "mseg-card", "data-layout-card": "desktop-grid-card", className: `flex h-full flex-col ${SYNTH_GRID_CARD_SHELL_CLASS} bg-white/[0.02] ${DESKTOP_GRID_CARD_CLASS}`, children: [
     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex shrink-0 items-center gap-1.5 px-2.5 py-1.5", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex gap-[3px]", children: Array.from({ length: MODULATION_MSEG_SLOT_COUNT }, (_, slotIndex) => /* @__PURE__ */ jsxRuntimeExports.jsx(
         "button",
@@ -41635,8 +41649,9 @@ function DesktopPatchViewBody({
       parseText: parsePanInput,
       pixelsPerFullRange: 180,
       dataRole: "wavetable-pan-field",
-      width: 92,
-      height: 40
+      variant: "compactOverlay",
+      width: 46,
+      height: 22
     }
   ), [synthView.pan]);
   const keyboardToolbarOverride = reactExports.useMemo(() => /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { "data-role": "keyboard-control-row", className: "grid min-h-[158px] gap-2", children: [
@@ -41826,7 +41841,7 @@ function DesktopPatchViewBody({
                 msegRateFocusBindings: synthView.keyboardRouting.msegRateFocusBindings
               }
             ),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("section", { className: `flex flex-col rounded-[22px] border border-white/[0.05] bg-white/[0.025] p-4 ${DESKTOP_GRID_CARD_CLASS}`, children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+            /* @__PURE__ */ jsxRuntimeExports.jsx("section", { "data-role": "mod-matrix-card", "data-layout-card": "desktop-grid-card", className: `flex flex-col ${SYNTH_GRID_CARD_SHELL_CLASS} border border-white/[0.05] bg-white/[0.025] p-4 ${DESKTOP_GRID_CARD_CLASS}`, children: /* @__PURE__ */ jsxRuntimeExports.jsx(
               DesktopModMatrix,
               {
                 routes: synthView.routes,
