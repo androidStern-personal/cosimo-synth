@@ -77,6 +77,11 @@ export const VOICE_MODE_OPTIONS: VoiceModeOption[] = [
     { value: 1, label: "Mono" },
     { value: 2, label: "Legato" },
 ];
+export const SYNTH_GRID_CARD_SIZE_CLASS = "aspect-[50/27] min-h-[198px]";
+export const SYNTH_GRID_CARD_SHELL_CLASS = "relative min-h-0 overflow-hidden rounded-[14px]";
+export const SYNTH_GRID_CARD_INSET_SHADOW_CLASS = "pointer-events-none absolute inset-0 rounded-[inherit] shadow-[inset_0_1px_0_rgba(255,255,255,0.06),inset_0_-40px_64px_rgba(0,0,0,0.28)]";
+export const SYNTH_COMPACT_CONTROL_CHROME_CLASS = "rounded-[5px] border border-white/[0.07] bg-black/42 shadow-[0_4px_12px_rgba(0,0,0,0.22)]";
+export const SYNTH_COMPACT_CONTROL_TEXT_CLASS = "text-[8px] uppercase tracking-[0.10em]";
 const MSEG_GRID_STEPS = [0.25, 0.5, 0.75] as const;
 const MSEG_PREVIEW_HORIZONTAL_PADDING_PX = 24;
 const MSEG_PREVIEW_VERTICAL_PADDING_PX = 22;
@@ -1818,8 +1823,11 @@ export function WavetableStageSection({
     return (
         <section
             ref={stageRef}
+            data-role="wavetable-card"
+            data-layout-card="desktop-grid-card"
             className={joinClasses(
-                "cosimo-stage relative overflow-hidden rounded-[28px] border border-white/[0.05]",
+                "cosimo-stage border border-white/[0.04]",
+                SYNTH_GRID_CARD_SHELL_CLASS,
                 className,
             )}
             onPointerDown={onPointerDown}
@@ -1834,16 +1842,19 @@ export function WavetableStageSection({
                 warpAmount={warpAmount}
             />
 
-            <div className="absolute inset-x-0 top-0 flex items-start justify-between gap-3 p-5 text-[11px] uppercase tracking-[0.16em] text-slate-300/70">
+            <div
+                data-role="wavetable-stage-top-controls"
+                className="absolute inset-x-0 top-0 flex items-start justify-between gap-1.5 p-1.5 text-[8px] uppercase tracking-[0.10em] text-slate-300/70"
+            >
                 <label
-                    className="relative inline-flex max-w-[280px] cursor-pointer items-center"
+                    className="relative inline-flex max-w-[128px] cursor-pointer items-center"
                     onFocus={onTablePrewarm}
                     onPointerEnter={onTablePrewarm}
                 >
-                    <div className="inline-flex min-w-0 items-center rounded-full border border-white/10 bg-black/40 px-4 py-2.5 pr-10 text-left text-[11px] uppercase tracking-[0.18em] text-amber-100 shadow-[0_10px_28px_rgba(0,0,0,0.28)] backdrop-blur-md">
+                    <div data-role="wavetable-select-chip" className={`inline-flex h-5 min-w-0 items-center ${SYNTH_COMPACT_CONTROL_CHROME_CLASS} px-1.5 pr-5 text-left ${SYNTH_COMPACT_CONTROL_TEXT_CLASS} text-amber-100`}>
                         <span data-role="wavetable-stage-title" className="truncate">{tableName}</span>
                     </div>
-                    <SelectChevron className="pointer-events-none absolute right-4 top-1/2 h-3 w-3 -translate-y-1/2 text-slate-300/75" />
+                    <SelectChevron className="pointer-events-none absolute right-1.5 top-1/2 h-2.5 w-2.5 -translate-y-1/2 text-slate-300/65" />
                     <select
                         className="absolute inset-0 cursor-pointer opacity-0"
                         value={String(desiredTableIndex)}
@@ -1859,23 +1870,26 @@ export function WavetableStageSection({
                     </select>
                 </label>
 
-                <div className="flex items-center gap-2">
-                    <div className="rounded-full border border-white/10 bg-black/35 px-3 py-2 text-cyan-200/80 shadow-[0_10px_28px_rgba(0,0,0,0.22)] backdrop-blur-md">
+                <div className="flex min-w-0 items-center gap-1">
+                    <div data-role="wavetable-frame-chip" className={`flex h-5 items-center ${SYNTH_COMPACT_CONTROL_CHROME_CLASS} px-1.5 ${SYNTH_COMPACT_CONTROL_TEXT_CLASS} text-cyan-200/80`}>
                         Frame {formatFrameIndex(position, frameCount)}
                     </div>
-                    <div className="rounded-full border border-white/10 bg-black/35 px-3 py-2 text-slate-200/80 shadow-[0_10px_28px_rgba(0,0,0,0.22)] backdrop-blur-md">
+                    <div data-role="wavetable-position-chip" className={`flex h-5 items-center ${SYNTH_COMPACT_CONTROL_CHROME_CLASS} px-1.5 ${SYNTH_COMPACT_CONTROL_TEXT_CLASS} text-slate-200/80`}>
                         Pos {clampDisplayPosition(position).toFixed(3)}
                     </div>
                 </div>
             </div>
 
-            <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-3 p-5">
-                <div className="flex min-w-0 items-end gap-3">
+            <div
+                data-role="wavetable-stage-bottom-controls"
+                className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-1 p-1"
+            >
+                <div className="flex min-w-0 items-end gap-1">
                     {bottomLeftAccessory}
                     {canRetry ? (
                         <button
                             type="button"
-                            className="cosimo-button rounded-full px-4 py-2 text-[11px] uppercase tracking-[0.18em] disabled:opacity-40"
+                            className="cosimo-button h-5 rounded-[5px] px-1.5 text-[8px] uppercase tracking-[0.10em] disabled:opacity-40"
                             disabled={!canRetry}
                             onClick={onRetry}
                         >
@@ -1884,7 +1898,7 @@ export function WavetableStageSection({
                     ) : null}
                 </div>
                 {bottomRightAccessory ? (
-                    <div className="flex min-w-0 items-end justify-end gap-3">
+                    <div className="flex min-w-0 items-end justify-end gap-1">
                         {bottomRightAccessory}
                     </div>
                 ) : null}

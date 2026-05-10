@@ -13072,6 +13072,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     right: calc(var(--spacing) * 1);
   }
 
+  .right-1\\.5 {
+    right: calc(var(--spacing) * 1.5);
+  }
+
   .right-2 {
     right: calc(var(--spacing) * 2);
   }
@@ -13613,10 +13617,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     height: 12px;
   }
 
-  .h-\\[18px\\] {
-    height: 18px;
-  }
-
   .h-\\[24px\\] {
     height: 24px;
   }
@@ -13825,8 +13825,8 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     width: 3px;
   }
 
-  .w-\\[18px\\] {
-    width: 18px;
+  .w-\\[12px\\] {
+    width: 12px;
   }
 
   .w-\\[38px\\] {
@@ -13873,12 +13873,12 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     max-width: 74px;
   }
 
-  .max-w-\\[140px\\] {
-    max-width: 140px;
+  .max-w-\\[128px\\] {
+    max-width: 128px;
   }
 
-  .max-w-\\[280px\\] {
-    max-width: 280px;
+  .max-w-\\[140px\\] {
+    max-width: 140px;
   }
 
   .max-w-\\[1080px\\] {
@@ -13929,8 +13929,8 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     min-width: 44px;
   }
 
-  .min-w-\\[112px\\] {
-    min-width: 112px;
+  .min-w-\\[72px\\] {
+    min-width: 72px;
   }
 
   .min-w-\\[132px\\] {
@@ -14435,6 +14435,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .rounded-\\[30px\\] {
     border-radius: 30px;
+  }
+
+  .rounded-\\[inherit\\] {
+    border-radius: inherit;
   }
 
   .rounded-full {
@@ -15030,26 +15034,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     }
   }
 
-  .bg-black\\/35 {
-    background-color: #00000059;
-  }
-
-  @supports (color: color-mix(in lab, red, red)) {
-    .bg-black\\/35 {
-      background-color: color-mix(in oklab, var(--color-black) 35%, transparent);
-    }
-  }
-
-  .bg-black\\/40 {
-    background-color: #0006;
-  }
-
-  @supports (color: color-mix(in lab, red, red)) {
-    .bg-black\\/40 {
-      background-color: color-mix(in oklab, var(--color-black) 40%, transparent);
-    }
-  }
-
   .bg-black\\/42 {
     background-color: #0000006b;
   }
@@ -15057,16 +15041,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
   @supports (color: color-mix(in lab, red, red)) {
     .bg-black\\/42 {
       background-color: color-mix(in oklab, var(--color-black) 42%, transparent);
-    }
-  }
-
-  .bg-black\\/45 {
-    background-color: #00000073;
-  }
-
-  @supports (color: color-mix(in lab, red, red)) {
-    .bg-black\\/45 {
-      background-color: color-mix(in oklab, var(--color-black) 45%, transparent);
     }
   }
 
@@ -15770,6 +15744,14 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .pr-4 {
     padding-right: calc(var(--spacing) * 4);
+  }
+
+  .pr-5 {
+    padding-right: calc(var(--spacing) * 5);
+  }
+
+  .pr-7 {
+    padding-right: calc(var(--spacing) * 7);
   }
 
   .pr-8 {
@@ -16943,6 +16925,16 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
   }
 
+  .shadow-\\[0_4px_12px_rgba\\(0\\,0\\,0\\,0\\.20\\)\\,inset_0_1px_0_rgba\\(255\\,255\\,255\\,0\\.04\\)\\] {
+    --tw-shadow: 0 4px 12px var(--tw-shadow-color, #0003), inset 0 1px 0 var(--tw-shadow-color, #ffffff0a);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
+  .shadow-\\[0_4px_12px_rgba\\(0\\,0\\,0\\,0\\.22\\)\\] {
+    --tw-shadow: 0 4px 12px var(--tw-shadow-color, #00000038);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
   .shadow-\\[0_4px_12px_rgba\\(0\\,0\\,0\\,0\\.45\\)\\,0_0_0_1px_rgba\\(103\\,232\\,249\\,0\\.28\\)\\] {
     --tw-shadow: 0 4px 12px var(--tw-shadow-color, #00000073), 0 0 0 1px var(--tw-shadow-color, #67e8f947);
     box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
@@ -16958,28 +16950,13 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
   }
 
-  .shadow-\\[0_10px_28px_rgba\\(0\\,0\\,0\\,0\\.22\\)\\] {
-    --tw-shadow: 0 10px 28px var(--tw-shadow-color, #00000038);
-    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
-  }
-
   .shadow-\\[0_10px_28px_rgba\\(0\\,0\\,0\\,0\\.26\\)\\,inset_0_1px_0_rgba\\(255\\,255\\,255\\,0\\.05\\)\\] {
     --tw-shadow: 0 10px 28px var(--tw-shadow-color, #00000042), inset 0 1px 0 var(--tw-shadow-color, #ffffff0d);
     box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
   }
 
-  .shadow-\\[0_10px_28px_rgba\\(0\\,0\\,0\\,0\\.28\\)\\] {
-    --tw-shadow: 0 10px 28px var(--tw-shadow-color, #00000047);
-    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
-  }
-
   .shadow-\\[0_10px_28px_rgba\\(0\\,0\\,0\\,0\\.55\\)\\] {
     --tw-shadow: 0 10px 28px var(--tw-shadow-color, #0000008c);
-    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
-  }
-
-  .shadow-\\[0_12px_28px_rgba\\(0\\,0\\,0\\,0\\.32\\)\\] {
-    --tw-shadow: 0 12px 28px var(--tw-shadow-color, #00000052);
     box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
   }
 
@@ -17068,13 +17045,13 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
   }
 
-  .shadow-\\[inset_0_1px_0_rgba\\(255\\,255\\,255\\,0\\.06\\)\\] {
-    --tw-shadow: inset 0 1px 0 var(--tw-shadow-color, #ffffff0f);
+  .shadow-\\[inset_0_1px_0_rgba\\(255\\,255\\,255\\,0\\.06\\)\\,inset_0_-40px_64px_rgba\\(0\\,0\\,0\\,0\\.28\\)\\] {
+    --tw-shadow: inset 0 1px 0 var(--tw-shadow-color, #ffffff0f), inset 0 -40px 64px var(--tw-shadow-color, #00000047);
     box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
   }
 
-  .shadow-\\[inset_0_1px_0_rgba\\(255\\,255\\,255\\,0\\.08\\)\\,inset_0_-64px_80px_rgba\\(0\\,0\\,0\\,0\\.34\\)\\] {
-    --tw-shadow: inset 0 1px 0 var(--tw-shadow-color, #ffffff14), inset 0 -64px 80px var(--tw-shadow-color, #00000057);
+  .shadow-\\[inset_0_1px_0_rgba\\(255\\,255\\,255\\,0\\.06\\)\\] {
+    --tw-shadow: inset 0 1px 0 var(--tw-shadow-color, #ffffff0f);
     box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
   }
 
