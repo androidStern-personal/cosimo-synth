@@ -827,8 +827,10 @@ def test_ios_ui_dev_server_configuration_exists() -> None:
     assert package_json["scripts"]["ios:ui:dev"] == "vite --config ios_auv3/vite.config.mjs"
     assert package_json["scripts"]["ios:ui:build"] == "node ui/build.mjs --ios"
     assert package_json["scripts"]["ios:project"] == "./scripts/generate_ios_auv3_xcode_project.sh build/ios_device_run"
-    assert package_json["scripts"]["desktop:native:build"] == "./scripts/build_desktop_native.sh"
-    assert package_json["scripts"]["desktop:native:dev"] == "./scripts/run_desktop_native_dev.sh"
+    assert package_json["scripts"]["synth:desktop:build"] == "./scripts/build_desktop_native.sh"
+    assert package_json["scripts"]["synth:desktop:dev"] == "./scripts/run_desktop_native_dev.sh"
+    assert "desktop:native:build" not in package_json["scripts"]
+    assert "desktop:native:dev" not in package_json["scripts"]
     assert "ui:ios:dev" not in package_json["scripts"]
     assert "ui:ios:build" not in package_json["scripts"]
     assert "vite" in package_json["devDependencies"]

@@ -2600,10 +2600,12 @@ function DesktopPatchViewBody({
                     isExpanded={isArticulationEditorExpanded}
                     selectedArticulationId={selectedArticulationId}
                     selectedIsDirty={synthView.selectedArticulationIsDirty}
+                    discardedEditLabel={synthView.discardedArticulationEdit?.slotName ?? null}
                     canCapture={synthView.hasHydratedArticulations}
                     chainSegments={chainSegments}
                     keySegments={keySegments}
                     velocitySegments={velocitySegments}
+                    heldInput={synthView.articulationHeldInput}
                     keyboardMinNote={keyboardRootNote}
                     keyboardMaxNote={keyboardRootNote + DEFAULT_KEYBOARD_NOTE_COUNT - 1}
                     onToggleExpanded={() => setIsArticulationEditorExpanded((previousValue) => !previousValue)}
@@ -2614,6 +2616,7 @@ function DesktopPatchViewBody({
                     onCapture={() => synthView.handleCaptureArticulationSlot({ autoAssign: !isArticulationEditorExpanded })}
                     onUpdate={synthView.handleUpdateSelectedArticulationSlot}
                     onRevert={synthView.handleRevertSelectedArticulationSlot}
+                    onUndoDiscard={synthView.handleUndoDiscardedArticulationEdit}
                     onSelectRangeSegment={handleSelectRangeSegment}
                     onAssignRangePosition={synthView.handleAssignArticulationRangePosition}
                     onInsertRangePosition={synthView.handleInsertArticulationRangeAtPosition}
@@ -2637,23 +2640,6 @@ function DesktopPatchViewBody({
                 />
             )}
 
-            {synthView.discardedArticulationEdit ? (
-                <div
-                    data-role="articulation-undo-toast"
-                    className="flex items-center justify-between gap-2 rounded-[12px] border border-pink-300/18 bg-pink-300/[0.07] px-3 py-2 text-[10px] uppercase tracking-[0.12em] text-pink-100/82"
-                >
-                    <span className="truncate">
-                        Discarded edits to {synthView.discardedArticulationEdit.slotName}
-                    </span>
-                    <button
-                        type="button"
-                        className="rounded-[7px] border border-pink-200/22 bg-pink-200/10 px-2 py-1 font-bold text-pink-50/90"
-                        onClick={synthView.handleUndoDiscardedArticulationEdit}
-                    >
-                        Undo
-                    </button>
-                </div>
-            ) : null}
         </div>
     ), [
         articulationCards,

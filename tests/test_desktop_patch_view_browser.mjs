@@ -266,6 +266,58 @@ async function waitForReactFrames(page, frameCount = 2) {
     }
 }
 
+async function dragArticulationCardToLane(page, articulationId, lane, targetPosition, {
+    afterDragOver = null,
+} = {}) {
+    const card = page.locator(`[data-role="articulation-card"][data-articulation-id="${articulationId}"]`);
+    const dataTransfer = await page.evaluateHandle(() => new DataTransfer());
+    await card.dispatchEvent("dragstart", { dataTransfer });
+    await lane.dispatchEvent("dragover", { dataTransfer, clientX: targetPosition.x, clientY: targetPosition.y });
+    if (typeof afterDragOver === "function") {
+        await afterDragOver();
+    }
+    await lane.dispatchEvent("drop", { dataTransfer, clientX: targetPosition.x, clientY: targetPosition.y });
+    await dataTransfer.dispose();
+}
+
+async function previewArticulationCardDragOver(page, articulationId, lane, targetPosition) {
+    const card = page.locator(`[data-role="articulation-card"][data-articulation-id="${articulationId}"]`);
+    const dataTransfer = await page.evaluateHandle(() => new DataTransfer());
+    await card.dispatchEvent("dragstart", { dataTransfer });
+    await lane.dispatchEvent("dragover", {
+        dataTransfer,
+        clientX: targetPosition.x,
+        clientY: targetPosition.y,
+    });
+    const previewOperation = await page.locator('[data-role="articulation-placement-preview"]').getAttribute("data-operation");
+    await dataTransfer.dispose();
+
+    return previewOperation;
+}
+
+async function readDesktopRangeSegments(page) {
+    return page.locator('[data-role="articulation-range-segment"]').evaluateAll((segments) => (
+        segments.map((segment) => ({
+            articulationId: segment.getAttribute("data-articulation-id"),
+            min: Number(segment.getAttribute("data-range-min")),
+            max: Number(segment.getAttribute("data-range-max")),
+            isPreview: segment.getAttribute("data-preview") === "true",
+            isPreviewAffected: segment.getAttribute("data-preview-affected") === "true",
+            text: segment.innerText.replace(/\s+/g, " ").trim(),
+        }))
+    ));
+}
+
+async function readDesktopRangeViewport(page) {
+    const lane = page.locator('[data-role="articulation-range-lane"]').first();
+    return lane.evaluate((element) => ({
+        index: Number(element.getAttribute("data-viewport-index")),
+        min: Number(element.getAttribute("data-viewport-min")),
+        max: Number(element.getAttribute("data-viewport-max")),
+        heldValue: element.getAttribute("data-held-value"),
+    }));
+}
+
 async function openHarnessPage({
     beforeGoto = null,
 } = {}) {
@@ -2018,6 +2070,79 @@ test("articulation slots clone current state and recall parameters plus route am
     }
 });
 
+test("articulation range lane zooms by thirds and marks held Key Vel and Chain values", async () => {
+    const page = await openHarnessPage();
+
+    try {
+        await page.waitForFunction(() => {
+            const addButton = document.querySelector('button[aria-label="Capture current parameters as a new articulation"]');
+            return addButton instanceof HTMLButtonElement && !addButton.disabled;
+        });
+
+        await page.getByRole("button", { name: "Expand articulation editor" }).click();
+
+        let viewport = await readDesktopRangeViewport(page);
+        assert.deepEqual(viewport, { index: 0, min: 0, max: 42, heldValue: "" });
+        assert.deepEqual(
+            await page.locator('[data-role="articulation-range-viewport-dot"]').evaluateAll((dots) => (
+                dots.map((dot) => ({
+                    index: dot.getAttribute("data-viewport-index"),
+                    held: dot.getAttribute("data-held"),
+                    pressed: dot.getAttribute("aria-pressed"),
+                }))
+            )),
+            [
+                { index: "0", held: "false", pressed: "true" },
+                { index: "1", held: "false", pressed: "false" },
+                { index: "2", held: "false", pressed: "false" },
+            ],
+        );
+
+        await page.getByRole("tab", { name: "Key" }).click();
+        await page.keyboard.down("a");
+        await page.locator('[data-role="articulation-held-value"][data-held-value="36"]').waitFor();
+        viewport = await readDesktopRangeViewport(page);
+        assert.deepEqual(viewport, { index: 0, min: 0, max: 42, heldValue: "36" });
+
+        await page.getByRole("tab", { name: "Vel" }).click();
+        assert.deepEqual(
+            await page.locator('[data-role="articulation-range-viewport-dot"]').evaluateAll((dots) => (
+                dots.map((dot) => ({
+                    index: dot.getAttribute("data-viewport-index"),
+                    held: dot.getAttribute("data-held"),
+                }))
+            )),
+            [
+                { index: "0", held: "false" },
+                { index: "1", held: "false" },
+                { index: "2", held: "true" },
+            ],
+            "velocity 100 should mark the upper third while the lower velocity third is visible",
+        );
+        await page.locator('[data-role="articulation-range-viewport-dot"][data-viewport-index="2"]').click();
+        await page.locator('[data-role="articulation-held-value"][data-held-value="100"]').waitFor();
+        assert.deepEqual(await readDesktopRangeViewport(page), { index: 2, min: 86, max: 127, heldValue: "100" });
+
+        await page.getByRole("tab", { name: "Chain" }).click();
+        await page.evaluate(() => {
+            window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("voiceArticulationStart", {
+                hasArticulation: 1,
+                selectorA: 24,
+            }, true);
+        });
+        await page.locator('[data-role="articulation-held-value"][data-held-value="24"]').waitFor();
+        assert.deepEqual(await readDesktopRangeViewport(page), { index: 0, min: 0, max: 42, heldValue: "24" });
+
+        await page.keyboard.up("a");
+        await page.waitForFunction(() => (
+            document.querySelector('[data-role="articulation-range-lane"]')?.getAttribute("data-held-value") === ""
+        ));
+    } finally {
+        await page.keyboard.up("a").catch(() => {});
+        await page.close();
+    }
+});
+
 test("articulation editor exposes insert resize move clear and expanded capture placement", async () => {
     const page = await openHarnessPage();
 
@@ -2053,33 +2178,110 @@ test("articulation editor exposes insert resize move clear and expanded capture 
 
         await page.getByRole("button", { name: "Expand articulation editor" }).click();
         await page.locator('[data-role="articulation-card"][data-articulation-id="pluck"]').click();
-        await page.getByRole("button", { name: "Insert" }).click();
+        assert.equal(
+            await page.locator('[data-role="articulation-lane-assign-mode"], [data-role="articulation-lane-insert-mode"]').count(),
+            0,
+            "range placement must be inferred from hover/drop position, not an Assign/Insert mode toggle",
+        );
 
         const lane = page.locator('[data-role="articulation-range-lane"]').first();
         const laneBox = await lane.boundingBox();
         assert.notEqual(laneBox, null);
-        await page.mouse.click(laneBox.x + laneBox.width * 0.5, laneBox.y + laneBox.height * 0.5);
+        const lowerViewport = await readDesktopRangeViewport(page);
+        assert.deepEqual(lowerViewport, { index: 0, min: 0, max: 42, heldValue: "" });
+        const expectedInsertPosition = Math.round(lowerViewport.min + (0.79 * (lowerViewport.max - lowerViewport.min)));
+        await dragArticulationCardToLane(page, "pluck", lane, {
+            x: laneBox.x + laneBox.width * 0.79,
+            y: laneBox.y + laneBox.height * 0.5,
+        }, {
+            afterDragOver: async () => {
+                const preview = page.locator('[data-role="articulation-placement-preview"]');
+                await preview.waitFor();
+                assert.equal(await preview.getAttribute("data-operation"), "insert");
+                assert.match(
+                    await preview.textContent(),
+                    new RegExp(`^insert ${expectedInsertPosition}$`),
+                    "edge hover must visibly preview insert before drop",
+                );
+                assert.deepEqual(
+                    await readDesktopRangeSegments(page),
+                    [
+                        {
+                            articulationId: "bow",
+                            min: 0,
+                            max: expectedInsertPosition - 1,
+                            isPreview: false,
+                            isPreviewAffected: true,
+                            text: `Bow 0-${expectedInsertPosition - 1}`,
+                        },
+                        {
+                            articulationId: "pluck",
+                            min: expectedInsertPosition,
+                            max: expectedInsertPosition,
+                            isPreview: true,
+                            isPreviewAffected: false,
+                            text: `Plu ${expectedInsertPosition}`,
+                        },
+                    ],
+                    "edge hover must render the effective post-drop lane before drop",
+                );
+                assert.equal(
+                    await page.locator('[data-role="articulation-range-ghost-value"]').textContent(),
+                    String(expectedInsertPosition),
+                    "the inserted width-1 preview still needs a visible value chip",
+                );
+            },
+        });
 
         let snapshot = await waitForHarnessSnapshot(
             page,
-            "range insert split without dead-ending full lane",
+            "edge drop inserts without an explicit insert toggle",
             (nextSnapshot) => {
                 const assignments = readStoredArticulationBank(nextSnapshot).chainAssignments;
                 return assignments.some((assignment) => (
                     assignment.articulationId === "bow"
                     && assignment.min === 0
-                    && assignment.max === 63
+                    && assignment.max === expectedInsertPosition - 1
                 )) && assignments.some((assignment) => (
                     assignment.articulationId === "pluck"
-                    && assignment.min === 64
-                    && assignment.max === 64
+                    && assignment.min === assignment.max
+                    && assignment.min === expectedInsertPosition
                 ));
             },
         );
         assert.deepEqual(readStoredArticulationBank(snapshot).chainAssignments, [
-            { id: "chain-bow-full", articulationId: "bow", min: 0, max: 63 },
-            { id: "chain-pluck-64", articulationId: "pluck", min: 64, max: 64 },
+            { id: "chain-bow-full", articulationId: "bow", min: 0, max: expectedInsertPosition - 1 },
+            { id: `chain-pluck-${expectedInsertPosition}`, articulationId: "pluck", min: expectedInsertPosition, max: expectedInsertPosition },
         ]);
+        assert.equal(
+            await page
+                .locator('[data-role="articulation-range-segment"][data-articulation-id="pluck"] [data-role="articulation-range-value"]')
+                .first()
+                .textContent(),
+            String(expectedInsertPosition),
+        );
+
+        await page.evaluate(({ stateKey }) => {
+            const harness = window.__COSIMO_DESKTOP_HARNESS__;
+            const currentBank = JSON.parse(harness.getSnapshot().storedState[stateKey]);
+            harness.setStoredStateValue(stateKey, JSON.stringify({
+                ...currentBank,
+                chainAssignments: [
+                    { id: "chain-bow-full", articulationId: "bow", min: 0, max: 20 },
+                    { id: "chain-pluck-21", articulationId: "pluck", min: 21, max: 21 },
+                ],
+            }));
+        }, {
+            stateKey: ARTICULATION_STATE_KEY,
+        });
+        snapshot = await waitForHarnessSnapshot(
+            page,
+            "seeded narrow segment for resize and move",
+            (nextSnapshot) => {
+                const assignments = readStoredArticulationBank(nextSnapshot).chainAssignments;
+                return assignments.some((assignment) => assignment.id === "chain-pluck-21" && assignment.min === 21 && assignment.max === 21);
+            },
+        );
 
         const resizeMaxHandle = page
             .locator('[data-role="articulation-range-segment"][data-articulation-id="pluck"] [data-role="articulation-range-resize-max"]')
@@ -2088,7 +2290,7 @@ test("articulation editor exposes insert resize move clear and expanded capture 
         assert.notEqual(resizeBox, null);
         await page.mouse.move(resizeBox.x + resizeBox.width * 0.5, resizeBox.y + resizeBox.height * 0.5);
         await page.mouse.down();
-        await page.mouse.move(laneBox.x + laneBox.width * 0.62, laneBox.y + laneBox.height * 0.5, { steps: 8 });
+        await page.mouse.move(laneBox.x + laneBox.width * 0.9, laneBox.y + laneBox.height * 0.5, { steps: 8 });
         await page.mouse.up();
 
         snapshot = await waitForHarnessSnapshot(
@@ -2097,20 +2299,46 @@ test("articulation editor exposes insert resize move clear and expanded capture 
             (nextSnapshot) => {
                 const pluck = readStoredArticulationBank(nextSnapshot).chainAssignments
                     .find((assignment) => assignment.articulationId === "pluck");
-                return pluck?.min === 64 && Number(pluck?.max) > 64;
+                return pluck?.min === 21 && Number(pluck?.max) > 21;
             },
         );
         const resizedPluck = readStoredArticulationBank(snapshot).chainAssignments
             .find((assignment) => assignment.articulationId === "pluck");
-        assert.equal(resizedPluck.min, 64);
-        assert.equal(resizedPluck.max, 79);
+        assert.equal(resizedPluck.min, 21);
+        assert.equal(resizedPluck.max, 38);
 
         const pluckSegment = page.locator('[data-role="articulation-range-segment"][data-articulation-id="pluck"]').first();
         const segmentBox = await pluckSegment.boundingBox();
         assert.notEqual(segmentBox, null);
         await page.mouse.move(segmentBox.x + segmentBox.width * 0.5, segmentBox.y + segmentBox.height * 0.5);
         await page.mouse.down();
-        await page.mouse.move(laneBox.x + laneBox.width * 0.76, laneBox.y + laneBox.height * 0.5, { steps: 10 });
+        await page.mouse.move(laneBox.x + laneBox.width * 0.95, laneBox.y + laneBox.height * 0.5, { steps: 10 });
+        assert.deepEqual(
+            await readDesktopRangeSegments(page),
+            [
+                {
+                    articulationId: "bow",
+                    min: 0,
+                    max: 20,
+                    isPreview: false,
+                    isPreviewAffected: false,
+                    text: "Bow 0-20",
+                },
+                {
+                    articulationId: "pluck",
+                    min: 31,
+                    max: 42,
+                    isPreview: true,
+                    isPreviewAffected: false,
+                    text: "Pluck 31-42",
+                },
+            ],
+            "range body drag must render its moved range before pointer up",
+        );
+        assert.equal(
+            await page.locator('[data-role="articulation-range-ghost-value"]').textContent(),
+            "31-48",
+        );
         await page.mouse.up();
 
         snapshot = await waitForHarnessSnapshot(
@@ -2119,12 +2347,12 @@ test("articulation editor exposes insert resize move clear and expanded capture 
             (nextSnapshot) => {
                 const pluck = readStoredArticulationBank(nextSnapshot).chainAssignments
                     .find((assignment) => assignment.articulationId === "pluck");
-                return Number(pluck?.min) > 64 && Number(pluck?.max) > Number(pluck?.min);
+                return Number(pluck?.min) > 21 && Number(pluck?.max) > Number(pluck?.min);
             },
         );
         const movedPluck = readStoredArticulationBank(snapshot).chainAssignments
             .find((assignment) => assignment.articulationId === "pluck");
-        assert.deepEqual(movedPluck, { id: "chain-pluck-64", articulationId: "pluck", min: 89, max: 104 });
+        assert.deepEqual(movedPluck, { id: "chain-pluck-21", articulationId: "pluck", min: 31, max: 48 });
 
         await page.locator('[data-role="articulation-clear-segment"]').click();
         snapshot = await waitForHarnessSnapshot(
@@ -2136,7 +2364,7 @@ test("articulation editor exposes insert resize move clear and expanded capture 
             ),
         );
         assert.deepEqual(readStoredArticulationBank(snapshot).chainAssignments, [
-            { id: "chain-bow-full", articulationId: "bow", min: 0, max: 63 },
+            { id: "chain-bow-full", articulationId: "bow", min: 0, max: 20 },
         ]);
 
         await page.getByRole("button", { name: "Capture current parameters as a new articulation" }).click();
@@ -2156,7 +2384,829 @@ test("articulation editor exposes insert resize move clear and expanded capture 
     }
 });
 
-test("articulation card audition is press-hold and cycles C1 C2 C3", async () => {
+test("real articulation card drag previews insert and changes the range", async () => {
+    const page = await openHarnessPage();
+
+    try {
+        await page.waitForFunction(() => {
+            const addButton = document.querySelector('button[aria-label="Capture current parameters as a new articulation"]');
+            return addButton instanceof HTMLButtonElement && !addButton.disabled;
+        });
+
+        const bank = normalizeArticulationBank({
+            selectedSlotId: "bow",
+            activeTriggerMode: "chain",
+            slots: [
+                { id: "bow", runtimeSlot: 0, name: "Bow" },
+                { id: "pluck", runtimeSlot: 1, name: "Pluck" },
+            ],
+            chainAssignments: [
+                { id: "chain-bow-full", articulationId: "bow", min: 0, max: 127 },
+            ],
+        });
+
+        await page.evaluate(({ stateKey, nextBank }) => {
+            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue(stateKey, JSON.stringify(nextBank));
+        }, {
+            stateKey: ARTICULATION_STATE_KEY,
+            nextBank: bank,
+        });
+        await waitForHarnessSnapshot(
+            page,
+            "seeded articulation bank for real browser drag",
+            (nextSnapshot) => readStoredArticulationBank(nextSnapshot).chainAssignments.length === 1,
+        );
+
+        await page.getByRole("button", { name: "Expand articulation editor" }).click();
+
+        const card = page.locator('[data-role="articulation-card"][data-articulation-id="pluck"]');
+        const lane = page.locator('[data-role="articulation-range-lane"]').first();
+        const laneBox = await lane.boundingBox();
+        assert.notEqual(laneBox, null);
+        const lowerViewport = await readDesktopRangeViewport(page);
+        assert.deepEqual(lowerViewport, { index: 0, min: 0, max: 42, heldValue: "" });
+
+        const targetPosition = {
+            x: laneBox.width * 0.79,
+            y: laneBox.height * 0.5,
+        };
+        const expectedInsertPosition = Math.round(lowerViewport.min + (0.79 * (lowerViewport.max - lowerViewport.min)));
+        const targetClientPosition = {
+            x: laneBox.x + targetPosition.x,
+            y: laneBox.y + targetPosition.y,
+        };
+
+        assert.equal(
+            await previewArticulationCardDragOver(page, "pluck", lane, targetClientPosition),
+            "insert",
+        );
+        assert.deepEqual(
+            await readDesktopRangeSegments(page),
+            [
+                {
+                    articulationId: "bow",
+                    min: 0,
+                    max: expectedInsertPosition - 1,
+                    isPreview: false,
+                    isPreviewAffected: true,
+                    text: `Bow 0-${expectedInsertPosition - 1}`,
+                },
+                {
+                    articulationId: "pluck",
+                    min: expectedInsertPosition,
+                    max: expectedInsertPosition,
+                    isPreview: true,
+                    isPreviewAffected: false,
+                    text: `Plu ${expectedInsertPosition}`,
+                },
+            ],
+            "real browser card drag must render the projected lane before mouse release",
+        );
+        assert.equal(
+            await page.locator('[data-role="articulation-range-ghost-value"]').textContent(),
+            String(expectedInsertPosition),
+            "the live insert preview must expose the exact target selector value",
+        );
+
+        await card.dragTo(lane, {
+            sourcePosition: { x: 20, y: 20 },
+            targetPosition,
+        });
+
+        const snapshot = await waitForHarnessSnapshot(
+            page,
+            "real browser drag inserts at the occupied edge",
+            (nextSnapshot) => {
+                const assignments = readStoredArticulationBank(nextSnapshot).chainAssignments;
+                return assignments.some((assignment) => (
+                    assignment.articulationId === "bow"
+                    && assignment.min === 0
+                    && assignment.max === expectedInsertPosition - 1
+                )) && assignments.some((assignment) => (
+                    assignment.articulationId === "pluck"
+                    && assignment.min === assignment.max
+                    && assignment.min === expectedInsertPosition
+                ));
+            },
+        );
+
+        assert.deepEqual(readStoredArticulationBank(snapshot).chainAssignments, [
+            { id: "chain-bow-full", articulationId: "bow", min: 0, max: expectedInsertPosition - 1 },
+            { id: `chain-pluck-${expectedInsertPosition}`, articulationId: "pluck", min: expectedInsertPosition, max: expectedInsertPosition },
+        ]);
+    } finally {
+        await page.close();
+    }
+});
+
+test("desktop articulation range clicks select only and dragging an already mapped card moves its range", async () => {
+    const page = await openHarnessPage();
+
+    try {
+        await page.waitForFunction(() => {
+            const addButton = document.querySelector('button[aria-label="Capture current parameters as a new articulation"]');
+            return addButton instanceof HTMLButtonElement && !addButton.disabled;
+        });
+
+        const bank = normalizeArticulationBank({
+            selectedSlotId: "bow",
+            activeTriggerMode: "chain",
+            slots: [
+                { id: "bow", runtimeSlot: 0, name: "Bow" },
+                { id: "pluck", runtimeSlot: 1, name: "Pluck" },
+                { id: "air", runtimeSlot: 2, name: "Air" },
+            ],
+            chainAssignments: [
+                { id: "chain-bow", articulationId: "bow", min: 0, max: 31 },
+                { id: "chain-pluck", articulationId: "pluck", min: 64, max: 95 },
+                { id: "chain-air", articulationId: "air", min: 96, max: 127 },
+            ],
+        });
+
+        await page.evaluate(({ stateKey, nextBank }) => {
+            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue(stateKey, JSON.stringify(nextBank));
+        }, {
+            stateKey: ARTICULATION_STATE_KEY,
+            nextBank: bank,
+        });
+        await waitForHarnessSnapshot(
+            page,
+            "seeded articulation bank for desktop click behavior",
+            (nextSnapshot) => readStoredArticulationBank(nextSnapshot).chainAssignments.length === 3,
+        );
+
+        await page.getByRole("button", { name: "Expand articulation editor" }).click();
+
+        const lane = page.locator('[data-role="articulation-range-lane"]').first();
+        const laneBox = await lane.boundingBox();
+        assert.notEqual(laneBox, null);
+        await page.mouse.click(laneBox.x + laneBox.width * 0.38, laneBox.y + laneBox.height * 0.5);
+        await waitForReactFrames(page);
+
+        let snapshot = await getHarnessSnapshot(page);
+        assert.deepEqual(readStoredArticulationBank(snapshot).chainAssignments, bank.chainAssignments);
+        assert.equal(await page.locator('[data-role="articulation-lane-toast"]').count(), 0);
+
+        await page.locator('[data-role="articulation-range-viewport-dot"][data-viewport-index="2"]').click();
+        assert.deepEqual(await readDesktopRangeViewport(page), { index: 2, min: 85, max: 127, heldValue: "" });
+
+        await page.locator('[data-role="articulation-range-segment"][data-articulation-id="air"]').click();
+        snapshot = await waitForHarnessSnapshot(
+            page,
+            "desktop range click selects the segment articulation",
+            (nextSnapshot) => readStoredArticulationBank(nextSnapshot).selectedSlotId === "air",
+        );
+        assert.deepEqual(readStoredArticulationBank(snapshot).chainAssignments, bank.chainAssignments);
+
+        await page.locator('[data-role="articulation-range-segment"][data-articulation-id="air"]').click({ button: "right" });
+        const rangeMenu = page.locator('[data-role="articulation-range-menu"]');
+        await rangeMenu.waitFor();
+        assert.deepEqual(
+            await rangeMenu.locator('[data-role="articulation-range-menu-item"]').evaluateAll((items) => (
+                items.map((item) => item.getAttribute("data-action"))
+            )),
+            ["replace", "insert-after", "duplicate-after", "delete"],
+            "right-click must open the range context menu with editing actions",
+        );
+        await waitForReactFrames(page);
+        snapshot = await getHarnessSnapshot(page);
+        assert.deepEqual(readStoredArticulationBank(snapshot).chainAssignments, bank.chainAssignments);
+        assert.equal(await page.locator('[data-role="articulation-lane-toast"]').count(), 0);
+        await page.keyboard.press("Escape");
+        await rangeMenu.waitFor({ state: "detached" });
+
+        const highViewport = await readDesktopRangeViewport(page);
+        const expectedMovedPosition = Math.round(highViewport.min + (0.96 * (highViewport.max - highViewport.min)));
+        assert.equal(expectedMovedPosition, 125);
+        const movedPluckMin = 96;
+        const movedPluckMax = 127;
+        await dragArticulationCardToLane(page, "pluck", lane, {
+            x: laneBox.x + (laneBox.width * 0.96),
+            y: laneBox.y + (laneBox.height * 0.5),
+        }, {
+            afterDragOver: async () => {
+                const preview = page.locator('[data-role="articulation-placement-preview"]');
+                await preview.waitFor();
+                assert.equal(await preview.getAttribute("data-operation"), "move");
+                assert.deepEqual(
+                    await readDesktopRangeSegments(page),
+                    [
+                        {
+                            articulationId: "pluck",
+                            min: movedPluckMin,
+                            max: movedPluckMax,
+                            isPreview: true,
+                            isPreviewAffected: false,
+                            text: `Pluck ${movedPluckMin}-${movedPluckMax}`,
+                        },
+                    ],
+                    "dragging an already-mapped card must preview one moved range, not merged instances",
+                );
+                assert.equal(
+                    await page.locator('[data-role="articulation-range-ghost-value"]').textContent(),
+                    `${movedPluckMin}-${movedPluckMax}`,
+                );
+            },
+        });
+
+        snapshot = await waitForHarnessSnapshot(
+            page,
+            "dragging a mapped card moves its only range instead of duplicating it",
+            (nextSnapshot) => {
+                const assignments = readStoredArticulationBank(nextSnapshot).chainAssignments;
+                return assignments.filter((assignment) => assignment.articulationId === "pluck").length === 1
+                    && assignments.some((assignment) => (
+                        assignment.articulationId === "pluck"
+                        && assignment.min === movedPluckMin
+                        && assignment.max === movedPluckMax
+                    ));
+            },
+        );
+        assert.deepEqual(readStoredArticulationBank(snapshot).chainAssignments, [
+            { id: "chain-bow", articulationId: "bow", min: 0, max: 31 },
+            { id: "chain-pluck", articulationId: "pluck", min: movedPluckMin, max: movedPluckMax },
+        ]);
+    } finally {
+        await page.close();
+    }
+});
+
+test("desktop articulation shared-boundary resize shrinks the range in the drag direction", async () => {
+    const page = await openHarnessPage();
+
+    try {
+        await page.waitForFunction(() => {
+            const addButton = document.querySelector('button[aria-label="Capture current parameters as a new articulation"]');
+            return addButton instanceof HTMLButtonElement && !addButton.disabled;
+        });
+
+        const bank = normalizeArticulationBank({
+            selectedSlotId: "bow",
+            activeTriggerMode: "chain",
+            slots: [
+                { id: "bow", runtimeSlot: 0, name: "Bow" },
+                { id: "pluck", runtimeSlot: 1, name: "Pluck" },
+            ],
+            chainAssignments: [
+                { id: "chain-bow", articulationId: "bow", min: 0, max: 20 },
+                { id: "chain-pluck", articulationId: "pluck", min: 21, max: 42 },
+            ],
+        });
+
+        await page.evaluate(({ stateKey, nextBank }) => {
+            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue(stateKey, JSON.stringify(nextBank));
+        }, {
+            stateKey: ARTICULATION_STATE_KEY,
+            nextBank: bank,
+        });
+        await waitForHarnessSnapshot(
+            page,
+            "seeded adjacent ranges for resize",
+            (nextSnapshot) => readStoredArticulationBank(nextSnapshot).chainAssignments.length === 2,
+        );
+
+        await page.getByRole("button", { name: "Expand articulation editor" }).click();
+
+        const lane = page.locator('[data-role="articulation-range-lane"]').first();
+        const laneBox = await lane.boundingBox();
+        assert.notEqual(laneBox, null);
+        const resizeMaxHandle = page
+            .locator('[data-role="articulation-range-segment"][data-articulation-id="bow"] [data-role="articulation-range-resize-max"]')
+            .first();
+        const resizeBox = await resizeMaxHandle.boundingBox();
+        assert.notEqual(resizeBox, null);
+
+        await page.mouse.move(resizeBox.x + resizeBox.width * 0.5, resizeBox.y + resizeBox.height * 0.5);
+        await page.mouse.down();
+        await page.mouse.move(laneBox.x + laneBox.width * 0.75, laneBox.y + laneBox.height * 0.5, { steps: 8 });
+
+        assert.deepEqual(
+            await page.locator('[data-role="articulation-range-value"]').allTextContents(),
+            ["0-20", "32-42"],
+            "shared-boundary drag right must preview shrinking the right range start while leaving the left range alone",
+        );
+
+        await page.mouse.up();
+
+        const snapshot = await waitForHarnessSnapshot(
+            page,
+            "right range shrinks from the start during shared-boundary drag right",
+            (nextSnapshot) => {
+                const assignments = readStoredArticulationBank(nextSnapshot).chainAssignments;
+                return assignments.some((assignment) => (
+                    assignment.articulationId === "bow"
+                    && assignment.min === 0
+                    && assignment.max === 20
+                )) && assignments.some((assignment) => (
+                    assignment.articulationId === "pluck"
+                    && assignment.min === 32
+                    && assignment.max === 42
+                ));
+            },
+        );
+        assert.deepEqual(readStoredArticulationBank(snapshot).chainAssignments, [
+            { id: "chain-bow", articulationId: "bow", min: 0, max: 20 },
+            { id: "chain-pluck", articulationId: "pluck", min: 32, max: 42 },
+        ]);
+    } finally {
+        await page.close();
+    }
+});
+
+test("desktop articulation shared-boundary resize works on the first cold drag", async () => {
+    const page = await openHarnessPage();
+
+    try {
+        await page.waitForFunction(() => {
+            const addButton = document.querySelector('button[aria-label="Capture current parameters as a new articulation"]');
+            return addButton instanceof HTMLButtonElement && !addButton.disabled;
+        });
+
+        const bank = normalizeArticulationBank({
+            selectedSlotId: "bow",
+            activeTriggerMode: "chain",
+            slots: [
+                { id: "bow", runtimeSlot: 0, name: "Bow" },
+                { id: "pluck", runtimeSlot: 1, name: "Pluck" },
+            ],
+            chainAssignments: [
+                { id: "chain-bow", articulationId: "bow", min: 0, max: 20 },
+                { id: "chain-pluck", articulationId: "pluck", min: 21, max: 42 },
+            ],
+        });
+
+        await page.evaluate(({ stateKey, nextBank }) => {
+            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue(stateKey, JSON.stringify(nextBank));
+        }, {
+            stateKey: ARTICULATION_STATE_KEY,
+            nextBank: bank,
+        });
+        await waitForHarnessSnapshot(
+            page,
+            "seeded adjacent ranges for cold first drag",
+            (nextSnapshot) => readStoredArticulationBank(nextSnapshot).chainAssignments.length === 2,
+        );
+
+        await page.getByRole("button", { name: "Expand articulation editor" }).click();
+
+        const lane = page.locator('[data-role="articulation-range-lane"]').first();
+        const laneBox = await lane.boundingBox();
+        assert.notEqual(laneBox, null);
+        const viewport = await readDesktopRangeViewport(page);
+        assert.deepEqual(viewport, { index: 0, min: 0, max: 42, heldValue: "" });
+
+        const bowSegment = page.locator('[data-role="articulation-range-segment"][data-articulation-id="bow"]').first();
+        const bowBox = await bowSegment.boundingBox();
+        assert.notEqual(bowBox, null);
+
+        const xForValue = (value) => (
+            laneBox.x + laneBox.width * ((value - viewport.min) / (viewport.max - viewport.min))
+        );
+        const y = bowBox.y + bowBox.height * 0.5;
+
+        await page.mouse.move(bowBox.x + bowBox.width - 1, y);
+        await page.mouse.down();
+        await page.mouse.move(xForValue(23), y, { steps: 4 });
+
+        assert.deepEqual(
+            await page.locator('[data-role="articulation-range-value"]').allTextContents(),
+            ["0-20", "23-42"],
+            "the first drag from a cold shared edge must preview shrinking the range in the drag direction",
+        );
+
+        await page.mouse.up();
+
+        const snapshot = await waitForHarnessSnapshot(
+            page,
+            "cold first drag right shrinks the right range start and leaves the left range in place",
+            (nextSnapshot) => {
+                const assignments = readStoredArticulationBank(nextSnapshot).chainAssignments;
+                return assignments.some((assignment) => (
+                    assignment.articulationId === "bow"
+                    && assignment.min === 0
+                    && assignment.max === 20
+                )) && assignments.some((assignment) => (
+                    assignment.articulationId === "pluck"
+                    && assignment.min === 23
+                    && assignment.max === 42
+                ));
+            },
+        );
+        assert.deepEqual(readStoredArticulationBank(snapshot).chainAssignments, [
+            { id: "chain-bow", articulationId: "bow", min: 0, max: 20 },
+            { id: "chain-pluck", articulationId: "pluck", min: 23, max: 42 },
+        ]);
+
+        await page.evaluate(({ stateKey, nextBank }) => {
+            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue(stateKey, JSON.stringify(nextBank));
+        }, {
+            stateKey: ARTICULATION_STATE_KEY,
+            nextBank: bank,
+        });
+        await waitForHarnessSnapshot(
+            page,
+            "reset adjacent ranges for cold first drag left",
+            (nextSnapshot) => {
+                const assignments = readStoredArticulationBank(nextSnapshot).chainAssignments;
+                return assignments.some((assignment) => (
+                    assignment.articulationId === "bow"
+                    && assignment.min === 0
+                    && assignment.max === 20
+                )) && assignments.some((assignment) => (
+                    assignment.articulationId === "pluck"
+                    && assignment.min === 21
+                    && assignment.max === 42
+                ));
+            },
+        );
+
+        const resetBowBox = await bowSegment.boundingBox();
+        assert.notEqual(resetBowBox, null);
+        await page.mouse.move(resetBowBox.x + resetBowBox.width - 1, y);
+        await page.mouse.down();
+        await page.mouse.move(xForValue(19), y, { steps: 4 });
+
+        assert.deepEqual(
+            await page.locator('[data-role="articulation-range-value"]').allTextContents(),
+            ["0-19", "21-42"],
+            "the first cold drag left from a shared edge must shrink the left range and leave the right range in place",
+        );
+
+        await page.mouse.up();
+
+        const dragLeftSnapshot = await waitForHarnessSnapshot(
+            page,
+            "cold first drag left shrinks the left range end and leaves the right range in place",
+            (nextSnapshot) => {
+                const assignments = readStoredArticulationBank(nextSnapshot).chainAssignments;
+                return assignments.some((assignment) => (
+                    assignment.articulationId === "bow"
+                    && assignment.min === 0
+                    && assignment.max === 19
+                )) && assignments.some((assignment) => (
+                    assignment.articulationId === "pluck"
+                    && assignment.min === 21
+                    && assignment.max === 42
+                ));
+            },
+        );
+        assert.deepEqual(readStoredArticulationBank(dragLeftSnapshot).chainAssignments, [
+            { id: "chain-bow", articulationId: "bow", min: 0, max: 19 },
+            { id: "chain-pluck", articulationId: "pluck", min: 21, max: 42 },
+        ]);
+    } finally {
+        await page.close();
+    }
+});
+
+test("desktop articulation one-slot ranges keep labels and avoid adjacent resize-handle stealing", async () => {
+    const page = await openHarnessPage();
+
+    try {
+        await page.waitForFunction(() => {
+            const addButton = document.querySelector('button[aria-label="Capture current parameters as a new articulation"]');
+            return addButton instanceof HTMLButtonElement && !addButton.disabled;
+        });
+
+        const bank = normalizeArticulationBank({
+            selectedSlotId: "bow",
+            activeTriggerMode: "chain",
+            slots: [
+                { id: "bow", runtimeSlot: 0, name: "Bow Forte" },
+                { id: "pluck", runtimeSlot: 1, name: "Pluck Snap" },
+            ],
+            chainAssignments: [
+                { id: "chain-bow", articulationId: "bow", min: 0, max: 20 },
+                { id: "chain-pluck", articulationId: "pluck", min: 21, max: 21 },
+            ],
+        });
+
+        await page.evaluate(({ stateKey, nextBank }) => {
+            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue(stateKey, JSON.stringify(nextBank));
+        }, {
+            stateKey: ARTICULATION_STATE_KEY,
+            nextBank: bank,
+        });
+        await waitForHarnessSnapshot(
+            page,
+            "seeded one-slot adjacent range",
+            (nextSnapshot) => readStoredArticulationBank(nextSnapshot).chainAssignments
+                .some((assignment) => assignment.articulationId === "pluck" && assignment.min === 21 && assignment.max === 21),
+        );
+
+        await page.getByRole("button", { name: "Expand articulation editor" }).click();
+
+        const lane = page.locator('[data-role="articulation-range-lane"]').first();
+        const laneBox = await lane.boundingBox();
+        assert.notEqual(laneBox, null);
+        const lowerViewport = await readDesktopRangeViewport(page);
+        assert.deepEqual(lowerViewport, { index: 0, min: 0, max: 42, heldValue: "" });
+
+        const bowSegment = page.locator('[data-role="articulation-range-segment"][data-articulation-id="bow"]').first();
+        const pluckSegment = page.locator('[data-role="articulation-range-segment"][data-articulation-id="pluck"]').first();
+        await pluckSegment.waitFor();
+        assert.equal(await pluckSegment.getAttribute("data-tier"), "tiny");
+        assert.equal(
+            await pluckSegment.locator('[data-role="articulation-range-name"]').textContent(),
+            "PS",
+            "a one-slot range should still display the articulation identity instead of going blank",
+        );
+
+        const pluckHandleWidths = await pluckSegment
+            .locator('[data-role^="articulation-range-resize"]')
+            .evaluateAll((handles) => handles.map((handle) => handle.getBoundingClientRect().width));
+        assert.deepEqual(
+            pluckHandleWidths.map((width) => Math.round(width)),
+            [4, 4],
+            "resize hit targets should not consume the readable area of a one-slot range",
+        );
+
+        const bowBox = await bowSegment.boundingBox();
+        const pluckBox = await pluckSegment.boundingBox();
+        assert.notEqual(bowBox, null);
+        assert.notEqual(pluckBox, null);
+
+        await page.mouse.move(bowBox.x + bowBox.width * 0.5, bowBox.y + bowBox.height * 0.5);
+        await page.waitForFunction(() => (
+            document
+                .querySelector('[data-role="articulation-range-segment"][data-articulation-id="bow"] [data-role="articulation-range-resize-max"]')
+                ?.getAttribute("data-active") === "true"
+            && document
+                .querySelector('[data-role="articulation-range-segment"][data-articulation-id="pluck"] [data-role="articulation-range-resize-min"]')
+                ?.getAttribute("data-active") === "false"
+        ));
+
+        await page.mouse.move(pluckBox.x + 1, pluckBox.y + pluckBox.height * 0.5);
+        await page.waitForFunction(() => (
+            document
+                .querySelector('[data-role="articulation-range-segment"][data-articulation-id="pluck"] [data-role="articulation-range-resize-min"]')
+                ?.getAttribute("data-active") === "true"
+            && document
+                .querySelector('[data-role="articulation-range-segment"][data-articulation-id="bow"] [data-role="articulation-range-resize-max"]')
+                ?.getAttribute("data-active") === "false"
+        ));
+
+        const xForValue = (value) => (
+            laneBox.x + laneBox.width * ((value - lowerViewport.min) / (lowerViewport.max - lowerViewport.min))
+        );
+
+        const bowMaxHandle = bowSegment.locator('[data-role="articulation-range-resize-max"]').first();
+        const bowMaxHandleBox = await bowMaxHandle.boundingBox();
+        assert.notEqual(bowMaxHandleBox, null);
+        await page.mouse.move(bowBox.x + bowBox.width * 0.5, bowBox.y + bowBox.height * 0.5);
+        await page.waitForFunction(() => (
+            document
+                .querySelector('[data-role="articulation-range-segment"][data-articulation-id="bow"] [data-role="articulation-range-resize-max"]')
+                ?.getAttribute("data-active") === "true"
+            && document
+                .querySelector('[data-role="articulation-range-segment"][data-articulation-id="pluck"] [data-role="articulation-range-resize-min"]')
+                ?.getAttribute("data-active") === "false"
+        ));
+        await page.mouse.move(
+            bowMaxHandleBox.x + bowMaxHandleBox.width * 0.5,
+            bowMaxHandleBox.y + bowMaxHandleBox.height * 0.5,
+        );
+        await page.mouse.down();
+        await page.mouse.move(xForValue(19), pluckBox.y + pluckBox.height * 0.5, { steps: 4 });
+        await page.mouse.up();
+
+        const snapshot = await waitForHarnessSnapshot(
+            page,
+            "shared boundary drag left shrinks the left range and leaves the right range in place",
+            (nextSnapshot) => {
+                const assignments = readStoredArticulationBank(nextSnapshot).chainAssignments;
+                return assignments.some((assignment) => (
+                    assignment.articulationId === "bow"
+                    && assignment.min === 0
+                    && assignment.max === 19
+                )) && assignments.some((assignment) => (
+                    assignment.articulationId === "pluck"
+                    && assignment.min === 21
+                    && assignment.max === 21
+                ));
+            },
+        );
+        assert.deepEqual(readStoredArticulationBank(snapshot).chainAssignments, [
+            { id: "chain-bow", articulationId: "bow", min: 0, max: 19 },
+            { id: "chain-pluck", articulationId: "pluck", min: 21, max: 21 },
+        ]);
+
+        await page.evaluate(({ stateKey }) => {
+            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue(stateKey, JSON.stringify({
+                selectedSlotId: "bow",
+                activeTriggerMode: "chain",
+                slots: [
+                    { id: "bow", runtimeSlot: 0, name: "Bow Forte" },
+                    { id: "pluck", runtimeSlot: 1, name: "Pluck Snap" },
+                ],
+                chainAssignments: [
+                    { id: "chain-bow", articulationId: "bow", min: 0, max: 20 },
+                    { id: "chain-pluck", articulationId: "pluck", min: 21, max: 42 },
+                ],
+            }));
+        }, {
+            stateKey: ARTICULATION_STATE_KEY,
+        });
+        await waitForHarnessSnapshot(
+            page,
+            "reset shared boundary with a wider right range",
+            (nextSnapshot) => readStoredArticulationBank(nextSnapshot).chainAssignments
+                .some((assignment) => assignment.articulationId === "pluck" && assignment.min === 21 && assignment.max === 42),
+        );
+
+        const refreshedBowSegment = page.locator('[data-role="articulation-range-segment"][data-articulation-id="bow"]').first();
+        const refreshedBowBox = await refreshedBowSegment.boundingBox();
+        assert.notEqual(refreshedBowBox, null);
+        const refreshedBowMaxHandle = refreshedBowSegment.locator('[data-role="articulation-range-resize-max"]').first();
+        const refreshedBowMaxHandleBox = await refreshedBowMaxHandle.boundingBox();
+        assert.notEqual(refreshedBowMaxHandleBox, null);
+        await page.mouse.move(refreshedBowBox.x + refreshedBowBox.width * 0.5, refreshedBowBox.y + refreshedBowBox.height * 0.5);
+        await page.waitForFunction(() => (
+            document
+                .querySelector('[data-role="articulation-range-segment"][data-articulation-id="bow"] [data-role="articulation-range-resize-max"]')
+                ?.getAttribute("data-active") === "true"
+        ));
+        await page.mouse.move(
+            refreshedBowMaxHandleBox.x + refreshedBowMaxHandleBox.width * 0.5,
+            refreshedBowMaxHandleBox.y + refreshedBowMaxHandleBox.height * 0.5,
+        );
+        await page.mouse.down();
+        await page.mouse.move(xForValue(23), refreshedBowBox.y + refreshedBowBox.height * 0.5, { steps: 4 });
+        await page.mouse.up();
+
+        const dragRightSnapshot = await waitForHarnessSnapshot(
+            page,
+            "shared boundary drag right shrinks the right range start and leaves the left range in place",
+            (nextSnapshot) => {
+                const assignments = readStoredArticulationBank(nextSnapshot).chainAssignments;
+                return assignments.some((assignment) => (
+                    assignment.articulationId === "bow"
+                    && assignment.min === 0
+                    && assignment.max === 20
+                )) && assignments.some((assignment) => (
+                    assignment.articulationId === "pluck"
+                    && assignment.min === 23
+                    && assignment.max === 42
+                ));
+            },
+        );
+        assert.deepEqual(readStoredArticulationBank(dragRightSnapshot).chainAssignments, [
+            { id: "chain-bow", articulationId: "bow", min: 0, max: 20 },
+            { id: "chain-pluck", articulationId: "pluck", min: 23, max: 42 },
+        ]);
+    } finally {
+        await page.close();
+    }
+});
+
+test("articulation range lane center drop replaces and selected card is obvious before update", async () => {
+    const page = await openHarnessPage();
+
+    try {
+        await page.waitForFunction(() => {
+            const addButton = document.querySelector('button[aria-label="Capture current parameters as a new articulation"]');
+            return addButton instanceof HTMLButtonElement && !addButton.disabled;
+        });
+
+        const bank = normalizeArticulationBank({
+            selectedSlotId: "bow",
+            activeTriggerMode: "chain",
+            slots: [
+                { id: "bow", runtimeSlot: 0, name: "Bow" },
+                { id: "pluck", runtimeSlot: 1, name: "Pluck" },
+            ],
+            chainAssignments: [
+                { id: "chain-bow-full", articulationId: "bow", min: 0, max: 127 },
+            ],
+        });
+
+        await page.evaluate(({ stateKey, nextBank }) => {
+            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue(stateKey, JSON.stringify(nextBank));
+        }, {
+            stateKey: ARTICULATION_STATE_KEY,
+            nextBank: bank,
+        });
+        await waitForHarnessSnapshot(
+            page,
+            "seeded articulation bank for replace",
+            (nextSnapshot) => readStoredArticulationBank(nextSnapshot).chainAssignments.length === 1,
+        );
+
+        await page.getByRole("button", { name: "Expand articulation editor" }).click();
+        const pluckCard = page.locator('[data-role="articulation-card"][data-articulation-id="pluck"]');
+        await pluckCard.click();
+        assert.equal(await pluckCard.getAttribute("data-selected"), "true");
+        assert.equal(await pluckCard.locator('[data-role="articulation-card-selected-label"]').textContent(), "Selected");
+
+        await page.evaluate(() => {
+            window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("pan", 0.25);
+        });
+        await page.locator('[data-role="articulation-update"]').waitFor();
+        assert.match(
+            await page.locator('[data-role="articulation-update"]').textContent(),
+            /Pluck/,
+            "Update button must name the selected articulation it will overwrite",
+        );
+
+        const lane = page.locator('[data-role="articulation-range-lane"]').first();
+        const laneBox = await lane.boundingBox();
+        assert.notEqual(laneBox, null);
+        await dragArticulationCardToLane(page, "pluck", lane, {
+            x: laneBox.x + laneBox.width * 0.5,
+            y: laneBox.y + laneBox.height * 0.5,
+        }, {
+            afterDragOver: async () => {
+                const preview = page.locator('[data-role="articulation-placement-preview"]');
+                await preview.waitFor();
+                assert.equal(await preview.getAttribute("data-operation"), "replace");
+                assert.match(
+                    await preview.textContent(),
+                    /^replace /,
+                    "center hover must visibly preview replace before drop",
+                );
+            },
+        });
+
+        const snapshot = await waitForHarnessSnapshot(
+            page,
+            "center drop replaces occupied range",
+            (nextSnapshot) => {
+                const assignments = readStoredArticulationBank(nextSnapshot).chainAssignments;
+                return assignments.length === 1
+                    && assignments[0].articulationId === "pluck"
+                    && assignments[0].min === 0
+                    && assignments[0].max === 127;
+            },
+        );
+        assert.deepEqual(readStoredArticulationBank(snapshot).chainAssignments, [
+            { id: "chain-bow-full", articulationId: "pluck", min: 0, max: 127 },
+        ]);
+    } finally {
+        await page.close();
+    }
+});
+
+test("mobile articulation segment tap replaces occupied range instead of inserting at the edge", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: async (nextPage) => {
+            await nextPage.setViewportSize({ width: 390, height: 760 });
+        },
+    });
+
+    try {
+        await page.waitForFunction(() => {
+            const addButton = document.querySelector('button[aria-label="Capture current parameters as a new articulation"]');
+            return addButton instanceof HTMLButtonElement && !addButton.disabled;
+        });
+
+        const bank = normalizeArticulationBank({
+            selectedSlotId: "bow",
+            activeTriggerMode: "chain",
+            slots: [
+                { id: "bow", runtimeSlot: 0, name: "Bow" },
+                { id: "pluck", runtimeSlot: 1, name: "Pluck" },
+            ],
+            chainAssignments: [
+                { id: "chain-bow-full", articulationId: "bow", min: 0, max: 127 },
+            ],
+        });
+
+        await page.evaluate(({ stateKey, nextBank }) => {
+            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue(stateKey, JSON.stringify(nextBank));
+        }, {
+            stateKey: ARTICULATION_STATE_KEY,
+            nextBank: bank,
+        });
+        await waitForHarnessSnapshot(
+            page,
+            "seeded articulation bank for mobile replace",
+            (nextSnapshot) => readStoredArticulationBank(nextSnapshot).chainAssignments.length === 1,
+        );
+
+        await page.getByRole("button", { name: "Expand articulation editor" }).click();
+        await page.locator('[data-role="articulation-card"][data-articulation-id="pluck"]').click();
+        await page.locator('[data-role="articulation-range-segment-row"]').first().click();
+
+        const snapshot = await waitForHarnessSnapshot(
+            page,
+            "mobile occupied row tap replaces instead of edge inserting",
+            (nextSnapshot) => {
+                const assignments = readStoredArticulationBank(nextSnapshot).chainAssignments;
+                return assignments.length === 1
+                    && assignments[0].articulationId === "pluck"
+                    && assignments[0].min === 0
+                    && assignments[0].max === 127;
+            },
+        );
+        assert.deepEqual(readStoredArticulationBank(snapshot).chainAssignments, [
+            { id: "chain-bow-full", articulationId: "pluck", min: 0, max: 127 },
+        ]);
+    } finally {
+        await page.close();
+    }
+});
+
+test("articulation card audition is press-hold and follows the most recently played note", async () => {
     const page = await openHarnessPage();
 
     async function pressAuditionAndExpect(note) {
@@ -2206,10 +3256,30 @@ test("articulation card audition is press-hold and cycles C1 C2 C3", async () =>
         });
         await page.locator('[data-role="articulation-card"][data-articulation-id="bow"]').waitFor();
 
-        await pressAuditionAndExpect(36);
+        await clearHarnessDebugLog(page);
+        await page.keyboard.down("g");
+        await page.keyboard.up("g");
+        await page.waitForFunction(() => window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().midiInputEvents.length === 2);
+        let snapshot = await getHarnessSnapshot(page);
+        assert.deepEqual(snapshot.midiInputEvents, [
+            { endpointID: "midiIn", value: buildShortMidi(0x90, 43, 100) },
+            { endpointID: "midiIn", value: buildShortMidi(0x80, 43) },
+        ]);
+
+        await pressAuditionAndExpect(43);
+        await pressAuditionAndExpect(43);
+
+        await clearHarnessDebugLog(page);
+        await page.keyboard.down("k");
+        await page.keyboard.up("k");
+        await page.waitForFunction(() => window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().midiInputEvents.length === 2);
+        snapshot = await getHarnessSnapshot(page);
+        assert.deepEqual(snapshot.midiInputEvents, [
+            { endpointID: "midiIn", value: buildShortMidi(0x90, 48, 100) },
+            { endpointID: "midiIn", value: buildShortMidi(0x80, 48) },
+        ]);
+
         await pressAuditionAndExpect(48);
-        await pressAuditionAndExpect(60);
-        await pressAuditionAndExpect(36);
     } finally {
         await page.close();
     }

@@ -634,6 +634,10 @@ function setTriggerLaneAssignments(bank, mode, assignments) {
 function findRangeAssignmentAt(assignments, position) {
     return assignments.find((assignment) => position >= assignment.min && position <= assignment.max) ?? null;
 }
+function removeOtherAssignmentsForArticulation(assignments, articulationId, keepAssignmentId = null) {
+    return assignments.filter((assignment) => (assignment.articulationId !== articulationId
+        || (keepAssignmentId !== null && assignment.id === keepAssignmentId)));
+}
 function findEmptyRangeGap(assignments, position, minAllowed, maxAllowed) {
     let gapMin = minAllowed;
     for (const assignment of sortRangeAssignments(assignments)) {
@@ -664,29 +668,26 @@ function findMatchingRangeAssignment(assignments, segmentValue) {
             && assignment.min === min
             && assignment.max === max))) ?? null;
 }
-function findMoveDestination(assignments, desiredMin, width, minAllowed, maxAllowed) {
-    const sortedAssignments = sortRangeAssignments(assignments);
-    const candidates = [];
-    let gapMin = minAllowed;
-    const addGapCandidate = (gapStart, gapEnd) => {
-        const maxStart = gapEnd - width + 1;
-        if (maxStart < gapStart) {
-            return;
-        }
-        const min = clamp(desiredMin, gapStart, maxStart);
-        candidates.push({
-            min,
-            max: min + width - 1,
-            distance: Math.abs(min - desiredMin),
-        });
-    };
-    for (const assignment of sortedAssignments) {
-        addGapCandidate(gapMin, assignment.min - 1);
-        gapMin = Math.max(gapMin, assignment.max + 1);
+function carveAssignmentAroundRange(assignment, carvedMin, carvedMax) {
+    if (assignment.max < carvedMin || assignment.min > carvedMax) {
+        return [assignment];
     }
-    addGapCandidate(gapMin, maxAllowed);
-    candidates.sort((left, right) => left.distance - right.distance || left.min - right.min);
-    return candidates[0] ?? null;
+    if (carvedMin <= assignment.min && carvedMax >= assignment.max) {
+        return [];
+    }
+    if (carvedMin <= assignment.min) {
+        const min = carvedMax + 1;
+        return min <= assignment.max ? [{ ...assignment, min }] : [];
+    }
+    if (carvedMax >= assignment.max) {
+        const max = carvedMin - 1;
+        return max >= assignment.min ? [{ ...assignment, max }] : [];
+    }
+    const left = { ...assignment, max: carvedMin - 1 };
+    const right = { ...assignment, min: carvedMax + 1 };
+    const leftWidth = left.max - left.min + 1;
+    const rightWidth = right.max - right.min + 1;
+    return leftWidth >= rightWidth ? [left] : [right];
 }
 export function assignArticulationToRangePosition(bankValue, modeValue, positionValue, articulationId) {
     const bank = normalizeArticulationBank(bankValue);
@@ -697,18 +698,19 @@ export function assignArticulationToRangePosition(bankValue, modeValue, position
     const position = normalizeInteger(positionValue, minAllowed, minAllowed, maxAllowed);
     const occupiedAssignment = assignments.find((assignment) => (position >= assignment.min && position <= assignment.max));
     const nextAssignments = occupiedAssignment
-        ? assignments.map((assignment) => (assignment.id === occupiedAssignment.id
+        ? removeOtherAssignmentsForArticulation(assignments.map((assignment) => (assignment.id === occupiedAssignment.id
             ? { ...assignment, articulationId }
-            : assignment))
+            : assignment)), articulationId, occupiedAssignment.id)
         : (() => {
-            const gap = findEmptyRangeGap(assignments, position, minAllowed, maxAllowed);
+            const nextAssignmentsWithoutSameArticulation = removeOtherAssignmentsForArticulation(assignments, articulationId);
+            const gap = findEmptyRangeGap(nextAssignmentsWithoutSameArticulation, position, minAllowed, maxAllowed);
             if (gap.max < gap.min) {
                 return assignments;
             }
             return [
-                ...assignments,
+                ...nextAssignmentsWithoutSameArticulation,
                 {
-                    id: createUniqueAssignmentId(assignments, prefix, articulationId, gap.min),
+                    id: createUniqueAssignmentId(nextAssignmentsWithoutSameArticulation, prefix, articulationId, gap.min),
                     articulationId,
                     min: gap.min,
                     max: gap.max,
@@ -717,7 +719,7 @@ export function assignArticulationToRangePosition(bankValue, modeValue, position
         })();
     return setTriggerLaneAssignments(bank, mode, nextAssignments);
 }
-export function insertArticulationRangeAtPosition(bankValue, modeValue, positionValue, articulationId) {
+export function insertArticulationRangeAtPosition(bankValue, modeValue, positionValue, articulationId, preserveSide) {
     const bank = normalizeArticulationBank(bankValue);
     if (!bank.slots.some((slot) => slot.id === articulationId)) {
         return bank;
@@ -727,10 +729,15 @@ export function insertArticulationRangeAtPosition(bankValue, modeValue, position
     const occupiedAssignment = findRangeAssignmentAt(assignments, position);
     let nextAssignments = assignments;
     if (occupiedAssignment) {
+        if (occupiedAssignment.articulationId === articulationId) {
+            return bank;
+        }
         if (occupiedAssignment.min === occupiedAssignment.max) {
             return bank;
         }
-        const trimFromMin = position - occupiedAssignment.min <= occupiedAssignment.max - position;
+        const trimFromMin = preserveSide === "upper"
+            || (preserveSide !== "lower"
+                && position - occupiedAssignment.min <= occupiedAssignment.max - position);
         nextAssignments = assignments.flatMap((assignment) => {
             if (assignment.id !== occupiedAssignment.id) {
                 return [assignment];
@@ -743,6 +750,7 @@ export function insertArticulationRangeAtPosition(bankValue, modeValue, position
             return max >= assignment.min ? [{ ...assignment, max }] : [];
         });
     }
+    nextAssignments = removeOtherAssignmentsForArticulation(nextAssignments, articulationId);
     if (findRangeAssignmentAt(nextAssignments, position)) {
         return bank;
     }
@@ -764,20 +772,21 @@ export function moveArticulationRangeAssignment(bankValue, modeValue, segmentVal
         return bank;
     }
     const width = target.max - target.min + 1;
-    const desiredMin = normalizeInteger(Number(targetPositionValue) - Math.floor(width / 2), target.min, minAllowed, Math.max(minAllowed, maxAllowed - width + 1));
-    const otherAssignments = assignments.filter((assignment) => assignment.id !== target.id);
-    const destination = findMoveDestination(otherAssignments, desiredMin, width, minAllowed, maxAllowed);
-    if (!destination || (destination.min === target.min && destination.max === target.max)) {
+    const nextMin = normalizeInteger(Number(targetPositionValue) - Math.floor(width / 2), target.min, minAllowed, Math.max(minAllowed, maxAllowed - width + 1));
+    const nextTarget = {
+        ...target,
+        min: nextMin,
+        max: nextMin + width - 1,
+    };
+    const otherAssignments = assignments
+        .filter((assignment) => assignment.id !== target.id)
+        .flatMap((assignment) => carveAssignmentAroundRange(assignment, nextTarget.min, nextTarget.max));
+    if (nextTarget.min === target.min
+        && nextTarget.max === target.max
+        && otherAssignments.length === assignments.length - 1) {
         return bank;
     }
-    return setTriggerLaneAssignments(bank, mode, [
-        ...otherAssignments,
-        {
-            ...target,
-            min: destination.min,
-            max: destination.max,
-        },
-    ]);
+    return setTriggerLaneAssignments(bank, mode, [...otherAssignments, nextTarget]);
 }
 export function resizeArticulationRangeAssignment(bankValue, modeValue, segmentValue, edge, positionValue) {
     const bank = normalizeArticulationBank(bankValue);
@@ -786,20 +795,25 @@ export function resizeArticulationRangeAssignment(bankValue, modeValue, segmentV
     if (!target) {
         return bank;
     }
-    const otherAssignments = sortRangeAssignments(assignments.filter((assignment) => assignment.id !== target.id));
-    const previousLimit = otherAssignments
-        .filter((assignment) => assignment.max < target.max)
-        .reduce((maxValue, assignment) => Math.max(maxValue, assignment.max + 1), minAllowed);
-    const nextLimit = otherAssignments
-        .filter((assignment) => assignment.min > target.min)
-        .reduce((minValue, assignment) => Math.min(minValue, assignment.min - 1), maxAllowed);
     const position = normalizeInteger(positionValue, edge === "min" ? target.min : target.max, minAllowed, maxAllowed);
     const nextTarget = edge === "min"
-        ? { ...target, min: clamp(position, previousLimit, target.max) }
-        : { ...target, max: clamp(position, target.min, nextLimit) };
+        ? { ...target, min: clamp(position, minAllowed, target.max) }
+        : { ...target, max: clamp(position, target.min, maxAllowed) };
     if (nextTarget.min === target.min && nextTarget.max === target.max) {
         return bank;
     }
+    const otherAssignments = sortRangeAssignments(assignments.filter((assignment) => assignment.id !== target.id))
+        .flatMap((assignment) => {
+        if (edge === "min" && assignment.max >= nextTarget.min && assignment.max < target.min) {
+            const max = nextTarget.min - 1;
+            return assignment.min <= max ? [{ ...assignment, max }] : [];
+        }
+        if (edge === "max" && assignment.min <= nextTarget.max && assignment.min > target.max) {
+            const min = nextTarget.max + 1;
+            return min <= assignment.max ? [{ ...assignment, min }] : [];
+        }
+        return [assignment];
+    });
     return setTriggerLaneAssignments(bank, mode, [...otherAssignments, nextTarget]);
 }
 export function clearArticulationRangeAssignment(bankValue, modeValue, segmentValue) {

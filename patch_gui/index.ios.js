@@ -12494,7 +12494,6700 @@ function requireClient() {
   return client.exports;
 }
 var clientExports = requireClient();
-const cssText = '/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com */\n@layer properties {\n  @supports (((-webkit-hyphens: none)) and (not (margin-trim: inline))) or ((-moz-orient: inline) and (not (color: rgb(from red r g b)))) {\n    *, :before, :after, ::backdrop {\n      --tw-translate-x: 0;\n      --tw-translate-y: 0;\n      --tw-translate-z: 0;\n      --tw-rotate-x: initial;\n      --tw-rotate-y: initial;\n      --tw-rotate-z: initial;\n      --tw-skew-x: initial;\n      --tw-skew-y: initial;\n      --tw-space-y-reverse: 0;\n      --tw-space-x-reverse: 0;\n      --tw-border-style: solid;\n      --tw-gradient-position: initial;\n      --tw-gradient-from: #0000;\n      --tw-gradient-via: #0000;\n      --tw-gradient-to: #0000;\n      --tw-gradient-stops: initial;\n      --tw-gradient-via-stops: initial;\n      --tw-gradient-from-position: 0%;\n      --tw-gradient-via-position: 50%;\n      --tw-gradient-to-position: 100%;\n      --tw-leading: initial;\n      --tw-font-weight: initial;\n      --tw-tracking: initial;\n      --tw-ordinal: initial;\n      --tw-slashed-zero: initial;\n      --tw-numeric-figure: initial;\n      --tw-numeric-spacing: initial;\n      --tw-numeric-fraction: initial;\n      --tw-shadow: 0 0 #0000;\n      --tw-shadow-color: initial;\n      --tw-shadow-alpha: 100%;\n      --tw-inset-shadow: 0 0 #0000;\n      --tw-inset-shadow-color: initial;\n      --tw-inset-shadow-alpha: 100%;\n      --tw-ring-color: initial;\n      --tw-ring-shadow: 0 0 #0000;\n      --tw-inset-ring-color: initial;\n      --tw-inset-ring-shadow: 0 0 #0000;\n      --tw-ring-inset: initial;\n      --tw-ring-offset-width: 0px;\n      --tw-ring-offset-color: #fff;\n      --tw-ring-offset-shadow: 0 0 #0000;\n      --tw-outline-style: solid;\n      --tw-blur: initial;\n      --tw-brightness: initial;\n      --tw-contrast: initial;\n      --tw-grayscale: initial;\n      --tw-hue-rotate: initial;\n      --tw-invert: initial;\n      --tw-opacity: initial;\n      --tw-saturate: initial;\n      --tw-sepia: initial;\n      --tw-drop-shadow: initial;\n      --tw-drop-shadow-color: initial;\n      --tw-drop-shadow-alpha: 100%;\n      --tw-drop-shadow-size: initial;\n      --tw-backdrop-blur: initial;\n      --tw-backdrop-brightness: initial;\n      --tw-backdrop-contrast: initial;\n      --tw-backdrop-grayscale: initial;\n      --tw-backdrop-hue-rotate: initial;\n      --tw-backdrop-invert: initial;\n      --tw-backdrop-opacity: initial;\n      --tw-backdrop-saturate: initial;\n      --tw-backdrop-sepia: initial;\n      --tw-duration: initial;\n      --tw-ease: initial;\n    }\n  }\n}\n\n@layer theme {\n  :root, :host {\n    --font-sans: ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji",\n      "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";\n    --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",\n      "Courier New", monospace;\n    --color-red-50: oklch(97.1% .013 17.38);\n    --color-red-300: oklch(80.8% .114 19.571);\n    --color-red-400: oklch(70.4% .191 22.216);\n    --color-red-600: oklch(57.7% .245 27.325);\n    --color-amber-100: oklch(96.2% .059 95.617);\n    --color-amber-200: oklch(92.4% .12 95.746);\n    --color-amber-400: oklch(82.8% .189 84.429);\n    --color-emerald-100: oklch(95% .052 163.051);\n    --color-emerald-200: oklch(90.5% .093 164.15);\n    --color-emerald-300: oklch(84.5% .143 164.978);\n    --color-cyan-50: oklch(98.4% .019 200.873);\n    --color-cyan-100: oklch(95.6% .045 203.388);\n    --color-cyan-200: oklch(91.7% .08 205.041);\n    --color-cyan-300: oklch(86.5% .127 207.078);\n    --color-cyan-400: oklch(78.9% .154 211.53);\n    --color-sky-100: oklch(95.1% .026 236.824);\n    --color-sky-300: oklch(82.8% .111 230.318);\n    --color-blue-300: oklch(80.9% .105 251.813);\n    --color-fuchsia-100: oklch(95.2% .037 318.852);\n    --color-fuchsia-200: oklch(90.3% .076 319.62);\n    --color-fuchsia-300: oklch(83.3% .145 321.434);\n    --color-rose-200: oklch(89.2% .058 10.001);\n    --color-rose-300: oklch(81% .117 11.638);\n    --color-rose-400: oklch(71.2% .194 13.428);\n    --color-slate-50: oklch(98.4% .003 247.858);\n    --color-slate-100: oklch(96.8% .007 247.896);\n    --color-slate-200: oklch(92.9% .013 255.508);\n    --color-slate-300: oklch(86.9% .022 252.894);\n    --color-slate-400: oklch(70.4% .04 256.788);\n    --color-slate-500: oklch(55.4% .046 257.417);\n    --color-black: #000;\n    --color-white: #fff;\n    --spacing: .25rem;\n    --container-sm: 24rem;\n    --container-lg: 32rem;\n    --container-2xl: 42rem;\n    --text-xs: .75rem;\n    --text-xs--line-height: calc(1 / .75);\n    --text-sm: .875rem;\n    --text-sm--line-height: calc(1.25 / .875);\n    --text-base: 1rem;\n    --text-base--line-height: calc(1.5 / 1);\n    --text-lg: 1.125rem;\n    --text-lg--line-height: calc(1.75 / 1.125);\n    --text-2xl: 1.5rem;\n    --text-2xl--line-height: calc(2 / 1.5);\n    --text-3xl: 1.875rem;\n    --text-3xl--line-height: calc(2.25 / 1.875);\n    --font-weight-normal: 400;\n    --font-weight-medium: 500;\n    --font-weight-semibold: 600;\n    --font-weight-bold: 700;\n    --font-weight-black: 900;\n    --tracking-tight: -.025em;\n    --tracking-wide: .025em;\n    --tracking-widest: .1em;\n    --leading-snug: 1.375;\n    --leading-normal: 1.5;\n    --leading-relaxed: 1.625;\n    --radius-xs: .125rem;\n    --radius-sm: .25rem;\n    --radius-md: .375rem;\n    --radius-lg: .5rem;\n    --radius-xl: .75rem;\n    --radius-2xl: 1rem;\n    --ease-in-out: cubic-bezier(.4, 0, .2, 1);\n    --animate-spin: spin 1s linear infinite;\n    --animate-pulse: pulse 2s cubic-bezier(.4, 0, .6, 1) infinite;\n    --blur-md: 12px;\n    --blur-xl: 24px;\n    --aspect-video: 16 / 9;\n    --default-transition-duration: .15s;\n    --default-transition-timing-function: cubic-bezier(.4, 0, .2, 1);\n    --default-font-family: var(--font-sans);\n    --default-mono-font-family: var(--font-mono);\n  }\n}\n\n@layer base {\n  *, :after, :before, ::backdrop {\n    box-sizing: border-box;\n    border: 0 solid;\n    margin: 0;\n    padding: 0;\n  }\n\n  ::file-selector-button {\n    box-sizing: border-box;\n    border: 0 solid;\n    margin: 0;\n    padding: 0;\n  }\n\n  html, :host {\n    -webkit-text-size-adjust: 100%;\n    tab-size: 4;\n    line-height: 1.5;\n    font-family: var(--default-font-family, ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji");\n    font-feature-settings: var(--default-font-feature-settings, normal);\n    font-variation-settings: var(--default-font-variation-settings, normal);\n    -webkit-tap-highlight-color: transparent;\n  }\n\n  hr {\n    height: 0;\n    color: inherit;\n    border-top-width: 1px;\n  }\n\n  abbr:where([title]) {\n    -webkit-text-decoration: underline dotted;\n    text-decoration: underline dotted;\n  }\n\n  h1, h2, h3, h4, h5, h6 {\n    font-size: inherit;\n    font-weight: inherit;\n  }\n\n  a {\n    color: inherit;\n    -webkit-text-decoration: inherit;\n    -webkit-text-decoration: inherit;\n    -webkit-text-decoration: inherit;\n    text-decoration: inherit;\n  }\n\n  b, strong {\n    font-weight: bolder;\n  }\n\n  code, kbd, samp, pre {\n    font-family: var(--default-mono-font-family, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace);\n    font-feature-settings: var(--default-mono-font-feature-settings, normal);\n    font-variation-settings: var(--default-mono-font-variation-settings, normal);\n    font-size: 1em;\n  }\n\n  small {\n    font-size: 80%;\n  }\n\n  sub, sup {\n    vertical-align: baseline;\n    font-size: 75%;\n    line-height: 0;\n    position: relative;\n  }\n\n  sub {\n    bottom: -.25em;\n  }\n\n  sup {\n    top: -.5em;\n  }\n\n  table {\n    text-indent: 0;\n    border-color: inherit;\n    border-collapse: collapse;\n  }\n\n  :-moz-focusring {\n    outline: auto;\n  }\n\n  progress {\n    vertical-align: baseline;\n  }\n\n  summary {\n    display: list-item;\n  }\n\n  ol, ul, menu {\n    list-style: none;\n  }\n\n  img, svg, video, canvas, audio, iframe, embed, object {\n    vertical-align: middle;\n    display: block;\n  }\n\n  img, video {\n    max-width: 100%;\n    height: auto;\n  }\n\n  button, input, select, optgroup, textarea {\n    font: inherit;\n    font-feature-settings: inherit;\n    font-variation-settings: inherit;\n    letter-spacing: inherit;\n    color: inherit;\n    opacity: 1;\n    background-color: #0000;\n    border-radius: 0;\n  }\n\n  ::file-selector-button {\n    font: inherit;\n    font-feature-settings: inherit;\n    font-variation-settings: inherit;\n    letter-spacing: inherit;\n    color: inherit;\n    opacity: 1;\n    background-color: #0000;\n    border-radius: 0;\n  }\n\n  :where(select:is([multiple], [size])) optgroup {\n    font-weight: bolder;\n  }\n\n  :where(select:is([multiple], [size])) optgroup option {\n    padding-inline-start: 20px;\n  }\n\n  ::file-selector-button {\n    margin-inline-end: 4px;\n  }\n\n  ::placeholder {\n    opacity: 1;\n  }\n\n  @supports (not ((-webkit-appearance: -apple-pay-button))) or (contain-intrinsic-size: 1px) {\n    ::placeholder {\n      color: currentColor;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      ::placeholder {\n        color: color-mix(in oklab, currentcolor 50%, transparent);\n      }\n    }\n  }\n\n  textarea {\n    resize: vertical;\n  }\n\n  ::-webkit-search-decoration {\n    -webkit-appearance: none;\n  }\n\n  ::-webkit-date-and-time-value {\n    min-height: 1lh;\n    text-align: inherit;\n  }\n\n  ::-webkit-datetime-edit {\n    display: inline-flex;\n  }\n\n  ::-webkit-datetime-edit-fields-wrapper {\n    padding: 0;\n  }\n\n  ::-webkit-datetime-edit {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-year-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-month-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-day-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-hour-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-minute-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-second-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-millisecond-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-meridiem-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-calendar-picker-indicator {\n    line-height: 1;\n  }\n\n  :-moz-ui-invalid {\n    box-shadow: none;\n  }\n\n  button, input:where([type="button"], [type="reset"], [type="submit"]) {\n    appearance: button;\n  }\n\n  ::file-selector-button {\n    appearance: button;\n  }\n\n  ::-webkit-inner-spin-button {\n    height: auto;\n  }\n\n  ::-webkit-outer-spin-button {\n    height: auto;\n  }\n\n  [hidden]:where(:not([hidden="until-found"])) {\n    display: none !important;\n  }\n}\n\n@layer components;\n\n@layer utilities {\n  .pointer-events-auto {\n    pointer-events: auto;\n  }\n\n  .pointer-events-none {\n    pointer-events: none;\n  }\n\n  .collapse {\n    visibility: collapse;\n  }\n\n  .invisible {\n    visibility: hidden;\n  }\n\n  .visible {\n    visibility: visible;\n  }\n\n  .sr-only {\n    clip-path: inset(50%);\n    white-space: nowrap;\n    border-width: 0;\n    width: 1px;\n    height: 1px;\n    margin: -1px;\n    padding: 0;\n    position: absolute;\n    overflow: hidden;\n  }\n\n  .absolute {\n    position: absolute;\n  }\n\n  .fixed {\n    position: fixed;\n  }\n\n  .relative {\n    position: relative;\n  }\n\n  .static {\n    position: static;\n  }\n\n  .sticky {\n    position: sticky;\n  }\n\n  .inset-0 {\n    inset: calc(var(--spacing) * 0);\n  }\n\n  .inset-1 {\n    inset: calc(var(--spacing) * 1);\n  }\n\n  .inset-x-0 {\n    inset-inline: calc(var(--spacing) * 0);\n  }\n\n  .inset-x-2 {\n    inset-inline: calc(var(--spacing) * 2);\n  }\n\n  .inset-x-3 {\n    inset-inline: calc(var(--spacing) * 3);\n  }\n\n  .inset-y-0 {\n    inset-block: calc(var(--spacing) * 0);\n  }\n\n  .inset-y-4 {\n    inset-block: calc(var(--spacing) * 4);\n  }\n\n  .start {\n    inset-inline-start: var(--spacing);\n  }\n\n  .-end {\n    inset-inline-end: calc(var(--spacing) * -1);\n  }\n\n  .end {\n    inset-inline-end: var(--spacing);\n  }\n\n  .-top-3 {\n    top: calc(var(--spacing) * -3);\n  }\n\n  .-top-12 {\n    top: calc(var(--spacing) * -12);\n  }\n\n  .top-0 {\n    top: calc(var(--spacing) * 0);\n  }\n\n  .top-0\\.5 {\n    top: calc(var(--spacing) * .5);\n  }\n\n  .top-1 {\n    top: calc(var(--spacing) * 1);\n  }\n\n  .top-1\\/2 {\n    top: 50%;\n  }\n\n  .top-2 {\n    top: calc(var(--spacing) * 2);\n  }\n\n  .top-3 {\n    top: calc(var(--spacing) * 3);\n  }\n\n  .top-4 {\n    top: calc(var(--spacing) * 4);\n  }\n\n  .top-full {\n    top: 100%;\n  }\n\n  .-right-12 {\n    right: calc(var(--spacing) * -12);\n  }\n\n  .right-0 {\n    right: calc(var(--spacing) * 0);\n  }\n\n  .right-1 {\n    right: calc(var(--spacing) * 1);\n  }\n\n  .right-2 {\n    right: calc(var(--spacing) * 2);\n  }\n\n  .right-3 {\n    right: calc(var(--spacing) * 3);\n  }\n\n  .right-4 {\n    right: calc(var(--spacing) * 4);\n  }\n\n  .-bottom-12 {\n    bottom: calc(var(--spacing) * -12);\n  }\n\n  .bottom-0 {\n    bottom: calc(var(--spacing) * 0);\n  }\n\n  .bottom-1 {\n    bottom: calc(var(--spacing) * 1);\n  }\n\n  .bottom-2 {\n    bottom: calc(var(--spacing) * 2);\n  }\n\n  .bottom-4 {\n    bottom: calc(var(--spacing) * 4);\n  }\n\n  .bottom-5 {\n    bottom: calc(var(--spacing) * 5);\n  }\n\n  .bottom-\\[48px\\] {\n    bottom: 48px;\n  }\n\n  .-left-12 {\n    left: calc(var(--spacing) * -12);\n  }\n\n  .left-0 {\n    left: calc(var(--spacing) * 0);\n  }\n\n  .left-1 {\n    left: calc(var(--spacing) * 1);\n  }\n\n  .left-1\\/2 {\n    left: 50%;\n  }\n\n  .left-2 {\n    left: calc(var(--spacing) * 2);\n  }\n\n  .left-3 {\n    left: calc(var(--spacing) * 3);\n  }\n\n  .isolate {\n    isolation: isolate;\n  }\n\n  .z-10 {\n    z-index: 10;\n  }\n\n  .z-20 {\n    z-index: 20;\n  }\n\n  .z-40 {\n    z-index: 40;\n  }\n\n  .z-50 {\n    z-index: 50;\n  }\n\n  .order-1 {\n    order: 1;\n  }\n\n  .order-first {\n    order: -9999;\n  }\n\n  .order-last {\n    order: 9999;\n  }\n\n  .col-start-2 {\n    grid-column-start: 2;\n  }\n\n  .row-span-2 {\n    grid-row: span 2 / span 2;\n  }\n\n  .row-start-1 {\n    grid-row-start: 1;\n  }\n\n  .\\!container {\n    width: 100% !important;\n  }\n\n  @media (min-width: 40rem) {\n    .\\!container {\n      max-width: 40rem !important;\n    }\n  }\n\n  @media (min-width: 48rem) {\n    .\\!container {\n      max-width: 48rem !important;\n    }\n  }\n\n  @media (min-width: 64rem) {\n    .\\!container {\n      max-width: 64rem !important;\n    }\n  }\n\n  @media (min-width: 80rem) {\n    .\\!container {\n      max-width: 80rem !important;\n    }\n  }\n\n  @media (min-width: 96rem) {\n    .\\!container {\n      max-width: 96rem !important;\n    }\n  }\n\n  .container {\n    width: 100%;\n  }\n\n  @media (min-width: 40rem) {\n    .container {\n      max-width: 40rem;\n    }\n  }\n\n  @media (min-width: 48rem) {\n    .container {\n      max-width: 48rem;\n    }\n  }\n\n  @media (min-width: 64rem) {\n    .container {\n      max-width: 64rem;\n    }\n  }\n\n  @media (min-width: 80rem) {\n    .container {\n      max-width: 80rem;\n    }\n  }\n\n  @media (min-width: 96rem) {\n    .container {\n      max-width: 96rem;\n    }\n  }\n\n  .m-1 {\n    margin: calc(var(--spacing) * 1);\n  }\n\n  .-mx-1 {\n    margin-inline: calc(var(--spacing) * -1);\n  }\n\n  .mx-0 {\n    margin-inline: calc(var(--spacing) * 0);\n  }\n\n  .mx-0\\.5 {\n    margin-inline: calc(var(--spacing) * .5);\n  }\n\n  .mx-2 {\n    margin-inline: calc(var(--spacing) * 2);\n  }\n\n  .mx-3 {\n    margin-inline: calc(var(--spacing) * 3);\n  }\n\n  .mx-auto {\n    margin-inline: auto;\n  }\n\n  .-my-2 {\n    margin-block: calc(var(--spacing) * -2);\n  }\n\n  .my-0 {\n    margin-block: calc(var(--spacing) * 0);\n  }\n\n  .my-1 {\n    margin-block: calc(var(--spacing) * 1);\n  }\n\n  .-mt-4 {\n    margin-top: calc(var(--spacing) * -4);\n  }\n\n  .mt-1 {\n    margin-top: calc(var(--spacing) * 1);\n  }\n\n  .mt-2 {\n    margin-top: calc(var(--spacing) * 2);\n  }\n\n  .mt-4 {\n    margin-top: calc(var(--spacing) * 4);\n  }\n\n  .mt-auto {\n    margin-top: auto;\n  }\n\n  .mb-2 {\n    margin-bottom: calc(var(--spacing) * 2);\n  }\n\n  .mb-3 {\n    margin-bottom: calc(var(--spacing) * 3);\n  }\n\n  .mb-4 {\n    margin-bottom: calc(var(--spacing) * 4);\n  }\n\n  .-ml-4 {\n    margin-left: calc(var(--spacing) * -4);\n  }\n\n  .ml-0 {\n    margin-left: calc(var(--spacing) * 0);\n  }\n\n  .ml-0\\.5 {\n    margin-left: calc(var(--spacing) * .5);\n  }\n\n  .ml-1 {\n    margin-left: calc(var(--spacing) * 1);\n  }\n\n  .ml-4 {\n    margin-left: calc(var(--spacing) * 4);\n  }\n\n  .ml-auto {\n    margin-left: auto;\n  }\n\n  .line-clamp-1 {\n    -webkit-line-clamp: 1;\n    -webkit-box-orient: vertical;\n    display: -webkit-box;\n    overflow: hidden;\n  }\n\n  .line-clamp-2 {\n    -webkit-line-clamp: 2;\n    -webkit-box-orient: vertical;\n    display: -webkit-box;\n    overflow: hidden;\n  }\n\n  .block {\n    display: block;\n  }\n\n  .contents {\n    display: contents;\n  }\n\n  .flex {\n    display: flex;\n  }\n\n  .grid {\n    display: grid;\n  }\n\n  .hidden {\n    display: none;\n  }\n\n  .inline {\n    display: inline;\n  }\n\n  .inline-block {\n    display: inline-block;\n  }\n\n  .inline-flex {\n    display: inline-flex;\n  }\n\n  .inline-grid {\n    display: inline-grid;\n  }\n\n  .table {\n    display: table;\n  }\n\n  .table-caption {\n    display: table-caption;\n  }\n\n  .table-cell {\n    display: table-cell;\n  }\n\n  .table-row {\n    display: table-row;\n  }\n\n  .field-sizing-content {\n    field-sizing: content;\n  }\n\n  .aspect-\\[50\\/27\\] {\n    aspect-ratio: 50 / 27;\n  }\n\n  .aspect-square {\n    aspect-ratio: 1;\n  }\n\n  .aspect-video {\n    aspect-ratio: var(--aspect-video);\n  }\n\n  .size-2 {\n    width: calc(var(--spacing) * 2);\n    height: calc(var(--spacing) * 2);\n  }\n\n  .size-3 {\n    width: calc(var(--spacing) * 3);\n    height: calc(var(--spacing) * 3);\n  }\n\n  .size-3\\.5 {\n    width: calc(var(--spacing) * 3.5);\n    height: calc(var(--spacing) * 3.5);\n  }\n\n  .size-4 {\n    width: calc(var(--spacing) * 4);\n    height: calc(var(--spacing) * 4);\n  }\n\n  .size-5 {\n    width: calc(var(--spacing) * 5);\n    height: calc(var(--spacing) * 5);\n  }\n\n  .size-6 {\n    width: calc(var(--spacing) * 6);\n    height: calc(var(--spacing) * 6);\n  }\n\n  .size-7 {\n    width: calc(var(--spacing) * 7);\n    height: calc(var(--spacing) * 7);\n  }\n\n  .size-8 {\n    width: calc(var(--spacing) * 8);\n    height: calc(var(--spacing) * 8);\n  }\n\n  .size-9 {\n    width: calc(var(--spacing) * 9);\n    height: calc(var(--spacing) * 9);\n  }\n\n  .size-10 {\n    width: calc(var(--spacing) * 10);\n    height: calc(var(--spacing) * 10);\n  }\n\n  .size-\\[11px\\] {\n    width: 11px;\n    height: 11px;\n  }\n\n  .size-\\[18px\\] {\n    width: 18px;\n    height: 18px;\n  }\n\n  .size-\\[22px\\] {\n    width: 22px;\n    height: 22px;\n  }\n\n  .size-auto {\n    width: auto;\n    height: auto;\n  }\n\n  .size-full {\n    width: 100%;\n    height: 100%;\n  }\n\n  .h-1 {\n    height: calc(var(--spacing) * 1);\n  }\n\n  .h-1\\.5 {\n    height: calc(var(--spacing) * 1.5);\n  }\n\n  .h-2 {\n    height: calc(var(--spacing) * 2);\n  }\n\n  .h-3 {\n    height: calc(var(--spacing) * 3);\n  }\n\n  .h-3\\.5 {\n    height: calc(var(--spacing) * 3.5);\n  }\n\n  .h-4 {\n    height: calc(var(--spacing) * 4);\n  }\n\n  .h-5 {\n    height: calc(var(--spacing) * 5);\n  }\n\n  .h-6 {\n    height: calc(var(--spacing) * 6);\n  }\n\n  .h-7 {\n    height: calc(var(--spacing) * 7);\n  }\n\n  .h-8 {\n    height: calc(var(--spacing) * 8);\n  }\n\n  .h-9 {\n    height: calc(var(--spacing) * 9);\n  }\n\n  .h-10 {\n    height: calc(var(--spacing) * 10);\n  }\n\n  .h-11 {\n    height: calc(var(--spacing) * 11);\n  }\n\n  .h-12 {\n    height: calc(var(--spacing) * 12);\n  }\n\n  .h-24 {\n    height: calc(var(--spacing) * 24);\n  }\n\n  .h-32 {\n    height: calc(var(--spacing) * 32);\n  }\n\n  .h-44 {\n    height: calc(var(--spacing) * 44);\n  }\n\n  .h-\\[7px\\] {\n    height: 7px;\n  }\n\n  .h-\\[18px\\] {\n    height: 18px;\n  }\n\n  .h-\\[24px\\] {\n    height: 24px;\n  }\n\n  .h-\\[118px\\] {\n    height: 118px;\n  }\n\n  .h-\\[180px\\] {\n    height: 180px;\n  }\n\n  .h-\\[190px\\] {\n    height: 190px;\n  }\n\n  .h-\\[320px\\] {\n    height: 320px;\n  }\n\n  .h-auto {\n    height: auto;\n  }\n\n  .h-full {\n    height: 100%;\n  }\n\n  .h-px {\n    height: 1px;\n  }\n\n  .h-svh {\n    height: 100svh;\n  }\n\n  .max-h-40 {\n    max-height: calc(var(--spacing) * 40);\n  }\n\n  .max-h-screen {\n    max-height: 100vh;\n  }\n\n  .min-h-0 {\n    min-height: calc(var(--spacing) * 0);\n  }\n\n  .min-h-4 {\n    min-height: calc(var(--spacing) * 4);\n  }\n\n  .min-h-16 {\n    min-height: calc(var(--spacing) * 16);\n  }\n\n  .min-h-\\[100dvh\\] {\n    min-height: 100dvh;\n  }\n\n  .min-h-\\[198px\\] {\n    min-height: 198px;\n  }\n\n  .min-h-\\[220px\\] {\n    min-height: 220px;\n  }\n\n  .min-h-\\[calc\\(100dvh-2rem\\)\\] {\n    min-height: calc(100dvh - 2rem);\n  }\n\n  .min-h-full {\n    min-height: 100%;\n  }\n\n  .min-h-screen {\n    min-height: 100vh;\n  }\n\n  .min-h-svh {\n    min-height: 100svh;\n  }\n\n  .w-0 {\n    width: calc(var(--spacing) * 0);\n  }\n\n  .w-0\\.5 {\n    width: calc(var(--spacing) * .5);\n  }\n\n  .w-1 {\n    width: calc(var(--spacing) * 1);\n  }\n\n  .w-1\\.5 {\n    width: calc(var(--spacing) * 1.5);\n  }\n\n  .w-2 {\n    width: calc(var(--spacing) * 2);\n  }\n\n  .w-3 {\n    width: calc(var(--spacing) * 3);\n  }\n\n  .w-3\\.5 {\n    width: calc(var(--spacing) * 3.5);\n  }\n\n  .w-4 {\n    width: calc(var(--spacing) * 4);\n  }\n\n  .w-5 {\n    width: calc(var(--spacing) * 5);\n  }\n\n  .w-6 {\n    width: calc(var(--spacing) * 6);\n  }\n\n  .w-7 {\n    width: calc(var(--spacing) * 7);\n  }\n\n  .w-8 {\n    width: calc(var(--spacing) * 8);\n  }\n\n  .w-9 {\n    width: calc(var(--spacing) * 9);\n  }\n\n  .w-10 {\n    width: calc(var(--spacing) * 10);\n  }\n\n  .w-11 {\n    width: calc(var(--spacing) * 11);\n  }\n\n  .w-12 {\n    width: calc(var(--spacing) * 12);\n  }\n\n  .w-16 {\n    width: calc(var(--spacing) * 16);\n  }\n\n  .w-24 {\n    width: calc(var(--spacing) * 24);\n  }\n\n  .w-64 {\n    width: calc(var(--spacing) * 64);\n  }\n\n  .w-72 {\n    width: calc(var(--spacing) * 72);\n  }\n\n  .w-\\[18px\\] {\n    width: 18px;\n  }\n\n  .w-\\[38px\\] {\n    width: 38px;\n  }\n\n  .w-\\[56px\\] {\n    width: 56px;\n  }\n\n  .w-auto {\n    width: auto;\n  }\n\n  .w-fit {\n    width: fit-content;\n  }\n\n  .w-full {\n    width: 100%;\n  }\n\n  .w-max {\n    width: max-content;\n  }\n\n  .w-px {\n    width: 1px;\n  }\n\n  .max-w-2xl {\n    max-width: var(--container-2xl);\n  }\n\n  .max-w-\\[34ch\\] {\n    max-width: 34ch;\n  }\n\n  .max-w-\\[280px\\] {\n    max-width: 280px;\n  }\n\n  .max-w-\\[1080px\\] {\n    max-width: 1080px;\n  }\n\n  .max-w-full {\n    max-width: 100%;\n  }\n\n  .max-w-max {\n    max-width: max-content;\n  }\n\n  .max-w-sm {\n    max-width: var(--container-sm);\n  }\n\n  .min-w-0 {\n    min-width: calc(var(--spacing) * 0);\n  }\n\n  .min-w-5 {\n    min-width: calc(var(--spacing) * 5);\n  }\n\n  .min-w-8 {\n    min-width: calc(var(--spacing) * 8);\n  }\n\n  .min-w-9 {\n    min-width: calc(var(--spacing) * 9);\n  }\n\n  .min-w-10 {\n    min-width: calc(var(--spacing) * 10);\n  }\n\n  .min-w-12 {\n    min-width: calc(var(--spacing) * 12);\n  }\n\n  .min-w-\\[112px\\] {\n    min-width: 112px;\n  }\n\n  .min-w-\\[132px\\] {\n    min-width: 132px;\n  }\n\n  .min-w-full {\n    min-width: 100%;\n  }\n\n  .flex-1 {\n    flex: 1;\n  }\n\n  .flex-shrink, .shrink {\n    flex-shrink: 1;\n  }\n\n  .shrink-0 {\n    flex-shrink: 0;\n  }\n\n  .flex-grow, .grow {\n    flex-grow: 1;\n  }\n\n  .grow-0 {\n    flex-grow: 0;\n  }\n\n  .basis-full {\n    flex-basis: 100%;\n  }\n\n  .caption-bottom {\n    caption-side: bottom;\n  }\n\n  .border-collapse {\n    border-collapse: collapse;\n  }\n\n  .-translate-x-1 {\n    --tw-translate-x: calc(var(--spacing) * -1);\n    translate: var(--tw-translate-x) var(--tw-translate-y);\n  }\n\n  .-translate-x-1\\/2 {\n    --tw-translate-x: calc(calc(1 / 2 * 100%) * -1);\n    translate: var(--tw-translate-x) var(--tw-translate-y);\n  }\n\n  .-translate-x-px {\n    --tw-translate-x: -1px;\n    translate: var(--tw-translate-x) var(--tw-translate-y);\n  }\n\n  .translate-x-px {\n    --tw-translate-x: 1px;\n    translate: var(--tw-translate-x) var(--tw-translate-y);\n  }\n\n  .-translate-y-1 {\n    --tw-translate-y: calc(var(--spacing) * -1);\n    translate: var(--tw-translate-x) var(--tw-translate-y);\n  }\n\n  .-translate-y-1\\/2 {\n    --tw-translate-y: calc(calc(1 / 2 * 100%) * -1);\n    translate: var(--tw-translate-x) var(--tw-translate-y);\n  }\n\n  .-translate-y-px {\n    --tw-translate-y: -1px;\n    translate: var(--tw-translate-x) var(--tw-translate-y);\n  }\n\n  .translate-y-0 {\n    --tw-translate-y: calc(var(--spacing) * 0);\n    translate: var(--tw-translate-x) var(--tw-translate-y);\n  }\n\n  .translate-y-1 {\n    --tw-translate-y: calc(var(--spacing) * 1);\n    translate: var(--tw-translate-x) var(--tw-translate-y);\n  }\n\n  .translate-y-1\\/2 {\n    --tw-translate-y: calc(1 / 2 * 100%);\n    translate: var(--tw-translate-x) var(--tw-translate-y);\n  }\n\n  .rotate-45 {\n    rotate: 45deg;\n  }\n\n  .rotate-90 {\n    rotate: 90deg;\n  }\n\n  .rotate-180 {\n    rotate: 180deg;\n  }\n\n  .transform {\n    transform: var(--tw-rotate-x, ) var(--tw-rotate-y, ) var(--tw-rotate-z, ) var(--tw-skew-x, ) var(--tw-skew-y, );\n  }\n\n  .animate-pulse {\n    animation: var(--animate-pulse);\n  }\n\n  .animate-spin {\n    animation: var(--animate-spin);\n  }\n\n  .cursor-default {\n    cursor: default;\n  }\n\n  .cursor-ew-resize {\n    cursor: ew-resize;\n  }\n\n  .cursor-grab {\n    cursor: grab;\n  }\n\n  .cursor-move {\n    cursor: move;\n  }\n\n  .cursor-ns-resize {\n    cursor: ns-resize;\n  }\n\n  .cursor-pointer {\n    cursor: pointer;\n  }\n\n  .cursor-text {\n    cursor: text;\n  }\n\n  .touch-none {\n    touch-action: none;\n  }\n\n  .resize {\n    resize: both;\n  }\n\n  .resize-none {\n    resize: none;\n  }\n\n  .scroll-my-1 {\n    scroll-margin-block: calc(var(--spacing) * 1);\n  }\n\n  .scroll-py-1 {\n    scroll-padding-block: calc(var(--spacing) * 1);\n  }\n\n  .list-disc {\n    list-style-type: disc;\n  }\n\n  .list-none {\n    list-style-type: none;\n  }\n\n  .appearance-none {\n    appearance: none;\n  }\n\n  .auto-rows-max {\n    grid-auto-rows: max-content;\n  }\n\n  .auto-rows-min {\n    grid-auto-rows: min-content;\n  }\n\n  .grid-cols-1 {\n    grid-template-columns: repeat(1, minmax(0, 1fr));\n  }\n\n  .grid-cols-2 {\n    grid-template-columns: repeat(2, minmax(0, 1fr));\n  }\n\n  .grid-cols-3 {\n    grid-template-columns: repeat(3, minmax(0, 1fr));\n  }\n\n  .grid-cols-4 {\n    grid-template-columns: repeat(4, minmax(0, 1fr));\n  }\n\n  .grid-cols-5 {\n    grid-template-columns: repeat(5, minmax(0, 1fr));\n  }\n\n  .grid-cols-\\[56px_minmax\\(0\\,1fr\\)\\] {\n    grid-template-columns: 56px minmax(0, 1fr);\n  }\n\n  .grid-cols-\\[minmax\\(0\\,1fr\\)_88px\\] {\n    grid-template-columns: minmax(0, 1fr) 88px;\n  }\n\n  .grid-cols-\\[minmax\\(0\\,1fr\\)_92px\\] {\n    grid-template-columns: minmax(0, 1fr) 92px;\n  }\n\n  .grid-cols-\\[minmax\\(0\\,1fr\\)_92px_auto\\] {\n    grid-template-columns: minmax(0, 1fr) 92px auto;\n  }\n\n  .grid-cols-\\[minmax\\(0\\,1fr\\)_auto\\] {\n    grid-template-columns: minmax(0, 1fr) auto;\n  }\n\n  .grid-rows-\\[auto_minmax\\(0\\,1fr\\)_auto\\] {\n    grid-template-rows: auto minmax(0, 1fr) auto;\n  }\n\n  .flex-col {\n    flex-direction: column;\n  }\n\n  .flex-col-reverse {\n    flex-direction: column-reverse;\n  }\n\n  .flex-row {\n    flex-direction: row;\n  }\n\n  .flex-wrap {\n    flex-wrap: wrap;\n  }\n\n  .place-items-center {\n    place-items: center;\n  }\n\n  .content-start {\n    align-content: flex-start;\n  }\n\n  .items-center {\n    align-items: center;\n  }\n\n  .items-end {\n    align-items: flex-end;\n  }\n\n  .items-start {\n    align-items: flex-start;\n  }\n\n  .items-stretch {\n    align-items: stretch;\n  }\n\n  .justify-between {\n    justify-content: space-between;\n  }\n\n  .justify-center {\n    justify-content: center;\n  }\n\n  .justify-end {\n    justify-content: flex-end;\n  }\n\n  .justify-start {\n    justify-content: flex-start;\n  }\n\n  .justify-items-start {\n    justify-items: start;\n  }\n\n  .gap-0 {\n    gap: calc(var(--spacing) * 0);\n  }\n\n  .gap-0\\.5 {\n    gap: calc(var(--spacing) * .5);\n  }\n\n  .gap-1 {\n    gap: calc(var(--spacing) * 1);\n  }\n\n  .gap-1\\.5 {\n    gap: calc(var(--spacing) * 1.5);\n  }\n\n  .gap-2 {\n    gap: calc(var(--spacing) * 2);\n  }\n\n  .gap-3 {\n    gap: calc(var(--spacing) * 3);\n  }\n\n  .gap-4 {\n    gap: calc(var(--spacing) * 4);\n  }\n\n  .gap-5 {\n    gap: calc(var(--spacing) * 5);\n  }\n\n  .gap-6 {\n    gap: calc(var(--spacing) * 6);\n  }\n\n  .gap-7 {\n    gap: calc(var(--spacing) * 7);\n  }\n\n  .gap-\\[3px\\] {\n    gap: 3px;\n  }\n\n  :where(.space-y-1 > :not(:last-child)) {\n    --tw-space-y-reverse: 0;\n    margin-block-start: calc(calc(var(--spacing) * 1) * var(--tw-space-y-reverse));\n    margin-block-end: calc(calc(var(--spacing) * 1) * calc(1 - var(--tw-space-y-reverse)));\n  }\n\n  :where(.space-y-1\\.5 > :not(:last-child)) {\n    --tw-space-y-reverse: 0;\n    margin-block-start: calc(calc(var(--spacing) * 1.5) * var(--tw-space-y-reverse));\n    margin-block-end: calc(calc(var(--spacing) * 1.5) * calc(1 - var(--tw-space-y-reverse)));\n  }\n\n  :where(.space-y-3 > :not(:last-child)) {\n    --tw-space-y-reverse: 0;\n    margin-block-start: calc(calc(var(--spacing) * 3) * var(--tw-space-y-reverse));\n    margin-block-end: calc(calc(var(--spacing) * 3) * calc(1 - var(--tw-space-y-reverse)));\n  }\n\n  :where(.space-x-4 > :not(:last-child)) {\n    --tw-space-x-reverse: 0;\n    margin-inline-start: calc(calc(var(--spacing) * 4) * var(--tw-space-x-reverse));\n    margin-inline-end: calc(calc(var(--spacing) * 4) * calc(1 - var(--tw-space-x-reverse)));\n  }\n\n  .gap-y-0 {\n    row-gap: calc(var(--spacing) * 0);\n  }\n\n  .self-center {\n    align-self: center;\n  }\n\n  .self-end {\n    align-self: flex-end;\n  }\n\n  .self-start {\n    align-self: flex-start;\n  }\n\n  .self-stretch {\n    align-self: stretch;\n  }\n\n  .justify-self-end {\n    justify-self: flex-end;\n  }\n\n  .truncate {\n    text-overflow: ellipsis;\n    white-space: nowrap;\n    overflow: hidden;\n  }\n\n  .overflow-auto {\n    overflow: auto;\n  }\n\n  .overflow-hidden {\n    overflow: hidden;\n  }\n\n  .overflow-visible {\n    overflow: visible;\n  }\n\n  .overflow-x-auto {\n    overflow-x: auto;\n  }\n\n  .overflow-x-hidden {\n    overflow-x: hidden;\n  }\n\n  .overflow-y-auto {\n    overflow-y: auto;\n  }\n\n  .rounded {\n    border-radius: .25rem;\n  }\n\n  .rounded-2xl {\n    border-radius: var(--radius-2xl);\n  }\n\n  .rounded-\\[5px\\] {\n    border-radius: 5px;\n  }\n\n  .rounded-\\[6px\\] {\n    border-radius: 6px;\n  }\n\n  .rounded-\\[7px\\] {\n    border-radius: 7px;\n  }\n\n  .rounded-\\[8px\\] {\n    border-radius: 8px;\n  }\n\n  .rounded-\\[10px\\] {\n    border-radius: 10px;\n  }\n\n  .rounded-\\[12px\\] {\n    border-radius: 12px;\n  }\n\n  .rounded-\\[14px\\] {\n    border-radius: 14px;\n  }\n\n  .rounded-\\[16px\\] {\n    border-radius: 16px;\n  }\n\n  .rounded-\\[18px\\] {\n    border-radius: 18px;\n  }\n\n  .rounded-\\[20px\\] {\n    border-radius: 20px;\n  }\n\n  .rounded-\\[22px\\] {\n    border-radius: 22px;\n  }\n\n  .rounded-\\[24px\\] {\n    border-radius: 24px;\n  }\n\n  .rounded-\\[28px\\] {\n    border-radius: 28px;\n  }\n\n  .rounded-\\[30px\\] {\n    border-radius: 30px;\n  }\n\n  .rounded-full {\n    border-radius: 3.40282e38px;\n  }\n\n  .rounded-lg {\n    border-radius: var(--radius-lg);\n  }\n\n  .rounded-md {\n    border-radius: var(--radius-md);\n  }\n\n  .rounded-none {\n    border-radius: 0;\n  }\n\n  .rounded-sm {\n    border-radius: var(--radius-sm);\n  }\n\n  .rounded-xl {\n    border-radius: var(--radius-xl);\n  }\n\n  .rounded-xs {\n    border-radius: var(--radius-xs);\n  }\n\n  .rounded-l {\n    border-top-left-radius: .25rem;\n    border-bottom-left-radius: .25rem;\n  }\n\n  .rounded-l-md {\n    border-top-left-radius: var(--radius-md);\n    border-bottom-left-radius: var(--radius-md);\n  }\n\n  .rounded-tl-sm {\n    border-top-left-radius: var(--radius-sm);\n  }\n\n  .rounded-r {\n    border-top-right-radius: .25rem;\n    border-bottom-right-radius: .25rem;\n  }\n\n  .rounded-r-md {\n    border-top-right-radius: var(--radius-md);\n    border-bottom-right-radius: var(--radius-md);\n  }\n\n  .border {\n    border-style: var(--tw-border-style);\n    border-width: 1px;\n  }\n\n  .border-0 {\n    border-style: var(--tw-border-style);\n    border-width: 0;\n  }\n\n  .border-2 {\n    border-style: var(--tw-border-style);\n    border-width: 2px;\n  }\n\n  .border-y {\n    border-block-style: var(--tw-border-style);\n    border-block-width: 1px;\n  }\n\n  .border-t {\n    border-top-style: var(--tw-border-style);\n    border-top-width: 1px;\n  }\n\n  .border-r {\n    border-right-style: var(--tw-border-style);\n    border-right-width: 1px;\n  }\n\n  .border-b {\n    border-bottom-style: var(--tw-border-style);\n    border-bottom-width: 1px;\n  }\n\n  .border-l {\n    border-left-style: var(--tw-border-style);\n    border-left-width: 1px;\n  }\n\n  .border-dashed {\n    --tw-border-style: dashed;\n    border-style: dashed;\n  }\n\n  .border-\\[\\#020611\\] {\n    border-color: #020611;\n  }\n\n  .border-\\[rgba\\(3\\,5\\,12\\,0\\.7\\)\\] {\n    border-color: #03050cb3;\n  }\n\n  .border-amber-100 {\n    border-color: var(--color-amber-100);\n  }\n\n  .border-amber-100\\/70 {\n    border-color: #fef3c6b3;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-amber-100\\/70 {\n      border-color: color-mix(in oklab, var(--color-amber-100) 70%, transparent);\n    }\n  }\n\n  .border-amber-200 {\n    border-color: var(--color-amber-200);\n  }\n\n  .border-amber-200\\/18 {\n    border-color: #fee6852e;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-amber-200\\/18 {\n      border-color: color-mix(in oklab, var(--color-amber-200) 18%, transparent);\n    }\n  }\n\n  .border-cyan-200 {\n    border-color: var(--color-cyan-200);\n  }\n\n  .border-cyan-200\\/18 {\n    border-color: #a2f4fd2e;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-cyan-200\\/18 {\n      border-color: color-mix(in oklab, var(--color-cyan-200) 18%, transparent);\n    }\n  }\n\n  .border-cyan-200\\/28 {\n    border-color: #a2f4fd47;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-cyan-200\\/28 {\n      border-color: color-mix(in oklab, var(--color-cyan-200) 28%, transparent);\n    }\n  }\n\n  .border-cyan-300 {\n    border-color: var(--color-cyan-300);\n  }\n\n  .border-cyan-300\\/20 {\n    border-color: #53eafd33;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-cyan-300\\/20 {\n      border-color: color-mix(in oklab, var(--color-cyan-300) 20%, transparent);\n    }\n  }\n\n  .border-cyan-300\\/25 {\n    border-color: #53eafd40;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-cyan-300\\/25 {\n      border-color: color-mix(in oklab, var(--color-cyan-300) 25%, transparent);\n    }\n  }\n\n  .border-emerald-300 {\n    border-color: var(--color-emerald-300);\n  }\n\n  .border-emerald-300\\/25 {\n    border-color: #5ee9b540;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-emerald-300\\/25 {\n      border-color: color-mix(in oklab, var(--color-emerald-300) 25%, transparent);\n    }\n  }\n\n  .border-fuchsia-300 {\n    border-color: var(--color-fuchsia-300);\n  }\n\n  .border-fuchsia-300\\/15 {\n    border-color: #f2a9ff26;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-fuchsia-300\\/15 {\n      border-color: color-mix(in oklab, var(--color-fuchsia-300) 15%, transparent);\n    }\n  }\n\n  .border-rose-300 {\n    border-color: var(--color-rose-300);\n  }\n\n  .border-sky-300 {\n    border-color: var(--color-sky-300);\n  }\n\n  .border-transparent {\n    border-color: #0000;\n  }\n\n  .border-white {\n    border-color: var(--color-white);\n  }\n\n  .border-white\\/6 {\n    border-color: #ffffff0f;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-white\\/6 {\n      border-color: color-mix(in oklab, var(--color-white) 6%, transparent);\n    }\n  }\n\n  .border-white\\/8 {\n    border-color: #ffffff14;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-white\\/8 {\n      border-color: color-mix(in oklab, var(--color-white) 8%, transparent);\n    }\n  }\n\n  .border-white\\/10 {\n    border-color: #ffffff1a;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-white\\/10 {\n      border-color: color-mix(in oklab, var(--color-white) 10%, transparent);\n    }\n  }\n\n  .border-white\\/\\[0\\.04\\] {\n    border-color: #ffffff0a;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-white\\/\\[0\\.04\\] {\n      border-color: color-mix(in oklab, var(--color-white) 4%, transparent);\n    }\n  }\n\n  .border-white\\/\\[0\\.05\\] {\n    border-color: #ffffff0d;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-white\\/\\[0\\.05\\] {\n      border-color: color-mix(in oklab, var(--color-white) 5%, transparent);\n    }\n  }\n\n  .border-white\\/\\[0\\.06\\] {\n    border-color: #ffffff0f;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-white\\/\\[0\\.06\\] {\n      border-color: color-mix(in oklab, var(--color-white) 6%, transparent);\n    }\n  }\n\n  .border-white\\/\\[0\\.07\\] {\n    border-color: #ffffff12;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-white\\/\\[0\\.07\\] {\n      border-color: color-mix(in oklab, var(--color-white) 7.0%, transparent);\n    }\n  }\n\n  .border-white\\/\\[0\\.08\\] {\n    border-color: #ffffff14;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-white\\/\\[0\\.08\\] {\n      border-color: color-mix(in oklab, var(--color-white) 8%, transparent);\n    }\n  }\n\n  .border-white\\/\\[0\\.10\\] {\n    border-color: #ffffff1a;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-white\\/\\[0\\.10\\] {\n      border-color: color-mix(in oklab, var(--color-white) 10%, transparent);\n    }\n  }\n\n  .border-t-transparent {\n    border-top-color: #0000;\n  }\n\n  .border-l-transparent {\n    border-left-color: #0000;\n  }\n\n  .bg-\\[\\#070b16\\] {\n    background-color: #070b16;\n  }\n\n  .bg-\\[\\#09101d\\]\\/95 {\n    background-color: oklab(17.3432% -.0040513 -.029082 / .95);\n  }\n\n  .bg-\\[\\#030711\\]\\/85 {\n    background-color: oklab(12.8817% -.00430492 -.0249884 / .85);\n  }\n\n  .bg-\\[rgba\\(3\\,5\\,12\\,0\\.6\\)\\] {\n    background-color: #03050c99;\n  }\n\n  .bg-\\[rgba\\(3\\,7\\,15\\,0\\.72\\)\\] {\n    background-color: #03070fb8;\n  }\n\n  .bg-black {\n    background-color: var(--color-black);\n  }\n\n  .bg-black\\/18 {\n    background-color: #0000002e;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-black\\/18 {\n      background-color: color-mix(in oklab, var(--color-black) 18%, transparent);\n    }\n  }\n\n  .bg-black\\/20 {\n    background-color: #0003;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-black\\/20 {\n      background-color: color-mix(in oklab, var(--color-black) 20%, transparent);\n    }\n  }\n\n  .bg-black\\/25 {\n    background-color: #00000040;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-black\\/25 {\n      background-color: color-mix(in oklab, var(--color-black) 25%, transparent);\n    }\n  }\n\n  .bg-black\\/30 {\n    background-color: #0000004d;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-black\\/30 {\n      background-color: color-mix(in oklab, var(--color-black) 30%, transparent);\n    }\n  }\n\n  .bg-black\\/35 {\n    background-color: #00000059;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-black\\/35 {\n      background-color: color-mix(in oklab, var(--color-black) 35%, transparent);\n    }\n  }\n\n  .bg-black\\/40 {\n    background-color: #0006;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-black\\/40 {\n      background-color: color-mix(in oklab, var(--color-black) 40%, transparent);\n    }\n  }\n\n  .bg-black\\/42 {\n    background-color: #0000006b;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-black\\/42 {\n      background-color: color-mix(in oklab, var(--color-black) 42%, transparent);\n    }\n  }\n\n  .bg-black\\/45 {\n    background-color: #00000073;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-black\\/45 {\n      background-color: color-mix(in oklab, var(--color-black) 45%, transparent);\n    }\n  }\n\n  .bg-black\\/48 {\n    background-color: #0000007a;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-black\\/48 {\n      background-color: color-mix(in oklab, var(--color-black) 48%, transparent);\n    }\n  }\n\n  .bg-black\\/50 {\n    background-color: #00000080;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-black\\/50 {\n      background-color: color-mix(in oklab, var(--color-black) 50%, transparent);\n    }\n  }\n\n  .bg-cyan-300 {\n    background-color: var(--color-cyan-300);\n  }\n\n  .bg-cyan-300\\/8 {\n    background-color: #53eafd14;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-cyan-300\\/8 {\n      background-color: color-mix(in oklab, var(--color-cyan-300) 8%, transparent);\n    }\n  }\n\n  .bg-cyan-300\\/10 {\n    background-color: #53eafd1a;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-cyan-300\\/10 {\n      background-color: color-mix(in oklab, var(--color-cyan-300) 10%, transparent);\n    }\n  }\n\n  .bg-cyan-300\\/15 {\n    background-color: #53eafd26;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-cyan-300\\/15 {\n      background-color: color-mix(in oklab, var(--color-cyan-300) 15%, transparent);\n    }\n  }\n\n  .bg-cyan-300\\/18 {\n    background-color: #53eafd2e;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-cyan-300\\/18 {\n      background-color: color-mix(in oklab, var(--color-cyan-300) 18%, transparent);\n    }\n  }\n\n  .bg-cyan-300\\/\\[0\\.08\\] {\n    background-color: #53eafd14;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-cyan-300\\/\\[0\\.08\\] {\n      background-color: color-mix(in oklab, var(--color-cyan-300) 8%, transparent);\n    }\n  }\n\n  .bg-cyan-400 {\n    background-color: var(--color-cyan-400);\n  }\n\n  .bg-cyan-400\\/10 {\n    background-color: #00d2ef1a;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-cyan-400\\/10 {\n      background-color: color-mix(in oklab, var(--color-cyan-400) 10%, transparent);\n    }\n  }\n\n  .bg-cyan-400\\/60 {\n    background-color: #00d2ef99;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-cyan-400\\/60 {\n      background-color: color-mix(in oklab, var(--color-cyan-400) 60%, transparent);\n    }\n  }\n\n  .bg-cyan-400\\/\\[0\\.08\\] {\n    background-color: #00d2ef14;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-cyan-400\\/\\[0\\.08\\] {\n      background-color: color-mix(in oklab, var(--color-cyan-400) 8%, transparent);\n    }\n  }\n\n  .bg-emerald-300 {\n    background-color: var(--color-emerald-300);\n  }\n\n  .bg-emerald-300\\/12 {\n    background-color: #5ee9b51f;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-emerald-300\\/12 {\n      background-color: color-mix(in oklab, var(--color-emerald-300) 12%, transparent);\n    }\n  }\n\n  .bg-fuchsia-300 {\n    background-color: var(--color-fuchsia-300);\n  }\n\n  .bg-fuchsia-300\\/8 {\n    background-color: #f2a9ff14;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-fuchsia-300\\/8 {\n      background-color: color-mix(in oklab, var(--color-fuchsia-300) 8%, transparent);\n    }\n  }\n\n  .bg-rose-400 {\n    background-color: var(--color-rose-400);\n  }\n\n  .bg-rose-400\\/\\[0\\.035\\] {\n    background-color: #ff667f09;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-rose-400\\/\\[0\\.035\\] {\n      background-color: color-mix(in oklab, var(--color-rose-400) 3.5%, transparent);\n    }\n  }\n\n  .bg-sky-300 {\n    background-color: var(--color-sky-300);\n  }\n\n  .bg-transparent {\n    background-color: #0000;\n  }\n\n  .bg-white {\n    background-color: var(--color-white);\n  }\n\n  .bg-white\\/\\[0\\.02\\] {\n    background-color: #ffffff05;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-white\\/\\[0\\.02\\] {\n      background-color: color-mix(in oklab, var(--color-white) 2%, transparent);\n    }\n  }\n\n  .bg-white\\/\\[0\\.03\\] {\n    background-color: #ffffff08;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-white\\/\\[0\\.03\\] {\n      background-color: color-mix(in oklab, var(--color-white) 3%, transparent);\n    }\n  }\n\n  .bg-white\\/\\[0\\.04\\] {\n    background-color: #ffffff0a;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-white\\/\\[0\\.04\\] {\n      background-color: color-mix(in oklab, var(--color-white) 4%, transparent);\n    }\n  }\n\n  .bg-white\\/\\[0\\.06\\] {\n    background-color: #ffffff0f;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-white\\/\\[0\\.06\\] {\n      background-color: color-mix(in oklab, var(--color-white) 6%, transparent);\n    }\n  }\n\n  .bg-white\\/\\[0\\.08\\] {\n    background-color: #ffffff14;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-white\\/\\[0\\.08\\] {\n      background-color: color-mix(in oklab, var(--color-white) 8%, transparent);\n    }\n  }\n\n  .bg-white\\/\\[0\\.012\\] {\n    background-color: #ffffff03;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-white\\/\\[0\\.012\\] {\n      background-color: color-mix(in oklab, var(--color-white) 1.2%, transparent);\n    }\n  }\n\n  .bg-white\\/\\[0\\.12\\] {\n    background-color: #ffffff1f;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-white\\/\\[0\\.12\\] {\n      background-color: color-mix(in oklab, var(--color-white) 12%, transparent);\n    }\n  }\n\n  .bg-white\\/\\[0\\.025\\] {\n    background-color: #ffffff06;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-white\\/\\[0\\.025\\] {\n      background-color: color-mix(in oklab, var(--color-white) 2.5%, transparent);\n    }\n  }\n\n  .bg-gradient-to-b {\n    --tw-gradient-position: to bottom in oklab;\n    background-image: linear-gradient(var(--tw-gradient-stops));\n  }\n\n  .bg-gradient-to-r {\n    --tw-gradient-position: to right in oklab;\n    background-image: linear-gradient(var(--tw-gradient-stops));\n  }\n\n  .bg-gradient-to-t {\n    --tw-gradient-position: to top in oklab;\n    background-image: linear-gradient(var(--tw-gradient-stops));\n  }\n\n  .bg-\\[linear-gradient\\(\\.\\.\\.\\)\\] {\n    background-image: linear-gradient(...);\n  }\n\n  .bg-\\[linear-gradient\\(90deg\\,rgba\\(135\\,215\\,245\\,0\\.58\\)\\,rgba\\(251\\,191\\,36\\,0\\.78\\)\\)\\] {\n    background-image: linear-gradient(90deg, #87d7f594, #fbbf24c7);\n  }\n\n  .bg-\\[linear-gradient\\(135deg\\,rgba\\(8\\,16\\,30\\,0\\.96\\)\\,rgba\\(4\\,6\\,14\\,1\\)\\)\\] {\n    background-image: linear-gradient(135deg, #08101ef5, #04060e);\n  }\n\n  .bg-\\[linear-gradient\\(180deg\\,\\#f8d88a\\,\\#fbbf24\\)\\] {\n    background-image: linear-gradient(#f8d88a, #fbbf24);\n  }\n\n  .bg-\\[linear-gradient\\(180deg\\,rgba\\(2\\,6\\,18\\,0\\.95\\)\\,rgba\\(1\\,3\\,9\\,1\\)\\)\\] {\n    background-image: linear-gradient(#020612f2, #010309);\n  }\n\n  .bg-\\[linear-gradient\\(180deg\\,rgba\\(9\\,13\\,24\\,0\\.98\\)\\,rgba\\(3\\,5\\,12\\,0\\.98\\)\\)\\] {\n    background-image: linear-gradient(#090d18fa, #03050cfa);\n  }\n\n  .bg-\\[linear-gradient\\(180deg\\,rgba\\(17\\,22\\,33\\,0\\.94\\)\\,rgba\\(5\\,8\\,16\\,0\\.98\\)\\)\\] {\n    background-image: linear-gradient(#111621f0, #050810fa);\n  }\n\n  .bg-\\[linear-gradient\\(180deg\\,rgba\\(18\\,25\\,40\\,0\\.94\\)\\,rgba\\(4\\,7\\,16\\,0\\.98\\)\\)\\] {\n    background-image: linear-gradient(#121928f0, #040710fa);\n  }\n\n  .bg-\\[linear-gradient\\(180deg\\,rgba\\(255\\,255\\,255\\,0\\.02\\)\\,rgba\\(255\\,255\\,255\\,0\\.01\\)\\)\\,linear-gradient\\(180deg\\,rgba\\(5\\,9\\,19\\,0\\.92\\)\\,rgba\\(7\\,13\\,24\\,0\\.96\\)\\)\\] {\n    background-image: linear-gradient(#ffffff05, #ffffff03), linear-gradient(#050913eb, #070d18f5);\n  }\n\n  .bg-\\[radial-gradient\\(circle_at_18\\%_22\\%\\,rgba\\(109\\,216\\,255\\,0\\.10\\)\\,transparent_26\\%\\)\\,radial-gradient\\(circle_at_82\\%_78\\%\\,rgba\\(248\\,184\\,77\\,0\\.10\\)\\,transparent_20\\%\\)\\] {\n    background-image: radial-gradient(circle at 18% 22%, #6dd8ff1a, #0000 26%), radial-gradient(circle at 82% 78%, #f8b84d1a, #0000 20%);\n  }\n\n  .bg-\\[radial-gradient\\(circle_at_top\\,rgba\\(93\\,173\\,255\\,0\\.14\\)\\,transparent_34\\%\\)\\,linear-gradient\\(180deg\\,rgba\\(6\\,10\\,22\\,0\\.98\\)\\,rgba\\(2\\,4\\,11\\,1\\)\\)\\] {\n    background-image: radial-gradient(circle at top, #5dadff24, #0000 34%), linear-gradient(#060a16fa, #02040b);\n  }\n\n  .bg-\\[radial-gradient\\(circle_at_top\\,rgba\\(120\\,112\\,255\\,0\\.10\\)\\,transparent_38\\%\\)\\,linear-gradient\\(180deg\\,rgba\\(5\\,8\\,18\\,1\\)\\,rgba\\(2\\,3\\,10\\,1\\)\\)\\] {\n    background-image: radial-gradient(circle at top, #7870ff1a, #0000 38%), linear-gradient(#050812, #02030a);\n  }\n\n  .bg-\\[radial-gradient\\(circle_at_top_left\\,rgba\\(103\\,232\\,249\\,0\\.13\\)\\,transparent_38\\%\\)\\,linear-gradient\\(180deg\\,rgba\\(6\\,12\\,24\\,0\\.95\\)\\,rgba\\(2\\,5\\,12\\,0\\.98\\)\\)\\] {\n    background-image: radial-gradient(circle at 0 0, #67e8f921, #0000 38%), linear-gradient(#060c18f2, #02050cfa);\n  }\n\n  .bg-\\[radial-gradient\\(circle_at_top_left\\,rgba\\(248\\,113\\,113\\,0\\.10\\)\\,transparent_34\\%\\)\\,linear-gradient\\(180deg\\,rgba\\(9\\,8\\,15\\,0\\.98\\)\\,rgba\\(2\\,4\\,11\\,1\\)\\)\\] {\n    background-image: radial-gradient(circle at 0 0, #f871711a, #0000 34%), linear-gradient(#09080ffa, #02040b);\n  }\n\n  .from-amber-400 {\n    --tw-gradient-from: var(--color-amber-400);\n    --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));\n  }\n\n  .from-cyan-400 {\n    --tw-gradient-from: var(--color-cyan-400);\n    --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));\n  }\n\n  .from-rose-400 {\n    --tw-gradient-from: var(--color-rose-400);\n    --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));\n  }\n\n  .from-transparent {\n    --tw-gradient-from: transparent;\n    --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));\n  }\n\n  .via-cyan-200 {\n    --tw-gradient-via: var(--color-cyan-200);\n    --tw-gradient-via-stops: var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-via) var(--tw-gradient-via-position), var(--tw-gradient-to) var(--tw-gradient-to-position);\n    --tw-gradient-stops: var(--tw-gradient-via-stops);\n  }\n\n  .to-amber-400 {\n    --tw-gradient-to: var(--color-amber-400);\n    --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));\n  }\n\n  .to-cyan-400 {\n    --tw-gradient-to: var(--color-cyan-400);\n    --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));\n  }\n\n  .to-rose-400 {\n    --tw-gradient-to: var(--color-rose-400);\n    --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));\n  }\n\n  .to-transparent {\n    --tw-gradient-to: transparent;\n    --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));\n  }\n\n  .mask-repeat {\n    -webkit-mask-repeat: repeat;\n    mask-repeat: repeat;\n  }\n\n  .fill-current {\n    fill: currentColor;\n  }\n\n  .fill-cyan-200 {\n    fill: var(--color-cyan-200);\n  }\n\n  .fill-fuchsia-200 {\n    fill: var(--color-fuchsia-200);\n  }\n\n  .fill-none {\n    fill: none;\n  }\n\n  .stroke-current {\n    stroke: currentColor;\n  }\n\n  .stroke-\\[1\\.5\\] {\n    stroke-width: 1.5px;\n  }\n\n  .p-0 {\n    padding: calc(var(--spacing) * 0);\n  }\n\n  .p-1 {\n    padding: calc(var(--spacing) * 1);\n  }\n\n  .p-1\\.5 {\n    padding: calc(var(--spacing) * 1.5);\n  }\n\n  .p-2 {\n    padding: calc(var(--spacing) * 2);\n  }\n\n  .p-3 {\n    padding: calc(var(--spacing) * 3);\n  }\n\n  .p-4 {\n    padding: calc(var(--spacing) * 4);\n  }\n\n  .p-5 {\n    padding: calc(var(--spacing) * 5);\n  }\n\n  .p-6 {\n    padding: calc(var(--spacing) * 6);\n  }\n\n  .p-8 {\n    padding: calc(var(--spacing) * 8);\n  }\n\n  .p-\\[2px\\] {\n    padding: 2px;\n  }\n\n  .p-px {\n    padding: 1px;\n  }\n\n  .px-0 {\n    padding-inline: calc(var(--spacing) * 0);\n  }\n\n  .px-1 {\n    padding-inline: calc(var(--spacing) * 1);\n  }\n\n  .px-1\\.5 {\n    padding-inline: calc(var(--spacing) * 1.5);\n  }\n\n  .px-2 {\n    padding-inline: calc(var(--spacing) * 2);\n  }\n\n  .px-2\\.5 {\n    padding-inline: calc(var(--spacing) * 2.5);\n  }\n\n  .px-3 {\n    padding-inline: calc(var(--spacing) * 3);\n  }\n\n  .px-4 {\n    padding-inline: calc(var(--spacing) * 4);\n  }\n\n  .px-5 {\n    padding-inline: calc(var(--spacing) * 5);\n  }\n\n  .px-6 {\n    padding-inline: calc(var(--spacing) * 6);\n  }\n\n  .py-0 {\n    padding-block: calc(var(--spacing) * 0);\n  }\n\n  .py-0\\.5 {\n    padding-block: calc(var(--spacing) * .5);\n  }\n\n  .py-1 {\n    padding-block: calc(var(--spacing) * 1);\n  }\n\n  .py-1\\.5 {\n    padding-block: calc(var(--spacing) * 1.5);\n  }\n\n  .py-2 {\n    padding-block: calc(var(--spacing) * 2);\n  }\n\n  .py-2\\.5 {\n    padding-block: calc(var(--spacing) * 2.5);\n  }\n\n  .py-3 {\n    padding-block: calc(var(--spacing) * 3);\n  }\n\n  .py-4 {\n    padding-block: calc(var(--spacing) * 4);\n  }\n\n  .py-5 {\n    padding-block: calc(var(--spacing) * 5);\n  }\n\n  .py-6 {\n    padding-block: calc(var(--spacing) * 6);\n  }\n\n  .py-8 {\n    padding-block: calc(var(--spacing) * 8);\n  }\n\n  .py-\\[2px\\] {\n    padding-block: 2px;\n  }\n\n  .py-\\[3px\\] {\n    padding-block: 3px;\n  }\n\n  .pt-0 {\n    padding-top: calc(var(--spacing) * 0);\n  }\n\n  .pt-1 {\n    padding-top: calc(var(--spacing) * 1);\n  }\n\n  .pt-2 {\n    padding-top: calc(var(--spacing) * 2);\n  }\n\n  .pt-2\\.5 {\n    padding-top: calc(var(--spacing) * 2.5);\n  }\n\n  .pt-3 {\n    padding-top: calc(var(--spacing) * 3);\n  }\n\n  .pt-4 {\n    padding-top: calc(var(--spacing) * 4);\n  }\n\n  .pr-1 {\n    padding-right: calc(var(--spacing) * 1);\n  }\n\n  .pr-2 {\n    padding-right: calc(var(--spacing) * 2);\n  }\n\n  .pr-3 {\n    padding-right: calc(var(--spacing) * 3);\n  }\n\n  .pr-4 {\n    padding-right: calc(var(--spacing) * 4);\n  }\n\n  .pr-8 {\n    padding-right: calc(var(--spacing) * 8);\n  }\n\n  .pr-10 {\n    padding-right: calc(var(--spacing) * 10);\n  }\n\n  .pr-11 {\n    padding-right: calc(var(--spacing) * 11);\n  }\n\n  .pb-1 {\n    padding-bottom: calc(var(--spacing) * 1);\n  }\n\n  .pb-3 {\n    padding-bottom: calc(var(--spacing) * 3);\n  }\n\n  .pb-4 {\n    padding-bottom: calc(var(--spacing) * 4);\n  }\n\n  .pb-5 {\n    padding-bottom: calc(var(--spacing) * 5);\n  }\n\n  .pl-2 {\n    padding-left: calc(var(--spacing) * 2);\n  }\n\n  .pl-3 {\n    padding-left: calc(var(--spacing) * 3);\n  }\n\n  .pl-4 {\n    padding-left: calc(var(--spacing) * 4);\n  }\n\n  .pl-8 {\n    padding-left: calc(var(--spacing) * 8);\n  }\n\n  .text-center {\n    text-align: center;\n  }\n\n  .text-left {\n    text-align: left;\n  }\n\n  .text-right {\n    text-align: right;\n  }\n\n  .align-middle {\n    vertical-align: middle;\n  }\n\n  .font-mono {\n    font-family: var(--font-mono);\n  }\n\n  .font-sans {\n    font-family: var(--font-sans);\n  }\n\n  .text-2xl {\n    font-size: var(--text-2xl);\n    line-height: var(--tw-leading, var(--text-2xl--line-height));\n  }\n\n  .text-3xl {\n    font-size: var(--text-3xl);\n    line-height: var(--tw-leading, var(--text-3xl--line-height));\n  }\n\n  .text-base {\n    font-size: var(--text-base);\n    line-height: var(--tw-leading, var(--text-base--line-height));\n  }\n\n  .text-lg {\n    font-size: var(--text-lg);\n    line-height: var(--tw-leading, var(--text-lg--line-height));\n  }\n\n  .text-sm {\n    font-size: var(--text-sm);\n    line-height: var(--tw-leading, var(--text-sm--line-height));\n  }\n\n  .text-xs {\n    font-size: var(--text-xs);\n    line-height: var(--tw-leading, var(--text-xs--line-height));\n  }\n\n  .text-\\[7px\\] {\n    font-size: 7px;\n  }\n\n  .text-\\[8px\\] {\n    font-size: 8px;\n  }\n\n  .text-\\[9px\\] {\n    font-size: 9px;\n  }\n\n  .text-\\[10px\\] {\n    font-size: 10px;\n  }\n\n  .text-\\[11px\\] {\n    font-size: 11px;\n  }\n\n  .text-\\[12px\\] {\n    font-size: 12px;\n  }\n\n  .text-\\[13px\\] {\n    font-size: 13px;\n  }\n\n  .text-\\[20px\\] {\n    font-size: 20px;\n  }\n\n  .leading-4 {\n    --tw-leading: calc(var(--spacing) * 4);\n    line-height: calc(var(--spacing) * 4);\n  }\n\n  .leading-none {\n    --tw-leading: 1;\n    line-height: 1;\n  }\n\n  .leading-normal {\n    --tw-leading: var(--leading-normal);\n    line-height: var(--leading-normal);\n  }\n\n  .leading-relaxed {\n    --tw-leading: var(--leading-relaxed);\n    line-height: var(--leading-relaxed);\n  }\n\n  .leading-snug {\n    --tw-leading: var(--leading-snug);\n    line-height: var(--leading-snug);\n  }\n\n  .font-black {\n    --tw-font-weight: var(--font-weight-black);\n    font-weight: var(--font-weight-black);\n  }\n\n  .font-bold {\n    --tw-font-weight: var(--font-weight-bold);\n    font-weight: var(--font-weight-bold);\n  }\n\n  .font-medium {\n    --tw-font-weight: var(--font-weight-medium);\n    font-weight: var(--font-weight-medium);\n  }\n\n  .font-normal {\n    --tw-font-weight: var(--font-weight-normal);\n    font-weight: var(--font-weight-normal);\n  }\n\n  .font-semibold {\n    --tw-font-weight: var(--font-weight-semibold);\n    font-weight: var(--font-weight-semibold);\n  }\n\n  .tracking-\\[-0\\.03em\\] {\n    --tw-tracking: -.03em;\n    letter-spacing: -.03em;\n  }\n\n  .tracking-\\[-0\\.04em\\] {\n    --tw-tracking: -.04em;\n    letter-spacing: -.04em;\n  }\n\n  .tracking-\\[0\\.1em\\] {\n    --tw-tracking: .1em;\n    letter-spacing: .1em;\n  }\n\n  .tracking-\\[0\\.2em\\] {\n    --tw-tracking: .2em;\n    letter-spacing: .2em;\n  }\n\n  .tracking-\\[0\\.03em\\] {\n    --tw-tracking: .03em;\n    letter-spacing: .03em;\n  }\n\n  .tracking-\\[0\\.04em\\] {\n    --tw-tracking: .04em;\n    letter-spacing: .04em;\n  }\n\n  .tracking-\\[0\\.06em\\] {\n    --tw-tracking: .06em;\n    letter-spacing: .06em;\n  }\n\n  .tracking-\\[0\\.08em\\] {\n    --tw-tracking: .08em;\n    letter-spacing: .08em;\n  }\n\n  .tracking-\\[0\\.10em\\] {\n    --tw-tracking: .1em;\n    letter-spacing: .1em;\n  }\n\n  .tracking-\\[0\\.12em\\] {\n    --tw-tracking: .12em;\n    letter-spacing: .12em;\n  }\n\n  .tracking-\\[0\\.14em\\] {\n    --tw-tracking: .14em;\n    letter-spacing: .14em;\n  }\n\n  .tracking-\\[0\\.15em\\] {\n    --tw-tracking: .15em;\n    letter-spacing: .15em;\n  }\n\n  .tracking-\\[0\\.16em\\] {\n    --tw-tracking: .16em;\n    letter-spacing: .16em;\n  }\n\n  .tracking-\\[0\\.18em\\] {\n    --tw-tracking: .18em;\n    letter-spacing: .18em;\n  }\n\n  .tracking-\\[0\\.22em\\] {\n    --tw-tracking: .22em;\n    letter-spacing: .22em;\n  }\n\n  .tracking-\\[0\\.24em\\] {\n    --tw-tracking: .24em;\n    letter-spacing: .24em;\n  }\n\n  .tracking-tight {\n    --tw-tracking: var(--tracking-tight);\n    letter-spacing: var(--tracking-tight);\n  }\n\n  .tracking-wide {\n    --tw-tracking: var(--tracking-wide);\n    letter-spacing: var(--tracking-wide);\n  }\n\n  .tracking-widest {\n    --tw-tracking: var(--tracking-widest);\n    letter-spacing: var(--tracking-widest);\n  }\n\n  .text-balance {\n    text-wrap: balance;\n  }\n\n  .text-wrap {\n    text-wrap: wrap;\n  }\n\n  .break-words {\n    overflow-wrap: break-word;\n  }\n\n  .whitespace-nowrap {\n    white-space: nowrap;\n  }\n\n  .text-amber-100 {\n    color: var(--color-amber-100);\n  }\n\n  .text-amber-200 {\n    color: var(--color-amber-200);\n  }\n\n  .text-amber-200\\/78 {\n    color: #fee685c7;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-amber-200\\/78 {\n      color: color-mix(in oklab, var(--color-amber-200) 78%, transparent);\n    }\n  }\n\n  .text-amber-200\\/85 {\n    color: #fee685d9;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-amber-200\\/85 {\n      color: color-mix(in oklab, var(--color-amber-200) 85%, transparent);\n    }\n  }\n\n  .text-blue-300 {\n    color: var(--color-blue-300);\n  }\n\n  .text-blue-300\\/55 {\n    color: #90c5ff8c;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-blue-300\\/55 {\n      color: color-mix(in oklab, var(--color-blue-300) 55%, transparent);\n    }\n  }\n\n  .text-blue-300\\/70 {\n    color: #90c5ffb3;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-blue-300\\/70 {\n      color: color-mix(in oklab, var(--color-blue-300) 70%, transparent);\n    }\n  }\n\n  .text-current {\n    color: currentColor;\n  }\n\n  .text-cyan-50 {\n    color: var(--color-cyan-50);\n  }\n\n  .text-cyan-50\\/80 {\n    color: #ecfeffcc;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-cyan-50\\/80 {\n      color: color-mix(in oklab, var(--color-cyan-50) 80%, transparent);\n    }\n  }\n\n  .text-cyan-50\\/90 {\n    color: #ecfeffe6;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-cyan-50\\/90 {\n      color: color-mix(in oklab, var(--color-cyan-50) 90%, transparent);\n    }\n  }\n\n  .text-cyan-100 {\n    color: var(--color-cyan-100);\n  }\n\n  .text-cyan-100\\/58 {\n    color: #cefafe94;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-cyan-100\\/58 {\n      color: color-mix(in oklab, var(--color-cyan-100) 58%, transparent);\n    }\n  }\n\n  .text-cyan-100\\/60 {\n    color: #cefafe99;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-cyan-100\\/60 {\n      color: color-mix(in oklab, var(--color-cyan-100) 60%, transparent);\n    }\n  }\n\n  .text-cyan-100\\/75 {\n    color: #cefafebf;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-cyan-100\\/75 {\n      color: color-mix(in oklab, var(--color-cyan-100) 75%, transparent);\n    }\n  }\n\n  .text-cyan-100\\/85 {\n    color: #cefafed9;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-cyan-100\\/85 {\n      color: color-mix(in oklab, var(--color-cyan-100) 85%, transparent);\n    }\n  }\n\n  .text-cyan-200 {\n    color: var(--color-cyan-200);\n  }\n\n  .text-cyan-200\\/70 {\n    color: #a2f4fdb3;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-cyan-200\\/70 {\n      color: color-mix(in oklab, var(--color-cyan-200) 70%, transparent);\n    }\n  }\n\n  .text-cyan-200\\/80 {\n    color: #a2f4fdcc;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-cyan-200\\/80 {\n      color: color-mix(in oklab, var(--color-cyan-200) 80%, transparent);\n    }\n  }\n\n  .text-cyan-300 {\n    color: var(--color-cyan-300);\n  }\n\n  .text-cyan-300\\/40 {\n    color: #53eafd66;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-cyan-300\\/40 {\n      color: color-mix(in oklab, var(--color-cyan-300) 40%, transparent);\n    }\n  }\n\n  .text-cyan-300\\/70 {\n    color: #53eafdb3;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-cyan-300\\/70 {\n      color: color-mix(in oklab, var(--color-cyan-300) 70%, transparent);\n    }\n  }\n\n  .text-cyan-300\\/85 {\n    color: #53eafdd9;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-cyan-300\\/85 {\n      color: color-mix(in oklab, var(--color-cyan-300) 85%, transparent);\n    }\n  }\n\n  .text-cyan-400 {\n    color: var(--color-cyan-400);\n  }\n\n  .text-cyan-400\\/45 {\n    color: #00d2ef73;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-cyan-400\\/45 {\n      color: color-mix(in oklab, var(--color-cyan-400) 45%, transparent);\n    }\n  }\n\n  .text-cyan-400\\/80 {\n    color: #00d2efcc;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-cyan-400\\/80 {\n      color: color-mix(in oklab, var(--color-cyan-400) 80%, transparent);\n    }\n  }\n\n  .text-emerald-100 {\n    color: var(--color-emerald-100);\n  }\n\n  .text-emerald-100\\/90 {\n    color: #d0fae5e6;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-emerald-100\\/90 {\n      color: color-mix(in oklab, var(--color-emerald-100) 90%, transparent);\n    }\n  }\n\n  .text-emerald-200 {\n    color: var(--color-emerald-200);\n  }\n\n  .text-emerald-200\\/50 {\n    color: #a4f4cf80;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-emerald-200\\/50 {\n      color: color-mix(in oklab, var(--color-emerald-200) 50%, transparent);\n    }\n  }\n\n  .text-emerald-300 {\n    color: var(--color-emerald-300);\n  }\n\n  .text-fuchsia-100 {\n    color: var(--color-fuchsia-100);\n  }\n\n  .text-fuchsia-100\\/90 {\n    color: #fae8ffe6;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-fuchsia-100\\/90 {\n      color: color-mix(in oklab, var(--color-fuchsia-100) 90%, transparent);\n    }\n  }\n\n  .text-fuchsia-200 {\n    color: var(--color-fuchsia-200);\n  }\n\n  .text-fuchsia-200\\/60 {\n    color: #f6cfff99;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-fuchsia-200\\/60 {\n      color: color-mix(in oklab, var(--color-fuchsia-200) 60%, transparent);\n    }\n  }\n\n  .text-rose-200 {\n    color: var(--color-rose-200);\n  }\n\n  .text-rose-400 {\n    color: var(--color-rose-400);\n  }\n\n  .text-rose-400\\/40 {\n    color: #ff667f66;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-rose-400\\/40 {\n      color: color-mix(in oklab, var(--color-rose-400) 40%, transparent);\n    }\n  }\n\n  .text-rose-400\\/45 {\n    color: #ff667f73;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-rose-400\\/45 {\n      color: color-mix(in oklab, var(--color-rose-400) 45%, transparent);\n    }\n  }\n\n  .text-rose-400\\/80 {\n    color: #ff667fcc;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-rose-400\\/80 {\n      color: color-mix(in oklab, var(--color-rose-400) 80%, transparent);\n    }\n  }\n\n  .text-sky-100 {\n    color: var(--color-sky-100);\n  }\n\n  .text-sky-300 {\n    color: var(--color-sky-300);\n  }\n\n  .text-slate-50 {\n    color: var(--color-slate-50);\n  }\n\n  .text-slate-100 {\n    color: var(--color-slate-100);\n  }\n\n  .text-slate-100\\/78 {\n    color: #f1f5f9c7;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-100\\/78 {\n      color: color-mix(in oklab, var(--color-slate-100) 78%, transparent);\n    }\n  }\n\n  .text-slate-200 {\n    color: var(--color-slate-200);\n  }\n\n  .text-slate-200\\/55 {\n    color: #e2e8f08c;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-200\\/55 {\n      color: color-mix(in oklab, var(--color-slate-200) 55%, transparent);\n    }\n  }\n\n  .text-slate-200\\/80 {\n    color: #e2e8f0cc;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-200\\/80 {\n      color: color-mix(in oklab, var(--color-slate-200) 80%, transparent);\n    }\n  }\n\n  .text-slate-200\\/85 {\n    color: #e2e8f0d9;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-200\\/85 {\n      color: color-mix(in oklab, var(--color-slate-200) 85%, transparent);\n    }\n  }\n\n  .text-slate-300 {\n    color: var(--color-slate-300);\n  }\n\n  .text-slate-300\\/40 {\n    color: #cad5e266;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-300\\/40 {\n      color: color-mix(in oklab, var(--color-slate-300) 40%, transparent);\n    }\n  }\n\n  .text-slate-300\\/45 {\n    color: #cad5e273;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-300\\/45 {\n      color: color-mix(in oklab, var(--color-slate-300) 45%, transparent);\n    }\n  }\n\n  .text-slate-300\\/55 {\n    color: #cad5e28c;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-300\\/55 {\n      color: color-mix(in oklab, var(--color-slate-300) 55%, transparent);\n    }\n  }\n\n  .text-slate-300\\/60 {\n    color: #cad5e299;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-300\\/60 {\n      color: color-mix(in oklab, var(--color-slate-300) 60%, transparent);\n    }\n  }\n\n  .text-slate-300\\/62 {\n    color: #cad5e29e;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-300\\/62 {\n      color: color-mix(in oklab, var(--color-slate-300) 62%, transparent);\n    }\n  }\n\n  .text-slate-300\\/70 {\n    color: #cad5e2b3;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-300\\/70 {\n      color: color-mix(in oklab, var(--color-slate-300) 70%, transparent);\n    }\n  }\n\n  .text-slate-300\\/72 {\n    color: #cad5e2b8;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-300\\/72 {\n      color: color-mix(in oklab, var(--color-slate-300) 72%, transparent);\n    }\n  }\n\n  .text-slate-300\\/75 {\n    color: #cad5e2bf;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-300\\/75 {\n      color: color-mix(in oklab, var(--color-slate-300) 75%, transparent);\n    }\n  }\n\n  .text-slate-400 {\n    color: var(--color-slate-400);\n  }\n\n  .text-slate-400\\/45 {\n    color: #90a1b973;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-400\\/45 {\n      color: color-mix(in oklab, var(--color-slate-400) 45%, transparent);\n    }\n  }\n\n  .text-slate-400\\/50 {\n    color: #90a1b980;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-400\\/50 {\n      color: color-mix(in oklab, var(--color-slate-400) 50%, transparent);\n    }\n  }\n\n  .text-slate-400\\/60 {\n    color: #90a1b999;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-400\\/60 {\n      color: color-mix(in oklab, var(--color-slate-400) 60%, transparent);\n    }\n  }\n\n  .text-slate-400\\/70 {\n    color: #90a1b9b3;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-400\\/70 {\n      color: color-mix(in oklab, var(--color-slate-400) 70%, transparent);\n    }\n  }\n\n  .text-slate-400\\/74 {\n    color: #90a1b9bd;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-400\\/74 {\n      color: color-mix(in oklab, var(--color-slate-400) 74%, transparent);\n    }\n  }\n\n  .text-slate-400\\/80 {\n    color: #90a1b9cc;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-400\\/80 {\n      color: color-mix(in oklab, var(--color-slate-400) 80%, transparent);\n    }\n  }\n\n  .text-slate-400\\/85 {\n    color: #90a1b9d9;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-400\\/85 {\n      color: color-mix(in oklab, var(--color-slate-400) 85%, transparent);\n    }\n  }\n\n  .text-slate-500 {\n    color: var(--color-slate-500);\n  }\n\n  .text-slate-500\\/35 {\n    color: #62748e59;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-500\\/35 {\n      color: color-mix(in oklab, var(--color-slate-500) 35%, transparent);\n    }\n  }\n\n  .text-white {\n    color: var(--color-white);\n  }\n\n  .lowercase {\n    text-transform: lowercase;\n  }\n\n  .uppercase {\n    text-transform: uppercase;\n  }\n\n  .italic {\n    font-style: italic;\n  }\n\n  .ordinal {\n    --tw-ordinal: ordinal;\n    font-variant-numeric: var(--tw-ordinal, ) var(--tw-slashed-zero, ) var(--tw-numeric-figure, ) var(--tw-numeric-spacing, ) var(--tw-numeric-fraction, );\n  }\n\n  .tabular-nums {\n    --tw-numeric-spacing: tabular-nums;\n    font-variant-numeric: var(--tw-ordinal, ) var(--tw-slashed-zero, ) var(--tw-numeric-figure, ) var(--tw-numeric-spacing, ) var(--tw-numeric-fraction, );\n  }\n\n  .underline {\n    text-decoration-line: underline;\n  }\n\n  .underline-offset-4 {\n    text-underline-offset: 4px;\n  }\n\n  .antialiased {\n    -webkit-font-smoothing: antialiased;\n    -moz-osx-font-smoothing: grayscale;\n  }\n\n  .accent-cyan-300 {\n    accent-color: var(--color-cyan-300);\n  }\n\n  .opacity-0 {\n    opacity: 0;\n  }\n\n  .opacity-40 {\n    opacity: .4;\n  }\n\n  .opacity-50 {\n    opacity: .5;\n  }\n\n  .opacity-70 {\n    opacity: .7;\n  }\n\n  .opacity-90 {\n    opacity: .9;\n  }\n\n  .shadow {\n    --tw-shadow: 0 1px 3px 0 var(--tw-shadow-color, #0000001a), 0 1px 2px -1px var(--tw-shadow-color, #0000001a);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[0_0_18px_rgba\\(251\\,191\\,36\\,0\\.34\\)\\] {\n    --tw-shadow: 0 0 18px var(--tw-shadow-color, #fbbf2457);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[0_10px_26px_rgba\\(0\\,0\\,0\\,0\\.28\\)\\] {\n    --tw-shadow: 0 10px 26px var(--tw-shadow-color, #00000047);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[0_10px_28px_rgba\\(0\\,0\\,0\\,0\\.22\\)\\] {\n    --tw-shadow: 0 10px 28px var(--tw-shadow-color, #00000038);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[0_10px_28px_rgba\\(0\\,0\\,0\\,0\\.26\\)\\,inset_0_1px_0_rgba\\(255\\,255\\,255\\,0\\.05\\)\\] {\n    --tw-shadow: 0 10px 28px var(--tw-shadow-color, #00000042), inset 0 1px 0 var(--tw-shadow-color, #ffffff0d);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[0_10px_28px_rgba\\(0\\,0\\,0\\,0\\.28\\)\\] {\n    --tw-shadow: 0 10px 28px var(--tw-shadow-color, #00000047);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[0_12px_28px_rgba\\(0\\,0\\,0\\,0\\.32\\)\\] {\n    --tw-shadow: 0 12px 28px var(--tw-shadow-color, #00000052);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[0_18px_40px_rgba\\(0\\,0\\,0\\,0\\.45\\)\\] {\n    --tw-shadow: 0 18px 40px var(--tw-shadow-color, #00000073);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[0_18px_42px_rgba\\(3\\,6\\,18\\,0\\.45\\)\\] {\n    --tw-shadow: 0 18px 42px var(--tw-shadow-color, #03061273);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[0_22px_40px_rgba\\(0\\,0\\,0\\,0\\.32\\)\\] {\n    --tw-shadow: 0 22px 40px var(--tw-shadow-color, #00000052);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[0_26px_80px_rgba\\(0\\,0\\,0\\,0\\.48\\)\\] {\n    --tw-shadow: 0 26px 80px var(--tw-shadow-color, #0000007a);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[0_28px_80px_rgba\\(0\\,0\\,0\\,0\\.56\\)\\] {\n    --tw-shadow: 0 28px 80px var(--tw-shadow-color, #0000008f);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[0_36px_80px_rgba\\(0\\,0\\,0\\,0\\.5\\)\\] {\n    --tw-shadow: 0 36px 80px var(--tw-shadow-color, #00000080);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[inset_0_0_0_1px_rgba\\(143\\,232\\,255\\,0\\.18\\)\\] {\n    --tw-shadow: inset 0 0 0 1px var(--tw-shadow-color, #8fe8ff2e);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[inset_0_1px_0_rgba\\(255\\,255\\,255\\,0\\.04\\)\\] {\n    --tw-shadow: inset 0 1px 0 var(--tw-shadow-color, #ffffff0a);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[inset_0_1px_0_rgba\\(255\\,255\\,255\\,0\\.06\\)\\] {\n    --tw-shadow: inset 0 1px 0 var(--tw-shadow-color, #ffffff0f);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[inset_0_1px_0_rgba\\(255\\,255\\,255\\,0\\.08\\)\\,inset_0_-64px_80px_rgba\\(0\\,0\\,0\\,0\\.34\\)\\] {\n    --tw-shadow: inset 0 1px 0 var(--tw-shadow-color, #ffffff14), inset 0 -64px 80px var(--tw-shadow-color, #00000057);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-lg {\n    --tw-shadow: 0 10px 15px -3px var(--tw-shadow-color, #0000001a), 0 4px 6px -4px var(--tw-shadow-color, #0000001a);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-md {\n    --tw-shadow: 0 4px 6px -1px var(--tw-shadow-color, #0000001a), 0 2px 4px -2px var(--tw-shadow-color, #0000001a);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-none {\n    --tw-shadow: 0 0 #0000;\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-sm {\n    --tw-shadow: 0 1px 3px 0 var(--tw-shadow-color, #0000001a), 0 1px 2px -1px var(--tw-shadow-color, #0000001a);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-xl {\n    --tw-shadow: 0 20px 25px -5px var(--tw-shadow-color, #0000001a), 0 8px 10px -6px var(--tw-shadow-color, #0000001a);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-xs {\n    --tw-shadow: 0 1px 2px 0 var(--tw-shadow-color, #0000000d);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .ring {\n    --tw-ring-shadow: var(--tw-ring-inset, ) 0 0 0 calc(1px + var(--tw-ring-offset-width)) var(--tw-ring-color, currentcolor);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .ring-0 {\n    --tw-ring-shadow: var(--tw-ring-inset, ) 0 0 0 calc(0px + var(--tw-ring-offset-width)) var(--tw-ring-color, currentcolor);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .outline-hidden {\n    --tw-outline-style: none;\n    outline-style: none;\n  }\n\n  @media (forced-colors: active) {\n    .outline-hidden {\n      outline-offset: 2px;\n      outline: 2px solid #0000;\n    }\n  }\n\n  .outline {\n    outline-style: var(--tw-outline-style);\n    outline-width: 1px;\n  }\n\n  .blur {\n    --tw-blur: blur(8px);\n    filter: var(--tw-blur, ) var(--tw-brightness, ) var(--tw-contrast, ) var(--tw-grayscale, ) var(--tw-hue-rotate, ) var(--tw-invert, ) var(--tw-saturate, ) var(--tw-sepia, ) var(--tw-drop-shadow, );\n  }\n\n  .invert {\n    --tw-invert: invert(100%);\n    filter: var(--tw-blur, ) var(--tw-brightness, ) var(--tw-contrast, ) var(--tw-grayscale, ) var(--tw-hue-rotate, ) var(--tw-invert, ) var(--tw-saturate, ) var(--tw-sepia, ) var(--tw-drop-shadow, );\n  }\n\n  .filter {\n    filter: var(--tw-blur, ) var(--tw-brightness, ) var(--tw-contrast, ) var(--tw-grayscale, ) var(--tw-hue-rotate, ) var(--tw-invert, ) var(--tw-saturate, ) var(--tw-sepia, ) var(--tw-drop-shadow, );\n  }\n\n  .backdrop-blur-md {\n    --tw-backdrop-blur: blur(var(--blur-md));\n    -webkit-backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );\n    backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );\n  }\n\n  .backdrop-blur-xl {\n    --tw-backdrop-blur: blur(var(--blur-xl));\n    -webkit-backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );\n    backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );\n  }\n\n  .backdrop-filter {\n    -webkit-backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );\n    backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );\n  }\n\n  .transition {\n    transition-property: color, background-color, border-color, outline-color, text-decoration-color, fill, stroke, --tw-gradient-from, --tw-gradient-via, --tw-gradient-to, opacity, box-shadow, transform, translate, scale, rotate, filter, -webkit-backdrop-filter, backdrop-filter, display, content-visibility, overlay, pointer-events;\n    transition-timing-function: var(--tw-ease, var(--default-transition-timing-function));\n    transition-duration: var(--tw-duration, var(--default-transition-duration));\n  }\n\n  .transition-all {\n    transition-property: all;\n    transition-timing-function: var(--tw-ease, var(--default-transition-timing-function));\n    transition-duration: var(--tw-duration, var(--default-transition-duration));\n  }\n\n  .transition-colors {\n    transition-property: color, background-color, border-color, outline-color, text-decoration-color, fill, stroke, --tw-gradient-from, --tw-gradient-via, --tw-gradient-to;\n    transition-timing-function: var(--tw-ease, var(--default-transition-timing-function));\n    transition-duration: var(--tw-duration, var(--default-transition-duration));\n  }\n\n  .transition-opacity {\n    transition-property: opacity;\n    transition-timing-function: var(--tw-ease, var(--default-transition-timing-function));\n    transition-duration: var(--tw-duration, var(--default-transition-duration));\n  }\n\n  .transition-shadow {\n    transition-property: box-shadow;\n    transition-timing-function: var(--tw-ease, var(--default-transition-timing-function));\n    transition-duration: var(--tw-duration, var(--default-transition-duration));\n  }\n\n  .transition-transform {\n    transition-property: transform, translate, scale, rotate;\n    transition-timing-function: var(--tw-ease, var(--default-transition-timing-function));\n    transition-duration: var(--tw-duration, var(--default-transition-duration));\n  }\n\n  .transition-none {\n    transition-property: none;\n  }\n\n  .duration-100 {\n    --tw-duration: .1s;\n    transition-duration: .1s;\n  }\n\n  .duration-200 {\n    --tw-duration: .2s;\n    transition-duration: .2s;\n  }\n\n  .duration-300 {\n    --tw-duration: .3s;\n    transition-duration: .3s;\n  }\n\n  .duration-1000 {\n    --tw-duration: 1s;\n    transition-duration: 1s;\n  }\n\n  .ease-in-out {\n    --tw-ease: var(--ease-in-out);\n    transition-timing-function: var(--ease-in-out);\n  }\n\n  .ease-linear {\n    --tw-ease: linear;\n    transition-timing-function: linear;\n  }\n\n  .outline-none {\n    --tw-outline-style: none;\n    outline-style: none;\n  }\n\n  .select-none {\n    -webkit-user-select: none;\n    user-select: none;\n  }\n\n  @media (hover: hover) {\n    .group-hover\\:opacity-100:is(:where(.group):hover *) {\n      opacity: 1;\n    }\n  }\n\n  .selection\\:bg-cyan-300\\/25 ::selection {\n    background-color: #53eafd40;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .selection\\:bg-cyan-300\\/25 ::selection {\n      background-color: color-mix(in oklab, var(--color-cyan-300) 25%, transparent);\n    }\n  }\n\n  .selection\\:bg-cyan-300\\/25::selection {\n    background-color: #53eafd40;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .selection\\:bg-cyan-300\\/25::selection {\n      background-color: color-mix(in oklab, var(--color-cyan-300) 25%, transparent);\n    }\n  }\n\n  @media (hover: hover) {\n    .hover\\:border-amber-200\\/30:hover {\n      border-color: #fee6854d;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:border-amber-200\\/30:hover {\n        border-color: color-mix(in oklab, var(--color-amber-200) 30%, transparent);\n      }\n    }\n\n    .hover\\:border-cyan-200\\/25:hover {\n      border-color: #a2f4fd40;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:border-cyan-200\\/25:hover {\n        border-color: color-mix(in oklab, var(--color-cyan-200) 25%, transparent);\n      }\n    }\n\n    .hover\\:border-cyan-200\\/30:hover {\n      border-color: #a2f4fd4d;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:border-cyan-200\\/30:hover {\n        border-color: color-mix(in oklab, var(--color-cyan-200) 30%, transparent);\n      }\n    }\n\n    .hover\\:border-white\\/10:hover {\n      border-color: #ffffff1a;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:border-white\\/10:hover {\n        border-color: color-mix(in oklab, var(--color-white) 10%, transparent);\n      }\n    }\n\n    .hover\\:border-white\\/12:hover {\n      border-color: #ffffff1f;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:border-white\\/12:hover {\n        border-color: color-mix(in oklab, var(--color-white) 12%, transparent);\n      }\n    }\n\n    .hover\\:border-white\\/18:hover {\n      border-color: #ffffff2e;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:border-white\\/18:hover {\n        border-color: color-mix(in oklab, var(--color-white) 18%, transparent);\n      }\n    }\n\n    .hover\\:bg-black\\/24:hover {\n      background-color: #0000003d;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:bg-black\\/24:hover {\n        background-color: color-mix(in oklab, var(--color-black) 24%, transparent);\n      }\n    }\n\n    .hover\\:bg-white\\/\\[0\\.01\\]:hover {\n      background-color: #ffffff03;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:bg-white\\/\\[0\\.01\\]:hover {\n        background-color: color-mix(in oklab, var(--color-white) 1%, transparent);\n      }\n    }\n\n    .hover\\:bg-white\\/\\[0\\.04\\]:hover {\n      background-color: #ffffff0a;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:bg-white\\/\\[0\\.04\\]:hover {\n        background-color: color-mix(in oklab, var(--color-white) 4%, transparent);\n      }\n    }\n\n    .hover\\:bg-white\\/\\[0\\.05\\]:hover {\n      background-color: #ffffff0d;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:bg-white\\/\\[0\\.05\\]:hover {\n        background-color: color-mix(in oklab, var(--color-white) 5%, transparent);\n      }\n    }\n\n    .hover\\:bg-white\\/\\[0\\.06\\]:hover {\n      background-color: #ffffff0f;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:bg-white\\/\\[0\\.06\\]:hover {\n        background-color: color-mix(in oklab, var(--color-white) 6%, transparent);\n      }\n    }\n\n    .hover\\:text-cyan-100:hover {\n      color: var(--color-cyan-100);\n    }\n\n    .hover\\:text-slate-100:hover {\n      color: var(--color-slate-100);\n    }\n\n    .hover\\:text-slate-200\\/80:hover {\n      color: #e2e8f0cc;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:text-slate-200\\/80:hover {\n        color: color-mix(in oklab, var(--color-slate-200) 80%, transparent);\n      }\n    }\n\n    .hover\\:text-slate-300\\/65:hover {\n      color: #cad5e2a6;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:text-slate-300\\/65:hover {\n        color: color-mix(in oklab, var(--color-slate-300) 65%, transparent);\n      }\n    }\n  }\n\n  .focus\\:border-emerald-300\\/30:focus {\n    border-color: #5ee9b54d;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .focus\\:border-emerald-300\\/30:focus {\n      border-color: color-mix(in oklab, var(--color-emerald-300) 30%, transparent);\n    }\n  }\n\n  .focus-visible\\:opacity-100:focus-visible {\n    opacity: 1;\n  }\n\n  .active\\:cursor-grabbing:active {\n    cursor: grabbing;\n  }\n\n  .disabled\\:opacity-35:disabled {\n    opacity: .35;\n  }\n\n  .disabled\\:opacity-40:disabled {\n    opacity: .4;\n  }\n\n  @media not all and (min-width: 480px) {\n    .max-\\[480px\\]\\:size-3\\.5 {\n      width: calc(var(--spacing) * 3.5);\n      height: calc(var(--spacing) * 3.5);\n    }\n\n    .max-\\[480px\\]\\:size-6 {\n      width: calc(var(--spacing) * 6);\n      height: calc(var(--spacing) * 6);\n    }\n\n    .max-\\[480px\\]\\:size-7 {\n      width: calc(var(--spacing) * 7);\n      height: calc(var(--spacing) * 7);\n    }\n\n    .max-\\[480px\\]\\:h-7 {\n      height: calc(var(--spacing) * 7);\n    }\n\n    .max-\\[480px\\]\\:w-\\[44px\\] {\n      width: 44px;\n    }\n\n    .max-\\[480px\\]\\:w-\\[64px\\] {\n      width: 64px;\n    }\n\n    .max-\\[480px\\]\\:rounded-\\[6px\\] {\n      border-radius: 6px;\n    }\n\n    .max-\\[480px\\]\\:px-2 {\n      padding-inline: calc(var(--spacing) * 2);\n    }\n\n    .max-\\[480px\\]\\:py-1 {\n      padding-block: calc(var(--spacing) * 1);\n    }\n\n    .max-\\[480px\\]\\:text-\\[10px\\] {\n      font-size: 10px;\n    }\n\n    .max-\\[480px\\]\\:text-\\[11px\\] {\n      font-size: 11px;\n    }\n  }\n\n  @media not all and (min-width: 360px) {\n    .max-\\[360px\\]\\:size-\\[26px\\] {\n      width: 26px;\n      height: 26px;\n    }\n  }\n\n  @media (min-width: 40rem) {\n    .sm\\:block {\n      display: block;\n    }\n\n    .sm\\:inline {\n      display: inline;\n    }\n  }\n\n  @media (min-width: 48rem) {\n    .md\\:grid-cols-2 {\n      grid-template-columns: repeat(2, minmax(0, 1fr));\n    }\n  }\n}\n\n:host {\n  box-sizing: border-box;\n  overscroll-behavior: none;\n  color: #eef2f5;\n  color-scheme: dark;\n  --cosimo-ios-top-inset: 0px;\n  --cosimo-ios-right-inset: 0px;\n  --cosimo-ios-bottom-inset: 0px;\n  --cosimo-ios-left-inset: 0px;\n  --cosimo-ios-safe-top: calc(env(safe-area-inset-top) + var(--cosimo-ios-top-inset));\n  --cosimo-ios-safe-right: calc(env(safe-area-inset-right) + var(--cosimo-ios-right-inset));\n  --cosimo-ios-safe-bottom: calc(env(safe-area-inset-bottom) + var(--cosimo-ios-bottom-inset));\n  --cosimo-ios-safe-left: calc(env(safe-area-inset-left) + var(--cosimo-ios-left-inset));\n  --cosimo-stage-min-height: 248px;\n  --cosimo-keyboard-height: 94px;\n  --cosimo-control-height: 54px;\n  background: #04070f;\n  width: 100%;\n  height: 100%;\n  min-height: 100dvh;\n  font-family: SF Pro Display, SF Pro Text, -apple-system, BlinkMacSystemFont, Avenir Next, sans-serif;\n  display: block;\n  overflow-x: hidden;\n}\n\n* {\n  box-sizing: border-box;\n}\n\nbutton, input, select {\n  font: inherit;\n}\n\n.cosimo-mod-amount-field {\n  justify-content: flex-end;\n  align-items: center;\n  gap: 10px;\n  min-width: 0;\n  display: flex;\n}\n\n.cosimo-mod-direction-toggle {\n  background: #ffffff0a;\n  border: 1px solid #ffffff1a;\n  border-radius: 16px;\n  gap: 4px;\n  padding: 4px;\n  display: grid;\n}\n\n.cosimo-mod-direction-button {\n  color: #e2e8f0b8;\n  background: none;\n  border: 0;\n  border-radius: 11px;\n  width: 26px;\n  height: 26px;\n  font-size: 14px;\n  font-weight: 700;\n  line-height: 1;\n}\n\n.cosimo-mod-direction-button[data-active="true"] {\n  color: #cffafe;\n  background: #67e8f92e;\n}\n\n.cosimo-mod-knob {\n  flex: none;\n  width: 66px;\n  height: 66px;\n  position: relative;\n}\n\n.cosimo-mod-knob-stack {\n  justify-items: center;\n  gap: 4px;\n  min-width: 0;\n  display: grid;\n}\n\n.cosimo-mod-knob-track {\n  border: 1px solid #ffffff14;\n  border-radius: 999px;\n  width: 100%;\n  height: 100%;\n  position: relative;\n  box-shadow: inset 0 1px #ffffff14, 0 10px 20px #00000038;\n}\n\n.cosimo-mod-knob-arc {\n  pointer-events: none;\n  width: 100%;\n  height: 100%;\n  position: absolute;\n  inset: 0;\n  overflow: visible;\n}\n\n.cosimo-mod-knob-arc-track {\n  fill: none;\n  stroke: #ffffff1a;\n  stroke-width: 4px;\n  stroke-linecap: round;\n}\n\n.cosimo-mod-knob-arc-fill {\n  fill: none;\n  stroke: #67e8f9eb;\n  stroke-width: 4px;\n  stroke-linecap: round;\n  filter: drop-shadow(0 0 8px #67e8f947);\n}\n\n.cosimo-mod-knob-core {\n  color: #cffafe;\n  background: radial-gradient(circle at 35% 28%, #ffffff1a, #0000 38%), linear-gradient(#0c1222fa, #060914fa);\n  border-radius: 999px;\n  place-items: center;\n  display: grid;\n  position: absolute;\n  inset: 9px;\n}\n\n.cosimo-mod-knob-percent {\n  letter-spacing: .12em;\n  text-transform: uppercase;\n  font-family: SF Mono, IBM Plex Mono, Menlo, monospace;\n  font-size: 10px;\n  font-weight: 700;\n}\n\n.cosimo-mod-knob-indicator {\n  transform-origin: 50% 26px;\n  pointer-events: none;\n  background: linear-gradient(#fef3c7 0%, #f472b6 100%);\n  border-radius: 999px;\n  width: 3px;\n  height: 19px;\n  position: absolute;\n  top: 7px;\n  left: 50%;\n  box-shadow: 0 0 12px #f472b65c;\n}\n\n.cosimo-mod-knob-center-marker {\n  pointer-events: none;\n  background: #fff6;\n  border-radius: 999px;\n  width: 2px;\n  height: 9px;\n  position: absolute;\n  top: 3px;\n  left: 50%;\n  transform: translateX(-50%);\n}\n\n.cosimo-mod-knob[data-polarity="bipolar"] .cosimo-mod-knob-center-marker {\n  background: #e2e8f0d6;\n  box-shadow: 0 0 8px #e2e8f03d;\n}\n\n.cosimo-mod-knob-input {\n  opacity: 0;\n  width: 100%;\n  height: 100%;\n  margin: 0;\n  position: absolute;\n  inset: 0;\n}\n\n.cosimo-mod-amount-copy {\n  gap: 2px;\n  min-width: 0;\n  display: grid;\n}\n\n.cosimo-mod-amount-readout {\n  letter-spacing: .08em;\n  color: #e2e8f0;\n  white-space: nowrap;\n  font-family: SF Mono, IBM Plex Mono, Menlo, monospace;\n  font-size: 11px;\n  font-weight: 600;\n}\n\n.cosimo-mod-amount-caption {\n  letter-spacing: .18em;\n  text-transform: uppercase;\n  color: #94a3b8bd;\n  font-family: SF Mono, IBM Plex Mono, Menlo, monospace;\n  font-size: 9px;\n}\n\n.ios-shell {\n  box-sizing: border-box;\n  width: 100%;\n  height: 100%;\n  min-height: 100dvh;\n  padding: var(--cosimo-ios-safe-top) var(--cosimo-ios-safe-right) var(--cosimo-ios-safe-bottom) var(--cosimo-ios-safe-left);\n  grid-template-rows: minmax(0, 1fr) auto;\n  min-width: 0;\n  display: grid;\n}\n\n.ios-top-row {\n  grid-template-rows: minmax(0, 1fr);\n  grid-template-columns: minmax(0, 1fr);\n  min-height: 0;\n  display: grid;\n  position: relative;\n  overflow: hidden;\n}\n\n.ios-main-view {\n  grid-area: 1 / 1;\n  min-height: 0;\n  display: grid;\n}\n\n.ios-main-view[data-hidden="true"] {\n  visibility: hidden;\n  pointer-events: none;\n}\n\n.ios-scroll {\n  overscroll-behavior: contain;\n  -webkit-overflow-scrolling: touch;\n  height: 100%;\n  min-height: 0;\n  overflow-y: auto;\n}\n\n.ios-content {\n  align-content: start;\n  gap: 16px;\n  min-width: 0;\n  padding: 0 16px;\n  display: grid;\n}\n\n.wavetable-panel, .play-panel, .mseg-shell, .keyboard-footer {\n  min-width: 0;\n}\n\n.section-label, .display-status, .bank-readout, .mini-label, .octave-readout, .glide-time-readout, .mseg-depth-readout, .mseg-rate-readout, .mseg-launcher-rate-readout {\n  letter-spacing: .16em;\n  text-transform: uppercase;\n  font-family: SF Mono, IBM Plex Mono, Menlo, monospace;\n}\n\n.wavetable-stage {\n  width: 100%;\n  min-width: 0;\n  max-width: 100%;\n  min-height: var(--cosimo-stage-min-height);\n  aspect-ratio: 1.55;\n  touch-action: none;\n  background: none;\n  position: relative;\n  overflow: hidden;\n}\n\n.wavetable-stage:before {\n  content: "";\n  opacity: .24;\n  pointer-events: none;\n  background-color: #0000;\n  background-image: linear-gradient(#ffffff07 1px, #0000 1px), linear-gradient(90deg, #ffffff07 1px, #0000 1px);\n  background-position: 0 0, 0 0;\n  background-repeat: repeat, repeat;\n  background-size: 28px 28px;\n  background-attachment: scroll, scroll;\n  background-origin: padding-box, padding-box;\n  background-clip: border-box, border-box;\n  position: absolute;\n  inset: 0;\n}\n\n.wavetable-display-stack {\n  position: absolute;\n  inset: 0;\n}\n\n.wavetable-layer {\n  will-change: transform;\n  position: absolute;\n  inset: 0;\n}\n\n.display-overlay {\n  text-align: center;\n  color: #ffd8acdb;\n  -webkit-backdrop-filter: blur(4px);\n  backdrop-filter: blur(4px);\n  background: #040712d1;\n  place-items: center;\n  padding: 20px;\n  font-size: 13px;\n  display: grid;\n  position: absolute;\n  inset: 0;\n}\n\n.display-overlay[hidden] {\n  display: none;\n}\n\n.stage-copy {\n  pointer-events: none;\n  grid-template-rows: auto 1fr auto;\n  gap: 8px;\n  padding: 12px;\n  display: grid;\n  position: absolute;\n  inset: 0;\n}\n\n.stage-copy-row {\n  pointer-events: auto;\n  justify-content: space-between;\n  align-items: center;\n  gap: 8px;\n  display: flex;\n}\n\n.stage-copy-row:last-child {\n  align-items: end;\n}\n\n.mini-label {\n  color: #d4dce657;\n  font-size: 10px;\n}\n\n.mini-label.active {\n  color: #87d7f5;\n}\n\n.mini-label.warm {\n  color: #f2b86b;\n}\n\n.display-status, .bank-readout {\n  color: #d4dce66b;\n  font-size: 10px;\n}\n\n.display-status {\n  background: #ffffff0a;\n  border-radius: 999px;\n  justify-self: start;\n  padding: 6px 10px;\n}\n\n.shape-readout {\n  letter-spacing: -.03em;\n  color: #87d7f5;\n  font-family: SF Pro Display, SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif;\n  font-size: 12px;\n  font-weight: 600;\n}\n\n.bank-picker-trigger {\n  pointer-events: auto;\n  align-items: end;\n  min-width: 0;\n  max-width: min(72%, 260px);\n  display: inline-flex;\n  position: relative;\n}\n\n.table-select-overlay {\n  opacity: .001;\n  appearance: none;\n  color: #0000;\n  cursor: pointer;\n  background: none;\n  border: 0;\n  width: calc(100% + 20px);\n  min-height: 40px;\n  font-size: 16px;\n  position: absolute;\n  inset: -8px -10px;\n}\n\n.bank-readout {\n  white-space: nowrap;\n  text-overflow: ellipsis;\n  min-width: 0;\n  overflow: hidden;\n}\n\n.table-retry-button {\n  color: #ffd8e8;\n  letter-spacing: .08em;\n  text-transform: uppercase;\n  pointer-events: auto;\n  background: #f56cb614;\n  border: 1px solid #f56cb647;\n  border-radius: 999px;\n  padding: 6px 10px;\n  font-size: 10px;\n}\n\n.table-retry-button[hidden] {\n  display: none;\n}\n\n.table-error-banner {\n  color: #ffd8e8;\n  background: #f56cb61f;\n  border: 1px solid #f56cb63d;\n  border-radius: 14px;\n  min-width: 0;\n  padding: 10px 12px;\n  font-size: 12px;\n  line-height: 1.35;\n  display: block;\n}\n\n.table-error-banner[hidden] {\n  display: none;\n}\n\n.play-grid {\n  grid-template-columns: minmax(132px, 160px) minmax(0, 1fr);\n  align-items: center;\n  gap: 10px;\n  min-width: 0;\n  display: grid;\n}\n\n.play-field {\n  min-width: 0;\n  display: grid;\n}\n\n.play-select {\n  color: #eef2f5;\n  background: #ffffff0a;\n  border: 1px solid #ffffff1a;\n  border-radius: 12px;\n  width: 100%;\n  min-height: 36px;\n  padding: 8px 10px;\n  font-size: 13px;\n}\n\n.glide-field-body {\n  grid-template-columns: minmax(0, 1fr) auto;\n  align-items: center;\n  gap: 10px;\n  display: grid;\n}\n\n.glide-time-slider {\n  width: 100%;\n}\n\n.glide-time-readout, .mseg-depth-readout, .mseg-rate-readout, .mseg-launcher-rate-readout {\n  color: #87d7f5;\n  letter-spacing: .08em;\n  white-space: nowrap;\n  font-size: 12px;\n}\n\n.mseg-shell {\n  gap: 10px;\n  display: grid;\n}\n\n.mseg-launcher {\n  gap: 12px;\n  display: grid;\n}\n\n.mseg-launcher-head {\n  justify-content: space-between;\n  align-items: end;\n  gap: 12px;\n  display: flex;\n}\n\n.mseg-launcher-copy, .mseg-modal-copy {\n  gap: 4px;\n  min-width: 0;\n  display: grid;\n}\n\n.mseg-eyebrow {\n  letter-spacing: .16em;\n  text-transform: uppercase;\n  color: #d4dce657;\n  font-family: SF Mono, IBM Plex Mono, Menlo, monospace;\n  font-size: 10px;\n}\n\n.mseg-route-title {\n  color: #eef2f5;\n  letter-spacing: -.03em;\n  font-size: 15px;\n  font-weight: 600;\n}\n\n.mseg-preview-button {\n  appearance: none;\n  text-align: left;\n  background: none;\n  border: 0;\n  width: 100%;\n  padding: 0;\n  display: block;\n}\n\n.mseg-preview-shell {\n  height: 128px;\n  min-height: 128px;\n}\n\n.mseg-preview-footer {\n  justify-content: space-between;\n  align-items: center;\n  gap: 10px;\n  display: flex;\n}\n\n.mseg-controls {\n  grid-template-columns: minmax(0, 1fr) auto;\n  align-items: center;\n  gap: 10px;\n  display: grid;\n}\n\n.mseg-depth {\n  gap: 8px;\n  display: grid;\n}\n\n.mseg-depth-label {\n  letter-spacing: .16em;\n  text-transform: uppercase;\n  color: #d4dce657;\n  font-family: SF Mono, IBM Plex Mono, Menlo, monospace;\n  font-size: 10px;\n}\n\n.mseg-depth-slider, .mseg-rate-slider {\n  width: 100%;\n}\n\n.mseg-modal-layer {\n  pointer-events: none;\n  grid-area: 1 / 1;\n  min-height: 0;\n  padding: 0;\n  position: relative;\n  inset: auto;\n}\n\n.mseg-modal-layer[data-open="true"] {\n  pointer-events: auto;\n}\n\n.mseg-modal-backdrop {\n  display: none;\n}\n\n.mseg-modal {\n  grid-template-rows: auto minmax(0, 1fr) auto;\n  gap: 4px;\n  min-height: 100%;\n  padding: 0 8px;\n  display: grid;\n  position: relative;\n}\n\n.mseg-modal-copy {\n  display: none;\n}\n\n.mseg-modal-head {\n  justify-content: end;\n  align-items: start;\n  min-height: 24px;\n  padding: 0;\n  display: flex;\n}\n\n.mseg-modal-close {\n  appearance: none;\n  color: #eef2f5;\n  letter-spacing: 0;\n  text-transform: none;\n  background: none;\n  border: 0;\n  border-radius: 0;\n  justify-content: center;\n  align-items: center;\n  width: 28px;\n  min-width: 28px;\n  height: 24px;\n  min-height: 24px;\n  padding: 0;\n  font-size: 15px;\n  font-weight: 600;\n  line-height: 1;\n  display: inline-flex;\n}\n\n.mseg-modal-stage {\n  min-height: 0;\n  padding-top: 3px;\n}\n\n.mseg-modal-editor-shell {\n  height: 100%;\n  min-height: 0;\n}\n\n.mseg-modal-surface {\n  touch-action: none;\n  width: 100%;\n  height: 100%;\n  min-height: 148px;\n  display: block;\n}\n\n.mseg-modal-footer {\n  grid-template-columns: minmax(0, 1fr) auto auto;\n  align-items: center;\n  gap: 12px;\n  display: grid;\n}\n\n.mseg-rate {\n  gap: 8px;\n  display: grid;\n}\n\n.mseg-modal-footer-actions {\n  align-items: center;\n  gap: 10px;\n  display: flex;\n}\n\n.mseg-loop-button {\n  color: #87d7f5;\n  background: none;\n  border: 0;\n  border-radius: 999px;\n  min-width: 36px;\n  min-height: 36px;\n  padding: 0;\n}\n\n.mseg-loop-button svg {\n  fill: currentColor;\n  width: 20px;\n  height: 20px;\n}\n\n.keyboard-footer {\n  z-index: 1;\n  background: #04070f;\n  gap: 0;\n  padding: 0 12px;\n  display: grid;\n  position: relative;\n}\n\n.keyboard-toolbar {\n  justify-content: center;\n  align-items: center;\n  display: flex;\n}\n\n.octave-controls {\n  grid-template-columns: auto auto auto;\n  align-items: center;\n  gap: 8px;\n  display: inline-grid;\n}\n\n.octave-button {\n  color: #eef2f5;\n  letter-spacing: .08em;\n  text-transform: uppercase;\n  background: #ffffff0a;\n  border: 1px solid #ffffff1a;\n  border-radius: 999px;\n  min-width: 72px;\n  min-height: 34px;\n  font-size: 12px;\n}\n\n.octave-button:disabled {\n  opacity: .32;\n}\n\n.octave-readout {\n  text-align: center;\n  color: #87d7f5;\n  min-width: 88px;\n  font-size: 12px;\n}\n\n.keyboard-host {\n  min-width: 0;\n  min-height: var(--cosimo-keyboard-height);\n  align-items: stretch;\n  display: grid;\n}\n\n.keyboard {\n  width: 100%;\n  height: var(--cosimo-keyboard-height);\n  touch-action: none;\n  background: linear-gradient(#ffffff06, #0000 18%), linear-gradient(#0a0d12ad, #07090deb);\n  border-radius: 14px 14px 0 0;\n  padding: 6px 6px 0;\n  overflow: hidden;\n}\n\n.cosimo-grid-line {\n  stroke: #ffffff14;\n  stroke-width: 1px;\n}\n\n.cosimo-curve-fill {\n  fill: #87d7f514;\n}\n\n.cosimo-curve-fill-progress {\n  fill: #87d7f538;\n}\n\n.cosimo-curve-line {\n  fill: none;\n  stroke: #87d7f5;\n  stroke-width: 3px;\n  stroke-linecap: round;\n  stroke-linejoin: round;\n}\n\n.cosimo-curve-fill-muted {\n  fill: #e1e7f00a;\n}\n\n.cosimo-curve-line-muted {\n  stroke: #e1e7f061;\n}\n\n.cosimo-reference-curve-fill {\n  fill: #e1e7f00a;\n}\n\n.cosimo-reference-curve-line {\n  fill: none;\n  stroke: #e1e7f061;\n  stroke-width: 3px;\n  stroke-linecap: round;\n  stroke-linejoin: round;\n}\n\n.cosimo-mseg-effective-curve-line {\n  fill: none;\n  stroke: #fbbf24;\n  stroke-width: 3.25px;\n  stroke-linecap: round;\n  stroke-linejoin: round;\n  filter: drop-shadow(0 0 8px #fbbf2452);\n}\n\n.cosimo-curve-line-highlight {\n  stroke: #32f0bc;\n}\n\n.cosimo-mseg-playhead {\n  stroke: #f4fbfff5;\n  stroke-width: 2px;\n  stroke-linecap: round;\n}\n\n.cosimo-mseg-point-default {\n  fill: #87d7f5;\n  stroke: #050913;\n  stroke-width: 2px;\n}\n\n.cosimo-mseg-point-selected {\n  fill: #f5d0fe;\n  stroke: #050913;\n  stroke-width: 3px;\n}\n\n.cosimo-mseg-point-highlight {\n  fill: #32f0bc;\n  stroke: #050913;\n  stroke-width: 2px;\n}\n\n.cosimo-mseg-point-muted {\n  fill: #e1e7f0c7;\n  stroke: #050913;\n  stroke-width: 2px;\n  opacity: .62;\n}\n\n@media (max-height: 720px) {\n  .ios-content {\n    gap: 14px;\n  }\n\n  .mseg-preview-shell, .mseg-modal-surface {\n    height: 136px;\n    min-height: 136px;\n  }\n}\n\n@property --tw-translate-x {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0;\n}\n\n@property --tw-translate-y {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0;\n}\n\n@property --tw-translate-z {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0;\n}\n\n@property --tw-rotate-x {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-rotate-y {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-rotate-z {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-skew-x {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-skew-y {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-space-y-reverse {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0;\n}\n\n@property --tw-space-x-reverse {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0;\n}\n\n@property --tw-border-style {\n  syntax: "*";\n  inherits: false;\n  initial-value: solid;\n}\n\n@property --tw-gradient-position {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-gradient-from {\n  syntax: "<color>";\n  inherits: false;\n  initial-value: #0000;\n}\n\n@property --tw-gradient-via {\n  syntax: "<color>";\n  inherits: false;\n  initial-value: #0000;\n}\n\n@property --tw-gradient-to {\n  syntax: "<color>";\n  inherits: false;\n  initial-value: #0000;\n}\n\n@property --tw-gradient-stops {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-gradient-via-stops {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-gradient-from-position {\n  syntax: "<length-percentage>";\n  inherits: false;\n  initial-value: 0%;\n}\n\n@property --tw-gradient-via-position {\n  syntax: "<length-percentage>";\n  inherits: false;\n  initial-value: 50%;\n}\n\n@property --tw-gradient-to-position {\n  syntax: "<length-percentage>";\n  inherits: false;\n  initial-value: 100%;\n}\n\n@property --tw-leading {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-font-weight {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-tracking {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-ordinal {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-slashed-zero {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-numeric-figure {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-numeric-spacing {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-numeric-fraction {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-shadow {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0 0 #0000;\n}\n\n@property --tw-shadow-color {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-shadow-alpha {\n  syntax: "<percentage>";\n  inherits: false;\n  initial-value: 100%;\n}\n\n@property --tw-inset-shadow {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0 0 #0000;\n}\n\n@property --tw-inset-shadow-color {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-inset-shadow-alpha {\n  syntax: "<percentage>";\n  inherits: false;\n  initial-value: 100%;\n}\n\n@property --tw-ring-color {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-ring-shadow {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0 0 #0000;\n}\n\n@property --tw-inset-ring-color {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-inset-ring-shadow {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0 0 #0000;\n}\n\n@property --tw-ring-inset {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-ring-offset-width {\n  syntax: "<length>";\n  inherits: false;\n  initial-value: 0;\n}\n\n@property --tw-ring-offset-color {\n  syntax: "*";\n  inherits: false;\n  initial-value: #fff;\n}\n\n@property --tw-ring-offset-shadow {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0 0 #0000;\n}\n\n@property --tw-outline-style {\n  syntax: "*";\n  inherits: false;\n  initial-value: solid;\n}\n\n@property --tw-blur {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-brightness {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-contrast {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-grayscale {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-hue-rotate {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-invert {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-opacity {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-saturate {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-sepia {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-drop-shadow {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-drop-shadow-color {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-drop-shadow-alpha {\n  syntax: "<percentage>";\n  inherits: false;\n  initial-value: 100%;\n}\n\n@property --tw-drop-shadow-size {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-blur {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-brightness {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-contrast {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-grayscale {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-hue-rotate {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-invert {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-opacity {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-saturate {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-sepia {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-duration {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-ease {\n  syntax: "*";\n  inherits: false\n}\n\n@keyframes spin {\n  to {\n    transform: rotate(360deg);\n  }\n}\n\n@keyframes pulse {\n  50% {\n    opacity: .5;\n  }\n}\n';
+const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com */
+@layer properties {
+  @supports (((-webkit-hyphens: none)) and (not (margin-trim: inline))) or ((-moz-orient: inline) and (not (color: rgb(from red r g b)))) {
+    *, :before, :after, ::backdrop {
+      --tw-translate-x: 0;
+      --tw-translate-y: 0;
+      --tw-translate-z: 0;
+      --tw-rotate-x: initial;
+      --tw-rotate-y: initial;
+      --tw-rotate-z: initial;
+      --tw-skew-x: initial;
+      --tw-skew-y: initial;
+      --tw-space-y-reverse: 0;
+      --tw-space-x-reverse: 0;
+      --tw-border-style: solid;
+      --tw-gradient-position: initial;
+      --tw-gradient-from: #0000;
+      --tw-gradient-via: #0000;
+      --tw-gradient-to: #0000;
+      --tw-gradient-stops: initial;
+      --tw-gradient-via-stops: initial;
+      --tw-gradient-from-position: 0%;
+      --tw-gradient-via-position: 50%;
+      --tw-gradient-to-position: 100%;
+      --tw-leading: initial;
+      --tw-font-weight: initial;
+      --tw-tracking: initial;
+      --tw-ordinal: initial;
+      --tw-slashed-zero: initial;
+      --tw-numeric-figure: initial;
+      --tw-numeric-spacing: initial;
+      --tw-numeric-fraction: initial;
+      --tw-shadow: 0 0 #0000;
+      --tw-shadow-color: initial;
+      --tw-shadow-alpha: 100%;
+      --tw-inset-shadow: 0 0 #0000;
+      --tw-inset-shadow-color: initial;
+      --tw-inset-shadow-alpha: 100%;
+      --tw-ring-color: initial;
+      --tw-ring-shadow: 0 0 #0000;
+      --tw-inset-ring-color: initial;
+      --tw-inset-ring-shadow: 0 0 #0000;
+      --tw-ring-inset: initial;
+      --tw-ring-offset-width: 0px;
+      --tw-ring-offset-color: #fff;
+      --tw-ring-offset-shadow: 0 0 #0000;
+      --tw-outline-style: solid;
+      --tw-blur: initial;
+      --tw-brightness: initial;
+      --tw-contrast: initial;
+      --tw-grayscale: initial;
+      --tw-hue-rotate: initial;
+      --tw-invert: initial;
+      --tw-opacity: initial;
+      --tw-saturate: initial;
+      --tw-sepia: initial;
+      --tw-drop-shadow: initial;
+      --tw-drop-shadow-color: initial;
+      --tw-drop-shadow-alpha: 100%;
+      --tw-drop-shadow-size: initial;
+      --tw-backdrop-blur: initial;
+      --tw-backdrop-brightness: initial;
+      --tw-backdrop-contrast: initial;
+      --tw-backdrop-grayscale: initial;
+      --tw-backdrop-hue-rotate: initial;
+      --tw-backdrop-invert: initial;
+      --tw-backdrop-opacity: initial;
+      --tw-backdrop-saturate: initial;
+      --tw-backdrop-sepia: initial;
+      --tw-duration: initial;
+      --tw-ease: initial;
+      --tw-content: "";
+    }
+  }
+}
+
+@layer theme {
+  :root, :host {
+    --font-sans: ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji",
+      "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+    --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+      "Courier New", monospace;
+    --color-red-50: oklch(97.1% .013 17.38);
+    --color-red-300: oklch(80.8% .114 19.571);
+    --color-red-400: oklch(70.4% .191 22.216);
+    --color-red-600: oklch(57.7% .245 27.325);
+    --color-amber-50: oklch(98.7% .022 95.277);
+    --color-amber-100: oklch(96.2% .059 95.617);
+    --color-amber-200: oklch(92.4% .12 95.746);
+    --color-amber-300: oklch(87.9% .169 91.605);
+    --color-amber-400: oklch(82.8% .189 84.429);
+    --color-emerald-100: oklch(95% .052 163.051);
+    --color-emerald-200: oklch(90.5% .093 164.15);
+    --color-emerald-300: oklch(84.5% .143 164.978);
+    --color-cyan-50: oklch(98.4% .019 200.873);
+    --color-cyan-100: oklch(95.6% .045 203.388);
+    --color-cyan-200: oklch(91.7% .08 205.041);
+    --color-cyan-300: oklch(86.5% .127 207.078);
+    --color-cyan-400: oklch(78.9% .154 211.53);
+    --color-sky-100: oklch(95.1% .026 236.824);
+    --color-sky-300: oklch(82.8% .111 230.318);
+    --color-blue-300: oklch(80.9% .105 251.813);
+    --color-fuchsia-100: oklch(95.2% .037 318.852);
+    --color-fuchsia-200: oklch(90.3% .076 319.62);
+    --color-fuchsia-300: oklch(83.3% .145 321.434);
+    --color-pink-50: oklch(97.1% .014 343.198);
+    --color-pink-100: oklch(94.8% .028 342.258);
+    --color-pink-200: oklch(89.9% .061 343.231);
+    --color-pink-300: oklch(82.3% .12 346.018);
+    --color-rose-200: oklch(89.2% .058 10.001);
+    --color-rose-300: oklch(81% .117 11.638);
+    --color-rose-400: oklch(71.2% .194 13.428);
+    --color-slate-50: oklch(98.4% .003 247.858);
+    --color-slate-100: oklch(96.8% .007 247.896);
+    --color-slate-200: oklch(92.9% .013 255.508);
+    --color-slate-300: oklch(86.9% .022 252.894);
+    --color-slate-400: oklch(70.4% .04 256.788);
+    --color-slate-500: oklch(55.4% .046 257.417);
+    --color-black: #000;
+    --color-white: #fff;
+    --spacing: .25rem;
+    --container-sm: 24rem;
+    --container-lg: 32rem;
+    --container-2xl: 42rem;
+    --text-xs: .75rem;
+    --text-xs--line-height: calc(1 / .75);
+    --text-sm: .875rem;
+    --text-sm--line-height: calc(1.25 / .875);
+    --text-base: 1rem;
+    --text-base--line-height: calc(1.5 / 1);
+    --text-lg: 1.125rem;
+    --text-lg--line-height: calc(1.75 / 1.125);
+    --text-2xl: 1.5rem;
+    --text-2xl--line-height: calc(2 / 1.5);
+    --text-3xl: 1.875rem;
+    --text-3xl--line-height: calc(2.25 / 1.875);
+    --font-weight-normal: 400;
+    --font-weight-medium: 500;
+    --font-weight-semibold: 600;
+    --font-weight-bold: 700;
+    --font-weight-black: 900;
+    --tracking-tight: -.025em;
+    --tracking-normal: 0em;
+    --tracking-wide: .025em;
+    --tracking-widest: .1em;
+    --leading-snug: 1.375;
+    --leading-normal: 1.5;
+    --leading-relaxed: 1.625;
+    --radius-xs: .125rem;
+    --radius-sm: .25rem;
+    --radius-md: .375rem;
+    --radius-lg: .5rem;
+    --radius-xl: .75rem;
+    --radius-2xl: 1rem;
+    --ease-in-out: cubic-bezier(.4, 0, .2, 1);
+    --animate-spin: spin 1s linear infinite;
+    --animate-pulse: pulse 2s cubic-bezier(.4, 0, .6, 1) infinite;
+    --blur-sm: 8px;
+    --blur-md: 12px;
+    --blur-xl: 24px;
+    --aspect-video: 16 / 9;
+    --default-transition-duration: .15s;
+    --default-transition-timing-function: cubic-bezier(.4, 0, .2, 1);
+    --default-font-family: var(--font-sans);
+    --default-mono-font-family: var(--font-mono);
+  }
+}
+
+@layer base {
+  *, :after, :before, ::backdrop {
+    box-sizing: border-box;
+    border: 0 solid;
+    margin: 0;
+    padding: 0;
+  }
+
+  ::file-selector-button {
+    box-sizing: border-box;
+    border: 0 solid;
+    margin: 0;
+    padding: 0;
+  }
+
+  html, :host {
+    -webkit-text-size-adjust: 100%;
+    tab-size: 4;
+    line-height: 1.5;
+    font-family: var(--default-font-family, ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji");
+    font-feature-settings: var(--default-font-feature-settings, normal);
+    font-variation-settings: var(--default-font-variation-settings, normal);
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  hr {
+    height: 0;
+    color: inherit;
+    border-top-width: 1px;
+  }
+
+  abbr:where([title]) {
+    -webkit-text-decoration: underline dotted;
+    text-decoration: underline dotted;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-size: inherit;
+    font-weight: inherit;
+  }
+
+  a {
+    color: inherit;
+    -webkit-text-decoration: inherit;
+    -webkit-text-decoration: inherit;
+    -webkit-text-decoration: inherit;
+    text-decoration: inherit;
+  }
+
+  b, strong {
+    font-weight: bolder;
+  }
+
+  code, kbd, samp, pre {
+    font-family: var(--default-mono-font-family, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace);
+    font-feature-settings: var(--default-mono-font-feature-settings, normal);
+    font-variation-settings: var(--default-mono-font-variation-settings, normal);
+    font-size: 1em;
+  }
+
+  small {
+    font-size: 80%;
+  }
+
+  sub, sup {
+    vertical-align: baseline;
+    font-size: 75%;
+    line-height: 0;
+    position: relative;
+  }
+
+  sub {
+    bottom: -.25em;
+  }
+
+  sup {
+    top: -.5em;
+  }
+
+  table {
+    text-indent: 0;
+    border-color: inherit;
+    border-collapse: collapse;
+  }
+
+  :-moz-focusring {
+    outline: auto;
+  }
+
+  progress {
+    vertical-align: baseline;
+  }
+
+  summary {
+    display: list-item;
+  }
+
+  ol, ul, menu {
+    list-style: none;
+  }
+
+  img, svg, video, canvas, audio, iframe, embed, object {
+    vertical-align: middle;
+    display: block;
+  }
+
+  img, video {
+    max-width: 100%;
+    height: auto;
+  }
+
+  button, input, select, optgroup, textarea {
+    font: inherit;
+    font-feature-settings: inherit;
+    font-variation-settings: inherit;
+    letter-spacing: inherit;
+    color: inherit;
+    opacity: 1;
+    background-color: #0000;
+    border-radius: 0;
+  }
+
+  ::file-selector-button {
+    font: inherit;
+    font-feature-settings: inherit;
+    font-variation-settings: inherit;
+    letter-spacing: inherit;
+    color: inherit;
+    opacity: 1;
+    background-color: #0000;
+    border-radius: 0;
+  }
+
+  :where(select:is([multiple], [size])) optgroup {
+    font-weight: bolder;
+  }
+
+  :where(select:is([multiple], [size])) optgroup option {
+    padding-inline-start: 20px;
+  }
+
+  ::file-selector-button {
+    margin-inline-end: 4px;
+  }
+
+  ::placeholder {
+    opacity: 1;
+  }
+
+  @supports (not ((-webkit-appearance: -apple-pay-button))) or (contain-intrinsic-size: 1px) {
+    ::placeholder {
+      color: currentColor;
+    }
+
+    @supports (color: color-mix(in lab, red, red)) {
+      ::placeholder {
+        color: color-mix(in oklab, currentcolor 50%, transparent);
+      }
+    }
+  }
+
+  textarea {
+    resize: vertical;
+  }
+
+  ::-webkit-search-decoration {
+    -webkit-appearance: none;
+  }
+
+  ::-webkit-date-and-time-value {
+    min-height: 1lh;
+    text-align: inherit;
+  }
+
+  ::-webkit-datetime-edit {
+    display: inline-flex;
+  }
+
+  ::-webkit-datetime-edit-fields-wrapper {
+    padding: 0;
+  }
+
+  ::-webkit-datetime-edit {
+    padding-block: 0;
+  }
+
+  ::-webkit-datetime-edit-year-field {
+    padding-block: 0;
+  }
+
+  ::-webkit-datetime-edit-month-field {
+    padding-block: 0;
+  }
+
+  ::-webkit-datetime-edit-day-field {
+    padding-block: 0;
+  }
+
+  ::-webkit-datetime-edit-hour-field {
+    padding-block: 0;
+  }
+
+  ::-webkit-datetime-edit-minute-field {
+    padding-block: 0;
+  }
+
+  ::-webkit-datetime-edit-second-field {
+    padding-block: 0;
+  }
+
+  ::-webkit-datetime-edit-millisecond-field {
+    padding-block: 0;
+  }
+
+  ::-webkit-datetime-edit-meridiem-field {
+    padding-block: 0;
+  }
+
+  ::-webkit-calendar-picker-indicator {
+    line-height: 1;
+  }
+
+  :-moz-ui-invalid {
+    box-shadow: none;
+  }
+
+  button, input:where([type="button"], [type="reset"], [type="submit"]) {
+    appearance: button;
+  }
+
+  ::file-selector-button {
+    appearance: button;
+  }
+
+  ::-webkit-inner-spin-button {
+    height: auto;
+  }
+
+  ::-webkit-outer-spin-button {
+    height: auto;
+  }
+
+  [hidden]:where(:not([hidden="until-found"])) {
+    display: none !important;
+  }
+}
+
+@layer components;
+
+@layer utilities {
+  .pointer-events-auto {
+    pointer-events: auto;
+  }
+
+  .pointer-events-none {
+    pointer-events: none;
+  }
+
+  .collapse {
+    visibility: collapse;
+  }
+
+  .invisible {
+    visibility: hidden;
+  }
+
+  .visible {
+    visibility: visible;
+  }
+
+  .sr-only {
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border-width: 0;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    position: absolute;
+    overflow: hidden;
+  }
+
+  .absolute {
+    position: absolute;
+  }
+
+  .fixed {
+    position: fixed;
+  }
+
+  .relative {
+    position: relative;
+  }
+
+  .static {
+    position: static;
+  }
+
+  .sticky {
+    position: sticky;
+  }
+
+  .inset-0 {
+    inset: calc(var(--spacing) * 0);
+  }
+
+  .inset-1 {
+    inset: calc(var(--spacing) * 1);
+  }
+
+  .inset-x-0 {
+    inset-inline: calc(var(--spacing) * 0);
+  }
+
+  .inset-x-2 {
+    inset-inline: calc(var(--spacing) * 2);
+  }
+
+  .inset-x-3 {
+    inset-inline: calc(var(--spacing) * 3);
+  }
+
+  .inset-y-0 {
+    inset-block: calc(var(--spacing) * 0);
+  }
+
+  .inset-y-0\\.5 {
+    inset-block: calc(var(--spacing) * .5);
+  }
+
+  .inset-y-1 {
+    inset-block: calc(var(--spacing) * 1);
+  }
+
+  .inset-y-4 {
+    inset-block: calc(var(--spacing) * 4);
+  }
+
+  .start {
+    inset-inline-start: var(--spacing);
+  }
+
+  .-end {
+    inset-inline-end: calc(var(--spacing) * -1);
+  }
+
+  .end {
+    inset-inline-end: var(--spacing);
+  }
+
+  .-top-0 {
+    top: calc(var(--spacing) * 0);
+  }
+
+  .-top-0\\.5 {
+    top: calc(var(--spacing) * -.5);
+  }
+
+  .-top-3 {
+    top: calc(var(--spacing) * -3);
+  }
+
+  .-top-12 {
+    top: calc(var(--spacing) * -12);
+  }
+
+  .top-0 {
+    top: calc(var(--spacing) * 0);
+  }
+
+  .top-0\\.5 {
+    top: calc(var(--spacing) * .5);
+  }
+
+  .top-1 {
+    top: calc(var(--spacing) * 1);
+  }
+
+  .top-1\\/2 {
+    top: 50%;
+  }
+
+  .top-2 {
+    top: calc(var(--spacing) * 2);
+  }
+
+  .top-3 {
+    top: calc(var(--spacing) * 3);
+  }
+
+  .top-4 {
+    top: calc(var(--spacing) * 4);
+  }
+
+  .top-full {
+    top: 100%;
+  }
+
+  .-right-12 {
+    right: calc(var(--spacing) * -12);
+  }
+
+  .right-0 {
+    right: calc(var(--spacing) * 0);
+  }
+
+  .right-1 {
+    right: calc(var(--spacing) * 1);
+  }
+
+  .right-2 {
+    right: calc(var(--spacing) * 2);
+  }
+
+  .right-3 {
+    right: calc(var(--spacing) * 3);
+  }
+
+  .right-4 {
+    right: calc(var(--spacing) * 4);
+  }
+
+  .-bottom-12 {
+    bottom: calc(var(--spacing) * -12);
+  }
+
+  .bottom-0 {
+    bottom: calc(var(--spacing) * 0);
+  }
+
+  .bottom-0\\.5 {
+    bottom: calc(var(--spacing) * .5);
+  }
+
+  .bottom-1 {
+    bottom: calc(var(--spacing) * 1);
+  }
+
+  .bottom-2 {
+    bottom: calc(var(--spacing) * 2);
+  }
+
+  .bottom-3 {
+    bottom: calc(var(--spacing) * 3);
+  }
+
+  .bottom-4 {
+    bottom: calc(var(--spacing) * 4);
+  }
+
+  .bottom-5 {
+    bottom: calc(var(--spacing) * 5);
+  }
+
+  .bottom-\\[48px\\] {
+    bottom: 48px;
+  }
+
+  .-left-12 {
+    left: calc(var(--spacing) * -12);
+  }
+
+  .left-0 {
+    left: calc(var(--spacing) * 0);
+  }
+
+  .left-1 {
+    left: calc(var(--spacing) * 1);
+  }
+
+  .left-1\\/2 {
+    left: 50%;
+  }
+
+  .left-2 {
+    left: calc(var(--spacing) * 2);
+  }
+
+  .left-3 {
+    left: calc(var(--spacing) * 3);
+  }
+
+  .isolate {
+    isolation: isolate;
+  }
+
+  .z-10 {
+    z-index: 10;
+  }
+
+  .z-20 {
+    z-index: 20;
+  }
+
+  .z-40 {
+    z-index: 40;
+  }
+
+  .z-50 {
+    z-index: 50;
+  }
+
+  .z-\\[1\\] {
+    z-index: 1;
+  }
+
+  .z-\\[2\\] {
+    z-index: 2;
+  }
+
+  .z-\\[3\\] {
+    z-index: 3;
+  }
+
+  .z-\\[4\\] {
+    z-index: 4;
+  }
+
+  .order-1 {
+    order: 1;
+  }
+
+  .order-first {
+    order: -9999;
+  }
+
+  .order-last {
+    order: 9999;
+  }
+
+  .col-start-2 {
+    grid-column-start: 2;
+  }
+
+  .row-span-2 {
+    grid-row: span 2 / span 2;
+  }
+
+  .row-start-1 {
+    grid-row-start: 1;
+  }
+
+  .\\!container {
+    width: 100% !important;
+  }
+
+  @media (min-width: 40rem) {
+    .\\!container {
+      max-width: 40rem !important;
+    }
+  }
+
+  @media (min-width: 48rem) {
+    .\\!container {
+      max-width: 48rem !important;
+    }
+  }
+
+  @media (min-width: 64rem) {
+    .\\!container {
+      max-width: 64rem !important;
+    }
+  }
+
+  @media (min-width: 80rem) {
+    .\\!container {
+      max-width: 80rem !important;
+    }
+  }
+
+  @media (min-width: 96rem) {
+    .\\!container {
+      max-width: 96rem !important;
+    }
+  }
+
+  .container {
+    width: 100%;
+  }
+
+  @media (min-width: 40rem) {
+    .container {
+      max-width: 40rem;
+    }
+  }
+
+  @media (min-width: 48rem) {
+    .container {
+      max-width: 48rem;
+    }
+  }
+
+  @media (min-width: 64rem) {
+    .container {
+      max-width: 64rem;
+    }
+  }
+
+  @media (min-width: 80rem) {
+    .container {
+      max-width: 80rem;
+    }
+  }
+
+  @media (min-width: 96rem) {
+    .container {
+      max-width: 96rem;
+    }
+  }
+
+  .m-1 {
+    margin: calc(var(--spacing) * 1);
+  }
+
+  .-mx-1 {
+    margin-inline: calc(var(--spacing) * -1);
+  }
+
+  .mx-0 {
+    margin-inline: calc(var(--spacing) * 0);
+  }
+
+  .mx-0\\.5 {
+    margin-inline: calc(var(--spacing) * .5);
+  }
+
+  .mx-2 {
+    margin-inline: calc(var(--spacing) * 2);
+  }
+
+  .mx-3 {
+    margin-inline: calc(var(--spacing) * 3);
+  }
+
+  .mx-auto {
+    margin-inline: auto;
+  }
+
+  .-my-2 {
+    margin-block: calc(var(--spacing) * -2);
+  }
+
+  .my-0 {
+    margin-block: calc(var(--spacing) * 0);
+  }
+
+  .my-1 {
+    margin-block: calc(var(--spacing) * 1);
+  }
+
+  .-mt-4 {
+    margin-top: calc(var(--spacing) * -4);
+  }
+
+  .mt-0 {
+    margin-top: calc(var(--spacing) * 0);
+  }
+
+  .mt-1 {
+    margin-top: calc(var(--spacing) * 1);
+  }
+
+  .mt-2 {
+    margin-top: calc(var(--spacing) * 2);
+  }
+
+  .mt-4 {
+    margin-top: calc(var(--spacing) * 4);
+  }
+
+  .mt-auto {
+    margin-top: auto;
+  }
+
+  .mb-2 {
+    margin-bottom: calc(var(--spacing) * 2);
+  }
+
+  .mb-3 {
+    margin-bottom: calc(var(--spacing) * 3);
+  }
+
+  .mb-4 {
+    margin-bottom: calc(var(--spacing) * 4);
+  }
+
+  .-ml-4 {
+    margin-left: calc(var(--spacing) * -4);
+  }
+
+  .ml-0 {
+    margin-left: calc(var(--spacing) * 0);
+  }
+
+  .ml-0\\.5 {
+    margin-left: calc(var(--spacing) * .5);
+  }
+
+  .ml-1 {
+    margin-left: calc(var(--spacing) * 1);
+  }
+
+  .ml-4 {
+    margin-left: calc(var(--spacing) * 4);
+  }
+
+  .ml-auto {
+    margin-left: auto;
+  }
+
+  .line-clamp-1 {
+    -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical;
+    display: -webkit-box;
+    overflow: hidden;
+  }
+
+  .line-clamp-2 {
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    display: -webkit-box;
+    overflow: hidden;
+  }
+
+  .block {
+    display: block;
+  }
+
+  .contents {
+    display: contents;
+  }
+
+  .flex {
+    display: flex;
+  }
+
+  .grid {
+    display: grid;
+  }
+
+  .hidden {
+    display: none;
+  }
+
+  .inline {
+    display: inline;
+  }
+
+  .inline-block {
+    display: inline-block;
+  }
+
+  .inline-flex {
+    display: inline-flex;
+  }
+
+  .inline-grid {
+    display: inline-grid;
+  }
+
+  .table {
+    display: table;
+  }
+
+  .table-caption {
+    display: table-caption;
+  }
+
+  .table-cell {
+    display: table-cell;
+  }
+
+  .table-row {
+    display: table-row;
+  }
+
+  .field-sizing-content {
+    field-sizing: content;
+  }
+
+  .aspect-\\[50\\/27\\] {
+    aspect-ratio: 50 / 27;
+  }
+
+  .aspect-square {
+    aspect-ratio: 1;
+  }
+
+  .aspect-video {
+    aspect-ratio: var(--aspect-video);
+  }
+
+  .size-2 {
+    width: calc(var(--spacing) * 2);
+    height: calc(var(--spacing) * 2);
+  }
+
+  .size-3 {
+    width: calc(var(--spacing) * 3);
+    height: calc(var(--spacing) * 3);
+  }
+
+  .size-3\\.5 {
+    width: calc(var(--spacing) * 3.5);
+    height: calc(var(--spacing) * 3.5);
+  }
+
+  .size-4 {
+    width: calc(var(--spacing) * 4);
+    height: calc(var(--spacing) * 4);
+  }
+
+  .size-5 {
+    width: calc(var(--spacing) * 5);
+    height: calc(var(--spacing) * 5);
+  }
+
+  .size-6 {
+    width: calc(var(--spacing) * 6);
+    height: calc(var(--spacing) * 6);
+  }
+
+  .size-7 {
+    width: calc(var(--spacing) * 7);
+    height: calc(var(--spacing) * 7);
+  }
+
+  .size-8 {
+    width: calc(var(--spacing) * 8);
+    height: calc(var(--spacing) * 8);
+  }
+
+  .size-9 {
+    width: calc(var(--spacing) * 9);
+    height: calc(var(--spacing) * 9);
+  }
+
+  .size-10 {
+    width: calc(var(--spacing) * 10);
+    height: calc(var(--spacing) * 10);
+  }
+
+  .size-\\[11px\\] {
+    width: 11px;
+    height: 11px;
+  }
+
+  .size-\\[18px\\] {
+    width: 18px;
+    height: 18px;
+  }
+
+  .size-\\[22px\\] {
+    width: 22px;
+    height: 22px;
+  }
+
+  .size-auto {
+    width: auto;
+    height: auto;
+  }
+
+  .size-full {
+    width: 100%;
+    height: 100%;
+  }
+
+  .h-1 {
+    height: calc(var(--spacing) * 1);
+  }
+
+  .h-1\\.5 {
+    height: calc(var(--spacing) * 1.5);
+  }
+
+  .h-2 {
+    height: calc(var(--spacing) * 2);
+  }
+
+  .h-2\\.5 {
+    height: calc(var(--spacing) * 2.5);
+  }
+
+  .h-3 {
+    height: calc(var(--spacing) * 3);
+  }
+
+  .h-3\\.5 {
+    height: calc(var(--spacing) * 3.5);
+  }
+
+  .h-4 {
+    height: calc(var(--spacing) * 4);
+  }
+
+  .h-5 {
+    height: calc(var(--spacing) * 5);
+  }
+
+  .h-6 {
+    height: calc(var(--spacing) * 6);
+  }
+
+  .h-7 {
+    height: calc(var(--spacing) * 7);
+  }
+
+  .h-8 {
+    height: calc(var(--spacing) * 8);
+  }
+
+  .h-9 {
+    height: calc(var(--spacing) * 9);
+  }
+
+  .h-10 {
+    height: calc(var(--spacing) * 10);
+  }
+
+  .h-11 {
+    height: calc(var(--spacing) * 11);
+  }
+
+  .h-12 {
+    height: calc(var(--spacing) * 12);
+  }
+
+  .h-14 {
+    height: calc(var(--spacing) * 14);
+  }
+
+  .h-24 {
+    height: calc(var(--spacing) * 24);
+  }
+
+  .h-32 {
+    height: calc(var(--spacing) * 32);
+  }
+
+  .h-44 {
+    height: calc(var(--spacing) * 44);
+  }
+
+  .h-\\[7px\\] {
+    height: 7px;
+  }
+
+  .h-\\[12px\\] {
+    height: 12px;
+  }
+
+  .h-\\[18px\\] {
+    height: 18px;
+  }
+
+  .h-\\[24px\\] {
+    height: 24px;
+  }
+
+  .h-\\[38px\\] {
+    height: 38px;
+  }
+
+  .h-\\[80px\\] {
+    height: 80px;
+  }
+
+  .h-\\[118px\\] {
+    height: 118px;
+  }
+
+  .h-\\[180px\\] {
+    height: 180px;
+  }
+
+  .h-\\[190px\\] {
+    height: 190px;
+  }
+
+  .h-\\[320px\\] {
+    height: 320px;
+  }
+
+  .h-auto {
+    height: auto;
+  }
+
+  .h-full {
+    height: 100%;
+  }
+
+  .h-px {
+    height: 1px;
+  }
+
+  .h-svh {
+    height: 100svh;
+  }
+
+  .max-h-40 {
+    max-height: calc(var(--spacing) * 40);
+  }
+
+  .max-h-screen {
+    max-height: 100vh;
+  }
+
+  .min-h-0 {
+    min-height: calc(var(--spacing) * 0);
+  }
+
+  .min-h-4 {
+    min-height: calc(var(--spacing) * 4);
+  }
+
+  .min-h-6 {
+    min-height: calc(var(--spacing) * 6);
+  }
+
+  .min-h-8 {
+    min-height: calc(var(--spacing) * 8);
+  }
+
+  .min-h-9 {
+    min-height: calc(var(--spacing) * 9);
+  }
+
+  .min-h-11 {
+    min-height: calc(var(--spacing) * 11);
+  }
+
+  .min-h-12 {
+    min-height: calc(var(--spacing) * 12);
+  }
+
+  .min-h-16 {
+    min-height: calc(var(--spacing) * 16);
+  }
+
+  .min-h-\\[100dvh\\] {
+    min-height: 100dvh;
+  }
+
+  .min-h-\\[100px\\] {
+    min-height: 100px;
+  }
+
+  .min-h-\\[158px\\] {
+    min-height: 158px;
+  }
+
+  .min-h-\\[198px\\] {
+    min-height: 198px;
+  }
+
+  .min-h-\\[220px\\] {
+    min-height: 220px;
+  }
+
+  .min-h-\\[calc\\(100dvh-2rem\\)\\] {
+    min-height: calc(100dvh - 2rem);
+  }
+
+  .min-h-full {
+    min-height: 100%;
+  }
+
+  .min-h-screen {
+    min-height: 100vh;
+  }
+
+  .min-h-svh {
+    min-height: 100svh;
+  }
+
+  .w-0 {
+    width: calc(var(--spacing) * 0);
+  }
+
+  .w-0\\.5 {
+    width: calc(var(--spacing) * .5);
+  }
+
+  .w-1 {
+    width: calc(var(--spacing) * 1);
+  }
+
+  .w-1\\.5 {
+    width: calc(var(--spacing) * 1.5);
+  }
+
+  .w-2 {
+    width: calc(var(--spacing) * 2);
+  }
+
+  .w-2\\.5 {
+    width: calc(var(--spacing) * 2.5);
+  }
+
+  .w-3 {
+    width: calc(var(--spacing) * 3);
+  }
+
+  .w-3\\.5 {
+    width: calc(var(--spacing) * 3.5);
+  }
+
+  .w-4 {
+    width: calc(var(--spacing) * 4);
+  }
+
+  .w-5 {
+    width: calc(var(--spacing) * 5);
+  }
+
+  .w-6 {
+    width: calc(var(--spacing) * 6);
+  }
+
+  .w-7 {
+    width: calc(var(--spacing) * 7);
+  }
+
+  .w-8 {
+    width: calc(var(--spacing) * 8);
+  }
+
+  .w-9 {
+    width: calc(var(--spacing) * 9);
+  }
+
+  .w-10 {
+    width: calc(var(--spacing) * 10);
+  }
+
+  .w-11 {
+    width: calc(var(--spacing) * 11);
+  }
+
+  .w-12 {
+    width: calc(var(--spacing) * 12);
+  }
+
+  .w-16 {
+    width: calc(var(--spacing) * 16);
+  }
+
+  .w-24 {
+    width: calc(var(--spacing) * 24);
+  }
+
+  .w-64 {
+    width: calc(var(--spacing) * 64);
+  }
+
+  .w-72 {
+    width: calc(var(--spacing) * 72);
+  }
+
+  .w-\\[3px\\] {
+    width: 3px;
+  }
+
+  .w-\\[18px\\] {
+    width: 18px;
+  }
+
+  .w-\\[38px\\] {
+    width: 38px;
+  }
+
+  .w-\\[56px\\] {
+    width: 56px;
+  }
+
+  .w-\\[148px\\] {
+    width: 148px;
+  }
+
+  .w-auto {
+    width: auto;
+  }
+
+  .w-fit {
+    width: fit-content;
+  }
+
+  .w-full {
+    width: 100%;
+  }
+
+  .w-max {
+    width: max-content;
+  }
+
+  .w-px {
+    width: 1px;
+  }
+
+  .max-w-2xl {
+    max-width: var(--container-2xl);
+  }
+
+  .max-w-\\[34ch\\] {
+    max-width: 34ch;
+  }
+
+  .max-w-\\[74px\\] {
+    max-width: 74px;
+  }
+
+  .max-w-\\[140px\\] {
+    max-width: 140px;
+  }
+
+  .max-w-\\[280px\\] {
+    max-width: 280px;
+  }
+
+  .max-w-\\[1080px\\] {
+    max-width: 1080px;
+  }
+
+  .max-w-\\[calc\\(100\\%-1rem\\)\\] {
+    max-width: calc(100% - 1rem);
+  }
+
+  .max-w-full {
+    max-width: 100%;
+  }
+
+  .max-w-max {
+    max-width: max-content;
+  }
+
+  .max-w-sm {
+    max-width: var(--container-sm);
+  }
+
+  .min-w-0 {
+    min-width: calc(var(--spacing) * 0);
+  }
+
+  .min-w-5 {
+    min-width: calc(var(--spacing) * 5);
+  }
+
+  .min-w-8 {
+    min-width: calc(var(--spacing) * 8);
+  }
+
+  .min-w-9 {
+    min-width: calc(var(--spacing) * 9);
+  }
+
+  .min-w-10 {
+    min-width: calc(var(--spacing) * 10);
+  }
+
+  .min-w-12 {
+    min-width: calc(var(--spacing) * 12);
+  }
+
+  .min-w-\\[44px\\] {
+    min-width: 44px;
+  }
+
+  .min-w-\\[112px\\] {
+    min-width: 112px;
+  }
+
+  .min-w-\\[132px\\] {
+    min-width: 132px;
+  }
+
+  .min-w-\\[152px\\] {
+    min-width: 152px;
+  }
+
+  .min-w-\\[180px\\] {
+    min-width: 180px;
+  }
+
+  .min-w-full {
+    min-width: 100%;
+  }
+
+  .flex-1 {
+    flex: 1;
+  }
+
+  .flex-shrink, .shrink {
+    flex-shrink: 1;
+  }
+
+  .shrink-0 {
+    flex-shrink: 0;
+  }
+
+  .flex-grow, .grow {
+    flex-grow: 1;
+  }
+
+  .grow-0 {
+    flex-grow: 0;
+  }
+
+  .basis-full {
+    flex-basis: 100%;
+  }
+
+  .caption-bottom {
+    caption-side: bottom;
+  }
+
+  .border-collapse {
+    border-collapse: collapse;
+  }
+
+  .-translate-x-1 {
+    --tw-translate-x: calc(var(--spacing) * -1);
+    translate: var(--tw-translate-x) var(--tw-translate-y);
+  }
+
+  .-translate-x-1\\/2 {
+    --tw-translate-x: calc(calc(1 / 2 * 100%) * -1);
+    translate: var(--tw-translate-x) var(--tw-translate-y);
+  }
+
+  .-translate-x-px {
+    --tw-translate-x: -1px;
+    translate: var(--tw-translate-x) var(--tw-translate-y);
+  }
+
+  .translate-x-px {
+    --tw-translate-x: 1px;
+    translate: var(--tw-translate-x) var(--tw-translate-y);
+  }
+
+  .-translate-y-1 {
+    --tw-translate-y: calc(var(--spacing) * -1);
+    translate: var(--tw-translate-x) var(--tw-translate-y);
+  }
+
+  .-translate-y-1\\/2 {
+    --tw-translate-y: calc(calc(1 / 2 * 100%) * -1);
+    translate: var(--tw-translate-x) var(--tw-translate-y);
+  }
+
+  .-translate-y-px {
+    --tw-translate-y: -1px;
+    translate: var(--tw-translate-x) var(--tw-translate-y);
+  }
+
+  .translate-y-0 {
+    --tw-translate-y: calc(var(--spacing) * 0);
+    translate: var(--tw-translate-x) var(--tw-translate-y);
+  }
+
+  .translate-y-1 {
+    --tw-translate-y: calc(var(--spacing) * 1);
+    translate: var(--tw-translate-x) var(--tw-translate-y);
+  }
+
+  .translate-y-1\\/2 {
+    --tw-translate-y: calc(1 / 2 * 100%);
+    translate: var(--tw-translate-x) var(--tw-translate-y);
+  }
+
+  .rotate-45 {
+    rotate: 45deg;
+  }
+
+  .rotate-90 {
+    rotate: 90deg;
+  }
+
+  .rotate-180 {
+    rotate: 180deg;
+  }
+
+  .transform {
+    transform: var(--tw-rotate-x, ) var(--tw-rotate-y, ) var(--tw-rotate-z, ) var(--tw-skew-x, ) var(--tw-skew-y, );
+  }
+
+  .animate-pulse {
+    animation: var(--animate-pulse);
+  }
+
+  .animate-spin {
+    animation: var(--animate-spin);
+  }
+
+  .cursor-default {
+    cursor: default;
+  }
+
+  .cursor-ew-resize {
+    cursor: ew-resize;
+  }
+
+  .cursor-grab {
+    cursor: grab;
+  }
+
+  .cursor-move {
+    cursor: move;
+  }
+
+  .cursor-not-allowed {
+    cursor: not-allowed;
+  }
+
+  .cursor-ns-resize {
+    cursor: ns-resize;
+  }
+
+  .cursor-pointer {
+    cursor: pointer;
+  }
+
+  .cursor-text {
+    cursor: text;
+  }
+
+  .touch-none {
+    touch-action: none;
+  }
+
+  .resize {
+    resize: both;
+  }
+
+  .resize-none {
+    resize: none;
+  }
+
+  .scroll-my-1 {
+    scroll-margin-block: calc(var(--spacing) * 1);
+  }
+
+  .scroll-py-1 {
+    scroll-padding-block: calc(var(--spacing) * 1);
+  }
+
+  .list-disc {
+    list-style-type: disc;
+  }
+
+  .list-none {
+    list-style-type: none;
+  }
+
+  .appearance-none {
+    appearance: none;
+  }
+
+  .auto-rows-max {
+    grid-auto-rows: max-content;
+  }
+
+  .auto-rows-min {
+    grid-auto-rows: min-content;
+  }
+
+  .grid-cols-1 {
+    grid-template-columns: repeat(1, minmax(0, 1fr));
+  }
+
+  .grid-cols-2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .grid-cols-3 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .grid-cols-4 {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .grid-cols-5 {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+
+  .grid-cols-\\[56px_minmax\\(0\\,1fr\\)\\] {
+    grid-template-columns: 56px minmax(0, 1fr);
+  }
+
+  .grid-cols-\\[minmax\\(0\\,1fr\\)_88px\\] {
+    grid-template-columns: minmax(0, 1fr) 88px;
+  }
+
+  .grid-cols-\\[minmax\\(0\\,1fr\\)_92px\\] {
+    grid-template-columns: minmax(0, 1fr) 92px;
+  }
+
+  .grid-cols-\\[minmax\\(0\\,1fr\\)_92px_auto\\] {
+    grid-template-columns: minmax(0, 1fr) 92px auto;
+  }
+
+  .grid-cols-\\[minmax\\(0\\,1fr\\)_auto\\] {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .grid-rows-\\[auto_minmax\\(0\\,1fr\\)_auto\\] {
+    grid-template-rows: auto minmax(0, 1fr) auto;
+  }
+
+  .flex-col {
+    flex-direction: column;
+  }
+
+  .flex-col-reverse {
+    flex-direction: column-reverse;
+  }
+
+  .flex-row {
+    flex-direction: row;
+  }
+
+  .flex-wrap {
+    flex-wrap: wrap;
+  }
+
+  .place-items-center {
+    place-items: center;
+  }
+
+  .content-start {
+    align-content: flex-start;
+  }
+
+  .items-baseline {
+    align-items: baseline;
+  }
+
+  .items-center {
+    align-items: center;
+  }
+
+  .items-end {
+    align-items: flex-end;
+  }
+
+  .items-start {
+    align-items: flex-start;
+  }
+
+  .items-stretch {
+    align-items: stretch;
+  }
+
+  .justify-between {
+    justify-content: space-between;
+  }
+
+  .justify-center {
+    justify-content: center;
+  }
+
+  .justify-end {
+    justify-content: flex-end;
+  }
+
+  .justify-start {
+    justify-content: flex-start;
+  }
+
+  .justify-items-start {
+    justify-items: start;
+  }
+
+  .gap-0 {
+    gap: calc(var(--spacing) * 0);
+  }
+
+  .gap-0\\.5 {
+    gap: calc(var(--spacing) * .5);
+  }
+
+  .gap-1 {
+    gap: calc(var(--spacing) * 1);
+  }
+
+  .gap-1\\.5 {
+    gap: calc(var(--spacing) * 1.5);
+  }
+
+  .gap-2 {
+    gap: calc(var(--spacing) * 2);
+  }
+
+  .gap-3 {
+    gap: calc(var(--spacing) * 3);
+  }
+
+  .gap-4 {
+    gap: calc(var(--spacing) * 4);
+  }
+
+  .gap-5 {
+    gap: calc(var(--spacing) * 5);
+  }
+
+  .gap-6 {
+    gap: calc(var(--spacing) * 6);
+  }
+
+  .gap-7 {
+    gap: calc(var(--spacing) * 7);
+  }
+
+  .gap-\\[3px\\] {
+    gap: 3px;
+  }
+
+  :where(.space-y-1 > :not(:last-child)) {
+    --tw-space-y-reverse: 0;
+    margin-block-start: calc(calc(var(--spacing) * 1) * var(--tw-space-y-reverse));
+    margin-block-end: calc(calc(var(--spacing) * 1) * calc(1 - var(--tw-space-y-reverse)));
+  }
+
+  :where(.space-y-1\\.5 > :not(:last-child)) {
+    --tw-space-y-reverse: 0;
+    margin-block-start: calc(calc(var(--spacing) * 1.5) * var(--tw-space-y-reverse));
+    margin-block-end: calc(calc(var(--spacing) * 1.5) * calc(1 - var(--tw-space-y-reverse)));
+  }
+
+  :where(.space-y-3 > :not(:last-child)) {
+    --tw-space-y-reverse: 0;
+    margin-block-start: calc(calc(var(--spacing) * 3) * var(--tw-space-y-reverse));
+    margin-block-end: calc(calc(var(--spacing) * 3) * calc(1 - var(--tw-space-y-reverse)));
+  }
+
+  :where(.space-x-4 > :not(:last-child)) {
+    --tw-space-x-reverse: 0;
+    margin-inline-start: calc(calc(var(--spacing) * 4) * var(--tw-space-x-reverse));
+    margin-inline-end: calc(calc(var(--spacing) * 4) * calc(1 - var(--tw-space-x-reverse)));
+  }
+
+  .gap-y-0 {
+    row-gap: calc(var(--spacing) * 0);
+  }
+
+  .self-center {
+    align-self: center;
+  }
+
+  .self-end {
+    align-self: flex-end;
+  }
+
+  .self-start {
+    align-self: flex-start;
+  }
+
+  .self-stretch {
+    align-self: stretch;
+  }
+
+  .justify-self-end {
+    justify-self: flex-end;
+  }
+
+  .truncate {
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    overflow: hidden;
+  }
+
+  .overflow-auto {
+    overflow: auto;
+  }
+
+  .overflow-hidden {
+    overflow: hidden;
+  }
+
+  .overflow-visible {
+    overflow: visible;
+  }
+
+  .overflow-x-auto {
+    overflow-x: auto;
+  }
+
+  .overflow-x-hidden {
+    overflow-x: hidden;
+  }
+
+  .overflow-y-auto {
+    overflow-y: auto;
+  }
+
+  .overflow-y-hidden {
+    overflow-y: hidden;
+  }
+
+  .rounded {
+    border-radius: .25rem;
+  }
+
+  .rounded-2xl {
+    border-radius: var(--radius-2xl);
+  }
+
+  .rounded-\\[2px\\] {
+    border-radius: 2px;
+  }
+
+  .rounded-\\[3px\\] {
+    border-radius: 3px;
+  }
+
+  .rounded-\\[4px\\] {
+    border-radius: 4px;
+  }
+
+  .rounded-\\[5px\\] {
+    border-radius: 5px;
+  }
+
+  .rounded-\\[6px\\] {
+    border-radius: 6px;
+  }
+
+  .rounded-\\[7px\\] {
+    border-radius: 7px;
+  }
+
+  .rounded-\\[8px\\] {
+    border-radius: 8px;
+  }
+
+  .rounded-\\[10px\\] {
+    border-radius: 10px;
+  }
+
+  .rounded-\\[12px\\] {
+    border-radius: 12px;
+  }
+
+  .rounded-\\[14px\\] {
+    border-radius: 14px;
+  }
+
+  .rounded-\\[16px\\] {
+    border-radius: 16px;
+  }
+
+  .rounded-\\[18px\\] {
+    border-radius: 18px;
+  }
+
+  .rounded-\\[20px\\] {
+    border-radius: 20px;
+  }
+
+  .rounded-\\[22px\\] {
+    border-radius: 22px;
+  }
+
+  .rounded-\\[24px\\] {
+    border-radius: 24px;
+  }
+
+  .rounded-\\[28px\\] {
+    border-radius: 28px;
+  }
+
+  .rounded-\\[30px\\] {
+    border-radius: 30px;
+  }
+
+  .rounded-full {
+    border-radius: 3.40282e38px;
+  }
+
+  .rounded-lg {
+    border-radius: var(--radius-lg);
+  }
+
+  .rounded-md {
+    border-radius: var(--radius-md);
+  }
+
+  .rounded-none {
+    border-radius: 0;
+  }
+
+  .rounded-sm {
+    border-radius: var(--radius-sm);
+  }
+
+  .rounded-xl {
+    border-radius: var(--radius-xl);
+  }
+
+  .rounded-xs {
+    border-radius: var(--radius-xs);
+  }
+
+  .rounded-l {
+    border-top-left-radius: .25rem;
+    border-bottom-left-radius: .25rem;
+  }
+
+  .rounded-l-md {
+    border-top-left-radius: var(--radius-md);
+    border-bottom-left-radius: var(--radius-md);
+  }
+
+  .rounded-tl-sm {
+    border-top-left-radius: var(--radius-sm);
+  }
+
+  .rounded-r {
+    border-top-right-radius: .25rem;
+    border-bottom-right-radius: .25rem;
+  }
+
+  .rounded-r-md {
+    border-top-right-radius: var(--radius-md);
+    border-bottom-right-radius: var(--radius-md);
+  }
+
+  .border {
+    border-style: var(--tw-border-style);
+    border-width: 1px;
+  }
+
+  .border-0 {
+    border-style: var(--tw-border-style);
+    border-width: 0;
+  }
+
+  .border-2 {
+    border-style: var(--tw-border-style);
+    border-width: 2px;
+  }
+
+  .border-y {
+    border-block-style: var(--tw-border-style);
+    border-block-width: 1px;
+  }
+
+  .border-t {
+    border-top-style: var(--tw-border-style);
+    border-top-width: 1px;
+  }
+
+  .border-r {
+    border-right-style: var(--tw-border-style);
+    border-right-width: 1px;
+  }
+
+  .border-b {
+    border-bottom-style: var(--tw-border-style);
+    border-bottom-width: 1px;
+  }
+
+  .border-l {
+    border-left-style: var(--tw-border-style);
+    border-left-width: 1px;
+  }
+
+  .border-dashed {
+    --tw-border-style: dashed;
+    border-style: dashed;
+  }
+
+  .border-\\[\\#020611\\] {
+    border-color: #020611;
+  }
+
+  .border-\\[rgba\\(3\\,5\\,12\\,0\\.7\\)\\] {
+    border-color: #03050cb3;
+  }
+
+  .border-amber-100 {
+    border-color: var(--color-amber-100);
+  }
+
+  .border-amber-100\\/70 {
+    border-color: #fef3c6b3;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .border-amber-100\\/70 {
+      border-color: color-mix(in oklab, var(--color-amber-100) 70%, transparent);
+    }
+  }
+
+  .border-amber-200 {
+    border-color: var(--color-amber-200);
+  }
+
+  .border-amber-200\\/18 {
+    border-color: #fee6852e;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .border-amber-200\\/18 {
+      border-color: color-mix(in oklab, var(--color-amber-200) 18%, transparent);
+    }
+  }
+
+  .border-amber-200\\/35 {
+    border-color: #fee68559;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .border-amber-200\\/35 {
+      border-color: color-mix(in oklab, var(--color-amber-200) 35%, transparent);
+    }
+  }
+
+  .border-amber-200\\/40 {
+    border-color: #fee68566;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .border-amber-200\\/40 {
+      border-color: color-mix(in oklab, var(--color-amber-200) 40%, transparent);
+    }
+  }
+
+  .border-amber-200\\/55 {
+    border-color: #fee6858c;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .border-amber-200\\/55 {
+      border-color: color-mix(in oklab, var(--color-amber-200) 55%, transparent);
+    }
+  }
+
+  .border-amber-300 {
+    border-color: var(--color-amber-300);
+  }
+
+  .border-amber-300\\/65 {
+    border-color: #ffd236a6;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .border-amber-300\\/65 {
+      border-color: color-mix(in oklab, var(--color-amber-300) 65%, transparent);
+    }
+  }
+
+  .border-cyan-100 {
+    border-color: var(--color-cyan-100);
+  }
+
+  .border-cyan-200 {
+    border-color: var(--color-cyan-200);
+  }
+
+  .border-cyan-200\\/18 {
+    border-color: #a2f4fd2e;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .border-cyan-200\\/18 {
+      border-color: color-mix(in oklab, var(--color-cyan-200) 18%, transparent);
+    }
+  }
+
+  .border-cyan-200\\/28 {
+    border-color: #a2f4fd47;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .border-cyan-200\\/28 {
+      border-color: color-mix(in oklab, var(--color-cyan-200) 28%, transparent);
+    }
+  }
+
+  .border-cyan-300 {
+    border-color: var(--color-cyan-300);
+  }
+
+  .border-cyan-300\\/20 {
+    border-color: #53eafd33;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .border-cyan-300\\/20 {
+      border-color: color-mix(in oklab, var(--color-cyan-300) 20%, transparent);
+    }
+  }
+
+  .border-cyan-300\\/25 {
+    border-color: #53eafd40;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .border-cyan-300\\/25 {
+      border-color: color-mix(in oklab, var(--color-cyan-300) 25%, transparent);
+    }
+  }
+
+  .border-cyan-300\\/35 {
+    border-color: #53eafd59;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .border-cyan-300\\/35 {
+      border-color: color-mix(in oklab, var(--color-cyan-300) 35%, transparent);
+    }
+  }
+
+  .border-emerald-100 {
+    border-color: var(--color-emerald-100);
+  }
+
+  .border-emerald-200 {
+    border-color: var(--color-emerald-200);
+  }
+
+  .border-emerald-300 {
+    border-color: var(--color-emerald-300);
+  }
+
+  .border-emerald-300\\/25 {
+    border-color: #5ee9b540;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .border-emerald-300\\/25 {
+      border-color: color-mix(in oklab, var(--color-emerald-300) 25%, transparent);
+    }
+  }
+
+  .border-fuchsia-300 {
+    border-color: var(--color-fuchsia-300);
+  }
+
+  .border-fuchsia-300\\/15 {
+    border-color: #f2a9ff26;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .border-fuchsia-300\\/15 {
+      border-color: color-mix(in oklab, var(--color-fuchsia-300) 15%, transparent);
+    }
+  }
+
+  .border-pink-200 {
+    border-color: var(--color-pink-200);
+  }
+
+  .border-pink-300 {
+    border-color: var(--color-pink-300);
+  }
+
+  .border-pink-300\\/15 {
+    border-color: #fda5d526;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .border-pink-300\\/15 {
+      border-color: color-mix(in oklab, var(--color-pink-300) 15%, transparent);
+    }
+  }
+
+  .border-pink-300\\/22 {
+    border-color: #fda5d538;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .border-pink-300\\/22 {
+      border-color: color-mix(in oklab, var(--color-pink-300) 22%, transparent);
+    }
+  }
+
+  .border-pink-300\\/24 {
+    border-color: #fda5d53d;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .border-pink-300\\/24 {
+      border-color: color-mix(in oklab, var(--color-pink-300) 24%, transparent);
+    }
+  }
+
+  .border-rose-300 {
+    border-color: var(--color-rose-300);
+  }
+
+  .border-sky-300 {
+    border-color: var(--color-sky-300);
+  }
+
+  .border-transparent {
+    border-color: #0000;
+  }
+
+  .border-white {
+    border-color: var(--color-white);
+  }
+
+  .border-white\\/6 {
+    border-color: #ffffff0f;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .border-white\\/6 {
+      border-color: color-mix(in oklab, var(--color-white) 6%, transparent);
+    }
+  }
+
+  .border-white\\/8 {
+    border-color: #ffffff14;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .border-white\\/8 {
+      border-color: color-mix(in oklab, var(--color-white) 8%, transparent);
+    }
+  }
+
+  .border-white\\/10 {
+    border-color: #ffffff1a;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .border-white\\/10 {
+      border-color: color-mix(in oklab, var(--color-white) 10%, transparent);
+    }
+  }
+
+  .border-white\\/\\[0\\.04\\] {
+    border-color: #ffffff0a;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .border-white\\/\\[0\\.04\\] {
+      border-color: color-mix(in oklab, var(--color-white) 4%, transparent);
+    }
+  }
+
+  .border-white\\/\\[0\\.05\\] {
+    border-color: #ffffff0d;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .border-white\\/\\[0\\.05\\] {
+      border-color: color-mix(in oklab, var(--color-white) 5%, transparent);
+    }
+  }
+
+  .border-white\\/\\[0\\.06\\] {
+    border-color: #ffffff0f;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .border-white\\/\\[0\\.06\\] {
+      border-color: color-mix(in oklab, var(--color-white) 6%, transparent);
+    }
+  }
+
+  .border-white\\/\\[0\\.07\\] {
+    border-color: #ffffff12;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .border-white\\/\\[0\\.07\\] {
+      border-color: color-mix(in oklab, var(--color-white) 7.0%, transparent);
+    }
+  }
+
+  .border-white\\/\\[0\\.08\\] {
+    border-color: #ffffff14;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .border-white\\/\\[0\\.08\\] {
+      border-color: color-mix(in oklab, var(--color-white) 8%, transparent);
+    }
+  }
+
+  .border-white\\/\\[0\\.10\\] {
+    border-color: #ffffff1a;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .border-white\\/\\[0\\.10\\] {
+      border-color: color-mix(in oklab, var(--color-white) 10%, transparent);
+    }
+  }
+
+  .border-t-transparent {
+    border-top-color: #0000;
+  }
+
+  .border-l-transparent {
+    border-left-color: #0000;
+  }
+
+  .bg-\\[\\#070a13\\]\\/96 {
+    background-color: oklab(14.6236% -.000604108 -.0204007 / .96);
+  }
+
+  .bg-\\[\\#070b16\\] {
+    background-color: #070b16;
+  }
+
+  .bg-\\[\\#080b15\\]\\/97 {
+    background-color: oklab(15.1826% .000117987 -.022216 / .97);
+  }
+
+  .bg-\\[\\#03050b\\]\\/92 {
+    background-color: oklab(11.5304% -.00186769 -.0172834 / .92);
+  }
+
+  .bg-\\[\\#04060c\\] {
+    background-color: #04060c;
+  }
+
+  .bg-\\[\\#09101d\\]\\/95 {
+    background-color: oklab(17.3432% -.0040513 -.029082 / .95);
+  }
+
+  .bg-\\[\\#030711\\]\\/85 {
+    background-color: oklab(12.8817% -.00430492 -.0249884 / .85);
+  }
+
+  .bg-\\[\\#050712\\]\\/55 {
+    background-color: oklab(13.2687% .00102779 -.0255741 / .55);
+  }
+
+  .bg-\\[rgba\\(3\\,5\\,12\\,0\\.6\\)\\] {
+    background-color: #03050c99;
+  }
+
+  .bg-\\[rgba\\(3\\,7\\,15\\,0\\.72\\)\\] {
+    background-color: #03070fb8;
+  }
+
+  .bg-amber-100 {
+    background-color: var(--color-amber-100);
+  }
+
+  .bg-amber-200 {
+    background-color: var(--color-amber-200);
+  }
+
+  .bg-amber-200\\/90 {
+    background-color: #fee685e6;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .bg-amber-200\\/90 {
+      background-color: color-mix(in oklab, var(--color-amber-200) 90%, transparent);
+    }
+  }
+
+  .bg-amber-300 {
+    background-color: var(--color-amber-300);
+  }
+
+  .bg-amber-300\\/12 {
+    background-color: #ffd2361f;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .bg-amber-300\\/12 {
+      background-color: color-mix(in oklab, var(--color-amber-300) 12%, transparent);
+    }
+  }
+
+  .bg-amber-300\\/14 {
+    background-color: #ffd23624;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .bg-amber-300\\/14 {
+      background-color: color-mix(in oklab, var(--color-amber-300) 14%, transparent);
+    }
+  }
+
+  .bg-amber-300\\/16 {
+    background-color: #ffd23629;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .bg-amber-300\\/16 {
+      background-color: color-mix(in oklab, var(--color-amber-300) 16%, transparent);
+    }
+  }
+
+  .bg-amber-300\\/\\[0\\.06\\] {
+    background-color: #ffd2360f;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .bg-amber-300\\/\\[0\\.06\\] {
+      background-color: color-mix(in oklab, var(--color-amber-300) 6%, transparent);
+    }
+  }
+
+  .bg-amber-300\\/\\[0\\.085\\] {
+    background-color: #ffd23616;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .bg-amber-300\\/\\[0\\.085\\] {
+      background-color: color-mix(in oklab, var(--color-amber-300) 8.5%, transparent);
+    }
+  }
+
+  .bg-black {
+    background-color: var(--color-black);
+  }
+
+  .bg-black\\/0 {
+    background-color: #0000;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .bg-black\\/0 {
+      background-color: color-mix(in oklab, var(--color-black) 0%, transparent);
+    }
+  }
+
+  .bg-black\\/18 {
+    background-color: #0000002e;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .bg-black\\/18 {
+      background-color: color-mix(in oklab, var(--color-black) 18%, transparent);
+    }
+  }
+
+  .bg-black\\/20 {
+    background-color: #0003;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .bg-black\\/20 {
+      background-color: color-mix(in oklab, var(--color-black) 20%, transparent);
+    }
+  }
+
+  .bg-black\\/25 {
+    background-color: #00000040;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .bg-black\\/25 {
+      background-color: color-mix(in oklab, var(--color-black) 25%, transparent);
+    }
+  }
+
+  .bg-black\\/30 {
+    background-color: #0000004d;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .bg-black\\/30 {
+      background-color: color-mix(in oklab, var(--color-black) 30%, transparent);
+    }
+  }
+
+  .bg-black\\/35 {
+    background-color: #00000059;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .bg-black\\/35 {
+      background-color: color-mix(in oklab, var(--color-black) 35%, transparent);
+    }
+  }
+
+  .bg-black\\/40 {
+    background-color: #0006;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .bg-black\\/40 {
+      background-color: color-mix(in oklab, var(--color-black) 40%, transparent);
+    }
+  }
+
+  .bg-black\\/42 {
+    background-color: #0000006b;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .bg-black\\/42 {
+      background-color: color-mix(in oklab, var(--color-black) 42%, transparent);
+    }
+  }
+
+  .bg-black\\/45 {
+    background-color: #00000073;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .bg-black\\/45 {
+      background-color: color-mix(in oklab, var(--color-black) 45%, transparent);
+    }
+  }
+
+  .bg-black\\/48 {
+    background-color: #0000007a;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .bg-black\\/48 {
+      background-color: color-mix(in oklab, var(--color-black) 48%, transparent);
+    }
+  }
+
+  .bg-black\\/50 {
+    background-color: #00000080;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .bg-black\\/50 {
+      background-color: color-mix(in oklab, var(--color-black) 50%, transparent);
+    }
+  }
+
+  .bg-cyan-100 {
+    background-color: var(--color-cyan-100);
+  }
+
+  .bg-cyan-200 {
+    background-color: var(--color-cyan-200);
+  }
+
+  .bg-cyan-200\\/85 {
+    background-color: #a2f4fdd9;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .bg-cyan-200\\/85 {
+      background-color: color-mix(in oklab, var(--color-cyan-200) 85%, transparent);
+    }
+  }
+
+  .bg-cyan-300 {
+    background-color: var(--color-cyan-300);
+  }
+
+  .bg-cyan-300\\/8 {
+    background-color: #53eafd14;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .bg-cyan-300\\/8 {
+      background-color: color-mix(in oklab, var(--color-cyan-300) 8%, transparent);
+    }
+  }
+
+  .bg-cyan-300\\/10 {
+    background-color: #53eafd1a;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .bg-cyan-300\\/10 {
+      background-color: color-mix(in oklab, var(--color-cyan-300) 10%, transparent);
+    }
+  }
+
+  .bg-cyan-300\\/15 {
+    background-color: #53eafd26;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .bg-cyan-300\\/15 {
+      background-color: color-mix(in oklab, var(--color-cyan-300) 15%, transparent);
+    }
+  }
+
+  .bg-cyan-300\\/18 {
+    background-color: #53eafd2e;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .bg-cyan-300\\/18 {
+      background-color: color-mix(in oklab, var(--color-cyan-300) 18%, transparent);
+    }
+  }
+
+  .bg-cyan-300\\/\\[0\\.08\\] {
+    background-color: #53eafd14;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .bg-cyan-300\\/\\[0\\.08\\] {
+      background-color: color-mix(in oklab, var(--color-cyan-300) 8%, transparent);
+    }
+  }
+
+  .bg-cyan-400 {
+    background-color: var(--color-cyan-400);
+  }
+
+  .bg-cyan-400\\/10 {
+    background-color: #00d2ef1a;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .bg-cyan-400\\/10 {
+      background-color: color-mix(in oklab, var(--color-cyan-400) 10%, transparent);
+    }
+  }
+
+  .bg-cyan-400\\/60 {
+    background-color: #00d2ef99;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .bg-cyan-400\\/60 {
+      background-color: color-mix(in oklab, var(--color-cyan-400) 60%, transparent);
+    }
+  }
+
+  .bg-cyan-400\\/\\[0\\.08\\] {
+    background-color: #00d2ef14;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .bg-cyan-400\\/\\[0\\.08\\] {
+      background-color: color-mix(in oklab, var(--color-cyan-400) 8%, transparent);
+    }
+  }
+
+  .bg-emerald-300 {
+    background-color: var(--color-emerald-300);
+  }
+
+  .bg-emerald-300\\/12 {
+    background-color: #5ee9b51f;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .bg-emerald-300\\/12 {
+      background-color: color-mix(in oklab, var(--color-emerald-300) 12%, transparent);
+    }
+  }
+
+  .bg-fuchsia-300 {
+    background-color: var(--color-fuchsia-300);
+  }
+
+  .bg-fuchsia-300\\/8 {
+    background-color: #f2a9ff14;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .bg-fuchsia-300\\/8 {
+      background-color: color-mix(in oklab, var(--color-fuchsia-300) 8%, transparent);
+    }
+  }
+
+  .bg-pink-200 {
+    background-color: var(--color-pink-200);
+  }
+
+  .bg-pink-300 {
+    background-color: var(--color-pink-300);
+  }
+
+  .bg-pink-300\\/10 {
+    background-color: #fda5d51a;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .bg-pink-300\\/10 {
+      background-color: color-mix(in oklab, var(--color-pink-300) 10%, transparent);
+    }
+  }
+
+  .bg-pink-300\\/95 {
+    background-color: #fda5d5f2;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .bg-pink-300\\/95 {
+      background-color: color-mix(in oklab, var(--color-pink-300) 95%, transparent);
+    }
+  }
+
+  .bg-pink-300\\/\\[0\\.08\\] {
+    background-color: #fda5d514;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .bg-pink-300\\/\\[0\\.08\\] {
+      background-color: color-mix(in oklab, var(--color-pink-300) 8%, transparent);
+    }
+  }
+
+  .bg-rose-400 {
+    background-color: var(--color-rose-400);
+  }
+
+  .bg-rose-400\\/\\[0\\.035\\] {
+    background-color: #ff667f09;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .bg-rose-400\\/\\[0\\.035\\] {
+      background-color: color-mix(in oklab, var(--color-rose-400) 3.5%, transparent);
+    }
+  }
+
+  .bg-sky-300 {
+    background-color: var(--color-sky-300);
+  }
+
+  .bg-slate-400 {
+    background-color: var(--color-slate-400);
+  }
+
+  .bg-slate-400\\/28 {
+    background-color: #90a1b947;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .bg-slate-400\\/28 {
+      background-color: color-mix(in oklab, var(--color-slate-400) 28%, transparent);
+    }
+  }
+
+  .bg-transparent {
+    background-color: #0000;
+  }
+
+  .bg-white {
+    background-color: var(--color-white);
+  }
+
+  .bg-white\\/\\[0\\.01\\] {
+    background-color: #ffffff03;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .bg-white\\/\\[0\\.01\\] {
+      background-color: color-mix(in oklab, var(--color-white) 1%, transparent);
+    }
+  }
+
+  .bg-white\\/\\[0\\.02\\] {
+    background-color: #ffffff05;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .bg-white\\/\\[0\\.02\\] {
+      background-color: color-mix(in oklab, var(--color-white) 2%, transparent);
+    }
+  }
+
+  .bg-white\\/\\[0\\.03\\] {
+    background-color: #ffffff08;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .bg-white\\/\\[0\\.03\\] {
+      background-color: color-mix(in oklab, var(--color-white) 3%, transparent);
+    }
+  }
+
+  .bg-white\\/\\[0\\.04\\] {
+    background-color: #ffffff0a;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .bg-white\\/\\[0\\.04\\] {
+      background-color: color-mix(in oklab, var(--color-white) 4%, transparent);
+    }
+  }
+
+  .bg-white\\/\\[0\\.05\\] {
+    background-color: #ffffff0d;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .bg-white\\/\\[0\\.05\\] {
+      background-color: color-mix(in oklab, var(--color-white) 5%, transparent);
+    }
+  }
+
+  .bg-white\\/\\[0\\.06\\] {
+    background-color: #ffffff0f;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .bg-white\\/\\[0\\.06\\] {
+      background-color: color-mix(in oklab, var(--color-white) 6%, transparent);
+    }
+  }
+
+  .bg-white\\/\\[0\\.08\\] {
+    background-color: #ffffff14;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .bg-white\\/\\[0\\.08\\] {
+      background-color: color-mix(in oklab, var(--color-white) 8%, transparent);
+    }
+  }
+
+  .bg-white\\/\\[0\\.10\\] {
+    background-color: #ffffff1a;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .bg-white\\/\\[0\\.10\\] {
+      background-color: color-mix(in oklab, var(--color-white) 10%, transparent);
+    }
+  }
+
+  .bg-white\\/\\[0\\.012\\] {
+    background-color: #ffffff03;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .bg-white\\/\\[0\\.012\\] {
+      background-color: color-mix(in oklab, var(--color-white) 1.2%, transparent);
+    }
+  }
+
+  .bg-white\\/\\[0\\.12\\] {
+    background-color: #ffffff1f;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .bg-white\\/\\[0\\.12\\] {
+      background-color: color-mix(in oklab, var(--color-white) 12%, transparent);
+    }
+  }
+
+  .bg-white\\/\\[0\\.018\\] {
+    background-color: #ffffff05;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .bg-white\\/\\[0\\.018\\] {
+      background-color: color-mix(in oklab, var(--color-white) 1.8%, transparent);
+    }
+  }
+
+  .bg-white\\/\\[0\\.022\\] {
+    background-color: #ffffff06;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .bg-white\\/\\[0\\.022\\] {
+      background-color: color-mix(in oklab, var(--color-white) 2.2%, transparent);
+    }
+  }
+
+  .bg-white\\/\\[0\\.025\\] {
+    background-color: #ffffff06;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .bg-white\\/\\[0\\.025\\] {
+      background-color: color-mix(in oklab, var(--color-white) 2.5%, transparent);
+    }
+  }
+
+  .bg-white\\/\\[0\\.035\\] {
+    background-color: #ffffff09;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .bg-white\\/\\[0\\.035\\] {
+      background-color: color-mix(in oklab, var(--color-white) 3.5%, transparent);
+    }
+  }
+
+  .bg-gradient-to-b {
+    --tw-gradient-position: to bottom in oklab;
+    background-image: linear-gradient(var(--tw-gradient-stops));
+  }
+
+  .bg-gradient-to-r {
+    --tw-gradient-position: to right in oklab;
+    background-image: linear-gradient(var(--tw-gradient-stops));
+  }
+
+  .bg-gradient-to-t {
+    --tw-gradient-position: to top in oklab;
+    background-image: linear-gradient(var(--tw-gradient-stops));
+  }
+
+  .bg-\\[linear-gradient\\(\\.\\.\\.\\)\\] {
+    background-image: linear-gradient(...);
+  }
+
+  .bg-\\[linear-gradient\\(90deg\\,rgba\\(135\\,215\\,245\\,0\\.58\\)\\,rgba\\(251\\,191\\,36\\,0\\.78\\)\\)\\] {
+    background-image: linear-gradient(90deg, #87d7f594, #fbbf24c7);
+  }
+
+  .bg-\\[linear-gradient\\(135deg\\,rgba\\(8\\,16\\,30\\,0\\.96\\)\\,rgba\\(4\\,6\\,14\\,1\\)\\)\\] {
+    background-image: linear-gradient(135deg, #08101ef5, #04060e);
+  }
+
+  .bg-\\[linear-gradient\\(180deg\\,\\#f8d88a\\,\\#fbbf24\\)\\] {
+    background-image: linear-gradient(#f8d88a, #fbbf24);
+  }
+
+  .bg-\\[linear-gradient\\(180deg\\,rgba\\(2\\,6\\,18\\,0\\.95\\)\\,rgba\\(1\\,3\\,9\\,1\\)\\)\\] {
+    background-image: linear-gradient(#020612f2, #010309);
+  }
+
+  .bg-\\[linear-gradient\\(180deg\\,rgba\\(9\\,13\\,24\\,0\\.98\\)\\,rgba\\(3\\,5\\,12\\,0\\.98\\)\\)\\] {
+    background-image: linear-gradient(#090d18fa, #03050cfa);
+  }
+
+  .bg-\\[linear-gradient\\(180deg\\,rgba\\(17\\,22\\,33\\,0\\.94\\)\\,rgba\\(5\\,8\\,16\\,0\\.98\\)\\)\\] {
+    background-image: linear-gradient(#111621f0, #050810fa);
+  }
+
+  .bg-\\[linear-gradient\\(180deg\\,rgba\\(18\\,25\\,40\\,0\\.94\\)\\,rgba\\(4\\,7\\,16\\,0\\.98\\)\\)\\] {
+    background-image: linear-gradient(#121928f0, #040710fa);
+  }
+
+  .bg-\\[linear-gradient\\(180deg\\,rgba\\(255\\,255\\,255\\,0\\.02\\)\\,rgba\\(255\\,255\\,255\\,0\\.01\\)\\)\\,linear-gradient\\(180deg\\,rgba\\(5\\,9\\,19\\,0\\.92\\)\\,rgba\\(7\\,13\\,24\\,0\\.96\\)\\)\\] {
+    background-image: linear-gradient(#ffffff05, #ffffff03), linear-gradient(#050913eb, #070d18f5);
+  }
+
+  .bg-\\[radial-gradient\\(circle_at_18\\%_22\\%\\,rgba\\(109\\,216\\,255\\,0\\.10\\)\\,transparent_26\\%\\)\\,radial-gradient\\(circle_at_82\\%_78\\%\\,rgba\\(248\\,184\\,77\\,0\\.10\\)\\,transparent_20\\%\\)\\] {
+    background-image: radial-gradient(circle at 18% 22%, #6dd8ff1a, #0000 26%), radial-gradient(circle at 82% 78%, #f8b84d1a, #0000 20%);
+  }
+
+  .bg-\\[radial-gradient\\(circle_at_top\\,rgba\\(93\\,173\\,255\\,0\\.14\\)\\,transparent_34\\%\\)\\,linear-gradient\\(180deg\\,rgba\\(6\\,10\\,22\\,0\\.98\\)\\,rgba\\(2\\,4\\,11\\,1\\)\\)\\] {
+    background-image: radial-gradient(circle at top, #5dadff24, #0000 34%), linear-gradient(#060a16fa, #02040b);
+  }
+
+  .bg-\\[radial-gradient\\(circle_at_top\\,rgba\\(120\\,112\\,255\\,0\\.10\\)\\,transparent_38\\%\\)\\,linear-gradient\\(180deg\\,rgba\\(5\\,8\\,18\\,1\\)\\,rgba\\(2\\,3\\,10\\,1\\)\\)\\] {
+    background-image: radial-gradient(circle at top, #7870ff1a, #0000 38%), linear-gradient(#050812, #02030a);
+  }
+
+  .bg-\\[radial-gradient\\(circle_at_top_left\\,rgba\\(103\\,232\\,249\\,0\\.13\\)\\,transparent_38\\%\\)\\,linear-gradient\\(180deg\\,rgba\\(6\\,12\\,24\\,0\\.95\\)\\,rgba\\(2\\,5\\,12\\,0\\.98\\)\\)\\] {
+    background-image: radial-gradient(circle at 0 0, #67e8f921, #0000 38%), linear-gradient(#060c18f2, #02050cfa);
+  }
+
+  .bg-\\[radial-gradient\\(circle_at_top_left\\,rgba\\(248\\,113\\,113\\,0\\.10\\)\\,transparent_34\\%\\)\\,linear-gradient\\(180deg\\,rgba\\(9\\,8\\,15\\,0\\.98\\)\\,rgba\\(2\\,4\\,11\\,1\\)\\)\\] {
+    background-image: radial-gradient(circle at 0 0, #f871711a, #0000 34%), linear-gradient(#09080ffa, #02040b);
+  }
+
+  .from-amber-400 {
+    --tw-gradient-from: var(--color-amber-400);
+    --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
+  }
+
+  .from-cyan-400 {
+    --tw-gradient-from: var(--color-cyan-400);
+    --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
+  }
+
+  .from-rose-400 {
+    --tw-gradient-from: var(--color-rose-400);
+    --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
+  }
+
+  .from-transparent {
+    --tw-gradient-from: transparent;
+    --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
+  }
+
+  .via-cyan-200 {
+    --tw-gradient-via: var(--color-cyan-200);
+    --tw-gradient-via-stops: var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-via) var(--tw-gradient-via-position), var(--tw-gradient-to) var(--tw-gradient-to-position);
+    --tw-gradient-stops: var(--tw-gradient-via-stops);
+  }
+
+  .to-amber-400 {
+    --tw-gradient-to: var(--color-amber-400);
+    --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
+  }
+
+  .to-cyan-400 {
+    --tw-gradient-to: var(--color-cyan-400);
+    --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
+  }
+
+  .to-rose-400 {
+    --tw-gradient-to: var(--color-rose-400);
+    --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
+  }
+
+  .to-transparent {
+    --tw-gradient-to: transparent;
+    --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
+  }
+
+  .mask-repeat {
+    -webkit-mask-repeat: repeat;
+    mask-repeat: repeat;
+  }
+
+  .fill-current {
+    fill: currentColor;
+  }
+
+  .fill-cyan-200 {
+    fill: var(--color-cyan-200);
+  }
+
+  .fill-fuchsia-200 {
+    fill: var(--color-fuchsia-200);
+  }
+
+  .fill-none {
+    fill: none;
+  }
+
+  .stroke-current {
+    stroke: currentColor;
+  }
+
+  .stroke-\\[1\\.5\\] {
+    stroke-width: 1.5px;
+  }
+
+  .p-0 {
+    padding: calc(var(--spacing) * 0);
+  }
+
+  .p-0\\.5 {
+    padding: calc(var(--spacing) * .5);
+  }
+
+  .p-1 {
+    padding: calc(var(--spacing) * 1);
+  }
+
+  .p-1\\.5 {
+    padding: calc(var(--spacing) * 1.5);
+  }
+
+  .p-2 {
+    padding: calc(var(--spacing) * 2);
+  }
+
+  .p-3 {
+    padding: calc(var(--spacing) * 3);
+  }
+
+  .p-4 {
+    padding: calc(var(--spacing) * 4);
+  }
+
+  .p-5 {
+    padding: calc(var(--spacing) * 5);
+  }
+
+  .p-6 {
+    padding: calc(var(--spacing) * 6);
+  }
+
+  .p-8 {
+    padding: calc(var(--spacing) * 8);
+  }
+
+  .p-\\[2px\\] {
+    padding: 2px;
+  }
+
+  .p-px {
+    padding: 1px;
+  }
+
+  .px-0 {
+    padding-inline: calc(var(--spacing) * 0);
+  }
+
+  .px-1 {
+    padding-inline: calc(var(--spacing) * 1);
+  }
+
+  .px-1\\.5 {
+    padding-inline: calc(var(--spacing) * 1.5);
+  }
+
+  .px-2 {
+    padding-inline: calc(var(--spacing) * 2);
+  }
+
+  .px-2\\.5 {
+    padding-inline: calc(var(--spacing) * 2.5);
+  }
+
+  .px-3 {
+    padding-inline: calc(var(--spacing) * 3);
+  }
+
+  .px-4 {
+    padding-inline: calc(var(--spacing) * 4);
+  }
+
+  .px-5 {
+    padding-inline: calc(var(--spacing) * 5);
+  }
+
+  .px-6 {
+    padding-inline: calc(var(--spacing) * 6);
+  }
+
+  .px-px {
+    padding-inline: 1px;
+  }
+
+  .py-0 {
+    padding-block: calc(var(--spacing) * 0);
+  }
+
+  .py-0\\.5 {
+    padding-block: calc(var(--spacing) * .5);
+  }
+
+  .py-1 {
+    padding-block: calc(var(--spacing) * 1);
+  }
+
+  .py-1\\.5 {
+    padding-block: calc(var(--spacing) * 1.5);
+  }
+
+  .py-2 {
+    padding-block: calc(var(--spacing) * 2);
+  }
+
+  .py-2\\.5 {
+    padding-block: calc(var(--spacing) * 2.5);
+  }
+
+  .py-3 {
+    padding-block: calc(var(--spacing) * 3);
+  }
+
+  .py-4 {
+    padding-block: calc(var(--spacing) * 4);
+  }
+
+  .py-5 {
+    padding-block: calc(var(--spacing) * 5);
+  }
+
+  .py-6 {
+    padding-block: calc(var(--spacing) * 6);
+  }
+
+  .py-8 {
+    padding-block: calc(var(--spacing) * 8);
+  }
+
+  .py-\\[2px\\] {
+    padding-block: 2px;
+  }
+
+  .py-\\[3px\\] {
+    padding-block: 3px;
+  }
+
+  .py-px {
+    padding-block: 1px;
+  }
+
+  .pt-0 {
+    padding-top: calc(var(--spacing) * 0);
+  }
+
+  .pt-1 {
+    padding-top: calc(var(--spacing) * 1);
+  }
+
+  .pt-2 {
+    padding-top: calc(var(--spacing) * 2);
+  }
+
+  .pt-2\\.5 {
+    padding-top: calc(var(--spacing) * 2.5);
+  }
+
+  .pt-3 {
+    padding-top: calc(var(--spacing) * 3);
+  }
+
+  .pt-4 {
+    padding-top: calc(var(--spacing) * 4);
+  }
+
+  .pr-1 {
+    padding-right: calc(var(--spacing) * 1);
+  }
+
+  .pr-2 {
+    padding-right: calc(var(--spacing) * 2);
+  }
+
+  .pr-3 {
+    padding-right: calc(var(--spacing) * 3);
+  }
+
+  .pr-4 {
+    padding-right: calc(var(--spacing) * 4);
+  }
+
+  .pr-8 {
+    padding-right: calc(var(--spacing) * 8);
+  }
+
+  .pr-10 {
+    padding-right: calc(var(--spacing) * 10);
+  }
+
+  .pr-11 {
+    padding-right: calc(var(--spacing) * 11);
+  }
+
+  .pb-1 {
+    padding-bottom: calc(var(--spacing) * 1);
+  }
+
+  .pb-2 {
+    padding-bottom: calc(var(--spacing) * 2);
+  }
+
+  .pb-3 {
+    padding-bottom: calc(var(--spacing) * 3);
+  }
+
+  .pb-4 {
+    padding-bottom: calc(var(--spacing) * 4);
+  }
+
+  .pb-5 {
+    padding-bottom: calc(var(--spacing) * 5);
+  }
+
+  .pl-1 {
+    padding-left: calc(var(--spacing) * 1);
+  }
+
+  .pl-2 {
+    padding-left: calc(var(--spacing) * 2);
+  }
+
+  .pl-3 {
+    padding-left: calc(var(--spacing) * 3);
+  }
+
+  .pl-4 {
+    padding-left: calc(var(--spacing) * 4);
+  }
+
+  .pl-8 {
+    padding-left: calc(var(--spacing) * 8);
+  }
+
+  .text-center {
+    text-align: center;
+  }
+
+  .text-left {
+    text-align: left;
+  }
+
+  .text-right {
+    text-align: right;
+  }
+
+  .align-middle {
+    vertical-align: middle;
+  }
+
+  .font-mono {
+    font-family: var(--font-mono);
+  }
+
+  .font-sans {
+    font-family: var(--font-sans);
+  }
+
+  .text-2xl {
+    font-size: var(--text-2xl);
+    line-height: var(--tw-leading, var(--text-2xl--line-height));
+  }
+
+  .text-3xl {
+    font-size: var(--text-3xl);
+    line-height: var(--tw-leading, var(--text-3xl--line-height));
+  }
+
+  .text-base {
+    font-size: var(--text-base);
+    line-height: var(--tw-leading, var(--text-base--line-height));
+  }
+
+  .text-lg {
+    font-size: var(--text-lg);
+    line-height: var(--tw-leading, var(--text-lg--line-height));
+  }
+
+  .text-sm {
+    font-size: var(--text-sm);
+    line-height: var(--tw-leading, var(--text-sm--line-height));
+  }
+
+  .text-xs {
+    font-size: var(--text-xs);
+    line-height: var(--tw-leading, var(--text-xs--line-height));
+  }
+
+  .text-\\[7px\\] {
+    font-size: 7px;
+  }
+
+  .text-\\[8px\\] {
+    font-size: 8px;
+  }
+
+  .text-\\[9px\\] {
+    font-size: 9px;
+  }
+
+  .text-\\[10px\\] {
+    font-size: 10px;
+  }
+
+  .text-\\[11px\\] {
+    font-size: 11px;
+  }
+
+  .text-\\[12px\\] {
+    font-size: 12px;
+  }
+
+  .text-\\[13px\\] {
+    font-size: 13px;
+  }
+
+  .text-\\[20px\\] {
+    font-size: 20px;
+  }
+
+  .leading-4 {
+    --tw-leading: calc(var(--spacing) * 4);
+    line-height: calc(var(--spacing) * 4);
+  }
+
+  .leading-none {
+    --tw-leading: 1;
+    line-height: 1;
+  }
+
+  .leading-normal {
+    --tw-leading: var(--leading-normal);
+    line-height: var(--leading-normal);
+  }
+
+  .leading-relaxed {
+    --tw-leading: var(--leading-relaxed);
+    line-height: var(--leading-relaxed);
+  }
+
+  .leading-snug {
+    --tw-leading: var(--leading-snug);
+    line-height: var(--leading-snug);
+  }
+
+  .font-black {
+    --tw-font-weight: var(--font-weight-black);
+    font-weight: var(--font-weight-black);
+  }
+
+  .font-bold {
+    --tw-font-weight: var(--font-weight-bold);
+    font-weight: var(--font-weight-bold);
+  }
+
+  .font-medium {
+    --tw-font-weight: var(--font-weight-medium);
+    font-weight: var(--font-weight-medium);
+  }
+
+  .font-normal {
+    --tw-font-weight: var(--font-weight-normal);
+    font-weight: var(--font-weight-normal);
+  }
+
+  .font-semibold {
+    --tw-font-weight: var(--font-weight-semibold);
+    font-weight: var(--font-weight-semibold);
+  }
+
+  .tracking-\\[-0\\.03em\\] {
+    --tw-tracking: -.03em;
+    letter-spacing: -.03em;
+  }
+
+  .tracking-\\[-0\\.04em\\] {
+    --tw-tracking: -.04em;
+    letter-spacing: -.04em;
+  }
+
+  .tracking-\\[0\\.01em\\] {
+    --tw-tracking: .01em;
+    letter-spacing: .01em;
+  }
+
+  .tracking-\\[0\\.1em\\] {
+    --tw-tracking: .1em;
+    letter-spacing: .1em;
+  }
+
+  .tracking-\\[0\\.02em\\] {
+    --tw-tracking: .02em;
+    letter-spacing: .02em;
+  }
+
+  .tracking-\\[0\\.2em\\] {
+    --tw-tracking: .2em;
+    letter-spacing: .2em;
+  }
+
+  .tracking-\\[0\\.03em\\] {
+    --tw-tracking: .03em;
+    letter-spacing: .03em;
+  }
+
+  .tracking-\\[0\\.04em\\] {
+    --tw-tracking: .04em;
+    letter-spacing: .04em;
+  }
+
+  .tracking-\\[0\\.06em\\] {
+    --tw-tracking: .06em;
+    letter-spacing: .06em;
+  }
+
+  .tracking-\\[0\\.08em\\] {
+    --tw-tracking: .08em;
+    letter-spacing: .08em;
+  }
+
+  .tracking-\\[0\\.10em\\] {
+    --tw-tracking: .1em;
+    letter-spacing: .1em;
+  }
+
+  .tracking-\\[0\\.12em\\] {
+    --tw-tracking: .12em;
+    letter-spacing: .12em;
+  }
+
+  .tracking-\\[0\\.14em\\] {
+    --tw-tracking: .14em;
+    letter-spacing: .14em;
+  }
+
+  .tracking-\\[0\\.15em\\] {
+    --tw-tracking: .15em;
+    letter-spacing: .15em;
+  }
+
+  .tracking-\\[0\\.16em\\] {
+    --tw-tracking: .16em;
+    letter-spacing: .16em;
+  }
+
+  .tracking-\\[0\\.18em\\] {
+    --tw-tracking: .18em;
+    letter-spacing: .18em;
+  }
+
+  .tracking-\\[0\\.22em\\] {
+    --tw-tracking: .22em;
+    letter-spacing: .22em;
+  }
+
+  .tracking-\\[0\\.24em\\] {
+    --tw-tracking: .24em;
+    letter-spacing: .24em;
+  }
+
+  .tracking-\\[0\\] {
+    --tw-tracking: 0;
+    letter-spacing: 0;
+  }
+
+  .tracking-normal {
+    --tw-tracking: var(--tracking-normal);
+    letter-spacing: var(--tracking-normal);
+  }
+
+  .tracking-tight {
+    --tw-tracking: var(--tracking-tight);
+    letter-spacing: var(--tracking-tight);
+  }
+
+  .tracking-wide {
+    --tw-tracking: var(--tracking-wide);
+    letter-spacing: var(--tracking-wide);
+  }
+
+  .tracking-widest {
+    --tw-tracking: var(--tracking-widest);
+    letter-spacing: var(--tracking-widest);
+  }
+
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .text-wrap {
+    text-wrap: wrap;
+  }
+
+  .break-words {
+    overflow-wrap: break-word;
+  }
+
+  .whitespace-nowrap {
+    white-space: nowrap;
+  }
+
+  .text-\\[\\#0a0d18\\] {
+    color: #0a0d18;
+  }
+
+  .text-\\[\\#070a13\\] {
+    color: #070a13;
+  }
+
+  .text-amber-50 {
+    color: var(--color-amber-50);
+  }
+
+  .text-amber-50\\/95 {
+    color: #fffbebf2;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-amber-50\\/95 {
+      color: color-mix(in oklab, var(--color-amber-50) 95%, transparent);
+    }
+  }
+
+  .text-amber-100 {
+    color: var(--color-amber-100);
+  }
+
+  .text-amber-100\\/80 {
+    color: #fef3c6cc;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-amber-100\\/80 {
+      color: color-mix(in oklab, var(--color-amber-100) 80%, transparent);
+    }
+  }
+
+  .text-amber-200 {
+    color: var(--color-amber-200);
+  }
+
+  .text-amber-200\\/78 {
+    color: #fee685c7;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-amber-200\\/78 {
+      color: color-mix(in oklab, var(--color-amber-200) 78%, transparent);
+    }
+  }
+
+  .text-amber-200\\/85 {
+    color: #fee685d9;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-amber-200\\/85 {
+      color: color-mix(in oklab, var(--color-amber-200) 85%, transparent);
+    }
+  }
+
+  .text-blue-300 {
+    color: var(--color-blue-300);
+  }
+
+  .text-blue-300\\/55 {
+    color: #90c5ff8c;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-blue-300\\/55 {
+      color: color-mix(in oklab, var(--color-blue-300) 55%, transparent);
+    }
+  }
+
+  .text-blue-300\\/70 {
+    color: #90c5ffb3;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-blue-300\\/70 {
+      color: color-mix(in oklab, var(--color-blue-300) 70%, transparent);
+    }
+  }
+
+  .text-current {
+    color: currentColor;
+  }
+
+  .text-cyan-50 {
+    color: var(--color-cyan-50);
+  }
+
+  .text-cyan-50\\/80 {
+    color: #ecfeffcc;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-cyan-50\\/80 {
+      color: color-mix(in oklab, var(--color-cyan-50) 80%, transparent);
+    }
+  }
+
+  .text-cyan-50\\/90 {
+    color: #ecfeffe6;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-cyan-50\\/90 {
+      color: color-mix(in oklab, var(--color-cyan-50) 90%, transparent);
+    }
+  }
+
+  .text-cyan-100 {
+    color: var(--color-cyan-100);
+  }
+
+  .text-cyan-100\\/58 {
+    color: #cefafe94;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-cyan-100\\/58 {
+      color: color-mix(in oklab, var(--color-cyan-100) 58%, transparent);
+    }
+  }
+
+  .text-cyan-100\\/60 {
+    color: #cefafe99;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-cyan-100\\/60 {
+      color: color-mix(in oklab, var(--color-cyan-100) 60%, transparent);
+    }
+  }
+
+  .text-cyan-100\\/75 {
+    color: #cefafebf;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-cyan-100\\/75 {
+      color: color-mix(in oklab, var(--color-cyan-100) 75%, transparent);
+    }
+  }
+
+  .text-cyan-100\\/85 {
+    color: #cefafed9;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-cyan-100\\/85 {
+      color: color-mix(in oklab, var(--color-cyan-100) 85%, transparent);
+    }
+  }
+
+  .text-cyan-100\\/90 {
+    color: #cefafee6;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-cyan-100\\/90 {
+      color: color-mix(in oklab, var(--color-cyan-100) 90%, transparent);
+    }
+  }
+
+  .text-cyan-100\\/92 {
+    color: #cefafeeb;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-cyan-100\\/92 {
+      color: color-mix(in oklab, var(--color-cyan-100) 92%, transparent);
+    }
+  }
+
+  .text-cyan-200 {
+    color: var(--color-cyan-200);
+  }
+
+  .text-cyan-200\\/70 {
+    color: #a2f4fdb3;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-cyan-200\\/70 {
+      color: color-mix(in oklab, var(--color-cyan-200) 70%, transparent);
+    }
+  }
+
+  .text-cyan-200\\/80 {
+    color: #a2f4fdcc;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-cyan-200\\/80 {
+      color: color-mix(in oklab, var(--color-cyan-200) 80%, transparent);
+    }
+  }
+
+  .text-cyan-200\\/95 {
+    color: #a2f4fdf2;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-cyan-200\\/95 {
+      color: color-mix(in oklab, var(--color-cyan-200) 95%, transparent);
+    }
+  }
+
+  .text-cyan-300 {
+    color: var(--color-cyan-300);
+  }
+
+  .text-cyan-300\\/40 {
+    color: #53eafd66;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-cyan-300\\/40 {
+      color: color-mix(in oklab, var(--color-cyan-300) 40%, transparent);
+    }
+  }
+
+  .text-cyan-300\\/70 {
+    color: #53eafdb3;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-cyan-300\\/70 {
+      color: color-mix(in oklab, var(--color-cyan-300) 70%, transparent);
+    }
+  }
+
+  .text-cyan-300\\/85 {
+    color: #53eafdd9;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-cyan-300\\/85 {
+      color: color-mix(in oklab, var(--color-cyan-300) 85%, transparent);
+    }
+  }
+
+  .text-cyan-400 {
+    color: var(--color-cyan-400);
+  }
+
+  .text-cyan-400\\/45 {
+    color: #00d2ef73;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-cyan-400\\/45 {
+      color: color-mix(in oklab, var(--color-cyan-400) 45%, transparent);
+    }
+  }
+
+  .text-cyan-400\\/80 {
+    color: #00d2efcc;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-cyan-400\\/80 {
+      color: color-mix(in oklab, var(--color-cyan-400) 80%, transparent);
+    }
+  }
+
+  .text-emerald-100 {
+    color: var(--color-emerald-100);
+  }
+
+  .text-emerald-100\\/90 {
+    color: #d0fae5e6;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-emerald-100\\/90 {
+      color: color-mix(in oklab, var(--color-emerald-100) 90%, transparent);
+    }
+  }
+
+  .text-emerald-200 {
+    color: var(--color-emerald-200);
+  }
+
+  .text-emerald-200\\/50 {
+    color: #a4f4cf80;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-emerald-200\\/50 {
+      color: color-mix(in oklab, var(--color-emerald-200) 50%, transparent);
+    }
+  }
+
+  .text-emerald-300 {
+    color: var(--color-emerald-300);
+  }
+
+  .text-fuchsia-100 {
+    color: var(--color-fuchsia-100);
+  }
+
+  .text-fuchsia-100\\/90 {
+    color: #fae8ffe6;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-fuchsia-100\\/90 {
+      color: color-mix(in oklab, var(--color-fuchsia-100) 90%, transparent);
+    }
+  }
+
+  .text-fuchsia-200 {
+    color: var(--color-fuchsia-200);
+  }
+
+  .text-fuchsia-200\\/60 {
+    color: #f6cfff99;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-fuchsia-200\\/60 {
+      color: color-mix(in oklab, var(--color-fuchsia-200) 60%, transparent);
+    }
+  }
+
+  .text-pink-50 {
+    color: var(--color-pink-50);
+  }
+
+  .text-pink-100 {
+    color: var(--color-pink-100);
+  }
+
+  .text-pink-100\\/80 {
+    color: #fce7f3cc;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-pink-100\\/80 {
+      color: color-mix(in oklab, var(--color-pink-100) 80%, transparent);
+    }
+  }
+
+  .text-pink-100\\/90 {
+    color: #fce7f3e6;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-pink-100\\/90 {
+      color: color-mix(in oklab, var(--color-pink-100) 90%, transparent);
+    }
+  }
+
+  .text-pink-200 {
+    color: var(--color-pink-200);
+  }
+
+  .text-pink-200\\/75 {
+    color: #fccee8bf;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-pink-200\\/75 {
+      color: color-mix(in oklab, var(--color-pink-200) 75%, transparent);
+    }
+  }
+
+  .text-pink-200\\/85 {
+    color: #fccee8d9;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-pink-200\\/85 {
+      color: color-mix(in oklab, var(--color-pink-200) 85%, transparent);
+    }
+  }
+
+  .text-pink-200\\/90 {
+    color: #fccee8e6;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-pink-200\\/90 {
+      color: color-mix(in oklab, var(--color-pink-200) 90%, transparent);
+    }
+  }
+
+  .text-rose-200 {
+    color: var(--color-rose-200);
+  }
+
+  .text-rose-400 {
+    color: var(--color-rose-400);
+  }
+
+  .text-rose-400\\/40 {
+    color: #ff667f66;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-rose-400\\/40 {
+      color: color-mix(in oklab, var(--color-rose-400) 40%, transparent);
+    }
+  }
+
+  .text-rose-400\\/45 {
+    color: #ff667f73;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-rose-400\\/45 {
+      color: color-mix(in oklab, var(--color-rose-400) 45%, transparent);
+    }
+  }
+
+  .text-rose-400\\/80 {
+    color: #ff667fcc;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-rose-400\\/80 {
+      color: color-mix(in oklab, var(--color-rose-400) 80%, transparent);
+    }
+  }
+
+  .text-sky-100 {
+    color: var(--color-sky-100);
+  }
+
+  .text-sky-300 {
+    color: var(--color-sky-300);
+  }
+
+  .text-slate-50 {
+    color: var(--color-slate-50);
+  }
+
+  .text-slate-100 {
+    color: var(--color-slate-100);
+  }
+
+  .text-slate-100\\/78 {
+    color: #f1f5f9c7;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-slate-100\\/78 {
+      color: color-mix(in oklab, var(--color-slate-100) 78%, transparent);
+    }
+  }
+
+  .text-slate-100\\/82 {
+    color: #f1f5f9d1;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-slate-100\\/82 {
+      color: color-mix(in oklab, var(--color-slate-100) 82%, transparent);
+    }
+  }
+
+  .text-slate-100\\/88 {
+    color: #f1f5f9e0;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-slate-100\\/88 {
+      color: color-mix(in oklab, var(--color-slate-100) 88%, transparent);
+    }
+  }
+
+  .text-slate-100\\/90 {
+    color: #f1f5f9e6;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-slate-100\\/90 {
+      color: color-mix(in oklab, var(--color-slate-100) 90%, transparent);
+    }
+  }
+
+  .text-slate-200 {
+    color: var(--color-slate-200);
+  }
+
+  .text-slate-200\\/55 {
+    color: #e2e8f08c;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-slate-200\\/55 {
+      color: color-mix(in oklab, var(--color-slate-200) 55%, transparent);
+    }
+  }
+
+  .text-slate-200\\/65 {
+    color: #e2e8f0a6;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-slate-200\\/65 {
+      color: color-mix(in oklab, var(--color-slate-200) 65%, transparent);
+    }
+  }
+
+  .text-slate-200\\/72 {
+    color: #e2e8f0b8;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-slate-200\\/72 {
+      color: color-mix(in oklab, var(--color-slate-200) 72%, transparent);
+    }
+  }
+
+  .text-slate-200\\/80 {
+    color: #e2e8f0cc;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-slate-200\\/80 {
+      color: color-mix(in oklab, var(--color-slate-200) 80%, transparent);
+    }
+  }
+
+  .text-slate-200\\/85 {
+    color: #e2e8f0d9;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-slate-200\\/85 {
+      color: color-mix(in oklab, var(--color-slate-200) 85%, transparent);
+    }
+  }
+
+  .text-slate-300 {
+    color: var(--color-slate-300);
+  }
+
+  .text-slate-300\\/30 {
+    color: #cad5e24d;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-slate-300\\/30 {
+      color: color-mix(in oklab, var(--color-slate-300) 30%, transparent);
+    }
+  }
+
+  .text-slate-300\\/35 {
+    color: #cad5e259;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-slate-300\\/35 {
+      color: color-mix(in oklab, var(--color-slate-300) 35%, transparent);
+    }
+  }
+
+  .text-slate-300\\/40 {
+    color: #cad5e266;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-slate-300\\/40 {
+      color: color-mix(in oklab, var(--color-slate-300) 40%, transparent);
+    }
+  }
+
+  .text-slate-300\\/45 {
+    color: #cad5e273;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-slate-300\\/45 {
+      color: color-mix(in oklab, var(--color-slate-300) 45%, transparent);
+    }
+  }
+
+  .text-slate-300\\/55 {
+    color: #cad5e28c;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-slate-300\\/55 {
+      color: color-mix(in oklab, var(--color-slate-300) 55%, transparent);
+    }
+  }
+
+  .text-slate-300\\/60 {
+    color: #cad5e299;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-slate-300\\/60 {
+      color: color-mix(in oklab, var(--color-slate-300) 60%, transparent);
+    }
+  }
+
+  .text-slate-300\\/62 {
+    color: #cad5e29e;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-slate-300\\/62 {
+      color: color-mix(in oklab, var(--color-slate-300) 62%, transparent);
+    }
+  }
+
+  .text-slate-300\\/65 {
+    color: #cad5e2a6;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-slate-300\\/65 {
+      color: color-mix(in oklab, var(--color-slate-300) 65%, transparent);
+    }
+  }
+
+  .text-slate-300\\/70 {
+    color: #cad5e2b3;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-slate-300\\/70 {
+      color: color-mix(in oklab, var(--color-slate-300) 70%, transparent);
+    }
+  }
+
+  .text-slate-300\\/72 {
+    color: #cad5e2b8;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-slate-300\\/72 {
+      color: color-mix(in oklab, var(--color-slate-300) 72%, transparent);
+    }
+  }
+
+  .text-slate-300\\/75 {
+    color: #cad5e2bf;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-slate-300\\/75 {
+      color: color-mix(in oklab, var(--color-slate-300) 75%, transparent);
+    }
+  }
+
+  .text-slate-400 {
+    color: var(--color-slate-400);
+  }
+
+  .text-slate-400\\/45 {
+    color: #90a1b973;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-slate-400\\/45 {
+      color: color-mix(in oklab, var(--color-slate-400) 45%, transparent);
+    }
+  }
+
+  .text-slate-400\\/50 {
+    color: #90a1b980;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-slate-400\\/50 {
+      color: color-mix(in oklab, var(--color-slate-400) 50%, transparent);
+    }
+  }
+
+  .text-slate-400\\/60 {
+    color: #90a1b999;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-slate-400\\/60 {
+      color: color-mix(in oklab, var(--color-slate-400) 60%, transparent);
+    }
+  }
+
+  .text-slate-400\\/70 {
+    color: #90a1b9b3;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-slate-400\\/70 {
+      color: color-mix(in oklab, var(--color-slate-400) 70%, transparent);
+    }
+  }
+
+  .text-slate-400\\/74 {
+    color: #90a1b9bd;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-slate-400\\/74 {
+      color: color-mix(in oklab, var(--color-slate-400) 74%, transparent);
+    }
+  }
+
+  .text-slate-400\\/80 {
+    color: #90a1b9cc;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-slate-400\\/80 {
+      color: color-mix(in oklab, var(--color-slate-400) 80%, transparent);
+    }
+  }
+
+  .text-slate-400\\/85 {
+    color: #90a1b9d9;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-slate-400\\/85 {
+      color: color-mix(in oklab, var(--color-slate-400) 85%, transparent);
+    }
+  }
+
+  .text-slate-500 {
+    color: var(--color-slate-500);
+  }
+
+  .text-slate-500\\/35 {
+    color: #62748e59;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-slate-500\\/35 {
+      color: color-mix(in oklab, var(--color-slate-500) 35%, transparent);
+    }
+  }
+
+  .text-white {
+    color: var(--color-white);
+  }
+
+  .text-white\\/95 {
+    color: #fffffff2;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-white\\/95 {
+      color: color-mix(in oklab, var(--color-white) 95%, transparent);
+    }
+  }
+
+  .lowercase {
+    text-transform: lowercase;
+  }
+
+  .normal-case {
+    text-transform: none;
+  }
+
+  .uppercase {
+    text-transform: uppercase;
+  }
+
+  .italic {
+    font-style: italic;
+  }
+
+  .ordinal {
+    --tw-ordinal: ordinal;
+    font-variant-numeric: var(--tw-ordinal, ) var(--tw-slashed-zero, ) var(--tw-numeric-figure, ) var(--tw-numeric-spacing, ) var(--tw-numeric-fraction, );
+  }
+
+  .tabular-nums {
+    --tw-numeric-spacing: tabular-nums;
+    font-variant-numeric: var(--tw-ordinal, ) var(--tw-slashed-zero, ) var(--tw-numeric-figure, ) var(--tw-numeric-spacing, ) var(--tw-numeric-fraction, );
+  }
+
+  .underline {
+    text-decoration-line: underline;
+  }
+
+  .underline-offset-4 {
+    text-underline-offset: 4px;
+  }
+
+  .antialiased {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  .accent-cyan-300 {
+    accent-color: var(--color-cyan-300);
+  }
+
+  .opacity-0 {
+    opacity: 0;
+  }
+
+  .opacity-40 {
+    opacity: .4;
+  }
+
+  .opacity-50 {
+    opacity: .5;
+  }
+
+  .opacity-70 {
+    opacity: .7;
+  }
+
+  .opacity-90 {
+    opacity: .9;
+  }
+
+  .shadow {
+    --tw-shadow: 0 1px 3px 0 var(--tw-shadow-color, #0000001a), 0 1px 2px -1px var(--tw-shadow-color, #0000001a);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
+  .shadow-\\[0_0_0_1px_rgba\\(7\\,10\\,19\\,0\\.72\\)\\,0_0_16px_rgba\\(251\\,191\\,36\\,0\\.50\\)\\] {
+    --tw-shadow: 0 0 0 1px var(--tw-shadow-color, #070a13b8), 0 0 16px var(--tw-shadow-color, #fbbf2480);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
+  .shadow-\\[0_0_3px_rgba\\(244\\,114\\,182\\,0\\.65\\)\\] {
+    --tw-shadow: 0 0 3px var(--tw-shadow-color, #f472b6a6);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
+  .shadow-\\[0_0_8px_rgba\\(251\\,191\\,36\\,0\\.45\\)\\] {
+    --tw-shadow: 0 0 8px var(--tw-shadow-color, #fbbf2473);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
+  .shadow-\\[0_0_10px_rgba\\(103\\,232\\,249\\,0\\.25\\)\\] {
+    --tw-shadow: 0 0 10px var(--tw-shadow-color, #67e8f940);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
+  .shadow-\\[0_0_10px_rgba\\(251\\,191\\,36\\,0\\.55\\)\\] {
+    --tw-shadow: 0 0 10px var(--tw-shadow-color, #fbbf248c);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
+  .shadow-\\[0_0_18px_rgba\\(251\\,191\\,36\\,0\\.34\\)\\] {
+    --tw-shadow: 0 0 18px var(--tw-shadow-color, #fbbf2457);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
+  .shadow-\\[0_4px_12px_rgba\\(0\\,0\\,0\\,0\\.45\\)\\,0_0_0_1px_rgba\\(103\\,232\\,249\\,0\\.28\\)\\] {
+    --tw-shadow: 0 4px 12px var(--tw-shadow-color, #00000073), 0 0 0 1px var(--tw-shadow-color, #67e8f947);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
+  .shadow-\\[0_10px_24px_rgba\\(0\\,0\\,0\\,0\\.45\\)\\] {
+    --tw-shadow: 0 10px 24px var(--tw-shadow-color, #00000073);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
+  .shadow-\\[0_10px_26px_rgba\\(0\\,0\\,0\\,0\\.28\\)\\] {
+    --tw-shadow: 0 10px 26px var(--tw-shadow-color, #00000047);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
+  .shadow-\\[0_10px_28px_rgba\\(0\\,0\\,0\\,0\\.22\\)\\] {
+    --tw-shadow: 0 10px 28px var(--tw-shadow-color, #00000038);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
+  .shadow-\\[0_10px_28px_rgba\\(0\\,0\\,0\\,0\\.26\\)\\,inset_0_1px_0_rgba\\(255\\,255\\,255\\,0\\.05\\)\\] {
+    --tw-shadow: 0 10px 28px var(--tw-shadow-color, #00000042), inset 0 1px 0 var(--tw-shadow-color, #ffffff0d);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
+  .shadow-\\[0_10px_28px_rgba\\(0\\,0\\,0\\,0\\.28\\)\\] {
+    --tw-shadow: 0 10px 28px var(--tw-shadow-color, #00000047);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
+  .shadow-\\[0_10px_28px_rgba\\(0\\,0\\,0\\,0\\.55\\)\\] {
+    --tw-shadow: 0 10px 28px var(--tw-shadow-color, #0000008c);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
+  .shadow-\\[0_12px_28px_rgba\\(0\\,0\\,0\\,0\\.32\\)\\] {
+    --tw-shadow: 0 12px 28px var(--tw-shadow-color, #00000052);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
+  .shadow-\\[0_18px_40px_rgba\\(0\\,0\\,0\\,0\\.45\\)\\] {
+    --tw-shadow: 0 18px 40px var(--tw-shadow-color, #00000073);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
+  .shadow-\\[0_18px_42px_rgba\\(3\\,6\\,18\\,0\\.45\\)\\] {
+    --tw-shadow: 0 18px 42px var(--tw-shadow-color, #03061273);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
+  .shadow-\\[0_22px_40px_rgba\\(0\\,0\\,0\\,0\\.32\\)\\] {
+    --tw-shadow: 0 22px 40px var(--tw-shadow-color, #00000052);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
+  .shadow-\\[0_26px_80px_rgba\\(0\\,0\\,0\\,0\\.48\\)\\] {
+    --tw-shadow: 0 26px 80px var(--tw-shadow-color, #0000007a);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
+  .shadow-\\[0_28px_80px_rgba\\(0\\,0\\,0\\,0\\.56\\)\\] {
+    --tw-shadow: 0 28px 80px var(--tw-shadow-color, #0000008f);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
+  .shadow-\\[0_36px_80px_rgba\\(0\\,0\\,0\\,0\\.5\\)\\] {
+    --tw-shadow: 0 36px 80px var(--tw-shadow-color, #00000080);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
+  .shadow-\\[inset_0_-1px_0_rgba\\(251\\,191\\,36\\,0\\.22\\)\\] {
+    --tw-shadow: inset 0 -1px 0 var(--tw-shadow-color, #fbbf2438);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
+  .shadow-\\[inset_0_-1px_0_rgba\\(251\\,191\\,36\\,0\\.24\\)\\] {
+    --tw-shadow: inset 0 -1px 0 var(--tw-shadow-color, #fbbf243d);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
+  .shadow-\\[inset_0_0_0_1px_rgba\\(143\\,232\\,255\\,0\\.18\\)\\] {
+    --tw-shadow: inset 0 0 0 1px var(--tw-shadow-color, #8fe8ff2e);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
+  .shadow-\\[inset_0_0_0_1px_rgba\\(251\\,191\\,36\\,0\\.18\\)\\] {
+    --tw-shadow: inset 0 0 0 1px var(--tw-shadow-color, #fbbf242e);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
+  .shadow-\\[inset_0_0_0_1px_rgba\\(252\\,211\\,77\\,0\\.20\\)\\] {
+    --tw-shadow: inset 0 0 0 1px var(--tw-shadow-color, #fcd34d33);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
+  .shadow-\\[inset_0_0_0_1px_rgba\\(255\\,255\\,255\\,0\\.10\\)\\] {
+    --tw-shadow: inset 0 0 0 1px var(--tw-shadow-color, #ffffff1a);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
+  .shadow-\\[inset_0_0_0_1px_rgba\\(255\\,255\\,255\\,0\\.18\\)\\] {
+    --tw-shadow: inset 0 0 0 1px var(--tw-shadow-color, #ffffff2e);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
+  .shadow-\\[inset_0_0_0_1px_rgba\\(255\\,255\\,255\\,0\\.55\\)\\,0_0_0_1px_rgba\\(252\\,211\\,77\\,0\\.55\\)\\] {
+    --tw-shadow: inset 0 0 0 1px var(--tw-shadow-color, #ffffff8c), 0 0 0 1px var(--tw-shadow-color, #fcd34d8c);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
+  .shadow-\\[inset_0_0_0_1px_rgba\\(255\\,255\\,255\\,0\\.80\\)\\,0_0_0_1px_rgba\\(103\\,232\\,249\\,0\\.75\\)\\,0_0_14px_rgba\\(103\\,232\\,249\\,0\\.28\\)\\] {
+    --tw-shadow: inset 0 0 0 1px var(--tw-shadow-color, #fffc), 0 0 0 1px var(--tw-shadow-color, #67e8f9bf), 0 0 14px var(--tw-shadow-color, #67e8f947);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
+  .shadow-\\[inset_0_1px_0_rgba\\(244\\,114\\,182\\,0\\.12\\)\\] {
+    --tw-shadow: inset 0 1px 0 var(--tw-shadow-color, #f472b61f);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
+  .shadow-\\[inset_0_1px_0_rgba\\(255\\,255\\,255\\,0\\.04\\)\\] {
+    --tw-shadow: inset 0 1px 0 var(--tw-shadow-color, #ffffff0a);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
+  .shadow-\\[inset_0_1px_0_rgba\\(255\\,255\\,255\\,0\\.06\\)\\] {
+    --tw-shadow: inset 0 1px 0 var(--tw-shadow-color, #ffffff0f);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
+  .shadow-\\[inset_0_1px_0_rgba\\(255\\,255\\,255\\,0\\.08\\)\\,inset_0_-64px_80px_rgba\\(0\\,0\\,0\\,0\\.34\\)\\] {
+    --tw-shadow: inset 0 1px 0 var(--tw-shadow-color, #ffffff14), inset 0 -64px 80px var(--tw-shadow-color, #00000057);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
+  .shadow-\\[inset_0_1px_0_rgba\\(255\\,255\\,255\\,0\\.025\\)\\] {
+    --tw-shadow: inset 0 1px 0 var(--tw-shadow-color, #ffffff06);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
+  .shadow-\\[inset_0_1px_2px_rgba\\(0\\,0\\,0\\,0\\.30\\)\\] {
+    --tw-shadow: inset 0 1px 2px var(--tw-shadow-color, #0000004d);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
+  .shadow-\\[inset_0_1px_2px_rgba\\(0\\,0\\,0\\,0\\.40\\)\\] {
+    --tw-shadow: inset 0 1px 2px var(--tw-shadow-color, #0006);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
+  .shadow-\\[inset_0_1px_2px_rgba\\(0\\,0\\,0\\,0\\.45\\)\\] {
+    --tw-shadow: inset 0 1px 2px var(--tw-shadow-color, #00000073);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
+  .shadow-\\[inset_0_1px_2px_rgba\\(0\\,0\\,0\\,0\\.55\\)\\,0_0_0_1px_rgba\\(103\\,232\\,249\\,0\\.20\\)\\] {
+    --tw-shadow: inset 0 1px 2px var(--tw-shadow-color, #0000008c), 0 0 0 1px var(--tw-shadow-color, #67e8f933);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
+  .shadow-\\[inset_0_1px_2px_rgba\\(0\\,0\\,0\\,0\\.55\\)\\] {
+    --tw-shadow: inset 0 1px 2px var(--tw-shadow-color, #0000008c);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
+  .shadow-lg {
+    --tw-shadow: 0 10px 15px -3px var(--tw-shadow-color, #0000001a), 0 4px 6px -4px var(--tw-shadow-color, #0000001a);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
+  .shadow-md {
+    --tw-shadow: 0 4px 6px -1px var(--tw-shadow-color, #0000001a), 0 2px 4px -2px var(--tw-shadow-color, #0000001a);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
+  .shadow-none {
+    --tw-shadow: 0 0 #0000;
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
+  .shadow-sm {
+    --tw-shadow: 0 1px 3px 0 var(--tw-shadow-color, #0000001a), 0 1px 2px -1px var(--tw-shadow-color, #0000001a);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
+  .shadow-xl {
+    --tw-shadow: 0 20px 25px -5px var(--tw-shadow-color, #0000001a), 0 8px 10px -6px var(--tw-shadow-color, #0000001a);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
+  .shadow-xs {
+    --tw-shadow: 0 1px 2px 0 var(--tw-shadow-color, #0000000d);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
+  .ring {
+    --tw-ring-shadow: var(--tw-ring-inset, ) 0 0 0 calc(1px + var(--tw-ring-offset-width)) var(--tw-ring-color, currentcolor);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
+  .ring-0 {
+    --tw-ring-shadow: var(--tw-ring-inset, ) 0 0 0 calc(0px + var(--tw-ring-offset-width)) var(--tw-ring-color, currentcolor);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
+  .ring-1 {
+    --tw-ring-shadow: var(--tw-ring-inset, ) 0 0 0 calc(1px + var(--tw-ring-offset-width)) var(--tw-ring-color, currentcolor);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
+  .ring-amber-100 {
+    --tw-ring-color: var(--color-amber-100);
+  }
+
+  .outline-hidden {
+    --tw-outline-style: none;
+    outline-style: none;
+  }
+
+  @media (forced-colors: active) {
+    .outline-hidden {
+      outline-offset: 2px;
+      outline: 2px solid #0000;
+    }
+  }
+
+  .outline {
+    outline-style: var(--tw-outline-style);
+    outline-width: 1px;
+  }
+
+  .blur {
+    --tw-blur: blur(8px);
+    filter: var(--tw-blur, ) var(--tw-brightness, ) var(--tw-contrast, ) var(--tw-grayscale, ) var(--tw-hue-rotate, ) var(--tw-invert, ) var(--tw-saturate, ) var(--tw-sepia, ) var(--tw-drop-shadow, );
+  }
+
+  .invert {
+    --tw-invert: invert(100%);
+    filter: var(--tw-blur, ) var(--tw-brightness, ) var(--tw-contrast, ) var(--tw-grayscale, ) var(--tw-hue-rotate, ) var(--tw-invert, ) var(--tw-saturate, ) var(--tw-sepia, ) var(--tw-drop-shadow, );
+  }
+
+  .filter {
+    filter: var(--tw-blur, ) var(--tw-brightness, ) var(--tw-contrast, ) var(--tw-grayscale, ) var(--tw-hue-rotate, ) var(--tw-invert, ) var(--tw-saturate, ) var(--tw-sepia, ) var(--tw-drop-shadow, );
+  }
+
+  .backdrop-blur-md {
+    --tw-backdrop-blur: blur(var(--blur-md));
+    -webkit-backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );
+    backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );
+  }
+
+  .backdrop-blur-sm {
+    --tw-backdrop-blur: blur(var(--blur-sm));
+    -webkit-backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );
+    backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );
+  }
+
+  .backdrop-blur-xl {
+    --tw-backdrop-blur: blur(var(--blur-xl));
+    -webkit-backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );
+    backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );
+  }
+
+  .backdrop-filter {
+    -webkit-backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );
+    backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );
+  }
+
+  .transition {
+    transition-property: color, background-color, border-color, outline-color, text-decoration-color, fill, stroke, --tw-gradient-from, --tw-gradient-via, --tw-gradient-to, opacity, box-shadow, transform, translate, scale, rotate, filter, -webkit-backdrop-filter, backdrop-filter, display, content-visibility, overlay, pointer-events;
+    transition-timing-function: var(--tw-ease, var(--default-transition-timing-function));
+    transition-duration: var(--tw-duration, var(--default-transition-duration));
+  }
+
+  .transition-all {
+    transition-property: all;
+    transition-timing-function: var(--tw-ease, var(--default-transition-timing-function));
+    transition-duration: var(--tw-duration, var(--default-transition-duration));
+  }
+
+  .transition-colors {
+    transition-property: color, background-color, border-color, outline-color, text-decoration-color, fill, stroke, --tw-gradient-from, --tw-gradient-via, --tw-gradient-to;
+    transition-timing-function: var(--tw-ease, var(--default-transition-timing-function));
+    transition-duration: var(--tw-duration, var(--default-transition-duration));
+  }
+
+  .transition-opacity {
+    transition-property: opacity;
+    transition-timing-function: var(--tw-ease, var(--default-transition-timing-function));
+    transition-duration: var(--tw-duration, var(--default-transition-duration));
+  }
+
+  .transition-shadow {
+    transition-property: box-shadow;
+    transition-timing-function: var(--tw-ease, var(--default-transition-timing-function));
+    transition-duration: var(--tw-duration, var(--default-transition-duration));
+  }
+
+  .transition-transform {
+    transition-property: transform, translate, scale, rotate;
+    transition-timing-function: var(--tw-ease, var(--default-transition-timing-function));
+    transition-duration: var(--tw-duration, var(--default-transition-duration));
+  }
+
+  .transition-none {
+    transition-property: none;
+  }
+
+  .duration-100 {
+    --tw-duration: .1s;
+    transition-duration: .1s;
+  }
+
+  .duration-200 {
+    --tw-duration: .2s;
+    transition-duration: .2s;
+  }
+
+  .duration-300 {
+    --tw-duration: .3s;
+    transition-duration: .3s;
+  }
+
+  .duration-1000 {
+    --tw-duration: 1s;
+    transition-duration: 1s;
+  }
+
+  .ease-in-out {
+    --tw-ease: var(--ease-in-out);
+    transition-timing-function: var(--ease-in-out);
+  }
+
+  .ease-linear {
+    --tw-ease: linear;
+    transition-timing-function: linear;
+  }
+
+  .outline-none {
+    --tw-outline-style: none;
+    outline-style: none;
+  }
+
+  .select-none {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  .\\[scrollbar-color\\:rgba\\(255\\,255\\,255\\,0\\.12\\)_transparent\\] {
+    scrollbar-color: #ffffff1f transparent;
+  }
+
+  .\\[scrollbar-width\\:thin\\] {
+    scrollbar-width: thin;
+  }
+
+  @media (hover: hover) {
+    .group-hover\\:opacity-100:is(:where(.group):hover *) {
+      opacity: 1;
+    }
+  }
+
+  .selection\\:bg-cyan-300\\/25 ::selection {
+    background-color: #53eafd40;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .selection\\:bg-cyan-300\\/25 ::selection {
+      background-color: color-mix(in oklab, var(--color-cyan-300) 25%, transparent);
+    }
+  }
+
+  .selection\\:bg-cyan-300\\/25::selection {
+    background-color: #53eafd40;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .selection\\:bg-cyan-300\\/25::selection {
+      background-color: color-mix(in oklab, var(--color-cyan-300) 25%, transparent);
+    }
+  }
+
+  .before\\:block:before {
+    content: var(--tw-content);
+    display: block;
+  }
+
+  .before\\:h-3:before {
+    content: var(--tw-content);
+    height: calc(var(--spacing) * 3);
+  }
+
+  .before\\:w-\\[2px\\]:before {
+    content: var(--tw-content);
+    width: 2px;
+  }
+
+  .before\\:rounded-full:before {
+    content: var(--tw-content);
+    border-radius: 3.40282e38px;
+  }
+
+  .before\\:bg-black\\/65:before {
+    content: var(--tw-content);
+    background-color: #000000a6;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .before\\:bg-black\\/65:before {
+      background-color: color-mix(in oklab, var(--color-black) 65%, transparent);
+    }
+  }
+
+  .before\\:bg-black\\/80:before {
+    content: var(--tw-content);
+    background-color: #000c;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .before\\:bg-black\\/80:before {
+      background-color: color-mix(in oklab, var(--color-black) 80%, transparent);
+    }
+  }
+
+  .before\\:opacity-0:before {
+    content: var(--tw-content);
+    opacity: 0;
+  }
+
+  .before\\:opacity-65:before {
+    content: var(--tw-content);
+    opacity: .65;
+  }
+
+  .before\\:transition:before {
+    content: var(--tw-content);
+    transition-property: color, background-color, border-color, outline-color, text-decoration-color, fill, stroke, --tw-gradient-from, --tw-gradient-via, --tw-gradient-to, opacity, box-shadow, transform, translate, scale, rotate, filter, -webkit-backdrop-filter, backdrop-filter, display, content-visibility, overlay, pointer-events;
+    transition-timing-function: var(--tw-ease, var(--default-transition-timing-function));
+    transition-duration: var(--tw-duration, var(--default-transition-duration));
+  }
+
+  .before\\:content-\\[\\'\\'\\]:before {
+    --tw-content: "";
+    content: var(--tw-content);
+  }
+
+  @media (hover: hover) {
+    .hover\\:border-amber-200\\/30:hover {
+      border-color: #fee6854d;
+    }
+
+    @supports (color: color-mix(in lab, red, red)) {
+      .hover\\:border-amber-200\\/30:hover {
+        border-color: color-mix(in oklab, var(--color-amber-200) 30%, transparent);
+      }
+    }
+
+    .hover\\:border-amber-200\\/35:hover {
+      border-color: #fee68559;
+    }
+
+    @supports (color: color-mix(in lab, red, red)) {
+      .hover\\:border-amber-200\\/35:hover {
+        border-color: color-mix(in oklab, var(--color-amber-200) 35%, transparent);
+      }
+    }
+
+    .hover\\:border-cyan-200\\/25:hover {
+      border-color: #a2f4fd40;
+    }
+
+    @supports (color: color-mix(in lab, red, red)) {
+      .hover\\:border-cyan-200\\/25:hover {
+        border-color: color-mix(in oklab, var(--color-cyan-200) 25%, transparent);
+      }
+    }
+
+    .hover\\:border-cyan-200\\/30:hover {
+      border-color: #a2f4fd4d;
+    }
+
+    @supports (color: color-mix(in lab, red, red)) {
+      .hover\\:border-cyan-200\\/30:hover {
+        border-color: color-mix(in oklab, var(--color-cyan-200) 30%, transparent);
+      }
+    }
+
+    .hover\\:border-cyan-200\\/32:hover {
+      border-color: #a2f4fd52;
+    }
+
+    @supports (color: color-mix(in lab, red, red)) {
+      .hover\\:border-cyan-200\\/32:hover {
+        border-color: color-mix(in oklab, var(--color-cyan-200) 32%, transparent);
+      }
+    }
+
+    .hover\\:border-pink-200\\/30:hover {
+      border-color: #fccee84d;
+    }
+
+    @supports (color: color-mix(in lab, red, red)) {
+      .hover\\:border-pink-200\\/30:hover {
+        border-color: color-mix(in oklab, var(--color-pink-200) 30%, transparent);
+      }
+    }
+
+    .hover\\:border-pink-200\\/38:hover {
+      border-color: #fccee861;
+    }
+
+    @supports (color: color-mix(in lab, red, red)) {
+      .hover\\:border-pink-200\\/38:hover {
+        border-color: color-mix(in oklab, var(--color-pink-200) 38%, transparent);
+      }
+    }
+
+    .hover\\:border-white\\/10:hover {
+      border-color: #ffffff1a;
+    }
+
+    @supports (color: color-mix(in lab, red, red)) {
+      .hover\\:border-white\\/10:hover {
+        border-color: color-mix(in oklab, var(--color-white) 10%, transparent);
+      }
+    }
+
+    .hover\\:border-white\\/12:hover {
+      border-color: #ffffff1f;
+    }
+
+    @supports (color: color-mix(in lab, red, red)) {
+      .hover\\:border-white\\/12:hover {
+        border-color: color-mix(in oklab, var(--color-white) 12%, transparent);
+      }
+    }
+
+    .hover\\:border-white\\/15:hover {
+      border-color: #ffffff26;
+    }
+
+    @supports (color: color-mix(in lab, red, red)) {
+      .hover\\:border-white\\/15:hover {
+        border-color: color-mix(in oklab, var(--color-white) 15%, transparent);
+      }
+    }
+
+    .hover\\:border-white\\/18:hover {
+      border-color: #ffffff2e;
+    }
+
+    @supports (color: color-mix(in lab, red, red)) {
+      .hover\\:border-white\\/18:hover {
+        border-color: color-mix(in oklab, var(--color-white) 18%, transparent);
+      }
+    }
+
+    .hover\\:border-white\\/20:hover {
+      border-color: #fff3;
+    }
+
+    @supports (color: color-mix(in lab, red, red)) {
+      .hover\\:border-white\\/20:hover {
+        border-color: color-mix(in oklab, var(--color-white) 20%, transparent);
+      }
+    }
+
+    .hover\\:border-white\\/\\[0\\.18\\]:hover {
+      border-color: #ffffff2e;
+    }
+
+    @supports (color: color-mix(in lab, red, red)) {
+      .hover\\:border-white\\/\\[0\\.18\\]:hover {
+        border-color: color-mix(in oklab, var(--color-white) 18%, transparent);
+      }
+    }
+
+    .hover\\:bg-amber-300\\/16:hover {
+      background-color: #ffd23629;
+    }
+
+    @supports (color: color-mix(in lab, red, red)) {
+      .hover\\:bg-amber-300\\/16:hover {
+        background-color: color-mix(in oklab, var(--color-amber-300) 16%, transparent);
+      }
+    }
+
+    .hover\\:bg-black\\/18:hover {
+      background-color: #0000002e;
+    }
+
+    @supports (color: color-mix(in lab, red, red)) {
+      .hover\\:bg-black\\/18:hover {
+        background-color: color-mix(in oklab, var(--color-black) 18%, transparent);
+      }
+    }
+
+    .hover\\:bg-black\\/24:hover {
+      background-color: #0000003d;
+    }
+
+    @supports (color: color-mix(in lab, red, red)) {
+      .hover\\:bg-black\\/24:hover {
+        background-color: color-mix(in oklab, var(--color-black) 24%, transparent);
+      }
+    }
+
+    .hover\\:bg-cyan-300\\/14:hover {
+      background-color: #53eafd24;
+    }
+
+    @supports (color: color-mix(in lab, red, red)) {
+      .hover\\:bg-cyan-300\\/14:hover {
+        background-color: color-mix(in oklab, var(--color-cyan-300) 14%, transparent);
+      }
+    }
+
+    .hover\\:bg-cyan-300\\/22:hover {
+      background-color: #53eafd38;
+    }
+
+    @supports (color: color-mix(in lab, red, red)) {
+      .hover\\:bg-cyan-300\\/22:hover {
+        background-color: color-mix(in oklab, var(--color-cyan-300) 22%, transparent);
+      }
+    }
+
+    .hover\\:bg-pink-300\\/12:hover {
+      background-color: #fda5d51f;
+    }
+
+    @supports (color: color-mix(in lab, red, red)) {
+      .hover\\:bg-pink-300\\/12:hover {
+        background-color: color-mix(in oklab, var(--color-pink-300) 12%, transparent);
+      }
+    }
+
+    .hover\\:bg-pink-300\\/16:hover {
+      background-color: #fda5d529;
+    }
+
+    @supports (color: color-mix(in lab, red, red)) {
+      .hover\\:bg-pink-300\\/16:hover {
+        background-color: color-mix(in oklab, var(--color-pink-300) 16%, transparent);
+      }
+    }
+
+    .hover\\:bg-pink-300\\/\\[0\\.06\\]:hover {
+      background-color: #fda5d50f;
+    }
+
+    @supports (color: color-mix(in lab, red, red)) {
+      .hover\\:bg-pink-300\\/\\[0\\.06\\]:hover {
+        background-color: color-mix(in oklab, var(--color-pink-300) 6%, transparent);
+      }
+    }
+
+    .hover\\:bg-pink-300\\/\\[0\\.16\\]:hover {
+      background-color: #fda5d529;
+    }
+
+    @supports (color: color-mix(in lab, red, red)) {
+      .hover\\:bg-pink-300\\/\\[0\\.16\\]:hover {
+        background-color: color-mix(in oklab, var(--color-pink-300) 16%, transparent);
+      }
+    }
+
+    .hover\\:bg-slate-200\\/55:hover {
+      background-color: #e2e8f08c;
+    }
+
+    @supports (color: color-mix(in lab, red, red)) {
+      .hover\\:bg-slate-200\\/55:hover {
+        background-color: color-mix(in oklab, var(--color-slate-200) 55%, transparent);
+      }
+    }
+
+    .hover\\:bg-white\\/\\[0\\.01\\]:hover {
+      background-color: #ffffff03;
+    }
+
+    @supports (color: color-mix(in lab, red, red)) {
+      .hover\\:bg-white\\/\\[0\\.01\\]:hover {
+        background-color: color-mix(in oklab, var(--color-white) 1%, transparent);
+      }
+    }
+
+    .hover\\:bg-white\\/\\[0\\.04\\]:hover {
+      background-color: #ffffff0a;
+    }
+
+    @supports (color: color-mix(in lab, red, red)) {
+      .hover\\:bg-white\\/\\[0\\.04\\]:hover {
+        background-color: color-mix(in oklab, var(--color-white) 4%, transparent);
+      }
+    }
+
+    .hover\\:bg-white\\/\\[0\\.05\\]:hover {
+      background-color: #ffffff0d;
+    }
+
+    @supports (color: color-mix(in lab, red, red)) {
+      .hover\\:bg-white\\/\\[0\\.05\\]:hover {
+        background-color: color-mix(in oklab, var(--color-white) 5%, transparent);
+      }
+    }
+
+    .hover\\:bg-white\\/\\[0\\.06\\]:hover {
+      background-color: #ffffff0f;
+    }
+
+    @supports (color: color-mix(in lab, red, red)) {
+      .hover\\:bg-white\\/\\[0\\.06\\]:hover {
+        background-color: color-mix(in oklab, var(--color-white) 6%, transparent);
+      }
+    }
+
+    .hover\\:bg-white\\/\\[0\\.07\\]:hover {
+      background-color: #ffffff12;
+    }
+
+    @supports (color: color-mix(in lab, red, red)) {
+      .hover\\:bg-white\\/\\[0\\.07\\]:hover {
+        background-color: color-mix(in oklab, var(--color-white) 7.0%, transparent);
+      }
+    }
+
+    .hover\\:bg-white\\/\\[0\\.025\\]:hover {
+      background-color: #ffffff06;
+    }
+
+    @supports (color: color-mix(in lab, red, red)) {
+      .hover\\:bg-white\\/\\[0\\.025\\]:hover {
+        background-color: color-mix(in oklab, var(--color-white) 2.5%, transparent);
+      }
+    }
+
+    .hover\\:bg-white\\/\\[0\\.035\\]:hover {
+      background-color: #ffffff09;
+    }
+
+    @supports (color: color-mix(in lab, red, red)) {
+      .hover\\:bg-white\\/\\[0\\.035\\]:hover {
+        background-color: color-mix(in oklab, var(--color-white) 3.5%, transparent);
+      }
+    }
+
+    .hover\\:bg-white\\/\\[0\\.075\\]:hover {
+      background-color: #ffffff13;
+    }
+
+    @supports (color: color-mix(in lab, red, red)) {
+      .hover\\:bg-white\\/\\[0\\.075\\]:hover {
+        background-color: color-mix(in oklab, var(--color-white) 7.5%, transparent);
+      }
+    }
+
+    .hover\\:text-amber-100\\/80:hover {
+      color: #fef3c6cc;
+    }
+
+    @supports (color: color-mix(in lab, red, red)) {
+      .hover\\:text-amber-100\\/80:hover {
+        color: color-mix(in oklab, var(--color-amber-100) 80%, transparent);
+      }
+    }
+
+    .hover\\:text-cyan-100:hover {
+      color: var(--color-cyan-100);
+    }
+
+    .hover\\:text-pink-100:hover {
+      color: var(--color-pink-100);
+    }
+
+    .hover\\:text-slate-50:hover {
+      color: var(--color-slate-50);
+    }
+
+    .hover\\:text-slate-100:hover {
+      color: var(--color-slate-100);
+    }
+
+    .hover\\:text-slate-200\\/80:hover {
+      color: #e2e8f0cc;
+    }
+
+    @supports (color: color-mix(in lab, red, red)) {
+      .hover\\:text-slate-200\\/80:hover {
+        color: color-mix(in oklab, var(--color-slate-200) 80%, transparent);
+      }
+    }
+
+    .hover\\:text-slate-300\\/65:hover {
+      color: #cad5e2a6;
+    }
+
+    @supports (color: color-mix(in lab, red, red)) {
+      .hover\\:text-slate-300\\/65:hover {
+        color: color-mix(in oklab, var(--color-slate-300) 65%, transparent);
+      }
+    }
+
+    .hover\\:shadow-\\[inset_0_0_0_1px_rgba\\(255\\,255\\,255\\,0\\.22\\)\\]:hover {
+      --tw-shadow: inset 0 0 0 1px var(--tw-shadow-color, #ffffff38);
+      box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+    }
+
+    .hover\\:before\\:opacity-95:hover:before {
+      content: var(--tw-content);
+      opacity: .95;
+    }
+  }
+
+  .focus\\:border-cyan-200\\/45:focus {
+    border-color: #a2f4fd73;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .focus\\:border-cyan-200\\/45:focus {
+      border-color: color-mix(in oklab, var(--color-cyan-200) 45%, transparent);
+    }
+  }
+
+  .focus\\:border-emerald-300\\/30:focus {
+    border-color: #5ee9b54d;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .focus\\:border-emerald-300\\/30:focus {
+      border-color: color-mix(in oklab, var(--color-emerald-300) 30%, transparent);
+    }
+  }
+
+  .focus\\:shadow-\\[inset_0_1px_2px_rgba\\(0\\,0\\,0\\,0\\.55\\)\\,0_0_0_1px_rgba\\(103\\,232\\,249\\,0\\.20\\)\\]:focus {
+    --tw-shadow: inset 0 1px 2px var(--tw-shadow-color, #0000008c), 0 0 0 1px var(--tw-shadow-color, #67e8f933);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
+  .focus-visible\\:opacity-100:focus-visible {
+    opacity: 1;
+  }
+
+  .focus-visible\\:ring-1:focus-visible {
+    --tw-ring-shadow: var(--tw-ring-inset, ) 0 0 0 calc(1px + var(--tw-ring-offset-width)) var(--tw-ring-color, currentcolor);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
+  .focus-visible\\:ring-cyan-200\\/45:focus-visible {
+    --tw-ring-color: #a2f4fd73;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .focus-visible\\:ring-cyan-200\\/45:focus-visible {
+      --tw-ring-color: color-mix(in oklab, var(--color-cyan-200) 45%, transparent);
+    }
+  }
+
+  .focus-visible\\:ring-offset-0:focus-visible {
+    --tw-ring-offset-width: 0px;
+    --tw-ring-offset-shadow: var(--tw-ring-inset, ) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);
+  }
+
+  .focus-visible\\:outline-none:focus-visible {
+    --tw-outline-style: none;
+    outline-style: none;
+  }
+
+  .active\\:scale-\\[0\\.92\\]:active {
+    scale: .92;
+  }
+
+  .active\\:cursor-grabbing:active {
+    cursor: grabbing;
+  }
+
+  .active\\:bg-amber-300\\/\\[0\\.05\\]:active {
+    background-color: #ffd2360d;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .active\\:bg-amber-300\\/\\[0\\.05\\]:active {
+      background-color: color-mix(in oklab, var(--color-amber-300) 5%, transparent);
+    }
+  }
+
+  .active\\:bg-cyan-300\\/20:active {
+    background-color: #53eafd33;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .active\\:bg-cyan-300\\/20:active {
+      background-color: color-mix(in oklab, var(--color-cyan-300) 20%, transparent);
+    }
+  }
+
+  .active\\:bg-cyan-300\\/30:active {
+    background-color: #53eafd4d;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .active\\:bg-cyan-300\\/30:active {
+      background-color: color-mix(in oklab, var(--color-cyan-300) 30%, transparent);
+    }
+  }
+
+  .active\\:bg-pink-300\\/22:active {
+    background-color: #fda5d538;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .active\\:bg-pink-300\\/22:active {
+      background-color: color-mix(in oklab, var(--color-pink-300) 22%, transparent);
+    }
+  }
+
+  .active\\:bg-pink-300\\/\\[0\\.22\\]:active {
+    background-color: #fda5d538;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .active\\:bg-pink-300\\/\\[0\\.22\\]:active {
+      background-color: color-mix(in oklab, var(--color-pink-300) 22%, transparent);
+    }
+  }
+
+  .active\\:bg-white\\/\\[0\\.04\\]:active {
+    background-color: #ffffff0a;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .active\\:bg-white\\/\\[0\\.04\\]:active {
+      background-color: color-mix(in oklab, var(--color-white) 4%, transparent);
+    }
+  }
+
+  .active\\:bg-white\\/\\[0\\.06\\]:active {
+    background-color: #ffffff0f;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .active\\:bg-white\\/\\[0\\.06\\]:active {
+      background-color: color-mix(in oklab, var(--color-white) 6%, transparent);
+    }
+  }
+
+  .active\\:bg-white\\/\\[0\\.10\\]:active {
+    background-color: #ffffff1a;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .active\\:bg-white\\/\\[0\\.10\\]:active {
+      background-color: color-mix(in oklab, var(--color-white) 10%, transparent);
+    }
+  }
+
+  .disabled\\:opacity-35:disabled {
+    opacity: .35;
+  }
+
+  .disabled\\:opacity-40:disabled {
+    opacity: .4;
+  }
+
+  @media not all and (min-width: 480px) {
+    .max-\\[480px\\]\\:size-3\\.5 {
+      width: calc(var(--spacing) * 3.5);
+      height: calc(var(--spacing) * 3.5);
+    }
+
+    .max-\\[480px\\]\\:size-6 {
+      width: calc(var(--spacing) * 6);
+      height: calc(var(--spacing) * 6);
+    }
+
+    .max-\\[480px\\]\\:size-7 {
+      width: calc(var(--spacing) * 7);
+      height: calc(var(--spacing) * 7);
+    }
+
+    .max-\\[480px\\]\\:h-7 {
+      height: calc(var(--spacing) * 7);
+    }
+
+    .max-\\[480px\\]\\:w-\\[44px\\] {
+      width: 44px;
+    }
+
+    .max-\\[480px\\]\\:w-\\[64px\\] {
+      width: 64px;
+    }
+
+    .max-\\[480px\\]\\:rounded-\\[6px\\] {
+      border-radius: 6px;
+    }
+
+    .max-\\[480px\\]\\:px-2 {
+      padding-inline: calc(var(--spacing) * 2);
+    }
+
+    .max-\\[480px\\]\\:py-1 {
+      padding-block: calc(var(--spacing) * 1);
+    }
+
+    .max-\\[480px\\]\\:text-\\[10px\\] {
+      font-size: 10px;
+    }
+
+    .max-\\[480px\\]\\:text-\\[11px\\] {
+      font-size: 11px;
+    }
+  }
+
+  @media not all and (min-width: 360px) {
+    .max-\\[360px\\]\\:size-\\[26px\\] {
+      width: 26px;
+      height: 26px;
+    }
+  }
+
+  @media (min-width: 40rem) {
+    .sm\\:block {
+      display: block;
+    }
+
+    .sm\\:flex {
+      display: flex;
+    }
+
+    .sm\\:hidden {
+      display: none;
+    }
+
+    .sm\\:inline {
+      display: inline;
+    }
+
+    .sm\\:inline-flex {
+      display: inline-flex;
+    }
+  }
+
+  @media (min-width: 48rem) {
+    .md\\:grid-cols-2 {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+}
+
+:host {
+  box-sizing: border-box;
+  overscroll-behavior: none;
+  color: #eef2f5;
+  color-scheme: dark;
+  --cosimo-ios-top-inset: 0px;
+  --cosimo-ios-right-inset: 0px;
+  --cosimo-ios-bottom-inset: 0px;
+  --cosimo-ios-left-inset: 0px;
+  --cosimo-ios-safe-top: calc(env(safe-area-inset-top) + var(--cosimo-ios-top-inset));
+  --cosimo-ios-safe-right: calc(env(safe-area-inset-right) + var(--cosimo-ios-right-inset));
+  --cosimo-ios-safe-bottom: calc(env(safe-area-inset-bottom) + var(--cosimo-ios-bottom-inset));
+  --cosimo-ios-safe-left: calc(env(safe-area-inset-left) + var(--cosimo-ios-left-inset));
+  --cosimo-stage-min-height: 248px;
+  --cosimo-keyboard-height: 94px;
+  --cosimo-control-height: 54px;
+  background: #04070f;
+  width: 100%;
+  height: 100%;
+  min-height: 100dvh;
+  font-family: SF Pro Display, SF Pro Text, -apple-system, BlinkMacSystemFont, Avenir Next, sans-serif;
+  display: block;
+  overflow-x: hidden;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+button, input, select {
+  font: inherit;
+}
+
+.cosimo-mod-amount-field {
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  display: flex;
+}
+
+.cosimo-mod-direction-toggle {
+  background: #ffffff0a;
+  border: 1px solid #ffffff1a;
+  border-radius: 16px;
+  gap: 4px;
+  padding: 4px;
+  display: grid;
+}
+
+.cosimo-mod-direction-button {
+  color: #e2e8f0b8;
+  background: none;
+  border: 0;
+  border-radius: 11px;
+  width: 26px;
+  height: 26px;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.cosimo-mod-direction-button[data-active="true"] {
+  color: #cffafe;
+  background: #67e8f92e;
+}
+
+.cosimo-mod-knob {
+  flex: none;
+  width: 66px;
+  height: 66px;
+  position: relative;
+}
+
+.cosimo-mod-knob-stack {
+  justify-items: center;
+  gap: 4px;
+  min-width: 0;
+  display: grid;
+}
+
+.cosimo-mod-knob-track {
+  border: 1px solid #ffffff14;
+  border-radius: 999px;
+  width: 100%;
+  height: 100%;
+  position: relative;
+  box-shadow: inset 0 1px #ffffff14, 0 10px 20px #00000038;
+}
+
+.cosimo-mod-knob-arc {
+  pointer-events: none;
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+}
+
+.cosimo-mod-knob-arc-track {
+  fill: none;
+  stroke: #ffffff1a;
+  stroke-width: 4px;
+  stroke-linecap: round;
+}
+
+.cosimo-mod-knob-arc-fill {
+  fill: none;
+  stroke: #67e8f9eb;
+  stroke-width: 4px;
+  stroke-linecap: round;
+  filter: drop-shadow(0 0 8px #67e8f947);
+}
+
+.cosimo-mod-knob-core {
+  color: #cffafe;
+  background: radial-gradient(circle at 35% 28%, #ffffff1a, #0000 38%), linear-gradient(#0c1222fa, #060914fa);
+  border-radius: 999px;
+  place-items: center;
+  display: grid;
+  position: absolute;
+  inset: 9px;
+}
+
+.cosimo-mod-knob-percent {
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  font-family: SF Mono, IBM Plex Mono, Menlo, monospace;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.cosimo-mod-knob-indicator {
+  transform-origin: 50% 26px;
+  pointer-events: none;
+  background: linear-gradient(#fef3c7 0%, #f472b6 100%);
+  border-radius: 999px;
+  width: 3px;
+  height: 19px;
+  position: absolute;
+  top: 7px;
+  left: 50%;
+  box-shadow: 0 0 12px #f472b65c;
+}
+
+.cosimo-mod-knob-center-marker {
+  pointer-events: none;
+  background: #fff6;
+  border-radius: 999px;
+  width: 2px;
+  height: 9px;
+  position: absolute;
+  top: 3px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.cosimo-mod-knob[data-polarity="bipolar"] .cosimo-mod-knob-center-marker {
+  background: #e2e8f0d6;
+  box-shadow: 0 0 8px #e2e8f03d;
+}
+
+.cosimo-mod-knob-input {
+  opacity: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  position: absolute;
+  inset: 0;
+}
+
+.cosimo-mod-amount-copy {
+  gap: 2px;
+  min-width: 0;
+  display: grid;
+}
+
+.cosimo-mod-amount-readout {
+  letter-spacing: .08em;
+  color: #e2e8f0;
+  white-space: nowrap;
+  font-family: SF Mono, IBM Plex Mono, Menlo, monospace;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.cosimo-mod-amount-caption {
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: #94a3b8bd;
+  font-family: SF Mono, IBM Plex Mono, Menlo, monospace;
+  font-size: 9px;
+}
+
+.ios-shell {
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  min-height: 100dvh;
+  padding: var(--cosimo-ios-safe-top) var(--cosimo-ios-safe-right) var(--cosimo-ios-safe-bottom) var(--cosimo-ios-safe-left);
+  grid-template-rows: minmax(0, 1fr) auto;
+  min-width: 0;
+  display: grid;
+}
+
+.ios-top-row {
+  grid-template-rows: minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
+  min-height: 0;
+  display: grid;
+  position: relative;
+  overflow: hidden;
+}
+
+.ios-main-view {
+  grid-area: 1 / 1;
+  min-height: 0;
+  display: grid;
+}
+
+.ios-main-view[data-hidden="true"] {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.ios-scroll {
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  height: 100%;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.ios-content {
+  align-content: start;
+  gap: 16px;
+  min-width: 0;
+  padding: 0 16px;
+  display: grid;
+}
+
+.wavetable-panel, .play-panel, .mseg-shell, .keyboard-footer {
+  min-width: 0;
+}
+
+.section-label, .display-status, .bank-readout, .mini-label, .octave-readout, .glide-time-readout, .mseg-depth-readout, .mseg-rate-readout, .mseg-launcher-rate-readout {
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  font-family: SF Mono, IBM Plex Mono, Menlo, monospace;
+}
+
+.wavetable-stage {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  min-height: var(--cosimo-stage-min-height);
+  aspect-ratio: 1.55;
+  touch-action: none;
+  background: none;
+  position: relative;
+  overflow: hidden;
+}
+
+.wavetable-stage:before {
+  content: "";
+  opacity: .24;
+  pointer-events: none;
+  background-color: #0000;
+  background-image: linear-gradient(#ffffff07 1px, #0000 1px), linear-gradient(90deg, #ffffff07 1px, #0000 1px);
+  background-position: 0 0, 0 0;
+  background-repeat: repeat, repeat;
+  background-size: 28px 28px;
+  background-attachment: scroll, scroll;
+  background-origin: padding-box, padding-box;
+  background-clip: border-box, border-box;
+  position: absolute;
+  inset: 0;
+}
+
+.wavetable-display-stack {
+  position: absolute;
+  inset: 0;
+}
+
+.wavetable-layer {
+  will-change: transform;
+  position: absolute;
+  inset: 0;
+}
+
+.display-overlay {
+  text-align: center;
+  color: #ffd8acdb;
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+  background: #040712d1;
+  place-items: center;
+  padding: 20px;
+  font-size: 13px;
+  display: grid;
+  position: absolute;
+  inset: 0;
+}
+
+.display-overlay[hidden] {
+  display: none;
+}
+
+.stage-copy {
+  pointer-events: none;
+  grid-template-rows: auto 1fr auto;
+  gap: 8px;
+  padding: 12px;
+  display: grid;
+  position: absolute;
+  inset: 0;
+}
+
+.stage-copy-row {
+  pointer-events: auto;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  display: flex;
+}
+
+.stage-copy-row:last-child {
+  align-items: end;
+}
+
+.mini-label {
+  color: #d4dce657;
+  font-size: 10px;
+}
+
+.mini-label.active {
+  color: #87d7f5;
+}
+
+.mini-label.warm {
+  color: #f2b86b;
+}
+
+.display-status, .bank-readout {
+  color: #d4dce66b;
+  font-size: 10px;
+}
+
+.display-status {
+  background: #ffffff0a;
+  border-radius: 999px;
+  justify-self: start;
+  padding: 6px 10px;
+}
+
+.shape-readout {
+  letter-spacing: -.03em;
+  color: #87d7f5;
+  font-family: SF Pro Display, SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.bank-picker-trigger {
+  pointer-events: auto;
+  align-items: end;
+  min-width: 0;
+  max-width: min(72%, 260px);
+  display: inline-flex;
+  position: relative;
+}
+
+.table-select-overlay {
+  opacity: .001;
+  appearance: none;
+  color: #0000;
+  cursor: pointer;
+  background: none;
+  border: 0;
+  width: calc(100% + 20px);
+  min-height: 40px;
+  font-size: 16px;
+  position: absolute;
+  inset: -8px -10px;
+}
+
+.bank-readout {
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.table-retry-button {
+  color: #ffd8e8;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  pointer-events: auto;
+  background: #f56cb614;
+  border: 1px solid #f56cb647;
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 10px;
+}
+
+.table-retry-button[hidden] {
+  display: none;
+}
+
+.table-error-banner {
+  color: #ffd8e8;
+  background: #f56cb61f;
+  border: 1px solid #f56cb63d;
+  border-radius: 14px;
+  min-width: 0;
+  padding: 10px 12px;
+  font-size: 12px;
+  line-height: 1.35;
+  display: block;
+}
+
+.table-error-banner[hidden] {
+  display: none;
+}
+
+.play-grid {
+  grid-template-columns: minmax(132px, 160px) minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  display: grid;
+}
+
+.play-field {
+  min-width: 0;
+  display: grid;
+}
+
+.play-select {
+  color: #eef2f5;
+  background: #ffffff0a;
+  border: 1px solid #ffffff1a;
+  border-radius: 12px;
+  width: 100%;
+  min-height: 36px;
+  padding: 8px 10px;
+  font-size: 13px;
+}
+
+.glide-field-body {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  display: grid;
+}
+
+.glide-time-slider {
+  width: 100%;
+}
+
+.glide-time-readout, .mseg-depth-readout, .mseg-rate-readout, .mseg-launcher-rate-readout {
+  color: #87d7f5;
+  letter-spacing: .08em;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+.mseg-shell {
+  gap: 10px;
+  display: grid;
+}
+
+.mseg-launcher {
+  gap: 12px;
+  display: grid;
+}
+
+.mseg-launcher-head {
+  justify-content: space-between;
+  align-items: end;
+  gap: 12px;
+  display: flex;
+}
+
+.mseg-launcher-copy, .mseg-modal-copy {
+  gap: 4px;
+  min-width: 0;
+  display: grid;
+}
+
+.mseg-eyebrow {
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: #d4dce657;
+  font-family: SF Mono, IBM Plex Mono, Menlo, monospace;
+  font-size: 10px;
+}
+
+.mseg-route-title {
+  color: #eef2f5;
+  letter-spacing: -.03em;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.mseg-preview-button {
+  appearance: none;
+  text-align: left;
+  background: none;
+  border: 0;
+  width: 100%;
+  padding: 0;
+  display: block;
+}
+
+.mseg-preview-shell {
+  height: 128px;
+  min-height: 128px;
+}
+
+.mseg-preview-footer {
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  display: flex;
+}
+
+.mseg-controls {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  display: grid;
+}
+
+.mseg-depth {
+  gap: 8px;
+  display: grid;
+}
+
+.mseg-depth-label {
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: #d4dce657;
+  font-family: SF Mono, IBM Plex Mono, Menlo, monospace;
+  font-size: 10px;
+}
+
+.mseg-depth-slider, .mseg-rate-slider {
+  width: 100%;
+}
+
+.mseg-modal-layer {
+  pointer-events: none;
+  grid-area: 1 / 1;
+  min-height: 0;
+  padding: 0;
+  position: relative;
+  inset: auto;
+}
+
+.mseg-modal-layer[data-open="true"] {
+  pointer-events: auto;
+}
+
+.mseg-modal-backdrop {
+  display: none;
+}
+
+.mseg-modal {
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 4px;
+  min-height: 100%;
+  padding: 0 8px;
+  display: grid;
+  position: relative;
+}
+
+.mseg-modal-copy {
+  display: none;
+}
+
+.mseg-modal-head {
+  justify-content: end;
+  align-items: start;
+  min-height: 24px;
+  padding: 0;
+  display: flex;
+}
+
+.mseg-modal-close {
+  appearance: none;
+  color: #eef2f5;
+  letter-spacing: 0;
+  text-transform: none;
+  background: none;
+  border: 0;
+  border-radius: 0;
+  justify-content: center;
+  align-items: center;
+  width: 28px;
+  min-width: 28px;
+  height: 24px;
+  min-height: 24px;
+  padding: 0;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1;
+  display: inline-flex;
+}
+
+.mseg-modal-stage {
+  min-height: 0;
+  padding-top: 3px;
+}
+
+.mseg-modal-editor-shell {
+  height: 100%;
+  min-height: 0;
+}
+
+.mseg-modal-surface {
+  touch-action: none;
+  width: 100%;
+  height: 100%;
+  min-height: 148px;
+  display: block;
+}
+
+.mseg-modal-footer {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 12px;
+  display: grid;
+}
+
+.mseg-rate {
+  gap: 8px;
+  display: grid;
+}
+
+.mseg-modal-footer-actions {
+  align-items: center;
+  gap: 10px;
+  display: flex;
+}
+
+.mseg-loop-button {
+  color: #87d7f5;
+  background: none;
+  border: 0;
+  border-radius: 999px;
+  min-width: 36px;
+  min-height: 36px;
+  padding: 0;
+}
+
+.mseg-loop-button svg {
+  fill: currentColor;
+  width: 20px;
+  height: 20px;
+}
+
+.keyboard-footer {
+  z-index: 1;
+  background: #04070f;
+  gap: 0;
+  padding: 0 12px;
+  display: grid;
+  position: relative;
+}
+
+.keyboard-toolbar {
+  justify-content: center;
+  align-items: center;
+  display: flex;
+}
+
+.octave-controls {
+  grid-template-columns: auto auto auto;
+  align-items: center;
+  gap: 8px;
+  display: inline-grid;
+}
+
+.octave-button {
+  color: #eef2f5;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  background: #ffffff0a;
+  border: 1px solid #ffffff1a;
+  border-radius: 999px;
+  min-width: 72px;
+  min-height: 34px;
+  font-size: 12px;
+}
+
+.octave-button:disabled {
+  opacity: .32;
+}
+
+.octave-readout {
+  text-align: center;
+  color: #87d7f5;
+  min-width: 88px;
+  font-size: 12px;
+}
+
+.keyboard-host {
+  min-width: 0;
+  min-height: var(--cosimo-keyboard-height);
+  align-items: stretch;
+  display: grid;
+}
+
+.keyboard {
+  width: 100%;
+  height: var(--cosimo-keyboard-height);
+  touch-action: none;
+  background: linear-gradient(#ffffff06, #0000 18%), linear-gradient(#0a0d12ad, #07090deb);
+  border-radius: 14px 14px 0 0;
+  padding: 6px 6px 0;
+  overflow: hidden;
+}
+
+.cosimo-grid-line {
+  stroke: #ffffff14;
+  stroke-width: 1px;
+}
+
+.cosimo-curve-fill {
+  fill: #87d7f514;
+}
+
+.cosimo-curve-fill-progress {
+  fill: #87d7f538;
+}
+
+.cosimo-curve-line {
+  fill: none;
+  stroke: #87d7f5;
+  stroke-width: 3px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.cosimo-curve-fill-muted {
+  fill: #e1e7f00a;
+}
+
+.cosimo-curve-line-muted {
+  stroke: #e1e7f061;
+}
+
+.cosimo-reference-curve-fill {
+  fill: #e1e7f00a;
+}
+
+.cosimo-reference-curve-line {
+  fill: none;
+  stroke: #e1e7f061;
+  stroke-width: 3px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.cosimo-mseg-effective-curve-line {
+  fill: none;
+  stroke: #fbbf24;
+  stroke-width: 3.25px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 0 8px #fbbf2452);
+}
+
+.cosimo-curve-line-highlight {
+  stroke: #32f0bc;
+}
+
+.cosimo-mseg-playhead {
+  stroke: #f4fbfff5;
+  stroke-width: 2px;
+  stroke-linecap: round;
+}
+
+.cosimo-mseg-point-default {
+  fill: #87d7f5;
+  stroke: #050913;
+  stroke-width: 2px;
+}
+
+.cosimo-mseg-point-selected {
+  fill: #f5d0fe;
+  stroke: #050913;
+  stroke-width: 3px;
+}
+
+.cosimo-mseg-point-highlight {
+  fill: #32f0bc;
+  stroke: #050913;
+  stroke-width: 2px;
+}
+
+.cosimo-mseg-point-muted {
+  fill: #e1e7f0c7;
+  stroke: #050913;
+  stroke-width: 2px;
+  opacity: .62;
+}
+
+@media (max-height: 720px) {
+  .ios-content {
+    gap: 14px;
+  }
+
+  .mseg-preview-shell, .mseg-modal-surface {
+    height: 136px;
+    min-height: 136px;
+  }
+}
+
+@property --tw-translate-x {
+  syntax: "*";
+  inherits: false;
+  initial-value: 0;
+}
+
+@property --tw-translate-y {
+  syntax: "*";
+  inherits: false;
+  initial-value: 0;
+}
+
+@property --tw-translate-z {
+  syntax: "*";
+  inherits: false;
+  initial-value: 0;
+}
+
+@property --tw-rotate-x {
+  syntax: "*";
+  inherits: false
+}
+
+@property --tw-rotate-y {
+  syntax: "*";
+  inherits: false
+}
+
+@property --tw-rotate-z {
+  syntax: "*";
+  inherits: false
+}
+
+@property --tw-skew-x {
+  syntax: "*";
+  inherits: false
+}
+
+@property --tw-skew-y {
+  syntax: "*";
+  inherits: false
+}
+
+@property --tw-space-y-reverse {
+  syntax: "*";
+  inherits: false;
+  initial-value: 0;
+}
+
+@property --tw-space-x-reverse {
+  syntax: "*";
+  inherits: false;
+  initial-value: 0;
+}
+
+@property --tw-border-style {
+  syntax: "*";
+  inherits: false;
+  initial-value: solid;
+}
+
+@property --tw-gradient-position {
+  syntax: "*";
+  inherits: false
+}
+
+@property --tw-gradient-from {
+  syntax: "<color>";
+  inherits: false;
+  initial-value: #0000;
+}
+
+@property --tw-gradient-via {
+  syntax: "<color>";
+  inherits: false;
+  initial-value: #0000;
+}
+
+@property --tw-gradient-to {
+  syntax: "<color>";
+  inherits: false;
+  initial-value: #0000;
+}
+
+@property --tw-gradient-stops {
+  syntax: "*";
+  inherits: false
+}
+
+@property --tw-gradient-via-stops {
+  syntax: "*";
+  inherits: false
+}
+
+@property --tw-gradient-from-position {
+  syntax: "<length-percentage>";
+  inherits: false;
+  initial-value: 0%;
+}
+
+@property --tw-gradient-via-position {
+  syntax: "<length-percentage>";
+  inherits: false;
+  initial-value: 50%;
+}
+
+@property --tw-gradient-to-position {
+  syntax: "<length-percentage>";
+  inherits: false;
+  initial-value: 100%;
+}
+
+@property --tw-leading {
+  syntax: "*";
+  inherits: false
+}
+
+@property --tw-font-weight {
+  syntax: "*";
+  inherits: false
+}
+
+@property --tw-tracking {
+  syntax: "*";
+  inherits: false
+}
+
+@property --tw-ordinal {
+  syntax: "*";
+  inherits: false
+}
+
+@property --tw-slashed-zero {
+  syntax: "*";
+  inherits: false
+}
+
+@property --tw-numeric-figure {
+  syntax: "*";
+  inherits: false
+}
+
+@property --tw-numeric-spacing {
+  syntax: "*";
+  inherits: false
+}
+
+@property --tw-numeric-fraction {
+  syntax: "*";
+  inherits: false
+}
+
+@property --tw-shadow {
+  syntax: "*";
+  inherits: false;
+  initial-value: 0 0 #0000;
+}
+
+@property --tw-shadow-color {
+  syntax: "*";
+  inherits: false
+}
+
+@property --tw-shadow-alpha {
+  syntax: "<percentage>";
+  inherits: false;
+  initial-value: 100%;
+}
+
+@property --tw-inset-shadow {
+  syntax: "*";
+  inherits: false;
+  initial-value: 0 0 #0000;
+}
+
+@property --tw-inset-shadow-color {
+  syntax: "*";
+  inherits: false
+}
+
+@property --tw-inset-shadow-alpha {
+  syntax: "<percentage>";
+  inherits: false;
+  initial-value: 100%;
+}
+
+@property --tw-ring-color {
+  syntax: "*";
+  inherits: false
+}
+
+@property --tw-ring-shadow {
+  syntax: "*";
+  inherits: false;
+  initial-value: 0 0 #0000;
+}
+
+@property --tw-inset-ring-color {
+  syntax: "*";
+  inherits: false
+}
+
+@property --tw-inset-ring-shadow {
+  syntax: "*";
+  inherits: false;
+  initial-value: 0 0 #0000;
+}
+
+@property --tw-ring-inset {
+  syntax: "*";
+  inherits: false
+}
+
+@property --tw-ring-offset-width {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0;
+}
+
+@property --tw-ring-offset-color {
+  syntax: "*";
+  inherits: false;
+  initial-value: #fff;
+}
+
+@property --tw-ring-offset-shadow {
+  syntax: "*";
+  inherits: false;
+  initial-value: 0 0 #0000;
+}
+
+@property --tw-outline-style {
+  syntax: "*";
+  inherits: false;
+  initial-value: solid;
+}
+
+@property --tw-blur {
+  syntax: "*";
+  inherits: false
+}
+
+@property --tw-brightness {
+  syntax: "*";
+  inherits: false
+}
+
+@property --tw-contrast {
+  syntax: "*";
+  inherits: false
+}
+
+@property --tw-grayscale {
+  syntax: "*";
+  inherits: false
+}
+
+@property --tw-hue-rotate {
+  syntax: "*";
+  inherits: false
+}
+
+@property --tw-invert {
+  syntax: "*";
+  inherits: false
+}
+
+@property --tw-opacity {
+  syntax: "*";
+  inherits: false
+}
+
+@property --tw-saturate {
+  syntax: "*";
+  inherits: false
+}
+
+@property --tw-sepia {
+  syntax: "*";
+  inherits: false
+}
+
+@property --tw-drop-shadow {
+  syntax: "*";
+  inherits: false
+}
+
+@property --tw-drop-shadow-color {
+  syntax: "*";
+  inherits: false
+}
+
+@property --tw-drop-shadow-alpha {
+  syntax: "<percentage>";
+  inherits: false;
+  initial-value: 100%;
+}
+
+@property --tw-drop-shadow-size {
+  syntax: "*";
+  inherits: false
+}
+
+@property --tw-backdrop-blur {
+  syntax: "*";
+  inherits: false
+}
+
+@property --tw-backdrop-brightness {
+  syntax: "*";
+  inherits: false
+}
+
+@property --tw-backdrop-contrast {
+  syntax: "*";
+  inherits: false
+}
+
+@property --tw-backdrop-grayscale {
+  syntax: "*";
+  inherits: false
+}
+
+@property --tw-backdrop-hue-rotate {
+  syntax: "*";
+  inherits: false
+}
+
+@property --tw-backdrop-invert {
+  syntax: "*";
+  inherits: false
+}
+
+@property --tw-backdrop-opacity {
+  syntax: "*";
+  inherits: false
+}
+
+@property --tw-backdrop-saturate {
+  syntax: "*";
+  inherits: false
+}
+
+@property --tw-backdrop-sepia {
+  syntax: "*";
+  inherits: false
+}
+
+@property --tw-duration {
+  syntax: "*";
+  inherits: false
+}
+
+@property --tw-ease {
+  syntax: "*";
+  inherits: false
+}
+
+@property --tw-content {
+  syntax: "*";
+  inherits: false;
+  initial-value: "";
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes pulse {
+  50% {
+    opacity: .5;
+  }
+}
+`;
 function assert$1(condition, message) {
   if (!condition) {
     throw new Error(message);
@@ -12934,26 +19627,26 @@ const FILTER_CUTOFF_MIN_HZ = 20;
 const FILTER_CUTOFF_MAX_HZ = 2e4;
 const FILTER_Q_MIN$1 = 0.1;
 const FILTER_Q_MAX$1 = 20;
-function clamp$8(value, min, max) {
+function clamp$9(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 function clampFilterCutoffHz(value) {
-  return clamp$8(Number(value) || 0, FILTER_CUTOFF_MIN_HZ, FILTER_CUTOFF_MAX_HZ);
+  return clamp$9(Number(value) || 0, FILTER_CUTOFF_MIN_HZ, FILTER_CUTOFF_MAX_HZ);
 }
 function clampFilterQ(value) {
-  return clamp$8(Number(value) || 0, FILTER_Q_MIN$1, FILTER_Q_MAX$1);
+  return clamp$9(Number(value) || 0, FILTER_Q_MIN$1, FILTER_Q_MAX$1);
 }
 function clampFilterMode(value) {
-  return clamp$8(Math.round(Number(value) || 0), FILTER_MODE_OFF, FILTER_MODE_PEAK);
+  return clamp$9(Math.round(Number(value) || 0), FILTER_MODE_OFF, FILTER_MODE_PEAK);
 }
 function clampWarpMode(value) {
-  return clamp$8(Math.round(Number(value) || 0), WARP_MODE_OFF$1, WARP_MODE_MIRROR$1);
+  return clamp$9(Math.round(Number(value) || 0), WARP_MODE_OFF$1, WARP_MODE_MIRROR$1);
 }
 function clampWarpAmount(value) {
-  return clamp$8(Number(value) || 0, 0, 1);
+  return clamp$9(Number(value) || 0, 0, 1);
 }
 function clampDisplayPosition(value) {
-  return clamp$8(Number(value) || 0, 0, 1);
+  return clamp$9(Number(value) || 0, 0, 1);
 }
 function mapDisplayDragToPosition(startValue, startClientY, nextClientY, dragSpan) {
   const safeSpan = Math.max(1, Number(dragSpan) || 0);
@@ -13185,17 +19878,17 @@ const MSEG_NOTE_OFF_POLICY_VALUES = /* @__PURE__ */ new Set([
   "immediate",
   "ignore"
 ]);
-function clamp$7(value, min, max) {
+function clamp$8(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 function almostEqual(left, right, epsilon = 1e-12) {
   return Math.abs(left - right) <= epsilon;
 }
 function clampCurvePower(value) {
-  return clamp$7(Number.isFinite(value) ? value : 0, -MSEG_CURVE_POWER_LIMIT, MSEG_CURVE_POWER_LIMIT);
+  return clamp$8(Number.isFinite(value) ? value : 0, -MSEG_CURVE_POWER_LIMIT, MSEG_CURVE_POWER_LIMIT);
 }
-function clamp01(value) {
-  return clamp$7(Number.isFinite(value) ? value : 0, 0, 1);
+function clamp01$1(value) {
+  return clamp$8(Number.isFinite(value) ? value : 0, 0, 1);
 }
 function createDefaultMsegShape(name = MSEG_DEFAULT_NAME) {
   return {
@@ -13225,7 +19918,7 @@ function createDefaultMsegPlayback() {
 }
 function clampMsegRateSeconds(value) {
   const numericValue = Number(value);
-  return clamp$7(
+  return clamp$8(
     Number.isFinite(numericValue) ? numericValue : 1,
     MSEG_RATE_MIN_SECONDS,
     MSEG_RATE_MAX_SECONDS
@@ -13264,8 +19957,8 @@ function createMsegEditorMetrics(width, height, {
 function pointToMsegEditorCoordinates(point, width, height, options = {}) {
   const metrics = createMsegEditorMetrics(width, height, options);
   const orientation = options.orientation === "vertical" ? "vertical" : "horizontal";
-  const normalizedX = clamp01(Number(point?.x));
-  const normalizedY = clamp01(Number(point?.y));
+  const normalizedX = clamp01$1(Number(point?.x));
+  const normalizedY = clamp01$1(Number(point?.y));
   if (orientation === "vertical") {
     return {
       x: metrics.plotLeft + normalizedY * metrics.plotWidth,
@@ -13282,13 +19975,13 @@ function msegEditorCoordinatesToPoint(editorX, editorY, width, height, options =
   const orientation = options.orientation === "vertical" ? "vertical" : "horizontal";
   if (orientation === "vertical") {
     return {
-      x: clamp01((Number(editorY) - metrics.plotTop) / metrics.plotHeight),
-      y: clamp01((Number(editorX) - metrics.plotLeft) / metrics.plotWidth)
+      x: clamp01$1((Number(editorY) - metrics.plotTop) / metrics.plotHeight),
+      y: clamp01$1((Number(editorX) - metrics.plotLeft) / metrics.plotWidth)
     };
   }
   return {
-    x: clamp01((Number(editorX) - metrics.plotLeft) / metrics.plotWidth),
-    y: clamp01(1 - (Number(editorY) - metrics.plotTop) / metrics.plotHeight)
+    x: clamp01$1((Number(editorX) - metrics.plotLeft) / metrics.plotWidth),
+    y: clamp01$1(1 - (Number(editorY) - metrics.plotTop) / metrics.plotHeight)
   };
 }
 function normalizeMsegLoop(loop) {
@@ -13296,8 +19989,8 @@ function normalizeMsegLoop(loop) {
     return null;
   }
   const nextLoop = loop;
-  const startX = clamp01(Number(nextLoop.startX));
-  const endX = clamp01(Number(nextLoop.endX));
+  const startX = clamp01$1(Number(nextLoop.startX));
+  const endX = clamp01$1(Number(nextLoop.endX));
   if (almostEqual(startX, endX)) {
     return null;
   }
@@ -13335,11 +20028,11 @@ function normalizePoint(point, pointIndex, pointCount) {
     x = pointIndex === 0 ? 0 : pointIndex === pointCount - 1 ? 1 : 0;
   }
   if (pointIndex !== 0 && pointIndex !== pointCount - 1) {
-    x = clamp01(x);
+    x = clamp01$1(x);
   }
   return {
     x,
-    y: clamp01(Number(nextPoint.y)),
+    y: clamp01$1(Number(nextPoint.y)),
     curvePower: clampCurvePower(Number(nextPoint.curvePower))
   };
 }
@@ -13381,8 +20074,8 @@ function powerScale(value, power) {
   return numerator / denominator;
 }
 function evaluateMsegSegmentPoint(from, to, t) {
-  const clampedT = clamp01(t);
-  const curvedT = clamp01(powerScale(clampedT, from.curvePower));
+  const clampedT = clamp01$1(t);
+  const curvedT = clamp01$1(powerScale(clampedT, from.curvePower));
   return {
     x: from.x + (to.x - from.x) * clampedT,
     y: from.y + (to.y - from.y) * curvedT,
@@ -13398,7 +20091,7 @@ function distanceSquaredToLineSegment(targetX, targetY, fromX, fromY, toX, toY) 
     const pointDeltaY2 = targetY - fromY;
     return pointDeltaX2 * pointDeltaX2 + pointDeltaY2 * pointDeltaY2;
   }
-  const projection = clamp$7(
+  const projection = clamp$8(
     ((targetX - fromX) * deltaX + (targetY - fromY) * deltaY) / segmentLengthSquared,
     0,
     1
@@ -13500,14 +20193,14 @@ function findEvaluationSegment(points, x) {
   };
 }
 function evaluateNormalizedMsegShape(points, x) {
-  const clampedX = clamp01(Number(x));
+  const clampedX = clamp01$1(Number(x));
   const segment = findEvaluationSegment(points, clampedX);
   if (segment.laterPointWins || almostEqual(segment.from.x, segment.to.x)) {
     return segment.to.y;
   }
   const width = segment.to.x - segment.from.x;
   const t = width <= 0 ? 1 : (clampedX - segment.from.x) / width;
-  const curvedT = clamp01(powerScale(t, segment.from.curvePower));
+  const curvedT = clamp01$1(powerScale(t, segment.from.curvePower));
   return segment.from.y + (segment.to.y - segment.from.y) * curvedT;
 }
 function evaluateMsegShape(shape, x) {
@@ -13534,7 +20227,7 @@ function sampleRenderedMsegBuffer(paddedBuffer, x) {
   if (!(paddedBuffer instanceof Float32Array) || paddedBuffer.length !== MSEG_PADDED_SAMPLES) {
     throw new Error(`Rendered MSEG buffers must be a Float32Array with ${MSEG_PADDED_SAMPLES} samples`);
   }
-  const clampedX = clamp01(Number(x));
+  const clampedX = clamp01$1(Number(x));
   const scaled = clampedX * (MSEG_BODY_SAMPLES - 1);
   const sampleIndex = Math.floor(scaled);
   const fractional = scaled - sampleIndex;
@@ -13617,9 +20310,9 @@ function deriveMsegSegmentCurvePower(shape, segmentIndex, x, y) {
   if (width <= 1e-12 || Math.abs(deltaY) <= 1e-12) {
     return 0;
   }
-  const localX = clamp$7(clamp01(Number(x)), from.x, to.x);
-  const t = clamp$7((localX - from.x) / width, 1e-4, 1 - 1e-4);
-  const targetCurvedT = clamp$7((Number(y) - from.y) / deltaY, 1e-4, 1 - 1e-4);
+  const localX = clamp$8(clamp01$1(Number(x)), from.x, to.x);
+  const t = clamp$8((localX - from.x) / width, 1e-4, 1 - 1e-4);
+  const targetCurvedT = clamp$8((Number(y) - from.y) / deltaY, 1e-4, 1 - 1e-4);
   if (!Number.isFinite(targetCurvedT) || almostEqual(targetCurvedT, t, 1e-4)) {
     return 0;
   }
@@ -13627,7 +20320,7 @@ function deriveMsegSegmentCurvePower(shape, segmentIndex, x, y) {
   let high = MSEG_CURVE_POWER_LIMIT;
   let lowValue = powerScale(t, low);
   let highValue = powerScale(t, high);
-  const target = clamp$7(targetCurvedT, Math.min(lowValue, highValue), Math.max(lowValue, highValue));
+  const target = clamp$8(targetCurvedT, Math.min(lowValue, highValue), Math.max(lowValue, highValue));
   const ascending = lowValue <= highValue;
   for (let iteration = 0; iteration < 32; iteration += 1) {
     const middle = (low + high) * 0.5;
@@ -13655,8 +20348,8 @@ function addMsegPoint(shape, x, y) {
   const normalizedShape = normalizeMsegShape(shape);
   const points = normalizedShape.points.map((point) => ({ ...point }));
   const nextPoint = {
-    x: clamp01(Number(x)),
-    y: clamp01(Number(y)),
+    x: clamp01$1(Number(x)),
+    y: clamp01$1(Number(y)),
     curvePower: 0
   };
   let insertIndex = points.length - 1;
@@ -13678,13 +20371,13 @@ function moveMsegPoint(shape, pointIndex, x, y) {
   const previousX = pointIndex > 0 ? points[pointIndex - 1].x : 0;
   const nextX = pointIndex < points.length - 1 ? points[pointIndex + 1].x : 1;
   const moved = { ...points[pointIndex] };
-  moved.y = clamp01(Number(y));
+  moved.y = clamp01$1(Number(y));
   if (pointIndex === 0) {
     moved.x = 0;
   } else if (pointIndex === points.length - 1) {
     moved.x = 1;
   } else {
-    moved.x = clamp$7(clamp01(Number(x)), previousX, nextX);
+    moved.x = clamp$8(clamp01$1(Number(x)), previousX, nextX);
   }
   points[pointIndex] = moved;
   return normalizeMsegShape({
@@ -13764,7 +20457,7 @@ const WARP_MODE_PWM = 2;
 const WARP_MODE_ASYM = 3;
 const WARP_MODE_MIRROR = 4;
 const DEFAULT_WAVETABLE_THEME = createDefaultWavetableTheme();
-function clamp$6(value, min, max) {
+function clamp$7(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 function requestNextAnimationFrame(callback) {
@@ -13808,10 +20501,10 @@ function assertFrames(frames) {
   }
 }
 function resolveWarpMode(rawMode) {
-  return clamp$6(Math.round(Number(rawMode) || 0), WARP_MODE_OFF, WARP_MODE_MIRROR);
+  return clamp$7(Math.round(Number(rawMode) || 0), WARP_MODE_OFF, WARP_MODE_MIRROR);
 }
 function isIdentityWarp(warpMode, warpAmount) {
-  const clampedAmount = clamp$6(Number(warpAmount) || 0, 0, 1);
+  const clampedAmount = clamp$7(Number(warpAmount) || 0, 0, 1);
   if (warpMode <= WARP_MODE_OFF) {
     return true;
   }
@@ -13830,46 +20523,46 @@ function isIdentityWarp(warpMode, warpAmount) {
   return true;
 }
 function curvedWarpRight(phase, amount) {
-  const clampedPhase = clamp$6(Number(phase) || 0, 0, 1);
-  const clampedAmount = clamp$6(Number(amount) || 0, 0, 1);
+  const clampedPhase = clamp$7(Number(phase) || 0, 0, 1);
+  const clampedAmount = clamp$7(Number(amount) || 0, 0, 1);
   const exponent = Math.pow(2, 4 * clampedAmount);
   return Math.pow(clampedPhase, exponent);
 }
 function curvedWarpLeft(phase, amount) {
-  const clampedPhase = clamp$6(Number(phase) || 0, 0, 1);
-  const clampedAmount = clamp$6(Number(amount) || 0, 0, 1);
+  const clampedPhase = clamp$7(Number(phase) || 0, 0, 1);
+  const clampedAmount = clamp$7(Number(amount) || 0, 0, 1);
   const exponent = Math.pow(2, 4 * clampedAmount);
   return 1 - Math.pow(1 - clampedPhase, exponent);
 }
 function curvedAsymSigned(phase, dial) {
-  const clampedDial = clamp$6(Number(dial) || 0, 0, 1);
+  const clampedDial = clamp$7(Number(dial) || 0, 0, 1);
   const signedAmount = 2 * clampedDial - 1;
   const magnitude = Math.abs(signedAmount);
   return signedAmount >= 0 ? curvedWarpRight(phase, magnitude) : curvedWarpLeft(phase, magnitude);
 }
 function linearSkewSigned(phase, dial) {
-  const clampedPhase = clamp$6(Number(phase) || 0, 0, 1);
-  const clampedDial = clamp$6(Number(dial) || 0, 0, 1);
+  const clampedPhase = clamp$7(Number(phase) || 0, 0, 1);
+  const clampedDial = clamp$7(Number(dial) || 0, 0, 1);
   const signedAmount = 2 * clampedDial - 1;
-  const split = clamp$6(0.5 + 0.48 * signedAmount, 0.02, 0.98);
+  const split = clamp$7(0.5 + 0.48 * signedAmount, 0.02, 0.98);
   if (clampedPhase < split) {
     return 0.5 * (clampedPhase / split);
   }
   return 0.5 + 0.5 * ((clampedPhase - split) / (1 - split));
 }
 function mirrorBasePhase(phase) {
-  const clampedPhase = clamp$6(Number(phase) || 0, 0, 1);
+  const clampedPhase = clamp$7(Number(phase) || 0, 0, 1);
   if (clampedPhase < 0.5) {
     return clampedPhase * 2;
   }
   return 2 - 2 * clampedPhase;
 }
 function pwmActivePortion(amount) {
-  const clampedAmount = clamp$6(Number(amount) || 0, 0, 1);
+  const clampedAmount = clamp$7(Number(amount) || 0, 0, 1);
   return 1 - (1 - 0.02) * clampedAmount;
 }
 function resolveDisplayWarpPhase(warpMode, warpAmount, phase) {
-  const clampedPhase = clamp$6(Number(phase) || 0, 0, 1);
+  const clampedPhase = clamp$7(Number(phase) || 0, 0, 1);
   const result = {
     shouldLookup: true,
     phase: clampedPhase
@@ -13877,7 +20570,7 @@ function resolveDisplayWarpPhase(warpMode, warpAmount, phase) {
   if (warpMode <= WARP_MODE_OFF || clampedPhase >= 1) {
     return result;
   }
-  const clampedAmount = clamp$6(Number(warpAmount) || 0, 0, 1);
+  const clampedAmount = clamp$7(Number(warpAmount) || 0, 0, 1);
   if (warpMode === WARP_MODE_BEND) {
     const invertedDial = 1 - clampedAmount;
     if (clampedPhase < 0.5) {
@@ -13907,7 +20600,7 @@ function resolveDisplayWarpPhase(warpMode, warpAmount, phase) {
   return result;
 }
 function sampleDisplayFrame(frame, phase) {
-  const safePhase = clamp$6(Number(phase) || 0, 0, 1);
+  const safePhase = clamp$7(Number(phase) || 0, 0, 1);
   const frameLength = frame.length;
   if (frameLength === 0) {
     return 0;
@@ -14018,10 +20711,10 @@ function createCamera() {
 }
 function createViewportPadding(width, height) {
   return {
-    left: clamp$6(width * 0.06, 22, 48),
-    right: clamp$6(width * 0.06, 22, 48),
-    top: clamp$6(height * 0.1, 20, 56),
-    bottom: clamp$6(height * 0.09, 20, 52)
+    left: clamp$7(width * 0.06, 22, 48),
+    right: clamp$7(width * 0.06, 22, 48),
+    top: clamp$7(height * 0.1, 20, 56),
+    bottom: clamp$7(height * 0.09, 20, 52)
   };
 }
 function projectWorldPoint(point, camera) {
@@ -14075,10 +20768,10 @@ function createProjection(points, width, height) {
   };
 }
 function getSurfacePointCount(width, sampleCount) {
-  return clamp$6(Math.round(width / 10), 64, Math.min(128, sampleCount));
+  return clamp$7(Math.round(width / 10), 64, Math.min(128, sampleCount));
 }
 function getContourPointCount(width, sampleCount) {
-  return clamp$6(Math.round(width / 4), 128, Math.min(256, sampleCount));
+  return clamp$7(Math.round(width / 4), 128, Math.min(256, sampleCount));
 }
 function createObjectPoints(samples, depth) {
   const points = new Array(samples.length);
@@ -14253,8 +20946,8 @@ function createSurfaceBands(projectedFrames) {
       const lightDirection = normaliseVector({ x: -0.2, y: 0.95, z: -0.5 });
       const averageCameraDepth = quad.reduce((total, point) => total + point.cameraDepth, 0) / quad.length;
       const depthNormalized = (frontFrame.depthNormalized + backFrame.depthNormalized) * 0.5;
-      const slopeLight = clamp$6((dotProduct(surfaceNormal, lightDirection) + 1) * 0.5, 0, 1);
-      const ridgeAmount = clamp$6(
+      const slopeLight = clamp$7((dotProduct(surfaceNormal, lightDirection) + 1) * 0.5, 0, 1);
+      const ridgeAmount = clamp$7(
         Math.abs(frontFrame.samples[sampleIndex + 1] - frontFrame.samples[sampleIndex]) * 0.95 + Math.abs(backFrame.samples[sampleIndex + 1] - backFrame.samples[sampleIndex]) * 0.95,
         0,
         1
@@ -14279,7 +20972,7 @@ function createSurfaceRibs(projectedFrames) {
   if (sampleCount < 3) {
     return [];
   }
-  const desiredRibCount = clamp$6(Math.round(sampleCount / 10), 8, 14);
+  const desiredRibCount = clamp$7(Math.round(sampleCount / 10), 8, 14);
   const selectedColumns = /* @__PURE__ */ new Set([0, sampleCount - 1]);
   for (let ribIndex = 1; ribIndex < desiredRibCount - 1; ribIndex += 1) {
     selectedColumns.add(
@@ -14322,7 +21015,7 @@ function createInterpolatedSurfaceSlices(sourceFrames, camera, projection) {
   if (frameCount === 0) {
     return [];
   }
-  const sliceCount = clamp$6(frameCount * 3 - 2, 17, 41);
+  const sliceCount = clamp$7(frameCount * 3 - 2, 17, 41);
   const slices = [];
   for (let sliceIndex = 0; sliceIndex < sliceCount; sliceIndex += 1) {
     const framePosition = sliceIndex * (frameCount - 1) / Math.max(1, sliceCount - 1);
@@ -14363,7 +21056,7 @@ function createCurrentSlice(staticScene, frameState) {
   const lowFrame = staticScene.contourFrames[frameState.frameLo];
   const highFrame = staticScene.contourFrames[frameState.frameHi];
   const warpMode = resolveWarpMode(frameState.warpMode);
-  const warpAmount = clamp$6(Number(frameState.warpAmount) || 0, 0, 1);
+  const warpAmount = clamp$7(Number(frameState.warpAmount) || 0, 0, 1);
   const blendedSamples = isIdentityWarp(warpMode, warpAmount) ? buildInterpolatedFrame(lowFrame.samples, highFrame.samples, frameState.frameT) : buildWarpedFrame(lowFrame.samples, highFrame.samples, frameState.frameT, warpMode, warpAmount);
   const depth = getSceneDepth(frameState.frameIndex, staticScene.frameCount);
   const objectPoints = createObjectPoints(blendedSamples, depth);
@@ -14377,8 +21070,8 @@ function createCurrentSlice(staticScene, frameState) {
   const labelAnchor = points[Math.floor(points.length * 0.78)] ?? points[points.length - 1];
   const label = {
     text: buildCurrentSliceLabel(frameState, staticScene.frameCount),
-    x: clamp$6(labelAnchor.x + 14, 18, staticScene.width - 236),
-    y: clamp$6(labelAnchor.y - 18, 24, staticScene.height - 24)
+    x: clamp$7(labelAnchor.x + 14, 18, staticScene.width - 236),
+    y: clamp$7(labelAnchor.y - 18, 24, staticScene.height - 24)
   };
   return {
     frameState,
@@ -14393,7 +21086,7 @@ function createCurrentSlice(staticScene, frameState) {
 }
 function buildCurrentSliceLabel(frameState, frameCount) {
   const warpMode = resolveWarpMode(frameState.warpMode);
-  const warpAmount = clamp$6(Number(frameState.warpAmount) || 0, 0, 1);
+  const warpAmount = clamp$7(Number(frameState.warpAmount) || 0, 0, 1);
   const baseLabel = `Frame ${frameState.frameIndex.toFixed(2)} / ${frameCount - 1}`;
   if (isIdentityWarp(warpMode, warpAmount)) {
     return baseLabel;
@@ -14417,7 +21110,7 @@ function buildCurrentSliceLabel(frameState, frameCount) {
 }
 function createFrameState(frameCount, position, warpMode = 0, warpAmount = 0) {
   const safeFrameCount = Math.max(1, Number(frameCount) || 0);
-  const clampedPosition = clamp$6(Number(position) || 0, 0, 1);
+  const clampedPosition = clamp$7(Number(position) || 0, 0, 1);
   const frameIndex = clampedPosition * (safeFrameCount - 1);
   const frameLo = Math.floor(frameIndex);
   const frameHi = Math.min(frameLo + 1, safeFrameCount - 1);
@@ -14430,7 +21123,7 @@ function createFrameState(frameCount, position, warpMode = 0, warpAmount = 0) {
     frameHi,
     frameT,
     warpMode: resolveWarpMode(warpMode),
-    warpAmount: clamp$6(Number(warpAmount) || 0, 0, 1)
+    warpAmount: clamp$7(Number(warpAmount) || 0, 0, 1)
   };
 }
 function decimateFrame(frame, targetPointCount) {
@@ -14592,7 +21285,7 @@ function drawWavetableModel(context, model, theme = DEFAULT_WAVETABLE_THEME) {
     context.restore();
   }
   for (const contour of model.contours) {
-    const strokeColour = mixRGB(theme.frameColor, theme.backgroundRGB, clamp$6(contour.colourMix, 0, 0.92));
+    const strokeColour = mixRGB(theme.frameColor, theme.backgroundRGB, clamp$7(contour.colourMix, 0, 0.92));
     context.save();
     context.strokeStyle = toRGBA(strokeColour, contour.alpha);
     context.lineWidth = contour.lineWidth;
@@ -14650,12 +21343,12 @@ class CanvasWavetableDisplay {
     this.queueRender();
   }
   setPosition(position) {
-    this.position = clamp$6(Number(position) || 0, 0, 1);
+    this.position = clamp$7(Number(position) || 0, 0, 1);
     this.queueRender();
   }
   setWarp(mode, amount) {
     this.warpMode = resolveWarpMode(mode);
-    this.warpAmount = clamp$6(Number(amount) || 0, 0, 1);
+    this.warpAmount = clamp$7(Number(amount) || 0, 0, 1);
     this.queueRender();
   }
   resize(width, height, devicePixelRatio = 1) {
@@ -14784,12 +21477,26 @@ const MODULATION_TARGET_OPTIONS = [
   { value: "pan", label: "PAN" }
 ];
 let generatedRouteIdCounter = 1;
-function clamp$5(value, min, max) {
+function hasOwnValue(record, key) {
+  return Object.prototype.hasOwnProperty.call(record, key);
+}
+function readFullStoredStateValue$1(storedState, key) {
+  const fullState = storedState && typeof storedState === "object" ? storedState : {};
+  const values = fullState.values && typeof fullState.values === "object" ? fullState.values : {};
+  if (hasOwnValue(values, key)) {
+    return values[key];
+  }
+  if (hasOwnValue(fullState, key)) {
+    return fullState[key];
+  }
+  return void 0;
+}
+function clamp$6(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 function clampEnvSeconds(value, fallback) {
   const numeric = Number(value);
-  return clamp$5(Number.isFinite(numeric) ? numeric : fallback, ENV_MIN_SECONDS, ENV_MAX_SECONDS);
+  return clamp$6(Number.isFinite(numeric) ? numeric : fallback, ENV_MIN_SECONDS, ENV_MAX_SECONDS);
 }
 function formatMagnitude(value, digits) {
   const numeric = Number.isFinite(value) ? value : 0;
@@ -14829,7 +21536,7 @@ function normalizePolarity(value) {
 function clampModulationRouteAmount(targetKind, value) {
   const limits = ROUTE_AMOUNT_LIMITS[targetKind];
   const numeric = Number(value);
-  return clamp$5(Number.isFinite(numeric) ? numeric : 0, limits.min, limits.max);
+  return clamp$6(Number.isFinite(numeric) ? numeric : 0, limits.min, limits.max);
 }
 function getModulationAmountDepth(targetKind, amount) {
   const clampedAmount = clampModulationRouteAmount(targetKind, amount);
@@ -14837,11 +21544,11 @@ function getModulationAmountDepth(targetKind, amount) {
   if (limit <= 0) {
     return 0;
   }
-  return clamp$5(Math.abs(clampedAmount) / limit, 0, 1);
+  return clamp$6(Math.abs(clampedAmount) / limit, 0, 1);
 }
 function composeModulationAmount(targetKind, depth) {
   const limits = getRouteAmountLimit(targetKind);
-  const clampedDepth = clamp$5(Number.isFinite(depth) ? depth : 0, 0, 1);
+  const clampedDepth = clamp$6(Number.isFinite(depth) ? depth : 0, 0, 1);
   if (Math.abs(clampedDepth - 0.5) <= 1e-9) {
     return 0;
   }
@@ -14868,12 +21575,12 @@ function getModulationAmountSliderPosition(targetKind, amount) {
     if (Math.abs(limits.min) <= 1e-9) {
       return 0.5;
     }
-    return clamp$5(0.5 * (1 - Math.abs(clampedAmount) / Math.abs(limits.min)), 0, 0.5);
+    return clamp$6(0.5 * (1 - Math.abs(clampedAmount) / Math.abs(limits.min)), 0, 0.5);
   }
   if (Math.abs(limits.max) <= 1e-9) {
     return 0.5;
   }
-  return clamp$5(0.5 + 0.5 * (clampedAmount / limits.max), 0.5, 1);
+  return clamp$6(0.5 + 0.5 * (clampedAmount / limits.max), 0.5, 1);
 }
 function formatModulationAmountReadout(targetKind, amount, polarity = "unipolar") {
   const clampedAmount = clampModulationRouteAmount(targetKind, amount);
@@ -14946,7 +21653,7 @@ function normalizeSourceSlot(sourceKind, rawSlot) {
     return null;
   }
   const maxSlot = sourceKind === "mseg" ? MODULATION_MSEG_SLOT_COUNT : MODULATION_ENV_SLOT_COUNT;
-  return clamp$5(Number.isFinite(numericSlot) ? numericSlot : 1, 1, maxSlot);
+  return clamp$6(Number.isFinite(numericSlot) ? numericSlot : 1, 1, maxSlot);
 }
 function createDefaultEnvelope(slotIndex) {
   return {
@@ -14964,7 +21671,7 @@ function normalizeEnvelope(value, slotIndex = 0) {
     name: typeof nextValue.name === "string" && nextValue.name.trim() ? nextValue.name : fallback.name,
     attackSeconds: clampEnvSeconds(nextValue.attackSeconds ?? fallback.attackSeconds, fallback.attackSeconds),
     decaySeconds: clampEnvSeconds(nextValue.decaySeconds ?? fallback.decaySeconds, fallback.decaySeconds),
-    sustain: clamp01(nextValue.sustain ?? fallback.sustain),
+    sustain: clamp01$1(nextValue.sustain ?? fallback.sustain),
     releaseSeconds: clampEnvSeconds(nextValue.releaseSeconds ?? fallback.releaseSeconds, fallback.releaseSeconds)
   };
 }
@@ -15002,7 +21709,7 @@ function normalizeMsegSlot(value, slotIndex) {
   return {
     shapeA,
     shapeB: normalizeMsegShape(nextValue.shapeB ?? shapeA),
-    morph: clamp01(nextValue.morph ?? 0),
+    morph: clamp01$1(nextValue.morph ?? 0),
     playback: normalizeMsegPlayback(nextValue.playback ?? createDefaultMsegPlayback())
   };
 }
@@ -15132,8 +21839,7 @@ class ModulationRuntimeBridge {
   requestBootState() {
     if (typeof this.patchConnection.requestFullStoredState === "function") {
       this.patchConnection.requestFullStoredState((storedState) => {
-        const fullState = storedState && typeof storedState === "object" ? storedState : {};
-        this.applyStoredState(fullState[MODULATION_STATE_KEY]);
+        this.applyStoredState(readFullStoredStateValue$1(storedState, MODULATION_STATE_KEY));
       });
       return;
     }
@@ -15153,13 +21859,13 @@ class ModulationRuntimeBridge {
     this.stateListeners.delete(listener);
   }
   getMsegSlotController(slotIndex) {
-    return this.slotControllers[clamp$5(Math.round(slotIndex), 0, MODULATION_MSEG_SLOT_COUNT - 1)];
+    return this.slotControllers[clamp$6(Math.round(slotIndex), 0, MODULATION_MSEG_SLOT_COUNT - 1)];
   }
   getMsegSlotEditShapeIndex(slotIndex) {
-    return this.msegSlotEditShapeIndexes[clamp$5(Math.round(slotIndex), 0, MODULATION_MSEG_SLOT_COUNT - 1)];
+    return this.msegSlotEditShapeIndexes[clamp$6(Math.round(slotIndex), 0, MODULATION_MSEG_SLOT_COUNT - 1)];
   }
   setMsegSlotEditShapeIndex(slotIndex, shapeIndex) {
-    const normalizedSlotIndex = clamp$5(Math.round(slotIndex), 0, MODULATION_MSEG_SLOT_COUNT - 1);
+    const normalizedSlotIndex = clamp$6(Math.round(slotIndex), 0, MODULATION_MSEG_SLOT_COUNT - 1);
     const normalizedShapeIndex = Math.round(Number(shapeIndex)) === 1 ? 1 : 0;
     if (this.msegSlotEditShapeIndexes[normalizedSlotIndex] === normalizedShapeIndex) {
       return;
@@ -15192,7 +21898,7 @@ class ModulationRuntimeBridge {
     });
   }
   setMsegSlotMorph(slotIndex, nextMorph) {
-    const normalizedMorph = clamp01(nextMorph);
+    const normalizedMorph = clamp01$1(nextMorph);
     const currentSlot = this.state.msegSlots[slotIndex];
     if (currentSlot.morph === normalizedMorph) {
       return;
@@ -15422,7 +22128,7 @@ function useResizeObserver$1(ref) {
   }, [ref]);
   return size;
 }
-function clamp$4(value, min, max) {
+function clamp$5(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 function buildMsegSurfacePaths(points, width, height, options = {}) {
@@ -15452,7 +22158,7 @@ function buildMsegMorphCurvePath(shapeAPoints, shapeBPoints, morphValue, width, 
   try {
     const bufferA = renderMsegShape({ points: shapeAPoints });
     const bufferB = renderMsegShape({ points: shapeBPoints });
-    const morph = clamp$4(Number(morphValue) || 0, 0, 1);
+    const morph = clamp$5(Number(morphValue) || 0, 0, 1);
     const metrics = createMsegEditorMetrics(width, height, {
       pointRadius: options.pointRadius,
       horizontalPadding: options.horizontalPadding ?? MSEG_EDITOR_HORIZONTAL_PADDING_PX,
@@ -15463,7 +22169,7 @@ function buildMsegMorphCurvePath(shapeAPoints, shapeBPoints, morphValue, width, 
       const x = sampleIndex / Math.max(1, sampleCount - 1);
       const valueA = sampleRenderedMsegBuffer(bufferA, x);
       const valueB = sampleRenderedMsegBuffer(bufferB, x);
-      const y = clamp$4(valueA + (valueB - valueA) * morph, 0, 1);
+      const y = clamp$5(valueA + (valueB - valueA) * morph, 0, 1);
       return pointToMsegEditorCoordinates({ x, y }, width, height, options);
     });
     return polylineToSvgPath(polyline);
@@ -15526,7 +22232,7 @@ function MsegPreview({
       morphCurvePath: nextMorphCurvePath
     };
   }, [morphShapeAPoints, morphShapeBPoints, morphValue, orientation, points, referencePoints, showMorphCurve, size.height, size.width]);
-  const clampedProgressFillEnd = progressFillEnd !== null && progressFillEnd !== void 0 && Number.isFinite(Number(progressFillEnd)) ? clamp$4(Number(progressFillEnd), 0, 1) : null;
+  const clampedProgressFillEnd = progressFillEnd !== null && progressFillEnd !== void 0 && Number.isFinite(Number(progressFillEnd)) ? clamp$5(Number(progressFillEnd), 0, 1) : null;
   const progressClipRect = reactExports.useMemo(() => {
     if (clampedProgressFillEnd === null) {
       return null;
@@ -15937,7 +22643,7 @@ const DISTORTION_FIXED_DISPLAY_RANGE = 2;
 const DISTORTION_CURVE_POINT_COUNT = 241;
 const DISTORTION_TRANSFER_OCCUPANCY_BIN_COUNT = 81;
 const DISTORTION_TRANSFER_OCCUPANCY_ACTIVITY_EPSILON = 0.035;
-function clamp$3(value, min, max) {
+function clamp$4(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 function coerceFiniteNumber(value) {
@@ -15991,7 +22697,7 @@ function normalizeDistortionScopeMessage(message) {
   const computedRemovedPeak = findPeak(normalizedInput.map((inputSample, index) => inputSample - normalizedOutput[index]));
   return {
     sampleRateHz: Math.max(1, coerceFiniteNumber(record.sampleRateHz) ?? 44100),
-    dominantChannel: clamp$3(Math.round(coerceFiniteNumber(record.dominantChannel) ?? 0), 0, 1),
+    dominantChannel: clamp$4(Math.round(coerceFiniteNumber(record.dominantChannel) ?? 0), 0, 1),
     inputPeak: Math.max(0, coerceFiniteNumber(record.inputPeak) ?? computedInputPeak),
     outputPeak: Math.max(0, coerceFiniteNumber(record.outputPeak) ?? computedOutputPeak),
     removedPeak: Math.max(0, coerceFiniteNumber(record.removedPeak) ?? computedRemovedPeak),
@@ -16021,12 +22727,12 @@ function normalizeDistortionHistoryMessage(message) {
   if (availableBinCount <= 0) {
     return null;
   }
-  const binCount = clamp$3(
+  const binCount = clamp$4(
     Math.round(coerceFiniteNumber(record.binCount) ?? availableBinCount),
     1,
     availableBinCount
   );
-  const validBinCount = clamp$3(
+  const validBinCount = clamp$4(
     Math.round(coerceFiniteNumber(record.validBinCount) ?? binCount),
     0,
     binCount
@@ -16052,7 +22758,7 @@ function normalizeDistortionHistoryMessage(message) {
   };
 }
 function shapeDistortionSample(inputSample, knee) {
-  const clampedKnee = clamp$3(Number(knee) || 0, 0, 1);
+  const clampedKnee = clamp$4(Number(knee) || 0, 0, 1);
   const exponent = 2 + 14 * clampedKnee * clampedKnee;
   const magnitude = Math.abs(Number(inputSample) || 0);
   const denominator = Math.pow(1 + Math.pow(magnitude, exponent), 1 / exponent);
@@ -16082,7 +22788,7 @@ function buildDistortionHistoryBins(frame) {
     frame.outputMins.length,
     frame.outputMaxs.length
   );
-  const safeValidBinCount = clamp$3(frame.validBinCount, 0, activeBinCount);
+  const safeValidBinCount = clamp$4(frame.validBinCount, 0, activeBinCount);
   const leadingPaddingCount = Math.max(0, activeBinCount - safeValidBinCount);
   const bins = [];
   for (let index = 0; index < leadingPaddingCount; index += 1) {
@@ -16192,7 +22898,7 @@ function buildDistortionTransferOccupancy({
       continue;
     }
     const normalized = (point.input + safeInputRange) / (safeInputRange * 2);
-    const binIndex = clamp$3(
+    const binIndex = clamp$4(
       Math.round(normalized * (safeBinCount - 1)),
       0,
       safeBinCount - 1
@@ -16205,7 +22911,7 @@ function buildDistortionTransferOccupancy({
   const smoothedRemoved = normalizeSeries(smoothSeries(removedBins));
   const smoothedClipped = smoothSeries(clippedBins).map((value, index) => {
     const density = densityBins[index] ?? 0;
-    return density > 0 ? clamp$3(value / density, 0, 1) : 0;
+    return density > 0 ? clamp$4(value / density, 0, 1) : 0;
   });
   const rawPoints = Array.from({ length: safeBinCount }, (_, index) => {
     const normalized = safeBinCount <= 1 ? 0 : index / (safeBinCount - 1);
@@ -16215,7 +22921,7 @@ function buildDistortionTransferOccupancy({
       output: shapeDistortionSample(input, knee),
       density: smoothedDensity[index] ?? 0,
       removed: smoothedRemoved[index] ?? 0,
-      clipped: clamp$3(smoothedClipped[index] ?? 0, 0, 1)
+      clipped: clamp$4(smoothedClipped[index] ?? 0, 0, 1)
     };
   });
   const segments = [];
@@ -16289,15 +22995,15 @@ const COMPACT_PLOT = {
 function joinClasses(...classes) {
   return classes.filter(Boolean).join(" ");
 }
-function clamp$2(value, min, max) {
+function clamp$3(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 function mapPlotX(sampleValue, plot, range) {
-  const normalized = clamp$2((sampleValue + range) / (Math.max(range, 1e-6) * 2), 0, 1);
+  const normalized = clamp$3((sampleValue + range) / (Math.max(range, 1e-6) * 2), 0, 1);
   return plot.left + plot.width * normalized;
 }
 function mapPlotY(sampleValue, plot, range) {
-  const normalized = clamp$2((range - sampleValue) / (Math.max(range, 1e-6) * 2), 0, 1);
+  const normalized = clamp$3((range - sampleValue) / (Math.max(range, 1e-6) * 2), 0, 1);
   return plot.top + plot.height * normalized;
 }
 function buildPolylinePath(points) {
@@ -16435,8 +23141,8 @@ function DistortionVisualizer({
     return {
       occupancyPath,
       clippedPath,
-      occupancyOpacity: clamp$2(0.14 + peakDensity * 0.34, 0.14, 0.48),
-      clippedOpacity: clamp$2(peakRemoved * 0.62 + peakClipped * 0.24, 0, 0.72)
+      occupancyOpacity: clamp$3(0.14 + peakDensity * 0.34, 0.14, 0.48),
+      clippedOpacity: clamp$3(peakRemoved * 0.62 + peakClipped * 0.24, 0, 0.72)
     };
   }).filter((segment) => segment.occupancyPath), [displayRange, transferOccupancy, transferPlotRect]);
   const historyColumns = reactExports.useMemo(() => {
@@ -16947,6 +23653,874 @@ function usePatchEventTrigger(endpointID) {
     patchConnection.sendEventOrValue?.(endpointID, value);
   }, [endpointID, patchConnection]);
 }
+const ARTICULATION_STATE_KEY = "articulations.v2";
+const ARTICULATION_TRIGGER_CONFIG_STATE_KEY = "articulationTriggerConfig.v1";
+const ARTICULATION_MAX_SLOTS = 128;
+const ARTICULATION_UNASSIGNED_RUNTIME_SLOT = -1;
+const ARTICULATION_DEFAULT_NAMES = [
+  "Bow Forte",
+  "Bow Pianissimo",
+  "Pluck Round",
+  "Pluck Snap",
+  "Hammer",
+  "Air Pad",
+  "Bell Strike",
+  "Choke",
+  "Tape Hum",
+  "Curl Lift",
+  "Chatter",
+  "Tug Sustain",
+  "Velvet Pop",
+  "Chrome Bloom",
+  "Tin Halo",
+  "Sugar Gate"
+];
+function clamp$2(value, min, max) {
+  return Math.min(Math.max(value, min), max);
+}
+function clamp01(value) {
+  return clamp$2(Number.isFinite(value) ? value : 0, 0, 1);
+}
+function normalizeNumber(value, fallback, min = -Number.MAX_VALUE, max = Number.MAX_VALUE) {
+  const numericValue = Number(value);
+  return clamp$2(Number.isFinite(numericValue) ? numericValue : fallback, min, max);
+}
+function normalizeInteger(value, fallback, min, max) {
+  return clamp$2(Math.round(normalizeNumber(value, fallback)), min, max);
+}
+function cloneJson(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+function normalizeTriggerMode(value) {
+  return value === "key" || value === "vel" || value === "chain" ? value : "chain";
+}
+function createUnassignedRuntimeMap() {
+  return Array.from({ length: ARTICULATION_MAX_SLOTS }, () => ARTICULATION_UNASSIGNED_RUNTIME_SLOT);
+}
+function createDefaultArticulationName(runtimeSlot) {
+  const safeRuntimeSlot = normalizeInteger(runtimeSlot, 0, 0, ARTICULATION_MAX_SLOTS - 1);
+  const baseName = ARTICULATION_DEFAULT_NAMES[safeRuntimeSlot % ARTICULATION_DEFAULT_NAMES.length];
+  const cycleIndex = Math.floor(safeRuntimeSlot / ARTICULATION_DEFAULT_NAMES.length);
+  return cycleIndex === 0 ? baseName : `${baseName} ${cycleIndex + 1}`;
+}
+function createUniqueArticulationId(usedIds, runtimeSlot) {
+  const baseId = `articulation-${runtimeSlot}`;
+  if (!usedIds.has(baseId)) {
+    return baseId;
+  }
+  for (let suffix = 2; suffix <= ARTICULATION_MAX_SLOTS; suffix += 1) {
+    const candidate = `${baseId}-${suffix}`;
+    if (!usedIds.has(candidate)) {
+      return candidate;
+    }
+  }
+  return `${baseId}-${Date.now().toString(36)}`;
+}
+function createUniqueAssignmentId(assignments, prefix, articulationId, position) {
+  const usedIds = new Set(assignments.map((assignment) => assignment.id));
+  const baseId = `${prefix}-${articulationId}-${position}`;
+  if (!usedIds.has(baseId)) {
+    return baseId;
+  }
+  for (let suffix = 2; suffix <= ARTICULATION_MAX_SLOTS; suffix += 1) {
+    const candidate = `${baseId}-${suffix}`;
+    if (!usedIds.has(candidate)) {
+      return candidate;
+    }
+  }
+  return `${baseId}-${Date.now().toString(36)}`;
+}
+function createUniqueCopiedName(slots, sourceName) {
+  const usedNames = new Set(slots.map((slot) => slot.name));
+  const baseName = `${sourceName} Copy`;
+  if (!usedNames.has(baseName)) {
+    return baseName;
+  }
+  for (let suffix = 2; suffix <= ARTICULATION_MAX_SLOTS; suffix += 1) {
+    const candidate = `${baseName} ${suffix}`;
+    if (!usedNames.has(candidate)) {
+      return candidate;
+    }
+  }
+  return baseName;
+}
+function createDefaultArticulationParameterSnapshot() {
+  return {
+    wavetablePosition: 0,
+    playMode: 0,
+    glideTime: 0,
+    pan: 0,
+    warpMode: 0,
+    warpAmount: 0,
+    filterMode: 0,
+    filterCutoff: 1e3,
+    filterQ: 0.707107,
+    msegMorphs: [0, 0, 0],
+    distortionMode: 0,
+    distortionDriveDb: 12,
+    distortionKnee: 0.35,
+    distortionWet: 0,
+    distortionWetHPHz: 40,
+    distortionWetLPHz: 18e3,
+    chorusEnabled: 0,
+    chorusMix: 0,
+    chorusMotionMode: 1,
+    chorusBloomMode: 0,
+    chorusTone: 0.5,
+    chorusFeedback: 0.42,
+    chorusRingAmount: 0,
+    chorusRingOffsetMode: 0,
+    chorusRingFineSemitones: 0
+  };
+}
+function normalizeArticulationParameterSnapshot(value) {
+  const defaults = createDefaultArticulationParameterSnapshot();
+  const nextValue = value && typeof value === "object" ? value : {};
+  const msegMorphs = Array.isArray(nextValue.msegMorphs) ? nextValue.msegMorphs : [];
+  return {
+    wavetablePosition: normalizeNumber(nextValue.wavetablePosition, defaults.wavetablePosition, 0, 1),
+    playMode: normalizeInteger(nextValue.playMode, defaults.playMode, 0, 2),
+    glideTime: normalizeNumber(nextValue.glideTime, defaults.glideTime, 0, 2),
+    pan: normalizeNumber(nextValue.pan, defaults.pan, -1, 1),
+    warpMode: normalizeInteger(nextValue.warpMode, defaults.warpMode, 0, 4),
+    warpAmount: normalizeNumber(nextValue.warpAmount, defaults.warpAmount, 0, 1),
+    filterMode: normalizeInteger(nextValue.filterMode, defaults.filterMode, 0, 5),
+    filterCutoff: normalizeNumber(nextValue.filterCutoff, defaults.filterCutoff, 20, 2e4),
+    filterQ: normalizeNumber(nextValue.filterQ, defaults.filterQ, 0.1, 20),
+    msegMorphs: [
+      clamp01(Number(msegMorphs[0])),
+      clamp01(Number(msegMorphs[1])),
+      clamp01(Number(msegMorphs[2]))
+    ],
+    distortionMode: normalizeInteger(nextValue.distortionMode, defaults.distortionMode, 0, 1),
+    distortionDriveDb: normalizeNumber(nextValue.distortionDriveDb, defaults.distortionDriveDb, 0, 36),
+    distortionKnee: normalizeNumber(nextValue.distortionKnee, defaults.distortionKnee, 0, 1),
+    distortionWet: normalizeNumber(nextValue.distortionWet, defaults.distortionWet, 0, 1),
+    distortionWetHPHz: normalizeNumber(nextValue.distortionWetHPHz, defaults.distortionWetHPHz, 20, 4e3),
+    distortionWetLPHz: normalizeNumber(nextValue.distortionWetLPHz, defaults.distortionWetLPHz, 20, 2e4),
+    chorusEnabled: normalizeInteger(nextValue.chorusEnabled, defaults.chorusEnabled, 0, 1),
+    chorusMix: normalizeNumber(nextValue.chorusMix, defaults.chorusMix, 0, 1),
+    chorusMotionMode: normalizeInteger(nextValue.chorusMotionMode, defaults.chorusMotionMode, 0, 3),
+    chorusBloomMode: normalizeInteger(nextValue.chorusBloomMode, defaults.chorusBloomMode, 0, 4),
+    chorusTone: normalizeNumber(nextValue.chorusTone, defaults.chorusTone, 0, 1),
+    chorusFeedback: normalizeNumber(nextValue.chorusFeedback, defaults.chorusFeedback, 0, 0.95),
+    chorusRingAmount: normalizeNumber(nextValue.chorusRingAmount, defaults.chorusRingAmount, 0, 1),
+    chorusRingOffsetMode: normalizeInteger(nextValue.chorusRingOffsetMode, defaults.chorusRingOffsetMode, 0, 3),
+    chorusRingFineSemitones: normalizeNumber(nextValue.chorusRingFineSemitones, defaults.chorusRingFineSemitones, -2, 2)
+  };
+}
+function normalizeArticulationRouteAmountSnapshot(value) {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+  const nextValue = value;
+  const routeId = typeof nextValue.routeId === "string" ? nextValue.routeId.trim() : "";
+  if (!routeId) {
+    return null;
+  }
+  return {
+    routeId,
+    amount: normalizeNumber(nextValue.amount, 0, -48, 48)
+  };
+}
+function normalizeArticulationSnapshot(value) {
+  const nextValue = value && typeof value === "object" ? value : {};
+  const routeAmounts = Array.isArray(nextValue.modRouteAmounts) ? nextValue.modRouteAmounts.map(normalizeArticulationRouteAmountSnapshot).filter((entry) => entry !== null) : [];
+  const routeAmountById = /* @__PURE__ */ new Map();
+  for (const routeAmount of routeAmounts) {
+    routeAmountById.set(routeAmount.routeId, routeAmount);
+  }
+  return {
+    format: "cosimo.articulation.snapshot",
+    version: 1,
+    parameters: normalizeArticulationParameterSnapshot(nextValue.parameters),
+    envelopes: [0, 1, 2].map((slotIndex) => normalizeEnvelope(
+      Array.isArray(nextValue.envelopes) ? nextValue.envelopes[slotIndex] : void 0,
+      slotIndex
+    )),
+    modRouteAmounts: [...routeAmountById.values()]
+  };
+}
+function normalizeArticulationSlot(value, fallbackRuntimeSlot) {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+  const nextValue = value;
+  const runtimeSlot = normalizeInteger(nextValue.runtimeSlot, fallbackRuntimeSlot, 0, ARTICULATION_MAX_SLOTS - 1);
+  const id = typeof nextValue.id === "string" && nextValue.id.trim() ? nextValue.id.trim() : `articulation-${runtimeSlot}`;
+  const name = typeof nextValue.name === "string" && nextValue.name.trim() ? nextValue.name.trim() : createDefaultArticulationName(runtimeSlot);
+  return {
+    id,
+    runtimeSlot,
+    name,
+    snapshot: normalizeArticulationSnapshot(nextValue.snapshot)
+  };
+}
+function normalizeKeyAssignment(value, validArticulationIds) {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+  const nextValue = value;
+  const articulationId = typeof nextValue.articulationId === "string" ? nextValue.articulationId.trim() : "";
+  if (!validArticulationIds.has(articulationId)) {
+    return null;
+  }
+  return {
+    note: normalizeInteger(nextValue.note, 0, 0, ARTICULATION_MAX_SLOTS - 1),
+    articulationId
+  };
+}
+function normalizeRangeAssignment(value, validArticulationIds, assignmentIndex, idPrefix, minAllowed) {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+  const nextValue = value;
+  const articulationId = typeof nextValue.articulationId === "string" ? nextValue.articulationId.trim() : "";
+  if (!validArticulationIds.has(articulationId)) {
+    return null;
+  }
+  let min = normalizeInteger(nextValue.min, minAllowed, minAllowed, ARTICULATION_MAX_SLOTS - 1);
+  let max = normalizeInteger(nextValue.max, min, minAllowed, ARTICULATION_MAX_SLOTS - 1);
+  if (max < min) {
+    [min, max] = [max, min];
+  }
+  const id = typeof nextValue.id === "string" && nextValue.id.trim() ? nextValue.id.trim() : `${idPrefix}-${assignmentIndex}`;
+  return {
+    id,
+    articulationId,
+    min,
+    max
+  };
+}
+function normalizeRangeAssignments(value, validArticulationIds, idPrefix, minAllowed) {
+  const inputAssignments = Array.isArray(value) ? value : [];
+  const usedIds = /* @__PURE__ */ new Set();
+  const assignments = [];
+  for (let assignmentIndex = 0; assignmentIndex < inputAssignments.length; assignmentIndex += 1) {
+    const assignment = normalizeRangeAssignment(
+      inputAssignments[assignmentIndex],
+      validArticulationIds,
+      assignmentIndex,
+      idPrefix,
+      minAllowed
+    );
+    if (!assignment || usedIds.has(assignment.id)) {
+      continue;
+    }
+    usedIds.add(assignment.id);
+    assignments.push(assignment);
+  }
+  return assignments;
+}
+function normalizeKeyAssignments(value, validArticulationIds) {
+  const inputAssignments = Array.isArray(value) ? value : [];
+  const usedNotes = /* @__PURE__ */ new Set();
+  const assignments = [];
+  for (const inputAssignment of inputAssignments) {
+    const assignment = normalizeKeyAssignment(inputAssignment, validArticulationIds);
+    if (!assignment || usedNotes.has(assignment.note)) {
+      continue;
+    }
+    usedNotes.add(assignment.note);
+    assignments.push(assignment);
+  }
+  return assignments;
+}
+function createDefaultArticulationBank() {
+  return {
+    format: "cosimo.articulations",
+    version: 2,
+    selectedSlotId: null,
+    activeTriggerMode: "chain",
+    slots: [],
+    chainAssignments: [],
+    keyAssignments: [],
+    velocityAssignments: []
+  };
+}
+function normalizeArticulationBank(value) {
+  let parsedValue = value;
+  if (typeof parsedValue === "string" && parsedValue.trim()) {
+    try {
+      parsedValue = JSON.parse(parsedValue);
+    } catch {
+      parsedValue = null;
+    }
+  }
+  const nextValue = parsedValue && typeof parsedValue === "object" ? parsedValue : {};
+  const inputSlots = Array.isArray(nextValue.slots) ? nextValue.slots : [];
+  const usedRuntimeSlots = /* @__PURE__ */ new Set();
+  const usedIds = /* @__PURE__ */ new Set();
+  const slots = [];
+  for (let slotIndex = 0; slotIndex < inputSlots.length && slots.length < ARTICULATION_MAX_SLOTS; slotIndex += 1) {
+    const slot = normalizeArticulationSlot(inputSlots[slotIndex], slotIndex);
+    if (!slot || usedRuntimeSlots.has(slot.runtimeSlot) || usedIds.has(slot.id)) {
+      continue;
+    }
+    usedRuntimeSlots.add(slot.runtimeSlot);
+    usedIds.add(slot.id);
+    slots.push(slot);
+  }
+  const selectedSlotId = typeof nextValue.selectedSlotId === "string" && slots.some((slot) => slot.id === nextValue.selectedSlotId) ? nextValue.selectedSlotId : null;
+  const validArticulationIds = new Set(slots.map((slot) => slot.id));
+  return {
+    format: "cosimo.articulations",
+    version: 2,
+    selectedSlotId,
+    activeTriggerMode: normalizeTriggerMode(nextValue.activeTriggerMode),
+    slots,
+    chainAssignments: normalizeRangeAssignments(nextValue.chainAssignments, validArticulationIds, "chain", 0),
+    keyAssignments: normalizeKeyAssignments(nextValue.keyAssignments, validArticulationIds),
+    velocityAssignments: normalizeRangeAssignments(nextValue.velocityAssignments, validArticulationIds, "velocity", 1)
+  };
+}
+function serializeArticulationBank(value) {
+  return JSON.stringify(normalizeArticulationBank(value));
+}
+function articulationBanksEqual(left, right) {
+  return serializeArticulationBank(left) === serializeArticulationBank(right);
+}
+function articulationSnapshotsEqual(left, right) {
+  return JSON.stringify(normalizeArticulationSnapshot(left)) === JSON.stringify(normalizeArticulationSnapshot(right));
+}
+function createArticulationSlotFromSnapshot(bankValue, snapshotValue) {
+  const bank = normalizeArticulationBank(bankValue);
+  const usedRuntimeSlots = new Set(bank.slots.map((slot) => slot.runtimeSlot));
+  const usedIds = new Set(bank.slots.map((slot) => slot.id));
+  let runtimeSlot = -1;
+  for (let candidate = 0; candidate < ARTICULATION_MAX_SLOTS; candidate += 1) {
+    if (!usedRuntimeSlots.has(candidate)) {
+      runtimeSlot = candidate;
+      break;
+    }
+  }
+  if (runtimeSlot < 0) {
+    return null;
+  }
+  return {
+    id: createUniqueArticulationId(usedIds, runtimeSlot),
+    runtimeSlot,
+    name: createDefaultArticulationName(runtimeSlot),
+    snapshot: cloneJson(normalizeArticulationSnapshot(snapshotValue))
+  };
+}
+function findFirstUnassignedIndex(assignedValues, minAllowed) {
+  for (let candidate = minAllowed; candidate < ARTICULATION_MAX_SLOTS; candidate += 1) {
+    if (!assignedValues.has(candidate)) {
+      return candidate;
+    }
+  }
+  return null;
+}
+function collectRangeAssignedValues(assignments) {
+  const assignedValues = /* @__PURE__ */ new Set();
+  for (const assignment of assignments) {
+    for (let value = assignment.min; value <= assignment.max; value += 1) {
+      assignedValues.add(value);
+    }
+  }
+  return assignedValues;
+}
+function assignArticulationToNextAvailableTrigger(bankValue, articulationId, modeValue) {
+  const bank = normalizeArticulationBank(bankValue);
+  const mode = normalizeTriggerMode(modeValue ?? bank.activeTriggerMode);
+  if (!bank.slots.some((slot) => slot.id === articulationId)) {
+    return bank;
+  }
+  if (mode === "chain") {
+    const nextSelector = findFirstUnassignedIndex(collectRangeAssignedValues(bank.chainAssignments), 0);
+    if (nextSelector === null) {
+      return bank;
+    }
+    return normalizeArticulationBank({
+      ...bank,
+      chainAssignments: [
+        ...bank.chainAssignments,
+        {
+          id: `chain-${articulationId}-${nextSelector}`,
+          articulationId,
+          min: nextSelector,
+          max: nextSelector
+        }
+      ]
+    });
+  }
+  if (mode === "key") {
+    const usedNotes = new Set(bank.keyAssignments.map((assignment) => assignment.note));
+    const nextNote = findFirstUnassignedIndex(usedNotes, 0);
+    if (nextNote === null) {
+      return bank;
+    }
+    return normalizeArticulationBank({
+      ...bank,
+      keyAssignments: [
+        ...bank.keyAssignments,
+        {
+          note: nextNote,
+          articulationId
+        }
+      ]
+    });
+  }
+  const nextVelocity = findFirstUnassignedIndex(collectRangeAssignedValues(bank.velocityAssignments), 1);
+  if (nextVelocity === null) {
+    return bank;
+  }
+  return normalizeArticulationBank({
+    ...bank,
+    velocityAssignments: [
+      ...bank.velocityAssignments,
+      {
+        id: `velocity-${articulationId}-${nextVelocity}`,
+        articulationId,
+        min: nextVelocity,
+        max: nextVelocity
+      }
+    ]
+  });
+}
+function addCapturedArticulationToBank(bankValue, snapshotValue, options = {}) {
+  const bank = normalizeArticulationBank(bankValue);
+  const nextSlot = createArticulationSlotFromSnapshot(bank, snapshotValue);
+  if (!nextSlot) {
+    return bank;
+  }
+  const nextBank = normalizeArticulationBank({
+    ...bank,
+    selectedSlotId: nextSlot.id,
+    slots: [...bank.slots, nextSlot]
+  });
+  if (options.autoAssign === false) {
+    return nextBank;
+  }
+  return assignArticulationToNextAvailableTrigger(nextBank, nextSlot.id, bank.activeTriggerMode);
+}
+function upsertSelectedArticulationSnapshot(bankValue, slotId, snapshotValue) {
+  const bank = normalizeArticulationBank(bankValue);
+  const snapshot = normalizeArticulationSnapshot(snapshotValue);
+  const slots = bank.slots.map((slot) => slot.id === slotId ? { ...slot, snapshot } : slot);
+  return normalizeArticulationBank({
+    ...bank,
+    slots
+  });
+}
+function setArticulationTriggerMode(bankValue, modeValue) {
+  const bank = normalizeArticulationBank(bankValue);
+  return normalizeArticulationBank({
+    ...bank,
+    activeTriggerMode: normalizeTriggerMode(modeValue)
+  });
+}
+function renameArticulationSlot(bankValue, slotId, nextNameValue) {
+  const bank = normalizeArticulationBank(bankValue);
+  const nextName = typeof nextNameValue === "string" ? nextNameValue.trim() : "";
+  if (!nextName) {
+    return bank;
+  }
+  return normalizeArticulationBank({
+    ...bank,
+    slots: bank.slots.map((slot) => slot.id === slotId ? { ...slot, name: nextName } : slot)
+  });
+}
+function duplicateArticulationSlot(bankValue, slotId) {
+  const bank = normalizeArticulationBank(bankValue);
+  const sourceSlot = bank.slots.find((slot) => slot.id === slotId);
+  if (!sourceSlot) {
+    return bank;
+  }
+  const nextSlot = createArticulationSlotFromSnapshot(bank, sourceSlot.snapshot);
+  if (!nextSlot) {
+    return bank;
+  }
+  return normalizeArticulationBank({
+    ...bank,
+    selectedSlotId: nextSlot.id,
+    slots: [
+      ...bank.slots,
+      {
+        ...nextSlot,
+        name: createUniqueCopiedName(bank.slots, sourceSlot.name)
+      }
+    ]
+  });
+}
+function deleteArticulationSlot(bankValue, slotId) {
+  const bank = normalizeArticulationBank(bankValue);
+  if (bank.slots.length <= 1 || !bank.slots.some((slot) => slot.id === slotId)) {
+    return bank;
+  }
+  const slots = bank.slots.filter((slot) => slot.id !== slotId);
+  return normalizeArticulationBank({
+    ...bank,
+    selectedSlotId: bank.selectedSlotId === slotId ? slots[0]?.id ?? null : bank.selectedSlotId,
+    slots,
+    chainAssignments: bank.chainAssignments.filter((assignment) => assignment.articulationId !== slotId),
+    keyAssignments: bank.keyAssignments.filter((assignment) => assignment.articulationId !== slotId),
+    velocityAssignments: bank.velocityAssignments.filter((assignment) => assignment.articulationId !== slotId)
+  });
+}
+function getRangeAssignmentField(mode) {
+  if (mode === "vel") {
+    return {
+      field: "velocityAssignments",
+      minAllowed: 1,
+      prefix: "velocity"
+    };
+  }
+  return {
+    field: "chainAssignments",
+    minAllowed: 0,
+    prefix: "chain"
+  };
+}
+function sortRangeAssignments(assignments) {
+  return [...assignments].sort((left, right) => left.min - right.min || left.max - right.max);
+}
+function keyAssignmentsToRangeAssignments(assignments) {
+  const sortedAssignments = [...assignments].sort((left, right) => left.note - right.note);
+  const ranges = [];
+  for (const assignment of sortedAssignments) {
+    const previous = ranges[ranges.length - 1];
+    if (previous && previous.articulationId === assignment.articulationId && previous.max + 1 === assignment.note) {
+      previous.max = assignment.note;
+      previous.id = `key-${previous.articulationId}-${previous.min}-${previous.max}`;
+      continue;
+    }
+    ranges.push({
+      id: `key-${assignment.articulationId}-${assignment.note}-${assignment.note}`,
+      articulationId: assignment.articulationId,
+      min: assignment.note,
+      max: assignment.note
+    });
+  }
+  return ranges;
+}
+function rangeAssignmentsToKeyAssignments(assignments) {
+  const usedNotes = /* @__PURE__ */ new Set();
+  const keyAssignments = [];
+  for (const assignment of sortRangeAssignments(assignments)) {
+    for (let note = assignment.min; note <= assignment.max; note += 1) {
+      if (usedNotes.has(note)) {
+        continue;
+      }
+      usedNotes.add(note);
+      keyAssignments.push({ note, articulationId: assignment.articulationId });
+    }
+  }
+  return keyAssignments;
+}
+function getTriggerLaneInfo(bank, modeValue) {
+  const mode = normalizeTriggerMode(modeValue);
+  if (mode === "key") {
+    return {
+      mode,
+      minAllowed: 0,
+      maxAllowed: ARTICULATION_MAX_SLOTS - 1,
+      prefix: "key",
+      assignments: keyAssignmentsToRangeAssignments(bank.keyAssignments)
+    };
+  }
+  const { field, minAllowed, prefix } = getRangeAssignmentField(mode);
+  return {
+    mode,
+    minAllowed,
+    maxAllowed: ARTICULATION_MAX_SLOTS - 1,
+    prefix,
+    assignments: bank[field]
+  };
+}
+function setTriggerLaneAssignments(bank, mode, assignments) {
+  const sortedAssignments = sortRangeAssignments(assignments);
+  if (mode === "key") {
+    return normalizeArticulationBank({
+      ...bank,
+      keyAssignments: rangeAssignmentsToKeyAssignments(sortedAssignments)
+    });
+  }
+  const { field } = getRangeAssignmentField(mode);
+  return normalizeArticulationBank({
+    ...bank,
+    [field]: sortedAssignments
+  });
+}
+function findRangeAssignmentAt(assignments, position) {
+  return assignments.find((assignment) => position >= assignment.min && position <= assignment.max) ?? null;
+}
+function removeOtherAssignmentsForArticulation(assignments, articulationId, keepAssignmentId = null) {
+  return assignments.filter((assignment) => assignment.articulationId !== articulationId || keepAssignmentId !== null && assignment.id === keepAssignmentId);
+}
+function findEmptyRangeGap(assignments, position, minAllowed, maxAllowed) {
+  let gapMin = minAllowed;
+  for (const assignment of sortRangeAssignments(assignments)) {
+    if (position < assignment.min) {
+      return {
+        min: gapMin,
+        max: Math.min(maxAllowed, assignment.min - 1)
+      };
+    }
+    gapMin = Math.max(gapMin, assignment.max + 1);
+  }
+  return {
+    min: gapMin,
+    max: maxAllowed
+  };
+}
+function findMatchingRangeAssignment(assignments, segmentValue) {
+  if (!segmentValue || typeof segmentValue !== "object") {
+    return null;
+  }
+  const segment = segmentValue;
+  const id = typeof segment.id === "string" ? segment.id : "";
+  const articulationId = typeof segment.articulationId === "string" ? segment.articulationId : "";
+  const min = Number(segment.min);
+  const max = Number(segment.max);
+  return assignments.find((assignment) => id && assignment.id === id || assignment.articulationId === articulationId && assignment.min === min && assignment.max === max) ?? null;
+}
+function carveAssignmentAroundRange(assignment, carvedMin, carvedMax) {
+  if (assignment.max < carvedMin || assignment.min > carvedMax) {
+    return [assignment];
+  }
+  if (carvedMin <= assignment.min && carvedMax >= assignment.max) {
+    return [];
+  }
+  if (carvedMin <= assignment.min) {
+    const min = carvedMax + 1;
+    return min <= assignment.max ? [{ ...assignment, min }] : [];
+  }
+  if (carvedMax >= assignment.max) {
+    const max = carvedMin - 1;
+    return max >= assignment.min ? [{ ...assignment, max }] : [];
+  }
+  const left = { ...assignment, max: carvedMin - 1 };
+  const right = { ...assignment, min: carvedMax + 1 };
+  const leftWidth = left.max - left.min + 1;
+  const rightWidth = right.max - right.min + 1;
+  return leftWidth >= rightWidth ? [left] : [right];
+}
+function assignArticulationToRangePosition(bankValue, modeValue, positionValue, articulationId) {
+  const bank = normalizeArticulationBank(bankValue);
+  if (!bank.slots.some((slot) => slot.id === articulationId)) {
+    return bank;
+  }
+  const { mode, minAllowed, maxAllowed, prefix, assignments } = getTriggerLaneInfo(bank, modeValue);
+  const position = normalizeInteger(positionValue, minAllowed, minAllowed, maxAllowed);
+  const occupiedAssignment = assignments.find((assignment) => position >= assignment.min && position <= assignment.max);
+  const nextAssignments = occupiedAssignment ? removeOtherAssignmentsForArticulation(
+    assignments.map((assignment) => assignment.id === occupiedAssignment.id ? { ...assignment, articulationId } : assignment),
+    articulationId,
+    occupiedAssignment.id
+  ) : (() => {
+    const nextAssignmentsWithoutSameArticulation = removeOtherAssignmentsForArticulation(assignments, articulationId);
+    const gap = findEmptyRangeGap(nextAssignmentsWithoutSameArticulation, position, minAllowed, maxAllowed);
+    if (gap.max < gap.min) {
+      return assignments;
+    }
+    return [
+      ...nextAssignmentsWithoutSameArticulation,
+      {
+        id: createUniqueAssignmentId(nextAssignmentsWithoutSameArticulation, prefix, articulationId, gap.min),
+        articulationId,
+        min: gap.min,
+        max: gap.max
+      }
+    ];
+  })();
+  return setTriggerLaneAssignments(bank, mode, nextAssignments);
+}
+function insertArticulationRangeAtPosition(bankValue, modeValue, positionValue, articulationId, preserveSide) {
+  const bank = normalizeArticulationBank(bankValue);
+  if (!bank.slots.some((slot) => slot.id === articulationId)) {
+    return bank;
+  }
+  const { mode, minAllowed, maxAllowed, prefix, assignments } = getTriggerLaneInfo(bank, modeValue);
+  const position = normalizeInteger(positionValue, minAllowed, minAllowed, maxAllowed);
+  const occupiedAssignment = findRangeAssignmentAt(assignments, position);
+  let nextAssignments = assignments;
+  if (occupiedAssignment) {
+    if (occupiedAssignment.articulationId === articulationId) {
+      return bank;
+    }
+    if (occupiedAssignment.min === occupiedAssignment.max) {
+      return bank;
+    }
+    const trimFromMin = preserveSide === "upper" || preserveSide !== "lower" && position - occupiedAssignment.min <= occupiedAssignment.max - position;
+    nextAssignments = assignments.flatMap((assignment) => {
+      if (assignment.id !== occupiedAssignment.id) {
+        return [assignment];
+      }
+      if (trimFromMin) {
+        const min = position + 1;
+        return min <= assignment.max ? [{ ...assignment, min }] : [];
+      }
+      const max = position - 1;
+      return max >= assignment.min ? [{ ...assignment, max }] : [];
+    });
+  }
+  nextAssignments = removeOtherAssignmentsForArticulation(nextAssignments, articulationId);
+  if (findRangeAssignmentAt(nextAssignments, position)) {
+    return bank;
+  }
+  return setTriggerLaneAssignments(bank, mode, [
+    ...nextAssignments,
+    {
+      id: createUniqueAssignmentId(nextAssignments, prefix, articulationId, position),
+      articulationId,
+      min: position,
+      max: position
+    }
+  ]);
+}
+function moveArticulationRangeAssignment(bankValue, modeValue, segmentValue, targetPositionValue) {
+  const bank = normalizeArticulationBank(bankValue);
+  const { mode, minAllowed, maxAllowed, assignments } = getTriggerLaneInfo(bank, modeValue);
+  const target = findMatchingRangeAssignment(assignments, segmentValue);
+  if (!target) {
+    return bank;
+  }
+  const width = target.max - target.min + 1;
+  const nextMin = normalizeInteger(
+    Number(targetPositionValue) - Math.floor(width / 2),
+    target.min,
+    minAllowed,
+    Math.max(minAllowed, maxAllowed - width + 1)
+  );
+  const nextTarget = {
+    ...target,
+    min: nextMin,
+    max: nextMin + width - 1
+  };
+  const otherAssignments = assignments.filter((assignment) => assignment.id !== target.id).flatMap((assignment) => carveAssignmentAroundRange(assignment, nextTarget.min, nextTarget.max));
+  if (nextTarget.min === target.min && nextTarget.max === target.max && otherAssignments.length === assignments.length - 1) {
+    return bank;
+  }
+  return setTriggerLaneAssignments(bank, mode, [...otherAssignments, nextTarget]);
+}
+function resizeArticulationRangeAssignment(bankValue, modeValue, segmentValue, edge, positionValue) {
+  const bank = normalizeArticulationBank(bankValue);
+  const { mode, minAllowed, maxAllowed, assignments } = getTriggerLaneInfo(bank, modeValue);
+  const target = findMatchingRangeAssignment(assignments, segmentValue);
+  if (!target) {
+    return bank;
+  }
+  const position = normalizeInteger(positionValue, edge === "min" ? target.min : target.max, minAllowed, maxAllowed);
+  const nextTarget = edge === "min" ? { ...target, min: clamp$2(position, minAllowed, target.max) } : { ...target, max: clamp$2(position, target.min, maxAllowed) };
+  if (nextTarget.min === target.min && nextTarget.max === target.max) {
+    return bank;
+  }
+  const otherAssignments = sortRangeAssignments(assignments.filter((assignment) => assignment.id !== target.id)).flatMap((assignment) => {
+    if (edge === "min" && assignment.max >= nextTarget.min && assignment.max < target.min) {
+      const max = nextTarget.min - 1;
+      return assignment.min <= max ? [{ ...assignment, max }] : [];
+    }
+    if (edge === "max" && assignment.min <= nextTarget.max && assignment.min > target.max) {
+      const min = nextTarget.max + 1;
+      return min <= assignment.max ? [{ ...assignment, min }] : [];
+    }
+    return [assignment];
+  });
+  return setTriggerLaneAssignments(bank, mode, [...otherAssignments, nextTarget]);
+}
+function clearArticulationRangeAssignment(bankValue, modeValue, segmentValue) {
+  const bank = normalizeArticulationBank(bankValue);
+  const { mode, assignments } = getTriggerLaneInfo(bank, modeValue);
+  const target = findMatchingRangeAssignment(assignments, segmentValue);
+  if (!target) {
+    return bank;
+  }
+  return setTriggerLaneAssignments(
+    bank,
+    mode,
+    assignments.filter((assignment) => assignment.id !== target.id)
+  );
+}
+function clearArticulationTriggerAssignments(bankValue, modeValue) {
+  const bank = normalizeArticulationBank(bankValue);
+  const mode = normalizeTriggerMode(modeValue);
+  return setTriggerLaneAssignments(bank, mode, []);
+}
+function distributeArticulationRanges(bankValue, modeValue) {
+  const bank = normalizeArticulationBank(bankValue);
+  const { mode, minAllowed, maxAllowed, prefix, assignments } = getTriggerLaneInfo(bank, modeValue);
+  const firstAssignmentByArticulation = /* @__PURE__ */ new Map();
+  for (const assignment of [...assignments].sort((left, right) => left.min - right.min)) {
+    if (!firstAssignmentByArticulation.has(assignment.articulationId)) {
+      firstAssignmentByArticulation.set(assignment.articulationId, assignment);
+    }
+  }
+  const uniqueAssignments = [...firstAssignmentByArticulation.values()];
+  if (uniqueAssignments.length === 0) {
+    return bank;
+  }
+  const rangeLength = maxAllowed - minAllowed + 1;
+  const nextAssignments = uniqueAssignments.map((assignment, assignmentIndex) => {
+    const min = minAllowed + Math.floor(assignmentIndex * rangeLength / uniqueAssignments.length);
+    const max = assignmentIndex === uniqueAssignments.length - 1 ? maxAllowed : minAllowed + Math.floor((assignmentIndex + 1) * rangeLength / uniqueAssignments.length) - 1;
+    return {
+      id: `${prefix}-${assignment.articulationId}-${min}`,
+      articulationId: assignment.articulationId,
+      min,
+      max: Math.max(min, max)
+    };
+  });
+  return setTriggerLaneAssignments(bank, mode, nextAssignments);
+}
+function fillRangeTriggerMap(target, assignments, runtimeSlotByArticulationId) {
+  for (const assignment of assignments) {
+    const runtimeSlot = runtimeSlotByArticulationId.get(assignment.articulationId);
+    if (runtimeSlot === void 0) {
+      continue;
+    }
+    for (let value = assignment.min; value <= assignment.max; value += 1) {
+      if (target[value] === ARTICULATION_UNASSIGNED_RUNTIME_SLOT) {
+        target[value] = runtimeSlot;
+      }
+    }
+  }
+}
+function buildArticulationTriggerConfig(bankValue) {
+  const bank = normalizeArticulationBank(bankValue);
+  const runtimeSlotByArticulationId = new Map(bank.slots.map((slot) => [slot.id, slot.runtimeSlot]));
+  const chain = createUnassignedRuntimeMap();
+  const key = createUnassignedRuntimeMap();
+  const velocity = createUnassignedRuntimeMap();
+  fillRangeTriggerMap(chain, bank.chainAssignments, runtimeSlotByArticulationId);
+  fillRangeTriggerMap(velocity, bank.velocityAssignments, runtimeSlotByArticulationId);
+  for (const assignment of bank.keyAssignments) {
+    const runtimeSlot = runtimeSlotByArticulationId.get(assignment.articulationId);
+    if (runtimeSlot === void 0 || key[assignment.note] !== ARTICULATION_UNASSIGNED_RUNTIME_SLOT) {
+      continue;
+    }
+    key[assignment.note] = runtimeSlot;
+  }
+  velocity[0] = ARTICULATION_UNASSIGNED_RUNTIME_SLOT;
+  return {
+    format: "cosimo.articulation.triggerConfig",
+    version: 1,
+    activeMode: bank.activeTriggerMode,
+    chain,
+    key,
+    velocity
+  };
+}
+function serializeArticulationTriggerConfig(value) {
+  const config = value && typeof value === "object" && value.format === "cosimo.articulation.triggerConfig" ? value : buildArticulationTriggerConfig(value);
+  return JSON.stringify({
+    format: "cosimo.articulation.triggerConfig",
+    version: 1,
+    activeMode: normalizeTriggerMode(config.activeMode),
+    chain: Array.from({ length: ARTICULATION_MAX_SLOTS }, (_, index) => normalizeInteger(config.chain?.[index], ARTICULATION_UNASSIGNED_RUNTIME_SLOT, ARTICULATION_UNASSIGNED_RUNTIME_SLOT, ARTICULATION_MAX_SLOTS - 1)),
+    key: Array.from({ length: ARTICULATION_MAX_SLOTS }, (_, index) => normalizeInteger(config.key?.[index], ARTICULATION_UNASSIGNED_RUNTIME_SLOT, ARTICULATION_UNASSIGNED_RUNTIME_SLOT, ARTICULATION_MAX_SLOTS - 1)),
+    velocity: Array.from({ length: ARTICULATION_MAX_SLOTS }, (_, index) => index === 0 ? ARTICULATION_UNASSIGNED_RUNTIME_SLOT : normalizeInteger(config.velocity?.[index], ARTICULATION_UNASSIGNED_RUNTIME_SLOT, ARTICULATION_UNASSIGNED_RUNTIME_SLOT, ARTICULATION_MAX_SLOTS - 1))
+  });
+}
+function sendNativeArticulationTriggerConfig(configValue, patchConnection) {
+  const serializedConfig = serializeArticulationTriggerConfig(configValue);
+  patchConnection?.sendNativeArticulationTriggerConfig?.(serializedConfig);
+  const globalObject = globalThis;
+  if (typeof globalObject.cosimo_set_articulation_trigger_config === "function") {
+    globalObject.cosimo_set_articulation_trigger_config(serializedConfig);
+  }
+}
 const EFFECTIVE_MSEG_STATE_ENDPOINT_ID = "effectiveMsegState";
 const EFFECTIVE_MSEG_SLOT_COUNT = 3;
 const FULL_SPAN_LOOP_EPSILON = 1e-6;
@@ -16961,9 +24535,9 @@ function coercePositions(value) {
     return null;
   }
   return [
-    clamp01(value[0]),
-    clamp01(value[1]),
-    clamp01(value[2])
+    clamp01$1(value[0]),
+    clamp01$1(value[1]),
+    clamp01$1(value[2])
   ];
 }
 function normalizeEffectiveMsegStateMessage(message) {
@@ -17023,7 +24597,7 @@ function resolveMsegPreviewPlayheadState({
       progressFillEnd: null
     };
   }
-  const progress = clamp01(observedState.positions[clampedSlotIndex]);
+  const progress = clamp01$1(observedState.positions[clampedSlotIndex]);
   const shouldFillProgress = playback ? !playback.loop || hasFullSpanLoop(playback) : false;
   return {
     voiceGeneration,
@@ -17032,31 +24606,148 @@ function resolveMsegPreviewPlayheadState({
     progressFillEnd: shouldFillProgress ? progress : null
   };
 }
+const DEFAULT_MIDI_INPUT_ENDPOINT_ID = "midiIn";
+const KEYBOARD_ROOT_NOTE_DEFAULT$1 = 36;
+const NOTE_ON_VELOCITY = 100;
+const STANDALONE_KEYBOARD_RELAY_SOURCE = "cosimo-standalone-keyboard";
+const previewKeyOffsetsByCode = /* @__PURE__ */ new Map([
+  ["KeyA", 0],
+  ["KeyW", 1],
+  ["KeyS", 2],
+  ["KeyE", 3],
+  ["KeyD", 4],
+  ["KeyF", 5],
+  ["KeyT", 6],
+  ["KeyG", 7],
+  ["KeyY", 8],
+  ["KeyH", 9],
+  ["KeyU", 10],
+  ["KeyJ", 11],
+  ["KeyK", 12],
+  ["KeyO", 13],
+  ["KeyL", 14],
+  ["KeyP", 15],
+  ["Semicolon", 16],
+  ["Quote", 17]
+]);
 function hasCommandModifier(event) {
   return event.metaKey || event.ctrlKey || event.altKey;
 }
+function buildShortMidi$1(status, noteNumber, velocity = 0) {
+  return (status & 255) << 16 | (noteNumber & 127) << 8 | velocity & 127;
+}
+function readKeyboardRootNote(keyboard) {
+  const keyboardElement = keyboard;
+  const rootNote = Number(keyboardElement?.getAttribute?.("root-note"));
+  return Number.isFinite(rootNote) ? Math.max(0, Math.min(127, Math.round(rootNote))) : KEYBOARD_ROOT_NOTE_DEFAULT$1;
+}
+function resolveStandalonePreviewNoteFromCode(code, keyboard) {
+  const offset = previewKeyOffsetsByCode.get(code);
+  if (offset === void 0) {
+    return null;
+  }
+  return Math.max(0, Math.min(127, readKeyboardRootNote(keyboard) + offset));
+}
+function isTextEntryElement(element) {
+  if (!(element instanceof Element)) {
+    return false;
+  }
+  if (element instanceof HTMLElement && element.isContentEditable) {
+    return true;
+  }
+  const tagName = element.tagName.toLowerCase();
+  if (tagName === "textarea" || tagName === "select") {
+    return true;
+  }
+  if (element instanceof HTMLInputElement) {
+    return !["button", "checkbox", "radio", "range", "reset", "submit"].includes(element.type.toLowerCase());
+  }
+  if (element.getAttribute("role") === "textbox") {
+    return true;
+  }
+  return Boolean(element.closest('textarea, select, input:not([type="button"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="reset"]):not([type="submit"]), [contenteditable="true"], [role="textbox"]'));
+}
+function eventIsInsideTextEntry(event) {
+  const path = typeof event.composedPath === "function" ? event.composedPath() : [];
+  return path.some(isTextEntryElement) || isTextEntryElement(document.activeElement);
+}
+function documentHasTextEntryActive() {
+  return isTextEntryElement(document.activeElement);
+}
+function isStandaloneKeyboardRelayMessage(data) {
+  if (!data || typeof data !== "object") {
+    return false;
+  }
+  const message = data;
+  return message.source === STANDALONE_KEYBOARD_RELAY_SOURCE && (message.eventType === "keydown" || message.eventType === "keyup") && typeof message.code === "string" && typeof message.repeat === "boolean" && typeof message.shiftKey === "boolean" && typeof message.metaKey === "boolean" && typeof message.ctrlKey === "boolean" && typeof message.altKey === "boolean";
+}
 function useSynthInputRouter(keyboardRef, {
   handleKeyboardOctaveDown,
-  handleKeyboardOctaveUp
+  handleKeyboardOctaveUp,
+  keyboardInputMode = "hosted",
+  midiInputEndpointID = DEFAULT_MIDI_INPUT_ENDPOINT_ID,
+  onPreviewNoteOn,
+  onPreviewMidiEvent,
+  sendMIDIInputEvent
 } = {}) {
   const activeArrowTargetRef = reactExports.useRef(null);
   const textEntryDepthRef = reactExports.useRef(0);
+  const heldPreviewNotesRef = reactExports.useRef(/* @__PURE__ */ new Map());
   const handleKeyboardOctaveDownRef = reactExports.useRef(handleKeyboardOctaveDown);
   const handleKeyboardOctaveUpRef = reactExports.useRef(handleKeyboardOctaveUp);
+  const keyboardInputModeRef = reactExports.useRef(keyboardInputMode);
+  const midiInputEndpointIDRef = reactExports.useRef(midiInputEndpointID);
+  const onPreviewNoteOnRef = reactExports.useRef(onPreviewNoteOn);
+  const onPreviewMidiEventRef = reactExports.useRef(onPreviewMidiEvent);
+  const sendMIDIInputEventRef = reactExports.useRef(sendMIDIInputEvent);
   reactExports.useEffect(() => {
     handleKeyboardOctaveDownRef.current = handleKeyboardOctaveDown;
   }, [handleKeyboardOctaveDown]);
   reactExports.useEffect(() => {
     handleKeyboardOctaveUpRef.current = handleKeyboardOctaveUp;
   }, [handleKeyboardOctaveUp]);
+  reactExports.useEffect(() => {
+    keyboardInputModeRef.current = keyboardInputMode;
+  }, [keyboardInputMode]);
+  reactExports.useEffect(() => {
+    midiInputEndpointIDRef.current = midiInputEndpointID;
+  }, [midiInputEndpointID]);
+  reactExports.useEffect(() => {
+    onPreviewNoteOnRef.current = onPreviewNoteOn;
+  }, [onPreviewNoteOn]);
+  reactExports.useEffect(() => {
+    onPreviewMidiEventRef.current = onPreviewMidiEvent;
+  }, [onPreviewMidiEvent]);
+  reactExports.useEffect(() => {
+    sendMIDIInputEventRef.current = sendMIDIInputEvent;
+  }, [sendMIDIInputEvent]);
+  const sendStandalonePreviewMIDI = reactExports.useCallback((status, noteNumber, velocity = 0) => {
+    const message = buildShortMidi$1(status, noteNumber, velocity);
+    onPreviewMidiEventRef.current?.(status, noteNumber, velocity);
+    if ((status & 240) === 144 && velocity > 0) {
+      onPreviewNoteOnRef.current?.(noteNumber);
+    }
+    sendMIDIInputEventRef.current?.(midiInputEndpointIDRef.current, message);
+    keyboardRef.current?.handleExternalMIDI?.(message);
+  }, [keyboardRef]);
+  const releaseStandalonePreviewNotes = reactExports.useCallback(() => {
+    if (heldPreviewNotesRef.current.size === 0) {
+      return;
+    }
+    for (const noteNumber of heldPreviewNotesRef.current.values()) {
+      sendStandalonePreviewMIDI(128, noteNumber);
+    }
+    heldPreviewNotesRef.current.clear();
+  }, [sendStandalonePreviewMIDI]);
   const activateArrowTarget = reactExports.useCallback((target) => {
     activeArrowTargetRef.current = target;
   }, []);
   const beginTextEntry = reactExports.useCallback((target) => {
     activeArrowTargetRef.current = target;
     textEntryDepthRef.current += 1;
+    releaseStandalonePreviewNotes();
     keyboardRef.current?.allNotesOff?.();
-  }, [keyboardRef]);
+  }, [keyboardRef, releaseStandalonePreviewNotes]);
   const endTextEntry = reactExports.useCallback(() => {
     textEntryDepthRef.current = Math.max(0, textEntryDepthRef.current - 1);
   }, []);
@@ -17074,52 +24765,134 @@ function useSynthInputRouter(keyboardRef, {
       if (textEntryDepthRef.current > 0) {
         return;
       }
-      const normalizedKey = event.key.toLowerCase();
-      if (normalizedKey === "z" && handleKeyboardOctaveDownRef.current) {
-        if (!event.repeat) {
-          const didShiftKeyboardOctave = handleKeyboardOctaveDownRef.current();
-          if (didShiftKeyboardOctave) {
-            keyboardRef.current?.allNotesOff?.();
-          }
-        }
-        event.preventDefault();
+      if (eventIsInsideTextEntry(event)) {
         return;
       }
-      if (normalizedKey === "x" && handleKeyboardOctaveUpRef.current) {
-        if (!event.repeat) {
-          const didShiftKeyboardOctave = handleKeyboardOctaveUpRef.current();
-          if (didShiftKeyboardOctave) {
-            keyboardRef.current?.allNotesOff?.();
+      if (keyboardInputModeRef.current === "standalone-preview") {
+        if (event.code === "KeyZ" && handleKeyboardOctaveDownRef.current) {
+          if (!event.repeat) {
+            releaseStandalonePreviewNotes();
+            const didShiftKeyboardOctave = handleKeyboardOctaveDownRef.current();
+            if (didShiftKeyboardOctave) {
+              keyboardRef.current?.allNotesOff?.();
+            }
           }
+          event.preventDefault();
+          return;
         }
-        event.preventDefault();
+        if (event.code === "KeyX" && handleKeyboardOctaveUpRef.current) {
+          if (!event.repeat) {
+            releaseStandalonePreviewNotes();
+            const didShiftKeyboardOctave = handleKeyboardOctaveUpRef.current();
+            if (didShiftKeyboardOctave) {
+              keyboardRef.current?.allNotesOff?.();
+            }
+          }
+          event.preventDefault();
+          return;
+        }
+        const noteNumber = resolveStandalonePreviewNoteFromCode(event.code, keyboardRef.current);
+        if (noteNumber !== null) {
+          event.preventDefault();
+          if (!event.repeat && !heldPreviewNotesRef.current.has(event.code)) {
+            heldPreviewNotesRef.current.set(event.code, noteNumber);
+            sendStandalonePreviewMIDI(144, noteNumber, NOTE_ON_VELOCITY);
+          }
+          return;
+        }
         return;
       }
-      keyboardRef.current?.handleKey?.(event, true);
     };
     const handleKeyUp = (event) => {
-      if (hasCommandModifier(event) || textEntryDepthRef.current > 0) {
+      if (hasCommandModifier(event)) {
         return;
       }
-      const normalizedKey = event.key.toLowerCase();
-      if (normalizedKey === "z" && handleKeyboardOctaveDownRef.current || normalizedKey === "x" && handleKeyboardOctaveUpRef.current) {
-        event.preventDefault();
+      if (keyboardInputModeRef.current === "standalone-preview") {
+        const heldNoteNumber = heldPreviewNotesRef.current.get(event.code);
+        if (heldNoteNumber !== void 0) {
+          event.preventDefault();
+          heldPreviewNotesRef.current.delete(event.code);
+          sendStandalonePreviewMIDI(128, heldNoteNumber);
+          return;
+        }
+      }
+      if (textEntryDepthRef.current > 0 || eventIsInsideTextEntry(event)) {
         return;
       }
-      keyboardRef.current?.handleKey?.(event, false);
+      if (keyboardInputModeRef.current === "standalone-preview") {
+        if (event.code === "KeyZ" && handleKeyboardOctaveDownRef.current || event.code === "KeyX" && handleKeyboardOctaveUpRef.current) {
+          event.preventDefault();
+          return;
+        }
+        if (resolveStandalonePreviewNoteFromCode(event.code, keyboardRef.current) !== null) {
+          event.preventDefault();
+          return;
+        }
+        return;
+      }
     };
     const handleWindowBlur = () => {
+      releaseStandalonePreviewNotes();
       keyboardRef.current?.allNotesOff?.();
+    };
+    const handleRelayedKeyboardMessage = (messageEvent) => {
+      if (keyboardInputModeRef.current !== "standalone-preview" || !isStandaloneKeyboardRelayMessage(messageEvent.data)) {
+        return;
+      }
+      const message = messageEvent.data;
+      if (message.metaKey || message.ctrlKey || message.altKey || textEntryDepthRef.current > 0 || documentHasTextEntryActive()) {
+        return;
+      }
+      if (message.eventType === "keydown") {
+        if (message.code === "KeyZ" && handleKeyboardOctaveDownRef.current) {
+          if (!message.repeat) {
+            releaseStandalonePreviewNotes();
+            const didShiftKeyboardOctave = handleKeyboardOctaveDownRef.current();
+            if (didShiftKeyboardOctave) {
+              keyboardRef.current?.allNotesOff?.();
+            }
+          }
+          return;
+        }
+        if (message.code === "KeyX" && handleKeyboardOctaveUpRef.current) {
+          if (!message.repeat) {
+            releaseStandalonePreviewNotes();
+            const didShiftKeyboardOctave = handleKeyboardOctaveUpRef.current();
+            if (didShiftKeyboardOctave) {
+              keyboardRef.current?.allNotesOff?.();
+            }
+          }
+          return;
+        }
+        const noteNumber = resolveStandalonePreviewNoteFromCode(message.code, keyboardRef.current);
+        if (noteNumber !== null && !message.repeat && !heldPreviewNotesRef.current.has(message.code)) {
+          heldPreviewNotesRef.current.set(message.code, noteNumber);
+          sendStandalonePreviewMIDI(144, noteNumber, NOTE_ON_VELOCITY);
+        }
+        return;
+      }
+      if (message.code === "KeyZ" && handleKeyboardOctaveDownRef.current || message.code === "KeyX" && handleKeyboardOctaveUpRef.current) {
+        return;
+      }
+      if (resolveStandalonePreviewNoteFromCode(message.code, keyboardRef.current) !== null) {
+        const noteNumber = heldPreviewNotesRef.current.get(message.code);
+        if (noteNumber !== void 0) {
+          heldPreviewNotesRef.current.delete(message.code);
+          sendStandalonePreviewMIDI(128, noteNumber);
+        }
+      }
     };
     window.addEventListener("keydown", handleKeyDown, true);
     window.addEventListener("keyup", handleKeyUp, true);
+    window.addEventListener("message", handleRelayedKeyboardMessage);
     window.addEventListener("blur", handleWindowBlur);
     return () => {
       window.removeEventListener("keydown", handleKeyDown, true);
       window.removeEventListener("keyup", handleKeyUp, true);
+      window.removeEventListener("message", handleRelayedKeyboardMessage);
       window.removeEventListener("blur", handleWindowBlur);
     };
-  }, [keyboardRef]);
+  }, [keyboardRef, releaseStandalonePreviewNotes, sendStandalonePreviewMIDI]);
   const bindArrowTarget = reactExports.useCallback((target) => ({
     onPointerDownCapture: () => activateArrowTarget(target),
     onFocusCapture: () => activateArrowTarget(target)
@@ -17278,6 +25051,10 @@ const CHORUS_RING_FINE_SEMITONES_ENDPOINT_ID = "chorusRingFineSemitones";
 const RUNTIME_SYNC_REQUEST_ENDPOINT_ID = "runtimeSyncRequest";
 const RUNTIME_STATE_ENDPOINT_ID = "runtimeState";
 const RETRY_DESIRED_TABLE_REQUEST_ENDPOINT_ID = "retryDesiredTableRequest";
+const WAVETABLE_PREWARM_REQUEST_ENDPOINT_ID = "wavetablePrewarmRequest";
+const MIDI_INPUT_ENDPOINT_ID$1 = "midiIn";
+const VOICE_ARTICULATION_START_ENDPOINT_ID = "voiceArticulationStart";
+const ARTICULATION_AUDITION_FALLBACK_NOTE = 60;
 const GLIDE_TIME_MIN_SECONDS = 0;
 const GLIDE_TIME_MAX_SECONDS = 2;
 const GLIDE_TIME_STEP_SECONDS = 1e-3;
@@ -17523,6 +25300,109 @@ function useModulationState() {
     state,
     bridge: bridgeRef
   };
+}
+function buildShortMidi(status, noteNumber, velocity = 0) {
+  return (status & 255) << 16 | (noteNumber & 127) << 8 | velocity & 127;
+}
+function readFullStoredStateValue(storedState, key) {
+  const fullState = storedState && typeof storedState === "object" ? storedState : {};
+  const values = fullState.values && typeof fullState.values === "object" ? fullState.values : {};
+  if (Object.prototype.hasOwnProperty.call(values, key)) {
+    return values[key];
+  }
+  if (Object.prototype.hasOwnProperty.call(fullState, key)) {
+    return fullState[key];
+  }
+  return void 0;
+}
+function useStoredArticulationBank() {
+  const patchConnection = usePatchConnection();
+  const [bank, setBank] = reactExports.useState(() => createDefaultArticulationBank());
+  const [hasHydrated, setHasHydrated] = reactExports.useState(false);
+  const bankRef = reactExports.useRef(bank);
+  const pendingEchoTokensRef = reactExports.useRef(/* @__PURE__ */ new Map());
+  reactExports.useEffect(() => {
+    bankRef.current = bank;
+  }, [bank]);
+  const rememberPendingEcho = reactExports.useCallback((serializedBank) => {
+    const pendingEchoTokens = pendingEchoTokensRef.current;
+    pendingEchoTokens.set(serializedBank, (pendingEchoTokens.get(serializedBank) ?? 0) + 1);
+  }, []);
+  const consumePendingEcho = reactExports.useCallback((serializedBank) => {
+    const pendingEchoTokens = pendingEchoTokensRef.current;
+    const pendingCount = pendingEchoTokens.get(serializedBank) ?? 0;
+    if (pendingCount <= 0) {
+      return false;
+    }
+    if (pendingCount === 1) {
+      pendingEchoTokens.delete(serializedBank);
+    } else {
+      pendingEchoTokens.set(serializedBank, pendingCount - 1);
+    }
+    return true;
+  }, []);
+  const applyIncomingBank = reactExports.useCallback((rawValue) => {
+    const nextBank = normalizeArticulationBank(rawValue);
+    setHasHydrated(true);
+    bankRef.current = nextBank;
+    setBank((previousBank) => articulationBanksEqual(previousBank, nextBank) ? previousBank : nextBank);
+    sendNativeArticulationTriggerConfig(buildArticulationTriggerConfig(nextBank), patchConnection);
+  }, [patchConnection]);
+  reactExports.useEffect(() => {
+    const handleStoredStateValue = (message) => {
+      if (!message || typeof message !== "object") {
+        return;
+      }
+      const nextMessage = message;
+      if (nextMessage.key !== ARTICULATION_STATE_KEY) {
+        return;
+      }
+      const serializedBank = serializeArticulationBank(nextMessage.value);
+      if (consumePendingEcho(serializedBank)) {
+        return;
+      }
+      applyIncomingBank(nextMessage.value);
+    };
+    patchConnection.addStoredStateValueListener?.(handleStoredStateValue);
+    if (typeof patchConnection.requestFullStoredState === "function") {
+      patchConnection.requestFullStoredState((storedState) => {
+        applyIncomingBank(readFullStoredStateValue(storedState, ARTICULATION_STATE_KEY));
+      });
+    } else if (typeof patchConnection.requestStoredStateValue === "function") {
+      patchConnection.requestStoredStateValue(ARTICULATION_STATE_KEY);
+    } else {
+      applyIncomingBank(void 0);
+    }
+    return () => {
+      patchConnection.removeStoredStateValueListener?.(handleStoredStateValue);
+    };
+  }, [applyIncomingBank, consumePendingEcho, patchConnection]);
+  const setAndPersistBank = reactExports.useCallback((nextBankValue) => {
+    const previousBank = bankRef.current;
+    const nextBank = normalizeArticulationBank(
+      typeof nextBankValue === "function" ? nextBankValue(previousBank) : nextBankValue
+    );
+    if (articulationBanksEqual(previousBank, nextBank)) {
+      return;
+    }
+    bankRef.current = nextBank;
+    setHasHydrated(true);
+    setBank(nextBank);
+    if (typeof patchConnection.sendStoredStateValue === "function") {
+      const serializedBank = serializeArticulationBank(nextBank);
+      const serializedTriggerConfig = serializeArticulationTriggerConfig(buildArticulationTriggerConfig(nextBank));
+      rememberPendingEcho(serializedBank);
+      patchConnection.sendStoredStateValue(ARTICULATION_STATE_KEY, serializedBank);
+      patchConnection.sendStoredStateValue(ARTICULATION_TRIGGER_CONFIG_STATE_KEY, serializedTriggerConfig);
+    }
+    sendNativeArticulationTriggerConfig(buildArticulationTriggerConfig(nextBank), patchConnection);
+  }, [patchConnection, rememberPendingEcho]);
+  return reactExports.useMemo(() => ({
+    bank,
+    bankRef,
+    hasHydrated,
+    setAndPersistBank
+  }), [bank, hasHydrated, setAndPersistBank]);
 }
 function useStagePositionDrag({
   stageRef,
@@ -17942,11 +25822,19 @@ function useSynthKeyboardRouting({
   onStepMsegRate,
   onStepGlideTime,
   onKeyboardOctaveDown,
-  onKeyboardOctaveUp
+  onKeyboardOctaveUp,
+  keyboardInputMode = "hosted",
+  onPreviewNoteOn,
+  onPreviewMidiEvent,
+  sendMIDIInputEvent
 }) {
   const synthInputRouter = useSynthInputRouter(keyboardRef, {
     handleKeyboardOctaveDown: onKeyboardOctaveDown,
-    handleKeyboardOctaveUp: onKeyboardOctaveUp
+    handleKeyboardOctaveUp: onKeyboardOctaveUp,
+    keyboardInputMode,
+    onPreviewNoteOn,
+    onPreviewMidiEvent,
+    sendMIDIInputEvent
   });
   const wavetableTarget = useStableArrowTarget("wavetable-select", onStepWavetable);
   const playModeTarget = useStableArrowTarget("play-mode", onStepPlayMode);
@@ -17978,8 +25866,10 @@ function useSynthPatchViewModel({
   msegCurveEditActivationMode = "immediate",
   onMsegCurveEditHoldActivated = null,
   onKeyboardOctaveDown,
-  onKeyboardOctaveUp
+  onKeyboardOctaveUp,
+  keyboardInputMode = "hosted"
 }) {
+  const patchConnection = usePatchConnection();
   const runtimeStateMessage = usePatchEndpoint(RUNTIME_STATE_ENDPOINT_ID, null);
   const normalizedRuntimeState = reactExports.useMemo(
     () => normalizeRuntimeTableState(runtimeStateMessage),
@@ -18128,6 +26018,7 @@ function useSynthPatchViewModel({
   });
   const requestRuntimeSync = usePatchEventTrigger(RUNTIME_SYNC_REQUEST_ENDPOINT_ID);
   const retryDesiredTableLoad = usePatchEventTrigger(RETRY_DESIRED_TABLE_REQUEST_ENDPOINT_ID);
+  const prewarmWavetable = usePatchEventTrigger(WAVETABLE_PREWARM_REQUEST_ENDPOINT_ID);
   const observedPosition = useObservedDisplayPosition(Number(wavetablePosition.value) || 0);
   const observedWarpState = useObservedWarpState({
     warpMode: warpMode.value,
@@ -18142,6 +26033,11 @@ function useSynthPatchViewModel({
   const observedDistortionHistory = useObservedDistortionHistory();
   const observedDistortionScope = useObservedDistortionScope();
   const observedMsegState = useObservedMsegState();
+  const voiceArticulationStartMessage = usePatchEndpoint(
+    VOICE_ARTICULATION_START_ENDPOINT_ID,
+    null
+  );
+  const articulationBankState = useStoredArticulationBank();
   const runtimePresentation = reactExports.useMemo(
     () => resolveRuntimeTablePresentation(runtimeStateMessage, Number(wavetableSelect.value) || 0),
     [runtimeStateMessage, wavetableSelect.value]
@@ -18150,11 +26046,26 @@ function useSynthPatchViewModel({
   const desiredTableIndex = runtimePresentation.desiredTableIndex ?? 0;
   const { frames, error: frameError } = useFactoryTableFrames(presentedTableIndex);
   const { state: modulationState, bridge: modulationBridge } = useModulationState();
+  const articulationBank = articulationBankState.bank;
+  const articulationSlots = articulationBank.slots;
+  const selectedArticulationSlot = reactExports.useMemo(() => articulationSlots.find((slot) => slot.id === articulationBank.selectedSlotId) ?? null, [articulationBank.selectedSlotId, articulationSlots]);
+  const isApplyingArticulationRef = reactExports.useRef(false);
+  const [selectedArticulationIsDirty, setSelectedArticulationIsDirty] = reactExports.useState(false);
+  const [discardedArticulationEdit, setDiscardedArticulationEdit] = reactExports.useState(null);
+  const activeAuditionRef = reactExports.useRef(null);
+  const lastPlayedNoteRef = reactExports.useRef(ARTICULATION_AUDITION_FALLBACK_NOTE);
+  const heldMidiNotesRef = reactExports.useRef(/* @__PURE__ */ new Map());
+  const heldMidiOrderRef = reactExports.useRef(0);
+  const [articulationHeldInput, setArticulationHeldInput] = reactExports.useState({
+    note: null,
+    velocity: null,
+    chain: null
+  });
   const [selectedMsegSlot, setSelectedMsegSlot] = reactExports.useState(0);
   const [selectedEnvelopeSlot, setSelectedEnvelopeSlot] = reactExports.useState(0);
   const displayedMsegControllerRef = reactExports.useRef(null);
   displayedMsegControllerRef.current = modulationBridge.current?.getMsegSlotController(selectedMsegSlot) ?? null;
-  const routes = modulationState?.routes ?? [];
+  const routes = reactExports.useMemo(() => modulationState?.routes ?? [], [modulationState?.routes]);
   const msegState = reactExports.useMemo(() => {
     if (!modulationState || !modulationBridge.current) {
       return null;
@@ -18193,13 +26104,35 @@ function useSynthPatchViewModel({
   reactExports.useEffect(() => {
     requestRuntimeSync(1);
   }, [requestRuntimeSync]);
+  const prewarmWavetableNeighborhood = reactExports.useCallback((centerTableIndex) => {
+    const tableCount = catalog?.tables?.length ?? 0;
+    if (tableCount <= 0) {
+      return;
+    }
+    const maxTableIndex = tableCount - 1;
+    const centerIndex = clamp$1(Math.round(Number(centerTableIndex) || 0), 0, maxTableIndex);
+    const seenTableIndices = /* @__PURE__ */ new Set();
+    for (const tableIndex of [centerIndex, centerIndex - 1, centerIndex + 1]) {
+      if (tableIndex < 0 || tableIndex > maxTableIndex || seenTableIndices.has(tableIndex)) {
+        continue;
+      }
+      seenTableIndices.add(tableIndex);
+      prewarmWavetable(tableIndex);
+    }
+  }, [catalog?.tables?.length, prewarmWavetable]);
   const handleSelectWavetable = reactExports.useCallback((nextValue) => {
     wavetableSelect.commitValue(nextValue);
-  }, [wavetableSelect]);
+    prewarmWavetableNeighborhood(nextValue);
+  }, [prewarmWavetableNeighborhood, wavetableSelect]);
   const handleStepWavetable = reactExports.useCallback((direction) => {
     const maxTableIndex = Math.max(0, (catalog?.tables?.length ?? 1) - 1);
-    wavetableSelect.commitValue(clamp$1(desiredTableIndex + direction, 0, maxTableIndex));
-  }, [catalog?.tables?.length, desiredTableIndex, wavetableSelect]);
+    const nextTableIndex = clamp$1(desiredTableIndex + direction, 0, maxTableIndex);
+    wavetableSelect.commitValue(nextTableIndex);
+    prewarmWavetableNeighborhood(nextTableIndex);
+  }, [catalog?.tables?.length, desiredTableIndex, prewarmWavetableNeighborhood, wavetableSelect]);
+  const handlePrewarmWavetablePicker = reactExports.useCallback(() => {
+    prewarmWavetableNeighborhood(desiredTableIndex);
+  }, [desiredTableIndex, prewarmWavetableNeighborhood]);
   const handleRetryLoad = reactExports.useCallback(() => {
     retryDesiredTableLoad(1);
   }, [retryDesiredTableLoad]);
@@ -18277,6 +26210,476 @@ function useSynthPatchViewModel({
   const handleRouteChange = reactExports.useCallback((routeIndex, nextRoute) => {
     modulationBridge.current?.setRoute(routeIndex, nextRoute);
   }, [modulationBridge]);
+  const captureCurrentArticulationSnapshot = reactExports.useCallback(() => {
+    const currentModulationState = modulationBridge.current?.getState() ?? modulationState;
+    return normalizeArticulationSnapshot({
+      parameters: {
+        wavetablePosition: wavetablePosition.value,
+        playMode: playMode.value,
+        glideTime: glideTime.value,
+        pan: pan.value,
+        warpMode: warpMode.value,
+        warpAmount: warpAmount.value,
+        filterMode: filterMode.value,
+        filterCutoff: filterCutoff.value,
+        filterQ: filterQ.value,
+        msegMorphs: [mseg1Morph.value, mseg2Morph.value, mseg3Morph.value],
+        distortionMode: distortionMode.value,
+        distortionDriveDb: distortionDriveDb.value,
+        distortionKnee: distortionKnee.value,
+        distortionWet: distortionWet.value,
+        distortionWetHPHz: distortionWetHPHz.value,
+        distortionWetLPHz: distortionWetLPHz.value,
+        chorusEnabled: chorusEnabled.value,
+        chorusMix: chorusMix.value,
+        chorusMotionMode: chorusMotionMode.value,
+        chorusBloomMode: chorusBloomMode.value,
+        chorusTone: chorusTone.value,
+        chorusFeedback: chorusFeedback.value,
+        chorusRingAmount: chorusRingAmount.value,
+        chorusRingOffsetMode: chorusRingOffsetMode.value,
+        chorusRingFineSemitones: chorusRingFineSemitones.value
+      },
+      envelopes: currentModulationState?.envelopeSlots ?? [0, 1, 2].map((slotIndex) => createDefaultEnvelope(slotIndex)),
+      modRouteAmounts: (currentModulationState?.routes ?? []).map((route) => ({
+        routeId: route.id,
+        amount: route.amount
+      }))
+    });
+  }, [
+    chorusBloomMode.value,
+    chorusEnabled.value,
+    chorusFeedback.value,
+    chorusMix.value,
+    chorusMotionMode.value,
+    chorusRingAmount.value,
+    chorusRingFineSemitones.value,
+    chorusRingOffsetMode.value,
+    chorusTone.value,
+    distortionDriveDb.value,
+    distortionKnee.value,
+    distortionMode.value,
+    distortionWet.value,
+    distortionWetHPHz.value,
+    distortionWetLPHz.value,
+    filterCutoff.value,
+    filterMode.value,
+    filterQ.value,
+    glideTime.value,
+    modulationBridge,
+    modulationState,
+    mseg1Morph.value,
+    mseg2Morph.value,
+    mseg3Morph.value,
+    pan.value,
+    playMode.value,
+    warpAmount.value,
+    warpMode.value,
+    wavetablePosition.value
+  ]);
+  const applyArticulationSnapshot = reactExports.useCallback((snapshotValue) => {
+    const snapshot = normalizeArticulationSnapshot(snapshotValue);
+    const parameters = snapshot.parameters;
+    wavetablePosition.setValue(parameters.wavetablePosition);
+    playMode.setValue(parameters.playMode);
+    glideTime.setValue(parameters.glideTime);
+    pan.setValue(parameters.pan);
+    warpMode.setValue(parameters.warpMode);
+    warpAmount.setValue(parameters.warpAmount);
+    filterMode.setValue(parameters.filterMode);
+    filterCutoff.setValue(parameters.filterCutoff);
+    filterQ.setValue(parameters.filterQ);
+    mseg1Morph.setValue(parameters.msegMorphs[0]);
+    mseg2Morph.setValue(parameters.msegMorphs[1]);
+    mseg3Morph.setValue(parameters.msegMorphs[2]);
+    distortionMode.setValue(parameters.distortionMode);
+    distortionDriveDb.setValue(parameters.distortionDriveDb);
+    distortionKnee.setValue(parameters.distortionKnee);
+    distortionWet.setValue(parameters.distortionWet);
+    distortionWetHPHz.setValue(parameters.distortionWetHPHz);
+    distortionWetLPHz.setValue(parameters.distortionWetLPHz);
+    chorusEnabled.setValue(parameters.chorusEnabled);
+    chorusMix.setValue(parameters.chorusMix);
+    chorusMotionMode.setValue(parameters.chorusMotionMode);
+    chorusBloomMode.setValue(parameters.chorusBloomMode);
+    chorusTone.setValue(parameters.chorusTone);
+    chorusFeedback.setValue(parameters.chorusFeedback);
+    chorusRingAmount.setValue(parameters.chorusRingAmount);
+    chorusRingOffsetMode.setValue(parameters.chorusRingOffsetMode);
+    chorusRingFineSemitones.setValue(parameters.chorusRingFineSemitones);
+    const bridge = modulationBridge.current;
+    bridge?.setMsegSlotMorph(0, parameters.msegMorphs[0]);
+    bridge?.setMsegSlotMorph(1, parameters.msegMorphs[1]);
+    bridge?.setMsegSlotMorph(2, parameters.msegMorphs[2]);
+    snapshot.envelopes.forEach((envelope, envelopeIndex) => {
+      bridge?.setEnvelope(envelopeIndex, envelope);
+    });
+    const currentRoutes = bridge?.getState().routes ?? modulationState?.routes ?? [];
+    const routeAmountById = new Map(snapshot.modRouteAmounts.map((routeAmount) => [
+      routeAmount.routeId,
+      routeAmount.amount
+    ]));
+    let hasRouteAmountChange = false;
+    const nextRoutes = currentRoutes.map((route) => {
+      if (!routeAmountById.has(route.id)) {
+        return route;
+      }
+      const nextAmount = clampModulationRouteAmount(route.targetKind, routeAmountById.get(route.id) ?? route.amount);
+      if (route.amount === nextAmount) {
+        return route;
+      }
+      hasRouteAmountChange = true;
+      return {
+        ...route,
+        amount: nextAmount
+      };
+    });
+    if (hasRouteAmountChange) {
+      bridge?.replaceRoutes(nextRoutes);
+    }
+  }, [
+    chorusBloomMode,
+    chorusEnabled,
+    chorusFeedback,
+    chorusMix,
+    chorusMotionMode,
+    chorusRingAmount,
+    chorusRingFineSemitones,
+    chorusRingOffsetMode,
+    chorusTone,
+    distortionDriveDb,
+    distortionKnee,
+    distortionMode,
+    distortionWet,
+    distortionWetHPHz,
+    distortionWetLPHz,
+    filterCutoff,
+    filterMode,
+    filterQ,
+    glideTime,
+    modulationBridge,
+    modulationState?.routes,
+    mseg1Morph,
+    mseg2Morph,
+    mseg3Morph,
+    pan,
+    playMode,
+    warpAmount,
+    warpMode,
+    wavetablePosition
+  ]);
+  const handleCaptureArticulationSlot = reactExports.useCallback((options = {}) => {
+    const snapshot = captureCurrentArticulationSnapshot();
+    articulationBankState.setAndPersistBank((previousBank) => {
+      const nextBank = addCapturedArticulationToBank(previousBank, snapshot, {
+        autoAssign: options.autoAssign ?? true
+      });
+      if (nextBank.slots.length === previousBank.slots.length) {
+        return previousBank;
+      }
+      return nextBank;
+    });
+    setSelectedArticulationIsDirty(false);
+    setDiscardedArticulationEdit(null);
+  }, [articulationBankState, captureCurrentArticulationSnapshot]);
+  const handleAddArticulationSlot = reactExports.useCallback(() => {
+    handleCaptureArticulationSlot({ autoAssign: true });
+  }, [handleCaptureArticulationSlot]);
+  const selectArticulationSlot = reactExports.useCallback((slotId, options = {}) => {
+    const bank = articulationBankState.bankRef.current;
+    const slot = bank.slots.find((candidate) => candidate.id === slotId);
+    if (!slot) {
+      return;
+    }
+    const previousSlot = bank.slots.find((candidate) => candidate.id === bank.selectedSlotId) ?? null;
+    const shouldRecordDirtyDiscard = options.recordDirtyDiscard !== false && selectedArticulationIsDirty && previousSlot && previousSlot.id !== slot.id;
+    if (shouldRecordDirtyDiscard) {
+      setDiscardedArticulationEdit({
+        slotId: previousSlot.id,
+        slotName: previousSlot.name,
+        snapshot: captureCurrentArticulationSnapshot()
+      });
+    }
+    isApplyingArticulationRef.current = true;
+    setSelectedArticulationIsDirty(false);
+    applyArticulationSnapshot(slot.snapshot);
+    setTimeout(() => {
+      isApplyingArticulationRef.current = false;
+    }, 0);
+    articulationBankState.setAndPersistBank((previousBank) => normalizeArticulationBank({
+      ...previousBank,
+      selectedSlotId: slotId
+    }));
+  }, [
+    applyArticulationSnapshot,
+    articulationBankState,
+    captureCurrentArticulationSnapshot,
+    selectedArticulationIsDirty
+  ]);
+  const handleSelectArticulationSlot = reactExports.useCallback((slotId) => {
+    selectArticulationSlot(slotId);
+  }, [selectArticulationSlot]);
+  const handleUpdateSelectedArticulationSlot = reactExports.useCallback(() => {
+    const bank = articulationBankState.bankRef.current;
+    const slotId = bank.selectedSlotId;
+    if (!slotId) {
+      return;
+    }
+    const snapshot = captureCurrentArticulationSnapshot();
+    articulationBankState.setAndPersistBank((previousBank) => upsertSelectedArticulationSnapshot(previousBank, slotId, snapshot));
+    setSelectedArticulationIsDirty(false);
+    setDiscardedArticulationEdit(null);
+  }, [articulationBankState, captureCurrentArticulationSnapshot]);
+  const handleRevertSelectedArticulationSlot = reactExports.useCallback(() => {
+    const bank = articulationBankState.bankRef.current;
+    const slot = bank.slots.find((candidate) => candidate.id === bank.selectedSlotId);
+    if (!slot) {
+      return;
+    }
+    if (selectedArticulationIsDirty) {
+      setDiscardedArticulationEdit({
+        slotId: slot.id,
+        slotName: slot.name,
+        snapshot: captureCurrentArticulationSnapshot()
+      });
+    }
+    isApplyingArticulationRef.current = true;
+    setSelectedArticulationIsDirty(false);
+    applyArticulationSnapshot(slot.snapshot);
+    setTimeout(() => {
+      isApplyingArticulationRef.current = false;
+    }, 0);
+  }, [
+    applyArticulationSnapshot,
+    articulationBankState,
+    captureCurrentArticulationSnapshot,
+    selectedArticulationIsDirty
+  ]);
+  const handleUndoDiscardedArticulationEdit = reactExports.useCallback(() => {
+    const edit = discardedArticulationEdit;
+    if (!edit) {
+      return;
+    }
+    isApplyingArticulationRef.current = true;
+    setDiscardedArticulationEdit(null);
+    applyArticulationSnapshot(edit.snapshot);
+    articulationBankState.setAndPersistBank((previousBank) => normalizeArticulationBank({
+      ...previousBank,
+      selectedSlotId: edit.slotId
+    }));
+    setTimeout(() => {
+      isApplyingArticulationRef.current = false;
+      setSelectedArticulationIsDirty(true);
+    }, 0);
+  }, [applyArticulationSnapshot, articulationBankState, discardedArticulationEdit]);
+  const handleSetArticulationTriggerMode = reactExports.useCallback((mode) => {
+    articulationBankState.setAndPersistBank((previousBank) => setArticulationTriggerMode(previousBank, mode));
+  }, [articulationBankState]);
+  const updateArticulationBankIfChanged = reactExports.useCallback((update) => {
+    const previousBank = articulationBankState.bankRef.current;
+    const nextBank = update(previousBank);
+    if (articulationBanksEqual(previousBank, nextBank)) {
+      return false;
+    }
+    articulationBankState.setAndPersistBank(nextBank);
+    return true;
+  }, [articulationBankState]);
+  const handleAssignArticulationRangePosition = reactExports.useCallback((mode, position, articulationId) => {
+    return updateArticulationBankIfChanged((previousBank) => assignArticulationToRangePosition(previousBank, mode, position, articulationId));
+  }, [updateArticulationBankIfChanged]);
+  const handleInsertArticulationRangeAtPosition = reactExports.useCallback((mode, position, articulationId, preserveSide) => {
+    return updateArticulationBankIfChanged((previousBank) => insertArticulationRangeAtPosition(previousBank, mode, position, articulationId, preserveSide));
+  }, [updateArticulationBankIfChanged]);
+  const handleDuplicateAndAssignArticulationRangePosition = reactExports.useCallback((mode, position, articulationId, operation) => {
+    const previousBank = articulationBankState.bankRef.current;
+    const duplicatedBank = duplicateArticulationSlot(previousBank, articulationId);
+    const nextSlotId = duplicatedBank.selectedSlotId;
+    if (articulationBanksEqual(previousBank, duplicatedBank) || !nextSlotId) {
+      return false;
+    }
+    const assignedBank = operation === "insert" ? insertArticulationRangeAtPosition(duplicatedBank, mode, position, nextSlotId) : assignArticulationToRangePosition(duplicatedBank, mode, position, nextSlotId);
+    if (articulationBanksEqual(duplicatedBank, assignedBank)) {
+      return false;
+    }
+    const nextSlot = assignedBank.slots.find((slot) => slot.id === nextSlotId);
+    articulationBankState.setAndPersistBank(assignedBank);
+    if (nextSlot) {
+      isApplyingArticulationRef.current = true;
+      setSelectedArticulationIsDirty(false);
+      applyArticulationSnapshot(nextSlot.snapshot);
+      setTimeout(() => {
+        isApplyingArticulationRef.current = false;
+      }, 0);
+    }
+    return true;
+  }, [applyArticulationSnapshot, articulationBankState]);
+  const handleMoveArticulationRangeAssignment = reactExports.useCallback((mode, segment, targetPosition) => {
+    return updateArticulationBankIfChanged((previousBank) => moveArticulationRangeAssignment(previousBank, mode, segment, targetPosition));
+  }, [updateArticulationBankIfChanged]);
+  const handleResizeArticulationRangeAssignment = reactExports.useCallback((mode, segment, edge, position) => {
+    return updateArticulationBankIfChanged((previousBank) => resizeArticulationRangeAssignment(previousBank, mode, segment, edge, position));
+  }, [updateArticulationBankIfChanged]);
+  const handleClearArticulationRangeAssignment = reactExports.useCallback((mode, segment) => {
+    return updateArticulationBankIfChanged((previousBank) => clearArticulationRangeAssignment(previousBank, mode, segment));
+  }, [updateArticulationBankIfChanged]);
+  const handleClearArticulationTriggerAssignments = reactExports.useCallback((mode) => {
+    articulationBankState.setAndPersistBank((previousBank) => clearArticulationTriggerAssignments(previousBank, mode));
+  }, [articulationBankState]);
+  const handleDistributeArticulationRanges = reactExports.useCallback((mode) => {
+    articulationBankState.setAndPersistBank((previousBank) => distributeArticulationRanges(previousBank, mode));
+  }, [articulationBankState]);
+  const handleRenameArticulationSlot = reactExports.useCallback((slotId, nextName) => {
+    articulationBankState.setAndPersistBank((previousBank) => renameArticulationSlot(previousBank, slotId, nextName));
+  }, [articulationBankState]);
+  const handleReplaceArticulationSlotWithCurrent = reactExports.useCallback((slotId) => {
+    const snapshot = captureCurrentArticulationSnapshot();
+    articulationBankState.setAndPersistBank((previousBank) => upsertSelectedArticulationSnapshot(previousBank, slotId, snapshot));
+    if (articulationBankState.bankRef.current.selectedSlotId === slotId) {
+      setSelectedArticulationIsDirty(false);
+    }
+  }, [articulationBankState, captureCurrentArticulationSnapshot]);
+  const handleDuplicateArticulationSlot = reactExports.useCallback((slotId) => {
+    const nextBank = duplicateArticulationSlot(articulationBankState.bankRef.current, slotId);
+    const nextSlot = nextBank.slots.find((slot) => slot.id === nextBank.selectedSlotId);
+    articulationBankState.setAndPersistBank(nextBank);
+    if (nextSlot) {
+      isApplyingArticulationRef.current = true;
+      setSelectedArticulationIsDirty(false);
+      applyArticulationSnapshot(nextSlot.snapshot);
+      setTimeout(() => {
+        isApplyingArticulationRef.current = false;
+      }, 0);
+    }
+  }, [applyArticulationSnapshot, articulationBankState]);
+  const handleDeleteArticulationSlot = reactExports.useCallback((slotId) => {
+    const previousBank = articulationBankState.bankRef.current;
+    const nextBank = deleteArticulationSlot(previousBank, slotId);
+    const selectedChanged = nextBank.selectedSlotId !== previousBank.selectedSlotId;
+    const nextSlot = nextBank.slots.find((slot) => slot.id === nextBank.selectedSlotId);
+    articulationBankState.setAndPersistBank(nextBank);
+    if (selectedChanged && nextSlot) {
+      isApplyingArticulationRef.current = true;
+      setSelectedArticulationIsDirty(false);
+      applyArticulationSnapshot(nextSlot.snapshot);
+      setTimeout(() => {
+        isApplyingArticulationRef.current = false;
+      }, 0);
+    }
+  }, [applyArticulationSnapshot, articulationBankState]);
+  const publishHeldMidiNote = reactExports.useCallback((nextChainValue) => {
+    let newest = null;
+    heldMidiNotesRef.current.forEach((heldNote, note) => {
+      if (!newest || heldNote.order > newest.order) {
+        newest = { note, velocity: heldNote.velocity, order: heldNote.order };
+      }
+    });
+    setArticulationHeldInput((previousValue) => {
+      const chain = nextChainValue === void 0 ? previousValue.chain : nextChainValue;
+      const nextValue = newest ? {
+        note: newest.note,
+        velocity: newest.velocity,
+        chain
+      } : nextChainValue !== void 0 ? {
+        note: null,
+        velocity: null,
+        chain
+      } : {
+        note: null,
+        velocity: null,
+        chain: null
+      };
+      return previousValue.note === nextValue.note && previousValue.velocity === nextValue.velocity && previousValue.chain === nextValue.chain ? previousValue : nextValue;
+    });
+  }, []);
+  const trackMidiInputForArticulationLane = reactExports.useCallback((status, note, velocity = 0) => {
+    const messageKind = status & 240;
+    const safeNote = clamp$1(Math.round(note), 0, 127);
+    const safeVelocity = clamp$1(Math.round(velocity), 0, 127);
+    const isNoteOn = messageKind === 144 && safeVelocity > 0;
+    const isNoteOff = messageKind === 128 || messageKind === 144 && safeVelocity === 0;
+    if (isNoteOn) {
+      lastPlayedNoteRef.current = safeNote;
+      heldMidiNotesRef.current.set(safeNote, {
+        velocity: safeVelocity,
+        order: heldMidiOrderRef.current += 1
+      });
+      publishHeldMidiNote();
+      return;
+    }
+    if (isNoteOff) {
+      heldMidiNotesRef.current.delete(safeNote);
+      publishHeldMidiNote();
+    }
+  }, [publishHeldMidiNote]);
+  const sendMidiInputEvent = reactExports.useCallback((status, note, velocity = 0) => {
+    trackMidiInputForArticulationLane(status, note, velocity);
+    patchConnection.sendMIDIInputEvent?.(MIDI_INPUT_ENDPOINT_ID$1, buildShortMidi(status, note, velocity));
+  }, [patchConnection, trackMidiInputForArticulationLane]);
+  const handleStopArticulationAudition = reactExports.useCallback((slotId) => {
+    const activeAudition = activeAuditionRef.current;
+    if (!activeAudition || slotId && activeAudition.slotId !== slotId) {
+      return;
+    }
+    sendMidiInputEvent(128, activeAudition.note, 0);
+    activeAuditionRef.current = null;
+  }, [sendMidiInputEvent]);
+  const handleStartArticulationAudition = reactExports.useCallback((slotId) => {
+    handleStopArticulationAudition();
+    selectArticulationSlot(slotId);
+    const note = clamp$1(Math.round(lastPlayedNoteRef.current), 0, 127);
+    activeAuditionRef.current = { slotId, note };
+    sendMidiInputEvent(144, note, 100);
+  }, [handleStopArticulationAudition, selectArticulationSlot, sendMidiInputEvent]);
+  reactExports.useEffect(() => {
+    if (!voiceArticulationStartMessage) {
+      return;
+    }
+    const hasArticulation = Boolean(voiceArticulationStartMessage.hasArticulation);
+    const selectorA = Number(voiceArticulationStartMessage.selectorA);
+    publishHeldMidiNote(
+      hasArticulation && Number.isFinite(selectorA) ? clamp$1(Math.round(selectorA), 0, 127) : null
+    );
+  }, [publishHeldMidiNote, voiceArticulationStartMessage]);
+  reactExports.useEffect(() => {
+    const handleWindowBlur = () => handleStopArticulationAudition();
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        handleStopArticulationAudition();
+      }
+    };
+    window.addEventListener("blur", handleWindowBlur);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("blur", handleWindowBlur);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [handleStopArticulationAudition]);
+  reactExports.useEffect(() => () => {
+    const activeAudition = activeAuditionRef.current;
+    if (activeAudition) {
+      patchConnection.sendMIDIInputEvent?.(
+        MIDI_INPUT_ENDPOINT_ID$1,
+        buildShortMidi(128, activeAudition.note, 0)
+      );
+      activeAuditionRef.current = null;
+    }
+  }, [patchConnection]);
+  reactExports.useEffect(() => {
+    if (!articulationBankState.hasHydrated || !selectedArticulationSlot) {
+      setSelectedArticulationIsDirty(false);
+      return;
+    }
+    if (isApplyingArticulationRef.current) {
+      return;
+    }
+    const currentSnapshot = captureCurrentArticulationSnapshot();
+    const isDirty = !articulationSnapshotsEqual(selectedArticulationSlot.snapshot, currentSnapshot);
+    setSelectedArticulationIsDirty((previousValue) => previousValue === isDirty ? previousValue : isDirty);
+  }, [
+    articulationBankState,
+    captureCurrentArticulationSnapshot,
+    selectedArticulationSlot
+  ]);
   const handleStepPlayMode = reactExports.useCallback((direction) => {
     playMode.commitValue(
       clamp$1(playMode.value + direction, 0, Math.max(0, voiceModeCount - 1))
@@ -18296,7 +26699,13 @@ function useSynthPatchViewModel({
     onStepMsegRate: handleStepMsegRate,
     onStepGlideTime: handleStepGlideTime,
     onKeyboardOctaveDown,
-    onKeyboardOctaveUp
+    onKeyboardOctaveUp,
+    keyboardInputMode,
+    onPreviewNoteOn: (noteNumber) => {
+      lastPlayedNoteRef.current = clamp$1(Math.round(noteNumber), 0, 127);
+    },
+    onPreviewMidiEvent: trackMidiInputForArticulationLane,
+    sendMIDIInputEvent: patchConnection.sendMIDIInputEvent?.bind(patchConnection)
   });
   return {
     frames,
@@ -18345,6 +26754,16 @@ function useSynthPatchViewModel({
     observedMsegPlayhead,
     observedWarpState,
     modulationState,
+    articulationBank,
+    articulationSlots,
+    selectedArticulationSlot,
+    selectedArticulationIsDirty,
+    articulationHeldInput,
+    discardedArticulationEdit: discardedArticulationEdit ? {
+      slotId: discardedArticulationEdit.slotId,
+      slotName: discardedArticulationEdit.slotName
+    } : null,
+    hasHydratedArticulations: articulationBankState.hasHydrated,
     selectedMsegSlot,
     selectedEnvelopeSlot,
     selectedEnvelope,
@@ -18357,7 +26776,29 @@ function useSynthPatchViewModel({
     handleAddRoute,
     handleRemoveRoute,
     handleRouteChange,
+    handleAddArticulationSlot,
+    handleCaptureArticulationSlot,
+    handleSelectArticulationSlot,
+    handleUpdateSelectedArticulationSlot,
+    handleRevertSelectedArticulationSlot,
+    handleUndoDiscardedArticulationEdit,
+    handleSetArticulationTriggerMode,
+    handleAssignArticulationRangePosition,
+    handleInsertArticulationRangeAtPosition,
+    handleDuplicateAndAssignArticulationRangePosition,
+    handleMoveArticulationRangeAssignment,
+    handleResizeArticulationRangeAssignment,
+    handleClearArticulationRangeAssignment,
+    handleClearArticulationTriggerAssignments,
+    handleDistributeArticulationRanges,
+    handleRenameArticulationSlot,
+    handleDuplicateArticulationSlot,
+    handleDeleteArticulationSlot,
+    handleReplaceArticulationSlotWithCurrent,
+    handleStartArticulationAudition,
+    handleStopArticulationAudition,
     handleSelectWavetable,
+    handlePrewarmWavetablePicker,
     handleRetryLoad,
     handleMsegMorphChange,
     handleMsegRateChange,
@@ -19437,6 +27878,7 @@ const IOSWavetablePanel = reactExports.memo(function IOSWavetablePanel2({
   wavetableFocusBindings,
   wavetablePosition,
   onSelectWavetable,
+  onPrewarmWavetablePicker,
   onRetryLoad
 }) {
   const activeStageGestureRef = reactExports.useRef(null);
@@ -19556,20 +27998,28 @@ const IOSWavetablePanel = reactExports.memo(function IOSWavetablePanel2({
           ),
           /* @__PURE__ */ jsxRuntimeExports.jsx("div", {}),
           /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "stage-copy-row", children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "bank-picker-trigger", children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "bank-readout", children: bankReadout }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx(
-                "select",
-                {
-                  className: "table-select table-select-overlay",
-                  "aria-label": "Select wavetable",
-                  value: String(desiredTableIndex),
-                  onChange: (event) => onSelectWavetable(Number(event.target.value)),
-                  ...wavetableFocusBindings,
-                  children: tableOptions.map((table, tableIndex) => /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: tableIndex, children: table.name }, `${table.tableId}-${tableIndex}`))
-                }
-              )
-            ] }),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs(
+              "label",
+              {
+                className: "bank-picker-trigger",
+                onFocus: onPrewarmWavetablePicker,
+                onPointerEnter: onPrewarmWavetablePicker,
+                children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "bank-readout", children: bankReadout }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "select",
+                    {
+                      className: "table-select table-select-overlay",
+                      "aria-label": "Select wavetable",
+                      value: String(desiredTableIndex),
+                      onChange: (event) => onSelectWavetable(Number(event.target.value)),
+                      ...wavetableFocusBindings,
+                      children: tableOptions.map((table, tableIndex) => /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: tableIndex, children: table.name }, `${table.tableId}-${tableIndex}`))
+                    }
+                  )
+                ]
+              }
+            ),
             /* @__PURE__ */ jsxRuntimeExports.jsx(
               "button",
               {
@@ -19707,6 +28157,7 @@ function IOSPatchViewBody() {
                 wavetableFocusBindings: synthView.keyboardRouting.wavetableFocusBindings,
                 wavetablePosition: synthView.wavetablePosition,
                 onSelectWavetable: handleSelectWavetable,
+                onPrewarmWavetablePicker: synthView.handlePrewarmWavetablePicker,
                 onRetryLoad: synthView.handleRetryLoad
               }
             ),

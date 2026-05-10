@@ -65,6 +65,7 @@ import {
     setArticulationTriggerMode,
     upsertSelectedArticulationSnapshot,
     type ArticulationBank,
+    type ArticulationInsertPreserveSide,
     type ArticulationRangeAssignment,
     type ArticulationRangeEditEdge,
     type ArticulationSlot,
@@ -156,7 +157,8 @@ const RUNTIME_STATE_ENDPOINT_ID = "runtimeState";
 const RETRY_DESIRED_TABLE_REQUEST_ENDPOINT_ID = "retryDesiredTableRequest";
 const WAVETABLE_PREWARM_REQUEST_ENDPOINT_ID = "wavetablePrewarmRequest";
 const MIDI_INPUT_ENDPOINT_ID = "midiIn";
-const ARTICULATION_AUDITION_NOTES = [36, 48, 60] as const;
+const VOICE_ARTICULATION_START_ENDPOINT_ID = "voiceArticulationStart";
+const ARTICULATION_AUDITION_FALLBACK_NOTE = 60;
 const GLIDE_TIME_MIN_SECONDS = 0;
 const GLIDE_TIME_MAX_SECONDS = 2;
 const GLIDE_TIME_STEP_SECONDS = 0.001;
@@ -214,6 +216,22 @@ export type SynthKeyboardRoutingBindings = {
     glideFocusTarget: SynthTextEntryFocusTarget;
 };
 
+export type ArticulationHeldInput = {
+    note: number | null;
+    velocity: number | null;
+    chain: number | null;
+};
+
+type HeldMidiNote = {
+    velocity: number;
+    order: number;
+};
+
+type VoiceArticulationStartMessage = {
+    hasArticulation?: number | boolean;
+    selectorA?: number;
+};
+
 export type SynthPatchViewModel = {
     frames: Float32Array[] | null;
     catalogError: string | null;
@@ -265,6 +283,7 @@ export type SynthPatchViewModel = {
     articulationSlots: ArticulationSlot[];
     selectedArticulationSlot: ArticulationSlot | null;
     selectedArticulationIsDirty: boolean;
+    articulationHeldInput: ArticulationHeldInput;
     discardedArticulationEdit: {
         slotId: string;
         slotName: string;
@@ -290,7 +309,12 @@ export type SynthPatchViewModel = {
     handleUndoDiscardedArticulationEdit: () => void;
     handleSetArticulationTriggerMode: (mode: ArticulationTriggerMode) => void;
     handleAssignArticulationRangePosition: (mode: ArticulationTriggerMode, position: number, articulationId: string) => boolean;
-    handleInsertArticulationRangeAtPosition: (mode: ArticulationTriggerMode, position: number, articulationId: string) => boolean;
+    handleInsertArticulationRangeAtPosition: (
+        mode: ArticulationTriggerMode,
+        position: number,
+        articulationId: string,
+        preserveSide?: ArticulationInsertPreserveSide,
+    ) => boolean;
     handleDuplicateAndAssignArticulationRangePosition: (
         mode: ArticulationTriggerMode,
         position: number,
@@ -1286,6 +1310,8 @@ export function useSynthKeyboardRouting({
     onKeyboardOctaveDown,
     onKeyboardOctaveUp,
     keyboardInputMode = "hosted",
+    onPreviewNoteOn,
+    onPreviewMidiEvent,
     sendMIDIInputEvent,
 }: {
     keyboardRef: RefObject<SynthKeyboardLike | null>;
@@ -1296,12 +1322,16 @@ export function useSynthKeyboardRouting({
     onKeyboardOctaveDown?: () => boolean;
     onKeyboardOctaveUp?: () => boolean;
     keyboardInputMode?: SynthKeyboardInputMode;
+    onPreviewNoteOn?: (noteNumber: number) => void;
+    onPreviewMidiEvent?: (status: number, noteNumber: number, velocity: number) => void;
     sendMIDIInputEvent?: (endpointID: string, shortMIDICode: number) => void;
 }): SynthKeyboardRoutingBindings {
     const synthInputRouter = useSynthInputRouter(keyboardRef, {
         handleKeyboardOctaveDown: onKeyboardOctaveDown,
         handleKeyboardOctaveUp: onKeyboardOctaveUp,
         keyboardInputMode,
+        onPreviewNoteOn,
+        onPreviewMidiEvent,
         sendMIDIInputEvent,
     });
     const wavetableTarget = useStableArrowTarget("wavetable-select", onStepWavetable);
@@ -1514,6 +1544,10 @@ export function useSynthPatchViewModel({
     const observedDistortionHistory = useObservedDistortionHistory();
     const observedDistortionScope = useObservedDistortionScope();
     const observedMsegState = useObservedMsegState();
+    const voiceArticulationStartMessage = usePatchEndpoint<VoiceArticulationStartMessage | null>(
+        VOICE_ARTICULATION_START_ENDPOINT_ID,
+        null,
+    );
     const articulationBankState = useStoredArticulationBank();
     const runtimePresentation = useMemo(
         () => resolveRuntimeTablePresentation(runtimeStateMessage, Number(wavetableSelect.value) || 0),
@@ -1536,7 +1570,14 @@ export function useSynthPatchViewModel({
         snapshot: ArticulationSnapshot;
     } | null>(null);
     const activeAuditionRef = useRef<{ slotId: string; note: number } | null>(null);
-    const auditionCycleIndexRef = useRef(0);
+    const lastPlayedNoteRef = useRef(ARTICULATION_AUDITION_FALLBACK_NOTE);
+    const heldMidiNotesRef = useRef(new Map<number, HeldMidiNote>());
+    const heldMidiOrderRef = useRef(0);
+    const [articulationHeldInput, setArticulationHeldInput] = useState<ArticulationHeldInput>({
+        note: null,
+        velocity: null,
+        chain: null,
+    });
     const [selectedMsegSlot, setSelectedMsegSlot] = useState(0);
     const [selectedEnvelopeSlot, setSelectedEnvelopeSlot] = useState(0);
     const displayedMsegControllerRef = useRef<MsegEditorControllerLike | null>(null);
@@ -2053,9 +2094,10 @@ export function useSynthPatchViewModel({
         mode: ArticulationTriggerMode,
         position: number,
         articulationId: string,
+        preserveSide?: ArticulationInsertPreserveSide,
     ) => {
         return updateArticulationBankIfChanged((previousBank) => (
-            insertArticulationRangeAtPosition(previousBank, mode, position, articulationId)
+            insertArticulationRangeAtPosition(previousBank, mode, position, articulationId, preserveSide)
         ));
     }, [updateArticulationBankIfChanged]);
 
@@ -2188,9 +2230,70 @@ export function useSynthPatchViewModel({
         }
     }, [applyArticulationSnapshot, articulationBankState]);
 
+    const publishHeldMidiNote = useCallback((nextChainValue?: number | null) => {
+        let newest: { note: number; velocity: number; order: number } | null = null;
+
+        heldMidiNotesRef.current.forEach((heldNote, note) => {
+            if (!newest || heldNote.order > newest.order) {
+                newest = { note, velocity: heldNote.velocity, order: heldNote.order };
+            }
+        });
+
+        setArticulationHeldInput((previousValue) => {
+            const chain = nextChainValue === undefined ? previousValue.chain : nextChainValue;
+            const nextValue = newest
+                ? {
+                    note: newest.note,
+                    velocity: newest.velocity,
+                    chain,
+                }
+                : nextChainValue !== undefined
+                    ? {
+                        note: null,
+                        velocity: null,
+                        chain,
+                    }
+                : {
+                    note: null,
+                    velocity: null,
+                    chain: null,
+                };
+
+            return previousValue.note === nextValue.note
+                && previousValue.velocity === nextValue.velocity
+                && previousValue.chain === nextValue.chain
+                ? previousValue
+                : nextValue;
+        });
+    }, []);
+
+    const trackMidiInputForArticulationLane = useCallback((status: number, note: number, velocity = 0) => {
+        const messageKind = status & 0xf0;
+        const safeNote = clamp(Math.round(note), 0, 127);
+        const safeVelocity = clamp(Math.round(velocity), 0, 127);
+        const isNoteOn = messageKind === 0x90 && safeVelocity > 0;
+        const isNoteOff = messageKind === 0x80 || (messageKind === 0x90 && safeVelocity === 0);
+
+        if (isNoteOn) {
+            lastPlayedNoteRef.current = safeNote;
+            heldMidiNotesRef.current.set(safeNote, {
+                velocity: safeVelocity,
+                order: heldMidiOrderRef.current += 1,
+            });
+            publishHeldMidiNote();
+            return;
+        }
+
+        if (isNoteOff) {
+            heldMidiNotesRef.current.delete(safeNote);
+            publishHeldMidiNote();
+        }
+    }, [publishHeldMidiNote]);
+
     const sendMidiInputEvent = useCallback((status: number, note: number, velocity = 0) => {
+        trackMidiInputForArticulationLane(status, note, velocity);
         patchConnection.sendMIDIInputEvent?.(MIDI_INPUT_ENDPOINT_ID, buildShortMidi(status, note, velocity));
-    }, [patchConnection]);
+    }, [patchConnection, trackMidiInputForArticulationLane]);
 
     const handleStopArticulationAudition = useCallback((slotId?: string) => {
         const activeAudition = activeAuditionRef.current;
@@ -2207,13 +2310,25 @@ export function useSynthPatchViewModel({
         handleStopArticulationAudition();
         selectArticulationSlot(slotId);
 
-        const note = ARTICULATION_AUDITION_NOTES[
-            auditionCycleIndexRef.current % ARTICULATION_AUDITION_NOTES.length
-        ];
-        auditionCycleIndexRef.current += 1;
+        const note = clamp(Math.round(lastPlayedNoteRef.current), 0, 127);
         activeAuditionRef.current = { slotId, note };
         sendMidiInputEvent(0x90, note, 100);
     }, [handleStopArticulationAudition, selectArticulationSlot, sendMidiInputEvent]);
+
+    useEffect(() => {
+        if (!voiceArticulationStartMessage) {
+            return;
+        }
+
+        const hasArticulation = Boolean(voiceArticulationStartMessage.hasArticulation);
+        const selectorA = Number(voiceArticulationStartMessage.selectorA);
+
+        publishHeldMidiNote(
+            hasArticulation && Number.isFinite(selectorA)
+                ? clamp(Math.round(selectorA), 0, 127)
+                : null,
+        );
+    }, [publishHeldMidiNote, voiceArticulationStartMessage]);
 
     useEffect(() => {
         const handleWindowBlur = () => handleStopArticulationAudition();
@@ -2290,6 +2405,10 @@ export function useSynthPatchViewModel({
         onKeyboardOctaveDown,
         onKeyboardOctaveUp,
         keyboardInputMode,
+        onPreviewNoteOn: (noteNumber) => {
+            lastPlayedNoteRef.current = clamp(Math.round(noteNumber), 0, 127);
+        },
+        onPreviewMidiEvent: trackMidiInputForArticulationLane,
         sendMIDIInputEvent: patchConnection.sendMIDIInputEvent?.bind(patchConnection),
     });
 
@@ -2344,6 +2463,7 @@ export function useSynthPatchViewModel({
         articulationSlots,
         selectedArticulationSlot,
         selectedArticulationIsDirty,
+        articulationHeldInput,
         discardedArticulationEdit: discardedArticulationEdit
             ? {
                 slotId: discardedArticulationEdit.slotId,
