@@ -12583,6 +12583,7 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     --color-red-300: oklch(80.8% .114 19.571);
     --color-red-400: oklch(70.4% .191 22.216);
     --color-red-600: oklch(57.7% .245 27.325);
+    --color-amber-50: oklch(98.7% .022 95.277);
     --color-amber-100: oklch(96.2% .059 95.617);
     --color-amber-200: oklch(92.4% .12 95.746);
     --color-amber-300: oklch(87.9% .169 91.605);
@@ -12638,6 +12639,7 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     --font-weight-bold: 700;
     --font-weight-black: 900;
     --tracking-tight: -.025em;
+    --tracking-normal: 0em;
     --tracking-wide: .025em;
     --tracking-widest: .1em;
     --leading-snug: 1.375;
@@ -12998,6 +13000,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     inset-block: calc(var(--spacing) * .5);
   }
 
+  .inset-y-1 {
+    inset-block: calc(var(--spacing) * 1);
+  }
+
   .inset-y-4 {
     inset-block: calc(var(--spacing) * 4);
   }
@@ -13012,6 +13018,14 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .end {
     inset-inline-end: var(--spacing);
+  }
+
+  .-top-0 {
+    top: calc(var(--spacing) * 0);
+  }
+
+  .-top-0\\.5 {
+    top: calc(var(--spacing) * -.5);
   }
 
   .-top-3 {
@@ -13086,12 +13100,20 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     bottom: calc(var(--spacing) * 0);
   }
 
+  .bottom-0\\.5 {
+    bottom: calc(var(--spacing) * .5);
+  }
+
   .bottom-1 {
     bottom: calc(var(--spacing) * 1);
   }
 
   .bottom-2 {
     bottom: calc(var(--spacing) * 2);
+  }
+
+  .bottom-3 {
+    bottom: calc(var(--spacing) * 3);
   }
 
   .bottom-4 {
@@ -13152,6 +13174,18 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .z-\\[1\\] {
     z-index: 1;
+  }
+
+  .z-\\[2\\] {
+    z-index: 2;
+  }
+
+  .z-\\[3\\] {
+    z-index: 3;
+  }
+
+  .z-\\[4\\] {
+    z-index: 4;
   }
 
   .order-1 {
@@ -13563,6 +13597,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     height: calc(var(--spacing) * 12);
   }
 
+  .h-14 {
+    height: calc(var(--spacing) * 14);
+  }
+
   .h-24 {
     height: calc(var(--spacing) * 24);
   }
@@ -13579,6 +13617,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     height: 7px;
   }
 
+  .h-\\[12px\\] {
+    height: 12px;
+  }
+
   .h-\\[18px\\] {
     height: 18px;
   }
@@ -13587,8 +13629,12 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     height: 24px;
   }
 
-  .h-\\[88px\\] {
-    height: 88px;
+  .h-\\[38px\\] {
+    height: 38px;
+  }
+
+  .h-\\[80px\\] {
+    height: 80px;
   }
 
   .h-\\[118px\\] {
@@ -13639,12 +13685,24 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     min-height: calc(var(--spacing) * 4);
   }
 
+  .min-h-6 {
+    min-height: calc(var(--spacing) * 6);
+  }
+
   .min-h-8 {
     min-height: calc(var(--spacing) * 8);
   }
 
   .min-h-9 {
     min-height: calc(var(--spacing) * 9);
+  }
+
+  .min-h-11 {
+    min-height: calc(var(--spacing) * 11);
+  }
+
+  .min-h-12 {
+    min-height: calc(var(--spacing) * 12);
   }
 
   .min-h-16 {
@@ -13655,8 +13713,8 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     min-height: 100dvh;
   }
 
-  .min-h-\\[108px\\] {
-    min-height: 108px;
+  .min-h-\\[100px\\] {
+    min-height: 100px;
   }
 
   .min-h-\\[158px\\] {
@@ -13771,6 +13829,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     width: calc(var(--spacing) * 72);
   }
 
+  .w-\\[3px\\] {
+    width: 3px;
+  }
+
   .w-\\[18px\\] {
     width: 18px;
   }
@@ -13783,8 +13845,8 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     width: 56px;
   }
 
-  .w-\\[152px\\] {
-    width: 152px;
+  .w-\\[148px\\] {
+    width: 148px;
   }
 
   .w-auto {
@@ -13815,12 +13877,24 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     max-width: 34ch;
   }
 
+  .max-w-\\[74px\\] {
+    max-width: 74px;
+  }
+
+  .max-w-\\[140px\\] {
+    max-width: 140px;
+  }
+
   .max-w-\\[280px\\] {
     max-width: 280px;
   }
 
   .max-w-\\[1080px\\] {
     max-width: 1080px;
+  }
+
+  .max-w-\\[calc\\(100\\%-1rem\\)\\] {
+    max-width: calc(100% - 1rem);
   }
 
   .max-w-full {
@@ -13859,6 +13933,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     min-width: calc(var(--spacing) * 12);
   }
 
+  .min-w-\\[44px\\] {
+    min-width: 44px;
+  }
+
   .min-w-\\[112px\\] {
     min-width: 112px;
   }
@@ -13867,8 +13945,12 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     min-width: 132px;
   }
 
-  .min-w-\\[168px\\] {
-    min-width: 168px;
+  .min-w-\\[152px\\] {
+    min-width: 152px;
+  }
+
+  .min-w-\\[180px\\] {
+    min-width: 180px;
   }
 
   .min-w-full {
@@ -14121,6 +14203,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     align-content: flex-start;
   }
 
+  .items-baseline {
+    align-items: baseline;
+  }
+
   .items-center {
     align-items: center;
   }
@@ -14175,10 +14261,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .gap-2 {
     gap: calc(var(--spacing) * 2);
-  }
-
-  .gap-2\\.5 {
-    gap: calc(var(--spacing) * 2.5);
   }
 
   .gap-3 {
@@ -14295,8 +14377,16 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     border-radius: var(--radius-2xl);
   }
 
+  .rounded-\\[2px\\] {
+    border-radius: 2px;
+  }
+
   .rounded-\\[3px\\] {
     border-radius: 3px;
+  }
+
+  .rounded-\\[4px\\] {
+    border-radius: 4px;
   }
 
   .rounded-\\[5px\\] {
@@ -14464,16 +14554,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     border-color: var(--color-amber-100);
   }
 
-  .border-amber-100\\/55 {
-    border-color: #fef3c68c;
-  }
-
-  @supports (color: color-mix(in lab, red, red)) {
-    .border-amber-100\\/55 {
-      border-color: color-mix(in oklab, var(--color-amber-100) 55%, transparent);
-    }
-  }
-
   .border-amber-100\\/70 {
     border-color: #fef3c6b3;
   }
@@ -14481,16 +14561,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
   @supports (color: color-mix(in lab, red, red)) {
     .border-amber-100\\/70 {
       border-color: color-mix(in oklab, var(--color-amber-100) 70%, transparent);
-    }
-  }
-
-  .border-amber-100\\/90 {
-    border-color: #fef3c6e6;
-  }
-
-  @supports (color: color-mix(in lab, red, red)) {
-    .border-amber-100\\/90 {
-      border-color: color-mix(in oklab, var(--color-amber-100) 90%, transparent);
     }
   }
 
@@ -14525,6 +14595,30 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
   @supports (color: color-mix(in lab, red, red)) {
     .border-amber-200\\/40 {
       border-color: color-mix(in oklab, var(--color-amber-200) 40%, transparent);
+    }
+  }
+
+  .border-amber-200\\/55 {
+    border-color: #fee6858c;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .border-amber-200\\/55 {
+      border-color: color-mix(in oklab, var(--color-amber-200) 55%, transparent);
+    }
+  }
+
+  .border-amber-300 {
+    border-color: var(--color-amber-300);
+  }
+
+  .border-amber-300\\/65 {
+    border-color: #ffd236a6;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .border-amber-300\\/65 {
+      border-color: color-mix(in oklab, var(--color-amber-300) 65%, transparent);
     }
   }
 
@@ -14566,6 +14660,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     .border-border\\/70 {
       border-color: color-mix(in oklab, var(--cosimo-mod-border) 70%, transparent);
     }
+  }
+
+  .border-cyan-100 {
+    border-color: var(--color-cyan-100);
   }
 
   .border-cyan-200 {
@@ -14616,8 +14714,26 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     }
   }
 
+  .border-cyan-300\\/35 {
+    border-color: #53eafd59;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .border-cyan-300\\/35 {
+      border-color: color-mix(in oklab, var(--color-cyan-300) 35%, transparent);
+    }
+  }
+
   .border-destructive {
     border-color: var(--cosimo-mod-destructive);
+  }
+
+  .border-emerald-100 {
+    border-color: var(--color-emerald-100);
+  }
+
+  .border-emerald-200 {
+    border-color: var(--color-emerald-200);
   }
 
   .border-emerald-300 {
@@ -14652,27 +14768,17 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     border-color: var(--color-pink-200);
   }
 
-  .border-pink-200\\/22 {
-    border-color: #fccee838;
-  }
-
-  @supports (color: color-mix(in lab, red, red)) {
-    .border-pink-200\\/22 {
-      border-color: color-mix(in oklab, var(--color-pink-200) 22%, transparent);
-    }
-  }
-
   .border-pink-300 {
     border-color: var(--color-pink-300);
   }
 
-  .border-pink-300\\/18 {
-    border-color: #fda5d52e;
+  .border-pink-300\\/15 {
+    border-color: #fda5d526;
   }
 
   @supports (color: color-mix(in lab, red, red)) {
-    .border-pink-300\\/18 {
-      border-color: color-mix(in oklab, var(--color-pink-300) 18%, transparent);
+    .border-pink-300\\/15 {
+      border-color: color-mix(in oklab, var(--color-pink-300) 15%, transparent);
     }
   }
 
@@ -14752,16 +14858,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     }
   }
 
-  .border-white\\/15 {
-    border-color: #ffffff26;
-  }
-
-  @supports (color: color-mix(in lab, red, red)) {
-    .border-white\\/15 {
-      border-color: color-mix(in oklab, var(--color-white) 15%, transparent);
-    }
-  }
-
   .border-white\\/\\[0\\.04\\] {
     border-color: #ffffff0a;
   }
@@ -14830,12 +14926,24 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     border-left-color: #0000;
   }
 
-  .bg-\\[\\#0a0d18\\]\\/95 {
-    background-color: oklab(16.1972% .000775084 -.02385 / .95);
+  .bg-\\[\\#070a13\\]\\/96 {
+    background-color: oklab(14.6236% -.000604108 -.0204007 / .96);
   }
 
   .bg-\\[\\#070b16\\] {
     background-color: #070b16;
+  }
+
+  .bg-\\[\\#080b15\\]\\/97 {
+    background-color: oklab(15.1826% .000117987 -.022216 / .97);
+  }
+
+  .bg-\\[\\#03050b\\]\\/92 {
+    background-color: oklab(11.5304% -.00186769 -.0172834 / .92);
+  }
+
+  .bg-\\[\\#04060c\\] {
+    background-color: #04060c;
   }
 
   .bg-\\[\\#09101d\\]\\/95 {
@@ -14846,12 +14954,34 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     background-color: oklab(12.8817% -.00430492 -.0249884 / .85);
   }
 
+  .bg-\\[\\#050712\\]\\/55 {
+    background-color: oklab(13.2687% .00102779 -.0255741 / .55);
+  }
+
   .bg-\\[rgba\\(3\\,5\\,12\\,0\\.6\\)\\] {
     background-color: #03050c99;
   }
 
   .bg-\\[rgba\\(3\\,7\\,15\\,0\\.72\\)\\] {
     background-color: #03070fb8;
+  }
+
+  .bg-amber-100 {
+    background-color: var(--color-amber-100);
+  }
+
+  .bg-amber-200 {
+    background-color: var(--color-amber-200);
+  }
+
+  .bg-amber-200\\/90 {
+    background-color: #fee685e6;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .bg-amber-200\\/90 {
+      background-color: color-mix(in oklab, var(--color-amber-200) 90%, transparent);
+    }
   }
 
   .bg-amber-300 {
@@ -14878,23 +15008,33 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     }
   }
 
-  .bg-amber-300\\/\\[0\\.05\\] {
-    background-color: #ffd2360d;
+  .bg-amber-300\\/16 {
+    background-color: #ffd23629;
   }
 
   @supports (color: color-mix(in lab, red, red)) {
-    .bg-amber-300\\/\\[0\\.05\\] {
-      background-color: color-mix(in oklab, var(--color-amber-300) 5%, transparent);
+    .bg-amber-300\\/16 {
+      background-color: color-mix(in oklab, var(--color-amber-300) 16%, transparent);
     }
   }
 
-  .bg-amber-300\\/\\[0\\.08\\] {
-    background-color: #ffd23614;
+  .bg-amber-300\\/\\[0\\.06\\] {
+    background-color: #ffd2360f;
   }
 
   @supports (color: color-mix(in lab, red, red)) {
-    .bg-amber-300\\/\\[0\\.08\\] {
-      background-color: color-mix(in oklab, var(--color-amber-300) 8%, transparent);
+    .bg-amber-300\\/\\[0\\.06\\] {
+      background-color: color-mix(in oklab, var(--color-amber-300) 6%, transparent);
+    }
+  }
+
+  .bg-amber-300\\/\\[0\\.085\\] {
+    background-color: #ffd23616;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .bg-amber-300\\/\\[0\\.085\\] {
+      background-color: color-mix(in oklab, var(--color-amber-300) 8.5%, transparent);
     }
   }
 
@@ -15030,8 +15170,22 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     }
   }
 
+  .bg-cyan-100 {
+    background-color: var(--color-cyan-100);
+  }
+
   .bg-cyan-200 {
     background-color: var(--color-cyan-200);
+  }
+
+  .bg-cyan-200\\/85 {
+    background-color: #a2f4fdd9;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .bg-cyan-200\\/85 {
+      background-color: color-mix(in oklab, var(--color-cyan-200) 85%, transparent);
+    }
   }
 
   .bg-cyan-300 {
@@ -15172,16 +15326,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     background-color: var(--color-pink-200);
   }
 
-  .bg-pink-200\\/10 {
-    background-color: #fccee81a;
-  }
-
-  @supports (color: color-mix(in lab, red, red)) {
-    .bg-pink-200\\/10 {
-      background-color: color-mix(in oklab, var(--color-pink-200) 10%, transparent);
-    }
-  }
-
   .bg-pink-300 {
     background-color: var(--color-pink-300);
   }
@@ -15196,33 +15340,13 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     }
   }
 
-  .bg-pink-300\\/90 {
-    background-color: #fda5d5e6;
+  .bg-pink-300\\/95 {
+    background-color: #fda5d5f2;
   }
 
   @supports (color: color-mix(in lab, red, red)) {
-    .bg-pink-300\\/90 {
-      background-color: color-mix(in oklab, var(--color-pink-300) 90%, transparent);
-    }
-  }
-
-  .bg-pink-300\\/\\[0\\.06\\] {
-    background-color: #fda5d50f;
-  }
-
-  @supports (color: color-mix(in lab, red, red)) {
-    .bg-pink-300\\/\\[0\\.06\\] {
-      background-color: color-mix(in oklab, var(--color-pink-300) 6%, transparent);
-    }
-  }
-
-  .bg-pink-300\\/\\[0\\.07\\] {
-    background-color: #fda5d512;
-  }
-
-  @supports (color: color-mix(in lab, red, red)) {
-    .bg-pink-300\\/\\[0\\.07\\] {
-      background-color: color-mix(in oklab, var(--color-pink-300) 7.0%, transparent);
+    .bg-pink-300\\/95 {
+      background-color: color-mix(in oklab, var(--color-pink-300) 95%, transparent);
     }
   }
 
@@ -15282,12 +15406,36 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     background-color: var(--color-sky-300);
   }
 
+  .bg-slate-400 {
+    background-color: var(--color-slate-400);
+  }
+
+  .bg-slate-400\\/28 {
+    background-color: #90a1b947;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .bg-slate-400\\/28 {
+      background-color: color-mix(in oklab, var(--color-slate-400) 28%, transparent);
+    }
+  }
+
   .bg-transparent {
     background-color: #0000;
   }
 
   .bg-white {
     background-color: var(--color-white);
+  }
+
+  .bg-white\\/\\[0\\.01\\] {
+    background-color: #ffffff03;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .bg-white\\/\\[0\\.01\\] {
+      background-color: color-mix(in oklab, var(--color-white) 1%, transparent);
+    }
   }
 
   .bg-white\\/\\[0\\.02\\] {
@@ -15350,6 +15498,16 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     }
   }
 
+  .bg-white\\/\\[0\\.10\\] {
+    background-color: #ffffff1a;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .bg-white\\/\\[0\\.10\\] {
+      background-color: color-mix(in oklab, var(--color-white) 10%, transparent);
+    }
+  }
+
   .bg-white\\/\\[0\\.012\\] {
     background-color: #ffffff03;
   }
@@ -15397,6 +15555,16 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
   @supports (color: color-mix(in lab, red, red)) {
     .bg-white\\/\\[0\\.025\\] {
       background-color: color-mix(in oklab, var(--color-white) 2.5%, transparent);
+    }
+  }
+
+  .bg-white\\/\\[0\\.035\\] {
+    background-color: #ffffff09;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .bg-white\\/\\[0\\.035\\] {
+      background-color: color-mix(in oklab, var(--color-white) 3.5%, transparent);
     }
   }
 
@@ -15638,6 +15806,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     padding-inline: calc(var(--spacing) * 6);
   }
 
+  .px-px {
+    padding-inline: 1px;
+  }
+
   .py-0 {
     padding-block: calc(var(--spacing) * 0);
   }
@@ -15772,10 +15944,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .pl-2 {
     padding-left: calc(var(--spacing) * 2);
-  }
-
-  .pl-2\\.5 {
-    padding-left: calc(var(--spacing) * 2.5);
   }
 
   .pl-3 {
@@ -15936,9 +16104,19 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     letter-spacing: -.04em;
   }
 
+  .tracking-\\[0\\.01em\\] {
+    --tw-tracking: .01em;
+    letter-spacing: .01em;
+  }
+
   .tracking-\\[0\\.1em\\] {
     --tw-tracking: .1em;
     letter-spacing: .1em;
+  }
+
+  .tracking-\\[0\\.02em\\] {
+    --tw-tracking: .02em;
+    letter-spacing: .02em;
   }
 
   .tracking-\\[0\\.2em\\] {
@@ -16006,6 +16184,16 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     letter-spacing: .24em;
   }
 
+  .tracking-\\[0\\] {
+    --tw-tracking: 0;
+    letter-spacing: 0;
+  }
+
+  .tracking-normal {
+    --tw-tracking: var(--tracking-normal);
+    letter-spacing: var(--tracking-normal);
+  }
+
   .tracking-tight {
     --tw-tracking: var(--tracking-tight);
     letter-spacing: var(--tracking-tight);
@@ -16041,8 +16229,36 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     color: #0a0d18;
   }
 
+  .text-\\[\\#070a13\\] {
+    color: #070a13;
+  }
+
+  .text-amber-50 {
+    color: var(--color-amber-50);
+  }
+
+  .text-amber-50\\/95 {
+    color: #fffbebf2;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-amber-50\\/95 {
+      color: color-mix(in oklab, var(--color-amber-50) 95%, transparent);
+    }
+  }
+
   .text-amber-100 {
     color: var(--color-amber-100);
+  }
+
+  .text-amber-100\\/80 {
+    color: #fef3c6cc;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-amber-100\\/80 {
+      color: color-mix(in oklab, var(--color-amber-100) 80%, transparent);
+    }
   }
 
   .text-amber-200 {
@@ -16176,6 +16392,16 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
   @supports (color: color-mix(in lab, red, red)) {
     .text-cyan-100\\/90 {
       color: color-mix(in oklab, var(--color-cyan-100) 90%, transparent);
+    }
+  }
+
+  .text-cyan-100\\/92 {
+    color: #cefafeeb;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-cyan-100\\/92 {
+      color: color-mix(in oklab, var(--color-cyan-100) 92%, transparent);
     }
   }
 
@@ -16383,37 +16609,17 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     color: var(--color-pink-50);
   }
 
-  .text-pink-50\\/90 {
-    color: #fdf2f8e6;
-  }
-
-  @supports (color: color-mix(in lab, red, red)) {
-    .text-pink-50\\/90 {
-      color: color-mix(in oklab, var(--color-pink-50) 90%, transparent);
-    }
-  }
-
   .text-pink-100 {
     color: var(--color-pink-100);
   }
 
-  .text-pink-100\\/82 {
-    color: #fce7f3d1;
+  .text-pink-100\\/80 {
+    color: #fce7f3cc;
   }
 
   @supports (color: color-mix(in lab, red, red)) {
-    .text-pink-100\\/82 {
-      color: color-mix(in oklab, var(--color-pink-100) 82%, transparent);
-    }
-  }
-
-  .text-pink-100\\/85 {
-    color: #fce7f3d9;
-  }
-
-  @supports (color: color-mix(in lab, red, red)) {
-    .text-pink-100\\/85 {
-      color: color-mix(in oklab, var(--color-pink-100) 85%, transparent);
+    .text-pink-100\\/80 {
+      color: color-mix(in oklab, var(--color-pink-100) 80%, transparent);
     }
   }
 
@@ -16431,6 +16637,16 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     color: var(--color-pink-200);
   }
 
+  .text-pink-200\\/75 {
+    color: #fccee8bf;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-pink-200\\/75 {
+      color: color-mix(in oklab, var(--color-pink-200) 75%, transparent);
+    }
+  }
+
   .text-pink-200\\/85 {
     color: #fccee8d9;
   }
@@ -16438,6 +16654,16 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
   @supports (color: color-mix(in lab, red, red)) {
     .text-pink-200\\/85 {
       color: color-mix(in oklab, var(--color-pink-200) 85%, transparent);
+    }
+  }
+
+  .text-pink-200\\/90 {
+    color: #fccee8e6;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-pink-200\\/90 {
+      color: color-mix(in oklab, var(--color-pink-200) 90%, transparent);
     }
   }
 
@@ -16499,16 +16725,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     color: var(--color-slate-100);
   }
 
-  .text-slate-100\\/75 {
-    color: #f1f5f9bf;
-  }
-
-  @supports (color: color-mix(in lab, red, red)) {
-    .text-slate-100\\/75 {
-      color: color-mix(in oklab, var(--color-slate-100) 75%, transparent);
-    }
-  }
-
   .text-slate-100\\/78 {
     color: #f1f5f9c7;
   }
@@ -16519,13 +16735,23 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     }
   }
 
-  .text-slate-100\\/85 {
-    color: #f1f5f9d9;
+  .text-slate-100\\/82 {
+    color: #f1f5f9d1;
   }
 
   @supports (color: color-mix(in lab, red, red)) {
-    .text-slate-100\\/85 {
-      color: color-mix(in oklab, var(--color-slate-100) 85%, transparent);
+    .text-slate-100\\/82 {
+      color: color-mix(in oklab, var(--color-slate-100) 82%, transparent);
+    }
+  }
+
+  .text-slate-100\\/88 {
+    color: #f1f5f9e0;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-slate-100\\/88 {
+      color: color-mix(in oklab, var(--color-slate-100) 88%, transparent);
     }
   }
 
@@ -16553,6 +16779,26 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     }
   }
 
+  .text-slate-200\\/65 {
+    color: #e2e8f0a6;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-slate-200\\/65 {
+      color: color-mix(in oklab, var(--color-slate-200) 65%, transparent);
+    }
+  }
+
+  .text-slate-200\\/72 {
+    color: #e2e8f0b8;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-slate-200\\/72 {
+      color: color-mix(in oklab, var(--color-slate-200) 72%, transparent);
+    }
+  }
+
   .text-slate-200\\/80 {
     color: #e2e8f0cc;
   }
@@ -16575,16 +16821,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .text-slate-300 {
     color: var(--color-slate-300);
-  }
-
-  .text-slate-300\\/25 {
-    color: #cad5e240;
-  }
-
-  @supports (color: color-mix(in lab, red, red)) {
-    .text-slate-300\\/25 {
-      color: color-mix(in oklab, var(--color-slate-300) 25%, transparent);
-    }
   }
 
   .text-slate-300\\/30 {
@@ -16624,16 +16860,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
   @supports (color: color-mix(in lab, red, red)) {
     .text-slate-300\\/45 {
       color: color-mix(in oklab, var(--color-slate-300) 45%, transparent);
-    }
-  }
-
-  .text-slate-300\\/50 {
-    color: #cad5e280;
-  }
-
-  @supports (color: color-mix(in lab, red, red)) {
-    .text-slate-300\\/50 {
-      color: color-mix(in oklab, var(--color-slate-300) 50%, transparent);
     }
   }
 
@@ -16799,8 +17025,22 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     color: var(--color-white);
   }
 
+  .text-white\\/95 {
+    color: #fffffff2;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-white\\/95 {
+      color: color-mix(in oklab, var(--color-white) 95%, transparent);
+    }
+  }
+
   .lowercase {
     text-transform: lowercase;
+  }
+
+  .normal-case {
+    text-transform: none;
   }
 
   .uppercase {
@@ -16863,23 +17103,43 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
   }
 
-  .shadow-\\[0_0_0_1px_rgba\\(252\\,211\\,77\\,0\\.6\\)\\,0_2px_10px_rgba\\(0\\,0\\,0\\,0\\.45\\)\\,inset_0_1px_0_rgba\\(255\\,255\\,255\\,0\\.25\\)\\] {
-    --tw-shadow: 0 0 0 1px var(--tw-shadow-color, #fcd34d99), 0 2px 10px var(--tw-shadow-color, #00000073), inset 0 1px 0 var(--tw-shadow-color, #ffffff40);
+  .shadow-\\[0_0_0_1px_rgba\\(7\\,10\\,19\\,0\\.72\\)\\,0_0_16px_rgba\\(251\\,191\\,36\\,0\\.50\\)\\] {
+    --tw-shadow: 0 0 0 1px var(--tw-shadow-color, #070a13b8), 0 0 16px var(--tw-shadow-color, #fbbf2480);
     box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
   }
 
-  .shadow-\\[0_0_4px_rgba\\(244\\,114\\,182\\,0\\.55\\)\\] {
-    --tw-shadow: 0 0 4px var(--tw-shadow-color, #f472b68c);
+  .shadow-\\[0_0_3px_rgba\\(244\\,114\\,182\\,0\\.65\\)\\] {
+    --tw-shadow: 0 0 3px var(--tw-shadow-color, #f472b6a6);
     box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
   }
 
-  .shadow-\\[0_0_10px_2px_rgba\\(103\\,232\\,249\\,0\\.6\\)\\] {
-    --tw-shadow: 0 0 10px 2px var(--tw-shadow-color, #67e8f999);
+  .shadow-\\[0_0_8px_rgba\\(251\\,191\\,36\\,0\\.45\\)\\] {
+    --tw-shadow: 0 0 8px var(--tw-shadow-color, #fbbf2473);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
+  .shadow-\\[0_0_10px_rgba\\(103\\,232\\,249\\,0\\.25\\)\\] {
+    --tw-shadow: 0 0 10px var(--tw-shadow-color, #67e8f940);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
+  .shadow-\\[0_0_10px_rgba\\(251\\,191\\,36\\,0\\.55\\)\\] {
+    --tw-shadow: 0 0 10px var(--tw-shadow-color, #fbbf248c);
     box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
   }
 
   .shadow-\\[0_0_18px_rgba\\(251\\,191\\,36\\,0\\.34\\)\\] {
     --tw-shadow: 0 0 18px var(--tw-shadow-color, #fbbf2457);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
+  .shadow-\\[0_4px_12px_rgba\\(0\\,0\\,0\\,0\\.45\\)\\,0_0_0_1px_rgba\\(103\\,232\\,249\\,0\\.28\\)\\] {
+    --tw-shadow: 0 4px 12px var(--tw-shadow-color, #00000073), 0 0 0 1px var(--tw-shadow-color, #67e8f947);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
+  .shadow-\\[0_10px_24px_rgba\\(0\\,0\\,0\\,0\\.45\\)\\] {
+    --tw-shadow: 0 10px 24px var(--tw-shadow-color, #00000073);
     box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
   }
 
@@ -16903,13 +17163,13 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
   }
 
-  .shadow-\\[0_12px_28px_rgba\\(0\\,0\\,0\\,0\\.32\\)\\] {
-    --tw-shadow: 0 12px 28px var(--tw-shadow-color, #00000052);
+  .shadow-\\[0_10px_28px_rgba\\(0\\,0\\,0\\,0\\.55\\)\\] {
+    --tw-shadow: 0 10px 28px var(--tw-shadow-color, #0000008c);
     box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
   }
 
-  .shadow-\\[0_14px_36px_rgba\\(0\\,0\\,0\\,0\\.55\\)\\] {
-    --tw-shadow: 0 14px 36px var(--tw-shadow-color, #0000008c);
+  .shadow-\\[0_12px_28px_rgba\\(0\\,0\\,0\\,0\\.32\\)\\] {
+    --tw-shadow: 0 12px 28px var(--tw-shadow-color, #00000052);
     box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
   }
 
@@ -16958,13 +17218,38 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
   }
 
-  .shadow-\\[inset_0_1px_0_rgba\\(244\\,114\\,182\\,0\\.12\\)\\] {
-    --tw-shadow: inset 0 1px 0 var(--tw-shadow-color, #f472b61f);
+  .shadow-\\[inset_0_0_0_1px_rgba\\(251\\,191\\,36\\,0\\.18\\)\\] {
+    --tw-shadow: inset 0 0 0 1px var(--tw-shadow-color, #fbbf242e);
     box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
   }
 
-  .shadow-\\[inset_0_1px_0_rgba\\(255\\,255\\,255\\,0\\.02\\)\\] {
-    --tw-shadow: inset 0 1px 0 var(--tw-shadow-color, #ffffff05);
+  .shadow-\\[inset_0_0_0_1px_rgba\\(252\\,211\\,77\\,0\\.20\\)\\] {
+    --tw-shadow: inset 0 0 0 1px var(--tw-shadow-color, #fcd34d33);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
+  .shadow-\\[inset_0_0_0_1px_rgba\\(255\\,255\\,255\\,0\\.10\\)\\] {
+    --tw-shadow: inset 0 0 0 1px var(--tw-shadow-color, #ffffff1a);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
+  .shadow-\\[inset_0_0_0_1px_rgba\\(255\\,255\\,255\\,0\\.18\\)\\] {
+    --tw-shadow: inset 0 0 0 1px var(--tw-shadow-color, #ffffff2e);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
+  .shadow-\\[inset_0_0_0_1px_rgba\\(255\\,255\\,255\\,0\\.55\\)\\,0_0_0_1px_rgba\\(252\\,211\\,77\\,0\\.55\\)\\] {
+    --tw-shadow: inset 0 0 0 1px var(--tw-shadow-color, #ffffff8c), 0 0 0 1px var(--tw-shadow-color, #fcd34d8c);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
+  .shadow-\\[inset_0_0_0_1px_rgba\\(255\\,255\\,255\\,0\\.80\\)\\,0_0_0_1px_rgba\\(103\\,232\\,249\\,0\\.75\\)\\,0_0_14px_rgba\\(103\\,232\\,249\\,0\\.28\\)\\] {
+    --tw-shadow: inset 0 0 0 1px var(--tw-shadow-color, #fffc), 0 0 0 1px var(--tw-shadow-color, #67e8f9bf), 0 0 14px var(--tw-shadow-color, #67e8f947);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
+  .shadow-\\[inset_0_1px_0_rgba\\(244\\,114\\,182\\,0\\.12\\)\\] {
+    --tw-shadow: inset 0 1px 0 var(--tw-shadow-color, #f472b61f);
     box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
   }
 
@@ -16983,28 +17268,33 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
   }
 
-  .shadow-\\[inset_0_1px_0_rgba\\(255\\,255\\,255\\,0\\.18\\)\\,0_1px_2px_rgba\\(0\\,0\\,0\\,0\\.3\\)\\] {
-    --tw-shadow: inset 0 1px 0 var(--tw-shadow-color, #ffffff2e), 0 1px 2px var(--tw-shadow-color, #0000004d);
-    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
-  }
-
   .shadow-\\[inset_0_1px_0_rgba\\(255\\,255\\,255\\,0\\.025\\)\\] {
     --tw-shadow: inset 0 1px 0 var(--tw-shadow-color, #ffffff06);
     box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
   }
 
-  .shadow-\\[inset_0_1px_2px_rgba\\(0\\,0\\,0\\,0\\.4\\)\\] {
-    --tw-shadow: inset 0 1px 2px var(--tw-shadow-color, #0006);
+  .shadow-\\[inset_0_1px_2px_rgba\\(0\\,0\\,0\\,0\\.30\\)\\] {
+    --tw-shadow: inset 0 1px 2px var(--tw-shadow-color, #0000004d);
     box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
   }
 
-  .shadow-\\[inset_0_1px_2px_rgba\\(0\\,0\\,0\\,0\\.35\\)\\] {
-    --tw-shadow: inset 0 1px 2px var(--tw-shadow-color, #00000059);
+  .shadow-\\[inset_0_1px_2px_rgba\\(0\\,0\\,0\\,0\\.40\\)\\] {
+    --tw-shadow: inset 0 1px 2px var(--tw-shadow-color, #0006);
     box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
   }
 
   .shadow-\\[inset_0_1px_2px_rgba\\(0\\,0\\,0\\,0\\.45\\)\\] {
     --tw-shadow: inset 0 1px 2px var(--tw-shadow-color, #00000073);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
+  .shadow-\\[inset_0_1px_2px_rgba\\(0\\,0\\,0\\,0\\.55\\)\\,0_0_0_1px_rgba\\(103\\,232\\,249\\,0\\.20\\)\\] {
+    --tw-shadow: inset 0 1px 2px var(--tw-shadow-color, #0000008c), 0 0 0 1px var(--tw-shadow-color, #67e8f933);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
+  .shadow-\\[inset_0_1px_2px_rgba\\(0\\,0\\,0\\,0\\.55\\)\\] {
+    --tw-shadow: inset 0 1px 2px var(--tw-shadow-color, #0000008c);
     box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
   }
 
@@ -17080,12 +17370,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .blur {
     --tw-blur: blur(8px);
-    filter: var(--tw-blur, ) var(--tw-brightness, ) var(--tw-contrast, ) var(--tw-grayscale, ) var(--tw-hue-rotate, ) var(--tw-invert, ) var(--tw-saturate, ) var(--tw-sepia, ) var(--tw-drop-shadow, );
-  }
-
-  .drop-shadow-\\[0_1px_0_rgba\\(255\\,255\\,255\\,0\\.18\\)\\] {
-    --tw-drop-shadow-size: drop-shadow(0 1px 0 var(--tw-drop-shadow-color, #ffffff2e));
-    --tw-drop-shadow: var(--tw-drop-shadow-size);
     filter: var(--tw-blur, ) var(--tw-brightness, ) var(--tw-contrast, ) var(--tw-grayscale, ) var(--tw-hue-rotate, ) var(--tw-invert, ) var(--tw-saturate, ) var(--tw-sepia, ) var(--tw-drop-shadow, );
   }
 
@@ -17245,9 +17529,9 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     height: calc(var(--spacing) * 3);
   }
 
-  .before\\:w-px:before {
+  .before\\:w-\\[2px\\]:before {
     content: var(--tw-content);
-    width: 1px;
+    width: 2px;
   }
 
   .before\\:rounded-full:before {
@@ -17255,14 +17539,25 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     border-radius: 3.40282e38px;
   }
 
-  .before\\:bg-black\\/45:before {
+  .before\\:bg-black\\/65:before {
     content: var(--tw-content);
-    background-color: #00000073;
+    background-color: #000000a6;
   }
 
   @supports (color: color-mix(in lab, red, red)) {
-    .before\\:bg-black\\/45:before {
-      background-color: color-mix(in oklab, var(--color-black) 45%, transparent);
+    .before\\:bg-black\\/65:before {
+      background-color: color-mix(in oklab, var(--color-black) 65%, transparent);
+    }
+  }
+
+  .before\\:bg-black\\/80:before {
+    content: var(--tw-content);
+    background-color: #000c;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .before\\:bg-black\\/80:before {
+      background-color: color-mix(in oklab, var(--color-black) 80%, transparent);
     }
   }
 
@@ -17271,9 +17566,9 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     opacity: 0;
   }
 
-  .before\\:opacity-90:before {
+  .before\\:opacity-65:before {
     content: var(--tw-content);
-    opacity: .9;
+    opacity: .65;
   }
 
   .before\\:transition:before {
@@ -17289,11 +17584,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
   }
 
   @media (hover: hover) {
-    .group-hover\\:before\\:opacity-60:is(:where(.group):hover *):before {
-      content: var(--tw-content);
-      opacity: .6;
-    }
-
     .hover\\:border-amber-200\\/30:hover {
       border-color: #fee6854d;
     }
@@ -17301,6 +17591,16 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     @supports (color: color-mix(in lab, red, red)) {
       .hover\\:border-amber-200\\/30:hover {
         border-color: color-mix(in oklab, var(--color-amber-200) 30%, transparent);
+      }
+    }
+
+    .hover\\:border-amber-200\\/35:hover {
+      border-color: #fee68559;
+    }
+
+    @supports (color: color-mix(in lab, red, red)) {
+      .hover\\:border-amber-200\\/35:hover {
+        border-color: color-mix(in oklab, var(--color-amber-200) 35%, transparent);
       }
     }
 
@@ -17344,23 +17644,13 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
       }
     }
 
-    .hover\\:border-cyan-200\\/35:hover {
-      border-color: #a2f4fd59;
+    .hover\\:border-pink-200\\/30:hover {
+      border-color: #fccee84d;
     }
 
     @supports (color: color-mix(in lab, red, red)) {
-      .hover\\:border-cyan-200\\/35:hover {
-        border-color: color-mix(in oklab, var(--color-cyan-200) 35%, transparent);
-      }
-    }
-
-    .hover\\:border-pink-200\\/35:hover {
-      border-color: #fccee859;
-    }
-
-    @supports (color: color-mix(in lab, red, red)) {
-      .hover\\:border-pink-200\\/35:hover {
-        border-color: color-mix(in oklab, var(--color-pink-200) 35%, transparent);
+      .hover\\:border-pink-200\\/30:hover {
+        border-color: color-mix(in oklab, var(--color-pink-200) 30%, transparent);
       }
     }
 
@@ -17414,13 +17704,23 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
       }
     }
 
-    .hover\\:border-white\\/35:hover {
-      border-color: #ffffff59;
+    .hover\\:border-white\\/20:hover {
+      border-color: #fff3;
     }
 
     @supports (color: color-mix(in lab, red, red)) {
-      .hover\\:border-white\\/35:hover {
-        border-color: color-mix(in oklab, var(--color-white) 35%, transparent);
+      .hover\\:border-white\\/20:hover {
+        border-color: color-mix(in oklab, var(--color-white) 20%, transparent);
+      }
+    }
+
+    .hover\\:border-white\\/\\[0\\.18\\]:hover {
+      border-color: #ffffff2e;
+    }
+
+    @supports (color: color-mix(in lab, red, red)) {
+      .hover\\:border-white\\/\\[0\\.18\\]:hover {
+        border-color: color-mix(in oklab, var(--color-white) 18%, transparent);
       }
     }
 
@@ -17434,13 +17734,13 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
       }
     }
 
-    .hover\\:bg-black\\/15:hover {
-      background-color: #00000026;
+    .hover\\:bg-black\\/18:hover {
+      background-color: #0000002e;
     }
 
     @supports (color: color-mix(in lab, red, red)) {
-      .hover\\:bg-black\\/15:hover {
-        background-color: color-mix(in oklab, var(--color-black) 15%, transparent);
+      .hover\\:bg-black\\/18:hover {
+        background-color: color-mix(in oklab, var(--color-black) 18%, transparent);
       }
     }
 
@@ -17474,13 +17774,13 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
       }
     }
 
-    .hover\\:bg-cyan-300\\/18:hover {
-      background-color: #53eafd2e;
+    .hover\\:bg-cyan-300\\/22:hover {
+      background-color: #53eafd38;
     }
 
     @supports (color: color-mix(in lab, red, red)) {
-      .hover\\:bg-cyan-300\\/18:hover {
-        background-color: color-mix(in oklab, var(--color-cyan-300) 18%, transparent);
+      .hover\\:bg-cyan-300\\/22:hover {
+        background-color: color-mix(in oklab, var(--color-cyan-300) 22%, transparent);
       }
     }
 
@@ -17504,23 +17804,13 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
       }
     }
 
-    .hover\\:bg-pink-300\\/10:hover {
-      background-color: #fda5d51a;
+    .hover\\:bg-pink-300\\/12:hover {
+      background-color: #fda5d51f;
     }
 
     @supports (color: color-mix(in lab, red, red)) {
-      .hover\\:bg-pink-300\\/10:hover {
-        background-color: color-mix(in oklab, var(--color-pink-300) 10%, transparent);
-      }
-    }
-
-    .hover\\:bg-pink-300\\/14:hover {
-      background-color: #fda5d524;
-    }
-
-    @supports (color: color-mix(in lab, red, red)) {
-      .hover\\:bg-pink-300\\/14:hover {
-        background-color: color-mix(in oklab, var(--color-pink-300) 14%, transparent);
+      .hover\\:bg-pink-300\\/12:hover {
+        background-color: color-mix(in oklab, var(--color-pink-300) 12%, transparent);
       }
     }
 
@@ -17534,6 +17824,26 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
       }
     }
 
+    .hover\\:bg-pink-300\\/\\[0\\.06\\]:hover {
+      background-color: #fda5d50f;
+    }
+
+    @supports (color: color-mix(in lab, red, red)) {
+      .hover\\:bg-pink-300\\/\\[0\\.06\\]:hover {
+        background-color: color-mix(in oklab, var(--color-pink-300) 6%, transparent);
+      }
+    }
+
+    .hover\\:bg-pink-300\\/\\[0\\.16\\]:hover {
+      background-color: #fda5d529;
+    }
+
+    @supports (color: color-mix(in lab, red, red)) {
+      .hover\\:bg-pink-300\\/\\[0\\.16\\]:hover {
+        background-color: color-mix(in oklab, var(--color-pink-300) 16%, transparent);
+      }
+    }
+
     .hover\\:bg-primary\\/10:hover {
       background-color: var(--cosimo-mod-primary);
     }
@@ -17541,6 +17851,16 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     @supports (color: color-mix(in lab, red, red)) {
       .hover\\:bg-primary\\/10:hover {
         background-color: color-mix(in oklab, var(--cosimo-mod-primary) 10%, transparent);
+      }
+    }
+
+    .hover\\:bg-slate-200\\/55:hover {
+      background-color: #e2e8f08c;
+    }
+
+    @supports (color: color-mix(in lab, red, red)) {
+      .hover\\:bg-slate-200\\/55:hover {
+        background-color: color-mix(in oklab, var(--color-slate-200) 55%, transparent);
       }
     }
 
@@ -17584,6 +17904,16 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
       }
     }
 
+    .hover\\:bg-white\\/\\[0\\.07\\]:hover {
+      background-color: #ffffff12;
+    }
+
+    @supports (color: color-mix(in lab, red, red)) {
+      .hover\\:bg-white\\/\\[0\\.07\\]:hover {
+        background-color: color-mix(in oklab, var(--color-white) 7.0%, transparent);
+      }
+    }
+
     .hover\\:bg-white\\/\\[0\\.025\\]:hover {
       background-color: #ffffff06;
     }
@@ -17594,13 +17924,33 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
       }
     }
 
-    .hover\\:bg-white\\/\\[0\\.038\\]:hover {
-      background-color: #ffffff0a;
+    .hover\\:bg-white\\/\\[0\\.035\\]:hover {
+      background-color: #ffffff09;
     }
 
     @supports (color: color-mix(in lab, red, red)) {
-      .hover\\:bg-white\\/\\[0\\.038\\]:hover {
-        background-color: color-mix(in oklab, var(--color-white) 3.8%, transparent);
+      .hover\\:bg-white\\/\\[0\\.035\\]:hover {
+        background-color: color-mix(in oklab, var(--color-white) 3.5%, transparent);
+      }
+    }
+
+    .hover\\:bg-white\\/\\[0\\.075\\]:hover {
+      background-color: #ffffff13;
+    }
+
+    @supports (color: color-mix(in lab, red, red)) {
+      .hover\\:bg-white\\/\\[0\\.075\\]:hover {
+        background-color: color-mix(in oklab, var(--color-white) 7.5%, transparent);
+      }
+    }
+
+    .hover\\:text-amber-100\\/80:hover {
+      color: #fef3c6cc;
+    }
+
+    @supports (color: color-mix(in lab, red, red)) {
+      .hover\\:text-amber-100\\/80:hover {
+        color: color-mix(in oklab, var(--color-amber-100) 80%, transparent);
       }
     }
 
@@ -17630,12 +17980,12 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
       }
     }
 
-    .hover\\:text-slate-100:hover {
-      color: var(--color-slate-100);
+    .hover\\:text-slate-50:hover {
+      color: var(--color-slate-50);
     }
 
-    .hover\\:text-slate-200:hover {
-      color: var(--color-slate-200);
+    .hover\\:text-slate-100:hover {
+      color: var(--color-slate-100);
     }
 
     .hover\\:text-slate-200\\/80:hover {
@@ -17658,9 +18008,14 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
       }
     }
 
-    .hover\\:before\\:opacity-90:hover:before {
+    .hover\\:shadow-\\[inset_0_0_0_1px_rgba\\(255\\,255\\,255\\,0\\.22\\)\\]:hover {
+      --tw-shadow: inset 0 0 0 1px var(--tw-shadow-color, #ffffff38);
+      box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+    }
+
+    .hover\\:before\\:opacity-95:hover:before {
       content: var(--tw-content);
-      opacity: .9;
+      opacity: .95;
     }
   }
 
@@ -17684,8 +18039,8 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     }
   }
 
-  .focus\\:shadow-\\[inset_0_1px_2px_rgba\\(0\\,0\\,0\\,0\\.4\\)\\,0_0_0_1px_rgba\\(103\\,232\\,249\\,0\\.18\\)\\]:focus {
-    --tw-shadow: inset 0 1px 2px var(--tw-shadow-color, #0006), 0 0 0 1px var(--tw-shadow-color, #67e8f92e);
+  .focus\\:shadow-\\[inset_0_1px_2px_rgba\\(0\\,0\\,0\\,0\\.55\\)\\,0_0_0_1px_rgba\\(103\\,232\\,249\\,0\\.20\\)\\]:focus {
+    --tw-shadow: inset 0 1px 2px var(--tw-shadow-color, #0000008c), 0 0 0 1px var(--tw-shadow-color, #67e8f933);
     box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
   }
 
@@ -17696,16 +18051,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
   .focus-visible\\:ring-1:focus-visible {
     --tw-ring-shadow: var(--tw-ring-inset, ) 0 0 0 calc(1px + var(--tw-ring-offset-width)) var(--tw-ring-color, currentcolor);
     box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
-  }
-
-  .focus-visible\\:ring-cyan-200\\/40:focus-visible {
-    --tw-ring-color: #a2f4fd66;
-  }
-
-  @supports (color: color-mix(in lab, red, red)) {
-    .focus-visible\\:ring-cyan-200\\/40:focus-visible {
-      --tw-ring-color: color-mix(in oklab, var(--color-cyan-200) 40%, transparent);
-    }
   }
 
   .focus-visible\\:ring-cyan-200\\/45:focus-visible {
@@ -17728,12 +18073,22 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     outline-style: none;
   }
 
-  .active\\:scale-\\[0\\.94\\]:active {
-    scale: .94;
+  .active\\:scale-\\[0\\.92\\]:active {
+    scale: .92;
   }
 
   .active\\:cursor-grabbing:active {
     cursor: grabbing;
+  }
+
+  .active\\:bg-amber-300\\/\\[0\\.05\\]:active {
+    background-color: #ffd2360d;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .active\\:bg-amber-300\\/\\[0\\.05\\]:active {
+      background-color: color-mix(in oklab, var(--color-amber-300) 5%, transparent);
+    }
   }
 
   .active\\:bg-cyan-300\\/20:active {
@@ -17746,13 +18101,13 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     }
   }
 
-  .active\\:bg-cyan-300\\/26:active {
-    background-color: #53eafd42;
+  .active\\:bg-cyan-300\\/30:active {
+    background-color: #53eafd4d;
   }
 
   @supports (color: color-mix(in lab, red, red)) {
-    .active\\:bg-cyan-300\\/26:active {
-      background-color: color-mix(in oklab, var(--color-cyan-300) 26%, transparent);
+    .active\\:bg-cyan-300\\/30:active {
+      background-color: color-mix(in oklab, var(--color-cyan-300) 30%, transparent);
     }
   }
 
@@ -17766,6 +18121,26 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     }
   }
 
+  .active\\:bg-pink-300\\/\\[0\\.22\\]:active {
+    background-color: #fda5d538;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .active\\:bg-pink-300\\/\\[0\\.22\\]:active {
+      background-color: color-mix(in oklab, var(--color-pink-300) 22%, transparent);
+    }
+  }
+
+  .active\\:bg-white\\/\\[0\\.04\\]:active {
+    background-color: #ffffff0a;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .active\\:bg-white\\/\\[0\\.04\\]:active {
+      background-color: color-mix(in oklab, var(--color-white) 4%, transparent);
+    }
+  }
+
   .active\\:bg-white\\/\\[0\\.06\\]:active {
     background-color: #ffffff0f;
   }
@@ -17773,6 +18148,16 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
   @supports (color: color-mix(in lab, red, red)) {
     .active\\:bg-white\\/\\[0\\.06\\]:active {
       background-color: color-mix(in oklab, var(--color-white) 6%, transparent);
+    }
+  }
+
+  .active\\:bg-white\\/\\[0\\.10\\]:active {
+    background-color: #ffffff1a;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .active\\:bg-white\\/\\[0\\.10\\]:active {
+      background-color: color-mix(in oklab, var(--color-white) 10%, transparent);
     }
   }
 
@@ -17845,12 +18230,20 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
       display: block;
     }
 
+    .sm\\:flex {
+      display: flex;
+    }
+
     .sm\\:hidden {
       display: none;
     }
 
     .sm\\:inline {
       display: inline;
+    }
+
+    .sm\\:inline-flex {
+      display: inline-flex;
     }
   }
 
@@ -34364,6 +34757,9 @@ function setTriggerLaneAssignments(bank, mode, assignments) {
 function findRangeAssignmentAt(assignments, position) {
   return assignments.find((assignment) => position >= assignment.min && position <= assignment.max) ?? null;
 }
+function removeOtherAssignmentsForArticulation(assignments, articulationId, keepAssignmentId = null) {
+  return assignments.filter((assignment) => assignment.articulationId !== articulationId || keepAssignmentId !== null && assignment.id === keepAssignmentId);
+}
 function findEmptyRangeGap(assignments, position, minAllowed, maxAllowed) {
   let gapMin = minAllowed;
   for (const assignment of sortRangeAssignments(assignments)) {
@@ -34391,29 +34787,26 @@ function findMatchingRangeAssignment(assignments, segmentValue) {
   const max = Number(segment.max);
   return assignments.find((assignment) => id && assignment.id === id || assignment.articulationId === articulationId && assignment.min === min && assignment.max === max) ?? null;
 }
-function findMoveDestination(assignments, desiredMin, width, minAllowed, maxAllowed) {
-  const sortedAssignments = sortRangeAssignments(assignments);
-  const candidates = [];
-  let gapMin = minAllowed;
-  const addGapCandidate = (gapStart, gapEnd) => {
-    const maxStart = gapEnd - width + 1;
-    if (maxStart < gapStart) {
-      return;
-    }
-    const min = clamp$3(desiredMin, gapStart, maxStart);
-    candidates.push({
-      min,
-      max: min + width - 1,
-      distance: Math.abs(min - desiredMin)
-    });
-  };
-  for (const assignment of sortedAssignments) {
-    addGapCandidate(gapMin, assignment.min - 1);
-    gapMin = Math.max(gapMin, assignment.max + 1);
+function carveAssignmentAroundRange(assignment, carvedMin, carvedMax) {
+  if (assignment.max < carvedMin || assignment.min > carvedMax) {
+    return [assignment];
   }
-  addGapCandidate(gapMin, maxAllowed);
-  candidates.sort((left, right) => left.distance - right.distance || left.min - right.min);
-  return candidates[0] ?? null;
+  if (carvedMin <= assignment.min && carvedMax >= assignment.max) {
+    return [];
+  }
+  if (carvedMin <= assignment.min) {
+    const min = carvedMax + 1;
+    return min <= assignment.max ? [{ ...assignment, min }] : [];
+  }
+  if (carvedMax >= assignment.max) {
+    const max = carvedMin - 1;
+    return max >= assignment.min ? [{ ...assignment, max }] : [];
+  }
+  const left = { ...assignment, max: carvedMin - 1 };
+  const right = { ...assignment, min: carvedMax + 1 };
+  const leftWidth = left.max - left.min + 1;
+  const rightWidth = right.max - right.min + 1;
+  return leftWidth >= rightWidth ? [left] : [right];
 }
 function assignArticulationToRangePosition(bankValue, modeValue, positionValue, articulationId) {
   const bank = normalizeArticulationBank(bankValue);
@@ -34423,15 +34816,20 @@ function assignArticulationToRangePosition(bankValue, modeValue, positionValue, 
   const { mode, minAllowed, maxAllowed, prefix, assignments } = getTriggerLaneInfo(bank, modeValue);
   const position = normalizeInteger(positionValue, minAllowed, minAllowed, maxAllowed);
   const occupiedAssignment = assignments.find((assignment) => position >= assignment.min && position <= assignment.max);
-  const nextAssignments = occupiedAssignment ? assignments.map((assignment) => assignment.id === occupiedAssignment.id ? { ...assignment, articulationId } : assignment) : (() => {
-    const gap = findEmptyRangeGap(assignments, position, minAllowed, maxAllowed);
+  const nextAssignments = occupiedAssignment ? removeOtherAssignmentsForArticulation(
+    assignments.map((assignment) => assignment.id === occupiedAssignment.id ? { ...assignment, articulationId } : assignment),
+    articulationId,
+    occupiedAssignment.id
+  ) : (() => {
+    const nextAssignmentsWithoutSameArticulation = removeOtherAssignmentsForArticulation(assignments, articulationId);
+    const gap = findEmptyRangeGap(nextAssignmentsWithoutSameArticulation, position, minAllowed, maxAllowed);
     if (gap.max < gap.min) {
       return assignments;
     }
     return [
-      ...assignments,
+      ...nextAssignmentsWithoutSameArticulation,
       {
-        id: createUniqueAssignmentId(assignments, prefix, articulationId, gap.min),
+        id: createUniqueAssignmentId(nextAssignmentsWithoutSameArticulation, prefix, articulationId, gap.min),
         articulationId,
         min: gap.min,
         max: gap.max
@@ -34440,7 +34838,7 @@ function assignArticulationToRangePosition(bankValue, modeValue, positionValue, 
   })();
   return setTriggerLaneAssignments(bank, mode, nextAssignments);
 }
-function insertArticulationRangeAtPosition(bankValue, modeValue, positionValue, articulationId) {
+function insertArticulationRangeAtPosition(bankValue, modeValue, positionValue, articulationId, preserveSide) {
   const bank = normalizeArticulationBank(bankValue);
   if (!bank.slots.some((slot) => slot.id === articulationId)) {
     return bank;
@@ -34450,10 +34848,13 @@ function insertArticulationRangeAtPosition(bankValue, modeValue, positionValue, 
   const occupiedAssignment = findRangeAssignmentAt(assignments, position);
   let nextAssignments = assignments;
   if (occupiedAssignment) {
+    if (occupiedAssignment.articulationId === articulationId) {
+      return bank;
+    }
     if (occupiedAssignment.min === occupiedAssignment.max) {
       return bank;
     }
-    const trimFromMin = position - occupiedAssignment.min <= occupiedAssignment.max - position;
+    const trimFromMin = preserveSide === "upper" || preserveSide !== "lower" && position - occupiedAssignment.min <= occupiedAssignment.max - position;
     nextAssignments = assignments.flatMap((assignment) => {
       if (assignment.id !== occupiedAssignment.id) {
         return [assignment];
@@ -34466,6 +34867,7 @@ function insertArticulationRangeAtPosition(bankValue, modeValue, positionValue, 
       return max >= assignment.min ? [{ ...assignment, max }] : [];
     });
   }
+  nextAssignments = removeOtherAssignmentsForArticulation(nextAssignments, articulationId);
   if (findRangeAssignmentAt(nextAssignments, position)) {
     return bank;
   }
@@ -34487,25 +34889,22 @@ function moveArticulationRangeAssignment(bankValue, modeValue, segmentValue, tar
     return bank;
   }
   const width = target.max - target.min + 1;
-  const desiredMin = normalizeInteger(
+  const nextMin = normalizeInteger(
     Number(targetPositionValue) - Math.floor(width / 2),
     target.min,
     minAllowed,
     Math.max(minAllowed, maxAllowed - width + 1)
   );
-  const otherAssignments = assignments.filter((assignment) => assignment.id !== target.id);
-  const destination = findMoveDestination(otherAssignments, desiredMin, width, minAllowed, maxAllowed);
-  if (!destination || destination.min === target.min && destination.max === target.max) {
+  const nextTarget = {
+    ...target,
+    min: nextMin,
+    max: nextMin + width - 1
+  };
+  const otherAssignments = assignments.filter((assignment) => assignment.id !== target.id).flatMap((assignment) => carveAssignmentAroundRange(assignment, nextTarget.min, nextTarget.max));
+  if (nextTarget.min === target.min && nextTarget.max === target.max && otherAssignments.length === assignments.length - 1) {
     return bank;
   }
-  return setTriggerLaneAssignments(bank, mode, [
-    ...otherAssignments,
-    {
-      ...target,
-      min: destination.min,
-      max: destination.max
-    }
-  ]);
+  return setTriggerLaneAssignments(bank, mode, [...otherAssignments, nextTarget]);
 }
 function resizeArticulationRangeAssignment(bankValue, modeValue, segmentValue, edge, positionValue) {
   const bank = normalizeArticulationBank(bankValue);
@@ -34514,14 +34913,22 @@ function resizeArticulationRangeAssignment(bankValue, modeValue, segmentValue, e
   if (!target) {
     return bank;
   }
-  const otherAssignments = sortRangeAssignments(assignments.filter((assignment) => assignment.id !== target.id));
-  const previousLimit = otherAssignments.filter((assignment) => assignment.max < target.max).reduce((maxValue, assignment) => Math.max(maxValue, assignment.max + 1), minAllowed);
-  const nextLimit = otherAssignments.filter((assignment) => assignment.min > target.min).reduce((minValue, assignment) => Math.min(minValue, assignment.min - 1), maxAllowed);
   const position = normalizeInteger(positionValue, edge === "min" ? target.min : target.max, minAllowed, maxAllowed);
-  const nextTarget = edge === "min" ? { ...target, min: clamp$3(position, previousLimit, target.max) } : { ...target, max: clamp$3(position, target.min, nextLimit) };
+  const nextTarget = edge === "min" ? { ...target, min: clamp$3(position, minAllowed, target.max) } : { ...target, max: clamp$3(position, target.min, maxAllowed) };
   if (nextTarget.min === target.min && nextTarget.max === target.max) {
     return bank;
   }
+  const otherAssignments = sortRangeAssignments(assignments.filter((assignment) => assignment.id !== target.id)).flatMap((assignment) => {
+    if (edge === "min" && assignment.max >= nextTarget.min && assignment.max < target.min) {
+      const max = nextTarget.min - 1;
+      return assignment.min <= max ? [{ ...assignment, max }] : [];
+    }
+    if (edge === "max" && assignment.min <= nextTarget.max && assignment.min > target.max) {
+      const min = nextTarget.max + 1;
+      return min <= assignment.max ? [{ ...assignment, min }] : [];
+    }
+    return [assignment];
+  });
   return setTriggerLaneAssignments(bank, mode, [...otherAssignments, nextTarget]);
 }
 function clearArticulationRangeAssignment(bankValue, modeValue, segmentValue) {
@@ -34790,6 +35197,8 @@ function useSynthInputRouter(keyboardRef, {
   handleKeyboardOctaveUp,
   keyboardInputMode = "hosted",
   midiInputEndpointID: midiInputEndpointID2 = DEFAULT_MIDI_INPUT_ENDPOINT_ID,
+  onPreviewNoteOn,
+  onPreviewMidiEvent,
   sendMIDIInputEvent
 } = {}) {
   const activeArrowTargetRef = reactExports.useRef(null);
@@ -34799,6 +35208,8 @@ function useSynthInputRouter(keyboardRef, {
   const handleKeyboardOctaveUpRef = reactExports.useRef(handleKeyboardOctaveUp);
   const keyboardInputModeRef = reactExports.useRef(keyboardInputMode);
   const midiInputEndpointIDRef = reactExports.useRef(midiInputEndpointID2);
+  const onPreviewNoteOnRef = reactExports.useRef(onPreviewNoteOn);
+  const onPreviewMidiEventRef = reactExports.useRef(onPreviewMidiEvent);
   const sendMIDIInputEventRef = reactExports.useRef(sendMIDIInputEvent);
   reactExports.useEffect(() => {
     handleKeyboardOctaveDownRef.current = handleKeyboardOctaveDown;
@@ -34813,10 +35224,20 @@ function useSynthInputRouter(keyboardRef, {
     midiInputEndpointIDRef.current = midiInputEndpointID2;
   }, [midiInputEndpointID2]);
   reactExports.useEffect(() => {
+    onPreviewNoteOnRef.current = onPreviewNoteOn;
+  }, [onPreviewNoteOn]);
+  reactExports.useEffect(() => {
+    onPreviewMidiEventRef.current = onPreviewMidiEvent;
+  }, [onPreviewMidiEvent]);
+  reactExports.useEffect(() => {
     sendMIDIInputEventRef.current = sendMIDIInputEvent;
   }, [sendMIDIInputEvent]);
   const sendStandalonePreviewMIDI = reactExports.useCallback((status, noteNumber, velocity = 0) => {
     const message = buildShortMidi$1(status, noteNumber, velocity);
+    onPreviewMidiEventRef.current?.(status, noteNumber, velocity);
+    if ((status & 240) === 144 && velocity > 0) {
+      onPreviewNoteOnRef.current?.(noteNumber);
+    }
     sendMIDIInputEventRef.current?.(midiInputEndpointIDRef.current, message);
     keyboardRef.current?.handleExternalMIDI?.(message);
   }, [keyboardRef]);
@@ -35143,7 +35564,8 @@ const RUNTIME_STATE_ENDPOINT_ID = "runtimeState";
 const RETRY_DESIRED_TABLE_REQUEST_ENDPOINT_ID = "retryDesiredTableRequest";
 const WAVETABLE_PREWARM_REQUEST_ENDPOINT_ID = "wavetablePrewarmRequest";
 const MIDI_INPUT_ENDPOINT_ID = "midiIn";
-const ARTICULATION_AUDITION_NOTES = [36, 48, 60];
+const VOICE_ARTICULATION_START_ENDPOINT_ID = "voiceArticulationStart";
+const ARTICULATION_AUDITION_FALLBACK_NOTE = 60;
 const GLIDE_TIME_MIN_SECONDS$1 = 0;
 const GLIDE_TIME_MAX_SECONDS$1 = 2;
 const GLIDE_TIME_STEP_SECONDS$1 = 1e-3;
@@ -35913,12 +36335,16 @@ function useSynthKeyboardRouting({
   onKeyboardOctaveDown,
   onKeyboardOctaveUp,
   keyboardInputMode = "hosted",
+  onPreviewNoteOn,
+  onPreviewMidiEvent,
   sendMIDIInputEvent
 }) {
   const synthInputRouter = useSynthInputRouter(keyboardRef, {
     handleKeyboardOctaveDown: onKeyboardOctaveDown,
     handleKeyboardOctaveUp: onKeyboardOctaveUp,
     keyboardInputMode,
+    onPreviewNoteOn,
+    onPreviewMidiEvent,
     sendMIDIInputEvent
   });
   const wavetableTarget = useStableArrowTarget("wavetable-select", onStepWavetable);
@@ -36118,6 +36544,10 @@ function useSynthPatchViewModel({
   const observedDistortionHistory = useObservedDistortionHistory();
   const observedDistortionScope = useObservedDistortionScope();
   const observedMsegState = useObservedMsegState();
+  const voiceArticulationStartMessage = usePatchEndpoint(
+    VOICE_ARTICULATION_START_ENDPOINT_ID,
+    null
+  );
   const articulationBankState = useStoredArticulationBank();
   const runtimePresentation = reactExports.useMemo(
     () => resolveRuntimeTablePresentation(runtimeStateMessage, Number(wavetableSelect.value) || 0),
@@ -36134,7 +36564,14 @@ function useSynthPatchViewModel({
   const [selectedArticulationIsDirty, setSelectedArticulationIsDirty] = reactExports.useState(false);
   const [discardedArticulationEdit, setDiscardedArticulationEdit] = reactExports.useState(null);
   const activeAuditionRef = reactExports.useRef(null);
-  const auditionCycleIndexRef = reactExports.useRef(0);
+  const lastPlayedNoteRef = reactExports.useRef(ARTICULATION_AUDITION_FALLBACK_NOTE);
+  const heldMidiNotesRef = reactExports.useRef(/* @__PURE__ */ new Map());
+  const heldMidiOrderRef = reactExports.useRef(0);
+  const [articulationHeldInput, setArticulationHeldInput] = reactExports.useState({
+    note: null,
+    velocity: null,
+    chain: null
+  });
   const [selectedMsegSlot, setSelectedMsegSlot] = reactExports.useState(0);
   const [selectedEnvelopeSlot, setSelectedEnvelopeSlot] = reactExports.useState(0);
   const displayedMsegControllerRef = reactExports.useRef(null);
@@ -36561,8 +36998,8 @@ function useSynthPatchViewModel({
   const handleAssignArticulationRangePosition = reactExports.useCallback((mode, position, articulationId) => {
     return updateArticulationBankIfChanged((previousBank) => assignArticulationToRangePosition(previousBank, mode, position, articulationId));
   }, [updateArticulationBankIfChanged]);
-  const handleInsertArticulationRangeAtPosition = reactExports.useCallback((mode, position, articulationId) => {
-    return updateArticulationBankIfChanged((previousBank) => insertArticulationRangeAtPosition(previousBank, mode, position, articulationId));
+  const handleInsertArticulationRangeAtPosition = reactExports.useCallback((mode, position, articulationId, preserveSide) => {
+    return updateArticulationBankIfChanged((previousBank) => insertArticulationRangeAtPosition(previousBank, mode, position, articulationId, preserveSide));
   }, [updateArticulationBankIfChanged]);
   const handleDuplicateAndAssignArticulationRangePosition = reactExports.useCallback((mode, position, articulationId, operation) => {
     const previousBank = articulationBankState.bankRef.current;
@@ -36640,9 +37077,55 @@ function useSynthPatchViewModel({
       }, 0);
     }
   }, [applyArticulationSnapshot, articulationBankState]);
+  const publishHeldMidiNote = reactExports.useCallback((nextChainValue) => {
+    let newest = null;
+    heldMidiNotesRef.current.forEach((heldNote, note) => {
+      if (!newest || heldNote.order > newest.order) {
+        newest = { note, velocity: heldNote.velocity, order: heldNote.order };
+      }
+    });
+    setArticulationHeldInput((previousValue) => {
+      const chain = nextChainValue === void 0 ? previousValue.chain : nextChainValue;
+      const nextValue = newest ? {
+        note: newest.note,
+        velocity: newest.velocity,
+        chain
+      } : nextChainValue !== void 0 ? {
+        note: null,
+        velocity: null,
+        chain
+      } : {
+        note: null,
+        velocity: null,
+        chain: null
+      };
+      return previousValue.note === nextValue.note && previousValue.velocity === nextValue.velocity && previousValue.chain === nextValue.chain ? previousValue : nextValue;
+    });
+  }, []);
+  const trackMidiInputForArticulationLane = reactExports.useCallback((status, note, velocity = 0) => {
+    const messageKind = status & 240;
+    const safeNote = clamp$2(Math.round(note), 0, 127);
+    const safeVelocity = clamp$2(Math.round(velocity), 0, 127);
+    const isNoteOn = messageKind === 144 && safeVelocity > 0;
+    const isNoteOff = messageKind === 128 || messageKind === 144 && safeVelocity === 0;
+    if (isNoteOn) {
+      lastPlayedNoteRef.current = safeNote;
+      heldMidiNotesRef.current.set(safeNote, {
+        velocity: safeVelocity,
+        order: heldMidiOrderRef.current += 1
+      });
+      publishHeldMidiNote();
+      return;
+    }
+    if (isNoteOff) {
+      heldMidiNotesRef.current.delete(safeNote);
+      publishHeldMidiNote();
+    }
+  }, [publishHeldMidiNote]);
   const sendMidiInputEvent = reactExports.useCallback((status, note, velocity = 0) => {
+    trackMidiInputForArticulationLane(status, note, velocity);
     patchConnection.sendMIDIInputEvent?.(MIDI_INPUT_ENDPOINT_ID, buildShortMidi(status, note, velocity));
-  }, [patchConnection]);
+  }, [patchConnection, trackMidiInputForArticulationLane]);
   const handleStopArticulationAudition = reactExports.useCallback((slotId) => {
     const activeAudition = activeAuditionRef.current;
     if (!activeAudition || slotId && activeAudition.slotId !== slotId) {
@@ -36654,11 +37137,20 @@ function useSynthPatchViewModel({
   const handleStartArticulationAudition = reactExports.useCallback((slotId) => {
     handleStopArticulationAudition();
     selectArticulationSlot(slotId);
-    const note = ARTICULATION_AUDITION_NOTES[auditionCycleIndexRef.current % ARTICULATION_AUDITION_NOTES.length];
-    auditionCycleIndexRef.current += 1;
+    const note = clamp$2(Math.round(lastPlayedNoteRef.current), 0, 127);
     activeAuditionRef.current = { slotId, note };
     sendMidiInputEvent(144, note, 100);
   }, [handleStopArticulationAudition, selectArticulationSlot, sendMidiInputEvent]);
+  reactExports.useEffect(() => {
+    if (!voiceArticulationStartMessage) {
+      return;
+    }
+    const hasArticulation = Boolean(voiceArticulationStartMessage.hasArticulation);
+    const selectorA = Number(voiceArticulationStartMessage.selectorA);
+    publishHeldMidiNote(
+      hasArticulation && Number.isFinite(selectorA) ? clamp$2(Math.round(selectorA), 0, 127) : null
+    );
+  }, [publishHeldMidiNote, voiceArticulationStartMessage]);
   reactExports.useEffect(() => {
     const handleWindowBlur = () => handleStopArticulationAudition();
     const handleKeyDown = (event) => {
@@ -36720,6 +37212,10 @@ function useSynthPatchViewModel({
     onKeyboardOctaveDown,
     onKeyboardOctaveUp,
     keyboardInputMode,
+    onPreviewNoteOn: (noteNumber) => {
+      lastPlayedNoteRef.current = clamp$2(Math.round(noteNumber), 0, 127);
+    },
+    onPreviewMidiEvent: trackMidiInputForArticulationLane,
     sendMIDIInputEvent: patchConnection.sendMIDIInputEvent?.bind(patchConnection)
   });
   return {
@@ -36773,6 +37269,7 @@ function useSynthPatchViewModel({
     articulationSlots,
     selectedArticulationSlot,
     selectedArticulationIsDirty,
+    articulationHeldInput,
     discardedArticulationEdit: discardedArticulationEdit ? {
       slotId: discardedArticulationEdit.slotId,
       slotName: discardedArticulationEdit.slotName
@@ -36824,21 +37321,52 @@ function useSynthPatchViewModel({
 }
 const ARTICULATION_DRAG_MIME = "application/x-cosimo-articulation-id";
 const ARTICULATION_RANGE_MAX = 127;
+let activeArticulationDragId = null;
+const RANGE_EDGE_RESIZE_HIT_PX = 8;
 const MODE_OPTIONS = [
   { mode: "chain", label: "Chain" },
   { mode: "key", label: "Key" },
   { mode: "vel", label: "Vel" }
 ];
-const PILL_BASE = "inline-flex h-7 shrink-0 items-center gap-1.5 rounded-[8px] border px-2.5 text-[10px] font-bold uppercase tracking-[0.12em] transition focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-200/45 focus-visible:ring-offset-0";
+const MIDI_NOTE_NAMES$1 = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+const PILL_BASE = "inline-flex h-6 shrink-0 items-center gap-1 rounded-[5px] border px-2 text-[10px] font-semibold tracking-[0.04em] transition focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-200/45 focus-visible:ring-offset-0";
 const PILL_NEUTRAL = "border-white/[0.06] bg-white/[0.025] text-slate-300/72 hover:border-white/15 hover:bg-white/[0.04] hover:text-slate-100 active:bg-white/[0.06]";
 const PILL_AMBER_ACTIVE = "border-amber-200/35 bg-amber-300/12 text-amber-100 shadow-[inset_0_-1px_0_rgba(251,191,36,0.22)]";
 const PILL_CYAN = "border-cyan-300/20 bg-cyan-300/8 text-cyan-100/90 hover:border-cyan-200/32 hover:bg-cyan-300/14 active:bg-cyan-300/20";
 const PILL_PINK = "border-pink-300/24 bg-pink-300/10 text-pink-100/90 hover:border-pink-200/38 hover:bg-pink-300/16 active:bg-pink-300/22";
 const FRAME_CLASS = "rounded-[14px] border border-white/[0.06] bg-white/[0.022] shadow-[inset_0_1px_0_rgba(255,255,255,0.025)]";
-const SEGMENTED_GROUP_CLASS = "inline-flex h-7 shrink-0 items-center gap-0.5 rounded-[8px] border border-white/[0.06] bg-white/[0.022] p-0.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.02)]";
-const SEGMENTED_BUTTON_BASE = "h-6 rounded-[6px] px-2.5 text-[10px] font-bold uppercase tracking-[0.14em] transition focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-200/45";
-const SEGMENTED_BUTTON_ACTIVE = "bg-amber-300/14 text-amber-100 shadow-[inset_0_-1px_0_rgba(251,191,36,0.24)]";
+const SEGMENTED_GROUP_CLASS = "inline-flex h-6 shrink-0 items-center gap-0.5 rounded-[6px] border border-white/[0.05] bg-black/25 p-0.5 shadow-[inset_0_1px_2px_rgba(0,0,0,0.30)]";
+const SEGMENTED_BUTTON_BASE = "h-5 rounded-[4px] px-2 text-[10px] font-semibold tracking-[0.04em] transition focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-200/45";
+const SEGMENTED_BUTTON_ACTIVE = "bg-amber-300/16 text-amber-100 shadow-[inset_0_-1px_0_rgba(251,191,36,0.24)]";
 const SEGMENTED_BUTTON_INACTIVE = "text-slate-300/65 hover:text-slate-100";
+const LANE_ACTION_CLASS = "inline-flex h-5 shrink-0 items-center rounded-[4px] bg-white/[0.035] px-1.5 text-[9px] font-semibold uppercase tracking-[0.10em] text-slate-300/72 transition hover:bg-white/[0.075] hover:text-slate-100 active:bg-white/[0.10] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-200/45";
+const LANE_ACTION_CLASS_PINK = "inline-flex h-5 shrink-0 items-center rounded-[4px] bg-pink-300/[0.08] px-1.5 text-[9px] font-semibold uppercase tracking-[0.10em] text-pink-200/85 transition hover:bg-pink-300/[0.16] hover:text-pink-100 active:bg-pink-300/[0.22] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-200/45";
+function rangeSegmentTier(widthPct) {
+  if (widthPct >= 14) {
+    return "large";
+  }
+  if (widthPct >= 7) {
+    return "medium";
+  }
+  if (widthPct >= 3) {
+    return "small";
+  }
+  return "tiny";
+}
+function abbreviateRangeLabel(name, maxLen) {
+  const trimmed = name.trim();
+  if (trimmed.length <= maxLen) {
+    return trimmed;
+  }
+  const words = trimmed.split(/\s+/);
+  if (words.length > 1) {
+    const initials = words.map((word) => word[0] ?? "").join("").toUpperCase();
+    if (initials.length <= maxLen && initials.length >= 2) {
+      return initials;
+    }
+  }
+  return trimmed.slice(0, maxLen);
+}
 function joinClasses(...classes) {
   return classes.filter(Boolean).join(" ");
 }
@@ -36847,6 +37375,52 @@ function clamp$1(value, min, max) {
 }
 function formatModeLabel(mode) {
   return mode === "vel" ? "Vel" : mode === "key" ? "Key" : "Chain";
+}
+function formatMidiNoteName$1(note) {
+  const safeNote = clamp$1(Math.round(note), 0, 127);
+  return `${MIDI_NOTE_NAMES$1[safeNote % 12]}${Math.floor(safeNote / 12) - 2}`;
+}
+function formatLanePosition(mode, value) {
+  const safeValue = Math.round(value);
+  return mode === "key" ? formatMidiNoteName$1(safeValue) : String(safeValue);
+}
+function formatLaneRange(mode, min, max) {
+  const minLabel = formatLanePosition(mode, min);
+  const maxLabel = formatLanePosition(mode, max);
+  return min === max ? minLabel : `${minLabel}-${maxLabel}`;
+}
+function buildRangeThirds(minValue, maxValue) {
+  const totalSlots = Math.max(1, maxValue - minValue + 1);
+  return [0, 1, 2].map((index) => {
+    const startOffset = Math.round(totalSlots * index / 3);
+    const endOffset = Math.round(totalSlots * (index + 1) / 3) - 1;
+    return {
+      index,
+      min: minValue + startOffset,
+      max: clamp$1(minValue + endOffset, minValue, maxValue)
+    };
+  });
+}
+function findRangeThirdForValue(thirds, value) {
+  if (value === null) {
+    return 0;
+  }
+  const matchingThird = thirds.find((third) => value >= third.min && value <= third.max);
+  return matchingThird?.index ?? 0;
+}
+function labelRangeThird(index) {
+  return index === 0 ? "Low" : index === 1 ? "Mid" : "High";
+}
+function heldValueForMode(mode, heldInput) {
+  const value = mode === "key" ? heldInput?.note : mode === "vel" ? heldInput?.velocity : heldInput?.chain;
+  return typeof value === "number" && Number.isFinite(value) ? clamp$1(Math.round(value), 0, ARTICULATION_RANGE_MAX) : null;
+}
+function clipSegmentsToRange(segments, minValue, maxValue) {
+  return segments.filter((segment) => segment.max >= minValue && segment.min <= maxValue).map((segment) => ({
+    ...segment,
+    visibleMin: Math.max(segment.min, minValue),
+    visibleMax: Math.min(segment.max, maxValue)
+  }));
 }
 function formatRuntimeSlot(slot) {
   return slot.toString().padStart(2, "0");
@@ -36918,7 +37492,7 @@ function ArticulationCardContextMenu({
       "data-role": "articulation-card-menu",
       "data-articulation-id": state.articulationId,
       style: containerStyle,
-      className: "z-50 min-w-[168px] rounded-[8px] border border-white/[0.08] bg-[#0a0d18]/95 p-1 shadow-[0_14px_36px_rgba(0,0,0,0.55)] backdrop-blur-sm",
+      className: "z-50 min-w-[152px] rounded-[6px] border border-white/[0.07] bg-[#080b15]/97 p-0.5 shadow-[0_10px_28px_rgba(0,0,0,0.55)] backdrop-blur-sm",
       children: ARTICULATION_CARD_MENU_ITEMS.map((item) => {
         const isDelete = item.action === "delete";
         const isDisabled = isDelete && !state.canDelete;
@@ -36938,8 +37512,106 @@ function ArticulationCardContextMenu({
               onSelectAction(item.action);
             },
             className: joinClasses(
-              "flex w-full items-center justify-between rounded-[5px] px-2.5 py-1.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] transition",
-              isDisabled ? "cursor-not-allowed text-slate-300/25" : isDelete ? "text-pink-200/85 hover:bg-pink-300/10 hover:text-pink-100" : "text-slate-200/80 hover:bg-white/[0.06] hover:text-slate-100"
+              "flex w-full items-center justify-between rounded-[4px] px-2 py-1 text-left text-[10px] font-medium tracking-normal normal-case transition",
+              isDisabled ? "cursor-not-allowed text-slate-300/30" : isDelete ? "text-pink-200/90 hover:bg-pink-300/12 hover:text-pink-100" : "text-slate-200/85 hover:bg-white/[0.07] hover:text-slate-50"
+            ),
+            children: item.label
+          },
+          item.action
+        );
+      })
+    }
+  );
+}
+const ARTICULATION_RANGE_MENU_ITEMS = [
+  { action: "replace", label: "Replace With Selected", requiresSelection: true },
+  { action: "insert-after", label: "Insert Selected After", requiresSelection: true },
+  { action: "duplicate-after", label: "Duplicate After" },
+  { action: "delete", label: "Delete", isDanger: true }
+];
+function ArticulationRangeContextMenu({
+  state,
+  hasSelectedArticulation,
+  onClose,
+  onSelectAction
+}) {
+  const containerRef = reactExports.useRef(null);
+  const [position, setPosition] = reactExports.useState({ x: state.x, y: state.y });
+  reactExports.useLayoutEffect(() => {
+    const el = containerRef.current;
+    if (!el) {
+      return;
+    }
+    const rect = el.getBoundingClientRect();
+    const margin = 8;
+    const viewportW = typeof window !== "undefined" ? window.innerWidth : rect.right;
+    const viewportH = typeof window !== "undefined" ? window.innerHeight : rect.bottom;
+    let x = state.x;
+    let y = state.y;
+    if (x + rect.width + margin > viewportW) {
+      x = Math.max(margin, viewportW - rect.width - margin);
+    }
+    if (y + rect.height + margin > viewportH) {
+      y = Math.max(margin, viewportH - rect.height - margin);
+    }
+    setPosition({ x, y });
+  }, [state.x, state.y]);
+  reactExports.useEffect(() => {
+    const handlePointerDown = (event) => {
+      const el = containerRef.current;
+      if (el && !el.contains(event.target)) {
+        onClose();
+      }
+    };
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
+        onClose();
+      }
+    };
+    document.addEventListener("pointerdown", handlePointerDown, true);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown, true);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [onClose]);
+  const containerStyle = {
+    position: "fixed",
+    top: position.y,
+    left: position.x
+  };
+  return /* @__PURE__ */ jsxRuntimeExports.jsx(
+    "div",
+    {
+      ref: containerRef,
+      role: "menu",
+      "aria-label": "Articulation range actions",
+      "data-role": "articulation-range-menu",
+      "data-segment-id": state.segment.id,
+      style: containerStyle,
+      className: "z-50 min-w-[180px] rounded-[6px] border border-white/[0.07] bg-[#080b15]/97 p-0.5 shadow-[0_10px_28px_rgba(0,0,0,0.55)] backdrop-blur-sm",
+      children: ARTICULATION_RANGE_MENU_ITEMS.map((item) => {
+        const isDisabled = Boolean(item.requiresSelection && !hasSelectedArticulation);
+        return /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "button",
+          {
+            type: "button",
+            role: "menuitem",
+            disabled: isDisabled,
+            "aria-disabled": isDisabled,
+            "data-role": "articulation-range-menu-item",
+            "data-action": item.action,
+            onClick: () => {
+              if (isDisabled) {
+                return;
+              }
+              onSelectAction(item.action);
+            },
+            className: joinClasses(
+              "flex w-full items-center justify-between rounded-[4px] px-2 py-1 text-left text-[10px] font-medium tracking-normal normal-case transition",
+              isDisabled ? "cursor-not-allowed text-slate-300/30" : item.isDanger ? "text-pink-200/90 hover:bg-pink-300/12 hover:text-pink-100" : "text-slate-200/85 hover:bg-white/[0.07] hover:text-slate-50"
             ),
             children: item.label
           },
@@ -37099,16 +37771,24 @@ function ArticulationCard({
   card,
   activeMode,
   onSelect,
+  onDragStart,
+  onDragEnd,
   onPlayPressStart,
   onPlayPressEnd,
   onOpenMenu
 }) {
   const longPressTimerRef = reactExports.useRef(null);
   const handleDragStart = reactExports.useCallback((event) => {
+    activeArticulationDragId = card.id;
     event.dataTransfer.setData(ARTICULATION_DRAG_MIME, card.id);
     event.dataTransfer.setData("text/plain", card.id);
     event.dataTransfer.effectAllowed = "copyMove";
-  }, [card.id]);
+    onDragStart(card.id);
+  }, [card.id, onDragStart]);
+  const handleDragEnd = reactExports.useCallback(() => {
+    activeArticulationDragId = null;
+    onDragEnd();
+  }, [onDragEnd]);
   const clearLongPressTimer = reactExports.useCallback(() => {
     if (longPressTimerRef.current !== null) {
       window.clearTimeout(longPressTimerRef.current);
@@ -37132,7 +37812,11 @@ function ArticulationCard({
   }, [card.id, onPlayPressEnd]);
   const handleCardPointerDown = reactExports.useCallback((event) => {
     const target = event.target;
-    if (event.pointerType === "mouse" || target?.closest('[data-role="articulation-card-play"]')) {
+    if (target?.closest('[data-role="articulation-card-play"]')) {
+      return;
+    }
+    activeArticulationDragId = card.id;
+    if (event.pointerType === "mouse") {
       return;
     }
     const { clientX, clientY } = event;
@@ -37142,12 +37826,9 @@ function ArticulationCard({
     }, 520);
   }, [card.id, clearLongPressTimer, onOpenMenu]);
   const containerClass = joinClasses(
-    "group relative flex w-[152px] shrink-0 flex-col gap-1.5 rounded-[10px] border py-1.5 pl-2.5 pr-2 transition cursor-grab active:cursor-grabbing focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-200/45",
-    card.isSelected ? "border-amber-200/40 bg-amber-300/[0.05]" : "border-white/[0.07] bg-white/[0.022] hover:border-white/15 hover:bg-white/[0.038]"
+    "group relative flex h-[80px] w-[148px] shrink-0 flex-col gap-1 rounded-[7px] border py-1 px-1.5 transition cursor-grab active:cursor-grabbing focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-200/45",
+    card.isSelected ? "border-amber-300/65 bg-amber-300/[0.085] shadow-[inset_0_0_0_1px_rgba(251,191,36,0.18)]" : "border-white/[0.07] bg-white/[0.02] hover:border-white/[0.18] hover:bg-white/[0.035]"
   );
-  const containerStyle = {
-    boxShadow: card.isSelected ? `inset 2px 0 0 ${card.color}, inset 0 1px 0 rgba(251,191,36,0.16), 0 1px 0 rgba(0,0,0,0.2)` : `inset 2px 0 0 ${card.color}, inset 0 1px 0 rgba(255,255,255,0.03)`
-  };
   return /* @__PURE__ */ jsxRuntimeExports.jsxs(
     "div",
     {
@@ -37162,11 +37843,15 @@ function ArticulationCard({
       "data-dirty": card.isDirty ? "true" : "false",
       draggable: true,
       onDragStart: handleDragStart,
+      onDragEnd: handleDragEnd,
       onPointerDown: handleCardPointerDown,
       onPointerMove: clearLongPressTimer,
       onPointerUp: clearLongPressTimer,
       onPointerCancel: clearLongPressTimer,
-      onClick: () => onSelect(card.id),
+      onClick: () => {
+        activeArticulationDragId = null;
+        onSelect(card.id);
+      },
       onContextMenu: (event) => {
         event.preventDefault();
         onOpenMenu(card.id, event.clientX, event.clientY);
@@ -37178,12 +37863,28 @@ function ArticulationCard({
         }
       },
       className: containerClass,
-      style: containerStyle,
       children: [
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-1.5", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx(ColorDot, { color: card.color }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "min-w-0 flex-1 truncate text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-100/90", children: card.name }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono text-[9px] tabular-nums text-slate-300/45", children: formatRuntimeSlot(card.runtimeSlot) }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "span",
+            {
+              className: joinClasses(
+                "min-w-0 flex-1 truncate text-[10px] font-semibold tracking-[0.02em]",
+                card.isSelected ? "text-amber-50/95" : "text-slate-100/88"
+              ),
+              children: card.name
+            }
+          ),
+          card.isDirty ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "span",
+            {
+              "aria-label": "Modified",
+              title: "Modified",
+              className: "h-1 w-1 shrink-0 rounded-full bg-pink-300/95 shadow-[0_0_3px_rgba(244,114,182,0.65)]"
+            }
+          ) : null,
+          card.isSelected ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { "data-role": "articulation-card-selected-label", className: "sr-only", children: "Selected" }) : null,
           /* @__PURE__ */ jsxRuntimeExports.jsx(
             "button",
             {
@@ -37196,25 +37897,28 @@ function ArticulationCard({
               onPointerCancel: handlePlayUp,
               onPointerLeave: handlePlayUp,
               onClick: (event) => event.stopPropagation(),
-              className: "flex h-5 w-5 shrink-0 items-center justify-center rounded-[5px] border border-cyan-300/20 bg-cyan-300/8 text-cyan-100/90 transition hover:border-cyan-200/35 hover:bg-cyan-300/18 active:scale-[0.94] active:bg-cyan-300/26 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-200/45",
+              className: "flex h-4 w-4 shrink-0 items-center justify-center rounded-[4px] bg-cyan-300/10 text-cyan-100/90 transition hover:bg-cyan-300/22 active:scale-[0.92] active:bg-cyan-300/30 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-200/45",
               children: /* @__PURE__ */ jsxRuntimeExports.jsx(PlayGlyph, {})
             }
           )
         ] }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid grid-cols-2 gap-1", children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "h-9 overflow-hidden rounded-[5px] border border-white/[0.05] bg-black/20 shadow-[inset_0_1px_2px_rgba(0,0,0,0.4)]", children: /* @__PURE__ */ jsxRuntimeExports.jsx(MsegThumbnail, { points: card.msegPoints, color: card.color }) }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "h-9 overflow-hidden rounded-[5px] border border-white/[0.05] bg-black/20 shadow-[inset_0_1px_2px_rgba(0,0,0,0.4)]", children: /* @__PURE__ */ jsxRuntimeExports.jsx(GainEnvelopeThumbnail, { envelope: card.gainEnvelope, color: card.color }) })
+          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "h-8 overflow-hidden rounded-[4px] bg-black/30 shadow-[inset_0_1px_2px_rgba(0,0,0,0.45)]", children: /* @__PURE__ */ jsxRuntimeExports.jsx(MsegThumbnail, { points: card.msegPoints, color: card.color }) }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "h-8 overflow-hidden rounded-[4px] bg-black/30 shadow-[inset_0_1px_2px_rgba(0,0,0,0.45)]", children: /* @__PURE__ */ jsxRuntimeExports.jsx(GainEnvelopeThumbnail, { envelope: card.gainEnvelope, color: card.color }) })
         ] }),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between gap-1.5", children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "truncate font-mono text-[9px] uppercase tracking-[0.14em] text-slate-300/55", children: card.assignmentLabel || `${formatModeLabel(activeMode).toUpperCase()} -` }),
-          card.isDirty ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between gap-1.5 leading-none", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
             "span",
             {
-              "aria-label": "Modified",
-              title: "Modified",
-              className: "h-1.5 w-1.5 shrink-0 rounded-full bg-pink-300/90 shadow-[0_0_4px_rgba(244,114,182,0.55)]"
+              className: joinClasses(
+                "min-w-0 flex-1 truncate font-mono text-[9px] tabular-nums tracking-[0.06em]",
+                card.assignmentLabel ? "text-slate-200/72" : "text-slate-300/35"
+              ),
+              title: card.assignmentLabel || void 0,
+              children: card.assignmentLabel || `${formatModeLabel(activeMode)} -`
             }
-          ) : null
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "shrink-0 font-mono text-[9px] tabular-nums text-slate-300/45", children: formatRuntimeSlot(card.runtimeSlot) })
         ] })
       ]
     }
@@ -37224,6 +37928,8 @@ function ArticulationCardCarousel({
   cards,
   activeMode,
   onSelectCard,
+  onCardDragStart,
+  onCardDragEnd,
   onPlayPressStart,
   onPlayPressEnd,
   onOpenMenu
@@ -37234,13 +37940,15 @@ function ArticulationCardCarousel({
       "data-role": "articulation-card-carousel",
       className: "flex min-w-0 flex-1 items-stretch gap-1.5 overflow-x-auto overflow-y-hidden py-0.5 [scrollbar-color:rgba(255,255,255,0.12)_transparent] [scrollbar-width:thin]",
       children: [
-        cards.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex h-[88px] flex-1 items-center justify-center rounded-[10px] border border-dashed border-white/[0.07] bg-white/[0.012] px-3 text-[10px] uppercase tracking-[0.2em] text-slate-300/40", children: "No Articulations" }) : null,
+        cards.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex h-[80px] flex-1 items-center justify-center rounded-[7px] border border-dashed border-white/[0.06] bg-white/[0.01] px-3 text-[10px] tracking-[0.04em] text-slate-300/40", children: "No articulations" }) : null,
         cards.map((card) => /* @__PURE__ */ jsxRuntimeExports.jsx(
           ArticulationCard,
           {
             card,
             activeMode,
             onSelect: onSelectCard,
+            onDragStart: onCardDragStart,
+            onDragEnd: onCardDragEnd,
             onPlayPressStart,
             onPlayPressEnd,
             onOpenMenu
@@ -37290,13 +37998,264 @@ function readDraggedArticulationId(event) {
     return fromMime;
   }
   const fromText = event.dataTransfer.getData("text/plain");
-  return fromText ? fromText : null;
+  return fromText ? fromText : activeArticulationDragId;
+}
+function findRangeSegmentAtPosition(segments, position) {
+  return segments.find((segment) => position >= segment.min && position <= segment.max) ?? null;
+}
+function findRangeGapAtPosition(segments, position, minValue, maxValue) {
+  let cursor = minValue;
+  for (const segment of [...segments].sort((left, right) => left.min - right.min)) {
+    if (position < segment.min && position >= cursor) {
+      return { min: cursor, max: segment.min - 1 };
+    }
+    cursor = Math.max(cursor, segment.max + 1);
+  }
+  if (position >= cursor && position <= maxValue) {
+    return { min: cursor, max: maxValue };
+  }
+  return { min: position, max: position };
+}
+function classifyRangePlacementPreview({
+  segments,
+  position,
+  minValue,
+  maxValue
+}) {
+  const safePosition = clamp$1(Math.round(position), minValue, maxValue);
+  const targetSegment = findRangeSegmentAtPosition(segments, safePosition);
+  if (!targetSegment) {
+    const gap = findRangeGapAtPosition(segments, safePosition, minValue, maxValue);
+    return {
+      operation: "fill",
+      position: safePosition,
+      min: gap.min,
+      max: gap.max,
+      targetSegment: null,
+      projectedSegments: segments
+    };
+  }
+  const width = targetSegment.max - targetSegment.min + 1;
+  const edgeSlots = Math.max(1, Math.floor(width * 0.25));
+  const isNearMin = width > 2 && safePosition <= targetSegment.min + edgeSlots - 1;
+  const isNearMax = width > 2 && safePosition >= targetSegment.max - edgeSlots + 1;
+  if (isNearMin || isNearMax) {
+    return {
+      operation: "insert",
+      position: safePosition,
+      min: safePosition,
+      max: safePosition,
+      targetSegment,
+      projectedSegments: segments,
+      insertPreserveSide: isNearMin ? "upper" : "lower"
+    };
+  }
+  return {
+    operation: "replace",
+    position: safePosition,
+    min: targetSegment.min,
+    max: targetSegment.max,
+    targetSegment,
+    projectedSegments: segments
+  };
+}
+function sortRangeSegments(segments) {
+  return [...segments].sort((left, right) => left.min - right.min || left.max - right.max);
+}
+function cardToPreviewSegment(cardsById, articulationId, min, max) {
+  const card = cardsById.get(articulationId);
+  if (!card) {
+    return null;
+  }
+  return {
+    id: `preview-${articulationId}-${min}-${max}`,
+    articulationId,
+    label: card.name,
+    color: card.color,
+    min,
+    max,
+    isSelected: true,
+    isPreview: true
+  };
+}
+function removeOtherSegmentsForArticulation(segments, articulationId, keepSegmentId = null) {
+  return segments.filter((segment) => segment.articulationId !== articulationId || keepSegmentId !== null && segment.id === keepSegmentId);
+}
+function findExistingSegmentForArticulation(segments, articulationId) {
+  if (!articulationId) {
+    return null;
+  }
+  return segments.find((segment) => segment.articulationId === articulationId) ?? null;
+}
+function centerSegmentRangeAtPosition(segment, position, minValue, maxValue) {
+  const width = Math.max(1, segment.max - segment.min + 1);
+  const min = clamp$1(
+    Math.round(position) - Math.floor(width / 2),
+    minValue,
+    Math.max(minValue, maxValue - width + 1)
+  );
+  return {
+    min,
+    max: min + width - 1
+  };
+}
+function carveSegmentAroundRange(segment, carvedMin, carvedMax) {
+  if (segment.max < carvedMin || segment.min > carvedMax) {
+    return [{ ...segment }];
+  }
+  if (carvedMin <= segment.min && carvedMax >= segment.max) {
+    return [];
+  }
+  if (carvedMin <= segment.min) {
+    const min = carvedMax + 1;
+    return min <= segment.max ? [{ ...segment, min, isPreviewAffected: true }] : [];
+  }
+  if (carvedMax >= segment.max) {
+    const max = carvedMin - 1;
+    return max >= segment.min ? [{ ...segment, max, isPreviewAffected: true }] : [];
+  }
+  const left = { ...segment, max: carvedMin - 1, isPreviewAffected: true };
+  const right = { ...segment, min: carvedMax + 1, isPreviewAffected: true };
+  const leftWidth = left.max - left.min + 1;
+  const rightWidth = right.max - right.min + 1;
+  return leftWidth >= rightWidth ? [left] : [right];
+}
+function projectRangeMove(segments, sourceSegment, position, minValue, maxValue) {
+  const nextRange = centerSegmentRangeAtPosition(sourceSegment, position, minValue, maxValue);
+  const nextSegment = {
+    ...sourceSegment,
+    ...nextRange,
+    isSelected: true,
+    isPreview: true
+  };
+  return sortRangeSegments([
+    ...segments.filter((segment) => segment.id !== sourceSegment.id).flatMap((segment) => carveSegmentAroundRange(segment, nextRange.min, nextRange.max)),
+    nextSegment
+  ]);
+}
+function projectRangePlacement({
+  segments,
+  cardsById,
+  articulationId,
+  preview,
+  minValue,
+  maxValue
+}) {
+  if (!articulationId) {
+    return sortRangeSegments(segments);
+  }
+  const nextSegment = cardToPreviewSegment(cardsById, articulationId, preview.min, preview.max);
+  if (!nextSegment) {
+    return sortRangeSegments(segments);
+  }
+  if (preview.operation === "replace" && preview.targetSegment) {
+    return sortRangeSegments(removeOtherSegmentsForArticulation(
+      segments.map((segment) => segment.id === preview.targetSegment?.id ? {
+        ...segment,
+        articulationId,
+        label: nextSegment.label,
+        color: nextSegment.color,
+        isSelected: true,
+        isPreview: true
+      } : segment),
+      articulationId,
+      preview.targetSegment.id
+    ));
+  }
+  if (preview.operation === "fill") {
+    return sortRangeSegments([
+      ...removeOtherSegmentsForArticulation(segments, articulationId),
+      nextSegment
+    ]);
+  }
+  if (!preview.targetSegment || preview.targetSegment.articulationId === articulationId) {
+    return sortRangeSegments(segments);
+  }
+  const target = preview.targetSegment;
+  const trimFromMin = preview.insertPreserveSide === "upper" || preview.insertPreserveSide !== "lower" && preview.position - target.min <= target.max - preview.position;
+  const trimmedSegments = segments.flatMap((segment) => {
+    if (segment.id !== target.id) {
+      return [segment];
+    }
+    if (trimFromMin) {
+      const min = clamp$1(preview.position + 1, minValue, maxValue);
+      return min <= segment.max ? [{ ...segment, min, isPreviewAffected: true }] : [];
+    }
+    const max = clamp$1(preview.position - 1, minValue, maxValue);
+    return max >= segment.min ? [{ ...segment, max, isPreviewAffected: true }] : [];
+  });
+  return sortRangeSegments([
+    ...removeOtherSegmentsForArticulation(trimmedSegments, articulationId),
+    nextSegment
+  ]);
+}
+function projectRangeResize(segments, target, edge, position, minValue, maxValue) {
+  const nextTarget = edge === "min" ? { ...target, min: clamp$1(position, minValue, target.max), isSelected: true, isPreview: true } : { ...target, max: clamp$1(position, target.min, maxValue), isSelected: true, isPreview: true };
+  return sortRangeSegments([
+    ...segments.filter((segment) => segment.id !== target.id).flatMap((segment) => {
+      if (edge === "min" && segment.max >= nextTarget.min && segment.max < target.min) {
+        const max = nextTarget.min - 1;
+        return segment.min <= max ? [{ ...segment, max, isPreviewAffected: true }] : [];
+      }
+      if (edge === "max" && segment.min <= nextTarget.max && segment.min > target.max) {
+        const min = nextTarget.max + 1;
+        return min <= segment.max ? [{ ...segment, min, isPreviewAffected: true }] : [];
+      }
+      return [segment];
+    }),
+    nextTarget
+  ]);
+}
+function findBoundaryResizeCandidate(segments, segment, edge) {
+  if (edge === "max") {
+    const rightSegment = segments.find((candidate) => candidate.min === segment.max + 1) ?? null;
+    return rightSegment ? { leftSegment: segment, rightSegment } : null;
+  }
+  const leftSegment = segments.find((candidate) => candidate.max === segment.min - 1) ?? null;
+  return leftSegment ? { leftSegment, rightSegment: segment } : null;
+}
+function resolveBoundaryResizeState(dragState, clientX) {
+  if (dragState.kind !== "boundary-resize") {
+    return dragState;
+  }
+  const deltaX = clientX - dragState.startX;
+  if (Math.abs(deltaX) <= 3) {
+    return dragState;
+  }
+  const dragMovesRight = deltaX > 0;
+  return {
+    kind: "resize",
+    segment: dragMovesRight ? dragState.rightSegment : dragState.leftSegment,
+    edge: dragMovesRight ? "min" : "max",
+    pointerId: dragState.pointerId,
+    startX: dragState.startX,
+    moved: true
+  };
+}
+function resizeEdgeFromSegmentPointer(clientX, rect, canResizeMin, canResizeMax) {
+  const leftDistance = Math.abs(clientX - rect.left);
+  const rightDistance = Math.abs(rect.right - clientX);
+  const nearMin = canResizeMin && leftDistance <= RANGE_EDGE_RESIZE_HIT_PX;
+  const nearMax = canResizeMax && rightDistance <= RANGE_EDGE_RESIZE_HIT_PX;
+  if (nearMin && nearMax) {
+    return leftDistance <= rightDistance ? "min" : "max";
+  }
+  if (nearMin) {
+    return "min";
+  }
+  if (nearMax) {
+    return "max";
+  }
+  return null;
 }
 function ArticulationRangeLane({
   mode,
   label,
+  cards,
   segments,
   selectedArticulationId,
+  draggedArticulationId,
+  heldInput,
   onSelectSegment,
   onAssignAtPosition,
   onInsertAtPosition,
@@ -37312,17 +38271,27 @@ function ArticulationRangeLane({
   maxLabel
 }) {
   const laneRef = reactExports.useRef(null);
-  const [dropIndicator, setDropIndicator] = reactExports.useState(null);
-  const [editMode, setEditMode] = reactExports.useState("assign");
+  const [placementPreview, setPlacementPreview] = reactExports.useState(null);
   const [focusedSegmentId, setFocusedSegmentId] = reactExports.useState(null);
+  const [hoveredSegmentId, setHoveredSegmentId] = reactExports.useState(null);
+  const [activeResizeSegmentId, setActiveResizeSegmentId] = reactExports.useState(null);
   const [toast, setToast] = reactExports.useState(null);
+  const [rangeMenu, setRangeMenu] = reactExports.useState(null);
   const dragStateRef = reactExports.useRef(null);
-  const totalSlots = Math.max(1, maxValue - minValue + 1);
-  const visibleSegments = reactExports.useMemo(() => segments.map((segment) => ({
-    ...segment,
-    visibleMin: clamp$1(segment.min, minValue, maxValue),
-    visibleMax: clamp$1(segment.max, minValue, maxValue)
-  })).filter((segment) => segment.visibleMax >= segment.visibleMin), [maxValue, minValue, segments]);
+  const rangeThirds = reactExports.useMemo(() => buildRangeThirds(minValue, maxValue), [maxValue, minValue]);
+  const [activeThird, setActiveThird] = reactExports.useState(0);
+  const fullTotalSlots = Math.max(1, maxValue - minValue + 1);
+  const visibleRange = rangeThirds[activeThird] ?? rangeThirds[0];
+  const viewMinValue = visibleRange.min;
+  const viewMaxValue = visibleRange.max;
+  const viewTotalSlots = Math.max(1, viewMaxValue - viewMinValue + 1);
+  const safeHeldValue = heldValueForMode(mode, heldInput);
+  const heldValue = safeHeldValue === null ? null : clamp$1(safeHeldValue, minValue, maxValue);
+  const heldValueIsVisible = heldValue !== null && heldValue >= viewMinValue && heldValue <= viewMaxValue;
+  const heldThird = findRangeThirdForValue(rangeThirds, heldValue);
+  const fullSegments = reactExports.useMemo(() => sortRangeSegments(segments), [segments]);
+  const visibleSegments = reactExports.useMemo(() => clipSegmentsToRange(fullSegments, viewMinValue, viewMaxValue), [fullSegments, viewMaxValue, viewMinValue]);
+  const cardById = reactExports.useMemo(() => new Map(cards.map((card) => [card.id, card])), [cards]);
   const selectedSegment = reactExports.useMemo(() => focusedSegmentId ? visibleSegments.find((segment) => segment.id === focusedSegmentId) ?? null : null, [focusedSegmentId, visibleSegments]);
   const showToast = reactExports.useCallback((message) => {
     setToast(message);
@@ -37333,121 +38302,188 @@ function ArticulationRangeLane({
   const positionFromClientX = reactExports.useCallback((clientX) => {
     const rect = laneRef.current?.getBoundingClientRect();
     if (!rect) {
-      return minValue;
+      return viewMinValue;
     }
     const ratio = clamp$1((clientX - rect.left) / Math.max(rect.width, 1), 0, 1);
-    return Math.round(minValue + ratio * (maxValue - minValue));
-  }, [maxValue, minValue]);
+    return Math.round(viewMinValue + ratio * (viewMaxValue - viewMinValue));
+  }, [viewMaxValue, viewMinValue]);
   const positionFromDragEvent = reactExports.useCallback((event) => positionFromClientX(event.clientX), [positionFromClientX]);
+  const previewFromPosition = reactExports.useCallback((position, articulationId, options = {}) => {
+    const sourceSegment = options.preferMoveExisting ? findExistingSegmentForArticulation(fullSegments, articulationId) : null;
+    if (sourceSegment) {
+      const projectedSegments = projectRangeMove(fullSegments, sourceSegment, position, minValue, maxValue);
+      const projectedSource = projectedSegments.find((segment) => segment.id === sourceSegment.id) ?? sourceSegment;
+      return {
+        operation: "move",
+        position: clamp$1(Math.round(position), minValue, maxValue),
+        min: projectedSource.min,
+        max: projectedSource.max,
+        targetSegment: sourceSegment,
+        projectedSegments
+      };
+    }
+    const previewSegments = visibleSegments.map((segment) => ({
+      ...segment,
+      min: segment.visibleMin,
+      max: segment.visibleMax
+    }));
+    const visiblePreview = classifyRangePlacementPreview({
+      segments: previewSegments,
+      position,
+      minValue: viewMinValue,
+      maxValue: viewMaxValue
+    });
+    const preview = {
+      ...visiblePreview,
+      projectedSegments: fullSegments
+    };
+    const projectedPreview = {
+      ...preview,
+      projectedSegments: projectRangePlacement({
+        segments: fullSegments,
+        cardsById: cardById,
+        articulationId,
+        preview,
+        minValue,
+        maxValue
+      })
+    };
+    return projectedPreview;
+  }, [cardById, fullSegments, maxValue, minValue, viewMaxValue, viewMinValue, visibleSegments]);
   const runEdit = reactExports.useCallback((didChange) => {
     if (!didChange) {
       showToast("No room for that mapping");
     }
   }, [showToast]);
+  const placeArticulationAtPosition = reactExports.useCallback((position, articulationId, duplicate, options = {}) => {
+    const preview = previewFromPosition(position, articulationId, {
+      preferMoveExisting: !duplicate && options.preferMoveExisting
+    });
+    if (preview.operation === "move" && preview.targetSegment) {
+      runEdit(onMoveSegment(mode, preview.targetSegment, position));
+      return;
+    }
+    const operation = preview.operation === "insert" ? "insert" : "assign";
+    runEdit(
+      duplicate ? onDuplicateAndAssignAtPosition(mode, preview.position, articulationId, operation) : operation === "insert" ? onInsertAtPosition(mode, preview.position, articulationId, preview.insertPreserveSide) : onAssignAtPosition(mode, preview.position, articulationId)
+    );
+  }, [
+    mode,
+    onAssignAtPosition,
+    onDuplicateAndAssignAtPosition,
+    onInsertAtPosition,
+    onMoveSegment,
+    previewFromPosition,
+    runEdit
+  ]);
   const assignSelectedAtPosition = reactExports.useCallback((position) => {
     if (!selectedArticulationId) {
       showToast("Select an articulation first");
       return;
     }
-    runEdit(
-      editMode === "insert" ? onInsertAtPosition(mode, position, selectedArticulationId) : onAssignAtPosition(mode, position, selectedArticulationId)
-    );
+    placeArticulationAtPosition(position, selectedArticulationId, false);
   }, [
-    editMode,
+    placeArticulationAtPosition,
+    selectedArticulationId,
+    showToast
+  ]);
+  const replaceSelectedAtPosition = reactExports.useCallback((position) => {
+    if (!selectedArticulationId) {
+      showToast("Select an articulation first");
+      return;
+    }
+    runEdit(onAssignAtPosition(mode, position, selectedArticulationId));
+  }, [
     mode,
     onAssignAtPosition,
-    onInsertAtPosition,
     runEdit,
     selectedArticulationId,
     showToast
   ]);
   const handleDragOver = reactExports.useCallback((event) => {
     event.preventDefault();
-    event.dataTransfer.dropEffect = editMode === "insert" ? "link" : "copy";
-    setDropIndicator(positionFromDragEvent(event));
-  }, [editMode, positionFromDragEvent]);
-  const handleDragLeave = reactExports.useCallback(() => {
-    setDropIndicator(null);
+    const draggedId = readDraggedArticulationId(event) ?? draggedArticulationId;
+    const articulationId = draggedId ?? selectedArticulationId;
+    const preview = previewFromPosition(positionFromDragEvent(event), articulationId, {
+      preferMoveExisting: Boolean(draggedId) && !event.altKey
+    });
+    event.dataTransfer.dropEffect = event.altKey ? "copy" : "move";
+    setPlacementPreview(preview);
+  }, [draggedArticulationId, positionFromDragEvent, previewFromPosition, selectedArticulationId]);
+  const handleDragLeave = reactExports.useCallback((event) => {
+    const nextTarget = event.relatedTarget;
+    if (nextTarget instanceof Node && event.currentTarget.contains(nextTarget)) {
+      return;
+    }
+    setPlacementPreview(null);
   }, []);
   const handleDrop = reactExports.useCallback((event) => {
     event.preventDefault();
-    const articulationId = readDraggedArticulationId(event);
+    const draggedId = readDraggedArticulationId(event) ?? draggedArticulationId;
+    const articulationId = draggedId ?? selectedArticulationId;
     const position = positionFromDragEvent(event);
-    setDropIndicator(null);
+    setPlacementPreview(null);
     if (!articulationId) {
       return;
     }
-    const operation = editMode === "insert" ? "insert" : "assign";
-    runEdit(
-      event.altKey ? onDuplicateAndAssignAtPosition(mode, position, articulationId, operation) : operation === "insert" ? onInsertAtPosition(mode, position, articulationId) : onAssignAtPosition(mode, position, articulationId)
-    );
+    placeArticulationAtPosition(position, articulationId, event.altKey, {
+      preferMoveExisting: Boolean(draggedId)
+    });
   }, [
-    editMode,
-    mode,
-    onAssignAtPosition,
-    onDuplicateAndAssignAtPosition,
-    onInsertAtPosition,
+    placeArticulationAtPosition,
     positionFromDragEvent,
-    runEdit
+    draggedArticulationId,
+    selectedArticulationId
   ]);
-  const handleLaneClick = reactExports.useCallback((event) => {
-    if (event.target !== event.currentTarget) {
-      return;
-    }
-    assignSelectedAtPosition(positionFromClientX(event.clientX));
-  }, [assignSelectedAtPosition, positionFromClientX]);
   const finishPointerEdit = reactExports.useCallback((clientX, cancelled = false) => {
-    const dragState = dragStateRef.current;
+    const dragState = dragStateRef.current ? resolveBoundaryResizeState(dragStateRef.current, clientX) : null;
     dragStateRef.current = null;
-    setDropIndicator(null);
+    setActiveResizeSegmentId(null);
+    setPlacementPreview(null);
     if (!dragState || cancelled) {
       return;
     }
     const position = positionFromClientX(clientX);
-    if (!dragState.moved && dragState.kind === "move") {
-      if (selectedArticulationId && (editMode === "insert" || selectedArticulationId !== dragState.segment.articulationId)) {
-        runEdit(
-          editMode === "insert" ? onInsertAtPosition(mode, position, selectedArticulationId) : onAssignAtPosition(mode, position, selectedArticulationId)
-        );
-        return;
-      }
-      setFocusedSegmentId(dragState.segment.id);
-      onSelectSegment(mode, dragState.segment);
+    if (!dragState.moved) {
+      const selectedDragSegment = dragState.kind === "boundary-resize" ? dragState.originalSegment : dragState.segment;
+      setFocusedSegmentId(selectedDragSegment.id);
+      onSelectSegment(mode, selectedDragSegment);
+      return;
+    }
+    if (dragState.kind === "boundary-resize") {
       return;
     }
     runEdit(
       dragState.kind === "resize" ? onResizeSegment(mode, dragState.segment, dragState.edge ?? "max", position) : onMoveSegment(mode, dragState.segment, position)
     );
   }, [
-    editMode,
     mode,
-    onAssignAtPosition,
-    onInsertAtPosition,
     onMoveSegment,
     onResizeSegment,
     onSelectSegment,
     positionFromClientX,
-    runEdit,
-    selectedArticulationId
+    runEdit
   ]);
-  const handleSegmentPointerDown = reactExports.useCallback((event, segment) => {
-    event.preventDefault();
-    event.stopPropagation();
-    event.currentTarget.setPointerCapture?.(event.pointerId);
-    dragStateRef.current = {
-      kind: "move",
-      segment,
-      pointerId: event.pointerId,
-      startX: event.clientX,
-      moved: false
-    };
-  }, []);
-  const handleResizePointerDown = reactExports.useCallback((event, segment, edge) => {
+  const startResizePointerDrag = reactExports.useCallback((event, segment, edge) => {
+    if (event.button !== 0) {
+      return;
+    }
     event.preventDefault();
     event.stopPropagation();
     event.currentTarget.setPointerCapture?.(event.pointerId);
     setFocusedSegmentId(segment.id);
-    dragStateRef.current = {
+    setHoveredSegmentId(segment.id);
+    setActiveResizeSegmentId(segment.id);
+    const boundaryCandidate = findBoundaryResizeCandidate(fullSegments, segment, edge);
+    dragStateRef.current = boundaryCandidate ? {
+      kind: "boundary-resize",
+      leftSegment: boundaryCandidate.leftSegment,
+      rightSegment: boundaryCandidate.rightSegment,
+      originalSegment: segment,
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      moved: false
+    } : {
       kind: "resize",
       segment,
       edge,
@@ -37455,17 +38491,70 @@ function ArticulationRangeLane({
       startX: event.clientX,
       moved: false
     };
-  }, []);
-  const handleSegmentPointerMove = reactExports.useCallback((event) => {
-    const dragState = dragStateRef.current;
-    if (!dragState || dragState.pointerId !== event.pointerId) {
+  }, [fullSegments]);
+  const handleSegmentPointerDown = reactExports.useCallback((event, segment) => {
+    if (event.button !== 0) {
       return;
+    }
+    const canResizeMin = segment.min >= viewMinValue;
+    const canResizeMax = segment.max <= viewMaxValue;
+    const resizeEdge = resizeEdgeFromSegmentPointer(
+      event.clientX,
+      event.currentTarget.getBoundingClientRect(),
+      canResizeMin,
+      canResizeMax
+    );
+    if (resizeEdge) {
+      startResizePointerDrag(event, segment, resizeEdge);
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    setHoveredSegmentId(segment.id);
+    dragStateRef.current = {
+      kind: "move",
+      segment,
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      moved: false
+    };
+  }, [startResizePointerDrag, viewMaxValue, viewMinValue]);
+  const handleResizePointerDown = reactExports.useCallback((event, segment, edge) => {
+    startResizePointerDrag(event, segment, edge);
+  }, [startResizePointerDrag]);
+  const handleSegmentPointerMove = reactExports.useCallback((event) => {
+    const currentDragState = dragStateRef.current;
+    if (!currentDragState || currentDragState.pointerId !== event.pointerId) {
+      return;
+    }
+    const dragState = resolveBoundaryResizeState(currentDragState, event.clientX);
+    if (dragState.kind !== currentDragState.kind) {
+      dragStateRef.current = dragState;
+      setFocusedSegmentId(dragState.segment.id);
+      setHoveredSegmentId(dragState.segment.id);
+      setActiveResizeSegmentId(dragState.segment.id);
     }
     if (Math.abs(event.clientX - dragState.startX) > 3) {
       dragState.moved = true;
     }
-    setDropIndicator(positionFromClientX(event.clientX));
-  }, [positionFromClientX]);
+    if (dragState.kind === "boundary-resize") {
+      dragStateRef.current = dragState;
+      return;
+    }
+    dragStateRef.current = dragState;
+    const position = positionFromClientX(event.clientX);
+    const projectedSegments = dragState.kind === "resize" ? projectRangeResize(fullSegments, dragState.segment, dragState.edge ?? "max", position, minValue, maxValue) : projectRangeMove(fullSegments, dragState.segment, position, minValue, maxValue);
+    const projectedTarget = projectedSegments.find((segment) => segment.id === dragState.segment.id) ?? dragState.segment;
+    setPlacementPreview({
+      operation: dragState.kind === "resize" ? "replace" : "move",
+      position,
+      min: projectedTarget.min,
+      max: projectedTarget.max,
+      targetSegment: dragState.segment,
+      projectedSegments
+    });
+  }, [fullSegments, maxValue, minValue, positionFromClientX]);
   const handleSegmentPointerUp = reactExports.useCallback((event) => {
     event.preventDefault();
     event.stopPropagation();
@@ -37480,6 +38569,17 @@ function ArticulationRangeLane({
     }
     finishPointerEdit(event.clientX, true);
   }, [finishPointerEdit]);
+  const handleSegmentPointerEnter = reactExports.useCallback((segment) => {
+    setHoveredSegmentId(segment.id);
+  }, []);
+  const handleSegmentPointerLeave = reactExports.useCallback((segment) => {
+    const dragState = dragStateRef.current;
+    const activeDragSegmentId = dragState?.kind === "boundary-resize" ? dragState.originalSegment.id : dragState?.segment.id;
+    if (activeDragSegmentId === segment.id) {
+      return;
+    }
+    setHoveredSegmentId((currentSegmentId) => currentSegmentId === segment.id ? null : currentSegmentId);
+  }, []);
   const handleLaneKeyDown = reactExports.useCallback((event) => {
     if ((event.key === "Delete" || event.key === "Backspace") && selectedSegment) {
       event.preventDefault();
@@ -37502,76 +38602,115 @@ function ArticulationRangeLane({
     }
     return rows;
   }, [maxValue, minValue, visibleSegments]);
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: joinClasses(FRAME_CLASS, "flex flex-col gap-2 px-3 py-2.5"), children: [
+  const displayedSegments = reactExports.useMemo(() => {
+    const sourceSegments = placementPreview?.projectedSegments ?? fullSegments;
+    return clipSegmentsToRange(sourceSegments, viewMinValue, viewMaxValue);
+  }, [fullSegments, placementPreview?.projectedSegments, viewMaxValue, viewMinValue]);
+  const previewSegment = placementPreview ? displayedSegments.find((segment) => segment.isPreview) ?? null : null;
+  const tickValues = reactExports.useMemo(() => Array.from({ length: viewTotalSlots }, (_, index) => viewMinValue + index), [viewMinValue, viewTotalSlots]);
+  const labeledTickValues = reactExports.useMemo(() => tickValues.filter((value) => value !== viewMinValue && value !== viewMaxValue && value % 10 === 0), [tickValues, viewMaxValue, viewMinValue]);
+  const openRangeMenu = reactExports.useCallback((event, segment) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setRangeMenu({
+      segment,
+      x: event.clientX,
+      y: event.clientY
+    });
+  }, []);
+  const handleRangeMenuAction = reactExports.useCallback((action) => {
+    if (!rangeMenu) {
+      return;
+    }
+    const { segment } = rangeMenu;
+    setRangeMenu(null);
+    switch (action) {
+      case "delete":
+        runEdit(onClearSegment(mode, segment));
+        return;
+      case "insert-after":
+        if (!selectedArticulationId) {
+          showToast("Select an articulation first");
+          return;
+        }
+        runEdit(onInsertAtPosition(mode, clamp$1(segment.max + 1, minValue, maxValue), selectedArticulationId));
+        return;
+      case "duplicate-after":
+        runEdit(onDuplicateAndAssignAtPosition(mode, clamp$1(segment.max + 1, minValue, maxValue), segment.articulationId, "insert"));
+        return;
+      case "replace":
+        if (!selectedArticulationId) {
+          showToast("Select an articulation first");
+          return;
+        }
+        runEdit(onAssignAtPosition(mode, segment.min, selectedArticulationId));
+    }
+  }, [
+    maxValue,
+    minValue,
+    mode,
+    onAssignAtPosition,
+    onClearSegment,
+    onDuplicateAndAssignAtPosition,
+    onInsertAtPosition,
+    rangeMenu,
+    runEdit,
+    selectedArticulationId,
+    showToast
+  ]);
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: joinClasses(FRAME_CLASS, "flex flex-col gap-1.5 px-2.5 py-2"), children: [
     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-wrap items-center justify-between gap-2", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[10px] font-bold uppercase tracking-[0.2em] text-slate-100/75", children: label }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "rounded-[5px] border border-white/[0.05] bg-black/20 px-1.5 py-px font-mono text-[9px] tabular-nums uppercase tracking-[0.14em] text-slate-300/55 shadow-[inset_0_1px_2px_rgba(0,0,0,0.35)]", children: `${segments.length} / ${totalSlots}` })
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex min-w-0 items-baseline gap-1.5", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[10px] font-semibold tracking-[0.04em] text-slate-100/82", children: label }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono text-[9px] tabular-nums tracking-[0.02em] text-slate-300/45", children: `${segments.length}/${fullTotalSlots}` }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "span",
+          {
+            "data-role": "articulation-range-viewport-label",
+            className: "hidden font-mono text-[9px] tabular-nums tracking-[0.02em] text-slate-300/55 sm:inline",
+            children: formatLaneRange(mode, viewMinValue, viewMaxValue)
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "div",
+          {
+            "data-role": "articulation-placement-readout",
+            className: "ml-1 hidden h-4 items-center font-mono text-[9px] tabular-nums tracking-[0.02em] text-cyan-100/85 sm:inline-flex",
+            children: placementPreview ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: `${placementPreview.operation} ${formatLaneRange(mode, placementPreview.min, placementPreview.max)}` }) : null
+          }
+        )
       ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { role: "group", "aria-label": "Range edit mode", className: SEGMENTED_GROUP_CLASS, children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx(
-            "button",
-            {
-              type: "button",
-              "aria-pressed": editMode === "assign",
-              onClick: () => setEditMode("assign"),
-              className: joinClasses(
-                SEGMENTED_BUTTON_BASE,
-                editMode === "assign" ? SEGMENTED_BUTTON_ACTIVE : SEGMENTED_BUTTON_INACTIVE
-              ),
-              "data-role": "articulation-lane-assign-mode",
-              children: "Assign"
-            }
-          ),
-          /* @__PURE__ */ jsxRuntimeExports.jsx(
-            "button",
-            {
-              type: "button",
-              "aria-pressed": editMode === "insert",
-              onClick: () => setEditMode("insert"),
-              className: joinClasses(
-                SEGMENTED_BUTTON_BASE,
-                editMode === "insert" ? SEGMENTED_BUTTON_ACTIVE : SEGMENTED_BUTTON_INACTIVE
-              ),
-              "data-role": "articulation-lane-insert-mode",
-              children: "Insert"
-            }
-          )
-        ] }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { "aria-hidden": "true", className: "h-5 w-px shrink-0 bg-white/[0.06]" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-1.5", children: [
-          selectedSegment ? /* @__PURE__ */ jsxRuntimeExports.jsx(
-            "button",
-            {
-              type: "button",
-              onClick: () => runEdit(onClearSegment(mode, selectedSegment)),
-              className: joinClasses(PILL_BASE, PILL_PINK),
-              "data-role": "articulation-clear-segment",
-              children: "Clear"
-            }
-          ) : null,
-          /* @__PURE__ */ jsxRuntimeExports.jsx(
-            "button",
-            {
-              type: "button",
-              onClick: () => onClearAll(mode),
-              className: joinClasses(PILL_BASE, PILL_NEUTRAL),
-              "data-role": "articulation-clear-all",
-              children: "Clear All"
-            }
-          ),
-          onDistribute ? /* @__PURE__ */ jsxRuntimeExports.jsx(
-            "button",
-            {
-              type: "button",
-              onClick: () => onDistribute(mode),
-              className: joinClasses(PILL_BASE, PILL_NEUTRAL),
-              "data-role": "articulation-distribute",
-              children: "Distribute Equally"
-            }
-          ) : null
-        ] })
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-1", children: [
+        selectedSegment ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "button",
+          {
+            type: "button",
+            onClick: () => runEdit(onClearSegment(mode, selectedSegment)),
+            className: LANE_ACTION_CLASS_PINK,
+            "data-role": "articulation-clear-segment",
+            children: "Clear"
+          }
+        ) : null,
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "button",
+          {
+            type: "button",
+            onClick: () => onClearAll(mode),
+            className: LANE_ACTION_CLASS,
+            "data-role": "articulation-clear-all",
+            children: "Clear All"
+          }
+        ),
+        onDistribute ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "button",
+          {
+            type: "button",
+            onClick: () => onDistribute(mode),
+            className: LANE_ACTION_CLASS,
+            "data-role": "articulation-distribute",
+            children: "Distribute"
+          }
+        ) : null
       ] })
     ] }),
     /* @__PURE__ */ jsxRuntimeExports.jsxs(
@@ -37579,46 +38718,93 @@ function ArticulationRangeLane({
       {
         ref: laneRef,
         "data-role": "articulation-range-lane",
+        "data-preview": placementPreview ? "true" : "false",
+        "data-viewport-index": String(activeThird),
+        "data-viewport-min": String(viewMinValue),
+        "data-viewport-max": String(viewMaxValue),
+        "data-held-value": heldValue === null ? "" : String(heldValue),
         tabIndex: 0,
-        onClick: handleLaneClick,
         onDragOver: handleDragOver,
         onDragLeave: handleDragLeave,
         onDrop: handleDrop,
         onKeyDown: handleLaneKeyDown,
-        className: "relative hidden h-11 w-full overflow-hidden rounded-[7px] border border-white/[0.06] bg-black/25 shadow-[inset_0_1px_2px_rgba(0,0,0,0.4)] outline-none transition focus:border-cyan-200/45 focus:shadow-[inset_0_1px_2px_rgba(0,0,0,0.4),0_0_0_1px_rgba(103,232,249,0.18)] sm:block",
+        className: joinClasses(
+          "relative hidden h-14 w-full overflow-hidden rounded-[6px] border bg-[#04060c] shadow-[inset_0_1px_2px_rgba(0,0,0,0.55)] outline-none transition focus:shadow-[inset_0_1px_2px_rgba(0,0,0,0.55),0_0_0_1px_rgba(103,232,249,0.20)] sm:block",
+          placementPreview ? "border-cyan-300/35 shadow-[inset_0_1px_2px_rgba(0,0,0,0.55),0_0_0_1px_rgba(103,232,249,0.20)]" : "border-white/[0.05] focus:border-cyan-200/45"
+        ),
         children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsxs(
-            "svg",
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { "aria-hidden": "true", className: "pointer-events-none absolute inset-0", children: [
+            Array.from({ length: Math.ceil(viewTotalSlots / 5) }).map((_, index) => /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "span",
+              {
+                className: joinClasses(
+                  "absolute top-0 h-full",
+                  index % 2 === 0 ? "bg-white/[0.012]" : "bg-transparent"
+                ),
+                style: {
+                  left: `${index * 5 / viewTotalSlots * 100}%`,
+                  width: `${Math.min(5, viewTotalSlots - index * 5) / viewTotalSlots * 100}%`
+                }
+              },
+              `band-${index}`
+            )),
+            tickValues.map((value) => {
+              const isTen = value % 10 === 0;
+              const isFive = value % 5 === 0;
+              return /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "span",
+                {
+                  className: joinClasses(
+                    "absolute top-0 w-px",
+                    isTen ? "h-[38px] bg-white/[0.10]" : isFive ? "h-[38px] bg-white/[0.05]" : "h-[12px] bg-white/[0.025]"
+                  ),
+                  style: { left: `${(value - viewMinValue) / Math.max(1, viewMaxValue - viewMinValue) * 100}%` }
+                },
+                `tick-${value}`
+              );
+            }),
+            labeledTickValues.map((value) => /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "span",
+              {
+                className: "absolute bottom-0.5 -translate-x-1/2 font-mono text-[8px] tabular-nums tracking-[0.02em] text-slate-300/45",
+                style: { left: `${(value - viewMinValue) / Math.max(1, viewMaxValue - viewMinValue) * 100}%` },
+                children: formatLanePosition(mode, value)
+              },
+              `label-${value}`
+            ))
+          ] }),
+          heldValueIsVisible && heldValue !== null ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "span",
             {
-              "aria-hidden": "true",
-              className: "pointer-events-none absolute inset-0 h-full w-full",
-              preserveAspectRatio: "none",
-              viewBox: "0 0 100 36",
-              children: [
-                [1, 2, 3, 4, 5, 6, 7].map((index) => /* @__PURE__ */ jsxRuntimeExports.jsx(
-                  "line",
-                  {
-                    x1: index * 12.5,
-                    x2: index * 12.5,
-                    y1: 4,
-                    y2: 32,
-                    stroke: "rgba(255,255,255,0.05)",
-                    strokeWidth: 0.4
-                  },
-                  index
-                )),
-                /* @__PURE__ */ jsxRuntimeExports.jsx("line", { x1: 50, x2: 50, y1: 2, y2: 34, stroke: "rgba(255,255,255,0.08)", strokeWidth: 0.5 })
-              ]
+              "aria-label": `${label} held value ${formatLanePosition(mode, heldValue)}`,
+              "data-role": "articulation-held-value",
+              "data-held-value": String(heldValue),
+              className: "pointer-events-none absolute top-0 z-[4] h-full w-[3px] -translate-x-1/2 rounded-full bg-amber-200 shadow-[0_0_0_1px_rgba(7,10,19,0.72),0_0_16px_rgba(251,191,36,0.50)]",
+              style: {
+                left: `${(heldValue - viewMinValue + 0.5) / viewTotalSlots * 100}%`
+              },
+              children: /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "absolute -top-0.5 left-1/2 h-1.5 w-1.5 -translate-x-1/2 rounded-full bg-amber-100 shadow-[0_0_10px_rgba(251,191,36,0.55)]" })
             }
-          ),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "pointer-events-none absolute inset-y-0 left-0 right-0", children: visibleSegments.map((segment) => {
-            const left = (segment.visibleMin - minValue) / totalSlots * 100;
-            const width = (segment.visibleMax - segment.visibleMin + 1) / totalSlots * 100;
-            const isHighlighted = segment.isSelected || focusedSegmentId === segment.id;
+          ) : null,
+          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "pointer-events-none absolute inset-x-0 top-0 h-[38px]", children: displayedSegments.map((segment) => {
+            const visibleMin = clamp$1(segment.visibleMin ?? segment.min, viewMinValue, viewMaxValue);
+            const visibleMax = clamp$1(segment.visibleMax ?? segment.max, viewMinValue, viewMaxValue);
+            const left = (visibleMin - viewMinValue) / viewTotalSlots * 100;
+            const width = (visibleMax - visibleMin + 1) / viewTotalSlots * 100;
+            const isPreview = segment.isPreview === true;
+            const isPreviewAffected = segment.isPreviewAffected === true;
+            const isHighlighted = segment.isSelected || focusedSegmentId === segment.id || isPreview;
+            const canResizeMin = segment.min >= viewMinValue;
+            const canResizeMax = segment.max <= viewMaxValue;
             const positionStyle = {
               left: `${left}%`,
               width: `${width}%`
             };
+            const valueLabel = formatLaneRange(mode, visibleMin, visibleMax);
+            const tier = rangeSegmentTier(width);
+            const nameText = tier === "tiny" ? abbreviateRangeLabel(segment.label, 3) : tier === "medium" ? abbreviateRangeLabel(segment.label, 8) : tier === "small" ? abbreviateRangeLabel(segment.label, 4) : segment.label;
+            const resizeHandlesAreInteractive = hoveredSegmentId === segment.id || activeResizeSegmentId === segment.id;
+            const resizeHandlesAreVisible = resizeHandlesAreInteractive || isHighlighted;
             return /* @__PURE__ */ jsxRuntimeExports.jsxs(
               "button",
               {
@@ -37627,14 +38813,25 @@ function ArticulationRangeLane({
                 "data-role": "articulation-range-segment",
                 "data-segment-id": segment.id,
                 "data-articulation-id": segment.articulationId,
+                "data-range-min": String(visibleMin),
+                "data-range-max": String(visibleMax),
+                "data-full-range-min": String(segment.min),
+                "data-full-range-max": String(segment.max),
+                "data-preview": isPreview ? "true" : "false",
+                "data-preview-affected": isPreviewAffected ? "true" : "false",
                 "data-selected": segment.isSelected ? "true" : "false",
+                "data-tier": tier,
                 onPointerDown: (event) => handleSegmentPointerDown(event, segment),
                 onPointerMove: handleSegmentPointerMove,
                 onPointerUp: handleSegmentPointerUp,
                 onPointerCancel: handleSegmentPointerCancel,
+                onPointerEnter: () => handleSegmentPointerEnter(segment),
+                onPointerLeave: () => handleSegmentPointerLeave(segment),
+                onContextMenu: (event) => openRangeMenu(event, segment),
+                title: `${segment.label} ${valueLabel}`,
                 className: joinClasses(
-                  "group pointer-events-auto absolute inset-y-0.5 flex cursor-grab items-center overflow-hidden rounded-[3px] border font-mono text-[9px] uppercase tracking-[0.14em] text-[#0a0d18] transition active:cursor-grabbing focus-visible:outline-none",
-                  isHighlighted ? "z-[1] border-amber-100/90 shadow-[0_0_0_1px_rgba(252,211,77,0.6),0_2px_10px_rgba(0,0,0,0.45),inset_0_1px_0_rgba(255,255,255,0.25)]" : "border-white/15 shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_1px_2px_rgba(0,0,0,0.3)] hover:border-white/35"
+                  "group pointer-events-auto absolute inset-y-0.5 flex cursor-grab items-center overflow-hidden rounded-[3px] text-[#0a0d18] transition active:cursor-grabbing focus-visible:outline-none",
+                  isPreview ? "z-[2] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.80),0_0_0_1px_rgba(103,232,249,0.75),0_0_14px_rgba(103,232,249,0.28)]" : isHighlighted ? "z-[1] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.55),0_0_0_1px_rgba(252,211,77,0.55)]" : isPreviewAffected ? "shadow-[inset_0_0_0_1px_rgba(255,255,255,0.18)]" : "shadow-[inset_0_0_0_1px_rgba(255,255,255,0.10)] hover:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.22)]"
                 ),
                 style: positionStyle,
                 children: [
@@ -37644,65 +38841,152 @@ function ArticulationRangeLane({
                       "aria-hidden": "true",
                       className: "absolute inset-0",
                       style: {
-                        background: `linear-gradient(180deg, ${segment.color} 0%, ${segment.color} 60%, rgba(0,0,0,0.18) 100%)`,
-                        opacity: isHighlighted ? 0.92 : 0.7
+                        background: segment.color,
+                        opacity: isPreview ? 0.96 : isHighlighted ? 0.92 : isPreviewAffected ? 0.68 : 0.78
                       }
                     }
                   ),
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "relative truncate px-1.5 drop-shadow-[0_1px_0_rgba(255,255,255,0.18)]", children: segment.label }),
-                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  tier === "tiny" ? /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "relative flex min-w-0 flex-1 items-center justify-center px-px", children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsx(
+                      "span",
+                      {
+                        "data-role": "articulation-range-name",
+                        className: "min-w-0 truncate text-center text-[8px] font-black leading-none tracking-[0] text-[#070a13]",
+                        children: nameText
+                      }
+                    ),
+                    /* @__PURE__ */ jsxRuntimeExports.jsx(
+                      "span",
+                      {
+                        "data-role": "articulation-range-value",
+                        className: "sr-only",
+                        children: valueLabel
+                      }
+                    )
+                  ] }) : /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "relative flex min-w-0 flex-1 items-center justify-between gap-1 px-1.5", children: tier === "small" ? /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { "data-role": "articulation-range-name", className: "min-w-0 flex-1 truncate text-center text-[9px] font-semibold tracking-[0.02em] text-[#0a0d18]", children: nameText }),
+                    /* @__PURE__ */ jsxRuntimeExports.jsx(
+                      "span",
+                      {
+                        "data-role": "articulation-range-value",
+                        className: "sr-only",
+                        children: valueLabel
+                      }
+                    )
+                  ] }) : /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { "data-role": "articulation-range-name", className: "min-w-0 truncate text-[9px] font-semibold tracking-[0.02em]", children: nameText }),
+                    /* @__PURE__ */ jsxRuntimeExports.jsx(
+                      "span",
+                      {
+                        "data-role": "articulation-range-value",
+                        className: "shrink-0 rounded-[2px] bg-[#050712]/55 px-1 py-px font-mono text-[9px] tabular-nums tracking-[0.02em] text-white/95",
+                        children: valueLabel
+                      }
+                    )
+                  ] }) }),
+                  canResizeMin ? /* @__PURE__ */ jsxRuntimeExports.jsx(
                     "span",
                     {
                       role: "button",
                       tabIndex: -1,
                       "aria-label": `Resize ${segment.label} start`,
                       "data-role": "articulation-range-resize-min",
+                      "data-active": resizeHandlesAreInteractive ? "true" : "false",
                       onPointerDown: (event) => handleResizePointerDown(event, segment, "min"),
                       onPointerMove: handleSegmentPointerMove,
                       onPointerUp: handleSegmentPointerUp,
                       onPointerCancel: handleSegmentPointerCancel,
                       className: joinClasses(
-                        "absolute inset-y-0 left-0 z-10 flex w-2.5 cursor-ew-resize items-center justify-center bg-black/0 transition before:block before:h-3 before:w-px before:rounded-full before:bg-black/45 before:opacity-0 before:transition before:content-[''] hover:bg-black/15 hover:before:opacity-90 group-hover:before:opacity-60",
-                        isHighlighted ? "before:opacity-90" : ""
+                        "absolute inset-y-0 left-0 z-10 flex w-1 cursor-ew-resize items-center justify-center bg-black/0 transition before:block before:h-3 before:w-[2px] before:rounded-full before:bg-black/65 before:opacity-0 before:transition before:content-['']",
+                        resizeHandlesAreInteractive ? "pointer-events-auto hover:bg-black/18 hover:before:opacity-95" : "pointer-events-none",
+                        resizeHandlesAreVisible ? "before:opacity-65" : "",
+                        isHighlighted ? "before:bg-black/80" : ""
                       )
                     }
-                  ),
-                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  ) : null,
+                  canResizeMax ? /* @__PURE__ */ jsxRuntimeExports.jsx(
                     "span",
                     {
                       role: "button",
                       tabIndex: -1,
                       "aria-label": `Resize ${segment.label} end`,
                       "data-role": "articulation-range-resize-max",
+                      "data-active": resizeHandlesAreInteractive ? "true" : "false",
                       onPointerDown: (event) => handleResizePointerDown(event, segment, "max"),
                       onPointerMove: handleSegmentPointerMove,
                       onPointerUp: handleSegmentPointerUp,
                       onPointerCancel: handleSegmentPointerCancel,
                       className: joinClasses(
-                        "absolute inset-y-0 right-0 z-10 flex w-2.5 cursor-ew-resize items-center justify-center bg-black/0 transition before:block before:h-3 before:w-px before:rounded-full before:bg-black/45 before:opacity-0 before:transition before:content-[''] hover:bg-black/15 hover:before:opacity-90 group-hover:before:opacity-60",
-                        isHighlighted ? "before:opacity-90" : ""
+                        "absolute inset-y-0 right-0 z-10 flex w-1 cursor-ew-resize items-center justify-center bg-black/0 transition before:block before:h-3 before:w-[2px] before:rounded-full before:bg-black/65 before:opacity-0 before:transition before:content-['']",
+                        resizeHandlesAreInteractive ? "pointer-events-auto hover:bg-black/18 hover:before:opacity-95" : "pointer-events-none",
+                        resizeHandlesAreVisible ? "before:opacity-65" : "",
+                        isHighlighted ? "before:bg-black/80" : ""
                       )
                     }
-                  )
+                  ) : null
                 ]
               },
               segment.id
             );
           }) }),
-          dropIndicator !== null ? /* @__PURE__ */ jsxRuntimeExports.jsx(
-            "div",
+          placementPreview && previewSegment ? /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            "span",
             {
-              "aria-hidden": "true",
-              className: "pointer-events-none absolute inset-y-0 w-px bg-cyan-200 shadow-[0_0_10px_2px_rgba(103,232,249,0.6)]",
-              style: { left: `${(dropIndicator - minValue) / Math.max(1, maxValue - minValue) * 100}%` }
+              "data-role": "articulation-range-ghost-label",
+              className: "pointer-events-none absolute top-1 z-[3] inline-flex max-w-[140px] -translate-x-1/2 items-center gap-1 rounded-[4px] bg-[#03050b]/92 px-1.5 py-0.5 font-mono text-[9px] tabular-nums tracking-[0.02em] text-cyan-50 shadow-[0_4px_12px_rgba(0,0,0,0.45),0_0_0_1px_rgba(103,232,249,0.28)]",
+              style: {
+                left: `${(((previewSegment.visibleMin ?? placementPreview.min) + (previewSegment.visibleMax ?? placementPreview.max)) / 2 - viewMinValue + 0.5) / viewTotalSlots * 100}%`
+              },
+              children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "max-w-[74px] truncate font-semibold tracking-[0.01em] text-cyan-100/92", children: previewSegment.label }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { "data-role": "articulation-range-ghost-value", children: formatLaneRange(mode, placementPreview.min, placementPreview.max) })
+              ]
+            }
+          ) : null,
+          placementPreview ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "span",
+            {
+              "data-role": "articulation-placement-preview",
+              "data-operation": placementPreview.operation,
+              className: "sr-only",
+              children: `${placementPreview.operation} ${formatLaneRange(mode, placementPreview.min, placementPreview.max)}`
             }
           ) : null
         ]
       }
     ),
+    /* @__PURE__ */ jsxRuntimeExports.jsx(
+      "div",
+      {
+        "aria-label": `${label} range viewport`,
+        "data-role": "articulation-range-viewport-dots",
+        className: "hidden items-center justify-center gap-1 sm:flex",
+        children: rangeThirds.map((third) => {
+          const isActive = third.index === activeThird;
+          const containsHeldValue = heldValue !== null && third.index === heldThird;
+          return /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "button",
+            {
+              type: "button",
+              "aria-label": `${label} ${labelRangeThird(third.index)} range ${formatLaneRange(mode, third.min, third.max)}`,
+              "aria-pressed": isActive,
+              "data-role": "articulation-range-viewport-dot",
+              "data-viewport-index": String(third.index),
+              "data-held": containsHeldValue ? "true" : "false",
+              onClick: () => setActiveThird(third.index),
+              className: joinClasses(
+                "h-1.5 rounded-full transition focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-200/45",
+                isActive ? "w-4 bg-cyan-200/85 shadow-[0_0_10px_rgba(103,232,249,0.25)]" : containsHeldValue ? "w-1.5 bg-amber-200/90 shadow-[0_0_8px_rgba(251,191,36,0.45)]" : "w-1.5 bg-slate-400/28 hover:bg-slate-200/55"
+              )
+            },
+            third.index
+          );
+        })
+      }
+    ),
     /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "grid gap-1.5 sm:hidden", "data-role": "articulation-range-list", children: mobileRows.map((row) => {
       const key = `${row.kind}-${row.min}-${row.max}-${row.segment?.id ?? "gap"}`;
-      const labelText = `${row.min === row.max ? row.min : `${row.min}-${row.max}`}`;
+      const labelText = formatLaneRange(mode, row.min, row.max);
       if (row.kind === "gap") {
         return /* @__PURE__ */ jsxRuntimeExports.jsxs(
           "button",
@@ -37710,10 +38994,10 @@ function ArticulationRangeLane({
             type: "button",
             "data-role": "articulation-range-gap-row",
             onClick: () => assignSelectedAtPosition(row.min),
-            className: "flex min-h-8 items-center justify-between rounded-[7px] border border-dashed border-white/[0.08] bg-white/[0.012] px-2.5 font-mono text-[10px] tabular-nums uppercase tracking-[0.14em] text-slate-300/50 transition hover:border-white/15 hover:bg-white/[0.025] hover:text-slate-200",
+            className: "flex min-h-11 items-center justify-between rounded-[6px] border border-dashed border-white/[0.08] bg-transparent px-2.5 font-mono text-[10px] tabular-nums uppercase tracking-[0.14em] text-slate-300/55 transition hover:border-white/20 hover:bg-white/[0.025] hover:text-slate-100 active:bg-white/[0.04]",
             children: [
               /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: labelText }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-slate-300/35", children: editMode === "insert" ? "Insert" : "Fill" })
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-slate-300/35", children: "Fill" })
             ]
           },
           key
@@ -37723,44 +39007,71 @@ function ArticulationRangeLane({
       if (!segment) {
         return null;
       }
-      const rowStyle = focusedSegmentId === segment.id ? { boxShadow: `inset 2px 0 0 ${segment.color}, inset 0 1px 0 rgba(251,191,36,0.14)` } : { boxShadow: `inset 2px 0 0 ${segment.color}` };
-      return /* @__PURE__ */ jsxRuntimeExports.jsxs(
-        "div",
-        {
-          "data-role": "articulation-range-segment-row",
-          className: joinClasses(
-            "flex min-h-9 items-center gap-2 rounded-[7px] border pl-2.5 pr-2 transition",
-            focusedSegmentId === segment.id ? "border-amber-100/55 bg-amber-300/[0.08]" : "border-white/[0.06] bg-white/[0.022] hover:border-white/15"
-          ),
-          style: rowStyle,
-          children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx(ColorDot, { color: segment.color }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx(
-              "button",
-              {
-                type: "button",
-                onClick: () => {
-                  setFocusedSegmentId(segment.id);
-                  onSelectSegment(mode, segment);
-                },
-                className: "min-w-0 flex-1 truncate text-left text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-100/85 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-200/40",
-                children: segment.label
+      const isFocused = focusedSegmentId === segment.id;
+      return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid gap-1", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          "button",
+          {
+            type: "button",
+            "data-role": "articulation-range-insert-row",
+            onClick: () => {
+              if (!selectedArticulationId) {
+                showToast("Select an articulation first");
+                return;
               }
+              runEdit(onInsertAtPosition(mode, row.min, selectedArticulationId));
+            },
+            className: "flex min-h-8 items-center justify-center rounded-[5px] border border-dashed border-white/[0.07] bg-transparent px-2.5 font-mono text-[9px] uppercase tracking-[0.14em] text-slate-300/45 transition hover:border-amber-200/35 hover:text-amber-100/80 active:bg-amber-300/[0.05]",
+            children: [
+              "Insert at ",
+              formatLanePosition(mode, row.min)
+            ]
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          "div",
+          {
+            role: "button",
+            tabIndex: 0,
+            "data-role": "articulation-range-segment-row",
+            onClick: () => replaceSelectedAtPosition(row.min),
+            onKeyDown: (event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                replaceSelectedAtPosition(row.min);
+              }
+            },
+            className: joinClasses(
+              "flex min-h-11 items-center gap-2 rounded-[6px] border px-2.5 py-1 text-left transition",
+              isFocused ? "border-amber-200/55 bg-amber-300/[0.06] shadow-[inset_0_0_0_1px_rgba(252,211,77,0.20)]" : "border-white/[0.07] bg-white/[0.02] hover:border-white/20 hover:bg-white/[0.035]"
             ),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono text-[10px] tabular-nums text-slate-300/60", children: labelText }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx(
-              "button",
-              {
-                type: "button",
-                onClick: () => runEdit(onClearSegment(mode, segment)),
-                className: "rounded-[6px] border border-pink-300/22 bg-pink-300/[0.06] px-2 py-1 text-[9px] font-bold uppercase tracking-[0.12em] text-pink-100/85 transition hover:border-pink-200/35 hover:bg-pink-300/14",
-                children: "Clear"
-              }
-            )
-          ]
-        },
-        key
-      );
+            children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx(ColorDot, { color: segment.color }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "min-w-0 flex-1 truncate text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-100/90", children: segment.label }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono text-[10px] tabular-nums tracking-[0.04em] text-slate-200/85", children: labelText }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "button",
+                {
+                  type: "button",
+                  onClick: (event) => {
+                    event.stopPropagation();
+                    runEdit(onClearSegment(mode, segment));
+                  },
+                  onKeyDown: (event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      runEdit(onClearSegment(mode, segment));
+                    }
+                  },
+                  className: "ml-1 inline-flex h-7 min-w-[44px] items-center justify-center rounded-[5px] border border-pink-300/15 bg-transparent px-2 text-[9px] font-semibold uppercase tracking-[0.12em] text-pink-200/75 transition hover:border-pink-200/30 hover:bg-pink-300/[0.06] hover:text-pink-100",
+                  children: "Clear"
+                }
+              )
+            ]
+          }
+        )
+      ] }, key);
     }) }),
     toast ? /* @__PURE__ */ jsxRuntimeExports.jsx(
       "div",
@@ -37771,16 +39082,25 @@ function ArticulationRangeLane({
         children: toast
       }
     ) : null,
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between font-mono text-[9px] tabular-nums uppercase tracking-[0.18em] text-slate-300/45", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between font-mono text-[9px] tabular-nums tracking-[0.04em] text-slate-200/65", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "flex items-center gap-1", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-slate-300/30", children: "MIN" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: minLabel })
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-slate-300/35", children: "view" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-slate-100/82", children: formatLanePosition(mode, viewMinValue) })
       ] }),
       /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "flex items-center gap-1", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: maxLabel }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-slate-300/30", children: "MAX" })
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-slate-100/82", children: formatLanePosition(mode, viewMaxValue) }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-slate-300/35", children: `${minLabel}-${maxLabel}` })
       ] })
-    ] })
+    ] }),
+    rangeMenu ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+      ArticulationRangeContextMenu,
+      {
+        state: rangeMenu,
+        hasSelectedArticulation: Boolean(selectedArticulationId),
+        onClose: () => setRangeMenu(null),
+        onSelectAction: handleRangeMenuAction
+      }
+    ) : null
   ] });
 }
 function MappingEditor(props) {
@@ -37795,10 +39115,10 @@ function MappingEditor(props) {
   } : props.activeMode === "key" ? {
     label: "Key",
     segments: props.keySegments,
-    minValue: props.keyboardMinNote,
-    maxValue: props.keyboardMaxNote,
-    minLabel: String(props.keyboardMinNote),
-    maxLabel: String(props.keyboardMaxNote),
+    minValue: 0,
+    maxValue: ARTICULATION_RANGE_MAX,
+    minLabel: formatMidiNoteName$1(0),
+    maxLabel: formatMidiNoteName$1(ARTICULATION_RANGE_MAX),
     canDistribute: false
   } : {
     label: "Chain",
@@ -37814,8 +39134,11 @@ function MappingEditor(props) {
     {
       mode: props.activeMode,
       label: config.label,
+      cards: props.cards,
       segments: config.segments,
       selectedArticulationId: props.selectedArticulationId,
+      draggedArticulationId: props.draggedArticulationId,
+      heldInput: props.heldInput,
       onSelectSegment: props.onSelectRangeSegment,
       onAssignAtPosition: props.onAssignRangePosition,
       onInsertAtPosition: props.onInsertRangePosition,
@@ -37829,11 +39152,13 @@ function MappingEditor(props) {
       maxValue: config.maxValue,
       minLabel: config.minLabel,
       maxLabel: config.maxLabel
-    }
+    },
+    props.activeMode
   );
 }
 function HeaderActions({
   selectedIsDirty,
+  selectedName,
   canCapture,
   onCapture,
   onUpdate,
@@ -37861,7 +39186,7 @@ function HeaderActions({
           "data-role": "articulation-update",
           onClick: onUpdate,
           className: joinClasses(PILL_BASE, PILL_AMBER_ACTIVE, "border-amber-200/40 hover:bg-amber-300/16"),
-          children: "Update"
+          children: selectedName ? `Update ${selectedName}` : "Update"
         }
       ),
       /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -37878,10 +39203,69 @@ function HeaderActions({
     ] }) : null
   ] });
 }
+function FloatingArticulationToolbar({
+  selectedIsDirty,
+  selectedName,
+  discardedEditLabel,
+  onUpdate,
+  onRevert,
+  onUndoDiscard
+}) {
+  if (!selectedIsDirty && !discardedEditLabel) {
+    return null;
+  }
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+    "div",
+    {
+      "data-role": "articulation-floating-toolbar",
+      className: "pointer-events-none absolute bottom-2 right-2 z-20 flex max-w-[calc(100%-1rem)] items-center gap-1 rounded-[7px] border border-white/[0.07] bg-[#070a13]/96 p-0.5 shadow-[0_10px_24px_rgba(0,0,0,0.45)]",
+      children: [
+        selectedIsDirty ? /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "pointer-events-auto flex items-center gap-0.5", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "max-w-[140px] truncate px-1.5 text-[9px] font-medium tracking-[0.02em] text-amber-100/80", children: selectedName ? `Edited ${selectedName}` : "Edited" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "button",
+            {
+              type: "button",
+              "aria-label": "Update selected articulation from current parameters",
+              "data-role": "articulation-update-floating",
+              onClick: onUpdate,
+              className: joinClasses(PILL_BASE, PILL_AMBER_ACTIVE, "h-5 rounded-[4px] px-1.5"),
+              children: "Save"
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "button",
+            {
+              type: "button",
+              "aria-label": "Revert current parameters to selected articulation",
+              "data-role": "articulation-revert-floating",
+              onClick: onRevert,
+              className: joinClasses(PILL_BASE, PILL_NEUTRAL, "h-5 rounded-[4px] px-1.5"),
+              children: "Revert"
+            }
+          )
+        ] }) : null,
+        discardedEditLabel && onUndoDiscard ? /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "pointer-events-auto flex items-center gap-0.5", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "max-w-[140px] truncate px-1.5 text-[9px] font-medium tracking-[0.02em] text-pink-100/80", children: `Discarded ${discardedEditLabel}` }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "button",
+            {
+              type: "button",
+              "data-role": "articulation-undo-discard-floating",
+              onClick: onUndoDiscard,
+              className: joinClasses(PILL_BASE, PILL_PINK, "h-5 rounded-[4px] px-1.5"),
+              children: "Undo"
+            }
+          )
+        ] }) : null
+      ]
+    }
+  );
+}
 function ActiveModeReadout({ activeMode }) {
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "inline-flex h-7 shrink-0 items-center gap-1.5 rounded-[8px] border border-white/[0.06] bg-black/30 px-2.5 shadow-[inset_0_1px_2px_rgba(0,0,0,0.45)]", children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[9px] uppercase tracking-[0.18em] text-slate-300/40", children: "Mode" }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono text-[10px] uppercase tracking-[0.16em] text-cyan-200/95", children: formatModeLabel(activeMode) })
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "inline-flex h-6 shrink-0 items-center gap-1 rounded-[5px] border border-white/[0.05] bg-black/30 px-2 shadow-[inset_0_1px_2px_rgba(0,0,0,0.40)]", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[9px] tracking-[0.04em] text-slate-300/45", children: "Mode" }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono text-[10px] tracking-[0.04em] text-cyan-200/95", children: formatModeLabel(activeMode) })
   ] });
 }
 function ExpandToggle({
@@ -37911,10 +39295,12 @@ function ArticulationControlSurface(props) {
     isExpanded,
     selectedArticulationId,
     selectedIsDirty,
+    discardedEditLabel,
     canCapture,
     chainSegments,
     keySegments,
     velocitySegments,
+    heldInput,
     keyboardMinNote,
     keyboardMaxNote,
     onToggleExpanded,
@@ -37925,6 +39311,7 @@ function ArticulationControlSurface(props) {
     onCapture,
     onUpdate,
     onRevert,
+    onUndoDiscard,
     onSelectRangeSegment,
     onAssignRangePosition,
     onInsertRangePosition,
@@ -37941,6 +39328,7 @@ function ArticulationControlSurface(props) {
   } = props;
   const [cardMenu, setCardMenu] = reactExports.useState(null);
   const [copiedArticulationId, setCopiedArticulationId] = reactExports.useState(null);
+  const [draggedArticulationId, setDraggedArticulationId] = reactExports.useState(null);
   const selectedCard = reactExports.useMemo(() => selectedArticulationId ? cards.find((card) => card.id === selectedArticulationId) ?? null : null, [cards, selectedArticulationId]);
   const handleCardContextMenu = reactExports.useCallback(
     (articulationId, x, y) => {
@@ -38012,6 +39400,8 @@ function ArticulationControlSurface(props) {
       cards,
       activeMode,
       onSelectCard,
+      onCardDragStart: setDraggedArticulationId,
+      onCardDragEnd: () => setDraggedArticulationId(null),
       onPlayPressStart: onCardPlayPressStart,
       onPlayPressEnd: onCardPlayPressEnd,
       onOpenMenu: handleCardContextMenu
@@ -38025,7 +39415,7 @@ function ArticulationControlSurface(props) {
         "data-state": "collapsed",
         "aria-label": "Articulations",
         onKeyDown: handleSurfaceKeyDown,
-        className: "flex min-h-[108px] shrink-0 items-stretch gap-2.5 rounded-[14px] border border-white/[0.06] bg-white/[0.022] px-2.5 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.025)]",
+        className: "relative flex min-h-[100px] shrink-0 items-stretch gap-2 rounded-[12px] border border-white/[0.06] bg-white/[0.022] px-2.5 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.025)]",
         children: [
           carousel,
           /* @__PURE__ */ jsxRuntimeExports.jsx("div", { "aria-hidden": "true", className: "w-px shrink-0 self-stretch bg-white/[0.05]" }),
@@ -38034,6 +39424,7 @@ function ArticulationControlSurface(props) {
               HeaderActions,
               {
                 selectedIsDirty,
+                selectedName: selectedCard?.name ?? null,
                 canCapture,
                 onCapture,
                 onUpdate,
@@ -38057,15 +39448,16 @@ function ArticulationControlSurface(props) {
       "data-state": "expanded",
       "aria-label": "Articulations",
       onKeyDown: handleSurfaceKeyDown,
-      className: "flex shrink-0 flex-col gap-2.5 rounded-[14px] border border-white/[0.06] bg-white/[0.022] px-2.5 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.025)]",
+      className: "relative flex shrink-0 flex-col gap-2 rounded-[12px] border border-white/[0.06] bg-white/[0.022] px-2.5 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.025)]",
       children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-wrap items-center justify-between gap-2 border-b border-white/[0.04] pb-2", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-wrap items-center justify-between gap-1.5", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx(ModeSegmentedControl, { activeMode, onSelectMode }),
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-1.5", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-1", children: [
             /* @__PURE__ */ jsxRuntimeExports.jsx(
               HeaderActions,
               {
                 selectedIsDirty,
+                selectedName: selectedCard?.name ?? null,
                 canCapture,
                 onCapture,
                 onUpdate,
@@ -38080,7 +39472,10 @@ function ArticulationControlSurface(props) {
           MappingEditor,
           {
             activeMode,
+            cards,
             selectedArticulationId,
+            draggedArticulationId,
+            heldInput,
             chainSegments,
             keySegments,
             velocitySegments,
@@ -38095,6 +39490,17 @@ function ArticulationControlSurface(props) {
             onClearRangeSegment,
             onClearRangeMode,
             onDistributeRange
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          FloatingArticulationToolbar,
+          {
+            selectedIsDirty,
+            selectedName: selectedCard?.name ?? null,
+            discardedEditLabel,
+            onUpdate,
+            onRevert,
+            onUndoDiscard
           }
         ),
         cardMenuOverlay
@@ -40260,10 +41666,12 @@ function DesktopPatchViewBody({
         isExpanded: isArticulationEditorExpanded,
         selectedArticulationId,
         selectedIsDirty: synthView.selectedArticulationIsDirty,
+        discardedEditLabel: synthView.discardedArticulationEdit?.slotName ?? null,
         canCapture: synthView.hasHydratedArticulations,
         chainSegments,
         keySegments,
         velocitySegments,
+        heldInput: synthView.articulationHeldInput,
         keyboardMinNote: keyboardRootNote,
         keyboardMaxNote: keyboardRootNote + DEFAULT_KEYBOARD_NOTE_COUNT - 1,
         onToggleExpanded: () => setIsArticulationEditorExpanded((previousValue) => !previousValue),
@@ -40274,6 +41682,7 @@ function DesktopPatchViewBody({
         onCapture: () => synthView.handleCaptureArticulationSlot({ autoAssign: !isArticulationEditorExpanded }),
         onUpdate: synthView.handleUpdateSelectedArticulationSlot,
         onRevert: synthView.handleRevertSelectedArticulationSlot,
+        onUndoDiscard: synthView.handleUndoDiscardedArticulationEdit,
         onSelectRangeSegment: handleSelectRangeSegment,
         onAssignRangePosition: synthView.handleAssignArticulationRangePosition,
         onInsertRangePosition: synthView.handleInsertArticulationRangeAtPosition,
@@ -40296,29 +41705,7 @@ function DesktopPatchViewBody({
         playModeFocusBindings: synthView.keyboardRouting.playModeFocusBindings,
         glideFocusTarget: synthView.keyboardRouting.glideFocusTarget
       }
-    ),
-    synthView.discardedArticulationEdit ? /* @__PURE__ */ jsxRuntimeExports.jsxs(
-      "div",
-      {
-        "data-role": "articulation-undo-toast",
-        className: "flex items-center justify-between gap-2 rounded-[12px] border border-pink-300/18 bg-pink-300/[0.07] px-3 py-2 text-[10px] uppercase tracking-[0.12em] text-pink-100/82",
-        children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "truncate", children: [
-            "Discarded edits to ",
-            synthView.discardedArticulationEdit.slotName
-          ] }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx(
-            "button",
-            {
-              type: "button",
-              className: "rounded-[7px] border border-pink-200/22 bg-pink-200/10 px-2 py-1 font-bold text-pink-50/90",
-              onClick: synthView.handleUndoDiscardedArticulationEdit,
-              children: "Undo"
-            }
-          )
-        ]
-      }
-    ) : null
+    )
   ] }), [
     articulationCards,
     articulationMode,

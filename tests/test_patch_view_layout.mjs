@@ -265,8 +265,10 @@ test("desktop and iPhone React UI tooling are wired for Vite dev and build loops
 
     assert.equal(packageJson.scripts["ui:desktop:dev"], "vite --config ui/vite.desktop.config.mjs");
     assert.equal(packageJson.scripts["ui:desktop:build"], "node ui/build.mjs --desktop");
-    assert.equal(packageJson.scripts["desktop:native:build"], "./scripts/build_desktop_native.sh");
-    assert.equal(packageJson.scripts["desktop:native:dev"], "./scripts/run_desktop_native_dev.sh");
+    assert.equal(packageJson.scripts["synth:desktop:build"], "./scripts/build_desktop_native.sh");
+    assert.equal(packageJson.scripts["synth:desktop:dev"], "./scripts/run_desktop_native_dev.sh");
+    assert.equal(packageJson.scripts["desktop:native:build"], undefined);
+    assert.equal(packageJson.scripts["desktop:native:dev"], undefined);
     assert.equal("ui:ios:dev" in packageJson.scripts, false);
     assert.equal("ui:ios:build" in packageJson.scripts, false);
     assert.equal(packageJson.scripts["ios:ui:dev"], "vite --config ios_auv3/vite.config.mjs");

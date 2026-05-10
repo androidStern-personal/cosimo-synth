@@ -412,7 +412,6 @@ test("articulation range editor operations separate replace fill insert move res
     const replacedBank = assignArticulationToRangePosition(filledGapBank, "chain", 100, "pluck");
     assert.deepEqual(replacedBank.chainAssignments, [
         { id: "chain-bow-full", articulationId: "bow", min: 0, max: 63 },
-        { id: "chain-pluck-64", articulationId: "pluck", min: 87, max: 93 },
         { id: "chain-air-94", articulationId: "pluck", min: 94, max: 127 },
     ]);
 
@@ -427,6 +426,72 @@ test("articulation range editor operations separate replace fill insert move res
     ]);
 
     assert.deepEqual(clearArticulationTriggerAssignments(clearedBank, "chain").chainAssignments, []);
+});
+
+test("articulation range edits keep one range per articulation and resize through neighbors", () => {
+    const bank = normalizeArticulationBank({
+        selectedSlotId: "bow",
+        slots: [
+            { id: "bow", runtimeSlot: 0 },
+            { id: "pluck", runtimeSlot: 1 },
+            { id: "air", runtimeSlot: 2 },
+        ],
+        chainAssignments: [
+            { id: "chain-bow", articulationId: "bow", min: 0, max: 63 },
+            { id: "chain-pluck", articulationId: "pluck", min: 64, max: 95 },
+            { id: "chain-air", articulationId: "air", min: 96, max: 127 },
+        ],
+    });
+
+    const movedPluckByInsert = insertArticulationRangeAtPosition(bank, "chain", 110, "pluck");
+    assert.deepEqual(movedPluckByInsert.chainAssignments, [
+        { id: "chain-bow", articulationId: "bow", min: 0, max: 63 },
+        { id: "chain-pluck-110", articulationId: "pluck", min: 110, max: 110 },
+        { id: "chain-air", articulationId: "air", min: 111, max: 127 },
+    ]);
+
+    const replacedAirWithBow = assignArticulationToRangePosition(bank, "chain", 100, "bow");
+    assert.deepEqual(replacedAirWithBow.chainAssignments, [
+        { id: "chain-pluck", articulationId: "pluck", min: 64, max: 95 },
+        { id: "chain-air", articulationId: "bow", min: 96, max: 127 },
+    ]);
+
+    const movedPluckThroughAir = moveArticulationRangeAssignment(
+        bank,
+        "chain",
+        { id: "chain-pluck", articulationId: "pluck", min: 64, max: 95 },
+        122,
+    );
+    assert.deepEqual(movedPluckThroughAir.chainAssignments, [
+        { id: "chain-bow", articulationId: "bow", min: 0, max: 63 },
+        { id: "chain-pluck", articulationId: "pluck", min: 96, max: 127 },
+    ]);
+
+    const expandedBow = resizeArticulationRangeAssignment(
+        bank,
+        "chain",
+        { id: "chain-bow", articulationId: "bow", min: 0, max: 63 },
+        "max",
+        80,
+    );
+    assert.deepEqual(expandedBow.chainAssignments, [
+        { id: "chain-bow", articulationId: "bow", min: 0, max: 80 },
+        { id: "chain-pluck", articulationId: "pluck", min: 81, max: 95 },
+        { id: "chain-air", articulationId: "air", min: 96, max: 127 },
+    ]);
+
+    const expandedAir = resizeArticulationRangeAssignment(
+        bank,
+        "chain",
+        { id: "chain-air", articulationId: "air", min: 96, max: 127 },
+        "min",
+        72,
+    );
+    assert.deepEqual(expandedAir.chainAssignments, [
+        { id: "chain-bow", articulationId: "bow", min: 0, max: 63 },
+        { id: "chain-pluck", articulationId: "pluck", min: 64, max: 71 },
+        { id: "chain-air", articulationId: "air", min: 72, max: 127 },
+    ]);
 });
 
 test("articulation runtime uploads resolve runtime slots and route-id amounts to fixed DSP route slots", () => {

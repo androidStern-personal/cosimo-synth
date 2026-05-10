@@ -12580,6 +12580,7 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     --color-red-300: oklch(80.8% .114 19.571);
     --color-red-400: oklch(70.4% .191 22.216);
     --color-red-600: oklch(57.7% .245 27.325);
+    --color-amber-50: oklch(98.7% .022 95.277);
     --color-amber-100: oklch(96.2% .059 95.617);
     --color-amber-200: oklch(92.4% .12 95.746);
     --color-amber-300: oklch(87.9% .169 91.605);
@@ -12635,6 +12636,7 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     --font-weight-bold: 700;
     --font-weight-black: 900;
     --tracking-tight: -.025em;
+    --tracking-normal: 0em;
     --tracking-wide: .025em;
     --tracking-widest: .1em;
     --leading-snug: 1.375;
@@ -12990,6 +12992,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     inset-block: calc(var(--spacing) * .5);
   }
 
+  .inset-y-1 {
+    inset-block: calc(var(--spacing) * 1);
+  }
+
   .inset-y-4 {
     inset-block: calc(var(--spacing) * 4);
   }
@@ -13004,6 +13010,14 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .end {
     inset-inline-end: var(--spacing);
+  }
+
+  .-top-0 {
+    top: calc(var(--spacing) * 0);
+  }
+
+  .-top-0\\.5 {
+    top: calc(var(--spacing) * -.5);
   }
 
   .-top-3 {
@@ -13078,12 +13092,20 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     bottom: calc(var(--spacing) * 0);
   }
 
+  .bottom-0\\.5 {
+    bottom: calc(var(--spacing) * .5);
+  }
+
   .bottom-1 {
     bottom: calc(var(--spacing) * 1);
   }
 
   .bottom-2 {
     bottom: calc(var(--spacing) * 2);
+  }
+
+  .bottom-3 {
+    bottom: calc(var(--spacing) * 3);
   }
 
   .bottom-4 {
@@ -13144,6 +13166,18 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .z-\\[1\\] {
     z-index: 1;
+  }
+
+  .z-\\[2\\] {
+    z-index: 2;
+  }
+
+  .z-\\[3\\] {
+    z-index: 3;
+  }
+
+  .z-\\[4\\] {
+    z-index: 4;
   }
 
   .order-1 {
@@ -13555,6 +13589,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     height: calc(var(--spacing) * 12);
   }
 
+  .h-14 {
+    height: calc(var(--spacing) * 14);
+  }
+
   .h-24 {
     height: calc(var(--spacing) * 24);
   }
@@ -13571,6 +13609,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     height: 7px;
   }
 
+  .h-\\[12px\\] {
+    height: 12px;
+  }
+
   .h-\\[18px\\] {
     height: 18px;
   }
@@ -13579,8 +13621,12 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     height: 24px;
   }
 
-  .h-\\[88px\\] {
-    height: 88px;
+  .h-\\[38px\\] {
+    height: 38px;
+  }
+
+  .h-\\[80px\\] {
+    height: 80px;
   }
 
   .h-\\[118px\\] {
@@ -13631,12 +13677,24 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     min-height: calc(var(--spacing) * 4);
   }
 
+  .min-h-6 {
+    min-height: calc(var(--spacing) * 6);
+  }
+
   .min-h-8 {
     min-height: calc(var(--spacing) * 8);
   }
 
   .min-h-9 {
     min-height: calc(var(--spacing) * 9);
+  }
+
+  .min-h-11 {
+    min-height: calc(var(--spacing) * 11);
+  }
+
+  .min-h-12 {
+    min-height: calc(var(--spacing) * 12);
   }
 
   .min-h-16 {
@@ -13647,8 +13705,8 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     min-height: 100dvh;
   }
 
-  .min-h-\\[108px\\] {
-    min-height: 108px;
+  .min-h-\\[100px\\] {
+    min-height: 100px;
   }
 
   .min-h-\\[158px\\] {
@@ -13763,6 +13821,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     width: calc(var(--spacing) * 72);
   }
 
+  .w-\\[3px\\] {
+    width: 3px;
+  }
+
   .w-\\[18px\\] {
     width: 18px;
   }
@@ -13775,8 +13837,8 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     width: 56px;
   }
 
-  .w-\\[152px\\] {
-    width: 152px;
+  .w-\\[148px\\] {
+    width: 148px;
   }
 
   .w-auto {
@@ -13807,12 +13869,24 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     max-width: 34ch;
   }
 
+  .max-w-\\[74px\\] {
+    max-width: 74px;
+  }
+
+  .max-w-\\[140px\\] {
+    max-width: 140px;
+  }
+
   .max-w-\\[280px\\] {
     max-width: 280px;
   }
 
   .max-w-\\[1080px\\] {
     max-width: 1080px;
+  }
+
+  .max-w-\\[calc\\(100\\%-1rem\\)\\] {
+    max-width: calc(100% - 1rem);
   }
 
   .max-w-full {
@@ -13851,6 +13925,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     min-width: calc(var(--spacing) * 12);
   }
 
+  .min-w-\\[44px\\] {
+    min-width: 44px;
+  }
+
   .min-w-\\[112px\\] {
     min-width: 112px;
   }
@@ -13859,8 +13937,12 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     min-width: 132px;
   }
 
-  .min-w-\\[168px\\] {
-    min-width: 168px;
+  .min-w-\\[152px\\] {
+    min-width: 152px;
+  }
+
+  .min-w-\\[180px\\] {
+    min-width: 180px;
   }
 
   .min-w-full {
@@ -14113,6 +14195,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     align-content: flex-start;
   }
 
+  .items-baseline {
+    align-items: baseline;
+  }
+
   .items-center {
     align-items: center;
   }
@@ -14167,10 +14253,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .gap-2 {
     gap: calc(var(--spacing) * 2);
-  }
-
-  .gap-2\\.5 {
-    gap: calc(var(--spacing) * 2.5);
   }
 
   .gap-3 {
@@ -14287,8 +14369,16 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     border-radius: var(--radius-2xl);
   }
 
+  .rounded-\\[2px\\] {
+    border-radius: 2px;
+  }
+
   .rounded-\\[3px\\] {
     border-radius: 3px;
+  }
+
+  .rounded-\\[4px\\] {
+    border-radius: 4px;
   }
 
   .rounded-\\[5px\\] {
@@ -14456,16 +14546,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     border-color: var(--color-amber-100);
   }
 
-  .border-amber-100\\/55 {
-    border-color: #fef3c68c;
-  }
-
-  @supports (color: color-mix(in lab, red, red)) {
-    .border-amber-100\\/55 {
-      border-color: color-mix(in oklab, var(--color-amber-100) 55%, transparent);
-    }
-  }
-
   .border-amber-100\\/70 {
     border-color: #fef3c6b3;
   }
@@ -14473,16 +14553,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
   @supports (color: color-mix(in lab, red, red)) {
     .border-amber-100\\/70 {
       border-color: color-mix(in oklab, var(--color-amber-100) 70%, transparent);
-    }
-  }
-
-  .border-amber-100\\/90 {
-    border-color: #fef3c6e6;
-  }
-
-  @supports (color: color-mix(in lab, red, red)) {
-    .border-amber-100\\/90 {
-      border-color: color-mix(in oklab, var(--color-amber-100) 90%, transparent);
     }
   }
 
@@ -14518,6 +14588,34 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     .border-amber-200\\/40 {
       border-color: color-mix(in oklab, var(--color-amber-200) 40%, transparent);
     }
+  }
+
+  .border-amber-200\\/55 {
+    border-color: #fee6858c;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .border-amber-200\\/55 {
+      border-color: color-mix(in oklab, var(--color-amber-200) 55%, transparent);
+    }
+  }
+
+  .border-amber-300 {
+    border-color: var(--color-amber-300);
+  }
+
+  .border-amber-300\\/65 {
+    border-color: #ffd236a6;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .border-amber-300\\/65 {
+      border-color: color-mix(in oklab, var(--color-amber-300) 65%, transparent);
+    }
+  }
+
+  .border-cyan-100 {
+    border-color: var(--color-cyan-100);
   }
 
   .border-cyan-200 {
@@ -14568,6 +14666,24 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     }
   }
 
+  .border-cyan-300\\/35 {
+    border-color: #53eafd59;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .border-cyan-300\\/35 {
+      border-color: color-mix(in oklab, var(--color-cyan-300) 35%, transparent);
+    }
+  }
+
+  .border-emerald-100 {
+    border-color: var(--color-emerald-100);
+  }
+
+  .border-emerald-200 {
+    border-color: var(--color-emerald-200);
+  }
+
   .border-emerald-300 {
     border-color: var(--color-emerald-300);
   }
@@ -14600,27 +14716,17 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     border-color: var(--color-pink-200);
   }
 
-  .border-pink-200\\/22 {
-    border-color: #fccee838;
-  }
-
-  @supports (color: color-mix(in lab, red, red)) {
-    .border-pink-200\\/22 {
-      border-color: color-mix(in oklab, var(--color-pink-200) 22%, transparent);
-    }
-  }
-
   .border-pink-300 {
     border-color: var(--color-pink-300);
   }
 
-  .border-pink-300\\/18 {
-    border-color: #fda5d52e;
+  .border-pink-300\\/15 {
+    border-color: #fda5d526;
   }
 
   @supports (color: color-mix(in lab, red, red)) {
-    .border-pink-300\\/18 {
-      border-color: color-mix(in oklab, var(--color-pink-300) 18%, transparent);
+    .border-pink-300\\/15 {
+      border-color: color-mix(in oklab, var(--color-pink-300) 15%, transparent);
     }
   }
 
@@ -14687,16 +14793,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
   @supports (color: color-mix(in lab, red, red)) {
     .border-white\\/10 {
       border-color: color-mix(in oklab, var(--color-white) 10%, transparent);
-    }
-  }
-
-  .border-white\\/15 {
-    border-color: #ffffff26;
-  }
-
-  @supports (color: color-mix(in lab, red, red)) {
-    .border-white\\/15 {
-      border-color: color-mix(in oklab, var(--color-white) 15%, transparent);
     }
   }
 
@@ -14768,12 +14864,24 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     border-left-color: #0000;
   }
 
-  .bg-\\[\\#0a0d18\\]\\/95 {
-    background-color: oklab(16.1972% .000775084 -.02385 / .95);
+  .bg-\\[\\#070a13\\]\\/96 {
+    background-color: oklab(14.6236% -.000604108 -.0204007 / .96);
   }
 
   .bg-\\[\\#070b16\\] {
     background-color: #070b16;
+  }
+
+  .bg-\\[\\#080b15\\]\\/97 {
+    background-color: oklab(15.1826% .000117987 -.022216 / .97);
+  }
+
+  .bg-\\[\\#03050b\\]\\/92 {
+    background-color: oklab(11.5304% -.00186769 -.0172834 / .92);
+  }
+
+  .bg-\\[\\#04060c\\] {
+    background-color: #04060c;
   }
 
   .bg-\\[\\#09101d\\]\\/95 {
@@ -14784,12 +14892,34 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     background-color: oklab(12.8817% -.00430492 -.0249884 / .85);
   }
 
+  .bg-\\[\\#050712\\]\\/55 {
+    background-color: oklab(13.2687% .00102779 -.0255741 / .55);
+  }
+
   .bg-\\[rgba\\(3\\,5\\,12\\,0\\.6\\)\\] {
     background-color: #03050c99;
   }
 
   .bg-\\[rgba\\(3\\,7\\,15\\,0\\.72\\)\\] {
     background-color: #03070fb8;
+  }
+
+  .bg-amber-100 {
+    background-color: var(--color-amber-100);
+  }
+
+  .bg-amber-200 {
+    background-color: var(--color-amber-200);
+  }
+
+  .bg-amber-200\\/90 {
+    background-color: #fee685e6;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .bg-amber-200\\/90 {
+      background-color: color-mix(in oklab, var(--color-amber-200) 90%, transparent);
+    }
   }
 
   .bg-amber-300 {
@@ -14816,23 +14946,33 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     }
   }
 
-  .bg-amber-300\\/\\[0\\.05\\] {
-    background-color: #ffd2360d;
+  .bg-amber-300\\/16 {
+    background-color: #ffd23629;
   }
 
   @supports (color: color-mix(in lab, red, red)) {
-    .bg-amber-300\\/\\[0\\.05\\] {
-      background-color: color-mix(in oklab, var(--color-amber-300) 5%, transparent);
+    .bg-amber-300\\/16 {
+      background-color: color-mix(in oklab, var(--color-amber-300) 16%, transparent);
     }
   }
 
-  .bg-amber-300\\/\\[0\\.08\\] {
-    background-color: #ffd23614;
+  .bg-amber-300\\/\\[0\\.06\\] {
+    background-color: #ffd2360f;
   }
 
   @supports (color: color-mix(in lab, red, red)) {
-    .bg-amber-300\\/\\[0\\.08\\] {
-      background-color: color-mix(in oklab, var(--color-amber-300) 8%, transparent);
+    .bg-amber-300\\/\\[0\\.06\\] {
+      background-color: color-mix(in oklab, var(--color-amber-300) 6%, transparent);
+    }
+  }
+
+  .bg-amber-300\\/\\[0\\.085\\] {
+    background-color: #ffd23616;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .bg-amber-300\\/\\[0\\.085\\] {
+      background-color: color-mix(in oklab, var(--color-amber-300) 8.5%, transparent);
     }
   }
 
@@ -14950,8 +15090,22 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     }
   }
 
+  .bg-cyan-100 {
+    background-color: var(--color-cyan-100);
+  }
+
   .bg-cyan-200 {
     background-color: var(--color-cyan-200);
+  }
+
+  .bg-cyan-200\\/85 {
+    background-color: #a2f4fdd9;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .bg-cyan-200\\/85 {
+      background-color: color-mix(in oklab, var(--color-cyan-200) 85%, transparent);
+    }
   }
 
   .bg-cyan-300 {
@@ -15074,16 +15228,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     background-color: var(--color-pink-200);
   }
 
-  .bg-pink-200\\/10 {
-    background-color: #fccee81a;
-  }
-
-  @supports (color: color-mix(in lab, red, red)) {
-    .bg-pink-200\\/10 {
-      background-color: color-mix(in oklab, var(--color-pink-200) 10%, transparent);
-    }
-  }
-
   .bg-pink-300 {
     background-color: var(--color-pink-300);
   }
@@ -15098,33 +15242,13 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     }
   }
 
-  .bg-pink-300\\/90 {
-    background-color: #fda5d5e6;
+  .bg-pink-300\\/95 {
+    background-color: #fda5d5f2;
   }
 
   @supports (color: color-mix(in lab, red, red)) {
-    .bg-pink-300\\/90 {
-      background-color: color-mix(in oklab, var(--color-pink-300) 90%, transparent);
-    }
-  }
-
-  .bg-pink-300\\/\\[0\\.06\\] {
-    background-color: #fda5d50f;
-  }
-
-  @supports (color: color-mix(in lab, red, red)) {
-    .bg-pink-300\\/\\[0\\.06\\] {
-      background-color: color-mix(in oklab, var(--color-pink-300) 6%, transparent);
-    }
-  }
-
-  .bg-pink-300\\/\\[0\\.07\\] {
-    background-color: #fda5d512;
-  }
-
-  @supports (color: color-mix(in lab, red, red)) {
-    .bg-pink-300\\/\\[0\\.07\\] {
-      background-color: color-mix(in oklab, var(--color-pink-300) 7.0%, transparent);
+    .bg-pink-300\\/95 {
+      background-color: color-mix(in oklab, var(--color-pink-300) 95%, transparent);
     }
   }
 
@@ -15156,12 +15280,36 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     background-color: var(--color-sky-300);
   }
 
+  .bg-slate-400 {
+    background-color: var(--color-slate-400);
+  }
+
+  .bg-slate-400\\/28 {
+    background-color: #90a1b947;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .bg-slate-400\\/28 {
+      background-color: color-mix(in oklab, var(--color-slate-400) 28%, transparent);
+    }
+  }
+
   .bg-transparent {
     background-color: #0000;
   }
 
   .bg-white {
     background-color: var(--color-white);
+  }
+
+  .bg-white\\/\\[0\\.01\\] {
+    background-color: #ffffff03;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .bg-white\\/\\[0\\.01\\] {
+      background-color: color-mix(in oklab, var(--color-white) 1%, transparent);
+    }
   }
 
   .bg-white\\/\\[0\\.02\\] {
@@ -15224,6 +15372,16 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     }
   }
 
+  .bg-white\\/\\[0\\.10\\] {
+    background-color: #ffffff1a;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .bg-white\\/\\[0\\.10\\] {
+      background-color: color-mix(in oklab, var(--color-white) 10%, transparent);
+    }
+  }
+
   .bg-white\\/\\[0\\.012\\] {
     background-color: #ffffff03;
   }
@@ -15271,6 +15429,16 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
   @supports (color: color-mix(in lab, red, red)) {
     .bg-white\\/\\[0\\.025\\] {
       background-color: color-mix(in oklab, var(--color-white) 2.5%, transparent);
+    }
+  }
+
+  .bg-white\\/\\[0\\.035\\] {
+    background-color: #ffffff09;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .bg-white\\/\\[0\\.035\\] {
+      background-color: color-mix(in oklab, var(--color-white) 3.5%, transparent);
     }
   }
 
@@ -15504,6 +15672,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     padding-inline: calc(var(--spacing) * 6);
   }
 
+  .px-px {
+    padding-inline: 1px;
+  }
+
   .py-0 {
     padding-block: calc(var(--spacing) * 0);
   }
@@ -15638,10 +15810,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .pl-2 {
     padding-left: calc(var(--spacing) * 2);
-  }
-
-  .pl-2\\.5 {
-    padding-left: calc(var(--spacing) * 2.5);
   }
 
   .pl-3 {
@@ -15802,9 +15970,19 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     letter-spacing: -.04em;
   }
 
+  .tracking-\\[0\\.01em\\] {
+    --tw-tracking: .01em;
+    letter-spacing: .01em;
+  }
+
   .tracking-\\[0\\.1em\\] {
     --tw-tracking: .1em;
     letter-spacing: .1em;
+  }
+
+  .tracking-\\[0\\.02em\\] {
+    --tw-tracking: .02em;
+    letter-spacing: .02em;
   }
 
   .tracking-\\[0\\.2em\\] {
@@ -15872,6 +16050,16 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     letter-spacing: .24em;
   }
 
+  .tracking-\\[0\\] {
+    --tw-tracking: 0;
+    letter-spacing: 0;
+  }
+
+  .tracking-normal {
+    --tw-tracking: var(--tracking-normal);
+    letter-spacing: var(--tracking-normal);
+  }
+
   .tracking-tight {
     --tw-tracking: var(--tracking-tight);
     letter-spacing: var(--tracking-tight);
@@ -15907,8 +16095,36 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     color: #0a0d18;
   }
 
+  .text-\\[\\#070a13\\] {
+    color: #070a13;
+  }
+
+  .text-amber-50 {
+    color: var(--color-amber-50);
+  }
+
+  .text-amber-50\\/95 {
+    color: #fffbebf2;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-amber-50\\/95 {
+      color: color-mix(in oklab, var(--color-amber-50) 95%, transparent);
+    }
+  }
+
   .text-amber-100 {
     color: var(--color-amber-100);
+  }
+
+  .text-amber-100\\/80 {
+    color: #fef3c6cc;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-amber-100\\/80 {
+      color: color-mix(in oklab, var(--color-amber-100) 80%, transparent);
+    }
   }
 
   .text-amber-200 {
@@ -16038,6 +16254,16 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
   @supports (color: color-mix(in lab, red, red)) {
     .text-cyan-100\\/90 {
       color: color-mix(in oklab, var(--color-cyan-100) 90%, transparent);
+    }
+  }
+
+  .text-cyan-100\\/92 {
+    color: #cefafeeb;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-cyan-100\\/92 {
+      color: color-mix(in oklab, var(--color-cyan-100) 92%, transparent);
     }
   }
 
@@ -16197,37 +16423,17 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     color: var(--color-pink-50);
   }
 
-  .text-pink-50\\/90 {
-    color: #fdf2f8e6;
-  }
-
-  @supports (color: color-mix(in lab, red, red)) {
-    .text-pink-50\\/90 {
-      color: color-mix(in oklab, var(--color-pink-50) 90%, transparent);
-    }
-  }
-
   .text-pink-100 {
     color: var(--color-pink-100);
   }
 
-  .text-pink-100\\/82 {
-    color: #fce7f3d1;
+  .text-pink-100\\/80 {
+    color: #fce7f3cc;
   }
 
   @supports (color: color-mix(in lab, red, red)) {
-    .text-pink-100\\/82 {
-      color: color-mix(in oklab, var(--color-pink-100) 82%, transparent);
-    }
-  }
-
-  .text-pink-100\\/85 {
-    color: #fce7f3d9;
-  }
-
-  @supports (color: color-mix(in lab, red, red)) {
-    .text-pink-100\\/85 {
-      color: color-mix(in oklab, var(--color-pink-100) 85%, transparent);
+    .text-pink-100\\/80 {
+      color: color-mix(in oklab, var(--color-pink-100) 80%, transparent);
     }
   }
 
@@ -16245,6 +16451,16 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     color: var(--color-pink-200);
   }
 
+  .text-pink-200\\/75 {
+    color: #fccee8bf;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-pink-200\\/75 {
+      color: color-mix(in oklab, var(--color-pink-200) 75%, transparent);
+    }
+  }
+
   .text-pink-200\\/85 {
     color: #fccee8d9;
   }
@@ -16252,6 +16468,16 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
   @supports (color: color-mix(in lab, red, red)) {
     .text-pink-200\\/85 {
       color: color-mix(in oklab, var(--color-pink-200) 85%, transparent);
+    }
+  }
+
+  .text-pink-200\\/90 {
+    color: #fccee8e6;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-pink-200\\/90 {
+      color: color-mix(in oklab, var(--color-pink-200) 90%, transparent);
     }
   }
 
@@ -16309,16 +16535,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     color: var(--color-slate-100);
   }
 
-  .text-slate-100\\/75 {
-    color: #f1f5f9bf;
-  }
-
-  @supports (color: color-mix(in lab, red, red)) {
-    .text-slate-100\\/75 {
-      color: color-mix(in oklab, var(--color-slate-100) 75%, transparent);
-    }
-  }
-
   .text-slate-100\\/78 {
     color: #f1f5f9c7;
   }
@@ -16329,13 +16545,23 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     }
   }
 
-  .text-slate-100\\/85 {
-    color: #f1f5f9d9;
+  .text-slate-100\\/82 {
+    color: #f1f5f9d1;
   }
 
   @supports (color: color-mix(in lab, red, red)) {
-    .text-slate-100\\/85 {
-      color: color-mix(in oklab, var(--color-slate-100) 85%, transparent);
+    .text-slate-100\\/82 {
+      color: color-mix(in oklab, var(--color-slate-100) 82%, transparent);
+    }
+  }
+
+  .text-slate-100\\/88 {
+    color: #f1f5f9e0;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-slate-100\\/88 {
+      color: color-mix(in oklab, var(--color-slate-100) 88%, transparent);
     }
   }
 
@@ -16363,6 +16589,26 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     }
   }
 
+  .text-slate-200\\/65 {
+    color: #e2e8f0a6;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-slate-200\\/65 {
+      color: color-mix(in oklab, var(--color-slate-200) 65%, transparent);
+    }
+  }
+
+  .text-slate-200\\/72 {
+    color: #e2e8f0b8;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-slate-200\\/72 {
+      color: color-mix(in oklab, var(--color-slate-200) 72%, transparent);
+    }
+  }
+
   .text-slate-200\\/80 {
     color: #e2e8f0cc;
   }
@@ -16385,16 +16631,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .text-slate-300 {
     color: var(--color-slate-300);
-  }
-
-  .text-slate-300\\/25 {
-    color: #cad5e240;
-  }
-
-  @supports (color: color-mix(in lab, red, red)) {
-    .text-slate-300\\/25 {
-      color: color-mix(in oklab, var(--color-slate-300) 25%, transparent);
-    }
   }
 
   .text-slate-300\\/30 {
@@ -16434,16 +16670,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
   @supports (color: color-mix(in lab, red, red)) {
     .text-slate-300\\/45 {
       color: color-mix(in oklab, var(--color-slate-300) 45%, transparent);
-    }
-  }
-
-  .text-slate-300\\/50 {
-    color: #cad5e280;
-  }
-
-  @supports (color: color-mix(in lab, red, red)) {
-    .text-slate-300\\/50 {
-      color: color-mix(in oklab, var(--color-slate-300) 50%, transparent);
     }
   }
 
@@ -16609,8 +16835,22 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     color: var(--color-white);
   }
 
+  .text-white\\/95 {
+    color: #fffffff2;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-white\\/95 {
+      color: color-mix(in oklab, var(--color-white) 95%, transparent);
+    }
+  }
+
   .lowercase {
     text-transform: lowercase;
+  }
+
+  .normal-case {
+    text-transform: none;
   }
 
   .uppercase {
@@ -16673,23 +16913,43 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
   }
 
-  .shadow-\\[0_0_0_1px_rgba\\(252\\,211\\,77\\,0\\.6\\)\\,0_2px_10px_rgba\\(0\\,0\\,0\\,0\\.45\\)\\,inset_0_1px_0_rgba\\(255\\,255\\,255\\,0\\.25\\)\\] {
-    --tw-shadow: 0 0 0 1px var(--tw-shadow-color, #fcd34d99), 0 2px 10px var(--tw-shadow-color, #00000073), inset 0 1px 0 var(--tw-shadow-color, #ffffff40);
+  .shadow-\\[0_0_0_1px_rgba\\(7\\,10\\,19\\,0\\.72\\)\\,0_0_16px_rgba\\(251\\,191\\,36\\,0\\.50\\)\\] {
+    --tw-shadow: 0 0 0 1px var(--tw-shadow-color, #070a13b8), 0 0 16px var(--tw-shadow-color, #fbbf2480);
     box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
   }
 
-  .shadow-\\[0_0_4px_rgba\\(244\\,114\\,182\\,0\\.55\\)\\] {
-    --tw-shadow: 0 0 4px var(--tw-shadow-color, #f472b68c);
+  .shadow-\\[0_0_3px_rgba\\(244\\,114\\,182\\,0\\.65\\)\\] {
+    --tw-shadow: 0 0 3px var(--tw-shadow-color, #f472b6a6);
     box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
   }
 
-  .shadow-\\[0_0_10px_2px_rgba\\(103\\,232\\,249\\,0\\.6\\)\\] {
-    --tw-shadow: 0 0 10px 2px var(--tw-shadow-color, #67e8f999);
+  .shadow-\\[0_0_8px_rgba\\(251\\,191\\,36\\,0\\.45\\)\\] {
+    --tw-shadow: 0 0 8px var(--tw-shadow-color, #fbbf2473);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
+  .shadow-\\[0_0_10px_rgba\\(103\\,232\\,249\\,0\\.25\\)\\] {
+    --tw-shadow: 0 0 10px var(--tw-shadow-color, #67e8f940);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
+  .shadow-\\[0_0_10px_rgba\\(251\\,191\\,36\\,0\\.55\\)\\] {
+    --tw-shadow: 0 0 10px var(--tw-shadow-color, #fbbf248c);
     box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
   }
 
   .shadow-\\[0_0_18px_rgba\\(251\\,191\\,36\\,0\\.34\\)\\] {
     --tw-shadow: 0 0 18px var(--tw-shadow-color, #fbbf2457);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
+  .shadow-\\[0_4px_12px_rgba\\(0\\,0\\,0\\,0\\.45\\)\\,0_0_0_1px_rgba\\(103\\,232\\,249\\,0\\.28\\)\\] {
+    --tw-shadow: 0 4px 12px var(--tw-shadow-color, #00000073), 0 0 0 1px var(--tw-shadow-color, #67e8f947);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
+  .shadow-\\[0_10px_24px_rgba\\(0\\,0\\,0\\,0\\.45\\)\\] {
+    --tw-shadow: 0 10px 24px var(--tw-shadow-color, #00000073);
     box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
   }
 
@@ -16713,13 +16973,13 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
   }
 
-  .shadow-\\[0_12px_28px_rgba\\(0\\,0\\,0\\,0\\.32\\)\\] {
-    --tw-shadow: 0 12px 28px var(--tw-shadow-color, #00000052);
+  .shadow-\\[0_10px_28px_rgba\\(0\\,0\\,0\\,0\\.55\\)\\] {
+    --tw-shadow: 0 10px 28px var(--tw-shadow-color, #0000008c);
     box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
   }
 
-  .shadow-\\[0_14px_36px_rgba\\(0\\,0\\,0\\,0\\.55\\)\\] {
-    --tw-shadow: 0 14px 36px var(--tw-shadow-color, #0000008c);
+  .shadow-\\[0_12px_28px_rgba\\(0\\,0\\,0\\,0\\.32\\)\\] {
+    --tw-shadow: 0 12px 28px var(--tw-shadow-color, #00000052);
     box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
   }
 
@@ -16768,13 +17028,38 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
   }
 
-  .shadow-\\[inset_0_1px_0_rgba\\(244\\,114\\,182\\,0\\.12\\)\\] {
-    --tw-shadow: inset 0 1px 0 var(--tw-shadow-color, #f472b61f);
+  .shadow-\\[inset_0_0_0_1px_rgba\\(251\\,191\\,36\\,0\\.18\\)\\] {
+    --tw-shadow: inset 0 0 0 1px var(--tw-shadow-color, #fbbf242e);
     box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
   }
 
-  .shadow-\\[inset_0_1px_0_rgba\\(255\\,255\\,255\\,0\\.02\\)\\] {
-    --tw-shadow: inset 0 1px 0 var(--tw-shadow-color, #ffffff05);
+  .shadow-\\[inset_0_0_0_1px_rgba\\(252\\,211\\,77\\,0\\.20\\)\\] {
+    --tw-shadow: inset 0 0 0 1px var(--tw-shadow-color, #fcd34d33);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
+  .shadow-\\[inset_0_0_0_1px_rgba\\(255\\,255\\,255\\,0\\.10\\)\\] {
+    --tw-shadow: inset 0 0 0 1px var(--tw-shadow-color, #ffffff1a);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
+  .shadow-\\[inset_0_0_0_1px_rgba\\(255\\,255\\,255\\,0\\.18\\)\\] {
+    --tw-shadow: inset 0 0 0 1px var(--tw-shadow-color, #ffffff2e);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
+  .shadow-\\[inset_0_0_0_1px_rgba\\(255\\,255\\,255\\,0\\.55\\)\\,0_0_0_1px_rgba\\(252\\,211\\,77\\,0\\.55\\)\\] {
+    --tw-shadow: inset 0 0 0 1px var(--tw-shadow-color, #ffffff8c), 0 0 0 1px var(--tw-shadow-color, #fcd34d8c);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
+  .shadow-\\[inset_0_0_0_1px_rgba\\(255\\,255\\,255\\,0\\.80\\)\\,0_0_0_1px_rgba\\(103\\,232\\,249\\,0\\.75\\)\\,0_0_14px_rgba\\(103\\,232\\,249\\,0\\.28\\)\\] {
+    --tw-shadow: inset 0 0 0 1px var(--tw-shadow-color, #fffc), 0 0 0 1px var(--tw-shadow-color, #67e8f9bf), 0 0 14px var(--tw-shadow-color, #67e8f947);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
+  .shadow-\\[inset_0_1px_0_rgba\\(244\\,114\\,182\\,0\\.12\\)\\] {
+    --tw-shadow: inset 0 1px 0 var(--tw-shadow-color, #f472b61f);
     box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
   }
 
@@ -16793,28 +17078,33 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
   }
 
-  .shadow-\\[inset_0_1px_0_rgba\\(255\\,255\\,255\\,0\\.18\\)\\,0_1px_2px_rgba\\(0\\,0\\,0\\,0\\.3\\)\\] {
-    --tw-shadow: inset 0 1px 0 var(--tw-shadow-color, #ffffff2e), 0 1px 2px var(--tw-shadow-color, #0000004d);
-    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
-  }
-
   .shadow-\\[inset_0_1px_0_rgba\\(255\\,255\\,255\\,0\\.025\\)\\] {
     --tw-shadow: inset 0 1px 0 var(--tw-shadow-color, #ffffff06);
     box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
   }
 
-  .shadow-\\[inset_0_1px_2px_rgba\\(0\\,0\\,0\\,0\\.4\\)\\] {
-    --tw-shadow: inset 0 1px 2px var(--tw-shadow-color, #0006);
+  .shadow-\\[inset_0_1px_2px_rgba\\(0\\,0\\,0\\,0\\.30\\)\\] {
+    --tw-shadow: inset 0 1px 2px var(--tw-shadow-color, #0000004d);
     box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
   }
 
-  .shadow-\\[inset_0_1px_2px_rgba\\(0\\,0\\,0\\,0\\.35\\)\\] {
-    --tw-shadow: inset 0 1px 2px var(--tw-shadow-color, #00000059);
+  .shadow-\\[inset_0_1px_2px_rgba\\(0\\,0\\,0\\,0\\.40\\)\\] {
+    --tw-shadow: inset 0 1px 2px var(--tw-shadow-color, #0006);
     box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
   }
 
   .shadow-\\[inset_0_1px_2px_rgba\\(0\\,0\\,0\\,0\\.45\\)\\] {
     --tw-shadow: inset 0 1px 2px var(--tw-shadow-color, #00000073);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
+  .shadow-\\[inset_0_1px_2px_rgba\\(0\\,0\\,0\\,0\\.55\\)\\,0_0_0_1px_rgba\\(103\\,232\\,249\\,0\\.20\\)\\] {
+    --tw-shadow: inset 0 1px 2px var(--tw-shadow-color, #0000008c), 0 0 0 1px var(--tw-shadow-color, #67e8f933);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
+  .shadow-\\[inset_0_1px_2px_rgba\\(0\\,0\\,0\\,0\\.55\\)\\] {
+    --tw-shadow: inset 0 1px 2px var(--tw-shadow-color, #0000008c);
     box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
   }
 
@@ -16886,12 +17176,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .blur {
     --tw-blur: blur(8px);
-    filter: var(--tw-blur, ) var(--tw-brightness, ) var(--tw-contrast, ) var(--tw-grayscale, ) var(--tw-hue-rotate, ) var(--tw-invert, ) var(--tw-saturate, ) var(--tw-sepia, ) var(--tw-drop-shadow, );
-  }
-
-  .drop-shadow-\\[0_1px_0_rgba\\(255\\,255\\,255\\,0\\.18\\)\\] {
-    --tw-drop-shadow-size: drop-shadow(0 1px 0 var(--tw-drop-shadow-color, #ffffff2e));
-    --tw-drop-shadow: var(--tw-drop-shadow-size);
     filter: var(--tw-blur, ) var(--tw-brightness, ) var(--tw-contrast, ) var(--tw-grayscale, ) var(--tw-hue-rotate, ) var(--tw-invert, ) var(--tw-saturate, ) var(--tw-sepia, ) var(--tw-drop-shadow, );
   }
 
@@ -17051,9 +17335,9 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     height: calc(var(--spacing) * 3);
   }
 
-  .before\\:w-px:before {
+  .before\\:w-\\[2px\\]:before {
     content: var(--tw-content);
-    width: 1px;
+    width: 2px;
   }
 
   .before\\:rounded-full:before {
@@ -17061,14 +17345,25 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     border-radius: 3.40282e38px;
   }
 
-  .before\\:bg-black\\/45:before {
+  .before\\:bg-black\\/65:before {
     content: var(--tw-content);
-    background-color: #00000073;
+    background-color: #000000a6;
   }
 
   @supports (color: color-mix(in lab, red, red)) {
-    .before\\:bg-black\\/45:before {
-      background-color: color-mix(in oklab, var(--color-black) 45%, transparent);
+    .before\\:bg-black\\/65:before {
+      background-color: color-mix(in oklab, var(--color-black) 65%, transparent);
+    }
+  }
+
+  .before\\:bg-black\\/80:before {
+    content: var(--tw-content);
+    background-color: #000c;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .before\\:bg-black\\/80:before {
+      background-color: color-mix(in oklab, var(--color-black) 80%, transparent);
     }
   }
 
@@ -17077,9 +17372,9 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     opacity: 0;
   }
 
-  .before\\:opacity-90:before {
+  .before\\:opacity-65:before {
     content: var(--tw-content);
-    opacity: .9;
+    opacity: .65;
   }
 
   .before\\:transition:before {
@@ -17095,11 +17390,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
   }
 
   @media (hover: hover) {
-    .group-hover\\:before\\:opacity-60:is(:where(.group):hover *):before {
-      content: var(--tw-content);
-      opacity: .6;
-    }
-
     .hover\\:border-amber-200\\/30:hover {
       border-color: #fee6854d;
     }
@@ -17107,6 +17397,16 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     @supports (color: color-mix(in lab, red, red)) {
       .hover\\:border-amber-200\\/30:hover {
         border-color: color-mix(in oklab, var(--color-amber-200) 30%, transparent);
+      }
+    }
+
+    .hover\\:border-amber-200\\/35:hover {
+      border-color: #fee68559;
+    }
+
+    @supports (color: color-mix(in lab, red, red)) {
+      .hover\\:border-amber-200\\/35:hover {
+        border-color: color-mix(in oklab, var(--color-amber-200) 35%, transparent);
       }
     }
 
@@ -17140,23 +17440,13 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
       }
     }
 
-    .hover\\:border-cyan-200\\/35:hover {
-      border-color: #a2f4fd59;
+    .hover\\:border-pink-200\\/30:hover {
+      border-color: #fccee84d;
     }
 
     @supports (color: color-mix(in lab, red, red)) {
-      .hover\\:border-cyan-200\\/35:hover {
-        border-color: color-mix(in oklab, var(--color-cyan-200) 35%, transparent);
-      }
-    }
-
-    .hover\\:border-pink-200\\/35:hover {
-      border-color: #fccee859;
-    }
-
-    @supports (color: color-mix(in lab, red, red)) {
-      .hover\\:border-pink-200\\/35:hover {
-        border-color: color-mix(in oklab, var(--color-pink-200) 35%, transparent);
+      .hover\\:border-pink-200\\/30:hover {
+        border-color: color-mix(in oklab, var(--color-pink-200) 30%, transparent);
       }
     }
 
@@ -17210,13 +17500,23 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
       }
     }
 
-    .hover\\:border-white\\/35:hover {
-      border-color: #ffffff59;
+    .hover\\:border-white\\/20:hover {
+      border-color: #fff3;
     }
 
     @supports (color: color-mix(in lab, red, red)) {
-      .hover\\:border-white\\/35:hover {
-        border-color: color-mix(in oklab, var(--color-white) 35%, transparent);
+      .hover\\:border-white\\/20:hover {
+        border-color: color-mix(in oklab, var(--color-white) 20%, transparent);
+      }
+    }
+
+    .hover\\:border-white\\/\\[0\\.18\\]:hover {
+      border-color: #ffffff2e;
+    }
+
+    @supports (color: color-mix(in lab, red, red)) {
+      .hover\\:border-white\\/\\[0\\.18\\]:hover {
+        border-color: color-mix(in oklab, var(--color-white) 18%, transparent);
       }
     }
 
@@ -17230,13 +17530,13 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
       }
     }
 
-    .hover\\:bg-black\\/15:hover {
-      background-color: #00000026;
+    .hover\\:bg-black\\/18:hover {
+      background-color: #0000002e;
     }
 
     @supports (color: color-mix(in lab, red, red)) {
-      .hover\\:bg-black\\/15:hover {
-        background-color: color-mix(in oklab, var(--color-black) 15%, transparent);
+      .hover\\:bg-black\\/18:hover {
+        background-color: color-mix(in oklab, var(--color-black) 18%, transparent);
       }
     }
 
@@ -17260,33 +17560,23 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
       }
     }
 
-    .hover\\:bg-cyan-300\\/18:hover {
-      background-color: #53eafd2e;
+    .hover\\:bg-cyan-300\\/22:hover {
+      background-color: #53eafd38;
     }
 
     @supports (color: color-mix(in lab, red, red)) {
-      .hover\\:bg-cyan-300\\/18:hover {
-        background-color: color-mix(in oklab, var(--color-cyan-300) 18%, transparent);
+      .hover\\:bg-cyan-300\\/22:hover {
+        background-color: color-mix(in oklab, var(--color-cyan-300) 22%, transparent);
       }
     }
 
-    .hover\\:bg-pink-300\\/10:hover {
-      background-color: #fda5d51a;
+    .hover\\:bg-pink-300\\/12:hover {
+      background-color: #fda5d51f;
     }
 
     @supports (color: color-mix(in lab, red, red)) {
-      .hover\\:bg-pink-300\\/10:hover {
-        background-color: color-mix(in oklab, var(--color-pink-300) 10%, transparent);
-      }
-    }
-
-    .hover\\:bg-pink-300\\/14:hover {
-      background-color: #fda5d524;
-    }
-
-    @supports (color: color-mix(in lab, red, red)) {
-      .hover\\:bg-pink-300\\/14:hover {
-        background-color: color-mix(in oklab, var(--color-pink-300) 14%, transparent);
+      .hover\\:bg-pink-300\\/12:hover {
+        background-color: color-mix(in oklab, var(--color-pink-300) 12%, transparent);
       }
     }
 
@@ -17297,6 +17587,36 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     @supports (color: color-mix(in lab, red, red)) {
       .hover\\:bg-pink-300\\/16:hover {
         background-color: color-mix(in oklab, var(--color-pink-300) 16%, transparent);
+      }
+    }
+
+    .hover\\:bg-pink-300\\/\\[0\\.06\\]:hover {
+      background-color: #fda5d50f;
+    }
+
+    @supports (color: color-mix(in lab, red, red)) {
+      .hover\\:bg-pink-300\\/\\[0\\.06\\]:hover {
+        background-color: color-mix(in oklab, var(--color-pink-300) 6%, transparent);
+      }
+    }
+
+    .hover\\:bg-pink-300\\/\\[0\\.16\\]:hover {
+      background-color: #fda5d529;
+    }
+
+    @supports (color: color-mix(in lab, red, red)) {
+      .hover\\:bg-pink-300\\/\\[0\\.16\\]:hover {
+        background-color: color-mix(in oklab, var(--color-pink-300) 16%, transparent);
+      }
+    }
+
+    .hover\\:bg-slate-200\\/55:hover {
+      background-color: #e2e8f08c;
+    }
+
+    @supports (color: color-mix(in lab, red, red)) {
+      .hover\\:bg-slate-200\\/55:hover {
+        background-color: color-mix(in oklab, var(--color-slate-200) 55%, transparent);
       }
     }
 
@@ -17340,6 +17660,16 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
       }
     }
 
+    .hover\\:bg-white\\/\\[0\\.07\\]:hover {
+      background-color: #ffffff12;
+    }
+
+    @supports (color: color-mix(in lab, red, red)) {
+      .hover\\:bg-white\\/\\[0\\.07\\]:hover {
+        background-color: color-mix(in oklab, var(--color-white) 7.0%, transparent);
+      }
+    }
+
     .hover\\:bg-white\\/\\[0\\.025\\]:hover {
       background-color: #ffffff06;
     }
@@ -17350,13 +17680,33 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
       }
     }
 
-    .hover\\:bg-white\\/\\[0\\.038\\]:hover {
-      background-color: #ffffff0a;
+    .hover\\:bg-white\\/\\[0\\.035\\]:hover {
+      background-color: #ffffff09;
     }
 
     @supports (color: color-mix(in lab, red, red)) {
-      .hover\\:bg-white\\/\\[0\\.038\\]:hover {
-        background-color: color-mix(in oklab, var(--color-white) 3.8%, transparent);
+      .hover\\:bg-white\\/\\[0\\.035\\]:hover {
+        background-color: color-mix(in oklab, var(--color-white) 3.5%, transparent);
+      }
+    }
+
+    .hover\\:bg-white\\/\\[0\\.075\\]:hover {
+      background-color: #ffffff13;
+    }
+
+    @supports (color: color-mix(in lab, red, red)) {
+      .hover\\:bg-white\\/\\[0\\.075\\]:hover {
+        background-color: color-mix(in oklab, var(--color-white) 7.5%, transparent);
+      }
+    }
+
+    .hover\\:text-amber-100\\/80:hover {
+      color: #fef3c6cc;
+    }
+
+    @supports (color: color-mix(in lab, red, red)) {
+      .hover\\:text-amber-100\\/80:hover {
+        color: color-mix(in oklab, var(--color-amber-100) 80%, transparent);
       }
     }
 
@@ -17368,12 +17718,12 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
       color: var(--color-pink-100);
     }
 
-    .hover\\:text-slate-100:hover {
-      color: var(--color-slate-100);
+    .hover\\:text-slate-50:hover {
+      color: var(--color-slate-50);
     }
 
-    .hover\\:text-slate-200:hover {
-      color: var(--color-slate-200);
+    .hover\\:text-slate-100:hover {
+      color: var(--color-slate-100);
     }
 
     .hover\\:text-slate-200\\/80:hover {
@@ -17396,9 +17746,14 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
       }
     }
 
-    .hover\\:before\\:opacity-90:hover:before {
+    .hover\\:shadow-\\[inset_0_0_0_1px_rgba\\(255\\,255\\,255\\,0\\.22\\)\\]:hover {
+      --tw-shadow: inset 0 0 0 1px var(--tw-shadow-color, #ffffff38);
+      box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+    }
+
+    .hover\\:before\\:opacity-95:hover:before {
       content: var(--tw-content);
-      opacity: .9;
+      opacity: .95;
     }
   }
 
@@ -17422,8 +17777,8 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     }
   }
 
-  .focus\\:shadow-\\[inset_0_1px_2px_rgba\\(0\\,0\\,0\\,0\\.4\\)\\,0_0_0_1px_rgba\\(103\\,232\\,249\\,0\\.18\\)\\]:focus {
-    --tw-shadow: inset 0 1px 2px var(--tw-shadow-color, #0006), 0 0 0 1px var(--tw-shadow-color, #67e8f92e);
+  .focus\\:shadow-\\[inset_0_1px_2px_rgba\\(0\\,0\\,0\\,0\\.55\\)\\,0_0_0_1px_rgba\\(103\\,232\\,249\\,0\\.20\\)\\]:focus {
+    --tw-shadow: inset 0 1px 2px var(--tw-shadow-color, #0000008c), 0 0 0 1px var(--tw-shadow-color, #67e8f933);
     box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
   }
 
@@ -17434,16 +17789,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
   .focus-visible\\:ring-1:focus-visible {
     --tw-ring-shadow: var(--tw-ring-inset, ) 0 0 0 calc(1px + var(--tw-ring-offset-width)) var(--tw-ring-color, currentcolor);
     box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
-  }
-
-  .focus-visible\\:ring-cyan-200\\/40:focus-visible {
-    --tw-ring-color: #a2f4fd66;
-  }
-
-  @supports (color: color-mix(in lab, red, red)) {
-    .focus-visible\\:ring-cyan-200\\/40:focus-visible {
-      --tw-ring-color: color-mix(in oklab, var(--color-cyan-200) 40%, transparent);
-    }
   }
 
   .focus-visible\\:ring-cyan-200\\/45:focus-visible {
@@ -17466,12 +17811,22 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     outline-style: none;
   }
 
-  .active\\:scale-\\[0\\.94\\]:active {
-    scale: .94;
+  .active\\:scale-\\[0\\.92\\]:active {
+    scale: .92;
   }
 
   .active\\:cursor-grabbing:active {
     cursor: grabbing;
+  }
+
+  .active\\:bg-amber-300\\/\\[0\\.05\\]:active {
+    background-color: #ffd2360d;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .active\\:bg-amber-300\\/\\[0\\.05\\]:active {
+      background-color: color-mix(in oklab, var(--color-amber-300) 5%, transparent);
+    }
   }
 
   .active\\:bg-cyan-300\\/20:active {
@@ -17484,13 +17839,13 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     }
   }
 
-  .active\\:bg-cyan-300\\/26:active {
-    background-color: #53eafd42;
+  .active\\:bg-cyan-300\\/30:active {
+    background-color: #53eafd4d;
   }
 
   @supports (color: color-mix(in lab, red, red)) {
-    .active\\:bg-cyan-300\\/26:active {
-      background-color: color-mix(in oklab, var(--color-cyan-300) 26%, transparent);
+    .active\\:bg-cyan-300\\/30:active {
+      background-color: color-mix(in oklab, var(--color-cyan-300) 30%, transparent);
     }
   }
 
@@ -17504,6 +17859,26 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     }
   }
 
+  .active\\:bg-pink-300\\/\\[0\\.22\\]:active {
+    background-color: #fda5d538;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .active\\:bg-pink-300\\/\\[0\\.22\\]:active {
+      background-color: color-mix(in oklab, var(--color-pink-300) 22%, transparent);
+    }
+  }
+
+  .active\\:bg-white\\/\\[0\\.04\\]:active {
+    background-color: #ffffff0a;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .active\\:bg-white\\/\\[0\\.04\\]:active {
+      background-color: color-mix(in oklab, var(--color-white) 4%, transparent);
+    }
+  }
+
   .active\\:bg-white\\/\\[0\\.06\\]:active {
     background-color: #ffffff0f;
   }
@@ -17511,6 +17886,16 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
   @supports (color: color-mix(in lab, red, red)) {
     .active\\:bg-white\\/\\[0\\.06\\]:active {
       background-color: color-mix(in oklab, var(--color-white) 6%, transparent);
+    }
+  }
+
+  .active\\:bg-white\\/\\[0\\.10\\]:active {
+    background-color: #ffffff1a;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .active\\:bg-white\\/\\[0\\.10\\]:active {
+      background-color: color-mix(in oklab, var(--color-white) 10%, transparent);
     }
   }
 
@@ -17583,12 +17968,20 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
       display: block;
     }
 
+    .sm\\:flex {
+      display: flex;
+    }
+
     .sm\\:hidden {
       display: none;
     }
 
     .sm\\:inline {
       display: inline;
+    }
+
+    .sm\\:inline-flex {
+      display: inline-flex;
     }
   }
 
@@ -23853,6 +24246,9 @@ function setTriggerLaneAssignments(bank, mode, assignments) {
 function findRangeAssignmentAt(assignments, position) {
   return assignments.find((assignment) => position >= assignment.min && position <= assignment.max) ?? null;
 }
+function removeOtherAssignmentsForArticulation(assignments, articulationId, keepAssignmentId = null) {
+  return assignments.filter((assignment) => assignment.articulationId !== articulationId || keepAssignmentId !== null && assignment.id === keepAssignmentId);
+}
 function findEmptyRangeGap(assignments, position, minAllowed, maxAllowed) {
   let gapMin = minAllowed;
   for (const assignment of sortRangeAssignments(assignments)) {
@@ -23880,29 +24276,26 @@ function findMatchingRangeAssignment(assignments, segmentValue) {
   const max = Number(segment.max);
   return assignments.find((assignment) => id && assignment.id === id || assignment.articulationId === articulationId && assignment.min === min && assignment.max === max) ?? null;
 }
-function findMoveDestination(assignments, desiredMin, width, minAllowed, maxAllowed) {
-  const sortedAssignments = sortRangeAssignments(assignments);
-  const candidates = [];
-  let gapMin = minAllowed;
-  const addGapCandidate = (gapStart, gapEnd) => {
-    const maxStart = gapEnd - width + 1;
-    if (maxStart < gapStart) {
-      return;
-    }
-    const min = clamp$2(desiredMin, gapStart, maxStart);
-    candidates.push({
-      min,
-      max: min + width - 1,
-      distance: Math.abs(min - desiredMin)
-    });
-  };
-  for (const assignment of sortedAssignments) {
-    addGapCandidate(gapMin, assignment.min - 1);
-    gapMin = Math.max(gapMin, assignment.max + 1);
+function carveAssignmentAroundRange(assignment, carvedMin, carvedMax) {
+  if (assignment.max < carvedMin || assignment.min > carvedMax) {
+    return [assignment];
   }
-  addGapCandidate(gapMin, maxAllowed);
-  candidates.sort((left, right) => left.distance - right.distance || left.min - right.min);
-  return candidates[0] ?? null;
+  if (carvedMin <= assignment.min && carvedMax >= assignment.max) {
+    return [];
+  }
+  if (carvedMin <= assignment.min) {
+    const min = carvedMax + 1;
+    return min <= assignment.max ? [{ ...assignment, min }] : [];
+  }
+  if (carvedMax >= assignment.max) {
+    const max = carvedMin - 1;
+    return max >= assignment.min ? [{ ...assignment, max }] : [];
+  }
+  const left = { ...assignment, max: carvedMin - 1 };
+  const right = { ...assignment, min: carvedMax + 1 };
+  const leftWidth = left.max - left.min + 1;
+  const rightWidth = right.max - right.min + 1;
+  return leftWidth >= rightWidth ? [left] : [right];
 }
 function assignArticulationToRangePosition(bankValue, modeValue, positionValue, articulationId) {
   const bank = normalizeArticulationBank(bankValue);
@@ -23912,15 +24305,20 @@ function assignArticulationToRangePosition(bankValue, modeValue, positionValue, 
   const { mode, minAllowed, maxAllowed, prefix, assignments } = getTriggerLaneInfo(bank, modeValue);
   const position = normalizeInteger(positionValue, minAllowed, minAllowed, maxAllowed);
   const occupiedAssignment = assignments.find((assignment) => position >= assignment.min && position <= assignment.max);
-  const nextAssignments = occupiedAssignment ? assignments.map((assignment) => assignment.id === occupiedAssignment.id ? { ...assignment, articulationId } : assignment) : (() => {
-    const gap = findEmptyRangeGap(assignments, position, minAllowed, maxAllowed);
+  const nextAssignments = occupiedAssignment ? removeOtherAssignmentsForArticulation(
+    assignments.map((assignment) => assignment.id === occupiedAssignment.id ? { ...assignment, articulationId } : assignment),
+    articulationId,
+    occupiedAssignment.id
+  ) : (() => {
+    const nextAssignmentsWithoutSameArticulation = removeOtherAssignmentsForArticulation(assignments, articulationId);
+    const gap = findEmptyRangeGap(nextAssignmentsWithoutSameArticulation, position, minAllowed, maxAllowed);
     if (gap.max < gap.min) {
       return assignments;
     }
     return [
-      ...assignments,
+      ...nextAssignmentsWithoutSameArticulation,
       {
-        id: createUniqueAssignmentId(assignments, prefix, articulationId, gap.min),
+        id: createUniqueAssignmentId(nextAssignmentsWithoutSameArticulation, prefix, articulationId, gap.min),
         articulationId,
         min: gap.min,
         max: gap.max
@@ -23929,7 +24327,7 @@ function assignArticulationToRangePosition(bankValue, modeValue, positionValue, 
   })();
   return setTriggerLaneAssignments(bank, mode, nextAssignments);
 }
-function insertArticulationRangeAtPosition(bankValue, modeValue, positionValue, articulationId) {
+function insertArticulationRangeAtPosition(bankValue, modeValue, positionValue, articulationId, preserveSide) {
   const bank = normalizeArticulationBank(bankValue);
   if (!bank.slots.some((slot) => slot.id === articulationId)) {
     return bank;
@@ -23939,10 +24337,13 @@ function insertArticulationRangeAtPosition(bankValue, modeValue, positionValue, 
   const occupiedAssignment = findRangeAssignmentAt(assignments, position);
   let nextAssignments = assignments;
   if (occupiedAssignment) {
+    if (occupiedAssignment.articulationId === articulationId) {
+      return bank;
+    }
     if (occupiedAssignment.min === occupiedAssignment.max) {
       return bank;
     }
-    const trimFromMin = position - occupiedAssignment.min <= occupiedAssignment.max - position;
+    const trimFromMin = preserveSide === "upper" || preserveSide !== "lower" && position - occupiedAssignment.min <= occupiedAssignment.max - position;
     nextAssignments = assignments.flatMap((assignment) => {
       if (assignment.id !== occupiedAssignment.id) {
         return [assignment];
@@ -23955,6 +24356,7 @@ function insertArticulationRangeAtPosition(bankValue, modeValue, positionValue, 
       return max >= assignment.min ? [{ ...assignment, max }] : [];
     });
   }
+  nextAssignments = removeOtherAssignmentsForArticulation(nextAssignments, articulationId);
   if (findRangeAssignmentAt(nextAssignments, position)) {
     return bank;
   }
@@ -23976,25 +24378,22 @@ function moveArticulationRangeAssignment(bankValue, modeValue, segmentValue, tar
     return bank;
   }
   const width = target.max - target.min + 1;
-  const desiredMin = normalizeInteger(
+  const nextMin = normalizeInteger(
     Number(targetPositionValue) - Math.floor(width / 2),
     target.min,
     minAllowed,
     Math.max(minAllowed, maxAllowed - width + 1)
   );
-  const otherAssignments = assignments.filter((assignment) => assignment.id !== target.id);
-  const destination = findMoveDestination(otherAssignments, desiredMin, width, minAllowed, maxAllowed);
-  if (!destination || destination.min === target.min && destination.max === target.max) {
+  const nextTarget = {
+    ...target,
+    min: nextMin,
+    max: nextMin + width - 1
+  };
+  const otherAssignments = assignments.filter((assignment) => assignment.id !== target.id).flatMap((assignment) => carveAssignmentAroundRange(assignment, nextTarget.min, nextTarget.max));
+  if (nextTarget.min === target.min && nextTarget.max === target.max && otherAssignments.length === assignments.length - 1) {
     return bank;
   }
-  return setTriggerLaneAssignments(bank, mode, [
-    ...otherAssignments,
-    {
-      ...target,
-      min: destination.min,
-      max: destination.max
-    }
-  ]);
+  return setTriggerLaneAssignments(bank, mode, [...otherAssignments, nextTarget]);
 }
 function resizeArticulationRangeAssignment(bankValue, modeValue, segmentValue, edge, positionValue) {
   const bank = normalizeArticulationBank(bankValue);
@@ -24003,14 +24402,22 @@ function resizeArticulationRangeAssignment(bankValue, modeValue, segmentValue, e
   if (!target) {
     return bank;
   }
-  const otherAssignments = sortRangeAssignments(assignments.filter((assignment) => assignment.id !== target.id));
-  const previousLimit = otherAssignments.filter((assignment) => assignment.max < target.max).reduce((maxValue, assignment) => Math.max(maxValue, assignment.max + 1), minAllowed);
-  const nextLimit = otherAssignments.filter((assignment) => assignment.min > target.min).reduce((minValue, assignment) => Math.min(minValue, assignment.min - 1), maxAllowed);
   const position = normalizeInteger(positionValue, edge === "min" ? target.min : target.max, minAllowed, maxAllowed);
-  const nextTarget = edge === "min" ? { ...target, min: clamp$2(position, previousLimit, target.max) } : { ...target, max: clamp$2(position, target.min, nextLimit) };
+  const nextTarget = edge === "min" ? { ...target, min: clamp$2(position, minAllowed, target.max) } : { ...target, max: clamp$2(position, target.min, maxAllowed) };
   if (nextTarget.min === target.min && nextTarget.max === target.max) {
     return bank;
   }
+  const otherAssignments = sortRangeAssignments(assignments.filter((assignment) => assignment.id !== target.id)).flatMap((assignment) => {
+    if (edge === "min" && assignment.max >= nextTarget.min && assignment.max < target.min) {
+      const max = nextTarget.min - 1;
+      return assignment.min <= max ? [{ ...assignment, max }] : [];
+    }
+    if (edge === "max" && assignment.min <= nextTarget.max && assignment.min > target.max) {
+      const min = nextTarget.max + 1;
+      return min <= assignment.max ? [{ ...assignment, min }] : [];
+    }
+    return [assignment];
+  });
   return setTriggerLaneAssignments(bank, mode, [...otherAssignments, nextTarget]);
 }
 function clearArticulationRangeAssignment(bankValue, modeValue, segmentValue) {
@@ -24279,6 +24686,8 @@ function useSynthInputRouter(keyboardRef, {
   handleKeyboardOctaveUp,
   keyboardInputMode = "hosted",
   midiInputEndpointID = DEFAULT_MIDI_INPUT_ENDPOINT_ID,
+  onPreviewNoteOn,
+  onPreviewMidiEvent,
   sendMIDIInputEvent
 } = {}) {
   const activeArrowTargetRef = reactExports.useRef(null);
@@ -24288,6 +24697,8 @@ function useSynthInputRouter(keyboardRef, {
   const handleKeyboardOctaveUpRef = reactExports.useRef(handleKeyboardOctaveUp);
   const keyboardInputModeRef = reactExports.useRef(keyboardInputMode);
   const midiInputEndpointIDRef = reactExports.useRef(midiInputEndpointID);
+  const onPreviewNoteOnRef = reactExports.useRef(onPreviewNoteOn);
+  const onPreviewMidiEventRef = reactExports.useRef(onPreviewMidiEvent);
   const sendMIDIInputEventRef = reactExports.useRef(sendMIDIInputEvent);
   reactExports.useEffect(() => {
     handleKeyboardOctaveDownRef.current = handleKeyboardOctaveDown;
@@ -24302,10 +24713,20 @@ function useSynthInputRouter(keyboardRef, {
     midiInputEndpointIDRef.current = midiInputEndpointID;
   }, [midiInputEndpointID]);
   reactExports.useEffect(() => {
+    onPreviewNoteOnRef.current = onPreviewNoteOn;
+  }, [onPreviewNoteOn]);
+  reactExports.useEffect(() => {
+    onPreviewMidiEventRef.current = onPreviewMidiEvent;
+  }, [onPreviewMidiEvent]);
+  reactExports.useEffect(() => {
     sendMIDIInputEventRef.current = sendMIDIInputEvent;
   }, [sendMIDIInputEvent]);
   const sendStandalonePreviewMIDI = reactExports.useCallback((status, noteNumber, velocity = 0) => {
     const message = buildShortMidi$1(status, noteNumber, velocity);
+    onPreviewMidiEventRef.current?.(status, noteNumber, velocity);
+    if ((status & 240) === 144 && velocity > 0) {
+      onPreviewNoteOnRef.current?.(noteNumber);
+    }
     sendMIDIInputEventRef.current?.(midiInputEndpointIDRef.current, message);
     keyboardRef.current?.handleExternalMIDI?.(message);
   }, [keyboardRef]);
@@ -24632,7 +25053,8 @@ const RUNTIME_STATE_ENDPOINT_ID = "runtimeState";
 const RETRY_DESIRED_TABLE_REQUEST_ENDPOINT_ID = "retryDesiredTableRequest";
 const WAVETABLE_PREWARM_REQUEST_ENDPOINT_ID = "wavetablePrewarmRequest";
 const MIDI_INPUT_ENDPOINT_ID$1 = "midiIn";
-const ARTICULATION_AUDITION_NOTES = [36, 48, 60];
+const VOICE_ARTICULATION_START_ENDPOINT_ID = "voiceArticulationStart";
+const ARTICULATION_AUDITION_FALLBACK_NOTE = 60;
 const GLIDE_TIME_MIN_SECONDS = 0;
 const GLIDE_TIME_MAX_SECONDS = 2;
 const GLIDE_TIME_STEP_SECONDS = 1e-3;
@@ -25402,12 +25824,16 @@ function useSynthKeyboardRouting({
   onKeyboardOctaveDown,
   onKeyboardOctaveUp,
   keyboardInputMode = "hosted",
+  onPreviewNoteOn,
+  onPreviewMidiEvent,
   sendMIDIInputEvent
 }) {
   const synthInputRouter = useSynthInputRouter(keyboardRef, {
     handleKeyboardOctaveDown: onKeyboardOctaveDown,
     handleKeyboardOctaveUp: onKeyboardOctaveUp,
     keyboardInputMode,
+    onPreviewNoteOn,
+    onPreviewMidiEvent,
     sendMIDIInputEvent
   });
   const wavetableTarget = useStableArrowTarget("wavetable-select", onStepWavetable);
@@ -25607,6 +26033,10 @@ function useSynthPatchViewModel({
   const observedDistortionHistory = useObservedDistortionHistory();
   const observedDistortionScope = useObservedDistortionScope();
   const observedMsegState = useObservedMsegState();
+  const voiceArticulationStartMessage = usePatchEndpoint(
+    VOICE_ARTICULATION_START_ENDPOINT_ID,
+    null
+  );
   const articulationBankState = useStoredArticulationBank();
   const runtimePresentation = reactExports.useMemo(
     () => resolveRuntimeTablePresentation(runtimeStateMessage, Number(wavetableSelect.value) || 0),
@@ -25623,7 +26053,14 @@ function useSynthPatchViewModel({
   const [selectedArticulationIsDirty, setSelectedArticulationIsDirty] = reactExports.useState(false);
   const [discardedArticulationEdit, setDiscardedArticulationEdit] = reactExports.useState(null);
   const activeAuditionRef = reactExports.useRef(null);
-  const auditionCycleIndexRef = reactExports.useRef(0);
+  const lastPlayedNoteRef = reactExports.useRef(ARTICULATION_AUDITION_FALLBACK_NOTE);
+  const heldMidiNotesRef = reactExports.useRef(/* @__PURE__ */ new Map());
+  const heldMidiOrderRef = reactExports.useRef(0);
+  const [articulationHeldInput, setArticulationHeldInput] = reactExports.useState({
+    note: null,
+    velocity: null,
+    chain: null
+  });
   const [selectedMsegSlot, setSelectedMsegSlot] = reactExports.useState(0);
   const [selectedEnvelopeSlot, setSelectedEnvelopeSlot] = reactExports.useState(0);
   const displayedMsegControllerRef = reactExports.useRef(null);
@@ -26050,8 +26487,8 @@ function useSynthPatchViewModel({
   const handleAssignArticulationRangePosition = reactExports.useCallback((mode, position, articulationId) => {
     return updateArticulationBankIfChanged((previousBank) => assignArticulationToRangePosition(previousBank, mode, position, articulationId));
   }, [updateArticulationBankIfChanged]);
-  const handleInsertArticulationRangeAtPosition = reactExports.useCallback((mode, position, articulationId) => {
-    return updateArticulationBankIfChanged((previousBank) => insertArticulationRangeAtPosition(previousBank, mode, position, articulationId));
+  const handleInsertArticulationRangeAtPosition = reactExports.useCallback((mode, position, articulationId, preserveSide) => {
+    return updateArticulationBankIfChanged((previousBank) => insertArticulationRangeAtPosition(previousBank, mode, position, articulationId, preserveSide));
   }, [updateArticulationBankIfChanged]);
   const handleDuplicateAndAssignArticulationRangePosition = reactExports.useCallback((mode, position, articulationId, operation) => {
     const previousBank = articulationBankState.bankRef.current;
@@ -26129,9 +26566,55 @@ function useSynthPatchViewModel({
       }, 0);
     }
   }, [applyArticulationSnapshot, articulationBankState]);
+  const publishHeldMidiNote = reactExports.useCallback((nextChainValue) => {
+    let newest = null;
+    heldMidiNotesRef.current.forEach((heldNote, note) => {
+      if (!newest || heldNote.order > newest.order) {
+        newest = { note, velocity: heldNote.velocity, order: heldNote.order };
+      }
+    });
+    setArticulationHeldInput((previousValue) => {
+      const chain = nextChainValue === void 0 ? previousValue.chain : nextChainValue;
+      const nextValue = newest ? {
+        note: newest.note,
+        velocity: newest.velocity,
+        chain
+      } : nextChainValue !== void 0 ? {
+        note: null,
+        velocity: null,
+        chain
+      } : {
+        note: null,
+        velocity: null,
+        chain: null
+      };
+      return previousValue.note === nextValue.note && previousValue.velocity === nextValue.velocity && previousValue.chain === nextValue.chain ? previousValue : nextValue;
+    });
+  }, []);
+  const trackMidiInputForArticulationLane = reactExports.useCallback((status, note, velocity = 0) => {
+    const messageKind = status & 240;
+    const safeNote = clamp$1(Math.round(note), 0, 127);
+    const safeVelocity = clamp$1(Math.round(velocity), 0, 127);
+    const isNoteOn = messageKind === 144 && safeVelocity > 0;
+    const isNoteOff = messageKind === 128 || messageKind === 144 && safeVelocity === 0;
+    if (isNoteOn) {
+      lastPlayedNoteRef.current = safeNote;
+      heldMidiNotesRef.current.set(safeNote, {
+        velocity: safeVelocity,
+        order: heldMidiOrderRef.current += 1
+      });
+      publishHeldMidiNote();
+      return;
+    }
+    if (isNoteOff) {
+      heldMidiNotesRef.current.delete(safeNote);
+      publishHeldMidiNote();
+    }
+  }, [publishHeldMidiNote]);
   const sendMidiInputEvent = reactExports.useCallback((status, note, velocity = 0) => {
+    trackMidiInputForArticulationLane(status, note, velocity);
     patchConnection.sendMIDIInputEvent?.(MIDI_INPUT_ENDPOINT_ID$1, buildShortMidi(status, note, velocity));
-  }, [patchConnection]);
+  }, [patchConnection, trackMidiInputForArticulationLane]);
   const handleStopArticulationAudition = reactExports.useCallback((slotId) => {
     const activeAudition = activeAuditionRef.current;
     if (!activeAudition || slotId && activeAudition.slotId !== slotId) {
@@ -26143,11 +26626,20 @@ function useSynthPatchViewModel({
   const handleStartArticulationAudition = reactExports.useCallback((slotId) => {
     handleStopArticulationAudition();
     selectArticulationSlot(slotId);
-    const note = ARTICULATION_AUDITION_NOTES[auditionCycleIndexRef.current % ARTICULATION_AUDITION_NOTES.length];
-    auditionCycleIndexRef.current += 1;
+    const note = clamp$1(Math.round(lastPlayedNoteRef.current), 0, 127);
     activeAuditionRef.current = { slotId, note };
     sendMidiInputEvent(144, note, 100);
   }, [handleStopArticulationAudition, selectArticulationSlot, sendMidiInputEvent]);
+  reactExports.useEffect(() => {
+    if (!voiceArticulationStartMessage) {
+      return;
+    }
+    const hasArticulation = Boolean(voiceArticulationStartMessage.hasArticulation);
+    const selectorA = Number(voiceArticulationStartMessage.selectorA);
+    publishHeldMidiNote(
+      hasArticulation && Number.isFinite(selectorA) ? clamp$1(Math.round(selectorA), 0, 127) : null
+    );
+  }, [publishHeldMidiNote, voiceArticulationStartMessage]);
   reactExports.useEffect(() => {
     const handleWindowBlur = () => handleStopArticulationAudition();
     const handleKeyDown = (event) => {
@@ -26209,6 +26701,10 @@ function useSynthPatchViewModel({
     onKeyboardOctaveDown,
     onKeyboardOctaveUp,
     keyboardInputMode,
+    onPreviewNoteOn: (noteNumber) => {
+      lastPlayedNoteRef.current = clamp$1(Math.round(noteNumber), 0, 127);
+    },
+    onPreviewMidiEvent: trackMidiInputForArticulationLane,
     sendMIDIInputEvent: patchConnection.sendMIDIInputEvent?.bind(patchConnection)
   });
   return {
@@ -26262,6 +26758,7 @@ function useSynthPatchViewModel({
     articulationSlots,
     selectedArticulationSlot,
     selectedArticulationIsDirty,
+    articulationHeldInput,
     discardedArticulationEdit: discardedArticulationEdit ? {
       slotId: discardedArticulationEdit.slotId,
       slotName: discardedArticulationEdit.slotName

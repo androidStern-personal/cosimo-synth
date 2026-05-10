@@ -5,8 +5,8 @@
   "scripts": {
     "ui:desktop:dev": "vite --config ui/vite.desktop.config.mjs",
     "ui:desktop:build": "node ui/build.mjs --desktop",
-    "desktop:native:build": "./scripts/build_desktop_native.sh",
-    "desktop:native:dev": "./scripts/run_desktop_native_dev.sh",
+    "synth:desktop:build": "./scripts/build_desktop_native.sh",
+    "synth:desktop:dev": "./scripts/run_desktop_native_dev.sh",
     "fx:dev": "vite --config fx/vite.config.mjs",
     "fx:build": "node fx/build-effect.mjs",
     "fx:prod:build": "node fx/prod-effect.mjs build",

@@ -28,6 +28,8 @@ export type SynthInputRouterOptions = {
     handleKeyboardOctaveUp?: () => boolean;
     keyboardInputMode?: SynthKeyboardInputMode;
     midiInputEndpointID?: string;
+    onPreviewNoteOn?: (noteNumber: number) => void;
+    onPreviewMidiEvent?: (status: number, noteNumber: number, velocity: number) => void;
     sendMIDIInputEvent?: (endpointID: string, shortMIDICode: number) => void;
 };
 
@@ -150,6 +152,8 @@ export function useSynthInputRouter(
         handleKeyboardOctaveUp,
         keyboardInputMode = "hosted",
         midiInputEndpointID = DEFAULT_MIDI_INPUT_ENDPOINT_ID,
+        onPreviewNoteOn,
+        onPreviewMidiEvent,
         sendMIDIInputEvent,
     }: SynthInputRouterOptions = {},
 ) {
@@ -160,6 +164,8 @@ export function useSynthInputRouter(
     const handleKeyboardOctaveUpRef = useRef(handleKeyboardOctaveUp);
     const keyboardInputModeRef = useRef(keyboardInputMode);
     const midiInputEndpointIDRef = useRef(midiInputEndpointID);
+    const onPreviewNoteOnRef = useRef(onPreviewNoteOn);
+    const onPreviewMidiEventRef = useRef(onPreviewMidiEvent);
     const sendMIDIInputEventRef = useRef(sendMIDIInputEvent);
 
     useEffect(() => {
@@ -179,12 +185,24 @@ export function useSynthInputRouter(
     }, [midiInputEndpointID]);
 
     useEffect(() => {
+        onPreviewNoteOnRef.current = onPreviewNoteOn;
+    }, [onPreviewNoteOn]);
+
+    useEffect(() => {
+        onPreviewMidiEventRef.current = onPreviewMidiEvent;
+    }, [onPreviewMidiEvent]);
+
+    useEffect(() => {
         sendMIDIInputEventRef.current = sendMIDIInputEvent;
     }, [sendMIDIInputEvent]);
 
     const sendStandalonePreviewMIDI = useCallback((status: number, noteNumber: number, velocity = 0) => {
         const message = buildShortMidi(status, noteNumber, velocity);
 
+        onPreviewMidiEventRef.current?.(status, noteNumber, velocity);
+        if ((status & 0xf0) === 0x90 && velocity > 0) {
+            onPreviewNoteOnRef.current?.(noteNumber);
+        }
         sendMIDIInputEventRef.current?.(midiInputEndpointIDRef.current, message);
         keyboardRef.current?.handleExternalMIDI?.(message);
     }, [keyboardRef]);
