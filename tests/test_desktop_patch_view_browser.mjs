@@ -7,7 +7,7 @@ import {
     normalizeArticulationBank,
 } from "../patch_gui/articulations.js";
 import { deserializeMsegShape, renderMsegShape } from "../patch_gui/mseg.js";
-import { deserializeModulationState } from "../patch_gui/modulation.js";
+import { deserializeModulationState, normalizeModulationState } from "../patch_gui/modulation.js";
 
 import {
     clearHarnessDebugLog,
@@ -25,6 +25,9 @@ let builtBundleServer;
 let browser;
 const TEST_SAMPLES_PER_FRAME = 2048;
 const MSEG_PREVIEW_HORIZONTAL_PADDING_PX = 24;
+const EFFECT_PRESETS_V2_STATE_KEY = "effects.presets.v2";
+const SYNTH_PRESET_EFFECT_ID = "cosimo-synth";
+const RETIRED_SYNTH_LOCAL_DIRTY_STATE_KEY = ["synth", "preset" + "Baseline" + "Snapshot", "v1"].join(".");
 
 function expectedMsegPreviewProgressClipWidth(previewState, progress) {
     const plotWidth = Math.max(1, previewState.width - (MSEG_PREVIEW_HORIZONTAL_PADDING_PX * 2));
@@ -41,6 +44,14 @@ function readStoredModulationState(snapshot) {
 
 function readStoredArticulationBank(snapshot) {
     return normalizeArticulationBank(snapshot.storedState[ARTICULATION_STATE_KEY]);
+}
+
+function readEffectPresetState(snapshot) {
+    return JSON.parse(String(snapshot.storedState[EFFECT_PRESETS_V2_STATE_KEY]));
+}
+
+function containsRetiredSynthPresetBaselineKey(snapshot) {
+    return Object.prototype.hasOwnProperty.call(snapshot.storedState, RETIRED_SYNTH_LOCAL_DIRTY_STATE_KEY);
 }
 
 function readStoredMsegShape(snapshot, slotIndex = 0) {
@@ -264,6 +275,90 @@ async function waitForReactFrames(page, frameCount = 2) {
     for (let frameIndex = 0; frameIndex < frameCount; frameIndex += 1) {
         await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(resolve)));
     }
+}
+
+async function readVisibleHarnessParameterEndpointIDs(page) {
+    return page.evaluate(() => {
+        const inputs = window.__COSIMO_DESKTOP_HARNESS__?.patchConnection?.status?.details?.inputs;
+
+        if (!Array.isArray(inputs)) {
+            throw new Error("Harness status inputs are unavailable.");
+        }
+
+        return inputs
+            .filter((input) => input
+                && typeof input === "object"
+                && input.purpose === "parameter"
+                && !(input.annotation && typeof input.annotation === "object" && input.annotation.hidden === true))
+            .map((input) => input.endpointID)
+            .sort((left, right) => String(left).localeCompare(String(right)));
+    });
+}
+
+async function clickPresetBarAction(page, action) {
+    await page.waitForFunction((nextAction) => {
+        const button = document
+            .querySelector("cosimo-preset-bar")
+            ?.shadowRoot
+            ?.querySelector(`[data-action="${nextAction}"]`);
+        return button instanceof HTMLButtonElement && !button.disabled;
+    }, action);
+
+    await page.evaluate((nextAction) => {
+        const button = document
+            .querySelector("cosimo-preset-bar")
+            ?.shadowRoot
+            ?.querySelector(`[data-action="${nextAction}"]`);
+
+        if (!(button instanceof HTMLButtonElement)) {
+            throw new Error(`Missing preset bar action ${nextAction}.`);
+        }
+
+        button.click();
+    }, action);
+}
+
+async function saveSynthPresetAs(page, label) {
+    await clickPresetBarAction(page, "save-as");
+    await page.waitForFunction(() => {
+        const overlay = document
+            .querySelector("cosimo-preset-bar")
+            ?.shadowRoot
+            ?.querySelector('[data-el="dialog-overlay"]');
+        return overlay instanceof HTMLElement && overlay.classList.contains("open");
+    });
+
+    await page.evaluate((nextLabel) => {
+        const shadowRoot = document.querySelector("cosimo-preset-bar")?.shadowRoot;
+        const input = shadowRoot?.querySelector('[data-el="dialog-input"]');
+        const confirm = shadowRoot?.querySelector('[data-action="dialog-confirm"]');
+
+        if (!(input instanceof HTMLInputElement) || !(confirm instanceof HTMLButtonElement)) {
+            throw new Error("Preset save dialog controls are missing.");
+        }
+
+        const valueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+
+        if (!valueSetter) {
+            throw new Error("Expected HTMLInputElement.prototype.value setter.");
+        }
+
+        valueSetter.call(input, nextLabel);
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+        confirm.click();
+    }, label);
+}
+
+async function waitForPresetBarDirtyState(page, dirty) {
+    await page.waitForFunction((expectedDirty) => {
+        const shadowRoot = document.querySelector("cosimo-preset-bar")?.shadowRoot;
+        const dirtyDot = shadowRoot?.querySelector('[data-el="dirty-dot"]');
+        const revertButton = shadowRoot?.querySelector('[data-action="revert"]');
+        return dirtyDot instanceof HTMLElement
+            && revertButton instanceof HTMLButtonElement
+            && dirtyDot.classList.contains("visible") === expectedDirty
+            && revertButton.disabled !== expectedDirty;
+    }, dirty);
 }
 
 async function dragArticulationCardToLane(page, articulationId, lane, targetPosition, {
@@ -1884,6 +1979,78 @@ test("voice mode buttons commit the exact discrete playMode values", async () =>
     }
 });
 
+test("unison controls commit parameters and redraw the voice distribution", async () => {
+    const page = await openHarnessPage();
+
+    try {
+        await showVoiceControls(page);
+        await page.locator('[data-role="unison-control-surface"]').waitFor();
+        assert.equal(await page.locator('[data-role="unison-visualization"] circle').count(), 1);
+
+        await clearHarnessDebugLog(page);
+        await page.locator('[data-role="unison-voices-up"]').click();
+        await page.waitForFunction(() => {
+            const snapshot = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot();
+            return Number(snapshot.parameterValues.unisonVoices) === 2;
+        });
+
+        let snapshot = await getHarnessSnapshot(page);
+        assert.deepEqual(
+            snapshot.sentMessages.filter(({ endpointID }) => endpointID === "unisonVoices"),
+            [{ endpointID: "unisonVoices", value: 2 }],
+        );
+
+        await clearHarnessDebugLog(page);
+        const detuneInput = page.locator('[data-role="unison-detune-control"] input');
+        await detuneInput.dblclick();
+        await detuneInput.fill("25");
+        await detuneInput.press("Enter");
+        await page.waitForFunction(() => {
+            const snapshot = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot();
+            return Math.abs(Number(snapshot.parameterValues.unisonDetune) - 0.5) < 0.0001;
+        });
+
+        await page.locator('[data-role="unison-detune-mode-control"]').click();
+        await page.locator('[data-role="unison-stack-mode-control"]').click();
+        await page.locator('[data-role="unison-phase-mode-control"]').click();
+        await page.waitForFunction(() => {
+            const snapshot = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot();
+            return Number(snapshot.parameterValues.unisonDetuneMode) === 1
+                && Number(snapshot.parameterValues.unisonStackMode) === 1
+                && Number(snapshot.parameterValues.unisonPhaseMode) === 1;
+        });
+
+        snapshot = await getHarnessSnapshot(page);
+        assert.deepEqual(
+            snapshot.sentMessages
+                .filter(({ endpointID }) => endpointID.startsWith("unison"))
+                .map(({ endpointID, value }) => ({ endpointID, value })),
+            [
+                { endpointID: "unisonDetune", value: 0.5 },
+                { endpointID: "unisonDetuneMode", value: 1 },
+                { endpointID: "unisonStackMode", value: 1 },
+                { endpointID: "unisonPhaseMode", value: 1 },
+            ],
+        );
+
+        await page.evaluate(() => {
+            window.__COSIMO_DESKTOP_HARNESS__.patchConnection.emitEffectiveUnisonState({
+                voices: 5,
+                detune: 0.4,
+                blend: 0.75,
+                width: 1,
+                detuneMode: 1,
+                stackMode: 2,
+                wavetablePositionSpread: 0.5,
+                warpSpread: 0.25,
+            });
+        });
+        await page.waitForFunction(() => document.querySelectorAll('[data-role="unison-visualization"] circle').length === 5);
+    } finally {
+        await page.close();
+    }
+});
+
 test("warp controls commit mode and amount, and the matrix can route MSEG 1 into warp amount", async () => {
     const page = await openHarnessPage();
 
@@ -3304,6 +3471,345 @@ test("articulation range lane center drop replaces and selected card is obvious 
         assert.deepEqual(readStoredArticulationBank(snapshot).chainAssignments, [
             { id: "chain-bow-full", articulationId: "pluck", min: 0, max: 127 },
         ]);
+    } finally {
+        await page.close();
+    }
+});
+
+test("contextual toolbar only exposes articulation draft actions", async () => {
+    const page = await openHarnessPage();
+
+    try {
+        await page.waitForFunction(() => {
+            const addButton = document.querySelector('button[aria-label="Capture current parameters as a new articulation"]');
+            return addButton instanceof HTMLButtonElement && !addButton.disabled;
+        });
+
+        const bank = normalizeArticulationBank({
+            selectedSlotId: "bow",
+            activeTriggerMode: "chain",
+            slots: [
+                { id: "bow", runtimeSlot: 0, name: "Bow" },
+            ],
+        });
+
+        await page.evaluate(({ articulationStateKey, nextBank }) => {
+            const harness = window.__COSIMO_DESKTOP_HARNESS__;
+            harness.setStoredStateValue(articulationStateKey, JSON.stringify(nextBank));
+        }, {
+            articulationStateKey: ARTICULATION_STATE_KEY,
+            nextBank: bank,
+        });
+
+        await waitForHarnessSnapshot(
+            page,
+            "seeded articulation",
+            (nextSnapshot) => readStoredArticulationBank(nextSnapshot).selectedSlotId === "bow",
+        );
+
+        await page.evaluate(() => {
+            window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("pan", 0.25);
+        });
+
+        const toolbar = page.locator('[data-role="contextual-floating-toolbar"]');
+        await toolbar.waitFor();
+        assert.match(await toolbar.getAttribute("aria-label"), /Edited Bow/i);
+        assert.doesNotMatch(
+            await toolbar.textContent(),
+            /save preset|save only|undo save|update and save|update \+ save/i,
+            "the floating toolbar must not expose preset-save language",
+        );
+        const toolbarBox = await toolbar.boundingBox();
+        assert.ok(toolbarBox && toolbarBox.height <= 44, "the floating toolbar must stay one row tall");
+        const toolbarButtonRoles = await toolbar.locator("button").evaluateAll((buttons) => (
+            buttons.map((button) => button.getAttribute("data-role")).sort()
+        ));
+        assert.deepEqual(toolbarButtonRoles, [
+            "contextual-revert-articulation",
+            "contextual-save-new-articulation",
+            "contextual-toolbar-dismiss",
+            "contextual-update-articulation",
+        ]);
+
+        await page.locator('[data-role="contextual-update-articulation"]').click();
+
+        const snapshot = await waitForHarnessSnapshot(
+            page,
+            "updated articulation without synth-local preset baseline",
+            (nextSnapshot) => {
+                const storedBank = readStoredArticulationBank(nextSnapshot);
+                return storedBank.slots[0].snapshot.parameters.pan === 0.25
+                    && !containsRetiredSynthPresetBaselineKey(nextSnapshot);
+            },
+        );
+        const storedBank = readStoredArticulationBank(snapshot);
+        assert.equal(storedBank.slots[0].snapshot.parameters.pan, 0.25);
+        assert.equal(containsRetiredSynthPresetBaselineKey(snapshot), false);
+        await page.waitForFunction(() => !document.querySelector('[data-role="contextual-floating-toolbar"]'));
+    } finally {
+        await page.close();
+    }
+});
+
+test("synth preset bar saves current synth state through shared effect presets", async () => {
+    const page = await openHarnessPage();
+
+    try {
+        await page.waitForFunction(() => Boolean(document.querySelector("cosimo-preset-bar")?.shadowRoot));
+
+        const seededBank = normalizeArticulationBank({
+            selectedSlotId: "bright-bow",
+            activeTriggerMode: "velocity",
+            slots: [
+                { id: "bright-bow", runtimeSlot: 0, name: "Bright Bow" },
+            ],
+            velocityAssignments: [
+                { id: "vel-bright", articulationId: "bright-bow", min: 12, max: 34 },
+            ],
+        });
+        const seededModulationState = normalizeModulationState(await page.evaluate(({ articulationStateKey, nextBank }) => {
+            const harness = window.__COSIMO_DESKTOP_HARNESS__;
+            harness.setStoredStateValue(articulationStateKey, JSON.stringify(nextBank));
+
+            const rawModulationState = harness.getSnapshot().storedState["modulation.v2"];
+            const modulationState = rawModulationState
+                ? JSON.parse(String(rawModulationState))
+                : { format: "cosimo.modulation", version: 2 };
+
+            modulationState.msegSlots = Array.isArray(modulationState.msegSlots)
+                ? modulationState.msegSlots
+                : [];
+            modulationState.envelopeSlots = Array.isArray(modulationState.envelopeSlots)
+                ? modulationState.envelopeSlots
+                : [];
+            modulationState.msegSlots[0] = {
+                ...(modulationState.msegSlots[0] ?? {}),
+                morph: 0.71,
+            };
+            modulationState.envelopeSlots[1] = {
+                ...(modulationState.envelopeSlots[1] ?? {}),
+                attackSeconds: 0.21,
+                decaySeconds: 0.32,
+                sustain: 0.43,
+                releaseSeconds: 0.54,
+            };
+            modulationState.routes = [{
+                id: "preset-route-1",
+                enabled: true,
+                sourceKind: "mseg",
+                sourceSlot: 0,
+                polarity: "bipolar",
+                targetKind: "warpAmount",
+                amount: 0.37,
+            }];
+            harness.setStoredStateValue("modulation.v2", JSON.stringify(modulationState));
+            return modulationState;
+        }, {
+            articulationStateKey: ARTICULATION_STATE_KEY,
+            nextBank: seededBank,
+        }));
+
+        await waitForHarnessSnapshot(
+            page,
+            "seeded non-default stored state before synth preset save",
+            (nextSnapshot) => readStoredArticulationBank(nextSnapshot).selectedSlotId === "bright-bow"
+                && Math.abs(Number(readStoredModulationState(nextSnapshot).msegSlots[0]?.morph) - 0.71) <= 1e-9,
+        );
+
+        await page.evaluate(() => {
+            const harness = window.__COSIMO_DESKTOP_HARNESS__;
+            harness.setParameterValue("pan", 0.25);
+            harness.setParameterValue("filterCutoff", 2475);
+            harness.setParameterValue("mseg1Morph", 0.33);
+        });
+
+        await waitForReactFrames(page, 3);
+        await saveSynthPresetAs(page, "Bright Test Synth");
+
+        const snapshot = await waitForHarnessSnapshot(
+            page,
+            "shared synth preset saved",
+            (nextSnapshot) => {
+                const rawState = nextSnapshot.storedState[EFFECT_PRESETS_V2_STATE_KEY];
+                if (!rawState || containsRetiredSynthPresetBaselineKey(nextSnapshot)) {
+                    return false;
+                }
+
+                const state = JSON.parse(String(rawState));
+                return Array.isArray(state.userPresets?.[SYNTH_PRESET_EFFECT_ID])
+                    && state.userPresets[SYNTH_PRESET_EFFECT_ID].some((preset) => preset.label === "Bright Test Synth");
+            },
+        );
+
+        const presetState = readEffectPresetState(snapshot);
+        const savedPreset = presetState.userPresets[SYNTH_PRESET_EFFECT_ID].find((preset) => (
+            preset.label === "Bright Test Synth"
+        ));
+
+        assert.ok(savedPreset, "shared preset state must contain the saved synth preset");
+        assert.equal(savedPreset.kind, "cosimo.effectPreset");
+        assert.equal(savedPreset.version, 2);
+        assert.equal(savedPreset.effectID, SYNTH_PRESET_EFFECT_ID);
+        const visibleEndpointIDs = await readVisibleHarnessParameterEndpointIDs(page);
+        const savedParameterIDs = Object.keys(savedPreset.parameters).sort((left, right) => left.localeCompare(right));
+        assert.deepEqual(
+            savedParameterIDs,
+            visibleEndpointIDs,
+            "saved synth presets must capture the complete visible Cmajor parameter contract",
+        );
+        for (const endpointID of visibleEndpointIDs) {
+            assert.equal(
+                savedPreset.parameters[endpointID],
+                snapshot.parameterValues[endpointID],
+                `saved parameter ${endpointID} must match the live value`,
+            );
+        }
+        assert.equal(snapshot.parameterValues.hiddenSynthPresetGuard, 0.42);
+        assert.equal("hiddenSynthPresetGuard" in savedPreset.parameters, false);
+        assert.equal("midiIn" in savedPreset.parameters, false);
+        assert.equal("runtimeState" in savedPreset.parameters, false);
+        assert.equal("effectiveWarpState" in savedPreset.parameters, false);
+        assert.equal(
+            Object.keys(savedPreset.parameters).some((endpointID) => endpointID.startsWith("effective")),
+            false,
+            "saved synth presets must only contain real parameters, not runtime display endpoints",
+        );
+        assert.deepEqual(
+            Object.keys(savedPreset.storedState).sort((left, right) => left.localeCompare(right)),
+            [ARTICULATION_STATE_KEY, "modulation.v2"],
+            "saved synth presets must capture only the required stored-state adapters",
+        );
+        assert.deepEqual(
+            normalizeArticulationBank(savedPreset.storedState[ARTICULATION_STATE_KEY]),
+            seededBank,
+            "saved synth presets must include the actual non-default articulation bank",
+        );
+        const savedModulationState = deserializeModulationState(savedPreset.storedState["modulation.v2"]);
+        assert.equal(savedModulationState.msegSlots[0].morph, seededModulationState.msegSlots[0].morph);
+        assert.equal(savedModulationState.envelopeSlots[1].attackSeconds, seededModulationState.envelopeSlots[1].attackSeconds);
+        assert.equal(savedModulationState.envelopeSlots[1].releaseSeconds, seededModulationState.envelopeSlots[1].releaseSeconds);
+        assert.deepEqual(
+            routeSummary(savedModulationState.routes[0]),
+            routeSummary(seededModulationState.routes[0]),
+            "saved synth presets must include the actual non-default modulation state",
+        );
+        assert.deepEqual(presetState.activePresetByEffect[SYNTH_PRESET_EFFECT_ID], {
+            presetID: savedPreset.presetID,
+            label: "Bright Test Synth",
+            dirty: false,
+        });
+        assert.equal(containsRetiredSynthPresetBaselineKey(snapshot), false);
+    } finally {
+        await page.close();
+    }
+});
+
+test("synth preset bar marks edits dirty and reverts without synth-local baseline state", async () => {
+    const page = await openHarnessPage();
+
+    try {
+        await page.waitForFunction(() => Boolean(document.querySelector("cosimo-preset-bar")?.shadowRoot));
+
+        await page.evaluate(() => {
+            const harness = window.__COSIMO_DESKTOP_HARNESS__;
+            harness.setParameterValue("pan", 0.12);
+            harness.setParameterValue("filterCutoff", 2475);
+            harness.setParameterValue("mseg1Morph", 0.33);
+        });
+
+        await waitForReactFrames(page, 3);
+        await saveSynthPresetAs(page, "Revert Test Synth");
+        await waitForPresetBarDirtyState(page, false);
+
+        await page.evaluate(() => {
+            const harness = window.__COSIMO_DESKTOP_HARNESS__;
+            harness.setParameterValue("pan", 0.77);
+            harness.setParameterValue("filterCutoff", 8200);
+        });
+
+        await waitForPresetBarDirtyState(page, true);
+        await clickPresetBarAction(page, "revert");
+
+        const snapshot = await waitForHarnessSnapshot(
+            page,
+            "shared synth preset reverted",
+            (nextSnapshot) => Math.abs(Number(nextSnapshot.parameterValues.pan) - 0.12) <= 1e-9
+                && Math.abs(Number(nextSnapshot.parameterValues.filterCutoff) - 2475) <= 1e-9
+                && Math.abs(Number(nextSnapshot.parameterValues.mseg1Morph) - 0.33) <= 1e-9
+                && !containsRetiredSynthPresetBaselineKey(nextSnapshot)
+                && readEffectPresetState(nextSnapshot).activePresetByEffect[SYNTH_PRESET_EFFECT_ID]?.dirty === false,
+        );
+
+        assert.equal(Number(snapshot.parameterValues.pan), 0.12);
+        assert.equal(Number(snapshot.parameterValues.filterCutoff), 2475);
+        assert.equal(Number(snapshot.parameterValues.mseg1Morph), 0.33);
+        assert.equal(containsRetiredSynthPresetBaselineKey(snapshot), false);
+    } finally {
+        await page.close();
+    }
+});
+
+test("collapsed articulation cards scroll without clipping the voice tab or row controls", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: async (nextPage) => {
+            await nextPage.setViewportSize({ width: 760, height: 720 });
+        },
+    });
+
+    try {
+        await page.waitForFunction(() => {
+            const addButton = document.querySelector('button[aria-label="Capture current parameters as a new articulation"]');
+            return addButton instanceof HTMLButtonElement && !addButton.disabled;
+        });
+
+        const bank = normalizeArticulationBank({
+            selectedSlotId: "slot-0",
+            activeTriggerMode: "chain",
+            slots: Array.from({ length: 16 }, (_, index) => ({
+                id: `slot-${index}`,
+                runtimeSlot: index,
+                name: `Articulation ${index}`,
+            })),
+        });
+
+        await page.evaluate(({ stateKey, nextBank }) => {
+            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue(stateKey, JSON.stringify(nextBank));
+        }, {
+            stateKey: ARTICULATION_STATE_KEY,
+            nextBank: bank,
+        });
+        await page.locator('[data-role="articulation-card"][data-articulation-id="slot-15"]').waitFor();
+
+        const layout = await page.evaluate(() => {
+            const row = document.querySelector('[data-role="keyboard-control-row"]');
+            const surface = document.querySelector('[data-role="articulation-control-surface"]');
+            const carousel = document.querySelector('[data-role="articulation-card-carousel"]');
+            const voiceTab = document.querySelector('[data-role="keyboard-control-mode-voice"]');
+
+            if (!row || !surface || !carousel || !voiceTab) {
+                throw new Error("Articulation control layout is missing.");
+            }
+
+            const rowBox = row.getBoundingClientRect();
+            const surfaceBox = surface.getBoundingClientRect();
+            const voiceBox = voiceTab.getBoundingClientRect();
+
+            return {
+                rowWidth: rowBox.width,
+                surfaceRight: surfaceBox.right,
+                rowRight: rowBox.right,
+                voiceRight: voiceBox.right,
+                carouselClientWidth: carousel.clientWidth,
+                carouselScrollWidth: carousel.scrollWidth,
+            };
+        });
+
+        assert.ok(layout.voiceRight <= layout.rowRight + 0.5, "the Voice tab must stay inside the controls row");
+        assert.ok(layout.surfaceRight <= layout.rowRight + 0.5, "the articulation row must not expand beyond its parent");
+        assert.ok(
+            layout.carouselScrollWidth > layout.carouselClientWidth,
+            "extra articulation cards should scroll inside the carousel instead of widening the row",
+        );
     } finally {
         await page.close();
     }
@@ -4779,9 +5285,16 @@ test("main MSEG morph control updates morph without taking keyboard focus and pr
         await page.mouse.down();
         await page.mouse.move(sliderBox.x + (sliderBox.width * 0.72), sliderBox.y + (sliderBox.height * 0.5), { steps: 6 });
 
-        await page.waitForFunction(() => Boolean(window.__COSIMO_DESKTOP_HARNESS__.getRenderedState().msegPreviewState?.morphCurvePath));
+        await page.waitForFunction(() => Boolean(window.__COSIMO_DESKTOP_HARNESS__.getRenderedState().msegPreviewState?.effectiveCurvePath));
         let renderedState = await getHarnessRenderedState(page);
-        assert.match(renderedState.msegPreviewState?.morphCurvePath ?? "", /^M /);
+        assert.match(renderedState.msegPreviewState?.effectiveCurvePath ?? "", /^M /);
+        assert.match(renderedState.msegPreviewState?.shapeACurvePath ?? "", /^M /);
+        assert.match(renderedState.msegPreviewState?.shapeBCurvePath ?? "", /^M /);
+        assert.notEqual(
+            renderedState.msegPreviewState?.effectiveCurvePath,
+            renderedState.msegPreviewState?.shapeACurvePath,
+            "The preview's primary curve should be the morphed A/B result, not always shape A.",
+        );
 
         const focusedElement = await page.evaluate(() => {
             const host = document.querySelector("cosimo-desktop-react-view");
@@ -4812,7 +5325,7 @@ test("main MSEG morph control updates morph without taking keyboard focus and pr
         );
 
         await page.mouse.up();
-        await page.waitForFunction(() => !window.__COSIMO_DESKTOP_HARNESS__.getRenderedState().msegPreviewState?.morphCurvePath);
+        await page.waitForFunction(() => Boolean(window.__COSIMO_DESKTOP_HARNESS__.getRenderedState().msegPreviewState?.effectiveCurvePath));
 
         const snapshot = await waitForHarnessSnapshot(
             page,

@@ -24,6 +24,11 @@ export const MOD_TARGET_FILTER_Q = 4;
 export const MOD_TARGET_PITCH_SEMITONES = 5;
 export const MOD_TARGET_AMP_GAIN_DB = 6;
 export const MOD_TARGET_PAN = 7;
+export const MOD_TARGET_UNISON_DETUNE = 8;
+export const MOD_TARGET_UNISON_BLEND = 9;
+export const MOD_TARGET_UNISON_WIDTH = 10;
+export const MOD_TARGET_UNISON_WT_POSITION_SPREAD = 11;
+export const MOD_TARGET_UNISON_WARP_SPREAD = 12;
 const MSEG_SLOT_NAMES = ["MSEG 1", "MSEG 2", "MSEG 3"];
 const ENV_SLOT_NAMES = ["Env 1", "Env 2", "Env 3"];
 const ENV_MIN_SECONDS = 0.001;
@@ -38,6 +43,11 @@ const ROUTE_AMOUNT_LIMITS = {
     pitchSemitones: { min: -48.0, max: 48.0 },
     ampGainDb: { min: -48.0, max: 6.0 },
     pan: { min: -1.0, max: 1.0 },
+    unisonDetune: { min: -1.0, max: 1.0 },
+    unisonBlend: { min: -1.0, max: 1.0 },
+    unisonWidth: { min: -1.0, max: 1.0 },
+    unisonWavetablePositionSpread: { min: -1.0, max: 1.0 },
+    unisonWarpSpread: { min: -1.0, max: 1.0 },
 };
 const ROUTE_AMOUNT_STEPS = {
     wavetablePosition: 0.001,
@@ -47,6 +57,11 @@ const ROUTE_AMOUNT_STEPS = {
     pitchSemitones: 0.01,
     ampGainDb: 0.1,
     pan: 0.001,
+    unisonDetune: 0.001,
+    unisonBlend: 0.001,
+    unisonWidth: 0.001,
+    unisonWavetablePositionSpread: 0.001,
+    unisonWarpSpread: 0.001,
 };
 export const MODULATION_SOURCE_OPTIONS = [
     { value: "mseg-1", label: "MSEG 1", sourceKind: "mseg", sourceSlot: 1 },
@@ -67,6 +82,11 @@ export const MODULATION_TARGET_OPTIONS = [
     { value: "pitchSemitones", label: "PITCH" },
     { value: "ampGainDb", label: "AMP" },
     { value: "pan", label: "PAN" },
+    { value: "unisonDetune", label: "UNI DET" },
+    { value: "unisonBlend", label: "UNI BLEND" },
+    { value: "unisonWidth", label: "UNI WIDTH" },
+    { value: "unisonWavetablePositionSpread", label: "UNI WT" },
+    { value: "unisonWarpSpread", label: "UNI WARP" },
 ];
 let generatedRouteIdCounter = 1;
 function hasOwnValue(record, key) {
@@ -206,6 +226,12 @@ export function formatModulationAmountReadout(targetKind, amount, polarity = "un
             return `${prefix}${formatMagnitude(clampedAmount * 100, 0)}%`;
         case "warpAmount":
             return `${prefix}${formatMagnitude(clampedAmount * 100, 0)}%`;
+        case "unisonDetune":
+        case "unisonBlend":
+        case "unisonWidth":
+        case "unisonWavetablePositionSpread":
+        case "unisonWarpSpread":
+            return `${prefix}${formatMagnitude(clampedAmount * 100, 0)}%`;
         case "filterCutoffOctaves":
             return `${prefix}${formatMagnitude(clampedAmount, 2)} oct`;
         case "filterQ":
@@ -233,6 +259,11 @@ export function formatModulationAmountEditingValue(targetKind, amount) {
     switch (targetKind) {
         case "wavetablePosition":
         case "warpAmount":
+        case "unisonDetune":
+        case "unisonBlend":
+        case "unisonWidth":
+        case "unisonWavetablePositionSpread":
+        case "unisonWarpSpread":
         case "pan":
             return formatSignedNumeric(clampedAmount * 100, 1);
         case "filterCutoffOctaves":
@@ -273,7 +304,13 @@ export function parseModulationAmountEditingValue(targetKind, rawText) {
     if (!Number.isFinite(numericValue)) {
         return null;
     }
-    if (targetKind === "wavetablePosition" || targetKind === "warpAmount") {
+    if (targetKind === "wavetablePosition"
+        || targetKind === "warpAmount"
+        || targetKind === "unisonDetune"
+        || targetKind === "unisonBlend"
+        || targetKind === "unisonWidth"
+        || targetKind === "unisonWavetablePositionSpread"
+        || targetKind === "unisonWarpSpread") {
         return clampModulationRouteAmount(targetKind, numericValue / 100);
     }
     if (targetKind === "pan") {
@@ -303,6 +340,16 @@ export function getModulationTargetClampHint(targetKind) {
             return "Amplitude still clamps to the synth's gain range.";
         case "pan":
             return "Pan still clamps between full left and full right.";
+        case "unisonDetune":
+            return "Unison detune still clamps to the oscillator's detune range.";
+        case "unisonBlend":
+            return "Unison blend still clamps between center-heavy and even spread.";
+        case "unisonWidth":
+            return "Unison width still clamps between mono and full stereo spread.";
+        case "unisonWavetablePositionSpread":
+            return "Unison wavetable spread still clamps to the table range.";
+        case "unisonWarpSpread":
+            return "Unison warp spread still clamps to the oscillator's warp range.";
         default:
             return "";
     }
@@ -320,7 +367,12 @@ function normalizeTargetKind(value) {
         || value === "filterQ"
         || value === "pitchSemitones"
         || value === "ampGainDb"
-        || value === "pan") {
+        || value === "pan"
+        || value === "unisonDetune"
+        || value === "unisonBlend"
+        || value === "unisonWidth"
+        || value === "unisonWavetablePositionSpread"
+        || value === "unisonWarpSpread") {
         return value;
     }
     return "wavetablePosition";
@@ -462,6 +514,16 @@ function targetKindToCode(targetKind) {
         return MOD_TARGET_PITCH_SEMITONES;
     if (targetKind === "ampGainDb")
         return MOD_TARGET_AMP_GAIN_DB;
+    if (targetKind === "unisonDetune")
+        return MOD_TARGET_UNISON_DETUNE;
+    if (targetKind === "unisonBlend")
+        return MOD_TARGET_UNISON_BLEND;
+    if (targetKind === "unisonWidth")
+        return MOD_TARGET_UNISON_WIDTH;
+    if (targetKind === "unisonWavetablePositionSpread")
+        return MOD_TARGET_UNISON_WT_POSITION_SPREAD;
+    if (targetKind === "unisonWarpSpread")
+        return MOD_TARGET_UNISON_WARP_SPREAD;
     return MOD_TARGET_PAN;
 }
 function toMsegPlaybackUpload(slotIndex, playback) {

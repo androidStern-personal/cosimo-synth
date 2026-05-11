@@ -18,6 +18,17 @@ const warpAmountEndpointID = "warpAmount";
 const filterModeEndpointID = "filterMode";
 const filterCutoffEndpointID = "filterCutoff";
 const filterQEndpointID = "filterQ";
+const unisonVoicesEndpointID = "unisonVoices";
+const unisonDetuneEndpointID = "unisonDetune";
+const unisonBlendEndpointID = "unisonBlend";
+const unisonWidthEndpointID = "unisonWidth";
+const unisonPhaseEndpointID = "unisonPhase";
+const unisonRandomEndpointID = "unisonRandom";
+const unisonPhaseModeEndpointID = "unisonPhaseMode";
+const unisonDetuneModeEndpointID = "unisonDetuneMode";
+const unisonStackModeEndpointID = "unisonStackMode";
+const unisonWavetablePositionSpreadEndpointID = "unisonWavetablePositionSpread";
+const unisonWarpSpreadEndpointID = "unisonWarpSpread";
 const mseg1MorphEndpointID = "mseg1Morph";
 const mseg2MorphEndpointID = "mseg2Morph";
 const mseg3MorphEndpointID = "mseg3Morph";
@@ -36,10 +47,12 @@ const chorusFeedbackEndpointID = "chorusFeedback";
 const chorusRingAmountEndpointID = "chorusRingAmount";
 const chorusRingOffsetModeEndpointID = "chorusRingOffsetMode";
 const chorusRingFineSemitonesEndpointID = "chorusRingFineSemitones";
+const hiddenSynthPresetGuardEndpointID = "hiddenSynthPresetGuard";
 const runtimeSyncRequestEndpointID = "runtimeSyncRequest";
 const runtimeStateEndpointID = "runtimeState";
 const effectiveWavetablePositionEndpointID = "effectiveWavetablePosition";
 const effectiveWarpStateEndpointID = "effectiveWarpState";
+const effectiveUnisonStateEndpointID = "effectiveUnisonState";
 const effectiveFilterStateEndpointID = "effectiveFilterState";
 const effectiveMsegStateEndpointID = "effectiveMsegState";
 const filterSpectrumEndpointID = "filterSpectrum";
@@ -325,6 +338,61 @@ function buildHarnessStatus(manifest: unknown) {
                     },
                 },
                 {
+                    endpointID: unisonVoicesEndpointID,
+                    purpose: "parameter",
+                    annotation: { name: "Unison", min: 1, max: 8, init: 1 },
+                },
+                {
+                    endpointID: unisonDetuneEndpointID,
+                    purpose: "parameter",
+                    annotation: { name: "Unison Detune", min: 0, max: 1, init: 0.1 },
+                },
+                {
+                    endpointID: unisonBlendEndpointID,
+                    purpose: "parameter",
+                    annotation: { name: "Unison Blend", min: 0, max: 1, init: 0.75 },
+                },
+                {
+                    endpointID: unisonWidthEndpointID,
+                    purpose: "parameter",
+                    annotation: { name: "Unison Width", min: 0, max: 1, init: 1 },
+                },
+                {
+                    endpointID: unisonPhaseEndpointID,
+                    purpose: "parameter",
+                    annotation: { name: "Unison Phase", min: 0, max: 1, init: 0 },
+                },
+                {
+                    endpointID: unisonRandomEndpointID,
+                    purpose: "parameter",
+                    annotation: { name: "Unison Random", min: 0, max: 1, init: 0 },
+                },
+                {
+                    endpointID: unisonPhaseModeEndpointID,
+                    purpose: "parameter",
+                    annotation: { name: "Unison Phase Mode", min: 0, max: 1, init: 0 },
+                },
+                {
+                    endpointID: unisonDetuneModeEndpointID,
+                    purpose: "parameter",
+                    annotation: { name: "Unison Detune Mode", min: 0, max: 4, init: 0 },
+                },
+                {
+                    endpointID: unisonStackModeEndpointID,
+                    purpose: "parameter",
+                    annotation: { name: "Unison Stack", min: 0, max: 4, init: 0 },
+                },
+                {
+                    endpointID: unisonWavetablePositionSpreadEndpointID,
+                    purpose: "parameter",
+                    annotation: { name: "Unison WT Pos", min: 0, max: 1, init: 0 },
+                },
+                {
+                    endpointID: unisonWarpSpreadEndpointID,
+                    purpose: "parameter",
+                    annotation: { name: "Unison Warp", min: 0, max: 1, init: 0 },
+                },
+                {
                     endpointID: mseg1MorphEndpointID,
                     purpose: "parameter",
                     annotation: {
@@ -504,6 +572,17 @@ function buildHarnessStatus(manifest: unknown) {
                         init: 0,
                     },
                 },
+                {
+                    endpointID: hiddenSynthPresetGuardEndpointID,
+                    purpose: "parameter",
+                    annotation: {
+                        name: "Hidden Synth Preset Guard",
+                        hidden: true,
+                        min: 0,
+                        max: 1,
+                        init: 0.42,
+                    },
+                },
             ],
         },
     };
@@ -534,6 +613,17 @@ export class MockPatchConnection implements PatchConnectionLike {
         [filterModeEndpointID, 0],
         [filterCutoffEndpointID, 1000],
         [filterQEndpointID, 0.707107],
+        [unisonVoicesEndpointID, 1],
+        [unisonDetuneEndpointID, 0.1],
+        [unisonBlendEndpointID, 0.75],
+        [unisonWidthEndpointID, 1],
+        [unisonPhaseEndpointID, 0],
+        [unisonRandomEndpointID, 0],
+        [unisonPhaseModeEndpointID, 0],
+        [unisonDetuneModeEndpointID, 0],
+        [unisonStackModeEndpointID, 0],
+        [unisonWavetablePositionSpreadEndpointID, 0],
+        [unisonWarpSpreadEndpointID, 0],
         [mseg1MorphEndpointID, 0],
         [mseg2MorphEndpointID, 0],
         [mseg3MorphEndpointID, 0],
@@ -552,6 +642,7 @@ export class MockPatchConnection implements PatchConnectionLike {
         [chorusRingAmountEndpointID, 0],
         [chorusRingOffsetModeEndpointID, 0],
         [chorusRingFineSemitonesEndpointID, 0],
+        [hiddenSynthPresetGuardEndpointID, 0.42],
     ]);
     private parameterListeners = new Map<string, Set<ParameterListener>>();
     private endpointListeners = new Map<string, Set<EndpointListener>>();
@@ -947,6 +1038,45 @@ export class MockPatchConnection implements PatchConnectionLike {
             hasActive: hasActive ? 1 : 0,
             mode,
             amount,
+        });
+    }
+
+    emitEffectiveUnisonState(
+        {
+            voiceGeneration = 1,
+            hasActive = true,
+            voices = 4,
+            detune = 0.35,
+            blend = 0.75,
+            width = 1,
+            detuneMode = 0,
+            stackMode = 0,
+            wavetablePositionSpread = 0,
+            warpSpread = 0,
+        }: {
+            voiceGeneration?: number;
+            hasActive?: boolean;
+            voices?: number;
+            detune?: number;
+            blend?: number;
+            width?: number;
+            detuneMode?: number;
+            stackMode?: number;
+            wavetablePositionSpread?: number;
+            warpSpread?: number;
+        } = {},
+    ) {
+        this.emitEndpoint(effectiveUnisonStateEndpointID, {
+            voiceGeneration,
+            hasActive: hasActive ? 1 : 0,
+            voices,
+            detune,
+            blend,
+            width,
+            detuneMode,
+            stackMode,
+            wavetablePositionSpread,
+            warpSpread,
         });
     }
 

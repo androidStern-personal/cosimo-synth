@@ -34,7 +34,7 @@ async function resolveCmajorApiRoot(rootPath) {
             const entries = await fs.readdir(depsRoot, { withFileTypes: true });
 
             for (const entry of entries) {
-                if (!entry.isDirectory() || !entry.name.startsWith("cmajor-")) {
+                if (!entry.name.startsWith("cmajor-")) {
                     continue;
                 }
 

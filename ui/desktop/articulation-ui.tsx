@@ -905,7 +905,7 @@ function ArticulationCardCarousel({
     return (
         <div
             data-role="articulation-card-carousel"
-            className="flex min-w-0 flex-1 items-stretch gap-1.5 overflow-x-auto overflow-y-hidden py-0.5 [scrollbar-color:rgba(255,255,255,0.12)_transparent] [scrollbar-width:thin]"
+            className="flex min-w-0 max-w-full flex-1 basis-0 items-stretch gap-1.5 overflow-x-auto overflow-y-hidden py-0.5 [scrollbar-color:rgba(255,255,255,0.12)_transparent] [scrollbar-width:thin]"
         >
             {cards.length === 0 ? (
                 <div className="flex h-[80px] flex-1 items-center justify-center rounded-[7px] border border-dashed border-white/[0.06] bg-white/[0.01] px-3 text-[10px] tracking-[0.04em] text-slate-300/40">
@@ -2780,11 +2780,11 @@ export function ArticulationControlSurface(props: ArticulationControlSurfaceProp
                 data-liquid-detail="section-tab"
                 aria-label="Articulations"
                 onKeyDown={handleSurfaceKeyDown}
-                className="synth-grid-card-shell relative flex min-h-[100px] shrink-0 items-stretch gap-2 rounded-[12px] border px-2.5 py-2"
+                className="synth-grid-card-shell relative flex min-h-[100px] min-w-0 shrink-0 items-stretch gap-2 overflow-hidden rounded-[12px] border px-2.5 py-2"
             >
                 {carousel}
                 <div aria-hidden="true" className="w-px shrink-0 self-stretch bg-white/[0.05]" />
-                <div className="flex shrink-0 flex-col items-end justify-between gap-1.5">
+                <div className="flex min-w-fit shrink-0 flex-col items-end justify-between gap-1.5">
                     <HeaderActions
                         selectedIsDirty={selectedIsDirty}
                         selectedName={selectedCard?.name ?? null}
@@ -2811,7 +2811,7 @@ export function ArticulationControlSurface(props: ArticulationControlSurfaceProp
             data-liquid-detail="section-tab"
             aria-label="Articulations"
             onKeyDown={handleSurfaceKeyDown}
-            className="synth-grid-card-shell relative flex shrink-0 flex-col gap-2 rounded-[12px] border px-2.5 py-2"
+            className="synth-grid-card-shell relative flex min-w-0 shrink-0 flex-col gap-2 overflow-hidden rounded-[12px] border px-2.5 py-2"
         >
             <div className="flex flex-wrap items-center justify-between gap-1.5">
                 <ModeSegmentedControl activeMode={activeMode} onSelectMode={onSelectMode} />

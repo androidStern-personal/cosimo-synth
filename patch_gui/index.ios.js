@@ -13973,6 +13973,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     min-height: calc(var(--spacing) * 16);
   }
 
+  .min-h-\\[92px\\] {
+    min-height: 92px;
+  }
+
   .min-h-\\[100dvh\\] {
     min-height: 100dvh;
   }
@@ -14133,6 +14137,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     width: 148px;
   }
 
+  .w-\\[min\\(calc\\(100vw-1rem\\)\\,680px\\)\\] {
+    width: min(100vw - 1rem, 680px);
+  }
+
   .w-auto {
     width: auto;
   }
@@ -14269,6 +14277,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     min-width: 180px;
   }
 
+  .min-w-fit {
+    min-width: fit-content;
+  }
+
   .min-w-full {
     min-width: 100%;
   }
@@ -14299,6 +14311,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .grow-0 {
     flex-grow: 0;
+  }
+
+  .basis-0 {
+    flex-basis: calc(var(--spacing) * 0);
   }
 
   .basis-auto {
@@ -14537,6 +14553,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .grid-cols-\\[56px_minmax\\(0\\,1fr\\)\\] {
     grid-template-columns: 56px minmax(0, 1fr);
+  }
+
+  .grid-cols-\\[82px_minmax\\(0\\,1fr\\)_minmax\\(0\\,1fr\\)_minmax\\(0\\,1fr\\)\\] {
+    grid-template-columns: 82px minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr);
   }
 
   .grid-cols-\\[minmax\\(0\\,1fr\\)_88px\\] {
@@ -14837,6 +14857,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     border-radius: 8px;
   }
 
+  .rounded-\\[9px\\] {
+    border-radius: 9px;
+  }
+
   .rounded-\\[10px\\] {
     border-radius: 10px;
   }
@@ -14875,6 +14899,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .rounded-\\[30px\\] {
     border-radius: 30px;
+  }
+
+  .rounded-\\[999px\\] {
+    border-radius: 999px;
   }
 
   .rounded-full {
@@ -15012,6 +15040,16 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     border-color: var(--color-amber-200);
   }
 
+  .border-amber-200\\/35 {
+    border-color: #fee68559;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .border-amber-200\\/35 {
+      border-color: color-mix(in oklab, var(--color-amber-200) 35%, transparent);
+    }
+  }
+
   .border-amber-200\\/40 {
     border-color: #fee68566;
   }
@@ -15055,6 +15093,16 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
   @supports (color: color-mix(in lab, red, red)) {
     .border-cyan-200\\/28 {
       border-color: color-mix(in oklab, var(--color-cyan-200) 28%, transparent);
+    }
+  }
+
+  .border-cyan-200\\/\\[0\\.09\\] {
+    border-color: #a2f4fd17;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .border-cyan-200\\/\\[0\\.09\\] {
+      border-color: color-mix(in oklab, var(--color-cyan-200) 9%, transparent);
     }
   }
 
@@ -15252,12 +15300,26 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     }
   }
 
+  .border-white\\/\\[0\\.055\\] {
+    border-color: #ffffff0e;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .border-white\\/\\[0\\.055\\] {
+      border-color: color-mix(in oklab, var(--color-white) 5.5%, transparent);
+    }
+  }
+
   .border-t-transparent {
     border-top-color: #0000;
   }
 
   .border-l-transparent {
     border-left-color: #0000;
+  }
+
+  .bg-\\[\\#070a12\\]\\/96 {
+    background-color: oklab(14.5558% -.00103131 -.0183188 / .96);
   }
 
   .bg-\\[\\#050505\\] {
@@ -15312,6 +15374,16 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     background-color: var(--color-amber-200);
   }
 
+  .bg-amber-200\\/16 {
+    background-color: #fee68529;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .bg-amber-200\\/16 {
+      background-color: color-mix(in oklab, var(--color-amber-200) 16%, transparent);
+    }
+  }
+
   .bg-amber-300 {
     background-color: var(--color-amber-300);
   }
@@ -15357,6 +15429,16 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
   @supports (color: color-mix(in lab, red, red)) {
     .bg-black\\/20 {
       background-color: color-mix(in oklab, var(--color-black) 20%, transparent);
+    }
+  }
+
+  .bg-black\\/28 {
+    background-color: #00000047;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .bg-black\\/28 {
+      background-color: color-mix(in oklab, var(--color-black) 28%, transparent);
     }
   }
 
@@ -15704,6 +15786,16 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     }
   }
 
+  .bg-white\\/\\[0\\.045\\] {
+    background-color: #ffffff0b;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .bg-white\\/\\[0\\.045\\] {
+      background-color: color-mix(in oklab, var(--color-white) 4.5%, transparent);
+    }
+  }
+
   .bg-gradient-to-b {
     --tw-gradient-position: to bottom in oklab;
     background-image: linear-gradient(var(--tw-gradient-stops));
@@ -15721,6 +15813,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .bg-\\[linear-gradient\\(\\.\\.\\.\\)\\] {
     background-image: linear-gradient(...);
+  }
+
+  .bg-\\[radial-gradient\\(circle_at_50\\%_30\\%\\,rgba\\(34\\,211\\,238\\,0\\.10\\)\\,rgba\\(2\\,6\\,14\\,0\\.78\\)_60\\%\\)\\] {
+    background-image: radial-gradient(circle at 50% 30%, #22d3ee1a, #02060ec7 60%);
   }
 
   .from-amber-400 {
@@ -16084,6 +16180,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .pr-1 {
     padding-right: calc(var(--spacing) * 1);
+  }
+
+  .pr-1\\.5 {
+    padding-right: calc(var(--spacing) * 1.5);
   }
 
   .pr-2 {
@@ -16845,6 +16945,16 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     }
   }
 
+  .text-slate-100\\/84 {
+    color: #f1f5f9d6;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-slate-100\\/84 {
+      color: color-mix(in oklab, var(--color-slate-100) 84%, transparent);
+    }
+  }
+
   .text-slate-100\\/88 {
     color: #f1f5f9e0;
   }
@@ -16896,6 +17006,16 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
   @supports (color: color-mix(in lab, red, red)) {
     .text-slate-200\\/72 {
       color: color-mix(in oklab, var(--color-slate-200) 72%, transparent);
+    }
+  }
+
+  .text-slate-200\\/80 {
+    color: #e2e8f0cc;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-slate-200\\/80 {
+      color: color-mix(in oklab, var(--color-slate-200) 80%, transparent);
     }
   }
 
@@ -17265,6 +17385,21 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
   }
 
+  .shadow-\\[0_0_14px_rgba\\(251\\,191\\,36\\,0\\.45\\)\\] {
+    --tw-shadow: 0 0 14px var(--tw-shadow-color, #fbbf2473);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
+  .shadow-\\[0_0_18px_rgba\\(251\\,191\\,36\\,0\\.10\\)\\] {
+    --tw-shadow: 0 0 18px var(--tw-shadow-color, #fbbf241a);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
+  .shadow-\\[0_18px_54px_rgba\\(0\\,0\\,0\\,0\\.54\\)\\,inset_0_1px_0_rgba\\(255\\,255\\,255\\,0\\.04\\)\\] {
+    --tw-shadow: 0 18px 54px var(--tw-shadow-color, #0000008a), inset 0 1px 0 var(--tw-shadow-color, #ffffff0a);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
   .shadow-\\[inset_0_0_0_1px_rgba\\(255\\,255\\,255\\,0\\.10\\)\\] {
     --tw-shadow: inset 0 0 0 1px var(--tw-shadow-color, #ffffff1a);
     box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
@@ -17412,6 +17547,12 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );
   }
 
+  .backdrop-blur-\\[2px\\] {
+    --tw-backdrop-blur: blur(2px);
+    -webkit-backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );
+    backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );
+  }
+
   .backdrop-blur-md {
     --tw-backdrop-blur: blur(var(--blur-md));
     -webkit-backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );
@@ -17540,8 +17681,20 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     user-select: none;
   }
 
+  .\\[--knob-track-value-color\\:\\#87d7f5\\] {
+    --knob-track-value-color: #87d7f5;
+  }
+
+  .\\[--preset-bar-border-radius\\:12px\\] {
+    --preset-bar-border-radius: 12px;
+  }
+
   .\\[scrollbar-color\\:rgba\\(255\\,255\\,255\\,0\\.12\\)_transparent\\] {
     scrollbar-color: #ffffff1f transparent;
+  }
+
+  .\\[scrollbar-width\\:none\\] {
+    scrollbar-width: none;
   }
 
   .\\[scrollbar-width\\:thin\\] {
@@ -17853,6 +18006,16 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
       background-color: rgb(var(--section-accent-rgb)/.045);
     }
 
+    .hover\\:bg-amber-200\\/22:hover {
+      background-color: #fee68538;
+    }
+
+    @supports (color: color-mix(in lab, red, red)) {
+      .hover\\:bg-amber-200\\/22:hover {
+        background-color: color-mix(in oklab, var(--color-amber-200) 22%, transparent);
+      }
+    }
+
     .hover\\:bg-amber-300\\/16:hover {
       background-color: #ffd23629;
     }
@@ -18055,6 +18218,16 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
       }
     }
 
+    .hover\\:bg-white\\/\\[0\\.045\\]:hover {
+      background-color: #ffffff0b;
+    }
+
+    @supports (color: color-mix(in lab, red, red)) {
+      .hover\\:bg-white\\/\\[0\\.045\\]:hover {
+        background-color: color-mix(in oklab, var(--color-white) 4.5%, transparent);
+      }
+    }
+
     .hover\\:bg-white\\/\\[0\\.075\\]:hover {
       background-color: #ffffff13;
     }
@@ -18193,6 +18366,21 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .focus\\:border-\\[var\\(--section-accent\\)\\]:focus {
     border-color: var(--section-accent);
+  }
+
+  .focus\\:ring-2:focus {
+    --tw-ring-shadow: var(--tw-ring-inset, ) 0 0 0 calc(2px + var(--tw-ring-offset-width)) var(--tw-ring-color, currentcolor);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
+  .focus\\:ring-cyan-200\\/45:focus {
+    --tw-ring-color: #a2f4fd73;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .focus\\:ring-cyan-200\\/45:focus {
+      --tw-ring-color: color-mix(in oklab, var(--color-cyan-200) 45%, transparent);
+    }
   }
 
   .focus\\:outline-none:focus {
@@ -18707,6 +18895,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
       grid-template-columns: repeat(3, minmax(0, 1fr));
     }
 
+    .lg\\:grid-cols-\\[minmax\\(168px\\,0\\.78fr\\)_minmax\\(0\\,1\\.22fr\\)\\] {
+      grid-template-columns: minmax(168px, .78fr) minmax(0, 1.22fr);
+    }
+
     .lg\\:flex-row {
       flex-direction: row;
     }
@@ -18840,6 +19032,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
       grid-template-columns: repeat(4, minmax(0, 1fr));
     }
 
+    .xl\\:grid-cols-\\[minmax\\(260px\\,0\\.76fr\\)_minmax\\(0\\,1\\.24fr\\)\\] {
+      grid-template-columns: minmax(260px, .76fr) minmax(0, 1.24fr);
+    }
+
     .xl\\:gap-40 {
       gap: calc(var(--spacing) * 40);
     }
@@ -18885,6 +19081,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .\\[\\&_strong\\]\\:bg-yellow-100 strong {
     background-color: var(--color-yellow-100);
+  }
+
+  .\\[\\&\\:\\:-webkit-scrollbar\\]\\:hidden::-webkit-scrollbar {
+    display: none;
   }
 }
 
@@ -20935,6 +21135,11 @@ const FILTER_MODE_OFF = 0;
 const FILTER_MODE_PEAK = 5;
 const WARP_MODE_OFF$1 = 0;
 const WARP_MODE_MIRROR$1 = 4;
+const UNISON_MAX_VOICES = 8;
+const UNISON_DETUNE_MODE_LINEAR = 0;
+const UNISON_DETUNE_MODE_RANDOM = 4;
+const UNISON_STACK_MODE_OFF = 0;
+const UNISON_STACK_MODE_CENTER_TWO_OCTAVES = 4;
 const FILTER_CUTOFF_MIN_HZ = 20;
 const FILTER_CUTOFF_MAX_HZ = 2e4;
 const FILTER_Q_MIN$1 = 0.1;
@@ -20956,6 +21161,18 @@ function clampWarpMode(value) {
 }
 function clampWarpAmount(value) {
   return clamp$9(Number(value) || 0, 0, 1);
+}
+function clampUnisonVoiceCount(value) {
+  return clamp$9(Math.round(Number(value) || 1), 1, UNISON_MAX_VOICES);
+}
+function clampUnison01(value) {
+  return clamp$9(Number(value) || 0, 0, 1);
+}
+function clampUnisonDetuneMode(value) {
+  return clamp$9(Math.round(Number(value) || 0), UNISON_DETUNE_MODE_LINEAR, UNISON_DETUNE_MODE_RANDOM);
+}
+function clampUnisonStackMode(value) {
+  return clamp$9(Math.round(Number(value) || 0), UNISON_STACK_MODE_OFF, UNISON_STACK_MODE_CENTER_TWO_OCTAVES);
 }
 function clampDisplayPosition(value) {
   return clamp$9(Number(value) || 0, 0, 1);
@@ -21077,6 +21294,59 @@ function selectObservedEffectiveWarpState(currentState, message) {
     amount: 0
   };
   const nextState = normalizeEffectiveWarpStateMessage(message);
+  if (!nextState) {
+    return previousState;
+  }
+  if (nextState.voiceGeneration < previousState.voiceGeneration) {
+    return previousState;
+  }
+  return nextState;
+}
+function normalizeEffectiveUnisonStateMessage(message) {
+  const payload = message?.event ?? message;
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+  const rawGeneration = Number(payload.voiceGeneration);
+  const rawHasActive = payload.hasActive;
+  return {
+    voiceGeneration: Number.isFinite(rawGeneration) ? Math.max(0, Math.trunc(rawGeneration)) : 0,
+    hasActive: Boolean(rawHasActive),
+    voices: clampUnisonVoiceCount(payload.voices),
+    detune: clampUnison01(payload.detune),
+    blend: clampUnison01(payload.blend),
+    width: clampUnison01(payload.width),
+    detuneMode: clampUnisonDetuneMode(payload.detuneMode),
+    stackMode: clampUnisonStackMode(payload.stackMode),
+    wavetablePositionSpread: clampUnison01(payload.wavetablePositionSpread),
+    warpSpread: clampUnison01(payload.warpSpread)
+  };
+}
+function selectObservedEffectiveUnisonState(currentState, message) {
+  const previousState = currentState && typeof currentState === "object" ? {
+    voiceGeneration: Number.isFinite(Number(currentState.voiceGeneration)) ? Math.trunc(Number(currentState.voiceGeneration)) : -1,
+    hasActive: Boolean(currentState.hasActive),
+    voices: clampUnisonVoiceCount(currentState.voices),
+    detune: clampUnison01(currentState.detune),
+    blend: clampUnison01(currentState.blend),
+    width: clampUnison01(currentState.width),
+    detuneMode: clampUnisonDetuneMode(currentState.detuneMode),
+    stackMode: clampUnisonStackMode(currentState.stackMode),
+    wavetablePositionSpread: clampUnison01(currentState.wavetablePositionSpread),
+    warpSpread: clampUnison01(currentState.warpSpread)
+  } : {
+    voiceGeneration: -1,
+    hasActive: false,
+    voices: 1,
+    detune: 0.1,
+    blend: 0.75,
+    width: 1,
+    detuneMode: UNISON_DETUNE_MODE_LINEAR,
+    stackMode: UNISON_STACK_MODE_OFF,
+    wavetablePositionSpread: 0,
+    warpSpread: 0
+  };
+  const nextState = normalizeEffectiveUnisonStateMessage(message);
   if (!nextState) {
     return previousState;
   }
@@ -22766,7 +23036,12 @@ const ROUTE_AMOUNT_LIMITS = {
   filterQ: { min: -19.9, max: FILTER_Q_MAX - FILTER_Q_MIN },
   pitchSemitones: { min: -48, max: 48 },
   ampGainDb: { min: -48, max: 6 },
-  pan: { min: -1, max: 1 }
+  pan: { min: -1, max: 1 },
+  unisonDetune: { min: -1, max: 1 },
+  unisonBlend: { min: -1, max: 1 },
+  unisonWidth: { min: -1, max: 1 },
+  unisonWavetablePositionSpread: { min: -1, max: 1 },
+  unisonWarpSpread: { min: -1, max: 1 }
 };
 const MODULATION_SOURCE_OPTIONS = [
   { value: "mseg-1", label: "MSEG 1", sourceKind: "mseg", sourceSlot: 1 },
@@ -22786,7 +23061,12 @@ const MODULATION_TARGET_OPTIONS = [
   { value: "filterQ", label: "RES" },
   { value: "pitchSemitones", label: "PITCH" },
   { value: "ampGainDb", label: "AMP" },
-  { value: "pan", label: "PAN" }
+  { value: "pan", label: "PAN" },
+  { value: "unisonDetune", label: "UNI DET" },
+  { value: "unisonBlend", label: "UNI BLEND" },
+  { value: "unisonWidth", label: "UNI WIDTH" },
+  { value: "unisonWavetablePositionSpread", label: "UNI WT" },
+  { value: "unisonWarpSpread", label: "UNI WARP" }
 ];
 let generatedRouteIdCounter = 1;
 function hasOwnValue(record, key) {
@@ -22902,6 +23182,12 @@ function formatModulationAmountReadout(targetKind, amount, polarity = "unipolar"
       return `${prefix}${formatMagnitude(clampedAmount * 100, 0)}%`;
     case "warpAmount":
       return `${prefix}${formatMagnitude(clampedAmount * 100, 0)}%`;
+    case "unisonDetune":
+    case "unisonBlend":
+    case "unisonWidth":
+    case "unisonWavetablePositionSpread":
+    case "unisonWarpSpread":
+      return `${prefix}${formatMagnitude(clampedAmount * 100, 0)}%`;
     case "filterCutoffOctaves":
       return `${prefix}${formatMagnitude(clampedAmount, 2)} oct`;
     case "filterQ":
@@ -22943,6 +23229,16 @@ function getModulationTargetClampHint(targetKind) {
       return "Amplitude still clamps to the synth's gain range.";
     case "pan":
       return "Pan still clamps between full left and full right.";
+    case "unisonDetune":
+      return "Unison detune still clamps to the oscillator's detune range.";
+    case "unisonBlend":
+      return "Unison blend still clamps between center-heavy and even spread.";
+    case "unisonWidth":
+      return "Unison width still clamps between mono and full stereo spread.";
+    case "unisonWavetablePositionSpread":
+      return "Unison wavetable spread still clamps to the table range.";
+    case "unisonWarpSpread":
+      return "Unison warp spread still clamps to the oscillator's warp range.";
     default:
       return "";
   }
@@ -22954,7 +23250,7 @@ function normalizeSourceKind(value) {
   return "mseg";
 }
 function normalizeTargetKind(value) {
-  if (value === "wavetablePosition" || value === "warpAmount" || value === "filterCutoffOctaves" || value === "filterQ" || value === "pitchSemitones" || value === "ampGainDb" || value === "pan") {
+  if (value === "wavetablePosition" || value === "warpAmount" || value === "filterCutoffOctaves" || value === "filterQ" || value === "pitchSemitones" || value === "ampGainDb" || value === "pan" || value === "unisonDetune" || value === "unisonBlend" || value === "unisonWidth" || value === "unisonWavetablePositionSpread" || value === "unisonWarpSpread") {
     return value;
   }
   return "wavetablePosition";
@@ -23463,9 +23759,9 @@ function buildMsegSurfacePaths(points, width, height, options = {}) {
   const fillPath = options.orientation === "vertical" ? `${curvePath} L ${metrics.plotLeft.toFixed(3)} ${metrics.plotBottom.toFixed(3)} L ${metrics.plotLeft.toFixed(3)} ${metrics.plotTop.toFixed(3)} Z` : `${curvePath} L ${metrics.plotRight.toFixed(3)} ${metrics.plotBottom.toFixed(3)} L ${metrics.plotLeft.toFixed(3)} ${metrics.plotBottom.toFixed(3)} Z`;
   return { curvePath, fillPath, metrics };
 }
-function buildMsegMorphCurvePath(shapeAPoints, shapeBPoints, morphValue, width, height, options = {}) {
+function buildMsegMorphSurfacePaths(shapeAPoints, shapeBPoints, morphValue, width, height, options = {}) {
   if (!shapeAPoints || !shapeBPoints || width <= 1 || height <= 1) {
-    return "";
+    return null;
   }
   try {
     const bufferA = renderMsegShape({ points: shapeAPoints });
@@ -23484,10 +23780,15 @@ function buildMsegMorphCurvePath(shapeAPoints, shapeBPoints, morphValue, width, 
       const y = clamp$5(valueA + (valueB - valueA) * morph, 0, 1);
       return pointToMsegEditorCoordinates({ x, y }, width, height, options);
     });
-    return polylineToSvgPath(polyline);
+    const curvePath = polylineToSvgPath(polyline);
+    const fillPath = options.orientation === "vertical" ? `${curvePath} L ${metrics.plotLeft.toFixed(3)} ${metrics.plotBottom.toFixed(3)} L ${metrics.plotLeft.toFixed(3)} ${metrics.plotTop.toFixed(3)} Z` : `${curvePath} L ${metrics.plotRight.toFixed(3)} ${metrics.plotBottom.toFixed(3)} L ${metrics.plotLeft.toFixed(3)} ${metrics.plotBottom.toFixed(3)} Z`;
+    return { curvePath, fillPath, metrics };
   } catch {
-    return "";
+    return null;
   }
+}
+function buildMsegMorphCurvePath(shapeAPoints, shapeBPoints, morphValue, width, height, options = {}) {
+  return buildMsegMorphSurfacePaths(shapeAPoints, shapeBPoints, morphValue, width, height, options)?.curvePath ?? "";
 }
 function polylineToSvgPath(polyline) {
   if (polyline.length === 0) {
@@ -23518,32 +23819,61 @@ function MsegPreview({
   const viewportRef = reactExports.useRef(null);
   const size = useResizeObserver$1(viewportRef);
   const clipPathId = reactExports.useId().replace(/:/g, "_");
-  const { curvePath, fillPath, referenceCurvePath, referenceFillPath, morphCurvePath, metrics } = reactExports.useMemo(() => {
+  const {
+    curvePath,
+    fillPath,
+    referenceCurvePath,
+    referenceFillPath,
+    morphShapeACurvePath,
+    morphShapeAFillPath,
+    morphShapeBCurvePath,
+    morphShapeBFillPath,
+    metrics
+  } = reactExports.useMemo(() => {
     const basePaths = buildMsegSurfacePaths(points, size.width, size.height, {
       orientation,
       pointRadius: 0,
       horizontalPadding: MSEG_PREVIEW_HORIZONTAL_PADDING_PX,
       verticalPadding: MSEG_PREVIEW_VERTICAL_PADDING_PX
     });
-    const referencePaths = referencePoints ? buildMsegSurfacePaths(referencePoints, size.width, size.height, {
+    const hasMorphReferenceShapes = Boolean(morphShapeAPoints && morphShapeBPoints);
+    const referencePaths = referencePoints && !hasMorphReferenceShapes ? buildMsegSurfacePaths(referencePoints, size.width, size.height, {
       orientation,
       pointRadius: 0,
       horizontalPadding: MSEG_PREVIEW_HORIZONTAL_PADDING_PX,
       verticalPadding: MSEG_PREVIEW_VERTICAL_PADDING_PX
     }) : null;
-    const nextMorphCurvePath = showMorphCurve ? buildMsegMorphCurvePath(morphShapeAPoints, morphShapeBPoints, morphValue, size.width, size.height, {
+    const sharedPreviewPathOptions = {
       orientation,
       pointRadius: 0,
       horizontalPadding: MSEG_PREVIEW_HORIZONTAL_PADDING_PX,
       verticalPadding: MSEG_PREVIEW_VERTICAL_PADDING_PX
-    }) : "";
+    };
+    const shapeAReferencePaths = morphShapeAPoints ? buildMsegSurfacePaths(morphShapeAPoints, size.width, size.height, sharedPreviewPathOptions) : null;
+    const shapeBReferencePaths = morphShapeBPoints ? buildMsegSurfacePaths(morphShapeBPoints, size.width, size.height, sharedPreviewPathOptions) : null;
+    const effectiveMorphPaths = buildMsegMorphSurfacePaths(
+      morphShapeAPoints,
+      morphShapeBPoints,
+      morphValue,
+      size.width,
+      size.height,
+      {
+        orientation,
+        pointRadius: 0,
+        horizontalPadding: MSEG_PREVIEW_HORIZONTAL_PADDING_PX,
+        verticalPadding: MSEG_PREVIEW_VERTICAL_PADDING_PX
+      }
+    );
     return {
-      ...basePaths,
+      ...effectiveMorphPaths ?? basePaths,
       referenceCurvePath: referencePaths?.curvePath ?? "",
       referenceFillPath: referencePaths?.fillPath ?? "",
-      morphCurvePath: nextMorphCurvePath
+      morphShapeACurvePath: shapeAReferencePaths?.curvePath ?? "",
+      morphShapeAFillPath: shapeAReferencePaths?.fillPath ?? "",
+      morphShapeBCurvePath: shapeBReferencePaths?.curvePath ?? "",
+      morphShapeBFillPath: shapeBReferencePaths?.fillPath ?? ""
     };
-  }, [morphShapeAPoints, morphShapeBPoints, morphValue, orientation, points, referencePoints, showMorphCurve, size.height, size.width]);
+  }, [morphShapeAPoints, morphShapeBPoints, morphValue, orientation, points, referencePoints, size.height, size.width]);
   const clampedProgressFillEnd = progressFillEnd !== null && progressFillEnd !== void 0 && Number.isFinite(Number(progressFillEnd)) ? clamp$5(Number(progressFillEnd), 0, 1) : null;
   const progressClipRect = reactExports.useMemo(() => {
     if (clampedProgressFillEnd === null) {
@@ -23608,6 +23938,38 @@ function MsegPreview({
         ] }),
         referenceFillPath ? /* @__PURE__ */ jsxRuntimeExports.jsx("path", { className: "cosimo-reference-curve-fill", d: referenceFillPath }) : null,
         referenceCurvePath ? /* @__PURE__ */ jsxRuntimeExports.jsx("path", { className: "cosimo-reference-curve-line", d: referenceCurvePath }) : null,
+        morphShapeAFillPath ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "path",
+          {
+            "data-role": "mseg-preview-shape-a-fill",
+            className: "cosimo-reference-curve-fill",
+            d: morphShapeAFillPath
+          }
+        ) : null,
+        morphShapeBFillPath ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "path",
+          {
+            "data-role": "mseg-preview-shape-b-fill",
+            className: "cosimo-reference-curve-fill",
+            d: morphShapeBFillPath
+          }
+        ) : null,
+        morphShapeACurvePath ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "path",
+          {
+            "data-role": "mseg-preview-shape-a-curve",
+            className: "cosimo-reference-curve-line",
+            d: morphShapeACurvePath
+          }
+        ) : null,
+        morphShapeBCurvePath ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "path",
+          {
+            "data-role": "mseg-preview-shape-b-curve",
+            className: "cosimo-reference-curve-line",
+            d: morphShapeBCurvePath
+          }
+        ) : null,
         /* @__PURE__ */ jsxRuntimeExports.jsx("path", { className: "cosimo-curve-fill", d: fillPath }),
         progressClipRect ? /* @__PURE__ */ jsxRuntimeExports.jsx("g", { clipPath: `url(#${clipPathId})`, children: /* @__PURE__ */ jsxRuntimeExports.jsx(
           "path",
@@ -23617,15 +23979,7 @@ function MsegPreview({
             "data-role": "mseg-preview-progress-fill"
           }
         ) }) : null,
-        /* @__PURE__ */ jsxRuntimeExports.jsx("path", { className: "cosimo-curve-line", d: curvePath }),
-        morphCurvePath ? /* @__PURE__ */ jsxRuntimeExports.jsx(
-          "path",
-          {
-            "data-role": "mseg-preview-morph-curve",
-            className: "cosimo-mseg-effective-curve-line",
-            d: morphCurvePath
-          }
-        ) : null
+        /* @__PURE__ */ jsxRuntimeExports.jsx("path", { "data-role": "mseg-preview-effective-curve", className: "cosimo-curve-line", d: curvePath })
       ]
     }
   );
@@ -25067,6 +25421,17 @@ function createDefaultArticulationParameterSnapshot() {
     filterMode: 0,
     filterCutoff: 1e3,
     filterQ: 0.707107,
+    unisonVoices: 1,
+    unisonDetune: 0.1,
+    unisonBlend: 0.75,
+    unisonWidth: 1,
+    unisonPhase: 0,
+    unisonRandom: 0,
+    unisonPhaseMode: 0,
+    unisonDetuneMode: 0,
+    unisonStackMode: 0,
+    unisonWavetablePositionSpread: 0,
+    unisonWarpSpread: 0,
     msegMorphs: [0, 0, 0],
     distortionMode: 0,
     distortionDriveDb: 12,
@@ -25099,6 +25464,22 @@ function normalizeArticulationParameterSnapshot(value) {
     filterMode: normalizeInteger(nextValue.filterMode, defaults.filterMode, 0, 5),
     filterCutoff: normalizeNumber(nextValue.filterCutoff, defaults.filterCutoff, 20, 2e4),
     filterQ: normalizeNumber(nextValue.filterQ, defaults.filterQ, 0.1, 20),
+    unisonVoices: normalizeInteger(nextValue.unisonVoices, defaults.unisonVoices, 1, 8),
+    unisonDetune: normalizeNumber(nextValue.unisonDetune, defaults.unisonDetune, 0, 1),
+    unisonBlend: normalizeNumber(nextValue.unisonBlend, defaults.unisonBlend, 0, 1),
+    unisonWidth: normalizeNumber(nextValue.unisonWidth, defaults.unisonWidth, 0, 1),
+    unisonPhase: normalizeNumber(nextValue.unisonPhase, defaults.unisonPhase, 0, 1),
+    unisonRandom: normalizeNumber(nextValue.unisonRandom, defaults.unisonRandom, 0, 1),
+    unisonPhaseMode: normalizeInteger(nextValue.unisonPhaseMode, defaults.unisonPhaseMode, 0, 1),
+    unisonDetuneMode: normalizeInteger(nextValue.unisonDetuneMode, defaults.unisonDetuneMode, 0, 4),
+    unisonStackMode: normalizeInteger(nextValue.unisonStackMode, defaults.unisonStackMode, 0, 4),
+    unisonWavetablePositionSpread: normalizeNumber(
+      nextValue.unisonWavetablePositionSpread,
+      defaults.unisonWavetablePositionSpread,
+      0,
+      1
+    ),
+    unisonWarpSpread: normalizeNumber(nextValue.unisonWarpSpread, defaults.unisonWarpSpread, 0, 1),
     msegMorphs: [
       clamp01(Number(msegMorphs[0])),
       clamp01(Number(msegMorphs[1])),
@@ -26328,6 +26709,7 @@ async function loadFactoryBankFrames(resourceClientInput, {
 }
 const EFFECTIVE_WAVETABLE_POSITION_ENDPOINT_ID = "effectiveWavetablePosition";
 const EFFECTIVE_WARP_STATE_ENDPOINT_ID = "effectiveWarpState";
+const EFFECTIVE_UNISON_STATE_ENDPOINT_ID = "effectiveUnisonState";
 const EFFECTIVE_FILTER_STATE_ENDPOINT_ID = "effectiveFilterState";
 const FILTER_SPECTRUM_ENDPOINT_ID = "filterSpectrum";
 const DISPLAY_SWIPE_THRESHOLD_PX = 2;
@@ -26342,6 +26724,17 @@ const WARP_AMOUNT_ENDPOINT_ID = "warpAmount";
 const FILTER_MODE_ENDPOINT_ID = "filterMode";
 const FILTER_CUTOFF_ENDPOINT_ID = "filterCutoff";
 const FILTER_Q_ENDPOINT_ID = "filterQ";
+const UNISON_VOICES_ENDPOINT_ID = "unisonVoices";
+const UNISON_DETUNE_ENDPOINT_ID = "unisonDetune";
+const UNISON_BLEND_ENDPOINT_ID = "unisonBlend";
+const UNISON_WIDTH_ENDPOINT_ID = "unisonWidth";
+const UNISON_PHASE_ENDPOINT_ID = "unisonPhase";
+const UNISON_RANDOM_ENDPOINT_ID = "unisonRandom";
+const UNISON_PHASE_MODE_ENDPOINT_ID = "unisonPhaseMode";
+const UNISON_DETUNE_MODE_ENDPOINT_ID = "unisonDetuneMode";
+const UNISON_STACK_MODE_ENDPOINT_ID = "unisonStackMode";
+const UNISON_WAVETABLE_POSITION_SPREAD_ENDPOINT_ID = "unisonWavetablePositionSpread";
+const UNISON_WARP_SPREAD_ENDPOINT_ID = "unisonWarpSpread";
 const MSEG_1_MORPH_ENDPOINT_ID = "mseg1Morph";
 const MSEG_2_MORPH_ENDPOINT_ID = "mseg2Morph";
 const MSEG_3_MORPH_ENDPOINT_ID = "mseg3Morph";
@@ -26593,6 +26986,50 @@ function useObservedWarpState({
     amount: Number(warpAmount) || 0
   };
 }
+function useObservedUnisonState({
+  unisonVoices,
+  unisonDetune,
+  unisonBlend,
+  unisonWidth,
+  unisonDetuneMode,
+  unisonStackMode,
+  unisonWavetablePositionSpread,
+  unisonWarpSpread
+}) {
+  const message = usePatchEndpoint(EFFECTIVE_UNISON_STATE_ENDPOINT_ID, null);
+  const fallbackState = reactExports.useMemo(() => ({
+    voiceGeneration: -1,
+    hasActive: false,
+    voices: clamp$1(Math.round(Number(unisonVoices) || 1), 1, 8),
+    detune: clamp$1(Number(unisonDetune) || 0, 0, 1),
+    blend: clamp$1(Number(unisonBlend) || 0, 0, 1),
+    width: clamp$1(Number(unisonWidth) || 0, 0, 1),
+    detuneMode: clamp$1(Math.round(Number(unisonDetuneMode) || 0), 0, 4),
+    stackMode: clamp$1(Math.round(Number(unisonStackMode) || 0), 0, 4),
+    wavetablePositionSpread: clamp$1(Number(unisonWavetablePositionSpread) || 0, 0, 1),
+    warpSpread: clamp$1(Number(unisonWarpSpread) || 0, 0, 1)
+  }), [
+    unisonBlend,
+    unisonDetune,
+    unisonDetuneMode,
+    unisonStackMode,
+    unisonVoices,
+    unisonWarpSpread,
+    unisonWavetablePositionSpread,
+    unisonWidth
+  ]);
+  const [observedState, setObservedState] = reactExports.useState(() => fallbackState);
+  reactExports.useEffect(() => {
+    setObservedState((previousState) => selectObservedEffectiveUnisonState(previousState, message));
+  }, [message]);
+  reactExports.useEffect(() => {
+    if (message) {
+      return;
+    }
+    setObservedState(fallbackState);
+  }, [fallbackState, message]);
+  return message ? observedState : fallbackState;
+}
 function useModulationState() {
   const patchConnection = usePatchConnection();
   const [state, setState] = reactExports.useState(null);
@@ -26715,6 +27152,126 @@ function useStoredArticulationBank() {
     hasHydrated,
     setAndPersistBank
   }), [bank, hasHydrated, setAndPersistBank]);
+}
+function isPlainRecord(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function parsePresetStoredStateValue(rawValue, label) {
+  if (typeof rawValue !== "string") {
+    return rawValue;
+  }
+  try {
+    return JSON.parse(rawValue);
+  } catch (error) {
+    throw new Error(`${label} must be valid JSON.`);
+  }
+}
+function parseStrictArticulationPresetBank(rawValue) {
+  const parsedValue = parsePresetStoredStateValue(rawValue, "Articulation preset state");
+  if (!isPlainRecord(parsedValue)) {
+    throw new Error("Articulation preset state must be an object.");
+  }
+  if (parsedValue.format !== "cosimo.articulations" || parsedValue.version !== 2) {
+    throw new Error("Articulation preset state must be cosimo.articulations version 2.");
+  }
+  return normalizeArticulationBank(parsedValue);
+}
+function parseStrictModulationPresetState(rawValue) {
+  const parsedValue = parsePresetStoredStateValue(rawValue, "Modulation preset state");
+  if (!isPlainRecord(parsedValue)) {
+    throw new Error("Modulation preset state must be an object.");
+  }
+  if (parsedValue.format !== "cosimo.modulation" || parsedValue.version !== 2) {
+    throw new Error("Modulation preset state must be cosimo.modulation version 2.");
+  }
+  return normalizeModulationState(parsedValue);
+}
+function useSynthPresetStoredStateAdapters({
+  articulationBankState,
+  modulationBridge,
+  modulationState
+}) {
+  const patchConnection = usePatchConnection();
+  const { bankRef, setAndPersistBank } = articulationBankState;
+  const latestModulationStateRef = reactExports.useRef(null);
+  reactExports.useEffect(() => {
+    latestModulationStateRef.current = modulationState;
+  }, [modulationState]);
+  return reactExports.useMemo(() => {
+    const subscribeToStoredStateKey = (stateKey, listener) => {
+      const handleStoredStateValue = (message) => {
+        if (!message || typeof message !== "object") {
+          return;
+        }
+        if (message.key === stateKey) {
+          listener();
+        }
+      };
+      patchConnection.addStoredStateValueListener?.(handleStoredStateValue);
+      return () => {
+        patchConnection.removeStoredStateValueListener?.(handleStoredStateValue);
+      };
+    };
+    return [
+      {
+        key: ARTICULATION_STATE_KEY,
+        schemaVersion: 2,
+        getContract() {
+          return {
+            key: ARTICULATION_STATE_KEY,
+            schemaVersion: 2,
+            required: true
+          };
+        },
+        capture() {
+          return bankRef.current;
+        },
+        normalizeForPreset(value) {
+          return parseStrictArticulationPresetBank(value);
+        },
+        serializeForPreset(value) {
+          return serializeArticulationBank(parseStrictArticulationPresetBank(value));
+        },
+        apply(value) {
+          setAndPersistBank(parseStrictArticulationPresetBank(value));
+        },
+        subscribe(listener) {
+          return subscribeToStoredStateKey(ARTICULATION_STATE_KEY, listener);
+        }
+      },
+      {
+        key: MODULATION_STATE_KEY,
+        schemaVersion: 2,
+        getContract() {
+          return {
+            key: MODULATION_STATE_KEY,
+            schemaVersion: 2,
+            required: true
+          };
+        },
+        capture() {
+          return modulationBridge.current?.getState() ?? latestModulationStateRef.current ?? createDefaultModulationState();
+        },
+        normalizeForPreset(value) {
+          return parseStrictModulationPresetState(value);
+        },
+        serializeForPreset(value) {
+          return serializeModulationState(parseStrictModulationPresetState(value));
+        },
+        apply(value) {
+          const nextState = parseStrictModulationPresetState(value);
+          if (modulationBridge.current) {
+            modulationBridge.current.setState(nextState);
+            return;
+          }
+          patchConnection.sendStoredStateValue?.(MODULATION_STATE_KEY, serializeModulationState(nextState));
+        },
+        subscribe(listener) {
+          return subscribeToStoredStateKey(MODULATION_STATE_KEY, listener);
+        }
+      }
+    ];
+  }, [bankRef, modulationBridge, patchConnection, setAndPersistBank]);
 }
 function useStagePositionDrag({
   stageRef,
@@ -27238,6 +27795,61 @@ function useSynthPatchViewModel({
     initialValue: 0.707107,
     coerce: (value) => clamp$1(Number(value) || 0, 0.1, 20)
   });
+  const unisonVoices = usePatchParameterBinding({
+    endpointID: UNISON_VOICES_ENDPOINT_ID,
+    initialValue: 1,
+    coerce: (value) => clamp$1(Math.round(Number(value) || 1), 1, 8)
+  });
+  const unisonDetune = usePatchParameterBinding({
+    endpointID: UNISON_DETUNE_ENDPOINT_ID,
+    initialValue: 0.1,
+    coerce: (value) => clamp$1(Number(value) || 0, 0, 1)
+  });
+  const unisonBlend = usePatchParameterBinding({
+    endpointID: UNISON_BLEND_ENDPOINT_ID,
+    initialValue: 0.75,
+    coerce: (value) => clamp$1(Number(value) || 0, 0, 1)
+  });
+  const unisonWidth = usePatchParameterBinding({
+    endpointID: UNISON_WIDTH_ENDPOINT_ID,
+    initialValue: 1,
+    coerce: (value) => clamp$1(Number(value) || 0, 0, 1)
+  });
+  const unisonPhase = usePatchParameterBinding({
+    endpointID: UNISON_PHASE_ENDPOINT_ID,
+    initialValue: 0,
+    coerce: (value) => clamp$1(Number(value) || 0, 0, 1)
+  });
+  const unisonRandom = usePatchParameterBinding({
+    endpointID: UNISON_RANDOM_ENDPOINT_ID,
+    initialValue: 0,
+    coerce: (value) => clamp$1(Number(value) || 0, 0, 1)
+  });
+  const unisonPhaseMode = usePatchParameterBinding({
+    endpointID: UNISON_PHASE_MODE_ENDPOINT_ID,
+    initialValue: 0,
+    coerce: (value) => clamp$1(Math.round(Number(value) || 0), 0, 1)
+  });
+  const unisonDetuneMode = usePatchParameterBinding({
+    endpointID: UNISON_DETUNE_MODE_ENDPOINT_ID,
+    initialValue: 0,
+    coerce: (value) => clamp$1(Math.round(Number(value) || 0), 0, 4)
+  });
+  const unisonStackMode = usePatchParameterBinding({
+    endpointID: UNISON_STACK_MODE_ENDPOINT_ID,
+    initialValue: 0,
+    coerce: (value) => clamp$1(Math.round(Number(value) || 0), 0, 4)
+  });
+  const unisonWavetablePositionSpread = usePatchParameterBinding({
+    endpointID: UNISON_WAVETABLE_POSITION_SPREAD_ENDPOINT_ID,
+    initialValue: 0,
+    coerce: (value) => clamp$1(Number(value) || 0, 0, 1)
+  });
+  const unisonWarpSpread = usePatchParameterBinding({
+    endpointID: UNISON_WARP_SPREAD_ENDPOINT_ID,
+    initialValue: 0,
+    coerce: (value) => clamp$1(Number(value) || 0, 0, 1)
+  });
   const mseg1Morph = usePatchParameterBinding({
     endpointID: MSEG_1_MORPH_ENDPOINT_ID,
     initialValue: 0,
@@ -27341,6 +27953,16 @@ function useSynthPatchViewModel({
     filterCutoff: filterCutoff.value,
     filterQ: filterQ.value
   });
+  const observedUnisonState = useObservedUnisonState({
+    unisonVoices: unisonVoices.value,
+    unisonDetune: unisonDetune.value,
+    unisonBlend: unisonBlend.value,
+    unisonWidth: unisonWidth.value,
+    unisonDetuneMode: unisonDetuneMode.value,
+    unisonStackMode: unisonStackMode.value,
+    unisonWavetablePositionSpread: unisonWavetablePositionSpread.value,
+    unisonWarpSpread: unisonWarpSpread.value
+  });
   const observedFilterSpectrum = useObservedFilterSpectrum();
   const observedDistortionHistory = useObservedDistortionHistory();
   const observedDistortionScope = useObservedDistortionScope();
@@ -27364,6 +27986,11 @@ function useSynthPatchViewModel({
   const isApplyingArticulationRef = reactExports.useRef(false);
   const [selectedArticulationIsDirty, setSelectedArticulationIsDirty] = reactExports.useState(false);
   const [discardedArticulationEdit, setDiscardedArticulationEdit] = reactExports.useState(null);
+  const presetStoredStateAdapters = useSynthPresetStoredStateAdapters({
+    articulationBankState,
+    modulationBridge,
+    modulationState
+  });
   const activeAuditionRef = reactExports.useRef(null);
   const lastPlayedNoteRef = reactExports.useRef(ARTICULATION_AUDITION_FALLBACK_NOTE);
   const heldMidiNotesRef = reactExports.useRef(/* @__PURE__ */ new Map());
@@ -27535,6 +28162,17 @@ function useSynthPatchViewModel({
         filterMode: filterMode.value,
         filterCutoff: filterCutoff.value,
         filterQ: filterQ.value,
+        unisonVoices: unisonVoices.value,
+        unisonDetune: unisonDetune.value,
+        unisonBlend: unisonBlend.value,
+        unisonWidth: unisonWidth.value,
+        unisonPhase: unisonPhase.value,
+        unisonRandom: unisonRandom.value,
+        unisonPhaseMode: unisonPhaseMode.value,
+        unisonDetuneMode: unisonDetuneMode.value,
+        unisonStackMode: unisonStackMode.value,
+        unisonWavetablePositionSpread: unisonWavetablePositionSpread.value,
+        unisonWarpSpread: unisonWarpSpread.value,
         msegMorphs: [mseg1Morph.value, mseg2Morph.value, mseg3Morph.value],
         distortionMode: distortionMode.value,
         distortionDriveDb: distortionDriveDb.value,
@@ -27556,7 +28194,7 @@ function useSynthPatchViewModel({
       modRouteAmounts: (currentModulationState?.routes ?? []).map((route) => ({
         routeId: route.id,
         amount: route.amount
-      }))
+      })).filter((routeAmount) => Math.abs(routeAmount.amount) > 1e-6)
     });
   }, [
     chorusBloomMode.value,
@@ -27585,6 +28223,17 @@ function useSynthPatchViewModel({
     mseg3Morph.value,
     pan.value,
     playMode.value,
+    unisonBlend.value,
+    unisonDetune.value,
+    unisonDetuneMode.value,
+    unisonPhase.value,
+    unisonPhaseMode.value,
+    unisonRandom.value,
+    unisonStackMode.value,
+    unisonVoices.value,
+    unisonWarpSpread.value,
+    unisonWavetablePositionSpread.value,
+    unisonWidth.value,
     warpAmount.value,
     warpMode.value,
     wavetablePosition.value
@@ -27601,6 +28250,17 @@ function useSynthPatchViewModel({
     filterMode.setValue(parameters.filterMode);
     filterCutoff.setValue(parameters.filterCutoff);
     filterQ.setValue(parameters.filterQ);
+    unisonVoices.setValue(parameters.unisonVoices);
+    unisonDetune.setValue(parameters.unisonDetune);
+    unisonBlend.setValue(parameters.unisonBlend);
+    unisonWidth.setValue(parameters.unisonWidth);
+    unisonPhase.setValue(parameters.unisonPhase);
+    unisonRandom.setValue(parameters.unisonRandom);
+    unisonPhaseMode.setValue(parameters.unisonPhaseMode);
+    unisonDetuneMode.setValue(parameters.unisonDetuneMode);
+    unisonStackMode.setValue(parameters.unisonStackMode);
+    unisonWavetablePositionSpread.setValue(parameters.unisonWavetablePositionSpread);
+    unisonWarpSpread.setValue(parameters.unisonWarpSpread);
     mseg1Morph.setValue(parameters.msegMorphs[0]);
     mseg2Morph.setValue(parameters.msegMorphs[1]);
     mseg3Morph.setValue(parameters.msegMorphs[2]);
@@ -27676,6 +28336,17 @@ function useSynthPatchViewModel({
     mseg3Morph,
     pan,
     playMode,
+    unisonBlend,
+    unisonDetune,
+    unisonDetuneMode,
+    unisonPhase,
+    unisonPhaseMode,
+    unisonRandom,
+    unisonStackMode,
+    unisonVoices,
+    unisonWarpSpread,
+    unisonWavetablePositionSpread,
+    unisonWidth,
     warpAmount,
     warpMode,
     wavetablePosition
@@ -28043,6 +28714,17 @@ function useSynthPatchViewModel({
     filterMode,
     filterCutoff,
     filterQ,
+    unisonVoices,
+    unisonDetune,
+    unisonBlend,
+    unisonWidth,
+    unisonPhase,
+    unisonRandom,
+    unisonPhaseMode,
+    unisonDetuneMode,
+    unisonStackMode,
+    unisonWavetablePositionSpread,
+    unisonWarpSpread,
     selectedMsegMorph,
     distortionMode,
     distortionDriveDb,
@@ -28065,11 +28747,13 @@ function useSynthPatchViewModel({
     observedDistortionScope,
     observedMsegPlayhead,
     observedWarpState,
+    observedUnisonState,
     modulationState,
     articulationBank,
     articulationSlots,
     selectedArticulationSlot,
     selectedArticulationIsDirty,
+    presetStoredStateAdapters,
     articulationHeldInput,
     discardedArticulationEdit: discardedArticulationEdit ? {
       slotId: discardedArticulationEdit.slotId,

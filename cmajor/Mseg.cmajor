@@ -4,6 +4,7 @@ namespace wt
     let msegPaddedSamples = 2051;
     let effectiveWavetablePositionMonitorHz = 30.0f;
     let effectiveWarpStateMonitorHz = 30.0f;
+    let effectiveUnisonStateMonitorHz = 30.0f;
     let effectiveFilterStateMonitorHz = 60.0f;
     let effectiveMsegStateMonitorHz = 60.0f;
     let msegNoteOffPolicyFinishLoop = 0;
@@ -49,6 +50,20 @@ namespace wt
         int32 hasActive;
         int32 mode;
         float32 amount;
+    }
+
+    struct EffectiveUnisonStateMonitor
+    {
+        int32 voiceGeneration;
+        int32 hasActive;
+        int32 voices;
+        float32 detune;
+        float32 blend;
+        float32 width;
+        int32 detuneMode;
+        int32 stackMode;
+        float32 wavetablePositionSpread;
+        float32 warpSpread;
     }
 
     struct EffectiveMsegStateMonitor

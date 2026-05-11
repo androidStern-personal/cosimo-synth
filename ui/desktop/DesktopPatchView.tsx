@@ -11,6 +11,7 @@ import {
 } from "react";
 import {
     PatchConnectionProvider,
+    usePatchConnection,
     type PatchConnectionLike,
 } from "../shared/cmajor-react";
 import type { ResourceClient } from "../shared/resource-client";
@@ -54,8 +55,12 @@ import { PrecisionNumberField } from "./desktop-precision-number-field";
 import { useDesktopCurveLab } from "./desktop-curve-lab";
 import { DesktopModMatrix } from "./desktop-mod-matrix";
 import {
+    SYNTH_PRESET_EFFECT_ID,
     useSynthPatchViewModel,
 } from "../shared/synth-hooks";
+import { createPresetBar } from "../shared/effects/preset-bar";
+import { createStandaloneEffectPresetController } from "../shared/effects/standalone-effect-presets";
+import type { EffectStoredStateAdapter } from "../shared/effects/effect-preset-v2";
 import {
     ArticulationControlSurface,
     type ArticulationCardView,
@@ -941,6 +946,448 @@ function WarpControlCluster({
     );
 }
 
+const UNISON_DETUNE_MODE_LABELS = ["Linear", "Super", "Exp", "Inv", "Random"] as const;
+const UNISON_STACK_MODE_LABELS = ["Off", "12", "12+7", "Center-12", "Center-24"] as const;
+const UNISON_PHASE_MODE_LABELS = ["Free", "Reset"] as const;
+
+function cycleDiscreteValue(binding: PatchControlBinding<number>, maxValue: number) {
+    binding.commitValue((Math.round(Number(binding.value) || 0) + 1) % (maxValue + 1));
+}
+
+function formatUnisonVoiceCount(value: number) {
+    return `${Math.round(clamp(value, 1, 8))}`;
+}
+
+function formatUnisonDetune(value: number) {
+    return `${Math.round(clamp(value, 0, 1) * 50)} ct`;
+}
+
+function parsePercentInput(text: string) {
+    const numeric = Number.parseFloat(String(text).replace("%", "").trim());
+    return Number.isFinite(numeric) ? clamp(numeric / 100, 0, 1) : null;
+}
+
+function parseUnisonDetuneInput(text: string) {
+    const numeric = Number.parseFloat(String(text).replace(/ct|cents?/gi, "").trim());
+    return Number.isFinite(numeric) ? clamp(numeric / 50, 0, 1) : null;
+}
+
+function unisonSpreadScalar(index: number, count: number, mode: number) {
+    if (count <= 1) {
+        return 0;
+    }
+
+    const normalized = (index / Math.max(1, count - 1)) * 2 - 1;
+
+    if (mode === 1) {
+        return Math.sin(normalized * Math.PI * 0.5);
+    }
+
+    if (mode === 2) {
+        return Math.sign(normalized) * Math.abs(normalized) ** 1.6;
+    }
+
+    if (mode === 3) {
+        return Math.sign(normalized) * (1 - (1 - Math.abs(normalized)) ** 1.6);
+    }
+
+    if (mode === 4) {
+        const seeded = Math.sin(((index + 1) * 37 + count * 19) * 12.9898) * 43758.5453;
+        return ((seeded % 1 + 1) % 1) * 2 - 1;
+    }
+
+    return normalized;
+}
+
+function unisonStackSemitones(index: number, count: number, stackMode: number) {
+    if (count <= 1 || stackMode === 0) {
+        return 0;
+    }
+
+    if (stackMode === 1) {
+        return index * 12;
+    }
+
+    if (stackMode === 2) {
+        return index % 2 === 0
+            ? Math.floor(index / 2) * 12
+            : Math.floor(index / 2) * 12 + 7;
+    }
+
+    const center = (count - 1) * 0.5;
+    const offset = index - center;
+    return offset * (stackMode === 4 ? 24 : 12);
+}
+
+function UnisonDistributionView({
+    voices,
+    detune,
+    blend,
+    width,
+    detuneMode,
+    stackMode,
+    wavetablePositionSpread,
+    warpSpread,
+}: {
+    voices: number;
+    detune: number;
+    blend: number;
+    width: number;
+    detuneMode: number;
+    stackMode: number;
+    wavetablePositionSpread: number;
+    warpSpread: number;
+}) {
+    const count = Math.round(clamp(voices, 1, 8));
+    const points = Array.from({ length: count }, (_, index) => {
+        const spread = unisonSpreadScalar(index, count, detuneMode);
+        const stackSemitones = unisonStackSemitones(index, count, stackMode);
+        const pitchOffset = spread * detune * 0.5 + stackSemitones / 48;
+        const centerDistance = count <= 1 ? 0 : Math.abs(index - ((count - 1) * 0.5)) / Math.max(1, (count - 1) * 0.5);
+        const weight = (1 - blend) * (1 - centerDistance) + blend;
+
+        return {
+            x: 50 + (spread * width * 38),
+            y: 45 - clamp(pitchOffset, -1, 1) * 28,
+            spread,
+            radius: 2.8 + weight * 2.8,
+        };
+    });
+    const wtExtent = wavetablePositionSpread * 38;
+    const warpExtent = warpSpread * 38;
+
+    return (
+        <div
+            data-role="unison-visualization"
+            className="relative min-h-[92px] overflow-hidden rounded-[14px] border border-cyan-200/[0.09] bg-[radial-gradient(circle_at_50%_30%,rgba(34,211,238,0.10),rgba(2,6,14,0.78)_60%)]"
+        >
+            <svg viewBox="0 0 100 92" className="h-full w-full" aria-hidden="true">
+                <line x1="50" y1="10" x2="50" y2="68" stroke="rgba(148,163,184,0.20)" strokeDasharray="2 4" />
+                <line x1="12" y1="45" x2="88" y2="45" stroke="rgba(148,163,184,0.16)" />
+                <path
+                    d={`M ${50 - wtExtent} 75 L ${50 + wtExtent} 75`}
+                    stroke="rgba(125,211,252,0.72)"
+                    strokeWidth="3"
+                    strokeLinecap="round"
+                />
+                <path
+                    d={`M ${50 - warpExtent} 84 L ${50 + warpExtent} 84`}
+                    stroke="rgba(251,191,36,0.72)"
+                    strokeWidth="3"
+                    strokeLinecap="round"
+                />
+                {points.map((point, index) => (
+                    <g key={`${index}-${point.x.toFixed(2)}`}>
+                        <line
+                            x1="50"
+                            y1="45"
+                            x2={point.x}
+                            y2={point.y}
+                            stroke="rgba(103,232,249,0.20)"
+                            strokeWidth="1"
+                        />
+                        <circle
+                            cx={point.x}
+                            cy={point.y}
+                            r={point.radius}
+                            fill={index % 2 === 0 ? "rgba(103,232,249,0.88)" : "rgba(251,191,36,0.88)"}
+                            stroke="rgba(255,255,255,0.65)"
+                            strokeWidth="0.6"
+                        />
+                    </g>
+                ))}
+                <text x="8" y="78" fill="rgba(203,213,225,0.54)" fontSize="5" letterSpacing="0">WT</text>
+                <text x="8" y="87" fill="rgba(203,213,225,0.54)" fontSize="5" letterSpacing="0">Warp</text>
+            </svg>
+        </div>
+    );
+}
+
+function UnisonModeButton({
+    label,
+    value,
+    binding,
+    max,
+    dataRole,
+}: {
+    label: string;
+    value: string;
+    binding: PatchControlBinding<number>;
+    max: number;
+    dataRole: string;
+}) {
+    return (
+        <button
+            type="button"
+            data-role={dataRole}
+            className="grid h-10 min-w-0 rounded-[10px] border border-white/[0.07] bg-black/28 px-2 py-1 text-left transition hover:bg-white/[0.045]"
+            onClick={() => cycleDiscreteValue(binding, max)}
+            title={`${label}: ${value}`}
+        >
+            <span className="text-[8px] font-bold uppercase tracking-[0.14em] text-slate-400/70">{label}</span>
+            <span className="truncate text-[10px] font-semibold uppercase tracking-[0.08em] text-cyan-100/90">{value}</span>
+        </button>
+    );
+}
+
+function UnisonField({
+    label,
+    children,
+}: {
+    label: string;
+    children: ReactNode;
+}) {
+    return (
+        <label className="grid min-w-0 gap-1">
+            <span className="text-[8px] font-bold uppercase tracking-[0.14em] text-slate-400/70">{label}</span>
+            {children}
+        </label>
+    );
+}
+
+function UnisonControlSurface({
+    unisonVoices,
+    unisonDetune,
+    unisonBlend,
+    unisonWidth,
+    unisonPhase,
+    unisonRandom,
+    unisonPhaseMode,
+    unisonDetuneMode,
+    unisonStackMode,
+    unisonWavetablePositionSpread,
+    unisonWarpSpread,
+    observedUnisonState,
+}: {
+    unisonVoices: PatchControlBinding<number>;
+    unisonDetune: PatchControlBinding<number>;
+    unisonBlend: PatchControlBinding<number>;
+    unisonWidth: PatchControlBinding<number>;
+    unisonPhase: PatchControlBinding<number>;
+    unisonRandom: PatchControlBinding<number>;
+    unisonPhaseMode: PatchControlBinding<number>;
+    unisonDetuneMode: PatchControlBinding<number>;
+    unisonStackMode: PatchControlBinding<number>;
+    unisonWavetablePositionSpread: PatchControlBinding<number>;
+    unisonWarpSpread: PatchControlBinding<number>;
+    observedUnisonState: {
+        hasActive: boolean;
+        voices: number;
+        detune: number;
+        blend: number;
+        width: number;
+        detuneMode: number;
+        stackMode: number;
+        wavetablePositionSpread: number;
+        warpSpread: number;
+    };
+}) {
+    const visualState = observedUnisonState.hasActive
+        ? observedUnisonState
+        : {
+            hasActive: false,
+            voices: unisonVoices.value,
+            detune: unisonDetune.value,
+            blend: unisonBlend.value,
+            width: unisonWidth.value,
+            detuneMode: unisonDetuneMode.value,
+            stackMode: unisonStackMode.value,
+            wavetablePositionSpread: unisonWavetablePositionSpread.value,
+            warpSpread: unisonWarpSpread.value,
+        };
+
+    return (
+        <section
+            data-role="unison-control-surface"
+            className="grid min-w-0 gap-2 rounded-[18px] border border-white/[0.055] bg-white/[0.022] p-3"
+        >
+            <div className="flex items-center justify-between gap-3">
+                <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-300/60">Unison</span>
+                <div className="flex items-center gap-1.5">
+                    <button
+                        type="button"
+                        data-role="unison-voices-down"
+                        className="grid size-7 place-items-center rounded-[9px] border border-white/[0.07] bg-black/30 text-slate-200/80 hover:bg-white/[0.045]"
+                        onClick={() => unisonVoices.commitValue(clamp(unisonVoices.value - 1, 1, 8))}
+                        aria-label="Decrease unison voices"
+                    >
+                        -
+                    </button>
+                    <PrecisionNumberField
+                        ariaLabel="Unison voices"
+                        binding={unisonVoices}
+                        min={1}
+                        max={8}
+                        step={1}
+                        width={58}
+                        height={30}
+                        formatDisplay={formatUnisonVoiceCount}
+                        formatEditingValue={(value) => String(Math.round(value))}
+                        parseText={(text) => Number.parseInt(text.trim(), 10)}
+                        dataRole="unison-voices-control"
+                    />
+                    <button
+                        type="button"
+                        data-role="unison-voices-up"
+                        className="grid size-7 place-items-center rounded-[9px] border border-white/[0.07] bg-black/30 text-slate-200/80 hover:bg-white/[0.045]"
+                        onClick={() => unisonVoices.commitValue(clamp(unisonVoices.value + 1, 1, 8))}
+                        aria-label="Increase unison voices"
+                    >
+                        +
+                    </button>
+                </div>
+            </div>
+
+            <div className="grid gap-3 lg:grid-cols-[minmax(168px,0.78fr)_minmax(0,1.22fr)]">
+                <UnisonDistributionView
+                    voices={visualState.voices}
+                    detune={visualState.detune}
+                    blend={visualState.blend}
+                    width={visualState.width}
+                    detuneMode={visualState.detuneMode}
+                    stackMode={visualState.stackMode}
+                    wavetablePositionSpread={visualState.wavetablePositionSpread}
+                    warpSpread={visualState.warpSpread}
+                />
+                <div className="grid min-w-0 gap-2">
+                    <div className="grid grid-cols-3 gap-1.5">
+                        <UnisonField label="Detune">
+                            <PrecisionNumberField
+                                ariaLabel="Unison detune"
+                                binding={unisonDetune}
+                                min={0}
+                                max={1}
+                                step={0.001}
+                                width={82}
+                                height={30}
+                                formatDisplay={formatUnisonDetune}
+                                formatEditingValue={(value) => String(Math.round(value * 50))}
+                                parseText={parseUnisonDetuneInput}
+                                dataRole="unison-detune-control"
+                            />
+                        </UnisonField>
+                        <UnisonField label="Blend">
+                            <PrecisionNumberField
+                                ariaLabel="Unison blend"
+                                binding={unisonBlend}
+                                min={0}
+                                max={1}
+                                step={0.001}
+                                width={82}
+                                height={30}
+                                formatDisplay={formatPercent}
+                                formatEditingValue={(value) => String(Math.round(value * 100))}
+                                parseText={parsePercentInput}
+                                dataRole="unison-blend-control"
+                            />
+                        </UnisonField>
+                        <UnisonField label="Width">
+                            <PrecisionNumberField
+                                ariaLabel="Unison width"
+                                binding={unisonWidth}
+                                min={0}
+                                max={1}
+                                step={0.001}
+                                width={82}
+                                height={30}
+                                formatDisplay={formatPercent}
+                                formatEditingValue={(value) => String(Math.round(value * 100))}
+                                parseText={parsePercentInput}
+                                dataRole="unison-width-control"
+                            />
+                        </UnisonField>
+                    </div>
+                    <div className="grid grid-cols-3 gap-1.5">
+                        <UnisonField label="Phase">
+                            <PrecisionNumberField
+                                ariaLabel="Unison phase"
+                                binding={unisonPhase}
+                                min={0}
+                                max={1}
+                                step={0.001}
+                                width={82}
+                                height={30}
+                                formatDisplay={formatPercent}
+                                formatEditingValue={(value) => String(Math.round(value * 100))}
+                                parseText={parsePercentInput}
+                                dataRole="unison-phase-control"
+                            />
+                        </UnisonField>
+                        <UnisonField label="Random">
+                            <PrecisionNumberField
+                                ariaLabel="Unison random"
+                                binding={unisonRandom}
+                                min={0}
+                                max={1}
+                                step={0.001}
+                                width={82}
+                                height={30}
+                                formatDisplay={formatPercent}
+                                formatEditingValue={(value) => String(Math.round(value * 100))}
+                                parseText={parsePercentInput}
+                                dataRole="unison-random-control"
+                            />
+                        </UnisonField>
+                        <UnisonField label="WT Pos">
+                            <PrecisionNumberField
+                                ariaLabel="Unison wavetable position spread"
+                                binding={unisonWavetablePositionSpread}
+                                min={0}
+                                max={1}
+                                step={0.001}
+                                width={82}
+                                height={30}
+                                formatDisplay={formatPercent}
+                                formatEditingValue={(value) => String(Math.round(value * 100))}
+                                parseText={parsePercentInput}
+                                dataRole="unison-wt-spread-control"
+                            />
+                        </UnisonField>
+                    </div>
+                    <div className="grid grid-cols-[82px_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)] gap-1.5">
+                        <UnisonField label="Warp">
+                            <PrecisionNumberField
+                                ariaLabel="Unison warp spread"
+                                binding={unisonWarpSpread}
+                                min={0}
+                                max={1}
+                                step={0.001}
+                                width={82}
+                                height={30}
+                                formatDisplay={formatPercent}
+                                formatEditingValue={(value) => String(Math.round(value * 100))}
+                                parseText={parsePercentInput}
+                                dataRole="unison-warp-spread-control"
+                            />
+                        </UnisonField>
+                        <UnisonModeButton
+                            label="Mode"
+                            value={UNISON_DETUNE_MODE_LABELS[Math.round(unisonDetuneMode.value)] ?? "Linear"}
+                            binding={unisonDetuneMode}
+                            max={4}
+                            dataRole="unison-detune-mode-control"
+                        />
+                        <UnisonModeButton
+                            label="Stack"
+                            value={UNISON_STACK_MODE_LABELS[Math.round(unisonStackMode.value)] ?? "Off"}
+                            binding={unisonStackMode}
+                            max={4}
+                            dataRole="unison-stack-mode-control"
+                        />
+                        <UnisonModeButton
+                            label="Phase"
+                            value={UNISON_PHASE_MODE_LABELS[Math.round(unisonPhaseMode.value)] ?? "Free"}
+                            binding={unisonPhaseMode}
+                            max={1}
+                            dataRole="unison-phase-mode-control"
+                        />
+                    </div>
+                </div>
+            </div>
+        </section>
+    );
+}
+
 function DesktopEnvelopeEditor({
     selectedEnvelope,
     onEnvelopeChange,
@@ -1215,6 +1662,47 @@ function StatusHeader({ statusText }: HeaderProps) {
             <span className="text-[10px] font-semibold uppercase tracking-[0.24em] text-blue-300/55">Cosimo Synth</span>
             <span className="text-[10px] uppercase tracking-[0.16em] text-[var(--cosimo-text-muted)]">{statusText}</span>
         </header>
+    );
+}
+
+function SynthPresetBarHost({
+    storedStateAdapters,
+}: {
+    storedStateAdapters: EffectStoredStateAdapter[];
+}) {
+    const patchConnection = usePatchConnection();
+    const hostRef = useRef<HTMLDivElement | null>(null);
+    const presetController = useMemo(() => createStandaloneEffectPresetController({
+        effectID: SYNTH_PRESET_EFFECT_ID,
+        patchConnection,
+        storedStateAdapters,
+    }), [patchConnection, storedStateAdapters]);
+
+    useEffect(() => {
+        const host = hostRef.current;
+
+        if (!host) {
+            return;
+        }
+
+        const presetBar = createPresetBar();
+        presetBar.controller = presetController;
+        host.replaceChildren(presetBar);
+        presetController.attach();
+
+        return () => {
+            presetController.detach();
+            presetBar.controller = null;
+            presetBar.remove();
+        };
+    }, [presetController]);
+
+    return (
+        <div
+            ref={hostRef}
+            data-role="synth-preset-bar-host"
+            className="relative z-40 min-w-0 overflow-visible rounded-[12px] border border-white/[0.06] bg-black/20 [--knob-track-value-color:#87d7f5] [--preset-bar-border-radius:12px]"
+        />
     );
 }
 
@@ -1761,9 +2249,33 @@ function EffectsRackSection({
 function KeyboardToolbar({
     playMode,
     glideTime,
+    unisonVoices,
+    unisonDetune,
+    unisonBlend,
+    unisonWidth,
+    unisonPhase,
+    unisonRandom,
+    unisonPhaseMode,
+    unisonDetuneMode,
+    unisonStackMode,
+    unisonWavetablePositionSpread,
+    unisonWarpSpread,
+    observedUnisonState,
     playModeFocusBindings,
     glideFocusTarget,
 }: VoiceGlideSectionProps & {
+    unisonVoices: PatchControlBinding<number>;
+    unisonDetune: PatchControlBinding<number>;
+    unisonBlend: PatchControlBinding<number>;
+    unisonWidth: PatchControlBinding<number>;
+    unisonPhase: PatchControlBinding<number>;
+    unisonRandom: PatchControlBinding<number>;
+    unisonPhaseMode: PatchControlBinding<number>;
+    unisonDetuneMode: PatchControlBinding<number>;
+    unisonStackMode: PatchControlBinding<number>;
+    unisonWavetablePositionSpread: PatchControlBinding<number>;
+    unisonWarpSpread: PatchControlBinding<number>;
+    observedUnisonState: SynthPatchViewModel["observedUnisonState"];
     playModeFocusBindings: SynthFocusBindings;
     glideFocusTarget: {
         onActivate: () => void;
@@ -1772,30 +2284,58 @@ function KeyboardToolbar({
     };
 }) {
     return (
-        <VoiceGlideControlSurface
-            playModeValue={playMode.value}
-            onPlayModeChange={(nextValue) => playMode.commitValue(nextValue)}
-            playModeFocusBindings={playModeFocusBindings}
-            className="grid-cols-[minmax(0,1fr)_auto] items-end"
-            glideControl={(
-                <NexusNumberField
-                    label="Glide"
-                    binding={glideTime}
-                    min={GLIDE_TIME_MIN_SECONDS}
-                    max={GLIDE_TIME_MAX_SECONDS}
-                    step={GLIDE_TIME_STEP_SECONDS}
-                    onActivate={glideFocusTarget.onActivate}
-                    onBeginTextEntry={glideFocusTarget.onBeginTextEntry}
-                    onEndTextEntry={glideFocusTarget.onEndTextEntry}
-                />
-            )}
-        />
+        <div className="grid gap-3 xl:grid-cols-[minmax(260px,0.76fr)_minmax(0,1.24fr)]">
+            <VoiceGlideControlSurface
+                playModeValue={playMode.value}
+                onPlayModeChange={(nextValue) => playMode.commitValue(nextValue)}
+                playModeFocusBindings={playModeFocusBindings}
+                className="grid-cols-[minmax(0,1fr)_auto] items-end"
+                glideControl={(
+                    <NexusNumberField
+                        label="Glide"
+                        binding={glideTime}
+                        min={GLIDE_TIME_MIN_SECONDS}
+                        max={GLIDE_TIME_MAX_SECONDS}
+                        step={GLIDE_TIME_STEP_SECONDS}
+                        onActivate={glideFocusTarget.onActivate}
+                        onBeginTextEntry={glideFocusTarget.onBeginTextEntry}
+                        onEndTextEntry={glideFocusTarget.onEndTextEntry}
+                    />
+                )}
+            />
+            <UnisonControlSurface
+                unisonVoices={unisonVoices}
+                unisonDetune={unisonDetune}
+                unisonBlend={unisonBlend}
+                unisonWidth={unisonWidth}
+                unisonPhase={unisonPhase}
+                unisonRandom={unisonRandom}
+                unisonPhaseMode={unisonPhaseMode}
+                unisonDetuneMode={unisonDetuneMode}
+                unisonStackMode={unisonStackMode}
+                unisonWavetablePositionSpread={unisonWavetablePositionSpread}
+                unisonWarpSpread={unisonWarpSpread}
+                observedUnisonState={observedUnisonState}
+            />
+        </div>
     );
 }
 
 function KeyboardSection({
     playMode,
     glideTime,
+    unisonVoices,
+    unisonDetune,
+    unisonBlend,
+    unisonWidth,
+    unisonPhase,
+    unisonRandom,
+    unisonPhaseMode,
+    unisonDetuneMode,
+    unisonStackMode,
+    unisonWavetablePositionSpread,
+    unisonWarpSpread,
+    observedUnisonState,
     keyboardRootNote,
     onOctaveDown,
     onOctaveUp,
@@ -1804,6 +2344,18 @@ function KeyboardSection({
     keyboardRef,
     toolbarOverride,
 }: VoiceGlideSectionProps & {
+    unisonVoices: PatchControlBinding<number>;
+    unisonDetune: PatchControlBinding<number>;
+    unisonBlend: PatchControlBinding<number>;
+    unisonWidth: PatchControlBinding<number>;
+    unisonPhase: PatchControlBinding<number>;
+    unisonRandom: PatchControlBinding<number>;
+    unisonPhaseMode: PatchControlBinding<number>;
+    unisonDetuneMode: PatchControlBinding<number>;
+    unisonStackMode: PatchControlBinding<number>;
+    unisonWavetablePositionSpread: PatchControlBinding<number>;
+    unisonWarpSpread: PatchControlBinding<number>;
+    observedUnisonState: SynthPatchViewModel["observedUnisonState"];
     keyboardRootNote: number;
     onOctaveDown: () => void;
     onOctaveUp: () => void;
@@ -1829,6 +2381,18 @@ function KeyboardSection({
                 <KeyboardToolbar
                     playMode={playMode}
                     glideTime={glideTime}
+                    unisonVoices={unisonVoices}
+                    unisonDetune={unisonDetune}
+                    unisonBlend={unisonBlend}
+                    unisonWidth={unisonWidth}
+                    unisonPhase={unisonPhase}
+                    unisonRandom={unisonRandom}
+                    unisonPhaseMode={unisonPhaseMode}
+                    unisonDetuneMode={unisonDetuneMode}
+                    unisonStackMode={unisonStackMode}
+                    unisonWavetablePositionSpread={unisonWavetablePositionSpread}
+                    unisonWarpSpread={unisonWarpSpread}
+                    observedUnisonState={observedUnisonState}
                     playModeFocusBindings={playModeFocusBindings}
                     glideFocusTarget={glideFocusTarget}
                 />
@@ -2400,6 +2964,90 @@ function ModulationMatrixSection({
     );
 }
 
+function ContextualArticulationToolbar({
+    articulationIsDirty,
+    selectedArticulationName,
+    isDismissed,
+    onDismiss,
+    onUpdateArticulation,
+    onSaveAsNewArticulation,
+    onRevertArticulation,
+}: {
+    articulationIsDirty: boolean;
+    selectedArticulationName: string | null;
+    isDismissed: boolean;
+    onDismiss: () => void;
+    onUpdateArticulation: () => void;
+    onSaveAsNewArticulation: () => void;
+    onRevertArticulation: () => void;
+}) {
+    if (!articulationIsDirty || isDismissed) {
+        return null;
+    }
+
+    const statusText = `Edited ${selectedArticulationName ?? "articulation"}`;
+
+    const buttonBase = "inline-flex h-7 shrink-0 items-center justify-center whitespace-nowrap rounded-[999px] px-3 text-[10px] font-bold uppercase tracking-[0.12em] transition focus:outline-none focus:ring-2 focus:ring-cyan-200/45";
+    const primaryButton = `${buttonBase} border border-amber-200/35 bg-amber-200/16 text-amber-50 shadow-[0_0_18px_rgba(251,191,36,0.10)] hover:bg-amber-200/22`;
+    const secondaryButton = `${buttonBase} border border-white/[0.08] bg-white/[0.045] text-slate-100/84 hover:bg-white/[0.07]`;
+    const quietButton = `${buttonBase} border border-white/[0.05] bg-transparent text-slate-300/70 hover:bg-white/[0.045] hover:text-slate-100`;
+
+    return (
+        <div
+            data-role="contextual-floating-toolbar"
+            aria-label={statusText}
+            className="pointer-events-none fixed bottom-4 left-1/2 z-50 w-[min(calc(100vw-1rem),680px)] -translate-x-1/2 px-2"
+        >
+            <div className="pointer-events-auto relative mx-auto flex h-10 w-fit max-w-full items-center gap-1.5 overflow-hidden rounded-[12px] border border-white/[0.08] bg-[#070a12]/96 py-1 pl-4 pr-1.5 shadow-[0_18px_54px_rgba(0,0,0,0.54),inset_0_1px_0_rgba(255,255,255,0.04)] backdrop-blur-[2px]">
+                <span
+                    aria-hidden="true"
+                    className="absolute left-2 top-2 h-1.5 w-1.5 rounded-full bg-amber-200 shadow-[0_0_14px_rgba(251,191,36,0.45)]"
+                />
+
+                <div className="flex min-w-0 items-center gap-1 overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                    <button
+                        type="button"
+                        aria-label={`Replace ${selectedArticulationName ?? "selected articulation"} with current sound`}
+                        data-role="contextual-update-articulation"
+                        onClick={onUpdateArticulation}
+                        className={primaryButton}
+                    >
+                        Replace
+                    </button>
+                    <button
+                        type="button"
+                        aria-label="Save current sound as a new articulation"
+                        data-role="contextual-save-new-articulation"
+                        onClick={onSaveAsNewArticulation}
+                        className={secondaryButton}
+                    >
+                        Save New
+                    </button>
+                    <button
+                        type="button"
+                        aria-label={`Revert to saved ${selectedArticulationName ?? "articulation"}`}
+                        data-role="contextual-revert-articulation"
+                        onClick={onRevertArticulation}
+                        className={quietButton}
+                    >
+                        Revert
+                    </button>
+                </div>
+
+                <button
+                    type="button"
+                    aria-label="Dismiss contextual toolbar"
+                    data-role="contextual-toolbar-dismiss"
+                    onClick={onDismiss}
+                    className="grid h-7 w-7 shrink-0 place-items-center rounded-full border border-white/[0.05] bg-white/[0.03] text-[11px] font-bold text-slate-300/70 transition hover:bg-white/[0.07] hover:text-slate-100 focus:outline-none focus:ring-2 focus:ring-cyan-200/45"
+                >
+                    X
+                </button>
+            </div>
+        </div>
+    );
+}
+
 function DesktopPatchViewBody({
     keyboardInputMode,
 }: {
@@ -2442,8 +3090,25 @@ function DesktopPatchViewBody({
     }, [keyboardInputMode]);
     const [keyboardControlMode, setKeyboardControlMode] = useState<"articulation" | "voice">("articulation");
     const [isArticulationEditorExpanded, setIsArticulationEditorExpanded] = useState(false);
+    const [dismissedContextualToolbarKey, setDismissedContextualToolbarKey] = useState<string | null>(null);
     const selectedArticulationId = synthView.selectedArticulationSlot?.id ?? null;
+    const selectedArticulationName = synthView.selectedArticulationSlot?.name ?? null;
     const articulationMode = synthView.articulationBank.activeTriggerMode as ArticulationUiTriggerMode;
+    const contextualToolbarKey = useMemo(() => {
+        if (!synthView.selectedArticulationIsDirty) {
+            return null;
+        }
+
+        return `articulation-dirty:${selectedArticulationId ?? ""}`;
+    }, [
+        selectedArticulationId,
+        synthView.selectedArticulationIsDirty,
+    ]);
+    useEffect(() => {
+        if (!contextualToolbarKey) {
+            setDismissedContextualToolbarKey(null);
+        }
+    }, [contextualToolbarKey]);
     const articulationCards = useMemo<ArticulationCardView[]>(() => {
         const bank = synthView.articulationBank;
 
@@ -2599,12 +3264,12 @@ function DesktopPatchViewBody({
         />
     ), [synthView.pan]);
     const keyboardToolbarOverride = useMemo(() => (
-        <div data-role="keyboard-control-row" className="grid min-h-[158px] gap-2">
-            <div className="flex items-center justify-between gap-2 rounded-[12px] border border-white/[0.05] bg-white/[0.018] px-2 py-1.5">
-                <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-300/45">
+        <div data-role="keyboard-control-row" className="grid min-h-[158px] min-w-0 gap-2 overflow-hidden">
+            <div className="flex min-w-0 items-center justify-between gap-2 overflow-hidden rounded-[12px] border border-white/[0.05] bg-white/[0.018] px-2 py-1.5">
+                <span className="min-w-0 truncate text-[10px] font-bold uppercase tracking-[0.18em] text-slate-300/45">
                     Controls
                 </span>
-                <div className="inline-flex h-7 items-center gap-1 rounded-[8px] border border-white/[0.06] bg-white/[0.022] p-0.5">
+                <div className="inline-flex h-7 shrink-0 items-center gap-1 rounded-[8px] border border-white/[0.06] bg-white/[0.022] p-0.5">
                     {([
                         ["articulation", "Articulations"],
                         ["voice", "Voice"],
@@ -2669,6 +3334,18 @@ function DesktopPatchViewBody({
                 <KeyboardToolbar
                     playMode={synthView.playMode}
                     glideTime={synthView.glideTime}
+                    unisonVoices={synthView.unisonVoices}
+                    unisonDetune={synthView.unisonDetune}
+                    unisonBlend={synthView.unisonBlend}
+                    unisonWidth={synthView.unisonWidth}
+                    unisonPhase={synthView.unisonPhase}
+                    unisonRandom={synthView.unisonRandom}
+                    unisonPhaseMode={synthView.unisonPhaseMode}
+                    unisonDetuneMode={synthView.unisonDetuneMode}
+                    unisonStackMode={synthView.unisonStackMode}
+                    unisonWavetablePositionSpread={synthView.unisonWavetablePositionSpread}
+                    unisonWarpSpread={synthView.unisonWarpSpread}
+                    observedUnisonState={synthView.observedUnisonState}
                     playModeFocusBindings={synthView.keyboardRouting.playModeFocusBindings}
                     glideFocusTarget={synthView.keyboardRouting.glideFocusTarget}
                 />
@@ -2693,6 +3370,7 @@ function DesktopPatchViewBody({
     return (
         <div className="cosimo-surface relative flex h-full w-full flex-col gap-3 overflow-hidden rounded-[28px] border border-white/[0.05] px-4 pb-4 pt-2.5 text-slate-100">
             <StatusHeader statusText={synthView.topStatus} />
+            <SynthPresetBarHost storedStateAdapters={synthView.presetStoredStateAdapters} />
 
             <main
                 data-role="desktop-scroll-region"
@@ -2813,6 +3491,18 @@ function DesktopPatchViewBody({
                 <KeyboardSection
                     playMode={synthView.playMode}
                     glideTime={synthView.glideTime}
+                    unisonVoices={synthView.unisonVoices}
+                    unisonDetune={synthView.unisonDetune}
+                    unisonBlend={synthView.unisonBlend}
+                    unisonWidth={synthView.unisonWidth}
+                    unisonPhase={synthView.unisonPhase}
+                    unisonRandom={synthView.unisonRandom}
+                    unisonPhaseMode={synthView.unisonPhaseMode}
+                    unisonDetuneMode={synthView.unisonDetuneMode}
+                    unisonStackMode={synthView.unisonStackMode}
+                    unisonWavetablePositionSpread={synthView.unisonWavetablePositionSpread}
+                    unisonWarpSpread={synthView.unisonWarpSpread}
+                    observedUnisonState={synthView.observedUnisonState}
                     keyboardRootNote={keyboardRootNote}
                     onOctaveDown={handleKeyboardOctaveDown}
                     onOctaveUp={handleKeyboardOctaveUp}
@@ -2842,6 +3532,20 @@ function DesktopPatchViewBody({
                 onPointerLeave={synthView.msegEditor.handlePointerLeave}
                 onPointerUp={synthView.msegEditor.handlePointerUp}
                 rateFocusBindings={synthView.keyboardRouting.msegRateFocusBindings}
+            />
+
+            <ContextualArticulationToolbar
+                articulationIsDirty={synthView.selectedArticulationIsDirty}
+                selectedArticulationName={selectedArticulationName}
+                isDismissed={Boolean(contextualToolbarKey && dismissedContextualToolbarKey === contextualToolbarKey)}
+                onDismiss={() => {
+                    if (contextualToolbarKey) {
+                        setDismissedContextualToolbarKey(contextualToolbarKey);
+                    }
+                }}
+                onUpdateArticulation={synthView.handleUpdateSelectedArticulationSlot}
+                onSaveAsNewArticulation={() => synthView.handleCaptureArticulationSlot({ autoAssign: true })}
+                onRevertArticulation={synthView.handleRevertSelectedArticulationSlot}
             />
 
             {curveLab.panel}
