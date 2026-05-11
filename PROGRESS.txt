@@ -846,7 +846,6 @@ Cosimo synth MSEG morph UI correction on 2026-05-06
 - While morph is actively being adjusted, the main MSEG graph and full MSEG editor can draw the DSP-effective interpolated curve in yellow. Shape A/B edit focus still controls only which shape is edited.
 - The wavetable warp controls are now grouped as one explicit `Warp` control with the current mode label and amount field, replacing the unlabeled icon-only mode chip plus detached amount field.
 - Stored-state runtime mirroring now compares the runtime events it would send, plus required runtime endpoint epochs, instead of the whole stored-state snapshot. This prevents morph-only stored-state changes from re-uploading MSEG buffers while still re-uploading when the DSP runtime epoch changes.
-
 Cosimo articulation SysEx architecture plan written on 2026-05-07
 - Added `ARTICULATION_SYSEX_ARCHITECTURE_PLAN.md` as the durable architecture proposal for FutureDaw NoteMeta SysEx, native bridge pairing, sample-ordered Cmajor note start, realtime `selectorA` articulation tables, voice latching, keyswitch behavior, and acceptance criteria.
 - The review pass corrected the undefined-selector behavior to match the earlier product decision: unknown `selectorA` values are ignored and leave the current audible articulation selector unchanged, rather than forcing a default fallback.

@@ -159,6 +159,35 @@ def _runtime_contains_required_choc_patches(runtime_root: Path) -> bool:
     return all(marker in header_text for marker in PATCHED_CHOC_MARKERS)
 
 
+def _apply_cosimo_choc_keyboard_relay_patch(runtime_root: Path) -> None:
+    webview_header = runtime_root / "include" / "choc" / "choc" / "gui" / "choc_WebView.h"
+
+    if not webview_header.exists():
+        return
+
+    header_text = webview_header.read_text(encoding="utf-8")
+
+    if "hostKeyboardShouldRelayToPlugin" in header_text:
+        return
+
+    age_function = """    static int64_t hostKeyboardAgeMs (std::chrono::steady_clock::time_point capturedAt)
+    {
+        return std::chrono::duration_cast<std::chrono::milliseconds> (std::chrono::steady_clock::now() - capturedAt).count();
+    }
+"""
+    if age_function not in header_text:
+        raise RuntimeError("Could not find CHOC host keyboard age helper while applying Cosimo keyboard relay patch.")
+
+    header_text = header_text.replace(age_function, age_function + HOST_KEYBOARD_RELAY_HELPERS, 1)
+
+    forward_call = "                auto result = forwardBufferedKeyboardEventToHost (payload);\n"
+    if forward_call not in header_text:
+        raise RuntimeError("Could not find CHOC host keyboard forward call while applying Cosimo keyboard relay patch.")
+
+    header_text = header_text.replace(forward_call, HOST_KEYBOARD_RELAY_FORWARD_BLOCK + forward_call, 1)
+    webview_header.write_text(header_text, encoding="utf-8")
+
+
 def _runtime_contains_required_cmajor_sidechain_patch(runtime_root: Path) -> bool:
     juce_plugin_header = runtime_root / "include" / "cmajor" / "helpers" / "cmaj_JUCEPlugin.h"
 
@@ -344,35 +373,6 @@ def _apply_cmajor_sidechain_bus_patch(runtime_root: Path) -> None:
         raise RuntimeError(f"Cmajor sidechain bus patch marker was not written to {juce_plugin_header}.")
 
 
-def _apply_cosimo_choc_keyboard_relay_patch(runtime_root: Path) -> None:
-    webview_header = runtime_root / "include" / "choc" / "choc" / "gui" / "choc_WebView.h"
-
-    if not webview_header.exists():
-        return
-
-    header_text = webview_header.read_text(encoding="utf-8")
-
-    if "hostKeyboardShouldRelayToPlugin" in header_text:
-        return
-
-    age_function = """    static int64_t hostKeyboardAgeMs (std::chrono::steady_clock::time_point capturedAt)
-    {
-        return std::chrono::duration_cast<std::chrono::milliseconds> (std::chrono::steady_clock::now() - capturedAt).count();
-    }
-"""
-    if age_function not in header_text:
-        raise RuntimeError("Could not find CHOC host keyboard age helper while applying Cosimo keyboard relay patch.")
-
-    header_text = header_text.replace(age_function, age_function + HOST_KEYBOARD_RELAY_HELPERS, 1)
-
-    forward_call = "                auto result = forwardBufferedKeyboardEventToHost (payload);\n"
-    if forward_call not in header_text:
-        raise RuntimeError("Could not find CHOC host keyboard forward call while applying Cosimo keyboard relay patch.")
-
-    header_text = header_text.replace(forward_call, HOST_KEYBOARD_RELAY_FORWARD_BLOCK + forward_call, 1)
-    webview_header.write_text(header_text, encoding="utf-8")
-
-
 def _runtime_head(runtime_root: Path) -> str | None:
     if not (runtime_root / ".git").exists():
         return None
@@ -428,6 +428,7 @@ def _clone_runtime(destination: Path) -> None:
     )
 
     _prepare_runtime_submodules(temp_destination)
+    _apply_cosimo_choc_keyboard_relay_patch(temp_destination)
 
     fetched_head = _runtime_head(temp_destination)
 
@@ -484,7 +485,6 @@ def ensure_runtime() -> Path:
             and _runtime_contains_required_choc_patches(RUNTIME_DESTINATION)
             and _runtime_looks_complete(RUNTIME_DESTINATION)
         ):
-            _apply_cosimo_choc_keyboard_relay_patch(RUNTIME_DESTINATION)
             _apply_cmajor_sidechain_bus_patch(RUNTIME_DESTINATION)
             return RUNTIME_DESTINATION
 
