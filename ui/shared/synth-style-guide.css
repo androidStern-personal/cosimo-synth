@@ -142,10 +142,40 @@
 .synth-grid-card-shell,
 [data-layout-card="desktop-grid-card"] {
     position: relative;
+    isolation: isolate;
     border-color: rgb(var(--cosimo-edge-rgb) / 0.28);
     background:
         linear-gradient(180deg, rgb(var(--cosimo-surface-raised-rgb) / 0.96), rgb(var(--cosimo-body-rgb) / 0.98));
     box-shadow: var(--cosimo-panel-shadow);
+}
+
+.synth-section-title {
+    font-family: var(--cosimo-font-label);
+    font-size: 10px;
+    font-weight: 600;
+    line-height: 1;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: rgb(var(--section-accent-rgb) / 0.56);
+    text-shadow: 0 0 12px rgb(var(--section-accent-rgb) / 0.18);
+}
+
+.synth-section-code,
+.synth-readout-text {
+    font-family: var(--cosimo-font-readout);
+    font-weight: 400;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--section-accent);
+    text-shadow: 0 0 12px var(--section-accent-glow);
+}
+
+.synth-muted-marking {
+    font-family: var(--cosimo-font-label);
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: rgb(var(--cosimo-control-rgb) / 0.92);
 }
 
 .synth-grid-card-inset {
@@ -170,6 +200,40 @@
     font-size: 8px;
     letter-spacing: 0.10em;
     text-transform: uppercase;
+}
+
+.synth-compact-control-value {
+    color: var(--section-accent);
+    text-shadow: 0 0 10px var(--section-accent-glow);
+}
+
+.synth-accent-icon-dot {
+    border: 1px solid rgb(var(--section-accent-rgb) / 0.22);
+    background: rgb(var(--section-accent-rgb) / 0.08);
+    color: var(--section-accent);
+}
+
+.synth-accent-soft-bg {
+    background: rgb(var(--section-accent-rgb) / 0.12);
+    color: var(--section-accent);
+}
+
+.synth-accent-faint-bg {
+    background: rgb(var(--section-accent-rgb) / 0.045);
+}
+
+.synth-accent-strip-bg {
+    background: rgb(var(--section-accent-rgb) / 0.12);
+}
+
+.synth-accent-solid-bg {
+    background: var(--section-accent);
+}
+
+.synth-accent-active-button {
+    border-color: rgb(var(--section-accent-rgb) / 0.25);
+    background: rgb(var(--section-accent-rgb) / 0.15);
+    color: var(--section-accent);
 }
 
 .synth-display-recess {
@@ -215,11 +279,12 @@
 }
 
 [data-liquid-detail="display-lip"]::before {
-    top: 8px;
-    right: 10px;
-    width: 48px;
-    height: 8px;
+    top: 7px;
+    left: 14px;
+    right: 14px;
+    height: 12px;
     border-radius: 999px;
+    opacity: 0.72;
 }
 
 [data-liquid-detail="meter-cover"]::before {
@@ -260,4 +325,36 @@
     right: 10px;
     width: 6px;
     border-radius: 999px;
+}
+
+.synth-display-lip-controls {
+    position: absolute;
+    left: 8px;
+    right: 8px;
+    top: 8px;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    min-height: 26px;
+    padding: 4px 5px;
+    border: 1px solid rgb(var(--section-accent-rgb) / 0.18);
+    border-radius: 10px;
+    background: rgb(var(--cosimo-recess-rgb) / 0.54);
+    box-shadow: var(--cosimo-glass-shadow);
+    backdrop-filter: blur(8px) saturate(1.18);
+}
+
+.synth-display-lip-controls::before {
+    content: "";
+    position: absolute;
+    left: 18px;
+    right: 18px;
+    top: 3px;
+    height: 2px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.24), transparent);
+    opacity: 0.58;
+    pointer-events: none;
 }

@@ -13729,6 +13729,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     min-height: 220px;
   }
 
+  .min-h-\\[240px\\] {
+    min-height: 240px;
+  }
+
   .min-h-\\[calc\\(100dvh-2rem\\)\\] {
     min-height: calc(100dvh - 2rem);
   }
@@ -14560,6 +14564,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .border-\\[rgba\\(3\\,5\\,12\\,0\\.7\\)\\] {
     border-color: #03050cb3;
+  }
+
+  .border-\\[var\\(--cosimo-recess\\)\\] {
+    border-color: var(--cosimo-recess);
   }
 
   .border-amber-100 {
@@ -16011,6 +16019,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     color: #070a13;
   }
 
+  .text-\\[var\\(--cosimo-text-muted\\)\\] {
+    color: var(--cosimo-text-muted);
+  }
+
   .text-\\[var\\(--section-accent\\)\\] {
     color: var(--section-accent);
   }
@@ -16868,12 +16880,36 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     opacity: .4;
   }
 
+  .opacity-45 {
+    opacity: .45;
+  }
+
   .opacity-50 {
     opacity: .5;
   }
 
+  .opacity-55 {
+    opacity: .55;
+  }
+
+  .opacity-60 {
+    opacity: .6;
+  }
+
   .opacity-70 {
     opacity: .7;
+  }
+
+  .opacity-75 {
+    opacity: .75;
+  }
+
+  .opacity-80 {
+    opacity: .8;
+  }
+
+  .opacity-85 {
+    opacity: .85;
   }
 
   .opacity-90 {
@@ -17627,6 +17663,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
       }
     }
 
+    .hover\\:opacity-100:hover {
+      opacity: 1;
+    }
+
     .hover\\:shadow-\\[inset_0_0_0_1px_rgba\\(255\\,255\\,255\\,0\\.22\\)\\]:hover {
       --tw-shadow: inset 0 0 0 1px var(--tw-shadow-color, #ffffff38);
       box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
@@ -17640,6 +17680,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .focus\\:border-\\[rgb\\(var\\(--section-accent-rgb\\)\\/0\\.54\\)\\]:focus {
     border-color: rgb(var(--section-accent-rgb)/.54);
+  }
+
+  .focus\\:border-\\[var\\(--section-accent\\)\\]:focus {
+    border-color: var(--section-accent);
   }
 
   .focus\\:border-emerald-300\\/30:focus {
@@ -17988,10 +18032,39 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 }
 
 .synth-grid-card-shell, [data-layout-card="desktop-grid-card"] {
+  isolation: isolate;
   border-color: rgb(var(--cosimo-edge-rgb) / .28);
   background: linear-gradient(180deg, rgb(var(--cosimo-surface-raised-rgb) / .96), rgb(var(--cosimo-body-rgb) / .98));
   box-shadow: var(--cosimo-panel-shadow);
   position: relative;
+}
+
+.synth-section-title {
+  font-family: var(--cosimo-font-label);
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: rgb(var(--section-accent-rgb) / .56);
+  text-shadow: 0 0 12px rgb(var(--section-accent-rgb) / .18);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.synth-section-code, .synth-readout-text {
+  font-family: var(--cosimo-font-readout);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--section-accent);
+  text-shadow: 0 0 12px var(--section-accent-glow);
+  font-weight: 400;
+}
+
+.synth-muted-marking {
+  font-family: var(--cosimo-font-label);
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: rgb(var(--cosimo-control-rgb) / .92);
+  font-weight: 600;
 }
 
 .synth-grid-card-inset {
@@ -18014,6 +18087,40 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
   letter-spacing: .1em;
   text-transform: uppercase;
   font-size: 8px;
+}
+
+.synth-compact-control-value {
+  color: var(--section-accent);
+  text-shadow: 0 0 10px var(--section-accent-glow);
+}
+
+.synth-accent-icon-dot {
+  border: 1px solid rgb(var(--section-accent-rgb) / .22);
+  background: rgb(var(--section-accent-rgb) / .08);
+  color: var(--section-accent);
+}
+
+.synth-accent-soft-bg {
+  background: rgb(var(--section-accent-rgb) / .12);
+  color: var(--section-accent);
+}
+
+.synth-accent-faint-bg {
+  background: rgb(var(--section-accent-rgb) / .045);
+}
+
+.synth-accent-strip-bg {
+  background: rgb(var(--section-accent-rgb) / .12);
+}
+
+.synth-accent-solid-bg {
+  background: var(--section-accent);
+}
+
+.synth-accent-active-button {
+  border-color: rgb(var(--section-accent-rgb) / .25);
+  background: rgb(var(--section-accent-rgb) / .15);
+  color: var(--section-accent);
 }
 
 .synth-display-recess {
@@ -18060,11 +18167,12 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 }
 
 [data-liquid-detail="display-lip"]:before {
+  opacity: .72;
   border-radius: 999px;
-  width: 48px;
-  height: 8px;
-  top: 8px;
-  right: 10px;
+  height: 12px;
+  top: 7px;
+  left: 14px;
+  right: 14px;
 }
 
 [data-liquid-detail="meter-cover"]:before {
@@ -18105,6 +18213,39 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
   top: 14px;
   bottom: 14px;
   right: 10px;
+}
+
+.synth-display-lip-controls {
+  z-index: 10;
+  border: 1px solid rgb(var(--section-accent-rgb) / .18);
+  background: rgb(var(--cosimo-recess-rgb) / .54);
+  min-height: 26px;
+  box-shadow: var(--cosimo-glass-shadow);
+  -webkit-backdrop-filter: blur(8px) saturate(1.18);
+  backdrop-filter: blur(8px) saturate(1.18);
+  border-radius: 10px;
+  justify-content: space-between;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 5px;
+  display: flex;
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  right: 8px;
+}
+
+.synth-display-lip-controls:before {
+  content: "";
+  opacity: .58;
+  pointer-events: none;
+  background: linear-gradient(90deg, #0000, #ffffff3d, #0000);
+  border-radius: 999px;
+  height: 2px;
+  position: absolute;
+  top: 3px;
+  left: 18px;
+  right: 18px;
 }
 
 :host {
@@ -18396,11 +18537,11 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
 .cosimo-mseg-effective-curve-line {
   fill: none;
-  stroke: var(--cosimo-accent-amber);
+  stroke: var(--section-accent);
   stroke-width: 3.25px;
   stroke-linecap: round;
   stroke-linejoin: round;
-  filter: drop-shadow(0 0 8px rgb(var(--cosimo-accent-amber-rgb) / .32));
+  filter: drop-shadow(0 0 8px var(--section-accent-glow));
 }
 
 .cosimo-curve-line-highlight {
@@ -18420,7 +18561,7 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 }
 
 .cosimo-mseg-point-selected {
-  fill: var(--cosimo-accent-amber);
+  fill: var(--section-accent);
   stroke: var(--cosimo-recess);
   stroke-width: 3px;
 }
@@ -18439,13 +18580,13 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 }
 
 .cosimo-mseg-morph-fill {
-  background: linear-gradient(90deg, rgb(var(--cosimo-accent-mint-rgb) / .54), rgb(var(--cosimo-accent-amber-rgb) / .72));
+  background: linear-gradient(90deg, rgb(var(--section-accent-rgb) / .24), rgb(var(--section-accent-rgb) / .74));
 }
 
 .cosimo-mseg-morph-thumb {
-  border: 1px solid rgb(var(--cosimo-accent-amber-rgb) / .78);
+  border: 1px solid rgb(var(--section-accent-rgb) / .78);
   background: var(--cosimo-control);
-  box-shadow: 0 0 16px rgb(var(--cosimo-accent-amber-rgb) / .34);
+  box-shadow: 0 0 16px var(--section-accent-glow);
 }
 
 @property --tw-translate-x {
@@ -20113,21 +20254,21 @@ function resolveRuntimeTablePresentation(message, fallbackTableIndex = 0) {
   };
 }
 const DEFAULT_PATCH_THEME = {
-  backgroundTop: "#04070f",
-  backgroundBottom: "#04070f",
-  backgroundRGB: [4, 7, 15],
-  panelStroke: "rgba(132, 149, 255, 0.0)",
-  frameBlueRGB: [94, 118, 255],
-  accentBlue: "#87d7f5",
-  accentBlueRGB: [135, 215, 245],
-  accentBlueDeep: "#5f7aff",
-  accentBlueDeepRGB: [95, 122, 255],
-  guideBlue: "rgba(129, 150, 255, 0.12)",
-  warmText: "#ffd8a6",
-  warmTextRGB: [255, 216, 166],
-  highlightPink: "#f56cb6",
-  highlightPinkRGB: [245, 108, 182],
-  shadowColor: "rgba(7, 11, 28, 0.36)"
+  backgroundTop: "#161616",
+  backgroundBottom: "#101010",
+  backgroundRGB: [16, 16, 16],
+  panelStroke: "rgba(125, 247, 255, 0.05)",
+  frameBlueRGB: [125, 247, 255],
+  accentBlue: "#7df7ff",
+  accentBlueRGB: [125, 247, 255],
+  accentBlueDeep: "#7df7ff",
+  accentBlueDeepRGB: [125, 247, 255],
+  guideBlue: "rgba(125, 247, 255, 0.12)",
+  warmText: "#7df7ff",
+  warmTextRGB: [125, 247, 255],
+  highlightPink: "#7df7ff",
+  highlightPinkRGB: [125, 247, 255],
+  shadowColor: "rgba(125, 247, 255, 0.26)"
 };
 function createDefaultWavetableTheme(theme = DEFAULT_PATCH_THEME) {
   return {
@@ -21004,7 +21145,7 @@ function drawWavetableModel(context, model, theme = DEFAULT_WAVETABLE_THEME) {
   context.fillStyle = toRGBA(theme.backgroundRGB, 0.74);
   context.fillRect(model.currentSlice.label.x - 10, model.currentSlice.label.y - 14, 210, 24);
   context.fillStyle = theme.textColor;
-  context.font = "600 12px Avenir Next, Avenir, sans-serif";
+  context.font = "400 12px Departure Mono, IBM Plex Mono, monospace";
   context.textAlign = "left";
   context.fillText(model.currentSlice.label.text, model.currentSlice.label.x, model.currentSlice.label.y + 2);
   context.restore();
@@ -22304,7 +22445,7 @@ const VOICE_MODE_OPTIONS = [
   { value: 1, label: "Mono" },
   { value: 2, label: "Legato" }
 ];
-const SYNTH_GRID_CARD_SIZE_CLASS = "aspect-[50/27] min-h-[198px]";
+const SYNTH_GRID_CARD_SIZE_CLASS = "aspect-[50/27] min-h-[240px]";
 const SYNTH_GRID_CARD_SHELL_CLASS = "synth-grid-card-shell relative min-h-0 overflow-hidden rounded-[14px]";
 const SYNTH_GRID_CARD_INSET_SHADOW_CLASS = "synth-grid-card-inset";
 const SYNTH_COMPACT_CONTROL_CHROME_CLASS = "synth-compact-control rounded-[5px]";
@@ -22817,7 +22958,7 @@ function RangeField({
           ...focusBindings
         }
       ),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-right font-mono text-sm tracking-[0.18em] text-cyan-200", children: displayValue })
+      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "synth-readout-text text-right text-sm", children: displayValue })
     ] })
   ] });
 }
@@ -22881,9 +23022,12 @@ function drawFilterSpectrumOverlay({
   }
   context.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
   context.clearRect(0, 0, width, height);
+  const accentRgb = window.getComputedStyle(canvas).getPropertyValue("--section-accent-rgb").trim().split(/\s+/).map((component) => Number.parseInt(component, 10));
+  const [accentR, accentG, accentB] = accentRgb.length === 3 && accentRgb.every(Number.isFinite) ? accentRgb : [169, 140, 255];
+  const accentColor = (alpha) => `rgba(${accentR}, ${accentG}, ${accentB}, ${alpha})`;
   const gradient = context.createLinearGradient(0, geometry.plotTop, 0, geometry.plotBottom);
-  gradient.addColorStop(0, "rgba(94, 215, 255, 0.14)");
-  gradient.addColorStop(1, "rgba(94, 215, 255, 0.00)");
+  gradient.addColorStop(0, accentColor(0.14));
+  gradient.addColorStop(1, accentColor(0));
   if (geometry.kind === "graph") {
     if (geometry.points.length === 0) {
       return;
@@ -22906,7 +23050,7 @@ function drawFilterSpectrumOverlay({
         context.lineTo(point.x, point.y);
       }
     }
-    context.strokeStyle = "rgba(114, 217, 255, 0.64)";
+    context.strokeStyle = accentColor(0.64);
     context.lineWidth = 1.9;
     context.stroke();
     context.beginPath();
@@ -22918,7 +23062,7 @@ function drawFilterSpectrumOverlay({
         context.lineTo(point.x, point.y);
       }
     }
-    context.strokeStyle = "rgba(158, 231, 255, 0.30)";
+    context.strokeStyle = accentColor(0.3);
     context.lineWidth = 1;
     context.stroke();
     return;
@@ -22948,7 +23092,7 @@ function drawFilterSpectrumOverlay({
     drawBarPath(bar.x, bar.y, bar.width, bar.height, bar.radius);
     context.fillStyle = gradient;
     context.fill();
-    context.strokeStyle = "rgba(114, 217, 255, 0.56)";
+    context.strokeStyle = accentColor(0.56);
     context.lineWidth = geometry.rounded ? 1.45 : 1.1;
     context.stroke();
   }
@@ -22962,7 +23106,7 @@ function drawFilterSpectrumOverlay({
     context.moveTo(centerX - halfWidth, peakBar.y);
     context.lineTo(centerX + halfWidth, peakBar.y);
   }
-  context.strokeStyle = "rgba(158, 231, 255, 0.32)";
+  context.strokeStyle = accentColor(0.32);
   context.lineWidth = 1;
   context.stroke();
 }
@@ -23305,13 +23449,13 @@ function FilterResponseGraph({
                   },
                   `filter-frequency-label-${tick.label}`
                 )),
-                /* @__PURE__ */ jsxRuntimeExports.jsx("path", { d: basePath.path, fill: "none", stroke: "rgba(123, 197, 255, 0.46)", strokeWidth: "2" }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("path", { d: basePath.path, fill: "none", stroke: "rgb(var(--section-accent-rgb) / 0.36)", strokeWidth: "2" }),
                 /* @__PURE__ */ jsxRuntimeExports.jsx(
                   "path",
                   {
                     d: livePath.path,
                     fill: "none",
-                    stroke: liveHasActive ? "rgba(94, 215, 255, 0.98)" : "rgba(94, 215, 255, 0.72)",
+                    stroke: liveHasActive ? "rgb(var(--section-accent-rgb) / 0.98)" : "rgb(var(--section-accent-rgb) / 0.72)",
                     strokeWidth: liveHasActive ? "3" : "2"
                   }
                 ),
@@ -23322,7 +23466,7 @@ function FilterResponseGraph({
                     x2: baseHandle.x,
                     y1: basePath.plotBottom,
                     y2: baseHandle.y,
-                    stroke: "rgba(255, 196, 64, 0.18)",
+                    stroke: "rgb(var(--section-accent-rgb) / 0.20)",
                     strokeWidth: "1.5",
                     strokeDasharray: "4 4",
                     pointerEvents: "none"
@@ -23359,8 +23503,8 @@ function FilterResponseGraph({
                     cx: baseHandle.x,
                     cy: baseHandle.y,
                     r: "15",
-                    fill: "rgba(255, 180, 34, 0.18)",
-                    stroke: "rgba(255, 211, 121, 0.18)",
+                    fill: "rgb(var(--section-accent-rgb) / 0.16)",
+                    stroke: "rgb(var(--section-accent-rgb) / 0.24)",
                     strokeWidth: "1",
                     pointerEvents: "none"
                   }
@@ -23372,8 +23516,8 @@ function FilterResponseGraph({
                     cx: baseHandle.x,
                     cy: baseHandle.y,
                     r: "10.5",
-                    fill: "#ffb81f",
-                    stroke: "rgba(255, 244, 219, 0.55)",
+                    fill: "var(--section-accent)",
+                    stroke: "rgb(255 255 255 / 0.42)",
                     strokeWidth: "1.6",
                     pointerEvents: "none"
                   }
@@ -23506,7 +23650,7 @@ function KeyboardSectionShell({
               children: /* @__PURE__ */ jsxRuntimeExports.jsx(OctaveShiftGlyph, { direction: "down" })
             }
           ),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "font-mono text-[10px] tracking-[0.18em] text-cyan-200/70", children: keyboardRootLabel })
+          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "synth-readout-text text-[10px] opacity-70", children: keyboardRootLabel })
         ] }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: joinClasses$2("grid gap-3", contentClassName), children: [
           toolbar,
@@ -23574,7 +23718,7 @@ function WavetableStageSection({
           "div",
           {
             "data-role": "wavetable-stage-top-controls",
-            className: "absolute inset-x-0 top-0 flex items-start justify-between gap-1.5 p-1.5 text-[8px] uppercase tracking-[0.10em] text-slate-300/70",
+            className: "synth-display-lip-controls text-[8px] uppercase tracking-[0.10em]",
             children: [
               /* @__PURE__ */ jsxRuntimeExports.jsxs(
                 "label",
@@ -23583,8 +23727,8 @@ function WavetableStageSection({
                   onFocus: onTablePrewarm,
                   onPointerEnter: onTablePrewarm,
                   children: [
-                    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { "data-role": "wavetable-select-chip", className: `inline-flex h-5 min-w-0 items-center ${SYNTH_COMPACT_CONTROL_CHROME_CLASS} px-1.5 pr-5 text-left ${SYNTH_COMPACT_CONTROL_TEXT_CLASS} text-amber-100`, children: /* @__PURE__ */ jsxRuntimeExports.jsx("span", { "data-role": "wavetable-stage-title", className: "truncate", children: tableName }) }),
-                    /* @__PURE__ */ jsxRuntimeExports.jsx(SelectChevron, { className: "pointer-events-none absolute right-1.5 top-1/2 h-2.5 w-2.5 -translate-y-1/2 text-slate-300/65" }),
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { "data-role": "wavetable-select-chip", className: `inline-flex h-5 min-w-0 items-center ${SYNTH_COMPACT_CONTROL_CHROME_CLASS} px-1.5 pr-5 text-left ${SYNTH_COMPACT_CONTROL_TEXT_CLASS} synth-compact-control-value`, children: /* @__PURE__ */ jsxRuntimeExports.jsx("span", { "data-role": "wavetable-stage-title", className: "truncate", children: tableName }) }),
+                    /* @__PURE__ */ jsxRuntimeExports.jsx(SelectChevron, { className: "pointer-events-none absolute right-1.5 top-1/2 h-2.5 w-2.5 -translate-y-1/2 text-[var(--section-accent)] opacity-70" }),
                     /* @__PURE__ */ jsxRuntimeExports.jsx(
                       "select",
                       {
@@ -23600,11 +23744,11 @@ function WavetableStageSection({
                 }
               ),
               /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex min-w-0 items-center gap-1", children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { "data-role": "wavetable-frame-chip", className: `flex h-5 items-center ${SYNTH_COMPACT_CONTROL_CHROME_CLASS} px-1.5 ${SYNTH_COMPACT_CONTROL_TEXT_CLASS} text-cyan-200/80`, children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { "data-role": "wavetable-frame-chip", className: `flex h-5 items-center ${SYNTH_COMPACT_CONTROL_CHROME_CLASS} px-1.5 ${SYNTH_COMPACT_CONTROL_TEXT_CLASS} synth-compact-control-value`, children: [
                   "Frame ",
                   formatFrameIndex(position, frameCount)
                 ] }),
-                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { "data-role": "wavetable-position-chip", className: `flex h-5 items-center ${SYNTH_COMPACT_CONTROL_CHROME_CLASS} px-1.5 ${SYNTH_COMPACT_CONTROL_TEXT_CLASS} text-slate-200/80`, children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { "data-role": "wavetable-position-chip", className: `flex h-5 items-center ${SYNTH_COMPACT_CONTROL_CHROME_CLASS} px-1.5 ${SYNTH_COMPACT_CONTROL_TEXT_CLASS} synth-compact-control-value`, children: [
                   "Pos ",
                   clampDisplayPosition(position).toFixed(3)
                 ] })
@@ -24346,7 +24490,7 @@ function DistortionVisualizer({
               ] }),
               /* @__PURE__ */ jsxRuntimeExports.jsx("filter", { id: "distortionTransferOccupancyGlow", x: "-18%", y: "-18%", width: "136%", height: "136%", children: /* @__PURE__ */ jsxRuntimeExports.jsx("feGaussianBlur", { stdDeviation: "5.6" }) })
             ] }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("rect", { x: "0", y: "0", width: COMPACT_VIEWBOX_WIDTH, height: COMPACT_VIEWBOX_HEIGHT, fill: "#020611" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("rect", { x: "0", y: "0", width: COMPACT_VIEWBOX_WIDTH, height: COMPACT_VIEWBOX_HEIGHT, fill: "var(--cosimo-recess)" }),
             /* @__PURE__ */ jsxRuntimeExports.jsx(
               "rect",
               {
@@ -24365,7 +24509,7 @@ function DistortionVisualizer({
                 x2: COMPACT_PLOT.left + COMPACT_PLOT.width,
                 y1: yValue,
                 y2: yValue,
-                stroke: index === 1 ? "rgba(255,255,255,0.12)" : "rgba(248,113,113,0.22)",
+                stroke: index === 1 ? "rgba(255,255,255,0.12)" : "rgb(var(--section-accent-rgb) / 0.22)",
                 strokeDasharray: index === 1 ? "0" : "6 6",
                 strokeWidth: index === 1 ? "1.2" : "1"
               },
@@ -24378,7 +24522,7 @@ function DistortionVisualizer({
                 y2: COMPACT_PLOT.top + COMPACT_PLOT.height,
                 x1: xValue,
                 x2: xValue,
-                stroke: index === 1 ? "rgba(255,255,255,0.12)" : "rgba(248,113,113,0.18)",
+                stroke: index === 1 ? "rgba(255,255,255,0.12)" : "rgb(var(--section-accent-rgb) / 0.18)",
                 strokeDasharray: index === 1 ? "0" : "6 6",
                 strokeWidth: index === 1 ? "1.2" : "1"
               },
@@ -24407,7 +24551,7 @@ function DistortionVisualizer({
                   width: column.removedTop.width,
                   height: column.removedTop.height,
                   rx: Math.min(2.2, column.removedTop.width * 0.45),
-                  fill: "rgba(251,113,133,0.88)",
+                  fill: "rgb(var(--section-accent-rgb) / 0.88)",
                   opacity: 0.3
                 }
               ) : null,
@@ -24420,7 +24564,7 @@ function DistortionVisualizer({
                   width: column.removedBottom.width,
                   height: column.removedBottom.height,
                   rx: Math.min(2.2, column.removedBottom.width * 0.45),
-                  fill: "rgba(251,113,133,0.88)",
+                  fill: "rgb(var(--section-accent-rgb) / 0.88)",
                   opacity: 0.3
                 }
               ) : null
@@ -24450,7 +24594,7 @@ function DistortionVisualizer({
                 {
                   "data-role": "distortion-transfer-clipped-occupancy",
                   d: segment.clippedPath,
-                  fill: "rgba(251,113,133,0.36)",
+                  fill: "rgb(var(--section-accent-rgb) / 0.36)",
                   opacity: segment.clippedOpacity
                 }
               ) : null
@@ -24460,15 +24604,15 @@ function DistortionVisualizer({
               {
                 d: transferCurvePath,
                 fill: "none",
-                stroke: "rgba(103,232,249,0.98)",
+                stroke: "var(--section-accent)",
                 strokeWidth: "3.2",
                 strokeLinecap: "round",
                 strokeLinejoin: "round"
               }
             ) : null,
-            /* @__PURE__ */ jsxRuntimeExports.jsx("text", { x: COMPACT_PLOT.left + 8, y: ceilingYTransferTop - 4, fill: "rgba(248,113,113,0.74)", fontSize: "10", children: "+1" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("text", { x: COMPACT_PLOT.left + 8, y: ceilingYTransferTop - 4, fill: "rgb(var(--section-accent-rgb) / 0.74)", fontSize: "10", children: "+1" }),
             /* @__PURE__ */ jsxRuntimeExports.jsx("text", { x: COMPACT_PLOT.left + 8, y: zeroYTransfer - 4, fill: "rgba(226,232,240,0.54)", fontSize: "10", children: "0" }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("text", { x: COMPACT_PLOT.left + 8, y: ceilingYTransferBottom - 4, fill: "rgba(248,113,113,0.74)", fontSize: "10", children: "-1" })
+            /* @__PURE__ */ jsxRuntimeExports.jsx("text", { x: COMPACT_PLOT.left + 8, y: ceilingYTransferBottom - 4, fill: "rgb(var(--section-accent-rgb) / 0.74)", fontSize: "10", children: "-1" })
           ]
         }
       ),
@@ -24478,7 +24622,7 @@ function DistortionVisualizer({
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: joinClasses$1("grid gap-3", className), children: [
     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between gap-3 text-[11px] uppercase tracking-[0.18em] text-slate-300/62", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx("div", { children: "Driven Transfer" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "font-mono text-[10px] tracking-[0.18em] text-cyan-100/75", children: overshoot > 0 ? `Overshoot +${overshoot.toFixed(2)}` : `Headroom ${(headroom * 100).toFixed(0)}%` })
+      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "synth-readout-text text-[10px] opacity-75", children: overshoot > 0 ? `Overshoot +${overshoot.toFixed(2)}` : `Headroom ${(headroom * 100).toFixed(0)}%` })
     ] }),
     /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "synth-display-recess overflow-hidden rounded-[24px]", children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
       "svg",
@@ -24490,12 +24634,12 @@ function DistortionVisualizer({
         children: [
           /* @__PURE__ */ jsxRuntimeExports.jsxs("defs", { children: [
             /* @__PURE__ */ jsxRuntimeExports.jsxs("linearGradient", { id: "distortionRemovedFill", x1: "0", x2: "0", y1: "0", y2: "1", children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx("stop", { offset: "0%", stopColor: "rgba(251,113,133,0.42)" }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx("stop", { offset: "100%", stopColor: "rgba(239,68,68,0.04)" })
+              /* @__PURE__ */ jsxRuntimeExports.jsx("stop", { offset: "0%", stopColor: "rgb(var(--section-accent-rgb) / 0.42)" }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx("stop", { offset: "100%", stopColor: "rgb(var(--section-accent-rgb) / 0.04)" })
             ] }),
             /* @__PURE__ */ jsxRuntimeExports.jsx("filter", { id: "distortionTransferOccupancyGlow", x: "-18%", y: "-18%", width: "136%", height: "136%", children: /* @__PURE__ */ jsxRuntimeExports.jsx("feGaussianBlur", { stdDeviation: "5.6" }) })
           ] }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("rect", { x: "0", y: "0", width: VIEWBOX_WIDTH, height: VIEWBOX_HEIGHT, fill: "#020611" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("rect", { x: "0", y: "0", width: VIEWBOX_WIDTH, height: VIEWBOX_HEIGHT, fill: "var(--cosimo-recess)" }),
           /* @__PURE__ */ jsxRuntimeExports.jsx(
             "rect",
             {
@@ -24529,7 +24673,7 @@ function DistortionVisualizer({
               x2: TRANSFER_PLOT.left + TRANSFER_PLOT.width,
               y1: yValue,
               y2: yValue,
-              stroke: index === 1 ? "rgba(255,255,255,0.12)" : "rgba(248,113,113,0.22)",
+              stroke: index === 1 ? "rgba(255,255,255,0.12)" : "rgb(var(--section-accent-rgb) / 0.22)",
               strokeDasharray: index === 1 ? "0" : "6 6",
               strokeWidth: index === 1 ? "1.2" : "1"
             },
@@ -24542,7 +24686,7 @@ function DistortionVisualizer({
               y2: TRANSFER_PLOT.top + TRANSFER_PLOT.height,
               x1: xValue,
               x2: xValue,
-              stroke: index === 1 ? "rgba(255,255,255,0.12)" : "rgba(248,113,113,0.18)",
+              stroke: index === 1 ? "rgba(255,255,255,0.12)" : "rgb(var(--section-accent-rgb) / 0.18)",
               strokeDasharray: index === 1 ? "0" : "6 6",
               strokeWidth: index === 1 ? "1.2" : "1"
             },
@@ -24555,7 +24699,7 @@ function DistortionVisualizer({
               x2: HISTORY_PLOT.left + HISTORY_PLOT.width,
               y1: yValue,
               y2: yValue,
-              stroke: index === 1 ? "rgba(255,255,255,0.12)" : "rgba(248,113,113,0.22)",
+              stroke: index === 1 ? "rgba(255,255,255,0.12)" : "rgb(var(--section-accent-rgb) / 0.22)",
               strokeDasharray: index === 1 ? "0" : "6 6",
               strokeWidth: index === 1 ? "1.2" : "1"
             },
@@ -24586,7 +24730,7 @@ function DistortionVisualizer({
               {
                 "data-role": "distortion-transfer-clipped-occupancy",
                 d: segment.clippedPath,
-                fill: "rgba(251,113,133,0.36)",
+                fill: "rgb(var(--section-accent-rgb) / 0.36)",
                 opacity: segment.clippedOpacity
               }
             ) : null
@@ -24596,7 +24740,7 @@ function DistortionVisualizer({
             {
               d: transferCurvePath,
               fill: "none",
-              stroke: "rgba(103,232,249,0.98)",
+              stroke: "var(--section-accent)",
               strokeWidth: "3.2",
               strokeLinecap: "round",
               strokeLinejoin: "round"
@@ -24624,7 +24768,7 @@ function DistortionVisualizer({
                 width: column.removedTop.width,
                 height: column.removedTop.height,
                 rx: Math.min(2.2, column.removedTop.width * 0.45),
-                fill: "rgba(251,113,133,0.88)"
+                fill: "rgb(var(--section-accent-rgb) / 0.88)"
               }
             ) : null,
             column.removedBottom ? /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -24636,19 +24780,19 @@ function DistortionVisualizer({
                 width: column.removedBottom.width,
                 height: column.removedBottom.height,
                 rx: Math.min(2.2, column.removedBottom.width * 0.45),
-                fill: "rgba(251,113,133,0.88)"
+                fill: "rgb(var(--section-accent-rgb) / 0.88)"
               }
             ) : null
           ] }, `history-column-${index}`)),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("text", { x: TRANSFER_PLOT.left + 8, y: ceilingYTransferTop - 6, fill: "rgba(248,113,113,0.74)", fontSize: "11", children: "+1" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("text", { x: TRANSFER_PLOT.left + 8, y: ceilingYTransferTop - 6, fill: "rgb(var(--section-accent-rgb) / 0.74)", fontSize: "11", children: "+1" }),
           /* @__PURE__ */ jsxRuntimeExports.jsx("text", { x: TRANSFER_PLOT.left + 8, y: zeroYTransfer - 6, fill: "rgba(226,232,240,0.54)", fontSize: "11", children: "0" }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("text", { x: TRANSFER_PLOT.left + 8, y: ceilingYTransferBottom - 6, fill: "rgba(248,113,113,0.74)", fontSize: "11", children: "-1" }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("text", { x: ceilingXTransferLeft - 9, y: TRANSFER_PLOT.top + TRANSFER_PLOT.height - 10, fill: "rgba(248,113,113,0.74)", fontSize: "11", textAnchor: "end", children: "-1" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("text", { x: TRANSFER_PLOT.left + 8, y: ceilingYTransferBottom - 6, fill: "rgb(var(--section-accent-rgb) / 0.74)", fontSize: "11", children: "-1" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("text", { x: ceilingXTransferLeft - 9, y: TRANSFER_PLOT.top + TRANSFER_PLOT.height - 10, fill: "rgb(var(--section-accent-rgb) / 0.74)", fontSize: "11", textAnchor: "end", children: "-1" }),
           /* @__PURE__ */ jsxRuntimeExports.jsx("text", { x: zeroXTransfer, y: TRANSFER_PLOT.top + TRANSFER_PLOT.height - 10, fill: "rgba(226,232,240,0.54)", fontSize: "11", textAnchor: "middle", children: "0" }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("text", { x: ceilingXTransferRight + 9, y: TRANSFER_PLOT.top + TRANSFER_PLOT.height - 10, fill: "rgba(248,113,113,0.74)", fontSize: "11", children: "+1" }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("text", { x: HISTORY_PLOT.left + 8, y: ceilingYHistoryTop - 6, fill: "rgba(248,113,113,0.74)", fontSize: "11", children: "+1" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("text", { x: ceilingXTransferRight + 9, y: TRANSFER_PLOT.top + TRANSFER_PLOT.height - 10, fill: "rgb(var(--section-accent-rgb) / 0.74)", fontSize: "11", children: "+1" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("text", { x: HISTORY_PLOT.left + 8, y: ceilingYHistoryTop - 6, fill: "rgb(var(--section-accent-rgb) / 0.74)", fontSize: "11", children: "+1" }),
           /* @__PURE__ */ jsxRuntimeExports.jsx("text", { x: HISTORY_PLOT.left + 8, y: zeroYHistory - 6, fill: "rgba(226,232,240,0.54)", fontSize: "11", children: "0" }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("text", { x: HISTORY_PLOT.left + 8, y: ceilingYHistoryBottom - 6, fill: "rgba(248,113,113,0.74)", fontSize: "11", children: "-1" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("text", { x: HISTORY_PLOT.left + 8, y: ceilingYHistoryBottom - 6, fill: "rgb(var(--section-accent-rgb) / 0.74)", fontSize: "11", children: "-1" }),
           /* @__PURE__ */ jsxRuntimeExports.jsxs("text", { x: TRANSFER_PLOT.left + TRANSFER_PLOT.width - 10, y: TRANSFER_PLOT.top + 24, fill: "rgba(226,232,240,0.54)", fontSize: "11", textAnchor: "end", children: [
             "fixed ±",
             displayRange.toFixed(2)
@@ -33045,7 +33189,7 @@ function PrecisionNumberField({
               spellCheck: false,
               readOnly: !isEditing,
               value: displayValue,
-              className: `h-full w-full bg-transparent font-mono text-cyan-100 outline-none ${isCompactOverlay ? "px-1.5 text-[9px] tracking-[0.06em]" : `text-[13px] tracking-[0.12em] ${suffix && !isEditing ? "pr-11" : "pr-4"} pl-4`} ${isEditing ? "cursor-text selection:bg-cyan-300/25" : "cursor-ew-resize select-none"}`,
+              className: `synth-readout-text h-full w-full bg-transparent outline-none ${isCompactOverlay ? "px-1.5 text-[9px] tracking-[0.06em]" : `text-[13px] tracking-[0.12em] ${suffix && !isEditing ? "pr-11" : "pr-4"} pl-4`} ${isEditing ? "cursor-text selection:bg-cyan-300/25" : "cursor-ew-resize select-none"}`,
               onPointerDown: (event) => {
                 if (event.button !== 0 || isEditing) {
                   return;
@@ -33145,7 +33289,7 @@ function PrecisionNumberField({
               }
             }
           ),
-          suffix && !isEditing ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: `pointer-events-none absolute top-1/2 -translate-y-1/2 font-mono text-cyan-100/58 ${isCompactOverlay ? "right-1.5 text-[7px] tracking-[0.08em]" : "right-4 text-[10px] tracking-[0.16em]"}`, children: suffix }) : null
+          suffix && !isEditing ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: `synth-readout-text pointer-events-none absolute top-1/2 -translate-y-1/2 opacity-60 ${isCompactOverlay ? "right-1.5 text-[7px] tracking-[0.08em]" : "right-4 text-[10px] tracking-[0.16em]"}`, children: suffix }) : null
         ]
       }
     )
@@ -39790,7 +39934,7 @@ function OverlayIconChip({
       type: "button",
       "aria-label": ariaLabel,
       title,
-      className: `flex h-5 w-5 items-center justify-center ${SYNTH_COMPACT_CONTROL_CHROME_CLASS} text-slate-100 transition hover:border-cyan-200/30 hover:text-cyan-100`,
+      className: `flex h-5 w-5 items-center justify-center ${SYNTH_COMPACT_CONTROL_CHROME_CLASS} text-[var(--section-accent)] opacity-80 transition hover:opacity-100`,
       onClick,
       children
     }
@@ -39885,7 +40029,7 @@ function MsegMorphRail({
             ]
           }
         ),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "w-10 shrink-0 text-right font-mono text-[10px] tracking-[0.08em] text-amber-200/85", children: value.toFixed(3) })
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "synth-readout-text w-10 shrink-0 text-right text-[10px] opacity-85", children: value.toFixed(3) })
       ]
     }
   );
@@ -39907,7 +40051,7 @@ function WarpControlCluster({
         onClick: () => warpMode.commitValue(cycleWarpMode(warpMode.value)),
         children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[7px] font-bold uppercase tracking-[0.10em] text-slate-300/45", children: "Warp" }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "grid size-4 shrink-0 place-items-center rounded-full border border-cyan-200/18 bg-cyan-300/8 text-cyan-100/85", children: /* @__PURE__ */ jsxRuntimeExports.jsx(WarpModeGlyph, { mode: warpMode.value }) }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "synth-accent-icon-dot grid size-4 shrink-0 place-items-center rounded-full", children: /* @__PURE__ */ jsxRuntimeExports.jsx(WarpModeGlyph, { mode: warpMode.value }) }),
           /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "min-w-0 truncate text-[8px] font-semibold uppercase tracking-[0.06em] text-slate-100/78", children: modeLabel })
         ]
       }
@@ -40075,7 +40219,7 @@ function DesktopEnvelopeEditor({
             width: geometry.attackRegionWidth,
             height: geometry.plotHeight,
             rx: 16,
-            fill: "rgba(109,216,255,0.03)"
+            fill: "rgb(var(--section-accent-rgb) / 0.03)"
           }
         ),
         /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -40086,7 +40230,7 @@ function DesktopEnvelopeEditor({
             width: geometry.decayRegionWidth,
             height: geometry.plotHeight,
             rx: 16,
-            fill: "rgba(109,216,255,0.045)"
+            fill: "rgb(var(--section-accent-rgb) / 0.045)"
           }
         ),
         /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -40097,7 +40241,7 @@ function DesktopEnvelopeEditor({
             width: geometry.releaseRegionWidth,
             height: geometry.plotHeight,
             rx: 16,
-            fill: "rgba(248,184,77,0.04)"
+            fill: "rgb(var(--section-accent-rgb) / 0.04)"
           }
         ),
         /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -40107,18 +40251,18 @@ function DesktopEnvelopeEditor({
             y1: geometry.plotTop,
             x2: geometry.noteOffX,
             y2: geometry.plotBottom,
-            stroke: "rgba(248,184,77,0.84)",
+            stroke: "rgb(var(--section-accent-rgb) / 0.84)",
             strokeWidth: 2,
             strokeDasharray: "7 7"
           }
         ),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("path", { d: envelopeFillPath, fill: "rgba(109,216,255,0.10)" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("path", { d: envelopeFillPath, fill: "rgb(var(--section-accent-rgb) / 0.10)" }),
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           "path",
           {
             d: envelopePath,
             fill: "none",
-            stroke: "rgba(109,216,255,0.98)",
+            stroke: "var(--section-accent)",
             strokeWidth: 4,
             strokeLinecap: "round",
             strokeLinejoin: "round"
@@ -40130,12 +40274,12 @@ function DesktopEnvelopeEditor({
             cx: geometry.attackX,
             cy: geometry.plotTop,
             r: 13,
-            fill: "rgba(8,16,28,0.94)",
-            stroke: "rgba(109,216,255,0.98)",
+            fill: "rgb(var(--cosimo-recess-rgb) / 0.94)",
+            stroke: "var(--section-accent)",
             strokeWidth: 3
           }
         ),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("circle", { cx: geometry.attackX, cy: geometry.plotTop, r: 4, fill: "rgba(109,216,255,0.98)" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("circle", { cx: geometry.attackX, cy: geometry.plotTop, r: 4, fill: "var(--section-accent)" }),
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           "circle",
           {
@@ -40154,12 +40298,12 @@ function DesktopEnvelopeEditor({
             cx: geometry.decayX,
             cy: geometry.sustainY,
             r: 13,
-            fill: "rgba(8,16,28,0.94)",
-            stroke: "rgba(248,184,77,0.98)",
+            fill: "rgb(var(--cosimo-recess-rgb) / 0.94)",
+            stroke: "var(--section-accent)",
             strokeWidth: 3
           }
         ),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("circle", { cx: geometry.decayX, cy: geometry.sustainY, r: 4, fill: "rgba(248,184,77,0.98)" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("circle", { cx: geometry.decayX, cy: geometry.sustainY, r: 4, fill: "var(--section-accent)" }),
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           "circle",
           {
@@ -40178,12 +40322,12 @@ function DesktopEnvelopeEditor({
             cx: geometry.releaseX,
             cy: geometry.plotBottom,
             r: 13,
-            fill: "rgba(8,16,28,0.94)",
-            stroke: "rgba(109,216,255,0.98)",
+            fill: "rgb(var(--cosimo-recess-rgb) / 0.94)",
+            stroke: "var(--section-accent)",
             strokeWidth: 3
           }
         ),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("circle", { cx: geometry.releaseX, cy: geometry.plotBottom, r: 4, fill: "rgba(109,216,255,0.98)" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("circle", { cx: geometry.releaseX, cy: geometry.plotBottom, r: 4, fill: "var(--section-accent)" }),
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           "circle",
           {
@@ -40203,7 +40347,7 @@ function DesktopEnvelopeEditor({
 function StatusHeader({ statusText }) {
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("header", { className: "flex items-center justify-between gap-3", children: [
     /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[10px] font-semibold uppercase tracking-[0.24em] text-blue-300/55", children: "Cosimo Synth" }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[10px] uppercase tracking-[0.16em] text-fuchsia-200/60", children: statusText })
+    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[10px] uppercase tracking-[0.16em] text-[var(--cosimo-text-muted)]", children: statusText })
   ] });
 }
 function FilterSection({
@@ -40445,13 +40589,13 @@ function DistortionSection({
               }
             ),
             /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "absolute left-3 top-2 flex items-center gap-2", children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[10px] font-bold uppercase tracking-[0.14em] text-rose-400/40", children: "Dist" }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "synth-section-title", children: "Dist" }),
               /* @__PURE__ */ jsxRuntimeExports.jsx(
                 "button",
                 {
                   "data-role": "distortion-mode-option-1",
                   type: "button",
-                  className: `rounded px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-[0.08em] transition ${distortionMode.value === 0 ? "bg-white/[0.06] text-slate-300/60" : "bg-cyan-400/10 text-cyan-300/70"}`,
+                  className: `rounded px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-[0.08em] transition ${distortionMode.value === 0 ? "bg-white/[0.06] text-slate-300/60" : "synth-accent-soft-bg"}`,
                   onClick: () => distortionMode.commitValue(distortionMode.value === 0 ? 1 : 0),
                   children: distortionModeOption.label
                 }
@@ -40462,13 +40606,13 @@ function DistortionSection({
                 "In ",
                 /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-slate-200/85", children: inputPeak.toFixed(3) })
               ] }),
-              /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "font-mono text-[8px] text-cyan-400/45", children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "synth-readout-text text-[8px] opacity-80", children: [
                 "Out ",
-                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-cyan-400/80", children: outputPeak.toFixed(3) })
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: outputPeak.toFixed(3) })
               ] }),
-              /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "font-mono text-[8px] text-rose-400/45", children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "synth-readout-text text-[8px] opacity-55", children: [
                 "Rem ",
-                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-rose-400/80", children: removedPeak.toFixed(3) })
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: removedPeak.toFixed(3) })
               ] })
             ] }),
             /* @__PURE__ */ jsxRuntimeExports.jsxs(
@@ -40483,28 +40627,28 @@ function DistortionSection({
                   /* @__PURE__ */ jsxRuntimeExports.jsx(
                     "div",
                     {
-                      className: "absolute bottom-0 left-0 top-0 rounded-l bg-rose-400/[0.035]",
+                      className: "synth-accent-faint-bg absolute bottom-0 left-0 top-0 rounded-l",
                       style: { width: `${wetHPNormalized * 100}%` }
                     }
                   ),
                   /* @__PURE__ */ jsxRuntimeExports.jsx(
                     "div",
                     {
-                      className: "absolute bottom-0 top-0 bg-cyan-400/[0.08]",
+                      className: "synth-accent-strip-bg absolute bottom-0 top-0",
                       style: { left: `${wetHPNormalized * 100}%`, right: `${(1 - wetLPNormalized) * 100}%` }
                     }
                   ),
                   /* @__PURE__ */ jsxRuntimeExports.jsx(
                     "div",
                     {
-                      className: "absolute bottom-0 right-0 top-0 rounded-r bg-rose-400/[0.035]",
+                      className: "synth-accent-faint-bg absolute bottom-0 right-0 top-0 rounded-r",
                       style: { width: `${(1 - wetLPNormalized) * 100}%` }
                     }
                   ),
                   /* @__PURE__ */ jsxRuntimeExports.jsx(
                     "div",
                     {
-                      className: "absolute top-1/2 size-[11px] -translate-x-1/2 -translate-y-1/2 cursor-ew-resize rounded-full border-2 border-[#020611] bg-cyan-400/60",
+                      className: "synth-accent-solid-bg absolute top-1/2 size-[11px] -translate-x-1/2 -translate-y-1/2 cursor-ew-resize rounded-full border-2 border-[var(--cosimo-recess)] opacity-70",
                       style: { left: `${wetHPNormalized * 100}%` },
                       onPointerDown: (e) => handleSliderPointerDown(e, hpTrackRef.current, distortionWetHPHz, wetHPNormalized, 0, 1, "horizontal", handleWetHPChange)
                     }
@@ -40512,7 +40656,7 @@ function DistortionSection({
                   /* @__PURE__ */ jsxRuntimeExports.jsx(
                     "div",
                     {
-                      className: "absolute top-1/2 size-[11px] -translate-x-1/2 -translate-y-1/2 cursor-ew-resize rounded-full border-2 border-[#020611] bg-cyan-400/60",
+                      className: "synth-accent-solid-bg absolute top-1/2 size-[11px] -translate-x-1/2 -translate-y-1/2 cursor-ew-resize rounded-full border-2 border-[var(--cosimo-recess)] opacity-70",
                       style: { left: `${wetLPNormalized * 100}%` },
                       onPointerDown: (e) => handleSliderPointerDown(e, hpTrackRef.current, distortionWetLPHz, wetLPNormalized, 0, 1, "horizontal", handleWetLPChange)
                     }
@@ -40520,7 +40664,7 @@ function DistortionSection({
                   /* @__PURE__ */ jsxRuntimeExports.jsx(
                     "span",
                     {
-                      className: "absolute -top-3 -translate-x-1/2 font-mono text-[7px] text-cyan-400/45",
+                      className: "synth-readout-text absolute -top-3 -translate-x-1/2 text-[7px] opacity-55",
                       style: { left: `${wetHPNormalized * 100}%` },
                       children: formatFrequencyHz(distortionWetHPHz.value)
                     }
@@ -40528,7 +40672,7 @@ function DistortionSection({
                   /* @__PURE__ */ jsxRuntimeExports.jsx(
                     "span",
                     {
-                      className: "absolute -top-3 -translate-x-1/2 font-mono text-[7px] text-cyan-400/45",
+                      className: "synth-readout-text absolute -top-3 -translate-x-1/2 text-[7px] opacity-55",
                       style: { left: `${wetLPNormalized * 100}%` },
                       children: formatFrequencyHz(distortionWetLPHz.value)
                     }
@@ -40575,7 +40719,7 @@ function ChorusModeRow({
       onClick,
       children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[7px] font-bold uppercase tracking-[0.10em] text-slate-400/50", children: label }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono text-[8px] font-bold uppercase tracking-[0.03em] text-cyan-50/80", children: value })
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "synth-readout-text text-[8px] opacity-80", children: value })
       ]
     }
   );
@@ -40604,13 +40748,13 @@ function ChorusEffectColumn({
       className: "synth-grid-card-shell relative flex h-full min-w-0 flex-col gap-1.5 rounded-[12px] p-2",
       children: [
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between gap-2", children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[10px] font-black uppercase tracking-[0.18em] text-cyan-100/75", children: "Chorus" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "synth-section-title", children: "Chorus" }),
           /* @__PURE__ */ jsxRuntimeExports.jsx(
             "button",
             {
               "data-role": "chorus-enabled-control",
               type: "button",
-              className: `rounded-[7px] border px-2 py-1 text-[8px] font-bold uppercase tracking-[0.12em] transition ${enabled ? "border-cyan-300/25 bg-cyan-300/15 text-cyan-50" : "border-white/[0.07] bg-white/[0.025] text-slate-400/70"}`,
+              className: `rounded-[7px] border px-2 py-1 text-[8px] font-bold uppercase tracking-[0.12em] transition ${enabled ? "synth-accent-active-button" : "border-white/[0.07] bg-white/[0.025] text-slate-400/70"}`,
               onClick: () => chorusEnabled.commitValue(enabled ? 0 : 1),
               children: enabled ? "On" : "Off"
             }
@@ -40887,8 +41031,8 @@ function MsegEditorModal({
       children: [
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-start justify-between gap-4", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-[11px] uppercase tracking-[0.22em] text-blue-300/70", children: slotLabel }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "mt-2 text-2xl font-semibold tracking-[-0.04em] text-amber-100", children: "Modulation Shape Editor" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "synth-section-title text-[11px]", children: slotLabel }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "synth-readout-text mt-2 text-2xl", children: "Modulation Shape Editor" }),
             /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "mt-2 text-sm text-slate-300/70", children: "Drag a point to move it. Click and drag a segment up or down to bend it. Click an empty spot to add a point. Click an interior point without dragging to delete it." })
           ] }),
           /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex items-center gap-2 rounded-[14px] border border-white/8 bg-white/[0.03] p-1", children: [0, 1].map((shapeIndex) => /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -40897,7 +41041,7 @@ function MsegEditorModal({
               type: "button",
               "aria-label": `Edit shape ${shapeIndex === 0 ? "A" : "B"}`,
               "aria-pressed": msegState.editShapeIndex === shapeIndex,
-              className: `h-9 min-w-10 rounded-[10px] px-3 text-[11px] font-semibold uppercase tracking-[0.16em] transition ${msegState.editShapeIndex === shapeIndex ? "bg-cyan-300/18 text-cyan-50" : "text-slate-300/55 hover:bg-white/[0.05] hover:text-slate-100"}`,
+              className: `h-9 min-w-10 rounded-[10px] px-3 text-[11px] font-semibold uppercase tracking-[0.16em] transition ${msegState.editShapeIndex === shapeIndex ? "synth-accent-active-button" : "text-slate-300/55 hover:bg-white/[0.05] hover:text-slate-100"}`,
               onClick: () => onSelectShape(shapeIndex),
               children: shapeIndex === 0 ? "A" : "B"
             },
@@ -40969,7 +41113,7 @@ function MsegEditorModal({
             )
           ] }),
           /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-3", children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "font-mono text-sm tracking-[0.16em] text-cyan-200", children: formatSeconds(clampMsegRateSeconds(msegState.playback.rate.seconds)) }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "synth-readout-text text-sm", children: formatSeconds(clampMsegRateSeconds(msegState.playback.rate.seconds)) }),
             /* @__PURE__ */ jsxRuntimeExports.jsx(
               "button",
               {
@@ -41111,7 +41255,7 @@ function ModulationMatrixSection({
             {
               type: "button",
               "aria-label": `Select MSEG ${slotIndex + 1}`,
-              className: `grid size-[18px] place-items-center rounded-[5px] border p-0 text-[8px] leading-none font-bold transition max-[480px]:size-7 max-[480px]:rounded-[6px] max-[480px]:text-[10px] ${activeEditorTab.kind === "mseg" && activeMsegSlot === slotIndex ? "border-cyan-300/25 bg-cyan-300/15 text-cyan-50/90" : "border-white/[0.06] bg-white/[0.02] text-slate-300/40 hover:border-white/10 hover:text-slate-300/65"}`,
+              className: `grid size-[18px] place-items-center rounded-[5px] border p-0 text-[8px] leading-none font-bold transition max-[480px]:size-7 max-[480px]:rounded-[6px] max-[480px]:text-[10px] ${activeEditorTab.kind === "mseg" && activeMsegSlot === slotIndex ? "synth-accent-active-button" : "border-white/[0.06] bg-white/[0.02] text-slate-300/40 hover:border-white/10 hover:text-slate-300/65"}`,
               onClick: () => {
                 onSelectMsegSlot(slotIndex);
                 setActiveEditorTab({ kind: "mseg", slotIndex });
@@ -41120,14 +41264,14 @@ function ModulationMatrixSection({
             },
             `mseg-pip-${slotIndex}`
           )) }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "ml-0.5 text-[10px] leading-none font-semibold uppercase tracking-[0.12em] text-cyan-100/60", children: "Mseg" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "synth-section-title ml-0.5", children: "Mseg" }),
           /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "mx-0.5 h-3 w-px shrink-0 bg-white/[0.06]" }),
           /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex gap-[3px]", children: Array.from({ length: MODULATION_ENV_SLOT_COUNT }, (_, slotIndex) => /* @__PURE__ */ jsxRuntimeExports.jsx(
             "button",
             {
               type: "button",
               "aria-label": `Select envelope ${slotIndex + 1}`,
-              className: `grid size-[18px] place-items-center rounded-[5px] border p-0 text-[8px] leading-none font-bold transition max-[480px]:size-7 max-[480px]:rounded-[6px] max-[480px]:text-[10px] ${activeEditorTab.kind === "envelope" && activeEnvelopeSlot === slotIndex ? "border-emerald-300/25 bg-emerald-300/12 text-emerald-100/90" : "border-white/[0.06] bg-white/[0.02] text-slate-300/40 hover:border-white/10 hover:text-slate-300/65"}`,
+              className: `grid size-[18px] place-items-center rounded-[5px] border p-0 text-[8px] leading-none font-bold transition max-[480px]:size-7 max-[480px]:rounded-[6px] max-[480px]:text-[10px] ${activeEditorTab.kind === "envelope" && activeEnvelopeSlot === slotIndex ? "synth-accent-active-button" : "border-white/[0.06] bg-white/[0.02] text-slate-300/40 hover:border-white/10 hover:text-slate-300/65"}`,
               onClick: () => {
                 onSelectEnvelopeSlot(slotIndex);
                 setActiveEditorTab({ kind: "envelope", slotIndex });
@@ -41136,7 +41280,7 @@ function ModulationMatrixSection({
             },
             `env-pip-${slotIndex}`
           )) }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "ml-0.5 text-[10px] leading-none font-semibold uppercase tracking-[0.12em] text-emerald-200/50", children: "Env" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "synth-section-title ml-0.5", children: "Env" }),
           /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "relative ml-auto h-[24px] shrink-0 max-[480px]:h-7", children: [
             /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: `absolute inset-0 flex items-center justify-end gap-2 ${activeEditorTab.kind === "mseg" ? "visible" : "invisible"}`, children: [
               /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex items-center gap-1 rounded-[7px] border border-white/[0.05] bg-white/[0.025] p-[2px]", children: [0, 1].map((shapeIndex) => /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -41145,7 +41289,7 @@ function ModulationMatrixSection({
                   type: "button",
                   "aria-label": `Edit MSEG shape ${shapeIndex === 0 ? "A" : "B"}`,
                   "aria-pressed": msegState?.editShapeIndex === shapeIndex,
-                  className: `grid size-[18px] place-items-center rounded-[5px] p-0 text-[8px] font-bold leading-none transition max-[480px]:size-6 max-[480px]:text-[10px] ${msegState?.editShapeIndex === shapeIndex ? "bg-cyan-300/18 text-cyan-50" : "text-slate-300/45 hover:bg-white/[0.06] hover:text-slate-200/80"}`,
+                  className: `grid size-[18px] place-items-center rounded-[5px] p-0 text-[8px] font-bold leading-none transition max-[480px]:size-6 max-[480px]:text-[10px] ${msegState?.editShapeIndex === shapeIndex ? "synth-accent-active-button" : "text-slate-300/45 hover:bg-white/[0.06] hover:text-slate-200/80"}`,
                   onClick: () => onSelectMsegShape(shapeIndex),
                   tabIndex: activeEditorTab.kind === "mseg" ? 0 : -1,
                   children: shapeIndex === 0 ? "A" : "B"
@@ -41157,7 +41301,7 @@ function ModulationMatrixSection({
                 {
                   type: "button",
                   "aria-label": msegState?.playback.loop ? "Looping" : "One Shot",
-                  className: `grid size-[22px] shrink-0 place-items-center rounded-[6px] border p-0 transition max-[480px]:size-7 ${msegState?.playback.loop ? "border-cyan-300/20 bg-cyan-300/10" : "border-white/[0.06] bg-white/[0.02]"}`,
+                  className: `grid size-[22px] shrink-0 place-items-center rounded-[6px] border p-0 transition max-[480px]:size-7 ${msegState?.playback.loop ? "synth-accent-active-button" : "border-white/[0.06] bg-white/[0.02]"}`,
                   onClick: onToggleMsegLoop,
                   tabIndex: activeEditorTab.kind === "mseg" ? 0 : -1,
                   children: [
@@ -41166,7 +41310,7 @@ function ModulationMatrixSection({
                       "svg",
                       {
                         viewBox: "0 0 16 16",
-                        className: `size-3 fill-none stroke-[1.5] stroke-current max-[480px]:size-3.5 ${msegState?.playback.loop ? "text-cyan-300/85" : "text-slate-300/40"}`,
+                        className: `size-3 fill-none stroke-[1.5] stroke-current max-[480px]:size-3.5 ${msegState?.playback.loop ? "text-[var(--section-accent)]" : "text-slate-300/40"}`,
                         children: /* @__PURE__ */ jsxRuntimeExports.jsx("path", { d: "M4 6 L12 6 L12 4 L15 7 L12 10 L12 8 L4 8 L4 10 L1 7 L4 4 Z", strokeLinecap: "round" })
                       }
                     )
@@ -41183,7 +41327,7 @@ function ModulationMatrixSection({
                   spellCheck: false,
                   readOnly: !isEditingMsegRate,
                   "aria-label": "MSEG rate",
-                  className: `w-[56px] select-none whitespace-nowrap rounded border border-white/[0.04] bg-white/[0.03] px-1.5 py-[3px] text-center font-mono text-[10px] leading-none tracking-[0.06em] text-cyan-200/70 outline-none max-[480px]:w-[64px] max-[480px]:px-2 max-[480px]:py-1 max-[480px]:text-[11px] ${isEditingMsegRate ? "cursor-text selection:bg-cyan-300/25" : "cursor-ew-resize"}`,
+                  className: `synth-readout-text w-[56px] select-none whitespace-nowrap rounded border border-white/[0.04] bg-white/[0.03] px-1.5 py-[3px] text-center text-[10px] leading-none outline-none max-[480px]:w-[64px] max-[480px]:px-2 max-[480px]:py-1 max-[480px]:text-[11px] ${isEditingMsegRate ? "cursor-text" : "cursor-ew-resize"}`,
                   value: isEditingMsegRate ? draftMsegRate : formatSeconds(currentMsegRate),
                   tabIndex: activeEditorTab.kind === "mseg" ? 0 : -1,
                   onPointerDown: (event) => {
@@ -41278,7 +41422,7 @@ function ModulationMatrixSection({
                   "aria-label": param.ariaLabel,
                   type: "text",
                   inputMode: "decimal",
-                  className: "w-[38px] rounded border border-white/[0.06] bg-white/[0.03] px-1 py-[2px] text-left font-mono text-[9px] leading-none text-slate-200/80 outline-none focus:border-emerald-300/30 max-[480px]:w-[44px] max-[480px]:text-[10px]",
+                  className: "synth-readout-text w-[38px] rounded border border-white/[0.06] bg-white/[0.03] px-1 py-[2px] text-left text-[9px] leading-none outline-none focus:border-[var(--section-accent)] max-[480px]:w-[44px] max-[480px]:text-[10px]",
                   value: param.draft,
                   onChange: (e) => param.setDraft(e.target.value),
                   onBlur: () => {
@@ -41336,7 +41480,7 @@ function ModulationMatrixSection({
                     progressFillEnd: observedMsegPlayhead.progressFillEnd
                   }
                 ) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "h-full w-full bg-white/[0.02]" }),
-                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "pointer-events-none absolute inset-0 grid place-items-center opacity-0 transition-opacity group-hover:opacity-100", children: /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "rounded-[6px] bg-[rgba(3,5,12,0.6)] px-2.5 py-1 text-[10px] uppercase tracking-[0.15em] text-cyan-300/40", children: "Edit Shape" }) })
+                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "pointer-events-none absolute inset-0 grid place-items-center opacity-0 transition-opacity group-hover:opacity-100", children: /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "synth-readout-text rounded-[6px] bg-[rgba(3,5,12,0.6)] px-2.5 py-1 text-[10px] opacity-45", children: "Edit Shape" }) })
               ]
             }
           ),

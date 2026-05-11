@@ -13721,6 +13721,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     min-height: 220px;
   }
 
+  .min-h-\\[240px\\] {
+    min-height: 240px;
+  }
+
   .min-h-\\[calc\\(100dvh-2rem\\)\\] {
     min-height: calc(100dvh - 2rem);
   }
@@ -14552,6 +14556,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .border-\\[rgba\\(3\\,5\\,12\\,0\\.7\\)\\] {
     border-color: #03050cb3;
+  }
+
+  .border-\\[var\\(--cosimo-recess\\)\\] {
+    border-color: var(--cosimo-recess);
   }
 
   .border-amber-100 {
@@ -15877,6 +15885,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     color: #070a13;
   }
 
+  .text-\\[var\\(--cosimo-text-muted\\)\\] {
+    color: var(--cosimo-text-muted);
+  }
+
   .text-\\[var\\(--section-accent\\)\\] {
     color: var(--section-accent);
   }
@@ -16678,12 +16690,36 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     opacity: .4;
   }
 
+  .opacity-45 {
+    opacity: .45;
+  }
+
   .opacity-50 {
     opacity: .5;
   }
 
+  .opacity-55 {
+    opacity: .55;
+  }
+
+  .opacity-60 {
+    opacity: .6;
+  }
+
   .opacity-70 {
     opacity: .7;
+  }
+
+  .opacity-75 {
+    opacity: .75;
+  }
+
+  .opacity-80 {
+    opacity: .8;
+  }
+
+  .opacity-85 {
+    opacity: .85;
   }
 
   .opacity-90 {
@@ -17365,6 +17401,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
       }
     }
 
+    .hover\\:opacity-100:hover {
+      opacity: 1;
+    }
+
     .hover\\:shadow-\\[inset_0_0_0_1px_rgba\\(255\\,255\\,255\\,0\\.22\\)\\]:hover {
       --tw-shadow: inset 0 0 0 1px var(--tw-shadow-color, #ffffff38);
       box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
@@ -17378,6 +17418,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .focus\\:border-\\[rgb\\(var\\(--section-accent-rgb\\)\\/0\\.54\\)\\]:focus {
     border-color: rgb(var(--section-accent-rgb)/.54);
+  }
+
+  .focus\\:border-\\[var\\(--section-accent\\)\\]:focus {
+    border-color: var(--section-accent);
   }
 
   .focus\\:border-emerald-300\\/30:focus {
@@ -17726,10 +17770,39 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 }
 
 .synth-grid-card-shell, [data-layout-card="desktop-grid-card"] {
+  isolation: isolate;
   border-color: rgb(var(--cosimo-edge-rgb) / .28);
   background: linear-gradient(180deg, rgb(var(--cosimo-surface-raised-rgb) / .96), rgb(var(--cosimo-body-rgb) / .98));
   box-shadow: var(--cosimo-panel-shadow);
   position: relative;
+}
+
+.synth-section-title {
+  font-family: var(--cosimo-font-label);
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: rgb(var(--section-accent-rgb) / .56);
+  text-shadow: 0 0 12px rgb(var(--section-accent-rgb) / .18);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.synth-section-code, .synth-readout-text {
+  font-family: var(--cosimo-font-readout);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--section-accent);
+  text-shadow: 0 0 12px var(--section-accent-glow);
+  font-weight: 400;
+}
+
+.synth-muted-marking {
+  font-family: var(--cosimo-font-label);
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: rgb(var(--cosimo-control-rgb) / .92);
+  font-weight: 600;
 }
 
 .synth-grid-card-inset {
@@ -17752,6 +17825,40 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
   letter-spacing: .1em;
   text-transform: uppercase;
   font-size: 8px;
+}
+
+.synth-compact-control-value {
+  color: var(--section-accent);
+  text-shadow: 0 0 10px var(--section-accent-glow);
+}
+
+.synth-accent-icon-dot {
+  border: 1px solid rgb(var(--section-accent-rgb) / .22);
+  background: rgb(var(--section-accent-rgb) / .08);
+  color: var(--section-accent);
+}
+
+.synth-accent-soft-bg {
+  background: rgb(var(--section-accent-rgb) / .12);
+  color: var(--section-accent);
+}
+
+.synth-accent-faint-bg {
+  background: rgb(var(--section-accent-rgb) / .045);
+}
+
+.synth-accent-strip-bg {
+  background: rgb(var(--section-accent-rgb) / .12);
+}
+
+.synth-accent-solid-bg {
+  background: var(--section-accent);
+}
+
+.synth-accent-active-button {
+  border-color: rgb(var(--section-accent-rgb) / .25);
+  background: rgb(var(--section-accent-rgb) / .15);
+  color: var(--section-accent);
 }
 
 .synth-display-recess {
@@ -17798,11 +17905,12 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 }
 
 [data-liquid-detail="display-lip"]:before {
+  opacity: .72;
   border-radius: 999px;
-  width: 48px;
-  height: 8px;
-  top: 8px;
-  right: 10px;
+  height: 12px;
+  top: 7px;
+  left: 14px;
+  right: 14px;
 }
 
 [data-liquid-detail="meter-cover"]:before {
@@ -17843,6 +17951,39 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
   top: 14px;
   bottom: 14px;
   right: 10px;
+}
+
+.synth-display-lip-controls {
+  z-index: 10;
+  border: 1px solid rgb(var(--section-accent-rgb) / .18);
+  background: rgb(var(--cosimo-recess-rgb) / .54);
+  min-height: 26px;
+  box-shadow: var(--cosimo-glass-shadow);
+  -webkit-backdrop-filter: blur(8px) saturate(1.18);
+  backdrop-filter: blur(8px) saturate(1.18);
+  border-radius: 10px;
+  justify-content: space-between;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 5px;
+  display: flex;
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  right: 8px;
+}
+
+.synth-display-lip-controls:before {
+  content: "";
+  opacity: .58;
+  pointer-events: none;
+  background: linear-gradient(90deg, #0000, #ffffff3d, #0000);
+  border-radius: 999px;
+  height: 2px;
+  position: absolute;
+  top: 3px;
+  left: 18px;
+  right: 18px;
 }
 
 :host {
@@ -20317,21 +20458,21 @@ function setMsegSegmentCurvePower(shape, segmentIndex, curvePower) {
   });
 }
 const DEFAULT_PATCH_THEME = {
-  backgroundTop: "#04070f",
-  backgroundBottom: "#04070f",
-  backgroundRGB: [4, 7, 15],
-  panelStroke: "rgba(132, 149, 255, 0.0)",
-  frameBlueRGB: [94, 118, 255],
-  accentBlue: "#87d7f5",
-  accentBlueRGB: [135, 215, 245],
-  accentBlueDeep: "#5f7aff",
-  accentBlueDeepRGB: [95, 122, 255],
-  guideBlue: "rgba(129, 150, 255, 0.12)",
-  warmText: "#ffd8a6",
-  warmTextRGB: [255, 216, 166],
-  highlightPink: "#f56cb6",
-  highlightPinkRGB: [245, 108, 182],
-  shadowColor: "rgba(7, 11, 28, 0.36)"
+  backgroundTop: "#161616",
+  backgroundBottom: "#101010",
+  backgroundRGB: [16, 16, 16],
+  panelStroke: "rgba(125, 247, 255, 0.05)",
+  frameBlueRGB: [125, 247, 255],
+  accentBlue: "#7df7ff",
+  accentBlueRGB: [125, 247, 255],
+  accentBlueDeep: "#7df7ff",
+  accentBlueDeepRGB: [125, 247, 255],
+  guideBlue: "rgba(125, 247, 255, 0.12)",
+  warmText: "#7df7ff",
+  warmTextRGB: [125, 247, 255],
+  highlightPink: "#7df7ff",
+  highlightPinkRGB: [125, 247, 255],
+  shadowColor: "rgba(125, 247, 255, 0.26)"
 };
 function createDefaultWavetableTheme(theme = DEFAULT_PATCH_THEME) {
   return {
@@ -21208,7 +21349,7 @@ function drawWavetableModel(context, model, theme = DEFAULT_WAVETABLE_THEME) {
   context.fillStyle = toRGBA(theme.backgroundRGB, 0.74);
   context.fillRect(model.currentSlice.label.x - 10, model.currentSlice.label.y - 14, 210, 24);
   context.fillStyle = theme.textColor;
-  context.font = "600 12px Avenir Next, Avenir, sans-serif";
+  context.font = "400 12px Departure Mono, IBM Plex Mono, monospace";
   context.textAlign = "left";
   context.fillText(model.currentSlice.label.text, model.currentSlice.label.x, model.currentSlice.label.y + 2);
   context.restore();
@@ -23169,7 +23310,7 @@ function DistortionVisualizer({
               ] }),
               /* @__PURE__ */ jsxRuntimeExports.jsx("filter", { id: "distortionTransferOccupancyGlow", x: "-18%", y: "-18%", width: "136%", height: "136%", children: /* @__PURE__ */ jsxRuntimeExports.jsx("feGaussianBlur", { stdDeviation: "5.6" }) })
             ] }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("rect", { x: "0", y: "0", width: COMPACT_VIEWBOX_WIDTH, height: COMPACT_VIEWBOX_HEIGHT, fill: "#020611" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("rect", { x: "0", y: "0", width: COMPACT_VIEWBOX_WIDTH, height: COMPACT_VIEWBOX_HEIGHT, fill: "var(--cosimo-recess)" }),
             /* @__PURE__ */ jsxRuntimeExports.jsx(
               "rect",
               {
@@ -23188,7 +23329,7 @@ function DistortionVisualizer({
                 x2: COMPACT_PLOT.left + COMPACT_PLOT.width,
                 y1: yValue,
                 y2: yValue,
-                stroke: index === 1 ? "rgba(255,255,255,0.12)" : "rgba(248,113,113,0.22)",
+                stroke: index === 1 ? "rgba(255,255,255,0.12)" : "rgb(var(--section-accent-rgb) / 0.22)",
                 strokeDasharray: index === 1 ? "0" : "6 6",
                 strokeWidth: index === 1 ? "1.2" : "1"
               },
@@ -23201,7 +23342,7 @@ function DistortionVisualizer({
                 y2: COMPACT_PLOT.top + COMPACT_PLOT.height,
                 x1: xValue,
                 x2: xValue,
-                stroke: index === 1 ? "rgba(255,255,255,0.12)" : "rgba(248,113,113,0.18)",
+                stroke: index === 1 ? "rgba(255,255,255,0.12)" : "rgb(var(--section-accent-rgb) / 0.18)",
                 strokeDasharray: index === 1 ? "0" : "6 6",
                 strokeWidth: index === 1 ? "1.2" : "1"
               },
@@ -23230,7 +23371,7 @@ function DistortionVisualizer({
                   width: column.removedTop.width,
                   height: column.removedTop.height,
                   rx: Math.min(2.2, column.removedTop.width * 0.45),
-                  fill: "rgba(251,113,133,0.88)",
+                  fill: "rgb(var(--section-accent-rgb) / 0.88)",
                   opacity: 0.3
                 }
               ) : null,
@@ -23243,7 +23384,7 @@ function DistortionVisualizer({
                   width: column.removedBottom.width,
                   height: column.removedBottom.height,
                   rx: Math.min(2.2, column.removedBottom.width * 0.45),
-                  fill: "rgba(251,113,133,0.88)",
+                  fill: "rgb(var(--section-accent-rgb) / 0.88)",
                   opacity: 0.3
                 }
               ) : null
@@ -23273,7 +23414,7 @@ function DistortionVisualizer({
                 {
                   "data-role": "distortion-transfer-clipped-occupancy",
                   d: segment.clippedPath,
-                  fill: "rgba(251,113,133,0.36)",
+                  fill: "rgb(var(--section-accent-rgb) / 0.36)",
                   opacity: segment.clippedOpacity
                 }
               ) : null
@@ -23283,15 +23424,15 @@ function DistortionVisualizer({
               {
                 d: transferCurvePath,
                 fill: "none",
-                stroke: "rgba(103,232,249,0.98)",
+                stroke: "var(--section-accent)",
                 strokeWidth: "3.2",
                 strokeLinecap: "round",
                 strokeLinejoin: "round"
               }
             ) : null,
-            /* @__PURE__ */ jsxRuntimeExports.jsx("text", { x: COMPACT_PLOT.left + 8, y: ceilingYTransferTop - 4, fill: "rgba(248,113,113,0.74)", fontSize: "10", children: "+1" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("text", { x: COMPACT_PLOT.left + 8, y: ceilingYTransferTop - 4, fill: "rgb(var(--section-accent-rgb) / 0.74)", fontSize: "10", children: "+1" }),
             /* @__PURE__ */ jsxRuntimeExports.jsx("text", { x: COMPACT_PLOT.left + 8, y: zeroYTransfer - 4, fill: "rgba(226,232,240,0.54)", fontSize: "10", children: "0" }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("text", { x: COMPACT_PLOT.left + 8, y: ceilingYTransferBottom - 4, fill: "rgba(248,113,113,0.74)", fontSize: "10", children: "-1" })
+            /* @__PURE__ */ jsxRuntimeExports.jsx("text", { x: COMPACT_PLOT.left + 8, y: ceilingYTransferBottom - 4, fill: "rgb(var(--section-accent-rgb) / 0.74)", fontSize: "10", children: "-1" })
           ]
         }
       ),
@@ -23301,7 +23442,7 @@ function DistortionVisualizer({
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: joinClasses("grid gap-3", className), children: [
     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between gap-3 text-[11px] uppercase tracking-[0.18em] text-slate-300/62", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx("div", { children: "Driven Transfer" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "font-mono text-[10px] tracking-[0.18em] text-cyan-100/75", children: overshoot > 0 ? `Overshoot +${overshoot.toFixed(2)}` : `Headroom ${(headroom * 100).toFixed(0)}%` })
+      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "synth-readout-text text-[10px] opacity-75", children: overshoot > 0 ? `Overshoot +${overshoot.toFixed(2)}` : `Headroom ${(headroom * 100).toFixed(0)}%` })
     ] }),
     /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "synth-display-recess overflow-hidden rounded-[24px]", children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
       "svg",
@@ -23313,12 +23454,12 @@ function DistortionVisualizer({
         children: [
           /* @__PURE__ */ jsxRuntimeExports.jsxs("defs", { children: [
             /* @__PURE__ */ jsxRuntimeExports.jsxs("linearGradient", { id: "distortionRemovedFill", x1: "0", x2: "0", y1: "0", y2: "1", children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx("stop", { offset: "0%", stopColor: "rgba(251,113,133,0.42)" }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx("stop", { offset: "100%", stopColor: "rgba(239,68,68,0.04)" })
+              /* @__PURE__ */ jsxRuntimeExports.jsx("stop", { offset: "0%", stopColor: "rgb(var(--section-accent-rgb) / 0.42)" }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx("stop", { offset: "100%", stopColor: "rgb(var(--section-accent-rgb) / 0.04)" })
             ] }),
             /* @__PURE__ */ jsxRuntimeExports.jsx("filter", { id: "distortionTransferOccupancyGlow", x: "-18%", y: "-18%", width: "136%", height: "136%", children: /* @__PURE__ */ jsxRuntimeExports.jsx("feGaussianBlur", { stdDeviation: "5.6" }) })
           ] }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("rect", { x: "0", y: "0", width: VIEWBOX_WIDTH, height: VIEWBOX_HEIGHT, fill: "#020611" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("rect", { x: "0", y: "0", width: VIEWBOX_WIDTH, height: VIEWBOX_HEIGHT, fill: "var(--cosimo-recess)" }),
           /* @__PURE__ */ jsxRuntimeExports.jsx(
             "rect",
             {
@@ -23352,7 +23493,7 @@ function DistortionVisualizer({
               x2: TRANSFER_PLOT.left + TRANSFER_PLOT.width,
               y1: yValue,
               y2: yValue,
-              stroke: index === 1 ? "rgba(255,255,255,0.12)" : "rgba(248,113,113,0.22)",
+              stroke: index === 1 ? "rgba(255,255,255,0.12)" : "rgb(var(--section-accent-rgb) / 0.22)",
               strokeDasharray: index === 1 ? "0" : "6 6",
               strokeWidth: index === 1 ? "1.2" : "1"
             },
@@ -23365,7 +23506,7 @@ function DistortionVisualizer({
               y2: TRANSFER_PLOT.top + TRANSFER_PLOT.height,
               x1: xValue,
               x2: xValue,
-              stroke: index === 1 ? "rgba(255,255,255,0.12)" : "rgba(248,113,113,0.18)",
+              stroke: index === 1 ? "rgba(255,255,255,0.12)" : "rgb(var(--section-accent-rgb) / 0.18)",
               strokeDasharray: index === 1 ? "0" : "6 6",
               strokeWidth: index === 1 ? "1.2" : "1"
             },
@@ -23378,7 +23519,7 @@ function DistortionVisualizer({
               x2: HISTORY_PLOT.left + HISTORY_PLOT.width,
               y1: yValue,
               y2: yValue,
-              stroke: index === 1 ? "rgba(255,255,255,0.12)" : "rgba(248,113,113,0.22)",
+              stroke: index === 1 ? "rgba(255,255,255,0.12)" : "rgb(var(--section-accent-rgb) / 0.22)",
               strokeDasharray: index === 1 ? "0" : "6 6",
               strokeWidth: index === 1 ? "1.2" : "1"
             },
@@ -23409,7 +23550,7 @@ function DistortionVisualizer({
               {
                 "data-role": "distortion-transfer-clipped-occupancy",
                 d: segment.clippedPath,
-                fill: "rgba(251,113,133,0.36)",
+                fill: "rgb(var(--section-accent-rgb) / 0.36)",
                 opacity: segment.clippedOpacity
               }
             ) : null
@@ -23419,7 +23560,7 @@ function DistortionVisualizer({
             {
               d: transferCurvePath,
               fill: "none",
-              stroke: "rgba(103,232,249,0.98)",
+              stroke: "var(--section-accent)",
               strokeWidth: "3.2",
               strokeLinecap: "round",
               strokeLinejoin: "round"
@@ -23447,7 +23588,7 @@ function DistortionVisualizer({
                 width: column.removedTop.width,
                 height: column.removedTop.height,
                 rx: Math.min(2.2, column.removedTop.width * 0.45),
-                fill: "rgba(251,113,133,0.88)"
+                fill: "rgb(var(--section-accent-rgb) / 0.88)"
               }
             ) : null,
             column.removedBottom ? /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -23459,19 +23600,19 @@ function DistortionVisualizer({
                 width: column.removedBottom.width,
                 height: column.removedBottom.height,
                 rx: Math.min(2.2, column.removedBottom.width * 0.45),
-                fill: "rgba(251,113,133,0.88)"
+                fill: "rgb(var(--section-accent-rgb) / 0.88)"
               }
             ) : null
           ] }, `history-column-${index}`)),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("text", { x: TRANSFER_PLOT.left + 8, y: ceilingYTransferTop - 6, fill: "rgba(248,113,113,0.74)", fontSize: "11", children: "+1" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("text", { x: TRANSFER_PLOT.left + 8, y: ceilingYTransferTop - 6, fill: "rgb(var(--section-accent-rgb) / 0.74)", fontSize: "11", children: "+1" }),
           /* @__PURE__ */ jsxRuntimeExports.jsx("text", { x: TRANSFER_PLOT.left + 8, y: zeroYTransfer - 6, fill: "rgba(226,232,240,0.54)", fontSize: "11", children: "0" }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("text", { x: TRANSFER_PLOT.left + 8, y: ceilingYTransferBottom - 6, fill: "rgba(248,113,113,0.74)", fontSize: "11", children: "-1" }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("text", { x: ceilingXTransferLeft - 9, y: TRANSFER_PLOT.top + TRANSFER_PLOT.height - 10, fill: "rgba(248,113,113,0.74)", fontSize: "11", textAnchor: "end", children: "-1" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("text", { x: TRANSFER_PLOT.left + 8, y: ceilingYTransferBottom - 6, fill: "rgb(var(--section-accent-rgb) / 0.74)", fontSize: "11", children: "-1" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("text", { x: ceilingXTransferLeft - 9, y: TRANSFER_PLOT.top + TRANSFER_PLOT.height - 10, fill: "rgb(var(--section-accent-rgb) / 0.74)", fontSize: "11", textAnchor: "end", children: "-1" }),
           /* @__PURE__ */ jsxRuntimeExports.jsx("text", { x: zeroXTransfer, y: TRANSFER_PLOT.top + TRANSFER_PLOT.height - 10, fill: "rgba(226,232,240,0.54)", fontSize: "11", textAnchor: "middle", children: "0" }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("text", { x: ceilingXTransferRight + 9, y: TRANSFER_PLOT.top + TRANSFER_PLOT.height - 10, fill: "rgba(248,113,113,0.74)", fontSize: "11", children: "+1" }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("text", { x: HISTORY_PLOT.left + 8, y: ceilingYHistoryTop - 6, fill: "rgba(248,113,113,0.74)", fontSize: "11", children: "+1" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("text", { x: ceilingXTransferRight + 9, y: TRANSFER_PLOT.top + TRANSFER_PLOT.height - 10, fill: "rgb(var(--section-accent-rgb) / 0.74)", fontSize: "11", children: "+1" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("text", { x: HISTORY_PLOT.left + 8, y: ceilingYHistoryTop - 6, fill: "rgb(var(--section-accent-rgb) / 0.74)", fontSize: "11", children: "+1" }),
           /* @__PURE__ */ jsxRuntimeExports.jsx("text", { x: HISTORY_PLOT.left + 8, y: zeroYHistory - 6, fill: "rgba(226,232,240,0.54)", fontSize: "11", children: "0" }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("text", { x: HISTORY_PLOT.left + 8, y: ceilingYHistoryBottom - 6, fill: "rgba(248,113,113,0.74)", fontSize: "11", children: "-1" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("text", { x: HISTORY_PLOT.left + 8, y: ceilingYHistoryBottom - 6, fill: "rgb(var(--section-accent-rgb) / 0.74)", fontSize: "11", children: "-1" }),
           /* @__PURE__ */ jsxRuntimeExports.jsxs("text", { x: TRANSFER_PLOT.left + TRANSFER_PLOT.width - 10, y: TRANSFER_PLOT.top + 24, fill: "rgba(226,232,240,0.54)", fontSize: "11", textAnchor: "end", children: [
             "fixed ±",
             displayRange.toFixed(2)

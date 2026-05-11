@@ -167,7 +167,7 @@ export function PrecisionNumberField({
                     spellCheck={false}
                     readOnly={!isEditing}
                     value={displayValue}
-                    className={`h-full w-full bg-transparent font-mono text-cyan-100 outline-none ${
+                    className={`synth-readout-text h-full w-full bg-transparent outline-none ${
                         isCompactOverlay ? "px-1.5 text-[9px] tracking-[0.06em]" : `text-[13px] tracking-[0.12em] ${
                             suffix && !isEditing ? "pr-11" : "pr-4"
                         } pl-4`
@@ -289,7 +289,7 @@ export function PrecisionNumberField({
                     }}
                 />
                 {suffix && !isEditing ? (
-                    <span className={`pointer-events-none absolute top-1/2 -translate-y-1/2 font-mono text-cyan-100/58 ${
+                    <span className={`synth-readout-text pointer-events-none absolute top-1/2 -translate-y-1/2 opacity-60 ${
                         isCompactOverlay ? "right-1.5 text-[7px] tracking-[0.08em]" : "right-4 text-[10px] tracking-[0.16em]"
                     }`}>
                         {suffix}
