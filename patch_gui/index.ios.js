@@ -16459,6 +16459,30 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     color: #070a13;
   }
 
+  .text-\\[rgb\\(232_236_239\\/0\\.82\\)\\] {
+    color: #e8ecefd1;
+  }
+
+  .text-\\[rgb\\(var\\(--cosimo-control-rgb\\)\\/0\\.55\\)\\] {
+    color: rgb(var(--cosimo-control-rgb)/.55);
+  }
+
+  .text-\\[rgb\\(var\\(--cosimo-control-rgb\\)\\/0\\.62\\)\\] {
+    color: rgb(var(--cosimo-control-rgb)/.62);
+  }
+
+  .text-\\[rgb\\(var\\(--cosimo-control-rgb\\)\\/0\\.82\\)\\] {
+    color: rgb(var(--cosimo-control-rgb)/.82);
+  }
+
+  .text-\\[rgb\\(var\\(--cosimo-control-rgb\\)\\/0\\.92\\)\\] {
+    color: rgb(var(--cosimo-control-rgb)/.92);
+  }
+
+  .text-\\[rgb\\(var\\(--section-accent-rgb\\)\\/0\\.72\\)\\] {
+    color: rgb(var(--section-accent-rgb)/.72);
+  }
+
   .text-\\[var\\(--cosimo-text-muted\\)\\] {
     color: var(--cosimo-text-muted);
   }
@@ -17691,8 +17715,16 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
       scale: var(--tw-scale-x) var(--tw-scale-y);
     }
 
+    .hover\\:border-\\[rgb\\(var\\(--section-accent-rgb\\)\\/0\\.22\\)\\]:hover {
+      border-color: rgb(var(--section-accent-rgb)/.22);
+    }
+
     .hover\\:border-\\[rgb\\(var\\(--section-accent-rgb\\)\\/0\\.32\\)\\]:hover {
       border-color: rgb(var(--section-accent-rgb)/.32);
+    }
+
+    .hover\\:border-\\[rgb\\(var\\(--section-accent-rgb\\)\\/0\\.34\\)\\]:hover {
+      border-color: rgb(var(--section-accent-rgb)/.34);
     }
 
     .hover\\:border-amber-200\\/30:hover {
@@ -17811,6 +17843,14 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
     .hover\\:bg-\\[rgb\\(var\\(--section-accent-rgb\\)\\/0\\.05\\)\\]:hover {
       background-color: rgb(var(--section-accent-rgb)/.05);
+    }
+
+    .hover\\:bg-\\[rgb\\(var\\(--section-accent-rgb\\)\\/0\\.08\\)\\]:hover {
+      background-color: rgb(var(--section-accent-rgb)/.08);
+    }
+
+    .hover\\:bg-\\[rgb\\(var\\(--section-accent-rgb\\)\\/0\\.045\\)\\]:hover {
+      background-color: rgb(var(--section-accent-rgb)/.045);
     }
 
     .hover\\:bg-amber-300\\/16:hover {
@@ -18023,6 +18063,18 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
       .hover\\:bg-white\\/\\[0\\.075\\]:hover {
         background-color: color-mix(in oklab, var(--color-white) 7.5%, transparent);
       }
+    }
+
+    .hover\\:text-\\[rgb\\(232_236_239\\/0\\.82\\)\\]:hover {
+      color: #e8ecefd1;
+    }
+
+    .hover\\:text-\\[rgb\\(var\\(--section-accent-rgb\\)\\/0\\.78\\)\\]:hover {
+      color: rgb(var(--section-accent-rgb)/.78);
+    }
+
+    .hover\\:text-\\[var\\(--section-accent\\)\\]:hover {
+      color: var(--section-accent);
     }
 
     .hover\\:text-amber-100\\/80:hover {
@@ -18852,7 +18904,7 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
   font-display: swap;
 }
 
-:host, .cosimo-mod-prototype-theme, .cosimo-surface, .ios-shell {
+:host, .cosimo-surface, .ios-shell {
   --cosimo-font-label: "IBM Plex Sans Condensed", "Avenir Next Condensed", "Arial Narrow", sans-serif;
   --cosimo-font-readout: "Departure Mono", "SF Mono", "IBM Plex Mono", Menlo, monospace;
   --cosimo-body: #1c1c1c;
@@ -18900,6 +18952,11 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
   --cosimo-contact-shadow: 0 4px 10px #00000042;
   --cosimo-emissive-shadow: 0 0 12px var(--section-accent-glow);
   --cosimo-glass-shadow: inset 0 1px 0 #ffffff2e, inset 0 -1px 0 #ffffff0b, 0 0 16px rgb(var(--section-accent-rgb) / .16);
+}
+
+.cosimo-mod-prototype-theme {
+  color: var(--cosimo-text);
+  font-family: var(--cosimo-font-label);
 }
 
 [data-section-accent="cyan"] {

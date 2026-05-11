@@ -118,17 +118,17 @@ function PrototypeSelect({
                 aria-label={ariaLabel}
                 aria-expanded={open ? "true" : "false"}
                 onClick={() => setOpen((previousOpen) => !previousOpen)}
-                className="flex items-center justify-between gap-1 rounded border border-border/40 bg-muted/60 px-2 py-1.5 text-xs font-medium text-foreground transition-all hover:border-border hover:bg-muted"
+                className="synth-compact-control synth-compact-control-text flex items-center justify-between gap-1 rounded px-2 py-1.5 transition hover:border-[rgb(var(--section-accent-rgb)/0.34)] hover:bg-[rgb(var(--section-accent-rgb)/0.08)]"
                 style={{ minWidth: `${longestLabelWidthPx}px` }}
             >
-                <span className="whitespace-nowrap">{selected?.label}</span>
-                <ChevronDownIcon className={`h-3 w-3 shrink-0 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`} />
+                <span className="synth-readout-text whitespace-nowrap text-[10px]">{selected?.label}</span>
+                <ChevronDownIcon className={`h-3 w-3 shrink-0 text-[rgb(var(--section-accent-rgb)/0.72)] transition-transform ${open ? "rotate-180" : ""}`} />
             </button>
             {open ? (
                 <>
                     <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
                     <div
-                        className="absolute z-50 mt-1 max-h-40 overflow-auto rounded border border-border bg-popover py-0.5 shadow-lg"
+                        className="synth-menu-surface absolute z-50 mt-1 max-h-40 overflow-auto rounded py-0.5"
                         style={{ minWidth: `${longestLabelWidthPx}px` }}
                     >
                         {options.map((option) => (
@@ -140,8 +140,8 @@ function PrototypeSelect({
                                     onChange(option.value);
                                     setOpen(false);
                                 }}
-                                className={`w-full px-2.5 py-1.5 text-left text-xs transition-colors hover:bg-muted/80 ${
-                                    value === option.value ? "bg-primary/10 text-primary" : "text-foreground"
+                                className={`w-full px-2.5 py-1.5 text-left text-[10px] transition-colors hover:bg-[rgb(var(--section-accent-rgb)/0.08)] ${
+                                    value === option.value ? "synth-readout-text synth-accent-soft-bg" : "text-[rgb(232_236_239/0.82)]"
                                 }`}
                             >
                                 {option.label}
@@ -304,7 +304,7 @@ function MiniKnob({
                     fill="none"
                     stroke="currentColor"
                     strokeWidth="2"
-                    className="text-muted/60"
+                    className="text-[rgb(var(--cosimo-control-rgb)/0.62)]"
                     strokeLinecap="round"
                     strokeDasharray="56.5"
                     strokeDashoffset="18.8"
@@ -324,7 +324,7 @@ function MiniKnob({
                         fill="none"
                         stroke="currentColor"
                         strokeWidth="2"
-                        className="text-primary"
+                        className="text-[var(--section-accent)]"
                         strokeLinecap="round"
                     />
                 ) : null}
@@ -333,16 +333,16 @@ function MiniKnob({
                     y1="2.5"
                     x2="16"
                     y2="6.5"
-                    stroke="rgba(255,255,255,0.58)"
+                    stroke="rgb(var(--section-accent-rgb) / 0.72)"
                     strokeWidth="1.2"
                     strokeLinecap="round"
                 />
             </svg>
             <div
-                className="absolute inset-1 rounded-full border border-border/60 bg-secondary"
+                className="synth-control-rail absolute inset-1 rounded-full"
                 style={{ transform: `rotate(${angle}deg)` }}
             >
-                <div className="absolute left-1/2 top-0.5 h-1.5 w-0.5 -translate-x-1/2 rounded-full bg-primary" />
+                <div className="synth-accent-solid-bg absolute left-1/2 top-0.5 h-1.5 w-0.5 -translate-x-1/2 rounded-full" />
             </div>
             {isEditing ? (
                 <input
@@ -365,7 +365,7 @@ function MiniKnob({
                         }
                     }}
                     onMouseDown={(event) => event.stopPropagation()}
-                    className="absolute left-1/2 top-1/2 z-10 h-6 w-16 -translate-x-1/2 -translate-y-1/2 rounded-md border border-border/70 bg-popover px-2 text-center text-[10px] font-mono text-foreground shadow-lg outline-none"
+                    className="synth-menu-surface synth-readout-text absolute left-1/2 top-1/2 z-10 h-6 w-16 -translate-x-1/2 -translate-y-1/2 rounded-md px-2 text-center text-[10px] outline-none"
                 />
             ) : null}
         </div>
@@ -391,8 +391,8 @@ function RoutePolarityToggle({
             onClick={() => onChange(isBipolar ? "unipolar" : "bipolar")}
             className={`inline-flex h-6 shrink-0 items-center justify-center rounded border px-1.5 text-xs font-bold leading-none tracking-tight transition-all ${
                 isBipolar
-                    ? "border-primary/40 bg-primary/20 text-primary"
-                    : "border-border/40 bg-muted/60 text-muted-foreground"
+                    ? "synth-accent-active-button"
+                    : "synth-compact-control text-[rgb(var(--cosimo-control-rgb)/0.92)]"
             }`}
             title={isBipolar ? "Bipolar modulation" : "Unipolar modulation"}
         >
@@ -421,7 +421,7 @@ function RouteRow({
         <div
             ref={rowRef}
             data-role={`route-row-${routeIndex + 1}`}
-            className={`group flex items-center gap-2 rounded-lg border border-border/20 bg-card/40 px-3 py-2 transition-all hover:border-border/50 hover:bg-card/70 ${
+            className={`synth-control-rail group flex items-center gap-2 rounded-lg px-3 py-2 transition-all hover:border-[rgb(var(--section-accent-rgb)/0.22)] hover:bg-[rgb(var(--section-accent-rgb)/0.045)] ${
                 route.enabled ? "" : "opacity-40"
             }`}
         >
@@ -431,8 +431,8 @@ function RouteRow({
                 onClick={() => onUpdate({ ...route, enabled: !route.enabled })}
                 className={`shrink-0 rounded p-1 transition-all ${
                     route.enabled
-                        ? "text-primary hover:text-primary/80"
-                        : "text-muted-foreground/40 hover:text-foreground"
+                        ? "synth-readout-text hover:text-[rgb(var(--section-accent-rgb)/0.78)]"
+                        : "text-[rgb(var(--cosimo-control-rgb)/0.62)] hover:text-[rgb(232_236_239/0.82)]"
                 }`}
                 title={route.enabled ? "Bypass" : "Enable"}
             >
@@ -449,7 +449,7 @@ function RouteRow({
                 />
             </div>
 
-            <ArrowRightIcon className="hidden h-3.5 w-3.5 shrink-0 text-muted-foreground/60 sm:block" />
+            <ArrowRightIcon className="hidden h-3.5 w-3.5 shrink-0 text-[rgb(var(--cosimo-control-rgb)/0.82)] sm:block" />
 
             <PrototypeSelect
                 ariaLabel={`Route ${routeIndex + 1} target`}
@@ -484,7 +484,7 @@ function RouteRow({
                 onChange={(nextAmount) => onUpdate({ ...route, amount: clampModulationRouteAmount(route.targetKind, nextAmount) })}
             />
 
-            <span className="hidden w-16 shrink-0 text-right font-mono text-xs font-medium tabular-nums text-primary sm:block">
+            <span className="synth-readout-text hidden w-16 shrink-0 text-right text-xs tabular-nums sm:block">
                 {formatModulationAmountReadout(route.targetKind, route.amount, route.polarity)}
             </span>
 
@@ -492,7 +492,7 @@ function RouteRow({
                 type="button"
                 aria-label={`Remove route ${routeIndex + 1}`}
                 onClick={onDelete}
-                className="shrink-0 rounded p-1 text-muted-foreground/40 opacity-0 transition-all hover:bg-destructive/10 hover:text-destructive focus-visible:opacity-100 group-hover:opacity-100"
+                className="shrink-0 rounded p-1 text-[rgb(var(--cosimo-control-rgb)/0.55)] opacity-0 transition-all hover:bg-[rgb(var(--section-accent-rgb)/0.08)] hover:text-[var(--section-accent)] focus-visible:opacity-100 group-hover:opacity-100"
             >
                 <XIcon className="h-3.5 w-3.5" />
             </button>
@@ -551,12 +551,12 @@ export function DesktopModMatrix({
     return (
         <div className={`cosimo-mod-prototype-theme flex h-full min-h-0 w-full flex-col ${className}`}>
             <div className="mb-3 flex items-center justify-between">
-                <h2 className="text-sm font-medium uppercase tracking-wide text-foreground/80">Mod Matrix</h2>
+                <h2 className="synth-section-title text-sm">Mod Matrix</h2>
                 <button
                     type="button"
                     aria-label="Add route"
                     onClick={handleAddRouteClick}
-                    className="flex items-center gap-1 rounded px-2 py-1 text-xs text-primary transition-colors hover:bg-primary/10"
+                    className="synth-readout-text flex items-center gap-1 rounded px-2 py-1 text-xs transition-colors hover:bg-[rgb(var(--section-accent-rgb)/0.08)]"
                 >
                     <PlusIcon className="h-3.5 w-3.5" />
                     <span className="hidden sm:inline">Add</span>

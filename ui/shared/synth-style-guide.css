@@ -15,7 +15,6 @@
 }
 
 :host,
-.cosimo-mod-prototype-theme,
 .cosimo-surface,
 .ios-shell {
     --cosimo-font-label: "IBM Plex Sans Condensed", "Avenir Next Condensed", "Arial Narrow", sans-serif;
@@ -69,6 +68,11 @@
     --cosimo-contact-shadow: 0 4px 10px rgb(0 0 0 / 0.26);
     --cosimo-emissive-shadow: 0 0 12px var(--section-accent-glow);
     --cosimo-glass-shadow: inset 0 1px 0 rgb(255 255 255 / 0.18), inset 0 -1px 0 rgb(255 255 255 / 0.045), 0 0 16px rgb(var(--section-accent-rgb) / 0.16);
+}
+
+.cosimo-mod-prototype-theme {
+    color: var(--cosimo-text);
+    font-family: var(--cosimo-font-label);
 }
 
 [data-section-accent="cyan"] {

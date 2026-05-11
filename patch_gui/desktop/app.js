@@ -15048,44 +15048,8 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     border-color: var(--color-blue-200);
   }
 
-  .border-border, .border-border\\/20 {
+  .border-border {
     border-color: var(--cosimo-mod-border);
-  }
-
-  @supports (color: color-mix(in lab, red, red)) {
-    .border-border\\/20 {
-      border-color: color-mix(in oklab, var(--cosimo-mod-border) 20%, transparent);
-    }
-  }
-
-  .border-border\\/40 {
-    border-color: var(--cosimo-mod-border);
-  }
-
-  @supports (color: color-mix(in lab, red, red)) {
-    .border-border\\/40 {
-      border-color: color-mix(in oklab, var(--cosimo-mod-border) 40%, transparent);
-    }
-  }
-
-  .border-border\\/60 {
-    border-color: var(--cosimo-mod-border);
-  }
-
-  @supports (color: color-mix(in lab, red, red)) {
-    .border-border\\/60 {
-      border-color: color-mix(in oklab, var(--cosimo-mod-border) 60%, transparent);
-    }
-  }
-
-  .border-border\\/70 {
-    border-color: var(--cosimo-mod-border);
-  }
-
-  @supports (color: color-mix(in lab, red, red)) {
-    .border-border\\/70 {
-      border-color: color-mix(in oklab, var(--cosimo-mod-border) 70%, transparent);
-    }
   }
 
   .border-cyan-100 {
@@ -15196,14 +15160,8 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     }
   }
 
-  .border-primary, .border-primary\\/40 {
+  .border-primary {
     border-color: var(--cosimo-mod-primary);
-  }
-
-  @supports (color: color-mix(in lab, red, red)) {
-    .border-primary\\/40 {
-      border-color: color-mix(in oklab, var(--cosimo-mod-primary) 40%, transparent);
-    }
   }
 
   .border-red-100 {
@@ -15472,14 +15430,8 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     background-color: var(--cosimo-mod-border);
   }
 
-  .bg-card, .bg-card\\/40 {
+  .bg-card {
     background-color: var(--cosimo-mod-card);
-  }
-
-  @supports (color: color-mix(in lab, red, red)) {
-    .bg-card\\/40 {
-      background-color: color-mix(in oklab, var(--cosimo-mod-card) 40%, transparent);
-    }
   }
 
   .bg-cyan-100 {
@@ -15588,14 +15540,8 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     background-color: var(--color-indigo-600);
   }
 
-  .bg-muted, .bg-muted\\/60 {
+  .bg-muted {
     background-color: var(--cosimo-mod-muted);
-  }
-
-  @supports (color: color-mix(in lab, red, red)) {
-    .bg-muted\\/60 {
-      background-color: color-mix(in oklab, var(--cosimo-mod-muted) 60%, transparent);
-    }
   }
 
   .bg-orange-500 {
@@ -15634,24 +15580,8 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     background-color: var(--cosimo-mod-popover);
   }
 
-  .bg-primary, .bg-primary\\/10 {
+  .bg-primary {
     background-color: var(--cosimo-mod-primary);
-  }
-
-  @supports (color: color-mix(in lab, red, red)) {
-    .bg-primary\\/10 {
-      background-color: color-mix(in oklab, var(--cosimo-mod-primary) 10%, transparent);
-    }
-  }
-
-  .bg-primary\\/20 {
-    background-color: var(--cosimo-mod-primary);
-  }
-
-  @supports (color: color-mix(in lab, red, red)) {
-    .bg-primary\\/20 {
-      background-color: color-mix(in oklab, var(--cosimo-mod-primary) 20%, transparent);
-    }
   }
 
   .bg-red-50 {
@@ -16599,6 +16529,30 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     color: #070a13;
   }
 
+  .text-\\[rgb\\(232_236_239\\/0\\.82\\)\\] {
+    color: #e8ecefd1;
+  }
+
+  .text-\\[rgb\\(var\\(--cosimo-control-rgb\\)\\/0\\.55\\)\\] {
+    color: rgb(var(--cosimo-control-rgb)/.55);
+  }
+
+  .text-\\[rgb\\(var\\(--cosimo-control-rgb\\)\\/0\\.62\\)\\] {
+    color: rgb(var(--cosimo-control-rgb)/.62);
+  }
+
+  .text-\\[rgb\\(var\\(--cosimo-control-rgb\\)\\/0\\.82\\)\\] {
+    color: rgb(var(--cosimo-control-rgb)/.82);
+  }
+
+  .text-\\[rgb\\(var\\(--cosimo-control-rgb\\)\\/0\\.92\\)\\] {
+    color: rgb(var(--cosimo-control-rgb)/.92);
+  }
+
+  .text-\\[rgb\\(var\\(--section-accent-rgb\\)\\/0\\.72\\)\\] {
+    color: rgb(var(--section-accent-rgb)/.72);
+  }
+
   .text-\\[var\\(--cosimo-text-muted\\)\\] {
     color: var(--cosimo-text-muted);
   }
@@ -16789,14 +16743,8 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     color: var(--color-emerald-300);
   }
 
-  .text-foreground, .text-foreground\\/80 {
+  .text-foreground {
     color: var(--cosimo-mod-foreground);
-  }
-
-  @supports (color: color-mix(in lab, red, red)) {
-    .text-foreground\\/80 {
-      color: color-mix(in oklab, var(--cosimo-mod-foreground) 80%, transparent);
-    }
   }
 
   .text-fuchsia-100 {
@@ -16857,24 +16805,8 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     color: var(--cosimo-mod-muted);
   }
 
-  .text-muted-foreground, .text-muted-foreground\\/40 {
+  .text-muted-foreground {
     color: var(--cosimo-mod-muted-foreground);
-  }
-
-  @supports (color: color-mix(in lab, red, red)) {
-    .text-muted-foreground\\/40 {
-      color: color-mix(in oklab, var(--cosimo-mod-muted-foreground) 40%, transparent);
-    }
-  }
-
-  .text-muted-foreground\\/60 {
-    color: var(--cosimo-mod-muted-foreground);
-  }
-
-  @supports (color: color-mix(in lab, red, red)) {
-    .text-muted-foreground\\/60 {
-      color: color-mix(in oklab, var(--cosimo-mod-muted-foreground) 60%, transparent);
-    }
   }
 
   .text-muted\\/60 {
@@ -17899,8 +17831,16 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
       scale: var(--tw-scale-x) var(--tw-scale-y);
     }
 
+    .hover\\:border-\\[rgb\\(var\\(--section-accent-rgb\\)\\/0\\.22\\)\\]:hover {
+      border-color: rgb(var(--section-accent-rgb)/.22);
+    }
+
     .hover\\:border-\\[rgb\\(var\\(--section-accent-rgb\\)\\/0\\.32\\)\\]:hover {
       border-color: rgb(var(--section-accent-rgb)/.32);
+    }
+
+    .hover\\:border-\\[rgb\\(var\\(--section-accent-rgb\\)\\/0\\.34\\)\\]:hover {
+      border-color: rgb(var(--section-accent-rgb)/.34);
     }
 
     .hover\\:border-amber-200\\/30:hover {
@@ -17920,16 +17860,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     @supports (color: color-mix(in lab, red, red)) {
       .hover\\:border-amber-200\\/35:hover {
         border-color: color-mix(in oklab, var(--color-amber-200) 35%, transparent);
-      }
-    }
-
-    .hover\\:border-border:hover, .hover\\:border-border\\/50:hover {
-      border-color: var(--cosimo-mod-border);
-    }
-
-    @supports (color: color-mix(in lab, red, red)) {
-      .hover\\:border-border\\/50:hover {
-        border-color: color-mix(in oklab, var(--cosimo-mod-border) 50%, transparent);
       }
     }
 
@@ -18031,6 +17961,14 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
       background-color: rgb(var(--section-accent-rgb)/.05);
     }
 
+    .hover\\:bg-\\[rgb\\(var\\(--section-accent-rgb\\)\\/0\\.08\\)\\]:hover {
+      background-color: rgb(var(--section-accent-rgb)/.08);
+    }
+
+    .hover\\:bg-\\[rgb\\(var\\(--section-accent-rgb\\)\\/0\\.045\\)\\]:hover {
+      background-color: rgb(var(--section-accent-rgb)/.045);
+    }
+
     .hover\\:bg-amber-300\\/16:hover {
       background-color: #ffd23629;
     }
@@ -18065,16 +18003,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
       background-color: var(--color-blue-700);
     }
 
-    .hover\\:bg-card\\/70:hover {
-      background-color: var(--cosimo-mod-card);
-    }
-
-    @supports (color: color-mix(in lab, red, red)) {
-      .hover\\:bg-card\\/70:hover {
-        background-color: color-mix(in oklab, var(--cosimo-mod-card) 70%, transparent);
-      }
-    }
-
     .hover\\:bg-cyan-300\\/14:hover {
       background-color: #53eafd24;
     }
@@ -18092,16 +18020,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     @supports (color: color-mix(in lab, red, red)) {
       .hover\\:bg-cyan-300\\/22:hover {
         background-color: color-mix(in oklab, var(--color-cyan-300) 22%, transparent);
-      }
-    }
-
-    .hover\\:bg-destructive\\/10:hover {
-      background-color: var(--cosimo-mod-destructive);
-    }
-
-    @supports (color: color-mix(in lab, red, red)) {
-      .hover\\:bg-destructive\\/10:hover {
-        background-color: color-mix(in oklab, var(--cosimo-mod-destructive) 10%, transparent);
       }
     }
 
@@ -18137,16 +18055,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
     .hover\\:bg-indigo-500:hover {
       background-color: var(--color-indigo-500);
-    }
-
-    .hover\\:bg-muted:hover, .hover\\:bg-muted\\/80:hover {
-      background-color: var(--cosimo-mod-muted);
-    }
-
-    @supports (color: color-mix(in lab, red, red)) {
-      .hover\\:bg-muted\\/80:hover {
-        background-color: color-mix(in oklab, var(--cosimo-mod-muted) 80%, transparent);
-      }
     }
 
     .hover\\:bg-pink-300\\/12:hover {
@@ -18186,16 +18094,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     @supports (color: color-mix(in lab, red, red)) {
       .hover\\:bg-pink-300\\/\\[0\\.16\\]:hover {
         background-color: color-mix(in oklab, var(--color-pink-300) 16%, transparent);
-      }
-    }
-
-    .hover\\:bg-primary\\/10:hover {
-      background-color: var(--cosimo-mod-primary);
-    }
-
-    @supports (color: color-mix(in lab, red, red)) {
-      .hover\\:bg-primary\\/10:hover {
-        background-color: color-mix(in oklab, var(--cosimo-mod-primary) 10%, transparent);
       }
     }
 
@@ -18303,6 +18201,18 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
       }
     }
 
+    .hover\\:text-\\[rgb\\(232_236_239\\/0\\.82\\)\\]:hover {
+      color: #e8ecefd1;
+    }
+
+    .hover\\:text-\\[rgb\\(var\\(--section-accent-rgb\\)\\/0\\.78\\)\\]:hover {
+      color: rgb(var(--section-accent-rgb)/.78);
+    }
+
+    .hover\\:text-\\[var\\(--section-accent\\)\\]:hover {
+      color: var(--section-accent);
+    }
+
     .hover\\:text-amber-100\\/80:hover {
       color: #fef3c6cc;
     }
@@ -18319,10 +18229,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
     .hover\\:text-cyan-100:hover {
       color: var(--color-cyan-100);
-    }
-
-    .hover\\:text-destructive:hover {
-      color: var(--cosimo-mod-destructive);
     }
 
     .hover\\:text-foreground:hover {
@@ -18345,14 +18251,8 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
       color: var(--color-pink-100);
     }
 
-    .hover\\:text-primary:hover, .hover\\:text-primary\\/80:hover {
+    .hover\\:text-primary:hover {
       color: var(--cosimo-mod-primary);
-    }
-
-    @supports (color: color-mix(in lab, red, red)) {
-      .hover\\:text-primary\\/80:hover {
-        color: color-mix(in oklab, var(--cosimo-mod-primary) 80%, transparent);
-      }
     }
 
     .hover\\:text-slate-50:hover {
@@ -19152,7 +19052,7 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
   font-display: swap;
 }
 
-:host, .cosimo-mod-prototype-theme, .cosimo-surface, .ios-shell {
+:host, .cosimo-surface, .ios-shell {
   --cosimo-font-label: "IBM Plex Sans Condensed", "Avenir Next Condensed", "Arial Narrow", sans-serif;
   --cosimo-font-readout: "Departure Mono", "SF Mono", "IBM Plex Mono", Menlo, monospace;
   --cosimo-body: #1c1c1c;
@@ -19200,6 +19100,11 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
   --cosimo-contact-shadow: 0 4px 10px #00000042;
   --cosimo-emissive-shadow: 0 0 12px var(--section-accent-glow);
   --cosimo-glass-shadow: inset 0 1px 0 #ffffff2e, inset 0 -1px 0 #ffffff0b, 0 0 16px rgb(var(--section-accent-rgb) / .16);
+}
+
+.cosimo-mod-prototype-theme {
+  color: var(--cosimo-text);
+  font-family: var(--cosimo-font-label);
 }
 
 [data-section-accent="cyan"] {
@@ -34945,11 +34850,11 @@ function PrototypeSelect({
         "aria-label": ariaLabel,
         "aria-expanded": open ? "true" : "false",
         onClick: () => setOpen((previousOpen) => !previousOpen),
-        className: "flex items-center justify-between gap-1 rounded border border-border/40 bg-muted/60 px-2 py-1.5 text-xs font-medium text-foreground transition-all hover:border-border hover:bg-muted",
+        className: "synth-compact-control synth-compact-control-text flex items-center justify-between gap-1 rounded px-2 py-1.5 transition hover:border-[rgb(var(--section-accent-rgb)/0.34)] hover:bg-[rgb(var(--section-accent-rgb)/0.08)]",
         style: { minWidth: `${longestLabelWidthPx}px` },
         children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "whitespace-nowrap", children: selected?.label }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx(ChevronDownIcon, { className: `h-3 w-3 shrink-0 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}` })
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "synth-readout-text whitespace-nowrap text-[10px]", children: selected?.label }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(ChevronDownIcon, { className: `h-3 w-3 shrink-0 text-[rgb(var(--section-accent-rgb)/0.72)] transition-transform ${open ? "rotate-180" : ""}` })
         ]
       }
     ),
@@ -34958,7 +34863,7 @@ function PrototypeSelect({
       /* @__PURE__ */ jsxRuntimeExports.jsx(
         "div",
         {
-          className: "absolute z-50 mt-1 max-h-40 overflow-auto rounded border border-border bg-popover py-0.5 shadow-lg",
+          className: "synth-menu-surface absolute z-50 mt-1 max-h-40 overflow-auto rounded py-0.5",
           style: { minWidth: `${longestLabelWidthPx}px` },
           children: options.map((option) => /* @__PURE__ */ jsxRuntimeExports.jsx(
             "button",
@@ -34969,7 +34874,7 @@ function PrototypeSelect({
                 onChange(option.value);
                 setOpen(false);
               },
-              className: `w-full px-2.5 py-1.5 text-left text-xs transition-colors hover:bg-muted/80 ${value === option.value ? "bg-primary/10 text-primary" : "text-foreground"}`,
+              className: `w-full px-2.5 py-1.5 text-left text-[10px] transition-colors hover:bg-[rgb(var(--section-accent-rgb)/0.08)] ${value === option.value ? "synth-readout-text synth-accent-soft-bg" : "text-[rgb(232_236_239/0.82)]"}`,
               children: option.label
             },
             option.value
@@ -35108,7 +35013,7 @@ function MiniKnob({
               fill: "none",
               stroke: "currentColor",
               strokeWidth: "2",
-              className: "text-muted/60",
+              className: "text-[rgb(var(--cosimo-control-rgb)/0.62)]",
               strokeLinecap: "round",
               strokeDasharray: "56.5",
               strokeDashoffset: "18.8",
@@ -35133,7 +35038,7 @@ function MiniKnob({
               fill: "none",
               stroke: "currentColor",
               strokeWidth: "2",
-              className: "text-primary",
+              className: "text-[var(--section-accent)]",
               strokeLinecap: "round"
             }
           ) : null,
@@ -35144,7 +35049,7 @@ function MiniKnob({
               y1: "2.5",
               x2: "16",
               y2: "6.5",
-              stroke: "rgba(255,255,255,0.58)",
+              stroke: "rgb(var(--section-accent-rgb) / 0.72)",
               strokeWidth: "1.2",
               strokeLinecap: "round"
             }
@@ -35153,9 +35058,9 @@ function MiniKnob({
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           "div",
           {
-            className: "absolute inset-1 rounded-full border border-border/60 bg-secondary",
+            className: "synth-control-rail absolute inset-1 rounded-full",
             style: { transform: `rotate(${angle}deg)` },
-            children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "absolute left-1/2 top-0.5 h-1.5 w-0.5 -translate-x-1/2 rounded-full bg-primary" })
+            children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "synth-accent-solid-bg absolute left-1/2 top-0.5 h-1.5 w-0.5 -translate-x-1/2 rounded-full" })
           }
         ),
         isEditing ? /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -35179,7 +35084,7 @@ function MiniKnob({
               }
             },
             onMouseDown: (event) => event.stopPropagation(),
-            className: "absolute left-1/2 top-1/2 z-10 h-6 w-16 -translate-x-1/2 -translate-y-1/2 rounded-md border border-border/70 bg-popover px-2 text-center text-[10px] font-mono text-foreground shadow-lg outline-none"
+            className: "synth-menu-surface synth-readout-text absolute left-1/2 top-1/2 z-10 h-6 w-16 -translate-x-1/2 -translate-y-1/2 rounded-md px-2 text-center text-[10px] outline-none"
           }
         ) : null
       ]
@@ -35199,7 +35104,7 @@ function RoutePolarityToggle({
       "aria-label": ariaLabel,
       "aria-pressed": isBipolar ? "true" : "false",
       onClick: () => onChange(isBipolar ? "unipolar" : "bipolar"),
-      className: `inline-flex h-6 shrink-0 items-center justify-center rounded border px-1.5 text-xs font-bold leading-none tracking-tight transition-all ${isBipolar ? "border-primary/40 bg-primary/20 text-primary" : "border-border/40 bg-muted/60 text-muted-foreground"}`,
+      className: `inline-flex h-6 shrink-0 items-center justify-center rounded border px-1.5 text-xs font-bold leading-none tracking-tight transition-all ${isBipolar ? "synth-accent-active-button" : "synth-compact-control text-[rgb(var(--cosimo-control-rgb)/0.92)]"}`,
       title: isBipolar ? "Bipolar modulation" : "Unipolar modulation",
       children: isBipolar ? "±" : "+"
     }
@@ -35219,7 +35124,7 @@ function RouteRow({
     {
       ref: rowRef,
       "data-role": `route-row-${routeIndex + 1}`,
-      className: `group flex items-center gap-2 rounded-lg border border-border/20 bg-card/40 px-3 py-2 transition-all hover:border-border/50 hover:bg-card/70 ${route.enabled ? "" : "opacity-40"}`,
+      className: `synth-control-rail group flex items-center gap-2 rounded-lg px-3 py-2 transition-all hover:border-[rgb(var(--section-accent-rgb)/0.22)] hover:bg-[rgb(var(--section-accent-rgb)/0.045)] ${route.enabled ? "" : "opacity-40"}`,
       children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           "button",
@@ -35227,7 +35132,7 @@ function RouteRow({
             type: "button",
             "aria-label": `Route ${routeIndex + 1} ${route.enabled ? "bypass" : "enable"}`,
             onClick: () => onUpdate({ ...route, enabled: !route.enabled }),
-            className: `shrink-0 rounded p-1 transition-all ${route.enabled ? "text-primary hover:text-primary/80" : "text-muted-foreground/40 hover:text-foreground"}`,
+            className: `shrink-0 rounded p-1 transition-all ${route.enabled ? "synth-readout-text hover:text-[rgb(var(--section-accent-rgb)/0.78)]" : "text-[rgb(var(--cosimo-control-rgb)/0.62)] hover:text-[rgb(232_236_239/0.82)]"}`,
             title: route.enabled ? "Bypass" : "Enable",
             children: /* @__PURE__ */ jsxRuntimeExports.jsx(PowerIcon, { className: "h-3 w-3" })
           }
@@ -35242,7 +35147,7 @@ function RouteRow({
             minWidthPx: 118
           }
         ) }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx(ArrowRightIcon, { className: "hidden h-3.5 w-3.5 shrink-0 text-muted-foreground/60 sm:block" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(ArrowRightIcon, { className: "hidden h-3.5 w-3.5 shrink-0 text-[rgb(var(--cosimo-control-rgb)/0.82)] sm:block" }),
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           PrototypeSelect,
           {
@@ -35281,14 +35186,14 @@ function RouteRow({
             onChange: (nextAmount) => onUpdate({ ...route, amount: clampModulationRouteAmount(route.targetKind, nextAmount) })
           }
         ),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "hidden w-16 shrink-0 text-right font-mono text-xs font-medium tabular-nums text-primary sm:block", children: formatModulationAmountReadout(route.targetKind, route.amount, route.polarity) }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "synth-readout-text hidden w-16 shrink-0 text-right text-xs tabular-nums sm:block", children: formatModulationAmountReadout(route.targetKind, route.amount, route.polarity) }),
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           "button",
           {
             type: "button",
             "aria-label": `Remove route ${routeIndex + 1}`,
             onClick: onDelete,
-            className: "shrink-0 rounded p-1 text-muted-foreground/40 opacity-0 transition-all hover:bg-destructive/10 hover:text-destructive focus-visible:opacity-100 group-hover:opacity-100",
+            className: "shrink-0 rounded p-1 text-[rgb(var(--cosimo-control-rgb)/0.55)] opacity-0 transition-all hover:bg-[rgb(var(--section-accent-rgb)/0.08)] hover:text-[var(--section-accent)] focus-visible:opacity-100 group-hover:opacity-100",
             children: /* @__PURE__ */ jsxRuntimeExports.jsx(XIcon, { className: "h-3.5 w-3.5" })
           }
         )
@@ -35332,14 +35237,14 @@ function DesktopModMatrix({
   }, [onAddRoute, routes.length]);
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: `cosimo-mod-prototype-theme flex h-full min-h-0 w-full flex-col ${className}`, children: [
     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mb-3 flex items-center justify-between", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { className: "text-sm font-medium uppercase tracking-wide text-foreground/80", children: "Mod Matrix" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { className: "synth-section-title text-sm", children: "Mod Matrix" }),
       /* @__PURE__ */ jsxRuntimeExports.jsxs(
         "button",
         {
           type: "button",
           "aria-label": "Add route",
           onClick: handleAddRouteClick,
-          className: "flex items-center gap-1 rounded px-2 py-1 text-xs text-primary transition-colors hover:bg-primary/10",
+          className: "synth-readout-text flex items-center gap-1 rounded px-2 py-1 text-xs transition-colors hover:bg-[rgb(var(--section-accent-rgb)/0.08)]",
           children: [
             /* @__PURE__ */ jsxRuntimeExports.jsx(PlusIcon, { className: "h-3.5 w-3.5" }),
             /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "hidden sm:inline", children: "Add" })
