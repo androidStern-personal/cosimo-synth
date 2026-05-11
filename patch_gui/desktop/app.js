@@ -19588,8 +19588,8 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 }
 
 .cosimo-mod-knob-center-marker {
+  background: rgb(var(--cosimo-control-rgb) / .38);
   pointer-events: none;
-  background: #ffffff61;
   border-radius: 999px;
   width: 2px;
   height: 10px;
@@ -19600,8 +19600,7 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 }
 
 .cosimo-mod-knob[data-polarity="bipolar"] .cosimo-mod-knob-center-marker {
-  background: #e2e8f0d1;
-  box-shadow: 0 0 8px #e2e8f047;
+  background: rgb(var(--cosimo-control-rgb) / .82);
 }
 
 .cosimo-mod-knob-input {

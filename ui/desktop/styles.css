@@ -250,14 +250,13 @@
     width: 2px;
     height: 10px;
     border-radius: 999px;
-    background: rgb(255 255 255 / 0.38);
+    background: rgb(var(--cosimo-control-rgb) / 0.38);
     transform: translateX(-50%);
     pointer-events: none;
 }
 
 .cosimo-mod-knob[data-polarity="bipolar"] .cosimo-mod-knob-center-marker {
-    background: rgb(226 232 240 / 0.82);
-    box-shadow: 0 0 8px rgb(226 232 240 / 0.28);
+    background: rgb(var(--cosimo-control-rgb) / 0.82);
 }
 
 .cosimo-mod-knob-input {

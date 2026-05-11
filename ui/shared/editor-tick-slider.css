@@ -207,7 +207,7 @@
     border-style: solid;
     border-color: var(--editor-accent-range);
     background: var(--editor-accent-range);
-    box-shadow: 0 0 0 2px rgba(244, 146, 58, 0.18);
+    box-shadow: 0 0 0 2px rgb(var(--section-accent-rgb, var(--cosimo-accent-amber-rgb)) / 0.18);
     color: var(--editor-surface-ink);
 }
 

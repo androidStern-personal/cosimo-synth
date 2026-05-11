@@ -155,14 +155,13 @@ select {
     width: 2px;
     height: 9px;
     border-radius: 999px;
-    background: rgb(255 255 255 / 0.40);
+    background: rgb(var(--cosimo-control-rgb) / 0.40);
     transform: translateX(-50%);
     pointer-events: none;
 }
 
 .cosimo-mod-knob[data-polarity="bipolar"] .cosimo-mod-knob-center-marker {
-    background: rgb(226 232 240 / 0.84);
-    box-shadow: 0 0 8px rgb(226 232 240 / 0.24);
+    background: rgb(var(--cosimo-control-rgb) / 0.84);
 }
 
 .cosimo-mod-knob-input {

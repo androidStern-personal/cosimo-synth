@@ -19381,8 +19381,8 @@ button, input, select {
 }
 
 .cosimo-mod-knob-center-marker {
+  background: rgb(var(--cosimo-control-rgb) / .4);
   pointer-events: none;
-  background: #fff6;
   border-radius: 999px;
   width: 2px;
   height: 9px;
@@ -19393,8 +19393,7 @@ button, input, select {
 }
 
 .cosimo-mod-knob[data-polarity="bipolar"] .cosimo-mod-knob-center-marker {
-  background: #e2e8f0d6;
-  box-shadow: 0 0 8px #e2e8f03d;
+  background: rgb(var(--cosimo-control-rgb) / .84);
 }
 
 .cosimo-mod-knob-input {
