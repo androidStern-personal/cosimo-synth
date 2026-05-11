@@ -12566,6 +12566,9 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
       --tw-duration: initial;
       --tw-ease: initial;
       --tw-content: "";
+      --tw-scale-x: 1;
+      --tw-scale-y: 1;
+      --tw-scale-z: 1;
     }
   }
 }
@@ -12577,14 +12580,24 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
       "Courier New", monospace;
     --color-red-50: oklch(97.1% .013 17.38);
+    --color-red-100: oklch(93.6% .032 17.717);
+    --color-red-200: oklch(88.5% .062 18.334);
     --color-red-300: oklch(80.8% .114 19.571);
     --color-red-400: oklch(70.4% .191 22.216);
+    --color-red-500: oklch(63.7% .237 25.331);
     --color-red-600: oklch(57.7% .245 27.325);
+    --color-red-700: oklch(50.5% .213 27.518);
+    --color-red-800: oklch(44.4% .177 26.899);
+    --color-orange-500: oklch(70.5% .213 47.604);
+    --color-orange-600: oklch(64.6% .222 41.116);
     --color-amber-50: oklch(98.7% .022 95.277);
     --color-amber-100: oklch(96.2% .059 95.617);
     --color-amber-200: oklch(92.4% .12 95.746);
     --color-amber-300: oklch(87.9% .169 91.605);
     --color-amber-400: oklch(82.8% .189 84.429);
+    --color-yellow-100: oklch(97.3% .071 103.193);
+    --color-yellow-400: oklch(85.2% .199 91.936);
+    --color-green-400: oklch(79.2% .209 151.711);
     --color-emerald-100: oklch(95% .052 163.051);
     --color-emerald-200: oklch(90.5% .093 164.15);
     --color-emerald-300: oklch(84.5% .143 164.978);
@@ -12595,7 +12608,19 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     --color-cyan-400: oklch(78.9% .154 211.53);
     --color-sky-100: oklch(95.1% .026 236.824);
     --color-sky-300: oklch(82.8% .111 230.318);
+    --color-blue-50: oklch(97% .014 254.604);
+    --color-blue-100: oklch(93.2% .032 255.585);
+    --color-blue-200: oklch(88.2% .059 254.128);
     --color-blue-300: oklch(80.9% .105 251.813);
+    --color-blue-500: oklch(62.3% .214 259.815);
+    --color-blue-600: oklch(54.6% .245 262.881);
+    --color-blue-700: oklch(48.8% .243 264.376);
+    --color-blue-950: oklch(28.2% .091 267.935);
+    --color-indigo-50: oklch(96.2% .018 272.314);
+    --color-indigo-100: oklch(93% .034 272.788);
+    --color-indigo-200: oklch(87% .065 274.039);
+    --color-indigo-500: oklch(58.5% .233 277.117);
+    --color-indigo-600: oklch(51.1% .262 276.966);
     --color-fuchsia-100: oklch(95.2% .037 318.852);
     --color-fuchsia-200: oklch(90.3% .076 319.62);
     --color-fuchsia-300: oklch(83.3% .145 321.434);
@@ -12612,12 +12637,30 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     --color-slate-300: oklch(86.9% .022 252.894);
     --color-slate-400: oklch(70.4% .04 256.788);
     --color-slate-500: oklch(55.4% .046 257.417);
+    --color-slate-600: oklch(44.6% .043 257.281);
+    --color-slate-900: oklch(20.8% .042 265.755);
+    --color-gray-50: oklch(98.5% .002 247.839);
+    --color-gray-100: oklch(96.7% .003 264.542);
+    --color-gray-200: oklch(92.8% .006 264.531);
+    --color-gray-300: oklch(87.2% .01 258.338);
+    --color-gray-500: oklch(55.1% .027 264.364);
+    --color-gray-600: oklch(44.6% .03 256.802);
+    --color-gray-700: oklch(37.3% .034 259.733);
+    --color-gray-800: oklch(27.8% .033 256.848);
+    --color-gray-900: oklch(21% .034 264.665);
     --color-black: #000;
     --color-white: #fff;
     --spacing: .25rem;
     --container-sm: 24rem;
+    --container-md: 28rem;
     --container-lg: 32rem;
+    --container-xl: 36rem;
     --container-2xl: 42rem;
+    --container-3xl: 48rem;
+    --container-4xl: 56rem;
+    --container-5xl: 64rem;
+    --container-6xl: 72rem;
+    --container-7xl: 80rem;
     --text-xs: .75rem;
     --text-xs--line-height: calc(1 / .75);
     --text-sm: .875rem;
@@ -12626,10 +12669,18 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     --text-base--line-height: calc(1.5 / 1);
     --text-lg: 1.125rem;
     --text-lg--line-height: calc(1.75 / 1.125);
+    --text-xl: 1.25rem;
+    --text-xl--line-height: calc(1.75 / 1.25);
     --text-2xl: 1.5rem;
     --text-2xl--line-height: calc(2 / 1.5);
     --text-3xl: 1.875rem;
     --text-3xl--line-height: calc(2.25 / 1.875);
+    --text-4xl: 2.25rem;
+    --text-4xl--line-height: calc(2.5 / 2.25);
+    --text-5xl: 3rem;
+    --text-5xl--line-height: 1;
+    --text-6xl: 3.75rem;
+    --text-6xl--line-height: 1;
     --font-weight-normal: 400;
     --font-weight-medium: 500;
     --font-weight-semibold: 600;
@@ -12639,6 +12690,7 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     --tracking-normal: 0em;
     --tracking-wide: .025em;
     --tracking-widest: .1em;
+    --leading-tight: 1.25;
     --leading-snug: 1.375;
     --leading-normal: 1.5;
     --leading-relaxed: 1.625;
@@ -12648,6 +12700,9 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     --radius-lg: .5rem;
     --radius-xl: .75rem;
     --radius-2xl: 1rem;
+    --radius-3xl: 1.5rem;
+    --ease-in: cubic-bezier(.4, 0, 1, 1);
+    --ease-out: cubic-bezier(0, 0, .2, 1);
     --ease-in-out: cubic-bezier(.4, 0, .2, 1);
     --animate-spin: spin 1s linear infinite;
     --animate-pulse: pulse 2s cubic-bezier(.4, 0, .6, 1) infinite;
@@ -12912,6 +12967,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 @layer components;
 
 @layer utilities {
+  .\\@container {
+    container-type: inline-size;
+  }
+
   .pointer-events-auto {
     pointer-events: auto;
   }
@@ -13004,6 +13063,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     inset-inline-start: var(--spacing);
   }
 
+  .start-0 {
+    inset-inline-start: calc(var(--spacing) * 0);
+  }
+
   .-end {
     inset-inline-end: calc(var(--spacing) * -1);
   }
@@ -13056,6 +13119,22 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     top: calc(var(--spacing) * 4);
   }
 
+  .top-5 {
+    top: calc(var(--spacing) * 5);
+  }
+
+  .top-10 {
+    top: calc(var(--spacing) * 10);
+  }
+
+  .top-14 {
+    top: calc(var(--spacing) * 14);
+  }
+
+  .top-\\[92px\\] {
+    top: 92px;
+  }
+
   .top-full {
     top: 100%;
   }
@@ -13076,6 +13155,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     right: calc(var(--spacing) * 1.5);
   }
 
+  .right-1\\/2 {
+    right: 50%;
+  }
+
   .right-2 {
     right: calc(var(--spacing) * 2);
   }
@@ -13088,8 +13171,16 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     right: calc(var(--spacing) * 4);
   }
 
+  .right-full {
+    right: 100%;
+  }
+
   .-bottom-12 {
     bottom: calc(var(--spacing) * -12);
+  }
+
+  .-bottom-15 {
+    bottom: calc(var(--spacing) * -15);
   }
 
   .bottom-0 {
@@ -13124,6 +13215,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     bottom: 48px;
   }
 
+  .bottom-full {
+    bottom: 100%;
+  }
+
   .-left-12 {
     left: calc(var(--spacing) * -12);
   }
@@ -13140,6 +13235,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     left: 50%;
   }
 
+  .left-1\\/3 {
+    left: 33.3333%;
+  }
+
   .left-2 {
     left: calc(var(--spacing) * 2);
   }
@@ -13148,8 +13247,24 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     left: calc(var(--spacing) * 3);
   }
 
+  .left-full {
+    left: 100%;
+  }
+
   .isolate {
     isolation: isolate;
+  }
+
+  .z-1 {
+    z-index: 1;
+  }
+
+  .z-3 {
+    z-index: 3;
+  }
+
+  .z-4 {
+    z-index: 4;
   }
 
   .z-10 {
@@ -13158,6 +13273,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .z-20 {
     z-index: 20;
+  }
+
+  .z-30 {
+    z-index: 30;
   }
 
   .z-40 {
@@ -13188,12 +13307,44 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     order: 1;
   }
 
+  .order-123 {
+    order: 123;
+  }
+
+  .order-456 {
+    order: 456;
+  }
+
   .order-first {
     order: -9999;
   }
 
   .order-last {
     order: 9999;
+  }
+
+  .col-1 {
+    grid-column: 1;
+  }
+
+  .col-2 {
+    grid-column: 2;
+  }
+
+  .col-3 {
+    grid-column: 3;
+  }
+
+  .col-4 {
+    grid-column: 4;
+  }
+
+  .col-6 {
+    grid-column: 6;
+  }
+
+  .col-12 {
+    grid-column: 12;
   }
 
   .col-start-2 {
@@ -13276,8 +13427,20 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     }
   }
 
+  .-m-px {
+    margin: -1px;
+  }
+
+  .m-0 {
+    margin: calc(var(--spacing) * 0);
+  }
+
   .m-1 {
     margin: calc(var(--spacing) * 1);
+  }
+
+  .m-2 {
+    margin: calc(var(--spacing) * 2);
   }
 
   .-mx-1 {
@@ -13300,6 +13463,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     margin-inline: calc(var(--spacing) * 3);
   }
 
+  .mx-5 {
+    margin-inline: calc(var(--spacing) * 5);
+  }
+
   .mx-auto {
     margin-inline: auto;
   }
@@ -13316,6 +13483,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     margin-block: calc(var(--spacing) * 1);
   }
 
+  .-mt-0\\.5 {
+    margin-top: calc(var(--spacing) * -.5);
+  }
+
   .-mt-4 {
     margin-top: calc(var(--spacing) * -4);
   }
@@ -13328,12 +13499,44 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     margin-top: calc(var(--spacing) * 1);
   }
 
+  .mt-1\\.5 {
+    margin-top: calc(var(--spacing) * 1.5);
+  }
+
   .mt-2 {
     margin-top: calc(var(--spacing) * 2);
   }
 
   .mt-4 {
     margin-top: calc(var(--spacing) * 4);
+  }
+
+  .mt-5 {
+    margin-top: calc(var(--spacing) * 5);
+  }
+
+  .mt-6 {
+    margin-top: calc(var(--spacing) * 6);
+  }
+
+  .mt-8 {
+    margin-top: calc(var(--spacing) * 8);
+  }
+
+  .mt-10 {
+    margin-top: calc(var(--spacing) * 10);
+  }
+
+  .mt-12 {
+    margin-top: calc(var(--spacing) * 12);
+  }
+
+  .mt-16 {
+    margin-top: calc(var(--spacing) * 16);
+  }
+
+  .mt-\\[1px\\] {
+    margin-top: 1px;
   }
 
   .mt-auto {
@@ -13350,6 +13553,38 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .mb-4 {
     margin-bottom: calc(var(--spacing) * 4);
+  }
+
+  .mb-5 {
+    margin-bottom: calc(var(--spacing) * 5);
+  }
+
+  .mb-6 {
+    margin-bottom: calc(var(--spacing) * 6);
+  }
+
+  .mb-8 {
+    margin-bottom: calc(var(--spacing) * 8);
+  }
+
+  .mb-9 {
+    margin-bottom: calc(var(--spacing) * 9);
+  }
+
+  .mb-10 {
+    margin-bottom: calc(var(--spacing) * 10);
+  }
+
+  .mb-12 {
+    margin-bottom: calc(var(--spacing) * 12);
+  }
+
+  .mb-20 {
+    margin-bottom: calc(var(--spacing) * 20);
+  }
+
+  .\\!ml-0 {
+    margin-left: calc(var(--spacing) * 0) !important;
   }
 
   .-ml-4 {
@@ -13370,6 +13605,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .ml-4 {
     margin-left: calc(var(--spacing) * 4);
+  }
+
+  .ml-5 {
+    margin-left: calc(var(--spacing) * 5);
   }
 
   .ml-auto {
@@ -13508,6 +13747,11 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     height: calc(var(--spacing) * 10);
   }
 
+  .size-12 {
+    width: calc(var(--spacing) * 12);
+    height: calc(var(--spacing) * 12);
+  }
+
   .size-\\[11px\\] {
     width: 11px;
     height: 11px;
@@ -13609,6 +13853,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     height: calc(var(--spacing) * 44);
   }
 
+  .h-48 {
+    height: calc(var(--spacing) * 48);
+  }
+
   .h-\\[7px\\] {
     height: 7px;
   }
@@ -13645,8 +13893,24 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     height: 320px;
   }
 
+  .h-\\[400px\\] {
+    height: 400px;
+  }
+
+  .h-\\[600px\\] {
+    height: 600px;
+  }
+
+  .h-\\[calc\\(100vh-3\\.5rem\\)\\] {
+    height: calc(100vh - 3.5rem);
+  }
+
   .h-auto {
     height: auto;
+  }
+
+  .h-fit {
+    height: fit-content;
   }
 
   .h-full {
@@ -13659,6 +13923,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .h-svh {
     height: 100svh;
+  }
+
+  .max-h-8 {
+    max-height: calc(var(--spacing) * 8);
   }
 
   .max-h-40 {
@@ -13753,6 +14021,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     width: calc(var(--spacing) * 1.5);
   }
 
+  .w-1\\/2 {
+    width: 50%;
+  }
+
   .w-2 {
     width: calc(var(--spacing) * 2);
   }
@@ -13767,6 +14039,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .w-3\\.5 {
     width: calc(var(--spacing) * 3.5);
+  }
+
+  .w-3\\/4 {
+    width: 75%;
   }
 
   .w-4 {
@@ -13809,6 +14085,14 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     width: calc(var(--spacing) * 16);
   }
 
+  .w-18 {
+    width: calc(var(--spacing) * 18);
+  }
+
+  .w-20 {
+    width: calc(var(--spacing) * 20);
+  }
+
   .w-24 {
     width: calc(var(--spacing) * 24);
   }
@@ -13819,6 +14103,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .w-72 {
     width: calc(var(--spacing) * 72);
+  }
+
+  .w-240 {
+    width: calc(var(--spacing) * 240);
   }
 
   .w-\\[3px\\] {
@@ -13865,6 +14153,30 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     max-width: var(--container-2xl);
   }
 
+  .max-w-3xl {
+    max-width: var(--container-3xl);
+  }
+
+  .max-w-4xl {
+    max-width: var(--container-4xl);
+  }
+
+  .max-w-5xl {
+    max-width: var(--container-5xl);
+  }
+
+  .max-w-6xl {
+    max-width: var(--container-6xl);
+  }
+
+  .max-w-7xl {
+    max-width: var(--container-7xl);
+  }
+
+  .max-w-240 {
+    max-width: calc(var(--spacing) * 240);
+  }
+
   .max-w-\\[34ch\\] {
     max-width: 34ch;
   }
@@ -13895,6 +14207,14 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .max-w-max {
     max-width: max-content;
+  }
+
+  .max-w-md {
+    max-width: var(--container-md);
+  }
+
+  .max-w-none {
+    max-width: none;
   }
 
   .max-w-sm {
@@ -13953,6 +14273,14 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     flex: 1;
   }
 
+  .flex-\\[2\\] {
+    flex: 2;
+  }
+
+  .flex-none {
+    flex: none;
+  }
+
   .flex-shrink, .shrink {
     flex-shrink: 1;
   }
@@ -13967,6 +14295,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .grow-0 {
     flex-grow: 0;
+  }
+
+  .basis-auto {
+    flex-basis: auto;
   }
 
   .basis-full {
@@ -13991,8 +14323,28 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     translate: var(--tw-translate-x) var(--tw-translate-y);
   }
 
+  .-translate-x-2 {
+    --tw-translate-x: calc(var(--spacing) * -2);
+    translate: var(--tw-translate-x) var(--tw-translate-y);
+  }
+
+  .-translate-x-7 {
+    --tw-translate-x: calc(var(--spacing) * -7);
+    translate: var(--tw-translate-x) var(--tw-translate-y);
+  }
+
   .-translate-x-px {
     --tw-translate-x: -1px;
+    translate: var(--tw-translate-x) var(--tw-translate-y);
+  }
+
+  .translate-x-2\\.5 {
+    --tw-translate-x: calc(var(--spacing) * 2.5);
+    translate: var(--tw-translate-x) var(--tw-translate-y);
+  }
+
+  .translate-x-7 {
+    --tw-translate-x: calc(var(--spacing) * 7);
     translate: var(--tw-translate-x) var(--tw-translate-y);
   }
 
@@ -14008,6 +14360,11 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .-translate-y-1\\/2 {
     --tw-translate-y: calc(calc(1 / 2 * 100%) * -1);
+    translate: var(--tw-translate-x) var(--tw-translate-y);
+  }
+
+  .-translate-y-5 {
+    --tw-translate-y: calc(var(--spacing) * -5);
     translate: var(--tw-translate-x) var(--tw-translate-y);
   }
 
@@ -14031,8 +14388,30 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     translate: var(--tw-translate-x) var(--tw-translate-y);
   }
 
+  .translate-y-6 {
+    --tw-translate-y: calc(var(--spacing) * 6);
+    translate: var(--tw-translate-x) var(--tw-translate-y);
+  }
+
+  .translate-y-6\\.5 {
+    --tw-translate-y: calc(var(--spacing) * 6.5);
+    translate: var(--tw-translate-x) var(--tw-translate-y);
+  }
+
+  .-rotate-5 {
+    rotate: -5deg;
+  }
+
+  .-rotate-134 {
+    rotate: -134deg;
+  }
+
   .rotate-45 {
     rotate: 45deg;
+  }
+
+  .rotate-58 {
+    rotate: 58deg;
   }
 
   .rotate-90 {
@@ -14275,6 +14654,18 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     gap: calc(var(--spacing) * 7);
   }
 
+  .gap-8 {
+    gap: calc(var(--spacing) * 8);
+  }
+
+  .gap-10 {
+    gap: calc(var(--spacing) * 10);
+  }
+
+  .gap-12 {
+    gap: calc(var(--spacing) * 12);
+  }
+
   .gap-\\[3px\\] {
     gap: 3px;
   }
@@ -14297,6 +14688,34 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     margin-block-end: calc(calc(var(--spacing) * 3) * calc(1 - var(--tw-space-y-reverse)));
   }
 
+  :where(.space-y-4 > :not(:last-child)) {
+    --tw-space-y-reverse: 0;
+    margin-block-start: calc(calc(var(--spacing) * 4) * var(--tw-space-y-reverse));
+    margin-block-end: calc(calc(var(--spacing) * 4) * calc(1 - var(--tw-space-y-reverse)));
+  }
+
+  :where(.space-y-8 > :not(:last-child)) {
+    --tw-space-y-reverse: 0;
+    margin-block-start: calc(calc(var(--spacing) * 8) * var(--tw-space-y-reverse));
+    margin-block-end: calc(calc(var(--spacing) * 8) * calc(1 - var(--tw-space-y-reverse)));
+  }
+
+  .gap-x-1 {
+    column-gap: calc(var(--spacing) * 1);
+  }
+
+  .gap-x-6 {
+    column-gap: calc(var(--spacing) * 6);
+  }
+
+  .gap-x-8 {
+    column-gap: calc(var(--spacing) * 8);
+  }
+
+  .gap-x-12 {
+    column-gap: calc(var(--spacing) * 12);
+  }
+
   :where(.space-x-4 > :not(:last-child)) {
     --tw-space-x-reverse: 0;
     margin-inline-start: calc(calc(var(--spacing) * 4) * var(--tw-space-x-reverse));
@@ -14305,6 +14724,14 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .gap-y-0 {
     row-gap: calc(var(--spacing) * 0);
+  }
+
+  .gap-y-6 {
+    row-gap: calc(var(--spacing) * 6);
+  }
+
+  .gap-y-12 {
+    row-gap: calc(var(--spacing) * 12);
   }
 
   .self-center {
@@ -14367,6 +14794,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .rounded-2xl {
     border-radius: var(--radius-2xl);
+  }
+
+  .rounded-3xl {
+    border-radius: var(--radius-3xl);
   }
 
   .rounded-\\[2px\\] {
@@ -14503,6 +14934,11 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     border-width: 0;
   }
 
+  .border-1 {
+    border-style: var(--tw-border-style);
+    border-width: 1px;
+  }
+
   .border-2 {
     border-style: var(--tw-border-style);
     border-width: 2px;
@@ -14536,6 +14972,11 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
   .border-dashed {
     --tw-border-style: dashed;
     border-style: dashed;
+  }
+
+  .border-solid {
+    --tw-border-style: solid;
+    border-style: solid;
   }
 
   .border-\\[\\#020611\\] {
@@ -14616,6 +15057,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     .border-amber-300\\/65 {
       border-color: color-mix(in oklab, var(--color-amber-300) 65%, transparent);
     }
+  }
+
+  .border-blue-200 {
+    border-color: var(--color-blue-200);
   }
 
   .border-cyan-100 {
@@ -14716,6 +15161,14 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     }
   }
 
+  .border-gray-200 {
+    border-color: var(--color-gray-200);
+  }
+
+  .border-gray-300 {
+    border-color: var(--color-gray-300);
+  }
+
   .border-pink-200 {
     border-color: var(--color-pink-200);
   }
@@ -14752,6 +15205,18 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     .border-pink-300\\/24 {
       border-color: color-mix(in oklab, var(--color-pink-300) 24%, transparent);
     }
+  }
+
+  .border-red-100 {
+    border-color: var(--color-red-100);
+  }
+
+  .border-red-200 {
+    border-color: var(--color-red-200);
+  }
+
+  .border-red-500 {
+    border-color: var(--color-red-500);
   }
 
   .border-rose-300 {
@@ -14894,6 +15359,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .bg-\\[\\#030711\\]\\/85 {
     background-color: oklab(12.8817% -.00430492 -.0249884 / .85);
+  }
+
+  .bg-\\[\\#050505\\] {
+    background-color: #050505;
   }
 
   .bg-\\[\\#050712\\]\\/55 {
@@ -15064,6 +15533,22 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     }
   }
 
+  .bg-blue-50 {
+    background-color: var(--color-blue-50);
+  }
+
+  .bg-blue-100 {
+    background-color: var(--color-blue-100);
+  }
+
+  .bg-blue-500 {
+    background-color: var(--color-blue-500);
+  }
+
+  .bg-blue-600 {
+    background-color: var(--color-blue-600);
+  }
+
   .bg-cyan-100 {
     background-color: var(--color-cyan-100);
   }
@@ -15198,6 +15683,40 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     }
   }
 
+  .bg-gray-50 {
+    background-color: var(--color-gray-50);
+  }
+
+  .bg-gray-100 {
+    background-color: var(--color-gray-100);
+  }
+
+  .bg-gray-200 {
+    background-color: var(--color-gray-200);
+  }
+
+  .bg-gray-900\\/5 {
+    background-color: #1018280d;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .bg-gray-900\\/5 {
+      background-color: color-mix(in oklab, var(--color-gray-900) 5%, transparent);
+    }
+  }
+
+  .bg-indigo-100 {
+    background-color: var(--color-indigo-100);
+  }
+
+  .bg-indigo-600 {
+    background-color: var(--color-indigo-600);
+  }
+
+  .bg-orange-500 {
+    background-color: var(--color-orange-500);
+  }
+
   .bg-pink-200 {
     background-color: var(--color-pink-200);
   }
@@ -15234,6 +15753,14 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     .bg-pink-300\\/\\[0\\.08\\] {
       background-color: color-mix(in oklab, var(--color-pink-300) 8%, transparent);
     }
+  }
+
+  .bg-red-50 {
+    background-color: var(--color-red-50);
+  }
+
+  .bg-red-600 {
+    background-color: var(--color-red-600);
   }
 
   .bg-rose-400 {
@@ -15497,8 +16024,27 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
   }
 
+  .from-orange-500\\/10 {
+    --tw-gradient-from: #fe6e001a;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .from-orange-500\\/10 {
+      --tw-gradient-from: color-mix(in oklab, var(--color-orange-500) 10%, transparent);
+    }
+  }
+
+  .from-orange-500\\/10 {
+    --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
+  }
+
   .from-rose-400 {
     --tw-gradient-from: var(--color-rose-400);
+    --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
+  }
+
+  .from-slate-50 {
+    --tw-gradient-from: var(--color-slate-50);
     --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
   }
 
@@ -15523,6 +16069,20 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
   }
 
+  .to-orange-500\\/5 {
+    --tw-gradient-to: #fe6e000d;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .to-orange-500\\/5 {
+      --tw-gradient-to: color-mix(in oklab, var(--color-orange-500) 5%, transparent);
+    }
+  }
+
+  .to-orange-500\\/5 {
+    --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
+  }
+
   .to-rose-400 {
     --tw-gradient-to: var(--color-rose-400);
     --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
@@ -15531,6 +16091,19 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
   .to-transparent {
     --tw-gradient-to: transparent;
     --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
+  }
+
+  .to-white {
+    --tw-gradient-to: var(--color-white);
+    --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
+  }
+
+  .bg-cover {
+    background-size: cover;
+  }
+
+  .bg-center {
+    background-position: center;
   }
 
   .mask-repeat {
@@ -15550,6 +16123,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     fill: var(--color-fuchsia-200);
   }
 
+  .fill-inherit {
+    fill: inherit;
+  }
+
   .fill-none {
     fill: none;
   }
@@ -15560,6 +16137,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .stroke-\\[1\\.5\\] {
     stroke-width: 1.5px;
+  }
+
+  .object-cover {
+    object-fit: cover;
   }
 
   .p-0 {
@@ -15598,8 +16179,16 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     padding: calc(var(--spacing) * 6);
   }
 
+  .p-7\\.5 {
+    padding: calc(var(--spacing) * 7.5);
+  }
+
   .p-8 {
     padding: calc(var(--spacing) * 8);
+  }
+
+  .p-24 {
+    padding: calc(var(--spacing) * 24);
   }
 
   .p-\\[2px\\] {
@@ -15644,6 +16233,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .px-6 {
     padding-inline: calc(var(--spacing) * 6);
+  }
+
+  .px-8 {
+    padding-inline: calc(var(--spacing) * 8);
   }
 
   .px-px {
@@ -15694,6 +16287,22 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     padding-block: calc(var(--spacing) * 8);
   }
 
+  .py-10 {
+    padding-block: calc(var(--spacing) * 10);
+  }
+
+  .py-12 {
+    padding-block: calc(var(--spacing) * 12);
+  }
+
+  .py-16 {
+    padding-block: calc(var(--spacing) * 16);
+  }
+
+  .py-24 {
+    padding-block: calc(var(--spacing) * 24);
+  }
+
   .py-\\[2px\\] {
     padding-block: 2px;
   }
@@ -15704,6 +16313,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .py-px {
     padding-block: 1px;
+  }
+
+  .ps-5 {
+    padding-inline-start: calc(var(--spacing) * 5);
   }
 
   .pt-0 {
@@ -15728,6 +16341,22 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .pt-4 {
     padding-top: calc(var(--spacing) * 4);
+  }
+
+  .pt-6 {
+    padding-top: calc(var(--spacing) * 6);
+  }
+
+  .pt-8 {
+    padding-top: calc(var(--spacing) * 8);
+  }
+
+  .pt-20 {
+    padding-top: calc(var(--spacing) * 20);
+  }
+
+  .pt-32 {
+    padding-top: calc(var(--spacing) * 32);
   }
 
   .pr-1 {
@@ -15786,6 +16415,22 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     padding-bottom: calc(var(--spacing) * 5);
   }
 
+  .pb-6 {
+    padding-bottom: calc(var(--spacing) * 6);
+  }
+
+  .pb-8 {
+    padding-bottom: calc(var(--spacing) * 8);
+  }
+
+  .pb-9 {
+    padding-bottom: calc(var(--spacing) * 9);
+  }
+
+  .pb-16 {
+    padding-bottom: calc(var(--spacing) * 16);
+  }
+
   .pl-1 {
     padding-left: calc(var(--spacing) * 1);
   }
@@ -15840,9 +16485,19 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     line-height: var(--tw-leading, var(--text-3xl--line-height));
   }
 
+  .text-4xl {
+    font-size: var(--text-4xl);
+    line-height: var(--tw-leading, var(--text-4xl--line-height));
+  }
+
   .text-base {
     font-size: var(--text-base);
     line-height: var(--tw-leading, var(--text-base--line-height));
+  }
+
+  .text-base\\/6 {
+    font-size: var(--text-base);
+    line-height: calc(var(--spacing) * 6);
   }
 
   .text-lg {
@@ -15853,6 +16508,11 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
   .text-sm {
     font-size: var(--text-sm);
     line-height: var(--tw-leading, var(--text-sm--line-height));
+  }
+
+  .text-xl {
+    font-size: var(--text-xl);
+    line-height: var(--tw-leading, var(--text-xl--line-height));
   }
 
   .text-xs {
@@ -15897,6 +16557,16 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     line-height: calc(var(--spacing) * 4);
   }
 
+  .leading-6 {
+    --tw-leading: calc(var(--spacing) * 6);
+    line-height: calc(var(--spacing) * 6);
+  }
+
+  .leading-8 {
+    --tw-leading: calc(var(--spacing) * 8);
+    line-height: calc(var(--spacing) * 8);
+  }
+
   .leading-none {
     --tw-leading: 1;
     line-height: 1;
@@ -15915,6 +16585,11 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
   .leading-snug {
     --tw-leading: var(--leading-snug);
     line-height: var(--leading-snug);
+  }
+
+  .leading-tight {
+    --tw-leading: var(--leading-tight);
+    line-height: var(--leading-tight);
   }
 
   .font-black {
@@ -16155,6 +16830,18 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     .text-blue-300\\/70 {
       color: color-mix(in oklab, var(--color-blue-300) 70%, transparent);
     }
+  }
+
+  .text-blue-500 {
+    color: var(--color-blue-500);
+  }
+
+  .text-blue-600 {
+    color: var(--color-blue-600);
+  }
+
+  .text-blue-950 {
+    color: var(--color-blue-950);
   }
 
   .text-current {
@@ -16401,6 +17088,50 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     }
   }
 
+  .text-gray-500 {
+    color: var(--color-gray-500);
+  }
+
+  .text-gray-600 {
+    color: var(--color-gray-600);
+  }
+
+  .text-gray-700 {
+    color: var(--color-gray-700);
+  }
+
+  .text-gray-800 {
+    color: var(--color-gray-800);
+  }
+
+  .text-gray-900 {
+    color: var(--color-gray-900);
+  }
+
+  .text-green-400 {
+    color: var(--color-green-400);
+  }
+
+  .text-indigo-100 {
+    color: var(--color-indigo-100);
+  }
+
+  .text-indigo-200 {
+    color: var(--color-indigo-200);
+  }
+
+  .text-indigo-600 {
+    color: var(--color-indigo-600);
+  }
+
+  .text-orange-500 {
+    color: var(--color-orange-500);
+  }
+
+  .text-orange-600 {
+    color: var(--color-orange-600);
+  }
+
   .text-pink-50 {
     color: var(--color-pink-50);
   }
@@ -16461,6 +17192,18 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     .text-pink-200\\/90 {
       color: color-mix(in oklab, var(--color-pink-200) 90%, transparent);
     }
+  }
+
+  .text-red-500 {
+    color: var(--color-red-500);
+  }
+
+  .text-red-600 {
+    color: var(--color-red-600);
+  }
+
+  .text-red-800 {
+    color: var(--color-red-800);
   }
 
   .text-rose-200 {
@@ -16813,6 +17556,14 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     }
   }
 
+  .text-slate-600 {
+    color: var(--color-slate-600);
+  }
+
+  .text-slate-900 {
+    color: var(--color-slate-900);
+  }
+
   .text-white {
     color: var(--color-white);
   }
@@ -16825,6 +17576,14 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     .text-white\\/95 {
       color: color-mix(in oklab, var(--color-white) 95%, transparent);
     }
+  }
+
+  .text-yellow-400 {
+    color: var(--color-yellow-400);
+  }
+
+  .capitalize {
+    text-transform: capitalize;
   }
 
   .lowercase {
@@ -16853,8 +17612,26 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     font-variant-numeric: var(--tw-ordinal, ) var(--tw-slashed-zero, ) var(--tw-numeric-figure, ) var(--tw-numeric-spacing, ) var(--tw-numeric-fraction, );
   }
 
+  .no-underline {
+    text-decoration-line: none;
+  }
+
   .underline {
     text-decoration-line: underline;
+  }
+
+  .decoration-slate-300 {
+    -webkit-text-decoration-color: var(--color-slate-300);
+    -webkit-text-decoration-color: var(--color-slate-300);
+    text-decoration-color: var(--color-slate-300);
+  }
+
+  .decoration-2 {
+    text-decoration-thickness: 2px;
+  }
+
+  .underline-offset-2 {
+    text-underline-offset: 2px;
   }
 
   .underline-offset-4 {
@@ -16886,8 +17663,16 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     opacity: .7;
   }
 
+  .opacity-80 {
+    opacity: .8;
+  }
+
   .opacity-90 {
     opacity: .9;
+  }
+
+  .opacity-100 {
+    opacity: 1;
   }
 
   .shadow {
@@ -17134,6 +17919,34 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     --tw-ring-color: var(--color-amber-100);
   }
 
+  .ring-gray-200 {
+    --tw-ring-color: var(--color-gray-200);
+  }
+
+  .ring-gray-900\\/10 {
+    --tw-ring-color: #1018281a;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .ring-gray-900\\/10 {
+      --tw-ring-color: color-mix(in oklab, var(--color-gray-900) 10%, transparent);
+    }
+  }
+
+  .ring-indigo-600 {
+    --tw-ring-color: var(--color-indigo-600);
+  }
+
+  .ring-orange-500\\/20 {
+    --tw-ring-color: #fe6e0033;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .ring-orange-500\\/20 {
+      --tw-ring-color: color-mix(in oklab, var(--color-orange-500) 20%, transparent);
+    }
+  }
+
   .outline-hidden {
     --tw-outline-style: none;
     outline-style: none;
@@ -17156,6 +17969,11 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     filter: var(--tw-blur, ) var(--tw-brightness, ) var(--tw-contrast, ) var(--tw-grayscale, ) var(--tw-hue-rotate, ) var(--tw-invert, ) var(--tw-saturate, ) var(--tw-sepia, ) var(--tw-drop-shadow, );
   }
 
+  .contrast-80 {
+    --tw-contrast: contrast(80%);
+    filter: var(--tw-blur, ) var(--tw-brightness, ) var(--tw-contrast, ) var(--tw-grayscale, ) var(--tw-hue-rotate, ) var(--tw-invert, ) var(--tw-saturate, ) var(--tw-sepia, ) var(--tw-drop-shadow, );
+  }
+
   .invert {
     --tw-invert: invert(100%);
     filter: var(--tw-blur, ) var(--tw-brightness, ) var(--tw-contrast, ) var(--tw-grayscale, ) var(--tw-hue-rotate, ) var(--tw-invert, ) var(--tw-saturate, ) var(--tw-sepia, ) var(--tw-drop-shadow, );
@@ -17163,6 +17981,12 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .filter {
     filter: var(--tw-blur, ) var(--tw-brightness, ) var(--tw-contrast, ) var(--tw-grayscale, ) var(--tw-hue-rotate, ) var(--tw-invert, ) var(--tw-saturate, ) var(--tw-sepia, ) var(--tw-drop-shadow, );
+  }
+
+  .backdrop-blur {
+    --tw-backdrop-blur: blur(8px);
+    -webkit-backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );
+    backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );
   }
 
   .backdrop-blur-md {
@@ -17190,6 +18014,12 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .transition {
     transition-property: color, background-color, border-color, outline-color, text-decoration-color, fill, stroke, --tw-gradient-from, --tw-gradient-via, --tw-gradient-to, opacity, box-shadow, transform, translate, scale, rotate, filter, -webkit-backdrop-filter, backdrop-filter, display, content-visibility, overlay, pointer-events;
+    transition-timing-function: var(--tw-ease, var(--default-transition-timing-function));
+    transition-duration: var(--tw-duration, var(--default-transition-duration));
+  }
+
+  .transition-\\[filter\\] {
+    transition-property: filter;
     transition-timing-function: var(--tw-ease, var(--default-transition-timing-function));
     transition-duration: var(--tw-duration, var(--default-transition-duration));
   }
@@ -17238,6 +18068,11 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     transition-duration: .2s;
   }
 
+  .duration-250 {
+    --tw-duration: .25s;
+    transition-duration: .25s;
+  }
+
   .duration-300 {
     --tw-duration: .3s;
     transition-duration: .3s;
@@ -17248,6 +18083,11 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     transition-duration: 1s;
   }
 
+  .ease-in {
+    --tw-ease: var(--ease-in);
+    transition-timing-function: var(--ease-in);
+  }
+
   .ease-in-out {
     --tw-ease: var(--ease-in-out);
     transition-timing-function: var(--ease-in-out);
@@ -17256,6 +18096,15 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
   .ease-linear {
     --tw-ease: linear;
     transition-timing-function: linear;
+  }
+
+  .ease-out {
+    --tw-ease: var(--ease-out);
+    transition-timing-function: var(--ease-out);
+  }
+
+  .will-change-\\[filter\\] {
+    will-change: filter;
   }
 
   .outline-none {
@@ -17280,6 +18129,26 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     .group-hover\\:opacity-100:is(:where(.group):hover *) {
       opacity: 1;
     }
+
+    .peer-hover\\:opacity-80:is(:where(.peer):hover ~ *) {
+      opacity: .8;
+    }
+  }
+
+  .marker\\:shrink-0 ::marker {
+    flex-shrink: 0;
+  }
+
+  .marker\\:shrink-0::marker {
+    flex-shrink: 0;
+  }
+
+  .marker\\:shrink-0 ::-webkit-details-marker {
+    flex-shrink: 0;
+  }
+
+  .marker\\:shrink-0::-webkit-details-marker {
+    flex-shrink: 0;
   }
 
   .selection\\:bg-cyan-300\\/25 ::selection {
@@ -17302,6 +18171,45 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     }
   }
 
+  .file\\:border-0::file-selector-button {
+    border-style: var(--tw-border-style);
+    border-width: 0;
+  }
+
+  .file\\:bg-transparent::file-selector-button {
+    background-color: #0000;
+  }
+
+  .file\\:text-sm::file-selector-button {
+    font-size: var(--text-sm);
+    line-height: var(--tw-leading, var(--text-sm--line-height));
+  }
+
+  .file\\:font-medium::file-selector-button {
+    --tw-font-weight: var(--font-weight-medium);
+    font-weight: var(--font-weight-medium);
+  }
+
+  .before\\:absolute:before {
+    content: var(--tw-content);
+    position: absolute;
+  }
+
+  .before\\:top-0:before {
+    content: var(--tw-content);
+    top: calc(var(--spacing) * 0);
+  }
+
+  .before\\:bottom-0:before {
+    content: var(--tw-content);
+    bottom: calc(var(--spacing) * 0);
+  }
+
+  .before\\:left-0:before {
+    content: var(--tw-content);
+    left: calc(var(--spacing) * 0);
+  }
+
   .before\\:block:before {
     content: var(--tw-content);
     display: block;
@@ -17312,9 +18220,19 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     height: calc(var(--spacing) * 3);
   }
 
+  .before\\:h-\\[1px\\]:before {
+    content: var(--tw-content);
+    height: 1px;
+  }
+
   .before\\:w-\\[2px\\]:before {
     content: var(--tw-content);
     width: 2px;
+  }
+
+  .before\\:w-full:before {
+    content: var(--tw-content);
+    width: 100%;
   }
 
   .before\\:rounded-full:before {
@@ -17367,6 +18285,13 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
   }
 
   @media (hover: hover) {
+    .hover\\:scale-105:hover {
+      --tw-scale-x: 105%;
+      --tw-scale-y: 105%;
+      --tw-scale-z: 105%;
+      scale: var(--tw-scale-x) var(--tw-scale-y);
+    }
+
     .hover\\:border-amber-200\\/30:hover {
       border-color: #fee6854d;
     }
@@ -17527,6 +18452,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
       }
     }
 
+    .hover\\:bg-blue-700:hover {
+      background-color: var(--color-blue-700);
+    }
+
     .hover\\:bg-cyan-300\\/14:hover {
       background-color: #53eafd24;
     }
@@ -17545,6 +18474,30 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
       .hover\\:bg-cyan-300\\/22:hover {
         background-color: color-mix(in oklab, var(--color-cyan-300) 22%, transparent);
       }
+    }
+
+    .hover\\:bg-gray-50:hover {
+      background-color: var(--color-gray-50);
+    }
+
+    .hover\\:bg-gray-100:hover {
+      background-color: var(--color-gray-100);
+    }
+
+    .hover\\:bg-gray-200:hover {
+      background-color: var(--color-gray-200);
+    }
+
+    .hover\\:bg-gray-300:hover {
+      background-color: var(--color-gray-300);
+    }
+
+    .hover\\:bg-indigo-50:hover {
+      background-color: var(--color-indigo-50);
+    }
+
+    .hover\\:bg-indigo-500:hover {
+      background-color: var(--color-indigo-500);
     }
 
     .hover\\:bg-pink-300\\/12:hover {
@@ -17585,6 +18538,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
       .hover\\:bg-pink-300\\/\\[0\\.16\\]:hover {
         background-color: color-mix(in oklab, var(--color-pink-300) 16%, transparent);
       }
+    }
+
+    .hover\\:bg-red-700:hover {
+      background-color: var(--color-red-700);
     }
 
     .hover\\:bg-slate-200\\/55:hover {
@@ -17687,8 +18644,24 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
       }
     }
 
+    .hover\\:text-blue-600:hover {
+      color: var(--color-blue-600);
+    }
+
     .hover\\:text-cyan-100:hover {
       color: var(--color-cyan-100);
+    }
+
+    .hover\\:text-gray-700:hover {
+      color: var(--color-gray-700);
+    }
+
+    .hover\\:text-gray-900:hover {
+      color: var(--color-gray-900);
+    }
+
+    .hover\\:text-orange-500:hover {
+      color: var(--color-orange-500);
     }
 
     .hover\\:text-pink-100:hover {
@@ -17723,6 +18696,20 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
       }
     }
 
+    .hover\\:underline:hover {
+      text-decoration-line: underline;
+    }
+
+    .hover\\:decoration-orange-500:hover {
+      -webkit-text-decoration-color: var(--color-orange-500);
+      -webkit-text-decoration-color: var(--color-orange-500);
+      text-decoration-color: var(--color-orange-500);
+    }
+
+    .hover\\:opacity-80:hover {
+      opacity: .8;
+    }
+
     .hover\\:shadow-\\[inset_0_0_0_1px_rgba\\(255\\,255\\,255\\,0\\.22\\)\\]:hover {
       --tw-shadow: inset 0 0 0 1px var(--tw-shadow-color, #ffffff38);
       box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
@@ -17732,6 +18719,25 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
       content: var(--tw-content);
       opacity: .95;
     }
+  }
+
+  .focus\\:not-sr-only:focus {
+    clip-path: none;
+    white-space: normal;
+    width: auto;
+    height: auto;
+    margin: 0;
+    padding: 0;
+    position: static;
+    overflow: visible;
+  }
+
+  .focus\\:absolute:focus {
+    position: absolute;
+  }
+
+  .focus\\:top-0:focus {
+    top: calc(var(--spacing) * 0);
   }
 
   .focus\\:border-cyan-200\\/45:focus {
@@ -17759,6 +18765,11 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
   }
 
+  .focus\\:outline-none:focus {
+    --tw-outline-style: none;
+    outline-style: none;
+  }
+
   .focus-visible\\:opacity-100:focus-visible {
     opacity: 1;
   }
@@ -17766,6 +18777,15 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
   .focus-visible\\:ring-1:focus-visible {
     --tw-ring-shadow: var(--tw-ring-inset, ) 0 0 0 calc(1px + var(--tw-ring-offset-width)) var(--tw-ring-color, currentcolor);
     box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
+  .focus-visible\\:ring-2:focus-visible {
+    --tw-ring-shadow: var(--tw-ring-inset, ) 0 0 0 calc(2px + var(--tw-ring-offset-width)) var(--tw-ring-color, currentcolor);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
+  .focus-visible\\:ring-blue-500:focus-visible {
+    --tw-ring-color: var(--color-blue-500);
   }
 
   .focus-visible\\:ring-cyan-200\\/45:focus-visible {
@@ -17778,14 +18798,47 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     }
   }
 
+  .focus-visible\\:ring-gray-500:focus-visible {
+    --tw-ring-color: var(--color-gray-500);
+  }
+
+  .focus-visible\\:ring-red-500:focus-visible {
+    --tw-ring-color: var(--color-red-500);
+  }
+
   .focus-visible\\:ring-offset-0:focus-visible {
     --tw-ring-offset-width: 0px;
     --tw-ring-offset-shadow: var(--tw-ring-inset, ) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);
   }
 
+  .focus-visible\\:ring-offset-2:focus-visible {
+    --tw-ring-offset-width: 2px;
+    --tw-ring-offset-shadow: var(--tw-ring-inset, ) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);
+  }
+
+  .focus-visible\\:outline-2:focus-visible {
+    outline-style: var(--tw-outline-style);
+    outline-width: 2px;
+  }
+
+  .focus-visible\\:outline-offset-2:focus-visible {
+    outline-offset: 2px;
+  }
+
+  .focus-visible\\:outline-indigo-600:focus-visible {
+    outline-color: var(--color-indigo-600);
+  }
+
   .focus-visible\\:outline-none:focus-visible {
     --tw-outline-style: none;
     outline-style: none;
+  }
+
+  .active\\:scale-95:active {
+    --tw-scale-x: 95%;
+    --tw-scale-y: 95%;
+    --tw-scale-z: 95%;
+    scale: var(--tw-scale-x) var(--tw-scale-y);
   }
 
   .active\\:scale-\\[0\\.92\\]:active {
@@ -17876,12 +18929,29 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     }
   }
 
+  .disabled\\:pointer-events-none:disabled {
+    pointer-events: none;
+  }
+
+  .disabled\\:cursor-not-allowed:disabled {
+    cursor: not-allowed;
+  }
+
   .disabled\\:opacity-35:disabled {
     opacity: .35;
   }
 
   .disabled\\:opacity-40:disabled {
     opacity: .4;
+  }
+
+  .disabled\\:opacity-50:disabled {
+    opacity: .5;
+  }
+
+  .has-\\[\\:focus\\]\\:outline:has(:focus) {
+    outline-style: var(--tw-outline-style);
+    outline-width: 1px;
   }
 
   @media not all and (min-width: 480px) {
@@ -17940,7 +19010,49 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     }
   }
 
+  @media not all and (min-width: 64rem) {
+    .max-lg\\:mb-6 {
+      margin-bottom: calc(var(--spacing) * 6);
+    }
+
+    .max-lg\\:max-w-xl {
+      max-width: var(--container-xl);
+    }
+  }
+
+  @media not all and (min-width: 48rem) {
+    .max-md\\:mx-auto {
+      margin-inline: auto;
+    }
+
+    .max-md\\:hidden {
+      display: none;
+    }
+
+    .max-md\\:max-w-lg {
+      max-width: var(--container-lg);
+    }
+
+    .max-md\\:pb-2 {
+      padding-bottom: calc(var(--spacing) * 2);
+    }
+  }
+
+  @media not all and (min-width: 40rem) {
+    .max-sm\\:gap-8 {
+      gap: calc(var(--spacing) * 8);
+    }
+
+    .max-sm\\:pt-2 {
+      padding-top: calc(var(--spacing) * 2);
+    }
+  }
+
   @media (min-width: 40rem) {
+    .sm\\:mt-20 {
+      margin-top: calc(var(--spacing) * 20);
+    }
+
     .sm\\:block {
       display: block;
     }
@@ -17960,12 +19072,389 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     .sm\\:inline-flex {
       display: inline-flex;
     }
+
+    .sm\\:h-9 {
+      height: calc(var(--spacing) * 9);
+    }
+
+    .sm\\:h-10 {
+      height: calc(var(--spacing) * 10);
+    }
+
+    .sm\\:h-full {
+      height: 100%;
+    }
+
+    .sm\\:w-1\\/2 {
+      width: 50%;
+    }
+
+    .sm\\:w-9 {
+      width: calc(var(--spacing) * 9);
+    }
+
+    .sm\\:w-10 {
+      width: calc(var(--spacing) * 10);
+    }
+
+    .sm\\:w-auto {
+      width: auto;
+    }
+
+    .sm\\:basis-auto {
+      flex-basis: auto;
+    }
+
+    .sm\\:grid-cols-2 {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .sm\\:flex-row {
+      flex-direction: row;
+    }
+
+    .sm\\:justify-center {
+      justify-content: center;
+    }
+
+    .sm\\:gap-6 {
+      gap: calc(var(--spacing) * 6);
+    }
+
+    .sm\\:p-3 {
+      padding: calc(var(--spacing) * 3);
+    }
+
+    .sm\\:px-6 {
+      padding-inline: calc(var(--spacing) * 6);
+    }
+
+    .sm\\:px-10 {
+      padding-inline: calc(var(--spacing) * 10);
+    }
+
+    .sm\\:py-3 {
+      padding-block: calc(var(--spacing) * 3);
+    }
+
+    .sm\\:py-24 {
+      padding-block: calc(var(--spacing) * 24);
+    }
+
+    .sm\\:py-32 {
+      padding-block: calc(var(--spacing) * 32);
+    }
+
+    .sm\\:pt-24 {
+      padding-top: calc(var(--spacing) * 24);
+    }
+
+    .sm\\:pt-40 {
+      padding-top: calc(var(--spacing) * 40);
+    }
+
+    .sm\\:pb-16 {
+      padding-bottom: calc(var(--spacing) * 16);
+    }
+
+    .sm\\:pb-20 {
+      padding-bottom: calc(var(--spacing) * 20);
+    }
+
+    .sm\\:text-left {
+      text-align: left;
+    }
+
+    .sm\\:text-4xl {
+      font-size: var(--text-4xl);
+      line-height: var(--tw-leading, var(--text-4xl--line-height));
+    }
+
+    .sm\\:text-5xl {
+      font-size: var(--text-5xl);
+      line-height: var(--tw-leading, var(--text-5xl--line-height));
+    }
+
+    .sm\\:text-xl {
+      font-size: var(--text-xl);
+      line-height: var(--tw-leading, var(--text-xl--line-height));
+    }
   }
 
   @media (min-width: 48rem) {
+    .md\\:m-0 {
+      margin: calc(var(--spacing) * 0);
+    }
+
+    .md\\:mb-32 {
+      margin-bottom: calc(var(--spacing) * 32);
+    }
+
+    .md\\:ml-3 {
+      margin-left: calc(var(--spacing) * 3);
+    }
+
+    .md\\:flex {
+      display: flex;
+    }
+
+    .md\\:hidden {
+      display: none;
+    }
+
+    .md\\:-rotate-4 {
+      rotate: -4deg;
+    }
+
+    .md\\:rotate-3 {
+      rotate: 3deg;
+    }
+
     .md\\:grid-cols-2 {
       grid-template-columns: repeat(2, minmax(0, 1fr));
     }
+
+    .md\\:grid-cols-3 {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .md\\:flex-row {
+      flex-direction: row;
+    }
+
+    .md\\:flex-wrap {
+      flex-wrap: wrap;
+    }
+
+    .md\\:items-end {
+      align-items: flex-end;
+    }
+
+    .md\\:gap-4 {
+      gap: calc(var(--spacing) * 4);
+    }
+
+    .md\\:text-base {
+      font-size: var(--text-base);
+      line-height: var(--tw-leading, var(--text-base--line-height));
+    }
+  }
+
+  @media (min-width: 64rem) {
+    .lg\\:relative {
+      position: relative;
+    }
+
+    .lg\\:-top-15 {
+      top: calc(var(--spacing) * -15);
+    }
+
+    .lg\\:-bottom-18 {
+      bottom: calc(var(--spacing) * -18);
+    }
+
+    .lg\\:block {
+      display: block;
+    }
+
+    .lg\\:max-w-4xl {
+      max-width: var(--container-4xl);
+    }
+
+    .lg\\:max-w-160 {
+      max-width: calc(var(--spacing) * 160);
+    }
+
+    .lg\\:-rotate-6 {
+      rotate: -6deg;
+    }
+
+    .lg\\:rotate-7 {
+      rotate: 7deg;
+    }
+
+    .lg\\:grid-cols-3 {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .lg\\:flex-row {
+      flex-direction: row;
+    }
+
+    .lg\\:gap-8 {
+      gap: calc(var(--spacing) * 8);
+    }
+
+    .lg\\:gap-30 {
+      gap: calc(var(--spacing) * 30);
+    }
+
+    .lg\\:rounded-2xl {
+      border-radius: var(--radius-2xl);
+    }
+
+    .lg\\:border-none {
+      --tw-border-style: none;
+      border-style: none;
+    }
+
+    .lg\\:p-10 {
+      padding: calc(var(--spacing) * 10);
+    }
+
+    .lg\\:px-8 {
+      padding-inline: calc(var(--spacing) * 8);
+    }
+
+    .lg\\:px-10 {
+      padding-inline: calc(var(--spacing) * 10);
+    }
+
+    .lg\\:py-24 {
+      padding-block: calc(var(--spacing) * 24);
+    }
+
+    .lg\\:pt-32 {
+      padding-top: calc(var(--spacing) * 32);
+    }
+
+    .lg\\:pt-48 {
+      padding-top: calc(var(--spacing) * 48);
+    }
+
+    .lg\\:pb-20 {
+      padding-bottom: calc(var(--spacing) * 20);
+    }
+
+    .lg\\:pb-28 {
+      padding-bottom: calc(var(--spacing) * 28);
+    }
+
+    .lg\\:text-6xl {
+      font-size: var(--text-6xl);
+      line-height: var(--tw-leading, var(--text-6xl--line-height));
+    }
+
+    .lg\\:text-\\[0\\.95rem\\] {
+      font-size: .95rem;
+    }
+
+    .lg\\:text-\\[1\\.35rem\\] {
+      font-size: 1.35rem;
+    }
+
+    .lg\\:leading-relaxed {
+      --tw-leading: var(--leading-relaxed);
+      line-height: var(--leading-relaxed);
+    }
+  }
+
+  @media (min-width: 80rem) {
+    .xl\\:-top-24\\.5 {
+      top: calc(var(--spacing) * -24.5);
+    }
+
+    .xl\\:-bottom-22 {
+      bottom: calc(var(--spacing) * -22);
+    }
+
+    .xl\\:-left-5 {
+      left: calc(var(--spacing) * -5);
+    }
+
+    .xl\\:-mr-4 {
+      margin-right: calc(var(--spacing) * -4);
+    }
+
+    .xl\\:w-10\\.5 {
+      width: calc(var(--spacing) * 10.5);
+    }
+
+    .xl\\:w-11 {
+      width: calc(var(--spacing) * 11);
+    }
+
+    .xl\\:w-14 {
+      width: calc(var(--spacing) * 14);
+    }
+
+    .xl\\:w-23 {
+      width: calc(var(--spacing) * 23);
+    }
+
+    .xl\\:w-25 {
+      width: calc(var(--spacing) * 25);
+    }
+
+    .xl\\:-translate-x-9 {
+      --tw-translate-x: calc(var(--spacing) * -9);
+      translate: var(--tw-translate-x) var(--tw-translate-y);
+    }
+
+    .xl\\:translate-x-8 {
+      --tw-translate-x: calc(var(--spacing) * 8);
+      translate: var(--tw-translate-x) var(--tw-translate-y);
+    }
+
+    .xl\\:-translate-y-7 {
+      --tw-translate-y: calc(var(--spacing) * -7);
+      translate: var(--tw-translate-x) var(--tw-translate-y);
+    }
+
+    .xl\\:translate-y-9 {
+      --tw-translate-y: calc(var(--spacing) * 9);
+      translate: var(--tw-translate-x) var(--tw-translate-y);
+    }
+
+    .xl\\:grid-cols-4 {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .xl\\:gap-40 {
+      gap: calc(var(--spacing) * 40);
+    }
+
+    .xl\\:p-15 {
+      padding: calc(var(--spacing) * 15);
+    }
+
+    .xl\\:px-0 {
+      padding-inline: calc(var(--spacing) * 0);
+    }
+  }
+
+  @media (min-width: 96rem) {
+    .\\32 xl\\:px-5 {
+      padding-inline: calc(var(--spacing) * 5);
+    }
+
+    .\\32 xl\\:px-10 {
+      padding-inline: calc(var(--spacing) * 10);
+    }
+
+    .\\32 xl\\:py-13 {
+      padding-block: calc(var(--spacing) * 13);
+    }
+  }
+
+  .ltr\\:-rotate-90:where(:dir(ltr), [dir="ltr"], [dir="ltr"] *) {
+    rotate: -90deg;
+  }
+
+  .rtl\\:rotate-90:where(:dir(rtl), [dir="rtl"], [dir="rtl"] *) {
+    rotate: 90deg;
+  }
+
+  .rtl\\:rotate-180:where(:dir(rtl), [dir="rtl"], [dir="rtl"] *) {
+    rotate: 180deg;
+  }
+
+  .\\[\\&_p\\]\\:mb-6 p {
+    margin-bottom: calc(var(--spacing) * 6);
+  }
+
+  .\\[\\&_strong\\]\\:bg-yellow-100 strong {
+    background-color: var(--color-yellow-100);
   }
 }
 
@@ -19151,6 +20640,24 @@ button, input, select {
   syntax: "*";
   inherits: false;
   initial-value: "";
+}
+
+@property --tw-scale-x {
+  syntax: "*";
+  inherits: false;
+  initial-value: 1;
+}
+
+@property --tw-scale-y {
+  syntax: "*";
+  inherits: false;
+  initial-value: 1;
+}
+
+@property --tw-scale-z {
+  syntax: "*";
+  inherits: false;
+  initial-value: 1;
 }
 
 @keyframes spin {
