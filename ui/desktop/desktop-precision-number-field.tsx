@@ -151,10 +151,10 @@ export function PrecisionNumberField({
             <span className="sr-only">{ariaLabel}</span>
             <div
                 data-role={dataRole}
-                className={`relative border border-white/[0.10] bg-black/48 ${
+                className={`synth-compact-control relative ${
                     isCompactOverlay
-                        ? "rounded-[5px] shadow-[0_4px_12px_rgba(0,0,0,0.20),inset_0_1px_0_rgba(255,255,255,0.04)]"
-                        : "rounded-full shadow-[0_10px_28px_rgba(0,0,0,0.26),inset_0_1px_0_rgba(255,255,255,0.05)]"
+                        ? "rounded-[5px]"
+                        : "rounded-full"
                 }`}
                 style={{ width: `${width}px`, height: `${height}px` }}
             >
@@ -167,7 +167,7 @@ export function PrecisionNumberField({
                     spellCheck={false}
                     readOnly={!isEditing}
                     value={displayValue}
-                    className={`h-full w-full bg-transparent font-mono text-cyan-100 outline-none ${
+                    className={`synth-readout-text h-full w-full bg-transparent outline-none ${
                         isCompactOverlay ? "px-1.5 text-[9px] tracking-[0.06em]" : `text-[13px] tracking-[0.12em] ${
                             suffix && !isEditing ? "pr-11" : "pr-4"
                         } pl-4`
@@ -289,7 +289,7 @@ export function PrecisionNumberField({
                     }}
                 />
                 {suffix && !isEditing ? (
-                    <span className={`pointer-events-none absolute top-1/2 -translate-y-1/2 font-mono text-cyan-100/58 ${
+                    <span className={`synth-readout-text pointer-events-none absolute top-1/2 -translate-y-1/2 opacity-60 ${
                         isCompactOverlay ? "right-1.5 text-[7px] tracking-[0.08em]" : "right-4 text-[10px] tracking-[0.16em]"
                     }`}>
                         {suffix}

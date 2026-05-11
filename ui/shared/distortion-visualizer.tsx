@@ -378,7 +378,7 @@ export function DistortionVisualizer({
                         </filter>
                     </defs>
 
-                    <rect x="0" y="0" width={COMPACT_VIEWBOX_WIDTH} height={COMPACT_VIEWBOX_HEIGHT} fill="#020611" />
+                    <rect x="0" y="0" width={COMPACT_VIEWBOX_WIDTH} height={COMPACT_VIEWBOX_HEIGHT} fill="var(--cosimo-recess)" />
                     <rect
                         x={COMPACT_PLOT.left}
                         y={COMPACT_PLOT.top}
@@ -396,7 +396,7 @@ export function DistortionVisualizer({
                             x2={COMPACT_PLOT.left + COMPACT_PLOT.width}
                             y1={yValue}
                             y2={yValue}
-                            stroke={index === 1 ? "rgba(255,255,255,0.12)" : "rgba(248,113,113,0.22)"}
+                            stroke={index === 1 ? "rgba(255,255,255,0.12)" : "rgb(var(--section-accent-rgb) / 0.22)"}
                             strokeDasharray={index === 1 ? "0" : "6 6"}
                             strokeWidth={index === 1 ? "1.2" : "1"}
                         />
@@ -408,7 +408,7 @@ export function DistortionVisualizer({
                             y2={COMPACT_PLOT.top + COMPACT_PLOT.height}
                             x1={xValue}
                             x2={xValue}
-                            stroke={index === 1 ? "rgba(255,255,255,0.12)" : "rgba(248,113,113,0.18)"}
+                            stroke={index === 1 ? "rgba(255,255,255,0.12)" : "rgb(var(--section-accent-rgb) / 0.18)"}
                             strokeDasharray={index === 1 ? "0" : "6 6"}
                             strokeWidth={index === 1 ? "1.2" : "1"}
                         />
@@ -437,7 +437,7 @@ export function DistortionVisualizer({
                                     width={column.removedTop.width}
                                     height={column.removedTop.height}
                                     rx={Math.min(2.2, column.removedTop.width * 0.45)}
-                                    fill="rgba(251,113,133,0.88)"
+                                    fill="rgb(var(--section-accent-rgb) / 0.88)"
                                     opacity={0.30}
                                 />
                             ) : null}
@@ -449,7 +449,7 @@ export function DistortionVisualizer({
                                     width={column.removedBottom.width}
                                     height={column.removedBottom.height}
                                     rx={Math.min(2.2, column.removedBottom.width * 0.45)}
-                                    fill="rgba(251,113,133,0.88)"
+                                    fill="rgb(var(--section-accent-rgb) / 0.88)"
                                     opacity={0.30}
                                 />
                             ) : null}
@@ -476,7 +476,7 @@ export function DistortionVisualizer({
                                 <path
                                     data-role="distortion-transfer-clipped-occupancy"
                                     d={segment.clippedPath}
-                                    fill="rgba(251,113,133,0.36)"
+                                    fill="rgb(var(--section-accent-rgb) / 0.36)"
                                     opacity={segment.clippedOpacity}
                                 />
                             ) : null}
@@ -488,7 +488,7 @@ export function DistortionVisualizer({
                         <path
                             d={transferCurvePath}
                             fill="none"
-                            stroke="rgba(103,232,249,0.98)"
+                            stroke="var(--section-accent)"
                             strokeWidth="3.2"
                             strokeLinecap="round"
                             strokeLinejoin="round"
@@ -496,9 +496,9 @@ export function DistortionVisualizer({
                     ) : null}
 
                     {/* Y-axis labels */}
-                    <text x={COMPACT_PLOT.left + 8} y={ceilingYTransferTop - 4} fill="rgba(248,113,113,0.74)" fontSize="10">+1</text>
+                    <text x={COMPACT_PLOT.left + 8} y={ceilingYTransferTop - 4} fill="rgb(var(--section-accent-rgb) / 0.74)" fontSize="10">+1</text>
                     <text x={COMPACT_PLOT.left + 8} y={zeroYTransfer - 4} fill="rgba(226,232,240,0.54)" fontSize="10">0</text>
-                    <text x={COMPACT_PLOT.left + 8} y={ceilingYTransferBottom - 4} fill="rgba(248,113,113,0.74)" fontSize="10">-1</text>
+                    <text x={COMPACT_PLOT.left + 8} y={ceilingYTransferBottom - 4} fill="rgb(var(--section-accent-rgb) / 0.74)" fontSize="10">-1</text>
                 </svg>
                 <pre data-role="distortion-graph-debug" className="hidden">
                     {JSON.stringify(debugState)}
@@ -511,12 +511,12 @@ export function DistortionVisualizer({
         <div className={joinClasses("grid gap-3", className)}>
             <div className="flex items-center justify-between gap-3 text-[11px] uppercase tracking-[0.18em] text-slate-300/62">
                 <div>Driven Transfer</div>
-                <div className="font-mono text-[10px] tracking-[0.18em] text-cyan-100/75">
+                <div className="synth-readout-text text-[10px] opacity-75">
                     {overshoot > 0 ? `Overshoot +${overshoot.toFixed(2)}` : `Headroom ${(headroom * 100).toFixed(0)}%`}
                 </div>
             </div>
 
-            <div className="overflow-hidden rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(2,6,18,0.95),rgba(1,3,9,1))] shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
+            <div className="synth-display-recess overflow-hidden rounded-[24px]">
                 <svg
                     data-role="distortion-visualizer"
                     viewBox={`0 0 ${VIEWBOX_WIDTH} ${VIEWBOX_HEIGHT}`}
@@ -525,15 +525,15 @@ export function DistortionVisualizer({
                 >
                     <defs>
                         <linearGradient id="distortionRemovedFill" x1="0" x2="0" y1="0" y2="1">
-                            <stop offset="0%" stopColor="rgba(251,113,133,0.42)" />
-                            <stop offset="100%" stopColor="rgba(239,68,68,0.04)" />
+                            <stop offset="0%" stopColor="rgb(var(--section-accent-rgb) / 0.42)" />
+                            <stop offset="100%" stopColor="rgb(var(--section-accent-rgb) / 0.04)" />
                         </linearGradient>
                         <filter id="distortionTransferOccupancyGlow" x="-18%" y="-18%" width="136%" height="136%">
                             <feGaussianBlur stdDeviation="5.6" />
                         </filter>
                     </defs>
 
-                    <rect x="0" y="0" width={VIEWBOX_WIDTH} height={VIEWBOX_HEIGHT} fill="#020611" />
+                    <rect x="0" y="0" width={VIEWBOX_WIDTH} height={VIEWBOX_HEIGHT} fill="var(--cosimo-recess)" />
 
                     <rect
                         x={TRANSFER_PLOT.left}
@@ -568,7 +568,7 @@ export function DistortionVisualizer({
                             x2={TRANSFER_PLOT.left + TRANSFER_PLOT.width}
                             y1={yValue}
                             y2={yValue}
-                            stroke={index === 1 ? "rgba(255,255,255,0.12)" : "rgba(248,113,113,0.22)"}
+                            stroke={index === 1 ? "rgba(255,255,255,0.12)" : "rgb(var(--section-accent-rgb) / 0.22)"}
                             strokeDasharray={index === 1 ? "0" : "6 6"}
                             strokeWidth={index === 1 ? "1.2" : "1"}
                         />
@@ -580,7 +580,7 @@ export function DistortionVisualizer({
                             y2={TRANSFER_PLOT.top + TRANSFER_PLOT.height}
                             x1={xValue}
                             x2={xValue}
-                            stroke={index === 1 ? "rgba(255,255,255,0.12)" : "rgba(248,113,113,0.18)"}
+                            stroke={index === 1 ? "rgba(255,255,255,0.12)" : "rgb(var(--section-accent-rgb) / 0.18)"}
                             strokeDasharray={index === 1 ? "0" : "6 6"}
                             strokeWidth={index === 1 ? "1.2" : "1"}
                         />
@@ -592,7 +592,7 @@ export function DistortionVisualizer({
                             x2={HISTORY_PLOT.left + HISTORY_PLOT.width}
                             y1={yValue}
                             y2={yValue}
-                            stroke={index === 1 ? "rgba(255,255,255,0.12)" : "rgba(248,113,113,0.22)"}
+                            stroke={index === 1 ? "rgba(255,255,255,0.12)" : "rgb(var(--section-accent-rgb) / 0.22)"}
                             strokeDasharray={index === 1 ? "0" : "6 6"}
                             strokeWidth={index === 1 ? "1.2" : "1"}
                         />
@@ -617,7 +617,7 @@ export function DistortionVisualizer({
                                 <path
                                     data-role="distortion-transfer-clipped-occupancy"
                                     d={segment.clippedPath}
-                                    fill="rgba(251,113,133,0.36)"
+                                    fill="rgb(var(--section-accent-rgb) / 0.36)"
                                     opacity={segment.clippedOpacity}
                                 />
                             ) : null}
@@ -627,7 +627,7 @@ export function DistortionVisualizer({
                         <path
                             d={transferCurvePath}
                             fill="none"
-                            stroke="rgba(103,232,249,0.98)"
+                            stroke="var(--section-accent)"
                             strokeWidth="3.2"
                             strokeLinecap="round"
                             strokeLinejoin="round"
@@ -654,7 +654,7 @@ export function DistortionVisualizer({
                                     width={column.removedTop.width}
                                     height={column.removedTop.height}
                                     rx={Math.min(2.2, column.removedTop.width * 0.45)}
-                                    fill="rgba(251,113,133,0.88)"
+                                    fill="rgb(var(--section-accent-rgb) / 0.88)"
                                 />
                             ) : null}
                             {column.removedBottom ? (
@@ -665,21 +665,21 @@ export function DistortionVisualizer({
                                     width={column.removedBottom.width}
                                     height={column.removedBottom.height}
                                     rx={Math.min(2.2, column.removedBottom.width * 0.45)}
-                                    fill="rgba(251,113,133,0.88)"
+                                    fill="rgb(var(--section-accent-rgb) / 0.88)"
                                 />
                             ) : null}
                         </g>
                     ))}
 
-                    <text x={TRANSFER_PLOT.left + 8} y={ceilingYTransferTop - 6} fill="rgba(248,113,113,0.74)" fontSize="11">+1</text>
+                    <text x={TRANSFER_PLOT.left + 8} y={ceilingYTransferTop - 6} fill="rgb(var(--section-accent-rgb) / 0.74)" fontSize="11">+1</text>
                     <text x={TRANSFER_PLOT.left + 8} y={zeroYTransfer - 6} fill="rgba(226,232,240,0.54)" fontSize="11">0</text>
-                    <text x={TRANSFER_PLOT.left + 8} y={ceilingYTransferBottom - 6} fill="rgba(248,113,113,0.74)" fontSize="11">-1</text>
-                    <text x={ceilingXTransferLeft - 9} y={TRANSFER_PLOT.top + TRANSFER_PLOT.height - 10} fill="rgba(248,113,113,0.74)" fontSize="11" textAnchor="end">-1</text>
+                    <text x={TRANSFER_PLOT.left + 8} y={ceilingYTransferBottom - 6} fill="rgb(var(--section-accent-rgb) / 0.74)" fontSize="11">-1</text>
+                    <text x={ceilingXTransferLeft - 9} y={TRANSFER_PLOT.top + TRANSFER_PLOT.height - 10} fill="rgb(var(--section-accent-rgb) / 0.74)" fontSize="11" textAnchor="end">-1</text>
                     <text x={zeroXTransfer} y={TRANSFER_PLOT.top + TRANSFER_PLOT.height - 10} fill="rgba(226,232,240,0.54)" fontSize="11" textAnchor="middle">0</text>
-                    <text x={ceilingXTransferRight + 9} y={TRANSFER_PLOT.top + TRANSFER_PLOT.height - 10} fill="rgba(248,113,113,0.74)" fontSize="11">+1</text>
-                    <text x={HISTORY_PLOT.left + 8} y={ceilingYHistoryTop - 6} fill="rgba(248,113,113,0.74)" fontSize="11">+1</text>
+                    <text x={ceilingXTransferRight + 9} y={TRANSFER_PLOT.top + TRANSFER_PLOT.height - 10} fill="rgb(var(--section-accent-rgb) / 0.74)" fontSize="11">+1</text>
+                    <text x={HISTORY_PLOT.left + 8} y={ceilingYHistoryTop - 6} fill="rgb(var(--section-accent-rgb) / 0.74)" fontSize="11">+1</text>
                     <text x={HISTORY_PLOT.left + 8} y={zeroYHistory - 6} fill="rgba(226,232,240,0.54)" fontSize="11">0</text>
-                    <text x={HISTORY_PLOT.left + 8} y={ceilingYHistoryBottom - 6} fill="rgba(248,113,113,0.74)" fontSize="11">-1</text>
+                    <text x={HISTORY_PLOT.left + 8} y={ceilingYHistoryBottom - 6} fill="rgb(var(--section-accent-rgb) / 0.74)" fontSize="11">-1</text>
                     <text x={TRANSFER_PLOT.left + TRANSFER_PLOT.width - 10} y={TRANSFER_PLOT.top + 24} fill="rgba(226,232,240,0.54)" fontSize="11" textAnchor="end">
                         fixed ±{displayRange.toFixed(2)}
                     </text>

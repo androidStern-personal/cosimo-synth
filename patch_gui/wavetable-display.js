@@ -1040,7 +1040,7 @@ export function drawWavetableModel(context, model, theme = DEFAULT_WAVETABLE_THE
     context.fillStyle = toRGBA(theme.backgroundRGB, 0.74);
     context.fillRect(model.currentSlice.label.x - 10, model.currentSlice.label.y - 14, 210, 24);
     context.fillStyle = theme.textColor;
-    context.font = "600 12px Avenir Next, Avenir, sans-serif";
+    context.font = "400 12px Departure Mono, IBM Plex Mono, monospace";
     context.textAlign = "left";
     context.fillText(model.currentSlice.label.text, model.currentSlice.label.x, model.currentSlice.label.y + 2);
     context.restore();

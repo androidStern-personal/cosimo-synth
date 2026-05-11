@@ -791,7 +791,7 @@ function OverlayIconChip({
             type="button"
             aria-label={ariaLabel}
             title={title}
-            className={`flex h-5 w-5 items-center justify-center ${SYNTH_COMPACT_CONTROL_CHROME_CLASS} text-slate-100 transition hover:border-cyan-200/30 hover:text-cyan-100`}
+            className={`flex h-5 w-5 items-center justify-center ${SYNTH_COMPACT_CONTROL_CHROME_CLASS} text-[var(--section-accent)] opacity-80 transition hover:opacity-100`}
             onClick={onClick}
         >
             {children}
@@ -840,7 +840,7 @@ function MsegMorphRail({
 
     return (
         <div
-            className={`flex items-center gap-2 rounded-[8px] border border-white/[0.07] bg-[rgba(3,7,15,0.72)] px-2.5 py-2 shadow-[0_10px_26px_rgba(0,0,0,0.28)] ${className ?? ""}`}
+            className={`cosimo-mseg-morph-control flex items-center gap-2 rounded-[8px] border px-2.5 py-2 ${className ?? ""}`}
             data-role="mseg-morph-control"
         >
             <span className="shrink-0 text-[9px] font-bold uppercase tracking-[0.14em] text-slate-300/55">Morph</span>
@@ -881,15 +881,15 @@ function MsegMorphRail({
             >
                 <div className="absolute left-0 right-0 top-1/2 h-[7px] -translate-y-1/2 rounded-full bg-white/[0.06]" />
                 <div
-                    className="absolute left-0 top-1/2 h-[7px] -translate-y-1/2 rounded-full bg-[linear-gradient(90deg,rgba(135,215,245,0.58),rgba(251,191,36,0.78))]"
+                    className="cosimo-mseg-morph-fill absolute left-0 top-1/2 h-[7px] -translate-y-1/2 rounded-full"
                     style={{ width: `${value * 100}%` }}
                 />
                 <div
-                    className="absolute top-1/2 size-[18px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-amber-100/70 bg-[linear-gradient(180deg,#f8d88a,#fbbf24)] shadow-[0_0_18px_rgba(251,191,36,0.34)]"
+                    className="cosimo-mseg-morph-thumb absolute top-1/2 size-[18px] -translate-x-1/2 -translate-y-1/2 rounded-full"
                     style={{ left: `${value * 100}%` }}
                 />
             </div>
-            <span className="w-10 shrink-0 text-right font-mono text-[10px] tracking-[0.08em] text-amber-200/85">
+            <span className="synth-readout-text w-10 shrink-0 text-right text-[10px] opacity-85">
                 {value.toFixed(3)}
             </span>
         </div>
@@ -916,7 +916,7 @@ function WarpControlCluster({
                 onClick={() => warpMode.commitValue(cycleWarpMode(warpMode.value))}
             >
                 <span className="text-[7px] font-bold uppercase tracking-[0.10em] text-slate-300/45">Warp</span>
-                <span className="grid size-4 shrink-0 place-items-center rounded-full border border-cyan-200/18 bg-cyan-300/8 text-cyan-100/85">
+                <span className="synth-accent-icon-dot grid size-4 shrink-0 place-items-center rounded-full">
                     <WarpModeGlyph mode={warpMode.value} />
                 </span>
                 <span className="min-w-0 truncate text-[8px] font-semibold uppercase tracking-[0.06em] text-slate-100/78">
@@ -1068,8 +1068,7 @@ function DesktopEnvelopeEditor({
     }, []);
 
     return (
-        <div className="relative h-full overflow-hidden bg-[linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01)),linear-gradient(180deg,rgba(5,9,19,0.92),rgba(7,13,24,0.96))]">
-                <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_22%,rgba(109,216,255,0.10),transparent_26%),radial-gradient(circle_at_82%_78%,rgba(248,184,77,0.10),transparent_20%)]" />
+        <div className="relative h-full overflow-hidden bg-[rgb(var(--cosimo-recess-rgb)/0.92)]">
                 <svg
                     ref={svgRef}
                     viewBox={`0 0 ${ENVELOPE_VIEWBOX.width} ${ENVELOPE_VIEWBOX.height}`}
@@ -1110,7 +1109,7 @@ function DesktopEnvelopeEditor({
                         width={geometry.attackRegionWidth}
                         height={geometry.plotHeight}
                         rx={16}
-                        fill="rgba(109,216,255,0.03)"
+                        fill="rgb(var(--section-accent-rgb) / 0.03)"
                     />
                     <rect
                         x={geometry.decayRegionStart}
@@ -1118,7 +1117,7 @@ function DesktopEnvelopeEditor({
                         width={geometry.decayRegionWidth}
                         height={geometry.plotHeight}
                         rx={16}
-                        fill="rgba(109,216,255,0.045)"
+                        fill="rgb(var(--section-accent-rgb) / 0.045)"
                     />
                     <rect
                         x={geometry.noteOffX}
@@ -1126,7 +1125,7 @@ function DesktopEnvelopeEditor({
                         width={geometry.releaseRegionWidth}
                         height={geometry.plotHeight}
                         rx={16}
-                        fill="rgba(248,184,77,0.04)"
+                        fill="rgb(var(--section-accent-rgb) / 0.04)"
                     />
 
                     <line
@@ -1134,16 +1133,16 @@ function DesktopEnvelopeEditor({
                         y1={geometry.plotTop}
                         x2={geometry.noteOffX}
                         y2={geometry.plotBottom}
-                        stroke="rgba(248,184,77,0.84)"
+                        stroke="rgb(var(--section-accent-rgb) / 0.84)"
                         strokeWidth={2}
                         strokeDasharray="7 7"
                     />
 
-                    <path d={envelopeFillPath} fill="rgba(109,216,255,0.10)" />
+                    <path d={envelopeFillPath} fill="rgb(var(--section-accent-rgb) / 0.10)" />
                     <path
                         d={envelopePath}
                         fill="none"
-                        stroke="rgba(109,216,255,0.98)"
+                        stroke="var(--section-accent)"
                         strokeWidth={4}
                         strokeLinecap="round"
                         strokeLinejoin="round"
@@ -1153,11 +1152,11 @@ function DesktopEnvelopeEditor({
                         cx={geometry.attackX}
                         cy={geometry.plotTop}
                         r={13}
-                        fill="rgba(8,16,28,0.94)"
-                        stroke="rgba(109,216,255,0.98)"
+                        fill="rgb(var(--cosimo-recess-rgb) / 0.94)"
+                        stroke="var(--section-accent)"
                         strokeWidth={3}
                     />
-                    <circle cx={geometry.attackX} cy={geometry.plotTop} r={4} fill="rgba(109,216,255,0.98)" />
+                    <circle cx={geometry.attackX} cy={geometry.plotTop} r={4} fill="var(--section-accent)" />
                     <circle
                         data-role="adsr-attack-handle-hit-target"
                         cx={geometry.attackX}
@@ -1172,11 +1171,11 @@ function DesktopEnvelopeEditor({
                         cx={geometry.decayX}
                         cy={geometry.sustainY}
                         r={13}
-                        fill="rgba(8,16,28,0.94)"
-                        stroke="rgba(248,184,77,0.98)"
+                        fill="rgb(var(--cosimo-recess-rgb) / 0.94)"
+                        stroke="var(--section-accent)"
                         strokeWidth={3}
                     />
-                    <circle cx={geometry.decayX} cy={geometry.sustainY} r={4} fill="rgba(248,184,77,0.98)" />
+                    <circle cx={geometry.decayX} cy={geometry.sustainY} r={4} fill="var(--section-accent)" />
                     <circle
                         data-role="adsr-decay-sustain-handle-hit-target"
                         cx={geometry.decayX}
@@ -1191,11 +1190,11 @@ function DesktopEnvelopeEditor({
                         cx={geometry.releaseX}
                         cy={geometry.plotBottom}
                         r={13}
-                        fill="rgba(8,16,28,0.94)"
-                        stroke="rgba(109,216,255,0.98)"
+                        fill="rgb(var(--cosimo-recess-rgb) / 0.94)"
+                        stroke="var(--section-accent)"
                         strokeWidth={3}
                     />
-                    <circle cx={geometry.releaseX} cy={geometry.plotBottom} r={4} fill="rgba(109,216,255,0.98)" />
+                    <circle cx={geometry.releaseX} cy={geometry.plotBottom} r={4} fill="var(--section-accent)" />
                     <circle
                         data-role="adsr-release-handle-hit-target"
                         cx={geometry.releaseX}
@@ -1214,7 +1213,7 @@ function StatusHeader({ statusText }: HeaderProps) {
     return (
         <header className="flex items-center justify-between gap-3">
             <span className="text-[10px] font-semibold uppercase tracking-[0.24em] text-blue-300/55">Cosimo Synth</span>
-            <span className="text-[10px] uppercase tracking-[0.16em] text-fuchsia-200/60">{statusText}</span>
+            <span className="text-[10px] uppercase tracking-[0.16em] text-[var(--cosimo-text-muted)]">{statusText}</span>
         </header>
     );
 }
@@ -1236,7 +1235,9 @@ function FilterSection({
         <section
             data-role="filter-card"
             data-layout-card="desktop-grid-card"
-            className={`${SYNTH_GRID_CARD_SHELL_CLASS} border border-white/[0.04] bg-[radial-gradient(circle_at_top,rgba(93,173,255,0.14),transparent_34%),linear-gradient(180deg,rgba(6,10,22,0.98),rgba(2,4,11,1))] ${className ?? ""}`}
+            data-section-accent="violet"
+            data-liquid-detail="display-lip"
+            className={`${SYNTH_GRID_CARD_SHELL_CLASS} border ${className ?? ""}`}
         >
             <div className={SYNTH_GRID_CARD_INSET_SHADOW_CLASS} />
 
@@ -1402,7 +1403,9 @@ function DistortionSection({
         <section
             data-role="distortion-card"
             data-layout-card="desktop-grid-card"
-            className={`flex h-full flex-col ${SYNTH_GRID_CARD_SHELL_CLASS} bg-[radial-gradient(circle_at_top_left,rgba(248,113,113,0.10),transparent_34%),linear-gradient(180deg,rgba(9,8,15,0.98),rgba(2,4,11,1))] ${className ?? ""}`}
+            data-section-accent="coral"
+            data-liquid-detail="meter-cover"
+            className={`flex h-full flex-col ${SYNTH_GRID_CARD_SHELL_CLASS} ${className ?? ""}`}
         >
             <input
                 data-role="distortion-wet-lp-field"
@@ -1454,14 +1457,14 @@ function DistortionSection({
 
                     {/* Top-left overlay: DIST label + mode toggle */}
                     <div className="absolute left-3 top-2 flex items-center gap-2">
-                        <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-rose-400/40">Dist</span>
+                        <span className="synth-section-title">Dist</span>
                         <button
                             data-role="distortion-mode-option-1"
                             type="button"
                             className={`rounded px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-[0.08em] transition ${
                                 distortionMode.value === 0
                                     ? "bg-white/[0.06] text-slate-300/60"
-                                    : "bg-cyan-400/10 text-cyan-300/70"
+                                    : "synth-accent-soft-bg"
                             }`}
                             onClick={() => distortionMode.commitValue(distortionMode.value === 0 ? 1 : 0)}
                         >
@@ -1472,8 +1475,8 @@ function DistortionSection({
                     {/* Bottom-right overlay: peak readouts */}
                     <div className="absolute bottom-5 right-2 grid gap-0.5 rounded-[5px] bg-black/50 px-2 py-1.5">
                         <span className="font-mono text-[8px] text-slate-200/55">In <span className="text-slate-200/85">{inputPeak.toFixed(3)}</span></span>
-                        <span className="font-mono text-[8px] text-cyan-400/45">Out <span className="text-cyan-400/80">{outputPeak.toFixed(3)}</span></span>
-                        <span className="font-mono text-[8px] text-rose-400/45">Rem <span className="text-rose-400/80">{removedPeak.toFixed(3)}</span></span>
+                        <span className="synth-readout-text text-[8px] opacity-80">Out <span>{outputPeak.toFixed(3)}</span></span>
+                        <span className="synth-readout-text text-[8px] opacity-55">Rem <span>{removedPeak.toFixed(3)}</span></span>
                     </div>
 
                     {/* Bottom strip: HP/LP frequency range selector */}
@@ -1485,35 +1488,35 @@ function DistortionSection({
                     >
                         <div className="absolute inset-0 rounded bg-white/[0.02]" />
                         <div
-                            className="absolute bottom-0 left-0 top-0 rounded-l bg-rose-400/[0.035]"
+                            className="synth-accent-faint-bg absolute bottom-0 left-0 top-0 rounded-l"
                             style={{ width: `${wetHPNormalized * 100}%` }}
                         />
                         <div
-                            className="absolute bottom-0 top-0 bg-cyan-400/[0.08]"
+                            className="synth-accent-strip-bg absolute bottom-0 top-0"
                             style={{ left: `${wetHPNormalized * 100}%`, right: `${(1 - wetLPNormalized) * 100}%` }}
                         />
                         <div
-                            className="absolute bottom-0 right-0 top-0 rounded-r bg-rose-400/[0.035]"
+                            className="synth-accent-faint-bg absolute bottom-0 right-0 top-0 rounded-r"
                             style={{ width: `${(1 - wetLPNormalized) * 100}%` }}
                         />
                         <div
-                            className="absolute top-1/2 size-[11px] -translate-x-1/2 -translate-y-1/2 cursor-ew-resize rounded-full border-2 border-[#020611] bg-cyan-400/60"
+                            className="synth-accent-solid-bg absolute top-1/2 size-[11px] -translate-x-1/2 -translate-y-1/2 cursor-ew-resize rounded-full border-2 border-[var(--cosimo-recess)] opacity-70"
                             style={{ left: `${wetHPNormalized * 100}%` }}
                             onPointerDown={(e) => handleSliderPointerDown(e, hpTrackRef.current, distortionWetHPHz, wetHPNormalized, 0, 1, "horizontal", handleWetHPChange)}
                         />
                         <div
-                            className="absolute top-1/2 size-[11px] -translate-x-1/2 -translate-y-1/2 cursor-ew-resize rounded-full border-2 border-[#020611] bg-cyan-400/60"
+                            className="synth-accent-solid-bg absolute top-1/2 size-[11px] -translate-x-1/2 -translate-y-1/2 cursor-ew-resize rounded-full border-2 border-[var(--cosimo-recess)] opacity-70"
                             style={{ left: `${wetLPNormalized * 100}%` }}
                             onPointerDown={(e) => handleSliderPointerDown(e, hpTrackRef.current, distortionWetLPHz, wetLPNormalized, 0, 1, "horizontal", handleWetLPChange)}
                         />
                         <span
-                            className="absolute -top-3 -translate-x-1/2 font-mono text-[7px] text-cyan-400/45"
+                            className="synth-readout-text absolute -top-3 -translate-x-1/2 text-[7px] opacity-55"
                             style={{ left: `${wetHPNormalized * 100}%` }}
                         >
                             {formatFrequencyHz(distortionWetHPHz.value)}
                         </span>
                         <span
-                            className="absolute -top-3 -translate-x-1/2 font-mono text-[7px] text-cyan-400/45"
+                            className="synth-readout-text absolute -top-3 -translate-x-1/2 text-[7px] opacity-55"
                             style={{ left: `${wetLPNormalized * 100}%` }}
                         >
                             {formatFrequencyHz(distortionWetLPHz.value)}
@@ -1562,7 +1565,7 @@ function ChorusModeRow({
             <span className="text-[7px] font-bold uppercase tracking-[0.10em] text-slate-400/50">
                 {label}
             </span>
-            <span className="font-mono text-[8px] font-bold uppercase tracking-[0.03em] text-cyan-50/80">
+            <span className="synth-readout-text text-[8px] opacity-80">
                 {value}
             </span>
         </button>
@@ -1588,18 +1591,20 @@ function ChorusEffectColumn({
     return (
         <section
             data-role="chorus-effect-column"
-            className="flex h-full min-w-0 flex-col gap-1.5 rounded-[12px] bg-[radial-gradient(circle_at_top_left,rgba(103,232,249,0.13),transparent_38%),linear-gradient(180deg,rgba(6,12,24,0.95),rgba(2,5,12,0.98))] p-2"
+            data-section-accent="ion"
+            data-liquid-detail="icon-lens"
+            className="synth-grid-card-shell relative flex h-full min-w-0 flex-col gap-1.5 rounded-[12px] p-2"
         >
             <div className="flex items-center justify-between gap-2">
-                <span className="text-[10px] font-black uppercase tracking-[0.18em] text-cyan-100/75">Chorus</span>
+                <span className="synth-section-title">Chorus</span>
                 <button
-                    data-role="chorus-enabled-control"
-                    type="button"
-                    className={`rounded-[7px] border px-2 py-1 text-[8px] font-bold uppercase tracking-[0.12em] transition ${
-                        enabled
-                            ? "border-cyan-300/25 bg-cyan-300/15 text-cyan-50"
+                        data-role="chorus-enabled-control"
+                        type="button"
+                        className={`rounded-[7px] border px-2 py-1 text-[8px] font-bold uppercase tracking-[0.12em] transition ${
+                            enabled
+                            ? "synth-accent-active-button"
                             : "border-white/[0.07] bg-white/[0.025] text-slate-400/70"
-                    }`}
+                        }`}
                     onClick={() => chorusEnabled.commitValue(enabled ? 0 : 1)}
                 >
                     {enabled ? "On" : "Off"}
@@ -1729,7 +1734,9 @@ function EffectsRackSection({
         <section
             data-role="effects-rack-card"
             data-layout-card="desktop-grid-card"
-            className={`grid h-full grid-cols-4 gap-2 ${SYNTH_GRID_CARD_SHELL_CLASS} border border-white/[0.04] bg-[linear-gradient(135deg,rgba(8,16,30,0.96),rgba(4,6,14,1))] p-2 ${className ?? ""}`}
+            data-section-accent="ion"
+            data-liquid-detail="edge-rail"
+            className={`grid h-full grid-cols-4 gap-2 ${SYNTH_GRID_CARD_SHELL_CLASS} border p-2 ${className ?? ""}`}
         >
             <div data-role="effect-rack-column" className="min-h-0 min-w-0">
                 <ChorusEffectColumn
@@ -1864,12 +1871,16 @@ function MsegEditorModal({
     }
 
     return (
-        <div className="absolute inset-0 z-20 flex items-center justify-center bg-[#030711]/85 p-6 backdrop-blur-md">
-            <div className="grid h-full w-full max-w-[1080px] grid-rows-[auto_minmax(0,1fr)_auto] gap-5 rounded-[28px] border border-white/10 bg-[#09101d]/95 p-6 shadow-[0_36px_80px_rgba(0,0,0,0.5)]">
+        <div className="synth-modal-backdrop absolute inset-0 z-20 flex items-center justify-center p-6">
+            <div
+                data-section-accent="mint"
+                data-liquid-detail="routing-node"
+                className="synth-modal-frame relative grid h-full w-full max-w-[1080px] grid-rows-[auto_minmax(0,1fr)_auto] gap-5 rounded-[28px] p-6"
+            >
                 <div className="flex items-start justify-between gap-4">
                     <div>
-                        <div className="text-[11px] uppercase tracking-[0.22em] text-blue-300/70">{slotLabel}</div>
-                        <div className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-amber-100">Modulation Shape Editor</div>
+                        <div className="synth-section-title text-[11px]">{slotLabel}</div>
+                        <div className="synth-readout-text mt-2 text-2xl">Modulation Shape Editor</div>
                         <div className="mt-2 text-sm text-slate-300/70">Drag a point to move it. Click and drag a segment up or down to bend it. Click an empty spot to add a point. Click an interior point without dragging to delete it.</div>
                     </div>
                     <div className="flex items-center gap-2 rounded-[14px] border border-white/8 bg-white/[0.03] p-1">
@@ -1881,7 +1892,7 @@ function MsegEditorModal({
                                 aria-pressed={msegState.editShapeIndex === shapeIndex}
                                 className={`h-9 min-w-10 rounded-[10px] px-3 text-[11px] font-semibold uppercase tracking-[0.16em] transition ${
                                     msegState.editShapeIndex === shapeIndex
-                                        ? "bg-cyan-300/18 text-cyan-50"
+                                        ? "synth-accent-active-button"
                                         : "text-slate-300/55 hover:bg-white/[0.05] hover:text-slate-100"
                                 }`}
                                 onClick={() => onSelectShape(shapeIndex)}
@@ -1948,7 +1959,7 @@ function MsegEditorModal({
                     </div>
 
                     <div className="flex items-center gap-3">
-                        <div className="font-mono text-sm tracking-[0.16em] text-cyan-200">
+                        <div className="synth-readout-text text-sm">
                             {formatSeconds(clampMsegRateSeconds(msegState.playback.rate.seconds))}
                         </div>
                         <button
@@ -2104,7 +2115,13 @@ function ModulationMatrixSection({
     }, [commitEnvelopeDurationField, selectedEnvelope]);
 
     return (
-        <section data-role="mseg-card" data-layout-card="desktop-grid-card" className={`flex h-full flex-col ${SYNTH_GRID_CARD_SHELL_CLASS} bg-white/[0.02] ${DESKTOP_GRID_CARD_CLASS}`}>
+        <section
+            data-role="mseg-card"
+            data-layout-card="desktop-grid-card"
+            data-section-accent="mint"
+            data-liquid-detail="routing-node"
+            className={`flex h-full flex-col ${SYNTH_GRID_CARD_SHELL_CLASS} ${DESKTOP_GRID_CARD_CLASS}`}
+        >
             {/* ── Pip selector top-bar ── */}
             <div className="flex shrink-0 items-center gap-1.5 px-2.5 py-1.5">
                 {/* MSEG pips */}
@@ -2116,7 +2133,7 @@ function ModulationMatrixSection({
                             aria-label={`Select MSEG ${slotIndex + 1}`}
                             className={`grid size-[18px] place-items-center rounded-[5px] border p-0 text-[8px] leading-none font-bold transition max-[480px]:size-7 max-[480px]:rounded-[6px] max-[480px]:text-[10px] ${
                                 activeEditorTab.kind === "mseg" && activeMsegSlot === slotIndex
-                                    ? "border-cyan-300/25 bg-cyan-300/15 text-cyan-50/90"
+                                    ? "synth-accent-active-button"
                                     : "border-white/[0.06] bg-white/[0.02] text-slate-300/40 hover:border-white/10 hover:text-slate-300/65"
                             }`}
                             onClick={() => {
@@ -2128,7 +2145,7 @@ function ModulationMatrixSection({
                         </button>
                     ))}
                 </div>
-                <span className="ml-0.5 text-[10px] leading-none font-semibold uppercase tracking-[0.12em] text-cyan-100/60">Mseg</span>
+                <span className="synth-section-title ml-0.5">Mseg</span>
 
                 {/* Separator */}
                 <div className="mx-0.5 h-3 w-px shrink-0 bg-white/[0.06]" />
@@ -2142,7 +2159,7 @@ function ModulationMatrixSection({
                             aria-label={`Select envelope ${slotIndex + 1}`}
                             className={`grid size-[18px] place-items-center rounded-[5px] border p-0 text-[8px] leading-none font-bold transition max-[480px]:size-7 max-[480px]:rounded-[6px] max-[480px]:text-[10px] ${
                                 activeEditorTab.kind === "envelope" && activeEnvelopeSlot === slotIndex
-                                    ? "border-emerald-300/25 bg-emerald-300/12 text-emerald-100/90"
+                                    ? "synth-accent-active-button"
                                     : "border-white/[0.06] bg-white/[0.02] text-slate-300/40 hover:border-white/10 hover:text-slate-300/65"
                             }`}
                             onClick={() => {
@@ -2154,7 +2171,7 @@ function ModulationMatrixSection({
                         </button>
                     ))}
                 </div>
-                <span className="ml-0.5 text-[10px] leading-none font-semibold uppercase tracking-[0.12em] text-emerald-200/50">Env</span>
+                <span className="synth-section-title ml-0.5">Env</span>
 
                 {/* Right-aligned controls — fixed-height container, both layers always rendered */}
                 <div className="relative ml-auto h-[24px] shrink-0 max-[480px]:h-7">
@@ -2169,7 +2186,7 @@ function ModulationMatrixSection({
                                     aria-pressed={msegState?.editShapeIndex === shapeIndex}
                                     className={`grid size-[18px] place-items-center rounded-[5px] p-0 text-[8px] font-bold leading-none transition max-[480px]:size-6 max-[480px]:text-[10px] ${
                                         msegState?.editShapeIndex === shapeIndex
-                                            ? "bg-cyan-300/18 text-cyan-50"
+                                            ? "synth-accent-active-button"
                                             : "text-slate-300/45 hover:bg-white/[0.06] hover:text-slate-200/80"
                                     }`}
                                     onClick={() => onSelectMsegShape(shapeIndex)}
@@ -2184,7 +2201,7 @@ function ModulationMatrixSection({
                             aria-label={msegState?.playback.loop ? "Looping" : "One Shot"}
                             className={`grid size-[22px] shrink-0 place-items-center rounded-[6px] border p-0 transition max-[480px]:size-7 ${
                                 msegState?.playback.loop
-                                    ? "border-cyan-300/20 bg-cyan-300/10"
+                                    ? "synth-accent-active-button"
                                     : "border-white/[0.06] bg-white/[0.02]"
                             }`}
                             onClick={onToggleMsegLoop}
@@ -2194,7 +2211,7 @@ function ModulationMatrixSection({
                             <svg
                                 viewBox="0 0 16 16"
                                 className={`size-3 fill-none stroke-[1.5] stroke-current max-[480px]:size-3.5 ${
-                                    msegState?.playback.loop ? "text-cyan-300/85" : "text-slate-300/40"
+                                    msegState?.playback.loop ? "text-[var(--section-accent)]" : "text-slate-300/40"
                                 }`}
                             >
                                 <path d="M4 6 L12 6 L12 4 L15 7 L12 10 L12 8 L4 8 L4 10 L1 7 L4 4 Z" strokeLinecap="round" />
@@ -2208,9 +2225,9 @@ function ModulationMatrixSection({
                             spellCheck={false}
                             readOnly={!isEditingMsegRate}
                             aria-label="MSEG rate"
-                            className={`w-[56px] select-none whitespace-nowrap rounded border border-white/[0.04] bg-white/[0.03] px-1.5 py-[3px] text-center font-mono text-[10px] leading-none tracking-[0.06em] text-cyan-200/70 outline-none max-[480px]:w-[64px] max-[480px]:px-2 max-[480px]:py-1 max-[480px]:text-[11px] ${
+                            className={`synth-readout-text w-[56px] select-none whitespace-nowrap rounded border border-white/[0.04] bg-white/[0.03] px-1.5 py-[3px] text-center text-[10px] leading-none outline-none max-[480px]:w-[64px] max-[480px]:px-2 max-[480px]:py-1 max-[480px]:text-[11px] ${
                                 isEditingMsegRate
-                                    ? "cursor-text selection:bg-cyan-300/25"
+                                    ? "cursor-text"
                                     : "cursor-ew-resize"
                             }`}
                             value={isEditingMsegRate ? draftMsegRate : formatSeconds(currentMsegRate)}
@@ -2296,7 +2313,7 @@ function ModulationMatrixSection({
                                     aria-label={param.ariaLabel}
                                     type="text"
                                     inputMode="decimal"
-                                    className="w-[38px] rounded border border-white/[0.06] bg-white/[0.03] px-1 py-[2px] text-left font-mono text-[9px] leading-none text-slate-200/80 outline-none focus:border-emerald-300/30 max-[480px]:w-[44px] max-[480px]:text-[10px]"
+                                    className="synth-readout-text w-[38px] rounded border border-white/[0.06] bg-white/[0.03] px-1 py-[2px] text-left text-[9px] leading-none outline-none focus:border-[var(--section-accent)] max-[480px]:w-[44px] max-[480px]:text-[10px]"
                                     value={param.draft}
                                     onChange={(e) => param.setDraft(e.target.value)}
                                     onBlur={() => {
@@ -2359,7 +2376,7 @@ function ModulationMatrixSection({
                                 <div className="h-full w-full bg-white/[0.02]" />
                             )}
                             <div className="pointer-events-none absolute inset-0 grid place-items-center opacity-0 transition-opacity group-hover:opacity-100">
-                                <span className="rounded-[6px] bg-[rgba(3,5,12,0.6)] px-2.5 py-1 text-[10px] uppercase tracking-[0.15em] text-cyan-300/40">
+                                <span className="synth-readout-text rounded-[6px] bg-[rgba(3,5,12,0.6)] px-2.5 py-1 text-[10px] opacity-45">
                                     Edit Shape
                                 </span>
                             </div>
@@ -2674,7 +2691,7 @@ function DesktopPatchViewBody({
     ]);
 
     return (
-        <div className="cosimo-surface relative flex h-full w-full flex-col gap-3 overflow-hidden rounded-[28px] border border-white/[0.05] px-4 pb-4 pt-2.5 text-slate-100 shadow-[0_26px_80px_rgba(0,0,0,0.48)]">
+        <div className="cosimo-surface relative flex h-full w-full flex-col gap-3 overflow-hidden rounded-[28px] border border-white/[0.05] px-4 pb-4 pt-2.5 text-slate-100">
             <StatusHeader statusText={synthView.topStatus} />
 
             <main
@@ -2777,7 +2794,13 @@ function DesktopPatchViewBody({
                         msegRateFocusBindings={synthView.keyboardRouting.msegRateFocusBindings}
                     />
 
-                    <section data-role="mod-matrix-card" data-layout-card="desktop-grid-card" className={`flex flex-col ${SYNTH_GRID_CARD_SHELL_CLASS} border border-white/[0.05] bg-white/[0.025] p-4 ${DESKTOP_GRID_CARD_CLASS}`}>
+                    <section
+                        data-role="mod-matrix-card"
+                        data-layout-card="desktop-grid-card"
+                        data-section-accent="amber"
+                        data-liquid-detail="edge-rail"
+                        className={`flex flex-col ${SYNTH_GRID_CARD_SHELL_CLASS} border p-4 ${DESKTOP_GRID_CARD_CLASS}`}
+                    >
                         <DesktopModMatrix
                             routes={synthView.routes}
                             onAddRoute={synthView.handleAddRoute}

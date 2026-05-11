@@ -1,0 +1,360 @@
+@font-face {
+    font-family: "Departure Mono";
+    src: url("../assets/fonts/DepartureMono-Regular.woff2") format("woff2");
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: "IBM Plex Sans Condensed";
+    src: url("../assets/fonts/IBMPlexSansCondensed-SemiBold.woff2") format("woff2");
+    font-style: normal;
+    font-weight: 600;
+    font-display: swap;
+}
+
+:host,
+.cosimo-mod-prototype-theme,
+.cosimo-surface,
+.ios-shell {
+    --cosimo-font-label: "IBM Plex Sans Condensed", "Avenir Next Condensed", "Arial Narrow", sans-serif;
+    --cosimo-font-readout: "Departure Mono", "SF Mono", "IBM Plex Mono", Menlo, monospace;
+
+    --cosimo-body: #1c1c1c;
+    --cosimo-body-rgb: 28 28 28;
+    --cosimo-control: #373737;
+    --cosimo-control-rgb: 55 55 55;
+    --cosimo-surface-raised: #262626;
+    --cosimo-surface-raised-rgb: 38 38 38;
+    --cosimo-surface-raised-high: #2b2b2b;
+    --cosimo-recess: #101010;
+    --cosimo-recess-rgb: 16 16 16;
+    --cosimo-recess-high: #161616;
+    --cosimo-edge: #4d4d4d;
+    --cosimo-edge-rgb: 77 77 77;
+    --cosimo-etched: #373737;
+    --cosimo-text: #e8ecef;
+    --cosimo-text-muted: #8e969b;
+
+    --cosimo-accent-cyan: #7df7ff;
+    --cosimo-accent-cyan-rgb: 125 247 255;
+    --cosimo-accent-ion: #6fa8ff;
+    --cosimo-accent-ion-rgb: 111 168 255;
+    --cosimo-accent-violet: #a98cff;
+    --cosimo-accent-violet-rgb: 169 140 255;
+    --cosimo-accent-pink: #ff79d8;
+    --cosimo-accent-pink-rgb: 255 121 216;
+    --cosimo-accent-coral: #ff7a6c;
+    --cosimo-accent-coral-rgb: 255 122 108;
+    --cosimo-accent-amber: #ffd36e;
+    --cosimo-accent-amber-rgb: 255 211 110;
+    --cosimo-accent-lime: #b7ff6a;
+    --cosimo-accent-lime-rgb: 183 255 106;
+    --cosimo-accent-mint: #68ffc2;
+    --cosimo-accent-mint-rgb: 104 255 194;
+
+    --section-accent: var(--cosimo-accent-cyan);
+    --section-accent-rgb: var(--cosimo-accent-cyan-rgb);
+    --section-accent-dim: rgb(var(--section-accent-rgb) / 0.24);
+    --section-accent-soft: rgb(var(--section-accent-rgb) / 0.12);
+    --section-accent-glow: rgb(var(--section-accent-rgb) / 0.36);
+
+    --cosimo-radius-chassis: 28px;
+    --cosimo-radius-panel: 14px;
+    --cosimo-radius-control: 5px;
+    --cosimo-radius-display: 8px;
+    --cosimo-panel-shadow: inset 0 1px 0 rgb(255 255 255 / 0.055), inset 0 -34px 58px rgb(0 0 0 / 0.30), 0 18px 42px rgb(0 0 0 / 0.30);
+    --cosimo-recess-shadow: inset 0 1px 2px rgb(0 0 0 / 0.76), inset 0 -1px 0 rgb(255 255 255 / 0.03);
+    --cosimo-contact-shadow: 0 4px 10px rgb(0 0 0 / 0.26);
+    --cosimo-emissive-shadow: 0 0 12px var(--section-accent-glow);
+    --cosimo-glass-shadow: inset 0 1px 0 rgb(255 255 255 / 0.18), inset 0 -1px 0 rgb(255 255 255 / 0.045), 0 0 16px rgb(var(--section-accent-rgb) / 0.16);
+}
+
+[data-section-accent="cyan"] {
+    --section-accent: var(--cosimo-accent-cyan);
+    --section-accent-rgb: var(--cosimo-accent-cyan-rgb);
+}
+
+[data-section-accent="ion"] {
+    --section-accent: var(--cosimo-accent-ion);
+    --section-accent-rgb: var(--cosimo-accent-ion-rgb);
+}
+
+[data-section-accent="violet"] {
+    --section-accent: var(--cosimo-accent-violet);
+    --section-accent-rgb: var(--cosimo-accent-violet-rgb);
+}
+
+[data-section-accent="pink"] {
+    --section-accent: var(--cosimo-accent-pink);
+    --section-accent-rgb: var(--cosimo-accent-pink-rgb);
+}
+
+[data-section-accent="coral"] {
+    --section-accent: var(--cosimo-accent-coral);
+    --section-accent-rgb: var(--cosimo-accent-coral-rgb);
+}
+
+[data-section-accent="amber"] {
+    --section-accent: var(--cosimo-accent-amber);
+    --section-accent-rgb: var(--cosimo-accent-amber-rgb);
+}
+
+[data-section-accent="lime"] {
+    --section-accent: var(--cosimo-accent-lime);
+    --section-accent-rgb: var(--cosimo-accent-lime-rgb);
+}
+
+[data-section-accent="mint"] {
+    --section-accent: var(--cosimo-accent-mint);
+    --section-accent-rgb: var(--cosimo-accent-mint-rgb);
+}
+
+.cosimo-surface,
+.ios-shell {
+    color: var(--cosimo-text);
+    font-family: var(--cosimo-font-label);
+}
+
+.cosimo-surface .font-mono,
+.ios-shell .font-mono,
+.cosimo-readout,
+.synth-value,
+[data-role$="-chip"],
+[data-role$="-readout"] {
+    font-family: var(--cosimo-font-readout);
+}
+
+.cosimo-label,
+.synth-label,
+.cosimo-surface [class*="uppercase"],
+.ios-shell [class*="uppercase"] {
+    font-family: var(--cosimo-font-label);
+    letter-spacing: 0.14em;
+}
+
+.synth-value {
+    color: var(--section-accent);
+    text-shadow: 0 0 12px var(--section-accent-glow);
+}
+
+.synth-grid-card-shell,
+[data-layout-card="desktop-grid-card"] {
+    position: relative;
+    isolation: isolate;
+    border-color: rgb(var(--cosimo-edge-rgb) / 0.28);
+    background:
+        linear-gradient(180deg, rgb(var(--cosimo-surface-raised-rgb) / 0.96), rgb(var(--cosimo-body-rgb) / 0.98));
+    box-shadow: var(--cosimo-panel-shadow);
+}
+
+.synth-section-title {
+    font-family: var(--cosimo-font-label);
+    font-size: 10px;
+    font-weight: 600;
+    line-height: 1;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: rgb(var(--section-accent-rgb) / 0.56);
+    text-shadow: 0 0 12px rgb(var(--section-accent-rgb) / 0.18);
+}
+
+.synth-section-code,
+.synth-readout-text {
+    font-family: var(--cosimo-font-readout);
+    font-weight: 400;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--section-accent);
+    text-shadow: 0 0 12px var(--section-accent-glow);
+}
+
+.synth-muted-marking {
+    font-family: var(--cosimo-font-label);
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: rgb(var(--cosimo-control-rgb) / 0.92);
+}
+
+.synth-grid-card-inset {
+    pointer-events: none;
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.05), inset 0 -34px 58px rgb(0 0 0 / 0.30);
+}
+
+.synth-compact-control,
+.cosimo-button,
+.cosimo-select {
+    border: 1px solid rgb(var(--cosimo-edge-rgb) / 0.34);
+    background: rgb(var(--cosimo-control-rgb) / 0.58);
+    color: var(--cosimo-text);
+    box-shadow: var(--cosimo-contact-shadow);
+}
+
+.synth-compact-control-text {
+    font-family: var(--cosimo-font-readout);
+    font-size: 8px;
+    letter-spacing: 0.10em;
+    text-transform: uppercase;
+}
+
+.synth-compact-control-value {
+    color: var(--section-accent);
+    text-shadow: 0 0 10px var(--section-accent-glow);
+}
+
+.synth-accent-icon-dot {
+    border: 1px solid rgb(var(--section-accent-rgb) / 0.22);
+    background: rgb(var(--section-accent-rgb) / 0.08);
+    color: var(--section-accent);
+}
+
+.synth-accent-soft-bg {
+    background: rgb(var(--section-accent-rgb) / 0.12);
+    color: var(--section-accent);
+}
+
+.synth-accent-faint-bg {
+    background: rgb(var(--section-accent-rgb) / 0.045);
+}
+
+.synth-accent-strip-bg {
+    background: rgb(var(--section-accent-rgb) / 0.12);
+}
+
+.synth-accent-solid-bg {
+    background: var(--section-accent);
+}
+
+.synth-accent-active-button {
+    border-color: rgb(var(--section-accent-rgb) / 0.25);
+    background: rgb(var(--section-accent-rgb) / 0.15);
+    color: var(--section-accent);
+}
+
+.synth-display-recess {
+    border: 1px solid rgb(var(--cosimo-edge-rgb) / 0.24);
+    background: rgb(var(--cosimo-recess-rgb) / 0.92);
+    box-shadow: var(--cosimo-recess-shadow);
+}
+
+.synth-control-rail {
+    border: 1px solid rgb(var(--cosimo-edge-rgb) / 0.24);
+    background: rgb(var(--cosimo-control-rgb) / 0.22);
+}
+
+.synth-modal-backdrop {
+    background: rgb(var(--cosimo-recess-rgb) / 0.86);
+    backdrop-filter: blur(10px);
+}
+
+.synth-modal-frame {
+    border: 1px solid rgb(var(--cosimo-edge-rgb) / 0.34);
+    background:
+        linear-gradient(180deg, rgb(var(--cosimo-surface-raised-rgb) / 0.98), rgb(var(--cosimo-body-rgb) / 0.99));
+    box-shadow: 0 36px 80px rgb(0 0 0 / 0.50);
+}
+
+.synth-menu-surface {
+    border: 1px solid rgb(var(--cosimo-edge-rgb) / 0.34);
+    background: rgb(var(--cosimo-recess-rgb) / 0.97);
+    box-shadow: var(--cosimo-contact-shadow);
+    backdrop-filter: blur(6px);
+}
+
+[data-liquid-detail]::before {
+    content: "";
+    position: absolute;
+    z-index: 2;
+    pointer-events: none;
+    border: 1px solid rgb(255 255 255 / 0.16);
+    background:
+        linear-gradient(135deg, rgb(255 255 255 / 0.18), rgb(var(--section-accent-rgb) / 0.09) 38%, rgb(255 255 255 / 0.035));
+    box-shadow: var(--cosimo-glass-shadow);
+    backdrop-filter: blur(9px) saturate(1.28);
+}
+
+[data-liquid-detail="display-lip"]::before {
+    top: 7px;
+    left: 14px;
+    right: 14px;
+    height: 12px;
+    border-radius: 999px;
+    opacity: 0.72;
+}
+
+[data-liquid-detail="meter-cover"]::before {
+    right: 10px;
+    bottom: 10px;
+    width: 52px;
+    height: 10px;
+    border-radius: 999px;
+}
+
+[data-liquid-detail="icon-lens"]::before {
+    top: 9px;
+    right: 10px;
+    width: 20px;
+    height: 20px;
+    border-radius: 999px;
+}
+
+[data-liquid-detail="section-tab"]::before {
+    top: 10px;
+    left: 10px;
+    width: 10px;
+    height: 28px;
+    border-radius: 999px;
+}
+
+[data-liquid-detail="routing-node"]::before {
+    right: 14px;
+    top: 14px;
+    width: 13px;
+    height: 13px;
+    border-radius: 999px;
+}
+
+[data-liquid-detail="edge-rail"]::before {
+    top: 14px;
+    bottom: 14px;
+    right: 10px;
+    width: 6px;
+    border-radius: 999px;
+}
+
+.synth-display-lip-controls {
+    position: absolute;
+    left: 8px;
+    right: 8px;
+    top: 8px;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    min-height: 26px;
+    padding: 4px 5px;
+    border: 1px solid rgb(var(--section-accent-rgb) / 0.18);
+    border-radius: 10px;
+    background: rgb(var(--cosimo-recess-rgb) / 0.54);
+    box-shadow: var(--cosimo-glass-shadow);
+    backdrop-filter: blur(8px) saturate(1.18);
+}
+
+.synth-display-lip-controls::before {
+    content: "";
+    position: absolute;
+    left: 18px;
+    right: 18px;
+    top: 3px;
+    height: 2px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.24), transparent);
+    opacity: 0.58;
+    pointer-events: none;
+}

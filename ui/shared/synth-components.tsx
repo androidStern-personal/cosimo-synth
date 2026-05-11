@@ -77,11 +77,11 @@ export const VOICE_MODE_OPTIONS: VoiceModeOption[] = [
     { value: 1, label: "Mono" },
     { value: 2, label: "Legato" },
 ];
-export const SYNTH_GRID_CARD_SIZE_CLASS = "aspect-[50/27] min-h-[198px]";
-export const SYNTH_GRID_CARD_SHELL_CLASS = "relative min-h-0 overflow-hidden rounded-[14px]";
-export const SYNTH_GRID_CARD_INSET_SHADOW_CLASS = "pointer-events-none absolute inset-0 rounded-[inherit] shadow-[inset_0_1px_0_rgba(255,255,255,0.06),inset_0_-40px_64px_rgba(0,0,0,0.28)]";
-export const SYNTH_COMPACT_CONTROL_CHROME_CLASS = "rounded-[5px] border border-white/[0.07] bg-black/42 shadow-[0_4px_12px_rgba(0,0,0,0.22)]";
-export const SYNTH_COMPACT_CONTROL_TEXT_CLASS = "text-[8px] uppercase tracking-[0.10em]";
+export const SYNTH_GRID_CARD_SIZE_CLASS = "aspect-[50/27] min-h-[240px]";
+export const SYNTH_GRID_CARD_SHELL_CLASS = "synth-grid-card-shell relative min-h-0 overflow-hidden rounded-[14px]";
+export const SYNTH_GRID_CARD_INSET_SHADOW_CLASS = "synth-grid-card-inset";
+export const SYNTH_COMPACT_CONTROL_CHROME_CLASS = "synth-compact-control rounded-[5px]";
+export const SYNTH_COMPACT_CONTROL_TEXT_CLASS = "synth-compact-control-text";
 const MSEG_GRID_STEPS = [0.25, 0.5, 0.75] as const;
 const MSEG_PREVIEW_HORIZONTAL_PADDING_PX = 24;
 const MSEG_PREVIEW_VERTICAL_PADDING_PX = 22;
@@ -883,7 +883,7 @@ export function RangeField({
                     onChange={(event) => onChange(Number(event.target.value))}
                     {...focusBindings}
                 />
-                <div className="text-right font-mono text-sm tracking-[0.18em] text-cyan-200">
+                <div className="synth-readout-text text-right text-sm">
                     {displayValue}
                 </div>
             </div>
@@ -1112,9 +1112,17 @@ function drawFilterSpectrumOverlay({
     context.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
     context.clearRect(0, 0, width, height);
 
+    const accentRgb = window.getComputedStyle(canvas).getPropertyValue("--section-accent-rgb")
+        .trim()
+        .split(/\s+/)
+        .map((component) => Number.parseInt(component, 10));
+    const [accentR, accentG, accentB] = accentRgb.length === 3 && accentRgb.every(Number.isFinite)
+        ? accentRgb
+        : [169, 140, 255];
+    const accentColor = (alpha: number) => `rgba(${accentR}, ${accentG}, ${accentB}, ${alpha})`;
     const gradient = context.createLinearGradient(0, geometry.plotTop, 0, geometry.plotBottom);
-    gradient.addColorStop(0, "rgba(94, 215, 255, 0.14)");
-    gradient.addColorStop(1, "rgba(94, 215, 255, 0.00)");
+    gradient.addColorStop(0, accentColor(0.14));
+    gradient.addColorStop(1, accentColor(0.00));
 
     if (geometry.kind === "graph") {
         if (geometry.points.length === 0) {
@@ -1142,7 +1150,7 @@ function drawFilterSpectrumOverlay({
                 context.lineTo(point.x, point.y);
             }
         }
-        context.strokeStyle = "rgba(114, 217, 255, 0.64)";
+        context.strokeStyle = accentColor(0.64);
         context.lineWidth = 1.9;
         context.stroke();
 
@@ -1156,7 +1164,7 @@ function drawFilterSpectrumOverlay({
             }
         }
 
-        context.strokeStyle = "rgba(158, 231, 255, 0.30)";
+        context.strokeStyle = accentColor(0.30);
         context.lineWidth = 1;
         context.stroke();
         return;
@@ -1189,7 +1197,7 @@ function drawFilterSpectrumOverlay({
         drawBarPath(bar.x, bar.y, bar.width, bar.height, bar.radius);
         context.fillStyle = gradient;
         context.fill();
-        context.strokeStyle = "rgba(114, 217, 255, 0.56)";
+        context.strokeStyle = accentColor(0.56);
         context.lineWidth = geometry.rounded ? 1.45 : 1.1;
         context.stroke();
     }
@@ -1205,7 +1213,7 @@ function drawFilterSpectrumOverlay({
         context.moveTo(centerX - halfWidth, peakBar.y);
         context.lineTo(centerX + halfWidth, peakBar.y);
     }
-    context.strokeStyle = "rgba(158, 231, 255, 0.32)";
+    context.strokeStyle = accentColor(0.32);
     context.lineWidth = 1;
     context.stroke();
 }
@@ -1507,7 +1515,7 @@ export function FilterResponseGraph({
         <div className={joinClasses("relative h-full w-full", className)}>
             <div
                 ref={viewportRef}
-                className="relative h-full w-full overflow-hidden rounded-[24px] border border-white/[0.05] bg-black/18 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
+                className="synth-display-recess relative h-full w-full overflow-hidden rounded-[24px]"
             >
                 <canvas
                     ref={spectrumCanvasRef}
@@ -1591,11 +1599,11 @@ export function FilterResponseGraph({
                             {tick.label}
                         </text>
                     ))}
-                    <path d={basePath.path} fill="none" stroke="rgba(123, 197, 255, 0.46)" strokeWidth="2" />
+                    <path d={basePath.path} fill="none" stroke="rgb(var(--section-accent-rgb) / 0.36)" strokeWidth="2" />
                     <path
                         d={livePath.path}
                         fill="none"
-                        stroke={liveHasActive ? "rgba(94, 215, 255, 0.98)" : "rgba(94, 215, 255, 0.72)"}
+                        stroke={liveHasActive ? "rgb(var(--section-accent-rgb) / 0.98)" : "rgb(var(--section-accent-rgb) / 0.72)"}
                         strokeWidth={liveHasActive ? "3" : "2"}
                     />
                     <line
@@ -1603,7 +1611,7 @@ export function FilterResponseGraph({
                         x2={baseHandle.x}
                         y1={basePath.plotBottom}
                         y2={baseHandle.y}
-                        stroke="rgba(255, 196, 64, 0.18)"
+                        stroke="rgb(var(--section-accent-rgb) / 0.20)"
                         strokeWidth="1.5"
                         strokeDasharray="4 4"
                         pointerEvents="none"
@@ -1634,8 +1642,8 @@ export function FilterResponseGraph({
                         cx={baseHandle.x}
                         cy={baseHandle.y}
                         r="15"
-                        fill="rgba(255, 180, 34, 0.18)"
-                        stroke="rgba(255, 211, 121, 0.18)"
+                        fill="rgb(var(--section-accent-rgb) / 0.16)"
+                        stroke="rgb(var(--section-accent-rgb) / 0.24)"
                         strokeWidth="1"
                         pointerEvents="none"
                     />
@@ -1644,8 +1652,8 @@ export function FilterResponseGraph({
                         cx={baseHandle.x}
                         cy={baseHandle.y}
                         r="10.5"
-                        fill="#ffb81f"
-                        stroke="rgba(255, 244, 219, 0.55)"
+                        fill="var(--section-accent)"
+                        stroke="rgb(255 255 255 / 0.42)"
                         strokeWidth="1.6"
                         pointerEvents="none"
                     />
@@ -1687,7 +1695,7 @@ export function VoiceModeToolbar({
             <span className="text-[10px] uppercase tracking-[0.18em] text-slate-300/60">Voice</span>
             <div
                 className={joinClasses(
-                    "inline-grid gap-1 rounded-[18px] border border-white/8 bg-black/25 p-1",
+                    "synth-control-rail inline-grid gap-1 rounded-[18px] p-1",
                     surfaceClassName,
                 )}
                 style={{ gridTemplateColumns: `repeat(${columnCount}, minmax(0, 1fr))` }}
@@ -1702,8 +1710,8 @@ export function VoiceModeToolbar({
                             type="button"
                             className={`rounded-[14px] px-3 py-2.5 text-left transition ${
                                 isActive
-                                    ? "bg-white/[0.08] text-cyan-100 shadow-[inset_0_0_0_1px_rgba(143,232,255,0.18)]"
-                                    : "text-slate-300/70 hover:bg-white/[0.04] hover:text-slate-100"
+                                    ? "bg-[rgb(var(--section-accent-rgb)/0.12)] text-[var(--section-accent)]"
+                                    : "text-slate-300/70 hover:bg-[rgb(var(--section-accent-rgb)/0.05)] hover:text-slate-100"
                             }`}
                             onClick={() => onChange(option.value)}
                             aria-pressed={isActive}
@@ -1755,9 +1763,13 @@ export function KeyboardSectionShell({
     contentClassName,
 }: KeyboardSectionShellProps) {
     return (
-        <section className={joinClasses("grid gap-3", className)}>
+        <section
+            data-section-accent="lime"
+            data-liquid-detail="edge-rail"
+            className={joinClasses("relative grid gap-3", className)}
+        >
             <div className={joinClasses(
-                "flex flex-col items-center justify-end gap-2 rounded-[22px] border border-white/[0.05] bg-white/[0.025] px-2 py-3",
+                "synth-control-rail flex flex-col items-center justify-end gap-2 rounded-[22px] px-2 py-3",
                 railClassName,
             )}>
                 <span className="text-[10px] uppercase tracking-[0.18em] text-slate-300/55">Oct</span>
@@ -1779,7 +1791,7 @@ export function KeyboardSectionShell({
                 >
                     <OctaveShiftGlyph direction="down" />
                 </button>
-                <div className="font-mono text-[10px] tracking-[0.18em] text-cyan-200/70">
+                <div className="synth-readout-text text-[10px] opacity-70">
                     {keyboardRootLabel}
                 </div>
             </div>
@@ -1825,8 +1837,10 @@ export function WavetableStageSection({
             ref={stageRef}
             data-role="wavetable-card"
             data-layout-card="desktop-grid-card"
+            data-section-accent="cyan"
+            data-liquid-detail="display-lip"
             className={joinClasses(
-                "cosimo-stage border border-white/[0.04]",
+                "cosimo-stage border",
                 SYNTH_GRID_CARD_SHELL_CLASS,
                 className,
             )}
@@ -1844,17 +1858,17 @@ export function WavetableStageSection({
 
             <div
                 data-role="wavetable-stage-top-controls"
-                className="absolute inset-x-0 top-0 flex items-start justify-between gap-1.5 p-1.5 text-[8px] uppercase tracking-[0.10em] text-slate-300/70"
+                className="synth-display-lip-controls text-[8px] uppercase tracking-[0.10em]"
             >
                 <label
                     className="relative inline-flex max-w-[128px] cursor-pointer items-center"
                     onFocus={onTablePrewarm}
                     onPointerEnter={onTablePrewarm}
                 >
-                    <div data-role="wavetable-select-chip" className={`inline-flex h-5 min-w-0 items-center ${SYNTH_COMPACT_CONTROL_CHROME_CLASS} px-1.5 pr-5 text-left ${SYNTH_COMPACT_CONTROL_TEXT_CLASS} text-amber-100`}>
+                    <div data-role="wavetable-select-chip" className={`inline-flex h-5 min-w-0 items-center ${SYNTH_COMPACT_CONTROL_CHROME_CLASS} px-1.5 pr-5 text-left ${SYNTH_COMPACT_CONTROL_TEXT_CLASS} synth-compact-control-value`}>
                         <span data-role="wavetable-stage-title" className="truncate">{tableName}</span>
                     </div>
-                    <SelectChevron className="pointer-events-none absolute right-1.5 top-1/2 h-2.5 w-2.5 -translate-y-1/2 text-slate-300/65" />
+                    <SelectChevron className="pointer-events-none absolute right-1.5 top-1/2 h-2.5 w-2.5 -translate-y-1/2 text-[var(--section-accent)] opacity-70" />
                     <select
                         className="absolute inset-0 cursor-pointer opacity-0"
                         value={String(desiredTableIndex)}
@@ -1871,10 +1885,10 @@ export function WavetableStageSection({
                 </label>
 
                 <div className="flex min-w-0 items-center gap-1">
-                    <div data-role="wavetable-frame-chip" className={`flex h-5 items-center ${SYNTH_COMPACT_CONTROL_CHROME_CLASS} px-1.5 ${SYNTH_COMPACT_CONTROL_TEXT_CLASS} text-cyan-200/80`}>
+                    <div data-role="wavetable-frame-chip" className={`flex h-5 items-center ${SYNTH_COMPACT_CONTROL_CHROME_CLASS} px-1.5 ${SYNTH_COMPACT_CONTROL_TEXT_CLASS} synth-compact-control-value`}>
                         Frame {formatFrameIndex(position, frameCount)}
                     </div>
-                    <div data-role="wavetable-position-chip" className={`flex h-5 items-center ${SYNTH_COMPACT_CONTROL_CHROME_CLASS} px-1.5 ${SYNTH_COMPACT_CONTROL_TEXT_CLASS} text-slate-200/80`}>
+                    <div data-role="wavetable-position-chip" className={`flex h-5 items-center ${SYNTH_COMPACT_CONTROL_CHROME_CLASS} px-1.5 ${SYNTH_COMPACT_CONTROL_TEXT_CLASS} synth-compact-control-value`}>
                         Pos {clampDisplayPosition(position).toFixed(3)}
                     </div>
                 </div>
@@ -2022,8 +2036,8 @@ export function MsegOverviewSection({
             className,
         )}>
             <div className="flex items-center justify-between gap-4">
-                <div className="text-[11px] uppercase tracking-[0.22em] text-blue-300/70">MSEG</div>
-                <div className="font-mono text-sm tracking-[0.16em] text-cyan-200">
+                <div className="synth-section-title text-[11px]">MSEG</div>
+                <div className="synth-readout-text text-sm">
                     {msegState ? formatSeconds(clampMsegRateSeconds(msegState.playback.rate.seconds)) : "0.000 s"}
                 </div>
             </div>
@@ -2057,7 +2071,7 @@ export function MsegOverviewSection({
                                     {...depthFocusBindings}
                                 />
                             </div>
-                            <div className="text-right font-mono text-sm tracking-[0.16em] text-cyan-200">
+                            <div className="synth-readout-text text-right text-sm">
                                 {Number(msegState.depth).toFixed(3)}
                             </div>
                         </div>
@@ -2077,7 +2091,7 @@ export function MsegOverviewSection({
                                     {...rateFocusBindings}
                                 />
                             </div>
-                            <div className="text-right font-mono text-sm tracking-[0.16em] text-cyan-200">
+                            <div className="synth-readout-text text-right text-sm">
                                 {formatSeconds(clampMsegRateSeconds(msegState.playback.rate.seconds))}
                             </div>
                             <button

@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "../shared/synth-style-guide.css";
 
 :host {
     display: block;
@@ -8,10 +9,10 @@
     min-height: 100dvh;
     overflow-x: hidden;
     overscroll-behavior: none;
-    background: #04070f;
-    color: #eef2f5;
+    background: var(--cosimo-body);
+    color: var(--cosimo-text);
     color-scheme: dark;
-    font-family: "SF Pro Display", "SF Pro Text", -apple-system, BlinkMacSystemFont, "Avenir Next", sans-serif;
+    font-family: var(--cosimo-font-label);
     --cosimo-ios-top-inset: 0px;
     --cosimo-ios-right-inset: 0px;
     --cosimo-ios-bottom-inset: 0px;
@@ -48,8 +49,8 @@ select {
     gap: 4px;
     padding: 4px;
     border-radius: 16px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgb(var(--cosimo-edge-rgb) / 0.34);
+    background: rgb(var(--cosimo-control-rgb) / 0.42);
 }
 
 .cosimo-mod-direction-button {
@@ -58,15 +59,15 @@ select {
     border: 0;
     border-radius: 11px;
     background: transparent;
-    color: rgba(226, 232, 240, 0.72);
+    color: rgb(226 232 240 / 0.72);
     font-size: 14px;
     font-weight: 700;
     line-height: 1;
 }
 
 .cosimo-mod-direction-button[data-active="true"] {
-    background: rgba(103, 232, 249, 0.18);
-    color: #cffafe;
+    background: var(--section-accent-soft);
+    color: var(--section-accent);
 }
 
 .cosimo-mod-knob {
@@ -88,10 +89,8 @@ select {
     width: 100%;
     height: 100%;
     border-radius: 999px;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    box-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 0.08),
-        0 10px 20px rgba(0, 0, 0, 0.22);
+    border: 1px solid rgb(var(--cosimo-edge-rgb) / 0.28);
+    box-shadow: var(--cosimo-contact-shadow);
 }
 
 .cosimo-mod-knob-arc {
@@ -105,17 +104,17 @@ select {
 
 .cosimo-mod-knob-arc-track {
     fill: none;
-    stroke: rgba(255, 255, 255, 0.1);
+    stroke: rgb(255 255 255 / 0.10);
     stroke-width: 4;
     stroke-linecap: round;
 }
 
 .cosimo-mod-knob-arc-fill {
     fill: none;
-    stroke: rgba(103, 232, 249, 0.92);
+    stroke: rgb(var(--section-accent-rgb) / 0.92);
     stroke-width: 4;
     stroke-linecap: round;
-    filter: drop-shadow(0 0 8px rgba(103, 232, 249, 0.28));
+    filter: drop-shadow(0 0 8px var(--section-accent-glow));
 }
 
 .cosimo-mod-knob-core {
@@ -124,14 +123,12 @@ select {
     display: grid;
     place-items: center;
     border-radius: 999px;
-    background:
-        radial-gradient(circle at 35% 28%, rgba(255, 255, 255, 0.1), transparent 38%),
-        linear-gradient(180deg, rgba(12, 18, 34, 0.98), rgba(6, 9, 20, 0.98));
-    color: #cffafe;
+    background: var(--cosimo-recess);
+    color: var(--section-accent);
 }
 
 .cosimo-mod-knob-percent {
-    font-family: "SF Mono", "IBM Plex Mono", Menlo, monospace;
+    font-family: var(--cosimo-font-readout);
     font-size: 10px;
     font-weight: 700;
     letter-spacing: 0.12em;
@@ -145,9 +142,9 @@ select {
     width: 3px;
     height: 19px;
     border-radius: 999px;
-    background: linear-gradient(180deg, #fef3c7 0%, #f472b6 100%);
+    background: var(--cosimo-accent-coral);
     transform-origin: 50% 26px;
-    box-shadow: 0 0 12px rgba(244, 114, 182, 0.36);
+    box-shadow: var(--cosimo-emissive-shadow);
     pointer-events: none;
 }
 
@@ -158,14 +155,14 @@ select {
     width: 2px;
     height: 9px;
     border-radius: 999px;
-    background: rgba(255, 255, 255, 0.4);
+    background: rgb(255 255 255 / 0.40);
     transform: translateX(-50%);
     pointer-events: none;
 }
 
 .cosimo-mod-knob[data-polarity="bipolar"] .cosimo-mod-knob-center-marker {
-    background: rgba(226, 232, 240, 0.84);
-    box-shadow: 0 0 8px rgba(226, 232, 240, 0.24);
+    background: rgb(226 232 240 / 0.84);
+    box-shadow: 0 0 8px rgb(226 232 240 / 0.24);
 }
 
 .cosimo-mod-knob-input {
@@ -184,20 +181,20 @@ select {
 }
 
 .cosimo-mod-amount-readout {
-    font-family: "SF Mono", "IBM Plex Mono", Menlo, monospace;
+    font-family: var(--cosimo-font-readout);
     font-size: 11px;
     font-weight: 600;
     letter-spacing: 0.08em;
-    color: #e2e8f0;
+    color: var(--cosimo-text);
     white-space: nowrap;
 }
 
 .cosimo-mod-amount-caption {
-    font-family: "SF Mono", "IBM Plex Mono", Menlo, monospace;
+    font-family: var(--cosimo-font-label);
     font-size: 9px;
     letter-spacing: 0.18em;
     text-transform: uppercase;
-    color: rgba(148, 163, 184, 0.74);
+    color: var(--cosimo-text-muted);
 }
 
 .ios-shell {
@@ -259,17 +256,38 @@ select {
     min-width: 0;
 }
 
+.ios-section-panel {
+    position: relative;
+    display: grid;
+    gap: 0.9rem;
+    min-width: 0;
+    border: 1px solid rgb(var(--cosimo-edge-rgb) / 0.28);
+    border-radius: 24px;
+    padding: 1rem;
+    background:
+        linear-gradient(180deg, rgb(var(--cosimo-surface-raised-rgb) / 0.96), rgb(var(--cosimo-body-rgb) / 0.98));
+    box-shadow: var(--cosimo-panel-shadow);
+    overflow: hidden;
+}
+
 .section-label,
+.mini-label,
+.mseg-eyebrow,
+.mseg-depth-label {
+    font-family: var(--cosimo-font-label);
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+}
+
 .display-status,
 .bank-readout,
-.mini-label,
 .octave-readout,
 .glide-time-readout,
 .mseg-depth-readout,
 .mseg-rate-readout,
 .mseg-launcher-rate-readout {
-    font-family: "SF Mono", "IBM Plex Mono", Menlo, monospace;
-    letter-spacing: 0.16em;
+    font-family: var(--cosimo-font-readout);
+    letter-spacing: 0.08em;
     text-transform: uppercase;
 }
 
@@ -281,7 +299,8 @@ select {
     min-height: var(--cosimo-stage-min-height);
     aspect-ratio: 1.55 / 1;
     overflow: hidden;
-    background: transparent;
+    border-radius: 18px;
+    background: var(--cosimo-recess);
     touch-action: none;
 }
 
@@ -290,8 +309,8 @@ select {
     position: absolute;
     inset: 0;
     background:
-        linear-gradient(rgba(255, 255, 255, 0.026) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(255, 255, 255, 0.026) 1px, transparent 1px);
+        linear-gradient(rgb(255 255 255 / 0.026) 1px, transparent 1px),
+        linear-gradient(90deg, rgb(255 255 255 / 0.026) 1px, transparent 1px);
     background-size: 28px 28px;
     opacity: 0.24;
     pointer-events: none;
@@ -316,8 +335,8 @@ select {
     text-align: center;
     padding: 20px;
     font-size: 13px;
-    color: rgba(255, 216, 172, 0.86);
-    background: rgba(4, 7, 18, 0.82);
+    color: rgb(var(--cosimo-accent-amber-rgb) / 0.86);
+    background: rgb(var(--cosimo-recess-rgb) / 0.82);
     backdrop-filter: blur(4px);
 }
 
@@ -349,36 +368,36 @@ select {
 
 .mini-label {
     font-size: 10px;
-    color: rgba(212, 220, 230, 0.34);
+    color: rgb(212 220 230 / 0.42);
 }
 
 .mini-label.active {
-    color: #87d7f5;
+    color: var(--section-accent);
 }
 
 .mini-label.warm {
-    color: #f2b86b;
+    color: var(--cosimo-accent-amber);
 }
 
 .display-status,
 .bank-readout {
     font-size: 10px;
-    color: rgba(212, 220, 230, 0.42);
+    color: rgb(212 220 230 / 0.48);
 }
 
 .display-status {
     justify-self: start;
     padding: 6px 10px;
     border-radius: 999px;
-    background: rgba(255, 255, 255, 0.04);
+    background: rgb(var(--cosimo-control-rgb) / 0.42);
 }
 
 .shape-readout {
-    font-family: "SF Pro Display", "SF Pro Text", -apple-system, BlinkMacSystemFont, sans-serif;
+    font-family: var(--cosimo-font-readout);
     font-size: 12px;
     font-weight: 600;
     letter-spacing: -0.03em;
-    color: #87d7f5;
+    color: var(--section-accent);
 }
 
 .bank-picker-trigger {
@@ -412,9 +431,9 @@ select {
 }
 
 .table-retry-button {
-    border: 1px solid rgba(245, 108, 182, 0.28);
+    border: 1px solid rgb(var(--cosimo-accent-pink-rgb) / 0.28);
     border-radius: 999px;
-    background: rgba(245, 108, 182, 0.08);
+    background: rgb(var(--cosimo-accent-pink-rgb) / 0.08);
     color: #ffd8e8;
     padding: 6px 10px;
     font-size: 10px;
@@ -432,8 +451,8 @@ select {
     min-width: 0;
     padding: 10px 12px;
     border-radius: 14px;
-    border: 1px solid rgba(245, 108, 182, 0.24);
-    background: rgba(245, 108, 182, 0.12);
+    border: 1px solid rgb(var(--cosimo-accent-pink-rgb) / 0.24);
+    background: rgb(var(--cosimo-accent-pink-rgb) / 0.12);
     color: #ffd8e8;
     font-size: 12px;
     line-height: 1.35;
@@ -460,9 +479,9 @@ select {
     width: 100%;
     min-height: 36px;
     border-radius: 12px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    background: rgba(255, 255, 255, 0.04);
-    color: #eef2f5;
+    border: 1px solid rgb(var(--cosimo-edge-rgb) / 0.34);
+    background: rgb(var(--cosimo-control-rgb) / 0.58);
+    color: var(--cosimo-text);
     padding: 8px 10px;
     font-size: 13px;
 }
@@ -483,7 +502,7 @@ select {
 .mseg-rate-readout,
 .mseg-launcher-rate-readout {
     font-size: 12px;
-    color: #87d7f5;
+    color: var(--section-accent);
     letter-spacing: 0.08em;
     white-space: nowrap;
 }
@@ -516,15 +535,15 @@ select {
     font-size: 10px;
     letter-spacing: 0.16em;
     text-transform: uppercase;
-    color: rgba(212, 220, 230, 0.34);
-    font-family: "SF Mono", "IBM Plex Mono", Menlo, monospace;
+    color: rgb(212 220 230 / 0.42);
+    font-family: var(--cosimo-font-label);
 }
 
 .mseg-route-title {
     font-size: 15px;
     font-weight: 600;
-    color: #eef2f5;
-    letter-spacing: -0.03em;
+    color: var(--cosimo-text);
+    letter-spacing: 0.02em;
 }
 
 .mseg-preview-button {
@@ -540,6 +559,10 @@ select {
 .mseg-preview-shell {
     height: 128px;
     min-height: 128px;
+    border-radius: 18px;
+    background: var(--cosimo-recess);
+    box-shadow: var(--cosimo-recess-shadow);
+    overflow: hidden;
 }
 
 .mseg-preview-footer {
@@ -565,8 +588,8 @@ select {
     font-size: 10px;
     letter-spacing: 0.16em;
     text-transform: uppercase;
-    color: rgba(212, 220, 230, 0.34);
-    font-family: "SF Mono", "IBM Plex Mono", Menlo, monospace;
+    color: rgb(212 220 230 / 0.42);
+    font-family: var(--cosimo-font-label);
 }
 
 .mseg-depth-slider,
@@ -601,6 +624,10 @@ select {
     padding: 0 8px 0;
 }
 
+.mseg-modal.ios-section-panel {
+    min-height: 100%;
+}
+
 .mseg-modal-copy {
     display: none;
 }
@@ -619,7 +646,7 @@ select {
     border: 0;
     border-radius: 0;
     background: transparent;
-    color: #eef2f5;
+    color: var(--cosimo-text);
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -672,11 +699,11 @@ select {
 }
 
 .mseg-loop-button {
-    border: 0;
+    border: 1px solid rgb(var(--cosimo-edge-rgb) / 0.28);
     border-radius: 999px;
-    background: transparent;
-    color: #87d7f5;
-    padding: 0;
+    background: rgb(var(--cosimo-control-rgb) / 0.42);
+    color: var(--section-accent);
+    padding: 0 10px;
     min-width: 36px;
     min-height: 36px;
 }
@@ -693,7 +720,7 @@ select {
     display: grid;
     gap: 0;
     padding: 0 12px;
-    background: #04070f;
+    background: var(--cosimo-body);
 }
 
 .keyboard-toolbar {
@@ -712,10 +739,10 @@ select {
 .octave-button {
     min-width: 72px;
     min-height: 34px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid rgb(var(--cosimo-edge-rgb) / 0.34);
     border-radius: 999px;
-    background: rgba(255, 255, 255, 0.04);
-    color: #eef2f5;
+    background: rgb(var(--cosimo-control-rgb) / 0.58);
+    color: var(--cosimo-text);
     font-size: 12px;
     letter-spacing: 0.08em;
     text-transform: uppercase;
@@ -729,7 +756,7 @@ select {
     min-width: 88px;
     text-align: center;
     font-size: 12px;
-    color: #87d7f5;
+    color: var(--section-accent);
 }
 
 .keyboard-host {
@@ -744,49 +771,48 @@ select {
     height: var(--cosimo-keyboard-height);
     border-radius: 14px 14px 0 0;
     overflow: hidden;
-    background:
-        linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 18%),
-        linear-gradient(180deg, rgba(10, 13, 18, 0.68), rgba(7, 9, 13, 0.92));
+    background: var(--cosimo-recess);
+    box-shadow: var(--cosimo-recess-shadow);
     padding: 6px 6px 0;
     touch-action: none;
 }
 
 .cosimo-grid-line {
-    stroke: rgba(255, 255, 255, 0.08);
+    stroke: rgb(255 255 255 / 0.08);
     stroke-width: 1;
 }
 
 .cosimo-curve-fill {
-    fill: rgba(135, 215, 245, 0.08);
+    fill: rgb(var(--section-accent-rgb) / 0.08);
 }
 
 .cosimo-curve-fill-progress {
-    fill: rgba(135, 215, 245, 0.22);
+    fill: rgb(var(--section-accent-rgb) / 0.22);
 }
 
 .cosimo-curve-line {
     fill: none;
-    stroke: #87d7f5;
+    stroke: var(--section-accent);
     stroke-width: 3;
     stroke-linecap: round;
     stroke-linejoin: round;
 }
 
 .cosimo-curve-fill-muted {
-    fill: rgba(225, 231, 240, 0.04);
+    fill: rgb(225 231 240 / 0.04);
 }
 
 .cosimo-curve-line-muted {
-    stroke: rgba(225, 231, 240, 0.38);
+    stroke: rgb(225 231 240 / 0.38);
 }
 
 .cosimo-reference-curve-fill {
-    fill: rgba(225, 231, 240, 0.04);
+    fill: rgb(225 231 240 / 0.04);
 }
 
 .cosimo-reference-curve-line {
     fill: none;
-    stroke: rgba(225, 231, 240, 0.38);
+    stroke: rgb(225 231 240 / 0.38);
     stroke-width: 3;
     stroke-linecap: round;
     stroke-linejoin: round;
@@ -794,46 +820,74 @@ select {
 
 .cosimo-mseg-effective-curve-line {
     fill: none;
-    stroke: #fbbf24;
+    stroke: var(--cosimo-accent-amber);
     stroke-width: 3.25;
     stroke-linecap: round;
     stroke-linejoin: round;
-    filter: drop-shadow(0 0 8px rgba(251, 191, 36, 0.32));
+    filter: drop-shadow(0 0 8px rgb(var(--cosimo-accent-amber-rgb) / 0.32));
 }
 
 .cosimo-curve-line-highlight {
-    stroke: #32f0bc;
+    stroke: var(--cosimo-accent-mint);
 }
 
 .cosimo-mseg-playhead {
-    stroke: rgba(244, 251, 255, 0.96);
+    stroke: rgb(244 251 255 / 0.96);
     stroke-width: 2;
     stroke-linecap: round;
 }
 
 .cosimo-mseg-point-default {
-    fill: #87d7f5;
-    stroke: #050913;
+    fill: var(--section-accent);
+    stroke: var(--cosimo-recess);
     stroke-width: 2px;
 }
 
 .cosimo-mseg-point-selected {
-    fill: #f5d0fe;
-    stroke: #050913;
+    fill: var(--cosimo-accent-pink);
+    stroke: var(--cosimo-recess);
     stroke-width: 3px;
 }
 
 .cosimo-mseg-point-highlight {
-    fill: #32f0bc;
-    stroke: #050913;
+    fill: var(--cosimo-accent-mint);
+    stroke: var(--cosimo-recess);
     stroke-width: 2px;
 }
 
 .cosimo-mseg-point-muted {
-    fill: rgba(225, 231, 240, 0.78);
-    stroke: #050913;
+    fill: rgb(225 231 240 / 0.78);
+    stroke: var(--cosimo-recess);
     stroke-width: 2px;
     opacity: 0.62;
+}
+
+.ios-section-panel select,
+.ios-section-panel input[type="range"],
+.ios-section-panel button {
+    font-family: var(--cosimo-font-label);
+}
+
+.ios-section-panel select {
+    appearance: none;
+    -webkit-appearance: none;
+    min-height: 36px;
+    border: 1px solid rgb(var(--cosimo-edge-rgb) / 0.34);
+    border-radius: 12px;
+    background: rgb(var(--cosimo-control-rgb) / 0.58);
+    color: var(--cosimo-text);
+    padding: 8px 28px 8px 10px;
+}
+
+.ios-section-panel input[type="range"] {
+    accent-color: var(--section-accent);
+}
+
+.ios-section-panel button:focus-visible,
+.ios-section-panel select:focus-visible,
+.ios-section-panel input[type="range"]:focus-visible {
+    outline: 2px solid var(--section-accent);
+    outline-offset: 2px;
 }
 
 @media (max-height: 720px) {

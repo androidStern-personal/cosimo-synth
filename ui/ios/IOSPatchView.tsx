@@ -232,7 +232,7 @@ const IOSPlayPanel = memo(function IOSPlayPanel({
     glideFocusTarget,
 }: IOSPlayPanelProps) {
     return (
-        <div className="play-panel">
+        <div className="play-panel ios-section-panel" data-section-accent="lime" data-liquid-detail="section-tab">
             <div className="play-grid">
                 <label className="play-field" aria-label="Voice mode">
                     <select
@@ -299,7 +299,7 @@ const IOSMsegLauncher = memo(function IOSMsegLauncher({
     onSelectMsegSlot: (slotIndex: number) => void;
 }) {
     return (
-        <div className="mseg-shell">
+        <div className="mseg-shell ios-section-panel" data-section-accent="mint" data-liquid-detail="routing-node">
             <div className="mseg-launcher">
                 <div className="mseg-launcher-head">
                     <div className="mseg-launcher-copy">
@@ -440,7 +440,7 @@ const IOSKeyboardToolbar = memo(function IOSKeyboardToolbar({
     onOctaveUp: () => void;
 }) {
     return (
-        <div className="keyboard-toolbar">
+        <div className="keyboard-toolbar ios-section-panel" data-section-accent="lime" data-liquid-detail="edge-rail">
             <div className="octave-controls">
                 <button
                     className="octave-button octave-down"
@@ -486,14 +486,10 @@ const IOSModulationMatrixPanel = memo(function IOSModulationMatrixPanel({
     onRouteChange: (routeIndex: number, nextRoute: ModulationRoute) => void;
 }) {
     return (
-        <div style={{
-            display: "grid",
-            gap: "0.9rem",
-            border: "1px solid rgba(255,255,255,0.08)",
-            borderRadius: "24px",
-            padding: "1rem",
-            background: "rgba(255,255,255,0.03)",
-        }}
+        <div
+            className="ios-section-panel"
+            data-section-accent="amber"
+            data-liquid-detail="edge-rail"
         >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.75rem" }}>
                 <div>
@@ -678,15 +674,9 @@ const IOSDistortionPanel = memo(function IOSDistortionPanel({
     return (
         <div
             data-role="ios-distortion-panel"
-            style={{
-                display: "grid",
-                gap: "0.9rem",
-                border: "1px solid rgba(255,255,255,0.08)",
-                borderRadius: "24px",
-                padding: "1rem",
-                background: "linear-gradient(180deg, rgba(22,10,16,0.96), rgba(7,8,14,0.98))",
-                boxShadow: "inset 0 1px 0 rgba(255,255,255,0.06)",
-            }}
+            className="ios-section-panel"
+            data-section-accent="coral"
+            data-liquid-detail="meter-cover"
         >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", gap: "0.75rem" }}>
                 <div>
@@ -945,7 +935,9 @@ const IOSMsegModal = memo(function IOSMsegModal({
         <div className="mseg-modal-layer" data-role="mseg-modal-layer" data-open={isOpen ? "true" : "false"}>
             {isOpen ? (
                 <section
-                    className="mseg-modal"
+                    className="mseg-modal ios-section-panel"
+                    data-section-accent="mint"
+                    data-liquid-detail="routing-node"
                     data-role="mseg-modal"
                     aria-hidden={isOpen ? "false" : "true"}
                 >
@@ -1191,7 +1183,7 @@ const IOSWavetablePanel = memo(function IOSWavetablePanel({
     }, [onSelectWavetable, tableOptions.length, wavetablePosition]);
 
     return (
-        <div className="wavetable-panel">
+        <div className="wavetable-panel ios-section-panel" data-section-accent="cyan" data-liquid-detail="display-lip">
             <div
                 ref={stageRef}
                 className="wavetable-stage"

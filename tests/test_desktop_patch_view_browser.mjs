@@ -881,7 +881,8 @@ test("built desktop bundle renders visible distortion slider handles inside the 
                     exists: true,
                     width: rect.width,
                     height: rect.height,
-                    backgroundImage: style.backgroundImage,
+                    backgroundColor: style.backgroundColor,
+                    borderTopColor: style.borderTopColor,
                     opacity: style.opacity,
                     visibility: style.visibility,
                 };
@@ -894,7 +895,8 @@ test("built desktop bundle renders visible distortion slider handles inside the 
             assert.equal(handle.exists, true, `${handle.dataRole} should exist`);
             assert.equal(handle.width >= 10, true, `${handle.dataRole} should have a visible width`);
             assert.equal(handle.height >= 10, true, `${handle.dataRole} should have a visible height`);
-            assert.notEqual(handle.backgroundImage, "none", `${handle.dataRole} should render its explicit gradient`);
+            assert.notEqual(handle.backgroundColor, "rgba(0, 0, 0, 0)", `${handle.dataRole} should render a visible handle fill`);
+            assert.notEqual(handle.borderTopColor, "rgba(0, 0, 0, 0)", `${handle.dataRole} should render a visible handle edge`);
             assert.equal(handle.opacity, "1", `${handle.dataRole} should not be transparent`);
             assert.equal(handle.visibility, "visible", `${handle.dataRole} should not be hidden`);
         }
