@@ -159,13 +159,13 @@ const MIDI_NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "
 
 const PILL_BASE = "inline-flex h-6 shrink-0 items-center gap-1 rounded-[5px] border px-2 text-[10px] font-semibold tracking-[0.04em] transition focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-200/45 focus-visible:ring-offset-0";
 const PILL_NEUTRAL = "border-white/[0.06] bg-white/[0.025] text-slate-300/72 hover:border-white/15 hover:bg-white/[0.04] hover:text-slate-100 active:bg-white/[0.06]";
-const PILL_AMBER_ACTIVE = "border-amber-200/35 bg-amber-300/12 text-amber-100 shadow-[inset_0_-1px_0_rgba(251,191,36,0.22)]";
+const PILL_AMBER_ACTIVE = "border-[rgb(var(--section-accent-rgb)/0.38)] bg-[rgb(var(--section-accent-rgb)/0.12)] text-[var(--section-accent)]";
 const PILL_CYAN = "border-cyan-300/20 bg-cyan-300/8 text-cyan-100/90 hover:border-cyan-200/32 hover:bg-cyan-300/14 active:bg-cyan-300/20";
 const PILL_PINK = "border-pink-300/24 bg-pink-300/10 text-pink-100/90 hover:border-pink-200/38 hover:bg-pink-300/16 active:bg-pink-300/22";
-const FRAME_CLASS = "rounded-[14px] border border-white/[0.06] bg-white/[0.022] shadow-[inset_0_1px_0_rgba(255,255,255,0.025)]";
-const SEGMENTED_GROUP_CLASS = "inline-flex h-6 shrink-0 items-center gap-0.5 rounded-[6px] border border-white/[0.05] bg-black/25 p-0.5 shadow-[inset_0_1px_2px_rgba(0,0,0,0.30)]";
+const FRAME_CLASS = "synth-display-recess rounded-[14px]";
+const SEGMENTED_GROUP_CLASS = "synth-control-rail inline-flex h-6 shrink-0 items-center gap-0.5 rounded-[6px] p-0.5";
 const SEGMENTED_BUTTON_BASE = "h-5 rounded-[4px] px-2 text-[10px] font-semibold tracking-[0.04em] transition focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-200/45";
-const SEGMENTED_BUTTON_ACTIVE = "bg-amber-300/16 text-amber-100 shadow-[inset_0_-1px_0_rgba(251,191,36,0.24)]";
+const SEGMENTED_BUTTON_ACTIVE = "bg-[rgb(var(--section-accent-rgb)/0.16)] text-[var(--section-accent)]";
 const SEGMENTED_BUTTON_INACTIVE = "text-slate-300/65 hover:text-slate-100";
 const LANE_ACTION_CLASS = "inline-flex h-5 shrink-0 items-center rounded-[4px] bg-white/[0.035] px-1.5 text-[9px] font-semibold uppercase tracking-[0.10em] text-slate-300/72 transition hover:bg-white/[0.075] hover:text-slate-100 active:bg-white/[0.10] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-200/45";
 const LANE_ACTION_CLASS_PINK = "inline-flex h-5 shrink-0 items-center rounded-[4px] bg-pink-300/[0.08] px-1.5 text-[9px] font-semibold uppercase tracking-[0.10em] text-pink-200/85 transition hover:bg-pink-300/[0.16] hover:text-pink-100 active:bg-pink-300/[0.22] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-200/45";
@@ -379,7 +379,7 @@ function ArticulationCardContextMenu({
             data-role="articulation-card-menu"
             data-articulation-id={state.articulationId}
             style={containerStyle}
-            className="z-50 min-w-[152px] rounded-[6px] border border-white/[0.07] bg-[#080b15]/97 p-0.5 shadow-[0_10px_28px_rgba(0,0,0,0.55)] backdrop-blur-sm"
+            className="synth-menu-surface z-50 min-w-[152px] rounded-[6px] p-0.5"
         >
             {ARTICULATION_CARD_MENU_ITEMS.map((item) => {
                 const isDelete = item.action === "delete";
@@ -498,7 +498,7 @@ function ArticulationRangeContextMenu({
             data-role="articulation-range-menu"
             data-segment-id={state.segment.id}
             style={containerStyle}
-            className="z-50 min-w-[180px] rounded-[6px] border border-white/[0.07] bg-[#080b15]/97 p-0.5 shadow-[0_10px_28px_rgba(0,0,0,0.55)] backdrop-blur-sm"
+            className="synth-menu-surface z-50 min-w-[180px] rounded-[6px] p-0.5"
         >
             {ARTICULATION_RANGE_MENU_ITEMS.map((item) => {
                 const isDisabled = Boolean(item.requiresSelection && !hasSelectedArticulation);
@@ -778,10 +778,10 @@ function ArticulationCard({
     }, [card.id, clearLongPressTimer, onOpenMenu]);
 
     const containerClass = joinClasses(
-        "group relative flex h-[80px] w-[148px] shrink-0 flex-col gap-1 rounded-[7px] border py-1 px-1.5 transition cursor-grab active:cursor-grabbing focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-200/45",
+        "synth-compact-control group relative flex h-[80px] w-[148px] shrink-0 flex-col gap-1 rounded-[7px] border py-1 px-1.5 transition cursor-grab active:cursor-grabbing focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-200/45",
         card.isSelected
-            ? "border-amber-300/65 bg-amber-300/[0.085] shadow-[inset_0_0_0_1px_rgba(251,191,36,0.18)]"
-            : "border-white/[0.07] bg-white/[0.02] hover:border-white/[0.18] hover:bg-white/[0.035]",
+            ? "border-[rgb(var(--section-accent-rgb)/0.68)] bg-[rgb(var(--section-accent-rgb)/0.09)]"
+            : "hover:border-[rgb(var(--section-accent-rgb)/0.32)] hover:bg-[rgb(var(--section-accent-rgb)/0.04)]",
     );
 
     return (
@@ -832,7 +832,7 @@ function ArticulationCard({
                     <span
                         aria-label="Modified"
                         title="Modified"
-                        className="h-1 w-1 shrink-0 rounded-full bg-pink-300/95 shadow-[0_0_3px_rgba(244,114,182,0.65)]"
+                        className="h-1 w-1 shrink-0 rounded-full bg-[var(--cosimo-accent-pink)]"
                     />
                 ) : null}
                 {card.isSelected ? (
@@ -856,10 +856,10 @@ function ArticulationCard({
                 </button>
             </div>
             <div className="grid grid-cols-2 gap-1">
-                <div className="h-8 overflow-hidden rounded-[4px] bg-black/30 shadow-[inset_0_1px_2px_rgba(0,0,0,0.45)]">
+                <div className="synth-display-recess h-8 overflow-hidden rounded-[4px]">
                     <MsegThumbnail points={card.msegPoints} color={card.color} />
                 </div>
-                <div className="h-8 overflow-hidden rounded-[4px] bg-black/30 shadow-[inset_0_1px_2px_rgba(0,0,0,0.45)]">
+                <div className="synth-display-recess h-8 overflow-hidden rounded-[4px]">
                     <GainEnvelopeThumbnail envelope={card.gainEnvelope} color={card.color} />
                 </div>
             </div>
@@ -1991,10 +1991,10 @@ function ArticulationRangeLane({
                 onDrop={handleDrop}
                 onKeyDown={handleLaneKeyDown}
                 className={joinClasses(
-                    "relative hidden h-14 w-full overflow-hidden rounded-[6px] border bg-[#04060c] shadow-[inset_0_1px_2px_rgba(0,0,0,0.55)] outline-none transition focus:shadow-[inset_0_1px_2px_rgba(0,0,0,0.55),0_0_0_1px_rgba(103,232,249,0.20)] sm:block",
+                    "synth-display-recess relative hidden h-14 w-full overflow-hidden rounded-[6px] outline-none transition sm:block",
                     placementPreview
-                        ? "border-cyan-300/35 shadow-[inset_0_1px_2px_rgba(0,0,0,0.55),0_0_0_1px_rgba(103,232,249,0.20)]"
-                        : "border-white/[0.05] focus:border-cyan-200/45",
+                        ? "border-[rgb(var(--section-accent-rgb)/0.42)]"
+                        : "focus:border-[rgb(var(--section-accent-rgb)/0.54)]",
                 )}
             >
                 <div aria-hidden="true" className="pointer-events-none absolute inset-0">
@@ -2212,7 +2212,7 @@ function ArticulationRangeLane({
                 {placementPreview && previewSegment ? (
                     <span
                         data-role="articulation-range-ghost-label"
-                        className="pointer-events-none absolute top-1 z-[3] inline-flex max-w-[140px] -translate-x-1/2 items-center gap-1 rounded-[4px] bg-[#03050b]/92 px-1.5 py-0.5 font-mono text-[9px] tabular-nums tracking-[0.02em] text-cyan-50 shadow-[0_4px_12px_rgba(0,0,0,0.45),0_0_0_1px_rgba(103,232,249,0.28)]"
+                        className="synth-compact-control pointer-events-none absolute top-1 z-[3] inline-flex max-w-[140px] -translate-x-1/2 items-center gap-1 rounded-[4px] px-1.5 py-0.5 font-mono text-[9px] tabular-nums tracking-[0.02em] text-cyan-50"
                         style={{
                             left: `${(((previewSegment.visibleMin ?? placementPreview.min) + (previewSegment.visibleMax ?? placementPreview.max)) / 2 - viewMinValue + 0.5) / viewTotalSlots * 100}%`,
                         }}
@@ -2257,9 +2257,9 @@ function ArticulationRangeLane({
                             className={joinClasses(
                                 "h-1.5 rounded-full transition focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-200/45",
                                 isActive
-                                    ? "w-4 bg-cyan-200/85 shadow-[0_0_10px_rgba(103,232,249,0.25)]"
+                                    ? "w-4 bg-[var(--section-accent)]"
                                     : containsHeldValue
-                                        ? "w-1.5 bg-amber-200/90 shadow-[0_0_8px_rgba(251,191,36,0.45)]"
+                                        ? "w-1.5 bg-[var(--cosimo-accent-amber)]"
                                         : "w-1.5 bg-slate-400/28 hover:bg-slate-200/55",
                             )}
                         />
@@ -2324,7 +2324,7 @@ function ArticulationRangeLane({
                                 className={joinClasses(
                                     "flex min-h-11 items-center gap-2 rounded-[6px] border px-2.5 py-1 text-left transition",
                                     isFocused
-                                        ? "border-amber-200/55 bg-amber-300/[0.06] shadow-[inset_0_0_0_1px_rgba(252,211,77,0.20)]"
+                                        ? "border-amber-200/55 bg-amber-300/[0.06]"
                                         : "border-white/[0.07] bg-white/[0.02] hover:border-white/20 hover:bg-white/[0.035]",
                                 )}
                             >
@@ -2361,7 +2361,7 @@ function ArticulationRangeLane({
                 <div
                     role="status"
                     data-role="articulation-lane-toast"
-                    className="rounded-[7px] border border-pink-300/22 bg-pink-300/[0.08] px-2.5 py-1.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-pink-100/90 shadow-[inset_0_1px_0_rgba(244,114,182,0.12)]"
+                    className="rounded-[7px] border border-pink-300/22 bg-pink-300/[0.08] px-2.5 py-1.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-pink-100/90"
                 >
                     {toast}
                 </div>
@@ -2556,7 +2556,7 @@ function FloatingArticulationToolbar({
     return (
         <div
             data-role="articulation-floating-toolbar"
-            className="pointer-events-none absolute bottom-2 right-2 z-20 flex max-w-[calc(100%-1rem)] items-center gap-1 rounded-[7px] border border-white/[0.07] bg-[#070a13]/96 p-0.5 shadow-[0_10px_24px_rgba(0,0,0,0.45)]"
+            className="synth-menu-surface pointer-events-none absolute bottom-2 right-2 z-20 flex max-w-[calc(100%-1rem)] items-center gap-1 rounded-[7px] p-0.5"
         >
             {selectedIsDirty ? (
                 <span className="pointer-events-auto flex items-center gap-0.5">
@@ -2604,7 +2604,7 @@ function FloatingArticulationToolbar({
 
 function ActiveModeReadout({ activeMode }: { activeMode: ArticulationTriggerMode }) {
     return (
-        <div className="inline-flex h-6 shrink-0 items-center gap-1 rounded-[5px] border border-white/[0.05] bg-black/30 px-2 shadow-[inset_0_1px_2px_rgba(0,0,0,0.40)]">
+        <div className="synth-compact-control inline-flex h-6 shrink-0 items-center gap-1 rounded-[5px] px-2">
             <span className="text-[9px] tracking-[0.04em] text-slate-300/45">Mode</span>
             <span className="font-mono text-[10px] tracking-[0.04em] text-cyan-200/95">
                 {formatModeLabel(activeMode)}
@@ -2776,9 +2776,11 @@ export function ArticulationControlSurface(props: ArticulationControlSurfaceProp
             <section
                 data-role="articulation-control-surface"
                 data-state="collapsed"
+                data-section-accent="amber"
+                data-liquid-detail="section-tab"
                 aria-label="Articulations"
                 onKeyDown={handleSurfaceKeyDown}
-                className="relative flex min-h-[100px] shrink-0 items-stretch gap-2 rounded-[12px] border border-white/[0.06] bg-white/[0.022] px-2.5 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.025)]"
+                className="synth-grid-card-shell relative flex min-h-[100px] shrink-0 items-stretch gap-2 rounded-[12px] border px-2.5 py-2"
             >
                 {carousel}
                 <div aria-hidden="true" className="w-px shrink-0 self-stretch bg-white/[0.05]" />
@@ -2805,9 +2807,11 @@ export function ArticulationControlSurface(props: ArticulationControlSurfaceProp
         <section
             data-role="articulation-control-surface"
             data-state="expanded"
+            data-section-accent="amber"
+            data-liquid-detail="section-tab"
             aria-label="Articulations"
             onKeyDown={handleSurfaceKeyDown}
-            className="relative flex shrink-0 flex-col gap-2 rounded-[12px] border border-white/[0.06] bg-white/[0.022] px-2.5 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.025)]"
+            className="synth-grid-card-shell relative flex shrink-0 flex-col gap-2 rounded-[12px] border px-2.5 py-2"
         >
             <div className="flex flex-wrap items-center justify-between gap-1.5">
                 <ModeSegmentedControl activeMode={activeMode} onSelectMode={onSelectMode} />

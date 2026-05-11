@@ -78,10 +78,10 @@ export const VOICE_MODE_OPTIONS: VoiceModeOption[] = [
     { value: 2, label: "Legato" },
 ];
 export const SYNTH_GRID_CARD_SIZE_CLASS = "aspect-[50/27] min-h-[198px]";
-export const SYNTH_GRID_CARD_SHELL_CLASS = "relative min-h-0 overflow-hidden rounded-[14px]";
-export const SYNTH_GRID_CARD_INSET_SHADOW_CLASS = "pointer-events-none absolute inset-0 rounded-[inherit] shadow-[inset_0_1px_0_rgba(255,255,255,0.06),inset_0_-40px_64px_rgba(0,0,0,0.28)]";
-export const SYNTH_COMPACT_CONTROL_CHROME_CLASS = "rounded-[5px] border border-white/[0.07] bg-black/42 shadow-[0_4px_12px_rgba(0,0,0,0.22)]";
-export const SYNTH_COMPACT_CONTROL_TEXT_CLASS = "text-[8px] uppercase tracking-[0.10em]";
+export const SYNTH_GRID_CARD_SHELL_CLASS = "synth-grid-card-shell relative min-h-0 overflow-hidden rounded-[14px]";
+export const SYNTH_GRID_CARD_INSET_SHADOW_CLASS = "synth-grid-card-inset";
+export const SYNTH_COMPACT_CONTROL_CHROME_CLASS = "synth-compact-control rounded-[5px]";
+export const SYNTH_COMPACT_CONTROL_TEXT_CLASS = "synth-compact-control-text";
 const MSEG_GRID_STEPS = [0.25, 0.5, 0.75] as const;
 const MSEG_PREVIEW_HORIZONTAL_PADDING_PX = 24;
 const MSEG_PREVIEW_VERTICAL_PADDING_PX = 22;
@@ -1507,7 +1507,7 @@ export function FilterResponseGraph({
         <div className={joinClasses("relative h-full w-full", className)}>
             <div
                 ref={viewportRef}
-                className="relative h-full w-full overflow-hidden rounded-[24px] border border-white/[0.05] bg-black/18 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
+                className="synth-display-recess relative h-full w-full overflow-hidden rounded-[24px]"
             >
                 <canvas
                     ref={spectrumCanvasRef}
@@ -1687,7 +1687,7 @@ export function VoiceModeToolbar({
             <span className="text-[10px] uppercase tracking-[0.18em] text-slate-300/60">Voice</span>
             <div
                 className={joinClasses(
-                    "inline-grid gap-1 rounded-[18px] border border-white/8 bg-black/25 p-1",
+                    "synth-control-rail inline-grid gap-1 rounded-[18px] p-1",
                     surfaceClassName,
                 )}
                 style={{ gridTemplateColumns: `repeat(${columnCount}, minmax(0, 1fr))` }}
@@ -1702,8 +1702,8 @@ export function VoiceModeToolbar({
                             type="button"
                             className={`rounded-[14px] px-3 py-2.5 text-left transition ${
                                 isActive
-                                    ? "bg-white/[0.08] text-cyan-100 shadow-[inset_0_0_0_1px_rgba(143,232,255,0.18)]"
-                                    : "text-slate-300/70 hover:bg-white/[0.04] hover:text-slate-100"
+                                    ? "bg-[rgb(var(--section-accent-rgb)/0.12)] text-[var(--section-accent)]"
+                                    : "text-slate-300/70 hover:bg-[rgb(var(--section-accent-rgb)/0.05)] hover:text-slate-100"
                             }`}
                             onClick={() => onChange(option.value)}
                             aria-pressed={isActive}
@@ -1755,9 +1755,13 @@ export function KeyboardSectionShell({
     contentClassName,
 }: KeyboardSectionShellProps) {
     return (
-        <section className={joinClasses("grid gap-3", className)}>
+        <section
+            data-section-accent="lime"
+            data-liquid-detail="edge-rail"
+            className={joinClasses("relative grid gap-3", className)}
+        >
             <div className={joinClasses(
-                "flex flex-col items-center justify-end gap-2 rounded-[22px] border border-white/[0.05] bg-white/[0.025] px-2 py-3",
+                "synth-control-rail flex flex-col items-center justify-end gap-2 rounded-[22px] px-2 py-3",
                 railClassName,
             )}>
                 <span className="text-[10px] uppercase tracking-[0.18em] text-slate-300/55">Oct</span>
@@ -1825,8 +1829,10 @@ export function WavetableStageSection({
             ref={stageRef}
             data-role="wavetable-card"
             data-layout-card="desktop-grid-card"
+            data-section-accent="cyan"
+            data-liquid-detail="display-lip"
             className={joinClasses(
-                "cosimo-stage border border-white/[0.04]",
+                "cosimo-stage border",
                 SYNTH_GRID_CARD_SHELL_CLASS,
                 className,
             )}

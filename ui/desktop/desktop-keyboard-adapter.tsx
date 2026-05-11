@@ -196,8 +196,8 @@ export function KeyboardDock({
     }, [hostSize.width, noteCount, rootNote, keyboardRef]);
 
     return (
-        <div className="rounded-[28px] border border-white/8 bg-white/[0.03] p-3 shadow-[0_18px_42px_rgba(3,6,18,0.45)]">
-            <div ref={hostRef} className="h-[118px] w-full overflow-hidden rounded-[22px] bg-[#070b16]" />
+        <div className="synth-grid-card-shell rounded-[28px] border p-3" data-section-accent="lime" data-liquid-detail="edge-rail">
+            <div ref={hostRef} className="synth-display-recess h-[118px] w-full overflow-hidden rounded-[22px]" />
         </div>
     );
 }

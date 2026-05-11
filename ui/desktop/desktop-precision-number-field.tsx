@@ -151,10 +151,10 @@ export function PrecisionNumberField({
             <span className="sr-only">{ariaLabel}</span>
             <div
                 data-role={dataRole}
-                className={`relative border border-white/[0.10] bg-black/48 ${
+                className={`synth-compact-control relative ${
                     isCompactOverlay
-                        ? "rounded-[5px] shadow-[0_4px_12px_rgba(0,0,0,0.20),inset_0_1px_0_rgba(255,255,255,0.04)]"
-                        : "rounded-full shadow-[0_10px_28px_rgba(0,0,0,0.26),inset_0_1px_0_rgba(255,255,255,0.05)]"
+                        ? "rounded-[5px]"
+                        : "rounded-full"
                 }`}
                 style={{ width: `${width}px`, height: `${height}px` }}
             >

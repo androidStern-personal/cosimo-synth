@@ -223,7 +223,7 @@ function CurvePreview({
     ), [samples]);
 
     return (
-        <div className="grid gap-3 rounded-[22px] border border-white/10 bg-black/42 p-4 shadow-[0_22px_40px_rgba(0,0,0,0.32)]">
+        <div className="synth-grid-card-shell grid gap-3 rounded-[22px] border p-4" data-section-accent="cyan" data-liquid-detail="display-lip">
             <div className="flex items-center justify-between gap-3 text-[10px] uppercase tracking-[0.24em] text-slate-400/80">
                 <span>Curve Preview</span>
                 <span>{getCurveTargetDefinition(targetId).previewRangeLabel ?? "0% -> 100%"}</span>
@@ -232,7 +232,7 @@ function CurvePreview({
             <svg
                 data-role="curve-lab-preview"
                 viewBox="0 0 260 190"
-                className="h-[190px] w-full overflow-visible rounded-[18px] bg-[linear-gradient(180deg,rgba(18,25,40,0.94),rgba(4,7,16,0.98))]"
+                className="synth-display-recess h-[190px] w-full overflow-visible rounded-[18px]"
                 aria-label="Curve lab preview"
             >
                 <defs>
@@ -349,7 +349,9 @@ function CurveLabPanel({
     return (
         <section
             data-role="curve-lab-panel"
-            className="flex min-h-[calc(100dvh-2rem)] w-full flex-col gap-4 rounded-[28px] border border-white/[0.08] bg-[linear-gradient(180deg,rgba(9,13,24,0.98),rgba(3,5,12,0.98))] p-4 shadow-[0_28px_80px_rgba(0,0,0,0.56)] backdrop-blur-xl"
+            data-section-accent="amber"
+            data-liquid-detail="edge-rail"
+            className="synth-modal-frame relative flex min-h-[calc(100dvh-2rem)] w-full flex-col gap-4 rounded-[28px] p-4"
         >
             <div className="flex items-start justify-between gap-4">
                 <div className="grid gap-1">
@@ -562,7 +564,7 @@ export function DesktopCurveLabStandaloneView() {
     }
 
     return (
-        <div className="min-h-[100dvh] bg-[radial-gradient(circle_at_top,rgba(120,112,255,0.10),transparent_38%),linear-gradient(180deg,rgba(5,8,18,1),rgba(2,3,10,1))] p-4 text-slate-100">
+        <div className="min-h-[100dvh] bg-[var(--cosimo-body)] p-4 text-slate-100">
             <CurveLabPanel
                 state={state}
                 onStateChange={(updater) => {
@@ -739,7 +741,7 @@ export function useDesktopCurveLab() {
         }
 
         popupRoot.render(
-            <div className="min-h-[100dvh] bg-[radial-gradient(circle_at_top,rgba(120,112,255,0.10),transparent_38%),linear-gradient(180deg,rgba(5,8,18,1),rgba(2,3,10,1))] p-4 text-slate-100">
+            <div className="min-h-[100dvh] bg-[var(--cosimo-body)] p-4 text-slate-100">
                 <CurveLabPanel state={state} onStateChange={updateState} />
             </div>,
         );
@@ -799,7 +801,7 @@ export function useDesktopCurveLab() {
                     aria-label={usesNativeCurveLabWindow
                         ? "Open curve lab"
                         : (state.isOpen ? "Focus curve lab" : "Open curve lab")}
-                    className="rounded-full border border-amber-200/18 bg-[linear-gradient(180deg,rgba(17,22,33,0.94),rgba(5,8,16,0.98))] px-4 py-3 text-[10px] uppercase tracking-[0.24em] text-amber-100 shadow-[0_18px_40px_rgba(0,0,0,0.45)] transition hover:border-amber-200/30"
+                    className="synth-compact-control rounded-full px-4 py-3 text-[10px] uppercase tracking-[0.24em] text-amber-100 transition hover:border-amber-200/30"
                     onClick={() => {
                         if (usesNativeCurveLabWindow && nativeBridge) {
                             updateState((previousState) => ({ ...previousState, isOpen: true }));

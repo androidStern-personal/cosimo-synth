@@ -840,7 +840,7 @@ function MsegMorphRail({
 
     return (
         <div
-            className={`flex items-center gap-2 rounded-[8px] border border-white/[0.07] bg-[rgba(3,7,15,0.72)] px-2.5 py-2 shadow-[0_10px_26px_rgba(0,0,0,0.28)] ${className ?? ""}`}
+            className={`cosimo-mseg-morph-control flex items-center gap-2 rounded-[8px] border px-2.5 py-2 ${className ?? ""}`}
             data-role="mseg-morph-control"
         >
             <span className="shrink-0 text-[9px] font-bold uppercase tracking-[0.14em] text-slate-300/55">Morph</span>
@@ -881,11 +881,11 @@ function MsegMorphRail({
             >
                 <div className="absolute left-0 right-0 top-1/2 h-[7px] -translate-y-1/2 rounded-full bg-white/[0.06]" />
                 <div
-                    className="absolute left-0 top-1/2 h-[7px] -translate-y-1/2 rounded-full bg-[linear-gradient(90deg,rgba(135,215,245,0.58),rgba(251,191,36,0.78))]"
+                    className="cosimo-mseg-morph-fill absolute left-0 top-1/2 h-[7px] -translate-y-1/2 rounded-full"
                     style={{ width: `${value * 100}%` }}
                 />
                 <div
-                    className="absolute top-1/2 size-[18px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-amber-100/70 bg-[linear-gradient(180deg,#f8d88a,#fbbf24)] shadow-[0_0_18px_rgba(251,191,36,0.34)]"
+                    className="cosimo-mseg-morph-thumb absolute top-1/2 size-[18px] -translate-x-1/2 -translate-y-1/2 rounded-full"
                     style={{ left: `${value * 100}%` }}
                 />
             </div>
@@ -1068,8 +1068,7 @@ function DesktopEnvelopeEditor({
     }, []);
 
     return (
-        <div className="relative h-full overflow-hidden bg-[linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01)),linear-gradient(180deg,rgba(5,9,19,0.92),rgba(7,13,24,0.96))]">
-                <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_22%,rgba(109,216,255,0.10),transparent_26%),radial-gradient(circle_at_82%_78%,rgba(248,184,77,0.10),transparent_20%)]" />
+        <div className="relative h-full overflow-hidden bg-[rgb(var(--cosimo-recess-rgb)/0.92)]">
                 <svg
                     ref={svgRef}
                     viewBox={`0 0 ${ENVELOPE_VIEWBOX.width} ${ENVELOPE_VIEWBOX.height}`}
@@ -1236,7 +1235,9 @@ function FilterSection({
         <section
             data-role="filter-card"
             data-layout-card="desktop-grid-card"
-            className={`${SYNTH_GRID_CARD_SHELL_CLASS} border border-white/[0.04] bg-[radial-gradient(circle_at_top,rgba(93,173,255,0.14),transparent_34%),linear-gradient(180deg,rgba(6,10,22,0.98),rgba(2,4,11,1))] ${className ?? ""}`}
+            data-section-accent="violet"
+            data-liquid-detail="display-lip"
+            className={`${SYNTH_GRID_CARD_SHELL_CLASS} border ${className ?? ""}`}
         >
             <div className={SYNTH_GRID_CARD_INSET_SHADOW_CLASS} />
 
@@ -1402,7 +1403,9 @@ function DistortionSection({
         <section
             data-role="distortion-card"
             data-layout-card="desktop-grid-card"
-            className={`flex h-full flex-col ${SYNTH_GRID_CARD_SHELL_CLASS} bg-[radial-gradient(circle_at_top_left,rgba(248,113,113,0.10),transparent_34%),linear-gradient(180deg,rgba(9,8,15,0.98),rgba(2,4,11,1))] ${className ?? ""}`}
+            data-section-accent="coral"
+            data-liquid-detail="meter-cover"
+            className={`flex h-full flex-col ${SYNTH_GRID_CARD_SHELL_CLASS} ${className ?? ""}`}
         >
             <input
                 data-role="distortion-wet-lp-field"
@@ -1588,7 +1591,9 @@ function ChorusEffectColumn({
     return (
         <section
             data-role="chorus-effect-column"
-            className="flex h-full min-w-0 flex-col gap-1.5 rounded-[12px] bg-[radial-gradient(circle_at_top_left,rgba(103,232,249,0.13),transparent_38%),linear-gradient(180deg,rgba(6,12,24,0.95),rgba(2,5,12,0.98))] p-2"
+            data-section-accent="ion"
+            data-liquid-detail="icon-lens"
+            className="synth-grid-card-shell relative flex h-full min-w-0 flex-col gap-1.5 rounded-[12px] p-2"
         >
             <div className="flex items-center justify-between gap-2">
                 <span className="text-[10px] font-black uppercase tracking-[0.18em] text-cyan-100/75">Chorus</span>
@@ -1729,7 +1734,9 @@ function EffectsRackSection({
         <section
             data-role="effects-rack-card"
             data-layout-card="desktop-grid-card"
-            className={`grid h-full grid-cols-4 gap-2 ${SYNTH_GRID_CARD_SHELL_CLASS} border border-white/[0.04] bg-[linear-gradient(135deg,rgba(8,16,30,0.96),rgba(4,6,14,1))] p-2 ${className ?? ""}`}
+            data-section-accent="ion"
+            data-liquid-detail="edge-rail"
+            className={`grid h-full grid-cols-4 gap-2 ${SYNTH_GRID_CARD_SHELL_CLASS} border p-2 ${className ?? ""}`}
         >
             <div data-role="effect-rack-column" className="min-h-0 min-w-0">
                 <ChorusEffectColumn
@@ -1864,8 +1871,12 @@ function MsegEditorModal({
     }
 
     return (
-        <div className="absolute inset-0 z-20 flex items-center justify-center bg-[#030711]/85 p-6 backdrop-blur-md">
-            <div className="grid h-full w-full max-w-[1080px] grid-rows-[auto_minmax(0,1fr)_auto] gap-5 rounded-[28px] border border-white/10 bg-[#09101d]/95 p-6 shadow-[0_36px_80px_rgba(0,0,0,0.5)]">
+        <div className="synth-modal-backdrop absolute inset-0 z-20 flex items-center justify-center p-6">
+            <div
+                data-section-accent="mint"
+                data-liquid-detail="routing-node"
+                className="synth-modal-frame relative grid h-full w-full max-w-[1080px] grid-rows-[auto_minmax(0,1fr)_auto] gap-5 rounded-[28px] p-6"
+            >
                 <div className="flex items-start justify-between gap-4">
                     <div>
                         <div className="text-[11px] uppercase tracking-[0.22em] text-blue-300/70">{slotLabel}</div>
@@ -2104,7 +2115,13 @@ function ModulationMatrixSection({
     }, [commitEnvelopeDurationField, selectedEnvelope]);
 
     return (
-        <section data-role="mseg-card" data-layout-card="desktop-grid-card" className={`flex h-full flex-col ${SYNTH_GRID_CARD_SHELL_CLASS} bg-white/[0.02] ${DESKTOP_GRID_CARD_CLASS}`}>
+        <section
+            data-role="mseg-card"
+            data-layout-card="desktop-grid-card"
+            data-section-accent="mint"
+            data-liquid-detail="routing-node"
+            className={`flex h-full flex-col ${SYNTH_GRID_CARD_SHELL_CLASS} ${DESKTOP_GRID_CARD_CLASS}`}
+        >
             {/* ── Pip selector top-bar ── */}
             <div className="flex shrink-0 items-center gap-1.5 px-2.5 py-1.5">
                 {/* MSEG pips */}
@@ -2674,7 +2691,7 @@ function DesktopPatchViewBody({
     ]);
 
     return (
-        <div className="cosimo-surface relative flex h-full w-full flex-col gap-3 overflow-hidden rounded-[28px] border border-white/[0.05] px-4 pb-4 pt-2.5 text-slate-100 shadow-[0_26px_80px_rgba(0,0,0,0.48)]">
+        <div className="cosimo-surface relative flex h-full w-full flex-col gap-3 overflow-hidden rounded-[28px] border border-white/[0.05] px-4 pb-4 pt-2.5 text-slate-100">
             <StatusHeader statusText={synthView.topStatus} />
 
             <main
@@ -2777,7 +2794,13 @@ function DesktopPatchViewBody({
                         msegRateFocusBindings={synthView.keyboardRouting.msegRateFocusBindings}
                     />
 
-                    <section data-role="mod-matrix-card" data-layout-card="desktop-grid-card" className={`flex flex-col ${SYNTH_GRID_CARD_SHELL_CLASS} border border-white/[0.05] bg-white/[0.025] p-4 ${DESKTOP_GRID_CARD_CLASS}`}>
+                    <section
+                        data-role="mod-matrix-card"
+                        data-layout-card="desktop-grid-card"
+                        data-section-accent="amber"
+                        data-liquid-detail="edge-rail"
+                        className={`flex flex-col ${SYNTH_GRID_CARD_SHELL_CLASS} border p-4 ${DESKTOP_GRID_CARD_CLASS}`}
+                    >
                         <DesktopModMatrix
                             routes={synthView.routes}
                             onAddRoute={synthView.handleAddRoute}

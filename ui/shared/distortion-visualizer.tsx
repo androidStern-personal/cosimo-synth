@@ -516,7 +516,7 @@ export function DistortionVisualizer({
                 </div>
             </div>
 
-            <div className="overflow-hidden rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(2,6,18,0.95),rgba(1,3,9,1))] shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
+            <div className="synth-display-recess overflow-hidden rounded-[24px]">
                 <svg
                     data-role="distortion-visualizer"
                     viewBox={`0 0 ${VIEWBOX_WIDTH} ${VIEWBOX_HEIGHT}`}
