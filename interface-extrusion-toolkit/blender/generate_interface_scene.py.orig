@@ -1,0 +1,415 @@
+#!/usr/bin/env python3
+"""Generate a Blender raised-interface-panel scene from interface.png + layout.json.
+
+Run from Blender, for example:
+  blender --background --python blender/generate_interface_scene.py -- \
+    --manifest manifests/example.static.json \
+    --layout captures/example-static/layout.json \
+    --image captures/example-static/interface.png \
+    --output out/example-static.blend
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import math
+import os
+import sys
+from pathlib import Path
+
+# Allow this script to import interface_geometry.py when executed by Blender.
+THIS_DIR = Path(__file__).resolve().parent
+if str(THIS_DIR) not in sys.path:
+    sys.path.insert(0, str(THIS_DIR))
+
+from interface_geometry import (  # noqa: E402
+    body_mesh_data,
+    css_point_to_world,
+    panel_center_world,
+    panel_depth_at_frame,
+    schedule_for_order,
+    skin_mesh_data,
+)
+
+try:
+    import bpy  # type: ignore
+except ImportError as exc:  # pragma: no cover - only useful when run outside Blender
+    raise SystemExit("This script must be run with Blender's Python interpreter") from exc
+
+
+def parse_args(argv):
+    if "--" in argv:
+        argv = argv[argv.index("--") + 1 :]
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--manifest", required=True)
+    parser.add_argument("--layout", required=True)
+    parser.add_argument("--image", required=True)
+    parser.add_argument("--output", required=True)
+    parser.add_argument("--render", action="store_true")
+    parser.add_argument("--frames", default=None, help="Optional render output path for frame sequence")
+    return parser.parse_args(argv)
+
+
+def load_json(path):
+    with open(path, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def clear_scene():
+    bpy.ops.object.select_all(action="SELECT")
+    bpy.ops.object.delete()
+
+
+def set_render_engine(scene):
+    valid = {item.identifier for item in bpy.types.RenderSettings.bl_rna.properties["engine"].enum_items}
+    if "BLENDER_EEVEE" in valid:
+        scene.render.engine = "BLENDER_EEVEE"
+    elif "BLENDER_EEVEE_NEXT" in valid:
+        scene.render.engine = "BLENDER_EEVEE_NEXT"
+    else:
+        scene.render.engine = "CYCLES"
+
+
+def make_mesh_object(name, vertices, faces, material=None, face_uvs=None, uv_name="UVMap"):
+    mesh = bpy.data.meshes.new(name + "Mesh")
+    mesh.from_pydata(vertices, [], faces)
+    mesh.update()
+    obj = bpy.data.objects.new(name, mesh)
+    bpy.context.collection.objects.link(obj)
+    if material is not None:
+        obj.data.materials.append(material)
+    if face_uvs is not None:
+        uv_layer = mesh.uv_layers.new(name=uv_name)
+        for poly_index, poly in enumerate(mesh.polygons):
+            poly_uvs = face_uvs[poly_index]
+            if len(poly_uvs) != poly.loop_total:
+                raise ValueError(f"UV count mismatch for {name} polygon {poly_index}")
+            for loop_offset, loop_index in enumerate(poly.loop_indices):
+                uv_layer.data[loop_index].uv = poly_uvs[loop_offset]
+        mesh.uv_layers.active = uv_layer
+    return obj
+
+
+def create_interface_material(image_path):
+    image = bpy.data.images.load(str(image_path))
+    mat = bpy.data.materials.new("Material_InterfaceSkin")
+    mat.use_nodes = True
+    nodes = mat.node_tree.nodes
+    links = mat.node_tree.links
+    bsdf = nodes.get("Principled BSDF")
+    image_node = nodes.new(type="ShaderNodeTexImage")
+    image_node.name = "Interface PNG"
+    image_node.image = image
+    texcoord = nodes.new(type="ShaderNodeTexCoord")
+    links.new(texcoord.outputs["UV"], image_node.inputs["Vector"])
+    if bsdf is not None:
+        if "Base Color" in bsdf.inputs:
+            links.new(image_node.outputs["Color"], bsdf.inputs["Base Color"])
+        if "Alpha" in bsdf.inputs:
+            links.new(image_node.outputs["Alpha"], bsdf.inputs["Alpha"])
+    mat.blend_method = "BLEND"
+    return mat
+
+
+def create_body_material():
+    mat = bpy.data.materials.new("Material_PanelBody_Dark")
+    mat.use_nodes = True
+    nodes = mat.node_tree.nodes
+    bsdf = nodes.get("Principled BSDF")
+    if bsdf is not None:
+        if "Base Color" in bsdf.inputs:
+            bsdf.inputs["Base Color"].default_value = (0.015, 0.018, 0.022, 1.0)
+        if "Roughness" in bsdf.inputs:
+            bsdf.inputs["Roughness"].default_value = 0.42
+        if "Metallic" in bsdf.inputs:
+            bsdf.inputs["Metallic"].default_value = 0.12
+    return mat
+
+
+def build_panel_schedule(manifest, order):
+    anim = manifest.get("animation", {})
+    return schedule_for_order(
+        order,
+        frames_per_section=int(anim.get("framesPerSection", 132)),
+        extrude_offset=int(anim.get("extrudeOffsetFrames", 18)),
+        rise_duration=int(anim.get("riseDurationFrames", 58)),
+        reveal_hold=int(anim.get("revealHoldFrames", 34)),
+        retract_duration=int(anim.get("retractDurationFrames", 14)),
+    )
+
+
+def set_action_interpolation(obj, interpolation="BEZIER"):
+    """Apply interpolation to object keyframes across Blender 4.x and 5.x APIs.
+
+    Blender 5 removed direct Action.fcurves access. For the generated camera rig we
+    only animate object.location, so the 5.x path asks the Action for the location
+    curves for this datablock explicitly. The 4.x path keeps the old direct fcurve
+    iteration.
+    """
+    action = getattr(getattr(obj, "animation_data", None), "action", None)
+    if action is None:
+        return
+
+    # Blender <= 4.x compatibility: Action.fcurves is directly iterable.
+    fcurves = getattr(action, "fcurves", None)
+    if fcurves is not None:
+        for fcurve in fcurves:
+            for key in fcurve.keyframe_points:
+                key.interpolation = interpolation
+        return
+
+    # Blender >= 5.x compatibility: direct Action.fcurves was removed.
+    ensure = getattr(action, "fcurve_ensure_for_datablock", None)
+    if ensure is None:
+        print(f"Warning: cannot set keyframe interpolation for {obj.name}; unsupported Action API")
+        return
+
+    for axis in range(3):
+        try:
+            fcurve = ensure(datablock=obj, data_path="location", index=axis)
+        except Exception as exc:
+            print(f"Warning: could not access location fcurve axis {axis} for {obj.name}: {exc}")
+            continue
+        for key in fcurve.keyframe_points:
+            key.interpolation = interpolation
+
+
+def add_weighted_normal(obj):
+    try:
+        mod = obj.modifiers.new("Weighted_Normal", "WEIGHTED_NORMAL")
+        mod.keep_sharp = True
+        return mod
+    except Exception:
+        return None
+
+
+def create_base_interface(layout, units, interface_mat):
+    css_w = float(layout["cssWidth"])
+    css_h = float(layout["cssHeight"])
+    left, top = css_point_to_world(0, 0, css_w, css_h, units)
+    right, bottom = css_point_to_world(css_w, css_h, css_w, css_h, units)
+    vertices = [
+        (left, top, -0.002),
+        (right, top, -0.002),
+        (right, bottom, -0.002),
+        (left, bottom, -0.002),
+    ]
+    faces = [[0, 1, 2, 3]]
+    face_uvs = [[(0, 1), (1, 1), (1, 0), (0, 0)]]
+    obj = make_mesh_object("BaseInterface", vertices, faces, interface_mat, face_uvs)
+    return obj
+
+
+def insert_panel_keyframes(body, skin, schedule, depth, epsilon):
+    # Keep the body effectively flat before protrusion while avoiding exact zero-scale oddities.
+    flat = 0.0001
+    frames = [
+        (schedule["extrudeStart"], flat),
+        (schedule["peakFrame"], depth),
+        (schedule["retractStart"], depth),
+        (schedule["retractEnd"], flat),
+    ]
+    for frame, current_depth in frames:
+        body.scale.z = current_depth
+        body.keyframe_insert(data_path="scale", frame=frame)
+        skin.location.z = current_depth + epsilon
+        skin.keyframe_insert(data_path="location", frame=frame)
+
+
+def create_panels(layout, manifest, interface_mat, body_mat):
+    units = float(manifest.get("world", {}).get("unitsPerCssPixel", 0.01))
+    segments = int(manifest.get("geometry", {}).get("segmentsPerCorner", 8))
+    epsilon = float(manifest.get("geometry", {}).get("skinEpsilon", 0.003))
+    max_depth = float(manifest.get("animation", {}).get("maxDepth", 0.35))
+    order = manifest.get("animation", {}).get("sectionOrder") or [s["id"] for s in layout["sections"]]
+    schedule = build_panel_schedule(manifest, order)
+    section_by_id = {s["id"]: s for s in layout["sections"]}
+
+    created = {}
+    for section_id in order:
+        panel = section_by_id[section_id]
+        body_data = body_mesh_data(panel, layout, units, segments)
+        body = make_mesh_object(f"Body_{section_id}", body_data["vertices"], body_data["faces"], body_mat)
+        add_weighted_normal(body)
+        body.scale.z = 0.0001
+
+        skin_data = skin_mesh_data(panel, layout, units, segments)
+        skin = make_mesh_object(
+            f"Skin_{section_id}",
+            skin_data["vertices"],
+            skin_data["faces"],
+            interface_mat,
+            skin_data["face_uvs"],
+        )
+        skin.location.z = epsilon
+
+        insert_panel_keyframes(body, skin, schedule[section_id], max_depth, epsilon)
+        created[section_id] = {"body": body, "skin": skin, "schedule": schedule[section_id]}
+    return created
+
+
+def make_empty(name, location):
+    obj = bpy.data.objects.new(name, None)
+    obj.empty_display_type = "PLAIN_AXES"
+    obj.empty_display_size = 0.2
+    obj.location = location
+    bpy.context.collection.objects.link(obj)
+    return obj
+
+
+def add_camera_rig(layout, manifest, panels):
+    scene = bpy.context.scene
+    units = float(manifest.get("world", {}).get("unitsPerCssPixel", 0.01))
+    anim = manifest.get("animation", {})
+    order = anim.get("sectionOrder") or list(panels.keys())
+    max_depth = float(anim.get("maxDepth", 1.05))
+    skim_altitude = float(anim.get("skimAltitude", 0.08))
+    reveal_altitude = float(anim.get("revealAltitude", 4.2))
+    approach_distance = float(anim.get("approachDistance", 6.5))
+    reveal_pullback = float(anim.get("revealPullback", 5.5))
+    lift_start_lead = int(anim.get("liftStartLeadFrames", 14))
+    reveal_settle_frames = int(anim.get("revealSettleFrames", 8))
+    interpolation = str(anim.get("keyframeInterpolation", "BEZIER"))
+
+    section_by_id = {s["id"]: s for s in layout["sections"]}
+    centers = {sid: panel_center_world(section_by_id[sid], layout, units) for sid in order}
+
+    camera_data = bpy.data.cameras.new("Camera")
+    camera = bpy.data.objects.new("Camera", camera_data)
+    bpy.context.collection.objects.link(camera)
+    target = make_empty("Camera_Target", (0, 0, 0.1))
+
+    constraint = camera.constraints.new(type="TRACK_TO")
+    constraint.target = target
+    constraint.track_axis = "TRACK_NEGATIVE_Z"
+    constraint.up_axis = "UP_Y"
+    camera_data.lens = float(anim.get("lensMm", 45))
+    scene.camera = camera
+
+    def norm2(vx, vy):
+        length = math.sqrt(vx * vx + vy * vy)
+        if length < 1e-6:
+            return (1.0, 0.0)
+        return (vx / length, vy / length)
+
+    previous = None
+    for idx, sid in enumerate(order):
+        cx, cy = centers[sid]
+        next_sid = order[idx + 1] if idx + 1 < len(order) else sid
+        nx, ny = centers[next_sid]
+        if previous is None:
+            dx, dy = norm2(nx - cx, ny - cy)
+        else:
+            px, py = centers[previous]
+            dx, dy = norm2(cx - px, cy - py)
+        previous = sid
+
+        beat = panels[sid]["schedule"]
+        lift_start = max(beat["extrudeStart"], beat["peakFrame"] - lift_start_lead)
+        reveal_frame = beat["peakFrame"] + reveal_settle_frames
+
+        # Aim at the target as it grows. At reveal height, look at the raised face.
+        target.location = (cx, cy, max_depth * 0.12)
+        target.keyframe_insert(data_path="location", frame=beat["approachStart"])
+        target.location = (cx, cy, max_depth * 0.55)
+        target.keyframe_insert(data_path="location", frame=beat["extrudeStart"])
+        target.location = (cx, cy, max_depth * 0.95)
+        target.keyframe_insert(data_path="location", frame=lift_start)
+        target.location = (cx, cy, max_depth * 0.82)
+        target.keyframe_insert(data_path="location", frame=reveal_frame)
+        target.keyframe_insert(data_path="location", frame=beat["retractStart"])
+        target.location = (cx, cy, max_depth * 0.18)
+        target.keyframe_insert(data_path="location", frame=beat["retractEnd"])
+
+        # Surface-skimming approach: start far away, low to the interface.
+        camera.location = (cx - dx * approach_distance, cy - dy * approach_distance, skim_altitude)
+        camera.keyframe_insert(data_path="location", frame=beat["approachStart"])
+        # Still low while the extrusion is already rising in the distance.
+        camera.location = (cx - dx * (approach_distance * 0.68), cy - dy * (approach_distance * 0.68), skim_altitude)
+        camera.keyframe_insert(data_path="location", frame=beat["extrudeStart"])
+        # Get close to the surface before lifting.
+        camera.location = (cx - dx * 0.65, cy - dy * 0.65, skim_altitude)
+        camera.keyframe_insert(data_path="location", frame=lift_start)
+        # Crane/pedestal up and pull back far enough to see the whole raised face.
+        camera.location = (cx - dx * reveal_pullback, cy - dy * reveal_pullback, reveal_altitude)
+        camera.keyframe_insert(data_path="location", frame=reveal_frame)
+        # Hold the reveal while the panel waits, then retracts quickly.
+        camera.keyframe_insert(data_path="location", frame=beat["retractStart"])
+        camera.keyframe_insert(data_path="location", frame=beat["retractEnd"])
+        # Dive back to the surface and continue in the travel direction.
+        camera.location = (cx + dx * 1.2, cy + dy * 1.2, skim_altitude)
+        camera.keyframe_insert(data_path="location", frame=beat.get("sectionEnd", beat["retractEnd"]))
+
+    set_action_interpolation(camera, interpolation)
+    set_action_interpolation(target, interpolation)
+    return camera, target
+
+
+def add_lights(layout, manifest):
+    css_w = float(layout["cssWidth"])
+    css_h = float(layout["cssHeight"])
+    units = float(manifest.get("world", {}).get("unitsPerCssPixel", 0.01))
+    w = css_w * units
+    h = css_h * units
+
+    ambient = bpy.context.scene.world or bpy.data.worlds.new("World")
+    bpy.context.scene.world = ambient
+    ambient.color = (0.005, 0.006, 0.008)
+
+    area_data = bpy.data.lights.new("Key_Area", "AREA")
+    area_data.energy = 450
+    area_data.size = max(w, h) * 0.65
+    area = bpy.data.objects.new("Key_Area", area_data)
+    area.location = (-w * 0.2, -h * 0.25, 3.5)
+    bpy.context.collection.objects.link(area)
+
+    rim_data = bpy.data.lights.new("Rim_Point", "POINT")
+    rim_data.energy = 120
+    rim = bpy.data.objects.new("Rim_Point", rim_data)
+    rim.location = (w * 0.4, h * 0.35, 1.2)
+    bpy.context.collection.objects.link(rim)
+
+
+def configure_timeline(manifest):
+    scene = bpy.context.scene
+    anim = manifest.get("animation", {})
+    scene.frame_start = 0
+    scene.frame_end = int(anim.get("durationFrames", 360))
+    scene.render.fps = int(anim.get("fps", 30))
+    scene.render.resolution_x = int(anim.get("resolutionX", 1080))
+    scene.render.resolution_y = int(anim.get("resolutionY", 1920))
+
+
+def main(argv):
+    args = parse_args(argv)
+    manifest = load_json(args.manifest)
+    layout = load_json(args.layout)
+    image_path = Path(args.image).resolve()
+    output_path = Path(args.output).resolve()
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    clear_scene()
+    scene = bpy.context.scene
+    set_render_engine(scene)
+    configure_timeline(manifest)
+
+    interface_mat = create_interface_material(image_path)
+    body_mat = create_body_material()
+    units = float(manifest.get("world", {}).get("unitsPerCssPixel", 0.01))
+
+    create_base_interface(layout, units, interface_mat)
+    panels = create_panels(layout, manifest, interface_mat, body_mat)
+    add_camera_rig(layout, manifest, panels)
+    add_lights(layout, manifest)
+
+    bpy.ops.wm.save_as_mainfile(filepath=str(output_path))
+    print(f"Saved {output_path}")
+
+    if args.render:
+        if args.frames:
+            bpy.context.scene.render.filepath = str(Path(args.frames).resolve())
+        bpy.ops.render.render(animation=True)
+
+
+if __name__ == "__main__":
+    main(sys.argv)

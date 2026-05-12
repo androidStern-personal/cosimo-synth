@@ -1233,6 +1233,7 @@ function FilterSection({
 
     return (
         <section
+            data-cosimo-panel="filter"
             data-role="filter-card"
             data-layout-card="desktop-grid-card"
             data-section-accent="violet"
@@ -1401,6 +1402,7 @@ function DistortionSection({
 
     return (
         <section
+            data-cosimo-panel="distortion"
             data-role="distortion-card"
             data-layout-card="desktop-grid-card"
             data-section-accent="coral"
@@ -1732,6 +1734,7 @@ function EffectsRackSection({
 }: EffectsRackSectionProps) {
     return (
         <section
+            data-cosimo-panel="effect"
             data-role="effects-rack-card"
             data-layout-card="desktop-grid-card"
             data-section-accent="ion"
@@ -2116,6 +2119,7 @@ function ModulationMatrixSection({
 
     return (
         <section
+            data-cosimo-panel="envelope"
             data-role="mseg-card"
             data-layout-card="desktop-grid-card"
             data-section-accent="mint"
@@ -2795,6 +2799,7 @@ function DesktopPatchViewBody({
                     />
 
                     <section
+                        data-cosimo-panel="mod"
                         data-role="mod-matrix-card"
                         data-layout-card="desktop-grid-card"
                         data-section-accent="amber"

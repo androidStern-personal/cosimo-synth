@@ -1,0 +1,22 @@
+@@ -139,11 +139,19 @@
+ 
+ 
+ def set_action_interpolation(obj, interpolation="BEZIER"):
+-    """Apply interpolation to all keyframes on an object, if it has animation data."""
++    """Best-effort keyframe interpolation setter.
++
++    Blender 5 moved away from direct Action.fcurves access. Default Bezier
++    interpolation is already acceptable for this generated camera path, so this
++    function must never fail if the Action internals differ by Blender version.
++    """
+     action = getattr(getattr(obj, "animation_data", None), "action", None)
+     if action is None:
+         return
+-    for fcurve in action.fcurves:
++    fcurves = getattr(action, "fcurves", None)
++    if fcurves is None:
++        return
++    for fcurve in fcurves:
+         for key in fcurve.keyframe_points:
+             key.interpolation = interpolation
+ 

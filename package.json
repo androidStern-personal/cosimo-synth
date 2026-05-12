@@ -22,6 +22,8 @@
     "ios:ui:dev": "vite --config ios_auv3/vite.config.mjs",
     "ios:ui:build": "node ui/build.mjs --ios",
     "ios:project": "./scripts/generate_ios_auv3_xcode_project.sh build/ios_device_run",
+    "cinematic3d:validate": "node scripts/validate-cinematic3d.js",
+    "cinematic3d:render": "mkdir -p demo/cinematic3d-output && remotion render ui/desktop/cinematic3d/remotion-root.tsx CosimoCinematic3D demo/cinematic3d-output/cosimo-cinematic3d.mp4 --gl=angle --concurrency=1",
     "test:desktop:ui": "node --test tests/test_desktop_patch_view_browser.mjs",
     "test:shared:hooks": "node --test tests/test_shared_synth_hooks_browser.mjs",
     "test:python:warp-alias": "uv run pytest tests/test_warp_aliasing.py",
@@ -34,15 +36,23 @@
   },
   "devDependencies": {
     "@react-grab/mcp": "0.1.29",
+    "@react-three/fiber": "^9.6.1",
+    "html2canvas": "^1.4.1",
+    "@remotion/cli": "^4.0.459",
+    "@remotion/three": "^4.0.459",
     "@tailwindcss/vite": "^4.2.2",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
+    "@types/three": "^0.184.0",
     "@vitejs/plugin-react": "^5.2.0",
     "playwright": "^1.59.0",
     "react-grab": "0.1.29",
+    "remotion": "^4.0.459",
     "tailwindcss": "^4.2.2",
+    "three": "^0.184.0",
     "typescript": "^6.0.2",
-    "vite": "^7.1.0"
+    "vite": "^7.1.0",
+    "zod": "^4.3.6"
   },
   "dependencies": {
     "nexusui": "^2.1.6",

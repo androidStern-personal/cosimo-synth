@@ -1,0 +1,86 @@
+{
+  "interfaceId": "cosimo-synth",
+  "capture": {
+    "url": "http://127.0.0.1:5174/",
+    "rootSelector": ".cosimo-surface",
+    "widthCss": 1600,
+    "heightCss": 1500,
+    "deviceScaleFactor": 1,
+    "screenshotScale": "css",
+    "animations": "allow",
+    "waitUntil": "domcontentloaded",
+    "waitForReadyExpression": "(() => { const root = document.querySelector('.cosimo-surface'); const panels = Array.from(document.querySelectorAll('.cosimo-surface [data-cosimo-panel]')); return !!root && root.getBoundingClientRect().width > 100 && root.getBoundingClientRect().height > 100 && panels.length >= 6 && panels.every((el) => el.getBoundingClientRect().width > 20 && el.getBoundingClientRect().height > 20); })()",
+    "readyTimeoutMs": 15000,
+    "rootTimeoutMs": 15000
+  },
+  "sections": [
+    {
+      "id": "wavetable",
+      "selector": "section[data-cosimo-panel='wavetable']"
+    },
+    {
+      "id": "filter",
+      "selector": "section[data-cosimo-panel='filter']"
+    },
+    {
+      "id": "distortion",
+      "selector": "section[data-cosimo-panel='distortion']"
+    },
+    {
+      "id": "effect",
+      "selector": "section[data-cosimo-panel='effect']"
+    },
+    {
+      "id": "envelope",
+      "selector": "section[data-cosimo-panel='envelope']"
+    },
+    {
+      "id": "mod",
+      "selector": "section[data-cosimo-panel='mod']"
+    }
+  ],
+  "world": {
+    "unitsPerCssPixel": 0.01,
+    "surfacePlane": "XY",
+    "extrusionAxis": "Z"
+  },
+  "geometry": {
+    "segmentsPerCorner": 8,
+    "skinEpsilon": 0.003
+  },
+  "animation": {
+    "preset": "single_section_animatic",
+    "focusSection": "wavetable",
+    "fps": 30,
+    "resolutionX": 1080,
+    "resolutionY": 1920,
+    "sectionOrder": [
+      "wavetable",
+      "filter",
+      "distortion",
+      "effect",
+      "envelope",
+      "mod"
+    ],
+    "lensMm": 20,
+    "blockHeightPanelRatio": 4.0,
+    "targetStartFrameFill": 0.10,
+    "targetRevealFrameFill": 0.60,
+    "surfaceCruiseFrames": 70,
+    "approachFrames": 115,
+    "wallClimbFrames": 58,
+    "revealHoldFrames": 24,
+    "retractDurationFrames": 14,
+    "diveFrames": 82,
+    "extrudeOffsetFrames": 10,
+    "focusApproachFrom": "bottom-right",
+    "skimHeightPanelRatio": 0.018,
+    "minSkimAltitude": 0.025,
+    "approachNearPanelRatio": 0.55,
+    "approachArcPanelRatio": 0.42,
+    "interfaceEdgeMarginRatio": 0.035,
+    "revealAltitudeBlockRatio": 1.24,
+    "revealSideBiasPanelRatio": 0.18,
+    "cameraBakeStep": 1
+  }
+}

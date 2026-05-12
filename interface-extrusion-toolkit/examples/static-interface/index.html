@@ -1,0 +1,56 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Static Interface Fixture</title>
+  <style>
+    html, body { margin: 0; background: #050608; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    #interface-root {
+      width: 1600px;
+      height: 1000px;
+      overflow: hidden;
+      position: relative;
+      background:
+        radial-gradient(circle at 20% 15%, rgba(60, 120, 255, 0.25), transparent 35%),
+        linear-gradient(135deg, #11151d, #050608);
+      color: #d6f7ff;
+      border-radius: 24px;
+    }
+    .panel {
+      position: absolute;
+      border-radius: 18px;
+      border: 1px solid rgba(120, 230, 255, 0.25);
+      background: linear-gradient(180deg, rgba(40, 52, 72, 0.85), rgba(16, 20, 28, 0.95));
+      box-shadow: inset 0 0 24px rgba(60, 200, 255, 0.07), 0 0 20px rgba(30, 180, 255, 0.08);
+      padding: 18px;
+      box-sizing: border-box;
+    }
+    .panel h2 { margin: 0 0 12px; font-size: 26px; font-weight: 700; letter-spacing: 0.06em; color: #a8f0ff; }
+    .lines { display: grid; gap: 10px; }
+    .line { height: 10px; border-radius: 10px; background: linear-gradient(90deg, #66f7ff, rgba(102,247,255,0.05)); }
+    .line:nth-child(2) { width: 72%; }
+    .line:nth-child(3) { width: 48%; }
+    [data-panel-id="wavetable"] { left: 72px; top: 72px; width: 600px; height: 280px; }
+    [data-panel-id="filter"] { left: 700px; top: 72px; width: 360px; height: 280px; border-radius: 24px; }
+    [data-panel-id="distortion"] { left: 1088px; top: 72px; width: 430px; height: 280px; border-radius: 12px; }
+    [data-panel-id="effect"] { left: 72px; top: 386px; width: 480px; height: 260px; }
+    [data-panel-id="envelope"] { left: 580px; top: 386px; width: 470px; height: 260px; }
+    [data-panel-id="mod"] { left: 1088px; top: 386px; width: 430px; height: 520px; border-radius: 28px; }
+    .footer { position:absolute; left:72px; right:560px; bottom:72px; height:210px; border-radius: 20px; border:1px solid rgba(255,255,255,.08); opacity:.5; }
+  </style>
+</head>
+<body>
+  <main id="interface-root">
+    <section class="panel" data-panel-id="wavetable"><h2>WAVETABLE</h2><div class="lines"><div class="line"></div><div class="line"></div><div class="line"></div></div></section>
+    <section class="panel" data-panel-id="filter"><h2>FILTER</h2><div class="lines"><div class="line"></div><div class="line"></div><div class="line"></div></div></section>
+    <section class="panel" data-panel-id="distortion"><h2>DISTORT</h2><div class="lines"><div class="line"></div><div class="line"></div><div class="line"></div></div></section>
+    <section class="panel" data-panel-id="effect"><h2>EFFECT</h2><div class="lines"><div class="line"></div><div class="line"></div><div class="line"></div></div></section>
+    <section class="panel" data-panel-id="envelope"><h2>ENVELOPE</h2><div class="lines"><div class="line"></div><div class="line"></div><div class="line"></div></div></section>
+    <section class="panel" data-panel-id="mod"><h2>MOD</h2><div class="lines"><div class="line"></div><div class="line"></div><div class="line"></div></div></section>
+    <div class="footer"></div>
+  </main>
+  <script>
+    window.__INTERFACE_CAPTURE_READY__ = true;
+  </script>
+</body>
+</html>

@@ -92,6 +92,10 @@ class CosimoDesktopReactViewElement extends HTMLElement {
     private mountPoint: HTMLDivElement | null = null;
     private modulationRuntimePatchConnection: PatchConnectionLike | null = null;
 
+    private shouldUseLightDom() {
+        return import.meta.env.DEV || this.dataset.cinematic3dCapture === "1";
+    }
+
     setPatchConnection(
         patchConnection: PatchConnectionLike,
         resourceClient?: ResourceClient,
@@ -113,7 +117,7 @@ class CosimoDesktopReactViewElement extends HTMLElement {
     }
 
     connectedCallback() {
-        if (import.meta.env.DEV) {
+        if (this.shouldUseLightDom()) {
             this.ensureLightDomStyles();
 
             if (!this.mountPoint || !this.root) {
@@ -167,7 +171,7 @@ class CosimoDesktopReactViewElement extends HTMLElement {
 
         const style = document.createElement("style");
         style.id = styleId;
-        style.textContent = cssText.replaceAll(":host", getTagName());
+        style.textContent = typeof cssText === "string" ? cssText.replaceAll(":host", getTagName()) : "";
         document.head.appendChild(style);
     }
 

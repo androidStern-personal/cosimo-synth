@@ -1,0 +1,162 @@
+{
+  "interfaceId": "cosimo-synth",
+  "cssWidth": 1600,
+  "cssHeight": 1500,
+  "imagePath": "interface.png",
+  "imagePixelWidth": 1600,
+  "imagePixelHeight": 1500,
+  "pixelScaleX": 1,
+  "pixelScaleY": 1,
+  "sections": [
+    {
+      "id": "wavetable",
+      "x": 17,
+      "y": 38,
+      "width": 772.96875,
+      "height": 417.40625,
+      "radii": {
+        "topLeft": {
+          "x": 14,
+          "y": 14
+        },
+        "topRight": {
+          "x": 14,
+          "y": 14
+        },
+        "bottomRight": {
+          "x": 14,
+          "y": 14
+        },
+        "bottomLeft": {
+          "x": 14,
+          "y": 14
+        }
+      }
+    },
+    {
+      "id": "filter",
+      "x": 806,
+      "y": 38,
+      "width": 772.96875,
+      "height": 417.40625,
+      "radii": {
+        "topLeft": {
+          "x": 14,
+          "y": 14
+        },
+        "topRight": {
+          "x": 14,
+          "y": 14
+        },
+        "bottomRight": {
+          "x": 14,
+          "y": 14
+        },
+        "bottomLeft": {
+          "x": 14,
+          "y": 14
+        }
+      }
+    },
+    {
+      "id": "distortion",
+      "x": 17,
+      "y": 471.40625,
+      "width": 772.96875,
+      "height": 417.40625,
+      "radii": {
+        "topLeft": {
+          "x": 14,
+          "y": 14
+        },
+        "topRight": {
+          "x": 14,
+          "y": 14
+        },
+        "bottomRight": {
+          "x": 14,
+          "y": 14
+        },
+        "bottomLeft": {
+          "x": 14,
+          "y": 14
+        }
+      }
+    },
+    {
+      "id": "effect",
+      "x": 806,
+      "y": 471.40625,
+      "width": 772.96875,
+      "height": 417.40625,
+      "radii": {
+        "topLeft": {
+          "x": 14,
+          "y": 14
+        },
+        "topRight": {
+          "x": 14,
+          "y": 14
+        },
+        "bottomRight": {
+          "x": 14,
+          "y": 14
+        },
+        "bottomLeft": {
+          "x": 14,
+          "y": 14
+        }
+      }
+    },
+    {
+      "id": "envelope",
+      "x": 17,
+      "y": 904.8125,
+      "width": 772.96875,
+      "height": 417.40625,
+      "radii": {
+        "topLeft": {
+          "x": 14,
+          "y": 14
+        },
+        "topRight": {
+          "x": 14,
+          "y": 14
+        },
+        "bottomRight": {
+          "x": 14,
+          "y": 14
+        },
+        "bottomLeft": {
+          "x": 14,
+          "y": 14
+        }
+      }
+    },
+    {
+      "id": "mod",
+      "x": 806,
+      "y": 904.8125,
+      "width": 772.96875,
+      "height": 417.40625,
+      "radii": {
+        "topLeft": {
+          "x": 14,
+          "y": 14
+        },
+        "topRight": {
+          "x": 14,
+          "y": 14
+        },
+        "bottomRight": {
+          "x": 14,
+          "y": 14
+        },
+        "bottomLeft": {
+          "x": 14,
+          "y": 14
+        }
+      }
+    }
+  ]
+}

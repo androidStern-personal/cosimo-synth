@@ -1,0 +1,44 @@
+{
+  "interfaceId": "example-static-interface",
+  "capture": {
+    "url": "http://127.0.0.1:4173/examples/static-interface/index.html",
+    "rootSelector": "#interface-root",
+    "widthCss": 1600,
+    "heightCss": 1000,
+    "screenshotScale": "css",
+    "waitForCaptureReady": true,
+    "animations": "allow"
+  },
+  "sections": [
+    { "id": "wavetable", "selector": "[data-panel-id='wavetable']" },
+    { "id": "filter", "selector": "[data-panel-id='filter']" },
+    { "id": "distortion", "selector": "[data-panel-id='distortion']" },
+    { "id": "effect", "selector": "[data-panel-id='effect']" },
+    { "id": "envelope", "selector": "[data-panel-id='envelope']" },
+    { "id": "mod", "selector": "[data-panel-id='mod']" }
+  ],
+  "world": {
+    "unitsPerCssPixel": 0.01,
+    "surfacePlane": "XY",
+    "extrusionAxis": "Z"
+  },
+  "geometry": {
+    "segmentsPerCorner": 8,
+    "skinEpsilon": 0.003
+  },
+  "animation": {
+    "preset": "surface_skim_popout_reveal",
+    "fps": 30,
+    "durationFrames": 432,
+    "maxDepth": 0.35,
+    "framesPerSection": 72,
+    "sectionOrder": ["wavetable", "filter", "distortion", "effect", "envelope", "mod"],
+    "skimAltitude": 0.08,
+    "revealAltitude": 1.4,
+    "approachDistance": 2.0,
+    "revealPullback": 1.7,
+    "lensMm": 45,
+    "resolutionX": 1080,
+    "resolutionY": 1920
+  }
+}

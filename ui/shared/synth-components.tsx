@@ -1835,6 +1835,7 @@ export function WavetableStageSection({
     return (
         <section
             ref={stageRef}
+            data-cosimo-panel="wavetable"
             data-role="wavetable-card"
             data-layout-card="desktop-grid-card"
             data-section-accent="cyan"

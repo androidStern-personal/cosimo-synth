@@ -45,6 +45,14 @@ ${reactRefreshPreamble}
   </script>`,
         }),
         serveHtmlEntry({
+            urlPath: "/ui/desktop/cinematic3d/index.html",
+            sourceFile: path.join(repoRoot, "ui", "desktop", "cinematic3d", "index.html"),
+            headInjection: `<script type="module" src="/@vite/client"></script>
+  <script type="module">
+${reactRefreshPreamble}
+  </script>`,
+        }),
+        serveHtmlEntry({
             urlPath: "/tests/helpers/module_test_shell.html",
             sourceFile: path.join(repoRoot, "tests", "helpers", "module_test_shell.html"),
             headInjection: `<script type="module" src="/@vite/client"></script>
