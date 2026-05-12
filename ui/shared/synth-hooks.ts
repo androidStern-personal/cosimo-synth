@@ -18,6 +18,14 @@ import {
     usePatchParameterBinding,
     type PatchControlBinding,
 } from "./patch-controls";
+import type { EffectStoredStateAdapter } from "./effects/effect-preset-v2";
+import {
+    useStandaloneEffectPresets,
+} from "./effects/use-standalone-effect-presets";
+import type {
+    StandaloneEffectPresetMutationResult,
+    StandaloneEffectPresetState,
+} from "./effects/standalone-effect-presets";
 import {
     deriveMsegSegmentCurvePower,
     clampMsegRateSeconds,
@@ -33,7 +41,9 @@ import {
     clampModulationRouteAmount,
     createDefaultEnvelope,
     createDefaultRoute,
+    MODULATION_STATE_KEY,
     releaseModulationRuntimeBridge,
+    serializeModulationState,
     type ModulationEnvelope,
     type ModulationRoute,
     type ModulationState,
@@ -163,6 +173,18 @@ const GLIDE_TIME_MIN_SECONDS = 0;
 const GLIDE_TIME_MAX_SECONDS = 2;
 const GLIDE_TIME_STEP_SECONDS = 0.001;
 
+function serializeArticulationPresetState(value: unknown) {
+    return serializeArticulationBank(normalizeArticulationBank(value));
+}
+
+function failedPresetMutation(message: string): StandaloneEffectPresetMutationResult<unknown> {
+    return {
+        ok: false,
+        error: new Error(message),
+        message,
+    };
+}
+
 type ActiveMsegPointPointerState = {
     kind: "point-drag";
     pointerId: number;
@@ -279,6 +301,8 @@ export type SynthPatchViewModel = {
     observedMsegPlayhead: MsegPreviewPlayheadState;
     observedWarpState: EffectiveWarpState;
     modulationState: ModulationState | null;
+    synthPresetState: StandaloneEffectPresetState;
+    activeSynthPresetCanOverwrite: boolean;
     articulationBank: ArticulationBank;
     articulationSlots: ArticulationSlot[];
     selectedArticulationSlot: ArticulationSlot | null;
@@ -301,6 +325,8 @@ export type SynthPatchViewModel = {
     handleAddRoute: () => void;
     handleRemoveRoute: (routeIndex: number) => void;
     handleRouteChange: (routeIndex: number, nextRoute: ModulationRoute) => void;
+    handleOverwriteActiveSynthPreset: () => StandaloneEffectPresetMutationResult<unknown>;
+    handleSaveSynthPresetAs: (label: string) => StandaloneEffectPresetMutationResult<unknown>;
     handleAddArticulationSlot: () => void;
     handleCaptureArticulationSlot: (options?: { autoAssign?: boolean }) => void;
     handleSelectArticulationSlot: (slotId: string) => void;
@@ -1558,10 +1584,90 @@ export function useSynthPatchViewModel({
     const { frames, error: frameError } = useFactoryTableFrames(presentedTableIndex);
     const { state: modulationState, bridge: modulationBridge } = useModulationState();
     const articulationBank = articulationBankState.bank;
+    const articulationPresetListenersRef = useRef(new Set<() => void>());
+    const modulationPresetAdapter = useMemo<EffectStoredStateAdapter>(() => ({
+        key: MODULATION_STATE_KEY,
+        schemaVersion: 2,
+        getContract() {
+            return {
+                key: MODULATION_STATE_KEY,
+                schemaVersion: 2,
+                required: true,
+            };
+        },
+        capture() {
+            return serializeModulationState(modulationBridge.current?.getState());
+        },
+        normalizeForPreset(value: unknown) {
+            return serializeModulationState(value);
+        },
+        serializeForPreset(value: unknown) {
+            return serializeModulationState(value);
+        },
+        apply(value: unknown) {
+            modulationBridge.current?.setState(value);
+        },
+        subscribe(listener: () => void) {
+            const bridge = modulationBridge.current;
+
+            if (!bridge) {
+                return () => {};
+            }
+
+            bridge.subscribe(listener);
+            return () => bridge.unsubscribe(listener);
+        },
+    }), [modulationBridge]);
+    const articulationPresetAdapter = useMemo<EffectStoredStateAdapter>(() => ({
+        key: ARTICULATION_STATE_KEY,
+        schemaVersion: 2,
+        getContract() {
+            return {
+                key: ARTICULATION_STATE_KEY,
+                schemaVersion: 2,
+                required: true,
+            };
+        },
+        capture() {
+            return serializeArticulationPresetState(articulationBankState.bankRef.current);
+        },
+        normalizeForPreset(value: unknown) {
+            return serializeArticulationPresetState(value);
+        },
+        serializeForPreset(value: unknown) {
+            return serializeArticulationPresetState(value);
+        },
+        apply(value: unknown) {
+            articulationBankState.setAndPersistBank(normalizeArticulationBank(value));
+            articulationPresetListenersRef.current.forEach((listener) => listener());
+        },
+        subscribe(listener: () => void) {
+            articulationPresetListenersRef.current.add(listener);
+            return () => articulationPresetListenersRef.current.delete(listener);
+        },
+    }), [articulationBankState.bankRef, articulationBankState.setAndPersistBank]);
+    const synthPresetStoredStateAdapters = useMemo(
+        () => [modulationPresetAdapter, articulationPresetAdapter],
+        [articulationPresetAdapter, modulationPresetAdapter],
+    );
+    const synthPreset = useStandaloneEffectPresets("synth", {
+        storedStateAdapters: synthPresetStoredStateAdapters,
+    });
     const articulationSlots = articulationBank.slots;
     const selectedArticulationSlot = useMemo(() => (
         articulationSlots.find((slot) => slot.id === articulationBank.selectedSlotId) ?? null
     ), [articulationBank.selectedSlotId, articulationSlots]);
+    const activeSynthPresetItem = useMemo(() => (
+        synthPreset.state.activePresetID
+            ? synthPreset.state.presets.find((preset) => (
+                preset.presetID === synthPreset.state.activePresetID && preset.isActive
+            )) ?? null
+            : null
+    ), [synthPreset.state.activePresetID, synthPreset.state.presets]);
+    const activeSynthPresetCanOverwrite = activeSynthPresetItem?.canOverwrite === true;
+    useEffect(() => {
+        articulationPresetListenersRef.current.forEach((listener) => listener());
+    }, [articulationBank]);
     const isApplyingArticulationRef = useRef(false);
     const [selectedArticulationIsDirty, setSelectedArticulationIsDirty] = useState(false);
     const [discardedArticulationEdit, setDiscardedArticulationEdit] = useState<{
@@ -2013,6 +2119,18 @@ export function useSynthPatchViewModel({
         setDiscardedArticulationEdit(null);
     }, [articulationBankState, captureCurrentArticulationSnapshot]);
 
+    const handleOverwriteActiveSynthPreset = useCallback((): StandaloneEffectPresetMutationResult<unknown> => {
+        if (!activeSynthPresetItem?.canOverwrite) {
+            return failedPresetMutation("No writable active preset is selected.");
+        }
+
+        return synthPreset.mutations.overwriteUserPreset(activeSynthPresetItem.presetKey);
+    }, [activeSynthPresetItem, synthPreset.mutations]);
+
+    const handleSaveSynthPresetAs = useCallback((label: string): StandaloneEffectPresetMutationResult<unknown> => {
+        return synthPreset.mutations.saveCurrentAsNewPreset(label);
+    }, [synthPreset.mutations]);
+
     const handleRevertSelectedArticulationSlot = useCallback(() => {
         const bank = articulationBankState.bankRef.current;
         const slot = bank.slots.find((candidate) => candidate.id === bank.selectedSlotId);
@@ -2459,6 +2577,8 @@ export function useSynthPatchViewModel({
         observedMsegPlayhead,
         observedWarpState,
         modulationState,
+        synthPresetState: synthPreset.state,
+        activeSynthPresetCanOverwrite,
         articulationBank,
         articulationSlots,
         selectedArticulationSlot,
@@ -2483,6 +2603,8 @@ export function useSynthPatchViewModel({
         handleAddRoute,
         handleRemoveRoute,
         handleRouteChange,
+        handleOverwriteActiveSynthPreset,
+        handleSaveSynthPresetAs,
         handleAddArticulationSlot,
         handleCaptureArticulationSlot,
         handleSelectArticulationSlot,

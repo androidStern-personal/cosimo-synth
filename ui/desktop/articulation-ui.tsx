@@ -2845,14 +2845,6 @@ export function ArticulationControlSurface(props: ArticulationControlSurfaceProp
                 onClearRangeMode={onClearRangeMode}
                 onDistributeRange={onDistributeRange}
             />
-            <FloatingArticulationToolbar
-                selectedIsDirty={selectedIsDirty}
-                selectedName={selectedCard?.name ?? null}
-                discardedEditLabel={discardedEditLabel}
-                onUpdate={onUpdate}
-                onRevert={onRevert}
-                onUndoDiscard={onUndoDiscard}
-            />
             {cardMenuOverlay}
         </section>
     );

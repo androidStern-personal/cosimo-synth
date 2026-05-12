@@ -1219,6 +1219,109 @@ function StatusHeader({ statusText }: HeaderProps) {
     );
 }
 
+function FloatingDirtyToolbar({
+    articulationDirty,
+    articulationName,
+    presetDirty,
+    activePresetLabel,
+    canOverwritePreset,
+    discardedEditLabel,
+    onPrimary,
+    onUpdateArticulation,
+    onRevertArticulation,
+    onUndoDiscard,
+    onDismiss,
+}: {
+    articulationDirty: boolean;
+    articulationName: string | null;
+    presetDirty: boolean;
+    activePresetLabel: string | null;
+    canOverwritePreset: boolean;
+    discardedEditLabel: string | null;
+    onPrimary: () => void;
+    onUpdateArticulation: () => void;
+    onRevertArticulation: () => void;
+    onUndoDiscard: () => void;
+    onDismiss: () => void;
+}) {
+    if (!articulationDirty && !presetDirty && !discardedEditLabel) {
+        return null;
+    }
+
+    const primaryLabel = articulationDirty && presetDirty
+        ? "Save all"
+        : presetDirty
+            ? canOverwritePreset ? "Save preset" : "Save as"
+            : "Update articulation";
+    const summary = [
+        articulationDirty ? `Articulation edited${articulationName ? `: ${articulationName}` : ""}` : null,
+        presetDirty ? `Preset edited${activePresetLabel ? `: ${activePresetLabel}` : ""}` : null,
+        discardedEditLabel ? `Discarded edit: ${discardedEditLabel}` : null,
+    ].filter(Boolean).join(" / ");
+
+    return (
+        <div
+            data-role="dirty-floating-toolbar"
+            className="pointer-events-auto absolute bottom-3 left-1/2 z-50 flex max-w-[calc(100%-2rem)] -translate-x-1/2 items-center gap-1 overflow-x-auto whitespace-nowrap rounded-[8px] border border-white/[0.08] bg-[#050812]/95 px-1.5 py-1 shadow-[0_14px_34px_rgba(0,0,0,0.48)]"
+        >
+            <span
+                aria-label={summary || "Unsaved edits"}
+                title={summary || "Unsaved edits"}
+                className="h-2 w-2 shrink-0 rounded-full bg-amber-300 shadow-[0_0_12px_rgba(251,191,36,0.75)]"
+            />
+            {(articulationDirty || presetDirty) ? (
+                <button
+                    type="button"
+                    data-role="dirty-toolbar-primary"
+                    onClick={onPrimary}
+                    className="h-6 rounded-[5px] border border-amber-200/20 bg-amber-300/14 px-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-amber-100 hover:bg-amber-300/22"
+                >
+                    {primaryLabel}
+                </button>
+            ) : null}
+            {articulationDirty && presetDirty ? (
+                <button
+                    type="button"
+                    data-role="dirty-toolbar-update-articulation"
+                    onClick={onUpdateArticulation}
+                    className="h-6 rounded-[5px] border border-white/[0.07] bg-white/[0.035] px-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-200 hover:bg-white/[0.06]"
+                >
+                    Art only
+                </button>
+            ) : null}
+            {articulationDirty && !presetDirty ? (
+                <button
+                    type="button"
+                    data-role="dirty-toolbar-revert-articulation"
+                    onClick={onRevertArticulation}
+                    className="h-6 rounded-[5px] border border-white/[0.07] bg-white/[0.035] px-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-200 hover:bg-white/[0.06]"
+                >
+                    Revert
+                </button>
+            ) : null}
+            {discardedEditLabel ? (
+                <button
+                    type="button"
+                    data-role="dirty-toolbar-undo-discard"
+                    onClick={onUndoDiscard}
+                    className="h-6 rounded-[5px] border border-pink-200/20 bg-pink-300/10 px-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-pink-100 hover:bg-pink-300/16"
+                >
+                    Undo
+                </button>
+            ) : null}
+            <button
+                type="button"
+                aria-label="Dismiss dirty toolbar"
+                data-role="dirty-toolbar-dismiss"
+                onClick={onDismiss}
+                className="h-6 w-6 shrink-0 rounded-[5px] border border-white/[0.06] bg-white/[0.025] text-[10px] font-semibold text-slate-300/75 hover:bg-white/[0.06] hover:text-slate-100"
+            >
+                x
+            </button>
+        </div>
+    );
+}
+
 function FilterSection({
     filterMode,
     filterCutoff,
@@ -2672,6 +2775,55 @@ function DesktopPatchViewBody({
         synthView,
         velocitySegments,
     ]);
+    const dirtyToolbarSignature = useMemo(() => {
+        const parts = [
+            synthView.synthPresetState.dirty ? `preset:${synthView.synthPresetState.activePresetID ?? "none"}` : "",
+            synthView.selectedArticulationIsDirty ? `art:${selectedArticulationId ?? "none"}` : "",
+            synthView.discardedArticulationEdit ? `discard:${synthView.discardedArticulationEdit.slotId}` : "",
+        ].filter(Boolean);
+
+        return parts.length > 0 ? parts.join("|") : "clean";
+    }, [
+        selectedArticulationId,
+        synthView.discardedArticulationEdit,
+        synthView.selectedArticulationIsDirty,
+        synthView.synthPresetState.activePresetID,
+        synthView.synthPresetState.dirty,
+    ]);
+    const [dismissedDirtyToolbarSignature, setDismissedDirtyToolbarSignature] = useState<string | null>(null);
+    useEffect(() => {
+        if (dirtyToolbarSignature === "clean") {
+            setDismissedDirtyToolbarSignature(null);
+        }
+    }, [dirtyToolbarSignature]);
+    const requestSynthPresetName = useCallback(() => {
+        const defaultName = synthView.synthPresetState.activeLabel || "New Synth Preset";
+        const nextName = window.prompt("Save preset as", defaultName);
+        return nextName?.trim() ?? "";
+    }, [synthView.synthPresetState.activeLabel]);
+    const handleSavePresetFromToolbar = useCallback(() => {
+        if (synthView.activeSynthPresetCanOverwrite) {
+            synthView.handleOverwriteActiveSynthPreset();
+            return;
+        }
+
+        const nextName = requestSynthPresetName();
+
+        if (nextName) {
+            synthView.handleSaveSynthPresetAs(nextName);
+        }
+    }, [requestSynthPresetName, synthView]);
+    const handleDirtyToolbarPrimary = useCallback(() => {
+        if (synthView.selectedArticulationIsDirty) {
+            synthView.handleUpdateSelectedArticulationSlot();
+        }
+
+        if (synthView.synthPresetState.dirty) {
+            handleSavePresetFromToolbar();
+        }
+    }, [handleSavePresetFromToolbar, synthView]);
+    const showDirtyToolbar = dirtyToolbarSignature !== "clean"
+        && dismissedDirtyToolbarSignature !== dirtyToolbarSignature;
 
     return (
         <div className="cosimo-surface relative flex h-full w-full flex-col gap-3 overflow-hidden rounded-[28px] border border-white/[0.05] px-4 pb-4 pt-2.5 text-slate-100 shadow-[0_26px_80px_rgba(0,0,0,0.48)]">
@@ -2799,6 +2951,22 @@ function DesktopPatchViewBody({
                     toolbarOverride={keyboardToolbarOverride}
                 />
             </main>
+
+            {showDirtyToolbar ? (
+                <FloatingDirtyToolbar
+                    articulationDirty={synthView.selectedArticulationIsDirty}
+                    articulationName={synthView.selectedArticulationSlot?.name ?? null}
+                    presetDirty={synthView.synthPresetState.dirty}
+                    activePresetLabel={synthView.synthPresetState.activeLabel || null}
+                    canOverwritePreset={synthView.activeSynthPresetCanOverwrite}
+                    discardedEditLabel={synthView.discardedArticulationEdit?.slotName ?? null}
+                    onPrimary={handleDirtyToolbarPrimary}
+                    onUpdateArticulation={synthView.handleUpdateSelectedArticulationSlot}
+                    onRevertArticulation={synthView.handleRevertSelectedArticulationSlot}
+                    onUndoDiscard={synthView.handleUndoDiscardedArticulationEdit}
+                    onDismiss={() => setDismissedDirtyToolbarSignature(dirtyToolbarSignature)}
+                />
+            ) : null}
 
             <MsegEditorModal
                 isOpen={synthView.msegEditor.isOpen}

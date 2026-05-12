@@ -13889,6 +13889,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     max-width: calc(100% - 1rem);
   }
 
+  .max-w-\\[calc\\(100\\%-2rem\\)\\] {
+    max-width: calc(100% - 2rem);
+  }
+
   .max-w-full {
     max-width: 100%;
   }
@@ -14574,6 +14578,16 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     }
   }
 
+  .border-amber-200\\/20 {
+    border-color: #fee68533;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .border-amber-200\\/20 {
+      border-color: color-mix(in oklab, var(--color-amber-200) 20%, transparent);
+    }
+  }
+
   .border-amber-200\\/35 {
     border-color: #fee68559;
   }
@@ -14718,6 +14732,16 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .border-pink-200 {
     border-color: var(--color-pink-200);
+  }
+
+  .border-pink-200\\/20 {
+    border-color: #fccee833;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .border-pink-200\\/20 {
+      border-color: color-mix(in oklab, var(--color-pink-200) 20%, transparent);
+    }
   }
 
   .border-pink-300 {
@@ -14898,6 +14922,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .bg-\\[\\#050712\\]\\/55 {
     background-color: oklab(13.2687% .00102779 -.0255741 / .55);
+  }
+
+  .bg-\\[\\#050812\\]\\/95 {
+    background-color: oklab(13.6318% -.00111023 -.0234135 / .95);
   }
 
   .bg-\\[rgba\\(3\\,5\\,12\\,0\\.6\\)\\] {
@@ -16920,6 +16948,11 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
   }
 
+  .shadow-\\[0_0_12px_rgba\\(251\\,191\\,36\\,0\\.75\\)\\] {
+    --tw-shadow: 0 0 12px var(--tw-shadow-color, #fbbf24bf);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
   .shadow-\\[0_0_18px_rgba\\(251\\,191\\,36\\,0\\.34\\)\\] {
     --tw-shadow: 0 0 18px var(--tw-shadow-color, #fbbf2457);
     box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
@@ -16957,6 +16990,11 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .shadow-\\[0_10px_28px_rgba\\(0\\,0\\,0\\,0\\.55\\)\\] {
     --tw-shadow: 0 10px 28px var(--tw-shadow-color, #0000008c);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
+  .shadow-\\[0_14px_34px_rgba\\(0\\,0\\,0\\,0\\.48\\)\\] {
+    --tw-shadow: 0 14px 34px var(--tw-shadow-color, #0000007a);
     box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
   }
 
@@ -17504,6 +17542,16 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     @supports (color: color-mix(in lab, red, red)) {
       .hover\\:bg-amber-300\\/16:hover {
         background-color: color-mix(in oklab, var(--color-amber-300) 16%, transparent);
+      }
+    }
+
+    .hover\\:bg-amber-300\\/22:hover {
+      background-color: #ffd23638;
+    }
+
+    @supports (color: color-mix(in lab, red, red)) {
+      .hover\\:bg-amber-300\\/22:hover {
+        background-color: color-mix(in oklab, var(--color-amber-300) 22%, transparent);
       }
     }
 
@@ -21454,16 +21502,16 @@ const MODULATION_TARGET_OPTIONS = [
   { value: "pan", label: "PAN" }
 ];
 let generatedRouteIdCounter = 1;
-function hasOwnValue(record, key) {
+function hasOwnValue$1(record, key) {
   return Object.prototype.hasOwnProperty.call(record, key);
 }
 function readFullStoredStateValue$1(storedState, key) {
   const fullState = storedState && typeof storedState === "object" ? storedState : {};
   const values = fullState.values && typeof fullState.values === "object" ? fullState.values : {};
-  if (hasOwnValue(values, key)) {
+  if (hasOwnValue$1(values, key)) {
     return values[key];
   }
-  if (hasOwnValue(fullState, key)) {
+  if (hasOwnValue$1(fullState, key)) {
     return fullState[key];
   }
   return void 0;
@@ -23630,6 +23678,2068 @@ function usePatchEventTrigger(endpointID) {
     patchConnection.sendEventOrValue?.(endpointID, value);
   }, [endpointID, patchConnection]);
 }
+const cmajorEndpointIdentifierPattern = /^[A-Za-z_][A-Za-z0-9_]*$/;
+function isPlainObject$2(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function finiteNumber(value) {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return void 0;
+  }
+  return value;
+}
+function normalizeEndpointID(endpointID) {
+  if (typeof endpointID !== "string" || !cmajorEndpointIdentifierPattern.test(endpointID)) {
+    throw new Error(`Invalid Cmajor parameter endpoint ID "${String(endpointID)}".`);
+  }
+  return endpointID;
+}
+function normalizeParameterContract(parameter) {
+  if (!isPlainObject$2(parameter)) {
+    throw new Error("Parameter contract must be an object.");
+  }
+  const endpointID = normalizeEndpointID(parameter.endpointID);
+  const annotation = isPlainObject$2(parameter.annotation) ? parameter.annotation : parameter;
+  const booleanAnnotation = annotation.boolean === true;
+  const initValue = annotation.init ?? parameter.defaultValue;
+  const discrete = annotation.discrete === true || parameter.discrete === true;
+  const type = parameter.type === "boolean" || booleanAnnotation || typeof initValue === "boolean" ? "boolean" : parameter.type === "integer" || discrete ? "integer" : "number";
+  const defaultValue = type === "boolean" ? Boolean(initValue) : finiteNumber(initValue) ?? 0;
+  const contract = {
+    endpointID,
+    type,
+    defaultValue
+  };
+  const min = finiteNumber(annotation.min ?? parameter.min);
+  const max = finiteNumber(annotation.max ?? parameter.max);
+  const step = finiteNumber(annotation.step ?? parameter.step);
+  const text = annotation.text ?? parameter.text;
+  if (min !== void 0) {
+    contract.min = min;
+  }
+  if (max !== void 0) {
+    contract.max = max;
+  }
+  if (step !== void 0) {
+    contract.step = step;
+  }
+  if (discrete) {
+    contract.discrete = true;
+  }
+  if (typeof text === "string") {
+    contract.text = text;
+  }
+  return contract;
+}
+function hasStoredStateContractGetter(entry) {
+  return typeof entry.getContract === "function";
+}
+function normalizeStoredStateContract(entry) {
+  const rawEntry = hasStoredStateContractGetter(entry) ? entry.getContract() : entry;
+  if (!isPlainObject$2(rawEntry)) {
+    throw new Error("Stored-state contract must be an object.");
+  }
+  if (typeof rawEntry.key !== "string" || rawEntry.key.trim().length === 0) {
+    throw new Error("Stored-state contract key must be a non-empty string.");
+  }
+  if (!Number.isInteger(rawEntry.schemaVersion) || rawEntry.schemaVersion < 1) {
+    throw new Error(`Stored-state contract "${rawEntry.key}" schemaVersion must be a positive integer.`);
+  }
+  return {
+    key: rawEntry.key,
+    schemaVersion: rawEntry.schemaVersion,
+    required: true
+  };
+}
+function assertUnique(values, keyFor, label) {
+  const seen = /* @__PURE__ */ new Set();
+  for (const value of values) {
+    const key = keyFor(value);
+    if (seen.has(key)) {
+      throw new Error(`Duplicate ${label} "${key}".`);
+    }
+    seen.add(key);
+  }
+}
+function canonicalValue(value) {
+  if (Array.isArray(value)) {
+    return value.map(canonicalValue);
+  }
+  if (isPlainObject$2(value)) {
+    return Object.fromEntries(
+      Object.keys(value).sort().filter((key) => value[key] !== void 0).map((key) => [key, canonicalValue(value[key])])
+    );
+  }
+  return value;
+}
+function canonicalJSONStringify(value) {
+  return JSON.stringify(canonicalValue(value));
+}
+function rightRotate(value, bits) {
+  return value >>> bits | value << 32 - bits;
+}
+function sha256(message) {
+  const bytes = new TextEncoder().encode(message);
+  const bitLength = bytes.length * 8;
+  const paddedLength = bytes.length + 9 + 63 >> 6 << 6;
+  const padded = new Uint8Array(paddedLength);
+  const hash = [
+    1779033703,
+    3144134277,
+    1013904242,
+    2773480762,
+    1359893119,
+    2600822924,
+    528734635,
+    1541459225
+  ];
+  const constants = [
+    1116352408,
+    1899447441,
+    3049323471,
+    3921009573,
+    961987163,
+    1508970993,
+    2453635748,
+    2870763221,
+    3624381080,
+    310598401,
+    607225278,
+    1426881987,
+    1925078388,
+    2162078206,
+    2614888103,
+    3248222580,
+    3835390401,
+    4022224774,
+    264347078,
+    604807628,
+    770255983,
+    1249150122,
+    1555081692,
+    1996064986,
+    2554220882,
+    2821834349,
+    2952996808,
+    3210313671,
+    3336571891,
+    3584528711,
+    113926993,
+    338241895,
+    666307205,
+    773529912,
+    1294757372,
+    1396182291,
+    1695183700,
+    1986661051,
+    2177026350,
+    2456956037,
+    2730485921,
+    2820302411,
+    3259730800,
+    3345764771,
+    3516065817,
+    3600352804,
+    4094571909,
+    275423344,
+    430227734,
+    506948616,
+    659060556,
+    883997877,
+    958139571,
+    1322822218,
+    1537002063,
+    1747873779,
+    1955562222,
+    2024104815,
+    2227730452,
+    2361852424,
+    2428436474,
+    2756734187,
+    3204031479,
+    3329325298
+  ];
+  const words = new Uint32Array(64);
+  padded.set(bytes);
+  padded[bytes.length] = 128;
+  for (let index = 0; index < 8; index += 1) {
+    padded[padded.length - 1 - index] = bitLength / 2 ** (8 * index) & 255;
+  }
+  for (let offset = 0; offset < padded.length; offset += 64) {
+    for (let index = 0; index < 16; index += 1) {
+      const byteIndex = offset + index * 4;
+      words[index] = (padded[byteIndex] << 24 | padded[byteIndex + 1] << 16 | padded[byteIndex + 2] << 8 | padded[byteIndex + 3]) >>> 0;
+    }
+    for (let index = 16; index < 64; index += 1) {
+      const s0 = rightRotate(words[index - 15], 7) ^ rightRotate(words[index - 15], 18) ^ words[index - 15] >>> 3;
+      const s1 = rightRotate(words[index - 2], 17) ^ rightRotate(words[index - 2], 19) ^ words[index - 2] >>> 10;
+      words[index] = words[index - 16] + s0 + words[index - 7] + s1 >>> 0;
+    }
+    let [a, b, c, d, e, f, g, h] = hash;
+    for (let index = 0; index < 64; index += 1) {
+      const s1 = rightRotate(e, 6) ^ rightRotate(e, 11) ^ rightRotate(e, 25);
+      const ch = e & f ^ ~e & g;
+      const temp1 = h + s1 + ch + constants[index] + words[index] >>> 0;
+      const s0 = rightRotate(a, 2) ^ rightRotate(a, 13) ^ rightRotate(a, 22);
+      const maj = a & b ^ a & c ^ b & c;
+      const temp2 = s0 + maj >>> 0;
+      h = g;
+      g = f;
+      f = e;
+      e = d + temp1 >>> 0;
+      d = c;
+      c = b;
+      b = a;
+      a = temp1 + temp2 >>> 0;
+    }
+    hash[0] = hash[0] + a >>> 0;
+    hash[1] = hash[1] + b >>> 0;
+    hash[2] = hash[2] + c >>> 0;
+    hash[3] = hash[3] + d >>> 0;
+    hash[4] = hash[4] + e >>> 0;
+    hash[5] = hash[5] + f >>> 0;
+    hash[6] = hash[6] + g >>> 0;
+    hash[7] = hash[7] + h >>> 0;
+  }
+  return hash.map((value) => value.toString(16).padStart(8, "0")).join("");
+}
+function contractHashPayload(contract) {
+  return {
+    effectID: contract.effectID,
+    parameters: contract.parameters,
+    storedState: contract.storedState
+  };
+}
+function buildCanonicalPluginStateContract({
+  effectID,
+  parameters,
+  storedState = []
+}) {
+  if (typeof effectID !== "string" || effectID.trim().length === 0) {
+    throw new Error("Plugin state contract effectID must be a non-empty string.");
+  }
+  const normalizedParameters = parameters.map(normalizeParameterContract).sort((left, right) => left.endpointID.localeCompare(right.endpointID));
+  const normalizedStoredState = storedState.map(normalizeStoredStateContract).sort((left, right) => left.key.localeCompare(right.key));
+  const baseContract = {
+    effectID: effectID.trim(),
+    parameters: normalizedParameters,
+    storedState: normalizedStoredState
+  };
+  assertUnique(normalizedParameters, (param) => param.endpointID, "parameter endpointID");
+  assertUnique(normalizedStoredState, (entry) => entry.key, "stored-state key");
+  return {
+    ...baseContract,
+    hash: `sha256:${sha256(canonicalJSONStringify(contractHashPayload(baseContract)))}`
+  };
+}
+function buildPluginStateContract({
+  effectID,
+  status,
+  storedState = []
+}) {
+  if (!isPlainObject$2(status) || !isPlainObject$2(status.details) || !Array.isArray(status.details.inputs)) {
+    throw new Error("Cmajor status details.inputs must be an array.");
+  }
+  const parameters = status.details.inputs.filter((endpoint) => isPlainObject$2(endpoint) && endpoint.purpose === "parameter" && !(isPlainObject$2(endpoint.annotation) && endpoint.annotation.hidden === true));
+  return buildCanonicalPluginStateContract({
+    effectID,
+    parameters,
+    storedState
+  });
+}
+function clonePluginStateContract(contract) {
+  return {
+    effectID: contract.effectID,
+    parameters: contract.parameters.map((parameter) => ({ ...parameter })),
+    storedState: contract.storedState.map((entry) => ({ ...entry })),
+    hash: contract.hash
+  };
+}
+const EFFECT_PRESET_KIND = "cosimo.effectPreset";
+const EFFECT_PRESET_SCHEMA_VERSION = 1;
+function assertNoDuplicateJsonKeys(jsonText) {
+  const stack = [];
+  let index = 0;
+  const skipWhitespace = () => {
+    while (index < jsonText.length && /\s/.test(jsonText[index])) {
+      index += 1;
+    }
+  };
+  const readString = () => {
+    const start = index;
+    index += 1;
+    while (index < jsonText.length) {
+      const char = jsonText[index];
+      if (char === '"') {
+        index += 1;
+        return JSON.parse(jsonText.slice(start, index));
+      }
+      if (char === "\\") {
+        index += 1;
+        if (index < jsonText.length) {
+          index += 1;
+        }
+        continue;
+      }
+      index += 1;
+    }
+    throw new Error("Invalid JSON string.");
+  };
+  while (index < jsonText.length) {
+    skipWhitespace();
+    const char = jsonText[index];
+    if (char === "{") {
+      stack.push({ keys: /* @__PURE__ */ new Set(), expectingKey: true });
+      index += 1;
+      continue;
+    }
+    if (char === "}") {
+      stack.pop();
+      index += 1;
+      continue;
+    }
+    if (char === ",") {
+      const current = stack[stack.length - 1];
+      if (current) {
+        current.expectingKey = true;
+      }
+      index += 1;
+      continue;
+    }
+    if (char === ":") {
+      const current = stack[stack.length - 1];
+      if (current) {
+        current.expectingKey = false;
+      }
+      index += 1;
+      continue;
+    }
+    if (char === '"') {
+      const value = readString();
+      const current = stack[stack.length - 1];
+      skipWhitespace();
+      if (current?.expectingKey && jsonText[index] === ":") {
+        if (current.keys.has(value)) {
+          throw new Error(`Duplicate JSON key "${value}".`);
+        }
+        current.keys.add(value);
+      }
+      continue;
+    }
+    index += 1;
+  }
+}
+const EFFECT_PRESET_V2_KIND = "cosimo.effectPreset";
+const EFFECT_PRESET_V2_SCHEMA_VERSION = 2;
+function isPlainObject$1(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function requireString$1(value, fieldName) {
+  if (typeof value !== "string" || value.trim().length === 0) {
+    throw new Error(`Effect preset ${fieldName} must be a non-empty string.`);
+  }
+  return value.trim();
+}
+function clonePreset(preset) {
+  return {
+    kind: EFFECT_PRESET_V2_KIND,
+    version: EFFECT_PRESET_V2_SCHEMA_VERSION,
+    effectID: preset.effectID,
+    presetID: preset.presetID,
+    label: preset.label,
+    contract: clonePluginStateContract(preset.contract),
+    parameters: { ...preset.parameters },
+    storedState: { ...preset.storedState }
+  };
+}
+function parsePresetShape(payload) {
+  if (!isPlainObject$1(payload)) {
+    throw new Error("Effect preset payload must be an object.");
+  }
+  if (payload.kind !== EFFECT_PRESET_V2_KIND) {
+    throw new Error(`Effect preset kind must be "${EFFECT_PRESET_V2_KIND}".`);
+  }
+  if (payload.version !== EFFECT_PRESET_V2_SCHEMA_VERSION) {
+    throw new Error(`Unsupported effect preset version "${String(payload.version)}".`);
+  }
+  if (!isPlainObject$1(payload.contract) || typeof payload.contract.hash !== "string") {
+    throw new Error("Effect preset contract with hash is required.");
+  }
+  if (!isPlainObject$1(payload.parameters)) {
+    throw new Error("Effect preset parameters must be an object.");
+  }
+  if (!isPlainObject$1(payload.storedState)) {
+    throw new Error("Effect preset storedState must be an object.");
+  }
+  return {
+    kind: EFFECT_PRESET_V2_KIND,
+    version: EFFECT_PRESET_V2_SCHEMA_VERSION,
+    effectID: requireString$1(payload.effectID, "effectID"),
+    presetID: requireString$1(payload.presetID, "presetID"),
+    label: requireString$1(payload.label, "label"),
+    contract: payload.contract,
+    parameters: { ...payload.parameters },
+    storedState: { ...payload.storedState }
+  };
+}
+function adapterByKey(adapters = []) {
+  return new Map(adapters.map((adapter) => [adapter.key, adapter]));
+}
+function sortedKeys(value) {
+  return Object.keys(value).sort((left, right) => left.localeCompare(right));
+}
+function missingKeys(expected, provided) {
+  const providedSet = new Set(provided);
+  return expected.filter((key) => !providedSet.has(key));
+}
+function unknownKeys(expected, provided) {
+  const expectedSet = new Set(expected);
+  return provided.filter((key) => !expectedSet.has(key));
+}
+function formatDiff({
+  preset,
+  currentContract
+}) {
+  const currentParameterIDs = currentContract.parameters.map((param) => param.endpointID);
+  const presetParameterIDs = sortedKeys(preset.parameters);
+  const currentStoredKeys = currentContract.storedState.map((entry) => entry.key);
+  const presetStoredKeys = sortedKeys(preset.storedState);
+  const unknownParams = unknownKeys(currentParameterIDs, presetParameterIDs);
+  const missingParams = missingKeys(currentParameterIDs, presetParameterIDs);
+  const unknownStoredState = unknownKeys(currentStoredKeys, presetStoredKeys);
+  const missingStoredState = missingKeys(currentStoredKeys, presetStoredKeys);
+  const lines = [
+    `Preset was saved for an incompatible ${currentContract.effectID} contract.`,
+    ""
+  ];
+  if (unknownParams.length > 0) {
+    lines.push("Unknown saved parameters:");
+    lines.push(...unknownParams.map((key) => `- ${key}`));
+    lines.push("");
+  }
+  if (missingParams.length > 0) {
+    lines.push("Missing current parameters:");
+    lines.push(...missingParams.map((key) => `- ${key}`));
+    lines.push("");
+  }
+  if (unknownStoredState.length > 0) {
+    lines.push("Unknown saved stored-state keys:");
+    lines.push(...unknownStoredState.map((key) => `- ${key}`));
+    lines.push("");
+  }
+  if (missingStoredState.length > 0) {
+    lines.push("Missing current stored-state keys:");
+    lines.push(...missingStoredState.map((key) => `- ${key}`));
+    lines.push("");
+  }
+  lines.push(`No migration is registered from ${preset.contract.hash} to ${currentContract.hash}.`);
+  return lines.join("\n");
+}
+function normalizeParameterValue(parameter, value) {
+  if (parameter.type === "boolean") {
+    if (typeof value !== "boolean") {
+      throw new Error(`${parameter.endpointID} must be a boolean.`);
+    }
+    return value;
+  }
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    throw new Error(`${parameter.endpointID} must be a finite number.`);
+  }
+  if (parameter.type === "integer" && !Number.isInteger(value)) {
+    throw new Error(`${parameter.endpointID} must be an integer.`);
+  }
+  if (typeof parameter.min === "number" && value < parameter.min) {
+    throw new Error(`${parameter.endpointID} value ${value} is below minimum ${parameter.min}.`);
+  }
+  if (typeof parameter.max === "number" && value > parameter.max) {
+    throw new Error(`${parameter.endpointID} value ${value} is above maximum ${parameter.max}.`);
+  }
+  return value;
+}
+function validateExactPreset(preset, currentContract, adapters = []) {
+  if (preset.effectID !== currentContract.effectID) {
+    throw new Error(`Cannot load ${preset.effectID} preset into ${currentContract.effectID}.`);
+  }
+  if (preset.contract.hash !== currentContract.hash) {
+    throw new Error(formatDiff({ preset, currentContract }));
+  }
+  const parameterIDs = currentContract.parameters.map((param) => param.endpointID);
+  const providedParameterIDs = sortedKeys(preset.parameters);
+  const unknownParams = unknownKeys(parameterIDs, providedParameterIDs);
+  const missingParams = missingKeys(parameterIDs, providedParameterIDs);
+  if (unknownParams.length > 0) {
+    throw new Error(`Unknown parameter: ${unknownParams.join(", ")}.`);
+  }
+  if (missingParams.length > 0) {
+    throw new Error(`Missing parameter: ${missingParams.join(", ")}.`);
+  }
+  const normalizedParameters = {};
+  for (const parameter of currentContract.parameters) {
+    normalizedParameters[parameter.endpointID] = normalizeParameterValue(parameter, preset.parameters[parameter.endpointID]);
+  }
+  const storedKeys = currentContract.storedState.map((entry) => entry.key);
+  const providedStoredKeys = sortedKeys(preset.storedState);
+  const unknownStoredKeys = unknownKeys(storedKeys, providedStoredKeys);
+  const missingStoredKeys = missingKeys(storedKeys, providedStoredKeys);
+  if (unknownStoredKeys.length > 0) {
+    throw new Error(`Unknown stored-state key: ${unknownStoredKeys.join(", ")}.`);
+  }
+  if (missingStoredKeys.length > 0) {
+    throw new Error(`Missing stored-state key: ${missingStoredKeys.join(", ")}.`);
+  }
+  const adaptersByKey = adapterByKey(adapters);
+  const normalizedStoredState = {};
+  for (const entry of currentContract.storedState) {
+    const adapter = adaptersByKey.get(entry.key);
+    const rawValue = preset.storedState[entry.key];
+    if (!adapter) {
+      normalizedStoredState[entry.key] = rawValue;
+      continue;
+    }
+    const normalizedValue = adapter.normalizeForPreset(rawValue);
+    normalizedStoredState[entry.key] = adapter.serializeForPreset(normalizedValue);
+  }
+  return {
+    ...preset,
+    contract: clonePluginStateContract(currentContract),
+    parameters: normalizedParameters,
+    storedState: normalizedStoredState
+  };
+}
+function assertNoAmbiguousMigrations(migrations, effectID) {
+  const seen = /* @__PURE__ */ new Set();
+  for (const migration of migrations.filter((entry) => entry.effectID === effectID)) {
+    const key = `${migration.fromHash}->${migration.toHash}`;
+    if (seen.has(key)) {
+      throw new Error(`Ambiguous migration path for ${effectID} from ${migration.fromHash}.`);
+    }
+    seen.add(key);
+  }
+}
+function migratePresetToCurrentContract(preset, currentContract, migrations) {
+  if (preset.contract.hash === currentContract.hash) {
+    return preset;
+  }
+  assertNoAmbiguousMigrations(migrations, currentContract.effectID);
+  const queue = [{ preset, path: [] }];
+  const visited = /* @__PURE__ */ new Set();
+  let found = null;
+  while (queue.length > 0) {
+    const next = queue.shift();
+    if (!next) {
+      break;
+    }
+    if (next.preset.contract.hash === currentContract.hash) {
+      if (found) {
+        throw new Error(`Ambiguous migration path for ${currentContract.effectID} to ${currentContract.hash}.`);
+      }
+      found = next;
+      continue;
+    }
+    if (visited.has(next.preset.contract.hash)) {
+      continue;
+    }
+    visited.add(next.preset.contract.hash);
+    const candidates = migrations.filter((migration) => migration.effectID === currentContract.effectID && migration.fromHash === next.preset.contract.hash);
+    if (candidates.length > 1) {
+      throw new Error(`Ambiguous migration path for ${currentContract.effectID} from ${next.preset.contract.hash}.`);
+    }
+    for (const migration of candidates) {
+      queue.push({
+        preset: migration.migrate(clonePreset(next.preset)),
+        path: [...next.path, `${migration.fromHash}->${migration.toHash}`]
+      });
+    }
+  }
+  if (!found) {
+    throw new Error(formatDiff({ preset, currentContract }));
+  }
+  return found.preset;
+}
+function normalizeEffectPresetV2(payload, {
+  currentContract,
+  migrations = [],
+  storedStateAdapters = []
+}) {
+  const parsedPreset = parsePresetShape(payload);
+  const migratedPreset = migratePresetToCurrentContract(parsedPreset, currentContract, migrations);
+  return validateExactPreset(migratedPreset, currentContract, storedStateAdapters);
+}
+function captureEffectPresetV2({
+  effectID,
+  presetID,
+  label,
+  currentContract,
+  currentParameterValues,
+  storedStateAdapters = []
+}) {
+  const parameters = {};
+  const missingEndpointIDs = [];
+  for (const parameter of currentContract.parameters) {
+    if (!Object.prototype.hasOwnProperty.call(currentParameterValues, parameter.endpointID)) {
+      missingEndpointIDs.push(parameter.endpointID);
+      continue;
+    }
+    parameters[parameter.endpointID] = normalizeParameterValue(parameter, currentParameterValues[parameter.endpointID]);
+  }
+  if (missingEndpointIDs.length > 0) {
+    throw new Error(`Cannot save preset because current values are missing for ${missingEndpointIDs.join(", ")}.`);
+  }
+  const adaptersByKey = adapterByKey(storedStateAdapters);
+  const storedState = {};
+  for (const entry of currentContract.storedState) {
+    const adapter = adaptersByKey.get(entry.key);
+    if (!adapter || typeof adapter.capture !== "function") {
+      throw new Error(`Cannot save preset because stored-state adapter "${entry.key}" is unavailable.`);
+    }
+    storedState[entry.key] = adapter.serializeForPreset(adapter.normalizeForPreset(adapter.capture()));
+  }
+  return normalizeEffectPresetV2({
+    kind: EFFECT_PRESET_V2_KIND,
+    version: EFFECT_PRESET_V2_SCHEMA_VERSION,
+    effectID,
+    presetID,
+    label,
+    contract: clonePluginStateContract(currentContract),
+    parameters,
+    storedState
+  }, { currentContract, storedStateAdapters });
+}
+function applyEffectPresetV2({
+  preset,
+  currentContract,
+  patchConnection,
+  migrations = [],
+  storedStateAdapters = []
+}) {
+  if (typeof patchConnection.sendEventOrValue !== "function") {
+    throw new Error("Cannot apply effect preset because parameter writes are unavailable.");
+  }
+  const normalizedPreset = normalizeEffectPresetV2(preset, {
+    currentContract,
+    migrations,
+    storedStateAdapters
+  });
+  const adaptersByKey = adapterByKey(storedStateAdapters);
+  for (const parameter of currentContract.parameters) {
+    const endpointID = parameter.endpointID;
+    const value = normalizedPreset.parameters[endpointID];
+    patchConnection.sendParameterGestureStart?.(endpointID);
+    try {
+      patchConnection.sendEventOrValue(endpointID, value);
+    } finally {
+      patchConnection.sendParameterGestureEnd?.(endpointID);
+    }
+  }
+  for (const entry of currentContract.storedState) {
+    const adapter = adaptersByKey.get(entry.key);
+    const value = normalizedPreset.storedState[entry.key];
+    if (adapter?.apply) {
+      adapter.apply(adapter.normalizeForPreset(value));
+    } else {
+      patchConnection.sendStoredStateValue?.(entry.key, value);
+    }
+  }
+  return normalizedPreset;
+}
+function parseEffectPresetV2Text(text) {
+  assertNoDuplicateJsonKeys(text);
+  return JSON.parse(text);
+}
+function cloneEffectPresetV2(preset) {
+  return {
+    ...clonePreset(preset),
+    contract: JSON.parse(canonicalJSONStringify(preset.contract))
+  };
+}
+const EFFECT_FACTORY_PRESETS = {
+  chorus: [
+    {
+      kind: EFFECT_PRESET_KIND,
+      version: EFFECT_PRESET_SCHEMA_VERSION,
+      effectID: "chorus",
+      presetID: "chorus.clean-wide",
+      label: "Clean Wide",
+      values: {
+        chorusEnabled: 1,
+        chorusMix: 0.62,
+        chorusMotionMode: 1,
+        chorusBloomMode: 0,
+        chorusTone: 0.58,
+        chorusFeedback: 0.28,
+        chorusRingAmount: 0,
+        chorusRingOffsetMode: 0,
+        chorusRingFineSemitones: 0
+      }
+    },
+    {
+      kind: EFFECT_PRESET_KIND,
+      version: EFFECT_PRESET_SCHEMA_VERSION,
+      effectID: "chorus",
+      presetID: "chorus.bloom-ring",
+      label: "Bloom Ring",
+      values: {
+        chorusEnabled: 1,
+        chorusMix: 0.76,
+        chorusMotionMode: 0,
+        chorusBloomMode: 2,
+        chorusTone: 0.72,
+        chorusFeedback: 0.42,
+        chorusRingAmount: 0.26,
+        chorusRingOffsetMode: 0,
+        chorusRingFineSemitones: 0.07
+      }
+    }
+  ],
+  ott: [
+    {
+      kind: EFFECT_PRESET_KIND,
+      version: EFFECT_PRESET_SCHEMA_VERSION,
+      effectID: "ott",
+      presetID: "ott.default-smash",
+      label: "Default Smash",
+      values: {
+        ottMix: 100,
+        ottAmount: 100,
+        ottTimePercent: 100,
+        ottBandDrive: 0,
+        ottEnvelopeMatch: 0
+      }
+    },
+    {
+      kind: EFFECT_PRESET_KIND,
+      version: EFFECT_PRESET_SCHEMA_VERSION,
+      effectID: "ott",
+      presetID: "ott.envelope-tamed",
+      label: "Envelope Tamed",
+      values: {
+        ottMix: 86,
+        ottAmount: 92,
+        ottTimePercent: 100,
+        ottBandDrive: 12,
+        ottEnvelopeMatch: 38
+      }
+    }
+  ]
+};
+const EFFECT_PRESETS_V2_STATE_KEY = "effects.presets.v2";
+const EFFECT_PRESET_V2_STATE_KIND = "cosimo.effectPresetState";
+const EFFECT_PRESET_V2_STATE_SCHEMA_VERSION = 2;
+function isPlainObject(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function requireString(value, fieldName) {
+  if (typeof value !== "string" || value.trim().length === 0) {
+    throw new Error(`${fieldName} must be a non-empty string.`);
+  }
+  return value.trim();
+}
+function requireBoolean(value, fieldName) {
+  if (typeof value !== "boolean") {
+    throw new Error(`${fieldName} must be a boolean.`);
+  }
+  return value;
+}
+function cloneActivePresetMetadata(metadata) {
+  return {
+    presetID: metadata.presetID,
+    label: metadata.label,
+    dirty: metadata.dirty
+  };
+}
+function normalizeActivePresetMetadata(effectID, payload) {
+  if (!isPlainObject(payload)) {
+    throw new Error(`Active preset metadata for "${effectID}" must be an object.`);
+  }
+  return {
+    presetID: requireString(payload.presetID, `activePresetByEffect.${effectID}.presetID`),
+    label: requireString(payload.label, `activePresetByEffect.${effectID}.label`),
+    dirty: requireBoolean(payload.dirty, `activePresetByEffect.${effectID}.dirty`)
+  };
+}
+function normalizePresetShape(payload) {
+  if (!isPlainObject(payload)) {
+    throw new Error("Effect preset payload must be an object.");
+  }
+  if (payload.kind !== EFFECT_PRESET_V2_KIND) {
+    throw new Error(`Effect preset kind must be "${EFFECT_PRESET_V2_KIND}".`);
+  }
+  if (payload.version !== EFFECT_PRESET_V2_SCHEMA_VERSION) {
+    throw new Error(`Unsupported effect preset version "${String(payload.version)}".`);
+  }
+  if (!isPlainObject(payload.contract) || typeof payload.contract.hash !== "string") {
+    throw new Error("Effect preset contract with hash is required.");
+  }
+  if (!isPlainObject(payload.parameters)) {
+    throw new Error("Effect preset parameters must be an object.");
+  }
+  if (!isPlainObject(payload.storedState)) {
+    throw new Error("Effect preset storedState must be an object.");
+  }
+  return cloneEffectPresetV2({
+    effectID: requireString(payload.effectID, "effectID"),
+    presetID: requireString(payload.presetID, "presetID"),
+    label: requireString(payload.label, "label"),
+    contract: payload.contract,
+    parameters: { ...payload.parameters },
+    storedState: { ...payload.storedState }
+  });
+}
+function cloneState(state) {
+  return {
+    kind: state.kind,
+    version: state.version,
+    userPresets: Object.fromEntries(Object.entries(state.userPresets).map(([effectID, presets]) => [
+      effectID,
+      presets.map(cloneEffectPresetV2)
+    ])),
+    activePresetByEffect: Object.fromEntries(Object.entries(state.activePresetByEffect).map(([effectID, metadata]) => [
+      effectID,
+      cloneActivePresetMetadata(metadata)
+    ]))
+  };
+}
+function storedStateEchoToken(value) {
+  return typeof value === "string" ? value : JSON.stringify(value);
+}
+function hasOwnValue(record, key) {
+  return !!record && Object.prototype.hasOwnProperty.call(record, key);
+}
+function getFullStoredStateValue(storedState, key) {
+  if (!isPlainObject(storedState)) {
+    return { found: false };
+  }
+  const values = isPlainObject(storedState.values) ? storedState.values : void 0;
+  if (values && hasOwnValue(values, key)) {
+    return {
+      found: true,
+      value: values[key]
+    };
+  }
+  if (hasOwnValue(storedState, key)) {
+    return {
+      found: true,
+      value: storedState[key]
+    };
+  }
+  return { found: false };
+}
+function errorFromUnknown$1(error) {
+  return error instanceof Error ? error : new Error(String(error));
+}
+function replacePresetInBank(bank, preset) {
+  const nextBank = bank.filter((candidate) => candidate.presetID !== preset.presetID);
+  nextBank.push(cloneEffectPresetV2(preset));
+  return nextBank;
+}
+function getChocUserFiles() {
+  const candidate = globalThis.chocUserFiles ?? globalThis.window?.chocUserFiles;
+  if (!candidate) {
+    return null;
+  }
+  if (typeof candidate.list !== "function" || typeof candidate.read !== "function" || typeof candidate.write !== "function" || typeof candidate.delete !== "function") {
+    throw new Error("window.chocUserFiles is missing list, read, write, or delete.");
+  }
+  return candidate;
+}
+function userPresetFileName(presetID) {
+  return `${presetID}.json`;
+}
+function createDefaultEffectPresetStateV2() {
+  return {
+    kind: EFFECT_PRESET_V2_STATE_KIND,
+    version: EFFECT_PRESET_V2_STATE_SCHEMA_VERSION,
+    userPresets: {},
+    activePresetByEffect: {}
+  };
+}
+function createActivePresetMetadataFromPresetV2(preset) {
+  return {
+    presetID: preset.presetID,
+    label: preset.label,
+    dirty: false
+  };
+}
+function normalizeEffectPresetStateV2(payload) {
+  if (!isPlainObject(payload)) {
+    throw new Error("Effect preset state payload must be an object.");
+  }
+  if (payload.kind !== EFFECT_PRESET_V2_STATE_KIND) {
+    throw new Error(`Effect preset state kind must be "${EFFECT_PRESET_V2_STATE_KIND}".`);
+  }
+  if (payload.version !== EFFECT_PRESET_V2_STATE_SCHEMA_VERSION) {
+    throw new Error(`Unsupported effect preset state version "${String(payload.version)}".`);
+  }
+  if (!isPlainObject(payload.userPresets)) {
+    throw new Error("Effect preset state userPresets must be an object.");
+  }
+  if (!isPlainObject(payload.activePresetByEffect)) {
+    throw new Error("Effect preset state activePresetByEffect must be an object.");
+  }
+  const userPresets = {};
+  const activePresetByEffect = {};
+  for (const [effectID, rawPresets] of Object.entries(payload.userPresets)) {
+    if (!Array.isArray(rawPresets)) {
+      throw new Error(`Effect preset bank "${effectID}" must be an array.`);
+    }
+    userPresets[effectID] = rawPresets.map((rawPreset) => {
+      const preset = normalizePresetShape(rawPreset);
+      if (preset.effectID !== effectID) {
+        throw new Error(`Effect preset bank "${effectID}" contains preset "${preset.presetID}" for effect "${preset.effectID}".`);
+      }
+      return preset;
+    });
+  }
+  for (const [effectID, rawMetadata] of Object.entries(payload.activePresetByEffect)) {
+    activePresetByEffect[effectID] = normalizeActivePresetMetadata(effectID, rawMetadata);
+  }
+  return {
+    kind: EFFECT_PRESET_V2_STATE_KIND,
+    version: EFFECT_PRESET_V2_STATE_SCHEMA_VERSION,
+    userPresets,
+    activePresetByEffect
+  };
+}
+function serializeEffectPresetStateV2(state) {
+  return JSON.stringify(normalizeEffectPresetStateV2(state));
+}
+function deserializeEffectPresetStateV2(rawValue) {
+  if (rawValue === void 0 || rawValue === null || rawValue === "") {
+    return createDefaultEffectPresetStateV2();
+  }
+  const parsed = typeof rawValue === "string" ? JSON.parse(rawValue) : rawValue;
+  return normalizeEffectPresetStateV2(parsed);
+}
+class EffectPresetRuntimeBridgeV2 {
+  constructor(patchConnection, options = {}) {
+    this.patchConnection = patchConnection;
+    this.options = options;
+    this.state = createDefaultEffectPresetStateV2();
+    this.handleStoredStateValueBound = this.handleStoredStateValue.bind(this);
+    this.userFiles = getChocUserFiles();
+  }
+  state;
+  attached = false;
+  listeners = /* @__PURE__ */ new Set();
+  errorListeners = /* @__PURE__ */ new Set();
+  pendingStoredStateEchoes = /* @__PURE__ */ new Map();
+  handleStoredStateValueBound;
+  userFiles;
+  localRevision = 0;
+  pendingStoredStateValueRevision = null;
+  attach() {
+    if (this.attached) {
+      return;
+    }
+    this.attached = true;
+    this.patchConnection.addStoredStateValueListener?.(this.handleStoredStateValueBound);
+  }
+  detach() {
+    if (!this.attached) {
+      return;
+    }
+    this.attached = false;
+    this.patchConnection.removeStoredStateValueListener?.(this.handleStoredStateValueBound);
+  }
+  requestBootState() {
+    const requestRevision = this.localRevision;
+    if (typeof this.patchConnection.requestFullStoredState === "function") {
+      this.patchConnection.requestFullStoredState((storedState) => {
+        if (requestRevision !== this.localRevision) {
+          return;
+        }
+        const storedValue = getFullStoredStateValue(storedState, EFFECT_PRESETS_V2_STATE_KEY);
+        if (storedValue.found) {
+          this.pendingStoredStateValueRevision = null;
+          this.applyStoredState(storedValue.value);
+          void this.loadUserPresetFiles();
+          return;
+        }
+        if (typeof this.patchConnection.requestStoredStateValue === "function") {
+          this.pendingStoredStateValueRevision = requestRevision;
+          this.patchConnection.requestStoredStateValue(EFFECT_PRESETS_V2_STATE_KEY);
+          void this.loadUserPresetFiles();
+          return;
+        }
+        this.applyStoredState(void 0);
+        void this.loadUserPresetFiles();
+      });
+      return;
+    }
+    if (typeof this.patchConnection.requestStoredStateValue === "function") {
+      this.pendingStoredStateValueRevision = requestRevision;
+      this.patchConnection.requestStoredStateValue(EFFECT_PRESETS_V2_STATE_KEY);
+    }
+    void this.loadUserPresetFiles();
+  }
+  getState() {
+    return cloneState(this.state);
+  }
+  subscribe(listener) {
+    this.listeners.add(listener);
+  }
+  unsubscribe(listener) {
+    this.listeners.delete(listener);
+  }
+  subscribeErrors(listener) {
+    this.errorListeners.add(listener);
+  }
+  unsubscribeErrors(listener) {
+    this.errorListeners.delete(listener);
+  }
+  saveUserPreset(preset, options = {}) {
+    const normalizedPreset = normalizePresetShape(preset);
+    const currentBank = this.state.userPresets[normalizedPreset.effectID] ?? [];
+    const nextActivePresetByEffect = options.activate ? {
+      ...this.state.activePresetByEffect,
+      [normalizedPreset.effectID]: createActivePresetMetadataFromPresetV2(normalizedPreset)
+    } : this.state.activePresetByEffect;
+    this.commitState({
+      ...this.state,
+      userPresets: {
+        ...this.state.userPresets,
+        [normalizedPreset.effectID]: replacePresetInBank(currentBank, normalizedPreset)
+      },
+      activePresetByEffect: nextActivePresetByEffect
+    });
+    this.writeUserPresetFile(normalizedPreset);
+    return normalizedPreset;
+  }
+  setUserPresetsForEffect(effectID, presets, activePresetMetadata) {
+    const activePresetByEffect = { ...this.state.activePresetByEffect };
+    if (activePresetMetadata === null) {
+      delete activePresetByEffect[effectID];
+    } else if (activePresetMetadata !== void 0) {
+      activePresetByEffect[effectID] = cloneActivePresetMetadata(activePresetMetadata);
+    }
+    const nextState = this.commitState({
+      ...this.state,
+      userPresets: {
+        ...this.state.userPresets,
+        [effectID]: presets.map(normalizePresetShape)
+      },
+      activePresetByEffect
+    });
+    this.syncUserPresetFilesForEffect(effectID, nextState.userPresets[effectID] ?? []);
+    return nextState.userPresets[effectID] ?? [];
+  }
+  setActivePresetMetadata(effectID, metadata) {
+    this.commitState({
+      ...this.state,
+      activePresetByEffect: {
+        ...this.state.activePresetByEffect,
+        [effectID]: cloneActivePresetMetadata(metadata)
+      }
+    });
+  }
+  replaceState(state) {
+    const nextState = this.commitState(state);
+    for (const [effectID, presets] of Object.entries(nextState.userPresets)) {
+      this.syncUserPresetFilesForEffect(effectID, presets);
+    }
+    return nextState;
+  }
+  applyStoredState(rawValue) {
+    try {
+      const storedState = deserializeEffectPresetStateV2(rawValue);
+      this.setState(this.userFiles ? {
+        ...storedState,
+        userPresets: this.state.userPresets
+      } : storedState);
+    } catch (error) {
+      this.notifyError(errorFromUnknown$1(error));
+    }
+  }
+  handleStoredStateValue(message) {
+    const nextMessage = message;
+    if (nextMessage?.key !== EFFECT_PRESETS_V2_STATE_KEY) {
+      return;
+    }
+    if (this.consumePendingStoredStateEcho(nextMessage.value)) {
+      return;
+    }
+    if (this.pendingStoredStateValueRevision !== null) {
+      const pendingRevision = this.pendingStoredStateValueRevision;
+      this.pendingStoredStateValueRevision = null;
+      if (pendingRevision !== this.localRevision) {
+        return;
+      }
+    }
+    this.applyStoredState(nextMessage.value);
+  }
+  setState(nextState) {
+    this.state = cloneState(nextState);
+    this.notify();
+  }
+  notify() {
+    const snapshot = this.getState();
+    for (const listener of this.listeners) {
+      listener(snapshot);
+    }
+  }
+  notifyError(error) {
+    for (const listener of this.errorListeners) {
+      listener(error);
+    }
+  }
+  commitState(nextState) {
+    const normalizedState = normalizeEffectPresetStateV2(nextState);
+    const storedState = this.userFiles ? {
+      ...normalizedState,
+      userPresets: {}
+    } : normalizedState;
+    const serializedState = serializeEffectPresetStateV2(storedState);
+    const sendStoredStateValue = this.patchConnection.sendStoredStateValue?.bind(this.patchConnection);
+    if (sendStoredStateValue) {
+      this.rememberPendingStoredStateEcho(serializedState);
+      try {
+        sendStoredStateValue(EFFECT_PRESETS_V2_STATE_KEY, serializedState);
+      } catch (error) {
+        this.consumePendingStoredStateEcho(serializedState);
+        throw error;
+      }
+    }
+    this.localRevision += 1;
+    this.setState(normalizedState);
+    return this.getState();
+  }
+  async loadUserPresetFiles() {
+    if (!this.userFiles || !this.options.fileStoreEffectID) {
+      return;
+    }
+    try {
+      const effectID = this.options.fileStoreEffectID;
+      const fileNames = (await this.userFiles.list(effectID)).filter((fileName) => fileName.endsWith(".json"));
+      const presets = [];
+      for (const fileName of fileNames) {
+        const preset = normalizePresetShape(JSON.parse(await this.userFiles.read(effectID, fileName)));
+        if (preset.effectID !== effectID) {
+          throw new Error(`Preset file "${fileName}" contains effect "${preset.effectID}" instead of "${effectID}".`);
+        }
+        presets.push(preset);
+      }
+      this.setState({
+        ...this.state,
+        userPresets: {
+          ...this.state.userPresets,
+          [effectID]: presets
+        }
+      });
+    } catch (error) {
+      this.notifyError(errorFromUnknown$1(error));
+    }
+  }
+  writeUserPresetFile(preset) {
+    if (!this.userFiles || !this.options.fileStoreEffectID || preset.effectID !== this.options.fileStoreEffectID) {
+      return;
+    }
+    void this.userFiles.write(preset.effectID, userPresetFileName(preset.presetID), JSON.stringify(normalizePresetShape(preset), null, 2)).catch((error) => this.notifyError(errorFromUnknown$1(error)));
+  }
+  syncUserPresetFilesForEffect(effectID, presets) {
+    if (!this.userFiles || effectID !== this.options.fileStoreEffectID) {
+      return;
+    }
+    void this.syncUserPresetFilesForEffectAsync(effectID, presets).catch((error) => this.notifyError(errorFromUnknown$1(error)));
+  }
+  async syncUserPresetFilesForEffectAsync(effectID, presets) {
+    if (!this.userFiles) {
+      return;
+    }
+    const nextFileNames = new Set(presets.map((preset) => userPresetFileName(preset.presetID)));
+    const existingFileNames = (await this.userFiles.list(effectID)).filter((fileName) => fileName.endsWith(".json"));
+    await Promise.all(presets.map((preset) => this.userFiles.write(effectID, userPresetFileName(preset.presetID), JSON.stringify(normalizePresetShape(preset), null, 2))));
+    await Promise.all(existingFileNames.filter((fileName) => !nextFileNames.has(fileName)).map((fileName) => this.userFiles.delete(effectID, fileName)));
+  }
+  rememberPendingStoredStateEcho(value) {
+    const token = storedStateEchoToken(value);
+    this.pendingStoredStateEchoes.set(token, (this.pendingStoredStateEchoes.get(token) ?? 0) + 1);
+  }
+  consumePendingStoredStateEcho(value) {
+    const token = storedStateEchoToken(value);
+    const count = this.pendingStoredStateEchoes.get(token);
+    if (!count) {
+      return false;
+    }
+    if (count <= 1) {
+      this.pendingStoredStateEchoes.delete(token);
+    } else {
+      this.pendingStoredStateEchoes.set(token, count - 1);
+    }
+    return true;
+  }
+}
+const defaultFilter = {
+  query: "",
+  source: "all"
+};
+function errorFromUnknown(error) {
+  return error instanceof Error ? error : new Error(String(error));
+}
+function defaultCreatePresetID({
+  effectID,
+  attempt
+}) {
+  const timestamp = Date.now().toString(36);
+  const randomSuffix = Math.random().toString(36).slice(2, 8);
+  const attemptSuffix = attempt === 0 ? "" : `-${attempt + 1}`;
+  return `user.${effectID}.${timestamp}-${randomSuffix}${attemptSuffix}`;
+}
+function valuesEqual(left, right) {
+  return Object.is(left, right);
+}
+function storedStateValuesEqual(left, right) {
+  return canonicalJSONStringify(left) === canonicalJSONStringify(right);
+}
+function presetKeyFor(source, presetID) {
+  return `${source}:${presetID}`;
+}
+function normalizeLabel(label) {
+  const trimmed = label.trim();
+  if (!trimmed) {
+    throw new Error("Preset label must not be empty.");
+  }
+  return trimmed;
+}
+function ensureStoredStateWriter(patchConnection, operation) {
+  if (typeof patchConnection.sendStoredStateValue !== "function") {
+    throw new Error(`Cannot ${operation} because Cmajor stored state writes are unavailable.`);
+  }
+}
+function ensureParameterWriter(patchConnection, operation) {
+  if (typeof patchConnection.sendEventOrValue !== "function") {
+    throw new Error(`Cannot ${operation} because the patch connection cannot write parameter values.`);
+  }
+}
+function defaultParameterValues(contract) {
+  const values = {};
+  for (const parameter of contract.parameters) {
+    values[parameter.endpointID] = parameter.defaultValue;
+  }
+  return values;
+}
+function normalizeRuntimeParameterValue(parameter, value) {
+  if (parameter.type === "boolean") {
+    if (typeof value === "boolean") {
+      return value;
+    }
+    if (value === 0 || value === 1) {
+      return value === 1;
+    }
+    throw new Error(`${parameter.endpointID} must be a boolean.`);
+  }
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue)) {
+    throw new Error(`${parameter.endpointID} must be a finite number.`);
+  }
+  if (parameter.type === "integer" && !Number.isInteger(numericValue)) {
+    throw new Error(`${parameter.endpointID} must be an integer.`);
+  }
+  if (typeof parameter.min === "number" && numericValue < parameter.min) {
+    throw new Error(`${parameter.endpointID} value ${numericValue} is below minimum ${parameter.min}.`);
+  }
+  if (typeof parameter.max === "number" && numericValue > parameter.max) {
+    throw new Error(`${parameter.endpointID} value ${numericValue} is above maximum ${parameter.max}.`);
+  }
+  return numericValue;
+}
+function legacyFactoryPresetToV2(preset, currentContract, storedStateAdapters) {
+  if (currentContract.storedState.length > 0) {
+    throw new Error(`Factory preset "${preset.presetID}" must be a v2 preset because "${currentContract.effectID}" has non-parameter state.`);
+  }
+  return normalizeEffectPresetV2({
+    kind: EFFECT_PRESET_V2_KIND,
+    version: EFFECT_PRESET_V2_SCHEMA_VERSION,
+    effectID: preset.effectID,
+    presetID: preset.presetID,
+    label: preset.label,
+    contract: clonePluginStateContract(currentContract),
+    parameters: {
+      ...defaultParameterValues(currentContract),
+      ...preset.values
+    },
+    storedState: {}
+  }, { currentContract, storedStateAdapters });
+}
+function factoryPresetToV2(preset, currentContract, storedStateAdapters, presetMigrations) {
+  if (preset.version === EFFECT_PRESET_V2_SCHEMA_VERSION && "parameters" in preset) {
+    return normalizeEffectPresetV2(preset, {
+      currentContract,
+      storedStateAdapters,
+      migrations: presetMigrations
+    });
+  }
+  return legacyFactoryPresetToV2(preset, currentContract, storedStateAdapters);
+}
+class StandaloneEffectPresetController {
+  constructor(options) {
+    this.options = options;
+    if (typeof options.effectID !== "string" || options.effectID.trim().length === 0) {
+      throw new Error("Effect preset controller effectID must be a non-empty string.");
+    }
+    this.factoryPresetRegistry = options.factoryPresets ?? EFFECT_FACTORY_PRESETS;
+    this.storedStateAdapters = options.storedStateAdapters ?? [];
+    this.presetMigrations = options.presetMigrations ?? [];
+    this.createPresetID = options.createPresetID ?? defaultCreatePresetID;
+    this.readClipboardText = options.readClipboardText;
+    this.writeClipboardText = options.writeClipboardText;
+    this.bridge = new EffectPresetRuntimeBridgeV2(options.patchConnection, {
+      fileStoreEffectID: options.effectID
+    });
+    this.bridgeState = this.bridge.getState();
+    this.handleBridgeStateBound = this.handleBridgeState.bind(this);
+    this.handleBridgeErrorBound = this.handleBridgeError.bind(this);
+    this.handleStatusBound = this.handleStatus.bind(this);
+  }
+  bridge;
+  factoryPresetRegistry;
+  storedStateAdapters;
+  presetMigrations;
+  createPresetID;
+  readClipboardText;
+  writeClipboardText;
+  listeners = /* @__PURE__ */ new Set();
+  currentValues = /* @__PURE__ */ new Map();
+  hydratingEndpointIDs = /* @__PURE__ */ new Set();
+  suppressedParameterValues = /* @__PURE__ */ new Map();
+  parameterListenerCleanups = [];
+  storedStateListenerCleanups = [];
+  handleBridgeStateBound;
+  handleBridgeErrorBound;
+  handleStatusBound;
+  bridgeState;
+  currentContract = null;
+  filter = { ...defaultFilter };
+  attached = false;
+  ready = false;
+  applyingPresetValuesDepth = 0;
+  lastError = null;
+  attach() {
+    if (this.attached) {
+      return;
+    }
+    this.attached = true;
+    this.bridge.subscribe(this.handleBridgeStateBound);
+    this.bridge.subscribeErrors(this.handleBridgeErrorBound);
+    this.bridge.attach();
+    this.bridge.requestBootState();
+    this.attachStoredStateListeners();
+    this.options.patchConnection.addStatusListener?.(this.handleStatusBound);
+    this.options.patchConnection.requestStatusUpdate?.();
+    this.notify();
+  }
+  detach() {
+    if (!this.attached) {
+      return;
+    }
+    this.detachParameterListeners();
+    this.detachStoredStateListeners();
+    this.bridge.unsubscribe(this.handleBridgeStateBound);
+    this.bridge.unsubscribeErrors(this.handleBridgeErrorBound);
+    this.bridge.detach();
+    this.options.patchConnection.removeStatusListener?.(this.handleStatusBound);
+    this.attached = false;
+    this.ready = false;
+    this.notify();
+  }
+  subscribe(listener) {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+  getState() {
+    const factoryPresets = this.buildPresetItems("factory", this.getFactoryPresets());
+    const userPresets = this.buildPresetItems("user", this.getUserPresets());
+    const presets = [...factoryPresets, ...userPresets];
+    const visiblePresets = presets.filter((preset) => this.presetMatchesFilter(preset));
+    const activePreset = this.bridgeState.activePresetByEffect[this.options.effectID] ?? null;
+    return {
+      effectID: this.options.effectID,
+      ready: this.ready,
+      filter: { ...this.filter },
+      presets,
+      visiblePresets,
+      factoryPresets,
+      userPresets,
+      activePreset: activePreset ? { ...activePreset } : null,
+      activePresetID: activePreset?.presetID ?? null,
+      activeLabel: activePreset?.label ?? "",
+      dirty: activePreset?.dirty ?? false,
+      currentValues: this.getCurrentValuesRecord(),
+      missingCurrentValueEndpointIDs: this.getMissingCurrentValueEndpointIDs(),
+      currentContract: this.currentContract ? clonePluginStateContract(this.currentContract) : null,
+      lastError: this.lastError
+    };
+  }
+  getMutations() {
+    return {
+      setFilter: this.setFilter.bind(this),
+      clearLastError: this.clearLastError.bind(this),
+      refreshCurrentValues: this.refreshCurrentValues.bind(this),
+      applyPreset: this.applyPreset.bind(this),
+      reapplyActivePreset: this.reapplyActivePreset.bind(this),
+      saveCurrentAsNewPreset: this.saveCurrentAsNewPreset.bind(this),
+      overwriteUserPreset: this.overwriteUserPreset.bind(this),
+      renamePreset: this.renamePreset.bind(this),
+      deletePreset: this.deletePreset.bind(this),
+      duplicatePresetAsUserPreset: this.duplicatePresetAsUserPreset.bind(this),
+      exportPresetText: this.exportPresetText.bind(this),
+      importPresetText: this.importPresetText.bind(this),
+      copyPresetToClipboard: this.copyPresetToClipboard.bind(this),
+      pastePresetFromClipboard: this.pastePresetFromClipboard.bind(this)
+    };
+  }
+  setFilter(filter) {
+    this.filter = {
+      query: filter.query ?? this.filter.query,
+      source: filter.source ?? this.filter.source
+    };
+    this.notify();
+  }
+  clearLastError() {
+    this.lastError = null;
+    this.notify();
+  }
+  refreshCurrentValues() {
+    return this.runMutation(() => {
+      this.requestCurrentParameterValues();
+      return this.getMissingCurrentValueEndpointIDs();
+    }, "Current parameter values refreshed.");
+  }
+  applyPreset(presetKey) {
+    return this.runMutation(() => {
+      ensureStoredStateWriter(this.options.patchConnection, "apply effect presets");
+      ensureParameterWriter(this.options.patchConnection, "apply effect presets");
+      const { preset } = this.resolvePreset(presetKey);
+      const normalizedPreset = this.normalizePresetForCurrentContract(preset);
+      this.commitActivePresetAndApply(normalizedPreset);
+      return cloneEffectPresetV2(normalizedPreset);
+    }, "Preset applied.");
+  }
+  reapplyActivePreset() {
+    return this.runMutation(() => {
+      const activePreset = this.bridgeState.activePresetByEffect[this.options.effectID];
+      if (!activePreset) {
+        throw new Error("No active preset is available to reapply.");
+      }
+      ensureStoredStateWriter(this.options.patchConnection, "reapply effect presets");
+      ensureParameterWriter(this.options.patchConnection, "reapply effect presets");
+      const preset = this.findPresetByID(activePreset.presetID);
+      if (!preset) {
+        throw new Error(`Active preset "${activePreset.presetID}" is not available.`);
+      }
+      const normalizedPreset = this.normalizePresetForCurrentContract(preset);
+      this.commitActivePresetAndApply(normalizedPreset);
+      return cloneEffectPresetV2(normalizedPreset);
+    }, "Preset reapplied.");
+  }
+  saveCurrentAsNewPreset(label) {
+    return this.runMutation(() => {
+      ensureStoredStateWriter(this.options.patchConnection, "save effect presets");
+      const normalizedLabel = normalizeLabel(label);
+      const presetID = this.createUniqueUserPresetID(normalizedLabel);
+      const preset = this.captureCurrentPreset(presetID, normalizedLabel);
+      this.bridge.saveUserPreset(preset, { activate: true });
+      return cloneEffectPresetV2(preset);
+    }, "Preset saved.");
+  }
+  overwriteUserPreset(presetKey) {
+    return this.runMutation(() => {
+      ensureStoredStateWriter(this.options.patchConnection, "overwrite effect presets");
+      const { source, preset } = this.resolvePreset(presetKey);
+      if (source !== "user") {
+        throw new Error("Factory presets cannot be overwritten.");
+      }
+      const nextPreset = this.captureCurrentPreset(preset.presetID, preset.label);
+      this.bridge.saveUserPreset(nextPreset, { activate: true });
+      return cloneEffectPresetV2(nextPreset);
+    }, "Preset overwritten.");
+  }
+  renamePreset(presetKey, label) {
+    return this.runMutation(() => {
+      ensureStoredStateWriter(this.options.patchConnection, "rename effect presets");
+      const { source, preset } = this.resolvePreset(presetKey);
+      if (source !== "user") {
+        throw new Error("Factory presets cannot be renamed.");
+      }
+      const nextPreset = this.normalizePresetForCurrentContract({
+        ...preset,
+        label: normalizeLabel(label)
+      });
+      const activePreset = this.bridgeState.activePresetByEffect[this.options.effectID];
+      const nextActivePreset = activePreset?.presetID === preset.presetID ? { ...activePreset, label: nextPreset.label } : void 0;
+      this.bridge.setUserPresetsForEffect(
+        this.options.effectID,
+        this.getUserPresets().map((candidate) => candidate.presetID === preset.presetID ? nextPreset : candidate),
+        nextActivePreset
+      );
+      return cloneEffectPresetV2(nextPreset);
+    }, "Preset renamed.");
+  }
+  deletePreset(presetKey) {
+    return this.runMutation(() => {
+      ensureStoredStateWriter(this.options.patchConnection, "delete effect presets");
+      const { source, preset } = this.resolvePreset(presetKey);
+      if (source !== "user") {
+        throw new Error("Factory presets cannot be deleted.");
+      }
+      const activePreset = this.bridgeState.activePresetByEffect[this.options.effectID];
+      const nextActivePreset = activePreset?.presetID === preset.presetID ? null : void 0;
+      this.bridge.setUserPresetsForEffect(
+        this.options.effectID,
+        this.getUserPresets().filter((candidate) => candidate.presetID !== preset.presetID),
+        nextActivePreset
+      );
+      return cloneEffectPresetV2(preset);
+    }, "Preset deleted.");
+  }
+  duplicatePresetAsUserPreset(presetKey, label) {
+    return this.runMutation(() => {
+      ensureStoredStateWriter(this.options.patchConnection, "duplicate effect presets");
+      const { preset } = this.resolvePreset(presetKey);
+      const normalizedLabel = normalizeLabel(label);
+      const nextPreset = this.normalizePresetForCurrentContract({
+        ...preset,
+        presetID: this.createUniqueUserPresetID(normalizedLabel),
+        label: normalizedLabel
+      });
+      this.bridge.saveUserPreset(nextPreset);
+      return cloneEffectPresetV2(nextPreset);
+    }, "Preset duplicated.");
+  }
+  exportPresetText(presetKey) {
+    return this.runMutation(() => {
+      const { preset } = this.resolvePreset(presetKey);
+      return JSON.stringify(this.normalizePresetForCurrentContract(preset), null, 2);
+    }, "Preset exported.");
+  }
+  importPresetText(text, options = {}) {
+    return this.runMutation(() => {
+      ensureStoredStateWriter(this.options.patchConnection, "import effect presets");
+      const preset = this.prepareImportedPreset(
+        this.parseImportText(text),
+        options.overwriteExisting === true,
+        options.copyOnIDConflict === true
+      );
+      if (options.applyAfterImport) {
+        ensureParameterWriter(this.options.patchConnection, "import and apply effect presets");
+        this.commitImportedPresetAndApply(preset);
+      } else {
+        this.bridge.saveUserPreset(preset);
+      }
+      return cloneEffectPresetV2(preset);
+    }, "Preset imported.");
+  }
+  async copyPresetToClipboard(presetKey) {
+    const exported = this.exportPresetText(presetKey);
+    if (!exported.ok) {
+      return exported;
+    }
+    try {
+      const writeClipboardText = this.writeClipboardText ?? globalThis.navigator?.clipboard?.writeText?.bind(globalThis.navigator.clipboard);
+      if (!writeClipboardText) {
+        throw new Error("Clipboard write API is unavailable.");
+      }
+      await writeClipboardText(exported.value);
+      this.lastError = null;
+      this.notify();
+      return {
+        ok: true,
+        value: exported.value,
+        message: "Preset copied."
+      };
+    } catch (error) {
+      return this.fail(errorFromUnknown(error));
+    }
+  }
+  async pastePresetFromClipboard(options = {}) {
+    try {
+      const readClipboardText = this.readClipboardText ?? globalThis.navigator?.clipboard?.readText?.bind(globalThis.navigator.clipboard);
+      if (!readClipboardText) {
+        throw new Error("Clipboard read API is unavailable.");
+      }
+      const text = await readClipboardText();
+      return this.importPresetText(text, {
+        ...options,
+        copyOnIDConflict: options.copyOnIDConflict ?? true
+      });
+    } catch (error) {
+      return this.fail(errorFromUnknown(error));
+    }
+  }
+  handleBridgeState(state) {
+    this.bridgeState = state;
+    this.notify();
+  }
+  handleBridgeError(error) {
+    this.lastError = error.message;
+    this.notify();
+  }
+  handleStatus(status) {
+    const nextContract = buildPluginStateContract({
+      effectID: this.options.effectID,
+      status,
+      storedState: this.storedStateAdapters
+    });
+    if (this.currentContract?.hash === nextContract.hash) {
+      return;
+    }
+    this.currentContract = nextContract;
+    this.ready = true;
+    this.currentValues.clear();
+    this.detachParameterListeners();
+    this.attachParameterListeners();
+    this.notify();
+  }
+  attachParameterListeners() {
+    const contract = this.requireCurrentContract();
+    for (const parameter of contract.parameters) {
+      const endpointID = parameter.endpointID;
+      this.hydratingEndpointIDs.add(endpointID);
+      const listener = (value) => this.handleParameterValue(endpointID, value);
+      this.options.patchConnection.addParameterListener?.(endpointID, listener);
+      this.parameterListenerCleanups.push(() => {
+        this.options.patchConnection.removeParameterListener?.(endpointID, listener);
+      });
+    }
+    this.requestCurrentParameterValues();
+  }
+  detachParameterListeners() {
+    for (const cleanup of this.parameterListenerCleanups) {
+      cleanup();
+    }
+    this.parameterListenerCleanups.length = 0;
+    this.hydratingEndpointIDs.clear();
+    this.suppressedParameterValues.clear();
+  }
+  attachStoredStateListeners() {
+    for (const adapter of this.storedStateAdapters) {
+      if (typeof adapter.subscribe !== "function") {
+        continue;
+      }
+      const cleanup = adapter.subscribe(() => this.handleStoredStateAdapterChange(adapter));
+      this.storedStateListenerCleanups.push(cleanup);
+    }
+  }
+  detachStoredStateListeners() {
+    for (const cleanup of this.storedStateListenerCleanups) {
+      cleanup();
+    }
+    this.storedStateListenerCleanups.length = 0;
+  }
+  requestCurrentParameterValues() {
+    for (const parameter of this.currentContract?.parameters ?? []) {
+      this.options.patchConnection.requestParameterValue?.(parameter.endpointID);
+    }
+  }
+  handleParameterValue(endpointID, value) {
+    let normalizedValue;
+    try {
+      normalizedValue = this.normalizeEndpointValue(endpointID, value);
+    } catch (error) {
+      this.lastError = errorFromUnknown(error).message;
+      this.notify();
+      return;
+    }
+    this.currentValues.set(endpointID, normalizedValue);
+    if (this.hydratingEndpointIDs.delete(endpointID)) {
+      this.notify();
+      return;
+    }
+    if (this.consumeSuppressedParameterValue(endpointID, normalizedValue)) {
+      this.notify();
+      return;
+    }
+    this.markActivePresetDirtyIfNeeded(endpointID, normalizedValue);
+    this.notify();
+  }
+  normalizeEndpointValue(endpointID, value) {
+    const parameter = this.currentContract?.parameters.find((candidate) => candidate.endpointID === endpointID);
+    if (!parameter) {
+      throw new Error(`Unknown parameter "${endpointID}".`);
+    }
+    return normalizeRuntimeParameterValue(parameter, value);
+  }
+  markActivePresetDirtyIfNeeded(endpointID, value) {
+    const activePreset = this.bridgeState.activePresetByEffect[this.options.effectID];
+    if (!activePreset || activePreset.dirty) {
+      return;
+    }
+    const activePresetPayload = this.findPresetByID(activePreset.presetID);
+    if (activePresetPayload && valuesEqual(activePresetPayload.parameters[endpointID], value)) {
+      return;
+    }
+    this.bridge.setActivePresetMetadata(this.options.effectID, {
+      ...activePreset,
+      dirty: true
+    });
+  }
+  handleStoredStateAdapterChange(adapter) {
+    if (this.applyingPresetValuesDepth > 0) {
+      return;
+    }
+    try {
+      this.markActivePresetDirtyForStoredStateIfNeeded(adapter);
+    } catch (error) {
+      this.lastError = errorFromUnknown(error).message;
+    }
+    this.notify();
+  }
+  markActivePresetDirtyForStoredStateIfNeeded(adapter) {
+    if (typeof adapter.capture !== "function") {
+      return;
+    }
+    const activePreset = this.bridgeState.activePresetByEffect[this.options.effectID];
+    if (!activePreset || activePreset.dirty) {
+      return;
+    }
+    const activePresetPayload = this.findPresetByID(activePreset.presetID);
+    const currentStoredState = adapter.serializeForPreset(adapter.normalizeForPreset(adapter.capture()));
+    if (activePresetPayload && storedStateValuesEqual(activePresetPayload.storedState[adapter.key], currentStoredState)) {
+      return;
+    }
+    this.bridge.setActivePresetMetadata(this.options.effectID, {
+      ...activePreset,
+      dirty: true
+    });
+  }
+  requireCurrentContract() {
+    if (!this.currentContract) {
+      throw new Error("Cannot use effect presets until the Cmajor status contract is available.");
+    }
+    return this.currentContract;
+  }
+  getFactoryPresets() {
+    if (!this.currentContract) {
+      return [];
+    }
+    return (this.factoryPresetRegistry[this.options.effectID] ?? []).map((preset) => factoryPresetToV2(
+      preset,
+      this.currentContract,
+      this.storedStateAdapters,
+      this.presetMigrations
+    ));
+  }
+  getUserPresets() {
+    return (this.bridgeState.userPresets[this.options.effectID] ?? []).map(cloneEffectPresetV2);
+  }
+  buildPresetItems(source, presets) {
+    const activePreset = this.bridgeState.activePresetByEffect[this.options.effectID];
+    return presets.map((preset) => {
+      const isActive = activePreset?.presetID === preset.presetID;
+      const isUser = source === "user";
+      const canApply = this.canApplyPreset(preset);
+      return {
+        presetKey: presetKeyFor(source, preset.presetID),
+        presetID: preset.presetID,
+        label: preset.label,
+        effectID: preset.effectID,
+        source,
+        preset: cloneEffectPresetV2(preset),
+        isActive,
+        dirty: Boolean(isActive && activePreset?.dirty),
+        canApply,
+        canRename: isUser,
+        canOverwrite: isUser,
+        canDelete: isUser,
+        canExport: canApply
+      };
+    });
+  }
+  canApplyPreset(preset) {
+    if (!this.currentContract) {
+      return false;
+    }
+    try {
+      this.normalizePresetForCurrentContract(preset);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  presetMatchesFilter(preset) {
+    if (this.filter.source !== "all" && preset.source !== this.filter.source) {
+      return false;
+    }
+    const query = this.filter.query.trim().toLowerCase();
+    if (!query) {
+      return true;
+    }
+    return preset.label.toLowerCase().includes(query) || preset.presetID.toLowerCase().includes(query);
+  }
+  getCurrentValuesRecord() {
+    const values = {};
+    for (const parameter of this.currentContract?.parameters ?? []) {
+      if (this.currentValues.has(parameter.endpointID)) {
+        values[parameter.endpointID] = this.currentValues.get(parameter.endpointID);
+      }
+    }
+    return values;
+  }
+  getMissingCurrentValueEndpointIDs() {
+    return (this.currentContract?.parameters ?? []).filter((parameter) => !this.currentValues.has(parameter.endpointID)).map((parameter) => parameter.endpointID);
+  }
+  createUniqueUserPresetID(label) {
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      const presetID = this.createPresetID({
+        effectID: this.options.effectID,
+        label,
+        attempt
+      }).trim();
+      if (!presetID) {
+        continue;
+      }
+      if (!this.findPresetByID(presetID)) {
+        return presetID;
+      }
+    }
+    throw new Error("Could not create a unique preset ID.");
+  }
+  captureCurrentPreset(presetID, label) {
+    return captureEffectPresetV2({
+      effectID: this.options.effectID,
+      presetID,
+      label,
+      currentContract: this.requireCurrentContract(),
+      currentParameterValues: this.getCurrentValuesRecord(),
+      storedStateAdapters: this.storedStateAdapters
+    });
+  }
+  resolvePreset(presetKeyOrID) {
+    if (presetKeyOrID.startsWith("factory:")) {
+      const presetID = presetKeyOrID.slice("factory:".length);
+      const preset = this.getFactoryPresets().find((candidate) => candidate.presetID === presetID);
+      if (!preset) {
+        throw new Error(`Factory preset "${presetID}" was not found.`);
+      }
+      return { source: "factory", preset };
+    }
+    if (presetKeyOrID.startsWith("user:")) {
+      const presetID = presetKeyOrID.slice("user:".length);
+      const preset = this.getUserPresets().find((candidate) => candidate.presetID === presetID);
+      if (!preset) {
+        throw new Error(`User preset "${presetID}" was not found.`);
+      }
+      return { source: "user", preset };
+    }
+    const matches = [
+      ...this.getFactoryPresets().map((preset) => ({ source: "factory", preset })),
+      ...this.getUserPresets().map((preset) => ({ source: "user", preset }))
+    ].filter(({ preset }) => preset.presetID === presetKeyOrID);
+    if (matches.length === 1) {
+      return matches[0];
+    }
+    if (matches.length > 1) {
+      throw new Error(`Preset ID "${presetKeyOrID}" is ambiguous; use a presetKey.`);
+    }
+    throw new Error(`Preset "${presetKeyOrID}" was not found.`);
+  }
+  findPresetByID(presetID) {
+    return this.getUserPresets().find((preset) => preset.presetID === presetID) ?? this.getFactoryPresets().find((preset) => preset.presetID === presetID) ?? null;
+  }
+  parseImportText(text) {
+    if (typeof text !== "string") {
+      throw new Error("Preset import text must be a string.");
+    }
+    const parsed = parseEffectPresetV2Text(text);
+    const preset = this.normalizePresetForCurrentContract(parsed);
+    if (preset.effectID !== this.options.effectID) {
+      throw new Error(`Cannot import ${preset.effectID} preset into ${this.options.effectID}.`);
+    }
+    return preset;
+  }
+  assertUserPresetIDCanBeStored(presetID, overwriteExisting) {
+    if (this.getFactoryPresets().some((preset) => preset.presetID === presetID)) {
+      throw new Error(`Preset ID "${presetID}" conflicts with a factory preset.`);
+    }
+    if (!overwriteExisting && this.getUserPresets().some((preset) => preset.presetID === presetID)) {
+      throw new Error(`User preset "${presetID}" already exists.`);
+    }
+  }
+  prepareImportedPreset(preset, overwriteExisting, copyOnIDConflict) {
+    if (overwriteExisting) {
+      this.assertUserPresetIDCanBeStored(preset.presetID, true);
+      return preset;
+    }
+    if (!this.findPresetByID(preset.presetID)) {
+      return preset;
+    }
+    if (!copyOnIDConflict) {
+      this.assertUserPresetIDCanBeStored(preset.presetID, false);
+    }
+    return this.normalizePresetForCurrentContract({
+      ...preset,
+      presetID: this.createUniqueUserPresetID(normalizeLabel(preset.label))
+    });
+  }
+  normalizePresetForCurrentContract(preset) {
+    return normalizeEffectPresetV2(preset, {
+      currentContract: this.requireCurrentContract(),
+      storedStateAdapters: this.storedStateAdapters,
+      migrations: this.presetMigrations
+    });
+  }
+  commitActivePresetAndApply(preset) {
+    const previousState = this.bridge.getState();
+    this.bridge.setActivePresetMetadata(this.options.effectID, createActivePresetMetadataFromPresetV2(preset));
+    try {
+      this.applyPresetValuesToPatch(preset);
+    } catch (error) {
+      this.restoreBridgeStateAfterApplyFailure(previousState, error);
+    }
+  }
+  commitImportedPresetAndApply(preset) {
+    const previousState = this.bridge.getState();
+    this.bridge.saveUserPreset(preset, { activate: true });
+    try {
+      this.applyPresetValuesToPatch(preset);
+    } catch (error) {
+      this.restoreBridgeStateAfterApplyFailure(previousState, error);
+    }
+  }
+  restoreBridgeStateAfterApplyFailure(previousState, originalError) {
+    try {
+      this.bridge.replaceState(previousState);
+    } catch (rollbackError) {
+      const original = errorFromUnknown(originalError);
+      const rollback = errorFromUnknown(rollbackError);
+      throw new Error(`${original.message}; failed to restore previous preset metadata: ${rollback.message}`);
+    }
+    throw errorFromUnknown(originalError);
+  }
+  applyPresetValuesToPatch(preset) {
+    const sendEventOrValue = this.options.patchConnection.sendEventOrValue;
+    if (typeof sendEventOrValue !== "function") {
+      throw new Error("Cannot apply effect presets because the patch connection cannot write parameter values.");
+    }
+    this.queueSuppressedPresetValues(preset);
+    this.applyingPresetValuesDepth += 1;
+    try {
+      applyEffectPresetV2({
+        patchConnection: {
+          sendParameterGestureStart: this.options.patchConnection.sendParameterGestureStart?.bind(this.options.patchConnection),
+          sendEventOrValue: sendEventOrValue.bind(this.options.patchConnection),
+          sendParameterGestureEnd: this.options.patchConnection.sendParameterGestureEnd?.bind(this.options.patchConnection),
+          sendStoredStateValue: this.options.patchConnection.sendStoredStateValue?.bind(this.options.patchConnection)
+        },
+        preset,
+        currentContract: this.requireCurrentContract(),
+        storedStateAdapters: this.storedStateAdapters,
+        migrations: this.presetMigrations
+      });
+    } catch (error) {
+      this.suppressedParameterValues.clear();
+      throw error;
+    } finally {
+      this.applyingPresetValuesDepth -= 1;
+    }
+  }
+  queueSuppressedPresetValues(preset) {
+    for (const [endpointID, value] of Object.entries(preset.parameters)) {
+      const queue = this.suppressedParameterValues.get(endpointID) ?? [];
+      queue.push(value);
+      this.suppressedParameterValues.set(endpointID, queue);
+    }
+  }
+  consumeSuppressedParameterValue(endpointID, value) {
+    const queue = this.suppressedParameterValues.get(endpointID);
+    if (!queue || queue.length === 0) {
+      return false;
+    }
+    const matchIndex = queue.findIndex((candidate) => valuesEqual(candidate, value));
+    if (matchIndex === -1) {
+      this.suppressedParameterValues.delete(endpointID);
+      return false;
+    }
+    queue.splice(matchIndex, 1);
+    if (queue.length === 0) {
+      this.suppressedParameterValues.delete(endpointID);
+    }
+    return true;
+  }
+  runMutation(mutation, message) {
+    try {
+      const value = mutation();
+      this.lastError = null;
+      this.notify();
+      return {
+        ok: true,
+        value,
+        message
+      };
+    } catch (error) {
+      return this.fail(errorFromUnknown(error));
+    }
+  }
+  fail(error) {
+    this.lastError = error.message;
+    this.notify();
+    return {
+      ok: false,
+      error,
+      message: error.message
+    };
+  }
+  notify() {
+    const state = this.getState();
+    for (const listener of this.listeners) {
+      listener(state);
+    }
+  }
+}
+function useStandaloneEffectPresets(effectID, options = {}) {
+  const patchConnection = usePatchConnection();
+  const {
+    descriptorRegistry,
+    factoryPresets,
+    storedStateAdapters,
+    presetMigrations,
+    createPresetID,
+    readClipboardText,
+    writeClipboardText,
+    initialFilter
+  } = options;
+  const controller = reactExports.useMemo(() => new StandaloneEffectPresetController({
+    effectID,
+    patchConnection,
+    descriptorRegistry,
+    factoryPresets,
+    storedStateAdapters,
+    presetMigrations,
+    createPresetID,
+    readClipboardText,
+    writeClipboardText
+  }), [
+    createPresetID,
+    descriptorRegistry,
+    effectID,
+    factoryPresets,
+    storedStateAdapters,
+    presetMigrations,
+    patchConnection,
+    readClipboardText,
+    writeClipboardText
+  ]);
+  const [state, setState] = reactExports.useState(() => controller.getState());
+  const mutations = reactExports.useMemo(() => controller.getMutations(), [controller]);
+  reactExports.useEffect(() => {
+    const unsubscribe = controller.subscribe(setState);
+    controller.attach();
+    setState(controller.getState());
+    return () => {
+      unsubscribe();
+      controller.detach();
+    };
+  }, [controller]);
+  reactExports.useEffect(() => {
+    if (initialFilter) {
+      controller.setFilter(initialFilter);
+    }
+  }, [controller, initialFilter?.query, initialFilter?.source]);
+  return {
+    state,
+    mutations,
+    controller
+  };
+}
 const ARTICULATION_STATE_KEY = "articulations.v2";
 const ARTICULATION_TRIGGER_CONFIG_STATE_KEY = "articulationTriggerConfig.v1";
 const ARTICULATION_MAX_SLOTS = 128;
@@ -25035,6 +27145,16 @@ const ARTICULATION_AUDITION_FALLBACK_NOTE = 60;
 const GLIDE_TIME_MIN_SECONDS = 0;
 const GLIDE_TIME_MAX_SECONDS = 2;
 const GLIDE_TIME_STEP_SECONDS = 1e-3;
+function serializeArticulationPresetState(value) {
+  return serializeArticulationBank(normalizeArticulationBank(value));
+}
+function failedPresetMutation(message) {
+  return {
+    ok: false,
+    error: new Error(message),
+    message
+  };
+}
 function describeErrorMessage(error) {
   if (error && typeof error === "object") {
     const maybeError = error;
@@ -26024,8 +28144,81 @@ function useSynthPatchViewModel({
   const { frames, error: frameError } = useFactoryTableFrames(presentedTableIndex);
   const { state: modulationState, bridge: modulationBridge } = useModulationState();
   const articulationBank = articulationBankState.bank;
+  const articulationPresetListenersRef = reactExports.useRef(/* @__PURE__ */ new Set());
+  const modulationPresetAdapter = reactExports.useMemo(() => ({
+    key: MODULATION_STATE_KEY,
+    schemaVersion: 2,
+    getContract() {
+      return {
+        key: MODULATION_STATE_KEY,
+        schemaVersion: 2,
+        required: true
+      };
+    },
+    capture() {
+      return serializeModulationState(modulationBridge.current?.getState());
+    },
+    normalizeForPreset(value) {
+      return serializeModulationState(value);
+    },
+    serializeForPreset(value) {
+      return serializeModulationState(value);
+    },
+    apply(value) {
+      modulationBridge.current?.setState(value);
+    },
+    subscribe(listener) {
+      const bridge = modulationBridge.current;
+      if (!bridge) {
+        return () => {
+        };
+      }
+      bridge.subscribe(listener);
+      return () => bridge.unsubscribe(listener);
+    }
+  }), [modulationBridge]);
+  const articulationPresetAdapter = reactExports.useMemo(() => ({
+    key: ARTICULATION_STATE_KEY,
+    schemaVersion: 2,
+    getContract() {
+      return {
+        key: ARTICULATION_STATE_KEY,
+        schemaVersion: 2,
+        required: true
+      };
+    },
+    capture() {
+      return serializeArticulationPresetState(articulationBankState.bankRef.current);
+    },
+    normalizeForPreset(value) {
+      return serializeArticulationPresetState(value);
+    },
+    serializeForPreset(value) {
+      return serializeArticulationPresetState(value);
+    },
+    apply(value) {
+      articulationBankState.setAndPersistBank(normalizeArticulationBank(value));
+      articulationPresetListenersRef.current.forEach((listener) => listener());
+    },
+    subscribe(listener) {
+      articulationPresetListenersRef.current.add(listener);
+      return () => articulationPresetListenersRef.current.delete(listener);
+    }
+  }), [articulationBankState.bankRef, articulationBankState.setAndPersistBank]);
+  const synthPresetStoredStateAdapters = reactExports.useMemo(
+    () => [modulationPresetAdapter, articulationPresetAdapter],
+    [articulationPresetAdapter, modulationPresetAdapter]
+  );
+  const synthPreset = useStandaloneEffectPresets("synth", {
+    storedStateAdapters: synthPresetStoredStateAdapters
+  });
   const articulationSlots = articulationBank.slots;
   const selectedArticulationSlot = reactExports.useMemo(() => articulationSlots.find((slot) => slot.id === articulationBank.selectedSlotId) ?? null, [articulationBank.selectedSlotId, articulationSlots]);
+  const activeSynthPresetItem = reactExports.useMemo(() => synthPreset.state.activePresetID ? synthPreset.state.presets.find((preset) => preset.presetID === synthPreset.state.activePresetID && preset.isActive) ?? null : null, [synthPreset.state.activePresetID, synthPreset.state.presets]);
+  const activeSynthPresetCanOverwrite = activeSynthPresetItem?.canOverwrite === true;
+  reactExports.useEffect(() => {
+    articulationPresetListenersRef.current.forEach((listener) => listener());
+  }, [articulationBank]);
   const isApplyingArticulationRef = reactExports.useRef(false);
   const [selectedArticulationIsDirty, setSelectedArticulationIsDirty] = reactExports.useState(false);
   const [discardedArticulationEdit, setDiscardedArticulationEdit] = reactExports.useState(null);
@@ -26407,6 +28600,15 @@ function useSynthPatchViewModel({
     setSelectedArticulationIsDirty(false);
     setDiscardedArticulationEdit(null);
   }, [articulationBankState, captureCurrentArticulationSnapshot]);
+  const handleOverwriteActiveSynthPreset = reactExports.useCallback(() => {
+    if (!activeSynthPresetItem?.canOverwrite) {
+      return failedPresetMutation("No writable active preset is selected.");
+    }
+    return synthPreset.mutations.overwriteUserPreset(activeSynthPresetItem.presetKey);
+  }, [activeSynthPresetItem, synthPreset.mutations]);
+  const handleSaveSynthPresetAs = reactExports.useCallback((label) => {
+    return synthPreset.mutations.saveCurrentAsNewPreset(label);
+  }, [synthPreset.mutations]);
   const handleRevertSelectedArticulationSlot = reactExports.useCallback(() => {
     const bank = articulationBankState.bankRef.current;
     const slot = bank.slots.find((candidate) => candidate.id === bank.selectedSlotId);
@@ -26731,6 +28933,8 @@ function useSynthPatchViewModel({
     observedMsegPlayhead,
     observedWarpState,
     modulationState,
+    synthPresetState: synthPreset.state,
+    activeSynthPresetCanOverwrite,
     articulationBank,
     articulationSlots,
     selectedArticulationSlot,
@@ -26753,6 +28957,8 @@ function useSynthPatchViewModel({
     handleAddRoute,
     handleRemoveRoute,
     handleRouteChange,
+    handleOverwriteActiveSynthPreset,
+    handleSaveSynthPresetAs,
     handleAddArticulationSlot,
     handleCaptureArticulationSlot,
     handleSelectArticulationSlot,
