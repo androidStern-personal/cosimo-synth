@@ -15,6 +15,19 @@ export const WARP_MODE_BEND = 1;
 export const WARP_MODE_PWM = 2;
 export const WARP_MODE_ASYM = 3;
 export const WARP_MODE_MIRROR = 4;
+export const UNISON_MAX_VOICES = 8;
+export const UNISON_PHASE_MODE_CONTIGUOUS = 0;
+export const UNISON_PHASE_MODE_RESET = 1;
+export const UNISON_DETUNE_MODE_LINEAR = 0;
+export const UNISON_DETUNE_MODE_SUPER = 1;
+export const UNISON_DETUNE_MODE_EXP = 2;
+export const UNISON_DETUNE_MODE_INV = 3;
+export const UNISON_DETUNE_MODE_RANDOM = 4;
+export const UNISON_STACK_MODE_OFF = 0;
+export const UNISON_STACK_MODE_OCTAVES = 1;
+export const UNISON_STACK_MODE_OCTAVES_FIFTHS = 2;
+export const UNISON_STACK_MODE_CENTER_OCTAVE = 3;
+export const UNISON_STACK_MODE_CENTER_TWO_OCTAVES = 4;
 const FILTER_CUTOFF_MIN_HZ = 20;
 const FILTER_CUTOFF_MAX_HZ = 20_000;
 const FILTER_Q_MIN = 0.1;
@@ -38,6 +51,19 @@ export type EffectiveWarpState = {
     hasActive: boolean;
     mode: number;
     amount: number;
+};
+
+export type EffectiveUnisonState = {
+    voiceGeneration: number;
+    hasActive: boolean;
+    voices: number;
+    detune: number;
+    blend: number;
+    width: number;
+    detuneMode: number;
+    stackMode: number;
+    wavetablePositionSpread: number;
+    warpSpread: number;
 };
 
 export type NormalizedRuntimeTableState = {
@@ -92,6 +118,26 @@ function clampWarpMode(value: unknown) {
 
 function clampWarpAmount(value: unknown) {
     return clamp(Number(value) || 0, 0, 1);
+}
+
+export function clampUnisonVoiceCount(value: unknown) {
+    return clamp(Math.round(Number(value) || 1), 1, UNISON_MAX_VOICES);
+}
+
+export function clampUnison01(value: unknown) {
+    return clamp(Number(value) || 0, 0, 1);
+}
+
+export function clampUnisonPhaseMode(value: unknown) {
+    return clamp(Math.round(Number(value) || 0), UNISON_PHASE_MODE_CONTIGUOUS, UNISON_PHASE_MODE_RESET);
+}
+
+export function clampUnisonDetuneMode(value: unknown) {
+    return clamp(Math.round(Number(value) || 0), UNISON_DETUNE_MODE_LINEAR, UNISON_DETUNE_MODE_RANDOM);
+}
+
+export function clampUnisonStackMode(value: unknown) {
+    return clamp(Math.round(Number(value) || 0), UNISON_STACK_MODE_OFF, UNISON_STACK_MODE_CENTER_TWO_OCTAVES);
 }
 
 export function clampDisplayPosition(value: unknown) {
@@ -276,6 +322,76 @@ export function selectObservedEffectiveWarpState(
             amount: 0,
         };
     const nextState = normalizeEffectiveWarpStateMessage(message);
+
+    if (!nextState) {
+        return previousState;
+    }
+
+    if (nextState.voiceGeneration < previousState.voiceGeneration) {
+        return previousState;
+    }
+
+    return nextState;
+}
+
+export function normalizeEffectiveUnisonStateMessage(message: unknown): EffectiveUnisonState | null {
+    const payload = (message as { event?: unknown } | null | undefined)?.event ?? message;
+
+    if (!payload || typeof payload !== "object") {
+        return null;
+    }
+
+    const rawGeneration = Number((payload as { voiceGeneration?: unknown }).voiceGeneration);
+    const rawHasActive = (payload as { hasActive?: unknown }).hasActive;
+
+    return {
+        voiceGeneration: Number.isFinite(rawGeneration)
+            ? Math.max(0, Math.trunc(rawGeneration))
+            : 0,
+        hasActive: Boolean(rawHasActive),
+        voices: clampUnisonVoiceCount((payload as { voices?: unknown }).voices),
+        detune: clampUnison01((payload as { detune?: unknown }).detune),
+        blend: clampUnison01((payload as { blend?: unknown }).blend),
+        width: clampUnison01((payload as { width?: unknown }).width),
+        detuneMode: clampUnisonDetuneMode((payload as { detuneMode?: unknown }).detuneMode),
+        stackMode: clampUnisonStackMode((payload as { stackMode?: unknown }).stackMode),
+        wavetablePositionSpread: clampUnison01((payload as { wavetablePositionSpread?: unknown }).wavetablePositionSpread),
+        warpSpread: clampUnison01((payload as { warpSpread?: unknown }).warpSpread),
+    };
+}
+
+export function selectObservedEffectiveUnisonState(
+    currentState: EffectiveUnisonState | null | undefined,
+    message: unknown,
+) {
+    const previousState = currentState && typeof currentState === "object"
+        ? {
+            voiceGeneration: Number.isFinite(Number(currentState.voiceGeneration))
+                ? Math.trunc(Number(currentState.voiceGeneration))
+                : -1,
+            hasActive: Boolean(currentState.hasActive),
+            voices: clampUnisonVoiceCount(currentState.voices),
+            detune: clampUnison01(currentState.detune),
+            blend: clampUnison01(currentState.blend),
+            width: clampUnison01(currentState.width),
+            detuneMode: clampUnisonDetuneMode(currentState.detuneMode),
+            stackMode: clampUnisonStackMode(currentState.stackMode),
+            wavetablePositionSpread: clampUnison01(currentState.wavetablePositionSpread),
+            warpSpread: clampUnison01(currentState.warpSpread),
+        }
+        : {
+            voiceGeneration: -1,
+            hasActive: false,
+            voices: 1,
+            detune: 0.1,
+            blend: 0.75,
+            width: 1,
+            detuneMode: UNISON_DETUNE_MODE_LINEAR,
+            stackMode: UNISON_STACK_MODE_OFF,
+            wavetablePositionSpread: 0,
+            warpSpread: 0,
+        };
+    const nextState = normalizeEffectiveUnisonStateMessage(message);
 
     if (!nextState) {
         return previousState;

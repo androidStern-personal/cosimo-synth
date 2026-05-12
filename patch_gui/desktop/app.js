@@ -13981,6 +13981,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     min-height: calc(var(--spacing) * 16);
   }
 
+  .min-h-\\[92px\\] {
+    min-height: 92px;
+  }
+
   .min-h-\\[100dvh\\] {
     min-height: 100dvh;
   }
@@ -14141,6 +14145,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     width: 148px;
   }
 
+  .w-\\[min\\(calc\\(100vw-1rem\\)\\,680px\\)\\] {
+    width: min(100vw - 1rem, 680px);
+  }
+
   .w-auto {
     width: auto;
   }
@@ -14277,6 +14285,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     min-width: 180px;
   }
 
+  .min-w-fit {
+    min-width: fit-content;
+  }
+
   .min-w-full {
     min-width: 100%;
   }
@@ -14307,6 +14319,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .grow-0 {
     flex-grow: 0;
+  }
+
+  .basis-0 {
+    flex-basis: calc(var(--spacing) * 0);
   }
 
   .basis-auto {
@@ -14545,6 +14561,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .grid-cols-\\[56px_minmax\\(0\\,1fr\\)\\] {
     grid-template-columns: 56px minmax(0, 1fr);
+  }
+
+  .grid-cols-\\[82px_minmax\\(0\\,1fr\\)_minmax\\(0\\,1fr\\)_minmax\\(0\\,1fr\\)\\] {
+    grid-template-columns: 82px minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr);
   }
 
   .grid-cols-\\[minmax\\(0\\,1fr\\)_88px\\] {
@@ -14845,6 +14865,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     border-radius: 8px;
   }
 
+  .rounded-\\[9px\\] {
+    border-radius: 9px;
+  }
+
   .rounded-\\[10px\\] {
     border-radius: 10px;
   }
@@ -14883,6 +14907,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .rounded-\\[30px\\] {
     border-radius: 30px;
+  }
+
+  .rounded-\\[999px\\] {
+    border-radius: 999px;
   }
 
   .rounded-full {
@@ -15020,6 +15048,16 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     border-color: var(--color-amber-200);
   }
 
+  .border-amber-200\\/35 {
+    border-color: #fee68559;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .border-amber-200\\/35 {
+      border-color: color-mix(in oklab, var(--color-amber-200) 35%, transparent);
+    }
+  }
+
   .border-amber-200\\/40 {
     border-color: #fee68566;
   }
@@ -15067,6 +15105,16 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
   @supports (color: color-mix(in lab, red, red)) {
     .border-cyan-200\\/28 {
       border-color: color-mix(in oklab, var(--color-cyan-200) 28%, transparent);
+    }
+  }
+
+  .border-cyan-200\\/\\[0\\.09\\] {
+    border-color: #a2f4fd17;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .border-cyan-200\\/\\[0\\.09\\] {
+      border-color: color-mix(in oklab, var(--color-cyan-200) 9%, transparent);
     }
   }
 
@@ -15272,12 +15320,26 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     }
   }
 
+  .border-white\\/\\[0\\.055\\] {
+    border-color: #ffffff0e;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .border-white\\/\\[0\\.055\\] {
+      border-color: color-mix(in oklab, var(--color-white) 5.5%, transparent);
+    }
+  }
+
   .border-t-transparent {
     border-top-color: #0000;
   }
 
   .border-l-transparent {
     border-left-color: #0000;
+  }
+
+  .bg-\\[\\#070a12\\]\\/96 {
+    background-color: oklab(14.5558% -.00103131 -.0183188 / .96);
   }
 
   .bg-\\[\\#050505\\] {
@@ -15330,6 +15392,16 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .bg-amber-200 {
     background-color: var(--color-amber-200);
+  }
+
+  .bg-amber-200\\/16 {
+    background-color: #fee68529;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .bg-amber-200\\/16 {
+      background-color: color-mix(in oklab, var(--color-amber-200) 16%, transparent);
+    }
   }
 
   .bg-amber-300 {
@@ -15387,6 +15459,16 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
   @supports (color: color-mix(in lab, red, red)) {
     .bg-black\\/20 {
       background-color: color-mix(in oklab, var(--color-black) 20%, transparent);
+    }
+  }
+
+  .bg-black\\/28 {
+    background-color: #00000047;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .bg-black\\/28 {
+      background-color: color-mix(in oklab, var(--color-black) 28%, transparent);
     }
   }
 
@@ -15766,6 +15848,16 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     }
   }
 
+  .bg-white\\/\\[0\\.045\\] {
+    background-color: #ffffff0b;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .bg-white\\/\\[0\\.045\\] {
+      background-color: color-mix(in oklab, var(--color-white) 4.5%, transparent);
+    }
+  }
+
   .bg-gradient-to-b {
     --tw-gradient-position: to bottom in oklab;
     background-image: linear-gradient(var(--tw-gradient-stops));
@@ -15783,6 +15875,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .bg-\\[linear-gradient\\(\\.\\.\\.\\)\\] {
     background-image: linear-gradient(...);
+  }
+
+  .bg-\\[radial-gradient\\(circle_at_50\\%_30\\%\\,rgba\\(34\\,211\\,238\\,0\\.10\\)\\,rgba\\(2\\,6\\,14\\,0\\.78\\)_60\\%\\)\\] {
+    background-image: radial-gradient(circle at 50% 30%, #22d3ee1a, #02060ec7 60%);
   }
 
   .from-amber-400 {
@@ -16154,6 +16250,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .pr-1 {
     padding-right: calc(var(--spacing) * 1);
+  }
+
+  .pr-1\\.5 {
+    padding-right: calc(var(--spacing) * 1.5);
   }
 
   .pr-2 {
@@ -16949,6 +17049,16 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     }
   }
 
+  .text-slate-100\\/84 {
+    color: #f1f5f9d6;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-slate-100\\/84 {
+      color: color-mix(in oklab, var(--color-slate-100) 84%, transparent);
+    }
+  }
+
   .text-slate-100\\/88 {
     color: #f1f5f9e0;
   }
@@ -17000,6 +17110,16 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
   @supports (color: color-mix(in lab, red, red)) {
     .text-slate-200\\/72 {
       color: color-mix(in oklab, var(--color-slate-200) 72%, transparent);
+    }
+  }
+
+  .text-slate-200\\/80 {
+    color: #e2e8f0cc;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-slate-200\\/80 {
+      color: color-mix(in oklab, var(--color-slate-200) 80%, transparent);
     }
   }
 
@@ -17369,6 +17489,21 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
   }
 
+  .shadow-\\[0_0_14px_rgba\\(251\\,191\\,36\\,0\\.45\\)\\] {
+    --tw-shadow: 0 0 14px var(--tw-shadow-color, #fbbf2473);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
+  .shadow-\\[0_0_18px_rgba\\(251\\,191\\,36\\,0\\.10\\)\\] {
+    --tw-shadow: 0 0 18px var(--tw-shadow-color, #fbbf241a);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
+  .shadow-\\[0_18px_54px_rgba\\(0\\,0\\,0\\,0\\.54\\)\\,inset_0_1px_0_rgba\\(255\\,255\\,255\\,0\\.04\\)\\] {
+    --tw-shadow: 0 18px 54px var(--tw-shadow-color, #0000008a), inset 0 1px 0 var(--tw-shadow-color, #ffffff0a);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
   .shadow-\\[inset_0_0_0_1px_rgba\\(255\\,255\\,255\\,0\\.10\\)\\] {
     --tw-shadow: inset 0 0 0 1px var(--tw-shadow-color, #ffffff1a);
     box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
@@ -17520,6 +17655,12 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );
   }
 
+  .backdrop-blur-\\[2px\\] {
+    --tw-backdrop-blur: blur(2px);
+    -webkit-backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );
+    backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );
+  }
+
   .backdrop-blur-md {
     --tw-backdrop-blur: blur(var(--blur-md));
     -webkit-backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );
@@ -17648,8 +17789,20 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     user-select: none;
   }
 
+  .\\[--knob-track-value-color\\:\\#87d7f5\\] {
+    --knob-track-value-color: #87d7f5;
+  }
+
+  .\\[--preset-bar-border-radius\\:12px\\] {
+    --preset-bar-border-radius: 12px;
+  }
+
   .\\[scrollbar-color\\:rgba\\(255\\,255\\,255\\,0\\.12\\)_transparent\\] {
     scrollbar-color: #ffffff1f transparent;
+  }
+
+  .\\[scrollbar-width\\:none\\] {
+    scrollbar-width: none;
   }
 
   .\\[scrollbar-width\\:thin\\] {
@@ -17969,6 +18122,16 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
       background-color: rgb(var(--section-accent-rgb)/.045);
     }
 
+    .hover\\:bg-amber-200\\/22:hover {
+      background-color: #fee68538;
+    }
+
+    @supports (color: color-mix(in lab, red, red)) {
+      .hover\\:bg-amber-200\\/22:hover {
+        background-color: color-mix(in oklab, var(--color-amber-200) 22%, transparent);
+      }
+    }
+
     .hover\\:bg-amber-300\\/16:hover {
       background-color: #ffd23629;
     }
@@ -18191,6 +18354,16 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
       }
     }
 
+    .hover\\:bg-white\\/\\[0\\.045\\]:hover {
+      background-color: #ffffff0b;
+    }
+
+    @supports (color: color-mix(in lab, red, red)) {
+      .hover\\:bg-white\\/\\[0\\.045\\]:hover {
+        background-color: color-mix(in oklab, var(--color-white) 4.5%, transparent);
+      }
+    }
+
     .hover\\:bg-white\\/\\[0\\.075\\]:hover {
       background-color: #ffffff13;
     }
@@ -18337,6 +18510,21 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .focus\\:border-\\[var\\(--section-accent\\)\\]:focus {
     border-color: var(--section-accent);
+  }
+
+  .focus\\:ring-2:focus {
+    --tw-ring-shadow: var(--tw-ring-inset, ) 0 0 0 calc(2px + var(--tw-ring-offset-width)) var(--tw-ring-color, currentcolor);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
+  .focus\\:ring-cyan-200\\/45:focus {
+    --tw-ring-color: #a2f4fd73;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .focus\\:ring-cyan-200\\/45:focus {
+      --tw-ring-color: color-mix(in oklab, var(--color-cyan-200) 45%, transparent);
+    }
   }
 
   .focus\\:outline-none:focus {
@@ -18855,6 +19043,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
       grid-template-columns: repeat(3, minmax(0, 1fr));
     }
 
+    .lg\\:grid-cols-\\[minmax\\(168px\\,0\\.78fr\\)_minmax\\(0\\,1\\.22fr\\)\\] {
+      grid-template-columns: minmax(168px, .78fr) minmax(0, 1.22fr);
+    }
+
     .lg\\:flex-row {
       flex-direction: row;
     }
@@ -18988,6 +19180,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
       grid-template-columns: repeat(4, minmax(0, 1fr));
     }
 
+    .xl\\:grid-cols-\\[minmax\\(260px\\,0\\.76fr\\)_minmax\\(0\\,1\\.24fr\\)\\] {
+      grid-template-columns: minmax(260px, .76fr) minmax(0, 1.24fr);
+    }
+
     .xl\\:gap-40 {
       gap: calc(var(--spacing) * 40);
     }
@@ -19033,6 +19229,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .\\[\\&_strong\\]\\:bg-yellow-100 strong {
     background-color: var(--color-yellow-100);
+  }
+
+  .\\[\\&\\:\\:-webkit-scrollbar\\]\\:hidden::-webkit-scrollbar {
+    display: none;
   }
 }
 
@@ -21170,6 +21370,11 @@ const FILTER_MODE_OFF$1 = 0;
 const FILTER_MODE_PEAK$1 = 5;
 const WARP_MODE_OFF$1 = 0;
 const WARP_MODE_MIRROR$1 = 4;
+const UNISON_MAX_VOICES = 8;
+const UNISON_DETUNE_MODE_LINEAR = 0;
+const UNISON_DETUNE_MODE_RANDOM = 4;
+const UNISON_STACK_MODE_OFF = 0;
+const UNISON_STACK_MODE_CENTER_TWO_OCTAVES = 4;
 const FILTER_CUTOFF_MIN_HZ$1 = 20;
 const FILTER_CUTOFF_MAX_HZ$1 = 2e4;
 const FILTER_Q_MIN$2 = 0.1;
@@ -21191,6 +21396,18 @@ function clampWarpMode(value) {
 }
 function clampWarpAmount(value) {
   return clamp$c(Number(value) || 0, 0, 1);
+}
+function clampUnisonVoiceCount(value) {
+  return clamp$c(Math.round(Number(value) || 1), 1, UNISON_MAX_VOICES);
+}
+function clampUnison01(value) {
+  return clamp$c(Number(value) || 0, 0, 1);
+}
+function clampUnisonDetuneMode(value) {
+  return clamp$c(Math.round(Number(value) || 0), UNISON_DETUNE_MODE_LINEAR, UNISON_DETUNE_MODE_RANDOM);
+}
+function clampUnisonStackMode(value) {
+  return clamp$c(Math.round(Number(value) || 0), UNISON_STACK_MODE_OFF, UNISON_STACK_MODE_CENTER_TWO_OCTAVES);
 }
 function clampDisplayPosition(value) {
   return clamp$c(Number(value) || 0, 0, 1);
@@ -21312,6 +21529,59 @@ function selectObservedEffectiveWarpState(currentState, message) {
     amount: 0
   };
   const nextState = normalizeEffectiveWarpStateMessage(message);
+  if (!nextState) {
+    return previousState;
+  }
+  if (nextState.voiceGeneration < previousState.voiceGeneration) {
+    return previousState;
+  }
+  return nextState;
+}
+function normalizeEffectiveUnisonStateMessage(message) {
+  const payload = message?.event ?? message;
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+  const rawGeneration = Number(payload.voiceGeneration);
+  const rawHasActive = payload.hasActive;
+  return {
+    voiceGeneration: Number.isFinite(rawGeneration) ? Math.max(0, Math.trunc(rawGeneration)) : 0,
+    hasActive: Boolean(rawHasActive),
+    voices: clampUnisonVoiceCount(payload.voices),
+    detune: clampUnison01(payload.detune),
+    blend: clampUnison01(payload.blend),
+    width: clampUnison01(payload.width),
+    detuneMode: clampUnisonDetuneMode(payload.detuneMode),
+    stackMode: clampUnisonStackMode(payload.stackMode),
+    wavetablePositionSpread: clampUnison01(payload.wavetablePositionSpread),
+    warpSpread: clampUnison01(payload.warpSpread)
+  };
+}
+function selectObservedEffectiveUnisonState(currentState, message) {
+  const previousState = currentState && typeof currentState === "object" ? {
+    voiceGeneration: Number.isFinite(Number(currentState.voiceGeneration)) ? Math.trunc(Number(currentState.voiceGeneration)) : -1,
+    hasActive: Boolean(currentState.hasActive),
+    voices: clampUnisonVoiceCount(currentState.voices),
+    detune: clampUnison01(currentState.detune),
+    blend: clampUnison01(currentState.blend),
+    width: clampUnison01(currentState.width),
+    detuneMode: clampUnisonDetuneMode(currentState.detuneMode),
+    stackMode: clampUnisonStackMode(currentState.stackMode),
+    wavetablePositionSpread: clampUnison01(currentState.wavetablePositionSpread),
+    warpSpread: clampUnison01(currentState.warpSpread)
+  } : {
+    voiceGeneration: -1,
+    hasActive: false,
+    voices: 1,
+    detune: 0.1,
+    blend: 0.75,
+    width: 1,
+    detuneMode: UNISON_DETUNE_MODE_LINEAR,
+    stackMode: UNISON_STACK_MODE_OFF,
+    wavetablePositionSpread: 0,
+    warpSpread: 0
+  };
+  const nextState = normalizeEffectiveUnisonStateMessage(message);
   if (!nextState) {
     return previousState;
   }
@@ -22941,7 +23211,12 @@ const ROUTE_AMOUNT_LIMITS = {
   filterQ: { min: -19.9, max: FILTER_Q_MAX - FILTER_Q_MIN },
   pitchSemitones: { min: -48, max: 48 },
   ampGainDb: { min: -48, max: 6 },
-  pan: { min: -1, max: 1 }
+  pan: { min: -1, max: 1 },
+  unisonDetune: { min: -1, max: 1 },
+  unisonBlend: { min: -1, max: 1 },
+  unisonWidth: { min: -1, max: 1 },
+  unisonWavetablePositionSpread: { min: -1, max: 1 },
+  unisonWarpSpread: { min: -1, max: 1 }
 };
 const ROUTE_AMOUNT_STEPS = {
   wavetablePosition: 1e-3,
@@ -22950,7 +23225,12 @@ const ROUTE_AMOUNT_STEPS = {
   filterQ: 1e-3,
   pitchSemitones: 0.01,
   ampGainDb: 0.1,
-  pan: 1e-3
+  pan: 1e-3,
+  unisonDetune: 1e-3,
+  unisonBlend: 1e-3,
+  unisonWidth: 1e-3,
+  unisonWavetablePositionSpread: 1e-3,
+  unisonWarpSpread: 1e-3
 };
 const MODULATION_SOURCE_OPTIONS = [
   { value: "mseg-1", label: "MSEG 1", sourceKind: "mseg", sourceSlot: 1 },
@@ -22970,19 +23250,24 @@ const MODULATION_TARGET_OPTIONS = [
   { value: "filterQ", label: "RES" },
   { value: "pitchSemitones", label: "PITCH" },
   { value: "ampGainDb", label: "AMP" },
-  { value: "pan", label: "PAN" }
+  { value: "pan", label: "PAN" },
+  { value: "unisonDetune", label: "UNI DET" },
+  { value: "unisonBlend", label: "UNI BLEND" },
+  { value: "unisonWidth", label: "UNI WIDTH" },
+  { value: "unisonWavetablePositionSpread", label: "UNI WT" },
+  { value: "unisonWarpSpread", label: "UNI WARP" }
 ];
 let generatedRouteIdCounter = 1;
-function hasOwnValue(record, key) {
+function hasOwnValue$1(record, key) {
   return Object.prototype.hasOwnProperty.call(record, key);
 }
 function readFullStoredStateValue$1(storedState, key) {
   const fullState = storedState && typeof storedState === "object" ? storedState : {};
   const values = fullState.values && typeof fullState.values === "object" ? fullState.values : {};
-  if (hasOwnValue(values, key)) {
+  if (hasOwnValue$1(values, key)) {
     return values[key];
   }
-  if (hasOwnValue(fullState, key)) {
+  if (hasOwnValue$1(fullState, key)) {
     return fullState[key];
   }
   return void 0;
@@ -23079,6 +23364,12 @@ function formatModulationAmountReadout(targetKind, amount, polarity = "unipolar"
       return `${prefix}${formatMagnitude(clampedAmount * 100, 0)}%`;
     case "warpAmount":
       return `${prefix}${formatMagnitude(clampedAmount * 100, 0)}%`;
+    case "unisonDetune":
+    case "unisonBlend":
+    case "unisonWidth":
+    case "unisonWavetablePositionSpread":
+    case "unisonWarpSpread":
+      return `${prefix}${formatMagnitude(clampedAmount * 100, 0)}%`;
     case "filterCutoffOctaves":
       return `${prefix}${formatMagnitude(clampedAmount, 2)} oct`;
     case "filterQ":
@@ -23106,6 +23397,11 @@ function formatModulationAmountEditingValue(targetKind, amount) {
   switch (targetKind) {
     case "wavetablePosition":
     case "warpAmount":
+    case "unisonDetune":
+    case "unisonBlend":
+    case "unisonWidth":
+    case "unisonWavetablePositionSpread":
+    case "unisonWarpSpread":
     case "pan":
       return formatSignedNumeric(clampedAmount * 100, 1);
     case "filterCutoffOctaves":
@@ -23141,7 +23437,7 @@ function parseModulationAmountEditingValue(targetKind, rawText) {
   if (!Number.isFinite(numericValue)) {
     return null;
   }
-  if (targetKind === "wavetablePosition" || targetKind === "warpAmount") {
+  if (targetKind === "wavetablePosition" || targetKind === "warpAmount" || targetKind === "unisonDetune" || targetKind === "unisonBlend" || targetKind === "unisonWidth" || targetKind === "unisonWavetablePositionSpread" || targetKind === "unisonWarpSpread") {
     return clampModulationRouteAmount(targetKind, numericValue / 100);
   }
   if (targetKind === "pan") {
@@ -23157,7 +23453,7 @@ function normalizeSourceKind(value) {
   return "mseg";
 }
 function normalizeTargetKind(value) {
-  if (value === "wavetablePosition" || value === "warpAmount" || value === "filterCutoffOctaves" || value === "filterQ" || value === "pitchSemitones" || value === "ampGainDb" || value === "pan") {
+  if (value === "wavetablePosition" || value === "warpAmount" || value === "filterCutoffOctaves" || value === "filterQ" || value === "pitchSemitones" || value === "ampGainDb" || value === "pan" || value === "unisonDetune" || value === "unisonBlend" || value === "unisonWidth" || value === "unisonWavetablePositionSpread" || value === "unisonWarpSpread") {
     return value;
   }
   return "wavetablePosition";
@@ -23658,9 +23954,9 @@ function buildMsegSurfacePaths(points, width, height, options = {}) {
   const fillPath = options.orientation === "vertical" ? `${curvePath} L ${metrics.plotLeft.toFixed(3)} ${metrics.plotBottom.toFixed(3)} L ${metrics.plotLeft.toFixed(3)} ${metrics.plotTop.toFixed(3)} Z` : `${curvePath} L ${metrics.plotRight.toFixed(3)} ${metrics.plotBottom.toFixed(3)} L ${metrics.plotLeft.toFixed(3)} ${metrics.plotBottom.toFixed(3)} Z`;
   return { curvePath, fillPath, metrics };
 }
-function buildMsegMorphCurvePath(shapeAPoints, shapeBPoints, morphValue, width, height, options = {}) {
+function buildMsegMorphSurfacePaths(shapeAPoints, shapeBPoints, morphValue, width, height, options = {}) {
   if (!shapeAPoints || !shapeBPoints || width <= 1 || height <= 1) {
-    return "";
+    return null;
   }
   try {
     const bufferA = renderMsegShape({ points: shapeAPoints });
@@ -23679,10 +23975,15 @@ function buildMsegMorphCurvePath(shapeAPoints, shapeBPoints, morphValue, width, 
       const y = clamp$7(valueA + (valueB - valueA) * morph, 0, 1);
       return pointToMsegEditorCoordinates({ x, y }, width, height, options);
     });
-    return polylineToSvgPath(polyline);
+    const curvePath = polylineToSvgPath(polyline);
+    const fillPath = options.orientation === "vertical" ? `${curvePath} L ${metrics.plotLeft.toFixed(3)} ${metrics.plotBottom.toFixed(3)} L ${metrics.plotLeft.toFixed(3)} ${metrics.plotTop.toFixed(3)} Z` : `${curvePath} L ${metrics.plotRight.toFixed(3)} ${metrics.plotBottom.toFixed(3)} L ${metrics.plotLeft.toFixed(3)} ${metrics.plotBottom.toFixed(3)} Z`;
+    return { curvePath, fillPath, metrics };
   } catch {
-    return "";
+    return null;
   }
+}
+function buildMsegMorphCurvePath(shapeAPoints, shapeBPoints, morphValue, width, height, options = {}) {
+  return buildMsegMorphSurfacePaths(shapeAPoints, shapeBPoints, morphValue, width, height, options)?.curvePath ?? "";
 }
 function polylineToSvgPath(polyline) {
   if (polyline.length === 0) {
@@ -23750,32 +24051,61 @@ function MsegPreview({
   const viewportRef = reactExports.useRef(null);
   const size = useResizeObserver$1(viewportRef);
   const clipPathId = reactExports.useId().replace(/:/g, "_");
-  const { curvePath, fillPath, referenceCurvePath, referenceFillPath, morphCurvePath, metrics } = reactExports.useMemo(() => {
+  const {
+    curvePath,
+    fillPath,
+    referenceCurvePath,
+    referenceFillPath,
+    morphShapeACurvePath,
+    morphShapeAFillPath,
+    morphShapeBCurvePath,
+    morphShapeBFillPath,
+    metrics
+  } = reactExports.useMemo(() => {
     const basePaths = buildMsegSurfacePaths(points, size.width, size.height, {
       orientation,
       pointRadius: 0,
       horizontalPadding: MSEG_PREVIEW_HORIZONTAL_PADDING_PX,
       verticalPadding: MSEG_PREVIEW_VERTICAL_PADDING_PX
     });
-    const referencePaths = referencePoints ? buildMsegSurfacePaths(referencePoints, size.width, size.height, {
+    const hasMorphReferenceShapes = Boolean(morphShapeAPoints && morphShapeBPoints);
+    const referencePaths = referencePoints && !hasMorphReferenceShapes ? buildMsegSurfacePaths(referencePoints, size.width, size.height, {
       orientation,
       pointRadius: 0,
       horizontalPadding: MSEG_PREVIEW_HORIZONTAL_PADDING_PX,
       verticalPadding: MSEG_PREVIEW_VERTICAL_PADDING_PX
     }) : null;
-    const nextMorphCurvePath = showMorphCurve ? buildMsegMorphCurvePath(morphShapeAPoints, morphShapeBPoints, morphValue, size.width, size.height, {
+    const sharedPreviewPathOptions = {
       orientation,
       pointRadius: 0,
       horizontalPadding: MSEG_PREVIEW_HORIZONTAL_PADDING_PX,
       verticalPadding: MSEG_PREVIEW_VERTICAL_PADDING_PX
-    }) : "";
+    };
+    const shapeAReferencePaths = morphShapeAPoints ? buildMsegSurfacePaths(morphShapeAPoints, size.width, size.height, sharedPreviewPathOptions) : null;
+    const shapeBReferencePaths = morphShapeBPoints ? buildMsegSurfacePaths(morphShapeBPoints, size.width, size.height, sharedPreviewPathOptions) : null;
+    const effectiveMorphPaths = buildMsegMorphSurfacePaths(
+      morphShapeAPoints,
+      morphShapeBPoints,
+      morphValue,
+      size.width,
+      size.height,
+      {
+        orientation,
+        pointRadius: 0,
+        horizontalPadding: MSEG_PREVIEW_HORIZONTAL_PADDING_PX,
+        verticalPadding: MSEG_PREVIEW_VERTICAL_PADDING_PX
+      }
+    );
     return {
-      ...basePaths,
+      ...effectiveMorphPaths ?? basePaths,
       referenceCurvePath: referencePaths?.curvePath ?? "",
       referenceFillPath: referencePaths?.fillPath ?? "",
-      morphCurvePath: nextMorphCurvePath
+      morphShapeACurvePath: shapeAReferencePaths?.curvePath ?? "",
+      morphShapeAFillPath: shapeAReferencePaths?.fillPath ?? "",
+      morphShapeBCurvePath: shapeBReferencePaths?.curvePath ?? "",
+      morphShapeBFillPath: shapeBReferencePaths?.fillPath ?? ""
     };
-  }, [morphShapeAPoints, morphShapeBPoints, morphValue, orientation, points, referencePoints, showMorphCurve, size.height, size.width]);
+  }, [morphShapeAPoints, morphShapeBPoints, morphValue, orientation, points, referencePoints, size.height, size.width]);
   const clampedProgressFillEnd = progressFillEnd !== null && progressFillEnd !== void 0 && Number.isFinite(Number(progressFillEnd)) ? clamp$7(Number(progressFillEnd), 0, 1) : null;
   const progressClipRect = reactExports.useMemo(() => {
     if (clampedProgressFillEnd === null) {
@@ -23840,6 +24170,38 @@ function MsegPreview({
         ] }),
         referenceFillPath ? /* @__PURE__ */ jsxRuntimeExports.jsx("path", { className: "cosimo-reference-curve-fill", d: referenceFillPath }) : null,
         referenceCurvePath ? /* @__PURE__ */ jsxRuntimeExports.jsx("path", { className: "cosimo-reference-curve-line", d: referenceCurvePath }) : null,
+        morphShapeAFillPath ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "path",
+          {
+            "data-role": "mseg-preview-shape-a-fill",
+            className: "cosimo-reference-curve-fill",
+            d: morphShapeAFillPath
+          }
+        ) : null,
+        morphShapeBFillPath ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "path",
+          {
+            "data-role": "mseg-preview-shape-b-fill",
+            className: "cosimo-reference-curve-fill",
+            d: morphShapeBFillPath
+          }
+        ) : null,
+        morphShapeACurvePath ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "path",
+          {
+            "data-role": "mseg-preview-shape-a-curve",
+            className: "cosimo-reference-curve-line",
+            d: morphShapeACurvePath
+          }
+        ) : null,
+        morphShapeBCurvePath ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "path",
+          {
+            "data-role": "mseg-preview-shape-b-curve",
+            className: "cosimo-reference-curve-line",
+            d: morphShapeBCurvePath
+          }
+        ) : null,
         /* @__PURE__ */ jsxRuntimeExports.jsx("path", { className: "cosimo-curve-fill", d: fillPath }),
         progressClipRect ? /* @__PURE__ */ jsxRuntimeExports.jsx("g", { clipPath: `url(#${clipPathId})`, children: /* @__PURE__ */ jsxRuntimeExports.jsx(
           "path",
@@ -23849,15 +24211,7 @@ function MsegPreview({
             "data-role": "mseg-preview-progress-fill"
           }
         ) }) : null,
-        /* @__PURE__ */ jsxRuntimeExports.jsx("path", { className: "cosimo-curve-line", d: curvePath }),
-        morphCurvePath ? /* @__PURE__ */ jsxRuntimeExports.jsx(
-          "path",
-          {
-            "data-role": "mseg-preview-morph-curve",
-            className: "cosimo-mseg-effective-curve-line",
-            d: morphCurvePath
-          }
-        ) : null
+        /* @__PURE__ */ jsxRuntimeExports.jsx("path", { "data-role": "mseg-preview-effective-curve", className: "cosimo-curve-line", d: curvePath })
       ]
     }
   );
@@ -24804,7 +25158,7 @@ function KeyboardSectionShell({
           ),
           /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "synth-readout-text text-[10px] opacity-70", children: keyboardRootLabel })
         ] }),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: joinClasses$2("grid gap-3", contentClassName), children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: joinClasses$2("grid min-w-0 gap-3", contentClassName), children: [
           toolbar,
           keyboard
         ] })
@@ -35402,6 +35756,17 @@ function createDefaultArticulationParameterSnapshot() {
     filterMode: 0,
     filterCutoff: 1e3,
     filterQ: 0.707107,
+    unisonVoices: 1,
+    unisonDetune: 0.1,
+    unisonBlend: 0.75,
+    unisonWidth: 1,
+    unisonPhase: 0,
+    unisonRandom: 0,
+    unisonPhaseMode: 0,
+    unisonDetuneMode: 0,
+    unisonStackMode: 0,
+    unisonWavetablePositionSpread: 0,
+    unisonWarpSpread: 0,
     msegMorphs: [0, 0, 0],
     distortionMode: 0,
     distortionDriveDb: 12,
@@ -35434,6 +35799,22 @@ function normalizeArticulationParameterSnapshot(value) {
     filterMode: normalizeInteger(nextValue.filterMode, defaults.filterMode, 0, 5),
     filterCutoff: normalizeNumber(nextValue.filterCutoff, defaults.filterCutoff, 20, 2e4),
     filterQ: normalizeNumber(nextValue.filterQ, defaults.filterQ, 0.1, 20),
+    unisonVoices: normalizeInteger(nextValue.unisonVoices, defaults.unisonVoices, 1, 8),
+    unisonDetune: normalizeNumber(nextValue.unisonDetune, defaults.unisonDetune, 0, 1),
+    unisonBlend: normalizeNumber(nextValue.unisonBlend, defaults.unisonBlend, 0, 1),
+    unisonWidth: normalizeNumber(nextValue.unisonWidth, defaults.unisonWidth, 0, 1),
+    unisonPhase: normalizeNumber(nextValue.unisonPhase, defaults.unisonPhase, 0, 1),
+    unisonRandom: normalizeNumber(nextValue.unisonRandom, defaults.unisonRandom, 0, 1),
+    unisonPhaseMode: normalizeInteger(nextValue.unisonPhaseMode, defaults.unisonPhaseMode, 0, 1),
+    unisonDetuneMode: normalizeInteger(nextValue.unisonDetuneMode, defaults.unisonDetuneMode, 0, 4),
+    unisonStackMode: normalizeInteger(nextValue.unisonStackMode, defaults.unisonStackMode, 0, 4),
+    unisonWavetablePositionSpread: normalizeNumber(
+      nextValue.unisonWavetablePositionSpread,
+      defaults.unisonWavetablePositionSpread,
+      0,
+      1
+    ),
+    unisonWarpSpread: normalizeNumber(nextValue.unisonWarpSpread, defaults.unisonWarpSpread, 0, 1),
     msegMorphs: [
       clamp01(Number(msegMorphs[0])),
       clamp01(Number(msegMorphs[1])),
@@ -36663,6 +37044,7 @@ async function loadFactoryBankFrames(resourceClientInput, {
 }
 const EFFECTIVE_WAVETABLE_POSITION_ENDPOINT_ID = "effectiveWavetablePosition";
 const EFFECTIVE_WARP_STATE_ENDPOINT_ID = "effectiveWarpState";
+const EFFECTIVE_UNISON_STATE_ENDPOINT_ID = "effectiveUnisonState";
 const EFFECTIVE_FILTER_STATE_ENDPOINT_ID = "effectiveFilterState";
 const FILTER_SPECTRUM_ENDPOINT_ID = "filterSpectrum";
 const DISPLAY_SWIPE_THRESHOLD_PX = 2;
@@ -36677,6 +37059,17 @@ const WARP_AMOUNT_ENDPOINT_ID = "warpAmount";
 const FILTER_MODE_ENDPOINT_ID = "filterMode";
 const FILTER_CUTOFF_ENDPOINT_ID = "filterCutoff";
 const FILTER_Q_ENDPOINT_ID = "filterQ";
+const UNISON_VOICES_ENDPOINT_ID = "unisonVoices";
+const UNISON_DETUNE_ENDPOINT_ID = "unisonDetune";
+const UNISON_BLEND_ENDPOINT_ID = "unisonBlend";
+const UNISON_WIDTH_ENDPOINT_ID = "unisonWidth";
+const UNISON_PHASE_ENDPOINT_ID = "unisonPhase";
+const UNISON_RANDOM_ENDPOINT_ID = "unisonRandom";
+const UNISON_PHASE_MODE_ENDPOINT_ID = "unisonPhaseMode";
+const UNISON_DETUNE_MODE_ENDPOINT_ID = "unisonDetuneMode";
+const UNISON_STACK_MODE_ENDPOINT_ID = "unisonStackMode";
+const UNISON_WAVETABLE_POSITION_SPREAD_ENDPOINT_ID = "unisonWavetablePositionSpread";
+const UNISON_WARP_SPREAD_ENDPOINT_ID = "unisonWarpSpread";
 const MSEG_1_MORPH_ENDPOINT_ID = "mseg1Morph";
 const MSEG_2_MORPH_ENDPOINT_ID = "mseg2Morph";
 const MSEG_3_MORPH_ENDPOINT_ID = "mseg3Morph";
@@ -36702,6 +37095,7 @@ const WAVETABLE_PREWARM_REQUEST_ENDPOINT_ID = "wavetablePrewarmRequest";
 const MIDI_INPUT_ENDPOINT_ID = "midiIn";
 const VOICE_ARTICULATION_START_ENDPOINT_ID = "voiceArticulationStart";
 const ARTICULATION_AUDITION_FALLBACK_NOTE = 60;
+const SYNTH_PRESET_EFFECT_ID = "cosimo-synth";
 const GLIDE_TIME_MIN_SECONDS$1 = 0;
 const GLIDE_TIME_MAX_SECONDS$1 = 2;
 const GLIDE_TIME_STEP_SECONDS$1 = 1e-3;
@@ -36928,6 +37322,50 @@ function useObservedWarpState({
     amount: Number(warpAmount) || 0
   };
 }
+function useObservedUnisonState({
+  unisonVoices,
+  unisonDetune,
+  unisonBlend,
+  unisonWidth,
+  unisonDetuneMode,
+  unisonStackMode,
+  unisonWavetablePositionSpread,
+  unisonWarpSpread
+}) {
+  const message = usePatchEndpoint(EFFECTIVE_UNISON_STATE_ENDPOINT_ID, null);
+  const fallbackState = reactExports.useMemo(() => ({
+    voiceGeneration: -1,
+    hasActive: false,
+    voices: clamp$2(Math.round(Number(unisonVoices) || 1), 1, 8),
+    detune: clamp$2(Number(unisonDetune) || 0, 0, 1),
+    blend: clamp$2(Number(unisonBlend) || 0, 0, 1),
+    width: clamp$2(Number(unisonWidth) || 0, 0, 1),
+    detuneMode: clamp$2(Math.round(Number(unisonDetuneMode) || 0), 0, 4),
+    stackMode: clamp$2(Math.round(Number(unisonStackMode) || 0), 0, 4),
+    wavetablePositionSpread: clamp$2(Number(unisonWavetablePositionSpread) || 0, 0, 1),
+    warpSpread: clamp$2(Number(unisonWarpSpread) || 0, 0, 1)
+  }), [
+    unisonBlend,
+    unisonDetune,
+    unisonDetuneMode,
+    unisonStackMode,
+    unisonVoices,
+    unisonWarpSpread,
+    unisonWavetablePositionSpread,
+    unisonWidth
+  ]);
+  const [observedState, setObservedState] = reactExports.useState(() => fallbackState);
+  reactExports.useEffect(() => {
+    setObservedState((previousState) => selectObservedEffectiveUnisonState(previousState, message));
+  }, [message]);
+  reactExports.useEffect(() => {
+    if (message) {
+      return;
+    }
+    setObservedState(fallbackState);
+  }, [fallbackState, message]);
+  return message ? observedState : fallbackState;
+}
 function useModulationState() {
   const patchConnection = usePatchConnection();
   const [state, setState] = reactExports.useState(null);
@@ -37050,6 +37488,126 @@ function useStoredArticulationBank() {
     hasHydrated,
     setAndPersistBank
   }), [bank, hasHydrated, setAndPersistBank]);
+}
+function isPlainRecord(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function parsePresetStoredStateValue(rawValue, label) {
+  if (typeof rawValue !== "string") {
+    return rawValue;
+  }
+  try {
+    return JSON.parse(rawValue);
+  } catch (error) {
+    throw new Error(`${label} must be valid JSON.`);
+  }
+}
+function parseStrictArticulationPresetBank(rawValue) {
+  const parsedValue = parsePresetStoredStateValue(rawValue, "Articulation preset state");
+  if (!isPlainRecord(parsedValue)) {
+    throw new Error("Articulation preset state must be an object.");
+  }
+  if (parsedValue.format !== "cosimo.articulations" || parsedValue.version !== 2) {
+    throw new Error("Articulation preset state must be cosimo.articulations version 2.");
+  }
+  return normalizeArticulationBank(parsedValue);
+}
+function parseStrictModulationPresetState(rawValue) {
+  const parsedValue = parsePresetStoredStateValue(rawValue, "Modulation preset state");
+  if (!isPlainRecord(parsedValue)) {
+    throw new Error("Modulation preset state must be an object.");
+  }
+  if (parsedValue.format !== "cosimo.modulation" || parsedValue.version !== 2) {
+    throw new Error("Modulation preset state must be cosimo.modulation version 2.");
+  }
+  return normalizeModulationState(parsedValue);
+}
+function useSynthPresetStoredStateAdapters({
+  articulationBankState,
+  modulationBridge,
+  modulationState
+}) {
+  const patchConnection = usePatchConnection();
+  const { bankRef, setAndPersistBank } = articulationBankState;
+  const latestModulationStateRef = reactExports.useRef(null);
+  reactExports.useEffect(() => {
+    latestModulationStateRef.current = modulationState;
+  }, [modulationState]);
+  return reactExports.useMemo(() => {
+    const subscribeToStoredStateKey = (stateKey, listener) => {
+      const handleStoredStateValue = (message) => {
+        if (!message || typeof message !== "object") {
+          return;
+        }
+        if (message.key === stateKey) {
+          listener();
+        }
+      };
+      patchConnection.addStoredStateValueListener?.(handleStoredStateValue);
+      return () => {
+        patchConnection.removeStoredStateValueListener?.(handleStoredStateValue);
+      };
+    };
+    return [
+      {
+        key: ARTICULATION_STATE_KEY,
+        schemaVersion: 2,
+        getContract() {
+          return {
+            key: ARTICULATION_STATE_KEY,
+            schemaVersion: 2,
+            required: true
+          };
+        },
+        capture() {
+          return bankRef.current;
+        },
+        normalizeForPreset(value) {
+          return parseStrictArticulationPresetBank(value);
+        },
+        serializeForPreset(value) {
+          return serializeArticulationBank(parseStrictArticulationPresetBank(value));
+        },
+        apply(value) {
+          setAndPersistBank(parseStrictArticulationPresetBank(value));
+        },
+        subscribe(listener) {
+          return subscribeToStoredStateKey(ARTICULATION_STATE_KEY, listener);
+        }
+      },
+      {
+        key: MODULATION_STATE_KEY,
+        schemaVersion: 2,
+        getContract() {
+          return {
+            key: MODULATION_STATE_KEY,
+            schemaVersion: 2,
+            required: true
+          };
+        },
+        capture() {
+          return modulationBridge.current?.getState() ?? latestModulationStateRef.current ?? createDefaultModulationState();
+        },
+        normalizeForPreset(value) {
+          return parseStrictModulationPresetState(value);
+        },
+        serializeForPreset(value) {
+          return serializeModulationState(parseStrictModulationPresetState(value));
+        },
+        apply(value) {
+          const nextState = parseStrictModulationPresetState(value);
+          if (modulationBridge.current) {
+            modulationBridge.current.setState(nextState);
+            return;
+          }
+          patchConnection.sendStoredStateValue?.(MODULATION_STATE_KEY, serializeModulationState(nextState));
+        },
+        subscribe(listener) {
+          return subscribeToStoredStateKey(MODULATION_STATE_KEY, listener);
+        }
+      }
+    ];
+  }, [bankRef, modulationBridge, patchConnection, setAndPersistBank]);
 }
 function useStagePositionDrag({
   stageRef,
@@ -37573,6 +38131,61 @@ function useSynthPatchViewModel({
     initialValue: 0.707107,
     coerce: (value) => clamp$2(Number(value) || 0, 0.1, 20)
   });
+  const unisonVoices = usePatchParameterBinding({
+    endpointID: UNISON_VOICES_ENDPOINT_ID,
+    initialValue: 1,
+    coerce: (value) => clamp$2(Math.round(Number(value) || 1), 1, 8)
+  });
+  const unisonDetune = usePatchParameterBinding({
+    endpointID: UNISON_DETUNE_ENDPOINT_ID,
+    initialValue: 0.1,
+    coerce: (value) => clamp$2(Number(value) || 0, 0, 1)
+  });
+  const unisonBlend = usePatchParameterBinding({
+    endpointID: UNISON_BLEND_ENDPOINT_ID,
+    initialValue: 0.75,
+    coerce: (value) => clamp$2(Number(value) || 0, 0, 1)
+  });
+  const unisonWidth = usePatchParameterBinding({
+    endpointID: UNISON_WIDTH_ENDPOINT_ID,
+    initialValue: 1,
+    coerce: (value) => clamp$2(Number(value) || 0, 0, 1)
+  });
+  const unisonPhase = usePatchParameterBinding({
+    endpointID: UNISON_PHASE_ENDPOINT_ID,
+    initialValue: 0,
+    coerce: (value) => clamp$2(Number(value) || 0, 0, 1)
+  });
+  const unisonRandom = usePatchParameterBinding({
+    endpointID: UNISON_RANDOM_ENDPOINT_ID,
+    initialValue: 0,
+    coerce: (value) => clamp$2(Number(value) || 0, 0, 1)
+  });
+  const unisonPhaseMode = usePatchParameterBinding({
+    endpointID: UNISON_PHASE_MODE_ENDPOINT_ID,
+    initialValue: 0,
+    coerce: (value) => clamp$2(Math.round(Number(value) || 0), 0, 1)
+  });
+  const unisonDetuneMode = usePatchParameterBinding({
+    endpointID: UNISON_DETUNE_MODE_ENDPOINT_ID,
+    initialValue: 0,
+    coerce: (value) => clamp$2(Math.round(Number(value) || 0), 0, 4)
+  });
+  const unisonStackMode = usePatchParameterBinding({
+    endpointID: UNISON_STACK_MODE_ENDPOINT_ID,
+    initialValue: 0,
+    coerce: (value) => clamp$2(Math.round(Number(value) || 0), 0, 4)
+  });
+  const unisonWavetablePositionSpread = usePatchParameterBinding({
+    endpointID: UNISON_WAVETABLE_POSITION_SPREAD_ENDPOINT_ID,
+    initialValue: 0,
+    coerce: (value) => clamp$2(Number(value) || 0, 0, 1)
+  });
+  const unisonWarpSpread = usePatchParameterBinding({
+    endpointID: UNISON_WARP_SPREAD_ENDPOINT_ID,
+    initialValue: 0,
+    coerce: (value) => clamp$2(Number(value) || 0, 0, 1)
+  });
   const mseg1Morph = usePatchParameterBinding({
     endpointID: MSEG_1_MORPH_ENDPOINT_ID,
     initialValue: 0,
@@ -37676,6 +38289,16 @@ function useSynthPatchViewModel({
     filterCutoff: filterCutoff.value,
     filterQ: filterQ.value
   });
+  const observedUnisonState = useObservedUnisonState({
+    unisonVoices: unisonVoices.value,
+    unisonDetune: unisonDetune.value,
+    unisonBlend: unisonBlend.value,
+    unisonWidth: unisonWidth.value,
+    unisonDetuneMode: unisonDetuneMode.value,
+    unisonStackMode: unisonStackMode.value,
+    unisonWavetablePositionSpread: unisonWavetablePositionSpread.value,
+    unisonWarpSpread: unisonWarpSpread.value
+  });
   const observedFilterSpectrum = useObservedFilterSpectrum();
   const observedDistortionHistory = useObservedDistortionHistory();
   const observedDistortionScope = useObservedDistortionScope();
@@ -37699,6 +38322,11 @@ function useSynthPatchViewModel({
   const isApplyingArticulationRef = reactExports.useRef(false);
   const [selectedArticulationIsDirty, setSelectedArticulationIsDirty] = reactExports.useState(false);
   const [discardedArticulationEdit, setDiscardedArticulationEdit] = reactExports.useState(null);
+  const presetStoredStateAdapters = useSynthPresetStoredStateAdapters({
+    articulationBankState,
+    modulationBridge,
+    modulationState
+  });
   const activeAuditionRef = reactExports.useRef(null);
   const lastPlayedNoteRef = reactExports.useRef(ARTICULATION_AUDITION_FALLBACK_NOTE);
   const heldMidiNotesRef = reactExports.useRef(/* @__PURE__ */ new Map());
@@ -37870,6 +38498,17 @@ function useSynthPatchViewModel({
         filterMode: filterMode.value,
         filterCutoff: filterCutoff.value,
         filterQ: filterQ.value,
+        unisonVoices: unisonVoices.value,
+        unisonDetune: unisonDetune.value,
+        unisonBlend: unisonBlend.value,
+        unisonWidth: unisonWidth.value,
+        unisonPhase: unisonPhase.value,
+        unisonRandom: unisonRandom.value,
+        unisonPhaseMode: unisonPhaseMode.value,
+        unisonDetuneMode: unisonDetuneMode.value,
+        unisonStackMode: unisonStackMode.value,
+        unisonWavetablePositionSpread: unisonWavetablePositionSpread.value,
+        unisonWarpSpread: unisonWarpSpread.value,
         msegMorphs: [mseg1Morph.value, mseg2Morph.value, mseg3Morph.value],
         distortionMode: distortionMode.value,
         distortionDriveDb: distortionDriveDb.value,
@@ -37891,7 +38530,7 @@ function useSynthPatchViewModel({
       modRouteAmounts: (currentModulationState?.routes ?? []).map((route) => ({
         routeId: route.id,
         amount: route.amount
-      }))
+      })).filter((routeAmount) => Math.abs(routeAmount.amount) > 1e-6)
     });
   }, [
     chorusBloomMode.value,
@@ -37920,6 +38559,17 @@ function useSynthPatchViewModel({
     mseg3Morph.value,
     pan.value,
     playMode.value,
+    unisonBlend.value,
+    unisonDetune.value,
+    unisonDetuneMode.value,
+    unisonPhase.value,
+    unisonPhaseMode.value,
+    unisonRandom.value,
+    unisonStackMode.value,
+    unisonVoices.value,
+    unisonWarpSpread.value,
+    unisonWavetablePositionSpread.value,
+    unisonWidth.value,
     warpAmount.value,
     warpMode.value,
     wavetablePosition.value
@@ -37936,6 +38586,17 @@ function useSynthPatchViewModel({
     filterMode.setValue(parameters.filterMode);
     filterCutoff.setValue(parameters.filterCutoff);
     filterQ.setValue(parameters.filterQ);
+    unisonVoices.setValue(parameters.unisonVoices);
+    unisonDetune.setValue(parameters.unisonDetune);
+    unisonBlend.setValue(parameters.unisonBlend);
+    unisonWidth.setValue(parameters.unisonWidth);
+    unisonPhase.setValue(parameters.unisonPhase);
+    unisonRandom.setValue(parameters.unisonRandom);
+    unisonPhaseMode.setValue(parameters.unisonPhaseMode);
+    unisonDetuneMode.setValue(parameters.unisonDetuneMode);
+    unisonStackMode.setValue(parameters.unisonStackMode);
+    unisonWavetablePositionSpread.setValue(parameters.unisonWavetablePositionSpread);
+    unisonWarpSpread.setValue(parameters.unisonWarpSpread);
     mseg1Morph.setValue(parameters.msegMorphs[0]);
     mseg2Morph.setValue(parameters.msegMorphs[1]);
     mseg3Morph.setValue(parameters.msegMorphs[2]);
@@ -38011,6 +38672,17 @@ function useSynthPatchViewModel({
     mseg3Morph,
     pan,
     playMode,
+    unisonBlend,
+    unisonDetune,
+    unisonDetuneMode,
+    unisonPhase,
+    unisonPhaseMode,
+    unisonRandom,
+    unisonStackMode,
+    unisonVoices,
+    unisonWarpSpread,
+    unisonWavetablePositionSpread,
+    unisonWidth,
     warpAmount,
     warpMode,
     wavetablePosition
@@ -38378,6 +39050,17 @@ function useSynthPatchViewModel({
     filterMode,
     filterCutoff,
     filterQ,
+    unisonVoices,
+    unisonDetune,
+    unisonBlend,
+    unisonWidth,
+    unisonPhase,
+    unisonRandom,
+    unisonPhaseMode,
+    unisonDetuneMode,
+    unisonStackMode,
+    unisonWavetablePositionSpread,
+    unisonWarpSpread,
     selectedMsegMorph,
     distortionMode,
     distortionDriveDb,
@@ -38400,11 +39083,13 @@ function useSynthPatchViewModel({
     observedDistortionScope,
     observedMsegPlayhead,
     observedWarpState,
+    observedUnisonState,
     modulationState,
     articulationBank,
     articulationSlots,
     selectedArticulationSlot,
     selectedArticulationIsDirty,
+    presetStoredStateAdapters,
     articulationHeldInput,
     discardedArticulationEdit: discardedArticulationEdit ? {
       slotId: discardedArticulationEdit.slotId,
@@ -38454,6 +39139,3167 @@ function useSynthPatchViewModel({
     msegEditor,
     keyboardRouting
   };
+}
+const ICON_SAVE = (
+  /* html */
+  `
+<svg
+  class="lucide lucide-save"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  aria-hidden="true"
+  focusable="false"
+>
+  <path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z" />
+  <path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7" />
+  <path d="M7 3v4a1 1 0 0 0 1 1h7" />
+</svg>`
+);
+const ICON_SAVE_AS = (
+  /* html */
+  `
+<svg
+  class="lucide lucide-file-plus-2"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  aria-hidden="true"
+  focusable="false"
+>
+  <path d="M11.35 22H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.706.706l3.588 3.588A2.4 2.4 0 0 1 20 8v5.35" />
+  <path d="M14 2v5a1 1 0 0 0 1 1h5" />
+  <path d="M14 19h6" />
+  <path d="M17 16v6" />
+</svg>`
+);
+const ICON_REVERT = (
+  /* html */
+  `
+<svg
+  class="lucide lucide-undo-2"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  aria-hidden="true"
+  focusable="false"
+>
+  <path d="M9 14 4 9l5-5" />
+  <path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11" />
+</svg>`
+);
+const ICON_COPY = (
+  /* html */
+  `
+<svg
+  class="lucide lucide-copy"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  aria-hidden="true"
+  focusable="false"
+>
+  <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+  <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+</svg>`
+);
+const ICON_PASTE = (
+  /* html */
+  `
+<svg
+  class="lucide lucide-clipboard-paste"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  aria-hidden="true"
+  focusable="false"
+>
+  <path d="M11 14h10" />
+  <path d="M16 4h2a2 2 0 0 1 2 2v1.344" />
+  <path d="m17 18 4-4-4-4" />
+  <path d="M8 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 1.793-1.113" />
+  <rect x="8" y="2" width="8" height="4" rx="1" />
+</svg>`
+);
+function escHTML(s) {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+function showToast(host, message, tone) {
+  const el = document.createElement("div");
+  el.className = `cpb-toast ${tone}`;
+  el.textContent = message;
+  host.appendChild(el);
+  setTimeout(() => {
+    el.style.opacity = "0";
+    el.style.transition = "opacity 250ms";
+  }, 2200);
+  setTimeout(() => el.remove(), 2500);
+}
+function handleMutationResult(result, toastHost, successMessage) {
+  if (result.ok) {
+    showToast(toastHost, successMessage ?? result.message, "success");
+    return true;
+  }
+  showToast(toastHost, result.message, "error");
+  return false;
+}
+const PRESET_BAR_CSS = (
+  /* css */
+  `
+  :host {
+    display: block;
+    position: relative;
+    font-family: "SF Mono", Menlo, Monaco, Consolas, monospace;
+    color: var(--foreground, #eff7ee);
+  }
+
+  *, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  /* ── Preset Bar ─────────────────────────────────────── */
+  .preset-bar {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    height: 38px;
+    background: rgba(0,0,0,0.22);
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    border-radius: var(--preset-bar-border-radius, 0);
+    overflow: hidden;
+    position: relative;
+    z-index: 60;
+  }
+
+  .nav-btn {
+    appearance: none;
+    border: none;
+    width: 32px;
+    height: 100%;
+    background: transparent;
+    color: rgba(239,247,238,0.45);
+    font: inherit;
+    font-size: 14px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 80ms;
+    flex-shrink: 0;
+  }
+  .nav-btn:hover {
+    color: var(--knob-track-value-color, #8ff0a4);
+    background: rgba(143,240,164,0.06);
+  }
+  .nav-btn:active { background: rgba(143,240,164,0.12); }
+
+  /* ── Name Region ────────────────────────────────────── */
+  .name-region {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 100%;
+    padding: 0 12px;
+    cursor: pointer;
+    transition: background 80ms;
+    position: relative;
+    min-width: 0;
+  }
+  .name-region:hover { background: rgba(255,255,255,0.03); }
+  .name-region.open { background: rgba(143,240,164,0.04); }
+
+  .preset-name {
+    font-size: 12px;
+    letter-spacing: 0.03em;
+    color: rgba(239,247,238,0.92);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .dirty-indicator {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #ffe884;
+    flex-shrink: 0;
+    display: none;
+  }
+  .dirty-indicator.visible { display: block; }
+
+  .source-tag {
+    font-size: 8px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: rgba(239,247,238,0.25);
+    flex-shrink: 0;
+  }
+
+  .chevron {
+    color: rgba(239,247,238,0.25);
+    font-size: 9px;
+    margin-left: auto;
+    flex-shrink: 0;
+    transition: transform 150ms;
+  }
+  .name-region.open .chevron { transform: rotate(180deg); }
+
+  /* ── Action Group ───────────────────────────────────── */
+  .action-group {
+    display: flex;
+    align-items: center;
+    height: 100%;
+    border-left: 1px solid rgba(255,255,255,0.06);
+    flex-shrink: 0;
+  }
+
+  .action-btn {
+    appearance: none;
+    border: none;
+    width: 32px;
+    height: 100%;
+    padding: 0;
+    background: transparent;
+    color: rgba(239,247,238,0.4);
+    font: inherit;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 80ms;
+    flex-shrink: 0;
+  }
+  .action-btn svg {
+    width: 15px;
+    height: 15px;
+    stroke-width: 2;
+  }
+  .action-btn:hover {
+    color: var(--knob-track-value-color, #8ff0a4);
+    background: rgba(143,240,164,0.06);
+  }
+  .action-btn:active { background: rgba(143,240,164,0.1); }
+  .action-btn:disabled { opacity: 0.25; pointer-events: none; }
+  .action-btn.highlight { color: rgba(143,240,164,0.7); }
+
+  .action-sep {
+    width: 1px;
+    height: 16px;
+    background: rgba(255,255,255,0.06);
+    flex-shrink: 0;
+  }
+
+  /* ── Flyout Dropdown ────────────────────────────────── */
+  .flyout-backdrop {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 49;
+    pointer-events: none;
+  }
+  .flyout-backdrop.open { display: block; }
+
+  .flyout {
+    display: none;
+    position: absolute;
+    top: 38px;
+    left: 0;
+    right: 0;
+    background: rgba(12,16,14,0.98);
+    backdrop-filter: blur(24px);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-top: none;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+    z-index: 50;
+    max-height: 400px;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .flyout.open { display: flex; }
+
+  .flyout-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 14px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    flex-shrink: 0;
+  }
+
+  .flyout-search {
+    flex: 1;
+    height: 28px;
+    padding: 0 10px;
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 7px;
+    background: rgba(0,0,0,0.3);
+    color: rgba(239,247,238,0.9);
+    font: inherit;
+    font-size: 11px;
+    letter-spacing: 0.02em;
+  }
+  .flyout-search::placeholder { color: rgba(239,247,238,0.25); }
+  .flyout-search:focus { border-color: rgba(143,240,164,0.4); outline: none; }
+
+  .filter-pill {
+    appearance: none;
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 999px;
+    padding: 4px 10px;
+    height: 28px;
+    background: transparent;
+    color: rgba(239,247,238,0.4);
+    font: inherit;
+    font-size: 9px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all 100ms;
+    white-space: nowrap;
+  }
+  .filter-pill:hover:not(.active) {
+    background: rgba(255,255,255,0.04);
+    color: rgba(239,247,238,0.6);
+  }
+  .filter-pill.active {
+    background: rgba(143,240,164,0.12);
+    border-color: rgba(143,240,164,0.25);
+    color: var(--knob-track-value-color, #8ff0a4);
+  }
+
+  /* Preset list */
+  .flyout-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 4px 0;
+  }
+  .flyout-list::-webkit-scrollbar { width: 5px; }
+  .flyout-list::-webkit-scrollbar-track { background: transparent; }
+  .flyout-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 3px; }
+
+  .section-header {
+    font-size: 9px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: rgba(239,247,238,0.25);
+    padding: 10px 16px 4px;
+  }
+  .section-header:first-child { padding-top: 6px; }
+
+  .preset-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 16px;
+    height: 32px;
+    cursor: pointer;
+    transition: background 60ms;
+  }
+  .preset-item:hover { background: rgba(255,255,255,0.04); }
+  .preset-item.active { background: rgba(143,240,164,0.08); }
+
+  .preset-item .item-name {
+    flex: 1;
+    font-size: 12px;
+    letter-spacing: 0.02em;
+    color: rgba(239,247,238,0.8);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .preset-item.active .item-name { color: var(--knob-track-value-color, #8ff0a4); }
+
+  .preset-item .item-source {
+    font-size: 8px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: rgba(239,247,238,0.2);
+    flex-shrink: 0;
+  }
+
+  .preset-item .item-dirty-star {
+    color: #ffe884;
+    font-size: 11px;
+    flex-shrink: 0;
+    display: none;
+  }
+
+  .preset-item .item-ctx {
+    appearance: none;
+    border: none;
+    background: transparent;
+    color: rgba(239,247,238,0.2);
+    font-size: 16px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0 2px;
+    opacity: 0;
+    transition: opacity 60ms;
+    flex-shrink: 0;
+  }
+  .preset-item:hover .item-ctx { opacity: 1; }
+  .preset-item .item-ctx:hover { color: rgba(239,247,238,0.6); }
+
+  .flyout-empty {
+    padding: 28px 16px;
+    text-align: center;
+    font-size: 11px;
+    color: rgba(239,247,238,0.25);
+  }
+
+  /* Flyout footer */
+  .flyout-footer {
+    display: flex;
+    gap: 6px;
+    padding: 8px 14px;
+    border-top: 1px solid rgba(255,255,255,0.06);
+    flex-shrink: 0;
+  }
+
+  .flyout-footer-btn {
+    appearance: none;
+    flex: 1;
+    height: 30px;
+    border: 1px dashed rgba(255,255,255,0.1);
+    border-radius: 7px;
+    background: transparent;
+    color: rgba(239,247,238,0.4);
+    font: inherit;
+    font-size: 9px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all 100ms;
+  }
+  .flyout-footer-btn:hover {
+    border-color: rgba(143,240,164,0.3);
+    color: var(--knob-track-value-color, #8ff0a4);
+    background: rgba(143,240,164,0.05);
+  }
+
+  /* ── Context Menu ───────────────────────────────────── */
+  .ctx-menu {
+    display: none;
+    position: fixed;
+    min-width: 200px;
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 10px;
+    background: rgba(14,18,16,0.98);
+    backdrop-filter: blur(24px);
+    box-shadow: 0 12px 40px rgba(0,0,0,0.65);
+    z-index: 200;
+    padding: 4px 0;
+    overflow: hidden;
+  }
+  .ctx-menu.open { display: block; }
+
+  .ctx-sep {
+    height: 1px;
+    background: rgba(255,255,255,0.06);
+    margin: 4px 0;
+  }
+
+  .ctx-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 14px;
+    cursor: pointer;
+    transition: background 60ms;
+    font-size: 11px;
+    color: rgba(239,247,238,0.75);
+    letter-spacing: 0.02em;
+  }
+  .ctx-item:hover {
+    background: rgba(143,240,164,0.1);
+    color: var(--knob-track-value-color, #8ff0a4);
+  }
+  .ctx-item .shortcut {
+    margin-left: auto;
+    font-size: 9px;
+    color: rgba(239,247,238,0.2);
+    letter-spacing: 0.04em;
+  }
+  .ctx-item.danger { color: #ff9a7d; }
+  .ctx-item.danger:hover { background: rgba(255,154,125,0.1); color: #ff9a7d; }
+
+  /* ── Save Dialog ────────────────────────────────────── */
+  .dialog-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 300;
+    align-items: center;
+    justify-content: center;
+  }
+  .dialog-overlay.open { display: flex; }
+
+  .dialog {
+    width: 380px;
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 14px;
+    background: rgba(14,18,16,0.98);
+    backdrop-filter: blur(24px);
+    padding: 22px;
+    box-shadow: 0 24px 64px rgba(0,0,0,0.6);
+    font-family: inherit;
+    color: var(--foreground, #eff7ee);
+  }
+
+  .dialog h3 {
+    font-size: 13px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    margin-bottom: 16px;
+  }
+
+  .dialog label {
+    display: block;
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: rgba(239,247,238,0.45);
+    margin-bottom: 6px;
+  }
+
+  .dialog input[type="text"] {
+    width: 100%;
+    height: 34px;
+    padding: 0 12px;
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 8px;
+    background: rgba(0,0,0,0.3);
+    color: rgba(239,247,238,0.92);
+    font: inherit;
+    font-size: 12px;
+    margin-bottom: 18px;
+  }
+  .dialog input[type="text"]:focus {
+    border-color: rgba(143,240,164,0.5);
+    outline: none;
+  }
+
+  .dialog-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+  }
+
+  .dialog-actions button {
+    appearance: none;
+    height: 32px;
+    padding: 0 18px;
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 7px;
+    background: rgba(255,255,255,0.04);
+    color: rgba(239,247,238,0.65);
+    font: inherit;
+    font-size: 10px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all 100ms;
+  }
+  .dialog-actions button:hover { background: rgba(255,255,255,0.08); }
+  .dialog-actions button.primary {
+    background: rgba(143,240,164,0.16);
+    border-color: rgba(143,240,164,0.35);
+    color: var(--knob-track-value-color, #8ff0a4);
+  }
+  .dialog-actions button.primary:hover { background: rgba(143,240,164,0.26); }
+
+  /* ── Toast ──────────────────────────────────────────── */
+  .cpb-toast-host {
+    position: fixed;
+    top: 16px;
+    right: 16px;
+    z-index: 400;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    pointer-events: none;
+  }
+
+  .cpb-toast {
+    padding: 8px 14px;
+    border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.08);
+    background: rgba(14,18,16,0.95);
+    backdrop-filter: blur(12px);
+    font-size: 11px;
+    color: rgba(239,247,238,0.8);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    animation: cpb-toast-in 160ms ease forwards;
+    font-family: inherit;
+  }
+  .cpb-toast.success { color: var(--knob-track-value-color, #8ff0a4); border-color: rgba(143,240,164,0.15); }
+  .cpb-toast.warn { color: #ffe884; border-color: rgba(255,232,132,0.15); }
+  .cpb-toast.error { color: #ff9a7d; border-color: rgba(255,154,125,0.15); }
+
+  @keyframes cpb-toast-in {
+    from { opacity: 0; transform: translateY(-6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+`
+);
+const PRESET_BAR_HTML = (
+  /* html */
+  `
+  <div class="preset-bar">
+    <button class="nav-btn" data-action="prev" title="Previous preset">&#8249;</button>
+
+    <div class="name-region" data-action="toggle-flyout">
+      <span class="preset-name" data-el="preset-name">No Preset</span>
+      <span class="dirty-indicator" data-el="dirty-dot"></span>
+      <span class="source-tag" data-el="source-tag"></span>
+      <span class="chevron">&#9662;</span>
+    </div>
+
+    <button class="nav-btn" data-action="next" title="Next preset">&#8250;</button>
+
+    <div class="action-group">
+      <button class="action-btn highlight" data-action="save" data-el="btn-save" title="Save preset" aria-label="Save preset" disabled>${ICON_SAVE}</button>
+      <span class="action-sep"></span>
+      <button class="action-btn" data-action="save-as" title="Save as new preset" aria-label="Save as new preset">${ICON_SAVE_AS}</button>
+      <span class="action-sep"></span>
+      <button class="action-btn" data-action="revert" data-el="btn-revert" title="Revert preset" aria-label="Revert preset" disabled>${ICON_REVERT}</button>
+      <span class="action-sep"></span>
+      <button class="action-btn" data-action="copy" title="Copy preset JSON" aria-label="Copy preset JSON">${ICON_COPY}</button>
+      <span class="action-sep"></span>
+      <button class="action-btn" data-action="paste" title="Paste preset JSON" aria-label="Paste preset JSON">${ICON_PASTE}</button>
+    </div>
+  </div>
+
+  <div class="flyout" data-el="flyout">
+    <div class="flyout-header">
+      <input class="flyout-search" data-el="flyout-search" type="text" placeholder="Search presets..." autocomplete="off" spellcheck="false">
+      <button class="filter-pill active" data-filter="all">All</button>
+      <button class="filter-pill" data-filter="factory">Factory</button>
+      <button class="filter-pill" data-filter="user">User</button>
+    </div>
+    <div class="flyout-list" data-el="flyout-list"></div>
+    <div class="flyout-footer">
+      <button class="flyout-footer-btn" data-action="footer-save-as">+ Save current as new preset</button>
+      <button class="flyout-footer-btn" data-action="footer-paste">Paste JSON</button>
+    </div>
+  </div>
+
+  <div class="flyout-backdrop" data-el="flyout-backdrop"></div>
+
+  <div class="ctx-menu" data-el="ctx-menu">
+    <div class="ctx-item" data-ctx="rename">Rename <span class="shortcut">F2</span></div>
+    <div class="ctx-item" data-ctx="duplicate">Duplicate</div>
+    <div class="ctx-item" data-ctx="overwrite">Overwrite with current</div>
+    <div class="ctx-sep"></div>
+    <div class="ctx-item" data-ctx="copy">Copy as JSON <span class="shortcut">&#8984;C</span></div>
+    <div class="ctx-sep"></div>
+    <div class="ctx-item danger" data-ctx="delete">Delete <span class="shortcut">&#9003;</span></div>
+  </div>
+
+  <div class="dialog-overlay" data-el="dialog-overlay">
+    <div class="dialog">
+      <h3 data-el="dialog-title">Save Preset</h3>
+      <label for="cpb-save-name">Preset Name</label>
+      <input type="text" id="cpb-save-name" data-el="dialog-input" value="">
+      <div class="dialog-actions">
+        <button data-action="dialog-cancel">Cancel</button>
+        <button class="primary" data-action="dialog-confirm" data-el="dialog-confirm">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="cpb-toast-host" data-el="toast-host"></div>
+`
+);
+const ELEMENT_NAME = "cosimo-preset-bar";
+class PresetBar extends HTMLElement {
+  _controller = null;
+  _unsubscribe = null;
+  _state = null;
+  _mutations = null;
+  _flyoutOpen = false;
+  _ctxTarget = null;
+  _saveDialogMode = "new";
+  _saveDialogPresetKey = null;
+  // Cached DOM refs
+  _els;
+  _handleDocumentPointerDown = (event) => {
+    if (!this._flyoutOpen && !this._els["ctx-menu"].classList.contains("open")) {
+      return;
+    }
+    if (event.composedPath().includes(this)) {
+      return;
+    }
+    this._closeFlyout();
+    this._closeCtxMenu();
+  };
+  _handleDocumentWheel = (event) => {
+    if (!this._flyoutOpen) {
+      return;
+    }
+    if (event.composedPath().includes(this._els["flyout"])) {
+      return;
+    }
+    this._closeFlyout();
+  };
+  constructor() {
+    super();
+    const shadow = this.attachShadow({ mode: "open" });
+    shadow.innerHTML = `<style>${PRESET_BAR_CSS}</style>${PRESET_BAR_HTML}`;
+    this._els = this._cacheElements(shadow);
+    this._attachEventListeners(shadow);
+  }
+  get controller() {
+    return this._controller;
+  }
+  set controller(next) {
+    if (this._controller === next) return;
+    if (this._unsubscribe) {
+      this._unsubscribe();
+      this._unsubscribe = null;
+    }
+    this._controller = next;
+    this._mutations = null;
+    this._state = null;
+    if (next) {
+      this._mutations = next.getMutations();
+      this._unsubscribe = next.subscribe((state) => this._onState(state));
+      this._onState(next.getState());
+    }
+  }
+  disconnectedCallback() {
+    if (this._unsubscribe) {
+      this._unsubscribe();
+      this._unsubscribe = null;
+    }
+    this._removeDocumentListeners();
+    this._closeFlyout();
+    this._closeCtxMenu();
+    this._closeDialog();
+  }
+  // ── DOM cache ────────────────────────────────────────
+  _cacheElements(root) {
+    const els = {};
+    for (const el of root.querySelectorAll("[data-el]")) {
+      els[el.dataset.el] = el;
+    }
+    return els;
+  }
+  // ── Event listeners ──────────────────────────────────
+  _attachEventListeners(root) {
+    root.addEventListener("click", (e) => {
+      const target = e.target;
+      const actionEl = target.closest("[data-action]");
+      if (actionEl) {
+        this._handleAction(actionEl.dataset.action);
+        return;
+      }
+      const filterEl = target.closest("[data-filter]");
+      if (filterEl) {
+        this._handleFilterPill(filterEl);
+        return;
+      }
+      const ctxEl = target.closest("[data-ctx]");
+      if (ctxEl) {
+        this._handleCtxAction(ctxEl.dataset.ctx);
+        return;
+      }
+      const itemEl = target.closest("[data-preset-key]");
+      if (itemEl && !target.closest(".item-ctx")) {
+        this._applyPreset(itemEl.dataset.presetKey);
+        return;
+      }
+      if (target === this._els["flyout-backdrop"]) {
+        this._closeFlyout();
+        return;
+      }
+      if (target === this._els["dialog-overlay"]) {
+        this._closeDialog();
+        return;
+      }
+      const ctxMenu = this._els["ctx-menu"];
+      if (ctxMenu.classList.contains("open") && !ctxMenu.contains(target)) {
+        this._closeCtxMenu();
+      }
+    });
+    root.addEventListener("click", (e) => {
+      const ctxBtn = e.target.closest(".item-ctx");
+      if (!ctxBtn) return;
+      e.stopPropagation();
+      const itemEl = ctxBtn.closest("[data-preset-key]");
+      if (!itemEl) return;
+      this._openCtxMenu(e, itemEl.dataset.presetKey);
+    });
+    root.addEventListener("contextmenu", (e) => {
+      const itemEl = e.target.closest("[data-preset-key][data-source='user']");
+      if (!itemEl) return;
+      e.preventDefault();
+      this._openCtxMenu(e, itemEl.dataset.presetKey);
+    });
+    const searchInput = this._els["flyout-search"];
+    searchInput.addEventListener("input", () => {
+      this._mutations?.setFilter({ query: searchInput.value });
+    });
+    const dialogInput = this._els["dialog-input"];
+    dialogInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") this._confirmDialog();
+      if (e.key === "Escape") this._closeDialog();
+    });
+    root.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") {
+        if (this._els["dialog-overlay"].classList.contains("open")) {
+          this._closeDialog();
+        } else if (this._els["ctx-menu"].classList.contains("open")) {
+          this._closeCtxMenu();
+        } else if (this._flyoutOpen) {
+          this._closeFlyout();
+        }
+      }
+    });
+  }
+  // ── Actions ──────────────────────────────────────────
+  _handleAction(action) {
+    switch (action) {
+      case "prev":
+        this._navigate(-1);
+        break;
+      case "next":
+        this._navigate(1);
+        break;
+      case "toggle-flyout":
+        this._toggleFlyout();
+        break;
+      case "save":
+        this._doSave();
+        break;
+      case "save-as":
+      case "footer-save-as":
+        this._closeFlyout();
+        this._openSaveDialog("new");
+        break;
+      case "revert":
+        this._doRevert();
+        break;
+      case "copy":
+        this._doCopy();
+        break;
+      case "paste":
+      case "footer-paste":
+        this._closeFlyout();
+        this._doPaste();
+        break;
+      case "dialog-cancel":
+        this._closeDialog();
+        break;
+      case "dialog-confirm":
+        this._confirmDialog();
+        break;
+    }
+  }
+  _handleFilterPill(el) {
+    const source = el.dataset.filter;
+    this._mutations?.setFilter({ source });
+    for (const pill of this.shadowRoot.querySelectorAll(".filter-pill")) {
+      pill.classList.toggle("active", pill.dataset.filter === source);
+    }
+  }
+  _handleCtxAction(action) {
+    const target = this._ctxTarget;
+    if (!target) {
+      this._closeCtxMenu();
+      return;
+    }
+    switch (action) {
+      case "rename":
+        this._closeCtxMenu();
+        this._openSaveDialog("rename", target.presetKey, target.label);
+        break;
+      case "duplicate":
+        this._closeCtxMenu();
+        this._openSaveDialog("duplicate", target.presetKey, `${target.label} (Copy)`);
+        break;
+      case "overwrite": {
+        const result = this._mutations.overwriteUserPreset(target.presetKey);
+        handleMutationResult(result, this._els["toast-host"]);
+        this._closeCtxMenu();
+        break;
+      }
+      case "copy": {
+        void this._mutations.copyPresetToClipboard(target.presetKey).then((result) => {
+          handleMutationResult(result, this._els["toast-host"]);
+        });
+        this._closeCtxMenu();
+        break;
+      }
+      case "delete": {
+        const result = this._mutations.deletePreset(target.presetKey);
+        handleMutationResult(result, this._els["toast-host"]);
+        this._closeCtxMenu();
+        break;
+      }
+    }
+  }
+  _navigate(direction) {
+    const state = this._state;
+    if (!state || state.visiblePresets.length === 0) return;
+    const currentIndex = state.visiblePresets.findIndex((p) => p.isActive);
+    let nextIndex;
+    if (currentIndex < 0) {
+      nextIndex = direction > 0 ? 0 : state.visiblePresets.length - 1;
+    } else {
+      nextIndex = (currentIndex + direction + state.visiblePresets.length) % state.visiblePresets.length;
+    }
+    this._applyPreset(state.visiblePresets[nextIndex].presetKey);
+  }
+  _applyPreset(presetKey) {
+    const result = this._mutations?.applyPreset(presetKey);
+    if (result && !result.ok) showToast(this._els["toast-host"], result.message, "error");
+    this._closeFlyout();
+    this._closeCtxMenu();
+  }
+  _doSave() {
+    const state = this._state;
+    if (!state?.activePreset) return;
+    const activeItem = state.presets.find((p) => p.isActive);
+    if (!activeItem?.canOverwrite) return;
+    const result = this._mutations.overwriteUserPreset(activeItem.presetKey);
+    handleMutationResult(result, this._els["toast-host"]);
+  }
+  _doRevert() {
+    const result = this._mutations?.reapplyActivePreset();
+    if (result) handleMutationResult(result, this._els["toast-host"], "Reverted to saved values");
+  }
+  _doCopy() {
+    const state = this._state;
+    if (!state?.activePreset) return;
+    const activeItem = state.presets.find((p) => p.isActive);
+    if (!activeItem) return;
+    void this._mutations.copyPresetToClipboard(activeItem.presetKey).then((result) => {
+      handleMutationResult(result, this._els["toast-host"]);
+    });
+  }
+  _doPaste() {
+    void this._mutations?.pastePresetFromClipboard({ applyAfterImport: true }).then((result) => {
+      if (result) handleMutationResult(result, this._els["toast-host"]);
+    });
+  }
+  // ── Flyout ───────────────────────────────────────────
+  _toggleFlyout() {
+    if (this._flyoutOpen) {
+      this._closeFlyout();
+    } else {
+      this._openFlyout();
+    }
+  }
+  _openFlyout() {
+    this._flyoutOpen = true;
+    this._els["flyout"].classList.add("open");
+    this._els["flyout-backdrop"].classList.add("open");
+    this.shadowRoot.querySelector(".name-region").classList.add("open");
+    this._addDocumentListeners();
+    this._renderFlyoutList();
+    setTimeout(() => this._els["flyout-search"].focus(), 30);
+  }
+  _closeFlyout() {
+    this._flyoutOpen = false;
+    this._els["flyout"].classList.remove("open");
+    this._els["flyout-backdrop"].classList.remove("open");
+    this.shadowRoot.querySelector(".name-region").classList.remove("open");
+    this._removeDocumentListeners();
+    if (this.shadowRoot?.activeElement === this._els["flyout-search"]) {
+      this._els["flyout-search"].blur();
+    }
+  }
+  _addDocumentListeners() {
+    document.addEventListener("pointerdown", this._handleDocumentPointerDown, { capture: true });
+    document.addEventListener("wheel", this._handleDocumentWheel, { capture: true, passive: true });
+  }
+  _removeDocumentListeners() {
+    document.removeEventListener("pointerdown", this._handleDocumentPointerDown, true);
+    document.removeEventListener("wheel", this._handleDocumentWheel, true);
+  }
+  // ── Context Menu ─────────────────────────────────────
+  _openCtxMenu(event, presetKey) {
+    const item = this._state?.presets.find((p) => p.presetKey === presetKey);
+    if (!item || item.source !== "user") return;
+    this._ctxTarget = item;
+    const menu = this._els["ctx-menu"];
+    menu.style.left = `${event.clientX}px`;
+    menu.style.top = `${event.clientY}px`;
+    menu.classList.add("open");
+  }
+  _closeCtxMenu() {
+    this._els["ctx-menu"].classList.remove("open");
+    this._ctxTarget = null;
+  }
+  // ── Save Dialog ──────────────────────────────────────
+  _openSaveDialog(mode, presetKey, prefill) {
+    this._saveDialogMode = mode;
+    this._saveDialogPresetKey = presetKey ?? null;
+    const titleEl = this._els["dialog-title"];
+    const confirmEl = this._els["dialog-confirm"];
+    const inputEl = this._els["dialog-input"];
+    switch (mode) {
+      case "new":
+        titleEl.textContent = "Save Preset";
+        confirmEl.textContent = "Save";
+        inputEl.value = prefill ?? (this._state?.dirty ? this._state.activeLabel : "My New Preset");
+        break;
+      case "rename":
+        titleEl.textContent = "Rename Preset";
+        confirmEl.textContent = "Rename";
+        inputEl.value = prefill ?? "";
+        break;
+      case "duplicate":
+        titleEl.textContent = "Duplicate Preset";
+        confirmEl.textContent = "Duplicate";
+        inputEl.value = prefill ?? "";
+        break;
+    }
+    this._els["dialog-overlay"].classList.add("open");
+    setTimeout(() => {
+      inputEl.focus();
+      inputEl.select();
+    }, 30);
+  }
+  _closeDialog() {
+    this._els["dialog-overlay"].classList.remove("open");
+  }
+  _confirmDialog() {
+    const name = this._els["dialog-input"].value.trim();
+    if (!name) return;
+    let result;
+    switch (this._saveDialogMode) {
+      case "new":
+        result = this._mutations?.saveCurrentAsNewPreset(name);
+        break;
+      case "rename":
+        if (this._saveDialogPresetKey) {
+          result = this._mutations?.renamePreset(this._saveDialogPresetKey, name);
+        }
+        break;
+      case "duplicate":
+        if (this._saveDialogPresetKey) {
+          result = this._mutations?.duplicatePresetAsUserPreset(this._saveDialogPresetKey, name);
+        }
+        break;
+    }
+    if (result) handleMutationResult(result, this._els["toast-host"]);
+    this._closeDialog();
+  }
+  // ── State → DOM ──────────────────────────────────────
+  _onState(state) {
+    this._state = state;
+    this._updateBar(state);
+    if (this._flyoutOpen) this._renderFlyoutList();
+    if (state.lastError) {
+      showToast(this._els["toast-host"], state.lastError, "error");
+      this._mutations?.clearLastError();
+    }
+  }
+  _updateBar(state) {
+    this._els["preset-name"].textContent = state.activeLabel || "No Preset";
+    this._els["dirty-dot"].classList.toggle("visible", state.dirty);
+    const activeItem = state.presets.find((p) => p.isActive);
+    this._els["source-tag"].textContent = activeItem?.source ?? "";
+    this._els["btn-save"].disabled = !state.dirty || !activeItem?.canOverwrite;
+    this._els["btn-revert"].disabled = !state.dirty;
+    for (const pill of this.shadowRoot.querySelectorAll(".filter-pill")) {
+      pill.classList.toggle("active", pill.dataset.filter === state.filter.source);
+    }
+  }
+  _renderFlyoutList() {
+    const state = this._state;
+    if (!state) return;
+    const list = this._els["flyout-list"];
+    const visible = state.visiblePresets;
+    if (visible.length === 0) {
+      list.innerHTML = `<div class="flyout-empty">No presets match.</div>`;
+      return;
+    }
+    const factory = visible.filter((p) => p.source === "factory");
+    const user = visible.filter((p) => p.source === "user");
+    let html = "";
+    if (factory.length) {
+      html += `<div class="section-header">Factory</div>`;
+      for (const p of factory) {
+        html += this._presetItemHTML(p);
+      }
+    }
+    if (user.length) {
+      html += `<div class="section-header">User</div>`;
+      for (const p of user) {
+        html += this._presetItemHTML(p);
+      }
+    }
+    list.innerHTML = html;
+  }
+  _presetItemHTML(item) {
+    const isActive = item.isActive;
+    const showDirty = isActive && item.dirty;
+    const showCtx = item.source === "user";
+    return `<div class="preset-item ${isActive ? "active" : ""}"
+                     data-preset-key="${escHTML(item.presetKey)}"
+                     data-source="${item.source}">
+            <span class="item-name">${escHTML(item.label)}</span>
+            <span class="item-dirty-star" style="display:${showDirty ? "block" : "none"}">*</span>
+            <span class="item-source">${item.source}</span>
+            ${showCtx ? `<button class="item-ctx">&#8943;</button>` : ""}
+        </div>`;
+  }
+}
+function definePresetBarElement() {
+  if (!window.customElements.get(ELEMENT_NAME)) {
+    window.customElements.define(ELEMENT_NAME, PresetBar);
+  }
+}
+function createPresetBar() {
+  definePresetBarElement();
+  return document.createElement(ELEMENT_NAME);
+}
+const cmajorEndpointIdentifierPattern = /^[A-Za-z_][A-Za-z0-9_]*$/;
+function isPlainObject$2(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function finiteNumber(value) {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return void 0;
+  }
+  return value;
+}
+function normalizeEndpointID(endpointID) {
+  if (typeof endpointID !== "string" || !cmajorEndpointIdentifierPattern.test(endpointID)) {
+    throw new Error(`Invalid Cmajor parameter endpoint ID "${String(endpointID)}".`);
+  }
+  return endpointID;
+}
+function normalizeParameterContract(parameter) {
+  if (!isPlainObject$2(parameter)) {
+    throw new Error("Parameter contract must be an object.");
+  }
+  const endpointID = normalizeEndpointID(parameter.endpointID);
+  const annotation = isPlainObject$2(parameter.annotation) ? parameter.annotation : parameter;
+  const booleanAnnotation = annotation.boolean === true;
+  const initValue = annotation.init ?? parameter.defaultValue;
+  const discrete = annotation.discrete === true || parameter.discrete === true;
+  const type = parameter.type === "boolean" || booleanAnnotation || typeof initValue === "boolean" ? "boolean" : parameter.type === "integer" || discrete ? "integer" : "number";
+  const defaultValue = type === "boolean" ? Boolean(initValue) : finiteNumber(initValue) ?? 0;
+  const contract = {
+    endpointID,
+    type,
+    defaultValue
+  };
+  const min = finiteNumber(annotation.min ?? parameter.min);
+  const max = finiteNumber(annotation.max ?? parameter.max);
+  const step = finiteNumber(annotation.step ?? parameter.step);
+  const text = annotation.text ?? parameter.text;
+  if (min !== void 0) {
+    contract.min = min;
+  }
+  if (max !== void 0) {
+    contract.max = max;
+  }
+  if (step !== void 0) {
+    contract.step = step;
+  }
+  if (discrete) {
+    contract.discrete = true;
+  }
+  if (typeof text === "string") {
+    contract.text = text;
+  }
+  return contract;
+}
+function hasStoredStateContractGetter(entry) {
+  return typeof entry.getContract === "function";
+}
+function normalizeStoredStateContract(entry) {
+  const rawEntry = hasStoredStateContractGetter(entry) ? entry.getContract() : entry;
+  if (!isPlainObject$2(rawEntry)) {
+    throw new Error("Stored-state contract must be an object.");
+  }
+  if (typeof rawEntry.key !== "string" || rawEntry.key.trim().length === 0) {
+    throw new Error("Stored-state contract key must be a non-empty string.");
+  }
+  if (!Number.isInteger(rawEntry.schemaVersion) || rawEntry.schemaVersion < 1) {
+    throw new Error(`Stored-state contract "${rawEntry.key}" schemaVersion must be a positive integer.`);
+  }
+  return {
+    key: rawEntry.key,
+    schemaVersion: rawEntry.schemaVersion,
+    required: true
+  };
+}
+function assertUnique(values, keyFor, label) {
+  const seen = /* @__PURE__ */ new Set();
+  for (const value of values) {
+    const key = keyFor(value);
+    if (seen.has(key)) {
+      throw new Error(`Duplicate ${label} "${key}".`);
+    }
+    seen.add(key);
+  }
+}
+function canonicalValue(value) {
+  if (Array.isArray(value)) {
+    return value.map(canonicalValue);
+  }
+  if (isPlainObject$2(value)) {
+    return Object.fromEntries(
+      Object.keys(value).sort().filter((key) => value[key] !== void 0).map((key) => [key, canonicalValue(value[key])])
+    );
+  }
+  return value;
+}
+function canonicalJSONStringify(value) {
+  return JSON.stringify(canonicalValue(value));
+}
+function rightRotate(value, bits) {
+  return value >>> bits | value << 32 - bits;
+}
+function sha256(message) {
+  const bytes = new TextEncoder().encode(message);
+  const bitLength = bytes.length * 8;
+  const paddedLength = bytes.length + 9 + 63 >> 6 << 6;
+  const padded = new Uint8Array(paddedLength);
+  const hash = [
+    1779033703,
+    3144134277,
+    1013904242,
+    2773480762,
+    1359893119,
+    2600822924,
+    528734635,
+    1541459225
+  ];
+  const constants = [
+    1116352408,
+    1899447441,
+    3049323471,
+    3921009573,
+    961987163,
+    1508970993,
+    2453635748,
+    2870763221,
+    3624381080,
+    310598401,
+    607225278,
+    1426881987,
+    1925078388,
+    2162078206,
+    2614888103,
+    3248222580,
+    3835390401,
+    4022224774,
+    264347078,
+    604807628,
+    770255983,
+    1249150122,
+    1555081692,
+    1996064986,
+    2554220882,
+    2821834349,
+    2952996808,
+    3210313671,
+    3336571891,
+    3584528711,
+    113926993,
+    338241895,
+    666307205,
+    773529912,
+    1294757372,
+    1396182291,
+    1695183700,
+    1986661051,
+    2177026350,
+    2456956037,
+    2730485921,
+    2820302411,
+    3259730800,
+    3345764771,
+    3516065817,
+    3600352804,
+    4094571909,
+    275423344,
+    430227734,
+    506948616,
+    659060556,
+    883997877,
+    958139571,
+    1322822218,
+    1537002063,
+    1747873779,
+    1955562222,
+    2024104815,
+    2227730452,
+    2361852424,
+    2428436474,
+    2756734187,
+    3204031479,
+    3329325298
+  ];
+  const words = new Uint32Array(64);
+  padded.set(bytes);
+  padded[bytes.length] = 128;
+  for (let index = 0; index < 8; index += 1) {
+    padded[padded.length - 1 - index] = bitLength / 2 ** (8 * index) & 255;
+  }
+  for (let offset = 0; offset < padded.length; offset += 64) {
+    for (let index = 0; index < 16; index += 1) {
+      const byteIndex = offset + index * 4;
+      words[index] = (padded[byteIndex] << 24 | padded[byteIndex + 1] << 16 | padded[byteIndex + 2] << 8 | padded[byteIndex + 3]) >>> 0;
+    }
+    for (let index = 16; index < 64; index += 1) {
+      const s0 = rightRotate(words[index - 15], 7) ^ rightRotate(words[index - 15], 18) ^ words[index - 15] >>> 3;
+      const s1 = rightRotate(words[index - 2], 17) ^ rightRotate(words[index - 2], 19) ^ words[index - 2] >>> 10;
+      words[index] = words[index - 16] + s0 + words[index - 7] + s1 >>> 0;
+    }
+    let [a, b, c, d, e, f, g, h] = hash;
+    for (let index = 0; index < 64; index += 1) {
+      const s1 = rightRotate(e, 6) ^ rightRotate(e, 11) ^ rightRotate(e, 25);
+      const ch = e & f ^ ~e & g;
+      const temp1 = h + s1 + ch + constants[index] + words[index] >>> 0;
+      const s0 = rightRotate(a, 2) ^ rightRotate(a, 13) ^ rightRotate(a, 22);
+      const maj = a & b ^ a & c ^ b & c;
+      const temp2 = s0 + maj >>> 0;
+      h = g;
+      g = f;
+      f = e;
+      e = d + temp1 >>> 0;
+      d = c;
+      c = b;
+      b = a;
+      a = temp1 + temp2 >>> 0;
+    }
+    hash[0] = hash[0] + a >>> 0;
+    hash[1] = hash[1] + b >>> 0;
+    hash[2] = hash[2] + c >>> 0;
+    hash[3] = hash[3] + d >>> 0;
+    hash[4] = hash[4] + e >>> 0;
+    hash[5] = hash[5] + f >>> 0;
+    hash[6] = hash[6] + g >>> 0;
+    hash[7] = hash[7] + h >>> 0;
+  }
+  return hash.map((value) => value.toString(16).padStart(8, "0")).join("");
+}
+function contractHashPayload(contract) {
+  return {
+    effectID: contract.effectID,
+    parameters: contract.parameters,
+    storedState: contract.storedState
+  };
+}
+function buildCanonicalPluginStateContract({
+  effectID,
+  parameters,
+  storedState = []
+}) {
+  if (typeof effectID !== "string" || effectID.trim().length === 0) {
+    throw new Error("Plugin state contract effectID must be a non-empty string.");
+  }
+  const normalizedParameters = parameters.map(normalizeParameterContract).sort((left, right) => left.endpointID.localeCompare(right.endpointID));
+  const normalizedStoredState = storedState.map(normalizeStoredStateContract).sort((left, right) => left.key.localeCompare(right.key));
+  const baseContract = {
+    effectID: effectID.trim(),
+    parameters: normalizedParameters,
+    storedState: normalizedStoredState
+  };
+  assertUnique(normalizedParameters, (param) => param.endpointID, "parameter endpointID");
+  assertUnique(normalizedStoredState, (entry) => entry.key, "stored-state key");
+  return {
+    ...baseContract,
+    hash: `sha256:${sha256(canonicalJSONStringify(contractHashPayload(baseContract)))}`
+  };
+}
+function buildPluginStateContract({
+  effectID,
+  status,
+  storedState = []
+}) {
+  if (!isPlainObject$2(status) || !isPlainObject$2(status.details) || !Array.isArray(status.details.inputs)) {
+    throw new Error("Cmajor status details.inputs must be an array.");
+  }
+  const parameters = status.details.inputs.filter((endpoint) => isPlainObject$2(endpoint) && endpoint.purpose === "parameter" && !(isPlainObject$2(endpoint.annotation) && endpoint.annotation.hidden === true));
+  return buildCanonicalPluginStateContract({
+    effectID,
+    parameters,
+    storedState
+  });
+}
+function clonePluginStateContract(contract) {
+  return {
+    effectID: contract.effectID,
+    parameters: contract.parameters.map((parameter) => ({ ...parameter })),
+    storedState: contract.storedState.map((entry) => ({ ...entry })),
+    hash: contract.hash
+  };
+}
+const EFFECT_PRESET_KIND = "cosimo.effectPreset";
+const EFFECT_PRESET_SCHEMA_VERSION = 1;
+function assertNoDuplicateJsonKeys(jsonText) {
+  const stack = [];
+  let index = 0;
+  const skipWhitespace = () => {
+    while (index < jsonText.length && /\s/.test(jsonText[index])) {
+      index += 1;
+    }
+  };
+  const readString = () => {
+    const start = index;
+    index += 1;
+    while (index < jsonText.length) {
+      const char = jsonText[index];
+      if (char === '"') {
+        index += 1;
+        return JSON.parse(jsonText.slice(start, index));
+      }
+      if (char === "\\") {
+        index += 1;
+        if (index < jsonText.length) {
+          index += 1;
+        }
+        continue;
+      }
+      index += 1;
+    }
+    throw new Error("Invalid JSON string.");
+  };
+  while (index < jsonText.length) {
+    skipWhitespace();
+    const char = jsonText[index];
+    if (char === "{") {
+      stack.push({ keys: /* @__PURE__ */ new Set(), expectingKey: true });
+      index += 1;
+      continue;
+    }
+    if (char === "}") {
+      stack.pop();
+      index += 1;
+      continue;
+    }
+    if (char === ",") {
+      const current = stack[stack.length - 1];
+      if (current) {
+        current.expectingKey = true;
+      }
+      index += 1;
+      continue;
+    }
+    if (char === ":") {
+      const current = stack[stack.length - 1];
+      if (current) {
+        current.expectingKey = false;
+      }
+      index += 1;
+      continue;
+    }
+    if (char === '"') {
+      const value = readString();
+      const current = stack[stack.length - 1];
+      skipWhitespace();
+      if (current?.expectingKey && jsonText[index] === ":") {
+        if (current.keys.has(value)) {
+          throw new Error(`Duplicate JSON key "${value}".`);
+        }
+        current.keys.add(value);
+      }
+      continue;
+    }
+    index += 1;
+  }
+}
+const EFFECT_PRESET_V2_KIND = "cosimo.effectPreset";
+const EFFECT_PRESET_V2_SCHEMA_VERSION = 2;
+function isPlainObject$1(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function requireString$1(value, fieldName) {
+  if (typeof value !== "string" || value.trim().length === 0) {
+    throw new Error(`Effect preset ${fieldName} must be a non-empty string.`);
+  }
+  return value.trim();
+}
+function clonePreset(preset) {
+  return {
+    kind: EFFECT_PRESET_V2_KIND,
+    version: EFFECT_PRESET_V2_SCHEMA_VERSION,
+    effectID: preset.effectID,
+    presetID: preset.presetID,
+    label: preset.label,
+    contract: clonePluginStateContract(preset.contract),
+    parameters: { ...preset.parameters },
+    storedState: { ...preset.storedState }
+  };
+}
+function parsePresetShape(payload) {
+  if (!isPlainObject$1(payload)) {
+    throw new Error("Effect preset payload must be an object.");
+  }
+  if (payload.kind !== EFFECT_PRESET_V2_KIND) {
+    throw new Error(`Effect preset kind must be "${EFFECT_PRESET_V2_KIND}".`);
+  }
+  if (payload.version !== EFFECT_PRESET_V2_SCHEMA_VERSION) {
+    throw new Error(`Unsupported effect preset version "${String(payload.version)}".`);
+  }
+  if (!isPlainObject$1(payload.contract) || typeof payload.contract.hash !== "string") {
+    throw new Error("Effect preset contract with hash is required.");
+  }
+  if (!isPlainObject$1(payload.parameters)) {
+    throw new Error("Effect preset parameters must be an object.");
+  }
+  if (!isPlainObject$1(payload.storedState)) {
+    throw new Error("Effect preset storedState must be an object.");
+  }
+  return {
+    kind: EFFECT_PRESET_V2_KIND,
+    version: EFFECT_PRESET_V2_SCHEMA_VERSION,
+    effectID: requireString$1(payload.effectID, "effectID"),
+    presetID: requireString$1(payload.presetID, "presetID"),
+    label: requireString$1(payload.label, "label"),
+    contract: payload.contract,
+    parameters: { ...payload.parameters },
+    storedState: { ...payload.storedState }
+  };
+}
+function adapterByKey(adapters = []) {
+  return new Map(adapters.map((adapter) => [adapter.key, adapter]));
+}
+function sortedKeys(value) {
+  return Object.keys(value).sort((left, right) => left.localeCompare(right));
+}
+function missingKeys(expected, provided) {
+  const providedSet = new Set(provided);
+  return expected.filter((key) => !providedSet.has(key));
+}
+function unknownKeys(expected, provided) {
+  const expectedSet = new Set(expected);
+  return provided.filter((key) => !expectedSet.has(key));
+}
+function formatDiff({
+  preset,
+  currentContract
+}) {
+  const currentParameterIDs = currentContract.parameters.map((param) => param.endpointID);
+  const presetParameterIDs = sortedKeys(preset.parameters);
+  const currentStoredKeys = currentContract.storedState.map((entry) => entry.key);
+  const presetStoredKeys = sortedKeys(preset.storedState);
+  const unknownParams = unknownKeys(currentParameterIDs, presetParameterIDs);
+  const missingParams = missingKeys(currentParameterIDs, presetParameterIDs);
+  const unknownStoredState = unknownKeys(currentStoredKeys, presetStoredKeys);
+  const missingStoredState = missingKeys(currentStoredKeys, presetStoredKeys);
+  const lines = [
+    `Preset was saved for an incompatible ${currentContract.effectID} contract.`,
+    ""
+  ];
+  if (unknownParams.length > 0) {
+    lines.push("Unknown saved parameters:");
+    lines.push(...unknownParams.map((key) => `- ${key}`));
+    lines.push("");
+  }
+  if (missingParams.length > 0) {
+    lines.push("Missing current parameters:");
+    lines.push(...missingParams.map((key) => `- ${key}`));
+    lines.push("");
+  }
+  if (unknownStoredState.length > 0) {
+    lines.push("Unknown saved stored-state keys:");
+    lines.push(...unknownStoredState.map((key) => `- ${key}`));
+    lines.push("");
+  }
+  if (missingStoredState.length > 0) {
+    lines.push("Missing current stored-state keys:");
+    lines.push(...missingStoredState.map((key) => `- ${key}`));
+    lines.push("");
+  }
+  lines.push(`No migration is registered from ${preset.contract.hash} to ${currentContract.hash}.`);
+  return lines.join("\n");
+}
+function normalizeParameterValue(parameter, value) {
+  if (parameter.type === "boolean") {
+    if (typeof value !== "boolean") {
+      throw new Error(`${parameter.endpointID} must be a boolean.`);
+    }
+    return value;
+  }
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    throw new Error(`${parameter.endpointID} must be a finite number.`);
+  }
+  if (parameter.type === "integer" && !Number.isInteger(value)) {
+    throw new Error(`${parameter.endpointID} must be an integer.`);
+  }
+  if (typeof parameter.min === "number" && value < parameter.min) {
+    throw new Error(`${parameter.endpointID} value ${value} is below minimum ${parameter.min}.`);
+  }
+  if (typeof parameter.max === "number" && value > parameter.max) {
+    throw new Error(`${parameter.endpointID} value ${value} is above maximum ${parameter.max}.`);
+  }
+  return value;
+}
+function validateExactPreset(preset, currentContract, adapters = []) {
+  if (preset.effectID !== currentContract.effectID) {
+    throw new Error(`Cannot load ${preset.effectID} preset into ${currentContract.effectID}.`);
+  }
+  if (preset.contract.hash !== currentContract.hash) {
+    throw new Error(formatDiff({ preset, currentContract }));
+  }
+  const parameterIDs = currentContract.parameters.map((param) => param.endpointID);
+  const providedParameterIDs = sortedKeys(preset.parameters);
+  const unknownParams = unknownKeys(parameterIDs, providedParameterIDs);
+  const missingParams = missingKeys(parameterIDs, providedParameterIDs);
+  if (unknownParams.length > 0) {
+    throw new Error(`Unknown parameter: ${unknownParams.join(", ")}.`);
+  }
+  if (missingParams.length > 0) {
+    throw new Error(`Missing parameter: ${missingParams.join(", ")}.`);
+  }
+  const normalizedParameters = {};
+  for (const parameter of currentContract.parameters) {
+    normalizedParameters[parameter.endpointID] = normalizeParameterValue(parameter, preset.parameters[parameter.endpointID]);
+  }
+  const storedKeys = currentContract.storedState.map((entry) => entry.key);
+  const providedStoredKeys = sortedKeys(preset.storedState);
+  const unknownStoredKeys = unknownKeys(storedKeys, providedStoredKeys);
+  const missingStoredKeys = missingKeys(storedKeys, providedStoredKeys);
+  if (unknownStoredKeys.length > 0) {
+    throw new Error(`Unknown stored-state key: ${unknownStoredKeys.join(", ")}.`);
+  }
+  if (missingStoredKeys.length > 0) {
+    throw new Error(`Missing stored-state key: ${missingStoredKeys.join(", ")}.`);
+  }
+  const adaptersByKey = adapterByKey(adapters);
+  const normalizedStoredState = {};
+  for (const entry of currentContract.storedState) {
+    const adapter = adaptersByKey.get(entry.key);
+    const rawValue = preset.storedState[entry.key];
+    if (!adapter) {
+      normalizedStoredState[entry.key] = rawValue;
+      continue;
+    }
+    const normalizedValue = adapter.normalizeForPreset(rawValue);
+    normalizedStoredState[entry.key] = adapter.serializeForPreset(normalizedValue);
+  }
+  return {
+    ...preset,
+    contract: clonePluginStateContract(currentContract),
+    parameters: normalizedParameters,
+    storedState: normalizedStoredState
+  };
+}
+function assertNoAmbiguousMigrations(migrations, effectID) {
+  const seen = /* @__PURE__ */ new Set();
+  for (const migration of migrations.filter((entry) => entry.effectID === effectID)) {
+    const key = `${migration.fromHash}->${migration.toHash}`;
+    if (seen.has(key)) {
+      throw new Error(`Ambiguous migration path for ${effectID} from ${migration.fromHash}.`);
+    }
+    seen.add(key);
+  }
+}
+function migratePresetToCurrentContract(preset, currentContract, migrations) {
+  if (preset.contract.hash === currentContract.hash) {
+    return preset;
+  }
+  assertNoAmbiguousMigrations(migrations, currentContract.effectID);
+  const queue = [{ preset, path: [] }];
+  const visited = /* @__PURE__ */ new Set();
+  let found = null;
+  while (queue.length > 0) {
+    const next = queue.shift();
+    if (!next) {
+      break;
+    }
+    if (next.preset.contract.hash === currentContract.hash) {
+      if (found) {
+        throw new Error(`Ambiguous migration path for ${currentContract.effectID} to ${currentContract.hash}.`);
+      }
+      found = next;
+      continue;
+    }
+    if (visited.has(next.preset.contract.hash)) {
+      continue;
+    }
+    visited.add(next.preset.contract.hash);
+    const candidates = migrations.filter((migration) => migration.effectID === currentContract.effectID && migration.fromHash === next.preset.contract.hash);
+    if (candidates.length > 1) {
+      throw new Error(`Ambiguous migration path for ${currentContract.effectID} from ${next.preset.contract.hash}.`);
+    }
+    for (const migration of candidates) {
+      queue.push({
+        preset: migration.migrate(clonePreset(next.preset)),
+        path: [...next.path, `${migration.fromHash}->${migration.toHash}`]
+      });
+    }
+  }
+  if (!found) {
+    throw new Error(formatDiff({ preset, currentContract }));
+  }
+  return found.preset;
+}
+function normalizeEffectPresetV2(payload, {
+  currentContract,
+  migrations = [],
+  storedStateAdapters = []
+}) {
+  const parsedPreset = parsePresetShape(payload);
+  const migratedPreset = migratePresetToCurrentContract(parsedPreset, currentContract, migrations);
+  return validateExactPreset(migratedPreset, currentContract, storedStateAdapters);
+}
+function captureEffectPresetV2({
+  effectID,
+  presetID,
+  label,
+  currentContract,
+  currentParameterValues,
+  storedStateAdapters = []
+}) {
+  const parameters = {};
+  const missingEndpointIDs = [];
+  for (const parameter of currentContract.parameters) {
+    if (!Object.prototype.hasOwnProperty.call(currentParameterValues, parameter.endpointID)) {
+      missingEndpointIDs.push(parameter.endpointID);
+      continue;
+    }
+    parameters[parameter.endpointID] = normalizeParameterValue(parameter, currentParameterValues[parameter.endpointID]);
+  }
+  if (missingEndpointIDs.length > 0) {
+    throw new Error(`Cannot save preset because current values are missing for ${missingEndpointIDs.join(", ")}.`);
+  }
+  const adaptersByKey = adapterByKey(storedStateAdapters);
+  const storedState = {};
+  for (const entry of currentContract.storedState) {
+    const adapter = adaptersByKey.get(entry.key);
+    if (!adapter || typeof adapter.capture !== "function") {
+      throw new Error(`Cannot save preset because stored-state adapter "${entry.key}" is unavailable.`);
+    }
+    storedState[entry.key] = adapter.serializeForPreset(adapter.normalizeForPreset(adapter.capture()));
+  }
+  return normalizeEffectPresetV2({
+    kind: EFFECT_PRESET_V2_KIND,
+    version: EFFECT_PRESET_V2_SCHEMA_VERSION,
+    effectID,
+    presetID,
+    label,
+    contract: clonePluginStateContract(currentContract),
+    parameters,
+    storedState
+  }, { currentContract, storedStateAdapters });
+}
+function applyEffectPresetV2({
+  preset,
+  currentContract,
+  patchConnection,
+  migrations = [],
+  storedStateAdapters = []
+}) {
+  if (typeof patchConnection.sendEventOrValue !== "function") {
+    throw new Error("Cannot apply effect preset because parameter writes are unavailable.");
+  }
+  const normalizedPreset = normalizeEffectPresetV2(preset, {
+    currentContract,
+    migrations,
+    storedStateAdapters
+  });
+  const adaptersByKey = adapterByKey(storedStateAdapters);
+  for (const parameter of currentContract.parameters) {
+    const endpointID = parameter.endpointID;
+    const value = normalizedPreset.parameters[endpointID];
+    patchConnection.sendParameterGestureStart?.(endpointID);
+    try {
+      patchConnection.sendEventOrValue(endpointID, value);
+    } finally {
+      patchConnection.sendParameterGestureEnd?.(endpointID);
+    }
+  }
+  for (const entry of currentContract.storedState) {
+    const adapter = adaptersByKey.get(entry.key);
+    const value = normalizedPreset.storedState[entry.key];
+    if (adapter?.apply) {
+      adapter.apply(adapter.normalizeForPreset(value));
+    } else {
+      patchConnection.sendStoredStateValue?.(entry.key, value);
+    }
+  }
+  return normalizedPreset;
+}
+function parseEffectPresetV2Text(text) {
+  assertNoDuplicateJsonKeys(text);
+  return JSON.parse(text);
+}
+function cloneEffectPresetV2(preset) {
+  return {
+    ...clonePreset(preset),
+    contract: JSON.parse(canonicalJSONStringify(preset.contract))
+  };
+}
+const EFFECT_FACTORY_PRESETS = {
+  chorus: [
+    {
+      kind: EFFECT_PRESET_KIND,
+      version: EFFECT_PRESET_SCHEMA_VERSION,
+      effectID: "chorus",
+      presetID: "chorus.clean-wide",
+      label: "Clean Wide",
+      values: {
+        chorusEnabled: 1,
+        chorusMix: 0.62,
+        chorusMotionMode: 1,
+        chorusBloomMode: 0,
+        chorusTone: 0.58,
+        chorusFeedback: 0.28,
+        chorusRingAmount: 0,
+        chorusRingOffsetMode: 0,
+        chorusRingFineSemitones: 0
+      }
+    },
+    {
+      kind: EFFECT_PRESET_KIND,
+      version: EFFECT_PRESET_SCHEMA_VERSION,
+      effectID: "chorus",
+      presetID: "chorus.bloom-ring",
+      label: "Bloom Ring",
+      values: {
+        chorusEnabled: 1,
+        chorusMix: 0.76,
+        chorusMotionMode: 0,
+        chorusBloomMode: 2,
+        chorusTone: 0.72,
+        chorusFeedback: 0.42,
+        chorusRingAmount: 0.26,
+        chorusRingOffsetMode: 0,
+        chorusRingFineSemitones: 0.07
+      }
+    }
+  ],
+  ott: [
+    {
+      kind: EFFECT_PRESET_KIND,
+      version: EFFECT_PRESET_SCHEMA_VERSION,
+      effectID: "ott",
+      presetID: "ott.default-smash",
+      label: "Default Smash",
+      values: {
+        ottMix: 100,
+        ottAmount: 100,
+        ottTimePercent: 100,
+        ottBandDrive: 0,
+        ottEnvelopeMatch: 0
+      }
+    },
+    {
+      kind: EFFECT_PRESET_KIND,
+      version: EFFECT_PRESET_SCHEMA_VERSION,
+      effectID: "ott",
+      presetID: "ott.envelope-tamed",
+      label: "Envelope Tamed",
+      values: {
+        ottMix: 86,
+        ottAmount: 92,
+        ottTimePercent: 100,
+        ottBandDrive: 12,
+        ottEnvelopeMatch: 38
+      }
+    }
+  ]
+};
+const EFFECT_PRESETS_V2_STATE_KEY = "effects.presets.v2";
+const EFFECT_PRESET_V2_STATE_KIND = "cosimo.effectPresetState";
+const EFFECT_PRESET_V2_STATE_SCHEMA_VERSION = 2;
+function isPlainObject(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function requireString(value, fieldName) {
+  if (typeof value !== "string" || value.trim().length === 0) {
+    throw new Error(`${fieldName} must be a non-empty string.`);
+  }
+  return value.trim();
+}
+function requireBoolean(value, fieldName) {
+  if (typeof value !== "boolean") {
+    throw new Error(`${fieldName} must be a boolean.`);
+  }
+  return value;
+}
+function cloneActivePresetMetadata(metadata) {
+  return {
+    presetID: metadata.presetID,
+    label: metadata.label,
+    dirty: metadata.dirty
+  };
+}
+function normalizeActivePresetMetadata(effectID, payload) {
+  if (!isPlainObject(payload)) {
+    throw new Error(`Active preset metadata for "${effectID}" must be an object.`);
+  }
+  return {
+    presetID: requireString(payload.presetID, `activePresetByEffect.${effectID}.presetID`),
+    label: requireString(payload.label, `activePresetByEffect.${effectID}.label`),
+    dirty: requireBoolean(payload.dirty, `activePresetByEffect.${effectID}.dirty`)
+  };
+}
+function normalizePresetShape(payload) {
+  if (!isPlainObject(payload)) {
+    throw new Error("Effect preset payload must be an object.");
+  }
+  if (payload.kind !== EFFECT_PRESET_V2_KIND) {
+    throw new Error(`Effect preset kind must be "${EFFECT_PRESET_V2_KIND}".`);
+  }
+  if (payload.version !== EFFECT_PRESET_V2_SCHEMA_VERSION) {
+    throw new Error(`Unsupported effect preset version "${String(payload.version)}".`);
+  }
+  if (!isPlainObject(payload.contract) || typeof payload.contract.hash !== "string") {
+    throw new Error("Effect preset contract with hash is required.");
+  }
+  if (!isPlainObject(payload.parameters)) {
+    throw new Error("Effect preset parameters must be an object.");
+  }
+  if (!isPlainObject(payload.storedState)) {
+    throw new Error("Effect preset storedState must be an object.");
+  }
+  return cloneEffectPresetV2({
+    effectID: requireString(payload.effectID, "effectID"),
+    presetID: requireString(payload.presetID, "presetID"),
+    label: requireString(payload.label, "label"),
+    contract: payload.contract,
+    parameters: { ...payload.parameters },
+    storedState: { ...payload.storedState }
+  });
+}
+function cloneState(state) {
+  return {
+    kind: state.kind,
+    version: state.version,
+    userPresets: Object.fromEntries(Object.entries(state.userPresets).map(([effectID, presets]) => [
+      effectID,
+      presets.map(cloneEffectPresetV2)
+    ])),
+    activePresetByEffect: Object.fromEntries(Object.entries(state.activePresetByEffect).map(([effectID, metadata]) => [
+      effectID,
+      cloneActivePresetMetadata(metadata)
+    ]))
+  };
+}
+function storedStateEchoToken(value) {
+  return typeof value === "string" ? value : JSON.stringify(value);
+}
+function hasOwnValue(record, key) {
+  return !!record && Object.prototype.hasOwnProperty.call(record, key);
+}
+function getFullStoredStateValue(storedState, key) {
+  if (!isPlainObject(storedState)) {
+    return { found: false };
+  }
+  const values = isPlainObject(storedState.values) ? storedState.values : void 0;
+  if (values && hasOwnValue(values, key)) {
+    return {
+      found: true,
+      value: values[key]
+    };
+  }
+  if (hasOwnValue(storedState, key)) {
+    return {
+      found: true,
+      value: storedState[key]
+    };
+  }
+  return { found: false };
+}
+function errorFromUnknown$1(error) {
+  return error instanceof Error ? error : new Error(String(error));
+}
+function replacePresetInBank(bank, preset) {
+  const nextBank = bank.filter((candidate) => candidate.presetID !== preset.presetID);
+  nextBank.push(cloneEffectPresetV2(preset));
+  return nextBank;
+}
+function getChocUserFiles() {
+  const candidate = globalThis.chocUserFiles ?? globalThis.window?.chocUserFiles;
+  if (!candidate) {
+    return null;
+  }
+  if (typeof candidate.list !== "function" || typeof candidate.read !== "function" || typeof candidate.write !== "function" || typeof candidate.delete !== "function") {
+    throw new Error("window.chocUserFiles is missing list, read, write, or delete.");
+  }
+  return candidate;
+}
+function userPresetFileName(presetID) {
+  return `${presetID}.json`;
+}
+function createDefaultEffectPresetStateV2() {
+  return {
+    kind: EFFECT_PRESET_V2_STATE_KIND,
+    version: EFFECT_PRESET_V2_STATE_SCHEMA_VERSION,
+    userPresets: {},
+    activePresetByEffect: {}
+  };
+}
+function createActivePresetMetadataFromPresetV2(preset) {
+  return {
+    presetID: preset.presetID,
+    label: preset.label,
+    dirty: false
+  };
+}
+function normalizeEffectPresetStateV2(payload) {
+  if (!isPlainObject(payload)) {
+    throw new Error("Effect preset state payload must be an object.");
+  }
+  if (payload.kind !== EFFECT_PRESET_V2_STATE_KIND) {
+    throw new Error(`Effect preset state kind must be "${EFFECT_PRESET_V2_STATE_KIND}".`);
+  }
+  if (payload.version !== EFFECT_PRESET_V2_STATE_SCHEMA_VERSION) {
+    throw new Error(`Unsupported effect preset state version "${String(payload.version)}".`);
+  }
+  if (!isPlainObject(payload.userPresets)) {
+    throw new Error("Effect preset state userPresets must be an object.");
+  }
+  if (!isPlainObject(payload.activePresetByEffect)) {
+    throw new Error("Effect preset state activePresetByEffect must be an object.");
+  }
+  const userPresets = {};
+  const activePresetByEffect = {};
+  for (const [effectID, rawPresets] of Object.entries(payload.userPresets)) {
+    if (!Array.isArray(rawPresets)) {
+      throw new Error(`Effect preset bank "${effectID}" must be an array.`);
+    }
+    userPresets[effectID] = rawPresets.map((rawPreset) => {
+      const preset = normalizePresetShape(rawPreset);
+      if (preset.effectID !== effectID) {
+        throw new Error(`Effect preset bank "${effectID}" contains preset "${preset.presetID}" for effect "${preset.effectID}".`);
+      }
+      return preset;
+    });
+  }
+  for (const [effectID, rawMetadata] of Object.entries(payload.activePresetByEffect)) {
+    activePresetByEffect[effectID] = normalizeActivePresetMetadata(effectID, rawMetadata);
+  }
+  return {
+    kind: EFFECT_PRESET_V2_STATE_KIND,
+    version: EFFECT_PRESET_V2_STATE_SCHEMA_VERSION,
+    userPresets,
+    activePresetByEffect
+  };
+}
+function serializeEffectPresetStateV2(state) {
+  return JSON.stringify(normalizeEffectPresetStateV2(state));
+}
+function deserializeEffectPresetStateV2(rawValue) {
+  if (rawValue === void 0 || rawValue === null || rawValue === "") {
+    return createDefaultEffectPresetStateV2();
+  }
+  const parsed = typeof rawValue === "string" ? JSON.parse(rawValue) : rawValue;
+  return normalizeEffectPresetStateV2(parsed);
+}
+class EffectPresetRuntimeBridgeV2 {
+  constructor(patchConnection, options = {}) {
+    this.patchConnection = patchConnection;
+    this.options = options;
+    this.state = createDefaultEffectPresetStateV2();
+    this.handleStoredStateValueBound = this.handleStoredStateValue.bind(this);
+    this.userFiles = getChocUserFiles();
+  }
+  state;
+  attached = false;
+  listeners = /* @__PURE__ */ new Set();
+  errorListeners = /* @__PURE__ */ new Set();
+  pendingStoredStateEchoes = /* @__PURE__ */ new Map();
+  handleStoredStateValueBound;
+  userFiles;
+  localRevision = 0;
+  pendingStoredStateValueRevision = null;
+  attach() {
+    if (this.attached) {
+      return;
+    }
+    this.attached = true;
+    this.patchConnection.addStoredStateValueListener?.(this.handleStoredStateValueBound);
+  }
+  detach() {
+    if (!this.attached) {
+      return;
+    }
+    this.attached = false;
+    this.patchConnection.removeStoredStateValueListener?.(this.handleStoredStateValueBound);
+  }
+  requestBootState() {
+    const requestRevision = this.localRevision;
+    if (typeof this.patchConnection.requestFullStoredState === "function") {
+      this.patchConnection.requestFullStoredState((storedState) => {
+        if (requestRevision !== this.localRevision) {
+          return;
+        }
+        const storedValue = getFullStoredStateValue(storedState, EFFECT_PRESETS_V2_STATE_KEY);
+        if (storedValue.found) {
+          this.pendingStoredStateValueRevision = null;
+          this.applyStoredState(storedValue.value);
+          void this.loadUserPresetFiles();
+          return;
+        }
+        if (typeof this.patchConnection.requestStoredStateValue === "function") {
+          this.pendingStoredStateValueRevision = requestRevision;
+          this.patchConnection.requestStoredStateValue(EFFECT_PRESETS_V2_STATE_KEY);
+          void this.loadUserPresetFiles();
+          return;
+        }
+        this.applyStoredState(void 0);
+        void this.loadUserPresetFiles();
+      });
+      return;
+    }
+    if (typeof this.patchConnection.requestStoredStateValue === "function") {
+      this.pendingStoredStateValueRevision = requestRevision;
+      this.patchConnection.requestStoredStateValue(EFFECT_PRESETS_V2_STATE_KEY);
+    }
+    void this.loadUserPresetFiles();
+  }
+  getState() {
+    return cloneState(this.state);
+  }
+  subscribe(listener) {
+    this.listeners.add(listener);
+  }
+  unsubscribe(listener) {
+    this.listeners.delete(listener);
+  }
+  subscribeErrors(listener) {
+    this.errorListeners.add(listener);
+  }
+  unsubscribeErrors(listener) {
+    this.errorListeners.delete(listener);
+  }
+  saveUserPreset(preset, options = {}) {
+    const normalizedPreset = normalizePresetShape(preset);
+    const currentBank = this.state.userPresets[normalizedPreset.effectID] ?? [];
+    const nextActivePresetByEffect = options.activate ? {
+      ...this.state.activePresetByEffect,
+      [normalizedPreset.effectID]: createActivePresetMetadataFromPresetV2(normalizedPreset)
+    } : this.state.activePresetByEffect;
+    this.commitState({
+      ...this.state,
+      userPresets: {
+        ...this.state.userPresets,
+        [normalizedPreset.effectID]: replacePresetInBank(currentBank, normalizedPreset)
+      },
+      activePresetByEffect: nextActivePresetByEffect
+    });
+    this.writeUserPresetFile(normalizedPreset);
+    return normalizedPreset;
+  }
+  setUserPresetsForEffect(effectID, presets, activePresetMetadata) {
+    const activePresetByEffect = { ...this.state.activePresetByEffect };
+    if (activePresetMetadata === null) {
+      delete activePresetByEffect[effectID];
+    } else if (activePresetMetadata !== void 0) {
+      activePresetByEffect[effectID] = cloneActivePresetMetadata(activePresetMetadata);
+    }
+    const nextState = this.commitState({
+      ...this.state,
+      userPresets: {
+        ...this.state.userPresets,
+        [effectID]: presets.map(normalizePresetShape)
+      },
+      activePresetByEffect
+    });
+    this.syncUserPresetFilesForEffect(effectID, nextState.userPresets[effectID] ?? []);
+    return nextState.userPresets[effectID] ?? [];
+  }
+  setActivePresetMetadata(effectID, metadata) {
+    this.commitState({
+      ...this.state,
+      activePresetByEffect: {
+        ...this.state.activePresetByEffect,
+        [effectID]: cloneActivePresetMetadata(metadata)
+      }
+    });
+  }
+  replaceState(state) {
+    const nextState = this.commitState(state);
+    for (const [effectID, presets] of Object.entries(nextState.userPresets)) {
+      this.syncUserPresetFilesForEffect(effectID, presets);
+    }
+    return nextState;
+  }
+  applyStoredState(rawValue) {
+    try {
+      const storedState = deserializeEffectPresetStateV2(rawValue);
+      this.setState(this.userFiles ? {
+        ...storedState,
+        userPresets: this.state.userPresets
+      } : storedState);
+    } catch (error) {
+      this.notifyError(errorFromUnknown$1(error));
+    }
+  }
+  handleStoredStateValue(message) {
+    const nextMessage = message;
+    if (nextMessage?.key !== EFFECT_PRESETS_V2_STATE_KEY) {
+      return;
+    }
+    if (this.consumePendingStoredStateEcho(nextMessage.value)) {
+      return;
+    }
+    if (this.pendingStoredStateValueRevision !== null) {
+      const pendingRevision = this.pendingStoredStateValueRevision;
+      this.pendingStoredStateValueRevision = null;
+      if (pendingRevision !== this.localRevision) {
+        return;
+      }
+    }
+    this.applyStoredState(nextMessage.value);
+  }
+  setState(nextState) {
+    this.state = cloneState(nextState);
+    this.notify();
+  }
+  notify() {
+    const snapshot = this.getState();
+    for (const listener of this.listeners) {
+      listener(snapshot);
+    }
+  }
+  notifyError(error) {
+    for (const listener of this.errorListeners) {
+      listener(error);
+    }
+  }
+  commitState(nextState) {
+    const normalizedState = normalizeEffectPresetStateV2(nextState);
+    const storedState = this.userFiles ? {
+      ...normalizedState,
+      userPresets: {}
+    } : normalizedState;
+    const serializedState = serializeEffectPresetStateV2(storedState);
+    const sendStoredStateValue = this.patchConnection.sendStoredStateValue?.bind(this.patchConnection);
+    if (sendStoredStateValue) {
+      this.rememberPendingStoredStateEcho(serializedState);
+      try {
+        sendStoredStateValue(EFFECT_PRESETS_V2_STATE_KEY, serializedState);
+      } catch (error) {
+        this.consumePendingStoredStateEcho(serializedState);
+        throw error;
+      }
+    }
+    this.localRevision += 1;
+    this.setState(normalizedState);
+    return this.getState();
+  }
+  async loadUserPresetFiles() {
+    if (!this.userFiles || !this.options.fileStoreEffectID) {
+      return;
+    }
+    try {
+      const effectID = this.options.fileStoreEffectID;
+      const fileNames = (await this.userFiles.list(effectID)).filter((fileName) => fileName.endsWith(".json"));
+      const presets = [];
+      for (const fileName of fileNames) {
+        const preset = normalizePresetShape(JSON.parse(await this.userFiles.read(effectID, fileName)));
+        if (preset.effectID !== effectID) {
+          throw new Error(`Preset file "${fileName}" contains effect "${preset.effectID}" instead of "${effectID}".`);
+        }
+        presets.push(preset);
+      }
+      this.setState({
+        ...this.state,
+        userPresets: {
+          ...this.state.userPresets,
+          [effectID]: presets
+        }
+      });
+    } catch (error) {
+      this.notifyError(errorFromUnknown$1(error));
+    }
+  }
+  writeUserPresetFile(preset) {
+    if (!this.userFiles || !this.options.fileStoreEffectID || preset.effectID !== this.options.fileStoreEffectID) {
+      return;
+    }
+    void this.userFiles.write(preset.effectID, userPresetFileName(preset.presetID), JSON.stringify(normalizePresetShape(preset), null, 2)).catch((error) => this.notifyError(errorFromUnknown$1(error)));
+  }
+  syncUserPresetFilesForEffect(effectID, presets) {
+    if (!this.userFiles || effectID !== this.options.fileStoreEffectID) {
+      return;
+    }
+    void this.syncUserPresetFilesForEffectAsync(effectID, presets).catch((error) => this.notifyError(errorFromUnknown$1(error)));
+  }
+  async syncUserPresetFilesForEffectAsync(effectID, presets) {
+    if (!this.userFiles) {
+      return;
+    }
+    const nextFileNames = new Set(presets.map((preset) => userPresetFileName(preset.presetID)));
+    const existingFileNames = (await this.userFiles.list(effectID)).filter((fileName) => fileName.endsWith(".json"));
+    await Promise.all(presets.map((preset) => this.userFiles.write(effectID, userPresetFileName(preset.presetID), JSON.stringify(normalizePresetShape(preset), null, 2))));
+    await Promise.all(existingFileNames.filter((fileName) => !nextFileNames.has(fileName)).map((fileName) => this.userFiles.delete(effectID, fileName)));
+  }
+  rememberPendingStoredStateEcho(value) {
+    const token = storedStateEchoToken(value);
+    this.pendingStoredStateEchoes.set(token, (this.pendingStoredStateEchoes.get(token) ?? 0) + 1);
+  }
+  consumePendingStoredStateEcho(value) {
+    const token = storedStateEchoToken(value);
+    const count = this.pendingStoredStateEchoes.get(token);
+    if (!count) {
+      return false;
+    }
+    if (count <= 1) {
+      this.pendingStoredStateEchoes.delete(token);
+    } else {
+      this.pendingStoredStateEchoes.set(token, count - 1);
+    }
+    return true;
+  }
+}
+const defaultFilter = {
+  query: "",
+  source: "all"
+};
+function errorFromUnknown(error) {
+  return error instanceof Error ? error : new Error(String(error));
+}
+function defaultCreatePresetID({
+  effectID,
+  attempt
+}) {
+  const timestamp = Date.now().toString(36);
+  const randomSuffix = Math.random().toString(36).slice(2, 8);
+  const attemptSuffix = attempt === 0 ? "" : `-${attempt + 1}`;
+  return `user.${effectID}.${timestamp}-${randomSuffix}${attemptSuffix}`;
+}
+function valuesEqual(left, right) {
+  return Object.is(left, right);
+}
+function storedStateValuesEqual(left, right) {
+  return canonicalJSONStringify(left) === canonicalJSONStringify(right);
+}
+function presetKeyFor(source, presetID) {
+  return `${source}:${presetID}`;
+}
+function normalizeLabel(label) {
+  const trimmed = label.trim();
+  if (!trimmed) {
+    throw new Error("Preset label must not be empty.");
+  }
+  return trimmed;
+}
+function ensureStoredStateWriter(patchConnection, operation) {
+  if (typeof patchConnection.sendStoredStateValue !== "function") {
+    throw new Error(`Cannot ${operation} because Cmajor stored state writes are unavailable.`);
+  }
+}
+function ensureParameterWriter(patchConnection, operation) {
+  if (typeof patchConnection.sendEventOrValue !== "function") {
+    throw new Error(`Cannot ${operation} because the patch connection cannot write parameter values.`);
+  }
+}
+function defaultParameterValues(contract) {
+  const values = {};
+  for (const parameter of contract.parameters) {
+    values[parameter.endpointID] = parameter.defaultValue;
+  }
+  return values;
+}
+function normalizeRuntimeParameterValue(parameter, value) {
+  if (parameter.type === "boolean") {
+    if (typeof value === "boolean") {
+      return value;
+    }
+    if (value === 0 || value === 1) {
+      return value === 1;
+    }
+    throw new Error(`${parameter.endpointID} must be a boolean.`);
+  }
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue)) {
+    throw new Error(`${parameter.endpointID} must be a finite number.`);
+  }
+  if (parameter.type === "integer" && !Number.isInteger(numericValue)) {
+    throw new Error(`${parameter.endpointID} must be an integer.`);
+  }
+  if (typeof parameter.min === "number" && numericValue < parameter.min) {
+    throw new Error(`${parameter.endpointID} value ${numericValue} is below minimum ${parameter.min}.`);
+  }
+  if (typeof parameter.max === "number" && numericValue > parameter.max) {
+    throw new Error(`${parameter.endpointID} value ${numericValue} is above maximum ${parameter.max}.`);
+  }
+  return numericValue;
+}
+function legacyFactoryPresetToV2(preset, currentContract, storedStateAdapters) {
+  if (currentContract.storedState.length > 0) {
+    throw new Error(`Factory preset "${preset.presetID}" must be a v2 preset because "${currentContract.effectID}" has non-parameter state.`);
+  }
+  return normalizeEffectPresetV2({
+    kind: EFFECT_PRESET_V2_KIND,
+    version: EFFECT_PRESET_V2_SCHEMA_VERSION,
+    effectID: preset.effectID,
+    presetID: preset.presetID,
+    label: preset.label,
+    contract: clonePluginStateContract(currentContract),
+    parameters: {
+      ...defaultParameterValues(currentContract),
+      ...preset.values
+    },
+    storedState: {}
+  }, { currentContract, storedStateAdapters });
+}
+function factoryPresetToV2(preset, currentContract, storedStateAdapters, presetMigrations) {
+  if (preset.version === EFFECT_PRESET_V2_SCHEMA_VERSION && "parameters" in preset) {
+    return normalizeEffectPresetV2(preset, {
+      currentContract,
+      storedStateAdapters,
+      migrations: presetMigrations
+    });
+  }
+  return legacyFactoryPresetToV2(preset, currentContract, storedStateAdapters);
+}
+class StandaloneEffectPresetController {
+  constructor(options) {
+    this.options = options;
+    if (typeof options.effectID !== "string" || options.effectID.trim().length === 0) {
+      throw new Error("Effect preset controller effectID must be a non-empty string.");
+    }
+    this.factoryPresetRegistry = options.factoryPresets ?? EFFECT_FACTORY_PRESETS;
+    this.storedStateAdapters = options.storedStateAdapters ?? [];
+    this.presetMigrations = options.presetMigrations ?? [];
+    this.createPresetID = options.createPresetID ?? defaultCreatePresetID;
+    this.readClipboardText = options.readClipboardText;
+    this.writeClipboardText = options.writeClipboardText;
+    this.bridge = new EffectPresetRuntimeBridgeV2(options.patchConnection, {
+      fileStoreEffectID: options.effectID
+    });
+    this.bridgeState = this.bridge.getState();
+    this.handleBridgeStateBound = this.handleBridgeState.bind(this);
+    this.handleBridgeErrorBound = this.handleBridgeError.bind(this);
+    this.handleStatusBound = this.handleStatus.bind(this);
+  }
+  bridge;
+  factoryPresetRegistry;
+  storedStateAdapters;
+  presetMigrations;
+  createPresetID;
+  readClipboardText;
+  writeClipboardText;
+  listeners = /* @__PURE__ */ new Set();
+  currentValues = /* @__PURE__ */ new Map();
+  hydratingEndpointIDs = /* @__PURE__ */ new Set();
+  suppressedParameterValues = /* @__PURE__ */ new Map();
+  parameterListenerCleanups = [];
+  storedStateListenerCleanups = [];
+  handleBridgeStateBound;
+  handleBridgeErrorBound;
+  handleStatusBound;
+  bridgeState;
+  currentContract = null;
+  filter = { ...defaultFilter };
+  attached = false;
+  ready = false;
+  applyingPresetValuesDepth = 0;
+  lastError = null;
+  attach() {
+    if (this.attached) {
+      return;
+    }
+    this.attached = true;
+    this.bridge.subscribe(this.handleBridgeStateBound);
+    this.bridge.subscribeErrors(this.handleBridgeErrorBound);
+    this.bridge.attach();
+    this.bridge.requestBootState();
+    this.attachStoredStateListeners();
+    this.options.patchConnection.addStatusListener?.(this.handleStatusBound);
+    this.options.patchConnection.requestStatusUpdate?.();
+    this.notify();
+  }
+  detach() {
+    if (!this.attached) {
+      return;
+    }
+    this.detachParameterListeners();
+    this.detachStoredStateListeners();
+    this.bridge.unsubscribe(this.handleBridgeStateBound);
+    this.bridge.unsubscribeErrors(this.handleBridgeErrorBound);
+    this.bridge.detach();
+    this.options.patchConnection.removeStatusListener?.(this.handleStatusBound);
+    this.attached = false;
+    this.ready = false;
+    this.notify();
+  }
+  subscribe(listener) {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+  getState() {
+    const factoryPresets = this.buildPresetItems("factory", this.getFactoryPresets());
+    const userPresets = this.buildPresetItems("user", this.getUserPresets());
+    const presets = [...factoryPresets, ...userPresets];
+    const visiblePresets = presets.filter((preset) => this.presetMatchesFilter(preset));
+    const activePreset = this.bridgeState.activePresetByEffect[this.options.effectID] ?? null;
+    return {
+      effectID: this.options.effectID,
+      ready: this.ready,
+      filter: { ...this.filter },
+      presets,
+      visiblePresets,
+      factoryPresets,
+      userPresets,
+      activePreset: activePreset ? { ...activePreset } : null,
+      activePresetID: activePreset?.presetID ?? null,
+      activeLabel: activePreset?.label ?? "",
+      dirty: activePreset?.dirty ?? false,
+      currentValues: this.getCurrentValuesRecord(),
+      missingCurrentValueEndpointIDs: this.getMissingCurrentValueEndpointIDs(),
+      currentContract: this.currentContract ? clonePluginStateContract(this.currentContract) : null,
+      lastError: this.lastError
+    };
+  }
+  getMutations() {
+    return {
+      setFilter: this.setFilter.bind(this),
+      clearLastError: this.clearLastError.bind(this),
+      refreshCurrentValues: this.refreshCurrentValues.bind(this),
+      applyPreset: this.applyPreset.bind(this),
+      reapplyActivePreset: this.reapplyActivePreset.bind(this),
+      saveCurrentAsNewPreset: this.saveCurrentAsNewPreset.bind(this),
+      overwriteUserPreset: this.overwriteUserPreset.bind(this),
+      renamePreset: this.renamePreset.bind(this),
+      deletePreset: this.deletePreset.bind(this),
+      duplicatePresetAsUserPreset: this.duplicatePresetAsUserPreset.bind(this),
+      exportPresetText: this.exportPresetText.bind(this),
+      importPresetText: this.importPresetText.bind(this),
+      copyPresetToClipboard: this.copyPresetToClipboard.bind(this),
+      pastePresetFromClipboard: this.pastePresetFromClipboard.bind(this)
+    };
+  }
+  setFilter(filter) {
+    this.filter = {
+      query: filter.query ?? this.filter.query,
+      source: filter.source ?? this.filter.source
+    };
+    this.notify();
+  }
+  clearLastError() {
+    this.lastError = null;
+    this.notify();
+  }
+  refreshCurrentValues() {
+    return this.runMutation(() => {
+      this.requestCurrentParameterValues();
+      return this.getMissingCurrentValueEndpointIDs();
+    }, "Current parameter values refreshed.");
+  }
+  applyPreset(presetKey) {
+    return this.runMutation(() => {
+      ensureStoredStateWriter(this.options.patchConnection, "apply effect presets");
+      ensureParameterWriter(this.options.patchConnection, "apply effect presets");
+      const { preset } = this.resolvePreset(presetKey);
+      const normalizedPreset = this.normalizePresetForCurrentContract(preset);
+      this.commitActivePresetAndApply(normalizedPreset);
+      return cloneEffectPresetV2(normalizedPreset);
+    }, "Preset applied.");
+  }
+  reapplyActivePreset() {
+    return this.runMutation(() => {
+      const activePreset = this.bridgeState.activePresetByEffect[this.options.effectID];
+      if (!activePreset) {
+        throw new Error("No active preset is available to reapply.");
+      }
+      ensureStoredStateWriter(this.options.patchConnection, "reapply effect presets");
+      ensureParameterWriter(this.options.patchConnection, "reapply effect presets");
+      const preset = this.findPresetByID(activePreset.presetID);
+      if (!preset) {
+        throw new Error(`Active preset "${activePreset.presetID}" is not available.`);
+      }
+      const normalizedPreset = this.normalizePresetForCurrentContract(preset);
+      this.commitActivePresetAndApply(normalizedPreset);
+      return cloneEffectPresetV2(normalizedPreset);
+    }, "Preset reapplied.");
+  }
+  saveCurrentAsNewPreset(label) {
+    return this.runMutation(() => {
+      ensureStoredStateWriter(this.options.patchConnection, "save effect presets");
+      const normalizedLabel = normalizeLabel(label);
+      const presetID = this.createUniqueUserPresetID(normalizedLabel);
+      const preset = this.captureCurrentPreset(presetID, normalizedLabel);
+      this.bridge.saveUserPreset(preset, { activate: true });
+      return cloneEffectPresetV2(preset);
+    }, "Preset saved.");
+  }
+  overwriteUserPreset(presetKey) {
+    return this.runMutation(() => {
+      ensureStoredStateWriter(this.options.patchConnection, "overwrite effect presets");
+      const { source, preset } = this.resolvePreset(presetKey);
+      if (source !== "user") {
+        throw new Error("Factory presets cannot be overwritten.");
+      }
+      const nextPreset = this.captureCurrentPreset(preset.presetID, preset.label);
+      this.bridge.saveUserPreset(nextPreset, { activate: true });
+      return cloneEffectPresetV2(nextPreset);
+    }, "Preset overwritten.");
+  }
+  renamePreset(presetKey, label) {
+    return this.runMutation(() => {
+      ensureStoredStateWriter(this.options.patchConnection, "rename effect presets");
+      const { source, preset } = this.resolvePreset(presetKey);
+      if (source !== "user") {
+        throw new Error("Factory presets cannot be renamed.");
+      }
+      const nextPreset = this.normalizePresetForCurrentContract({
+        ...preset,
+        label: normalizeLabel(label)
+      });
+      const activePreset = this.bridgeState.activePresetByEffect[this.options.effectID];
+      const nextActivePreset = activePreset?.presetID === preset.presetID ? { ...activePreset, label: nextPreset.label } : void 0;
+      this.bridge.setUserPresetsForEffect(
+        this.options.effectID,
+        this.getUserPresets().map((candidate) => candidate.presetID === preset.presetID ? nextPreset : candidate),
+        nextActivePreset
+      );
+      return cloneEffectPresetV2(nextPreset);
+    }, "Preset renamed.");
+  }
+  deletePreset(presetKey) {
+    return this.runMutation(() => {
+      ensureStoredStateWriter(this.options.patchConnection, "delete effect presets");
+      const { source, preset } = this.resolvePreset(presetKey);
+      if (source !== "user") {
+        throw new Error("Factory presets cannot be deleted.");
+      }
+      const activePreset = this.bridgeState.activePresetByEffect[this.options.effectID];
+      const nextActivePreset = activePreset?.presetID === preset.presetID ? null : void 0;
+      this.bridge.setUserPresetsForEffect(
+        this.options.effectID,
+        this.getUserPresets().filter((candidate) => candidate.presetID !== preset.presetID),
+        nextActivePreset
+      );
+      return cloneEffectPresetV2(preset);
+    }, "Preset deleted.");
+  }
+  duplicatePresetAsUserPreset(presetKey, label) {
+    return this.runMutation(() => {
+      ensureStoredStateWriter(this.options.patchConnection, "duplicate effect presets");
+      const { preset } = this.resolvePreset(presetKey);
+      const normalizedLabel = normalizeLabel(label);
+      const nextPreset = this.normalizePresetForCurrentContract({
+        ...preset,
+        presetID: this.createUniqueUserPresetID(normalizedLabel),
+        label: normalizedLabel
+      });
+      this.bridge.saveUserPreset(nextPreset);
+      return cloneEffectPresetV2(nextPreset);
+    }, "Preset duplicated.");
+  }
+  exportPresetText(presetKey) {
+    return this.runMutation(() => {
+      const { preset } = this.resolvePreset(presetKey);
+      return JSON.stringify(this.normalizePresetForCurrentContract(preset), null, 2);
+    }, "Preset exported.");
+  }
+  importPresetText(text, options = {}) {
+    return this.runMutation(() => {
+      ensureStoredStateWriter(this.options.patchConnection, "import effect presets");
+      const preset = this.prepareImportedPreset(
+        this.parseImportText(text),
+        options.overwriteExisting === true,
+        options.copyOnIDConflict === true
+      );
+      if (options.applyAfterImport) {
+        ensureParameterWriter(this.options.patchConnection, "import and apply effect presets");
+        this.commitImportedPresetAndApply(preset);
+      } else {
+        this.bridge.saveUserPreset(preset);
+      }
+      return cloneEffectPresetV2(preset);
+    }, "Preset imported.");
+  }
+  async copyPresetToClipboard(presetKey) {
+    const exported = this.exportPresetText(presetKey);
+    if (!exported.ok) {
+      return exported;
+    }
+    try {
+      const writeClipboardText = this.writeClipboardText ?? globalThis.navigator?.clipboard?.writeText?.bind(globalThis.navigator.clipboard);
+      if (!writeClipboardText) {
+        throw new Error("Clipboard write API is unavailable.");
+      }
+      await writeClipboardText(exported.value);
+      this.lastError = null;
+      this.notify();
+      return {
+        ok: true,
+        value: exported.value,
+        message: "Preset copied."
+      };
+    } catch (error) {
+      return this.fail(errorFromUnknown(error));
+    }
+  }
+  async pastePresetFromClipboard(options = {}) {
+    try {
+      const readClipboardText = this.readClipboardText ?? globalThis.navigator?.clipboard?.readText?.bind(globalThis.navigator.clipboard);
+      if (!readClipboardText) {
+        throw new Error("Clipboard read API is unavailable.");
+      }
+      const text = await readClipboardText();
+      return this.importPresetText(text, {
+        ...options,
+        copyOnIDConflict: options.copyOnIDConflict ?? true
+      });
+    } catch (error) {
+      return this.fail(errorFromUnknown(error));
+    }
+  }
+  handleBridgeState(state) {
+    this.bridgeState = state;
+    this.notify();
+  }
+  handleBridgeError(error) {
+    this.lastError = error.message;
+    this.notify();
+  }
+  handleStatus(status) {
+    const nextContract = buildPluginStateContract({
+      effectID: this.options.effectID,
+      status,
+      storedState: this.storedStateAdapters
+    });
+    if (this.currentContract?.hash === nextContract.hash) {
+      return;
+    }
+    this.currentContract = nextContract;
+    this.ready = true;
+    this.currentValues.clear();
+    this.detachParameterListeners();
+    this.attachParameterListeners();
+    this.notify();
+  }
+  attachParameterListeners() {
+    const contract = this.requireCurrentContract();
+    for (const parameter of contract.parameters) {
+      const endpointID = parameter.endpointID;
+      this.hydratingEndpointIDs.add(endpointID);
+      const listener = (value) => this.handleParameterValue(endpointID, value);
+      this.options.patchConnection.addParameterListener?.(endpointID, listener);
+      this.parameterListenerCleanups.push(() => {
+        this.options.patchConnection.removeParameterListener?.(endpointID, listener);
+      });
+    }
+    this.requestCurrentParameterValues();
+  }
+  detachParameterListeners() {
+    for (const cleanup of this.parameterListenerCleanups) {
+      cleanup();
+    }
+    this.parameterListenerCleanups.length = 0;
+    this.hydratingEndpointIDs.clear();
+    this.suppressedParameterValues.clear();
+  }
+  attachStoredStateListeners() {
+    for (const adapter of this.storedStateAdapters) {
+      if (typeof adapter.subscribe !== "function") {
+        continue;
+      }
+      const cleanup = adapter.subscribe(() => this.handleStoredStateAdapterChange(adapter));
+      this.storedStateListenerCleanups.push(cleanup);
+    }
+  }
+  detachStoredStateListeners() {
+    for (const cleanup of this.storedStateListenerCleanups) {
+      cleanup();
+    }
+    this.storedStateListenerCleanups.length = 0;
+  }
+  requestCurrentParameterValues() {
+    for (const parameter of this.currentContract?.parameters ?? []) {
+      this.options.patchConnection.requestParameterValue?.(parameter.endpointID);
+    }
+  }
+  handleParameterValue(endpointID, value) {
+    let normalizedValue;
+    try {
+      normalizedValue = this.normalizeEndpointValue(endpointID, value);
+    } catch (error) {
+      this.lastError = errorFromUnknown(error).message;
+      this.notify();
+      return;
+    }
+    this.currentValues.set(endpointID, normalizedValue);
+    if (this.hydratingEndpointIDs.delete(endpointID)) {
+      this.notify();
+      return;
+    }
+    if (this.consumeSuppressedParameterValue(endpointID, normalizedValue)) {
+      this.notify();
+      return;
+    }
+    this.markActivePresetDirtyIfNeeded(endpointID, normalizedValue);
+    this.notify();
+  }
+  normalizeEndpointValue(endpointID, value) {
+    const parameter = this.currentContract?.parameters.find((candidate) => candidate.endpointID === endpointID);
+    if (!parameter) {
+      throw new Error(`Unknown parameter "${endpointID}".`);
+    }
+    return normalizeRuntimeParameterValue(parameter, value);
+  }
+  markActivePresetDirtyIfNeeded(endpointID, value) {
+    const activePreset = this.bridgeState.activePresetByEffect[this.options.effectID];
+    if (!activePreset || activePreset.dirty) {
+      return;
+    }
+    const activePresetPayload = this.findPresetByID(activePreset.presetID);
+    if (activePresetPayload && valuesEqual(activePresetPayload.parameters[endpointID], value)) {
+      return;
+    }
+    this.bridge.setActivePresetMetadata(this.options.effectID, {
+      ...activePreset,
+      dirty: true
+    });
+  }
+  handleStoredStateAdapterChange(adapter) {
+    if (this.applyingPresetValuesDepth > 0) {
+      return;
+    }
+    try {
+      this.markActivePresetDirtyForStoredStateIfNeeded(adapter);
+    } catch (error) {
+      this.lastError = errorFromUnknown(error).message;
+    }
+    this.notify();
+  }
+  markActivePresetDirtyForStoredStateIfNeeded(adapter) {
+    if (typeof adapter.capture !== "function") {
+      return;
+    }
+    const activePreset = this.bridgeState.activePresetByEffect[this.options.effectID];
+    if (!activePreset || activePreset.dirty) {
+      return;
+    }
+    const activePresetPayload = this.findPresetByID(activePreset.presetID);
+    const currentStoredState = adapter.serializeForPreset(adapter.normalizeForPreset(adapter.capture()));
+    if (activePresetPayload && storedStateValuesEqual(activePresetPayload.storedState[adapter.key], currentStoredState)) {
+      return;
+    }
+    this.bridge.setActivePresetMetadata(this.options.effectID, {
+      ...activePreset,
+      dirty: true
+    });
+  }
+  requireCurrentContract() {
+    if (!this.currentContract) {
+      throw new Error("Cannot use effect presets until the Cmajor status contract is available.");
+    }
+    return this.currentContract;
+  }
+  getFactoryPresets() {
+    if (!this.currentContract) {
+      return [];
+    }
+    return (this.factoryPresetRegistry[this.options.effectID] ?? []).map((preset) => factoryPresetToV2(
+      preset,
+      this.currentContract,
+      this.storedStateAdapters,
+      this.presetMigrations
+    ));
+  }
+  getUserPresets() {
+    return (this.bridgeState.userPresets[this.options.effectID] ?? []).map(cloneEffectPresetV2);
+  }
+  buildPresetItems(source, presets) {
+    const activePreset = this.bridgeState.activePresetByEffect[this.options.effectID];
+    return presets.map((preset) => {
+      const isActive = activePreset?.presetID === preset.presetID;
+      const isUser = source === "user";
+      const canApply = this.canApplyPreset(preset);
+      return {
+        presetKey: presetKeyFor(source, preset.presetID),
+        presetID: preset.presetID,
+        label: preset.label,
+        effectID: preset.effectID,
+        source,
+        preset: cloneEffectPresetV2(preset),
+        isActive,
+        dirty: Boolean(isActive && activePreset?.dirty),
+        canApply,
+        canRename: isUser,
+        canOverwrite: isUser,
+        canDelete: isUser,
+        canExport: canApply
+      };
+    });
+  }
+  canApplyPreset(preset) {
+    if (!this.currentContract) {
+      return false;
+    }
+    try {
+      this.normalizePresetForCurrentContract(preset);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  presetMatchesFilter(preset) {
+    if (this.filter.source !== "all" && preset.source !== this.filter.source) {
+      return false;
+    }
+    const query = this.filter.query.trim().toLowerCase();
+    if (!query) {
+      return true;
+    }
+    return preset.label.toLowerCase().includes(query) || preset.presetID.toLowerCase().includes(query);
+  }
+  getCurrentValuesRecord() {
+    const values = {};
+    for (const parameter of this.currentContract?.parameters ?? []) {
+      if (this.currentValues.has(parameter.endpointID)) {
+        values[parameter.endpointID] = this.currentValues.get(parameter.endpointID);
+      }
+    }
+    return values;
+  }
+  getMissingCurrentValueEndpointIDs() {
+    return (this.currentContract?.parameters ?? []).filter((parameter) => !this.currentValues.has(parameter.endpointID)).map((parameter) => parameter.endpointID);
+  }
+  createUniqueUserPresetID(label) {
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      const presetID = this.createPresetID({
+        effectID: this.options.effectID,
+        label,
+        attempt
+      }).trim();
+      if (!presetID) {
+        continue;
+      }
+      if (!this.findPresetByID(presetID)) {
+        return presetID;
+      }
+    }
+    throw new Error("Could not create a unique preset ID.");
+  }
+  captureCurrentPreset(presetID, label) {
+    return captureEffectPresetV2({
+      effectID: this.options.effectID,
+      presetID,
+      label,
+      currentContract: this.requireCurrentContract(),
+      currentParameterValues: this.getCurrentValuesRecord(),
+      storedStateAdapters: this.storedStateAdapters
+    });
+  }
+  resolvePreset(presetKeyOrID) {
+    if (presetKeyOrID.startsWith("factory:")) {
+      const presetID = presetKeyOrID.slice("factory:".length);
+      const preset = this.getFactoryPresets().find((candidate) => candidate.presetID === presetID);
+      if (!preset) {
+        throw new Error(`Factory preset "${presetID}" was not found.`);
+      }
+      return { source: "factory", preset };
+    }
+    if (presetKeyOrID.startsWith("user:")) {
+      const presetID = presetKeyOrID.slice("user:".length);
+      const preset = this.getUserPresets().find((candidate) => candidate.presetID === presetID);
+      if (!preset) {
+        throw new Error(`User preset "${presetID}" was not found.`);
+      }
+      return { source: "user", preset };
+    }
+    const matches = [
+      ...this.getFactoryPresets().map((preset) => ({ source: "factory", preset })),
+      ...this.getUserPresets().map((preset) => ({ source: "user", preset }))
+    ].filter(({ preset }) => preset.presetID === presetKeyOrID);
+    if (matches.length === 1) {
+      return matches[0];
+    }
+    if (matches.length > 1) {
+      throw new Error(`Preset ID "${presetKeyOrID}" is ambiguous; use a presetKey.`);
+    }
+    throw new Error(`Preset "${presetKeyOrID}" was not found.`);
+  }
+  findPresetByID(presetID) {
+    return this.getUserPresets().find((preset) => preset.presetID === presetID) ?? this.getFactoryPresets().find((preset) => preset.presetID === presetID) ?? null;
+  }
+  parseImportText(text) {
+    if (typeof text !== "string") {
+      throw new Error("Preset import text must be a string.");
+    }
+    const parsed = parseEffectPresetV2Text(text);
+    const preset = this.normalizePresetForCurrentContract(parsed);
+    if (preset.effectID !== this.options.effectID) {
+      throw new Error(`Cannot import ${preset.effectID} preset into ${this.options.effectID}.`);
+    }
+    return preset;
+  }
+  assertUserPresetIDCanBeStored(presetID, overwriteExisting) {
+    if (this.getFactoryPresets().some((preset) => preset.presetID === presetID)) {
+      throw new Error(`Preset ID "${presetID}" conflicts with a factory preset.`);
+    }
+    if (!overwriteExisting && this.getUserPresets().some((preset) => preset.presetID === presetID)) {
+      throw new Error(`User preset "${presetID}" already exists.`);
+    }
+  }
+  prepareImportedPreset(preset, overwriteExisting, copyOnIDConflict) {
+    if (overwriteExisting) {
+      this.assertUserPresetIDCanBeStored(preset.presetID, true);
+      return preset;
+    }
+    if (!this.findPresetByID(preset.presetID)) {
+      return preset;
+    }
+    if (!copyOnIDConflict) {
+      this.assertUserPresetIDCanBeStored(preset.presetID, false);
+    }
+    return this.normalizePresetForCurrentContract({
+      ...preset,
+      presetID: this.createUniqueUserPresetID(normalizeLabel(preset.label))
+    });
+  }
+  normalizePresetForCurrentContract(preset) {
+    return normalizeEffectPresetV2(preset, {
+      currentContract: this.requireCurrentContract(),
+      storedStateAdapters: this.storedStateAdapters,
+      migrations: this.presetMigrations
+    });
+  }
+  commitActivePresetAndApply(preset) {
+    const previousState = this.bridge.getState();
+    this.bridge.setActivePresetMetadata(this.options.effectID, createActivePresetMetadataFromPresetV2(preset));
+    try {
+      this.applyPresetValuesToPatch(preset);
+    } catch (error) {
+      this.restoreBridgeStateAfterApplyFailure(previousState, error);
+    }
+  }
+  commitImportedPresetAndApply(preset) {
+    const previousState = this.bridge.getState();
+    this.bridge.saveUserPreset(preset, { activate: true });
+    try {
+      this.applyPresetValuesToPatch(preset);
+    } catch (error) {
+      this.restoreBridgeStateAfterApplyFailure(previousState, error);
+    }
+  }
+  restoreBridgeStateAfterApplyFailure(previousState, originalError) {
+    try {
+      this.bridge.replaceState(previousState);
+    } catch (rollbackError) {
+      const original = errorFromUnknown(originalError);
+      const rollback = errorFromUnknown(rollbackError);
+      throw new Error(`${original.message}; failed to restore previous preset metadata: ${rollback.message}`);
+    }
+    throw errorFromUnknown(originalError);
+  }
+  applyPresetValuesToPatch(preset) {
+    const sendEventOrValue = this.options.patchConnection.sendEventOrValue;
+    if (typeof sendEventOrValue !== "function") {
+      throw new Error("Cannot apply effect presets because the patch connection cannot write parameter values.");
+    }
+    this.queueSuppressedPresetValues(preset);
+    this.applyingPresetValuesDepth += 1;
+    try {
+      applyEffectPresetV2({
+        patchConnection: {
+          sendParameterGestureStart: this.options.patchConnection.sendParameterGestureStart?.bind(this.options.patchConnection),
+          sendEventOrValue: sendEventOrValue.bind(this.options.patchConnection),
+          sendParameterGestureEnd: this.options.patchConnection.sendParameterGestureEnd?.bind(this.options.patchConnection),
+          sendStoredStateValue: this.options.patchConnection.sendStoredStateValue?.bind(this.options.patchConnection)
+        },
+        preset,
+        currentContract: this.requireCurrentContract(),
+        storedStateAdapters: this.storedStateAdapters,
+        migrations: this.presetMigrations
+      });
+    } catch (error) {
+      this.suppressedParameterValues.clear();
+      throw error;
+    } finally {
+      this.applyingPresetValuesDepth -= 1;
+    }
+  }
+  queueSuppressedPresetValues(preset) {
+    for (const [endpointID, value] of Object.entries(preset.parameters)) {
+      const queue = this.suppressedParameterValues.get(endpointID) ?? [];
+      queue.push(value);
+      this.suppressedParameterValues.set(endpointID, queue);
+    }
+  }
+  consumeSuppressedParameterValue(endpointID, value) {
+    const queue = this.suppressedParameterValues.get(endpointID);
+    if (!queue || queue.length === 0) {
+      return false;
+    }
+    const matchIndex = queue.findIndex((candidate) => valuesEqual(candidate, value));
+    if (matchIndex === -1) {
+      this.suppressedParameterValues.delete(endpointID);
+      return false;
+    }
+    queue.splice(matchIndex, 1);
+    if (queue.length === 0) {
+      this.suppressedParameterValues.delete(endpointID);
+    }
+    return true;
+  }
+  runMutation(mutation, message) {
+    try {
+      const value = mutation();
+      this.lastError = null;
+      this.notify();
+      return {
+        ok: true,
+        value,
+        message
+      };
+    } catch (error) {
+      return this.fail(errorFromUnknown(error));
+    }
+  }
+  fail(error) {
+    this.lastError = error.message;
+    this.notify();
+    return {
+      ok: false,
+      error,
+      message: error.message
+    };
+  }
+  notify() {
+    const state = this.getState();
+    for (const listener of this.listeners) {
+      listener(state);
+    }
+  }
+}
+function createStandaloneEffectPresetController(options) {
+  return new StandaloneEffectPresetController(options);
 }
 const ARTICULATION_DRAG_MIME = "application/x-cosimo-articulation-id";
 const ARTICULATION_RANGE_MAX = 127;
@@ -39074,7 +42920,7 @@ function ArticulationCardCarousel({
     "div",
     {
       "data-role": "articulation-card-carousel",
-      className: "flex min-w-0 flex-1 items-stretch gap-1.5 overflow-x-auto overflow-y-hidden py-0.5 [scrollbar-color:rgba(255,255,255,0.12)_transparent] [scrollbar-width:thin]",
+      className: "flex min-w-0 max-w-full flex-1 basis-0 items-stretch gap-1.5 overflow-x-auto overflow-y-hidden py-0.5 [scrollbar-color:rgba(255,255,255,0.12)_transparent] [scrollbar-width:thin]",
       children: [
         cards.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex h-[80px] flex-1 items-center justify-center rounded-[7px] border border-dashed border-white/[0.06] bg-white/[0.01] px-3 text-[10px] tracking-[0.04em] text-slate-300/40", children: "No articulations" }) : null,
         cards.map((card) => /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -39429,7 +43275,7 @@ function ArticulationRangeLane({
   const visibleSegments = reactExports.useMemo(() => clipSegmentsToRange(fullSegments, viewMinValue, viewMaxValue), [fullSegments, viewMaxValue, viewMinValue]);
   const cardById = reactExports.useMemo(() => new Map(cards.map((card) => [card.id, card])), [cards]);
   const selectedSegment = reactExports.useMemo(() => focusedSegmentId ? visibleSegments.find((segment) => segment.id === focusedSegmentId) ?? null : null, [focusedSegmentId, visibleSegments]);
-  const showToast = reactExports.useCallback((message) => {
+  const showToast2 = reactExports.useCallback((message) => {
     setToast(message);
     window.setTimeout(() => {
       setToast((currentMessage) => currentMessage === message ? null : currentMessage);
@@ -39488,9 +43334,9 @@ function ArticulationRangeLane({
   }, [cardById, fullSegments, maxValue, minValue, viewMaxValue, viewMinValue, visibleSegments]);
   const runEdit = reactExports.useCallback((didChange) => {
     if (!didChange) {
-      showToast("No room for that mapping");
+      showToast2("No room for that mapping");
     }
-  }, [showToast]);
+  }, [showToast2]);
   const placeArticulationAtPosition = reactExports.useCallback((position, articulationId, duplicate, options = {}) => {
     const preview = previewFromPosition(position, articulationId, {
       preferMoveExisting: !duplicate && options.preferMoveExisting
@@ -39514,18 +43360,18 @@ function ArticulationRangeLane({
   ]);
   const assignSelectedAtPosition = reactExports.useCallback((position) => {
     if (!selectedArticulationId) {
-      showToast("Select an articulation first");
+      showToast2("Select an articulation first");
       return;
     }
     placeArticulationAtPosition(position, selectedArticulationId, false);
   }, [
     placeArticulationAtPosition,
     selectedArticulationId,
-    showToast
+    showToast2
   ]);
   const replaceSelectedAtPosition = reactExports.useCallback((position) => {
     if (!selectedArticulationId) {
-      showToast("Select an articulation first");
+      showToast2("Select an articulation first");
       return;
     }
     runEdit(onAssignAtPosition(mode, position, selectedArticulationId));
@@ -39534,7 +43380,7 @@ function ArticulationRangeLane({
     onAssignAtPosition,
     runEdit,
     selectedArticulationId,
-    showToast
+    showToast2
   ]);
   const handleDragOver = reactExports.useCallback((event) => {
     event.preventDefault();
@@ -39766,7 +43612,7 @@ function ArticulationRangeLane({
         return;
       case "insert-after":
         if (!selectedArticulationId) {
-          showToast("Select an articulation first");
+          showToast2("Select an articulation first");
           return;
         }
         runEdit(onInsertAtPosition(mode, clamp$1(segment.max + 1, minValue, maxValue), selectedArticulationId));
@@ -39776,7 +43622,7 @@ function ArticulationRangeLane({
         return;
       case "replace":
         if (!selectedArticulationId) {
-          showToast("Select an articulation first");
+          showToast2("Select an articulation first");
           return;
         }
         runEdit(onAssignAtPosition(mode, segment.min, selectedArticulationId));
@@ -39792,7 +43638,7 @@ function ArticulationRangeLane({
     rangeMenu,
     runEdit,
     selectedArticulationId,
-    showToast
+    showToast2
   ]);
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: joinClasses(FRAME_CLASS, "flex flex-col gap-1.5 px-2.5 py-2"), children: [
     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-wrap items-center justify-between gap-2", children: [
@@ -40152,7 +43998,7 @@ function ArticulationRangeLane({
             "data-role": "articulation-range-insert-row",
             onClick: () => {
               if (!selectedArticulationId) {
-                showToast("Select an articulation first");
+                showToast2("Select an articulation first");
                 return;
               }
               runEdit(onInsertAtPosition(mode, row.min, selectedArticulationId));
@@ -40553,11 +44399,11 @@ function ArticulationControlSurface(props) {
         "data-liquid-detail": "section-tab",
         "aria-label": "Articulations",
         onKeyDown: handleSurfaceKeyDown,
-        className: "synth-grid-card-shell relative flex min-h-[100px] shrink-0 items-stretch gap-2 rounded-[12px] border px-2.5 py-2",
+        className: "synth-grid-card-shell relative flex min-h-[100px] min-w-0 shrink-0 items-stretch gap-2 overflow-hidden rounded-[12px] border px-2.5 py-2",
         children: [
           carousel,
           /* @__PURE__ */ jsxRuntimeExports.jsx("div", { "aria-hidden": "true", className: "w-px shrink-0 self-stretch bg-white/[0.05]" }),
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex shrink-0 flex-col items-end justify-between gap-1.5", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex min-w-fit shrink-0 flex-col items-end justify-between gap-1.5", children: [
             /* @__PURE__ */ jsxRuntimeExports.jsx(
               HeaderActions,
               {
@@ -40588,7 +44434,7 @@ function ArticulationControlSurface(props) {
       "data-liquid-detail": "section-tab",
       "aria-label": "Articulations",
       onKeyDown: handleSurfaceKeyDown,
-      className: "synth-grid-card-shell relative flex shrink-0 flex-col gap-2 rounded-[12px] border px-2.5 py-2",
+      className: "synth-grid-card-shell relative flex min-w-0 shrink-0 flex-col gap-2 overflow-hidden rounded-[12px] border px-2.5 py-2",
       children: [
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-wrap items-center justify-between gap-1.5", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx(ModeSegmentedControl, { activeMode, onSelectMode }),
@@ -41227,6 +45073,415 @@ function WarpControlCluster({
     )
   ] });
 }
+const UNISON_DETUNE_MODE_LABELS = ["Linear", "Super", "Exp", "Inv", "Random"];
+const UNISON_STACK_MODE_LABELS = ["Off", "12", "12+7", "Center-12", "Center-24"];
+const UNISON_PHASE_MODE_LABELS = ["Free", "Reset"];
+function cycleDiscreteValue(binding, maxValue) {
+  binding.commitValue((Math.round(Number(binding.value) || 0) + 1) % (maxValue + 1));
+}
+function formatUnisonVoiceCount(value) {
+  return `${Math.round(clamp(value, 1, 8))}`;
+}
+function formatUnisonDetune(value) {
+  return `${Math.round(clamp(value, 0, 1) * 50)} ct`;
+}
+function parsePercentInput(text) {
+  const numeric = Number.parseFloat(String(text).replace("%", "").trim());
+  return Number.isFinite(numeric) ? clamp(numeric / 100, 0, 1) : null;
+}
+function parseUnisonDetuneInput(text) {
+  const numeric = Number.parseFloat(String(text).replace(/ct|cents?/gi, "").trim());
+  return Number.isFinite(numeric) ? clamp(numeric / 50, 0, 1) : null;
+}
+function unisonSpreadScalar(index, count, mode) {
+  if (count <= 1) {
+    return 0;
+  }
+  const normalized = index / Math.max(1, count - 1) * 2 - 1;
+  if (mode === 1) {
+    return Math.sin(normalized * Math.PI * 0.5);
+  }
+  if (mode === 2) {
+    return Math.sign(normalized) * Math.abs(normalized) ** 1.6;
+  }
+  if (mode === 3) {
+    return Math.sign(normalized) * (1 - (1 - Math.abs(normalized)) ** 1.6);
+  }
+  if (mode === 4) {
+    const seeded = Math.sin(((index + 1) * 37 + count * 19) * 12.9898) * 43758.5453;
+    return (seeded % 1 + 1) % 1 * 2 - 1;
+  }
+  return normalized;
+}
+function unisonStackSemitones(index, count, stackMode) {
+  if (count <= 1 || stackMode === 0) {
+    return 0;
+  }
+  if (stackMode === 1) {
+    return index * 12;
+  }
+  if (stackMode === 2) {
+    return index % 2 === 0 ? Math.floor(index / 2) * 12 : Math.floor(index / 2) * 12 + 7;
+  }
+  const center = (count - 1) * 0.5;
+  const offset = index - center;
+  return offset * (stackMode === 4 ? 24 : 12);
+}
+function UnisonDistributionView({
+  voices,
+  detune,
+  blend,
+  width,
+  detuneMode,
+  stackMode,
+  wavetablePositionSpread,
+  warpSpread
+}) {
+  const count = Math.round(clamp(voices, 1, 8));
+  const points = Array.from({ length: count }, (_, index) => {
+    const spread = unisonSpreadScalar(index, count, detuneMode);
+    const stackSemitones = unisonStackSemitones(index, count, stackMode);
+    const pitchOffset = spread * detune * 0.5 + stackSemitones / 48;
+    const centerDistance = count <= 1 ? 0 : Math.abs(index - (count - 1) * 0.5) / Math.max(1, (count - 1) * 0.5);
+    const weight = (1 - blend) * (1 - centerDistance) + blend;
+    return {
+      x: 50 + spread * width * 38,
+      y: 45 - clamp(pitchOffset, -1, 1) * 28,
+      spread,
+      radius: 2.8 + weight * 2.8
+    };
+  });
+  const wtExtent = wavetablePositionSpread * 38;
+  const warpExtent = warpSpread * 38;
+  return /* @__PURE__ */ jsxRuntimeExports.jsx(
+    "div",
+    {
+      "data-role": "unison-visualization",
+      className: "relative min-h-[92px] overflow-hidden rounded-[14px] border border-cyan-200/[0.09] bg-[radial-gradient(circle_at_50%_30%,rgba(34,211,238,0.10),rgba(2,6,14,0.78)_60%)]",
+      children: /* @__PURE__ */ jsxRuntimeExports.jsxs("svg", { viewBox: "0 0 100 92", className: "h-full w-full", "aria-hidden": "true", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("line", { x1: "50", y1: "10", x2: "50", y2: "68", stroke: "rgba(148,163,184,0.20)", strokeDasharray: "2 4" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("line", { x1: "12", y1: "45", x2: "88", y2: "45", stroke: "rgba(148,163,184,0.16)" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "path",
+          {
+            d: `M ${50 - wtExtent} 75 L ${50 + wtExtent} 75`,
+            stroke: "rgba(125,211,252,0.72)",
+            strokeWidth: "3",
+            strokeLinecap: "round"
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "path",
+          {
+            d: `M ${50 - warpExtent} 84 L ${50 + warpExtent} 84`,
+            stroke: "rgba(251,191,36,0.72)",
+            strokeWidth: "3",
+            strokeLinecap: "round"
+          }
+        ),
+        points.map((point, index) => /* @__PURE__ */ jsxRuntimeExports.jsxs("g", { children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "line",
+            {
+              x1: "50",
+              y1: "45",
+              x2: point.x,
+              y2: point.y,
+              stroke: "rgba(103,232,249,0.20)",
+              strokeWidth: "1"
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "circle",
+            {
+              cx: point.x,
+              cy: point.y,
+              r: point.radius,
+              fill: index % 2 === 0 ? "rgba(103,232,249,0.88)" : "rgba(251,191,36,0.88)",
+              stroke: "rgba(255,255,255,0.65)",
+              strokeWidth: "0.6"
+            }
+          )
+        ] }, `${index}-${point.x.toFixed(2)}`)),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("text", { x: "8", y: "78", fill: "rgba(203,213,225,0.54)", fontSize: "5", letterSpacing: "0", children: "WT" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("text", { x: "8", y: "87", fill: "rgba(203,213,225,0.54)", fontSize: "5", letterSpacing: "0", children: "Warp" })
+      ] })
+    }
+  );
+}
+function UnisonModeButton({
+  label,
+  value,
+  binding,
+  max,
+  dataRole
+}) {
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+    "button",
+    {
+      type: "button",
+      "data-role": dataRole,
+      className: "grid h-10 min-w-0 rounded-[10px] border border-white/[0.07] bg-black/28 px-2 py-1 text-left transition hover:bg-white/[0.045]",
+      onClick: () => cycleDiscreteValue(binding, max),
+      title: `${label}: ${value}`,
+      children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[8px] font-bold uppercase tracking-[0.14em] text-slate-400/70", children: label }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "truncate text-[10px] font-semibold uppercase tracking-[0.08em] text-cyan-100/90", children: value })
+      ]
+    }
+  );
+}
+function UnisonField({
+  label,
+  children
+}) {
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "grid min-w-0 gap-1", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[8px] font-bold uppercase tracking-[0.14em] text-slate-400/70", children: label }),
+    children
+  ] });
+}
+function UnisonControlSurface({
+  unisonVoices,
+  unisonDetune,
+  unisonBlend,
+  unisonWidth,
+  unisonPhase,
+  unisonRandom,
+  unisonPhaseMode,
+  unisonDetuneMode,
+  unisonStackMode,
+  unisonWavetablePositionSpread,
+  unisonWarpSpread,
+  observedUnisonState
+}) {
+  const visualState = observedUnisonState.hasActive ? observedUnisonState : {
+    voices: unisonVoices.value,
+    detune: unisonDetune.value,
+    blend: unisonBlend.value,
+    width: unisonWidth.value,
+    detuneMode: unisonDetuneMode.value,
+    stackMode: unisonStackMode.value,
+    wavetablePositionSpread: unisonWavetablePositionSpread.value,
+    warpSpread: unisonWarpSpread.value
+  };
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+    "section",
+    {
+      "data-role": "unison-control-surface",
+      className: "grid min-w-0 gap-2 rounded-[18px] border border-white/[0.055] bg-white/[0.022] p-3",
+      children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between gap-3", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[10px] font-bold uppercase tracking-[0.18em] text-slate-300/60", children: "Unison" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-1.5", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "button",
+              {
+                type: "button",
+                "data-role": "unison-voices-down",
+                className: "grid size-7 place-items-center rounded-[9px] border border-white/[0.07] bg-black/30 text-slate-200/80 hover:bg-white/[0.045]",
+                onClick: () => unisonVoices.commitValue(clamp(unisonVoices.value - 1, 1, 8)),
+                "aria-label": "Decrease unison voices",
+                children: "-"
+              }
+            ),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              PrecisionNumberField,
+              {
+                ariaLabel: "Unison voices",
+                binding: unisonVoices,
+                min: 1,
+                max: 8,
+                step: 1,
+                width: 58,
+                height: 30,
+                formatDisplay: formatUnisonVoiceCount,
+                formatEditingValue: (value) => String(Math.round(value)),
+                parseText: (text) => Number.parseInt(text.trim(), 10),
+                dataRole: "unison-voices-control"
+              }
+            ),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "button",
+              {
+                type: "button",
+                "data-role": "unison-voices-up",
+                className: "grid size-7 place-items-center rounded-[9px] border border-white/[0.07] bg-black/30 text-slate-200/80 hover:bg-white/[0.045]",
+                onClick: () => unisonVoices.commitValue(clamp(unisonVoices.value + 1, 1, 8)),
+                "aria-label": "Increase unison voices",
+                children: "+"
+              }
+            )
+          ] })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid gap-3 lg:grid-cols-[minmax(168px,0.78fr)_minmax(0,1.22fr)]", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            UnisonDistributionView,
+            {
+              voices: visualState.voices,
+              detune: visualState.detune,
+              blend: visualState.blend,
+              width: visualState.width,
+              detuneMode: visualState.detuneMode,
+              stackMode: visualState.stackMode,
+              wavetablePositionSpread: visualState.wavetablePositionSpread,
+              warpSpread: visualState.warpSpread
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid min-w-0 gap-2", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid grid-cols-3 gap-1.5", children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx(UnisonField, { label: "Detune", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                PrecisionNumberField,
+                {
+                  ariaLabel: "Unison detune",
+                  binding: unisonDetune,
+                  min: 0,
+                  max: 1,
+                  step: 1e-3,
+                  width: 82,
+                  height: 30,
+                  formatDisplay: formatUnisonDetune,
+                  formatEditingValue: (value) => String(Math.round(value * 50)),
+                  parseText: parseUnisonDetuneInput,
+                  dataRole: "unison-detune-control"
+                }
+              ) }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx(UnisonField, { label: "Blend", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                PrecisionNumberField,
+                {
+                  ariaLabel: "Unison blend",
+                  binding: unisonBlend,
+                  min: 0,
+                  max: 1,
+                  step: 1e-3,
+                  width: 82,
+                  height: 30,
+                  formatDisplay: formatPercent,
+                  formatEditingValue: (value) => String(Math.round(value * 100)),
+                  parseText: parsePercentInput,
+                  dataRole: "unison-blend-control"
+                }
+              ) }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx(UnisonField, { label: "Width", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                PrecisionNumberField,
+                {
+                  ariaLabel: "Unison width",
+                  binding: unisonWidth,
+                  min: 0,
+                  max: 1,
+                  step: 1e-3,
+                  width: 82,
+                  height: 30,
+                  formatDisplay: formatPercent,
+                  formatEditingValue: (value) => String(Math.round(value * 100)),
+                  parseText: parsePercentInput,
+                  dataRole: "unison-width-control"
+                }
+              ) })
+            ] }),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid grid-cols-3 gap-1.5", children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx(UnisonField, { label: "Phase", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                PrecisionNumberField,
+                {
+                  ariaLabel: "Unison phase",
+                  binding: unisonPhase,
+                  min: 0,
+                  max: 1,
+                  step: 1e-3,
+                  width: 82,
+                  height: 30,
+                  formatDisplay: formatPercent,
+                  formatEditingValue: (value) => String(Math.round(value * 100)),
+                  parseText: parsePercentInput,
+                  dataRole: "unison-phase-control"
+                }
+              ) }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx(UnisonField, { label: "Random", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                PrecisionNumberField,
+                {
+                  ariaLabel: "Unison random",
+                  binding: unisonRandom,
+                  min: 0,
+                  max: 1,
+                  step: 1e-3,
+                  width: 82,
+                  height: 30,
+                  formatDisplay: formatPercent,
+                  formatEditingValue: (value) => String(Math.round(value * 100)),
+                  parseText: parsePercentInput,
+                  dataRole: "unison-random-control"
+                }
+              ) }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx(UnisonField, { label: "WT Pos", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                PrecisionNumberField,
+                {
+                  ariaLabel: "Unison wavetable position spread",
+                  binding: unisonWavetablePositionSpread,
+                  min: 0,
+                  max: 1,
+                  step: 1e-3,
+                  width: 82,
+                  height: 30,
+                  formatDisplay: formatPercent,
+                  formatEditingValue: (value) => String(Math.round(value * 100)),
+                  parseText: parsePercentInput,
+                  dataRole: "unison-wt-spread-control"
+                }
+              ) })
+            ] }),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid grid-cols-[82px_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)] gap-1.5", children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx(UnisonField, { label: "Warp", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                PrecisionNumberField,
+                {
+                  ariaLabel: "Unison warp spread",
+                  binding: unisonWarpSpread,
+                  min: 0,
+                  max: 1,
+                  step: 1e-3,
+                  width: 82,
+                  height: 30,
+                  formatDisplay: formatPercent,
+                  formatEditingValue: (value) => String(Math.round(value * 100)),
+                  parseText: parsePercentInput,
+                  dataRole: "unison-warp-spread-control"
+                }
+              ) }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                UnisonModeButton,
+                {
+                  label: "Mode",
+                  value: UNISON_DETUNE_MODE_LABELS[Math.round(unisonDetuneMode.value)] ?? "Linear",
+                  binding: unisonDetuneMode,
+                  max: 4,
+                  dataRole: "unison-detune-mode-control"
+                }
+              ),
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                UnisonModeButton,
+                {
+                  label: "Stack",
+                  value: UNISON_STACK_MODE_LABELS[Math.round(unisonStackMode.value)] ?? "Off",
+                  binding: unisonStackMode,
+                  max: 4,
+                  dataRole: "unison-stack-mode-control"
+                }
+              ),
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                UnisonModeButton,
+                {
+                  label: "Phase",
+                  value: UNISON_PHASE_MODE_LABELS[Math.round(unisonPhaseMode.value)] ?? "Free",
+                  binding: unisonPhaseMode,
+                  max: 1,
+                  dataRole: "unison-phase-mode-control"
+                }
+              )
+            ] })
+          ] })
+        ] })
+      ]
+    }
+  );
+}
 function DesktopEnvelopeEditor({
   selectedEnvelope,
   onEnvelopeChange
@@ -41501,6 +45756,40 @@ function StatusHeader({ statusText }) {
     /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[10px] font-semibold uppercase tracking-[0.24em] text-blue-300/55", children: "Cosimo Synth" }),
     /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[10px] uppercase tracking-[0.16em] text-[var(--cosimo-text-muted)]", children: statusText })
   ] });
+}
+function SynthPresetBarHost({
+  storedStateAdapters
+}) {
+  const patchConnection = usePatchConnection();
+  const hostRef = reactExports.useRef(null);
+  const presetController = reactExports.useMemo(() => createStandaloneEffectPresetController({
+    effectID: SYNTH_PRESET_EFFECT_ID,
+    patchConnection,
+    storedStateAdapters
+  }), [patchConnection, storedStateAdapters]);
+  reactExports.useEffect(() => {
+    const host = hostRef.current;
+    if (!host) {
+      return;
+    }
+    const presetBar = createPresetBar();
+    presetBar.controller = presetController;
+    host.replaceChildren(presetBar);
+    presetController.attach();
+    return () => {
+      presetController.detach();
+      presetBar.controller = null;
+      presetBar.remove();
+    };
+  }, [presetController]);
+  return /* @__PURE__ */ jsxRuntimeExports.jsx(
+    "div",
+    {
+      ref: hostRef,
+      "data-role": "synth-preset-bar-host",
+      className: "relative z-40 min-w-0 overflow-visible rounded-[12px] border border-white/[0.06] bg-black/20 [--knob-track-value-color:#87d7f5] [--preset-bar-border-radius:12px]"
+    }
+  );
 }
 function FilterSection({
   filterMode,
@@ -42085,35 +46374,78 @@ function EffectsRackSection({
 function KeyboardToolbar({
   playMode,
   glideTime,
+  unisonVoices,
+  unisonDetune,
+  unisonBlend,
+  unisonWidth,
+  unisonPhase,
+  unisonRandom,
+  unisonPhaseMode,
+  unisonDetuneMode,
+  unisonStackMode,
+  unisonWavetablePositionSpread,
+  unisonWarpSpread,
+  observedUnisonState,
   playModeFocusBindings,
   glideFocusTarget
 }) {
-  return /* @__PURE__ */ jsxRuntimeExports.jsx(
-    VoiceGlideControlSurface,
-    {
-      playModeValue: playMode.value,
-      onPlayModeChange: (nextValue) => playMode.commitValue(nextValue),
-      playModeFocusBindings,
-      className: "grid-cols-[minmax(0,1fr)_auto] items-end",
-      glideControl: /* @__PURE__ */ jsxRuntimeExports.jsx(
-        NexusNumberField,
-        {
-          label: "Glide",
-          binding: glideTime,
-          min: GLIDE_TIME_MIN_SECONDS,
-          max: GLIDE_TIME_MAX_SECONDS,
-          step: GLIDE_TIME_STEP_SECONDS,
-          onActivate: glideFocusTarget.onActivate,
-          onBeginTextEntry: glideFocusTarget.onBeginTextEntry,
-          onEndTextEntry: glideFocusTarget.onEndTextEntry
-        }
-      )
-    }
-  );
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid gap-3 xl:grid-cols-[minmax(260px,0.76fr)_minmax(0,1.24fr)]", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx(
+      VoiceGlideControlSurface,
+      {
+        playModeValue: playMode.value,
+        onPlayModeChange: (nextValue) => playMode.commitValue(nextValue),
+        playModeFocusBindings,
+        className: "grid-cols-[minmax(0,1fr)_auto] items-end",
+        glideControl: /* @__PURE__ */ jsxRuntimeExports.jsx(
+          NexusNumberField,
+          {
+            label: "Glide",
+            binding: glideTime,
+            min: GLIDE_TIME_MIN_SECONDS,
+            max: GLIDE_TIME_MAX_SECONDS,
+            step: GLIDE_TIME_STEP_SECONDS,
+            onActivate: glideFocusTarget.onActivate,
+            onBeginTextEntry: glideFocusTarget.onBeginTextEntry,
+            onEndTextEntry: glideFocusTarget.onEndTextEntry
+          }
+        )
+      }
+    ),
+    /* @__PURE__ */ jsxRuntimeExports.jsx(
+      UnisonControlSurface,
+      {
+        unisonVoices,
+        unisonDetune,
+        unisonBlend,
+        unisonWidth,
+        unisonPhase,
+        unisonRandom,
+        unisonPhaseMode,
+        unisonDetuneMode,
+        unisonStackMode,
+        unisonWavetablePositionSpread,
+        unisonWarpSpread,
+        observedUnisonState
+      }
+    )
+  ] });
 }
 function KeyboardSection({
   playMode,
   glideTime,
+  unisonVoices,
+  unisonDetune,
+  unisonBlend,
+  unisonWidth,
+  unisonPhase,
+  unisonRandom,
+  unisonPhaseMode,
+  unisonDetuneMode,
+  unisonStackMode,
+  unisonWavetablePositionSpread,
+  unisonWarpSpread,
+  observedUnisonState,
   keyboardRootNote,
   onOctaveDown,
   onOctaveUp,
@@ -42137,6 +46469,18 @@ function KeyboardSection({
         {
           playMode,
           glideTime,
+          unisonVoices,
+          unisonDetune,
+          unisonBlend,
+          unisonWidth,
+          unisonPhase,
+          unisonRandom,
+          unisonPhaseMode,
+          unisonDetuneMode,
+          unisonStackMode,
+          unisonWavetablePositionSpread,
+          unisonWarpSpread,
+          observedUnisonState,
           playModeFocusBindings,
           glideFocusTarget
         }
@@ -42655,6 +46999,87 @@ function ModulationMatrixSection({
     }
   );
 }
+function ContextualArticulationToolbar({
+  articulationIsDirty,
+  selectedArticulationName,
+  isDismissed,
+  onDismiss,
+  onUpdateArticulation,
+  onSaveAsNewArticulation,
+  onRevertArticulation
+}) {
+  if (!articulationIsDirty || isDismissed) {
+    return null;
+  }
+  const statusText = `Edited ${selectedArticulationName ?? "articulation"}`;
+  const buttonBase = "inline-flex h-7 shrink-0 items-center justify-center whitespace-nowrap rounded-[999px] px-3 text-[10px] font-bold uppercase tracking-[0.12em] transition focus:outline-none focus:ring-2 focus:ring-cyan-200/45";
+  const primaryButton = `${buttonBase} border border-amber-200/35 bg-amber-200/16 text-amber-50 shadow-[0_0_18px_rgba(251,191,36,0.10)] hover:bg-amber-200/22`;
+  const secondaryButton = `${buttonBase} border border-white/[0.08] bg-white/[0.045] text-slate-100/84 hover:bg-white/[0.07]`;
+  const quietButton = `${buttonBase} border border-white/[0.05] bg-transparent text-slate-300/70 hover:bg-white/[0.045] hover:text-slate-100`;
+  return /* @__PURE__ */ jsxRuntimeExports.jsx(
+    "div",
+    {
+      "data-role": "contextual-floating-toolbar",
+      "aria-label": statusText,
+      className: "pointer-events-none fixed bottom-4 left-1/2 z-50 w-[min(calc(100vw-1rem),680px)] -translate-x-1/2 px-2",
+      children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "pointer-events-auto relative mx-auto flex h-10 w-fit max-w-full items-center gap-1.5 overflow-hidden rounded-[12px] border border-white/[0.08] bg-[#070a12]/96 py-1 pl-4 pr-1.5 shadow-[0_18px_54px_rgba(0,0,0,0.54),inset_0_1px_0_rgba(255,255,255,0.04)] backdrop-blur-[2px]", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "span",
+          {
+            "aria-hidden": "true",
+            className: "absolute left-2 top-2 h-1.5 w-1.5 rounded-full bg-amber-200 shadow-[0_0_14px_rgba(251,191,36,0.45)]"
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex min-w-0 items-center gap-1 overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "button",
+            {
+              type: "button",
+              "aria-label": `Replace ${selectedArticulationName ?? "selected articulation"} with current sound`,
+              "data-role": "contextual-update-articulation",
+              onClick: onUpdateArticulation,
+              className: primaryButton,
+              children: "Replace"
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "button",
+            {
+              type: "button",
+              "aria-label": "Save current sound as a new articulation",
+              "data-role": "contextual-save-new-articulation",
+              onClick: onSaveAsNewArticulation,
+              className: secondaryButton,
+              children: "Save New"
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "button",
+            {
+              type: "button",
+              "aria-label": `Revert to saved ${selectedArticulationName ?? "articulation"}`,
+              "data-role": "contextual-revert-articulation",
+              onClick: onRevertArticulation,
+              className: quietButton,
+              children: "Revert"
+            }
+          )
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "button",
+          {
+            type: "button",
+            "aria-label": "Dismiss contextual toolbar",
+            "data-role": "contextual-toolbar-dismiss",
+            onClick: onDismiss,
+            className: "grid h-7 w-7 shrink-0 place-items-center rounded-full border border-white/[0.05] bg-white/[0.03] text-[11px] font-bold text-slate-300/70 transition hover:bg-white/[0.07] hover:text-slate-100 focus:outline-none focus:ring-2 focus:ring-cyan-200/45",
+            children: "X"
+          }
+        )
+      ] })
+    }
+  );
+}
 function DesktopPatchViewBody({
   keyboardInputMode
 }) {
@@ -42690,8 +47115,24 @@ function DesktopPatchViewBody({
   }, [keyboardInputMode]);
   const [keyboardControlMode, setKeyboardControlMode] = reactExports.useState("articulation");
   const [isArticulationEditorExpanded, setIsArticulationEditorExpanded] = reactExports.useState(false);
+  const [dismissedContextualToolbarKey, setDismissedContextualToolbarKey] = reactExports.useState(null);
   const selectedArticulationId = synthView.selectedArticulationSlot?.id ?? null;
+  const selectedArticulationName = synthView.selectedArticulationSlot?.name ?? null;
   const articulationMode = synthView.articulationBank.activeTriggerMode;
+  const contextualToolbarKey = reactExports.useMemo(() => {
+    if (!synthView.selectedArticulationIsDirty) {
+      return null;
+    }
+    return `articulation-dirty:${selectedArticulationId ?? ""}`;
+  }, [
+    selectedArticulationId,
+    synthView.selectedArticulationIsDirty
+  ]);
+  reactExports.useEffect(() => {
+    if (!contextualToolbarKey) {
+      setDismissedContextualToolbarKey(null);
+    }
+  }, [contextualToolbarKey]);
   const articulationCards = reactExports.useMemo(() => {
     const bank = synthView.articulationBank;
     return synthView.articulationSlots.map((slot) => {
@@ -42813,10 +47254,10 @@ function DesktopPatchViewBody({
       height: 22
     }
   ), [synthView.pan]);
-  const keyboardToolbarOverride = reactExports.useMemo(() => /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { "data-role": "keyboard-control-row", className: "grid min-h-[158px] gap-2", children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between gap-2 rounded-[12px] border border-white/[0.05] bg-white/[0.018] px-2 py-1.5", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[10px] font-bold uppercase tracking-[0.18em] text-slate-300/45", children: "Controls" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "inline-flex h-7 items-center gap-1 rounded-[8px] border border-white/[0.06] bg-white/[0.022] p-0.5", children: [
+  const keyboardToolbarOverride = reactExports.useMemo(() => /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { "data-role": "keyboard-control-row", className: "grid min-h-[158px] min-w-0 gap-2 overflow-hidden", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex min-w-0 items-center justify-between gap-2 overflow-hidden rounded-[12px] border border-white/[0.05] bg-white/[0.018] px-2 py-1.5", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "min-w-0 truncate text-[10px] font-bold uppercase tracking-[0.18em] text-slate-300/45", children: "Controls" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "inline-flex h-7 shrink-0 items-center gap-1 rounded-[8px] border border-white/[0.06] bg-white/[0.022] p-0.5", children: [
         ["articulation", "Articulations"],
         ["voice", "Voice"]
       ].map(([mode, label]) => /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -42876,6 +47317,18 @@ function DesktopPatchViewBody({
       {
         playMode: synthView.playMode,
         glideTime: synthView.glideTime,
+        unisonVoices: synthView.unisonVoices,
+        unisonDetune: synthView.unisonDetune,
+        unisonBlend: synthView.unisonBlend,
+        unisonWidth: synthView.unisonWidth,
+        unisonPhase: synthView.unisonPhase,
+        unisonRandom: synthView.unisonRandom,
+        unisonPhaseMode: synthView.unisonPhaseMode,
+        unisonDetuneMode: synthView.unisonDetuneMode,
+        unisonStackMode: synthView.unisonStackMode,
+        unisonWavetablePositionSpread: synthView.unisonWavetablePositionSpread,
+        unisonWarpSpread: synthView.unisonWarpSpread,
+        observedUnisonState: synthView.observedUnisonState,
         playModeFocusBindings: synthView.keyboardRouting.playModeFocusBindings,
         glideFocusTarget: synthView.keyboardRouting.glideFocusTarget
       }
@@ -42896,6 +47349,7 @@ function DesktopPatchViewBody({
   ]);
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "cosimo-surface relative flex h-full w-full flex-col gap-3 overflow-hidden rounded-[28px] border border-white/[0.05] px-4 pb-4 pt-2.5 text-slate-100", children: [
     /* @__PURE__ */ jsxRuntimeExports.jsx(StatusHeader, { statusText: synthView.topStatus }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx(SynthPresetBarHost, { storedStateAdapters: synthView.presetStoredStateAdapters }),
     /* @__PURE__ */ jsxRuntimeExports.jsxs(
       "main",
       {
@@ -43025,6 +47479,18 @@ function DesktopPatchViewBody({
             {
               playMode: synthView.playMode,
               glideTime: synthView.glideTime,
+              unisonVoices: synthView.unisonVoices,
+              unisonDetune: synthView.unisonDetune,
+              unisonBlend: synthView.unisonBlend,
+              unisonWidth: synthView.unisonWidth,
+              unisonPhase: synthView.unisonPhase,
+              unisonRandom: synthView.unisonRandom,
+              unisonPhaseMode: synthView.unisonPhaseMode,
+              unisonDetuneMode: synthView.unisonDetuneMode,
+              unisonStackMode: synthView.unisonStackMode,
+              unisonWavetablePositionSpread: synthView.unisonWavetablePositionSpread,
+              unisonWarpSpread: synthView.unisonWarpSpread,
+              observedUnisonState: synthView.observedUnisonState,
               keyboardRootNote,
               onOctaveDown: handleKeyboardOctaveDown,
               onOctaveUp: handleKeyboardOctaveUp,
@@ -43058,6 +47524,22 @@ function DesktopPatchViewBody({
         onPointerLeave: synthView.msegEditor.handlePointerLeave,
         onPointerUp: synthView.msegEditor.handlePointerUp,
         rateFocusBindings: synthView.keyboardRouting.msegRateFocusBindings
+      }
+    ),
+    /* @__PURE__ */ jsxRuntimeExports.jsx(
+      ContextualArticulationToolbar,
+      {
+        articulationIsDirty: synthView.selectedArticulationIsDirty,
+        selectedArticulationName,
+        isDismissed: Boolean(contextualToolbarKey && dismissedContextualToolbarKey === contextualToolbarKey),
+        onDismiss: () => {
+          if (contextualToolbarKey) {
+            setDismissedContextualToolbarKey(contextualToolbarKey);
+          }
+        },
+        onUpdateArticulation: synthView.handleUpdateSelectedArticulationSlot,
+        onSaveAsNewArticulation: () => synthView.handleCaptureArticulationSlot({ autoAssign: true }),
+        onRevertArticulation: synthView.handleRevertSelectedArticulationSlot
       }
     ),
     curveLab.panel

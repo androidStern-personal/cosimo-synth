@@ -28,17 +28,22 @@ import {
     type MsegState,
 } from "./mseg";
 import {
+    MODULATION_STATE_KEY,
     acquireModulationRuntimeBridge,
     buildDisplayedMsegState,
     clampModulationRouteAmount,
+    createDefaultModulationState,
     createDefaultEnvelope,
     createDefaultRoute,
+    normalizeModulationState,
     releaseModulationRuntimeBridge,
+    serializeModulationState,
     type ModulationEnvelope,
     type ModulationRoute,
     type ModulationState,
     type MsegEditorControllerLike,
 } from "./modulation";
+import type { EffectStoredStateAdapter } from "./effects/effect-preset-v2";
 import {
     ARTICULATION_STATE_KEY,
     ARTICULATION_TRIGGER_CONFIG_STATE_KEY,
@@ -78,10 +83,12 @@ import {
     mapDisplayDragToPosition,
     normalizeRuntimeTableState,
     resolveRuntimeTablePresentation,
+    selectObservedEffectiveUnisonState,
     selectObservedEffectiveFilterState,
     selectObservedEffectiveWarpState,
     selectObservedWavetablePositionState,
     type EffectiveFilterState,
+    type EffectiveUnisonState,
     type EffectiveWarpState,
     type RuntimeTablePresentation,
 } from "./runtime-table-state";
@@ -120,6 +127,7 @@ import {
 
 export const EFFECTIVE_WAVETABLE_POSITION_ENDPOINT_ID = "effectiveWavetablePosition";
 export const EFFECTIVE_WARP_STATE_ENDPOINT_ID = "effectiveWarpState";
+export const EFFECTIVE_UNISON_STATE_ENDPOINT_ID = "effectiveUnisonState";
 export const EFFECTIVE_FILTER_STATE_ENDPOINT_ID = "effectiveFilterState";
 export const FILTER_SPECTRUM_ENDPOINT_ID = "filterSpectrum";
 export const DISPLAY_SWIPE_THRESHOLD_PX = 2;
@@ -134,6 +142,17 @@ const WARP_AMOUNT_ENDPOINT_ID = "warpAmount";
 const FILTER_MODE_ENDPOINT_ID = "filterMode";
 const FILTER_CUTOFF_ENDPOINT_ID = "filterCutoff";
 const FILTER_Q_ENDPOINT_ID = "filterQ";
+const UNISON_VOICES_ENDPOINT_ID = "unisonVoices";
+const UNISON_DETUNE_ENDPOINT_ID = "unisonDetune";
+const UNISON_BLEND_ENDPOINT_ID = "unisonBlend";
+const UNISON_WIDTH_ENDPOINT_ID = "unisonWidth";
+const UNISON_PHASE_ENDPOINT_ID = "unisonPhase";
+const UNISON_RANDOM_ENDPOINT_ID = "unisonRandom";
+const UNISON_PHASE_MODE_ENDPOINT_ID = "unisonPhaseMode";
+const UNISON_DETUNE_MODE_ENDPOINT_ID = "unisonDetuneMode";
+const UNISON_STACK_MODE_ENDPOINT_ID = "unisonStackMode";
+const UNISON_WAVETABLE_POSITION_SPREAD_ENDPOINT_ID = "unisonWavetablePositionSpread";
+const UNISON_WARP_SPREAD_ENDPOINT_ID = "unisonWarpSpread";
 const MSEG_1_MORPH_ENDPOINT_ID = "mseg1Morph";
 const MSEG_2_MORPH_ENDPOINT_ID = "mseg2Morph";
 const MSEG_3_MORPH_ENDPOINT_ID = "mseg3Morph";
@@ -159,6 +178,7 @@ const WAVETABLE_PREWARM_REQUEST_ENDPOINT_ID = "wavetablePrewarmRequest";
 const MIDI_INPUT_ENDPOINT_ID = "midiIn";
 const VOICE_ARTICULATION_START_ENDPOINT_ID = "voiceArticulationStart";
 const ARTICULATION_AUDITION_FALLBACK_NOTE = 60;
+export const SYNTH_PRESET_EFFECT_ID = "cosimo-synth";
 const GLIDE_TIME_MIN_SECONDS = 0;
 const GLIDE_TIME_MAX_SECONDS = 2;
 const GLIDE_TIME_STEP_SECONDS = 0.001;
@@ -256,6 +276,17 @@ export type SynthPatchViewModel = {
     filterMode: PatchControlBinding<number>;
     filterCutoff: PatchControlBinding<number>;
     filterQ: PatchControlBinding<number>;
+    unisonVoices: PatchControlBinding<number>;
+    unisonDetune: PatchControlBinding<number>;
+    unisonBlend: PatchControlBinding<number>;
+    unisonWidth: PatchControlBinding<number>;
+    unisonPhase: PatchControlBinding<number>;
+    unisonRandom: PatchControlBinding<number>;
+    unisonPhaseMode: PatchControlBinding<number>;
+    unisonDetuneMode: PatchControlBinding<number>;
+    unisonStackMode: PatchControlBinding<number>;
+    unisonWavetablePositionSpread: PatchControlBinding<number>;
+    unisonWarpSpread: PatchControlBinding<number>;
     selectedMsegMorph: PatchControlBinding<number>;
     distortionMode: PatchControlBinding<number>;
     distortionDriveDb: PatchControlBinding<number>;
@@ -278,11 +309,13 @@ export type SynthPatchViewModel = {
     observedDistortionScope: DistortionScopeFrame | null;
     observedMsegPlayhead: MsegPreviewPlayheadState;
     observedWarpState: EffectiveWarpState;
+    observedUnisonState: EffectiveUnisonState;
     modulationState: ModulationState | null;
     articulationBank: ArticulationBank;
     articulationSlots: ArticulationSlot[];
     selectedArticulationSlot: ArticulationSlot | null;
     selectedArticulationIsDirty: boolean;
+    presetStoredStateAdapters: EffectStoredStateAdapter[];
     articulationHeldInput: ArticulationHeldInput;
     discardedArticulationEdit: {
         slotId: string;
@@ -629,6 +662,64 @@ export function useObservedWarpState({
     };
 }
 
+export function useObservedUnisonState({
+    unisonVoices,
+    unisonDetune,
+    unisonBlend,
+    unisonWidth,
+    unisonDetuneMode,
+    unisonStackMode,
+    unisonWavetablePositionSpread,
+    unisonWarpSpread,
+}: {
+    unisonVoices: number;
+    unisonDetune: number;
+    unisonBlend: number;
+    unisonWidth: number;
+    unisonDetuneMode: number;
+    unisonStackMode: number;
+    unisonWavetablePositionSpread: number;
+    unisonWarpSpread: number;
+}) {
+    const message = usePatchEndpoint<unknown | null>(EFFECTIVE_UNISON_STATE_ENDPOINT_ID, null);
+    const fallbackState = useMemo<EffectiveUnisonState>(() => ({
+        voiceGeneration: -1,
+        hasActive: false,
+        voices: clamp(Math.round(Number(unisonVoices) || 1), 1, 8),
+        detune: clamp(Number(unisonDetune) || 0, 0, 1),
+        blend: clamp(Number(unisonBlend) || 0, 0, 1),
+        width: clamp(Number(unisonWidth) || 0, 0, 1),
+        detuneMode: clamp(Math.round(Number(unisonDetuneMode) || 0), 0, 4),
+        stackMode: clamp(Math.round(Number(unisonStackMode) || 0), 0, 4),
+        wavetablePositionSpread: clamp(Number(unisonWavetablePositionSpread) || 0, 0, 1),
+        warpSpread: clamp(Number(unisonWarpSpread) || 0, 0, 1),
+    }), [
+        unisonBlend,
+        unisonDetune,
+        unisonDetuneMode,
+        unisonStackMode,
+        unisonVoices,
+        unisonWarpSpread,
+        unisonWavetablePositionSpread,
+        unisonWidth,
+    ]);
+    const [observedState, setObservedState] = useState<EffectiveUnisonState>(() => fallbackState);
+
+    useEffect(() => {
+        setObservedState((previousState) => selectObservedEffectiveUnisonState(previousState, message));
+    }, [message]);
+
+    useEffect(() => {
+        if (message) {
+            return;
+        }
+
+        setObservedState(fallbackState);
+    }, [fallbackState, message]);
+
+    return message ? observedState : fallbackState;
+}
+
 export function useModulationState() {
     const patchConnection = usePatchConnection();
     const [state, setState] = useState<ModulationState | null>(null);
@@ -787,6 +878,152 @@ function useStoredArticulationBank() {
         hasHydrated,
         setAndPersistBank,
     }), [bank, hasHydrated, setAndPersistBank]);
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function parsePresetStoredStateValue(rawValue: unknown, label: string) {
+    if (typeof rawValue !== "string") {
+        return rawValue;
+    }
+
+    try {
+        return JSON.parse(rawValue);
+    } catch (error) {
+        throw new Error(`${label} must be valid JSON.`);
+    }
+}
+
+function parseStrictArticulationPresetBank(rawValue: unknown): ArticulationBank {
+    const parsedValue = parsePresetStoredStateValue(rawValue, "Articulation preset state");
+
+    if (!isPlainRecord(parsedValue)) {
+        throw new Error("Articulation preset state must be an object.");
+    }
+
+    if (parsedValue.format !== "cosimo.articulations" || parsedValue.version !== 2) {
+        throw new Error("Articulation preset state must be cosimo.articulations version 2.");
+    }
+
+    return normalizeArticulationBank(parsedValue);
+}
+
+function parseStrictModulationPresetState(rawValue: unknown): ModulationState {
+    const parsedValue = parsePresetStoredStateValue(rawValue, "Modulation preset state");
+
+    if (!isPlainRecord(parsedValue)) {
+        throw new Error("Modulation preset state must be an object.");
+    }
+
+    if (parsedValue.format !== "cosimo.modulation" || parsedValue.version !== 2) {
+        throw new Error("Modulation preset state must be cosimo.modulation version 2.");
+    }
+
+    return normalizeModulationState(parsedValue);
+}
+
+function useSynthPresetStoredStateAdapters({
+    articulationBankState,
+    modulationBridge,
+    modulationState,
+}: {
+    articulationBankState: ReturnType<typeof useStoredArticulationBank>;
+    modulationBridge: ReturnType<typeof useModulationState>["bridge"];
+    modulationState: ModulationState | null;
+}) {
+    const patchConnection = usePatchConnection();
+    const { bankRef, setAndPersistBank } = articulationBankState;
+    const latestModulationStateRef = useRef<ModulationState | null>(null);
+
+    useEffect(() => {
+        latestModulationStateRef.current = modulationState;
+    }, [modulationState]);
+
+    return useMemo<EffectStoredStateAdapter[]>(() => {
+        const subscribeToStoredStateKey = (stateKey: string, listener: () => void) => {
+            const handleStoredStateValue = (message: unknown) => {
+                if (!message || typeof message !== "object") {
+                    return;
+                }
+
+                if ((message as { key?: unknown }).key === stateKey) {
+                    listener();
+                }
+            };
+
+            patchConnection.addStoredStateValueListener?.(handleStoredStateValue);
+
+            return () => {
+                patchConnection.removeStoredStateValueListener?.(handleStoredStateValue);
+            };
+        };
+
+        return [
+            {
+                key: ARTICULATION_STATE_KEY,
+                schemaVersion: 2,
+                getContract() {
+                    return {
+                        key: ARTICULATION_STATE_KEY,
+                        schemaVersion: 2,
+                        required: true,
+                    };
+                },
+                capture() {
+                    return bankRef.current;
+                },
+                normalizeForPreset(value: unknown) {
+                    return parseStrictArticulationPresetBank(value);
+                },
+                serializeForPreset(value: unknown) {
+                    return serializeArticulationBank(parseStrictArticulationPresetBank(value));
+                },
+                apply(value: unknown) {
+                    setAndPersistBank(parseStrictArticulationPresetBank(value));
+                },
+                subscribe(listener: () => void) {
+                    return subscribeToStoredStateKey(ARTICULATION_STATE_KEY, listener);
+                },
+            },
+            {
+                key: MODULATION_STATE_KEY,
+                schemaVersion: 2,
+                getContract() {
+                    return {
+                        key: MODULATION_STATE_KEY,
+                        schemaVersion: 2,
+                        required: true,
+                    };
+                },
+                capture() {
+                    return modulationBridge.current?.getState()
+                        ?? latestModulationStateRef.current
+                        ?? createDefaultModulationState();
+                },
+                normalizeForPreset(value: unknown) {
+                    return parseStrictModulationPresetState(value);
+                },
+                serializeForPreset(value: unknown) {
+                    return serializeModulationState(parseStrictModulationPresetState(value));
+                },
+                apply(value: unknown) {
+                    const nextState = parseStrictModulationPresetState(value);
+
+                    if (modulationBridge.current) {
+                        modulationBridge.current.setState(nextState);
+                        return;
+                    }
+
+                    patchConnection.sendStoredStateValue?.(MODULATION_STATE_KEY, serializeModulationState(nextState));
+                },
+                subscribe(listener: () => void) {
+                    return subscribeToStoredStateKey(MODULATION_STATE_KEY, listener);
+                },
+            },
+        ];
+    }, [bankRef, modulationBridge, patchConnection, setAndPersistBank]);
 }
 
 export function useMsegState() {
@@ -1437,6 +1674,61 @@ export function useSynthPatchViewModel({
         initialValue: 0.707107,
         coerce: (value) => clamp(Number(value) || 0, 0.1, 20),
     });
+    const unisonVoices = usePatchParameterBinding<number>({
+        endpointID: UNISON_VOICES_ENDPOINT_ID,
+        initialValue: 1,
+        coerce: (value) => clamp(Math.round(Number(value) || 1), 1, 8),
+    });
+    const unisonDetune = usePatchParameterBinding<number>({
+        endpointID: UNISON_DETUNE_ENDPOINT_ID,
+        initialValue: 0.1,
+        coerce: (value) => clamp(Number(value) || 0, 0, 1),
+    });
+    const unisonBlend = usePatchParameterBinding<number>({
+        endpointID: UNISON_BLEND_ENDPOINT_ID,
+        initialValue: 0.75,
+        coerce: (value) => clamp(Number(value) || 0, 0, 1),
+    });
+    const unisonWidth = usePatchParameterBinding<number>({
+        endpointID: UNISON_WIDTH_ENDPOINT_ID,
+        initialValue: 1,
+        coerce: (value) => clamp(Number(value) || 0, 0, 1),
+    });
+    const unisonPhase = usePatchParameterBinding<number>({
+        endpointID: UNISON_PHASE_ENDPOINT_ID,
+        initialValue: 0,
+        coerce: (value) => clamp(Number(value) || 0, 0, 1),
+    });
+    const unisonRandom = usePatchParameterBinding<number>({
+        endpointID: UNISON_RANDOM_ENDPOINT_ID,
+        initialValue: 0,
+        coerce: (value) => clamp(Number(value) || 0, 0, 1),
+    });
+    const unisonPhaseMode = usePatchParameterBinding<number>({
+        endpointID: UNISON_PHASE_MODE_ENDPOINT_ID,
+        initialValue: 0,
+        coerce: (value) => clamp(Math.round(Number(value) || 0), 0, 1),
+    });
+    const unisonDetuneMode = usePatchParameterBinding<number>({
+        endpointID: UNISON_DETUNE_MODE_ENDPOINT_ID,
+        initialValue: 0,
+        coerce: (value) => clamp(Math.round(Number(value) || 0), 0, 4),
+    });
+    const unisonStackMode = usePatchParameterBinding<number>({
+        endpointID: UNISON_STACK_MODE_ENDPOINT_ID,
+        initialValue: 0,
+        coerce: (value) => clamp(Math.round(Number(value) || 0), 0, 4),
+    });
+    const unisonWavetablePositionSpread = usePatchParameterBinding<number>({
+        endpointID: UNISON_WAVETABLE_POSITION_SPREAD_ENDPOINT_ID,
+        initialValue: 0,
+        coerce: (value) => clamp(Number(value) || 0, 0, 1),
+    });
+    const unisonWarpSpread = usePatchParameterBinding<number>({
+        endpointID: UNISON_WARP_SPREAD_ENDPOINT_ID,
+        initialValue: 0,
+        coerce: (value) => clamp(Number(value) || 0, 0, 1),
+    });
     const mseg1Morph = usePatchParameterBinding<number>({
         endpointID: MSEG_1_MORPH_ENDPOINT_ID,
         initialValue: 0,
@@ -1540,6 +1832,16 @@ export function useSynthPatchViewModel({
         filterCutoff: filterCutoff.value,
         filterQ: filterQ.value,
     });
+    const observedUnisonState = useObservedUnisonState({
+        unisonVoices: unisonVoices.value,
+        unisonDetune: unisonDetune.value,
+        unisonBlend: unisonBlend.value,
+        unisonWidth: unisonWidth.value,
+        unisonDetuneMode: unisonDetuneMode.value,
+        unisonStackMode: unisonStackMode.value,
+        unisonWavetablePositionSpread: unisonWavetablePositionSpread.value,
+        unisonWarpSpread: unisonWarpSpread.value,
+    });
     const observedFilterSpectrum = useObservedFilterSpectrum();
     const observedDistortionHistory = useObservedDistortionHistory();
     const observedDistortionScope = useObservedDistortionScope();
@@ -1569,6 +1871,11 @@ export function useSynthPatchViewModel({
         slotName: string;
         snapshot: ArticulationSnapshot;
     } | null>(null);
+    const presetStoredStateAdapters = useSynthPresetStoredStateAdapters({
+        articulationBankState,
+        modulationBridge,
+        modulationState,
+    });
     const activeAuditionRef = useRef<{ slotId: string; note: number } | null>(null);
     const lastPlayedNoteRef = useRef(ARTICULATION_AUDITION_FALLBACK_NOTE);
     const heldMidiNotesRef = useRef(new Map<number, HeldMidiNote>());
@@ -1777,6 +2084,17 @@ export function useSynthPatchViewModel({
                 filterMode: filterMode.value,
                 filterCutoff: filterCutoff.value,
                 filterQ: filterQ.value,
+                unisonVoices: unisonVoices.value,
+                unisonDetune: unisonDetune.value,
+                unisonBlend: unisonBlend.value,
+                unisonWidth: unisonWidth.value,
+                unisonPhase: unisonPhase.value,
+                unisonRandom: unisonRandom.value,
+                unisonPhaseMode: unisonPhaseMode.value,
+                unisonDetuneMode: unisonDetuneMode.value,
+                unisonStackMode: unisonStackMode.value,
+                unisonWavetablePositionSpread: unisonWavetablePositionSpread.value,
+                unisonWarpSpread: unisonWarpSpread.value,
                 msegMorphs: [mseg1Morph.value, mseg2Morph.value, mseg3Morph.value],
                 distortionMode: distortionMode.value,
                 distortionDriveDb: distortionDriveDb.value,
@@ -1795,10 +2113,12 @@ export function useSynthPatchViewModel({
                 chorusRingFineSemitones: chorusRingFineSemitones.value,
             },
             envelopes: currentModulationState?.envelopeSlots ?? [0, 1, 2].map((slotIndex) => createDefaultEnvelope(slotIndex)),
-            modRouteAmounts: (currentModulationState?.routes ?? []).map((route) => ({
-                routeId: route.id,
-                amount: route.amount,
-            })),
+            modRouteAmounts: (currentModulationState?.routes ?? [])
+                .map((route) => ({
+                    routeId: route.id,
+                    amount: route.amount,
+                }))
+                .filter((routeAmount) => Math.abs(routeAmount.amount) > 0.000001),
         });
     }, [
         chorusBloomMode.value,
@@ -1827,6 +2147,17 @@ export function useSynthPatchViewModel({
         mseg3Morph.value,
         pan.value,
         playMode.value,
+        unisonBlend.value,
+        unisonDetune.value,
+        unisonDetuneMode.value,
+        unisonPhase.value,
+        unisonPhaseMode.value,
+        unisonRandom.value,
+        unisonStackMode.value,
+        unisonVoices.value,
+        unisonWarpSpread.value,
+        unisonWavetablePositionSpread.value,
+        unisonWidth.value,
         warpAmount.value,
         warpMode.value,
         wavetablePosition.value,
@@ -1845,6 +2176,17 @@ export function useSynthPatchViewModel({
         filterMode.setValue(parameters.filterMode);
         filterCutoff.setValue(parameters.filterCutoff);
         filterQ.setValue(parameters.filterQ);
+        unisonVoices.setValue(parameters.unisonVoices);
+        unisonDetune.setValue(parameters.unisonDetune);
+        unisonBlend.setValue(parameters.unisonBlend);
+        unisonWidth.setValue(parameters.unisonWidth);
+        unisonPhase.setValue(parameters.unisonPhase);
+        unisonRandom.setValue(parameters.unisonRandom);
+        unisonPhaseMode.setValue(parameters.unisonPhaseMode);
+        unisonDetuneMode.setValue(parameters.unisonDetuneMode);
+        unisonStackMode.setValue(parameters.unisonStackMode);
+        unisonWavetablePositionSpread.setValue(parameters.unisonWavetablePositionSpread);
+        unisonWarpSpread.setValue(parameters.unisonWarpSpread);
         mseg1Morph.setValue(parameters.msegMorphs[0]);
         mseg2Morph.setValue(parameters.msegMorphs[1]);
         mseg3Morph.setValue(parameters.msegMorphs[2]);
@@ -1926,6 +2268,17 @@ export function useSynthPatchViewModel({
         mseg3Morph,
         pan,
         playMode,
+        unisonBlend,
+        unisonDetune,
+        unisonDetuneMode,
+        unisonPhase,
+        unisonPhaseMode,
+        unisonRandom,
+        unisonStackMode,
+        unisonVoices,
+        unisonWarpSpread,
+        unisonWavetablePositionSpread,
+        unisonWidth,
         warpAmount,
         warpMode,
         wavetablePosition,
@@ -2436,6 +2789,17 @@ export function useSynthPatchViewModel({
         filterMode,
         filterCutoff,
         filterQ,
+        unisonVoices,
+        unisonDetune,
+        unisonBlend,
+        unisonWidth,
+        unisonPhase,
+        unisonRandom,
+        unisonPhaseMode,
+        unisonDetuneMode,
+        unisonStackMode,
+        unisonWavetablePositionSpread,
+        unisonWarpSpread,
         selectedMsegMorph,
         distortionMode,
         distortionDriveDb,
@@ -2458,11 +2822,13 @@ export function useSynthPatchViewModel({
         observedDistortionScope,
         observedMsegPlayhead,
         observedWarpState,
+        observedUnisonState,
         modulationState,
         articulationBank,
         articulationSlots,
         selectedArticulationSlot,
         selectedArticulationIsDirty,
+        presetStoredStateAdapters,
         articulationHeldInput,
         discardedArticulationEdit: discardedArticulationEdit
             ? {

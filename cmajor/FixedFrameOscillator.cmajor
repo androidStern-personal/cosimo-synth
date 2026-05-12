@@ -43,8 +43,26 @@ namespace wt
     let modulationTargetPitchSemitones = 5;
     let modulationTargetAmpGainDb = 6;
     let modulationTargetPan = 7;
+    let modulationTargetUnisonDetune = 8;
+    let modulationTargetUnisonBlend = 9;
+    let modulationTargetUnisonWidth = 10;
+    let modulationTargetUnisonWavetablePositionSpread = 11;
+    let modulationTargetUnisonWarpSpread = 12;
     let articulationSlotCount = 128;
     let articulationSelectorNone = -1;
+    let maxUnisonVoiceCount = 8;
+    let unisonPhaseModeContiguous = 0;
+    let unisonPhaseModeReset = 1;
+    let unisonDetuneModeLinear = 0;
+    let unisonDetuneModeSuper = 1;
+    let unisonDetuneModeExp = 2;
+    let unisonDetuneModeInv = 3;
+    let unisonDetuneModeRandom = 4;
+    let unisonStackModeOff = 0;
+    let unisonStackModeOctaves = 1;
+    let unisonStackModeOctavesFifths = 2;
+    let unisonStackModeCenterOctave = 3;
+    let unisonStackModeCenterTwoOctaves = 4;
     let warpOversampleFactor = 8;
     let warpDecimatorTapCount = 257;
     let warpDecimatorCutoffNyquist = 0.125f;
@@ -150,6 +168,17 @@ namespace wt
         bool enabled;
         float32 framePosition;
         float32 pan;
+        int32 unisonVoices;
+        float32 unisonDetune;
+        float32 unisonBlend;
+        float32 unisonWidth;
+        float32 unisonPhase;
+        float32 unisonRandom;
+        int32 unisonPhaseMode;
+        int32 unisonDetuneMode;
+        int32 unisonStackMode;
+        float32 unisonWavetablePositionSpread;
+        float32 unisonWarpSpread;
         int32 warpMode;
         float32 warpAmount;
         int32 filterMode;
@@ -1408,6 +1437,17 @@ namespace wt
         input value float32 filterCutoffIn [[ name: "Filter Cutoff", min: 20.0f, max: 20000.0f, init: 1000.0f, unit: "Hz", rampFrames: 64 ]];
         input value float32 filterQIn [[ name: "Filter Q", min: 0.1f, max: 20.0f, init: 0.707107f, rampFrames: 64 ]];
         input value float32 panIn [[ name: "Pan", min: -1.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
+        input value float32 unisonVoicesIn [[ name: "Unison", min: 1.0f, max: 8.0f, init: 1.0f, discrete: true, step: 1.0f, rampFrames: 0 ]];
+        input value float32 unisonDetuneIn [[ name: "Unison Detune", min: 0.0f, max: 1.0f, init: 0.10f, rampFrames: 64 ]];
+        input value float32 unisonBlendIn [[ name: "Unison Blend", min: 0.0f, max: 1.0f, init: 0.75f, rampFrames: 64 ]];
+        input value float32 unisonWidthIn [[ name: "Unison Width", min: 0.0f, max: 1.0f, init: 1.0f, rampFrames: 64 ]];
+        input value float32 unisonPhaseIn [[ name: "Unison Phase", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 0 ]];
+        input value float32 unisonRandomIn [[ name: "Unison Random", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 0 ]];
+        input value float32 unisonPhaseModeIn [[ name: "Unison Phase Mode", min: 0.0f, max: 1.0f, init: 0.0f, discrete: true, step: 1.0f, text: "Contiguous|Reset", rampFrames: 0 ]];
+        input value float32 unisonDetuneModeIn [[ name: "Unison Detune Mode", min: 0.0f, max: 4.0f, init: 0.0f, discrete: true, step: 1.0f, text: "Linear|Super|Exp|Inv|Random", rampFrames: 0 ]];
+        input value float32 unisonStackModeIn [[ name: "Unison Stack", min: 0.0f, max: 4.0f, init: 0.0f, discrete: true, step: 1.0f, text: "Off|12|12+7|Center-12|Center-24", rampFrames: 0 ]];
+        input value float32 unisonWavetablePositionSpreadIn [[ name: "Unison WT Pos", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
+        input value float32 unisonWarpSpreadIn [[ name: "Unison Warp", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
         input value float32 mseg1MorphIn [[ name: "MSEG 1 Morph", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 0 ]];
         input value float32 mseg2MorphIn [[ name: "MSEG 2 Morph", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 0 ]];
         input value float32 mseg3MorphIn [[ name: "MSEG 3 Morph", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 0 ]];
@@ -1416,6 +1456,7 @@ namespace wt
         output event RuntimeServiceState runtimeServiceStateOut;
         output event wt::EffectiveWavetablePositionMonitor effectiveWavetablePositionOut;
         output event wt::EffectiveWarpStateMonitor effectiveWarpStateOut;
+        output event wt::EffectiveUnisonStateMonitor effectiveUnisonStateOut;
         output event wt::EffectiveFilterStateMonitor effectiveFilterStateOut;
         output event wt::EffectiveMsegStateMonitor effectiveMsegStateOut;
         output event wt::VoiceArticulationMonitor voiceArticulationStartOut;
@@ -1431,7 +1472,10 @@ namespace wt
         node modEnv3 = wt::RetriggerableAdsr[voiceCount];
 
         std::filters::simper::Implementation[voiceCount] filters;
+        std::filters::simper::Implementation[voiceCount] unisonLeftFilters;
+        std::filters::simper::Implementation[voiceCount] unisonRightFilters;
         std::oscillators::PhasorState[voiceCount] phasors;
+        std::oscillators::PhasorState[voiceCount * maxUnisonVoiceCount] unisonPhasors;
         int32[voiceCount] voiceChannel;
         float32[voiceCount] voiceBasePitch;
         float32[voiceCount] voiceCurrentPitch;
@@ -1453,12 +1497,31 @@ namespace wt
         float32[voiceCount] voiceEffectiveFilterCutoffHz;
         float32[voiceCount] voiceEffectiveFilterQ;
         float32[voiceCount] voiceEffectivePan;
+        int32[voiceCount] voiceEffectiveUnisonVoices;
+        float32[voiceCount] voiceEffectiveUnisonDetune;
+        float32[voiceCount] voiceEffectiveUnisonBlend;
+        float32[voiceCount] voiceEffectiveUnisonWidth;
+        int32[voiceCount] voiceEffectiveUnisonDetuneMode;
+        int32[voiceCount] voiceEffectiveUnisonStackMode;
+        float32[voiceCount] voiceEffectiveUnisonWavetablePositionSpread;
+        float32[voiceCount] voiceEffectiveUnisonWarpSpread;
         float32[voiceCount] voiceMsegProgress1;
         float32[voiceCount] voiceMsegProgress2;
         float32[voiceCount] voiceMsegProgress3;
         bool[articulationSlotCount] articulationSlotDefined;
         float32[articulationSlotCount] articulationFramePosition;
         float32[articulationSlotCount] articulationPan;
+        int32[articulationSlotCount] articulationUnisonVoices;
+        float32[articulationSlotCount] articulationUnisonDetune;
+        float32[articulationSlotCount] articulationUnisonBlend;
+        float32[articulationSlotCount] articulationUnisonWidth;
+        float32[articulationSlotCount] articulationUnisonPhase;
+        float32[articulationSlotCount] articulationUnisonRandom;
+        int32[articulationSlotCount] articulationUnisonPhaseMode;
+        int32[articulationSlotCount] articulationUnisonDetuneMode;
+        int32[articulationSlotCount] articulationUnisonStackMode;
+        float32[articulationSlotCount] articulationUnisonWavetablePositionSpread;
+        float32[articulationSlotCount] articulationUnisonWarpSpread;
         int32[articulationSlotCount] articulationWarpMode;
         float32[articulationSlotCount] articulationWarpAmount;
         int32[articulationSlotCount] articulationFilterMode;
@@ -1477,6 +1540,17 @@ namespace wt
         int32[voiceCount] voiceArticulationAgeSamples;
         float32[voiceCount] voiceArticulationFramePosition;
         float32[voiceCount] voiceArticulationPan;
+        int32[voiceCount] voiceArticulationUnisonVoices;
+        float32[voiceCount] voiceArticulationUnisonDetune;
+        float32[voiceCount] voiceArticulationUnisonBlend;
+        float32[voiceCount] voiceArticulationUnisonWidth;
+        float32[voiceCount] voiceArticulationUnisonPhase;
+        float32[voiceCount] voiceArticulationUnisonRandom;
+        int32[voiceCount] voiceArticulationUnisonPhaseMode;
+        int32[voiceCount] voiceArticulationUnisonDetuneMode;
+        int32[voiceCount] voiceArticulationUnisonStackMode;
+        float32[voiceCount] voiceArticulationUnisonWavetablePositionSpread;
+        float32[voiceCount] voiceArticulationUnisonWarpSpread;
         int32[voiceCount] voiceArticulationWarpMode;
         float32[voiceCount] voiceArticulationWarpAmount;
         int32[voiceCount] voiceArticulationFilterMode;
@@ -1491,6 +1565,8 @@ namespace wt
         float32[warpDecimatorTapCount] warpDecimatorTapsState;
         float32[voiceCount * warpDecimatorTapCount] voiceWarpHistory;
         int32[voiceCount] voiceWarpHistoryWriteIndex;
+        float32[voiceCount * maxUnisonVoiceCount * warpDecimatorTapCount] unisonWarpHistory;
+        int32[voiceCount * maxUnisonVoiceCount] unisonWarpHistoryWriteIndex;
         ModulationRouteUpload[modulationRouteCount] modulationRoutes;
         bool modulationEnabled = true;
 
@@ -1544,12 +1620,40 @@ namespace wt
         int32 framesUntilNextMonitorUpdate = 0;
         int32 warpMonitorUpdateIntervalFrames = 1;
         int32 framesUntilNextWarpMonitorUpdate = 0;
+        int32 unisonMonitorUpdateIntervalFrames = 1;
+        int32 framesUntilNextUnisonMonitorUpdate = 0;
         int32 filterMonitorUpdateIntervalFrames = 1;
         int32 framesUntilNextFilterMonitorUpdate = 0;
         int32 msegMonitorUpdateIntervalFrames = 1;
         int32 framesUntilNextMsegMonitorUpdate = 0;
         float32 previewFrequencyHzState = previewFrequencyHz;
         float32 glideTimeSecondsState = 0.0f;
+        int32 unisonVoicesState = 1;
+        float32 unisonDetuneState = 0.10f;
+        float32 unisonBlendState = 0.75f;
+        float32 unisonWidthState = 1.0f;
+        float32 unisonPhaseState = 0.0f;
+        float32 unisonRandomState = 0.0f;
+        int32 unisonPhaseModeState = unisonPhaseModeContiguous;
+        int32 unisonDetuneModeState = unisonDetuneModeLinear;
+        int32 unisonStackModeState = unisonStackModeOff;
+        float32 unisonWavetablePositionSpreadState = 0.0f;
+        float32 unisonWarpSpreadState = 0.0f;
+
+        void updateUnisonInputState()
+        {
+            unisonVoicesState = resolveUnisonVoices (unisonVoicesIn);
+            unisonDetuneState = clampUnison01 (unisonDetuneIn);
+            unisonBlendState = clampUnison01 (unisonBlendIn);
+            unisonWidthState = clampUnison01 (unisonWidthIn);
+            unisonPhaseState = clampUnison01 (unisonPhaseIn);
+            unisonRandomState = clampUnison01 (unisonRandomIn);
+            unisonPhaseModeState = resolveUnisonPhaseMode (unisonPhaseModeIn);
+            unisonDetuneModeState = resolveUnisonDetuneMode (unisonDetuneModeIn);
+            unisonStackModeState = resolveUnisonStackMode (unisonStackModeIn);
+            unisonWavetablePositionSpreadState = clampUnison01 (unisonWavetablePositionSpreadIn);
+            unisonWarpSpreadState = clampUnison01 (unisonWarpSpreadIn);
+        }
 
         void clearTableBankState (int32 bankIndex)
         {
@@ -1576,6 +1680,58 @@ namespace wt
             return (voiceIndex * warpDecimatorTapCount) + tapIndex;
         }
 
+        int32 unisonIndex (int32 voiceIndex, int32 subVoiceIndex)
+        {
+            return (int32 (wrap<voiceCount> (voiceIndex)) * maxUnisonVoiceCount)
+                 + int32 (wrap<maxUnisonVoiceCount> (subVoiceIndex));
+        }
+
+        int32 unisonWarpHistoryIndex (int32 voiceIndex, int32 subVoiceIndex, int32 tapIndex)
+        {
+            return (unisonIndex (voiceIndex, subVoiceIndex) * warpDecimatorTapCount) + tapIndex;
+        }
+
+        int32 resolveUnisonVoices (float32 rawVoices)
+        {
+            return std::intrinsics::clamp (
+                int32 (std::intrinsics::floor (rawVoices + 0.5f)),
+                1,
+                maxUnisonVoiceCount
+            );
+        }
+
+        int32 resolveUnisonPhaseMode (float32 rawMode)
+        {
+            return std::intrinsics::clamp (
+                int32 (std::intrinsics::floor (rawMode + 0.5f)),
+                unisonPhaseModeContiguous,
+                unisonPhaseModeReset
+            );
+        }
+
+        int32 resolveUnisonDetuneMode (float32 rawMode)
+        {
+            return std::intrinsics::clamp (
+                int32 (std::intrinsics::floor (rawMode + 0.5f)),
+                unisonDetuneModeLinear,
+                unisonDetuneModeRandom
+            );
+        }
+
+        int32 resolveUnisonStackMode (float32 rawMode)
+        {
+            return std::intrinsics::clamp (
+                int32 (std::intrinsics::floor (rawMode + 0.5f)),
+                unisonStackModeOff,
+                unisonStackModeCenterTwoOctaves
+            );
+        }
+
+        float32 clampUnison01 (float32 value)
+        {
+            return std::intrinsics::clamp (value, 0.0f, 1.0f);
+        }
+
         void resetWarpRenderState (int32 voiceIndex)
         {
             let resolvedVoice = int32 (wrap<voiceCount> (voiceIndex));
@@ -1586,16 +1742,39 @@ namespace wt
             voiceWarpHistoryWriteIndex.at (resolvedVoice) = 0;
         }
 
+        void resetUnisonWarpRenderState (int32 voiceIndex, int32 subVoiceIndex)
+        {
+            let resolvedVoice = int32 (wrap<voiceCount> (voiceIndex));
+            let resolvedSubVoice = int32 (wrap<maxUnisonVoiceCount> (subVoiceIndex));
+            let stateIndex = unisonIndex (resolvedVoice, resolvedSubVoice);
+
+            for (int32 tapIndex = 0; tapIndex < warpDecimatorTapCount; ++tapIndex)
+                unisonWarpHistory.at (unisonWarpHistoryIndex (resolvedVoice, resolvedSubVoice, tapIndex)) = 0.0f;
+
+            unisonWarpHistoryWriteIndex.at (stateIndex) = 0;
+        }
+
+        void resetVoiceUnisonWarpRenderState (int32 voiceIndex)
+        {
+            for (wrap<maxUnisonVoiceCount> subVoice)
+                resetUnisonWarpRenderState (voiceIndex, int32 (subVoice));
+        }
+
         void resetAllWarpRenderState()
         {
             for (wrap<voiceCount> voice)
+            {
                 resetWarpRenderState (int32 (voice));
+                resetVoiceUnisonWarpRenderState (int32 (voice));
+            }
         }
 
         void resetFilterState (int32 voiceIndex)
         {
             let resolvedVoice = int32 (wrap<voiceCount> (voiceIndex));
             filters.at (resolvedVoice).reset();
+            unisonLeftFilters.at (resolvedVoice).reset();
+            unisonRightFilters.at (resolvedVoice).reset();
         }
 
         void resetAllFilterState()
@@ -1616,6 +1795,92 @@ namespace wt
                 modulationRoutes.at (routeIndex).targetKind = modulationTargetWavetablePosition;
                 modulationRoutes.at (routeIndex).amount = 0.0f;
             }
+        }
+
+        float32 unisonSpreadScalar (int32 subVoiceIndex, int32 voiceCountForNote, int32 detuneMode)
+        {
+            if (voiceCountForNote <= 1)
+                return 0.0f;
+
+            let normalized = (float32 (subVoiceIndex) / float32 (voiceCountForNote - 1)) * 2.0f - 1.0f;
+
+            if (detuneMode == unisonDetuneModeSuper)
+                return std::intrinsics::sin (normalized * 0.5f * float32 (pi));
+
+            if (detuneMode == unisonDetuneModeExp)
+            {
+                let sign = normalized < 0.0f ? -1.0f : 1.0f;
+                return sign * std::intrinsics::pow (std::intrinsics::abs (normalized), 1.6f);
+            }
+
+            if (detuneMode == unisonDetuneModeInv)
+            {
+                let sign = normalized < 0.0f ? -1.0f : 1.0f;
+                return sign * (1.0f - std::intrinsics::pow (1.0f - std::intrinsics::abs (normalized), 1.6f));
+            }
+
+            if (detuneMode == unisonDetuneModeRandom)
+            {
+                let seeded = std::intrinsics::sin (
+                    float32 ((subVoiceIndex + 1) * 37 + (voiceCountForNote * 19)) * 12.9898f
+                ) * 43758.5453f;
+                return (std::intrinsics::wrap (seeded, 1.0f) * 2.0f) - 1.0f;
+            }
+
+            return normalized;
+        }
+
+        float32 unisonStackSemitones (int32 subVoiceIndex, int32 voiceCountForNote, int32 stackMode)
+        {
+            if (voiceCountForNote <= 1 || stackMode == unisonStackModeOff)
+                return 0.0f;
+
+            if (stackMode == unisonStackModeOctaves)
+                return float32 (subVoiceIndex) * 12.0f;
+
+            if (stackMode == unisonStackModeOctavesFifths)
+            {
+                if ((subVoiceIndex % 2) == 0)
+                    return float32 (subVoiceIndex / 2) * 12.0f;
+
+                return (float32 (subVoiceIndex / 2) * 12.0f) + 7.0f;
+            }
+
+            let center = float32 (voiceCountForNote - 1) * 0.5f;
+            let offset = float32 (subVoiceIndex) - center;
+
+            if (stackMode == unisonStackModeCenterTwoOctaves)
+                return offset * 24.0f;
+
+            return offset * 12.0f;
+        }
+
+        float32 unisonSubVoiceWeight (int32 subVoiceIndex, int32 voiceCountForNote, float32 blend)
+        {
+            if (voiceCountForNote <= 1)
+                return 1.0f;
+
+            let clampedBlend = clampUnison01 (blend);
+            let center = float32 (voiceCountForNote - 1) * 0.5f;
+            let distanceFromCenter = std::intrinsics::abs (float32 (subVoiceIndex) - center);
+            let maxDistance = center <= 0.0f ? 1.0f : center;
+            let sideAmount = distanceFromCenter / maxDistance;
+            return (1.0f - clampedBlend) * (1.0f - sideAmount) + clampedBlend;
+        }
+
+        float32 unisonSubVoicePhase (int32 voiceIndex,
+                                     int32 subVoiceIndex,
+                                     int32 generation,
+                                     float32 phase,
+                                     float32 randomAmount)
+        {
+            let clampedPhase = clampUnison01 (phase);
+            let clampedRandom = clampUnison01 (randomAmount);
+            let seeded = std::intrinsics::sin (
+                float32 ((voiceIndex + 1) * 101 + (subVoiceIndex + 1) * 1009 + (generation + 1) * 9176) * 12.9898f
+            ) * 43758.5453f;
+            let randomPhase = std::intrinsics::wrap (seeded, 1.0f);
+            return std::intrinsics::wrap (clampedPhase + (randomPhase * clampedRandom), 1.0f);
         }
 
         int32 articulationMsegIndex (int32 selectorA, int32 slotIndex)
@@ -1701,6 +1966,17 @@ namespace wt
             voiceArticulationAgeSamples.at (voice) = std::intrinsics::max (0, ageSamples);
             voiceArticulationFramePosition.at (voice) = articulationFramePosition.at (selectorA);
             voiceArticulationPan.at (voice) = articulationPan.at (selectorA);
+            voiceArticulationUnisonVoices.at (voice) = articulationUnisonVoices.at (selectorA);
+            voiceArticulationUnisonDetune.at (voice) = articulationUnisonDetune.at (selectorA);
+            voiceArticulationUnisonBlend.at (voice) = articulationUnisonBlend.at (selectorA);
+            voiceArticulationUnisonWidth.at (voice) = articulationUnisonWidth.at (selectorA);
+            voiceArticulationUnisonPhase.at (voice) = articulationUnisonPhase.at (selectorA);
+            voiceArticulationUnisonRandom.at (voice) = articulationUnisonRandom.at (selectorA);
+            voiceArticulationUnisonPhaseMode.at (voice) = articulationUnisonPhaseMode.at (selectorA);
+            voiceArticulationUnisonDetuneMode.at (voice) = articulationUnisonDetuneMode.at (selectorA);
+            voiceArticulationUnisonStackMode.at (voice) = articulationUnisonStackMode.at (selectorA);
+            voiceArticulationUnisonWavetablePositionSpread.at (voice) = articulationUnisonWavetablePositionSpread.at (selectorA);
+            voiceArticulationUnisonWarpSpread.at (voice) = articulationUnisonWarpSpread.at (selectorA);
             voiceArticulationWarpMode.at (voice) = articulationWarpMode.at (selectorA);
             voiceArticulationWarpAmount.at (voice) = articulationWarpAmount.at (selectorA);
             voiceArticulationFilterMode.at (voice) = articulationFilterMode.at (selectorA);
@@ -2037,6 +2313,8 @@ namespace wt
                 {
                     phasors.at (voice).phase = 0.0f;
                     resetWarpRenderState (int32 (voice));
+                    resetVoiceUnisonPhases (int32 (voice), maxUnisonVoiceCount, 0.0f, 0.0f);
+                    resetVoiceUnisonWarpRenderState (int32 (voice));
                 }
             }
 
@@ -2477,6 +2755,41 @@ namespace wt
             effectiveWarpStateOut <- monitor;
         }
 
+        void emitEffectiveUnisonStateMonitor()
+        {
+            wt::EffectiveUnisonStateMonitor monitor;
+            let newestVoiceIndex = findNewestMonitoredVoiceIndex();
+
+            if (newestVoiceIndex >= 0)
+            {
+                monitor.voiceGeneration = voiceGeneration.at (newestVoiceIndex);
+                monitor.hasActive = 1;
+                monitor.voices = voiceEffectiveUnisonVoices.at (newestVoiceIndex);
+                monitor.detune = voiceEffectiveUnisonDetune.at (newestVoiceIndex);
+                monitor.blend = voiceEffectiveUnisonBlend.at (newestVoiceIndex);
+                monitor.width = voiceEffectiveUnisonWidth.at (newestVoiceIndex);
+                monitor.detuneMode = voiceEffectiveUnisonDetuneMode.at (newestVoiceIndex);
+                monitor.stackMode = voiceEffectiveUnisonStackMode.at (newestVoiceIndex);
+                monitor.wavetablePositionSpread = voiceEffectiveUnisonWavetablePositionSpread.at (newestVoiceIndex);
+                monitor.warpSpread = voiceEffectiveUnisonWarpSpread.at (newestVoiceIndex);
+            }
+            else
+            {
+                monitor.voiceGeneration = findNewestVisibleGeneration();
+                monitor.hasActive = 0;
+                monitor.voices = unisonVoicesState;
+                monitor.detune = unisonDetuneState;
+                monitor.blend = unisonBlendState;
+                monitor.width = unisonWidthState;
+                monitor.detuneMode = unisonDetuneModeState;
+                monitor.stackMode = unisonStackModeState;
+                monitor.wavetablePositionSpread = unisonWavetablePositionSpreadState;
+                monitor.warpSpread = unisonWarpSpreadState;
+            }
+
+            effectiveUnisonStateOut <- monitor;
+        }
+
         void emitEffectiveFilterStateMonitor()
         {
             wt::EffectiveFilterStateMonitor monitor;
@@ -2548,6 +2861,16 @@ namespace wt
             else
             {
                 framesUntilNextWarpMonitorUpdate -= 1;
+            }
+
+            if (framesUntilNextUnisonMonitorUpdate <= 0)
+            {
+                emitEffectiveUnisonStateMonitor();
+                framesUntilNextUnisonMonitorUpdate = unisonMonitorUpdateIntervalFrames - 1;
+            }
+            else
+            {
+                framesUntilNextUnisonMonitorUpdate -= 1;
             }
 
             if (framesUntilNextFilterMonitorUpdate <= 0)
@@ -2665,6 +2988,91 @@ namespace wt
             return readWarpDecimatorOutput (voiceIndex);
         }
 
+        void pushUnisonWarpHistorySample (int32 voiceIndex, int32 subVoiceIndex, float32 sample)
+        {
+            let resolvedVoice = int32 (wrap<voiceCount> (voiceIndex));
+            let resolvedSubVoice = int32 (wrap<maxUnisonVoiceCount> (subVoiceIndex));
+            let stateIndex = unisonIndex (resolvedVoice, resolvedSubVoice);
+            let writeIndex = unisonWarpHistoryWriteIndex.at (stateIndex);
+            unisonWarpHistory.at (unisonWarpHistoryIndex (resolvedVoice, resolvedSubVoice, writeIndex)) = sample;
+            int32 nextWriteIndex = writeIndex + 1;
+
+            if (nextWriteIndex >= warpDecimatorTapCount)
+                nextWriteIndex = 0;
+
+            unisonWarpHistoryWriteIndex.at (stateIndex) = nextWriteIndex;
+        }
+
+        float32 readUnisonWarpDecimatorOutput (int32 voiceIndex, int32 subVoiceIndex)
+        {
+            let resolvedVoice = int32 (wrap<voiceCount> (voiceIndex));
+            let resolvedSubVoice = int32 (wrap<maxUnisonVoiceCount> (subVoiceIndex));
+            int32 historyIndex = unisonWarpHistoryWriteIndex.at (unisonIndex (resolvedVoice, resolvedSubVoice));
+            float32 sum = 0.0f;
+
+            for (int32 tapIndex = 0; tapIndex < warpDecimatorTapCount; ++tapIndex)
+            {
+                historyIndex -= 1;
+
+                if (historyIndex < 0)
+                    historyIndex = warpDecimatorTapCount - 1;
+
+                sum += unisonWarpHistory.at (unisonWarpHistoryIndex (resolvedVoice, resolvedSubVoice, historyIndex))
+                     * warpDecimatorTapsState.at (tapIndex);
+            }
+
+            return sum;
+        }
+
+        float32 renderWarpedUnisonSample (int32 voiceIndex,
+                                          int32 subVoiceIndex,
+                                          int32 playableMipIndex,
+                                          float32 effectivePosition,
+                                          float32 basePhase,
+                                          float32 currentPhaseIncrement,
+                                          int32 warpMode,
+                                          float32 effectiveWarpAmount)
+        {
+            let oversampledPhaseIncrement = currentPhaseIncrement / float32 (warpOversampleFactor);
+
+            for (int32 oversampleIndex = 0; oversampleIndex < warpOversampleFactor; ++oversampleIndex)
+            {
+                let oversampledPhase = std::intrinsics::wrap (
+                    basePhase + (float32 (oversampleIndex) * oversampledPhaseIncrement),
+                    1.0f
+                );
+                let warpedPhase = resolveWarpPhase (warpMode, effectiveWarpAmount, oversampledPhase);
+                float32 oversampledSample = 0.0f;
+
+                if (warpedPhase.shouldLookup)
+                    oversampledSample = readVoiceSampleForMip (playableMipIndex, effectivePosition, warpedPhase.phase);
+                else if (warpedPhase.holdCycleEndpoint)
+                    oversampledSample = readVoiceEndpointSampleForMip (playableMipIndex, effectivePosition);
+
+                pushUnisonWarpHistorySample (voiceIndex, subVoiceIndex, oversampledSample);
+            }
+
+            return readUnisonWarpDecimatorOutput (voiceIndex, subVoiceIndex);
+        }
+
+        void resetVoiceUnisonPhases (int32 voiceIndex,
+                                     int32 unisonVoiceCount,
+                                     float32 phase,
+                                     float32 randomAmount)
+        {
+            let voice = int32 (wrap<voiceCount> (voiceIndex));
+            let generation = voiceGeneration.at (voice);
+
+            for (wrap<maxUnisonVoiceCount> subVoice)
+            {
+                let subIndex = int32 (subVoice);
+                let phaseForVoice = subIndex < unisonVoiceCount
+                    ? unisonSubVoicePhase (voice, subIndex, generation, phase, randomAmount)
+                    : 0.0f;
+                unisonPhasors.at (unisonIndex (voice, subIndex)).phase = phaseForVoice;
+            }
+        }
+
         void updateVoiceFrequencyHz (int32 voiceIndex)
         {
             let voice = wrap<voiceCount> (voiceIndex);
@@ -2753,7 +3161,22 @@ namespace wt
             nextVoiceGeneration += 1;
             voiceTrackingSerial.at (voice) = nextVoiceTrackingSerial;
             nextVoiceTrackingSerial += 1;
+            let baseUnisonVoices = voiceUsesArticulation.at (voice)
+                ? voiceArticulationUnisonVoices.at (voice)
+                : unisonVoicesState;
+            let baseUnisonPhase = voiceUsesArticulation.at (voice)
+                ? voiceArticulationUnisonPhase.at (voice)
+                : unisonPhaseState;
+            let baseUnisonRandom = voiceUsesArticulation.at (voice)
+                ? voiceArticulationUnisonRandom.at (voice)
+                : unisonRandomState;
+            let baseUnisonPhaseMode = voiceUsesArticulation.at (voice)
+                ? voiceArticulationUnisonPhaseMode.at (voice)
+                : unisonPhaseModeState;
             resetWarpRenderState (index);
+            resetVoiceUnisonWarpRenderState (index);
+            if (baseUnisonPhaseMode == unisonPhaseModeReset)
+                resetVoiceUnisonPhases (index, baseUnisonVoices, baseUnisonPhase, baseUnisonRandom);
             resetFilterState (index);
 
             envelopes[voice].eventIn <- note;
@@ -2845,6 +3268,21 @@ namespace wt
                 voiceGeneration.at (voice) = nextVoiceGeneration;
                 nextVoiceGeneration += 1;
                 resetWarpRenderState (index);
+                resetVoiceUnisonWarpRenderState (index);
+                let baseUnisonVoices = voiceUsesArticulation.at (voice)
+                    ? voiceArticulationUnisonVoices.at (voice)
+                    : unisonVoicesState;
+                let baseUnisonPhase = voiceUsesArticulation.at (voice)
+                    ? voiceArticulationUnisonPhase.at (voice)
+                    : unisonPhaseState;
+                let baseUnisonRandom = voiceUsesArticulation.at (voice)
+                    ? voiceArticulationUnisonRandom.at (voice)
+                    : unisonRandomState;
+                let baseUnisonPhaseMode = voiceUsesArticulation.at (voice)
+                    ? voiceArticulationUnisonPhaseMode.at (voice)
+                    : unisonPhaseModeState;
+                if (baseUnisonPhaseMode == unisonPhaseModeReset)
+                    resetVoiceUnisonPhases (index, baseUnisonVoices, baseUnisonPhase, baseUnisonRandom);
                 resetFilterState (index);
                 envelopes[voice].eventIn <- note;
                 triggerVoiceModulators (index);
@@ -2874,6 +3312,17 @@ namespace wt
 
             articulationFramePosition.at (selectorA) = std::intrinsics::clamp (upload.framePosition, 0.0f, 1.0f);
             articulationPan.at (selectorA) = clampPan (upload.pan);
+            articulationUnisonVoices.at (selectorA) = resolveUnisonVoices (float32 (upload.unisonVoices));
+            articulationUnisonDetune.at (selectorA) = clampUnison01 (upload.unisonDetune);
+            articulationUnisonBlend.at (selectorA) = clampUnison01 (upload.unisonBlend);
+            articulationUnisonWidth.at (selectorA) = clampUnison01 (upload.unisonWidth);
+            articulationUnisonPhase.at (selectorA) = clampUnison01 (upload.unisonPhase);
+            articulationUnisonRandom.at (selectorA) = clampUnison01 (upload.unisonRandom);
+            articulationUnisonPhaseMode.at (selectorA) = resolveUnisonPhaseMode (float32 (upload.unisonPhaseMode));
+            articulationUnisonDetuneMode.at (selectorA) = resolveUnisonDetuneMode (float32 (upload.unisonDetuneMode));
+            articulationUnisonStackMode.at (selectorA) = resolveUnisonStackMode (float32 (upload.unisonStackMode));
+            articulationUnisonWavetablePositionSpread.at (selectorA) = clampUnison01 (upload.unisonWavetablePositionSpread);
+            articulationUnisonWarpSpread.at (selectorA) = clampUnison01 (upload.unisonWarpSpread);
             articulationWarpMode.at (selectorA) = resolveWarpMode (float32 (upload.warpMode));
             articulationWarpAmount.at (selectorA) = std::intrinsics::clamp (upload.warpAmount, 0.0f, 1.0f);
             articulationFilterMode.at (selectorA) = resolveFilterMode (float32 (upload.filterMode));
@@ -3011,6 +3460,7 @@ namespace wt
         {
             previewFrequencyHzState = previewFrequencyHzState < 0.0f ? 0.0f : previewFrequencyHzState;
             glideTimeSecondsState = std::intrinsics::max (0.0f, glideTimeIn);
+            updateUnisonInputState();
             initialiseWarpDecimatorTaps();
             resetAllWarpRenderState();
 
@@ -3024,6 +3474,11 @@ namespace wt
             );
             warpMonitorUpdateIntervalFrames = std::intrinsics::max (1, requestedWarpInterval);
             framesUntilNextWarpMonitorUpdate = 0;
+            let requestedUnisonInterval = int32 (
+                std::intrinsics::floor ((processor.frequency / wt::effectiveUnisonStateMonitorHz) + 0.5f)
+            );
+            unisonMonitorUpdateIntervalFrames = std::intrinsics::max (1, requestedUnisonInterval);
+            framesUntilNextUnisonMonitorUpdate = 0;
             let requestedFilterInterval = int32 (
                 std::intrinsics::floor ((processor.frequency / wt::effectiveFilterStateMonitorHz) + 0.5f)
             );
@@ -3041,6 +3496,7 @@ namespace wt
             loop
             {
                 glideTimeSecondsState = std::intrinsics::max (0.0f, glideTimeIn);
+                updateUnisonInputState();
 
                 if (! hasEmittedInitialRuntimeState)
                 {
@@ -3078,6 +3534,11 @@ namespace wt
                     float32 routePitchSemitones = 0.0f;
                     float32 routeAmpGainDb = 0.0f;
                     float32 routePan = 0.0f;
+                    float32 routeUnisonDetune = 0.0f;
+                    float32 routeUnisonBlend = 0.0f;
+                    float32 routeUnisonWidth = 0.0f;
+                    float32 routeUnisonWavetablePositionSpread = 0.0f;
+                    float32 routeUnisonWarpSpread = 0.0f;
 
                     if (modulationEnabled)
                     {
@@ -3107,6 +3568,16 @@ namespace wt
                                 routeAmpGainDb += routedValue;
                             else if (route.targetKind == modulationTargetPan)
                                 routePan += routedValue;
+                            else if (route.targetKind == modulationTargetUnisonDetune)
+                                routeUnisonDetune += routedValue;
+                            else if (route.targetKind == modulationTargetUnisonBlend)
+                                routeUnisonBlend += routedValue;
+                            else if (route.targetKind == modulationTargetUnisonWidth)
+                                routeUnisonWidth += routedValue;
+                            else if (route.targetKind == modulationTargetUnisonWavetablePositionSpread)
+                                routeUnisonWavetablePositionSpread += routedValue;
+                            else if (route.targetKind == modulationTargetUnisonWarpSpread)
+                                routeUnisonWarpSpread += routedValue;
                         }
                     }
 
@@ -3131,6 +3602,30 @@ namespace wt
                     let basePan = voiceUsesArticulation.at (voice)
                         ? voiceArticulationPan.at (voice)
                         : panIn;
+                    let baseUnisonVoices = voiceUsesArticulation.at (voice)
+                        ? voiceArticulationUnisonVoices.at (voice)
+                        : unisonVoicesState;
+                    let baseUnisonDetune = voiceUsesArticulation.at (voice)
+                        ? voiceArticulationUnisonDetune.at (voice)
+                        : unisonDetuneState;
+                    let baseUnisonBlend = voiceUsesArticulation.at (voice)
+                        ? voiceArticulationUnisonBlend.at (voice)
+                        : unisonBlendState;
+                    let baseUnisonWidth = voiceUsesArticulation.at (voice)
+                        ? voiceArticulationUnisonWidth.at (voice)
+                        : unisonWidthState;
+                    let baseUnisonDetuneMode = voiceUsesArticulation.at (voice)
+                        ? voiceArticulationUnisonDetuneMode.at (voice)
+                        : unisonDetuneModeState;
+                    let baseUnisonStackMode = voiceUsesArticulation.at (voice)
+                        ? voiceArticulationUnisonStackMode.at (voice)
+                        : unisonStackModeState;
+                    let baseUnisonWavetablePositionSpread = voiceUsesArticulation.at (voice)
+                        ? voiceArticulationUnisonWavetablePositionSpread.at (voice)
+                        : unisonWavetablePositionSpreadState;
+                    let baseUnisonWarpSpread = voiceUsesArticulation.at (voice)
+                        ? voiceArticulationUnisonWarpSpread.at (voice)
+                        : unisonWarpSpreadState;
                     let effectivePosition = std::intrinsics::clamp (
                         baseFramePosition + routePosition,
                         0.0f,
@@ -3149,6 +3644,16 @@ namespace wt
                     );
                     let effectiveFilterQ = clampFilterQ (baseFilterQ + routeFilterQ);
                     let effectivePan = clampPan (basePan + routePan);
+                    let effectiveUnisonVoices = std::intrinsics::clamp (baseUnisonVoices, 1, maxUnisonVoiceCount);
+                    let effectiveUnisonDetune = clampUnison01 (baseUnisonDetune + routeUnisonDetune);
+                    let effectiveUnisonBlend = clampUnison01 (baseUnisonBlend + routeUnisonBlend);
+                    let effectiveUnisonWidth = clampUnison01 (baseUnisonWidth + routeUnisonWidth);
+                    let effectiveUnisonWavetablePositionSpread = clampUnison01 (
+                        baseUnisonWavetablePositionSpread + routeUnisonWavetablePositionSpread
+                    );
+                    let effectiveUnisonWarpSpread = clampUnison01 (
+                        baseUnisonWarpSpread + routeUnisonWarpSpread
+                    );
                     let effectivePitchSemitones = voiceCurrentPitch.at (voice) + voiceBendSemitones.at (voice) + routePitchSemitones;
                     let effectiveFrequencyHz = std::notes::noteToFrequency (effectivePitchSemitones);
                     let voiceSerial = voiceTrackingSerial.at (voice);
@@ -3168,68 +3673,191 @@ namespace wt
                     voiceEffectiveFilterCutoffHz.at (voice) = effectiveFilterCutoffHz;
                     voiceEffectiveFilterQ.at (voice) = effectiveFilterQ;
                     voiceEffectivePan.at (voice) = effectivePan;
+                    voiceEffectiveUnisonVoices.at (voice) = effectiveUnisonVoices;
+                    voiceEffectiveUnisonDetune.at (voice) = effectiveUnisonDetune;
+                    voiceEffectiveUnisonBlend.at (voice) = effectiveUnisonBlend;
+                    voiceEffectiveUnisonWidth.at (voice) = effectiveUnisonWidth;
+                    voiceEffectiveUnisonDetuneMode.at (voice) = baseUnisonDetuneMode;
+                    voiceEffectiveUnisonStackMode.at (voice) = baseUnisonStackMode;
+                    voiceEffectiveUnisonWavetablePositionSpread.at (voice) = effectiveUnisonWavetablePositionSpread;
+                    voiceEffectiveUnisonWarpSpread.at (voice) = effectiveUnisonWarpSpread;
 
                     if (envelopeGain <= 0.0f || effectiveFrequencyHz <= 0.0f)
                         continue;
 
-                    phasors.at (voice).setFrequency (processor.frequency, effectiveFrequencyHz);
-                    let currentPhaseIncrement = effectiveFrequencyHz / float32 (processor.frequency);
-                    let requestedMipIndex = selectMipIndexFromPhaseIncrement (currentPhaseIncrement);
-                    let playableMipIndex = findPlayableMipIndex (requestedMipIndex);
-                    int32 warpRequestedMipIndex = requestedMipIndex;
-                    int32 warpPlayableMipIndex = playableMipIndex;
-
-                    if (shouldRenderWarpBackground)
+                    if (effectiveUnisonVoices <= 1)
                     {
-                        let warpPhaseIncrement = currentPhaseIncrement / float32 (warpOversampleFactor);
-                        warpRequestedMipIndex = selectMipIndexFromPhaseIncrement (warpPhaseIncrement);
-                        warpPlayableMipIndex = findPlayableMipIndex (warpRequestedMipIndex);
-                    }
+                        phasors.at (voice).setFrequency (processor.frequency, effectiveFrequencyHz);
+                        let currentPhaseIncrement = effectiveFrequencyHz / float32 (processor.frequency);
+                        let requestedMipIndex = selectMipIndexFromPhaseIncrement (currentPhaseIncrement);
+                        let playableMipIndex = findPlayableMipIndex (requestedMipIndex);
+                        int32 warpRequestedMipIndex = requestedMipIndex;
+                        int32 warpPlayableMipIndex = playableMipIndex;
 
-                    if (playableMipIndex < 0 && warpPlayableMipIndex < 0)
-                        continue;
+                        if (shouldRenderWarpBackground)
+                        {
+                            let warpPhaseIncrement = currentPhaseIncrement / float32 (warpOversampleFactor);
+                            warpRequestedMipIndex = selectMipIndexFromPhaseIncrement (warpPhaseIncrement);
+                            warpPlayableMipIndex = findPlayableMipIndex (warpRequestedMipIndex);
+                        }
 
-                    let phase = phasors.at (voice).next();
-                    float32 sample = 0.0f;
+                        if (playableMipIndex < 0 && warpPlayableMipIndex < 0)
+                            continue;
 
-                    if (playableMipIndex >= 0)
-                        sample = readVoiceSampleForMip (playableMipIndex, effectivePosition, phase);
+                        let phase = phasors.at (voice).next();
+                        float32 sample = 0.0f;
 
-                    if (shouldRenderWarpBackground && warpPlayableMipIndex >= 0)
-                    {
-                        let warpedSample = renderWarpedVoiceSample (
-                            int32 (voice),
-                            warpPlayableMipIndex,
-                            effectivePosition,
-                            phase,
-                            currentPhaseIncrement,
-                            warpMode,
-                            effectiveWarpAmount
-                        );
+                        if (playableMipIndex >= 0)
+                            sample = readVoiceSampleForMip (playableMipIndex, effectivePosition, phase);
 
-                        if (! shouldBypassWarpOutput)
-                            sample = warpedSample;
-                    }
+                        if (shouldRenderWarpBackground && warpPlayableMipIndex >= 0)
+                        {
+                            let warpedSample = renderWarpedVoiceSample (
+                                int32 (voice),
+                                warpPlayableMipIndex,
+                                effectivePosition,
+                                phase,
+                                currentPhaseIncrement,
+                                warpMode,
+                                effectiveWarpAmount
+                            );
 
-                    if (filterMode > filterModeOff)
-                    {
-                        filters.at (voice).setMode (resolveSimperFilterMode (filterMode));
-                        filters.at (voice).setFrequency (
-                            processor.frequency,
-                            effectiveFilterCutoffHz,
-                            effectiveFilterQ,
-                            0.0f
-                        );
-                        sample = filters.at (voice).process (sample);
+                            if (! shouldBypassWarpOutput)
+                                sample = warpedSample;
+                        }
+
+                        if (filterMode > filterModeOff)
+                        {
+                            filters.at (voice).setMode (resolveSimperFilterMode (filterMode));
+                            filters.at (voice).setFrequency (
+                                processor.frequency,
+                                effectiveFilterCutoffHz,
+                                effectiveFilterQ,
+                                0.0f
+                            );
+                            sample = filters.at (voice).process (sample);
+                        }
+                        else
+                        {
+                            resetFilterState (int32 (voice));
+                        }
+
+                        let gainedSample = sample * envelopeGain * dbToGain (clampAmpGainDb (routeAmpGainDb));
+                        leftMix += gainedSample * panLeftGain (effectivePan);
+                        rightMix += gainedSample * panRightGain (effectivePan);
                     }
                     else
                     {
-                        resetFilterState (int32 (voice));
-                    }
+                        float32 unisonLeft = 0.0f;
+                        float32 unisonRight = 0.0f;
+                        float32 weightSum = 0.0f;
+                        let detuneCents = effectiveUnisonDetune * 50.0f;
 
-                    let gainedSample = sample * envelopeGain * dbToGain (clampAmpGainDb (routeAmpGainDb));
-                    leftMix += gainedSample * panLeftGain (effectivePan);
-                    rightMix += gainedSample * panRightGain (effectivePan);
+                        for (int32 subVoiceIndex = 0; subVoiceIndex < maxUnisonVoiceCount; ++subVoiceIndex)
+                        {
+                            if (subVoiceIndex >= effectiveUnisonVoices)
+                                continue;
+
+                            let spreadScalar = unisonSpreadScalar (subVoiceIndex, effectiveUnisonVoices, baseUnisonDetuneMode);
+                            let stackSemitones = unisonStackSemitones (subVoiceIndex, effectiveUnisonVoices, baseUnisonStackMode);
+                            let subPitchSemitones = effectivePitchSemitones + (spreadScalar * detuneCents * 0.01f) + stackSemitones;
+                            let subFrequencyHz = std::notes::noteToFrequency (subPitchSemitones);
+
+                            if (subFrequencyHz <= 0.0f)
+                                continue;
+
+                            let subPosition = std::intrinsics::clamp (
+                                effectivePosition + (spreadScalar * effectiveUnisonWavetablePositionSpread * 0.5f),
+                                0.0f,
+                                1.0f
+                            );
+                            let subWarpAmount = std::intrinsics::clamp (
+                                effectiveWarpAmount + (spreadScalar * effectiveUnisonWarpSpread * 0.5f),
+                                0.0f,
+                                1.0f
+                            );
+                            let subPan = clampPan (effectivePan + (spreadScalar * effectiveUnisonWidth));
+                            let subWeight = unisonSubVoiceWeight (subVoiceIndex, effectiveUnisonVoices, effectiveUnisonBlend);
+                            let currentPhaseIncrement = subFrequencyHz / float32 (processor.frequency);
+                            let requestedMipIndex = selectMipIndexFromPhaseIncrement (currentPhaseIncrement);
+                            let playableMipIndex = findPlayableMipIndex (requestedMipIndex);
+                            int32 warpRequestedMipIndex = requestedMipIndex;
+                            int32 warpPlayableMipIndex = playableMipIndex;
+
+                            if (shouldRenderWarpBackground)
+                            {
+                                let warpPhaseIncrement = currentPhaseIncrement / float32 (warpOversampleFactor);
+                                warpRequestedMipIndex = selectMipIndexFromPhaseIncrement (warpPhaseIncrement);
+                                warpPlayableMipIndex = findPlayableMipIndex (warpRequestedMipIndex);
+                            }
+
+                            if (playableMipIndex < 0 && warpPlayableMipIndex < 0)
+                                continue;
+
+                            let subStateIndex = unisonIndex (int32 (voice), subVoiceIndex);
+                            unisonPhasors.at (subStateIndex).setFrequency (processor.frequency, subFrequencyHz);
+                            let phase = unisonPhasors.at (subStateIndex).next();
+                            float32 sample = 0.0f;
+
+                            if (playableMipIndex >= 0)
+                                sample = readVoiceSampleForMip (playableMipIndex, subPosition, phase);
+
+                            if (shouldRenderWarpBackground && warpPlayableMipIndex >= 0)
+                            {
+                                let warpedSample = renderWarpedUnisonSample (
+                                    int32 (voice),
+                                    subVoiceIndex,
+                                    warpPlayableMipIndex,
+                                    subPosition,
+                                    phase,
+                                    currentPhaseIncrement,
+                                    warpMode,
+                                    subWarpAmount
+                                );
+
+                                if (! isIdentityWarp (warpMode, subWarpAmount))
+                                    sample = warpedSample;
+                            }
+
+                            unisonLeft += sample * subWeight * panLeftGain (subPan);
+                            unisonRight += sample * subWeight * panRightGain (subPan);
+                            weightSum += subWeight;
+                        }
+
+                        if (weightSum <= 0.0f)
+                            continue;
+
+                        unisonLeft /= weightSum;
+                        unisonRight /= weightSum;
+
+                        if (filterMode > filterModeOff)
+                        {
+                            unisonLeftFilters.at (voice).setMode (resolveSimperFilterMode (filterMode));
+                            unisonLeftFilters.at (voice).setFrequency (
+                                processor.frequency,
+                                effectiveFilterCutoffHz,
+                                effectiveFilterQ,
+                                0.0f
+                            );
+                            unisonRightFilters.at (voice).setMode (resolveSimperFilterMode (filterMode));
+                            unisonRightFilters.at (voice).setFrequency (
+                                processor.frequency,
+                                effectiveFilterCutoffHz,
+                                effectiveFilterQ,
+                                0.0f
+                            );
+                            unisonLeft = unisonLeftFilters.at (voice).process (unisonLeft);
+                            unisonRight = unisonRightFilters.at (voice).process (unisonRight);
+                        }
+                        else
+                        {
+                            resetFilterState (int32 (voice));
+                        }
+
+                        let gain = envelopeGain * dbToGain (clampAmpGainDb (routeAmpGainDb));
+                        leftMix += unisonLeft * gain;
+                        rightMix += unisonRight * gain;
+                    }
                 }
 
                 out <- float32<2> (leftMix, rightMix);

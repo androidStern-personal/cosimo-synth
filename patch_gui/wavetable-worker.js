@@ -818,6 +818,11 @@ const MOD_TARGET_FILTER_Q = 4;
 const MOD_TARGET_PITCH_SEMITONES = 5;
 const MOD_TARGET_AMP_GAIN_DB = 6;
 const MOD_TARGET_PAN = 7;
+const MOD_TARGET_UNISON_DETUNE = 8;
+const MOD_TARGET_UNISON_BLEND = 9;
+const MOD_TARGET_UNISON_WIDTH = 10;
+const MOD_TARGET_UNISON_WT_POSITION_SPREAD = 11;
+const MOD_TARGET_UNISON_WARP_SPREAD = 12;
 const MSEG_SLOT_NAMES = ["MSEG 1", "MSEG 2", "MSEG 3"];
 const ENV_SLOT_NAMES = ["Env 1", "Env 2", "Env 3"];
 const ENV_MIN_SECONDS = 1e-3;
@@ -831,7 +836,12 @@ const ROUTE_AMOUNT_LIMITS = {
   filterQ: { min: -19.9, max: FILTER_Q_MAX - FILTER_Q_MIN },
   pitchSemitones: { min: -48, max: 48 },
   ampGainDb: { min: -48, max: 6 },
-  pan: { min: -1, max: 1 }
+  pan: { min: -1, max: 1 },
+  unisonDetune: { min: -1, max: 1 },
+  unisonBlend: { min: -1, max: 1 },
+  unisonWidth: { min: -1, max: 1 },
+  unisonWavetablePositionSpread: { min: -1, max: 1 },
+  unisonWarpSpread: { min: -1, max: 1 }
 };
 let generatedRouteIdCounter = 1;
 function clamp$2(value, min, max) {
@@ -870,7 +880,7 @@ function normalizeSourceKind(value) {
   return "mseg";
 }
 function normalizeTargetKind(value) {
-  if (value === "wavetablePosition" || value === "warpAmount" || value === "filterCutoffOctaves" || value === "filterQ" || value === "pitchSemitones" || value === "ampGainDb" || value === "pan") {
+  if (value === "wavetablePosition" || value === "warpAmount" || value === "filterCutoffOctaves" || value === "filterQ" || value === "pitchSemitones" || value === "ampGainDb" || value === "pan" || value === "unisonDetune" || value === "unisonBlend" || value === "unisonWidth" || value === "unisonWavetablePositionSpread" || value === "unisonWarpSpread") {
     return value;
   }
   return "wavetablePosition";
@@ -987,6 +997,11 @@ function targetKindToCode(targetKind) {
   if (targetKind === "filterQ") return MOD_TARGET_FILTER_Q;
   if (targetKind === "pitchSemitones") return MOD_TARGET_PITCH_SEMITONES;
   if (targetKind === "ampGainDb") return MOD_TARGET_AMP_GAIN_DB;
+  if (targetKind === "unisonDetune") return MOD_TARGET_UNISON_DETUNE;
+  if (targetKind === "unisonBlend") return MOD_TARGET_UNISON_BLEND;
+  if (targetKind === "unisonWidth") return MOD_TARGET_UNISON_WIDTH;
+  if (targetKind === "unisonWavetablePositionSpread") return MOD_TARGET_UNISON_WT_POSITION_SPREAD;
+  if (targetKind === "unisonWarpSpread") return MOD_TARGET_UNISON_WARP_SPREAD;
   return MOD_TARGET_PAN;
 }
 function toMsegPlaybackUpload(slotIndex, playback) {
@@ -1121,6 +1136,17 @@ function createDefaultArticulationParameterSnapshot() {
     filterMode: 0,
     filterCutoff: 1e3,
     filterQ: 0.707107,
+    unisonVoices: 1,
+    unisonDetune: 0.1,
+    unisonBlend: 0.75,
+    unisonWidth: 1,
+    unisonPhase: 0,
+    unisonRandom: 0,
+    unisonPhaseMode: 0,
+    unisonDetuneMode: 0,
+    unisonStackMode: 0,
+    unisonWavetablePositionSpread: 0,
+    unisonWarpSpread: 0,
     msegMorphs: [0, 0, 0],
     distortionMode: 0,
     distortionDriveDb: 12,
@@ -1153,6 +1179,22 @@ function normalizeArticulationParameterSnapshot(value) {
     filterMode: normalizeInteger(nextValue.filterMode, defaults.filterMode, 0, 5),
     filterCutoff: normalizeNumber(nextValue.filterCutoff, defaults.filterCutoff, 20, 2e4),
     filterQ: normalizeNumber(nextValue.filterQ, defaults.filterQ, 0.1, 20),
+    unisonVoices: normalizeInteger(nextValue.unisonVoices, defaults.unisonVoices, 1, 8),
+    unisonDetune: normalizeNumber(nextValue.unisonDetune, defaults.unisonDetune, 0, 1),
+    unisonBlend: normalizeNumber(nextValue.unisonBlend, defaults.unisonBlend, 0, 1),
+    unisonWidth: normalizeNumber(nextValue.unisonWidth, defaults.unisonWidth, 0, 1),
+    unisonPhase: normalizeNumber(nextValue.unisonPhase, defaults.unisonPhase, 0, 1),
+    unisonRandom: normalizeNumber(nextValue.unisonRandom, defaults.unisonRandom, 0, 1),
+    unisonPhaseMode: normalizeInteger(nextValue.unisonPhaseMode, defaults.unisonPhaseMode, 0, 1),
+    unisonDetuneMode: normalizeInteger(nextValue.unisonDetuneMode, defaults.unisonDetuneMode, 0, 4),
+    unisonStackMode: normalizeInteger(nextValue.unisonStackMode, defaults.unisonStackMode, 0, 4),
+    unisonWavetablePositionSpread: normalizeNumber(
+      nextValue.unisonWavetablePositionSpread,
+      defaults.unisonWavetablePositionSpread,
+      0,
+      1
+    ),
+    unisonWarpSpread: normalizeNumber(nextValue.unisonWarpSpread, defaults.unisonWarpSpread, 0, 1),
     msegMorphs: [
       clamp01(Number(msegMorphs[0])),
       clamp01(Number(msegMorphs[1])),
@@ -1339,6 +1381,17 @@ function createDisabledRuntimeUpload(selectorA) {
     filterMode: 0,
     filterCutoffHz: 1e3,
     filterQ: 0.707107,
+    unisonVoices: 1,
+    unisonDetune: 0.1,
+    unisonBlend: 0.75,
+    unisonWidth: 1,
+    unisonPhase: 0,
+    unisonRandom: 0,
+    unisonPhaseMode: 0,
+    unisonDetuneMode: 0,
+    unisonStackMode: 0,
+    unisonWavetablePositionSpread: 0,
+    unisonWarpSpread: 0,
     msegMorphs: Array.from({ length: MODULATION_MSEG_SLOT_COUNT }, () => 0),
     routeAmounts: Array.from({ length: MODULATION_MAX_ROUTES }, () => 0),
     envelopeAttackSeconds: Array.from({ length: MODULATION_ENV_SLOT_COUNT }, (_, slotIndex) => createDefaultEnvelope(slotIndex).attackSeconds),
@@ -1375,6 +1428,17 @@ function buildArticulationRuntimeUploads(bankValue, currentRoutesValue = []) {
       filterMode: parameters.filterMode,
       filterCutoffHz: parameters.filterCutoff,
       filterQ: parameters.filterQ,
+      unisonVoices: parameters.unisonVoices,
+      unisonDetune: parameters.unisonDetune,
+      unisonBlend: parameters.unisonBlend,
+      unisonWidth: parameters.unisonWidth,
+      unisonPhase: parameters.unisonPhase,
+      unisonRandom: parameters.unisonRandom,
+      unisonPhaseMode: parameters.unisonPhaseMode,
+      unisonDetuneMode: parameters.unisonDetuneMode,
+      unisonStackMode: parameters.unisonStackMode,
+      unisonWavetablePositionSpread: parameters.unisonWavetablePositionSpread,
+      unisonWarpSpread: parameters.unisonWarpSpread,
       msegMorphs: Array.from({ length: MODULATION_MSEG_SLOT_COUNT }, (_2, slotIndex) => parameters.msegMorphs[slotIndex] ?? 0),
       routeAmounts: Array.from({ length: MODULATION_MAX_ROUTES }, (_2, routeIndex) => {
         const route = currentRoutes[routeIndex];

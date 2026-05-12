@@ -22,7 +22,9 @@ declare global {
                     height: number;
                     playhead: { x1: number; y1: number; x2: number; y2: number } | null;
                     progressClip: { x: number; y: number; width: number; height: number } | null;
-                    morphCurvePath: string | null;
+                    effectiveCurvePath: string | null;
+                    shapeACurvePath: string | null;
+                    shapeBCurvePath: string | null;
                 } | null;
                 stageLabel: string | null;
                 stageDebug: unknown | null;
@@ -145,7 +147,9 @@ function readMsegPreviewState() {
 
     const playhead = svg.querySelector('[data-role="mseg-preview-playhead"]');
     const progressClip = svg.querySelector('[data-role="mseg-preview-progress-clip"]');
-    const morphCurve = svg.querySelector('[data-role="mseg-preview-morph-curve"]');
+    const effectiveCurve = svg.querySelector('[data-role="mseg-preview-effective-curve"]');
+    const shapeACurve = svg.querySelector('[data-role="mseg-preview-shape-a-curve"]');
+    const shapeBCurve = svg.querySelector('[data-role="mseg-preview-shape-b-curve"]');
     const [, , width, height] = (svg.getAttribute("viewBox") ?? "0 0 0 0")
         .split(/\s+/)
         .map((value) => Number(value) || 0);
@@ -169,8 +173,14 @@ function readMsegPreviewState() {
                 height: Number(progressClip.getAttribute("height")) || 0,
             }
             : null,
-        morphCurvePath: morphCurve instanceof SVGPathElement
-            ? morphCurve.getAttribute("d") || null
+        effectiveCurvePath: effectiveCurve instanceof SVGPathElement
+            ? effectiveCurve.getAttribute("d") || null
+            : null,
+        shapeACurvePath: shapeACurve instanceof SVGPathElement
+            ? shapeACurve.getAttribute("d") || null
+            : null,
+        shapeBCurvePath: shapeBCurve instanceof SVGPathElement
+            ? shapeBCurve.getAttribute("d") || null
             : null,
     };
 }
