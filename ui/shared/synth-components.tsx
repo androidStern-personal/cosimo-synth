@@ -77,7 +77,7 @@ export const VOICE_MODE_OPTIONS: VoiceModeOption[] = [
     { value: 1, label: "Mono" },
     { value: 2, label: "Legato" },
 ];
-export const SYNTH_GRID_CARD_SIZE_CLASS = "aspect-[50/27] min-h-[240px]";
+export const SYNTH_GRID_CARD_SIZE_CLASS = "aspect-[50/27]";
 export const SYNTH_GRID_CARD_SHELL_CLASS = "synth-grid-card-shell relative min-h-0 overflow-hidden rounded-[14px]";
 export const SYNTH_GRID_CARD_INSET_SHADOW_CLASS = "synth-grid-card-inset";
 export const SYNTH_COMPACT_CONTROL_CHROME_CLASS = "synth-compact-control rounded-[5px]";

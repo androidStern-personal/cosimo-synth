@@ -401,7 +401,7 @@ function createProjection(points, width, height) {
         projectedCenterX: (minX + maxX) * 0.5,
         projectedCenterY: (minY + maxY) * 0.5,
         centerX: width * 0.5,
-        centerY: height * 0.46,
+        centerY: height * 0.5,
     };
 }
 
@@ -949,11 +949,11 @@ export function drawWavetableModel(context, model, theme = DEFAULT_WAVETABLE_THE
     const gradient = context.createLinearGradient?.(0, 0, 0, model.height);
 
     if (gradient) {
-        gradient.addColorStop(0, theme.backgroundTop);
-        gradient.addColorStop(1, theme.backgroundBottom);
+        gradient.addColorStop(0, "#4b164f");
+        gradient.addColorStop(1, "#1f4f5c");
         context.fillStyle = gradient;
     } else {
-        context.fillStyle = theme.backgroundBottom;
+        context.fillStyle = "#4b164f";
     }
 
     context.clearRect(0, 0, model.width, model.height);
