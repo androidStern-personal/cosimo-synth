@@ -1,3 +1,40 @@
+Recent consolidation checkpoint recorded on 2026-05-12
+- Current consolidation branch: `codex/consolidate-unison-articulation-20260512`.
+- This branch started from current `master` at `2aa7b61` (`Tokenize residual synth control glows`).
+- It has two kept commits on top of `master`:
+  - `52162cf`: keeps the chorus VST prototype HTML and the newer goal note from the old `codex/articulation-editor-complete` branch. This is intentionally kept because the prototype HTML may still be useful.
+  - `9a563f6`: consolidates the unison feature from `checkpoint-for-goals` / `c255cf9` into the current styled app. In product terms, this keeps the unison controls, effective unison-state reporting, unison-aware Cmajor behavior, shared synth preset saving/reverting, and the articulation draft toolbar behavior. Conflict resolution kept the current style-guide UI and restored the card-carousel containment needed so many articulation cards scroll inside the control row instead of widening it.
+- This consolidation branch is the current candidate path toward `master`. The 3D demo and the two May 10 stashes are preserved but not merged into it.
+- Verification already run on this consolidation branch:
+  - `npm run ui:build`
+  - `npm run test:desktop:ui` -> 67 passed
+  - `npm run test:shared:hooks` -> 19 passed
+  - `env PYTHONPATH=. uv run pytest tests/test_unison_probe.py` -> 5 passed
+  - `env PYTHONPATH=. uv run pytest tests/test_warp_aliasing.py` -> 5 passed
+  - `env PYTHONPATH=. uv run pytest tests/test_filter_modulation_stability.py` -> 31 passed
+  - `cmaj test --singleThread --sessionID=1 tests/cmajor_warp` -> 16 passed
+  - `cmaj test --singleThread --sessionID=2 tests/cmajor_filter` -> 14 passed
+  - `node --test tests/test_articulations.mjs` -> 9 passed
+  - `npm run synth:desktop:build` -> installed `/Users/winterfell/Library/Audio/Plug-Ins/VST3/CosimoDesktopNative.vst3` and `/Users/winterfell/Library/Audio/Plug-Ins/Components/CosimoDesktopNative.component`
+  - `npm run synth:desktop:dev` -> started `http://127.0.0.1:5174` and launched the standalone app against that dev server
+- Preservation branch: `codex/preserve-cinematic3d-20260512` at `df01dc1`.
+  - Parent/common ancestor for that checkpoint is `0498793`, the prototype/goal-note commit.
+  - This preserves the isolated cinematic 3D demo worktree. In app terms, it is the demo/capture/rendering path for turning the Cosimo interface into a raised 3D scene and video output.
+  - I verified this branch is not carrying synth DSP, preset, unison, articulation, or host behavior that should be silently merged to `master`. The only normal app-surface touches are capture/demo hooks used by the 3D pipeline.
+  - Keep this isolated for now.
+- Preservation branch: `codex/preserve-stash-master-20260510-230222` at `0f04243`.
+  - Parent/common ancestor for that checkpoint is `2992ece` (`Regenerate patch GUI bundles after master merge`).
+  - This preserves the May 10 23:02 master stash. In app terms, it appears to be generated iPhone UI output plus a hardware-lit visual moodboard prototype.
+  - The original stash still exists as `stash@{Sun May 10 23:02:22 2026}: On master: pre-codex-master-merge-local-tracked-edits`.
+  - Do not merge this until the user reviews the stash contents.
+- Preservation branch: `codex/preserve-stash-articulation-20260510-191236` at `17fbbc7`.
+  - Parent/common ancestor for that checkpoint is `c0c837` (`Unify desktop top row panel sizing`).
+  - This preserves the May 10 19:12 articulation/style stash. In app terms, it contains style-guide/font work and generated UI output around the articulation editor era.
+  - The original stash still exists as `stash@{Sun May 10 19:12:36 2026}: On codex/articulation-editor-complete: codex-paused-style-guide-before-master-merge`.
+  - Do not merge this until the user reviews the stash contents.
+- There are still older stashes from April on the stash stack. They were not part of this May 9-12 pass and were not modified.
+- The main checkout still has unrelated untracked demo/render/transient assets. They were left alone and are not included in the consolidation commits.
+
 Cosimo GUI-open articulation state fix completed on 2026-05-07
 - Fixed the Ableton bug where opening the synth GUI could recall a stored selected articulation and overwrite live parameter state.
 - Articulation runtime mirroring now runs from `patch_gui/wavetable-worker.js` through `ui/shared/articulation-worker-service.ts`, so the UI is no longer the owner of realtime articulation table uploads.
