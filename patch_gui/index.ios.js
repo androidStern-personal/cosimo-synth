@@ -13483,6 +13483,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     margin-block: calc(var(--spacing) * 1);
   }
 
+  .-mt-0 {
+    margin-top: calc(var(--spacing) * 0);
+  }
+
   .-mt-0\\.5 {
     margin-top: calc(var(--spacing) * -.5);
   }
@@ -14335,6 +14339,11 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .-translate-x-px {
     --tw-translate-x: -1px;
+    translate: var(--tw-translate-x) var(--tw-translate-y);
+  }
+
+  .translate-x-2 {
+    --tw-translate-x: calc(var(--spacing) * 2);
     translate: var(--tw-translate-x) var(--tw-translate-y);
   }
 
@@ -15695,6 +15704,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     background-color: var(--color-gray-200);
   }
 
+  .bg-gray-900 {
+    background-color: var(--color-gray-900);
+  }
+
   .bg-gray-900\\/5 {
     background-color: #1018280d;
   }
@@ -16024,6 +16037,11 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
   }
 
+  .from-orange-500 {
+    --tw-gradient-from: var(--color-orange-500);
+    --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
+  }
+
   .from-orange-500\\/10 {
     --tw-gradient-from: #fe6e001a;
   }
@@ -16066,6 +16084,11 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .to-cyan-400 {
     --tw-gradient-to: var(--color-cyan-400);
+    --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
+  }
+
+  .to-orange-500 {
+    --tw-gradient-to: var(--color-orange-500);
     --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
   }
 
@@ -16177,6 +16200,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .p-6 {
     padding: calc(var(--spacing) * 6);
+  }
+
+  .p-7 {
+    padding: calc(var(--spacing) * 7);
   }
 
   .p-7\\.5 {
@@ -17923,6 +17950,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     --tw-ring-color: var(--color-gray-200);
   }
 
+  .ring-gray-900 {
+    --tw-ring-color: var(--color-gray-900);
+  }
+
   .ring-gray-900\\/10 {
     --tw-ring-color: #1018281a;
   }
@@ -17935,6 +17966,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .ring-indigo-600 {
     --tw-ring-color: var(--color-indigo-600);
+  }
+
+  .ring-orange-500 {
+    --tw-ring-color: var(--color-orange-500);
   }
 
   .ring-orange-500\\/20 {
