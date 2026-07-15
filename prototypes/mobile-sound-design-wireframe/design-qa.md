@@ -1,48 +1,45 @@
 # Design QA
 
-## Comparison setup
+## Evidence
 
-- Structural before/after: `/tmp/cosimo-structure-compare.jpg`
-- Palette and final-state contact sheet: `/tmp/cosimo-palette-layout-compare-v2.jpg`
-- Palette references: Native Instruments Super 8 and XLN DB-30 Drum Butter landing pages captured at `/tmp/native-instruments-super-8-landing.jpg` and `/tmp/xln-drum-butter-landing-clean.jpg`
-- Final Effects state: `/tmp/cosimo-effects-final-390x844.jpg`
-- Final sparse articulation override: `/tmp/cosimo-voice-override-final-375x667-retry.jpg`
-- Final compact Envelope editor: `/tmp/cosimo-envelope-source-final-375x667-retry.jpg`
-- Final orphan-source state: `/tmp/cosimo-orphan-source-final-375x667-retry.jpg`
-- Viewports: 390 × 844 and 375 × 667.
+- Visual source of truth: `/Users/winterfell/.codex/generated_images/019f51fe-8cad-74e0-af19-5afb4e44104e/exec-576250f4-f394-424a-9e76-9bba8ad81fe4.png`
+- Final Effects implementation at 390 × 844: `/tmp/cosimo-final-effects-390x844.png`
+- Final Effects implementation at 375 × 667: `/tmp/cosimo-final-effects-375x667.png`
+- Same-input source/implementation comparison: `/tmp/cosimo-final-comparison.png`
+- Focused top comparison: `/tmp/cosimo-final-top-comparison.png`
+- Focused lower-surface comparison: `/tmp/cosimo-final-bottom-comparison.png`
+- Additional reviewed states: `/tmp/cosimo-polish-mapping-expanded-375x667.png` and `/tmp/cosimo-polish-source-editor-375x667.png`
+- Comparison state: Phaser focused, Frequency selected, MSEG 1 and Pressure mapped, one stable relationship card visible, Pluck articulation active.
 
-## Findings
+## Visual review
 
-- No actionable P0, P1, or P2 issue remains in the requested structural pass.
-- The underlying language remains white, black, square, and wireframe. Color is now semantic rather than decorative: Pluck and each modulator retain their own subdued Super 8 / Drum Butter-inspired accent wherever that identity appears.
-- Sparse articulation state is legible without adding icons everywhere. Only the overridden Warp control receives the Pluck icon/color, patch-base anchor, and contextual `Pluck Reset` action.
-- Effect-rack quick controls now use the same wireframe track, position handle, and default tick as the rest of the system. Separate six-dot handles make rack reordering distinct from value adjustment.
-- The contextual region starts with compact amount-bearing mapping chips. Tapping one reveals exactly one relationship card; its amount, polarity, reducer, removal, and source-editor entry are available without covering the primary module.
-- Reducers remain contextual. The per-note MSEG → global Phaser mapping shows Max/Mean; Envelope → per-note Wavetable does not.
-- The Envelope editor integrates A/D/S/R manipulation and readouts into its shape graphic. The target list begins immediately below it, recovering the former slider-row and primary-panel dead space.
-- Source chips use icon + slot, target-count badges, and stable source colors. The new unattached Envelope 2 is visibly muted with a zero badge.
-- The 375 × 667 layout has no document overflow. Measured regions end exactly at the viewport: primary 108–268, contextual 268–543, sources 543–585, audition 585–667.
+- No P0, P1, or P2 visual defect remains after comparing the reference and implementation together at the same viewport.
+- The app reads as five coherent instrument surfaces: workspace/rack, graphic editor, calibration matrix, relationship/source bands, and audition transport.
+- The global effects rack is one continuous surface. The active effect and active workspace invert black/white; quick control, bypass state, and reorder handle remain distinct.
+- The responsive parameter matrix fits every label at 390 × 844 and 375 × 667. Four-parameter voice modules use a 2 × 2 matrix rather than empty cells.
+- Modulation and articulation colors are confined to semantic glyphs, rails, ranges, and override handles. Structural hierarchy remains monochrome.
+- Mapping chips swap one always-present relationship card without moving the primary module, source shelf, or audition transport. Source-first target rows remain directly editable and expose an explicit target-navigation action.
+- Source attachment counts are separated into neutral badges; orphan sources are muted. The audition footer uses the same custom checkbox, rule, typography, and active-state grammar as the rest of the instrument.
+- IBM Plex Sans Condensed and Departure Mono load from checked-in assets. No visible text is below 10 px.
+- The final adversarial visual review reported no remaining P0, P1, or P2 blocker.
 
-## Interaction checks
+## Interaction review
 
-- Created a Pluck Warp override by manipulating Warp while Pluck was active; the effective value, patch-base marker, icon, and reset action all appeared.
-- Opened Envelope 1 → Wavetable Warp, confirmed `Back to Envelope 1`, and confirmed return restored the Wavetable target as the expanded source relationship.
-- Expanded and collapsed the MSEG 1 mapping card while keeping Phaser visible.
-- Reordered Phaser ahead of Flanger using only the rack drag handle.
-- Added Envelope 2 and confirmed its zero-target empty state, muted shelf treatment, and zero badge.
-- Verified the production Vite build.
-- Checked browser warnings and errors: none.
+- Effects → Voice → Effects restores the previous module and parameter.
+- Rack quick controls follow the last-touched parameter. Bypass changes to an explicit `Off` state without losing module focus.
+- A non-Default voice edit creates a sparse articulation override; Default exposes the patch base; Reset removes only the active articulation override.
+- Parameter-first mappings keep one relationship card present. Switching `MSEG 1 ↔ Pressure`, including reselecting the active chip, preserves identical region geometry at 390 × 844 and 375 × 667. Source-first navigation follows `MSEG 1 → Wavetable Index → Back to MSEG 1 → Back to Phaser` and restores context.
+- Adding Envelope 2 creates a muted zero-target source. Context deletion removes it; Undo restores the exact source and orphan state.
+- Latched audition now remains active while another parameter receives focus. Moving Warp produces `Ready · Pluck override · Wavetable Warp`; Capture creates and opens MSEG 2 mapped to that exact target/layer.
+- When MSEG 1–3 are occupied, Capture reports `MSEG full · delete one to capture`, retains the buffered gesture, and never reuses a slot silently.
+- Trigger supports pointer, keyboard, click fallback, latch, cancel, window-blur, and visibility cleanup. ARIA labels and pressed/expanded state were audited after the final pass.
+- The final focused accessibility review reported no remaining P0/P1 prototype blocker.
 
-## Comparison history
+## Verification
 
-- Previous P1: blue/native rack sliders broke the wireframe language. Fixed with the shared black wireframe range component.
-- Previous P1: articulation base, override, and modulation state were visually conflated. Fixed with a base anchor, articulation-colored override handle/icon, and separately colored modulation range.
-- Previous P2: the Envelope source view spent space on redundant A/D/S/R slider rows. Fixed by moving those interactions into the graphic and starting targets immediately below it.
-- Previous P2: mapping identity required opening a card to see amount. Fixed by putting the live amount on each source chip and preserving the detailed card only for deeper settings.
-- Previous P2: rack reorder and rack quick-adjust used ambiguous gestures. Fixed with a dedicated drag handle and a separate shared-language range track.
-
-## Open questions
-
-- None block this wireframe iteration. Exact production color values, haptic strength, and long-press onboarding remain later visual/interaction polish decisions.
+- `npm run build` passes.
+- `git diff --check -- src/App.jsx src/styles.css AGENTS.md design-qa.md` passes.
+- The local prototype remains available at `http://127.0.0.1:4175/`.
+- Actual DSP reorder/bypass, audio cadence, patch serialization, and gesture-to-MSEG conversion remain intentionally outside this UI prototype.
 
 final result: passed

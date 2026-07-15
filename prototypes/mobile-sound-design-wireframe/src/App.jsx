@@ -9,7 +9,6 @@ import {
   FadersHorizontal,
   Gauge,
   Lightning,
-  LinkSimple,
   Plus,
   Pulse,
   Waveform,
@@ -442,11 +441,17 @@ function EffectRack({
             <article
               className="rack-tile"
               data-active={activeModuleId === effect.id}
+              data-enabled={enabled[effect.id]}
               data-effect-id={effect.id}
               key={effect.id}
               ref={activeModuleId === effect.id ? activeTileRef : null}
             >
-              <button className="rack-focus" onClick={() => onFocus(effect)}>
+              <button
+                aria-label={"Open " + effect.label + " editor"}
+                aria-pressed={activeModuleId === effect.id}
+                className="rack-focus"
+                onClick={() => onFocus(effect)}
+              >
                 <strong>{effect.label}</strong>
               </button>
               <label className="rack-quick-control">
@@ -465,11 +470,12 @@ function EffectRack({
               </label>
               <label className="rack-enabled">
                 <input
+                  aria-label={effect.label + " enabled"}
                   type="checkbox"
                   checked={enabled[effect.id]}
                   onChange={(event) => onEnable(effect.id, event.target.checked)}
                 />
-                On
+                {enabled[effect.id] ? "On" : "Off"}
               </label>
               <button
                 aria-label={"Reorder " + effect.label}
@@ -523,6 +529,8 @@ function VoiceStrip({ activeModuleId, baseValues, lastTweaked, onFocus }) {
           const target = TARGETS[module.id + "." + quickId];
           return (
             <button
+              aria-label={"Open " + module.label + " editor"}
+              aria-pressed={activeModuleId === module.id}
               data-selected={activeModuleId === module.id}
               key={module.id}
               onClick={() => onFocus(module)}
@@ -748,12 +756,8 @@ function DirectPad({
   return (
     <div
       className="graphic-pad"
-      role="slider"
+      role="group"
       aria-label={module.graphicLabel + ". Horizontal changes " + xTarget.label + ", vertical changes " + yTarget.label + "."}
-      aria-valuemin="0"
-      aria-valuemax="100"
-      aria-valuenow={Math.round(xValue)}
-      tabIndex={0}
       onPointerDown={(event) => {
         onSelect(xTarget);
         event.currentTarget.setPointerCapture(event.pointerId);
@@ -814,6 +818,7 @@ function ParameterControl({
   source,
   articulation,
   articulationOverride,
+  expanded,
   dropActive = false,
   selected,
   onSelect,
@@ -841,7 +846,16 @@ function ParameterControl({
 
   return (
     <button
-      aria-label={"Select " + (label || target.label)}
+      aria-expanded={expanded}
+      aria-label={
+        "Select " + (label || target.label) + ", " +
+        (target.workspace === "voice" && articulation !== "Default"
+          ? hasArticulationOverride
+            ? articulation + " override"
+            : "edits " + articulation + " override"
+          : "patch base")
+      }
+      aria-pressed={selected}
       className={"parameter-control parameter-" + variant}
       data-articulation-override={hasArticulationOverride}
       data-drop-active={dropActive}
@@ -964,10 +978,16 @@ function ModuleEditor({
       <header className="editor-heading">
         <div>
           <strong>{module.label}</strong>
-          <small>{module.workspace === "effects" ? "Global effect · patch base" : "Per-note voice module"}</small>
+          <small>
+            {module.workspace === "effects"
+              ? "Global effect · patch base"
+              : articulation === "Default"
+                ? "Per-note voice · patch base"
+                : "Per-note voice · editing " + articulation + " overrides"}
+          </small>
         </div>
         <div className="editor-heading-actions">
-          <output aria-live="polite">{readout || "Exact value appears while dragging"}</output>
+          <output aria-live="polite">{readout}</output>
           {sourceReturn && (
             <button className="source-return-button" onClick={onReturnToSource}>
               Back to {sourceReturn.label}
@@ -986,7 +1006,11 @@ function ModuleEditor({
         onSelect={onSelectTarget}
       />
 
-      <div className="parameter-grid" aria-label={module.label + " parameters"}>
+      <div
+        className="parameter-grid"
+        data-parameter-count={module.params.length}
+        aria-label={module.label + " parameters"}
+      >
         {module.params.map((param) => {
           const target = TARGETS[module.id + "." + param.id];
           const targetMappings = mappings.filter((item) => item.targetKey === target.key);
@@ -1033,16 +1057,23 @@ function MappingCard({
 
   return (
     <div className="mapping-card" style={{ "--source-color": sourceColor(source) }}>
-      <button aria-label={"Edit " + source.label} className="source-preview" onClick={() => onOpenSource(source)}>
-        <SourceIcon source={source} size={30} />
+      <button
+        aria-label={"Edit " + source.label + " source for " + target.moduleLabel + " " + target.label}
+        className="source-preview"
+        onClick={() => onOpenSource(source)}
+      >
+        <span className="source-preview-icons">
+          <SourceIcon source={source} size={26} />
+          <ArrowSquareOut aria-hidden="true" size={14} />
+        </span>
         <strong>{source.label}</strong>
-        <span>{source.type === "mseg" ? "Shape thumbnail" : source.type === "macro" ? "Macro position" : "Source preview"}</span>
+        <span>Edit source</span>
       </button>
       <div className="mapping-settings">
-        <label>
-          Amount
+        <label className="mapping-amount">
+          <span className="mapping-field-label">Amount</span>
           <WireRange
-            ariaLabel={source.label + " mapping amount"}
+            ariaLabel={source.label + " to " + target.moduleLabel + " " + target.label + " mapping amount"}
             minimum={-100}
             maximum={100}
             defaultValue={0}
@@ -1061,7 +1092,7 @@ function MappingCard({
         </label>
         <div className="mapping-options">
           <select
-            aria-label="Mapping polarity"
+            aria-label={source.label + " to " + target.moduleLabel + " " + target.label + " polarity"}
             value={activeMapping.polarity}
             onChange={(event) => onUpdate({ polarity: event.target.value })}
           >
@@ -1070,7 +1101,7 @@ function MappingCard({
           </select>
           {mappingNeedsReducer(source, target) && (
             <select
-              aria-label="MPE reducer"
+              aria-label={source.label + " to " + target.moduleLabel + " " + target.label + " reducer"}
               value={activeMapping.reducer}
               onChange={(event) => onUpdate({ reducer: event.target.value })}
             >
@@ -1078,7 +1109,12 @@ function MappingCard({
               <option>Mean</option>
             </select>
           )}
-          <button onClick={onRemove}>Remove</button>
+          <button
+            aria-label={"Remove " + source.label + " mapping from " + target.moduleLabel + " " + target.label}
+            onClick={onRemove}
+          >
+            Remove
+          </button>
         </div>
       </div>
     </div>
@@ -1089,6 +1125,7 @@ function MappingChips({
   mappings,
   sourceLookup,
   activeSourceId,
+  expandedSourceId,
   leading,
   onActivate,
   onChoose,
@@ -1112,7 +1149,9 @@ function MappingChips({
         const source = sourceLookup[item.sourceId];
         return (
           <button
-            aria-label={source.label}
+            aria-expanded={expandedSourceId === item.sourceId}
+            aria-label={source.label + " mapping, " + (item.amount > 0 ? "+" : "") + Math.round(item.amount) + "%"}
+            aria-pressed={activeSourceId === item.sourceId}
             data-selected={activeSourceId === item.sourceId}
             key={item.id}
             onClick={() => onChoose(item.sourceId)}
@@ -1174,15 +1213,20 @@ function ParameterContext({
   onReadout,
 }) {
   const [addOpen, setAddOpen] = useState(false);
-  const [expandedSourceId, setExpandedSourceId] = useState(null);
-  const expandedMapping = mappings.find((item) => item.sourceId === expandedSourceId) || null;
+  const [expandedSourceId, setExpandedSourceId] = useState(activeSourceId || mappings[0]?.sourceId || null);
+  const visibleSourceId = mappings.some((item) => item.sourceId === expandedSourceId)
+    ? expandedSourceId
+    : mappings.some((item) => item.sourceId === activeSourceId)
+      ? activeSourceId
+      : mappings[0]?.sourceId || null;
+  const expandedMapping = mappings.find((item) => item.sourceId === visibleSourceId) || null;
   const source = expandedMapping ? sourceLookup[expandedMapping.sourceId] : null;
   const availableSources = patchSources.filter(
     (candidate) => !mappings.some((item) => item.sourceId === candidate.id),
   );
 
   useEffect(() => {
-    setExpandedSourceId(null);
+    setExpandedSourceId(activeSourceId || mappings[0]?.sourceId || null);
     setAddOpen(false);
   }, [target.key]);
 
@@ -1192,6 +1236,7 @@ function ParameterContext({
         mappings={mappings}
         sourceLookup={sourceLookup}
         activeSourceId={activeSourceId}
+        expandedSourceId={visibleSourceId}
         leading={articulationOverride != null ? (
           <button
             aria-label={"Clear " + articulation + " override"}
@@ -1207,14 +1252,15 @@ function ParameterContext({
         onActivate={onChoose}
         onChoose={(sourceId) => {
           onChoose(sourceId);
-          setExpandedSourceId((current) => current === sourceId ? null : sourceId);
+          setExpandedSourceId(sourceId);
+          setAddOpen(false);
         }}
         onToggleAdd={() => setAddOpen((open) => !open)}
         onAmountChange={(mappingId, amount) => onUpdate(mappingId, { amount })}
         onReadout={onReadout}
       />
-      {addOpen && (
-        <div className="mapping-add-menu" role="menu" aria-label="Choose modulation source">
+      {addOpen ? (
+        <div className="mapping-add-menu" role="group" aria-label="Choose modulation source">
           {availableSources.map((candidate) => (
             <button
               key={candidate.id}
@@ -1230,19 +1276,20 @@ function ParameterContext({
           ))}
           {availableSources.length === 0 && <span>Every source is already mapped.</span>}
         </div>
+      ) : (
+        <MappingCard
+          mapping={expandedMapping}
+          source={source}
+          target={target}
+          onUpdate={(patch) => onUpdate(expandedMapping.id, patch)}
+          onRemove={() => {
+            onRemove(expandedMapping.id);
+            setExpandedSourceId(null);
+          }}
+          onOpenSource={onOpenSource}
+          onReadout={onReadout}
+        />
       )}
-      <MappingCard
-        mapping={expandedMapping}
-        source={source}
-        target={target}
-        onUpdate={(patch) => onUpdate(expandedMapping.id, patch)}
-        onRemove={() => {
-          onRemove(expandedMapping.id);
-          setExpandedSourceId(null);
-        }}
-        onOpenSource={onOpenSource}
-        onReadout={onReadout}
-      />
     </section>
   );
 }
@@ -1275,7 +1322,7 @@ function SourcePrimary({ source, onReadout }) {
       context.setTransform(ratio, 0, 0, ratio, 0, 0);
       context.clearRect(0, 0, bounds.width, bounds.height);
       context.strokeStyle = color;
-      context.fillStyle = "white";
+      context.fillStyle = getComputedStyle(canvas).getPropertyValue("--paper").trim() || "#fafaf7";
       context.lineWidth = 2;
       const left = 16;
       const right = bounds.width - 16;
@@ -1300,7 +1347,7 @@ function SourcePrimary({ source, onReadout }) {
       });
       context.restore();
       context.strokeStyle = color;
-      context.fillStyle = "white";
+      context.fillStyle = getComputedStyle(canvas).getPropertyValue("--paper").trim() || "#fafaf7";
 
       if (source.type === "envelope") {
         const attackX = left + width * (0.08 + settings.attack * 0.0022);
@@ -1415,7 +1462,7 @@ function SourcePrimary({ source, onReadout }) {
       onPointerCancel={() => {
         gesture.current = null;
       }}
-      role="application"
+      role="group"
       style={{ "--source-color": color }}
       tabIndex="0"
     >
@@ -1452,6 +1499,7 @@ function SourceEditor({
   onRemoveMapping,
   onAddTarget,
   onReadout,
+  onScrollPosition,
 }) {
   const [addOpen, setAddOpen] = useState(false);
   const [newTargetKey, setNewTargetKey] = useState(availableTargets[0]?.key || "");
@@ -1481,7 +1529,14 @@ function SourceEditor({
         <header className="editor-heading">
           <div>
             <strong>{source.label} · source editor</strong>
-            <small>{targetMappings.length} target{targetMappings.length === 1 ? "" : "s"}</small>
+            <small>
+              {source.capturedMotion
+                ? "Captured · " +
+                  TARGETS[source.capturedMotion.targetKey].moduleLabel + " " +
+                  TARGETS[source.capturedMotion.targetKey].label + " · " +
+                  source.capturedMotion.layer
+                : targetMappings.length + " target" + (targetMappings.length === 1 ? "" : "s")}
+            </small>
           </div>
           <div className="source-header-actions">
             <output aria-live="polite">{readout}</output>
@@ -1491,10 +1546,20 @@ function SourceEditor({
         <SourcePrimary source={source} onReadout={onReadout} />
       </section>
 
-      <section className="context-editor target-context" ref={targetContextRef}>
+      <section
+        className="context-editor target-context"
+        onScroll={(event) => onScrollPosition?.(event.currentTarget.scrollTop)}
+        ref={targetContextRef}
+      >
         <header className="context-heading">
           <strong>{source.label} targets</strong>
-          <button onClick={() => setAddOpen((open) => !open)}><Plus aria-hidden="true" size={15} /> Target</button>
+          <button
+            aria-expanded={addOpen}
+            aria-label={"Add target to " + source.label}
+            onClick={() => setAddOpen((open) => !open)}
+          >
+            <Plus aria-hidden="true" size={15} /> Target
+          </button>
         </header>
         {addOpen && (
           <div className="target-add-control">
@@ -1534,6 +1599,7 @@ function SourceEditor({
                   source={source}
                   articulation={articulation}
                   articulationOverride={articulationOverrides[target.key]}
+                  expanded={expanded}
                   dropActive={dropTargetKey === target.key}
                   selected={expanded}
                   variant="target"
@@ -1573,7 +1639,12 @@ function SourceEditor({
                         <option>Mean</option>
                       </select>
                     )}
-                    <button onClick={() => onRemoveMapping(item.id)}>Remove</button>
+                    <button
+                      aria-label={"Remove " + source.label + " mapping from " + target.moduleLabel + " " + target.label}
+                      onClick={() => onRemoveMapping(item.id)}
+                    >
+                      Remove
+                    </button>
                   </div>
                 )}
               </article>
@@ -1663,6 +1734,7 @@ function SourceShelf({
           return (
             <button
               aria-label={source.label + ", " + targetCount + " targets"}
+              aria-pressed={focusedSourceId === source.id}
               data-dragging={draggedSourceId === source.id}
               data-orphan={targetCount === 0}
               data-selected={focusedSourceId === source.id}
@@ -1687,21 +1759,27 @@ function SourceShelf({
               style={{ "--source-color": sourceColor(source) }}
               title={source.label}
             >
-              <SourceIcon source={source} size={22} />
-              <span>{source.slot}</span>
+              <span className="source-glyph">
+                <SourceIcon source={source} size={21} />
+              </span>
+              <span className="source-slot">{source.slot}</span>
               <span className="source-attachment-badge">
-                <LinkSimple aria-hidden="true" size={8} />
                 {targetCount}
               </span>
             </button>
           );
         })}
-        <button aria-label="Add modulation source" onClick={onToggleAdd} title="Add modulation source">
+        <button
+          aria-expanded={addOpen}
+          aria-label="Add modulation source"
+          onClick={onToggleAdd}
+          title="Add modulation source"
+        >
           <Plus aria-hidden="true" size={22} />
         </button>
       </div>
       {addOpen && (
-        <div className="source-add-menu" role="menu" aria-label="Add modulation source">
+        <div className="source-add-menu" role="group" aria-label="Add modulation source">
           {[
             { type: "macro", label: "Macro" },
             { type: "envelope", label: "Envelope" },
@@ -1716,7 +1794,7 @@ function SourceShelf({
         </div>
       )}
       {contextSource && (
-        <div className="source-context-menu" role="menu" aria-label={contextSource.label + " actions"}>
+        <div className="source-context-menu" role="dialog" aria-modal="false" aria-label={contextSource.label + " actions"}>
           <strong>{contextSource.label}</strong>
           <button
             onClick={() => {
@@ -1748,52 +1826,116 @@ function AuditionBar({
   onRepeat,
   latch,
   onLatch,
+  triggerActive,
   onTriggerStart,
   onTriggerEnd,
+  onTriggerFallback,
+  onTriggerCancel,
   canCapture,
   onCapture,
   status,
 }) {
+  const activeInput = useRef(null);
+  const suppressClick = useRef(false);
+
+  const beginInput = (kind, event) => {
+    if (activeInput.current) return;
+    activeInput.current = { kind, pointerId: event?.pointerId };
+    suppressClick.current = true;
+    if (kind === "pointer") event.currentTarget.setPointerCapture?.(event.pointerId);
+    onTriggerStart();
+  };
+
+  const finishInput = (kind, event, cancelled = false) => {
+    const current = activeInput.current;
+    if (!current || current.kind !== kind) return;
+    activeInput.current = null;
+    if (kind === "pointer" && event?.currentTarget.hasPointerCapture?.(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    if (cancelled) {
+      suppressClick.current = false;
+      onTriggerCancel();
+    }
+    else onTriggerEnd();
+  };
+
   return (
     <section className="audition-bar" aria-label="Persistent audition controls">
-      <div className="audition-row">
+      <div className="audition-row audition-primary">
         <label
-          className="articulation-picker"
+          className="transport-field articulation-picker"
           style={{ "--articulation-color": ARTICULATIONS[articulation]?.color }}
         >
-          Articulation
-          <span className="articulation-picker-icon">
-            <ArticulationIcon articulation={articulation} />
+          <span className="transport-label">Articulation</span>
+          <span className="transport-select articulation-select">
+            <span className="articulation-picker-icon">
+              <ArticulationIcon articulation={articulation} />
+            </span>
+            <select aria-label="Articulation" value={articulation} onChange={(event) => onArticulation(event.target.value)}>
+              {Object.keys(ARTICULATIONS).map((name) => <option key={name}>{name}</option>)}
+            </select>
           </span>
-          <select value={articulation} onChange={(event) => onArticulation(event.target.value)}>
-            {Object.keys(ARTICULATIONS).map((name) => <option key={name}>{name}</option>)}
-          </select>
         </label>
-        <button onClick={() => onArticulation("Default")}>Default articulation</button>
-        <label>
-          Note
-          <select value={note} onChange={(event) => onNote(event.target.value)}>
+        <button className="default-articulation-button" onClick={() => onArticulation("Default")}>Default articulation</button>
+        <label className="transport-field note-picker">
+          <span className="transport-label">Note</span>
+          <select aria-label="Note" value={note} onChange={(event) => onNote(event.target.value)}>
             <option>C2</option>
             <option>C3</option>
             <option>C4</option>
           </select>
         </label>
-        <button
-          className="trigger-button"
-          onPointerDown={onTriggerStart}
-          onPointerUp={onTriggerEnd}
-          onPointerCancel={onTriggerEnd}
-          onPointerLeave={(event) => {
-            if (event.buttons) onTriggerEnd(event);
-          }}
-        >
-          Trigger
-        </button>
+        <span className="transport-field trigger-field">
+          <span className="transport-label">Trigger</span>
+          <button
+            aria-label={triggerActive ? "Release triggered note" : "Trigger note"}
+            aria-pressed={triggerActive}
+            className="trigger-button"
+            onBlur={() => {
+              if (latch) return;
+              activeInput.current = null;
+              suppressClick.current = false;
+              onTriggerCancel();
+            }}
+            onClick={() => {
+              if (suppressClick.current) {
+                suppressClick.current = false;
+                return;
+              }
+              onTriggerFallback();
+            }}
+            onKeyDown={(event) => {
+              if ((event.key !== " " && event.key !== "Enter") || event.repeat) return;
+              event.preventDefault();
+              beginInput("keyboard", event);
+            }}
+            onKeyUp={(event) => {
+              if (event.key !== " " && event.key !== "Enter") return;
+              event.preventDefault();
+              finishInput("keyboard", event);
+            }}
+            onPointerDown={(event) => {
+              if (event.pointerType === "mouse" && event.button !== 0) return;
+              beginInput("pointer", event);
+            }}
+            onPointerUp={(event) => finishInput("pointer", event)}
+            onPointerCancel={(event) => finishInput("pointer", event, true)}
+            onPointerLeave={(event) => {
+              if (event.buttons && !event.currentTarget.hasPointerCapture?.(event.pointerId)) {
+                finishInput("pointer", event);
+              }
+            }}
+            title={triggerActive ? "Release triggered note" : "Trigger note"}
+          >
+            <Circle aria-hidden="true" size={16} weight={triggerActive ? "fill" : "regular"} />
+          </button>
+        </span>
       </div>
-      <div className="audition-row">
-        <label><input type="checkbox" checked={repeat} onChange={(event) => onRepeat(event.target.checked)} /> Repeat</label>
-        <label><input type="checkbox" checked={latch} onChange={(event) => onLatch(event.target.checked)} /> Latch</label>
-        <button disabled={!canCapture} onClick={onCapture}>Capture motion</button>
+      <div className="audition-row audition-secondary">
+        <label><input aria-label="Repeat trigger" type="checkbox" checked={repeat} onChange={(event) => onRepeat(event.target.checked)} /> Repeat</label>
+        <label><input aria-label="Latch trigger" type="checkbox" checked={latch} onChange={(event) => onLatch(event.target.checked)} /> Latch</label>
+        <button className="capture-button" disabled={!canCapture} onClick={onCapture}>Capture motion</button>
         <output aria-live="polite">{status}</output>
       </div>
     </section>
@@ -1831,6 +1973,7 @@ export function App() {
   const [sourceFocusId, setSourceFocusId] = useState(null);
   const [returnContext, setReturnContext] = useState(null);
   const [sourceNavigation, setSourceNavigation] = useState(null);
+  const sourceContextScroll = useRef(0);
   const [sourceAddOpen, setSourceAddOpen] = useState(false);
   const sourceDrag = useRef(null);
   const [draggedSourceId, setDraggedSourceId] = useState(null);
@@ -1844,10 +1987,38 @@ export function App() {
   const [repeat, setRepeat] = useState(false);
   const [latch, setLatch] = useState(false);
   const triggerHeld = useRef(false);
+  const triggerFallbackTimer = useRef(null);
+  const [triggerActive, setTriggerActive] = useState(false);
+  const captureCandidateRef = useRef(null);
   const [captureCandidate, setCaptureCandidate] = useState(null);
-  const [auditionStatus, setAuditionStatus] = useState("Buffer waiting for a note");
+  const [auditionStatus, setAuditionStatus] = useState("Waiting for note");
 
-  useEffect(() => () => window.clearTimeout(readoutTimer.current), []);
+  useEffect(() => () => {
+    window.clearTimeout(readoutTimer.current);
+    window.clearTimeout(triggerFallbackTimer.current);
+  }, []);
+
+  useEffect(() => {
+    const cancelHeldTrigger = () => {
+      window.clearTimeout(triggerFallbackTimer.current);
+      if (!triggerHeld.current) return;
+      triggerHeld.current = false;
+      setTriggerActive(false);
+      const candidate = captureCandidateRef.current;
+      setAuditionStatus(candidate
+        ? "Ready · " + candidate.layer + " · " + TARGETS[candidate.targetKey].moduleLabel + " " + TARGETS[candidate.targetKey].label
+        : "Waiting for note");
+    };
+    const handleVisibility = () => {
+      if (document.hidden) cancelHeldTrigger();
+    };
+    window.addEventListener("blur", cancelHeldTrigger);
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => {
+      window.removeEventListener("blur", cancelHeldTrigger);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, []);
 
   const sourceLookup = useMemo(
     () => Object.fromEntries([...sources, ...FIXED_SOURCES].map((source) => [source.id, source])),
@@ -1904,9 +2075,10 @@ export function App() {
     if (!triggerHeld.current) return;
     const target = TARGETS[targetKey];
     const candidate = { targetKey, layer, articulation };
+    captureCandidateRef.current = candidate;
     setCaptureCandidate(candidate);
     setAuditionStatus(
-      "Recording: " + layer + " · " + target.moduleLabel + " " + target.label,
+      "Recording · " + layer + " · " + target.moduleLabel + " " + target.label,
     );
   };
 
@@ -1953,6 +2125,16 @@ export function App() {
   };
 
   const focusModule = (module) => {
+    const sourceTaskId = sourceFocusId || sourceNavigation?.sourceId;
+    if (sourceFocusId) {
+      setSourceNavigation({
+        sourceId: sourceFocusId,
+        targetKey: selectedTarget.key,
+        scrollTop: sourceContextScroll.current,
+      });
+    } else if (!sourceTaskId) {
+      setSourceNavigation(null);
+    }
     setWorkspace(module.workspace);
     setActiveModuleId(module.id);
     setLastModuleByWorkspace((current) => ({ ...current, [module.workspace]: module.id }));
@@ -1961,8 +2143,7 @@ export function App() {
       module.id + "." + module.quick;
     setSelectedTargetKey(targetKey);
     setSourceFocusId(null);
-    setReturnContext(null);
-    setSourceNavigation(null);
+    if (!sourceTaskId) setReturnContext(null);
   };
 
   const chooseWorkspace = (nextWorkspace) => {
@@ -1991,6 +2172,7 @@ export function App() {
         targetKey: selectedTarget.key,
       });
     }
+    sourceContextScroll.current = 0;
     setSourceNavigation(null);
     setSourceFocusId(source.id);
   };
@@ -2004,10 +2186,12 @@ export function App() {
     setSourceFocusId(null);
     setReturnContext(null);
     setSourceNavigation(null);
+    sourceContextScroll.current = 0;
   };
 
   const openTargetFromSource = (target, sourceId, scrollTop = 0) => {
     const module = MODULES_BY_ID[target.moduleId];
+    sourceContextScroll.current = scrollTop;
     setSourceNavigation({ sourceId, targetKey: target.key, scrollTop });
     setWorkspace(module.workspace);
     setActiveModuleId(module.id);
@@ -2020,14 +2204,18 @@ export function App() {
 
   const returnToSource = () => {
     if (!sourceNavigation) return;
+    sourceContextScroll.current = sourceNavigation.scrollTop || 0;
     setSourceFocusId(sourceNavigation.sourceId);
     haptic("light");
   };
 
-  const addMapping = (targetKey, sourceId, amount = 25) => {
+  const addMapping = (targetKey, sourceId, amount = 25, metadata = {}) => {
     const id = targetKey + "::" + sourceId;
     if (!mappings.some((item) => item.id === id)) {
-      setMappings((current) => [...current, mapping(targetKey, sourceId, amount, "Unipolar", "Max")]);
+      setMappings((current) => [
+        ...current,
+        { ...mapping(targetKey, sourceId, amount, "Unipolar", "Max"), ...metadata },
+      ]);
     }
     setActiveSourceByTarget((current) => ({ ...current, [targetKey]: sourceId }));
   };
@@ -2099,6 +2287,7 @@ export function App() {
       slot,
       label: labels[type] + " " + slot,
     };
+    if (deletedSource) setDeletedSource(null);
     setSources((current) => [...current, source]);
     setSourceAddOpen(false);
     openSource(source);
@@ -2106,9 +2295,19 @@ export function App() {
 
   const deleteSource = (sourceId) => {
     const source = sources.find((candidate) => candidate.id === sourceId);
+    if (!source) return;
     const removedMappings = mappings.filter((item) => item.sourceId === sourceId);
     const remainingMappings = mappings.filter((item) => item.sourceId !== sourceId);
-    setDeletedSource({ source, mappings: removedMappings });
+    const activeTargetKeys = Object.entries(activeSourceByTarget)
+      .filter(([, activeId]) => activeId === sourceId)
+      .map(([targetKey]) => targetKey);
+    setDeletedSource({
+      source,
+      mappings: removedMappings,
+      activeTargetKeys,
+      sourceNavigation: sourceNavigation?.sourceId === sourceId ? sourceNavigation : null,
+      returnContext: sourceNavigation?.sourceId === sourceId ? returnContext : null,
+    });
     setSources((current) => current.filter((candidate) => candidate.id !== sourceId));
     setMappings(remainingMappings);
     setActiveSourceByTarget((current) => Object.fromEntries(
@@ -2119,38 +2318,142 @@ export function App() {
       }),
     ));
     if (sourceFocusId === sourceId) returnFromSource();
+    else if (sourceNavigation?.sourceId === sourceId) {
+      setSourceNavigation(null);
+      setReturnContext(null);
+    }
     setAuditionStatus((source?.label || "Source") + " deleted");
   };
 
   const undoDeleteSource = () => {
     if (!deletedSource) return;
+    if (sources.some((source) => source.id === deletedSource.source.id)) {
+      setAuditionStatus("Undo unavailable · " + deletedSource.source.label + " slot was reused");
+      setDeletedSource(null);
+      return;
+    }
     const typeOrder = { macro: 0, envelope: 1, mseg: 2 };
     setSources((current) => [...current, deletedSource.source].sort((left, right) =>
       typeOrder[left.type] - typeOrder[right.type] || left.slot - right.slot));
-    setMappings((current) => [...current, ...deletedSource.mappings]);
+    setMappings((current) => {
+      const existingIds = new Set(current.map((item) => item.id));
+      return [
+        ...current,
+        ...deletedSource.mappings.filter((item) => !existingIds.has(item.id)),
+      ];
+    });
+    setActiveSourceByTarget((current) => ({
+      ...current,
+      ...Object.fromEntries(
+        (deletedSource.activeTargetKeys || []).map((targetKey) => [targetKey, deletedSource.source.id]),
+      ),
+    }));
+    if (deletedSource.sourceNavigation) {
+      setSourceNavigation(deletedSource.sourceNavigation);
+      setReturnContext(deletedSource.returnContext);
+    }
     setAuditionStatus(deletedSource.source.label + " restored");
     setDeletedSource(null);
     haptic("success");
   };
 
+  const describeCaptureCandidate = (candidate) => {
+    const target = candidate ? TARGETS[candidate.targetKey] : null;
+    return candidate && target
+      ? candidate.layer + " · " + target.moduleLabel + " " + target.label
+      : null;
+  };
+
+  const stopTrigger = (status) => {
+    window.clearTimeout(triggerFallbackTimer.current);
+    triggerHeld.current = false;
+    setTriggerActive(false);
+    const description = describeCaptureCandidate(captureCandidateRef.current);
+    setAuditionStatus(description
+      ? "Ready · " + description
+      : status || "Waiting for note");
+  };
+
+  const startTrigger = () => {
+    window.clearTimeout(triggerFallbackTimer.current);
+    if (latch && triggerHeld.current) {
+      stopTrigger(note + " latch released");
+      return;
+    }
+    triggerHeld.current = true;
+    setTriggerActive(true);
+    captureCandidateRef.current = null;
+    setCaptureCandidate(null);
+    setAuditionStatus(
+      note + (latch ? " latched" : repeat ? " repeating" : " held") +
+      " · move parameter",
+    );
+    haptic("light");
+  };
+
+  const releaseTrigger = () => {
+    window.clearTimeout(triggerFallbackTimer.current);
+    if (!triggerHeld.current) return;
+    if (latch) {
+      setAuditionStatus(note + " latched" + (repeat ? " · repeat on" : ""));
+      return;
+    }
+    stopTrigger();
+  };
+
+  const fallbackTrigger = () => {
+    startTrigger();
+    if (latch) return;
+    triggerFallbackTimer.current = window.setTimeout(() => stopTrigger(), 180);
+  };
+
   const captureMotion = () => {
-    if (!captureCandidate) return;
+    const candidate = captureCandidateRef.current || captureCandidate;
+    if (!candidate) return;
     const occupiedSlots = new Set(
       sources.filter((source) => source.type === "mseg").map((source) => source.slot),
     );
-    const slot = [1, 2, 3].find((candidate) => !occupiedSlots.has(candidate)) || 3;
-    const sourceId = "mseg-" + slot;
-    if (!sources.some((source) => source.id === sourceId)) {
-      setSources((current) => [
-        ...current,
-        { id: sourceId, type: "mseg", slot, label: "MSEG " + slot },
-      ]);
+    const slot = [1, 2, 3].find((candidateSlot) => !occupiedSlots.has(candidateSlot));
+    if (!slot) {
+      setAuditionStatus("MSEG full · delete one to capture");
+      haptic("error");
+      return;
     }
-    addMapping(captureCandidate.targetKey, sourceId, 100);
-    const target = TARGETS[captureCandidate.targetKey];
+    const sourceId = "mseg-" + slot;
+    const target = TARGETS[candidate.targetKey];
+    const source = {
+      id: sourceId,
+      type: "mseg",
+      slot,
+      label: "MSEG " + slot,
+      capturedMotion: { ...candidate },
+    };
+    if (deletedSource) setDeletedSource(null);
+    setSources((current) => [...current, source]);
+    addMapping(candidate.targetKey, sourceId, 100, {
+      capturedLayer: candidate.layer,
+      capturedArticulation: candidate.articulation,
+    });
+    setWorkspace(target.workspace);
+    setActiveModuleId(target.moduleId);
+    setLastModuleByWorkspace((current) => ({ ...current, [target.workspace]: target.moduleId }));
+    setSelectedTargetKey(target.key);
+    setLastTargetByModule((current) => ({ ...current, [target.moduleId]: target.key }));
+    setReturnContext({
+      workspace: target.workspace,
+      moduleId: target.moduleId,
+      targetKey: target.key,
+    });
+    setSourceNavigation(null);
+    sourceContextScroll.current = 0;
+    setSourceFocusId(sourceId);
+    window.clearTimeout(triggerFallbackTimer.current);
+    triggerHeld.current = false;
+    setTriggerActive(false);
+    captureCandidateRef.current = null;
     setCaptureCandidate(null);
     setAuditionStatus(
-      "Captured " + target.moduleLabel + " " + target.label + " as MSEG " + slot,
+      "Captured · " + candidate.layer + " · " + target.moduleLabel + " " + target.label + " · MSEG " + slot,
     );
     haptic("success");
   };
@@ -2217,6 +2520,9 @@ export function App() {
           onRemoveMapping={removeMapping}
           onAddTarget={(targetKey) => addMapping(targetKey, sourceFocus.id)}
           onReadout={showReadout}
+          onScrollPosition={(scrollTop) => {
+            sourceContextScroll.current = scrollTop;
+          }}
         />
       ) : (
         <div className="workspace-stack">
@@ -2288,19 +2594,15 @@ export function App() {
         repeat={repeat}
         onRepeat={setRepeat}
         latch={latch}
-        onLatch={setLatch}
-        onTriggerStart={() => {
-          triggerHeld.current = true;
-          setCaptureCandidate(null);
-          setAuditionStatus(note + " held · move a parameter to record");
-          haptic("light");
+        onLatch={(checked) => {
+          setLatch(checked);
+          if (!checked && triggerHeld.current) stopTrigger(note + " latch released");
         }}
-        onTriggerEnd={() => {
-          triggerHeld.current = false;
-          setAuditionStatus((current) => current.startsWith("Recording:")
-            ? current.replace("Recording:", "Ready:")
-            : "Buffer waiting for a parameter gesture");
-        }}
+        triggerActive={triggerActive}
+        onTriggerStart={startTrigger}
+        onTriggerEnd={releaseTrigger}
+        onTriggerFallback={fallbackTrigger}
+        onTriggerCancel={() => stopTrigger()}
         canCapture={Boolean(captureCandidate)}
         onCapture={captureMotion}
         status={auditionStatus}
