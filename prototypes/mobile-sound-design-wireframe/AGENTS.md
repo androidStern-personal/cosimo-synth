@@ -8,10 +8,11 @@ When implementing from a selected generated mock, treat that image as the source
 
 ## Durable decisions for this prototype
 
+- This is a parallel React/Vite product prototype for Cosimo's eventual iOS UI, not a disposable HTML mock and not the production integration itself. Keep product components independent from mock data so `CosimoMobileExperience` can later receive a real iOS/Cmajor adapter.
 - Keep the presentation as a plain structural wireframe: white canvas, black outlines, native controls, no decorative visual styling.
 - The persistent shell includes the patch header, ordered effect rack, compact source shelf, current articulation, and audition/capture controls.
 - In an effect view, the primary effect stays visible above an inline contextual mapping inspector; do not cover effect parameters with a drawer.
-- The source shelf and mapping inspector have distinct roles. A source-shelf tap explicitly changes focus to the source editor; a mapping-chip tap stays in the effect and edits that source-to-parameter relationship.
+- The source shelf and mapping inspector have distinct roles. A source-shelf tap explicitly changes focus to the source editor; a mapping-chip tap opens the contextual relationship editor inside the already-fixed workspace region.
 - Global effects are patch-owned. The articulation selector remains available for audition, but it does not create a Phaser base-value override.
 - Voice/Oscillator and Effects Rack are sibling sound-design workspaces selected from the centered persistent header control. The Voice workspace exposes Wavetable, Voice Filter, and Amp/Pan as its module strip.
 - Scalar parameter tiles are the controls: tap selects, horizontal drag edits the base value, and vertical drag edits the selected source's modulation amount. Do not add a redundant permanent large slider above them.
@@ -32,7 +33,7 @@ When implementing from a selected generated mock, treat that image as the source
 - Preserve the black-on-white wireframe as the base language. Color is semantic and reserved for articulations and modulation sources. Each articulation and each source slot gets a stable unique color inspired by Native Instruments Super 8 and XLN DB-30 Drum Butter; reuse that color everywhere the identity appears.
 - Each articulation has a compact icon. Only parameters with a sparse articulation override show that articulation's icon and color, plus a visible way to reset the override to the patch base.
 - When a non-Default articulation is active, editing an eligible per-note voice parameter creates or edits that articulation's absolute override. Global effects remain patch-base controls.
-- Mapping chips remain compact and directly adjustable. The relationship region has a fixed height and always shows one detail card when mappings exist; tapping another chip swaps the card in place and never collapses the region or shifts the primary editor. Source-editor targets likewise remain compact until one target is expanded.
+- Mapping chips remain compact and directly adjustable. Tapping a chip replaces only the fixed workspace: the primary module collapses to a live target strip, the source graphic takes focus, and relationship settings occupy a fixed bottom slot. Header, rack, source shelf, and audition transport never move. Source-editor targets likewise remain compact until one target is expanded.
 - Modulation reducers are contextual: show Mean/Max only when a per-note or MPE source crosses into a global target.
 - Source-shelf chips show an upper-right target-count badge. Unmapped orphan sources are visually muted. Source chips drag onto visible eligible parameters; beginning a drag exposes drop targets and a successful drop creates or focuses the mapping.
 - Opening a target from a source editor creates a shallow return path back to that source, restoring target focus and scroll position.
@@ -40,7 +41,7 @@ When implementing from a selected generated mock, treat that image as the source
 - Effect-rack reordering uses a distinct drag handle, not the tile body or quick-control track. Rack quick controls reuse the same small black wireframe range language as other continuous controls.
 - Envelope source controls belong in the touchable envelope graphic. Avoid separate A/D/S/R slider rows and give the recovered space to the target list.
 - Primary scalar controls share one borderless parameter matrix. Preserve large invisible touch cells, but let alignment, whitespace, typography, and one outer calibration-panel boundary provide the grouping instead of drawing six separate cards.
-- Contextual mappings form one ruled relationship band. Source colors are small identity marks inside that band; one selected mapping may invert black/white and its attached detail editor remains present below the chips.
+- Contextual mappings form one ruled relationship band in the normal module view. Source colors are small identity marks inside that band; one selected mapping may invert black/white. Deeper settings belong to the contextual relationship editor, not an expanding inline card.
 - The persistent source shelf reads as a graph legend, not a row of colored cards: controls are borderless, identity color is confined to the glyph and short underline, attachment count stays raised, and the focused source may invert black/white.
 - The persistent audition area is an anchored transport footer. Articulation, note, and Trigger are stable grouped controls; categorical selections may use black/white inversion, while Repeat, Latch, Capture, and buffer status form a quieter secondary row.
 - Treat the selected Ulm scientific-instrument mock as directional visual truth for hierarchy, density, typography, and active states, while preserving Cosimo-specific interactions rather than cloning the mock mechanically.

@@ -2,44 +2,73 @@
 
 ## Evidence
 
-- Visual source of truth: `/Users/winterfell/.codex/generated_images/019f51fe-8cad-74e0-af19-5afb4e44104e/exec-576250f4-f394-424a-9e76-9bba8ad81fe4.png`
-- Final Effects implementation at 390 × 844: `/tmp/cosimo-final-effects-390x844.png`
-- Final Effects implementation at 375 × 667: `/tmp/cosimo-final-effects-375x667.png`
-- Same-input source/implementation comparison: `/tmp/cosimo-final-comparison.png`
-- Focused top comparison: `/tmp/cosimo-final-top-comparison.png`
-- Focused lower-surface comparison: `/tmp/cosimo-final-bottom-comparison.png`
-- Additional reviewed states: `/tmp/cosimo-polish-mapping-expanded-375x667.png` and `/tmp/cosimo-polish-source-editor-375x667.png`
-- Comparison state: Phaser focused, Frequency selected, MSEG 1 and Pressure mapped, one stable relationship card visible, Pluck articulation active.
+- Source visual truth: `/Users/winterfell/.codex/generated_images/019f51fe-8cad-74e0-af19-5afb4e44104e/exec-576250f4-f394-424a-9e76-9bba8ad81fe4.png`
+- Canonical browser render: `/tmp/cosimo-final-canonical-390x844.png`
+- Compact browser render: `/tmp/cosimo-final-canonical-375x667.png`
+- Same-input comparison: `/tmp/cosimo-final-reference-comparison-390x844.png`
+- Independent final comparison: `/tmp/cosimo-readonly-audit-comparison-390x844.png`
+- Same-input overlay: `/tmp/cosimo-final-reference-overlay-390x844.png`
+- Focused upper/lower comparisons: `/tmp/cosimo-final-reference-top-390x430.png`, `/tmp/cosimo-final-reference-bottom-390x414.png`
+- Responsive state matrix: `/tmp/cosimo-final-state-matrix-375x667.png`
+- Stress fixture: `/tmp/cosimo-final-stress-375x667.png`
+- Mapping, override, orphan, attached-source, and bypass states: `/tmp/cosimo-final-mapping-focus-375x667.png`, `/tmp/cosimo-final-override-375x667.png`, `/tmp/cosimo-final-orphan-375x667.png`, `/tmp/cosimo-final-attached-375x667.png`, `/tmp/cosimo-delay-bypassed-375x667.png`
+- Canonical comparison state: Effects workspace, Phaser focused, Depth selected, Macro 1 mapping focused, Pluck articulation active. The rack quick control independently remains Frequency.
 
-## Visual review
+## Findings
 
-- No P0, P1, or P2 visual defect remains after comparing the reference and implementation together at the same viewport.
-- The app reads as five coherent instrument surfaces: workspace/rack, graphic editor, calibration matrix, relationship/source bands, and audition transport.
-- The global effects rack is one continuous surface. The active effect and active workspace invert black/white; quick control, bypass state, and reorder handle remain distinct.
-- The responsive parameter matrix fits every label at 390 × 844 and 375 × 667. Four-parameter voice modules use a 2 × 2 matrix rather than empty cells.
-- Modulation and articulation colors are confined to semantic glyphs, rails, ranges, and override handles. Structural hierarchy remains monochrome.
-- Mapping chips swap one always-present relationship card without moving the primary module, source shelf, or audition transport. Source-first target rows remain directly editable and expose an explicit target-navigation action.
-- Source attachment counts are separated into neutral badges; orphan sources are muted. The audition footer uses the same custom checkbox, rule, typography, and active-state grammar as the rest of the instrument.
-- IBM Plex Sans Condensed and Departure Mono load from checked-in assets. No visible text is below 10 px.
-- The final adversarial visual review reported no remaining P0, P1, or P2 blocker.
+- No actionable P0, P1, or P2 finding remains.
+- Intentional product differences from the Ulm visual reference: rack sequence numbers are omitted, source attachment-count badges remain, and the canonical source/parameter fixture uses the approved product state. These are decisions, not rendering defects.
 
-## Interaction review
+## Fidelity surfaces
 
-- Effects → Voice → Effects restores the previous module and parameter.
-- Rack quick controls follow the last-touched parameter. Bypass changes to an explicit `Off` state without losing module focus.
-- A non-Default voice edit creates a sparse articulation override; Default exposes the patch base; Reset removes only the active articulation override.
-- Parameter-first mappings keep one relationship card present. Switching `MSEG 1 ↔ Pressure`, including reselecting the active chip, preserves identical region geometry at 390 × 844 and 375 × 667. Source-first navigation follows `MSEG 1 → Wavetable Index → Back to MSEG 1 → Back to Phaser` and restores context.
-- Adding Envelope 2 creates a muted zero-target source. Context deletion removes it; Undo restores the exact source and orphan state.
-- Latched audition now remains active while another parameter receives focus. Moving Warp produces `Ready · Pluck override · Wavetable Warp`; Capture creates and opens MSEG 2 mapped to that exact target/layer.
-- When MSEG 1–3 are occupied, Capture reports `MSEG full · delete one to capture`, retains the buffered gesture, and never reuses a slot silently.
-- Trigger supports pointer, keyboard, click fallback, latch, cancel, window-blur, and visibility cleanup. ARIA labels and pressed/expanded state were audited after the final pass.
-- The final focused accessibility review reported no remaining P0/P1 prototype blocker.
+- Typography: checked-in IBM Plex Sans Condensed and Departure Mono assets load correctly. Labels and tabular live values have reserved geometry, so changing values does not move neighboring controls.
+- Layout: the five persistent shell regions fit at 390 × 844 and 375 × 667. Borders have single ownership, the parameter matrix uses alignment instead of nested cards, and the relationship editor occupies reserved workspace rather than inserting content and shifting the shell.
+- Color: paper/ink owns structure. Teal is the instrument accent; source and articulation colors appear only on semantic glyphs, rails, mapping ranges, and override markers.
+- Graphics: Phaser, Filter, Wavetable, Envelope, and MSEG views are interactive React/Canvas surfaces with consistent grid, line, and handle rules.
+- Content: module identities, quick controls, mapping counts, articulation state, reducer policy, capture ownership, source orphan state, and return paths remain coherent across the matrix.
 
-## Verification
+## Defects found and closed
 
-- `npm run build` passes.
-- `git diff --check -- src/App.jsx src/styles.css AGENTS.md design-qa.md` passes.
-- The local prototype remains available at `http://127.0.0.1:4175/`.
-- Actual DSP reorder/bypass, audio cadence, patch serialization, and gesture-to-MSEG conversion remain intentionally outside this UI prototype.
+1. The earlier ad-hoc screen had inconsistent borders, spacing, nested cards, value-driven reflow, and overlapping controls.
+   - Rebuilt it as tokenized React surfaces: header, rack, primary editor, relationship band, source legend, and audition transport.
+2. Compact rack tiles clipped quick controls and confused reordering with parameter adjustment.
+   - Added a dedicated drag handle, fixed-width live-value tracks, and separate quick-control, enable, focus, and reorder gestures.
+3. Opening a relationship inserted a large card and shifted the interface.
+   - Reserved the secondary workspace and made relationship detail swap in place; only one mapping focus is expanded at a time.
+4. Source drag capture failed for mouse input and duplicate mapping drops appeared successful.
+   - Added pointer capture, visible eligible targets, and adapter/controller duplicate rejection.
+5. Releasing a latched Trigger could restart the note and clear its retrospective capture candidate.
+   - Added lifecycle-safe release/cancel behavior and reducer contract coverage.
+6. The product controller imported prototype fixture constants.
+   - Controller defaults now derive from the adapter snapshot/catalog; only `App` injects prototype session state.
+7. Delay exposed Rate labels and compact capture feedback hid the recorded target.
+   - Compound labels are parameter-derived and the compact HUD retains a full accessible capture description.
+8. Source colors and obsolete tokens drifted outside the design system.
+   - Semantic values now live in CSS tokens only; every declared token has a current consumer.
+
+## Interaction and responsive verification
+
+- Effects ↔ Voice workspace carousel preserves module focus.
+- Rack quick control, bypass, selection, and dedicated reorder handle remain distinct.
+- Parameter tiles support direct X base editing and Y selected-mapping editing.
+- Mapping chips expose amount directly and swap one fixed-region relationship editor for polarity, reducer, navigation, and removal.
+- Source-first target navigation restores the exact source and selected target.
+- Sparse absolute articulation overrides are visually identified and clear independently from the patch base.
+- Source add, delete, Undo, count badges, orphan state, target navigation, and drag-to-target assignment are implemented in React.
+- Trigger, Repeat, Latch, note/articulation choice, and retrospective capture preserve the parameter moved while Trigger was held.
+- Mean/Max appears only when a per-note source crosses into a global destination.
+- The deterministic `?fixture=stress` state covers maximum and signed values, bypass, override, orphan/attached sources, and an active capture candidate.
+- Browser geometry checks found zero document overflow or element intersections in the reviewed states. Browser console checks found no warnings or errors.
+- Independent visual, responsive, and React-interaction reviewers found no remaining high- or medium-severity defect.
+
+## Verification commands
+
+- `npm test` — 9/9 passed.
+- `npm run check:styles` — 10 CSS files passed the style contract.
+- `npm run build` — Vite production build passed.
+- `git diff --check` — passed.
+- Live prototype: `http://127.0.0.1:4175/`.
+
+Actual DSP audio, native patch serialization, haptic feel on physical iPhone hardware, and gesture-to-MSEG signal processing remain intentionally outside this parallel UI prototype.
 
 final result: passed

@@ -1,0 +1,266 @@
+@layer cosimo.features {
+  .cosimo-audition {
+    display: grid;
+    grid-template-rows: var(--cosimo-shell-sources-master) minmax(0, 1fr);
+    block-size: 100%;
+    min-inline-size: 0;
+    background: var(--cosimo-color-paper);
+  }
+
+  .cosimo-audition__primary,
+  .cosimo-audition__secondary {
+    display: grid;
+    min-inline-size: 0;
+    align-items: stretch;
+  }
+
+  .cosimo-audition__primary {
+    grid-template-columns:
+      var(--cosimo-audition-articulation-width)
+      minmax(0, 1fr)
+      var(--cosimo-audition-note-width)
+      var(--cosimo-audition-trigger-width);
+    gap: var(--cosimo-space-2);
+    padding-inline: var(--cosimo-gutter-screen);
+    border-block-end: var(--cosimo-stroke-hairline) solid var(--cosimo-color-rule);
+  }
+
+  .cosimo-audition__field {
+    display: grid;
+    grid-template-rows: var(--cosimo-type-label-line) minmax(0, 1fr);
+    min-inline-size: 0;
+    padding-block: var(--cosimo-space-micro);
+    padding-inline: var(--cosimo-space-1);
+  }
+
+  .cosimo-audition__field + .cosimo-audition__field,
+  .cosimo-audition__default + .cosimo-audition__field {
+    border-inline-start: 0;
+  }
+
+  .cosimo-audition__label {
+    overflow: hidden;
+    color: var(--cosimo-color-ink-muted);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .cosimo-audition__articulation-control {
+    display: grid;
+    grid-template-columns: var(--cosimo-control-small) minmax(0, 1fr);
+    min-inline-size: 0;
+    color: var(--cosimo-color-paper);
+    background: var(--cosimo-color-ink);
+  }
+
+  .cosimo-audition__articulation-mark {
+    display: grid;
+    place-items: center;
+    color: var(--cosimo-articulation-color);
+    border-block-end: var(--cosimo-stroke-semantic) solid var(--cosimo-articulation-color);
+  }
+
+  .cosimo-audition__select {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) var(--cosimo-space-4);
+    min-inline-size: 0;
+    align-items: center;
+    min-block-size: var(--cosimo-control-small);
+    padding-inline: var(--cosimo-space-1);
+    border: var(--cosimo-stroke-structural) solid var(--cosimo-color-ink);
+    background: var(--cosimo-color-paper);
+  }
+
+  .cosimo-audition__articulation .cosimo-audition__select {
+    color: var(--cosimo-color-paper);
+    border-color: var(--cosimo-color-ink);
+    background: var(--cosimo-color-ink);
+  }
+
+  .cosimo-audition__select select {
+    position: absolute;
+    inset: 0;
+    inline-size: 100%;
+    padding-inline: var(--cosimo-space-1) var(--cosimo-space-4);
+    color: inherit;
+    background: transparent;
+    font-family: var(--cosimo-font-value);
+    font-size: var(--cosimo-type-value-size);
+    line-height: var(--cosimo-type-value-line);
+  }
+
+  .cosimo-audition__select svg {
+    grid-column: 2;
+    pointer-events: none;
+  }
+
+  .cosimo-audition__default {
+    min-inline-size: 0;
+    min-block-size: var(--cosimo-hit-min);
+    align-self: end;
+    margin-block: var(--cosimo-space-micro);
+    margin-inline: 0;
+    padding-inline: var(--cosimo-space-1);
+    border: var(--cosimo-stroke-structural) solid var(--cosimo-color-ink);
+    text-align: center;
+    font-size: var(--cosimo-type-micro-size);
+    white-space: nowrap;
+  }
+
+  .cosimo-audition__default-compact {
+    display: none;
+  }
+
+  .cosimo-audition__note .cosimo-audition__select {
+    padding-inline: var(--cosimo-space-micro);
+  }
+
+  .cosimo-audition__trigger-field {
+    padding-inline: var(--cosimo-space-1);
+  }
+
+  .cosimo-audition__trigger {
+    position: relative;
+    display: grid;
+    min-inline-size: var(--cosimo-control-small);
+    min-block-size: var(--cosimo-control-small);
+    place-items: center;
+    color: var(--cosimo-color-paper);
+    background: var(--cosimo-color-ink);
+  }
+
+  .cosimo-audition__trigger::after {
+    position: absolute;
+    inset-block-start: calc((var(--cosimo-type-label-line) + (var(--cosimo-space-micro) * 2)) * -1);
+    inset-inline: 0;
+    inset-block-end: 0;
+    content: "";
+  }
+
+  .cosimo-audition__trigger[aria-pressed="true"] {
+    color: var(--cosimo-color-ink);
+    background: var(--cosimo-color-paper);
+    outline: var(--cosimo-stroke-active) solid var(--cosimo-color-ink);
+    outline-offset: calc(var(--cosimo-stroke-active) * -1);
+  }
+
+  .cosimo-audition__secondary {
+    grid-template-columns: auto auto auto minmax(0, 1fr);
+    align-items: center;
+    gap: var(--cosimo-space-1);
+    padding-inline: var(--cosimo-gutter-screen);
+  }
+
+  .cosimo-audition__toggle {
+    position: relative;
+    display: flex;
+    min-block-size: var(--cosimo-control-small);
+    align-items: center;
+    gap: var(--cosimo-space-1);
+  }
+
+  .cosimo-audition__toggle input {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+  }
+
+  .cosimo-audition__toggle > span {
+    inline-size: var(--cosimo-space-3);
+    block-size: var(--cosimo-space-3);
+    border: var(--cosimo-stroke-structural) solid var(--cosimo-color-ink);
+  }
+
+  .cosimo-audition__toggle input:checked + span {
+    background: var(--cosimo-color-ink);
+    box-shadow: inset 0 0 0 var(--cosimo-space-micro) var(--cosimo-color-paper);
+  }
+
+  .cosimo-audition__toggle input:focus-visible + span {
+    outline: var(--cosimo-stroke-active) solid var(--cosimo-color-ink);
+    outline-offset: var(--cosimo-space-micro);
+  }
+
+  .cosimo-audition__capture {
+    min-block-size: var(--cosimo-control-small);
+    padding-inline: var(--cosimo-space-2);
+    color: var(--cosimo-color-paper);
+    background: var(--cosimo-color-ink);
+    white-space: nowrap;
+  }
+
+  .cosimo-audition__capture:disabled {
+    color: var(--cosimo-color-disabled);
+    background: transparent;
+    outline: var(--cosimo-stroke-hairline) solid var(--cosimo-color-rule);
+    outline-offset: calc(var(--cosimo-stroke-hairline) * -1);
+  }
+
+  .cosimo-audition__status {
+    min-inline-size: 0;
+    overflow: hidden;
+    text-align: start;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .cosimo-audition__status-compact {
+    display: none;
+  }
+
+  @media (max-width: 380px), (max-height: 720px) { /* style-contract-allow-raw: named compact viewport breakpoint */
+    .cosimo-audition {
+      grid-template-rows: var(--cosimo-hit-min) minmax(0, 1fr);
+    }
+
+    .cosimo-audition__default {
+      margin-block: 0;
+    }
+
+    .cosimo-audition__default-full {
+      display: none;
+    }
+
+    .cosimo-audition__default-compact {
+      display: inline;
+    }
+
+    .cosimo-audition__field {
+      grid-template-rows: var(--cosimo-type-label-line) minmax(0, 1fr);
+      padding-block: var(--cosimo-space-micro);
+      padding-inline: var(--cosimo-space-1);
+    }
+
+    .cosimo-audition__articulation-control {
+      grid-template-columns: var(--cosimo-space-5) minmax(0, 1fr);
+    }
+
+    .cosimo-audition__select,
+    .cosimo-audition__trigger {
+      min-block-size: calc(var(--cosimo-hit-min) - var(--cosimo-type-label-line) - (var(--cosimo-space-micro) * 2));
+    }
+
+    .cosimo-audition__secondary {
+      grid-template-columns: auto auto auto minmax(0, 1fr);
+      padding-inline: var(--cosimo-gutter-compact);
+    }
+
+    .cosimo-audition__toggle,
+    .cosimo-audition__capture {
+      min-block-size: var(--cosimo-hit-min);
+    }
+
+    .cosimo-audition__status {
+      font-size: var(--cosimo-type-micro-size);
+    }
+
+    .cosimo-audition__status-full {
+      display: none;
+    }
+
+    .cosimo-audition__status-compact {
+      display: inline;
+    }
+  }
+}

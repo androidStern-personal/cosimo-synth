@@ -1,0 +1,146 @@
+@font-face {
+  font-family: "Cosimo Instrument Sans";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("../../../../ui/assets/fonts/IBMPlexSansCondensed-SemiBold.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Cosimo Instrument Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("../../../../ui/assets/fonts/DepartureMono-Regular.woff2") format("woff2");
+}
+
+@layer cosimo.tokens {
+  :root {
+    /* Material and ink */
+    --cosimo-color-paper: #fafaf7;
+    --cosimo-color-paper-raised: #fffef9;
+    --cosimo-color-ink: #171717;
+    --cosimo-color-ink-muted: #5f5e59;
+    --cosimo-color-rule: #b8b7b0;
+    --cosimo-color-graph: #d9d8d2;
+    --cosimo-color-disabled: #8a8882;
+    --cosimo-color-accent: #078f99;
+
+    /* Semantic source and articulation palette */
+    --cosimo-color-source-macro-1: #9d5ca8;
+    --cosimo-color-source-macro-2: #bd5f8b;
+    --cosimo-color-source-macro-3: #5c70b2;
+    --cosimo-color-source-macro-4: #aa7933;
+    --cosimo-color-source-envelope-1: #2698bd;
+    --cosimo-color-source-envelope-2: #4b9f67;
+    --cosimo-color-source-envelope-3: #6c78b6;
+    --cosimo-color-source-mseg-1: #d85b36;
+    --cosimo-color-source-mseg-2: #d2a12e;
+    --cosimo-color-source-mseg-3: #795ca3;
+    --cosimo-color-source-pressure: #c34f55;
+    --cosimo-color-articulation-default: #716e68;
+    --cosimo-color-articulation-pluck: #d2a128;
+    --cosimo-color-articulation-bowed: #2f8f82;
+    --cosimo-color-articulation-accent: #d65c52;
+
+    /* Four-pixel rhythm with a two-pixel optical adjustment. */
+    --cosimo-space-0: 0;
+    --cosimo-space-micro: 2px;
+    --cosimo-space-1: 4px;
+    --cosimo-space-2: 8px;
+    --cosimo-space-3: 12px;
+    --cosimo-space-4: 16px;
+    --cosimo-space-5: 24px;
+
+    /* Strokes */
+    --cosimo-stroke-hairline: 1px;
+    --cosimo-stroke-structural: 1px;
+    --cosimo-stroke-active: 2px;
+    --cosimo-stroke-semantic: 3px;
+
+    /* Typography families */
+    --cosimo-font-label: "Cosimo Instrument Sans", "Arial Narrow", system-ui, sans-serif;
+    --cosimo-font-value: "Cosimo Instrument Mono", ui-monospace, monospace;
+
+    /* Typography roles */
+    --cosimo-type-module-size: 20px;
+    --cosimo-type-module-line: 24px;
+    --cosimo-type-navigation-size: 16px;
+    --cosimo-type-navigation-line: 18px;
+    --cosimo-type-label-size: 10px;
+    --cosimo-type-label-line: 12px;
+    --cosimo-type-value-size: 10px;
+    --cosimo-type-value-line: 14px;
+    --cosimo-type-micro-size: 10px;
+    --cosimo-type-micro-line: 12px;
+    --cosimo-type-weight-regular: 400;
+    --cosimo-type-weight-emphasis: 600;
+    --cosimo-type-tracking-label: 0.04em;
+    --cosimo-type-tracking-navigation: 0.025em;
+
+    /* Reserved widths for live values */
+    --cosimo-value-width-percent: 5ch;
+    --cosimo-value-width-rate: 8ch;
+    --cosimo-value-width-frequency: 9ch;
+    --cosimo-value-width-phase: 4ch;
+    --cosimo-value-width-note: 3ch;
+    --cosimo-value-width-status: 24ch;
+    --cosimo-value-width-mod-status: 11ch;
+    --cosimo-value-width-slot: 1ch;
+    --cosimo-value-width-compact-percent: 3ch;
+
+    /* Controls and touch geometry */
+    --cosimo-hit-min: 44px;
+    --cosimo-control-small: 32px;
+    --cosimo-control-medium: 36px;
+    --cosimo-control-large: 44px;
+    --cosimo-track-height: 12px;
+    --cosimo-marker-size: 8px;
+    --cosimo-gutter-screen: 12px;
+    --cosimo-gutter-compact: 8px;
+    --cosimo-viewport-block: 100dvh;
+
+    /* 390 x 844 master shell */
+    --cosimo-shell-width-master: 390px;
+    --cosimo-shell-height-master: 844px;
+    --cosimo-shell-header-master: 48px;
+    --cosimo-shell-rack-master: 96px;
+    --cosimo-shell-sources-master: 48px;
+    --cosimo-shell-audition-master: 80px;
+    --cosimo-shell-inspector-master: 40px;
+    --cosimo-module-header-master: 54px;
+    --cosimo-module-graphic-master: 275px;
+    --cosimo-mapping-detail-focus-master: 112px;
+
+    /* 375 x 667 compact shell */
+    --cosimo-shell-width-compact: 375px;
+    --cosimo-shell-height-compact: 667px;
+    --cosimo-shell-header-compact: 44px;
+    --cosimo-shell-rack-compact: 88px;
+    --cosimo-shell-sources-compact: 44px;
+    --cosimo-shell-audition-compact: 88px;
+    --cosimo-shell-inspector-compact: 44px;
+    --cosimo-module-header-compact: 36px;
+    --cosimo-module-graphic-compact: 195px;
+    --cosimo-inspector-chips-compact: 44px;
+    --cosimo-mapping-detail-focus-compact: 96px;
+
+    /* Product-component geometry */
+    --cosimo-rack-tile-width: 128px;
+    --cosimo-rack-tile-width-compact: 120px;
+    --cosimo-parameter-cell-min: 44px;
+    --cosimo-source-chip-width: 48px;
+    --cosimo-rack-title-size: 18px;
+    --cosimo-rack-title-size-compact: 14px;
+    --cosimo-header-type-size: 15px;
+    --cosimo-audition-articulation-width: 104px;
+    --cosimo-audition-note-width: 56px;
+    --cosimo-audition-trigger-width: 60px;
+    --cosimo-compound-division-width: 56px;
+
+    /* Layering is reserved for overlays, never structural layout. */
+    --cosimo-z-content: 1;
+    --cosimo-z-sticky: 10;
+    --cosimo-z-popover: 20;
+  }
+}

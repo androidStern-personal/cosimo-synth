@@ -1,0 +1,352 @@
+@layer cosimo.module-editor {
+  .module-editor {
+    display: grid;
+    grid-template-rows:
+      var(--cosimo-module-header-master)
+      var(--cosimo-module-graphic-master)
+      minmax(var(--cosimo-space-0), 1fr);
+    min-inline-size: 0;
+    min-block-size: 0;
+    padding-inline: var(--cosimo-space-3);
+    overflow: clip;
+  }
+
+  .module-editor__header {
+    display: flex;
+    min-inline-size: 0;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--cosimo-space-2);
+  }
+
+  .module-editor__header h1,
+  .module-editor__header p {
+    margin: 0;
+  }
+
+  .module-editor__hud {
+    inline-size: min(var(--cosimo-value-width-mod-status), 100%);
+    min-block-size: var(--cosimo-type-value-line);
+    color: var(--cosimo-color-ink-muted);
+  }
+
+  .module-editor__context {
+    display: flex;
+    min-inline-size: 0;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--cosimo-space-1);
+  }
+
+  .module-editor__return {
+    display: inline-flex;
+    min-inline-size: 0;
+    min-block-size: var(--cosimo-control-small);
+    align-items: center;
+    gap: var(--cosimo-space-1);
+    padding-inline: var(--cosimo-space-2);
+  }
+
+  .module-editor__return > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .module-editor__graphic {
+    position: relative;
+    min-inline-size: 0;
+    min-block-size: 0;
+    overflow: clip;
+  }
+
+  .module-editor__canvas,
+  .module-graphic {
+    display: block;
+    inline-size: 100%;
+    block-size: 100%;
+    touch-action: none;
+  }
+
+  .compound-controls {
+    position: absolute;
+    z-index: var(--cosimo-z-content);
+    inset-block-start: var(--cosimo-space-2);
+    inset-inline-end: var(--cosimo-space-2);
+    display: grid;
+    grid-template-columns: repeat(3, var(--cosimo-hit-min)) var(--cosimo-compound-division-width);
+    min-block-size: var(--cosimo-control-small);
+    align-items: stretch;
+    border: var(--cosimo-stroke-structural) solid var(--cosimo-color-ink);
+    background: var(--cosimo-color-paper);
+  }
+
+  .compound-controls > * {
+    position: relative;
+    display: grid;
+    min-inline-size: 0;
+    padding-inline: var(--cosimo-space-1);
+    place-items: center;
+  }
+
+  .compound-controls > button::after {
+    position: absolute;
+    inset-block: calc((var(--cosimo-hit-min) - var(--cosimo-control-small)) / -2);
+    inset-inline: 0;
+    content: "";
+  }
+
+  .compound-controls > :not(:first-child) {
+    border-inline-start: var(--cosimo-stroke-hairline) solid var(--cosimo-color-rule);
+  }
+
+  .compound-controls__mode[data-state="selected"] {
+    color: var(--cosimo-color-paper);
+    background: var(--cosimo-color-ink);
+  }
+
+  .compound-controls__division {
+    position: relative;
+    padding: 0;
+    background: var(--cosimo-color-paper);
+  }
+
+  .compound-controls__division select {
+    position: absolute;
+    inset-block: calc((var(--cosimo-hit-min) - var(--cosimo-control-small)) / -2);
+    inset-inline: 0;
+    inline-size: 100%;
+    block-size: 100%;
+    padding-inline: var(--cosimo-space-2) var(--cosimo-space-4);
+    background: transparent;
+    text-align: start;
+  }
+
+  .compound-controls__division svg {
+    position: absolute;
+    inset-inline-end: var(--cosimo-space-1);
+    inset-block-start: 50%;
+    pointer-events: none;
+    translate: 0 -50%;
+  }
+
+  .parameter-matrix {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-auto-rows: minmax(var(--cosimo-parameter-cell-min), 1fr);
+    min-inline-size: 0;
+    min-block-size: 0;
+    border-inline: var(--cosimo-stroke-structural) solid var(--cosimo-color-ink);
+    overflow: clip;
+  }
+
+  .parameter-control {
+    position: relative;
+    display: grid;
+    grid-template-rows: auto var(--cosimo-track-height) auto;
+    min-inline-size: 0;
+    min-block-size: var(--cosimo-parameter-cell-min);
+    padding: var(--cosimo-space-2);
+    border-block-end: var(--cosimo-stroke-hairline) solid var(--cosimo-color-rule);
+    touch-action: none;
+  }
+
+  .parameter-control:nth-child(2n) {
+    border-inline-start: var(--cosimo-stroke-hairline) solid var(--cosimo-color-rule);
+  }
+
+  .parameter-control[data-state="selected"] {
+    box-shadow: inset var(--cosimo-stroke-active) 0 0 var(--cosimo-color-ink);
+  }
+
+  .parameter-control[data-drop-target="true"] {
+    background: color-mix(in srgb, var(--drag-source-color, var(--cosimo-color-accent)) 12%, var(--cosimo-color-paper));
+    outline: var(--cosimo-stroke-active) solid var(--drag-source-color, var(--cosimo-color-accent));
+    outline-offset: calc(var(--cosimo-stroke-active) * -1);
+  }
+
+  .is-dragging-source .parameter-control[data-drop-eligible="true"] {
+    outline: var(--cosimo-stroke-hairline) dashed var(--drag-source-color, var(--cosimo-color-accent));
+    outline-offset: calc(var(--cosimo-stroke-hairline) * -1);
+  }
+
+  .is-dragging-source .parameter-control[data-drop-eligible="false"] {
+    opacity: 0.42;
+  }
+
+  .is-dragging-source .parameter-control[data-drop-target="true"] {
+    outline-style: solid;
+    outline-width: var(--cosimo-stroke-active);
+    outline-offset: calc(var(--cosimo-stroke-active) * -1);
+  }
+
+  .parameter-control__heading,
+  .parameter-control__foot {
+    display: flex;
+    min-inline-size: 0;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--cosimo-space-1);
+  }
+
+  .parameter-control__foot .cosimo-value {
+    inline-size: var(--cosimo-value-width-mod-status);
+  }
+
+  .parameter-control__identities {
+    display: inline-flex;
+    min-inline-size: 0;
+    align-items: center;
+    gap: var(--cosimo-space-1);
+  }
+
+  .parameter-control__articulation {
+    display: inline-grid;
+    color: var(--cosimo-semantic-color);
+    place-items: center;
+  }
+
+  .parameter-control__track {
+    position: relative;
+    display: block;
+    align-self: center;
+    inline-size: 100%;
+    block-size: var(--cosimo-track-height);
+  }
+
+  .parameter-control__track::before {
+    position: absolute;
+    inset-block-start: 50%;
+    inset-inline: 0;
+    block-size: var(--cosimo-stroke-hairline);
+    background: var(--cosimo-color-ink);
+    content: "";
+  }
+
+  .parameter-control__base,
+  .parameter-control__mapping {
+    position: absolute;
+    inset-block-start: calc(50% - var(--cosimo-stroke-semantic) / 2);
+    inset-inline-start: 0;
+    block-size: var(--cosimo-stroke-semantic);
+  }
+
+  .parameter-control__base {
+    inline-size: var(--parameter-base);
+    background: var(--cosimo-color-accent);
+  }
+
+  .parameter-control__mapping {
+    inset-inline-start: var(--parameter-mapping-start);
+    inline-size: var(--parameter-mapping-width);
+    background: var(--cosimo-semantic-color);
+  }
+
+  .parameter-control__default,
+  .parameter-control__handle {
+    position: absolute;
+    inset-block-start: 50%;
+    translate: -50% -50%;
+  }
+
+  .parameter-control__default {
+    inset-inline-start: var(--parameter-default);
+    inline-size: var(--cosimo-stroke-active);
+    block-size: var(--cosimo-track-height);
+    background: var(--cosimo-color-ink);
+  }
+
+  .parameter-control__handle {
+    inset-inline-start: var(--parameter-base);
+    inline-size: var(--cosimo-marker-size);
+    block-size: var(--cosimo-marker-size);
+    border: var(--cosimo-stroke-hairline) solid var(--cosimo-color-ink);
+    background: var(--cosimo-color-paper);
+  }
+
+  .parameter-control__foot {
+    font-family: var(--cosimo-font-value);
+    font-size: var(--cosimo-type-micro-size);
+    line-height: var(--cosimo-type-micro-line);
+  }
+
+  .source-identity {
+    display: inline-flex;
+    min-inline-size: 0;
+    align-items: center;
+    gap: var(--cosimo-space-micro);
+    color: var(--identity-color);
+    white-space: nowrap;
+  }
+
+  .source-identity__slot {
+    font-family: var(--cosimo-font-value);
+    font-size: var(--cosimo-type-micro-size);
+    line-height: var(--cosimo-type-micro-line);
+  }
+
+  .source-identity__name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  @media (max-width: 380px), (max-height: 720px) { /* style-contract-allow-raw: named compact viewport breakpoint */
+    .module-editor {
+      grid-template-rows:
+        var(--cosimo-module-header-compact)
+        var(--cosimo-module-graphic-compact)
+        minmax(var(--cosimo-space-0), 1fr);
+      padding-inline: var(--cosimo-space-2);
+    }
+
+    .module-editor__header .cosimo-type-micro {
+      display: none;
+    }
+
+    .module-editor__context {
+      max-inline-size: 70%;
+    }
+
+    .module-editor__hud:not([data-active="true"]) {
+      display: none;
+    }
+
+    .parameter-matrix {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .parameter-matrix[data-control-count="4"] {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .parameter-control:nth-child(2n) {
+      border-inline-start: 0;
+    }
+
+    .parameter-control:not(:nth-child(3n + 1)) {
+      border-inline-start: var(--cosimo-stroke-hairline) solid var(--cosimo-color-rule);
+    }
+
+    .parameter-matrix[data-control-count="4"] .parameter-control {
+      border-inline-start: 0;
+    }
+
+    .parameter-matrix[data-control-count="4"] .parameter-control:nth-child(2n) {
+      border-inline-start: var(--cosimo-stroke-hairline) solid var(--cosimo-color-rule);
+    }
+
+    .parameter-control {
+      padding: var(--cosimo-space-1);
+    }
+
+    .parameter-control__heading .source-identity__slot,
+    .parameter-control__foot .cosimo-value {
+      display: none;
+    }
+
+    .compound-controls {
+      inset-block-start: var(--cosimo-space-1);
+      inset-inline-end: var(--cosimo-space-1);
+    }
+  }
+}

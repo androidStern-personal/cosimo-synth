@@ -1,0 +1,99 @@
+@layer cosimo.features {
+  .cosimo-synth-shell__header,
+  .cosimo-synth-shell__rack,
+  .cosimo-synth-shell__sources,
+  .cosimo-synth-shell__audition {
+    border-block-end: var(--cosimo-stroke-structural) solid var(--cosimo-color-ink);
+  }
+
+  .cosimo-synth-shell__audition {
+    border-block-end: 0;
+  }
+
+  .cosimo-synth-shell__workspace {
+    background: var(--cosimo-color-paper);
+  }
+
+  .cosimo-synth-shell__sources {
+    border-block-start: var(--cosimo-stroke-structural) solid var(--cosimo-color-ink);
+    overflow: visible;
+  }
+
+  .cosimo-instrument-header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    align-items: stretch;
+    block-size: 100%;
+    min-inline-size: 0;
+    background: var(--cosimo-color-paper);
+  }
+
+  .cosimo-instrument-header__patch,
+  .cosimo-instrument-header__menu {
+    display: flex;
+    min-inline-size: 0;
+    min-block-size: var(--cosimo-control-large);
+    align-items: center;
+    gap: var(--cosimo-space-1);
+    padding-inline: var(--cosimo-space-2);
+    font-size: var(--cosimo-header-type-size);
+    white-space: nowrap;
+  }
+
+  .cosimo-instrument-header__patch {
+    justify-content: flex-start;
+  }
+
+  .cosimo-instrument-header__patch-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .cosimo-instrument-header__menu {
+    justify-content: flex-end;
+  }
+
+  .cosimo-workspace-carousel {
+    display: grid;
+    grid-template-columns: repeat(3, var(--cosimo-hit-min));
+    block-size: 100%;
+    align-items: center;
+    touch-action: pan-y;
+    transform: translateX(calc(var(--cosimo-workspace-drag, 0) * 0.15));
+  }
+
+  .cosimo-workspace-carousel__neighbor,
+  .cosimo-workspace-carousel__current {
+    display: grid;
+    inline-size: var(--cosimo-hit-min);
+    block-size: var(--cosimo-hit-min);
+    place-items: center;
+  }
+
+  .cosimo-workspace-carousel__neighbor {
+    color: var(--cosimo-color-ink-muted);
+    border-inline: var(--cosimo-stroke-hairline) solid var(--cosimo-color-rule);
+  }
+
+  .cosimo-workspace-carousel__current {
+    color: var(--cosimo-color-paper);
+    background: var(--cosimo-color-ink);
+  }
+
+  @media (max-width: 380px), (max-height: 720px) { /* style-contract-allow-raw: named compact viewport breakpoint */
+    .cosimo-instrument-header__patch,
+    .cosimo-instrument-header__menu {
+      padding-inline: var(--cosimo-gutter-compact);
+    }
+
+    .cosimo-instrument-header__menu span {
+      display: none;
+    }
+
+    .cosimo-workspace-carousel__neighbor,
+    .cosimo-workspace-carousel__current {
+      inline-size: var(--cosimo-hit-min);
+      block-size: 100%;
+    }
+  }
+}

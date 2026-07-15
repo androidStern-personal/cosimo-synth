@@ -1,0 +1,260 @@
+@layer cosimo.reset, cosimo.foundation;
+
+@layer cosimo.reset {
+  :where(.cosimo-ui, [data-cosimo-ui]),
+  :where(.cosimo-ui, [data-cosimo-ui]) *,
+  :where(.cosimo-ui, [data-cosimo-ui]) *::before,
+  :where(.cosimo-ui, [data-cosimo-ui]) *::after {
+    box-sizing: border-box;
+  }
+
+  :where(.cosimo-ui, [data-cosimo-ui]) {
+    color: var(--cosimo-color-ink);
+    background: var(--cosimo-color-paper);
+    font-family: var(--cosimo-font-label);
+  }
+
+  :where(.cosimo-ui, [data-cosimo-ui]) :where(button, input, select, output) {
+    min-inline-size: 0;
+    margin: var(--cosimo-space-0);
+    color: inherit;
+    font: inherit;
+  }
+
+  :where(.cosimo-ui, [data-cosimo-ui]) :where(button, select) {
+    appearance: none;
+    padding: var(--cosimo-space-0);
+    border: var(--cosimo-space-0);
+    border-radius: var(--cosimo-space-0);
+    background: transparent;
+  }
+
+  :where(.cosimo-ui, [data-cosimo-ui]) button {
+    text-align: inherit;
+  }
+
+  :where(.cosimo-ui, [data-cosimo-ui]) :where(button, input, select):focus-visible {
+    outline: var(--cosimo-stroke-active) solid var(--cosimo-color-ink);
+    outline-offset: calc(var(--cosimo-stroke-active) * -1);
+  }
+}
+
+@layer cosimo.foundation {
+  .cosimo-mobile-shell {
+    --cosimo-shell-header: var(--cosimo-shell-header-master);
+    --cosimo-shell-rack: var(--cosimo-shell-rack-master);
+    --cosimo-shell-sources: var(--cosimo-shell-sources-master);
+    --cosimo-shell-audition: var(--cosimo-shell-audition-master);
+    --cosimo-shell-inspector: var(--cosimo-shell-inspector-master);
+
+    position: relative;
+    isolation: isolate;
+    display: grid;
+    grid-template-rows:
+      var(--cosimo-shell-header)
+      var(--cosimo-shell-rack)
+      minmax(var(--cosimo-space-0), 1fr)
+      var(--cosimo-shell-sources)
+      var(--cosimo-shell-audition);
+    inline-size: min(100%, var(--cosimo-shell-width-master));
+    block-size: min(var(--cosimo-viewport-block), var(--cosimo-shell-height-master));
+    margin-inline: auto;
+    overflow: clip;
+    border-inline: var(--cosimo-stroke-structural) solid var(--cosimo-color-ink);
+    background: var(--cosimo-color-paper);
+  }
+
+  .cosimo-shell-region {
+    min-inline-size: 0;
+    min-block-size: 0;
+    overflow: clip;
+  }
+
+  .cosimo-surface {
+    min-inline-size: 0;
+    min-block-size: 0;
+    color: var(--cosimo-color-ink);
+    background: var(--cosimo-color-paper);
+  }
+
+  .cosimo-surface[data-state="selected"] {
+    color: var(--cosimo-color-paper);
+    background: var(--cosimo-color-ink);
+  }
+
+  .cosimo-surface[data-state="disabled"],
+  .cosimo-surface[data-state="bypassed"] {
+    color: var(--cosimo-color-disabled);
+  }
+
+  .cosimo-frame {
+    border: var(--cosimo-stroke-structural) solid var(--cosimo-color-ink);
+  }
+
+  .cosimo-rule-before {
+    border-block-start: var(--cosimo-stroke-structural) solid var(--cosimo-color-ink);
+  }
+
+  .cosimo-rule-between {
+    border-inline-start: var(--cosimo-stroke-hairline) solid var(--cosimo-color-rule);
+  }
+
+  .cosimo-active-frame {
+    outline: var(--cosimo-stroke-active) solid var(--cosimo-color-ink);
+    outline-offset: calc(var(--cosimo-stroke-active) * -1);
+  }
+
+  .cosimo-semantic-rule {
+    border-inline-start: var(--cosimo-stroke-semantic) solid var(--cosimo-semantic-color, var(--cosimo-color-accent));
+  }
+
+  .cosimo-hit-target {
+    display: inline-grid;
+    min-inline-size: var(--cosimo-hit-min);
+    min-block-size: var(--cosimo-hit-min);
+    place-items: center;
+    touch-action: manipulation;
+  }
+
+  .cosimo-control-frame {
+    min-block-size: var(--cosimo-control-medium);
+    padding-inline: var(--cosimo-space-2);
+    border: var(--cosimo-stroke-structural) solid var(--cosimo-color-ink);
+    background: var(--cosimo-color-paper);
+  }
+
+  .cosimo-control-frame[data-state="selected"] {
+    color: var(--cosimo-color-paper);
+    background: var(--cosimo-color-ink);
+  }
+
+  .cosimo-type-module {
+    font-family: var(--cosimo-font-label);
+    font-size: var(--cosimo-type-module-size);
+    font-weight: var(--cosimo-type-weight-emphasis);
+    line-height: var(--cosimo-type-module-line);
+    letter-spacing: var(--cosimo-type-tracking-navigation);
+    text-transform: uppercase;
+  }
+
+  .cosimo-type-navigation {
+    font-family: var(--cosimo-font-label);
+    font-size: var(--cosimo-type-navigation-size);
+    font-weight: var(--cosimo-type-weight-emphasis);
+    line-height: var(--cosimo-type-navigation-line);
+    letter-spacing: var(--cosimo-type-tracking-navigation);
+    text-transform: uppercase;
+  }
+
+  .cosimo-type-label {
+    font-family: var(--cosimo-font-label);
+    font-size: var(--cosimo-type-label-size);
+    font-weight: var(--cosimo-type-weight-emphasis);
+    line-height: var(--cosimo-type-label-line);
+    letter-spacing: var(--cosimo-type-tracking-label);
+    text-transform: uppercase;
+  }
+
+  .cosimo-type-value,
+  .cosimo-value {
+    overflow: clip;
+    color: inherit;
+    font-family: var(--cosimo-font-value);
+    font-size: var(--cosimo-type-value-size);
+    font-variant-numeric: tabular-nums;
+    font-weight: var(--cosimo-type-weight-regular);
+    line-height: var(--cosimo-type-value-line);
+    text-align: end;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .cosimo-transient-hud {
+    display: block;
+    min-inline-size: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .cosimo-type-micro {
+    font-family: var(--cosimo-font-label);
+    font-size: var(--cosimo-type-micro-size);
+    font-weight: var(--cosimo-type-weight-regular);
+    line-height: var(--cosimo-type-micro-line);
+  }
+
+  .cosimo-value[data-value-kind="percent"],
+  .cosimo-value[data-value-kind="signed"] {
+    inline-size: var(--cosimo-value-width-percent);
+  }
+
+  .cosimo-value[data-value-kind="rate"] {
+    inline-size: var(--cosimo-value-width-rate);
+  }
+
+  .cosimo-value[data-value-kind="frequency"] {
+    inline-size: var(--cosimo-value-width-frequency);
+  }
+
+  .cosimo-value[data-value-kind="phase"] {
+    inline-size: var(--cosimo-value-width-phase);
+  }
+
+  .cosimo-value[data-value-kind="note"] {
+    inline-size: var(--cosimo-value-width-note);
+  }
+
+  .cosimo-value[data-value-kind="status"] {
+    inline-size: min(100%, var(--cosimo-value-width-status));
+    max-inline-size: 100%;
+  }
+
+  .cosimo-stable-slot {
+    min-inline-size: 0;
+    min-block-size: 0;
+    overflow: clip;
+    contain: layout paint;
+  }
+
+  .cosimo-inspector-slot {
+    block-size: var(--cosimo-shell-inspector);
+    min-block-size: var(--cosimo-shell-inspector);
+    max-block-size: var(--cosimo-shell-inspector);
+    overflow: clip;
+  }
+
+  [data-scroll-surface="horizontal"] {
+    min-inline-size: 0;
+    overflow-x: auto;
+    overflow-y: clip;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: none;
+    touch-action: pan-x;
+  }
+
+  [data-scroll-surface="horizontal"]::-webkit-scrollbar {
+    display: none;
+  }
+
+  [data-scroll-surface="vertical"] {
+    min-block-size: 0;
+    overflow-x: clip;
+    overflow-y: auto;
+    overscroll-behavior-block: contain;
+    touch-action: pan-y;
+  }
+
+  @media (max-width: 380px), (max-height: 720px) { /* style-contract-allow-raw: named compact viewport breakpoint */
+    .cosimo-mobile-shell {
+      --cosimo-shell-header: var(--cosimo-shell-header-compact);
+      --cosimo-shell-rack: var(--cosimo-shell-rack-compact);
+      --cosimo-shell-sources: var(--cosimo-shell-sources-compact);
+      --cosimo-shell-audition: var(--cosimo-shell-audition-compact);
+      --cosimo-shell-inspector: var(--cosimo-shell-inspector-compact);
+
+      inline-size: min(100%, var(--cosimo-shell-width-compact));
+      block-size: min(var(--cosimo-viewport-block), var(--cosimo-shell-height-compact));
+    }
+  }
+}

@@ -1,0 +1,57 @@
+@layer cosimo.foundation {
+  .wire-range {
+    position: relative;
+    display: block;
+    min-inline-size: 0;
+    block-size: var(--cosimo-track-height);
+  }
+
+  .wire-range__track {
+    position: absolute;
+    inset: 0;
+  }
+
+  .wire-range__track::before {
+    position: absolute;
+    inset-block-start: 50%;
+    inset-inline: 0;
+    block-size: var(--cosimo-stroke-hairline);
+    background: var(--cosimo-color-ink);
+    content: "";
+  }
+
+  .wire-range__fill {
+    position: absolute;
+    inset-block-start: calc(50% - var(--cosimo-stroke-semantic) / 2);
+    inset-inline-start: 0;
+    block-size: var(--cosimo-stroke-semantic);
+    background: var(--range-accent);
+  }
+
+  .wire-range__default {
+    position: absolute;
+    inset-block-start: 0;
+    inline-size: var(--cosimo-stroke-active);
+    block-size: 100%;
+    background: var(--cosimo-color-ink);
+  }
+
+  .wire-range__handle {
+    position: absolute;
+    inset-block-start: 50%;
+    inline-size: var(--cosimo-marker-size);
+    block-size: var(--cosimo-marker-size);
+    translate: -50% -50%;
+    border: var(--cosimo-stroke-hairline) solid var(--cosimo-color-ink);
+    background: var(--cosimo-color-paper);
+  }
+
+  .wire-range input {
+    position: absolute;
+    inset: 0;
+    inline-size: 100%;
+    block-size: 100%;
+    cursor: ew-resize;
+    opacity: 0;
+  }
+}
